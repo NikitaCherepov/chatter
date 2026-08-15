@@ -604,13 +604,13 @@ db.exec("CREATE INDEX IF NOT EXISTS idx_user_prompts_user ON user_prompts(user_i
 // Historical prompt identity migration. A message keeps both the stable ID
 // and the name snapshot that was visible when the answer was generated.
 db.exec(`
-  CREATE TABLE IF NOT EXISTS schema_migrations (
+  CREATE TABLE IF NOT EXISTS chatter_schema_migrations (
     key TEXT PRIMARY KEY,
     applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
   )
 `);
 const promptIdMigrationKey = 'chat_messages_prompt_id_v1';
-if (!db.prepare('SELECT 1 FROM schema_migrations WHERE key = ?').get(promptIdMigrationKey)) {
+if (!db.prepare('SELECT 1 FROM chatter_schema_migrations WHERE key = ?').get(promptIdMigrationKey)) {
   const migratePromptIds = db.transaction(() => {
     const result = db.prepare(`
       UPDATE chat_messages AS cm
@@ -653,7 +653,7 @@ if (!db.prepare('SELECT 1 FROM schema_migrations WHERE key = ?').get(promptIdMig
         AND cm.prompt_name IS NOT NULL
         AND trim(cm.prompt_name) != ''
     `).run();
-    db.prepare('INSERT INTO schema_migrations (key) VALUES (?)').run(promptIdMigrationKey);
+    db.prepare('INSERT INTO chatter_schema_migrations (key) VALUES (?)').run(promptIdMigrationKey);
     return result.changes;
   });
   const migrated = migratePromptIds();
