@@ -742,7 +742,27 @@
       "linkTelegram": "Telegram'ı Bağla",
       "logout": "Çıkış Yap",
       "hideFromBot": "Bot aramasından gizle",
-      "showInBot": "Bot aramasında göster"
+      "showInBot": "Bot aramasında göster",
+      "filters": {
+        "title": "Filtreler",
+        "prompt": "İstem",
+        "model": "Model",
+        "all": "Tümü",
+        "withFiles": "Dosyalarla",
+        "withImages": "Görsellerle"
+      },
+      "folders": {
+        "new": "Yeni klasör",
+        "create": "Oluştur",
+        "cancel": "İptal",
+        "actions": "Klasör işlemleri",
+        "rename": "Yeniden Adlandır",
+        "delete": "Sil",
+        "dragChat": "Sohbeti sürükle",
+        "dropChat": "Bir sohbeti buraya sürükleyin",
+        "unfiled": "Sınıflandırılmamış",
+        "moveTo": "Klasöre taşı"
+      }
     },
     "empty": {
       "selectOrCreate": "Bir sohbet seçin veya yeni bir tane oluşturun"

@@ -421,7 +421,27 @@
       "linkTelegram": "绑定 Telegram",
       "logout": "退出登录",
       "hideFromBot": "从机器人搜索中隐藏",
-      "showInBot": "在机器人搜索中显示"
+      "showInBot": "在机器人搜索中显示",
+      "filters": {
+        "title": "筛选器",
+        "prompt": "提示词",
+        "model": "模型",
+        "all": "全部",
+        "withFiles": "带文件",
+        "withImages": "带图片"
+      },
+      "folders": {
+        "new": "新建文件夹",
+        "create": "创建",
+        "cancel": "取消",
+        "actions": "文件夹操作",
+        "rename": "重命名",
+        "delete": "删除",
+        "dragChat": "拖动聊天",
+        "dropChat": "将聊天拖到此处",
+        "unfiled": "未归档",
+        "moveTo": "移动到文件夹"
+      }
     },
     "empty": {
       "selectOrCreate": "选择一个聊天或新建一个"

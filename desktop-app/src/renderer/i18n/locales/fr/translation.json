@@ -421,7 +421,27 @@
       "linkTelegram": "Lier Telegram",
       "logout": "Se déconnecter",
       "hideFromBot": "Masquer de la recherche du bot",
-      "showInBot": "Afficher dans la recherche du bot"
+      "showInBot": "Afficher dans la recherche du bot",
+      "filters": {
+        "title": "Filtres",
+        "prompt": "Invite",
+        "model": "Modèle",
+        "all": "Tous",
+        "withFiles": "Avec fichiers",
+        "withImages": "Avec images"
+      },
+      "folders": {
+        "new": "Nouveau dossier",
+        "create": "Créer",
+        "cancel": "Annuler",
+        "actions": "Actions du dossier",
+        "rename": "Renommer",
+        "delete": "Supprimer",
+        "dragChat": "Glisser la conversation",
+        "dropChat": "Glissez une conversation ici",
+        "unfiled": "Non classé",
+        "moveTo": "Déplacer vers le dossier"
+      }
     },
     "empty": {
       "selectOrCreate": "Sélectionnez un chat ou créez-en un nouveau"

@@ -753,11 +753,9 @@ export function ChatPage() {
   const chunksRef = useRef<Blob[]>([]);
   const [contextMenuPos, setContextMenuPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  // Visual-only prototype for chat folders and filters. No values are persisted
-  // or sent to the backend until the final UX is approved.
   const [demoFiltersOpen, setDemoFiltersOpen] = useState(false);
   const [demoFolderCreatorOpen, setDemoFolderCreatorOpen] = useState(false);
-  const [demoFolderName, setDemoFolderName] = useState('Новая папка');
+  const [demoFolderName, setDemoFolderName] = useState(() => t('chat.sidebar.folders.new'));
   const [chatFolders, setChatFolders] = useState<api.ChatFolder[]>([]);
   const [demoFolderMenuId, setDemoFolderMenuId] = useState<number | null>(null);
   const [demoFolderMenuPos, setDemoFolderMenuPos] = useState({ x: 0, y: 0 });
@@ -770,7 +768,8 @@ export function ChatPage() {
   const [demoPromptFilter, setDemoPromptFilter] = useState('all');
   const [demoModelFilter, setDemoModelFilter] = useState('all');
   const [demoFilesFilter, setDemoFilesFilter] = useState(false);
-  const [demoTelegramFilter, setDemoTelegramFilter] = useState(false);
+  const [demoImagesFilter, setDemoImagesFilter] = useState(false);
+  const [chatFilterOptions, setChatFilterOptions] = useState<{ prompts: string[]; models: string[] }>({ prompts: [], models: [] });
   const [msgMenuId, setMsgMenuId] = useState<number | null>(null);
   const [msgMenuPos, setMsgMenuPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const msgMenuTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -907,16 +906,24 @@ export function ChatPage() {
     [attachedImages],
   );
 
-  const loadChats = async () => {
+  const loadChats = useCallback(async () => {
     setLoadingChats(true);
     try {
-      const [res, folderRes] = await Promise.all([
-        api.getChats(CHAT_PAGE_SIZE),
+      const filters: api.ChatListFilters = {
+        prompt: demoPromptFilter === 'all' ? undefined : demoPromptFilter,
+        model: demoModelFilter === 'all' ? undefined : demoModelFilter,
+        hasFiles: demoFilesFilter,
+        hasImages: demoImagesFilter,
+      };
+      const [res, folderRes, filterOptions] = await Promise.all([
+        api.getChats(CHAT_PAGE_SIZE, 0, filters),
         api.getChatFolders().catch(() => ({ folders: [] as api.ChatFolder[] })),
+        api.getChatFilterOptions().catch(() => ({ prompts: [] as string[], models: [] as string[] })),
       ]);
       const normalizedChats = res.chats.map((chat) => ({ ...chat, folder_id: chat.folder_id ?? null }));
       setChats(normalizedChats);
       setChatFolders(folderRes.folders);
+      setChatFilterOptions(filterOptions);
       setHasMoreChats(res.chats.length === CHAT_PAGE_SIZE);
       if (res.active_chat_id) {
         setActiveChatId(res.active_chat_id);
@@ -928,13 +935,18 @@ export function ChatPage() {
     } finally {
       setLoadingChats(false);
     }
-  };
+  }, [demoPromptFilter, demoModelFilter, demoFilesFilter, demoImagesFilter]);
 
   const loadMoreChats = useCallback(async () => {
     if (loadingMoreChats || !hasMoreChats || searchQuery.trim().length >= 3) return;
     setLoadingMoreChats(true);
     try {
-      const res = await api.getChats(CHAT_PAGE_SIZE, chats.length);
+      const res = await api.getChats(CHAT_PAGE_SIZE, chats.length, {
+        prompt: demoPromptFilter === 'all' ? undefined : demoPromptFilter,
+        model: demoModelFilter === 'all' ? undefined : demoModelFilter,
+        hasFiles: demoFilesFilter,
+        hasImages: demoImagesFilter,
+      });
       setHasMoreChats(res.chats.length === CHAT_PAGE_SIZE);
       if (res.chats.length > 0) {
         setChats(prev => {
@@ -950,7 +962,7 @@ export function ChatPage() {
     } finally {
       setLoadingMoreChats(false);
     }
-  }, [loadingMoreChats, hasMoreChats, searchQuery, chats.length]);
+  }, [loadingMoreChats, hasMoreChats, searchQuery, chats.length, demoPromptFilter, demoModelFilter, demoFilesFilter, demoImagesFilter]);
 
   const handleSidebarScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
     const el = e.currentTarget;
@@ -959,7 +971,7 @@ export function ChatPage() {
     }
   }, [loadMoreChats]);
 
-  useEffect(() => { loadChats(); }, []);
+  useEffect(() => { void loadChats(); }, [loadChats]);
 
   useEffect(() => {
     if (activeChatId) {
@@ -985,7 +997,7 @@ export function ChatPage() {
         incrementUnread(data.chat_id);
       }
     });
-  }, [activeChatId, chats]);
+  }, [activeChatId, chats, loadChats]);
 
   // External clients write into the same backend chat. Refresh the open
   // conversation when their user message and final answer are persisted.
@@ -996,7 +1008,7 @@ export function ChatPage() {
     } else if (data.phase === 'assistant') {
       incrementUnread(data.chat_id);
     }
-  }), [activeChatId]);
+  }), [activeChatId, loadChats]);
 
   const refreshContextTokens = useCallback(async (chatId: number) => {
     try {
@@ -2977,7 +2989,7 @@ export function ChatPage() {
             className={s.chatDragHandle}
             {...dragHandleProps}
             onClick={(event) => event.stopPropagation()}
-            title="Перетащить чат"
+            title={t('chat.sidebar.folders.dragChat')}
           >
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
               <path d="M8 1.5v13M1.5 8h13" />
@@ -3102,13 +3114,26 @@ export function ChatPage() {
               <line x1="3" y1="18" x2="21" y2="18" />
             </svg>
           </button>
-          <motion.span
-            className={s.sidebarTitle}
+          <motion.div
+            className={s.sidebarTitleGroup}
             animate={{ opacity: sidebarCollapsed ? 0 : 1 }}
             transition={{ duration: 0.15 }}
+            style={{ pointerEvents: sidebarCollapsed ? 'none' : 'auto' }}
           >
-            {t('chat.sidebar.chats')}
-          </motion.span>
+            <span className={s.sidebarTitle}>{t('chat.sidebar.chats')}</span>
+            <button
+              className={`${s.sidebarActionBtn} ${demoFiltersOpen ? s.sidebarActionBtnActive : ''}`}
+              onClick={() => {
+                setDemoFiltersOpen((value) => !value);
+                setDemoFolderCreatorOpen(false);
+              }}
+              title={t('chat.sidebar.filters.title')}
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 5h16l-6.2 7.1v5.1l-3.6 1.8v-6.9L4 5z" />
+              </svg>
+            </button>
+          </motion.div>
           <motion.div
             className={s.sidebarHeaderActions}
             animate={{ opacity: sidebarCollapsed ? 0 : 1 }}
@@ -3116,24 +3141,16 @@ export function ChatPage() {
             style={{ pointerEvents: sidebarCollapsed ? 'none' : 'auto' }}
           >
             <button
-              className={`${s.sidebarActionBtn} ${demoFiltersOpen ? s.sidebarActionBtnActive : ''}`}
-              onClick={() => {
-                setDemoFiltersOpen((value) => !value);
-                setDemoFolderCreatorOpen(false);
-              }}
-              title="Фильтры"
-            >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M4 5h16l-6.2 7.1v5.1l-3.6 1.8v-6.9L4 5z" />
-              </svg>
-            </button>
-            <button
               className={`${s.newChatBtn} ${demoFolderCreatorOpen ? s.newChatBtnActive : ''}`}
               onClick={() => {
-                setDemoFolderCreatorOpen((value) => !value);
+                setDemoFolderCreatorOpen((value) => {
+                  const next = !value;
+                  if (next) setDemoFolderName(t('chat.sidebar.folders.new'));
+                  return next;
+                });
                 setDemoFiltersOpen(false);
               }}
-              title="Новая папка"
+              title={t('chat.sidebar.folders.new')}
             >
               <FolderAddIcon />
             </button>
@@ -3185,26 +3202,24 @@ export function ChatPage() {
             >
               <div className={s.demoFilterGrid}>
                 <label className={s.demoFilterField}>
-                  <span>Промпт</span>
+                  <span>{t('chat.sidebar.filters.prompt')}</span>
                   <Select
                     value={demoPromptFilter}
                     onChange={setDemoPromptFilter}
                     options={[
-                      { value: 'all', label: 'Все' },
-                      { value: 'vega', label: 'Vega' },
-                      { value: 'default', label: 'Default' },
+                      { value: 'all', label: t('chat.sidebar.filters.all') },
+                      ...chatFilterOptions.prompts.map((prompt) => ({ value: prompt, label: prompt })),
                     ]}
                   />
                 </label>
                 <label className={s.demoFilterField}>
-                  <span>Модель</span>
+                  <span>{t('chat.sidebar.filters.model')}</span>
                   <Select
                     value={demoModelFilter}
                     onChange={setDemoModelFilter}
                     options={[
-                      { value: 'all', label: 'Все' },
-                      { value: 'deepseek', label: 'Deepseek V4 Flash' },
-                      { value: 'gemini', label: 'Gemini Flash' },
+                      { value: 'all', label: t('chat.sidebar.filters.all') },
+                      ...chatFilterOptions.models.map((model) => ({ value: model, label: model })),
                     ]}
                   />
                 </label>
@@ -3214,13 +3229,13 @@ export function ChatPage() {
                   className={demoFilesFilter ? s.demoFilterChipActive : ''}
                   onClick={() => setDemoFilesFilter((value) => !value)}
                 >
-                  С файлами
+                  {t('chat.sidebar.filters.withFiles')}
                 </button>
                 <button
-                  className={demoTelegramFilter ? s.demoFilterChipActive : ''}
-                  onClick={() => setDemoTelegramFilter((value) => !value)}
+                  className={demoImagesFilter ? s.demoFilterChipActive : ''}
+                  onClick={() => setDemoImagesFilter((value) => !value)}
                 >
-                  Telegram
+                  {t('chat.sidebar.filters.withImages')}
                 </button>
               </div>
             </motion.div>
@@ -3239,7 +3254,7 @@ export function ChatPage() {
               <FolderIcon />
               <input value={demoFolderName} onChange={(event) => setDemoFolderName(event.target.value)} autoFocus />
               <button
-                title="Создать"
+                title={t('chat.sidebar.folders.create')}
                 onClick={async () => {
                   const value = demoFolderName.trim();
                   if (!value) return;
@@ -3247,7 +3262,7 @@ export function ChatPage() {
                     const { folder } = await api.createChatFolder(value);
                     setChatFolders((current) => [...current, folder]);
                     setDemoExpandedFolders((current) => ({ ...current, [folder.id]: true }));
-                    setDemoFolderName('New folder');
+                    setDemoFolderName(t('chat.sidebar.folders.new'));
                     setDemoFolderCreatorOpen(false);
                   } catch (error) {
                     console.error('Failed to create chat folder:', error);
@@ -3256,7 +3271,7 @@ export function ChatPage() {
               >
                 ✓
               </button>
-              <button title="Отмена" onClick={() => setDemoFolderCreatorOpen(false)}>×</button>
+              <button title={t('chat.sidebar.folders.cancel')} onClick={() => setDemoFolderCreatorOpen(false)}>×</button>
             </motion.div>
           )}
         </AnimatePresence>
@@ -3338,7 +3353,7 @@ export function ChatPage() {
                       <button
                         className={s.kebabBtn}
                         onClick={(event) => toggleDemoFolderMenu(event, folder.id)}
-                        title="Действия с папкой"
+                        title={t('chat.sidebar.folders.actions')}
                       >
                         <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor">
                           <circle cx="8" cy="3" r="1.5" />
@@ -3352,8 +3367,8 @@ export function ChatPage() {
                           style={{ top: demoFolderMenuPos.y, left: demoFolderMenuPos.x }}
                           onClick={(event) => event.stopPropagation()}
                         >
-                          <button className={s.contextMenuItem} onClick={() => startDemoFolderRename(folder.id, folder.name)}>Переименовать</button>
-                          <button className={`${s.contextMenuItem} ${s.contextMenuItemDanger}`} onClick={() => deleteDemoFolder(folder.id)}>Удалить</button>
+                          <button className={s.contextMenuItem} onClick={() => startDemoFolderRename(folder.id, folder.name)}>{t('chat.sidebar.folders.rename')}</button>
+                          <button className={`${s.contextMenuItem} ${s.contextMenuItemDanger}`} onClick={() => deleteDemoFolder(folder.id)}>{t('chat.sidebar.folders.delete')}</button>
                         </div>
                       )}
                     </div>
@@ -3368,7 +3383,7 @@ export function ChatPage() {
                         transition={{ duration: 0.15 }}
                       >
                         {folder.chats.map((chat) => renderSidebarChat(chat, true))}
-                        {folder.chats.length === 0 && <div className={s.demoEmptyFolder}>Перетащите сюда чат</div>}
+                        {folder.chats.length === 0 && <div className={s.demoEmptyFolder}>{t('chat.sidebar.folders.dropChat')}</div>}
                       </motion.div>
                     )}
                   </AnimatePresence>
@@ -3379,11 +3394,11 @@ export function ChatPage() {
             <DemoDroppableFolder folderId="unfiled">
               <div className={s.demoUnfiledDropZone}>
               <div className={s.demoUnfiledHeader}>
-                <span>Без папки</span>
+                <span>{t('chat.sidebar.folders.unfiled')}</span>
                 <span>{demoUnfiledChats.length}</span>
               </div>
               {demoUnfiledChats.map((chat) => renderSidebarChat(chat))}
-              {demoUnfiledChats.length === 0 && <div className={s.demoEmptyUnfiled}>Перетащите сюда чат</div>}
+              {demoUnfiledChats.length === 0 && <div className={s.demoEmptyUnfiled}>{t('chat.sidebar.folders.dropChat')}</div>}
               </div>
             </DemoDroppableFolder>
             {chats.length === 0 && (
@@ -3458,7 +3473,7 @@ export function ChatPage() {
             <div className={s.demoMoveMenuGroup}>
               <button className={s.contextMenuItem} onClick={() => setDemoMoveMenuOpen((value) => !value)}>
                 <FolderIcon size={14} />
-                <span>Переместить в папку</span>
+                <span>{t('chat.sidebar.folders.moveTo')}</span>
                 <svg className={`${s.demoMoveMenuChevron} ${demoMoveMenuOpen ? s.demoMoveMenuChevronOpen : ''}`} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="9 18 15 12 9 6" />
                 </svg>
@@ -3479,7 +3494,7 @@ export function ChatPage() {
                     className={(chats.find((chat) => chat.id === contextMenuChatId)?.folder_id ?? null) === null ? s.demoMoveMenuOptionActive : ''}
                     onClick={() => void moveDemoChat(contextMenuChatId, null)}
                   >
-                    <span>Без папки</span>
+                    <span>{t('chat.sidebar.folders.unfiled')}</span>
                     {(chats.find((chat) => chat.id === contextMenuChatId)?.folder_id ?? null) === null && <span>✓</span>}
                   </button>
                 </div>

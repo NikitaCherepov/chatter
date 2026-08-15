@@ -742,7 +742,27 @@
       "linkTelegram": "Collega Telegram",
       "logout": "Esci",
       "hideFromBot": "Nascondi dalla ricerca bot",
-      "showInBot": "Mostra nella ricerca bot"
+      "showInBot": "Mostra nella ricerca bot",
+      "filters": {
+        "title": "Filtri",
+        "prompt": "Prompt",
+        "model": "Modello",
+        "all": "Tutti",
+        "withFiles": "Con file",
+        "withImages": "Con immagini"
+      },
+      "folders": {
+        "new": "Nuova cartella",
+        "create": "Crea",
+        "cancel": "Annulla",
+        "actions": "Azioni cartella",
+        "rename": "Rinomina",
+        "delete": "Elimina",
+        "dragChat": "Trascina chat",
+        "dropChat": "Trascina una chat qui",
+        "unfiled": "Non archiviata",
+        "moveTo": "Sposta nella cartella"
+      }
     },
     "empty": {
       "selectOrCreate": "Seleziona una chat o creane una nuova"

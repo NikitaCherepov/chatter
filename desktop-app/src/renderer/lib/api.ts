@@ -331,8 +331,24 @@ export type ChatFolder = {
   updated_at: number;
 };
 
-export async function getChats(limit = 25, offset = 0): Promise<{ chats: ChatInfo[]; active_chat_id: number | null }> {
-  return apiFetch(`/api/v1/chats?limit=${limit}&offset=${offset}`);
+export type ChatListFilters = {
+  prompt?: string;
+  model?: string;
+  hasFiles?: boolean;
+  hasImages?: boolean;
+};
+
+export async function getChats(limit = 25, offset = 0, filters: ChatListFilters = {}): Promise<{ chats: ChatInfo[]; active_chat_id: number | null }> {
+  const params = new URLSearchParams({ limit: `${limit}`, offset: `${offset}` });
+  if (filters.prompt) params.set('prompt', filters.prompt);
+  if (filters.model) params.set('model', filters.model);
+  if (filters.hasFiles) params.set('has_files', '1');
+  if (filters.hasImages) params.set('has_images', '1');
+  return apiFetch(`/api/v1/chats?${params.toString()}`);
+}
+
+export async function getChatFilterOptions(): Promise<{ prompts: string[]; models: string[] }> {
+  return apiFetch('/api/v1/chat-filter-options');
 }
 
 export async function getChatFolders(): Promise<{ folders: ChatFolder[] }> {

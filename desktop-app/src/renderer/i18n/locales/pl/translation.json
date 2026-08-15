@@ -742,7 +742,27 @@
       "linkTelegram": "Połącz Telegram",
       "logout": "Wyloguj się",
       "hideFromBot": "Ukryj przed wyszukiwaniem bota",
-      "showInBot": "Pokaż w wyszukiwaniu bota"
+      "showInBot": "Pokaż w wyszukiwaniu bota",
+      "filters": {
+        "title": "Filtry",
+        "prompt": "Prompt",
+        "model": "Model",
+        "all": "Wszystkie",
+        "withFiles": "Z plikami",
+        "withImages": "Z obrazami"
+      },
+      "folders": {
+        "new": "Nowy folder",
+        "create": "Utwórz",
+        "cancel": "Anuluj",
+        "actions": "Akcje folderu",
+        "rename": "Zmień nazwę",
+        "delete": "Usuń",
+        "dragChat": "Przeciągnij czat",
+        "dropChat": "Przeciągnij czat tutaj",
+        "unfiled": "Bez kategorii",
+        "moveTo": "Przenieś do folderu"
+      }
     },
     "empty": {
       "selectOrCreate": "Wybierz czat lub utwórz nowy"

@@ -421,7 +421,27 @@
       "linkTelegram": "Telegramと連携",
       "logout": "ログアウト",
       "hideFromBot": "ボット検索から非表示",
-      "showInBot": "ボット検索に表示"
+      "showInBot": "ボット検索に表示",
+      "filters": {
+        "title": "フィルター",
+        "prompt": "プロンプト",
+        "model": "モデル",
+        "all": "すべて",
+        "withFiles": "ファイルあり",
+        "withImages": "画像あり"
+      },
+      "folders": {
+        "new": "新しいフォルダー",
+        "create": "作成",
+        "cancel": "キャンセル",
+        "actions": "フォルダー操作",
+        "rename": "名前を変更",
+        "delete": "削除",
+        "dragChat": "チャットをドラッグ",
+        "dropChat": "ここにチャットをドラッグ",
+        "unfiled": "未分類",
+        "moveTo": "フォルダーに移動"
+      }
     },
     "empty": {
       "selectOrCreate": "チャットを選択するか、新しく作成してください"

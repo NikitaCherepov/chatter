@@ -742,7 +742,27 @@
       "linkTelegram": "Propojit Telegram",
       "logout": "Odhlásit se",
       "hideFromBot": "Skrýt z vyhledávání botem",
-      "showInBot": "Zobrazit ve vyhledávání botem"
+      "showInBot": "Zobrazit ve vyhledávání botem",
+      "filters": {
+        "title": "Filtry",
+        "prompt": "Výzva",
+        "model": "Model",
+        "all": "Vše",
+        "withFiles": "Se soubory",
+        "withImages": "S obrázky"
+      },
+      "folders": {
+        "new": "Nová složka",
+        "create": "Vytvořit",
+        "cancel": "Zrušit",
+        "actions": "Akce se složkou",
+        "rename": "Přejmenovat",
+        "delete": "Smazat",
+        "dragChat": "Přetáhnout chat",
+        "dropChat": "Přetáhněte sem chat",
+        "unfiled": "Nezarazeno",
+        "moveTo": "Přesunout do složky"
+      }
     },
     "empty": {
       "selectOrCreate": "Vyberte chat nebo vytvořte nový"

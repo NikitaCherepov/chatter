@@ -382,6 +382,15 @@ db.exec(`
 if (!db.prepare("SELECT name FROM sqlite_master WHERE type='index' AND name='idx_chat_messages_active'").get()) {
   db.exec("CREATE INDEX IF NOT EXISTS idx_chat_messages_active ON chat_messages(user_id, chat_id, archived, id DESC)");
 }
+db.exec(`
+  CREATE INDEX IF NOT EXISTS idx_chat_messages_user_prompt_chat
+  ON chat_messages(user_id, prompt_name, chat_id)
+  WHERE prompt_name IS NOT NULL;
+
+  CREATE INDEX IF NOT EXISTS idx_chat_messages_user_model_chat
+  ON chat_messages(user_id, model_name, chat_id)
+  WHERE model_name IS NOT NULL;
+`);
 
 db.exec("UPDATE users SET is_admin = 1 WHERE role = 'admin'");
 

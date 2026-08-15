@@ -110,19 +110,58 @@ export const ensureActiveChat = (userId: number) => {
   return chatId;
 };
 
-export const listUserChats = (userId: number, limit = 50, offset = 0): ChatDto[] => {
+export type ChatListFilters = {
+  promptName?: string;
+  modelName?: string;
+  hasFiles?: boolean;
+  hasImages?: boolean;
+};
+
+export const listUserChats = (userId: number, limit = 50, offset = 0, filters: ChatListFilters = {}): ChatDto[] => {
   const activeId = ensureActiveChat(userId);
   const parsedLimit = Number.isFinite(limit) ? Math.floor(limit) : 50;
   const parsedOffset = Number.isFinite(offset) ? Math.floor(offset) : 0;
   const safeLimit = Math.max(1, Math.min(100, parsedLimit));
   const safeOffset = Math.max(0, parsedOffset);
+  const conditions = ['uc.user_id = ?'];
+  const params: Array<string | number> = [userId];
+  if (filters.promptName) {
+    conditions.push(`EXISTS (
+      SELECT 1 FROM chat_messages cm
+      WHERE cm.user_id = uc.user_id AND cm.chat_id = uc.id AND cm.prompt_name = ?
+    )`);
+    params.push(filters.promptName);
+  }
+  if (filters.modelName) {
+    conditions.push(`EXISTS (
+      SELECT 1 FROM chat_messages cm
+      WHERE cm.user_id = uc.user_id AND cm.chat_id = uc.id AND cm.model_name = ?
+    )`);
+    params.push(filters.modelName);
+  }
+  if (filters.hasFiles) {
+    conditions.push(`EXISTS (
+      SELECT 1 FROM chat_messages cm
+      WHERE cm.user_id = uc.user_id AND cm.chat_id = uc.id
+        AND cm.attachments IS NOT NULL
+        AND TRIM(cm.attachments) NOT IN ('', '[]', 'null')
+    )`);
+  }
+  if (filters.hasImages) {
+    conditions.push(`EXISTS (
+      SELECT 1 FROM chat_messages cm
+      WHERE cm.user_id = uc.user_id AND cm.chat_id = uc.id
+        AND cm.images IS NOT NULL
+        AND TRIM(cm.images) NOT IN ('', '[]', 'null')
+    )`);
+  }
   const rows = db.prepare(`
-    SELECT id, title, folder_id, created_at, updated_at, bot_hidden
-    FROM user_chats
-    WHERE user_id = ?
-    ORDER BY updated_at DESC, id DESC
+    SELECT uc.id, uc.title, uc.folder_id, uc.created_at, uc.updated_at, uc.bot_hidden
+    FROM user_chats uc
+    WHERE ${conditions.join('\n      AND ')}
+    ORDER BY uc.updated_at DESC, uc.id DESC
     LIMIT ? OFFSET ?
-  `).all(userId, safeLimit, safeOffset) as Array<{ id: number; title: string; folder_id: number | null; created_at: string; updated_at: string; bot_hidden: number }>;
+  `).all(...params, safeLimit, safeOffset) as Array<{ id: number; title: string; folder_id: number | null; created_at: string; updated_at: string; bot_hidden: number }>;
 
   return rows.map(row => ({
     id: row.id,
@@ -133,6 +172,32 @@ export const listUserChats = (userId: number, limit = 50, offset = 0): ChatDto[]
     is_active: row.id === activeId,
     bot_hidden: row.bot_hidden === 1
   }));
+};
+
+export type ChatFilterOptions = {
+  prompts: string[];
+  models: string[];
+};
+
+export const listChatFilterOptions = (userId: number): ChatFilterOptions => {
+  const prompts = db.prepare(`
+    SELECT DISTINCT cm.prompt_name AS value
+    FROM chat_messages cm
+    INNER JOIN user_chats uc ON uc.id = cm.chat_id AND uc.user_id = cm.user_id
+    WHERE cm.user_id = ? AND cm.prompt_name IS NOT NULL AND TRIM(cm.prompt_name) != ''
+    ORDER BY cm.prompt_name COLLATE NOCASE ASC
+  `).all(userId) as Array<{ value: string }>;
+  const models = db.prepare(`
+    SELECT DISTINCT cm.model_name AS value
+    FROM chat_messages cm
+    INNER JOIN user_chats uc ON uc.id = cm.chat_id AND uc.user_id = cm.user_id
+    WHERE cm.user_id = ? AND cm.model_name IS NOT NULL AND TRIM(cm.model_name) != ''
+    ORDER BY cm.model_name COLLATE NOCASE ASC
+  `).all(userId) as Array<{ value: string }>;
+  return {
+    prompts: prompts.map((row) => row.value),
+    models: models.map((row) => row.value),
+  };
 };
 
 export type ChatFolderDto = {

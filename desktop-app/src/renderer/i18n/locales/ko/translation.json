@@ -742,7 +742,27 @@
       "linkTelegram": "Telegram 연결",
       "logout": "로그아웃",
       "hideFromBot": "봇 검색에서 숨기기",
-      "showInBot": "봇 검색에 표시"
+      "showInBot": "봇 검색에 표시",
+      "filters": {
+        "title": "필터",
+        "prompt": "프롬프트",
+        "model": "모델",
+        "all": "전체",
+        "withFiles": "파일 포함",
+        "withImages": "이미지 포함"
+      },
+      "folders": {
+        "new": "새 폴더",
+        "create": "만들기",
+        "cancel": "취소",
+        "actions": "폴더 작업",
+        "rename": "이름 바꾸기",
+        "delete": "삭제",
+        "dragChat": "채팅 끌기",
+        "dropChat": "여기에 채팅을 끌어다 놓으세요",
+        "unfiled": "분류되지 않음",
+        "moveTo": "폴더로 이동"
+      }
     },
     "empty": {
       "selectOrCreate": "채팅을 선택하거나 새로 만드세요"

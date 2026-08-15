@@ -436,7 +436,27 @@
       "showInBot": "Show in bot search",
       "unlinkTelegram": "Unlink Telegram",
       "linkTelegram": "Link Telegram",
-      "logout": "Log out"
+      "logout": "Log out",
+      "filters": {
+        "title": "Filters",
+        "prompt": "Prompt",
+        "model": "Model",
+        "all": "All",
+        "withFiles": "With files",
+        "withImages": "With images"
+      },
+      "folders": {
+        "new": "New folder",
+        "create": "Create",
+        "cancel": "Cancel",
+        "actions": "Folder actions",
+        "rename": "Rename",
+        "delete": "Delete",
+        "dragChat": "Drag chat",
+        "dropChat": "Drag a chat here",
+        "unfiled": "Unfiled",
+        "moveTo": "Move to folder"
+      }
     },
     "empty": {
       "selectOrCreate": "Select a chat or create a new one"

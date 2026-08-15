@@ -421,7 +421,27 @@
       "linkTelegram": "Vincular Telegram",
       "logout": "Sair",
       "hideFromBot": "Ocultar da pesquisa do bot",
-      "showInBot": "Mostrar na pesquisa do bot"
+      "showInBot": "Mostrar na pesquisa do bot",
+      "filters": {
+        "title": "Filtros",
+        "prompt": "Prompt",
+        "model": "Modelo",
+        "all": "Todos",
+        "withFiles": "Com arquivos",
+        "withImages": "Com imagens"
+      },
+      "folders": {
+        "new": "Nova pasta",
+        "create": "Criar",
+        "cancel": "Cancelar",
+        "actions": "Ações da pasta",
+        "rename": "Renomear",
+        "delete": "Excluir",
+        "dragChat": "Arrastar conversa",
+        "dropChat": "Arraste uma conversa para cá",
+        "unfiled": "Sem pasta",
+        "moveTo": "Mover para pasta"
+      }
     },
     "empty": {
       "selectOrCreate": "Selecione um chat ou crie um novo"

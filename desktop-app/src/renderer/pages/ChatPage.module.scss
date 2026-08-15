@@ -46,9 +46,15 @@
   padding: 24px 16px 16px;
 }
 
-.sidebarTitle {
+.sidebarTitleGroup {
   flex: 1;
   min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.sidebarTitle {
   font-size: 14px;
   font-weight: 600;
   color: var(--text-primary);

@@ -421,7 +421,27 @@
       "linkTelegram": "Telegram verbinden",
       "logout": "Abmelden",
       "hideFromBot": "Vor Botsuche ausblenden",
-      "showInBot": "In Botsuche anzeigen"
+      "showInBot": "In Botsuche anzeigen",
+      "filters": {
+        "title": "Filter",
+        "prompt": "Eingabeaufforderung",
+        "model": "Modell",
+        "all": "Alle",
+        "withFiles": "Mit Dateien",
+        "withImages": "Mit Bildern"
+      },
+      "folders": {
+        "new": "Neuer Ordner",
+        "create": "Erstellen",
+        "cancel": "Abbrechen",
+        "actions": "Ordneraktionen",
+        "rename": "Umbenennen",
+        "delete": "Löschen",
+        "dragChat": "Chat ziehen",
+        "dropChat": "Ziehen Sie einen Chat hierher",
+        "unfiled": "Nicht abgelegt",
+        "moveTo": "In Ordner verschieben"
+      }
     },
     "empty": {
       "selectOrCreate": "Wählen Sie einen Chat aus oder erstellen Sie einen neuen"
