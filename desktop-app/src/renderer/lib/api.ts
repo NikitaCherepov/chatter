@@ -306,6 +306,7 @@ export type Message = {
   token_count?: number;
   /** Токены reasoning_content (только для assistant). */
   reasoning_tokens?: number;
+  prompt_id?: number | null;
   prompt_name?: string | null;
   model_name?: string | null;
   provider_name?: string | null;
@@ -333,7 +334,7 @@ export type ChatFolder = {
 };
 
 export type ChatListFilters = {
-  prompt?: string;
+  promptId?: number;
   model?: string;
   hasFiles?: boolean;
   hasImages?: boolean;
@@ -342,7 +343,7 @@ export type ChatListFilters = {
 
 export async function getChats(limit = 25, offset = 0, filters: ChatListFilters = {}): Promise<{ chats: ChatInfo[]; active_chat_id: number | null; total: number }> {
   const params = new URLSearchParams({ limit: `${limit}`, offset: `${offset}` });
-  if (filters.prompt) params.set('prompt', filters.prompt);
+  if (filters.promptId !== undefined) params.set('prompt_id', `${filters.promptId}`);
   if (filters.model) params.set('model', filters.model);
   if (filters.hasFiles) params.set('has_files', '1');
   if (filters.hasImages) params.set('has_images', '1');
@@ -351,13 +352,13 @@ export async function getChats(limit = 25, offset = 0, filters: ChatListFilters 
   return apiFetch(`/api/v1/chats?${params.toString()}`);
 }
 
-export async function getChatFilterOptions(): Promise<{ prompts: string[]; models: string[] }> {
+export async function getChatFilterOptions(): Promise<{ prompts: Array<{ id: number; name: string }>; models: string[] }> {
   return apiFetch('/api/v1/chat-filter-options');
 }
 
 export async function getChatFolders(filters: ChatListFilters = {}): Promise<{ folders: ChatFolder[]; unfiled_count: number; total_count: number; active_chat_id: number | null; active_chat: ChatInfo | null }> {
   const params = new URLSearchParams();
-  if (filters.prompt) params.set('prompt', filters.prompt);
+  if (filters.promptId !== undefined) params.set('prompt_id', `${filters.promptId}`);
   if (filters.model) params.set('model', filters.model);
   if (filters.hasFiles) params.set('has_files', '1');
   if (filters.hasImages) params.set('has_images', '1');
@@ -530,6 +531,7 @@ export type ChatSendResponse = {
   tool_calls?: ToolCall[];
   token_count?: number;
   reasoning_tokens?: number;
+  prompt_id?: number | null;
   prompt_name?: string | null;
   model_name?: string | null;
   provider_name?: string | null;

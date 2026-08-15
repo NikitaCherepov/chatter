@@ -6739,6 +6739,7 @@ export const sendMessageThroughAi = async (
   let usedModel = '';
   let usedProvider = '';
   let usedUniqueId: string | null = null;
+  let responsePromptId: number | null = null;
   let responsePromptName = 'Chatter';
   let diceRollValue: number | null = null;
   const usageCalls: TokenUsageCall[] = [];
@@ -7171,6 +7172,7 @@ export const sendMessageThroughAi = async (
   const isGuestMode = Boolean(flags?.disable_personal);
   const resolvedPrompt = isGuestMode ? null : resolvePromptForUser(promptUser);
   const promptContent = resolvedPrompt?.content || '';
+  responsePromptId = resolvedPrompt?.id ?? null;
   responsePromptName = resolvedPrompt?.name || (isGuestMode ? 'Guest' : 'Chatter');
   const coreMemoryForPrompt = isGuestMode ? '' : (user.core_memory || '');
   const pinnedHintForPrompt = isGuestMode ? '' : pinnedHint;
@@ -7880,6 +7882,7 @@ iterations.push(currentIteration);
         assistantMessageImages, reasoningContent, tcJson, null, subagentsJson,
         {
           usage: messageUsage,
+          promptId: responsePromptId,
           promptName: responsePromptName,
           modelName: responseModelName,
           providerName: usedProvider || null,
@@ -7951,6 +7954,7 @@ iterations.push(currentIteration);
       reasoning_tokens: aggregateUsage.reasoning_tokens,
       calls: usageCalls,
     },
+    prompt_id: responsePromptId,
     prompt_name: responsePromptName,
     model_name: responseModelName,
     provider_name: usedProvider || null,
@@ -7997,6 +8001,7 @@ iterations.push(currentIteration);
             abortedReasoning, abortedTcJson, null, abortedSubagentsJson,
             {
               usage: abortedMessageUsage,
+              promptId: responsePromptId,
               promptName: responsePromptName,
               modelName: abortedModelName,
               providerName: usedProvider || null,
@@ -8033,6 +8038,7 @@ iterations.push(currentIteration);
           reasoning_tokens: abortedAggregateUsage.reasoning_tokens,
           calls: usageCalls,
         },
+        prompt_id: responsePromptId,
         prompt_name: responsePromptName,
         model_name: abortedModelName,
         provider_name: usedProvider || null,

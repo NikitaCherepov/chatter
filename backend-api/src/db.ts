@@ -324,6 +324,7 @@ ensureChatMessageColumn('token_count', 'ALTER TABLE chat_messages ADD COLUMN tok
 ensureChatMessageColumn('reasoning_tokens', 'ALTER TABLE chat_messages ADD COLUMN reasoning_tokens INTEGER NOT NULL DEFAULT 0');
 // Exact provider usage and response metadata (local token_count remains the context-trimming weight).
 ensureChatMessageColumn('usage_json', 'ALTER TABLE chat_messages ADD COLUMN usage_json TEXT');
+ensureChatMessageColumn('prompt_id', 'ALTER TABLE chat_messages ADD COLUMN prompt_id INTEGER');
 ensureChatMessageColumn('prompt_name', 'ALTER TABLE chat_messages ADD COLUMN prompt_name TEXT');
 ensureChatMessageColumn('model_name', 'ALTER TABLE chat_messages ADD COLUMN model_name TEXT');
 ensureChatMessageColumn('provider_name', 'ALTER TABLE chat_messages ADD COLUMN provider_name TEXT');
@@ -383,9 +384,10 @@ if (!db.prepare("SELECT name FROM sqlite_master WHERE type='index' AND name='idx
   db.exec("CREATE INDEX IF NOT EXISTS idx_chat_messages_active ON chat_messages(user_id, chat_id, archived, id DESC)");
 }
 db.exec(`
-  CREATE INDEX IF NOT EXISTS idx_chat_messages_user_prompt_chat
-  ON chat_messages(user_id, prompt_name, chat_id)
-  WHERE prompt_name IS NOT NULL;
+  DROP INDEX IF EXISTS idx_chat_messages_user_prompt_chat;
+  CREATE INDEX IF NOT EXISTS idx_chat_messages_user_prompt_id_chat
+  ON chat_messages(user_id, prompt_id, chat_id)
+  WHERE prompt_id IS NOT NULL;
 
   CREATE INDEX IF NOT EXISTS idx_chat_messages_user_model_chat
   ON chat_messages(user_id, model_name, chat_id)
@@ -598,6 +600,65 @@ db.exec(`
 `);
 
 db.exec("CREATE INDEX IF NOT EXISTS idx_user_prompts_user ON user_prompts(user_id)");
+
+// Historical prompt identity migration. A message keeps both the stable ID
+// and the name snapshot that was visible when the answer was generated.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS schema_migrations (
+    key TEXT PRIMARY KEY,
+    applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )
+`);
+const promptIdMigrationKey = 'chat_messages_prompt_id_v1';
+if (!db.prepare('SELECT 1 FROM schema_migrations WHERE key = ?').get(promptIdMigrationKey)) {
+  const migratePromptIds = db.transaction(() => {
+    const result = db.prepare(`
+      UPDATE chat_messages AS cm
+      SET prompt_id = COALESCE(
+        (
+          SELECT u.selected_prompt_id
+          FROM users u
+          INNER JOIN prompts p ON p.id = u.selected_prompt_id
+          WHERE u.id = cm.user_id
+            AND p.name = cm.prompt_name COLLATE NOCASE
+        ),
+        (
+          SELECT u.selected_prompt_id
+          FROM users u
+          INNER JOIN user_prompts up ON up.id = (-u.selected_prompt_id - 1000)
+          WHERE u.id = cm.user_id
+            AND u.selected_prompt_id <= -1000
+            AND up.user_id = cm.user_id
+            AND up.name = cm.prompt_name COLLATE NOCASE
+        ),
+        (
+          SELECT -(1000 + up.id)
+          FROM user_prompts up
+          WHERE up.user_id = cm.user_id
+            AND up.name = cm.prompt_name COLLATE NOCASE
+          ORDER BY up.id DESC
+          LIMIT 1
+        ),
+        (
+          SELECT p.id
+          FROM prompts p
+          WHERE p.name = cm.prompt_name COLLATE NOCASE
+          ORDER BY p.id ASC
+          LIMIT 1
+        ),
+        CASE WHEN lower(cm.prompt_name) = 'custom' THEN -1 ELSE NULL END
+      )
+      WHERE cm.prompt_id IS NULL
+        AND cm.role = 'assistant'
+        AND cm.prompt_name IS NOT NULL
+        AND trim(cm.prompt_name) != ''
+    `).run();
+    db.prepare('INSERT INTO schema_migrations (key) VALUES (?)').run(promptIdMigrationKey);
+    return result.changes;
+  });
+  const migrated = migratePromptIds();
+  console.log(`[db] prompt_id migration completed: ${migrated} historical messages linked`);
+}
 
 // ── Currency rates (CBR) ──────────────────────────────────────────────────────
 

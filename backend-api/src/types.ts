@@ -126,6 +126,7 @@ export type MessageDto = {
   /** Локально посчитанные токены (без reasoning_content). См. MessageTokensDto. */
   token_count?: number;
   reasoning_tokens?: number;
+  prompt_id?: number | null;
   prompt_name?: string | null;
   model_name?: string | null;
   provider_name?: string | null;
@@ -239,6 +240,7 @@ export type AiSendResult = {
   reasoning_tokens?: number;
   /** Токены user-сообщения (если было сохранено новое). См. MessageTokensDto. */
   user_token_count?: number;
+  prompt_id?: number | null;
   prompt_name?: string | null;
   model_name?: string | null;
   provider_name?: string | null;

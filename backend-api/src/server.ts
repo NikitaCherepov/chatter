@@ -1464,7 +1464,11 @@ app.get('/api/v1/chats', (req: AuthedRequest, res) => {
   const userId = accountIdFromRequest(req);
   const limit = Number.parseInt(`${req.query.limit || '50'}`, 10);
   const offset = Number.parseInt(`${req.query.offset || '0'}`, 10);
-  const promptName = `${req.query.prompt || ''}`.trim();
+  const promptIdRaw = req.query.prompt_id;
+  const promptId = promptIdRaw === undefined ? undefined : Number(`${promptIdRaw}`);
+  if (promptId !== undefined && (!Number.isSafeInteger(promptId) || promptId === 0)) {
+    return res.status(400).json({ error: 'bad_prompt_id' });
+  }
   const modelName = `${req.query.model || ''}`.trim();
   const folderQuery = req.query.folder;
   let folderId: number | null | undefined;
@@ -1478,7 +1482,7 @@ app.get('/api/v1/chats', (req: AuthedRequest, res) => {
     folderId = parsedFolderId;
   }
   const filters = {
-    promptName: promptName || undefined,
+    promptId,
     modelName: modelName || undefined,
     hasFiles: req.query.has_files === '1',
     hasImages: req.query.has_images === '1',
@@ -1499,11 +1503,15 @@ app.get('/api/v1/chat-filter-options', (req: AuthedRequest, res) => {
 
 app.get('/api/v1/chat-folders', (req: AuthedRequest, res) => {
   const userId = accountIdFromRequest(req);
-  const promptName = `${req.query.prompt || ''}`.trim();
+  const promptIdRaw = req.query.prompt_id;
+  const promptId = promptIdRaw === undefined ? undefined : Number(`${promptIdRaw}`);
+  if (promptId !== undefined && (!Number.isSafeInteger(promptId) || promptId === 0)) {
+    return res.status(400).json({ error: 'bad_prompt_id' });
+  }
   const modelName = `${req.query.model || ''}`.trim();
   const activeChatId = ensureActiveChat(userId);
   return res.json({ ...listChatFolders(userId, {
-    promptName: promptName || undefined,
+    promptId,
     modelName: modelName || undefined,
     hasFiles: req.query.has_files === '1',
     hasImages: req.query.has_images === '1',

@@ -111,7 +111,7 @@ export const ensureActiveChat = (userId: number) => {
 };
 
 export type ChatListFilters = {
-  promptName?: string;
+  promptId?: number;
   modelName?: string;
   hasFiles?: boolean;
   hasImages?: boolean;
@@ -121,12 +121,12 @@ export type ChatListFilters = {
 const buildUserChatFilter = (userId: number, filters: ChatListFilters) => {
   const conditions = ['uc.user_id = ?'];
   const params: Array<string | number> = [userId];
-  if (filters.promptName) {
+  if (Number.isSafeInteger(filters.promptId) && filters.promptId !== 0) {
     conditions.push(`EXISTS (
       SELECT 1 FROM chat_messages cm
-      WHERE cm.user_id = uc.user_id AND cm.chat_id = uc.id AND cm.prompt_name = ?
+      WHERE cm.user_id = uc.user_id AND cm.chat_id = uc.id AND cm.prompt_id = ?
     )`);
-    params.push(filters.promptName);
+    params.push(Number(filters.promptId));
   }
   if (filters.modelName) {
     conditions.push(`EXISTS (
@@ -216,18 +216,22 @@ export const countUserChats = (userId: number, filters: ChatListFilters = {}): n
 };
 
 export type ChatFilterOptions = {
-  prompts: string[];
+  prompts: Array<{ id: number; name: string }>;
   models: string[];
 };
 
 export const listChatFilterOptions = (userId: number): ChatFilterOptions => {
   const prompts = db.prepare(`
-    SELECT DISTINCT cm.prompt_name AS value
+    SELECT cm.prompt_id AS id, cm.prompt_name AS name
     FROM chat_messages cm
-    INNER JOIN user_chats uc ON uc.id = cm.chat_id AND uc.user_id = cm.user_id
-    WHERE cm.user_id = ? AND cm.prompt_name IS NOT NULL AND TRIM(cm.prompt_name) != ''
-    ORDER BY cm.prompt_name COLLATE NOCASE ASC
-  `).all(userId) as Array<{ value: string }>;
+    INNER JOIN (
+      SELECT prompt_id, MAX(id) AS message_id
+      FROM chat_messages
+      WHERE user_id = ? AND prompt_id IS NOT NULL
+      GROUP BY prompt_id
+    ) latest ON latest.message_id = cm.id
+    ORDER BY cm.prompt_name COLLATE NOCASE ASC, cm.prompt_id ASC
+  `).all(userId) as Array<{ id: number; name: string | null }>;
   const models = db.prepare(`
     SELECT DISTINCT cm.model_name AS value
     FROM chat_messages cm
@@ -236,7 +240,7 @@ export const listChatFilterOptions = (userId: number): ChatFilterOptions => {
     ORDER BY cm.model_name COLLATE NOCASE ASC
   `).all(userId) as Array<{ value: string }>;
   return {
-    prompts: prompts.map((row) => row.value),
+    prompts: prompts.map((row) => ({ id: row.id, name: row.name?.trim() || `Prompt ${row.id}` })),
     models: models.map((row) => row.value),
   };
 };
@@ -430,7 +434,7 @@ export const forkChat = (
     const rows = db.prepare(`
       SELECT id, role, content, images, audio, reasoning_content,
              tool_calls_json, token_count, reasoning_tokens,
-             attachments, subagents_json, usage_json, prompt_name, model_name, provider_name, archived
+             attachments, subagents_json, usage_json, prompt_id, prompt_name, model_name, provider_name, archived
       FROM chat_messages
       WHERE user_id = ? AND chat_id = ? AND id <= ?
       ORDER BY id ASC
@@ -447,6 +451,7 @@ export const forkChat = (
       attachments: string | null;
       subagents_json: string | null;
       usage_json: string | null;
+      prompt_id: number | null;
       prompt_name: string | null;
       model_name: string | null;
       provider_name: string | null;
@@ -459,9 +464,9 @@ export const forkChat = (
         telegram_chat_id, telegram_message_id,
         images, audio, reasoning_content, tool_calls_json,
         token_count, reasoning_tokens, attachments, subagents_json,
-        usage_json, prompt_name, model_name, provider_name, archived
+        usage_json, prompt_id, prompt_name, model_name, provider_name, archived
       )
-      VALUES (?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     for (const row of rows) {
@@ -502,6 +507,7 @@ export const forkChat = (
         newAttachmentsJson,
         row.subagents_json,
         row.usage_json,
+        row.prompt_id,
         row.prompt_name,
         row.model_name,
         row.provider_name,
@@ -821,13 +827,13 @@ export const getChatMessages = (userId: number, chatId: number, limit = 20, offs
   const rows = db.prepare(`
     SELECT id, chat_id, role, content, reasoning_content, tool_calls_json, images, audio,
            telegram_chat_id, telegram_message_id, created_at, archived, token_count,
-           reasoning_tokens, attachments, subagents_json, usage_json, prompt_name,
+           reasoning_tokens, attachments, subagents_json, usage_json, prompt_id, prompt_name,
            model_name, provider_name
     FROM chat_messages
     WHERE user_id = ? AND chat_id = ?
     ORDER BY id DESC
     LIMIT ? OFFSET ?
-  `).all(userId, chatId, safeLimit, safeOffset) as Array<{ id: number; chat_id: number; role: ChatRole; content: string; reasoning_content: string | null; tool_calls_json: string | null; images: string | null; audio: string | null; telegram_chat_id: number | null; telegram_message_id: number | null; created_at: string; archived: number; token_count: number; reasoning_tokens: number; attachments: string | null; subagents_json: string | null; usage_json: string | null; prompt_name: string | null; model_name: string | null; provider_name: string | null }>;
+  `).all(userId, chatId, safeLimit, safeOffset) as Array<{ id: number; chat_id: number; role: ChatRole; content: string; reasoning_content: string | null; tool_calls_json: string | null; images: string | null; audio: string | null; telegram_chat_id: number | null; telegram_message_id: number | null; created_at: string; archived: number; token_count: number; reasoning_tokens: number; attachments: string | null; subagents_json: string | null; usage_json: string | null; prompt_id: number | null; prompt_name: string | null; model_name: string | null; provider_name: string | null }>;
 
   return rows.reverse().map(row => {
     let parsedImages: MessageImage[] | null = null;
@@ -889,6 +895,7 @@ export const getChatMessages = (userId: number, chatId: number, limit = 20, offs
       archived: row.archived === 1,
       token_count: row.token_count ?? 0,
       reasoning_tokens: row.reasoning_tokens ?? 0,
+      prompt_id: row.prompt_id,
       prompt_name: row.prompt_name,
       model_name: row.model_name,
       provider_name: row.provider_name,
@@ -1005,6 +1012,7 @@ export const appendChatMessage = async (
   subagentsJson: string | null = null,
   metadata?: {
     usage?: MessageUsage | null;
+    promptId?: number | null;
     promptName?: string | null;
     modelName?: string | null;
     providerName?: string | null;
@@ -1016,6 +1024,7 @@ export const appendChatMessage = async (
   const tcJson = role === 'assistant' && toolCallsJson?.trim() ? toolCallsJson.trim() : null;
   const saj = role === 'assistant' && subagentsJson?.trim() ? subagentsJson.trim() : null;
   const usageJson = role === 'assistant' && metadata?.usage ? JSON.stringify(metadata.usage) : null;
+  const promptId = role === 'assistant' && Number.isSafeInteger(metadata?.promptId) ? Number(metadata?.promptId) : null;
   const promptName = role === 'assistant' ? metadata?.promptName?.trim() || null : null;
   const modelName = role === 'assistant' ? metadata?.modelName?.trim() || null : null;
   const providerName = role === 'assistant' ? metadata?.providerName?.trim() || null : null;
@@ -1128,13 +1137,13 @@ export const appendChatMessage = async (
     INSERT INTO chat_messages (
       user_id, role, content, chat_id, telegram_chat_id, telegram_message_id,
       images, reasoning_content, tool_calls_json, token_count, reasoning_tokens,
-      attachments, subagents_json, usage_json, prompt_name, model_name, provider_name
+      attachments, subagents_json, usage_json, prompt_id, prompt_name, model_name, provider_name
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     userId, role, content, chatId, telegramChatId, telegramMessageId,
     imagesJson, reasoning, tcJson, tokenCount, reasoningTokens,
-    attachmentsJson, saj, usageJson, promptName, modelName, providerName
+    attachmentsJson, saj, usageJson, promptId, promptName, modelName, providerName
   );
   db.prepare('UPDATE user_chats SET updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND id = ?').run(userId, chatId);
   return Number(inserted.lastInsertRowid);

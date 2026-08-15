@@ -826,7 +826,7 @@ export function ChatPage() {
   const [demoModelFilter, setDemoModelFilter] = useState('all');
   const [demoFilesFilter, setDemoFilesFilter] = useState(false);
   const [demoImagesFilter, setDemoImagesFilter] = useState(false);
-  const [chatFilterOptions, setChatFilterOptions] = useState<{ prompts: string[]; models: string[] }>({ prompts: [], models: [] });
+  const [chatFilterOptions, setChatFilterOptions] = useState<{ prompts: Array<{ id: number; name: string }>; models: string[] }>({ prompts: [], models: [] });
   const [msgMenuId, setMsgMenuId] = useState<number | null>(null);
   const [msgMenuPos, setMsgMenuPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const msgMenuTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1017,7 +1017,7 @@ export function ChatPage() {
   }, []);
 
   const getCurrentChatFilters = useCallback((): api.ChatListFilters => ({
-    prompt: demoPromptFilter === 'all' ? undefined : demoPromptFilter,
+    promptId: demoPromptFilter === 'all' ? undefined : Number(demoPromptFilter),
     model: demoModelFilter === 'all' ? undefined : demoModelFilter,
     hasFiles: demoFilesFilter,
     hasImages: demoImagesFilter,
@@ -1030,10 +1030,10 @@ export function ChatPage() {
       const filters = getCurrentChatFilters();
       const [folderRes, filterOptions] = await Promise.all([
         api.getChatFolders(filters).catch(() => ({ folders: [] as api.ChatFolder[], unfiled_count: 0, total_count: 0, active_chat_id: null, active_chat: null })),
-        api.getChatFilterOptions().catch(() => ({ prompts: [] as string[], models: [] as string[] })),
+        api.getChatFilterOptions().catch(() => ({ prompts: [] as Array<{ id: number; name: string }>, models: [] as string[] })),
       ]);
       if (generation !== chatListGenerationRef.current) return;
-      const hasActiveFilters = Boolean(filters.prompt || filters.model || filters.hasFiles || filters.hasImages);
+      const hasActiveFilters = Boolean(filters.promptId !== undefined || filters.model || filters.hasFiles || filters.hasImages);
       setChats(!hasActiveFilters && folderRes.active_chat
         ? [{ ...folderRes.active_chat, folder_id: folderRes.active_chat.folder_id ?? null }]
         : []);
@@ -1950,6 +1950,7 @@ export function ChatPage() {
                       reasoning_content: res.reasoning_content ?? null,
                       tool_calls: res.tool_calls ?? null,
                       subagents: res.subagents ?? null,
+                      prompt_id: res.prompt_id ?? null,
                       prompt_name: res.prompt_name ?? null,
                       model_name: res.model_name ?? null,
                       provider_name: res.provider_name ?? null,
@@ -1982,6 +1983,7 @@ export function ChatPage() {
                     reasoning_content: res.reasoning_content ?? null,
                     tool_calls: res.tool_calls ?? null,
                     subagents: res.subagents ?? null,
+                    prompt_id: res.prompt_id ?? null,
                     prompt_name: res.prompt_name ?? null,
                     model_name: res.model_name ?? null,
                     provider_name: res.provider_name ?? null,
@@ -2027,6 +2029,7 @@ export function ChatPage() {
                   tool_calls: res.tool_calls ?? null,
                   ...(genImages ? { images: genImages } : {}),
                   subagents: res.subagents ?? null,
+                  prompt_id: res.prompt_id ?? null,
                   prompt_name: res.prompt_name ?? null,
                   model_name: res.model_name ?? null,
                   provider_name: res.provider_name ?? null,
@@ -2063,6 +2066,7 @@ export function ChatPage() {
                 tool_calls: res.tool_calls ?? null,
                 images: genImages,
                 subagents: res.subagents ?? null,
+                prompt_id: res.prompt_id ?? null,
                 prompt_name: res.prompt_name ?? null,
                 model_name: res.model_name ?? null,
                 provider_name: res.provider_name ?? null,
@@ -2605,6 +2609,7 @@ export function ChatPage() {
           setStreamingState('done');
           setStreamingMsgId(null);
           const responseMetadata = {
+            prompt_id: res.prompt_id ?? null,
             prompt_name: res.prompt_name ?? null,
             model_name: res.model_name ?? null,
             provider_name: res.provider_name ?? null,
@@ -2787,6 +2792,7 @@ export function ChatPage() {
           setStreamingState('done');
           setStreamingMsgId(null);
           const responseMetadata = {
+            prompt_id: res.prompt_id ?? null,
             prompt_name: res.prompt_name ?? null,
             model_name: res.model_name ?? null,
             provider_name: res.provider_name ?? null,
@@ -3554,7 +3560,12 @@ export function ChatPage() {
                     onChange={setDemoPromptFilter}
                     options={[
                       { value: 'all', label: t('chat.sidebar.filters.all') },
-                      ...chatFilterOptions.prompts.map((prompt) => ({ value: prompt, label: prompt })),
+                      ...chatFilterOptions.prompts.map((prompt) => ({
+                        value: `${prompt.id}`,
+                        label: chatFilterOptions.prompts.some((other) => other.id !== prompt.id && other.name === prompt.name)
+                          ? `${prompt.name} · #${prompt.id}`
+                          : prompt.name,
+                      })),
                     ]}
                   />
                 </label>
