@@ -313,6 +313,23 @@
   }
 }
 
+.roomParticipantCardDragging { opacity: 0.25; }
+
+.roomParticipantCardDropTarget {
+  border-color: var(--accent);
+  background-color: var(--bg-primary);
+}
+
+.roomParticipantCardOverlay {
+  box-sizing: border-box;
+  border-color: var(--border-medium);
+  background-color: var(--bg-secondary);
+  box-shadow: 0 10px 28px rgba(16, 38, 64, 0.18);
+  pointer-events: none;
+
+  .roomParticipantDrag { opacity: 1; }
+}
+
 .roomAddParticipantWrap { position: relative; }
 
 .roomPromptPicker {

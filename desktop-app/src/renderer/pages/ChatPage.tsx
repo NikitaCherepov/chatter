@@ -89,6 +89,43 @@ function DemoDroppableFolder({
   );
 }
 
+function DemoDraggableRoomParticipant({
+  participantId,
+  children,
+}: {
+  participantId: string;
+  children: (dragHandleProps: any) => React.ReactNode;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef: setDraggableNodeRef,
+    isDragging,
+  } = useDraggable({
+    id: `room-participant-drag-${participantId}`,
+    data: { participantId },
+  });
+  const {
+    setNodeRef: setDroppableNodeRef,
+    isOver,
+  } = useDroppable({
+    id: `room-participant-drop-${participantId}`,
+    data: { participantId },
+  });
+
+  return (
+    <div
+      ref={(node) => {
+        setDraggableNodeRef(node);
+        setDroppableNodeRef(node);
+      }}
+      className={`${s.roomParticipantCard} ${isDragging ? s.roomParticipantCardDragging : ''} ${isOver && !isDragging ? s.roomParticipantCardDropTarget : ''}`}
+    >
+      {children({ ...attributes, ...listeners })}
+    </div>
+  );
+}
+
 const chatFolderCollisionDetection: CollisionDetection = (args) => {
   const pointerHits = pointerWithin(args);
   return pointerHits.length > 0 ? pointerHits : closestCenter(args);
@@ -837,6 +874,8 @@ export function ChatPage() {
   const [demoNextParticipant, setDemoNextParticipant] = useState('vega');
   const [demoRoomAutoRespond, setDemoRoomAutoRespond] = useState(true);
   const [demoAddParticipantOpen, setDemoAddParticipantOpen] = useState(false);
+  const [demoDraggingRoomParticipantId, setDemoDraggingRoomParticipantId] = useState<string | null>(null);
+  const [demoDraggingRoomParticipantSize, setDemoDraggingRoomParticipantSize] = useState<{ width: number; height: number } | null>(null);
   const [demoRoomParticipantMenuId, setDemoRoomParticipantMenuId] = useState<string | null>(null);
   const [demoRoomCharacters, setDemoRoomCharacters] = useState([
     { id: 'vega', name: 'Vega', initial: 'V' },
@@ -3602,6 +3641,23 @@ export function ChatPage() {
     setDemoAddParticipantOpen(false);
   };
 
+  const handleDemoRoomParticipantDragEnd = ({ active, over }: DragEndEvent) => {
+    setDemoDraggingRoomParticipantId(null);
+    setDemoDraggingRoomParticipantSize(null);
+    const activeId = String(active.data.current?.participantId || '');
+    const overId = String(over?.data.current?.participantId || '');
+    if (!activeId || !overId || activeId === overId) return;
+    setDemoRoomCharacters((current) => {
+      const fromIndex = current.findIndex((participant) => participant.id === activeId);
+      const toIndex = current.findIndex((participant) => participant.id === overId);
+      if (fromIndex < 0 || toIndex < 0) return current;
+      const next = [...current];
+      const [moved] = next.splice(fromIndex, 1);
+      next.splice(toIndex, 0, moved);
+      return next;
+    });
+  };
+
   return (
     <div className={s.layout}>
       {/* SIDEBAR */}
@@ -6086,50 +6142,89 @@ export function ChatPage() {
                   <span className={s.roomSectionLabel}>{t('chat.room.participants')}</span>
                   <span className={s.roomParticipantTotal}>{demoRoomCharacters.length + 1}</span>
                 </div>
-                <div className={s.roomParticipantList}>
-                  <div className={s.roomParticipantCard}>
-                    <span className={`${s.roomParticipantAvatar} ${s.roomAvatarHuman}`}>{(user?.name || user?.username || 'Y').trim().charAt(0).toUpperCase()}</span>
-                    <div className={s.roomParticipantInfo}>
-                      <strong>{user?.name || user?.username || t('chat.room.you')}</strong>
-                      <span>{t('chat.room.human')}</span>
-                    </div>
-                    <span className={s.roomParticipantYou}>{t('chat.room.you')}</span>
-                  </div>
-                  {demoRoomCharacters.map((participant, index) => (
-                    <div className={s.roomParticipantCard} key={participant.id}>
-                      <button type="button" className={s.roomParticipantDrag} aria-label={t('chat.room.reorder')}>
-                        <svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor"><circle cx="3" cy="3" r="1"/><circle cx="9" cy="3" r="1"/><circle cx="3" cy="8" r="1"/><circle cx="9" cy="8" r="1"/><circle cx="3" cy="13" r="1"/><circle cx="9" cy="13" r="1"/></svg>
-                      </button>
-                      <span className={s.roomParticipantIndex}>{index + 1}</span>
-                      <span className={`${s.roomParticipantAvatar} ${getDemoRoomAvatarClass(participant.id)}`}>{participant.initial}</span>
+                <DndContext
+                  collisionDetection={closestCenter}
+                  onDragStart={({ active }) => {
+                    setDemoDraggingRoomParticipantId(String(active.data.current?.participantId || ''));
+                    const initialRect = active.rect.current.initial;
+                    setDemoDraggingRoomParticipantSize(initialRect ? { width: initialRect.width, height: initialRect.height } : null);
+                    setDemoRoomParticipantMenuId(null);
+                  }}
+                  onDragCancel={() => {
+                    setDemoDraggingRoomParticipantId(null);
+                    setDemoDraggingRoomParticipantSize(null);
+                  }}
+                  onDragEnd={handleDemoRoomParticipantDragEnd}
+                >
+                  <div className={s.roomParticipantList}>
+                    <div className={s.roomParticipantCard}>
+                      <span className={`${s.roomParticipantAvatar} ${s.roomAvatarHuman}`}>{(user?.name || user?.username || 'Y').trim().charAt(0).toUpperCase()}</span>
                       <div className={s.roomParticipantInfo}>
-                        <strong>{participant.name}</strong>
-                        <span>{index === 0 ? t('chat.room.mainAssistant') : t('chat.room.character')}</span>
+                        <strong>{user?.name || user?.username || t('chat.room.you')}</strong>
+                        <span>{t('chat.room.human')}</span>
                       </div>
-                      {demoRoomCharacters.length > 1 && (
-                        <button
-                          type="button"
-                          className={s.roomParticipantMenu}
-                          aria-label={t('common.actions')}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setDemoRoomParticipantMenuId((current) => current === participant.id ? null : participant.id);
-                          }}
-                        >
-                          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><circle cx="8" cy="3" r="1.4"/><circle cx="8" cy="8" r="1.4"/><circle cx="8" cy="13" r="1.4"/></svg>
-                        </button>
-                      )}
-                      {demoRoomParticipantMenuId === participant.id && (
-                        <div className={s.roomParticipantContextMenu} onClick={(event) => event.stopPropagation()}>
-                          <button type="button" onClick={() => removeDemoRoomCharacter(participant.id)}>
-                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-                            {t('chat.room.removeParticipant')}
-                          </button>
-                        </div>
-                      )}
+                      <span className={s.roomParticipantYou}>{t('chat.room.you')}</span>
                     </div>
-                  ))}
-                </div>
+                    {demoRoomCharacters.map((participant, index) => (
+                      <DemoDraggableRoomParticipant participantId={participant.id} key={participant.id}>
+                        {(dragHandleProps) => (
+                          <>
+                            <button type="button" className={s.roomParticipantDrag} aria-label={t('chat.room.reorder')} {...dragHandleProps}>
+                              <svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor"><circle cx="3" cy="3" r="1"/><circle cx="9" cy="3" r="1"/><circle cx="3" cy="8" r="1"/><circle cx="9" cy="8" r="1"/><circle cx="3" cy="13" r="1"/><circle cx="9" cy="13" r="1"/></svg>
+                            </button>
+                            <span className={s.roomParticipantIndex}>{index + 1}</span>
+                            <span className={`${s.roomParticipantAvatar} ${getDemoRoomAvatarClass(participant.id)}`}>{participant.initial}</span>
+                            <div className={s.roomParticipantInfo}>
+                              <strong>{participant.name}</strong>
+                              <span>{index === 0 ? t('chat.room.mainAssistant') : t('chat.room.character')}</span>
+                            </div>
+                            {demoRoomCharacters.length > 1 && (
+                              <button
+                                type="button"
+                                className={s.roomParticipantMenu}
+                                aria-label={t('common.actions')}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  setDemoRoomParticipantMenuId((current) => current === participant.id ? null : participant.id);
+                                }}
+                              >
+                                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><circle cx="8" cy="3" r="1.4"/><circle cx="8" cy="8" r="1.4"/><circle cx="8" cy="13" r="1.4"/></svg>
+                              </button>
+                            )}
+                            {demoRoomParticipantMenuId === participant.id && (
+                              <div className={s.roomParticipantContextMenu} onClick={(event) => event.stopPropagation()}>
+                                <button type="button" onClick={() => removeDemoRoomCharacter(participant.id)}>
+                                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                                  {t('chat.room.removeParticipant')}
+                                </button>
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </DemoDraggableRoomParticipant>
+                    ))}
+                  </div>
+                  <DragOverlay zIndex={10002} dropAnimation={null}>
+                    {demoDraggingRoomParticipantId && (() => {
+                      const participant = demoRoomCharacters.find((item) => item.id === demoDraggingRoomParticipantId);
+                      if (!participant) return null;
+                      const index = demoRoomCharacters.findIndex((item) => item.id === participant.id);
+                      return (
+                        <div className={`${s.roomParticipantCard} ${s.roomParticipantCardOverlay}`} style={demoDraggingRoomParticipantSize || undefined}>
+                          <button type="button" className={s.roomParticipantDrag} tabIndex={-1}>
+                            <svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor"><circle cx="3" cy="3" r="1"/><circle cx="9" cy="3" r="1"/><circle cx="3" cy="8" r="1"/><circle cx="9" cy="8" r="1"/><circle cx="3" cy="13" r="1"/><circle cx="9" cy="13" r="1"/></svg>
+                          </button>
+                          <span className={s.roomParticipantIndex}>{index + 1}</span>
+                          <span className={`${s.roomParticipantAvatar} ${getDemoRoomAvatarClass(participant.id)}`}>{participant.initial}</span>
+                          <div className={s.roomParticipantInfo}>
+                            <strong>{participant.name}</strong>
+                            <span>{index === 0 ? t('chat.room.mainAssistant') : t('chat.room.character')}</span>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </DragOverlay>
+                </DndContext>
                 <div className={s.roomAddParticipantWrap}>
                   {demoAddParticipantOpen && (
                     <div className={s.roomPromptPicker} onClick={(event) => event.stopPropagation()}>
