@@ -16,6 +16,15 @@ never placed in the container environment.
 The Docker socket gives this service host-level privileges. Keep the manager
 small, authenticated and behind TLS. Never add arbitrary shell-command routes.
 
+## Sessions
+
+Successful logins create a random session token stored in the `chatter_admin_session`
+cookie and mirrored to `sessions.json`, so sessions survive manager restarts. The
+session lifetime is 14 days by default and can be overridden with the `SESSION_TTL_MS`
+environment variable (milliseconds) in `manager.env`. Each authenticated request
+slides the server-side expiry, but the cookie `Max-Age` is fixed at login, so the
+browser drops the session at most 14 days after the last login.
+
 ## Request routing
 
 The manager is the browser's single entry point. It serves two kinds of routes:
