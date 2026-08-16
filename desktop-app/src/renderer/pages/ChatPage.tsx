@@ -25,6 +25,7 @@ import { RejectWithComment } from '../components/RejectWithComment';
 import { FileEditDiff } from '../components/FileEditDiff/FileEditDiff';
 import type { ImageItem, DocumentItem } from '../components/AttachModal';
 import { Select } from '../components/Select';
+import { PromptSelector, type PromptOption } from '../components/PromptSelector';
 import Slider from '../components/Slider';
 import { SettingsModal } from '../components/SettingsModal';
 import { Tooltip } from '../components/Tooltip';
@@ -877,7 +878,7 @@ export function ChatPage() {
   const [draggingRoomParticipantSize, setDraggingRoomParticipantSize] = useState<{ width: number; height: number } | null>(null);
   const [roomParticipantMenuId, setRoomParticipantMenuId] = useState<number | null>(null);
   const [roomCharacters, setRoomCharacters] = useState<api.ChatAgent[]>([]);
-  const [roomPrompts, setRoomPrompts] = useState<Array<{ id: number; name: string; description: string }>>([]);
+  const [roomPrompts, setRoomPrompts] = useState<PromptOption[]>([]);
   const [chatFilterOptions, setChatFilterOptions] = useState<{ prompts: Array<{ id: number; name: string }>; models: string[] }>({ prompts: [], models: [] });
   const [msgMenuId, setMsgMenuId] = useState<number | null>(null);
   const [msgMenuPos, setMsgMenuPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
@@ -945,8 +946,8 @@ export function ChatPage() {
       .then((result) => {
         if (cancelled) return;
         setRoomPrompts([
-          ...result.prompts.map(({ id, name, description }) => ({ id, name, description })),
-          ...result.custom_prompts.map(({ id, name, description }) => ({ id, name, description })),
+          ...result.prompts.map(({ id, name, description }) => ({ id, name, description, kind: 'default' as const })),
+          ...result.custom_prompts.map(({ id, name, description }) => ({ id, name, description, kind: 'custom' as const })),
         ]);
       })
       .catch((error) => console.error('Failed to load room prompts:', error));
@@ -6573,21 +6574,15 @@ export function ChatPage() {
                   {addParticipantOpen && (
                     <div className={s.roomPromptPicker} onClick={(event) => event.stopPropagation()}>
                       <div className={s.roomPromptPickerTitle}>{t('chat.room.choosePrompt')}</div>
-                      {roomPrompts.map((prompt) => (
-                          <button
-                            key={prompt.id}
-                            type="button"
-                            className={s.roomPromptOption}
-                            onClick={() => void addRoomCharacter(prompt.id)}
-                          >
-                            <span className={`${s.roomPromptAvatar} ${getRoomAvatarClass(prompt.id)}`}>{getRoomInitial(prompt.name)}</span>
-                            <span className={s.roomPromptInfo}>
-                              <strong>{prompt.name}</strong>
-                              <span>{prompt.description}</span>
-                            </span>
-                            <span className={s.roomPromptStatus}>+</span>
-                          </button>
-                      ))}
+                      <PromptSelector
+                        options={roomPrompts}
+                        value={null}
+                        onChange={(promptId) => void addRoomCharacter(promptId)}
+                        disabled={roomSaving}
+                        placeholder={t('chat.room.choosePrompt')}
+                        maxVisibleItems={5}
+                        allowCreate={false}
+                      />
                     </div>
                   )}
                   <button

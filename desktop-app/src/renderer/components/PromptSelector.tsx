@@ -18,11 +18,12 @@ type Props = {
   disabled?: boolean;
   placeholder?: string;
   maxVisibleItems?: number;
+  allowCreate?: boolean;
 };
 
 const NEW_PROMPT_ID = -1;
 
-export function PromptSelector({ options, value, onChange, disabled = false, placeholder, maxVisibleItems = 6 }: Props) {
+export function PromptSelector({ options, value, onChange, disabled = false, placeholder, maxVisibleItems = 6, allowCreate = true }: Props) {
   const { t } = useTranslation();
   const resolvedPlaceholder = placeholder ?? t('promptSelector.placeholder');
   const [isOpen, setIsOpen] = useState(false);
@@ -147,18 +148,22 @@ export function PromptSelector({ options, value, onChange, disabled = false, pla
               <div className={s.emptyState}>{t('common.nothingFound')}</div>
             )}
 
-            <div className={s.customDivider} />
-            <button
-              className={`${s.option} ${value === NEW_PROMPT_ID ? s.optionActive : ''}`}
-              onClick={() => handleSelect(NEW_PROMPT_ID)}
-              type="button"
-            >
-              <span className={s.optionTop}>
-                <span className={s.optionName}>{t('promptSelector.newPrompt')}</span>
-                {renderBadge('custom')}
-              </span>
-              <span className={s.optionDesc}>{t('promptSelector.createOwn')}</span>
-            </button>
+            {allowCreate && (
+              <>
+                <div className={s.customDivider} />
+                <button
+                  className={`${s.option} ${value === NEW_PROMPT_ID ? s.optionActive : ''}`}
+                  onClick={() => handleSelect(NEW_PROMPT_ID)}
+                  type="button"
+                >
+                  <span className={s.optionTop}>
+                    <span className={s.optionName}>{t('promptSelector.newPrompt')}</span>
+                    {renderBadge('custom')}
+                  </span>
+                  <span className={s.optionDesc}>{t('promptSelector.createOwn')}</span>
+                </button>
+              </>
+            )}
           </div>
         </div>
       )}

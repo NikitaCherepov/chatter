@@ -382,61 +382,6 @@
   text-transform: uppercase;
 }
 
-.roomPromptOption {
-  width: 100%;
-  min-height: 44px;
-  padding: 6px 7px;
-  border: none;
-  border-radius: 7px;
-  background: transparent;
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  text-align: left;
-  cursor: pointer;
-
-  &:hover:not(:disabled) { background-color: var(--bg-modal-hover); }
-
-  &:disabled {
-    opacity: 0.55;
-    cursor: default;
-  }
-}
-
-.roomPromptAvatar {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  color: #fff;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  font-size: 10px;
-  font-weight: 700;
-}
-
-.roomPromptInfo {
-  min-width: 0;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-
-  strong {
-    overflow: hidden;
-    color: var(--text-primary);
-    font-size: 11px;
-    font-weight: 600;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  span { color: var(--text-muted); font-size: 10px; }
-}
-
-.roomPromptStatus { color: var(--text-hint); font-size: 9px; white-space: nowrap; }
-
 .roomAddParticipant {
   width: 100%;
   height: 36px;
