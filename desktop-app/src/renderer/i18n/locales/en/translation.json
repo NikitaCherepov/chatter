@@ -603,6 +603,28 @@
     "composer": {
       "placeholder": "Enter a message..."
     },
+    "room": {
+      "title": "Room",
+      "subtitle": "Group chat prototype",
+      "open": "Open room",
+      "participantCount": "{{count}} participants",
+      "participants": "Participants",
+      "mode": "Response mode",
+      "manual": "Manual",
+      "round": "Round",
+      "manualHint": "Choose which character responds next.",
+      "roundHint": "Every active character responds once in the selected order.",
+      "whoRespondsNext": "Who responds next?",
+      "roundOrder": "Round order",
+      "startRound": "Start round",
+      "you": "You",
+      "human": "Human participant",
+      "mainAssistant": "Main assistant",
+      "character": "Character",
+      "reorder": "Change order",
+      "addParticipant": "Add participant",
+      "prototypeHint": "Participant creation will be connected to the backend later."
+    },
     "deleteChat": {
       "title": "Delete chat?",
       "message": "This action cannot be undone. All messages will be permanently deleted."

@@ -32,7 +32,7 @@ import { PixelAvatar, dispatchAvatarState, startAvatarLoop, stopAvatarLoop, getA
 import type { SetDisplayStatePayload } from '../components/PixelAvatar';
 import { ToolsPanel } from '../components/ToolsPanel';
 import { QuotaWidget } from '../components/QuotaWidget';
-import { openTool, handleDesktopAction, dispatchMapData, emitSuggestMacro } from '../lib/tools';
+import { openTool, handleDesktopAction, dispatchMapData, emitSuggestMacro, setToolsPanelState } from '../lib/tools';
 import { createSpeechRecorder } from '../lib/speechRecorder';
 import { startWakeWordAudioStream, stopWakeWordAudioStream } from '../lib/wakeWordAudio';
 import { getWakeWordEnabled } from '../lib/wakeWordToggle';
@@ -826,6 +826,9 @@ export function ChatPage() {
   const [demoModelFilter, setDemoModelFilter] = useState('all');
   const [demoFilesFilter, setDemoFilesFilter] = useState(false);
   const [demoImagesFilter, setDemoImagesFilter] = useState(false);
+  const [demoRoomOpen, setDemoRoomOpen] = useState(false);
+  const [demoRoomMode, setDemoRoomMode] = useState<'manual' | 'round'>('manual');
+  const [demoNextParticipant, setDemoNextParticipant] = useState('vega');
   const [chatFilterOptions, setChatFilterOptions] = useState<{ prompts: Array<{ id: number; name: string }>; models: string[] }>({ prompts: [], models: [] });
   const [msgMenuId, setMsgMenuId] = useState<number | null>(null);
   const [msgMenuPos, setMsgMenuPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
@@ -4127,6 +4130,28 @@ export function ChatPage() {
                 </div>
                 )}
               </div>
+              <button
+                type="button"
+                className={`${s.roomTrigger} ${demoRoomOpen ? s.roomTriggerActive : ''}`}
+                onClick={() => {
+                  setDemoRoomOpen((open) => {
+                    if (!open) setToolsPanelState({ isOpen: false });
+                    return !open;
+                  });
+                }}
+                title={t('chat.room.open')}
+              >
+                <span className={s.roomAvatarStack} aria-hidden="true">
+                  <span className={`${s.roomAvatar} ${s.roomAvatarHuman}`}>{(user?.name || user?.username || 'Y').trim().charAt(0).toUpperCase()}</span>
+                  <span className={`${s.roomAvatar} ${s.roomAvatarVega}`}>V</span>
+                  <span className={`${s.roomAvatar} ${s.roomAvatarAlice}`}>A</span>
+                  <span className={`${s.roomAvatar} ${s.roomAvatarDetective}`}>D</span>
+                </span>
+                <span className={s.roomTriggerText}>{t('chat.room.participantCount', { count: 4 })}</span>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <polyline points={demoRoomOpen ? '18 15 12 9 6 15' : '9 18 15 12 9 6'} />
+                </svg>
+              </button>
               {showTokens && contextTokens && (
                 <div
                   className={s.contextTokensCompact}
@@ -5712,6 +5737,44 @@ export function ChatPage() {
               </div>
             )}
 
+            {/* Group room turn controls (UI prototype only) */}
+            <div className={s.roomTurnBar}>
+              {demoRoomMode === 'manual' ? (
+                <>
+                  <span className={s.roomTurnLabel}>{t('chat.room.whoRespondsNext')}</span>
+                  <div className={s.roomTurnParticipants}>
+                    {[
+                      { id: 'vega', name: 'Vega', avatarClass: s.roomAvatarVega, initial: 'V' },
+                      { id: 'alice', name: 'Alice', avatarClass: s.roomAvatarAlice, initial: 'A' },
+                      { id: 'detective', name: 'Detective', avatarClass: s.roomAvatarDetective, initial: 'D' },
+                    ].map((participant) => (
+                      <button
+                        key={participant.id}
+                        type="button"
+                        className={`${s.roomTurnParticipant} ${demoNextParticipant === participant.id ? s.roomTurnParticipantActive : ''}`}
+                        onClick={() => setDemoNextParticipant(participant.id)}
+                      >
+                        <span className={`${s.roomTurnAvatar} ${participant.avatarClass}`}>{participant.initial}</span>
+                        <span>{participant.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <span className={s.roomTurnLabel}>{t('chat.room.roundOrder')}</span>
+                  <div className={s.roomRoundOrder}>
+                    <span><b>1</b> Vega</span>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m9 18 6-6-6-6" /></svg>
+                    <span><b>2</b> Alice</span>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m9 18 6-6-6-6" /></svg>
+                    <span><b>3</b> Detective</span>
+                  </div>
+                  <button type="button" className={s.roomStartRound}>{t('chat.room.startRound')}</button>
+                </>
+              )}
+            </div>
+
             {/* Image previews above input */}
             {attachedImages.length > 0 && (
               <div className={s.imagePreviews}>
@@ -5902,6 +5965,84 @@ export function ChatPage() {
           </>
         )}
       </main>
+
+      <AnimatePresence initial={false}>
+        {demoRoomOpen && (
+          <motion.aside
+            className={s.roomPanel}
+            initial={{ width: 0, opacity: 0 }}
+            animate={{ width: 300, opacity: 1 }}
+            exit={{ width: 0, opacity: 0 }}
+            transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+          >
+            <div className={s.roomPanelInner}>
+              <div className={s.roomPanelHeader}>
+                <div>
+                  <div className={s.roomPanelTitle}>{t('chat.room.title')}</div>
+                  <div className={s.roomPanelSubtitle}>{t('chat.room.subtitle')}</div>
+                </div>
+                <button type="button" className={s.roomCloseBtn} onClick={() => setDemoRoomOpen(false)} aria-label={t('common.close')}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
+                </button>
+              </div>
+
+              <div className={s.roomSection}>
+                <div className={s.roomSectionLabel}>{t('chat.room.mode')}</div>
+                <div className={s.roomModeSwitch}>
+                  <button type="button" className={demoRoomMode === 'manual' ? s.roomModeActive : ''} onClick={() => setDemoRoomMode('manual')}>
+                    {t('chat.room.manual')}
+                  </button>
+                  <button type="button" className={demoRoomMode === 'round' ? s.roomModeActive : ''} onClick={() => setDemoRoomMode('round')}>
+                    {t('chat.room.round')}
+                  </button>
+                </div>
+                <div className={s.roomModeHint}>{t(demoRoomMode === 'manual' ? 'chat.room.manualHint' : 'chat.room.roundHint')}</div>
+              </div>
+
+              <div className={s.roomSection}>
+                <div className={s.roomParticipantsHeader}>
+                  <span className={s.roomSectionLabel}>{t('chat.room.participants')}</span>
+                  <span className={s.roomParticipantTotal}>4</span>
+                </div>
+                <div className={s.roomParticipantList}>
+                  <div className={s.roomParticipantCard}>
+                    <span className={`${s.roomParticipantAvatar} ${s.roomAvatarHuman}`}>{(user?.name || user?.username || 'Y').trim().charAt(0).toUpperCase()}</span>
+                    <div className={s.roomParticipantInfo}>
+                      <strong>{user?.name || user?.username || t('chat.room.you')}</strong>
+                      <span>{t('chat.room.human')}</span>
+                    </div>
+                    <span className={s.roomParticipantYou}>{t('chat.room.you')}</span>
+                  </div>
+                  {[
+                    { id: 'vega', name: 'Vega', description: t('chat.room.mainAssistant'), avatarClass: s.roomAvatarVega, initial: 'V' },
+                    { id: 'alice', name: 'Alice', description: t('chat.room.character'), avatarClass: s.roomAvatarAlice, initial: 'A' },
+                    { id: 'detective', name: 'Detective', description: t('chat.room.character'), avatarClass: s.roomAvatarDetective, initial: 'D' },
+                  ].map((participant, index) => (
+                    <div className={s.roomParticipantCard} key={participant.id}>
+                      <button type="button" className={s.roomParticipantDrag} aria-label={t('chat.room.reorder')}>
+                        <svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor"><circle cx="3" cy="3" r="1"/><circle cx="9" cy="3" r="1"/><circle cx="3" cy="8" r="1"/><circle cx="9" cy="8" r="1"/><circle cx="3" cy="13" r="1"/><circle cx="9" cy="13" r="1"/></svg>
+                      </button>
+                      <span className={s.roomParticipantIndex}>{index + 1}</span>
+                      <span className={`${s.roomParticipantAvatar} ${participant.avatarClass}`}>{participant.initial}</span>
+                      <div className={s.roomParticipantInfo}>
+                        <strong>{participant.name}</strong>
+                        <span>{participant.description}</span>
+                      </div>
+                      <button type="button" className={s.roomParticipantMenu} aria-label={t('common.actions')}>
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><circle cx="8" cy="3" r="1.4"/><circle cx="8" cy="8" r="1.4"/><circle cx="8" cy="13" r="1.4"/></svg>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <button type="button" className={s.roomAddParticipant} onClick={() => toast.info(t('chat.room.prototypeHint'))}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
+                  {t('chat.room.addParticipant')}
+                </button>
+              </div>
+            </div>
+          </motion.aside>
+        )}
+      </AnimatePresence>
 
       {/* RIGHT TOOLS PANEL */}
       <ToolsPanel plan={user?.plan || 'free'} isAdmin={user?.is_admin || 0} activeChatId={activeChatId} onImageClick={(src, msgId, url) => { setViewerImageSrc(src); setViewerImageMsgId(msgId ?? null); setViewerImageUrl(url ?? null); }} onChatSelect={selectChat} />
