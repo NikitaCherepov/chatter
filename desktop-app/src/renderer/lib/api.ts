@@ -308,6 +308,7 @@ export type Message = {
   reasoning_tokens?: number;
   prompt_id?: number | null;
   prompt_name?: string | null;
+  agent_id?: number | null;
   model_name?: string | null;
   provider_name?: string | null;
   usage?: MessageUsage | null;
@@ -579,6 +580,7 @@ export type GeneratedImage = {
 
 export type ChatSendResponse = {
   reply_text: string;
+  user_only?: boolean;
   reasoning_content?: string | null;
   message_id: number;
   user_message_id?: number;
@@ -593,6 +595,7 @@ export type ChatSendResponse = {
   reasoning_tokens?: number;
   prompt_id?: number | null;
   prompt_name?: string | null;
+  agent_id?: number | null;
   model_name?: string | null;
   provider_name?: string | null;
   message_usage?: MessageUsage | null;
@@ -750,12 +753,22 @@ const ensureBrowserDownloadBridge = () => {
 };
 let activeStreamCallbacks: StreamCallbacks = {};
 let activeChatRequestAccepted = false;
+let activeStreamResolve: (() => void) | null = null;
+
+const finishActiveStream = () => {
+  activeStreamResolve?.();
+  activeStreamResolve = null;
+};
 
 const failActiveChatRequest = (error: string, message?: string) => {
   const callback = activeStreamCallbacks.onError ?? wsCallbacks.onError;
   activeStreamCallbacks = {};
   activeChatRequestAccepted = false;
-  callback?.(error, message);
+  try {
+    callback?.(error, message);
+  } finally {
+    finishActiveStream();
+  }
 };
 
 const refreshWebSocketAccessToken = (): Promise<boolean> => {
@@ -928,15 +941,25 @@ export function initWebSocket(callbacks?: WsCallbacks) {
         case 'dice_roll': (activeStreamCallbacks.onDiceRoll ?? wsCallbacks.onDiceRoll)?.(Number(msg.roll)); break;
         case 'user_message_saved': (activeStreamCallbacks.onUserMessageSaved ?? wsCallbacks.onUserMessageSaved)?.(msg); break;
         case 'done': {
-          (activeStreamCallbacks.onDone ?? wsCallbacks.onDone)?.(msg);
+          const callback = activeStreamCallbacks.onDone ?? wsCallbacks.onDone;
           activeStreamCallbacks = {};
           activeChatRequestAccepted = false;
+          try {
+            callback?.(msg);
+          } finally {
+            finishActiveStream();
+          }
           break;
         }
         case 'error': {
-          (activeStreamCallbacks.onError ?? wsCallbacks.onError)?.(msg.error, msg.message);
+          const callback = activeStreamCallbacks.onError ?? wsCallbacks.onError;
           activeStreamCallbacks = {};
           activeChatRequestAccepted = false;
+          try {
+            callback?.(msg.error, msg.message);
+          } finally {
+            finishActiveStream();
+          }
           break;
         }
         case 'task_result': wsCallbacks.onTaskResult?.({ chat_id: msg.chat_id, text: msg.text, is_new_chat: msg.is_new_chat }); break;
@@ -1089,31 +1112,36 @@ export async function streamChatMessage(
   displayManifest?: { moods: string[]; reactions: string[] },
   currentDisplayState?: DisplayStatePayload | null,
   callbacks?: StreamCallbacks,
-  options?: { isVoice?: boolean; preferredModel?: string | null; regenerate_hint?: string; skip_user_history?: boolean; regenerate_from_history?: boolean; dice_mode?: 'normal' | 'always_one' | 'always_twenty' },
+  options?: { isVoice?: boolean; preferredModel?: string | null; regenerate_hint?: string; skip_user_history?: boolean; regenerate_from_history?: boolean; dice_mode?: 'normal' | 'always_one' | 'always_twenty'; agentId?: number; userOnly?: boolean; countAsUserMessage?: boolean },
   documents?: ChatSendDocument[]
 ) {
   // If WS is connected — send through WS
   if (ws && ws.readyState === WebSocket.OPEN) {
-    activeStreamCallbacks = callbacks ?? {};
-    activeChatRequestAccepted = false;
-    const msg: Record<string, unknown> = { type: 'chat_send', text };
-    if (chatId) msg.chat_id = chatId;
-    if (images?.length) msg.images = images;
-    if (documents?.length) msg.documents = documents;
-    if (displayManifest) msg.display_manifest = displayManifest;
-    if (currentDisplayState) msg.current_display_state = currentDisplayState;
-    if (options?.isVoice) msg.is_voice = true;
-    if (options?.preferredModel) msg.preferred_model = options.preferredModel;
-    if (options?.regenerate_hint) msg.regenerate_hint = options.regenerate_hint;
-    if (options?.skip_user_history) msg.skip_user_history = true;
-    if (options?.regenerate_from_history) msg.regenerate_from_history = true;
-    if (options?.dice_mode) msg.dice_mode = options.dice_mode;
-    try {
-      ws.send(JSON.stringify(msg));
-    } catch {
-      failActiveChatRequest('connection_lost_before_request_accepted');
-    }
-    return;
+    return new Promise<void>((resolve) => {
+      activeStreamCallbacks = callbacks ?? {};
+      activeStreamResolve = resolve;
+      activeChatRequestAccepted = false;
+      const msg: Record<string, unknown> = { type: 'chat_send', text };
+      if (chatId) msg.chat_id = chatId;
+      if (images?.length) msg.images = images;
+      if (documents?.length) msg.documents = documents;
+      if (displayManifest) msg.display_manifest = displayManifest;
+      if (currentDisplayState) msg.current_display_state = currentDisplayState;
+      if (options?.isVoice) msg.is_voice = true;
+      if (options?.preferredModel) msg.preferred_model = options.preferredModel;
+      if (options?.regenerate_hint) msg.regenerate_hint = options.regenerate_hint;
+      if (options?.skip_user_history) msg.skip_user_history = true;
+      if (options?.regenerate_from_history) msg.regenerate_from_history = true;
+      if (options?.dice_mode) msg.dice_mode = options.dice_mode;
+      if (options?.agentId) msg.agent_id = options.agentId;
+      if (options?.userOnly) msg.user_only = true;
+      if (options?.countAsUserMessage === false) msg.count_as_user_message = false;
+      try {
+        ws!.send(JSON.stringify(msg));
+      } catch {
+        failActiveChatRequest('connection_lost_before_request_accepted');
+      }
+    });
   }
 
   // Fallback: SSE
@@ -1142,7 +1170,7 @@ async function streamChatMessageSSE(
   displayManifest?: { moods: string[]; reactions: string[] },
   currentDisplayState?: DisplayStatePayload | null,
   callbacks?: StreamCallbacks,
-  options?: { isVoice?: boolean; preferredModel?: string | null; regenerate_hint?: string; skip_user_history?: boolean; regenerate_from_history?: boolean; dice_mode?: 'normal' | 'always_one' | 'always_twenty' },
+  options?: { isVoice?: boolean; preferredModel?: string | null; regenerate_hint?: string; skip_user_history?: boolean; regenerate_from_history?: boolean; dice_mode?: 'normal' | 'always_one' | 'always_twenty'; agentId?: number; userOnly?: boolean; countAsUserMessage?: boolean },
   documents?: ChatSendDocument[]
 ) {
   const attemptStream = async (isRetry = false): Promise<void> => {
@@ -1162,6 +1190,9 @@ async function streamChatMessageSSE(
     if (options?.skip_user_history) body.skip_user_history = true;
     if (options?.regenerate_from_history) body.regenerate_from_history = true;
     if (options?.dice_mode) body.dice_mode = options.dice_mode;
+    if (options?.agentId) body.agent_id = options.agentId;
+    if (options?.userOnly) body.user_only = true;
+    if (options?.countAsUserMessage === false) body.count_as_user_message = false;
 
     const res = await fetch(`${API_BASE}/api/v1/chat/send`, {
       method: 'POST',

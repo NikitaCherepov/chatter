@@ -2078,6 +2078,10 @@ app.post('/api/v1/chat/send', async (req: AuthedRequest, res) => {
   const currentDisplayState = req.body?.current_display_state ?? null;
   const isDesktop = Boolean(req.body?.is_desktop);
   const isVoice = Boolean(req.body?.is_voice);
+  const agentId = req.body?.agent_id === undefined ? undefined : Number(req.body.agent_id);
+  if (agentId !== undefined && (!Number.isSafeInteger(agentId) || agentId <= 0)) {
+    return res.status(400).json({ error: 'bad_agent_id' });
+  }
 
   // Load enabled macros from DB
   const enabledMacros = getEnabledMacros(userId);
@@ -2101,6 +2105,9 @@ app.post('/api/v1/chat/send', async (req: AuthedRequest, res) => {
       isVoice,
       activeMacros: enabledMacros,
       preferredModel: req.body?.preferred_model || undefined,
+      agentId,
+      userOnly: Boolean(req.body?.user_only),
+      countAsUserMessage: req.body?.count_as_user_message !== false,
       regenerateHint: req.body?.regenerate_hint || undefined,
       regenerateFromHistory: Boolean(req.body?.regenerate_from_history),
       skipUserHistory: Boolean(req.body?.skip_user_history),
@@ -6315,6 +6322,11 @@ setInterval(() => {
 async function handleWsChatSend(client: WsClient, msg: any) {
   const { text, chat_id, images, documents, display_manifest, is_voice, preferred_model, regenerate_hint, regenerate_from_history } = msg;
   const userId = client.accountId;
+  const requestedAgentId = msg.agent_id === undefined ? undefined : Number(msg.agent_id);
+  if (requestedAgentId !== undefined && (!Number.isSafeInteger(requestedAgentId) || requestedAgentId <= 0)) {
+    client.ws.send(JSON.stringify({ type: 'error', error: 'bad_agent_id' }));
+    return;
+  }
 
   // Parse & validate images
   const MAX_IMAGE_BYTES_API = 20 * 1024 * 1024;
@@ -6471,6 +6483,9 @@ async function handleWsChatSend(client: WsClient, msg: any) {
       isVoice: Boolean(is_voice),
       activeMacros: enabledMacros,
       preferredModel: preferred_model || undefined,
+      agentId: requestedAgentId,
+      userOnly: Boolean(msg.user_only),
+      countAsUserMessage: msg.count_as_user_message !== false,
       regenerateHint: regenerate_hint || undefined,
       regenerateFromHistory: Boolean(regenerate_from_history),
       skipUserHistory: Boolean(msg.skip_user_history),

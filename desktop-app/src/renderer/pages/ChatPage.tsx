@@ -865,19 +865,19 @@ export function ChatPage() {
   const [demoModelFilter, setDemoModelFilter] = useState('all');
   const [demoFilesFilter, setDemoFilesFilter] = useState(false);
   const [demoImagesFilter, setDemoImagesFilter] = useState(false);
-  const [demoRoomOpen, setDemoRoomOpen] = useState(false);
-  const [demoRoomCreated, setDemoRoomCreated] = useState(false);
-  const [demoRoomLoading, setDemoRoomLoading] = useState(false);
-  const [demoRoomSaving, setDemoRoomSaving] = useState(false);
-  const [demoRoomMode, setDemoRoomMode] = useState<'manual' | 'round'>('manual');
-  const [demoNextParticipant, setDemoNextParticipant] = useState<number | null>(null);
-  const [demoRoomAutoRespond, setDemoRoomAutoRespond] = useState(true);
-  const [demoAddParticipantOpen, setDemoAddParticipantOpen] = useState(false);
-  const [demoDraggingRoomParticipantId, setDemoDraggingRoomParticipantId] = useState<number | null>(null);
-  const [demoDraggingRoomParticipantSize, setDemoDraggingRoomParticipantSize] = useState<{ width: number; height: number } | null>(null);
-  const [demoRoomParticipantMenuId, setDemoRoomParticipantMenuId] = useState<number | null>(null);
-  const [demoRoomCharacters, setDemoRoomCharacters] = useState<api.ChatAgent[]>([]);
-  const [demoRoomPrompts, setDemoRoomPrompts] = useState<Array<{ id: number; name: string; description: string }>>([]);
+  const [roomOpen, setRoomOpen] = useState(false);
+  const [roomCreated, setRoomCreated] = useState(false);
+  const [roomLoading, setRoomLoading] = useState(false);
+  const [roomSaving, setRoomSaving] = useState(false);
+  const [roomMode, setRoomMode] = useState<'manual' | 'round'>('manual');
+  const [nextRoomParticipant, setNextRoomParticipant] = useState<number | null>(null);
+  const [roomAutoRespond, setRoomAutoRespond] = useState(true);
+  const [addParticipantOpen, setAddParticipantOpen] = useState(false);
+  const [draggingRoomParticipantId, setDraggingRoomParticipantId] = useState<number | null>(null);
+  const [draggingRoomParticipantSize, setDraggingRoomParticipantSize] = useState<{ width: number; height: number } | null>(null);
+  const [roomParticipantMenuId, setRoomParticipantMenuId] = useState<number | null>(null);
+  const [roomCharacters, setRoomCharacters] = useState<api.ChatAgent[]>([]);
+  const [roomPrompts, setRoomPrompts] = useState<Array<{ id: number; name: string; description: string }>>([]);
   const [chatFilterOptions, setChatFilterOptions] = useState<{ prompts: Array<{ id: number; name: string }>; models: string[] }>({ prompts: [], models: [] });
   const [msgMenuId, setMsgMenuId] = useState<number | null>(null);
   const [msgMenuPos, setMsgMenuPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
@@ -896,62 +896,62 @@ export function ChatPage() {
     return () => window.removeEventListener('click', closeFolderMenu);
   }, [demoFolderMenuId]);
   useEffect(() => {
-    if (!demoRoomParticipantMenuId) return;
-    const closeParticipantMenu = () => setDemoRoomParticipantMenuId(null);
+    if (!roomParticipantMenuId) return;
+    const closeParticipantMenu = () => setRoomParticipantMenuId(null);
     window.addEventListener('click', closeParticipantMenu);
     return () => window.removeEventListener('click', closeParticipantMenu);
-  }, [demoRoomParticipantMenuId]);
+  }, [roomParticipantMenuId]);
   useEffect(() => {
-    if (!demoAddParticipantOpen) return;
-    const closePromptPicker = () => setDemoAddParticipantOpen(false);
+    if (!addParticipantOpen) return;
+    const closePromptPicker = () => setAddParticipantOpen(false);
     window.addEventListener('click', closePromptPicker);
     return () => window.removeEventListener('click', closePromptPicker);
-  }, [demoAddParticipantOpen]);
-  const applyDemoRoom = useCallback((room: api.ChatRoom) => {
-    setDemoRoomCreated(room.enabled);
-    setDemoRoomMode(room.response_mode);
-    setDemoRoomAutoRespond(room.auto_respond);
-    setDemoRoomCharacters(room.agents);
-    setDemoNextParticipant(room.next_agent_id ?? room.agents[0]?.id ?? null);
+  }, [addParticipantOpen]);
+  const applyRoom = useCallback((room: api.ChatRoom) => {
+    setRoomCreated(room.enabled);
+    setRoomMode(room.response_mode);
+    setRoomAutoRespond(room.auto_respond);
+    setRoomCharacters(room.agents);
+    setNextRoomParticipant(room.next_agent_id ?? room.agents[0]?.id ?? null);
   }, []);
   useEffect(() => {
     let cancelled = false;
-    setDemoAddParticipantOpen(false);
-    setDemoRoomParticipantMenuId(null);
-    setDemoRoomSaving(false);
+    setAddParticipantOpen(false);
+    setRoomParticipantMenuId(null);
+    setRoomSaving(false);
     if (!activeChatId) {
-      applyDemoRoom({ enabled: false, response_mode: 'manual', auto_respond: true, next_agent_id: null, agents: [] });
+      applyRoom({ enabled: false, response_mode: 'manual', auto_respond: true, next_agent_id: null, agents: [] });
       return () => { cancelled = true; };
     }
-    applyDemoRoom({ enabled: false, response_mode: 'manual', auto_respond: true, next_agent_id: null, agents: [] });
-    setDemoRoomLoading(true);
+    applyRoom({ enabled: false, response_mode: 'manual', auto_respond: true, next_agent_id: null, agents: [] });
+    setRoomLoading(true);
     void api.getChatRoom(activeChatId)
       .then(({ room }) => {
-        if (!cancelled) applyDemoRoom(room);
+        if (!cancelled) applyRoom(room);
       })
       .catch((error) => {
         console.error('Failed to load chat room:', error);
-        if (!cancelled) applyDemoRoom({ enabled: false, response_mode: 'manual', auto_respond: true, next_agent_id: null, agents: [] });
+        if (!cancelled) applyRoom({ enabled: false, response_mode: 'manual', auto_respond: true, next_agent_id: null, agents: [] });
       })
       .finally(() => {
-        if (!cancelled) setDemoRoomLoading(false);
+        if (!cancelled) setRoomLoading(false);
       });
     return () => { cancelled = true; };
-  }, [activeChatId, applyDemoRoom]);
+  }, [activeChatId, applyRoom]);
   useEffect(() => {
-    if (!demoAddParticipantOpen || demoRoomPrompts.length > 0) return;
+    if (!addParticipantOpen || roomPrompts.length > 0) return;
     let cancelled = false;
     void api.getPrompts()
       .then((result) => {
         if (cancelled) return;
-        setDemoRoomPrompts([
+        setRoomPrompts([
           ...result.prompts.map(({ id, name, description }) => ({ id, name, description })),
           ...result.custom_prompts.map(({ id, name, description }) => ({ id, name, description })),
         ]);
       })
       .catch((error) => console.error('Failed to load room prompts:', error));
     return () => { cancelled = true; };
-  }, [demoAddParticipantOpen, demoRoomPrompts.length]);
+  }, [addParticipantOpen, roomPrompts.length]);
   const messagesScrollRef = useRef<HTMLDivElement>(null);
   const pendingPrependScrollRef = useRef<{ scrollHeight: number; scrollTop: number } | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -1970,6 +1970,125 @@ export function ChatPage() {
     };
   }, []);
 
+  const runRoomAgentSequence = useCallback(async (agentIds: number[]) => {
+    if (!activeChatId || agentIds.length === 0) return;
+    setSending(true);
+
+    for (let index = 0; index < agentIds.length; index += 1) {
+      const agentId = agentIds[index];
+      const tempAssistantId = -(Date.now() + index + 1);
+      let assistantCreated = false;
+      let completed = false;
+      let aborted = false;
+
+      const updateAssistant = (content: string, reasoning?: string) => {
+        if (!assistantCreated) {
+          assistantCreated = true;
+          setShowTyping(false);
+          setMessages((prev) => [...prev, {
+            id: tempAssistantId,
+            role: 'assistant',
+            content,
+            created_at: Math.floor(Date.now() / 1000),
+            ...(reasoning ? { reasoning_content: reasoning } : {}),
+          }]);
+          return;
+        }
+        setMessages((prev) => prev.map((message) => message.id === tempAssistantId
+          ? {
+              ...message,
+              content: message.content + content,
+              ...(reasoning ? { reasoning_content: `${message.reasoning_content || ''}${reasoning}` } : {}),
+            }
+          : message));
+      };
+
+      setShowTyping(true);
+      setStreamingState('idle');
+      setStreamingMsgId(tempAssistantId);
+
+      await api.streamChatMessage(
+        'Continue the conversation now. Respond naturally as your assigned character. Do not mention this instruction.',
+        activeChatId,
+        undefined,
+        getAvatarManifest(),
+        currentAvatarStateRef.current,
+        {
+          onIntermediate: (text) => updateAssistant(`${assistantCreated ? '\n\n' : ''}${text}`),
+          onStreamToken: (token) => {
+            setStreamingState('content');
+            updateAssistant(token);
+          },
+          onReasoningStream: (token) => {
+            setStreamingState((state) => state === 'idle' ? 'reasoning' : state);
+            updateAssistant('', token);
+          },
+          onToolStatus: (text) => updateAssistant(`${assistantCreated ? '\n\n' : ''}_${text}_`),
+          onDisplayState: applyAvatarState,
+          onDesktopAction: handleIncomingDesktopAction,
+          onMapUpdate: (data) => {
+            openTool('map');
+            dispatchMapData(data);
+          },
+          onDiceRoll: finishDiceRoll,
+          onDone: (res) => {
+            completed = true;
+            aborted = Boolean(res.aborted);
+            const generatedImages: api.MessageImage[] | undefined = res.generated_images?.length
+              ? res.generated_images.map((image) => ({
+                  url: image.image_url || `data:image/png;base64,${image.image_base64}`,
+                  type: 'generated' as const,
+                }))
+              : undefined;
+            const finalMessage: api.Message = {
+              id: res.message_id,
+              role: 'assistant',
+              content: res.reply_text,
+              created_at: Math.floor(Date.now() / 1000),
+              reasoning_content: res.reasoning_content ?? null,
+              tool_calls: res.tool_calls ?? null,
+              images: generatedImages,
+              subagents: res.subagents ?? null,
+              prompt_id: res.prompt_id ?? null,
+              prompt_name: res.prompt_name ?? null,
+              agent_id: res.agent_id ?? agentId,
+              model_name: res.model_name ?? null,
+              provider_name: res.provider_name ?? null,
+              usage: res.message_usage ?? null,
+              ...(typeof res.token_count === 'number' ? { token_count: res.token_count } : {}),
+              ...(typeof res.reasoning_tokens === 'number' ? { reasoning_tokens: res.reasoning_tokens } : {}),
+            };
+            setMessages((prev) => assistantCreated
+              ? prev.map((message) => message.id === tempAssistantId ? finalMessage : message)
+              : [...prev, finalMessage]);
+            if (res.display_state) applyAvatarState(res.display_state);
+            notifyAssistantResponse(res.message_id, res.chat_id, res.reply_text);
+            refreshContextTokens(res.chat_id);
+          },
+          onError: (error, message) => {
+            console.error('Room agent stream error:', error);
+            toast.error(message || error);
+            setMessages((prev) => prev.filter((item) => item.id !== tempAssistantId));
+          },
+        },
+        {
+          preferredModel,
+          skip_user_history: true,
+          agentId,
+          countAsUserMessage: false,
+          dice_mode: diceMode,
+        },
+      );
+
+      setStreamingState('done');
+      setStreamingMsgId(null);
+      setShowTyping(false);
+      if (!completed || aborted) break;
+    }
+
+    setSending(false);
+  }, [activeChatId, applyAvatarState, diceMode, finishDiceRoll, handleIncomingDesktopAction, notifyAssistantResponse, preferredModel, refreshContextTokens]);
+
   const handleSend = useCallback(async () => {
     const text = input.trim();
     const hasImages = attachedImages.length > 0;
@@ -2059,6 +2178,7 @@ export function ChatPage() {
       }
     };
 
+    const primaryRoomResult = { current: null as api.ChatSendResponse | null };
     await api.streamChatMessage(
       text || ' ',
       activeChatId ?? undefined,
@@ -2108,6 +2228,7 @@ export function ChatPage() {
           }
         },
         onDone: (res) => {
+          primaryRoomResult.current = res;
           // Финализируем стрим-буфер перед обработкой done
           streamAppenderRef.current.flushNow();
           setStreamingState('done');
@@ -2115,6 +2236,28 @@ export function ChatPage() {
           // Dice Roll Mode: fallback — если событие dice_roll не дошло, используем done-поле
           if (typeof res.dice_roll === 'number' && diceRolling) {
             finishDiceRoll(res.dice_roll);
+          }
+          if (res.user_only) {
+            setMessages((prev) => prev.map((message) =>
+              res.user_message_id && (message.id === tempUserMsg.id || message.id === res.user_message_id)
+                ? {
+                    ...message,
+                    id: res.user_message_id!,
+                    ...(res.user_message_images ? { images: res.user_message_images } : {}),
+                    ...(typeof res.user_token_count === 'number' ? { token_count: res.user_token_count } : {}),
+                  }
+                : message
+            ));
+            setShowTyping(false);
+            setSending(false);
+            setStreamingState('done');
+            setStreamingMsgId(null);
+            if (!activeChatId || res.chat_id !== activeChatId) {
+              setActiveChatId(res.chat_id);
+              loadChats();
+            }
+            refreshContextTokens(res.chat_id);
+            return;
           }
           // Если генерация была остановлена пользователем — soft abort.
           // Сохраняем всё что бот успел сделать как обычное сообщение (если message_id > 0).
@@ -2133,6 +2276,7 @@ export function ChatPage() {
                       subagents: res.subagents ?? null,
                       prompt_id: res.prompt_id ?? null,
                       prompt_name: res.prompt_name ?? null,
+                      agent_id: res.agent_id ?? null,
                       model_name: res.model_name ?? null,
                       provider_name: res.provider_name ?? null,
                       usage: res.message_usage ?? null,
@@ -2166,6 +2310,7 @@ export function ChatPage() {
                     subagents: res.subagents ?? null,
                     prompt_id: res.prompt_id ?? null,
                     prompt_name: res.prompt_name ?? null,
+                    agent_id: res.agent_id ?? null,
                     model_name: res.model_name ?? null,
                     provider_name: res.provider_name ?? null,
                     usage: res.message_usage ?? null,
@@ -2212,6 +2357,7 @@ export function ChatPage() {
                   subagents: res.subagents ?? null,
                   prompt_id: res.prompt_id ?? null,
                   prompt_name: res.prompt_name ?? null,
+                  agent_id: res.agent_id ?? null,
                   model_name: res.model_name ?? null,
                   provider_name: res.provider_name ?? null,
                   usage: res.message_usage ?? null,
@@ -2249,6 +2395,7 @@ export function ChatPage() {
                 subagents: res.subagents ?? null,
                 prompt_id: res.prompt_id ?? null,
                 prompt_name: res.prompt_name ?? null,
+                agent_id: res.agent_id ?? null,
                 model_name: res.model_name ?? null,
                 provider_name: res.provider_name ?? null,
                 usage: res.message_usage ?? null,
@@ -2327,10 +2474,33 @@ export function ChatPage() {
           }
         }
       },
-      isVoice ? { isVoice: true, preferredModel: preferredModel, dice_mode: diceMode } : { preferredModel: preferredModel, dice_mode: diceMode },
+      {
+        ...(isVoice ? { isVoice: true } : {}),
+        preferredModel,
+        dice_mode: diceMode,
+        ...(roomCreated && roomAutoRespond && roomCharacters.length > 0
+          ? { agentId: roomMode === 'manual'
+              ? (nextRoomParticipant ?? roomCharacters[0].id)
+              : roomCharacters[0].id }
+          : {}),
+        ...(roomCreated && (!roomAutoRespond || roomCharacters.length === 0)
+          ? { userOnly: true }
+          : {}),
+      },
       documentsToSend.length > 0 ? documentsToSend : undefined
     );
-  }, [input, sending, activeChatId, attachedImages, attachedDocuments, attachedImageBytes, maxImageBytes, maxImageCount, preferredModel, handleIncomingDesktopAction, diceRollEnabled, startDiceRollAnimation, finishDiceRoll, diceStatus, diceMode, applyAvatarState, t]);
+    if (
+      primaryRoomResult.current
+      && !primaryRoomResult.current.user_only
+      && !primaryRoomResult.current.aborted
+      && roomCreated
+      && roomAutoRespond
+      && roomMode === 'round'
+      && roomCharacters.length > 1
+    ) {
+      await runRoomAgentSequence(roomCharacters.slice(1).map((agent) => agent.id));
+    }
+  }, [input, sending, activeChatId, attachedImages, attachedDocuments, attachedImageBytes, maxImageBytes, maxImageCount, preferredModel, handleIncomingDesktopAction, diceRollEnabled, startDiceRollAnimation, finishDiceRoll, diceStatus, diceMode, applyAvatarState, t, roomCreated, roomAutoRespond, roomCharacters, roomMode, nextRoomParticipant, runRoomAgentSequence]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
@@ -2742,6 +2912,7 @@ export function ChatPage() {
     if (!activeChatId || sending) return;
     const idx = messages.findIndex(m => m.id === assistantMsgId);
     if (idx < 0) return;
+    const responseAgentId = messages[idx].agent_id ?? undefined;
     // Find last user message before this assistant message
     let userText = '';
     for (let i = idx - 1; i >= 0; i--) {
@@ -2816,6 +2987,7 @@ export function ChatPage() {
           const responseMetadata = {
             prompt_id: res.prompt_id ?? null,
             prompt_name: res.prompt_name ?? null,
+            agent_id: res.agent_id ?? null,
             model_name: res.model_name ?? null,
             provider_name: res.provider_name ?? null,
             usage: res.message_usage ?? null,
@@ -2917,7 +3089,7 @@ export function ChatPage() {
           setSending(false);
         },
       },
-      { preferredModel: preferredModel, skip_user_history: true, regenerate_from_history: true, dice_mode: diceMode }
+      { preferredModel: preferredModel, skip_user_history: true, regenerate_from_history: true, dice_mode: diceMode, agentId: responseAgentId }
     );
   }, [activeChatId, sending, messages, preferredModel, handleIncomingDesktopAction, diceRollEnabled, startDiceRollAnimation, finishDiceRoll, diceMode, applyAvatarState]);
 
@@ -2927,6 +3099,7 @@ export function ChatPage() {
     setRegenHintText('');
     const idx = messages.findIndex(m => m.id === assistantMsgId);
     if (idx < 0) return;
+    const responseAgentId = messages[idx].agent_id ?? undefined;
     let userText = '';
     for (let i = idx - 1; i >= 0; i--) {
       if (messages[i].role === 'user') {
@@ -2999,6 +3172,7 @@ export function ChatPage() {
           const responseMetadata = {
             prompt_id: res.prompt_id ?? null,
             prompt_name: res.prompt_name ?? null,
+            agent_id: res.agent_id ?? null,
             model_name: res.model_name ?? null,
             provider_name: res.provider_name ?? null,
             usage: res.message_usage ?? null,
@@ -3090,7 +3264,7 @@ export function ChatPage() {
           setSending(false);
         },
       },
-      { preferredModel: preferredModel, regenerate_hint: hint.trim(), skip_user_history: true, regenerate_from_history: true, dice_mode: diceMode }
+      { preferredModel: preferredModel, regenerate_hint: hint.trim(), skip_user_history: true, regenerate_from_history: true, dice_mode: diceMode, agentId: responseAgentId }
     );
   }, [activeChatId, sending, messages, preferredModel, handleIncomingDesktopAction, diceRollEnabled, startDiceRollAnimation, finishDiceRoll, diceMode, applyAvatarState]);
 
@@ -3655,148 +3829,148 @@ export function ChatPage() {
     void moveDemoChat(chatId, folderId);
   };
 
-  const getDemoRoomAvatarClass = (participantId: number) => {
+  const getRoomAvatarClass = (participantId: number) => {
     const variant = Math.abs(participantId) % 3;
     if (variant === 1) return s.roomAvatarAlice;
     if (variant === 2) return s.roomAvatarDetective;
     return s.roomAvatarVega;
   };
 
-  const getDemoRoomInitial = (name: string) => name.trim().charAt(0).toUpperCase() || 'C';
+  const getRoomInitial = (name: string) => name.trim().charAt(0).toUpperCase() || 'C';
 
-  const removeDemoRoomCharacter = async (participantId: number) => {
-    if (!activeChatId || demoRoomSaving) return;
+  const removeRoomCharacter = async (participantId: number) => {
+    if (!activeChatId || roomSaving) return;
     const chatId = activeChatId;
-    const previousCharacters = demoRoomCharacters;
-    const previousNextParticipant = demoNextParticipant;
+    const previousCharacters = roomCharacters;
+    const previousNextParticipant = nextRoomParticipant;
     const nextCharacters = previousCharacters.filter((participant) => participant.id !== participantId);
-    setDemoRoomCharacters(nextCharacters);
-    setDemoNextParticipant((selected) => selected === participantId ? (nextCharacters[0]?.id ?? null) : selected);
-    setDemoRoomParticipantMenuId(null);
-    setDemoRoomSaving(true);
+    setRoomCharacters(nextCharacters);
+    setNextRoomParticipant((selected) => selected === participantId ? (nextCharacters[0]?.id ?? null) : selected);
+    setRoomParticipantMenuId(null);
+    setRoomSaving(true);
     try {
       const { room } = await api.removeChatAgent(chatId, participantId);
-      if (activeChatIdRef.current === chatId) applyDemoRoom(room);
+      if (activeChatIdRef.current === chatId) applyRoom(room);
     } catch (error) {
       console.error('Failed to remove chat agent:', error);
       if (activeChatIdRef.current === chatId) {
-        setDemoRoomCharacters(previousCharacters);
-        setDemoNextParticipant(previousNextParticipant);
+        setRoomCharacters(previousCharacters);
+        setNextRoomParticipant(previousNextParticipant);
         toast.error(t('auth.error.generic'));
       }
     } finally {
-      if (activeChatIdRef.current === chatId) setDemoRoomSaving(false);
+      if (activeChatIdRef.current === chatId) setRoomSaving(false);
     }
   };
 
-  const addDemoRoomCharacter = async (promptId: number) => {
-    if (!activeChatId || demoRoomSaving) return;
+  const addRoomCharacter = async (promptId: number) => {
+    if (!activeChatId || roomSaving) return;
     const chatId = activeChatId;
-    setDemoAddParticipantOpen(false);
-    setDemoRoomSaving(true);
+    setAddParticipantOpen(false);
+    setRoomSaving(true);
     try {
       const { room } = await api.addChatAgent(chatId, promptId);
-      if (activeChatIdRef.current === chatId) applyDemoRoom(room);
+      if (activeChatIdRef.current === chatId) applyRoom(room);
     } catch (error) {
       console.error('Failed to add chat agent:', error);
       if (activeChatIdRef.current === chatId) toast.error(t('auth.error.generic'));
     } finally {
-      if (activeChatIdRef.current === chatId) setDemoRoomSaving(false);
+      if (activeChatIdRef.current === chatId) setRoomSaving(false);
     }
   };
 
-  const handleDemoRoomParticipantDragEnd = ({ active, over }: DragEndEvent) => {
-    setDemoDraggingRoomParticipantId(null);
-    setDemoDraggingRoomParticipantSize(null);
+  const handleRoomParticipantDragEnd = ({ active, over }: DragEndEvent) => {
+    setDraggingRoomParticipantId(null);
+    setDraggingRoomParticipantSize(null);
     const activeId = Number(active.data.current?.participantId);
     const overId = Number(over?.data.current?.participantId);
     if (!Number.isSafeInteger(activeId) || !Number.isSafeInteger(overId) || activeId === overId || !activeChatId) return;
     const chatId = activeChatId;
-    const previousCharacters = demoRoomCharacters;
+    const previousCharacters = roomCharacters;
     const fromIndex = previousCharacters.findIndex((participant) => participant.id === activeId);
     const toIndex = previousCharacters.findIndex((participant) => participant.id === overId);
     if (fromIndex < 0 || toIndex < 0) return;
     const next = [...previousCharacters];
     const [moved] = next.splice(fromIndex, 1);
     next.splice(toIndex, 0, moved);
-    setDemoRoomCharacters(next);
+    setRoomCharacters(next);
     void api.reorderChatAgents(chatId, next.map((participant) => participant.id))
       .then(({ room }) => {
-        if (activeChatIdRef.current === chatId) applyDemoRoom(room);
+        if (activeChatIdRef.current === chatId) applyRoom(room);
       })
       .catch((error) => {
         console.error('Failed to reorder chat agents:', error);
         if (activeChatIdRef.current === chatId) {
-          setDemoRoomCharacters(previousCharacters);
+          setRoomCharacters(previousCharacters);
           toast.error(t('auth.error.generic'));
         }
       });
   };
 
-  const createDemoRoom = async () => {
-    if (!activeChatId || demoRoomSaving) return;
+  const createRoom = async () => {
+    if (!activeChatId || roomSaving) return;
     const chatId = activeChatId;
-    setDemoRoomSaving(true);
+    setRoomSaving(true);
     try {
       const { room } = await api.createChatRoom(chatId);
-      if (activeChatIdRef.current === chatId) applyDemoRoom(room);
+      if (activeChatIdRef.current === chatId) applyRoom(room);
     } catch (error) {
       console.error('Failed to create chat room:', error);
       if (activeChatIdRef.current === chatId) toast.error(t('auth.error.generic'));
     } finally {
-      if (activeChatIdRef.current === chatId) setDemoRoomSaving(false);
+      if (activeChatIdRef.current === chatId) setRoomSaving(false);
     }
   };
 
-  const deleteDemoRoom = async () => {
-    if (!activeChatId || demoRoomSaving) return;
-    if (demoRoomCharacters.length > 0) {
+  const deleteRoom = async () => {
+    if (!activeChatId || roomSaving) return;
+    if (roomCharacters.length > 0) {
       toast.info(t('chat.room.removeAgentsBeforeDelete'));
       return;
     }
     const chatId = activeChatId;
-    setDemoRoomSaving(true);
+    setRoomSaving(true);
     try {
       const { room } = await api.deleteChatRoom(chatId);
       if (activeChatIdRef.current === chatId) {
-        applyDemoRoom(room);
-        setDemoRoomOpen(false);
+        applyRoom(room);
+        setRoomOpen(false);
       }
     } catch (error) {
       console.error('Failed to delete chat room:', error);
       if (activeChatIdRef.current === chatId) toast.error(t('auth.error.generic'));
     } finally {
-      if (activeChatIdRef.current === chatId) setDemoRoomSaving(false);
+      if (activeChatIdRef.current === chatId) setRoomSaving(false);
     }
   };
 
-  const updateDemoRoomSettings = async (
+  const updateRoomSettings = async (
     patch: { response_mode?: 'manual' | 'round'; auto_respond?: boolean; next_agent_id?: number | null },
   ) => {
-    if (!activeChatId || demoRoomSaving) return;
+    if (!activeChatId || roomSaving) return;
     const chatId = activeChatId;
     const previous = {
-      response_mode: demoRoomMode,
-      auto_respond: demoRoomAutoRespond,
-      next_agent_id: demoNextParticipant,
+      response_mode: roomMode,
+      auto_respond: roomAutoRespond,
+      next_agent_id: nextRoomParticipant,
     };
-    if (patch.response_mode !== undefined) setDemoRoomMode(patch.response_mode);
-    if (patch.auto_respond !== undefined) setDemoRoomAutoRespond(patch.auto_respond);
-    if (patch.next_agent_id !== undefined) setDemoNextParticipant(patch.next_agent_id);
-    setDemoRoomSaving(true);
+    if (patch.response_mode !== undefined) setRoomMode(patch.response_mode);
+    if (patch.auto_respond !== undefined) setRoomAutoRespond(patch.auto_respond);
+    if (patch.next_agent_id !== undefined) setNextRoomParticipant(patch.next_agent_id);
+    setRoomSaving(true);
     try {
       const { room } = await api.updateChatRoomSettings(chatId, patch);
-      if (activeChatIdRef.current === chatId) applyDemoRoom(room);
+      if (activeChatIdRef.current === chatId) applyRoom(room);
     } catch (error) {
       console.error('Failed to update chat room settings:', error);
       if (activeChatIdRef.current === chatId) {
-        setDemoRoomMode(previous.response_mode);
-        setDemoRoomAutoRespond(previous.auto_respond);
-        setDemoNextParticipant(previous.next_agent_id);
+        setRoomMode(previous.response_mode);
+        setRoomAutoRespond(previous.auto_respond);
+        setNextRoomParticipant(previous.next_agent_id);
         toast.error(t('auth.error.generic'));
       }
     } finally {
-      if (activeChatIdRef.current === chatId) setDemoRoomSaving(false);
+      if (activeChatIdRef.current === chatId) setRoomSaving(false);
     }
   };
 
@@ -4383,16 +4557,16 @@ export function ChatPage() {
               </div>
               <button
                 type="button"
-                className={`${s.roomTrigger} ${demoRoomOpen ? s.roomTriggerActive : ''} ${!demoRoomCreated ? s.roomTriggerEmpty : ''}`}
+                className={`${s.roomTrigger} ${roomOpen ? s.roomTriggerActive : ''} ${!roomCreated ? s.roomTriggerEmpty : ''}`}
                 onClick={() => {
-                  setDemoRoomOpen((open) => {
+                  setRoomOpen((open) => {
                     if (!open) setToolsPanelState({ isOpen: false });
                     return !open;
                   });
                 }}
-                title={t(!demoRoomCreated ? 'chat.room.createRoom' : 'chat.room.open')}
+                title={t(!roomCreated ? 'chat.room.createRoom' : 'chat.room.open')}
               >
-                {!demoRoomCreated ? (
+                {!roomCreated ? (
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
                     <path d="M12 5v14M5 12h14" />
                   </svg>
@@ -4400,13 +4574,13 @@ export function ChatPage() {
                   <>
                     <span className={s.roomAvatarStack} aria-hidden="true">
                       <span className={`${s.roomAvatar} ${s.roomAvatarHuman}`}>{(user?.name || user?.username || 'Y').trim().charAt(0).toUpperCase()}</span>
-                      {demoRoomCharacters.slice(0, 3).map((participant) => (
-                        <span key={participant.id} className={`${s.roomAvatar} ${getDemoRoomAvatarClass(participant.id)}`}>{getDemoRoomInitial(participant.name)}</span>
+                      {roomCharacters.slice(0, 3).map((participant) => (
+                        <span key={participant.id} className={`${s.roomAvatar} ${getRoomAvatarClass(participant.id)}`}>{getRoomInitial(participant.name)}</span>
                       ))}
                     </span>
-                    <span className={s.roomTriggerText}>{t('chat.room.participantCount', { count: demoRoomCharacters.length + 1 })}</span>
+                    <span className={s.roomTriggerText}>{t('chat.room.participantCount', { count: roomCharacters.length + 1 })}</span>
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <polyline points={demoRoomOpen ? '18 15 12 9 6 15' : '9 18 15 12 9 6'} />
+                      <polyline points={roomOpen ? '18 15 12 9 6 15' : '9 18 15 12 9 6'} />
                     </svg>
                   </>
                 )}
@@ -5997,19 +6171,19 @@ export function ChatPage() {
             )}
 
             {/* Group room turn controls (UI prototype only) */}
-            {demoRoomCreated && demoRoomCharacters.length > 1 && <div className={s.roomTurnBar}>
-              {demoRoomMode === 'manual' ? (
+            {roomCreated && roomCharacters.length > 1 && <div className={s.roomTurnBar}>
+              {roomMode === 'manual' ? (
                 <>
                   <span className={s.roomTurnLabel}>{t('chat.room.whoRespondsNext')}</span>
                   <div className={s.roomTurnParticipants}>
-                    {demoRoomCharacters.map((participant) => (
+                    {roomCharacters.map((participant) => (
                       <button
                         key={participant.id}
                         type="button"
-                        className={`${s.roomTurnParticipant} ${demoNextParticipant === participant.id ? s.roomTurnParticipantActive : ''}`}
-                        onClick={() => void updateDemoRoomSettings({ next_agent_id: participant.id })}
+                        className={`${s.roomTurnParticipant} ${nextRoomParticipant === participant.id ? s.roomTurnParticipantActive : ''}`}
+                        onClick={() => void updateRoomSettings({ next_agent_id: participant.id })}
                       >
-                        <span className={`${s.roomTurnAvatar} ${getDemoRoomAvatarClass(participant.id)}`}>{getDemoRoomInitial(participant.name)}</span>
+                        <span className={`${s.roomTurnAvatar} ${getRoomAvatarClass(participant.id)}`}>{getRoomInitial(participant.name)}</span>
                         <span>{participant.name}</span>
                       </button>
                     ))}
@@ -6017,9 +6191,10 @@ export function ChatPage() {
                   <button
                     type="button"
                     className={s.roomActionButton}
-                    onClick={() => toast.info(t('chat.room.manualActionPrototype', {
-                      name: demoRoomCharacters.find((participant) => participant.id === demoNextParticipant)?.name || demoRoomCharacters[0]?.name,
-                    }))}
+                    disabled={sending}
+                    onClick={() => void runRoomAgentSequence([
+                      nextRoomParticipant ?? roomCharacters[0].id,
+                    ])}
                   >
                     {t('chat.room.reply')}
                   </button>
@@ -6028,14 +6203,21 @@ export function ChatPage() {
                 <>
                   <span className={s.roomTurnLabel}>{t('chat.room.roundOrder')}</span>
                   <div className={s.roomRoundOrder}>
-                    {demoRoomCharacters.map((participant, index) => (
+                    {roomCharacters.map((participant, index) => (
                       <React.Fragment key={participant.id}>
                         {index > 0 && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m9 18 6-6-6-6" /></svg>}
                         <span><b>{index + 1}</b> {participant.name}</span>
                       </React.Fragment>
                     ))}
                   </div>
-                  <button type="button" className={s.roomActionButton} onClick={() => toast.info(t('chat.room.sequenceActionPrototype'))}>{t('chat.room.startSequence')}</button>
+                  <button
+                    type="button"
+                    className={s.roomActionButton}
+                    disabled={sending}
+                    onClick={() => void runRoomAgentSequence(roomCharacters.map((participant) => participant.id))}
+                  >
+                    {t('chat.room.startSequence')}
+                  </button>
                 </>
               )}
             </div>}
@@ -6232,7 +6414,7 @@ export function ChatPage() {
       </main>
 
       <AnimatePresence initial={false}>
-        {demoRoomOpen && (
+        {roomOpen && (
           <motion.aside
             className={s.roomPanel}
             initial={{ width: 0, opacity: 0 }}
@@ -6246,20 +6428,20 @@ export function ChatPage() {
                   <div className={s.roomPanelTitle}>{t('chat.room.title')}</div>
                   <div className={s.roomPanelSubtitle}>{t('chat.room.subtitle')}</div>
                 </div>
-                <button type="button" className={s.roomCloseBtn} onClick={() => setDemoRoomOpen(false)} aria-label={t('common.close')}>
+                <button type="button" className={s.roomCloseBtn} onClick={() => setRoomOpen(false)} aria-label={t('common.close')}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
                 </button>
               </div>
 
-              {demoRoomLoading ? (
+              {roomLoading ? (
                 <div className={s.roomCreateState}>{t('common.loading')}</div>
-              ) : !demoRoomCreated ? (
+              ) : !roomCreated ? (
                 <div className={s.roomCreateState}>
                   <button
                     type="button"
                     className={s.roomCreateButton}
-                    disabled={!activeChatId || demoRoomSaving}
-                    onClick={() => void createDemoRoom()}
+                    disabled={!activeChatId || roomSaving}
+                    onClick={() => void createRoom()}
                   >
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
                     {t('chat.room.createRoom')}
@@ -6270,14 +6452,14 @@ export function ChatPage() {
               <div className={s.roomSection}>
                 <div className={s.roomSectionLabel}>{t('chat.room.mode')}</div>
                 <div className={s.roomModeSwitch}>
-                  <button type="button" disabled={demoRoomSaving} className={demoRoomMode === 'manual' ? s.roomModeActive : ''} onClick={() => void updateDemoRoomSettings({ response_mode: 'manual' })}>
+                  <button type="button" disabled={roomSaving} className={roomMode === 'manual' ? s.roomModeActive : ''} onClick={() => void updateRoomSettings({ response_mode: 'manual' })}>
                     {t('chat.room.manual')}
                   </button>
-                  <button type="button" disabled={demoRoomSaving} className={demoRoomMode === 'round' ? s.roomModeActive : ''} onClick={() => void updateDemoRoomSettings({ response_mode: 'round' })}>
+                  <button type="button" disabled={roomSaving} className={roomMode === 'round' ? s.roomModeActive : ''} onClick={() => void updateRoomSettings({ response_mode: 'round' })}>
                     {t('chat.room.round')}
                   </button>
                 </div>
-                <div className={s.roomModeHint}>{t(demoRoomMode === 'manual' ? 'chat.room.manualHint' : 'chat.room.roundHint')}</div>
+                <div className={s.roomModeHint}>{t(roomMode === 'manual' ? 'chat.room.manualHint' : 'chat.room.roundHint')}</div>
                 <div className={s.roomAutoRespondRow}>
                   <div className={s.roomAutoRespondText}>
                     <strong>{t('chat.room.autoRespond')}</strong>
@@ -6286,10 +6468,10 @@ export function ChatPage() {
                   <button
                     type="button"
                     role="switch"
-                    aria-checked={demoRoomAutoRespond}
-                    className={`${s.roomToggle} ${demoRoomAutoRespond ? s.roomToggleActive : ''}`}
-                    disabled={demoRoomSaving}
-                    onClick={() => void updateDemoRoomSettings({ auto_respond: !demoRoomAutoRespond })}
+                    aria-checked={roomAutoRespond}
+                    className={`${s.roomToggle} ${roomAutoRespond ? s.roomToggleActive : ''}`}
+                    disabled={roomSaving}
+                    onClick={() => void updateRoomSettings({ auto_respond: !roomAutoRespond })}
                   >
                     <span />
                   </button>
@@ -6299,22 +6481,22 @@ export function ChatPage() {
               <div className={s.roomSection}>
                 <div className={s.roomParticipantsHeader}>
                   <span className={s.roomSectionLabel}>{t('chat.room.participants')}</span>
-                  <span className={s.roomParticipantTotal}>{demoRoomCharacters.length + 1}</span>
+                  <span className={s.roomParticipantTotal}>{roomCharacters.length + 1}</span>
                 </div>
                 <DndContext
                   collisionDetection={closestCenter}
                   onDragStart={({ active }) => {
                     const participantId = Number(active.data.current?.participantId);
-                    setDemoDraggingRoomParticipantId(Number.isSafeInteger(participantId) ? participantId : null);
+                    setDraggingRoomParticipantId(Number.isSafeInteger(participantId) ? participantId : null);
                     const initialRect = active.rect.current.initial;
-                    setDemoDraggingRoomParticipantSize(initialRect ? { width: initialRect.width, height: initialRect.height } : null);
-                    setDemoRoomParticipantMenuId(null);
+                    setDraggingRoomParticipantSize(initialRect ? { width: initialRect.width, height: initialRect.height } : null);
+                    setRoomParticipantMenuId(null);
                   }}
                   onDragCancel={() => {
-                    setDemoDraggingRoomParticipantId(null);
-                    setDemoDraggingRoomParticipantSize(null);
+                    setDraggingRoomParticipantId(null);
+                    setDraggingRoomParticipantSize(null);
                   }}
-                  onDragEnd={handleDemoRoomParticipantDragEnd}
+                  onDragEnd={handleRoomParticipantDragEnd}
                 >
                   <div className={s.roomParticipantList}>
                     <div className={s.roomParticipantCard}>
@@ -6325,37 +6507,37 @@ export function ChatPage() {
                       </div>
                       <span className={s.roomParticipantYou}>{t('chat.room.you')}</span>
                     </div>
-                    {demoRoomCharacters.map((participant, index) => (
+                    {roomCharacters.map((participant, index) => (
                       <DemoDraggableRoomParticipant participantId={participant.id} key={participant.id}>
                         {(dragHandleProps) => (
                           <>
-                            {demoRoomCharacters.length > 1 && (
+                            {roomCharacters.length > 1 && (
                               <button type="button" className={s.roomParticipantDrag} aria-label={t('chat.room.reorder')} {...dragHandleProps}>
                                 <svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor"><circle cx="3" cy="3" r="1"/><circle cx="9" cy="3" r="1"/><circle cx="3" cy="8" r="1"/><circle cx="9" cy="8" r="1"/><circle cx="3" cy="13" r="1"/><circle cx="9" cy="13" r="1"/></svg>
                               </button>
                             )}
                             <span className={s.roomParticipantIndex}>{index + 1}</span>
-                            <span className={`${s.roomParticipantAvatar} ${getDemoRoomAvatarClass(participant.id)}`}>{getDemoRoomInitial(participant.name)}</span>
+                            <span className={`${s.roomParticipantAvatar} ${getRoomAvatarClass(participant.id)}`}>{getRoomInitial(participant.name)}</span>
                             <div className={s.roomParticipantInfo}>
                               <strong>{participant.name}</strong>
                               <span>{index === 0 ? t('chat.room.mainAssistant') : t('chat.room.character')}</span>
                             </div>
-                            {demoRoomCharacters.length > 0 && (
+                            {roomCharacters.length > 0 && (
                               <button
                                 type="button"
                                 className={s.roomParticipantMenu}
                                 aria-label={t('common.actions')}
                                 onClick={(event) => {
                                   event.stopPropagation();
-                                  setDemoRoomParticipantMenuId((current) => current === participant.id ? null : participant.id);
+                                  setRoomParticipantMenuId((current) => current === participant.id ? null : participant.id);
                                 }}
                               >
                                 <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><circle cx="8" cy="3" r="1.4"/><circle cx="8" cy="8" r="1.4"/><circle cx="8" cy="13" r="1.4"/></svg>
                               </button>
                             )}
-                            {demoRoomParticipantMenuId === participant.id && (
+                            {roomParticipantMenuId === participant.id && (
                               <div className={s.roomParticipantContextMenu} onClick={(event) => event.stopPropagation()}>
-                                <button type="button" onClick={() => void removeDemoRoomCharacter(participant.id)}>
+                                <button type="button" onClick={() => void removeRoomCharacter(participant.id)}>
                                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                                   {t('chat.room.removeParticipant')}
                                 </button>
@@ -6367,17 +6549,17 @@ export function ChatPage() {
                     ))}
                   </div>
                   <DragOverlay zIndex={10002} dropAnimation={null}>
-                    {demoDraggingRoomParticipantId && (() => {
-                      const participant = demoRoomCharacters.find((item) => item.id === demoDraggingRoomParticipantId);
+                    {draggingRoomParticipantId && (() => {
+                      const participant = roomCharacters.find((item) => item.id === draggingRoomParticipantId);
                       if (!participant) return null;
-                      const index = demoRoomCharacters.findIndex((item) => item.id === participant.id);
+                      const index = roomCharacters.findIndex((item) => item.id === participant.id);
                       return (
-                        <div className={`${s.roomParticipantCard} ${s.roomParticipantCardOverlay}`} style={demoDraggingRoomParticipantSize || undefined}>
+                        <div className={`${s.roomParticipantCard} ${s.roomParticipantCardOverlay}`} style={draggingRoomParticipantSize || undefined}>
                           <button type="button" className={s.roomParticipantDrag} tabIndex={-1}>
                             <svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor"><circle cx="3" cy="3" r="1"/><circle cx="9" cy="3" r="1"/><circle cx="3" cy="8" r="1"/><circle cx="9" cy="8" r="1"/><circle cx="3" cy="13" r="1"/><circle cx="9" cy="13" r="1"/></svg>
                           </button>
                           <span className={s.roomParticipantIndex}>{index + 1}</span>
-                          <span className={`${s.roomParticipantAvatar} ${getDemoRoomAvatarClass(participant.id)}`}>{getDemoRoomInitial(participant.name)}</span>
+                          <span className={`${s.roomParticipantAvatar} ${getRoomAvatarClass(participant.id)}`}>{getRoomInitial(participant.name)}</span>
                           <div className={s.roomParticipantInfo}>
                             <strong>{participant.name}</strong>
                             <span>{index === 0 ? t('chat.room.mainAssistant') : t('chat.room.character')}</span>
@@ -6388,17 +6570,17 @@ export function ChatPage() {
                   </DragOverlay>
                 </DndContext>
                 <div className={s.roomAddParticipantWrap}>
-                  {demoAddParticipantOpen && (
+                  {addParticipantOpen && (
                     <div className={s.roomPromptPicker} onClick={(event) => event.stopPropagation()}>
                       <div className={s.roomPromptPickerTitle}>{t('chat.room.choosePrompt')}</div>
-                      {demoRoomPrompts.map((prompt) => (
+                      {roomPrompts.map((prompt) => (
                           <button
                             key={prompt.id}
                             type="button"
                             className={s.roomPromptOption}
-                            onClick={() => void addDemoRoomCharacter(prompt.id)}
+                            onClick={() => void addRoomCharacter(prompt.id)}
                           >
-                            <span className={`${s.roomPromptAvatar} ${getDemoRoomAvatarClass(prompt.id)}`}>{getDemoRoomInitial(prompt.name)}</span>
+                            <span className={`${s.roomPromptAvatar} ${getRoomAvatarClass(prompt.id)}`}>{getRoomInitial(prompt.name)}</span>
                             <span className={s.roomPromptInfo}>
                               <strong>{prompt.name}</strong>
                               <span>{prompt.description}</span>
@@ -6411,10 +6593,10 @@ export function ChatPage() {
                   <button
                     type="button"
                     className={s.roomAddParticipant}
-                    disabled={demoRoomSaving}
+                    disabled={roomSaving}
                     onClick={(event) => {
                       event.stopPropagation();
-                      setDemoAddParticipantOpen((open) => !open);
+                      setAddParticipantOpen((open) => !open);
                     }}
                   >
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
@@ -6425,8 +6607,8 @@ export function ChatPage() {
               <button
                 type="button"
                 className={s.roomDeleteButton}
-                disabled={demoRoomSaving}
-                onClick={() => void deleteDemoRoom()}
+                disabled={roomSaving}
+                onClick={() => void deleteRoom()}
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                 {t('chat.room.deleteRoom')}

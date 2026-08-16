@@ -8,6 +8,7 @@ import { appendChatMessage, ensureActiveChat, getHistoryForAi, getMessageTokens,
 import { calculateChargedTokens, checkQuota, chargeTokens, getModelOverride, getPricingSnapshot, calculateEstimatedCostUsd, isModelFree } from './token-quota.js';
 import { getPlanLimits } from './plan-limits.js';
 import { resolvePromptForUser, AVATAR_PROMPT_HINT } from './prompts.js';
+import { getChatAgentForResponse } from './chat-rooms.js';
 import { createNote, deleteNote, getNoteById, listNotes } from './notes.js';
 import { createTask, deletePendingTask, getPendingTaskCount, listTasks } from './tasks.js';
 import { listMapPinsForBot } from './map-pins.js';
@@ -6555,6 +6556,10 @@ export const sendMessageThroughAi = async (
     reasoningLevel?: ReasoningLevel | null;
     autoRejectHitl?: boolean;
     isBackgroundTask?: boolean;
+    /** Use a saved room-agent prompt snapshot for this response. */
+    agentId?: number;
+    /** Persist the user's message without starting an assistant generation. */
+    userOnly?: boolean;
     /** Notify a connected Desktop when an external client writes into this chat. */
     notifyDesktopChatUpdates?: boolean;
   }
@@ -6577,7 +6582,7 @@ export const sendMessageThroughAi = async (
   // Branches on plan billing_mode: 'tokens' (legacy) or 'budget' (USD-based).
   const planLimitsForQuota = getPlanLimits(user.plan);
   const quotaCheck = checkQuota(userId, user.is_admin === 1, planLimitsForQuota.billing_mode);
-  if (!quotaCheck.ok && !selectedMainModelIsFree) {
+  if (!options?.userOnly && !quotaCheck.ok && !selectedMainModelIsFree) {
     const err = new Error('quota_exceeded') as Error & { code?: string; quota?: number; used?: number; resetsAt?: number };
     err.code = 'quota_exceeded';
     err.quota = quotaCheck.quota;
@@ -6741,6 +6746,7 @@ export const sendMessageThroughAi = async (
   let usedUniqueId: string | null = null;
   let responsePromptId: number | null = null;
   let responsePromptName = 'Chatter';
+  let responseAgentId: number | null = null;
   let diceRollValue: number | null = null;
   const usageCalls: TokenUsageCall[] = [];
   const subagentUsageCalls: Array<TokenUsageCall & { agentName: string }> = [];
@@ -6957,6 +6963,10 @@ export const sendMessageThroughAi = async (
 
   try {
   chatId = targetChatId && Number.isFinite(targetChatId) ? targetChatId : ensureActiveChat(userId);
+  const responseAgent = options?.agentId !== undefined
+    ? getChatAgentForResponse(userId, chatId, options.agentId)
+    : null;
+  responseAgentId = responseAgent?.id ?? null;
   const maxContextTokens = resolveMaxContextTokens(user);
   const attachmentMaxTokens = resolveAttachmentMaxTokens(user);
   // Apply the provider-anchored estimate before assembling the next request.
@@ -6976,10 +6986,12 @@ export const sendMessageThroughAi = async (
     chatId,
     attachmentMaxTokens,
     currentModelSupportsVision,
-    attachmentBudgetState
+    attachmentBudgetState,
+    Boolean(responseAgent)
   );
   const automaticChatTitlePromise = (
-    !requestedRegenerateFromHistory
+    !options?.userOnly
+    && !requestedRegenerateFromHistory
     && !options?.skipHistory
     && !options?.skipUserHistory
     && history.length === 0
@@ -7044,6 +7056,54 @@ export const sendMessageThroughAi = async (
       });
     }
     notifyDesktopChatUpdated('user', userMessageId);
+  }
+
+  if (options?.userOnly) {
+    if (automaticChatTitlePromise) {
+      const title = await automaticChatTitlePromise;
+      if (title) {
+        renameUserChat(userId, chatId, title);
+        const action: DesktopActionPayload = {
+          action: 'chat_title_update',
+          value: { chat_id: chatId, title },
+        };
+        const deliveredViaWs = sendToDesktop(userId, { type: 'desktop_action', ...action });
+        if (!deliveredViaWs && safeOnDesktopAction) {
+          await Promise.resolve(safeOnDesktopAction(action)).catch((err: any) => {
+            console.warn('[chat-title] client notification failed:', err?.message || String(err));
+          });
+        }
+      }
+    }
+    if (options?.countAsUserMessage !== false) {
+      db.prepare(`
+        UPDATE users
+        SET daily_message_count = COALESCE(daily_message_count, 0) + 1,
+            total_message_length = COALESCE(total_message_length, 0) + ?
+        WHERE id = ?
+      `).run(userTextForHistory.length, userId);
+    }
+    trimUserHistoryByChat(userId, chatId, maxContextTokens);
+    return {
+      reply_text: '',
+      user_only: true,
+      chat_id: chatId,
+      message_id: 0,
+      user_message_id: userMessageId,
+      user_message_images: options?.userImages?.length ? options.userImages : undefined,
+      usage: {
+        tokens_used: 0,
+        used_model: null,
+        used_provider: null,
+        prompt_tokens: 0,
+        completion_tokens: 0,
+        cache_hit_tokens: 0,
+        cache_miss_tokens: 0,
+        reasoning_tokens: 0,
+        calls: [],
+      },
+      ...(userMessageId > 0 ? { user_token_count: getMessageTokens(userMessageId).token_count } : {}),
+    };
   }
 
   const timezone = Number.isFinite(Number(user.timezone_offset)) ? Number(user.timezone_offset) : 5;
@@ -7170,10 +7230,10 @@ export const sendMessageThroughAi = async (
     console.log(`[feature-flags] user=${userId} disabled tools: ${[...disabledToolSet].join(', ')}`);
   }
   const isGuestMode = Boolean(flags?.disable_personal);
-  const resolvedPrompt = isGuestMode ? null : resolvePromptForUser(promptUser);
-  const promptContent = resolvedPrompt?.content || '';
-  responsePromptId = resolvedPrompt?.id ?? null;
-  responsePromptName = resolvedPrompt?.name || (isGuestMode ? 'Guest' : 'Chatter');
+  const resolvedPrompt = isGuestMode || responseAgent ? null : resolvePromptForUser(promptUser);
+  const promptContent = responseAgent?.prompt_content || resolvedPrompt?.content || '';
+  responsePromptId = responseAgent?.source_prompt_id ?? resolvedPrompt?.id ?? null;
+  responsePromptName = responseAgent?.name || resolvedPrompt?.name || (isGuestMode ? 'Guest' : 'Chatter');
   const coreMemoryForPrompt = isGuestMode ? '' : (user.core_memory || '');
   const pinnedHintForPrompt = isGuestMode ? '' : pinnedHint;
 
@@ -7886,6 +7946,7 @@ iterations.push(currentIteration);
           promptName: responsePromptName,
           modelName: responseModelName,
           providerName: usedProvider || null,
+          agentId: responseAgentId,
         }
       );
   notifyDesktopChatUpdated('assistant', assistantMessageId);
@@ -7956,6 +8017,7 @@ iterations.push(currentIteration);
     },
     prompt_id: responsePromptId,
     prompt_name: responsePromptName,
+    agent_id: responseAgentId,
     model_name: responseModelName,
     provider_name: usedProvider || null,
     message_usage: messageUsage,
@@ -8005,6 +8067,7 @@ iterations.push(currentIteration);
               promptName: responsePromptName,
               modelName: abortedModelName,
               providerName: usedProvider || null,
+              agentId: responseAgentId,
             }
           );
           notifyDesktopChatUpdated('assistant', abortedMessageId);
@@ -8040,6 +8103,7 @@ iterations.push(currentIteration);
         },
         prompt_id: responsePromptId,
         prompt_name: responsePromptName,
+        agent_id: responseAgentId,
         model_name: abortedModelName,
         provider_name: usedProvider || null,
         message_usage: abortedMessageUsage,

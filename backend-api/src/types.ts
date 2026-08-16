@@ -128,9 +128,9 @@ export type MessageDto = {
   reasoning_tokens?: number;
   prompt_id?: number | null;
   prompt_name?: string | null;
+  agent_id?: number | null;
   model_name?: string | null;
   provider_name?: string | null;
-  agent_id?: number | null;
   usage?: MessageUsage | null;
   attachments?: MessageAttachment[] | null;
   /** Полные trace ad-hoc субагентов (если были). */
@@ -204,6 +204,7 @@ export type GeneratedImage = {
 
 export type AiSendResult = {
   reply_text: string;
+  user_only?: boolean;
   reasoning_content?: string | null;
   chat_id: number;
   message_id: number;
@@ -243,6 +244,7 @@ export type AiSendResult = {
   user_token_count?: number;
   prompt_id?: number | null;
   prompt_name?: string | null;
+  agent_id?: number | null;
   model_name?: string | null;
   provider_name?: string | null;
   message_usage?: MessageUsage | null;

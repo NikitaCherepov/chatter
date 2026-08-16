@@ -29,6 +29,22 @@ export type ChatRoomDto = {
   agents: ChatAgentDto[];
 };
 
+export const getChatAgentForResponse = (
+  userId: number,
+  chatId: number,
+  agentId: number,
+): ChatAgentDto => {
+  const chat = requireRoom(userId, chatId);
+  const agent = db.prepare(`
+    SELECT id, chat_id, owner_user_id, source_prompt_id, name, prompt_content,
+           sort_order, created_at, updated_at
+    FROM chat_agents
+    WHERE id = ? AND chat_id = ? AND is_active = 1
+  `).get(agentId, chat.id) as ChatAgentDto | undefined;
+  if (!agent) throw new Error('agent_not_found');
+  return agent;
+};
+
 type ChatRoomRow = {
   id: number;
   user_id: number;
