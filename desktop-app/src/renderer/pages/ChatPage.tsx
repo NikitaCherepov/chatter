@@ -870,6 +870,7 @@ export function ChatPage() {
   const [demoFilesFilter, setDemoFilesFilter] = useState(false);
   const [demoImagesFilter, setDemoImagesFilter] = useState(false);
   const [demoRoomOpen, setDemoRoomOpen] = useState(false);
+  const [demoRoomCreated, setDemoRoomCreated] = useState(false);
   const [demoRoomMode, setDemoRoomMode] = useState<'manual' | 'round'>('manual');
   const [demoNextParticipant, setDemoNextParticipant] = useState('vega');
   const [demoRoomAutoRespond, setDemoRoomAutoRespond] = useState(true);
@@ -3620,7 +3621,6 @@ export function ChatPage() {
 
   const removeDemoRoomCharacter = (participantId: string) => {
     setDemoRoomCharacters((current) => {
-      if (current.length <= 1) return current;
       const next = current.filter((participant) => participant.id !== participantId);
       setDemoNextParticipant((selected) => selected === participantId ? (next[0]?.id || '') : selected);
       return next;
@@ -4241,16 +4241,16 @@ export function ChatPage() {
               </div>
               <button
                 type="button"
-                className={`${s.roomTrigger} ${demoRoomOpen ? s.roomTriggerActive : ''} ${demoRoomCharacters.length <= 1 ? s.roomTriggerEmpty : ''}`}
+                className={`${s.roomTrigger} ${demoRoomOpen ? s.roomTriggerActive : ''} ${!demoRoomCreated ? s.roomTriggerEmpty : ''}`}
                 onClick={() => {
                   setDemoRoomOpen((open) => {
                     if (!open) setToolsPanelState({ isOpen: false });
                     return !open;
                   });
                 }}
-                title={t(demoRoomCharacters.length <= 1 ? 'chat.room.addParticipantsShort' : 'chat.room.open')}
+                title={t(!demoRoomCreated ? 'chat.room.createRoom' : 'chat.room.open')}
               >
-                {demoRoomCharacters.length <= 1 ? (
+                {!demoRoomCreated ? (
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
                     <path d="M12 5v14M5 12h14" />
                   </svg>
@@ -6109,6 +6109,23 @@ export function ChatPage() {
                 </button>
               </div>
 
+              {!demoRoomCreated ? (
+                <div className={s.roomCreateState}>
+                  <button
+                    type="button"
+                    className={s.roomCreateButton}
+                    onClick={() => {
+                      setDemoRoomCharacters([{ id: 'vega', name: 'Vega', initial: 'V' }]);
+                      setDemoNextParticipant('vega');
+                      setDemoRoomCreated(true);
+                    }}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
+                    {t('chat.room.createRoom')}
+                  </button>
+                </div>
+              ) : (
+              <>
               <div className={s.roomSection}>
                 <div className={s.roomSectionLabel}>{t('chat.room.mode')}</div>
                 <div className={s.roomModeSwitch}>
@@ -6169,16 +6186,18 @@ export function ChatPage() {
                       <DemoDraggableRoomParticipant participantId={participant.id} key={participant.id}>
                         {(dragHandleProps) => (
                           <>
-                            <button type="button" className={s.roomParticipantDrag} aria-label={t('chat.room.reorder')} {...dragHandleProps}>
-                              <svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor"><circle cx="3" cy="3" r="1"/><circle cx="9" cy="3" r="1"/><circle cx="3" cy="8" r="1"/><circle cx="9" cy="8" r="1"/><circle cx="3" cy="13" r="1"/><circle cx="9" cy="13" r="1"/></svg>
-                            </button>
+                            {demoRoomCharacters.length > 1 && (
+                              <button type="button" className={s.roomParticipantDrag} aria-label={t('chat.room.reorder')} {...dragHandleProps}>
+                                <svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor"><circle cx="3" cy="3" r="1"/><circle cx="9" cy="3" r="1"/><circle cx="3" cy="8" r="1"/><circle cx="9" cy="8" r="1"/><circle cx="3" cy="13" r="1"/><circle cx="9" cy="13" r="1"/></svg>
+                              </button>
+                            )}
                             <span className={s.roomParticipantIndex}>{index + 1}</span>
                             <span className={`${s.roomParticipantAvatar} ${getDemoRoomAvatarClass(participant.id)}`}>{participant.initial}</span>
                             <div className={s.roomParticipantInfo}>
                               <strong>{participant.name}</strong>
                               <span>{index === 0 ? t('chat.room.mainAssistant') : t('chat.room.character')}</span>
                             </div>
-                            {demoRoomCharacters.length > 1 && (
+                            {demoRoomCharacters.length > 0 && (
                               <button
                                 type="button"
                                 className={s.roomParticipantMenu}
@@ -6259,6 +6278,23 @@ export function ChatPage() {
                   </button>
                 </div>
               </div>
+              <button
+                type="button"
+                className={s.roomDeleteButton}
+                onClick={() => {
+                  if (demoRoomCharacters.length > 0) {
+                    toast.info(t('chat.room.removeAgentsBeforeDelete'));
+                    return;
+                  }
+                  setDemoRoomCreated(false);
+                  setDemoRoomOpen(false);
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                {t('chat.room.deleteRoom')}
+              </button>
+              </>
+              )}
             </div>
           </motion.aside>
         )}

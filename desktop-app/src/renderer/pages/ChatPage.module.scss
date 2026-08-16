@@ -161,6 +161,34 @@
 .roomCloseBtn { width: 28px; height: 28px; border-radius: 6px; }
 .roomSection { display: flex; flex-direction: column; gap: 10px; }
 
+.roomCreateState {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.roomCreateButton {
+  min-width: 170px;
+  height: 38px;
+  padding: 0 16px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  background-color: var(--accent);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: filter 0.12s, transform 0.12s;
+
+  &:hover { filter: brightness(1.06); }
+  &:active { transform: translateY(1px); }
+}
+
 .roomSectionLabel {
   color: var(--text-muted);
   font-size: 11px;
@@ -425,6 +453,29 @@
   transition: border-color 0.12s, color 0.12s, background-color 0.12s;
 
   &:hover { border-color: var(--accent); background-color: var(--bg-primary); color: var(--text-primary); }
+}
+
+.roomDeleteButton {
+  width: 100%;
+  min-height: 34px;
+  margin-top: auto;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--color-error);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  flex-shrink: 0;
+  font-size: 11px;
+  cursor: pointer;
+  transition: border-color 0.12s, background-color 0.12s;
+
+  &:hover {
+    border-color: var(--color-error);
+    background-color: var(--bg-primary);
+  }
 }
 
 .roomTurnBar {
