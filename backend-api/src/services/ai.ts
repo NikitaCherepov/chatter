@@ -8,7 +8,7 @@ import { appendChatMessage, ensureActiveChat, getHistoryForAi, getMessageTokens,
 import { calculateChargedTokens, checkQuota, chargeTokens, getModelOverride, getPricingSnapshot, calculateEstimatedCostUsd, isModelFree } from './token-quota.js';
 import { getPlanLimits } from './plan-limits.js';
 import { resolvePromptForUser, AVATAR_PROMPT_HINT } from './prompts.js';
-import { getChatAgentForResponse } from './chat-rooms.js';
+import { getChatAgentForResponse, hasMultipleActiveChatAgents } from './chat-rooms.js';
 import { createNote, deleteNote, getNoteById, listNotes } from './notes.js';
 import { createTask, deletePendingTask, getPendingTaskCount, listTasks } from './tasks.js';
 import { listMapPinsForBot } from './map-pins.js';
@@ -6966,6 +6966,9 @@ export const sendMessageThroughAi = async (
   const responseAgent = options?.agentId !== undefined
     ? getChatAgentForResponse(userId, chatId, options.agentId)
     : null;
+  const identifyResponseAgent = responseAgent
+    ? hasMultipleActiveChatAgents(userId, chatId)
+    : false;
   responseAgentId = responseAgent?.id ?? null;
   const maxContextTokens = resolveMaxContextTokens(user);
   const attachmentMaxTokens = resolveAttachmentMaxTokens(user);
@@ -7232,6 +7235,9 @@ export const sendMessageThroughAi = async (
   const isGuestMode = Boolean(flags?.disable_personal);
   const resolvedPrompt = isGuestMode || responseAgent ? null : resolvePromptForUser(promptUser);
   const promptContent = responseAgent?.prompt_content || resolvedPrompt?.content || '';
+  const roomIdentityPrompt = responseAgent && identifyResponseAgent
+    ? `[ROOM IDENTITY]\nYour participant name in this room is ${JSON.stringify(responseAgent.name)}.\nMessages from other participants are labeled with their names.\nRespond only as this participant and do not impersonate other participants.\n\n`
+    : '';
   responsePromptId = responseAgent?.source_prompt_id ?? resolvedPrompt?.id ?? null;
   responsePromptName = responseAgent?.name || resolvedPrompt?.name || (isGuestMode ? 'Guest' : 'Chatter');
   const coreMemoryForPrompt = isGuestMode ? '' : (user.core_memory || '');
@@ -7254,7 +7260,7 @@ export const sendMessageThroughAi = async (
     try { await safeOnDiceRoll?.(diceRollValue); } catch { /* ignore */ }
   }
 
-  const proSystemPrompt = `${voicePromptHint}${buildSystemPrompt(promptContent, user.name || 'User', coreMemoryForPrompt)}${pinnedHintForPrompt}${dynamicContextToolHint}${avatarPromptHint}`;
+  const proSystemPrompt = `${voicePromptHint}${buildSystemPrompt(`${roomIdentityPrompt}${promptContent}`, user.name || 'User', coreMemoryForPrompt)}${pinnedHintForPrompt}${dynamicContextToolHint}${avatarPromptHint}`;
 
   // executionMode больше не переключается на vision-pro/lite при наличии фото.
   // Фото идёт через нативный vision (если модель поддерживает) или через tool describe_image.

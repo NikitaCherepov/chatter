@@ -45,6 +45,16 @@ export const getChatAgentForResponse = (
   return agent;
 };
 
+export const hasMultipleActiveChatAgents = (userId: number, chatId: number): boolean => {
+  const chat = requireRoom(userId, chatId);
+  const row = db.prepare(`
+    SELECT COUNT(*) AS count
+    FROM chat_agents
+    WHERE chat_id = ? AND is_active = 1
+  `).get(chat.id) as { count: number };
+  return Number(row.count) > 1;
+};
+
 type ChatRoomRow = {
   id: number;
   user_id: number;
