@@ -391,6 +391,66 @@ export async function moveChatToFolder(chatId: number, folderId: number | null):
   });
 }
 
+export type ChatAgent = {
+  id: number;
+  chat_id: number;
+  owner_user_id: number;
+  source_prompt_id: number | null;
+  name: string;
+  prompt_content: string;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ChatRoom = {
+  enabled: boolean;
+  response_mode: 'manual' | 'round';
+  auto_respond: boolean;
+  next_agent_id: number | null;
+  agents: ChatAgent[];
+};
+
+export async function getChatRoom(chatId: number): Promise<{ room: ChatRoom }> {
+  return apiFetch(`/api/v1/chats/${chatId}/room`);
+}
+
+export async function createChatRoom(chatId: number): Promise<{ room: ChatRoom }> {
+  return apiFetch(`/api/v1/chats/${chatId}/room`, { method: 'POST' });
+}
+
+export async function deleteChatRoom(chatId: number): Promise<{ room: ChatRoom }> {
+  return apiFetch(`/api/v1/chats/${chatId}/room`, { method: 'DELETE' });
+}
+
+export async function addChatAgent(chatId: number, promptId: number, name?: string): Promise<{ room: ChatRoom }> {
+  return apiFetch(`/api/v1/chats/${chatId}/room/agents`, {
+    method: 'POST',
+    body: JSON.stringify({ prompt_id: promptId, ...(name ? { name } : {}) }),
+  });
+}
+
+export async function removeChatAgent(chatId: number, agentId: number): Promise<{ room: ChatRoom }> {
+  return apiFetch(`/api/v1/chats/${chatId}/room/agents/${agentId}`, { method: 'DELETE' });
+}
+
+export async function reorderChatAgents(chatId: number, agentIds: number[]): Promise<{ room: ChatRoom }> {
+  return apiFetch(`/api/v1/chats/${chatId}/room/agents/order`, {
+    method: 'PATCH',
+    body: JSON.stringify({ agent_ids: agentIds }),
+  });
+}
+
+export async function updateChatRoomSettings(
+  chatId: number,
+  settings: { response_mode?: 'manual' | 'round'; auto_respond?: boolean; next_agent_id?: number | null },
+): Promise<{ room: ChatRoom }> {
+  return apiFetch(`/api/v1/chats/${chatId}/room/settings`, {
+    method: 'PATCH',
+    body: JSON.stringify(settings),
+  });
+}
+
 export type ChatSearchResult = {
   chat_id: number;
   chat_title: string;

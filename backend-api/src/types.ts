@@ -130,6 +130,7 @@ export type MessageDto = {
   prompt_name?: string | null;
   model_name?: string | null;
   provider_name?: string | null;
+  agent_id?: number | null;
   usage?: MessageUsage | null;
   attachments?: MessageAttachment[] | null;
   /** Полные trace ad-hoc субагентов (если были). */

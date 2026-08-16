@@ -545,6 +545,7 @@ export const deleteUserChat = (userId: number, chatId: number): boolean => {
   // Удаляем файлы картинок и вложений перед удалением строк
   cleanupMessageFiles(userId, chatId);
   db.prepare('DELETE FROM chat_messages WHERE user_id = ? AND chat_id = ?').run(userId, chatId);
+  db.prepare('DELETE FROM chat_agents WHERE chat_id = ?').run(chatId);
   db.prepare('DELETE FROM user_chats WHERE id = ? AND user_id = ?').run(chatId, userId);
   // If deleted chat was active, reset to another chat
   const user = db.prepare('SELECT active_chat_id FROM users WHERE id = ?').get(userId) as { active_chat_id: number | null } | undefined;
@@ -1912,6 +1913,12 @@ export const updateUserTelegramUsername = (userId: number, tgUsername: string | 
 
 export const removeUser = (userId: number) => {
   userId = resolveAccountId(userId);
+  db.prepare(`DELETE FROM chat_agents WHERE chat_id IN (SELECT id FROM user_chats WHERE user_id = ?)`).run(userId);
+  db.prepare(`
+    UPDATE chat_agents
+    SET is_active = 0, deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+    WHERE owner_user_id = ? AND is_active = 1
+  `).run(userId);
   db.prepare('DELETE FROM chat_messages WHERE user_id = ?').run(userId);
   db.prepare('DELETE FROM user_chats WHERE user_id = ?').run(userId);
   db.prepare('DELETE FROM chat_folders WHERE user_id = ?').run(userId);

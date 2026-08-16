@@ -79,6 +79,26 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_user_chats_user_id_id
   ON user_chats(user_id, id DESC);
 
+  CREATE TABLE IF NOT EXISTS chat_agents (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    chat_id INTEGER NOT NULL,
+    owner_user_id INTEGER NOT NULL,
+    source_prompt_id INTEGER,
+    name TEXT NOT NULL,
+    prompt_content TEXT NOT NULL,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    deleted_at DATETIME
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_chat_agents_chat_active_order
+  ON chat_agents(chat_id, is_active, sort_order, id);
+
+  CREATE INDEX IF NOT EXISTS idx_chat_agents_owner
+  ON chat_agents(owner_user_id, id);
+
   CREATE TABLE IF NOT EXISTS chat_folders (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
@@ -328,6 +348,7 @@ ensureChatMessageColumn('prompt_id', 'ALTER TABLE chat_messages ADD COLUMN promp
 ensureChatMessageColumn('prompt_name', 'ALTER TABLE chat_messages ADD COLUMN prompt_name TEXT');
 ensureChatMessageColumn('model_name', 'ALTER TABLE chat_messages ADD COLUMN model_name TEXT');
 ensureChatMessageColumn('provider_name', 'ALTER TABLE chat_messages ADD COLUMN provider_name TEXT');
+ensureChatMessageColumn('agent_id', 'ALTER TABLE chat_messages ADD COLUMN agent_id INTEGER');
 // Attachments (documents) — text files injected into AI context
 ensureChatMessageColumn('attachments', 'ALTER TABLE chat_messages ADD COLUMN attachments TEXT');
 // Subagent traces — полные trace ad-hoc субагентов для UI-отображения (не уходит в AI-контекст)
@@ -345,7 +366,23 @@ if (!hasUserChatColumn('bot_hidden')) {
 if (!hasUserChatColumn('folder_id')) {
   db.exec('ALTER TABLE user_chats ADD COLUMN folder_id INTEGER');
 }
+if (!hasUserChatColumn('room_enabled')) {
+  db.exec('ALTER TABLE user_chats ADD COLUMN room_enabled INTEGER NOT NULL DEFAULT 0');
+}
+if (!hasUserChatColumn('room_response_mode')) {
+  db.exec("ALTER TABLE user_chats ADD COLUMN room_response_mode TEXT NOT NULL DEFAULT 'manual'");
+}
+if (!hasUserChatColumn('room_auto_respond')) {
+  db.exec('ALTER TABLE user_chats ADD COLUMN room_auto_respond INTEGER NOT NULL DEFAULT 1');
+}
+if (!hasUserChatColumn('room_next_agent_id')) {
+  db.exec('ALTER TABLE user_chats ADD COLUMN room_next_agent_id INTEGER');
+}
+if (!hasUserChatColumn('default_prompt_id')) {
+  db.exec('ALTER TABLE user_chats ADD COLUMN default_prompt_id INTEGER');
+}
 db.exec('CREATE INDEX IF NOT EXISTS idx_user_chats_user_folder ON user_chats(user_id, folder_id)');
+db.exec('CREATE INDEX IF NOT EXISTS idx_chat_messages_agent ON chat_messages(agent_id, id) WHERE agent_id IS NOT NULL');
 
 ensureTaskColumn('recurrence_type', "ALTER TABLE tasks ADD COLUMN recurrence_type TEXT NOT NULL DEFAULT 'once'");
 ensureTaskColumn('recurrence_weekday', 'ALTER TABLE tasks ADD COLUMN recurrence_weekday INTEGER');

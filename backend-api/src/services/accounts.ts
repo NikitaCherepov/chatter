@@ -241,6 +241,11 @@ const moveSimpleOwnership = (sourceAccountId: number, targetAccountId: number) =
       .run(targetAccountId, sourceAccountId);
   }
 
+  if (tableHasColumn('chat_agents', 'owner_user_id')) {
+    db.prepare('UPDATE chat_agents SET owner_user_id = ? WHERE owner_user_id = ?')
+      .run(targetAccountId, sourceAccountId);
+  }
+
   if (tableHasColumn('user_plan_subscriptions', 'user_id')) {
     if (tableHasColumn('user_plan_subscriptions', 'is_current')) {
       db.prepare('UPDATE user_plan_subscriptions SET is_current = 0 WHERE user_id = ?')

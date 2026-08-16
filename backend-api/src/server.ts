@@ -61,6 +61,7 @@ import {
 import { normalizeSupportedLanguage, SUPPORTED_LANGUAGES } from './i18n/languages.js';
 import { translateForLanguage } from './i18n/index.js';
 import { associateServerAccessKeyUser, createServerAccessKey, getLastServerAccessKeyForUser, isServerAccessKeyGateEnabled, listServerAccessKeys, revokeServerAccessKey, validateServerAccessKey } from './services/server-access-keys.js';
+import { addChatAgent, createChatRoom, deleteChatRoom, getChatRoom, removeChatAgent, reorderChatAgents, updateChatAgent, updateChatRoomSettings } from './services/chat-rooms.js';
 
 dotenv.config();
 ensureDefaultPrompt();
@@ -1559,6 +1560,144 @@ app.post('/api/v1/chats', (req: AuthedRequest, res) => {
   const title = `${req.body?.title || ''}`;
   const chatId = createUserChat(userId, title);
   res.status(201).json({ chat_id: chatId, chat: getUserChatListItem(userId, chatId) });
+});
+
+const sendChatRoomError = (res: any, err: unknown) => {
+  const error = err instanceof Error ? err.message : 'chat_room_failed';
+  if (['bad_prompt_id', 'bad_agent_order', 'prompt_content_required'].includes(error)) {
+    return res.status(400).json({ error });
+  }
+  if (['chat_not_found', 'agent_not_found', 'prompt_not_found', 'user_not_found'].includes(error)) {
+    return res.status(404).json({ error });
+  }
+  if (['room_not_created', 'room_has_agents'].includes(error)) {
+    return res.status(409).json({ error });
+  }
+  console.error('[chat-room]', err);
+  return res.status(500).json({ error: 'chat_room_failed' });
+};
+
+app.get('/api/v1/chats/:id/room', (req: AuthedRequest, res) => {
+  const userId = accountIdFromRequest(req);
+  const chatId = Number.parseInt(req.params.id, 10);
+  if (!Number.isSafeInteger(chatId) || chatId <= 0) return res.status(400).json({ error: 'bad_chat_id' });
+  const room = getChatRoom(userId, chatId);
+  if (!room) return res.status(404).json({ error: 'chat_not_found' });
+  return res.json({ room });
+});
+
+app.post('/api/v1/chats/:id/room', (req: AuthedRequest, res) => {
+  const userId = accountIdFromRequest(req);
+  const chatId = Number.parseInt(req.params.id, 10);
+  if (!Number.isSafeInteger(chatId) || chatId <= 0) return res.status(400).json({ error: 'bad_chat_id' });
+  try {
+    return res.status(201).json({ room: createChatRoom(userId, chatId) });
+  } catch (err) {
+    return sendChatRoomError(res, err);
+  }
+});
+
+app.delete('/api/v1/chats/:id/room', (req: AuthedRequest, res) => {
+  const userId = accountIdFromRequest(req);
+  const chatId = Number.parseInt(req.params.id, 10);
+  if (!Number.isSafeInteger(chatId) || chatId <= 0) return res.status(400).json({ error: 'bad_chat_id' });
+  try {
+    return res.json({ room: deleteChatRoom(userId, chatId) });
+  } catch (err) {
+    return sendChatRoomError(res, err);
+  }
+});
+
+app.post('/api/v1/chats/:id/room/agents', (req: AuthedRequest, res) => {
+  const userId = accountIdFromRequest(req);
+  const chatId = Number.parseInt(req.params.id, 10);
+  const promptId = Number(req.body?.prompt_id);
+  if (!Number.isSafeInteger(chatId) || chatId <= 0) return res.status(400).json({ error: 'bad_chat_id' });
+  if (!Number.isSafeInteger(promptId) || promptId === 0) return res.status(400).json({ error: 'bad_prompt_id' });
+  const name = req.body?.name === undefined ? undefined : `${req.body.name}`;
+  try {
+    return res.status(201).json({ room: addChatAgent(userId, chatId, promptId, name) });
+  } catch (err) {
+    return sendChatRoomError(res, err);
+  }
+});
+
+app.patch('/api/v1/chats/:id/room/agents/order', (req: AuthedRequest, res) => {
+  const userId = accountIdFromRequest(req);
+  const chatId = Number.parseInt(req.params.id, 10);
+  if (!Number.isSafeInteger(chatId) || chatId <= 0) return res.status(400).json({ error: 'bad_chat_id' });
+  if (!Array.isArray(req.body?.agent_ids)) return res.status(400).json({ error: 'bad_agent_order' });
+  const agentIds = req.body.agent_ids.map((value: unknown) => Number(value));
+  if (agentIds.some((id: number) => !Number.isSafeInteger(id) || id <= 0)) {
+    return res.status(400).json({ error: 'bad_agent_order' });
+  }
+  try {
+    return res.json({ room: reorderChatAgents(userId, chatId, agentIds) });
+  } catch (err) {
+    return sendChatRoomError(res, err);
+  }
+});
+
+app.patch('/api/v1/chats/:id/room/agents/:agentId', (req: AuthedRequest, res) => {
+  const userId = accountIdFromRequest(req);
+  const chatId = Number.parseInt(req.params.id, 10);
+  const agentId = Number.parseInt(req.params.agentId, 10);
+  if (!Number.isSafeInteger(chatId) || chatId <= 0) return res.status(400).json({ error: 'bad_chat_id' });
+  if (!Number.isSafeInteger(agentId) || agentId <= 0) return res.status(400).json({ error: 'bad_agent_id' });
+  const sourcePromptId = req.body?.prompt_id === undefined ? undefined : Number(req.body.prompt_id);
+  if (sourcePromptId !== undefined && (!Number.isSafeInteger(sourcePromptId) || sourcePromptId === 0)) {
+    return res.status(400).json({ error: 'bad_prompt_id' });
+  }
+  try {
+    return res.json({ room: updateChatAgent(userId, chatId, agentId, {
+      name: req.body?.name === undefined ? undefined : `${req.body.name}`,
+      promptContent: req.body?.prompt_content === undefined ? undefined : `${req.body.prompt_content}`,
+      sourcePromptId,
+    }) });
+  } catch (err) {
+    return sendChatRoomError(res, err);
+  }
+});
+
+app.delete('/api/v1/chats/:id/room/agents/:agentId', (req: AuthedRequest, res) => {
+  const userId = accountIdFromRequest(req);
+  const chatId = Number.parseInt(req.params.id, 10);
+  const agentId = Number.parseInt(req.params.agentId, 10);
+  if (!Number.isSafeInteger(chatId) || chatId <= 0) return res.status(400).json({ error: 'bad_chat_id' });
+  if (!Number.isSafeInteger(agentId) || agentId <= 0) return res.status(400).json({ error: 'bad_agent_id' });
+  try {
+    return res.json({ room: removeChatAgent(userId, chatId, agentId) });
+  } catch (err) {
+    return sendChatRoomError(res, err);
+  }
+});
+
+app.patch('/api/v1/chats/:id/room/settings', (req: AuthedRequest, res) => {
+  const userId = accountIdFromRequest(req);
+  const chatId = Number.parseInt(req.params.id, 10);
+  if (!Number.isSafeInteger(chatId) || chatId <= 0) return res.status(400).json({ error: 'bad_chat_id' });
+  const responseMode = req.body?.response_mode;
+  if (responseMode !== undefined && responseMode !== 'manual' && responseMode !== 'round') {
+    return res.status(400).json({ error: 'bad_response_mode' });
+  }
+  if (req.body?.auto_respond !== undefined && typeof req.body.auto_respond !== 'boolean') {
+    return res.status(400).json({ error: 'bad_auto_respond' });
+  }
+  const nextAgentId = req.body?.next_agent_id === undefined
+    ? undefined
+    : req.body.next_agent_id === null ? null : Number(req.body.next_agent_id);
+  if (nextAgentId !== undefined && nextAgentId !== null && (!Number.isSafeInteger(nextAgentId) || nextAgentId <= 0)) {
+    return res.status(400).json({ error: 'bad_agent_id' });
+  }
+  try {
+    return res.json({ room: updateChatRoomSettings(userId, chatId, {
+      responseMode,
+      autoRespond: req.body?.auto_respond,
+      nextAgentId,
+    }) });
+  } catch (err) {
+    return sendChatRoomError(res, err);
+  }
 });
 
 app.post('/api/v1/chats/:id/fork', (req: AuthedRequest, res) => {
