@@ -1368,19 +1368,26 @@ export const getHistoryForAi = (
   attachmentMaxTokens = 0,
   supportsVision = false,
   attachmentBudgetState?: { remaining: number },
-  labelRoomAgents = false,
+  responseAgentId: number | null = null,
 ): any[] => {
-  const shouldLabelRoomAgents = labelRoomAgents && Number((db.prepare(`
-    SELECT COUNT(*) AS count FROM chat_agents WHERE chat_id = ? AND is_active = 1
-  `).get(chatId) as { count: number }).count) > 1;
+  const activeRoomAgents = responseAgentId !== null
+    ? db.prepare(`
+        SELECT id, name
+        FROM chat_agents
+        WHERE chat_id = ? AND is_active = 1
+        ORDER BY sort_order ASC, id ASC
+      `).all(chatId) as Array<{ id: number; name: string }>
+    : [];
+  const shouldSeparateRoomAgents = activeRoomAgents.length > 1;
+  const primaryRoomAgent = activeRoomAgents[0] ?? null;
   const rows = db.prepare(`
     SELECT cm.id, cm.role, cm.content, cm.tool_calls_json, cm.attachments, cm.images,
-           ca.name AS agent_name
+           cm.agent_id, ca.name AS agent_name
     FROM chat_messages cm
     LEFT JOIN chat_agents ca ON ca.id = cm.agent_id
     WHERE cm.user_id = ? AND cm.chat_id = ? AND cm.archived = 0
     ORDER BY cm.id DESC
-  `).all(userId, chatId).reverse() as Array<{ id: number; role: ChatRole; content: string; tool_calls_json: string | null; attachments: string | null; images: string | null; agent_name: string | null }>;
+  `).all(userId, chatId).reverse() as Array<{ id: number; role: ChatRole; content: string; tool_calls_json: string | null; attachments: string | null; images: string | null; agent_id: number | null; agent_name: string | null }>;
 
   const messages: any[] = [];
   const attachmentBudget = attachmentBudgetState ?? { remaining: attachmentMaxTokens };
@@ -1477,16 +1484,24 @@ export const getHistoryForAi = (
       continue;
     }
     // role === 'assistant'
-    const expanded = expandAssistantMessage(row.content, row.tool_calls_json);
-    if (shouldLabelRoomAgents && row.agent_name) {
-      for (let index = expanded.length - 1; index >= 0; index -= 1) {
-        const message = expanded[index];
-        if (message?.role === 'assistant' && typeof message.content === 'string' && message.content.trim()) {
-          message.content = `[${row.agent_name}]\n${message.content}`;
-          break;
-        }
+    const effectiveAgentId = row.agent_id ?? primaryRoomAgent?.id ?? null;
+    const effectiveAgentName = row.agent_name ?? (row.agent_id === null ? primaryRoomAgent?.name : null);
+    if (
+      shouldSeparateRoomAgents
+      && effectiveAgentId !== null
+      && effectiveAgentId !== responseAgentId
+      && effectiveAgentName
+    ) {
+      const participantText = row.content.trim();
+      if (participantText) {
+        messages.push({
+          role: 'user',
+          content: `[ROOM MESSAGE FROM ${JSON.stringify(effectiveAgentName)}]\n${participantText}`,
+        });
       }
+      continue;
     }
+    const expanded = expandAssistantMessage(row.content, row.tool_calls_json);
 
     // Assistant images (скриншоты, generate_image) не добавляются в AI-контекст.
     // image_url в role: 'assistant' не поддерживается многими провайдерами,

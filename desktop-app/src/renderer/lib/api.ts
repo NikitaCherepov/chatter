@@ -435,6 +435,17 @@ export async function removeChatAgent(chatId: number, agentId: number): Promise<
   return apiFetch(`/api/v1/chats/${chatId}/room/agents/${agentId}`, { method: 'DELETE' });
 }
 
+export async function updateChatAgent(
+  chatId: number,
+  agentId: number,
+  fields: { name?: string },
+): Promise<{ room: ChatRoom }> {
+  return apiFetch(`/api/v1/chats/${chatId}/room/agents/${agentId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(fields),
+  });
+}
+
 export async function reorderChatAgents(chatId: number, agentIds: number[]): Promise<{ room: ChatRoom }> {
   return apiFetch(`/api/v1/chats/${chatId}/room/agents/order`, {
     method: 'PATCH',
