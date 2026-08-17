@@ -5,6 +5,7 @@ import { countTokens, countMessageTokens, countToolCallTokens, countToolResultTo
 import { buildBaseSystemPromptForUser } from './system-prompt.js';
 import { resolvePromptForUser } from './prompts.js';
 import { getEnabledMacros } from './macros.js';
+import { listRoomReaderUserIds } from './chat-rooms.js';
 import {
   allocateAccountId,
   createPasswordIdentity,
@@ -119,26 +120,29 @@ export type ChatListFilters = {
 };
 
 const buildUserChatFilter = (userId: number, filters: ChatListFilters) => {
-  const conditions = ['uc.user_id = ?'];
-  const params: Array<string | number> = [userId];
+  // Owned chats + rooms the user has joined as a member.
+  const conditions = [`(uc.user_id = ? OR EXISTS (SELECT 1 FROM chat_members um WHERE um.chat_id = uc.id AND um.user_id = ?))`];
+  const params: Array<string | number> = [userId, userId];
+  // Message-based filters match on chat_id only: in shared rooms messages may
+  // belong to other authors.
   if (Number.isSafeInteger(filters.promptId) && filters.promptId !== 0) {
     conditions.push(`EXISTS (
       SELECT 1 FROM chat_messages cm
-      WHERE cm.user_id = uc.user_id AND cm.chat_id = uc.id AND cm.prompt_id = ?
+      WHERE cm.chat_id = uc.id AND cm.prompt_id = ?
     )`);
     params.push(Number(filters.promptId));
   }
   if (filters.modelName) {
     conditions.push(`EXISTS (
       SELECT 1 FROM chat_messages cm
-      WHERE cm.user_id = uc.user_id AND cm.chat_id = uc.id AND cm.model_name = ?
+      WHERE cm.chat_id = uc.id AND cm.model_name = ?
     )`);
     params.push(filters.modelName);
   }
   if (filters.hasFiles) {
     conditions.push(`EXISTS (
       SELECT 1 FROM chat_messages cm
-      WHERE cm.user_id = uc.user_id AND cm.chat_id = uc.id
+      WHERE cm.chat_id = uc.id
         AND cm.attachments IS NOT NULL
         AND TRIM(cm.attachments) NOT IN ('', '[]', 'null')
     )`);
@@ -146,7 +150,7 @@ const buildUserChatFilter = (userId: number, filters: ChatListFilters) => {
   if (filters.hasImages) {
     conditions.push(`EXISTS (
       SELECT 1 FROM chat_messages cm
-      WHERE cm.user_id = uc.user_id AND cm.chat_id = uc.id
+      WHERE cm.chat_id = uc.id
         AND cm.images IS NOT NULL
         AND TRIM(cm.images) NOT IN ('', '[]', 'null')
     )`);
@@ -927,16 +931,23 @@ export const deleteMessageImage = (
 export const getChatMessages = (userId: number, chatId: number, limit = 20, offset = 0): MessageDto[] => {
   const safeLimit = Math.max(1, Math.min(100, Math.floor(limit)));
   const safeOffset = Math.max(0, Math.floor(offset));
+  // Access: owner or room member. In a multi-user room everyone reads all
+  // chat messages regardless of authorship; a personal chat stays user-scoped.
+  const readerIds = listRoomReaderUserIds(chatId);
+  if (!readerIds) return [];
+  if (!readerIds.includes(userId)) return [];
+  const multiUserRoom = readerIds.length > 1;
+  const placeholders = readerIds.map(() => '?').join(', ');
   const rows = db.prepare(`
     SELECT id, chat_id, role, content, reasoning_content, tool_calls_json, images, audio,
            telegram_chat_id, telegram_message_id, created_at, archived, token_count,
            reasoning_tokens, attachments, subagents_json, usage_json, prompt_id, prompt_name,
            model_name, provider_name, agent_id
     FROM chat_messages
-    WHERE user_id = ? AND chat_id = ?
+    WHERE ${multiUserRoom ? `user_id IN (${placeholders})` : 'user_id = ?'} AND chat_id = ?
     ORDER BY id DESC
     LIMIT ? OFFSET ?
-  `).all(userId, chatId, safeLimit, safeOffset) as Array<{ id: number; chat_id: number; role: ChatRole; content: string; reasoning_content: string | null; tool_calls_json: string | null; images: string | null; audio: string | null; telegram_chat_id: number | null; telegram_message_id: number | null; created_at: string; archived: number; token_count: number; reasoning_tokens: number; attachments: string | null; subagents_json: string | null; usage_json: string | null; prompt_id: number | null; prompt_name: string | null; model_name: string | null; provider_name: string | null; agent_id: number | null }>;
+  `).all(...(multiUserRoom ? readerIds : [userId]), chatId, safeLimit, safeOffset) as Array<{ id: number; chat_id: number; role: ChatRole; content: string; reasoning_content: string | null; tool_calls_json: string | null; images: string | null; audio: string | null; telegram_chat_id: number | null; telegram_message_id: number | null; created_at: string; archived: number; token_count: number; reasoning_tokens: number; attachments: string | null; subagents_json: string | null; usage_json: string | null; prompt_id: number | null; prompt_name: string | null; model_name: string | null; provider_name: string | null; agent_id: number | null }>;
 
   return rows.reverse().map(row => {
     let parsedImages: MessageImage[] | null = null;
@@ -1482,14 +1493,21 @@ export const getHistoryForAi = (
     : [];
   const shouldSeparateRoomAgents = activeRoomAgents.length > 1;
   const primaryRoomAgent = activeRoomAgents[0] ?? null;
+  // Multi-user room: history spans all participants' messages. Personal chat:
+  // only the user's own messages.
+  const readerIds = listRoomReaderUserIds(chatId) ?? [userId];
+  const multiUserRoom = readerIds.includes(userId) && readerIds.length > 1;
+  const historyUserIds = multiUserRoom ? readerIds : [userId];
+  const placeholders = historyUserIds.map(() => '?').join(', ');
   const rows = db.prepare(`
     SELECT cm.id, cm.role, cm.content, cm.tool_calls_json, cm.attachments, cm.images,
-           cm.agent_id, ca.name AS agent_name
+           cm.agent_id, ca.name AS agent_name, u.name AS author_name
     FROM chat_messages cm
     LEFT JOIN chat_agents ca ON ca.id = cm.agent_id
-    WHERE cm.user_id = ? AND cm.chat_id = ? AND cm.archived = 0
+    LEFT JOIN users u ON u.id = cm.user_id
+    WHERE cm.user_id IN (${placeholders}) AND cm.chat_id = ? AND cm.archived = 0
     ORDER BY cm.id DESC
-  `).all(userId, chatId).reverse() as Array<{ id: number; role: ChatRole; content: string; tool_calls_json: string | null; attachments: string | null; images: string | null; agent_id: number | null; agent_name: string | null }>;
+  `).all(...historyUserIds, chatId).reverse() as Array<{ id: number; role: ChatRole; content: string; tool_calls_json: string | null; attachments: string | null; images: string | null; agent_id: number | null; agent_name: string | null; author_name: string | null }>;
 
   const messages: any[] = [];
   const attachmentBudget = attachmentBudgetState ?? { remaining: attachmentMaxTokens };
@@ -1535,6 +1553,11 @@ export const getHistoryForAi = (
 
       let textContent = row.content;
       if (injected) textContent += '\n\n' + injected;
+      // Multi-user room: label human messages with the author's name so room
+      // agents can tell participants apart (same convention as agent messages).
+      if (multiUserRoom && row.author_name) {
+        textContent = `[ROOM MESSAGE FROM ${JSON.stringify(row.author_name)}]\n${textContent}`;
+      }
 
       if (allImages.length > 0 && supportsVision) {
         // Vision: загружаем файлы с диска, формируем content как массив text + image_url.

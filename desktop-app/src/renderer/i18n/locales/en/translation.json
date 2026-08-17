@@ -638,7 +638,20 @@
       "promptDetective": "Investigator",
       "prototypeHint": "Participant creation will be connected to the backend later.",
       "manualActionPrototype": "{{name}} will respond after the backend is connected.",
-      "sequenceActionPrototype": "The characters will respond in order after the backend is connected."
+      "sequenceActionPrototype": "The characters will respond in order after the backend is connected.",
+      "joinRoom": "Join room",
+      "joinSubmit": "Join",
+      "inviteLinkPlaceholder": "Paste invite link (chatter://join-room?...)",
+      "invalidInviteLink": "Invalid invite link.",
+      "joinFailed": "Failed to join the room.",
+      "joined": "Joined the room.",
+      "addParticipantKind": "Add participant",
+      "addBot": "Bot (character)",
+      "addHuman": "Human",
+      "inviteLinkTitle": "Invite link",
+      "copyInvite": "Copy link",
+      "inviteCopied": "Copied!",
+      "inviteHint": "Send this link to the user. They open the room panel and press \"Join room\". Link expires in 7 days."
     },
     "deleteChat": {
       "title": "Delete chat?",

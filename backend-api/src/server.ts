@@ -61,7 +61,7 @@ import {
 import { normalizeSupportedLanguage, SUPPORTED_LANGUAGES } from './i18n/languages.js';
 import { translateForLanguage } from './i18n/index.js';
 import { associateServerAccessKeyUser, createServerAccessKey, getLastServerAccessKeyForUser, isServerAccessKeyGateEnabled, listServerAccessKeys, revokeServerAccessKey, validateServerAccessKey } from './services/server-access-keys.js';
-import { addChatAgent, createChatRoom, deleteChatRoom, getChatRoom, removeChatAgent, reorderChatAgents, updateChatAgent, updateChatRoomSettings } from './services/chat-rooms.js';
+import { addChatAgent, createChatRoom, createChatRoomInvite, deleteChatRoom, getChatRoom, getChatRoomInviteInfo, joinChatRoomByInvite, leaveChatRoom, removeChatAgent, revokeChatRoomInvite, reorderChatAgents, updateChatAgent, updateChatRoomSettings } from './services/chat-rooms.js';
 
 dotenv.config();
 ensureDefaultPrompt();
@@ -1567,10 +1567,10 @@ const sendChatRoomError = (res: any, err: unknown) => {
   if (['bad_prompt_id', 'bad_agent_order', 'prompt_content_required'].includes(error)) {
     return res.status(400).json({ error });
   }
-  if (['chat_not_found', 'agent_not_found', 'prompt_not_found', 'user_not_found'].includes(error)) {
+  if (['chat_not_found', 'agent_not_found', 'prompt_not_found', 'user_not_found', 'invite_not_found'].includes(error)) {
     return res.status(404).json({ error });
   }
-  if (['room_not_created', 'room_has_agents'].includes(error)) {
+  if (['room_not_created', 'room_has_agents', 'owner_cannot_leave'].includes(error)) {
     return res.status(409).json({ error });
   }
   if (error === 'forbidden') {
@@ -1698,6 +1698,61 @@ app.patch('/api/v1/chats/:id/room/settings', (req: AuthedRequest, res) => {
       autoRespond: req.body?.auto_respond,
       nextAgentId,
     }) });
+  } catch (err) {
+    return sendChatRoomError(res, err);
+  }
+});
+
+// ── Room invites ───────────────────────────────────────────────────────────
+
+app.post('/api/v1/chats/:id/room/invites', (req: AuthedRequest, res) => {
+  const userId = accountIdFromRequest(req);
+  const chatId = Number.parseInt(req.params.id, 10);
+  if (!Number.isSafeInteger(chatId) || chatId <= 0) return res.status(400).json({ error: 'bad_chat_id' });
+  try {
+    return res.status(201).json({ invite: createChatRoomInvite(userId, chatId) });
+  } catch (err) {
+    return sendChatRoomError(res, err);
+  }
+});
+
+app.delete('/api/v1/chats/:id/room/invites/:token', (req: AuthedRequest, res) => {
+  const userId = accountIdFromRequest(req);
+  const chatId = Number.parseInt(req.params.id, 10);
+  const token = `${req.params.token}`;
+  if (!Number.isSafeInteger(chatId) || chatId <= 0) return res.status(400).json({ error: 'bad_chat_id' });
+  if (!token) return res.status(400).json({ error: 'bad_invite_token' });
+  try {
+    revokeChatRoomInvite(userId, chatId, token);
+    return res.json({ ok: true });
+  } catch (err) {
+    return sendChatRoomError(res, err);
+  }
+});
+
+app.get('/api/v1/room-invites/:token', (req: AuthedRequest, res) => {
+  accountIdFromRequest(req);
+  const info = getChatRoomInviteInfo(`${req.params.token}`);
+  if (!info) return res.status(404).json({ error: 'invite_not_found' });
+  return res.json(info);
+});
+
+app.post('/api/v1/room-invites/:token/join', (req: AuthedRequest, res) => {
+  const userId = accountIdFromRequest(req);
+  try {
+    return res.json(joinChatRoomByInvite(userId, `${req.params.token}`));
+  } catch (err) {
+    return sendChatRoomError(res, err);
+  }
+});
+
+app.post('/api/v1/chats/:id/room/leave', (req: AuthedRequest, res) => {
+  const userId = accountIdFromRequest(req);
+  const chatId = Number.parseInt(req.params.id, 10);
+  if (!Number.isSafeInteger(chatId) || chatId <= 0) return res.status(400).json({ error: 'bad_chat_id' });
+  try {
+    leaveChatRoom(userId, chatId);
+    return res.json({ ok: true });
   } catch (err) {
     return sendChatRoomError(res, err);
   }

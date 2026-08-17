@@ -421,6 +421,23 @@ db.exec(`
   WHERE room_enabled = 1
 `);
 
+// ── Room invites ──────────────────────────────────────────────────────────
+// Admin generates a tokenized link; anyone with an account on the same server
+// can join via POST /api/v1/room-invites/:token/join. Tokens are random and
+// stored in plain form (short-lived, revocable — same trust level as the
+// existing server access keys).
+db.exec(`
+  CREATE TABLE IF NOT EXISTS chat_invites (
+    token TEXT PRIMARY KEY,
+    chat_id INTEGER NOT NULL,
+    created_by INTEGER NOT NULL,
+    created_at INTEGER NOT NULL,
+    expires_at INTEGER,
+    revoked_at DATETIME
+  )
+`);
+db.exec("CREATE INDEX IF NOT EXISTS idx_chat_invites_chat ON chat_invites(chat_id, revoked_at)");
+
 db.exec('CREATE INDEX IF NOT EXISTS idx_user_chats_user_folder ON user_chats(user_id, folder_id)');
 db.exec('CREATE INDEX IF NOT EXISTS idx_chat_messages_agent ON chat_messages(agent_id, id) WHERE agent_id IS NOT NULL');
 

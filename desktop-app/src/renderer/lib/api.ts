@@ -407,6 +407,7 @@ export type ChatAgent = {
 
 export type ChatMember = {
   user_id: number;
+  name: string | null;
   role: 'admin' | 'member';
   response_mode: 'manual' | 'round';
   auto_respond: boolean;
@@ -473,6 +474,63 @@ export async function updateChatRoomSettings(
     method: 'PATCH',
     body: JSON.stringify(settings),
   });
+}
+
+// ── Room invites ───────────────────────────────────────────────────────────
+
+export type RoomInvite = {
+  token: string;
+  chat_id: number;
+  created_by: number;
+  created_at: number;
+  expires_at: number | null;
+};
+
+export type RoomInviteInfo = {
+  chat_id: number;
+  title: string;
+  inviter_name: string | null;
+};
+
+/** Build a chatter:// deep link like the existing server connection link. */
+export function buildRoomInviteLink(invite: RoomInvite): string {
+  const serverBase = (typeof API_BASE === 'string' ? API_BASE : '').replace(/\/+$/, '');
+  return `chatter://join-room?server=${encodeURIComponent(serverBase)}&token=${encodeURIComponent(invite.token)}`;
+}
+
+/** Extract an invite token from a chatter://join-room link (or raw token). */
+export function parseRoomInviteToken(link: string): string | null {
+  const trimmed = link.trim();
+  if (!trimmed) return null;
+  if (!trimmed.includes('://')) return /^[a-f0-9]{16,}$/i.test(trimmed) ? trimmed : null;
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol !== 'chatter:') return null;
+    const token = `${parsed.searchParams.get('token') || ''}`.trim();
+    return token || null;
+  } catch {
+    return null;
+  }
+}
+
+export async function createRoomInvite(chatId: number): Promise<{ invite: RoomInvite }> {
+  return apiFetch(`/api/v1/chats/${chatId}/room/invites`, { method: 'POST' });
+}
+
+export async function revokeRoomInvite(chatId: number, token: string): Promise<{ ok: true }> {
+  return apiFetch(`/api/v1/chats/${chatId}/room/invites/${encodeURIComponent(token)}`, { method: 'DELETE' });
+}
+
+export async function getRoomInviteInfo(token: string): Promise<RoomInviteInfo> {
+  return apiFetch(`/api/v1/room-invites/${encodeURIComponent(token)}`);
+}
+
+export async function joinRoomByInvite(token: string): Promise<{ chat_id: number; room: ChatRoom }> {
+  return apiFetch(`/api/v1/room-invites/${encodeURIComponent(token)}/join`, { method: 'POST' });
+}
+
+export async function leaveRoom(chatId: number): Promise<{ ok: true }> {
+  return apiFetch(`/api/v1/chats/${chatId}/room/leave`, { method: 'POST' });
 }
 
 export type ChatSearchResult = {

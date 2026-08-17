@@ -1,4 +1,4 @@
-import { db } from '../db.js';
+import { db, getNowUnix } from '../db.js';
 import {
   CUSTOM_PROMPT_ID,
   USER_PROMPT_OFFSET,
@@ -24,6 +24,7 @@ export type ChatAgentDto = {
 
 export type ChatMemberDto = {
   user_id: number;
+  name: string | null;
   role: 'admin' | 'member';
   response_mode: 'manual' | 'round';
   auto_respond: boolean;
@@ -76,6 +77,7 @@ type ChatRoomRow = {
 type ChatMemberRow = {
   chat_id: number;
   user_id: number;
+  name: string | null;
   role: string;
   response_mode: string;
   auto_respond: number;
@@ -102,16 +104,18 @@ export const getAccessibleChat = (userId: number, chatId: number): ChatRoomRow |
 };
 
 const getMember = (chatId: number, userId: number) => db.prepare(`
-  SELECT chat_id, user_id, role, response_mode, auto_respond, next_agent_id, sort_order, joined_at
-  FROM chat_members
-  WHERE chat_id = ? AND user_id = ?
+  SELECT m.chat_id, m.user_id, u.name, m.role, m.response_mode, m.auto_respond, m.next_agent_id, m.sort_order, m.joined_at
+  FROM chat_members m
+  LEFT JOIN users u ON u.id = m.user_id
+  WHERE m.chat_id = ? AND m.user_id = ?
 `).get(chatId, userId) as ChatMemberRow | undefined;
 
 const listMembers = (chatId: number) => db.prepare(`
-  SELECT chat_id, user_id, role, response_mode, auto_respond, next_agent_id, sort_order, joined_at
-  FROM chat_members
-  WHERE chat_id = ?
-  ORDER BY sort_order ASC, user_id ASC
+  SELECT m.chat_id, m.user_id, u.name, m.role, m.response_mode, m.auto_respond, m.next_agent_id, m.sort_order, m.joined_at
+  FROM chat_members m
+  LEFT JOIN users u ON u.id = m.user_id
+  WHERE m.chat_id = ?
+  ORDER BY m.sort_order ASC, m.user_id ASC
 `).all(chatId) as ChatMemberRow[];
 
 const listActiveAgents = (chatId: number) => db.prepare(`
@@ -124,6 +128,7 @@ const listActiveAgents = (chatId: number) => db.prepare(`
 
 const toMemberDto = (member: ChatMemberRow): ChatMemberDto => ({
   user_id: member.user_id,
+  name: member.name,
   role: member.role === 'admin' ? 'admin' : 'member',
   response_mode: member.response_mode === 'round' ? 'round' : 'manual',
   auto_respond: member.auto_respond === 1,
@@ -149,15 +154,16 @@ const resolveRoomAccess = (userId: number, chatId: number): { chat: ChatRoomRow;
   if (!member) {
     if (chat.user_id !== userId) throw new Error('chat_not_found');
     // Legacy fallback: room predates chat_members — materialize the owner's row.
-    member = db.prepare(`
+    db.prepare(`
       INSERT INTO chat_members (chat_id, user_id, role, response_mode, auto_respond, next_agent_id, sort_order)
       VALUES (?, ?, 'admin',
               COALESCE((SELECT room_response_mode FROM user_chats WHERE id = ?), 'manual'),
               COALESCE((SELECT room_auto_respond FROM user_chats WHERE id = ?), 1),
               (SELECT room_next_agent_id FROM user_chats WHERE id = ?),
               0)
-      RETURNING chat_id, user_id, role, response_mode, auto_respond, next_agent_id, sort_order, joined_at
-    `).get(chat.id, userId, chat.id, chat.id, chat.id) as ChatMemberRow;
+    `).run(chat.id, userId, chat.id, chat.id, chat.id);
+    member = getMember(chat.id, userId);
+    if (!member) throw new Error('chat_not_found');
   }
   return { chat, member };
 };
@@ -445,3 +451,112 @@ export const updateChatRoomSettings = (
   }
   return toRoomDto(chat, getMember(chatId, userId));
 })();
+
+// ── Room invites ──────────────────────────────────────────────────────────
+
+const INVITE_TTL_SECONDS = 7 * 24 * 60 * 60; // 7 days
+
+export type ChatInviteDto = {
+  token: string;
+  chat_id: number;
+  created_by: number;
+  created_at: number;
+  expires_at: number | null;
+};
+
+const generateInviteToken = () => {
+  const bytes = new Uint8Array(18);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+};
+
+export const createChatRoomInvite = (userId: number, chatId: number): ChatInviteDto => {
+  requireRoomAdmin(userId, chatId);
+  const token = generateInviteToken();
+  const now = getNowUnix();
+  db.prepare(`
+    INSERT INTO chat_invites (token, chat_id, created_by, created_at, expires_at)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(token, chatId, userId, now, now + INVITE_TTL_SECONDS);
+  return { token, chat_id: chatId, created_by: userId, created_at: now, expires_at: now + INVITE_TTL_SECONDS };
+};
+
+export const listChatRoomInvites = (userId: number, chatId: number): ChatInviteDto[] => {
+  requireRoomAdmin(userId, chatId);
+  return db.prepare(`
+    SELECT token, chat_id, created_by, created_at, expires_at
+    FROM chat_invites
+    WHERE chat_id = ? AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > ?)
+    ORDER BY created_at DESC
+  `).all(chatId, getNowUnix()) as ChatInviteDto[];
+};
+
+export const revokeChatRoomInvite = (userId: number, chatId: number, token: string): void => {
+  requireRoomAdmin(userId, chatId);
+  db.prepare('UPDATE chat_invites SET revoked_at = CURRENT_TIMESTAMP WHERE token = ? AND chat_id = ?')
+    .run(token, chatId);
+};
+
+const getValidInvite = (token: string) => db.prepare(`
+  SELECT token, chat_id, created_by, created_at, expires_at
+  FROM chat_invites
+  WHERE token = ? AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > ?)
+`).get(token, getNowUnix()) as ChatInviteDto | undefined;
+
+/** Public invite info (authed): what the joiner will see before joining. */
+export const getChatRoomInviteInfo = (token: string): { chat_id: number; title: string; inviter_name: string | null } | null => {
+  const invite = getValidInvite(token);
+  if (!invite) return null;
+  const chat = db.prepare('SELECT id, title FROM user_chats WHERE id = ?')
+    .get(invite.chat_id) as { id: number; title: string } | undefined;
+  if (!chat) return null;
+  const inviter = db.prepare('SELECT name FROM users WHERE id = ?').get(invite.created_by) as { name: string | null } | undefined;
+  return { chat_id: invite.chat_id, title: chat.title, inviter_name: inviter?.name ?? null };
+};
+
+/** Join a room via invite token. Idempotent for existing members. */
+export const joinChatRoomByInvite = (userId: number, token: string): { chat_id: number; room: ChatRoomDto } => {
+  const invite = getValidInvite(token);
+  if (!invite) throw new Error('invite_not_found');
+  const chat = db.prepare('SELECT id, user_id, room_enabled FROM user_chats WHERE id = ?')
+    .get(invite.chat_id) as { id: number; user_id: number; room_enabled: number } | undefined;
+  if (!chat) throw new Error('chat_not_found');
+  if (chat.room_enabled !== 1) throw new Error('room_not_created');
+
+  const existing = getMember(chat.id, userId);
+  if (!existing && chat.user_id !== userId) {
+    const nextOrder = Number((db.prepare(`
+      SELECT COALESCE(MAX(sort_order), -1) + 1 AS next_order FROM chat_members WHERE chat_id = ?
+    `).get(chat.id) as { next_order: number }).next_order);
+    db.prepare(`
+      INSERT INTO chat_members (chat_id, user_id, role, sort_order)
+      VALUES (?, ?, 'member', ?)
+    `).run(chat.id, userId, nextOrder);
+  }
+  return { chat_id: chat.id, room: toRoomDto(chat, getMember(chat.id, userId)) };
+};
+
+export const leaveChatRoom = (userId: number, chatId: number): void => {
+  const { chat } = requireRoom(userId, chatId);
+  if (chat.user_id === userId) throw new Error('owner_cannot_leave');
+  db.prepare('DELETE FROM chat_members WHERE chat_id = ? AND user_id = ?').run(chatId, userId);
+};
+
+/** User ids allowed to read this chat's messages: owner + all members. */
+export const listRoomReaderUserIds = (chatId: number): number[] | null => {
+  const chat = db.prepare('SELECT id, user_id, room_enabled FROM user_chats WHERE id = ?')
+    .get(chatId) as { id: number; user_id: number; room_enabled: number } | undefined;
+  if (!chat) return null;
+  const memberIds = (db.prepare('SELECT user_id FROM chat_members WHERE chat_id = ?').all(chat.id) as Array<{ user_id: number }>)
+    .map(row => row.user_id);
+  return memberIds.includes(chat.user_id) ? memberIds : [chat.user_id, ...memberIds];
+};
+
+/** Can this user read messages of this chat (owner or room member)? */
+export const canReadChatMessages = (userId: number, chatId: number): boolean => {
+  const chat = db.prepare('SELECT id, user_id FROM user_chats WHERE id = ?')
+    .get(chatId) as { id: number; user_id: number } | undefined;
+  if (!chat) return false;
+  if (chat.user_id === userId) return true;
+  return Boolean(db.prepare('SELECT 1 FROM chat_members WHERE chat_id = ? AND user_id = ?').get(chatId, userId));
+};

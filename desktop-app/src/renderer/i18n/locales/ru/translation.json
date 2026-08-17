@@ -638,7 +638,20 @@
       "promptDetective": "Детектив",
       "prototypeHint": "Создание участников подключим к бэкенду позже.",
       "manualActionPrototype": "{{name}} ответит после подключения бэкенда.",
-      "sequenceActionPrototype": "Персонажи ответят по очереди после подключения бэкенда."
+      "sequenceActionPrototype": "Персонажи ответят по очереди после подключения бэкенда.",
+      "joinRoom": "Присоединиться",
+      "joinSubmit": "Войти",
+      "inviteLinkPlaceholder": "Вставь ссылку-приглашение (chatter://join-room?...)",
+      "invalidInviteLink": "Некорректная ссылка-приглашение.",
+      "joinFailed": "Не удалось присоединиться к комнате.",
+      "joined": "Ты присоединился к комнате.",
+      "addParticipantKind": "Кого добавить?",
+      "addBot": "Бот (персонаж)",
+      "addHuman": "Человек",
+      "inviteLinkTitle": "Ссылка-приглашение",
+      "copyInvite": "Скопировать",
+      "inviteCopied": "Скопировано!",
+      "inviteHint": "Отправь ссылку юзеру. Он открывает панель комнаты и жмёт «Присоединиться». Ссылка действует 7 дней."
     },
     "deleteChat": {
       "title": "Удалить чат?",
