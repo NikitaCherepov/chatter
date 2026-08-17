@@ -403,9 +403,20 @@ export const forkChat = (
   customTitle?: string
 ): { chat_id: number; forked_messages: number } | null => {
   // Verify the source chat belongs to the user.
-  const sourceChat = db.prepare(
-    'SELECT id, title FROM user_chats WHERE id = ? AND user_id = ?'
-  ).get(sourceChatId, userId) as { id: number; title: string } | undefined;
+  const sourceChat = db.prepare(`
+    SELECT id, title, room_enabled, room_response_mode, room_auto_respond,
+           room_next_agent_id, default_prompt_id
+    FROM user_chats
+    WHERE id = ? AND user_id = ?
+  `).get(sourceChatId, userId) as {
+    id: number;
+    title: string;
+    room_enabled: number;
+    room_response_mode: string;
+    room_auto_respond: number;
+    room_next_agent_id: number | null;
+    default_prompt_id: number | null;
+  } | undefined;
   if (!sourceChat) return null;
 
   // Verify the anchor message exists in the source chat.
@@ -430,11 +441,78 @@ export const forkChat = (
     // 1. Create the new chat and activate it.
     const newChatId = createUserChat(userId, title);
 
+    // A room branch needs its own agents: message.agent_id values cannot keep
+    // pointing at agents that belong to the source chat. Copy both active and
+    // removed agents so historical speaker names remain intact, then remap all
+    // copied messages to the new agent ids.
+    const sourceAgents = db.prepare(`
+      SELECT id, owner_user_id, source_prompt_id, name, prompt_content,
+             sort_order, is_active, created_at, updated_at, deleted_at
+      FROM chat_agents
+      WHERE chat_id = ?
+      ORDER BY id ASC
+    `).all(sourceChatId) as Array<{
+      id: number;
+      owner_user_id: number;
+      source_prompt_id: number | null;
+      name: string;
+      prompt_content: string;
+      sort_order: number;
+      is_active: number;
+      created_at: string;
+      updated_at: string;
+      deleted_at: string | null;
+    }>;
+    const agentIdMap = new Map<number, number>();
+    const insertAgent = db.prepare(`
+      INSERT INTO chat_agents (
+        chat_id, owner_user_id, source_prompt_id, name, prompt_content,
+        sort_order, is_active, created_at, updated_at, deleted_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    for (const agent of sourceAgents) {
+      const inserted = insertAgent.run(
+        newChatId,
+        agent.owner_user_id,
+        agent.source_prompt_id,
+        agent.name,
+        agent.prompt_content,
+        agent.sort_order,
+        agent.is_active,
+        agent.created_at,
+        agent.updated_at,
+        agent.deleted_at,
+      );
+      agentIdMap.set(agent.id, Number(inserted.lastInsertRowid));
+    }
+
+    const nextAgentId = sourceChat.room_next_agent_id === null
+      ? null
+      : (agentIdMap.get(sourceChat.room_next_agent_id) ?? null);
+    db.prepare(`
+      UPDATE user_chats
+      SET room_enabled = ?,
+          room_response_mode = ?,
+          room_auto_respond = ?,
+          room_next_agent_id = ?,
+          default_prompt_id = ?
+      WHERE id = ? AND user_id = ?
+    `).run(
+      sourceChat.room_enabled,
+      sourceChat.room_response_mode,
+      sourceChat.room_auto_respond,
+      nextAgentId,
+      sourceChat.default_prompt_id,
+      newChatId,
+      userId,
+    );
+
     // 2. Select all source messages up to the anchor (inclusive), oldest first.
     const rows = db.prepare(`
       SELECT id, role, content, images, audio, reasoning_content,
              tool_calls_json, token_count, reasoning_tokens,
-             attachments, subagents_json, usage_json, prompt_id, prompt_name, model_name, provider_name, archived
+             attachments, subagents_json, usage_json, prompt_id, prompt_name, model_name, provider_name,
+             agent_id, archived
       FROM chat_messages
       WHERE user_id = ? AND chat_id = ? AND id <= ?
       ORDER BY id ASC
@@ -455,6 +533,7 @@ export const forkChat = (
       prompt_name: string | null;
       model_name: string | null;
       provider_name: string | null;
+      agent_id: number | null;
       archived: number;
     }>;
 
@@ -464,9 +543,9 @@ export const forkChat = (
         telegram_chat_id, telegram_message_id,
         images, audio, reasoning_content, tool_calls_json,
         token_count, reasoning_tokens, attachments, subagents_json,
-        usage_json, prompt_id, prompt_name, model_name, provider_name, archived
+        usage_json, prompt_id, prompt_name, model_name, provider_name, agent_id, archived
       )
-      VALUES (?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     for (const row of rows) {
@@ -511,6 +590,7 @@ export const forkChat = (
         row.prompt_name,
         row.model_name,
         row.provider_name,
+        row.agent_id === null ? null : (agentIdMap.get(row.agent_id) ?? null),
         row.archived           // preserve archived state
       );
     }
