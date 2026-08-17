@@ -941,7 +941,7 @@ export const getChatMessages = (userId: number, chatId: number, limit = 20, offs
   const multiUserRoom = readerIds.length > 1;
   const placeholders = readerIds.map(() => '?').join(', ');
   const rows = db.prepare(`
-    SELECT id, chat_id, role, content, reasoning_content, tool_calls_json, images, audio,
+    SELECT id, chat_id, user_id, role, content, reasoning_content, tool_calls_json, images, audio,
            telegram_chat_id, telegram_message_id, created_at, archived, token_count,
            reasoning_tokens, attachments, subagents_json, usage_json, prompt_id, prompt_name,
            model_name, provider_name, agent_id
@@ -949,7 +949,7 @@ export const getChatMessages = (userId: number, chatId: number, limit = 20, offs
     WHERE ${multiUserRoom ? `user_id IN (${placeholders})` : 'user_id = ?'} AND chat_id = ?
     ORDER BY id DESC
     LIMIT ? OFFSET ?
-  `).all(...(multiUserRoom ? readerIds : [userId]), chatId, safeLimit, safeOffset) as Array<{ id: number; chat_id: number; role: ChatRole; content: string; reasoning_content: string | null; tool_calls_json: string | null; images: string | null; audio: string | null; telegram_chat_id: number | null; telegram_message_id: number | null; created_at: string; archived: number; token_count: number; reasoning_tokens: number; attachments: string | null; subagents_json: string | null; usage_json: string | null; prompt_id: number | null; prompt_name: string | null; model_name: string | null; provider_name: string | null; agent_id: number | null }>;
+  `).all(...(multiUserRoom ? readerIds : [userId]), chatId, safeLimit, safeOffset) as Array<{ id: number; chat_id: number; user_id: number; role: ChatRole; content: string; reasoning_content: string | null; tool_calls_json: string | null; images: string | null; audio: string | null; telegram_chat_id: number | null; telegram_message_id: number | null; created_at: string; archived: number; token_count: number; reasoning_tokens: number; attachments: string | null; subagents_json: string | null; usage_json: string | null; prompt_id: number | null; prompt_name: string | null; model_name: string | null; provider_name: string | null; agent_id: number | null }>;
 
   return rows.reverse().map(row => {
     let parsedImages: MessageImage[] | null = null;
@@ -998,6 +998,7 @@ export const getChatMessages = (userId: number, chatId: number, limit = 20, offs
     return {
       id: row.id,
       chat_id: row.chat_id,
+      user_id: row.user_id,
       role: row.role,
       content: row.content,
       reasoning_content: row.reasoning_content,

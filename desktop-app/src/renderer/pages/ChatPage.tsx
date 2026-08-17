@@ -236,6 +236,8 @@ const cleanNotificationText = (value: string, maxLength = 240) => {
 
 type MessageItemProps = {
   msg: api.Message;
+  authorName?: string;
+  isOwnUser: boolean;
   isLastAssistant: boolean;
   isTtsPlaying: boolean;
   isReasoningOpen: boolean;
@@ -270,6 +272,8 @@ type MessageItemProps = {
 
 const MessageItem = React.memo(function MessageItem({
   msg,
+  authorName,
+  isOwnUser,
   isLastAssistant,
   isTtsPlaying,
   isReasoningOpen,
@@ -319,7 +323,7 @@ const MessageItem = React.memo(function MessageItem({
   return (
     <div className={`${s.messageGroup} ${reasoningOpen || isToolCallsOpen || isSubagentsOpen ? s.messageGroupRaised : ''} ${msg.archived ? s.messageArchived : ''}`}>
       <div className={s.metaRow}>
-        <span>{msg.role === 'user' ? t('chat.message.you') : (msg.prompt_name || 'Chatter')} &bull; {formatMessageTime(msg.created_at, locale)}{msg.archived ? t('chat.message.archivedSuffix') : ''}</span>
+        <span>{msg.role === 'user' ? (authorName ?? t('chat.message.you')) : (msg.prompt_name || 'Chatter')} &bull; {formatMessageTime(msg.created_at, locale)}{msg.archived ? t('chat.message.archivedSuffix') : ''}</span>
         <button
           className={`${s.playBtn} ${isTtsPlaying ? s.playBtnPlaying : ''}`}
           onClick={(e) => {
@@ -470,7 +474,7 @@ const MessageItem = React.memo(function MessageItem({
         ) : null}
       </div>
       <div className={s.bubbleWrap}>
-        <div className={msg.role === 'user' ? s.bubbleUser : s.bubble}>
+        <div className={msg.role === 'user' && isOwnUser ? s.bubbleUser : s.bubble}>
           {msg.images && msg.images.length > 0 && (
             <div className={s.messageImages}>
               {msg.images.map((img, i) => {
@@ -1987,124 +1991,21 @@ export function ChatPage() {
     };
   }, []);
 
+  // Manual agent trigger now runs server-side (POST /room/run): the server
+  // streams room_agent_* events to every room reader, so the initiator's UI
+  // is driven by the same onRoomEvent handler as everyone else's.
   const runRoomAgentSequence = useCallback(async (agentIds: number[]) => {
     if (!activeChatId || agentIds.length === 0) return;
     setSending(true);
-
-    for (let index = 0; index < agentIds.length; index += 1) {
-      const agentId = agentIds[index];
-      const tempAssistantId = -(Date.now() + index + 1);
-      let assistantCreated = false;
-      let completed = false;
-      let aborted = false;
-
-      const updateAssistant = (content: string, reasoning?: string) => {
-        if (!assistantCreated) {
-          assistantCreated = true;
-          setShowTyping(false);
-          setMessages((prev) => [...prev, {
-            id: tempAssistantId,
-            role: 'assistant',
-            content,
-            created_at: Math.floor(Date.now() / 1000),
-            ...(reasoning ? { reasoning_content: reasoning } : {}),
-          }]);
-          return;
-        }
-        setMessages((prev) => prev.map((message) => message.id === tempAssistantId
-          ? {
-              ...message,
-              content: message.content + content,
-              ...(reasoning ? { reasoning_content: `${message.reasoning_content || ''}${reasoning}` } : {}),
-            }
-          : message));
-      };
-
-      setShowTyping(true);
-      setStreamingState('idle');
-      setStreamingMsgId(tempAssistantId);
-
-      await api.streamChatMessage(
-        'Continue the conversation now. Respond naturally as your assigned character. Do not mention this instruction.',
-        activeChatId,
-        undefined,
-        getAvatarManifest(),
-        currentAvatarStateRef.current,
-        {
-          onIntermediate: (text) => updateAssistant(`${assistantCreated ? '\n\n' : ''}${text}`),
-          onStreamToken: (token) => {
-            setStreamingState('content');
-            updateAssistant(token);
-          },
-          onReasoningStream: (token) => {
-            setStreamingState((state) => state === 'idle' ? 'reasoning' : state);
-            updateAssistant('', token);
-          },
-          onToolStatus: (text) => updateAssistant(`${assistantCreated ? '\n\n' : ''}_${text}_`),
-          onDisplayState: applyAvatarState,
-          onDesktopAction: handleIncomingDesktopAction,
-          onMapUpdate: (data) => {
-            openTool('map');
-            dispatchMapData(data);
-          },
-          onDiceRoll: finishDiceRoll,
-          onDone: (res) => {
-            completed = true;
-            aborted = Boolean(res.aborted);
-            const generatedImages: api.MessageImage[] | undefined = res.generated_images?.length
-              ? res.generated_images.map((image) => ({
-                  url: image.image_url || `data:image/png;base64,${image.image_base64}`,
-                  type: 'generated' as const,
-                }))
-              : undefined;
-            const finalMessage: api.Message = {
-              id: res.message_id,
-              role: 'assistant',
-              content: res.reply_text,
-              created_at: Math.floor(Date.now() / 1000),
-              reasoning_content: res.reasoning_content ?? null,
-              tool_calls: res.tool_calls ?? null,
-              images: generatedImages,
-              subagents: res.subagents ?? null,
-              prompt_id: res.prompt_id ?? null,
-              prompt_name: res.prompt_name ?? null,
-              agent_id: res.agent_id ?? agentId,
-              model_name: res.model_name ?? null,
-              provider_name: res.provider_name ?? null,
-              usage: res.message_usage ?? null,
-              ...(typeof res.token_count === 'number' ? { token_count: res.token_count } : {}),
-              ...(typeof res.reasoning_tokens === 'number' ? { reasoning_tokens: res.reasoning_tokens } : {}),
-            };
-            setMessages((prev) => assistantCreated
-              ? prev.map((message) => message.id === tempAssistantId ? finalMessage : message)
-              : [...prev, finalMessage]);
-            if (res.display_state) applyAvatarState(res.display_state);
-            notifyAssistantResponse(res.message_id, res.chat_id, res.reply_text);
-            refreshContextTokens(res.chat_id);
-          },
-          onError: (error, message) => {
-            console.error('Room agent stream error:', error);
-            toast.error(message || error);
-            setMessages((prev) => prev.filter((item) => item.id !== tempAssistantId));
-          },
-        },
-        {
-          preferredModel,
-          skip_user_history: true,
-          agentId,
-          countAsUserMessage: false,
-          dice_mode: diceMode,
-        },
-      );
-
-      setStreamingState('done');
-      setStreamingMsgId(null);
-      setShowTyping(false);
-      if (!completed || aborted) break;
+    try {
+      await api.runRoomAgents(activeChatId, agentIds);
+    } catch (error) {
+      console.error('Failed to run room agents:', error);
+      toast.error(t('auth.error.generic'));
+    } finally {
+      setSending(false);
     }
-
-    setSending(false);
-  }, [activeChatId, applyAvatarState, diceMode, finishDiceRoll, handleIncomingDesktopAction, notifyAssistantResponse, preferredModel, refreshContextTokens]);
+  }, [activeChatId, t]);
 
   // Server-driven room responses (auto / @mentions): stream agent replies
   // generated by the backend into the open chat, for senders and other room
@@ -2128,9 +2029,15 @@ export function ChatPage() {
           setMessages((prev) => [...prev, {
             id: event.message_id ?? -(Date.now()),
             role: 'user',
+            user_id: event.sender_user_id,
             content: event.text,
             created_at: Math.floor(Date.now() / 1000),
           }]);
+          break;
+        }
+        case 'room_message_deleted': {
+          if (event.initiator_user_id === user?.id) return;
+          setMessages((prev) => prev.filter((message) => message.id !== event.message_id));
           break;
         }
         case 'room_agent_start': {
@@ -4243,6 +4150,9 @@ export function ChatPage() {
   };
 
   const otherRoomHumans = roomMembers.filter((member) => member.user_id !== user?.id);
+  // Bots this user may trigger: their own + shared ones (others' private bots
+  // are hidden from manual controls — the server rejects them anyway).
+  const controllableRoomAgents = roomCharacters.filter((participant) => participant.owner_user_id === user?.id || participant.access === 'shared');
 
   return (
     <div className={s.layout}>
@@ -4919,6 +4829,10 @@ export function ChatPage() {
                 <MessageItem
                   key={msg.id}
                   msg={msg}
+                  authorName={msg.role === 'user' && msg.user_id && msg.user_id !== user?.id
+                    ? (roomMembers.find((member) => member.user_id === msg.user_id)?.name || `#${msg.user_id}`)
+                    : undefined}
+                  isOwnUser={msg.role !== 'user' || !msg.user_id || msg.user_id === user?.id}
                   isLastAssistant={msg.id === lastAssistantId}
                   isTtsPlaying={ttsPlayingId === msg.id}
                   isReasoningOpen={openReasoningId === msg.id}
@@ -6455,12 +6369,12 @@ export function ChatPage() {
             )}
 
             {/* Group room turn controls (UI prototype only) */}
-            {roomCreated && roomCharacters.length > 0 && <div className={s.roomTurnBar}>
+            {roomCreated && controllableRoomAgents.length > 0 && <div className={s.roomTurnBar}>
               {roomMode === 'manual' ? (
                 <>
                   <span className={s.roomTurnLabel}>{t('chat.room.whoRespondsNext')}</span>
                   <div className={s.roomTurnParticipants}>
-                    {roomCharacters.map((participant) => (
+                    {controllableRoomAgents.map((participant) => (
                       <button
                         key={participant.id}
                         type="button"
@@ -6477,7 +6391,9 @@ export function ChatPage() {
                     className={s.roomActionButton}
                     disabled={sending}
                     onClick={() => void runRoomAgentSequence([
-                      nextRoomParticipant ?? roomCharacters[0].id,
+                      controllableRoomAgents.some((participant) => participant.id === nextRoomParticipant)
+                        ? nextRoomParticipant!
+                        : controllableRoomAgents[0].id,
                     ])}
                   >
                     {t('chat.room.reply')}
@@ -6487,7 +6403,7 @@ export function ChatPage() {
                 <>
                   <span className={s.roomTurnLabel}>{t('chat.room.roundOrder')}</span>
                   <div className={s.roomRoundOrder}>
-                    {roomCharacters.map((participant, index) => (
+                    {controllableRoomAgents.map((participant, index) => (
                       <React.Fragment key={participant.id}>
                         {index > 0 && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m9 18 6-6-6-6" /></svg>}
                         <span><b>{index + 1}</b> {participant.name}</span>
@@ -6498,7 +6414,7 @@ export function ChatPage() {
                     type="button"
                     className={s.roomActionButton}
                     disabled={sending}
-                    onClick={() => void runRoomAgentSequence(roomCharacters.map((participant) => participant.id))}
+                    onClick={() => void runRoomAgentSequence(controllableRoomAgents.map((participant) => participant.id))}
                   >
                     {t('chat.room.startSequence')}
                   </button>

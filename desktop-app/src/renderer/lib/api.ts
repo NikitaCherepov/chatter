@@ -295,6 +295,8 @@ export type SubagentTrace = {
 export type Message = {
   id: number;
   role: 'user' | 'assistant';
+  /** Message's author */
+  user_id?: number | null;
   content: string;
   reasoning_content?: string | null;
   tool_calls?: ToolCall[] | null;
@@ -475,6 +477,14 @@ export async function updateChatRoomSettings(
   return apiFetch(`/api/v1/chats/${chatId}/room/settings`, {
     method: 'PATCH',
     body: JSON.stringify(settings),
+  });
+}
+
+/** Manual bot trigger ("Reply" / "Reply in order"): the server streams room_agent_* WS events to every member. */
+export async function runRoomAgents(chatId: number, agentIds: number[]): Promise<{ ok: boolean }> {
+  return apiFetch(`/api/v1/chats/${chatId}/room/run`, {
+    method: 'POST',
+    body: JSON.stringify({ agent_ids: agentIds }),
   });
 }
 
@@ -809,7 +819,8 @@ export type RoomEvent =
   | { type: 'room_agent_reasoning'; chat_id: number; agent_id: number; text: string }
   | { type: 'room_agent_done'; chat_id: number; agent_id: number; result: any }
   | { type: 'room_agent_error'; chat_id: number; agent_id: number; error: string }
-  | { type: 'room_members_updated'; chat_id: number };
+  | { type: 'room_members_updated'; chat_id: number }
+  | { type: 'room_message_deleted'; chat_id: number; message_id: number; initiator_user_id: number };
 
 type WsCallbacks = StreamCallbacks & {
   onConnect?: () => void;
@@ -1078,6 +1089,7 @@ export function initWebSocket(callbacks?: WsCallbacks) {
         case 'room_agent_done':
         case 'room_agent_error':
         case 'room_members_updated':
+        case 'room_message_deleted':
           wsCallbacks.onRoomEvent?.(msg);
           break;
         case 'chat_updated':

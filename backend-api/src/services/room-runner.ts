@@ -145,20 +145,14 @@ export type RoomRunEmitter = (payload: Record<string, unknown>) => void;
 
 const roomRunChains = new Map<number, Promise<void>>();
 
-/**
- * Run the room response queue sequentially. Serialized per chat so two senders
- * cannot interleave generations. Events are emitted to every room reader
- * (the caller broadcasts them over WS).
- */
-export const runRoomResponseQueue = async (
+/** Sequentially run the given steps, serialized per chat. */
+const runStepsSerialized = async (
   chatId: number,
-  senderId: number,
-  userText: string,
+  steps: RoomResponseStep[],
   emit: RoomRunEmitter,
 ): Promise<void> => {
   const previous = roomRunChains.get(chatId) ?? Promise.resolve();
   const chained = previous.then(async () => {
-    const steps = computeRoomResponseQueue(senderId, chatId, userText);
     for (const { agent, reason } of steps) {
       emit({ type: 'room_agent_start', chat_id: chatId, agent_id: agent.id, agent_name: agent.name, owner_user_id: agent.owner_user_id, reason });
       try {
@@ -189,4 +183,42 @@ export const runRoomResponseQueue = async (
   } finally {
     if (roomRunChains.get(chatId) === chained) roomRunChains.delete(chatId);
   }
+};
+
+/**
+ * Run the room response queue sequentially. Serialized per chat so two senders
+ * cannot interleave generations. Events are emitted to every room reader
+ * (the caller broadcasts them over WS).
+ */
+export const runRoomResponseQueue = async (
+  chatId: number,
+  senderId: number,
+  userText: string,
+  emit: RoomRunEmitter,
+): Promise<void> => {
+  const steps = computeRoomResponseQueue(senderId, chatId, userText);
+  await runStepsSerialized(chatId, steps, emit);
+};
+
+/**
+ * Manual trigger (the "Reply" / "Reply in order" buttons): run exactly the
+ * requested agents in the given order. Only agents the initiator owns or that
+ * are shared are allowed. Everyone (including the initiator) watches via
+ * room_agent_* WS events.
+ */
+export const runRoomAgents = async (
+  chatId: number,
+  initiatorId: number,
+  agentIds: number[],
+  emit: RoomRunEmitter,
+): Promise<void> => {
+  const agents = listRoomAgents(chatId).filter(a =>
+    agentIds.includes(a.id) && (a.owner_user_id === initiatorId || a.access === 'shared'),
+  );
+  const steps: RoomResponseStep[] = [];
+  for (const id of agentIds) {
+    const agent = agents.find(a => a.id === id);
+    if (agent) steps.push({ agent, reason: 'auto' });
+  }
+  await runStepsSerialized(chatId, steps, emit);
 };

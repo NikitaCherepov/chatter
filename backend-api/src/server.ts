@@ -62,7 +62,7 @@ import { normalizeSupportedLanguage, SUPPORTED_LANGUAGES } from './i18n/language
 import { translateForLanguage } from './i18n/index.js';
 import { associateServerAccessKeyUser, createServerAccessKey, getLastServerAccessKeyForUser, isServerAccessKeyGateEnabled, listServerAccessKeys, revokeServerAccessKey, validateServerAccessKey } from './services/server-access-keys.js';
 import { addChatAgent, canReadChatMessages, createChatRoom, createChatRoomInvite, deleteChatRoom, getChatRoom, getChatRoomInviteInfo, joinChatRoomByInvite, leaveChatRoom, listRoomReaderUserIds, removeChatAgent, revokeChatRoomInvite, reorderChatAgents, updateChatAgent, updateChatRoomSettings } from './services/chat-rooms.js';
-import { isRoomChat, runRoomResponseQueue } from './services/room-runner.js';
+import { isRoomChat, runRoomAgents, runRoomResponseQueue } from './services/room-runner.js';
 
 /** Fire-and-forget WS broadcast to every room reader (owner + members). */
 const broadcastToRoom = (chatId: number, payload: Record<string, unknown>) => {
@@ -1777,6 +1777,22 @@ app.post('/api/v1/chats/:id/room/leave', (req: AuthedRequest, res) => {
   }
 });
 
+// Manual agent trigger ("Ответить" / "Ответить по порядку"): the server runs
+// the requested agents and streams room_agent_* events to every room reader.
+app.post('/api/v1/chats/:id/room/run', (req: AuthedRequest, res) => {
+  const userId = accountIdFromRequest(req);
+  const chatId = Number.parseInt(req.params.id, 10);
+  if (!Number.isSafeInteger(chatId) || chatId <= 0) return res.status(400).json({ error: 'bad_chat_id' });
+  const agentIds = Array.isArray(req.body?.agent_ids)
+    ? [...new Set(req.body.agent_ids.map((v: unknown) => Number(v)).filter((v: number) => Number.isSafeInteger(v) && v > 0))] as number[]
+    : [];
+  if (agentIds.length === 0) return res.status(400).json({ error: 'bad_agent_ids' });
+  if (!canReadChatMessages(userId, chatId)) return res.status(404).json({ error: 'chat_not_found' });
+  // Fire-and-forget: generation + streaming happen via room_agent_* WS events.
+  void runRoomAgents(chatId, userId, agentIds, (payload) => broadcastToRoom(chatId, payload));
+  return res.json({ ok: true });
+});
+
 app.post('/api/v1/chats/:id/fork', (req: AuthedRequest, res) => {
   const userId = accountIdFromRequest(req);
   const sourceChatId = Number.parseInt(req.params.id, 10);
@@ -1844,6 +1860,10 @@ app.delete('/api/v1/chats/:chatId/messages/:messageId', (req: AuthedRequest, res
   if (!Number.isFinite(messageId) || messageId <= 0) return res.status(400).json({ error: 'bad_message_id' });
   const ok = deleteUserMessage(userId, chatId, messageId);
   if (!ok) return res.status(404).json({ error: 'message_not_found' });
+  // Push deletion to other room members (the deleter already updated locally).
+  if (isRoomChat(chatId)) {
+    broadcastToRoom(chatId, { type: 'room_message_deleted', chat_id: chatId, message_id: messageId, initiator_user_id: userId });
+  }
   return res.json({ ok: true });
 });
 
