@@ -451,7 +451,7 @@ export async function removeChatAgent(chatId: number, agentId: number): Promise<
 export async function updateChatAgent(
   chatId: number,
   agentId: number,
-  fields: { name?: string; prompt_id?: number; prompt_content?: string },
+  fields: { name?: string; prompt_id?: number; prompt_content?: string; access?: 'private' | 'shared' },
 ): Promise<{ room: ChatRoom }> {
   return apiFetch(`/api/v1/chats/${chatId}/room/agents/${agentId}`, {
     method: 'PATCH',
@@ -800,10 +800,19 @@ let reconnectDelay = 1000;
 const MAX_RECONNECT_DELAY = 30000;
 let wsTokenRefreshPromise: Promise<boolean> | null = null;
 
+export type RoomEvent =
+  | { type: 'room_user_message'; chat_id: number; message_id: number | null; sender_user_id: number; text: string }
+  | { type: 'room_agent_start'; chat_id: number; agent_id: number; agent_name: string; owner_user_id: number; reason: 'mention' | 'auto' }
+  | { type: 'room_agent_token'; chat_id: number; agent_id: number; text: string }
+  | { type: 'room_agent_reasoning'; chat_id: number; agent_id: number; text: string }
+  | { type: 'room_agent_done'; chat_id: number; agent_id: number; result: any }
+  | { type: 'room_agent_error'; chat_id: number; agent_id: number; error: string };
+
 type WsCallbacks = StreamCallbacks & {
   onConnect?: () => void;
   onDisconnect?: () => void;
   onTaskResult?: (data: { chat_id: number; text: string; is_new_chat: boolean }) => void;
+  onRoomEvent?: (event: RoomEvent) => void;
   onChatUpdated?: (data: {
     chat_id: number;
     message_id: number;
@@ -941,6 +950,21 @@ const scheduleWebSocketTokenRefresh = (socket: WebSocket) => {
 /** Register a global handler for task_result events (scheduler push). */
 export function onTaskResult(cb: WsCallbacks['onTaskResult']) {
   wsCallbacks.onTaskResult = cb;
+  return () => {
+    if (wsCallbacks.onTaskResult === cb) {
+      wsCallbacks.onTaskResult = undefined;
+    }
+  };
+}
+
+/** Register a global handler for multi-user room events. */
+export function onRoomEvent(cb: WsCallbacks['onRoomEvent']) {
+  wsCallbacks.onRoomEvent = cb;
+  return () => {
+    if (wsCallbacks.onRoomEvent === cb) {
+      wsCallbacks.onRoomEvent = undefined;
+    }
+  };
 }
 
 /** Register a handler for messages added to a chat by another client, such as Telegram. */
@@ -1044,6 +1068,14 @@ export function initWebSocket(callbacks?: WsCallbacks) {
           break;
         }
         case 'task_result': wsCallbacks.onTaskResult?.({ chat_id: msg.chat_id, text: msg.text, is_new_chat: msg.is_new_chat }); break;
+        case 'room_user_message':
+        case 'room_agent_start':
+        case 'room_agent_token':
+        case 'room_agent_reasoning':
+        case 'room_agent_done':
+        case 'room_agent_error':
+          wsCallbacks.onRoomEvent?.(msg);
+          break;
         case 'chat_updated':
           wsCallbacks.onChatUpdated?.({
             chat_id: Number(msg.chat_id),

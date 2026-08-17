@@ -55,6 +55,8 @@ export const getChatAgentForResponse = (
     WHERE id = ? AND chat_id = ? AND is_active = 1
   `).get(agentId, chat.id) as ChatAgentDto | undefined;
   if (!agent) throw new Error('agent_not_found');
+  // Explicit trigger of someone else's bot requires shared access.
+  if (agent.owner_user_id !== userId && agent.access !== 'shared') throw new Error('forbidden');
   return agent;
 };
 
@@ -344,7 +346,7 @@ export const updateChatAgent = (
   userId: number,
   chatId: number,
   agentId: number,
-  fields: { name?: string; promptContent?: string; sourcePromptId?: number },
+  fields: { name?: string; promptContent?: string; sourcePromptId?: number; access?: 'private' | 'shared' },
 ): ChatRoomDto => db.transaction(() => {
   const { chat, member } = requireRoom(userId, chatId);
   const agent = db.prepare(`
@@ -359,6 +361,12 @@ export const updateChatAgent = (
   if (fields.name !== undefined) {
     updates.push('name = ?');
     params.push(makeUniqueAgentName(chatId, normalizeAgentName(fields.name, agent.name), agentId));
+  }
+  if (fields.access !== undefined) {
+    // Only the agent's owner (or room admin) may toggle shared access.
+    if (member.role !== 'admin' && agent.owner_user_id !== userId) throw new Error('forbidden');
+    updates.push('access = ?');
+    params.push(fields.access === 'shared' ? 'shared' : 'private');
   }
   if (fields.sourcePromptId !== undefined) {
     const prompt = resolvePromptSnapshot(userId, fields.sourcePromptId);

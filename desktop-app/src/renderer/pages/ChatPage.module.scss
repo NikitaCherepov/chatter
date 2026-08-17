@@ -287,6 +287,18 @@
   font-size: 10px;
 }
 
+.roomSharedBadge {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background-color: color-mix(in srgb, var(--accent) 15%, transparent);
+  color: var(--accent);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  vertical-align: middle;
+}
+
 .roomSectionLabel {
   color: var(--text-muted);
   font-size: 11px;

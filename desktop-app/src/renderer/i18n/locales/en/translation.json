@@ -651,7 +651,12 @@
       "inviteLinkTitle": "Invite link",
       "copyInvite": "Copy link",
       "inviteCopied": "Copied!",
-      "inviteHint": "Send this link to the user. They open the room panel and press \"Join room\". Link expires in 7 days."
+      "inviteHint": "Send this link to the user. They open the room panel and press \"Join room\". Link expires in 7 days.",
+      "agentError": "Room agent failed: {{error}}",
+      "makeShared": "Share with members",
+      "makePrivate": "Close access",
+      "sharedBadge": "shared",
+      "leaveRoom": "Leave room"
     },
     "deleteChat": {
       "title": "Delete chat?",

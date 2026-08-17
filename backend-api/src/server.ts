@@ -61,7 +61,20 @@ import {
 import { normalizeSupportedLanguage, SUPPORTED_LANGUAGES } from './i18n/languages.js';
 import { translateForLanguage } from './i18n/index.js';
 import { associateServerAccessKeyUser, createServerAccessKey, getLastServerAccessKeyForUser, isServerAccessKeyGateEnabled, listServerAccessKeys, revokeServerAccessKey, validateServerAccessKey } from './services/server-access-keys.js';
-import { addChatAgent, createChatRoom, createChatRoomInvite, deleteChatRoom, getChatRoom, getChatRoomInviteInfo, joinChatRoomByInvite, leaveChatRoom, removeChatAgent, revokeChatRoomInvite, reorderChatAgents, updateChatAgent, updateChatRoomSettings } from './services/chat-rooms.js';
+import { addChatAgent, createChatRoom, createChatRoomInvite, deleteChatRoom, getChatRoom, getChatRoomInviteInfo, joinChatRoomByInvite, leaveChatRoom, listRoomReaderUserIds, removeChatAgent, revokeChatRoomInvite, reorderChatAgents, updateChatAgent, updateChatRoomSettings } from './services/chat-rooms.js';
+import { isRoomChat, runRoomResponseQueue } from './services/room-runner.js';
+
+/** Fire-and-forget WS broadcast to every room reader (owner + members). */
+const broadcastToRoom = (chatId: number, payload: Record<string, unknown>) => {
+  const readerIds = listRoomReaderUserIds(chatId) || [];
+  const data = JSON.stringify(payload);
+  for (const readerId of readerIds) {
+    const client = wsClients.get(readerId);
+    if (client?.ws.readyState === WebSocket.OPEN) {
+      try { client.ws.send(data); } catch { /* offline reader */ }
+    }
+  }
+};
 
 dotenv.config();
 ensureDefaultPrompt();
@@ -1656,6 +1669,7 @@ app.patch('/api/v1/chats/:id/room/agents/:agentId', (req: AuthedRequest, res) =>
       name: req.body?.name === undefined ? undefined : `${req.body.name}`,
       promptContent: req.body?.prompt_content === undefined ? undefined : `${req.body.prompt_content}`,
       sourcePromptId,
+      access: req.body?.access === 'shared' ? 'shared' : req.body?.access === 'private' ? 'private' : undefined,
     }) });
   } catch (err) {
     return sendChatRoomError(res, err);
@@ -2203,6 +2217,18 @@ app.post('/api/v1/chat/send', async (req: AuthedRequest, res) => {
 
     res.write(`event: done\ndata: ${JSON.stringify(result)}\n\n`);
     res.end();
+
+    // Multi-user rooms: server-side response queue after a saved user message.
+    if (req.body?.user_only && isRoomChat(chatId)) {
+      broadcastToRoom(chatId, {
+        type: 'room_user_message',
+        chat_id: chatId,
+        message_id: result.user_message_id ?? null,
+        sender_user_id: userId,
+        text,
+      });
+      void runRoomResponseQueue(chatId, userId, text, (payload) => broadcastToRoom(chatId, payload));
+    }
   } catch (err: any) {
     const payload = buildLocalizedAiError(err, userId);
     res.write(`event: error\ndata: ${JSON.stringify(payload)}\n\n`);
@@ -6581,6 +6607,21 @@ async function handleWsChatSend(client: WsClient, msg: any) {
 
     // Send 'done' through the current connection (may have reconnected since).
     sendWsJson({ type: 'done', ...result });
+
+    // Multi-user rooms: after a saved user message, the SERVER runs the
+    // response queue (auto responses / @mentions) and broadcasts everything
+    // to all room readers.
+    if (msg.user_only && chat_id && isRoomChat(chat_id)) {
+      const roomId = chat_id;
+      broadcastToRoom(roomId, {
+        type: 'room_user_message',
+        chat_id: roomId,
+        message_id: result.user_message_id ?? null,
+        sender_user_id: userId,
+        text,
+      });
+      void runRoomResponseQueue(roomId, userId, text, (payload) => broadcastToRoom(roomId, payload));
+    }
   } catch (err: any) {
     const payload = buildLocalizedAiError(err, userId);
     // Send 'error' through the current connection (may have reconnected since).
