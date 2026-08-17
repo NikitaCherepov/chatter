@@ -2081,34 +2081,51 @@ export function ChatPage() {
         case 'room_agent_start': {
           const tempId = -(Date.now() + 1);
           roomEventAgentMsgIds.current.set(event.agent_id, tempId);
-          setShowTyping(false);
+          // Show the "typing" dots first; the assistant bubble is created lazily
+          // on the first token/reasoning chunk (same feel as a single chat).
+          setShowTyping(true);
           setStreamingState('idle');
           setStreamingMsgId(tempId);
-          setMessages((prev) => [...prev, {
-            id: tempId,
-            role: 'assistant',
-            content: '',
-            created_at: Math.floor(Date.now() / 1000),
-            agent_id: event.agent_id,
-          }]);
           break;
         }
         case 'room_agent_token': {
           const tempId = roomEventAgentMsgIds.current.get(event.agent_id);
           if (tempId === undefined) return;
           setStreamingState('content');
-          setMessages((prev) => prev.map((message) => message.id === tempId
-            ? { ...message, content: message.content + event.text }
-            : message));
+          setShowTyping(false);
+          setMessages((prev) => {
+            const exists = prev.some((message) => message.id === tempId);
+            const base = exists ? prev : [...prev, {
+              id: tempId,
+              role: 'assistant' as const,
+              content: '',
+              created_at: Math.floor(Date.now() / 1000),
+              agent_id: event.agent_id,
+            }];
+            return base.map((message) => message.id === tempId
+              ? { ...message, content: message.content + event.text }
+              : message);
+          });
           break;
         }
         case 'room_agent_reasoning': {
           const tempId = roomEventAgentMsgIds.current.get(event.agent_id);
           if (tempId === undefined) return;
           setStreamingState((state) => state === 'idle' ? 'reasoning' : state);
-          setMessages((prev) => prev.map((message) => message.id === tempId
-            ? { ...message, reasoning_content: `${message.reasoning_content || ''}${event.text}` }
-            : message));
+          setShowTyping(false);
+          setMessages((prev) => {
+            const exists = prev.some((message) => message.id === tempId);
+            const base = exists ? prev : [...prev, {
+              id: tempId,
+              role: 'assistant' as const,
+              content: '',
+              created_at: Math.floor(Date.now() / 1000),
+              agent_id: event.agent_id,
+            }];
+            return base.map((message) => message.id === tempId
+              ? { ...message, reasoning_content: `${message.reasoning_content || ''}${event.text}` }
+              : message);
+          });
           break;
         }
         case 'room_agent_done': {
@@ -2146,6 +2163,7 @@ export function ChatPage() {
           if (roomEventAgentMsgIds.current.size === 0) {
             setStreamingState('done');
             setStreamingMsgId(null);
+            setShowTyping(false);
           }
           if (res.message_id) notifyAssistantResponse(res.message_id, event.chat_id, finalMessage.content);
           refreshContextTokens(event.chat_id);
@@ -2160,6 +2178,7 @@ export function ChatPage() {
           if (roomEventAgentMsgIds.current.size === 0) {
             setStreamingState('done');
             setStreamingMsgId(null);
+            setShowTyping(false);
           }
           toast.error(t('chat.room.agentError', { error: event.error }));
           break;
