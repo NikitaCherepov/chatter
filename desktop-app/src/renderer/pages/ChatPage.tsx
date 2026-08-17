@@ -877,6 +877,7 @@ export function ChatPage() {
   const [draggingRoomParticipantId, setDraggingRoomParticipantId] = useState<number | null>(null);
   const [draggingRoomParticipantSize, setDraggingRoomParticipantSize] = useState<{ width: number; height: number } | null>(null);
   const [roomParticipantMenuId, setRoomParticipantMenuId] = useState<number | null>(null);
+  const [changingRoomParticipantPromptId, setChangingRoomParticipantPromptId] = useState<number | null>(null);
   const [renamingRoomParticipantId, setRenamingRoomParticipantId] = useState<number | null>(null);
   const [renamingRoomParticipantName, setRenamingRoomParticipantName] = useState('');
   const [roomCharacters, setRoomCharacters] = useState<api.ChatAgent[]>([]);
@@ -905,11 +906,14 @@ export function ChatPage() {
     return () => window.removeEventListener('click', closeParticipantMenu);
   }, [roomParticipantMenuId]);
   useEffect(() => {
-    if (!addParticipantOpen) return;
-    const closePromptPicker = () => setAddParticipantOpen(false);
+    if (!addParticipantOpen && changingRoomParticipantPromptId === null) return;
+    const closePromptPicker = () => {
+      setAddParticipantOpen(false);
+      setChangingRoomParticipantPromptId(null);
+    };
     window.addEventListener('click', closePromptPicker);
     return () => window.removeEventListener('click', closePromptPicker);
-  }, [addParticipantOpen]);
+  }, [addParticipantOpen, changingRoomParticipantPromptId]);
   const applyRoom = useCallback((room: api.ChatRoom) => {
     setRoomCreated(room.enabled);
     setRoomMode(room.response_mode);
@@ -920,6 +924,7 @@ export function ChatPage() {
   useEffect(() => {
     let cancelled = false;
     setAddParticipantOpen(false);
+    setChangingRoomParticipantPromptId(null);
     setRoomParticipantMenuId(null);
     setRenamingRoomParticipantId(null);
     setRenamingRoomParticipantName('');
@@ -944,7 +949,7 @@ export function ChatPage() {
     return () => { cancelled = true; };
   }, [activeChatId, applyRoom]);
   useEffect(() => {
-    if (!addParticipantOpen || roomPrompts.length > 0) return;
+    if ((!addParticipantOpen && changingRoomParticipantPromptId === null) || roomPrompts.length > 0) return;
     let cancelled = false;
     void api.getPrompts()
       .then((result) => {
@@ -956,7 +961,7 @@ export function ChatPage() {
       })
       .catch((error) => console.error('Failed to load room prompts:', error));
     return () => { cancelled = true; };
-  }, [addParticipantOpen, roomPrompts.length]);
+  }, [addParticipantOpen, changingRoomParticipantPromptId, roomPrompts.length]);
   const messagesScrollRef = useRef<HTMLDivElement>(null);
   const pendingPrependScrollRef = useRef<{ scrollHeight: number; scrollTop: number } | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -3910,6 +3915,29 @@ export function ChatPage() {
     }
   };
 
+  const startRoomCharacterPromptChange = (participantId: number) => {
+    setRoomParticipantMenuId(null);
+    setAddParticipantOpen(false);
+    setChangingRoomParticipantPromptId(participantId);
+  };
+
+  const changeRoomCharacterPrompt = async (promptId: number) => {
+    if (!activeChatId || changingRoomParticipantPromptId === null || roomSaving) return;
+    const chatId = activeChatId;
+    const participantId = changingRoomParticipantPromptId;
+    setChangingRoomParticipantPromptId(null);
+    setRoomSaving(true);
+    try {
+      const { room } = await api.updateChatAgent(chatId, participantId, { prompt_id: promptId });
+      if (activeChatIdRef.current === chatId) applyRoom(room);
+    } catch (error) {
+      console.error('Failed to change chat agent prompt:', error);
+      if (activeChatIdRef.current === chatId) toast.error(t('auth.error.generic'));
+    } finally {
+      if (activeChatIdRef.current === chatId) setRoomSaving(false);
+    }
+  };
+
   const handleRoomParticipantDragEnd = ({ active, over }: DragEndEvent) => {
     setDraggingRoomParticipantId(null);
     setDraggingRoomParticipantSize(null);
@@ -6589,6 +6617,10 @@ export function ChatPage() {
                                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
                                   {t('chat.sidebar.rename')}
                                 </button>
+                                <button type="button" onClick={() => startRoomCharacterPromptChange(participant.id)}>
+                                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 21v-7"/><path d="M4 10V3"/><path d="M12 21v-9"/><path d="M12 8V3"/><path d="M20 21v-5"/><path d="M20 12V3"/><path d="M1 14h6"/><path d="M9 8h6"/><path d="M17 16h6"/></svg>
+                                  {t('chat.room.changePrompt')}
+                                </button>
                                 <button type="button" className={s.roomParticipantContextDanger} onClick={() => void removeRoomCharacter(participant.id)}>
                                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                                   {t('chat.room.removeParticipant')}
@@ -6622,6 +6654,24 @@ export function ChatPage() {
                   </DragOverlay>
                 </DndContext>
                 <div className={s.roomAddParticipantWrap}>
+                  {changingRoomParticipantPromptId !== null && (() => {
+                    const participant = roomCharacters.find((item) => item.id === changingRoomParticipantPromptId);
+                    if (!participant) return null;
+                    return (
+                      <div className={s.roomPromptPicker} onClick={(event) => event.stopPropagation()}>
+                        <div className={s.roomPromptPickerTitle}>{t('chat.room.changePrompt')}</div>
+                        <PromptSelector
+                          options={roomPrompts}
+                          value={participant.source_prompt_id}
+                          onChange={(promptId) => void changeRoomCharacterPrompt(promptId)}
+                          disabled={roomSaving}
+                          placeholder={t('chat.room.choosePrompt')}
+                          maxVisibleItems={5}
+                          allowCreate={false}
+                        />
+                      </div>
+                    );
+                  })()}
                   {addParticipantOpen && (
                     <div className={s.roomPromptPicker} onClick={(event) => event.stopPropagation()}>
                       <div className={s.roomPromptPickerTitle}>{t('chat.room.choosePrompt')}</div>
@@ -6642,6 +6692,7 @@ export function ChatPage() {
                     disabled={roomSaving}
                     onClick={(event) => {
                       event.stopPropagation();
+                      setChangingRoomParticipantPromptId(null);
                       setAddParticipantOpen((open) => !open);
                     }}
                   >

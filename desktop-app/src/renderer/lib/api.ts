@@ -438,7 +438,7 @@ export async function removeChatAgent(chatId: number, agentId: number): Promise<
 export async function updateChatAgent(
   chatId: number,
   agentId: number,
-  fields: { name?: string },
+  fields: { name?: string; prompt_id?: number; prompt_content?: string },
 ): Promise<{ room: ChatRoom }> {
   return apiFetch(`/api/v1/chats/${chatId}/room/agents/${agentId}`, {
     method: 'PATCH',

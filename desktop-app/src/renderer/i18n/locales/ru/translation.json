@@ -632,6 +632,7 @@
       "addParticipant": "Добавить участника",
       "addParticipantsShort": "Добавить участников",
       "choosePrompt": "Выберите промпт",
+      "changePrompt": "Сменить промпт",
       "promptDefault": "Основной ассистент",
       "promptCreative": "Творческий собеседник",
       "promptDetective": "Детектив",
