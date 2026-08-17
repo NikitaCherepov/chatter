@@ -1313,6 +1313,13 @@ export function ChatPage() {
       markAsRead(activeChatId);
       loadMessages(activeChatId);
     }
+    // Switching chats must not keep the previous chat's generation state
+    // (otherwise a running room queue leaves `sending` stuck in the new chat).
+    setSending(false);
+    setShowTyping(false);
+    setStreamingState('idle');
+    setStreamingMsgId(null);
+    roomEventAgentMsgIds.current.clear();
   }, [activeChatId]);
 
   // Register global handler for scheduler task_result events
@@ -2091,6 +2098,7 @@ export function ChatPage() {
           // Show the "typing" dots first; the assistant bubble is created lazily
           // on the first token/reasoning chunk (same feel as a single chat).
           setShowTyping(true);
+          setSending(true);
           setStreamingState('idle');
           setStreamingMsgId(tempId);
           break;
@@ -2188,6 +2196,14 @@ export function ChatPage() {
             setShowTyping(false);
           }
           toast.error(t('chat.room.agentError', { error: event.error }));
+          break;
+        }
+        case 'room_queue_done': {
+          roomEventAgentMsgIds.current.clear();
+          setSending(false);
+          setShowTyping(false);
+          setStreamingState('done');
+          setStreamingMsgId(null);
           break;
         }
       }
@@ -2354,7 +2370,9 @@ export function ChatPage() {
                 : message
             ));
             setShowTyping(false);
-            setSending(false);
+            // In rooms the user message is only persisted here; the response
+            // queue keeps `sending` active until room_queue_done arrives.
+            if (!roomCreated) setSending(false);
             setStreamingState('done');
             setStreamingMsgId(null);
             if (!activeChatId || res.chat_id !== activeChatId) {
@@ -6678,7 +6696,13 @@ export function ChatPage() {
               {sending ? (
                 <svg
                   className={s.sendIcon}
-                  onClick={() => { api.stopChatStream(); }}
+                  onClick={() => {
+                    if (roomCreated) {
+                      api.stopRoomStream(activeChatId ?? 0);
+                    } else {
+                      api.stopChatStream();
+                    }
+                  }}
                   viewBox="0 0 24 24" fill="var(--accent-icon-light)" stroke="none"
                 >
                   <rect x="6" y="6" width="12" height="12" rx="2" />

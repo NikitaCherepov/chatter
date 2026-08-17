@@ -62,7 +62,7 @@ import { normalizeSupportedLanguage, SUPPORTED_LANGUAGES } from './i18n/language
 import { translateForLanguage } from './i18n/index.js';
 import { associateServerAccessKeyUser, createServerAccessKey, getLastServerAccessKeyForUser, isServerAccessKeyGateEnabled, listServerAccessKeys, revokeServerAccessKey, validateServerAccessKey } from './services/server-access-keys.js';
 import { addChatAgent, canReadChatMessages, createChatRoom, createChatRoomInvite, deleteChatRoom, getChatRoom, getChatRoomInviteInfo, joinChatRoomByInvite, leaveChatRoom, listRoomReaderUserIds, removeChatAgent, revokeChatRoomInvite, reorderChatAgents, reorderChatMembers, updateChatAgent, updateChatRoomSettings } from './services/chat-rooms.js';
-import { isRoomChat, runRoomAgents, runRoomResponseQueue } from './services/room-runner.js';
+import { isRoomChat, runRoomAgents, runRoomResponseQueue, stopRoomQueue } from './services/room-runner.js';
 
 /** Fire-and-forget WS broadcast to every room reader (owner + members). */
 const broadcastToRoom = (chatId: number, payload: Record<string, unknown>) => {
@@ -1807,6 +1807,16 @@ app.post('/api/v1/chats/:id/room/run', (req: AuthedRequest, res) => {
   // Fire-and-forget: generation + streaming happen via room_agent_* WS events.
   void runRoomAgents(chatId, userId, agentIds, (payload) => broadcastToRoom(chatId, payload));
   return res.json({ ok: true });
+});
+
+// Stop the currently running room response queue (any participant can stop it).
+app.post('/api/v1/chats/:id/room/stop', (req: AuthedRequest, res) => {
+  const userId = accountIdFromRequest(req);
+  const chatId = Number.parseInt(req.params.id, 10);
+  if (!Number.isSafeInteger(chatId) || chatId <= 0) return res.status(400).json({ error: 'bad_chat_id' });
+  if (!canReadChatMessages(userId, chatId)) return res.status(404).json({ error: 'chat_not_found' });
+  const stopped = stopRoomQueue(chatId);
+  return res.json({ ok: true, stopped });
 });
 
 app.post('/api/v1/chats/:id/fork', (req: AuthedRequest, res) => {
@@ -6353,6 +6363,11 @@ wss.on('connection', (ws, req) => {
           controller.abort();
         }
         // Ответ не нужен — клиент получит done с aborted: true
+      } else if (msg.type === 'room_stop') {
+        const chatId = Number(msg.chat_id);
+        if (Number.isSafeInteger(chatId) && chatId > 0 && canReadChatMessages(client.accountId, chatId)) {
+          stopRoomQueue(chatId);
+        }
       } else if (msg.type === 'ipc_result') {
         handleIpcResult(client, msg);
       } else if (msg.type === 'browser_download_requested') {

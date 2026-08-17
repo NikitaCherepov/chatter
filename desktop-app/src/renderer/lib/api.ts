@@ -828,7 +828,8 @@ export type RoomEvent =
   | { type: 'room_agent_error'; chat_id: number; agent_id: number; error: string }
   | { type: 'room_members_updated'; chat_id: number }
   | { type: 'room_message_deleted'; chat_id: number; message_id: number; initiator_user_id: number }
-  | { type: 'room_message_edited'; chat_id: number; message_id: number; initiator_user_id: number; content: string };
+  | { type: 'room_message_edited'; chat_id: number; message_id: number; initiator_user_id: number; content: string }
+  | { type: 'room_queue_done'; chat_id: number };
 
 type WsCallbacks = StreamCallbacks & {
   onConnect?: () => void;
@@ -1099,6 +1100,7 @@ export function initWebSocket(callbacks?: WsCallbacks) {
         case 'room_members_updated':
         case 'room_message_deleted':
         case 'room_message_edited':
+        case 'room_queue_done':
           wsCallbacks.onRoomEvent?.(msg);
           break;
         case 'chat_updated':
@@ -1297,6 +1299,17 @@ export function stopChatStream() {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (tokens?.access_token) headers['Authorization'] = `Bearer ${tokens.access_token}`;
   fetch(`${API_BASE}/api/v1/chat/stop`, { method: 'POST', headers }).catch(() => {});
+}
+
+/** Stop the currently running room response queue. */
+export function stopRoomStream(chatId: number) {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'room_stop', chat_id: chatId }));
+  }
+  const tokens = loadTokens();
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (tokens?.access_token) headers['Authorization'] = `Bearer ${tokens.access_token}`;
+  fetch(`${API_BASE}/api/v1/chats/${chatId}/room/stop`, { method: 'POST', headers }).catch(() => {});
 }
 
 // ── SSE fallback (kept for when WS is not connected) ──

@@ -6562,6 +6562,8 @@ export const sendMessageThroughAi = async (
     userOnly?: boolean;
     /** Notify a connected Desktop when an external client writes into this chat. */
     notifyDesktopChatUpdates?: boolean;
+    /** External signal (e.g. room queue stop) that aborts this generation. */
+    externalAbortSignal?: AbortSignal;
   }
 ): Promise<AiSendResult> => {
   const user = getUserById(userId);
@@ -6672,6 +6674,17 @@ export const sendMessageThroughAi = async (
   const abortController = new AbortController();
   if (!options?.isBackgroundTask) {
     activeGenerations.set(userId, abortController);
+  }
+
+  // Wire an external abort signal (e.g. a room queue being stopped) into this
+  // generation's own controller so all downstream checks abort together.
+  const externalAbortHandler = () => abortController.abort();
+  if (options?.externalAbortSignal) {
+    if (options.externalAbortSignal.aborted) {
+      abortController.abort();
+    } else {
+      options.externalAbortSignal.addEventListener('abort', externalAbortHandler, { once: true });
+    }
   }
 
   // ── Stream callbacks for real-time token streaming ──
@@ -8125,6 +8138,9 @@ iterations.push(currentIteration);
     }
     throw err;
   } finally {
+    if (options?.externalAbortSignal) {
+      options.externalAbortSignal.removeEventListener('abort', externalAbortHandler);
+    }
     if (activeGenerations.get(userId) === abortController) {
       activeGenerations.delete(userId);
     }

@@ -144,6 +144,17 @@ export const computeRoomResponseQueue = (
 export type RoomRunEmitter = (payload: Record<string, unknown>) => void;
 
 const roomRunChains = new Map<number, Promise<void>>();
+const roomAbortControllers = new Map<number, AbortController>();
+
+/** Abort the currently running room queue for a chat (if any). */
+export const stopRoomQueue = (chatId: number): boolean => {
+  const controller = roomAbortControllers.get(chatId);
+  if (controller && !controller.signal.aborted) {
+    controller.abort();
+    return true;
+  }
+  return false;
+};
 
 /** Sequentially run the given steps, serialized per chat. */
 const runStepsSerialized = async (
@@ -152,8 +163,12 @@ const runStepsSerialized = async (
   emit: RoomRunEmitter,
 ): Promise<void> => {
   const previous = roomRunChains.get(chatId) ?? Promise.resolve();
+  const roomController = new AbortController();
+  roomAbortControllers.set(chatId, roomController);
+
   const chained = previous.then(async () => {
     for (const { agent, reason } of steps) {
+      if (roomController.signal.aborted) break;
       emit({ type: 'room_agent_start', chat_id: chatId, agent_id: agent.id, agent_name: agent.name, owner_user_id: agent.owner_user_id, reason });
       try {
         const result: AiSendResult = await sendMessageThroughAi(agent.owner_user_id, ROOM_RUNNER_PROMPT, chatId, {
@@ -161,6 +176,7 @@ const runStepsSerialized = async (
           skipUserHistory: true,
           countAsUserMessage: false,
           isDesktop: true,
+          externalAbortSignal: roomController.signal,
           onStreamToken: async (text) => {
             emit({ type: 'room_agent_token', chat_id: chatId, agent_id: agent.id, text });
           },
@@ -181,6 +197,7 @@ const runStepsSerialized = async (
   try {
     await chained;
   } finally {
+    if (roomAbortControllers.get(chatId) === roomController) roomAbortControllers.delete(chatId);
     if (roomRunChains.get(chatId) === chained) roomRunChains.delete(chatId);
   }
 };
@@ -198,6 +215,7 @@ export const runRoomResponseQueue = async (
 ): Promise<void> => {
   const steps = computeRoomResponseQueue(senderId, chatId, userText);
   await runStepsSerialized(chatId, steps, emit);
+  emit({ type: 'room_queue_done', chat_id: chatId });
 };
 
 /**
@@ -221,4 +239,5 @@ export const runRoomAgents = async (
     if (agent) steps.push({ agent, reason: 'auto' });
   }
   await runStepsSerialized(chatId, steps, emit);
+  emit({ type: 'room_queue_done', chat_id: chatId });
 };
