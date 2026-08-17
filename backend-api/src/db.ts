@@ -381,6 +381,46 @@ if (!hasUserChatColumn('room_next_agent_id')) {
 if (!hasUserChatColumn('default_prompt_id')) {
   db.exec('ALTER TABLE user_chats ADD COLUMN default_prompt_id INTEGER');
 }
+
+// ── Multi-user rooms: per-member settings ────────────────────────────────
+// Room response settings (mode / auto_respond / selected agent) live on the
+// member row, not on user_chats. room_enabled on user_chats stays as the
+// "room exists" flag. Legacy room_* settings are migrated into the owner's
+// member row below (INSERT OR IGNORE keeps it idempotent).
+db.exec(`
+  CREATE TABLE IF NOT EXISTS chat_members (
+    chat_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    role TEXT NOT NULL DEFAULT 'member' CHECK(role IN ('admin', 'member')),
+    response_mode TEXT NOT NULL DEFAULT 'manual' CHECK(response_mode IN ('manual', 'round')),
+    auto_respond INTEGER NOT NULL DEFAULT 1 CHECK(auto_respond IN (0, 1)),
+    next_agent_id INTEGER,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    joined_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (chat_id, user_id)
+  )
+`);
+db.exec("CREATE INDEX IF NOT EXISTS idx_chat_members_user ON chat_members(user_id)");
+db.exec("CREATE INDEX IF NOT EXISTS idx_chat_members_order ON chat_members(chat_id, sort_order, user_id)");
+
+// Bot visibility to other members: 'private' = only the owner can trigger,
+// 'shared' = any room member can trigger (@mention / manual trigger).
+const hasChatAgentColumn = (columnName: string) => {
+  const columns = db.prepare('PRAGMA table_info(chat_agents)').all() as Array<{ name: string }>;
+  return columns.some(column => column.name === columnName);
+};
+if (!hasChatAgentColumn('access')) {
+  db.exec("ALTER TABLE chat_agents ADD COLUMN access TEXT NOT NULL DEFAULT 'private' CHECK(access IN ('private', 'shared'))");
+}
+
+// Migrate legacy room settings into the owner's member row (idempotent).
+db.exec(`
+  INSERT OR IGNORE INTO chat_members (chat_id, user_id, role, response_mode, auto_respond, next_agent_id, sort_order, joined_at)
+  SELECT id, user_id, 'admin', room_response_mode, room_auto_respond, room_next_agent_id, 0, CURRENT_TIMESTAMP
+  FROM user_chats
+  WHERE room_enabled = 1
+`);
+
 db.exec('CREATE INDEX IF NOT EXISTS idx_user_chats_user_folder ON user_chats(user_id, folder_id)');
 db.exec('CREATE INDEX IF NOT EXISTS idx_chat_messages_agent ON chat_messages(agent_id, id) WHERE agent_id IS NOT NULL');
 

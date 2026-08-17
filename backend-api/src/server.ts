@@ -1573,6 +1573,9 @@ const sendChatRoomError = (res: any, err: unknown) => {
   if (['room_not_created', 'room_has_agents'].includes(error)) {
     return res.status(409).json({ error });
   }
+  if (error === 'forbidden') {
+    return res.status(403).json({ error });
+  }
   console.error('[chat-room]', err);
   return res.status(500).json({ error: 'chat_room_failed' });
 };

@@ -2344,7 +2344,8 @@ function setupGithubDesktopUpdater() {
 }
 
 app.commandLine.appendSwitch('disable-blink-features', 'AutomationControlled');
-const hasSingleInstanceLock = app.requestSingleInstanceLock();
+// Single-instance lock only in production builds; dev mode allows multiple instances
+const hasSingleInstanceLock = !app.isPackaged || app.requestSingleInstanceLock();
 
 if (!hasSingleInstanceLock) {
   app.quit();

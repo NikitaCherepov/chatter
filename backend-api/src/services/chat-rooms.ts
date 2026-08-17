@@ -16,9 +16,20 @@ export type ChatAgentDto = {
   source_prompt_id: number | null;
   name: string;
   prompt_content: string;
+  access: 'private' | 'shared';
   sort_order: number;
   created_at: string;
   updated_at: string;
+};
+
+export type ChatMemberDto = {
+  user_id: number;
+  role: 'admin' | 'member';
+  response_mode: 'manual' | 'round';
+  auto_respond: boolean;
+  next_agent_id: number | null;
+  sort_order: number;
+  joined_at: string;
 };
 
 export type ChatRoomDto = {
@@ -27,6 +38,7 @@ export type ChatRoomDto = {
   auto_respond: boolean;
   next_agent_id: number | null;
   agents: ChatAgentDto[];
+  members: ChatMemberDto[];
 };
 
 export const getChatAgentForResponse = (
@@ -34,10 +46,10 @@ export const getChatAgentForResponse = (
   chatId: number,
   agentId: number,
 ): ChatAgentDto => {
-  const chat = requireRoom(userId, chatId);
+  const { chat } = requireRoom(userId, chatId);
   const agent = db.prepare(`
     SELECT id, chat_id, owner_user_id, source_prompt_id, name, prompt_content,
-           sort_order, created_at, updated_at
+           access, sort_order, created_at, updated_at
     FROM chat_agents
     WHERE id = ? AND chat_id = ? AND is_active = 1
   `).get(agentId, chat.id) as ChatAgentDto | undefined;
@@ -46,7 +58,7 @@ export const getChatAgentForResponse = (
 };
 
 export const hasMultipleActiveChatAgents = (userId: number, chatId: number): boolean => {
-  const chat = requireRoom(userId, chatId);
+  const { chat } = requireRoom(userId, chatId);
   const row = db.prepare(`
     SELECT COUNT(*) AS count
     FROM chat_agents
@@ -59,38 +71,107 @@ type ChatRoomRow = {
   id: number;
   user_id: number;
   room_enabled: number;
-  room_response_mode: string;
-  room_auto_respond: number;
-  room_next_agent_id: number | null;
+};
+
+type ChatMemberRow = {
+  chat_id: number;
+  user_id: number;
+  role: string;
+  response_mode: string;
+  auto_respond: number;
+  next_agent_id: number | null;
+  sort_order: number;
+  joined_at: string;
 };
 
 const getOwnedChat = (userId: number, chatId: number) => db.prepare(`
-  SELECT id, user_id, room_enabled, room_response_mode, room_auto_respond, room_next_agent_id
+  SELECT id, user_id, room_enabled
   FROM user_chats
   WHERE id = ? AND user_id = ?
 `).get(chatId, userId) as ChatRoomRow | undefined;
 
+/** Chat the user can see: either owned or a member of. */
+export const getAccessibleChat = (userId: number, chatId: number): ChatRoomRow | undefined => {
+  const owned = getOwnedChat(userId, chatId);
+  if (owned) return owned;
+  const membership = db.prepare('SELECT chat_id FROM chat_members WHERE chat_id = ? AND user_id = ?')
+    .get(chatId, userId) as { chat_id: number } | undefined;
+  if (!membership) return undefined;
+  return db.prepare('SELECT id, user_id, room_enabled FROM user_chats WHERE id = ?')
+    .get(chatId) as ChatRoomRow | undefined;
+};
+
+const getMember = (chatId: number, userId: number) => db.prepare(`
+  SELECT chat_id, user_id, role, response_mode, auto_respond, next_agent_id, sort_order, joined_at
+  FROM chat_members
+  WHERE chat_id = ? AND user_id = ?
+`).get(chatId, userId) as ChatMemberRow | undefined;
+
+const listMembers = (chatId: number) => db.prepare(`
+  SELECT chat_id, user_id, role, response_mode, auto_respond, next_agent_id, sort_order, joined_at
+  FROM chat_members
+  WHERE chat_id = ?
+  ORDER BY sort_order ASC, user_id ASC
+`).all(chatId) as ChatMemberRow[];
+
 const listActiveAgents = (chatId: number) => db.prepare(`
   SELECT id, chat_id, owner_user_id, source_prompt_id, name, prompt_content,
-         sort_order, created_at, updated_at
+         access, sort_order, created_at, updated_at
   FROM chat_agents
   WHERE chat_id = ? AND is_active = 1
   ORDER BY sort_order ASC, id ASC
 `).all(chatId) as ChatAgentDto[];
 
-const toRoomDto = (chat: ChatRoomRow): ChatRoomDto => ({
-  enabled: chat.room_enabled === 1,
-  response_mode: chat.room_response_mode === 'round' ? 'round' : 'manual',
-  auto_respond: chat.room_auto_respond === 1,
-  next_agent_id: chat.room_next_agent_id,
-  agents: listActiveAgents(chat.id),
+const toMemberDto = (member: ChatMemberRow): ChatMemberDto => ({
+  user_id: member.user_id,
+  role: member.role === 'admin' ? 'admin' : 'member',
+  response_mode: member.response_mode === 'round' ? 'round' : 'manual',
+  auto_respond: member.auto_respond === 1,
+  next_agent_id: member.next_agent_id,
+  sort_order: member.sort_order,
+  joined_at: member.joined_at,
 });
 
-const requireRoom = (userId: number, chatId: number) => {
-  const chat = getOwnedChat(userId, chatId);
+const toRoomDto = (chat: ChatRoomRow, viewerMember: ChatMemberRow | null): ChatRoomDto => ({
+  enabled: chat.room_enabled === 1,
+  response_mode: viewerMember?.response_mode === 'round' ? 'round' : 'manual',
+  auto_respond: viewerMember ? viewerMember.auto_respond === 1 : true,
+  next_agent_id: viewerMember?.next_agent_id ?? null,
+  agents: listActiveAgents(chat.id),
+  members: listMembers(chat.id).map(toMemberDto),
+});
+
+/** Resolve chat + caller's membership. Owner fallback keeps legacy single-user behavior. */
+const resolveRoomAccess = (userId: number, chatId: number): { chat: ChatRoomRow; member: ChatMemberRow } => {
+  const chat = getAccessibleChat(userId, chatId);
   if (!chat) throw new Error('chat_not_found');
-  if (chat.room_enabled !== 1) throw new Error('room_not_created');
-  return chat;
+  let member = getMember(chat.id, userId);
+  if (!member) {
+    if (chat.user_id !== userId) throw new Error('chat_not_found');
+    // Legacy fallback: room predates chat_members — materialize the owner's row.
+    member = db.prepare(`
+      INSERT INTO chat_members (chat_id, user_id, role, response_mode, auto_respond, next_agent_id, sort_order)
+      VALUES (?, ?, 'admin',
+              COALESCE((SELECT room_response_mode FROM user_chats WHERE id = ?), 'manual'),
+              COALESCE((SELECT room_auto_respond FROM user_chats WHERE id = ?), 1),
+              (SELECT room_next_agent_id FROM user_chats WHERE id = ?),
+              0)
+      RETURNING chat_id, user_id, role, response_mode, auto_respond, next_agent_id, sort_order, joined_at
+    `).get(chat.id, userId, chat.id, chat.id, chat.id) as ChatMemberRow;
+  }
+  return { chat, member };
+};
+
+const requireRoom = (userId: number, chatId: number) => {
+  const access = resolveRoomAccess(userId, chatId);
+  if (access.chat.room_enabled !== 1) throw new Error('room_not_created');
+  return access;
+};
+
+const requireRoomAdmin = (userId: number, chatId: number) => {
+  const access = requireRoom(userId, chatId);
+  if (access.member.role !== 'admin') throw new Error('forbidden');
+  return access;
 };
 
 const getUserPromptSelection = (userId: number) => db.prepare(`
@@ -168,14 +249,15 @@ const compactAgentOrder = (chatId: number) => {
 };
 
 export const getChatRoom = (userId: number, chatId: number): ChatRoomDto | null => {
-  const chat = getOwnedChat(userId, chatId);
-  return chat ? toRoomDto(chat) : null;
+  const chat = getAccessibleChat(userId, chatId);
+  if (!chat) return null;
+  return toRoomDto(chat, getMember(chat.id, userId));
 };
 
 export const createChatRoom = (userId: number, chatId: number): ChatRoomDto => db.transaction(() => {
   const chat = getOwnedChat(userId, chatId);
   if (!chat) throw new Error('chat_not_found');
-  if (chat.room_enabled === 1) return toRoomDto(chat);
+  if (chat.room_enabled === 1) return toRoomDto(chat, getMember(chatId, userId));
 
   const prompt = resolvePromptSnapshot(userId);
   const name = makeUniqueAgentName(chatId, normalizeAgentName(prompt.name, 'Chatter'));
@@ -192,18 +274,26 @@ export const createChatRoom = (userId: number, chatId: number): ChatRoomDto => d
   db.prepare(`
     UPDATE user_chats
     SET room_enabled = 1,
-        room_response_mode = 'manual',
-        room_auto_respond = 1,
-        room_next_agent_id = ?,
         default_prompt_id = COALESCE(default_prompt_id, ?),
         updated_at = CURRENT_TIMESTAMP
     WHERE id = ? AND user_id = ?
-  `).run(agentId, prompt.id, chatId, userId);
-  return toRoomDto(getOwnedChat(userId, chatId)!);
+  `).run(prompt.id, chatId, userId);
+  // Owner becomes room admin. Legacy room_* columns (if any) seed the member row.
+  db.prepare(`
+    INSERT INTO chat_members (chat_id, user_id, role, response_mode, auto_respond, next_agent_id, sort_order)
+    VALUES (?, ?, 'admin',
+            COALESCE((SELECT room_response_mode FROM user_chats WHERE id = ?), 'manual'),
+            COALESCE((SELECT room_auto_respond FROM user_chats WHERE id = ?), 1),
+            ?,
+            0)
+    ON CONFLICT(chat_id, user_id) DO UPDATE SET
+      next_agent_id = COALESCE(chat_members.next_agent_id, excluded.next_agent_id)
+  `).run(chatId, userId, chatId, chatId, agentId);
+  return toRoomDto(getOwnedChat(userId, chatId)!, getMember(chatId, userId));
 })();
 
 export const deleteChatRoom = (userId: number, chatId: number): ChatRoomDto => db.transaction(() => {
-  const chat = requireRoom(userId, chatId);
+  const { chat } = requireRoomAdmin(userId, chatId);
   const activeCount = Number((db.prepare(`
     SELECT COUNT(*) AS count FROM chat_agents WHERE chat_id = ? AND is_active = 1
   `).get(chatId) as { count: number }).count);
@@ -211,9 +301,10 @@ export const deleteChatRoom = (userId: number, chatId: number): ChatRoomDto => d
   db.prepare(`
     UPDATE user_chats
     SET room_enabled = 0, room_next_agent_id = NULL, updated_at = CURRENT_TIMESTAMP
-    WHERE id = ? AND user_id = ?
-  `).run(chatId, userId);
-  return toRoomDto({ ...chat, room_enabled: 0, room_next_agent_id: null });
+    WHERE id = ?
+  `).run(chatId);
+  db.prepare('DELETE FROM chat_members WHERE chat_id = ?').run(chatId);
+  return toRoomDto({ ...chat, room_enabled: 0 }, null);
 })();
 
 export const addChatAgent = (
@@ -234,12 +325,13 @@ export const addChatAgent = (
       chat_id, owner_user_id, source_prompt_id, name, prompt_content, sort_order
     ) VALUES (?, ?, ?, ?, ?, ?)
   `).run(chatId, userId, prompt.id, name, prompt.content, order);
+  const agentId = Number(inserted.lastInsertRowid);
   db.prepare(`
-    UPDATE user_chats
-    SET room_next_agent_id = COALESCE(room_next_agent_id, ?), updated_at = CURRENT_TIMESTAMP
-    WHERE id = ? AND user_id = ?
-  `).run(Number(inserted.lastInsertRowid), chatId, userId);
-  return toRoomDto(getOwnedChat(userId, chatId)!);
+    UPDATE chat_members
+    SET next_agent_id = COALESCE(next_agent_id, ?)
+    WHERE chat_id = ? AND user_id = ?
+  `).run(agentId, chatId, userId);
+  return toRoomDto(requireRoom(userId, chatId).chat, getMember(chatId, userId));
 })();
 
 export const updateChatAgent = (
@@ -248,11 +340,13 @@ export const updateChatAgent = (
   agentId: number,
   fields: { name?: string; promptContent?: string; sourcePromptId?: number },
 ): ChatRoomDto => db.transaction(() => {
-  requireRoom(userId, chatId);
+  const { chat, member } = requireRoom(userId, chatId);
   const agent = db.prepare(`
-    SELECT id, name FROM chat_agents WHERE id = ? AND chat_id = ? AND is_active = 1
-  `).get(agentId, chatId) as { id: number; name: string } | undefined;
+    SELECT id, name, owner_user_id FROM chat_agents WHERE id = ? AND chat_id = ? AND is_active = 1
+  `).get(agentId, chatId) as { id: number; name: string; owner_user_id: number } | undefined;
   if (!agent) throw new Error('agent_not_found');
+  // Only the room admin or the agent's owner may edit the agent.
+  if (member.role !== 'admin' && agent.owner_user_id !== userId) throw new Error('forbidden');
 
   const updates: string[] = [];
   const params: Array<string | number | null> = [];
@@ -270,21 +364,26 @@ export const updateChatAgent = (
     updates.push('prompt_content = ?');
     params.push(content);
   }
-  if (updates.length === 0) return toRoomDto(getOwnedChat(userId, chatId)!);
+  if (updates.length === 0) return toRoomDto(chat, getMember(chatId, userId));
   updates.push('updated_at = CURRENT_TIMESTAMP');
   params.push(agentId, chatId);
   db.prepare(`UPDATE chat_agents SET ${updates.join(', ')} WHERE id = ? AND chat_id = ?`).run(...params);
-  return toRoomDto(getOwnedChat(userId, chatId)!);
+  return toRoomDto(chat, getMember(chatId, userId));
 })();
 
 export const removeChatAgent = (userId: number, chatId: number, agentId: number): ChatRoomDto => db.transaction(() => {
-  requireRoom(userId, chatId);
-  const removed = db.prepare(`
+  const { chat, member } = requireRoom(userId, chatId);
+  const agent = db.prepare(`
+    SELECT id, owner_user_id FROM chat_agents WHERE id = ? AND chat_id = ? AND is_active = 1
+  `).get(agentId, chatId) as { id: number; owner_user_id: number } | undefined;
+  if (!agent) throw new Error('agent_not_found');
+  if (member.role !== 'admin' && agent.owner_user_id !== userId) throw new Error('forbidden');
+
+  db.prepare(`
     UPDATE chat_agents
     SET is_active = 0, deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
-    WHERE id = ? AND chat_id = ? AND is_active = 1
+    WHERE id = ? AND chat_id = ?
   `).run(agentId, chatId);
-  if (removed.changes === 0) throw new Error('agent_not_found');
   compactAgentOrder(chatId);
   const firstAgent = db.prepare(`
     SELECT id FROM chat_agents
@@ -292,16 +391,16 @@ export const removeChatAgent = (userId: number, chatId: number, agentId: number)
     ORDER BY sort_order ASC, id ASC LIMIT 1
   `).get(chatId) as { id: number } | undefined;
   db.prepare(`
-    UPDATE user_chats
-    SET room_next_agent_id = CASE WHEN room_next_agent_id = ? THEN ? ELSE room_next_agent_id END,
-        updated_at = CURRENT_TIMESTAMP
-    WHERE id = ? AND user_id = ?
-  `).run(agentId, firstAgent?.id ?? null, chatId, userId);
-  return toRoomDto(getOwnedChat(userId, chatId)!);
+    UPDATE chat_members
+    SET next_agent_id = CASE WHEN next_agent_id = ? THEN ? ELSE next_agent_id END
+    WHERE chat_id = ?
+  `).run(agentId, firstAgent?.id ?? null, chatId);
+  db.prepare('UPDATE user_chats SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(chatId);
+  return toRoomDto(chat, getMember(chatId, userId));
 })();
 
 export const reorderChatAgents = (userId: number, chatId: number, agentIds: number[]): ChatRoomDto => db.transaction(() => {
-  requireRoom(userId, chatId);
+  const { chat } = requireRoomAdmin(userId, chatId);
   const activeIds = listActiveAgents(chatId).map(agent => agent.id);
   if (agentIds.length !== activeIds.length || new Set(agentIds).size !== agentIds.length) {
     throw new Error('bad_agent_order');
@@ -310,7 +409,7 @@ export const reorderChatAgents = (userId: number, chatId: number, agentIds: numb
   if (agentIds.some(id => !expected.has(id))) throw new Error('bad_agent_order');
   const update = db.prepare('UPDATE chat_agents SET sort_order = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND chat_id = ?');
   agentIds.forEach((agentId, index) => update.run(index, agentId, chatId));
-  return toRoomDto(getOwnedChat(userId, chatId)!);
+  return toRoomDto(chat, getMember(chatId, userId));
 })();
 
 export const updateChatRoomSettings = (
@@ -318,15 +417,15 @@ export const updateChatRoomSettings = (
   chatId: number,
   fields: { responseMode?: 'manual' | 'round'; autoRespond?: boolean; nextAgentId?: number | null },
 ): ChatRoomDto => db.transaction(() => {
-  requireRoom(userId, chatId);
+  const { chat } = requireRoom(userId, chatId);
   const updates: string[] = [];
   const params: Array<string | number | null> = [];
   if (fields.responseMode !== undefined) {
-    updates.push('room_response_mode = ?');
+    updates.push('response_mode = ?');
     params.push(fields.responseMode);
   }
   if (fields.autoRespond !== undefined) {
-    updates.push('room_auto_respond = ?');
+    updates.push('auto_respond = ?');
     params.push(fields.autoRespond ? 1 : 0);
   }
   if (fields.nextAgentId !== undefined) {
@@ -336,13 +435,13 @@ export const updateChatRoomSettings = (
       `).get(fields.nextAgentId, chatId);
       if (!exists) throw new Error('agent_not_found');
     }
-    updates.push('room_next_agent_id = ?');
+    updates.push('next_agent_id = ?');
     params.push(fields.nextAgentId);
   }
   if (updates.length > 0) {
-    updates.push('updated_at = CURRENT_TIMESTAMP');
     params.push(chatId, userId);
-    db.prepare(`UPDATE user_chats SET ${updates.join(', ')} WHERE id = ? AND user_id = ?`).run(...params);
+    db.prepare(`UPDATE chat_members SET ${updates.join(', ')} WHERE chat_id = ? AND user_id = ?`).run(...params);
+    db.prepare('UPDATE user_chats SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(chatId);
   }
-  return toRoomDto(getOwnedChat(userId, chatId)!);
+  return toRoomDto(chat, getMember(chatId, userId));
 })();

@@ -881,6 +881,7 @@ export function ChatPage() {
   const [renamingRoomParticipantId, setRenamingRoomParticipantId] = useState<number | null>(null);
   const [renamingRoomParticipantName, setRenamingRoomParticipantName] = useState('');
   const [roomCharacters, setRoomCharacters] = useState<api.ChatAgent[]>([]);
+  const [roomMembers, setRoomMembers] = useState<api.ChatMember[]>([]);
   const [roomPrompts, setRoomPrompts] = useState<PromptOption[]>([]);
   const [chatFilterOptions, setChatFilterOptions] = useState<{ prompts: Array<{ id: number; name: string }>; models: string[] }>({ prompts: [], models: [] });
   const [msgMenuId, setMsgMenuId] = useState<number | null>(null);
@@ -919,6 +920,7 @@ export function ChatPage() {
     setRoomMode(room.response_mode);
     setRoomAutoRespond(room.auto_respond);
     setRoomCharacters(room.agents);
+    setRoomMembers(room.members ?? []);
     setNextRoomParticipant(room.next_agent_id ?? room.agents[0]?.id ?? null);
   }, []);
   useEffect(() => {
@@ -930,10 +932,10 @@ export function ChatPage() {
     setRenamingRoomParticipantName('');
     setRoomSaving(false);
     if (!activeChatId) {
-      applyRoom({ enabled: false, response_mode: 'manual', auto_respond: true, next_agent_id: null, agents: [] });
+      applyRoom({ enabled: false, response_mode: 'manual', auto_respond: true, next_agent_id: null, agents: [], members: [] });
       return () => { cancelled = true; };
     }
-    applyRoom({ enabled: false, response_mode: 'manual', auto_respond: true, next_agent_id: null, agents: [] });
+    applyRoom({ enabled: false, response_mode: 'manual', auto_respond: true, next_agent_id: null, agents: [], members: [] });
     setRoomLoading(true);
     void api.getChatRoom(activeChatId)
       .then(({ room }) => {
@@ -941,7 +943,7 @@ export function ChatPage() {
       })
       .catch((error) => {
         console.error('Failed to load chat room:', error);
-        if (!cancelled) applyRoom({ enabled: false, response_mode: 'manual', auto_respond: true, next_agent_id: null, agents: [] });
+        if (!cancelled) applyRoom({ enabled: false, response_mode: 'manual', auto_respond: true, next_agent_id: null, agents: [], members: [] });
       })
       .finally(() => {
         if (!cancelled) setRoomLoading(false);

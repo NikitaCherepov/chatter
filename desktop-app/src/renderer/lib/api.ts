@@ -399,9 +399,20 @@ export type ChatAgent = {
   source_prompt_id: number | null;
   name: string;
   prompt_content: string;
+  access: 'private' | 'shared';
   sort_order: number;
   created_at: string;
   updated_at: string;
+};
+
+export type ChatMember = {
+  user_id: number;
+  role: 'admin' | 'member';
+  response_mode: 'manual' | 'round';
+  auto_respond: boolean;
+  next_agent_id: number | null;
+  sort_order: number;
+  joined_at: string;
 };
 
 export type ChatRoom = {
@@ -410,6 +421,7 @@ export type ChatRoom = {
   auto_respond: boolean;
   next_agent_id: number | null;
   agents: ChatAgent[];
+  members: ChatMember[];
 };
 
 export async function getChatRoom(chatId: number): Promise<{ room: ChatRoom }> {
