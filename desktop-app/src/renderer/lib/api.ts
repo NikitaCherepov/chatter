@@ -827,7 +827,8 @@ export type RoomEvent =
   | { type: 'room_agent_done'; chat_id: number; agent_id: number; owner_user_id: number; result: any }
   | { type: 'room_agent_error'; chat_id: number; agent_id: number; error: string }
   | { type: 'room_members_updated'; chat_id: number }
-  | { type: 'room_message_deleted'; chat_id: number; message_id: number; initiator_user_id: number };
+  | { type: 'room_message_deleted'; chat_id: number; message_id: number; initiator_user_id: number }
+  | { type: 'room_message_edited'; chat_id: number; message_id: number; initiator_user_id: number; content: string };
 
 type WsCallbacks = StreamCallbacks & {
   onConnect?: () => void;
@@ -1097,6 +1098,7 @@ export function initWebSocket(callbacks?: WsCallbacks) {
         case 'room_agent_error':
         case 'room_members_updated':
         case 'room_message_deleted':
+        case 'room_message_edited':
           wsCallbacks.onRoomEvent?.(msg);
           break;
         case 'chat_updated':

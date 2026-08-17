@@ -2078,6 +2078,13 @@ export function ChatPage() {
           setMessages((prev) => prev.filter((message) => message.id !== event.message_id));
           break;
         }
+        case 'room_message_edited': {
+          if (event.initiator_user_id === user?.id) return;
+          setMessages((prev) => prev.map((message) => message.id === event.message_id
+            ? { ...message, content: event.content }
+            : message));
+          break;
+        }
         case 'room_agent_start': {
           const tempId = -(Date.now() + 1);
           roomEventAgentMsgIds.current.set(event.agent_id, tempId);

@@ -1928,6 +1928,10 @@ app.put('/api/v1/chats/:chatId/messages/:messageId', (req: AuthedRequest, res) =
   if (!newContent) return res.status(400).json({ error: 'bad_content' });
   const result = editUserMessage(userId, chatId, messageId, newContent);
   if (!result.ok) return res.status(404).json({ error: 'message_not_found' });
+  // Push the edit to other room members (the editor already updated locally).
+  if (isRoomChat(chatId)) {
+    broadcastToRoom(chatId, { type: 'room_message_edited', chat_id: chatId, message_id: messageId, initiator_user_id: userId, content: newContent });
+  }
   return res.json({ ok: true, token_count: result.token_count });
 });
 
