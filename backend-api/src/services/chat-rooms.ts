@@ -426,6 +426,20 @@ export const reorderChatAgents = (userId: number, chatId: number, agentIds: numb
   return toRoomDto(chat, getMember(chatId, userId));
 })();
 
+// Admin reorders MEMBERS (people) — this is the primary room queue order.
+export const reorderChatMembers = (userId: number, chatId: number, memberUserIds: number[]): ChatRoomDto => db.transaction(() => {
+  const { chat } = requireRoomAdmin(userId, chatId);
+  const currentIds = listMembers(chatId).map(member => member.user_id);
+  if (memberUserIds.length !== currentIds.length || new Set(memberUserIds).size !== memberUserIds.length) {
+    throw new Error('bad_member_order');
+  }
+  const expected = new Set(currentIds);
+  if (memberUserIds.some(id => !expected.has(id))) throw new Error('bad_member_order');
+  const update = db.prepare('UPDATE chat_members SET sort_order = ? WHERE chat_id = ? AND user_id = ?');
+  memberUserIds.forEach((memberId, index) => update.run(index, chatId, memberId));
+  return toRoomDto(chat, getMember(chatId, userId));
+})();
+
 export const updateChatRoomSettings = (
   userId: number,
   chatId: number,

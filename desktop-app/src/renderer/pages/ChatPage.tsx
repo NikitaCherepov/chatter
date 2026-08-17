@@ -104,14 +104,51 @@ function DemoDraggableRoomParticipant({
     isDragging,
   } = useDraggable({
     id: `room-participant-drag-${participantId}`,
-    data: { participantId },
+    data: { kind: 'agent', participantId },
   });
   const {
     setNodeRef: setDroppableNodeRef,
     isOver,
   } = useDroppable({
     id: `room-participant-drop-${participantId}`,
-    data: { participantId },
+    data: { kind: 'agent', participantId },
+  });
+
+  return (
+    <div
+      ref={(node) => {
+        setDraggableNodeRef(node);
+        setDroppableNodeRef(node);
+      }}
+      className={`${s.roomParticipantCard} ${isDragging ? s.roomParticipantCardDragging : ''} ${isOver && !isDragging ? s.roomParticipantCardDropTarget : ''}`}
+    >
+      {children({ ...attributes, ...listeners })}
+    </div>
+  );
+}
+
+function DemoDraggableRoomMember({
+  memberId,
+  children,
+}: {
+  memberId: number;
+  children: (dragHandleProps: any) => React.ReactNode;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef: setDraggableNodeRef,
+    isDragging,
+  } = useDraggable({
+    id: `room-member-drag-${memberId}`,
+    data: { kind: 'member', memberId },
+  });
+  const {
+    setNodeRef: setDroppableNodeRef,
+    isOver,
+  } = useDroppable({
+    id: `room-member-drop-${memberId}`,
+    data: { kind: 'member', memberId },
   });
 
   return (
@@ -878,6 +915,7 @@ export function ChatPage() {
   const [nextRoomParticipant, setNextRoomParticipant] = useState<number | null>(null);
   const [roomAutoRespond, setRoomAutoRespond] = useState(true);
   const [draggingRoomParticipantId, setDraggingRoomParticipantId] = useState<number | null>(null);
+  const [draggingRoomMemberId, setDraggingRoomMemberId] = useState<number | null>(null);
   const [draggingRoomParticipantSize, setDraggingRoomParticipantSize] = useState<{ width: number; height: number } | null>(null);
   const [roomParticipantMenuId, setRoomParticipantMenuId] = useState<number | null>(null);
   const [changingRoomParticipantPromptId, setChangingRoomParticipantPromptId] = useState<number | null>(null);
@@ -3971,11 +4009,42 @@ export function ChatPage() {
 
   const handleRoomParticipantDragEnd = ({ active, over }: DragEndEvent) => {
     setDraggingRoomParticipantId(null);
+    setDraggingRoomMemberId(null);
     setDraggingRoomParticipantSize(null);
+    if (!activeChatId) return;
+    const chatId = activeChatId;
+
+    // Dragging a MEMBER (person) — primary queue order.
+    if (active.data.current?.kind === 'member') {
+      const activeId = Number(active.data.current?.memberId);
+      const overId = Number(over?.data.current?.memberId);
+      if (!Number.isSafeInteger(activeId) || !Number.isSafeInteger(overId) || activeId === overId) return;
+      const previousMembers = roomMembers;
+      const fromIndex = previousMembers.findIndex((member) => member.user_id === activeId);
+      const toIndex = previousMembers.findIndex((member) => member.user_id === overId);
+      if (fromIndex < 0 || toIndex < 0) return;
+      const next = [...previousMembers];
+      const [moved] = next.splice(fromIndex, 1);
+      next.splice(toIndex, 0, moved);
+      setRoomMembers(next);
+      void api.reorderChatMembers(chatId, next.map((member) => member.user_id))
+        .then(({ room }) => {
+          if (activeChatIdRef.current === chatId) applyRoom(room);
+        })
+        .catch((error) => {
+          console.error('Failed to reorder chat members:', error);
+          if (activeChatIdRef.current === chatId) {
+            setRoomMembers(previousMembers);
+            toast.error(t('auth.error.generic'));
+          }
+        });
+      return;
+    }
+
+    // Dragging an AGENT (bot).
     const activeId = Number(active.data.current?.participantId);
     const overId = Number(over?.data.current?.participantId);
-    if (!Number.isSafeInteger(activeId) || !Number.isSafeInteger(overId) || activeId === overId || !activeChatId) return;
-    const chatId = activeChatId;
+    if (!Number.isSafeInteger(activeId) || !Number.isSafeInteger(overId) || activeId === overId) return;
     const previousCharacters = roomCharacters;
     const fromIndex = previousCharacters.findIndex((participant) => participant.id === activeId);
     const toIndex = previousCharacters.findIndex((participant) => participant.id === overId);
@@ -4150,6 +4219,7 @@ export function ChatPage() {
   };
 
   const otherRoomHumans = roomMembers.filter((member) => member.user_id !== user?.id);
+  const isRoomAdmin = roomMembers.some((member) => member.user_id === user?.id && member.role === 'admin');
   // Bots this user may trigger: their own + shared ones (others' private bots
   // are hidden from manual controls — the server rejects them anyway).
   const controllableRoomAgents = roomCharacters.filter((participant) => participant.owner_user_id === user?.id || participant.access === 'shared');
@@ -6705,121 +6775,162 @@ export function ChatPage() {
               <div className={s.roomSection}>
                 <div className={s.roomParticipantsHeader}>
                   <span className={s.roomSectionLabel}>{t('chat.room.participants')}</span>
-                  <span className={s.roomParticipantTotal}>{otherRoomHumans.length + roomCharacters.length + 1}</span>
+                  <span className={s.roomParticipantTotal}>{roomMembers.length + roomCharacters.length}</span>
                 </div>
                 <DndContext
                   collisionDetection={closestCenter}
                   onDragStart={({ active }) => {
-                    const participantId = Number(active.data.current?.participantId);
-                    setDraggingRoomParticipantId(Number.isSafeInteger(participantId) ? participantId : null);
+                    const kind = active.data.current?.kind;
                     const initialRect = active.rect.current.initial;
                     setDraggingRoomParticipantSize(initialRect ? { width: initialRect.width, height: initialRect.height } : null);
                     setRoomParticipantMenuId(null);
+                    if (kind === 'member') {
+                      const memberId = Number(active.data.current?.memberId);
+                      setDraggingRoomMemberId(Number.isSafeInteger(memberId) ? memberId : null);
+                      setDraggingRoomParticipantId(null);
+                    } else {
+                      const participantId = Number(active.data.current?.participantId);
+                      setDraggingRoomParticipantId(Number.isSafeInteger(participantId) ? participantId : null);
+                      setDraggingRoomMemberId(null);
+                    }
                   }}
                   onDragCancel={() => {
                     setDraggingRoomParticipantId(null);
+                    setDraggingRoomMemberId(null);
                     setDraggingRoomParticipantSize(null);
                   }}
                   onDragEnd={handleRoomParticipantDragEnd}
                 >
                   <div className={s.roomParticipantList}>
-                    <div className={s.roomParticipantCard}>
-                      <span className={`${s.roomParticipantAvatar} ${s.roomAvatarHuman}`}>{(user?.name || user?.username || 'Y').trim().charAt(0).toUpperCase()}</span>
-                      <div className={s.roomParticipantInfo}>
-                        <strong>{user?.name || user?.username || t('chat.room.you')}</strong>
-                        <span>{t('chat.room.human')}</span>
-                      </div>
-                      <span className={s.roomParticipantYou}>{t('chat.room.you')}</span>
-                    </div>
-                    {otherRoomHumans.map((member) => (
-                      <div className={s.roomParticipantCard} key={`member-${member.user_id}`}>
-                        <span className={`${s.roomParticipantAvatar} ${s.roomAvatarHuman}`}>{(member.name || 'U').trim().charAt(0).toUpperCase()}</span>
-                        <div className={s.roomParticipantInfo}>
-                          <strong>{member.name || `#${member.user_id}`}</strong>
-                          <span>{t('chat.room.human')}</span>
-                        </div>
-                      </div>
-                    ))}
-                    {roomCharacters.map((participant, index) => (
-                      <DemoDraggableRoomParticipant participantId={participant.id} key={participant.id}>
-                        {(dragHandleProps) => (
-                          <>
-                            {roomCharacters.length > 1 && (
-                              <button type="button" className={s.roomParticipantDrag} aria-label={t('chat.room.reorder')} {...dragHandleProps}>
-                                <svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor"><circle cx="3" cy="3" r="1"/><circle cx="9" cy="3" r="1"/><circle cx="3" cy="8" r="1"/><circle cx="9" cy="8" r="1"/><circle cx="3" cy="13" r="1"/><circle cx="9" cy="13" r="1"/></svg>
-                              </button>
-                            )}
-                            <span className={s.roomParticipantIndex}>{index + 1}</span>
-                            <span className={`${s.roomParticipantAvatar} ${getRoomAvatarClass(participant.id)}`}>{getRoomInitial(participant.name)}</span>
-                            <div className={s.roomParticipantInfo}>
-                              {renamingRoomParticipantId === participant.id ? (
-                                <input
-                                  className={s.roomParticipantRenameInput}
-                                  value={renamingRoomParticipantName}
-                                  maxLength={80}
-                                  onChange={(event) => setRenamingRoomParticipantName(event.target.value)}
-                                  onClick={(event) => event.stopPropagation()}
-                                  onBlur={() => void finishRoomCharacterRename()}
-                                  onKeyDown={(event) => {
-                                    if (event.key === 'Enter') void finishRoomCharacterRename();
-                                    if (event.key === 'Escape') {
-                                      setRenamingRoomParticipantId(null);
-                                      setRenamingRoomParticipantName('');
-                                    }
-                                  }}
-                                  autoFocus
-                                />
-                              ) : (
-                                <strong>
-                                  {participant.name}
-                                  {participant.access === 'shared' && participant.owner_user_id !== user?.id && (
-                                    <span className={s.roomSharedBadge} title={t('chat.room.sharedBadge')}>{t('chat.room.sharedBadge')}</span>
-                                  )}
-                                </strong>
-                              )}
-                              <span>{index === 0 ? t('chat.room.mainAssistant') : t('chat.room.character')}</span>
-                            </div>
-                            {roomCharacters.length > 0 && (
-                              <button
-                                type="button"
-                                className={s.roomParticipantMenu}
-                                aria-label={t('common.actions')}
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  setRoomParticipantMenuId((current) => current === participant.id ? null : participant.id);
-                                }}
-                              >
-                                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><circle cx="8" cy="3" r="1.4"/><circle cx="8" cy="8" r="1.4"/><circle cx="8" cy="13" r="1.4"/></svg>
-                              </button>
-                            )}
-                            {roomParticipantMenuId === participant.id && (
-                              <div className={s.roomParticipantContextMenu} onClick={(event) => event.stopPropagation()}>
-                                <button type="button" onClick={() => startRoomCharacterRename(participant)}>
-                                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
-                                  {t('chat.sidebar.rename')}
-                                </button>
-                                <button type="button" onClick={() => startRoomCharacterPromptChange(participant.id)}>
-                                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 21v-7"/><path d="M4 10V3"/><path d="M12 21v-9"/><path d="M12 8V3"/><path d="M20 21v-5"/><path d="M20 12V3"/><path d="M1 14h6"/><path d="M9 8h6"/><path d="M17 16h6"/></svg>
-                                  {t('chat.room.changePrompt')}
-                                </button>
-                                {participant.owner_user_id === user?.id && (
-                                  <button type="button" onClick={() => void toggleRoomCharacterAccess(participant)}>
-                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>
-                                    {participant.access === 'shared' ? t('chat.room.makePrivate') : t('chat.room.makeShared')}
+                    {roomMembers.map((member) => {
+                      const isSelf = member.user_id === user?.id;
+                      const memberAgents = roomCharacters.filter((participant) => participant.owner_user_id === member.user_id);
+                      const displayName = isSelf
+                        ? (user?.name || user?.username || t('chat.room.you'))
+                        : (member.name || `#${member.user_id}`);
+                      return (
+                        <React.Fragment key={`member-${member.user_id}`}>
+                          <DemoDraggableRoomMember memberId={member.user_id}>
+                            {(dragHandleProps) => (
+                              <>
+                                {isRoomAdmin && roomMembers.length > 1 && (
+                                  <button type="button" className={s.roomParticipantDrag} aria-label={t('chat.room.reorder')} {...dragHandleProps}>
+                                    <svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor"><circle cx="3" cy="3" r="1"/><circle cx="9" cy="3" r="1"/><circle cx="3" cy="8" r="1"/><circle cx="9" cy="8" r="1"/><circle cx="3" cy="13" r="1"/><circle cx="9" cy="13" r="1"/></svg>
                                   </button>
                                 )}
-                                <button type="button" className={s.roomParticipantContextDanger} onClick={() => void removeRoomCharacter(participant.id)}>
-                                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-                                  {t('chat.room.removeParticipant')}
-                                </button>
-                              </div>
+                                <span className={`${s.roomParticipantAvatar} ${s.roomAvatarHuman}`}>{displayName.trim().charAt(0).toUpperCase()}</span>
+                                <div className={s.roomParticipantInfo}>
+                                  <strong>{displayName}</strong>
+                                  <span>{t('chat.room.human')}</span>
+                                </div>
+                                {isSelf && <span className={s.roomParticipantYou}>{t('chat.room.you')}</span>}
+                              </>
                             )}
-                          </>
-                        )}
-                      </DemoDraggableRoomParticipant>
-                    ))}
+                          </DemoDraggableRoomMember>
+                          {memberAgents.map((participant, index) => (
+                            <DemoDraggableRoomParticipant participantId={participant.id} key={participant.id}>
+                              {(dragHandleProps) => (
+                                <>
+                                  {roomCharacters.length > 1 && (
+                                    <button type="button" className={s.roomParticipantDrag} aria-label={t('chat.room.reorder')} {...dragHandleProps}>
+                                      <svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor"><circle cx="3" cy="3" r="1"/><circle cx="9" cy="3" r="1"/><circle cx="3" cy="8" r="1"/><circle cx="9" cy="8" r="1"/><circle cx="3" cy="13" r="1"/><circle cx="9" cy="13" r="1"/></svg>
+                                    </button>
+                                  )}
+                                  <span className={s.roomParticipantIndex}>{index + 1}</span>
+                                  <span className={`${s.roomParticipantAvatar} ${getRoomAvatarClass(participant.id)}`}>{getRoomInitial(participant.name)}</span>
+                                  <div className={s.roomParticipantInfo}>
+                                    {renamingRoomParticipantId === participant.id ? (
+                                      <input
+                                        className={s.roomParticipantRenameInput}
+                                        value={renamingRoomParticipantName}
+                                        maxLength={80}
+                                        onChange={(event) => setRenamingRoomParticipantName(event.target.value)}
+                                        onClick={(event) => event.stopPropagation()}
+                                        onBlur={() => void finishRoomCharacterRename()}
+                                        onKeyDown={(event) => {
+                                          if (event.key === 'Enter') void finishRoomCharacterRename();
+                                          if (event.key === 'Escape') {
+                                            setRenamingRoomParticipantId(null);
+                                            setRenamingRoomParticipantName('');
+                                          }
+                                        }}
+                                        autoFocus
+                                      />
+                                    ) : (
+                                      <strong>
+                                        {participant.name}
+                                        {participant.access === 'shared' && (
+                                          <span className={s.roomSharedBadge} title={t('chat.room.sharedBadge')}>{t('chat.room.sharedBadge')}</span>
+                                        )}
+                                      </strong>
+                                    )}
+                                    <span>{index === 0 ? t('chat.room.mainAssistant') : t('chat.room.character')}</span>
+                                  </div>
+                                  {roomCharacters.length > 0 && (
+                                    <button
+                                      type="button"
+                                      className={s.roomParticipantMenu}
+                                      aria-label={t('common.actions')}
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        setRoomParticipantMenuId((current) => current === participant.id ? null : participant.id);
+                                      }}
+                                    >
+                                      <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><circle cx="8" cy="3" r="1.4"/><circle cx="8" cy="8" r="1.4"/><circle cx="8" cy="13" r="1.4"/></svg>
+                                    </button>
+                                  )}
+                                  {roomParticipantMenuId === participant.id && (
+                                    <div className={s.roomParticipantContextMenu} onClick={(event) => event.stopPropagation()}>
+                                      <button type="button" onClick={() => startRoomCharacterRename(participant)}>
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                                        {t('chat.sidebar.rename')}
+                                      </button>
+                                      <button type="button" onClick={() => startRoomCharacterPromptChange(participant.id)}>
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 21v-7"/><path d="M4 10V3"/><path d="M12 21v-9"/><path d="M12 8V3"/><path d="M20 21v-5"/><path d="M20 12V3"/><path d="M1 14h6"/><path d="M9 8h6"/><path d="M17 16h6"/></svg>
+                                        {t('chat.room.changePrompt')}
+                                      </button>
+                                      {participant.owner_user_id === user?.id && (
+                                        <button type="button" onClick={() => void toggleRoomCharacterAccess(participant)}>
+                                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>
+                                          {participant.access === 'shared' ? t('chat.room.makePrivate') : t('chat.room.makeShared')}
+                                        </button>
+                                      )}
+                                      <button type="button" className={s.roomParticipantContextDanger} onClick={() => void removeRoomCharacter(participant.id)}>
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                                        {t('chat.room.removeParticipant')}
+                                      </button>
+                                    </div>
+                                  )}
+                                </>
+                              )}
+                            </DemoDraggableRoomParticipant>
+                          ))}
+                        </React.Fragment>
+                      );
+                    })}
                   </div>
                   <DragOverlay zIndex={10002} dropAnimation={null}>
+                    {draggingRoomMemberId && (() => {
+                      const member = roomMembers.find((item) => item.user_id === draggingRoomMemberId);
+                      if (!member) return null;
+                      const isSelf = member.user_id === user?.id;
+                      const displayName = isSelf
+                        ? (user?.name || user?.username || t('chat.room.you'))
+                        : (member.name || `#${member.user_id}`);
+                      return (
+                        <div className={`${s.roomParticipantCard} ${s.roomParticipantCardOverlay}`} style={draggingRoomParticipantSize || undefined}>
+                          <button type="button" className={s.roomParticipantDrag} tabIndex={-1}>
+                            <svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor"><circle cx="3" cy="3" r="1"/><circle cx="9" cy="3" r="1"/><circle cx="3" cy="8" r="1"/><circle cx="9" cy="8" r="1"/><circle cx="3" cy="13" r="1"/><circle cx="9" cy="13" r="1"/></svg>
+                          </button>
+                          <span className={`${s.roomParticipantAvatar} ${s.roomAvatarHuman}`}>{displayName.trim().charAt(0).toUpperCase()}</span>
+                          <div className={s.roomParticipantInfo}>
+                            <strong>{displayName}</strong>
+                            <span>{t('chat.room.human')}</span>
+                          </div>
+                          {isSelf && <span className={s.roomParticipantYou}>{t('chat.room.you')}</span>}
+                        </div>
+                      );
+                    })()}
                     {draggingRoomParticipantId && (() => {
                       const participant = roomCharacters.find((item) => item.id === draggingRoomParticipantId);
                       if (!participant) return null;

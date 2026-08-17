@@ -61,7 +61,7 @@ import {
 import { normalizeSupportedLanguage, SUPPORTED_LANGUAGES } from './i18n/languages.js';
 import { translateForLanguage } from './i18n/index.js';
 import { associateServerAccessKeyUser, createServerAccessKey, getLastServerAccessKeyForUser, isServerAccessKeyGateEnabled, listServerAccessKeys, revokeServerAccessKey, validateServerAccessKey } from './services/server-access-keys.js';
-import { addChatAgent, canReadChatMessages, createChatRoom, createChatRoomInvite, deleteChatRoom, getChatRoom, getChatRoomInviteInfo, joinChatRoomByInvite, leaveChatRoom, listRoomReaderUserIds, removeChatAgent, revokeChatRoomInvite, reorderChatAgents, updateChatAgent, updateChatRoomSettings } from './services/chat-rooms.js';
+import { addChatAgent, canReadChatMessages, createChatRoom, createChatRoomInvite, deleteChatRoom, getChatRoom, getChatRoomInviteInfo, joinChatRoomByInvite, leaveChatRoom, listRoomReaderUserIds, removeChatAgent, revokeChatRoomInvite, reorderChatAgents, reorderChatMembers, updateChatAgent, updateChatRoomSettings } from './services/chat-rooms.js';
 import { isRoomChat, runRoomAgents, runRoomResponseQueue } from './services/room-runner.js';
 
 /** Fire-and-forget WS broadcast to every room reader (owner + members). */
@@ -1577,7 +1577,7 @@ app.post('/api/v1/chats', (req: AuthedRequest, res) => {
 
 const sendChatRoomError = (res: any, err: unknown) => {
   const error = err instanceof Error ? err.message : 'chat_room_failed';
-  if (['bad_prompt_id', 'bad_agent_order', 'prompt_content_required'].includes(error)) {
+  if (['bad_prompt_id', 'bad_agent_order', 'bad_member_order', 'prompt_content_required'].includes(error)) {
     return res.status(400).json({ error });
   }
   if (['chat_not_found', 'agent_not_found', 'prompt_not_found', 'user_not_found', 'invite_not_found'].includes(error)) {
@@ -1649,6 +1649,22 @@ app.patch('/api/v1/chats/:id/room/agents/order', (req: AuthedRequest, res) => {
   }
   try {
     return res.json({ room: reorderChatAgents(userId, chatId, agentIds) });
+  } catch (err) {
+    return sendChatRoomError(res, err);
+  }
+});
+
+app.patch('/api/v1/chats/:id/room/members/order', (req: AuthedRequest, res) => {
+  const userId = accountIdFromRequest(req);
+  const chatId = Number.parseInt(req.params.id, 10);
+  if (!Number.isSafeInteger(chatId) || chatId <= 0) return res.status(400).json({ error: 'bad_chat_id' });
+  if (!Array.isArray(req.body?.member_ids)) return res.status(400).json({ error: 'bad_member_order' });
+  const memberIds = req.body.member_ids.map((value: unknown) => Number(value));
+  if (memberIds.some((id: number) => !Number.isSafeInteger(id) || id <= 0)) {
+    return res.status(400).json({ error: 'bad_member_order' });
+  }
+  try {
+    return res.json({ room: reorderChatMembers(userId, chatId, memberIds) });
   } catch (err) {
     return sendChatRoomError(res, err);
   }

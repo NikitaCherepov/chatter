@@ -470,6 +470,13 @@ export async function reorderChatAgents(chatId: number, agentIds: number[]): Pro
   });
 }
 
+export async function reorderChatMembers(chatId: number, memberIds: number[]): Promise<{ room: ChatRoom }> {
+  return apiFetch(`/api/v1/chats/${chatId}/room/members/order`, {
+    method: 'PATCH',
+    body: JSON.stringify({ member_ids: memberIds }),
+  });
+}
+
 export async function updateChatRoomSettings(
   chatId: number,
   settings: { response_mode?: 'manual' | 'round'; auto_respond?: boolean; next_agent_id?: number | null },
