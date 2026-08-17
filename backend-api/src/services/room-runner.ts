@@ -168,7 +168,7 @@ const runStepsSerialized = async (
             emit({ type: 'room_agent_reasoning', chat_id: chatId, agent_id: agent.id, text });
           },
         });
-        emit({ type: 'room_agent_done', chat_id: chatId, agent_id: agent.id, result });
+        emit({ type: 'room_agent_done', chat_id: chatId, agent_id: agent.id, owner_user_id: agent.owner_user_id, result });
         if (result.aborted) break;
       } catch (err: any) {
         console.error('[room-runner] agent generation failed', { chatId, agentId: agent.id, error: err?.message });

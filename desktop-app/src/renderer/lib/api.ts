@@ -824,7 +824,7 @@ export type RoomEvent =
   | { type: 'room_agent_start'; chat_id: number; agent_id: number; agent_name: string; owner_user_id: number; reason: 'mention' | 'auto' }
   | { type: 'room_agent_token'; chat_id: number; agent_id: number; text: string }
   | { type: 'room_agent_reasoning'; chat_id: number; agent_id: number; text: string }
-  | { type: 'room_agent_done'; chat_id: number; agent_id: number; result: any }
+  | { type: 'room_agent_done'; chat_id: number; agent_id: number; owner_user_id: number; result: any }
   | { type: 'room_agent_error'; chat_id: number; agent_id: number; error: string }
   | { type: 'room_members_updated'; chat_id: number }
   | { type: 'room_message_deleted'; chat_id: number; message_id: number; initiator_user_id: number };
