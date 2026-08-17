@@ -61,7 +61,7 @@ import {
 import { normalizeSupportedLanguage, SUPPORTED_LANGUAGES } from './i18n/languages.js';
 import { translateForLanguage } from './i18n/index.js';
 import { associateServerAccessKeyUser, createServerAccessKey, getLastServerAccessKeyForUser, isServerAccessKeyGateEnabled, listServerAccessKeys, revokeServerAccessKey, validateServerAccessKey } from './services/server-access-keys.js';
-import { addChatAgent, createChatRoom, createChatRoomInvite, deleteChatRoom, getChatRoom, getChatRoomInviteInfo, joinChatRoomByInvite, leaveChatRoom, listRoomReaderUserIds, removeChatAgent, revokeChatRoomInvite, reorderChatAgents, updateChatAgent, updateChatRoomSettings } from './services/chat-rooms.js';
+import { addChatAgent, canReadChatMessages, createChatRoom, createChatRoomInvite, deleteChatRoom, getChatRoom, getChatRoomInviteInfo, joinChatRoomByInvite, leaveChatRoom, listRoomReaderUserIds, removeChatAgent, revokeChatRoomInvite, reorderChatAgents, updateChatAgent, updateChatRoomSettings } from './services/chat-rooms.js';
 import { isRoomChat, runRoomResponseQueue } from './services/room-runner.js';
 
 /** Fire-and-forget WS broadcast to every room reader (owner + members). */
@@ -1754,7 +1754,10 @@ app.get('/api/v1/room-invites/:token', (req: AuthedRequest, res) => {
 app.post('/api/v1/room-invites/:token/join', (req: AuthedRequest, res) => {
   const userId = accountIdFromRequest(req);
   try {
-    return res.json(joinChatRoomByInvite(userId, `${req.params.token}`));
+    const result = joinChatRoomByInvite(userId, `${req.params.token}`);
+    // Notify everyone in the room (including the new member) to refresh members.
+    broadcastToRoom(result.chat_id, { type: 'room_members_updated', chat_id: result.chat_id });
+    return res.json(result);
   } catch (err) {
     return sendChatRoomError(res, err);
   }
@@ -1766,6 +1769,8 @@ app.post('/api/v1/chats/:id/room/leave', (req: AuthedRequest, res) => {
   if (!Number.isSafeInteger(chatId) || chatId <= 0) return res.status(400).json({ error: 'bad_chat_id' });
   try {
     leaveChatRoom(userId, chatId);
+    // Notify remaining readers to refresh members (the leaver already knows).
+    broadcastToRoom(chatId, { type: 'room_members_updated', chat_id: chatId });
     return res.json({ ok: true });
   } catch (err) {
     return sendChatRoomError(res, err);
@@ -1916,11 +1921,15 @@ app.post('/api/v1/messages/:id/send-to-telegram', async (req: AuthedRequest, res
 
   console.log(`[send-to-telegram] accountId=${userId}, telegramId=${telegramId}, messageId=${messageId}`);
 
-  // Fetch the message, verify ownership
+  // Fetch the message. Access = message author OR any reader of a room the
+  // message's chat belongs to (multi-user rooms: bot replies are stored under
+  // the bot owner's user_id).
   const row = db.prepare(`
-    SELECT id, content, images FROM chat_messages WHERE id = ? AND user_id = ?
-  `).get(messageId, userId) as { id: number; content: string; images: string | null } | undefined;
-  if (!row) return res.status(404).json({ error: 'message_not_found' });
+    SELECT id, user_id, chat_id, content, images FROM chat_messages WHERE id = ?
+  `).get(messageId) as { id: number; user_id: number; chat_id: number; content: string; images: string | null } | undefined;
+  if (!row || (row.user_id !== userId && !canReadChatMessages(userId, row.chat_id))) {
+    return res.status(404).json({ error: 'message_not_found' });
+  }
 
   const text = row.content || '';
   type MsgImage = { url: string; type: string };

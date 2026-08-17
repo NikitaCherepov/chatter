@@ -323,6 +323,8 @@ export type ChatInfo = {
   folder_id: number | null;
   created_at: number;
   bot_hidden?: boolean;
+  /** false = not yours room */
+  is_owner?: boolean;
 };
 
 export type ChatFolder = {
@@ -806,7 +808,8 @@ export type RoomEvent =
   | { type: 'room_agent_token'; chat_id: number; agent_id: number; text: string }
   | { type: 'room_agent_reasoning'; chat_id: number; agent_id: number; text: string }
   | { type: 'room_agent_done'; chat_id: number; agent_id: number; result: any }
-  | { type: 'room_agent_error'; chat_id: number; agent_id: number; error: string };
+  | { type: 'room_agent_error'; chat_id: number; agent_id: number; error: string }
+  | { type: 'room_members_updated'; chat_id: number };
 
 type WsCallbacks = StreamCallbacks & {
   onConnect?: () => void;
@@ -1074,6 +1077,7 @@ export function initWebSocket(callbacks?: WsCallbacks) {
         case 'room_agent_reasoning':
         case 'room_agent_done':
         case 'room_agent_error':
+        case 'room_members_updated':
           wsCallbacks.onRoomEvent?.(msg);
           break;
         case 'chat_updated':

@@ -8,7 +8,7 @@ import { appendChatMessage, ensureActiveChat, getHistoryForAi, getMessageTokens,
 import { calculateChargedTokens, checkQuota, chargeTokens, getModelOverride, getPricingSnapshot, calculateEstimatedCostUsd, isModelFree } from './token-quota.js';
 import { getPlanLimits } from './plan-limits.js';
 import { resolvePromptForUser, AVATAR_PROMPT_HINT } from './prompts.js';
-import { getChatAgentForResponse, hasMultipleActiveChatAgents } from './chat-rooms.js';
+import { getChatAgentForResponse, hasMultipleActiveChatAgents, canReadChatMessages } from './chat-rooms.js';
 import { createNote, deleteNote, getNoteById, listNotes } from './notes.js';
 import { createTask, deletePendingTask, getPendingTaskCount, listTasks } from './tasks.js';
 import { listMapPinsForBot } from './map-pins.js';
@@ -6963,6 +6963,11 @@ export const sendMessageThroughAi = async (
 
   try {
   chatId = targetChatId && Number.isFinite(targetChatId) ? targetChatId : ensureActiveChat(userId);
+  // Writes are restricted to the chat owner and room members — otherwise a
+  // logged-in user could send into someone else's chat_id.
+  if (targetChatId && Number.isFinite(targetChatId) && !canReadChatMessages(userId, chatId)) {
+    throw new Error('chat_not_found');
+  }
   const responseAgent = options?.agentId !== undefined
     ? getChatAgentForResponse(userId, chatId, options.agentId)
     : null;

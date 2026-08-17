@@ -172,12 +172,13 @@ export const listUserChats = (userId: number, limit = 50, offset = 0, filters: C
   const safeOffset = Math.max(0, parsedOffset);
   const { where, params } = buildUserChatFilter(userId, filters);
   const rows = db.prepare(`
-    SELECT uc.id, uc.title, uc.folder_id, uc.created_at, uc.updated_at, uc.bot_hidden
+    SELECT uc.id, uc.title, uc.folder_id, uc.created_at, uc.updated_at, uc.bot_hidden,
+           (uc.user_id = ?) AS is_owner
     FROM user_chats uc
     WHERE ${where}
     ORDER BY uc.updated_at DESC, uc.id DESC
     LIMIT ? OFFSET ?
-  `).all(...params, safeLimit, safeOffset) as Array<{ id: number; title: string; folder_id: number | null; created_at: string; updated_at: string; bot_hidden: number }>;
+  `).all(userId, ...params, safeLimit, safeOffset) as Array<{ id: number; title: string; folder_id: number | null; created_at: string; updated_at: string; bot_hidden: number; is_owner: number }>;
 
   return rows.map(row => ({
     id: row.id,
@@ -186,7 +187,8 @@ export const listUserChats = (userId: number, limit = 50, offset = 0, filters: C
     created_at: toUnix(row.created_at),
     updated_at: toUnix(row.updated_at),
     is_active: row.id === activeId,
-    bot_hidden: row.bot_hidden === 1
+    bot_hidden: row.bot_hidden === 1,
+    is_owner: row.is_owner === 1
   }));
 };
 

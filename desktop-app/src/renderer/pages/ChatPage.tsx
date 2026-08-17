@@ -2114,6 +2114,15 @@ export function ChatPage() {
     return api.onRoomEvent((event) => {
       if (event.chat_id !== activeChatIdRef.current) return;
       switch (event.type) {
+        case 'room_members_updated': {
+          // Someone joined or left — refresh the room (members + shared agents).
+          void api.getChatRoom(event.chat_id)
+            .then(({ room }) => {
+              if (activeChatIdRef.current === event.chat_id) applyRoom(room);
+            })
+            .catch((error) => console.error('Failed to refresh room members:', error));
+          break;
+        }
         case 'room_user_message': {
           if (event.sender_user_id === user?.id) return;
           setMessages((prev) => [...prev, {
@@ -2854,6 +2863,22 @@ export function ChatPage() {
   const handleStartDelete = (chatId: number) => {
     setDeletingChatId(chatId);
     setContextMenuChatId(null);
+  };
+
+  // Participating (not owned) rooms: "delete" means leaving the room.
+  const handleLeaveRoomFromSidebar = async (chatId: number) => {
+    setContextMenuChatId(null);
+    try {
+      await api.leaveRoom(chatId);
+      setChats(prev => prev.filter(c => c.id !== chatId));
+      if (activeChatId === chatId) {
+        setActiveChatId(null);
+        setMessages([]);
+      }
+    } catch (err) {
+      console.error('Failed to leave room:', err);
+      toast.error(t('auth.error.generic'));
+    }
   };
 
   const handleToggleBotHidden = async (chatId: number) => {
@@ -4658,13 +4683,24 @@ export function ChatPage() {
                 </>
               )}
             </button>
-            <button className={`${s.contextMenuItem} ${s.contextMenuItemDanger}`} onClick={() => handleStartDelete(contextMenuChatId)}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="3 6 5 6 21 6" />
-                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-              </svg>
-              {t('common.delete')}
-            </button>
+            {chats.find(c => c.id === contextMenuChatId)?.is_owner === false ? (
+              <button className={`${s.contextMenuItem} ${s.contextMenuItemDanger}`} onClick={() => void handleLeaveRoomFromSidebar(contextMenuChatId)}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                  <polyline points="16 17 21 12 16 7" />
+                  <path d="M21 12H9" />
+                </svg>
+                {t('chat.room.leaveRoom')}
+              </button>
+            ) : (
+              <button className={`${s.contextMenuItem} ${s.contextMenuItemDanger}`} onClick={() => handleStartDelete(contextMenuChatId)}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="3 6 5 6 21 6" />
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                </svg>
+                {t('common.delete')}
+              </button>
+            )}
           </div>
         )}
 
@@ -4819,11 +4855,14 @@ export function ChatPage() {
                   <>
                     <span className={s.roomAvatarStack} aria-hidden="true">
                       <span className={`${s.roomAvatar} ${s.roomAvatarHuman}`}>{(user?.name || user?.username || 'Y').trim().charAt(0).toUpperCase()}</span>
+                      {otherRoomHumans.slice(0, 3).map((member) => (
+                        <span key={`member-${member.user_id}`} className={`${s.roomAvatar} ${s.roomAvatarHuman}`}>{(member.name || 'U').trim().charAt(0).toUpperCase()}</span>
+                      ))}
                       {roomCharacters.slice(0, 3).map((participant) => (
                         <span key={participant.id} className={`${s.roomAvatar} ${getRoomAvatarClass(participant.id)}`}>{getRoomInitial(participant.name)}</span>
                       ))}
                     </span>
-                    <span className={s.roomTriggerText}>{t('chat.room.participantCount', { count: roomCharacters.length + 1 })}</span>
+                    <span className={s.roomTriggerText}>{t('chat.room.participantCount', { count: otherRoomHumans.length + roomCharacters.length + 1 })}</span>
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                       <polyline points={roomOpen ? '18 15 12 9 6 15' : '9 18 15 12 9 6'} />
                     </svg>
@@ -6416,7 +6455,7 @@ export function ChatPage() {
             )}
 
             {/* Group room turn controls (UI prototype only) */}
-            {roomCreated && roomCharacters.length > 1 && <div className={s.roomTurnBar}>
+            {roomCreated && roomCharacters.length > 0 && <div className={s.roomTurnBar}>
               {roomMode === 'manual' ? (
                 <>
                   <span className={s.roomTurnLabel}>{t('chat.room.whoRespondsNext')}</span>
@@ -6962,15 +7001,17 @@ export function ChatPage() {
                   </button>
                 </div>
               </div>
-              <button
-                type="button"
-                className={s.roomDeleteButton}
-                disabled={roomSaving}
-                onClick={() => void deleteRoom()}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-                {t('chat.room.deleteRoom')}
-              </button>
+              {roomMembers.some(m => m.user_id === user?.id && m.role === 'admin') && (
+                <button
+                  type="button"
+                  className={s.roomDeleteButton}
+                  disabled={roomSaving}
+                  onClick={() => void deleteRoom()}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                  {t('chat.room.deleteRoom')}
+                </button>
+              )}
               {roomMembers.some(m => m.user_id === user?.id && m.role === 'member') && (
                 <button
                   type="button"
