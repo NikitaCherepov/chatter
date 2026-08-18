@@ -822,6 +822,9 @@ export function ChatPage() {
   const [activeChatId, setActiveChatId] = useState<number | null>(null);
   const activeChatIdRef = useRef<number | null>(activeChatId);
   activeChatIdRef.current = activeChatId;
+  // Chats with a server-side room queue currently running (used to keep the
+  // composer blocked when switching away and back).
+  const roomStreamChatIdsRef = useRef(new Set<number>());
   const { unreadByChat, incrementUnread, markAsRead, getUnread } = useUnreadChats();
   const [messages, setMessages] = useState<api.Message[]>([]);
   const [input, setInput] = useState('');
@@ -1315,11 +1318,18 @@ export function ChatPage() {
     }
     // Switching chats must not keep the previous chat's generation state
     // (otherwise a running room queue leaves `sending` stuck in the new chat).
-    setSending(false);
+    // But if we switch BACK into a room whose queue is still running, the
+    // composer must stay blocked.
+    if (activeChatId !== null && roomStreamChatIdsRef.current.has(activeChatId)) {
+      setSending(true);
+    } else {
+      setSending(false);
+    }
     setShowTyping(false);
     setStreamingState('idle');
     setStreamingMsgId(null);
-    roomEventAgentMsgIds.current.clear();
+    // NOTE: do not clear roomEventAgentMsgIds here — it tracks in-flight
+    // server-side streams across chat switches (cleared on room_queue_done).
   }, [activeChatId]);
 
   // Register global handler for scheduler task_result events
@@ -2058,6 +2068,16 @@ export function ChatPage() {
   const roomEventAgentMsgIds = useRef(new Map<number, number>());
   useEffect(() => {
     return api.onRoomEvent((event) => {
+      // Keep bookkeeping for in-flight room streams even when this chat is not
+      // open, so switching back mid-generation can resume the stream.
+      if (event.type === 'room_agent_start') {
+        roomEventAgentMsgIds.current.set(event.agent_id, -(Date.now() + 1));
+        roomStreamChatIdsRef.current.add(event.chat_id);
+      } else if (event.type === 'room_queue_done') {
+        roomEventAgentMsgIds.current.clear();
+        roomStreamChatIdsRef.current.delete(event.chat_id);
+      }
+
       if (event.chat_id !== activeChatIdRef.current) return;
       switch (event.type) {
         case 'room_members_updated': {
@@ -2093,8 +2113,7 @@ export function ChatPage() {
           break;
         }
         case 'room_agent_start': {
-          const tempId = -(Date.now() + 1);
-          roomEventAgentMsgIds.current.set(event.agent_id, tempId);
+          const tempId = roomEventAgentMsgIds.current.get(event.agent_id) ?? -(Date.now() + 1);
           // Show the "typing" dots first; the assistant bubble is created lazily
           // on the first token/reasoning chunk (same feel as a single chat).
           setShowTyping(true);
@@ -6697,8 +6716,8 @@ export function ChatPage() {
                 <svg
                   className={s.sendIcon}
                   onClick={() => {
-                    if (roomCreated) {
-                      api.stopRoomStream(activeChatId ?? 0);
+                    if (activeChatId !== null && roomStreamChatIdsRef.current.has(activeChatId)) {
+                      api.stopRoomStream(activeChatId);
                     } else {
                       api.stopChatStream();
                     }
