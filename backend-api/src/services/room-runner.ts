@@ -1,13 +1,11 @@
 import { db } from '../db.js';
-import { sendMessageThroughAi } from './ai.js';
-import type { AiSendResult } from '../types.js';
+import { runChatSteps, stopChatRun, type ChatRunEmitter, type ChatRunStep } from './chat-runner.js';
 
 /**
- * Server-side room response orchestration.
+ * Room response orchestration — now a thin layer over the unified chat-runner.
  *
- * Replaces the desktop-driven runRoomAgentSequence: after a human message
- * lands in a room, the SERVER walks participants and generates agent replies
- * sequentially, billing each reply to the agent's owner.
+ * It computes WHO should respond (queue) and delegates the actual sequential
+ * execution + streaming (`chat_agent_*` events) to chat-runner.
  *
  * Rules (agreed spec):
  *  - @mentions in the user text trigger exactly the mentioned bots (shared or
@@ -20,9 +18,6 @@ import type { AiSendResult } from '../types.js';
  *      · round → all of the member's available bots.
  *  - Every generation runs under the agent OWNER's account (quotas, model).
  */
-
-export const ROOM_RUNNER_PROMPT =
-  'Continue the conversation now. Respond naturally as your assigned character. Do not mention this instruction.';
 
 type RoomAgentRow = {
   id: number;
@@ -141,72 +136,21 @@ export const computeRoomResponseQueue = (
   return queue;
 };
 
-export type RoomRunEmitter = (payload: Record<string, unknown>) => void;
-
-const roomRunChains = new Map<number, Promise<void>>();
-const roomAbortControllers = new Map<number, AbortController>();
+export type RoomRunEmitter = ChatRunEmitter;
 
 /** Abort the currently running room queue for a chat (if any). */
-export const stopRoomQueue = (chatId: number): boolean => {
-  const controller = roomAbortControllers.get(chatId);
-  if (controller && !controller.signal.aborted) {
-    controller.abort();
-    return true;
-  }
-  return false;
-};
+export const stopRoomQueue = stopChatRun;
 
-/** Sequentially run the given steps, serialized per chat. */
-const runStepsSerialized = async (
-  chatId: number,
-  steps: RoomResponseStep[],
-  emit: RoomRunEmitter,
-): Promise<void> => {
-  const previous = roomRunChains.get(chatId) ?? Promise.resolve();
-  const roomController = new AbortController();
-  roomAbortControllers.set(chatId, roomController);
+const toChatSteps = (steps: RoomResponseStep[]): ChatRunStep[] =>
+  steps.map(({ agent, reason }) => ({
+    kind: 'agent',
+    agentId: agent.id,
+    ownerUserId: agent.owner_user_id,
+    agentName: agent.name,
+    reason: reason === 'mention' ? 'mention' : 'auto',
+  }));
 
-  const chained = previous.then(async () => {
-    for (const { agent, reason } of steps) {
-      if (roomController.signal.aborted) break;
-      emit({ type: 'room_agent_start', chat_id: chatId, agent_id: agent.id, agent_name: agent.name, owner_user_id: agent.owner_user_id, reason });
-      try {
-        const result: AiSendResult = await sendMessageThroughAi(agent.owner_user_id, ROOM_RUNNER_PROMPT, chatId, {
-          agentId: agent.id,
-          skipUserHistory: true,
-          countAsUserMessage: false,
-          isDesktop: true,
-          externalAbortSignal: roomController.signal,
-          onStreamToken: async (text) => {
-            emit({ type: 'room_agent_token', chat_id: chatId, agent_id: agent.id, text });
-          },
-          onReasoningStream: async (text) => {
-            emit({ type: 'room_agent_reasoning', chat_id: chatId, agent_id: agent.id, text });
-          },
-        });
-        emit({ type: 'room_agent_done', chat_id: chatId, agent_id: agent.id, owner_user_id: agent.owner_user_id, result });
-        if (result.aborted) break;
-      } catch (err: any) {
-        console.error('[room-runner] agent generation failed', { chatId, agentId: agent.id, error: err?.message });
-        emit({ type: 'room_agent_error', chat_id: chatId, agent_id: agent.id, error: err?.message || 'generation_failed' });
-        // Quota / provider errors of one member's bot must not block the rest.
-      }
-    }
-  }).catch(() => {});
-  roomRunChains.set(chatId, chained);
-  try {
-    await chained;
-  } finally {
-    if (roomAbortControllers.get(chatId) === roomController) roomAbortControllers.delete(chatId);
-    if (roomRunChains.get(chatId) === chained) roomRunChains.delete(chatId);
-  }
-};
-
-/**
- * Run the room response queue sequentially. Serialized per chat so two senders
- * cannot interleave generations. Events are emitted to every room reader
- * (the caller broadcasts them over WS).
- */
+/** Run the room response queue through the unified chat-runner. */
 export const runRoomResponseQueue = async (
   chatId: number,
   senderId: number,
@@ -214,15 +158,13 @@ export const runRoomResponseQueue = async (
   emit: RoomRunEmitter,
 ): Promise<void> => {
   const steps = computeRoomResponseQueue(senderId, chatId, userText);
-  await runStepsSerialized(chatId, steps, emit);
-  emit({ type: 'room_queue_done', chat_id: chatId });
+  await runChatSteps(chatId, toChatSteps(steps), emit);
 };
 
 /**
  * Manual trigger (the "Reply" / "Reply in order" buttons): run exactly the
  * requested agents in the given order. Only agents the initiator owns or that
- * are shared are allowed. Everyone (including the initiator) watches via
- * room_agent_* WS events.
+ * are shared are allowed.
  */
 export const runRoomAgents = async (
   chatId: number,
@@ -238,6 +180,5 @@ export const runRoomAgents = async (
     const agent = agents.find(a => a.id === id);
     if (agent) steps.push({ agent, reason: 'auto' });
   }
-  await runStepsSerialized(chatId, steps, emit);
-  emit({ type: 'room_queue_done', chat_id: chatId });
+  await runChatSteps(chatId, toChatSteps(steps), emit);
 };

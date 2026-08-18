@@ -574,6 +574,12 @@ export const listRoomReaderUserIds = (chatId: number): number[] | null => {
   return memberIds.includes(chat.user_id) ? memberIds : [chat.user_id, ...memberIds];
 };
 
+/**
+ * Unified reader list for ANY chat (single or room). A plain chat has no
+ * chat_members rows, so this naturally resolves to [owner].
+ */
+export const listChatReaderUserIds = listRoomReaderUserIds;
+
 /** Can this user read messages of this chat (owner or room member)? */
 export const canReadChatMessages = (userId: number, chatId: number): boolean => {
   const chat = db.prepare('SELECT id, user_id FROM user_chats WHERE id = ?')

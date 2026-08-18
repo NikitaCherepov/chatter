@@ -821,15 +821,15 @@ let wsTokenRefreshPromise: Promise<boolean> | null = null;
 
 export type RoomEvent =
   | { type: 'room_user_message'; chat_id: number; message_id: number | null; sender_user_id: number; text: string }
-  | { type: 'room_agent_start'; chat_id: number; agent_id: number; agent_name: string; owner_user_id: number; reason: 'mention' | 'auto' }
-  | { type: 'room_agent_token'; chat_id: number; agent_id: number; text: string }
-  | { type: 'room_agent_reasoning'; chat_id: number; agent_id: number; text: string }
-  | { type: 'room_agent_done'; chat_id: number; agent_id: number; owner_user_id: number; result: any }
-  | { type: 'room_agent_error'; chat_id: number; agent_id: number; error: string }
+  | { type: 'chat_agent_start'; chat_id: number; agent_id: number; agent_name: string; owner_user_id: number; reason: 'mention' | 'auto' | 'manual' }
+  | { type: 'chat_agent_token'; chat_id: number; agent_id: number; text: string }
+  | { type: 'chat_agent_reasoning'; chat_id: number; agent_id: number; text: string }
+  | { type: 'chat_agent_done'; chat_id: number; agent_id: number; owner_user_id: number; result: any }
+  | { type: 'chat_agent_error'; chat_id: number; agent_id: number; error: string }
   | { type: 'room_members_updated'; chat_id: number }
   | { type: 'room_message_deleted'; chat_id: number; message_id: number; initiator_user_id: number }
   | { type: 'room_message_edited'; chat_id: number; message_id: number; initiator_user_id: number; content: string }
-  | { type: 'room_queue_done'; chat_id: number };
+  | { type: 'chat_queue_done'; chat_id: number };
 
 type WsCallbacks = StreamCallbacks & {
   onConnect?: () => void;
@@ -1092,15 +1092,15 @@ export function initWebSocket(callbacks?: WsCallbacks) {
         }
         case 'task_result': wsCallbacks.onTaskResult?.({ chat_id: msg.chat_id, text: msg.text, is_new_chat: msg.is_new_chat }); break;
         case 'room_user_message':
-        case 'room_agent_start':
-        case 'room_agent_token':
-        case 'room_agent_reasoning':
-        case 'room_agent_done':
-        case 'room_agent_error':
+        case 'chat_agent_start':
+        case 'chat_agent_token':
+        case 'chat_agent_reasoning':
+        case 'chat_agent_done':
+        case 'chat_agent_error':
         case 'room_members_updated':
         case 'room_message_deleted':
         case 'room_message_edited':
-        case 'room_queue_done':
+        case 'chat_queue_done':
           wsCallbacks.onRoomEvent?.(msg);
           break;
         case 'chat_updated':

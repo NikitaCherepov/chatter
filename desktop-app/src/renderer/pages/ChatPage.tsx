@@ -1329,7 +1329,7 @@ export function ChatPage() {
     setStreamingState('idle');
     setStreamingMsgId(null);
     // NOTE: do not clear roomEventAgentMsgIds here — it tracks in-flight
-    // server-side streams across chat switches (cleared on room_queue_done).
+    // server-side streams across chat switches (cleared on chat_queue_done).
   }, [activeChatId]);
 
   // Register global handler for scheduler task_result events
@@ -2070,10 +2070,10 @@ export function ChatPage() {
     return api.onRoomEvent((event) => {
       // Keep bookkeeping for in-flight room streams even when this chat is not
       // open, so switching back mid-generation can resume the stream.
-      if (event.type === 'room_agent_start') {
+      if (event.type === 'chat_agent_start') {
         roomEventAgentMsgIds.current.set(event.agent_id, -(Date.now() + 1));
         roomStreamChatIdsRef.current.add(event.chat_id);
-      } else if (event.type === 'room_queue_done') {
+      } else if (event.type === 'chat_queue_done') {
         roomEventAgentMsgIds.current.clear();
         roomStreamChatIdsRef.current.delete(event.chat_id);
       }
@@ -2112,7 +2112,7 @@ export function ChatPage() {
             : message));
           break;
         }
-        case 'room_agent_start': {
+        case 'chat_agent_start': {
           const tempId = roomEventAgentMsgIds.current.get(event.agent_id) ?? -(Date.now() + 1);
           // Show the "typing" dots first; the assistant bubble is created lazily
           // on the first token/reasoning chunk (same feel as a single chat).
@@ -2122,7 +2122,7 @@ export function ChatPage() {
           setStreamingMsgId(tempId);
           break;
         }
-        case 'room_agent_token': {
+        case 'chat_agent_token': {
           const tempId = roomEventAgentMsgIds.current.get(event.agent_id);
           if (tempId === undefined) return;
           setStreamingState('content');
@@ -2142,7 +2142,7 @@ export function ChatPage() {
           });
           break;
         }
-        case 'room_agent_reasoning': {
+        case 'chat_agent_reasoning': {
           const tempId = roomEventAgentMsgIds.current.get(event.agent_id);
           if (tempId === undefined) return;
           setStreamingState((state) => state === 'idle' ? 'reasoning' : state);
@@ -2162,7 +2162,7 @@ export function ChatPage() {
           });
           break;
         }
-        case 'room_agent_done': {
+        case 'chat_agent_done': {
           const tempId = roomEventAgentMsgIds.current.get(event.agent_id);
           roomEventAgentMsgIds.current.delete(event.agent_id);
           const res = event.result ?? {};
@@ -2203,7 +2203,7 @@ export function ChatPage() {
           refreshContextTokens(event.chat_id);
           break;
         }
-        case 'room_agent_error': {
+        case 'chat_agent_error': {
           const tempId = roomEventAgentMsgIds.current.get(event.agent_id);
           roomEventAgentMsgIds.current.delete(event.agent_id);
           if (tempId !== undefined) {
@@ -2217,7 +2217,7 @@ export function ChatPage() {
           toast.error(t('chat.room.agentError', { error: event.error }));
           break;
         }
-        case 'room_queue_done': {
+        case 'chat_queue_done': {
           roomEventAgentMsgIds.current.clear();
           setSending(false);
           setShowTyping(false);
@@ -2390,7 +2390,7 @@ export function ChatPage() {
             ));
             setShowTyping(false);
             // In rooms the user message is only persisted here; the response
-            // queue keeps `sending` active until room_queue_done arrives.
+            // queue keeps `sending` active until chat_queue_done arrives.
             if (!roomCreated) setSending(false);
             setStreamingState('done');
             setStreamingMsgId(null);
