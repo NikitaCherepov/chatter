@@ -283,6 +283,9 @@ type MessageItemProps = {
   authorName?: string;
   isOwnUser: boolean;
   isLastAssistant: boolean;
+  /** False for foreign private agents: regeneration is rejected server-side
+   *  and the optimistic UI would remove the message. */
+  canRegenerate: boolean;
   isTtsPlaying: boolean;
   isReasoningOpen: boolean;
   isToolCallsOpen: boolean;
@@ -319,6 +322,7 @@ const MessageItem = React.memo(function MessageItem({
   authorName,
   isOwnUser,
   isLastAssistant,
+  canRegenerate,
   isTtsPlaying,
   isReasoningOpen,
   isToolCallsOpen,
@@ -450,7 +454,7 @@ const MessageItem = React.memo(function MessageItem({
             </svg>
           </button>
         )}
-        {isLastAssistant && (
+        {isLastAssistant && canRegenerate && (
           <>
             <button className={s.playBtn} onClick={(e) => { e.stopPropagation(); onRegenerate(msg.id); }} title={t('chat.message.regenerate')} disabled={sending}>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -3883,6 +3887,14 @@ export function ChatPage() {
   // Bots this user may trigger: their own + shared ones (others' private bots
   // are hidden from manual controls — the server rejects them anyway).
   const controllableRoomAgents = roomCharacters.filter((participant) => participant.owner_user_id === user?.id || participant.access === 'shared');
+  // Regenerate gating: hide only when the agent is KNOWN to be a foreign
+  // private bot. If the agent is unknown (participants not loaded yet / bot
+  // removed), keep the button — the server rejects forbidden triggers anyway.
+  const canRegenerateMessage = (msg: { agent_id?: number | null }) => {
+    if (msg.agent_id == null) return true;
+    const agent = roomCharacters.find((a) => a.id === msg.agent_id);
+    return !agent || agent.owner_user_id === user?.id || agent.access === 'shared';
+  };
 
   return (
     <div className={s.layout}>
@@ -4564,6 +4576,7 @@ export function ChatPage() {
                     : undefined}
                   isOwnUser={msg.role !== 'user' || !msg.user_id || msg.user_id === user?.id}
                   isLastAssistant={msg.id === lastAssistantId}
+                  canRegenerate={canRegenerateMessage(msg)}
                   isTtsPlaying={ttsPlayingId === msg.id}
                   isReasoningOpen={openReasoningId === msg.id}
                   isToolCallsOpen={openToolCallsId === msg.id}
@@ -4671,7 +4684,12 @@ export function ChatPage() {
                         </svg>
                       </button>
                     )}
-                    {msg.id === lastAssistantId && (
+                    {/* Regeneration is hidden only for KNOWN foreign private
+                        bots. Unknown agents (participants not loaded / bot
+                        removed) keep the button — the server decides. */}
+                    {msg.id === lastAssistantId
+                      && canRegenerateMessage(msg)
+                      && (
                       <>
                         <button
                           className={s.playBtn}
