@@ -468,10 +468,12 @@ export const forkChat = (
   } | undefined;
   if (!sourceChat) return null;
 
-  // Verify the anchor message exists in the source chat.
+  // Verify the anchor message exists in the source chat. The anchor may be
+  // authored by anyone (e.g. a former member of an emptied room) — the
+  // endpoint above only lets effectively single-reader chats through.
   const anchor = db.prepare(
-    'SELECT id FROM chat_messages WHERE id = ? AND user_id = ? AND chat_id = ?'
-  ).get(fromMessageId, userId, sourceChatId) as { id: number } | undefined;
+    'SELECT id FROM chat_messages WHERE id = ? AND chat_id = ?'
+  ).get(fromMessageId, sourceChatId) as { id: number } | undefined;
   if (!anchor) return null;
 
   // Resolve title.
@@ -577,19 +579,23 @@ export const forkChat = (
       );
     }
 
-    // 2. Select all source messages up to the anchor (inclusive), oldest first.
+    // 2. Select ALL source messages up to the anchor (inclusive), oldest
+    // first — regardless of author (e.g. former room members' messages in an
+    // emptied room). Copied rows are re-attributed to the forking user below,
+    // because single-reader chats filter messages by user_id on read.
     const rows = db.prepare(`
       SELECT id, role, content, images, audio, reasoning_content,
              tool_calls_json, token_count, reasoning_tokens,
              attachments, subagents_json, usage_json, prompt_id, prompt_name, model_name, provider_name,
-             agent_id, archived
+             agent_id, archived, created_at
       FROM chat_messages
-      WHERE user_id = ? AND chat_id = ? AND id <= ?
+      WHERE chat_id = ? AND id <= ?
       ORDER BY id ASC
-    `).all(userId, sourceChatId, fromMessageId) as Array<{
+    `).all(sourceChatId, fromMessageId) as Array<{
       id: number;
       role: ChatRole;
       content: string;
+      created_at: string;
       images: string | null;
       audio: string | null;
       reasoning_content: string | null;
@@ -613,9 +619,9 @@ export const forkChat = (
         telegram_chat_id, telegram_message_id,
         images, audio, reasoning_content, tool_calls_json,
         token_count, reasoning_tokens, attachments, subagents_json,
-        usage_json, prompt_id, prompt_name, model_name, provider_name, agent_id, archived
+        usage_json, prompt_id, prompt_name, model_name, provider_name, agent_id, archived, created_at
       )
-      VALUES (?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     for (const row of rows) {
@@ -661,7 +667,8 @@ export const forkChat = (
         row.model_name,
         row.provider_name,
         row.agent_id === null ? null : (agentIdMap.get(row.agent_id) ?? null),
-        row.archived           // preserve archived state
+        row.archived,          // preserve archived state
+        row.created_at         // preserve original timestamps
       );
     }
 
