@@ -821,14 +821,21 @@ let wsTokenRefreshPromise: Promise<boolean> | null = null;
 
 export type RoomEvent =
   | { type: 'room_user_message'; chat_id: number; message_id: number | null; sender_user_id: number; text: string }
-  | { type: 'chat_agent_start'; chat_id: number; agent_id: number; agent_name: string; owner_user_id: number; reason: 'mention' | 'auto' | 'manual' }
-  | { type: 'chat_agent_token'; chat_id: number; agent_id: number; text: string }
-  | { type: 'chat_agent_reasoning'; chat_id: number; agent_id: number; text: string }
-  | { type: 'chat_agent_done'; chat_id: number; agent_id: number; owner_user_id: number; result: any }
-  | { type: 'chat_agent_error'; chat_id: number; agent_id: number; error: string }
+  | { type: 'chat_agent_start'; chat_id: number; agent_id: number | null; agent_name: string; owner_user_id: number; reason: 'mention' | 'auto' | 'manual' }
+  | { type: 'chat_agent_token'; chat_id: number; agent_id: number | null; text: string }
+  | { type: 'chat_agent_reasoning'; chat_id: number; agent_id: number | null; text: string }
+  | { type: 'chat_agent_done'; chat_id: number; agent_id: number | null; owner_user_id: number; result: any }
+  | { type: 'chat_agent_error'; chat_id: number; agent_id: number | null; error: string; message?: string }
+  | { type: 'chat_intermediate'; chat_id: number; text: string }
+  | { type: 'chat_tool_status'; chat_id: number; text: string }
+  | { type: 'chat_desktop_action'; chat_id: number; action: string; target?: string; value?: any }
+  | { type: 'chat_display_state'; chat_id: number; [key: string]: any }
+  | { type: 'chat_map_update'; chat_id: number; [key: string]: any }
+  | { type: 'chat_dice_roll'; chat_id: number; roll: number }
   | { type: 'room_members_updated'; chat_id: number }
   | { type: 'room_message_deleted'; chat_id: number; message_id: number; initiator_user_id: number }
   | { type: 'room_message_edited'; chat_id: number; message_id: number; initiator_user_id: number; content: string }
+  | { type: 'chat_user_message_saved'; chat_id: number; message_id: number | null; images?: MessageImage[] }
   | { type: 'chat_queue_done'; chat_id: number };
 
 type WsCallbacks = StreamCallbacks & {
@@ -863,25 +870,6 @@ const ensureBrowserDownloadBridge = () => {
   window.electronAPI.onBrowserDownloadResolved(({ download_id }) => {
     if (download_id) pendingBrowserDownloadEvents.delete(download_id);
   });
-};
-let activeStreamCallbacks: StreamCallbacks = {};
-let activeChatRequestAccepted = false;
-let activeStreamResolve: (() => void) | null = null;
-
-const finishActiveStream = () => {
-  activeStreamResolve?.();
-  activeStreamResolve = null;
-};
-
-const failActiveChatRequest = (error: string, message?: string) => {
-  const callback = activeStreamCallbacks.onError ?? wsCallbacks.onError;
-  activeStreamCallbacks = {};
-  activeChatRequestAccepted = false;
-  try {
-    callback?.(error, message);
-  } finally {
-    finishActiveStream();
-  }
 };
 
 const refreshWebSocketAccessToken = (): Promise<boolean> => {
@@ -1049,92 +1037,19 @@ export function initWebSocket(callbacks?: WsCallbacks) {
       const msg = JSON.parse(ev.data as string);
 
       switch (msg.type) {
-        case 'chat_accepted':
-          activeChatRequestAccepted = true;
-          break;
-        case 'intermediate': (activeStreamCallbacks.onIntermediate ?? wsCallbacks.onIntermediate)?.(msg.text); break;
-        case 'stream_token': (activeStreamCallbacks.onStreamToken ?? wsCallbacks.onStreamToken)?.(msg.text); break;
-        case 'reasoning_token': (activeStreamCallbacks.onReasoningStream ?? wsCallbacks.onReasoningStream)?.(msg.text); break;
-        case 'display_state': (activeStreamCallbacks.onDisplayState ?? wsCallbacks.onDisplayState)?.(msg); break;
-        case 'desktop_action':
-          // If it's a macro — execute it via Electron in the background
-          if (msg.action === 'execute_macro' && msg.value?.commands) {
-            (window as any).electronAPI?.executeCommands(msg.value.commands).catch(console.error);
-          }
-          // Pass to React (e.g. UI toast "Macro launched")
-          (activeStreamCallbacks.onDesktopAction ?? wsCallbacks.onDesktopAction)?.(msg);
-          break;
-        case 'tool_status': (activeStreamCallbacks.onToolStatus ?? wsCallbacks.onToolStatus)?.(msg.text); break;
-        case 'map_update': (activeStreamCallbacks.onMapUpdate ?? wsCallbacks.onMapUpdate)?.(msg); break;
-        case 'dice_roll': (activeStreamCallbacks.onDiceRoll ?? wsCallbacks.onDiceRoll)?.(Number(msg.roll)); break;
-        case 'user_message_saved': (activeStreamCallbacks.onUserMessageSaved ?? wsCallbacks.onUserMessageSaved)?.(msg); break;
-        case 'done': {
-          const callback = activeStreamCallbacks.onDone ?? wsCallbacks.onDone;
-          activeStreamCallbacks = {};
-          activeChatRequestAccepted = false;
-          try {
-            callback?.(msg);
-          } finally {
-            finishActiveStream();
-          }
-          break;
-        }
-        case 'error': {
-          const callback = activeStreamCallbacks.onError ?? wsCallbacks.onError;
-          activeStreamCallbacks = {};
-          activeChatRequestAccepted = false;
-          try {
-            callback?.(msg.error, msg.message);
-          } finally {
-            finishActiveStream();
-          }
-          break;
-        }
         case 'task_result': wsCallbacks.onTaskResult?.({ chat_id: msg.chat_id, text: msg.text, is_new_chat: msg.is_new_chat }); break;
-        case 'chat_agent_token':
-          if (msg.agent_id === null) (activeStreamCallbacks.onStreamToken ?? wsCallbacks.onStreamToken)?.(msg.text);
-          else wsCallbacks.onRoomEvent?.(msg);
-          break;
-        case 'chat_agent_reasoning':
-          if (msg.agent_id === null) (activeStreamCallbacks.onReasoningStream ?? wsCallbacks.onReasoningStream)?.(msg.text);
-          else wsCallbacks.onRoomEvent?.(msg);
-          break;
         case 'chat_agent_start':
-          // Single-chat start has no callback (typing is handled by handleSend).
-          if (msg.agent_id !== null) wsCallbacks.onRoomEvent?.(msg);
-          break;
+        case 'chat_agent_token':
+        case 'chat_agent_reasoning':
         case 'chat_agent_done':
-          if (msg.agent_id === null) {
-            const callback = activeStreamCallbacks.onDone ?? wsCallbacks.onDone;
-            activeStreamCallbacks = {};
-            activeChatRequestAccepted = false;
-            try { callback?.(msg.result); } finally { finishActiveStream(); }
-          } else {
-            wsCallbacks.onRoomEvent?.(msg);
-          }
-          break;
         case 'chat_agent_error':
-          if (msg.agent_id === null) {
-            const callback = activeStreamCallbacks.onError ?? wsCallbacks.onError;
-            activeStreamCallbacks = {};
-            activeChatRequestAccepted = false;
-            try { callback?.(msg.error); } finally { finishActiveStream(); }
-          } else {
-            wsCallbacks.onRoomEvent?.(msg);
-          }
-          break;
-        case 'chat_intermediate': (activeStreamCallbacks.onIntermediate ?? wsCallbacks.onIntermediate)?.(msg.text); break;
-        case 'chat_tool_status': (activeStreamCallbacks.onToolStatus ?? wsCallbacks.onToolStatus)?.(msg.text); break;
+        case 'chat_intermediate':
+        case 'chat_tool_status':
         case 'chat_desktop_action':
-          if (msg.action === 'execute_macro' && msg.value?.commands) {
-            (window as any).electronAPI?.executeCommands(msg.value.commands).catch(console.error);
-          }
-          (activeStreamCallbacks.onDesktopAction ?? wsCallbacks.onDesktopAction)?.(msg);
-          break;
-        case 'chat_display_state': (activeStreamCallbacks.onDisplayState ?? wsCallbacks.onDisplayState)?.(msg); break;
-        case 'chat_map_update': (activeStreamCallbacks.onMapUpdate ?? wsCallbacks.onMapUpdate)?.(msg); break;
-        case 'chat_dice_roll': (activeStreamCallbacks.onDiceRoll ?? wsCallbacks.onDiceRoll)?.(Number(msg.roll)); break;
-        case 'chat_user_message_saved': (activeStreamCallbacks.onUserMessageSaved ?? wsCallbacks.onUserMessageSaved)?.(msg); break;
+        case 'chat_display_state':
+        case 'chat_map_update':
+        case 'chat_dice_roll':
+        case 'chat_user_message_saved':
         case 'room_user_message':
         case 'room_members_updated':
         case 'room_message_deleted':
@@ -1221,11 +1136,6 @@ export function initWebSocket(callbacks?: WsCallbacks) {
       wsAuthRefreshAckTimer = null;
     }
     if (wasCurrentSocket) wsCallbacks.onDisconnect?.();
-    if (wasCurrentSocket && Object.keys(activeStreamCallbacks).length > 0 && !activeChatRequestAccepted) {
-      failActiveChatRequest(
-        ev.code === 1009 ? 'image_payload_too_large' : 'connection_lost_before_request_accepted',
-      );
-    }
 
     // 4001 means that the access token is no longer valid (usually expired).
     // Refresh it before reconnecting, otherwise every retry would reuse the same token.
@@ -1282,65 +1192,57 @@ export function isWsConnected(): boolean {
   return ws !== null && ws.readyState === WebSocket.OPEN;
 }
 
-// ── Send chat_send via WS ──
+// ── Send chat_send via WS (unified) ──
 
-export async function streamChatMessage(
-  text: string,
-  chatId?: number,
-  images?: ChatSendImage[],
-  displayManifest?: { moods: string[]; reactions: string[] },
-  currentDisplayState?: DisplayStatePayload | null,
-  callbacks?: StreamCallbacks,
-  options?: { isVoice?: boolean; preferredModel?: string | null; regenerate_hint?: string; skip_user_history?: boolean; regenerate_from_history?: boolean; dice_mode?: 'normal' | 'always_one' | 'always_twenty'; agentId?: number; userOnly?: boolean; countAsUserMessage?: boolean },
-  documents?: ChatSendDocument[]
-) {
-  // If WS is connected — send through WS
+/** Fire-and-forget unified trigger. Streaming is delivered via unified chat events. */
+export function sendChatTrigger(payload: {
+  text: string;
+  chatId?: number;
+  images?: ChatSendImage[];
+  documents?: ChatSendDocument[];
+  displayManifest?: { moods: string[]; reactions: string[] };
+  currentDisplayState?: DisplayStatePayload | null;
+  isVoice?: boolean;
+  preferredModel?: string | null;
+  regenerate_hint?: string;
+  skip_user_history?: boolean;
+  regenerate_from_history?: boolean;
+  dice_mode?: 'normal' | 'always_one' | 'always_twenty';
+  agentId?: number;
+  userOnly?: boolean;
+  countAsUserMessage?: boolean;
+}) {
   if (ws && ws.readyState === WebSocket.OPEN) {
-    return new Promise<void>((resolve) => {
-      activeStreamCallbacks = callbacks ?? {};
-      activeStreamResolve = resolve;
-      activeChatRequestAccepted = false;
-      const msg: Record<string, unknown> = { type: 'chat_send', text };
-      if (chatId) msg.chat_id = chatId;
-      if (images?.length) msg.images = images;
-      if (documents?.length) msg.documents = documents;
-      if (displayManifest) msg.display_manifest = displayManifest;
-      if (currentDisplayState) msg.current_display_state = currentDisplayState;
-      if (options?.isVoice) msg.is_voice = true;
-      if (options?.preferredModel) msg.preferred_model = options.preferredModel;
-      if (options?.regenerate_hint) msg.regenerate_hint = options.regenerate_hint;
-      if (options?.skip_user_history) msg.skip_user_history = true;
-      if (options?.regenerate_from_history) msg.regenerate_from_history = true;
-      if (options?.dice_mode) msg.dice_mode = options.dice_mode;
-      if (options?.agentId) msg.agent_id = options.agentId;
-      if (options?.userOnly) msg.user_only = true;
-      if (options?.countAsUserMessage === false) msg.count_as_user_message = false;
-      try {
-        ws!.send(JSON.stringify(msg));
-      } catch {
-        failActiveChatRequest('connection_lost_before_request_accepted');
-      }
-    });
+    const msg: Record<string, unknown> = { type: 'chat_send', text: payload.text };
+    if (payload.chatId) msg.chat_id = payload.chatId;
+    if (payload.images?.length) msg.images = payload.images;
+    if (payload.documents?.length) msg.documents = payload.documents;
+    if (payload.displayManifest) msg.display_manifest = payload.displayManifest;
+    if (payload.currentDisplayState) msg.current_display_state = payload.currentDisplayState;
+    if (payload.isVoice) msg.is_voice = true;
+    if (payload.preferredModel) msg.preferred_model = payload.preferredModel;
+    if (payload.regenerate_hint) msg.regenerate_hint = payload.regenerate_hint;
+    if (payload.skip_user_history) msg.skip_user_history = true;
+    if (payload.regenerate_from_history) msg.regenerate_from_history = true;
+    if (payload.dice_mode) msg.dice_mode = payload.dice_mode;
+    if (payload.agentId) msg.agent_id = payload.agentId;
+    if (payload.userOnly) msg.user_only = true;
+    if (payload.countAsUserMessage === false) msg.count_as_user_message = false;
+    try {
+      ws.send(JSON.stringify(msg));
+    } catch (err) {
+      console.warn('[ws] failed to send chat_send:', err);
+    }
+    return;
   }
 
-  // Fallback: SSE
-  await streamChatMessageSSE(text, chatId, images, displayManifest, currentDisplayState, callbacks, options, documents);
+  // Fallback: SSE (same unified event stream).
+  void sendChatTriggerSSE(payload);
 }
 
 // ── Stop chat generation ──
 
-export function stopChatStream() {
-  if (ws && ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({ type: 'chat_stop' }));
-  }
-  // POST is also used as a fallback/backup for WS stop.
-  const tokens = loadTokens();
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (tokens?.access_token) headers['Authorization'] = `Bearer ${tokens.access_token}`;
-  fetch(`${API_BASE}/api/v1/chat/stop`, { method: 'POST', headers }).catch(() => {});
-}
-
-/** Stop the currently running room response queue. */
+/** Stop the currently running chat run (single or room). */
 export function stopRoomStream(chatId: number) {
   if (ws && ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify({ type: 'room_stop', chat_id: chatId }));
@@ -1353,36 +1255,43 @@ export function stopRoomStream(chatId: number) {
 
 // ── SSE fallback (kept for when WS is not connected) ──
 
-async function streamChatMessageSSE(
-  text: string,
-  chatId?: number,
-  images?: ChatSendImage[],
-  displayManifest?: { moods: string[]; reactions: string[] },
-  currentDisplayState?: DisplayStatePayload | null,
-  callbacks?: StreamCallbacks,
-  options?: { isVoice?: boolean; preferredModel?: string | null; regenerate_hint?: string; skip_user_history?: boolean; regenerate_from_history?: boolean; dice_mode?: 'normal' | 'always_one' | 'always_twenty'; agentId?: number; userOnly?: boolean; countAsUserMessage?: boolean },
-  documents?: ChatSendDocument[]
-) {
-  const attemptStream = async (isRetry = false): Promise<void> => {
+async function sendChatTriggerSSE(payload: {
+  text: string;
+  chatId?: number;
+  images?: ChatSendImage[];
+  documents?: ChatSendDocument[];
+  displayManifest?: { moods: string[]; reactions: string[] };
+  currentDisplayState?: DisplayStatePayload | null;
+  isVoice?: boolean;
+  preferredModel?: string | null;
+  regenerate_hint?: string;
+  skip_user_history?: boolean;
+  regenerate_from_history?: boolean;
+  dice_mode?: 'normal' | 'always_one' | 'always_twenty';
+  agentId?: number;
+  userOnly?: boolean;
+  countAsUserMessage?: boolean;
+}) {
+  const attempt = async (isRetry = false): Promise<void> => {
     const tokens = loadTokens();
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     if (tokens?.access_token) headers['Authorization'] = `Bearer ${tokens.access_token}`;
 
-    const body: Record<string, unknown> = { text, is_desktop: true };
-    if (chatId) body.chat_id = chatId;
-    if (images && images.length > 0) body.images = images;
-    if (documents && documents.length > 0) body.documents = documents;
-    if (displayManifest) body.display_manifest = displayManifest;
-    if (currentDisplayState) body.current_display_state = currentDisplayState;
-    if (options?.isVoice) body.is_voice = true;
-    if (options?.preferredModel) body.preferred_model = options.preferredModel;
-    if (options?.regenerate_hint) body.regenerate_hint = options.regenerate_hint;
-    if (options?.skip_user_history) body.skip_user_history = true;
-    if (options?.regenerate_from_history) body.regenerate_from_history = true;
-    if (options?.dice_mode) body.dice_mode = options.dice_mode;
-    if (options?.agentId) body.agent_id = options.agentId;
-    if (options?.userOnly) body.user_only = true;
-    if (options?.countAsUserMessage === false) body.count_as_user_message = false;
+    const body: Record<string, unknown> = { text: payload.text, is_desktop: true };
+    if (payload.chatId) body.chat_id = payload.chatId;
+    if (payload.images?.length) body.images = payload.images;
+    if (payload.documents?.length) body.documents = payload.documents;
+    if (payload.displayManifest) body.display_manifest = payload.displayManifest;
+    if (payload.currentDisplayState) body.current_display_state = payload.currentDisplayState;
+    if (payload.isVoice) body.is_voice = true;
+    if (payload.preferredModel) body.preferred_model = payload.preferredModel;
+    if (payload.regenerate_hint) body.regenerate_hint = payload.regenerate_hint;
+    if (payload.skip_user_history) body.skip_user_history = true;
+    if (payload.regenerate_from_history) body.regenerate_from_history = true;
+    if (payload.dice_mode) body.dice_mode = payload.dice_mode;
+    if (payload.agentId) body.agent_id = payload.agentId;
+    if (payload.userOnly) body.user_only = true;
+    if (payload.countAsUserMessage === false) body.count_as_user_message = false;
 
     const res = await fetch(`${API_BASE}/api/v1/chat/send`, {
       method: 'POST',
@@ -1394,7 +1303,7 @@ async function streamChatMessageSSE(
       const refreshed = await refreshToken(tokens.refresh_token);
       if (refreshed) {
         saveTokens(refreshed);
-        return attemptStream(true);
+        return attempt(true);
       }
       clearTokens();
       throw new Error('Session expired');
@@ -1419,28 +1328,15 @@ async function streamChatMessageSSE(
         if (!chunk.trim() || chunk.startsWith(':')) continue;
 
         const lines = chunk.split('\n');
-        let eventName = 'message';
         let dataStr = '';
-
         for (const line of lines) {
-          if (line.startsWith('event:')) eventName = line.slice(6).trim();
           if (line.startsWith('data:')) dataStr = line.slice(5).trim();
         }
 
         if (dataStr) {
           try {
             const data = JSON.parse(dataStr);
-            if (eventName === 'intermediate' && callbacks?.onIntermediate) callbacks.onIntermediate(data.text);
-            else if (eventName === 'stream_token' && callbacks?.onStreamToken) callbacks.onStreamToken(data.text);
-            else if (eventName === 'reasoning_token' && callbacks?.onReasoningStream) callbacks.onReasoningStream(data.text);
-            else if (eventName === 'display_state' && callbacks?.onDisplayState) callbacks.onDisplayState(data);
-            else if (eventName === 'desktop_action' && callbacks?.onDesktopAction) callbacks.onDesktopAction(data);
-            else if (eventName === 'map_update' && callbacks?.onMapUpdate) callbacks.onMapUpdate(data);
-            else if (eventName === 'dice_roll' && callbacks?.onDiceRoll) callbacks.onDiceRoll(Number(data.roll));
-            else if (eventName === 'user_message_saved' && callbacks?.onUserMessageSaved) callbacks.onUserMessageSaved(data);
-            else if (eventName === 'tool_status' && callbacks?.onToolStatus) callbacks.onToolStatus(data.text);
-            else if (eventName === 'done' && callbacks?.onDone) callbacks.onDone(data);
-            else if (eventName === 'error' && callbacks?.onError) callbacks.onError(data.error, data.message);
+            if (data?.type) wsCallbacks.onRoomEvent?.(data);
           } catch {
             // ignore malformed JSON
           }
@@ -1450,9 +1346,9 @@ async function streamChatMessageSSE(
   };
 
   try {
-    await attemptStream();
+    await attempt();
   } catch (err: any) {
-    if (callbacks?.onError) callbacks.onError(err.message || 'stream_failed');
+    console.warn('[sse] unified chat stream failed:', err?.message || String(err));
   }
 }
 

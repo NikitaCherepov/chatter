@@ -27,6 +27,10 @@ export type ChatRunStep =
       ownerUserId: number;
       agentName: string;
       reason: 'auto' | 'mention' | 'manual';
+      /** Override the default room-bot continuation prompt (e.g. regenerate). */
+      prompt?: string;
+      /** Extra/override options merged over the agent defaults. */
+      options?: AiSendOptions;
     }
   | {
       kind: 'default';
@@ -101,14 +105,27 @@ const runSteps = async (
     });
 
     try {
+      // Agent steps: step.options may override agent defaults, but user-owned
+      // payload (images, macros, billing) must never leak into the bot owner's
+      // request and bot replies are never counted as user messages.
+      let stepOptions: Record<string, unknown>;
+      if (step.kind === 'agent') {
+        const { images: _images, userImages: _userImages, userAttachments: _userAttachments, activeMacros: _activeMacros, countAsUserMessage: _countAsUserMessage, ...overrides } = (step.options ?? {}) as Record<string, unknown>;
+        stepOptions = {
+          agentId: step.agentId,
+          skipUserHistory: true,
+          countAsUserMessage: false,
+          ...overrides,
+        };
+      } else {
+        stepOptions = { ...(step.options ?? {}) };
+      }
       const result: AiSendResult = await sendMessageThroughAi(
         step.ownerUserId,
-        step.kind === 'agent' ? AGENT_ROOM_CONTINUE_PROMPT : step.prompt,
+        step.kind === 'agent' ? (step.prompt ?? AGENT_ROOM_CONTINUE_PROMPT) : step.prompt,
         chatId,
         {
-          ...(step.kind === 'agent'
-            ? { agentId: step.agentId, skipUserHistory: true, countAsUserMessage: false }
-            : (step.options ?? {})),
+          ...stepOptions,
           isDesktop: true,
           externalAbortSignal: signal,
           onStreamToken: async (text) => {

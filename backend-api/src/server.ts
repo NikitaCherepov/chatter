@@ -61,7 +61,7 @@ import {
 import { normalizeSupportedLanguage, SUPPORTED_LANGUAGES } from './i18n/languages.js';
 import { translateForLanguage } from './i18n/index.js';
 import { associateServerAccessKeyUser, createServerAccessKey, getLastServerAccessKeyForUser, isServerAccessKeyGateEnabled, listServerAccessKeys, revokeServerAccessKey, validateServerAccessKey } from './services/server-access-keys.js';
-import { addChatAgent, canReadChatMessages, createChatRoom, createChatRoomInvite, deleteChatRoom, getChatRoom, getChatRoomInviteInfo, joinChatRoomByInvite, leaveChatRoom, listChatReaderUserIds, removeChatAgent, revokeChatRoomInvite, reorderChatAgents, reorderChatMembers, updateChatAgent, updateChatRoomSettings } from './services/chat-rooms.js';
+import { addChatAgent, canReadChatMessages, createChatRoom, createChatRoomInvite, deleteChatRoom, getChatAgentForResponse, getChatRoom, getChatRoomInviteInfo, joinChatRoomByInvite, leaveChatRoom, listChatReaderUserIds, removeChatAgent, revokeChatRoomInvite, reorderChatAgents, reorderChatMembers, updateChatAgent, updateChatRoomSettings } from './services/chat-rooms.js';
 import { runChatSteps } from './services/chat-runner.js';
 import { isRoomChat, runRoomAgents, runRoomResponseQueue, stopRoomQueue } from './services/room-runner.js';
 
@@ -2218,6 +2218,10 @@ app.post('/api/v1/chat/send', async (req: AuthedRequest, res) => {
   // Load enabled macros from DB
   const enabledMacros = getEnabledMacros(userId);
 
+  // Chat id resolved inside try (may create a new chat); kept for the catch
+  // block so error events carry the correct chat_id.
+  let resolvedChatId: number | null = Number.isFinite(chatId) && chatId > 0 ? chatId : null;
+
   // SSE-заголовки
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
@@ -2227,18 +2231,22 @@ app.post('/api/v1/chat/send', async (req: AuthedRequest, res) => {
 
   try {
     const rawUserRecord = getUserById(userId);
-    const result = await sendMessageThroughAi(userId, text, chatId, {
+    const targetChatId = Number.isFinite(chatId) && chatId > 0 ? chatId : ensureActiveChat(userId);
+    resolvedChatId = targetChatId;
+
+    const writeEvent = (payload: Record<string, unknown>) => {
+      res.write(`data: ${JSON.stringify(payload)}\n\n`);
+    };
+
+    const commonOptions = {
       ...(images.length > 0 ? { images } : {}),
       userImages: savedUserImages,
       ...(savedUserAttachments ? { userAttachments: savedUserAttachments } : {}),
       displayManifest,
       currentDisplayState,
-      isDesktop,
       isVoice,
       activeMacros: enabledMacros,
       preferredModel: req.body?.preferred_model || undefined,
-      agentId,
-      userOnly: Boolean(req.body?.user_only),
       countAsUserMessage: req.body?.count_as_user_message !== false,
       regenerateHint: req.body?.regenerate_hint || undefined,
       regenerateFromHistory: Boolean(req.body?.regenerate_from_history),
@@ -2246,52 +2254,52 @@ app.post('/api/v1/chat/send', async (req: AuthedRequest, res) => {
       featureFlags: rawUserRecord ? parseFeatureFlags(rawUserRecord) : undefined,
       diceRollMode: Boolean(parseUiSettings(rawUserRecord ?? getUserById(userId)).dice_roll_enabled),
       ...(() => { const fv = resolveDiceForceValue(req.body?.dice_mode); return fv !== undefined ? { diceRollForceValue: fv } : {}; })(),
-      onIntermediateMessage: (stepText) => {
-        res.write(`event: intermediate\ndata: ${JSON.stringify({ text: stepText })}\n\n`);
-      },
-      onStateChange: (state) => {
-        res.write(`event: display_state\ndata: ${JSON.stringify(state)}\n\n`);
-      },
-      onDesktopAction: (action) => {
-        res.write(`event: desktop_action\ndata: ${JSON.stringify(action)}\n\n`);
-      },
-      onToolStatus: (statusText) => {
-        res.write(`event: tool_status\ndata: ${JSON.stringify({ text: statusText })}\n\n`);
-      },
-      onMapUpdate: (data) => {
-        res.write(`event: map_update\ndata: ${JSON.stringify(data)}\n\n`);
-      },
-      onDiceRoll: (roll) => {
-        res.write(`event: dice_roll\ndata: ${JSON.stringify({ roll })}\n\n`);
-      },
-      onUserMessageSaved: (data) => {
-        res.write(`event: user_message_saved\ndata: ${JSON.stringify(data)}\n\n`);
-      },
-      onStreamToken: (text) => {
-        res.write(`event: stream_token\ndata: ${JSON.stringify({ text })}\n\n`);
-      },
-      onReasoningStream: (text) => {
-        res.write(`event: reasoning_token\ndata: ${JSON.stringify({ text })}\n\n`);
-      }
-    });
+    };
 
-    res.write(`event: done\ndata: ${JSON.stringify(result)}\n\n`);
-    res.end();
-
-    // Multi-user rooms: server-side response queue after a saved user message.
-    if (req.body?.user_only && isRoomChat(chatId)) {
-      broadcastToChat(chatId, {
+    // Rooms: user_only persists the human message; the server then runs the queue.
+    if (req.body?.user_only && isRoomChat(targetChatId)) {
+      const result = await sendMessageThroughAi(userId, text, targetChatId, {
+        ...commonOptions,
+        agentId,
+        userOnly: true,
+        isDesktop: true,
+      });
+      writeEvent({
+        type: 'chat_user_message_saved',
+        chat_id: targetChatId,
+        message_id: result.user_message_id ?? null,
+        ...(result.user_message_images ? { images: result.user_message_images } : {}),
+      });
+      res.end();
+      broadcastToChat(targetChatId, {
         type: 'room_user_message',
-        chat_id: chatId,
+        chat_id: targetChatId,
         message_id: result.user_message_id ?? null,
         sender_user_id: userId,
         text,
       });
-      void runRoomResponseQueue(chatId, userId, text, (payload) => broadcastToChat(chatId, payload));
+      void runRoomResponseQueue(targetChatId, userId, text, (payload) => broadcastToChat(targetChatId, payload));
+      return;
     }
+
+    if (agentId === undefined) {
+      await runChatSteps(
+        targetChatId,
+        [{ kind: 'default', ownerUserId: userId, prompt: `${text || ''}`.trim() || ' ', options: commonOptions }],
+        writeEvent,
+      );
+    } else {
+      const agent = getChatAgentForResponse(userId, targetChatId, agentId);
+      await runChatSteps(
+        targetChatId,
+        [{ kind: 'agent', agentId, ownerUserId: agent.owner_user_id, agentName: agent.name, reason: 'manual', prompt: `${text || ''}`.trim() || ' ', options: commonOptions }],
+        writeEvent,
+      );
+    }
+    res.end();
   } catch (err: any) {
     const payload = buildLocalizedAiError(err, userId);
-    res.write(`event: error\ndata: ${JSON.stringify(payload)}\n\n`);
+    res.write(`data: ${JSON.stringify({ type: 'chat_agent_error', chat_id: resolvedChatId, agent_id: null, error: payload?.error || 'chat_send_failed', message: payload?.message })}\n\n`);
     res.end();
   }
 });
@@ -6357,13 +6365,6 @@ wss.on('connection', (ws, req) => {
 
       if (msg.type === 'chat_send') {
         await handleWsChatSend(client, msg);
-      } else if (msg.type === 'chat_stop') {
-        const userId = client.accountId;
-        const controller = activeGenerations.get(userId);
-        if (controller) {
-          controller.abort();
-        }
-        // Ответ не нужен — клиент получит done с aborted: true
       } else if (msg.type === 'room_stop') {
         const chatId = Number(msg.chat_id);
         if (Number.isSafeInteger(chatId) && chatId > 0 && canReadChatMessages(client.accountId, chatId)) {
@@ -6620,9 +6621,14 @@ async function handleWsChatSend(client: WsClient, msg: any) {
     return Promise.resolve(true);
   };
 
+  // Chat id resolved inside try (may create a new chat); kept for the catch
+  // block so error events carry the correct chat_id.
+  let resolvedChatId: number | null = Number.isFinite(chat_id) && chat_id > 0 ? chat_id : null;
+
   try {
     const rawUserRecord = getUserById(userId);
     const targetChatId = Number.isFinite(chat_id) && chat_id > 0 ? chat_id : ensureActiveChat(userId);
+    resolvedChatId = targetChatId;
 
     const commonOptions = {
       ...(parsedImages.length > 0 ? { images: parsedImages } : {}),
@@ -6652,7 +6658,14 @@ async function handleWsChatSend(client: WsClient, msg: any) {
         userOnly: true,
         isDesktop: true,
       });
-      sendWsJson({ type: 'done', ...result });
+      // Ack the initiator with the persisted user message id (replaces the temp
+      // bubble); other members get room_user_message below.
+      sendWsJson({
+        type: 'chat_user_message_saved',
+        chat_id: targetChatId,
+        message_id: result.user_message_id ?? null,
+        ...(result.user_message_images ? { images: result.user_message_images } : {}),
+      });
       broadcastToChat(targetChatId, {
         type: 'room_user_message',
         chat_id: targetChatId,
@@ -6676,46 +6689,28 @@ async function handleWsChatSend(client: WsClient, msg: any) {
       return;
     }
 
-    // Legacy explicit-bot trigger (room bot regenerate). Kept for now so bot
-    // regenerate keeps its existing semantics.
-    const result = await sendMessageThroughAi(userId, text, targetChatId, {
-      ...commonOptions,
-      agentId: requestedAgentId,
-      isDesktop: true,
-      onIntermediateMessage: async (stepText) => {
-        await sendWsJson({ type: 'intermediate', text: stepText });
-      },
-      onStateChange: async (state) => {
-        await sendWsJson({ type: 'display_state', ...state });
-      },
-      onDesktopAction: async (action) => {
-        await sendWsJson({ type: 'desktop_action', ...action });
-      },
-      onToolStatus: async (statusText) => {
-        await sendWsJson({ type: 'tool_status', text: statusText });
-      },
-      onMapUpdate: async (data) => {
-        await sendWsJson({ type: 'map_update', ...data });
-      },
-      onDiceRoll: async (roll) => {
-        await sendWsJson({ type: 'dice_roll', roll });
-      },
-      onUserMessageSaved: async (data) => {
-        await sendWsJson({ type: 'user_message_saved', ...data });
-      },
-      onStreamToken: async (text) => {
-        await sendWsJson({ type: 'stream_token', text });
-      },
-      onReasoningStream: async (text) => {
-        await sendWsJson({ type: 'reasoning_token', text });
-      },
-    });
-    sendWsJson({ type: 'done', ...result });
+    // Explicit bot trigger (room bot regenerate): run it through the unified
+    // chat-runner as an agent step (billed to the bot owner, broadcast to all).
+    const agent = getChatAgentForResponse(userId, targetChatId, requestedAgentId);
+    await runChatSteps(
+      targetChatId,
+      [{
+        kind: 'agent',
+        agentId: requestedAgentId,
+        ownerUserId: agent.owner_user_id,
+        agentName: agent.name,
+        reason: 'manual',
+        prompt: `${text || ''}`.trim() || ' ',
+        options: commonOptions,
+      }],
+      (payload) => broadcastToChat(targetChatId, payload),
+    );
   } catch (err: any) {
     const payload = buildLocalizedAiError(err, userId);
-    // Send 'error' through the current connection (may have reconnected since).
-    // If desktop is offline, the user will see the result/error on next chat refresh.
-    sendWsJson({ type: 'error', ...payload });
+    // Unified error event (the client no longer handles the legacy 'error'
+    // type). This fires before any chat_agent_start, so the client uses it to
+    // reset the composer state.
+    sendWsJson({ type: 'chat_agent_error', chat_id: resolvedChatId, agent_id: null, error: payload?.error || 'chat_send_failed', message: payload?.message });
   }
 }
 // ── WS ipc_result handler ────────────────────────────────────────────────────
