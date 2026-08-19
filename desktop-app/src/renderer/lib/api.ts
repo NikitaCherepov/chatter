@@ -1064,6 +1064,11 @@ export function initWebSocket(callbacks?: WsCallbacks) {
         case 'chat_queue_done':
           wsCallbacks.onRoomEvent?.(msg);
           break;
+        // Legacy push channel still used for unwrapped backend events,
+        // including automatic titles and confirmation cards. Do not remove.
+        case 'desktop_action':
+          wsCallbacks.onDesktopAction?.(msg);
+          break;
         case 'chat_updated':
           wsCallbacks.onChatUpdated?.({
             chat_id: Number(msg.chat_id),
