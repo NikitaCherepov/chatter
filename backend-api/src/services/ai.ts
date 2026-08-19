@@ -130,10 +130,37 @@ export type ToolIteration = {
   is_final?: boolean;
 };
 
-// Registry of active generations для остановки по userId
-export const activeGenerations = new Map<number, AbortController>();
+// Registry of active generations для остановки. Keyed by `${userId}:${chatId}`:
+// один юзер может иметь параллельные генерации в разных чатах.
+export const activeGenerations = new Map<string, AbortController>();
 export const activeHitlWaits = new Set<number>();
 const activeHitlWaitCounts = new Map<number, number>();
+
+export const generationKey = (userId: number, chatId: number | undefined | null): string =>
+  `${userId}:${chatId ?? 0}`;
+
+/** Abort the active generation for a specific user+chat (if any). */
+export const abortChatGeneration = (userId: number, chatId: number): boolean => {
+  const controller = activeGenerations.get(generationKey(userId, chatId));
+  if (controller && !controller.signal.aborted) {
+    controller.abort();
+    return true;
+  }
+  return false;
+};
+
+/** Abort ALL active generations for a user (legacy stop endpoints, updates). */
+export const abortUserGenerations = (userId: number): number => {
+  let stopped = 0;
+  const prefix = `${userId}:`;
+  for (const [key, controller] of activeGenerations.entries()) {
+    if (key.startsWith(prefix) && !controller.signal.aborted) {
+      controller.abort();
+      stopped += 1;
+    }
+  }
+  return stopped;
+};
 
 export const beginActiveHitlWait = (userId: number) => {
   activeHitlWaitCounts.set(userId, (activeHitlWaitCounts.get(userId) || 0) + 1);
@@ -6647,12 +6674,15 @@ export const sendMessageThroughAi = async (
 
   // Token counting remains for statistics only.
 
-  const previousController = activeGenerations.get(userId);
+  // Generations are scoped per user+chat: a send in chat B must NOT abort an
+  // active stream in chat A (multi-chat / room parallelism).
+  const currentGenerationKey = generationKey(userId, targetChatId);
+  const previousController = activeGenerations.get(currentGenerationKey);
   if (previousController && !previousController.signal.aborted) {
     if (activeHitlWaits.has(userId)) {
       const waitingChatId = targetChatId && Number.isFinite(targetChatId) ? targetChatId : ensureActiveChat(userId);
       return {
-        reply_text: 'I am waiting for your response to the confirmation card above. Press "Allow", "Deny", or "Deny with comment" — and I will continue that request.',
+        reply_text: translateForLanguage((user as any)?.language, 'chat.hitlWaitingConfirmation'),
         chat_id: waitingChatId,
         message_id: 0,
         usage: {
@@ -6673,7 +6703,7 @@ export const sendMessageThroughAi = async (
 
   const abortController = new AbortController();
   if (!options?.isBackgroundTask) {
-    activeGenerations.set(userId, abortController);
+    activeGenerations.set(currentGenerationKey, abortController);
   }
 
   // Wire an external abort signal (e.g. a room queue being stopped) into this
@@ -8141,8 +8171,8 @@ iterations.push(currentIteration);
     if (options?.externalAbortSignal) {
       options.externalAbortSignal.removeEventListener('abort', externalAbortHandler);
     }
-    if (activeGenerations.get(userId) === abortController) {
-      activeGenerations.delete(userId);
+    if (activeGenerations.get(currentGenerationKey) === abortController) {
+      activeGenerations.delete(currentGenerationKey);
     }
     // Quota charge happens once per call, even on abort.
     if (!chargeDone) {

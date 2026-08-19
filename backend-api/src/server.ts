@@ -12,7 +12,7 @@ import { activateUserChat, bindChatMessageTelegramMeta, clearAllUserMessages, cl
 import { createNote, countNotes, deleteNote, getNoteById, getNoteStats, getNoteStatsForUsers, listNotes, updateNoteContent } from './services/notes.js';
 import { createTask, deletePendingTask, getUserTaskById, listTasks } from './services/tasks.js';
 import { listMapPins, getMapPinById, createMapPin, updateMapPin, deleteMapPin } from './services/map-pins.js';
-import { sendMessageThroughAi, generateAdminOutreach, callLiteAi, ensureUtilityAiQuota, chargeUtilityAiCompletion, getModelsCatalog, getAutoReasoningLevels, getAutoVisionSupport, activeGenerations, beginActiveHitlWait, endActiveHitlWait, getUpdateState, setUpdatePrepare, forceAbortActiveGenerations, clearUpdatePrepare, resolveManualModel } from './services/ai.js';
+import { sendMessageThroughAi, generateAdminOutreach, callLiteAi, ensureUtilityAiQuota, chargeUtilityAiCompletion, getModelsCatalog, getAutoReasoningLevels, getAutoVisionSupport, abortChatGeneration, abortUserGenerations, beginActiveHitlWait, endActiveHitlWait, getUpdateState, setUpdatePrepare, forceAbortActiveGenerations, clearUpdatePrepare, resolveManualModel } from './services/ai.js';
 import { initSubagentRunner } from './services/subagents/runner.js';
 import { runCompletion, runTool, throwIfAborted, withAbort, toolDefinitions, normalizeTokenUsage } from './services/ai.js';
 import { listMacros, getMacroById, getEnabledMacros, createMacro, updateMacro, deleteMacro } from './services/macros.js';
@@ -2313,24 +2313,27 @@ app.post('/internal/ai/stop', internalAuth, (req, res) => {
     return res.status(400).json({ ok: false, error: 'bad_user_id' });
   }
 
-  const controller = activeGenerations.get(userId);
-  if (!controller || controller.signal.aborted) {
+  const stopped = abortUserGenerations(userId);
+  if (!stopped) {
     return res.json({ ok: false, message: 'no_active_generation' });
   }
 
-  controller.abort();
   return res.json({ ok: true, message: 'stopped' });
 });
 
 // ── Остановка генерации ────────────────────────────────────────────────────
 app.post('/api/v1/chat/stop', authMiddleware, (req: AuthedRequest, res) => {
   const userId = accountIdFromRequest(req);
-  const controller = activeGenerations.get(userId);
-  if (controller) {
-    controller.abort();
-    return res.json({ ok: true, message: 'Остановлено' });
+  const stopLanguage = getUserById(userId)?.language;
+  const stoppedMessage = () => ({ ok: true, message: translateForLanguage(stopLanguage, 'chat.stopStopped') });
+  const noActiveMessage = () => ({ ok: false, message: translateForLanguage(stopLanguage, 'chat.stopNoActiveGeneration') });
+  // Optional chat scoping: new clients stop per chat; legacy clients (no
+  // chat_id) stop everything for the user, matching the old semantics.
+  const chatId = Number(req.body?.chat_id);
+  if (Number.isSafeInteger(chatId) && chatId > 0) {
+    return res.json(abortChatGeneration(userId, chatId) ? stoppedMessage() : noActiveMessage());
   }
-  return res.json({ ok: false, message: 'Нет активной генерации' });
+  return res.json(abortUserGenerations(userId) > 0 ? stoppedMessage() : noActiveMessage());
 });
 
 // ── TTS (Cartesia cloud) ────────────────────────────────────────────────

@@ -1,6 +1,9 @@
 {
   "chat": {
-    "defaultTitle": "Chat {{number}}"
+    "defaultTitle": "Chat {{number}}",
+    "hitlWaitingConfirmation": "I am waiting for your response to the confirmation card above. Press \"Allow\", \"Deny\", or \"Deny with comment\" — and I will continue that request.",
+    "stopStopped": "Stopped",
+    "stopNoActiveGeneration": "No active generation"
   },
   "toolStatus": {
     "search_web": "Searching the web...",
