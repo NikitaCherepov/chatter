@@ -404,6 +404,8 @@
       "branchTitle": "Create a new chat branch with a copy of the history up to this message",
       "sendTelegram": "Send to Telegram",
       "createBranch": "Create branch",
+      "branchNotAllowedInRoom": "Branches are not available in shared rooms yet",
+      "branchFailed": "Failed to create branch",
       "subagentNumber": "🧠 Subagent {{number}}"
     },
     "reasoning": {

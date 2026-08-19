@@ -1841,6 +1841,14 @@ app.post('/api/v1/chats/:id/fork', (req: AuthedRequest, res) => {
     return res.status(400).json({ error: 'bad_message_id' });
   }
   const title = req.body?.title ? String(req.body.title) : undefined;
+  // Forking shared rooms (owner + at least one other human member) is
+  // disabled: the legacy copy logic drops other members' messages, producing
+  // a silently truncated history. Single-user chats (even with many bots)
+  // keep working as before.
+  const readerIds = listChatReaderUserIds(sourceChatId);
+  if (readerIds && readerIds.length > 1) {
+    return res.status(403).json({ error: 'fork_not_allowed_in_shared_room' });
+  }
   const result = forkChat(userId, sourceChatId, fromMessageId, title);
   if (!result) return res.status(404).json({ error: 'chat_or_message_not_found' });
   return res.status(201).json(result);

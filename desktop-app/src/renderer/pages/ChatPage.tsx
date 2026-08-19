@@ -2854,8 +2854,11 @@ export function ChatPage() {
       const res = await api.forkChatFromMessage(activeChatId, messageId);
       await loadChats();
       selectChat(res.chat_id);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to fork chat:', err);
+      toast.error(err?.code === 'fork_not_allowed_in_shared_room'
+        ? t('chat.message.branchNotAllowedInRoom')
+        : t('chat.message.branchFailed'));
     } finally {
       setForking(false);
     }
@@ -6061,6 +6064,7 @@ export function ChatPage() {
                     {t('chat.message.sendTelegram')}
                   </button>
                 )}
+                {otherRoomHumans.length === 0 && (
                 <button className={s.contextMenuItem} onClick={() => handleForkFromMessage(msgMenuId)} disabled={forking} title={t('chat.message.branchTitle')}>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <circle cx="6" cy="6" r="2" />
@@ -6071,6 +6075,7 @@ export function ChatPage() {
                   </svg>
                   {t('chat.message.createBranch')}
                 </button>
+                )}
                 {canEditMenuMessage && (
                   <button className={s.contextMenuItem} onClick={() => handleStartEdit(msgMenuId)}>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

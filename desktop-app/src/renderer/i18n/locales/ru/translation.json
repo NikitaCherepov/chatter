@@ -403,6 +403,8 @@
       "branchTitle": "Создать новый чат-ветку с копией истории до этого сообщения",
       "sendTelegram": "Отправить в Telegram",
       "createBranch": "Создать ветку",
+      "branchNotAllowedInRoom": "Ветки пока недоступны в общих комнатах",
+      "branchFailed": "Не удалось создать ветку",
       "subagentNumber": "🧠 Сабагент {{number}}",
       "providerTokenUsage": "Точное использование токенов завершения, сообщенное провайдером"
     },
