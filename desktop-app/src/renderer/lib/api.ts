@@ -1091,12 +1091,51 @@ export function initWebSocket(callbacks?: WsCallbacks) {
           break;
         }
         case 'task_result': wsCallbacks.onTaskResult?.({ chat_id: msg.chat_id, text: msg.text, is_new_chat: msg.is_new_chat }); break;
-        case 'room_user_message':
-        case 'chat_agent_start':
         case 'chat_agent_token':
+          if (msg.agent_id === null) (activeStreamCallbacks.onStreamToken ?? wsCallbacks.onStreamToken)?.(msg.text);
+          else wsCallbacks.onRoomEvent?.(msg);
+          break;
         case 'chat_agent_reasoning':
+          if (msg.agent_id === null) (activeStreamCallbacks.onReasoningStream ?? wsCallbacks.onReasoningStream)?.(msg.text);
+          else wsCallbacks.onRoomEvent?.(msg);
+          break;
+        case 'chat_agent_start':
+          // Single-chat start has no callback (typing is handled by handleSend).
+          if (msg.agent_id !== null) wsCallbacks.onRoomEvent?.(msg);
+          break;
         case 'chat_agent_done':
+          if (msg.agent_id === null) {
+            const callback = activeStreamCallbacks.onDone ?? wsCallbacks.onDone;
+            activeStreamCallbacks = {};
+            activeChatRequestAccepted = false;
+            try { callback?.(msg.result); } finally { finishActiveStream(); }
+          } else {
+            wsCallbacks.onRoomEvent?.(msg);
+          }
+          break;
         case 'chat_agent_error':
+          if (msg.agent_id === null) {
+            const callback = activeStreamCallbacks.onError ?? wsCallbacks.onError;
+            activeStreamCallbacks = {};
+            activeChatRequestAccepted = false;
+            try { callback?.(msg.error); } finally { finishActiveStream(); }
+          } else {
+            wsCallbacks.onRoomEvent?.(msg);
+          }
+          break;
+        case 'chat_intermediate': (activeStreamCallbacks.onIntermediate ?? wsCallbacks.onIntermediate)?.(msg.text); break;
+        case 'chat_tool_status': (activeStreamCallbacks.onToolStatus ?? wsCallbacks.onToolStatus)?.(msg.text); break;
+        case 'chat_desktop_action':
+          if (msg.action === 'execute_macro' && msg.value?.commands) {
+            (window as any).electronAPI?.executeCommands(msg.value.commands).catch(console.error);
+          }
+          (activeStreamCallbacks.onDesktopAction ?? wsCallbacks.onDesktopAction)?.(msg);
+          break;
+        case 'chat_display_state': (activeStreamCallbacks.onDisplayState ?? wsCallbacks.onDisplayState)?.(msg); break;
+        case 'chat_map_update': (activeStreamCallbacks.onMapUpdate ?? wsCallbacks.onMapUpdate)?.(msg); break;
+        case 'chat_dice_roll': (activeStreamCallbacks.onDiceRoll ?? wsCallbacks.onDiceRoll)?.(Number(msg.roll)); break;
+        case 'chat_user_message_saved': (activeStreamCallbacks.onUserMessageSaved ?? wsCallbacks.onUserMessageSaved)?.(msg); break;
+        case 'room_user_message':
         case 'room_members_updated':
         case 'room_message_deleted':
         case 'room_message_edited':

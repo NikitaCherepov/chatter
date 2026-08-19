@@ -62,6 +62,7 @@ import { normalizeSupportedLanguage, SUPPORTED_LANGUAGES } from './i18n/language
 import { translateForLanguage } from './i18n/index.js';
 import { associateServerAccessKeyUser, createServerAccessKey, getLastServerAccessKeyForUser, isServerAccessKeyGateEnabled, listServerAccessKeys, revokeServerAccessKey, validateServerAccessKey } from './services/server-access-keys.js';
 import { addChatAgent, canReadChatMessages, createChatRoom, createChatRoomInvite, deleteChatRoom, getChatRoom, getChatRoomInviteInfo, joinChatRoomByInvite, leaveChatRoom, listChatReaderUserIds, removeChatAgent, revokeChatRoomInvite, reorderChatAgents, reorderChatMembers, updateChatAgent, updateChatRoomSettings } from './services/chat-rooms.js';
+import { runChatSteps } from './services/chat-runner.js';
 import { isRoomChat, runRoomAgents, runRoomResponseQueue, stopRoomQueue } from './services/room-runner.js';
 
 /** Fire-and-forget WS broadcast to every chat reader (owner for single, owner+members for rooms). */
@@ -6621,18 +6622,17 @@ async function handleWsChatSend(client: WsClient, msg: any) {
 
   try {
     const rawUserRecord = getUserById(userId);
-    const result = await sendMessageThroughAi(userId, text, chat_id, {
+    const targetChatId = Number.isFinite(chat_id) && chat_id > 0 ? chat_id : ensureActiveChat(userId);
+
+    const commonOptions = {
       ...(parsedImages.length > 0 ? { images: parsedImages } : {}),
       userImages: savedUserImages,
       ...(savedUserAttachments ? { userAttachments: savedUserAttachments } : {}),
       displayManifest: display_manifest,
       currentDisplayState: msg.current_display_state ?? null,
-      isDesktop: true,
       isVoice: Boolean(is_voice),
       activeMacros: enabledMacros,
       preferredModel: preferred_model || undefined,
-      agentId: requestedAgentId,
-      userOnly: Boolean(msg.user_only),
       countAsUserMessage: msg.count_as_user_message !== false,
       regenerateHint: regenerate_hint || undefined,
       regenerateFromHistory: Boolean(regenerate_from_history),
@@ -6640,6 +6640,48 @@ async function handleWsChatSend(client: WsClient, msg: any) {
       featureFlags: rawUserRecord ? parseFeatureFlags(rawUserRecord) : undefined,
       diceRollMode: Boolean(parseUiSettings(rawUserRecord ?? getUserById(userId)).dice_roll_enabled),
       ...(() => { const fv = resolveDiceForceValue(msg.dice_mode); return fv !== undefined ? { diceRollForceValue: fv } : {}; })(),
+    };
+
+    // Rooms: `user_only` only persists the human message; the SERVER then runs
+    // the response queue (auto / @mentions) and broadcasts room_user_message +
+    // chat_agent_* events to every room reader.
+    if (msg.user_only && isRoomChat(targetChatId)) {
+      const result = await sendMessageThroughAi(userId, text, targetChatId, {
+        ...commonOptions,
+        agentId: requestedAgentId,
+        userOnly: true,
+        isDesktop: true,
+      });
+      sendWsJson({ type: 'done', ...result });
+      broadcastToChat(targetChatId, {
+        type: 'room_user_message',
+        chat_id: targetChatId,
+        message_id: result.user_message_id ?? null,
+        sender_user_id: userId,
+        text,
+      });
+      void runRoomResponseQueue(targetChatId, userId, text, (payload) => broadcastToChat(targetChatId, payload));
+      return;
+    }
+
+    // Plain single chat: run through the unified chat-runner. It streams
+    // chat_agent_* + chat_* events to the owner (and to room readers if this
+    // ever fires inside a room without an explicit bot).
+    if (requestedAgentId === undefined) {
+      await runChatSteps(
+        targetChatId,
+        [{ kind: 'default', ownerUserId: userId, prompt: `${text || ''}`.trim() || ' ', options: commonOptions }],
+        (payload) => broadcastToChat(targetChatId, payload),
+      );
+      return;
+    }
+
+    // Legacy explicit-bot trigger (room bot regenerate). Kept for now so bot
+    // regenerate keeps its existing semantics.
+    const result = await sendMessageThroughAi(userId, text, targetChatId, {
+      ...commonOptions,
+      agentId: requestedAgentId,
+      isDesktop: true,
       onIntermediateMessage: async (stepText) => {
         await sendWsJson({ type: 'intermediate', text: stepText });
       },
@@ -6668,24 +6710,7 @@ async function handleWsChatSend(client: WsClient, msg: any) {
         await sendWsJson({ type: 'reasoning_token', text });
       },
     });
-
-    // Send 'done' through the current connection (may have reconnected since).
     sendWsJson({ type: 'done', ...result });
-
-    // Multi-user rooms: after a saved user message, the SERVER runs the
-    // response queue (auto responses / @mentions) and broadcasts everything
-    // to all room readers.
-    if (msg.user_only && chat_id && isRoomChat(chat_id)) {
-      const roomId = chat_id;
-      broadcastToChat(roomId, {
-        type: 'room_user_message',
-        chat_id: roomId,
-        message_id: result.user_message_id ?? null,
-        sender_user_id: userId,
-        text,
-      });
-      void runRoomResponseQueue(roomId, userId, text, (payload) => broadcastToChat(roomId, payload));
-    }
   } catch (err: any) {
     const payload = buildLocalizedAiError(err, userId);
     // Send 'error' through the current connection (may have reconnected since).
