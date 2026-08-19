@@ -144,11 +144,12 @@ export const stopRoomQueue = stopChatRun;
 /** True while the chat has an active or queued run (late-joiner sync). */
 export const hasActiveRoomRun = hasActiveChatRun;
 
-const toChatSteps = (steps: RoomResponseStep[]): ChatRunStep[] =>
+const toChatSteps = (steps: RoomResponseStep[], initiatorId: number): ChatRunStep[] =>
   steps.map(({ agent, reason }) => ({
     kind: 'agent',
     agentId: agent.id,
     ownerUserId: agent.owner_user_id,
+    initiatorUserId: initiatorId,
     agentName: agent.name,
     reason: reason === 'mention' ? 'mention' : 'auto',
   }));
@@ -161,7 +162,7 @@ export const runRoomResponseQueue = async (
   emit: RoomRunEmitter,
 ): Promise<void> => {
   const steps = computeRoomResponseQueue(senderId, chatId, userText);
-  await runChatSteps(chatId, toChatSteps(steps), emit);
+  await runChatSteps(chatId, toChatSteps(steps, senderId), emit);
 };
 
 /**
@@ -183,5 +184,5 @@ export const runRoomAgents = async (
     const agent = agents.find(a => a.id === id);
     if (agent) steps.push({ agent, reason: 'auto' });
   }
-  await runChatSteps(chatId, toChatSteps(steps), emit);
+  await runChatSteps(chatId, toChatSteps(steps, initiatorId), emit);
 };

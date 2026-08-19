@@ -25,6 +25,10 @@ export type ChatRunStep =
       kind: 'agent';
       agentId: number;
       ownerUserId: number;
+      /** Who triggered this run (button / message / @mention / regenerate).
+       *  Generation is BILLED to ownerUserId, but tools inside runTool run
+       *  under the initiator's account (their servers, desktop, notes…). */
+      initiatorUserId: number;
       agentName: string;
       reason: 'auto' | 'mention' | 'manual';
       /** Override the default room-bot continuation prompt (e.g. regenerate). */
@@ -35,6 +39,8 @@ export type ChatRunStep =
   | {
       kind: 'default';
       ownerUserId: number;
+      /** Single-chat runs: the initiator is the chat owner. */
+      initiatorUserId: number;
       prompt: string;
       options?: AiSendOptions;
     };
@@ -101,6 +107,7 @@ const runSteps = async (
       agent_id: agentId,
       agent_name: agentName,
       owner_user_id: step.ownerUserId,
+      initiator_user_id: step.initiatorUserId,
       reason,
     });
 
@@ -115,6 +122,7 @@ const runSteps = async (
           agentId: step.agentId,
           skipUserHistory: true,
           countAsUserMessage: false,
+          initiatorUserId: step.initiatorUserId,
           ...overrides,
         };
       } else {
@@ -166,6 +174,7 @@ const runSteps = async (
         chat_id: chatId,
         agent_id: agentId,
         owner_user_id: step.ownerUserId,
+        initiator_user_id: step.initiatorUserId,
         result,
       });
       if (result.aborted) break;

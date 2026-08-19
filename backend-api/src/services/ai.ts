@@ -3637,9 +3637,15 @@ const getTaskByUserAndId = (userId: number, taskId: number) => db.prepare(`
   WHERE user_id = ? AND id = ?
 `).get(userId, taskId) as { id: number; status: string } | undefined;
 
-export const runTool = async (user: UserRecord, timezoneOffset: number, toolName: string, argsRaw: string, aiCall: (requestPayload: Record<string, unknown>) => Promise<CompletionMeta>, generatedImages?: Array<{ image_base64: string; image_url?: string; prompt_used: string }>, displayStateSink?: { value: DisplayStatePayload | null }, desktopActionSink?: { value: DesktopActionPayload | null }, mapUpdateSink?: { value: MapUpdatePayload | null }, activeMacros?: Array<{ id: number; title: string; description?: string; commands: string[]; pinned?: boolean; return_output?: boolean }>, signal?: AbortSignal, subagentExtra?: { manualModel?: any; subagentMode?: 'auto' | 'manual'; subagentReasoningLevel?: ReasoningLevel | null; onToolStatus?: (text: string) => Promise<void> | void; onDesktopAction?: (action: any) => Promise<void> | void; displayManifest?: { moods?: string[]; reactions?: string[] } | null; currentDisplayState?: DisplayStatePayload | null; onSubagentTrace?: (trace: any) => void; onSubagentUsageCall?: (agentName: string, usage: TokenUsageCall) => void; onVisionUsageCall?: (usage: TokenUsageCall) => void; shouldStopForQuota?: (usage: TokenUsageCall) => boolean; availableToolDefs?: any[] }, autoRejectHitl?: boolean, userImages?: Array<{ base64: string; mimeType: string }>) => {
+export const runTool = async (user: UserRecord, timezoneOffset: number, toolName: string, argsRaw: string, aiCall: (requestPayload: Record<string, unknown>) => Promise<CompletionMeta>, generatedImages?: Array<{ image_base64: string; image_url?: string; prompt_used: string }>, displayStateSink?: { value: DisplayStatePayload | null }, desktopActionSink?: { value: DesktopActionPayload | null }, mapUpdateSink?: { value: MapUpdatePayload | null }, activeMacros?: Array<{ id: number; title: string; description?: string; commands: string[]; pinned?: boolean; return_output?: boolean }>, signal?: AbortSignal, subagentExtra?: { manualModel?: any; subagentMode?: 'auto' | 'manual'; subagentReasoningLevel?: ReasoningLevel | null; onToolStatus?: (text: string) => Promise<void> | void; onDesktopAction?: (action: any) => Promise<void> | void; displayManifest?: { moods?: string[]; reactions?: string[] } | null; currentDisplayState?: DisplayStatePayload | null; onSubagentTrace?: (trace: any) => void; onSubagentUsageCall?: (agentName: string, usage: TokenUsageCall) => void; onVisionUsageCall?: (usage: TokenUsageCall) => void; shouldStopForQuota?: (usage: TokenUsageCall) => boolean; availableToolDefs?: any[] }, autoRejectHitl?: boolean, userImages?: Array<{ base64: string; mimeType: string }>, billingUserId?: number) => {
   throwIfAborted(signal);
   const parsed = JSON.parse(argsRaw || '{}');
+  // Room runs: `user` is the INITIATOR (data privacy: their servers, desktop,
+  // notes…), while COSTS (web-search quota, image generation) are billed to
+  // the bot OWNER. Same user outside rooms.
+  const billingUser = billingUserId !== undefined && billingUserId !== user.id
+    ? (getUserById(billingUserId) ?? user)
+    : user;
   const runTrackedVisionCompletion = async (requestPayload: Record<string, unknown>) => {
     const completion = await runCompletion('vision-pro', requestPayload, undefined, signal);
     const normalized = normalizeTokenUsage(completion.response?.usage);
@@ -3672,9 +3678,10 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
   if (toolName === 'search_web') {
     const query = `${parsed.query || ''}`.trim();
     if (!query) return 'Tool error: empty search query.';
-    const webLimit = checkWebSearchLimit(user);
-    if (!webLimit.allowed && user.is_admin !== 1) return webLimit.reason;
-    incrementUserWebSearchUsage(user.id, 1);
+    // Quota is the bot owner's — the initiator only provides tool data.
+    const webLimit = checkWebSearchLimit(billingUser);
+    if (!webLimit.allowed && billingUser.is_admin !== 1) return webLimit.reason;
+    incrementUserWebSearchUsage(billingUser.id, 1);
     return runWebSearch(query, signal);
   }
 
@@ -3963,7 +3970,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
 
     selectedImages = selectedImages.slice(0, 3);
 
-    const result = await runImageGeneration(user.id, prompt, selectedImages.length > 0 ? selectedImages : undefined);
+    const result = await runImageGeneration(billingUser.id, prompt, selectedImages.length > 0 ? selectedImages : undefined);
     if (!result.ok) return `Image generation error: ${(result as any).error || 'unknown'}`;
     // base64 НЕ возвращаем в tool_content — он сохраняется в массив generatedImages
     // LLM получает текстовую заглушку, чтобы не забивать контекст мегабайтами base64
@@ -6591,11 +6598,23 @@ export const sendMessageThroughAi = async (
     notifyDesktopChatUpdates?: boolean;
     /** External signal (e.g. room queue stop) that aborts this generation. */
     externalAbortSignal?: AbortSignal;
+    /** Room runs: who triggered the generation (button / message / @mention /
+     *  regenerate). Billing + model stay on `userId` (the bot owner), but ALL
+     *  tools in runTool execute under the initiator's account (their servers,
+     *  desktop, notes, memory…) so the owner's private data never leaks. */
+    initiatorUserId?: number;
   }
 ): Promise<AiSendResult> => {
   const user = getUserById(userId);
   if (!user) throw new Error('user_not_found');
   if (user.status !== 'approved' && user.is_admin !== 1) throw new Error('user_not_approved');
+  // Room runs: tools (servers, desktop IPC, notes, memory, HITL cards…) must
+  // execute under the INITIATOR's account, not the bot owner's. Everything
+  // billing/model related keeps using `user` above.
+  const initiator = options?.initiatorUserId !== undefined && options.initiatorUserId !== userId
+    ? getUserById(options.initiatorUserId)
+    : null;
+  const toolUser = initiator && initiator.status === 'approved' ? initiator : user;
 
   // Reject immediately if server update is in progress
   if (getUpdatePreparing()) {
@@ -7328,7 +7347,7 @@ export const sendMessageThroughAi = async (
   ];
   // UI actions can originate from any client (Telegram, future messengers, Desktop).
   // Expose them whenever the request itself comes from Desktop or Desktop is online.
-  const desktopUiAvailable = Boolean(options?.isDesktop || isDesktopOnline(userId));
+  const desktopUiAvailable = Boolean(options?.isDesktop || isDesktopOnline(userId) || (toolUser !== user && isDesktopOnline(toolUser.id)));
   const desktopOnlyTools = desktopUiAvailable ? [
     buildDesktopActionTool(),
   ] : [];
@@ -7708,7 +7727,7 @@ const runOneToolCall = async (toolCall: any, emitStatus = true): Promise<Execute
     } else {
     toolContent = await withAbort(
       runTool(
-        user,
+        toolUser,
         timezone,
         toolName,
         toolCall.function?.arguments || '{}',
@@ -7741,7 +7760,8 @@ const runOneToolCall = async (toolCall: any, emitStatus = true): Promise<Execute
           ),
         },
         options?.autoRejectHitl,
-        images
+        images,
+        userId
       ),
       abortController.signal
     );

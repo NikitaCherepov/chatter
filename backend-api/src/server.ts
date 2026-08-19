@@ -2303,14 +2303,14 @@ app.post('/api/v1/chat/send', async (req: AuthedRequest, res) => {
     if (agentId === undefined) {
       await runChatSteps(
         targetChatId,
-        [{ kind: 'default', ownerUserId: userId, prompt: `${text || ''}`.trim() || ' ', options: commonOptions }],
+        [{ kind: 'default', ownerUserId: userId, initiatorUserId: userId, prompt: `${text || ''}`.trim() || ' ', options: commonOptions }],
         writeEvent,
       );
     } else {
       const agent = getChatAgentForResponse(userId, targetChatId, agentId);
       await runChatSteps(
         targetChatId,
-        [{ kind: 'agent', agentId, ownerUserId: agent.owner_user_id, agentName: agent.name, reason: 'manual', prompt: `${text || ''}`.trim() || ' ', options: commonOptions }],
+        [{ kind: 'agent', agentId, ownerUserId: agent.owner_user_id, initiatorUserId: userId, agentName: agent.name, reason: 'manual', prompt: `${text || ''}`.trim() || ' ', options: commonOptions }],
         writeEvent,
       );
     }
@@ -6704,7 +6704,7 @@ async function handleWsChatSend(client: WsClient, msg: any) {
     if (requestedAgentId === undefined) {
       await runChatSteps(
         targetChatId,
-        [{ kind: 'default', ownerUserId: userId, prompt: `${text || ''}`.trim() || ' ', options: commonOptions }],
+        [{ kind: 'default', ownerUserId: userId, initiatorUserId: userId, prompt: `${text || ''}`.trim() || ' ', options: commonOptions }],
         (payload) => broadcastToChat(targetChatId, payload),
       );
       return;
@@ -6719,6 +6719,7 @@ async function handleWsChatSend(client: WsClient, msg: any) {
         kind: 'agent',
         agentId: requestedAgentId,
         ownerUserId: agent.owner_user_id,
+        initiatorUserId: userId,
         agentName: agent.name,
         reason: 'manual',
         prompt: `${text || ''}`.trim() || ' ',
