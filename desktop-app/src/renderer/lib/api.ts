@@ -1194,8 +1194,10 @@ export function isWsConnected(): boolean {
 
 // ── Send chat_send via WS (unified) ──
 
-/** Fire-and-forget unified trigger. Streaming is delivered via unified chat events. */
-export function sendChatTrigger(payload: {
+/** Unified trigger. Streaming is delivered via unified chat events.
+ * Resolves to false when the trigger could not be delivered at all
+ * (WS send failed and the SSE fallback failed to open). */
+export async function sendChatTrigger(payload: {
   text: string;
   chatId?: number;
   images?: ChatSendImage[];
@@ -1228,16 +1230,18 @@ export function sendChatTrigger(payload: {
     if (payload.agentId) msg.agent_id = payload.agentId;
     if (payload.userOnly) msg.user_only = true;
     if (payload.countAsUserMessage === false) msg.count_as_user_message = false;
+    let wsSent = false;
     try {
       ws.send(JSON.stringify(msg));
+      wsSent = true;
     } catch (err) {
-      console.warn('[ws] failed to send chat_send:', err);
+      console.warn('[ws] failed to send chat_send, falling back to SSE:', err);
     }
-    return;
+    if (wsSent) return true;
   }
 
   // Fallback: SSE (same unified event stream).
-  void sendChatTriggerSSE(payload);
+  return sendChatTriggerSSE(payload);
 }
 
 // ── Stop chat generation ──
@@ -1272,7 +1276,7 @@ async function sendChatTriggerSSE(payload: {
   userOnly?: boolean;
   countAsUserMessage?: boolean;
 }) {
-  const attempt = async (isRetry = false): Promise<void> => {
+  const attempt = async (isRetry = false): Promise<boolean> => {
     const tokens = loadTokens();
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     if (tokens?.access_token) headers['Authorization'] = `Bearer ${tokens.access_token}`;
@@ -1312,43 +1316,58 @@ async function sendChatTriggerSSE(payload: {
     if (!res.ok) throw new Error(await res.text());
     if (!res.body) throw new Error('ReadableStream not supported');
 
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder('utf-8');
-    let buffer = '';
+    // Stream opened — the trigger is delivered. Keep reading in the
+    // background: the unified events below drive the UI, and mid-stream
+    // transport failures surface as a synthetic chat_agent_error so the
+    // client can reset its composer state.
+    const sseChatId = payload.chatId ?? null;
+    void (async () => {
+      const reader = res.body!.getReader();
+      const decoder = new TextDecoder('utf-8');
+      let buffer = '';
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const chunks = buffer.split('\n\n');
+          buffer = chunks.pop() || '';
 
-      buffer += decoder.decode(value, { stream: true });
-      const chunks = buffer.split('\n\n');
-      buffer = chunks.pop() || '';
+          for (const chunk of chunks) {
+            if (!chunk.trim() || chunk.startsWith(':')) continue;
 
-      for (const chunk of chunks) {
-        if (!chunk.trim() || chunk.startsWith(':')) continue;
+            const lines = chunk.split('\n');
+            let dataStr = '';
+            for (const line of lines) {
+              if (line.startsWith('data:')) dataStr = line.slice(5).trim();
+            }
 
-        const lines = chunk.split('\n');
-        let dataStr = '';
-        for (const line of lines) {
-          if (line.startsWith('data:')) dataStr = line.slice(5).trim();
-        }
-
-        if (dataStr) {
-          try {
-            const data = JSON.parse(dataStr);
-            if (data?.type) wsCallbacks.onRoomEvent?.(data);
-          } catch {
-            // ignore malformed JSON
+            if (dataStr) {
+              try {
+                const data = JSON.parse(dataStr);
+                if (data?.type) wsCallbacks.onRoomEvent?.(data);
+              } catch {
+                // ignore malformed JSON
+              }
+            }
           }
         }
+      } catch (err: any) {
+        console.warn('[sse] unified chat stream failed mid-stream:', err?.message || String(err));
+        if (sseChatId) {
+          wsCallbacks.onRoomEvent?.({ type: 'chat_agent_error', chat_id: sseChatId, agent_id: null, error: 'connection_lost' });
+        }
       }
-    }
+    })();
+    return true;
   };
 
   try {
-    await attempt();
+    return await attempt();
   } catch (err: any) {
-    console.warn('[sse] unified chat stream failed:', err?.message || String(err));
+    console.warn('[sse] unified chat trigger failed:', err?.message || String(err));
+    return false;
   }
 }
 

@@ -828,6 +828,39 @@ export function ChatPage() {
   // Optimistic temp user-message id per chat, replaced when the server acks
   // the persisted message via chat_user_message_saved.
   const pendingUserMessageIdByChatRef = useRef(new Map<number, number>());
+  // Watchdog timers per chat: if the server never picks up a send (no ack /
+  // start / queue events), roll the optimistic UI back so the composer does
+  // not hang in `sending` forever.
+  const sendWatchdogTimersRef = useRef(new Map<number, ReturnType<typeof setTimeout>>());
+  const clearSendWatchdog = useCallback((chatId: number) => {
+    const timer = sendWatchdogTimersRef.current.get(chatId);
+    if (timer) {
+      clearTimeout(timer);
+      sendWatchdogTimersRef.current.delete(chatId);
+    }
+  }, []);
+  const armSendWatchdog = useCallback((chatId: number) => {
+    clearSendWatchdog(chatId);
+    sendWatchdogTimersRef.current.set(chatId, setTimeout(() => {
+      sendWatchdogTimersRef.current.delete(chatId);
+      // Queued behind an active run for this chat — wait another cycle.
+      if (roomEventAgentMsgIds.current.has(chatId) || roomStreamChatIdsRef.current.has(chatId)) {
+        armSendWatchdog(chatId);
+        return;
+      }
+      const pendingTempId = pendingUserMessageIdByChatRef.current.get(chatId);
+      pendingUserMessageIdByChatRef.current.delete(chatId);
+      roomStreamChatIdsRef.current.delete(chatId);
+      if (pendingTempId !== undefined) {
+        setMessages((prev) => prev.filter((message) => message.id !== pendingTempId));
+      }
+      setSending(false);
+      setShowTyping(false);
+      setStreamingMsgId(null);
+      setStreamingState('done');
+      toast.error(t('chat.connectionLostBeforeSend'));
+    }, 25000));
+  }, [clearSendWatchdog, t]);
   const { unreadByChat, incrementUnread, markAsRead, getUnread } = useUnreadChats();
   const [messages, setMessages] = useState<api.Message[]>([]);
   const [input, setInput] = useState('');
@@ -2073,6 +2106,9 @@ export function ChatPage() {
     return api.onRoomEvent((event) => {
       // Keep bookkeeping for in-flight room streams even when this chat is not
       // open, so switching back mid-generation can resume the stream.
+      // Any server event for this chat proves the trigger was picked up —
+      // disarm the send watchdog.
+      clearSendWatchdog(event.chat_id);
       if (event.type === 'chat_agent_start') {
         roomEventAgentMsgIds.current.set(event.chat_id, { agentId: event.agent_id, tempId: -(Date.now() + 1), created: false });
         roomStreamChatIdsRef.current.add(event.chat_id);
@@ -2285,7 +2321,7 @@ export function ChatPage() {
         }
       }
     });
-  }, [user?.id, notifyAssistantResponse, refreshContextTokens, t]);
+  }, [user?.id, notifyAssistantResponse, refreshContextTokens, t, clearSendWatchdog]);
 
   const handleSend = useCallback(async () => {
     const text = input.trim();
@@ -2346,7 +2382,8 @@ export function ChatPage() {
     // Streaming is handled entirely by the onRoomEvent handler.
     if (activeChatId) {
       pendingUserMessageIdByChatRef.current.set(activeChatId, tempUserMsg.id);
-      api.sendChatTrigger({
+      armSendWatchdog(activeChatId);
+      const delivered = await api.sendChatTrigger({
         text: text || ' ',
         chatId: activeChatId,
         images: imagesToSend.length > 0 ? imagesToSend : undefined,
@@ -2358,10 +2395,21 @@ export function ChatPage() {
         dice_mode: diceMode,
         userOnly: roomCreated,
       });
+      if (!delivered) {
+        // The trigger never reached the server — roll the optimistic UI back.
+        clearSendWatchdog(activeChatId);
+        pendingUserMessageIdByChatRef.current.delete(activeChatId);
+        setMessages((prev) => prev.filter((message) => message.id !== tempUserMsg.id));
+        setSending(false);
+        setShowTyping(false);
+        setStreamingState('done');
+        setStreamingMsgId(null);
+        toast.error(t('chat.connectionLostBeforeSend'));
+      }
     }
     return;
 
-  }, [input, sending, activeChatId, attachedImages, attachedDocuments, attachedImageBytes, maxImageBytes, maxImageCount, preferredModel, handleIncomingDesktopAction, diceRollEnabled, startDiceRollAnimation, finishDiceRoll, diceStatus, diceMode, applyAvatarState, t, roomCreated]);
+  }, [input, sending, activeChatId, attachedImages, attachedDocuments, attachedImageBytes, maxImageBytes, maxImageCount, preferredModel, handleIncomingDesktopAction, diceRollEnabled, startDiceRollAnimation, finishDiceRoll, diceStatus, diceMode, applyAvatarState, t, roomCreated, armSendWatchdog, clearSendWatchdog]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
@@ -2813,8 +2861,9 @@ export function ChatPage() {
     setShowTyping(true);
 
     // Room bot regenerate: run through the unified chat-runner (agent step).
+    armSendWatchdog(activeChatId);
     if (responseAgentId !== undefined) {
-      api.sendChatTrigger({
+      const delivered = await api.sendChatTrigger({
         text: userText,
         chatId: activeChatId,
         preferredModel,
@@ -2823,11 +2872,17 @@ export function ChatPage() {
         dice_mode: diceMode,
         agentId: responseAgentId,
       });
+      if (!delivered) {
+        clearSendWatchdog(activeChatId);
+        setSending(false);
+        setShowTyping(false);
+        toast.error(t('chat.connectionLostBeforeSend'));
+      }
       return;
     }
 
     // Single chat regenerate: unified default step.
-    api.sendChatTrigger({
+    const delivered = await api.sendChatTrigger({
       text: userText,
       chatId: activeChatId,
       preferredModel,
@@ -2835,8 +2890,14 @@ export function ChatPage() {
       regenerate_from_history: true,
       dice_mode: diceMode,
     });
+    if (!delivered) {
+      clearSendWatchdog(activeChatId);
+      setSending(false);
+      setShowTyping(false);
+      toast.error(t('chat.connectionLostBeforeSend'));
+    }
     return;
-  }, [activeChatId, sending, messages, preferredModel, handleIncomingDesktopAction, diceRollEnabled, startDiceRollAnimation, finishDiceRoll, diceMode, applyAvatarState]);
+  }, [activeChatId, sending, messages, preferredModel, handleIncomingDesktopAction, diceRollEnabled, startDiceRollAnimation, finishDiceRoll, diceMode, applyAvatarState, t, armSendWatchdog, clearSendWatchdog]);
 
   const handleRegenerateWithHint = useCallback(async (assistantMsgId: number, hint: string) => {
     if (!activeChatId || sending || !hint.trim()) return;
@@ -2866,8 +2927,9 @@ export function ChatPage() {
     setShowTyping(true);
 
     // Room bot regenerate: run through the unified chat-runner (agent step).
+    armSendWatchdog(activeChatId);
     if (responseAgentId !== undefined) {
-      api.sendChatTrigger({
+      const delivered = await api.sendChatTrigger({
         text: userText,
         chatId: activeChatId,
         preferredModel,
@@ -2877,11 +2939,17 @@ export function ChatPage() {
         dice_mode: diceMode,
         agentId: responseAgentId,
       });
+      if (!delivered) {
+        clearSendWatchdog(activeChatId);
+        setSending(false);
+        setShowTyping(false);
+        toast.error(t('chat.connectionLostBeforeSend'));
+      }
       return;
     }
 
     // Single chat regenerate-with-hint: unified default step.
-    api.sendChatTrigger({
+    const delivered = await api.sendChatTrigger({
       text: userText,
       chatId: activeChatId,
       preferredModel,
@@ -2890,8 +2958,14 @@ export function ChatPage() {
       regenerate_from_history: true,
       dice_mode: diceMode,
     });
+    if (!delivered) {
+      clearSendWatchdog(activeChatId);
+      setSending(false);
+      setShowTyping(false);
+      toast.error(t('chat.connectionLostBeforeSend'));
+    }
     return;
-  }, [activeChatId, sending, messages, preferredModel, handleIncomingDesktopAction, diceRollEnabled, startDiceRollAnimation, finishDiceRoll, diceMode, applyAvatarState]);
+  }, [activeChatId, sending, messages, preferredModel, handleIncomingDesktopAction, diceRollEnabled, startDiceRollAnimation, finishDiceRoll, diceMode, applyAvatarState, t, armSendWatchdog, clearSendWatchdog]);
 
   const handleCopyMessage = (messageId: number) => {
     const msg = messages.find(m => m.id === messageId);
