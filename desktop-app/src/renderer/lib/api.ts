@@ -495,6 +495,13 @@ export async function runRoomAgents(chatId: number, agentIds: number[]): Promise
   });
 }
 
+/** True while the chat has an active/queued run — lets a client that joined
+ *  mid-generation (missed chat_agent_start) sync its composer state. */
+export async function getRoomRunStatus(chatId: number): Promise<boolean> {
+  const res = await apiFetch(`/api/v1/chats/${chatId}/room/status`);
+  return Boolean((res as any)?.active);
+}
+
 // ── Room invites ───────────────────────────────────────────────────────────
 
 export type RoomInvite = {

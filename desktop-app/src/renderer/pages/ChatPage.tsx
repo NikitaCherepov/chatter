@@ -1361,6 +1361,19 @@ export function ChatPage() {
     } else {
       setSending(false);
     }
+    // Late-joiner resync: if a run is active server-side but we missed its
+    // chat_agent_start (e.g. the app was closed), block the composer so the
+    // stop button shows. No-op when we already know about the stream.
+    if (activeChatId !== null && !roomStreamChatIdsRef.current.has(activeChatId)) {
+      void api.getRoomRunStatus(activeChatId)
+        .then((active) => {
+          if (active && activeChatIdRef.current === activeChatId && !roomStreamChatIdsRef.current.has(activeChatId)) {
+            roomStreamChatIdsRef.current.add(activeChatId);
+            setSending(true);
+          }
+        })
+        .catch(() => { /* non-fatal: the run may have just ended */ });
+    }
     setShowTyping(false);
     setStreamingState('idle');
     setStreamingMsgId(null);
@@ -2089,11 +2102,13 @@ export function ChatPage() {
     if (!activeChatId || agentIds.length === 0) return;
     setSending(true);
     try {
+      // The server enqueues and returns immediately; the run itself streams
+      // via chat_agent_* events. Do NOT reset `sending` here — chat_queue_done
+      // owns the reset (otherwise the stop button disappears mid-run).
       await api.runRoomAgents(activeChatId, agentIds);
     } catch (error) {
       console.error('Failed to run room agents:', error);
       toast.error(t('auth.error.generic'));
-    } finally {
       setSending(false);
     }
   }, [activeChatId, t]);
@@ -2259,6 +2274,19 @@ export function ChatPage() {
           roomEventAgentMsgIds.current.delete(event.chat_id);
           const tempId = stream?.tempId;
           const res = event.result ?? {};
+          // Stopped by a participant with nothing saved — drop the temp
+          // bubble instead of replacing it with an empty id=0 message.
+          if (res.aborted && !res.message_id) {
+            if (tempId !== undefined) {
+              setMessages((prev) => prev.filter((message) => message.id !== tempId));
+            }
+            if (roomEventAgentMsgIds.current.size === 0) {
+              setStreamingState('done');
+              setStreamingMsgId(null);
+              setShowTyping(false);
+            }
+            break;
+          }
           const generatedImages: api.MessageImage[] | undefined = res.generated_images?.length
             ? res.generated_images.map((image: any) => ({
                 url: image.image_url || `data:image/png;base64,${image.image_base64}`,

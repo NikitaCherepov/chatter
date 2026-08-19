@@ -229,3 +229,10 @@ export const runChatSteps = (
     void drainChat(chatId);
   });
 };
+
+/** True while a chat has an active or queued run (for late joiners to sync
+ *  their composer/stop-button state when they missed chat_agent_start). */
+export const hasActiveChatRun = (chatId: number): boolean => {
+  const state = chatStates.get(chatId);
+  return Boolean(state && (state.activeController !== null || state.queue.length > 0 || state.draining));
+};

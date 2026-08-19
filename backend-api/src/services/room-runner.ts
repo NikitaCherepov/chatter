@@ -1,5 +1,5 @@
 import { db } from '../db.js';
-import { runChatSteps, stopChatRun, type ChatRunEmitter, type ChatRunStep } from './chat-runner.js';
+import { hasActiveChatRun, runChatSteps, stopChatRun, type ChatRunEmitter, type ChatRunStep } from './chat-runner.js';
 
 /**
  * Room response orchestration — now a thin layer over the unified chat-runner.
@@ -140,6 +140,9 @@ export type RoomRunEmitter = ChatRunEmitter;
 
 /** Abort the currently running room queue for a chat (if any). */
 export const stopRoomQueue = stopChatRun;
+
+/** True while the chat has an active or queued run (late-joiner sync). */
+export const hasActiveRoomRun = hasActiveChatRun;
 
 const toChatSteps = (steps: RoomResponseStep[]): ChatRunStep[] =>
   steps.map(({ agent, reason }) => ({

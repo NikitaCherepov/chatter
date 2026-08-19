@@ -63,7 +63,7 @@ import { translateForLanguage } from './i18n/index.js';
 import { associateServerAccessKeyUser, createServerAccessKey, getLastServerAccessKeyForUser, isServerAccessKeyGateEnabled, listServerAccessKeys, revokeServerAccessKey, validateServerAccessKey } from './services/server-access-keys.js';
 import { addChatAgent, canReadChatMessages, createChatRoom, createChatRoomInvite, deleteChatRoom, getChatAgentForResponse, getChatRoom, getChatRoomInviteInfo, joinChatRoomByInvite, leaveChatRoom, listChatReaderUserIds, removeChatAgent, revokeChatRoomInvite, reorderChatAgents, reorderChatMembers, updateChatAgent, updateChatRoomSettings } from './services/chat-rooms.js';
 import { runChatSteps } from './services/chat-runner.js';
-import { isRoomChat, runRoomAgents, runRoomResponseQueue, stopRoomQueue } from './services/room-runner.js';
+import { isRoomChat, runRoomAgents, runRoomResponseQueue, stopRoomQueue, hasActiveRoomRun } from './services/room-runner.js';
 
 /** Fire-and-forget WS broadcast to every chat reader (owner for single, owner+members for rooms). */
 const broadcastToChat = (chatId: number, payload: Record<string, unknown>) => {
@@ -1818,6 +1818,16 @@ app.post('/api/v1/chats/:id/room/stop', (req: AuthedRequest, res) => {
   if (!canReadChatMessages(userId, chatId)) return res.status(404).json({ error: 'chat_not_found' });
   const stopped = stopRoomQueue(chatId);
   return res.json({ ok: true, stopped });
+});
+
+// Active-run status: lets clients that joined mid-generation (and missed
+// chat_agent_start) sync their composer / stop-button state.
+app.get('/api/v1/chats/:id/room/status', (req: AuthedRequest, res) => {
+  const userId = accountIdFromRequest(req);
+  const chatId = Number.parseInt(req.params.id, 10);
+  if (!Number.isSafeInteger(chatId) || chatId <= 0) return res.status(400).json({ error: 'bad_chat_id' });
+  if (!canReadChatMessages(userId, chatId)) return res.status(404).json({ error: 'chat_not_found' });
+  return res.json({ active: hasActiveRoomRun(chatId) });
 });
 
 app.post('/api/v1/chats/:id/fork', (req: AuthedRequest, res) => {
