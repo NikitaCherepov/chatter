@@ -155,11 +155,24 @@ const buildUserChatFilter = (userId: number, filters: ChatListFilters) => {
         AND TRIM(cm.images) NOT IN ('', '[]', 'null')
     )`);
   }
+  // Folder placement is per-user: owner → user_chats.folder_id, room member →
+  // chat_members.folder_id. An owner-side folder move must not affect members.
   if (filters.folderId === null) {
-    conditions.push('uc.folder_id IS NULL');
+    conditions.push(`(
+      (uc.user_id = ? AND uc.folder_id IS NULL)
+      OR (uc.user_id <> ? AND NOT EXISTS (
+        SELECT 1 FROM chat_members um2 WHERE um2.chat_id = uc.id AND um2.user_id = ? AND um2.folder_id IS NOT NULL
+      ))
+    )`);
+    params.push(userId, userId, userId);
   } else if (Number.isSafeInteger(filters.folderId) && Number(filters.folderId) > 0) {
-    conditions.push('uc.folder_id = ?');
-    params.push(Number(filters.folderId));
+    conditions.push(`(
+      (uc.user_id = ? AND uc.folder_id = ?)
+      OR EXISTS (
+        SELECT 1 FROM chat_members um2 WHERE um2.chat_id = uc.id AND um2.user_id = ? AND um2.folder_id = ?
+      )
+    )`);
+    params.push(userId, Number(filters.folderId), userId, Number(filters.folderId));
   }
   return { where: conditions.join('\n      AND '), params };
 };
@@ -172,13 +185,17 @@ export const listUserChats = (userId: number, limit = 50, offset = 0, filters: C
   const safeOffset = Math.max(0, parsedOffset);
   const { where, params } = buildUserChatFilter(userId, filters);
   const rows = db.prepare(`
-    SELECT uc.id, uc.title, uc.folder_id, uc.created_at, uc.updated_at, uc.bot_hidden,
-           (uc.user_id = ?) AS is_owner
+    SELECT uc.id, uc.title, uc.created_at, uc.updated_at, uc.bot_hidden,
+           (uc.user_id = ?) AS is_owner,
+           CASE
+             WHEN uc.user_id = ? THEN uc.folder_id
+             ELSE (SELECT um.folder_id FROM chat_members um WHERE um.chat_id = uc.id AND um.user_id = ?)
+           END AS folder_id
     FROM user_chats uc
     WHERE ${where}
     ORDER BY uc.updated_at DESC, uc.id DESC
     LIMIT ? OFFSET ?
-  `).all(userId, ...params, safeLimit, safeOffset) as Array<{ id: number; title: string; folder_id: number | null; created_at: string; updated_at: string; bot_hidden: number; is_owner: number }>;
+  `).all(userId, userId, userId, ...params, safeLimit, safeOffset) as Array<{ id: number; title: string; folder_id: number | null; created_at: string; updated_at: string; bot_hidden: number; is_owner: number }>;
 
   return rows.map(row => ({
     id: row.id,
@@ -195,10 +212,16 @@ export const listUserChats = (userId: number, limit = 50, offset = 0, filters: C
 export const getUserChatListItem = (userId: number, chatId: number): ChatDto | undefined => {
   const activeId = ensureActiveChat(userId);
   const row = db.prepare(`
-    SELECT id, title, folder_id, created_at, updated_at, bot_hidden
-    FROM user_chats
-    WHERE user_id = ? AND id = ?
-  `).get(userId, chatId) as { id: number; title: string; folder_id: number | null; created_at: string; updated_at: string; bot_hidden: number } | undefined;
+    SELECT uc.id, uc.title, uc.created_at, uc.updated_at, uc.bot_hidden,
+           (uc.user_id = ?) AS is_owner,
+           CASE
+             WHEN uc.user_id = ? THEN uc.folder_id
+             ELSE (SELECT um.folder_id FROM chat_members um WHERE um.chat_id = uc.id AND um.user_id = ?)
+           END AS folder_id
+    FROM user_chats uc
+    WHERE uc.id = ?
+      AND (uc.user_id = ? OR EXISTS (SELECT 1 FROM chat_members um2 WHERE um2.chat_id = uc.id AND um2.user_id = ?))
+  `).get(userId, userId, userId, chatId, userId, userId) as { id: number; title: string; folder_id: number | null; created_at: string; updated_at: string; bot_hidden: number; is_owner: number } | undefined;
   if (!row) return undefined;
   return {
     id: row.id,
@@ -208,6 +231,7 @@ export const getUserChatListItem = (userId: number, chatId: number): ChatDto | u
     updated_at: toUnix(row.updated_at),
     is_active: row.id === activeId,
     bot_hidden: row.bot_hidden === 1,
+    is_owner: row.is_owner === 1,
   };
 };
 
@@ -266,12 +290,17 @@ export const listChatFolders = (userId: number, filters: ChatListFilters = {}): 
   total_count: number;
 } => {
   const { where, params } = buildUserChatFilter(userId, filters);
+  // Folder placement is per-user (owner → user_chats.folder_id, member →
+  // chat_members.folder_id), so counts must use the same resolution.
   const countRows = db.prepare(`
-    SELECT uc.folder_id, COUNT(*) AS count
+    SELECT CASE
+      WHEN uc.user_id = ? THEN uc.folder_id
+      ELSE (SELECT um.folder_id FROM chat_members um WHERE um.chat_id = uc.id AND um.user_id = ?)
+    END AS folder_id, COUNT(*) AS count
     FROM user_chats uc
     WHERE ${where}
-    GROUP BY uc.folder_id
-  `).all(...params) as Array<{ folder_id: number | null; count: number }>;
+    GROUP BY folder_id
+  `).all(userId, userId, ...params) as Array<{ folder_id: number | null; count: number }>;
   const counts = new Map<number | null, number>(countRows.map((row) => [row.folder_id, Number(row.count) || 0]));
   const rows = db.prepare(`
     SELECT id, name, sort_order, created_at, updated_at
@@ -332,20 +361,34 @@ export const deleteChatFolder = (userId: number, folderId: number): boolean => d
     .get(folderId, userId) as { id: number } | undefined;
   if (!folder) return false;
   db.prepare('UPDATE user_chats SET folder_id = NULL WHERE user_id = ? AND folder_id = ?').run(userId, folderId);
+  // Per-member placements (rooms) must be cleaned up too.
+  db.prepare('UPDATE chat_members SET folder_id = NULL WHERE user_id = ? AND folder_id = ?').run(userId, folderId);
   db.prepare('DELETE FROM chat_folders WHERE id = ? AND user_id = ?').run(folderId, userId);
   return true;
 })();
 
 export const moveUserChatToFolder = (userId: number, chatId: number, folderId: number | null): boolean => {
-  const chat = db.prepare('SELECT id FROM user_chats WHERE id = ? AND user_id = ?')
-    .get(chatId, userId) as { id: number } | undefined;
+  const chat = db.prepare('SELECT id, user_id FROM user_chats WHERE id = ?')
+    .get(chatId) as { id: number; user_id: number } | undefined;
   if (!chat) return false;
+  const isOwner = chat.user_id === userId;
+  if (!isOwner) {
+    // Rooms: a member files the chat into their OWN folder — the owner's
+    // placement is untouched.
+    const member = db.prepare('SELECT user_id FROM chat_members WHERE chat_id = ? AND user_id = ?')
+      .get(chatId, userId) as { user_id: number } | undefined;
+    if (!member) return false;
+  }
   if (folderId !== null) {
     const folder = db.prepare('SELECT id FROM chat_folders WHERE id = ? AND user_id = ?')
       .get(folderId, userId) as { id: number } | undefined;
     if (!folder) return false;
   }
-  db.prepare('UPDATE user_chats SET folder_id = ? WHERE id = ? AND user_id = ?').run(folderId, chatId, userId);
+  if (isOwner) {
+    db.prepare('UPDATE user_chats SET folder_id = ? WHERE id = ? AND user_id = ?').run(folderId, chatId, userId);
+  } else {
+    db.prepare('UPDATE chat_members SET folder_id = ? WHERE chat_id = ? AND user_id = ?').run(folderId, chatId, userId);
+  }
   return true;
 };
 

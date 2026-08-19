@@ -403,6 +403,19 @@ db.exec(`
 db.exec("CREATE INDEX IF NOT EXISTS idx_chat_members_user ON chat_members(user_id)");
 db.exec("CREATE INDEX IF NOT EXISTS idx_chat_members_order ON chat_members(chat_id, sort_order, user_id)");
 
+// ── chat_members: per-member folder placement ──────────────────────────────
+// Folder assignment is per-user: the owner keeps theirs in user_chats.folder_id,
+// room members store their own here (an owner-side folder move must not
+// affect how members see the room in their sidebar).
+const hasChatMemberColumn = (columnName: string) => {
+  const columns = db.prepare('PRAGMA table_info(chat_members)').all() as Array<{ name: string }>;
+  return columns.some(column => column.name === columnName);
+};
+if (!hasChatMemberColumn('folder_id')) {
+  db.exec('ALTER TABLE chat_members ADD COLUMN folder_id INTEGER');
+}
+db.exec("CREATE INDEX IF NOT EXISTS idx_chat_members_folder ON chat_members(user_id, folder_id)");
+
 // Bot visibility to other members: 'private' = only the owner can trigger,
 // 'shared' = any room member can trigger (@mention / manual trigger).
 const hasChatAgentColumn = (columnName: string) => {

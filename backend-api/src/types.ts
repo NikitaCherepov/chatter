@@ -61,6 +61,8 @@ export type ChatDto = {
   updated_at: number;
   is_active: boolean;
   bot_hidden?: boolean;
+  /** Rooms: true for the chat owner, false for joined members. */
+  is_owner?: boolean;
 };
 
 export type MessageImage = {
