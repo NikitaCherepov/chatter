@@ -1360,15 +1360,20 @@ export type ChatMediaItem = {
 export const getChatMedia = (userId: number, chatId: number, limit = 100, offset = 0): ChatMediaItem[] => {
   const safeLimit = Math.max(1, Math.min(500, Math.floor(limit)));
   const safeOffset = Math.max(0, Math.floor(offset));
+  // Access + scope mirror getChatMessages: in a multi-user room every reader
+  // sees ALL room images (not only their own); personal chats stay user-scoped.
+  const readerIds = listRoomReaderUserIds(chatId);
+  if (!readerIds || !readerIds.includes(userId)) return [];
+  const multiUserRoom = readerIds.length > 1;
   // Берём с запасом по строкам — одна строка может содержать несколько картинок
   const rowLimit = safeOffset + safeLimit + 50;
   const rows = db.prepare(`
     SELECT id, images, created_at
     FROM chat_messages
-    WHERE user_id = ? AND chat_id = ? AND images IS NOT NULL AND images != ''
+    WHERE user_id ${multiUserRoom ? `IN (${readerIds.map(() => '?').join(', ')})` : '= ?'} AND chat_id = ? AND images IS NOT NULL AND images != ''
     ORDER BY id DESC
     LIMIT ?
-  `).all(userId, chatId, rowLimit) as Array<{ id: number; images: string; created_at: string }>;
+  `).all(...(multiUserRoom ? readerIds : [userId]), chatId, rowLimit) as Array<{ id: number; images: string; created_at: string }>;
 
   const items: ChatMediaItem[] = [];
   for (const row of rows) {
@@ -1400,14 +1405,21 @@ export const getAllUserMedia = (userId: number, limit = 100, offset = 0): ChatMe
   const safeOffset = Math.max(0, Math.floor(offset));
   // Берём с запасом по строкам — одна строка может содержать несколько картинок
   const rowLimit = safeOffset + safeLimit + 50;
+  // Own images + everything shared in rooms this user can read (owner or
+  // member). The chat title is taken from the VIEWER's own chat entry.
   const rows = db.prepare(`
     SELECT cm.id, cm.images, cm.created_at, cm.chat_id, uc.title AS chat_title
     FROM chat_messages cm
-    LEFT JOIN user_chats uc ON uc.id = cm.chat_id AND uc.user_id = cm.user_id
-    WHERE cm.user_id = ? AND cm.images IS NOT NULL AND cm.images != ''
+    LEFT JOIN user_chats uc ON uc.id = cm.chat_id AND uc.user_id = ?
+    WHERE (cm.user_id = ? OR cm.chat_id IN (
+        SELECT rc.id FROM user_chats rc
+        WHERE rc.room_enabled = 1
+          AND (rc.user_id = ? OR EXISTS (SELECT 1 FROM chat_members m WHERE m.chat_id = rc.id AND m.user_id = ?))
+      ))
+      AND cm.images IS NOT NULL AND cm.images != ''
     ORDER BY cm.id DESC
     LIMIT ?
-  `).all(userId, rowLimit) as Array<{ id: number; images: string; created_at: string; chat_id: number; chat_title: string | null }>;
+  `).all(userId, userId, userId, userId, rowLimit) as Array<{ id: number; images: string; created_at: string; chat_id: number; chat_title: string | null }>;
 
   const userLanguage = (db.prepare('SELECT language FROM users WHERE id = ?').get(userId) as { language: string | null } | undefined)?.language;
   const items: ChatMediaItem[] = [];

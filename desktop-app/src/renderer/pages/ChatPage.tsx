@@ -2162,6 +2162,8 @@ export function ChatPage() {
             user_id: event.sender_user_id,
             content: event.text,
             created_at: Math.floor(Date.now() / 1000),
+            ...(event.images ? { images: event.images } : {}),
+            ...(event.attachments ? { attachments: event.attachments } : {}),
           }]);
           break;
         }

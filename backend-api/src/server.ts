@@ -1014,17 +1014,20 @@ app.get('/api/v1/images/:filename', async (req: AuthedRequest, res) => {
   const filepath = resolveImageFile(filename);
   if (!filepath) return res.status(404).json({ error: 'image_not_found' });
 
-  // Verify ownership: check that this image belongs to a message owned by this user
+  // Verify access: the requester owns the message OR can read the chat it
+  // belongs to (room members see each other's images).
   // images column may be JSON: [{"url":"/api/v1/images/xxx.png",...}] or plain text: "generated: /uploads/xxx.png"
   const likePattern = `%${filename}%`;
   console.log(`[image-access] userId=${userId}, effectiveId=${effectiveId}, filename=${filename}`);
-  const row = db.prepare(`
-    SELECT 1 FROM chat_messages
-    WHERE user_id = ? AND images LIKE ?
-    LIMIT 1
-  `).get(effectiveId, likePattern) as { 1: number } | undefined;
+  const rows = db.prepare(`
+    SELECT user_id, chat_id FROM chat_messages
+    WHERE images LIKE ?
+    LIMIT 10
+  `).all(likePattern) as Array<{ user_id: number; chat_id: number }>;
 
-  if (!row) {
+  const allowed = rows.some(r => r.user_id === effectiveId || canReadChatMessages(effectiveId, r.chat_id));
+
+  if (!allowed) {
     console.log(`[image-access] DENIED - no matching row for effectiveId=${effectiveId}, pattern=${likePattern}`);
     return res.status(403).json({ error: 'access_denied' });
   }
@@ -1071,15 +1074,18 @@ app.get('/api/v1/attachments/:filename', (req: AuthedRequest, res) => {
   const filepath = resolveAttachmentFile(filename);
   if (!filepath) return res.status(404).json({ error: 'attachment_not_found' });
 
-  // Verify ownership: check that this attachment belongs to a message owned by this user
+  // Verify access: the requester owns the message OR can read the chat it
+  // belongs to (room members see each other's attachments).
   const likePattern = `%${filename}%`;
-  const row = db.prepare(`
-    SELECT 1 FROM chat_messages
-    WHERE user_id = ? AND attachments LIKE ?
-    LIMIT 1
-  `).get(effectiveId, likePattern) as { 1: number } | undefined;
+  const rows = db.prepare(`
+    SELECT user_id, chat_id FROM chat_messages
+    WHERE attachments LIKE ?
+    LIMIT 10
+  `).all(likePattern) as Array<{ user_id: number; chat_id: number }>;
 
-  if (!row) {
+  const allowed = rows.some(r => r.user_id === effectiveId || canReadChatMessages(effectiveId, r.chat_id));
+
+  if (!allowed) {
     return res.status(403).json({ error: 'access_denied' });
   }
 
@@ -1106,13 +1112,17 @@ app.get('/api/v1/audio/:filename', (req: AuthedRequest, res) => {
   const filepath = resolveAudioFile(filename);
   if (!filepath) return res.status(404).json({ error: 'audio_not_found' });
 
-  // Verify access: check chat_messages (per-user audio) OR tts_voice_previews (shared preview cache)
+  // Verify access: the requester owns the message OR can read the chat it
+  // belongs to (room members hear each other's voice), OR it's a shared
+  // tts_voice_previews cache entry.
   const likePattern = `%${filename}%`;
-  const msgRow = db.prepare(`
-    SELECT 1 FROM chat_messages
-    WHERE user_id = ? AND audio LIKE ?
-    LIMIT 1
-  `).get(effectiveId, likePattern) as { 1: number } | undefined;
+  const msgRows = db.prepare(`
+    SELECT user_id, chat_id FROM chat_messages
+    WHERE audio LIKE ?
+    LIMIT 10
+  `).all(likePattern) as Array<{ user_id: number; chat_id: number }>;
+
+  const msgAllowed = msgRows.some(r => r.user_id === effectiveId || canReadChatMessages(effectiveId, r.chat_id));
 
   const previewRow = db.prepare(`
     SELECT 1 FROM tts_voice_previews
@@ -1120,7 +1130,7 @@ app.get('/api/v1/audio/:filename', (req: AuthedRequest, res) => {
     LIMIT 1
   `).get(likePattern) as { 1: number } | undefined;
 
-  if (!msgRow && !previewRow) return res.status(403).json({ error: 'access_denied' });
+  if (!msgAllowed && !previewRow) return res.status(403).json({ error: 'access_denied' });
 
   res.sendFile(filepath);
 });
@@ -2295,6 +2305,8 @@ app.post('/api/v1/chat/send', async (req: AuthedRequest, res) => {
         message_id: result.user_message_id ?? null,
         sender_user_id: userId,
         text,
+        ...(result.user_message_images ? { images: result.user_message_images } : {}),
+        ...(savedUserAttachments ? { attachments: savedUserAttachments } : {}),
       });
       void runRoomResponseQueue(targetChatId, userId, text, (payload) => broadcastToChat(targetChatId, payload));
       return;
@@ -6693,6 +6705,8 @@ async function handleWsChatSend(client: WsClient, msg: any) {
         message_id: result.user_message_id ?? null,
         sender_user_id: userId,
         text,
+        ...(result.user_message_images ? { images: result.user_message_images } : {}),
+        ...(savedUserAttachments ? { attachments: savedUserAttachments } : {}),
       });
       void runRoomResponseQueue(targetChatId, userId, text, (payload) => broadcastToChat(targetChatId, payload));
       return;
