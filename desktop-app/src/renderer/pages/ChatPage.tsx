@@ -249,7 +249,14 @@ const reasoningPanelVariants = {
 
 const formatMessageTime = (ts: number, locale?: string) => {
   const d = new Date(ts * 1000);
-  return d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
+  const time = d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
+  // Always show the date next to the time — forked/branched chats often
+  // carry history from other days. The year is added when it differs.
+  const sameYear = d.getFullYear() === new Date().getFullYear();
+  const date = d.toLocaleDateString(locale, sameYear
+    ? { day: 'numeric', month: 'short' }
+    : { day: 'numeric', month: 'short', year: 'numeric' });
+  return `${date}, ${time}`;
 };
 
 const formatToolValue = (value: unknown) => {

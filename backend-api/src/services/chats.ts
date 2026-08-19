@@ -1,5 +1,9 @@
-﻿import { db, toUnix } from '../db.js';
+﻿import fs from 'node:fs';
+import path from 'node:path';
+import { db, toUnix } from '../db.js';
 import type { ChatDto, MessageDto, MessageImage, MessageAudio, MessageAttachment, ChatRole, UserRecord, MessageUsage } from '../types.js';
+import { copyAttachmentFile, deleteAttachmentFile } from './attachment-storage.js';
+import { deleteImageFile, filenameFromUrl, resolveImageFile } from './image-storage.js';
 import type { ToolIteration } from './ai.js';
 import { countTokens, countMessageTokens, countToolCallTokens, countToolResultTokens } from './tokenizer.js';
 import { buildBaseSystemPromptForUser } from './system-prompt.js';
@@ -482,12 +486,6 @@ export const forkChat = (
     ? customTitle.trim().slice(0, 120)
     : buildForkTitle(sourceChat.title, userLanguage);
 
-  // Lazily import to avoid a circular dependency at module load time
-  // (matches the pattern used in deleteMessageAttachment).
-  const { copyAttachmentFile } = require('./attachment-storage.js') as {
-    copyAttachmentFile: (src: string) => { filename: string; url: string } | null;
-  };
-
   const tx = db.transaction(() => {
     // 1. Create the new chat and activate it.
     const newChatId = createUserChat(userId, title);
@@ -787,9 +785,6 @@ const cleanupMessageFiles = (userId: number, chatId: number, messageId?: number)
     const params = messageId ? [messageId, userId, chatId] : [userId, chatId];
     const rows = db.prepare(query).all(...params) as Array<{ images: string | null; attachments: string | null }>;
 
-    const { deleteImageFile, filenameFromUrl } = require('./image-storage.js');
-    const { deleteAttachmentFile } = require('./attachment-storage.js');
-
     for (const row of rows) {
       // Картинки
       if (row.images) {
@@ -907,7 +902,6 @@ export const deleteMessageAttachment = (
 
   // 1. Remove file from disk
   try {
-    const { deleteAttachmentFile } = require('./attachment-storage.js');
     deleteAttachmentFile(target.filename);
   } catch { /* best-effort */ }
 
@@ -963,7 +957,6 @@ export const deleteMessageImage = (
 
   // 1. Удаляем файл с диска
   try {
-    const { deleteImageFile, filenameFromUrl } = require('./image-storage.js');
     const filename = filenameFromUrl(target.url);
     if (filename) deleteImageFile(filename);
   } catch { /* best-effort */ }
@@ -1151,7 +1144,6 @@ function estimateImageTokens(width: number, height: number): number {
  */
 async function estimateImageTokensFromFile(url: string): Promise<number> {
   try {
-    const { resolveImageFile, filenameFromUrl } = require('./image-storage.js');
     const filename = filenameFromUrl(url);
     if (!filename) return 1000;
     const filepath = resolveImageFile(filename);
@@ -1615,10 +1607,6 @@ export const getHistoryForAi = (
       if (allImages.length > 0 && supportsVision) {
         // Vision: загружаем файлы с диска, формируем content как массив text + image_url.
         // Маркеры с URL добавляются в text — чтобы модель могла передать их в generate_image / describe_image.
-        const { resolveImageFile, filenameFromUrl } = require('./image-storage.js');
-        const fs = require('node:fs');
-        const nodePath = require('node:path');
-
         const imageMarker = allImages.map((img, i) => `[Attached image ${i + 1}: ${img.url}]`).join('\n');
         const textWithMarkers = textContent + (imageMarker ? '\n' + imageMarker : '');
 
@@ -1630,7 +1618,7 @@ export const getHistoryForAi = (
             const filepath = resolveImageFile(filename);
             if (!filepath) continue;
             const buf = fs.readFileSync(filepath);
-            const ext = nodePath.extname(filename).toLowerCase();
+            const ext = path.extname(filename).toLowerCase();
             const mimeType = ext === '.webp' ? 'image/webp' : ext === '.png' ? 'image/png' : 'image/jpeg';
             imageBlocks.push({
               type: 'image_url',
