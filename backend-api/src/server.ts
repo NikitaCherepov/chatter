@@ -61,12 +61,12 @@ import {
 import { normalizeSupportedLanguage, SUPPORTED_LANGUAGES } from './i18n/languages.js';
 import { translateForLanguage } from './i18n/index.js';
 import { associateServerAccessKeyUser, createServerAccessKey, getLastServerAccessKeyForUser, isServerAccessKeyGateEnabled, listServerAccessKeys, revokeServerAccessKey, validateServerAccessKey } from './services/server-access-keys.js';
-import { addChatAgent, canReadChatMessages, createChatRoom, createChatRoomInvite, deleteChatRoom, getChatRoom, getChatRoomInviteInfo, joinChatRoomByInvite, leaveChatRoom, listRoomReaderUserIds, removeChatAgent, revokeChatRoomInvite, reorderChatAgents, reorderChatMembers, updateChatAgent, updateChatRoomSettings } from './services/chat-rooms.js';
+import { addChatAgent, canReadChatMessages, createChatRoom, createChatRoomInvite, deleteChatRoom, getChatRoom, getChatRoomInviteInfo, joinChatRoomByInvite, leaveChatRoom, listChatReaderUserIds, removeChatAgent, revokeChatRoomInvite, reorderChatAgents, reorderChatMembers, updateChatAgent, updateChatRoomSettings } from './services/chat-rooms.js';
 import { isRoomChat, runRoomAgents, runRoomResponseQueue, stopRoomQueue } from './services/room-runner.js';
 
-/** Fire-and-forget WS broadcast to every room reader (owner + members). */
-const broadcastToRoom = (chatId: number, payload: Record<string, unknown>) => {
-  const readerIds = listRoomReaderUserIds(chatId) || [];
+/** Fire-and-forget WS broadcast to every chat reader (owner for single, owner+members for rooms). */
+const broadcastToChat = (chatId: number, payload: Record<string, unknown>) => {
+  const readerIds = listChatReaderUserIds(chatId) || [];
   const data = JSON.stringify(payload);
   for (const readerId of readerIds) {
     const client = wsClients.get(readerId);
@@ -1772,7 +1772,7 @@ app.post('/api/v1/room-invites/:token/join', (req: AuthedRequest, res) => {
   try {
     const result = joinChatRoomByInvite(userId, `${req.params.token}`);
     // Notify everyone in the room (including the new member) to refresh members.
-    broadcastToRoom(result.chat_id, { type: 'room_members_updated', chat_id: result.chat_id });
+    broadcastToChat(result.chat_id, { type: 'room_members_updated', chat_id: result.chat_id });
     return res.json(result);
   } catch (err) {
     return sendChatRoomError(res, err);
@@ -1786,7 +1786,7 @@ app.post('/api/v1/chats/:id/room/leave', (req: AuthedRequest, res) => {
   try {
     leaveChatRoom(userId, chatId);
     // Notify remaining readers to refresh members (the leaver already knows).
-    broadcastToRoom(chatId, { type: 'room_members_updated', chat_id: chatId });
+    broadcastToChat(chatId, { type: 'room_members_updated', chat_id: chatId });
     return res.json({ ok: true });
   } catch (err) {
     return sendChatRoomError(res, err);
@@ -1805,7 +1805,7 @@ app.post('/api/v1/chats/:id/room/run', (req: AuthedRequest, res) => {
   if (agentIds.length === 0) return res.status(400).json({ error: 'bad_agent_ids' });
   if (!canReadChatMessages(userId, chatId)) return res.status(404).json({ error: 'chat_not_found' });
   // Fire-and-forget: generation + streaming happen via room_agent_* WS events.
-  void runRoomAgents(chatId, userId, agentIds, (payload) => broadcastToRoom(chatId, payload));
+  void runRoomAgents(chatId, userId, agentIds, (payload) => broadcastToChat(chatId, payload));
   return res.json({ ok: true });
 });
 
@@ -1888,7 +1888,7 @@ app.delete('/api/v1/chats/:chatId/messages/:messageId', (req: AuthedRequest, res
   if (!ok) return res.status(404).json({ error: 'message_not_found' });
   // Push deletion to other room members (the deleter already updated locally).
   if (isRoomChat(chatId)) {
-    broadcastToRoom(chatId, { type: 'room_message_deleted', chat_id: chatId, message_id: messageId, initiator_user_id: userId });
+    broadcastToChat(chatId, { type: 'room_message_deleted', chat_id: chatId, message_id: messageId, initiator_user_id: userId });
   }
   return res.json({ ok: true });
 });
@@ -1940,7 +1940,7 @@ app.put('/api/v1/chats/:chatId/messages/:messageId', (req: AuthedRequest, res) =
   if (!result.ok) return res.status(404).json({ error: 'message_not_found' });
   // Push the edit to other room members (the editor already updated locally).
   if (isRoomChat(chatId)) {
-    broadcastToRoom(chatId, { type: 'room_message_edited', chat_id: chatId, message_id: messageId, initiator_user_id: userId, content: newContent });
+    broadcastToChat(chatId, { type: 'room_message_edited', chat_id: chatId, message_id: messageId, initiator_user_id: userId, content: newContent });
   }
   return res.json({ ok: true, token_count: result.token_count });
 });
@@ -2279,14 +2279,14 @@ app.post('/api/v1/chat/send', async (req: AuthedRequest, res) => {
 
     // Multi-user rooms: server-side response queue after a saved user message.
     if (req.body?.user_only && isRoomChat(chatId)) {
-      broadcastToRoom(chatId, {
+      broadcastToChat(chatId, {
         type: 'room_user_message',
         chat_id: chatId,
         message_id: result.user_message_id ?? null,
         sender_user_id: userId,
         text,
       });
-      void runRoomResponseQueue(chatId, userId, text, (payload) => broadcastToRoom(chatId, payload));
+      void runRoomResponseQueue(chatId, userId, text, (payload) => broadcastToChat(chatId, payload));
     }
   } catch (err: any) {
     const payload = buildLocalizedAiError(err, userId);
@@ -6677,14 +6677,14 @@ async function handleWsChatSend(client: WsClient, msg: any) {
     // to all room readers.
     if (msg.user_only && chat_id && isRoomChat(chat_id)) {
       const roomId = chat_id;
-      broadcastToRoom(roomId, {
+      broadcastToChat(roomId, {
         type: 'room_user_message',
         chat_id: roomId,
         message_id: result.user_message_id ?? null,
         sender_user_id: userId,
         text,
       });
-      void runRoomResponseQueue(roomId, userId, text, (payload) => broadcastToRoom(roomId, payload));
+      void runRoomResponseQueue(roomId, userId, text, (payload) => broadcastToChat(roomId, payload));
     }
   } catch (err: any) {
     const payload = buildLocalizedAiError(err, userId);
