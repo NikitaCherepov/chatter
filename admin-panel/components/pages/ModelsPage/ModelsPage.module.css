@@ -244,6 +244,16 @@
   border-color: color-mix(in srgb, #f5a524 45%, var(--border-light));
   color: #f5a524;
 }
+.monitorAdminField {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+.monitorAdminFieldLabel {
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  color: var(--text-body);
+}
 .monitorAdminList {
   display: flex;
   flex-direction: column;
@@ -253,6 +263,25 @@
   display: flex;
   align-items: center;
   gap: var(--sp-2);
+  padding: var(--sp-1) var(--sp-2);
+  border: 1px solid var(--border-input);
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-size: var(--fs-sm);
+}
+.monitorAdminItem:hover {
+  border-color: var(--accent);
+}
+.monitorAdminCheckbox {
+  width: 1rem !important;
+  height: 1rem !important;
+  min-height: 0 !important;
+  min-width: 0 !important;
+  flex: 0 0 auto;
+  margin: 0 !important;
+  padding: 0 !important;
+  accent-color: var(--accent);
+  cursor: pointer;
 }
 .monitorStates {
   margin-top: var(--sp-3);

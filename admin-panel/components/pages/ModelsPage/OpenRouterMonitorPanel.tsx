@@ -126,13 +126,15 @@ export function OpenRouterMonitorPanel() {
       </FormField>
 
       {draft.recipientsMode === 'selected' && (
-        <FormField label={t('models.monitor.recipientAdmins') || 'Admins'}>
+        <div className={styles.monitorAdminField}>
+          <span className={styles.monitorAdminFieldLabel}>{t('models.monitor.recipientAdmins') || 'Admins'}</span>
           {admins.length === 0 && <small>{t('models.monitor.noAdmins') || 'No admins found'}</small>}
           <div className={styles.monitorAdminList}>
             {admins.map(admin => (
               <label key={admin.id} className={styles.monitorAdminItem}>
                 <input
                   type="checkbox"
+                  className={styles.monitorAdminCheckbox}
                   checked={draft.recipientUserIds.includes(admin.id)}
                   onChange={e => setDraft(d => {
                     if (!d) return d;
@@ -147,7 +149,7 @@ export function OpenRouterMonitorPanel() {
               </label>
             ))}
           </div>
-        </FormField>
+        </div>
       )}
 
       <div style={{ display: 'flex', gap: 'var(--sp-2)', flexWrap: 'wrap', alignItems: 'center' }}>
