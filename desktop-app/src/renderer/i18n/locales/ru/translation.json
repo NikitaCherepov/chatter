@@ -407,8 +407,8 @@
       "branchFailed": "Не удалось создать ветку",
       "subagentNumber": "🧠 Сабагент {{number}}",
       "providerTokenUsage": "Точное использование токенов завершения, сообщенное провайдером",
-      "generationPerf": "Первый токен: {{latency}} мс\nГенерация: {{gen}} мс\nВсего: {{total}} мс\nСкорость: {{tps}} токенов/с",
-      "firstTokenLatency": "Задержка до первого токена: {{latency}} мс"
+      "generationPerf": "Первый токен: {{latency}}\nГенерация: {{gen}}\nВсего: {{total}}\nСкорость: {{tps}} токенов/с",
+      "firstTokenLatency": "Задержка до первого токена: {{latency}}"
     },
     "reasoning": {
       "auto": "Авто",

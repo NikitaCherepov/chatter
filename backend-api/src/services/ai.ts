@@ -6747,32 +6747,45 @@ export const sendMessageThroughAi = async (
     firstTokenAt: 0,
     /** performance.now() when the current provider call was sent (0 = no active call). */
     callStartAt: 0,
+    /** performance.now() when the CURRENT call produced its first token (0 = not yet). */
+    callFirstTokenAt: 0,
     /** performance.now() of the most recent token (to account for an in-flight call on abort). */
     lastTokenAt: 0,
     /** Sum of provider call durations (ms). Tool execution time between calls is NOT included. */
     genMs: 0,
+    /** Sum of PURE streaming windows (first token -> stream end) across calls.
+     *  This is the denominator for tokens_per_second: TTFT is excluded. */
+    streamMs: 0,
   };
-  const buildUsagePerf = (totalTokens: number): NonNullable<MessageUsage['perf']> | undefined => {
+  const buildUsagePerf = (completionTokens: number): NonNullable<MessageUsage['perf']> | undefined => {
     if (!perfMetrics.firstTokenAt || perfMetrics.requestStartAt <= 0) return undefined;
-    // On abort the in-flight call duration never landed in genMs — account for it
-    // up to the last received token.
-    const inflightMs = perfMetrics.callStartAt > 0 && perfMetrics.lastTokenAt > perfMetrics.callStartAt
+    // On abort the in-flight durations never landed in genMs/streamMs — account
+    // for them up to the last received token.
+    const inflightFullMs = perfMetrics.callStartAt > 0 && perfMetrics.lastTokenAt > perfMetrics.callStartAt
       ? perfMetrics.lastTokenAt - perfMetrics.callStartAt
       : 0;
-    const genMs = perfMetrics.genMs + inflightMs;
-    if (genMs <= 0 || totalTokens <= 0) return undefined;
+    const inflightStreamMs = perfMetrics.callFirstTokenAt > 0 && perfMetrics.lastTokenAt > perfMetrics.callFirstTokenAt
+      ? perfMetrics.lastTokenAt - perfMetrics.callFirstTokenAt
+      : 0;
+    const genMs = perfMetrics.genMs + inflightFullMs;
+    const streamMs = perfMetrics.streamMs + inflightStreamMs;
+    if (genMs <= 0 || completionTokens <= 0) return undefined;
     return {
       first_token_latency_ms: Math.max(0, Math.round(perfMetrics.firstTokenAt - perfMetrics.requestStartAt)),
       generation_ms: Math.round(genMs),
       // Called at save time, so wall-clock time covers the whole response incl. tool pauses.
       total_ms: Math.max(0, Math.round(performance.now() - perfMetrics.requestStartAt)),
-      tokens_per_second: Math.round((totalTokens / (genMs / 1000)) * 10) / 10,
+      // Speed = completion tokens / pure streaming time (first token -> last token).
+      tokens_per_second: streamMs > 0
+        ? Math.round((completionTokens / (streamMs / 1000)) * 10) / 10
+        : 0,
     };
   };
   const streamCallbacks: StreamCallbacks = {
     onToken: (t) => {
       const now = performance.now();
       if (!perfMetrics.firstTokenAt) perfMetrics.firstTokenAt = now;
+      if (!perfMetrics.callFirstTokenAt) perfMetrics.callFirstTokenAt = now;
       perfMetrics.lastTokenAt = now;
       streamContentBuffer += t;
       if (options?.onStreamToken) {
@@ -6783,6 +6796,7 @@ export const sendMessageThroughAi = async (
       ? (t) => {
           const now = performance.now();
           if (!perfMetrics.firstTokenAt) perfMetrics.firstTokenAt = now;
+          if (!perfMetrics.callFirstTokenAt) perfMetrics.callFirstTokenAt = now;
           perfMetrics.lastTokenAt = now;
           streamReasoningBuffer += t;
           Promise.resolve(options.onReasoningStream!(t)).catch(e => console.warn('[stream onReasoningToken]', e));
@@ -6790,6 +6804,7 @@ export const sendMessageThroughAi = async (
       : (t) => {
           const now = performance.now();
           if (!perfMetrics.firstTokenAt) perfMetrics.firstTokenAt = now;
+          if (!perfMetrics.callFirstTokenAt) perfMetrics.callFirstTokenAt = now;
           perfMetrics.lastTokenAt = now;
           streamReasoningBuffer += t;
         },
@@ -7621,12 +7636,19 @@ User request: "${text}"`;
     }
     // Perf: mark the first request send and time each provider call.
     // Time between calls (tool execution) is excluded from genMs.
+    // streamMs additionally excludes the call's own TTFT (speed denominator).
     if (!perfMetrics.requestStartAt) perfMetrics.requestStartAt = performance.now();
     perfMetrics.callStartAt = performance.now();
+    perfMetrics.callFirstTokenAt = 0;
     const completion = await runCompletion(executionMode, completionPayload, manualModel, abortController.signal, executionMode === 'lite' ? 'none' : reasoningLevel, executionMode === 'lite' ? null : resolvedModelSettings, streamCallbacks);
     if (perfMetrics.callStartAt > 0) {
-      perfMetrics.genMs += performance.now() - perfMetrics.callStartAt;
+      const callEnd = performance.now();
+      perfMetrics.genMs += callEnd - perfMetrics.callStartAt;
+      if (perfMetrics.callFirstTokenAt > 0) {
+        perfMetrics.streamMs += callEnd - perfMetrics.callFirstTokenAt;
+      }
       perfMetrics.callStartAt = 0;
+      perfMetrics.callFirstTokenAt = 0;
     }
     // Debug: log image sizes when present
     if (hasImages) {

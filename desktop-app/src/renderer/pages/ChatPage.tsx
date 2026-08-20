@@ -525,14 +525,22 @@ const MessageItem = React.memo(function MessageItem({
                   className={s.tokenBadge}
                   title={t('chat.message.firstTokenLatency', { latency: msg.usage!.perf!.first_token_latency_ms })}
                 >
-                  {msg.usage!.perf!.first_token_latency_ms} ms
+                  {msg.usage!.perf!.first_token_latency_ms > 1000
+                    ? `${(msg.usage!.perf!.first_token_latency_ms / 1000).toFixed(1)}s`
+                    : `${msg.usage!.perf!.first_token_latency_ms} ms`}
                 </span>
                 <span
                   className={s.tokenBadge}
                   title={t('chat.message.generationPerf', {
-                    latency: msg.usage!.perf!.first_token_latency_ms,
-                    gen: msg.usage!.perf!.generation_ms,
-                    total: msg.usage!.perf!.total_ms,
+                    latency: msg.usage!.perf!.first_token_latency_ms > 1000
+                      ? `${(msg.usage!.perf!.first_token_latency_ms / 1000).toFixed(1)}s`
+                      : `${msg.usage!.perf!.first_token_latency_ms} ms`,
+                    gen: msg.usage!.perf!.generation_ms > 1000
+                      ? `${(msg.usage!.perf!.generation_ms / 1000).toFixed(1)}s`
+                      : `${msg.usage!.perf!.generation_ms} ms`,
+                    total: msg.usage!.perf!.total_ms > 1000
+                      ? `${(msg.usage!.perf!.total_ms / 1000).toFixed(1)}s`
+                      : `${msg.usage!.perf!.total_ms} ms`,
                     tps: msg.usage!.perf!.tokens_per_second,
                   })}
                 >
