@@ -1,6 +1,9 @@
 {
   "chat": {
-    "defaultTitle": "Чат {{number}}"
+    "defaultTitle": "Чат {{number}}",
+    "hitlWaitingConfirmation": "Я жду вашего ответа на карточку подтверждения выше. Нажмите «Разрешить», «Отклонить» или «Отклонить с комментарием» — и я продолжу этот запрос.",
+    "stopStopped": "Остановлено",
+    "stopNoActiveGeneration": "Нет активной генерации"
   },
   "toolStatus": {
     "search_web": "Поиск в интернете...",
@@ -87,7 +90,6 @@
     "serverUpdating": "⚠️ Идёт обновление сервера. Пожалуйста, подождите и попробуйте позже.",
     "genericServerError": "⚠️ Ошибка сервера. Проверьте логи."
   },
-
   "subagents": {
     "toolStatus": {
       "list_directory": "[{{agent}}] Чтение каталога...",

@@ -73,7 +73,10 @@
     }
   },
   "chat": {
-    "defaultTitle": "Czat {{number}}"
+    "defaultTitle": "Czat {{number}}",
+    "hitlWaitingConfirmation": "Czekam na Twoją odpowiedź na karcie potwierdzenia powyżej. Naciśnij \"Zezwól\", \"Odmów\" lub \"Odmów z komentarzem\" — a ja kontynuuję to żądanie.",
+    "stopStopped": "Zatrzymano",
+    "stopNoActiveGeneration": "Brak aktywnego generowania"
   },
   "confirmations": {
     "reviewSshSystem": "Jesteś ekspertem ds. bezpieczeństwa. Odpowiedz krótko.",

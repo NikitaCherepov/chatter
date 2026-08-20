@@ -711,7 +711,9 @@
       "sendTelegram": "Wyślij do Telegrama",
       "createBranch": "Utwórz gałąź",
       "subagentNumber": "🧠 Subagent {{number}}",
-      "providerTokenUsage": "Dokładne użycie tokenów uzupełnienia zgłoszone przez dostawcę"
+      "providerTokenUsage": "Dokładne użycie tokenów uzupełnienia zgłoszone przez dostawcę",
+      "branchNotAllowedInRoom": "Rozgałęzienia nie są jeszcze dostępne w pokojach współdzielonych",
+      "branchFailed": "Nie udało się utworzyć rozgałęzienia"
     },
     "reasoning": {
       "auto": "Auto",
@@ -967,6 +969,67 @@
       "title": "Wylogować się?",
       "message": "Będziesz musiał się ponownie zalogować na tym urządzeniu.",
       "confirm": "Wyloguj się"
+    },
+    "room": {
+      "title": "Pokój",
+      "subtitle": "Funkcja eksperymentalna",
+      "open": "Otwórz pokój",
+      "createRoom": "Utwórz pokój",
+      "deleteRoom": "Usuń pokój",
+      "removeAgentsBeforeDelete": "Usuń wszystkich agentów przed usunięciem pokoju.",
+      "participantCount": "{{count}} uczestników",
+      "participants": "Uczestnicy",
+      "mode": "Tryb odpowiedzi",
+      "manual": "Ręczny",
+      "round": "Po kolei",
+      "manualHint": "Wybierz, która postać odpowie następna.",
+      "roundHint": "Każda aktywna postać odpowiada raz w wybranej kolejności.",
+      "autoRespond": "Odpowiadaj natychmiast",
+      "autoRespondHint": "Odpowiadaj po każdej nowej wiadomości od człowieka.",
+      "whoRespondsNext": "Kto odpowiada następny?",
+      "roundOrder": "Kolejność odpowiedzi",
+      "reply": "Odpowiedz",
+      "startSequence": "Odpowiadaj po kolei",
+      "you": "Ty",
+      "human": "Użytkownik",
+      "mainAssistant": "Główny asystent",
+      "character": "Postać",
+      "reorder": "Zmień kolejność",
+      "removeParticipant": "Usuń uczestnika",
+      "addParticipant": "Dodaj uczestnika",
+      "addParticipantsShort": "Dodaj uczestników",
+      "choosePrompt": "Wybierz prompt",
+      "changePrompt": "Zmień prompt",
+      "promptDefault": "Domyślny asystent",
+      "promptCreative": "Kreatywny towarzysz",
+      "promptDetective": "Śledczy",
+      "prototypeHint": "Tworzenie uczestnika zostanie później połączone z backendem.",
+      "manualActionPrototype": "{{name}} odpowie po połączeniu z backendem.",
+      "sequenceActionPrototype": "Postacie odpowiedzą w kolejności po połączeniu z backendem.",
+      "joinRoom": "Dołącz do pokoju",
+      "joinSubmit": "Dołącz",
+      "inviteLinkPlaceholder": "Wklej link zaproszenia (chatter://join-room?...)",
+      "invalidInviteLink": "Nieprawidłowy link zaproszenia.",
+      "joinFailed": "Nie udało się dołączyć do pokoju.",
+      "joined": "Dołączono do pokoju.",
+      "addParticipantKind": "Dodaj uczestnika",
+      "addBot": "Bot (postać)",
+      "addHuman": "Człowiek",
+      "inviteLinkTitle": "Link zaproszenia",
+      "copyInvite": "Kopiuj link",
+      "inviteCopied": "Skopiowano!",
+      "inviteHint": "Wyślij ten link użytkownikowi. Otworzy panel pokoju i naciśnie „Dołącz do pokoju”. Link wygasa po 7 dniach.",
+      "manageInvites": "Linki zaproszeń",
+      "activeInvitesTitle": "Aktywne linki zaproszeń",
+      "noInvites": "Brak aktywnych linków",
+      "newInvite": "Utwórz link",
+      "revokeInvite": "Odwołaj",
+      "removeMember": "Usuń z pokoju",
+      "agentError": "Agent pokoju nie powiódł się: {{error}}",
+      "makeShared": "Udostępnij członkom",
+      "makePrivate": "Zamknij dostęp",
+      "sharedBadge": "udostępnione",
+      "leaveRoom": "Opuść pokój"
     }
   },
   "promptSelector": {
@@ -1106,6 +1169,24 @@
       "experimental": {
         "title": "## Funkcje eksperymentalne",
         "body": "Regularnie dodajemy nowe funkcje. Oto, co możesz wypróbować już teraz:\n\n- **Agent DevOps** — wbudowane narzędzie SSH. Uruchamiaj polecenia na zdalnych serwerach z bezpiecznymi zasadami ręcznego potwierdzania.\n- **Mapy i trasy** — AI może wyszukiwać miejsca i budować trasy na interaktywnej mapie w prawym panelu.\n- **Tryb rzutu kostką (d20)** — dla fanów gier stołowych. Dodaje wirtualny rzut kostką, który określa powodzenie akcji i kieruje narracją w odpowiedziach AI (włącz w **Ustawienia → Aplikacja**)."
+      }
+    },
+    "rooms": {
+      "bots": {
+        "title": "## Pokoje z botami!",
+        "body": "Teraz możesz tworzyć pokoje i dodawać do nich wiele botów. Mogą ze sobą rozmawiać i wchodzić w interakcje w tej samej przestrzeni."
+      },
+      "invite": {
+        "title": "## Zaproś znajomego",
+        "body": "Teraz możesz zapraszać znajomych do swoich pokoi i rozmawiać z nimi oraz z botami.\n\nTwój znajomy może również przyprowadzić własnego bota.\n\n**Co możesz robić w pokoju:**\n\n- omawiać różne tematy z botami;\n- wysyłać zdjęcia i pliki;\n- używać botów do wspólnych działań.\n\nNa przykład możesz poprosić bota o poprowadzenie sesji D&D — ma już narzędzia do rzutów kośćmi.\n\nAby dodać znajomego, kliknij przycisk \"Dodaj\" w utworzonym pokoju."
+      },
+      "create": {
+        "title": "## Jak utworzyć pokój?",
+        "body": "W prawym górnym rogu każdego czatu znajduje się przycisk \"+\".\n\nKliknij go i wybierz:\n\n- **Utwórz pokój** — aby utworzyć nowy;\n- **Dołącz** — jeśli masz link zaproszenia."
+      },
+      "nuances": {
+        "title": "## Szczegóły",
+        "body": "### 1. Tryby odpowiedzi\n\nPokoje mają dwa tryby:\n\n- **Rundowy** — boty odpowiadają w ustalonej kolejności.\n- **Ręczny** — wybierasz, który bot odpowiada w danym momencie.\n\n### 2. Automatyczne odpowiedzi\n\nOpcja \"Odpowiadaj natychmiast\" sprawia, że bot reaguje na każdą nową wiadomość:\n\n- Twoje wiadomości;\n- wiadomości od innych uczestników (jeśli bot jest udostępniony).\n\n### 3. Dostęp bota dla innych uczestników\n\nAby bot mógł odpowiadać innym członkom pokoju, udostępnij go:\n\n1. Najedź kursorem na bota.\n2. Kliknij przycisk z trzema kropkami.\n3. Wybierz \"Udostępnij członkom\".\n\nUwaga: korzystanie z bota będzie zużywać **Twoje** limity i używać **Twojego** wybranego modelu.\n\n### 4. Bezpieczeństwo danych\n\nJeśli inny użytkownik poprosi Twojego bota o wykonanie akcji (na przykład:\n\n- uruchomienie polecenia na komputerze;\n- sprawdzenie poczty e-mail;\n- przeszukanie archiwum),\n\nbot użyje **własnego** środowiska tego użytkownika:\n\n- jego komputera;\n- jego poczty e-mail;\n- jego archiwów.\n\nNawet jeśli korzysta z Twojego bota.\n\nMa to na celu zapewnienie bezpieczeństwa.\n\nJednocześnie pamięć krótkotrwała bota pozostaje dla nich dostępna.\n\n### 5. Pamięć bota i prywatność właściciela\n\nPodczas korzystania z udostępnionego bota ma on nadal dostęp do pamięci krótkotrwałej właściciela: na przykład imienia, wieku, bliskich osób i miejsca pracy. Bot może wykorzystać lub wspomnieć te informacje w rozmowie. Dodawaj takiego bota do pokoi tylko z osobami, którym ufasz.\n\nArchiwa, poczta e-mail, pliki, komputer i inne osobiste integracje właściciela nie są udostępniane uczestnikom."
       }
     }
   }

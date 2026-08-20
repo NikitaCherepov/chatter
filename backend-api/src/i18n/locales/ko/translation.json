@@ -73,7 +73,10 @@
     }
   },
   "chat": {
-    "defaultTitle": "채팅 {{number}}"
+    "defaultTitle": "채팅 {{number}}",
+    "hitlWaitingConfirmation": "위의 확인 카드에 대한 응답을 기다리고 있습니다. \"허용\", \"거부\" 또는 \"댓글과 함께 거부\"를 누르면 해당 요청을 계속 진행하겠습니다.",
+    "stopStopped": "중지됨",
+    "stopNoActiveGeneration": "활성 생성 없음"
   },
   "confirmations": {
     "reviewSshSystem": "당신은 보안 전문가입니다. 간략히 답변하세요.",

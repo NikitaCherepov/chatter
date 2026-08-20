@@ -390,7 +390,9 @@
       "sendTelegram": "Enviar a Telegram",
       "createBranch": "Crear rama",
       "subagentNumber": "🧠 Subagente {{number}}",
-      "providerTokenUsage": "Uso exacto de tokens de finalización informado por el proveedor"
+      "providerTokenUsage": "Uso exacto de tokens de finalización informado por el proveedor",
+      "branchNotAllowedInRoom": "Las ramas no están disponibles en salas compartidas todavía",
+      "branchFailed": "No se pudo crear la rama"
     },
     "reasoning": {
       "auto": "Auto",
@@ -646,6 +648,67 @@
       "title": "¿Cerrar sesión?",
       "message": "Deberá iniciar sesión nuevamente en este dispositivo.",
       "confirm": "Cerrar sesión"
+    },
+    "room": {
+      "title": "Sala",
+      "subtitle": "Característica experimental",
+      "open": "Abrir sala",
+      "createRoom": "Crear sala",
+      "deleteRoom": "Eliminar sala",
+      "removeAgentsBeforeDelete": "Elimina todos los agentes antes de borrar la sala.",
+      "participantCount": "{{count}} participantes",
+      "participants": "Participantes",
+      "mode": "Modo de respuesta",
+      "manual": "Manual",
+      "round": "En orden",
+      "manualHint": "Elige qué personaje responde a continuación.",
+      "roundHint": "Cada personaje activo responde una vez en el orden seleccionado.",
+      "autoRespond": "Responder inmediatamente",
+      "autoRespondHint": "Responde después de cada nuevo mensaje humano.",
+      "whoRespondsNext": "¿Quién responde a continuación?",
+      "roundOrder": "Orden de respuesta",
+      "reply": "Responder",
+      "startSequence": "Responder en orden",
+      "you": "Tú",
+      "human": "Usuario",
+      "mainAssistant": "Asistente principal",
+      "character": "Personaje",
+      "reorder": "Cambiar orden",
+      "removeParticipant": "Eliminar participante",
+      "addParticipant": "Añadir participante",
+      "addParticipantsShort": "Añadir participantes",
+      "choosePrompt": "Elegir un prompt",
+      "changePrompt": "Cambiar prompt",
+      "promptDefault": "Asistente predeterminado",
+      "promptCreative": "Compañero creativo",
+      "promptDetective": "Investigador",
+      "prototypeHint": "La creación de participantes se conectará al backend más tarde.",
+      "manualActionPrototype": "{{name}} responderá después de que se conecte el backend.",
+      "sequenceActionPrototype": "Los personajes responderán en orden después de que se conecte el backend.",
+      "joinRoom": "Unirse a la sala",
+      "joinSubmit": "Unirse",
+      "inviteLinkPlaceholder": "Pegar enlace de invitación (chatter://join-room?...)",
+      "invalidInviteLink": "Enlace de invitación no válido.",
+      "joinFailed": "No se pudo unir a la sala.",
+      "joined": "Te has unido a la sala.",
+      "addParticipantKind": "Añadir participante",
+      "addBot": "Bot (personaje)",
+      "addHuman": "Humano",
+      "inviteLinkTitle": "Enlace de invitación",
+      "copyInvite": "Copiar enlace",
+      "inviteCopied": "¡Copiado!",
+      "inviteHint": "Envía este enlace al usuario. Abrirá el panel de la sala y pulsará \"Unirse a la sala\". El enlace caduca en 7 días.",
+      "manageInvites": "Enlaces de invitación",
+      "activeInvitesTitle": "Enlaces de invitación activos",
+      "noInvites": "No hay enlaces activos",
+      "newInvite": "Crear enlace",
+      "revokeInvite": "Revocar",
+      "removeMember": "Eliminar de la sala",
+      "agentError": "El agente de la sala falló: {{error}}",
+      "makeShared": "Compartir con miembros",
+      "makePrivate": "Cerrar acceso",
+      "sharedBadge": "compartido",
+      "leaveRoom": "Salir de la sala"
     }
   },
   "promptSelector": {
@@ -1097,6 +1160,24 @@
       "experimental": {
         "title": "## Funciones experimentales",
         "body": "Agregamos nuevas funciones con regularidad. Esto es lo que puedes probar ahora mismo:\n\n- **Agente DevOps** — herramienta SSH integrada. Ejecuta comandos en servidores remotos con políticas seguras de confirmación manual.\n- **Mapas y rutas** — la IA puede buscar lugares y construir rutas en un mapa interactivo en el panel derecho.\n- **Modo de tirada de dados (d20)** — para aficionados a los juegos de mesa. Añade una tirada de dados virtual que determina el éxito de las acciones y guía la narrativa en las respuestas de la IA (actívalo en **Configuración → Aplicación**)."
+      }
+    },
+    "rooms": {
+      "bots": {
+        "title": "## ¡Salas con bots!",
+        "body": "Ahora puedes crear salas y añadir varios bots a ellas. Pueden hablar entre sí e interactuar en el mismo espacio."
+      },
+      "invite": {
+        "title": "## Invita a un amigo",
+        "body": "Ahora puedes invitar amigos a tus salas y chatear con ellos y con los bots.\n\nTu amigo también puede traer su propio bot.\n\n**Qué puedes hacer en una sala:**\n\n- discutir varios temas con los bots;\n- enviar fotos y archivos;\n- usar bots para actividades colaborativas.\n\nPor ejemplo, puedes pedirle a un bot que dirija una sesión de D&D: ya tiene herramientas para tirar dados.\n\nPara añadir a un amigo, haz clic en el botón \"Añadir\" dentro de una sala creada."
+      },
+      "create": {
+        "title": "## ¿Cómo crear una sala?",
+        "body": "En la esquina superior derecha de cualquier chat hay un botón \"+\".\n\nHaz clic en él y elige:\n\n- **Crear sala** — para crear una nueva;\n- **Unirse** — si tienes un enlace de invitación."
+      },
+      "nuances": {
+        "title": "## Detalles",
+        "body": "### 1. Modos de respuesta\n\nLas salas tienen dos modos:\n\n- **Ronda** — los bots responden en un orden establecido.\n- **Manual** — tú eliges qué bot responde en cada momento.\n\n### 2. Respuestas automáticas\n\nLa opción \"Responder inmediatamente\" hace que el bot reaccione a cada mensaje nuevo:\n\n- tus mensajes;\n- mensajes de otros participantes (si el bot es compartido).\n\n### 3. Acceso del bot para otros participantes\n\nPara permitir que un bot responda a otros miembros de la sala, hazlo compartido:\n\n1. Pasa el cursor sobre el bot.\n2. Haz clic en el botón de tres puntos.\n3. Selecciona \"Compartir con miembros\".\n\nNota: usar el bot consumirá **tus** cuotas y usará **tu** modelo seleccionado.\n\n### 4. Seguridad de los datos\n\nSi otro usuario le pide a tu bot que realice una acción (por ejemplo:\n\n- ejecutar un comando en una computadora;\n- revisar el correo electrónico;\n- buscar en un archivo),\n\nusará **su propio** entorno:\n\n- su computadora;\n- su correo electrónico;\n- sus archivos.\n\nAunque estén usando tu bot.\n\nEsto se hace por seguridad.\n\nAl mismo tiempo, la memoria activa del bot sigue siendo accesible para ellos.\n\n### 5. Memoria del bot y privacidad del propietario\n\nAl usar un bot compartido, este aún tiene acceso a la memoria a corto plazo del propietario: por ejemplo, nombre, edad, personas cercanas y lugar de trabajo. El bot puede usar o mencionar esta información en la conversación. Solo añade este tipo de bot a salas con personas de confianza.\n\nLos archivos, el correo electrónico, los archivos, la computadora y otras integraciones personales del propietario no se comparten con los participantes."
       }
     }
   }

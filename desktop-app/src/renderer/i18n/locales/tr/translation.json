@@ -711,7 +711,9 @@
       "branchTitle": "Bu mesaja kadar olan geçmişin bir kopyasıyla yeni bir sohbet dalı oluştur",
       "sendTelegram": "Telegram'a gönder",
       "createBranch": "Dal oluştur",
-      "subagentNumber": "🧠 Alt Ajan {{number}}"
+      "subagentNumber": "🧠 Alt Ajan {{number}}",
+      "branchNotAllowedInRoom": "Dallar henüz paylaşılan odalarda kullanılamıyor",
+      "branchFailed": "Dal oluşturulamadı"
     },
     "reasoning": {
       "auto": "Otomatik",
@@ -967,6 +969,67 @@
       "title": "Çıkış yapılsın mı?",
       "message": "Bu cihazda tekrar oturum açmanız gerekecek.",
       "confirm": "Çıkış yap"
+    },
+    "room": {
+      "title": "Oda",
+      "subtitle": "Deneysel özellik",
+      "open": "Odayı aç",
+      "createRoom": "Oda oluştur",
+      "deleteRoom": "Odayı sil",
+      "removeAgentsBeforeDelete": "Odayı silmeden önce tüm aracıları kaldırın.",
+      "participantCount": "{{count}} katılımcı",
+      "participants": "Katılımcılar",
+      "mode": "Yanıt modu",
+      "manual": "Manuel",
+      "round": "Sırayla",
+      "manualHint": "Sıradaki karakterin kimin yanıtlayacağını seçin.",
+      "roundHint": "Her aktif karakter, seçilen sıraya göre bir kez yanıt verir.",
+      "autoRespond": "Hemen yanıtla",
+      "autoRespondHint": "Her yeni insan mesajından sonra yanıt ver.",
+      "whoRespondsNext": "Sıradaki kim yanıtlasın?",
+      "roundOrder": "Yanıt sırası",
+      "reply": "Yanıtla",
+      "startSequence": "Sırayla yanıtla",
+      "you": "Sen",
+      "human": "Kullanıcı",
+      "mainAssistant": "Ana asistan",
+      "character": "Karakter",
+      "reorder": "Sırayı değiştir",
+      "removeParticipant": "Katılımcıyı kaldır",
+      "addParticipant": "Katılımcı ekle",
+      "addParticipantsShort": "Katılımcı ekle",
+      "choosePrompt": "Bir istem seç",
+      "changePrompt": "İstemi değiştir",
+      "promptDefault": "Varsayılan asistan",
+      "promptCreative": "Yaratıcı arkadaş",
+      "promptDetective": "Araştırmacı",
+      "prototypeHint": "Katılımcı oluşturma daha sonra arka uca bağlanacaktır.",
+      "manualActionPrototype": "{{name}} arka uç bağlandıktan sonra yanıt verecek.",
+      "sequenceActionPrototype": "Karakterler arka uç bağlandıktan sonra sırayla yanıt verecek.",
+      "joinRoom": "Odaya katıl",
+      "joinSubmit": "Katıl",
+      "inviteLinkPlaceholder": "Davet bağlantısını yapıştır (chatter://join-room?...)",
+      "invalidInviteLink": "Geçersiz davet bağlantısı.",
+      "joinFailed": "Odaya katılınamadı.",
+      "joined": "Odaya katıldınız.",
+      "addParticipantKind": "Katılımcı ekle",
+      "addBot": "Bot (karakter)",
+      "addHuman": "İnsan",
+      "inviteLinkTitle": "Davet bağlantısı",
+      "copyInvite": "Bağlantıyı kopyala",
+      "inviteCopied": "Kopyalandı!",
+      "inviteHint": "Bu bağlantıyı kullanıcıya gönderin. Oda panelini açıp \"Odaya Katıl\" butonuna basarlar. Bağlantı 7 gün içinde geçerliliğini yitirir.",
+      "manageInvites": "Davet bağlantıları",
+      "activeInvitesTitle": "Aktif davet bağlantıları",
+      "noInvites": "Aktif bağlantı yok",
+      "newInvite": "Bağlantı oluştur",
+      "revokeInvite": "İptal et",
+      "removeMember": "Odadan kaldır",
+      "agentError": "Oda aracısı başarısız oldu: {{error}}",
+      "makeShared": "Üyelerle paylaş",
+      "makePrivate": "Erişimi kapat",
+      "sharedBadge": "paylaşıldı",
+      "leaveRoom": "Odadan ayrıl"
     }
   },
   "promptSelector": {
@@ -1106,6 +1169,24 @@
       "experimental": {
         "title": "## Deneysel Özellikler",
         "body": "Düzenli olarak yeni özellikler ekliyoruz. İşte şu anda deneyebilecekleriniz:\n\n- **DevOps Ajanı** — yerleşik SSH aracı. Güvenli manuel onay politikalarıyla uzak sunucularda komut çalıştırın.\n- **Haritalar ve Rotalar** — Yapay zeka, sağ paneldeki etkileşimli haritada yer arayabilir ve rotalar oluşturabilir.\n- **Zar Atma Modu (d20)** — masaüstü oyun hayranları için. Eylemlerin başarısını belirleyen ve yapay zeka yanıtlarında anlatıyı yönlendiren sanal bir zar atışı ekler (etkinleştirmek için **Ayarlar → Uygulama**)."
+      }
+    },
+    "rooms": {
+      "bots": {
+        "title": "## Botlu odalar!",
+        "body": "Artık odalar oluşturabilir ve bunlara birden fazla bot ekleyebilirsiniz. Birbirleriyle konuşabilir ve aynı alanda etkileşime girebilirler."
+      },
+      "invite": {
+        "title": "## Bir arkadaş davet et",
+        "body": "Artık arkadaşlarınızı odalarınıza davet edebilir ve onlarla birlikte botlarla sohbet edebilirsiniz.\n\nArkadaşınız kendi botunu da getirebilir.\n\n**Bir odada neler yapabilirsiniz:**\n\n- botlarla çeşitli konuları tartışmak;\n- fotoğraf ve dosya göndermek;\n- işbirlikçi etkinlikler için botları kullanmak.\n\nÖrneğin, bir bottan D&D oturumu yönetmesini isteyebilirsiniz — zar atma araçları zaten mevcuttur.\n\nBir arkadaş eklemek için, oluşturulan odanın içindeki \"Ekle\" düğmesine tıklayın."
+      },
+      "create": {
+        "title": "## Oda nasıl oluşturulur?",
+        "body": "Herhangi bir sohbetin sağ üst köşesinde bir \"+\" düğmesi vardır.\n\nTıklayın ve seçin:\n\n- **Oda oluştur** — yeni bir oda oluşturmak için;\n- **Katıl** — davet bağlantınız varsa."
+      },
+      "nuances": {
+        "title": "## Ayrıntılar",
+        "body": "### 1. Yanıt modları\n\nOdaların iki modu vardır:\n\n- **Tur** — botlar belirlenen sırayla yanıt verir.\n- **Manuel** — herhangi bir anda hangi botun yanıt vereceğini siz seçersiniz.\n\n### 2. Otomatik yanıtlar\n\n\"Hemen yanıtla\" seçeneği, botun her yeni mesaja tepki vermesini sağlar:\n\n- mesajlarınız;\n- diğer katılımcıların mesajları (bot paylaşılıyorsa).\n\n### 3. Diğer katılımcılar için bot erişimi\n\nBir botun diğer oda üyelerine yanıt vermesini sağlamak için onu paylaşılan yapın:\n\n1. Botun üzerine gelin.\n2. Üç nokta düğmesine tıklayın.\n3. \"Üyelerle paylaş\" seçeneğini seçin.\n\nNot: botu kullanmak **sizin** kotalarınızı tüketir ve **sizin** seçtiğiniz modeli kullanır.\n\n### 4. Veri güvenliği\n\nBaşka bir kullanıcı botunuzdan bir eylem gerçekleştirmesini isterse (örneğin:\n\n- bilgisayarda bir komut çalıştırmak;\n- e-postayı kontrol etmek;\n- bir arşivde arama yapmak),\n\nbu, **kendi** ortamını kullanır:\n\n- kendi bilgisayarı;\n- kendi e-postası;\n- kendi arşivleri.\n\nBotunuzu kullanıyor olsa bile.\n\nBu, güvenlik için yapılır.\n\nAynı zamanda, botun sıcak belleği onlar için erişilebilir kalır.\n\n### 5. Bot belleği ve sahibin gizliliği\n\nPaylaşılan bir bot kullanıldığında, sahibin kısa süreli belleğine erişimi olmaya devam eder: örneğin, ad, yaş, yakın kişiler ve iş yeri. Bot bu bilgileri sohbette kullanabilir veya bahsedebilir. Böyle bir botu yalnızca güvendiğiniz kişilerin olduğu odalara ekleyin.\n\nSahibin arşivleri, e-postası, dosyaları, bilgisayarı ve diğer kişisel entegrasyonları katılımcılarla paylaşılmaz."
       }
     }
   }

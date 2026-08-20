@@ -1,6 +1,9 @@
 {
   "chat": {
-    "defaultTitle": "Sohbet {{number}}"
+    "defaultTitle": "Sohbet {{number}}",
+    "hitlWaitingConfirmation": "Yukarıdaki onay kartına yanıtınızı bekliyorum. \"İzin Ver\", \"Reddet\" veya \"Yorumla Reddet\" seçeneklerinden birine basın — ve bu isteğe devam edeceğim.",
+    "stopStopped": "Durduruldu",
+    "stopNoActiveGeneration": "Aktif üretim yok"
   },
   "toolStatus": {
     "search_web": "Web'de arama yapılıyor...",

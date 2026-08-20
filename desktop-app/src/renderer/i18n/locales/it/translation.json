@@ -711,7 +711,9 @@
       "sendTelegram": "Invia in Telegram",
       "createBranch": "Crea ramo",
       "subagentNumber": "🧠 Subagente {{number}}",
-      "providerTokenUsage": "Utilizzo esatto dei token di completamento riportato dal provider"
+      "providerTokenUsage": "Utilizzo esatto dei token di completamento riportato dal provider",
+      "branchNotAllowedInRoom": "I rami non sono ancora disponibili nelle stanze condivise",
+      "branchFailed": "Impossibile creare il ramo"
     },
     "reasoning": {
       "auto": "Auto",
@@ -967,6 +969,67 @@
       "title": "Disconnettersi?",
       "message": "Dovrai accedere di nuovo su questo dispositivo.",
       "confirm": "Disconnetti"
+    },
+    "room": {
+      "title": "Stanza",
+      "subtitle": "Funzionalità sperimentale",
+      "open": "Apri stanza",
+      "createRoom": "Crea stanza",
+      "deleteRoom": "Elimina stanza",
+      "removeAgentsBeforeDelete": "Rimuovi tutti gli agenti prima di eliminare la stanza.",
+      "participantCount": "{{count}} partecipanti",
+      "participants": "Partecipanti",
+      "mode": "Modalità di risposta",
+      "manual": "Manuale",
+      "round": "In ordine",
+      "manualHint": "Scegli quale personaggio risponde successivamente.",
+      "roundHint": "Ogni personaggio attivo risponde una volta nell'ordine selezionato.",
+      "autoRespond": "Rispondi immediatamente",
+      "autoRespondHint": "Rispondi dopo ogni nuovo messaggio umano.",
+      "whoRespondsNext": "Chi risponde dopo?",
+      "roundOrder": "Ordine di risposta",
+      "reply": "Rispondi",
+      "startSequence": "Rispondi in ordine",
+      "you": "Tu",
+      "human": "Utente",
+      "mainAssistant": "Assistente principale",
+      "character": "Personaggio",
+      "reorder": "Cambia ordine",
+      "removeParticipant": "Rimuovi partecipante",
+      "addParticipant": "Aggiungi partecipante",
+      "addParticipantsShort": "Aggiungi partecipanti",
+      "choosePrompt": "Scegli un prompt",
+      "changePrompt": "Cambia prompt",
+      "promptDefault": "Assistente predefinito",
+      "promptCreative": "Compagno creativo",
+      "promptDetective": "Investigatore",
+      "prototypeHint": "La creazione dei partecipanti sarà collegata al backend in seguito.",
+      "manualActionPrototype": "{{name}} risponderà dopo che il backend sarà collegato.",
+      "sequenceActionPrototype": "I personaggi risponderanno in ordine dopo che il backend sarà collegato.",
+      "joinRoom": "Entra nella stanza",
+      "joinSubmit": "Entra",
+      "inviteLinkPlaceholder": "Incolla il link di invito (chatter://join-room?...)",
+      "invalidInviteLink": "Link di invito non valido.",
+      "joinFailed": "Impossibile unirsi alla stanza.",
+      "joined": "Ti sei unito alla stanza.",
+      "addParticipantKind": "Aggiungi partecipante",
+      "addBot": "Bot (personaggio)",
+      "addHuman": "Umano",
+      "inviteLinkTitle": "Link di invito",
+      "copyInvite": "Copia link",
+      "inviteCopied": "Copiato!",
+      "inviteHint": "Invia questo link all'utente. Aprirà il pannello della stanza e premerà \"Unisciti alla stanza\". Il link scade tra 7 giorni.",
+      "manageInvites": "Link di invito",
+      "activeInvitesTitle": "Link di invito attivi",
+      "noInvites": "Nessun link attivo",
+      "newInvite": "Crea link",
+      "revokeInvite": "Revoca",
+      "removeMember": "Rimuovi dalla stanza",
+      "agentError": "Errore agente stanza: {{error}}",
+      "makeShared": "Condividi con i membri",
+      "makePrivate": "Chiudi accesso",
+      "sharedBadge": "condiviso",
+      "leaveRoom": "Lascia la stanza"
     }
   },
   "promptSelector": {
@@ -1106,6 +1169,24 @@
       "experimental": {
         "title": "## Funzionalità Sperimentali",
         "body": "Aggiungiamo regolarmente nuove funzionalità. Ecco cosa puoi provare subito:\n\n- **Agente DevOps** — strumento SSH integrato. Esegui comandi su server remoti con politiche di conferma manuale sicure.\n- **Mappe e Percorsi** — l'IA può cercare luoghi e costruire percorsi su una mappa interattiva nel pannello di destra.\n- **Modalità Tiro di Dado (d20)** — per gli appassionati di giochi da tavolo. Aggiunge un tiro di dado virtuale che determina il successo delle azioni e guida la narrazione nelle risposte dell'IA (attivala in **Impostazioni → Applicazione**)."
+      }
+    },
+    "rooms": {
+      "bots": {
+        "title": "## Stanze con bot!",
+        "body": "Ora puoi creare stanze e aggiungere più bot. Possono parlare tra loro e interagire nello stesso spazio."
+      },
+      "invite": {
+        "title": "## Invita un amico",
+        "body": "Ora puoi invitare amici nelle tue stanze e chattare insieme a loro e ai bot.\n\nIl tuo amico può anche portare il proprio bot.\n\n**Cosa puoi fare in una stanza:**\n\n- discutere vari argomenti con i bot;\n- inviare foto e file;\n- usare i bot per attività collaborative.\n\nAd esempio, puoi chiedere a un bot di gestire una sessione di D&D — ha già strumenti per i tiri di dado.\n\nPer aggiungere un amico, clicca il pulsante \"Aggiungi\" all'interno di una stanza creata."
+      },
+      "create": {
+        "title": "## Come creare una stanza?",
+        "body": "Nell'angolo in alto a destra di qualsiasi chat c'è un pulsante \"+\".\n\nCliccalo e scegli:\n\n- **Crea stanza** — per crearne una nuova;\n- **Unisciti** — se hai un link di invito."
+      },
+      "nuances": {
+        "title": "## Dettagli",
+        "body": "### 1. Modalità di risposta\n\nLe stanze hanno due modalità:\n\n- **Round** — i bot rispondono in un ordine prestabilito.\n- **Manuale** — scegli tu quale bot risponde in un dato momento.\n\n### 2. Risposte automatiche\n\nL'opzione \"Rispondi immediatamente\" fa sì che il bot reagisca a ogni nuovo messaggio:\n\n- i tuoi messaggi;\n- messaggi di altri partecipanti (se il bot è condiviso).\n\n### 3. Accesso del bot per altri partecipanti\n\nPer consentire a un bot di rispondere ad altri membri della stanza, rendilo condiviso:\n\n1. Passa il mouse sopra il bot.\n2. Clicca il pulsante con i tre puntini.\n3. Seleziona \"Condividi con i membri\".\n\nNota: l'uso del bot consumerà **le tue** quote e userà **il tuo** modello selezionato.\n\n### 4. Sicurezza dei dati\n\nSe un altro utente chiede al tuo bot di eseguire un'azione (ad esempio:\n\n- eseguire un comando su un computer;\n- controllare l'email;\n- cercare in un archivio),\n\nuserà **il proprio** ambiente:\n\n- il proprio computer;\n- la propria email;\n- i propri archivi.\n\nAnche se stanno usando il tuo bot.\n\nQuesto viene fatto per sicurezza.\n\nAllo stesso tempo, la memoria calda del bot rimane accessibile a loro.\n\n### 5. Memoria del bot e privacy del proprietario\n\nQuando si usa un bot condiviso, ha ancora accesso alla memoria a breve termine del proprietario: ad esempio, nome, età, persone vicine e luogo di lavoro. Il bot può usare o menzionare queste informazioni in conversazione. Aggiungi solo tali bot a stanze con persone di cui ti fidi.\n\nGli archivi, l'email, i file, il computer e altre integrazioni personali del proprietario non sono condivisi con i partecipanti."
       }
     }
   }

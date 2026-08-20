@@ -73,7 +73,10 @@
     }
   },
   "chat": {
-    "defaultTitle": "Chat {{number}}"
+    "defaultTitle": "Chat {{number}}",
+    "hitlWaitingConfirmation": "Attendo la tua risposta alla scheda di conferma qui sopra. Premi \"Consenti\", \"Nega\" o \"Nega con commento\" — e continuerò quella richiesta.",
+    "stopStopped": "Fermato",
+    "stopNoActiveGeneration": "Nessuna generazione attiva"
   },
   "confirmations": {
     "reviewSshSystem": "Sei un esperto di sicurezza. Rispondi brevemente.",

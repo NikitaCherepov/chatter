@@ -390,7 +390,9 @@
       "sendTelegram": "发送到 Telegram",
       "createBranch": "创建分支",
       "subagentNumber": "🧠 子代理 {{number}}",
-      "providerTokenUsage": "提供商报告的精确完成令牌使用量"
+      "providerTokenUsage": "提供商报告的精确完成令牌使用量",
+      "branchNotAllowedInRoom": "共享房间中暂不支持分支",
+      "branchFailed": "创建分支失败"
     },
     "reasoning": {
       "auto": "自动",
@@ -646,6 +648,67 @@
       "title": "退出登录？",
       "message": "您需要在此设备上重新登录。",
       "confirm": "退出登录"
+    },
+    "room": {
+      "title": "房间",
+      "subtitle": "实验性功能",
+      "open": "打开房间",
+      "createRoom": "创建房间",
+      "deleteRoom": "删除房间",
+      "removeAgentsBeforeDelete": "删除房间前请移除所有代理。",
+      "participantCount": "{{count}} 位参与者",
+      "participants": "参与者",
+      "mode": "回复模式",
+      "manual": "手动",
+      "round": "按顺序",
+      "manualHint": "选择下一个回复的角色。",
+      "roundHint": "每个活跃角色按所选顺序回复一次。",
+      "autoRespond": "立即回复",
+      "autoRespondHint": "在每条新的人类消息后回复。",
+      "whoRespondsNext": "谁下一个回复？",
+      "roundOrder": "回复顺序",
+      "reply": "回复",
+      "startSequence": "按顺序回复",
+      "you": "你",
+      "human": "用户",
+      "mainAssistant": "主助手",
+      "character": "角色",
+      "reorder": "更改顺序",
+      "removeParticipant": "移除参与者",
+      "addParticipant": "添加参与者",
+      "addParticipantsShort": "添加参与者",
+      "choosePrompt": "选择一个提示",
+      "changePrompt": "更改提示",
+      "promptDefault": "默认助手",
+      "promptCreative": "创意伙伴",
+      "promptDetective": "调查员",
+      "prototypeHint": "参与者创建将在稍后连接到后端。",
+      "manualActionPrototype": "{{name}}将在后端连接后响应。",
+      "sequenceActionPrototype": "角色将在后端连接后按顺序响应。",
+      "joinRoom": "加入房间",
+      "joinSubmit": "加入",
+      "inviteLinkPlaceholder": "粘贴邀请链接（chatter://join-room?...）",
+      "invalidInviteLink": "无效的邀请链接。",
+      "joinFailed": "加入房间失败。",
+      "joined": "已加入房间。",
+      "addParticipantKind": "添加参与者",
+      "addBot": "机器人（角色）",
+      "addHuman": "人类",
+      "inviteLinkTitle": "邀请链接",
+      "copyInvite": "复制链接",
+      "inviteCopied": "已复制！",
+      "inviteHint": "将此链接发送给用户。他们打开房间面板并点击“加入房间”。链接7天后过期。",
+      "manageInvites": "邀请链接",
+      "activeInvitesTitle": "有效邀请链接",
+      "noInvites": "无有效链接",
+      "newInvite": "创建链接",
+      "revokeInvite": "撤销",
+      "removeMember": "从房间移除",
+      "agentError": "房间代理失败：{{error}}",
+      "makeShared": "与成员共享",
+      "makePrivate": "关闭访问",
+      "sharedBadge": "已共享",
+      "leaveRoom": "离开房间"
     }
   },
   "promptSelector": {
@@ -1097,6 +1160,24 @@
       "experimental": {
         "title": "## 实验性功能",
         "body": "我们会定期添加新功能。以下是您现在可以尝试的内容：\n\n- **DevOps Agent** — 内置SSH工具。在远程服务器上运行命令，并配有安全的手动确认策略。\n- **地图与路线** — AI可以在右侧面板的交互式地图上搜索地点并构建路线。\n- **骰子投掷模式 (d20)** — 面向桌面游戏爱好者。添加一个虚拟骰子投掷，决定AI响应中行动的成功与否并引导叙事（在**设置 → 应用程序**中启用）。"
+      }
+    },
+    "rooms": {
+      "bots": {
+        "title": "## 带机器人的房间！",
+        "body": "现在您可以创建房间并向其中添加多个机器人。它们可以在同一空间中相互交谈和互动。"
+      },
+      "invite": {
+        "title": "## 邀请朋友",
+        "body": "现在您可以邀请朋友加入您的房间，并与他们和机器人一起聊天。\n\n您的朋友也可以带上自己的机器人。\n\n**在房间中您可以：**\n\n- 与机器人讨论各种话题；\n- 发送照片和文件；\n- 使用机器人进行协作活动。\n\n例如，您可以要求机器人主持一场龙与地下城（D&D）游戏——它已经具备掷骰子的工具。\n\n要添加朋友，请点击已创建房间内的“添加”按钮。"
+      },
+      "create": {
+        "title": "## 如何创建房间？",
+        "body": "在任何聊天的右上角都有一个“+”按钮。\n\n点击它并选择：\n\n- **创建房间** — 创建一个新房间；\n- **加入** — 如果您有邀请链接。"
+      },
+      "nuances": {
+        "title": "## 详情",
+        "body": "### 1. 响应模式\n\n房间有两种模式：\n\n- **轮流** — 机器人按设定顺序响应。\n- **手动** — 您可以选择任意时刻由哪个机器人响应。\n\n### 2. 自动响应\n\n“立即响应”选项使机器人对每条新消息做出反应：\n\n- 您的消息；\n- 其他参与者的消息（如果机器人是共享的）。\n\n### 3. 其他参与者对机器人的访问权限\n\n要让机器人响应其他房间成员，请将其设为共享：\n\n1. 将鼠标悬停在机器人上。\n2. 点击三点按钮。\n3. 选择“与成员共享”。\n\n注意：使用该机器人将消耗**您的**配额并使用**您**选择的模型。\n\n### 4. 数据安全\n\n如果其他用户要求您的机器人执行操作（例如：\n\n- 在计算机上运行命令；\n- 检查电子邮件；\n- 搜索档案），\n\n它将使用**他们自己的**环境：\n\n- 他们的计算机；\n- 他们的电子邮件；\n- 他们的档案。\n\n即使他们使用的是您的机器人。\n\n这是出于安全考虑。\n\n同时，机器人的热记忆仍然对他们可访问。\n\n### 5. 机器人记忆与所有者隐私\n\n使用共享机器人时，它仍然可以访问所有者的短期记忆：例如，姓名、年龄、亲近的人和职场。机器人可能会在对话中使用或提及这些信息。请仅将此类机器人添加到您信任的人所在的房间。\n\n所有者的档案、电子邮件、文件、计算机和其他个人集成不会与参与者共享。"
       }
     }
   }

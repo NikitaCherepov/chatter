@@ -1,6 +1,9 @@
 {
   "chat": {
-    "defaultTitle": "Chat {{number}}"
+    "defaultTitle": "Chat {{number}}",
+    "hitlWaitingConfirmation": "Čekám na vaši odpověď na potvrzovací kartu výše. Stiskněte \"Povolit\", \"Odmítnout\" nebo \"Odmítnout s komentářem\" — a já budu pokračovat v tomto požadavku.",
+    "stopStopped": "Zastaveno",
+    "stopNoActiveGeneration": "Žádná aktivní generace"
   },
   "toolStatus": {
     "search_web": "Prohledávám web...",

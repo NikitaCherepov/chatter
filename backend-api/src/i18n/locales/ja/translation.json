@@ -73,7 +73,10 @@
     }
   },
   "chat": {
-    "defaultTitle": "チャット {{number}}"
+    "defaultTitle": "チャット {{number}}",
+    "hitlWaitingConfirmation": "上記の確認カードへのご返答をお待ちしています。「許可」「拒否」「コメント付きで拒否」を押してください。その後、そのリクエストを続行します。",
+    "stopStopped": "停止しました",
+    "stopNoActiveGeneration": "アクティブな生成はありません"
   },
   "confirmations": {
     "reviewSshSystem": "あなたはセキュリティ専門家です。簡潔に回答してください。",

@@ -711,7 +711,9 @@
       "branchTitle": "Vytvořit novou větev chatu s kopií historie až po tuto zprávu",
       "sendTelegram": "Odeslat do Telegramu",
       "createBranch": "Vytvořit větev",
-      "subagentNumber": "🧠 Subagent {{number}}"
+      "subagentNumber": "🧠 Subagent {{number}}",
+      "branchNotAllowedInRoom": "Větve zatím nejsou k dispozici ve sdílených místnostech",
+      "branchFailed": "Vytvoření větve se nezdařilo"
     },
     "reasoning": {
       "auto": "Automaticky",
@@ -967,6 +969,67 @@
       "title": "Odhlásit se?",
       "message": "Na tomto zařízení se budete muset znovu přihlásit.",
       "confirm": "Odhlásit se"
+    },
+    "room": {
+      "title": "Místnost",
+      "subtitle": "Experimentální funkce",
+      "open": "Otevřít místnost",
+      "createRoom": "Vytvořit místnost",
+      "deleteRoom": "Smazat místnost",
+      "removeAgentsBeforeDelete": "Před smazáním místnosti odeberte všechny agenty.",
+      "participantCount": "{{count}} účastníků",
+      "participants": "Účastníci",
+      "mode": "Režim odpovědí",
+      "manual": "Ručně",
+      "round": "V pořadí",
+      "manualHint": "Vyberte, která postava odpoví jako další.",
+      "roundHint": "Každá aktivní postava odpoví jednou ve zvoleném pořadí.",
+      "autoRespond": "Odpovědět okamžitě",
+      "autoRespondHint": "Odpovědět po každé nové lidské zprávě.",
+      "whoRespondsNext": "Kdo odpoví jako další?",
+      "roundOrder": "Pořadí odpovědí",
+      "reply": "Odpovědět",
+      "startSequence": "Odpovídat v pořadí",
+      "you": "Vy",
+      "human": "Uživatel",
+      "mainAssistant": "Hlavní asistent",
+      "character": "Postava",
+      "reorder": "Změnit pořadí",
+      "removeParticipant": "Odebrat účastníka",
+      "addParticipant": "Přidat účastníka",
+      "addParticipantsShort": "Přidat účastníky",
+      "choosePrompt": "Vyberte výzvu",
+      "changePrompt": "Změnit prompt",
+      "promptDefault": "Výchozí asistent",
+      "promptCreative": "Kreativní společník",
+      "promptDetective": "Vyšetřovatel",
+      "prototypeHint": "Vytváření účastníků bude později propojeno s backendem.",
+      "manualActionPrototype": "{{name}} odpoví po připojení backendu.",
+      "sequenceActionPrototype": "Postavy odpoví v pořadí po připojení backendu.",
+      "joinRoom": "Připojit se k místnosti",
+      "joinSubmit": "Připojit se",
+      "inviteLinkPlaceholder": "Vložte pozvánkový odkaz (chatter://join-room?...)",
+      "invalidInviteLink": "Neplatný odkaz k pozvání.",
+      "joinFailed": "Připojení do místnosti se nezdařilo.",
+      "joined": "Připojeno do místnosti.",
+      "addParticipantKind": "Přidat účastníka",
+      "addBot": "Bot (postava)",
+      "addHuman": "Člověk",
+      "inviteLinkTitle": "Odkaz k pozvání",
+      "copyInvite": "Kopírovat odkaz",
+      "inviteCopied": "Zkopírováno!",
+      "inviteHint": "Pošlete tento odkaz uživateli. Otevře panel místnosti a stiskne \"Připojit se k místnosti\". Odkaz vyprší za 7 dní.",
+      "manageInvites": "Odkazy na pozvánky",
+      "activeInvitesTitle": "Aktivní odkazy na pozvánky",
+      "noInvites": "Žádné aktivní odkazy",
+      "newInvite": "Vytvořit odkaz",
+      "revokeInvite": "Odvolat",
+      "removeMember": "Odebrat z místnosti",
+      "agentError": "Agent místnosti selhal: {{error}}",
+      "makeShared": "Sdílet s členy",
+      "makePrivate": "Zavřít přístup",
+      "sharedBadge": "sdíleno",
+      "leaveRoom": "Opustit místnost"
     }
   },
   "promptSelector": {
@@ -1106,6 +1169,24 @@
       "experimental": {
         "title": "## Experimentální funkce",
         "body": "Pravidelně přidáváme nové funkce. Zde je to, co můžete vyzkoušet právě teď:\n\n- **DevOps Agent** — vestavěný nástroj SSH. Spouštějte příkazy na vzdálených serverech s bezpečnými zásadami ručního potvrzení.\n- **Mapy a trasy** — AI umí vyhledávat místa a vytvářet trasy na interaktivní mapě v pravém panelu.\n- **Režim hodu kostkou (d20)** — pro fanoušky deskových her. Přidává virtuální hod kostkou, který určuje úspěšnost akcí a řídí vyprávění v odpovědích AI (povolte v **Nastavení → Aplikace**)."
+      }
+    },
+    "rooms": {
+      "bots": {
+        "title": "## Místnosti s boty!",
+        "body": "Nyní můžete vytvářet místnosti a přidávat do nich více botů. Mohou spolu mluvit a interagovat ve stejném prostoru."
+      },
+      "invite": {
+        "title": "## Pozvěte přítele",
+        "body": "Nyní můžete pozvat přátele do svých místností a chatovat s nimi a boty.\n\nVáš přítel si také může přivést vlastního bota.\n\n**Co můžete v místnosti dělat:**\n\n- diskutovat o různých tématech s boty;\n- posílat fotky a soubory;\n- používat boty pro společné aktivity.\n\nMůžete například požádat bota, aby vedl D&D sezení – už má nástroje pro hody kostkami.\n\nChcete-li přidat přítele, klikněte na tlačítko \"Přidat\" uvnitř vytvořené místnosti."
+      },
+      "create": {
+        "title": "## Jak vytvořit místnost?",
+        "body": "V pravém horním rohu každého chatu je tlačítko \"+\".\n\nKlikněte na něj a vyberte:\n\n- **Vytvořit místnost** – pro vytvoření nové;\n- **Připojit se** – pokud máte pozvánku."
+      },
+      "nuances": {
+        "title": "## Podrobnosti",
+        "body": "### 1. Režimy odpovědí\n\nMístnosti mají dva režimy:\n\n- **Kolo** – boti odpovídají v nastaveném pořadí.\n- **Ručně** – vy si vyberete, který bot odpoví v daném okamžiku.\n\n### 2. Automatické odpovědi\n\nMožnost \"Odpovědět okamžitě\" způsobí, že bot reaguje na každou novou zprávu:\n\n- vaše zprávy;\n- zprávy od ostatních účastníků (pokud je bot sdílený).\n\n### 3. Přístup bota pro ostatní účastníky\n\nChcete-li, aby bot odpovídal ostatním členům místnosti, zpřístupněte ho:\n\n1. Najeďte na bota.\n2. Klikněte na tlačítko se třemi tečkami.\n3. Vyberte \"Sdílet s členy\".\n\nPoznámka: používání bota spotřebuje **vaše** kvóty a použije **vámi** vybraný model.\n\n### 4. Zabezpečení dat\n\nPokud jiný uživatel požádá vašeho bota o provedení akce (například:\n\n- spustit příkaz na počítači;\n- zkontrolovat e-mail;\n- prohledat archiv),\n\npoužije **vlastní** prostředí:\n\n- jejich počítač;\n- jejich e-mail;\n- jejich archivy.\n\nI když používají vašeho bota.\n\nTo je provedeno z bezpečnostních důvodů.\n\nZároveň zůstává botova krátkodobá paměť pro ně přístupná.\n\n### 5. Paměť bota a soukromí vlastníka\n\nPři používání sdíleného bota má stále přístup ke krátkodobé paměti vlastníka: například jméno, věk, blízké osoby a pracoviště. Bot může tyto informace použít nebo zmínit v konverzaci. Přidávejte takového bota do místností pouze s lidmi, kterým důvěřujete.\n\nArchivy, e-mail, soubory, počítač a další osobní integrace vlastníka nejsou sdíleny s účastníky."
       }
     }
   }

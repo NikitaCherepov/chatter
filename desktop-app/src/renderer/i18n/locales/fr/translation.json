@@ -390,7 +390,9 @@
       "sendTelegram": "Envoyer sur Telegram",
       "createBranch": "Créer une branche",
       "subagentNumber": "🧠 Sous-agent {{number}}",
-      "providerTokenUsage": "Utilisation exacte des jetons de complétion rapportée par le fournisseur"
+      "providerTokenUsage": "Utilisation exacte des jetons de complétion rapportée par le fournisseur",
+      "branchNotAllowedInRoom": "Les branches ne sont pas encore disponibles dans les salons partagés",
+      "branchFailed": "Échec de la création de la branche"
     },
     "reasoning": {
       "auto": "Auto",
@@ -646,6 +648,67 @@
       "title": "Se déconnecter ?",
       "message": "Vous devrez vous reconnecter sur cet appareil.",
       "confirm": "Se déconnecter"
+    },
+    "room": {
+      "title": "Salon",
+      "subtitle": "Fonctionnalité expérimentale",
+      "open": "Ouvrir le salon",
+      "createRoom": "Créer un salon",
+      "deleteRoom": "Supprimer le salon",
+      "removeAgentsBeforeDelete": "Retirez tous les agents avant de supprimer le salon.",
+      "participantCount": "{{count}} participants",
+      "participants": "Participants",
+      "mode": "Mode de réponse",
+      "manual": "Manuel",
+      "round": "Dans l'ordre",
+      "manualHint": "Choisissez quel personnage répond ensuite.",
+      "roundHint": "Chaque personnage actif répond une fois dans l'ordre sélectionné.",
+      "autoRespond": "Répondre immédiatement",
+      "autoRespondHint": "Répondre après chaque nouveau message humain.",
+      "whoRespondsNext": "Qui répond ensuite ?",
+      "roundOrder": "Ordre de réponse",
+      "reply": "Répondre",
+      "startSequence": "Répondre dans l'ordre",
+      "you": "Vous",
+      "human": "Utilisateur",
+      "mainAssistant": "Assistant principal",
+      "character": "Personnage",
+      "reorder": "Changer l'ordre",
+      "removeParticipant": "Retirer le participant",
+      "addParticipant": "Ajouter un participant",
+      "addParticipantsShort": "Ajouter des participants",
+      "choosePrompt": "Choisir une invite",
+      "changePrompt": "Changer le prompt",
+      "promptDefault": "Assistant par défaut",
+      "promptCreative": "Compagnon créatif",
+      "promptDetective": "Enquêteur",
+      "prototypeHint": "La création de participants sera connectée au backend plus tard.",
+      "manualActionPrototype": "{{name}} répondra après la connexion au backend.",
+      "sequenceActionPrototype": "Les personnages répondront dans l'ordre après la connexion au backend.",
+      "joinRoom": "Rejoindre la salle",
+      "joinSubmit": "Rejoindre",
+      "inviteLinkPlaceholder": "Collez le lien d'invitation (chatter://join-room?...)",
+      "invalidInviteLink": "Lien d'invitation invalide.",
+      "joinFailed": "Échec de la connexion à la salle.",
+      "joined": "Vous avez rejoint la salle.",
+      "addParticipantKind": "Ajouter un participant",
+      "addBot": "Bot (personnage)",
+      "addHuman": "Humain",
+      "inviteLinkTitle": "Lien d'invitation",
+      "copyInvite": "Copier le lien",
+      "inviteCopied": "Copié !",
+      "inviteHint": "Envoyez ce lien à l'utilisateur. Il ouvre le panneau de la salle et appuie sur \"Rejoindre la salle\". Le lien expire dans 7 jours.",
+      "manageInvites": "Liens d'invitation",
+      "activeInvitesTitle": "Liens d'invitation actifs",
+      "noInvites": "Aucun lien actif",
+      "newInvite": "Créer un lien",
+      "revokeInvite": "Révoquer",
+      "removeMember": "Retirer de la salle",
+      "agentError": "Échec de l'agent de la salle : {{error}}",
+      "makeShared": "Partager avec les membres",
+      "makePrivate": "Fermer l'accès",
+      "sharedBadge": "partagé",
+      "leaveRoom": "Quitter la salle"
     }
   },
   "promptSelector": {
@@ -1097,6 +1160,24 @@
       "experimental": {
         "title": "## Fonctionnalités expérimentales",
         "body": "Nous ajoutons régulièrement de nouvelles fonctionnalités. Voici ce que vous pouvez essayer dès maintenant :\n\n- **Agent DevOps** — outil SSH intégré. Exécutez des commandes sur des serveurs distants avec des politiques de confirmation manuelle sécurisées.\n- **Cartes et itinéraires** — l'IA peut rechercher des lieux et construire des itinéraires sur une carte interactive dans le panneau de droite.\n- **Mode lancer de dé (d20)** — pour les fans de jeux de société. Ajoute un lancer de dé virtuel qui détermine le succès des actions et guide la narration dans les réponses de l'IA (activer dans **Paramètres → Application**)."
+      }
+    },
+    "rooms": {
+      "bots": {
+        "title": "## Des salons avec des bots !",
+        "body": "Vous pouvez maintenant créer des salons et y ajouter plusieurs bots. Ils peuvent discuter entre eux et interagir dans le même espace."
+      },
+      "invite": {
+        "title": "## Inviter un ami",
+        "body": "Vous pouvez maintenant inviter des amis dans vos salons et discuter avec eux et les bots.\n\nVotre ami peut également apporter son propre bot.\n\n**Ce que vous pouvez faire dans un salon :**\n\n- discuter de divers sujets avec les bots ;\n- envoyer des photos et des fichiers ;\n- utiliser les bots pour des activités collaboratives.\n\nPar exemple, vous pouvez demander à un bot de diriger une session de D&D — il dispose déjà d'outils pour lancer les dés.\n\nPour ajouter un ami, cliquez sur le bouton \"Ajouter\" dans un salon créé."
+      },
+      "create": {
+        "title": "## Comment créer un salon ?",
+        "body": "En haut à droite de chaque discussion, il y a un bouton \"+\".\n\nCliquez dessus et choisissez :\n\n- **Créer un salon** — pour en créer un nouveau ;\n- **Rejoindre** — si vous avez un lien d'invitation."
+      },
+      "nuances": {
+        "title": "## Détails",
+        "body": "### 1. Modes de réponse\n\nLes salons ont deux modes :\n\n- **Tour** — les bots répondent dans un ordre défini.\n- **Manuel** — vous choisissez quel bot répond à tout moment.\n\n### 2. Réponses automatiques\n\nL'option \"Répondre immédiatement\" fait réagir le bot à chaque nouveau message :\n\n- vos messages ;\n- les messages des autres participants (si le bot est partagé).\n\n### 3. Accès du bot pour les autres participants\n\nPour permettre à un bot de répondre aux autres membres du salon, rendez-le partagé :\n\n1. Survolez le bot.\n2. Cliquez sur le bouton à trois points.\n3. Sélectionnez \"Partager avec les membres\".\n\nRemarque : l'utilisation du bot consommera **vos** quotas et utilisera **votre** modèle sélectionné.\n\n### 4. Sécurité des données\n\nSi un autre utilisateur demande à votre bot d'effectuer une action (par exemple :\n\n- exécuter une commande sur un ordinateur ;\n- vérifier les e-mails ;\n- rechercher dans une archive),\n\nil utilisera **son propre** environnement :\n\n- son ordinateur ;\n- ses e-mails ;\n- ses archives.\n\nMême s'il utilise votre bot.\n\nCela est fait pour des raisons de sécurité.\n\nEn même temps, la mémoire chaude du bot reste accessible pour eux.\n\n### 5. Mémoire du bot et confidentialité du propriétaire\n\nLors de l'utilisation d'un bot partagé, il a toujours accès à la mémoire à court terme du propriétaire : par exemple, le nom, l'âge, les proches et le lieu de travail. Le bot peut utiliser ou mentionner ces informations dans la conversation. N'ajoutez un tel bot qu'à des salons avec des personnes de confiance.\n\nLes archives, e-mails, fichiers, ordinateur et autres intégrations personnelles du propriétaire ne sont pas partagés avec les participants."
       }
     }
   }

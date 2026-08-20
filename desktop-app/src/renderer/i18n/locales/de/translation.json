@@ -390,7 +390,9 @@
       "sendTelegram": "An Telegram senden",
       "createBranch": "Zweig erstellen",
       "subagentNumber": "🧠 Unteragent {{number}}",
-      "providerTokenUsage": "Vom Anbieter gemeldete genaue Token-Nutzung für die Vervollständigung"
+      "providerTokenUsage": "Vom Anbieter gemeldete genaue Token-Nutzung für die Vervollständigung",
+      "branchNotAllowedInRoom": "Verzweigungen sind in gemeinsamen Räumen noch nicht verfügbar",
+      "branchFailed": "Verzweigung konnte nicht erstellt werden"
     },
     "reasoning": {
       "auto": "Auto",
@@ -646,6 +648,67 @@
       "title": "Abmelden?",
       "message": "Sie müssen sich auf diesem Gerät erneut anmelden.",
       "confirm": "Abmelden"
+    },
+    "room": {
+      "title": "Raum",
+      "subtitle": "Experimentelle Funktion",
+      "open": "Raum öffnen",
+      "createRoom": "Raum erstellen",
+      "deleteRoom": "Raum löschen",
+      "removeAgentsBeforeDelete": "Entfernen Sie alle Agenten, bevor Sie den Raum löschen.",
+      "participantCount": "{{count}} Teilnehmer",
+      "participants": "Teilnehmer",
+      "mode": "Antwortmodus",
+      "manual": "Manuell",
+      "round": "Der Reihe nach",
+      "manualHint": "Wählen Sie, welcher Charakter als Nächstes antwortet.",
+      "roundHint": "Jeder aktive Charakter antwortet einmal in der ausgewählten Reihenfolge.",
+      "autoRespond": "Sofort antworten",
+      "autoRespondHint": "Antworten Sie nach jeder neuen menschlichen Nachricht.",
+      "whoRespondsNext": "Wer antwortet als Nächstes?",
+      "roundOrder": "Antwortreihenfolge",
+      "reply": "Antworten",
+      "startSequence": "Der Reihe nach antworten",
+      "you": "Du",
+      "human": "Benutzer",
+      "mainAssistant": "Hauptassistent",
+      "character": "Charakter",
+      "reorder": "Reihenfolge ändern",
+      "removeParticipant": "Teilnehmer entfernen",
+      "addParticipant": "Teilnehmer hinzufügen",
+      "addParticipantsShort": "Teilnehmer hinzufügen",
+      "choosePrompt": "Eingabeaufforderung wählen",
+      "changePrompt": "Prompt ändern",
+      "promptDefault": "Standardassistent",
+      "promptCreative": "Kreativer Begleiter",
+      "promptDetective": "Ermittler",
+      "prototypeHint": "Die Teilnehmererstellung wird später mit dem Backend verbunden.",
+      "manualActionPrototype": "{{name}} wird antworten, nachdem das Backend verbunden ist.",
+      "sequenceActionPrototype": "Die Charaktere werden nacheinander antworten, nachdem das Backend verbunden ist.",
+      "joinRoom": "Raum beitreten",
+      "joinSubmit": "Beitreten",
+      "inviteLinkPlaceholder": "Einladungslink einfügen (chatter://join-room?...)",
+      "invalidInviteLink": "Ungültiger Einladungslink.",
+      "joinFailed": "Beitritt zum Raum fehlgeschlagen.",
+      "joined": "Dem Raum beigetreten.",
+      "addParticipantKind": "Teilnehmer hinzufügen",
+      "addBot": "Bot (Charakter)",
+      "addHuman": "Mensch",
+      "inviteLinkTitle": "Einladungslink",
+      "copyInvite": "Link kopieren",
+      "inviteCopied": "Kopiert!",
+      "inviteHint": "Senden Sie diesen Link an den Benutzer. Er öffnet das Raum-Panel und drückt \"Raum beitreten\". Der Link läuft in 7 Tagen ab.",
+      "manageInvites": "Einladungslink",
+      "activeInvitesTitle": "Aktive Einladungslink",
+      "noInvites": "Keine aktiven Links",
+      "newInvite": "Link erstellen",
+      "revokeInvite": "Widerrufen",
+      "removeMember": "Aus Raum entfernen",
+      "agentError": "Raum-Agent fehlgeschlagen: {{error}}",
+      "makeShared": "Mit Mitgliedern teilen",
+      "makePrivate": "Zugriff schließen",
+      "sharedBadge": "geteilt",
+      "leaveRoom": "Raum verlassen"
     }
   },
   "promptSelector": {
@@ -1097,6 +1160,24 @@
       "experimental": {
         "title": "## Experimentelle Funktionen",
         "body": "Wir fügen regelmäßig neue Funktionen hinzu. Hier ist, was Sie jetzt ausprobieren können:\n\n- **DevOps-Agent** — integriertes SSH-Tool. Führen Sie Befehle auf entfernten Servern mit sicheren manuellen Bestätigungsrichtlinien aus.\n- **Karten & Routen** — KI kann Orte suchen und Routen auf einer interaktiven Karte im rechten Bereich erstellen.\n- **Würfelmodus (d20)** — für Tabletop-Fans. Fügt einen virtuellen Würfelwurf hinzu, der den Erfolg von Aktionen bestimmt und die Erzählung in KI-Antworten lenkt (aktivieren in **Einstellungen → Anwendung**)."
+      }
+    },
+    "rooms": {
+      "bots": {
+        "title": "## Räume mit Bots!",
+        "body": "Jetzt kannst du Räume erstellen und mehrere Bots hinzufügen. Sie können miteinander sprechen und im selben Raum interagieren."
+      },
+      "invite": {
+        "title": "## Freund einladen",
+        "body": "Jetzt kannst du Freunde in deine Räume einladen und gemeinsam mit ihnen und Bots chatten.\n\nDein Freund kann auch seinen eigenen Bot mitbringen.\n\n**Was du in einem Raum tun kannst:**\n\n- verschiedene Themen mit Bots besprechen;\n- Fotos und Dateien senden;\n- Bots für gemeinsame Aktivitäten nutzen.\n\nZum Beispiel kannst du einen Bot bitten, eine D&D-Sitzung zu leiten – er hat bereits Werkzeuge für Würfelwürfe.\n\nUm einen Freund hinzuzufügen, klicke auf die Schaltfläche \"Hinzufügen\" in einem erstellten Raum."
+      },
+      "create": {
+        "title": "## Wie erstelle ich einen Raum?",
+        "body": "In der oberen rechten Ecke jedes Chats gibt es eine \"+\"-Schaltfläche.\n\nKlicke darauf und wähle:\n\n- **Raum erstellen** – um einen neuen zu erstellen;\n- **Beitreten** – wenn du einen Einladungslink hast."
+      },
+      "nuances": {
+        "title": "## Details",
+        "body": "### 1. Antwortmodi\n\nRäume haben zwei Modi:\n\n- **Runde** – Bots antworten in einer festgelegten Reihenfolge.\n- **Manuell** – du wählst, welcher Bot zu einem bestimmten Zeitpunkt antwortet.\n\n### 2. Automatische Antworten\n\nDie Option \"Sofort antworten\" lässt den Bot auf jede neue Nachricht reagieren:\n\n- deine Nachrichten;\n- Nachrichten anderer Teilnehmer (wenn der Bot geteilt ist).\n\n### 3. Bot-Zugriff für andere Teilnehmer\n\nDamit ein Bot auf andere Raummitglieder antworten kann, mache ihn geteilt:\n\n1. Fahre mit der Maus über den Bot.\n2. Klicke auf die Drei-Punkte-Schaltfläche.\n3. Wähle \"Mit Mitgliedern teilen\".\n\nHinweis: Die Nutzung des Bots verbraucht **deine** Kontingente und verwendet **dein** ausgewähltes Modell.\n\n### 4. Datensicherheit\n\nWenn ein anderer Benutzer deinen Bot bittet, eine Aktion auszuführen (zum Beispiel:\n\n- einen Befehl auf einem Computer ausführen;\n- E-Mails prüfen;\n- ein Archiv durchsuchen),\n\nverwendet er **seine eigene** Umgebung:\n\n- seinen Computer;\n- seine E-Mails;\n- seine Archive.\n\nAuch wenn er deinen Bot verwendet.\n\nDies dient der Sicherheit.\n\nGleichzeitig bleibt der heiße Speicher des Bots für ihn zugänglich.\n\n### 5. Bot-Speicher und Datenschutz des Besitzers\n\nBei Verwendung eines geteilten Bots hat dieser weiterhin Zugriff auf den Kurzzeitspeicher des Besitzers: zum Beispiel Name, Alter, nahestehende Personen und Arbeitsplatz. Der Bot kann diese Informationen im Gespräch verwenden oder erwähnen. Füge einen solchen Bot nur Räumen mit Personen hinzu, denen du vertraust.\n\nDie Archive, E-Mails, Dateien, der Computer und andere persönliche Integrationen des Besitzers werden nicht mit Teilnehmern geteilt."
       }
     }
   }

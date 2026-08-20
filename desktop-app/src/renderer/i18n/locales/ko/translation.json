@@ -711,7 +711,9 @@
       "sendTelegram": "Telegram으로 보내기",
       "createBranch": "분기 생성",
       "subagentNumber": "🧠 하위 에이전트 {{number}}",
-      "providerTokenUsage": "공급자가 보고한 정확한 완료 토큰 사용량"
+      "providerTokenUsage": "공급자가 보고한 정확한 완료 토큰 사용량",
+      "branchNotAllowedInRoom": "공유 룸에서는 아직 분기를 사용할 수 없습니다",
+      "branchFailed": "분기를 만들지 못했습니다"
     },
     "reasoning": {
       "auto": "자동",
@@ -967,6 +969,67 @@
       "title": "로그아웃하시겠습니까?",
       "message": "이 기기에서 다시 로그인해야 합니다.",
       "confirm": "로그아웃"
+    },
+    "room": {
+      "title": "룸",
+      "subtitle": "실험적 기능",
+      "open": "룸 열기",
+      "createRoom": "룸 만들기",
+      "deleteRoom": "룸 삭제",
+      "removeAgentsBeforeDelete": "룸을 삭제하기 전에 모든 에이전트를 제거하세요.",
+      "participantCount": "참가자 {{count}}명",
+      "participants": "참가자",
+      "mode": "응답 모드",
+      "manual": "수동",
+      "round": "순서대로",
+      "manualHint": "다음에 응답할 캐릭터를 선택하세요.",
+      "roundHint": "모든 활성 캐릭터가 선택한 순서대로 한 번씩 응답합니다.",
+      "autoRespond": "즉시 답장",
+      "autoRespondHint": "새로운 인간 메시지가 올 때마다 응답합니다.",
+      "whoRespondsNext": "다음에 누가 응답할까요?",
+      "roundOrder": "응답 순서",
+      "reply": "답장",
+      "startSequence": "순서대로 답변",
+      "you": "당신",
+      "human": "사용자",
+      "mainAssistant": "메인 어시스턴트",
+      "character": "캐릭터",
+      "reorder": "순서 변경",
+      "removeParticipant": "참가자 제거",
+      "addParticipant": "참가자 추가",
+      "addParticipantsShort": "참가자 추가",
+      "choosePrompt": "프롬프트 선택",
+      "changePrompt": "프롬프트 변경",
+      "promptDefault": "기본 어시스턴트",
+      "promptCreative": "창의적인 동반자",
+      "promptDetective": "조사자",
+      "prototypeHint": "참가자 생성은 나중에 백엔드에 연결됩니다.",
+      "manualActionPrototype": "{{name}}은(는) 백엔드 연결 후 응답합니다.",
+      "sequenceActionPrototype": "캐릭터들은 백엔드 연결 후 순서대로 응답합니다.",
+      "joinRoom": "방 참가",
+      "joinSubmit": "참가",
+      "inviteLinkPlaceholder": "초대 링크 붙여넣기 (chatter://join-room?...)",
+      "invalidInviteLink": "잘못된 초대 링크입니다.",
+      "joinFailed": "방에 참여하지 못했습니다.",
+      "joined": "방에 참여했습니다.",
+      "addParticipantKind": "참가자 추가",
+      "addBot": "봇 (캐릭터)",
+      "addHuman": "사람",
+      "inviteLinkTitle": "초대 링크",
+      "copyInvite": "링크 복사",
+      "inviteCopied": "복사되었습니다!",
+      "inviteHint": "이 링크를 사용자에게 보내세요. 사용자는 방 패널을 열고 \"방 참여\"를 누릅니다. 링크는 7일 후 만료됩니다.",
+      "manageInvites": "초대 링크",
+      "activeInvitesTitle": "활성 초대 링크",
+      "noInvites": "활성 링크 없음",
+      "newInvite": "링크 만들기",
+      "revokeInvite": "취소",
+      "removeMember": "방에서 제거",
+      "agentError": "방 에이전트 실패: {{error}}",
+      "makeShared": "멤버와 공유",
+      "makePrivate": "접근 닫기",
+      "sharedBadge": "공유됨",
+      "leaveRoom": "방 나가기"
     }
   },
   "promptSelector": {
@@ -1106,6 +1169,24 @@
       "experimental": {
         "title": "## 실험적 기능",
         "body": "정기적으로 새로운 기능을 추가하고 있습니다. 지금 사용해 볼 수 있는 기능은 다음과 같습니다:\n\n- **DevOps Agent** — 내장 SSH 도구. 안전한 수동 확인 정책으로 원격 서버에서 명령을 실행합니다.\n- **Maps & Routes** — AI가 장소를 검색하고 오른쪽 패널의 대화형 지도에서 경로를 작성할 수 있습니다.\n- **Dice Roll Mode (d20)** — 테이블탑 팬을 위한 기능. 가상 주사위 굴림을 추가하여 행동의 성공 여부를 결정하고 AI 응답의 내러티브를 안내합니다(**설정 → 애플리케이션**에서 활성화)."
+      }
+    },
+    "rooms": {
+      "bots": {
+        "title": "## 봇이 있는 방!",
+        "body": "이제 방을 만들고 여러 봇을 추가할 수 있습니다. 봇들은 서로 대화하고 같은 공간에서 상호작용할 수 있습니다."
+      },
+      "invite": {
+        "title": "## 친구 초대",
+        "body": "이제 친구를 방에 초대하고 친구 및 봇과 함께 채팅할 수 있습니다.\n\n친구도 자신의 봇을 가져올 수 있습니다.\n\n**방에서 할 수 있는 일:**\n\n- 봇과 다양한 주제로 토론하기;\n- 사진 및 파일 보내기;\n- 협업 활동에 봇 사용하기.\n\n예를 들어, 봇에게 D&D 세션을 진행하도록 요청할 수 있습니다. 이미 주사위 굴리기 도구가 있습니다.\n\n친구를 추가하려면 생성된 방 안의 \"추가\" 버튼을 클릭하세요."
+      },
+      "create": {
+        "title": "## 방을 만드는 방법?",
+        "body": "모든 채팅의 오른쪽 상단에 \"+\" 버튼이 있습니다.\n\n클릭하고 선택하세요:\n\n- **방 만들기** — 새 방을 만들려면;\n- **참여** — 초대 링크가 있는 경우."
+      },
+      "nuances": {
+        "title": "## 세부 사항",
+        "body": "### 1. 응답 모드\n\n방에는 두 가지 모드가 있습니다:\n\n- **라운드** — 봇이 정해진 순서로 응답합니다.\n- **수동** — 특정 순간에 응답할 봇을 선택합니다.\n\n### 2. 자동 응답\n\n\"즉시 응답\" 옵션을 사용하면 봇이 모든 새 메시지에 반응합니다:\n\n- 사용자의 메시지;\n- 다른 참가자의 메시지(봇이 공유된 경우).\n\n### 3. 다른 참가자를 위한 봇 접근\n\n봇이 다른 방 구성원에게 응답하도록 하려면 공유로 설정하세요:\n\n1. 봇 위에 마우스를 올립니다.\n2. 점 3개 버튼을 클릭합니다.\n3. \"구성원과 공유\"를 선택합니다.\n\n참고: 봇을 사용하면 **사용자의** 할당량이 소모되고 **사용자가 선택한** 모델이 사용됩니다.\n\n### 4. 데이터 보안\n\n다른 사용자가 봇에게 작업을 요청하는 경우(예:\n\n- 컴퓨터에서 명령 실행;\n- 이메일 확인;\n- 아카이브 검색),\n\n봇은 **자신의** 환경을 사용합니다:\n\n- 자신의 컴퓨터;\n- 자신의 이메일;\n- 자신의 아카이브.\n\n사용자의 봇을 사용하더라도 그렇습니다.\n\n보안을 위해 이렇게 합니다.\n\n동시에 봇의 핫 메모리는 그들에게 계속 접근 가능합니다.\n\n### 5. 봇 메모리 및 소유자 개인정보\n\n공유 봇을 사용할 때도 소유자의 단기 기억에 접근할 수 있습니다: 예를 들어, 이름, 나이, 가까운 사람, 직장. 봇은 대화에서 이 정보를 사용하거나 언급할 수 있습니다. 신뢰하는 사람과만 방에 이러한 봇을 추가하세요.\n\n소유자의 아카이브, 이메일, 파일, 컴퓨터 및 기타 개인 통합은 참가자와 공유되지 않습니다."
       }
     }
   }

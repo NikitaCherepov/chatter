@@ -73,7 +73,10 @@
     }
   },
   "chat": {
-    "defaultTitle": "Chat {{number}}"
+    "defaultTitle": "Chat {{number}}",
+    "hitlWaitingConfirmation": "J'attends votre réponse à la carte de confirmation ci-dessus. Appuyez sur « Autoriser », « Refuser » ou « Refuser avec commentaire » — et je poursuivrai cette demande.",
+    "stopStopped": "Arrêté",
+    "stopNoActiveGeneration": "Aucune génération active"
   },
   "confirmations": {
     "reviewSshSystem": "Vous êtes un expert en sécurité. Répondez brièvement.",
