@@ -2143,7 +2143,19 @@ export function ChatPage() {
         roomStreamChatIdsRef.current.delete(event.chat_id);
       }
 
-      if (event.chat_id !== activeChatIdRef.current) return;
+      if (event.chat_id !== activeChatIdRef.current) {
+        // Background run finished in another chat: light the unread badge
+        // (same as scheduled tasks) and push a native notification with the
+        // bot's reply preview. Aborted runs with nothing saved are ignored.
+        if (event.type === 'chat_agent_done') {
+          const res = event.result ?? {};
+          if (!(res.aborted && !res.message_id)) {
+            incrementUnread(event.chat_id);
+            if (res.message_id) notifyAssistantResponse(res.message_id, event.chat_id, res.reply_text ?? '');
+          }
+        }
+        return;
+      }
       switch (event.type) {
         case 'room_members_updated': {
           // Someone joined or left — refresh the room (members + shared agents).
