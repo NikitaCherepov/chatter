@@ -1647,7 +1647,9 @@ app.post('/api/v1/chats/:id/room/agents', (req: AuthedRequest, res) => {
   if (!Number.isSafeInteger(promptId) || promptId === 0) return res.status(400).json({ error: 'bad_prompt_id' });
   const name = req.body?.name === undefined ? undefined : `${req.body.name}`;
   try {
-    return res.status(201).json({ room: addChatAgent(userId, chatId, promptId, name) });
+    const room = addChatAgent(userId, chatId, promptId, name);
+    broadcastToChat(chatId, { type: 'room_members_updated', chat_id: chatId });
+    return res.status(201).json({ room });
   } catch (err) {
     return sendChatRoomError(res, err);
   }
@@ -1663,7 +1665,9 @@ app.patch('/api/v1/chats/:id/room/agents/order', (req: AuthedRequest, res) => {
     return res.status(400).json({ error: 'bad_agent_order' });
   }
   try {
-    return res.json({ room: reorderChatAgents(userId, chatId, agentIds) });
+    const room = reorderChatAgents(userId, chatId, agentIds);
+    broadcastToChat(chatId, { type: 'room_members_updated', chat_id: chatId });
+    return res.json({ room });
   } catch (err) {
     return sendChatRoomError(res, err);
   }
@@ -1679,7 +1683,9 @@ app.patch('/api/v1/chats/:id/room/members/order', (req: AuthedRequest, res) => {
     return res.status(400).json({ error: 'bad_member_order' });
   }
   try {
-    return res.json({ room: reorderChatMembers(userId, chatId, memberIds) });
+    const room = reorderChatMembers(userId, chatId, memberIds);
+    broadcastToChat(chatId, { type: 'room_members_updated', chat_id: chatId });
+    return res.json({ room });
   } catch (err) {
     return sendChatRoomError(res, err);
   }
@@ -1696,12 +1702,14 @@ app.patch('/api/v1/chats/:id/room/agents/:agentId', (req: AuthedRequest, res) =>
     return res.status(400).json({ error: 'bad_prompt_id' });
   }
   try {
-    return res.json({ room: updateChatAgent(userId, chatId, agentId, {
+    const room = updateChatAgent(userId, chatId, agentId, {
       name: req.body?.name === undefined ? undefined : `${req.body.name}`,
       promptContent: req.body?.prompt_content === undefined ? undefined : `${req.body.prompt_content}`,
       sourcePromptId,
       access: req.body?.access === 'shared' ? 'shared' : req.body?.access === 'private' ? 'private' : undefined,
-    }) });
+    });
+    broadcastToChat(chatId, { type: 'room_members_updated', chat_id: chatId });
+    return res.json({ room });
   } catch (err) {
     return sendChatRoomError(res, err);
   }
@@ -1714,7 +1722,9 @@ app.delete('/api/v1/chats/:id/room/agents/:agentId', (req: AuthedRequest, res) =
   if (!Number.isSafeInteger(chatId) || chatId <= 0) return res.status(400).json({ error: 'bad_chat_id' });
   if (!Number.isSafeInteger(agentId) || agentId <= 0) return res.status(400).json({ error: 'bad_agent_id' });
   try {
-    return res.json({ room: removeChatAgent(userId, chatId, agentId) });
+    const room = removeChatAgent(userId, chatId, agentId);
+    broadcastToChat(chatId, { type: 'room_members_updated', chat_id: chatId });
+    return res.json({ room });
   } catch (err) {
     return sendChatRoomError(res, err);
   }
@@ -1738,11 +1748,13 @@ app.patch('/api/v1/chats/:id/room/settings', (req: AuthedRequest, res) => {
     return res.status(400).json({ error: 'bad_agent_id' });
   }
   try {
-    return res.json({ room: updateChatRoomSettings(userId, chatId, {
+    const room = updateChatRoomSettings(userId, chatId, {
       responseMode,
       autoRespond: req.body?.auto_respond,
       nextAgentId,
-    }) });
+    });
+    broadcastToChat(chatId, { type: 'room_members_updated', chat_id: chatId });
+    return res.json({ room });
   } catch (err) {
     return sendChatRoomError(res, err);
   }
