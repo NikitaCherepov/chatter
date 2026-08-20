@@ -778,7 +778,17 @@ function runDocker(args, timeoutMs = 20 * 60 * 1000) {
   return new Promise((resolve, reject) => {
     const child = spawn(DOCKER_BIN, args, {
       cwd: PROJECT_DIR,
-      env: { ...process.env, BACKEND_ENV_FILE, TELEGRAM_ENV_FILE, VOICE_ENV_FILE },
+      env: {
+        ...process.env,
+        // The manager process keeps the image tag it received at container
+        // startup. Read the current channel from compose.env for every Docker
+        // invocation so switching branches works without restarting manager.
+        CHATTER_IMAGE_TAG: currentImageTag(),
+        CHATTER_IMAGE_PREFIX: currentImagePrefix(),
+        BACKEND_ENV_FILE,
+        TELEGRAM_ENV_FILE,
+        VOICE_ENV_FILE,
+      },
       stdio: ['ignore', 'pipe', 'pipe']
     });
     let stdout = '';
