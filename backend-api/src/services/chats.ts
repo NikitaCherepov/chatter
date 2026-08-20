@@ -984,15 +984,17 @@ export const getChatMessages = (userId: number, chatId: number, limit = 20, offs
   const multiUserRoom = readerIds.length > 1;
   const placeholders = readerIds.map(() => '?').join(', ');
   const rows = db.prepare(`
-    SELECT id, chat_id, user_id, role, content, reasoning_content, tool_calls_json, images, audio,
-           telegram_chat_id, telegram_message_id, created_at, archived, token_count,
-           reasoning_tokens, attachments, subagents_json, usage_json, prompt_id, prompt_name,
-           model_name, provider_name, agent_id
-    FROM chat_messages
-    WHERE ${multiUserRoom ? `user_id IN (${placeholders})` : 'user_id = ?'} AND chat_id = ?
-    ORDER BY id DESC
+    SELECT m.id, m.chat_id, m.user_id, m.role, m.content, m.reasoning_content, m.tool_calls_json, m.images,
+           cma.audio AS viewer_audio,
+           m.telegram_chat_id, m.telegram_message_id, m.created_at, m.archived, m.token_count,
+           m.reasoning_tokens, m.attachments, m.subagents_json, m.usage_json, m.prompt_id, m.prompt_name,
+           m.model_name, m.provider_name, m.agent_id
+    FROM chat_messages m
+    LEFT JOIN chat_message_audio cma ON cma.message_id = m.id AND cma.user_id = ?
+    WHERE ${multiUserRoom ? `m.user_id IN (${placeholders})` : 'm.user_id = ?'} AND m.chat_id = ?
+    ORDER BY m.id DESC
     LIMIT ? OFFSET ?
-  `).all(...(multiUserRoom ? readerIds : [userId]), chatId, safeLimit, safeOffset) as Array<{ id: number; chat_id: number; user_id: number; role: ChatRole; content: string; reasoning_content: string | null; tool_calls_json: string | null; images: string | null; audio: string | null; telegram_chat_id: number | null; telegram_message_id: number | null; created_at: string; archived: number; token_count: number; reasoning_tokens: number; attachments: string | null; subagents_json: string | null; usage_json: string | null; prompt_id: number | null; prompt_name: string | null; model_name: string | null; provider_name: string | null; agent_id: number | null }>;
+  `).all(userId, ...(multiUserRoom ? readerIds : [userId]), chatId, safeLimit, safeOffset) as Array<{ id: number; chat_id: number; user_id: number; role: ChatRole; content: string; reasoning_content: string | null; tool_calls_json: string | null; images: string | null; viewer_audio: string | null; telegram_chat_id: number | null; telegram_message_id: number | null; created_at: string; archived: number; token_count: number; reasoning_tokens: number; attachments: string | null; subagents_json: string | null; usage_json: string | null; prompt_id: number | null; prompt_name: string | null; model_name: string | null; provider_name: string | null; agent_id: number | null }>;
 
   return rows.reverse().map(row => {
     let parsedImages: MessageImage[] | null = null;
@@ -1003,9 +1005,10 @@ export const getChatMessages = (userId: number, chatId: number, limit = 20, offs
     if (row.attachments) {
       try { parsedAttachments = JSON.parse(row.attachments); } catch { parsedAttachments = null; }
     }
+    // TTS audio is per-viewer: each user hears their own voice/provider.
     let parsedAudio: MessageAudio | null = null;
-    if (row.audio) {
-      try { parsedAudio = JSON.parse(row.audio); } catch { parsedAudio = null; }
+    if (row.viewer_audio) {
+      try { parsedAudio = JSON.parse(row.viewer_audio); } catch { parsedAudio = null; }
     }
     let parsedToolCalls: Array<{ id?: string; name: string; arguments: any; result_preview?: string }> | null = null;
     if (row.tool_calls_json) {
@@ -1323,15 +1326,19 @@ export const bindChatMessageTelegramMeta = (
   WHERE id = ? AND user_id = ?
 `).run(telegramChatId, telegramMessageId, messageId, userId);
 
+/**
+ * TTS audio is INDIVIDUAL: stored per (message, user). Room members each get
+ * their own voice/provider; nobody overwrites anyone else's audio.
+ */
 export const updateChatMessageAudio = (
   userId: number,
   messageId: number,
   audio: MessageAudio
 ) => db.prepare(`
-  UPDATE chat_messages
-  SET audio = ?
-  WHERE id = ? AND user_id = ?
-`).run(JSON.stringify(audio), messageId, userId);
+  INSERT INTO chat_message_audio (message_id, user_id, audio)
+  VALUES (?, ?, ?)
+  ON CONFLICT(message_id, user_id) DO UPDATE SET audio = excluded.audio
+`).run(messageId, userId, JSON.stringify(audio));
 
 export const getChatMessageOwner = (messageId: number): number | null => {
   const row = db.prepare('SELECT user_id FROM chat_messages WHERE id = ?').get(messageId) as { user_id: number } | undefined;
@@ -1532,6 +1539,10 @@ function expandAssistantMessage(content: string, toolCallsJson: string | null): 
  *
  * Reasoning в API не отправляется (односторонний вывод модели).
  */
+/** True when the chat is a room with more than one participant (reader). */
+export const isMultiUserRoomChat = (chatId: number): boolean =>
+  (listRoomReaderUserIds(chatId)?.length ?? 0) > 1;
+
 export const getHistoryForAi = (
   userId: number,
   chatId: number,
@@ -1539,6 +1550,9 @@ export const getHistoryForAi = (
   supportsVision = false,
   attachmentBudgetState?: { remaining: number },
   responseAgentId: number | null = null,
+  /** Virtual truncation budget (tokens) for multi-user rooms: keep newest
+   *  messages while they fit, drop the rest. No DB archivation involved. */
+  roomHistoryTokenBudget = 0,
 ): any[] => {
   const activeRoomAgents = responseAgentId !== null
     ? db.prepare(`
@@ -1556,15 +1570,32 @@ export const getHistoryForAi = (
   const multiUserRoom = readerIds.includes(userId) && readerIds.length > 1;
   const historyUserIds = multiUserRoom ? readerIds : [userId];
   const placeholders = historyUserIds.map(() => '?').join(', ');
-  const rows = db.prepare(`
+  const rowsQuery = db.prepare(`
     SELECT cm.id, cm.role, cm.content, cm.tool_calls_json, cm.attachments, cm.images,
-           cm.agent_id, ca.name AS agent_name, u.name AS author_name
+           cm.agent_id, ca.name AS agent_name, u.name AS author_name, cm.token_count
     FROM chat_messages cm
     LEFT JOIN chat_agents ca ON ca.id = cm.agent_id
     LEFT JOIN users u ON u.id = cm.user_id
     WHERE cm.user_id IN (${placeholders}) AND cm.chat_id = ? AND cm.archived = 0
     ORDER BY cm.id DESC
-  `).all(...historyUserIds, chatId).reverse() as Array<{ id: number; role: ChatRole; content: string; tool_calls_json: string | null; attachments: string | null; images: string | null; agent_id: number | null; agent_name: string | null; author_name: string | null }>;
+  `);
+  let rows = rowsQuery.all(...historyUserIds, chatId) as Array<{ id: number; role: ChatRole; content: string; tool_calls_json: string | null; attachments: string | null; images: string | null; agent_id: number | null; agent_name: string | null; author_name: string | null; token_count: number | null }>;
+
+  // Multi-user rooms: virtual truncation — walk from the newest message back,
+  // keep messages while they fit into the budget. The newest message is always
+  // kept even if it alone exceeds the budget. No DB rows are modified.
+  if (multiUserRoom && roomHistoryTokenBudget > 0 && rows.length > 0) {
+    let used = 0;
+    let keep = 1; // newest message is always kept
+    for (let i = 0; i < rows.length; i += 1) {
+      const cost = Math.max(0, rows[i].token_count ?? countTokens(rows[i].content || ''));
+      if (i > 0 && used + cost > roomHistoryTokenBudget) break;
+      used += cost;
+      keep = i + 1;
+    }
+    rows = rows.slice(0, keep);
+  }
+  rows.reverse();
 
   const messages: any[] = [];
   const attachmentBudget = attachmentBudgetState ?? { remaining: attachmentMaxTokens };

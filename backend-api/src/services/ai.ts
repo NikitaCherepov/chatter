@@ -4,7 +4,7 @@ import nodeFetch from 'node-fetch';
 import { ProxyAgent } from 'proxy-agent';
 import { Readable } from 'node:stream';
 import type { AiSendResult, DesktopActionPayload, DisplayStatePayload, MapUpdatePayload, TaskNotifyMode, TaskRecurrenceType, TaskType, UserPlan, UserRecord, MessageAttachment, MessageUsage, NormalizedTokenUsage, TokenUsageCall } from '../types.js';
-import { appendChatMessage, ensureActiveChat, getHistoryForAi, getMessageTokens, getUserById, renameUserChat, resolveMaxContextTokens, resolveAttachmentMaxTokens, injectAttachments, setUserTimezone, trimUserHistoryByChat, searchChatHistory, getChatMessagesAround } from './chats.js';
+import { appendChatMessage, ensureActiveChat, getHistoryForAi, getMessageTokens, getUserById, renameUserChat, resolveMaxContextTokens, resolveAttachmentMaxTokens, injectAttachments, setUserTimezone, trimUserHistoryByChat, searchChatHistory, getChatMessagesAround, isMultiUserRoomChat } from './chats.js';
 import { calculateChargedTokens, checkQuota, chargeTokens, getModelOverride, getPricingSnapshot, calculateEstimatedCostUsd, isModelFree } from './token-quota.js';
 import { getPlanLimits } from './plan-limits.js';
 import { resolvePromptForUser, AVATAR_PROMPT_HINT } from './prompts.js';
@@ -7039,8 +7039,15 @@ export const sendMessageThroughAi = async (
   responseAgentId = responseAgent?.id ?? null;
   const maxContextTokens = resolveMaxContextTokens(user);
   const attachmentMaxTokens = resolveAttachmentMaxTokens(user);
+  // Multi-user rooms: no DB archivation (it is per-user and would truncate the
+  // shared room history for everyone). Instead the history builder truncates
+  // virtually at request time, using the generating user's context limit.
+  const multiUserRoom = isMultiUserRoomChat(chatId);
+  const roomHistoryTokenBudget = multiUserRoom ? Math.floor(maxContextTokens * 0.5) : 0;
   // Apply the provider-anchored estimate before assembling the next request.
-  trimUserHistoryByChat(userId, chatId, maxContextTokens);
+  if (!multiUserRoom) {
+    trimUserHistoryByChat(userId, chatId, maxContextTokens);
+  }
   const attachmentBudgetState = { remaining: attachmentMaxTokens };
   const pendingAttachmentText = options?.userAttachments?.length && attachmentBudgetState.remaining > 0
     ? injectAttachments(options.userAttachments, attachmentBudgetState.remaining)
@@ -7057,7 +7064,8 @@ export const sendMessageThroughAi = async (
     attachmentMaxTokens,
     currentModelSupportsVision,
     attachmentBudgetState,
-    responseAgent?.id ?? null
+    responseAgent?.id ?? null,
+    roomHistoryTokenBudget
   );
   const automaticChatTitlePromise = (
     !options?.userOnly
@@ -7153,7 +7161,9 @@ export const sendMessageThroughAi = async (
         WHERE id = ?
       `).run(userTextForHistory.length, userId);
     }
-    trimUserHistoryByChat(userId, chatId, maxContextTokens);
+    if (!multiUserRoom) {
+      trimUserHistoryByChat(userId, chatId, maxContextTokens);
+    }
     return {
       reply_text: '',
       user_only: true,
@@ -8037,7 +8047,9 @@ iterations.push(currentIteration);
   }
   // Quota charge (weekly_tokens_used + user_token_usage) is handled in finally via chargeFromUsageCalls.
 
-  trimUserHistoryByChat(userId, chatId, maxContextTokens);
+  if (!multiUserRoom) {
+    trimUserHistoryByChat(userId, chatId, maxContextTokens);
+  }
 
   // Title generation starts in parallel with the main answer, but is applied
   // before the request completes so every client observes the same backend state.

@@ -8,7 +8,7 @@ import dotenv from 'dotenv';
 import { WebSocketServer, WebSocket } from 'ws';
 import { wsClients, registerWsClient, unregisterWsClient, isDesktopOnline, sendIpcToDesktop, sendToDesktop, WS_HEARTBEAT_GRACE_MS, WS_HEARTBEAT_INTERVAL_MS, type WsClient } from './ws-clients.js';
 import { adminMiddleware, authMiddleware, issueAuthTokens, makePasswordHash, refreshAccessToken, validateTelegramInitData, verifyPassword, verifyToken, verifyTokenIgnoreExpiry, type AuthedRequest } from './auth.js';
-import { activateUserChat, bindChatMessageTelegramMeta, clearAllUserMessages, clearUserChatMessages, countUserChats, createPasswordAccount, createOrUpdateUserForApiRegistration, createUserChat, deleteUserHistoryByRole, deleteUserHistoryMessage, ensureActiveChat, forkChat, getPasswordAccountByLogin, getChatMessages, getChatMedia, getAllUserMedia, getRecentUserHistory, getUserById, getUserChatById, getUserChatListItem, listUserChats, upsertUserFromTelegram, setUserTimezone, updateUserPrompt, selectUserCustomPrompt, updateUserCustomPrompt, resetUsersPromptIfDeleted, resetDailyMessageCounters, upsertTelegramUser, createPendingTelegramUser, updateUserStatus, updateUserRole, updateUserName, updateUserTelegramUsername, removeUser, getAllUsers, getUsersCount, getUsersPage, getPendingUsersCount, getPendingUsersPage, getBannedUsersCount, getBannedUsersPage, updateUserPlan, syncAllUsersPlanLimits, resetUserWeeklyUsage, resetAllUsersWeeklyUsage, updateUserWeeklyCostQuota, revokeUserAuthTokens, generateLinkCode, verifyLinkCode, getLinkCodeForUser, generatePasswordResetCode, verifyPasswordResetCode, signPasswordResetToken, verifyPasswordResetToken, adminApplyGeneratedPassword, renameUserChat, deleteUserChat, deleteUserMessage, editUserMessage, searchUserChats, updateChatMessageAudio, getChatMessageOwner, getChatContextTokens, resolveMaxContextTokens, updateUserMaxContextTokens, getChatAttachments, deleteMessageAttachment, deleteMessageImage, resolveAttachmentMaxTokens, updateUserAttachmentMaxTokens, setChatBotHidden, listChatFolders, createChatFolder, renameChatFolder, deleteChatFolder, moveUserChatToFolder, listChatFilterOptions } from './services/chats.js';
+import { activateUserChat, bindChatMessageTelegramMeta, clearAllUserMessages, clearUserChatMessages, countUserChats, createPasswordAccount, createOrUpdateUserForApiRegistration, createUserChat, deleteUserHistoryByRole, deleteUserHistoryMessage, ensureActiveChat, forkChat, getPasswordAccountByLogin, getChatMessages, getChatMedia, getAllUserMedia, getRecentUserHistory, getUserById, getUserChatById, getUserChatListItem, listUserChats, upsertUserFromTelegram, setUserTimezone, updateUserPrompt, selectUserCustomPrompt, updateUserCustomPrompt, resetUsersPromptIfDeleted, resetDailyMessageCounters, upsertTelegramUser, createPendingTelegramUser, updateUserStatus, updateUserRole, updateUserName, updateUserTelegramUsername, removeUser, getAllUsers, getUsersCount, getUsersPage, getPendingUsersCount, getPendingUsersPage, getBannedUsersCount, getBannedUsersPage, updateUserPlan, syncAllUsersPlanLimits, resetUserWeeklyUsage, resetAllUsersWeeklyUsage, updateUserWeeklyCostQuota, revokeUserAuthTokens, generateLinkCode, verifyLinkCode, getLinkCodeForUser, generatePasswordResetCode, verifyPasswordResetCode, signPasswordResetToken, verifyPasswordResetToken, adminApplyGeneratedPassword, renameUserChat, deleteUserChat, deleteUserMessage, editUserMessage, searchUserChats, updateChatMessageAudio, getChatContextTokens, resolveMaxContextTokens, updateUserMaxContextTokens, getChatAttachments, deleteMessageAttachment, deleteMessageImage, resolveAttachmentMaxTokens, updateUserAttachmentMaxTokens, setChatBotHidden, listChatFolders, createChatFolder, renameChatFolder, deleteChatFolder, moveUserChatToFolder, listChatFilterOptions } from './services/chats.js';
 import { createNote, countNotes, deleteNote, getNoteById, getNoteStats, getNoteStatsForUsers, listNotes, updateNoteContent } from './services/notes.js';
 import { createTask, deletePendingTask, getUserTaskById, listTasks } from './services/tasks.js';
 import { listMapPins, getMapPinById, createMapPin, updateMapPin, deleteMapPin } from './services/map-pins.js';
@@ -1112,17 +1112,21 @@ app.get('/api/v1/audio/:filename', (req: AuthedRequest, res) => {
   const filepath = resolveAudioFile(filename);
   if (!filepath) return res.status(404).json({ error: 'audio_not_found' });
 
-  // Verify access: the requester owns the message OR can read the chat it
-  // belongs to (room members hear each other's voice), OR it's a shared
-  // tts_voice_previews cache entry.
+  // Audio is PER-USER (chat_message_audio): the file is served only to the
+  // user who generated this voiceover (legacy chat_messages.audio rows still
+  // count for their owners). Shared tts_voice_previews cache stays public.
   const likePattern = `%${filename}%`;
-  const msgRows = db.prepare(`
-    SELECT user_id, chat_id FROM chat_messages
-    WHERE audio LIKE ?
-    LIMIT 10
-  `).all(likePattern) as Array<{ user_id: number; chat_id: number }>;
+  const msgRow = db.prepare(`
+    SELECT 1 FROM chat_message_audio
+    WHERE user_id = ? AND audio LIKE ?
+    LIMIT 1
+  `).get(effectiveId, likePattern) as { 1: number } | undefined;
 
-  const msgAllowed = msgRows.some(r => r.user_id === effectiveId || canReadChatMessages(effectiveId, r.chat_id));
+  const legacyRow = db.prepare(`
+    SELECT 1 FROM chat_messages
+    WHERE user_id = ? AND audio LIKE ?
+    LIMIT 1
+  `).get(effectiveId, likePattern) as { 1: number } | undefined;
 
   const previewRow = db.prepare(`
     SELECT 1 FROM tts_voice_previews
@@ -1130,7 +1134,7 @@ app.get('/api/v1/audio/:filename', (req: AuthedRequest, res) => {
     LIMIT 1
   `).get(likePattern) as { 1: number } | undefined;
 
-  if (!msgAllowed && !previewRow) return res.status(403).json({ error: 'access_denied' });
+  if (!msgRow && !legacyRow && !previewRow) return res.status(403).json({ error: 'access_denied' });
 
   res.sendFile(filepath);
 });
@@ -2418,10 +2422,12 @@ app.post('/api/v1/tts/generate', async (req: AuthedRequest, res) => {
   if (!text) return res.status(400).json({ error: 'text_required' });
   if (!voiceId) return res.status(400).json({ error: 'voice_id_required' });
 
-  // If message_id provided, verify ownership
+  // If message_id provided: the requester must be able to READ the chat the
+  // message belongs to (owner or room member) — audio is saved per-user, so
+  // generating your own voiceover for someone else's message is fine.
   if (messageId) {
-    const ownerId = getChatMessageOwner(messageId);
-    if (ownerId !== userId) {
+    const msgRow = db.prepare('SELECT user_id, chat_id FROM chat_messages WHERE id = ?').get(messageId) as { user_id: number; chat_id: number } | undefined;
+    if (!msgRow || (msgRow.user_id !== userId && !canReadChatMessages(userId, msgRow.chat_id))) {
       return res.status(403).json({ error: 'access_denied' });
     }
   }

@@ -426,6 +426,26 @@ if (!hasChatAgentColumn('access')) {
   db.exec("ALTER TABLE chat_agents ADD COLUMN access TEXT NOT NULL DEFAULT 'private' CHECK(access IN ('private', 'shared'))");
 }
 
+// ── chat_message_audio: per-user TTS audio ──────────────────────────────────
+// TTS озвучка индивидуальна: каждый юзер слышит свой голос/провайдер. Аудио
+// привязывается к паре (message, user), а не к сообщению. Legacy-колонка
+// chat_messages.audio разово переносится владельцам.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS chat_message_audio (
+    message_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    audio TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (message_id, user_id)
+  )
+`);
+db.exec(`
+  INSERT OR IGNORE INTO chat_message_audio (message_id, user_id, audio)
+  SELECT id, user_id, audio
+  FROM chat_messages
+  WHERE audio IS NOT NULL AND audio != ''
+`);
+
 // Migrate legacy room settings into the owner's member row (idempotent).
 db.exec(`
   INSERT OR IGNORE INTO chat_members (chat_id, user_id, role, response_mode, auto_respond, next_agent_id, sort_order, joined_at)
