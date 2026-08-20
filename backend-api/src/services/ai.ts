@@ -6739,8 +6739,41 @@ export const sendMessageThroughAi = async (
   // ── Stream callbacks for real-time token streaming ──
   // Always create onToken/onReasoningToken to accumulate into streamContentBuffer/streamReasoningBuffer,
   // so partial content is preserved on abort during streaming.
+  // Perf metrics (computed locally): TTFT + generation time with tool pauses excluded.
+  const perfMetrics = {
+    /** performance.now() when the first provider request of this generation was sent. */
+    requestStartAt: 0,
+    /** performance.now() when the first token arrived (set only once). */
+    firstTokenAt: 0,
+    /** performance.now() when the current provider call was sent (0 = no active call). */
+    callStartAt: 0,
+    /** performance.now() of the most recent token (to account for an in-flight call on abort). */
+    lastTokenAt: 0,
+    /** Sum of provider call durations (ms). Tool execution time between calls is NOT included. */
+    genMs: 0,
+  };
+  const buildUsagePerf = (totalTokens: number): NonNullable<MessageUsage['perf']> | undefined => {
+    if (!perfMetrics.firstTokenAt || perfMetrics.requestStartAt <= 0) return undefined;
+    // On abort the in-flight call duration never landed in genMs — account for it
+    // up to the last received token.
+    const inflightMs = perfMetrics.callStartAt > 0 && perfMetrics.lastTokenAt > perfMetrics.callStartAt
+      ? perfMetrics.lastTokenAt - perfMetrics.callStartAt
+      : 0;
+    const genMs = perfMetrics.genMs + inflightMs;
+    if (genMs <= 0 || totalTokens <= 0) return undefined;
+    return {
+      first_token_latency_ms: Math.max(0, Math.round(perfMetrics.firstTokenAt - perfMetrics.requestStartAt)),
+      generation_ms: Math.round(genMs),
+      // Called at save time, so wall-clock time covers the whole response incl. tool pauses.
+      total_ms: Math.max(0, Math.round(performance.now() - perfMetrics.requestStartAt)),
+      tokens_per_second: Math.round((totalTokens / (genMs / 1000)) * 10) / 10,
+    };
+  };
   const streamCallbacks: StreamCallbacks = {
     onToken: (t) => {
+      const now = performance.now();
+      if (!perfMetrics.firstTokenAt) perfMetrics.firstTokenAt = now;
+      perfMetrics.lastTokenAt = now;
       streamContentBuffer += t;
       if (options?.onStreamToken) {
         Promise.resolve(options.onStreamToken!(t)).catch(e => console.warn('[stream onToken]', e));
@@ -6748,10 +6781,18 @@ export const sendMessageThroughAi = async (
     },
     onReasoningToken: options?.onReasoningStream
       ? (t) => {
+          const now = performance.now();
+          if (!perfMetrics.firstTokenAt) perfMetrics.firstTokenAt = now;
+          perfMetrics.lastTokenAt = now;
           streamReasoningBuffer += t;
           Promise.resolve(options.onReasoningStream!(t)).catch(e => console.warn('[stream onReasoningToken]', e));
         }
-      : (t) => { streamReasoningBuffer += t; },
+      : (t) => {
+          const now = performance.now();
+          if (!perfMetrics.firstTokenAt) perfMetrics.firstTokenAt = now;
+          perfMetrics.lastTokenAt = now;
+          streamReasoningBuffer += t;
+        },
   };
 
   console.log('[sendMessageThroughAi] streamCallbacks', {
@@ -7578,7 +7619,15 @@ User request: "${text}"`;
       completionPayload.tools = executionTools;
       completionPayload.tool_choice = 'auto';
     }
+    // Perf: mark the first request send and time each provider call.
+    // Time between calls (tool execution) is excluded from genMs.
+    if (!perfMetrics.requestStartAt) perfMetrics.requestStartAt = performance.now();
+    perfMetrics.callStartAt = performance.now();
     const completion = await runCompletion(executionMode, completionPayload, manualModel, abortController.signal, executionMode === 'lite' ? 'none' : reasoningLevel, executionMode === 'lite' ? null : resolvedModelSettings, streamCallbacks);
+    if (perfMetrics.callStartAt > 0) {
+      perfMetrics.genMs += performance.now() - perfMetrics.callStartAt;
+      perfMetrics.callStartAt = 0;
+    }
     // Debug: log image sizes when present
     if (hasImages) {
       const imgSizes = images.map(img => ({ mimeType: img.mimeType, base64Len: img.base64.length, approxKB: Math.round(img.base64.length * 0.75 / 1024) }));
@@ -8014,7 +8063,7 @@ iterations.push(currentIteration);
   const aggregateUsage = sumTokenUsage(usageCalls);
   const latestUsage = tokenUsageWithoutCallMeta(usageCalls[usageCalls.length - 1]);
   const messageUsage: MessageUsage | null = usageCalls.length > 0
-    ? { latest: latestUsage, aggregate: aggregateUsage, calls: usageCalls }
+    ? { latest: latestUsage, aggregate: aggregateUsage, calls: usageCalls, perf: buildUsagePerf(aggregateUsage.total_tokens) }
     : null;
   const responseModelName = usedProvider === 'manual' && selectedManualModelName
     ? selectedManualModelName
@@ -8133,7 +8182,7 @@ iterations.push(currentIteration);
       const abortedAggregateUsage = sumTokenUsage(usageCalls);
       const abortedLatestUsage = tokenUsageWithoutCallMeta(usageCalls[usageCalls.length - 1]);
       const abortedMessageUsage: MessageUsage | null = usageCalls.length > 0
-        ? { latest: abortedLatestUsage, aggregate: abortedAggregateUsage, calls: usageCalls }
+        ? { latest: abortedLatestUsage, aggregate: abortedAggregateUsage, calls: usageCalls, perf: buildUsagePerf(abortedAggregateUsage.total_tokens) }
         : null;
       const abortedModelName = usedProvider === 'manual' && selectedManualModelName
         ? selectedManualModelName

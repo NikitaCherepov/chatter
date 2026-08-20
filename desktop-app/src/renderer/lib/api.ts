@@ -267,6 +267,17 @@ export type MessageUsage = {
   calls: TokenUsageCall[];
   context_estimate_tokens?: number;
   context_local_tokens?: number;
+  /** Generation performance (computed locally on the backend). */
+  perf?: {
+    /** ms from sending the first request to the first token (TTFT). */
+    first_token_latency_ms: number;
+    /** Total generation ms (tool execution pauses excluded). */
+    generation_ms: number;
+    /** Full wall-clock response time: first request sent -> message saved (incl. tool pauses). */
+    total_ms: number;
+    /** total_tokens / generation_ms. */
+    tokens_per_second: number;
+  };
 };
 
 export type ToolCall = { id?: string; name: string; arguments: any; result_preview?: string };

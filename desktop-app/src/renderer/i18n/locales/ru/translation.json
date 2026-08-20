@@ -406,7 +406,9 @@
       "branchNotAllowedInRoom": "Ветки пока недоступны в общих комнатах",
       "branchFailed": "Не удалось создать ветку",
       "subagentNumber": "🧠 Сабагент {{number}}",
-      "providerTokenUsage": "Точное использование токенов завершения, сообщенное провайдером"
+      "providerTokenUsage": "Точное использование токенов завершения, сообщенное провайдером",
+      "generationPerf": "Первый токен: {{latency}} мс\nГенерация: {{gen}} мс\nВсего: {{total}} мс\nСкорость: {{tps}} токенов/с",
+      "firstTokenLatency": "Задержка до первого токена: {{latency}} мс"
     },
     "reasoning": {
       "auto": "Авто",

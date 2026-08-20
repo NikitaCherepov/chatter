@@ -504,7 +504,7 @@ const MessageItem = React.memo(function MessageItem({
             )}
           </>
         )}
-        {(msg.role === 'assistant' && msg.model_name) || (showTokens && typeof displayedTokenCount === 'number' && displayedTokenCount > 0) ? (
+        {(msg.role === 'assistant' && msg.model_name) || (showTokens && typeof displayedTokenCount === 'number' && displayedTokenCount > 0) || (showTokens && (msg.usage?.perf?.tokens_per_second ?? 0) > 0) ? (
           <span className={s.messageUsageMeta}>
             {msg.role === 'assistant' && msg.model_name && (
               <span className={s.modelBadge} title={msg.provider_name || undefined}>{msg.model_name}</span>
@@ -518,6 +518,27 @@ const MessageItem = React.memo(function MessageItem({
               >
                 {displayedTokenCount} tk
               </span>
+            )}
+            {showTokens && msg.role === 'assistant' && (msg.usage?.perf?.tokens_per_second ?? 0) > 0 && (
+              <>
+                <span
+                  className={s.tokenBadge}
+                  title={t('chat.message.firstTokenLatency', { latency: msg.usage!.perf!.first_token_latency_ms })}
+                >
+                  {msg.usage!.perf!.first_token_latency_ms} ms
+                </span>
+                <span
+                  className={s.tokenBadge}
+                  title={t('chat.message.generationPerf', {
+                    latency: msg.usage!.perf!.first_token_latency_ms,
+                    gen: msg.usage!.perf!.generation_ms,
+                    total: msg.usage!.perf!.total_ms,
+                    tps: msg.usage!.perf!.tokens_per_second,
+                  })}
+                >
+                  {msg.usage!.perf!.tokens_per_second} tk/s
+                </span>
+              </>
             )}
           </span>
         ) : null}

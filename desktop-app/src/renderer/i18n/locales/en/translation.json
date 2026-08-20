@@ -389,6 +389,8 @@
       "regenerateWithHint": "Regenerate with instruction",
       "localTokenEstimate": "Local message token estimate (excluding reasoning)",
       "providerTokenUsage": "Exact completion token usage reported by the provider",
+      "generationPerf": "First token: {{latency}} ms\nGeneration: {{gen}} ms\nTotal: {{total}} ms\nSpeed: {{tps}} tokens/s",
+      "firstTokenLatency": "Time to first token: {{latency}} ms",
       "interruptedSuffix": "· ⏹ interrupted",
       "arguments": "Arguments",
       "result": "Result",
