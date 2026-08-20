@@ -21,6 +21,7 @@ import * as api from '../lib/api';
 import { generateDocxBlob, generateChatDocxBlob } from '../lib/markdownToDocx';
 import { MarkdownRenderer } from '../components/MarkdownRenderer';
 import { AttachModal, prepareAttachmentFiles } from '../components/AttachModal';
+import { RoomInvitesModal } from '../components/RoomInvitesModal';
 import { RejectWithComment } from '../components/RejectWithComment';
 import { FileEditDiff } from '../components/FileEditDiff/FileEditDiff';
 import type { ImageItem, DocumentItem } from '../components/AttachModal';
@@ -976,6 +977,10 @@ export function ChatPage() {
   const [addParticipantKind, setAddParticipantKind] = useState<'choose' | 'bot' | 'human' | null>(null);
   const [inviteLink, setInviteLink] = useState<string | null>(null);
   const [inviteCopied, setInviteCopied] = useState(false);
+  const [roomMemberMenuId, setRoomMemberMenuId] = useState<number | null>(null);
+  const [roomInvitesOpen, setRoomInvitesOpen] = useState(false);
+  const [roomInvites, setRoomInvites] = useState<api.RoomInvite[]>([]);
+  const [roomInvitesLoading, setRoomInvitesLoading] = useState(false);
   const [joinRoomOpen, setJoinRoomOpen] = useState(false);
   const [joinRoomLink, setJoinRoomLink] = useState('');
   const [joinRoomBusy, setJoinRoomBusy] = useState(false);
@@ -1003,6 +1008,12 @@ export function ChatPage() {
     window.addEventListener('click', closeParticipantMenu);
     return () => window.removeEventListener('click', closeParticipantMenu);
   }, [roomParticipantMenuId]);
+  useEffect(() => {
+    if (!roomMemberMenuId) return;
+    const closeMemberMenu = () => setRoomMemberMenuId(null);
+    window.addEventListener('click', closeMemberMenu);
+    return () => window.removeEventListener('click', closeMemberMenu);
+  }, [roomMemberMenuId]);
   useEffect(() => {
     if (addParticipantKind === null && inviteLink === null && changingRoomParticipantPromptId === null) return;
     const closePromptPicker = () => {
@@ -3880,6 +3891,75 @@ export function ChatPage() {
     }
   };
 
+  const refreshRoomInvites = async (chatId: number) => {
+    setRoomInvitesLoading(true);
+    try {
+      const { invites } = await api.listRoomInvites(chatId);
+      setRoomInvites(invites);
+    } catch (error) {
+      console.error('Failed to list room invites:', error);
+      toast.error(t('auth.error.generic'));
+    } finally {
+      setRoomInvitesLoading(false);
+    }
+  };
+
+  const toggleRoomInvites = async () => {
+    if (!activeChatId) return;
+    setRoomInvitesOpen(true);
+    void refreshRoomInvites(activeChatId);
+  };
+
+  const createInviteFromModal = async () => {
+    if (!activeChatId || roomSaving) return;
+    setRoomSaving(true);
+    try {
+      await api.createRoomInvite(activeChatId);
+      await refreshRoomInvites(activeChatId);
+    } catch (error) {
+      console.error('Failed to create room invite:', error);
+      toast.error(t('auth.error.generic'));
+    } finally {
+      setRoomSaving(false);
+    }
+  };
+
+  const revokeInvite = async (token: string) => {
+    if (!activeChatId) return;
+    try {
+      await api.revokeRoomInvite(activeChatId, token);
+      setRoomInvites((prev) => prev.filter((invite) => invite.token !== token));
+    } catch (error) {
+      console.error('Failed to revoke invite:', error);
+      toast.error(t('auth.error.generic'));
+    }
+  };
+
+  const copyInviteTokenLink = async (invite: api.RoomInvite) => {
+    try {
+      await navigator.clipboard.writeText(api.buildRoomInviteLink(invite));
+    } catch {
+      toast.error(t('auth.error.generic'));
+    }
+  };
+
+  const removeRoomMemberAction = async (memberUserId: number) => {
+    if (!activeChatId || roomSaving) return;
+    const chatId = activeChatId;
+    setRoomMemberMenuId(null);
+    setRoomSaving(true);
+    try {
+      await api.removeRoomMember(chatId, memberUserId);
+      const { room } = await api.getChatRoom(chatId);
+      if (activeChatIdRef.current === chatId) applyRoom(room);
+    } catch (error) {
+      console.error('Failed to remove room member:', error);
+      toast.error(t('auth.error.generic'));
+    } finally {
+      if (activeChatIdRef.current === chatId) setRoomSaving(false);
+    }
+  };
+
   const joinRoom = async () => {
     if (joinRoomBusy) return;
     const token = api.parseRoomInviteToken(joinRoomLink);
@@ -6534,6 +6614,29 @@ export function ChatPage() {
                                   <span>{t('chat.room.human')}</span>
                                 </div>
                                 {isSelf && <span className={s.roomParticipantYou}>{t('chat.room.you')}</span>}
+                                {isRoomAdmin && !isSelf && member.role !== 'admin' && (
+                                  <>
+                                    <button
+                                      type="button"
+                                      className={s.roomParticipantMenu}
+                                      aria-label={t('common.actions')}
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        setRoomMemberMenuId((current) => current === member.user_id ? null : member.user_id);
+                                      }}
+                                    >
+                                      <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><circle cx="8" cy="3" r="1.4"/><circle cx="8" cy="8" r="1.4"/><circle cx="8" cy="13" r="1.4"/></svg>
+                                    </button>
+                                    {roomMemberMenuId === member.user_id && (
+                                      <div className={s.roomParticipantContextMenu} onClick={(event) => event.stopPropagation()}>
+                                        <button type="button" className={s.roomParticipantContextDanger} onClick={() => void removeRoomMemberAction(member.user_id)}>
+                                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="m17 8 5 5M22 8l-5 5"/></svg>
+                                          {t('chat.room.removeMember')}
+                                        </button>
+                                      </div>
+                                    )}
+                                  </>
+                                )}
                               </>
                             )}
                           </DemoDraggableRoomMember>
@@ -6687,10 +6790,12 @@ export function ChatPage() {
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="4" y="8" width="16" height="12" rx="2"/><path d="M12 8V4M8 4h8M9 14h.01M15 14h.01"/></svg>
                         {t('chat.room.addBot')}
                       </button>
-                      <button type="button" className={s.roomAddKindOption} disabled={roomSaving} onClick={() => { setAddParticipantKind(null); void createInviteLink(); }}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg>
-                        {t('chat.room.addHuman')}
-                      </button>
+                      {isRoomAdmin && (
+                        <button type="button" className={s.roomAddKindOption} disabled={roomSaving} onClick={() => { setAddParticipantKind(null); void createInviteLink(); }}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg>
+                          {t('chat.room.addHuman')}
+                        </button>
+                      )}
                     </div>
                   )}
                   {addParticipantKind === 'bot' && (
@@ -6730,12 +6835,30 @@ export function ChatPage() {
                       event.stopPropagation();
                       setChangingRoomParticipantPromptId(null);
                       setInviteLink(null);
-                      setAddParticipantKind((kind) => (kind === 'choose' ? null : 'choose'));
+                      // Only admins can invite people; members jump straight to bots.
+                      setAddParticipantKind((kind) => {
+                        const next = kind === 'choose' ? null : 'choose';
+                        return !isRoomAdmin && next === 'choose' ? 'bot' : next;
+                      });
                     }}
                   >
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
                     {t('chat.room.addParticipant')}
                   </button>
+                  {isRoomAdmin && (
+                    <button
+                      type="button"
+                      className={`${s.roomAddParticipant} ${s.roomInvitesToggle}`}
+                      disabled={roomSaving}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        void toggleRoomInvites();
+                      }}
+                    >
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg>
+                      {t('chat.room.manageInvites')}
+                    </button>
+                  )}
                 </div>
               </div>
               {roomMembers.some(m => m.user_id === user?.id && m.role === 'admin') && (
@@ -6784,6 +6907,15 @@ export function ChatPage() {
           />
         )}
 
+        <RoomInvitesModal
+          open={roomInvitesOpen}
+          invites={roomInvites}
+          loading={roomInvitesLoading}
+          onClose={() => setRoomInvitesOpen(false)}
+          onRevoke={(token) => void revokeInvite(token)}
+          onCopy={(invite) => void copyInviteTokenLink(invite)}
+          onCreate={() => void createInviteFromModal()}
+        />
         {showAttachModal && (
           <AttachModal
             key="attach-modal"

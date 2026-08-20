@@ -61,7 +61,7 @@ import {
 import { normalizeSupportedLanguage, SUPPORTED_LANGUAGES } from './i18n/languages.js';
 import { translateForLanguage } from './i18n/index.js';
 import { associateServerAccessKeyUser, createServerAccessKey, getLastServerAccessKeyForUser, isServerAccessKeyGateEnabled, listServerAccessKeys, revokeServerAccessKey, validateServerAccessKey } from './services/server-access-keys.js';
-import { addChatAgent, canReadChatMessages, createChatRoom, createChatRoomInvite, deleteChatRoom, getChatAgentForResponse, getChatRoom, getChatRoomInviteInfo, joinChatRoomByInvite, leaveChatRoom, listChatReaderUserIds, removeChatAgent, revokeChatRoomInvite, reorderChatAgents, reorderChatMembers, updateChatAgent, updateChatRoomSettings } from './services/chat-rooms.js';
+import { addChatAgent, canReadChatMessages, createChatRoom, createChatRoomInvite, deleteChatRoom, getChatAgentForResponse, getChatRoom, getChatRoomInviteInfo, joinChatRoomByInvite, leaveChatRoom, listChatReaderUserIds, listChatRoomInvites, removeChatAgent, removeChatRoomMember, revokeChatRoomInvite, reorderChatAgents, reorderChatMembers, updateChatAgent, updateChatRoomSettings } from './services/chat-rooms.js';
 import { runChatSteps } from './services/chat-runner.js';
 import { isRoomChat, runRoomAgents, runRoomResponseQueue, stopRoomQueue, hasActiveRoomRun } from './services/room-runner.js';
 
@@ -1595,10 +1595,10 @@ const sendChatRoomError = (res: any, err: unknown) => {
   if (['bad_prompt_id', 'bad_agent_order', 'bad_member_order', 'prompt_content_required'].includes(error)) {
     return res.status(400).json({ error });
   }
-  if (['chat_not_found', 'agent_not_found', 'prompt_not_found', 'user_not_found', 'invite_not_found'].includes(error)) {
+  if (['chat_not_found', 'agent_not_found', 'prompt_not_found', 'user_not_found', 'invite_not_found', 'member_not_found'].includes(error)) {
     return res.status(404).json({ error });
   }
-  if (['room_not_created', 'room_has_agents', 'owner_cannot_leave'].includes(error)) {
+  if (['room_not_created', 'room_has_agents', 'owner_cannot_leave', 'owner_cannot_be_removed'].includes(error)) {
     return res.status(409).json({ error });
   }
   if (error === 'forbidden') {
@@ -1761,6 +1761,17 @@ app.post('/api/v1/chats/:id/room/invites', (req: AuthedRequest, res) => {
   }
 });
 
+app.get('/api/v1/chats/:id/room/invites', (req: AuthedRequest, res) => {
+  const userId = accountIdFromRequest(req);
+  const chatId = Number.parseInt(req.params.id, 10);
+  if (!Number.isSafeInteger(chatId) || chatId <= 0) return res.status(400).json({ error: 'bad_chat_id' });
+  try {
+    return res.json({ invites: listChatRoomInvites(userId, chatId) });
+  } catch (err) {
+    return sendChatRoomError(res, err);
+  }
+});
+
 app.delete('/api/v1/chats/:id/room/invites/:token', (req: AuthedRequest, res) => {
   const userId = accountIdFromRequest(req);
   const chatId = Number.parseInt(req.params.id, 10);
@@ -1801,6 +1812,22 @@ app.post('/api/v1/chats/:id/room/leave', (req: AuthedRequest, res) => {
   try {
     leaveChatRoom(userId, chatId);
     // Notify remaining readers to refresh members (the leaver already knows).
+    broadcastToChat(chatId, { type: 'room_members_updated', chat_id: chatId });
+    return res.json({ ok: true });
+  } catch (err) {
+    return sendChatRoomError(res, err);
+  }
+});
+
+// Admin removes a member from the room.
+app.delete('/api/v1/chats/:id/room/members/:memberId', (req: AuthedRequest, res) => {
+  const userId = accountIdFromRequest(req);
+  const chatId = Number.parseInt(req.params.id, 10);
+  const memberId = Number.parseInt(req.params.memberId, 10);
+  if (!Number.isSafeInteger(chatId) || chatId <= 0) return res.status(400).json({ error: 'bad_chat_id' });
+  if (!Number.isSafeInteger(memberId) || memberId <= 0) return res.status(400).json({ error: 'bad_member_id' });
+  try {
+    removeChatRoomMember(userId, chatId, memberId);
     broadcastToChat(chatId, { type: 'room_members_updated', chat_id: chatId });
     return res.json({ ok: true });
   } catch (err) {

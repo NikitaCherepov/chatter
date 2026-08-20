@@ -543,6 +543,14 @@ export async function createRoomInvite(chatId: number): Promise<{ invite: RoomIn
   return apiFetch(`/api/v1/chats/${chatId}/room/invites`, { method: 'POST' });
 }
 
+export async function listRoomInvites(chatId: number): Promise<{ invites: RoomInvite[] }> {
+  return apiFetch(`/api/v1/chats/${chatId}/room/invites`);
+}
+
+export async function removeRoomMember(chatId: number, memberUserId: number): Promise<{ ok: true }> {
+  return apiFetch(`/api/v1/chats/${chatId}/room/members/${memberUserId}`, { method: 'DELETE' });
+}
+
 export async function revokeRoomInvite(chatId: number, token: string): Promise<{ ok: true }> {
   return apiFetch(`/api/v1/chats/${chatId}/room/invites/${encodeURIComponent(token)}`, { method: 'DELETE' });
 }

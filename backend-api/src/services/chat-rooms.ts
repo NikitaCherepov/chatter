@@ -564,6 +564,14 @@ export const leaveChatRoom = (userId: number, chatId: number): void => {
   db.prepare('DELETE FROM chat_members WHERE chat_id = ? AND user_id = ?').run(chatId, userId);
 };
 
+/** Admin removes another member from the room (owner cannot be removed). */
+export const removeChatRoomMember = (userId: number, chatId: number, memberUserId: number): void => {
+  const { chat } = requireRoomAdmin(userId, chatId);
+  if (memberUserId === chat.user_id) throw new Error('owner_cannot_be_removed');
+  const deleted = db.prepare('DELETE FROM chat_members WHERE chat_id = ? AND user_id = ?').run(chatId, memberUserId);
+  if (deleted.changes === 0) throw new Error('member_not_found');
+};
+
 /** User ids allowed to read this chat's messages: owner + all members. */
 export const listRoomReaderUserIds = (chatId: number): number[] | null => {
   const chat = db.prepare('SELECT id, user_id, room_enabled FROM user_chats WHERE id = ?')
