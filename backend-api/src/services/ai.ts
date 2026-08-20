@@ -2971,10 +2971,10 @@ const buildDescribeImageTool = () => {
           },
           image_url: {
             type: 'string',
-            description: 'Image URL from [Attached image N: URL] markers. Leave empty to analyze images from the current user message.'
+            description: 'REQUIRED. Image URL copied exactly from the [Attached image N: URL] marker of the image to analyze.'
           }
         },
-        required: ['question']
+        required: ['question', 'image_url']
       }
     }
   };
