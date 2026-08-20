@@ -9,7 +9,7 @@ import { countTokens, countMessageTokens, countToolCallTokens, countToolResultTo
 import { buildBaseSystemPromptForUser } from './system-prompt.js';
 import { resolvePromptForUser } from './prompts.js';
 import { getEnabledMacros } from './macros.js';
-import { listRoomReaderUserIds } from './chat-rooms.js';
+import { listRoomReaderUserIds, canReadChatMessages } from './chat-rooms.js';
 import {
   allocateAccountId,
   createPasswordIdentity,
@@ -681,7 +681,9 @@ export const forkChat = (
 };
 
 export const activateUserChat = (userId: number, chatId: number) => {
-  const exists = db.prepare('SELECT id FROM user_chats WHERE user_id = ? AND id = ?').get(userId, chatId) as { id: number } | undefined;
+  // Own chat OR shared room membership: owner-created rooms live in the
+  // owner's user_chats row, members join via chat_members.
+  const exists = canReadChatMessages(userId, chatId);
   if (!exists) return false;
   db.prepare('UPDATE users SET active_chat_id = ? WHERE id = ?').run(chatId, userId);
   return true;

@@ -3294,11 +3294,21 @@ export function ChatPage() {
       if (!response.ok) throw new Error('download failed');
       const blob = await response.blob();
       const buffer = await blob.arrayBuffer();
-      const ext = blob.type.includes('png') ? 'png' : blob.type.includes('webp') ? 'webp' : blob.type.includes('gif') ? 'gif' : 'jpg';
+      // Prefer the extension from the URL itself (works for any attachment
+      // type); fall back to MIME type, then to a generic extension.
+      const urlExt = (src.split('?')[0].match(/\.([a-zA-Z0-9]+)$/) || [])[1]?.toLowerCase();
+      const mimeExt: Record<string, string> = {
+        'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif',
+        'image/jpeg': 'jpg', 'image/svg+xml': 'svg', 'application/pdf': 'pdf',
+        'audio/mpeg': 'mp3', 'audio/wav': 'wav', 'audio/ogg': 'ogg',
+        'video/mp4': 'mp4', 'text/plain': 'txt', 'application/zip': 'zip',
+        'application/json': 'json',
+      };
+      const ext = urlExt && urlExt.length <= 5 ? urlExt : (mimeExt[blob.type] || 'bin');
       const d = new Date();
       const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
       const uuid = crypto.randomUUID().split('-')[0];
-      const fileName = `image_${dateStr}_${uuid}.${ext}`;
+      const fileName = `file_${dateStr}_${uuid}.${ext}`;
       const result = await window.electronAPI?.saveFile(fileName, buffer);
       if (result && !result.canceled) {
         toast.success(t('chat.toasts.imageSaved'));
