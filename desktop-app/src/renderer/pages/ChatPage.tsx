@@ -979,7 +979,12 @@ export function ChatPage() {
   const [demoFolderMenuPos, setDemoFolderMenuPos] = useState({ x: 0, y: 0 });
   const [demoRenamingFolderId, setDemoRenamingFolderId] = useState<number | null>(null);
   const [demoRenamingFolderName, setDemoRenamingFolderName] = useState('');
-  const [demoExpandedFolders, setDemoExpandedFolders] = useState<Record<number, boolean>>({});
+  const [demoExpandedFolders, setDemoExpandedFolders] = useState<Record<number, boolean>>(() => {
+    try {
+      const raw = localStorage.getItem('chatter_expanded_folders');
+      return raw ? JSON.parse(raw) as Record<number, boolean> : {};
+    } catch { return {}; }
+  });
   const [demoDraggingChatId, setDemoDraggingChatId] = useState<number | null>(null);
   const [demoDraggingChatSize, setDemoDraggingChatSize] = useState<{ width: number; height: number } | null>(null);
   const [demoMoveMenuOpen, setDemoMoveMenuOpen] = useState(false);
@@ -3516,7 +3521,11 @@ export function ChatPage() {
   const demoDraggingChat = chats.find((chat) => chat.id === demoDraggingChatId) ?? null;
 
   const toggleDemoFolder = (folderId: number) => {
-    setDemoExpandedFolders((current) => ({ ...current, [folderId]: current[folderId] === false }));
+    setDemoExpandedFolders((current) => {
+      const next = { ...current, [folderId]: current[folderId] === false };
+      try { localStorage.setItem('chatter_expanded_folders', JSON.stringify(next)); } catch { /* ignore */ }
+      return next;
+    });
   };
 
   const startDemoFolderRename = (folderId: number, currentName: string) => {
