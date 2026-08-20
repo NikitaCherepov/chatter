@@ -8063,7 +8063,7 @@ iterations.push(currentIteration);
   const aggregateUsage = sumTokenUsage(usageCalls);
   const latestUsage = tokenUsageWithoutCallMeta(usageCalls[usageCalls.length - 1]);
   const messageUsage: MessageUsage | null = usageCalls.length > 0
-    ? { latest: latestUsage, aggregate: aggregateUsage, calls: usageCalls, perf: buildUsagePerf(aggregateUsage.total_tokens) }
+    ? { latest: latestUsage, aggregate: aggregateUsage, calls: usageCalls, perf: buildUsagePerf(aggregateUsage.completion_tokens) }
     : null;
   const responseModelName = usedProvider === 'manual' && selectedManualModelName
     ? selectedManualModelName
@@ -8182,7 +8182,7 @@ iterations.push(currentIteration);
       const abortedAggregateUsage = sumTokenUsage(usageCalls);
       const abortedLatestUsage = tokenUsageWithoutCallMeta(usageCalls[usageCalls.length - 1]);
       const abortedMessageUsage: MessageUsage | null = usageCalls.length > 0
-        ? { latest: abortedLatestUsage, aggregate: abortedAggregateUsage, calls: usageCalls, perf: buildUsagePerf(abortedAggregateUsage.total_tokens) }
+        ? { latest: abortedLatestUsage, aggregate: abortedAggregateUsage, calls: usageCalls, perf: buildUsagePerf(abortedAggregateUsage.completion_tokens) }
         : null;
       const abortedModelName = usedProvider === 'manual' && selectedManualModelName
         ? selectedManualModelName

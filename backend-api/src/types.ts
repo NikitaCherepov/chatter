@@ -118,7 +118,7 @@ export type MessageUsage = {
     generation_ms: number;
     /** Full wall-clock response time: first request sent -> message saved (incl. tool pauses). */
     total_ms: number;
-    /** total_tokens / generation_ms. */
+    /** completion_tokens / generation_ms (actual text generation speed). */
     tokens_per_second: number;
   };
 };
