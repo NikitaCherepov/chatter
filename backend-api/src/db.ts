@@ -820,6 +820,45 @@ db.exec(`
   )
 `);
 
+// ── OpenRouter provider monitoring (settings + per-model state) ───────────
+// Settings live in a single row (id = 1) so the admin panel can persist them
+// permanently without ENV rewrites. State is keyed by model unique ID (same
+// key space as model_overrides.model_id).
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS openrouter_monitor_settings (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    enabled INTEGER NOT NULL DEFAULT 0,
+    interval_minutes INTEGER NOT NULL DEFAULT 60 CHECK (interval_minutes >= 5),
+    action TEXT NOT NULL DEFAULT 'notify'
+      CHECK (action IN ('notify', 'cheapest', 'throughput', 'latency')),
+    recipients_mode TEXT NOT NULL DEFAULT 'all_admins'
+      CHECK (recipients_mode IN ('all_admins', 'selected')),
+    recipient_user_ids TEXT NOT NULL DEFAULT '[]',
+    updated_at INTEGER NOT NULL
+  )
+`);
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS openrouter_monitor_state (
+    model_id TEXT PRIMARY KEY,
+    route TEXT,
+    model_slug TEXT,
+    provider_slug TEXT,
+    status TEXT NOT NULL DEFAULT 'unknown'
+      CHECK (status IN ('unknown', 'available', 'missing', 'check_failed', 'model_missing')),
+    last_ok_at INTEGER,
+    last_check_at INTEGER,
+    consecutive_missing INTEGER NOT NULL DEFAULT 0,
+    unavailable_since INTEGER,
+    last_notified_at INTEGER,
+    last_notified_key TEXT,
+    previous_provider_slug TEXT,
+    replacement_provider_slug TEXT,
+    last_error TEXT
+  )
+`);
+
 // ── User token usage (immutable accounting ledger) ────────────────────────
 // Source of truth for cost / statistics. NOT affected by chat/message deletion.
 // One row per AI response (manual or auto, including aborts).

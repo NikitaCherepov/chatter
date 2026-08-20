@@ -28,6 +28,11 @@ import { getSmartHomeSettings, setSmartHomeToken, deleteSmartHomeToken, setZigbe
 import { db } from './db.js';
 import { getCleanTextFromUrl } from './services/web-reader.js';
 import { startTaskScheduler } from './services/scheduler.js';
+import {
+  getMonitorSettings, saveMonitorSettings, getMonitorStates, runMonitorCycle,
+  startOpenRouterMonitor, restartOpenRouterMonitor,
+} from './services/openrouter-monitor.js';
+import { getOpenRouterMonitoredModels } from './services/ai.js';
 import { runVoiceTurn } from './services/voice.js';
 import { runPhotoAnalyzeTurn } from './services/photo.js';
 import { migratePendingAccountNamespaces, VectorMemoryService } from './services/vector-memory.js';
@@ -4243,6 +4248,53 @@ app.post('/internal/admin/users/reset-weekly-usage-all', internalAuth, (_req, re
   return res.json({ ok: true, affected });
 });
 
+// ─── OpenRouter provider monitoring ─────────────────────────────────────────
+
+app.get('/internal/admin/openrouter-monitor/settings', internalAuth, (_req, res) => {
+  return res.json(getMonitorSettings());
+});
+
+app.put('/internal/admin/openrouter-monitor/settings', internalAuth, (req, res) => {
+  const body = req.body as {
+    enabled?: boolean;
+    intervalMinutes?: number;
+    action?: 'notify' | 'cheapest' | 'throughput' | 'latency';
+    recipientsMode?: 'all_admins' | 'selected';
+    recipientUserIds?: number[];
+  } | null;
+  const settings = saveMonitorSettings(body ?? {});
+  restartOpenRouterMonitor();
+  return res.json(settings);
+});
+
+app.get('/internal/admin/openrouter-monitor/status', internalAuth, (_req, res) => {
+  const admins = db.prepare(`
+    SELECT u.id, u.name,
+      EXISTS(SELECT 1 FROM account_identities ai WHERE ai.account_id = u.id AND ai.provider = 'telegram') AS has_telegram
+    FROM users u
+    WHERE u.is_admin = 1 OR u.role = 'admin'
+    ORDER BY u.id ASC
+  `).all() as Array<{ id: number; name: string | null; has_telegram: number }>;
+  return res.json({
+    settings: getMonitorSettings(),
+    states: getMonitorStates(),
+    models: getOpenRouterMonitoredModels(),
+    admins: admins.map(a => ({ id: a.id, name: a.name, hasTelegram: a.has_telegram === 1 })),
+  });
+});
+
+app.post('/internal/admin/openrouter-monitor/check', internalAuth, async (req, res) => {
+  const body = req.body as { modelIds?: string[] } | null;
+  try {
+    const outcomes = await runMonitorCycle({
+      modelIds: Array.isArray(body?.modelIds) ? body!.modelIds!.map(String).filter(Boolean) : undefined,
+    });
+    return res.json({ ok: true, outcomes, states: getMonitorStates() });
+  } catch (err: any) {
+    return res.status(502).json({ error: err?.message || 'monitor_check_failed' });
+  }
+});
+
 // ─── Model overrides (coefficients + provider info) ─────────────────────────
 
 app.get('/internal/admin/model-coefficients', internalAuth, (_req, res) => {
@@ -6206,6 +6258,7 @@ const server = app.listen(PORT, () => {
     console.log('[backend-vector-memory] disabled (BACKEND_VECTOR_MEMORY_API_ENABLED != 1)');
   }
   startTaskScheduler();
+  startOpenRouterMonitor();
   initSubagentRunner({ runCompletion, runTool, throwIfAborted, withAbort, toolDefinitions, normalizeTokenUsage });
 
   setImmediate(async () => {

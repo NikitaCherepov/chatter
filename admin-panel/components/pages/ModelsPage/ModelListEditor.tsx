@@ -11,6 +11,7 @@ import {
   type ModelPrices,
 } from '../../../lib/presetModels';
 import { api } from '../../../lib/api';
+import { useOpenRouterMonitorStatus } from '../../../lib/useOpenRouterMonitor';
 import { Select, type SelectOption } from '../../ui/Select/Select';
 import {
   OpenRouterModelInput,
@@ -212,6 +213,60 @@ async function fetchModelEndpoints(modelId: string): Promise<ModelEndpointsResul
 }
 
 // ── ProviderModelFields ──────────────────────────────────────────────────────
+
+// ── Per-model provider monitor badge ────────────────────────────────────────
+
+const MONITOR_STATUS_LABELS: Record<string, string> = {
+  available: 'Available',
+  missing: 'Missing',
+  check_failed: 'Check failed',
+  model_missing: 'Model removed',
+  unknown: '—',
+};
+
+function ProviderMonitorStatus({ uniqueId, slug }: { uniqueId?: string; slug: string }) {
+  const { t } = useTranslation();
+  const { status, checkModels } = useOpenRouterMonitorStatus();
+  const [checking, setChecking] = useState(false);
+  if (!uniqueId || !slug) return null;
+
+  const state = status?.states.find(s => s.model_id === uniqueId) || null;
+  const strategy = status?.settings.action && status.settings.action !== 'notify'
+    ? status.settings.action : null;
+
+  const handleCheckNow = async () => {
+    setChecking(true);
+    try {
+      await checkModels([uniqueId]);
+    } catch { /* surfaced in the panel */ }
+    finally { setChecking(false); }
+  };
+
+  const lastChecked = state?.last_check_at
+    ? new Date(state.last_check_at * 1000).toLocaleString()
+    : null;
+
+  return (
+    <div className={styles.monitorInline}>
+      <span className={`${styles.monitorBadge} ${styles[`monitor_${state?.status || 'unknown'}`] || ''}`}>
+        {state ? (MONITOR_STATUS_LABELS[state.status] || state.status) : (t('models.monitor.noData') || 'Not checked yet')}
+      </span>
+      {strategy && (
+        <small style={{ color: 'var(--color-muted)' }}>
+          {t('models.monitor.strategy') || 'Strategy'}: {strategy}
+        </small>
+      )}
+      {lastChecked && (
+        <small style={{ color: 'var(--color-muted)' }}>
+          {t('models.monitor.lastChecked') || 'Last checked'}: {lastChecked}
+        </small>
+      )}
+      <button type="button" className="buttonSecondary" disabled={checking} onClick={() => void handleCheckNow()}>
+        {checking ? (t('models.monitor.checking') || 'Checking…') : (t('models.monitor.checkNow') || 'Check now')}
+      </button>
+    </div>
+  );
+}
 
 export function ProviderModelFields({
   model, onChange, required = true, coefficientManager,
@@ -499,6 +554,7 @@ export function ProviderModelFields({
                 placeholder={t('models.billing.autoRouting') || 'Auto'}
                 valueFallbackLabel={prices.orSlug || undefined}
               />
+              <ProviderMonitorStatus uniqueId={model.uniqueId} slug={prices.orSlug} />
             </FormField>
           )}
 

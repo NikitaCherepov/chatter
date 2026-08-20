@@ -1800,7 +1800,7 @@ async function backendInternalRequest(pathname, options = {}) {
       ...(options.body ? { 'Content-Type': 'application/json' } : {}),
       ...(options.headers || {}),
     },
-    signal: AbortSignal.timeout(5000),
+    signal: AbortSignal.timeout(options.timeoutMs || 5000),
   });
   const body = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(body.error || `backend_http_${response.status}`);
@@ -2348,6 +2348,51 @@ async function handleRequest(req, res) {
       return sendJson(res, 200, data);
     } catch (error) {
       return sendJson(res, 502, { error: error.message || 'openrouter_endpoints_failed' });
+    }
+  }
+
+  // ── OpenRouter provider monitor (proxied to backend internal API) ────────
+  if (pathname === '/api/openrouter-monitor/settings') {
+    if (req.method === 'GET') {
+      try {
+        return sendJson(res, 200, await backendInternalRequest('/internal/admin/openrouter-monitor/settings'));
+      } catch (error) {
+        return sendJson(res, 502, { error: error.message || 'monitor_settings_failed' });
+      }
+    }
+    if (req.method === 'PUT') {
+      const body = await readJson(req);
+      try {
+        return sendJson(res, 200, await backendInternalRequest('/internal/admin/openrouter-monitor/settings', {
+          method: 'PUT',
+          body: JSON.stringify(body),
+        }));
+      } catch (error) {
+        return sendJson(res, 400, { error: error.message || 'monitor_settings_save_failed' });
+      }
+    }
+  }
+
+  if (req.method === 'GET' && pathname === '/api/openrouter-monitor/status') {
+    try {
+      return sendJson(res, 200, await backendInternalRequest('/internal/admin/openrouter-monitor/status', { timeoutMs: 15000 }));
+    } catch (error) {
+      return sendJson(res, 502, { error: error.message || 'monitor_status_failed' });
+    }
+  }
+
+  if (req.method === 'POST' && pathname === '/api/openrouter-monitor/check') {
+    const body = await readJson(req);
+    try {
+      // A full cycle fetches every unique model slug with a 12s timeout each —
+      // allow plenty of time before the manager gives up.
+      return sendJson(res, 200, await backendInternalRequest('/internal/admin/openrouter-monitor/check', {
+        method: 'POST',
+        body: JSON.stringify(body || {}),
+        timeoutMs: 300000,
+      }));
+    } catch (error) {
+      return sendJson(res, 502, { error: error.message || 'monitor_check_failed' });
     }
   }
 

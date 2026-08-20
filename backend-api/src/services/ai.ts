@@ -6,6 +6,7 @@ import { Readable } from 'node:stream';
 import type { AiSendResult, DesktopActionPayload, DisplayStatePayload, MapUpdatePayload, TaskNotifyMode, TaskRecurrenceType, TaskType, UserPlan, UserRecord, MessageAttachment, MessageUsage, NormalizedTokenUsage, TokenUsageCall } from '../types.js';
 import { appendChatMessage, ensureActiveChat, getHistoryForAi, getMessageTokens, getUserById, renameUserChat, resolveMaxContextTokens, resolveAttachmentMaxTokens, injectAttachments, setUserTimezone, trimUserHistoryByChat, searchChatHistory, getChatMessagesAround, isMultiUserRoomChat } from './chats.js';
 import { calculateChargedTokens, checkQuota, chargeTokens, getModelOverride, getPricingSnapshot, calculateEstimatedCostUsd, isModelFree } from './token-quota.js';
+import { registerMonitoredModelsProvider, isProviderMissingError, attemptRuntimeProviderSwitch } from './openrouter-monitor.js';
 import { getPlanLimits } from './plan-limits.js';
 import { resolvePromptForUser, AVATAR_PROMPT_HINT } from './prompts.js';
 import { getChatAgentForResponse, hasMultipleActiveChatAgents, canReadChatMessages } from './chat-rooms.js';
@@ -509,6 +510,48 @@ const parseManualModels = (): ManualModelEntry[] => {
 
 const MANUAL_MODELS = parseManualModels();
 const MANUAL_MODELS_MAP = new Map(MANUAL_MODELS.map(m => [m.id, m]));
+
+// ── OpenRouter provider monitoring registration ────────────────────────────
+// All Manual/Pro/Lite/Vision entries whose baseURL is OpenRouter are exposed
+// to the background monitor (it filters further by pinned provider slug).
+const isOpenRouterUrl = (url: string) => (url || '').toLowerCase().includes('openrouter.ai');
+
+export const getOpenRouterMonitoredModels = () => {
+  const models: Array<{ uniqueId: string; route: string; modelSlug: string }> = [];
+  for (const m of MANUAL_MODELS) {
+    if (isOpenRouterUrl(m.baseURL)) models.push({ uniqueId: m.id, route: 'Manual', modelSlug: m.apiModelName });
+  }
+  for (const provider of PRO_PROVIDERS) {
+    if (!isOpenRouterUrl(provider.baseURL)) continue;
+    provider.modelChain.forEach((model, i) => {
+      const uniqueId = provider.uniqueIds[i];
+      if (uniqueId) models.push({ uniqueId, route: 'Pro', modelSlug: model });
+    });
+  }
+  for (const provider of LITE_PROVIDERS) {
+    if (!isOpenRouterUrl(provider.baseURL)) continue;
+    provider.modelChain.forEach((model, i) => {
+      const uniqueId = provider.uniqueIds[i];
+      if (uniqueId) models.push({ uniqueId, route: 'Lite', modelSlug: model });
+    });
+  }
+  for (const provider of VISION_PROVIDERS.pro) {
+    if (!isOpenRouterUrl(provider.baseURL)) continue;
+    provider.modelChain.forEach((model, i) => {
+      const uniqueId = provider.uniqueIds[i];
+      if (uniqueId) models.push({ uniqueId, route: 'Vision Pro', modelSlug: model });
+    });
+  }
+  for (const provider of VISION_PROVIDERS.lite) {
+    if (!isOpenRouterUrl(provider.baseURL)) continue;
+    provider.modelChain.forEach((model, i) => {
+      const uniqueId = provider.uniqueIds[i];
+      if (uniqueId) models.push({ uniqueId, route: 'Vision Lite', modelSlug: model });
+    });
+  }
+  return models;
+};
+registerMonitoredModelsProvider(getOpenRouterMonitoredModels);
 
 export const getModelsCatalog = (isAdmin = false) => MANUAL_MODELS
   .filter(m => isAdmin || !m.adminOnly)
@@ -1240,7 +1283,9 @@ const createCompletionWithModelFallback = async (
     const model = modelChain[modelIndex];
     const currentUniqueId = uniqueIds[modelIndex] || null;
     const override = currentUniqueId ? getModelOverride(currentUniqueId) : null;
-    const openRouterSlug = override?.openrouter_provider_slug ?? null;
+    let openRouterSlug = override?.openrouter_provider_slug ?? null;
+    // Guard so auto-switch retries a live request at most once per model.
+    let providerSwitchRetried = false;
 
     const attempts = RETRIES_PER_MODEL + 1;
     for (let attempt = 1; attempt <= attempts; attempt += 1) {
@@ -1308,6 +1353,25 @@ const createCompletionWithModelFallback = async (
         if (isRetryable(err) && attempt < attempts) {
           await abortableSleep(RETRY_SECONDS * 1000, signal);
           continue;
+        }
+        // OpenRouter says the pinned provider/endpoint no longer exists for
+        // this model. With auto-switch enabled: refresh the catalog once,
+        // persist a replacement provider and retry this request exactly once.
+        if (openRouterSlug && currentUniqueId && !providerSwitchRetried && isProviderMissingError(err)
+            && (baseURL || '').toLowerCase().includes('openrouter.ai')) {
+          providerSwitchRetried = true;
+          const requirements = {
+            tools: Array.isArray((requestBody as any)?.tools) && ((requestBody as any).tools as unknown[]).length > 0,
+          };
+          const newSlug = await attemptRuntimeProviderSwitch(currentUniqueId, requirements);
+          if (newSlug) {
+            openRouterSlug = newSlug;
+            console.warn('[ai] openrouter provider auto-switched', {
+              model, uniqueId: currentUniqueId, newProvider: newSlug,
+            });
+            attempt -= 1; // allow exactly one extra attempt with the new provider
+            continue;
+          }
         }
         break;
       }

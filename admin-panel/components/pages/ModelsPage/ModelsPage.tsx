@@ -6,6 +6,7 @@ import { ActionBar } from '../../ui/ActionBar/ActionBar';
 import grid from '../../ui/PageGrid/PageGrid.module.css';
 import { ManualModelListEditor } from './ManualModelListEditor';
 import { ModelListEditor, ProviderModelFields } from './ModelListEditor';
+import { OpenRouterMonitorPanel } from './OpenRouterMonitorPanel';
 import styles from './ModelsPage.module.css';
 
 type Props = {
@@ -105,6 +106,16 @@ export function ModelsPage({ settings, setSettings, saving, saveState, onSave }:
             }
           />
         </div>
+      </details>
+
+      <details className={styles.section}>
+        <summary>
+          <span>
+            <strong>{t('models.monitor.title') || 'OpenRouter monitoring'}</strong>
+            <small>{t('models.monitor.subtitle') || 'Watch pinned providers, notify and switch automatically'}</small>
+          </span>
+        </summary>
+        <OpenRouterMonitorPanel />
       </details>
 
       <ActionBar saving={saving} state={saveState} />

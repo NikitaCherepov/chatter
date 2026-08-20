@@ -213,3 +213,58 @@
     flex-direction: column;
   }
 }
+
+/* ── OpenRouter monitor ─────────────────────────────────────────────── */
+.monitorInline {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin-top: var(--sp-1);
+}
+.monitorBadge {
+  display: inline-block;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  border: 1px solid var(--border-medium);
+  background: var(--bg-primary);
+  color: var(--color-muted);
+}
+.monitor_available {
+  border-color: color-mix(in srgb, #46a758 45%, var(--border-light));
+  color: #46a758;
+}
+.monitor_missing,
+.monitor_model_missing {
+  border-color: color-mix(in srgb, var(--color-error) 45%, var(--border-light));
+  color: var(--color-error);
+}
+.monitor_check_failed {
+  border-color: color-mix(in srgb, #f5a524 45%, var(--border-light));
+  color: #f5a524;
+}
+.monitorAdminList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+.monitorAdminItem {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.monitorStates {
+  margin-top: var(--sp-3);
+}
+.monitorTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+.monitorTable th,
+.monitorTable td {
+  text-align: left;
+  padding: var(--sp-1) var(--sp-2);
+  border-bottom: 1px solid var(--border-light);
+}

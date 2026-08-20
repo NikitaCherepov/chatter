@@ -86,7 +86,9 @@
     "changedRelogin": "Changed. Log in again.",
     "coefficientLoadError": "Failed to load coefficients",
     "coefficientSaved": "Coefficient saved",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "on": "On",
+    "off": "Off"
   },
   "ui": {
     "search": "Search…",
@@ -174,6 +176,40 @@
       "refreshing": "Refreshing…",
       "customModel": "Other…",
       "customModelHint": "specify manually"
+    },
+    "monitor": {
+      "title": "OpenRouter monitoring",
+      "subtitle": "Watch pinned providers, notify admins and switch automatically",
+      "unavailable": "Monitor API is not available (update chatter-manager).",
+      "enabled": "Monitoring enabled",
+      "enabledHint": "Periodically verify that pinned OpenRouter providers still serve the model",
+      "interval": "Check interval (minutes)",
+      "intervalHint": "Minimum 5 minutes; a small random jitter is added to spread the load",
+      "action": "Action when provider disappears",
+      "actionHint": "Auto-switch happens only after two consecutive successful checks without the provider",
+      "actionNotify": "Notify only",
+      "actionCheapest": "Switch to cheapest",
+      "actionThroughput": "Switch to fastest (throughput)",
+      "actionLatency": "Switch to lowest latency",
+      "recipients": "Notification recipients",
+      "recipientsHint": "Telegram notifications are sent via the existing Chatter bot",
+      "recipientsAll": "All admins with Telegram",
+      "recipientsSelected": "Selected admins",
+      "recipientAdmins": "Admins",
+      "noAdmins": "No admins found",
+      "noTelegram": "no Telegram",
+      "saveSettings": "Save monitoring settings",
+      "checkAll": "Check all now",
+      "checking": "Checking…",
+      "checkNow": "Check now",
+      "noData": "Not checked yet",
+      "strategy": "Strategy",
+      "lastChecked": "Last checked",
+      "statesTitle": "Monitored models status",
+      "colModel": "Model",
+      "colProvider": "Provider",
+      "colStatus": "Status",
+      "colLastCheck": "Last checked"
     }
   },
   "integrations": {
