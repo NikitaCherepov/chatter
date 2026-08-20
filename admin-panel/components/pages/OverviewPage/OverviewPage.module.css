@@ -300,6 +300,39 @@
   display: flex;
   gap: var(--sp-2);
 }
+.updateChannel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-top: var(--sp-1);
+}
+.channelChip {
+  padding: 2px var(--sp-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 6px);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+  cursor: pointer;
+}
+.channelChip:hover {
+  color: var(--text-primary);
+}
+.channelEdit {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.channelEdit input {
+  width: 160px;
+  padding: 2px var(--sp-2);
+  font-size: var(--fs-xs);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--bg-input, transparent);
+  color: var(--text-primary);
+}
 @media (max-width: 1000px) {
   .statusGrid {
     grid-template-columns: repeat(2, 1fr);

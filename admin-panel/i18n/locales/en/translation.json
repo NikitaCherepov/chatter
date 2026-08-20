@@ -621,6 +621,16 @@
       "checkError": "Check error: {{message}}",
       "starting": "Starting update…",
       "updateError": "Update error: {{message}}",
+      "channel": {
+        "label": "Channel",
+        "hint": "Update channel: 'latest' for production, or a branch name to track that branch's images. '/' is replaced with '-'.",
+        "apply": "Switch",
+        "switching": "Switching…",
+        "invalidTag": "Invalid channel name. Use letters, digits, '.', '_' and '-'.",
+        "switchedFound": "Switched to '{{tag}}'. New images found — update is available.",
+        "switchedCurrent": "Switched to '{{tag}}'. Server is already running this channel's images.",
+        "error": "Channel switch error: {{message}}"
+      },
       "changes": {
         "services": "Services",
         "changed": "Changed: {{services}}",

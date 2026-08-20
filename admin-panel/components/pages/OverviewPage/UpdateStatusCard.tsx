@@ -30,6 +30,11 @@ export function UpdateStatusCard() {
   const [drainPhase, setDrainPhase] = useState<DrainPhase>('idle');
   const [drain, setDrain] = useState<DrainState | null>(null);
 
+  // Update channel (image tag) switching
+  const [tagDraft, setTagDraft] = useState('');
+  const [tagEditing, setTagEditing] = useState(false);
+  const [switching, setSwitching] = useState(false);
+
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const tickTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const drainStartRef = useRef<number>(0);
@@ -100,6 +105,33 @@ export function UpdateStatusCard() {
       setMessage(t('system.update.checkError', { message: err instanceof Error ? err.message : String(err) }));
     } finally {
       setRefreshing(false);
+    }
+  }
+
+  // Branch names map to image tags with `/` replaced by `-` (same slug as CI).
+  async function handleSwitchTag() {
+    const tag = tagDraft.trim().replace(/\//g, '-');
+    if (!/^[A-Za-z0-9][A-Za-z0-9_.-]{0,99}$/.test(tag) || tag === 'local') {
+      setMessage(t('system.update.channel.invalidTag'));
+      return;
+    }
+    setSwitching(true);
+    setMessage('');
+    try {
+      await serverUpdateService.setTag(tag);
+      setTagEditing(false);
+      // Immediately check the new channel so the admin sees what's there.
+      setRefreshing(true);
+      const fresh = await serverUpdateService.forceRefresh();
+      queryClient.setQueryData(['server-update'], fresh);
+      setMessage(fresh?.available
+        ? t('system.update.channel.switchedFound', { tag })
+        : t('system.update.channel.switchedCurrent', { tag }));
+    } catch (err) {
+      setMessage(t('system.update.channel.error', { message: err instanceof Error ? err.message : String(err) }));
+    } finally {
+      setRefreshing(false);
+      setSwitching(false);
     }
   }
 
@@ -307,6 +339,33 @@ export function UpdateStatusCard() {
             <button type="button" disabled={busy || updateInProgress} onClick={() => void handleOpenModal()}>
               {updateInProgress ? t('system.update.updating') : t('system.update.updateButton')}
             </button>
+          )}
+        </div>
+        {/* Update channel (image tag): `latest` = production, branch tag = track a branch */}
+        <div className={styles.updateChannel}>
+          <button
+            type="button"
+            className={styles.channelChip}
+            disabled={switching || updateInProgress}
+            title={t('system.update.channel.hint')}
+            onClick={() => { setTagDraft(info.imageTag || 'latest'); setTagEditing((prev) => !prev); }}
+          >
+            {t('system.update.channel.label')}: <strong>{info.imageTag || 'latest'}</strong>
+          </button>
+          {tagEditing && (
+            <span className={styles.channelEdit}>
+              <input
+                value={tagDraft}
+                disabled={switching}
+                placeholder="latest"
+                spellCheck={false}
+                onChange={(event) => setTagDraft(event.target.value)}
+                onKeyDown={(event) => { if (event.key === 'Enter') void handleSwitchTag(); }}
+              />
+              <button type="button" disabled={switching} onClick={() => void handleSwitchTag()}>
+                {switching ? t('system.update.channel.switching') : t('system.update.channel.apply')}
+              </button>
+            </span>
           )}
         </div>
       </div>

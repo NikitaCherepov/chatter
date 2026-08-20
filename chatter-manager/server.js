@@ -77,6 +77,50 @@ const UPDATE_STATE_FILE = path.join(CONFIG_DIR, 'server-update.json');
 const METRICS_FILE = path.join(CONFIG_DIR, 'metrics.json');
 const HOST_PROJECT_DIR = `${process.env.CHATTER_HOST_PROJECT_DIR || ''}`.trim();
 const HOST_CONFIG_DIR = `${process.env.CHATTER_HOST_CONFIG_DIR || ''}`.trim();
+// Host compose.env (the file install.sh writes and the update helper reads).
+// CONFIG_DIR is a rw bind mount of the host config directory, so edits made
+// here are visible on the host immediately.
+const COMPOSE_ENV_FILE = path.join(CONFIG_DIR, 'compose.env');
+const UPDATER_LOG_FILE = path.join(CONFIG_DIR, 'server-update.log');
+const IMAGE_TAG_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,99}$/;
+
+function readEnvFileValue(filePath, key) {
+  try {
+    const match = fs.readFileSync(filePath, 'utf8').match(new RegExp(`^${key}=(.*)$`, 'm'));
+    return match ? match[1].trim() : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Replace or append a KEY=value line in an env file, preserving all other lines. */
+function updateEnvFileValue(filePath, key, value) {
+  let content = '';
+  try { content = fs.readFileSync(filePath, 'utf8'); } catch { /* new file */ }
+  const pattern = new RegExp(`^${key}=.*$`, 'm');
+  const line = `${key}=${value}`;
+  const updated = pattern.test(content)
+    ? content.replace(pattern, line)
+    : (content.length > 0 && !content.endsWith('\n') ? `${content}\n${line}\n` : `${content}${line}\n`);
+  atomicWrite(filePath, updated);
+}
+
+/**
+ * The image tag is read from the host compose.env (the source of truth for
+ * the update helper and container recreation), falling back to the process
+ * environment. Reading dynamically allows switching update channels (e.g.
+ * `latest` -> a feature branch tag) without restarting the manager.
+ */
+function currentImageTag() {
+  const fromEnvFile = readEnvFileValue(COMPOSE_ENV_FILE, 'CHATTER_IMAGE_TAG');
+  const tag = `${fromEnvFile || process.env.CHATTER_IMAGE_TAG || ''}`.trim();
+  return tag || 'local';
+}
+
+function currentImagePrefix() {
+  const fromEnvFile = readEnvFileValue(COMPOSE_ENV_FILE, 'CHATTER_IMAGE_PREFIX');
+  return `${fromEnvFile || process.env.CHATTER_IMAGE_PREFIX || ''}`.trim() || 'chatter';
+}
 const BACKUP_CONFIG_FILES = [
   'backend.env',
   'telegram.env',
@@ -209,8 +253,8 @@ writeEnv(COMPOSE_RUNTIME_ENV_FILE, {
   BACKEND_PORT: process.env.BACKEND_PORT || '3050',
   NOTES_PORT: process.env.NOTES_PORT || '3001',
   VOICE_PORT: process.env.VOICE_PORT || '3030',
-  CHATTER_IMAGE_PREFIX: process.env.CHATTER_IMAGE_PREFIX || 'chatter',
-  CHATTER_IMAGE_TAG: process.env.CHATTER_IMAGE_TAG || 'local',
+  CHATTER_IMAGE_PREFIX: currentImagePrefix(),
+  CHATTER_IMAGE_TAG: currentImageTag(),
   CHATTER_PULL_IMAGES: process.env.CHATTER_PULL_IMAGES || '0',
   CHATTER_PUBLIC_HOST: process.env.CHATTER_PUBLIC_HOST || '',
   CHATTER_PUBLIC_URL: process.env.CHATTER_PUBLIC_URL || ''
@@ -765,8 +809,10 @@ const SERVER_IMAGE_SUFFIXES = {
 };
 
 function serverUpdatesSupported() {
+  const tag = currentImageTag();
   return process.env.CHATTER_PULL_IMAGES === '1'
-    && process.env.CHATTER_IMAGE_TAG === 'latest'
+    // 'local' means images were built on the host — there is no registry to pull from.
+    && tag && tag !== 'local'
     && path.isAbsolute(HOST_PROJECT_DIR)
     && path.isAbsolute(HOST_CONFIG_DIR)
     && HOST_PROJECT_DIR !== '/'
@@ -808,8 +854,8 @@ const PULL_COOLDOWN_MS = 5 * 60 * 1000;
 
 function imageReference(service) {
   const suffix = SERVER_IMAGE_SUFFIXES[service];
-  const prefix = `${process.env.CHATTER_IMAGE_PREFIX || ''}`.trim();
-  const tag = `${process.env.CHATTER_IMAGE_TAG || ''}`.trim();
+  const prefix = currentImagePrefix();
+  const tag = currentImageTag();
   if (!suffix || !prefix || !tag || /[\s'"`$]/.test(`${prefix}${tag}`)) throw new Error('invalid_server_image_reference');
   return `${prefix}-${suffix}:${tag}`;
 }
@@ -864,6 +910,7 @@ function shortImageHash(image) {
 async function getServerUpdateInfo({ pull = false, forcePull = false } = {}) {
   const result = {
     supported: serverUpdatesSupported(),
+    imageTag: currentImageTag(),
     installedHash: '—',
     latestHash: '—',
     available: false,
@@ -957,10 +1004,22 @@ ${stopCommand}
 ${composeCommand}
 # Remove only the previous images used by this Chatter installation. Docker
 # refuses to remove an image that is still used by any container, so shared or
-# unchanged images remain safe. Cleanup is best-effort.
+# unchanged images remain safe. Cleanup is best-effort, but every outcome is
+# logged to server-update.log in the config directory so failures are visible.
+LOG_FILE="$HOST_CONFIG_DIR/server-update.log"
+log() { printf '%s %s\\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >> "$LOG_FILE"; }
+log "update to $TARGET_HASH: cleaning up old images"
 for IMAGE_ID in $OLD_IMAGE_IDS; do
-  docker image rm "$IMAGE_ID" >/dev/null 2>&1 || true
+  if docker image rm "$IMAGE_ID" >> "$LOG_FILE" 2>&1; then
+    log "removed old image $IMAGE_ID"
+  else
+    log "could not remove image $IMAGE_ID (still used by a container or shared)"
+  fi
 done
+# Drop dangling layers left behind by docker pull replacing tags (e.g. the old
+# 'latest' image after switching to a branch tag). -f only affects untagged
+# images, so tagged images of other projects are safe.
+docker image prune -f >> "$LOG_FILE" 2>&1 || log "docker image prune failed"
 printf '{"status":"complete","targetHash":"%s","message":"server_update_complete","updatedAt":"%s"}\n' "$TARGET_HASH" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$HOST_CONFIG_DIR/server-update.json"`;
   await runDocker([
     'run', '--detach', '--rm', '--name', `chatter-server-updater-${Date.now()}`,
@@ -1865,6 +1924,33 @@ async function handleRequest(req, res) {
       .catch(error => console.error('[manager:server-update]', error))
       .finally(() => { updatePromise = null; });
     return sendJson(res, 202, { ok: true, targetHash: snapshot.latestHash });
+  }
+
+  // Switch the update channel (image tag): `latest` for production, a branch
+  // tag (e.g. `feature-x`) to track a working branch. Persists the tag into
+  // the host compose.env (used by the update helper and container recreation)
+  // and into compose.runtime.env (used by this manager's own compose calls),
+  // so the change takes effect without restarting the manager.
+  if (req.method === 'POST' && pathname === '/api/server-update/tag') {
+    if (!serverUpdatesSupported()) return sendJson(res, 409, { error: 'server_updates_not_available_for_this_installation' });
+    if (serverUpdateInProgress() || applyPromise || backupPromise || restorePromise) return sendJson(res, 409, { error: 'another_operation_is_in_progress' });
+    let tag;
+    try {
+      tag = `${(await readJson(req)).tag || ''}`.trim();
+    } catch {
+      return sendJson(res, 400, { error: 'invalid_json' });
+    }
+    if (!IMAGE_TAG_PATTERN.test(tag)) return sendJson(res, 400, { error: 'invalid_image_tag' });
+    if (tag === 'local') return sendJson(res, 400, { error: 'invalid_image_tag' });
+    try {
+      updateEnvFileValue(COMPOSE_ENV_FILE, 'CHATTER_IMAGE_TAG', tag);
+      updateEnvFileValue(COMPOSE_RUNTIME_ENV_FILE, 'CHATTER_IMAGE_TAG', tag);
+    } catch (error) {
+      return sendJson(res, 500, { error: error.message || 'failed_to_persist_image_tag' });
+    }
+    lastPullTime = 0; // the next refresh should pull the new channel right away
+    console.log(`[manager:server-update] image tag switched to '${tag}'`);
+    return sendJson(res, 200, { ok: true, imageTag: tag });
   }
 
   if (pathname === '/api/update/prepare') {

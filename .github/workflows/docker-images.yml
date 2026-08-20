@@ -16,7 +16,6 @@ concurrency:
 
 jobs:
   build-and-push:
-    if: github.ref == 'refs/heads/main'
     name: ${{ matrix.image }}
     runs-on: ubuntu-latest
     strategy:
@@ -63,14 +62,26 @@ jobs:
           jq -e '.changes as $c | ($c | type) == "object" and ($c.en | type) == "array" and ($c.ru | type) == "array" and all($c.en[]; type == "string") and all($c.ru[]; type == "string") and ($c.en | length) == ($c.ru | length)' server-changelog.json >/dev/null
           echo "value=$(base64 -w 0 server-changelog.json)" >> "$GITHUB_OUTPUT"
 
+      - name: Sanitize branch tag
+        id: branch
+        shell: bash
+        run: |
+          slug="$(printf '%s' "${GITHUB_REF_NAME}" | tr '/' '-' | tr -cd 'A-Za-z0-9_.-' | cut -c1-100)"
+          if [ -z "$slug" ]; then
+            echo "Branch tag is empty after sanitization" >&2
+            exit 1
+          fi
+          echo "tag=$slug" >> "$GITHUB_OUTPUT"
+
       - name: Generate image metadata
         id: metadata
         uses: docker/metadata-action@v6
         with:
           images: ghcr.io/${{ github.repository_owner }}/chatter-${{ matrix.image }}
           tags: |
-            type=raw,value=latest
+            type=raw,value=latest,enable={{is_default_branch}}
             type=sha,prefix=sha-
+            type=raw,value=${{ steps.branch.outputs.tag }}
           labels: |
             io.chatter.server.changelog-base64=${{ steps.changelog.outputs.value }}
 

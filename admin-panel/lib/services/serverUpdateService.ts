@@ -9,6 +9,8 @@ export type UpdateOperation = {
 
 export type ServerUpdateInfo = {
   supported: boolean;
+  /** Image tag (= update channel): `latest` for production, branch tag otherwise. */
+  imageTag?: string;
   installedHash: string;
   latestHash: string;
   available: boolean;
@@ -33,6 +35,12 @@ export const serverUpdateService = {
   refresh: () => api<ServerUpdateInfo>('/api/server-update?refresh=1'),
   forceRefresh: () => api<ServerUpdateInfo>('/api/server-update?refresh=1&force=1'),
   apply: () => api('/api/server-update', { method: 'POST', body: '{}' }),
+  // Switch the update channel (image tag). `latest` = production, a branch
+  // tag (with `/` replaced by `-`) tracks that branch's images.
+  setTag: (tag: string) => api<{ ok: true; imageTag: string }>('/api/server-update/tag', {
+    method: 'POST',
+    body: JSON.stringify({ tag }),
+  }),
 
   // Update drain endpoints (proxied by chatter-manager -> backend-api)
   getUpdateState: () => api<UpdateState>('/api/update/prepare'),
