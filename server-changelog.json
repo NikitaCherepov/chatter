@@ -6,62 +6,62 @@
       "Messages now show their sent date."
     ],
     "cs": [
-      "Místnosti, do kterých můžete pozvat další lidi a přivést vlastní boty.",
+      "Přidány místnosti, kam můžete pozvat další lidi a přivést vlastní boty.",
       "Boti nyní mohou pracovat na pozadí a upozornit vás, až dokončí práci.",
       "Zprávy nyní zobrazují datum odeslání."
     ],
     "de": [
-      "Räume, in die Sie andere Personen einladen und Ihre eigenen Bots mitbringen können.",
-      "Bots können jetzt im Hintergrund arbeiten und Sie benachrichtigen, wenn sie fertig sind.",
+      "Räume hinzugefügt, in die du andere Personen einladen und deine eigenen Bots mitbringen kannst.",
+      "Bots können jetzt im Hintergrund arbeiten und dich benachrichtigen, wenn sie fertig sind.",
       "Nachrichten zeigen jetzt ihr Sendedatum."
     ],
     "es": [
-      "Salas donde puedes invitar a otras personas y traer tus propios bots.",
+      "Se agregaron salas donde puedes invitar a otras personas y traer tus propios bots.",
       "Los bots ahora pueden trabajar en segundo plano y notificarte cuando terminen.",
       "Los mensajes ahora muestran su fecha de envío."
     ],
     "fr": [
-      "Salons où vous pouvez inviter d'autres personnes et amener vos propres bots.",
+      "Ajout de salons où vous pouvez inviter d'autres personnes et amener vos propres bots.",
       "Les bots peuvent désormais travailler en arrière-plan et vous notifier lorsqu'ils ont terminé.",
       "Les messages affichent désormais leur date d'envoi."
     ],
     "it": [
-      "Stanze in cui puoi invitare altre persone e portare i tuoi bot.",
+      "Aggiunte stanze dove puoi invitare altre persone e portare i tuoi bot.",
       "I bot ora possono lavorare in background e avvisarti quando finiscono.",
       "I messaggi ora mostrano la data di invio."
     ],
     "ja": [
-      "他の人を招待して自分のボットを持ち込める部屋。",
+      "他の人を招待して自分のボットを持ち込めるルームを追加しました。",
       "ボットはバックグラウンドで動作し、完了時に通知できるようになりました。",
       "メッセージに送信日時が表示されるようになりました。"
     ],
     "ko": [
-      "다른 사람을 초대하고 자신의 봇을 가져올 수 있는 방입니다.",
-      "봇이 이제 백그라운드에서 작업하고 완료되면 알림을 보낼 수 있습니다.",
-      "메시지에 이제 전송 날짜가 표시됩니다."
+      "다른 사람을 초대하고 자신의 봇을 가져올 수 있는 방이 추가되었습니다.",
+      "봇이 이제 백그라운드에서 작업하고 완료되면 알릴 수 있습니다.",
+      "메시지에 전송 날짜가 표시됩니다."
     ],
     "pl": [
-      "Pokoje, do których możesz zapraszać inne osoby i przyprowadzać własne boty.",
+      "Dodano pokoje, w których możesz zapraszać inne osoby i przyprowadzać własne boty.",
       "Boty mogą teraz pracować w tle i powiadamiać Cię po zakończeniu.",
       "Wiadomości pokazują teraz datę wysłania."
     ],
     "pt-BR": [
-      "Salas onde você pode convidar outras pessoas e trazer seus próprios bots.",
+      "Adicionamos salas onde você pode convidar outras pessoas e trazer seus próprios bots.",
       "Os bots agora podem trabalhar em segundo plano e notificá-lo quando terminarem.",
       "As mensagens agora mostram a data de envio."
     ],
     "ru": [
-      "Добавлены комнаты, куда вы можете приглашать других людей и приводить своих ботов.",
+      "Добавлены комнаты, где вы можете приглашать других людей и приводить своих ботов.",
       "Боты теперь могут работать в фоновом режиме и уведомлять вас о завершении.",
       "Сообщения теперь показывают дату отправки."
     ],
     "tr": [
-      "Başkalarını davet edebileceğiniz ve kendi botlarınızı getirebileceğiniz odalar.",
-      "Botlar artık arka planda çalışabilir ve bitirdiklerinde sizi bilgilendirebilir.",
+      "Diğer kişileri davet edebileceğiniz ve kendi botlarınızı getirebileceğiniz odalar eklendi.",
+      "Botlar artık arka planda çalışabilir ve bitirdiklerinde size bildirim gönderebilir.",
       "Mesajlar artık gönderilme tarihini gösteriyor."
     ],
     "zh-CN": [
-      "您可以邀请他人并携带自己的机器人的房间。",
+      "添加了房间，您可以邀请其他人并带上自己的机器人。",
       "机器人现在可以在后台工作，并在完成时通知您。",
       "消息现在显示发送日期。"
     ]
