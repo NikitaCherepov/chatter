@@ -1,14 +1,9 @@
 {
   "changes": {
     "en": [
-      "Added chat search filters.",
-      "Added folders.",
-      "Added notifications.",
-      "Fixed a bug with Chatter running in the background.",
-      "Added system tray support.",
-      "Fixed an issue with multiple Chatter instances launching.",
-      "Fixed a bug with notifications disappearing (they didn't disappear :O).",
-      "Fixed prompts (minor bug)."
+      "Rooms where you can invite other people and bring your own bots.",
+      "Bots can now work in the background and notify you when they finish.",
+      "Messages now show their sent date."
     ],
     "cs": [
       "Přidány filtry vyhledávání v chatu.",

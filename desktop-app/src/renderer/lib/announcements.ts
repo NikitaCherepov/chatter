@@ -1,4 +1,8 @@
 import TelegramIcon from '../assets/integrations/telegram.webp';
+import Rooms1 from '../assets/integrations/rooms_1.webp';
+import Rooms2 from '../assets/integrations/rooms_2.webp';
+import Rooms3 from '../assets/integrations/rooms_3.webp';
+import Rooms4 from '../assets/integrations/rooms_4.webp';
 import type { UiSettings } from './api';
 
 /** A single slide inside an announcement. */
@@ -48,6 +52,35 @@ const DESKTOP_ANNOUNCEMENTS: Announcement[] = [
         id: 'experimental',
         titleKey: 'onboarding.welcome.experimental.title',
         bodyKey: 'onboarding.welcome.experimental.body',
+      },
+    ],
+  },
+  {
+    id: 'rooms_v1',
+    slides: [
+      {
+        id: 'rooms-bots',
+        titleKey: 'onboarding.rooms.bots.title',
+        image: Rooms1,
+        bodyKey: 'onboarding.rooms.bots.body',
+      },
+      {
+        id: 'rooms-invite',
+        titleKey: 'onboarding.rooms.invite.title',
+        image: Rooms2,
+        bodyKey: 'onboarding.rooms.invite.body',
+      },
+      {
+        id: 'rooms-create',
+        titleKey: 'onboarding.rooms.create.title',
+        image: Rooms3,
+        bodyKey: 'onboarding.rooms.create.body',
+      },
+      {
+        id: 'rooms-nuances',
+        titleKey: 'onboarding.rooms.nuances.title',
+        image: Rooms4,
+        bodyKey: 'onboarding.rooms.nuances.body',
       },
     ],
   },

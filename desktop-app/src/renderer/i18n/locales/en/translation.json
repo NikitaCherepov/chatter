@@ -607,7 +607,7 @@
     },
     "room": {
       "title": "Room",
-      "subtitle": "Group chat prototype",
+      "subtitle": "Experimental feature",
       "open": "Open room",
       "createRoom": "Create room",
       "deleteRoom": "Delete room",
@@ -626,7 +626,7 @@
       "reply": "Reply",
       "startSequence": "Reply in order",
       "you": "You",
-      "human": "Human participant",
+      "human": "User",
       "mainAssistant": "Main assistant",
       "character": "Character",
       "reorder": "Change order",
@@ -1160,6 +1160,24 @@
       "experimental": {
         "title": "## Experimental Features",
         "body": "We regularly add new features. Here's what you can try right now:\n\n- **DevOps Agent** — built-in SSH tool. Run commands on remote servers with safe manual-confirmation policies.\n- **Maps & Routes** — AI can search for places and build routes on an interactive map in the right panel.\n- **Dice Roll Mode (d20)** — for tabletop fans. Adds a virtual dice roll that determines the success of actions and guides the narrative in AI responses (enable in **Settings → Application**)."
+      }
+    },
+    "rooms": {
+      "bots": {
+        "title": "## Rooms with bots!",
+        "body": "Now you can create rooms and add multiple bots to them. They can talk to each other and interact in the same space."
+      },
+      "invite": {
+        "title": "## Invite a friend",
+        "body": "Now you can invite friends to your rooms and chat together with them and bots.\n\nYour friend can also bring their own bot.\n\n**What you can do in a room:**\n\n- discuss various topics with bots;\n- send photos and files;\n- use bots for collaborative activities.\n\nFor example, you can ask a bot to run a D&D session — it already has tools for dice rolls.\n\nTo add a friend, click the \"Add\" button inside a created room."
+      },
+      "create": {
+        "title": "## How to create a room?",
+        "body": "In the top-right corner of any chat there is a \"+\" button.\n\nClick it and choose:\n\n- **Create room** — to create a new one;\n- **Join** — if you have an invite link."
+      },
+      "nuances": {
+        "title": "## Details",
+        "body": "### 1. Response modes\n\nRooms have two modes:\n\n- **Round** — bots respond in a set order.\n- **Manual** — you choose which bot responds at any given moment.\n\n### 2. Auto-responses\n\nThe \"Respond immediately\" option makes the bot react to every new message:\n\n- your messages;\n- messages from other participants (if the bot is shared).\n\n### 3. Bot access for other participants\n\nTo let a bot respond to other room members, make it shared:\n\n1. Hover over the bot.\n2. Click the three-dot button.\n3. Select \"Share with members\".\n\nNote: using the bot will consume **your** quotas and use **your** selected model.\n\n### 4. Data security\n\nIf another user asks your bot to perform an action (for example:\n\n- run a command on a computer;\n- check email;\n- search an archive),\n\nit will use **their own** environment:\n\n- their computer;\n- their email;\n- their archives.\n\nEven though they are using your bot.\n\nThis is done for security.\n\nAt the same time, the bot's hot memory remains accessible to them.\n\n### 5. Bot memory and owner privacy\n\nWhen using a shared bot, it still has access to the owner's short-term memory: for example, name, age, close people, and workplace. The bot may use or mention this information in conversation. Only add such a bot to rooms with people you trust.\n\nThe owner's archives, email, files, computer, and other personal integrations are not shared with participants."
       }
     }
   }
