@@ -79,9 +79,12 @@
 }
 
 .image {
-  width: 80px;
-  height: 80px;
+  max-width: 100%;
+  width: auto;
+  height: auto;
+  max-height: 240px;
   object-fit: contain;
+  border-radius: 8px;
 }
 
 .slideTitle {
