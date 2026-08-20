@@ -247,6 +247,8 @@ assert.strictEqual(newSlug, 'provider-b');
 assert.strictEqual(getModelOverride('manual-1')?.openrouter_provider_slug, 'provider-b');
 assert.strictEqual(getModelOverride('manual-1')?.input_price_per_million, 0.2);
 assert.ok(notifications.some(n => n.includes('New provider: Provider B LLC (provider-b)') && n.includes('live request')), 'provider display name + runtime reason');
+assert.ok(notifications.some(n => n.includes('Strategy: notify only') || n.includes('Strategy: cheapest')), 'strategy label translated, no raw i18n key leak');
+assert.ok(notifications.every(n => !n.includes('openRouterMonitor.')), 'no raw translation keys in notifications');
 // Provider still present → runtime switch is a no-op (transient error).
 catalog = JSON.parse(JSON.stringify(FULL));
 assert.strictEqual(await attemptRuntimeProviderSwitch('manual-1'), null);

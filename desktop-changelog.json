@@ -3,7 +3,9 @@
     "en": [
       "Added rooms where you can invite other people and bring your own bots.",
       "Bots can now work in the background and notify you when they finish.",
-      "Messages now show their sent date."
+      "Messages now show their sent date.",
+      "Added model generation speed display.",
+      "Fixed folder state saving."
     ],
     "cs": [
       "Přidány místnosti, kam můžete pozvat další lidi a přivést vlastní boty.",

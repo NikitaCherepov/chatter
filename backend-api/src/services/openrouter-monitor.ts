@@ -486,7 +486,7 @@ const buildNotification = (params: {
   } else if (params.autoSwitch && params.replacement) {
     lines.push(
       `${t('newProvider')}: ${label(params.replacement.baseSlug, params.newName)}`,
-      `${t('strategy')}: ${t(`strategy.${params.strategy}`)}`,
+      `${t('strategy')}: ${t(`strategy${params.strategy.charAt(0).toUpperCase()}${params.strategy.slice(1)}`)}`,
       `${t('input')}: ${fmtPrice(params.replacement.prices?.inputPricePerMillion)} / 1M`,
       `${t('output')}: ${fmtPrice(params.replacement.prices?.outputPricePerMillion)} / 1M`,
       `${t('cacheRead')}: ${fmtPrice(params.replacement.prices?.cacheReadPricePerMillion)} / 1M`,
