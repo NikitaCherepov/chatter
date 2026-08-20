@@ -1,18 +1,9 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import styles from './ModelsPage.module.css';
 
-/**
- * `<details>` with an animated expand/collapse (framer-motion).
- *
- * The native `open` attribute is intentionally NOT used: removing it makes
- * the browser hide all non-summary children instantly, which would cut the
- * exit animation. Instead the body is rendered conditionally inside an
- * AnimatePresence height animation, and the visual "open" state is exposed
- * to CSS via the `.detailsOpen` class (chevron rotation, +/− marker, …).
- */
 export function AnimatedDetails({
   open,
   onToggle,
@@ -26,11 +17,14 @@ export function AnimatedDetails({
   summary: ReactNode;
   children: ReactNode;
 }) {
+  // overflow must clip ONLY while the height animates — otherwise absolutely
+  // positioned dropdowns (Select) inside the body get cut off.
+  const [settled, setSettled] = useState(false);
+
   return (
     <details open className={`${className} ${open ? styles.detailsOpen : ''}`}>
       <summary
         onClick={(event) => {
-          // Prevent the instant native toggle; we animate instead.
           event.preventDefault();
           onToggle(!open);
         }}
@@ -45,7 +39,9 @@ export function AnimatedDetails({
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.22, ease: 'easeOut' }}
-            style={{ overflow: 'hidden' }}
+            style={{ overflow: settled && open ? 'visible' : 'hidden' }}
+            onAnimationStart={() => setSettled(false)}
+            onAnimationComplete={() => setSettled(true)}
           >
             {children}
           </motion.div>

@@ -261,7 +261,7 @@ const PROVIDER_URLS: Record<NonNullable<ProviderKind>, string> = {
 
 const API_KEYS_CHANGED_EVENT = 'chatter:api-keys-changed';
 
-function resolveProviderKind(baseUrl: string): ProviderKind {
+export function resolveProviderKind(baseUrl: string): ProviderKind {
   const url = baseUrl.toLowerCase();
   if (url.includes('openrouter.ai')) return 'openrouter';
   if (url.includes('deepseek.com')) return 'deepseek';

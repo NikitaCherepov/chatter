@@ -7,7 +7,7 @@ import { FormField } from '../../ui/FormField/FormField';
 import { Toggle } from '../../ui/Toggle/Toggle';
 import { AnimatedDetails } from './AnimatedDetails';
 import { DragGrip, ModelOverlaySummary, SortableModelsDnd } from './SortableModels';
-import { ModelSummaryChips, ProviderModelFields } from './ModelListEditor';
+import { ModelSummaryChips, ProviderModelFields, resolveProviderKind } from './ModelListEditor';
 import styles from './ModelsPage.module.css';
 
 const newManualModel = (): ManualModelConfig => {
@@ -132,6 +132,18 @@ export function ManualModelListEditor({
                       <span>{model.model || t('models.manual.modelNotSet')}</span>
                     </span>
                     <ModelSummaryChips
+                      providerKind={
+                        getOverride(model.uniqueId)?.providerKind ||
+                        resolveProviderKind(model.baseUrl)
+                      }
+                      prices={
+                        getOverride(model.uniqueId)
+                          ? {
+                              input: getOverride(model.uniqueId)?.inputPricePerMillion,
+                              output: getOverride(model.uniqueId)?.outputPricePerMillion,
+                            }
+                          : null
+                      }
                       coefficient={model.coefficient}
                       badges={[
                         ...(model.supportsVision ? [t('models.manual.supportsVision')] : []),
