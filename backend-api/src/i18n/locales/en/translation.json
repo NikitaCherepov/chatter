@@ -26,7 +26,10 @@
     "noReplacementSelected": "No replacement was selected. Choose another provider in the admin panel.",
     "reason": "Reason",
     "reasonRuntime": "detected during a live request; the request was retried once with the new provider",
-    "reasonRemoved": "the model was removed from the OpenRouter catalog"
+    "reasonRemoved": "the model was removed from the OpenRouter catalog",
+    "provider": "Provider",
+    "priceTitle": "📉 OpenRouter provider prices changed",
+    "priceUpdatedOverrides": "Model prices in the admin panel were updated automatically."
   },
   "toolStatus": {
     "search_web": "Searching the web...",

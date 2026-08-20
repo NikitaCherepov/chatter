@@ -9,6 +9,8 @@ export type MonitorSettingsData = {
   action: 'notify' | 'cheapest' | 'throughput' | 'latency';
   recipientsMode: 'all_admins' | 'selected';
   recipientUserIds: number[];
+  priceTracking: 'off' | 'notify' | 'update';
+  priceThresholdPct: number;
 };
 
 export type MonitorStateData = {
@@ -25,6 +27,7 @@ export type MonitorStateData = {
   previous_provider_slug: string | null;
   replacement_provider_slug: string | null;
   last_error: string | null;
+  last_seen_prices?: string | null;
 };
 
 export type MonitorStatusData = {
@@ -101,5 +104,12 @@ export function useOpenRouterMonitorStatus() {
     return saved;
   }, [refresh, notifyOthers]);
 
-  return { status, loading, refresh, checkModels, saveSettings };
+  const sendTestNotification = useCallback(async (kind: 'missing' | 'price') => {
+    return api<{ ok: boolean }>('/api/openrouter-monitor/test-notification', {
+      method: 'POST',
+      body: JSON.stringify({ kind }),
+    });
+  }, []);
+
+  return { status, loading, refresh, checkModels, saveSettings, sendTestNotification };
 }

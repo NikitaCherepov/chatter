@@ -2415,6 +2415,19 @@ async function handleRequest(req, res) {
     }
   }
 
+  if (req.method === 'POST' && pathname === '/api/openrouter-monitor/test-notification') {
+    const body = await readJson(req);
+    try {
+      return sendJson(res, 200, await backendInternalRequest('/internal/admin/openrouter-monitor/test-notification', {
+        method: 'POST',
+        body: JSON.stringify(body || {}),
+        timeoutMs: 30000,
+      }));
+    } catch (error) {
+      return sendJson(res, 502, { error: error.message || 'monitor_test_notification_failed' });
+    }
+  }
+
   // ── OpenRouter model billing info proxy (admin panel billing setup) ──────
   const orBillingMatch = pathname.match(/^\/api\/models\/([^/]+)\/billing$/);
   if (orBillingMatch) {

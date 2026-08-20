@@ -23,6 +23,7 @@ const MISSING_THRESHOLD = 2;
 const JITTER_FRACTION = 0.1;
 
 export type MonitorAction = 'notify' | 'cheapest' | 'throughput' | 'latency';
+export type PriceTrackingMode = 'off' | 'notify' | 'update';
 export type MonitorStatus = 'unknown' | 'available' | 'missing' | 'check_failed' | 'model_missing';
 
 export type MonitorSettings = {
@@ -31,6 +32,8 @@ export type MonitorSettings = {
   action: MonitorAction;
   recipientsMode: 'all_admins' | 'selected';
   recipientUserIds: number[];
+  priceTracking: PriceTrackingMode;
+  priceThresholdPct: number;
 };
 
 export type MonitoredModel = {
@@ -54,6 +57,7 @@ export type MonitorState = {
   previous_provider_slug: string | null;
   replacement_provider_slug: string | null;
   last_error: string | null;
+  last_seen_prices: string | null;
 };
 
 export type OpenRouterEndpoint = {
@@ -83,7 +87,11 @@ const DEFAULT_SETTINGS: MonitorSettings = {
   action: 'notify',
   recipientsMode: 'all_admins',
   recipientUserIds: [],
+  priceTracking: 'notify',
+  priceThresholdPct: 5,
 };
+
+const PRICE_TRACKING_MODES = ['off', 'notify', 'update'] as const;
 
 const parseRecipientIds = (raw: unknown): number[] => {
   let list: unknown[];
@@ -97,7 +105,8 @@ const parseRecipientIds = (raw: unknown): number[] => {
 
 export const getMonitorSettings = (): MonitorSettings => {
   const row = db.prepare('SELECT * FROM openrouter_monitor_settings WHERE id = 1').get() as
-    | { enabled: number; interval_minutes: number; action: string; recipients_mode: string; recipient_user_ids: string }
+    | { enabled: number; interval_minutes: number; action: string; recipients_mode: string; recipient_user_ids: string;
+        price_tracking?: string; price_threshold_pct?: number }
     | undefined;
   if (!row) return { ...DEFAULT_SETTINGS };
   return {
@@ -107,6 +116,10 @@ export const getMonitorSettings = (): MonitorSettings => {
       ? (row.action as MonitorAction) : DEFAULT_SETTINGS.action,
     recipientsMode: row.recipients_mode === 'selected' ? 'selected' : 'all_admins',
     recipientUserIds: parseRecipientIds(row.recipient_user_ids),
+    priceTracking: PRICE_TRACKING_MODES.includes(row.price_tracking as PriceTrackingMode)
+      ? (row.price_tracking as PriceTrackingMode) : DEFAULT_SETTINGS.priceTracking,
+    priceThresholdPct: Number.isFinite(row.price_threshold_pct) && (row.price_threshold_pct ?? 0) > 0
+      ? row.price_threshold_pct! : DEFAULT_SETTINGS.priceThresholdPct,
   };
 };
 
@@ -121,17 +134,23 @@ export const saveMonitorSettings = (patch: Partial<MonitorSettings>): MonitorSet
     recipientsMode: patch.recipientsMode === 'selected' || patch.recipientsMode === 'all_admins'
       ? patch.recipientsMode : current.recipientsMode,
     recipientUserIds: patch.recipientUserIds !== undefined ? parseRecipientIds(patch.recipientUserIds) : current.recipientUserIds,
+    priceTracking: patch.priceTracking && PRICE_TRACKING_MODES.includes(patch.priceTracking)
+      ? patch.priceTracking : current.priceTracking,
+    priceThresholdPct: patch.priceThresholdPct !== undefined && Number.isFinite(patch.priceThresholdPct) && patch.priceThresholdPct > 0
+      ? Math.min(100, patch.priceThresholdPct) : current.priceThresholdPct,
   };
   db.prepare(`
     INSERT INTO openrouter_monitor_settings
-      (id, enabled, interval_minutes, action, recipients_mode, recipient_user_ids, updated_at)
-    VALUES (1, ?, ?, ?, ?, ?, ?)
+      (id, enabled, interval_minutes, action, recipients_mode, recipient_user_ids, price_tracking, price_threshold_pct, updated_at)
+    VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       enabled = excluded.enabled,
       interval_minutes = excluded.interval_minutes,
       action = excluded.action,
       recipients_mode = excluded.recipients_mode,
       recipient_user_ids = excluded.recipient_user_ids,
+      price_tracking = excluded.price_tracking,
+      price_threshold_pct = excluded.price_threshold_pct,
       updated_at = excluded.updated_at
   `).run(
     next.enabled ? 1 : 0,
@@ -139,6 +158,8 @@ export const saveMonitorSettings = (patch: Partial<MonitorSettings>): MonitorSet
     next.action,
     next.recipientsMode,
     JSON.stringify(next.recipientUserIds),
+    next.priceTracking,
+    next.priceThresholdPct,
     getNowUnix(),
   );
   return next;
@@ -155,8 +176,8 @@ const writeState = (state: MonitorState): void => {
       model_id, route, model_slug, provider_slug, status,
       last_ok_at, last_check_at, consecutive_missing, unavailable_since,
       last_notified_at, last_notified_key, previous_provider_slug,
-      replacement_provider_slug, last_error
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      replacement_provider_slug, last_error, last_seen_prices
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(model_id) DO UPDATE SET
       route = excluded.route,
       model_slug = excluded.model_slug,
@@ -170,12 +191,13 @@ const writeState = (state: MonitorState): void => {
       last_notified_key = excluded.last_notified_key,
       previous_provider_slug = excluded.previous_provider_slug,
       replacement_provider_slug = excluded.replacement_provider_slug,
-      last_error = excluded.last_error
+      last_error = excluded.last_error,
+      last_seen_prices = excluded.last_seen_prices
   `).run(
     state.model_id, state.route, state.model_slug, state.provider_slug, state.status,
     state.last_ok_at, state.last_check_at, state.consecutive_missing, state.unavailable_since,
     state.last_notified_at, state.last_notified_key, state.previous_provider_slug,
-    state.replacement_provider_slug, state.last_error,
+    state.replacement_provider_slug, state.last_error, state.last_seen_prices,
   );
 };
 
@@ -186,6 +208,7 @@ const upsertState = (modelId: string, patch: Partial<MonitorState>): MonitorStat
     status: 'unknown', last_ok_at: null, last_check_at: null, consecutive_missing: 0,
     unavailable_since: null, last_notified_at: null, last_notified_key: null,
     previous_provider_slug: null, replacement_provider_slug: null, last_error: null,
+    last_seen_prices: null,
   };
   const next = { ...base, ...patch, model_id: modelId } as MonitorState;
   writeState(next);
@@ -545,6 +568,7 @@ export const runMonitorCycle = async (options?: {
           last_notified_key: null,
           replacement_provider_slug: null,
           last_error: null,
+          last_seen_prices: null, // re-baseline prices for the new provider
         });
       }
 
@@ -592,7 +616,8 @@ export const runMonitorCycle = async (options?: {
           last_notified_key: null,
           last_error: null,
         });
-        outcomes.push({ modelId: target.uniqueId, status: 'available', switched: false, notified: false });
+        const priceNotified = await maybeNotifyPriceChange(target, endpoints);
+        outcomes.push({ modelId: target.uniqueId, status: 'available', switched: false, notified: priceNotified });
         continue;
       }
 
@@ -683,6 +708,199 @@ const maybeNotify = async (
   }
   upsertState(target.uniqueId, { last_notified_at: getNowUnix(), last_notified_key: key });
   return true;
+};
+
+// ── Price tracking ──────────────────────────────────────────────────────────
+
+/** Grouped prices of the pinned provider (max across regional variants, same as the UI shows). */
+export const pinnedProviderPrices = (endpoints: OpenRouterEndpoint[], slug: string): EndpointPrices | null => {
+  const eps = endpoints.filter(ep => matchesProviderSlug(ep.tag || '', slug));
+  if (!eps.length) return null;
+  // All matching endpoints share the same base slug → single candidate group.
+  return buildCandidateGroups(eps)[0]?.prices ?? null;
+};
+
+const parseStoredPrices = (raw: string | null): EndpointPrices | null => {
+  if (!raw) return null;
+  try {
+    const v = JSON.parse(raw) as EndpointPrices;
+    return (typeof v === 'object' && v !== null) ? v : null;
+  } catch {
+    return null;
+  }
+};
+
+/** True when every field is either non-comparable or within the threshold. */
+export const pricesWithinThreshold = (prev: EndpointPrices, current: EndpointPrices, thresholdPct: number): boolean => {
+  const fields: Array<keyof EndpointPrices> = ['inputPricePerMillion', 'outputPricePerMillion', 'cacheReadPricePerMillion'];
+  for (const field of fields) {
+    const a = prev[field];
+    const b = current[field];
+    // Only compare where both sides are known numbers; null ↔ value is not a
+    // reliable signal (some providers don't publish cache prices).
+    if (typeof a !== 'number' || typeof b !== 'number') continue;
+    if (a === 0 && b === 0) continue;
+    const base = a === 0 ? b : a;
+    const changePct = Math.abs(b - a) / Math.abs(base) * 100;
+    if (changePct > thresholdPct) return false;
+  }
+  return true;
+};
+
+const buildPriceNotification = (params: {
+  modelSlug: string;
+  route: string;
+  providerSlug: string;
+  providerName?: string | null;
+  prev: EndpointPrices;
+  current: EndpointPrices;
+  updatedOverrides: boolean;
+}, language?: unknown): string => {
+  const t = (key: string, values: Record<string, string | number> = {}) =>
+    translateForLanguage(language, `openRouterMonitor.${key}`, values);
+  const label = params.providerName && params.providerName !== params.providerSlug
+    ? `${params.providerName} (${params.providerSlug})` : params.providerSlug;
+  const delta = (a: number | null, b: number | null) => {
+    let pct = '';
+    if (typeof a === 'number' && typeof b === 'number' && a !== 0) {
+      const change = ((b - a) / Math.abs(a)) * 100;
+      const rounded = Math.round(Math.abs(change) * 10) / 10;
+      pct = ` (${change > 0 ? '+' : change < 0 ? '−' : ''}${rounded}%)`;
+    }
+    return `${fmtPrice(a)} → ${fmtPrice(b)}${pct}`;
+  };
+  const lines = [
+    t('priceTitle'),
+    '',
+    `${t('model')}: \`${params.modelSlug}\``,
+    `${t('route')}: ${params.route}`,
+    `${t('provider')}: ${label}`,
+    '',
+    `${t('input')}: ${delta(params.prev.inputPricePerMillion, params.current.inputPricePerMillion)} / 1M`,
+    `${t('output')}: ${delta(params.prev.outputPricePerMillion, params.current.outputPricePerMillion)} / 1M`,
+    `${t('cacheRead')}: ${delta(params.prev.cacheReadPricePerMillion, params.current.cacheReadPricePerMillion)} / 1M`,
+  ];
+  if (params.updatedOverrides) lines.push('', t('priceUpdatedOverrides'));
+  return lines.join('\n');
+};
+
+/**
+ * Compares the pinned provider's current prices against the last seen snapshot.
+ * First successful check records the baseline silently; afterwards a change
+ * beyond settings.priceThresholdPct notifies admins (and optionally refreshes
+ * the prices stored in model_overrides so cost accounting stays honest).
+ */
+const maybeNotifyPriceChange = async (
+  target: MonitoredModel & { slug: string },
+  endpoints: OpenRouterEndpoint[],
+): Promise<boolean> => {
+  try {
+    const settings = getMonitorSettings();
+    if (settings.priceTracking === 'off') return false;
+
+    const current = pinnedProviderPrices(endpoints, target.slug);
+    if (!current) return false;
+
+    const currentJson = JSON.stringify(current);
+    const stored = readState(target.uniqueId);
+    if (stored?.last_seen_prices === currentJson) return false; // nothing changed
+
+    const prev = parseStoredPrices(stored?.last_seen_prices ?? null);
+    upsertState(target.uniqueId, { last_seen_prices: currentJson });
+    if (!prev) return false; // first check → baseline only
+    if (pricesWithinThreshold(prev, current, settings.priceThresholdPct)) return false;
+
+    // 'update' mode refreshes model_overrides prices — never for manually
+    // priced models, that's an explicit admin decision.
+    let updatedOverrides = false;
+    if (settings.priceTracking === 'update') {
+      const override = getModelOverride(target.uniqueId);
+      if (override && override.pricing_mode !== 'manual') {
+        setModelProvider(target.uniqueId, {
+          inputPricePerMillion: current.inputPricePerMillion,
+          outputPricePerMillion: current.outputPricePerMillion,
+          cacheReadPricePerMillion: current.cacheReadPricePerMillion,
+          pricingSource: 'openrouter_auto',
+        });
+        updatedOverrides = true;
+      }
+    }
+
+    const names = await loadProviderNames();
+    const params = {
+      modelSlug: target.modelSlug,
+      route: target.route,
+      providerSlug: target.slug,
+      providerName: names.get(target.slug) ?? null,
+      prev,
+      current,
+      updatedOverrides,
+    };
+    const textFor = (language: unknown) => buildPriceNotification(params, language);
+    for (const transport of notifyTransport) await transport(textFor).catch(() => {});
+    return true;
+  } catch (err) {
+    console.warn('[openrouter-monitor] price check failed:', err);
+    return false;
+  }
+};
+
+// ── Test notifications (admin panel "Test notification" buttons) ────────────
+
+/**
+ * Sends a sample notification through the real transport (same recipients and
+ * languages as production alerts) so the admin can verify Telegram delivery.
+ * Uses the first monitored model for realistic content; falls back to
+ * placeholders when nothing is monitored yet. Never throws.
+ */
+export const sendTestNotification = async (kind: 'missing' | 'price'): Promise<boolean> => {
+  try {
+    const first = modelsProvider()[0] ?? { uniqueId: 'test', route: '—', modelSlug: 'test/model' };
+    const slug = getModelOverride(first.uniqueId)?.openrouter_provider_slug ?? 'example-provider';
+    const names = await loadProviderNames();
+
+    let textFor: (language: unknown) => string;
+    if (kind === 'price') {
+      const prev = { inputPricePerMillion: 1, outputPricePerMillion: 2, cacheReadPricePerMillion: 0.1 };
+      const current = { inputPricePerMillion: 1.5, outputPricePerMillion: 2.4, cacheReadPricePerMillion: 0.1 };
+      const params = {
+        modelSlug: first.modelSlug,
+        route: first.route,
+        providerSlug: slug,
+        providerName: names.get(slug) ?? null,
+        prev,
+        current,
+        updatedOverrides: false,
+      };
+      textFor = (language: unknown) => buildPriceNotification(params, language);
+    } else {
+      const replacement: CandidateGroup = {
+        baseSlug: 'example-replacement',
+        prices: { inputPricePerMillion: 0.75, outputPricePerMillion: 1.2, cacheReadPricePerMillion: 0.05 },
+        throughputP50: 420,
+        latencyP50: 180,
+        uptime: 0.99,
+        endpointCount: 2,
+      };
+      const params = {
+        modelSlug: first.modelSlug,
+        route: first.route,
+        previousSlug: slug,
+        previousName: names.get(slug) ?? null,
+        newName: names.get(replacement.baseSlug) ?? null,
+        replacement,
+        strategy: getMonitorSettings().action,
+        autoSwitch: true,
+      };
+      textFor = (language: unknown) => buildNotification(params, language);
+    }
+
+    for (const transport of notifyTransport) await transport(textFor).catch(() => {});
+    return true;
+  } catch (err) {
+    console.warn('[openrouter-monitor] test notification failed:', err);
+    return false;
+  }
 };
 
 // ── Runtime auto-switch (real request failed with missing provider) ─────────

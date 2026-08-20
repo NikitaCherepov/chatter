@@ -22,10 +22,11 @@ const STATUS_LABELS: Record<string, string> = {
 
 export function OpenRouterMonitorPanel() {
   const { t } = useTranslation();
-  const { status, loading, checkModels, saveSettings } = useOpenRouterMonitorStatus();
+  const { status, loading, checkModels, saveSettings, sendTestNotification } = useOpenRouterMonitorStatus();
   const [draft, setDraft] = useState<MonitorSettingsData | null>(null);
   const [saving, setSaving] = useState(false);
   const [checking, setChecking] = useState(false);
+  const [testing, setTesting] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -60,6 +61,12 @@ export function OpenRouterMonitorPanel() {
     { value: 'selected', label: t('models.monitor.recipientsSelected') || 'Selected admins' },
   ];
 
+  const priceTrackingOptions: SelectOption[] = [
+    { value: 'off', label: t('models.monitor.priceTrackingOff') || 'Off' },
+    { value: 'notify', label: t('models.monitor.priceTrackingNotify') || 'Notify only' },
+    { value: 'update', label: t('models.monitor.priceTrackingUpdate') || 'Notify and update prices' },
+  ];
+
   const admins = status?.admins || [];
   const states = status?.states || [];
 
@@ -83,6 +90,18 @@ export function OpenRouterMonitorPanel() {
       setError(err?.message || 'check_failed');
     } finally {
       setChecking(false);
+    }
+  };
+
+  const handleTestNotification = async (kind: 'missing' | 'price') => {
+    setTesting(true);
+    setError('');
+    try {
+      await sendTestNotification(kind);
+    } catch (err: any) {
+      setError(err?.message || 'test_notification_failed');
+    } finally {
+      setTesting(false);
     }
   };
 
@@ -137,6 +156,40 @@ export function OpenRouterMonitorPanel() {
           }
         />
       </FormField>
+
+      <div className={styles.twoColumns}>
+        <FormField
+          label={t('models.monitor.priceTracking') || 'Price tracking'}
+          hint={t('models.monitor.priceTrackingHint') || 'Watch the pinned provider prices for changes'}
+        >
+          <Select
+            options={priceTrackingOptions}
+            value={draft.priceTracking}
+            onChange={(v) =>
+              setDraft((d) => (d ? { ...d, priceTracking: v as MonitorSettingsData['priceTracking'] } : d))
+            }
+          />
+        </FormField>
+        <FormField
+          label={t('models.monitor.priceThreshold') || 'Change threshold (%)'}
+          hint={t('models.monitor.priceThresholdHint') || 'Ignore changes smaller than this percentage'}
+        >
+          <input
+            type="number"
+            min={0.1}
+            step={0.5}
+            max={100}
+            value={draft.priceThresholdPct}
+            onChange={(e) =>
+              setDraft((d) =>
+                d
+                  ? { ...d, priceThresholdPct: Math.min(100, Math.max(0.1, Number(e.target.value) || 5)) }
+                  : d
+              )
+            }
+          />
+        </FormField>
+      </div>
 
       <FormField
         label={t('models.monitor.recipients') || 'Notification recipients'}
@@ -209,6 +262,26 @@ export function OpenRouterMonitorPanel() {
           {checking
             ? t('models.monitor.checking') || 'Checking…'
             : t('models.monitor.checkAll') || 'Check all now'}
+        </button>
+        <button
+          type="button"
+          className="buttonSecondary"
+          disabled={testing}
+          onClick={() => void handleTestNotification('missing')}
+        >
+          {testing
+            ? t('models.monitor.testing') || 'Sending…'
+            : t('models.monitor.testMissing') || 'Test: provider missing'}
+        </button>
+        <button
+          type="button"
+          className="buttonSecondary"
+          disabled={testing}
+          onClick={() => void handleTestNotification('price')}
+        >
+          {testing
+            ? t('models.monitor.testing') || 'Sending…'
+            : t('models.monitor.testPrice') || 'Test: price change'}
         </button>
         {error && <small style={{ color: 'var(--color-danger, #e5484d)' }}>{error}</small>}
       </div>

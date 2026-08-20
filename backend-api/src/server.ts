@@ -30,7 +30,7 @@ import { getCleanTextFromUrl } from './services/web-reader.js';
 import { startTaskScheduler } from './services/scheduler.js';
 import {
   getMonitorSettings, saveMonitorSettings, getMonitorStates, runMonitorCycle,
-  startOpenRouterMonitor, restartOpenRouterMonitor,
+  startOpenRouterMonitor, restartOpenRouterMonitor, sendTestNotification,
 } from './services/openrouter-monitor.js';
 import { getOpenRouterMonitoredModels } from './services/ai.js';
 import { runVoiceTurn } from './services/voice.js';
@@ -4261,6 +4261,8 @@ app.put('/internal/admin/openrouter-monitor/settings', internalAuth, (req, res) 
     action?: 'notify' | 'cheapest' | 'throughput' | 'latency';
     recipientsMode?: 'all_admins' | 'selected';
     recipientUserIds?: number[];
+    priceTracking?: 'off' | 'notify' | 'update';
+    priceThresholdPct?: number;
   } | null;
   const settings = saveMonitorSettings(body ?? {});
   restartOpenRouterMonitor();
@@ -4293,6 +4295,13 @@ app.post('/internal/admin/openrouter-monitor/check', internalAuth, async (req, r
   } catch (err: any) {
     return res.status(502).json({ error: err?.message || 'monitor_check_failed' });
   }
+});
+
+app.post('/internal/admin/openrouter-monitor/test-notification', internalAuth, async (req, res) => {
+  const body = req.body as { kind?: 'missing' | 'price' } | null;
+  const kind = body?.kind === 'price' ? 'price' : 'missing';
+  const ok = await sendTestNotification(kind);
+  return res.json({ ok });
 });
 
 // ─── Model overrides (coefficients + provider info) ─────────────────────────

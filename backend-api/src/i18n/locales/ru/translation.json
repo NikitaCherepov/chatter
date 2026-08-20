@@ -26,7 +26,10 @@
     "noReplacementSelected": "Замена не выбрана. Выберите другого провайдера в админ-панели.",
     "reason": "Причина",
     "reasonRuntime": "обнаружено во время живого запроса; запрос повторён один раз с новым провайдером",
-    "reasonRemoved": "модель удалена из каталога OpenRouter"
+    "reasonRemoved": "модель удалена из каталога OpenRouter",
+    "provider": "Провайдер",
+    "priceTitle": "📉 Цены провайдера OpenRouter изменились",
+    "priceUpdatedOverrides": "Цены модели в админ-панели обновлены автоматически."
   },
   "toolStatus": {
     "search_web": "Поиск в интернете...",

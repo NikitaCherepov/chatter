@@ -91,7 +91,7 @@ const resetWorld = () => {
   const rawDb = new Database(process.env.API_DB_PATH!);
   rawDb.exec('DELETE FROM openrouter_monitor_state');
   rawDb.close();
-  setSettings({ enabled: true, intervalMinutes: 60, action: 'notify', recipientsMode: 'all_admins', recipientUserIds: [] });
+  setSettings({ enabled: true, intervalMinutes: 60, action: 'notify', recipientsMode: 'all_admins', recipientUserIds: [], priceTracking: 'off' });
   for (const m of MODELS) {
     setModelProvider(m.uniqueId, {
       providerKind: 'openrouter',
@@ -256,8 +256,50 @@ console.log('✔ runtime auto-switch');
 
 setSettings({ enabled: true, intervalMinutes: 30, action: 'latency', recipientsMode: 'selected', recipientUserIds: [1, 'x', 2] });
 const s = getMonitorSettings();
-assert.deepStrictEqual(s, { enabled: true, intervalMinutes: 30, action: 'latency', recipientsMode: 'selected', recipientUserIds: [1, 2] });
+assert.deepStrictEqual(s, { enabled: true, intervalMinutes: 30, action: 'latency', recipientsMode: 'selected', recipientUserIds: [1, 2], priceTracking: 'off', priceThresholdPct: 5 });
 console.log('✔ settings persist and sanitize');
+
+// ── 12. Price tracking ──────────────────────────────────────────────────────
+
+resetWorld();
+setSettings({ priceTracking: 'notify' });
+await runMonitorCycle(); // first successful check → baseline recorded silently
+notifications.length = 0;
+
+// Input price 1 → 2 $/M (100% change, way above the 5% threshold).
+const reprice = (prompt: string) => {
+  catalog['google/gemini-2.5-flash'] = FULL['google/gemini-2.5-flash'].map(e =>
+    e.tag === 'provider-a'
+      ? { ...e, pricing: { prompt, completion: e.pricing!.completion, input_cache_read: e.pricing!.input_cache_read } }
+      : e
+  );
+};
+reprice('0.000002');
+outcomes = await runMonitorCycle();
+assert.ok(outcomes.find(o => o.modelId === 'manual-1')?.notified, 'price change notified');
+assert.ok(notifications.some(n => n.includes('$1 → $2 (+100%)')), 'old → new price + change percent in the message');
+assert.ok(notifications.every(n => !n.includes('updated automatically')), 'notify mode does not touch overrides');
+assert.strictEqual(getModelOverride('manual-1')?.input_price_per_million, 1, 'override prices untouched in notify mode');
+console.log('✔ price change notifies without touching overrides');
+
+// Update mode refreshes model_overrides prices.
+setSettings({ priceTracking: 'update' });
+reprice('0.000003'); // 2 → 3 $/M
+notifications.length = 0;
+outcomes = await runMonitorCycle();
+assert.ok(outcomes.find(o => o.modelId === 'manual-1')?.notified);
+assert.strictEqual(getModelOverride('manual-1')?.input_price_per_million, 3, 'override prices refreshed');
+assert.strictEqual(getModelOverride('manual-1')?.pricing_source, 'openrouter_auto');
+assert.ok(notifications.some(n => n.includes('updated automatically')), 'message mentions automatic update');
+console.log('✔ update mode refreshes override prices');
+
+// Small drift below the threshold is ignored.
+reprice('0.0000031'); // 3 → 3.1 $/M ≈ 3.3% < 5%
+notifications.length = 0;
+outcomes = await runMonitorCycle();
+assert.ok(!outcomes.find(o => o.modelId === 'manual-1')?.notified, 'small drift ignored');
+assert.strictEqual(notifications.length, 0);
+console.log('✔ below-threshold drift ignored');
 
 console.log('\nAll openrouter-monitor tests passed.');
 process.exit(0);

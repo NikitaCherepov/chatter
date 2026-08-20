@@ -855,9 +855,27 @@ db.exec(`
     last_notified_key TEXT,
     previous_provider_slug TEXT,
     replacement_provider_slug TEXT,
-    last_error TEXT
+    last_error TEXT,
+    last_seen_prices TEXT
   )
 `);
+
+// ── Price tracking (added after initial release; migrations for existing DBs) ──
+const ensureMonitorSettingsColumn = (columnName: string, ddl: string) => {
+  const columns = db.prepare('PRAGMA table_info(openrouter_monitor_settings)').all() as Array<{ name: string }>;
+  if (!columns.some(column => column.name === columnName)) db.exec(ddl);
+};
+ensureMonitorSettingsColumn('price_tracking',
+  "ALTER TABLE openrouter_monitor_settings ADD COLUMN price_tracking TEXT NOT NULL DEFAULT 'notify'" +
+  " CHECK (price_tracking IN ('off', 'notify', 'update'))");
+ensureMonitorSettingsColumn('price_threshold_pct',
+  'ALTER TABLE openrouter_monitor_settings ADD COLUMN price_threshold_pct REAL NOT NULL DEFAULT 5');
+{
+  const columns = db.prepare('PRAGMA table_info(openrouter_monitor_state)').all() as Array<{ name: string }>;
+  if (!columns.some(column => column.name === 'last_seen_prices')) {
+    db.exec('ALTER TABLE openrouter_monitor_state ADD COLUMN last_seen_prices TEXT');
+  }
+}
 
 // ── User token usage (immutable accounting ledger) ────────────────────────
 // Source of truth for cost / statistics. NOT affected by chat/message deletion.
