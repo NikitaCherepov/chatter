@@ -2,6 +2,7 @@ import type { Dispatch, FormEvent, SetStateAction } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ProviderModelConfig, Settings } from '../../../lib/types';
 import { useModelCoefficients } from '../../../lib/useModelCoefficients';
+import { usePersistentOpenState } from '../../../lib/usePersistentOpenState';
 import { ActionBar } from '../../ui/ActionBar/ActionBar';
 import grid from '../../ui/PageGrid/PageGrid.module.css';
 import { ManualModelListEditor } from './ManualModelListEditor';
@@ -20,9 +21,25 @@ type Props = {
 export function ModelsPage({ settings, setSettings, saving, saveState, onSave }: Props) {
   // One shared coefficient manager for PRO / LITE / Vision (Manual has its own
   // because its editor hydrates coefficient into ManualModelConfig).
-  const { getCoefficient, setCoefficient, saveCoefficient, getOverride, saveOverride, state: coeffState } = useModelCoefficients();
-  const coefficientManager = { get: getCoefficient, set: setCoefficient, save: saveCoefficient, getOverride, saveOverride };
+  const {
+    getCoefficient,
+    setCoefficient,
+    saveCoefficient,
+    getOverride,
+    saveOverride,
+    state: coeffState,
+  } = useModelCoefficients();
+  const coefficientManager = {
+    get: getCoefficient,
+    set: setCoefficient,
+    save: saveCoefficient,
+    getOverride,
+    saveOverride,
+  };
   const { t } = useTranslation();
+  // Which top-level sections (Auto / Vision / Manual / Monitor) stay open — persisted.
+  const { isOpen: isSectionOpen, setOpen: setSectionOpen } =
+    usePersistentOpenState('models:sections');
 
   const updateVision = (patch: Partial<ProviderModelConfig>) => {
     setSettings((current) => ({
@@ -33,7 +50,11 @@ export function ModelsPage({ settings, setSettings, saving, saveState, onSave }:
 
   return (
     <form className={grid.stack} onSubmit={onSave} noValidate>
-      <details className={styles.section} open>
+      <details
+        className={styles.section}
+        open={isSectionOpen('auto', true)}
+        onToggle={(event) => setSectionOpen('auto', event.currentTarget.open)}
+      >
         <summary>
           <span>
             <strong>Auto</strong>
@@ -48,6 +69,7 @@ export function ModelsPage({ settings, setSettings, saving, saveState, onSave }:
             onChange={(proModels) => setSettings((current) => ({ ...current, proModels }))}
             required
             coefficientManager={coefficientManager}
+            storageKey="pro"
           />
           <div className={styles.divider} />
           <div className={styles.listHeading}>
@@ -62,12 +84,17 @@ export function ModelsPage({ settings, setSettings, saving, saveState, onSave }:
             emptyText={t('models.lite.emptyText')}
             required
             coefficientManager={coefficientManager}
+            storageKey="lite"
           />
           {coeffState && <p className={styles.empty}>{coeffState}</p>}
         </div>
       </details>
 
-      <details className={styles.section}>
+      <details
+        className={styles.section}
+        open={isSectionOpen('vision')}
+        onToggle={(event) => setSectionOpen('vision', event.currentTarget.open)}
+      >
         <summary>
           <span>
             <strong>Vision</strong>
@@ -91,7 +118,11 @@ export function ModelsPage({ settings, setSettings, saving, saveState, onSave }:
         </div>
       </details>
 
-      <details className={styles.section}>
+      <details
+        className={styles.section}
+        open={isSectionOpen('manual')}
+        onToggle={(event) => setSectionOpen('manual', event.currentTarget.open)}
+      >
         <summary>
           <span>
             <strong>{t('models.manual.title')}</strong>
@@ -101,18 +132,23 @@ export function ModelsPage({ settings, setSettings, saving, saveState, onSave }:
         <div className={styles.sectionBody}>
           <ManualModelListEditor
             models={settings.manualModels}
-            onChange={(manualModels) =>
-              setSettings((current) => ({ ...current, manualModels }))
-            }
+            onChange={(manualModels) => setSettings((current) => ({ ...current, manualModels }))}
           />
         </div>
       </details>
 
-      <details className={styles.section}>
+      <details
+        className={styles.section}
+        open={isSectionOpen('monitor')}
+        onToggle={(event) => setSectionOpen('monitor', event.currentTarget.open)}
+      >
         <summary>
           <span>
             <strong>{t('models.monitor.title') || 'OpenRouter monitoring'}</strong>
-            <small>{t('models.monitor.subtitle') || 'Watch pinned providers, notify and switch automatically'}</small>
+            <small>
+              {t('models.monitor.subtitle') ||
+                'Watch pinned providers, notify and switch automatically'}
+            </small>
           </span>
         </summary>
         <OpenRouterMonitorPanel />

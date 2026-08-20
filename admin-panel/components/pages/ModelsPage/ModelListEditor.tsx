@@ -1,6 +1,12 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { ApiKey, ApiKeyValue, ModelOverrideData, ProviderKind, ProviderModelConfig } from '../../../lib/types';
+import type {
+  ApiKey,
+  ApiKeyValue,
+  ModelOverrideData,
+  ProviderKind,
+  ProviderModelConfig,
+} from '../../../lib/types';
 import {
   DEEPSEEK_PRESET_MODELS,
   XIAOMI_PRESET_MODELS,
@@ -23,6 +29,8 @@ import {
 import { FormField } from '../../ui/FormField/FormField';
 import { Toggle } from '../../ui/Toggle/Toggle';
 import { SecretState } from '../../ui/SecretState/SecretState';
+import { usePersistentOpenState } from '../../../lib/usePersistentOpenState';
+import { DragGrip, ModelOverlaySummary, SortableModelsDnd } from './SortableModels';
 import styles from './ModelsPage.module.css';
 
 type CoefficientManager = {
@@ -41,6 +49,8 @@ type Props = {
   required?: boolean;
   emptyText?: string;
   coefficientManager?: CoefficientManager;
+  /** localStorage key suffix for persisted open/closed cards. */
+  storageKey?: string;
 };
 
 const newModel = (): ProviderModelConfig => ({
@@ -53,52 +63,93 @@ const newModel = (): ProviderModelConfig => ({
 });
 
 export function ModelListEditor({
-  title, description, models, onChange, required = false, emptyText, coefficientManager,
+  title,
+  description,
+  models,
+  onChange,
+  required = false,
+  emptyText,
+  coefficientManager,
+  storageKey = 'models',
 }: Props) {
   const { t } = useTranslation();
+  const { isOpen, setOpen } = usePersistentOpenState(`cards:${storageKey}`);
   const update = (index: number, patch: Partial<ProviderModelConfig>) => {
-    onChange(models.map((model, i) => i === index ? { ...model, ...patch } : model));
-  };
-  const move = (index: number, offset: number) => {
-    const target = index + offset;
-    if (target < 0 || target >= models.length) return;
-    const next = [...models];
-    [next[index], next[target]] = [next[target], next[index]];
-    onChange(next);
+    onChange(models.map((model, i) => (i === index ? { ...model, ...patch } : model)));
   };
 
   return (
     <div className={styles.modelList}>
       {(title || description) && (
         <div className={styles.listHeading}>
-          <div>{title && <h3>{title}</h3>}{description && <p>{description}</p>}</div>
+          <div>
+            {title && <h3>{title}</h3>}
+            {description && <p>{description}</p>}
+          </div>
         </div>
       )}
-      {!models.length && <p className={styles.empty}>{emptyText || t('models.common.emptyText')}</p>}
-      {models.map((model, index) => (
-        <div className={styles.modelSequence} key={model.id}>
-          {index > 0 && <span className={styles.nextLabel}>{t('models.common.nextModel')}</span>}
-          <details className={styles.modelCard} open={index === 0 ? true : undefined}>
-            <summary>
-              <span className={styles.order}>{index + 1}</span>
-              <span className={styles.modelTitle}>
-                <strong>{model.model || t('models.common.newModel')}</strong>
-                <span>{model.baseUrl || t('models.common.providerNotSet')}</span>
-              </span>
-              <SecretState configured={model.hasApiKey || Boolean(model.apiKey)} />
-            </summary>
-            <div className={styles.modelBody}>
-              <ProviderModelFields model={model} onChange={p => update(index, p)} coefficientManager={coefficientManager} />
-              <div className={styles.modelActions}>
-                <button className="buttonSecondary" type="button" disabled={index === 0} onClick={() => move(index, -1)}>{t('models.common.moveUp')}</button>
-                <button className="buttonSecondary" type="button" disabled={index === models.length - 1} onClick={() => move(index, 1)}>{t('models.common.moveDown')}</button>
-                <button className={styles.dangerButton} type="button" disabled={required && models.length === 1} onClick={() => onChange(models.filter((_, i) => i !== index))}>{t('models.common.remove')}</button>
+      {!models.length && (
+        <p className={styles.empty}>{emptyText || t('models.common.emptyText')}</p>
+      )}
+      <SortableModelsDnd
+        items={models}
+        onReorder={onChange}
+        renderOverlay={(model, order) => (
+          <ModelOverlaySummary
+            order={order}
+            title={model.model || t('models.common.newModel')}
+            subtitle={model.baseUrl || t('models.common.providerNotSet')}
+          />
+        )}
+      >
+        {(model, index, dragHandleProps) => (
+          <div className={styles.modelSequence}>
+            {index > 0 && <span className={styles.nextLabel}>{t('models.common.nextModel')}</span>}
+            <details
+              className={styles.modelCard}
+              open={isOpen(model.id, index === 0)}
+              onToggle={(event) => setOpen(model.id, event.currentTarget.open)}
+            >
+              <summary>
+                <DragGrip
+                  dragHandleProps={dragHandleProps}
+                  title={t('models.common.dragToReorder')}
+                />
+                <span className={styles.order}>{index + 1}</span>
+                <span className={styles.modelTitle}>
+                  <strong>{model.model || t('models.common.newModel')}</strong>
+                  <span>{model.baseUrl || t('models.common.providerNotSet')}</span>
+                </span>
+                <SecretState configured={model.hasApiKey || Boolean(model.apiKey)} />
+              </summary>
+              <div className={styles.modelBody}>
+                <ProviderModelFields
+                  model={model}
+                  onChange={(p) => update(index, p)}
+                  coefficientManager={coefficientManager}
+                />
+                <div className={styles.modelActions}>
+                  <button
+                    className={styles.dangerButton}
+                    type="button"
+                    disabled={required && models.length === 1}
+                    onClick={() => onChange(models.filter((_, i) => i !== index))}
+                  >
+                    {t('models.common.remove')}
+                  </button>
+                </div>
               </div>
-            </div>
-          </details>
-        </div>
-      ))}
-      <button className="buttonSecondary" type="button" onClick={() => onChange([...models, newModel()])}>{t('models.common.addModel')}</button>
+            </details>
+          </div>
+        )}
+      </SortableModelsDnd>
+      <button
+        className="buttonSecondary"
+        type="button"
+        onClick={() => onChange([...models, newModel()])}
+      >
+        {t('models.common.addModel')}
+      </button>
     </div>
   );
 }
@@ -149,7 +200,9 @@ async function loadProviderNames(): Promise<Map<string, string>> {
     return _providerNames;
   }
   try {
-    const data = await api<{ data?: Array<{ slug?: string; name?: string }> }>('/api/openrouter/providers');
+    const data = await api<{ data?: Array<{ slug?: string; name?: string }> }>(
+      '/api/openrouter/providers',
+    );
     const map = new Map<string, string>();
     for (const item of data?.data || []) {
       if (item.slug && item.name) map.set(item.slug, item.name);
@@ -174,7 +227,9 @@ async function fetchModelEndpoints(modelId: string): Promise<ModelEndpointsResul
   const slug = encodeURIComponent(modelId.slice(slashIdx + 1));
 
   const [endpointsResp, providers] = await Promise.all([
-    api<{ data?: { endpoints?: OrEndpoint[] } }>(`/api/openrouter/models/${author}/${slug}/endpoints`),
+    api<{ data?: { endpoints?: OrEndpoint[] } }>(
+      `/api/openrouter/models/${author}/${slug}/endpoints`,
+    ),
     loadProviderNames(),
   ]);
 
@@ -198,14 +253,15 @@ async function fetchModelEndpoints(modelId: string): Promise<ModelEndpointsResul
   const pricesBySlug = new Map<string, ModelPrices | null>();
   let basePrices: ModelPrices | null = null;
   for (const [baseSlug, entries] of baseGroups) {
-    const allPrices = entries.map(e => e.prices);
+    const allPrices = entries.map((e) => e.prices);
     const minP = minModelPrices(allPrices);
     const maxP = maxModelPrices(allPrices);
     pricesBySlug.set(baseSlug, maxP);
     if (basePrices === null) basePrices = maxP;
-    const hint = (minP && maxP && entries.length > 1)
-      ? formatPricesRangeHint(minP, maxP)
-      : formatPricesHint(maxP);
+    const hint =
+      minP && maxP && entries.length > 1
+        ? formatPricesRangeHint(minP, maxP)
+        : formatPricesHint(maxP);
     const label = providers.get(baseSlug) || baseSlug;
     options.push({ value: baseSlug, label, hint });
   }
@@ -230,16 +286,19 @@ function ProviderMonitorStatus({ uniqueId, slug }: { uniqueId?: string; slug: st
   const [checking, setChecking] = useState(false);
   if (!uniqueId || !slug) return null;
 
-  const state = status?.states.find(s => s.model_id === uniqueId) || null;
-  const strategy = status?.settings.action && status.settings.action !== 'notify'
-    ? status.settings.action : null;
+  const state = status?.states.find((s) => s.model_id === uniqueId) || null;
+  const strategy =
+    status?.settings.action && status.settings.action !== 'notify' ? status.settings.action : null;
 
   const handleCheckNow = async () => {
     setChecking(true);
     try {
       await checkModels([uniqueId]);
-    } catch { /* surfaced in the panel */ }
-    finally { setChecking(false); }
+    } catch {
+      /* surfaced in the panel */
+    } finally {
+      setChecking(false);
+    }
   };
 
   const lastChecked = state?.last_check_at
@@ -248,8 +307,12 @@ function ProviderMonitorStatus({ uniqueId, slug }: { uniqueId?: string; slug: st
 
   return (
     <div className={styles.monitorInline}>
-      <span className={`${styles.monitorBadge} ${styles[`monitor_${state?.status || 'unknown'}`] || ''}`}>
-        {state ? (MONITOR_STATUS_LABELS[state.status] || state.status) : (t('models.monitor.noData') || 'Not checked yet')}
+      <span
+        className={`${styles.monitorBadge} ${styles[`monitor_${state?.status || 'unknown'}`] || ''}`}
+      >
+        {state
+          ? MONITOR_STATUS_LABELS[state.status] || state.status
+          : t('models.monitor.noData') || 'Not checked yet'}
       </span>
       {strategy && (
         <small style={{ color: 'var(--color-muted)' }}>
@@ -261,15 +324,25 @@ function ProviderMonitorStatus({ uniqueId, slug }: { uniqueId?: string; slug: st
           {t('models.monitor.lastChecked') || 'Last checked'}: {lastChecked}
         </small>
       )}
-      <button type="button" className="buttonSecondary" disabled={checking} onClick={() => void handleCheckNow()}>
-        {checking ? (t('models.monitor.checking') || 'Checking…') : (t('models.monitor.checkNow') || 'Check now')}
+      <button
+        type="button"
+        className="buttonSecondary"
+        disabled={checking}
+        onClick={() => void handleCheckNow()}
+      >
+        {checking
+          ? t('models.monitor.checking') || 'Checking…'
+          : t('models.monitor.checkNow') || 'Check now'}
       </button>
     </div>
   );
 }
 
 export function ProviderModelFields({
-  model, onChange, required = true, coefficientManager,
+  model,
+  onChange,
+  required = true,
+  coefficientManager,
 }: {
   model: ProviderModelConfig;
   onChange: (patch: Partial<ProviderModelConfig>) => void;
@@ -284,7 +357,9 @@ export function ProviderModelFields({
   const [selectedApiKeyId, setSelectedApiKeyId] = useState('');
 
   const loadApiKeys = useCallback(() => {
-    api<ApiKey[]>('/api/api-keys').then(setApiKeys).catch(() => {});
+    api<ApiKey[]>('/api/api-keys')
+      .then(setApiKeys)
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -311,9 +386,9 @@ export function ProviderModelFields({
   ];
 
   const [prices, setPrices] = useState({
-    input: override?.inputPricePerMillion ?? null as number | null,
-    output: override?.outputPricePerMillion ?? null as number | null,
-    cache: override?.cacheReadPricePerMillion ?? null as number | null,
+    input: override?.inputPricePerMillion ?? (null as number | null),
+    output: override?.outputPricePerMillion ?? (null as number | null),
+    cache: override?.cacheReadPricePerMillion ?? (null as number | null),
     orSlug: override?.openrouterProviderSlug ?? '',
   });
   const [pricesTouched, setPricesTouched] = useState(false);
@@ -332,55 +407,77 @@ export function ProviderModelFields({
     const nextOutput = override?.outputPricePerMillion ?? null;
     const nextCache = override?.cacheReadPricePerMillion ?? null;
     const nextSlug = override?.openrouterProviderSlug ?? '';
-    setPrices(prev => {
-      if (prev.input === nextInput && prev.output === nextOutput && prev.cache === nextCache && prev.orSlug === nextSlug) {
+    setPrices((prev) => {
+      if (
+        prev.input === nextInput &&
+        prev.output === nextOutput &&
+        prev.cache === nextCache &&
+        prev.orSlug === nextSlug
+      ) {
         return prev;
       }
       return { input: nextInput, output: nextOutput, cache: nextCache, orSlug: nextSlug };
     });
   }, [override, pricesTouched]);
 
-  const persistOverride = useCallback(async (patch: Partial<ModelOverrideData>) => {
-    const id = model.uniqueId?.trim();
-    if (!id || !coefficientManager?.saveOverride) return;
-    await coefficientManager.saveOverride(id, patch);
-  }, [model.uniqueId, coefficientManager]);
+  const persistOverride = useCallback(
+    async (patch: Partial<ModelOverrideData>) => {
+      const id = model.uniqueId?.trim();
+      if (!id || !coefficientManager?.saveOverride) return;
+      await coefficientManager.saveOverride(id, patch);
+    },
+    [model.uniqueId, coefficientManager],
+  );
 
   // Load endpoints for a model: refreshes the upstream provider dropdown
   // and the cached price map. Returns the result for synchronous use.
-  const loadEndpoints = useCallback(async (modelId: string): Promise<ModelEndpointsResult | null> => {
-    if (!modelId || !modelId.includes('/')) return null;
-    const result = await fetchModelEndpoints(modelId);
-    if (result) {
-      endpointsCacheRef.current = result;
-      const autoOpt = { value: '', label: t('models.billing.autoRouting') || 'Auto', hint: 'auto-routing' };
-      setOrProviderOptions([autoOpt, ...result.options]);
-    }
-    return result;
-  }, [t]);
+  const loadEndpoints = useCallback(
+    async (modelId: string): Promise<ModelEndpointsResult | null> => {
+      if (!modelId || !modelId.includes('/')) return null;
+      const result = await fetchModelEndpoints(modelId);
+      if (result) {
+        endpointsCacheRef.current = result;
+        const autoOpt = {
+          value: '',
+          label: t('models.billing.autoRouting') || 'Auto',
+          hint: 'auto-routing',
+        };
+        setOrProviderOptions([autoOpt, ...result.options]);
+      }
+      return result;
+    },
+    [t],
+  );
 
-  const applyAutoPrices = useCallback(async (mp: ModelPrices | null, source: 'auto' | 'endpoint' | 'preset') => {
-    const next = {
-      input: mp?.inputPricePerMillion ?? null,
-      output: mp?.outputPricePerMillion ?? null,
-      cache: mp?.cacheReadPricePerMillion ?? null,
-    };
-    setPrices((p) => ({ ...p, ...next }));
-    setPricesTouched(true);
-    const sourceLabel = source === 'auto'
-      ? (providerKind === 'deepseek' || providerKind === 'xiaomi' ? 'preset' : 'openrouter_auto')
-      : source === 'endpoint' ? 'openrouter_endpoint'
-      : 'preset';
-    await persistOverride({
-      providerKind,
-      openrouterProviderSlug: prices.orSlug || null,
-      inputPricePerMillion: next.input,
-      outputPricePerMillion: next.output,
-      cacheReadPricePerMillion: next.cache,
-      pricingMode: 'auto',
-      pricingSource: sourceLabel,
-    });
-  }, [persistOverride, providerKind, prices.orSlug]);
+  const applyAutoPrices = useCallback(
+    async (mp: ModelPrices | null, source: 'auto' | 'endpoint' | 'preset') => {
+      const next = {
+        input: mp?.inputPricePerMillion ?? null,
+        output: mp?.outputPricePerMillion ?? null,
+        cache: mp?.cacheReadPricePerMillion ?? null,
+      };
+      setPrices((p) => ({ ...p, ...next }));
+      setPricesTouched(true);
+      const sourceLabel =
+        source === 'auto'
+          ? providerKind === 'deepseek' || providerKind === 'xiaomi'
+            ? 'preset'
+            : 'openrouter_auto'
+          : source === 'endpoint'
+            ? 'openrouter_endpoint'
+            : 'preset';
+      await persistOverride({
+        providerKind,
+        openrouterProviderSlug: prices.orSlug || null,
+        inputPricePerMillion: next.input,
+        outputPricePerMillion: next.output,
+        cacheReadPricePerMillion: next.cache,
+        pricingMode: 'auto',
+        pricingSource: sourceLabel,
+      });
+    },
+    [persistOverride, providerKind, prices.orSlug],
+  );
 
   const handleModelSelect = async (modelId: string, basePrices: ModelPrices | null) => {
     onChange({ model: modelId });
@@ -404,7 +501,7 @@ export function ProviderModelFields({
   const saveManualPrices = async () => {
     await persistOverride({
       providerKind,
-      openrouterProviderSlug: providerKind === 'openrouter' ? (prices.orSlug || null) : null,
+      openrouterProviderSlug: providerKind === 'openrouter' ? prices.orSlug || null : null,
       inputPricePerMillion: prices.input,
       outputPricePerMillion: prices.output,
       cacheReadPricePerMillion: prices.cache,
@@ -417,7 +514,8 @@ export function ProviderModelFields({
     const k = (kind || undefined) as ProviderKind | undefined;
     if (k && k !== 'custom' && PROVIDER_URLS[k]) onChange({ baseUrl: PROVIDER_URLS[k] });
     const id = model.uniqueId?.trim();
-    if (id && coefficientManager?.saveOverride) void coefficientManager.saveOverride(id, { providerKind: k ?? null });
+    if (id && coefficientManager?.saveOverride)
+      void coefficientManager.saveOverride(id, { providerKind: k ?? null });
   };
 
   const handleOrProviderChange = async (slug: string) => {
@@ -467,11 +565,15 @@ export function ProviderModelFields({
 
   const isCustom = providerKind === 'custom';
   const showModelAutocomplete = providerKind === 'openrouter';
-  const presetModels = providerKind === 'deepseek' ? DEEPSEEK_PRESET_MODELS
-    : providerKind === 'xiaomi' ? XIAOMI_PRESET_MODELS
-    : null;
-  const isPricingFromOpenRouter = override?.pricingSource === 'openrouter_auto'
-    || override?.pricingSource === 'openrouter_endpoint';
+  const presetModels =
+    providerKind === 'deepseek'
+      ? DEEPSEEK_PRESET_MODELS
+      : providerKind === 'xiaomi'
+        ? XIAOMI_PRESET_MODELS
+        : null;
+  const isPricingFromOpenRouter =
+    override?.pricingSource === 'openrouter_auto' ||
+    override?.pricingSource === 'openrouter_endpoint';
   const isPricingFromPreset = override?.pricingSource === 'preset';
 
   return (
@@ -499,53 +601,109 @@ export function ProviderModelFields({
               onSelect={(id, mp) => void handleModelSelect(id, mp)}
             />
           ) : (
-            <input value={model.model} onChange={e => onChange({ model: e.target.value })}
-              placeholder="provider/model-name" required={required} />
+            <input
+              value={model.model}
+              onChange={(e) => onChange({ model: e.target.value })}
+              placeholder="provider/model-name"
+              required={required}
+            />
           )}
         </FormField>
       </div>
 
       {/* Row 2: URL */}
       <FormField label={t('models.providerFields.baseUrl')}>
-        <input type="url" value={model.baseUrl}
-          onChange={e => onChange({ baseUrl: e.target.value })}
-          placeholder={PROVIDER_URLS[providerKind ?? 'custom'] || 'https://…'} required={required} readOnly={!isCustom} />
+        <input
+          type="url"
+          value={model.baseUrl}
+          onChange={(e) => onChange({ baseUrl: e.target.value })}
+          placeholder={PROVIDER_URLS[providerKind ?? 'custom'] || 'https://…'}
+          required={required}
+          readOnly={!isCustom}
+        />
       </FormField>
 
-      <FormField label={t('models.providerFields.proxyUrl')} hint={t('models.providerFields.proxyUrlHint')}>
-        <input value={model.proxyUrl ?? ''}
-          onChange={e => onChange({ proxyUrl: e.target.value })}
-          placeholder="socks5://host.docker.internal:1080" />
+      <FormField
+        label={t('models.providerFields.proxyUrl')}
+        hint={t('models.providerFields.proxyUrlHint')}
+      >
+        <input
+          value={model.proxyUrl ?? ''}
+          onChange={(e) => onChange({ proxyUrl: e.target.value })}
+          placeholder="socks5://host.docker.internal:1080"
+        />
       </FormField>
 
       {/* Row 3: quota id */}
-      <FormField label={t('models.providerFields.quotaId')} hint={t('models.providerFields.quotaIdHint')}>
-        <input value={model.uniqueId ?? ''} onChange={e => onChange({ uniqueId: e.target.value })}
-          placeholder={`auto-${(model.model || 'model').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'model'}`} />
+      <FormField
+        label={t('models.providerFields.quotaId')}
+        hint={t('models.providerFields.quotaIdHint')}
+      >
+        <input
+          value={model.uniqueId ?? ''}
+          onChange={(e) => onChange({ uniqueId: e.target.value })}
+          placeholder={`auto-${
+            (model.model || 'model')
+              .toLowerCase()
+              .replace(/[^a-z0-9]+/g, '-')
+              .replace(/^-+|-+$/g, '') || 'model'
+          }`}
+        />
       </FormField>
 
       {/* Coefficient */}
       {coefficientManager?.get && (
-        <FormField label={t('models.providerFields.coefficient')} hint={t('models.providerFields.coefficientHint')}>
-          <input type="number" min={0} step={0.1} value={coefficientManager.get?.(model.uniqueId) ?? 1}
-            onChange={e => { const v = Number(e.target.value); const id = model.uniqueId?.trim(); if (id && Number.isFinite(v) && v >= 0) coefficientManager.set?.(id, v); }}
-            onBlur={e => { const v = Number(e.target.value); const c = Number.isFinite(v) && v >= 0 ? v : 1; const id = model.uniqueId?.trim(); if (id) void coefficientManager.save?.(id, c); }} />
+        <FormField
+          label={t('models.providerFields.coefficient')}
+          hint={t('models.providerFields.coefficientHint')}
+        >
+          <input
+            type="number"
+            min={0}
+            step={0.1}
+            value={coefficientManager.get?.(model.uniqueId) ?? 1}
+            onChange={(e) => {
+              const v = Number(e.target.value);
+              const id = model.uniqueId?.trim();
+              if (id && Number.isFinite(v) && v >= 0) coefficientManager.set?.(id, v);
+            }}
+            onBlur={(e) => {
+              const v = Number(e.target.value);
+              const c = Number.isFinite(v) && v >= 0 ? v : 1;
+              const id = model.uniqueId?.trim();
+              if (id) void coefficientManager.save?.(id, c);
+            }}
+          />
         </FormField>
       )}
 
       {/* Prices — only if override hook is available */}
       {coefficientManager?.getOverride && (
         <>
-          <FormField label={t('models.providerFields.isFree')} hint={t('models.providerFields.isFreeHint')}>
+          <FormField
+            label={t('models.providerFields.isFree')}
+            hint={t('models.providerFields.isFreeHint')}
+          >
             <Toggle
               checked={Boolean(override?.isFree)}
-              onChange={(checked) => { void persistOverride({ isFree: checked }); }}
-              label={override?.isFree ? t('models.providerFields.isFreeOn') : t('models.providerFields.isFreeOff')}
+              onChange={(checked) => {
+                void persistOverride({ isFree: checked });
+              }}
+              label={
+                override?.isFree
+                  ? t('models.providerFields.isFreeOn')
+                  : t('models.providerFields.isFreeOff')
+              }
             />
           </FormField>
           {providerKind === 'openrouter' && (
-            <FormField label={t('models.billing.openrouterProvider') || 'OpenRouter provider'}
-              hint={t('models.billing.openrouterProviderHint') || '“Auto” lets OpenRouter choose the endpoint'}>
+            <FormField
+              label={t('models.billing.openrouterProvider') || 'OpenRouter provider'}
+              hint={
+                t('models.billing.openrouterProviderHint') ||
+                '“Auto” lets OpenRouter choose the endpoint'
+              }
+            >
               <Select
                 options={orProviderOptions}
                 value={prices.orSlug}
@@ -559,27 +717,51 @@ export function ProviderModelFields({
           )}
 
           <div className={styles.threeColumns}>
-            <FormField label={t('models.billing.inputPrice') || 'Input $/1M'}
-              hint={t('models.billing.priceHint') || '$ per 1M tokens'}>
-              <input type="number" min={0} step="any" value={prices.input ?? ''}
-                onChange={e => handlePriceChange('input', e.target.value)}
-                placeholder="0.00" onBlur={() => void saveManualPrices()} />
+            <FormField
+              label={t('models.billing.inputPrice') || 'Input $/1M'}
+              hint={t('models.billing.priceHint') || '$ per 1M tokens'}
+            >
+              <input
+                type="number"
+                min={0}
+                step="any"
+                value={prices.input ?? ''}
+                onChange={(e) => handlePriceChange('input', e.target.value)}
+                placeholder="0.00"
+                onBlur={() => void saveManualPrices()}
+              />
             </FormField>
-            <FormField label={t('models.billing.outputPrice') || 'Output $/1M'}
-              hint={t('models.billing.priceHint') || '$ per 1M tokens'}>
-              <input type="number" min={0} step="any" value={prices.output ?? ''}
-                onChange={e => handlePriceChange('output', e.target.value)}
-                placeholder="0.00" onBlur={() => void saveManualPrices()} />
+            <FormField
+              label={t('models.billing.outputPrice') || 'Output $/1M'}
+              hint={t('models.billing.priceHint') || '$ per 1M tokens'}
+            >
+              <input
+                type="number"
+                min={0}
+                step="any"
+                value={prices.output ?? ''}
+                onChange={(e) => handlePriceChange('output', e.target.value)}
+                placeholder="0.00"
+                onBlur={() => void saveManualPrices()}
+              />
             </FormField>
-            <FormField label={t('models.billing.cacheReadPrice') || 'Cached $/1M'}
-              hint={t('models.billing.cacheReadPriceHint') || 'Falls back to input price if empty'}>
-              <input type="number" min={0} step="any" value={prices.cache ?? ''}
-                onChange={e => handlePriceChange('cache', e.target.value)}
-                placeholder="0.00" onBlur={() => void saveManualPrices()} />
+            <FormField
+              label={t('models.billing.cacheReadPrice') || 'Cached $/1M'}
+              hint={t('models.billing.cacheReadPriceHint') || 'Falls back to input price if empty'}
+            >
+              <input
+                type="number"
+                min={0}
+                step="any"
+                value={prices.cache ?? ''}
+                onChange={(e) => handlePriceChange('cache', e.target.value)}
+                placeholder="0.00"
+                onBlur={() => void saveManualPrices()}
+              />
             </FormField>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-2)', flexWrap: 'wrap' }}>
+          <div className={styles.pricingMetaRow}>
             {(isPricingFromOpenRouter || isPricingFromPreset) && (
               <small style={{ color: 'var(--color-muted)' }}>
                 {t('models.billing.pricingSource') || 'Source'}: {override?.pricingSource}
@@ -593,8 +775,8 @@ export function ProviderModelFields({
                 onClick={() => void handleRefreshPrices()}
               >
                 {refreshing
-                  ? (t('models.billing.refreshing') || 'Refreshing…')
-                  : (t('models.billing.refreshPrices') || 'Refresh prices')}
+                  ? t('models.billing.refreshing') || 'Refreshing…'
+                  : t('models.billing.refreshPrices') || 'Refresh prices'}
               </button>
             )}
           </div>
@@ -610,7 +792,9 @@ export function ProviderModelFields({
             hint: k.key_prefix,
           })),
           { value: '__create__', label: t('security.apiKeyCreateNew') },
-          ...(model.hasApiKey ? [{ value: '__existing__', label: t('security.apiKeyExistingKey') }] : []),
+          ...(model.hasApiKey
+            ? [{ value: '__existing__', label: t('security.apiKeyExistingKey') }]
+            : []),
         ];
 
         const handleSelectChange = (value: string) => {
@@ -623,9 +807,11 @@ export function ProviderModelFields({
             const id = Number(value.slice(4));
             setSelectedApiKeyId(value);
             coefficientManager?.saveOverride?.(model.uniqueId || '', { selectedApiKeyId: id });
-            api<ApiKeyValue>(`/api/api-keys/${id}`).then((keyData) => {
-              onChange({ apiKey: keyData.key });
-            }).catch(() => {});
+            api<ApiKeyValue>(`/api/api-keys/${id}`)
+              .then((keyData) => {
+                onChange({ apiKey: keyData.key });
+              })
+              .catch(() => {});
           }
         };
 
@@ -649,16 +835,29 @@ export function ProviderModelFields({
           return (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-3)' }}>
               <FormField label={t('security.apiKeyName')}>
-                <input value={newKeyName} onChange={e => setNewKeyName(e.target.value)}
-                  placeholder={t('security.apiKeyNamePlaceholder')} />
+                <input
+                  value={newKeyName}
+                  onChange={(e) => setNewKeyName(e.target.value)}
+                  placeholder={t('security.apiKeyNamePlaceholder')}
+                />
               </FormField>
               <FormField label={t('security.apiKeyValue')}>
-                <input type="password" value={newKeyValue} onChange={e => setNewKeyValue(e.target.value)}
-                  placeholder={t('security.apiKeyValuePlaceholder')} />
+                <input
+                  type="password"
+                  value={newKeyValue}
+                  onChange={(e) => setNewKeyValue(e.target.value)}
+                  placeholder={t('security.apiKeyValuePlaceholder')}
+                />
               </FormField>
               <div style={{ display: 'flex', gap: 'var(--sp-2)' }}>
-                <button type="button" onClick={handleCreateKey}>{t('security.apiKeyCreate')}</button>
-                <button type="button" className="buttonSecondary" onClick={() => setShowCreateKey(false)}>
+                <button type="button" onClick={handleCreateKey}>
+                  {t('security.apiKeyCreate')}
+                </button>
+                <button
+                  type="button"
+                  className="buttonSecondary"
+                  onClick={() => setShowCreateKey(false)}
+                >
                   {t('common.cancel') || 'Cancel'}
                 </button>
               </div>
@@ -667,8 +866,10 @@ export function ProviderModelFields({
         }
 
         return (
-          <FormField label={t('security.apiKeySelect')}
-            state={<SecretState configured={model.hasApiKey || Boolean(model.apiKey)} />}>
+          <FormField
+            label={t('security.apiKeySelect')}
+            state={<SecretState configured={model.hasApiKey || Boolean(model.apiKey)} />}
+          >
             <Select
               options={selectOptions}
               value={selectedApiKeyId}

@@ -49,11 +49,32 @@
   border-top: 1px solid var(--border-light);
 }
 .modelList,
-.fields,
 .modelBody {
   display: flex;
   flex-direction: column;
   gap: var(--sp-3);
+}
+/* Provider fields — compact two-column grid so expanded cards don't
+   stretch inputs full-width on wide screens (readability). */
+.fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sp-3) var(--sp-4);
+  align-items: start;
+}
+.fields > * {
+  min-width: 0;
+}
+.fields > .twoColumns,
+.fields > .threeColumns,
+.fields > .pricingMetaRow {
+  grid-column: 1 / -1;
+}
+.pricingMetaRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
 }
 .listHeading {
   display: flex;
@@ -209,9 +230,68 @@
   .threeColumns {
     grid-template-columns: 1fr;
   }
+  .fields {
+    grid-template-columns: 1fr;
+  }
   .listHeading {
     flex-direction: column;
   }
+}
+
+/* ── Drag & drop (queues reorder) ───────────────────────────────────── */
+.sortableRow {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  border-radius: var(--radius);
+  transition: box-shadow 0.12s ease;
+}
+.sortableRowDragging {
+  opacity: 0.25;
+}
+.sortableRowOver {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+.sortableOverlay {
+  box-sizing: border-box;
+  border-radius: var(--radius);
+  background: var(--bg-primary);
+  box-shadow: 0 10px 28px rgba(16, 38, 64, 0.18);
+  pointer-events: none;
+}
+.overlaySummary {
+  display: flex;
+  min-height: 58px;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius);
+  background: var(--bg-bubble);
+}
+.dragHandle {
+  display: grid;
+  width: 22px;
+  height: 26px;
+  flex: 0 0 auto;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-hint);
+  cursor: grab;
+  opacity: 0.35;
+  transition: opacity 0.12s ease, color 0.12s ease, background-color 0.12s ease;
+}
+.modelCard > summary:hover .dragHandle,
+.dragHandle:focus-visible {
+  opacity: 1;
+  color: var(--text-muted);
+  background: var(--bg-primary);
+}
+.dragHandle:active {
+  cursor: grabbing;
 }
 
 /* ── OpenRouter monitor ─────────────────────────────────────────────── */

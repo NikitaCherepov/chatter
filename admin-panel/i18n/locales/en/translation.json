@@ -134,8 +134,7 @@
       "nextModel": "next model",
       "newModel": "New model",
       "providerNotSet": "Provider not set",
-      "moveUp": "Move up",
-      "moveDown": "Move down",
+      "dragToReorder": "Drag to reorder",
       "remove": "Remove",
       "addModel": "+ Add model"
     },
