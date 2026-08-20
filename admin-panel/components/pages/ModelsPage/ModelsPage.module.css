@@ -23,7 +23,7 @@
   font-size: var(--fs-md);
   font-weight: var(--fw-normal);
 }
-.section[open] > summary::after {
+.section.detailsOpen > summary::after {
   content: '−';
 }
 .section > summary > span {
@@ -44,9 +44,16 @@
 .sectionBody {
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: var(--sp-4);
   padding: var(--sp-4);
   border-top: 1px solid var(--border-light);
+}
+/* Border-top spans the full section width; the content itself stays in a
+   comfortable centered column instead of edge-to-edge. */
+.sectionBody > * {
+  width: 100%;
+  max-width: 1040px;
 }
 .modelList,
 .modelBody {
@@ -75,6 +82,46 @@
   align-items: center;
   flex-wrap: wrap;
   gap: var(--sp-2);
+}
+.listToolbar {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sp-2);
+}
+.listToolbar .buttonSecondary {
+  padding: 0.25rem 0.6rem;
+  font-size: var(--fs-xs);
+}
+/* At-a-glance chips on collapsed cards: provider, prices, coefficient, badges. */
+.summaryChips {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 6px;
+  margin-left: auto;
+  overflow: hidden;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 8px;
+  border: 1px solid var(--border-light);
+  border-radius: 999px;
+  background: var(--bg-primary);
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-normal);
+  white-space: nowrap;
+}
+.chip em {
+  color: var(--text-hint);
+  font-style: normal;
+}
+@media (max-width: 760px) {
+  .summaryChips {
+    display: none;
+  }
 }
 .listHeading {
   display: flex;
@@ -143,7 +190,7 @@
   content: '⌄';
   font-size: var(--fs-sm);
 }
-.modelCard[open] > summary::after {
+.modelCard.detailsOpen > summary::after {
   transform: rotate(180deg);
 }
 .order {

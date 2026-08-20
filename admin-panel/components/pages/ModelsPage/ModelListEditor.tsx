@@ -30,6 +30,7 @@ import { FormField } from '../../ui/FormField/FormField';
 import { Toggle } from '../../ui/Toggle/Toggle';
 import { SecretState } from '../../ui/SecretState/SecretState';
 import { usePersistentOpenState } from '../../../lib/usePersistentOpenState';
+import { AnimatedDetails } from './AnimatedDetails';
 import { DragGrip, ModelOverlaySummary, SortableModelsDnd } from './SortableModels';
 import styles from './ModelsPage.module.css';
 
@@ -62,6 +63,55 @@ const newModel = (): ProviderModelConfig => ({
   hasApiKey: false,
 });
 
+// ── Card summary chips (at-a-glance info on collapsed cards) ─────────────────
+
+const PROVIDER_CHIP_LABELS: Record<string, string> = {
+  openrouter: 'OpenRouter',
+  deepseek: 'DeepSeek',
+  xiaomi: 'Xiaomi',
+};
+
+function formatPriceChip(value: number | null | undefined) {
+  return value == null ? '—' : String(value);
+}
+
+export function ModelSummaryChips({
+  providerKind,
+  prices,
+  coefficient,
+  badges,
+}: {
+  providerKind?: string | null;
+  prices?: { input?: number | null; output?: number | null } | null;
+  coefficient?: number;
+  badges?: string[];
+}) {
+  const { t } = useTranslation();
+  const providerLabel = providerKind
+    ? (PROVIDER_CHIP_LABELS[providerKind] ?? t('models.billing.customProvider') ?? 'Custom')
+    : null;
+  const hasPrices = Boolean(prices && (prices.input != null || prices.output != null));
+  return (
+    <span className={styles.summaryChips}>
+      {providerLabel && <span className={styles.chip}>{providerLabel}</span>}
+      {hasPrices && prices && (
+        <span className={styles.chip} title="$/1M">
+          <em>in</em> {formatPriceChip(prices.input)} · <em>out</em>{' '}
+          {formatPriceChip(prices.output)}
+        </span>
+      )}
+      {typeof coefficient === 'number' && coefficient !== 1 && (
+        <span className={styles.chip}>×{coefficient}</span>
+      )}
+      {badges?.map((badge) => (
+        <span key={badge} className={styles.chip}>
+          {badge}
+        </span>
+      ))}
+    </span>
+  );
+}
+
 export function ModelListEditor({
   title,
   description,
@@ -73,10 +123,13 @@ export function ModelListEditor({
   storageKey = 'models',
 }: Props) {
   const { t } = useTranslation();
-  const { isOpen, setOpen } = usePersistentOpenState(`cards:${storageKey}`);
+  const { isOpen, setOpen, setAll } = usePersistentOpenState(`cards:${storageKey}`);
   const update = (index: number, patch: Partial<ProviderModelConfig>) => {
     onChange(models.map((model, i) => (i === index ? { ...model, ...patch } : model)));
   };
+  // uniqueId is stable across saves (the server preserves it); the index-based
+  // `id` is regenerated on every save, so it must not key React state.
+  const cardKey = (model: ProviderModelConfig) => model.uniqueId?.trim() || model.id;
 
   return (
     <div className={styles.modelList}>
@@ -91,9 +144,28 @@ export function ModelListEditor({
       {!models.length && (
         <p className={styles.empty}>{emptyText || t('models.common.emptyText')}</p>
       )}
+      {models.length > 1 && (
+        <div className={styles.listToolbar}>
+          <button
+            className="buttonSecondary"
+            type="button"
+            onClick={() => setAll(models.map(cardKey), true)}
+          >
+            {t('models.common.expandAll')}
+          </button>
+          <button
+            className="buttonSecondary"
+            type="button"
+            onClick={() => setAll(models.map(cardKey), false)}
+          >
+            {t('models.common.collapseAll')}
+          </button>
+        </div>
+      )}
       <SortableModelsDnd
         items={models}
         onReorder={onChange}
+        keyOf={cardKey}
         renderOverlay={(model, order) => (
           <ModelOverlaySummary
             order={order}
@@ -102,46 +174,70 @@ export function ModelListEditor({
           />
         )}
       >
-        {(model, index, dragHandleProps) => (
-          <div className={styles.modelSequence}>
-            {index > 0 && <span className={styles.nextLabel}>{t('models.common.nextModel')}</span>}
-            <details
-              className={styles.modelCard}
-              open={isOpen(model.id, index === 0)}
-              onToggle={(event) => setOpen(model.id, event.currentTarget.open)}
-            >
-              <summary>
-                <DragGrip
-                  dragHandleProps={dragHandleProps}
-                  title={t('models.common.dragToReorder')}
-                />
-                <span className={styles.order}>{index + 1}</span>
-                <span className={styles.modelTitle}>
-                  <strong>{model.model || t('models.common.newModel')}</strong>
-                  <span>{model.baseUrl || t('models.common.providerNotSet')}</span>
-                </span>
-                <SecretState configured={model.hasApiKey || Boolean(model.apiKey)} />
-              </summary>
-              <div className={styles.modelBody}>
-                <ProviderModelFields
-                  model={model}
-                  onChange={(p) => update(index, p)}
-                  coefficientManager={coefficientManager}
-                />
-                <div className={styles.modelActions}>
-                  <button
-                    className={styles.dangerButton}
-                    type="button"
-                    disabled={required && models.length === 1}
-                    onClick={() => onChange(models.filter((_, i) => i !== index))}
-                  >
-                    {t('models.common.remove')}
-                  </button>
+        {(model, index, dragHandleProps) => {
+          const key = cardKey(model);
+          return (
+            <div className={styles.modelSequence}>
+              {index > 0 && (
+                <span className={styles.nextLabel}>{t('models.common.nextModel')}</span>
+              )}
+              <AnimatedDetails
+                className={styles.modelCard}
+                open={isOpen(key, index === 0)}
+                onToggle={(next) => setOpen(key, next)}
+                summary={
+                  <>
+                    <DragGrip
+                      dragHandleProps={dragHandleProps}
+                      title={t('models.common.dragToReorder')}
+                    />
+                    <span className={styles.order}>{index + 1}</span>
+                    <span className={styles.modelTitle}>
+                      <strong>{model.model || t('models.common.newModel')}</strong>
+                      <span>{model.baseUrl || t('models.common.providerNotSet')}</span>
+                    </span>
+                    <ModelSummaryChips
+                      providerKind={
+                        coefficientManager?.getOverride?.(model.uniqueId)?.providerKind ||
+                        resolveProviderKind(model.baseUrl)
+                      }
+                      prices={
+                        coefficientManager?.getOverride?.(model.uniqueId)
+                          ? {
+                              input: coefficientManager.getOverride?.(model.uniqueId)
+                                ?.inputPricePerMillion,
+                              output: coefficientManager.getOverride?.(model.uniqueId)
+                                ?.outputPricePerMillion,
+                            }
+                          : null
+                      }
+                      coefficient={coefficientManager?.get?.(model.uniqueId)}
+                    />
+                    <SecretState configured={model.hasApiKey || Boolean(model.apiKey)} />
+                  </>
+                }
+              >
+                <div className={styles.modelBody}>
+                  <ProviderModelFields
+                    model={model}
+                    onChange={(p) => update(index, p)}
+                    coefficientManager={coefficientManager}
+                  />
+                  <div className={styles.modelActions}>
+                    <button
+                      className={styles.dangerButton}
+                      type="button"
+                      disabled={required && models.length === 1}
+                      onClick={() => onChange(models.filter((_, i) => i !== index))}
+                    >
+                      {t('models.common.remove')}
+                    </button>
+                  </div>
                 </div>
-              </div>
-            </details>
-          </div>
-        )}
+              </AnimatedDetails>
+            </div>
+          );
+        }}
       </SortableModelsDnd>
       <button
         className="buttonSecondary"
@@ -872,7 +968,7 @@ export function ProviderModelFields({
           >
             <Select
               options={selectOptions}
-              value={selectedApiKeyId}
+              value={selectedApiKeyId || (model.hasApiKey ? '__existing__' : '')}
               onChange={handleSelectChange}
               placeholder={t('security.apiKeySelectPlaceholder')}
             />

@@ -8,6 +8,7 @@ import grid from '../../ui/PageGrid/PageGrid.module.css';
 import { ManualModelListEditor } from './ManualModelListEditor';
 import { ModelListEditor, ProviderModelFields } from './ModelListEditor';
 import { OpenRouterMonitorPanel } from './OpenRouterMonitorPanel';
+import { AnimatedDetails } from './AnimatedDetails';
 import styles from './ModelsPage.module.css';
 
 type Props = {
@@ -50,17 +51,17 @@ export function ModelsPage({ settings, setSettings, saving, saveState, onSave }:
 
   return (
     <form className={grid.stack} onSubmit={onSave} noValidate>
-      <details
+      <AnimatedDetails
         className={styles.section}
         open={isSectionOpen('auto', true)}
-        onToggle={(event) => setSectionOpen('auto', event.currentTarget.open)}
-      >
-        <summary>
+        onToggle={(next) => setSectionOpen('auto', next)}
+        summary={
           <span>
             <strong>Auto</strong>
             <small>{t('models.auto.subtitle')}</small>
           </span>
-        </summary>
+        }
+      >
         <div className={styles.sectionBody}>
           <ModelListEditor
             title="PRO"
@@ -88,19 +89,19 @@ export function ModelsPage({ settings, setSettings, saving, saveState, onSave }:
           />
           {coeffState && <p className={styles.empty}>{coeffState}</p>}
         </div>
-      </details>
+      </AnimatedDetails>
 
-      <details
+      <AnimatedDetails
         className={styles.section}
         open={isSectionOpen('vision')}
-        onToggle={(event) => setSectionOpen('vision', event.currentTarget.open)}
-      >
-        <summary>
+        onToggle={(next) => setSectionOpen('vision', next)}
+        summary={
           <span>
             <strong>Vision</strong>
             <small>{t('models.vision.subtitle')}</small>
           </span>
-        </summary>
+        }
+      >
         <div className={styles.sectionBody}>
           <div className={styles.singleModel}>
             <div className={styles.modelTitle}>
@@ -116,33 +117,32 @@ export function ModelsPage({ settings, setSettings, saving, saveState, onSave }:
           </div>
           {coeffState && <p className={styles.empty}>{coeffState}</p>}
         </div>
-      </details>
+      </AnimatedDetails>
 
-      <details
+      <AnimatedDetails
         className={styles.section}
         open={isSectionOpen('manual')}
-        onToggle={(event) => setSectionOpen('manual', event.currentTarget.open)}
-      >
-        <summary>
+        onToggle={(next) => setSectionOpen('manual', next)}
+        summary={
           <span>
             <strong>{t('models.manual.title')}</strong>
             <small>{t('models.manual.subtitle')}</small>
           </span>
-        </summary>
+        }
+      >
         <div className={styles.sectionBody}>
           <ManualModelListEditor
             models={settings.manualModels}
             onChange={(manualModels) => setSettings((current) => ({ ...current, manualModels }))}
           />
         </div>
-      </details>
+      </AnimatedDetails>
 
-      <details
+      <AnimatedDetails
         className={styles.section}
         open={isSectionOpen('monitor')}
-        onToggle={(event) => setSectionOpen('monitor', event.currentTarget.open)}
-      >
-        <summary>
+        onToggle={(next) => setSectionOpen('monitor', next)}
+        summary={
           <span>
             <strong>{t('models.monitor.title') || 'OpenRouter monitoring'}</strong>
             <small>
@@ -150,9 +150,10 @@ export function ModelsPage({ settings, setSettings, saving, saveState, onSave }:
                 'Watch pinned providers, notify and switch automatically'}
             </small>
           </span>
-        </summary>
+        }
+      >
         <OpenRouterMonitorPanel />
-      </details>
+      </AnimatedDetails>
 
       <ActionBar saving={saving} state={saveState} />
     </form>

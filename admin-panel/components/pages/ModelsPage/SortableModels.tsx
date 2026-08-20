@@ -118,15 +118,19 @@ export function SortableModelsDnd<T extends WithId>({
   items,
   onReorder,
   renderOverlay,
+  keyOf,
   children,
 }: {
   items: T[];
   onReorder: (next: T[]) => void;
   renderOverlay: (activeItem: T, order: number) => ReactNode;
+  /** Stable identity for keys/dnd ids (defaults to `item.id`). Use uniqueId when the server regenerates ids. */
+  keyOf?: (item: T) => string;
   children: (item: T, index: number, dragHandleProps: DragHandleProps) => ReactNode;
 }) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [activeSize, setActiveSize] = useState<{ width: number; height: number } | null>(null);
+  const getKey = keyOf ?? ((item: T) => item.id);
 
   const handleDragStart = useCallback((event: DragStartEvent) => {
     const id = (event.active.data.current as { id?: string } | undefined)?.id ?? null;
@@ -147,18 +151,18 @@ export function SortableModelsDnd<T extends WithId>({
       const activeModelId = (event.active.data.current as { id?: string } | undefined)?.id;
       const overModelId = (event.over?.data.current as { id?: string } | undefined)?.id;
       if (!activeModelId || !overModelId || activeModelId === overModelId) return;
-      const from = items.findIndex((item) => item.id === activeModelId);
-      const to = items.findIndex((item) => item.id === overModelId);
+      const from = items.findIndex((item) => getKey(item) === activeModelId);
+      const to = items.findIndex((item) => getKey(item) === overModelId);
       if (from < 0 || to < 0) return;
       const next = [...items];
       const [moved] = next.splice(from, 1);
       next.splice(to, 0, moved);
       onReorder(next);
     },
-    [items, onReorder],
+    [items, onReorder, getKey],
   );
 
-  const activeIndex = activeId ? items.findIndex((item) => item.id === activeId) : -1;
+  const activeIndex = activeId ? items.findIndex((item) => getKey(item) === activeId) : -1;
   const activeItem = activeIndex >= 0 ? items[activeIndex] : null;
 
   return (
@@ -168,11 +172,14 @@ export function SortableModelsDnd<T extends WithId>({
       onDragCancel={handleDragCancel}
       onDragEnd={handleDragEnd}
     >
-      {items.map((item, index) => (
-        <SortableModelRow key={item.id} id={item.id}>
-          {(dragHandleProps) => children(item, index, dragHandleProps)}
-        </SortableModelRow>
-      ))}
+      {items.map((item, index) => {
+        const key = getKey(item);
+        return (
+          <SortableModelRow key={key} id={key}>
+            {(dragHandleProps) => children(item, index, dragHandleProps)}
+          </SortableModelRow>
+        );
+      })}
       <DragOverlay zIndex={1000} dropAnimation={{ duration: 150, easing: 'ease-out' }}>
         {activeItem && (
           <div className={styles.sortableOverlay} style={activeSize ?? undefined}>

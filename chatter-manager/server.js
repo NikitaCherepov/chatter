@@ -489,6 +489,7 @@ function mergeProviderModels(input, existing, label, { required = false } = {}) 
   if (required && input.length === 0) throw new Error(`${label} requires at least one model`);
   const existingKeys = new Map(existing.map(item => [item.id, item.apiKey]));
   const existingProxies = new Map(existing.map(item => [item.id, item.proxyUrl || '']));
+  const existingUniqueIds = new Map(existing.map(item => [item.id, item.uniqueId || '']));
   return input.map((item, index) => {
     const id = `${item?.id || `${label}-${index}`}`;
     const baseUrl = normalizeUrl(item?.baseUrl, `${label} provider URL`, { allowEmpty: false });
@@ -499,7 +500,12 @@ function mergeProviderModels(input, existing, label, { required = false } = {}) 
       item?.proxyUrl === undefined ? existingProxies.get(id) : item.proxyUrl,
       `${label} proxy URL`
     );
-    return { id, baseUrl, apiKey, model, proxyUrl };
+    // uniqueId keys model overrides (prices / provider kind / API key) in the
+    // admin panel — preserve the client value, fall back to the stored one so
+    // a save never detaches existing overrides.
+    const uniqueId = `${item?.uniqueId || existingUniqueIds.get(id) || ''}`.trim();
+    if (/[|;\r\n\0]/.test(uniqueId)) throw new Error(`${label} quota id is invalid`);
+    return { id, baseUrl, apiKey, model, proxyUrl, uniqueId };
   });
 }
 
@@ -510,11 +516,14 @@ function mergeProviderModel(input, existing, label, { required = true } = {}) {
   if (!required && !baseUrlInput && !modelInput && !input.apiKey) return null;
   const apiKey = `${input.apiKey || ''}`.trim() || existing.apiKey || '';
   if (!apiKey || /[|;\r\n\0]/.test(apiKey)) throw new Error(`${label} API key is required`);
+  const uniqueId = `${input.uniqueId || existing.uniqueId || ''}`.trim();
+  if (/[|;\r\n\0]/.test(uniqueId)) throw new Error(`${label} quota id is invalid`);
   return {
     id: existing.id,
     baseUrl: normalizeUrl(input.baseUrl, `${label} provider URL`, { allowEmpty: false }),
     apiKey,
     model: validateEnvPart(input.model, `${label} model`),
+    uniqueId,
     proxyUrl: normalizeProxyUrl(
       input.proxyUrl === undefined ? existing.proxyUrl : input.proxyUrl,
       `${label} proxy URL`

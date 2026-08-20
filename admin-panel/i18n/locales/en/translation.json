@@ -135,6 +135,8 @@
       "newModel": "New model",
       "providerNotSet": "Provider not set",
       "dragToReorder": "Drag to reorder",
+      "expandAll": "Expand all",
+      "collapseAll": "Collapse all",
       "remove": "Remove",
       "addModel": "+ Add model"
     },

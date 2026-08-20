@@ -35,7 +35,12 @@ export function OpenRouterMonitorPanel() {
   if (!draft) {
     return (
       <div className={styles.sectionBody}>
-        <p className={styles.empty}>{loading ? t('common.loading') || 'Loading…' : (t('models.monitor.unavailable') || 'Monitor API is not available (update chatter-manager).')}</p>
+        <p className={styles.empty}>
+          {loading
+            ? t('common.loading') || 'Loading…'
+            : t('models.monitor.unavailable') ||
+              'Monitor API is not available (update chatter-manager).'}
+        </p>
       </div>
     );
   }
@@ -43,7 +48,10 @@ export function OpenRouterMonitorPanel() {
   const actionOptions: SelectOption[] = [
     { value: 'notify', label: t('models.monitor.actionNotify') || 'Notify only' },
     { value: 'cheapest', label: t('models.monitor.actionCheapest') || 'Switch to cheapest' },
-    { value: 'throughput', label: t('models.monitor.actionThroughput') || 'Switch to fastest (throughput)' },
+    {
+      value: 'throughput',
+      label: t('models.monitor.actionThroughput') || 'Switch to fastest (throughput)',
+    },
     { value: 'latency', label: t('models.monitor.actionLatency') || 'Switch to lowest latency' },
   ];
 
@@ -83,69 +91,103 @@ export function OpenRouterMonitorPanel() {
       <div className={styles.twoColumns}>
         <FormField
           label={t('models.monitor.enabled') || 'Monitoring enabled'}
-          hint={t('models.monitor.enabledHint') || 'Periodically verify that pinned OpenRouter providers still serve the model'}
+          hint={
+            t('models.monitor.enabledHint') ||
+            'Periodically verify that pinned OpenRouter providers still serve the model'
+          }
         >
           <Toggle
             checked={draft.enabled}
-            onChange={(checked) => setDraft(d => d ? { ...d, enabled: checked } : d)}
-            label={draft.enabled ? (t('common.on') || 'On') : (t('common.off') || 'Off')}
+            onChange={(checked) => setDraft((d) => (d ? { ...d, enabled: checked } : d))}
+            label={draft.enabled ? t('common.on') || 'On' : t('common.off') || 'Off'}
           />
         </FormField>
         <FormField
           label={t('models.monitor.interval') || 'Check interval (minutes)'}
-          hint={t('models.monitor.intervalHint') || 'Minimum 5 minutes; a small random jitter is added'}
+          hint={
+            t('models.monitor.intervalHint') || 'Minimum 5 minutes; a small random jitter is added'
+          }
         >
           <input
-            type="number" min={5} step={5}
+            type="number"
+            min={5}
+            step={5}
             value={draft.intervalMinutes}
-            onChange={e => setDraft(d => d ? { ...d, intervalMinutes: Math.max(5, Number(e.target.value) || 60) } : d)}
+            onChange={(e) =>
+              setDraft((d) =>
+                d ? { ...d, intervalMinutes: Math.max(5, Number(e.target.value) || 60) } : d,
+              )
+            }
           />
         </FormField>
       </div>
 
       <FormField
         label={t('models.monitor.action') || 'Action when provider disappears'}
-        hint={t('models.monitor.actionHint') || 'Auto-switch happens only after two consecutive successful checks without the provider'}
+        hint={
+          t('models.monitor.actionHint') ||
+          'Auto-switch happens only after two consecutive successful checks without the provider'
+        }
       >
         <Select
           options={actionOptions}
           value={draft.action}
-          onChange={(v) => setDraft(d => d ? { ...d, action: (v as MonitorSettingsData['action']) } : d)}
+          onChange={(v) =>
+            setDraft((d) => (d ? { ...d, action: v as MonitorSettingsData['action'] } : d))
+          }
         />
       </FormField>
 
       <FormField
         label={t('models.monitor.recipients') || 'Notification recipients'}
-        hint={t('models.monitor.recipientsHint') || 'Telegram notifications use the existing Chatter bot'}
+        hint={
+          t('models.monitor.recipientsHint') ||
+          'Telegram notifications use the existing Chatter bot'
+        }
       >
         <Select
           options={recipientOptions}
           value={draft.recipientsMode}
-          onChange={(v) => setDraft(d => d ? { ...d, recipientsMode: (v as MonitorSettingsData['recipientsMode']) } : d)}
+          onChange={(v) =>
+            setDraft((d) =>
+              d ? { ...d, recipientsMode: v as MonitorSettingsData['recipientsMode'] } : d,
+            )
+          }
         />
       </FormField>
 
       {draft.recipientsMode === 'selected' && (
         <div className={styles.monitorAdminField}>
-          <span className={styles.monitorAdminFieldLabel}>{t('models.monitor.recipientAdmins') || 'Admins'}</span>
-          {admins.length === 0 && <small>{t('models.monitor.noAdmins') || 'No admins found'}</small>}
+          <span className={styles.monitorAdminFieldLabel}>
+            {t('models.monitor.recipientAdmins') || 'Admins'}
+          </span>
+          {admins.length === 0 && (
+            <small>{t('models.monitor.noAdmins') || 'No admins found'}</small>
+          )}
           <div className={styles.monitorAdminList}>
-            {admins.map(admin => (
+            {admins.map((admin) => (
               <label key={admin.id} className={styles.monitorAdminItem}>
                 <input
                   type="checkbox"
                   className={styles.monitorAdminCheckbox}
                   checked={draft.recipientUserIds.includes(admin.id)}
-                  onChange={e => setDraft(d => {
-                    if (!d) return d;
-                    const ids = e.target.checked
-                      ? [...d.recipientUserIds, admin.id]
-                      : d.recipientUserIds.filter(id => id !== admin.id);
-                    return { ...d, recipientUserIds: ids };
-                  })}
+                  onChange={(e) =>
+                    setDraft((d) => {
+                      if (!d) return d;
+                      const ids = e.target.checked
+                        ? [...d.recipientUserIds, admin.id]
+                        : d.recipientUserIds.filter((id) => id !== admin.id);
+                      return { ...d, recipientUserIds: ids };
+                    })
+                  }
                 />
                 <span>{admin.name || `#${admin.id}`}</span>
-                {!admin.hasTelegram && <small style={{ color: 'var(--color-muted)' }}> · {t('models.monitor.noTelegram') || 'no Telegram'}</small>}
+                {!admin.hasTelegram && (
+                  <small style={{ color: 'var(--color-muted)' }}>
+                    {' '}
+                    · {t('models.monitor.noTelegram') || 'no Telegram'}
+                  </small>
+                )}
               </label>
             ))}
           </div>
@@ -154,10 +196,19 @@ export function OpenRouterMonitorPanel() {
 
       <div style={{ display: 'flex', gap: 'var(--sp-2)', flexWrap: 'wrap', alignItems: 'center' }}>
         <button type="button" disabled={saving} onClick={() => void handleSave()}>
-          {saving ? (t('common.saving') || 'Saving…') : (t('models.monitor.saveSettings') || 'Save monitoring settings')}
+          {saving
+            ? t('common.saving') || 'Saving…'
+            : t('models.monitor.saveSettings') || 'Save monitoring settings'}
         </button>
-        <button type="button" className="buttonSecondary" disabled={checking} onClick={() => void handleCheckAll()}>
-          {checking ? (t('models.monitor.checking') || 'Checking…') : (t('models.monitor.checkAll') || 'Check all now')}
+        <button
+          type="button"
+          className="buttonSecondary"
+          disabled={checking}
+          onClick={() => void handleCheckAll()}
+        >
+          {checking
+            ? t('models.monitor.checking') || 'Checking…'
+            : t('models.monitor.checkAll') || 'Check all now'}
         </button>
         {error && <small style={{ color: 'var(--color-danger, #e5484d)' }}>{error}</small>}
       </div>
@@ -176,13 +227,15 @@ export function OpenRouterMonitorPanel() {
               </tr>
             </thead>
             <tbody>
-              {states.map(s => (
+              {states.map((s) => (
                 <tr key={s.model_id}>
                   <td>{s.model_slug || s.model_id}</td>
                   <td>{s.route || '—'}</td>
                   <td>{s.provider_slug || '—'}</td>
                   <td>
-                    <span className={`${styles.monitorBadge} ${styles[`monitor_${s.status}`] || ''}`}>
+                    <span
+                      className={`${styles.monitorBadge} ${styles[`monitor_${s.status}`] || ''}`}
+                    >
                       {STATUS_LABELS[s.status] || s.status}
                     </span>
                     {s.status === 'missing' && s.consecutive_missing > 0 && (

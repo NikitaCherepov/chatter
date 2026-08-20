@@ -44,10 +44,15 @@ export function usePersistentOpenState(storageKey: string) {
     });
   }, []);
 
+  /** Bulk open/close (expand-all / collapse-all). */
+  const setAll = useCallback((ids: string[], open: boolean) => {
+    setOpenIds(open ? new Set(ids) : new Set());
+  }, []);
+
   const isOpen = useCallback(
     (id: string, defaultOpen = false) => (openIds === null ? defaultOpen : openIds.has(id)),
     [openIds],
   );
 
-  return { isOpen, setOpen };
+  return { isOpen, setOpen, setAll };
 }
