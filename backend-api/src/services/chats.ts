@@ -1736,14 +1736,16 @@ export const getHistoryForAi = (
  *
  * возвращает { archived_count, tokens_before, tokens_after } для логирования.
  */
-export const getProviderContextEstimate = (userId: number, chatId: number): number | null => {
+const getProviderContextEstimateForUsers = (userIds: number[], chatId: number): number | null => {
+  if (userIds.length === 0) return null;
+  const placeholders = userIds.map(() => '?').join(', ');
   const latestAssistant = db.prepare(`
     SELECT id, created_at, usage_json
     FROM chat_messages
-    WHERE user_id = ? AND chat_id = ? AND role = 'assistant' AND usage_json IS NOT NULL
+    WHERE user_id IN (${placeholders}) AND chat_id = ? AND role = 'assistant' AND usage_json IS NOT NULL
     ORDER BY id DESC
     LIMIT 1
-  `).get(userId, chatId) as { id: number; created_at: string; usage_json: string | null } | undefined;
+  `).get(...userIds, chatId) as { id: number; created_at: string; usage_json: string | null } | undefined;
 
   if (!latestAssistant?.usage_json) return null;
 
@@ -1755,8 +1757,8 @@ export const getProviderContextEstimate = (userId: number, chatId: number): numb
     const activeLocal = db.prepare(`
       SELECT COALESCE(SUM(token_count), 0) AS tokens
       FROM chat_messages
-      WHERE user_id = ? AND chat_id = ? AND archived = 0
-    `).get(userId, chatId) as { tokens: number };
+      WHERE user_id IN (${placeholders}) AND chat_id = ? AND archived = 0
+    `).get(...userIds, chatId) as { tokens: number };
 
     if (
       Number.isFinite(usage.context_estimate_tokens)
@@ -1780,16 +1782,16 @@ export const getProviderContextEstimate = (userId: number, chatId: number): numb
     const archivedAfter = db.prepare(`
       SELECT COALESCE(SUM(token_count), 0) AS tokens
       FROM chat_messages
-      WHERE user_id = ? AND chat_id = ? AND archived = 1
+      WHERE user_id IN (${placeholders}) AND chat_id = ? AND archived = 1
         AND id <= ? AND archived_at >= ?
-    `).get(userId, chatId, latestAssistant.id, latestAssistant.created_at) as { tokens: number };
+    `).get(...userIds, chatId, latestAssistant.id, latestAssistant.created_at) as { tokens: number };
 
     // Defensive support for persisted rows added after the latest assistant message.
     const activeAfter = db.prepare(`
       SELECT COALESCE(SUM(token_count), 0) AS tokens
       FROM chat_messages
-      WHERE user_id = ? AND chat_id = ? AND archived = 0 AND id > ?
-    `).get(userId, chatId, latestAssistant.id) as { tokens: number };
+      WHERE user_id IN (${placeholders}) AND chat_id = ? AND archived = 0 AND id > ?
+    `).get(...userIds, chatId, latestAssistant.id) as { tokens: number };
 
     return Math.max(
       0,
@@ -1799,6 +1801,9 @@ export const getProviderContextEstimate = (userId: number, chatId: number): numb
     return null;
   }
 };
+
+export const getProviderContextEstimate = (userId: number, chatId: number): number | null =>
+  getProviderContextEstimateForUsers([userId], chatId);
 
 const saveProviderContextAnchor = (
   userId: number,
@@ -2591,6 +2596,14 @@ export type ChatContextTokens = {
  * (+ возможные надбавки за голос/аватар/изображения, которые здесь не учтены).
  */
 export const getChatContextTokens = (userId: number, chatId: number): ChatContextTokens => {
+  // Personal chats are stored under one user_id. Shared room messages are
+  // stored under their human sender or bot owner, so the counter must use the
+  // same room-wide reader scope as getChatMessages()/getHistoryForAi().
+  const readerIds = listRoomReaderUserIds(chatId);
+  const scopedUserIds = readerIds?.includes(userId) ? readerIds : [];
+  const placeholders = scopedUserIds.map(() => '?').join(', ');
+  if (scopedUserIds.length === 0) throw new Error('chat_not_found');
+
   const row = db.prepare(`
     SELECT
       COALESCE(SUM(CASE WHEN archived = 0 THEN token_count ELSE 0 END), 0) AS messages_tokens,
@@ -2599,8 +2612,8 @@ export const getChatContextTokens = (userId: number, chatId: number): ChatContex
       COALESCE(SUM(CASE WHEN archived = 0 THEN 1 ELSE 0 END), 0) AS active_messages,
       COALESCE(SUM(CASE WHEN archived = 1 THEN 1 ELSE 0 END), 0) AS archived_messages
     FROM chat_messages
-    WHERE user_id = ? AND chat_id = ?
-  `).get(userId, chatId) as Pick<
+    WHERE user_id IN (${placeholders}) AND chat_id = ?
+  `).get(...scopedUserIds, chatId) as Pick<
     ChatContextTokens,
     'messages_tokens' | 'reasoning_tokens' | 'archived_tokens' | 'active_messages' | 'archived_messages'
   >;
@@ -2608,10 +2621,10 @@ export const getChatContextTokens = (userId: number, chatId: number): ChatContex
   const latestAssistant = db.prepare(`
     SELECT usage_json, model_name
     FROM chat_messages
-    WHERE user_id = ? AND chat_id = ? AND role = 'assistant' AND usage_json IS NOT NULL
+    WHERE user_id IN (${placeholders}) AND chat_id = ? AND role = 'assistant' AND usage_json IS NOT NULL
     ORDER BY id DESC
     LIMIT 1
-  `).get(userId, chatId) as { usage_json: string | null; model_name: string | null } | undefined;
+  `).get(...scopedUserIds, chatId) as { usage_json: string | null; model_name: string | null } | undefined;
 
   let latestUsage: MessageUsage['latest'] | null = null;
   if (latestAssistant?.usage_json) {
@@ -2650,7 +2663,7 @@ export const getChatContextTokens = (userId: number, chatId: number): ChatContex
     latest_cache_miss_tokens: latestUsage?.cache_miss_tokens ?? 0,
     latest_reasoning_tokens: latestUsage?.reasoning_tokens ?? 0,
     latest_model_name: latestAssistant?.model_name ?? null,
-    current_context_tokens: getProviderContextEstimate(userId, chatId)
+    current_context_tokens: getProviderContextEstimateForUsers(scopedUserIds, chatId)
       ?? (row.messages_tokens + system_prompt_tokens),
   };
 };

@@ -2184,6 +2184,7 @@ app.get('/api/v1/chats/:id/context-tokens', (req: AuthedRequest, res) => {
   const userId = accountIdFromRequest(req);
   const chatId = Number.parseInt(req.params.id, 10);
   if (!Number.isFinite(chatId) || chatId <= 0) return res.status(400).json({ error: 'bad_chat_id' });
+  if (!canReadChatMessages(userId, chatId)) return res.status(404).json({ error: 'chat_not_found' });
   const tokens = getChatContextTokens(userId, chatId);
   res.json(tokens);
 });
