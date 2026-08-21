@@ -123,5 +123,8 @@
     "provider": "プロバイダー",
     "priceTitle": "📉 OpenRouterプロバイダーの価格が変更されました",
     "priceUpdatedOverrides": "管理パネルのモデル価格が自動的に更新されました。"
+  },
+  "models": {
+    "selectionReset": "選択したモデルは利用できなくなりました。Chatterは自動モデル選択に切り替えました。"
   }
 }

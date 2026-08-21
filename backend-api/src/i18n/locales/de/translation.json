@@ -123,5 +123,8 @@
     "provider": "Anbieter",
     "priceTitle": "📉 OpenRouter-Anbieterpreise geändert",
     "priceUpdatedOverrides": "Modellpreise im Admin-Panel wurden automatisch aktualisiert."
+  },
+  "models": {
+    "selectionReset": "Das ausgewählte Modell ist nicht mehr verfügbar. Chatter hat Sie zur automatischen Modellauswahl umgestellt."
   }
 }

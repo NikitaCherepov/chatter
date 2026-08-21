@@ -776,7 +776,27 @@
     "model": {
       "label": "Model:",
       "automatic": "Otomatik seçim",
-      "freeBadge": "ücretsiz"
+      "freeBadge": "ücretsiz",
+      "meta": {
+        "intel": {
+          "label": "IQ",
+          "low": "temel",
+          "mid": "orta",
+          "high": "akıllı"
+        },
+        "speed": {
+          "label": "Hız",
+          "low": "yavaş",
+          "mid": "ortalama",
+          "high": "hızlı"
+        },
+        "price": {
+          "label": "Fiyat",
+          "low": "ucuz",
+          "mid": "ortalama",
+          "high": "pahalı"
+        }
+      }
     },
     "messages": {
       "loading": "Mesajlar yükleniyor...",

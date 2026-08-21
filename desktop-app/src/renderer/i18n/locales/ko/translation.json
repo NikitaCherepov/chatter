@@ -776,7 +776,27 @@
     "model": {
       "label": "모델:",
       "automatic": "자동 선택",
-      "freeBadge": "무료"
+      "freeBadge": "무료",
+      "meta": {
+        "intel": {
+          "label": "IQ",
+          "low": "기본",
+          "mid": "중간",
+          "high": "스마트"
+        },
+        "speed": {
+          "label": "속도",
+          "low": "느림",
+          "mid": "보통",
+          "high": "빠름"
+        },
+        "price": {
+          "label": "가격",
+          "low": "저렴",
+          "mid": "평균",
+          "high": "비쌈"
+        }
+      }
     },
     "messages": {
       "loading": "메시지 로딩 중...",

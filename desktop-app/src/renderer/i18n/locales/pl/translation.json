@@ -776,7 +776,27 @@
     "model": {
       "label": "Model:",
       "automatic": "Automatyczny wybór",
-      "freeBadge": "darmowy"
+      "freeBadge": "darmowy",
+      "meta": {
+        "intel": {
+          "label": "IQ",
+          "low": "podstawowy",
+          "mid": "średni",
+          "high": "inteligentny"
+        },
+        "speed": {
+          "label": "Prędkość",
+          "low": "wolno",
+          "mid": "średnio",
+          "high": "szybko"
+        },
+        "price": {
+          "label": "Cena",
+          "low": "tanio",
+          "mid": "średnia",
+          "high": "droga"
+        }
+      }
     },
     "messages": {
       "loading": "Ładowanie wiadomości...",

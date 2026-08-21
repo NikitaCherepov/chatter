@@ -173,7 +173,20 @@
       "refreshPrices": "Preise aktualisieren",
       "refreshing": "Aktualisiere…",
       "customModel": "Andere…",
-      "customModelHint": "manuell angeben"
+      "customModelHint": "manuell angeben",
+      "intelTier": "Intelligenzstufe",
+      "intelTierHint": "Wird im Benutzermodell-Auswahlfeld angezeigt",
+      "priceTier": "Preisstufe",
+      "priceTierHint": "Angezeigt als $ / $$ / $$$",
+      "tierUnset": "Nicht festgelegt",
+      "intelLow": "Basis",
+      "intelMid": "Mittel",
+      "intelHigh": "Smart",
+      "priceLow": "Günstig",
+      "priceMid": "Durchschnitt",
+      "priceHigh": "Teuer",
+      "measuredSpeed": "Gemessene Geschwindigkeit",
+      "measuredSpeedHint": "Automatisch aus der tatsächlichen Nutzung erfasst"
     },
     "monitor": {
       "title": "OpenRouter-Überwachung",

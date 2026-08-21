@@ -776,7 +776,27 @@
     "model": {
       "label": "Model:",
       "automatic": "Automatický výběr",
-      "freeBadge": "zdarma"
+      "freeBadge": "zdarma",
+      "meta": {
+        "intel": {
+          "label": "IQ",
+          "low": "základní",
+          "mid": "střední",
+          "high": "chytrý"
+        },
+        "speed": {
+          "label": "Rychlost",
+          "low": "pomalé",
+          "mid": "průměrné",
+          "high": "rychlé"
+        },
+        "price": {
+          "label": "Cena",
+          "low": "levné",
+          "mid": "průměrná",
+          "high": "drahá"
+        }
+      }
     },
     "messages": {
       "loading": "Načítání zpráv...",

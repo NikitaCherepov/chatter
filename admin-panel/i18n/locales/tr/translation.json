@@ -178,7 +178,20 @@
       "refreshPrices": "Fiyatları yenile",
       "refreshing": "Yenileniyor…",
       "customModel": "Diğer…",
-      "customModelHint": "manuel olarak belirtin"
+      "customModelHint": "manuel olarak belirtin",
+      "intelTier": "Zeka seviyesi",
+      "intelTierHint": "Kullanıcı model seçicide gösterilir",
+      "priceTier": "Fiyat seviyesi",
+      "priceTierHint": "$ / $$ / $$$ olarak gösterilir",
+      "tierUnset": "Ayarlanmadı",
+      "intelLow": "Temel",
+      "intelMid": "Orta",
+      "intelHigh": "Akıllı",
+      "priceLow": "Ucuz",
+      "priceMid": "Ortalama",
+      "priceHigh": "Pahalı",
+      "measuredSpeed": "Ölçülen hız",
+      "measuredSpeedHint": "Gerçek kullanımdan otomatik olarak toplanır"
     },
     "monitor": {
       "title": "OpenRouter izleme",

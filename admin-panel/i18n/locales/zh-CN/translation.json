@@ -173,7 +173,20 @@
       "refreshPrices": "刷新价格",
       "refreshing": "刷新中…",
       "customModel": "其他…",
-      "customModelHint": "手动指定"
+      "customModelHint": "手动指定",
+      "intelTier": "智能层级",
+      "intelTierHint": "显示在用户模型选择器中",
+      "priceTier": "价格层级",
+      "priceTierHint": "显示为 $ / $$ / $$$",
+      "tierUnset": "未设置",
+      "intelLow": "基础",
+      "intelMid": "中等",
+      "intelHigh": "智能",
+      "priceLow": "便宜",
+      "priceMid": "平均",
+      "priceHigh": "昂贵",
+      "measuredSpeed": "实测速度",
+      "measuredSpeedHint": "从实际使用中自动收集"
     },
     "monitor": {
       "title": "OpenRouter 监控",

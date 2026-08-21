@@ -123,5 +123,8 @@
     "provider": "提供商",
     "priceTitle": "📉 OpenRouter提供商价格已变更",
     "priceUpdatedOverrides": "管理面板中的模型价格已自动更新。"
+  },
+  "models": {
+    "selectionReset": "所选模型不再可用。Chatter 已将您切换到自动模型选择。"
   }
 }

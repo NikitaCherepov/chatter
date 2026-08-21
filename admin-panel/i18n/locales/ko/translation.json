@@ -173,7 +173,20 @@
       "refreshPrices": "가격 새로고침",
       "refreshing": "새로고치는 중…",
       "customModel": "기타…",
-      "customModelHint": "수동으로 지정"
+      "customModelHint": "수동으로 지정",
+      "intelTier": "지능 등급",
+      "intelTierHint": "사용자 모델 선택기에 표시됩니다",
+      "priceTier": "가격 등급",
+      "priceTierHint": "$ / $$ / $$$로 표시됩니다",
+      "tierUnset": "설정되지 않음",
+      "intelLow": "기본",
+      "intelMid": "중간",
+      "intelHigh": "스마트",
+      "priceLow": "저렴",
+      "priceMid": "평균",
+      "priceHigh": "비쌈",
+      "measuredSpeed": "측정된 속도",
+      "measuredSpeedHint": "실제 사용량에서 자동으로 수집됨"
     },
     "monitor": {
       "title": "OpenRouter 모니터링",

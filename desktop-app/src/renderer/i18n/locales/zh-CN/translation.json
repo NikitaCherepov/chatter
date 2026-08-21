@@ -455,7 +455,27 @@
     "model": {
       "label": "模型：",
       "automatic": "自动选择",
-      "freeBadge": "免费"
+      "freeBadge": "免费",
+      "meta": {
+        "intel": {
+          "label": "智商",
+          "low": "基础",
+          "mid": "中等",
+          "high": "智能"
+        },
+        "speed": {
+          "label": "速度",
+          "low": "慢",
+          "mid": "平均",
+          "high": "快"
+        },
+        "price": {
+          "label": "价格",
+          "low": "便宜",
+          "mid": "平均",
+          "high": "昂贵"
+        }
+      }
     },
     "messages": {
       "loading": "正在加载消息...",

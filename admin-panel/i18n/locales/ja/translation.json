@@ -173,7 +173,20 @@
       "refreshPrices": "価格を更新",
       "refreshing": "更新中…",
       "customModel": "その他…",
-      "customModelHint": "手動で指定"
+      "customModelHint": "手動で指定",
+      "intelTier": "インテリジェンス層",
+      "intelTierHint": "ユーザーモデルセレクターに表示されます",
+      "priceTier": "価格層",
+      "priceTierHint": "$ / $$ / $$$ として表示されます",
+      "tierUnset": "未設定",
+      "intelLow": "基本",
+      "intelMid": "中級",
+      "intelHigh": "スマート",
+      "priceLow": "安価",
+      "priceMid": "平均",
+      "priceHigh": "高価",
+      "measuredSpeed": "測定速度",
+      "measuredSpeedHint": "実際の使用状況から自動的に収集されます"
     },
     "monitor": {
       "title": "OpenRouter モニタリング",

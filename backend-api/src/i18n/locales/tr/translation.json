@@ -123,5 +123,8 @@
     "provider": "Sağlayıcı",
     "priceTitle": "📉 OpenRouter sağlayıcı fiyatları değişti",
     "priceUpdatedOverrides": "Yönetim panelindeki model fiyatları otomatik olarak güncellendi."
+  },
+  "models": {
+    "selectionReset": "Seçilen model artık mevcut değil. Chatter sizi otomatik model seçimine geçirdi."
   }
 }

@@ -455,7 +455,27 @@
     "model": {
       "label": "Modelo:",
       "automatic": "Seleção automática",
-      "freeBadge": "gratuito"
+      "freeBadge": "gratuito",
+      "meta": {
+        "intel": {
+          "label": "QI",
+          "low": "básico",
+          "mid": "médio",
+          "high": "inteligente"
+        },
+        "speed": {
+          "label": "Velocidade",
+          "low": "lento",
+          "mid": "médio",
+          "high": "rápido"
+        },
+        "price": {
+          "label": "Preço",
+          "low": "barato",
+          "mid": "médio",
+          "high": "caro"
+        }
+      }
     },
     "messages": {
       "loading": "Carregando mensagens...",

@@ -1,56 +1,43 @@
 {
   "changes": {
     "en": [
-      "Added model generation speed display.",
-      "Fixed folder state saving."
+      "Added cost/intelligence/speed for each model in the model picker"
     ],
     "cs": [
-      "Přidáno zobrazení rychlosti generování modelu.",
-      "Opraveno ukládání stavu složky."
+      "Přidána cena/inteligence/rychlost pro každý model ve výběru modelů"
     ],
     "de": [
-      "Anzeige der Modellgenerierungsgeschwindigkeit hinzugefügt.",
-      "Speichern des Ordnerstatus behoben."
+      "Kosten/Intelligenz/Geschwindigkeit für jedes Modell im Modellauswahl hinzugefügt"
     ],
     "es": [
-      "Se añadió la visualización de la velocidad de generación del modelo.",
-      "Se corrigió el guardado del estado de la carpeta."
+      "Costo/inteligencia/velocidad añadidos para cada modelo en el selector de modelos"
     ],
     "fr": [
-      "Affichage de la vitesse de génération du modèle ajouté.",
-      "Correction de l'enregistrement de l'état des dossiers."
+      "Coût/intelligence/vitesse ajoutés pour chaque modèle dans le sélecteur de modèles"
     ],
     "it": [
-      "Aggiunta la visualizzazione della velocità di generazione del modello.",
-      "Corretto il salvataggio dello stato delle cartelle."
+      "Aggiunto costo/intelligenza/velocità per ogni modello nel selettore dei modelli"
     ],
     "ja": [
-      "モデル生成速度の表示を追加しました。",
-      "フォルダー状態の保存を修正しました。"
+      "モデルピッカーで各モデルのコスト/インテリジェンス/スピードを追加しました"
     ],
     "ko": [
-      "모델 생성 속도 표시를 추가했습니다.",
-      "폴더 상태 저장을 수정했습니다."
+      "모델 선택기에서 각 모델에 대한 비용/지능/속도를 추가했습니다."
     ],
     "pl": [
-      "Dodano wyświetlanie szybkości generowania modelu.",
-      "Naprawiono zapisywanie stanu folderu."
+      "Dodano koszt/inteligencję/szybkość dla każdego modelu w selektorze modeli"
     ],
     "pt-BR": [
-      "Adicionada exibição da velocidade de geração do modelo.",
-      "Corrigido o salvamento do estado da pasta."
+      "Custo/inteligência/velocidade adicionados para cada modelo no seletor de modelos"
     ],
     "ru": [
-      "Добавлено отображение скорости генерации модели.",
-      "Исправлено сохранение состояния папок."
+      "Добавлена стоимость/интеллект/скорость для каждой модели в выборе модели"
     ],
     "tr": [
-      "Model üretim hızı görüntüleme eklendi.",
-      "Klasör durumu kaydetme düzeltildi."
+      "Model seçicide her model için maliyet/zeka/hız eklendi"
     ],
     "zh-CN": [
-      "添加了模型生成速度显示。",
-      "修复了文件夹状态保存。"
+      "在模型选择器中为每个模型添加了成本/智能/速度信息"
     ]
   }
 }

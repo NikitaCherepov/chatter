@@ -123,5 +123,8 @@
     "provider": "제공자",
     "priceTitle": "📉 OpenRouter 제공자 가격이 변경되었습니다.",
     "priceUpdatedOverrides": "관리자 패널의 모델 가격이 자동으로 업데이트되었습니다."
+  },
+  "models": {
+    "selectionReset": "선택한 모델을 더 이상 사용할 수 없습니다. Chatter가 자동 모델 선택으로 전환했습니다."
   }
 }

@@ -123,5 +123,8 @@
     "provider": "Poskytovatel",
     "priceTitle": "📉 Ceny poskytovatele OpenRouter se změnily",
     "priceUpdatedOverrides": "Ceny modelů v administračním panelu byly automaticky aktualizovány."
+  },
+  "models": {
+    "selectionReset": "Vybraný model již není dostupný. Chatter vás přepnul na automatický výběr modelu."
   }
 }

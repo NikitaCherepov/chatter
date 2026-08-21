@@ -179,7 +179,20 @@
       "refreshPrices": "Obnovit ceny",
       "refreshing": "Obnovuji…",
       "customModel": "Jiné…",
-      "customModelHint": "zadat ručně"
+      "customModelHint": "zadat ručně",
+      "intelTier": "Úroveň inteligence",
+      "intelTierHint": "Zobrazeno ve výběru uživatelského modelu",
+      "priceTier": "Cenová úroveň",
+      "priceTierHint": "Zobrazeno jako $ / $$ / $$$",
+      "tierUnset": "Nenastaveno",
+      "intelLow": "Základní",
+      "intelMid": "Střední",
+      "intelHigh": "Chytrý",
+      "priceLow": "Levný",
+      "priceMid": "Průměrný",
+      "priceHigh": "Drahé",
+      "measuredSpeed": "Naměřená rychlost",
+      "measuredSpeedHint": "Shromažďováno automaticky ze skutečného používání"
     },
     "monitor": {
       "title": "Monitorování OpenRouter",
