@@ -1,95 +1,56 @@
 {
   "changes": {
     "en": [
-      "Added rooms where you can invite other people and bring your own bots.",
-      "Bots can now work in the background and notify you when they finish.",
-      "Messages now show their sent date.",
       "Added model generation speed display.",
       "Fixed folder state saving."
     ],
     "cs": [
-      "Přidány místnosti, kam můžete pozvat další lidi a přivést vlastní boty.",
-      "Boti nyní mohou pracovat na pozadí a upozornit vás, až dokončí práci.",
-      "Zprávy nyní zobrazují datum odeslání.",
       "Přidáno zobrazení rychlosti generování modelu.",
-      "Opraveno ukládání stavu složek."
+      "Opraveno ukládání stavu složky."
     ],
     "de": [
-      "Räume hinzugefügt, in die du andere Personen einladen und deine eigenen Bots mitbringen kannst.",
-      "Bots können jetzt im Hintergrund arbeiten und dich benachrichtigen, wenn sie fertig sind.",
-      "Nachrichten zeigen jetzt ihr Sendedatum an.",
       "Anzeige der Modellgenerierungsgeschwindigkeit hinzugefügt.",
       "Speichern des Ordnerstatus behoben."
     ],
     "es": [
-      "Se agregaron salas donde puedes invitar a otras personas y traer tus propios bots.",
-      "Los bots ahora pueden trabajar en segundo plano y notificarte cuando terminen.",
-      "Los mensajes ahora muestran su fecha de envío.",
-      "Se agregó la visualización de la velocidad de generación del modelo.",
-      "Se corrigió el guardado del estado de las carpetas."
+      "Se añadió la visualización de la velocidad de generación del modelo.",
+      "Se corrigió el guardado del estado de la carpeta."
     ],
     "fr": [
-      "Ajout de salons où vous pouvez inviter d'autres personnes et amener vos propres bots.",
-      "Les bots peuvent désormais travailler en arrière-plan et vous notifier lorsqu'ils ont terminé.",
-      "Les messages affichent désormais leur date d'envoi.",
-      "Ajout de l'affichage de la vitesse de génération du modèle.",
+      "Affichage de la vitesse de génération du modèle ajouté.",
       "Correction de l'enregistrement de l'état des dossiers."
     ],
     "it": [
-      "Aggiunte stanze dove puoi invitare altre persone e portare i tuoi bot.",
-      "I bot ora possono lavorare in background e avvisarti quando finiscono.",
-      "I messaggi ora mostrano la data di invio.",
       "Aggiunta la visualizzazione della velocità di generazione del modello.",
       "Corretto il salvataggio dello stato delle cartelle."
     ],
     "ja": [
-      "他の人を招待して自分のボットを持ち込めるルームを追加しました。",
-      "ボットはバックグラウンドで動作し、完了時に通知できるようになりました。",
-      "メッセージに送信日時が表示されるようになりました。",
       "モデル生成速度の表示を追加しました。",
-      "フォルダの状態保存を修正しました。"
+      "フォルダー状態の保存を修正しました。"
     ],
     "ko": [
-      "다른 사람을 초대하고 자신의 봇을 가져올 수 있는 방이 추가되었습니다.",
-      "봇이 이제 백그라운드에서 작업하고 완료되면 알릴 수 있습니다.",
-      "메시지에 전송 날짜가 표시됩니다.",
-      "모델 생성 속도 표시가 추가되었습니다.",
-      "폴더 상태 저장 문제가 수정되었습니다."
+      "모델 생성 속도 표시를 추가했습니다.",
+      "폴더 상태 저장을 수정했습니다."
     ],
     "pl": [
-      "Dodano pokoje, do których możesz zapraszać inne osoby i przyprowadzać własne boty.",
-      "Boty mogą teraz pracować w tle i powiadamiać Cię po zakończeniu.",
-      "Wiadomości pokazują teraz datę wysłania.",
       "Dodano wyświetlanie szybkości generowania modelu.",
-      "Naprawiono zapisywanie stanu folderów."
+      "Naprawiono zapisywanie stanu folderu."
     ],
     "pt-BR": [
-      "Adicionadas salas onde você pode convidar outras pessoas e trazer seus próprios bots.",
-      "Os bots agora podem trabalhar em segundo plano e notificá-lo quando terminarem.",
-      "As mensagens agora mostram a data de envio.",
       "Adicionada exibição da velocidade de geração do modelo.",
-      "Corrigido o salvamento do estado das pastas."
+      "Corrigido o salvamento do estado da pasta."
     ],
     "ru": [
-      "Добавлены комнаты, где вы можете приглашать других людей и приводить своих ботов.",
-      "Боты теперь могут работать в фоновом режиме и уведомлять вас о завершении.",
-      "Сообщения теперь показывают дату отправки.",
       "Добавлено отображение скорости генерации модели.",
       "Исправлено сохранение состояния папок."
     ],
     "tr": [
-      "Başkalarını davet edebileceğiniz ve kendi botlarınızı getirebileceğiniz odalar eklendi.",
-      "Botlar artık arka planda çalışabilir ve bitirdiklerinde sizi bilgilendirebilir.",
-      "Mesajlar artık gönderilme tarihini gösteriyor.",
       "Model üretim hızı görüntüleme eklendi.",
       "Klasör durumu kaydetme düzeltildi."
     ],
     "zh-CN": [
-      "添加了可以邀请他人并携带自己的机器人的房间。",
-      "机器人现在可以在后台工作，并在完成时通知您。",
-      "消息现在显示发送日期。",
       "添加了模型生成速度显示。",
-      "修复了文件夹状态保存问题。"
+      "修复了文件夹状态保存。"
     ]
   }
 }
