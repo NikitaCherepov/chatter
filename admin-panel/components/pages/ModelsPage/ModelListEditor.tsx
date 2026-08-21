@@ -903,6 +903,53 @@ export function ProviderModelFields({
             </FormField>
           </div>
 
+          {/* Display tiers for the desktop model selector (admin-optional) */}
+          <div className={styles.threeColumns}>
+            <FormField
+              label={t('models.billing.intelTier') || 'Intelligence tier'}
+              hint={t('models.billing.intelTierHint') || 'Shown in the user model selector'}
+            >
+              <Select
+                options={[
+                  { value: '', label: t('models.billing.tierUnset') || 'Not set' },
+                  { value: '1', label: t('models.billing.intelLow') || '■□□ Basic' },
+                  { value: '2', label: t('models.billing.intelMid') || '■■□ Smart' },
+                  { value: '3', label: t('models.billing.intelHigh') || '■■■ Genius' },
+                ]}
+                value={override?.intelTier ? String(override.intelTier) : ''}
+                onChange={(v) => void persistOverride({ intelTier: v ? (Number(v) as 1 | 2 | 3) : null })}
+              />
+            </FormField>
+            <FormField
+              label={t('models.billing.priceTier') || 'Price tier'}
+              hint={t('models.billing.priceTierHint') || 'Shown as $ / $$ / $$$'}
+            >
+              <Select
+                options={[
+                  { value: '', label: t('models.billing.tierUnset') || 'Not set' },
+                  { value: '1', label: t('models.billing.priceLow') || 'Cheap' },
+                  { value: '2', label: t('models.billing.priceMid') || 'Average' },
+                  { value: '3', label: t('models.billing.priceHigh') || 'Expensive' },
+                ]}
+                value={override?.priceTier ? String(override.priceTier) : ''}
+                onChange={(v) => void persistOverride({ priceTier: v ? (Number(v) as 1 | 2 | 3) : null })}
+              />
+            </FormField>
+            <FormField
+              label={t('models.billing.measuredSpeed') || 'Measured speed'}
+              hint={
+                override?.tpsSamples
+                  ? `${override.avgTps ?? '—'} t/s · ${override.tpsSamples} samples`
+                  : t('models.billing.measuredSpeedHint') || 'Collected automatically from real usage'
+              }
+            >
+              <input
+                value={override?.avgTps ? `${Math.round(override.avgTps)} t/s` : '—'}
+                readOnly
+              />
+            </FormField>
+          </div>
+
           <div className={styles.pricingMetaRow}>
             {(isPricingFromOpenRouter || isPricingFromPreset) && (
               <small style={{ color: 'var(--color-muted)' }}>

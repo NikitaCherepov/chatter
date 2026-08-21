@@ -4584,16 +4584,28 @@ export function ChatPage() {
                       <Select
                         options={[
                           { value: '', label: t('chat.reasoning.auto'), hint: t('chat.model.automatic'), badge: (user?.plan === 'pro' ? autoSupportsVision.pro : autoSupportsVision.lite) ? { text: 'Vision', color: 'success' as const } : undefined },
-                          ...modelsCatalog.map(m => ({
-                            value: m.id,
-                            label: m.name,
-                            hint: m.description || undefined,
-                            badge: m.is_free
-                              ? { text: t('chat.model.freeBadge'), color: 'info' as const }
-                              : m.supports_vision
-                                ? { text: 'Vision', color: 'success' as const }
-                                : undefined,
-                          })),
+                          ...modelsCatalog.map(m => {
+                            const tps = (m.avg_tokens_per_second ?? 0) > 0 ? m.avg_tokens_per_second! : 0;
+                            // Token display on -> exact t/s; off -> discrete scale, no numbers.
+                            // Scale thresholds: <20 t/s = slow, <60 = average, >=60 = fast.
+                            const speedTier = tps > 0 ? (tps >= 60 ? 3 : tps >= 20 ? 2 : 1) as 1 | 2 | 3 : undefined;
+                            return {
+                              value: m.id,
+                              label: m.name,
+                              hint: m.description || undefined,
+                              badge: m.is_free
+                                ? { text: t('chat.model.freeBadge'), color: 'info' as const }
+                                : m.supports_vision
+                                  ? { text: 'Vision', color: 'success' as const }
+                                  : undefined,
+                              meta: {
+                                intel: m.intel_tier ?? undefined,
+                                speedTps: showTokens && tps > 0 ? tps : undefined,
+                                speed: !showTokens ? speedTier : undefined,
+                                price: m.price_tier ?? undefined,
+                              },
+                            };
+                          }),
                         ]}
                         value={preferredModel || ''}
                         onChange={async (val) => {

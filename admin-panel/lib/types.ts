@@ -23,6 +23,13 @@ export type ModelOverrideData = {
   pricingUpdatedAt: number | null;
   selectedApiKeyId: number | null;
   isFree: boolean;
+  /** Admin-set display tier 1..3 shown in the desktop model selector (null = unset). */
+  intelTier: number | null;
+  /** Admin-set price tier 1..3 ($ / $$ / $$$) (null = unset). */
+  priceTier: number | null;
+  /** Locally measured generation speed, EMA (tokens/sec). */
+  avgTps: number | null;
+  tpsSamples: number | null;
 };
 
 export type ManualModelConfig = ProviderModelConfig & {

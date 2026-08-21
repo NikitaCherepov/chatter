@@ -807,6 +807,13 @@ ensureModelOverrideColumn('pricing_source', 'ALTER TABLE model_overrides ADD COL
 ensureModelOverrideColumn('pricing_updated_at', 'ALTER TABLE model_overrides ADD COLUMN pricing_updated_at INTEGER');
 ensureModelOverrideColumn('selected_api_key_id', 'ALTER TABLE model_overrides ADD COLUMN selected_api_key_id INTEGER');
 ensureModelOverrideColumn('is_free', 'ALTER TABLE model_overrides ADD COLUMN is_free INTEGER NOT NULL DEFAULT 0');
+// Admin-set display tiers (1..3, NULL = not set) shown in the desktop model selector.
+ensureModelOverrideColumn('intel_tier', 'ALTER TABLE model_overrides ADD COLUMN intel_tier INTEGER');
+ensureModelOverrideColumn('price_tier', 'ALTER TABLE model_overrides ADD COLUMN price_tier INTEGER');
+// Locally measured generation speed (EMA over recent messages, tokens/sec).
+ensureModelOverrideColumn('avg_tps', 'ALTER TABLE model_overrides ADD COLUMN avg_tps REAL');
+ensureModelOverrideColumn('tps_samples', 'ALTER TABLE model_overrides ADD COLUMN tps_samples INTEGER');
+ensureModelOverrideColumn('tps_updated_at', 'ALTER TABLE model_overrides ADD COLUMN tps_updated_at INTEGER');
 
 
 db.exec(`

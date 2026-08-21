@@ -1762,6 +1762,12 @@ export type ModelCatalogEntry = {
   supported_params?: string[];
   supports_vision?: boolean;
   is_free?: boolean;
+  /** Admin-set display tier 1..3 (null = not set). */
+  intel_tier?: 1 | 2 | 3 | null;
+  /** Admin-set display tier 1..3 (null = not set). */
+  price_tier?: 1 | 2 | 3 | null;
+  /** Locally measured generation speed (EMA, tokens/sec; null = no stats yet). */
+  avg_tokens_per_second?: number | null;
 };
 
 export async function getModels(): Promise<{ models: ModelCatalogEntry[]; preferred_model: string | null; auto_reasoning_levels?: ReasoningLevel[]; auto_supports_vision?: { pro: boolean; lite: boolean } }> {

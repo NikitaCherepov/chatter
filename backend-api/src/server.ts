@@ -38,6 +38,7 @@ import { runPhotoAnalyzeTurn } from './services/photo.js';
 import { migratePendingAccountNamespaces, VectorMemoryService } from './services/vector-memory.js';
 import { seedPlanLimitsIfEmpty, loadPlanLimitsFromDb, savePlanLimitsToDb, DEFAULT_PLAN_LIMITS, PLAN_IDS, type PlanLimits } from './services/plan-limits.js';
 import { refreshCoefficientCache, setCoefficient, setModelProvider, getModelOverride, getOverrideMap } from './services/token-quota.js';
+import { forgetModelTps } from './services/model-stats.js';
 import type { ProviderKind, PricingMode, ModelOverride } from './services/token-quota.js';
 import { sendTelegramMessage } from './services/telegram-send.js';
 import { getAllPrompts, getPromptById, createPrompt, updatePromptName, updatePromptDescription, updatePromptContent, setDefaultPrompt, deletePrompt, ensureDefaultPrompt, resolvePromptForUser as resolveStoredPromptForUser, getUserPrompts, getUserPromptById, createUserPrompt, updateUserPrompt as updateUserPromptRow, deleteUserPrompt as deleteUserPromptRow, toUserPromptSelectedId, parseUserPromptRowId, USER_PROMPT_OFFSET } from './services/prompts.js';
@@ -4313,7 +4314,8 @@ app.get('/internal/admin/model-coefficients', internalAuth, (_req, res) => {
            provider_kind, openrouter_provider_slug, pricing_mode,
            input_price_per_million, output_price_per_million,
            cache_read_price_per_million, pricing_source, pricing_updated_at,
-           selected_api_key_id, is_free
+           selected_api_key_id, is_free,
+           intel_tier, price_tier, avg_tps, tps_samples, tps_updated_at
     FROM model_overrides
   `).all() as Array<ModelOverride>;
   const coefficients: Record<string, number> = {};
@@ -4328,6 +4330,10 @@ app.get('/internal/admin/model-coefficients', internalAuth, (_req, res) => {
     pricingUpdatedAt: number | null;
     selectedApiKeyId: number | null;
     isFree: boolean;
+    intelTier: number | null;
+    priceTier: number | null;
+    avgTps: number | null;
+    tpsSamples: number | null;
   }> = {};
   for (const row of rows) {
     coefficients[row.model_id] = row.coefficient;
@@ -4342,6 +4348,10 @@ app.get('/internal/admin/model-coefficients', internalAuth, (_req, res) => {
       pricingUpdatedAt: row.pricing_updated_at,
       selectedApiKeyId: row.selected_api_key_id,
       isFree: row.is_free === 1,
+      intelTier: row.intel_tier,
+      priceTier: row.price_tier,
+      avgTps: row.avg_tps,
+      tpsSamples: row.tps_samples,
     };
   }
   return res.json({ coefficients, overrides });
@@ -4361,7 +4371,12 @@ app.put('/internal/admin/model-coefficients/:modelId', internalAuth, (req, res) 
     pricingSource?: string | null;
     selectedApiKeyId?: number | null;
     isFree?: boolean | null;
+    intelTier?: number | null;
+    priceTier?: number | null;
   } | null;
+
+  const isTier = (v: unknown): v is number | null =>
+    v === null || v === 1 || v === 2 || v === 3;
 
   // Handle coefficient-only mode (backward-compatible).
   const rawCoeff = Number(body?.coefficient);
@@ -4377,9 +4392,14 @@ app.put('/internal/admin/model-coefficients/:modelId', internalAuth, (req, res) 
     || 'pricingSource' in body
     || 'selectedApiKeyId' in body
     || 'isFree' in body
+    || 'intelTier' in body
+    || 'priceTier' in body
   );
 
   if (hasProviderFields) {
+    if (('intelTier' in body && !isTier(body.intelTier)) || ('priceTier' in body && !isTier(body.priceTier))) {
+      return res.status(400).json({ error: 'bad_tier' });
+    }
     // Full override update
     setModelProvider(modelId, {
       providerKind: body?.providerKind,
@@ -4392,6 +4412,8 @@ app.put('/internal/admin/model-coefficients/:modelId', internalAuth, (req, res) 
       coefficient: hasCoeff && rawCoeff >= 0 ? rawCoeff : null,
       selectedApiKeyId: body?.selectedApiKeyId,
       isFree: body && 'isFree' in body ? Boolean(body.isFree) : null,
+      intelTier: body && 'intelTier' in body ? body.intelTier : undefined,
+      priceTier: body && 'priceTier' in body ? body.priceTier : undefined,
     });
     return res.json({ ok: true, model_id: modelId });
   }
@@ -4406,6 +4428,7 @@ app.delete('/internal/admin/model-coefficients/:modelId', internalAuth, (req, re
   const modelId = `${req.params.modelId || ''}`.trim();
   if (!modelId) return res.status(400).json({ error: 'bad_model_id' });
   db.prepare('DELETE FROM model_overrides WHERE model_id = ?').run(modelId);
+  forgetModelTps(modelId);
   refreshCoefficientCache();
   return res.json({ ok: true });
 });
@@ -4444,8 +4467,15 @@ app.put('/internal/admin/models/:modelId/billing', internalAuth, (req, res) => {
     coefficient?: number | null;
     selectedApiKeyId?: number | null;
     isFree?: boolean | null;
+    intelTier?: number | null;
+    priceTier?: number | null;
   } | null;
   if (!body) return res.status(400).json({ error: 'bad_body' });
+
+  const isTier = (v: unknown): boolean => v === null || v === 1 || v === 2 || v === 3;
+  if (('intelTier' in body && !isTier(body.intelTier)) || ('priceTier' in body && !isTier(body.priceTier))) {
+    return res.status(400).json({ error: 'bad_tier' });
+  }
 
   setModelProvider(modelId, {
     providerKind: body.providerKind,
@@ -4458,6 +4488,8 @@ app.put('/internal/admin/models/:modelId/billing', internalAuth, (req, res) => {
     coefficient: body.coefficient,
     selectedApiKeyId: body.selectedApiKeyId,
     isFree: body.isFree,
+    intelTier: body.intelTier,
+    priceTier: body.priceTier,
   });
   return res.json({ ok: true, model_id: modelId });
 });

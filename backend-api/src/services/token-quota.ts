@@ -24,6 +24,14 @@ export type ModelOverride = {
   pricing_updated_at: number | null;
   selected_api_key_id: number | null;
   is_free: number; // INTEGER 0/1
+  /** Admin-set display tier 1..3 (NULL = not set). */
+  intel_tier: number | null;
+  /** Admin-set display tier 1..3 (NULL = not set). */
+  price_tier: number | null;
+  /** Locally measured generation speed, EMA (tokens/sec). */
+  avg_tps: number | null;
+  tps_samples: number | null;
+  tps_updated_at: number | null;
 };
 
 export type PricingSnapshot = {
@@ -45,7 +53,8 @@ const readAllOverrides = (): Map<string, ModelOverride> => {
            provider_kind, openrouter_provider_slug, pricing_mode,
            input_price_per_million, output_price_per_million,
            cache_read_price_per_million, pricing_source, pricing_updated_at,
-           selected_api_key_id, is_free
+           selected_api_key_id, is_free,
+           intel_tier, price_tier, avg_tps, tps_samples, tps_updated_at
     FROM model_overrides
   `).all() as Array<ModelOverride>;
   const map = new Map<string, ModelOverride>();
@@ -213,6 +222,10 @@ export const setModelProvider = (
     coefficient?: number | null;
     selectedApiKeyId?: number | null;
     isFree?: boolean | null;
+    /** Admin-set display tier 1..3; null = unset. */
+    intelTier?: number | null;
+    /** Admin-set display tier 1..3; null = unset. */
+    priceTier?: number | null;
   }
 ): void => {
   const now = getNowUnix();
@@ -232,6 +245,10 @@ export const setModelProvider = (
   const isFree = params.isFree !== undefined && params.isFree !== null
     ? (params.isFree ? 1 : 0)
     : existing?.is_free ?? 0;
+  const validTier = (v: unknown): number | null =>
+    (v === 1 || v === 2 || v === 3) ? v : null;
+  const intelTier = params.intelTier !== undefined ? validTier(params.intelTier) : existing?.intel_tier ?? null;
+  const priceTier = params.priceTier !== undefined ? validTier(params.priceTier) : existing?.price_tier ?? null;
 
   db.prepare(`
     INSERT INTO model_overrides (
@@ -239,8 +256,8 @@ export const setModelProvider = (
       provider_kind, openrouter_provider_slug, pricing_mode,
       input_price_per_million, output_price_per_million,
       cache_read_price_per_million, pricing_source, pricing_updated_at,
-      selected_api_key_id, is_free
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      selected_api_key_id, is_free, intel_tier, price_tier
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(model_id) DO UPDATE SET
       coefficient = excluded.coefficient,
       updated_at = excluded.updated_at,
@@ -253,7 +270,9 @@ export const setModelProvider = (
       pricing_source = excluded.pricing_source,
       pricing_updated_at = excluded.pricing_updated_at,
       selected_api_key_id = excluded.selected_api_key_id,
-      is_free = excluded.is_free
+      is_free = excluded.is_free,
+      intel_tier = excluded.intel_tier,
+      price_tier = excluded.price_tier
   `).run(
     modelId, coeff, now,
     providerKind,
@@ -265,7 +284,9 @@ export const setModelProvider = (
     pricingSource,
     pricingSource ? now : null,
     selectedApiKeyId,
-    isFree
+    isFree,
+    intelTier,
+    priceTier
   );
   refreshOverrideCache();
 };

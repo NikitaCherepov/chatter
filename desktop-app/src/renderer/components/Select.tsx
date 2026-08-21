@@ -15,11 +15,24 @@ export type SelectBadge = {
   icon?: ReactNode;
 };
 
+/** Optional model meta shown as a compact row under the hint. */
+export type SelectOptionMeta = {
+  /** Intelligence level 1..3 — rendered as filled squares scale. */
+  intel?: 1 | 2 | 3;
+  /** Measured generation speed (tokens/sec) — rendered as an exact number. */
+  speedTps?: number;
+  /** Speed level 1..3 — rendered as squares (used when token display is off). */
+  speed?: 1 | 2 | 3;
+  /** Price tier 1..3 — rendered as $ / $$ / $$$. */
+  price?: 1 | 2 | 3;
+};
+
 export type SelectOption = {
   value: string;
   label: string;
   hint?: string;
   badge?: SelectBadge;
+  meta?: SelectOptionMeta;
 };
 
 type Props = {
@@ -102,6 +115,58 @@ export function Select({
     );
   };
 
+  const INTEL_LABELS = ['chat.model.meta.intel.low', 'chat.model.meta.intel.mid', 'chat.model.meta.intel.high'];
+  const SPEED_LABELS = ['chat.model.meta.speed.low', 'chat.model.meta.speed.mid', 'chat.model.meta.speed.high'];
+  const PRICE_LABELS = ['chat.model.meta.price.low', 'chat.model.meta.price.mid', 'chat.model.meta.price.high'];
+
+  const renderIntel = (level: 1 | 2 | 3) => (
+    <span className={s.metaItem} title={t('chat.model.meta.intel.label') + ': ' + t(INTEL_LABELS[level - 1])}>
+      <span className={s.metaScale}>
+        {[1, 2, 3].map(i => (
+          <span key={i} className={`${s.metaSquare} ${i <= level ? s.metaSquareFilled : ''}`} />
+        ))}
+      </span>
+    </span>
+  );
+
+  // Exact number — shown when token display is enabled.
+  const renderSpeedTps = (tps: number) => (
+    <span className={s.metaItem} title={t('chat.model.meta.speed.label') + ': ~' + Math.round(tps) + ' t/s'}>
+      <span className={s.metaLabel}>{t('chat.model.meta.speed.label')}</span>
+      <span className={s.metaValue}>{Math.round(tps)} t/s</span>
+    </span>
+  );
+
+  // Discrete scale — shown when token display is disabled (no exact numbers).
+  const renderSpeedScale = (level: 1 | 2 | 3) => (
+    <span className={s.metaItem} title={t('chat.model.meta.speed.label') + ': ' + t(SPEED_LABELS[level - 1])}>
+      <span className={s.metaScale}>
+        {[1, 2, 3].map(i => (
+          <span key={i} className={`${s.metaSquare} ${i <= level ? s.metaSquareFilled : ''}`} />
+        ))}
+      </span>
+    </span>
+  );
+
+  const renderPrice = (tier: 1 | 2 | 3) => (
+    <span className={s.metaItem} title={t('chat.model.meta.price.label') + ': ' + t(PRICE_LABELS[tier - 1])}>
+      <span className={s.metaDollars}>{'$'.repeat(tier)}</span>
+    </span>
+  );
+
+  const renderMeta = (meta: SelectOptionMeta) => {
+    const hasAny = meta.intel !== undefined || meta.speedTps !== undefined || meta.speed !== undefined || meta.price !== undefined;
+    if (!hasAny) return null;
+    return (
+      <span className={s.metaRow}>
+        {meta.intel !== undefined && renderIntel(meta.intel)}
+        {meta.speedTps !== undefined && renderSpeedTps(meta.speedTps)}
+        {meta.speed !== undefined && renderSpeedScale(meta.speed)}
+        {meta.price !== undefined && renderPrice(meta.price)}
+      </span>
+    );
+  };
+
   return (
     <div className={s.root} ref={rootRef}>
       <button
@@ -151,6 +216,7 @@ export function Select({
                   {opt.badge && renderBadge(opt.badge)}
                 </div>
                 {opt.hint && <span className={s.optionHint}>{opt.hint}</span>}
+                {opt.meta && renderMeta(opt.meta)}
               </button>
             ))}
 

@@ -6,6 +6,7 @@ import { Readable } from 'node:stream';
 import type { AiSendResult, DesktopActionPayload, DisplayStatePayload, MapUpdatePayload, TaskNotifyMode, TaskRecurrenceType, TaskType, UserPlan, UserRecord, MessageAttachment, MessageUsage, NormalizedTokenUsage, TokenUsageCall } from '../types.js';
 import { appendChatMessage, ensureActiveChat, getHistoryForAi, getMessageTokens, getUserById, renameUserChat, resolveMaxContextTokens, resolveAttachmentMaxTokens, injectAttachments, setUserTimezone, trimUserHistoryByChat, searchChatHistory, getChatMessagesAround, isMultiUserRoomChat } from './chats.js';
 import { calculateChargedTokens, checkQuota, chargeTokens, getModelOverride, getPricingSnapshot, calculateEstimatedCostUsd, isModelFree } from './token-quota.js';
+import { recordModelTps, setKnownModelStatsFilter } from './model-stats.js';
 import { registerMonitoredModelsProvider, isProviderMissingError, attemptRuntimeProviderSwitch } from './openrouter-monitor.js';
 import { getPlanLimits } from './plan-limits.js';
 import { resolvePromptForUser, AVATAR_PROMPT_HINT } from './prompts.js';
@@ -553,6 +554,17 @@ export const getOpenRouterMonitoredModels = () => {
 };
 registerMonitoredModelsProvider(getOpenRouterMonitoredModels);
 
+// All routable model ids (Manual + Pro/Lite/Vision chains) — used to filter
+// the tps-stats flush so removed models don't resurrect rows in model_overrides.
+const KNOWN_UNIQUE_IDS = new Set<string>([
+  ...MANUAL_MODELS.map(m => m.id),
+  ...PRO_PROVIDERS.flatMap(p => p.uniqueIds.filter((id): id is string => !!id)),
+  ...LITE_PROVIDERS.flatMap(p => p.uniqueIds.filter((id): id is string => !!id)),
+  ...VISION_PROVIDERS.pro.flatMap(p => p.uniqueIds.filter((id): id is string => !!id)),
+  ...VISION_PROVIDERS.lite.flatMap(p => p.uniqueIds.filter((id): id is string => !!id)),
+]);
+setKnownModelStatsFilter(() => KNOWN_UNIQUE_IDS);
+
 export const getModelsCatalog = (isAdmin = false) => MANUAL_MODELS
   .filter(m => isAdmin || !m.adminOnly)
   .map(m => ({
@@ -563,6 +575,11 @@ export const getModelsCatalog = (isAdmin = false) => MANUAL_MODELS
   supported_params: [...getProviderSupportedParams(m.baseURL)],
   supports_vision: m.supportsVision,
   is_free: isModelFree(m.id),
+  // Admin-set display tiers (1..3, null = not set).
+  intel_tier: getModelOverride(m.id)?.intel_tier ?? null,
+  price_tier: getModelOverride(m.id)?.price_tier ?? null,
+  // Locally measured generation speed (EMA, tokens/sec); null = no stats yet.
+  avg_tokens_per_second: getModelOverride(m.id)?.tps_samples ? getModelOverride(m.id)!.avg_tps : null,
 }));
 
 export const resolveManualModel = (modelId: string, isAdmin = false): ManualModelEntry | undefined => {
@@ -8151,6 +8168,15 @@ iterations.push(currentIteration);
   const messageUsage: MessageUsage | null = usageCalls.length > 0
     ? { latest: latestUsage, aggregate: aggregateUsage, calls: usageCalls, perf: buildUsagePerf(aggregateUsage.completion_tokens) }
     : null;
+  // Track speed only when every completed provider call belongs to the same
+  // model. A mid-response fallback would otherwise blend multiple models and
+  // attribute the result to whichever model happened to finish last.
+  const hasSingleUsageModel = !!usedUniqueId
+    && usageCalls.length > 0
+    && usageCalls.every((call) => call.uniqueId === usedUniqueId);
+  if (messageUsage?.perf?.tokens_per_second && hasSingleUsageModel) {
+    recordModelTps(usedUniqueId, messageUsage.perf.tokens_per_second);
+  }
   const responseModelName = usedProvider === 'manual' && selectedManualModelName
     ? selectedManualModelName
     : (usedModel || null);
