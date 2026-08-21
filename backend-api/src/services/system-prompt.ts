@@ -13,8 +13,14 @@ export const TOOL_USAGE_RULES = `\n\n[CRITICAL DIRECTIVE: TOOL EXECUTION]
 If the user asks you to perform an action on their PC (create a file, open a website, check a service) or call a tool, YOU MUST CALL THE APPROPRIATE TOOL (e.g., execute_pc_command or else).
 UNDER NO CIRCUMSTANCES should you simulate the execution using text. Do NOT write "Opening...", "Creating...", or "Executing...". Do NOT roleplay the action. Just silently output the tool call JSON.`;
 
-export const buildSystemPrompt = (prompt: string, userName: string, coreMemory: string) => {
-  return `${prompt}\n\nUser name {{user}}: ${userName}\n\n[USER CORE MEMORY]\n${(coreMemory || '').trim() || 'Empty for now.'}${COLD_MEMORY_PROMPT_HINT}${TOOL_USAGE_RULES}${SECURITY_PROTOCOL_HINT}${UNTRUSTED_DATA_PROTOCOL_HINT}${LANGUAGE_HINT}`;
+export const buildSystemPrompt = (
+  prompt: string,
+  userName: string,
+  coreMemory: string,
+  includeToolHints = true,
+) => {
+  const toolHints = includeToolHints ? `${COLD_MEMORY_PROMPT_HINT}${TOOL_USAGE_RULES}` : '';
+  return `${prompt}\n\nUser name {{user}}: ${userName}\n\n[USER CORE MEMORY]\n${(coreMemory || '').trim() || 'Empty for now.'}${toolHints}${SECURITY_PROTOCOL_HINT}${UNTRUSTED_DATA_PROTOCOL_HINT}${LANGUAGE_HINT}`;
 };
 
 export const buildTimeContext = (timezoneOffset: number) => {

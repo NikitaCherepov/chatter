@@ -7,6 +7,8 @@ export type ProviderModelConfig = {
   hasApiKey: boolean;
   /** Stable id used to look up coefficient in model_overrides. Auto-generated server-side if empty. */
   uniqueId?: string;
+  /** Whether this model accepts OpenAI-compatible tool definitions. */
+  supportsTools?: boolean;
 };
 
 export type ProviderKind = 'openrouter' | 'deepseek' | 'xiaomi' | 'custom' | null;
@@ -37,6 +39,7 @@ export type ManualModelConfig = ProviderModelConfig & {
   description: string;
   uniqueId: string;
   supportsVision: boolean;
+  supportsTools: boolean;
   adminOnly: boolean;
   /** Token quota coefficient. 0 = free model, 1 = default, 0.7 = cheaper, 1.5 = expensive. */
   coefficient?: number;

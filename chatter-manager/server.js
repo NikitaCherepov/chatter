@@ -440,7 +440,7 @@ function getProviderModels(backendEnv) {
 
 function parseManualModels(raw) {
   return `${raw || ''}`.split(';').map(value => value.trim()).filter(Boolean).map((chunk, index) => {
-    const [baseUrl = '', apiKey = '', model = '', name = '', description = '', uniqueId = '', supportsVision = '0', adminOnly = '0', proxyUrl = ''] = chunk.split('|').map(value => value.trim());
+    const [baseUrl = '', apiKey = '', model = '', name = '', description = '', uniqueId = '', supportsVision = '0', adminOnly = '0', proxyUrl = '', supportsTools = '1'] = chunk.split('|').map(value => value.trim());
     return {
       id: uniqueId || `manual-${index}`,
       baseUrl,
@@ -450,6 +450,7 @@ function parseManualModels(raw) {
       description,
       uniqueId: uniqueId || `manual-${index}`,
       supportsVision: ['1', 'true'].includes(supportsVision.toLowerCase()),
+      supportsTools: ['1', 'true'].includes(supportsTools.toLowerCase()),
       adminOnly: ['1', 'true'].includes(adminOnly.toLowerCase()),
       proxyUrl
     };
@@ -552,6 +553,7 @@ function mergeManualModels(input, existing) {
       description: `${item?.description || ''}`.trim(),
       uniqueId,
       supportsVision: Boolean(item?.supportsVision),
+      supportsTools: item?.supportsTools === undefined ? true : Boolean(item.supportsTools),
       adminOnly: Boolean(item?.adminOnly),
       proxyUrl: normalizeProxyUrl(
         item?.proxyUrl === undefined ? existingProxies.get(id) : item.proxyUrl,
@@ -568,7 +570,7 @@ const serializeProviderModels = models => models
     return [model.baseUrl, model.apiKey, model.model, uniqueId, proxyUrl].join('|');
   })
   .join(';');
-const serializeManualModels = models => models.map(model => [model.baseUrl, model.apiKey, model.model, model.name, model.description.replace(/[|;\r\n]/g, ' '), model.uniqueId, model.supportsVision ? '1' : '0', model.adminOnly ? '1' : '0', model.proxyUrl || ''].join('|')).join(';');
+const serializeManualModels = models => models.map(model => [model.baseUrl, model.apiKey, model.model, model.name, model.description.replace(/[|;\r\n]/g, ' '), model.uniqueId, model.supportsVision ? '1' : '0', model.adminOnly ? '1' : '0', model.proxyUrl || '', model.supportsTools === false ? '0' : '1'].join('|')).join(';');
 
 function saveSettings(input) {
   const previous = loadSettings();

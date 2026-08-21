@@ -122,7 +122,9 @@
       "supportsVision": "支持图像",
       "adminOnly": "仅管理员",
       "remove": "移除模型",
-      "addModel": "+ 添加手动模型"
+      "addModel": "+ 添加手动模型",
+      "textOnly": "仅文本，无工具",
+      "noTools": "无工具"
     },
     "common": {
       "emptyText": "尚未添加任何模型。",

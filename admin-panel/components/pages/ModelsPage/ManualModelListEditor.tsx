@@ -23,6 +23,7 @@ const newManualModel = (): ManualModelConfig => {
     name: '',
     description: '',
     supportsVision: false,
+    supportsTools: true,
     adminOnly: false,
     coefficient: 1,
   };
@@ -147,6 +148,7 @@ export function ManualModelListEditor({
                       coefficient={model.coefficient}
                       badges={[
                         ...(model.supportsVision ? [t('models.manual.supportsVision')] : []),
+                        ...(!model.supportsTools ? [t('models.manual.noTools')] : []),
                         ...(model.adminOnly ? [t('models.manual.adminOnly')] : []),
                       ]}
                     />
@@ -209,6 +211,13 @@ export function ManualModelListEditor({
                       onChange={(supportsVision) => update(index, { supportsVision })}
                       label={t('models.manual.supportsVision')}
                     />
+                    {resolveProviderKind(model.baseUrl) === 'custom' && (
+                      <Toggle
+                        checked={!model.supportsTools}
+                        onChange={(textOnly) => update(index, { supportsTools: !textOnly })}
+                        label={t('models.manual.textOnly')}
+                      />
+                    )}
                     <Toggle
                       checked={model.adminOnly}
                       onChange={(adminOnly) => update(index, { adminOnly })}

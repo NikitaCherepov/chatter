@@ -122,7 +122,9 @@
       "supportsVision": "이미지 지원",
       "adminOnly": "관리자 전용",
       "remove": "모델 제거",
-      "addModel": "+ 수동 모델 추가"
+      "addModel": "+ 수동 모델 추가",
+      "textOnly": "텍스트만, 도구 없이",
+      "noTools": "도구 없음"
     },
     "common": {
       "emptyText": "아직 추가된 모델이 없습니다.",

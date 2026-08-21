@@ -122,7 +122,9 @@
       "supportsVision": "Unterstützt Bilder",
       "adminOnly": "Nur Admins",
       "remove": "Modell entfernen",
-      "addModel": "+ Manuelles Modell hinzufügen"
+      "addModel": "+ Manuelles Modell hinzufügen",
+      "textOnly": "Nur Text, ohne Tools",
+      "noTools": "Keine Tools"
     },
     "common": {
       "emptyText": "Noch keine Modelle hinzugefügt.",

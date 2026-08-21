@@ -122,7 +122,9 @@
       "supportsVision": "画像対応",
       "adminOnly": "管理者のみ",
       "remove": "モデルを削除",
-      "addModel": "+ 手動モデルを追加"
+      "addModel": "+ 手動モデルを追加",
+      "textOnly": "テキストのみ、ツールなし",
+      "noTools": "ツールなし"
     },
     "common": {
       "emptyText": "まだモデルが追加されていません。",

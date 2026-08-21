@@ -127,7 +127,9 @@
       "supportsVision": "Görselleri destekler",
       "adminOnly": "Yalnızca yöneticiler",
       "remove": "Modeli kaldır",
-      "addModel": "+ Manuel model ekle"
+      "addModel": "+ Manuel model ekle",
+      "textOnly": "Yalnızca metin, araçlar olmadan",
+      "noTools": "Araç yok"
     },
     "common": {
       "emptyText": "Henüz model eklenmedi.",

@@ -282,6 +282,7 @@ type OrEndpoint = {
   status?: string | number | null;
   /** Uptime score for the last day, 0..100. */
   uptime_last_1d?: number | null;
+  supported_parameters?: string[];
 };
 
 type ModelEndpointsResult = {
@@ -289,6 +290,10 @@ type ModelEndpointsResult = {
   /** Map of base slug → prices. */
   pricesBySlug: Map<string, ModelPrices | null>;
   basePrices: ModelPrices | null;
+  /** True when at least one endpoint for the model accepts tools. */
+  supportsTools: boolean;
+  /** Map of base provider slug to tool support. */
+  toolsBySlug: Map<string, boolean>;
 };
 
 // ── Providers name cache ─────────────────────────────────────────────────────
@@ -336,6 +341,16 @@ async function fetchModelEndpoints(modelId: string): Promise<ModelEndpointsResul
   ]);
 
   const endpoints = endpointsResp?.data?.endpoints || [];
+  const supportsTools = endpoints.some((endpoint) =>
+    endpoint.supported_parameters?.includes('tools'),
+  );
+  const toolsBySlug = new Map<string, boolean>();
+  for (const endpoint of endpoints) {
+    const baseSlug = (endpoint.tag || '').split('/')[0];
+    if (!baseSlug) continue;
+    if (!toolsBySlug.has(baseSlug)) toolsBySlug.set(baseSlug, false);
+    if (endpoint.supported_parameters?.includes('tools')) toolsBySlug.set(baseSlug, true);
+  }
 
   // Group by base slug (tag.split('/')[0]).
   type Entry = {
@@ -407,7 +422,7 @@ async function fetchModelEndpoints(modelId: string): Promise<ModelEndpointsResul
     if (outB == null) return -1;
     return outA - outB;
   });
-  return { options, pricesBySlug, basePrices };
+  return { options, pricesBySlug, basePrices, supportsTools, toolsBySlug };
 }
 
 // ── ProviderModelFields ──────────────────────────────────────────────────────
@@ -591,6 +606,26 @@ export function ProviderModelFields({
     [t],
   );
 
+  // Existing OpenRouter models are also checked when the card is rendered,
+  // not only when the admin selects a new model from autocomplete.
+  useEffect(() => {
+    if (providerKind !== 'openrouter' || !model.model) return;
+    let cancelled = false;
+    void loadEndpoints(model.model).then((result) => {
+      if (!result || cancelled) return;
+      const selectedSlug = override?.openrouterProviderSlug || '';
+      const supportsTools = selectedSlug
+        ? (result.toolsBySlug.get(selectedSlug) ?? result.supportsTools)
+        : result.supportsTools;
+      if (model.supportsTools !== supportsTools) onChange({ supportsTools });
+    });
+    return () => {
+      cancelled = true;
+    };
+    // onChange is intentionally omitted: parent supplies an inline updater.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [providerKind, model.model, model.supportsTools, override?.openrouterProviderSlug, loadEndpoints]);
+
   const applyAutoPrices = useCallback(
     async (mp: ModelPrices | null, source: 'auto' | 'endpoint' | 'preset') => {
       const next = {
@@ -626,6 +661,7 @@ export function ProviderModelFields({
     if (providerKind === 'openrouter') {
       // Load endpoints for the new model (refreshes the provider dropdown).
       const endpoints = await loadEndpoints(modelId);
+      if (endpoints) onChange({ supportsTools: endpoints.supportsTools });
       // Reset the upstream provider selector to "Auto" (different model = different endpoints).
       setPrices((p) => ({ ...p, orSlug: '' }));
       await persistOverride({ providerKind, openrouterProviderSlug: null });
@@ -671,6 +707,9 @@ export function ProviderModelFields({
     if (!slug) {
       // Auto: use base prices.
       const base = endpointsCacheRef.current?.basePrices ?? null;
+      if (endpointsCacheRef.current) {
+        onChange({ supportsTools: endpointsCacheRef.current.supportsTools });
+      }
       await applyAutoPrices(base, 'auto');
       return;
     }
@@ -679,6 +718,8 @@ export function ProviderModelFields({
     if (!endpointsCacheRef.current && model.model) {
       await loadEndpoints(model.model);
     }
+    const supportsTools = endpointsCacheRef.current?.toolsBySlug.get(slug);
+    if (supportsTools !== undefined) onChange({ supportsTools });
     const mp = endpointsCacheRef.current?.pricesBySlug.get(slug) ?? cached;
     await applyAutoPrices(mp, 'endpoint');
   };

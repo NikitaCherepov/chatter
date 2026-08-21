@@ -315,6 +315,7 @@ type ManualModelEntry = {
   client: OpenAI;
   baseURL: string;
   supportsVision: boolean;
+  supportsTools: boolean;
   adminOnly: boolean;
 };
 
@@ -478,9 +479,10 @@ const parseVisionProviders = (): { pro: LiteProvider[]; lite: LiteProvider[] } =
 const VISION_PROVIDERS = parseVisionProviders();
 
 // ── MODELS_MANUAL: manual model selection by user ──────────────────────────
-// Env format: base_url|api_key|api_model_name|display_name|description|unique_id|supports_vision|admin_only|proxy_url;...
+// Env format: base_url|api_key|api_model_name|display_name|description|unique_id|supports_vision|admin_only|proxy_url|supports_tools;...
 // supports_vision: optional, "1" or "0" (default "0")
 // admin_only: optional, "1" or "0" (default "0")
+// supports_tools: optional, "1" or "0" (default "1" for backward compatibility)
 const parseManualModelFlag = (value: unknown): boolean => {
   const normalized = typeof value === 'string' ? value.trim().toLowerCase() : '';
   return normalized === '1' || normalized === 'true';
@@ -493,7 +495,7 @@ const parseManualModels = (): ManualModelEntry[] => {
   const models: ManualModelEntry[] = [];
   for (let i = 0; i < chunks.length; i += 1) {
     const parts = chunks[i].split('|').map(v => `${v || ''}`.trim());
-    const [baseURL, apiKey, apiModelName, displayName, description, uniqueId, supportsVisionRaw, adminOnlyRaw, proxyUrl] = parts;
+    const [baseURL, apiKey, apiModelName, displayName, description, uniqueId, supportsVisionRaw, adminOnlyRaw, proxyUrl, supportsToolsRaw = '1'] = parts;
     if (!baseURL || !apiKey || !apiModelName || !uniqueId) continue;
     models.push({
       id: uniqueId,
@@ -503,6 +505,7 @@ const parseManualModels = (): ManualModelEntry[] => {
       client: createOpenAIClient(apiKey, baseURL, proxyUrl),
       baseURL,
       supportsVision: parseManualModelFlag(supportsVisionRaw),
+      supportsTools: parseManualModelFlag(supportsToolsRaw),
       adminOnly: parseManualModelFlag(adminOnlyRaw),
     });
   }
@@ -574,6 +577,7 @@ export const getModelsCatalog = (isAdmin = false) => MANUAL_MODELS
   reasoning_levels: getReasoningLevelsForBaseURL(m.baseURL),
   supported_params: [...getProviderSupportedParams(m.baseURL)],
   supports_vision: m.supportsVision,
+  supports_tools: m.supportsTools,
   is_free: isModelFree(m.id),
   // Admin-set display tiers (1..3, null = not set).
   intel_tier: getModelOverride(m.id)?.intel_tier ?? null,
@@ -6755,6 +6759,9 @@ export const sendMessageThroughAi = async (
   }
   // Проверяем, whether the current model supports native vision
   const currentModelSupportsVision = modelSupportsVision(manualModel, user.plan || 'free');
+  // Auto routes are expected to support tools. Manual models can explicitly
+  // disable them (OpenRouter capability is detected by the admin panel).
+  const currentModelSupportsTools = manualModel?.supportsTools !== false;
   const subagentModelId = user.subagent_mode && user.subagent_mode !== 'auto' ? user.subagent_mode : null;
   const subagentManualModel = subagentModelId ? resolveManualModel(subagentModelId, isAdmin) : undefined;
   if (subagentModelId && !subagentManualModel) {
@@ -7338,8 +7345,10 @@ export const sendMessageThroughAi = async (
   }
 
   const timezone = Number.isFinite(Number(user.timezone_offset)) ? Number(user.timezone_offset) : 5;
-  const dynamicContextToolHint = `\n\n[DYNAMIC CONTEXT]\nCurrent user time is available via the get_user_time tool. Do not guess current date/time: call get_user_time when it matters for answering or scheduling.\nCurrent pixel avatar state is available via the get_avatar_state tool. To change emotions, use set_display_state.`;
-  const avatarPromptHint = options?.displayManifest ? AVATAR_PROMPT_HINT : '';
+  const dynamicContextToolHint = currentModelSupportsTools
+    ? `\n\n[DYNAMIC CONTEXT]\nCurrent user time is available via the get_user_time tool. Do not guess current date/time: call get_user_time when it matters for answering or scheduling.\nCurrent pixel avatar state is available via the get_avatar_state tool. To change emotions, use set_display_state.`
+    : '';
+  const avatarPromptHint = currentModelSupportsTools && options?.displayManifest ? AVATAR_PROMPT_HINT : '';
   const promptUser = user;
   const voicePromptHint = options?.isVoice ? `\n\nSTRICTLY, MANDATORY RIGHT NOW, OBLIGATORY!!! follow:\n1. Answer as BRIEFLY as possible. as BRIEF and natural as possible, like in spoken dialogue.\n2. NO long lists, Markdown tables or code blocks, unless directly asked.\n3. Use conversational style. as BRIEF and COMFORTABLE as possible for listening and substantive. 4. Replace symbols with words: Replace any technical symbols, abbreviations and units of measurement with their full verbal names.
    - Forbidden: "%", "°C", "m/s", "km/h", "$", "rub."
@@ -7469,7 +7478,7 @@ export const sendMessageThroughAi = async (
   responsePromptId = responseAgent?.source_prompt_id ?? resolvedPrompt?.id ?? null;
   responsePromptName = responseAgent?.name || resolvedPrompt?.name || (isGuestMode ? 'Guest' : 'Chatter');
   const coreMemoryForPrompt = isGuestMode ? '' : (user.core_memory || '');
-  const pinnedHintForPrompt = isGuestMode ? '' : pinnedHint;
+  const pinnedHintForPrompt = isGuestMode || !currentModelSupportsTools ? '' : pinnedHint;
 
   // ── Dice Roll Mode (d20 roleplay) ──
   // Backend rolls the dice and immediately pushes the result to clients via onDiceRoll
@@ -7488,7 +7497,7 @@ export const sendMessageThroughAi = async (
     try { await safeOnDiceRoll?.(diceRollValue); } catch { /* ignore */ }
   }
 
-  const proSystemPrompt = `${voicePromptHint}${buildSystemPrompt(`${roomIdentityPrompt}${promptContent}`, user.name || 'User', coreMemoryForPrompt)}${pinnedHintForPrompt}${dynamicContextToolHint}${avatarPromptHint}`;
+  const proSystemPrompt = `${voicePromptHint}${buildSystemPrompt(`${roomIdentityPrompt}${promptContent}`, user.name || 'User', coreMemoryForPrompt, currentModelSupportsTools)}${pinnedHintForPrompt}${dynamicContextToolHint}${avatarPromptHint}`;
 
   // executionMode больше не переключается на vision-pro/lite при наличии фото.
   // Фото идёт через нативный vision (если модель поддерживает) или через tool describe_image.
@@ -7520,12 +7529,14 @@ export const sendMessageThroughAi = async (
     ...desktopOnlyTools,
   ];
   const spawnSubagentTool = options?.isDesktop ? buildSpawnSubagentTool(allBaseToolDefs) : null;
-  let executionTools: any[] = [
-    ...allBaseToolDefs,
-    ...(subagentTool ? [subagentTool] : []),
-    ...(spawnSubagentTool ? [spawnSubagentTool] : []),
-    ...(options?.activeMacros && options.activeMacros.length > 0 ? [buildListMyMacrosTool(), buildExecuteMacroTool(), buildExploreFsTool(), buildSuggestMacroTool()] : [])
-  ].filter(t => !disabledToolSet.has(t?.function?.name || '')) as any[];
+  let executionTools: any[] = currentModelSupportsTools
+    ? [
+        ...allBaseToolDefs,
+        ...(subagentTool ? [subagentTool] : []),
+        ...(spawnSubagentTool ? [spawnSubagentTool] : []),
+        ...(options?.activeMacros && options.activeMacros.length > 0 ? [buildListMyMacrosTool(), buildExecuteMacroTool(), buildExploreFsTool(), buildSuggestMacroTool()] : [])
+      ].filter(t => !disabledToolSet.has(t?.function?.name || '')) as any[]
+    : [];
 
   let executionHistory = history;
   let executionSystemPrompt = proSystemPrompt;
@@ -7727,7 +7738,7 @@ User request: "${text}"`;
       thinking: { type: executionMode === 'lite' ? 'disabled' : 'enabled' },
       clear_thinking: false
     };
-    if (!finalizeForQuota) {
+    if (!finalizeForQuota && executionTools.length > 0) {
       completionPayload.tools = executionTools;
       completionPayload.tool_choice = 'auto';
     }

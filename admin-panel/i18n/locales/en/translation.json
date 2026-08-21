@@ -125,6 +125,8 @@
       "descriptionLabel": "Short description",
       "descriptionPlaceholder": "What tasks this model is suitable for",
       "supportsVision": "Supports images",
+      "textOnly": "Text only, without tools",
+      "noTools": "No tools",
       "adminOnly": "Admins only",
       "remove": "Remove model",
       "addModel": "+ Add manual model"

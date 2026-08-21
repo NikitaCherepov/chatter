@@ -128,7 +128,9 @@
       "supportsVision": "Podporuje obrázky",
       "adminOnly": "Pouze pro administrátory",
       "remove": "Odebrat model",
-      "addModel": "+ Přidat ruční model"
+      "addModel": "+ Přidat ruční model",
+      "textOnly": "Pouze text, bez nástrojů",
+      "noTools": "Žádné nástroje"
     },
     "common": {
       "emptyText": "Zatím nebyly přidány žádné modely.",
