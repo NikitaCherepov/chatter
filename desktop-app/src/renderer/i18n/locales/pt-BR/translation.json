@@ -392,7 +392,9 @@
       "subagentNumber": "🧠 Subagente {{number}}",
       "providerTokenUsage": "Uso exato de tokens de conclusão relatado pelo provedor",
       "branchNotAllowedInRoom": "Ramificações não estão disponíveis em salas compartilhadas ainda",
-      "branchFailed": "Falha ao criar ramificação"
+      "branchFailed": "Falha ao criar ramificação",
+      "generationPerf": "Primeiro token: {{latency}}\nGeração: {{gen}}\nTotal: {{total}}\nVelocidade: {{tps}} tokens/s",
+      "firstTokenLatency": "Tempo até o primeiro token: {{latency}}"
     },
     "reasoning": {
       "auto": "Auto",

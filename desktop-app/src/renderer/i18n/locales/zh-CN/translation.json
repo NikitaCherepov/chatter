@@ -392,7 +392,9 @@
       "subagentNumber": "🧠 子代理 {{number}}",
       "providerTokenUsage": "提供商报告的精确完成令牌使用量",
       "branchNotAllowedInRoom": "共享房间中暂不支持分支",
-      "branchFailed": "创建分支失败"
+      "branchFailed": "创建分支失败",
+      "generationPerf": "首个令牌：{{latency}}\n生成：{{gen}}\n总计：{{total}}\n速度：{{tps}} 令牌/秒",
+      "firstTokenLatency": "首个令牌时间：{{latency}}"
     },
     "reasoning": {
       "auto": "自动",

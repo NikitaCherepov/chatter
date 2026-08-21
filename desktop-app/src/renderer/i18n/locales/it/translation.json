@@ -713,7 +713,9 @@
       "subagentNumber": "🧠 Subagente {{number}}",
       "providerTokenUsage": "Utilizzo esatto dei token di completamento riportato dal provider",
       "branchNotAllowedInRoom": "I rami non sono ancora disponibili nelle stanze condivise",
-      "branchFailed": "Impossibile creare il ramo"
+      "branchFailed": "Impossibile creare il ramo",
+      "generationPerf": "Primo token: {{latency}}\nGenerazione: {{gen}}\nTotale: {{total}}\nVelocità: {{tps}} token/s",
+      "firstTokenLatency": "Tempo al primo token: {{latency}}"
     },
     "reasoning": {
       "auto": "Auto",

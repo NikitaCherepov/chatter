@@ -97,5 +97,31 @@
   "passwordReset": {
     "title": "🔐 Chatter Desktop password recovery",
     "body": "Your verification code: {{code}}\n\nThe code is valid for 5 minutes.\n\nIf you did not request a password recovery — ignore this message."
+  },
+  "openRouterMonitor": {
+    "title": "⚠️ Poskytovatel OpenRouter není dostupný",
+    "model": "Model",
+    "route": "Trasa",
+    "previousProvider": "Předchozí poskytovatel",
+    "status": "již není pro tento model dostupný",
+    "newProvider": "Nový poskytovatel",
+    "strategy": "Strategie",
+    "strategyNotify": "pouze upozornit",
+    "strategyCheapest": "nejlevnější",
+    "strategyThroughput": "nejvyšší propustnost",
+    "strategyLatency": "nejnižší latence",
+    "input": "Vstup",
+    "output": "Výstup",
+    "cacheRead": "Čtení z mezipaměti",
+    "pending": "Automatické přepnutí čeká: poskytovatel musí chybět v {{count}} po sobě jdoucích kontrolách.",
+    "noReplacementFound": "Mezi zbývajícími koncovými body tohoto modelu nebyla nalezena žádná náhrada.",
+    "chooseInPanel": "Vyberte jiného poskytovatele v administračním panelu.",
+    "noReplacementSelected": "Nebyla vybrána žádná náhrada. Vyberte jiného poskytovatele v administračním panelu.",
+    "reason": "Důvod",
+    "reasonRuntime": "zjištěno během živého požadavku; požadavek byl jednou zopakován s novým poskytovatelem",
+    "reasonRemoved": "model byl odebrán z katalogu OpenRouter",
+    "provider": "Poskytovatel",
+    "priceTitle": "📉 Ceny poskytovatele OpenRouter se změnily",
+    "priceUpdatedOverrides": "Ceny modelů v administračním panelu byly automaticky aktualizovány."
   }
 }

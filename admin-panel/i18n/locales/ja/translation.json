@@ -86,7 +86,9 @@
     "changedRelogin": "変更されました。再度ログインしてください。",
     "coefficientLoadError": "係数の読み込みに失敗しました",
     "coefficientSaved": "係数が保存されました",
-    "cancel": "キャンセル"
+    "cancel": "キャンセル",
+    "on": "オン",
+    "off": "オフ"
   },
   "models": {
     "auto": {
@@ -130,7 +132,10 @@
       "moveUp": "上に移動",
       "moveDown": "下に移動",
       "remove": "削除",
-      "addModel": "+ モデルを追加"
+      "addModel": "+ モデルを追加",
+      "dragToReorder": "ドラッグして並べ替え",
+      "expandAll": "すべて展開",
+      "collapseAll": "すべて折りたたむ"
     },
     "providerFields": {
       "baseUrl": "プロバイダーURL",
@@ -169,6 +174,50 @@
       "refreshing": "更新中…",
       "customModel": "その他…",
       "customModelHint": "手動で指定"
+    },
+    "monitor": {
+      "title": "OpenRouter モニタリング",
+      "subtitle": "ピン留めされたプロバイダーを監視し、管理者に通知し、自動的に切り替えます",
+      "unavailable": "モニターAPIは利用できません（chatter-managerを更新してください）。",
+      "enabled": "モニタリングが有効です",
+      "enabledHint": "定期的に、固定されたOpenRouterプロバイダーがモデルを提供し続けていることを確認します",
+      "interval": "チェック間隔（分）",
+      "intervalHint": "最小5分間；負荷を分散するために小さなランダムなジッターが追加されます",
+      "action": "プロバイダーが消えたときのアクション",
+      "actionHint": "自動切り替えは、プロバイダーなしで2回連続してチェックが成功した後にのみ発生します",
+      "actionNotify": "通知のみ",
+      "actionCheapest": "最安値に切り替え",
+      "actionThroughput": "最速（スループット）に切り替え",
+      "actionLatency": "最低遅延に切り替え",
+      "priceTracking": "価格追跡",
+      "priceTrackingHint": "ピン留めされたプロバイダーの価格の変動を監視します",
+      "priceTrackingOff": "オフ",
+      "priceTrackingNotify": "通知のみ",
+      "priceTrackingUpdate": "価格を通知して更新する",
+      "priceThreshold": "しきい値の変更（％）",
+      "priceThresholdHint": "このパーセンテージより小さい変更は無視します。手動価格は上書きされません。",
+      "recipients": "通知の受信者",
+      "recipientsHint": "Telegram通知は既存のChatterボットを介して送信されます",
+      "recipientsAll": "Telegramを持つすべての管理者",
+      "recipientsSelected": "選択された管理者",
+      "recipientAdmins": "管理者",
+      "noAdmins": "管理者が見つかりません",
+      "noTelegram": "Telegramなし",
+      "saveSettings": "監視設定を保存",
+      "checkAll": "今すぐすべて確認",
+      "checking": "確認中…",
+      "testing": "送信中…",
+      "testMissing": "テスト: プロバイダーがありません",
+      "testPrice": "テスト: 価格変更",
+      "checkNow": "今すぐ確認",
+      "noData": "未確認",
+      "strategy": "戦略",
+      "lastChecked": "最終確認",
+      "statesTitle": "監視対象モデルのステータス",
+      "colModel": "モデル",
+      "colProvider": "プロバイダー",
+      "colStatus": "ステータス",
+      "colLastCheck": "最終確認"
     }
   },
   "integrations": {
@@ -656,6 +705,16 @@
         "forceNow": "今すぐ強制アップデート",
         "timeoutNotice": "15秒が経過しました、{{count}}人のユーザーがまだ作業中です。引き続き待機、強制アップデート、またはキャンセルできます。",
         "pollError": "ドレインポーリングに失敗しました: {{message}}"
+      },
+      "channel": {
+        "label": "チャンネル",
+        "hint": "更新チャンネル: 本番用は'latest'、またはそのブランチのイメージを追跡するブランチ名を指定します。'/'は'-'に置き換えられます。",
+        "apply": "切り替え",
+        "switching": "切り替え中…",
+        "invalidTag": "無効なチャンネル名です。文字、数字、'.'、'_'、'-'を使用してください。",
+        "switchedFound": "'{{tag}}' に切り替えました。新しいイメージが見つかりました — アップデートが利用可能です。",
+        "switchedCurrent": "'{{tag}}' に切り替えました。サーバーは既にこのチャンネルのイメージを実行しています。",
+        "error": "チャンネル切り替えエラー: {{message}}"
       }
     },
     "error": "エラー: {{message}}",

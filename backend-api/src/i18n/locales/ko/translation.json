@@ -97,5 +97,31 @@
   "passwordReset": {
     "title": "🔐 Chatter Desktop password recovery",
     "body": "Your verification code: {{code}}\n\nThe code is valid for 5 minutes.\n\nIf you did not request a password recovery — ignore this message."
+  },
+  "openRouterMonitor": {
+    "title": "⚠️ OpenRouter 제공업체를 사용할 수 없음",
+    "model": "모델",
+    "route": "경로",
+    "previousProvider": "이전 제공업체",
+    "status": "이 모델에 더 이상 사용할 수 없음",
+    "newProvider": "새 제공업체",
+    "strategy": "전략",
+    "strategyNotify": "알림만",
+    "strategyCheapest": "최저가",
+    "strategyThroughput": "최고 처리량",
+    "strategyLatency": "최저 지연 시간",
+    "input": "입력",
+    "output": "출력",
+    "cacheRead": "캐시 읽기",
+    "pending": "자동 전환이 보류 중입니다: 공급자가 {{count}}회 연속 확인에서 누락되어야 합니다.",
+    "noReplacementFound": "이 모델의 나머지 엔드포인트 중에서 대체 항목을 찾지 못했습니다.",
+    "chooseInPanel": "관리자 패널에서 다른 공급자를 선택하세요.",
+    "noReplacementSelected": "대체 항목이 선택되지 않았습니다. 관리자 패널에서 다른 공급자를 선택하세요.",
+    "reason": "이유",
+    "reasonRuntime": "실시간 요청 중에 감지됨; 요청은 새 공급자로 한 번 재시도되었습니다.",
+    "reasonRemoved": "모델이 OpenRouter 카탈로그에서 제거되었습니다.",
+    "provider": "제공자",
+    "priceTitle": "📉 OpenRouter 제공자 가격이 변경되었습니다.",
+    "priceUpdatedOverrides": "관리자 패널의 모델 가격이 자동으로 업데이트되었습니다."
   }
 }

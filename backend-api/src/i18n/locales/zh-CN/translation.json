@@ -97,5 +97,31 @@
   "passwordReset": {
     "title": "🔐 Chatter Desktop password recovery",
     "body": "Your verification code: {{code}}\n\nThe code is valid for 5 minutes.\n\nIf you did not request a password recovery — ignore this message."
+  },
+  "openRouterMonitor": {
+    "title": "⚠️ OpenRouter 提供商不可用",
+    "model": "模型",
+    "route": "路由",
+    "previousProvider": "之前的提供商",
+    "status": "不再适用于此模型",
+    "newProvider": "新的提供商",
+    "strategy": "策略",
+    "strategyNotify": "仅通知",
+    "strategyCheapest": "最便宜",
+    "strategyThroughput": "最高吞吐量",
+    "strategyLatency": "最低延迟",
+    "input": "输入",
+    "output": "输出",
+    "cacheRead": "缓存读取",
+    "pending": "自动切换待定：提供程序必须在{{count}}次连续检查中缺失。",
+    "noReplacementFound": "在该模型的其余端点中未找到替代。",
+    "chooseInPanel": "请在管理面板中选择另一个提供程序。",
+    "noReplacementSelected": "未选择替代。请在管理面板中选择另一个提供程序。",
+    "reason": "原因",
+    "reasonRuntime": "在实时请求期间检测到；请求已使用新提供程序重试一次",
+    "reasonRemoved": "该模型已从OpenRouter目录中移除",
+    "provider": "提供商",
+    "priceTitle": "📉 OpenRouter提供商价格已变更",
+    "priceUpdatedOverrides": "管理面板中的模型价格已自动更新。"
   }
 }

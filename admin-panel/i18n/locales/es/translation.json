@@ -86,7 +86,9 @@
     "changedRelogin": "Cambiado. Inicie sesión de nuevo.",
     "coefficientLoadError": "Error al cargar los coeficientes",
     "coefficientSaved": "Coeficiente guardado",
-    "cancel": "Cancelar"
+    "cancel": "Cancelar",
+    "on": "Activado",
+    "off": "Desactivado"
   },
   "models": {
     "auto": {
@@ -130,7 +132,10 @@
       "moveUp": "Subir",
       "moveDown": "Bajar",
       "remove": "Eliminar",
-      "addModel": "+ Agregar modelo"
+      "addModel": "+ Agregar modelo",
+      "dragToReorder": "Arrastrar para reordenar",
+      "expandAll": "Expandir todo",
+      "collapseAll": "Contraer todo"
     },
     "providerFields": {
       "baseUrl": "URL del proveedor",
@@ -169,6 +174,50 @@
       "refreshing": "Actualizando…",
       "customModel": "Otro…",
       "customModelHint": "especificar manualmente"
+    },
+    "monitor": {
+      "title": "Monitoreo de OpenRouter",
+      "subtitle": "Vigilar proveedores fijados, notificar a administradores y cambiar automáticamente",
+      "unavailable": "La API de monitoreo no está disponible (actualizar chatter-manager).",
+      "enabled": "Monitoreo habilitado",
+      "enabledHint": "Verificar periódicamente que los proveedores fijados de OpenRouter aún sirvan el modelo",
+      "interval": "Intervalo de comprobación (minutos)",
+      "intervalHint": "Mínimo 5 minutos; se añade un pequeño jitter aleatorio para distribuir la carga",
+      "action": "Acción cuando el proveedor desaparece",
+      "actionHint": "El cambio automático ocurre solo después de dos comprobaciones exitosas consecutivas sin el proveedor",
+      "actionNotify": "Solo notificar",
+      "actionCheapest": "Cambiar al más barato",
+      "actionThroughput": "Cambiar al más rápido (rendimiento)",
+      "actionLatency": "Cambiar a la menor latencia",
+      "priceTracking": "Seguimiento de precios",
+      "priceTrackingHint": "Vigilar los precios de los proveedores fijados para cambios",
+      "priceTrackingOff": "Desactivado",
+      "priceTrackingNotify": "Solo notificar",
+      "priceTrackingUpdate": "Notificar y actualizar precios",
+      "priceThreshold": "Umbral de cambio (%)",
+      "priceThresholdHint": "Ignorar cambios menores que este porcentaje; el precio manual nunca se sobrescribe",
+      "recipients": "Destinatarios de notificaciones",
+      "recipientsHint": "Las notificaciones de Telegram se envían a través del bot Chatter existente",
+      "recipientsAll": "Todos los administradores con Telegram",
+      "recipientsSelected": "Administradores seleccionados",
+      "recipientAdmins": "Administradores",
+      "noAdmins": "No se encontraron administradores",
+      "noTelegram": "sin Telegram",
+      "saveSettings": "Guardar configuración de monitoreo",
+      "checkAll": "Verificar todo ahora",
+      "checking": "Verificando…",
+      "testing": "Enviando…",
+      "testMissing": "Prueba: proveedor faltante",
+      "testPrice": "Prueba: cambio de precio",
+      "checkNow": "Verificar ahora",
+      "noData": "Aún no verificado",
+      "strategy": "Estrategia",
+      "lastChecked": "Última comprobación",
+      "statesTitle": "Estado de los modelos monitorizados",
+      "colModel": "Modelo",
+      "colProvider": "Proveedor",
+      "colStatus": "Estado",
+      "colLastCheck": "Última comprobación"
     }
   },
   "integrations": {
@@ -629,6 +678,16 @@
       "checkError": "Error de verificación: {{message}}",
       "starting": "Iniciando actualización…",
       "updateError": "Error de actualización: {{message}}",
+      "channel": {
+        "label": "Canal",
+        "hint": "Canal de actualización: 'latest' para producción o el nombre de una rama para seguir sus imágenes. '/' se sustituye por '-'.",
+        "apply": "Cambiar",
+        "switching": "Cambiando…",
+        "invalidTag": "Nombre de canal no válido. Use letras, dígitos, '.', '_' y '-'.",
+        "switchedFound": "Cambiado a '{{tag}}'. Se encontraron nuevas imágenes: hay una actualización disponible.",
+        "switchedCurrent": "Cambiado a '{{tag}}'. El servidor ya está ejecutando las imágenes de este canal.",
+        "error": "Error al cambiar de canal: {{message}}"
+      },
       "changes": {
         "services": "Servicios",
         "changed": "Cambiados: {{services}}",

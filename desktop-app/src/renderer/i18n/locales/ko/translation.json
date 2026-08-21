@@ -713,7 +713,9 @@
       "subagentNumber": "🧠 하위 에이전트 {{number}}",
       "providerTokenUsage": "공급자가 보고한 정확한 완료 토큰 사용량",
       "branchNotAllowedInRoom": "공유 룸에서는 아직 분기를 사용할 수 없습니다",
-      "branchFailed": "분기를 만들지 못했습니다"
+      "branchFailed": "분기를 만들지 못했습니다",
+      "generationPerf": "첫 토큰: {{latency}}\n생성: {{gen}}\n총계: {{total}}\n속도: {{tps}} 토큰/초",
+      "firstTokenLatency": "첫 토큰까지의 시간: {{latency}}"
     },
     "reasoning": {
       "auto": "자동",

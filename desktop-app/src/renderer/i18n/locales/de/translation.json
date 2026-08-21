@@ -392,7 +392,9 @@
       "subagentNumber": "🧠 Unteragent {{number}}",
       "providerTokenUsage": "Vom Anbieter gemeldete genaue Token-Nutzung für die Vervollständigung",
       "branchNotAllowedInRoom": "Verzweigungen sind in gemeinsamen Räumen noch nicht verfügbar",
-      "branchFailed": "Verzweigung konnte nicht erstellt werden"
+      "branchFailed": "Verzweigung konnte nicht erstellt werden",
+      "generationPerf": "Erster Token: {{latency}}\nGenerierung: {{gen}}\nGesamt: {{total}}\nGeschwindigkeit: {{tps}} Token/s",
+      "firstTokenLatency": "Zeit bis zum ersten Token: {{latency}}"
     },
     "reasoning": {
       "auto": "Auto",

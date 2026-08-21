@@ -713,7 +713,9 @@
       "createBranch": "Dal oluştur",
       "subagentNumber": "🧠 Alt Ajan {{number}}",
       "branchNotAllowedInRoom": "Dallar henüz paylaşılan odalarda kullanılamıyor",
-      "branchFailed": "Dal oluşturulamadı"
+      "branchFailed": "Dal oluşturulamadı",
+      "generationPerf": "İlk token: {{latency}}\nÜretim: {{gen}}\nToplam: {{total}}\nHız: {{tps}} token/s",
+      "firstTokenLatency": "İlk token süresi: {{latency}}"
     },
     "reasoning": {
       "auto": "Otomatik",

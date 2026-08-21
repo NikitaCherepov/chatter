@@ -392,7 +392,9 @@
       "subagentNumber": "🧠 Sous-agent {{number}}",
       "providerTokenUsage": "Utilisation exacte des jetons de complétion rapportée par le fournisseur",
       "branchNotAllowedInRoom": "Les branches ne sont pas encore disponibles dans les salons partagés",
-      "branchFailed": "Échec de la création de la branche"
+      "branchFailed": "Échec de la création de la branche",
+      "generationPerf": "Premier jeton : {{latency}}\nGénération : {{gen}}\nTotal : {{total}}\nVitesse : {{tps}} jetons/s",
+      "firstTokenLatency": "Temps jusqu'au premier jeton : {{latency}}"
     },
     "reasoning": {
       "auto": "Auto",

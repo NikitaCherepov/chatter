@@ -86,7 +86,9 @@
     "changedRelogin": "Alterado. Faça login novamente.",
     "coefficientLoadError": "Falha ao carregar coeficientes",
     "coefficientSaved": "Coeficiente salvo",
-    "cancel": "Cancelar"
+    "cancel": "Cancelar",
+    "on": "Ativado",
+    "off": "Desligado"
   },
   "models": {
     "auto": {
@@ -130,7 +132,10 @@
       "moveUp": "Mover para cima",
       "moveDown": "Mover para baixo",
       "remove": "Remover",
-      "addModel": "+ Adicionar modelo"
+      "addModel": "+ Adicionar modelo",
+      "dragToReorder": "Arraste para reordenar",
+      "expandAll": "Expandir tudo",
+      "collapseAll": "Recolher tudo"
     },
     "providerFields": {
       "baseUrl": "URL do provedor",
@@ -169,6 +174,50 @@
       "refreshing": "Atualizando…",
       "customModel": "Outro…",
       "customModelHint": "especificar manualmente"
+    },
+    "monitor": {
+      "title": "Monitoramento do OpenRouter",
+      "subtitle": "Acompanhe provedores fixados, notifique administradores e alterne automaticamente",
+      "unavailable": "A API do Monitor não está disponível (atualize o chatter-manager).",
+      "enabled": "Monitoramento habilitado",
+      "enabledHint": "Verifique periodicamente se os provedores fixados do OpenRouter ainda servem o modelo",
+      "interval": "Intervalo de verificação (minutos)",
+      "intervalHint": "Mínimo de 5 minutos; um pequeno jitter aleatório é adicionado para distribuir a carga",
+      "action": "Ação quando o provedor desaparece",
+      "actionHint": "A troca automática ocorre somente após duas verificações consecutivas bem-sucedidas sem o provedor",
+      "actionNotify": "Somente notificar",
+      "actionCheapest": "Mudar para o mais barato",
+      "actionThroughput": "Alternar para o mais rápido (throughput)",
+      "actionLatency": "Mudar para a menor latência",
+      "priceTracking": "Acompanhamento de preços",
+      "priceTrackingHint": "Acompanhe as alterações nos preços dos provedores fixados",
+      "priceTrackingOff": "Desativado",
+      "priceTrackingNotify": "Notificar apenas",
+      "priceTrackingUpdate": "Notificar e atualizar preços",
+      "priceThreshold": "Alterar limite (%)",
+      "priceThresholdHint": "Ignore alterações menores que esta porcentagem; o preço manual nunca é sobrescrito",
+      "recipients": "Destinatários de notificações",
+      "recipientsHint": "As notificações do Telegram são enviadas por meio do bot Chatter existente",
+      "recipientsAll": "Todos os administradores com Telegram",
+      "recipientsSelected": "Administradores selecionados",
+      "recipientAdmins": "Administradores",
+      "noAdmins": "Nenhum administrador encontrado",
+      "noTelegram": "sem Telegram",
+      "saveSettings": "Salvar configurações de monitoramento",
+      "checkAll": "Verificar todos agora",
+      "checking": "Verificando…",
+      "testing": "Enviando…",
+      "testMissing": "Teste: provedor ausente",
+      "testPrice": "Teste: alteração de preço",
+      "checkNow": "Verificar agora",
+      "noData": "Ainda não verificado",
+      "strategy": "Estratégia",
+      "lastChecked": "Última verificação",
+      "statesTitle": "Status dos modelos monitorados",
+      "colModel": "Modelo",
+      "colProvider": "Provedor",
+      "colStatus": "Status",
+      "colLastCheck": "Última verificação"
     }
   },
   "integrations": {
@@ -656,6 +705,16 @@
         "forceNow": "Forçar atualização agora",
         "timeoutNotice": "15 segundos se passaram, {{count}} usuário(s) ainda trabalhando. Você pode continuar aguardando, forçar a atualização ou cancelar.",
         "pollError": "Falha na verificação de dreno: {{message}}"
+      },
+      "channel": {
+        "label": "Canal",
+        "hint": "Canal de atualização: 'latest' para produção, ou um nome de branch para rastrear as imagens desse branch. '/' é substituído por '-'.",
+        "apply": "Alternar",
+        "switching": "Alternando…",
+        "invalidTag": "Nome de canal inválido. Use letras, dígitos, '.', '_' e '-'.",
+        "switchedFound": "Mudou para '{{tag}}'. Novas imagens encontradas — atualização disponível.",
+        "switchedCurrent": "Alternado para '{{tag}}'. O servidor já está executando as imagens deste canal.",
+        "error": "Erro ao trocar de canal: {{message}}"
       }
     },
     "error": "Erro: {{message}}",

@@ -713,7 +713,9 @@
       "subagentNumber": "🧠 Subagent {{number}}",
       "providerTokenUsage": "Dokładne użycie tokenów uzupełnienia zgłoszone przez dostawcę",
       "branchNotAllowedInRoom": "Rozgałęzienia nie są jeszcze dostępne w pokojach współdzielonych",
-      "branchFailed": "Nie udało się utworzyć rozgałęzienia"
+      "branchFailed": "Nie udało się utworzyć rozgałęzienia",
+      "generationPerf": "Pierwszy token: {{latency}}\nGenerowanie: {{gen}}\nRazem: {{total}}\nSzybkość: {{tps}} tokenów/s",
+      "firstTokenLatency": "Czas do pierwszego tokena: {{latency}}"
     },
     "reasoning": {
       "auto": "Auto",

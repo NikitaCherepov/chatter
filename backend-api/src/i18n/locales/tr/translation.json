@@ -97,5 +97,31 @@
   "passwordReset": {
     "title": "🔐 Chatter Desktop password recovery",
     "body": "Your verification code: {{code}}\n\nThe code is valid for 5 minutes.\n\nIf you did not request a password recovery — ignore this message."
+  },
+  "openRouterMonitor": {
+    "title": "⚠️ OpenRouter sağlayıcısı kullanılamıyor",
+    "model": "Model",
+    "route": "Rota",
+    "previousProvider": "Önceki sağlayıcı",
+    "status": "bu model için artık kullanılamıyor",
+    "newProvider": "Yeni sağlayıcı",
+    "strategy": "Strateji",
+    "strategyNotify": "yalnızca bildir",
+    "strategyCheapest": "en ucuz",
+    "strategyThroughput": "en yüksek işlem hızı",
+    "strategyLatency": "en düşük gecikme",
+    "input": "Girdi",
+    "output": "Çıktı",
+    "cacheRead": "Önbellek okuma",
+    "pending": "Otomatik geçiş bekliyor: sağlayıcı {{count}} ardışık kontrolde eksik olmalıdır.",
+    "noReplacementFound": "Bu modelin kalan uç noktaları arasında yedek bulunamadı.",
+    "chooseInPanel": "Yönetim panelinde başka bir sağlayıcı seçin.",
+    "noReplacementSelected": "Yedek seçilmedi. Yönetim panelinde başka bir sağlayıcı seçin.",
+    "reason": "Neden",
+    "reasonRuntime": "canlı istek sırasında tespit edildi; istek yeni sağlayıcıyla bir kez yeniden denendi",
+    "reasonRemoved": "model, OpenRouter kataloğundan kaldırıldı",
+    "provider": "Sağlayıcı",
+    "priceTitle": "📉 OpenRouter sağlayıcı fiyatları değişti",
+    "priceUpdatedOverrides": "Yönetim panelindeki model fiyatları otomatik olarak güncellendi."
   }
 }

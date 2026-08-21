@@ -713,7 +713,9 @@
       "createBranch": "Vytvořit větev",
       "subagentNumber": "🧠 Subagent {{number}}",
       "branchNotAllowedInRoom": "Větve zatím nejsou k dispozici ve sdílených místnostech",
-      "branchFailed": "Vytvoření větve se nezdařilo"
+      "branchFailed": "Vytvoření větve se nezdařilo",
+      "generationPerf": "První token: {{latency}}\nGenerování: {{gen}}\nCelkem: {{total}}\nRychlost: {{tps}} tokenů/s",
+      "firstTokenLatency": "Čas do prvního tokenu: {{latency}}"
     },
     "reasoning": {
       "auto": "Automaticky",

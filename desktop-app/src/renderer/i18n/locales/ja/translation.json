@@ -392,7 +392,9 @@
       "subagentNumber": "🧠 サブエージェント {{number}}",
       "providerTokenUsage": "プロバイダーが報告した正確な完了トークン使用量",
       "branchNotAllowedInRoom": "共有ルームではブランチはまだ利用できません",
-      "branchFailed": "ブランチの作成に失敗しました"
+      "branchFailed": "ブランチの作成に失敗しました",
+      "generationPerf": "最初のトークン: {{latency}}\n生成: {{gen}}\n合計: {{total}}\n速度: {{tps}} トークン/秒",
+      "firstTokenLatency": "最初のトークンまでの時間: {{latency}}"
     },
     "reasoning": {
       "auto": "自動",

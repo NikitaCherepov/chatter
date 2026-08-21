@@ -87,7 +87,9 @@
     "changedRelogin": "Změněno. Přihlaste se znovu.",
     "coefficientLoadError": "Nepodařilo se načíst koeficienty",
     "coefficientSaved": "Koeficient uložen",
-    "cancel": "Zrušit"
+    "cancel": "Zrušit",
+    "on": "Zapnuto",
+    "off": "Vypnuto"
   },
   "ui": {
     "search": "Hledat…",
@@ -136,7 +138,10 @@
       "moveUp": "Posunout nahoru",
       "moveDown": "Posunout dolů",
       "remove": "Odebrat",
-      "addModel": "+ Přidat model"
+      "addModel": "+ Přidat model",
+      "dragToReorder": "Přetažením změníte pořadí",
+      "expandAll": "Rozbalit vše",
+      "collapseAll": "Sbalit vše"
     },
     "providerFields": {
       "baseUrl": "URL poskytovatele",
@@ -175,6 +180,50 @@
       "refreshing": "Obnovuji…",
       "customModel": "Jiné…",
       "customModelHint": "zadat ručně"
+    },
+    "monitor": {
+      "title": "Monitorování OpenRouter",
+      "subtitle": "Sledujte připnuté poskytovatele, upozorňujte administrátory a přepínejte automaticky",
+      "unavailable": "Monitorovací API není dostupné (aktualizujte chatter-manager).",
+      "enabled": "Monitorování povoleno",
+      "enabledHint": "Pravidelně ověřujte, že připnutí poskytovatelé OpenRouter stále obsluhují model",
+      "interval": "Interval kontroly (minuty)",
+      "intervalHint": "Minimálně 5 minut; je přidán malý náhodný rozptyl pro rozložení zátěže",
+      "action": "Akce, když poskytovatel zmizí",
+      "actionHint": "Automatické přepnutí nastane pouze po dvou po sobě jdoucích úspěšných kontrolách bez poskytovatele",
+      "actionNotify": "Pouze upozornit",
+      "actionCheapest": "Přepnout na nejlevnější",
+      "actionThroughput": "Přepnout na nejrychlejší (propustnost)",
+      "actionLatency": "Přepnout na nejnižší latenci",
+      "priceTracking": "Sledování cen",
+      "priceTrackingHint": "Sledujte změny cen připnutých poskytovatelů",
+      "priceTrackingOff": "Vypnuto",
+      "priceTrackingNotify": "Pouze upozornit",
+      "priceTrackingUpdate": "Upozornit a aktualizovat ceny",
+      "priceThreshold": "Práh změny (%)",
+      "priceThresholdHint": "Ignorovat změny menší než toto procento; ruční ceny se nikdy nepřepisují",
+      "recipients": "Příjemci oznámení",
+      "recipientsHint": "Telegramová oznámení jsou odesílána prostřednictvím stávajícího bota Chatter",
+      "recipientsAll": "Všichni administrátoři s Telegramem",
+      "recipientsSelected": "Vybraní administrátoři",
+      "recipientAdmins": "Administrátoři",
+      "noAdmins": "Nebyli nalezeni žádní administrátoři",
+      "noTelegram": "žádný Telegram",
+      "saveSettings": "Uložit nastavení monitorování",
+      "checkAll": "Zkontrolovat vše nyní",
+      "checking": "Kontroluji…",
+      "testing": "Odesílání…",
+      "testMissing": "Test: chybí poskytovatel",
+      "testPrice": "Test: změna ceny",
+      "checkNow": "Zkontrolovat nyní",
+      "noData": "Zatím nezkontrolováno",
+      "strategy": "Strategie",
+      "lastChecked": "Poslední kontrola",
+      "statesTitle": "Stav sledovaných modelů",
+      "colModel": "Model",
+      "colProvider": "Poskytovatel",
+      "colStatus": "Stav",
+      "colLastCheck": "Naposledy zkontrolováno"
     }
   },
   "integrations": {
@@ -649,6 +698,16 @@
         "forceNow": "Vynutit aktualizaci nyní",
         "timeoutNotice": "Uběhlo 15 sekund, {{count}} uživatel(é) stále pracují. Můžete pokračovat v čekání, vynutit aktualizaci nebo zrušit.",
         "pollError": "Selhalo dotazování na vyprázdnění: {{message}}"
+      },
+      "channel": {
+        "label": "Kanál",
+        "hint": "Kanál aktualizací: 'latest' pro produkci, nebo název větve pro sledování obrázků této větve. '/' je nahrazeno '-'",
+        "apply": "Přepnout",
+        "switching": "Přepínání…",
+        "invalidTag": "Neplatný název kanálu. Použijte písmena, číslice, '.', '_' a '-'.",
+        "switchedFound": "Přepnuto na '{{tag}}'. Byly nalezeny nové obrazy — je k dispozici aktualizace.",
+        "switchedCurrent": "Přepnuto na '{{tag}}'. Server již používá obrazy tohoto kanálu.",
+        "error": "Chyba přepnutí kanálu: {{message}}"
       }
     },
     "error": "Chyba: {{message}}"

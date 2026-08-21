@@ -86,7 +86,9 @@
     "changedRelogin": "已更改。请重新登录。",
     "coefficientLoadError": "加载系数失败",
     "coefficientSaved": "系数已保存",
-    "cancel": "取消"
+    "cancel": "取消",
+    "on": "开启",
+    "off": "关闭"
   },
   "models": {
     "auto": {
@@ -130,7 +132,10 @@
       "moveUp": "上移",
       "moveDown": "下移",
       "remove": "移除",
-      "addModel": "+ 添加模型"
+      "addModel": "+ 添加模型",
+      "dragToReorder": "拖动以重新排序",
+      "expandAll": "全部展开",
+      "collapseAll": "全部折叠"
     },
     "providerFields": {
       "baseUrl": "提供商 URL",
@@ -169,6 +174,50 @@
       "refreshing": "刷新中…",
       "customModel": "其他…",
       "customModelHint": "手动指定"
+    },
+    "monitor": {
+      "title": "OpenRouter 监控",
+      "subtitle": "查看固定的提供商，通知管理员并自动切换",
+      "unavailable": "监控API不可用（请更新chatter-manager）。",
+      "enabled": "监控已启用",
+      "enabledHint": "定期验证固定的OpenRouter提供商是否仍提供该模型",
+      "interval": "检查间隔（分钟）",
+      "intervalHint": "最小5分钟；会添加少量随机抖动以分散负载",
+      "action": "提供商消失时的操作",
+      "actionHint": "自动切换仅在连续两次成功检查且未使用该提供商后发生",
+      "actionNotify": "仅通知",
+      "actionCheapest": "切换到最便宜",
+      "actionThroughput": "切换到最快（吞吐量）",
+      "actionLatency": "切换到最低延迟",
+      "priceTracking": "价格跟踪",
+      "priceTrackingHint": "关注固定的提供商价格变动",
+      "priceTrackingOff": "关闭",
+      "priceTrackingNotify": "仅通知",
+      "priceTrackingUpdate": "通知并更新价格",
+      "priceThreshold": "更改阈值 (%)",
+      "priceThresholdHint": "忽略小于此百分比的变动；手动定价永远不会被覆盖",
+      "recipients": "通知收件人",
+      "recipientsHint": "Telegram 通知通过现有的 Chatter 机器人发送",
+      "recipientsAll": "所有拥有Telegram的管理员",
+      "recipientsSelected": "选定的管理员",
+      "recipientAdmins": "管理员",
+      "noAdmins": "未找到管理员",
+      "noTelegram": "无Telegram",
+      "saveSettings": "保存监控设置",
+      "checkAll": "立即全部检查",
+      "checking": "正在检查…",
+      "testing": "正在发送…",
+      "testMissing": "测试：缺少提供商",
+      "testPrice": "测试：价格变动",
+      "checkNow": "立即检查",
+      "noData": "尚未检查",
+      "strategy": "策略",
+      "lastChecked": "上次检查",
+      "statesTitle": "监控模型状态",
+      "colModel": "模型",
+      "colProvider": "提供商",
+      "colStatus": "状态",
+      "colLastCheck": "上次检查"
     }
   },
   "integrations": {
@@ -656,6 +705,16 @@
         "forceNow": "立即强制更新",
         "timeoutNotice": "15秒已过，仍有{{count}}位用户在工作中。您可以继续等待、强制更新或取消。",
         "pollError": "排空轮询失败：{{message}}"
+      },
+      "channel": {
+        "label": "渠道",
+        "hint": "更新渠道：'latest' 用于生产环境，或分支名称以跟踪该分支的镜像。'/' 会被替换为 '-'。",
+        "apply": "切换",
+        "switching": "正在切换…",
+        "invalidTag": "无效的渠道名称。请使用字母、数字、'.'、'_' 和 '-'。",
+        "switchedFound": "已切换到'{{tag}}'。发现新镜像——有可用更新。",
+        "switchedCurrent": "已切换到'{{tag}}'。服务器已在运行该频道的镜像。",
+        "error": "频道切换错误：{{message}}"
       }
     },
     "error": "错误：{{message}}",

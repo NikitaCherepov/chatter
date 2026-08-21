@@ -12,62 +12,110 @@
     "cs": [
       "Přidány místnosti, kam můžete pozvat další lidi a přivést vlastní boty.",
       "Boti nyní mohou pracovat na pozadí a upozornit vás, až dokončí práci.",
-      "Zprávy nyní zobrazují datum odeslání."
+      "Zprávy nyní zobrazují datum odeslání.",
+      "Přidány automatické aktualizace cen a upozornění.",
+      "Přidána upozornění na změnu poskytovatele.",
+      "Přidána experimentální větev aktualizací.",
+      "Přepracována karta modelů, aby byla pohodlnější."
     ],
     "de": [
-      "Räume hinzugefügt, in die du andere Personen einladen und deine eigenen Bots mitbringen kannst.",
-      "Bots können jetzt im Hintergrund arbeiten und dich benachrichtigen, wenn sie fertig sind.",
-      "Nachrichten zeigen jetzt ihr Sendedatum."
+      "Räume hinzugefügt, in die Sie andere Personen einladen und eigene Bots mitbringen können.",
+      "Bots können jetzt im Hintergrund arbeiten und Sie benachrichtigen, wenn sie fertig sind.",
+      "Nachrichten zeigen jetzt ihr Sendedatum.",
+      "Automatische Preisaktualisierungen und Benachrichtigungen hinzugefügt.",
+      "Benachrichtigungen bei Anbieterwechsel hinzugefügt.",
+      "Experimenteller Updates-Zweig hinzugefügt.",
+      "Modell-Tab neu gestaltet, um es komfortabler zu machen."
     ],
     "es": [
       "Se agregaron salas donde puedes invitar a otras personas y traer tus propios bots.",
       "Los bots ahora pueden trabajar en segundo plano y notificarte cuando terminen.",
-      "Los mensajes ahora muestran su fecha de envío."
+      "Los mensajes ahora muestran su fecha de envío.",
+      "Se agregaron actualizaciones automáticas de precios y notificaciones.",
+      "Se agregaron notificaciones de cambio de proveedor.",
+      "Se añadió una rama de actualizaciones experimentales.",
+      "Se rediseñó la pestaña de modelos, haciéndola más conveniente."
     ],
     "fr": [
       "Ajout de salons où vous pouvez inviter d'autres personnes et amener vos propres bots.",
       "Les bots peuvent désormais travailler en arrière-plan et vous notifier lorsqu'ils ont terminé.",
-      "Les messages affichent désormais leur date d'envoi."
+      "Les messages affichent désormais leur date d'envoi.",
+      "Ajout de mises à jour automatiques des prix et de notifications.",
+      "Ajout de notifications de changement de fournisseur.",
+      "Ajout d'une branche de mises à jour expérimentale.",
+      "Refonte de l'onglet des modèles, le rendant plus pratique."
     ],
     "it": [
-      "Aggiunte stanze dove puoi invitare altre persone e portare i tuoi bot.",
+      "Aggiunte stanze in cui puoi invitare altre persone e portare i tuoi bot.",
       "I bot ora possono lavorare in background e avvisarti quando finiscono.",
-      "I messaggi ora mostrano la data di invio."
+      "I messaggi ora mostrano la data di invio.",
+      "Aggiunti aggiornamenti automatici dei prezzi e notifiche.",
+      "Aggiunte notifiche di cambio fornitore.",
+      "Aggiunto un ramo di aggiornamenti sperimentali.",
+      "Riprogettata la scheda dei modelli, rendendola più comoda."
     ],
     "ja": [
-      "他の人を招待して自分のボットを持ち込めるルームを追加しました。",
-      "ボットはバックグラウンドで動作し、完了時に通知できるようになりました。",
-      "メッセージに送信日時が表示されるようになりました。"
+      "他の人を招待して自分のボットを持ち込める部屋を追加しました。",
+      "ボットがバックグラウンドで動作し、完了時に通知できるようになりました。",
+      "メッセージに送信日時が表示されるようになりました。",
+      "自動価格更新と通知を追加しました。",
+      "プロバイダー変更通知を追加しました。",
+      "実験的なアップデートブランチを追加しました。",
+      "モデルタブを再設計し、より便利にしました。"
     ],
     "ko": [
       "다른 사람을 초대하고 자신의 봇을 가져올 수 있는 방이 추가되었습니다.",
-      "봇이 이제 백그라운드에서 작업하고 완료되면 알릴 수 있습니다.",
-      "메시지에 전송 날짜가 표시됩니다."
+      "봇이 이제 백그라운드에서 작업하고 완료 시 알림을 보낼 수 있습니다.",
+      "메시지에 전송 날짜가 표시됩니다.",
+      "자동 가격 업데이트 및 알림이 추가되었습니다.",
+      "공급자 변경 알림이 추가되었습니다.",
+      "실험적 업데이트 분기를 추가했습니다.",
+      "모델 탭을 재설계하여 더 편리하게 만들었습니다."
     ],
     "pl": [
       "Dodano pokoje, w których możesz zapraszać inne osoby i przyprowadzać własne boty.",
       "Boty mogą teraz pracować w tle i powiadamiać Cię po zakończeniu.",
-      "Wiadomości pokazują teraz datę wysłania."
+      "Wiadomości pokazują teraz datę wysłania.",
+      "Dodano automatyczne aktualizacje cen i powiadomienia.",
+      "Dodano powiadomienia o zmianie dostawcy.",
+      "Dodano eksperymentalną gałąź aktualizacji.",
+      "Przeprojektowano zakładkę modeli, czyniąc ją wygodniejszą."
     ],
     "pt-BR": [
-      "Adicionamos salas onde você pode convidar outras pessoas e trazer seus próprios bots.",
+      "Adicionadas salas onde você pode convidar outras pessoas e trazer seus próprios bots.",
       "Os bots agora podem trabalhar em segundo plano e notificá-lo quando terminarem.",
-      "As mensagens agora mostram a data de envio."
+      "As mensagens agora mostram a data de envio.",
+      "Adicionadas atualizações automáticas de preço e notificações.",
+      "Adicionadas notificações de mudança de provedor.",
+      "Adicionado um ramo de atualizações experimentais.",
+      "Redesenhamos a aba de modelos, tornando-a mais conveniente."
     ],
     "ru": [
       "Добавлены комнаты, где вы можете приглашать других людей и приводить своих ботов.",
       "Боты теперь могут работать в фоновом режиме и уведомлять вас о завершении.",
-      "Сообщения теперь показывают дату отправки."
+      "Сообщения теперь показывают дату отправки.",
+      "Добавлены автоматические обновления цен и уведомления.",
+      "Добавлены уведомления о смене провайдера.",
+      "Добавлена экспериментальная ветка обновлений.",
+      "Переработана вкладка моделей, сделав её более удобной."
     ],
     "tr": [
       "Diğer kişileri davet edebileceğiniz ve kendi botlarınızı getirebileceğiniz odalar eklendi.",
-      "Botlar artık arka planda çalışabilir ve bitirdiklerinde size bildirim gönderebilir.",
-      "Mesajlar artık gönderilme tarihini gösteriyor."
+      "Botlar artık arka planda çalışabilir ve bitirdiklerinde sizi bilgilendirebilir.",
+      "Mesajlar artık gönderilme tarihini gösteriyor.",
+      "Otomatik fiyat güncellemeleri ve bildirimler eklendi.",
+      "Sağlayıcı değişikliği bildirimleri eklendi.",
+      "Deneysel güncellemeler dalı eklendi.",
+      "Modeller sekmesi yeniden tasarlandı, daha kullanışlı hale getirildi."
     ],
     "zh-CN": [
-      "添加了房间，您可以邀请其他人并带上自己的机器人。",
+      "添加了房间功能，您可以邀请其他人并携带自己的机器人。",
       "机器人现在可以在后台工作，并在完成时通知您。",
-      "消息现在显示发送日期。"
+      "消息现在显示发送日期。",
+      "添加了自动价格更新和通知。",
+      "添加了提供商变更通知。",
+      "新增了一个实验性更新分支。",
+      "重新设计了模型标签页，使其更加便捷。"
     ]
   }
 }

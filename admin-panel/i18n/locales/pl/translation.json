@@ -86,7 +86,9 @@
     "changedRelogin": "Zmieniono. Zaloguj się ponownie.",
     "coefficientLoadError": "Nie udało się załadować współczynników",
     "coefficientSaved": "Współczynnik zapisany",
-    "cancel": "Anuluj"
+    "cancel": "Anuluj",
+    "on": "Włączony",
+    "off": "Wyłączone"
   },
   "models": {
     "auto": {
@@ -130,7 +132,10 @@
       "moveUp": "Przesuń w górę",
       "moveDown": "Przesuń w dół",
       "remove": "Usuń",
-      "addModel": "+ Dodaj model"
+      "addModel": "+ Dodaj model",
+      "dragToReorder": "Przeciągnij, aby zmienić kolejność",
+      "expandAll": "Rozwiń wszystkie",
+      "collapseAll": "Zwiń wszystkie"
     },
     "providerFields": {
       "baseUrl": "URL dostawcy",
@@ -169,6 +174,50 @@
       "refreshing": "Odświeżanie…",
       "customModel": "Inne…",
       "customModelHint": "określ ręcznie"
+    },
+    "monitor": {
+      "title": "Monitorowanie OpenRouter",
+      "subtitle": "Obserwuj przypiętych dostawców, powiadamiaj administratorów i przełączaj automatycznie",
+      "unavailable": "Interfejs API monitora jest niedostępny (zaktualizuj chatter-manager).",
+      "enabled": "Monitoring włączony",
+      "enabledHint": "Okresowo weryfikuj, czy przypięci dostawcy OpenRouter nadal obsługują model",
+      "interval": "Interwał sprawdzania (minuty)",
+      "intervalHint": "Minimum 5 minut; dodawany jest niewielki losowy jitter, aby rozłożyć obciążenie",
+      "action": "Akcja, gdy dostawca zniknie",
+      "actionHint": "Automatyczne przełączanie następuje tylko po dwóch kolejnych pomyślnych kontrolach bez dostawcy",
+      "actionNotify": "Tylko powiadom",
+      "actionCheapest": "Przełącz na najtańszy",
+      "actionThroughput": "Przełącz na najszybszy (przepustowość)",
+      "actionLatency": "Przełącz na najniższe opóźnienie",
+      "priceTracking": "Śledzenie cen",
+      "priceTrackingHint": "Obserwuj zmiany cen przypiętych dostawców",
+      "priceTrackingOff": "Wyłączone",
+      "priceTrackingNotify": "Tylko powiadom",
+      "priceTrackingUpdate": "Powiadamiaj i aktualizuj ceny",
+      "priceThreshold": "Zmień próg (%)",
+      "priceThresholdHint": "Ignoruj zmiany mniejsze niż ten procent; ceny ręczne nigdy nie są nadpisywane",
+      "recipients": "Odbiorcy powiadomień",
+      "recipientsHint": "Powiadomienia Telegram są wysyłane przez istniejącego bota Chatter",
+      "recipientsAll": "Wszyscy administratorzy z Telegramem",
+      "recipientsSelected": "Wybrani administratorzy",
+      "recipientAdmins": "Administratorzy",
+      "noAdmins": "Nie znaleziono administratorów",
+      "noTelegram": "brak Telegrama",
+      "saveSettings": "Zapisz ustawienia monitorowania",
+      "checkAll": "Sprawdź wszystkie teraz",
+      "checking": "Sprawdzanie…",
+      "testing": "Wysyłanie…",
+      "testMissing": "Test: brak dostawcy",
+      "testPrice": "Test: zmiana ceny",
+      "checkNow": "Sprawdź teraz",
+      "noData": "Jeszcze nie sprawdzono",
+      "strategy": "Strategia",
+      "lastChecked": "Ostatnio sprawdzono",
+      "statesTitle": "Status monitorowanych modeli",
+      "colModel": "Model",
+      "colProvider": "Dostawca",
+      "colStatus": "Status",
+      "colLastCheck": "Ostatnio sprawdzono"
     }
   },
   "integrations": {
@@ -656,6 +705,16 @@
         "forceNow": "Wymuś aktualizację teraz",
         "timeoutNotice": "Minęło 15 sekund, {{count}} użytkownik(ów) nadal pracuje. Możesz czekać dalej, wymusić aktualizację lub anulować.",
         "pollError": "Błąd odpytania opróżniania: {{message}}"
+      },
+      "channel": {
+        "label": "Kanał",
+        "hint": "Kanał aktualizacji: 'latest' dla produkcji lub nazwa gałęzi, aby śledzić obrazy tej gałęzi. '/' jest zastępowane przez '-'.",
+        "apply": "Przełącz",
+        "switching": "Przełączanie…",
+        "invalidTag": "Nieprawidłowa nazwa kanału. Użyj liter, cyfr, '.', '_' i '-'.",
+        "switchedFound": "Przełączono na '{{tag}}'. Znaleziono nowe obrazy — dostępna jest aktualizacja.",
+        "switchedCurrent": "Przełączono na '{{tag}}'. Serwer już uruchamia obrazy tego kanału.",
+        "error": "Błąd przełączania kanału: {{message}}"
       }
     },
     "error": "Błąd: {{message}}",

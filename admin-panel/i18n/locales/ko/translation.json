@@ -86,7 +86,9 @@
     "changedRelogin": "변경되었습니다. 다시 로그인하세요.",
     "coefficientLoadError": "계수 로드 실패",
     "coefficientSaved": "계수 저장됨",
-    "cancel": "취소"
+    "cancel": "취소",
+    "on": "켜짐",
+    "off": "끔"
   },
   "models": {
     "auto": {
@@ -130,7 +132,10 @@
       "moveUp": "위로 이동",
       "moveDown": "아래로 이동",
       "remove": "제거",
-      "addModel": "+ 모델 추가"
+      "addModel": "+ 모델 추가",
+      "dragToReorder": "드래그하여 순서 변경",
+      "expandAll": "모두 펼치기",
+      "collapseAll": "모두 접기"
     },
     "providerFields": {
       "baseUrl": "공급자 URL",
@@ -169,6 +174,50 @@
       "refreshing": "새로고치는 중…",
       "customModel": "기타…",
       "customModelHint": "수동으로 지정"
+    },
+    "monitor": {
+      "title": "OpenRouter 모니터링",
+      "subtitle": "고정된 제공자를 감시하고, 관리자에게 알리며 자동으로 전환합니다",
+      "unavailable": "모니터 API를 사용할 수 없습니다(chatter-manager 업데이트 필요).",
+      "enabled": "모니터링 활성화됨",
+      "enabledHint": "고정된 OpenRouter 제공자가 여전히 모델을 제공하는지 주기적으로 확인합니다",
+      "interval": "확인 간격(분)",
+      "intervalHint": "최소 5분; 부하를 분산하기 위해 약간의 무작위 지터가 추가됩니다",
+      "action": "공급자가 사라질 때의 동작",
+      "actionHint": "자동 전환은 공급자 없이 두 번 연속 성공적인 확인 후에만 발생합니다.",
+      "actionNotify": "알림만",
+      "actionCheapest": "가장 저렴한 것으로 전환",
+      "actionThroughput": "가장 빠른 속도(처리량)로 전환",
+      "actionLatency": "최저 지연 시간으로 전환",
+      "priceTracking": "가격 추적",
+      "priceTrackingHint": "고정된 제공업체 가격의 변경 사항을 확인합니다",
+      "priceTrackingOff": "끔",
+      "priceTrackingNotify": "알림만",
+      "priceTrackingUpdate": "가격 알림 및 업데이트",
+      "priceThreshold": "임계값 변경 (%)",
+      "priceThresholdHint": "이 백분율보다 작은 변경 사항은 무시합니다. 수동 가격은 절대 덮어쓰지 않습니다.",
+      "recipients": "알림 수신자",
+      "recipientsHint": "텔레그램 알림은 기존 채터 봇을 통해 전송됩니다",
+      "recipientsAll": "Telegram이 있는 모든 관리자",
+      "recipientsSelected": "선택된 관리자",
+      "recipientAdmins": "관리자",
+      "noAdmins": "관리자를 찾을 수 없습니다",
+      "noTelegram": "텔레그램 없음",
+      "saveSettings": "모니터링 설정 저장",
+      "checkAll": "지금 모두 확인",
+      "checking": "확인 중…",
+      "testing": "전송 중…",
+      "testMissing": "테스트: 공급자 누락",
+      "testPrice": "테스트: 가격 변경",
+      "checkNow": "지금 확인",
+      "noData": "아직 확인되지 않음",
+      "strategy": "전략",
+      "lastChecked": "마지막 확인",
+      "statesTitle": "모니터링되는 모델 상태",
+      "colModel": "모델",
+      "colProvider": "제공자",
+      "colStatus": "상태",
+      "colLastCheck": "마지막 확인"
     }
   },
   "integrations": {
@@ -656,6 +705,16 @@
         "forceNow": "지금 강제 업데이트",
         "timeoutNotice": "15초가 경과했으며, {{count}}명의 사용자가 여전히 작업 중입니다. 계속 대기하거나, 강제 업데이트하거나 취소할 수 있습니다.",
         "pollError": "드레인 폴링 실패: {{message}}"
+      },
+      "channel": {
+        "label": "채널",
+        "hint": "업데이트 채널: 프로덕션용 'latest' 또는 해당 브랜치의 이미지를 추적할 브랜치 이름입니다. '/'는 '-'로 대체됩니다.",
+        "apply": "전환",
+        "switching": "전환 중…",
+        "invalidTag": "잘못된 채널 이름입니다. 문자, 숫자, '.', '_' 및 '-'를 사용하세요.",
+        "switchedFound": "'{{tag}}'(으)로 전환했습니다. 새 이미지를 찾았습니다 — 업데이트가 가능합니다.",
+        "switchedCurrent": "'{{tag}}'(으)로 전환했습니다. 서버가 이미 이 채널의 이미지를 실행 중입니다.",
+        "error": "채널 전환 오류: {{message}}"
       }
     },
     "error": "오류: {{message}}",

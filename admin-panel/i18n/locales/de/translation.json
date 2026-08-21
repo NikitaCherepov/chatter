@@ -86,7 +86,9 @@
     "changedRelogin": "Geändert. Bitte erneut anmelden.",
     "coefficientLoadError": "Fehler beim Laden der Koeffizienten",
     "coefficientSaved": "Koeffizient gespeichert",
-    "cancel": "Abbrechen"
+    "cancel": "Abbrechen",
+    "on": "Ein",
+    "off": "Aus"
   },
   "models": {
     "auto": {
@@ -130,7 +132,10 @@
       "moveUp": "Nach oben",
       "moveDown": "Nach unten",
       "remove": "Entfernen",
-      "addModel": "+ Modell hinzufügen"
+      "addModel": "+ Modell hinzufügen",
+      "dragToReorder": "Zum Neuanordnen ziehen",
+      "expandAll": "Alle erweitern",
+      "collapseAll": "Alle einklappen"
     },
     "providerFields": {
       "baseUrl": "Anbieter-URL",
@@ -169,6 +174,50 @@
       "refreshing": "Aktualisiere…",
       "customModel": "Andere…",
       "customModelHint": "manuell angeben"
+    },
+    "monitor": {
+      "title": "OpenRouter-Überwachung",
+      "subtitle": "Pinnwand-Anbieter überwachen, Administratoren benachrichtigen und automatisch wechseln",
+      "unavailable": "Monitor-API nicht verfügbar (chatter-manager aktualisieren).",
+      "enabled": "Überwachung aktiviert",
+      "enabledHint": "Regelmäßig überprüfen, ob gepinnte OpenRouter-Anbieter das Modell weiterhin bereitstellen",
+      "interval": "Prüfintervall (Minuten)",
+      "intervalHint": "Mindestens 5 Minuten; ein kleiner zufälliger Jitter wird hinzugefügt, um die Last zu verteilen",
+      "action": "Aktion, wenn Anbieter verschwindet",
+      "actionHint": "Automatischer Wechsel erfolgt nur nach zwei aufeinanderfolgenden erfolgreichen Prüfungen ohne den Anbieter",
+      "actionNotify": "Nur benachrichtigen",
+      "actionCheapest": "Zum günstigsten wechseln",
+      "actionThroughput": "Zum schnellsten wechseln (Durchsatz)",
+      "actionLatency": "Zur niedrigsten Latenz wechseln",
+      "priceTracking": "Preisverfolgung",
+      "priceTrackingHint": "Beobachten Sie die Preise der angehefteten Anbieter auf Änderungen",
+      "priceTrackingOff": "Aus",
+      "priceTrackingNotify": "Nur benachrichtigen",
+      "priceTrackingUpdate": "Benachrichtigen und Preise aktualisieren",
+      "priceThreshold": "Änderungsschwelle (%)",
+      "priceThresholdHint": "Änderungen kleiner als dieser Prozentsatz ignorieren; manuelle Preise werden nie überschrieben",
+      "recipients": "Benachrichtigungsempfänger",
+      "recipientsHint": "Telegram-Benachrichtigungen werden über den vorhandenen Chatter-Bot gesendet",
+      "recipientsAll": "Alle Admins mit Telegram",
+      "recipientsSelected": "Ausgewählte Admins",
+      "recipientAdmins": "Admins",
+      "noAdmins": "Keine Administratoren gefunden",
+      "noTelegram": "kein Telegram",
+      "saveSettings": "Überwachungseinstellungen speichern",
+      "checkAll": "Alle jetzt prüfen",
+      "checking": "Wird geprüft…",
+      "testing": "Wird gesendet…",
+      "testMissing": "Test: Anbieter fehlt",
+      "testPrice": "Test: Preisänderung",
+      "checkNow": "Jetzt prüfen",
+      "noData": "Noch nicht geprüft",
+      "strategy": "Strategie",
+      "lastChecked": "Zuletzt geprüft",
+      "statesTitle": "Status der überwachten Modelle",
+      "colModel": "Modell",
+      "colProvider": "Anbieter",
+      "colStatus": "Status",
+      "colLastCheck": "Zuletzt geprüft"
     }
   },
   "integrations": {
@@ -656,6 +705,16 @@
         "forceNow": "Jetzt sofort aktualisieren",
         "timeoutNotice": "15 Sekunden sind vergangen, {{count}} Benutzer arbeiten noch. Sie können weiter warten, das Update erzwingen oder abbrechen.",
         "pollError": "Drain-Abfrage fehlgeschlagen: {{message}}"
+      },
+      "channel": {
+        "label": "Kanal",
+        "hint": "Update-Kanal: 'latest' für Produktion oder ein Branchname, um die Images dieses Branches zu verfolgen. '/' wird durch '-' ersetzt.",
+        "apply": "Wechseln",
+        "switching": "Wechsle…",
+        "invalidTag": "Ungültiger Kanalname. Verwenden Sie Buchstaben, Ziffern, '.', '_' und '-'.",
+        "switchedFound": "Zu '{{tag}}' gewechselt. Neue Images gefunden – Update verfügbar.",
+        "switchedCurrent": "Zu '{{tag}}' gewechselt. Der Server führt bereits die Images dieses Kanals aus.",
+        "error": "Fehler beim Kanalwechsel: {{message}}"
       }
     },
     "error": "Fehler: {{message}}",

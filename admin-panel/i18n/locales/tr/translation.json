@@ -86,7 +86,9 @@
     "changedRelogin": "Değişti. Tekrar giriş yapın.",
     "coefficientLoadError": "Katsayılar yüklenemedi",
     "coefficientSaved": "Katsayı kaydedildi",
-    "cancel": "İptal"
+    "cancel": "İptal",
+    "on": "Açık",
+    "off": "Kapalı"
   },
   "ui": {
     "search": "Ara…",
@@ -135,7 +137,10 @@
       "moveUp": "Yukarı taşı",
       "moveDown": "Aşağı taşı",
       "remove": "Kaldır",
-      "addModel": "+ Model ekle"
+      "addModel": "+ Model ekle",
+      "dragToReorder": "Yeniden sıralamak için sürükleyin",
+      "expandAll": "Tümünü genişlet",
+      "collapseAll": "Tümünü daralt"
     },
     "providerFields": {
       "baseUrl": "Sağlayıcı URL'si",
@@ -174,6 +179,50 @@
       "refreshing": "Yenileniyor…",
       "customModel": "Diğer…",
       "customModelHint": "manuel olarak belirtin"
+    },
+    "monitor": {
+      "title": "OpenRouter izleme",
+      "subtitle": "Sabitlenmiş sağlayıcıları izleyin, yöneticileri bilgilendirin ve otomatik olarak değiştirin",
+      "unavailable": "İzleme API'si kullanılamıyor (chatter-manager'ı güncelleyin).",
+      "enabled": "İzleme etkin",
+      "enabledHint": "Sabitlenmiş OpenRouter sağlayıcılarının modeli hâlâ sunduğunu periyodik olarak doğrulayın",
+      "interval": "Kontrol aralığı (dakika)",
+      "intervalHint": "En az 5 dakika; yükü dağıtmak için küçük bir rastgele sapma eklenir",
+      "action": "Sağlayıcı kaybolduğunda yapılacak işlem",
+      "actionHint": "Otomatik geçiş yalnızca sağlayıcı olmadan art arda iki başarılı kontrol sonrasında gerçekleşir",
+      "actionNotify": "Yalnızca bildir",
+      "actionCheapest": "En ucuzuna geç",
+      "actionThroughput": "En hızlısına geç (verim)",
+      "actionLatency": "En düşük gecikmeye geç",
+      "priceTracking": "Fiyat takibi",
+      "priceTrackingHint": "Sabitlenen sağlayıcı fiyatlarındaki değişiklikleri izle",
+      "priceTrackingOff": "Kapalı",
+      "priceTrackingNotify": "Yalnızca bildir",
+      "priceTrackingUpdate": "Bildir ve fiyatları güncelle",
+      "priceThreshold": "Değişim eşiği (%)",
+      "priceThresholdHint": "Bu yüzdeden küçük değişiklikleri yoksay; manuel fiyatlandırma asla üzerine yazılmaz",
+      "recipients": "Bildirim alıcıları",
+      "recipientsHint": "Telegram bildirimleri mevcut Chatter botu üzerinden gönderilir",
+      "recipientsAll": "Telegram'ı olan tüm yöneticiler",
+      "recipientsSelected": "Seçilen yöneticiler",
+      "recipientAdmins": "Yöneticiler",
+      "noAdmins": "Yönetici bulunamadı",
+      "noTelegram": "Telegram yok",
+      "saveSettings": "İzleme ayarlarını kaydet",
+      "checkAll": "Şimdi tümünü kontrol et",
+      "checking": "Kontrol ediliyor…",
+      "testing": "Gönderiliyor…",
+      "testMissing": "Test: sağlayıcı eksik",
+      "testPrice": "Test: fiyat değişikliği",
+      "checkNow": "Şimdi kontrol et",
+      "noData": "Henüz kontrol edilmedi",
+      "strategy": "Strateji",
+      "lastChecked": "Son kontrol",
+      "statesTitle": "İzlenen modellerin durumu",
+      "colModel": "Model",
+      "colProvider": "Sağlayıcı",
+      "colStatus": "Durum",
+      "colLastCheck": "Son kontrol"
     }
   },
   "integrations": {
@@ -648,6 +697,16 @@
         "forceNow": "Şimdi zorla güncelle",
         "timeoutNotice": "15 saniye geçti, {{count}} kullanıcı hâlâ çalışıyor. Beklemeye devam edebilir, güncellemeyi zorlayabilir veya iptal edebilirsiniz.",
         "pollError": "Drenaj yoklaması başarısız: {{message}}"
+      },
+      "channel": {
+        "label": "Kanal",
+        "hint": "Güncelleme kanalı: üretim için 'latest' veya o dalın görüntülerini izlemek için bir dal adı. '/' yerine '-' kullanılır.",
+        "apply": "Değiştir",
+        "switching": "Geçiliyor…",
+        "invalidTag": "Geçersiz kanal adı. Harf, rakam, '.', '_' ve '-' kullanın.",
+        "switchedFound": "'{{tag}}' kanalına geçildi. Yeni görüntüler bulundu — güncelleme mevcut.",
+        "switchedCurrent": "'{{tag}}' kanalına geçildi. Sunucu zaten bu kanalın görüntülerini çalıştırıyor.",
+        "error": "Kanal geçiş hatası: {{message}}"
       }
     },
     "error": "Hata: {{message}}"

@@ -86,7 +86,9 @@
     "changedRelogin": "Modifié. Connectez-vous à nouveau.",
     "coefficientLoadError": "Échec du chargement des coefficients",
     "coefficientSaved": "Coefficient enregistré",
-    "cancel": "Annuler"
+    "cancel": "Annuler",
+    "on": "Activé",
+    "off": "Désactivé"
   },
   "models": {
     "auto": {
@@ -130,7 +132,10 @@
       "moveUp": "Monter",
       "moveDown": "Descendre",
       "remove": "Supprimer",
-      "addModel": "+ Ajouter un modèle"
+      "addModel": "+ Ajouter un modèle",
+      "dragToReorder": "Glisser pour réorganiser",
+      "expandAll": "Tout développer",
+      "collapseAll": "Tout réduire"
     },
     "providerFields": {
       "baseUrl": "URL du fournisseur",
@@ -169,6 +174,50 @@
       "refreshing": "Actualisation…",
       "customModel": "Autre…",
       "customModelHint": "spécifier manuellement"
+    },
+    "monitor": {
+      "title": "Surveillance OpenRouter",
+      "subtitle": "Surveillez les fournisseurs épinglés, notifiez les administrateurs et basculez automatiquement",
+      "unavailable": "L'API de surveillance n'est pas disponible (mettre à jour chatter-manager).",
+      "enabled": "Surveillance activée",
+      "enabledHint": "Vérifier périodiquement que les fournisseurs OpenRouter épinglés servent toujours le modèle",
+      "interval": "Intervalle de vérification (minutes)",
+      "intervalHint": "Minimum 5 minutes ; un léger aléa est ajouté pour répartir la charge",
+      "action": "Action lorsque le fournisseur disparaît",
+      "actionHint": "Le basculement automatique ne se produit qu'après deux vérifications consécutives réussies sans le fournisseur",
+      "actionNotify": "Notifier uniquement",
+      "actionCheapest": "Basculer vers le moins cher",
+      "actionThroughput": "Basculer vers le plus rapide (débit)",
+      "actionLatency": "Basculer vers la latence la plus faible",
+      "priceTracking": "Suivi des prix",
+      "priceTrackingHint": "Surveiller les prix des fournisseurs épinglés pour détecter les changements",
+      "priceTrackingOff": "Désactivé",
+      "priceTrackingNotify": "Notifier uniquement",
+      "priceTrackingUpdate": "Notifier et mettre à jour les prix",
+      "priceThreshold": "Seuil de changement (%)",
+      "priceThresholdHint": "Ignorer les changements inférieurs à ce pourcentage ; la tarification manuelle n'est jamais écrasée",
+      "recipients": "Destinataires des notifications",
+      "recipientsHint": "Les notifications Telegram sont envoyées via le bot Chatter existant",
+      "recipientsAll": "Tous les administrateurs avec Telegram",
+      "recipientsSelected": "Administrateurs sélectionnés",
+      "recipientAdmins": "Administrateurs",
+      "noAdmins": "Aucun administrateur trouvé",
+      "noTelegram": "pas de Telegram",
+      "saveSettings": "Enregistrer les paramètres de surveillance",
+      "checkAll": "Tout vérifier maintenant",
+      "checking": "Vérification…",
+      "testing": "Envoi…",
+      "testMissing": "Test : fournisseur manquant",
+      "testPrice": "Test : changement de prix",
+      "checkNow": "Vérifier maintenant",
+      "noData": "Pas encore vérifié",
+      "strategy": "Stratégie",
+      "lastChecked": "Dernière vérification",
+      "statesTitle": "Statut des modèles surveillés",
+      "colModel": "Modèle",
+      "colProvider": "Fournisseur",
+      "colStatus": "Statut",
+      "colLastCheck": "Dernière vérification"
     }
   },
   "integrations": {
@@ -656,6 +705,16 @@
         "forceNow": "Forcer la mise à jour maintenant",
         "timeoutNotice": "15 secondes se sont écoulées, {{count}} utilisateur(s) encore actif(s). Vous pouvez continuer à attendre, forcer la mise à jour ou annuler.",
         "pollError": "Échec de la vérification de vidage : {{message}}"
+      },
+      "channel": {
+        "label": "Canal",
+        "hint": "Canal de mise à jour : « latest » pour la production, ou un nom de branche pour suivre les images de cette branche. « / » est remplacé par « - ».",
+        "apply": "Appliquer",
+        "switching": "Changement…",
+        "invalidTag": "Nom de canal invalide. Utilisez des lettres, des chiffres, '.', '_' et '-'.",
+        "switchedFound": "Passé à '{{tag}}'. De nouvelles images trouvées — une mise à jour est disponible.",
+        "switchedCurrent": "Passé à '{{tag}}'. Le serveur exécute déjà les images de ce canal.",
+        "error": "Erreur de changement de canal : {{message}}"
       }
     },
     "error": "Erreur : {{message}}",

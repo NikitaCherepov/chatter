@@ -97,5 +97,31 @@
   "passwordReset": {
     "title": "🔐 Chatter Desktop password recovery",
     "body": "Your verification code: {{code}}\n\nThe code is valid for 5 minutes.\n\nIf you did not request a password recovery — ignore this message."
+  },
+  "openRouterMonitor": {
+    "title": "⚠️ Provider OpenRouter non disponibile",
+    "model": "Modello",
+    "route": "Percorso",
+    "previousProvider": "Provider precedente",
+    "status": "non più disponibile per questo modello",
+    "newProvider": "Nuovo provider",
+    "strategy": "Strategia",
+    "strategyNotify": "solo notifica",
+    "strategyCheapest": "più economico",
+    "strategyThroughput": "throughput più elevato",
+    "strategyLatency": "latenza più bassa",
+    "input": "Input",
+    "output": "Output",
+    "cacheRead": "Lettura cache",
+    "pending": "Il cambio automatico è in sospeso: il provider deve mancare in {{count}} controlli consecutivi.",
+    "noReplacementFound": "Nessun sostituto trovato tra gli endpoint rimanenti di questo modello.",
+    "chooseInPanel": "Scegli un altro provider nel pannello di amministrazione.",
+    "noReplacementSelected": "Nessun sostituto selezionato. Scegli un altro provider nel pannello di amministrazione.",
+    "reason": "Motivo",
+    "reasonRuntime": "rilevato durante una richiesta live; la richiesta è stata ritentata una volta con il nuovo provider",
+    "reasonRemoved": "il modello è stato rimosso dal catalogo OpenRouter",
+    "provider": "Provider",
+    "priceTitle": "📉 Prezzi del provider OpenRouter modificati",
+    "priceUpdatedOverrides": "I prezzi dei modelli nel pannello di amministrazione sono stati aggiornati automaticamente."
   }
 }
