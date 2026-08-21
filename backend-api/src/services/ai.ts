@@ -6738,6 +6738,13 @@ export const sendMessageThroughAi = async (
   // Резолв preferred model: из options (явный запрос) или из профиля юзера
   const isAdmin = user.is_admin === 1;
   let manualModel = preferredModelId ? resolveManualModel(preferredModelId, isAdmin) : undefined;
+  let modelSelectionReset = false;
+  if (preferredModelId && !manualModel) {
+    modelSelectionReset = true;
+    // Do not overwrite a newer choice made concurrently from another client.
+    db.prepare('UPDATE users SET preferred_model = NULL WHERE id = ? AND preferred_model = ?')
+      .run(userId, preferredModelId);
+  }
   const selectedManualModelName = manualModel?.name || null;
   if (preferredModelId && !manualModel) {
     console.warn(`[ai] preferred_model "${preferredModelId}" not found in MODELS_MANUAL, falling back to auto`);
@@ -6747,6 +6754,9 @@ export const sendMessageThroughAi = async (
   const subagentModelId = user.subagent_mode && user.subagent_mode !== 'auto' ? user.subagent_mode : null;
   const subagentManualModel = subagentModelId ? resolveManualModel(subagentModelId, isAdmin) : undefined;
   if (subagentModelId && !subagentManualModel) {
+    modelSelectionReset = true;
+    db.prepare("UPDATE users SET subagent_mode = 'auto' WHERE id = ? AND subagent_mode = ?")
+      .run(userId, subagentModelId);
     console.warn(`[ai] subagent_model "${subagentModelId}" not found in MODELS_MANUAL, falling back to auto`);
   }
   const subagentMode: 'auto' | 'manual' = subagentManualModel ? 'manual' : 'auto';
@@ -7678,8 +7688,10 @@ User request: "${text}"`;
   const displayStateSink: { value: DisplayStatePayload | null } = { value: null };
   const desktopActionSink: { value: DesktopActionPayload | null } = { value: null };
   const mapUpdateSink: { value: MapUpdatePayload | null } = { value: null };
-  let modelFallbackNotice: string | null = null;
-  let modelFallbackNoticeSent = false;
+  let modelFallbackNotice: string | null = modelSelectionReset
+    ? translateForLanguage(user.language, 'models.selectionReset')
+    : null;
+  let modelFallbackNoticeSent = modelSelectionReset;
   let quotaFinalizationIssued = false;
 
   while (loop < effectiveMaxLoops) {
@@ -8245,6 +8257,7 @@ iterations.push(currentIteration);
     user_message_id: userMessageId,
     user_message_images: options?.userImages?.length ? options.userImages : undefined,
     model_fallback_notice: modelFallbackNotice,
+    preferred_model_reset: modelSelectionReset || undefined,
     tool_user_messages: toolUserMessages,
     generated_images: generatedImages.length > 0 ? generatedImages : undefined,
     display_state: displayStateSink.value ?? undefined,

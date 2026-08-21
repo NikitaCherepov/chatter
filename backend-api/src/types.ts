@@ -224,6 +224,7 @@ export type AiSendResult = {
   user_message_id?: number;
   user_message_images?: MessageImage[];
   model_fallback_notice?: string | null;
+  preferred_model_reset?: boolean;
   tool_user_messages?: string[];
   generated_images?: GeneratedImage[];
   display_state?: DisplayStatePayload | null;

@@ -1162,6 +1162,14 @@ export function ChatPage() {
         const res = await api.getModels();
         setModelsCatalog(res.models);
         setPreferredModel(res.preferred_model);
+        if (res.model_selection_reset && res.model_selection_reset_notice) {
+          toast.info(res.model_selection_reset_notice);
+          void window.electronAPI.showDesktopNotification({
+            id: 'model-selection-reset:catalog',
+            title: 'Chatter',
+            body: res.model_selection_reset_notice,
+          }).catch(() => undefined);
+        }
         if (res.auto_reasoning_levels) setAutoReasoningLevels(res.auto_reasoning_levels);
         if (res.auto_supports_vision) setAutoSupportsVision(res.auto_supports_vision);
       } catch {}
@@ -2186,6 +2194,20 @@ export function ChatPage() {
       } else if (event.type === 'chat_queue_done') {
         roomEventAgentMsgIds.current.delete(event.chat_id);
         roomStreamChatIdsRef.current.delete(event.chat_id);
+      }
+
+      if (event.type === 'chat_agent_done' && event.result?.preferred_model_reset) {
+        setPreferredModel(null);
+        const notice = event.result.model_fallback_notice;
+        if (notice) {
+          toast.info(notice);
+          showNativeNotification({
+            id: `model-selection-reset:${event.owner_user_id}:${event.result.message_id || Date.now()}`,
+            title: 'Chatter',
+            body: notice,
+            chatId: event.chat_id,
+          });
+        }
       }
 
       if (event.chat_id !== activeChatIdRef.current) {

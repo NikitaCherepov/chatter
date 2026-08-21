@@ -715,6 +715,7 @@ export type ChatSendResponse = {
   generated_images?: GeneratedImage[];
   display_state?: DisplayStatePayload | null;
   model_fallback_notice?: string | null;
+  preferred_model_reset?: boolean;
   aborted?: boolean;
   tool_calls?: ToolCall[];
   token_count?: number;
@@ -1770,7 +1771,7 @@ export type ModelCatalogEntry = {
   avg_tokens_per_second?: number | null;
 };
 
-export async function getModels(): Promise<{ models: ModelCatalogEntry[]; preferred_model: string | null; auto_reasoning_levels?: ReasoningLevel[]; auto_supports_vision?: { pro: boolean; lite: boolean } }> {
+export async function getModels(): Promise<{ models: ModelCatalogEntry[]; preferred_model: string | null; model_selection_reset?: boolean; model_selection_reset_notice?: string | null; auto_reasoning_levels?: ReasoningLevel[]; auto_supports_vision?: { pro: boolean; lite: boolean } }> {
   return apiFetch('/api/v1/models');
 }
 

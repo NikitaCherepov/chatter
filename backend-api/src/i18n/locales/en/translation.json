@@ -5,6 +5,9 @@
     "stopStopped": "Stopped",
     "stopNoActiveGeneration": "No active generation"
   },
+  "models": {
+    "selectionReset": "The selected model is no longer available. Chatter switched you to automatic model selection."
+  },
   "openRouterMonitor": {
     "title": "⚠️ OpenRouter provider unavailable",
     "model": "Model",

@@ -5,6 +5,9 @@
     "stopStopped": "Остановлено",
     "stopNoActiveGeneration": "Нет активной генерации"
   },
+  "models": {
+    "selectionReset": "Выбранная модель больше недоступна. Chatter переключил вас на автоматический выбор модели."
+  },
   "openRouterMonitor": {
     "title": "⚠️ Провайдер OpenRouter недоступен",
     "model": "Модель",

@@ -121,6 +121,7 @@ export function Select({
 
   const renderIntel = (level: 1 | 2 | 3) => (
     <span className={s.metaItem} title={t('chat.model.meta.intel.label') + ': ' + t(INTEL_LABELS[level - 1])}>
+      <span className={s.metaLabel}>{t('chat.model.meta.intel.label')}</span>
       <span className={s.metaScale}>
         {[1, 2, 3].map(i => (
           <span key={i} className={`${s.metaSquare} ${i <= level ? s.metaSquareFilled : ''}`} />
@@ -140,6 +141,7 @@ export function Select({
   // Discrete scale — shown when token display is disabled (no exact numbers).
   const renderSpeedScale = (level: 1 | 2 | 3) => (
     <span className={s.metaItem} title={t('chat.model.meta.speed.label') + ': ' + t(SPEED_LABELS[level - 1])}>
+      <span className={s.metaLabel}>{t('chat.model.meta.speed.label')}</span>
       <span className={s.metaScale}>
         {[1, 2, 3].map(i => (
           <span key={i} className={`${s.metaSquare} ${i <= level ? s.metaSquareFilled : ''}`} />
@@ -150,6 +152,7 @@ export function Select({
 
   const renderPrice = (tier: 1 | 2 | 3) => (
     <span className={s.metaItem} title={t('chat.model.meta.price.label') + ': ' + t(PRICE_LABELS[tier - 1])}>
+      <span className={s.metaLabel}>{t('chat.model.meta.price.label')}</span>
       <span className={s.metaDollars}>{'$'.repeat(tier)}</span>
     </span>
   );

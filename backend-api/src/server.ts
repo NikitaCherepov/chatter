@@ -4677,9 +4677,30 @@ app.get('/api/v1/models', (req: AuthedRequest, res) => {
   const userId = accountIdFromRequest(req);
   const user = getUserById(userId);
   const catalog = getModelsCatalog(user?.is_admin === 1);
+  const availableIds = new Set(catalog.map(model => model.id));
+  let modelSelectionReset = false;
+  let preferredModel = user?.preferred_model || null;
+  if (preferredModel && !availableIds.has(preferredModel)) {
+    db.prepare('UPDATE users SET preferred_model = NULL WHERE id = ? AND preferred_model = ?')
+      .run(userId, preferredModel);
+    preferredModel = null;
+    modelSelectionReset = true;
+  }
+  const subagentModel = user?.subagent_mode && user.subagent_mode !== 'auto'
+    ? user.subagent_mode
+    : null;
+  if (subagentModel && !availableIds.has(subagentModel)) {
+    db.prepare("UPDATE users SET subagent_mode = 'auto' WHERE id = ? AND subagent_mode = ?")
+      .run(userId, subagentModel);
+    modelSelectionReset = true;
+  }
   return res.json({
     models: catalog,
-    preferred_model: user?.preferred_model || null,
+    preferred_model: preferredModel,
+    model_selection_reset: modelSelectionReset,
+    model_selection_reset_notice: modelSelectionReset
+      ? translateForLanguage(user?.language, 'models.selectionReset')
+      : null,
     auto_reasoning_levels: getAutoReasoningLevels(),
     auto_supports_vision: getAutoVisionSupport(),
   });
