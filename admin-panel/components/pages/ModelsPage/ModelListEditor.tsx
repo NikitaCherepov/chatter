@@ -18,7 +18,8 @@ import {
 } from '../../../lib/presetModels';
 import { api } from '../../../lib/api';
 import { useOpenRouterMonitorStatus } from '../../../lib/useOpenRouterMonitor';
-import { Select, type SelectOption } from '../../ui/Select/Select';
+import { Select, type SelectBadge, type SelectOption } from '../../ui/Select/Select';
+import { formatContextLength } from '../../ui/ModelInput/ModelInput.utils';
 import {
   OpenRouterModelInput,
   PresetModelInput,
@@ -276,6 +277,11 @@ type OrEndpoint = {
   provider_name?: string;
   name?: string;
   pricing?: OpenRouterPricing;
+  quantization?: string | null;
+  context_length?: number | null;
+  status?: string | number | null;
+  /** Uptime score for the last day, 0..100. */
+  uptime_last_1d?: number | null;
 };
 
 type ModelEndpointsResult = {
@@ -332,7 +338,13 @@ async function fetchModelEndpoints(modelId: string): Promise<ModelEndpointsResul
   const endpoints = endpointsResp?.data?.endpoints || [];
 
   // Group by base slug (tag.split('/')[0]).
-  type Entry = { baseSlug: string; prices: ModelPrices };
+  type Entry = {
+    baseSlug: string;
+    prices: ModelPrices;
+    quantization?: string | null;
+    contextLength?: number | null;
+    uptime?: number | null;
+  };
   const baseGroups = new Map<string, Entry[]>();
   for (const ep of endpoints) {
     const tag = ep.tag || '';
@@ -341,7 +353,13 @@ async function fetchModelEndpoints(modelId: string): Promise<ModelEndpointsResul
     const prices = ep.pricing ? pricingToModelPrices(ep.pricing) : null;
     if (!prices) continue;
     const list = baseGroups.get(baseSlug) || [];
-    list.push({ baseSlug, prices });
+    list.push({
+      baseSlug,
+      prices,
+      quantization: ep.quantization,
+      contextLength: ep.context_length,
+      uptime: ep.uptime_last_1d,
+    });
     baseGroups.set(baseSlug, list);
   }
 
@@ -354,13 +372,41 @@ async function fetchModelEndpoints(modelId: string): Promise<ModelEndpointsResul
     const maxP = maxModelPrices(allPrices);
     pricesBySlug.set(baseSlug, maxP);
     if (basePrices === null) basePrices = maxP;
-    const hint =
+    // Prices + quantizations + max context — joined for the option hint.
+    const hintParts: string[] = [
       minP && maxP && entries.length > 1
         ? formatPricesRangeHint(minP, maxP)
-        : formatPricesHint(maxP);
+        : formatPricesHint(maxP),
+    ];
+    const quants = [
+      ...new Set(entries.map((e) => e.quantization).filter((q) => q && q !== 'unknown')),
+    ] as string[];
+    if (quants.length) hintParts.push(quants.sort().join('/'));
+    const maxCtx = Math.max(...entries.map((e) => e.contextLength ?? 0));
+    if (maxCtx > 0) hintParts.push(formatContextLength(maxCtx));
+    // Uptime badge (last 24h, %): green ≥98, yellow ≥90, red below.
+    const uptimes = entries.map((e) => e.uptime).filter((u): u is number => u != null);
+    let badge: SelectBadge | undefined;
+    if (uptimes.length) {
+      const uptime = Math.min(...uptimes);
+      badge = {
+        text: `uptime ${Math.round(uptime)}%`,
+        color: uptime >= 98 ? 'success' : uptime >= 90 ? 'warning' : 'error',
+      };
+    }
     const label = providers.get(baseSlug) || baseSlug;
-    options.push({ value: baseSlug, label, hint });
+    options.push({ value: baseSlug, label, hint: hintParts.join(' · '), badge });
   }
+  // Cheapest output price first (nulls last) — manual provider picking is
+  // primarily price-driven.
+  options.sort((a, b) => {
+    const outA = pricesBySlug.get(a.value)?.outputPricePerMillion;
+    const outB = pricesBySlug.get(b.value)?.outputPricePerMillion;
+    if (outA == null && outB == null) return 0;
+    if (outA == null) return 1;
+    if (outB == null) return -1;
+    return outA - outB;
+  });
   return { options, pricesBySlug, basePrices };
 }
 
