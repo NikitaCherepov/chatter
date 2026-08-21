@@ -4067,7 +4067,11 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
       }
       generatedImages.push({ image_base64: result.image_base64, image_url: imageUrl, prompt_used: result.prompt_used });
     }
-    return JSON.stringify({ status: 'success', message: 'Image generated successfully and will be sent to the user. Describe the result in your own words.' });
+    return JSON.stringify({
+      status: 'success',
+      message: 'Image generated successfully and attached to the response. The image_url can be reused in a later generate_image call to edit this image.',
+      image_url: generatedImages?.[generatedImages.length - 1]?.image_url ?? null,
+    });
   }
 
   if (toolName === 'create_pixel_image') {
