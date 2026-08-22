@@ -656,12 +656,18 @@ export function ProviderModelFields({
     [persistOverride, providerKind, prices.orSlug],
   );
 
-  const handleModelSelect = async (modelId: string, basePrices: ModelPrices | null) => {
-    onChange({ model: modelId });
+  const handleModelSelect = async (
+    modelId: string,
+    basePrices: ModelPrices | null,
+    supportsTools?: boolean,
+  ) => {
+    onChange({
+      model: modelId,
+      ...(supportsTools === undefined ? {} : { supportsTools }),
+    });
     if (providerKind === 'openrouter') {
       // Load endpoints for the new model (refreshes the provider dropdown).
       const endpoints = await loadEndpoints(modelId);
-      if (endpoints) onChange({ supportsTools: endpoints.supportsTools });
       // Reset the upstream provider selector to "Auto" (different model = different endpoints).
       setPrices((p) => ({ ...p, orSlug: '' }));
       await persistOverride({ providerKind, openrouterProviderSlug: null });
@@ -775,7 +781,9 @@ export function ProviderModelFields({
           {showModelAutocomplete ? (
             <OpenRouterModelInput
               value={model.model}
-              onSelect={(id, mp) => void handleModelSelect(id, mp)}
+              onSelect={(id, mp, supportsTools) =>
+                void handleModelSelect(id, mp, supportsTools)
+              }
             />
           ) : presetModels ? (
             <PresetModelInput

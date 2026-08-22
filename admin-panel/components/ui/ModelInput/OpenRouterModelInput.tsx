@@ -13,7 +13,11 @@ import {
 
 type Props = {
   value: string;
-  onSelect: (modelId: string, prices: ModelPrices | null) => void;
+  onSelect: (
+    modelId: string,
+    prices: ModelPrices | null,
+    supportsTools?: boolean,
+  ) => void;
 };
 
 /**
@@ -26,6 +30,7 @@ export function OpenRouterModelInput({ value, onSelect }: Props) {
   const [options, setOptions] = useState<SelectOption[]>([]);
   // Cache full pricing objects by model id so we don't refetch on every select.
   const pricingCacheRef = useRef<Map<string, ModelPrices | null>>(new Map());
+  const toolSupportCacheRef = useRef<Map<string, boolean>>(new Map());
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleSearch = useCallback((q: string) => {
@@ -43,6 +48,7 @@ export function OpenRouterModelInput({ value, onSelect }: Props) {
           pricing?: OpenRouterPricing;
           architecture?: { modality?: string | null } | null;
           context_length?: number | null;
+          supported_parameters?: string[];
         };
         const data = await api<{ data?: ApiModel[] }>(
           `/api/openrouter/models?q=${encodeURIComponent(trimmed)}`
@@ -53,10 +59,24 @@ export function OpenRouterModelInput({ value, onSelect }: Props) {
             if (m.id && m.pricing) {
               pricingCacheRef.current.set(m.id, pricingToModelPrices(m.pricing));
             }
+            if (m.id && Array.isArray(m.supported_parameters)) {
+              toolSupportCacheRef.current.set(
+                m.id,
+                m.supported_parameters.includes('tools'),
+              );
+            }
             return {
               value: m.id || '',
               label: m.name || m.id || '',
               hint: formatModelHint(m),
+              badge:
+                Array.isArray(m.supported_parameters) &&
+                !m.supported_parameters.includes('tools')
+                  ? {
+                      text: t('models.manual.noTools'),
+                      color: 'warning' as const,
+                    }
+                  : undefined,
             };
           })
           .filter((m) => m.value);
@@ -65,7 +85,7 @@ export function OpenRouterModelInput({ value, onSelect }: Props) {
         setOptions([]);
       }
     }, 400);
-  }, []);
+  }, [t]);
 
   const optionsWithCurrent = useMemo(() => {
     if (!value) return options;
@@ -74,7 +94,11 @@ export function OpenRouterModelInput({ value, onSelect }: Props) {
   }, [options, value]);
 
   const handleChange = (v: string) => {
-    onSelect(v, pricingCacheRef.current.get(v) ?? null);
+    onSelect(
+      v,
+      pricingCacheRef.current.get(v) ?? null,
+      toolSupportCacheRef.current.get(v),
+    );
   };
 
   return (
