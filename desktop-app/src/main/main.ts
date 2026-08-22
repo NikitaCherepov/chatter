@@ -2182,11 +2182,6 @@ function setupContentSecurityPolicy(): void {
           'ws://127.0.0.1:3050',
     ];
     const connectSources = ["'self'", ...serverCspSources(), ...developmentSources];
-    const frameSources = [
-      "'self'",
-      ...serverCspSources().filter((source) => source.startsWith('http')),
-      ...developmentSources.filter((source) => source.startsWith('http')),
-    ];
     const scriptSources = [
       "'self'",
       ...(!app.isPackaged ? ["'unsafe-eval'", "'unsafe-inline'"] : []),
@@ -2210,7 +2205,7 @@ function setupContentSecurityPolicy(): void {
       `connect-src ${connectSources.join(' ')}`,
       "worker-src 'self' blob:",
       "object-src 'none'",
-      `frame-src ${frameSources.join(' ')}`,
+      "frame-src 'none'",
       "base-uri 'none'",
       "form-action 'self'",
     ].join('; ');

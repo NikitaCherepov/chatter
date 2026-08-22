@@ -424,7 +424,7 @@
     "connectionLostBeforeSend": "The connection closed before the server accepted the message. Please send it again.",
     "attachmentPreview": {
       "open": "Open attachment",
-      "loadFailed": "Could not display this PDF. You can still download it.",
+      "loadFailed": "Could not display this document. You can still download it.",
       "unavailable": "Preview is unavailable for this file. You can still download it."
     },
     "export": {

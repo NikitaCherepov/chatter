@@ -284,41 +284,79 @@ const isPdfAttachment = (attachment: api.MessageAttachment) =>
   attachment.mime_type === 'application/pdf'
   || attachment.name.toLowerCase().endsWith('.pdf');
 
-const canEmbedAttachment = (attachment: api.MessageAttachment) =>
-  isPdfAttachment(attachment)
-  || attachment.mime_type.startsWith('text/')
-  || attachment.mime_type === 'application/json'
-  || attachment.mime_type === 'application/xml';
+const isDocxAttachment = (attachment: api.MessageAttachment) =>
+  attachment.mime_type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  || attachment.name.toLowerCase().endsWith('.docx');
 
-const PDF_CACHE_MAX_BYTES = 64 * 1024 * 1024;
-const pdfAttachmentCache = new Map<string, Uint8Array>();
-let pdfAttachmentCacheBytes = 0;
+const ATTACHMENT_PREVIEW_CACHE_MAX_BYTES = 64 * 1024 * 1024;
+const attachmentPreviewCache = new Map<string, Uint8Array>();
+let attachmentPreviewCacheBytes = 0;
 
-const loadPdfBytes = async (src: string, cacheKey: string): Promise<Uint8Array> => {
-  const cached = pdfAttachmentCache.get(cacheKey);
+const loadAttachmentBytes = async (src: string, cacheKey: string): Promise<Uint8Array> => {
+  const cached = attachmentPreviewCache.get(cacheKey);
   if (cached) {
-    pdfAttachmentCache.delete(cacheKey);
-    pdfAttachmentCache.set(cacheKey, cached);
+    attachmentPreviewCache.delete(cacheKey);
+    attachmentPreviewCache.set(cacheKey, cached);
     return cached;
   }
 
   const response = await fetch(src);
-  if (!response.ok) throw new Error(`PDF request failed with status ${response.status}`);
+  if (!response.ok) throw new Error(`Attachment request failed with status ${response.status}`);
   const bytes = new Uint8Array(await response.arrayBuffer());
 
-  if (bytes.byteLength <= PDF_CACHE_MAX_BYTES) {
-    while (pdfAttachmentCacheBytes + bytes.byteLength > PDF_CACHE_MAX_BYTES && pdfAttachmentCache.size > 0) {
-      const oldestKey = pdfAttachmentCache.keys().next().value as string | undefined;
+  if (bytes.byteLength <= ATTACHMENT_PREVIEW_CACHE_MAX_BYTES) {
+    while (
+      attachmentPreviewCacheBytes + bytes.byteLength > ATTACHMENT_PREVIEW_CACHE_MAX_BYTES
+      && attachmentPreviewCache.size > 0
+    ) {
+      const oldestKey = attachmentPreviewCache.keys().next().value as string | undefined;
       if (!oldestKey) break;
-      const oldest = pdfAttachmentCache.get(oldestKey);
-      pdfAttachmentCache.delete(oldestKey);
-      pdfAttachmentCacheBytes -= oldest?.byteLength || 0;
+      const oldest = attachmentPreviewCache.get(oldestKey);
+      attachmentPreviewCache.delete(oldestKey);
+      attachmentPreviewCacheBytes -= oldest?.byteLength || 0;
     }
-    pdfAttachmentCache.set(cacheKey, bytes);
-    pdfAttachmentCacheBytes += bytes.byteLength;
+    attachmentPreviewCache.set(cacheKey, bytes);
+    attachmentPreviewCacheBytes += bytes.byteLength;
   }
 
   return bytes;
+};
+
+const DOCX_ALLOWED_TAGS = new Set([
+  'p', 'br', 'strong', 'b', 'em', 'i', 'u', 's',
+  'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+  'ul', 'ol', 'li', 'table', 'thead', 'tbody', 'tfoot', 'tr', 'td', 'th',
+  'blockquote', 'pre', 'code', 'img',
+]);
+
+const sanitizeDocxHtml = (rawHtml: string) => {
+  const document = new DOMParser().parseFromString(rawHtml, 'text/html');
+  const elements = Array.from(document.body.querySelectorAll('*'));
+
+  for (const element of elements) {
+    const tagName = element.tagName.toLowerCase();
+    if (!DOCX_ALLOWED_TAGS.has(tagName)) {
+      element.replaceWith(...Array.from(element.childNodes));
+      continue;
+    }
+
+    const imageSource = tagName === 'img' ? element.getAttribute('src') : null;
+    const imageAlt = tagName === 'img' ? element.getAttribute('alt') : null;
+    for (const attribute of Array.from(element.attributes)) {
+      element.removeAttribute(attribute.name);
+    }
+
+    if (tagName === 'img') {
+      if (!imageSource?.startsWith('data:image/')) {
+        element.remove();
+      } else {
+        element.setAttribute('src', imageSource);
+        if (imageAlt) element.setAttribute('alt', imageAlt);
+      }
+    }
+  }
+
+  return document.body.innerHTML;
 };
 
 type PdfAttachmentPreviewProps = {
@@ -343,7 +381,7 @@ const PdfAttachmentPreview = ({ src, cacheKey, loadingLabel, errorLabel }: PdfAt
       try {
         const pdfjs = await import('pdfjs-dist');
         pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
-        const bytes = await loadPdfBytes(src, cacheKey);
+        const bytes = await loadAttachmentBytes(src, cacheKey);
         const loadingTask = pdfjs.getDocument({ data: bytes.slice() });
         const pdf = await loadingTask.promise;
         pdfDocument = pdf;
@@ -397,6 +435,60 @@ const PdfAttachmentPreview = ({ src, cacheKey, loadingLabel, errorLabel }: PdfAt
       {status === 'loading' && <div className={s.documentViewerPdfStatus}>{loadingLabel}</div>}
       {status === 'error' && <div className={s.documentViewerPdfStatus}>{errorLabel}</div>}
       <div ref={pagesRef} className={s.documentViewerPdfPages} aria-hidden={status !== 'ready'} />
+    </div>
+  );
+};
+
+type DocxAttachmentPreviewProps = PdfAttachmentPreviewProps;
+
+const DocxAttachmentPreview = ({ src, cacheKey, loadingLabel, errorLabel }: DocxAttachmentPreviewProps) => {
+  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [html, setHtml] = useState('');
+
+  useEffect(() => {
+    let disposed = false;
+
+    const renderDocx = async () => {
+      setStatus('loading');
+      setHtml('');
+
+      try {
+        const [mammothModule, bytes] = await Promise.all([
+          import('mammoth'),
+          loadAttachmentBytes(src, cacheKey),
+        ]);
+        const mammoth = mammothModule.default;
+        const copiedBytes = bytes.slice();
+        const result = await mammoth.convertToHtml(
+          { arrayBuffer: copiedBytes.buffer as ArrayBuffer },
+          { convertImage: mammoth.images.dataUri, externalFileAccess: false },
+        );
+        if (disposed) return;
+
+        setHtml(sanitizeDocxHtml(result.value));
+        setStatus('ready');
+      } catch (error) {
+        console.error('Failed to render DOCX attachment:', error);
+        if (!disposed) setStatus('error');
+      }
+    };
+
+    void renderDocx();
+    return () => {
+      disposed = true;
+    };
+  }, [cacheKey, src]);
+
+  return (
+    <div className={s.documentViewerDocx}>
+      {status === 'loading' && <div className={s.documentViewerPdfStatus}>{loadingLabel}</div>}
+      {status === 'error' && <div className={s.documentViewerPdfStatus}>{errorLabel}</div>}
+      {status === 'ready' && (
+        <article
+          className={s.documentViewerDocxContent}
+          dangerouslySetInnerHTML={{ __html: html }}
+        />
+      )}
     </div>
   );
 };
@@ -7386,13 +7478,12 @@ export function ChatPage() {
                     loadingLabel={t('common.loading')}
                     errorLabel={t('chat.attachmentPreview.loadFailed')}
                   />
-                ) : viewerAttachment.url
-                  && !viewerAttachment.extracted_text
-                  && canEmbedAttachment(viewerAttachment) ? (
-                  <iframe
-                    className={s.documentViewerFrame}
+                ) : viewerAttachment.url && isDocxAttachment(viewerAttachment) ? (
+                  <DocxAttachmentPreview
                     src={resolveImageUrl(viewerAttachment.url)}
-                    title={viewerAttachment.name}
+                    cacheKey={viewerAttachment.filename || viewerAttachment.url}
+                    loadingLabel={t('common.loading')}
+                    errorLabel={t('chat.attachmentPreview.loadFailed')}
                   />
                 ) : viewerAttachment.extracted_text ? (
                   <pre className={s.documentViewerText}>{viewerAttachment.extracted_text}</pre>

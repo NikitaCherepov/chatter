@@ -2685,13 +2685,6 @@
   display: flex;
 }
 
-.documentViewerFrame {
-  width: 100%;
-  height: 100%;
-  border: 0;
-  background-color: #fff;
-}
-
 .documentViewerPdf {
   position: relative;
   width: 100%;
@@ -2727,6 +2720,69 @@
   justify-content: center;
   color: #fff;
   font-size: 13px;
+}
+
+.documentViewerDocx {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: auto;
+  padding: 20px;
+  box-sizing: border-box;
+  background-color: #555b61;
+}
+
+.documentViewerDocxContent {
+  width: min(850px, 100%);
+  min-height: 100%;
+  margin: 0 auto;
+  padding: 48px 56px;
+  box-sizing: border-box;
+  background-color: #fff;
+  color: #1f2937;
+  font-family: Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+  box-shadow: 0 3px 14px rgba(0, 0, 0, 0.28);
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    margin: 1.2em 0 0.5em;
+    line-height: 1.25;
+  }
+
+  p,
+  ul,
+  ol,
+  blockquote,
+  pre,
+  table {
+    margin: 0 0 1em;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  td,
+  th {
+    padding: 6px 8px;
+    border: 1px solid #cbd5e1;
+    text-align: left;
+    vertical-align: top;
+  }
+
+  img {
+    max-width: 100%;
+    height: auto;
+  }
 }
 
 .documentViewerText {
