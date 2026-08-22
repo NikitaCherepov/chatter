@@ -372,6 +372,7 @@ const MessageItem = React.memo(function MessageItem({
   return (
     <div className={`${s.messageGroup} ${reasoningOpen || isToolCallsOpen || isSubagentsOpen ? s.messageGroupRaised : ''} ${msg.archived ? s.messageArchived : ''}`}>
       <div className={s.metaRow}>
+        <div className={s.metaRowLeft}>
         <span>{msg.role === 'user' ? (authorName ?? t('chat.message.you')) : (msg.prompt_name || 'Chatter')} &bull; {formatMessageTime(msg.created_at, locale)}{msg.archived ? t('chat.message.archivedSuffix') : ''}</span>
         <button
           className={`${s.playBtn} ${isTtsPlaying ? s.playBtnPlaying : ''}`}
@@ -504,6 +505,8 @@ const MessageItem = React.memo(function MessageItem({
             )}
           </>
         )}
+        </div>
+        <div className={s.metaRowRight}>
         {(msg.role === 'assistant' && msg.model_name) || (showTokens && typeof displayedTokenCount === 'number' && displayedTokenCount > 0) || (showTokens && (msg.usage?.perf?.tokens_per_second ?? 0) > 0) ? (
           <span className={s.messageUsageMeta}>
             {msg.role === 'assistant' && msg.model_name && (
@@ -550,6 +553,7 @@ const MessageItem = React.memo(function MessageItem({
             )}
           </span>
         ) : null}
+        </div>
       </div>
       <div className={s.bubbleWrap}>
         <div className={msg.role === 'user' && isOwnUser ? s.bubbleUser : s.bubble}>

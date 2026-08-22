@@ -58,6 +58,7 @@
 
 .roomTrigger {
   margin-left: auto;
+  flex-shrink: 0;
   height: 36px;
   padding: 0 10px 0 8px;
   border: 1px solid transparent;
@@ -1635,8 +1636,26 @@
   padding-left: 2px;
   display: flex;
   align-items: center;
-  gap: 6px;
+  justify-content: space-between;
+  gap: 6px 12px;
+  flex-wrap: wrap;
   position: relative;
+}
+
+.metaRowLeft {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.metaRowRight {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  min-width: 0;
 }
 
 .playBtn {
