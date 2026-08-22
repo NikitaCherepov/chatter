@@ -69,7 +69,9 @@ export function ManualModelListEditor({
       models.map((model, itemIndex) => (itemIndex === index ? { ...model, ...patch } : model)),
     );
   };
-  const cardKey = (model: ManualModelConfig) => model.uniqueId?.trim() || model.id;
+  // The quota ID is editable, so it cannot identify the React card itself.
+  // Otherwise every keystroke remounts and collapses the card.
+  const cardKey = (model: ManualModelConfig) => model.id;
 
   return (
     <div className={styles.modelList}>

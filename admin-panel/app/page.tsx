@@ -22,6 +22,29 @@ import { PromptsPage } from '../components/pages/PromptsPage/PromptsPage';
 import { api, ApiError } from '../lib/api';
 import { emptySettings, type Service, type Settings } from '../lib/types';
 
+const ADMIN_SECTIONS: ReadonlySet<AdminSection> = new Set([
+  'overview',
+  'users',
+  'accessKeys',
+  'models',
+  'prompts',
+  'limits',
+  'integrations',
+  'services',
+  'system',
+  'backups',
+  'logs',
+  'security',
+  'settings',
+]);
+
+function sectionFromUrl(): AdminSection {
+  const value = new URLSearchParams(window.location.search).get('tab');
+  return value && ADMIN_SECTIONS.has(value as AdminSection)
+    ? (value as AdminSection)
+    : 'overview';
+}
+
 export default function Home() {
   const [authenticated, setAuthenticated] = useState<boolean | null>(null);
   const [section, setSection] = useState<AdminSection>('overview');
@@ -45,7 +68,7 @@ export default function Home() {
       const match = window.location.pathname.match(/^\/users\/(\d+)\/?$/);
       const userId = match ? Number.parseInt(match[1], 10) : null;
       setSelectedUserId(userId && userId > 0 ? userId : null);
-      if (userId) setSection('users');
+      setSection(userId ? 'users' : sectionFromUrl());
     };
     syncUserRoute();
     window.addEventListener('popstate', syncUserRoute);
@@ -184,10 +207,10 @@ export default function Home() {
   const sharedSettingsProps = { settings, setSettings, saving, saveState, onSave: save };
 
   function navigateSection(nextSection: AdminSection) {
-    if (selectedUserId || window.location.pathname.startsWith('/users/')) {
-      window.history.pushState({}, '', '/');
-      setSelectedUserId(null);
-    }
+    const url = new URL('/', window.location.origin);
+    url.searchParams.set('tab', nextSection);
+    window.history.pushState({}, '', `${url.pathname}${url.search}`);
+    setSelectedUserId(null);
     setSection(nextSection);
   }
 
@@ -198,7 +221,7 @@ export default function Home() {
   }
 
   function closeUser() {
-    window.history.pushState({}, '', '/');
+    window.history.pushState({}, '', '/?tab=users');
     setSelectedUserId(null);
     setSection('users');
   }

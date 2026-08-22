@@ -128,9 +128,9 @@ export function ModelListEditor({
   const update = (index: number, patch: Partial<ProviderModelConfig>) => {
     onChange(models.map((model, i) => (i === index ? { ...model, ...patch } : model)));
   };
-  // uniqueId is stable across saves (the server preserves it); the index-based
-  // `id` is regenerated on every save, so it must not key React state.
-  const cardKey = (model: ProviderModelConfig) => model.uniqueId?.trim() || model.id;
+  // The quota ID is editable, so it cannot identify the React card itself.
+  // Otherwise every keystroke remounts and collapses the card.
+  const cardKey = (model: ProviderModelConfig) => model.id;
 
   return (
     <div className={styles.modelList}>
