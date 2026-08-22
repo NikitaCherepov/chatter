@@ -28,6 +28,7 @@ import type { ImageItem, DocumentItem } from '../components/AttachModal';
 import { Select } from '../components/Select';
 import { PromptSelector, type PromptOption } from '../components/PromptSelector';
 import Slider from '../components/Slider';
+import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import { SettingsModal } from '../components/SettingsModal';
 import { Tooltip } from '../components/Tooltip';
 import { PixelAvatar, dispatchAvatarState, startAvatarLoop, stopAvatarLoop, getAvatarManifest } from '../components/PixelAvatar';
@@ -279,6 +280,127 @@ const cleanNotificationText = (value: string, maxLength = 240) => {
   return `${clean.slice(0, maxLength - 1).trimEnd()}…`;
 };
 
+const isPdfAttachment = (attachment: api.MessageAttachment) =>
+  attachment.mime_type === 'application/pdf'
+  || attachment.name.toLowerCase().endsWith('.pdf');
+
+const canEmbedAttachment = (attachment: api.MessageAttachment) =>
+  isPdfAttachment(attachment)
+  || attachment.mime_type.startsWith('text/')
+  || attachment.mime_type === 'application/json'
+  || attachment.mime_type === 'application/xml';
+
+const PDF_CACHE_MAX_BYTES = 64 * 1024 * 1024;
+const pdfAttachmentCache = new Map<string, Uint8Array>();
+let pdfAttachmentCacheBytes = 0;
+
+const loadPdfBytes = async (src: string, cacheKey: string): Promise<Uint8Array> => {
+  const cached = pdfAttachmentCache.get(cacheKey);
+  if (cached) {
+    pdfAttachmentCache.delete(cacheKey);
+    pdfAttachmentCache.set(cacheKey, cached);
+    return cached;
+  }
+
+  const response = await fetch(src);
+  if (!response.ok) throw new Error(`PDF request failed with status ${response.status}`);
+  const bytes = new Uint8Array(await response.arrayBuffer());
+
+  if (bytes.byteLength <= PDF_CACHE_MAX_BYTES) {
+    while (pdfAttachmentCacheBytes + bytes.byteLength > PDF_CACHE_MAX_BYTES && pdfAttachmentCache.size > 0) {
+      const oldestKey = pdfAttachmentCache.keys().next().value as string | undefined;
+      if (!oldestKey) break;
+      const oldest = pdfAttachmentCache.get(oldestKey);
+      pdfAttachmentCache.delete(oldestKey);
+      pdfAttachmentCacheBytes -= oldest?.byteLength || 0;
+    }
+    pdfAttachmentCache.set(cacheKey, bytes);
+    pdfAttachmentCacheBytes += bytes.byteLength;
+  }
+
+  return bytes;
+};
+
+type PdfAttachmentPreviewProps = {
+  src: string;
+  cacheKey: string;
+  loadingLabel: string;
+  errorLabel: string;
+};
+
+const PdfAttachmentPreview = ({ src, cacheKey, loadingLabel, errorLabel }: PdfAttachmentPreviewProps) => {
+  const pagesRef = useRef<HTMLDivElement>(null);
+  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+
+  useEffect(() => {
+    let disposed = false;
+    let pdfDocument: { destroy: () => Promise<void> } | null = null;
+
+    const renderPdf = async () => {
+      setStatus('loading');
+      if (pagesRef.current) pagesRef.current.replaceChildren();
+
+      try {
+        const pdfjs = await import('pdfjs-dist');
+        pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
+        const bytes = await loadPdfBytes(src, cacheKey);
+        const loadingTask = pdfjs.getDocument({ data: bytes.slice() });
+        const pdf = await loadingTask.promise;
+        pdfDocument = pdf;
+        if (disposed || !pagesRef.current) return;
+
+        const container = pagesRef.current;
+        const availableWidth = Math.max(280, container.clientWidth - 32);
+        const outputScale = Math.min(window.devicePixelRatio || 1, 2);
+
+        for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+          if (disposed) return;
+          const page = await pdf.getPage(pageNumber);
+          const baseViewport = page.getViewport({ scale: 1 });
+          const viewport = page.getViewport({ scale: availableWidth / baseViewport.width });
+          const canvas = document.createElement('canvas');
+          const context = canvas.getContext('2d');
+          if (!context) throw new Error('Canvas 2D context is unavailable');
+
+          canvas.width = Math.floor(viewport.width * outputScale);
+          canvas.height = Math.floor(viewport.height * outputScale);
+          canvas.style.width = `${Math.floor(viewport.width)}px`;
+          canvas.style.height = `${Math.floor(viewport.height)}px`;
+          canvas.className = s.documentViewerPdfPage;
+          container.appendChild(canvas);
+
+          await page.render({
+            canvasContext: context,
+            viewport,
+            transform: outputScale === 1 ? undefined : [outputScale, 0, 0, outputScale, 0, 0],
+          }).promise;
+          page.cleanup();
+        }
+
+        if (!disposed) setStatus('ready');
+      } catch (error) {
+        console.error('Failed to render PDF attachment:', error);
+        if (!disposed) setStatus('error');
+      }
+    };
+
+    void renderPdf();
+    return () => {
+      disposed = true;
+      if (pagesRef.current) pagesRef.current.replaceChildren();
+      void pdfDocument?.destroy();
+    };
+  }, [cacheKey, src]);
+
+  return (
+    <div className={s.documentViewerPdf}>
+      {status === 'loading' && <div className={s.documentViewerPdfStatus}>{loadingLabel}</div>}
+      {status === 'error' && <div className={s.documentViewerPdfStatus}>{errorLabel}</div>}
+      <div ref={pagesRef} className={s.documentViewerPdfPages} aria-hidden={status !== 'ready'} />
+    </div>
+  );
+};
+
 type MessageItemProps = {
   msg: api.Message;
   authorName?: string;
@@ -301,6 +423,7 @@ type MessageItemProps = {
   resolveImageUrl: (url: string) => string;
   onSetMessages: React.Dispatch<React.SetStateAction<api.Message[]>>;
   onSetViewerImageSrc: (src: string, messageId?: number, url?: string) => void;
+  onOpenAttachment: (attachment: api.MessageAttachment) => void;
   onDownloadImage: (src: string) => void;
   onToggleReasoning: (messageId: number) => void;
   onToggleToolCalls: (messageId: number) => void;
@@ -338,6 +461,7 @@ const MessageItem = React.memo(function MessageItem({
   resolveImageUrl,
   onSetMessages,
   onSetViewerImageSrc,
+  onOpenAttachment,
   onDownloadImage,
   onToggleReasoning,
   onToggleToolCalls,
@@ -587,7 +711,19 @@ const MessageItem = React.memo(function MessageItem({
               {msg.attachments.map((att, i) => {
                 const downloadUrl = att.url ? resolveImageUrl(att.url) : null;
                 return (
-                  <div key={i} className={s.attachmentCard}>
+                  <div
+                    key={i}
+                    className={s.attachmentCard}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => onOpenAttachment(att)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        onOpenAttachment(att);
+                      }
+                    }}
+                  >
                     <div className={s.attachmentIcon}>
                       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
@@ -1121,6 +1257,7 @@ export function ChatPage() {
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [notificationsEnabled, setNotificationsEnabledState] = useState(true);
   const [viewerImageSrc, setViewerImageSrc] = useState<string | null>(null);
+  const [viewerAttachment, setViewerAttachment] = useState<api.MessageAttachment | null>(null);
   const [viewerImageMsgId, setViewerImageMsgId] = useState<number | null>(null);
   const [viewerImageUrl, setViewerImageUrl] = useState<string | null>(null);
   const [imageDeleteTarget, setImageDeleteTarget] = useState<{ messageId: number; url: string } | null>(null);
@@ -2722,6 +2859,7 @@ export function ChatPage() {
 
   const handleDeleteAttachment = useCallback(async (messageId: number, filename: string) => {
     if (!activeChatId) return;
+    setViewerAttachment(current => current?.filename === filename ? null : current);
     // Optimistic: remove from UI immediately
     setMessages(prev => prev.map(m => {
       if (m.id !== messageId || !m.attachments) return m;
@@ -2739,6 +2877,15 @@ export function ChatPage() {
       setMessages(data.messages);
     }
   }, [activeChatId]);
+
+  useEffect(() => {
+    if (!viewerAttachment) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setViewerAttachment(null);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [viewerAttachment]);
 
   const performLogout = () => {
     setShowLogoutConfirm(false);
@@ -3425,6 +3572,31 @@ export function ChatPage() {
       toast.error(t('chat.toasts.imageSaveFailed'));
     }
   }, []);
+
+  const handleOpenEmailAttachment = useCallback((attachment: {
+    url: string;
+    name: string;
+    mime_type: string;
+    size_bytes: number;
+  }) => {
+    const existingAttachment = messages
+      .flatMap(message => message.attachments || [])
+      .find(candidate => candidate.url === attachment.url);
+
+    const encodedFilename = attachment.url.split('/').pop()?.split(/[?#]/)[0] || attachment.name;
+    let filename = encodedFilename;
+    try {
+      filename = decodeURIComponent(encodedFilename);
+    } catch {
+      // Keep the encoded filename when the URL contains malformed escaping.
+    }
+
+    setViewerAttachment({
+      ...attachment,
+      filename: existingAttachment?.filename || filename,
+      extracted_text: existingAttachment?.extracted_text || '',
+    });
+  }, [messages]);
 
   const handleDeleteImage = useCallback(async (messageId: number, url: string) => {
     setDeletingImage(true);
@@ -4799,6 +4971,7 @@ export function ChatPage() {
                     setViewerImageMsgId(msgId ?? null);
                     setViewerImageUrl(url ?? null);
                   }}
+                  onOpenAttachment={setViewerAttachment}
                   onDownloadImage={handleDownloadImage}
                   onToggleReasoning={handleToggleReasoning}
                   onToggleToolCalls={handleToggleToolCalls}
@@ -6058,8 +6231,8 @@ export function ChatPage() {
                         <button
                           key={attachment.url}
                           type="button"
-                          title={t('common.download')}
-                          onClick={() => handleDownloadImage(resolveImageUrl(attachment.url))}
+                          title={t('chat.attachmentPreview.open')}
+                          onClick={() => handleOpenEmailAttachment(attachment)}
                           style={{
                             display: 'flex',
                             width: '100%',
@@ -7146,6 +7319,88 @@ export function ChatPage() {
               alt=""
               onClick={(e) => e.stopPropagation()}
             />
+          </motion.div>
+        )}
+
+        {viewerAttachment && (
+          <motion.div
+            key="attachment-viewer"
+            className={s.documentViewerOverlay}
+            onClick={() => setViewerAttachment(null)}
+            variants={{
+              hidden: { opacity: 0 },
+              visible: { opacity: 1 },
+              exit: { opacity: 0 },
+            }}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+          >
+            <motion.div
+              className={s.documentViewerPanel}
+              onClick={(event) => event.stopPropagation()}
+              initial={{ opacity: 0, scale: 0.98, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.98, y: 8 }}
+            >
+              <div className={s.documentViewerHeader}>
+                <div className={s.documentViewerHeading}>
+                  <span className={s.documentViewerName}>{viewerAttachment.name}</span>
+                  <span className={s.documentViewerSize}>
+                    {viewerAttachment.size_bytes < 1024 * 1024
+                      ? `${(viewerAttachment.size_bytes / 1024).toFixed(1)} KB`
+                      : `${(viewerAttachment.size_bytes / (1024 * 1024)).toFixed(1)} MB`}
+                  </span>
+                </div>
+                <div className={s.documentViewerActions}>
+                  {viewerAttachment.url && (
+                    <button
+                      className={s.documentViewerAction}
+                      onClick={() => handleDownloadImage(resolveImageUrl(viewerAttachment.url))}
+                      title={t('common.download')}
+                    >
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                        <polyline points="7 10 12 15 17 10" />
+                        <line x1="12" y1="15" x2="12" y2="3" />
+                      </svg>
+                    </button>
+                  )}
+                  <button
+                    className={s.documentViewerAction}
+                    onClick={() => setViewerAttachment(null)}
+                    title={t('common.close')}
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="18" y1="6" x2="6" y2="18" />
+                      <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+              <div className={s.documentViewerBody}>
+                {viewerAttachment.url && isPdfAttachment(viewerAttachment) ? (
+                  <PdfAttachmentPreview
+                    src={resolveImageUrl(viewerAttachment.url)}
+                    cacheKey={viewerAttachment.filename || viewerAttachment.url}
+                    loadingLabel={t('common.loading')}
+                    errorLabel={t('chat.attachmentPreview.loadFailed')}
+                  />
+                ) : viewerAttachment.url
+                  && !viewerAttachment.extracted_text
+                  && canEmbedAttachment(viewerAttachment) ? (
+                  <iframe
+                    className={s.documentViewerFrame}
+                    src={resolveImageUrl(viewerAttachment.url)}
+                    title={viewerAttachment.name}
+                  />
+                ) : viewerAttachment.extracted_text ? (
+                  <pre className={s.documentViewerText}>{viewerAttachment.extracted_text}</pre>
+                ) : (
+                  <div className={s.documentViewerEmpty}>{t('chat.attachmentPreview.unavailable')}</div>
+                )}
+              </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
