@@ -510,6 +510,9 @@ db.exec(`
 if (!db.prepare("SELECT name FROM sqlite_master WHERE type='index' AND name='idx_chat_messages_active'").get()) {
   db.exec("CREATE INDEX IF NOT EXISTS idx_chat_messages_active ON chat_messages(user_id, chat_id, archived, id DESC)");
 }
+// Supports room-wide last-message lookups where messages can have different owners.
+db.exec("DROP INDEX IF EXISTS idx_chat_messages_chat_id_id");
+db.exec("CREATE INDEX IF NOT EXISTS idx_chat_messages_chat_activity ON chat_messages(chat_id, created_at DESC, id DESC)");
 db.exec(`
   DROP INDEX IF EXISTS idx_chat_messages_user_prompt_chat;
   CREATE INDEX IF NOT EXISTS idx_chat_messages_user_prompt_id_chat

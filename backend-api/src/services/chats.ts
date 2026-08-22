@@ -2553,20 +2553,34 @@ export const searchUserChats = (userId: number, query: string, limit = 20): Sear
   // Use MATCH with prefix search (trailing *) for partial word matches
   const ftsQuery = safeQuery.split(/\s+/).filter(Boolean).map(w => `${w}*`).join(' ');
 
-  // Step 1: get distinct chat_ids sorted by rank.
+  // Step 1: get distinct chat_ids sorted by the latest message in each chat.
+  // Relevance is still used below to choose the best matching snippet.
   // Desktop UI search returns ALL chats (including bot_hidden) so users
   // can find their own conversations. The bot tool uses searchChatHistory()
   // which applies the bot_hidden filter separately.
   // NOTE: FTS5 MATCH requires the bare table name on the left side;
   // table aliases (e.g. "messages_fts mfts ... mfts MATCH") are NOT supported.
   const chatHits = db.prepare(`
-    SELECT chat_id, MIN(rank) as best_rank
+    SELECT
+      chat_id,
+      MIN(rank) AS best_rank,
+      COALESCE((
+        SELECT cm.created_at
+        FROM chat_messages cm
+        WHERE cm.chat_id = messages_fts.chat_id
+        ORDER BY cm.created_at DESC, cm.id DESC
+        LIMIT 1
+      ), '') AS last_message_at
     FROM messages_fts
     WHERE user_id = ? AND messages_fts MATCH ?
     GROUP BY chat_id
-    ORDER BY best_rank
+    ORDER BY last_message_at DESC, chat_id DESC
     LIMIT ?
-  `).all(userId, ftsQuery, safeLimit) as Array<{ chat_id: number; best_rank: number }>;
+  `).all(userId, ftsQuery, safeLimit) as Array<{
+    chat_id: number;
+    best_rank: number;
+    last_message_at: string;
+  }>;
 
   if (chatHits.length === 0) return [];
 
