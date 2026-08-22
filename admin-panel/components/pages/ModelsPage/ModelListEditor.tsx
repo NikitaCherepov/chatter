@@ -627,7 +627,11 @@ export function ProviderModelFields({
   }, [providerKind, model.model, model.supportsTools, override?.openrouterProviderSlug, loadEndpoints]);
 
   const applyAutoPrices = useCallback(
-    async (mp: ModelPrices | null, source: 'auto' | 'endpoint' | 'preset') => {
+    async (
+      mp: ModelPrices | null,
+      source: 'auto' | 'endpoint' | 'preset',
+      openrouterProviderSlug = prices.orSlug,
+    ) => {
       const next = {
         input: mp?.inputPricePerMillion ?? null,
         output: mp?.outputPricePerMillion ?? null,
@@ -645,7 +649,8 @@ export function ProviderModelFields({
             : 'preset';
       await persistOverride({
         providerKind,
-        openrouterProviderSlug: prices.orSlug || null,
+        openrouterProviderSlug:
+          providerKind === 'openrouter' ? openrouterProviderSlug || null : null,
         inputPricePerMillion: next.input,
         outputPricePerMillion: next.output,
         cacheReadPricePerMillion: next.cache,
@@ -673,7 +678,7 @@ export function ProviderModelFields({
       await persistOverride({ providerKind, openrouterProviderSlug: null });
       // Apply base pricing (from /models or first endpoint).
       const mp = endpoints?.basePrices ?? basePrices;
-      if (mp) await applyAutoPrices(mp, 'auto');
+      if (mp) await applyAutoPrices(mp, 'auto', '');
       return;
     }
     // For deepseek/xiaomi preset models — apply the preset prices directly.
@@ -716,7 +721,7 @@ export function ProviderModelFields({
       if (endpointsCacheRef.current) {
         onChange({ supportsTools: endpointsCacheRef.current.supportsTools });
       }
-      await applyAutoPrices(base, 'auto');
+      await applyAutoPrices(base, 'auto', '');
       return;
     }
     const cached = endpointsCacheRef.current?.pricesBySlug.get(slug) ?? null;
@@ -727,7 +732,7 @@ export function ProviderModelFields({
     const supportsTools = endpointsCacheRef.current?.toolsBySlug.get(slug);
     if (supportsTools !== undefined) onChange({ supportsTools });
     const mp = endpointsCacheRef.current?.pricesBySlug.get(slug) ?? cached;
-    await applyAutoPrices(mp, 'endpoint');
+    await applyAutoPrices(mp, 'endpoint', slug);
   };
 
   const handleRefreshPrices = async () => {
@@ -738,9 +743,9 @@ export function ProviderModelFields({
       if (!endpoints) return;
       if (prices.orSlug) {
         const mp = endpoints.pricesBySlug.get(prices.orSlug) ?? null;
-        await applyAutoPrices(mp, 'endpoint');
+        await applyAutoPrices(mp, 'endpoint', prices.orSlug);
       } else {
-        await applyAutoPrices(endpoints.basePrices, 'auto');
+        await applyAutoPrices(endpoints.basePrices, 'auto', '');
       }
     } finally {
       setRefreshing(false);
