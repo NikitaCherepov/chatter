@@ -108,7 +108,8 @@ export const deleteImageFile = (filename: string): void => {
 /**
  * Extract filename from a URL like /api/v1/images/abc123.webp
  */
-export const filenameFromUrl = (url: string): string | null => {
-  const match = url.match(/\/api\/v1\/images\/(.+)$/);
-  return match ? match[1] : null;
+export const filenameFromUrl = (url: string | null | undefined): string | null => {
+  if (!url) return null;
+  const match = url.match(/\/(?:api\/v1\/images|uploads)\/([^/?#]+)(?:[?#].*)?$/);
+  return match ? path.basename(match[1]) : null;
 };

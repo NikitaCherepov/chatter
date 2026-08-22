@@ -699,9 +699,9 @@ export const renameUserChat = (userId: number, chatId: number, title: string): b
 export const deleteUserChat = (userId: number, chatId: number): boolean => {
   const exists = db.prepare('SELECT id FROM user_chats WHERE user_id = ? AND id = ?').get(userId, chatId) as { id: number } | undefined;
   if (!exists) return false;
-  // Удаляем файлы картинок и вложений перед удалением строк
-  cleanupMessageFiles(userId, chatId);
+  const imageFilenames = cleanupMessageFiles(userId, chatId);
   db.prepare('DELETE FROM chat_messages WHERE user_id = ? AND chat_id = ?').run(userId, chatId);
+  cleanupUnreferencedImages(imageFilenames);
   db.prepare('DELETE FROM chat_agents WHERE chat_id = ?').run(chatId);
   db.prepare('DELETE FROM chat_members WHERE chat_id = ?').run(chatId);
   db.prepare('DELETE FROM user_chats WHERE id = ? AND user_id = ?').run(chatId, userId);
@@ -716,16 +716,22 @@ export const deleteUserChat = (userId: number, chatId: number): boolean => {
 
 export const clearUserChatMessages = (userId: number, chatId: number): boolean => {
   if (!getUserChatById(userId, chatId)) return false;
-  cleanupMessageFiles(userId, chatId);
+  const imageFilenames = cleanupMessageFiles(userId, chatId);
   db.prepare('DELETE FROM chat_messages WHERE user_id = ? AND chat_id = ?').run(userId, chatId);
+  cleanupUnreferencedImages(imageFilenames);
   db.prepare('UPDATE user_chats SET updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND id = ?').run(userId, chatId);
   return true;
 };
 
 export const clearAllUserMessages = (userId: number) => {
   const chats = db.prepare('SELECT id FROM user_chats WHERE user_id = ?').all(userId) as Array<{ id: number }>;
-  for (const chat of chats) cleanupMessageFiles(userId, chat.id);
-  return db.prepare('DELETE FROM chat_messages WHERE user_id = ?').run(userId).changes;
+  const imageFilenames = new Set<string>();
+  for (const chat of chats) {
+    for (const filename of cleanupMessageFiles(userId, chat.id)) imageFilenames.add(filename);
+  }
+  const changes = db.prepare('DELETE FROM chat_messages WHERE user_id = ?').run(userId).changes;
+  cleanupUnreferencedImages(imageFilenames);
+  return changes;
 };
 
 export const getRecentUserHistory = (userId: number, limit = 20) => {
@@ -750,36 +756,47 @@ export const deleteUserHistoryByRole = (userId: number, role: ChatRole | 'all') 
   if (role === 'all') return clearAllUserMessages(userId);
   const rows = db.prepare('SELECT id, chat_id FROM chat_messages WHERE user_id = ? AND role = ?')
     .all(userId, role) as Array<{ id: number; chat_id: number | null }>;
+  const imageFilenames = new Set<string>();
   for (const row of rows) {
-    if (row.chat_id) cleanupMessageFiles(userId, row.chat_id, row.id);
+    if (row.chat_id) {
+      for (const filename of cleanupMessageFiles(userId, row.chat_id, row.id)) imageFilenames.add(filename);
+    }
   }
-  return db.prepare('DELETE FROM chat_messages WHERE user_id = ? AND role = ?').run(userId, role).changes;
+  const changes = db.prepare('DELETE FROM chat_messages WHERE user_id = ? AND role = ?').run(userId, role).changes;
+  cleanupUnreferencedImages(imageFilenames);
+  return changes;
 };
 
 export const deleteUserHistoryMessage = (userId: number, messageId: number, mode: 'db' | 'tg') => {
   const idColumn = mode === 'tg' ? 'telegram_message_id' : 'id';
   const rows = db.prepare(`SELECT id, chat_id FROM chat_messages WHERE user_id = ? AND ${idColumn} = ?`)
     .all(userId, messageId) as Array<{ id: number; chat_id: number | null }>;
+  const imageFilenames = new Set<string>();
   for (const row of rows) {
-    if (row.chat_id) cleanupMessageFiles(userId, row.chat_id, row.id);
+    if (row.chat_id) {
+      for (const filename of cleanupMessageFiles(userId, row.chat_id, row.id)) imageFilenames.add(filename);
+    }
   }
-  return db.prepare(`DELETE FROM chat_messages WHERE user_id = ? AND ${idColumn} = ?`).run(userId, messageId).changes;
+  const changes = db.prepare(`DELETE FROM chat_messages WHERE user_id = ? AND ${idColumn} = ?`).run(userId, messageId).changes;
+  cleanupUnreferencedImages(imageFilenames);
+  return changes;
 };
 
 export const deleteUserMessage = (userId: number, chatId: number, messageId: number): boolean => {
-  // Удаляем файлы картинок и вложений перед удалением строки
-  cleanupMessageFiles(userId, chatId, messageId);
+  const imageFilenames = cleanupMessageFiles(userId, chatId, messageId);
   const result = db.prepare(
     'DELETE FROM chat_messages WHERE id = ? AND user_id = ? AND chat_id = ?'
   ).run(messageId, userId, chatId);
+  if (result.changes > 0) cleanupUnreferencedImages(imageFilenames);
   return result.changes > 0;
 };
 
 /**
- * Удаляет файлы (картинки, вложения) с диска для одного сообщения или всех сообщений чата.
- * Best-effort: ошибки удаления файлов не блокируют удаление из БД.
+ * Collects image filenames for a later reference check and immediately deletes unique attachments.
+ * Best-effort: file cleanup errors do not block database deletion.
  */
-const cleanupMessageFiles = (userId: number, chatId: number, messageId?: number): void => {
+const cleanupMessageFiles = (userId: number, chatId: number, messageId?: number): Set<string> => {
+  const imageFilenames = new Set<string>();
   try {
     const query = messageId
       ? 'SELECT images, attachments FROM chat_messages WHERE id = ? AND user_id = ? AND chat_id = ?'
@@ -792,9 +809,11 @@ const cleanupMessageFiles = (userId: number, chatId: number, messageId?: number)
       if (row.images) {
         try {
           const imgs = JSON.parse(row.images) as MessageImage[];
-          for (const img of imgs) {
-            const fn = filenameFromUrl(img.url);
-            if (fn) deleteImageFile(fn);
+          if (Array.isArray(imgs)) {
+            for (const img of imgs) {
+              const fn = filenameFromUrl(img?.url);
+              if (fn) imageFilenames.add(fn);
+            }
           }
         } catch { /* skip */ }
       }
@@ -809,6 +828,36 @@ const cleanupMessageFiles = (userId: number, chatId: number, messageId?: number)
       }
     }
   } catch { /* best-effort */ }
+  return imageFilenames;
+};
+
+const isImageFilenameReferenced = (filename: string): boolean => {
+  try {
+    const rows = db.prepare(`
+      SELECT images
+      FROM chat_messages
+      WHERE images IS NOT NULL AND images != '' AND images LIKE ?
+    `).all(`%${filename}%`) as Array<{ images: string }>;
+
+    return rows.some(row => {
+      try {
+        const images = JSON.parse(row.images) as MessageImage[];
+        return Array.isArray(images)
+          && images.some(image => filenameFromUrl(image?.url) === filename);
+      } catch {
+        return false;
+      }
+    });
+  } catch {
+    // Keeping an orphaned file is safer than deleting an image that may still be referenced.
+    return true;
+  }
+};
+
+const cleanupUnreferencedImages = (filenames: Iterable<string>): void => {
+  for (const filename of new Set(filenames)) {
+    if (!isImageFilenameReferenced(filename)) deleteImageFile(filename);
+  }
 };
 
 export const editUserMessage = (
@@ -957,20 +1006,18 @@ export const deleteMessageImage = (
   const target = imgs.find(a => a.url === imageUrl);
   if (!target) return { ok: false };
 
-  // 1. Удаляем файл с диска
-  try {
-    const filename = filenameFromUrl(target.url);
-    if (filename) deleteImageFile(filename);
-  } catch { /* best-effort */ }
-
-  // 2. Убираем из массива
+  // 1. Remove the reference from the array first.
   const remaining = imgs.filter(a => a.url !== imageUrl);
   const newJson = remaining.length > 0 ? JSON.stringify(remaining) : null;
 
-  // 3. UPDATE
+  // 2. Persist the updated image list.
   db.prepare(
     'UPDATE chat_messages SET images = ? WHERE id = ? AND user_id = ?'
   ).run(newJson, messageId, userId);
+
+  // 3. Delete the file only when neither the original message nor another branch still uses it.
+  const filename = filenameFromUrl(target.url);
+  if (filename) cleanupUnreferencedImages([filename]);
 
   return { ok: true };
 };
