@@ -145,7 +145,8 @@
     "input": {
       "empty": "Text výzvy nemůže být prázdný ani příkaz.",
       "tooLong": "Příliš dlouhé: {{length}} znaků. Limit: {{limit}}.",
-      "saved": "Vlastní výzva uložena a vybrána."
+      "saved": "Vlastní výzva uložena a vybrána.",
+      "progress": "✅ Přijato: {{length}} / {{limit}} znaků.\nPošlete další část nebo /done pro uložení. /cancel pro zrušení."
     }
   },
   "model": {
@@ -701,7 +702,8 @@
     },
     "email": {
       "fromLine": "Od: {{address}}\n",
-      "confirmationMarkdown": "📧 **Odeslat e-mail**\n\n{{fromLine}}Komu: {{to}}\nPředmět: {{subject}}\n\n```\n{{body}}\n```\n\nOdeslat?"
+      "confirmationMarkdown": "📧 **Odeslat e-mail**\n\n{{fromLine}}Komu: {{to}}\nPředmět: {{subject}}\n\n```\n{{body}}\n```\n\nOdeslat?",
+      "attachmentsLine": "Přílohy:\n{{attachments}}\n"
     },
     "visualClick": {
       "defaultReason": "Kliknout na obrazovku",
@@ -732,7 +734,11 @@
     "allowSiteSession": "Povolit na tomto webu",
     "siteAllowedSession": "✅ Na tomto webu povoleno do zavření Chatteru.",
     "actualTarget": "Skutečný prvek stránky",
-    "actions": { "open": "Otevřít adresu", "click": "Kliknout na prvek", "fill": "Zadat text" }
+    "actions": {
+      "open": "Otevřít adresu",
+      "click": "Kliknout na prvek",
+      "fill": "Zadat text"
+    }
   },
   "browserDownloadConfirmation": {
     "prompt": "📥 Stáhnout tento soubor?\n\n{{filename}}\nVelikost: {{size}}",

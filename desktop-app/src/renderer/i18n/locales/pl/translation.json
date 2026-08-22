@@ -863,7 +863,8 @@
       "title": "Wysyłanie wiadomości",
       "from": "Od:",
       "to": "Do:",
-      "subject": "Temat:"
+      "subject": "Temat:",
+      "attachments": "Załączniki:"
     },
     "runbook": {
       "title": "Propozycja instrukcji"
@@ -1052,6 +1053,11 @@
       "makePrivate": "Zamknij dostęp",
       "sharedBadge": "udostępnione",
       "leaveRoom": "Opuść pokój"
+    },
+    "attachmentPreview": {
+      "open": "Otwórz załącznik",
+      "loadFailed": "Nie można wyświetlić tego dokumentu. Nadal możesz go pobrać.",
+      "unavailable": "Podgląd jest niedostępny dla tego pliku. Nadal możesz go pobrać."
     }
   },
   "promptSelector": {

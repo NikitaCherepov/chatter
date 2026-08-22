@@ -542,7 +542,8 @@
       "title": "E-Mail senden",
       "from": "Von:",
       "to": "An:",
-      "subject": "Betreff:"
+      "subject": "Betreff:",
+      "attachments": "Anhänge:"
     },
     "browserDownload": {
       "confirmTitle": "Datei herunterladen?",
@@ -731,6 +732,11 @@
       "makePrivate": "Zugriff schließen",
       "sharedBadge": "geteilt",
       "leaveRoom": "Raum verlassen"
+    },
+    "attachmentPreview": {
+      "open": "Anhang öffnen",
+      "loadFailed": "Dieses Dokument konnte nicht angezeigt werden. Sie können es trotzdem herunterladen.",
+      "unavailable": "Für diese Datei ist keine Vorschau verfügbar. Sie können sie trotzdem herunterladen."
     }
   },
   "promptSelector": {

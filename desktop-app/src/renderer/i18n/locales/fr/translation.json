@@ -542,7 +542,8 @@
       "title": "Envoi d'un e-mail",
       "from": "De :",
       "to": "À :",
-      "subject": "Objet :"
+      "subject": "Objet :",
+      "attachments": "Pièces jointes :"
     },
     "browserDownload": {
       "confirmTitle": "Télécharger le fichier ?",
@@ -731,6 +732,11 @@
       "makePrivate": "Fermer l'accès",
       "sharedBadge": "partagé",
       "leaveRoom": "Quitter la salle"
+    },
+    "attachmentPreview": {
+      "open": "Ouvrir la pièce jointe",
+      "loadFailed": "Impossible d'afficher ce document. Vous pouvez toujours le télécharger.",
+      "unavailable": "L'aperçu n'est pas disponible pour ce fichier. Vous pouvez toujours le télécharger."
     }
   },
   "promptSelector": {

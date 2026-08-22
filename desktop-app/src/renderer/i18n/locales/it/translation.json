@@ -863,7 +863,8 @@
       "title": "Invio email",
       "from": "Da:",
       "to": "A:",
-      "subject": "Oggetto:"
+      "subject": "Oggetto:",
+      "attachments": "Allegati:"
     },
     "runbook": {
       "title": "Proposta di istruzioni"
@@ -1052,6 +1053,11 @@
       "makePrivate": "Chiudi accesso",
       "sharedBadge": "condiviso",
       "leaveRoom": "Lascia la stanza"
+    },
+    "attachmentPreview": {
+      "open": "Apri allegato",
+      "loadFailed": "Impossibile visualizzare questo documento. Puoi comunque scaricarlo.",
+      "unavailable": "L'anteprima non è disponibile per questo file. Puoi comunque scaricarlo."
     }
   },
   "promptSelector": {

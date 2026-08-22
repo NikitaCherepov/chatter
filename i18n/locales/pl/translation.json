@@ -144,7 +144,8 @@
     "input": {
       "empty": "Tekst promptu nie może być pusty ani być poleceniem.",
       "tooLong": "Za długo: {{length}} znaków. Limit: {{limit}}.",
-      "saved": "Niestandardowy prompt zapisany i wybrany."
+      "saved": "Niestandardowy prompt zapisany i wybrany.",
+      "progress": "✅ Otrzymano: {{length}} / {{limit}} znaków.\nWyślij następną część lub /done, aby zapisać. /cancel, aby anulować."
     },
     "defaultDescription": "Domyślny styl konwersacji Chatter"
   },
@@ -702,7 +703,11 @@
     "allowSiteSession": "Zezwól w tej witrynie",
     "siteAllowedSession": "✅ Zezwolono w tej witrynie do zamknięcia Chattera.",
     "actualTarget": "Rzeczywisty element strony",
-    "actions": { "open": "Otwórz adres", "click": "Kliknij element", "fill": "Wprowadź tekst" }
+    "actions": {
+      "open": "Otwórz adres",
+      "click": "Kliknij element",
+      "fill": "Wprowadź tekst"
+    }
   },
   "browserDownloadConfirmation": {
     "prompt": "📥 Pobrać ten plik?\n\n{{filename}}\nRozmiar: {{size}}",
@@ -775,7 +780,8 @@
     },
     "email": {
       "fromLine": "Od: {{address}}\n",
-      "confirmationMarkdown": "📧 **Wyślij e-mail**\n\n{{fromLine}}Do: {{to}}\nTemat: {{subject}}\n\n```\n{{body}}\n```\n\nWysłać?"
+      "confirmationMarkdown": "📧 **Wyślij e-mail**\n\n{{fromLine}}Do: {{to}}\nTemat: {{subject}}\n\n```\n{{body}}\n```\n\nWysłać?",
+      "attachmentsLine": "Załączniki:\n{{attachments}}\n"
     },
     "visualClick": {
       "defaultReason": "Kliknięcie na ekranie",

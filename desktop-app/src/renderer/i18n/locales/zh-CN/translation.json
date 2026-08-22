@@ -542,7 +542,8 @@
       "title": "发送邮件",
       "from": "发件人：",
       "to": "收件人：",
-      "subject": "主题："
+      "subject": "主题：",
+      "attachments": "附件："
     },
     "browserDownload": {
       "confirmTitle": "下载文件？",
@@ -731,6 +732,11 @@
       "makePrivate": "关闭访问",
       "sharedBadge": "已共享",
       "leaveRoom": "离开房间"
+    },
+    "attachmentPreview": {
+      "open": "打开附件",
+      "loadFailed": "无法显示此文档。您仍可下载它。",
+      "unavailable": "此文件不支持预览。您仍可下载它。"
     }
   },
   "promptSelector": {

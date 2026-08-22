@@ -542,7 +542,8 @@
       "title": "Envio de e-mail",
       "from": "De:",
       "to": "Para:",
-      "subject": "Assunto:"
+      "subject": "Assunto:",
+      "attachments": "Anexos:"
     },
     "browserDownload": {
       "confirmTitle": "Baixar o arquivo?",
@@ -731,6 +732,11 @@
       "makePrivate": "Fechar acesso",
       "sharedBadge": "compartilhado",
       "leaveRoom": "Sair da sala"
+    },
+    "attachmentPreview": {
+      "open": "Abrir anexo",
+      "loadFailed": "Não foi possível exibir este documento. Você ainda pode baixá-lo.",
+      "unavailable": "A visualização não está disponível para este arquivo. Você ainda pode baixá-lo."
     }
   },
   "promptSelector": {

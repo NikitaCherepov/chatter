@@ -863,7 +863,8 @@
       "title": "이메일 보내기",
       "from": "보낸 사람:",
       "to": "받는 사람:",
-      "subject": "제목:"
+      "subject": "제목:",
+      "attachments": "첨부 파일:"
     },
     "runbook": {
       "title": "지침 제안"
@@ -1052,6 +1053,11 @@
       "makePrivate": "접근 닫기",
       "sharedBadge": "공유됨",
       "leaveRoom": "방 나가기"
+    },
+    "attachmentPreview": {
+      "open": "첨부 파일 열기",
+      "loadFailed": "이 문서를 표시할 수 없습니다. 여전히 다운로드할 수 있습니다.",
+      "unavailable": "이 파일의 미리 보기를 사용할 수 없습니다. 여전히 다운로드할 수 있습니다."
     }
   },
   "promptSelector": {

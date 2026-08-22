@@ -144,7 +144,8 @@
     "input": {
       "empty": "Il testo del prompt non può essere vuoto o essere un comando.",
       "tooLong": "Troppo lungo: {{length}} caratteri. Limite: {{limit}}.",
-      "saved": "Prompt personalizzato salvato e selezionato."
+      "saved": "Prompt personalizzato salvato e selezionato.",
+      "progress": "✅ Ricevuti: {{length}} / {{limit}} caratteri.\nInvia la parte successiva o /done per salvare. /cancel per annullare."
     },
     "defaultDescription": "Stile di conversazione predefinito di Chatter"
   },
@@ -702,7 +703,11 @@
     "allowSiteSession": "Consenti su questo sito",
     "siteAllowedSession": "✅ Consentito su questo sito fino alla chiusura di Chatter.",
     "actualTarget": "Elemento effettivo della pagina",
-    "actions": { "open": "Apri indirizzo", "click": "Fai clic sull’elemento", "fill": "Inserisci testo" }
+    "actions": {
+      "open": "Apri indirizzo",
+      "click": "Fai clic sull’elemento",
+      "fill": "Inserisci testo"
+    }
   },
   "browserDownloadConfirmation": {
     "prompt": "📥 Scaricare questo file?\n\n{{filename}}\nDimensione: {{size}}",
@@ -775,7 +780,8 @@
     },
     "email": {
       "fromLine": "Da: {{address}}\n",
-      "confirmationMarkdown": "📧 **Invia email**\n\n{{fromLine}}A: {{to}}\nOggetto: {{subject}}\n\n```\n{{body}}\n```\n\nInviare?"
+      "confirmationMarkdown": "📧 **Invia email**\n\n{{fromLine}}A: {{to}}\nOggetto: {{subject}}\n\n```\n{{body}}\n```\n\nInviare?",
+      "attachmentsLine": "Allegati:\n{{attachments}}\n"
     },
     "visualClick": {
       "defaultReason": "Clic sullo schermo",

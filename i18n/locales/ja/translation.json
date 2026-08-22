@@ -144,7 +144,8 @@
     "input": {
       "empty": "プロンプトテキストを空にしたり、コマンドにすることはできません。",
       "tooLong": "長すぎます: {{length}} 文字。制限: {{limit}}。",
-      "saved": "カスタムプロンプトが保存され、選択されました。"
+      "saved": "カスタムプロンプトが保存され、選択されました。",
+      "progress": "✅ 受信: {{length}} / {{limit}} 文字。\n次の部分を送信するか、/done で保存、/cancel でキャンセルします。"
     },
     "defaultDescription": "デフォルトのチャッター会話スタイル"
   },
@@ -702,7 +703,11 @@
     "allowSiteSession": "このサイトで許可",
     "siteAllowedSession": "✅ Chatterを閉じるまでこのサイトで許可されました。",
     "actualTarget": "実際のページ要素",
-    "actions": { "open": "アドレスを開く", "click": "要素をクリック", "fill": "テキストを入力" }
+    "actions": {
+      "open": "アドレスを開く",
+      "click": "要素をクリック",
+      "fill": "テキストを入力"
+    }
   },
   "browserDownloadConfirmation": {
     "prompt": "📥 このファイルをダウンロードしますか？\n\n{{filename}}\nサイズ：{{size}}",
@@ -775,7 +780,8 @@
     },
     "email": {
       "fromLine": "差出人: {{address}}\n",
-      "confirmationMarkdown": "📧 **メール送信**\n\n{{fromLine}}宛先: {{to}}\n件名: {{subject}}\n\n```\n{{body}}\n```\n\n送信しますか？"
+      "confirmationMarkdown": "📧 **メール送信**\n\n{{fromLine}}宛先: {{to}}\n件名: {{subject}}\n\n```\n{{body}}\n```\n\n送信しますか？",
+      "attachmentsLine": "添付ファイル:\n{{attachments}}\n"
     },
     "visualClick": {
       "defaultReason": "画面をクリック",

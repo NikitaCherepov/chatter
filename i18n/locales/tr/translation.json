@@ -145,7 +145,8 @@
     "input": {
       "empty": "İstem metni boş veya bir komut olamaz.",
       "tooLong": "Çok uzun: {{length}} karakter. Sınır: {{limit}}.",
-      "saved": "Özel istem kaydedildi ve seçildi."
+      "saved": "Özel istem kaydedildi ve seçildi.",
+      "progress": "✅ Alındı: {{length}} / {{limit}} karakter.\nSonraki bölümü gönderin veya kaydetmek için /done. İptal etmek için /cancel."
     }
   },
   "model": {
@@ -701,7 +702,8 @@
     },
     "email": {
       "fromLine": "Kimden: {{address}}\n",
-      "confirmationMarkdown": "📧 **E-posta gönder**\n\n{{fromLine}}Kime: {{to}}\nKonu: {{subject}}\n\n```\n{{body}}\n```\n\nGönderilsin mi?"
+      "confirmationMarkdown": "📧 **E-posta gönder**\n\n{{fromLine}}Kime: {{to}}\nKonu: {{subject}}\n\n```\n{{body}}\n```\n\nGönderilsin mi?",
+      "attachmentsLine": "Ekler:\n{{attachments}}\n"
     },
     "visualClick": {
       "defaultReason": "Ekrana tıkla",
@@ -732,7 +734,11 @@
     "allowSiteSession": "Bu sitede izin ver",
     "siteAllowedSession": "✅ Chatter kapanana kadar bu sitede izin verildi.",
     "actualTarget": "Gerçek sayfa öğesi",
-    "actions": { "open": "Adresi aç", "click": "Öğeye tıkla", "fill": "Metin gir" }
+    "actions": {
+      "open": "Adresi aç",
+      "click": "Öğeye tıkla",
+      "fill": "Metin gir"
+    }
   },
   "browserDownloadConfirmation": {
     "prompt": "📥 Bu dosya indirilsin mi?\n\n{{filename}}\nBoyut: {{size}}",

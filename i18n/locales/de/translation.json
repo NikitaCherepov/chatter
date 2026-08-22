@@ -144,7 +144,8 @@
     "input": {
       "empty": "Prompttext darf nicht leer sein oder ein Befehl sein.",
       "tooLong": "Zu lang: {{length}} Zeichen. Limit: {{limit}}.",
-      "saved": "Benutzerdefinierter Prompt gespeichert und ausgewählt."
+      "saved": "Benutzerdefinierter Prompt gespeichert und ausgewählt.",
+      "progress": "✅ Erhalten: {{length}} / {{limit}} Zeichen.\nSenden Sie den nächsten Teil oder /done zum Speichern. /cancel zum Abbrechen."
     },
     "defaultDescription": "Standard-Chatter-Gesprächsstil"
   },
@@ -702,7 +703,11 @@
     "allowSiteSession": "Auf dieser Website erlauben",
     "siteAllowedSession": "✅ Auf dieser Website bis zum Schließen von Chatter erlaubt.",
     "actualTarget": "Tatsächliches Seitenelement",
-    "actions": { "open": "Adresse öffnen", "click": "Element anklicken", "fill": "Text eingeben" }
+    "actions": {
+      "open": "Adresse öffnen",
+      "click": "Element anklicken",
+      "fill": "Text eingeben"
+    }
   },
   "browserDownloadConfirmation": {
     "prompt": "📥 Diese Datei herunterladen?\n\n{{filename}}\nGröße: {{size}}",
@@ -775,7 +780,8 @@
     },
     "email": {
       "fromLine": "Von: {{address}}\n",
-      "confirmationMarkdown": "📧 **E-Mail senden**\n\n{{fromLine}}An: {{to}}\nBetreff: {{subject}}\n\n```\n{{body}}\n```\n\nSenden?"
+      "confirmationMarkdown": "📧 **E-Mail senden**\n\n{{fromLine}}An: {{to}}\nBetreff: {{subject}}\n\n```\n{{body}}\n```\n\nSenden?",
+      "attachmentsLine": "Anhänge:\n{{attachments}}\n"
     },
     "visualClick": {
       "defaultReason": "Klick auf den Bildschirm",

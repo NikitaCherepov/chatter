@@ -863,7 +863,8 @@
       "title": "E-posta gönder",
       "from": "Kimden:",
       "to": "Kime:",
-      "subject": "Konu:"
+      "subject": "Konu:",
+      "attachments": "Ekler:"
     },
     "runbook": {
       "title": "Runbook önerisi"
@@ -1052,6 +1053,11 @@
       "makePrivate": "Erişimi kapat",
       "sharedBadge": "paylaşıldı",
       "leaveRoom": "Odadan ayrıl"
+    },
+    "attachmentPreview": {
+      "open": "Eki aç",
+      "loadFailed": "Bu belge görüntülenemedi. Yine de indirebilirsiniz.",
+      "unavailable": "Bu dosya için önizleme kullanılamıyor. Yine de indirebilirsiniz."
     }
   },
   "promptSelector": {

@@ -863,7 +863,8 @@
       "title": "Odeslat e-mail",
       "from": "Od:",
       "to": "Komu:",
-      "subject": "Předmět:"
+      "subject": "Předmět:",
+      "attachments": "Přílohy:"
     },
     "runbook": {
       "title": "Návrh runbooku"
@@ -1052,6 +1053,11 @@
       "makePrivate": "Zavřít přístup",
       "sharedBadge": "sdíleno",
       "leaveRoom": "Opustit místnost"
+    },
+    "attachmentPreview": {
+      "open": "Otevřít přílohu",
+      "loadFailed": "Tento dokument se nepodařilo zobrazit. Můžete si jej stále stáhnout.",
+      "unavailable": "Náhled není pro tento soubor dostupný. Můžete si jej stále stáhnout."
     }
   },
   "promptSelector": {

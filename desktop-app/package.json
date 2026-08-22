@@ -1,6 +1,6 @@
 {
   "name": "chatter-desktop",
-  "version": "1.9.11",
+  "version": "1.9.12",
   "license": "AGPL-3.0-only",
   "private": true,
   "main": "dist/main/main.js",

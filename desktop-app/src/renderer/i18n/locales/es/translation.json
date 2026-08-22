@@ -542,7 +542,8 @@
       "title": "Envío de correo",
       "from": "De:",
       "to": "Para:",
-      "subject": "Asunto:"
+      "subject": "Asunto:",
+      "attachments": "Adjuntos:"
     },
     "browserDownload": {
       "confirmTitle": "¿Descargar el archivo?",
@@ -731,6 +732,11 @@
       "makePrivate": "Cerrar acceso",
       "sharedBadge": "compartido",
       "leaveRoom": "Salir de la sala"
+    },
+    "attachmentPreview": {
+      "open": "Abrir adjunto",
+      "loadFailed": "No se pudo mostrar este documento. Aún puedes descargarlo.",
+      "unavailable": "La vista previa no está disponible para este archivo. Aún puedes descargarlo."
     }
   },
   "promptSelector": {

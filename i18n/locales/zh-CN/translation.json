@@ -144,7 +144,8 @@
     "input": {
       "empty": "提示文本不能为空或为命令。",
       "tooLong": "过长：{{length}} 个字符。限制：{{limit}}。",
-      "saved": "自定义提示已保存并选中。"
+      "saved": "自定义提示已保存并选中。",
+      "progress": "✅ 已接收：{{length}} / {{limit}} 个字符。\n发送下一部分或 /done 保存。 /cancel 取消。"
     },
     "defaultDescription": "默认的Chatter对话风格"
   },
@@ -702,7 +703,11 @@
     "allowSiteSession": "在此网站允许",
     "siteAllowedSession": "✅ 在 Chatter 关闭前已允许此网站。",
     "actualTarget": "实际页面元素",
-    "actions": { "open": "打开地址", "click": "点击元素", "fill": "输入文本" }
+    "actions": {
+      "open": "打开地址",
+      "click": "点击元素",
+      "fill": "输入文本"
+    }
   },
   "browserDownloadConfirmation": {
     "prompt": "📥 下载此文件？\n\n{{filename}}\n大小：{{size}}",
@@ -775,7 +780,8 @@
     },
     "email": {
       "fromLine": "发件人: {{address}}\n",
-      "confirmationMarkdown": "📧 **发送邮件**\n\n{{fromLine}}收件人: {{to}}\n主题: {{subject}}\n\n```\n{{body}}\n```\n\n发送？"
+      "confirmationMarkdown": "📧 **发送邮件**\n\n{{fromLine}}收件人: {{to}}\n主题: {{subject}}\n\n```\n{{body}}\n```\n\n发送？",
+      "attachmentsLine": "附件：\n{{attachments}}\n"
     },
     "visualClick": {
       "defaultReason": "点击屏幕",

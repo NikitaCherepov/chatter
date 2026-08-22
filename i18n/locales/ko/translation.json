@@ -144,7 +144,8 @@
     "input": {
       "empty": "프롬프트 텍스트는 비어 있거나 명령어일 수 없습니다.",
       "tooLong": "너무 깁니다: {{length}}자. 제한: {{limit}}자.",
-      "saved": "사용자 정의 프롬프트가 저장되고 선택되었습니다."
+      "saved": "사용자 정의 프롬프트가 저장되고 선택되었습니다.",
+      "progress": "✅ 수신됨: {{length}} / {{limit}}자.\n다음 부분을 보내거나 /done으로 저장하세요. /cancel로 취소하세요."
     },
     "defaultDescription": "기본 Chatter 대화 스타일"
   },
@@ -702,7 +703,11 @@
     "allowSiteSession": "이 사이트에서 허용",
     "siteAllowedSession": "✅ Chatter를 닫을 때까지 이 사이트에서 허용되었습니다.",
     "actualTarget": "실제 페이지 요소",
-    "actions": { "open": "주소 열기", "click": "요소 클릭", "fill": "텍스트 입력" }
+    "actions": {
+      "open": "주소 열기",
+      "click": "요소 클릭",
+      "fill": "텍스트 입력"
+    }
   },
   "browserDownloadConfirmation": {
     "prompt": "📥 이 파일을 다운로드할까요?\n\n{{filename}}\n크기: {{size}}",
@@ -775,7 +780,8 @@
     },
     "email": {
       "fromLine": "보낸 사람: {{address}}\n",
-      "confirmationMarkdown": "📧 **이메일 보내기**\n\n{{fromLine}}받는 사람: {{to}}\n제목: {{subject}}\n\n```\n{{body}}\n```\n\n보내시겠습니까?"
+      "confirmationMarkdown": "📧 **이메일 보내기**\n\n{{fromLine}}받는 사람: {{to}}\n제목: {{subject}}\n\n```\n{{body}}\n```\n\n보내시겠습니까?",
+      "attachmentsLine": "첨부 파일:\n{{attachments}}\n"
     },
     "visualClick": {
       "defaultReason": "화면 클릭",

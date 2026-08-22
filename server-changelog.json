@@ -1,134 +1,121 @@
 {
   "changes": {
     "en": [
-      "Added rooms where you can invite other people and bring your own bots.",
-      "Bots can now work in the background and notify you when they finish.",
-      "Messages now show their sent date.",
-      "Added automatic price updates and notifications.",
-      "Added provider change notifications.",
-      "Added an experimental updates branch.",
-      "Redesigned the models tab, making it more convenient.",
-      "Fixed a bug when deleting a user-selected model"
+      "Reworked the documents system and added a tool for reading documents.",
+      "Chatter can now attach files to outgoing email messages.",
+      "Added support for xlsx and other document formats.",
+      "Added a toggle for models without tool support.",
+      "Generated images are now attached to tool responses.",
+      "Fixed gallery listing.",
+      "Increased the custom prompt size limit."
     ],
     "cs": [
-      "Přidány místnosti, kam můžete pozvat další lidi a přivést vlastní boty.",
-      "Boti nyní mohou pracovat na pozadí a upozornit vás, až dokončí práci.",
-      "Zprávy nyní zobrazují datum odeslání.",
-      "Přidány automatické aktualizace cen a upozornění.",
-      "Přidána upozornění na změnu poskytovatele.",
-      "Přidána větev experimentálních aktualizací.",
-      "Přepracována karta modelů, což ji činí pohodlnější.",
-      "Opravena chyba při mazání uživatelem vybraného modelu"
+      "Přepracovali jsme systém dokumentů a přidali nástroj pro čtení dokumentů.",
+      "Chatter nyní může připojovat soubory k odchozím e-mailovým zprávám.",
+      "Přidána podpora pro xlsx a další formáty dokumentů.",
+      "Přidán přepínač pro modely bez podpory nástrojů.",
+      "Generované obrázky jsou nyní připojeny k odpovědím nástrojů.",
+      "Opraven výpis galerie.",
+      "Zvýšen limit velikosti vlastního promptu."
     ],
     "de": [
-      "Räume hinzugefügt, in die Sie andere Personen einladen und Ihre eigenen Bots mitbringen können.",
-      "Bots können jetzt im Hintergrund arbeiten und Sie benachrichtigen, wenn sie fertig sind.",
-      "Nachrichten zeigen jetzt ihr Sendedatum.",
-      "Automatische Preisaktualisierungen und Benachrichtigungen hinzugefügt.",
-      "Benachrichtigungen bei Anbieterwechsel hinzugefügt.",
-      "Experimentellen Updates-Zweig hinzugefügt.",
-      "Modell-Tab neu gestaltet, um ihn komfortabler zu machen.",
-      "Fehler beim Löschen eines benutzerausgewählten Modells behoben."
+      "Das Dokumentensystem wurde überarbeitet und ein Tool zum Lesen von Dokumenten hinzugefügt.",
+      "Chatter kann jetzt Dateien an ausgehende E-Mail-Nachrichten anhängen.",
+      "Unterstützung für xlsx und andere Dokumentformate hinzugefügt.",
+      "Ein Umschalter für Modelle ohne Tool-Unterstützung hinzugefügt.",
+      "Generierte Bilder werden jetzt an Tool-Antworten angehängt.",
+      "Galerieliste korrigiert.",
+      "Das Größenlimit für benutzerdefinierte Eingabeaufforderungen wurde erhöht."
     ],
     "es": [
-      "Se agregaron salas donde puedes invitar a otras personas y traer tus propios bots.",
-      "Los bots ahora pueden trabajar en segundo plano y notificarte cuando terminen.",
-      "Los mensajes ahora muestran su fecha de envío.",
-      "Se agregaron actualizaciones automáticas de precios y notificaciones.",
-      "Se agregaron notificaciones de cambio de proveedor.",
-      "Se añadió una rama de actualizaciones experimentales.",
-      "Se rediseñó la pestaña de modelos, haciéndola más conveniente.",
-      "Se corrigió un error al eliminar un modelo seleccionado por el usuario."
+      "Se rediseñó el sistema de documentos y se añadió una herramienta para leer documentos.",
+      "Chatter ahora puede adjuntar archivos a los mensajes de correo salientes.",
+      "Se añadió soporte para xlsx y otros formatos de documentos.",
+      "Se añadió un interruptor para modelos sin soporte de herramientas.",
+      "Las imágenes generadas ahora se adjuntan a las respuestas de las herramientas.",
+      "Listado de galería corregido.",
+      "Se aumentó el límite de tamaño del prompt personalizado."
     ],
     "fr": [
-      "Ajout de salons où vous pouvez inviter d'autres personnes et amener vos propres bots.",
-      "Les bots peuvent désormais travailler en arrière-plan et vous notifier lorsqu'ils ont terminé.",
-      "Les messages affichent désormais leur date d'envoi.",
-      "Ajout de mises à jour automatiques des prix et de notifications.",
-      "Ajout de notifications de changement de fournisseur.",
-      "Ajout d'une branche de mises à jour expérimentale.",
-      "Refonte de l'onglet des modèles, le rendant plus pratique.",
-      "Correction d'un bug lors de la suppression d'un modèle sélectionné par l'utilisateur."
+      "Système de documents retravaillé et ajout d'un outil de lecture de documents.",
+      "Chatter peut désormais joindre des fichiers aux e-mails sortants.",
+      "Ajout de la prise en charge des formats xlsx et autres formats de documents.",
+      "Ajout d'un bouton pour les modèles sans prise en charge des outils.",
+      "Les images générées sont désormais jointes aux réponses des outils.",
+      "Correction de la liste de la galerie.",
+      "Augmentation de la limite de taille de l'invite personnalisée."
     ],
     "it": [
-      "Aggiunte stanze in cui puoi invitare altre persone e portare i tuoi bot.",
-      "I bot ora possono lavorare in background e avvisarti quando finiscono.",
-      "I messaggi ora mostrano la data di invio.",
-      "Aggiunti aggiornamenti automatici dei prezzi e notifiche.",
-      "Aggiunte notifiche di cambio fornitore.",
-      "Aggiunto un ramo di aggiornamenti sperimentali.",
-      "Riprogettata la scheda dei modelli, rendendola più comoda.",
-      "Corretto un bug durante l'eliminazione di un modello selezionato dall'utente"
+      "Rifatto il sistema di documenti e aggiunto uno strumento per la lettura dei documenti.",
+      "Chatter ora può allegare file ai messaggi di posta elettronica in uscita.",
+      "Aggiunto supporto per xlsx e altri formati di documenti.",
+      "Aggiunto un interruttore per i modelli senza supporto per gli strumenti.",
+      "Le immagini generate ora sono allegate alle risposte degli strumenti.",
+      "Corretta la visualizzazione della galleria.",
+      "Aumentato il limite di dimensione del prompt personalizzato."
     ],
     "ja": [
-      "他の人を招待して自分のボットを持ち込めるルームを追加しました。",
-      "ボットはバックグラウンドで動作し、完了時に通知できるようになりました。",
-      "メッセージに送信日時が表示されるようになりました。",
-      "自動価格更新と通知を追加しました。",
-      "プロバイダー変更通知を追加しました。",
-      "実験的なアップデートブランチを追加しました。",
-      "モデルタブを再設計し、より便利にしました。",
-      "ユーザーが選択したモデルを削除する際のバグを修正しました。"
+      "ドキュメントシステムを再設計し、ドキュメントを読むためのツールを追加しました。",
+      "Chatterは送信メールにファイルを添付できるようになりました。",
+      "xlsxおよびその他のドキュメント形式のサポートを追加しました。",
+      "ツールをサポートしていないモデル用のトグルを追加しました。",
+      "生成された画像はツールの応答に添付されるようになりました。",
+      "ギャラリー一覧を修正しました。",
+      "カスタムプロンプトのサイズ制限を引き上げました。"
     ],
     "ko": [
-      "다른 사람을 초대하고 자신의 봇을 가져올 수 있는 방이 추가되었습니다.",
-      "봇이 이제 백그라운드에서 작업하고 완료 시 알림을 보낼 수 있습니다.",
-      "메시지에 전송 날짜가 표시됩니다.",
-      "자동 가격 업데이트 및 알림이 추가되었습니다.",
-      "공급자 변경 알림이 추가되었습니다.",
-      "실험적 업데이트 분기를 추가했습니다.",
-      "모델 탭을 재설계하여 더 편리하게 만들었습니다.",
-      "사용자가 선택한 모델을 삭제할 때 발생하는 버그를 수정했습니다."
+      "문서 시스템을 재작업하고 문서 읽기 도구를 추가했습니다.",
+      "Chatter는 이제 발신 이메일 메시지에 파일을 첨부할 수 있습니다.",
+      "xlsx 및 기타 문서 형식에 대한 지원을 추가했습니다.",
+      "도구 지원이 없는 모델용 토글을 추가했습니다.",
+      "생성된 이미지는 이제 도구 응답에 첨부됩니다.",
+      "갤러리 목록을 수정했습니다.",
+      "사용자 정의 프롬프트 크기 제한을 늘렸습니다."
     ],
     "pl": [
-      "Dodano pokoje, do których możesz zapraszać inne osoby i zabierać własne boty.",
-      "Boty mogą teraz pracować w tle i powiadamiać Cię po zakończeniu.",
-      "Wiadomości pokazują teraz datę wysłania.",
-      "Dodano automatyczne aktualizacje cen i powiadomienia.",
-      "Dodano powiadomienia o zmianie dostawcy.",
-      "Dodano eksperymentalną gałąź aktualizacji.",
-      "Przeprojektowano kartę modeli, czyniąc ją wygodniejszą.",
-      "Naprawiono błąd podczas usuwania wybranego przez użytkownika modelu"
+      "Przebudowano system dokumentów i dodano narzędzie do czytania dokumentów.",
+      "Chatter może teraz dołączać pliki do wychodzących wiadomości e-mail.",
+      "Dodano obsługę formatów xlsx i innych formatów dokumentów.",
+      "Dodano przełącznik dla modeli bez obsługi narzędzi.",
+      "Wygenerowane obrazy są teraz dołączane do odpowiedzi narzędzi.",
+      "Naprawiono listę galerii.",
+      "Zwiększono limit rozmiaru niestandardowego monitu."
     ],
     "pt-BR": [
-      "Adicionadas salas onde você pode convidar outras pessoas e trazer seus próprios bots.",
-      "Os bots agora podem trabalhar em segundo plano e notificá-lo quando terminarem.",
-      "As mensagens agora mostram a data de envio.",
-      "Adicionadas atualizações automáticas de preço e notificações.",
-      "Adicionadas notificações de mudança de provedor.",
-      "Adicionado um ramo de atualizações experimentais.",
-      "Redesenhamos a aba de modelos, tornando-a mais conveniente.",
-      "Corrigido um bug ao excluir um modelo selecionado pelo usuário"
+      "Reformulamos o sistema de documentos e adicionamos uma ferramenta para leitura de documentos.",
+      "O Chatter agora pode anexar arquivos a mensagens de e-mail enviadas.",
+      "Adicionamos suporte para xlsx e outros formatos de documento.",
+      "Adicionamos um alternador para modelos sem suporte a ferramentas.",
+      "As imagens geradas agora são anexadas às respostas das ferramentas.",
+      "Listagem da galeria corrigida.",
+      "Aumentado o limite de tamanho do prompt personalizado."
     ],
     "ru": [
-      "Добавлены комнаты, где вы можете приглашать других людей и приводить своих ботов.",
-      "Боты теперь могут работать в фоновом режиме и уведомлять вас о завершении.",
-      "Сообщения теперь показывают дату отправки.",
-      "Добавлены автоматические обновления цен и уведомления.",
-      "Добавлены уведомления о смене провайдера.",
-      "Добавлена экспериментальная ветка обновлений.",
-      "Переработана вкладка моделей, сделав её более удобной.",
-      "Исправлена ошибка при удалении выбранной пользователем модели"
+      "Переработана система документов и добавлен инструмент для чтения документов.",
+      "Chatter теперь может прикреплять файлы к исходящим сообщениям электронной почты.",
+      "Добавлена поддержка xlsx и других форматов документов.",
+      "Добавлен переключатель для моделей без поддержки инструментов.",
+      "Сгенерированные изображения теперь прикрепляются к ответам инструментов.",
+      "Исправлено отображение галереи.",
+      "Увеличен лимит размера пользовательского запроса."
     ],
     "tr": [
-      "Diğer kişileri davet edebileceğiniz ve kendi botlarınızı getirebileceğiniz odalar eklendi.",
-      "Botlar artık arka planda çalışabilir ve bitirdiklerinde sizi bilgilendirebilir.",
-      "Mesajlar artık gönderilme tarihini gösteriyor.",
-      "Otomatik fiyat güncellemeleri ve bildirimler eklendi.",
-      "Sağlayıcı değişikliği bildirimleri eklendi.",
-      "Deneysel güncellemeler dalı eklendi.",
-      "Modeller sekmesi yeniden tasarlandı, daha kullanışlı hale getirildi.",
-      "Kullanıcı tarafından seçilen bir model silinirken oluşan hata düzeltildi."
+      "Belge sistemi yeniden düzenlendi ve belge okuma aracı eklendi.",
+      "Chatter artık giden e-posta mesajlarına dosya ekleyebiliyor.",
+      "xlsx ve diğer belge formatları için destek eklendi.",
+      "Araç desteği olmayan modeller için bir geçiş anahtarı eklendi.",
+      "Oluşturulan görseller artık araç yanıtlarına ekleniyor.",
+      "Sabit galeri listelemesi.",
+      "Özel istem boyut sınırı artırıldı."
     ],
     "zh-CN": [
-      "添加了可以邀请他人并携带自己的机器人的房间。",
-      "机器人现在可以在后台工作，并在完成时通知您。",
-      "消息现在显示发送日期。",
-      "添加了自动价格更新和通知。",
-      "添加了提供商变更通知。",
-      "添加了一个实验性更新分支。",
-      "重新设计了模型选项卡，使其更加方便。",
-      "修复了删除用户选定模型时的错误。"
+      "重构了文档系统，并添加了用于阅读文档的工具。",
+      "Chatter 现在可以将文件附加到外发电子邮件消息中。",
+      "添加了对 xlsx 和其他文档格式的支持。",
+      "为不支持工具支持的模型添加了切换开关。",
+      "生成的图像现在附加到工具响应中。",
+      "修复了画廊列表。",
+      "增加了自定义提示词的大小限制。"
     ]
   }
 }
