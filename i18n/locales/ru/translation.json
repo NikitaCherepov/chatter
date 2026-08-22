@@ -588,7 +588,8 @@
     "ssh": { "confirmationMarkdown": "🖥 **SSH: {{serverName}}** ({{host}})\n\n`{{command}}`\n\nРазрешить выполнение?" },
     "email": {
       "fromLine": "От: {{address}}\n",
-      "confirmationMarkdown": "📧 **Отправка письма**\n\n{{fromLine}}Кому: {{to}}\nТема: {{subject}}\n\n```\n{{body}}\n```\n\nОтправить?"
+      "attachmentsLine": "Вложения:\n{{attachments}}\n",
+      "confirmationMarkdown": "📧 **Отправка письма**\n\n{{fromLine}}Кому: {{to}}\nТема: {{subject}}\n{{attachmentsLine}}\n```\n{{body}}\n```\n\nОтправить?"
     },
     "visualClick": {
       "defaultReason": "Клик по экрану",

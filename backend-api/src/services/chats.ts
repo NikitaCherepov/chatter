@@ -22,6 +22,7 @@ import {
 import { normalizeSupportedLanguage } from '../i18n/languages.js';
 import { formatAutomaticChatTitle } from '../i18n/index.js';
 import { getPlanLimits, getDefaultUserPlanLimits, loadPlanLimitsFromDb } from './plan-limits.js';
+import { withAttachmentMetadata } from './chat-attachments.js';
 
 export const getRawUserById = (userId: number) => db
   .prepare('SELECT * FROM users WHERE id = ?')
@@ -1129,52 +1130,29 @@ export const getChatMessages = (userId: number, chatId: number, limit = 20, offs
   });
 };
 
-/**
- * Build text injection for user attachments.
- *
- * Each attachment becomes:
- *   [Пользователь прикрепил файл: server_logs.txt]
- *   --- НАЧАЛО ФАЙЛА ---
- *   ...
- *   --- КОНЕЦ ФАЙЛА ---
- *
- * Blocks are separated by blank lines. Order matches array order.
- *
- * If `maxTokens` > 0, files are added sequentially and trimmed once the
- * cumulative token budget is reached. Files that don't fit are omitted from
- * the injection (caller validates at upload time, but this is a safety net
- * for archived history where the user's limit may have shrunk).
- */
+/** Build a metadata-only manifest. File content is available through tools. */
 export const injectAttachments = (
   attachments: MessageAttachment[],
-  maxTokens = 0
+  _maxTokens = 0
 ): string => {
   if (!attachments || attachments.length === 0) return '';
-
-  const blocks: string[] = [];
-  let usedTokens = 0;
-
-  for (const att of attachments) {
-    const block = `[Пользователь прикрепил файл: ${att.name}]\n--- НАЧАЛО ФАЙЛА ---\n${att.extracted_text}\n--- КОНЕЦ ФАЙЛА ---`;
-    if (maxTokens > 0) {
-      const blockTokens = countTokens(block);
-      if (usedTokens + blockTokens > maxTokens) {
-        // Trim this block to what's left, if anything.
-        const remaining = maxTokens - usedTokens;
-        if (remaining <= 50) break; // not enough room to be useful
-        // Rough char-based trim (~4 chars/token) then re-clamp by tokens.
-        const charBudget = remaining * 4;
-        const head = block.slice(0, Math.max(0, charBudget - 60));
-        blocks.push(`${head}\n…[обрезано по лимиту]…\n--- КОНЕЦ ФАЙЛА ---`);
-        usedTokens = maxTokens;
-        break;
-      }
-      usedTokens += blockTokens;
-    }
-    blocks.push(block);
-  }
-
-  return blocks.join('\n\n');
+  return attachments
+    .filter(att => Boolean(att.url))
+    .map(raw => {
+      const att = withAttachmentMetadata(raw);
+      return [
+        '[ATTACHED_DOCUMENT]',
+        `name: ${att.name}`,
+        `attachment_url: ${att.url}`,
+        `size_bytes: ${att.size_bytes}`,
+        `char_count: ${att.char_count}`,
+        `estimated_tokens: ${att.estimated_tokens}`,
+        `chunks: ${att.chunk_count}`,
+        'Use read_attachment_file or search_attachment_file to inspect this document.',
+        '[/ATTACHED_DOCUMENT]',
+      ].join('\n');
+    })
+    .join('\n\n');
 };
 
 /**

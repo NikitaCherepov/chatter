@@ -1,4 +1,6 @@
 ﻿import crypto from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
 import net from 'node:net';
 import { lookup } from 'node:dns/promises';
 import { simpleParser } from 'mailparser';
@@ -6,6 +8,8 @@ import { db } from '../db.js';
 import { getUserById } from './chats.js';
 import { getEncryptionKey } from '../utils/encryption.js';
 import { wrapUntrustedContent } from './web-reader.js';
+import { resolveAttachmentFile } from './attachment-storage.js';
+import type { MessageAttachment } from '../types.js';
 
 export type MailProvider = 'yandex' | 'google' | 'custom';
 
@@ -29,6 +33,82 @@ const ENCRYPTION_IV_LENGTH = 16;
 const EMAIL_PASSWORD_DELIMITER = '::';
 export const MAIL_RESULTS_HARD_LIMIT = 50;
 export const MAIL_RESULTS_DEFAULT_LIMIT = 10;
+export const MAX_EMAIL_ATTACHMENTS = 5;
+export const MAX_EMAIL_ATTACHMENTS_BYTES = 18 * 1024 * 1024;
+
+export type ResolvedEmailAttachment = {
+  url: string;
+  filename: string;
+  name: string;
+  mimeType: string;
+  sizeBytes: number;
+  sha256: string;
+};
+
+const hashFileSha256 = async (filepath: string): Promise<string> => {
+  const content = await fs.promises.readFile(filepath);
+  return crypto.createHash('sha256').update(content).digest('hex');
+};
+
+export const resolveEmailAttachmentsForUser = async (
+  userId: number,
+  attachmentUrls: string[],
+): Promise<ResolvedEmailAttachment[]> => {
+  const urls = [...new Set(attachmentUrls.map(value => `${value || ''}`.trim()).filter(Boolean))];
+  if (urls.length > MAX_EMAIL_ATTACHMENTS) throw new Error('too_many_email_attachments');
+
+  const resolved: ResolvedEmailAttachment[] = [];
+  let totalBytes = 0;
+
+  for (const url of urls) {
+    const match = url.match(/^\/api\/v1\/attachments\/([^/?#]+)(?:[?#].*)?$/);
+    if (!match) throw new Error('invalid_email_attachment_url');
+
+    let filename = '';
+    try {
+      filename = decodeURIComponent(match[1]);
+    } catch {
+      throw new Error('invalid_email_attachment_url');
+    }
+    if (!filename || filename !== path.basename(filename)) throw new Error('invalid_email_attachment_url');
+
+    const rows = db.prepare(`
+      SELECT attachments
+      FROM chat_messages
+      WHERE user_id = ? AND attachments IS NOT NULL AND attachments LIKE ?
+    `).all(userId, `%${filename}%`) as Array<{ attachments: string }>;
+
+    let attachment: MessageAttachment | undefined;
+    for (const row of rows) {
+      try {
+        const parsed = JSON.parse(row.attachments) as MessageAttachment[];
+        if (!Array.isArray(parsed)) continue;
+        attachment = parsed.find(item => item.filename === filename && item.url === url);
+        if (attachment) break;
+      } catch { /* ignore invalid legacy rows */ }
+    }
+    if (!attachment) throw new Error('email_attachment_not_owned');
+
+    const filepath = resolveAttachmentFile(filename);
+    if (!filepath) throw new Error('email_attachment_not_found');
+    const stat = await fs.promises.stat(filepath);
+    if (!stat.isFile() || stat.size !== attachment.size_bytes) throw new Error('email_attachment_changed');
+
+    totalBytes += stat.size;
+    if (totalBytes > MAX_EMAIL_ATTACHMENTS_BYTES) throw new Error('email_attachments_too_large');
+
+    resolved.push({
+      url,
+      filename,
+      name: attachment.name,
+      mimeType: attachment.mime_type || 'application/octet-stream',
+      sizeBytes: stat.size,
+      sha256: await hashFileSha256(filepath),
+    });
+  }
+
+  return resolved;
+};
 
 export type MailConnectionConfig = {
   login: string;
@@ -651,7 +731,15 @@ export const deleteAllMailAccounts = (userId: number) => db
 
 export { encryptSecret, getMailAccountsForUser, getMailAccountById, getMailAccountForUser, normalizeMailProvider };
 
-export const runEmailSend = async (userId: number, to: string, subject: string, body: string, provider?: string, mailAccountId?: number ) => {
+export const runEmailSend = async (
+  userId: number,
+  to: string,
+  subject: string,
+  body: string,
+  provider?: string,
+  mailAccountId?: number,
+  attachments: ResolvedEmailAttachment[] = [],
+) => {
   const user = getUserById(userId);
   if (!user) return 'Ошибка: пользователь не найден.';
   const account = resolveUserMailAccount(userId, provider, mailAccountId);
@@ -668,6 +756,17 @@ export const runEmailSend = async (userId: number, to: string, subject: string, 
   const normalizedBody = (body || '').trim();
   if (!normalizedTo || !normalizedSubject || !normalizedBody) {
     return 'Ошибка: нужны to, subject и body.';
+  }
+
+  const verifiedAttachments = await resolveEmailAttachmentsForUser(
+    userId,
+    attachments.map(attachment => attachment.url),
+  );
+  if (verifiedAttachments.length !== attachments.length) throw new Error('email_attachment_changed');
+  for (let index = 0; index < attachments.length; index += 1) {
+    if (verifiedAttachments[index].sha256 !== attachments[index].sha256) {
+      throw new Error('email_attachment_changed');
+    }
   }
 
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -696,7 +795,12 @@ export const runEmailSend = async (userId: number, to: string, subject: string, 
       to: normalizedTo,
       subject: normalizedSubject,
       text: normalizedBody,
-      html: normalizedBody
+      html: normalizedBody,
+      attachments: verifiedAttachments.map(attachment => ({
+        filename: attachment.name,
+        path: resolveAttachmentFile(attachment.filename)!,
+        contentType: attachment.mimeType,
+      })),
     });
     return `✅ Письмо успешно отправлено на ${normalizedTo}`;
   } catch (err: any) {

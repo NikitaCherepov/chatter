@@ -77,6 +77,10 @@ export type MessageAttachment = {
   extracted_text: string;
   url: string;
   filename: string;
+  /** Extracted text metadata. Optional for attachments saved before this feature. */
+  char_count?: number;
+  estimated_tokens?: number;
+  chunk_count?: number;
 };
 
 export type MessageAudio = {

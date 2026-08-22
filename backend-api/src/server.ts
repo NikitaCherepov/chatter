@@ -33,6 +33,7 @@ import {
   startOpenRouterMonitor, restartOpenRouterMonitor, sendTestNotification,
 } from './services/openrouter-monitor.js';
 import { getOpenRouterMonitoredModels } from './services/ai.js';
+import { saveParsedChatAttachment } from './services/chat-attachments.js';
 import { runVoiceTurn } from './services/voice.js';
 import { runPhotoAnalyzeTurn } from './services/photo.js';
 import { migratePendingAccountNamespaces, VectorMemoryService } from './services/vector-memory.js';
@@ -52,7 +53,7 @@ import {
 } from './services/plan-limits.js';
 import { resolveImageFile, getUploadsDir } from './services/image-storage.js';
 import { resolveAttachmentFile, MAX_RAW_FILE_SIZE as MAX_ATTACHMENT_BYTES } from './services/attachment-storage.js';
-import { parseDocument, guessMimeType, SUPPORTED_EXTENSIONS } from './services/document-parser.js';
+import { parseDocument, SUPPORTED_EXTENSIONS } from './services/document-parser.js';
 import { resolveAudioFile, saveTtsAudio } from './services/audio-storage.js';
 import { isCartesiaConfigured, fetchCartesiaVoices, generateTtsAudio } from './services/tts-cartesia.js';
 import type { DesktopActionPayload, UserRecord } from './types.js';
@@ -454,7 +455,6 @@ app.post('/internal/ai/send', internalAuth, async (req, res) => {
   let savedUserAttachmentsInternal: any[] | null = null;
   if (documentsRawInternal.length > 0) {
     try {
-      const { saveUserDocument } = await import('./services/attachment-storage.js');
       const saved: any[] = [];
       for (const doc of documentsRawInternal) {
         const base64 = `${doc?.base64 || ''}`.trim();
@@ -470,15 +470,7 @@ app.post('/internal/ai/send', internalAuth, async (req, res) => {
           return res.status(400).json({ error: 'unsupported_document_format', filename, ext });
         }
         const extractedText = await parseDocument(buf, filename);
-        const stored = await saveUserDocument(buf, filename);
-        saved.push({
-          name: filename,
-          size_bytes: buf.length,
-          mime_type: guessMimeType(filename),
-          extracted_text: extractedText,
-          url: stored.url,
-          filename: stored.filename,
-        });
+        saved.push(await saveParsedChatAttachment(buf, filename, extractedText));
       }
       savedUserAttachmentsInternal = saved.length > 0 ? saved : null;
     } catch (err: any) {
@@ -547,7 +539,6 @@ app.post('/internal/ai/stream', internalAuth, async (req: any, res: any) => {
   let savedUserAttachmentsStream: any[] | null = null;
   if (documentsRawStream.length > 0) {
     try {
-      const { saveUserDocument } = await import('./services/attachment-storage.js');
       const saved: any[] = [];
       for (const doc of documentsRawStream) {
         const base64 = `${doc?.base64 || ''}`.trim();
@@ -563,15 +554,7 @@ app.post('/internal/ai/stream', internalAuth, async (req: any, res: any) => {
           return res.status(400).json({ error: 'unsupported_document_format', filename, ext });
         }
         const extractedText = await parseDocument(buf, filename);
-        const stored = await saveUserDocument(buf, filename);
-        saved.push({
-          name: filename,
-          size_bytes: buf.length,
-          mime_type: guessMimeType(filename),
-          extracted_text: extractedText,
-          url: stored.url,
-          filename: stored.filename,
-        });
+        saved.push(await saveParsedChatAttachment(buf, filename, extractedText));
       }
       savedUserAttachmentsStream = saved.length > 0 ? saved : null;
     } catch (err: any) {
@@ -2250,7 +2233,6 @@ app.post('/api/v1/chat/send', async (req: AuthedRequest, res) => {
   let savedUserAttachments: any[] | null = null;
   if (documentsRaw.length > 0) {
     try {
-      const { saveUserDocument } = await import('./services/attachment-storage.js');
       const saved: any[] = [];
       for (const doc of documentsRaw) {
         const base64 = `${doc?.base64 || ''}`.trim();
@@ -2266,15 +2248,7 @@ app.post('/api/v1/chat/send', async (req: AuthedRequest, res) => {
           return res.status(400).json({ error: 'unsupported_document_format', filename, ext });
         }
         const extractedText = await parseDocument(buf, filename);
-        const stored = await saveUserDocument(buf, filename);
-        saved.push({
-          name: filename,
-          size_bytes: buf.length,
-          mime_type: guessMimeType(filename),
-          extracted_text: extractedText,
-          url: stored.url,
-          filename: stored.filename,
-        });
+        saved.push(await saveParsedChatAttachment(buf, filename, extractedText));
       }
       savedUserAttachments = saved.length > 0 ? saved : null;
     } catch (err: any) {
@@ -5805,7 +5779,7 @@ app.post('/api/v1/email/approve', async (req: AuthedRequest, res: any) => {
   try {
     deletePendingEmailConfirmation(confirmationId);
     notifyConfirmationResolved(userId, confirmationId, 'executing');
-    const result = await runEmailSend(userId, pending.to, pending.subject, pending.body, pending.provider, pending.mailAccountId);
+    const result = await runEmailSend(userId, pending.to, pending.subject, pending.body, pending.provider, pending.mailAccountId, pending.attachments);
     pending.resolve(result);
     notifyConfirmationResolved(userId, confirmationId, 'executed');
     return res.json({ ok: true, status: 'sent', result });
@@ -6265,7 +6239,7 @@ app.post('/internal/email/approve', internalAuth, async (req, res) => {
   try {
     deletePendingEmailConfirmation(confirmationId);
     notifyConfirmationResolved(userId, confirmationId, 'executing');
-    const result = await runEmailSend(pending.userId, pending.to, pending.subject, pending.body, pending.provider, pending.mailAccountId);
+    const result = await runEmailSend(pending.userId, pending.to, pending.subject, pending.body, pending.provider, pending.mailAccountId, pending.attachments);
     pending.resolve(result);
     notifyConfirmationResolved(userId, confirmationId, 'executed');
     return res.json({ ok: true, status: 'sent', result });
@@ -6728,7 +6702,6 @@ async function handleWsChatSend(client: WsClient, msg: any) {
   const documentsRaw: Array<any> = Array.isArray(documents) ? documents : [];
   if (documentsRaw.length > 0) {
     try {
-      const { saveUserDocument } = await import('./services/attachment-storage.js');
       const saved: any[] = [];
       for (const doc of documentsRaw) {
         const base64 = `${doc?.base64 || ''}`.trim();
@@ -6746,15 +6719,7 @@ async function handleWsChatSend(client: WsClient, msg: any) {
           return;
         }
         const extractedText = await parseDocument(buf, filename);
-        const stored = await saveUserDocument(buf, filename);
-        saved.push({
-          name: filename,
-          size_bytes: buf.length,
-          mime_type: guessMimeType(filename),
-          extracted_text: extractedText,
-          url: stored.url,
-          filename: stored.filename,
-        });
+        saved.push(await saveParsedChatAttachment(buf, filename, extractedText));
       }
       savedUserAttachments = saved.length > 0 ? saved : null;
     } catch (err: any) {

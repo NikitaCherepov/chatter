@@ -6553,6 +6553,7 @@ const processUserTextThroughAi = async (
                     const toAddr = action.value.to || '';
                     const subject = action.value.subject || '';
                     const bodyPreview = (action.value.body || '').slice(0, 1000);
+                    const attachments = Array.isArray(action.value.attachments) ? action.value.attachments : [];
                     const keyboard = Markup.inlineKeyboard([
                         [
                             Markup.button.callback(ctx.t('generated.sendButton'), `email:allow:${confirmationId}`),
@@ -6563,17 +6564,29 @@ const processUserTextThroughAi = async (
                         ]
                     ]);
                     const fromLine = fromAddr ? ctx.t('desktopActions.email.fromLine', { address: fromAddr }) : '';
+                    const attachmentItems = attachments.map((attachment: any) => {
+                        const name = `${attachment?.name || 'attachment'}`.replace(/([_*\[\]`])/g, '\\$1');
+                        const sizeBytes = Number(attachment?.size_bytes) || 0;
+                        const size = sizeBytes >= 1024 * 1024
+                            ? `${(sizeBytes / (1024 * 1024)).toFixed(1)} MB`
+                            : `${Math.max(1, Math.ceil(sizeBytes / 1024))} KB`;
+                        return `• ${name} (${size})`;
+                    }).join('\n');
+                    const attachmentsLine = attachmentItems
+                        ? ctx.t('desktopActions.email.attachmentsLine', { attachments: attachmentItems })
+                        : '';
                     const msgText = ctx.t('desktopActions.email.confirmationMarkdown', {
                         fromLine,
                         to: toAddr,
                         subject,
+                        attachmentsLine,
                         body: bodyPreview.replace(/```/g, "'''")
                     });
                     try {
                         await ctx.reply(msgText, { parse_mode: 'Markdown', ...keyboard });
                     } catch {
                         try {
-                            await ctx.reply(ctx.t('generated.emailSendConfirmation', { fromLine: fromLine, toAddr: toAddr, subject: subject, bodyPreview: bodyPreview }), keyboard);
+                            await ctx.reply(`${ctx.t('generated.emailSendConfirmation', { fromLine: fromLine, toAddr: toAddr, subject: subject, bodyPreview: bodyPreview })}${attachmentsLine}`, keyboard);
                         } catch {
                             // ignore
                         }

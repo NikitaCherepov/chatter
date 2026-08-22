@@ -581,7 +581,8 @@
       "title": "Отправка письма",
       "from": "От:",
       "to": "Кому:",
-      "subject": "Тема:"
+      "subject": "Тема:",
+      "attachments": "Вложения:"
     },
     "browserDownload": {
       "confirmTitle": "Скачать файл?",

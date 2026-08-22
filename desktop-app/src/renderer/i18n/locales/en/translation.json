@@ -581,7 +581,8 @@
       "title": "Send email",
       "from": "From:",
       "to": "To:",
-      "subject": "Subject:"
+      "subject": "Subject:",
+      "attachments": "Attachments:"
     },
     "browserDownload": {
       "confirmTitle": "Download file?",

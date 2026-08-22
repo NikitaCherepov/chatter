@@ -4,12 +4,14 @@
  */
 
 import { sendToDesktop } from '../ws-clients.js';
+import type { ResolvedEmailAttachment } from './mail.js';
 
 export type PendingEmailConfirmation = {
   userId: number;
   to: string;
   subject: string;
   body: string;
+  attachments: ResolvedEmailAttachment[];
   provider?: string;
   mailAccountId?: number;
   resolve: (result: any) => void;

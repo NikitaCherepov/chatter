@@ -1137,7 +1137,14 @@ export function ChatPage() {
   const autoApprovingFileIdsRef = useRef(new Set<string>());
   const autoApprovedFileIdsRef = useRef(new Set<string>());
   const [webcamCaptureConfirmations, setWebcamCaptureConfirmations] = useState<Array<{ confirmation_id: string; purpose: string; camera_name: string }>>([]);
-  const [emailConfirmations, setEmailConfirmations] = useState<Array<{ confirmation_id: string; from: string; to: string; subject: string; body: string }>>([]);
+  const [emailConfirmations, setEmailConfirmations] = useState<Array<{
+    confirmation_id: string;
+    from: string;
+    to: string;
+    subject: string;
+    body: string;
+    attachments: Array<{ url: string; name: string; mime_type: string; size_bytes: number }>;
+  }>>([]);
   const [modelsCatalog, setModelsCatalog] = useState<api.ModelCatalogEntry[]>([]);
   const [preferredModel, setPreferredModel] = useState<string | null>(null);
   const [reasoningLevel, setReasoningLevel] = useState<api.ReasoningLevel | null>(null);
@@ -1964,7 +1971,14 @@ export function ChatPage() {
     }
 
     if (action.action === 'email_confirmation' && action.value) {
-      const val = action.value as { confirmation_id?: string; from?: string; to?: string; subject?: string; body?: string };
+      const val = action.value as {
+        confirmation_id?: string;
+        from?: string;
+        to?: string;
+        subject?: string;
+        body?: string;
+        attachments?: Array<{ url?: string; name?: string; mime_type?: string; size_bytes?: number }>;
+      };
       if (val.confirmation_id && val.to && val.subject && val.body) {
         setEmailConfirmations(prev => {
           if (prev.some(c => c.confirmation_id === val.confirmation_id)) return prev;
@@ -1974,6 +1988,16 @@ export function ChatPage() {
             to: val.to!,
             subject: val.subject!,
             body: val.body!,
+            attachments: Array.isArray(val.attachments)
+              ? val.attachments
+                .filter(attachment => Boolean(attachment.url && attachment.name))
+                .map(attachment => ({
+                  url: attachment.url!,
+                  name: attachment.name!,
+                  mime_type: attachment.mime_type || 'application/octet-stream',
+                  size_bytes: Number(attachment.size_bytes) || 0,
+                }))
+              : [],
           }];
         });
       }
@@ -6021,6 +6045,42 @@ export function ChatPage() {
                   <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '6px' }}>
                     {t('chat.email.subject')} <span style={{ color: 'var(--text-primary)' }}>{conf.subject}</span>
                   </div>
+                  {conf.attachments.length > 0 && (
+                    <div style={{ marginBottom: '8px' }}>
+                      <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px' }}>
+                        {t('chat.email.attachments')}
+                      </div>
+                      {conf.attachments.map(attachment => (
+                        <button
+                          key={attachment.url}
+                          type="button"
+                          title={t('common.download')}
+                          onClick={() => handleDownloadImage(resolveImageUrl(attachment.url))}
+                          style={{
+                            display: 'flex',
+                            width: '100%',
+                            justifyContent: 'space-between',
+                            gap: '8px',
+                            padding: '6px 8px',
+                            marginBottom: '4px',
+                            border: '1px solid var(--border-color)',
+                            borderRadius: '6px',
+                            background: 'var(--bg-modal-hover)',
+                            color: 'var(--text-primary)',
+                            cursor: 'pointer',
+                            textAlign: 'left',
+                          }}
+                        >
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{attachment.name}</span>
+                          <span style={{ flexShrink: 0, color: 'var(--text-muted)' }}>
+                            {attachment.size_bytes >= 1024 * 1024
+                              ? `${(attachment.size_bytes / (1024 * 1024)).toFixed(1)} MB`
+                              : `${Math.max(1, Math.ceil(attachment.size_bytes / 1024))} KB`}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                   <div style={{ fontSize: '12px', padding: '8px', background: 'var(--bg-modal-hover)', borderRadius: '6px', maxHeight: '200px', overflowY: 'auto' }}>
                     <MarkdownRenderer content={conf.body} />
                   </div>
