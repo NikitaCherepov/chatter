@@ -17,13 +17,90 @@ const TEXT_EXTENSIONS = new Set([
 
 const DOCX_EXTENSIONS = new Set(['docx']);
 const PDF_EXTENSIONS = new Set(['pdf']);
+const SPREADSHEET_EXTENSIONS = new Set(['xlsx']);
 
 /** Combined set for validation/UI */
 export const SUPPORTED_EXTENSIONS = new Set([
   ...TEXT_EXTENSIONS,
   ...DOCX_EXTENSIONS,
   ...PDF_EXTENSIONS,
+  ...SPREADSHEET_EXTENSIONS,
 ]);
+
+const SPREADSHEET_OUTPUT_RESERVE = 256;
+const MAX_SPREADSHEET_COLUMNS = 100;
+const MAX_SPREADSHEET_CELL_CHARS = 2_000;
+
+const excelColumnName = (index: number): string => {
+  let value = index + 1;
+  let name = '';
+  while (value > 0) {
+    value -= 1;
+    name = String.fromCharCode(65 + (value % 26)) + name;
+    value = Math.floor(value / 26);
+  }
+  return name;
+};
+
+const markdownCell = (value: unknown): string => {
+  const text = value instanceof Date
+    ? value.toISOString()
+    : value == null
+      ? ''
+      : String(value);
+  const trimmed = text.length > MAX_SPREADSHEET_CELL_CHARS
+    ? `${text.slice(0, MAX_SPREADSHEET_CELL_CHARS)}…`
+    : text;
+  return trimmed
+    .replace(/\\/g, '\\\\')
+    .replace(/([`*_{}\[\]()<>|])/g, '\\$1')
+    .replace(/\r?\n/g, ' ');
+};
+
+const spreadsheetToMarkdown = (
+  sheets: Array<{ sheet: string; data: Array<Array<unknown>> }>,
+): string => {
+  const chunks: string[] = [];
+  let outputLength = 0;
+  let truncated = false;
+  const outputLimit = MAX_EXTRACTED_TEXT_CHARS - SPREADSHEET_OUTPUT_RESERVE;
+  const append = (text: string): boolean => {
+    if (outputLength + text.length > outputLimit) {
+      truncated = true;
+      return false;
+    }
+    chunks.push(text);
+    outputLength += text.length;
+    return true;
+  };
+
+  outer: for (const sheet of sheets) {
+    if (!append(`## Sheet: ${markdownCell(sheet.sheet)}\n\n`)) break;
+    const columnCount = Math.min(
+      MAX_SPREADSHEET_COLUMNS,
+      sheet.data.reduce((max, row) => Math.max(max, row.length), 0),
+    );
+    if (columnCount === 0) {
+      if (!append('_Empty sheet_\n\n')) break;
+      continue;
+    }
+
+    if (!append(`| ${Array.from({ length: columnCount }, (_, index) => excelColumnName(index)).join(' | ')} |\n`)) break;
+    if (!append(`| ${Array.from({ length: columnCount }, () => '---').join(' | ')} |\n`)) break;
+
+    for (const row of sheet.data) {
+      const values = Array.from(
+        { length: columnCount },
+        (_, index) => markdownCell(row[index]),
+      );
+      if (!append(`| ${values.join(' | ')} |\n`)) break outer;
+    }
+    if (!append('\n')) break;
+  }
+
+  if (truncated) chunks.push('\n_Spreadsheet preview was truncated because it exceeded the document text limit._\n');
+  return chunks.join('');
+};
 
 /**
  * Returns lowercase extension (without dot) of a filename, or '' if none.
@@ -52,6 +129,7 @@ const clampText = (text: string): string => {
  *  - txt/md/json/csv/log/xml/yaml/code/etc → UTF-8 as-is
  *  - docx → mammoth.extractRawText
  *  - pdf  → pdf-parse
+ *  - xlsx → Markdown tables for every sheet
  *
  * Throws on unknown extension or parse failure.
  */
@@ -88,6 +166,10 @@ export const parseDocument = async (
     } finally {
       await parser.destroy();
     }
+  } else if (SPREADSHEET_EXTENSIONS.has(ext)) {
+    const { default: readXlsxFile } = await import('read-excel-file/node');
+    const sheets = await readXlsxFile(buffer);
+    raw = spreadsheetToMarkdown(sheets);
   } else {
     // defensive
     throw new Error(`Неподдерживаемый формат документа: .${ext}`);
@@ -154,6 +236,7 @@ export const guessMimeType = (filename: string): string => {
     rtf: 'application/rtf',
     docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     pdf: 'application/pdf',
+    xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   };
   return map[ext] || 'application/octet-stream';
 };

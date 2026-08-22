@@ -37,7 +37,7 @@ const ALLOWED_DOC_EXTENSIONS = [
   'sh', 'bash', 'zsh', 'fish', 'bat', 'ps1',
   'sql', 'graphql', 'gql',
   'html', 'htm', 'css', 'scss', 'sass', 'less',
-  'rtf', 'docx', 'pdf',
+  'rtf', 'docx', 'pdf', 'xlsx',
 ];
 
 const MAX_DOC_SIZE = 5 * 1024 * 1024; // 5 MB

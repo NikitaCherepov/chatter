@@ -288,6 +288,22 @@ const isDocxAttachment = (attachment: api.MessageAttachment) =>
   attachment.mime_type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
   || attachment.name.toLowerCase().endsWith('.docx');
 
+const isSpreadsheetAttachment = (attachment: api.MessageAttachment) =>
+  attachment.mime_type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  || attachment.name.toLowerCase().endsWith('.xlsx');
+
+const formatTextAttachment = (attachment: api.MessageAttachment): string => {
+  const isJson = attachment.mime_type === 'application/json'
+    || attachment.name.toLowerCase().endsWith('.json');
+  if (!isJson) return attachment.extracted_text;
+
+  try {
+    return JSON.stringify(JSON.parse(attachment.extracted_text), null, 2);
+  } catch {
+    return attachment.extracted_text;
+  }
+};
+
 const ATTACHMENT_PREVIEW_CACHE_MAX_BYTES = 64 * 1024 * 1024;
 const attachmentPreviewCache = new Map<string, Uint8Array>();
 let attachmentPreviewCacheBytes = 0;
@@ -7485,8 +7501,12 @@ export function ChatPage() {
                     loadingLabel={t('common.loading')}
                     errorLabel={t('chat.attachmentPreview.loadFailed')}
                   />
+                ) : viewerAttachment.extracted_text && isSpreadsheetAttachment(viewerAttachment) ? (
+                  <div className={s.documentViewerSpreadsheet}>
+                    <MarkdownRenderer content={viewerAttachment.extracted_text} />
+                  </div>
                 ) : viewerAttachment.extracted_text ? (
-                  <pre className={s.documentViewerText}>{viewerAttachment.extracted_text}</pre>
+                  <pre className={s.documentViewerText}>{formatTextAttachment(viewerAttachment)}</pre>
                 ) : (
                   <div className={s.documentViewerEmpty}>{t('chat.attachmentPreview.unavailable')}</div>
                 )}
