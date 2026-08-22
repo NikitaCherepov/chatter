@@ -145,7 +145,8 @@
     "input": {
       "empty": "Prompt text cannot be empty or be a command.",
       "tooLong": "Too long: {{length}} characters. Limit: {{limit}}.",
-      "saved": "Custom prompt saved and selected."
+      "saved": "Custom prompt saved and selected.",
+      "progress": "✅ Received: {{length}} / {{limit}} characters.\nSend the next part or /done to save. /cancel to cancel."
     }
   },
   "model": {

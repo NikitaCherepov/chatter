@@ -2777,7 +2777,7 @@ app.post('/api/v1/prompts/custom', (req: AuthedRequest, res) => {
   const description = `${req.body?.description || ''}`.trim();
   const content = `${req.body?.content || ''}`;
   if (!name) return res.status(400).json({ error: 'name_required' });
-  if (content.length > 10000) return res.status(400).json({ error: 'content_too_long' });
+  if (content.length > 20000) return res.status(400).json({ error: 'content_too_long' });
 
   const result = createUserPrompt(userId, name, description, content);
   const newRowId = Number(result.lastInsertRowid);
@@ -2811,7 +2811,7 @@ app.put('/api/v1/prompts/custom/:selectedId', (req: AuthedRequest, res) => {
   }
   if (req.body?.content !== undefined) {
     const content = `${req.body.content}`;
-    if (content.length > 10000) return res.status(400).json({ error: 'content_too_long' });
+    if (content.length > 20000) return res.status(400).json({ error: 'content_too_long' });
     fields.content = content;
   }
 

@@ -81,7 +81,8 @@ const AUTO_SYNC_PLAN_LIMITS_ON_BOOT = process.env.AUTO_SYNC_PLAN_LIMITS_ON_BOOT 
 const MAX_PENDING_TASKS_PER_USER = 10;
 const PAGE_SIZE = 10;
 const CUSTOM_PROMPT_ID = -1;
-const MAX_CUSTOM_PROMPT_LENGTH = 800;
+const MAX_CUSTOM_PROMPT_LENGTH = 20000;
+const customPromptBuffers = new Map<number, string>();
 const NOTES_WEBAPP_URL = (process.env.NOTES_WEBAPP_URL || '').trim();
 const NOTE_QUERY_MAX_LENGTH = 120;
 const NOTES_PAGE_SIZE_DEFAULT = 10;
@@ -6948,27 +6949,55 @@ bot.on('text', async (ctx) => {
 
         const customPromptFlow = customPromptEditFlows.get(userId);
         if (customPromptFlow === 'await_content') {
+            const lowered = (userText || '').trim().toLowerCase();
+            const isFinish = lowered === '/done' || lowered === 'done' || lowered === 'готово';
+            const isCancel = lowered === '/cancel' || lowered === 'отмена' || lowered === 'cancel';
+
+            if (isCancel) {
+                customPromptEditFlows.delete(userId);
+                customPromptBuffers.delete(userId);
+                return ctx.reply(ctx.t('prompt.cancelled'));
+            }
+
+            if (isFinish) {
+                const buffer = (customPromptBuffers.get(userId) || '').trim();
+                customPromptEditFlows.delete(userId);
+                customPromptBuffers.delete(userId);
+                if (!buffer) {
+                    return ctx.reply(ctx.t('prompt.input.empty'));
+                }
+
+                const userRecord = await getUser(userId);
+                if (!userRecord) {
+                    return ctx.reply(ctx.t('common.userMissingAgain'));
+                }
+
+                await updateUserCustomPrompt(userId, buffer);
+                try { await runBackendUpdateCustomPrompt(userId, buffer); } catch {}
+                await selectUserCustomPrompt(userId);
+                return ctx.reply(ctx.t('prompt.input.saved'), buildMenuTriggerKeyboard(ctx.t));
+            }
+
             if (!userText || userText.startsWith('/')) {
                 return ctx.reply(ctx.t('prompt.input.empty'));
             }
-            if (userText.length > MAX_CUSTOM_PROMPT_LENGTH) {
+
+            const prev = customPromptBuffers.get(userId) || '';
+            const combined = prev ? `${prev}\n${userText}` : userText;
+            if (combined.length > MAX_CUSTOM_PROMPT_LENGTH) {
+                customPromptBuffers.delete(userId);
+                customPromptEditFlows.delete(userId);
                 return ctx.reply(ctx.t('prompt.input.tooLong', {
-                    length: userText.length,
+                    length: combined.length,
                     limit: MAX_CUSTOM_PROMPT_LENGTH
                 }));
             }
 
-            const userRecord = await getUser(userId);
-            if (!userRecord) {
-                customPromptEditFlows.delete(userId);
-                return ctx.reply(ctx.t('common.userMissingAgain'));
-            }
-
-            await updateUserCustomPrompt(userId, userText.trim());
-            try { await runBackendUpdateCustomPrompt(userId, userText.trim()); } catch {}
-            await selectUserCustomPrompt(userId);
-            customPromptEditFlows.delete(userId);
-            return ctx.reply(ctx.t('prompt.input.saved'), buildMenuTriggerKeyboard(ctx.t));
+            customPromptBuffers.set(userId, combined);
+            return ctx.reply(ctx.t('prompt.input.progress', {
+                length: combined.length,
+                limit: MAX_CUSTOM_PROMPT_LENGTH
+            }));
         }
     }
 

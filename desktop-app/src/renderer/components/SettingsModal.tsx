@@ -1251,10 +1251,10 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
                       <textarea
                         className={s.textareaInput}
                         value={customContent}
-                        onChange={(e) => setCustomContent(e.target.value.slice(0, 10000))}
+                        onChange={(e) => setCustomContent(e.target.value.slice(0, 20000))}
                         placeholder={t('settings.prompt.textPlaceholder')}
                         rows={6}
-                        maxLength={10000}
+                        maxLength={20000}
                       />
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
                         <div style={{ display: 'flex', gap: '8px' }}>
@@ -1276,8 +1276,8 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
                             </button>
                           )}
                         </div>
-                        <span style={{ fontSize: '11px', color: customContent.length >= 10000 ? '#e74c3c' : 'var(--text-hint)' }}>
-                          {customContent.length} / 10000
+                        <span style={{ fontSize: '11px', color: customContent.length >= 20000 ? '#e74c3c' : 'var(--text-hint)' }}>
+                          {customContent.length} / 20000
                         </span>
                       </div>
 
