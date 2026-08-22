@@ -1459,45 +1459,62 @@ export const getChatMedia = (userId: number, chatId: number, limit = 100, offset
 export const getAllUserMedia = (userId: number, limit = 100, offset = 0): ChatMediaItem[] => {
   const safeLimit = Math.max(1, Math.min(500, Math.floor(limit)));
   const safeOffset = Math.max(0, Math.floor(offset));
-  // Берём с запасом по строкам — одна строка может содержать несколько картинок
-  const rowLimit = safeOffset + safeLimit + 50;
-  // Own images + everything shared in rooms this user can read (owner or
-  // member). The chat title is taken from the VIEWER's own chat entry.
+  // Expand image arrays before pagination and keep the oldest surviving
+  // reference for each URL. Forks share image files, so this prevents one
+  // physical image from appearing multiple times in the all-chats gallery.
   const rows = db.prepare(`
-    SELECT cm.id, cm.images, cm.created_at, cm.chat_id, uc.title AS chat_title
-    FROM chat_messages cm
-    LEFT JOIN user_chats uc ON uc.id = cm.chat_id AND uc.user_id = ?
-    WHERE (cm.user_id = ? OR cm.chat_id IN (
-        SELECT rc.id FROM user_chats rc
-        WHERE rc.room_enabled = 1
-          AND (rc.user_id = ? OR EXISTS (SELECT 1 FROM chat_members m WHERE m.chat_id = rc.id AND m.user_id = ?))
-      ))
-      AND cm.images IS NOT NULL AND cm.images != ''
-    ORDER BY cm.id DESC
-    LIMIT ?
-  `).all(userId, userId, userId, userId, rowLimit) as Array<{ id: number; images: string; created_at: string; chat_id: number; chat_title: string | null }>;
+    WITH expanded_media AS (
+      SELECT
+        cm.id AS message_id,
+        cm.chat_id,
+        cm.created_at,
+        uc.title AS chat_title,
+        json_extract(image.value, '$.url') AS url,
+        json_extract(image.value, '$.type') AS type
+      FROM chat_messages cm
+      LEFT JOIN user_chats uc ON uc.id = cm.chat_id AND uc.user_id = ?
+      JOIN json_each(CASE WHEN json_valid(cm.images) THEN cm.images ELSE '[]' END) image
+      WHERE (cm.user_id = ? OR cm.chat_id IN (
+          SELECT rc.id FROM user_chats rc
+          WHERE rc.room_enabled = 1
+            AND (rc.user_id = ? OR EXISTS (
+              SELECT 1 FROM chat_members m WHERE m.chat_id = rc.id AND m.user_id = ?
+            ))
+        ))
+        AND cm.images IS NOT NULL
+        AND cm.images != ''
+        AND json_type(image.value) = 'object'
+        AND COALESCE(json_extract(image.value, '$.url'), '') != ''
+    ), ranked_media AS (
+      SELECT *, ROW_NUMBER() OVER (
+        PARTITION BY url
+        ORDER BY message_id ASC
+      ) AS reference_rank
+      FROM expanded_media
+    )
+    SELECT message_id, chat_id, created_at, chat_title, url, type
+    FROM ranked_media
+    WHERE reference_rank = 1
+    ORDER BY message_id DESC
+    LIMIT ? OFFSET ?
+  `).all(userId, userId, userId, userId, safeLimit, safeOffset) as Array<{
+    message_id: number;
+    chat_id: number;
+    created_at: string;
+    chat_title: string | null;
+    url: string;
+    type: MessageImage['type'];
+  }>;
 
   const userLanguage = (db.prepare('SELECT language FROM users WHERE id = ?').get(userId) as { language: string | null } | undefined)?.language;
-  const items: ChatMediaItem[] = [];
-  for (const row of rows) {
-    try {
-      const imgs = JSON.parse(row.images) as MessageImage[];
-      for (const img of imgs) {
-        if (img.url) {
-          items.push({
-            message_id: row.id,
-            url: img.url,
-            type: img.type,
-            created_at: toUnix(row.created_at),
-            chat_id: row.chat_id,
-            chat_title: row.chat_title || formatAutomaticChatTitle(userLanguage, row.chat_id),
-          });
-        }
-      }
-    } catch { /* skip invalid JSON */ }
-  }
-  // Обрезаем по реальному количеству изображений
-  return items.slice(safeOffset, safeOffset + safeLimit);
+  return rows.map(row => ({
+    message_id: row.message_id,
+    url: row.url,
+    type: row.type,
+    created_at: toUnix(row.created_at),
+    chat_id: row.chat_id,
+    chat_title: row.chat_title || formatAutomaticChatTitle(userLanguage, row.chat_id),
+  }));
 };
 
 /**
