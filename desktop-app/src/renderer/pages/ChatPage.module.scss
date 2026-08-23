@@ -1843,11 +1843,10 @@
 
 .reasoningPanel {
   position: absolute;
-  top: 0;
   left: 0;
   right: 0;
+  top: 0;
   z-index: 30;
-  width: 100%;
   padding: 10px 12px;
   border: 1px solid var(--border-light);
   border-radius: 8px;
@@ -1860,6 +1859,12 @@
   word-break: break-word;
   box-shadow: var(--shadow-card);
   transform-origin: top left;
+}
+
+.reasoningPanelUp {
+  top: auto;
+  bottom: calc(100% + 26px);
+  transform-origin: bottom left;
 }
 
 .toolCallList {
