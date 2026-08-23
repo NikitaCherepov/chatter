@@ -110,6 +110,7 @@ Siempre puedes ver si alguien ha compartido tu clave, y puedes revocarla en cual
    - Un buscador de modelos para OpenRouter esta integrado en el panel de administracion.
    - La lista de proveedores se completa automaticamente cuando seleccionas un modelo. Quieres que las solicitudes vayan solo a un proveedor especifico? Solo seleccionalo del menu desplegable.
    - Los precios de tokens de entrada/salida/cache se establecen automaticamente al seleccionar un modelo.
+   - Los proveedores de OpenRouter seleccionados pueden supervisarse automáticamente. Chatter puede avisar a los administradores si un proveedor desaparece o cambia sus precios y cambiar a la alternativa disponible más barata, rápida o con menor latencia.
    - Un modelo Vision esta disponible por separado. Si el modelo principal no es multimodal, le pedira a Vision que describa la imagen que adjuntaste.
 
    ![Seleccion de modelo, proveedor y precio en el panel de administracion](../assets/admin-model-selection.gif)
@@ -137,6 +138,7 @@ Siempre puedes ver si alguien ha compartido tu clave, y puedes revocarla en cual
 ## Que puede hacer Chatter?
 
 1. Usar memoria vectorial. Cada usuario obtiene un registro aislado separado por defecto. Actualmente solo esta disponible la integracion con [Pinecone](https://app.pinecone.io/).
+   - ¿Olvidaste en qué chat hablaste de algo? Pide a Chatter que busque entre las conversaciones disponibles para ti, encuentre los mensajes relevantes y abra el chat original.
 2. Activarse con "Alexa", "Hey, Jarvis", "Hey Mycroft" o "Hey Rhasspy", con soporte para reconocimiento de voz y respuestas de voz.
 
    ![Activacion por voz de Chatter y control de la interfaz de usuario](../assets/chatter-voice-activation.gif)
@@ -149,7 +151,7 @@ Siempre puedes ver si alguien ha compartido tu clave, y puedes revocarla en cual
 
    ![Chatter crea y abre un sitio web por si mismo](../assets/chatter-site-creation.gif)
 
-5. Leer y enviar correos electronicos desde las bandejas de entrada que hayas agregado. Actualmente, la integracion guiada comoda esta disponible para [Gmail](https://mail.google.com/mail/) y [Yandex](https://mail.yandex.ru/), asi como cualquier otro correo electronico que puedas configurar manualmente. El envio de correos requiere confirmacion del usuario.
+5. Leer y enviar correos electrónicos desde los buzones que hayas añadido, incluidos archivos adjuntos. Actualmente, la integración guiada está disponible para [Gmail](https://mail.google.com/mail/) y [Yandex](https://mail.yandex.ru/), así como para cualquier otro correo que puedas configurar manualmente. Cada correo saliente requiere confirmación del usuario.
 6. Usar la busqueda web a traves del servicio [Tavily](https://www.tavily.com/).
 7. Leer y analizar sitios web usando [Browserless](https://www.browserless.io/pricing).
 8. Generar imagenes a partir de una referencia o de texto a traves de OpenRouter.
@@ -173,11 +175,15 @@ Siempre puedes ver si alguien ha compartido tu clave, y puedes revocarla en cual
 23. Controlar la camara web, tomar capturas de pantalla y hacer clic en la pantalla mientras el Desktop esta conectado. Cualquier accion de este tipo requiere tu confirmacion.
 24. La mayoria de las funciones son accesibles desde Telegram con un menu comodo y botones en linea.
 25. Controlar tu hogar inteligente y encender luces en un horario. La integracion con Yandex esta disponible; el soporte para Zigbee es actualmente experimental y necesita mas pruebas.
-26. Adjuntar documentos y fotos incluso a un modelo sin vision (cuando un modelo de vision esta configurado por separado).
+26. Adjuntar documentos y fotos incluso a un modelo sin visión (cuando se configura por separado un modelo de visión). Los documentos ya no tienen que llenar el contexto inmediatamente: el asistente puede consultar sus metadatos, leerlos por partes y buscar en su contenido. Desktop también incluye vistas previas integradas para formatos de documentos habituales.
 27. Transcribir mensajes de voz de Telegram! (requiere un servidor potente con al menos 2 nucleos, 2 GB de RAM y voice-api habilitado)
-28. Creacion comoda y rapida de ramas de chat, ademas de regeneracion con instrucciones.
-29. El bot sugiere un comando pero no sabes lo que hace? Presiona el boton Review y el modelo Lite evalua sus riesgos.
-30. Usar el navegador integrado en Chatter Desktop. El asistente puede leer la página que abriste, desplazarse por ella, abrir enlaces, pulsar controles y rellenar campos normales. Las acciones del navegador pueden requerir tu confirmación, las descargas siempre se pausan para su aprobación y los campos de contraseña no están disponibles para el modelo.
+28. Añadir varios personajes de IA a un chat para juegos de rol en solitario, debates o tareas colaborativas. Elige manualmente quién responde después o deja que los bots respondan por turnos.
+29. Invitar a otras personas y amigos a una sala compartida. Cada participante puede traer su propio bot o interactuar con los bots que otros participantes hayan puesto a disposición.
+30. Organizar los chats en carpetas y filtrarlos por prompt, modelo, archivos o imágenes.
+31. Dejar que las respuestas largas continúen en segundo plano y recibir una notificación cuando Chatter termine.
+32. Creación cómoda y rápida de ramas de chat, además de regeneración con instrucciones.
+33. ¿El bot sugiere un comando pero no sabes lo que hace? Pulsa el botón Review y el modelo Lite evaluará sus riesgos.
+34. Usar el navegador integrado en Chatter Desktop. El asistente puede leer la página que abriste, desplazarse por ella, abrir enlaces, pulsar controles y rellenar campos normales. Las acciones del navegador pueden requerir tu confirmación, las descargas siempre se pausan para su aprobación y los campos de contraseña no están disponibles para el modelo.
 
 ---
 

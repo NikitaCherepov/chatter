@@ -110,6 +110,7 @@ Vous pouvez toujours voir si quelquun a partage votre cle, et vous pouvez la rev
    - Un moteur de recherche de modeles pour OpenRouter est integre au panneau dadministration.
    - La liste des fournisseurs est remplie automatiquement des que vous selectionnez un modele. Vous voulez que les requetes aillent uniquement vers un fournisseur specifique? Il suffit de le choisir dans le menu deroulant.
    - Les prix des tokens dentree/sortie/cache sont definis automatiquement lorsque vous selectionnez un modele.
+   - Les fournisseurs OpenRouter sélectionnés peuvent être surveillés automatiquement. Chatter peut avertir les administrateurs lorsqu’un fournisseur disparaît ou modifie ses tarifs, puis basculer vers l’alternative disponible la moins chère, la plus rapide ou à la latence la plus faible.
    - Un modele Vision est disponible separement. Si le modele principal nest pas multimodal, il demandera a Vision de decrire limage que vous avez jointe.
 
    ![Selection dun modele, fournisseur et tarification dans le panneau dadministration](../assets/admin-model-selection.gif)
@@ -137,6 +138,7 @@ Vous pouvez toujours voir si quelquun a partage votre cle, et vous pouvez la rev
 ## Que peut faire Chatter?
 
 1. Utiliser la memoire vectorielle. Chaque utilisateur obtient un enregistrement isole separe par defaut. Actuellement, seule lintegration [Pinecone](https://app.pinecone.io/) est disponible.
+   - Vous avez oublié dans quelle conversation un sujet a été abordé ? Demandez à Chatter de rechercher parmi les conversations auxquelles vous avez accès, de retrouver les messages pertinents et d’ouvrir la conversation d’origine.
 2. Se reveiller sur "Alexa", "Hey, Jarvis", "Hey Mycroft" ou "Hey Rhasspy", avec prise en charge de la reconnaissance vocale et des reponses vocales.
 
    ![Activation vocale Chatter et controle de linterface utilisateur](../assets/chatter-voice-activation.gif)
@@ -149,7 +151,7 @@ Vous pouvez toujours voir si quelquun a partage votre cle, et vous pouvez la rev
 
    ![Chatter cree et ouvre un site web tout seul](../assets/chatter-site-creation.gif)
 
-5. Lire et envoyer des e-mails depuis les boites aux lettres que vous avez ajoutees. Actuellement, une integration guidee pratique est disponible pour [Gmail](https://mail.google.com/mail/) et [Yandex](https://mail.yandex.ru/), ainsi que pour toute autre adresse e-mail que vous pouvez configurer manuellement. Lenvoi de-mails necessite la confirmation de lutilisateur.
+5. Lire et envoyer des e-mails depuis les boîtes aux lettres ajoutées, y compris avec des pièces jointes. Une intégration guidée pratique est disponible pour [Gmail](https://mail.google.com/mail/) et [Yandex](https://mail.yandex.ru/), ainsi que pour toute autre adresse configurable manuellement. Chaque e-mail sortant nécessite la confirmation de l’utilisateur.
 6. Utiliser la recherche web via le service [Tavily](https://www.tavily.com/).
 7. Lire et analyser des sites web avec [Browserless](https://www.browserless.io/pricing).
 8. Generer des images a partir dune reference ou de texte via OpenRouter.
@@ -173,11 +175,15 @@ Vous pouvez toujours voir si quelquun a partage votre cle, et vous pouvez la rev
 23. Controler la webcam, prendre des captures decran et cliquer sur lecran pendant que le Bureau est connecte. Chacune de ces actions necessite votre confirmation.
 24. La plupart des fonctionnalites sont accessibles depuis Telegram avec un menu pratique et des boutons inline.
 25. Controler votre maison intelligente et allumer les lumieres selon un horaire. Lintegration Yandex est disponible; le support Zigbee est actuellement experimental et necessite des tests supplementaires.
-26. Joindre des documents et des photos meme a un modele sans vision (lorsquun modele de vision est configure separement).
+26. Joindre des documents et des photos même à un modèle sans vision (lorsqu’un modèle de vision est configuré séparément). Les documents ne doivent plus remplir immédiatement le contexte : l’assistant peut consulter leurs métadonnées, les lire par sections et rechercher dans leur contenu. Desktop propose également un aperçu intégré des formats de documents courants.
 27. Transcrire les messages vocaux de Telegram! (necessite un serveur puissant avec au moins 2 curs, 2 Go de RAM et voice-api active)
-28. Creation pratique et rapide de branches de discussion, ainsi que regeneration avec instructions.
-29. Le bot suggere une commande mais vous ne savez pas ce quelle fait? Appuyez sur le bouton Review et le modele Lite evalue ses risques.
-30. Utiliser le navigateur intégré à Chatter Desktop. L’assistant peut lire la page que vous avez ouverte, la faire défiler, ouvrir des liens, cliquer sur des contrôles et remplir des champs ordinaires. Les actions du navigateur peuvent nécessiter votre confirmation, les téléchargements sont toujours suspendus pour approbation et les champs de mot de passe restent inaccessibles au modèle.
+28. Ajouter plusieurs personnages IA à une même conversation pour du jeu de rôle en solo, des discussions ou des tâches collaboratives. Choisissez manuellement qui répond ensuite ou laissez les bots répondre à tour de rôle.
+29. Inviter d’autres personnes et amis dans une salle partagée. Chaque participant peut venir avec son propre bot ou interagir avec les bots que les autres participants ont rendus accessibles.
+30. Organiser les conversations dans des dossiers et les filtrer par prompt, modèle, fichiers ou images.
+31. Laisser les réponses longues continuer en arrière-plan et recevoir une notification lorsque Chatter a terminé.
+32. Création pratique et rapide de branches de discussion, ainsi que régénération avec instructions.
+33. Le bot suggère une commande mais vous ne savez pas ce qu’elle fait ? Appuyez sur le bouton Review et le modèle Lite évalue ses risques.
+34. Utiliser le navigateur intégré à Chatter Desktop. L’assistant peut lire la page que vous avez ouverte, la faire défiler, ouvrir des liens, cliquer sur des contrôles et remplir des champs ordinaires. Les actions du navigateur peuvent nécessiter votre confirmation, les téléchargements sont toujours suspendus pour approbation et les champs de mot de passe restent inaccessibles au modèle.
 
 ---
 

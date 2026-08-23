@@ -112,6 +112,7 @@ You can always see if someone has shared your key, and you can revoke it at any 
     - A model search engine for OpenRouter is built into the admin panel.
     - The provider list is populated as soon as you select a model. Want requests to go only to a specific provider? Just pick it from the dropdown.
     - Input/output/cache token prices are set automatically when you select a model.
+    - Pinned OpenRouter providers can be monitored automatically. Chatter can notify administrators when a provider disappears or changes its prices, and switch to the cheapest, fastest, or lowest-latency available alternative.
     - A Vision model is available separately — if the main model is not multimodal, it will ask Vision to describe the image you attached.
 
     ![Selecting a model, provider and pricing in the admin panel](docs/assets/admin-model-selection.gif)
@@ -139,6 +140,7 @@ You can always see if someone has shared your key, and you can revoke it at any 
 ## What can Chatter do?
 
  1. Use vector memory. Each user gets a separate isolated record by default. Currently only [Pinecone](https://app.pinecone.io/) integration is available.
+    - Forgot which chat you discussed something in? Ask Chatter to search across the conversations available to you, find the relevant messages, and open the original chat.
  2. Wake on "Alexa", "Hey, Jarvis", "Hey Mycroft", or "Hey Rhasspy", with support for speech recognition and voice replies.
 
     ![Chatter voice activation and UI control](docs/assets/chatter-voice-activation.gif)
@@ -151,7 +153,7 @@ You can always see if someone has shared your key, and you can revoke it at any 
 
     ![Chatter creates and opens a website on its own](docs/assets/chatter-site-creation.gif)
 
- 5. Read and send emails from mailboxes you've added. Currently, convenient guided integration is available for [Gmail](https://mail.google.com/mail/) and [Yandex](https://mail.yandex.ru/), as well as any other email you can configure manually. Sending emails requires user confirmation.
+ 5. Read and send emails from mailboxes you've added, including file attachments. Currently, convenient guided integration is available for [Gmail](https://mail.google.com/mail/) and [Yandex](https://mail.yandex.ru/), as well as any other email you can configure manually. Every outgoing email requires user confirmation.
  6. Use web search via the [Tavily](https://www.tavily.com/) service.
  7. Read and parse websites using [Browserless](https://www.browserless.io/pricing).
  8. Generate images from a reference or from text via OpenRouter.
@@ -175,11 +177,15 @@ You can always see if someone has shared your key, and you can revoke it at any 
  23. Control the webcam, take screenshots, and click on the screen while Desktop is connected. Any such action requires your confirmation.
  24. Most features are accessible from Telegram with a convenient menu and inline buttons.
  25. Control your smart home and turn on lights on a schedule. Yandex integration is available; Zigbee support is currently experimental and needs further testing.
- 26. Attach documents and photos even to a model without vision (when a vision-model is set up separately).
+ 26. Attach documents and photos even to a model without vision (when a vision-model is set up separately). Documents no longer have to fill the context immediately: the assistant can inspect their metadata, read them in parts, and search their contents. Desktop also includes built-in previews for common document formats.
  27. Transcribe voice messages from Telegram! (requires a powerful server with at least 2 cores, 2 GB RAM, and voice-api enabled)
- 28. Convenient and fast creation of chat branches, plus regeneration with instructions.
- 29. The bot suggests a command but you don't know what it does? Press the Review button and the Lite model assesses its risks.
- 30. Use the browser built into Chatter Desktop. The assistant can read the page you opened, scroll it, follow links, click controls, and fill ordinary fields. Browser actions can require your confirmation, downloads are always paused for approval, and password fields are unavailable to the model.
+ 28. Add multiple AI characters to one chat for solo role-playing, discussions, or collaborative tasks. Manually choose who responds next, or let the bots answer in sequence.
+ 29. Invite other people and friends into a shared room. Each participant can bring their own bot or interact with bots that other participants have made available.
+ 30. Organize chats into folders and filter them by prompt, model, files, or images.
+ 31. Let long-running responses continue in the background and receive a notification when Chatter finishes.
+ 32. Convenient and fast creation of chat branches, plus regeneration with instructions.
+ 33. The bot suggests a command but you don't know what it does? Press the Review button and the Lite model assesses its risks.
+ 34. Use the browser built into Chatter Desktop. The assistant can read the page you opened, scroll it, follow links, click controls, and fill ordinary fields. Browser actions can require your confirmation, downloads are always paused for approval, and password fields are unavailable to the model.
 
 ---
 

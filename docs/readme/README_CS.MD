@@ -110,6 +110,7 @@ Vždy můžete vidět, jestli někdo sdílel váš klíč, a můžete jej kdykol
    - Vyhledávač modelů pro OpenRouter je zabudovaný přímo v admin panelu.
    - Seznam poskytovatelů se naplní automaticky, jakmile vyberete model. Chcete, aby požadavky směřovaly pouze k určitému poskytovateli? Stačí jej vybrat z rozbalovací nabídky.
    - Ceny tokenů pro vstup/výstup/mezipaměť se nastaví automaticky při výběru modelu.
+   - Připnuté poskytovatele OpenRouter lze automaticky sledovat. Chatter může upozornit administrátory, když poskytovatel zmizí nebo změní ceny, a přepnout na nejlevnější, nejrychlejší nebo dostupnou alternativu s nejnižší latencí.
    - Vision model je k dispozici samostatně — pokud hlavní model není multimodální, požádá Vision, aby popsal obrázek, který jste přiložili.
 
    ![Výběr modelu, poskytovatele a ceny v admin panelu](../assets/admin-model-selection.gif)
@@ -137,6 +138,7 @@ Vždy můžete vidět, jestli někdo sdílel váš klíč, a můžete jej kdykol
 ## Co všechno Chatter umí?
 
 1. Používat vektorovou paměť. Každý uživatel ve výchozím nastavení dostane samostatný izolovaný záznam. V současné době je k dispozici pouze integrace [Pinecone](https://app.pinecone.io/).
+   - Zapomněli jste, ve kterém chatu jste něco probírali? Požádejte Chatter, aby prohledal konverzace, ke kterým máte přístup, našel příslušné zprávy a otevřel původní chat.
 2. Probouzet se na "Alexa", "Hey, Jarvis", "Hey Mycroft" nebo "Hey Rhasspy" s podporou rozpoznávání řeči a hlasových odpovědí.
 
    ![Chatter hlasová aktivace a ovládání rozhraní](../assets/chatter-voice-activation.gif)
@@ -149,7 +151,7 @@ Vždy můžete vidět, jestli někdo sdílel váš klíč, a můžete jej kdykol
 
    ![Chatter samostatně vytváří a otevírá webové stránky](../assets/chatter-site-creation.gif)
 
-5. Číst a odesílat e-maily z přidaných poštovních schránek. V současné době je k dispozici pohodlná řízená integrace pro [Gmail](https://mail.google.com/mail/) a [Yandex](https://mail.yandex.ru/) a také jakýkoli jiný e-mail, který můžete nakonfigurovat ručně. Odesílání e-mailů vyžaduje potvrzení uživatele.
+5. Číst a odesílat e-maily z přidaných poštovních schránek, včetně souborových příloh. V současné době je k dispozici pohodlná řízená integrace pro [Gmail](https://mail.google.com/mail/) a [Yandex](https://mail.yandex.ru/) a také jakýkoli jiný e-mail, který můžete nakonfigurovat ručně. Každý odchozí e-mail vyžaduje potvrzení uživatele.
 6. Používat webové vyhledávání prostřednictvím služby [Tavily](https://www.tavily.com/).
 7. Číst a parsovat webové stránky pomocí [Browserless](https://www.browserless.io/pricing).
 8. Generovat obrázky z reference nebo z textu přes OpenRouter.
@@ -173,11 +175,15 @@ Vždy můžete vidět, jestli někdo sdílel váš klíč, a můžete jej kdykol
 23. Ovládat webkameru, pořizovat snímky obrazovky a klikat na obrazovku, když je Desktop připojen. Jakákoli taková akce vyžaduje vaše potvrzení.
 24. Většina funkcí je přístupná z Telegramu s pohodlnou nabídkou a inline tlačítky.
 25. Ovládat svou chytrou domácnost a rozsvěcovat světla podle plánu. Yandex integrace je k dispozici; Zigbee podpora je v současné době experimentální a vyžaduje další testování.
-26. Připojovat dokumenty a fotografie i k modelu bez vision schopností (pokud je vision model nastaven samostatně).
+26. Připojovat dokumenty a fotografie i k modelu bez vision schopností (pokud je vision model nastaven samostatně). Dokumenty již nemusí okamžitě zaplnit kontext: asistent může prohlédnout jejich metadata, číst je po částech a prohledávat jejich obsah. Desktop také nabízí vestavěný náhled běžných formátů dokumentů.
 27. Přepisovat hlasové zprávy z Telegramu! (vyžaduje výkonný server s alespoň 2 jádry, 2 GB RAM a povoleným voice-api)
-28. Pohodlné a rychlé vytváření větví chatu a regenerace s instrukcemi.
-29. Bot navrhne příkaz, ale nevíte, co dělá? Stiskněte tlačítko Review a Lite model posoudí jeho rizika.
-30. Používat prohlížeč zabudovaný do Chatter Desktop. Asistent může číst otevřenou stránku, posouvat ji, otevírat odkazy, klikat na ovládací prvky a vyplňovat běžná pole. Akce prohlížeče mohou vyžadovat vaše potvrzení, stahování souborů se vždy pozastaví ke schválení a pole s hesly nejsou modelu přístupná.
+28. Přidat do jednoho chatu více AI postav pro sólové hraní rolí, diskuse nebo společné úkoly. Ručně vyberte, kdo odpoví jako další, nebo nechte boty odpovídat postupně.
+29. Pozvat další lidi a přátele do sdílené místnosti. Každý účastník si může přivést vlastního bota nebo komunikovat s boty, které zpřístupnili ostatní účastníci.
+30. Uspořádat chaty do složek a filtrovat je podle promptu, modelu, souborů nebo obrázků.
+31. Nechat dlouhé odpovědi pokračovat na pozadí a obdržet oznámení, až Chatter skončí.
+32. Pohodlné a rychlé vytváření větví chatu a regenerace s instrukcemi.
+33. Bot navrhne příkaz, ale nevíte, co dělá? Stiskněte tlačítko Review a Lite model posoudí jeho rizika.
+34. Používat prohlížeč zabudovaný do Chatter Desktop. Asistent může číst otevřenou stránku, posouvat ji, otevírat odkazy, klikat na ovládací prvky a vyplňovat běžná pole. Akce prohlížeče mohou vyžadovat vaše potvrzení, stahování souborů se vždy pozastaví ke schválení a pole s hesly nejsou modelu přístupná.
 
 ---
 

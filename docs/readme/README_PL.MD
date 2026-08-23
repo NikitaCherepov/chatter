@@ -110,6 +110,7 @@ Zawsze możesz sprawdzić, czy ktoś udostępnił Twój klucz, i w każdej chwil
    - Wyszukiwarka modeli dla OpenRouter jest wbudowana w panel administracyjny.
    - Lista dostawców jest wypełniana zaraz po wybraniu modelu. Chcesz, aby żądania trafiały tylko do konkretnego dostawcy? Po prostu wybierz go z listy rozwijanej.
    - Ceny tokenów wejścia/wyjścia/cache są ustawiane automatycznie po wybraniu modelu.
+   - Wybranych dostawców OpenRouter można monitorować automatycznie. Chatter może powiadamiać administratorów, gdy dostawca znika lub zmienia ceny, i przełączyć się na najtańszą, najszybszą albo dostępną alternatywę o najniższym opóźnieniu.
    - Model Vision jest dostępny osobno — jeśli główny model nie jest multimodalny, poprosi Vision o opisanie dołączonego obrazu.
 
    ![Wybór modelu, dostawcy i ceny w panelu administracyjnym](../assets/admin-model-selection.gif)
@@ -137,6 +138,7 @@ Zawsze możesz sprawdzić, czy ktoś udostępnił Twój klucz, i w każdej chwil
 ## Co potrafi Chatter?
 
 1. Używa pamięci wektorowej. Każdy użytkownik domyślnie otrzymuje osobny, izolowany zapis. Obecnie dostępna jest tylko integracja z [Pinecone](https://app.pinecone.io/).
+   - Nie pamiętasz, w którym czacie coś było omawiane? Poproś Chatter, aby przeszukał dostępne dla ciebie rozmowy, znalazł odpowiednie wiadomości i otworzył oryginalny czat.
 2. Budzi się na "Alexa", "Hey, Jarvis", "Hey Mycroft" lub "Hey Rhasspy", z obsługą rozpoznawania mowy i odpowiedzi głosowych.
 
    ![Aktywacja głosowa Chatter i sterowanie UI](../assets/chatter-voice-activation.gif)
@@ -149,7 +151,7 @@ Zawsze możesz sprawdzić, czy ktoś udostępnił Twój klucz, i w każdej chwil
 
    ![Chatter samodzielnie tworzy i otwiera stronę internetową](../assets/chatter-site-creation.gif)
 
-5. Odczytuje i wysyła e-maile z dodanych skrzynek pocztowych. Obecnie dostępna jest wygodna, prowadzona integracja dla [Gmail](https://mail.google.com/mail/) i [Yandex](https://mail.yandex.ru/), a także dowolnej innej poczty, którą można skonfigurować ręcznie. Wysyłanie e-maili wymaga potwierdzenia użytkownika.
+5. Odczytuje i wysyła e-maile z dodanych skrzynek pocztowych, również z załącznikami. Obecnie dostępna jest wygodna, prowadzona integracja dla [Gmail](https://mail.google.com/mail/) i [Yandex](https://mail.yandex.ru/), a także dowolnej innej poczty, którą można skonfigurować ręcznie. Każdy wychodzący e-mail wymaga potwierdzenia użytkownika.
 6. Używa wyszukiwania w sieci przez usługę [Tavily](https://www.tavily.com/).
 7. Czyta i analizuje strony internetowe za pomocą [Browserless](https://www.browserless.io/pricing).
 8. Generuje obrazy na podstawie referencji lub z tekstu przez OpenRouter.
@@ -173,11 +175,15 @@ Zawsze możesz sprawdzić, czy ktoś udostępnił Twój klucz, i w każdej chwil
 23. Steruje kamerą internetową, robi zrzuty ekranu i klika na ekranie, gdy Desktop jest podłączony. Każda taka czynność wymaga Twojego potwierdzenia.
 24. Większość funkcji jest dostępna z Telegramu z wygodnym menu i przyciskami inline.
 25. Steruje inteligentnym domem i włącza światła zgodnie z harmonogramem. Integracja Yandex jest dostępna; obsługa Zigbee jest obecnie eksperymentalna i wymaga dalszych testów.
-26. Dołącza dokumenty i zdjęcia nawet do modelu bez vision (gdy model vision jest skonfigurowany osobno).
+26. Dołącza dokumenty i zdjęcia nawet do modelu bez vision (gdy model vision jest skonfigurowany osobno). Dokumenty nie muszą już od razu wypełniać kontekstu: asystent może sprawdzić ich metadane, czytać je fragmentami i przeszukiwać zawartość. Desktop zawiera także wbudowany podgląd popularnych formatów dokumentów.
 27. Transkrybuje wiadomości głosowe z Telegramu! (wymaga wydajnego serwera z co najmniej 2 rdzeniami, 2 GB RAM i włączonym voice-api)
-28. Wygodne i szybkie tworzenie gałęzi czatu oraz regeneracja z instrukcjami.
-29. Bot sugeruje polecenie, ale nie wiesz, co robi? Naciśnij przycisk Review, a model Lite oceni jego ryzyko.
-30. Korzystać z przeglądarki wbudowanej w Chatter Desktop. Asystent może czytać otwartą przez użytkownika stronę, przewijać ją, otwierać linki, klikać elementy sterujące i wypełniać zwykłe pola. Działania przeglądarki mogą wymagać potwierdzenia, pobieranie plików jest zawsze wstrzymywane do zatwierdzenia, a pola haseł są niedostępne dla modelu.
+28. Dodawać wiele postaci AI do jednego czatu na potrzeby samodzielnego role-play, dyskusji lub wspólnych zadań. Ręcznie wybieraj, kto odpowie następny, albo pozwól botom odpowiadać po kolei.
+29. Zapraszać inne osoby i znajomych do wspólnego pokoju. Każdy uczestnik może przyprowadzić własnego bota lub korzystać z botów udostępnionych przez innych uczestników.
+30. Organizować czaty w folderach i filtrować je według promptu, modelu, plików lub obrazów.
+31. Pozwalać długim odpowiedziom działać w tle i otrzymywać powiadomienie, gdy Chatter skończy.
+32. Wygodne i szybkie tworzenie gałęzi czatu oraz regeneracja z instrukcjami.
+33. Bot sugeruje polecenie, ale nie wiesz, co robi? Naciśnij przycisk Review, a model Lite oceni jego ryzyko.
+34. Korzystać z przeglądarki wbudowanej w Chatter Desktop. Asystent może czytać otwartą przez użytkownika stronę, przewijać ją, otwierać linki, klikać elementy sterujące i wypełniać zwykłe pola. Działania przeglądarki mogą wymagać potwierdzenia, pobieranie plików jest zawsze wstrzymywane do zatwierdzenia, a pola haseł są niedostępne dla modelu.
 
 ---
 

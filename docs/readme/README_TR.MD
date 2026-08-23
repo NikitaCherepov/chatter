@@ -110,6 +110,7 @@ Anahtarınızı birinin paylaşıp paylaşmadığını her zaman görebilir ve i
    - OpenRouter için bir model arama motoru yönetim paneline entegre edilmiştir.
    - Bir model seçtiğinizde sağlayıcı listesi otomatik olarak doldurulur. İsteklerin yalnızca belirli bir sağlayıcıya gitmesini mi istiyorsunuz? Açılır menüden seçmeniz yeterli.
    - Girdi/çıktı/önbellek token fiyatları, bir model seçtiğinizde otomatik olarak ayarlanır.
+   - Seçilen OpenRouter sağlayıcıları otomatik olarak izlenebilir. Bir sağlayıcı kaybolduğunda veya fiyatlarını değiştirdiğinde Chatter yöneticileri bilgilendirebilir ve mevcut en ucuz, en hızlı ya da en düşük gecikmeli alternatife geçebilir.
    - Görme (Vision) modeli ayrı olarak mevcuttur — ana model çok modlu değilse, eklediğiniz görseli tanımlaması için Vision'a sorar.
 
    ![Yönetim panelinde model, sağlayıcı ve fiyatlandırma seçme](../assets/admin-model-selection.gif)
@@ -137,6 +138,7 @@ Anahtarınızı birinin paylaşıp paylaşmadığını her zaman görebilir ve i
 ## Chatter Neler Yapabilir?
 
 1. Vektör belleği kullanın. Her kullanıcı varsayılan olarak ayrı, izole bir kayıt alır. Şu anda yalnızca [Pinecone](https://app.pinecone.io/) entegrasyonu mevcuttur.
+   - Bir konuyu hangi sohbette konuştuğunuzu unuttunuz mu? Chatter’dan erişebildiğiniz konuşmaları aramasını, ilgili mesajları bulmasını ve özgün sohbeti açmasını isteyin.
 2. "Alexa", "Hey, Jarvis", "Hey Mycroft" veya "Hey Rhasspy" ile uyandırma, konuşma tanıma ve sesli yanıt desteği ile.
 
    ![Chatter ses aktivasyonu ve arayüz kontrolü](../assets/chatter-voice-activation.gif)
@@ -149,7 +151,7 @@ Anahtarınızı birinin paylaşıp paylaşmadığını her zaman görebilir ve i
 
    ![Chatter kendi başına bir web sitesi oluşturur ve açar](../assets/chatter-site-creation.gif)
 
-5. Eklediğiniz posta kutularından e-postaları okuma ve gönderme. Şu anda [Gmail](https://mail.google.com/mail/) ve [Yandex](https://mail.yandex.ru/) için kullanışlı rehberli entegrasyonun yanı sıra manuel olarak yapılandırabileceğiniz diğer tüm e-postalar mevcuttur. E-posta göndermek kullanıcı onayı gerektirir.
+5. Eklediğiniz posta kutularından dosya ekleriyle birlikte e-posta okuma ve gönderme. Şu anda [Gmail](https://mail.google.com/mail/) ve [Yandex](https://mail.yandex.ru/) için kullanışlı rehberli entegrasyonun yanı sıra manuel olarak yapılandırabileceğiniz diğer tüm e-postalar mevcuttur. Gönderilen her e-posta kullanıcı onayı gerektirir.
 6. [Tavily](https://www.tavily.com/) hizmeti aracılığıyla web araması kullanın.
 7. [Browserless](https://www.browserless.io/pricing) kullanarak web sitelerini okuyun ve ayrıştırın.
 8. OpenRouter aracılığıyla bir referanstan veya metinden görsel oluşturun.
@@ -173,11 +175,15 @@ Anahtarınızı birinin paylaşıp paylaşmadığını her zaman görebilir ve i
 23. Masaüstü bağlıyken web kamerasını kontrol edin, ekran görüntüsü alın ve ekrana tıklayın. Bu tür herhangi bir işlem onayınızı gerektirir.
 24. Çoğu özelliğe Telegram'dan kullanışlı bir menü ve satır içi düğmelerle erişilebilir.
 25. Akıllı evinizi kontrol edin ve programlı olarak ışıkları açın. Yandex entegrasyonu mevcuttur; Zigbee desteği şu anda deneyseldir ve daha fazla teste ihtiyaç duyar.
-26. Görme yeteneği olmayan bir modele bile belge ve fotoğraf ekleyin (bir görme modeli ayrı olarak ayarlandığında).
+26. Görme yeteneği olmayan bir modele bile belge ve fotoğraf ekleyin (bir görme modeli ayrı olarak ayarlandığında). Belgelerin artık bağlamı hemen doldurması gerekmez: asistan meta verilerini inceleyebilir, onları bölümler hâlinde okuyabilir ve içeriklerinde arama yapabilir. Desktop ayrıca yaygın belge biçimleri için yerleşik önizlemeler içerir.
 27. Telegram'dan sesli mesajları yazıya dökün! (en az 2 çekirdek, 2 GB RAM ve voice-api etkin olan güçlü bir sunucu gerektirir)
-28. Kullanışlı ve hızlı sohbet dalları oluşturma ve talimatlarla yeniden oluşturma.
-29. Bot bir komut öneriyor ama ne işe yaradığını bilmiyor musunuz? İncele düğmesine basın ve Lite model risklerini değerlendirsin.
-30. Chatter Desktop’a yerleşik tarayıcıyı kullanabilirsiniz. Asistan açtığınız sayfayı okuyabilir, kaydırabilir, bağlantıları açabilir, denetimlere tıklayabilir ve normal alanları doldurabilir. Tarayıcı işlemleri onayınızı gerektirebilir, indirmeler onay için her zaman duraklatılır ve parola alanlarına model erişemez.
+28. Tek başına rol yapma, tartışmalar veya ortak görevler için bir sohbete birden fazla yapay zekâ karakteri ekleyin. Sırada kimin yanıt vereceğini elle seçin veya botların sırayla yanıt vermesine izin verin.
+29. Diğer kişileri ve arkadaşlarınızı paylaşılan bir odaya davet edin. Her katılımcı kendi botunu getirebilir veya diğer katılımcıların erişime açtığı botlarla etkileşime geçebilir.
+30. Sohbetleri klasörlerde düzenleyin ve prompt, model, dosya veya görsellere göre filtreleyin.
+31. Uzun yanıtların arka planda devam etmesine izin verin ve Chatter tamamladığında bildirim alın.
+32. Kullanışlı ve hızlı sohbet dalları oluşturma ve talimatlarla yeniden oluşturma.
+33. Bot bir komut öneriyor ama ne işe yaradığını bilmiyor musunuz? İncele düğmesine basın ve Lite model risklerini değerlendirsin.
+34. Chatter Desktop’a yerleşik tarayıcıyı kullanabilirsiniz. Asistan açtığınız sayfayı okuyabilir, kaydırabilir, bağlantıları açabilir, denetimlere tıklayabilir ve normal alanları doldurabilir. Tarayıcı işlemleri onayınızı gerektirebilir, indirmeler onay için her zaman duraklatılır ve parola alanlarına model erişemez.
 
 ---
 
