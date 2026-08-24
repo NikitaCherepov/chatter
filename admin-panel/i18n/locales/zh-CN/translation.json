@@ -209,6 +209,7 @@
       "priceTrackingOff": "关闭",
       "priceTrackingNotify": "仅通知",
       "priceTrackingUpdate": "通知并更新价格",
+      "priceTrackingSwitchCheapest": "通知并切换到最便宜的提供商",
       "priceThreshold": "更改阈值 (%)",
       "priceThresholdHint": "忽略小于此百分比的变动；手动定价永远不会被覆盖",
       "recipients": "通知收件人",

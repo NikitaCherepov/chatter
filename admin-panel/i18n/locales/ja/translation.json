@@ -209,6 +209,7 @@
       "priceTrackingOff": "オフ",
       "priceTrackingNotify": "通知のみ",
       "priceTrackingUpdate": "価格を通知して更新する",
+      "priceTrackingSwitchCheapest": "通知して最も安いプロバイダーに切り替える",
       "priceThreshold": "しきい値の変更（％）",
       "priceThresholdHint": "このパーセンテージより小さい変更は無視します。手動価格は上書きされません。",
       "recipients": "通知の受信者",

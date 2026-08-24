@@ -127,6 +127,7 @@
     "priceProviderKept": "プロバイダーは変更されませんでした。{{provider}} が選択した戦略に引き続き最適です。",
     "priceNoCandidate": "プロバイダーは変更されませんでした。適切な候補が見つかりませんでした。",
     "priceTrackingNotifyOnly": "価格追跡が通知のみのため、プロバイダーは変更されませんでした。",
+    "priceUpdatedOnly": "選択したモードは価格のみを更新するため、プロバイダーは変更されませんでした。",
     "priceSwitchDisabled": "プロバイダーの自動切り替えは設定されていません。プロバイダーは変更されませんでした。"
   },
   "models": {

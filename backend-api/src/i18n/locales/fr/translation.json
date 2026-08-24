@@ -127,6 +127,7 @@
     "priceProviderKept": "Fournisseur inchangé : {{provider}} reste le meilleur choix pour la stratégie sélectionnée.",
     "priceNoCandidate": "Fournisseur inchangé : aucun candidat approprié n'a été trouvé.",
     "priceTrackingNotifyOnly": "Fournisseur inchangé, car le suivi des prix est configuré pour notifier uniquement.",
+    "priceUpdatedOnly": "Le fournisseur n'a pas été modifié, car le mode sélectionné met uniquement les prix à jour.",
     "priceSwitchDisabled": "Le changement automatique de fournisseur n'est pas configuré. Le fournisseur n'a pas été modifié."
   },
   "models": {

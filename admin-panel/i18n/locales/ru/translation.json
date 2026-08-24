@@ -212,6 +212,7 @@
       "priceTrackingOff": "Выключено",
       "priceTrackingNotify": "Только уведомить",
       "priceTrackingUpdate": "Уведомить и обновить цены",
+      "priceTrackingSwitchCheapest": "Уведомить и переключить на самого дешёвого провайдера",
       "priceThreshold": "Порог изменения (%)",
       "priceThresholdHint": "Изменения меньше этого процента игнорируются; цены, заданные вручную, не перезаписываются",
       "recipients": "Получатели уведомлений",

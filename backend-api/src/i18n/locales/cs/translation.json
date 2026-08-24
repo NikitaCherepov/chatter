@@ -127,6 +127,7 @@
     "priceProviderKept": "Poskytovatel nebyl změněn: {{provider}} stále nejlépe odpovídá zvolené strategii.",
     "priceNoCandidate": "Poskytovatel nebyl změněn: nebyl nalezen vhodný kandidát.",
     "priceTrackingNotifyOnly": "Poskytovatel nebyl změněn, protože sledování cen je nastaveno pouze na upozornění.",
+    "priceUpdatedOnly": "Poskytovatel nebyl změněn, protože zvolený režim pouze aktualizuje ceny.",
     "priceSwitchDisabled": "Automatické přepínání poskytovatelů není nastaveno. Poskytovatel nebyl změněn."
   },
   "models": {

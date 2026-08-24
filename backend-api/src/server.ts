@@ -4237,7 +4237,7 @@ app.put('/internal/admin/openrouter-monitor/settings', internalAuth, (req, res) 
     action?: 'notify' | 'cheapest' | 'throughput' | 'latency';
     recipientsMode?: 'all_admins' | 'selected';
     recipientUserIds?: number[];
-    priceTracking?: 'off' | 'notify' | 'update';
+    priceTracking?: 'off' | 'notify' | 'update' | 'switch_cheapest';
     priceThresholdPct?: number;
   } | null;
   const settings = saveMonitorSettings(body ?? {});

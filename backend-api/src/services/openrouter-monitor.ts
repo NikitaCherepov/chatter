@@ -23,7 +23,7 @@ const MISSING_THRESHOLD = 2;
 const JITTER_FRACTION = 0.1;
 
 export type MonitorAction = 'notify' | 'cheapest' | 'throughput' | 'latency';
-export type PriceTrackingMode = 'off' | 'notify' | 'update';
+export type PriceTrackingMode = 'off' | 'notify' | 'update' | 'switch_cheapest';
 export type MonitorStatus = 'unknown' | 'available' | 'missing' | 'check_failed' | 'model_missing';
 
 export type MonitorSettings = {
@@ -91,7 +91,7 @@ const DEFAULT_SETTINGS: MonitorSettings = {
   priceThresholdPct: 5,
 };
 
-const PRICE_TRACKING_MODES = ['off', 'notify', 'update'] as const;
+const PRICE_TRACKING_MODES = ['off', 'notify', 'update', 'switch_cheapest'] as const;
 
 const parseRecipientIds = (raw: unknown): number[] => {
   let list: unknown[];
@@ -106,7 +106,7 @@ const parseRecipientIds = (raw: unknown): number[] => {
 export const getMonitorSettings = (): MonitorSettings => {
   const row = db.prepare('SELECT * FROM openrouter_monitor_settings WHERE id = 1').get() as
     | { enabled: number; interval_minutes: number; action: string; recipients_mode: string; recipient_user_ids: string;
-        price_tracking?: string; price_threshold_pct?: number }
+        price_tracking?: string; price_switch_cheapest?: number; price_threshold_pct?: number }
     | undefined;
   if (!row) return { ...DEFAULT_SETTINGS };
   return {
@@ -116,8 +116,10 @@ export const getMonitorSettings = (): MonitorSettings => {
       ? (row.action as MonitorAction) : DEFAULT_SETTINGS.action,
     recipientsMode: row.recipients_mode === 'selected' ? 'selected' : 'all_admins',
     recipientUserIds: parseRecipientIds(row.recipient_user_ids),
-    priceTracking: PRICE_TRACKING_MODES.includes(row.price_tracking as PriceTrackingMode)
-      ? (row.price_tracking as PriceTrackingMode) : DEFAULT_SETTINGS.priceTracking,
+    priceTracking: row.price_tracking === 'update' && row.price_switch_cheapest === 1
+      ? 'switch_cheapest'
+      : PRICE_TRACKING_MODES.includes(row.price_tracking as PriceTrackingMode)
+        ? (row.price_tracking as PriceTrackingMode) : DEFAULT_SETTINGS.priceTracking,
     priceThresholdPct: Number.isFinite(row.price_threshold_pct) && (row.price_threshold_pct ?? 0) > 0
       ? row.price_threshold_pct! : DEFAULT_SETTINGS.priceThresholdPct,
   };
@@ -139,10 +141,11 @@ export const saveMonitorSettings = (patch: Partial<MonitorSettings>): MonitorSet
     priceThresholdPct: patch.priceThresholdPct !== undefined && Number.isFinite(patch.priceThresholdPct) && patch.priceThresholdPct > 0
       ? Math.min(100, patch.priceThresholdPct) : current.priceThresholdPct,
   };
+  const storedPriceTracking = next.priceTracking === 'switch_cheapest' ? 'update' : next.priceTracking;
   db.prepare(`
     INSERT INTO openrouter_monitor_settings
-      (id, enabled, interval_minutes, action, recipients_mode, recipient_user_ids, price_tracking, price_threshold_pct, updated_at)
-    VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?)
+      (id, enabled, interval_minutes, action, recipients_mode, recipient_user_ids, price_tracking, price_switch_cheapest, price_threshold_pct, updated_at)
+    VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       enabled = excluded.enabled,
       interval_minutes = excluded.interval_minutes,
@@ -150,6 +153,7 @@ export const saveMonitorSettings = (patch: Partial<MonitorSettings>): MonitorSet
       recipients_mode = excluded.recipients_mode,
       recipient_user_ids = excluded.recipient_user_ids,
       price_tracking = excluded.price_tracking,
+      price_switch_cheapest = excluded.price_switch_cheapest,
       price_threshold_pct = excluded.price_threshold_pct,
       updated_at = excluded.updated_at
   `).run(
@@ -158,7 +162,8 @@ export const saveMonitorSettings = (patch: Partial<MonitorSettings>): MonitorSet
     next.action,
     next.recipientsMode,
     JSON.stringify(next.recipientUserIds),
-    next.priceTracking,
+    storedPriceTracking,
+    next.priceTracking === 'switch_cheapest' ? 1 : 0,
     next.priceThresholdPct,
     getNowUnix(),
   );
@@ -761,8 +766,7 @@ const buildPriceNotification = (params: {
   prev: EndpointPrices;
   current: EndpointPrices;
   updatedOverrides: boolean;
-  strategy: MonitorAction;
-  switchResult: 'disabled' | 'notify_only' | 'kept' | 'switched' | 'no_candidate';
+  switchResult: 'notify_only' | 'update_only' | 'kept' | 'switched' | 'no_candidate';
   replacement?: CandidateGroup | null;
   replacementName?: string | null;
 }, language?: unknown): string => {
@@ -791,7 +795,7 @@ const buildPriceNotification = (params: {
     `${t('cacheRead')}: ${delta(params.prev.cacheReadPricePerMillion, params.current.cacheReadPricePerMillion)} / 1M`,
   ];
   if (params.updatedOverrides) lines.push('', t('priceUpdatedOverrides'));
-  lines.push('', `${t('strategy')}: ${t(`strategy${params.strategy.charAt(0).toUpperCase()}${params.strategy.slice(1)}`)}`);
+  lines.push('');
   if (params.switchResult === 'switched' && params.replacement) {
     const replacementLabel = params.replacementName && params.replacementName !== params.replacement.baseSlug
       ? `${params.replacementName} (${params.replacement.baseSlug})`
@@ -809,7 +813,7 @@ const buildPriceNotification = (params: {
   } else if (params.switchResult === 'notify_only') {
     lines.push(t('priceTrackingNotifyOnly'));
   } else {
-    lines.push(t('priceSwitchDisabled'));
+    lines.push(t('priceUpdatedOnly'));
   }
   return lines.join('\n');
 };
@@ -847,19 +851,18 @@ const maybeNotifyPriceChange = async (
     if (!prev) return unchanged; // first check → baseline only
     if (pricesWithinThreshold(prev, current, settings.priceThresholdPct)) return unchanged;
 
-    let switchResult: 'disabled' | 'notify_only' | 'kept' | 'switched' | 'no_candidate';
+    let switchResult: 'notify_only' | 'update_only' | 'kept' | 'switched' | 'no_candidate';
     let replacement: CandidateGroup | null = null;
     let switched = false;
 
-    if (settings.action === 'notify') {
-      switchResult = 'disabled';
-    } else if (settings.priceTracking !== 'update') {
-      // Price tracking in notify-only mode must never mutate the selected provider.
+    if (settings.priceTracking === 'notify') {
       switchResult = 'notify_only';
+    } else if (settings.priceTracking === 'update') {
+      switchResult = 'update_only';
     } else {
-      // Re-evaluate every provider after a significant price change. Include the
-      // current provider so it can remain selected when it is still the best.
-      replacement = selectReplacement(endpoints, settings.action);
+      // Price-based switching is independent from the strategy used when a
+      // provider disappears. Include the current provider in the comparison.
+      replacement = selectReplacement(endpoints, 'cheapest');
       if (!replacement) {
         switchResult = 'no_candidate';
       } else if (replacement.baseSlug === target.slug) {
@@ -873,7 +876,7 @@ const maybeNotifyPriceChange = async (
     // 'update' mode refreshes model_overrides prices — never for manually
     // priced models, that's an explicit admin decision.
     let updatedOverrides = false;
-    if (settings.priceTracking === 'update') {
+    if (settings.priceTracking === 'update' || settings.priceTracking === 'switch_cheapest') {
       const override = getModelOverride(target.uniqueId);
       if (override && override.pricing_mode !== 'manual') {
         const selectedPrices = switched ? replacement?.prices : current;
@@ -911,7 +914,6 @@ const maybeNotifyPriceChange = async (
       prev,
       current,
       updatedOverrides,
-      strategy: settings.action,
       switchResult,
       replacement,
       replacementName: replacement ? names.get(replacement.baseSlug) ?? null : null,
@@ -951,8 +953,7 @@ export const sendTestNotification = async (kind: 'missing' | 'price'): Promise<b
         prev,
         current,
         updatedOverrides: false,
-        strategy: getMonitorSettings().action,
-        switchResult: 'disabled' as const,
+        switchResult: 'notify_only' as const,
         replacement: null,
         replacementName: null,
       };

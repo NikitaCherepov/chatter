@@ -37,6 +37,7 @@
     "priceProviderKept": "Provider was not changed: {{provider}} is still the best match for the selected strategy.",
     "priceNoCandidate": "Provider was not changed: no suitable candidate was found.",
     "priceTrackingNotifyOnly": "Provider was not changed because price tracking is set to notify only.",
+    "priceUpdatedOnly": "Provider was not changed because the selected mode only updates prices.",
     "priceSwitchDisabled": "Automatic provider switching is not configured. Provider was not changed."
   },
   "toolStatus": {

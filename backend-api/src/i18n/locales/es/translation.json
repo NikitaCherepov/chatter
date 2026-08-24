@@ -127,6 +127,7 @@
     "priceProviderKept": "El proveedor no cambió: {{provider}} sigue siendo la mejor opción para la estrategia seleccionada.",
     "priceNoCandidate": "El proveedor no cambió: no se encontró un candidato adecuado.",
     "priceTrackingNotifyOnly": "El proveedor no cambió porque el seguimiento de precios está configurado solo para notificar.",
+    "priceUpdatedOnly": "El proveedor no cambió porque el modo seleccionado solo actualiza los precios.",
     "priceSwitchDisabled": "El cambio automático de proveedor no está configurado. El proveedor no cambió."
   },
   "models": {

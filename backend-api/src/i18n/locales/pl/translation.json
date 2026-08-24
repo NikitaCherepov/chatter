@@ -127,6 +127,7 @@
     "priceProviderKept": "Dostawca nie został zmieniony: {{provider}} nadal najlepiej pasuje do wybranej strategii.",
     "priceNoCandidate": "Dostawca nie został zmieniony: nie znaleziono odpowiedniego kandydata.",
     "priceTrackingNotifyOnly": "Dostawca nie został zmieniony, ponieważ śledzenie cen ustawiono tylko na powiadomienia.",
+    "priceUpdatedOnly": "Dostawca nie został zmieniony, ponieważ wybrany tryb jedynie aktualizuje ceny.",
     "priceSwitchDisabled": "Automatyczne przełączanie dostawców nie jest skonfigurowane. Dostawca nie został zmieniony."
   },
   "models": {

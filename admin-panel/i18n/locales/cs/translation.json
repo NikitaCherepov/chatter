@@ -215,6 +215,7 @@
       "priceTrackingOff": "Vypnuto",
       "priceTrackingNotify": "Pouze upozornit",
       "priceTrackingUpdate": "Upozornit a aktualizovat ceny",
+      "priceTrackingSwitchCheapest": "Upozornit a přepnout na nejlevnějšího poskytovatele",
       "priceThreshold": "Práh změny (%)",
       "priceThresholdHint": "Ignorovat změny menší než toto procento; ruční ceny se nikdy nepřepisují",
       "recipients": "Příjemci oznámení",

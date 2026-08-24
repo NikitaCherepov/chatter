@@ -214,6 +214,7 @@
       "priceTrackingOff": "Kapalı",
       "priceTrackingNotify": "Yalnızca bildir",
       "priceTrackingUpdate": "Bildir ve fiyatları güncelle",
+      "priceTrackingSwitchCheapest": "Bildir ve en ucuz sağlayıcıya geç",
       "priceThreshold": "Değişim eşiği (%)",
       "priceThresholdHint": "Bu yüzdeden küçük değişiklikleri yoksay; manuel fiyatlandırma asla üzerine yazılmaz",
       "recipients": "Bildirim alıcıları",

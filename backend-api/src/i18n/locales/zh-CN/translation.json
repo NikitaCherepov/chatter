@@ -127,6 +127,7 @@
     "priceProviderKept": "提供商未更改：{{provider}} 仍然最符合所选策略。",
     "priceNoCandidate": "提供商未更改：未找到合适的候选提供商。",
     "priceTrackingNotifyOnly": "由于价格跟踪设置为仅通知，因此未更改提供商。",
+    "priceUpdatedOnly": "提供商未更改，因为所选模式仅更新价格。",
     "priceSwitchDisabled": "未配置自动切换提供商。提供商未更改。"
   },
   "models": {

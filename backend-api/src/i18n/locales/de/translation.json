@@ -127,6 +127,7 @@
     "priceProviderKept": "Anbieter nicht geändert: {{provider}} passt weiterhin am besten zur gewählten Strategie.",
     "priceNoCandidate": "Anbieter nicht geändert: Es wurde kein geeigneter Kandidat gefunden.",
     "priceTrackingNotifyOnly": "Anbieter nicht geändert, da die Preisüberwachung nur Benachrichtigungen sendet.",
+    "priceUpdatedOnly": "Der Anbieter wurde nicht geändert, da der gewählte Modus nur die Preise aktualisiert.",
     "priceSwitchDisabled": "Automatischer Anbieterwechsel ist nicht konfiguriert. Der Anbieter wurde nicht geändert."
   },
   "models": {

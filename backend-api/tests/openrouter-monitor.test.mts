@@ -281,17 +281,19 @@ outcomes = await runMonitorCycle();
 assert.ok(outcomes.find(o => o.modelId === 'manual-1')?.notified, 'price change notified');
 assert.ok(notifications.some(n => n.includes('$1 → $2 (+100%)')), 'old → new price + change percent in the message');
 assert.ok(notifications.every(n => !n.includes('updated automatically')), 'notify mode does not touch overrides');
-assert.ok(notifications.some(n => n.includes('Automatic provider switching is not configured')), 'message explains that no strategy is configured');
+assert.ok(notifications.some(n => n.includes('price tracking is set to notify only')), 'message explains why the provider was not changed');
 assert.strictEqual(getModelOverride('manual-1')?.input_price_per_million, 1, 'override prices untouched in notify mode');
 console.log('✔ price change notifies without touching overrides');
 
-// Update mode refreshes model_overrides prices.
-setSettings({ priceTracking: 'update' });
+// Update mode refreshes model_overrides prices but never uses the separate
+// strategy configured for a provider disappearance.
+setSettings({ priceTracking: 'update', action: 'cheapest' });
 reprice('0.000003'); // 2 → 3 $/M
 notifications.length = 0;
 outcomes = await runMonitorCycle();
 assert.ok(outcomes.find(o => o.modelId === 'manual-1')?.notified);
 assert.strictEqual(getModelOverride('manual-1')?.input_price_per_million, 3, 'override prices refreshed');
+assert.strictEqual(getModelOverride('manual-1')?.openrouter_provider_slug, 'provider-a', 'update-only mode does not switch providers');
 assert.strictEqual(getModelOverride('manual-1')?.pricing_source, 'openrouter_auto');
 assert.ok(notifications.some(n => n.includes('updated automatically')), 'message mentions automatic update');
 console.log('✔ update mode refreshes override prices');
@@ -304,10 +306,10 @@ assert.ok(!outcomes.find(o => o.modelId === 'manual-1')?.notified, 'small drift 
 assert.strictEqual(notifications.length, 0);
 console.log('✔ below-threshold drift ignored');
 
-// Update mode + a selection strategy re-evaluates all endpoints after a
-// significant price change and switches when another provider is now better.
+// The dedicated switch mode re-evaluates all endpoints after a significant
+// price change and switches when another provider is now cheaper.
 resetWorld();
-setSettings({ priceTracking: 'update', action: 'cheapest' });
+setSettings({ priceTracking: 'switch_cheapest', action: 'latency' });
 await runMonitorCycle(); // provider-a baseline
 notifications.length = 0;
 reprice('0.000004'); // provider-a becomes more expensive than provider-b

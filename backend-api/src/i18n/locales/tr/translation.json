@@ -127,6 +127,7 @@
     "priceProviderKept": "Sağlayıcı değiştirilmedi: {{provider}} seçilen stratejiye hâlâ en uygun seçenektir.",
     "priceNoCandidate": "Sağlayıcı değiştirilmedi: uygun bir aday bulunamadı.",
     "priceTrackingNotifyOnly": "Fiyat izleme yalnızca bildirim olarak ayarlandığı için sağlayıcı değiştirilmedi.",
+    "priceUpdatedOnly": "Seçilen mod yalnızca fiyatları güncellediği için sağlayıcı değiştirilmedi.",
     "priceSwitchDisabled": "Otomatik sağlayıcı değiştirme yapılandırılmamış. Sağlayıcı değiştirilmedi."
   },
   "models": {

@@ -209,6 +209,7 @@
       "priceTrackingOff": "Desactivado",
       "priceTrackingNotify": "Solo notificar",
       "priceTrackingUpdate": "Notificar y actualizar precios",
+      "priceTrackingSwitchCheapest": "Notificar y cambiar al proveedor más barato",
       "priceThreshold": "Umbral de cambio (%)",
       "priceThresholdHint": "Ignorar cambios menores que este porcentaje; el precio manual nunca se sobrescribe",
       "recipients": "Destinatarios de notificaciones",
