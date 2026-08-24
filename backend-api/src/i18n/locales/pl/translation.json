@@ -122,7 +122,12 @@
     "reasonRemoved": "model został usunięty z katalogu OpenRouter",
     "provider": "Dostawca",
     "priceTitle": "📉 Zmieniły się ceny dostawców OpenRouter",
-    "priceUpdatedOverrides": "Ceny modeli w panelu administracyjnym zostały zaktualizowane automatycznie."
+    "priceUpdatedOverrides": "Ceny modeli w panelu administracyjnym zostały zaktualizowane automatycznie.",
+    "priceProviderSwitched": "Zmieniono dostawcę: {{previous}} → {{next}}.",
+    "priceProviderKept": "Dostawca nie został zmieniony: {{provider}} nadal najlepiej pasuje do wybranej strategii.",
+    "priceNoCandidate": "Dostawca nie został zmieniony: nie znaleziono odpowiedniego kandydata.",
+    "priceTrackingNotifyOnly": "Dostawca nie został zmieniony, ponieważ śledzenie cen ustawiono tylko na powiadomienia.",
+    "priceSwitchDisabled": "Automatyczne przełączanie dostawców nie jest skonfigurowane. Dostawca nie został zmieniony."
   },
   "models": {
     "selectionReset": "Wybrany model nie jest już dostępny. Chatter przełączył Cię na automatyczny wybór modelu."

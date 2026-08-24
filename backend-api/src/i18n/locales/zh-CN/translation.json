@@ -122,7 +122,12 @@
     "reasonRemoved": "该模型已从OpenRouter目录中移除",
     "provider": "提供商",
     "priceTitle": "📉 OpenRouter提供商价格已变更",
-    "priceUpdatedOverrides": "管理面板中的模型价格已自动更新。"
+    "priceUpdatedOverrides": "管理面板中的模型价格已自动更新。",
+    "priceProviderSwitched": "提供商已切换：{{previous}} → {{next}}。",
+    "priceProviderKept": "提供商未更改：{{provider}} 仍然最符合所选策略。",
+    "priceNoCandidate": "提供商未更改：未找到合适的候选提供商。",
+    "priceTrackingNotifyOnly": "由于价格跟踪设置为仅通知，因此未更改提供商。",
+    "priceSwitchDisabled": "未配置自动切换提供商。提供商未更改。"
   },
   "models": {
     "selectionReset": "所选模型不再可用。Chatter 已将您切换到自动模型选择。"

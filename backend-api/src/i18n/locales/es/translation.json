@@ -122,7 +122,12 @@
     "reasonRemoved": "el modelo fue eliminado del catálogo de OpenRouter",
     "provider": "Proveedor",
     "priceTitle": "📉 Los precios de los proveedores de OpenRouter cambiaron",
-    "priceUpdatedOverrides": "Los precios de los modelos en el panel de administración se actualizaron automáticamente."
+    "priceUpdatedOverrides": "Los precios de los modelos en el panel de administración se actualizaron automáticamente.",
+    "priceProviderSwitched": "Proveedor cambiado: {{previous}} → {{next}}.",
+    "priceProviderKept": "El proveedor no cambió: {{provider}} sigue siendo la mejor opción para la estrategia seleccionada.",
+    "priceNoCandidate": "El proveedor no cambió: no se encontró un candidato adecuado.",
+    "priceTrackingNotifyOnly": "El proveedor no cambió porque el seguimiento de precios está configurado solo para notificar.",
+    "priceSwitchDisabled": "El cambio automático de proveedor no está configurado. El proveedor no cambió."
   },
   "models": {
     "selectionReset": "El modelo seleccionado ya no está disponible. Chatter te cambió a la selección automática de modelos."

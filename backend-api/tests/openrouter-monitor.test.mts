@@ -281,6 +281,7 @@ outcomes = await runMonitorCycle();
 assert.ok(outcomes.find(o => o.modelId === 'manual-1')?.notified, 'price change notified');
 assert.ok(notifications.some(n => n.includes('$1 → $2 (+100%)')), 'old → new price + change percent in the message');
 assert.ok(notifications.every(n => !n.includes('updated automatically')), 'notify mode does not touch overrides');
+assert.ok(notifications.some(n => n.includes('Automatic provider switching is not configured')), 'message explains that no strategy is configured');
 assert.strictEqual(getModelOverride('manual-1')?.input_price_per_million, 1, 'override prices untouched in notify mode');
 console.log('✔ price change notifies without touching overrides');
 
@@ -302,6 +303,29 @@ outcomes = await runMonitorCycle();
 assert.ok(!outcomes.find(o => o.modelId === 'manual-1')?.notified, 'small drift ignored');
 assert.strictEqual(notifications.length, 0);
 console.log('✔ below-threshold drift ignored');
+
+// Update mode + a selection strategy re-evaluates all endpoints after a
+// significant price change and switches when another provider is now better.
+resetWorld();
+setSettings({ priceTracking: 'update', action: 'cheapest' });
+await runMonitorCycle(); // provider-a baseline
+notifications.length = 0;
+reprice('0.000004'); // provider-a becomes more expensive than provider-b
+outcomes = await runMonitorCycle();
+const priceSwitched = outcomes.find(o => o.modelId === 'manual-1');
+assert.ok(priceSwitched?.switched, 'price change switches to the cheapest provider');
+assert.strictEqual(priceSwitched?.newSlug, 'provider-b');
+assert.strictEqual(getModelOverride('manual-1')?.openrouter_provider_slug, 'provider-b');
+assert.strictEqual(getModelOverride('manual-1')?.input_price_per_million, 0.2);
+assert.ok(notifications.some(n => n.includes('Provider switched: Provider A Inc. (provider-a) → Provider B LLC (provider-b).')));
+
+// The replacement prices become the new baseline, so the next cycle must not
+// report the same change again.
+notifications.length = 0;
+outcomes = await runMonitorCycle();
+assert.ok(!outcomes.find(o => o.modelId === 'manual-1')?.notified, 'replacement baseline prevents duplicate alerts');
+assert.strictEqual(notifications.filter(n => n.includes('Route: Manual')).length, 0);
+console.log('✔ price change can switch provider and stores the new baseline');
 
 console.log('\nAll openrouter-monitor tests passed.');
 process.exit(0);

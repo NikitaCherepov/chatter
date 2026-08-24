@@ -32,7 +32,12 @@
     "reasonRemoved": "the model was removed from the OpenRouter catalog",
     "provider": "Provider",
     "priceTitle": "📉 OpenRouter provider prices changed",
-    "priceUpdatedOverrides": "Model prices in the admin panel were updated automatically."
+    "priceUpdatedOverrides": "Model prices in the admin panel were updated automatically.",
+    "priceProviderSwitched": "Provider switched: {{previous}} → {{next}}.",
+    "priceProviderKept": "Provider was not changed: {{provider}} is still the best match for the selected strategy.",
+    "priceNoCandidate": "Provider was not changed: no suitable candidate was found.",
+    "priceTrackingNotifyOnly": "Provider was not changed because price tracking is set to notify only.",
+    "priceSwitchDisabled": "Automatic provider switching is not configured. Provider was not changed."
   },
   "toolStatus": {
     "search_web": "Searching the web...",

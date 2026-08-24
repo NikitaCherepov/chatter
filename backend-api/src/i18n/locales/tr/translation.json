@@ -122,7 +122,12 @@
     "reasonRemoved": "model, OpenRouter kataloğundan kaldırıldı",
     "provider": "Sağlayıcı",
     "priceTitle": "📉 OpenRouter sağlayıcı fiyatları değişti",
-    "priceUpdatedOverrides": "Yönetim panelindeki model fiyatları otomatik olarak güncellendi."
+    "priceUpdatedOverrides": "Yönetim panelindeki model fiyatları otomatik olarak güncellendi.",
+    "priceProviderSwitched": "Sağlayıcı değiştirildi: {{previous}} → {{next}}.",
+    "priceProviderKept": "Sağlayıcı değiştirilmedi: {{provider}} seçilen stratejiye hâlâ en uygun seçenektir.",
+    "priceNoCandidate": "Sağlayıcı değiştirilmedi: uygun bir aday bulunamadı.",
+    "priceTrackingNotifyOnly": "Fiyat izleme yalnızca bildirim olarak ayarlandığı için sağlayıcı değiştirilmedi.",
+    "priceSwitchDisabled": "Otomatik sağlayıcı değiştirme yapılandırılmamış. Sağlayıcı değiştirilmedi."
   },
   "models": {
     "selectionReset": "Seçilen model artık mevcut değil. Chatter sizi otomatik model seçimine geçirdi."

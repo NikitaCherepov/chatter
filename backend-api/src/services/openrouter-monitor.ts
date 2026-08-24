@@ -616,8 +616,14 @@ export const runMonitorCycle = async (options?: {
           last_notified_key: null,
           last_error: null,
         });
-        const priceNotified = await maybeNotifyPriceChange(target, endpoints);
-        outcomes.push({ modelId: target.uniqueId, status: 'available', switched: false, notified: priceNotified });
+        const priceResult = await maybeNotifyPriceChange(target, endpoints);
+        outcomes.push({
+          modelId: target.uniqueId,
+          status: 'available',
+          switched: priceResult.switched,
+          notified: priceResult.notified,
+          newSlug: priceResult.newSlug,
+        });
         continue;
       }
 
@@ -755,6 +761,10 @@ const buildPriceNotification = (params: {
   prev: EndpointPrices;
   current: EndpointPrices;
   updatedOverrides: boolean;
+  strategy: MonitorAction;
+  switchResult: 'disabled' | 'notify_only' | 'kept' | 'switched' | 'no_candidate';
+  replacement?: CandidateGroup | null;
+  replacementName?: string | null;
 }, language?: unknown): string => {
   const t = (key: string, values: Record<string, string | number> = {}) =>
     translateForLanguage(language, `openRouterMonitor.${key}`, values);
@@ -781,7 +791,33 @@ const buildPriceNotification = (params: {
     `${t('cacheRead')}: ${delta(params.prev.cacheReadPricePerMillion, params.current.cacheReadPricePerMillion)} / 1M`,
   ];
   if (params.updatedOverrides) lines.push('', t('priceUpdatedOverrides'));
+  lines.push('', `${t('strategy')}: ${t(`strategy${params.strategy.charAt(0).toUpperCase()}${params.strategy.slice(1)}`)}`);
+  if (params.switchResult === 'switched' && params.replacement) {
+    const replacementLabel = params.replacementName && params.replacementName !== params.replacement.baseSlug
+      ? `${params.replacementName} (${params.replacement.baseSlug})`
+      : params.replacement.baseSlug;
+    lines.push(
+      t('priceProviderSwitched', { previous: label, next: replacementLabel }),
+      `${t('input')}: ${fmtPrice(params.replacement.prices?.inputPricePerMillion)} / 1M`,
+      `${t('output')}: ${fmtPrice(params.replacement.prices?.outputPricePerMillion)} / 1M`,
+      `${t('cacheRead')}: ${fmtPrice(params.replacement.prices?.cacheReadPricePerMillion)} / 1M`,
+    );
+  } else if (params.switchResult === 'kept') {
+    lines.push(t('priceProviderKept', { provider: label }));
+  } else if (params.switchResult === 'no_candidate') {
+    lines.push(t('priceNoCandidate'));
+  } else if (params.switchResult === 'notify_only') {
+    lines.push(t('priceTrackingNotifyOnly'));
+  } else {
+    lines.push(t('priceSwitchDisabled'));
+  }
   return lines.join('\n');
+};
+
+type PriceCheckResult = {
+  notified: boolean;
+  switched: boolean;
+  newSlug: string | null;
 };
 
 /**
@@ -793,22 +829,46 @@ const buildPriceNotification = (params: {
 const maybeNotifyPriceChange = async (
   target: MonitoredModel & { slug: string },
   endpoints: OpenRouterEndpoint[],
-): Promise<boolean> => {
+): Promise<PriceCheckResult> => {
+  const unchanged = { notified: false, switched: false, newSlug: null };
   try {
     const settings = getMonitorSettings();
-    if (settings.priceTracking === 'off') return false;
+    if (settings.priceTracking === 'off') return unchanged;
 
     const current = pinnedProviderPrices(endpoints, target.slug);
-    if (!current) return false;
+    if (!current) return unchanged;
 
     const currentJson = JSON.stringify(current);
     const stored = readState(target.uniqueId);
-    if (stored?.last_seen_prices === currentJson) return false; // nothing changed
+    if (stored?.last_seen_prices === currentJson) return unchanged; // nothing changed
 
     const prev = parseStoredPrices(stored?.last_seen_prices ?? null);
     upsertState(target.uniqueId, { last_seen_prices: currentJson });
-    if (!prev) return false; // first check → baseline only
-    if (pricesWithinThreshold(prev, current, settings.priceThresholdPct)) return false;
+    if (!prev) return unchanged; // first check → baseline only
+    if (pricesWithinThreshold(prev, current, settings.priceThresholdPct)) return unchanged;
+
+    let switchResult: 'disabled' | 'notify_only' | 'kept' | 'switched' | 'no_candidate';
+    let replacement: CandidateGroup | null = null;
+    let switched = false;
+
+    if (settings.action === 'notify') {
+      switchResult = 'disabled';
+    } else if (settings.priceTracking !== 'update') {
+      // Price tracking in notify-only mode must never mutate the selected provider.
+      switchResult = 'notify_only';
+    } else {
+      // Re-evaluate every provider after a significant price change. Include the
+      // current provider so it can remain selected when it is still the best.
+      replacement = selectReplacement(endpoints, settings.action);
+      if (!replacement) {
+        switchResult = 'no_candidate';
+      } else if (replacement.baseSlug === target.slug) {
+        switchResult = 'kept';
+      } else {
+        switchResult = 'switched';
+        switched = true;
+      }
+    }
 
     // 'update' mode refreshes model_overrides prices — never for manually
     // priced models, that's an explicit admin decision.
@@ -816,13 +876,29 @@ const maybeNotifyPriceChange = async (
     if (settings.priceTracking === 'update') {
       const override = getModelOverride(target.uniqueId);
       if (override && override.pricing_mode !== 'manual') {
+        const selectedPrices = switched ? replacement?.prices : current;
         setModelProvider(target.uniqueId, {
-          inputPricePerMillion: current.inputPricePerMillion,
-          outputPricePerMillion: current.outputPricePerMillion,
-          cacheReadPricePerMillion: current.cacheReadPricePerMillion,
+          openrouterProviderSlug: switched ? replacement!.baseSlug : target.slug,
+          inputPricePerMillion: selectedPrices?.inputPricePerMillion ?? null,
+          outputPricePerMillion: selectedPrices?.outputPricePerMillion ?? null,
+          cacheReadPricePerMillion: selectedPrices?.cacheReadPricePerMillion ?? null,
           pricingSource: 'openrouter_auto',
         });
         updatedOverrides = true;
+        if (switched && replacement) {
+          upsertState(target.uniqueId, {
+            provider_slug: replacement.baseSlug,
+            previous_provider_slug: target.slug,
+            replacement_provider_slug: replacement.baseSlug,
+            last_seen_prices: replacement.prices ? JSON.stringify(replacement.prices) : null,
+          });
+        }
+      } else if (switched) {
+        // Manual pricing is an explicit admin decision, so do not switch to a
+        // provider whose prices would not be persisted consistently.
+        switched = false;
+        replacement = null;
+        switchResult = 'no_candidate';
       }
     }
 
@@ -835,13 +911,17 @@ const maybeNotifyPriceChange = async (
       prev,
       current,
       updatedOverrides,
+      strategy: settings.action,
+      switchResult,
+      replacement,
+      replacementName: replacement ? names.get(replacement.baseSlug) ?? null : null,
     };
     const textFor = (language: unknown) => buildPriceNotification(params, language);
     for (const transport of notifyTransport) await transport(textFor).catch(() => {});
-    return true;
+    return { notified: true, switched, newSlug: switched ? replacement?.baseSlug ?? null : null };
   } catch (err) {
     console.warn('[openrouter-monitor] price check failed:', err);
-    return false;
+    return unchanged;
   }
 };
 
@@ -871,6 +951,10 @@ export const sendTestNotification = async (kind: 'missing' | 'price'): Promise<b
         prev,
         current,
         updatedOverrides: false,
+        strategy: getMonitorSettings().action,
+        switchResult: 'disabled' as const,
+        replacement: null,
+        replacementName: null,
       };
       textFor = (language: unknown) => buildPriceNotification(params, language);
     } else {

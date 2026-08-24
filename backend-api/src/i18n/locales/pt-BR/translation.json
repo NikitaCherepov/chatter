@@ -122,7 +122,12 @@
     "reasonRemoved": "o modelo foi removido do catálogo do OpenRouter",
     "provider": "Provedor",
     "priceTitle": "📉 Os preços dos provedores do OpenRouter mudaram",
-    "priceUpdatedOverrides": "Os preços dos modelos no painel administrativo foram atualizados automaticamente."
+    "priceUpdatedOverrides": "Os preços dos modelos no painel administrativo foram atualizados automaticamente.",
+    "priceProviderSwitched": "Provedor alterado: {{previous}} → {{next}}.",
+    "priceProviderKept": "O provedor não foi alterado: {{provider}} ainda é a melhor opção para a estratégia selecionada.",
+    "priceNoCandidate": "O provedor não foi alterado: nenhum candidato adequado foi encontrado.",
+    "priceTrackingNotifyOnly": "O provedor não foi alterado porque o monitoramento de preços está configurado apenas para notificar.",
+    "priceSwitchDisabled": "A troca automática de provedor não está configurada. O provedor não foi alterado."
   },
   "models": {
     "selectionReset": "O modelo selecionado não está mais disponível. O Chatter mudou você para a seleção automática de modelo."

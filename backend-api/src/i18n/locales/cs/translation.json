@@ -122,7 +122,12 @@
     "reasonRemoved": "model byl odebrán z katalogu OpenRouter",
     "provider": "Poskytovatel",
     "priceTitle": "📉 Ceny poskytovatele OpenRouter se změnily",
-    "priceUpdatedOverrides": "Ceny modelů v administračním panelu byly automaticky aktualizovány."
+    "priceUpdatedOverrides": "Ceny modelů v administračním panelu byly automaticky aktualizovány.",
+    "priceProviderSwitched": "Poskytovatel přepnut: {{previous}} → {{next}}.",
+    "priceProviderKept": "Poskytovatel nebyl změněn: {{provider}} stále nejlépe odpovídá zvolené strategii.",
+    "priceNoCandidate": "Poskytovatel nebyl změněn: nebyl nalezen vhodný kandidát.",
+    "priceTrackingNotifyOnly": "Poskytovatel nebyl změněn, protože sledování cen je nastaveno pouze na upozornění.",
+    "priceSwitchDisabled": "Automatické přepínání poskytovatelů není nastaveno. Poskytovatel nebyl změněn."
   },
   "models": {
     "selectionReset": "Vybraný model již není dostupný. Chatter vás přepnul na automatický výběr modelu."

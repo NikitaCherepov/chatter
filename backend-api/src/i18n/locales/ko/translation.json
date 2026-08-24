@@ -122,7 +122,12 @@
     "reasonRemoved": "모델이 OpenRouter 카탈로그에서 제거되었습니다.",
     "provider": "제공자",
     "priceTitle": "📉 OpenRouter 제공자 가격이 변경되었습니다.",
-    "priceUpdatedOverrides": "관리자 패널의 모델 가격이 자동으로 업데이트되었습니다."
+    "priceUpdatedOverrides": "관리자 패널의 모델 가격이 자동으로 업데이트되었습니다.",
+    "priceProviderSwitched": "제공자를 전환했습니다: {{previous}} → {{next}}.",
+    "priceProviderKept": "제공자가 변경되지 않았습니다. {{provider}}이(가) 선택한 전략에 여전히 가장 적합합니다.",
+    "priceNoCandidate": "제공자가 변경되지 않았습니다. 적합한 후보를 찾지 못했습니다.",
+    "priceTrackingNotifyOnly": "가격 추적이 알림 전용으로 설정되어 있어 제공자가 변경되지 않았습니다.",
+    "priceSwitchDisabled": "자동 제공자 전환이 구성되지 않았습니다. 제공자가 변경되지 않았습니다."
   },
   "models": {
     "selectionReset": "선택한 모델을 더 이상 사용할 수 없습니다. Chatter가 자동 모델 선택으로 전환했습니다."

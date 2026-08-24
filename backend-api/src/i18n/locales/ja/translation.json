@@ -122,7 +122,12 @@
     "reasonRemoved": "モデルがOpenRouterカタログから削除されました",
     "provider": "プロバイダー",
     "priceTitle": "📉 OpenRouterプロバイダーの価格が変更されました",
-    "priceUpdatedOverrides": "管理パネルのモデル価格が自動的に更新されました。"
+    "priceUpdatedOverrides": "管理パネルのモデル価格が自動的に更新されました。",
+    "priceProviderSwitched": "プロバイダーを切り替えました: {{previous}} → {{next}}。",
+    "priceProviderKept": "プロバイダーは変更されませんでした。{{provider}} が選択した戦略に引き続き最適です。",
+    "priceNoCandidate": "プロバイダーは変更されませんでした。適切な候補が見つかりませんでした。",
+    "priceTrackingNotifyOnly": "価格追跡が通知のみのため、プロバイダーは変更されませんでした。",
+    "priceSwitchDisabled": "プロバイダーの自動切り替えは設定されていません。プロバイダーは変更されませんでした。"
   },
   "models": {
     "selectionReset": "選択したモデルは利用できなくなりました。Chatterは自動モデル選択に切り替えました。"

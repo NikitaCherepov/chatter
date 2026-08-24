@@ -122,7 +122,12 @@
     "reasonRemoved": "das Modell wurde aus dem OpenRouter-Katalog entfernt",
     "provider": "Anbieter",
     "priceTitle": "📉 OpenRouter-Anbieterpreise geändert",
-    "priceUpdatedOverrides": "Modellpreise im Admin-Panel wurden automatisch aktualisiert."
+    "priceUpdatedOverrides": "Modellpreise im Admin-Panel wurden automatisch aktualisiert.",
+    "priceProviderSwitched": "Anbieter gewechselt: {{previous}} → {{next}}.",
+    "priceProviderKept": "Anbieter nicht geändert: {{provider}} passt weiterhin am besten zur gewählten Strategie.",
+    "priceNoCandidate": "Anbieter nicht geändert: Es wurde kein geeigneter Kandidat gefunden.",
+    "priceTrackingNotifyOnly": "Anbieter nicht geändert, da die Preisüberwachung nur Benachrichtigungen sendet.",
+    "priceSwitchDisabled": "Automatischer Anbieterwechsel ist nicht konfiguriert. Der Anbieter wurde nicht geändert."
   },
   "models": {
     "selectionReset": "Das ausgewählte Modell ist nicht mehr verfügbar. Chatter hat Sie zur automatischen Modellauswahl umgestellt."
