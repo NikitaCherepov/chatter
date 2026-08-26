@@ -2816,7 +2816,7 @@ const buildListDevopsServersTool = () => {
     type: 'function' as const,
     function: {
       name: 'list_devops_servers',
-      description: `Shows the user\'s server list (id, name, host, username). Use when the user mentions a server or asks to run a command on a remote server.`,
+      description: `Shows the user\'s server list (id, name, host, username, and whether a sudo password is saved). Use when the user mentions a server or asks to run a command on a remote server.`,
       parameters: {
         type: 'object',
         properties: {},
@@ -2837,7 +2837,14 @@ Use when the user asks to:
 - Check server or service status
 - View logs, processes, disk space
 
-Important: if the command is unknown or potentially dangerous — the user must confirm execution on the desktop.`,
+Important: if the command is unknown or potentially dangerous — the user must confirm execution on the desktop.
+
+Sudo and confirmation rules:
+- When the requested operation needs sudo, call this tool immediately with the real target command. The backend supplies a saved sudo password or asks the user for it in the confirmation card.
+- Do not run \`sudo -n\` or another probe before the target command.
+- Do not append \`|| echo ...\` merely to detect or hide failure. Read \`status\`, \`exit_code\`, \`stdout\`, and \`stderr\` from the tool result.
+- A confirmation card is created only by calling this tool. Never tell the user to confirm a command that you have not submitted through this tool.
+- Prefer one target operation per call. Use shell chaining only when the operation genuinely requires it.`,
       parameters: {
         type: 'object',
         properties: {
@@ -5072,7 +5079,7 @@ Respond in the user's language. Be detailed and precise.`
     }
     return JSON.stringify({
       status: 'success',
-      servers: servers.map(s => ({ id: s.id, name: s.name, host: s.host, port: s.port, username: s.username, default_ssh_key_id: s.default_ssh_key_id, use_ssh_key_for_login: s.use_ssh_key_for_login })),
+      servers: servers.map(s => ({ id: s.id, name: s.name, host: s.host, port: s.port, username: s.username, has_sudo_password: s.has_sudo_password, default_ssh_key_id: s.default_ssh_key_id, use_ssh_key_for_login: s.use_ssh_key_for_login })),
       ssh_keys: sshKeys.map(k => ({ id: k.id, name: k.name }))
     });
   }
