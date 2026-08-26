@@ -5102,12 +5102,13 @@ Respond in the user's language. Be detailed and precise.`
         const { execSshCommand } = await import('./ssh.js');
         const result = await execSshCommand(user.id, serverId, command);
         return JSON.stringify({
-          status: 'success',
+          status: result.exitCode === 0 ? 'success' : 'error',
           server: server.name,
           command,
           stdout: result.stdout.slice(-3000),
           stderr: result.stderr.slice(-1000),
-          exit_code: result.exitCode
+          exit_code: result.exitCode,
+          ...(result.exitCode === 0 ? {} : { message: `Command exited with code ${result.exitCode ?? 'unknown'}.` })
         });
       } catch (err: any) {
         return JSON.stringify({ status: 'error', message: `SSH error: ${err?.message || String(err)}`, server: server.name, command });
@@ -5155,12 +5156,13 @@ Respond in the user's language. Be detailed and precise.`
       });
 
       return JSON.stringify({
-        status: 'success',
+        status: result.exitCode === 0 ? 'success' : 'error',
         server: server.name,
         command,
         stdout: result.stdout?.slice(-3000) || '',
         stderr: result.stderr?.slice(-1000) || '',
-        exit_code: result.exitCode
+        exit_code: result.exitCode,
+        ...(result.exitCode === 0 ? {} : { message: `Command exited with code ${result.exitCode ?? 'unknown'}.` })
       });
     } catch (err: any) {
       if (err?.message?.startsWith('rejected_by_user')) {

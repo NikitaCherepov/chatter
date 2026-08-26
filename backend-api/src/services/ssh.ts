@@ -1,5 +1,6 @@
 import { Client, ClientChannel } from 'ssh2';
 import { getServerCreds, ServerCreds } from './devops.js';
+import { prepareCommandForSudoPassword } from './ssh-command.js';
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -134,12 +135,15 @@ export const execSshCommand = (
     client.on('ready', () => {
       clearTimeout(timer);
 
-      // If command uses sudo and we have a sudo password, use sudo -S and write password to stdin
+      // Add stdin password support to the sudo invocation itself without
+      // rewriting the surrounding shell expression. Prefixing the whole
+      // expression would turn `cd /app && sudo command` into `sudo cd ...`.
       let execCommand = command;
       const sudoPassword = options?.sudoPasswordOverride || creds.sudoPassword;
-      const needsSudoPassword = /\bsudo\b/.test(command) && sudoPassword;
+      const preparedSudoCommand = prepareCommandForSudoPassword(command);
+      const needsSudoPassword = preparedSudoCommand.needsPassword && Boolean(sudoPassword);
       if (needsSudoPassword) {
-        execCommand = `sudo -S ${command.replace(/^\s*sudo\s+/, '')}`;
+        execCommand = preparedSudoCommand.command;
       }
 
       client.exec(execCommand, (err: Error | undefined, stream: ClientChannel) => {
