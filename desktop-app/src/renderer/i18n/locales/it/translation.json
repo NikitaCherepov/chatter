@@ -522,7 +522,11 @@
       "currentPassword": "Password attuale",
       "newPassword": "Nuova password",
       "changeLogin": "Cambia login",
-      "newLogin": "Nuovo login"
+      "newLogin": "Nuovo login",
+      "timezone": "Fuso orario",
+      "timezoneHelp": "Utilizzato per l'ora locale, i promemoria e le attività pianificate.",
+      "timezoneDevice": "Fuso orario corrente su questo dispositivo",
+      "timezoneNotConfigured": "Non è stato ancora confermato; viene mostrato il fuso orario del dispositivo."
     },
     "prompt": {
       "style": "Stile di comunicazione",
@@ -637,7 +641,9 @@
       "loginChangeFailed": "Impossibile cambiare login",
       "loginAlreadyExists": "Questo login è già in uso",
       "badLogin": "Formato login non valido",
-      "loginRequired": "Inserisci la password attuale e il nuovo login"
+      "loginRequired": "Inserisci la password attuale e il nuovo login",
+      "timezoneSaved": "Fuso orario salvato",
+      "timezoneSaveFailed": "Impossibile salvare il fuso orario"
     },
     "connections": {
       "help": "Gestisci i servizi che possono accedere e utilizzare questo account.",

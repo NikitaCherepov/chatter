@@ -201,7 +201,11 @@
       "currentPassword": "Mot de passe actuel",
       "newPassword": "Nouveau mot de passe",
       "changeLogin": "Changer l'identifiant",
-      "newLogin": "Nouvel identifiant"
+      "newLogin": "Nouvel identifiant",
+      "timezone": "Fuseau horaire",
+      "timezoneHelp": "Utilisé pour l'heure locale, les rappels et les tâches planifiées.",
+      "timezoneDevice": "Fuseau horaire actuel sur cet appareil",
+      "timezoneNotConfigured": "Il n'a pas encore été confirmé ; le fuseau horaire de l'appareil est affiché."
     },
     "prompt": {
       "style": "Style de communication",
@@ -316,7 +320,9 @@
       "loginChangeFailed": "Échec de la modification de l'identifiant",
       "loginAlreadyExists": "Cet identifiant est déjà pris",
       "badLogin": "Format d'identifiant invalide",
-      "loginRequired": "Saisissez le mot de passe actuel et le nouvel identifiant"
+      "loginRequired": "Saisissez le mot de passe actuel et le nouvel identifiant",
+      "timezoneSaved": "Fuseau horaire enregistré",
+      "timezoneSaveFailed": "Impossible d'enregistrer le fuseau horaire"
     },
     "connections": {
       "help": "Gérez les services qui peuvent se connecter et utiliser ce compte.",

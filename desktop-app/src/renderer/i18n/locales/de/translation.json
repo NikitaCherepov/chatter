@@ -201,7 +201,11 @@
       "currentPassword": "Aktuelles Passwort",
       "newPassword": "Neues Passwort",
       "changeLogin": "Login ändern",
-      "newLogin": "Neuer Login"
+      "newLogin": "Neuer Login",
+      "timezone": "Zeitzone",
+      "timezoneHelp": "Wird für lokale Zeit, Erinnerungen und geplante Aufgaben verwendet.",
+      "timezoneDevice": "Aktuelle Zeitzone auf diesem Gerät",
+      "timezoneNotConfigured": "Noch nicht bestätigt; die Gerätezeitzone wird angezeigt."
     },
     "prompt": {
       "style": "Kommunikationsstil",
@@ -316,7 +320,9 @@
       "loginChangeFailed": "Anmeldung konnte nicht geändert werden",
       "loginAlreadyExists": "Diese Anmeldung ist bereits vergeben",
       "badLogin": "Ungültiges Anmeldeformat",
-      "loginRequired": "Aktuelles Passwort und neue Anmeldung eingeben"
+      "loginRequired": "Aktuelles Passwort und neue Anmeldung eingeben",
+      "timezoneSaved": "Zeitzone gespeichert",
+      "timezoneSaveFailed": "Zeitzone konnte nicht gespeichert werden"
     },
     "connections": {
       "help": "Verwalten Sie Dienste, die sich bei diesem Konto anmelden und es nutzen können.",

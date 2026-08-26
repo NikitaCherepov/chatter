@@ -201,7 +201,11 @@
       "currentPassword": "Senha Atual",
       "newPassword": "Nova Senha",
       "changeLogin": "Alterar Login",
-      "newLogin": "Novo Login"
+      "newLogin": "Novo Login",
+      "timezone": "Fuso horário",
+      "timezoneHelp": "Usado para hora local, lembretes e tarefas agendadas.",
+      "timezoneDevice": "Fuso horário atual neste dispositivo",
+      "timezoneNotConfigured": "Ainda não foi confirmado; o fuso horário do dispositivo é exibido."
     },
     "prompt": {
       "style": "Estilo de comunicação",
@@ -316,7 +320,9 @@
       "loginChangeFailed": "Falha ao alterar o login",
       "loginAlreadyExists": "Este login já está em uso",
       "badLogin": "Formato de login inválido",
-      "loginRequired": "Informe a senha atual e o novo login"
+      "loginRequired": "Informe a senha atual e o novo login",
+      "timezoneSaved": "Fuso horário salvo",
+      "timezoneSaveFailed": "Não foi possível salvar o fuso horário"
     },
     "connections": {
       "help": "Gerencie serviços que podem fazer login e usar esta conta.",

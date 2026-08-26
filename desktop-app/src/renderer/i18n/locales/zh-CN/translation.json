@@ -201,7 +201,11 @@
       "currentPassword": "当前密码",
       "newPassword": "新密码",
       "changeLogin": "更改登录",
-      "newLogin": "新登录"
+      "newLogin": "新登录",
+      "timezone": "时区",
+      "timezoneHelp": "用于本地时间、提醒和计划任务。",
+      "timezoneDevice": "此设备上的当前时区",
+      "timezoneNotConfigured": "尚未确认；显示设备时区。"
     },
     "prompt": {
       "style": "沟通风格",
@@ -316,7 +320,9 @@
       "loginChangeFailed": "更改登录失败",
       "loginAlreadyExists": "此登录名已被占用",
       "badLogin": "登录格式无效",
-      "loginRequired": "请输入当前密码和新登录名"
+      "loginRequired": "请输入当前密码和新登录名",
+      "timezoneSaved": "时区已保存",
+      "timezoneSaveFailed": "无法保存时区"
     },
     "connections": {
       "help": "管理可以登录并使用此账户的服务。",

@@ -904,6 +904,10 @@ const toAuthUserDto = (user: UserRecord) => {
     selected_prompt_id: effectiveUser.selected_prompt_id ?? null,
     custom_prompt_content: effectiveUser.custom_prompt_content ?? null,
     core_memory: effectiveUser.core_memory ?? null,
+    timezone_offset: effectiveUser.timezone_offset != null && Number.isFinite(Number(effectiveUser.timezone_offset))
+      ? Number(effectiveUser.timezone_offset)
+      : null,
+    timezone_confirmed: Number(effectiveUser.timezone_confirmed || 0) === 1,
     language: normalizeSupportedLanguage(effectiveUser.language),
     ui_settings: parseUiSettings(effectiveUser),
     subagent_model: effectiveUser.subagent_mode && effectiveUser.subagent_mode !== 'auto' ? effectiveUser.subagent_mode : null,
@@ -1167,6 +1171,24 @@ app.put('/api/v1/user/name', (req: AuthedRequest, res) => {
   const result = db.prepare('UPDATE users SET name = ? WHERE id = ?').run(name, userId);
   if (result.changes === 0) return res.status(404).json({ error: 'user_not_found' });
   return res.json({ ok: true, name });
+});
+
+app.put('/api/v1/user/timezone', (req: AuthedRequest, res) => {
+  const rawOffset = Number(req.body?.timezone_offset);
+  const timezoneOffset = Math.round(rawOffset * 4) / 4;
+  if (
+    !Number.isFinite(rawOffset)
+    || rawOffset < -12
+    || rawOffset > 14
+    || Math.abs(rawOffset - timezoneOffset) > 1e-7
+  ) {
+    return res.status(400).json({ error: 'bad_timezone_offset' });
+  }
+
+  const userId = resolveAccountId(req.authUserId!);
+  const result = setUserTimezone(userId, timezoneOffset);
+  if (result.changes === 0) return res.status(404).json({ error: 'user_not_found' });
+  return res.json({ ok: true, timezone_offset: timezoneOffset, timezone_confirmed: true });
 });
 
 // Revoke every access/refresh token previously issued to this account.
@@ -2572,7 +2594,7 @@ app.post('/api/v1/tasks', (req: AuthedRequest, res) => {
     ? Math.floor(Number(req.body?.recurrence_weekday))
     : null;
   const timezoneOffset = Number.isFinite(Number(req.body?.timezone_offset))
-    ? Math.floor(Number(req.body?.timezone_offset))
+    ? Math.round(Number(req.body?.timezone_offset) * 4) / 4
     : null;
   const notifyMode = `${req.body?.notify_mode || 'always'}` as any;
   const notifyCondition = req.body?.notify_condition == null ? null : `${req.body.notify_condition}`;
@@ -3235,9 +3257,15 @@ app.post('/internal/user/timezone', internalAuth, (req, res) => {
   const userId = resolveInternalAccountId(req.body?.user_id);
   const offset = Number(req.body?.timezone_offset);
   if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
-  if (!Number.isFinite(offset) || offset < -12 || offset > 14) return res.status(400).json({ error: 'bad_timezone_offset' });
+  const normalizedOffset = Math.round(offset * 4) / 4;
+  if (
+    !Number.isFinite(offset)
+    || offset < -12
+    || offset > 14
+    || Math.abs(offset - normalizedOffset) > 1e-7
+  ) return res.status(400).json({ error: 'bad_timezone_offset' });
 
-  setUserTimezone(userId, Math.floor(offset));
+  setUserTimezone(userId, normalizedOffset);
   return res.json({ ok: true });
 });
 

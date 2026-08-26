@@ -522,7 +522,11 @@
       "currentPassword": "현재 비밀번호",
       "newPassword": "새 비밀번호",
       "changeLogin": "로그인 변경",
-      "newLogin": "새 로그인"
+      "newLogin": "새 로그인",
+      "timezone": "시간대",
+      "timezoneHelp": "현지 시간, 알림 및 예약된 작업에 사용됩니다.",
+      "timezoneDevice": "이 기기의 현재 시간대",
+      "timezoneNotConfigured": "아직 확인되지 않았습니다. 기기 시간대가 표시됩니다."
     },
     "prompt": {
       "style": "대화 스타일",
@@ -637,7 +641,9 @@
       "loginChangeFailed": "로그인 변경에 실패했습니다.",
       "loginAlreadyExists": "이 로그인은 이미 사용 중입니다.",
       "badLogin": "잘못된 로그인 형식입니다.",
-      "loginRequired": "현재 비밀번호와 새 로그인을 입력하세요."
+      "loginRequired": "현재 비밀번호와 새 로그인을 입력하세요.",
+      "timezoneSaved": "시간대가 저장되었습니다.",
+      "timezoneSaveFailed": "시간대를 저장할 수 없습니다"
     },
     "connections": {
       "help": "이 계정에 로그인하고 사용할 수 있는 서비스를 관리합니다.",

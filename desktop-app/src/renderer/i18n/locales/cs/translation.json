@@ -522,7 +522,11 @@
       "currentPassword": "Stávající heslo",
       "newPassword": "Nové heslo",
       "changeLogin": "Změnit přihlašovací jméno",
-      "newLogin": "Nové přihlašovací jméno"
+      "newLogin": "Nové přihlašovací jméno",
+      "timezone": "Časové pásmo",
+      "timezoneHelp": "Používá se pro místní čas, připomínky a naplánované úlohy.",
+      "timezoneDevice": "Aktuální časové pásmo na tomto zařízení",
+      "timezoneNotConfigured": "Zatím nebylo potvrzeno; zobrazuje se časové pásmo zařízení."
     },
     "connections": {
       "help": "Spravujte služby, které se mohou přihlásit k tomuto účtu a používat jej.",
@@ -660,7 +664,9 @@
       "loginChangeFailed": "Změna přihlašovacího jména se nezdařila",
       "loginAlreadyExists": "Toto přihlašovací jméno je již obsazeno",
       "badLogin": "Neplatný formát přihlašovacího jména",
-      "loginRequired": "Zadejte aktuální heslo a nové přihlašovací jméno"
+      "loginRequired": "Zadejte aktuální heslo a nové přihlašovací jméno",
+      "timezoneSaved": "Časové pásmo uloženo",
+      "timezoneSaveFailed": "Časové pásmo se nepodařilo uložit"
     },
     "about": {
       "version": "Verze {{version}}",

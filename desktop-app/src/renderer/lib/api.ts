@@ -74,6 +74,8 @@ type User = {
   selected_prompt_id: number | null;
   custom_prompt_content: string | null;
   core_memory: string | null;
+  timezone_offset?: number | null;
+  timezone_confirmed?: boolean;
   language?: string | null;
   ui_settings?: UiSettings;
   subagent_model?: string | null;
@@ -1916,6 +1918,18 @@ export async function setUserName(name: string): Promise<{ ok: boolean; name: st
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name }),
+  });
+}
+
+export async function setUserTimezone(timezoneOffset: number): Promise<{
+  ok: boolean;
+  timezone_offset: number;
+  timezone_confirmed: boolean;
+}> {
+  return apiFetch('/api/v1/user/timezone', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ timezone_offset: timezoneOffset }),
   });
 }
 

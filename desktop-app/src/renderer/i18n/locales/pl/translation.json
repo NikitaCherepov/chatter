@@ -522,7 +522,11 @@
       "currentPassword": "Obecne hasło",
       "newPassword": "Nowe hasło",
       "changeLogin": "Zmień login",
-      "newLogin": "Nowy login"
+      "newLogin": "Nowy login",
+      "timezone": "Strefa czasowa",
+      "timezoneHelp": "Używana do czasu lokalnego, przypomnień i zaplanowanych zadań.",
+      "timezoneDevice": "Bieżąca strefa czasowa na tym urządzeniu",
+      "timezoneNotConfigured": "Nie została jeszcze potwierdzona; wyświetlana jest strefa czasowa urządzenia."
     },
     "prompt": {
       "style": "Styl komunikacji",
@@ -637,7 +641,9 @@
       "loginChangeFailed": "Nie udało się zmienić loginu",
       "loginAlreadyExists": "Ten login jest już zajęty",
       "badLogin": "Nieprawidłowy format loginu",
-      "loginRequired": "Wprowadź obecne hasło i nowy login"
+      "loginRequired": "Wprowadź obecne hasło i nowy login",
+      "timezoneSaved": "Zapisano strefę czasową",
+      "timezoneSaveFailed": "Nie udało się zapisać strefy czasowej"
     },
     "connections": {
       "help": "Zarządzaj usługami, które mogą logować się i korzystać z tego konta.",

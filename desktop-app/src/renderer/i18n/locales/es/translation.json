@@ -201,7 +201,11 @@
       "currentPassword": "Contraseña actual",
       "newPassword": "Nueva contraseña",
       "changeLogin": "Cambiar inicio de sesión",
-      "newLogin": "Nuevo inicio de sesión"
+      "newLogin": "Nuevo inicio de sesión",
+      "timezone": "Zona horaria",
+      "timezoneHelp": "Se usa para la hora local, recordatorios y tareas programadas.",
+      "timezoneDevice": "Zona horaria actual en este dispositivo",
+      "timezoneNotConfigured": "Aún no se ha confirmado; se muestra la zona horaria del dispositivo."
     },
     "prompt": {
       "style": "Estilo de comunicación",
@@ -316,7 +320,9 @@
       "loginChangeFailed": "Error al cambiar el inicio de sesión",
       "loginAlreadyExists": "Este inicio de sesión ya está en uso",
       "badLogin": "Formato de inicio de sesión no válido",
-      "loginRequired": "Ingrese la contraseña actual y el nuevo inicio de sesión"
+      "loginRequired": "Ingrese la contraseña actual y el nuevo inicio de sesión",
+      "timezoneSaved": "Zona horaria guardada",
+      "timezoneSaveFailed": "No se pudo guardar la zona horaria"
     },
     "connections": {
       "help": "Administra los servicios que pueden iniciar sesión y usar esta cuenta.",

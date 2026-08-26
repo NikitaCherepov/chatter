@@ -1677,23 +1677,36 @@ const normalizeDailyWebSearchLimit = (value: number | null | undefined) => {
 
 const clampTimezoneOffset = (offset: number) => {
   if (!Number.isFinite(offset)) return null;
-  const rounded = Math.round(offset);
+  const rounded = Math.round(offset * 4) / 4;
   if (rounded < -12 || rounded > 14) return null;
   return rounded;
 };
 
+const parseOffsetValue = (raw: string) => {
+  const normalized = raw.replace(/\s+/g, '').replace(',', '.');
+  const parts = normalized.split(':');
+  if (parts.length === 2) {
+    const hours = Number.parseInt(parts[0], 10);
+    const minutes = Number.parseInt(parts[1], 10);
+    if (!Number.isFinite(hours) || !Number.isFinite(minutes) || minutes < 0 || minutes >= 60) return null;
+    return Math.sign(hours || 1) * (Math.abs(hours) + minutes / 60);
+  }
+  const value = Number.parseFloat(normalized);
+  return Number.isFinite(value) ? value : null;
+};
+
 const parseUtcOffsetFromText = (raw: string) => {
   const text = raw.trim().toLowerCase();
-  const utcMatch = text.match(/utc\s*([+-]\s*\d{1,2})/i);
+  const utcMatch = text.match(/utc\s*([+-]\s*\d{1,2}(?::\d{2}|[.,]\d{1,2})?)/i);
   if (utcMatch) {
-    const value = Number.parseInt(utcMatch[1].replace(/\s+/g, ''), 10);
-    return clampTimezoneOffset(value);
+    const value = parseOffsetValue(utcMatch[1]);
+    return value === null ? null : clampTimezoneOffset(value);
   }
 
-  const gmtMatch = text.match(/gmt\s*([+-]\s*\d{1,2})/i);
+  const gmtMatch = text.match(/gmt\s*([+-]\s*\d{1,2}(?::\d{2}|[.,]\d{1,2})?)/i);
   if (gmtMatch) {
-    const value = Number.parseInt(gmtMatch[1].replace(/\s+/g, ''), 10);
-    return clampTimezoneOffset(value);
+    const value = parseOffsetValue(gmtMatch[1]);
+    return value === null ? null : clampTimezoneOffset(value);
   }
 
   return null;

@@ -522,7 +522,11 @@
       "currentPassword": "Mevcut Şifre",
       "newPassword": "Yeni Şifre",
       "changeLogin": "Girişi Değiştir",
-      "newLogin": "Yeni Giriş"
+      "newLogin": "Yeni Giriş",
+      "timezone": "Saat dilimi",
+      "timezoneHelp": "Yerel saat, hatırlatıcılar ve zamanlanmış görevler için kullanılır.",
+      "timezoneDevice": "Bu cihazdaki geçerli saat dilimi",
+      "timezoneNotConfigured": "Henüz onaylanmadı; cihaz saat dilimi gösteriliyor."
     },
     "connections": {
       "help": "Bu hesaba giriş yapabilen ve kullanabilen hizmetleri yönetin.",
@@ -660,7 +664,9 @@
       "loginChangeFailed": "Giriş değiştirilemedi",
       "loginAlreadyExists": "Bu giriş zaten kullanılıyor",
       "badLogin": "Geçersiz giriş formatı",
-      "loginRequired": "Mevcut şifreyi ve yeni girişi girin"
+      "loginRequired": "Mevcut şifreyi ve yeni girişi girin",
+      "timezoneSaved": "Saat dilimi kaydedildi",
+      "timezoneSaveFailed": "Saat dilimi kaydedilemedi"
     },
     "about": {
       "version": "Sürüm {{version}}",

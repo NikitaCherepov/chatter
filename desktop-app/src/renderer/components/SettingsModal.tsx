@@ -55,6 +55,22 @@ const ZOOM_STEP_PCT = 5;
 const ZOOM_MIN_PCT = 40;
 const ZOOM_MAX_PCT = 200;
 
+const COMMON_TIMEZONE_OFFSETS = [
+  -12, -11, -10, -9.5, -9, -8, -7, -6, -5, -4, -3.5, -3, -2, -1,
+  0, 1, 2, 3, 3.5, 4, 4.5, 5, 5.5, 5.75, 6, 6.5, 7, 8, 8.75,
+  9, 9.5, 10, 10.5, 11, 12, 12.75, 13, 13.75, 14,
+];
+
+const normalizeTimezoneOffset = (offset: number) => Math.min(14, Math.max(-12, Math.round(offset * 4) / 4));
+
+const formatTimezoneOffset = (offset: number) => {
+  const sign = offset >= 0 ? '+' : '-';
+  const absolute = Math.abs(offset);
+  const hours = Math.floor(absolute);
+  const minutes = Math.round((absolute - hours) * 60);
+  return `UTC${sign}${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+};
+
 
 const overlayVariants = {
   hidden: { opacity: 0 },
@@ -111,6 +127,22 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
   // Account
   const [nameValue, setNameValue] = useState('');
   const [saving, setSaving] = useState(false);
+  const detectedTimezoneOffset = useMemo(
+    () => normalizeTimezoneOffset(-new Date().getTimezoneOffset() / 60),
+    [],
+  );
+  const [timezoneValue, setTimezoneValue] = useState('');
+  const [timezoneSaving, setTimezoneSaving] = useState(false);
+  const timezoneOptions = useMemo<SelectOption[]>(() => {
+    const offsets = COMMON_TIMEZONE_OFFSETS.includes(detectedTimezoneOffset)
+      ? COMMON_TIMEZONE_OFFSETS
+      : [...COMMON_TIMEZONE_OFFSETS, detectedTimezoneOffset].sort((a, b) => a - b);
+    return offsets.map(offset => ({
+      value: String(offset),
+      label: formatTimezoneOffset(offset),
+      hint: offset === detectedTimezoneOffset ? t('settings.account.timezoneDevice') : undefined,
+    }));
+  }, [detectedTimezoneOffset, t]);
   // Password & login change — keep separate states so the two forms do not
   // interact (clearing one must not clear the other).
   const [pwdCurrent, setPwdCurrent] = useState('');
@@ -271,8 +303,14 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
     if (user) {
       setNameValue(user.name || '');
       setCoreMemory(user.core_memory || '');
+      const savedOffset = Number(user.timezone_offset);
+      setTimezoneValue(String(
+        user.timezone_confirmed && Number.isFinite(savedOffset)
+          ? normalizeTimezoneOffset(savedOffset)
+          : detectedTimezoneOffset,
+      ));
     }
-  }, [user]);
+  }, [user, detectedTimezoneOffset]);
 
   // Refresh core memory from server when account tab opens
   useEffect(() => {
@@ -281,7 +319,7 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
         .then((res: any) => {
           setCoreMemory(res.user.core_memory || '');
           if (user) {
-            const updated = { ...user, core_memory: res.user.core_memory || '' };
+            const updated = { ...user, ...res.user, core_memory: res.user.core_memory || '' };
             setUser(updated);
             localStorage.setItem('chatter_user', JSON.stringify(updated));
           }
@@ -673,6 +711,27 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
     if (e.key === 'Enter') {
       e.preventDefault();
       handleSaveName();
+    }
+  };
+
+  const handleSaveTimezone = async () => {
+    const timezoneOffset = Number(timezoneValue);
+    if (!Number.isFinite(timezoneOffset)) return;
+    setTimezoneSaving(true);
+    try {
+      const result = await api.setUserTimezone(timezoneOffset);
+      const updated = {
+        ...user!,
+        timezone_offset: result.timezone_offset,
+        timezone_confirmed: result.timezone_confirmed,
+      };
+      setUser(updated);
+      localStorage.setItem('chatter_user', JSON.stringify(updated));
+      toast.success(t('settings.toasts.timezoneSaved'));
+    } catch {
+      toast.error(t('settings.toasts.timezoneSaveFailed'));
+    } finally {
+      setTimezoneSaving(false);
     }
   };
 
@@ -1079,6 +1138,28 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
                     {coreMemory.length} / 800
                   </span>
                 </div>
+              </div>
+
+                            <div className={s.fieldGroup}>
+                <label className={s.fieldLabel}>{t('settings.account.timezone')}</label>
+                <span className={s.fieldLabel} style={{ marginTop: '-4px', display: 'block' }}>
+                  {t('settings.account.timezoneHelp')}
+                  {!user?.timezone_confirmed ? ` ${t('settings.account.timezoneNotConfigured')}` : ''}
+                </span>
+                <Select
+                  options={timezoneOptions}
+                  value={timezoneValue}
+                  onChange={setTimezoneValue}
+                  searchable
+                  maxVisibleItems={7}
+                />
+                <button
+                  className={s.saveBtn}
+                  onClick={handleSaveTimezone}
+                  disabled={timezoneSaving || !timezoneValue}
+                >
+                  {timezoneSaving ? t('common.saving') : t('common.save')}
+                </button>
               </div>
 
               <div className={s.macroFormDivider} />

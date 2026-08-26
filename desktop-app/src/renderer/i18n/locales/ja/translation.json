@@ -201,7 +201,11 @@
       "currentPassword": "現在のパスワード",
       "newPassword": "新しいパスワード",
       "changeLogin": "ログインIDを変更",
-      "newLogin": "新しいログインID"
+      "newLogin": "新しいログインID",
+      "timezone": "タイムゾーン",
+      "timezoneHelp": "現地時間、リマインダー、スケジュールされたタスクに使用されます。",
+      "timezoneDevice": "このデバイスの現在のタイムゾーン",
+      "timezoneNotConfigured": "まだ確認されていません。デバイスのタイムゾーンが表示されています。"
     },
     "prompt": {
       "style": "会話スタイル",
@@ -316,7 +320,9 @@
       "loginChangeFailed": "ログインの変更に失敗しました",
       "loginAlreadyExists": "このログインは既に使用されています",
       "badLogin": "ログイン形式が無効です",
-      "loginRequired": "現在のパスワードと新しいログインを入力してください"
+      "loginRequired": "現在のパスワードと新しいログインを入力してください",
+      "timezoneSaved": "タイムゾーンが保存されました",
+      "timezoneSaveFailed": "タイムゾーンを保存できませんでした"
     },
     "connections": {
       "help": "このアカウントにサインインして使用できるサービスを管理します。",
