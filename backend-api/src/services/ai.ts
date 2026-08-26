@@ -2134,18 +2134,18 @@ export const toolDefinitions = [
     type: 'function',
     function: {
       name: 'control_smart_home',
-      description: 'Controls a smart home device by its device_id. First call get_smart_devices to get the ID of the needed device.',
+      description: 'Controls a smart home device by its device_id. First call get_smart_devices. For Zigbee properties not covered by the standard actions, use set_property with an exact property from writable_properties.',
       parameters: {
         type: 'object',
         properties: {
           device_id: {
             type: 'string',
-            description: 'Device ID obtained from get_smart_devices (e.g. "yandex_group_d3866e23-..." or "yandex_device_65b9c366-...").'
+            description: 'Device ID obtained from get_smart_devices (for example "yandex_group_..." or "zigbee_0x...").'
           },
           action: {
             type: 'string',
-            enum: ['on', 'off', 'set_color', 'set_brightness'],
-            description: 'on - turn on, off - turn off, set_color - change color, set_brightness - change brightness.'
+            enum: ['on', 'off', 'set_color', 'set_brightness', 'set_property'],
+            description: 'Standard actions control power, color, or brightness. set_property controls any writable Zigbee2MQTT property listed by get_smart_devices.'
           },
           color: {
             type: 'string',
@@ -2154,6 +2154,14 @@ export const toolDefinitions = [
           brightness: {
             type: 'number',
             description: 'Brightness level from 1 to 100. Used only with action=set_brightness.'
+          },
+          property: {
+            type: 'string',
+            description: 'Exact Zigbee property from writable_properties. Used only with action=set_property.'
+          },
+          value: {
+            type: 'string',
+            description: 'Value for set_property. Use plain text for text/enum values and JSON text for numbers, booleans, objects, or arrays, e.g. 22, heat, true, or {"x":0.4,"y":0.3}.'
           }
         },
         required: ['device_id', 'action']
@@ -2172,7 +2180,7 @@ export const toolDefinitions = [
           delay_seconds: { type: 'number', description: 'Delay in seconds from now, e.g. 60.' },
           execute_at: { type: 'number', description: 'Legacy field: Unix timestamp in seconds. Use only if local_time/delay_seconds are not suitable.' },
           task_type: { type: 'string', enum: ['message', 'smart_home', 'ai_instruction'], description: 'message - reminder, smart_home - smart home command, ai_instruction - schedule AI instruction execution (web search, email check, data analysis, etc. — AI will call the needed tools itself).' },
-          payload: { type: 'string', description: 'For message: reminder text. For smart_home: JSON string like {"device_id":"yandex_group_...","action":"on"|"off"|"set_color"|"set_brightness","color":"#RRGGBB","brightness":50}. For ai_instruction: instruction text that the AI will execute on schedule.' },
+          payload: { type: 'string', description: 'For message: reminder text. For smart_home: JSON string with device_id and action (on, off, set_color, set_brightness, or Zigbee set_property with property and value). For ai_instruction: instruction text that the AI will execute on schedule.' },
           target_chat_id: { type: 'number', description: 'Chat ID where the task result will be saved and sent (ai_instruction only). If not specified — the active chat is used.' },
           create_new_chat: { type: 'boolean', description: 'Create a new chat for the task result (ai_instruction only). If true — a new chat will be created. target_chat_id is ignored.' },
           recurrence_type: { type: 'string', enum: ['once', 'daily', 'weekly'], description: 'Schedule type: once - one time, daily - every day, weekly - every week.' },

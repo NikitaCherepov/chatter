@@ -15,9 +15,34 @@ export type ZigbeeDeviceParsed = {
   type: string | null;
   capabilities: string;
   target_ids: string;
+  writable_properties: string;
 };
 
 export type MqttPublishResult = { ok: boolean; error?: string };
+
+export type ZigbeeWritableProperty = {
+  property: string;
+  name: string;
+  label: string;
+  type: 'binary' | 'numeric' | 'enum' | 'text' | 'composite' | 'list';
+  category?: string;
+  unit?: string;
+  value_min?: number;
+  value_max?: number;
+  value_step?: number;
+  values?: unknown[];
+  value_on?: unknown;
+  value_off?: unknown;
+  value_toggle?: unknown;
+  length_min?: number;
+  length_max?: number;
+  features?: ZigbeeWritableProperty[];
+  item_type?: ZigbeeWritableProperty;
+};
+
+export type ZigbeeValueValidation =
+  | { ok: true; value: unknown }
+  | { ok: false; error: string };
 
 // ── MQTT connection pool (one client per broker URL) ────────────────────────
 
@@ -146,6 +171,100 @@ function extractCapabilities(exposes: any[]): string[] {
   return caps;
 }
 
+const SUPPORTED_WRITABLE_TYPES = new Set(['binary', 'numeric', 'enum', 'text', 'composite', 'list']);
+
+const isSettable = (expose: any): boolean => (Number(expose?.access) & 2) === 2;
+
+const finiteNumber = (value: unknown): number | undefined => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+};
+
+const sanitizeWritableExpose = (expose: any, requireSetAccess: boolean): ZigbeeWritableProperty | null => {
+  if (!expose || typeof expose !== 'object') return null;
+  if (requireSetAccess && !isSettable(expose)) return null;
+
+  const type = `${expose.type || ''}`;
+  const property = `${expose.property || ''}`.trim();
+  if (!property || !SUPPORTED_WRITABLE_TYPES.has(type)) return null;
+
+  const result: ZigbeeWritableProperty = {
+    property,
+    name: `${expose.name || property}`,
+    label: `${expose.label || expose.name || property}`,
+    type: type as ZigbeeWritableProperty['type'],
+  };
+
+  if (typeof expose.category === 'string') result.category = expose.category;
+  if (typeof expose.unit === 'string') result.unit = expose.unit;
+
+  const valueMin = finiteNumber(expose.value_min);
+  const valueMax = finiteNumber(expose.value_max);
+  const valueStep = finiteNumber(expose.value_step);
+  const lengthMin = finiteNumber(expose.length_min);
+  const lengthMax = finiteNumber(expose.length_max);
+  if (valueMin !== undefined) result.value_min = valueMin;
+  if (valueMax !== undefined) result.value_max = valueMax;
+  if (valueStep !== undefined && valueStep > 0) result.value_step = valueStep;
+  if (lengthMin !== undefined) result.length_min = lengthMin;
+  if (lengthMax !== undefined) result.length_max = lengthMax;
+
+  if (Array.isArray(expose.values)) result.values = expose.values;
+  if (Object.prototype.hasOwnProperty.call(expose, 'value_on')) result.value_on = expose.value_on;
+  if (Object.prototype.hasOwnProperty.call(expose, 'value_off')) result.value_off = expose.value_off;
+  if (Object.prototype.hasOwnProperty.call(expose, 'value_toggle')) result.value_toggle = expose.value_toggle;
+
+  if (type === 'composite') {
+    const features = Array.isArray(expose.features)
+      ? expose.features
+          .map((feature: any) => sanitizeWritableExpose(feature, feature?.access !== undefined))
+          .filter((feature: ZigbeeWritableProperty | null): feature is ZigbeeWritableProperty => Boolean(feature))
+      : [];
+    if (!features.length) return null;
+    result.features = features;
+  }
+
+  if (type === 'list') {
+    const itemType = sanitizeWritableExpose(
+      { ...(expose.item_type || {}), property: expose.item_type?.property || 'item' },
+      false,
+    );
+    if (!itemType) return null;
+    result.item_type = itemType;
+  }
+
+  return result;
+};
+
+/** Returns only properties whose Zigbee2MQTT access mask includes SET (bit 2). */
+export function extractWritableProperties(exposes: any[]): ZigbeeWritableProperty[] {
+  const properties: ZigbeeWritableProperty[] = [];
+
+  const visit = (expose: any) => {
+    if (!expose || typeof expose !== 'object') return;
+
+    const direct = sanitizeWritableExpose(expose, true);
+    if (direct) {
+      properties.push(direct);
+      return;
+    }
+
+    if (Array.isArray(expose.features)) {
+      for (const feature of expose.features) visit(feature);
+    }
+  };
+
+  for (const expose of Array.isArray(exposes) ? exposes : []) visit(expose);
+
+  const seen = new Set<string>();
+  return properties.filter((property) => {
+    const key = `${property.property}:${property.type}:${JSON.stringify(property.features || [])}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 /**
  * Maps Z2M exposes names → unified capabilities (matching Yandex format).
  * This lets the AI tool work identically with both providers.
@@ -173,6 +292,7 @@ function parseZigbeeData(rawDevices: any[]): ZigbeeDeviceParsed[] {
     const friendlyName: string = d.friendly_name || d.ieee_address;
     const rawCaps = d.definition?.exposes ? extractCapabilities(d.definition.exposes) : [];
     const unifiedCaps = mapZ2mCapsToUnified(rawCaps);
+    const writableProperties = extractWritableProperties(d.definition?.exposes || []);
 
     // Detect device type from exposes
     const deviceType = d.definition?.exposes?.find((e: any) =>
@@ -189,6 +309,7 @@ function parseZigbeeData(rawDevices: any[]): ZigbeeDeviceParsed[] {
       type: deviceType,
       capabilities: JSON.stringify(unifiedCaps),
       target_ids: JSON.stringify([friendlyName]),
+      writable_properties: JSON.stringify(writableProperties),
     });
   }
 
@@ -235,6 +356,7 @@ export async function discoverZigbeeGroups(brokerUrl: string): Promise<ZigbeeDev
             type: 'light', // Groups are typically lights
             capabilities: JSON.stringify(['on_off', 'brightness', 'color_setting']),
             target_ids: JSON.stringify([g.friendly_name]),
+            writable_properties: JSON.stringify([]),
           }));
 
         resolve(groups);
@@ -297,15 +419,126 @@ function buildZ2mPayload(action: string, args: { color?: string; brightness?: nu
   return {};
 }
 
-/**
- * Publishes an MQTT command for a zigbee device.
- * Topic: zigbee2mqtt/{FRIENDLY_NAME}/set
- */
-export async function publishZigbeeCommand(
+const decodeToolValue = (rawValue: unknown): unknown => {
+  if (typeof rawValue !== 'string') return rawValue;
+  const trimmed = rawValue.trim();
+  if (!trimmed) return '';
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    return trimmed;
+  }
+};
+
+const matchAllowedValue = (value: unknown, allowedValues: unknown[]): unknown | undefined => {
+  const exact = allowedValues.find(allowed => Object.is(allowed, value));
+  if (exact !== undefined) return exact;
+  if (typeof value !== 'string') return undefined;
+  const normalized = value.trim().toLowerCase();
+  return allowedValues.find(allowed => typeof allowed === 'string' && allowed.toLowerCase() === normalized);
+};
+
+export function validateZigbeePropertyValue(
+  schema: ZigbeeWritableProperty,
+  rawValue: unknown,
+): ZigbeeValueValidation {
+  const value = decodeToolValue(rawValue);
+
+  if (schema.type === 'numeric') {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return { ok: false, error: 'value_must_be_numeric' };
+    if (schema.value_min !== undefined && numeric < schema.value_min) {
+      return { ok: false, error: `value_below_minimum_${schema.value_min}` };
+    }
+    if (schema.value_max !== undefined && numeric > schema.value_max) {
+      return { ok: false, error: `value_above_maximum_${schema.value_max}` };
+    }
+    if (schema.value_step !== undefined) {
+      const base = schema.value_min || 0;
+      const steps = (numeric - base) / schema.value_step;
+      if (Math.abs(steps - Math.round(steps)) > 1e-7) {
+        return { ok: false, error: `value_must_follow_step_${schema.value_step}` };
+      }
+    }
+    return { ok: true, value: numeric };
+  }
+
+  if (schema.type === 'binary') {
+    const allowed = [schema.value_on, schema.value_off, schema.value_toggle]
+      .filter(candidate => candidate !== undefined);
+    const matched = matchAllowedValue(value, allowed);
+    if (matched === undefined) {
+      return { ok: false, error: `value_must_be_one_of_${JSON.stringify(allowed)}` };
+    }
+    return { ok: true, value: matched };
+  }
+
+  if (schema.type === 'enum') {
+    const allowed = Array.isArray(schema.values) ? schema.values : [];
+    const matched = matchAllowedValue(value, allowed);
+    if (matched === undefined) {
+      return { ok: false, error: `value_must_be_one_of_${JSON.stringify(allowed)}` };
+    }
+    return { ok: true, value: matched };
+  }
+
+  if (schema.type === 'text') {
+    if (typeof value !== 'string') return { ok: false, error: 'value_must_be_text' };
+    return { ok: true, value };
+  }
+
+  if (schema.type === 'composite') {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return { ok: false, error: 'value_must_be_json_object' };
+    }
+    const features = schema.features || [];
+    const input = value as Record<string, unknown>;
+    const output: Record<string, unknown> = {};
+    for (const [key, nestedValue] of Object.entries(input)) {
+      const nestedSchema = features.find(feature => feature.property === key);
+      if (!nestedSchema) return { ok: false, error: `unknown_nested_property_${key}` };
+      const nestedResult = validateZigbeePropertyValue(nestedSchema, nestedValue);
+      if (nestedResult.ok === false) return { ok: false, error: `${key}_${nestedResult.error}` };
+      output[key] = nestedResult.value;
+    }
+    if (!Object.keys(output).length) return { ok: false, error: 'composite_value_is_empty' };
+    return { ok: true, value: output };
+  }
+
+  if (schema.type === 'list') {
+    if (!Array.isArray(value)) return { ok: false, error: 'value_must_be_json_array' };
+    if (schema.length_min !== undefined && value.length < schema.length_min) {
+      return { ok: false, error: `list_shorter_than_${schema.length_min}` };
+    }
+    if (schema.length_max !== undefined && value.length > schema.length_max) {
+      return { ok: false, error: `list_longer_than_${schema.length_max}` };
+    }
+    if (!schema.item_type) return { ok: false, error: 'list_item_schema_missing' };
+    const output: unknown[] = [];
+    for (let index = 0; index < value.length; index += 1) {
+      const itemResult = validateZigbeePropertyValue(schema.item_type, value[index]);
+      if (itemResult.ok === false) return { ok: false, error: `item_${index}_${itemResult.error}` };
+      output.push(itemResult.value);
+    }
+    return { ok: true, value: output };
+  }
+
+  return { ok: false, error: 'unsupported_property_type' };
+}
+
+export async function publishZigbeeProperty(
   brokerUrl: string,
   friendlyName: string,
-  action: string,
-  args: { color?: string; brightness?: number },
+  property: string,
+  value: unknown,
+): Promise<MqttPublishResult> {
+  return publishZigbeePayload(brokerUrl, friendlyName, { [property]: value });
+}
+
+async function publishZigbeePayload(
+  brokerUrl: string,
+  friendlyName: string,
+  payload: Record<string, unknown>,
 ): Promise<MqttPublishResult> {
   try {
     const client = getMqttClient(brokerUrl);
@@ -318,9 +551,7 @@ export async function publishZigbeeCommand(
       });
     }
 
-    const payload = buildZ2mPayload(action, args);
     const topic = `zigbee2mqtt/${friendlyName}/set`;
-
     return new Promise<MqttPublishResult>((resolve) => {
       client.publish(topic, JSON.stringify(payload), { qos: 1 }, (err) => {
         if (err) return resolve({ ok: false, error: err.message });
@@ -330,6 +561,19 @@ export async function publishZigbeeCommand(
   } catch (err: any) {
     return { ok: false, error: err.message || String(err) };
   }
+}
+
+/**
+ * Publishes an MQTT command for a zigbee device.
+ * Topic: zigbee2mqtt/{FRIENDLY_NAME}/set
+ */
+export async function publishZigbeeCommand(
+  brokerUrl: string,
+  friendlyName: string,
+  action: string,
+  args: { color?: string; brightness?: number },
+): Promise<MqttPublishResult> {
+  return publishZigbeePayload(brokerUrl, friendlyName, buildZ2mPayload(action, args));
 }
 
 // ── Color helper (duplicated from smart-home.ts to avoid circular import) ───

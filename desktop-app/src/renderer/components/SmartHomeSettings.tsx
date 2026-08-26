@@ -240,7 +240,7 @@ export function SmartHomeSettings() {
                   <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{t('advanced.smart.zigbee.step4')}</span><br />
                   {t('advanced.smart.zigbee.step4Text')}<br />
                   <code style={{ color: 'var(--accent)' }}>mqtt://192.168.1.100:1883</code><br />
-                  <code style={{ color: 'var(--accent)' }}>mqtt://localhost:1883</code>
+                  <code style={{ color: 'var(--accent)' }}>mqtts://user:password@mqtt.example.com:8883</code>
                 </div>
                 <div style={{ marginBottom: '10px' }}>
                   <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{t('advanced.smart.zigbee.step5')}</span><br />

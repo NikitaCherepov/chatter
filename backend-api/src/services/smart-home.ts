@@ -1,7 +1,14 @@
 import crypto from 'node:crypto';
 import { db, getNowUnix } from '../db.js';
 import { getEncryptionKey } from '../utils/encryption.js';
-import { discoverZigbeeDevices, discoverZigbeeGroups, publishZigbeeCommand } from './zigbee.js';
+import {
+  discoverZigbeeDevices,
+  discoverZigbeeGroups,
+  publishZigbeeCommand,
+  publishZigbeeProperty,
+  validateZigbeePropertyValue,
+  type ZigbeeWritableProperty,
+} from './zigbee.js';
 
 // ── Encryption (uses shared ENCRYPTION_KEY, same as mail.ts) ─────────────────
 
@@ -49,22 +56,30 @@ db.exec(`
     type TEXT,
     capabilities TEXT NOT NULL DEFAULT '[]',
     target_ids TEXT NOT NULL DEFAULT '[]',
+    writable_properties TEXT NOT NULL DEFAULT '[]',
     created_at INTEGER NOT NULL,
     PRIMARY KEY (user_id, id)
   )
 `);
 
+const smartDeviceColumns = db.prepare('PRAGMA table_info(smart_devices)').all() as Array<{ name: string }>;
+if (!smartDeviceColumns.some(column => column.name === 'writable_properties')) {
+  db.exec("ALTER TABLE smart_devices ADD COLUMN writable_properties TEXT NOT NULL DEFAULT '[]'");
+}
+
 db.exec('CREATE INDEX IF NOT EXISTS idx_smart_devices_user ON smart_devices(user_id)');
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
-export type SmartHomeAction = 'on' | 'off' | 'set_color' | 'set_brightness';
+export type SmartHomeAction = 'on' | 'off' | 'set_color' | 'set_brightness' | 'set_property';
 
 export type SmartHomeArgs = {
   device_id?: string;
   action?: SmartHomeAction;
   color?: string;
   brightness?: number;
+  property?: string;
+  value?: unknown;
 };
 
 export type SmartDeviceDto = {
@@ -94,6 +109,7 @@ type SmartDeviceRow = {
   type: string | null;
   capabilities: string;
   target_ids: string;
+  writable_properties: string;
   created_at: number;
 };
 
@@ -368,11 +384,11 @@ export const syncZigbeeDevices = async (userId: number): Promise<{ synced: numbe
     db.prepare(`DELETE FROM smart_devices WHERE user_id = ? AND provider = 'zigbee'`).run(userId);
     const now = getNowUnix();
     const insert = db.prepare(`
-      INSERT INTO smart_devices (id, user_id, name, room_name, provider, is_group, native_id, type, capabilities, target_ids, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO smart_devices (id, user_id, name, room_name, provider, is_group, native_id, type, capabilities, target_ids, writable_properties, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     for (const d of allParsed) {
-      insert.run(d.id, userId, d.name, d.room_name, d.provider, d.is_group, d.native_id, d.type, d.capabilities, d.target_ids, now);
+      insert.run(d.id, userId, d.name, d.room_name, d.provider, d.is_group, d.native_id, d.type, d.capabilities, d.target_ids, d.writable_properties, now);
     }
     db.prepare(`UPDATE smart_home_settings SET synced_at = ? WHERE user_id = ? AND provider = 'zigbee'`)
       .run(now, userId);
@@ -401,15 +417,29 @@ export const listSmartDevices = (userId: number): SmartDeviceDto[] => {
 
 /** Compact JSON for AI tool response (get_smart_devices) */
 export const listSmartDevicesForAi = (userId: number): string => {
-  const devices = listSmartDevices(userId);
-  if (!devices.length) return 'No devices found. Ask the user to add a token and sync devices in settings.';
-  const compact = devices.map(d => ({
-    id: d.id,
-    name: d.name,
-    room: d.room_name,
-    type: d.type,
-    capabilities: d.capabilities,
-  }));
+  const devices = db.prepare(`SELECT * FROM smart_devices WHERE user_id = ? ORDER BY name COLLATE NOCASE`)
+    .all(userId) as SmartDeviceRow[];
+  if (!devices.length) return 'No devices found. Ask the user to configure a provider and sync devices in settings.';
+  const compact = devices.map(d => {
+    let writableProperties: ZigbeeWritableProperty[] = [];
+    if (d.provider === 'zigbee') {
+      try {
+        const parsed = JSON.parse(d.writable_properties || '[]');
+        if (Array.isArray(parsed)) writableProperties = parsed;
+      } catch {
+        writableProperties = [];
+      }
+    }
+    return {
+      id: d.id,
+      name: d.name,
+      room: d.room_name,
+      provider: d.provider,
+      type: d.type,
+      capabilities: JSON.parse(d.capabilities || '[]'),
+      ...(writableProperties.length ? { writable_properties: writableProperties } : {}),
+    };
+  });
   return JSON.stringify(compact, null, 2);
 };
 
@@ -468,8 +498,12 @@ export const runSmartHomeControl = async (userId: number, args: SmartHomeArgs): 
   if (!device) return `Error: device with id "${deviceId}" not found. Run sync in settings.`;
 
   const action = args.action;
-  if (!action || !['on', 'off', 'set_color', 'set_brightness'].includes(action)) {
+  if (!action || !['on', 'off', 'set_color', 'set_brightness', 'set_property'].includes(action)) {
     return 'Tool error: unknown action.';
+  }
+
+  if (action === 'set_property' && device.provider !== 'zigbee') {
+    return 'Tool error: set_property is available only for Zigbee devices.';
   }
 
   // ── Zigbee: MQTT publish ──
@@ -480,6 +514,44 @@ export const runSmartHomeControl = async (userId: number, args: SmartHomeArgs): 
     const targetIds: string[] = JSON.parse(device.target_ids);
     const friendlyName = targetIds[0]; // zigbee uses friendly_name for MQTT topic
     if (!friendlyName) return 'Error: device has no MQTT address.';
+
+    if (action === 'set_property') {
+      const property = `${args.property || ''}`.trim();
+      if (!property) return 'Tool error: property is required for set_property.';
+      if (args.value === undefined) return 'Tool error: value is required for set_property.';
+
+      let writableProperties: ZigbeeWritableProperty[] = [];
+      try {
+        const parsed = JSON.parse(device.writable_properties || '[]');
+        if (Array.isArray(parsed)) writableProperties = parsed;
+      } catch {
+        writableProperties = [];
+      }
+
+      const candidates = writableProperties.filter(item => item.property === property);
+      if (!candidates.length) {
+        return `Tool error: Zigbee property "${property}" is not writable for this device. Run sync in settings and call get_smart_devices again.`;
+      }
+
+      let validatedValue: unknown;
+      const validationErrors: string[] = [];
+      for (const candidate of candidates) {
+        const validation = validateZigbeePropertyValue(candidate, args.value);
+        if (validation.ok) {
+          validatedValue = validation.value;
+          break;
+        }
+        if (validation.ok === false) validationErrors.push(validation.error);
+      }
+
+      if (validatedValue === undefined) {
+        return `Tool error: invalid value for Zigbee property "${property}": ${validationErrors.join(' | ') || 'validation_failed'}.`;
+      }
+
+      const result = await publishZigbeeProperty(brokerUrl, friendlyName, property, validatedValue);
+      if (!result.ok) return `MQTT error: ${result.error}`;
+      return `Success: "${device.name}" → ${property} set to ${JSON.stringify(validatedValue)}.`;
+    }
 
     const result = await publishZigbeeCommand(brokerUrl, friendlyName, action, {
       color: args.color,
