@@ -323,7 +323,6 @@
       "diceMode": "Dice mode (d20)",
       "diceHelp": "Adds a d20 next to the message box. AI responses depend on your luck.",
       "contextLimitHelp": "Older messages are archived when the context exceeds the limit. When exceeded, the context is collapsed to 50%. Plan maximum: {{max}}k tokens.",
-      "contextLimitModelWarning": "You selected {{selected}}k, but the current model supports {{model}}k. Chatter will use {{model}}k.",
       "attachmentLimitHelp": "How many context tokens attached document contents may use. 0 = auto (90% of the context limit). Maximum: {{max}}k tokens."
     },
     "about": {
@@ -715,6 +714,7 @@
       "imageSaveFailed": "Could not save the image",
       "imageDeleteFailed": "Could not delete the image",
       "modelChangeFailed": "Could not change the model",
+      "modelContextLimited": "Your context limit is {{selected}}k, but this model supports {{model}}k. Chatter will use {{model}}k.",
       "reasoningChangeFailed": "Could not change the reasoning level",
       "macroSaved": "Macro saved to settings",
       "macroSaveFailed": "Could not save the macro",

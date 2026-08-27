@@ -1398,6 +1398,7 @@ export function ChatPage() {
   }>>([]);
   const [modelsCatalog, setModelsCatalog] = useState<api.ModelCatalogEntry[]>([]);
   const [preferredModel, setPreferredModel] = useState<string | null>(null);
+  const [selectedContextLimit, setSelectedContextLimit] = useState<number | null>(null);
   const [reasoningLevel, setReasoningLevel] = useState<api.ReasoningLevel | null>(null);
   const [autoReasoningLevels, setAutoReasoningLevels] = useState<api.ReasoningLevel[]>(['none', 'minimal', 'low', 'medium', 'high', 'xhigh']);
   const [autoSupportsVision, setAutoSupportsVision] = useState<{ pro: boolean; lite: boolean }>({ pro: false, lite: false });
@@ -1434,6 +1435,10 @@ export function ChatPage() {
       try {
         const res = await api.getReasoningLevel();
         setReasoningLevel(res.reasoning_level);
+      } catch {}
+      try {
+        const res = await api.getContextTokenLimit();
+        setSelectedContextLimit(res.max_context_tokens);
       } catch {}
     })();
   }, []);
@@ -4945,6 +4950,25 @@ export function ChatPage() {
                           try {
                             await api.setPreferredModel(modelId);
                             setPreferredModel(modelId);
+                            let currentContextLimit = selectedContextLimit;
+                            try {
+                              const limit = await api.getContextTokenLimit();
+                              currentContextLimit = limit.max_context_tokens;
+                              setSelectedContextLimit(currentContextLimit);
+                            } catch {}
+                            const modelContext = modelId
+                              ? modelsCatalog.find((model) => model.id === modelId)?.context_length
+                              : null;
+                            if (
+                              modelContext
+                              && currentContextLimit
+                              && currentContextLimit > modelContext
+                            ) {
+                              toast.info(t('chat.toasts.modelContextLimited', {
+                                selected: Math.round(currentContextLimit / 1000),
+                                model: Math.round(modelContext / 1000),
+                              }));
+                            }
                           } catch {
                             toast.error(t('chat.toasts.modelChangeFailed'));
                           }
