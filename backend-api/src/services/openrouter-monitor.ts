@@ -992,7 +992,7 @@ export const sendTestNotification = async (kind: 'missing' | 'price'): Promise<b
       textFor = (language: unknown) => buildPriceNotification(params, language);
     } else {
       const replacement: CandidateGroup = {
-        baseSlug: 'example-replacement',
+        baseSlug: 'DeepSeek',
         prices: { inputPricePerMillion: 0.75, outputPricePerMillion: 1.2, cacheReadPricePerMillion: 0.05 },
         throughputP50: 420,
         latencyP50: 180,
