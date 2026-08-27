@@ -11,7 +11,7 @@
       "saveFirst": "Najpierw zapisz token",
       "invalidToken": "Nieprawidłowy lub wygasły token Yandex",
       "syncError": "Błąd synchronizacji:",
-      "title": "Inteligentny dom (Yandex)",
+      "title": "Inteligentny dom",
       "oauthToken": "Token OAuth Yandex",
       "savedPlaceholder": "•••••••• (token zapisany)",
       "tokenPlaceholder": "Wklej token (y0_...)",

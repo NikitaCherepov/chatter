@@ -11,7 +11,7 @@
       "saveFirst": "Nejprve uložte token",
       "invalidToken": "Neplatný nebo expirovaný Yandex token",
       "syncError": "Chyba synchronizace:",
-      "title": "Chytrá domácnost (Yandex)",
+      "title": "Chytrá domácnost",
       "oauthToken": "Yandex OAuth token",
       "savedPlaceholder": "•••••••• (token uložen)",
       "tokenPlaceholder": "Vložte token (y0_...)",

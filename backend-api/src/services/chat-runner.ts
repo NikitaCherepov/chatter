@@ -175,6 +175,7 @@ const runSteps = async (
         agent_id: agentId,
         owner_user_id: step.ownerUserId,
         initiator_user_id: step.initiatorUserId,
+        is_voice: Boolean(step.options?.isVoice),
         result,
       });
       if (result.aborted) break;

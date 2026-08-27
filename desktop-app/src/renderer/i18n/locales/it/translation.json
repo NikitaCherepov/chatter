@@ -11,7 +11,7 @@
       "saveFirst": "Salva prima il token",
       "invalidToken": "Token Yandex non valido o scaduto",
       "syncError": "Errore di sincronizzazione:",
-      "title": "Casa intelligente (Yandex)",
+      "title": "Casa intelligente",
       "oauthToken": "Token OAuth Yandex",
       "savedPlaceholder": "•••••••• (token salvato)",
       "tokenPlaceholder": "Incolla il token (y0_...)",

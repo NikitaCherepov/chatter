@@ -1021,7 +1021,7 @@
       "saveFirst": "Enregistrez d'abord le jeton",
       "invalidToken": "Jeton Yandex invalide ou expiré",
       "syncError": "Erreur de synchronisation :",
-      "title": "Maison intelligente (Yandex)",
+      "title": "Maison intelligente",
       "oauthToken": "Jeton OAuth Yandex",
       "savedPlaceholder": "•••••••• (jeton enregistré)",
       "tokenPlaceholder": "Insérez le jeton (y0_...)",

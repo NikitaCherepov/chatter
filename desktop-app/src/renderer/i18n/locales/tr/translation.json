@@ -11,7 +11,7 @@
       "saveFirst": "Önce token'ı kaydedin",
       "invalidToken": "Geçersiz veya süresi dolmuş Yandex token'ı",
       "syncError": "Senkronizasyon hatası:",
-      "title": "Akıllı ev (Yandex)",
+      "title": "Akıllı ev",
       "oauthToken": "Yandex OAuth token'ı",
       "savedPlaceholder": "•••••••• (token kaydedildi)",
       "tokenPlaceholder": "Token'ı yapıştırın (y0_...)",

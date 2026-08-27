@@ -11,7 +11,7 @@
       "saveFirst": "먼저 토큰을 저장하세요",
       "invalidToken": "잘못되었거나 만료된 Yandex 토큰",
       "syncError": "동기화 오류:",
-      "title": "스마트 홈 (Yandex)",
+      "title": "스마트 홈",
       "oauthToken": "Yandex OAuth 토큰",
       "savedPlaceholder": "•••••••• (토큰 저장됨)",
       "tokenPlaceholder": "토큰을 입력하세요 (y0_...)",

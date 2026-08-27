@@ -2488,6 +2488,18 @@ export function ChatPage() {
         }
       }
 
+      // Voice-triggered replies are broadcast to every room participant, but
+      // automatic TTS must run only on the desktop that initiated the request.
+      if (
+        event.type === 'chat_agent_done'
+        && event.is_voice
+        && event.initiator_user_id === user?.id
+        && event.result?.message_id
+        && event.result?.reply_text
+      ) {
+        ttsSpeak(event.result.message_id, event.result.reply_text);
+      }
+
       if (event.chat_id !== activeChatIdRef.current) {
         // Background run finished in another chat: light the unread badge
         // (same as scheduled tasks) and push a native notification with the

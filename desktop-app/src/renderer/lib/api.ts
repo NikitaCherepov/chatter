@@ -853,7 +853,7 @@ export type RoomEvent =
   | { type: 'chat_agent_start'; chat_id: number; agent_id: number | null; agent_name: string; owner_user_id: number; reason: 'mention' | 'auto' | 'manual' }
   | { type: 'chat_agent_token'; chat_id: number; agent_id: number | null; text: string }
   | { type: 'chat_agent_reasoning'; chat_id: number; agent_id: number | null; text: string }
-  | { type: 'chat_agent_done'; chat_id: number; agent_id: number | null; owner_user_id: number; result: any }
+  | { type: 'chat_agent_done'; chat_id: number; agent_id: number | null; owner_user_id: number; initiator_user_id: number; is_voice?: boolean; result: any }
   | { type: 'chat_agent_error'; chat_id: number; agent_id: number | null; error: string; message?: string }
   | { type: 'chat_intermediate'; chat_id: number; text: string }
   | { type: 'chat_tool_status'; chat_id: number; text: string }

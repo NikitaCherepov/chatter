@@ -2354,7 +2354,13 @@ app.post('/api/v1/chat/send', async (req: AuthedRequest, res) => {
         ...(result.user_message_images ? { images: result.user_message_images } : {}),
         ...(savedUserAttachments ? { attachments: savedUserAttachments } : {}),
       });
-      void runRoomResponseQueue(targetChatId, userId, text, (payload) => broadcastToChat(targetChatId, payload));
+      void runRoomResponseQueue(
+        targetChatId,
+        userId,
+        text,
+        (payload) => broadcastToChat(targetChatId, payload),
+        { isVoice },
+      );
       return;
     }
 
@@ -6870,7 +6876,13 @@ async function handleWsChatSend(client: WsClient, msg: any) {
         ...(result.user_message_images ? { images: result.user_message_images } : {}),
         ...(savedUserAttachments ? { attachments: savedUserAttachments } : {}),
       });
-      void runRoomResponseQueue(targetChatId, userId, text, (payload) => broadcastToChat(targetChatId, payload));
+      void runRoomResponseQueue(
+        targetChatId,
+        userId,
+        text,
+        (payload) => broadcastToChat(targetChatId, payload),
+        { isVoice: Boolean(is_voice) },
+      );
       return;
     }
 

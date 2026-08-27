@@ -87,7 +87,7 @@ The bot receives the list of tools from the backend and passes them to the AI. A
 
 - **search_web** — web search (Tavily).
 - **read_webpage** — fetch and clean webpage text.
-- **get_smart_devices** / **control_smart_home** — smart home control (Yandex). Two tools: the first returns a list of devices from the DB, the second controls them by device_id. Token and devices are configured via UI (Settings → Smart Home).
+- **get_smart_devices** / **control_smart_home** — smart home control. Two tools: the first returns a list of devices from the DB, the second controls them by device_id. Token and devices are configured via UI (Settings → Smart Home).
 - **schedule_task** / **get_my_tasks** / **delete_my_task** — schedule tasks and reminders.
 - **set_user_timezone** — set user timezone.
 - **check_emails** / **read_email_content** / **send_email** — email operations.

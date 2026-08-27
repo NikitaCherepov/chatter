@@ -1021,7 +1021,7 @@
       "saveFirst": "まずトークンを保存してください",
       "invalidToken": "Yandexトークンが無効または期限切れです",
       "syncError": "同期エラー:",
-      "title": "スマートホーム (Yandex)",
+      "title": "スマートホーム",
       "oauthToken": "Yandex OAuthトークン",
       "savedPlaceholder": "•••••••• (トークン保存済み)",
       "tokenPlaceholder": "トークンを貼り付け (y0_...)",

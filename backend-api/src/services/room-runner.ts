@@ -144,7 +144,11 @@ export const stopRoomQueue = stopChatRun;
 /** True while the chat has an active or queued run (late-joiner sync). */
 export const hasActiveRoomRun = hasActiveChatRun;
 
-const toChatSteps = (steps: RoomResponseStep[], initiatorId: number): ChatRunStep[] =>
+type RoomResponseOptions = {
+  isVoice?: boolean;
+};
+
+const toChatSteps = (steps: RoomResponseStep[], initiatorId: number, options?: RoomResponseOptions): ChatRunStep[] =>
   steps.map(({ agent, reason }) => ({
     kind: 'agent',
     agentId: agent.id,
@@ -152,6 +156,7 @@ const toChatSteps = (steps: RoomResponseStep[], initiatorId: number): ChatRunSte
     initiatorUserId: initiatorId,
     agentName: agent.name,
     reason: reason === 'mention' ? 'mention' : 'auto',
+    ...(options ? { options } : {}),
   }));
 
 /** Run the room response queue through the unified chat-runner. */
@@ -160,9 +165,10 @@ export const runRoomResponseQueue = async (
   senderId: number,
   userText: string,
   emit: RoomRunEmitter,
+  options?: RoomResponseOptions,
 ): Promise<void> => {
   const steps = computeRoomResponseQueue(senderId, chatId, userText);
-  await runChatSteps(chatId, toChatSteps(steps, senderId), emit);
+  await runChatSteps(chatId, toChatSteps(steps, senderId, options), emit);
 };
 
 /**

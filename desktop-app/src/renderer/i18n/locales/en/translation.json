@@ -1085,7 +1085,7 @@
       "saveFirst": "Save the token first",
       "invalidToken": "Invalid or expired Yandex token",
       "syncError": "Sync error:",
-      "title": "Smart home (Yandex)",
+      "title": "Smart home",
       "oauthToken": "Yandex OAuth token",
       "savedPlaceholder": "•••••••• (token saved)",
       "tokenPlaceholder": "Paste the token (y0_...)",
