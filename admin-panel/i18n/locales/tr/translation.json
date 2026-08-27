@@ -161,7 +161,10 @@
       "isFree": "Ücretsiz model",
       "isFreeHint": "Etkinleştirilirse, model herhangi bir kota tüketmez (ne token ne de $ cinsinden bütçe) ve harcanan paraya dahil edilmez.",
       "isFreeOn": "Ücretsiz: evet",
-      "isFreeOff": "Ücretsiz: hayır"
+      "isFreeOff": "Ücretsiz: hayır",
+      "contextLength": "Bağlam penceresi",
+      "contextLengthHint": "Bu model/sağlayıcı tarafından desteklenen maksimum toplam bağlam, token cinsinden.",
+      "contextLengthAutoHint": "Seçilen OpenRouter uç noktasından otomatik olarak algılanır."
     },
     "billing": {
       "customProvider": "Özel",

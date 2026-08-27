@@ -156,7 +156,10 @@
       "isFree": "無料モデル",
       "isFreeHint": "有効にすると、モデルはクォータ（トークンや予算（$））を消費せず、支出額にもカウントされません。",
       "isFreeOn": "無料：はい",
-      "isFreeOff": "無料：いいえ"
+      "isFreeOff": "無料：いいえ",
+      "contextLength": "コンテキストウィンドウ",
+      "contextLengthHint": "このモデル/プロバイダーがサポートする最大合計コンテキスト（トークン単位）。",
+      "contextLengthAutoHint": "選択したOpenRouterエンドポイントから自動的に検出されます。"
     },
     "billing": {
       "customProvider": "カスタム",

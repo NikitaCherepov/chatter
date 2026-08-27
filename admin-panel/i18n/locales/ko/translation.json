@@ -156,7 +156,10 @@
       "isFree": "무료 모델",
       "isFreeHint": "활성화하면 모델이 할당량(토큰이나 예산($))을 소비하지 않으며 지출 금액에 포함되지 않습니다.",
       "isFreeOn": "무료: 예",
-      "isFreeOff": "무료: 아니요"
+      "isFreeOff": "무료: 아니요",
+      "contextLength": "컨텍스트 창",
+      "contextLengthHint": "이 모델/제공자가 지원하는 최대 총 컨텍스트(토큰 단위)입니다.",
+      "contextLengthAutoHint": "선택한 OpenRouter 엔드포인트에서 자동으로 감지됩니다."
     },
     "billing": {
       "customProvider": "사용자 정의",

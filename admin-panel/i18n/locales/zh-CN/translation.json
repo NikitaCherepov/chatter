@@ -156,7 +156,10 @@
       "isFree": "免费模型",
       "isFreeHint": "如果启用，该模型不消耗任何配额（既不计入代币也不计入预算$），也不计入已花费金额。",
       "isFreeOn": "免费：是",
-      "isFreeOff": "免费：否"
+      "isFreeOff": "免费：否",
+      "contextLength": "上下文窗口",
+      "contextLengthHint": "此模型/提供商支持的最大总上下文，以令牌为单位。",
+      "contextLengthAutoHint": "从选定的 OpenRouter 端点自动检测。"
     },
     "billing": {
       "customProvider": "自定义",

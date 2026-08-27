@@ -632,7 +632,8 @@
       "commandsReviewFailed": "Échec de la vérification des commandes",
       "credentialsUpdateFailed": "Échec de la mise à jour des identifiants",
       "enterNewPassword": "Entrez un nouveau mot de passe",
-      "folderAllowedSession": "Dossier autorisé pour cette session : {{folder}}"
+      "folderAllowedSession": "Dossier autorisé pour cette session : {{folder}}",
+      "modelContextLimited": "Votre limite de contexte est de {{selected}}k, mais ce modèle prend en charge {{model}}k. Chatter utilisera {{model}}k."
     },
     "image": {
       "generatedAlt": "Image générée",

@@ -156,7 +156,10 @@
       "isFree": "Modelo gratuito",
       "isFreeHint": "Se ativado, o modelo não consome nenhuma cota (nem tokens nem orçamento em $) e não é contabilizado no dinheiro gasto.",
       "isFreeOn": "Gratuito: sim",
-      "isFreeOff": "Gratuito: não"
+      "isFreeOff": "Gratuito: não",
+      "contextLength": "Janela de contexto",
+      "contextLengthHint": "Contexto total máximo suportado por este modelo/provedor, em tokens.",
+      "contextLengthAutoHint": "Detectado automaticamente a partir do endpoint OpenRouter selecionado."
     },
     "billing": {
       "customProvider": "Personalizado",

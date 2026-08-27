@@ -944,7 +944,8 @@
       "commandsReviewFailed": "Komutlar incelenemedi",
       "credentialsUpdateFailed": "Kimlik bilgileri güncellenemedi",
       "enterNewPassword": "Yeni bir şifre girin",
-      "folderAllowedSession": "Bu oturum için klasöre izin verildi: {{folder}}"
+      "folderAllowedSession": "Bu oturum için klasöre izin verildi: {{folder}}",
+      "modelContextLimited": "Bağlam sınırınız {{selected}}k, ancak bu model {{model}}k destekliyor. Chatter, {{model}}k kullanacak."
     },
     "image": {
       "generatedAlt": "Oluşturulan görsel",

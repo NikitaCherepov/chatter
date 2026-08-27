@@ -632,7 +632,8 @@
       "commandsReviewFailed": "命令审核失败",
       "credentialsUpdateFailed": "凭据更新失败",
       "enterNewPassword": "输入新密码",
-      "folderAllowedSession": "已为此会话允许文件夹：{{folder}}"
+      "folderAllowedSession": "已为此会话允许文件夹：{{folder}}",
+      "modelContextLimited": "您的上下文限制为{{selected}}k，但此模型支持{{model}}k。Chatter将使用{{model}}k。"
     },
     "image": {
       "generatedAlt": "生成的图像",

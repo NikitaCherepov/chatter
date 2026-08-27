@@ -632,7 +632,8 @@
       "commandsReviewFailed": "Befehlsprüfung fehlgeschlagen",
       "credentialsUpdateFailed": "Fehler beim Aktualisieren der Anmeldedaten",
       "enterNewPassword": "Neues Passwort eingeben",
-      "folderAllowedSession": "Ordner für diese Sitzung zugelassen: {{folder}}"
+      "folderAllowedSession": "Ordner für diese Sitzung zugelassen: {{folder}}",
+      "modelContextLimited": "Ihr Kontextlimit beträgt {{selected}}k, aber dieses Modell unterstützt {{model}}k. Chatter verwendet {{model}}k."
     },
     "image": {
       "generatedAlt": "Generiertes Bild",

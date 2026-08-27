@@ -944,7 +944,8 @@
       "commandsReviewFailed": "명령 검토 실패",
       "credentialsUpdateFailed": "자격 증명 업데이트 오류",
       "enterNewPassword": "새 비밀번호 입력",
-      "folderAllowedSession": "이 세션에 허용된 폴더: {{folder}}"
+      "folderAllowedSession": "이 세션에 허용된 폴더: {{folder}}",
+      "modelContextLimited": "컨텍스트 한도는 {{selected}}k이지만, 이 모델은 {{model}}k를 지원합니다. Chatter는 {{model}}k를 사용합니다."
     },
     "image": {
       "generatedAlt": "생성된 이미지",

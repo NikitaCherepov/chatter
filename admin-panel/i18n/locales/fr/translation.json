@@ -156,7 +156,10 @@
       "isFree": "Modèle gratuit",
       "isFreeHint": "Si activé, le modèle ne consomme aucun quota (ni jetons ni budget en $) et n'est pas compté dans les dépenses.",
       "isFreeOn": "Gratuit : oui",
-      "isFreeOff": "Gratuit : non"
+      "isFreeOff": "Gratuit : non",
+      "contextLength": "Fenêtre de contexte",
+      "contextLengthHint": "Contexte total maximal pris en charge par ce modèle/fournisseur, en jetons.",
+      "contextLengthAutoHint": "Détecté automatiquement à partir du point de terminaison OpenRouter sélectionné."
     },
     "billing": {
       "customProvider": "Personnalisé",

@@ -632,7 +632,8 @@
       "commandsReviewFailed": "No se pudieron revisar los comandos",
       "credentialsUpdateFailed": "Error al actualizar las credenciales",
       "enterNewPassword": "Ingrese la nueva contraseña",
-      "folderAllowedSession": "Carpeta permitida para esta sesión: {{folder}}"
+      "folderAllowedSession": "Carpeta permitida para esta sesión: {{folder}}",
+      "modelContextLimited": "Tu límite de contexto es {{selected}}k, pero este modelo admite {{model}}k. Chatter usará {{model}}k."
     },
     "image": {
       "generatedAlt": "Imagen generada",

@@ -156,7 +156,10 @@
       "isFree": "Darmowy model",
       "isFreeHint": "Jeśli włączone, model nie zużywa żadnego limitu (ani tokenów, ani budżetu w $) i nie jest liczony do wydanych pieniędzy.",
       "isFreeOn": "Darmowy: tak",
-      "isFreeOff": "Darmowy: nie"
+      "isFreeOff": "Darmowy: nie",
+      "contextLength": "Okno kontekstu",
+      "contextLengthHint": "Maksymalny całkowity kontekst obsługiwany przez ten model/dostawcę, w tokenach.",
+      "contextLengthAutoHint": "Wykrywane automatycznie z wybranego punktu końcowego OpenRouter."
     },
     "billing": {
       "customProvider": "Niestandardowy",

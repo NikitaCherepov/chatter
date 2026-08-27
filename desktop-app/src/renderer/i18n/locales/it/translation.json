@@ -944,7 +944,8 @@
       "commandsReviewFailed": "Revisione comandi fallita",
       "credentialsUpdateFailed": "Aggiornamento credenziali fallito",
       "enterNewPassword": "Inserisci nuova password",
-      "folderAllowedSession": "Cartella consentita per questa sessione: {{folder}}"
+      "folderAllowedSession": "Cartella consentita per questa sessione: {{folder}}",
+      "modelContextLimited": "Il tuo limite di contesto è {{selected}}k, ma questo modello supporta {{model}}k. Chatter userà {{model}}k."
     },
     "image": {
       "generatedAlt": "Immagine generata",

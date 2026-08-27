@@ -156,7 +156,10 @@
       "isFree": "Kostenloses Modell",
       "isFreeHint": "Wenn aktiviert, verbraucht das Modell kein Kontingent (weder Tokens noch Budget in $) und wird nicht in den Ausgaben gezählt.",
       "isFreeOn": "Kostenlos: ja",
-      "isFreeOff": "Kostenlos: nein"
+      "isFreeOff": "Kostenlos: nein",
+      "contextLength": "Kontextfenster",
+      "contextLengthHint": "Maximaler Gesamtkontext, der von diesem Modell/Anbieter unterstützt wird, in Tokens.",
+      "contextLengthAutoHint": "Automatisch vom ausgewählten OpenRouter-Endpunkt erkannt."
     },
     "billing": {
       "customProvider": "Benutzerdefiniert",

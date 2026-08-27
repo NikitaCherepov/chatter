@@ -944,7 +944,8 @@
       "commandsReviewFailed": "Příkazy se nepodařilo zkontrolovat",
       "credentialsUpdateFailed": "Přihlašovací údaje se nepodařilo aktualizovat",
       "enterNewPassword": "Zadejte nové heslo",
-      "folderAllowedSession": "Složka povolena pro tuto relaci: {{folder}}"
+      "folderAllowedSession": "Složka povolena pro tuto relaci: {{folder}}",
+      "modelContextLimited": "Váš limit kontextu je {{selected}}k, ale tento model podporuje {{model}}k. Chatter použije {{model}}k."
     },
     "image": {
       "generatedAlt": "Vygenerovaný obrázek",

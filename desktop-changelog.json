@@ -1,56 +1,56 @@
 {
   "changes": {
     "en": [
-      "Added timezone settings",
-      "Improved Zigbee work"
+      "Added a notification when the model's context window is smaller than the selected context size",
+      "Fixed renaming of room chats"
     ],
     "cs": [
-      "Přidána nastavení časového pásma",
-      "Vylepšena práce se Zigbee"
+      "Přidáno upozornění, když je kontextové okno modelu menší než vybraná velikost kontextu",
+      "Opraveno přejmenování pokojových chatů"
     ],
     "de": [
-      "Zeitzoneneinstellungen hinzugefügt",
-      "Zigbee-Arbeit verbessert"
+      "Benachrichtigung hinzugefügt, wenn das Kontextfenster des Modells kleiner als die ausgewählte Kontextgröße ist",
+      "Umbenennen von Raum-Chats behoben"
     ],
     "es": [
-      "Ajustes de zona horaria añadidos",
-      "Mejorado el trabajo con Zigbee"
+      "Se añadió una notificación cuando la ventana de contexto del modelo es más pequeña que el tamaño de contexto seleccionado",
+      "Se corrigió el cambio de nombre de los chats de sala"
     ],
     "fr": [
-      "Paramètres de fuseau horaire ajoutés",
-      "Amélioration du travail Zigbee"
+      "Ajout d'une notification lorsque la fenêtre de contexte du modèle est plus petite que la taille de contexte sélectionnée",
+      "Correction du renommage des discussions de salle"
     ],
     "it": [
-      "Aggiunte impostazioni del fuso orario",
-      "Migliorato il funzionamento di Zigbee"
+      "Aggiunta una notifica quando la finestra di contesto del modello è più piccola della dimensione di contesto selezionata",
+      "Corretta la rinomina delle chat di stanza"
     ],
     "ja": [
-      "タイムゾーン設定を追加しました",
-      "Zigbeeの動作を改善しました"
+      "モデルのコンテキストウィンドウが選択したコンテキストサイズより小さい場合の通知を追加しました",
+      "ルームチャットの名前変更を修正しました"
     ],
     "ko": [
-      "시간대 설정 추가됨",
-      "Zigbee 작업 개선됨"
+      "모델의 컨텍스트 창이 선택한 컨텍스트 크기보다 작을 때 알림을 추가했습니다.",
+      "방 채팅 이름 변경 문제를 수정했습니다."
     ],
     "pl": [
-      "Dodano ustawienia strefy czasowej",
-      "Ulepszono działanie Zigbee"
+      "Dodano powiadomienie, gdy okno kontekstu modelu jest mniejsze niż wybrany rozmiar kontekstu",
+      "Naprawiono zmienianie nazw czatów pokojowych"
     ],
     "pt-BR": [
-      "Configurações de fuso horário adicionadas",
-      "Trabalho Zigbee aprimorado"
+      "Adicionada uma notificação quando a janela de contexto do modelo é menor que o tamanho de contexto selecionado",
+      "Corrigida a renomeação de conversas de sala"
     ],
     "ru": [
-      "Добавлены настройки часового пояса",
-      "Улучшена работа Zigbee"
+      "Добавлено уведомление, когда окно контекста модели меньше выбранного размера контекста",
+      "Исправлено переименование комнатных чатов"
     ],
     "tr": [
-      "Saat dilimi ayarları eklendi",
-      "Zigbee çalışması iyileştirildi"
+      "Modelin bağlam penceresi seçilen bağlam boyutundan küçük olduğunda bir bildirim eklendi",
+      "Oda sohbetlerinin yeniden adlandırılması düzeltildi"
     ],
     "zh-CN": [
-      "添加了时区设置",
-      "改进了Zigbee工作"
+      "当模型的上下文窗口小于所选上下文大小时，添加了通知",
+      "修复了房间聊天的重命名问题"
     ]
   }
 }

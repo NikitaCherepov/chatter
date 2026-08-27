@@ -162,7 +162,10 @@
       "isFree": "Bezplatný model",
       "isFreeHint": "Pokud je povoleno, model nespotřebovává žádný kvótu (ani tokeny, ani rozpočet v $) a nezapočítává se do utracených peněz.",
       "isFreeOn": "Bezplatný: ano",
-      "isFreeOff": "Bezplatný: ne"
+      "isFreeOff": "Bezplatný: ne",
+      "contextLength": "Kontextové okno",
+      "contextLengthHint": "Maximální celkový kontext podporovaný tímto modelem/poskytovatelem, v tokenech.",
+      "contextLengthAutoHint": "Automaticky zjištěno z vybraného koncového bodu OpenRouter."
     },
     "billing": {
       "customProvider": "Vlastní",

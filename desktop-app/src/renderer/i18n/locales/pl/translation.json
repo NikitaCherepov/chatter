@@ -944,7 +944,8 @@
       "commandsReviewFailed": "Nie udało się sprawdzić poleceń",
       "credentialsUpdateFailed": "Błąd aktualizacji danych logowania",
       "enterNewPassword": "Wprowadź nowe hasło",
-      "folderAllowedSession": "Folder dozwolony dla tej sesji: {{folder}}"
+      "folderAllowedSession": "Folder dozwolony dla tej sesji: {{folder}}",
+      "modelContextLimited": "Twój limit kontekstu wynosi {{selected}}k, ale ten model obsługuje {{model}}k. Chatter użyje {{model}}k."
     },
     "image": {
       "generatedAlt": "Wygenerowany obraz",
