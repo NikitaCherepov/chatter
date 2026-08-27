@@ -514,7 +514,6 @@ type MessageItemProps = {
   authorName?: string;
   isOwnUser: boolean;
   isLastAssistant: boolean;
-  isLast: boolean;
   /** False for foreign private agents: regeneration is rejected server-side
    *  and the optimistic UI would remove the message. */
   canRegenerate: boolean;
@@ -553,7 +552,6 @@ type MessageItemProps = {
 const MessageItem = React.memo(function MessageItem({
   msg,
   authorName,
-  isLast,
   isOwnUser,
   isLastAssistant,
   canRegenerate,
@@ -912,12 +910,12 @@ const MessageItem = React.memo(function MessageItem({
         </div>
         <AnimatePresence>
           {hasReasoning && reasoningOpen && (
-            <motion.div className={`${s.reasoningPanel} ${isLast ? s.reasoningPanelUp : ''} ${isStreamingReasoning || isStreamingContent ? s.bubbleTextStreaming : ''}`} variants={reasoningPanelVariants} initial="hidden" animate="visible" exit="exit">
+            <motion.div className={`${s.reasoningPanel} ${isStreamingReasoning || isStreamingContent ? s.bubbleTextStreaming : ''}`} variants={reasoningPanelVariants} initial="hidden" animate="visible" exit="exit">
               <MarkdownRenderer content={msg.reasoning_content || ''} />
             </motion.div>
           )}
           {hasToolCalls && isToolCallsOpen && (
-            <motion.div className={`${s.reasoningPanel} ${isLast ? s.reasoningPanelUp : ''}`} variants={reasoningPanelVariants} initial="hidden" animate="visible" exit="exit">
+            <motion.div className={s.reasoningPanel} variants={reasoningPanelVariants} initial="hidden" animate="visible" exit="exit">
               <div className={s.toolCallList}>
                 {msg.tool_calls!.map((tc, i) => {
                   const args = formatToolValue(tc.arguments);
@@ -940,7 +938,7 @@ const MessageItem = React.memo(function MessageItem({
             </motion.div>
           )}
           {hasSubagents && isSubagentsOpen && (
-            <motion.div className={`${s.reasoningPanel} ${isLast ? s.reasoningPanelUp : ''}`} variants={reasoningPanelVariants} initial="hidden" animate="visible" exit="exit">
+            <motion.div className={s.reasoningPanel} variants={reasoningPanelVariants} initial="hidden" animate="visible" exit="exit">
               <div className={s.toolCallList}>
                 {msg.subagents!.map((sa, i) => {
                   const totalToolCalls = sa.iterations?.reduce((sum, it) => sum + (it.tool_calls?.length || 0), 0) ?? 0;
@@ -5086,7 +5084,6 @@ export function ChatPage() {
                     : undefined}
                   isOwnUser={msg.role !== 'user' || !msg.user_id || msg.user_id === user?.id}
                   isLastAssistant={msg.id === lastAssistantId}
-                  isLast={msg.id === visibleMessages[visibleMessages.length - 1].id}
                   canRegenerate={canRegenerateMessage(msg)}
                   isTtsPlaying={ttsPlayingId === msg.id}
                   isReasoningOpen={openReasoningId === msg.id}

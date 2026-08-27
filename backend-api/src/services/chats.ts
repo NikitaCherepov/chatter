@@ -190,7 +190,12 @@ export const listUserChats = (userId: number, limit = 50, offset = 0, filters: C
   const safeOffset = Math.max(0, parsedOffset);
   const { where, params } = buildUserChatFilter(userId, filters);
   const rows = db.prepare(`
-    SELECT uc.id, uc.title, uc.created_at, uc.updated_at, uc.bot_hidden,
+    SELECT uc.id,
+           CASE
+             WHEN uc.user_id = ? THEN uc.title
+             ELSE COALESCE(NULLIF((SELECT um.title FROM chat_members um WHERE um.chat_id = uc.id AND um.user_id = ?), ''), uc.title)
+           END AS title,
+           uc.created_at, uc.updated_at, uc.bot_hidden,
            (uc.user_id = ?) AS is_owner,
            CASE
              WHEN uc.user_id = ? THEN uc.folder_id
@@ -200,7 +205,7 @@ export const listUserChats = (userId: number, limit = 50, offset = 0, filters: C
     WHERE ${where}
     ORDER BY uc.updated_at DESC, uc.id DESC
     LIMIT ? OFFSET ?
-  `).all(userId, userId, userId, ...params, safeLimit, safeOffset) as Array<{ id: number; title: string; folder_id: number | null; created_at: string; updated_at: string; bot_hidden: number; is_owner: number }>;
+  `).all(userId, userId, userId, userId, userId, ...params, safeLimit, safeOffset) as Array<{ id: number; title: string; folder_id: number | null; created_at: string; updated_at: string; bot_hidden: number; is_owner: number }>;
 
   return rows.map(row => ({
     id: row.id,
@@ -217,7 +222,12 @@ export const listUserChats = (userId: number, limit = 50, offset = 0, filters: C
 export const getUserChatListItem = (userId: number, chatId: number): ChatDto | undefined => {
   const activeId = ensureActiveChat(userId);
   const row = db.prepare(`
-    SELECT uc.id, uc.title, uc.created_at, uc.updated_at, uc.bot_hidden,
+    SELECT uc.id,
+           CASE
+             WHEN uc.user_id = ? THEN uc.title
+             ELSE COALESCE(NULLIF((SELECT um.title FROM chat_members um WHERE um.chat_id = uc.id AND um.user_id = ?), ''), uc.title)
+           END AS title,
+           uc.created_at, uc.updated_at, uc.bot_hidden,
            (uc.user_id = ?) AS is_owner,
            CASE
              WHEN uc.user_id = ? THEN uc.folder_id
@@ -226,7 +236,7 @@ export const getUserChatListItem = (userId: number, chatId: number): ChatDto | u
     FROM user_chats uc
     WHERE uc.id = ?
       AND (uc.user_id = ? OR EXISTS (SELECT 1 FROM chat_members um2 WHERE um2.chat_id = uc.id AND um2.user_id = ?))
-  `).get(userId, userId, userId, chatId, userId, userId) as { id: number; title: string; folder_id: number | null; created_at: string; updated_at: string; bot_hidden: number; is_owner: number } | undefined;
+  `).get(userId, userId, userId, userId, userId, chatId, userId, userId) as { id: number; title: string; folder_id: number | null; created_at: string; updated_at: string; bot_hidden: number; is_owner: number } | undefined;
   if (!row) return undefined;
   return {
     id: row.id,
@@ -691,10 +701,15 @@ export const activateUserChat = (userId: number, chatId: number) => {
 };
 
 export const renameUserChat = (userId: number, chatId: number, title: string): boolean => {
-  const exists = db.prepare('SELECT id FROM user_chats WHERE user_id = ? AND id = ?').get(userId, chatId) as { id: number } | undefined;
-  if (!exists) return false;
-  db.prepare('UPDATE user_chats SET title = ? WHERE id = ? AND user_id = ?').run(title.slice(0, 120), chatId, userId);
-  return true;
+  const chat = db.prepare('SELECT user_id FROM user_chats WHERE id = ?').get(chatId) as { user_id: number } | undefined;
+  if (!chat) return false;
+  const safeTitle = title.slice(0, 120);
+  if (chat.user_id === userId) {
+    return db.prepare('UPDATE user_chats SET title = ? WHERE id = ? AND user_id = ?')
+      .run(safeTitle, chatId, userId).changes > 0;
+  }
+  return db.prepare('UPDATE chat_members SET title = ? WHERE chat_id = ? AND user_id = ?')
+    .run(safeTitle, chatId, userId).changes > 0;
 };
 
 export const deleteUserChat = (userId: number, chatId: number): boolean => {
@@ -1446,11 +1461,11 @@ export const getAllUserMedia = (userId: number, limit = 100, offset = 0): ChatMe
         cm.id AS message_id,
         cm.chat_id,
         cm.created_at,
-        uc.title AS chat_title,
+        COALESCE(NULLIF((SELECT member.title FROM chat_members member WHERE member.chat_id = uc.id AND member.user_id = ?), ''), uc.title) AS chat_title,
         json_extract(image.value, '$.url') AS url,
         json_extract(image.value, '$.type') AS type
       FROM chat_messages cm
-      LEFT JOIN user_chats uc ON uc.id = cm.chat_id AND uc.user_id = ?
+      LEFT JOIN user_chats uc ON uc.id = cm.chat_id
       JOIN json_each(CASE WHEN json_valid(cm.images) THEN cm.images ELSE '[]' END) image
       WHERE (cm.user_id = ? OR cm.chat_id IN (
           SELECT rc.id FROM user_chats rc
@@ -2601,13 +2616,30 @@ export const searchUserChats = (userId: number, query: string, limit = 20): Sear
 
   const results: SearchResult[] = [];
   for (const hit of chatHits) {
-    const chat = db.prepare('SELECT title, folder_id, created_at FROM user_chats WHERE id = ? AND user_id = ?').get(hit.chat_id, userId) as { title: string; folder_id: number | null; created_at: string } | undefined;
+    const chat = db.prepare(`
+      SELECT uc.user_id AS owner_user_id, uc.title AS owner_title,
+             uc.folder_id AS owner_folder_id, uc.created_at,
+             member.title AS member_title, member.folder_id AS member_folder_id
+      FROM user_chats uc
+      LEFT JOIN chat_members member ON member.chat_id = uc.id AND member.user_id = ?
+      WHERE uc.id = ? AND (uc.user_id = ? OR member.user_id IS NOT NULL)
+    `).get(userId, hit.chat_id, userId) as {
+      owner_user_id: number;
+      owner_title: string;
+      owner_folder_id: number | null;
+      created_at: string;
+      member_title: string | null;
+      member_folder_id: number | null;
+    } | undefined;
     if (!chat) continue;
+    const isOwner = chat.owner_user_id === userId;
+    const effectiveTitle = isOwner ? chat.owner_title : chat.member_title || chat.owner_title;
+    const effectiveFolderId = isOwner ? chat.owner_folder_id : chat.member_folder_id;
     const snip = snippetStmt.get(userId, hit.chat_id, ftsQuery) as { snippet: string } | undefined;
     results.push({
       chat_id: hit.chat_id,
-      chat_title: chat.title || formatAutomaticChatTitle(userLanguage, hit.chat_id),
-      folder_id: chat.folder_id,
+      chat_title: effectiveTitle || formatAutomaticChatTitle(userLanguage, hit.chat_id),
+      folder_id: effectiveFolderId,
       created_at: toUnix(chat.created_at),
       snippet: snip?.snippet || '',
       rank: hit.best_rank,

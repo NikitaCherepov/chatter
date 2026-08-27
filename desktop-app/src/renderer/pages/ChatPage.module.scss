@@ -1861,12 +1861,6 @@
   transform-origin: top left;
 }
 
-.reasoningPanelUp {
-  top: auto;
-  bottom: calc(100% + 26px);
-  transform-origin: bottom left;
-}
-
 .toolCallList {
   display: flex;
   flex-direction: column;

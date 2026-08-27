@@ -415,6 +415,22 @@ if (!hasChatMemberColumn('folder_id')) {
   db.exec('ALTER TABLE chat_members ADD COLUMN folder_id INTEGER');
 }
 db.exec("CREATE INDEX IF NOT EXISTS idx_chat_members_folder ON chat_members(user_id, folder_id)");
+// Room titles are personal, just like folder placement. NULL means that the
+// member still uses the room owner's title from user_chats.
+if (!hasChatMemberColumn('title')) {
+  db.exec('ALTER TABLE chat_members ADD COLUMN title TEXT');
+}
+// Existing members receive a snapshot once. Future owner renames must not
+// silently rename rooms in another member's sidebar.
+db.exec(`
+  UPDATE chat_members
+  SET title = (SELECT uc.title FROM user_chats uc WHERE uc.id = chat_members.chat_id)
+  WHERE title IS NULL
+    AND EXISTS (
+      SELECT 1 FROM user_chats uc
+      WHERE uc.id = chat_members.chat_id AND uc.user_id != chat_members.user_id
+    )
+`);
 
 // Bot visibility to other members: 'private' = only the owner can trigger,
 // 'shared' = any room member can trigger (@mention / manual trigger).

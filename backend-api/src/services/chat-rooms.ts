@@ -540,8 +540,8 @@ export const getChatRoomInviteInfo = (token: string): { chat_id: number; title: 
 export const joinChatRoomByInvite = (userId: number, token: string): { chat_id: number; room: ChatRoomDto } => {
   const invite = getValidInvite(token);
   if (!invite) throw new Error('invite_not_found');
-  const chat = db.prepare('SELECT id, user_id, room_enabled FROM user_chats WHERE id = ?')
-    .get(invite.chat_id) as { id: number; user_id: number; room_enabled: number } | undefined;
+  const chat = db.prepare('SELECT id, user_id, title, room_enabled FROM user_chats WHERE id = ?')
+    .get(invite.chat_id) as { id: number; user_id: number; title: string; room_enabled: number } | undefined;
   if (!chat) throw new Error('chat_not_found');
   if (chat.room_enabled !== 1) throw new Error('room_not_created');
 
@@ -551,9 +551,9 @@ export const joinChatRoomByInvite = (userId: number, token: string): { chat_id: 
       SELECT COALESCE(MAX(sort_order), -1) + 1 AS next_order FROM chat_members WHERE chat_id = ?
     `).get(chat.id) as { next_order: number }).next_order);
     db.prepare(`
-      INSERT INTO chat_members (chat_id, user_id, role, sort_order)
-      VALUES (?, ?, 'member', ?)
-    `).run(chat.id, userId, nextOrder);
+      INSERT INTO chat_members (chat_id, user_id, role, sort_order, title)
+      VALUES (?, ?, 'member', ?, ?)
+    `).run(chat.id, userId, nextOrder, chat.title);
   }
   return { chat_id: chat.id, room: toRoomDto(chat, getMember(chat.id, userId)) };
 };
