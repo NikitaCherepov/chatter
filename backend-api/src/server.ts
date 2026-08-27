@@ -4317,7 +4317,7 @@ app.get('/internal/admin/model-coefficients', internalAuth, (_req, res) => {
            input_price_per_million, output_price_per_million,
            cache_read_price_per_million, pricing_source, pricing_updated_at,
            selected_api_key_id, is_free,
-           intel_tier, price_tier, avg_tps, tps_samples, tps_updated_at
+           intel_tier, price_tier, context_length, avg_tps, tps_samples, tps_updated_at
     FROM model_overrides
   `).all() as Array<ModelOverride>;
   const coefficients: Record<string, number> = {};
@@ -4334,6 +4334,7 @@ app.get('/internal/admin/model-coefficients', internalAuth, (_req, res) => {
     isFree: boolean;
     intelTier: number | null;
     priceTier: number | null;
+    contextLength: number | null;
     avgTps: number | null;
     tpsSamples: number | null;
   }> = {};
@@ -4352,6 +4353,7 @@ app.get('/internal/admin/model-coefficients', internalAuth, (_req, res) => {
       isFree: row.is_free === 1,
       intelTier: row.intel_tier,
       priceTier: row.price_tier,
+      contextLength: row.context_length,
       avgTps: row.avg_tps,
       tpsSamples: row.tps_samples,
     };
@@ -4375,6 +4377,7 @@ app.put('/internal/admin/model-coefficients/:modelId', internalAuth, (req, res) 
     isFree?: boolean | null;
     intelTier?: number | null;
     priceTier?: number | null;
+    contextLength?: number | null;
   } | null;
 
   const isTier = (v: unknown): v is number | null =>
@@ -4396,6 +4399,7 @@ app.put('/internal/admin/model-coefficients/:modelId', internalAuth, (req, res) 
     || 'isFree' in body
     || 'intelTier' in body
     || 'priceTier' in body
+    || 'contextLength' in body
   );
 
   if (hasProviderFields) {
@@ -4416,6 +4420,7 @@ app.put('/internal/admin/model-coefficients/:modelId', internalAuth, (req, res) 
       isFree: body && 'isFree' in body ? Boolean(body.isFree) : null,
       intelTier: body && 'intelTier' in body ? body.intelTier : undefined,
       priceTier: body && 'priceTier' in body ? body.priceTier : undefined,
+      contextLength: body && 'contextLength' in body ? body.contextLength : undefined,
     });
     return res.json({ ok: true, model_id: modelId });
   }
@@ -4453,6 +4458,7 @@ app.get('/internal/admin/models/:modelId/billing', internalAuth, (req, res) => {
     cacheReadPricePerMillion: override.cache_read_price_per_million,
     pricingSource: override.pricing_source,
     pricingUpdatedAt: override.pricing_updated_at,
+    contextLength: override.context_length,
   });
 });
 
@@ -4471,6 +4477,7 @@ app.put('/internal/admin/models/:modelId/billing', internalAuth, (req, res) => {
     isFree?: boolean | null;
     intelTier?: number | null;
     priceTier?: number | null;
+    contextLength?: number | null;
   } | null;
   if (!body) return res.status(400).json({ error: 'bad_body' });
 
@@ -4492,6 +4499,7 @@ app.put('/internal/admin/models/:modelId/billing', internalAuth, (req, res) => {
     isFree: body.isFree,
     intelTier: body.intelTier,
     priceTier: body.priceTier,
+    contextLength: body.contextLength,
   });
   return res.json({ ok: true, model_id: modelId });
 });

@@ -17,6 +17,7 @@ type Props = {
     modelId: string,
     prices: ModelPrices | null,
     supportsTools?: boolean,
+    contextLength?: number | null,
   ) => void;
 };
 
@@ -31,6 +32,7 @@ export function OpenRouterModelInput({ value, onSelect }: Props) {
   // Cache full pricing objects by model id so we don't refetch on every select.
   const pricingCacheRef = useRef<Map<string, ModelPrices | null>>(new Map());
   const toolSupportCacheRef = useRef<Map<string, boolean>>(new Map());
+  const contextLengthCacheRef = useRef<Map<string, number | null>>(new Map());
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleSearch = useCallback((q: string) => {
@@ -65,6 +67,7 @@ export function OpenRouterModelInput({ value, onSelect }: Props) {
                 m.supported_parameters.includes('tools'),
               );
             }
+            if (m.id) contextLengthCacheRef.current.set(m.id, m.context_length ?? null);
             return {
               value: m.id || '',
               label: m.name || m.id || '',
@@ -98,6 +101,7 @@ export function OpenRouterModelInput({ value, onSelect }: Props) {
       v,
       pricingCacheRef.current.get(v) ?? null,
       toolSupportCacheRef.current.get(v),
+      contextLengthCacheRef.current.get(v) ?? null,
     );
   };
 

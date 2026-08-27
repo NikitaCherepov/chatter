@@ -294,6 +294,10 @@ type ModelEndpointsResult = {
   supportsTools: boolean;
   /** Map of base provider slug to tool support. */
   toolsBySlug: Map<string, boolean>;
+  /** Safe minimum context across regional endpoints matched by a base slug. */
+  contextBySlug: Map<string, number | null>;
+  /** Maximum context exposed by the model for OpenRouter auto-routing. */
+  baseContextLength: number | null;
 };
 
 // ── Providers name cache ─────────────────────────────────────────────────────
@@ -345,6 +349,7 @@ async function fetchModelEndpoints(modelId: string): Promise<ModelEndpointsResul
     endpoint.supported_parameters?.includes('tools'),
   );
   const toolsBySlug = new Map<string, boolean>();
+  const contextBySlug = new Map<string, number | null>();
   for (const endpoint of endpoints) {
     const baseSlug = (endpoint.tag || '').split('/')[0];
     if (!baseSlug) continue;
@@ -381,6 +386,7 @@ async function fetchModelEndpoints(modelId: string): Promise<ModelEndpointsResul
   const options: SelectOption[] = [];
   const pricesBySlug = new Map<string, ModelPrices | null>();
   let basePrices: ModelPrices | null = null;
+  let baseContextLength: number | null = null;
   for (const [baseSlug, entries] of baseGroups) {
     const allPrices = entries.map((e) => e.prices);
     const minP = minModelPrices(allPrices);
@@ -397,8 +403,15 @@ async function fetchModelEndpoints(modelId: string): Promise<ModelEndpointsResul
       ...new Set(entries.map((e) => e.quantization).filter((q) => q && q !== 'unknown')),
     ] as string[];
     if (quants.length) hintParts.push(quants.sort().join('/'));
-    const maxCtx = Math.max(...entries.map((e) => e.contextLength ?? 0));
-    if (maxCtx > 0) hintParts.push(formatContextLength(maxCtx));
+    const contextValues = entries
+      .map((e) => e.contextLength ?? 0)
+      .filter((value) => Number.isFinite(value) && value >= 1000);
+    const safeCtx = contextValues.length ? Math.min(...contextValues) : null;
+    contextBySlug.set(baseSlug, safeCtx);
+    if (safeCtx) {
+      hintParts.push(formatContextLength(safeCtx));
+      baseContextLength = Math.max(baseContextLength ?? 0, ...contextValues);
+    }
     // Uptime badge (last 24h, %): green ≥98, yellow ≥90, red below.
     const uptimes = entries.map((e) => e.uptime).filter((u): u is number => u != null);
     let badge: SelectBadge | undefined;
@@ -422,7 +435,7 @@ async function fetchModelEndpoints(modelId: string): Promise<ModelEndpointsResul
     if (outB == null) return -1;
     return outA - outB;
   });
-  return { options, pricesBySlug, basePrices, supportsTools, toolsBySlug };
+  return { options, pricesBySlug, basePrices, supportsTools, toolsBySlug, contextBySlug, baseContextLength };
 }
 
 // ── ProviderModelFields ──────────────────────────────────────────────────────
@@ -549,6 +562,10 @@ export function ProviderModelFields({
     orSlug: override?.openrouterProviderSlug ?? '',
   });
   const [pricesTouched, setPricesTouched] = useState(false);
+  const [contextLength, setContextLength] = useState<number | null>(
+    override?.contextLength ?? null,
+  );
+  const [contextLengthTouched, setContextLengthTouched] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   // Dynamic upstream provider options (built from the model's /endpoints).
   const [orProviderOptions, setOrProviderOptions] = useState<SelectOption[]>([
@@ -576,6 +593,10 @@ export function ProviderModelFields({
       return { input: nextInput, output: nextOutput, cache: nextCache, orSlug: nextSlug };
     });
   }, [override, pricesTouched]);
+
+  useEffect(() => {
+    if (!contextLengthTouched) setContextLength(override?.contextLength ?? null);
+  }, [override?.contextLength, contextLengthTouched]);
 
   const persistOverride = useCallback(
     async (patch: Partial<ModelOverrideData>) => {
@@ -617,20 +638,28 @@ export function ProviderModelFields({
       const supportsTools = selectedSlug
         ? (result.toolsBySlug.get(selectedSlug) ?? result.supportsTools)
         : result.supportsTools;
+      const detectedContextLength = selectedSlug
+        ? (result.contextBySlug.get(selectedSlug) ?? null)
+        : result.baseContextLength;
       if (model.supportsTools !== supportsTools) onChange({ supportsTools });
+      if (override?.contextLength !== detectedContextLength) {
+        setContextLength(detectedContextLength);
+        void persistOverride({ contextLength: detectedContextLength });
+      }
     });
     return () => {
       cancelled = true;
     };
     // onChange is intentionally omitted: parent supplies an inline updater.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [providerKind, model.model, model.supportsTools, override?.openrouterProviderSlug, loadEndpoints]);
+  }, [providerKind, model.model, model.supportsTools, override?.openrouterProviderSlug, override?.contextLength, loadEndpoints, persistOverride]);
 
   const applyAutoPrices = useCallback(
     async (
       mp: ModelPrices | null,
       source: 'auto' | 'endpoint' | 'preset',
       openrouterProviderSlug = prices.orSlug,
+      explicitContextLength?: number | null,
     ) => {
       const next = {
         input: mp?.inputPricePerMillion ?? null,
@@ -647,6 +676,15 @@ export function ProviderModelFields({
           : source === 'endpoint'
             ? 'openrouter_endpoint'
             : 'preset';
+      const detectedContextLength =
+        providerKind === 'openrouter'
+          ? explicitContextLength !== undefined
+            ? explicitContextLength
+            : openrouterProviderSlug
+            ? (endpointsCacheRef.current?.contextBySlug.get(openrouterProviderSlug) ?? null)
+            : (endpointsCacheRef.current?.baseContextLength ?? contextLength)
+          : contextLength;
+      if (providerKind === 'openrouter') setContextLength(detectedContextLength);
       await persistOverride({
         providerKind,
         openrouterProviderSlug:
@@ -656,15 +694,17 @@ export function ProviderModelFields({
         cacheReadPricePerMillion: next.cache,
         pricingMode: 'auto',
         pricingSource: sourceLabel,
+        contextLength: detectedContextLength,
       });
     },
-    [persistOverride, providerKind, prices.orSlug],
+    [persistOverride, providerKind, prices.orSlug, contextLength],
   );
 
   const handleModelSelect = async (
     modelId: string,
     basePrices: ModelPrices | null,
     supportsTools?: boolean,
+    catalogContextLength?: number | null,
   ) => {
     onChange({
       model: modelId,
@@ -675,10 +715,16 @@ export function ProviderModelFields({
       const endpoints = await loadEndpoints(modelId);
       // Reset the upstream provider selector to "Auto" (different model = different endpoints).
       setPrices((p) => ({ ...p, orSlug: '' }));
-      await persistOverride({ providerKind, openrouterProviderSlug: null });
+      const detectedContextLength = endpoints?.baseContextLength ?? catalogContextLength ?? null;
+      setContextLength(detectedContextLength);
+      await persistOverride({
+        providerKind,
+        openrouterProviderSlug: null,
+        contextLength: detectedContextLength,
+      });
       // Apply base pricing (from /models or first endpoint).
       const mp = endpoints?.basePrices ?? basePrices;
-      if (mp) await applyAutoPrices(mp, 'auto', '');
+      if (mp) await applyAutoPrices(mp, 'auto', '', detectedContextLength);
       return;
     }
     // For deepseek/xiaomi preset models — apply the preset prices directly.
@@ -786,8 +832,8 @@ export function ProviderModelFields({
           {showModelAutocomplete ? (
             <OpenRouterModelInput
               value={model.model}
-              onSelect={(id, mp, supportsTools) =>
-                void handleModelSelect(id, mp, supportsTools)
+              onSelect={(id, mp, supportsTools, catalogContextLength) =>
+                void handleModelSelect(id, mp, supportsTools, catalogContextLength)
               }
             />
           ) : presetModels ? (
@@ -844,6 +890,33 @@ export function ProviderModelFields({
               .replace(/[^a-z0-9]+/g, '-')
               .replace(/^-+|-+$/g, '') || 'model'
           }`}
+        />
+      </FormField>
+
+      <FormField
+        label={t('models.providerFields.contextLength')}
+        hint={
+          providerKind === 'openrouter'
+            ? t('models.providerFields.contextLengthAutoHint')
+            : t('models.providerFields.contextLengthHint')
+        }
+      >
+        <input
+          type="number"
+          min={1000}
+          step={1000}
+          value={contextLength ?? ''}
+          readOnly={providerKind === 'openrouter'}
+          placeholder="128000"
+          onChange={(e) => {
+            const raw = e.target.value;
+            setContextLengthTouched(true);
+            setContextLength(raw ? Math.max(1000, Math.floor(Number(raw))) : null);
+          }}
+          onBlur={() => {
+            setContextLengthTouched(false);
+            void persistOverride({ contextLength });
+          }}
         />
       </FormField>
 

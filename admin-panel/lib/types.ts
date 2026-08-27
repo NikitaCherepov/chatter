@@ -32,6 +32,8 @@ export type ModelOverrideData = {
   /** Locally measured generation speed, EMA (tokens/sec). */
   avgTps: number | null;
   tpsSamples: number | null;
+  /** Maximum total context accepted by the configured model/provider. */
+  contextLength: number | null;
 };
 
 export type ManualModelConfig = ProviderModelConfig & {

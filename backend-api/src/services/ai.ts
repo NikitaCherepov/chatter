@@ -569,6 +569,13 @@ const KNOWN_UNIQUE_IDS = new Set<string>([
 ]);
 setKnownModelStatsFilter(() => KNOWN_UNIQUE_IDS);
 
+const resolveConfiguredModelContextLimit = (uniqueIds: Array<string | null | undefined>): number | null => {
+  const limits = uniqueIds
+    .map(id => getModelOverride(id)?.context_length ?? null)
+    .filter((value): value is number => Number.isFinite(value) && value >= 1000);
+  return limits.length ? Math.min(...limits) : null;
+};
+
 export const getModelsCatalog = (isAdmin = false) => MANUAL_MODELS
   .filter(m => isAdmin || !m.adminOnly)
   .map(m => ({
@@ -585,6 +592,7 @@ export const getModelsCatalog = (isAdmin = false) => MANUAL_MODELS
   price_tier: getModelOverride(m.id)?.price_tier ?? null,
   // Locally measured generation speed (EMA, tokens/sec); null = no stats yet.
   avg_tokens_per_second: getModelOverride(m.id)?.tps_samples ? getModelOverride(m.id)!.avg_tps : null,
+  context_length: getModelOverride(m.id)?.context_length ?? null,
 }));
 
 export const resolveManualModel = (modelId: string, isAdmin = false): ManualModelEntry | undefined => {
@@ -1384,6 +1392,7 @@ const createCompletionWithModelFallback = async (
           providerSwitchRetried = true;
           const requirements = {
             tools: Array.isArray((requestBody as any)?.tools) && ((requestBody as any).tools as unknown[]).length > 0,
+            minContextTokens: override?.context_length ?? undefined,
           };
           const newSlug = await attemptRuntimeProviderSwitch(currentUniqueId, requirements);
           if (newSlug) {
@@ -7335,8 +7344,21 @@ export const sendMessageThroughAi = async (
     ? hasMultipleActiveChatAgents(userId, chatId)
     : false;
   responseAgentId = responseAgent?.id ?? null;
-  const maxContextTokens = resolveMaxContextTokens(user);
-  const attachmentMaxTokens = resolveAttachmentMaxTokens(user);
+  const modelContextLimit = manualModel
+    ? resolveConfiguredModelContextLimit([manualModel.id])
+    : resolveConfiguredModelContextLimit(PRO_PROVIDERS.flatMap(provider => provider.uniqueIds));
+  const effectiveContextTokens = resolveMaxContextTokens(user, modelContextLimit);
+  // Keep room for the completion itself. The rest is the maximum request-side
+  // context used by archiving, room truncation and attachment reads.
+  const maxResponseTokens = Math.min(16_384, Math.max(256, Math.floor(effectiveContextTokens * 0.2)));
+  const maxContextTokens = Math.max(256, effectiveContextTokens - maxResponseTokens);
+  const attachmentMaxTokens = resolveAttachmentMaxTokens(user, modelContextLimit);
+  if (resolvedModelSettings?.max_tokens != null) {
+    resolvedModelSettings = {
+      ...resolvedModelSettings,
+      max_tokens: Math.min(resolvedModelSettings.max_tokens, maxResponseTokens),
+    };
+  }
   // File reads share one cumulative budget for the whole generation. A new
   // user message creates a new sendMessageThroughAi call and resets it.
   const attachmentReadBudgetState = { remaining: attachmentMaxTokens };
@@ -7878,7 +7900,7 @@ User request: "${text}"`;
     }
     const completionPayload: Record<string, unknown> = {
       messages: currentMessages,
-      max_tokens: 16384,
+      max_tokens: maxResponseTokens,
       thinking: { type: executionMode === 'lite' ? 'disabled' : 'enabled' },
       clear_thinking: false
     };
@@ -8305,7 +8327,7 @@ iterations.push(currentIteration);
       const finalCompletion = await runCompletion(executionMode, {
         messages: currentMessages,
         tools: [],  // no tools — force text-only response
-        max_tokens: 8192,
+        max_tokens: Math.min(8192, maxResponseTokens),
         thinking: { type: executionMode === 'lite' ? 'disabled' : 'enabled' },
         clear_thinking: false
       }, manualModel, abortController.signal, executionMode === 'lite' ? 'none' : reasoningLevel, executionMode === 'lite' ? null : resolvedModelSettings, streamCallbacks);

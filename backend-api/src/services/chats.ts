@@ -2034,16 +2034,22 @@ export const resetUsersPromptIfDeleted = (promptId: number) => db
 
 /**
  * Резолвит эффективный лимит контекста в токенах для пользователя.
- * Берёт min(max_context_tokens, max_context_tokens_limit).
+ * Takes the minimum of the user's choice, plan limit and optional model limit.
  * Fallback на единый конфиг тарифов.
  */
-export const resolveMaxContextTokens = (user: UserRecord): number => {
+export const resolveMaxContextTokens = (user: UserRecord, modelContextLimit?: number | null): number => {
   const planLimit = getPlanLimits(user.plan).max_context_tokens;
   const hardLimit = Number.isFinite(user.max_context_tokens_limit) && user.max_context_tokens_limit! > 0
     ? Math.floor(user.max_context_tokens_limit!) : planLimit;
   const userChoice = Number.isFinite(user.max_context_tokens) && user.max_context_tokens! > 0
     ? Math.floor(user.max_context_tokens!) : hardLimit;
-  return Math.max(1000, Math.min(userChoice, hardLimit));
+  const configuredLimit = Math.max(1000, Math.min(userChoice, hardLimit));
+  const safeModelLimit = Number.isFinite(modelContextLimit) && (modelContextLimit ?? 0) >= 1000
+    ? Math.floor(modelContextLimit as number)
+    : null;
+  return safeModelLimit === null
+    ? configuredLimit
+    : Math.max(1000, Math.min(configuredLimit, safeModelLimit));
 };
 
 export const updateUserMaxContextTokens = (userId: number, maxContextTokens: number) => {
@@ -2060,8 +2066,8 @@ export const updateUserMaxContextTokens = (userId: number, maxContextTokens: num
  * - 0 = авто: 90% от max_context_tokens.
  * - Иначе — значение юзера, но не больше 90% от max_context_tokens.
  */
-export const resolveAttachmentMaxTokens = (user: UserRecord): number => {
-  const maxCtx = resolveMaxContextTokens(user);
+export const resolveAttachmentMaxTokens = (user: UserRecord, modelContextLimit?: number | null): number => {
+  const maxCtx = resolveMaxContextTokens(user, modelContextLimit);
   const hardCap = Math.floor(maxCtx * 0.9);
   const userChoice = Number.isFinite(user.attachment_max_tokens) && user.attachment_max_tokens! > 0
     ? Math.floor(user.attachment_max_tokens!) : hardCap;

@@ -71,12 +71,14 @@ export type OpenRouterEndpoint = {
   throughput_last_30m?: { p50?: number } | null;
   latency_last_30m?: { p50?: number } | null;
   uptime_last_30m?: number | null;
+  context_length?: number | null;
 };
 
 export type SelectionRequirements = {
   tools?: boolean;
   zdr?: boolean;
   caching?: boolean;
+  minContextTokens?: number;
 };
 
 // ── Settings persistence ────────────────────────────────────────────────────
@@ -304,6 +306,8 @@ type CandidateGroup = {
   latencyP50: number | null;            // min across endpoints
   uptime: number | null;                // max across endpoints
   endpointCount: number;
+  /** Safe minimum across all regional variants matched by the base slug. */
+  contextLength: number | null;
 };
 
 const isEndpointUsable = (ep: OpenRouterEndpoint, requirements?: SelectionRequirements): boolean => {
@@ -314,7 +318,19 @@ const isEndpointUsable = (ep: OpenRouterEndpoint, requirements?: SelectionRequir
   if (requirements?.tools && !supported.has('tools')) return false;
   if (requirements?.caching && !supported.has('cache_control')) return false;
   if (requirements?.zdr && ep.zdr !== true && !supported.has('zero_data_retention')) return false;
+  if (requirements?.minContextTokens) {
+    const contextLength = Number(ep.context_length);
+    if (!Number.isFinite(contextLength) || contextLength < requirements.minContextTokens) return false;
+  }
   return true;
+};
+
+const providerContextLength = (endpoints: OpenRouterEndpoint[], selectedSlug: string): number | null => {
+  const limits = endpoints
+    .filter(ep => matchesProviderSlug(ep.tag || '', selectedSlug))
+    .map(ep => Number(ep.context_length))
+    .filter(value => Number.isFinite(value) && value >= 1000);
+  return limits.length ? Math.min(...limits) : null;
 };
 
 const buildCandidateGroups = (endpoints: OpenRouterEndpoint[], requirements?: SelectionRequirements): CandidateGroup[] => {
@@ -343,6 +359,7 @@ const buildCandidateGroups = (endpoints: OpenRouterEndpoint[], requirements?: Se
     const throughputs = eps.map(e => e.throughput_last_30m?.p50).filter((v): v is number => typeof v === 'number' && Number.isFinite(v));
     const latencies = eps.map(e => e.latency_last_30m?.p50).filter((v): v is number => typeof v === 'number' && Number.isFinite(v));
     const uptimes = eps.map(e => e.uptime_last_30m).filter((v): v is number => typeof v === 'number' && Number.isFinite(v));
+    const contextLengths = eps.map(e => Number(e.context_length)).filter(v => Number.isFinite(v) && v >= 1000);
     result.push({
       baseSlug: base,
       prices,
@@ -350,6 +367,7 @@ const buildCandidateGroups = (endpoints: OpenRouterEndpoint[], requirements?: Se
       latencyP50: latencies.length ? Math.min(...latencies) : null,
       uptime: uptimes.length ? Math.max(...uptimes) : null,
       endpointCount: eps.length,
+      contextLength: contextLengths.length ? Math.min(...contextLengths) : null,
     });
   }
   return result;
@@ -609,6 +627,10 @@ export const runMonitorCycle = async (options?: {
       // 3) Successful catalog response — check the pinned provider.
       const providerPresent = endpoints.some(ep => matchesProviderSlug(ep.tag || '', target.slug));
       if (providerPresent) {
+        const currentContextLength = providerContextLength(endpoints, target.slug);
+        if (currentContextLength !== getModelOverride(target.uniqueId)?.context_length) {
+          setModelProvider(target.uniqueId, { contextLength: currentContextLength });
+        }
         upsertState(target.uniqueId, {
           route: target.route,
           model_slug: target.modelSlug,
@@ -649,7 +671,11 @@ export const runMonitorCycle = async (options?: {
 
       let replacement: CandidateGroup | null = null;
       if (canSwitch && autoSwitch) {
-        replacement = selectReplacement(endpoints, settings.action, options?.requirements, target.slug);
+        const currentContextLength = getModelOverride(target.uniqueId)?.context_length ?? undefined;
+        replacement = selectReplacement(endpoints, settings.action, {
+          ...options?.requirements,
+          minContextTokens: options?.requirements?.minContextTokens ?? currentContextLength,
+        }, target.slug);
         if (replacement) {
           setModelProvider(target.uniqueId, {
             openrouterProviderSlug: replacement.baseSlug,
@@ -658,6 +684,7 @@ export const runMonitorCycle = async (options?: {
             cacheReadPricePerMillion: replacement.prices?.cacheReadPricePerMillion ?? null,
             pricingMode: 'auto',
             pricingSource: 'openrouter_auto',
+            contextLength: replacement.contextLength,
           });
           upsertState(target.uniqueId, {
             provider_slug: replacement.baseSlug,
@@ -862,7 +889,9 @@ const maybeNotifyPriceChange = async (
     } else {
       // Price-based switching is independent from the strategy used when a
       // provider disappears. Include the current provider in the comparison.
-      replacement = selectReplacement(endpoints, 'cheapest');
+      replacement = selectReplacement(endpoints, 'cheapest', {
+        minContextTokens: getModelOverride(target.uniqueId)?.context_length ?? undefined,
+      });
       if (!replacement) {
         switchResult = 'no_candidate';
       } else if (replacement.baseSlug === target.slug) {
@@ -886,6 +915,9 @@ const maybeNotifyPriceChange = async (
           outputPricePerMillion: selectedPrices?.outputPricePerMillion ?? null,
           cacheReadPricePerMillion: selectedPrices?.cacheReadPricePerMillion ?? null,
           pricingSource: 'openrouter_auto',
+          contextLength: switched
+            ? replacement?.contextLength ?? null
+            : providerContextLength(endpoints, target.slug),
         });
         updatedOverrides = true;
         if (switched && replacement) {
@@ -966,6 +998,7 @@ export const sendTestNotification = async (kind: 'missing' | 'price'): Promise<b
         latencyP50: 180,
         uptime: 0.99,
         endpointCount: 2,
+        contextLength: 128_000,
       };
       const params = {
         modelSlug: first.modelSlug,
@@ -1043,6 +1076,7 @@ export const attemptRuntimeProviderSwitch = async (
       cacheReadPricePerMillion: replacement.prices?.cacheReadPricePerMillion ?? null,
       pricingMode: 'auto',
       pricingSource: 'openrouter_auto',
+      contextLength: replacement.contextLength,
     });
     upsertState(uniqueId, {
       route: model.route,

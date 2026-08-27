@@ -1771,6 +1771,8 @@ export type ModelCatalogEntry = {
   price_tier?: 1 | 2 | 3 | null;
   /** Locally measured generation speed (EMA, tokens/sec; null = no stats yet). */
   avg_tokens_per_second?: number | null;
+  /** Maximum total context accepted by the configured model/provider. */
+  context_length?: number | null;
 };
 
 export async function getModels(): Promise<{ models: ModelCatalogEntry[]; preferred_model: string | null; model_selection_reset?: boolean; model_selection_reset_notice?: string | null; auto_reasoning_levels?: ReasoningLevel[]; auto_supports_vision?: { pro: boolean; lite: boolean } }> {

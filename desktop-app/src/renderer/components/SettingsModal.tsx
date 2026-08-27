@@ -170,6 +170,7 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
   const [aiGenerating, setAiGenerating] = useState(false);
   const [aiGenerated, setAiGenerated] = useState<string | null>(null);
   const [aiPreferredModel, setAiPreferredModel] = useState<string | null>(null);
+  const [preferredModelForContext, setPreferredModelForContext] = useState<string | null>(null);
 
   // App zoom (stored as honest percentages)
   const [zoomPct, setZoomPct] = useState(100);
@@ -347,7 +348,10 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
         api.getModels().catch(() => null),
         api.getModelSettings().catch(() => null),
       ]).then(([catRes, setRes]) => {
-        if (catRes) setModelsCatalog(catRes.models);
+        if (catRes) {
+          setModelsCatalog(catRes.models);
+          setPreferredModelForContext(catRes.preferred_model);
+        }
         if (setRes) setModelSettingsMap(setRes.model_settings);
       }).finally(() => setModelsLoading(false));
     }
@@ -362,6 +366,7 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
       api.getModels()
         .then((res) => {
           setModelsCatalog(res.models);
+          setPreferredModelForContext(res.preferred_model);
           if (res.auto_reasoning_levels) setAutoReasoningLevels(res.auto_reasoning_levels);
         })
         .catch(() => {});
@@ -2040,6 +2045,20 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
                   <div style={{ fontSize: 11, color: 'var(--text-hint)', marginTop: 4 }}>
                     {t('settings.app.contextLimitHelp', { max: (contextTokenLimit.max_context_tokens_limit / 1000).toFixed(0) })}
                   </div>
+                  {(() => {
+                    const modelContext = preferredModelForContext
+                      ? modelsCatalog.find((model) => model.id === preferredModelForContext)?.context_length
+                      : null;
+                    if (!modelContext || contextTokenLimit.max_context_tokens <= modelContext) return null;
+                    return (
+                      <div style={{ fontSize: 11, color: 'var(--text-warning, #b26a00)', marginTop: 4 }}>
+                        {t('settings.app.contextLimitModelWarning', {
+                          selected: Math.round(contextTokenLimit.max_context_tokens / 1000),
+                          model: Math.round(modelContext / 1000),
+                        })}
+                      </div>
+                    );
+                  })()}
                   <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
                     {TOKEN_STEPS
                       .filter(step => step <= contextTokenLimit.max_context_tokens_limit)

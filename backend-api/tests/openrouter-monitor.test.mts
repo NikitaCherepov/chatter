@@ -37,6 +37,7 @@ const ep = (tag: string, overrides: Partial<EndpointSpec> = {}): EndpointSpec =>
   throughput_last_30m: { p50: 100 },
   latency_last_30m: { p50: 200 },
   uptime_last_30m: 0.99,
+  context_length: 128_000,
   ...overrides,
 });
 
@@ -99,6 +100,7 @@ const resetWorld = () => {
       pricingMode: 'auto',
       inputPricePerMillion: 1, outputPricePerMillion: 2, cacheReadPricePerMillion: 0.1,
       pricingSource: 'openrouter_auto',
+      contextLength: null,
     });
   }
 };
@@ -157,6 +159,7 @@ assert.strictEqual(getModelOverride('manual-1')?.input_price_per_million, 0.2);
 assert.strictEqual(getModelOverride('manual-1')?.output_price_per_million, 1);
 assert.strictEqual(getModelOverride('manual-1')?.pricing_mode, 'auto');
 assert.strictEqual(getModelOverride('manual-1')?.pricing_source, 'openrouter_auto');
+assert.strictEqual(getModelOverride('manual-1')?.context_length, 128_000);
 const lite = getModelOverride('lite-1');
 assert.strictEqual(lite?.openrouter_provider_slug, 'provider-b', 'same model slug in another chain switched too');
 // One endpoints request per unique model slug per cycle: gemini slug is
@@ -231,6 +234,15 @@ assert.strictEqual(selectReplacement(endpoints.filter(e => !e.tag!.startsWith('p
 // tools requirement:
 const noTools = endpoints.map(e => ({ ...e, supported_parameters: e.tag === 'provider-b' ? [] : ['tools'] }));
 assert.strictEqual(selectReplacement(noTools, 'cheapest', { tools: true }, 'provider-a')?.baseSlug, 'google-vertex');
+const contextEndpoints = endpoints.map((endpoint) => ({
+  ...endpoint,
+  context_length: endpoint.tag === 'provider-b' ? 1_000_000 : 64_000,
+}));
+assert.strictEqual(
+  selectReplacement(contextEndpoints, 'cheapest', { minContextTokens: 500_000 }, 'provider-a')?.baseSlug,
+  'provider-b',
+  'providers with insufficient or mixed regional context windows are excluded',
+);
 console.log('✔ selection strategies');
 
 // ── 10. Runtime auto-switch: single shot, respects mode ─────────────────────

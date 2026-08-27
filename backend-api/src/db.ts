@@ -813,6 +813,8 @@ ensureModelOverrideColumn('is_free', 'ALTER TABLE model_overrides ADD COLUMN is_
 // Admin-set display tiers (1..3, NULL = not set) shown in the desktop model selector.
 ensureModelOverrideColumn('intel_tier', 'ALTER TABLE model_overrides ADD COLUMN intel_tier INTEGER');
 ensureModelOverrideColumn('price_tier', 'ALTER TABLE model_overrides ADD COLUMN price_tier INTEGER');
+// Maximum total context accepted by the configured model/provider endpoint.
+ensureModelOverrideColumn('context_length', 'ALTER TABLE model_overrides ADD COLUMN context_length INTEGER');
 // Locally measured generation speed (EMA over recent messages, tokens/sec).
 ensureModelOverrideColumn('avg_tps', 'ALTER TABLE model_overrides ADD COLUMN avg_tps REAL');
 ensureModelOverrideColumn('tps_samples', 'ALTER TABLE model_overrides ADD COLUMN tps_samples INTEGER');
