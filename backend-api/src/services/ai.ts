@@ -8135,8 +8135,8 @@ const runOneToolCall = async (toolCall: any, emitStatus = true): Promise<Execute
       abortController.signal
     );
 
-    // Если тулз изменил состояние аватара — прокидываем наружу в реалтайме
-    if (toolName === 'set_display_state' && displayStateSink.value && safeOnStateChange) {
+    // Forward avatar changes immediately, including pixel art promoted to the avatar.
+    if ((toolName === 'set_display_state' || toolName === 'create_pixel_image') && displayStateSink.value && safeOnStateChange) {
       await safeOnStateChange(displayStateSink.value);
     }
 
