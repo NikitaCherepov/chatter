@@ -55,10 +55,18 @@
 
 :root[data-theme='dark'] {
   // --- Base ---
-  --bg-primary: #101722;
+
+  /* 
+  Example
+   --bg-primary: #101722;
   --bg-secondary: #182333;
   --bg-input: #1c293a;
   --bg-bubble: #1a2636;
+  */
+  --bg-primary: #1c293a;
+  --bg-secondary: #101722;
+  --bg-input: #182333;
+  --bg-bubble: #151f2d;
   --bg-modal-hover: #243348;
 
   // --- Borders ---
