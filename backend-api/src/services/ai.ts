@@ -8135,8 +8135,10 @@ const runOneToolCall = async (toolCall: any, emitStatus = true): Promise<Execute
       abortController.signal
     );
 
-    // Forward avatar changes immediately, including pixel art promoted to the avatar.
-    if ((toolName === 'set_display_state' || toolName === 'create_pixel_image') && displayStateSink.value && safeOnStateChange) {
+    // Forward explicit display-state changes immediately. Pixel-art avatar
+    // changes are applied from the final result after the protected image has
+    // been attached to the persisted assistant message.
+    if (toolName === 'set_display_state' && displayStateSink.value && safeOnStateChange) {
       await safeOnStateChange(displayStateSink.value);
     }
 

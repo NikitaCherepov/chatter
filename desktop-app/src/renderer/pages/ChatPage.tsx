@@ -2697,6 +2697,11 @@ export function ChatPage() {
           setMessages((prev) => tempId !== undefined && prev.some((message) => message.id === tempId)
             ? prev.map((message) => message.id === tempId ? finalMessage : message)
             : [...prev, finalMessage]);
+          // Pixel-art media becomes readable only after the assistant message
+          // has been persisted and the image is associated with this chat.
+          if (res.display_state?.mode === 'media' && res.display_state.media_url) {
+            applyAvatarState(res.display_state);
+          }
           if (roomEventAgentMsgIds.current.size === 0) {
             setStreamingState('done');
             setStreamingMsgId(null);
@@ -2731,7 +2736,7 @@ export function ChatPage() {
         }
       }
     });
-  }, [user?.id, notifyAssistantResponse, refreshContextTokens, t, clearSendWatchdog]);
+  }, [user?.id, notifyAssistantResponse, refreshContextTokens, t, clearSendWatchdog, applyAvatarState]);
 
   const handleSend = useCallback(async () => {
     const text = input.trim();
