@@ -1,4 +1,5 @@
 import { useLayoutEffect } from 'react';
+import { THEME_CHANGE_EVENT } from '../lib/theme';
 import s from './CustomTitleBar.module.scss';
 
 export function CustomTitleBar() {
@@ -7,11 +8,17 @@ export function CustomTitleBar() {
   useLayoutEffect(() => {
     if (!electronAPI?.setTitleBarOverlay) return;
 
-    const rootStyles = getComputedStyle(document.documentElement);
-    const color = rootStyles.getPropertyValue('--bg-secondary').trim();
-    const symbolColor = rootStyles.getPropertyValue('--text-secondary').trim();
+    const syncColors = () => {
+      const rootStyles = getComputedStyle(document.documentElement);
+      const color = rootStyles.getPropertyValue('--bg-secondary').trim();
+      const symbolColor = rootStyles.getPropertyValue('--text-secondary').trim();
 
-    void electronAPI.setTitleBarOverlay({ color, symbolColor });
+      void electronAPI.setTitleBarOverlay({ color, symbolColor });
+    };
+
+    syncColors();
+    window.addEventListener(THEME_CHANGE_EVENT, syncColors);
+    return () => window.removeEventListener(THEME_CHANGE_EVENT, syncColors);
   }, [electronAPI]);
 
   if (!electronAPI) return null;

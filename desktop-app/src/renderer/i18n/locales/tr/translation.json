@@ -612,6 +612,10 @@
     },
     "app": {
       "interfaceLanguage": "Arayüz dili",
+      "theme": "Tema",
+      "themeSystem": "Sistem",
+      "themeLight": "Açık",
+      "themeDark": "Koyu",
       "zoom": "Arayüz ölçeği",
       "showTokens": "Tokenları göster",
       "subagentModel": "Alt ajan modeli:",

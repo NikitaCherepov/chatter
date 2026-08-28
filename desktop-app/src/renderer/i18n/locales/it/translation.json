@@ -589,6 +589,10 @@
     },
     "app": {
       "interfaceLanguage": "Lingua dell'interfaccia",
+      "theme": "Tema",
+      "themeSystem": "Sistema",
+      "themeLight": "Chiaro",
+      "themeDark": "Scuro",
       "zoom": "Zoom dell'interfaccia",
       "showTokens": "Mostra token",
       "subagentModel": "Modello subagente:",

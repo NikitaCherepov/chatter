@@ -4,8 +4,10 @@ import './global.scss';
 import { App } from './App';
 import { ToolWindowApp } from './ToolWindowApp';
 import { initializeI18n } from './i18n';
+import { initializeTheme } from './lib/theme';
 
 async function bootstrap() {
+  initializeTheme();
   await initializeI18n();
 
   const rootEl = document.getElementById('root');

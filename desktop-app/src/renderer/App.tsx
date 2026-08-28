@@ -12,6 +12,7 @@ import { getUnseenAnnouncements } from './lib/announcements';
 import { UpdateModal } from './components/UpdateModal';
 import { OnboardingModal } from './components/OnboardingModal';
 import { CustomTitleBar } from './components/CustomTitleBar';
+import { getResolvedTheme, THEME_CHANGE_EVENT, type ResolvedTheme } from './lib/theme';
 import s from './App.module.scss';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
@@ -52,6 +53,16 @@ function ChangePasswordRoute() {
 }
 
 export function App() {
+  const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>(() => getResolvedTheme());
+
+  useEffect(() => {
+    const handleThemeChange = (event: Event) => {
+      setResolvedTheme((event as CustomEvent<ResolvedTheme>).detail);
+    };
+    window.addEventListener(THEME_CHANGE_EVENT, handleThemeChange);
+    return () => window.removeEventListener(THEME_CHANGE_EVENT, handleThemeChange);
+  }, []);
+
   return (
     <AuthProvider>
       <div className={s.appShell}>
@@ -84,7 +95,7 @@ export function App() {
           </HashRouter>
         </div>
       </div>
-      <Toaster position="top-right" richColors closeButton offset={52} />
+      <Toaster position="top-right" richColors closeButton offset={52} theme={resolvedTheme} />
       <AnnouncementOverlay />
       <UpdateListener />
     </AuthProvider>

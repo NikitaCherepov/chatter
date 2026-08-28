@@ -612,6 +612,10 @@
     },
     "app": {
       "interfaceLanguage": "Jazyk rozhraní",
+      "theme": "Motiv",
+      "themeSystem": "Systém",
+      "themeLight": "Světlý",
+      "themeDark": "Tmavý",
       "zoom": "Měřítko rozhraní",
       "showTokens": "Zobrazit tokeny",
       "subagentModel": "Model podagenta:",

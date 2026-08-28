@@ -589,6 +589,10 @@
     },
     "app": {
       "interfaceLanguage": "인터페이스 언어",
+      "theme": "테마",
+      "themeSystem": "시스템",
+      "themeLight": "라이트",
+      "themeDark": "다크",
       "zoom": "인터페이스 확대/축소",
       "showTokens": "토큰 표시",
       "subagentModel": "서브에이전트 모델:",

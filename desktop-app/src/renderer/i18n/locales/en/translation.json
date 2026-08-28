@@ -305,6 +305,10 @@
     },
     "app": {
       "interfaceLanguage": "Interface language",
+      "theme": "Theme",
+      "themeSystem": "System",
+      "themeLight": "Light",
+      "themeDark": "Dark",
       "zoom": "Interface scale",
       "renderPerf": "Chat rendering performance",
       "renderPerfLow": "Low (weak PCs)",

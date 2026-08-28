@@ -45,8 +45,62 @@
   --shadow-fab: 0 2px 8px rgba(8, 15, 29, 0.3);
   --shadow-modal: 0 8px 32px rgba(8, 15, 29, 0.18);
 
+  // --- Selection ---
+  --selection-bg: #c9d2df;
+  --selection-text: var(--text-primary);
+
   // --- Window title bar ---
   --titlebar-height: env(titlebar-area-height, 40px);
+}
+
+:root[data-theme='dark'] {
+  // --- Base ---
+  --bg-primary: #101722;
+  --bg-secondary: #182333;
+  --bg-input: #1c293a;
+  --bg-bubble: #1a2636;
+  --bg-modal-hover: #243348;
+
+  // --- Borders ---
+  --border-light: #2a3a4f;
+  --border-medium: #3b5068;
+  --border-input: #3b5068;
+
+  // --- Text ---
+  --text-primary: #f3f6fa;
+  --text-body: #e4ebf3;
+  --text-secondary: #c8d4e3;
+  --text-muted: #91a6bd;
+  --text-hint: #71869d;
+
+  // --- Accents ---
+  --accent: #7da6cf;
+  --accent-contrast: #0b1320;
+  --accent-icon: #8db6dc;
+  --accent-icon-light: #aac9e5;
+  --accent-icon-placeholder: #6686a5;
+
+  // --- Status ---
+  --color-success: #4ade80;
+  --color-error: #f87171;
+  --color-info: #60a5fa;
+  --color-warning: #facc15;
+
+  // --- Scrollbar ---
+  --scrollbar-thumb: #48627c;
+  --scrollbar-hover: #607f9e;
+
+  // --- Overlay ---
+  --overlay-bg: rgba(0, 0, 0, 0.58);
+
+  // --- Shadows ---
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.35), 0 8px 24px rgba(0, 0, 0, 0.28);
+  --shadow-fab: 0 2px 8px rgba(0, 0, 0, 0.5);
+  --shadow-modal: 0 8px 32px rgba(0, 0, 0, 0.45);
+
+  // --- Selection ---
+  --selection-bg: #34516f;
+  --selection-text: #f3f6fa;
 }
 
 *,
@@ -101,8 +155,8 @@ input, textarea, button {
 // ---------- Selection ----------
 
 ::selection {
-  background: #c9d2df;
-  color: var(--text-primary);
+  background: var(--selection-bg);
+  color: var(--selection-text);
 }
 
 // ---------- Links ----------

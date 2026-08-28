@@ -282,6 +282,10 @@
     },
     "app": {
       "interfaceLanguage": "Язык интерфейса",
+      "theme": "Тема",
+      "themeSystem": "Системная",
+      "themeLight": "Светлая",
+      "themeDark": "Тёмная",
       "zoom": "Масштаб интерфейса",
       "renderPerf": "Производительность рендера чата",
       "renderPerfLow": "Низкая (слабые ПК)",

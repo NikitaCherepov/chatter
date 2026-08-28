@@ -11,6 +11,7 @@ import type { TtsSettings } from '../lib/tts';
 import { getSpeechRecognitionLanguage, setSpeechRecognitionLanguage, type SpeechRecognitionLanguage } from '../lib/speechRecognition';
 import { getWakeWordEnabled, setWakeWordEnabled as setWakeWordEnabledStorage } from '../lib/wakeWordToggle';
 import { getRenderPerfLevel, setRenderPerfLevel, type RenderPerfLevel } from '../lib/renderPerf';
+import { getThemePreference, setThemePreference, type ThemePreference } from '../lib/theme';
 import { Select } from './Select';
 import type { SelectOption } from './Select';
 import {
@@ -273,6 +274,7 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
     () => getLanguagePreference(),
   );
   const [renderPerf, setRenderPerfState] = useState<RenderPerfLevel>(() => getRenderPerfLevel());
+  const [themePreference, setThemePreferenceState] = useState<ThemePreference>(() => getThemePreference());
   const languageOptions = useMemo<SelectOption[]>(() => {
     const currentSystemLanguage = getLanguageDisplayName(getDetectedSystemLanguage());
     return [
@@ -426,6 +428,18 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
     { value: 'high', label: t('settings.app.renderPerfHigh') },
     { value: 'ultra', label: t('settings.app.renderPerfUltra') },
   ], [t]);
+
+  const themeOptions = useMemo<SelectOption[]>(() => [
+    { value: 'system', label: t('settings.app.themeSystem') },
+    { value: 'light', label: t('settings.app.themeLight') },
+    { value: 'dark', label: t('settings.app.themeDark') },
+  ], [t]);
+
+  const handleThemeChange = (value: string) => {
+    if (value !== 'system' && value !== 'light' && value !== 'dark') return;
+    setThemePreferenceState(value);
+    setThemePreference(value);
+  };
 
   const handleRenderPerfChange = (value: string) => {
     if (value !== 'low' && value !== 'medium' && value !== 'high' && value !== 'ultra') return;
@@ -1911,6 +1925,15 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
                   value={languagePreference}
                   onChange={handleLanguagePreferenceChange}
                   placeholder={t('settings.language.system')}
+                />
+              </div>
+
+              <div className={s.fieldGroup}>
+                <label className={s.fieldLabel}>{t('settings.app.theme')}</label>
+                <Select
+                  options={themeOptions}
+                  value={themePreference}
+                  onChange={handleThemeChange}
                 />
               </div>
 
