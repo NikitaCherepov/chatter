@@ -7700,7 +7700,10 @@ export const sendMessageThroughAi = async (
         ...allBaseToolDefs,
         ...(subagentTool ? [subagentTool] : []),
         ...(spawnSubagentTool ? [spawnSubagentTool] : []),
-        ...(options?.activeMacros && options.activeMacros.length > 0 ? [buildListMyMacrosTool(), buildExecuteMacroTool(), buildExploreFsTool(), buildSuggestMacroTool()] : [])
+        buildListMyMacrosTool(),
+        buildExecuteMacroTool(),
+        buildExploreFsTool(),
+        buildSuggestMacroTool(),
       ].filter(t => !disabledToolSet.has(t?.function?.name || '')) as any[]
     : [];
 
