@@ -795,7 +795,7 @@ const MessageItem = React.memo(function MessageItem({
                 const src = resolveImageUrl(img.url);
                 return (
                   <div key={i} className={s.messageImageWrap}>
-                    <img className={s.messageImage} src={src} alt={img.type === 'generated' ? t('chat.image.generatedAlt') : t('chat.image.photoAlt')} loading="lazy" onClick={() => onSetViewerImageSrc(src, msg.id, img.url)} />
+                    <img className={`${s.messageImage} ${img.type === 'generated' ? s.generatedMessageImage : ''}`} src={src} alt={img.type === 'generated' ? t('chat.image.generatedAlt') : t('chat.image.photoAlt')} loading="lazy" onClick={() => onSetViewerImageSrc(src, msg.id, img.url)} />
                     {msg.id > 0 && <button className={s.messageImageDelete} onClick={(e) => { e.stopPropagation(); onDeleteImage(msg.id, img.url); }} title={t('common.delete')}>
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <polyline points="3 6 5 6 21 6" />
@@ -5297,7 +5297,7 @@ export function ChatPage() {
                             return (
                               <div key={i} className={s.messageImageWrap}>
                                 <img
-                                  className={s.messageImage}
+                                  className={`${s.messageImage} ${img.type === 'generated' ? s.generatedMessageImage : ''}`}
                                   src={src}
                                   alt={img.type === 'generated' ? t('chat.image.generatedAlt') : t('chat.image.photoAlt')}
                                   loading="lazy"

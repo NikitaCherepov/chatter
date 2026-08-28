@@ -1,56 +1,82 @@
 {
   "changes": {
     "en": [
-      "Added a notification when the model's context window is smaller than the selected context size",
-      "Fixed renaming of room chats"
+      "Removed the default option from the map card",
+      "Fixed macros",
+      "Fixed pixel art generation",
+      "Fixed design issues"
     ],
     "cs": [
-      "Přidáno upozornění, když je kontextové okno modelu menší než vybraná velikost kontextu",
-      "Opraveno přejmenování pokojových chatů"
+      "Odebrána výchozí volba z mapové karty",
+      "Opraveny makra",
+      "Opravena generace pixel artu",
+      "Opraveny problémy s designem"
     ],
     "de": [
-      "Benachrichtigung hinzugefügt, wenn das Kontextfenster des Modells kleiner als die ausgewählte Kontextgröße ist",
-      "Umbenennen von Raum-Chats behoben"
+      "Standardoption aus der Kartenkarte entfernt",
+      "Makros behoben",
+      "Pixel-Art-Generierung behoben",
+      "Designprobleme behoben"
     ],
     "es": [
-      "Se añadió una notificación cuando la ventana de contexto del modelo es más pequeña que el tamaño de contexto seleccionado",
-      "Se corrigió el cambio de nombre de los chats de sala"
+      "Se eliminó la opción predeterminada de la tarjeta de mapa",
+      "Se corrigieron las macros",
+      "Se corrigió la generación de arte de píxeles",
+      "Se corrigieron problemas de diseño"
     ],
     "fr": [
-      "Ajout d'une notification lorsque la fenêtre de contexte du modèle est plus petite que la taille de contexte sélectionnée",
-      "Correction du renommage des discussions de salle"
+      "Suppression de l'option par défaut de la carte",
+      "Correction des macros",
+      "Correction de la génération de pixel art",
+      "Correction des problèmes de conception"
     ],
     "it": [
-      "Aggiunta una notifica quando la finestra di contesto del modello è più piccola della dimensione di contesto selezionata",
-      "Corretta la rinomina delle chat di stanza"
+      "Rimossa l'opzione predefinita dalla scheda mappa",
+      "Corretti i macro",
+      "Corretta la generazione di pixel art",
+      "Corretti i problemi di design"
     ],
     "ja": [
-      "モデルのコンテキストウィンドウが選択したコンテキストサイズより小さい場合の通知を追加しました",
-      "ルームチャットの名前変更を修正しました"
+      "マップカードからデフォルトオプションを削除しました",
+      "マクロを修正しました",
+      "ピクセルアート生成を修正しました",
+      "デザインの問題を修正しました"
     ],
     "ko": [
-      "모델의 컨텍스트 창이 선택한 컨텍스트 크기보다 작을 때 알림을 추가했습니다.",
-      "방 채팅 이름 변경 문제를 수정했습니다."
+      "지도 카드에서 기본 옵션을 제거했습니다",
+      "매크로 수정",
+      "픽셀 아트 생성 수정",
+      "디자인 문제 수정"
     ],
     "pl": [
-      "Dodano powiadomienie, gdy okno kontekstu modelu jest mniejsze niż wybrany rozmiar kontekstu",
-      "Naprawiono zmienianie nazw czatów pokojowych"
+      "Usunięto domyślną opcję z karty mapy",
+      "Naprawiono makra",
+      "Naprawiono generowanie pixel artu",
+      "Naprawiono problemy z projektem"
     ],
     "pt-BR": [
-      "Adicionada uma notificação quando a janela de contexto do modelo é menor que o tamanho de contexto selecionado",
-      "Corrigida a renomeação de conversas de sala"
+      "Removida a opção padrão do cartão de mapa",
+      "Macros corrigidos",
+      "Corrigida a geração de pixel art",
+      "Corrigidos problemas de design"
     ],
     "ru": [
-      "Добавлено уведомление, когда окно контекста модели меньше выбранного размера контекста",
-      "Исправлено переименование комнатных чатов"
+      "Убрали вариант по умолчанию из карточки карты",
+      "Исправлены макросы",
+      "Исправлена генерация пиксель-арта",
+      "Исправлены проблемы с дизайном"
     ],
     "tr": [
-      "Modelin bağlam penceresi seçilen bağlam boyutundan küçük olduğunda bir bildirim eklendi",
-      "Oda sohbetlerinin yeniden adlandırılması düzeltildi"
+      "Harita kartından varsayılan seçenek kaldırıldı",
+      "Makrolar düzeltildi",
+      "Piksel sanatı oluşturma düzeltildi",
+      "Tasarım sorunları düzeltildi"
     ],
     "zh-CN": [
-      "当模型的上下文窗口小于所选上下文大小时，添加了通知",
-      "修复了房间聊天的重命名问题"
+      "从地图卡片中移除了默认选项",
+      "修复了宏",
+      "修复了像素艺术生成",
+      "修复了设计问题"
     ]
   }
 }

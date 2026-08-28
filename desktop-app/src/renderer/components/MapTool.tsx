@@ -77,13 +77,14 @@ const TILE_LAYERS: Record<string, { url: string; attribution: string }> = {
 };
 
 const TILE_STORAGE_KEY = 'chatter-map-tile';
+const SELECTABLE_TILE_KEYS = new Set(['standard', 'satellite']);
 
 function loadTile(): string {
   try {
     const saved = localStorage.getItem(TILE_STORAGE_KEY);
-    if (saved && TILE_LAYERS[saved]) return saved;
+    if (saved && SELECTABLE_TILE_KEYS.has(saved)) return saved;
   } catch { /* */ }
-  return 'light';
+  return 'standard';
 }
 
 export type UserPin = {
@@ -174,9 +175,8 @@ function TileSync({ tileKey }: { tileKey: string }) {
 export function MapTool() {
   const { t } = useTranslation();
   const tileOptions: RadioOption[] = [
-    { value: 'light', label: t('tools.map.light') },
-    { value: 'satellite', label: t('tools.map.satellite') },
     { value: 'standard', label: t('tools.map.standard') },
+    { value: 'satellite', label: t('tools.map.satellite') },
   ];
   const [mapData, setMapData] = useState<MapData | null>(() => getMapData());
   const [tileKey, setTileKey] = useState<string>(loadTile);
