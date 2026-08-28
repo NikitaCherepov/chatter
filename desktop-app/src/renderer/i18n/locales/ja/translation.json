@@ -258,6 +258,8 @@
       "noSpecializedSubagentsHelp": "事前設定されたサブエージェントの呼び出し（invoke_subagent）を無効にします。",
       "noAdhocSubagents": "サブエージェント作成なし",
       "noAdhocSubagentsHelp": "その場でのサブエージェント作成（spawn_subagent）を無効にします。",
+      "noAvatarControl": "アバター操作を無効にする",
+      "noAvatarControlHelp": "AI はピクセルアバターを認識・操作できません。アバター関連のツールとプロンプト指示が削除されます。",
       "noWakeWord": "ウェイクワードを無効にする",
       "noWakeWordHelp": "ウェイクワード（Alexa、Hey Jarvis、Hey Mycroft、Hey Rhasspy）のリスニングを停止します。マイクストリームがオフになります。"
     },

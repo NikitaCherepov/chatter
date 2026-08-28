@@ -602,6 +602,8 @@
       "noSpecializedSubagentsHelp": "Önceden tanımlanmış alt ajanları devre dışı bırakır (invoke_subagent).",
       "noAdhocSubagents": "Geçici alt ajan yok",
       "noAdhocSubagentsHelp": "Anlık alt ajan oluşturmayı devre dışı bırakır (spawn_subagent).",
+      "noAvatarControl": "Avatar kontrolünü devre dışı bırak",
+      "noAvatarControlHelp": "AI piksel avatarı göremez veya kontrol edemez. Avatar araçları ve ilgili istem talimatları kaldırılır.",
       "noWakeWord": "Uyandırma kelimesini devre dışı bırak",
       "noWakeWordHelp": "Uyandırma kelimelerini (Alexa, Hey Jarvis, Hey Mycroft, Hey Rhasspy) dinlemeyi durdur. Mikrofon akışı kapatılacak."
     },

@@ -3816,7 +3816,7 @@ const getTaskByUserAndId = (userId: number, taskId: number) => db.prepare(`
   WHERE user_id = ? AND id = ?
 `).get(userId, taskId) as { id: number; status: string } | undefined;
 
-export const runTool = async (user: UserRecord, timezoneOffset: number, toolName: string, argsRaw: string, aiCall: (requestPayload: Record<string, unknown>) => Promise<CompletionMeta>, generatedImages?: Array<{ image_base64: string; image_url?: string; prompt_used: string }>, displayStateSink?: { value: DisplayStatePayload | null }, desktopActionSink?: { value: DesktopActionPayload | null }, mapUpdateSink?: { value: MapUpdatePayload | null }, activeMacros?: Array<{ id: number; title: string; description?: string; commands: string[]; pinned?: boolean; return_output?: boolean }>, signal?: AbortSignal, subagentExtra?: { manualModel?: any; subagentMode?: 'auto' | 'manual'; subagentReasoningLevel?: ReasoningLevel | null; onToolStatus?: (text: string) => Promise<void> | void; onDesktopAction?: (action: any) => Promise<void> | void; displayManifest?: { moods?: string[]; reactions?: string[] } | null; currentDisplayState?: DisplayStatePayload | null; onSubagentTrace?: (trace: any) => void; onSubagentUsageCall?: (agentName: string, usage: TokenUsageCall) => void; onVisionUsageCall?: (usage: TokenUsageCall) => void; shouldStopForQuota?: (usage: TokenUsageCall) => boolean; availableToolDefs?: any[]; attachmentReadContext?: AttachmentReadContext }, autoRejectHitl?: boolean, userImages?: Array<{ base64: string; mimeType: string }>, billingUserId?: number) => {
+export const runTool = async (user: UserRecord, timezoneOffset: number, toolName: string, argsRaw: string, aiCall: (requestPayload: Record<string, unknown>) => Promise<CompletionMeta>, generatedImages?: Array<{ image_base64: string; image_url?: string; prompt_used: string }>, displayStateSink?: { value: DisplayStatePayload | null }, desktopActionSink?: { value: DesktopActionPayload | null }, mapUpdateSink?: { value: MapUpdatePayload | null }, activeMacros?: Array<{ id: number; title: string; description?: string; commands: string[]; pinned?: boolean; return_output?: boolean }>, signal?: AbortSignal, subagentExtra?: { manualModel?: any; subagentMode?: 'auto' | 'manual'; subagentReasoningLevel?: ReasoningLevel | null; onToolStatus?: (text: string) => Promise<void> | void; onDesktopAction?: (action: any) => Promise<void> | void; displayManifest?: { moods?: string[]; reactions?: string[] } | null; currentDisplayState?: DisplayStatePayload | null; avatarControlEnabled?: boolean; onSubagentTrace?: (trace: any) => void; onSubagentUsageCall?: (agentName: string, usage: TokenUsageCall) => void; onVisionUsageCall?: (usage: TokenUsageCall) => void; shouldStopForQuota?: (usage: TokenUsageCall) => boolean; availableToolDefs?: any[]; attachmentReadContext?: AttachmentReadContext }, autoRejectHitl?: boolean, userImages?: Array<{ base64: string; mimeType: string }>, billingUserId?: number) => {
   throwIfAborted(signal);
   const parsed = JSON.parse(argsRaw || '{}');
   // Room runs: `user` is the INITIATOR (data privacy: their servers, desktop,
@@ -4235,7 +4235,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
         generatedImages.push({ image_base64: result.original.base64, image_url: result.original.url, prompt_used: 'pixel-art (original)' });
       }
 
-      if (parsed.set_as_avatar === true && displayStateSink) {
+      if (parsed.set_as_avatar === true && subagentExtra?.avatarControlEnabled !== false && displayStateSink) {
         displayStateSink.value = { mode: 'media', media_url: result.original.url };
       }
 
@@ -6822,6 +6822,7 @@ export const sendMessageThroughAi = async (
       disable_personal?: boolean;
       disable_specialized_subagents?: boolean;
       disable_adhoc_subagents?: boolean;
+      disable_avatar_control?: boolean;
     } | null;
     regenerateHint?: string;
     regenerateFromHistory?: boolean;
@@ -7510,11 +7511,13 @@ export const sendMessageThroughAi = async (
     };
   }
 
+  const flags = options?.featureFlags;
+  const avatarControlEnabled = !flags?.disable_avatar_control;
   const timezone = Number.isFinite(Number(user.timezone_offset)) ? Number(user.timezone_offset) : 5;
   const dynamicContextToolHint = currentModelSupportsTools
-    ? `\n\n[DYNAMIC CONTEXT]\nCurrent user time is available via the get_user_time tool. Do not guess current date/time: call get_user_time when it matters for answering or scheduling.\nCurrent pixel avatar state is available via the get_avatar_state tool. To change emotions, use set_display_state.`
+    ? `\n\n[DYNAMIC CONTEXT]\nCurrent user time is available via the get_user_time tool. Do not guess current date/time: call get_user_time when it matters for answering or scheduling.${avatarControlEnabled ? '\nCurrent pixel avatar state is available via the get_avatar_state tool. To change emotions, use set_display_state.' : ''}`
     : '';
-  const avatarPromptHint = currentModelSupportsTools && options?.displayManifest ? AVATAR_PROMPT_HINT : '';
+  const avatarPromptHint = currentModelSupportsTools && avatarControlEnabled && options?.displayManifest ? AVATAR_PROMPT_HINT : '';
   const promptUser = user;
   const voicePromptHint = options?.isVoice ? `\n\nSTRICTLY, MANDATORY RIGHT NOW, OBLIGATORY!!! follow:\n1. Answer as BRIEFLY as possible. as BRIEF and natural as possible, like in spoken dialogue.\n2. NO long lists, Markdown tables or code blocks, unless directly asked.\n3. Use conversational style. as BRIEF and COMFORTABLE as possible for listening and substantive. 4. Replace symbols with words: Replace any technical symbols, abbreviations and units of measurement with their full verbal names.
    - Forbidden: "%", "°C", "m/s", "km/h", "$", "rub."
@@ -7525,7 +7528,6 @@ export const sendMessageThroughAi = async (
     : '';
 
   // ── Feature flags → disabled tools ──
-  const flags = options?.featureFlags;
   const disabledToolSet = new Set<string>();
   if (flags?.disable_memory_write) {
     disabledToolSet.add('save_to_cold_memory');
@@ -7632,6 +7634,10 @@ export const sendMessageThroughAi = async (
   if (flags?.disable_adhoc_subagents) {
     disabledToolSet.add('spawn_subagent');
   }
+  if (!avatarControlEnabled) {
+    disabledToolSet.add('get_avatar_state');
+    disabledToolSet.add('set_display_state');
+  }
   if (disabledToolSet.size > 0) {
     console.log(`[feature-flags] user=${userId} disabled tools: ${[...disabledToolSet].join(', ')}`);
   }
@@ -7689,8 +7695,23 @@ export const sendMessageThroughAi = async (
   ] : [];
   // Build spawn_subagent AFTER we know all available tools (including serverOnlyTools, desktopOnlyTools, etc.)
   // so the model can see and grant the full set.
+  const baseToolDefinitions = avatarControlEnabled
+    ? [...toolDefinitions]
+    : toolDefinitions.filter((tool: any) => tool?.function?.name !== 'get_avatar_state').map((tool: any) => {
+        if (tool?.function?.name !== 'create_pixel_image') return tool;
+        const properties = { ...(tool.function.parameters?.properties || {}) };
+        delete properties.set_as_avatar;
+        return {
+          ...tool,
+          function: {
+            ...tool.function,
+            parameters: { ...tool.function.parameters, properties },
+          },
+        };
+      });
   const allBaseToolDefs = [
-    ...toolDefinitions, buildDisplayStateTool(options?.displayManifest),
+    ...baseToolDefinitions,
+    ...(avatarControlEnabled ? [buildDisplayStateTool(options?.displayManifest)] : []),
     ...serverOnlyTools,
     ...desktopOnlyTools,
   ];
@@ -8111,8 +8132,9 @@ const runOneToolCall = async (toolCall: any, emitStatus = true): Promise<Execute
             latestRequestUsage = usage;
           },
           shouldStopForQuota,
-          displayManifest: options?.displayManifest,
-          currentDisplayState: options?.currentDisplayState,
+          displayManifest: avatarControlEnabled ? options?.displayManifest : null,
+          currentDisplayState: avatarControlEnabled ? options?.currentDisplayState : null,
+          avatarControlEnabled,
           availableToolDefs: executionTools.filter(
             (t: any) => t?.function?.name && t.function.name !== 'spawn_subagent' && t.function.name !== 'invoke_subagent'
           ),
@@ -8247,7 +8269,11 @@ for (let toolCallIndex = 0; toolCallIndex < toolCalls.length; toolCallIndex += 1
     }
 
     executionMode = 'pro';
-    executionTools = [...toolDefinitions, buildDisplayStateTool(options?.displayManifest), ...(desktopUiAvailable ? [buildDesktopActionTool()] : [])] as any[];
+    executionTools = [
+      ...baseToolDefinitions,
+      ...(avatarControlEnabled ? [buildDisplayStateTool(options?.displayManifest)] : []),
+      ...(desktopUiAvailable ? [buildDesktopActionTool()] : []),
+    ].filter((tool: any) => !disabledToolSet.has(tool?.function?.name || '')) as any[];
     currentMessages.length = 0;
     currentMessages.push(
       { role: 'system', content: proSystemPrompt },

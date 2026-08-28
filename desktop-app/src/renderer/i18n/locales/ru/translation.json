@@ -272,6 +272,8 @@
       "noSpecializedSubagentsHelp": "Отключает вызов заранее настроенных субагентов (invoke_subagent).",
       "noAdhocSubagents": "Без создания субагентов",
       "noAdhocSubagentsHelp": "Отключает создание субагентов на лету (spawn_subagent).",
+      "noAvatarControl": "Отключить управление аватаром",
+      "noAvatarControlHelp": "AI не видит пиксельный аватар и не может им управлять. Инструменты и инструкции промпта об аватаре удаляются.",
       "noWakeWord": "Отключить wake word",
       "noWakeWordHelp": "Не слушать wake words (Alexa, Hey Jarvis, Hey Mycroft, Hey Rhasspy). Поток микрофона будет остановлен."
     },

@@ -258,6 +258,8 @@
       "noSpecializedSubagentsHelp": "Désactive l'appel de sous-agents préconfigurés (invoke_subagent).",
       "noAdhocSubagents": "Sans création de sous-agents",
       "noAdhocSubagentsHelp": "Désactive la création de sous-agents à la volée (spawn_subagent).",
+      "noAvatarControl": "Désactiver le contrôle de l’avatar",
+      "noAvatarControlHelp": "L’IA ne peut ni voir ni contrôler l’avatar pixelisé. Les outils et instructions liés à l’avatar sont supprimés.",
       "noWakeWord": "Désactiver le mot de réveil",
       "noWakeWordHelp": "Arrêter l'écoute des mots de réveil (Alexa, Hey Jarvis, Hey Mycroft, Hey Rhasspy). Le flux du microphone sera désactivé."
     },

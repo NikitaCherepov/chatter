@@ -295,6 +295,8 @@
       "noSpecializedSubagentsHelp": "Disables predefined subagents (invoke_subagent).",
       "noAdhocSubagents": "No ad-hoc subagents",
       "noAdhocSubagentsHelp": "Disables creating subagents on the fly (spawn_subagent).",
+      "noAvatarControl": "Disable avatar control",
+      "noAvatarControlHelp": "AI cannot see or control the pixel avatar. Avatar tools and related prompt instructions are removed.",
       "noWakeWord": "Disable wake word",
       "noWakeWordHelp": "Stop listening for wake words (Alexa, Hey Jarvis, Hey Mycroft, Hey Rhasspy). The microphone stream will be turned off."
     },

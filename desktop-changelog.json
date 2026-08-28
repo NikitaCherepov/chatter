@@ -1,82 +1,56 @@
 {
   "changes": {
     "en": [
-      "Removed the default option from the map card",
-      "Fixed macros",
-      "Fixed pixel art generation",
-      "Fixed design issues"
+      "Added a dark theme",
+      "Added an option to disable the avatar"
     ],
     "cs": [
-      "Odebrána výchozí volba z mapové karty",
-      "Opraveny makra",
-      "Opravena generace pixel artu",
-      "Opraveny problémy s designem"
+      "Přidán tmavý režim",
+      "Přidána možnost vypnout avatara"
     ],
     "de": [
-      "Standardoption aus der Kartenkarte entfernt",
-      "Makros behoben",
-      "Pixel-Art-Generierung behoben",
-      "Designprobleme behoben"
+      "Dunkles Design hinzugefügt",
+      "Option hinzugefügt, den Avatar zu deaktivieren"
     ],
     "es": [
-      "Se eliminó la opción predeterminada de la tarjeta de mapa",
-      "Se corrigieron las macros",
-      "Se corrigió la generación de arte de píxeles",
-      "Se corrigieron problemas de diseño"
+      "Se añadió un tema oscuro",
+      "Se añadió una opción para desactivar el avatar"
     ],
     "fr": [
-      "Suppression de l'option par défaut de la carte",
-      "Correction des macros",
-      "Correction de la génération de pixel art",
-      "Correction des problèmes de conception"
+      "Ajout d'un thème sombre",
+      "Ajout d'une option pour désactiver l'avatar"
     ],
     "it": [
-      "Rimossa l'opzione predefinita dalla scheda mappa",
-      "Corretti i macro",
-      "Corretta la generazione di pixel art",
-      "Corretti i problemi di design"
+      "Aggiunto un tema scuro",
+      "Aggiunta un'opzione per disabilitare l'avatar"
     ],
     "ja": [
-      "マップカードからデフォルトオプションを削除しました",
-      "マクロを修正しました",
-      "ピクセルアート生成を修正しました",
-      "デザインの問題を修正しました"
+      "ダークテーマを追加しました",
+      "アバターを無効にするオプションを追加しました"
     ],
     "ko": [
-      "지도 카드에서 기본 옵션을 제거했습니다",
-      "매크로 수정",
-      "픽셀 아트 생성 수정",
-      "디자인 문제 수정"
+      "다크 테마 추가",
+      "아바타를 비활성화하는 옵션 추가"
     ],
     "pl": [
-      "Usunięto domyślną opcję z karty mapy",
-      "Naprawiono makra",
-      "Naprawiono generowanie pixel artu",
-      "Naprawiono problemy z projektem"
+      "Dodano ciemny motyw",
+      "Dodano opcję wyłączenia awatara"
     ],
     "pt-BR": [
-      "Removida a opção padrão do cartão de mapa",
-      "Macros corrigidos",
-      "Corrigida a geração de pixel art",
-      "Corrigidos problemas de design"
+      "Adicionado um tema escuro",
+      "Adicionada uma opção para desativar o avatar"
     ],
     "ru": [
-      "Убрали вариант по умолчанию из карточки карты",
-      "Исправлены макросы",
-      "Исправлена генерация пиксель-арта",
-      "Исправлены проблемы с дизайном"
+      "Добавлена тёмная тема",
+      "Добавлена опция отключения аватара"
     ],
     "tr": [
-      "Harita kartından varsayılan seçenek kaldırıldı",
-      "Makrolar düzeltildi",
-      "Piksel sanatı oluşturma düzeltildi",
-      "Tasarım sorunları düzeltildi"
+      "Koyu tema eklendi",
+      "Avatarı devre dışı bırakma seçeneği eklendi"
     ],
     "zh-CN": [
-      "从地图卡片中移除了默认选项",
-      "修复了宏",
-      "修复了像素艺术生成",
-      "修复了设计问题"
+      "添加了深色主题",
+      "添加了禁用头像的选项"
     ]
   }
 }

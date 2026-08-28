@@ -258,6 +258,8 @@
       "noSpecializedSubagentsHelp": "Deaktiviert den Aufruf vorkonfigurierter Subagenten (invoke_subagent).",
       "noAdhocSubagents": "Keine Erstellung von Subagenten",
       "noAdhocSubagentsHelp": "Deaktiviert die Erstellung von Subagenten im laufenden Betrieb (spawn_subagent).",
+      "noAvatarControl": "Avatar-Steuerung deaktivieren",
+      "noAvatarControlHelp": "Die KI kann den Pixel-Avatar weder sehen noch steuern. Avatar-Werkzeuge und zugehörige Prompt-Anweisungen werden entfernt.",
       "noWakeWord": "Wake-Wort deaktivieren",
       "noWakeWordHelp": "Stoppt das Lauschen auf Wake-Wörter (Alexa, Hey Jarvis, Hey Mycroft, Hey Rhasspy). Der Mikrofonstream wird ausgeschaltet."
     },

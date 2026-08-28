@@ -258,6 +258,8 @@
       "noSpecializedSubagentsHelp": "Desativa a chamada de subagentes pré-configurados (invoke_subagent).",
       "noAdhocSubagents": "Sem criação de subagentes",
       "noAdhocSubagentsHelp": "Desativa a criação de subagentes em tempo real (spawn_subagent).",
+      "noAvatarControl": "Desativar controle do avatar",
+      "noAvatarControlHelp": "A IA não pode ver nem controlar o avatar em pixel art. As ferramentas e instruções relacionadas ao avatar são removidas.",
       "noWakeWord": "Desativar palavra de ativação",
       "noWakeWordHelp": "Parar de ouvir palavras de ativação (Alexa, Hey Jarvis, Hey Mycroft, Hey Rhasspy). O fluxo do microfone será desligado."
     },

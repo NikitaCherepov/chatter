@@ -258,6 +258,8 @@
       "noSpecializedSubagentsHelp": "禁用调用预配置的子代理（invoke_subagent）。",
       "noAdhocSubagents": "不创建子代理",
       "noAdhocSubagentsHelp": "禁用即时创建子代理（spawn_subagent）。",
+      "noAvatarControl": "禁用头像控制",
+      "noAvatarControlHelp": "AI 无法查看或控制像素头像。与头像相关的工具和提示词指令将被移除。",
       "noWakeWord": "禁用唤醒词",
       "noWakeWordHelp": "停止监听唤醒词（Alexa、Hey Jarvis、Hey Mycroft、Hey Rhasspy）。麦克风流将被关闭。"
     },

@@ -602,6 +602,8 @@
       "noSpecializedSubagentsHelp": "Zakáže předdefinované podagenty (invoke_subagent).",
       "noAdhocSubagents": "Žádní ad-hoc podagenti",
       "noAdhocSubagentsHelp": "Zakáže vytváření podagentů za běhu (spawn_subagent).",
+      "noAvatarControl": "Zakázat ovládání avatara",
+      "noAvatarControlHelp": "AI nemůže pixelového avatara vidět ani ovládat. Nástroje a pokyny související s avatarem budou odstraněny.",
       "noWakeWord": "Zakázat budící slovo",
       "noWakeWordHelp": "Zastavit poslech budících slov (Alexa, Hey Jarvis, Hey Mycroft, Hey Rhasspy). Mikrofonní proud bude vypnut."
     },

@@ -1873,6 +1873,7 @@ export type FeatureFlags = {
   disable_personal: boolean;
   disable_specialized_subagents: boolean;
   disable_adhoc_subagents: boolean;
+  disable_avatar_control: boolean;
 };
 
 export async function getFeatureFlags(): Promise<{ flags: FeatureFlags }> {

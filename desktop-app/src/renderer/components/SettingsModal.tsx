@@ -257,6 +257,7 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
     disable_personal: false,
     disable_specialized_subagents: false,
     disable_adhoc_subagents: false,
+    disable_avatar_control: false,
   });
   const [flagsLoading, setFlagsLoading] = useState(false);
   const [flagsSaving, setFlagsSaving] = useState(false);
@@ -1781,6 +1782,24 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
                         <div style={{ fontWeight: 600, fontSize: 13 }}>{t('settings.restrictions.noAdhocSubagents')}</div>
                         <div style={{ fontSize: 11, color: 'var(--text-hint)', marginTop: 2 }}>
                           {t('settings.restrictions.noAdhocSubagentsHelp')}
+                        </div>
+                      </div>
+                    </label>
+                  </div>
+
+                  <div className={s.fieldGroup}>
+                    <label className={s.macroToggleLabel}>
+                      <input
+                        type="checkbox"
+                        className={s.macroCheckbox}
+                        checked={featureFlags.disable_avatar_control}
+                        onChange={() => handleToggleFlag('disable_avatar_control')}
+                        disabled={flagsSaving}
+                      />
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: 13 }}>{t('settings.restrictions.noAvatarControl')}</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-hint)', marginTop: 2 }}>
+                          {t('settings.restrictions.noAvatarControlHelp')}
                         </div>
                       </div>
                     </label>

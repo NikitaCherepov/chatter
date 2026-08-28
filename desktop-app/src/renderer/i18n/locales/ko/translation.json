@@ -579,6 +579,8 @@
       "noSpecializedSubagentsHelp": "사전 설정된 서브에이전트 호출(invoke_subagent)을 비활성화합니다.",
       "noAdhocSubagents": "서브에이전트 생성 없음",
       "noAdhocSubagentsHelp": "즉시 서브에이전트 생성(spawn_subagent)을 비활성화합니다.",
+      "noAvatarControl": "아바타 제어 비활성화",
+      "noAvatarControlHelp": "AI가 픽셀 아바타를 보거나 제어할 수 없습니다. 아바타 도구와 관련 프롬프트 지침이 제거됩니다.",
       "noWakeWord": "웨이크 워드 비활성화",
       "noWakeWordHelp": "웨이크 워드(Alexa, Hey Jarvis, Hey Mycroft, Hey Rhasspy) 수신을 중지합니다. 마이크 스트림이 꺼집니다."
     },
