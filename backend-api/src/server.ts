@@ -5128,9 +5128,12 @@ app.post('/api/v1/macro/explain', async (req: AuthedRequest, res) => {
     return res.status(400).json({ error: 'commands_required_array_of_strings' });
   }
 
+  const user = getUserById(userId);
+  const responseLanguage = normalizeSupportedLanguage(user?.language) ?? 'en';
+
   try {
     const text = await callLiteAi(
-      'Ты — системный администратор. Кратко (2-4 предложения) объясни, что делает этот набор команд в консоли Windows/Linux. Отвечай на русском, без лишних вводных слов.',
+      `You are a system administrator. Briefly explain in 2-4 sentences what this set of Windows/Linux console commands does. Respond in the language identified by BCP 47 code "${responseLanguage}", without unnecessary introductory phrases.`,
       commands.map((c: string, i: number) => `${i + 1}. ${c}`).join('\n'),
       { accounting: { userId, route: 'utility:macro-explain' } }
     );
