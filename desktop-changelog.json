@@ -1,56 +1,43 @@
 {
   "changes": {
     "en": [
-      "Added a dark theme",
-      "Added an option to disable the avatar"
+      "Added automatic reconnection: a health check ping detects if the server crashed during startup and reloads all pending requests"
     ],
     "cs": [
-      "Přidán tmavý režim",
-      "Přidána možnost vypnout avatara"
+      "Přidáno automatické znovupřipojení: ping kontroly stavu zjistí, zda server spadl během spouštění, a znovu načte všechny čekající požadavky"
     ],
     "de": [
-      "Dunkles Design hinzugefügt",
-      "Option hinzugefügt, den Avatar zu deaktivieren"
+      "Automatische Wiederverbindung hinzugefügt: Ein Health-Check-Ping erkennt, ob der Server während des Starts abgestürzt ist, und lädt alle ausstehenden Anfragen neu"
     ],
     "es": [
-      "Se añadió un tema oscuro",
-      "Se añadió una opción para desactivar el avatar"
+      "Reconexión automática añadida: un ping de verificación de estado detecta si el servidor se bloqueó durante el inicio y recarga todas las solicitudes pendientes"
     ],
     "fr": [
-      "Ajout d'un thème sombre",
-      "Ajout d'une option pour désactiver l'avatar"
+      "Reconnexion automatique ajoutée : un ping de contrôle de santé détecte si le serveur a planté au démarrage et recharge toutes les demandes en attente"
     ],
     "it": [
-      "Aggiunto un tema scuro",
-      "Aggiunta un'opzione per disabilitare l'avatar"
+      "Aggiunta la riconnessione automatica: un ping di controllo salute rileva se il server è andato in crash durante l'avvio e ricarica tutte le richieste in sospeso"
     ],
     "ja": [
-      "ダークテーマを追加しました",
-      "アバターを無効にするオプションを追加しました"
+      "自動再接続を追加しました: ヘルスチェックpingが起動中にサーバーがクラッシュしたことを検出し、保留中のすべてのリクエストを再読み込みします"
     ],
     "ko": [
-      "다크 테마 추가",
-      "아바타를 비활성화하는 옵션 추가"
+      "자동 재연결 추가: 상태 확인 핑이 시작 중 서버 충돌을 감지하고 대기 중인 모든 요청을 다시 로드합니다"
     ],
     "pl": [
-      "Dodano ciemny motyw",
-      "Dodano opcję wyłączenia awatara"
+      "Dodano automatyczne ponowne łączenie: ping kontrolny wykrywa, czy serwer uległ awarii podczas uruchamiania, i przeładowuje wszystkie oczekujące żądania"
     ],
     "pt-BR": [
-      "Adicionado um tema escuro",
-      "Adicionada uma opção para desativar o avatar"
+      "Reconexão automática adicionada: um ping de verificação de integridade detecta se o servidor travou durante a inicialização e recarrega todas as solicitações pendentes"
     ],
     "ru": [
-      "Добавлена тёмная тема",
-      "Добавлена опция отключения аватара"
+      "Добавлено автоматическое переподключение: проверка связи обнаруживает, если сервер упал во время запуска, и перезагружает все ожидающие запросы"
     ],
     "tr": [
-      "Koyu tema eklendi",
-      "Avatarı devre dışı bırakma seçeneği eklendi"
+      "Otomatik yeniden bağlanma eklendi: bir sağlık kontrolü ping'i, sunucunun başlangıç sırasında çöküp çökmediğini algılar ve bekleyen tüm istekleri yeniden yükler"
     ],
     "zh-CN": [
-      "添加了深色主题",
-      "添加了禁用头像的选项"
+      "新增自动重连：健康检查ping检测服务器在启动期间是否崩溃，并重新加载所有待处理请求"
     ]
   }
 }

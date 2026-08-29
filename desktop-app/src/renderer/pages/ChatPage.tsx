@@ -1412,34 +1412,36 @@ export function ChatPage() {
     return ttsSubscribe((id) => setTtsPlayingId(id));
   }, []);
 
+  const loadModelConfiguration = useCallback(async () => {
+    try {
+      const res = await api.getModels();
+      setModelsCatalog(res.models);
+      setPreferredModel(res.preferred_model);
+      if (res.model_selection_reset && res.model_selection_reset_notice) {
+        toast.info(res.model_selection_reset_notice);
+        void window.electronAPI.showDesktopNotification({
+          id: 'model-selection-reset:catalog',
+          title: 'Chatter',
+          body: res.model_selection_reset_notice,
+        }).catch(() => undefined);
+      }
+      if (res.auto_reasoning_levels) setAutoReasoningLevels(res.auto_reasoning_levels);
+      if (res.auto_supports_vision) setAutoSupportsVision(res.auto_supports_vision);
+    } catch {}
+    try {
+      const res = await api.getReasoningLevel();
+      setReasoningLevel(res.reasoning_level);
+    } catch {}
+    try {
+      const res = await api.getContextTokenLimit();
+      setSelectedContextLimit(res.max_context_tokens);
+    } catch {}
+  }, []);
+
   // Load models catalog + reasoning level
   useEffect(() => {
-    (async () => {
-      try {
-        const res = await api.getModels();
-        setModelsCatalog(res.models);
-        setPreferredModel(res.preferred_model);
-        if (res.model_selection_reset && res.model_selection_reset_notice) {
-          toast.info(res.model_selection_reset_notice);
-          void window.electronAPI.showDesktopNotification({
-            id: 'model-selection-reset:catalog',
-            title: 'Chatter',
-            body: res.model_selection_reset_notice,
-          }).catch(() => undefined);
-        }
-        if (res.auto_reasoning_levels) setAutoReasoningLevels(res.auto_reasoning_levels);
-        if (res.auto_supports_vision) setAutoSupportsVision(res.auto_supports_vision);
-      } catch {}
-      try {
-        const res = await api.getReasoningLevel();
-        setReasoningLevel(res.reasoning_level);
-      } catch {}
-      try {
-        const res = await api.getContextTokenLimit();
-        setSelectedContextLimit(res.max_context_tokens);
-      } catch {}
-    })();
-  }, []);
+    void loadModelConfiguration();
+  }, [loadModelConfiguration]);
 
   // Ref flag: when true, the next handleSend() call originated from voice input (wake word)
   const isVoiceInputRef = useRef(false);
@@ -1771,9 +1773,10 @@ export function ChatPage() {
 
   useEffect(() => api.onBackendRestored(() => {
     void loadChats();
+    void loadModelConfiguration();
     const chatId = activeChatIdRef.current;
     if (chatId !== null) void loadMessages(chatId);
-  }), [loadChats, loadMessages]);
+  }), [loadChats, loadMessages, loadModelConfiguration]);
 
   const loadOlderMessages = useCallback(async () => {
     if (!activeChatId || loadingOlderMessages || !hasMoreMessages) return;
