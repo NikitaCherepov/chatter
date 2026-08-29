@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
 import { diffLines } from 'diff';
@@ -181,8 +182,9 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
   const [ttsModels, setTtsModels] = useState(() => getTtsModels());
   const [ttsSettings, setTtsSettingsState] = useState<TtsSettings>(() => getTtsSettings());
   const [previewPlaying, setPreviewPlaying] = useState(false);
-  const [remoteProvidersLoading, setRemoteProvidersLoading] = useState(false);
   const [piperLoading, setPiperLoading] = useState(false);
+  const [piperVoicesReady, setPiperVoicesReady] = useState(false);
+  const [remoteProvidersReady, setRemoteProvidersReady] = useState(false);
   const [recognitionLanguage, setRecognitionLanguage] = useState<SpeechRecognitionLanguage>(
     () => getSpeechRecognitionLanguage(),
   );
@@ -193,56 +195,77 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
     ...SUPPORTED_LANGUAGES.map((language) => ({ value: language, label: getLanguageDisplayName(language) })),
   ], [i18n.language, t]);
 
-  // Refresh local voices and backend-provided cloud TTS options when voice settings open.
+  const remoteProvidersQuery = useQuery({
+    queryKey: ['tts', 'remote-providers'],
+    queryFn: () => fetchRemoteTtsProviders(true),
+    enabled: section === 'voice',
+    staleTime: 10 * 60 * 1000,
+    gcTime: Infinity,
+  });
+
+  const syncAvailableTtsModels = useCallback(() => {
+    const models = getTtsModels();
+    setTtsModels(models);
+    setTtsSettingsState(current => {
+      const selectedModel = models.find(model => model.id === current.modelId);
+      const selectedVoiceExists = selectedModel?.voices.some(voice => voice.id === current.voiceId) ?? false;
+      if (selectedVoiceExists) return current;
+
+      const fallbackModel = selectedModel && selectedModel.voices.length > 0
+        ? selectedModel
+        : models.find(model => model.id === 'piper' && model.voices.length > 0)
+          || models.find(model => model.id === 'builtin' && model.voices.length > 0);
+      if (!fallbackModel) return current;
+
+      const fallbackVoice = fallbackModel.id === 'piper'
+        ? fallbackModel.voices.find(voice => voice.id === 'ruslan') || fallbackModel.voices[0]
+        : fallbackModel.voices[0];
+      const nextSettings = {
+        ...current,
+        modelId: fallbackModel.id,
+        voiceId: fallbackVoice.id,
+      };
+      setTtsSettings(nextSettings);
+      return nextSettings;
+    });
+  }, []);
+
+  // Refresh local Piper voices when voice settings open.
   useEffect(() => {
     if (section !== 'voice') return;
 
     let cancelled = false;
     setTtsModels(getTtsModels());
     setPiperLoading(true);
-    setRemoteProvidersLoading(true);
 
-    Promise.all([
-      fetchPiperVoiceList(),
-      fetchRemoteTtsProviders(true),
-    ]).then(() => {
-      if (cancelled) return;
-
-      const models = getTtsModels();
-      setTtsModels(models);
-      setTtsSettingsState(current => {
-        const selectedModel = models.find(model => model.id === current.modelId);
-        const selectedVoiceExists = selectedModel?.voices.some(voice => voice.id === current.voiceId) ?? false;
-        if (selectedVoiceExists) return current;
-
-        const fallbackModel = selectedModel && selectedModel.voices.length > 0
-          ? selectedModel
-          : models.find(model => model.id === 'piper' && model.voices.length > 0)
-            || models.find(model => model.id === 'builtin' && model.voices.length > 0);
-        if (!fallbackModel) return current;
-
-        const fallbackVoice = fallbackModel.id === 'piper'
-          ? fallbackModel.voices.find(voice => voice.id === 'ruslan') || fallbackModel.voices[0]
-          : fallbackModel.voices[0];
-        const nextSettings = {
-          ...current,
-          modelId: fallbackModel.id,
-          voiceId: fallbackVoice.id,
-        };
-        setTtsSettings(nextSettings);
-        return nextSettings;
-      });
-    }).finally(() => {
-      if (!cancelled) {
-        setPiperLoading(false);
-        setRemoteProvidersLoading(false);
-      }
-    });
+    void fetchPiperVoiceList()
+      .then(() => {
+        if (cancelled) return;
+        setTtsModels(getTtsModels());
+        setPiperVoicesReady(true);
+      })
+      .finally(() => { if (!cancelled) setPiperLoading(false); });
 
     return () => {
       cancelled = true;
     };
-  }, [section]);
+  }, [section, syncAvailableTtsModels]);
+
+  useEffect(() => {
+    if (section !== 'voice' || !remoteProvidersQuery.data) return;
+    setTtsModels(getTtsModels());
+    setRemoteProvidersReady(true);
+  }, [remoteProvidersQuery.data, section]);
+
+  useEffect(() => {
+    if (section !== 'voice' || !piperVoicesReady || !remoteProvidersReady) return;
+    syncAvailableTtsModels();
+  }, [
+    piperVoicesReady,
+    remoteProvidersReady,
+    section,
+    syncAvailableTtsModels,
+  ]);
 
   const [coreMemory, setCoreMemory] = useState('');
   const [coreMemorySaving, setCoreMemorySaving] = useState(false);
@@ -1007,7 +1030,7 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
 
   const selectedVoiceListLoading = ttsSettings.modelId === 'piper'
     ? piperLoading
-    : !['piper', 'builtin'].includes(ttsSettings.modelId) && remoteProvidersLoading;
+    : !['piper', 'builtin'].includes(ttsSettings.modelId) && remoteProvidersQuery.isPending;
 
   const handleModelChange = (modelId: string) => {
     const voices = getVoicesForModel(modelId);
@@ -1531,6 +1554,7 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
                   value={ttsSettings.modelId}
                   onChange={handleModelChange}
                   placeholder={t('settings.voice.modelPlaceholder')}
+                  disabled={!piperVoicesReady || !remoteProvidersReady}
                 />
               </div>
 

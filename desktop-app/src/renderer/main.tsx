@@ -5,6 +5,7 @@ import { App } from './App';
 import { ToolWindowApp } from './ToolWindowApp';
 import { initializeI18n } from './i18n';
 import { initializeTheme } from './lib/theme';
+import { QueryProvider } from './lib/QueryProvider';
 
 async function bootstrap() {
   initializeTheme();
@@ -14,7 +15,11 @@ async function bootstrap() {
   if (rootEl) {
     const root = createRoot(rootEl);
     const isToolWindow = new URLSearchParams(window.location.search).has('toolWindow');
-    root.render(isToolWindow ? <ToolWindowApp /> : <App />);
+    root.render(
+      <QueryProvider>
+        {isToolWindow ? <ToolWindowApp /> : <App />}
+      </QueryProvider>,
+    );
   }
 }
 

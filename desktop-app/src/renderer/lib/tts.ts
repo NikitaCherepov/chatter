@@ -104,8 +104,7 @@ let cachedRemoteTtsModels: TtsModel[] | null = null;
 let remoteProvidersFetchPromise: Promise<TtsModel[]> | null = null;
 
 export async function fetchRemoteTtsProviders(forceRefresh = false): Promise<TtsModel[]> {
-  if (forceRefresh) cachedRemoteTtsModels = null;
-  if (cachedRemoteTtsModels) return cachedRemoteTtsModels;
+  if (!forceRefresh && cachedRemoteTtsModels) return cachedRemoteTtsModels;
   if (remoteProvidersFetchPromise) return remoteProvidersFetchPromise;
 
   remoteProvidersFetchPromise = (async () => {
@@ -127,8 +126,7 @@ export async function fetchRemoteTtsProviders(forceRefresh = false): Promise<Tts
       return cachedRemoteTtsModels;
     } catch (err) {
       console.error('[TTS] failed to fetch remote providers:', err);
-      cachedRemoteTtsModels = [];
-      return cachedRemoteTtsModels;
+      throw err;
     } finally {
       remoteProvidersFetchPromise = null;
     }
