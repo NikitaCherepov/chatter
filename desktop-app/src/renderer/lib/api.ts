@@ -112,6 +112,105 @@ export function clearTokens() {
 
 // ---------- Fetch wrapper ----------
 
+const BACKEND_RECOVERY_DELAYS = [5_000, 15_000, 30_000, 60_000, 120_000];
+const BACKEND_HEALTH_TIMEOUT = 8_000;
+const backendRestoredListeners = new Set<() => void>();
+let backendRecoveryTimer: ReturnType<typeof setTimeout> | null = null;
+let backendRecoveryAttempt = 0;
+let backendRecoveryActive = false;
+let backendHealthCheckInFlight = false;
+let backendOnlineListenerRegistered = false;
+
+function isRecoverableHttpStatus(status: number): boolean {
+  return status === 502 || status === 503 || status === 504;
+}
+
+function getServerConnectionHeaders(): Record<string, string> {
+  const connection = loadServerConnection();
+  return connection?.key ? { 'X-Chatter-Server-Key': connection.key } : {};
+}
+
+function notifyBackendRestored() {
+  reconnectWebSocket();
+  for (const listener of backendRestoredListeners) {
+    try { listener(); } catch (error) { console.error('[recovery] listener failed', error); }
+  }
+}
+
+function scheduleBackendHealthCheck(delay?: number) {
+  if (!backendRecoveryActive || backendRecoveryTimer || backendHealthCheckInFlight) return;
+  const retryDelay = delay ?? BACKEND_RECOVERY_DELAYS[Math.min(
+    backendRecoveryAttempt,
+    BACKEND_RECOVERY_DELAYS.length - 1,
+  )];
+  backendRecoveryTimer = setTimeout(() => {
+    backendRecoveryTimer = null;
+    void checkBackendHealth();
+  }, retryDelay);
+}
+
+async function checkBackendHealth() {
+  if (!backendRecoveryActive || backendHealthCheckInFlight) return;
+  backendHealthCheckInFlight = true;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), BACKEND_HEALTH_TIMEOUT);
+  try {
+    const response = await fetch(`${API_BASE}/health`, {
+      method: 'GET',
+      headers: getServerConnectionHeaders(),
+      cache: 'no-store',
+      signal: controller.signal,
+    });
+    if (!response.ok) throw new Error(`health_${response.status}`);
+
+    backendRecoveryActive = false;
+    backendRecoveryAttempt = 0;
+    console.info('[recovery] backend is available again');
+    notifyBackendRestored();
+  } catch {
+    backendRecoveryAttempt += 1;
+  } finally {
+    clearTimeout(timeout);
+    backendHealthCheckInFlight = false;
+    scheduleBackendHealthCheck();
+  }
+}
+
+function startBackendRecovery() {
+  if (!backendOnlineListenerRegistered) {
+    window.addEventListener('online', () => {
+      if (!backendRecoveryActive || backendHealthCheckInFlight) return;
+      if (backendRecoveryTimer) clearTimeout(backendRecoveryTimer);
+      backendRecoveryTimer = null;
+      scheduleBackendHealthCheck(0);
+    });
+    backendOnlineListenerRegistered = true;
+  }
+  if (backendRecoveryActive) return;
+  backendRecoveryActive = true;
+  backendRecoveryAttempt = 0;
+  scheduleBackendHealthCheck();
+}
+
+async function fetchWithRecovery(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  try {
+    const response = await fetch(input, init);
+    if (isRecoverableHttpStatus(response.status)) startBackendRecovery();
+    return response;
+  } catch (error) {
+    startBackendRecovery();
+    throw error;
+  }
+}
+
+/** Run a callback once after a temporarily unavailable backend responds to /health again. */
+export function onBackendRestored(callback: () => void) {
+  backendRestoredListeners.add(callback);
+  return () => {
+    backendRestoredListeners.delete(callback);
+  };
+}
+
 export async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
   const tokens = loadTokens();
   const headers: Record<string, string> = {
@@ -125,7 +224,7 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
   const connection = loadServerConnection();
   if (connection?.key) headers['X-Chatter-Server-Key'] = connection.key;
 
-  const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+  const res = await fetchWithRecovery(`${API_BASE}${path}`, { ...options, headers });
 
   const refreshExcludedPaths = new Set([
     '/api/v1/auth/login',
@@ -140,7 +239,7 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
       // Reconnect WebSocket with new token
       reconnectWebSocket();
       headers['Authorization'] = `Bearer ${refreshed.access_token}`;
-      const retry = await fetch(`${API_BASE}${path}`, { ...options, headers });
+      const retry = await fetchWithRecovery(`${API_BASE}${path}`, { ...options, headers });
       if (!retry.ok) {
         const body = await retry.json().catch(() => ({}));
         if (retry.status === 401) clearTokens();

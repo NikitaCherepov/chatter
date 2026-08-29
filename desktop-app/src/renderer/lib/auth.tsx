@@ -64,9 +64,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     void initialize();
 
+    const unsubscribeBackendRestored = api.onBackendRestored(() => {
+      const tokens = api.loadTokens();
+      if (!tokens?.access_token) return;
+      void api.fetchMe()
+        .then((restoredUser) => {
+          if (disposed) return;
+          setUser(restoredUser);
+          localStorage.setItem('chatter_user', JSON.stringify(restoredUser));
+          api.initWebSocket();
+        })
+        .catch((error) => {
+          if (disposed || !(error instanceof api.ApiError) || error.status !== 401) return;
+          api.clearTokens();
+          localStorage.removeItem('chatter_user');
+          setUser(null);
+        });
+    });
+
     // Close WebSocket on unmount
     return () => {
       disposed = true;
+      unsubscribeBackendRestored();
       api.closeWebSocket();
     };
   }, []);

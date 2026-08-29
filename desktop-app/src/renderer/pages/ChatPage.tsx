@@ -1753,7 +1753,7 @@ export function ChatPage() {
     }
   }, []);
 
-  const loadMessages = async (chatId: number) => {
+  const loadMessages = useCallback(async (chatId: number) => {
     setLoadingMessages(true);
     // Reset character budget — each chat starts with a fresh budget
     setCharBudget(getRenderPerfBudget());
@@ -1767,7 +1767,13 @@ export function ChatPage() {
     } finally {
       setLoadingMessages(false);
     }
-  };
+  }, [refreshContextTokens]);
+
+  useEffect(() => api.onBackendRestored(() => {
+    void loadChats();
+    const chatId = activeChatIdRef.current;
+    if (chatId !== null) void loadMessages(chatId);
+  }), [loadChats, loadMessages]);
 
   const loadOlderMessages = useCallback(async () => {
     if (!activeChatId || loadingOlderMessages || !hasMoreMessages) return;
