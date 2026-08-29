@@ -84,6 +84,15 @@ const broadcastToChat = (chatId: number, payload: Record<string, unknown>) => {
   }
 };
 
+/** Notify every connected desktop that model metadata or availability changed. */
+const broadcastModelCatalogUpdated = () => {
+  const data = JSON.stringify({ type: 'model_catalog_updated' });
+  for (const client of wsClients.values()) {
+    if (client.ws.readyState !== WebSocket.OPEN) continue;
+    try { client.ws.send(data); } catch { /* disconnected client */ }
+  }
+};
+
 dotenv.config();
 ensureDefaultPrompt();
 db.transaction(() => {
@@ -4428,12 +4437,14 @@ app.put('/internal/admin/model-coefficients/:modelId', internalAuth, (req, res) 
       priceTier: body && 'priceTier' in body ? body.priceTier : undefined,
       contextLength: body && 'contextLength' in body ? body.contextLength : undefined,
     });
+    broadcastModelCatalogUpdated();
     return res.json({ ok: true, model_id: modelId });
   }
 
   // Backward-compatible coefficient-only update
   if (!hasCoeff || rawCoeff < 0) return res.status(400).json({ error: 'bad_coefficient' });
   setCoefficient(modelId, rawCoeff);
+  broadcastModelCatalogUpdated();
   return res.json({ ok: true, model_id: modelId, coefficient: rawCoeff });
 });
 
@@ -4443,6 +4454,7 @@ app.delete('/internal/admin/model-coefficients/:modelId', internalAuth, (req, re
   db.prepare('DELETE FROM model_overrides WHERE model_id = ?').run(modelId);
   forgetModelTps(modelId);
   refreshCoefficientCache();
+  broadcastModelCatalogUpdated();
   return res.json({ ok: true });
 });
 
@@ -4507,6 +4519,7 @@ app.put('/internal/admin/models/:modelId/billing', internalAuth, (req, res) => {
     priceTier: body.priceTier,
     contextLength: body.contextLength,
   });
+  broadcastModelCatalogUpdated();
   return res.json({ ok: true, model_id: modelId });
 });
 

@@ -1443,6 +1443,16 @@ export function ChatPage() {
     void loadModelConfiguration();
   }, [loadModelConfiguration]);
 
+  useEffect(() => {
+    const refreshModels = () => { void loadModelConfiguration(); };
+    const unsubscribeConnect = api.onWebSocketConnect(refreshModels);
+    const unsubscribeCatalog = api.onModelCatalogUpdated(refreshModels);
+    return () => {
+      unsubscribeConnect();
+      unsubscribeCatalog();
+    };
+  }, [loadModelConfiguration]);
+
   // Ref flag: when true, the next handleSend() call originated from voice input (wake word)
   const isVoiceInputRef = useRef(false);
   const currentAvatarStateRef = useRef<SetDisplayStatePayload | null>(null);

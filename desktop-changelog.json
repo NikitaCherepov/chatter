@@ -1,7 +1,9 @@
 {
   "changes": {
     "en": [
-      "Added automatic reconnection: a health check ping detects if the server crashed during startup and reloads all pending requests"
+      "Added automatic reconnection: a health check ping detects if the server crashed during startup and reloads all pending requests",
+      "Fixed voice caching",
+      "Fixed model catalog loading"
     ],
     "cs": [
       "Přidáno automatické znovupřipojení: ping kontroly stavu zjistí, zda server spadl během spouštění, a znovu načte všechny čekající požadavky"

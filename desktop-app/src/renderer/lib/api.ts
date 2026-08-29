@@ -969,6 +969,7 @@ export type RoomEvent =
 type WsCallbacks = StreamCallbacks & {
   onConnect?: () => void;
   onDisconnect?: () => void;
+  onModelCatalogUpdated?: () => void;
   onTaskResult?: (data: { chat_id: number; text: string; is_new_chat: boolean }) => void;
   onRoomEvent?: (event: RoomEvent) => void;
   onChatUpdated?: (data: {
@@ -1136,6 +1137,22 @@ export function onMapUpdate(cb: StreamCallbacks['onMapUpdate']) {
   };
 }
 
+/** Refresh model-dependent UI after a real WS connection or reconnection. */
+export function onWebSocketConnect(cb: NonNullable<WsCallbacks['onConnect']>) {
+  wsCallbacks.onConnect = cb;
+  return () => {
+    if (wsCallbacks.onConnect === cb) wsCallbacks.onConnect = undefined;
+  };
+}
+
+/** Refresh model-dependent UI after an explicit server catalog update. */
+export function onModelCatalogUpdated(cb: NonNullable<WsCallbacks['onModelCatalogUpdated']>) {
+  wsCallbacks.onModelCatalogUpdated = cb;
+  return () => {
+    if (wsCallbacks.onModelCatalogUpdated === cb) wsCallbacks.onModelCatalogUpdated = undefined;
+  };
+}
+
 export function initWebSocket(callbacks?: WsCallbacks) {
   if (callbacks) wsCallbacks = { ...wsCallbacks, ...callbacks };
   ensureBrowserDownloadBridge();
@@ -1166,6 +1183,7 @@ export function initWebSocket(callbacks?: WsCallbacks) {
 
       switch (msg.type) {
         case 'task_result': wsCallbacks.onTaskResult?.({ chat_id: msg.chat_id, text: msg.text, is_new_chat: msg.is_new_chat }); break;
+        case 'model_catalog_updated': wsCallbacks.onModelCatalogUpdated?.(); break;
         case 'chat_agent_start':
         case 'chat_agent_token':
         case 'chat_agent_reasoning':
