@@ -6,40 +6,64 @@
       "Fixed model catalog loading"
     ],
     "cs": [
-      "Přidáno automatické znovupřipojení: ping kontroly stavu zjistí, zda server spadl během spouštění, a znovu načte všechny čekající požadavky"
+      "Přidáno automatické znovupřipojení: ping kontroly stavu zjistí, zda server spadl během spouštění, a znovu načte všechny čekající požadavky",
+      "Opraveno ukládání hlasu do mezipaměti",
+      "Opraveno načítání katalogu modelů"
     ],
     "de": [
-      "Automatische Wiederverbindung hinzugefügt: Ein Health-Check-Ping erkennt, ob der Server während des Starts abgestürzt ist, und lädt alle ausstehenden Anfragen neu"
+      "Automatische Wiederverbindung hinzugefügt: Ein Health-Check-Ping erkennt, ob der Server während des Starts abgestürzt ist, und lädt alle ausstehenden Anfragen neu",
+      "Sprach-Caching behoben",
+      "Laden des Modellkatalogs behoben"
     ],
     "es": [
-      "Reconexión automática añadida: un ping de verificación de estado detecta si el servidor se bloqueó durante el inicio y recarga todas las solicitudes pendientes"
+      "Reconexión automática añadida: un ping de verificación de salud detecta si el servidor se bloqueó durante el inicio y recarga todas las solicitudes pendientes",
+      "Corregido el almacenamiento en caché de voz",
+      "Corregida la carga del catálogo de modelos"
     ],
     "fr": [
-      "Reconnexion automatique ajoutée : un ping de contrôle de santé détecte si le serveur a planté au démarrage et recharge toutes les demandes en attente"
+      "Ajout de la reconnexion automatique : un ping de contrôle de santé détecte si le serveur a planté au démarrage et recharge toutes les requêtes en attente",
+      "Correction de la mise en cache vocale",
+      "Correction du chargement du catalogue de modèles"
     ],
     "it": [
-      "Aggiunta la riconnessione automatica: un ping di controllo salute rileva se il server è andato in crash durante l'avvio e ricarica tutte le richieste in sospeso"
+      "Aggiunta la riconnessione automatica: un ping di controllo salute rileva se il server è andato in crash durante l'avvio e ricarica tutte le richieste in sospeso",
+      "Corretta la memorizzazione nella cache vocale",
+      "Corretto il caricamento del catalogo modelli"
     ],
     "ja": [
-      "自動再接続を追加しました: ヘルスチェックpingが起動中にサーバーがクラッシュしたことを検出し、保留中のすべてのリクエストを再読み込みします"
+      "自動再接続を追加: ヘルスチェックpingが起動中にサーバーがクラッシュしたことを検出し、保留中のすべてのリクエストを再読み込みします",
+      "音声キャッシュを修正",
+      "モデルカタログの読み込みを修正"
     ],
     "ko": [
-      "자동 재연결 추가: 상태 확인 핑이 시작 중 서버 충돌을 감지하고 대기 중인 모든 요청을 다시 로드합니다"
+      "자동 재연결 추가: 상태 확인 핑이 시작 중 서버 충돌을 감지하고 대기 중인 모든 요청을 다시 로드합니다",
+      "음성 캐싱 수정",
+      "모델 카탈로그 로딩 수정"
     ],
     "pl": [
-      "Dodano automatyczne ponowne łączenie: ping kontrolny wykrywa, czy serwer uległ awarii podczas uruchamiania, i przeładowuje wszystkie oczekujące żądania"
+      "Dodano automatyczne ponowne łączenie: ping sprawdzający stan wykrywa, czy serwer uległ awarii podczas uruchamiania, i przeładowuje wszystkie oczekujące żądania",
+      "Naprawiono buforowanie głosu",
+      "Naprawiono ładowanie katalogu modeli"
     ],
     "pt-BR": [
-      "Reconexão automática adicionada: um ping de verificação de integridade detecta se o servidor travou durante a inicialização e recarrega todas as solicitações pendentes"
+      "Adicionada reconexão automática: um ping de verificação de saúde detecta se o servidor travou durante a inicialização e recarrega todas as solicitações pendentes",
+      "Corrigido o cache de voz",
+      "Corrigido o carregamento do catálogo de modelos"
     ],
     "ru": [
-      "Добавлено автоматическое переподключение: проверка связи обнаруживает, если сервер упал во время запуска, и перезагружает все ожидающие запросы"
+      "Добавлено автоматическое переподключение: проверка связи обнаруживает, если сервер упал во время запуска, и перезагружает все ожидающие запросы",
+      "Исправлено кэширование голоса",
+      "Исправлена загрузка каталога моделей"
     ],
     "tr": [
-      "Otomatik yeniden bağlanma eklendi: bir sağlık kontrolü ping'i, sunucunun başlangıç sırasında çöküp çökmediğini algılar ve bekleyen tüm istekleri yeniden yükler"
+      "Otomatik yeniden bağlanma eklendi: bir sağlık kontrolü ping'i, sunucunun başlangıç sırasında çöküp çökmediğini algılar ve bekleyen tüm istekleri yeniden yükler",
+      "Ses önbelleği düzeltildi",
+      "Model kataloğu yükleme düzeltildi"
     ],
     "zh-CN": [
-      "新增自动重连：健康检查ping检测服务器在启动期间是否崩溃，并重新加载所有待处理请求"
+      "添加了自动重连：健康检查ping检测服务器在启动期间是否崩溃，并重新加载所有待处理请求",
+      "修复了语音缓存",
+      "修复了模型目录加载"
     ]
   }
 }
