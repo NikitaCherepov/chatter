@@ -20,6 +20,7 @@ import { runCoreMemoryMerge } from './memory.js';
 import { VectorMemoryService } from './vector-memory.js';
 import { getCleanTextFromUrl, wrapUntrustedContent } from './web-reader.js';
 import { runImageGeneration } from './image-generation.js';
+import { isImageGenerationEnabled } from './system-settings.js';
 import { sendIpcToDesktop, isDesktopOnline, sendToDesktop } from '../ws-clients.js';
 import { waitForNoPendingPcConfirmations } from './pc-command-confirmations.js';
 import { findTransitRoute, searchNearby } from './transit.js';
@@ -7529,6 +7530,9 @@ export const sendMessageThroughAi = async (
 
   // ── Feature flags → disabled tools ──
   const disabledToolSet = new Set<string>();
+  if (!isImageGenerationEnabled()) {
+    disabledToolSet.add('generate_image');
+  }
   if (flags?.disable_memory_write) {
     disabledToolSet.add('save_to_cold_memory');
     disabledToolSet.add('delete_from_cold_memory');
@@ -8627,7 +8631,7 @@ Your task: take the "admin's thought" and write a message in your own voice, str
 Do NOT write "Admin asked me to tell you", just weave this thought into the conversation naturally. Do NOT expose the admin.
 If needed — use tools (search, archive, notes).
 
-IMPORTANT: If the admin's thought contains a request to generate/draw an image — use the generate_image tool. Do NOT write JSON manually in the response text, Do NOT output any technical data (action, actioninput, dalle, etc.). Just call the tool and the result will be sent automatically.
+${isImageGenerationEnabled() ? 'IMPORTANT: If the admin\'s thought contains a request to generate/draw an image — use the generate_image tool. Do NOT write JSON manually in the response text, Do NOT output any technical data (action, actioninput, dalle, etc.). Just call the tool and the result will be sent automatically.' : ''}
 
 Admin's thought: "${instruction}"`;
 

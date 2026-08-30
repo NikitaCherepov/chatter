@@ -24,6 +24,7 @@ import { registerPendingPcConfirmation, getPendingPcConfirmation, deletePendingP
 import { getPendingVisualClick, deletePendingVisualClick } from './services/visual-click-confirmations.js';
 import { getPendingEmailConfirmation, deletePendingEmailConfirmation } from './services/email-confirmations.js';
 import { runImageGeneration } from './services/image-generation.js';
+import { isImageGenerationEnabled, setImageGenerationEnabled } from './services/system-settings.js';
 import { getSmartHomeSettings, setSmartHomeToken, deleteSmartHomeToken, setZigbeeToken, deleteZigbeeToken, listSmartDevices, syncSmartHomeDevices } from './services/smart-home.js';
 import { db } from './db.js';
 import { getCleanTextFromUrl } from './services/web-reader.js';
@@ -4173,6 +4174,17 @@ app.delete('/api/v1/admin/users/:id/ban', adminMiddleware, async (req: AuthedReq
 });
 
 // ─── Plan limits config (admin-editable) ────────────────────────────────────
+
+app.get('/internal/admin/image-generation/settings', internalAuth, (_req, res) => {
+  return res.json({ enabled: isImageGenerationEnabled() });
+});
+
+app.put('/internal/admin/image-generation/settings', internalAuth, (req, res) => {
+  if (typeof req.body?.enabled !== 'boolean') {
+    return res.status(400).json({ error: 'enabled_must_be_boolean' });
+  }
+  return res.json({ enabled: setImageGenerationEnabled(req.body.enabled) });
+});
 
 app.post('/internal/admin/sync-plan-limits', internalAuth, (_req, res) => {
   syncAllUsersPlanLimits();

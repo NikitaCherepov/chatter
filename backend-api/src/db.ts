@@ -783,6 +783,19 @@ db.exec(`
   )
 `);
 
+// ── Global runtime settings ─────────────────────────────────────────────
+// Generic key/value storage for settings that should change without a
+// backend restart. Values are JSON so more ENV configuration can migrate
+// here incrementally without adding a table for every switch.
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS system_settings (
+    key TEXT PRIMARY KEY,
+    value_json TEXT NOT NULL,
+    updated_at INTEGER NOT NULL
+  )
+`);
+
 // ── Model overrides (coefficient for token quota accounting) ─────────────
 // model_id matches the uniqueId from MODELS_MANUAL / PRO / LITE / VISION env.
 // coefficient = multiplier applied to total_tokens for quota accounting.

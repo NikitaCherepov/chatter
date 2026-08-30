@@ -76,6 +76,7 @@ export type CloudTtsSettings = {
 };
 
 export type ImageGenerationSettings = {
+  enabled: boolean;
   baseUrl: string;
   apiKey: string;
   hasApiKey: boolean;
@@ -172,6 +173,7 @@ export const emptySettings: Settings = {
     model: 'sonic-3.5',
   },
   imageGeneration: {
+    enabled: true,
     baseUrl: 'https://openrouter.ai/api/v1',
     apiKey: '',
     hasApiKey: false,

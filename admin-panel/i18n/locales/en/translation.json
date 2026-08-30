@@ -247,6 +247,7 @@
     "subtitle": "Open an integration to configure keys and service parameters.",
     "statusConfigured": "Connected",
     "statusNotConfigured": "Not configured",
+    "statusDisabled": "Disabled",
     "back": "Back",
     "modelsLink": {
       "label": "Models",
@@ -321,6 +322,8 @@
       "modelLabel": "Model"
     },
     "imageGeneration": {
+      "enabled": "Image generation enabled",
+      "savingEnabled": "Saving image generation setting…",
       "pageTitle": "Image Generation",
       "pageDescription": "Currently only OpenRouter is supported. GPT Image, Nano Banana, and Grok models connect through its unified Image API.",
       "sectionTitle": "OpenRouter",

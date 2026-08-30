@@ -5,6 +5,7 @@ import type { ImageGenerationSettings } from '../../../lib/types';
 import { FormField } from '../../ui/FormField/FormField';
 import { Input } from '../../ui/Input/Input';
 import { Select } from '../../ui/Select/Select';
+import { Toggle } from '../../ui/Toggle/Toggle';
 import { IntegrationDetailPage } from './IntegrationDetailPage';
 import { IntegrationSecretField } from './IntegrationSecretField';
 import styles from './IntegrationsPage.module.css';
@@ -57,6 +58,8 @@ export function ImageGenerationPage({
   const [checking, setChecking] = useState(false);
   const [checkResult, setCheckResult] = useState<ModelCheck | null>(null);
   const [checkError, setCheckError] = useState('');
+  const [toggleSaving, setToggleSaving] = useState(false);
+  const [toggleError, setToggleError] = useState('');
   const supportsResolution = settings.supportedParameters.includes('resolution');
   const supportsQuality = settings.supportedParameters.includes('quality');
 
@@ -87,6 +90,25 @@ export function ImageGenerationPage({
     }
   }
 
+  async function toggleEnabled(enabled: boolean) {
+    const previous = settings.enabled;
+    onChange({ enabled });
+    setToggleSaving(true);
+    setToggleError('');
+    try {
+      const saved = await api<{ enabled: boolean }>('/api/image-generation/settings', {
+        method: 'PUT',
+        body: JSON.stringify({ enabled }),
+      });
+      onChange({ enabled: saved.enabled });
+    } catch (error) {
+      onChange({ enabled: previous });
+      setToggleError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setToggleSaving(false);
+    }
+  }
+
   return (
     <IntegrationDetailPage
       title={t('integrations.imageGeneration.pageTitle')}
@@ -102,6 +124,15 @@ export function ImageGenerationPage({
           <p>{t('integrations.imageGeneration.sectionIntro')}</p>
         </div>
         <div className={styles.fields}>
+          <Toggle
+            checked={settings.enabled}
+            onChange={(enabled) => void toggleEnabled(enabled)}
+            label={toggleSaving
+              ? t('integrations.imageGeneration.savingEnabled')
+              : t('integrations.imageGeneration.enabled')}
+            disabled={toggleSaving}
+          />
+          {toggleError && <span className={styles.checkError}>{toggleError}</span>}
           <FormField label={t('integrations.imageGeneration.apiUrlLabel')} hint={t('integrations.imageGeneration.apiUrlHint')}>
             <Input type="url" value={OPENROUTER_BASE_URL} readOnly />
           </FormField>
@@ -110,7 +141,7 @@ export function ImageGenerationPage({
             value={settings.apiKey}
             configured={settings.hasApiKey}
             onChange={(apiKey) => onChange({ apiKey })}
-            required
+            required={settings.enabled}
           />
           <FormField
             label={t('integrations.imageGeneration.modelLabel')}
@@ -128,7 +159,7 @@ export function ImageGenerationPage({
                   setCheckError('');
                 }}
                 placeholder="x-ai/grok-imagine-image-quality"
-                required
+                required={settings.enabled}
               />
               <button
                 className={styles.checkButton}

@@ -332,6 +332,7 @@ function publicSettings() {
       model: backendEnv.CARTESIA_MODEL_ID || 'sonic-3.5'
     },
     imageGeneration: {
+      enabled: true,
       baseUrl: OPENROUTER_BASE_URL,
       apiKey: '',
       hasApiKey: Boolean(backendEnv.OPENROUTER_API_KEY),
@@ -1917,7 +1918,16 @@ async function handleRequest(req, res) {
     const tail = Math.min(1000, Math.max(50, Number.parseInt(url.searchParams.get('tail') || '200', 10) || 200));
     return streamDockerLogs(req, res, service, tail);
   }
-  if (req.method === 'GET' && pathname === '/api/settings') return sendJson(res, 200, publicSettings());
+  if (req.method === 'GET' && pathname === '/api/settings') {
+    const settings = publicSettings();
+    try {
+      const runtime = await backendInternalRequest('/internal/admin/image-generation/settings');
+      settings.imageGeneration.enabled = runtime.enabled === true;
+    } catch {
+      // Keep the safe default while backend is temporarily unavailable.
+    }
+    return sendJson(res, 200, settings);
+  }
   if (req.method === 'GET' && pathname === '/api/status') return sendJson(res, 200, { applying: Boolean(applyPromise), services: await getServiceStatus() });
   if (req.method === 'GET' && pathname === '/api/server-update') {
     if (url.searchParams.get('refresh') === '1' && serverUpdateInProgress()) return sendJson(res, 409, { error: 'server_update_is_in_progress' });
@@ -2374,6 +2384,27 @@ async function handleRequest(req, res) {
   }
 
   // ── OpenRouter provider monitor (proxied to backend internal API) ────────
+  if (pathname === '/api/image-generation/settings') {
+    if (req.method === 'GET') {
+      try {
+        return sendJson(res, 200, await backendInternalRequest('/internal/admin/image-generation/settings'));
+      } catch (error) {
+        return sendJson(res, 502, { error: error.message || 'image_generation_settings_failed' });
+      }
+    }
+    if (req.method === 'PUT') {
+      const body = await readJson(req);
+      try {
+        return sendJson(res, 200, await backendInternalRequest('/internal/admin/image-generation/settings', {
+          method: 'PUT',
+          body: JSON.stringify({ enabled: body.enabled }),
+        }));
+      } catch (error) {
+        return sendJson(res, 400, { error: error.message || 'image_generation_settings_save_failed' });
+      }
+    }
+  }
+
   if (pathname === '/api/openrouter-monitor/settings') {
     if (req.method === 'GET') {
       try {

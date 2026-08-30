@@ -2,6 +2,7 @@ import dotenv from 'dotenv';
 import { getUserById } from './chats.js';
 import { db } from '../db.js';
 import type { UserPlan, UserRecord } from '../types.js';
+import { isImageGenerationEnabled } from './system-settings.js';
 
 dotenv.config();
 
@@ -127,6 +128,9 @@ export const runImageGeneration = async (
   prompt: string,
   inputImages?: Array<{ base64: string; mimeType: string }>
 ): Promise<ImageGenResult | ImageGenError> => {
+  if (!isImageGenerationEnabled()) {
+    return { ok: false, error: 'Image generation is disabled by the administrator.' };
+  }
   const user = getUserById(userId);
   if (!user) return { ok: false, error: 'user_not_found' };
   if (user.status !== 'approved' && user.is_admin !== 1) return { ok: false, error: 'user_not_approved' };

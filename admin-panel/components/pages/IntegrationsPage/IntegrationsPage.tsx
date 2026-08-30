@@ -123,7 +123,7 @@ export function IntegrationsPage({
     'web-search': settings.webSearch.hasApiKey,
     'web-reader': settings.webReader.hasToken,
     'cloud-tts': settings.cloudTts.hasApiKey,
-    'image-generation': settings.imageGeneration.hasApiKey,
+    'image-generation': settings.imageGeneration.enabled && settings.imageGeneration.hasApiKey,
   };
 
   return (
@@ -155,7 +155,13 @@ export function IntegrationsPage({
             <span className={styles.info}>
               <small>{t(`integrations.items.${item.id}.group`)}</small>
               <strong>{t(`integrations.items.${item.id}.name`)}</strong>
-              <em>{configured[item.id] ? t('integrations.statusConfigured') : t(`integrations.items.${item.id}.description`)}</em>
+              <em>
+                {item.id === 'image-generation' && !settings.imageGeneration.enabled
+                  ? t('integrations.statusDisabled')
+                  : configured[item.id]
+                    ? t('integrations.statusConfigured')
+                    : t(`integrations.items.${item.id}.description`)}
+              </em>
             </span>
             <Icon name="arrow" />
           </button>
