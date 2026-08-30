@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQueryClient } from '@tanstack/react-query';
 import { Card } from '../../ui/Card/Card';
@@ -12,6 +12,8 @@ import { useBackups, useBackupSchedule } from '../../../lib/hooks/useBackups';
 import { useBackupMutations } from '../../../lib/hooks/useBackupMutations';
 import { useBackupDetails } from '../../../lib/hooks/useBackupDetails';
 import { uploadBackup } from '../../../lib/services/backupService';
+import { useBackendRestartDrain } from '../../../lib/hooks/useBackendRestartDrain';
+import { ServerUpdateModal } from '../SystemPage/ServerUpdateModal/ServerUpdateModal';
 import styles from '../SystemPage/SystemPage.module.css';
 
 export function BackupsPage() {
@@ -28,6 +30,19 @@ export function BackupsPage() {
   const [importProgress, setImportProgress] = useState<number | null>(null);
   const [importState, setImportState] = useState('');
   const [schedule, setSchedule] = useState<BackupSchedule>({ frequency: 'off', includeUploads: false, retention: 10, lastRunAt: '' });
+  const pendingRestoreRef = useRef<string | null>(null);
+
+  const restoreRestart = useBackendRestartDrain({
+    apply: applyPendingRestore,
+    closeOnSuccess: true,
+  });
+
+  async function applyPendingRestore() {
+    const backupName = pendingRestoreRef.current;
+    if (!backupName) throw new Error('backup_restore_missing');
+    await restoreMutation.mutateAsync(backupName);
+    pendingRestoreRef.current = null;
+  }
 
   // Sync schedule from query to local state for editing
   useEffect(() => {
@@ -50,7 +65,8 @@ export function BackupsPage() {
 
   function handleRestore(backup: BackupInfo) {
     if (!window.confirm(t('system.backups.restoreConfirm', { name: backup.name }))) return;
-    restoreMutation.mutate(backup.name);
+    pendingRestoreRef.current = backup.name;
+    void restoreRestart.show();
   }
 
   async function handleImport(file: File) {
@@ -121,6 +137,23 @@ export function BackupsPage() {
           onDelete={(backup) => handleDelete(backup)}
         />
       </Card>
+      {restoreRestart.open && (
+        <ServerUpdateModal
+          mode="configuration"
+          changelog={{}}
+          rebuiltFromSameCommit={false}
+          updating={restoreRestart.phase === 'applying'}
+          operationStatus="idle"
+          operationMessage=""
+          drainPhase={restoreRestart.phase}
+          drain={restoreRestart.drain}
+          applyError={restoreRestart.error}
+          onCancel={restoreRestart.cancel}
+          onRetry={restoreRestart.retry}
+          onSoftUpdate={restoreRestart.soft}
+          onForceUpdate={restoreRestart.force}
+        />
+      )}
     </div>
   );
 }

@@ -18,6 +18,7 @@ export type DrainState = {
 export type DrainPhase = 'idle' | 'draining' | 'timeout' | 'applying';
 
 export function ServerUpdateModal({
+  mode = 'update',
   changelog,
   rebuiltFromSameCommit,
   updating,
@@ -31,6 +32,7 @@ export function ServerUpdateModal({
   onSoftUpdate,
   onForceUpdate,
 }: {
+  mode?: 'update' | 'configuration';
   changelog: Record<string, string[]>;
   rebuiltFromSameCommit: boolean;
   updating: boolean;
@@ -45,6 +47,7 @@ export function ServerUpdateModal({
   onForceUpdate: () => void;
 }) {
   const { t, i18n } = useTranslation();
+  const isConfiguration = mode === 'configuration';
 
   const stageProgress: Record<string, number> = {
     queued: 10,
@@ -57,7 +60,7 @@ export function ServerUpdateModal({
   const effectiveStatus = operationStatus === 'idle' && updating ? 'queued' : operationStatus;
   const stageKey = effectiveStatus && activeStatuses.has(effectiveStatus) ? `system.update.stages.${effectiveStatus}` : null;
   const terminal = effectiveStatus === 'complete' || effectiveStatus === 'failed';
-  const showProgress = updating || terminal;
+  const showProgress = !isConfiguration && (updating || terminal);
   const progressPercent = stageProgress[effectiveStatus] ?? 0;
   const failed = effectiveStatus === 'failed';
 
@@ -106,7 +109,9 @@ export function ServerUpdateModal({
   return (
     <div className={styles.backdrop} role="presentation" onMouseDown={onBackdropClick}>
       <div className={styles.modal} role="dialog" aria-modal="true" aria-labelledby="server-update-title">
-        <h2 id="server-update-title">{t('system.update.title')}</h2>
+        <h2 id="server-update-title">
+          {t(isConfiguration ? 'system.update.restart.title' : 'system.update.title')}
+        </h2>
 
         {/* ─── Drain status ─────────────────────────────────────────────── */}
         {showDrainSection && (
@@ -138,7 +143,7 @@ export function ServerUpdateModal({
             {/* timeout: 15s passed, still have users */}
             {drainPhase === 'timeout' && (
               <p className={styles.drainTimeoutNotice}>
-                {t('system.update.drain.timeoutNotice', { count: drain!.activeUsers })}
+                {t(isConfiguration ? 'system.update.restart.timeoutNotice' : 'system.update.drain.timeoutNotice', { count: drain!.activeUsers })}
               </p>
             )}
           </div>
@@ -147,6 +152,10 @@ export function ServerUpdateModal({
         {/* ─── Changelog (only in idle phase) ──────────────────────────── */}
         {drainPhase === 'idle' && (
           <>
+            {isConfiguration ? (
+              <p>{t('system.update.restart.description')}</p>
+            ) : (
+              <>
             {rebuiltFromSameCommit && <p className={styles.notice}>{t('system.update.changes.rebuiltFromSame')}</p>}
             {releaseNotes && (
               <>
@@ -155,6 +164,8 @@ export function ServerUpdateModal({
               </>
             )}
             <p>{t('system.update.changes.autoBackup')}</p>
+              </>
+            )}
           </>
         )}
 
@@ -181,7 +192,9 @@ export function ServerUpdateModal({
         {/* ─── Action buttons ──────────────────────────────────────────── */}
         <div className={styles.actions}>
           {drainPhase === 'applying' ? (
-            <button type="button" disabled>{t('system.update.changes.updating')}</button>
+            <button type="button" disabled>
+              {t(isConfiguration ? 'system.update.restart.applying' : 'system.update.changes.updating')}
+            </button>
           ) : terminal ? (
             <>
               <button type="button" className="buttonSecondary" onClick={onCancel}>
@@ -207,7 +220,7 @@ export function ServerUpdateModal({
                 onClick={onSoftUpdate}
                 disabled={drainPhase !== 'idle'}
               >
-                {t('system.update.drain.softUpdate')}
+                {t(isConfiguration ? 'system.update.restart.softApply' : 'system.update.drain.softUpdate')}
               </button>
 
               {/* Force: available in idle, draining, AND timeout phases.
@@ -217,7 +230,7 @@ export function ServerUpdateModal({
                 type="button"
                 onClick={onForceUpdate}
               >
-                {t('system.update.drain.forceNow')}
+                {t(isConfiguration ? 'system.update.restart.forceApply' : 'system.update.drain.forceNow')}
               </button>
             </>
           )}

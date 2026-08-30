@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { AdminSection } from '../../AdminShell/AdminShell';
 import type { Service, Settings } from '../../../lib/types';
@@ -6,6 +6,8 @@ import { api } from '../../../lib/api';
 import { Icon } from '../../icons/icons';
 import { Card } from '../../ui/Card/Card';
 import { UpdateStatusCard } from './UpdateStatusCard';
+import { useBackendRestartDrain } from '../../../lib/hooks/useBackendRestartDrain';
+import { ServerUpdateModal } from '../SystemPage/ServerUpdateModal/ServerUpdateModal';
 import styles from './OverviewPage.module.css';
 
 const serviceNames: Record<string, string> = {
@@ -28,10 +30,24 @@ export function OverviewPage({
 }) {
   const [busyService, setBusyService] = useState('');
   const [actionError, setActionError] = useState('');
+  const pendingServiceActionRef = useRef<{ service: string; action: 'start' | 'stop' | 'restart' } | null>(null);
   const { t } = useTranslation();
   const serviceMap = new Map(services.map((service) => [service.service, service]));
 
-  async function controlService(service: string, action: 'start' | 'stop' | 'restart') {
+  const serviceRestart = useBackendRestartDrain({
+    apply: applyPendingServiceAction,
+    closeOnSuccess: true,
+    onError: setActionError,
+  });
+
+  async function applyPendingServiceAction() {
+    const pending = pendingServiceActionRef.current;
+    if (!pending) throw new Error('service_action_missing');
+    await runServiceAction(pending.service, pending.action);
+    pendingServiceActionRef.current = null;
+  }
+
+  async function runServiceAction(service: string, action: 'start' | 'stop' | 'restart') {
     setBusyService(service);
     setActionError('');
     try {
@@ -40,10 +56,24 @@ export function OverviewPage({
         body: '{}',
       });
       await onRefresh();
-    } catch (error) {
-      setActionError(error instanceof Error ? error.message : String(error));
     } finally {
       setBusyService('');
+    }
+  }
+
+  async function controlService(service: string, action: 'start' | 'stop' | 'restart') {
+    setActionError('');
+    const interruptsBackend = (service === 'backend' && action !== 'start')
+      || (service === 'voice' && action !== 'restart');
+    if (interruptsBackend) {
+      pendingServiceActionRef.current = { service, action };
+      await serviceRestart.show();
+      return;
+    }
+    try {
+      await runServiceAction(service, action);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : String(error));
     }
   }
 
@@ -162,6 +192,23 @@ export function OverviewPage({
           </div>
         </Card>
       </div>
+      {serviceRestart.open && (
+        <ServerUpdateModal
+          mode="configuration"
+          changelog={{}}
+          rebuiltFromSameCommit={false}
+          updating={serviceRestart.phase === 'applying'}
+          operationStatus="idle"
+          operationMessage=""
+          drainPhase={serviceRestart.phase}
+          drain={serviceRestart.drain}
+          applyError={serviceRestart.error}
+          onCancel={serviceRestart.cancel}
+          onRetry={serviceRestart.retry}
+          onSoftUpdate={serviceRestart.soft}
+          onForceUpdate={serviceRestart.force}
+        />
+      )}
     </div>
   );
 }

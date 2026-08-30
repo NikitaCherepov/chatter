@@ -42,17 +42,17 @@ export const serverUpdateService = {
     body: JSON.stringify({ tag }),
   }),
 
-  // Update drain endpoints (proxied by chatter-manager -> backend-api)
-  getUpdateState: () => api<UpdateState>('/api/update/prepare'),
-  prepareUpdate: () => api<UpdateState>('/api/update/prepare', {
+  // Shared backend restart drain endpoints (proxied by chatter-manager -> backend-api)
+  getUpdateState: () => api<UpdateState>('/api/restart/prepare'),
+  prepareUpdate: () => api<UpdateState>('/api/restart/prepare', {
     method: 'POST',
     body: JSON.stringify({ action: 'prepare' }),
   }),
-  cancelUpdate: () => api<UpdateState>('/api/update/prepare', {
+  cancelUpdate: () => api<UpdateState>('/api/restart/prepare', {
     method: 'POST',
     body: JSON.stringify({ action: 'cancel' }),
   }),
-  forceUpdate: () => api<{ aborted: number }>('/api/update/prepare', {
+  forceUpdate: () => api<{ aborted: number }>('/api/restart/prepare', {
     method: 'POST',
     body: JSON.stringify({ action: 'force' }),
   }),

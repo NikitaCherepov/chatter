@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useCallback, useEffect, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AdminShell, type AdminSection } from '../components/AdminShell/AdminShell';
 import { LoginScreen } from '../components/LoginScreen/LoginScreen';
@@ -21,6 +21,8 @@ import { SettingsPage } from '../components/pages/SettingsPage/SettingsPage';
 import { PromptsPage } from '../components/pages/PromptsPage/PromptsPage';
 import { api, ApiError } from '../lib/api';
 import { emptySettings, type Service, type Settings } from '../lib/types';
+import { useBackendRestartDrain } from '../lib/hooks/useBackendRestartDrain';
+import { ServerUpdateModal } from '../components/pages/SystemPage/ServerUpdateModal/ServerUpdateModal';
 
 const ADMIN_SECTIONS: ReadonlySet<AdminSection> = new Set([
   'overview',
@@ -61,6 +63,7 @@ export default function Home() {
   const [newPassword, setNewPassword] = useState('');
   const [accountState, setAccountState] = useState('');
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
+  const pendingSettingsRef = useRef<Record<string, unknown> | null>(null);
   const { t } = useTranslation();
 
   useEffect(() => {
@@ -93,6 +96,32 @@ export default function Home() {
     setServices(loadedServices);
     setUsername(session.username);
   }, []);
+
+  const applySettings = useCallback(async () => {
+    const payload = pendingSettingsRef.current;
+    if (!payload) throw new Error('settings_payload_missing');
+    setSaving(true);
+    setSaveState(t('common.savingSettings'));
+    try {
+      await api('/api/settings', {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      });
+      pendingSettingsRef.current = null;
+      setTelegramToken('');
+      setVoiceToken('');
+      setSaveState(t('common.settingsApplied'));
+      await loadData();
+    } finally {
+      setSaving(false);
+    }
+  }, [loadData, t]);
+
+  const settingsRestart = useBackendRestartDrain({
+    apply: applySettings,
+    closeOnSuccess: true,
+    onError: (message) => setSaveState(`${t('common.error')}: ${message}`),
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -149,22 +178,8 @@ export default function Home() {
 
   async function save(event: FormEvent) {
     event.preventDefault();
-    setSaving(true);
-    setSaveState(t('common.savingSettings'));
-    try {
-      await api('/api/settings', {
-        method: 'PUT',
-        body: JSON.stringify({ ...settings, telegramToken, voiceToken }),
-      });
-      setTelegramToken('');
-      setVoiceToken('');
-      setSaveState(t('common.settingsApplied'));
-      await loadData();
-    } catch (error) {
-      setSaveState(`${t('common.error')}: ${error instanceof Error ? error.message : String(error)}`);
-    } finally {
-      setSaving(false);
-    }
+    pendingSettingsRef.current = { ...settings, telegramToken, voiceToken };
+    await settingsRestart.show();
   }
 
   async function changeAccount(event: FormEvent) {
@@ -227,6 +242,7 @@ export default function Home() {
   }
 
   return (
+    <>
     <AdminShell
       section={section}
       username={username}
@@ -278,5 +294,23 @@ export default function Home() {
       {section === 'settings' && <SettingsPage />}
       {section === 'prompts' && <PromptsPage />}
     </AdminShell>
+    {settingsRestart.open && (
+      <ServerUpdateModal
+        mode="configuration"
+        changelog={{}}
+        rebuiltFromSameCommit={false}
+        updating={settingsRestart.phase === 'applying'}
+        operationStatus="idle"
+        operationMessage=""
+        drainPhase={settingsRestart.phase}
+        drain={settingsRestart.drain}
+        applyError={settingsRestart.error}
+        onCancel={settingsRestart.cancel}
+        onRetry={settingsRestart.retry}
+        onSoftUpdate={settingsRestart.soft}
+        onForceUpdate={settingsRestart.force}
+      />
+    )}
+    </>
   );
 }

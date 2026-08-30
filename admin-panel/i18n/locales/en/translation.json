@@ -724,6 +724,14 @@
         "softUpdate": "Wait up to 15s and update",
         "forceNow": "Force update now",
         "pollError": "Drain poll failed: {{message}}"
+      },
+      "restart": {
+        "title": "Restart backend",
+        "description": "This action restarts the backend. Active generations can finish before the restart.",
+        "timeoutNotice": "15 seconds have passed, {{count}} user(s) still working. You can keep waiting, continue now, or cancel.",
+        "softApply": "Wait up to 15s and continue",
+        "forceApply": "Continue now",
+        "applying": "Working…"
       }
     },
     "error": "Error: {{message}}"

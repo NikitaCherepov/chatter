@@ -1974,7 +1974,8 @@ async function handleRequest(req, res) {
     return sendJson(res, 200, { ok: true, imageTag: tag });
   }
 
-  if (pathname === '/api/update/prepare') {
+  // Keep the old update-specific path as an alias for existing admin panels.
+  if (pathname === '/api/restart/prepare' || pathname === '/api/update/prepare') {
     if (req.method === 'GET') {
       try {
         return sendJson(res, 200, await backendInternalRequest('/internal/admin/update/prepare'));
