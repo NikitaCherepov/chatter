@@ -1,8 +1,8 @@
 {
   "changes": {
     "en": [
-      "Fixed timezone settings for desktop-app",
-      "Improved Zigbee work"
+      "Added a soft reload to other critical places in the admin panel besides updates",
+      "Added an option to disable image generation"
     ],
     "cs": [
       "Opravena nastavení časového pásma pro desktopovou aplikaci",
