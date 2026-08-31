@@ -822,6 +822,7 @@ db.exec(`
     example_json TEXT NOT NULL,
     start_page INTEGER NOT NULL,
     end_page INTEGER NOT NULL,
+    overlap_pages INTEGER NOT NULL DEFAULT 1,
     auto_confirm INTEGER NOT NULL DEFAULT 1,
     status TEXT NOT NULL DEFAULT 'pending'
       CHECK(status IN ('pending', 'processing', 'completed', 'failed', 'cancelled')),
@@ -849,6 +850,12 @@ db.exec(`
 db.exec('CREATE INDEX IF NOT EXISTS idx_document_extraction_files_user ON document_extraction_files(user_id, updated_at DESC)');
 db.exec('CREATE INDEX IF NOT EXISTS idx_document_extraction_jobs_file ON document_extraction_jobs(user_id, file_id, created_at DESC)');
 db.exec('CREATE INDEX IF NOT EXISTS idx_document_extraction_items_job ON document_extraction_items(user_id, job_id, status, id)');
+{
+  const columns = db.prepare('PRAGMA table_info(document_extraction_jobs)').all() as Array<{ name: string }>;
+  if (!columns.some(column => column.name === 'overlap_pages')) {
+    db.exec('ALTER TABLE document_extraction_jobs ADD COLUMN overlap_pages INTEGER NOT NULL DEFAULT 1');
+  }
+}
 
 // ── Model overrides (coefficient for token quota accounting) ─────────────
 // model_id matches the uniqueId from MODELS_MANUAL / PRO / LITE / VISION env.

@@ -40,6 +40,7 @@ export function JsonExtractorTool() {
   const [exampleText, setExampleText] = useState(DEFAULT_EXAMPLE);
   const [startPage, setStartPage] = useState(1);
   const [endPage, setEndPage] = useState(1);
+  const [overlapPages, setOverlapPages] = useState(true);
   const [autoConfirm, setAutoConfirm] = useState(true);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editText, setEditText] = useState('');
@@ -132,6 +133,7 @@ export function JsonExtractorTool() {
         example,
         start_page: startPage,
         end_page: endPage,
+        overlap_pages: overlapPages,
         auto_confirm: autoConfirm,
       });
       setJob(result.job);
@@ -187,6 +189,12 @@ export function JsonExtractorTool() {
     [job?.items],
   );
   const reviewCount = job?.items.filter(item => item.status === 'review').length || 0;
+  const selectedPageCount = Math.max(0, endPage - startPage + 1);
+  const batchCount = selectedPageCount === 0
+    ? 0
+    : selectedPageCount <= 3
+      ? 1
+      : 1 + Math.ceil((selectedPageCount - 3) / (overlapPages ? 2 : 3));
   const finalJson = useMemo(
     () => JSON.stringify(confirmed.map(item => item.data), null, 2),
     [confirmed],
@@ -301,6 +309,29 @@ export function JsonExtractorTool() {
                 onChange={event => setEndPage(Number(event.target.value))} />
             </label>
           </div>
+          <div className={s.batchHint}>
+            {tr(
+              `${batchCount} batches · up to 3 pages each`,
+              `${batchCount} пакетов · до 3 страниц в каждом`,
+            )}
+          </div>
+          <label className={s.toggleRow}>
+            <input
+              type="checkbox"
+              checked={overlapPages}
+              onChange={event => setOverlapPages(event.target.checked)}
+            />
+            <span>
+              <strong>{tr(
+                'Repeat one page between batches',
+                'Повторять одну страницу между пакетами',
+              )}</strong>
+              <small>{tr(
+                'Helps when an entry continues on the next page, but uses more model calls.',
+                'Полезно, если запись продолжается на следующей странице, но требует больше вызовов модели.',
+              )}</small>
+            </span>
+          </label>
           <label className={s.toggleRow}>
             <input type="checkbox" checked={autoConfirm} onChange={event => setAutoConfirm(event.target.checked)} />
             <span>
@@ -343,6 +374,12 @@ export function JsonExtractorTool() {
       <div className={s.progress}><i style={{ width: `${job.total_batches ? job.processed_batches / job.total_batches * 100 : 0}%` }} /></div>
       {job.error && <div className={s.error}>{job.error}</div>}
       <div className={s.jobActions}>
+        {statusIsActive(job.status) && (
+          <button className={s.dangerButton} onClick={async () => {
+            await api.cancelExtractionJob(job.id);
+            await refreshJob(job.id);
+          }}>{tr('Stop', 'Остановить')}</button>
+        )}
         {reviewCount > 0 && (
           <button className={s.primary} onClick={async () => {
             await api.confirmExtractionItems(job.id);
@@ -377,7 +414,7 @@ export function JsonExtractorTool() {
                 </>
               ) : (
                 <>
-                  {item.status === 'review' && (
+                  {(item.status === 'review' || (item.status === 'incomplete' && !statusIsActive(job.status))) && (
                     <button className={s.primary} onClick={() => void updateItem(item, { status: 'confirmed' })}>
                       {tr('Confirm', 'Подтвердить')}
                     </button>

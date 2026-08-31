@@ -12,7 +12,6 @@ import { countTokens } from './tokenizer.js';
 
 const VIRTUAL_PAGE_CHARS = 6_000;
 const BATCH_SIZE = 3;
-const BATCH_OVERLAP = 1;
 const MAX_EXTRACTOR_FILE_SIZE = 25 * 1024 * 1024;
 
 type FileRow = {
@@ -24,7 +23,7 @@ type FileRow = {
 type JobRow = {
   id: number; user_id: number; file_id: number; instruction: string;
   example_json: string; start_page: number; end_page: number;
-  auto_confirm: number; status: string; current_page: number;
+  overlap_pages: number; auto_confirm: number; status: string; current_page: number;
   processed_batches: number; total_batches: number; error: string | null;
   created_at: number; updated_at: number;
 };
@@ -48,6 +47,7 @@ const jobDto = (row: JobRow) => ({
   id: row.id, file_id: row.file_id, instruction: row.instruction,
   example: parseJson<Record<string, unknown>>(row.example_json, {}),
   start_page: row.start_page, end_page: row.end_page,
+  overlap_pages: Boolean(row.overlap_pages),
   auto_confirm: Boolean(row.auto_confirm), status: row.status,
   current_page: row.current_page, processed_batches: row.processed_batches,
   total_batches: row.total_batches, error: row.error,
@@ -191,6 +191,17 @@ const identityFor = (item: Record<string, unknown>, field: string) => {
     : `hash:${crypto.createHash('sha256').update(JSON.stringify(item)).digest('hex')}`;
 };
 
+const mergeRecords = (
+  first: Record<string, unknown>,
+  second: Record<string, unknown>,
+) => {
+  const merged = { ...first };
+  for (const [key, value] of Object.entries(second)) {
+    if (meaningful(value) || !meaningful(merged[key])) merged[key] = value;
+  }
+  return merged;
+};
+
 const saveComplete = (
   job: JobRow,
   item: Record<string, unknown>,
@@ -204,7 +215,10 @@ const saveComplete = (
     ORDER BY id DESC LIMIT 1
   `).get(job.user_id, job.id, identity) as ItemRow | undefined;
   if (existing) {
-    const merged = { ...parseJson<Record<string, unknown>>(existing.data_json, {}), ...item };
+    const merged = mergeRecords(
+      parseJson<Record<string, unknown>>(existing.data_json, {}),
+      item,
+    );
     const pages = [...new Set([
       ...parseJson<number[]>(existing.source_pages, []),
       ...sourcePages,
@@ -231,22 +245,28 @@ const replaceIncomplete = (
 ) => {
   db.prepare("DELETE FROM document_extraction_items WHERE user_id = ? AND job_id = ? AND status = 'incomplete'")
     .run(job.user_id, job.id);
+  const deduplicated = new Map<string, Record<string, unknown>>();
+  for (const item of items) {
+    const identity = identityFor(item, identityField);
+    const previous = deduplicated.get(identity);
+    deduplicated.set(identity, previous ? mergeRecords(previous, item) : item);
+  }
   const insert = db.prepare(`
     INSERT INTO document_extraction_items
       (user_id, job_id, data_json, status, identity_key, source_pages, created_at, updated_at)
     VALUES (?, ?, ?, 'incomplete', ?, ?, ?, ?)
   `);
-  for (const item of items) {
+  for (const [identity, item] of deduplicated) {
     insert.run(
-      job.user_id, job.id, JSON.stringify(item), identityFor(item, identityField),
+      job.user_id, job.id, JSON.stringify(item), identity,
       JSON.stringify(sourcePages), now(), now(),
     );
   }
 };
 
-const getBatchStarts = (start: number, end: number) => {
+const getBatchStarts = (start: number, end: number, overlapPages: boolean) => {
   const result: number[] = [];
-  const step = BATCH_SIZE - BATCH_OVERLAP;
+  const step = BATCH_SIZE - (overlapPages ? 1 : 0);
   for (let page = start; page <= end; page += step) {
     result.push(page);
     if (page + BATCH_SIZE - 1 >= end) break;
@@ -265,7 +285,7 @@ const processJob = async (jobId: number) => {
   const example = parseJson<Record<string, unknown>>(job.example_json, {});
   const requiredKeys = Object.keys(example);
   const identityField = requiredKeys[0];
-  const starts = getBatchStarts(job.start_page, job.end_page);
+  const starts = getBatchStarts(job.start_page, job.end_page, Boolean(job.overlap_pages));
   db.prepare("UPDATE document_extraction_jobs SET status = 'processing', total_batches = ?, updated_at = ? WHERE id = ?")
     .run(starts.length, now(), jobId);
   try {
@@ -331,7 +351,7 @@ export const createExtractionJob = (
   userId: number,
   input: {
     fileId: number; instruction: string; example: unknown;
-    startPage?: number; endPage?: number; autoConfirm?: boolean;
+    startPage?: number; endPage?: number; overlapPages?: boolean; autoConfirm?: boolean;
   },
 ) => {
   const file = db.prepare('SELECT * FROM document_extraction_files WHERE id = ? AND user_id = ?')
@@ -352,12 +372,14 @@ export const createExtractionJob = (
   const result = db.prepare(`
     INSERT INTO document_extraction_jobs (
       user_id, file_id, instruction, example_json, start_page, end_page,
-      auto_confirm, status, total_batches, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)
+      overlap_pages, auto_confirm, status, total_batches, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)
   `).run(
     userId, file.id, instruction, exampleJson, startPage, endPage,
+    input.overlapPages === false ? 0 : 1,
     input.autoConfirm === false ? 0 : 1,
-    getBatchStarts(startPage, endPage).length, timestamp, timestamp,
+    getBatchStarts(startPage, endPage, input.overlapPages !== false).length,
+    timestamp, timestamp,
   );
   const jobId = Number(result.lastInsertRowid);
   void processJob(jobId);
@@ -368,6 +390,35 @@ export const getExtractionJob = (userId: number, jobId: number) => {
   const job = db.prepare('SELECT * FROM document_extraction_jobs WHERE id = ? AND user_id = ?')
     .get(jobId, userId) as JobRow | undefined;
   if (!job) return null;
+  const duplicateRows = db.prepare(`
+    SELECT * FROM document_extraction_items
+    WHERE job_id = ? AND user_id = ? AND status = 'incomplete'
+    ORDER BY id DESC
+  `).all(jobId, userId) as ItemRow[];
+  const kept = new Map<string, ItemRow>();
+  db.transaction(() => {
+    for (const row of duplicateRows) {
+      const key = row.identity_key || `data:${row.data_json}`;
+      const existing = kept.get(key);
+      if (!existing) {
+        kept.set(key, row);
+        continue;
+      }
+      const data = mergeRecords(
+        parseJson<Record<string, unknown>>(row.data_json, {}),
+        parseJson<Record<string, unknown>>(existing.data_json, {}),
+      );
+      const pages = [...new Set([
+        ...parseJson<number[]>(row.source_pages, []),
+        ...parseJson<number[]>(existing.source_pages, []),
+      ])].sort((a, b) => a - b);
+      db.prepare('UPDATE document_extraction_items SET data_json = ?, source_pages = ? WHERE id = ?')
+        .run(JSON.stringify(data), JSON.stringify(pages), existing.id);
+      db.prepare('DELETE FROM document_extraction_items WHERE id = ?').run(row.id);
+      existing.data_json = JSON.stringify(data);
+      existing.source_pages = JSON.stringify(pages);
+    }
+  })();
   const items = db.prepare(
     'SELECT * FROM document_extraction_items WHERE job_id = ? AND user_id = ? ORDER BY id',
   ).all(jobId, userId) as ItemRow[];
@@ -435,6 +486,13 @@ export const deleteExtractionItem = (userId: number, jobId: number, itemId: numb
   db.prepare(
     'DELETE FROM document_extraction_items WHERE id = ? AND job_id = ? AND user_id = ?',
   ).run(itemId, jobId, userId).changes > 0;
+
+export const cancelExtractionJob = (userId: number, jobId: number) =>
+  db.prepare(`
+    UPDATE document_extraction_jobs
+    SET status = 'cancelled', updated_at = ?
+    WHERE id = ? AND user_id = ? AND status IN ('pending', 'processing')
+  `).run(now(), jobId, userId).changes > 0;
 
 // The response of an in-flight model call is unknown after a backend restart.
 // Mark interrupted jobs clearly instead of leaving them permanently processing.

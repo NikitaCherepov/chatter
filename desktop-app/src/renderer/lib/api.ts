@@ -2140,6 +2140,7 @@ export type ExtractionJobSummary = {
   example: Record<string, unknown>;
   start_page: number;
   end_page: number;
+  overlap_pages: boolean;
   auto_confirm: boolean;
   status: ExtractionJobStatus;
   current_page: number;
@@ -2216,6 +2217,7 @@ export async function createExtractionJob(input: {
   example: Record<string, unknown>;
   start_page: number;
   end_page: number;
+  overlap_pages: boolean;
   auto_confirm: boolean;
 }): Promise<{ job: ExtractionJob }> {
   return apiFetch('/api/v1/document-extractor/jobs', {
@@ -2227,6 +2229,10 @@ export async function createExtractionJob(input: {
 
 export async function getExtractionJob(jobId: number): Promise<{ job: ExtractionJob }> {
   return apiFetch(`/api/v1/document-extractor/jobs/${jobId}`);
+}
+
+export async function cancelExtractionJob(jobId: number): Promise<{ ok: boolean }> {
+  return apiFetch(`/api/v1/document-extractor/jobs/${jobId}/cancel`, { method: 'POST' });
 }
 
 export async function updateExtractionItem(

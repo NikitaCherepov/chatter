@@ -56,6 +56,7 @@ import { resolveImageFile, getUploadsDir } from './services/image-storage.js';
 import { resolveAttachmentFile, MAX_RAW_FILE_SIZE as MAX_ATTACHMENT_BYTES } from './services/attachment-storage.js';
 import { parseDocument, SUPPORTED_EXTENSIONS } from './services/document-parser.js';
 import {
+  cancelExtractionJob,
   confirmExtractionItems,
   createExtractionFile,
   createExtractionJob,
@@ -2095,6 +2096,7 @@ app.post('/api/v1/document-extractor/jobs', (req: AuthedRequest, res) => {
       example: req.body?.example,
       startPage: Number(req.body?.start_page) || undefined,
       endPage: Number(req.body?.end_page) || undefined,
+      overlapPages: req.body?.overlap_pages !== false,
       autoConfirm: req.body?.auto_confirm !== false,
     });
     return res.status(201).json({ job });
@@ -2109,6 +2111,13 @@ app.get('/api/v1/document-extractor/jobs/:jobId', (req: AuthedRequest, res) => {
   const job = getExtractionJob(accountIdFromRequest(req), Number(req.params.jobId));
   if (!job) return res.status(404).json({ error: 'job_not_found' });
   return res.json({ job });
+});
+
+app.post('/api/v1/document-extractor/jobs/:jobId/cancel', (req: AuthedRequest, res) => {
+  if (!cancelExtractionJob(accountIdFromRequest(req), Number(req.params.jobId))) {
+    return res.status(409).json({ error: 'job_not_active' });
+  }
+  return res.json({ ok: true });
 });
 
 app.patch('/api/v1/document-extractor/jobs/:jobId/items/:itemId', (req: AuthedRequest, res) => {
