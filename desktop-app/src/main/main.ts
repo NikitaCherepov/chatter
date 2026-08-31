@@ -850,7 +850,15 @@ function createWindow() {
   });
 
   // ── Detached tool windows ────────────────────────────────────────────────
-  const detachableToolIds = new Set(['notebook', 'tasks', 'map', 'gallery', 'documents', 'browser']);
+  const detachableToolIds = new Set([
+    'notebook',
+    'tasks',
+    'map',
+    'gallery',
+    'documents',
+    'browser',
+    'json-extractor',
+  ]);
 
   ipcMain.handle('tool-window:open', async (event, payload: {
     toolId?: string;

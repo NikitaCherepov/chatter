@@ -113,6 +113,13 @@
   background: var(--bg-bubble); font-size: 10px; text-transform: uppercase;
   small { color: var(--text-muted); text-transform: none; }
 }
+.cardHeaderMeta { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.copyButton {
+  width: 23px; height: 23px; padding: 0; border: 0; border-radius: 5px;
+  display: grid; place-items: center; background: transparent; color: var(--text-muted);
+  cursor: pointer;
+  &:hover { color: var(--text-primary); background: var(--bg-modal-hover); }
+}
 .item pre, .final pre {
   margin: 0; padding: 9px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere;
   color: var(--text-body); font: 10px/1.45 Consolas, 'Courier New', monospace;

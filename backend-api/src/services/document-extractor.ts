@@ -170,7 +170,7 @@ const meaningful = (value: unknown) =>
 
 const isComplete = (value: unknown, keys: string[]): value is Record<string, unknown> =>
   Boolean(value && typeof value === 'object' && !Array.isArray(value)
-    && keys.every(key => Object.hasOwn(value, key) && meaningful((value as Record<string, unknown>)[key])));
+    && keys.every(key => Object.hasOwn(value, key)));
 
 const parseModelResult = (raw: string) => {
   const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
@@ -307,7 +307,7 @@ const processJob = async (jobId: number) => {
         parseJson<Record<string, unknown>>(row.data_json, {}),
       );
       const raw = await callLiteAi(
-        'You extract structured data from document pages. Return strictly one JSON object with exactly two array keys: "complete" and "incomplete". Use the example object as the required shape. Put an object in complete only when every example field is present and non-empty and the source entry clearly ends in the supplied pages. Put cut-off or missing-field objects in incomplete. Continue and merge prior incomplete objects when their remaining text appears. Any prior incomplete object that cannot be completed from these pages must remain in incomplete unchanged. Never invent missing facts. Do not add prose or markdown.',
+        'You extract structured data from document pages. Return strictly one JSON object with exactly two array keys: "complete" and "incomplete". Use the example object as the required shape. Follow the extraction instruction when deciding whether an empty string, null, empty array, or empty object is a legitimate final value. Put an object in complete when every example field is present, its values satisfy the extraction instruction, and the source entry clearly ends in the supplied pages. Put cut-off or missing-field objects in incomplete. Continue and merge prior incomplete objects when their remaining text appears. Any prior incomplete object that cannot be completed from these pages must remain in incomplete unchanged. Never invent missing facts. Do not add prose or markdown.',
         `EXTRACTION INSTRUCTION:\n${job.instruction}\n\nEXAMPLE OBJECT:\n${job.example_json}\n\nPRIOR INCOMPLETE OBJECTS:\n${JSON.stringify(previous)}\n\nDOCUMENT PAGES:\n${pageText}`,
         {
           max_tokens: 8192,

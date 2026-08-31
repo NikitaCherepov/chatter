@@ -44,6 +44,7 @@ export function JsonExtractorTool() {
   const [autoConfirm, setAutoConfirm] = useState(true);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editText, setEditText] = useState('');
+  const [hideConfirmed, setHideConfirmed] = useState(false);
 
   const loadFiles = useCallback(async () => {
     try {
@@ -200,9 +201,13 @@ export function JsonExtractorTool() {
     [confirmed],
   );
 
-  const copyFinal = async () => {
-    await navigator.clipboard.writeText(finalJson);
+  const copyJson = async (value: unknown) => {
+    await navigator.clipboard.writeText(JSON.stringify(value, null, 2));
     toast.success(tr('JSON copied', 'JSON скопирован'));
+  };
+
+  const copyFinal = async () => {
+    await copyJson(confirmed.map(item => item.data));
   };
 
   const downloadFinal = () => {
@@ -386,6 +391,13 @@ export function JsonExtractorTool() {
             await refreshJob(job.id);
           }}>{tr(`Confirm all (${reviewCount})`, `Подтвердить все (${reviewCount})`)}</button>
         )}
+        {confirmed.length > 0 && (
+          <button onClick={() => setHideConfirmed(value => !value)}>
+            {hideConfirmed
+              ? tr(`Show confirmed (${confirmed.length})`, `Показать подтверждённые (${confirmed.length})`)
+              : tr(`Hide confirmed (${confirmed.length})`, `Скрыть подтверждённые (${confirmed.length})`)}
+          </button>
+        )}
         <button onClick={copyFinal}>{tr('Copy JSON', 'Копировать JSON')}</button>
         <button onClick={downloadFinal}>{tr('Download', 'Скачать')}</button>
       </div>
@@ -395,11 +407,27 @@ export function JsonExtractorTool() {
             ? tr('The first cards will appear here.', 'Здесь появятся первые карточки.')
             : tr('No objects found.', 'Объекты не найдены.')}</div>
         )}
-        {job.items.map(item => (
+        {job.items
+          .filter(item => !hideConfirmed || item.status !== 'confirmed')
+          .map(item => (
           <article key={item.id} className={`${s.item} ${s[item.status]}`}>
             <header>
               <span>{statusLabel(item.status)}</span>
-              <small>{tr('pages', 'стр.')} {item.source_pages.join(', ')}</small>
+              <div className={s.cardHeaderMeta}>
+                <small>{tr('pages', 'стр.')} {item.source_pages.join(', ')}</small>
+                <button
+                  type="button"
+                  className={s.copyButton}
+                  title={tr('Copy JSON', 'Копировать JSON')}
+                  onClick={() => void copyJson(item.data)}
+                  aria-label={tr('Copy JSON', 'Копировать JSON')}
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="9" y="9" width="13" height="13" rx="2" />
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                  </svg>
+                </button>
+              </div>
             </header>
             {editingId === item.id ? (
               <textarea className={s.code} value={editText} onChange={event => setEditText(event.target.value)} />
@@ -435,7 +463,21 @@ export function JsonExtractorTool() {
         <section className={s.final}>
           <header>
             <strong>{tr('Final JSON', 'Итоговый JSON')}</strong>
-            <span>{confirmed.length}</span>
+            <div className={s.cardHeaderMeta}>
+              <span>{confirmed.length}</span>
+              <button
+                type="button"
+                className={s.copyButton}
+                title={tr('Copy JSON', 'Копировать JSON')}
+                onClick={() => void copyFinal()}
+                aria-label={tr('Copy JSON', 'Копировать JSON')}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="9" y="9" width="13" height="13" rx="2" />
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                </svg>
+              </button>
+            </div>
           </header>
           <pre>{finalJson}</pre>
         </section>
