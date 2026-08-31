@@ -5,6 +5,7 @@ import { GalleryTool } from './GalleryTool';
 import { MapTool } from './MapTool';
 import { NotebookTool } from './NotebookTool';
 import { TasksTool } from './TasksTool';
+import { JsonExtractorTool } from './JsonExtractorTool';
 
 type Props = {
   toolId: string;
@@ -23,5 +24,6 @@ export function ToolContent({ toolId, contentMax, activeChatId, onImageClick, on
   }
   if (toolId === 'documents') return <DocumentsTool chatId={activeChatId ?? null} />;
   if (toolId === 'browser') return <BrowserTool />;
+  if (toolId === 'json-extractor') return <JsonExtractorTool />;
   return null;
 }

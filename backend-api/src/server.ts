@@ -55,6 +55,19 @@ import {
 import { resolveImageFile, getUploadsDir } from './services/image-storage.js';
 import { resolveAttachmentFile, MAX_RAW_FILE_SIZE as MAX_ATTACHMENT_BYTES } from './services/attachment-storage.js';
 import { parseDocument, SUPPORTED_EXTENSIONS } from './services/document-parser.js';
+import {
+  confirmExtractionItems,
+  createExtractionFile,
+  createExtractionJob,
+  deleteExtractionFile,
+  deleteExtractionItem,
+  getExtractionJob,
+  listExtractionFiles,
+  listExtractionJobs,
+  renameExtractionFile,
+  resolveExtractionDownload,
+  updateExtractionItem,
+} from './services/document-extractor.js';
 import { resolveAudioFile, saveTtsAudio } from './services/audio-storage.js';
 import { isCartesiaConfigured, fetchCartesiaVoices, generateTtsAudio } from './services/tts-cartesia.js';
 import type { DesktopActionPayload, UserRecord } from './types.js';
@@ -2007,6 +2020,131 @@ app.delete('/api/v1/chats/:chatId/messages/:messageId/attachments/:filename', (r
   const result = deleteMessageAttachment(userId, chatId, messageId, filename);
   if (!result.ok) return res.status(404).json({ error: 'attachment_not_found' });
   return res.json({ ok: true, token_count: result.token_count });
+});
+
+// ── Standalone JSON document extractor ──────────────────────────────────
+
+app.get('/api/v1/document-extractor/files', (req: AuthedRequest, res) => {
+  return res.json({ files: listExtractionFiles(accountIdFromRequest(req)) });
+});
+
+app.post('/api/v1/document-extractor/files', async (req: AuthedRequest, res) => {
+  const userId = accountIdFromRequest(req);
+  const data = typeof req.body?.data_base64 === 'string' ? req.body.data_base64 : '';
+  const name = typeof req.body?.name === 'string' ? req.body.name : '';
+  if (!data || !name) return res.status(400).json({ error: 'file_required' });
+  try {
+    const buffer = Buffer.from(data, 'base64');
+    const file = await createExtractionFile(userId, {
+      name,
+      mimeType: typeof req.body?.mime_type === 'string' ? req.body.mime_type : undefined,
+      buffer,
+    });
+    return res.status(201).json({ file });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'upload_failed';
+    const status = message === 'pdf_text_layer_required' ? 422 : 400;
+    return res.status(status).json({ error: message });
+  }
+});
+
+app.patch('/api/v1/document-extractor/files/:fileId', (req: AuthedRequest, res) => {
+  const userId = accountIdFromRequest(req);
+  const fileId = Number(req.params.fileId);
+  if (!Number.isInteger(fileId)) return res.status(400).json({ error: 'bad_file_id' });
+  if (!renameExtractionFile(userId, fileId, req.body?.name)) {
+    return res.status(404).json({ error: 'file_not_found' });
+  }
+  return res.json({ ok: true });
+});
+
+app.delete('/api/v1/document-extractor/files/:fileId', (req: AuthedRequest, res) => {
+  const userId = accountIdFromRequest(req);
+  const fileId = Number(req.params.fileId);
+  if (!Number.isInteger(fileId)) return res.status(400).json({ error: 'bad_file_id' });
+  if (!deleteExtractionFile(userId, fileId)) {
+    return res.status(404).json({ error: 'file_not_found' });
+  }
+  return res.json({ ok: true });
+});
+
+app.get('/api/v1/document-extractor/files/:fileId/download', (req: AuthedRequest, res) => {
+  const userId = accountIdFromRequest(req);
+  const fileId = Number(req.params.fileId);
+  if (!Number.isInteger(fileId)) return res.status(400).json({ error: 'bad_file_id' });
+  const file = resolveExtractionDownload(userId, fileId);
+  if (!file) return res.status(404).json({ error: 'file_not_found' });
+  res.type(file.mimeType);
+  return res.download(file.filepath, file.name);
+});
+
+app.get('/api/v1/document-extractor/files/:fileId/jobs', (req: AuthedRequest, res) => {
+  const userId = accountIdFromRequest(req);
+  const fileId = Number(req.params.fileId);
+  const jobs = Number.isInteger(fileId) ? listExtractionJobs(userId, fileId) : null;
+  if (!jobs) return res.status(404).json({ error: 'file_not_found' });
+  return res.json({ jobs });
+});
+
+app.post('/api/v1/document-extractor/jobs', (req: AuthedRequest, res) => {
+  const userId = accountIdFromRequest(req);
+  try {
+    const job = createExtractionJob(userId, {
+      fileId: Number(req.body?.file_id),
+      instruction: req.body?.instruction,
+      example: req.body?.example,
+      startPage: Number(req.body?.start_page) || undefined,
+      endPage: Number(req.body?.end_page) || undefined,
+      autoConfirm: req.body?.auto_confirm !== false,
+    });
+    return res.status(201).json({ job });
+  } catch (error) {
+    return res.status(400).json({
+      error: error instanceof Error ? error.message : 'job_create_failed',
+    });
+  }
+});
+
+app.get('/api/v1/document-extractor/jobs/:jobId', (req: AuthedRequest, res) => {
+  const job = getExtractionJob(accountIdFromRequest(req), Number(req.params.jobId));
+  if (!job) return res.status(404).json({ error: 'job_not_found' });
+  return res.json({ job });
+});
+
+app.patch('/api/v1/document-extractor/jobs/:jobId/items/:itemId', (req: AuthedRequest, res) => {
+  try {
+    const item = updateExtractionItem(
+      accountIdFromRequest(req),
+      Number(req.params.jobId),
+      Number(req.params.itemId),
+      { data: req.body?.data, status: req.body?.status },
+    );
+    if (!item) return res.status(404).json({ error: 'item_not_found' });
+    return res.json({ item });
+  } catch (error) {
+    return res.status(400).json({
+      error: error instanceof Error ? error.message : 'item_update_failed',
+    });
+  }
+});
+
+app.post('/api/v1/document-extractor/jobs/:jobId/confirm', (req: AuthedRequest, res) => {
+  const ids = Array.isArray(req.body?.item_ids)
+    ? req.body.item_ids.map(Number).filter(Number.isInteger)
+    : undefined;
+  if (!confirmExtractionItems(accountIdFromRequest(req), Number(req.params.jobId), ids)) {
+    return res.status(404).json({ error: 'job_not_found' });
+  }
+  return res.json({ ok: true });
+});
+
+app.delete('/api/v1/document-extractor/jobs/:jobId/items/:itemId', (req: AuthedRequest, res) => {
+  if (!deleteExtractionItem(
+    accountIdFromRequest(req),
+    Number(req.params.jobId),
+    Number(req.params.itemId),
+  )) return res.status(404).json({ error: 'item_not_found' });
+  return res.json({ ok: true });
 });
 
 // Удаление изображения из messages.images по URL (картинка может принадлежать любому чату юзера)

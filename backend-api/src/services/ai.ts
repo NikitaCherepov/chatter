@@ -1605,7 +1605,7 @@ export const chargeUtilityAiCompletion = (
 export const callLiteAi = async (
   systemPrompt: string,
   userPrompt: string,
-  options?: { max_tokens?: number; accounting?: UtilityAiAccounting },
+  options?: { max_tokens?: number; temperature?: number; accounting?: UtilityAiAccounting },
 ): Promise<string> => {
   const maxTokens = options?.max_tokens ?? 4096;
   if (options?.accounting) {
@@ -1617,7 +1617,7 @@ export const callLiteAi = async (
       { role: 'user', content: userPrompt }
     ],
     max_tokens: maxTokens,
-    temperature: 0.7
+    temperature: options?.temperature ?? 0.7
   };
 
   const meta = await createCompletionWithLiteProviderFallback(requestBody, undefined, 'none');

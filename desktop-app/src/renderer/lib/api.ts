@@ -2128,6 +2128,133 @@ export async function deleteAttachment(chatId: number, messageId: number, filena
   });
 }
 
+// ---------- Standalone JSON Document Extractor ----------
+
+export type ExtractionJobStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
+export type ExtractionItemStatus = 'incomplete' | 'review' | 'confirmed';
+
+export type ExtractionJobSummary = {
+  id: number;
+  file_id: number;
+  instruction: string;
+  example: Record<string, unknown>;
+  start_page: number;
+  end_page: number;
+  auto_confirm: boolean;
+  status: ExtractionJobStatus;
+  current_page: number;
+  processed_batches: number;
+  total_batches: number;
+  error: string | null;
+  created_at: number;
+  updated_at: number;
+};
+
+export type ExtractionItem = {
+  id: number;
+  job_id: number;
+  data: Record<string, unknown>;
+  status: ExtractionItemStatus;
+  identity_key: string | null;
+  source_pages: number[];
+  created_at: number;
+  updated_at: number;
+};
+
+export type ExtractionJob = ExtractionJobSummary & { items: ExtractionItem[] };
+
+export type ExtractionFile = {
+  id: number;
+  name: string;
+  mime_type: string;
+  size_bytes: number;
+  char_count: number;
+  approximate_tokens: number;
+  page_count: number;
+  created_at: number;
+  updated_at: number;
+  latest_job: ExtractionJobSummary | null;
+};
+
+export async function listExtractionFiles(): Promise<{ files: ExtractionFile[] }> {
+  return apiFetch('/api/v1/document-extractor/files');
+}
+
+export async function uploadExtractionFile(file: File): Promise<{ file: ExtractionFile }> {
+  const dataBase64 = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error || new Error('file_read_failed'));
+    reader.onload = () => resolve(String(reader.result || '').split(',')[1] || '');
+    reader.readAsDataURL(file);
+  });
+  return apiFetch('/api/v1/document-extractor/files', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: file.name, mime_type: file.type, data_base64: dataBase64 }),
+  });
+}
+
+export async function renameExtractionFile(fileId: number, name: string): Promise<{ ok: boolean }> {
+  return apiFetch(`/api/v1/document-extractor/files/${fileId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  });
+}
+
+export async function deleteExtractionFile(fileId: number): Promise<{ ok: boolean }> {
+  return apiFetch(`/api/v1/document-extractor/files/${fileId}`, { method: 'DELETE' });
+}
+
+export async function listExtractionJobs(fileId: number): Promise<{ jobs: ExtractionJobSummary[] }> {
+  return apiFetch(`/api/v1/document-extractor/files/${fileId}/jobs`);
+}
+
+export async function createExtractionJob(input: {
+  file_id: number;
+  instruction: string;
+  example: Record<string, unknown>;
+  start_page: number;
+  end_page: number;
+  auto_confirm: boolean;
+}): Promise<{ job: ExtractionJob }> {
+  return apiFetch('/api/v1/document-extractor/jobs', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+}
+
+export async function getExtractionJob(jobId: number): Promise<{ job: ExtractionJob }> {
+  return apiFetch(`/api/v1/document-extractor/jobs/${jobId}`);
+}
+
+export async function updateExtractionItem(
+  jobId: number,
+  itemId: number,
+  input: { data?: Record<string, unknown>; status?: 'review' | 'confirmed' },
+): Promise<{ item: ExtractionItem }> {
+  return apiFetch(`/api/v1/document-extractor/jobs/${jobId}/items/${itemId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+}
+
+export async function confirmExtractionItems(jobId: number, itemIds?: number[]): Promise<{ ok: boolean }> {
+  return apiFetch(`/api/v1/document-extractor/jobs/${jobId}/confirm`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(itemIds ? { item_ids: itemIds } : {}),
+  });
+}
+
+export async function deleteExtractionItem(jobId: number, itemId: number): Promise<{ ok: boolean }> {
+  return apiFetch(`/api/v1/document-extractor/jobs/${jobId}/items/${itemId}`, {
+    method: 'DELETE',
+  });
+}
+
 export async function deleteMessageImage(messageId: number, imageUrl: string): Promise<{ ok: boolean }> {
   return apiFetch(`/api/v1/messages/${messageId}/images?url=${encodeURIComponent(imageUrl)}`, {
     method: 'DELETE',

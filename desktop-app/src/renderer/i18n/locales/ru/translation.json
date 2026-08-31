@@ -770,6 +770,8 @@
       "gallery": "Галерея",
       "chatPhotos": "Фото из чата",
       "documents": "Документы",
+      "jsonExtractor": "JSON-экстрактор",
+      "jsonExtractorDescription": "Превратить документ в JSON",
       "chatFiles": "Файлы чата",
       "browser": "Браузер",
       "webPages": "Веб-страницы",

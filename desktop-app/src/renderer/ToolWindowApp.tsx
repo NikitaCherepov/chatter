@@ -17,6 +17,7 @@ const TOOL_TITLE_KEYS: Record<string, string> = {
   gallery: 'tools.panel.gallery',
   documents: 'tools.panel.documents',
   browser: 'tools.panel.browser',
+  'json-extractor': 'tools.panel.jsonExtractor',
 };
 
 export function ToolWindowApp() {

@@ -796,6 +796,60 @@ db.exec(`
   )
 `);
 
+// ── Standalone document extraction workspace ────────────────────────────
+// Files belong to the user rather than a chat so long-running extraction
+// projects remain available when the active chat changes or is deleted.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS document_extraction_files (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    storage_filename TEXT NOT NULL UNIQUE,
+    mime_type TEXT NOT NULL,
+    size_bytes INTEGER NOT NULL,
+    char_count INTEGER NOT NULL,
+    approximate_tokens INTEGER NOT NULL,
+    page_count INTEGER NOT NULL,
+    pages_json TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS document_extraction_jobs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    file_id INTEGER NOT NULL,
+    instruction TEXT NOT NULL,
+    example_json TEXT NOT NULL,
+    start_page INTEGER NOT NULL,
+    end_page INTEGER NOT NULL,
+    auto_confirm INTEGER NOT NULL DEFAULT 1,
+    status TEXT NOT NULL DEFAULT 'pending'
+      CHECK(status IN ('pending', 'processing', 'completed', 'failed', 'cancelled')),
+    current_page INTEGER NOT NULL DEFAULT 0,
+    processed_batches INTEGER NOT NULL DEFAULT 0,
+    total_batches INTEGER NOT NULL DEFAULT 0,
+    error TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    FOREIGN KEY(file_id) REFERENCES document_extraction_files(id) ON DELETE CASCADE
+  );
+  CREATE TABLE IF NOT EXISTS document_extraction_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    job_id INTEGER NOT NULL,
+    data_json TEXT NOT NULL,
+    status TEXT NOT NULL CHECK(status IN ('incomplete', 'review', 'confirmed')),
+    identity_key TEXT,
+    source_pages TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    FOREIGN KEY(job_id) REFERENCES document_extraction_jobs(id) ON DELETE CASCADE
+  );
+`);
+db.exec('CREATE INDEX IF NOT EXISTS idx_document_extraction_files_user ON document_extraction_files(user_id, updated_at DESC)');
+db.exec('CREATE INDEX IF NOT EXISTS idx_document_extraction_jobs_file ON document_extraction_jobs(user_id, file_id, created_at DESC)');
+db.exec('CREATE INDEX IF NOT EXISTS idx_document_extraction_items_job ON document_extraction_items(user_id, job_id, status, id)');
+
 // ── Model overrides (coefficient for token quota accounting) ─────────────
 // model_id matches the uniqueId from MODELS_MANUAL / PRO / LITE / VISION env.
 // coefficient = multiplier applied to total_tokens for quota accounting.

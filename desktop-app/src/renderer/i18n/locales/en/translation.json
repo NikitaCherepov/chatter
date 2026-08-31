@@ -770,6 +770,8 @@
       "gallery": "Gallery",
       "chatPhotos": "Chat photos",
       "documents": "Documents",
+      "jsonExtractor": "JSON Extractor",
+      "jsonExtractorDescription": "Turn a document into JSON",
       "chatFiles": "Chat files",
       "browser": "Browser",
       "webPages": "Web pages",
