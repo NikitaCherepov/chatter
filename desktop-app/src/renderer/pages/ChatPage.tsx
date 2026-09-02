@@ -795,7 +795,7 @@ const MessageItem = React.memo(function MessageItem({
                 const src = resolveImageUrl(img.url);
                 return (
                   <div key={i} className={s.messageImageWrap}>
-                    <img className={`${s.messageImage} ${img.type === 'generated' ? s.generatedMessageImage : ''}`} src={src} alt={img.type === 'generated' ? t('chat.image.generatedAlt') : t('chat.image.photoAlt')} loading="lazy" onClick={() => onSetViewerImageSrc(src, msg.id, img.url)} />
+                    <img className={`${s.messageImage} ${img.type !== 'user_photo' ? s.generatedMessageImage : ''}`} src={src} alt={img.type === 'user_photo' ? t('chat.image.photoAlt') : t('chat.image.generatedAlt')} loading="lazy" onClick={() => onSetViewerImageSrc(src, msg.id, img.url)} />
                     {msg.id > 0 && <button className={s.messageImageDelete} onClick={(e) => { e.stopPropagation(); onDeleteImage(msg.id, img.url); }} title={t('common.delete')}>
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <polyline points="3 6 5 6 21 6" />
@@ -2694,6 +2694,7 @@ export function ChatPage() {
                 type: 'generated' as const,
               }))
             : undefined;
+          const responseImages = res.response_images ?? generatedImages;
           const finalMessage: api.Message = {
             id: res.message_id,
             role: 'assistant',
@@ -2702,7 +2703,8 @@ export function ChatPage() {
             created_at: Math.floor(Date.now() / 1000),
             reasoning_content: res.reasoning_content ?? null,
             tool_calls: res.tool_calls ?? null,
-            images: generatedImages,
+            images: responseImages,
+            attachments: res.response_attachments ?? undefined,
             subagents: res.subagents ?? null,
             prompt_id: res.prompt_id ?? null,
             prompt_name: res.prompt_name ?? null,
@@ -5316,9 +5318,9 @@ export function ChatPage() {
                             return (
                               <div key={i} className={s.messageImageWrap}>
                                 <img
-                                  className={`${s.messageImage} ${img.type === 'generated' ? s.generatedMessageImage : ''}`}
+                                  className={`${s.messageImage} ${img.type !== 'user_photo' ? s.generatedMessageImage : ''}`}
                                   src={src}
-                                  alt={img.type === 'generated' ? t('chat.image.generatedAlt') : t('chat.image.photoAlt')}
+                                  alt={img.type === 'user_photo' ? t('chat.image.photoAlt') : t('chat.image.generatedAlt')}
                                   loading="lazy"
                                   onClick={() => {
                                     setViewerImageSrc(src);

@@ -1400,7 +1400,7 @@ export const getMessageTokens = (messageId: number): { token_count: number; reas
 export type ChatMediaItem = {
   message_id: number;
   url: string;
-  type: 'user_photo' | 'generated';
+  type: MessageImage['type'];
   created_at: number;
   chat_id?: number;
   chat_title?: string;

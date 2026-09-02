@@ -329,7 +329,7 @@ export async function fetchMe(): Promise<User> {
 
 export type MessageImage = {
   url: string;
-  type: 'user_photo' | 'generated';
+  type: 'user_photo' | 'generated' | 'external';
 };
 
 export type MessageAttachment = {
@@ -751,7 +751,7 @@ export async function editMessage(chatId: number, messageId: number, content: st
 export type ChatMediaItem = {
   message_id: number;
   url: string;
-  type: 'user_photo' | 'generated';
+  type: MessageImage['type'];
   created_at: number;
   chat_id?: number;
   chat_title?: string;
@@ -814,6 +814,8 @@ export type ChatSendResponse = {
   user_message_images?: MessageImage[];
   chat_id: number;
   generated_images?: GeneratedImage[];
+  response_images?: MessageImage[];
+  response_attachments?: MessageAttachment[];
   display_state?: DisplayStatePayload | null;
   model_fallback_notice?: string | null;
   preferred_model_reset?: boolean;

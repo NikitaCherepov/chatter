@@ -3,7 +3,7 @@ import dotenv from 'dotenv';
 import nodeFetch from 'node-fetch';
 import { ProxyAgent } from 'proxy-agent';
 import { Readable } from 'node:stream';
-import type { AiSendResult, DesktopActionPayload, DisplayStatePayload, MapUpdatePayload, TaskNotifyMode, TaskRecurrenceType, TaskType, UserPlan, UserRecord, MessageAttachment, MessageUsage, NormalizedTokenUsage, TokenUsageCall } from '../types.js';
+import type { AiSendResult, DesktopActionPayload, DisplayStatePayload, MapUpdatePayload, TaskNotifyMode, TaskRecurrenceType, TaskType, UserPlan, UserRecord, MessageAttachment, MessageImage, MessageUsage, NormalizedTokenUsage, TokenUsageCall } from '../types.js';
 import { appendChatMessage, ensureActiveChat, getHistoryForAi, getMessageTokens, getUserById, getUserChatListItem, renameUserChat, resolveMaxContextTokens, resolveAttachmentMaxTokens, injectAttachments, setUserTimezone, trimUserHistoryByChat, searchChatHistory, getChatMessagesAround, isMultiUserRoomChat, getChatContextTokens } from './chats.js';
 import { calculateChargedTokens, checkQuota, chargeTokens, getModelOverride, getPricingSnapshot, calculateEstimatedCostUsd, isModelFree } from './token-quota.js';
 import { recordModelTps, setKnownModelStatsFilter } from './model-stats.js';
@@ -29,6 +29,7 @@ import { countTokens } from './tokenizer.js';
 import { listSubagentNames, buildSubagentListDescription, getSubagent } from './subagents/registry.js';
 import { hasBackendTranslation, translateForLanguage } from '../i18n/index.js';
 import { readChatAttachment, searchChatAttachment, type AttachmentReadContext } from './chat-attachments.js';
+import { attachFileToResponse, type ResponseFileSink } from './response-attachments.js';
 
 dotenv.config();
 
@@ -2327,6 +2328,21 @@ export const toolDefinitions = [
   {
     type: 'function',
     function: {
+      name: 'attach_file_to_response',
+      description: 'Attaches an existing email attachment or a public Internet file to your current response. Use the exact file_ref returned by read_email_content, or an exact public http(s) URL. The file is saved by Chatter and appears on your assistant message; images appear inline. This does not read the file contents.',
+      parameters: {
+        type: 'object',
+        properties: {
+          file_ref: { type: 'string', description: 'Exact short-lived file_ref returned for an email attachment by read_email_content.' },
+          url: { type: 'string', description: 'Exact public http(s) URL to download. Do not invent or alter URLs.' },
+          filename: { type: 'string', description: 'Optional display filename.' },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'send_email',
       description: 'Sends an email on behalf of the user. Use when the user explicitly asks to send an email. If the user explicitly specifies yandex/google — pass provider.',
       parameters: {
@@ -3839,7 +3855,7 @@ const getTaskByUserAndId = (userId: number, taskId: number) => db.prepare(`
   WHERE user_id = ? AND id = ?
 `).get(userId, taskId) as { id: number; status: string } | undefined;
 
-export const runTool = async (user: UserRecord, timezoneOffset: number, toolName: string, argsRaw: string, aiCall: (requestPayload: Record<string, unknown>) => Promise<CompletionMeta>, generatedImages?: Array<{ image_base64: string; image_url?: string; prompt_used: string }>, displayStateSink?: { value: DisplayStatePayload | null }, desktopActionSink?: { value: DesktopActionPayload | null }, mapUpdateSink?: { value: MapUpdatePayload | null }, activeMacros?: Array<{ id: number; title: string; description?: string; commands: string[]; pinned?: boolean; return_output?: boolean }>, signal?: AbortSignal, subagentExtra?: { manualModel?: any; subagentMode?: 'auto' | 'manual'; subagentReasoningLevel?: ReasoningLevel | null; onToolStatus?: (text: string) => Promise<void> | void; onDesktopAction?: (action: any) => Promise<void> | void; displayManifest?: { moods?: string[]; reactions?: string[] } | null; currentDisplayState?: DisplayStatePayload | null; avatarControlEnabled?: boolean; onSubagentTrace?: (trace: any) => void; onSubagentUsageCall?: (agentName: string, usage: TokenUsageCall) => void; onVisionUsageCall?: (usage: TokenUsageCall) => void; shouldStopForQuota?: (usage: TokenUsageCall) => boolean; availableToolDefs?: any[]; attachmentReadContext?: AttachmentReadContext }, autoRejectHitl?: boolean, userImages?: Array<{ base64: string; mimeType: string }>, billingUserId?: number) => {
+export const runTool = async (user: UserRecord, timezoneOffset: number, toolName: string, argsRaw: string, aiCall: (requestPayload: Record<string, unknown>) => Promise<CompletionMeta>, generatedImages?: Array<{ image_base64: string; image_url?: string; prompt_used: string }>, displayStateSink?: { value: DisplayStatePayload | null }, desktopActionSink?: { value: DesktopActionPayload | null }, mapUpdateSink?: { value: MapUpdatePayload | null }, activeMacros?: Array<{ id: number; title: string; description?: string; commands: string[]; pinned?: boolean; return_output?: boolean }>, signal?: AbortSignal, subagentExtra?: { manualModel?: any; subagentMode?: 'auto' | 'manual'; subagentReasoningLevel?: ReasoningLevel | null; onToolStatus?: (text: string) => Promise<void> | void; onDesktopAction?: (action: any) => Promise<void> | void; displayManifest?: { moods?: string[]; reactions?: string[] } | null; currentDisplayState?: DisplayStatePayload | null; avatarControlEnabled?: boolean; onSubagentTrace?: (trace: any) => void; onSubagentUsageCall?: (agentName: string, usage: TokenUsageCall) => void; onVisionUsageCall?: (usage: TokenUsageCall) => void; shouldStopForQuota?: (usage: TokenUsageCall) => boolean; availableToolDefs?: any[]; attachmentReadContext?: AttachmentReadContext; responseFileSink?: ResponseFileSink }, autoRejectHitl?: boolean, userImages?: Array<{ base64: string; mimeType: string }>, billingUserId?: number) => {
   throwIfAborted(signal);
   const parsed = JSON.parse(argsRaw || '{}');
   // Room runs: `user` is the INITIATOR (data privacy: their servers, desktop,
@@ -4045,6 +4061,11 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
       typeof parsed.provider === 'string' ? parsed.provider : '',
       Number.isFinite(Number(parsed.mail_account_id)) ? Number(parsed.mail_account_id) : undefined,
     );
+  }
+  if (toolName === 'attach_file_to_response') {
+    const sink = subagentExtra?.responseFileSink;
+    if (!sink) return JSON.stringify({ status: 'unavailable', message: 'Attachments cannot be persisted for this response.' });
+    return attachFileToResponse(user.id, parsed, sink);
   }
   if (toolName === 'send_email') {
     const to: string = typeof parsed.to === 'string' ? parsed.to.trim() : '';
@@ -7331,6 +7352,11 @@ export const sendMessageThroughAi = async (
   const iterations: ToolIteration[] = [];
   const toolUserMessages: string[] = [];
   const generatedImages: Array<{ image_base64: string; image_url?: string; prompt_used: string }> = [];
+  const responseFileSink: ResponseFileSink = {
+    images: [],
+    attachments: [],
+    sourceKeys: new Set<string>(),
+  };
   let assistantTelegramChatId: number | null = null;
   let userMessageId = 0;
   const telegramOriginChatId = Number(options?.userTelegramChatId);
@@ -8177,7 +8203,10 @@ const runOneToolCall = async (toolCall: any, emitStatus = true): Promise<Execute
           currentDisplayState: avatarControlEnabled ? options?.currentDisplayState : null,
           avatarControlEnabled,
           availableToolDefs: executionTools.filter(
-            (t: any) => t?.function?.name && t.function.name !== 'spawn_subagent' && t.function.name !== 'invoke_subagent'
+            (t: any) => t?.function?.name
+              && t.function.name !== 'spawn_subagent'
+              && t.function.name !== 'invoke_subagent'
+              && t.function.name !== 'attach_file_to_response'
           ),
           attachmentReadContext: {
             chatId,
@@ -8193,6 +8222,7 @@ const runOneToolCall = async (toolCall: any, emitStatus = true): Promise<Execute
             },
             capacityState: attachmentCapacityState,
           },
+          ...(!options?.skipHistory ? { responseFileSink } : {}),
         },
         options?.autoRejectHitl,
         images,
@@ -8434,9 +8464,10 @@ iterations.push(currentIteration);
   const textToSave = fullDbHistory || answer;
   const reasoningContent = reasoningParts.length > 0 ? reasoningParts.join('\n\n').trim() : null;
   // Collect generated image URLs for assistant message
-  const assistantMessageImages = generatedImages.length > 0
-    ? generatedImages.filter(img => img.image_url).map(img => ({ url: img.image_url!, type: 'generated' as const }))
-    : null;
+  const assistantMessageImages: MessageImage[] = [
+    ...generatedImages.filter(img => img.image_url).map(img => ({ url: img.image_url!, type: 'generated' as const })),
+    ...responseFileSink.images,
+  ];
   // Store NEW format in DB: array of iterations with full results.
   // getHistoryForAi() unfolds it into a correct message sequence for the API.
   // Old flat format (without 'step') is supported as fallback when reading.
@@ -8463,7 +8494,10 @@ iterations.push(currentIteration);
     ? 0
     : await appendChatMessage(
         userId, chatId, 'assistant', textToSave, assistantTelegramChatId, null,
-        assistantMessageImages, reasoningContent, tcJson, null, subagentsJson,
+        assistantMessageImages.length > 0 ? assistantMessageImages : null,
+        reasoningContent, tcJson,
+        responseFileSink.attachments.length > 0 ? responseFileSink.attachments : null,
+        subagentsJson,
         {
           usage: messageUsage,
           promptId: responsePromptId,
@@ -8527,6 +8561,8 @@ iterations.push(currentIteration);
     preferred_model_reset: modelSelectionReset || undefined,
     tool_user_messages: toolUserMessages,
     generated_images: generatedImages.length > 0 ? generatedImages : undefined,
+    response_images: assistantMessageImages.length > 0 ? assistantMessageImages : undefined,
+    response_attachments: responseFileSink.attachments.length > 0 ? responseFileSink.attachments : undefined,
     display_state: displayStateSink.value ?? undefined,
     desktop_action: desktopActionSink.value ?? undefined,
     tool_calls: toolCallsHistory.length > 0 ? toolCallsHistory : undefined,
@@ -8579,6 +8615,10 @@ iterations.push(currentIteration);
       const abortedModelName = usedProvider === 'manual' && selectedManualModelName
         ? selectedManualModelName
         : (usedModel || null);
+      const abortedImages: MessageImage[] = [
+        ...generatedImages.filter(img => img.image_url).map(img => ({ url: img.image_url!, type: 'generated' as const })),
+        ...responseFileSink.images,
+      ];
 
       let abortedMessageId = 0;
       if (!options?.skipHistory) {
@@ -8586,8 +8626,11 @@ iterations.push(currentIteration);
           abortedMessageId = await appendChatMessage(
             userId, chatId, 'assistant',
             abortedDbText || '_Generation stopped_',
-            assistantTelegramChatId, null, null,
-            abortedReasoning, abortedTcJson, null, abortedSubagentsJson,
+            assistantTelegramChatId, null,
+            abortedImages.length > 0 ? abortedImages : null,
+            abortedReasoning, abortedTcJson,
+            responseFileSink.attachments.length > 0 ? responseFileSink.attachments : null,
+            abortedSubagentsJson,
             {
               usage: abortedMessageUsage,
               promptId: responsePromptId,
@@ -8614,6 +8657,8 @@ iterations.push(currentIteration);
         message_id: abortedMessageId,
         user_message_id: userMessageId,
         user_message_images: options?.userImages?.length ? options.userImages : undefined,
+        response_images: abortedImages.length > 0 ? abortedImages : undefined,
+        response_attachments: responseFileSink.attachments.length > 0 ? responseFileSink.attachments : undefined,
         aborted: true,
         tool_calls: toolCallsHistory.length > 0 ? toolCallsHistory : undefined,
         subagents: subagentTraces.length > 0 ? subagentTraces : undefined,

@@ -39,6 +39,7 @@ export const MAX_EMAIL_ATTACHMENTS = 5;
 export const MAX_EMAIL_ATTACHMENTS_BYTES = 18 * 1024 * 1024;
 const MAX_EMAIL_SOURCE_BYTES = 25 * 1024 * 1024;
 const MAX_EMAIL_BODY_CHARS = 3_500;
+const EMAIL_ATTACHMENT_REF_TTL_MS = 60 * 60 * 1000;
 
 export type MailSearchScope = 'all' | 'inbox' | 'sent';
 
@@ -322,7 +323,51 @@ const attachmentExtension = (filename: string): string => {
   return extension;
 };
 
-const attachmentMetadata = (attachments: any[]) => attachments.map((attachment, index) => {
+type EmailAttachmentRefPayload = {
+  user_id: number;
+  mail_account_id: number;
+  mailbox_path: string;
+  message_uid: number;
+  attachment_index: number;
+  expires_at: number;
+};
+
+const signEmailAttachmentRef = (payload: EmailAttachmentRefPayload): string => {
+  const encoded = Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url');
+  const signature = crypto
+    .createHmac('sha256', getEncryptionKey(['ENCRYPTION_KEY']))
+    .update(encoded)
+    .digest('base64url');
+  return `mail_${encoded}.${signature}`;
+};
+
+const parseEmailAttachmentRef = (userId: number, value: string): EmailAttachmentRefPayload | null => {
+  const match = value.match(/^mail_([A-Za-z0-9_-]+)\.([A-Za-z0-9_-]+)$/);
+  if (!match) return null;
+  const expected = crypto
+    .createHmac('sha256', getEncryptionKey(['ENCRYPTION_KEY']))
+    .update(match[1])
+    .digest();
+  let supplied: Buffer;
+  try {
+    supplied = Buffer.from(match[2], 'base64url');
+  } catch {
+    return null;
+  }
+  if (expected.length !== supplied.length || !crypto.timingSafeEqual(expected, supplied)) return null;
+  try {
+    const payload = JSON.parse(Buffer.from(match[1], 'base64url').toString('utf8')) as EmailAttachmentRefPayload;
+    if (payload.user_id !== userId || payload.expires_at < Date.now()) return null;
+    return payload;
+  } catch {
+    return null;
+  }
+};
+
+const attachmentMetadata = (
+  attachments: any[],
+  reference?: Omit<EmailAttachmentRefPayload, 'attachment_index' | 'expires_at'>,
+) => attachments.map((attachment, index) => {
   const filename = `${attachment?.filename || `attachment-${index + 1}`}`;
   const sizeBytes = Math.max(0, Number(attachment?.size || attachment?.content?.length || 0));
   const supported = SUPPORTED_EXTENSIONS.has(attachmentExtension(filename));
@@ -333,6 +378,13 @@ const attachmentMetadata = (attachments: any[]) => attachments.map((attachment, 
     mime_type: `${attachment?.contentType || 'application/octet-stream'}`,
     size_bytes: sizeBytes,
     readable: supported && withinLimit,
+    ...(reference ? {
+      file_ref: signEmailAttachmentRef({
+        ...reference,
+        attachment_index: index + 1,
+        expires_at: Date.now() + EMAIL_ATTACHMENT_REF_TTL_MS,
+      }),
+    } : {}),
     ...(!supported ? { unreadable_reason: 'unsupported_format' } : {}),
     ...(supported && !withinLimit ? { unreadable_reason: 'file_too_large' } : {}),
   };
@@ -617,13 +669,82 @@ export const runEmailRead = async (
         body: compact,
         body_truncated: cleanText.length > compact.length,
         body_characters: cleanText.length,
-        attachments: attachmentMetadata(attachments),
+        attachments: attachmentMetadata(attachments, {
+          user_id: userId,
+          mail_account_id: account.id,
+          mailbox_path: mailbox.path,
+          message_uid: resolvedUid,
+        }),
       }, null, 2));
     } finally {
       lock.release();
     }
   } catch (err: any) {
     return `Email read error: ${err?.message || String(err)}`;
+  } finally {
+    try { await client.logout(); } catch {}
+  }
+};
+
+export type ResolvedMailAttachmentRef = {
+  buffer: Buffer;
+  filename: string;
+  mimeType: string;
+};
+
+/** Resolve a short-lived, user-bound reference returned by read_email_content. */
+export const resolveEmailAttachmentReference = async (
+  userId: number,
+  fileRef: string,
+): Promise<ResolvedMailAttachmentRef> => {
+  const reference = parseEmailAttachmentRef(userId, fileRef);
+  if (!reference) throw new Error('invalid_or_expired_file_ref');
+  const account = resolveUserMailAccount(userId, '', reference.mail_account_id);
+  if (!account) throw new Error('email_account_not_found');
+
+  const imapflowMod = await optionalImport('imapflow');
+  const ImapFlow = (imapflowMod as any)?.ImapFlow || (imapflowMod as any)?.default?.ImapFlow || (imapflowMod as any)?.default || null;
+  if (!ImapFlow) throw new Error('imapflow_unavailable');
+
+  const decryptedPass = decryptSecret(account.imap_pass);
+  const client = new ImapFlow({
+    host: account.imap_host,
+    port: account.imap_port || 993,
+    secure: (account.imap_secure ?? 1) === 1,
+    logger: false,
+    auth: { user: account.imap_user, pass: decryptedPass },
+  });
+
+  try {
+    await client.connect();
+    const mailboxes = await resolveReadableMailboxes(client, 'all', reference.mailbox_path);
+    if (!mailboxes.length) throw new Error('mailbox_not_found_or_forbidden');
+    const lock = await client.getMailboxLock(mailboxes[0].path, { readOnly: true });
+    try {
+      const metadata = await preflightEmailSource(client, reference.message_uid);
+      if (!metadata) throw new Error('email_not_found');
+      const msg = await client.fetchOne(reference.message_uid, { source: true }, { uid: true });
+      const rawSource = msg?.source;
+      if (!rawSource?.length) throw new Error('email_source_empty');
+      validateFetchedEmailSource(rawSource);
+      const parsed = await simpleParser(rawSource, {
+        maxHtmlLengthToParse: MAX_EMAIL_SOURCE_BYTES,
+        skipImageLinks: true,
+      });
+      const attachment = mailAttachments(parsed)[reference.attachment_index - 1];
+      if (!attachment) throw new Error('attachment_out_of_range');
+      const buffer = Buffer.isBuffer(attachment.content)
+        ? attachment.content
+        : Buffer.from(attachment.content || '');
+      if (buffer.length > MAX_EMAIL_ATTACHMENTS_BYTES) throw new Error('attachment_too_large');
+      return {
+        buffer,
+        filename: `${attachment.filename || `attachment-${reference.attachment_index}`}`,
+        mimeType: `${attachment.contentType || 'application/octet-stream'}`,
+      };
+    } finally {
+      lock.release();
+    }
   } finally {
     try { await client.logout(); } catch {}
   }

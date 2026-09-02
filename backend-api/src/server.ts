@@ -1106,6 +1106,9 @@ app.get('/api/v1/attachments/:filename', (req: AuthedRequest, res) => {
     return res.status(403).json({ error: 'access_denied' });
   }
 
+  // Arbitrary attachments must never execute in the API origin.
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename.replace(/["\\]/g, '_')}"`);
   res.sendFile(filepath);
 });
 

@@ -24,6 +24,43 @@ const ensureUploadsDir = () => {
 export type SavedImage = {
   url: string;       // relative URL: /api/v1/images/abc123.webp
   filename: string;  // abc123.webp
+  mime_type?: string;
+};
+
+const DISPLAY_IMAGE_FORMATS: Record<string, { extension: string; mimeType: string }> = {
+  jpeg: { extension: 'jpg', mimeType: 'image/jpeg' },
+  png: { extension: 'png', mimeType: 'image/png' },
+  webp: { extension: 'webp', mimeType: 'image/webp' },
+  gif: { extension: 'gif', mimeType: 'image/gif' },
+  avif: { extension: 'avif', mimeType: 'image/avif' },
+};
+const CONVERTIBLE_IMAGE_FORMATS = new Set(['tiff', 'heif', 'heic', 'jp2', 'jxl']);
+
+/** Save a validated raster image using its real format, not a caller-provided MIME type. */
+export const saveExternalImage = async (buffer: Buffer): Promise<SavedImage | null> => {
+  ensureUploadsDir();
+
+  let format = '';
+  try {
+    const metadata = await sharp(buffer, { failOn: 'none', animated: true, limitInputPixels: 60_000_000 }).metadata();
+    format = `${metadata.format || ''}`.toLowerCase();
+    if ((metadata.width || 0) * (metadata.height || 0) > 60_000_000) return null;
+  } catch {
+    return null;
+  }
+  if (!format || (!DISPLAY_IMAGE_FORMATS[format] && !CONVERTIBLE_IMAGE_FORMATS.has(format))) return null;
+
+  const id = crypto.randomBytes(12).toString('hex');
+  const displayFormat = DISPLAY_IMAGE_FORMATS[format];
+  if (displayFormat) {
+    const filename = `${id}.${displayFormat.extension}`;
+    await fs.promises.writeFile(path.join(UPLOADS_DIR, filename), buffer);
+    return { url: `/api/v1/images/${filename}`, filename, mime_type: displayFormat.mimeType };
+  }
+
+  const filename = `${id}.webp`;
+  await sharp(buffer, { failOn: 'none', limitInputPixels: 60_000_000 }).webp({ quality: 90 }).toFile(path.join(UPLOADS_DIR, filename));
+  return { url: `/api/v1/images/${filename}`, filename, mime_type: 'image/webp' };
 };
 
 /**
@@ -59,16 +96,10 @@ export const saveUserImageThumbnail = async (
 export const saveGeneratedImage = async (
   base64: string
 ): Promise<SavedImage> => {
-  ensureUploadsDir();
-
   const buffer = Buffer.from(base64, 'base64');
-  const id = crypto.randomBytes(12).toString('hex');
-  const filename = `${id}.png`;
-  const filepath = path.join(UPLOADS_DIR, filename);
-
-  await fs.promises.writeFile(filepath, buffer);
-
-  return { url: `/api/v1/images/${filename}`, filename };
+  const saved = await saveExternalImage(buffer);
+  if (!saved) throw new Error('generated_image_format_not_supported');
+  return saved;
 };
 
 /**

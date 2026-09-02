@@ -67,7 +67,7 @@ export type ChatDto = {
 
 export type MessageImage = {
   url: string;
-  type: 'user_photo' | 'generated';
+  type: 'user_photo' | 'generated' | 'external';
 };
 
 export type MessageAttachment = {
@@ -231,6 +231,8 @@ export type AiSendResult = {
   preferred_model_reset?: boolean;
   tool_user_messages?: string[];
   generated_images?: GeneratedImage[];
+  response_images?: MessageImage[];
+  response_attachments?: MessageAttachment[];
   display_state?: DisplayStatePayload | null;
   desktop_action?: DesktopActionPayload | null;
   aborted?: boolean;
