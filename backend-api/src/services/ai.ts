@@ -2367,7 +2367,7 @@ export const toolDefinitions = [
           provider: { type: 'string', enum: ['yandex', 'google', 'custom'], description: 'Fallback provider selection.' },
           to: { type: 'string', description: 'Recipient email.' },
           subject: { type: 'string', description: 'Email subject.' },
-          body: { type: 'string', description: 'Email body. Can pass HTML markup (<b>, <h1>, <ul>, <a>, etc.) for a nicely formatted email.' },
+          body: { type: 'string', description: 'Email body. Markdown and inline HTML tags (<b>, <i>, <a>, <br>, etc.) are supported and rendered as a nicely formatted HTML email; \\n line breaks are preserved. Full HTML documents are accepted too.' },
           attachment_urls: {
             type: 'array',
             maxItems: 5,

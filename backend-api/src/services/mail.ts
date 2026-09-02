@@ -4,6 +4,7 @@ import path from 'node:path';
 import net from 'node:net';
 import { lookup } from 'node:dns/promises';
 import { simpleParser } from 'mailparser';
+import { marked } from 'marked';
 import { db } from '../db.js';
 import { getUserById } from './chats.js';
 import { getEncryptionKey } from '../utils/encryption.js';
@@ -1148,6 +1149,104 @@ export const deleteAllMailAccounts = (userId: number) => db
 
 export { encryptSecret, getMailAccountsForUser, getMailAccountById, getMailAccountForUser, normalizeMailProvider };
 
+// ─── Outgoing email body formatting ──────────────────────────────────────────
+// The AI model may pass plain text, Markdown, or HTML. nodemailer receives the
+// body verbatim, and raw "\n" line breaks collapse inside HTML — so without a
+// conversion the recipient sees one merged blob of text with visible markdown
+// artifacts. composeEmailBody() builds a proper html part (preserving line
+// breaks) and a clean plain-text alternative (without raw HTML tags).
+
+const EMAIL_HTML_BLOCK_TAG_RE = /<\/?(?:html|body|head|meta|title|style|div|p|h[1-6]|ul|ol|li|dl|dt|dd|table|thead|tbody|tfoot|tr|td|th|blockquote|pre|hr|center|section|article|header|footer|nav|font)\b[^>]*>/i;
+
+const decodeHtmlEntities = (value: string): string => value
+  .replace(/&nbsp;/gi, ' ')
+  .replace(/&amp;/gi, '&')
+  .replace(/&lt;/gi, '<')
+  .replace(/&gt;/gi, '>')
+  .replace(/&quot;/gi, '"')
+  .replace(/&(?:#39|apos);/gi, "'");
+
+const htmlToPlainText = (value: string): string => {
+  const text = value
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(?:p|div|h[1-6]|li|tr|blockquote|pre)>/gi, '\n')
+    .replace(/<li\b[^>]*>/gi, '• ')
+    .replace(/<\/(?:td|th)>/gi, '\t')
+    .replace(/<[^>]+>/g, '');
+  return decodeHtmlEntities(text)
+    .replace(/\r\n/g, '\n')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+};
+
+export type ComposedEmailBody = { text: string; html: string };
+
+const composeEmailBody = (rawBody: string): ComposedEmailBody => {
+  const body = `${rawBody || ''}`.trim();
+  if (!body) return { text: '', html: '' };
+  // A full HTML document/fragment (block-level tags) is sent as-is;
+  // inline tags like <b>, <i>, <a>, <br> stay valid in Markdown mode too.
+  if (EMAIL_HTML_BLOCK_TAG_RE.test(body)) {
+    return { text: htmlToPlainText(body), html: body };
+  }
+  // Plain text / Markdown: render to HTML and preserve single line breaks.
+  const html = marked.parse(body, { async: false, breaks: true, gfm: true }) as string;
+  return { text: body, html };
+};
+
+// ─── Sent-folder copy (IMAP APPEND) ─────────────────────────────────────────
+// SMTP does not store anything in "Sent" by itself. Gmail keeps sent copies
+// server-side, but e.g. Yandex does not save letters submitted from external
+// clients unless a webmail setting is enabled — so we append a copy ourselves.
+
+const appendEmailToSentMailbox = async (
+  account: MailAccountRecord,
+  password: string,
+  rawMessage: Buffer,
+): Promise<boolean> => {
+  const imapflowMod = await optionalImport('imapflow');
+  const ImapFlow = (imapflowMod as any)?.ImapFlow || (imapflowMod as any)?.default?.ImapFlow || (imapflowMod as any)?.default || null;
+  if (!ImapFlow) return false;
+
+  const client = new ImapFlow({
+    host: account.imap_host,
+    port: account.imap_port || 993,
+    secure: (account.imap_secure ?? 1) === 1,
+    logger: false,
+    auth: { user: account.imap_user, pass: password },
+  });
+
+  try {
+    await client.connect();
+    const sentMailboxes = await resolveReadableMailboxes(client, 'sent');
+    const sentPath = sentMailboxes.find(mailbox => mailbox.direction === 'outgoing')?.path;
+    if (!sentPath) return false;
+    await client.append(sentPath, rawMessage, ['\\Seen']);
+    return true;
+  } catch {
+    return false;
+  } finally {
+    try { await client.logout(); } catch { /* ignore */ }
+  }
+};
+
+const renderRawEmailCopy = async (createTransport: any, mailOptions: any, messageId?: string): Promise<Buffer | null> => {
+  try {
+    const streamTransporter = createTransport({ streamTransport: true, buffer: true });
+    const rendered = await streamTransporter.sendMail({ ...mailOptions, messageId });
+    const raw = (rendered as any)?.message;
+    if (Buffer.isBuffer(raw) && raw.length > 0) return raw;
+    if (typeof raw === 'string' && raw.length > 0) return Buffer.from(raw);
+    return null;
+  } catch {
+    return null;
+  }
+};
+
 export const runEmailSend = async (
   userId: number,
   to: string,
@@ -1217,20 +1316,32 @@ export const runEmailSend = async (
     }
   });
 
+  const composed = composeEmailBody(normalizedBody);
+
+  const mailOptions = {
+    from: account.email,
+    to: normalizedTo,
+    subject: normalizedSubject,
+    text: composed.text,
+    html: composed.html,
+    attachments: verifiedAttachments.map(attachment => ({
+      filename: attachment.name,
+      path: resolveAttachmentFile(attachment.filename)!,
+      contentType: attachment.mimeType,
+    })),
+  };
+
   try {
-    await transporter.sendMail({
-      from: account.email,
-      to: normalizedTo,
-      subject: normalizedSubject,
-      text: normalizedBody,
-      html: normalizedBody,
-      attachments: verifiedAttachments.map(attachment => ({
-        filename: attachment.name,
-        path: resolveAttachmentFile(attachment.filename)!,
-        contentType: attachment.mimeType,
-      })),
-    });
-    return `✅ Письмо успешно отправлено на ${normalizedTo}`;
+    const info = await transporter.sendMail(mailOptions);
+    // Save a copy to the Sent folder. Gmail stores sent mail server-side
+    // automatically, so we skip the append there to avoid duplicates.
+    let copyNote = '';
+    if (account.provider !== 'google') {
+      const rawCopy = await renderRawEmailCopy(createTransport, mailOptions, (info as any)?.messageId);
+      const copySaved = rawCopy ? await appendEmailToSentMailbox(account, decryptedPass, rawCopy) : false;
+      if (!copySaved) copyNote = ' (копия в папку «Отправленные» не сохранена)';
+    }
+    return `✅ Письмо успешно отправлено на ${normalizedTo}${copyNote}`;
   } catch (err: any) {
     return `❌ Ошибка отправки: ${err?.message || String(err)}`;
   }
