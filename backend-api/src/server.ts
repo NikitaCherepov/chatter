@@ -1101,8 +1101,14 @@ app.get('/api/v1/attachments/:filename', (req: AuthedRequest, res) => {
   `).all(likePattern) as Array<{ user_id: number; chat_id: number }>;
 
   const allowed = rows.some(r => r.user_id === effectiveId || canReadChatMessages(effectiveId, r.chat_id));
+  const temporaryAllowed = Boolean(db.prepare(`
+    SELECT 1
+    FROM temporary_user_files
+    WHERE user_id = ? AND filename = ? AND expires_at > unixepoch()
+    LIMIT 1
+  `).get(effectiveId, filename));
 
-  if (!allowed) {
+  if (!allowed && !temporaryAllowed) {
     return res.status(403).json({ error: 'access_denied' });
   }
 

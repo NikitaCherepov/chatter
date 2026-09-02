@@ -2,10 +2,12 @@ import net from 'node:net';
 import path from 'node:path';
 import { lookup } from 'node:dns/promises';
 import type { MessageAttachment, MessageImage } from '../types.js';
-import { MAX_RAW_FILE_SIZE, saveUserDocument } from './attachment-storage.js';
-import { guessMimeType, parseDocument, SUPPORTED_EXTENSIONS } from './document-parser.js';
+import { saveUserDocument } from './attachment-storage.js';
+import { checkBotFilePermission } from './bot-file-policy.js';
+import { parseDocument } from './document-parser.js';
 import { saveExternalImage } from './image-storage.js';
 import { resolveEmailAttachmentReference } from './mail.js';
+import { saveTemporaryUserFile, TEMPORARY_FILE_TTL_SECONDS } from './temporary-files.js';
 import { countTokens } from './tokenizer.js';
 
 const MAX_RESPONSE_FILE_BYTES = 20 * 1024 * 1024;
@@ -137,10 +139,60 @@ const downloadRemoteFile = async (value: string): Promise<FileSource> => {
   throw new Error('too_many_redirects');
 };
 
-const normalizedFilename = (requested: unknown, fallback: string): string => {
-  const value = typeof requested === 'string' ? requested.trim() : '';
-  const base = path.basename(value || fallback).replace(/[\u0000-\u001f\u007f]/g, '').slice(0, 160);
-  return base || 'attachment';
+export const saveTempFileForUse = async (
+  userId: number,
+  args: { file_ref?: unknown; url?: unknown; filename?: unknown },
+): Promise<string> => {
+  const fileRef = typeof args.file_ref === 'string' ? args.file_ref.trim() : '';
+  const remoteUrl = typeof args.url === 'string' ? args.url.trim() : '';
+  if (Boolean(fileRef) === Boolean(remoteUrl)) {
+    return JSON.stringify({ status: 'error', message: 'Provide exactly one of file_ref or url.' });
+  }
+
+  const source = fileRef
+    ? await resolveEmailAttachmentReference(userId, fileRef)
+    : await downloadRemoteFile(remoteUrl);
+  if (!source.buffer.length) throw new Error('empty_file');
+  if (source.buffer.length > MAX_RESPONSE_FILE_BYTES) throw new Error('file_too_large');
+
+  const allowedFile = checkBotFilePermission(
+    args.filename,
+    source.filename,
+    source.mimeType,
+    MAX_RESPONSE_FILE_BYTES,
+  );
+  if (!allowedFile) {
+    const filename = path.basename(`${args.filename || source.filename || 'attachment'}`);
+    return JSON.stringify({
+      status: 'unsupported_file_type',
+      filename,
+      extension: path.extname(filename).slice(1).toLowerCase() || null,
+    });
+  }
+  if (source.buffer.length > allowedFile.maxSizeBytes) {
+    return JSON.stringify({
+      status: 'file_too_large',
+      filename: allowedFile.filename,
+      size_bytes: source.buffer.length,
+      max_size_bytes: allowedFile.maxSizeBytes,
+    });
+  }
+
+  const saved = await saveTemporaryUserFile(
+    userId,
+    source.buffer,
+    allowedFile.filename,
+    allowedFile.mimeType,
+  );
+  return JSON.stringify({
+    status: 'saved',
+    filename: allowedFile.filename,
+    mime_type: allowedFile.mimeType,
+    size_bytes: saved.size_bytes,
+    attachment_url: saved.url,
+    expires_in_seconds: TEMPORARY_FILE_TTL_SECONDS,
+    instruction: 'Use this exact relative attachment_url when another tool asks for a saved file.',
+  });
 };
 
 export const attachFileToResponse = async (
@@ -164,9 +216,32 @@ export const attachFileToResponse = async (
     : await downloadRemoteFile(remoteUrl);
   if (!source.buffer.length) throw new Error('empty_file');
   if (source.buffer.length > MAX_RESPONSE_FILE_BYTES) throw new Error('file_too_large');
-  const filename = normalizedFilename(args.filename, source.filename);
+  const allowedFile = checkBotFilePermission(
+    args.filename,
+    source.filename,
+    source.mimeType,
+    MAX_RESPONSE_FILE_BYTES,
+  );
+  if (!allowedFile) {
+    const filename = path.basename(`${args.filename || source.filename || 'attachment'}`);
+    return JSON.stringify({
+      status: 'unsupported_file_type',
+      filename,
+      extension: path.extname(filename).slice(1).toLowerCase() || null,
+    });
+  }
+  if (source.buffer.length > allowedFile.maxSizeBytes) {
+    return JSON.stringify({
+      status: 'file_too_large',
+      filename: allowedFile.filename,
+      size_bytes: source.buffer.length,
+      max_size_bytes: allowedFile.maxSizeBytes,
+    });
+  }
 
-  const savedImage = await saveExternalImage(source.buffer);
+  const savedImage = allowedFile.kind === 'image'
+    ? await saveExternalImage(source.buffer)
+    : null;
   if (savedImage) {
     const image: MessageImage = { url: savedImage.url, type: 'external' };
     sink.images.push(image);
@@ -174,48 +249,30 @@ export const attachFileToResponse = async (
     return JSON.stringify({
       status: 'attached',
       kind: 'image',
-      filename,
+      filename: allowedFile.filename,
       mime_type: savedImage.mime_type,
       size_bytes: source.buffer.length,
       url: savedImage.url,
     });
   }
 
-  const extension = path.extname(filename).slice(1).toLowerCase();
-  if (!SUPPORTED_EXTENSIONS.has(extension)) {
-    return JSON.stringify({
-      status: 'unsupported_file_type',
-      filename,
-      extension: extension || null,
-    });
-  }
-  if (source.buffer.length > MAX_RAW_FILE_SIZE) {
-    return JSON.stringify({
-      status: 'file_too_large',
-      filename,
-      size_bytes: source.buffer.length,
-      max_size_bytes: MAX_RAW_FILE_SIZE,
-    });
-  }
-
   let extractedText = '';
-  try {
-    extractedText = await parseDocument(source.buffer, filename);
-  } catch (error: any) {
-    return JSON.stringify({
-      status: 'file_parse_failed',
-      filename,
-      message: error?.message || String(error),
-    });
+  if (allowedFile.kind === 'document') {
+    try {
+      extractedText = await parseDocument(source.buffer, allowedFile.filename);
+    } catch (error: any) {
+      return JSON.stringify({
+        status: 'file_parse_failed',
+        filename: allowedFile.filename,
+        message: error?.message || String(error),
+      });
+    }
   }
-  const saved = await saveUserDocument(source.buffer, filename);
-  const mimeType = source.mimeType && source.mimeType !== 'application/octet-stream'
-    ? source.mimeType
-    : guessMimeType(filename);
+  const saved = await saveUserDocument(source.buffer, allowedFile.filename);
   const attachment: MessageAttachment = {
-    name: filename,
+    name: allowedFile.filename,
     size_bytes: saved.size_bytes,
-    mime_type: mimeType,
+    mime_type: allowedFile.mimeType,
     extracted_text: extractedText,
     url: saved.url,
     filename: saved.filename,
@@ -227,8 +284,8 @@ export const attachFileToResponse = async (
   return JSON.stringify({
     status: 'attached',
     kind: 'file',
-    filename,
-    mime_type: mimeType,
+    filename: allowedFile.filename,
+    mime_type: allowedFile.mimeType,
     size_bytes: saved.size_bytes,
     url: saved.url,
   });

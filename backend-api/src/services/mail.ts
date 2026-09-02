@@ -12,6 +12,7 @@ import { MAX_RAW_FILE_SIZE, resolveAttachmentFile } from './attachment-storage.j
 import { parseDocument, SUPPORTED_EXTENSIONS } from './document-parser.js';
 import { readExtractedDocument, type AttachmentReadContext } from './chat-attachments.js';
 import type { MessageAttachment } from '../types.js';
+import { resolveTemporaryUserFile } from './temporary-files.js';
 
 export type MailProvider = 'yandex' | 'google' | 'custom';
 
@@ -99,7 +100,23 @@ export const resolveEmailAttachmentsForUser = async (
         if (attachment) break;
       } catch { /* ignore invalid legacy rows */ }
     }
-    if (!attachment) throw new Error('email_attachment_not_owned');
+    if (!attachment) {
+      const temporary = resolveTemporaryUserFile(userId, url);
+      if (!temporary) throw new Error('email_attachment_unavailable');
+      const actualHash = await hashFileSha256(temporary.filepath);
+      if (actualHash !== temporary.sha256) throw new Error('email_attachment_unavailable');
+      totalBytes += temporary.size_bytes;
+      if (totalBytes > MAX_EMAIL_ATTACHMENTS_BYTES) throw new Error('email_attachments_too_large');
+      resolved.push({
+        url: temporary.url,
+        filename: temporary.filename,
+        name: temporary.name,
+        mimeType: temporary.mime_type,
+        sizeBytes: temporary.size_bytes,
+        sha256: temporary.sha256,
+      });
+      continue;
+    }
 
     const filepath = resolveAttachmentFile(filename);
     if (!filepath) throw new Error('email_attachment_not_found');
@@ -1158,14 +1175,25 @@ export const runEmailSend = async (
     return 'Ошибка: нужны to, subject и body.';
   }
 
-  const verifiedAttachments = await resolveEmailAttachmentsForUser(
-    userId,
-    attachments.map(attachment => attachment.url),
-  );
-  if (verifiedAttachments.length !== attachments.length) throw new Error('email_attachment_changed');
+  let verifiedAttachments: ResolvedEmailAttachment[];
+  try {
+    verifiedAttachments = await resolveEmailAttachmentsForUser(
+      userId,
+      attachments.map(attachment => attachment.url),
+    );
+  } catch (error: any) {
+    const code = `${error?.message || ''}`;
+    if (['email_attachment_unavailable', 'email_attachment_not_owned', 'email_attachment_not_found', 'email_attachment_changed'].includes(code)) {
+      throw new Error('The file does not exist, has expired, or was deleted. Save it again before sending.');
+    }
+    throw error;
+  }
+  if (verifiedAttachments.length !== attachments.length) {
+    throw new Error('The file does not exist, has expired, or was deleted. Save it again before sending.');
+  }
   for (let index = 0; index < attachments.length; index += 1) {
     if (verifiedAttachments[index].sha256 !== attachments[index].sha256) {
-      throw new Error('email_attachment_changed');
+      throw new Error('The file does not exist, has expired, or was deleted. Save it again before sending.');
     }
   }
 

@@ -29,7 +29,7 @@ import { countTokens } from './tokenizer.js';
 import { listSubagentNames, buildSubagentListDescription, getSubagent } from './subagents/registry.js';
 import { hasBackendTranslation, translateForLanguage } from '../i18n/index.js';
 import { readChatAttachment, searchChatAttachment, type AttachmentReadContext } from './chat-attachments.js';
-import { attachFileToResponse, type ResponseFileSink } from './response-attachments.js';
+import { attachFileToResponse, saveTempFileForUse, type ResponseFileSink } from './response-attachments.js';
 
 dotenv.config();
 
@@ -2291,7 +2291,7 @@ export const toolDefinitions = [
     type: 'function',
     function: {
       name: 'read_email_content',
-      description: 'Reads an incoming or outgoing email and lists its attachments. After check_emails pass the exact mailbox_path and message_uid from the result; use subject_part only as a legacy fallback.',
+      description: 'Reads an incoming or outgoing email and lists its attachments. After check_emails pass the exact mailbox_path and message_uid from the result; use subject_part only as a legacy fallback. Each attachment includes a short-lived file_ref.',
       parameters: {
         type: 'object',
         properties: {
@@ -2328,6 +2328,21 @@ export const toolDefinitions = [
   {
     type: 'function',
     function: {
+      name: 'save_temp_file',
+      description: 'Temporarily saves a file for one hour and returns a relative attachment_url that other tools can use. Use this when the situation does not require attaching the file to the user-facing chat, but you need to use it elsewhere, for example as an email attachment. Pass an external absolute URL or an exact email file_ref. Reuse the returned relative URL instead of saving the same file again.',
+      parameters: {
+        type: 'object',
+        properties: {
+          file_ref: { type: 'string', description: 'Exact short-lived file_ref returned for an email attachment by read_email_content.' },
+          url: { type: 'string', description: 'Exact public absolute http(s) URL of the file. Do not invent or alter URLs.' },
+          filename: { type: 'string', description: 'Optional filename to use for the temporary file.' },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'attach_file_to_response',
       description: 'Attaches an existing email attachment or a public Internet file to your current response. Use the exact file_ref returned by read_email_content, or an exact public http(s) URL. The file is saved by Chatter and appears on your assistant message; images appear inline. This does not read the file contents.',
       parameters: {
@@ -2344,7 +2359,7 @@ export const toolDefinitions = [
     type: 'function',
     function: {
       name: 'send_email',
-      description: 'Sends an email on behalf of the user. Use when the user explicitly asks to send an email. If the user explicitly specifies yandex/google — pass provider.',
+      description: 'Sends an email on behalf of the user. Use when the user explicitly asks to send an email. Email attachments must be relative attachment_url values for files already saved in Chatter. If you only have an external absolute URL or an email file_ref, first call save_temp_file and then pass its returned attachment_url. If the user explicitly specifies yandex/google — pass provider.',
       parameters: {
         type: 'object',
         properties: {
@@ -2357,7 +2372,7 @@ export const toolDefinitions = [
             type: 'array',
             maxItems: 5,
             items: { type: 'string' },
-            description: 'Exact attachment_url values from documents attached by the user. Never invent or alter these URLs.'
+            description: 'Exact relative /api/v1/attachments/... URLs for files already saved in Chatter or returned by save_temp_file. Absolute URLs and email file_ref values are not accepted. Never invent or alter these URLs.'
           }
         },
         required: ['to', 'subject', 'body']
@@ -4067,6 +4082,9 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     if (!sink) return JSON.stringify({ status: 'unavailable', message: 'Attachments cannot be persisted for this response.' });
     return attachFileToResponse(user.id, parsed, sink);
   }
+  if (toolName === 'save_temp_file') {
+    return saveTempFileForUse(user.id, parsed);
+  }
   if (toolName === 'send_email') {
     const to: string = typeof parsed.to === 'string' ? parsed.to.trim() : '';
     const subject: string = typeof parsed.subject === 'string' ? parsed.subject.trim() : '';
@@ -4084,9 +4102,21 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     try {
       attachments = await resolveEmailAttachmentsForUser(user.id, attachmentUrls);
     } catch (err: any) {
+      const errorCode = `${err?.message || ''}`;
+      const invalidLink = errorCode === 'invalid_email_attachment_url';
+      const unavailable = [
+        'email_attachment_unavailable',
+        'email_attachment_not_owned',
+        'email_attachment_not_found',
+        'email_attachment_changed',
+      ].includes(errorCode);
       return JSON.stringify({
         status: 'error',
-        message: `Cannot attach the requested documents: ${err?.message || String(err)}`,
+        message: invalidLink
+          ? 'Email attachments require a relative /api/v1/attachments/... URL. Call save_temp_file first when you only have an absolute URL or email file_ref.'
+          : unavailable
+            ? 'The file does not exist, has expired, or was deleted. Save it again with save_temp_file before using it.'
+            : `Cannot attach the requested documents: ${err?.message || String(err)}`,
       });
     }
 
