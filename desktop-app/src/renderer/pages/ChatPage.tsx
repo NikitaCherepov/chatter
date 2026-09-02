@@ -3732,6 +3732,14 @@ export function ChatPage() {
     mime_type: string;
     size_bytes: number;
   }) => {
+    if (attachment.mime_type.toLowerCase().startsWith('image/')) {
+      setViewerAttachment(null);
+      setViewerImageSrc(resolveImageUrl(attachment.url));
+      setViewerImageMsgId(null);
+      setViewerImageUrl(null);
+      return;
+    }
+
     const existingAttachment = messages
       .flatMap(message => message.attachments || [])
       .find(candidate => candidate.url === attachment.url);
@@ -3749,7 +3757,7 @@ export function ChatPage() {
       filename: existingAttachment?.filename || filename,
       extracted_text: existingAttachment?.extracted_text || '',
     });
-  }, [messages]);
+  }, [messages, resolveImageUrl]);
 
   const handleDeleteImage = useCallback(async (messageId: number, url: string) => {
     setDeletingImage(true);
