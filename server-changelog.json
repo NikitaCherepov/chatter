@@ -2,55 +2,94 @@
   "changes": {
     "en": [
       "Added a soft reload to other critical places in the admin panel besides updates",
-      "Added an option to disable image generation"
+      "Added an option to disable image generation",
+      "Added a JSON parser",
+      "The bot can now send files and images it found on the internet or in email directly to the chat",
+      "Added temporary file storage for the bot (for example, so it can forward a file it saw in a message without sending it to the user in the chat)"
     ],
     "cs": [
-      "Přidáno měkké načtení na další kritická místa v administračním panelu kromě aktualizací",
-      "Přidána možnost zakázat generování obrázků"
+      "Přidáno měkké načtení do dalších kritických míst v administračním panelu kromě aktualizací",
+      "Přidána možnost zakázat generování obrázků",
+      "Přidán JSON parser",
+      "Bot nyní může posílat soubory a obrázky, které našel na internetu nebo v e-mailu, přímo do chatu",
+      "Přidáno dočasné úložiště souborů pro bota (například, aby mohl přeposlat soubor, který viděl ve zprávě, aniž by ho poslal uživateli do chatu)"
     ],
     "de": [
       "Weiches Neuladen an anderen kritischen Stellen im Admin-Panel neben Updates hinzugefügt",
-      "Option zum Deaktivieren der Bildgenerierung hinzugefügt"
+      "Option zum Deaktivieren der Bildgenerierung hinzugefügt",
+      "JSON-Parser hinzugefügt",
+      "Der Bot kann jetzt Dateien und Bilder, die er im Internet oder in E-Mails gefunden hat, direkt an den Chat senden",
+      "Temporäre Dateispeicherung für den Bot hinzugefügt (z. B. damit er eine Datei, die er in einer Nachricht gesehen hat, weiterleiten kann, ohne sie dem Benutzer im Chat zu senden)"
     ],
     "es": [
-      "Se añadió una recarga suave en otros lugares críticos del panel de administración además de las actualizaciones",
-      "Se añadió una opción para deshabilitar la generación de imágenes"
+      "Se agregó una recarga suave en otros lugares críticos del panel de administración además de las actualizaciones",
+      "Se agregó una opción para deshabilitar la generación de imágenes",
+      "Se agregó un analizador JSON",
+      "El bot ahora puede enviar archivos e imágenes que encontró en internet o en el correo electrónico directamente al chat",
+      "Se agregó almacenamiento temporal de archivos para el bot (por ejemplo, para que pueda reenviar un archivo que vio en un mensaje sin enviarlo al usuario en el chat)"
     ],
     "fr": [
       "Ajout d'un rechargement doux à d'autres endroits critiques du panneau d'administration en plus des mises à jour",
-      "Ajout d'une option pour désactiver la génération d'images"
+      "Ajout d'une option pour désactiver la génération d'images",
+      "Ajout d'un analyseur JSON",
+      "Le bot peut désormais envoyer des fichiers et des images trouvés sur Internet ou dans les e-mails directement dans le chat",
+      "Ajout d'un stockage temporaire de fichiers pour le bot (par exemple, pour qu'il puisse transférer un fichier vu dans un message sans l'envoyer à l'utilisateur dans le chat)"
     ],
     "it": [
       "Aggiunto un soft reload in altri punti critici del pannello di amministrazione oltre agli aggiornamenti",
-      "Aggiunta un'opzione per disabilitare la generazione di immagini"
+      "Aggiunta un'opzione per disabilitare la generazione di immagini",
+      "Aggiunto un parser JSON",
+      "Il bot ora può inviare file e immagini trovati su internet o via email direttamente nella chat",
+      "Aggiunto un archivio temporaneo di file per il bot (ad esempio, per inoltrare un file visto in un messaggio senza inviarlo all'utente nella chat)"
     ],
     "ja": [
       "更新以外の管理パネルの重要な場所にもソフトリロードを追加しました",
-      "画像生成を無効にするオプションを追加しました"
+      "画像生成を無効にするオプションを追加しました",
+      "JSONパーサーを追加しました",
+      "ボットはインターネットやメールで見つけたファイルや画像をチャットに直接送信できるようになりました",
+      "ボット用の一時ファイルストレージを追加しました（例えば、メッセージ内で見たファイルをユーザーに送信せずに転送できるようにするため）"
     ],
     "ko": [
       "업데이트 외에 관리자 패널의 다른 중요한 위치에 소프트 리로드를 추가했습니다.",
-      "이미지 생성 비활성화 옵션을 추가했습니다."
+      "이미지 생성 비활성화 옵션을 추가했습니다.",
+      "JSON 파서를 추가했습니다.",
+      "봇이 인터넷이나 이메일에서 찾은 파일과 이미지를 채팅으로 직접 보낼 수 있습니다.",
+      "봇을 위한 임시 파일 저장소를 추가했습니다(예: 메시지에서 본 파일을 사용자에게 채팅으로 보내지 않고 전달할 수 있음)."
     ],
     "pl": [
       "Dodano miękkie przeładowanie w innych krytycznych miejscach panelu administracyjnego oprócz aktualizacji",
-      "Dodano opcję wyłączania generowania obrazów"
+      "Dodano opcję wyłączania generowania obrazów",
+      "Dodano parser JSON",
+      "Bot może teraz wysyłać pliki i obrazy znalezione w internecie lub w e-mailach bezpośrednio na czat",
+      "Dodano tymczasowe przechowywanie plików dla bota (na przykład, aby mógł przekazać plik widziany w wiadomości bez wysyłania go do użytkownika na czacie)"
     ],
     "pt-BR": [
-      "Configurações de fuso horário corrigidas para o aplicativo de desktop",
-      "Trabalho Zigbee aprimorado"
+      "Adicionado um recarregamento suave em outros locais críticos do painel administrativo, além das atualizações",
+      "Adicionada uma opção para desativar a geração de imagens",
+      "Adicionado um analisador JSON",
+      "O bot agora pode enviar arquivos e imagens encontrados na internet ou em e-mails diretamente para o chat",
+      "Adicionado armazenamento temporário de arquivos para o bot (por exemplo, para que ele possa encaminhar um arquivo visto em uma mensagem sem enviá-lo ao usuário no chat)"
     ],
     "ru": [
-      "Исправлены настройки часового пояса для настольного приложения",
-      "Улучшена работа Zigbee"
+      "Добавлена мягкая перезагрузка в другие критически важные места админ-панели, помимо обновлений",
+      "Добавлена возможность отключить генерацию изображений",
+      "Добавлен JSON-парсер",
+      "Бот теперь может отправлять файлы и изображения, найденные в интернете или в электронной почте, прямо в чат",
+      "Добавлено временное хранилище файлов для бота (например, чтобы он мог переслать файл, увиденный в сообщении, не отправляя его пользователю в чат)"
     ],
     "tr": [
-      "Masaüstü uygulaması için sabit saat dilimi ayarları",
-      "Zigbee çalışması iyileştirildi"
+      "Yönetim panelindeki güncellemeler dışındaki diğer kritik yerlere yumuşak yeniden yükleme eklendi",
+      "Görüntü oluşturmayı devre dışı bırakma seçeneği eklendi",
+      "JSON ayrıştırıcı eklendi",
+      "Bot artık internette veya e-postada bulduğu dosyaları ve görüntüleri doğrudan sohbete gönderebiliyor",
+      "Bot için geçici dosya depolama eklendi (örneğin, bir mesajda gördüğü bir dosyayı kullanıcıya sohbette göndermeden iletebilmesi için)"
     ],
     "zh-CN": [
-      "修复了桌面应用时区设置",
-      "改进了Zigbee工作"
+      "在管理面板中除更新外的其他关键位置添加了软重载",
+      "添加了禁用图像生成的选项",
+      "添加了JSON解析器",
+      "机器人现在可以将从互联网或电子邮件中找到的文件和图像直接发送到聊天中",
+      "为机器人添加了临时文件存储（例如，以便它可以转发在消息中看到的文件，而无需在聊天中发送给用户）"
     ]
   }
 }
