@@ -15,7 +15,7 @@ import { createNote, deleteNote, getNoteById, listNotes } from './notes.js';
 import { createTask, deletePendingTask, getPendingTaskCount, listTasks } from './tasks.js';
 import { listMapPinsForBot } from './map-pins.js';
 import { runSmartHomeControl, type SmartHomeArgs, listSmartDevicesForAi } from './smart-home.js';
-import { getMailAccountsForUser, resolveEmailAttachmentsForUser, runEmailCheck, runEmailRead } from './mail.js';
+import { getMailAccountsForUser, resolveEmailAttachmentsForUser, runEmailAttachmentRead, runEmailCheck, runEmailRead } from './mail.js';
 import { runCoreMemoryMerge } from './memory.js';
 import { VectorMemoryService } from './vector-memory.js';
 import { getCleanTextFromUrl, wrapUntrustedContent } from './web-reader.js';
@@ -2270,7 +2270,7 @@ export const toolDefinitions = [
     type: 'function',
     function: {
       name: 'check_emails',
-      description: 'Searches user emails: latest inbox, search by sender/subject/keyword, date filter, pagination. If the user explicitly specifies yandex/google — pass provider.',
+      description: 'Searches incoming and outgoing user emails by default. Supports sender/recipient/subject/keyword, date filters, pagination, and inbox/sent scope. Pass the returned mailbox_path together with message_uid when reading a message.',
       parameters: {
         type: 'object',
         properties: {
@@ -2279,6 +2279,7 @@ export const toolDefinitions = [
           search_query: { type: 'string', description: 'Search string (name, domain, subject, keyword).' },
           date_from: { type: 'string', description: 'Start date (inclusive) in YYYY-MM-DD format.' },
           date_to: { type: 'string', description: 'End date (inclusive) in YYYY-MM-DD format.' },
+          scope: { type: 'string', enum: ['all', 'inbox', 'sent'], description: 'Mailboxes to search. Default: all (Inbox and Sent).' },
           limit: { type: 'number', description: 'Number of results (1–50). Default: 10.' },
           offset: { type: 'number', description: 'Pagination offset. Example: first offset=0, then offset=10 for the next 10 emails.' }
         }
@@ -2289,17 +2290,39 @@ export const toolDefinitions = [
     type: 'function',
     function: {
       name: 'read_email_content',
-      description: 'Reads the content of a specific email. After check_emails pass the exact message_uid from the result; use subject_part only as a fallback.',
+      description: 'Reads an incoming or outgoing email and lists its attachments. After check_emails pass the exact mailbox_path and message_uid from the result; use subject_part only as a legacy fallback.',
       parameters: {
         type: 'object',
         properties: {
           mail_account_id: { type: 'number', description: 'ID of a specific mail account.' },
           provider: { type: 'string', enum: ['yandex', 'google', 'custom'], description: 'Fallback provider selection.' },
           message_uid: { type: 'number', description: 'Exact email uid from the check_emails result. Preferred method.' },
+          mailbox_path: { type: 'string', description: 'Exact mailbox_path from the check_emails result. Required for Sent; omitted values fall back to Inbox for compatibility.' },
           subject_part: { type: 'string', description: 'Part of the email subject for fallback search if uid is unavailable.' }
         }
       }
     }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'read_email_attachment',
+      description: 'Reads a supported document attached to an email. First call read_email_content and pass its exact mailbox_path, message_uid, and attachment_index. Uses the same per-generation document/context budget as chat attachments.',
+      parameters: {
+        type: 'object',
+        properties: {
+          mail_account_id: { type: 'number', description: 'ID of a specific mail account.' },
+          provider: { type: 'string', enum: ['yandex', 'google', 'custom'], description: 'Fallback provider selection.' },
+          mailbox_path: { type: 'string', description: 'Exact mailbox_path returned by check_emails or read_email_content.' },
+          message_uid: { type: 'number', description: 'Exact message_uid returned by check_emails or read_email_content.' },
+          attachment_index: { type: 'number', description: '1-based attachment_index returned by read_email_content.' },
+          mode: { type: 'string', enum: ['full', 'chunk'], description: 'Read the complete document or selected chunk. Default: chunk.' },
+          chunk: { type: 'number', description: '1-based chunk number for mode=chunk. Default: 1.' },
+          adjacent_chunks: { type: 'number', description: 'Also return this many neighboring chunks on each side (0-2). Default: 0.' },
+        },
+        required: ['mailbox_path', 'message_uid', 'attachment_index'],
+      },
+    },
   },
   {
     type: 'function',
@@ -3996,7 +4019,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
 
   if (toolName === 'check_emails') {
     const limit = Number.isFinite(Number(parsed.limit)) ? Number(parsed.limit) : 0;
-    return runEmailCheck(user.id, typeof parsed.search_query === 'string' ? parsed.search_query : '', limit, typeof parsed.provider === 'string' ? parsed.provider : '', Number.isFinite(Number(parsed.offset)) ? Number(parsed.offset) : 0, typeof parsed.date_from === 'string' ? parsed.date_from : '', typeof parsed.date_to === 'string' ? parsed.date_to : '', Number.isFinite(Number(parsed.mail_account_id)) ? Number(parsed.mail_account_id) : undefined);
+    return runEmailCheck(user.id, typeof parsed.search_query === 'string' ? parsed.search_query : '', limit, typeof parsed.provider === 'string' ? parsed.provider : '', Number.isFinite(Number(parsed.offset)) ? Number(parsed.offset) : 0, typeof parsed.date_from === 'string' ? parsed.date_from : '', typeof parsed.date_to === 'string' ? parsed.date_to : '', Number.isFinite(Number(parsed.mail_account_id)) ? Number(parsed.mail_account_id) : undefined, typeof parsed.scope === 'string' ? parsed.scope : 'all');
   }
 
   if (toolName === 'read_email_content') return runEmailRead(
@@ -4004,8 +4027,25 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     typeof parsed.subject_part === 'string' ? parsed.subject_part : '',
     typeof parsed.provider === 'string' ? parsed.provider : '',
     Number.isFinite(Number(parsed.message_uid)) ? Number(parsed.message_uid) : undefined,
-    Number.isFinite(Number(parsed.mail_account_id)) ? Number(parsed.mail_account_id) : undefined
+    Number.isFinite(Number(parsed.mail_account_id)) ? Number(parsed.mail_account_id) : undefined,
+    typeof parsed.mailbox_path === 'string' ? parsed.mailbox_path : '',
   );
+  if (toolName === 'read_email_attachment') {
+    const context = subagentExtra?.attachmentReadContext;
+    if (!context) return JSON.stringify({ status: 'attachment_context_unavailable' });
+    return runEmailAttachmentRead(
+      user.id,
+      typeof parsed.mailbox_path === 'string' ? parsed.mailbox_path : '',
+      Number(parsed.message_uid),
+      Number(parsed.attachment_index),
+      parsed.mode === 'full' ? 'full' : 'chunk',
+      Number(parsed.chunk) || 1,
+      Number(parsed.adjacent_chunks) || 0,
+      context,
+      typeof parsed.provider === 'string' ? parsed.provider : '',
+      Number.isFinite(Number(parsed.mail_account_id)) ? Number(parsed.mail_account_id) : undefined,
+    );
+  }
   if (toolName === 'send_email') {
     const to: string = typeof parsed.to === 'string' ? parsed.to.trim() : '';
     const subject: string = typeof parsed.subject === 'string' ? parsed.subject.trim() : '';
@@ -7593,6 +7633,7 @@ export const sendMessageThroughAi = async (
     disabledToolSet.add('list_mail_accounts');
     disabledToolSet.add('check_emails');
     disabledToolSet.add('read_email_content');
+    disabledToolSet.add('read_email_attachment');
     disabledToolSet.add('get_my_tasks');
     disabledToolSet.add('list_monitors');
     disabledToolSet.add('capture_screen');

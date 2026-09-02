@@ -1095,8 +1095,9 @@ A numeric prefix `[N]` is added:
 | `get_my_tasks` | List user's tasks |
 | `delete_my_task` | Delete a task |
 | `set_user_timezone` | Set timezone |
-| `check_emails` | Search emails |
-| `read_email_content` | Read email content |
+| `check_emails` | Search incoming and outgoing emails (`all`, `inbox`, or `sent`) |
+| `read_email_content` | Read email content and list attachments |
+| `read_email_attachment` | Read a supported document attached to an email |
 | `send_email` | Send email (requires user confirmation — HitL `email_confirmation` card) |
 | `save_note` | Save a note |
 | `list_my_notes` | List notes |
@@ -1159,7 +1160,7 @@ The system allows the user to selectively disable AI tools via checkboxes in the
 | `disable_memory_write` | Disable data writing | `save_to_cold_memory`, `delete_from_cold_memory`, `save_note`, `delete_note` |
 | `disable_pc_control_lite` | Limited mode | `execute_ssh_command`, `list_devops_servers`, `list_devops_runbooks`, `read_devops_runbook`, `suggest_devops_runbook`, `install_ssh_public_key`, `suggest_server_creds_update`, `create_server_user`, `change_server_user_password`, `execute_macro`, `suggest_macro`, `list_my_macros`, `send_email`, `schedule_task`, `delete_my_task` |
 | `disable_pc_commands` | No PC commands | `execute_pc_command`, `get_file_info`, `read_file`, `search_file_keywords`, `write_file`, `edit_file_lines` |
-| `disable_pc_control_full` | Full lockdown | Everything from lite + `execute_pc_command`, `get_file_info`, `read_file`, `search_file_keywords`, `write_file`, `edit_file_lines` + `control_smart_home`, `get_smart_devices`, `check_emails`, `read_email_content`, `get_my_tasks`, `explore_fs`, `desktop_action`, `map_control`, `get_map_pins`, `find_transit_route`, `search_nearby` |
+| `disable_pc_control_full` | Full lockdown | Everything from lite + `execute_pc_command`, `get_file_info`, `read_file`, `search_file_keywords`, `write_file`, `edit_file_lines` + `control_smart_home`, `get_smart_devices`, `check_emails`, `read_email_content`, `read_email_attachment`, `get_my_tasks`, `explore_fs`, `desktop_action`, `map_control`, `get_map_pins`, `find_transit_route`, `search_nearby` |
 | `disable_internet` | No internet & generation | `search_web`, `read_webpage`, `generate_image` |
 | `disable_personal` | Guest mode | `update_core_memory`, `search_cold_memory`, `save_to_cold_memory`, `delete_from_cold_memory`, `save_note`, `list_my_notes`, `read_note`, `delete_note`, `schedule_task`, `get_my_tasks`, `delete_my_task` + hide prompt and hot memory from system prompt |
 | `disable_specialized_subagents` | No specialized subagents | `invoke_subagent` |

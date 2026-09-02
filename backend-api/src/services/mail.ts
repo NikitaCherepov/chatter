@@ -8,7 +8,9 @@ import { db } from '../db.js';
 import { getUserById } from './chats.js';
 import { getEncryptionKey } from '../utils/encryption.js';
 import { wrapUntrustedContent } from './web-reader.js';
-import { resolveAttachmentFile } from './attachment-storage.js';
+import { MAX_RAW_FILE_SIZE, resolveAttachmentFile } from './attachment-storage.js';
+import { parseDocument, SUPPORTED_EXTENSIONS } from './document-parser.js';
+import { readExtractedDocument, type AttachmentReadContext } from './chat-attachments.js';
 import type { MessageAttachment } from '../types.js';
 
 export type MailProvider = 'yandex' | 'google' | 'custom';
@@ -35,6 +37,15 @@ export const MAIL_RESULTS_HARD_LIMIT = 50;
 export const MAIL_RESULTS_DEFAULT_LIMIT = 10;
 export const MAX_EMAIL_ATTACHMENTS = 5;
 export const MAX_EMAIL_ATTACHMENTS_BYTES = 18 * 1024 * 1024;
+const MAX_EMAIL_SOURCE_BYTES = 25 * 1024 * 1024;
+const MAX_EMAIL_BODY_CHARS = 3_500;
+
+export type MailSearchScope = 'all' | 'inbox' | 'sent';
+
+type ReadableMailbox = {
+  path: string;
+  direction: 'incoming' | 'outgoing';
+};
 
 export type ResolvedEmailAttachment = {
   url: string;
@@ -244,6 +255,106 @@ const optionalImport = async (moduleName: string) => {
   }
 };
 
+const mailboxKey = (value: string): string => value.trim().toLocaleLowerCase();
+
+const isSentMailboxFallback = (value: string): boolean => {
+  const normalized = mailboxKey(value);
+  return normalized === 'sent'
+    || normalized.endsWith('/sent')
+    || normalized.endsWith('.sent')
+    || normalized.includes('sent mail')
+    || normalized.includes('sent items')
+    || normalized.includes('отправлен');
+};
+
+const resolveReadableMailboxes = async (
+  client: any,
+  scope: MailSearchScope = 'all',
+  requestedPath = '',
+): Promise<ReadableMailbox[]> => {
+  const listed = await client.list() as Array<{ path?: string; specialUse?: string }>;
+  const inboxEntry = listed.find(item => `${item.specialUse || ''}`.toLocaleLowerCase() === '\\inbox')
+    || listed.find(item => mailboxKey(`${item.path || ''}`) === 'inbox');
+  const sentEntry = listed.find(item => `${item.specialUse || ''}`.toLocaleLowerCase() === '\\sent')
+    || listed.find(item => isSentMailboxFallback(`${item.path || ''}`));
+
+  const inbox: ReadableMailbox = {
+    path: `${inboxEntry?.path || 'INBOX'}`,
+    direction: 'incoming',
+  };
+  const sent: ReadableMailbox | null = sentEntry?.path
+    ? { path: `${sentEntry.path}`, direction: 'outgoing' }
+    : null;
+  const available = [inbox, sent].filter((item): item is ReadableMailbox => Boolean(item));
+
+  if (requestedPath.trim()) {
+    const requestedKey = mailboxKey(requestedPath);
+    return available.filter(item => mailboxKey(item.path) === requestedKey);
+  }
+  if (scope === 'inbox') return [inbox];
+  if (scope === 'sent') return sent ? [sent] : [];
+  return available.filter((item, index, items) => (
+    items.findIndex(candidate => mailboxKey(candidate.path) === mailboxKey(item.path)) === index
+  ));
+};
+
+const normalizeMailScope = (value?: string): MailSearchScope => (
+  value === 'inbox' || value === 'sent' ? value : 'all'
+);
+
+const addressText = (value: any): string => {
+  if (typeof value?.text === 'string') return value.text;
+  if (!Array.isArray(value?.value)) return '';
+  return value.value
+    .map((item: any) => item?.address || item?.name || '')
+    .filter(Boolean)
+    .join(', ');
+};
+
+const mailAttachments = (parsed: any): any[] => (
+  Array.isArray(parsed?.attachments)
+    ? parsed.attachments.filter((item: any) => !item?.related && item?.contentDisposition !== 'inline')
+    : []
+);
+
+const attachmentExtension = (filename: string): string => {
+  const extension = path.extname(filename).slice(1).toLocaleLowerCase();
+  return extension;
+};
+
+const attachmentMetadata = (attachments: any[]) => attachments.map((attachment, index) => {
+  const filename = `${attachment?.filename || `attachment-${index + 1}`}`;
+  const sizeBytes = Math.max(0, Number(attachment?.size || attachment?.content?.length || 0));
+  const supported = SUPPORTED_EXTENSIONS.has(attachmentExtension(filename));
+  const withinLimit = sizeBytes <= MAX_RAW_FILE_SIZE;
+  return {
+    attachment_index: index + 1,
+    filename,
+    mime_type: `${attachment?.contentType || 'application/octet-stream'}`,
+    size_bytes: sizeBytes,
+    readable: supported && withinLimit,
+    ...(!supported ? { unreadable_reason: 'unsupported_format' } : {}),
+    ...(supported && !withinLimit ? { unreadable_reason: 'file_too_large' } : {}),
+  };
+});
+
+const preflightEmailSource = async (client: any, uid: number): Promise<any> => {
+  const metadata = await client.fetchOne(uid, { envelope: true, size: true }, { uid: true });
+  if (!metadata) return null;
+  const sizeBytes = Math.max(0, Number(metadata.size || 0));
+  if (sizeBytes > MAX_EMAIL_SOURCE_BYTES) {
+    throw new Error(`email_too_large:${sizeBytes}:${MAX_EMAIL_SOURCE_BYTES}`);
+  }
+  return metadata;
+};
+
+const validateFetchedEmailSource = (source: Buffer): Buffer => {
+  if (source.length > MAX_EMAIL_SOURCE_BYTES) {
+    throw new Error(`email_too_large:${source.length}:${MAX_EMAIL_SOURCE_BYTES}`);
+  }
+  return source;
+};
+
 export const runEmailCheck = async (
   userId: number,
   searchQuery?: string,
@@ -252,25 +363,26 @@ export const runEmailCheck = async (
   offset = 0,
   dateFrom?: string,
   dateTo?: string,
-  mailAccountId?: number
- ) => {
+  mailAccountId?: number,
+  scopeRaw?: string,
+) => {
   const user = getUserById(userId);
-  if (!user) return 'Ошибка: пользователь не найден.';
+  if (!user) return 'Error: user not found.';
   const account = resolveUserMailAccount(userId, provider, mailAccountId);
-  if (!account) return 'Ошибка: почта не настроена.';
+  if (!account) return 'Error: email is not configured.';
 
   const imapflowMod = await optionalImport('imapflow');
   const ImapFlow = (imapflowMod as any)?.ImapFlow || (imapflowMod as any)?.default?.ImapFlow || (imapflowMod as any)?.default || null;
   if (!ImapFlow) {
     const keys = imapflowMod && typeof imapflowMod === 'object' ? Object.keys(imapflowMod).join(',') : '';
-    return `Ошибка: модуль imapflow недоступен для runtime (keys: ${keys || 'none'}).`;
+    return `Error: imapflow is unavailable for this runtime (keys: ${keys || 'none'}).`;
   }
 
   let decryptedPass = '';
   try {
     decryptedPass = decryptSecret(account.imap_pass);
   } catch (err: any) {
-    return `Ошибка: не удалось расшифровать пароль почты (${err?.message || String(err)}).`;
+    return `Error: failed to decrypt the email password (${err?.message || String(err)}).`;
   }
 
   const requestedLimit = Number.isFinite(limit) ? Math.floor(limit) : 0;
@@ -278,6 +390,7 @@ export const runEmailCheck = async (
   const safeLimit = Math.max(1, Math.min(MAIL_RESULTS_HARD_LIMIT, desiredLimit));
   const safeOffset = Math.max(0, Math.min(500, Math.floor(offset || 0)));
   const normalizedQuery = (searchQuery || '').trim();
+  const scope = normalizeMailScope(scopeRaw);
 
   const normalizeDateOnly = (value?: string) => {
     if (!value) return null;
@@ -304,126 +417,148 @@ export const runEmailCheck = async (
 
   try {
     await client.connect();
-    const lock = await client.getMailboxLock('INBOX');
-    try {
-      const total = Number(client.mailbox?.exists || 0);
-      if (total <= 0) return 'Почта пуста.';
-
-      const useServerSearch = Boolean(normalizedQuery || dateFromNorm || dateToNorm);
-      let fetchRange: string | number[];
-      let totalMatches = total;
-
-      if (useServerSearch) {
-        const searchCriteria: Record<string, unknown> = {};
-        if (normalizedQuery) {
-          searchCriteria.or = [
-            { from: normalizedQuery },
-            { subject: normalizedQuery },
-            { text: normalizedQuery }
-          ];
-        }
-        if (dateFromNorm) searchCriteria.since = dateFromNorm;
-        if (dateToNorm) {
-          const exclusiveEnd = new Date(`${dateToNorm}T00:00:00Z`);
-          exclusiveEnd.setUTCDate(exclusiveEnd.getUTCDate() + 1);
-          searchCriteria.before = exclusiveEnd.toISOString().slice(0, 10);
-        }
-
-        const foundUidsRaw = await client.search(searchCriteria, { uid: true });
-        const foundUids = Array.isArray(foundUidsRaw)
-          ? foundUidsRaw.map(Number).filter(Number.isFinite).sort((left, right) => right - left)
-          : [];
-        totalMatches = foundUids.length;
-        fetchRange = foundUids.slice(safeOffset, safeOffset + safeLimit);
-      } else {
-        const fetchWindow = Math.min(500, safeLimit + safeOffset);
-        const startSeq = Math.max(1, total - fetchWindow + 1);
-        fetchRange = `${startSeq}:${total}`;
-      }
-
-      if (Array.isArray(fetchRange) && !fetchRange.length) {
-        if (normalizedQuery) return `Ничего не найдено по запросу "${normalizedQuery}".`;
-        if (dateFromNorm || dateToNorm) return 'Писем в указанном диапазоне нет.';
-        return `Ничего не найдено (offset=${safeOffset}, limit=${safeLimit}).`;
-      }
-
-      const collected: Array<{ uid: number; message_uid: number; from: string; subject: string; date: string; date_unix: number | null }> = [];
-      const messages = useServerSearch
-        ? client.fetch(fetchRange, { envelope: true }, { uid: true })
-        : client.fetch(fetchRange, { envelope: true });
-
-      for await (const msg of messages) {
-        const envelope = msg.envelope;
-        const fromAddress = envelope?.from?.[0]?.address || envelope?.from?.[0]?.name || 'unknown';
-        const subject = envelope?.subject || '(без темы)';
-        const date = envelope?.date instanceof Date ? envelope.date : null;
-        const dateUnix = date ? Math.floor(date.getTime() / 1000) : null;
-
-        collected.push({
-          uid: Number(msg.uid || 0),
-          message_uid: Number(msg.uid || 0),
-          from: fromAddress,
-          subject,
-          date: date ? date.toLocaleString('ru-RU') : 'дата неизвестна',
-          date_unix: dateUnix
-        });
-      }
-
-      if (!collected.length) {
-        if (normalizedQuery) return `Ничего не найдено по запросу "${normalizedQuery}".`;
-        if (dateFromNorm || dateToNorm) return 'Писем в указанном диапазоне нет.';
-        return 'Почта пуста.';
-      }
-
-      const sorted = [...collected].sort((a, b) => (b.date_unix || 0) - (a.date_unix || 0) || b.uid - a.uid);
-      const sliced = useServerSearch ? sorted : sorted.slice(safeOffset, safeOffset + safeLimit);
-      if (!sliced.length) return `Ничего не найдено (offset=${safeOffset}, limit=${safeLimit}).`;
-
+    const mailboxes = await resolveReadableMailboxes(client, scope);
+    if (!mailboxes.length) {
       return wrapUntrustedContent(JSON.stringify({
-        mail_account_id: account.id,
-        label: account.label,
-        provider: account.provider,
-        account: account.imap_user,
-        total_matches: totalMatches,
-        offset: safeOffset,
-        limit: safeLimit,
-        items: sliced
-      }, null, 2));
-    } finally {
-      lock.release();
+        status: 'mailbox_unavailable',
+        scope,
+        message: scope === 'sent' ? 'The Sent mailbox was not found.' : 'No readable mailboxes were found.',
+      }));
     }
+
+    const useServerSearch = Boolean(normalizedQuery || dateFromNorm || dateToNorm);
+    const fetchWindow = Math.min(500, safeLimit + safeOffset);
+    const collected: Array<{
+      uid: number;
+      message_uid: number;
+      mailbox_path: string;
+      direction: 'incoming' | 'outgoing';
+      from: string;
+      to: string;
+      subject: string;
+      date: string;
+      date_unix: number | null;
+    }> = [];
+    let totalMatches = 0;
+
+    for (const mailbox of mailboxes) {
+      const lock = await client.getMailboxLock(mailbox.path, { readOnly: true });
+      try {
+        const total = Number(client.mailbox?.exists || 0);
+        if (total <= 0) continue;
+
+        let fetchRange: string | number[];
+        if (useServerSearch) {
+          const searchCriteria: Record<string, unknown> = {};
+          if (normalizedQuery) {
+            searchCriteria.or = [
+              { from: normalizedQuery },
+              { to: normalizedQuery },
+              { subject: normalizedQuery },
+              { text: normalizedQuery }
+            ];
+          }
+          if (dateFromNorm) searchCriteria.since = dateFromNorm;
+          if (dateToNorm) {
+            const exclusiveEnd = new Date(`${dateToNorm}T00:00:00Z`);
+            exclusiveEnd.setUTCDate(exclusiveEnd.getUTCDate() + 1);
+            searchCriteria.before = exclusiveEnd.toISOString().slice(0, 10);
+          }
+
+          const foundUidsRaw = await client.search(searchCriteria, { uid: true });
+          const foundUids = Array.isArray(foundUidsRaw)
+            ? foundUidsRaw.map(Number).filter(Number.isFinite).sort((left, right) => right - left)
+            : [];
+          totalMatches += foundUids.length;
+          fetchRange = foundUids.slice(0, fetchWindow);
+        } else {
+          totalMatches += total;
+          const startSeq = Math.max(1, total - fetchWindow + 1);
+          fetchRange = `${startSeq}:${total}`;
+        }
+
+        if (Array.isArray(fetchRange) && !fetchRange.length) continue;
+        const messages = useServerSearch
+          ? client.fetch(fetchRange, { envelope: true }, { uid: true })
+          : client.fetch(fetchRange, { envelope: true });
+
+        for await (const msg of messages) {
+          const envelope = msg.envelope;
+          const date = envelope?.date instanceof Date ? envelope.date : null;
+          collected.push({
+            uid: Number(msg.uid || 0),
+            message_uid: Number(msg.uid || 0),
+            mailbox_path: mailbox.path,
+            direction: mailbox.direction,
+            from: envelope?.from?.[0]?.address || envelope?.from?.[0]?.name || 'unknown',
+            to: envelope?.to?.[0]?.address || envelope?.to?.[0]?.name || 'unknown',
+            subject: envelope?.subject || '(no subject)',
+            date: date ? date.toISOString() : 'unknown',
+            date_unix: date ? Math.floor(date.getTime() / 1000) : null,
+          });
+        }
+      } finally {
+        lock.release();
+      }
+    }
+
+    const sorted = collected.sort((a, b) => (
+      (b.date_unix || 0) - (a.date_unix || 0)
+      || b.uid - a.uid
+    ));
+    const items = sorted.slice(safeOffset, safeOffset + safeLimit);
+    return wrapUntrustedContent(JSON.stringify({
+      status: 'ok',
+      mail_account_id: account.id,
+      label: account.label,
+      provider: account.provider,
+      account: account.imap_user,
+      scope,
+      searched_mailboxes: mailboxes.map(mailbox => ({
+        mailbox_path: mailbox.path,
+        direction: mailbox.direction,
+      })),
+      total_matches: totalMatches,
+      offset: safeOffset,
+      limit: safeLimit,
+      items,
+    }, null, 2));
   } catch (err: any) {
-    return `Ошибка IMAP: ${err?.message || String(err)}`;
+    return `IMAP error: ${err?.message || String(err)}`;
   } finally {
     try { await client.logout(); } catch {}
   }
 };
 
-export const runEmailRead = async (userId: number, subjectPart: string, provider?: string, messageUid?: number, mailAccountId?: number ) => {
+export const runEmailRead = async (
+  userId: number,
+  subjectPart: string,
+  provider?: string,
+  messageUid?: number,
+  mailAccountId?: number,
+  mailboxPath?: string,
+) => {
   const user = getUserById(userId);
-  if (!user) return 'Ошибка: пользователь не найден.';
+  if (!user) return 'Error: user not found.';
   const account = resolveUserMailAccount(userId, provider, mailAccountId);
-  if (!account) return 'Ошибка: почта не настроена.';
+  if (!account) return 'Error: email is not configured.';
 
   const imapflowMod = await optionalImport('imapflow');
   const ImapFlow = (imapflowMod as any)?.ImapFlow || (imapflowMod as any)?.default?.ImapFlow || (imapflowMod as any)?.default || null;
-  if (!ImapFlow) {
-    const keys = imapflowMod && typeof imapflowMod === 'object' ? Object.keys(imapflowMod).join(',') : '';
-    return `Ошибка: модуль imapflow недоступен для runtime (keys: ${keys || 'none'}).`;
-  }
+  if (!ImapFlow) return 'Error: imapflow is unavailable for this runtime.';
 
   let decryptedPass = '';
   try {
     decryptedPass = decryptSecret(account.imap_pass);
   } catch (err: any) {
-    return `Ошибка: не удалось расшифровать пароль почты (${err?.message || String(err)}).`;
+    return `Error: failed to decrypt the email password (${err?.message || String(err)}).`;
   }
 
   const normalizedSubject = (subjectPart || '').trim();
   const normalizedUid = Number.isFinite(Number(messageUid)) && Number(messageUid) > 0
     ? Math.floor(Number(messageUid))
     : null;
-  if (!normalizedSubject && !normalizedUid) return 'Ошибка: нужен message_uid или subject_part.';
+  if (!normalizedSubject && !normalizedUid) return 'Error: message_uid or subject_part is required.';
 
   const client = new ImapFlow({
     host: account.imap_host,
@@ -435,42 +570,186 @@ export const runEmailRead = async (userId: number, subjectPart: string, provider
 
   try {
     await client.connect();
-    const lock = await client.getMailboxLock('INBOX');
+    const mailboxes = await resolveReadableMailboxes(client, 'all', mailboxPath || '');
+    if (!mailboxes.length) return JSON.stringify({ status: 'mailbox_not_found_or_forbidden' });
+    const mailbox = mailboxes[0];
+    const lock = await client.getMailboxLock(mailbox.path, { readOnly: true });
     try {
       const total = Number(client.mailbox?.exists || 0);
-      if (total <= 0) return 'Почта пуста.';
+      if (total <= 0) return JSON.stringify({ status: 'mailbox_empty', mailbox_path: mailbox.path });
 
-      let msg: any;
-      let pickedSubject = normalizedSubject;
-
-      if (normalizedUid) {
-        msg = await client.fetchOne(normalizedUid, { source: true, envelope: true }, { uid: true });
-        if (!msg) return `Письмо с UID ${normalizedUid} не найдено.`;
-      } else {
+      let resolvedUid = normalizedUid;
+      if (!resolvedUid) {
         const foundUidsRaw = await client.search({ subject: normalizedSubject }, { uid: true });
         const foundUids = Array.isArray(foundUidsRaw)
           ? foundUidsRaw.map(Number).filter(Number.isFinite).sort((left, right) => right - left)
           : [];
-        if (!foundUids.length) return `Письмо по теме "${normalizedSubject}" не найдено.`;
-        msg = await client.fetchOne(foundUids[0], { source: true, envelope: true }, { uid: true });
-        if (!msg) return `Письмо по теме "${normalizedSubject}" не найдено.`;
-        pickedSubject = msg.envelope?.subject || normalizedSubject;
+        if (!foundUids.length) return JSON.stringify({ status: 'not_found', subject_part: normalizedSubject });
+        resolvedUid = foundUids[0];
       }
 
+      const metadata = await preflightEmailSource(client, resolvedUid);
+      if (!metadata) return JSON.stringify({ status: 'not_found', message_uid: resolvedUid });
+      const msg = await client.fetchOne(resolvedUid, { source: true, envelope: true }, { uid: true });
       const rawSource = msg?.source;
-      if (!rawSource || !rawSource.length) return 'Тело письма пустое.';
+      if (!rawSource || !rawSource.length) return JSON.stringify({ status: 'empty_body', message_uid: resolvedUid });
+      validateFetchedEmailSource(rawSource);
 
-      const parsed = await simpleParser(rawSource);
+      const parsed = await simpleParser(rawSource, {
+        maxHtmlLengthToParse: MAX_EMAIL_SOURCE_BYTES,
+        skipImageLinks: true,
+      });
       const cleanText = parsed.text || '';
+      const attachments = mailAttachments(parsed);
+      const compact = cleanText.slice(0, MAX_EMAIL_BODY_CHARS);
 
-      if (!cleanText.trim()) return 'Не удалось извлечь читаемый текст из письма.';
-      const compact = cleanText.slice(0, 3500);
-      return wrapUntrustedContent(`Письмо найдено: ${msg?.envelope?.subject || pickedSubject}\n\n${compact}`);
+      return wrapUntrustedContent(JSON.stringify({
+        status: 'ok',
+        mail_account_id: account.id,
+        mailbox_path: mailbox.path,
+        direction: mailbox.direction,
+        message_uid: resolvedUid,
+        subject: parsed.subject || msg?.envelope?.subject || normalizedSubject || '(no subject)',
+        from: addressText(parsed.from),
+        to: addressText(parsed.to),
+        cc: addressText(parsed.cc),
+        date: parsed.date instanceof Date ? parsed.date.toISOString() : null,
+        body: compact,
+        body_truncated: cleanText.length > compact.length,
+        body_characters: cleanText.length,
+        attachments: attachmentMetadata(attachments),
+      }, null, 2));
     } finally {
       lock.release();
     }
   } catch (err: any) {
-    return `Ошибка чтения письма: ${err?.message || String(err)}`;
+    return `Email read error: ${err?.message || String(err)}`;
+  } finally {
+    try { await client.logout(); } catch {}
+  }
+};
+
+export const runEmailAttachmentRead = async (
+  userId: number,
+  mailboxPath: string,
+  messageUid: number,
+  attachmentIndex: number,
+  mode: 'full' | 'chunk',
+  chunkIndex: number,
+  adjacentChunks: number,
+  context: AttachmentReadContext,
+  provider?: string,
+  mailAccountId?: number,
+) => {
+  const user = getUserById(userId);
+  if (!user) return JSON.stringify({ status: 'user_not_found' });
+  const account = resolveUserMailAccount(userId, provider, mailAccountId);
+  if (!account) return JSON.stringify({ status: 'email_not_configured' });
+
+  const normalizedUid = Math.floor(Number(messageUid));
+  const normalizedAttachmentIndex = Math.floor(Number(attachmentIndex));
+  if (!Number.isFinite(normalizedUid) || normalizedUid <= 0) {
+    return JSON.stringify({ status: 'invalid_message_uid' });
+  }
+  if (!Number.isFinite(normalizedAttachmentIndex) || normalizedAttachmentIndex <= 0) {
+    return JSON.stringify({ status: 'invalid_attachment_index' });
+  }
+
+  const imapflowMod = await optionalImport('imapflow');
+  const ImapFlow = (imapflowMod as any)?.ImapFlow || (imapflowMod as any)?.default?.ImapFlow || (imapflowMod as any)?.default || null;
+  if (!ImapFlow) return JSON.stringify({ status: 'imapflow_unavailable' });
+
+  let decryptedPass = '';
+  try {
+    decryptedPass = decryptSecret(account.imap_pass);
+  } catch (err: any) {
+    return JSON.stringify({ status: 'email_password_error', message: err?.message || String(err) });
+  }
+
+  const client = new ImapFlow({
+    host: account.imap_host,
+    port: account.imap_port || 993,
+    secure: (account.imap_secure ?? 1) === 1,
+    logger: false,
+    auth: { user: account.imap_user, pass: decryptedPass }
+  });
+
+  try {
+    await client.connect();
+    const mailboxes = await resolveReadableMailboxes(client, 'all', mailboxPath);
+    if (!mailboxes.length) return JSON.stringify({ status: 'mailbox_not_found_or_forbidden' });
+    const mailbox = mailboxes[0];
+    const lock = await client.getMailboxLock(mailbox.path, { readOnly: true });
+    try {
+      const metadata = await preflightEmailSource(client, normalizedUid);
+      if (!metadata) return JSON.stringify({ status: 'email_not_found' });
+      const msg = await client.fetchOne(normalizedUid, { source: true }, { uid: true });
+      const rawSource = msg?.source;
+      if (!rawSource || !rawSource.length) return JSON.stringify({ status: 'email_source_empty' });
+      validateFetchedEmailSource(rawSource);
+
+      const parsed = await simpleParser(rawSource, {
+        maxHtmlLengthToParse: MAX_EMAIL_SOURCE_BYTES,
+        skipImageLinks: true,
+      });
+      const attachments = mailAttachments(parsed);
+      const attachment = attachments[normalizedAttachmentIndex - 1];
+      if (!attachment) {
+        return JSON.stringify({
+          status: 'attachment_out_of_range',
+          attachment_count: attachments.length,
+        });
+      }
+
+      const filename = `${attachment.filename || `attachment-${normalizedAttachmentIndex}`}`;
+      const content = Buffer.isBuffer(attachment.content)
+        ? attachment.content
+        : Buffer.from(attachment.content || '');
+      if (content.length > MAX_RAW_FILE_SIZE) {
+        return JSON.stringify({
+          status: 'file_too_large',
+          size_bytes: content.length,
+          max_size_bytes: MAX_RAW_FILE_SIZE,
+        });
+      }
+      if (!SUPPORTED_EXTENSIONS.has(attachmentExtension(filename))) {
+        return JSON.stringify({
+          status: 'unsupported_format',
+          filename,
+        });
+      }
+
+      let extractedText = '';
+      try {
+        extractedText = await parseDocument(content, filename);
+      } catch (err: any) {
+        return JSON.stringify({
+          status: 'attachment_parse_failed',
+          filename,
+          message: err?.message || String(err),
+        });
+      }
+
+      return readExtractedDocument(
+        filename,
+        {
+          mail_account_id: account.id,
+          mailbox_path: mailbox.path,
+          direction: mailbox.direction,
+          message_uid: normalizedUid,
+          attachment_index: normalizedAttachmentIndex,
+        },
+        extractedText,
+        mode,
+        chunkIndex,
+        adjacentChunks,
+        context,
+      );
+    } finally {
+      lock.release();
+    }
+  } catch (err: any) {
+    return JSON.stringify({ status: 'email_attachment_read_error', message: err?.message || String(err) });
   } finally {
     try { await client.logout(); } catch {}
   }

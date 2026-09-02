@@ -1010,8 +1010,9 @@ Desktop может отправлять `regenerate_from_history: true` вмес
 | `get_my_tasks` | Список задач пользователя |
 | `delete_my_task` | Удаление задачи |
 | `set_user_timezone` | Установка часового пояса |
-| `check_emails` | Поиск писем в почте |
-| `read_email_content` | Чтение содержимого письма |
+| `check_emails` | Поиск входящих и исходящих писем (`all`, `inbox` или `sent`) |
+| `read_email_content` | Чтение содержимого письма и списка вложений |
+| `read_email_attachment` | Чтение поддерживаемого документа из вложения письма |
 | `send_email` | Отправка письма (требует подтверждения пользователя — HitL-карточка `email_confirmation`) |
 | `save_note` | Сохранение заметки |
 | `list_my_notes` | Список заметок |
@@ -1074,7 +1075,7 @@ Desktop может отправлять `regenerate_from_history: true` вмес
 | `disable_memory_write` | Запрет записи данных | `save_to_cold_memory`, `delete_from_cold_memory`, `save_note`, `delete_note` |
 | `disable_pc_control_lite` | Ограниченный режим | `execute_ssh_command`, `list_devops_servers`, `list_devops_runbooks`, `read_devops_runbook`, `suggest_devops_runbook`, `install_ssh_public_key`, `suggest_server_creds_update`, `create_server_user`, `change_server_user_password`, `execute_macro`, `suggest_macro`, `list_my_macros`, `send_email`, `schedule_task`, `delete_my_task` |
 | `disable_pc_commands` | Без команд на ПК | `execute_pc_command`, `get_file_info`, `read_file`, `search_file_keywords`, `write_file`, `edit_file_lines` |
-| `disable_pc_control_full` | Полная блокировка | Всё из lite + `execute_pc_command`, `get_file_info`, `read_file`, `search_file_keywords`, `write_file`, `edit_file_lines` + `control_smart_home`, `get_smart_devices`, `check_emails`, `read_email_content`, `get_my_tasks`, `explore_fs`, `desktop_action`, `map_control`, `get_map_pins`, `find_transit_route`, `search_nearby` |
+| `disable_pc_control_full` | Полная блокировка | Всё из lite + `execute_pc_command`, `get_file_info`, `read_file`, `search_file_keywords`, `write_file`, `edit_file_lines` + `control_smart_home`, `get_smart_devices`, `check_emails`, `read_email_content`, `read_email_attachment`, `get_my_tasks`, `explore_fs`, `desktop_action`, `map_control`, `get_map_pins`, `find_transit_route`, `search_nearby` |
 | `disable_internet` | Без интернета и генерации | `search_web`, `read_webpage`, `generate_image` |
 | `disable_personal` | Гостевой режим | `update_core_memory`, `search_cold_memory`, `save_to_cold_memory`, `delete_from_cold_memory`, `save_note`, `list_my_notes`, `read_note`, `delete_note`, `schedule_task`, `get_my_tasks`, `delete_my_task` + скрытие промпта и горячей памяти из system prompt |
 | `disable_specialized_subagents` | Без специализированных субагентов | `invoke_subagent` |

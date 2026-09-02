@@ -141,18 +141,21 @@ const untrustedAttachmentResult = (payload: Record<string, unknown>) => (
   wrapUntrustedContent(JSON.stringify(payload, null, 2))
 );
 
-export const readChatAttachment = (
-  userId: number,
-  attachmentUrl: string,
+/**
+ * Reads already-extracted document text using the same context and per-generation
+ * budget as chat attachments. This is also used for documents attached to email.
+ */
+export const readExtractedDocument = (
+  name: string,
+  source: Record<string, unknown>,
+  text: string,
   mode: 'full' | 'chunk',
   chunkIndex: number,
   adjacentChunks: number,
   context: AttachmentReadContext,
 ): string => {
-  const attachment = resolveAttachmentInChat(userId, context.chatId, attachmentUrl);
-  if (!attachment) return JSON.stringify({ status: 'not_found_or_forbidden' });
-  const chunks = splitAttachmentText(attachment.extracted_text || '');
-  if (chunks.length === 0) return JSON.stringify({ status: 'empty_attachment', attachment_url: attachmentUrl });
+  const chunks = splitAttachmentText(text);
+  if (chunks.length === 0) return JSON.stringify({ status: 'empty_attachment', ...source });
 
   let selected: AttachmentChunk[];
   if (mode === 'full') {
@@ -174,14 +177,35 @@ export const readChatAttachment = (
 
   return untrustedAttachmentResult({
     status: 'ok',
-    name: attachment.name,
-    attachment_url: attachment.url,
+    name,
+    ...source,
     total_chunks: chunks.length,
     returned_chunks: selected.map(chunk => chunk.index),
     estimated_tokens: requestedTokens,
     remaining_attachment_tokens: context.readBudget.remaining,
     content: selected.map(chunk => ({ chunk: chunk.index, text: chunk.text })),
   });
+};
+
+export const readChatAttachment = (
+  userId: number,
+  attachmentUrl: string,
+  mode: 'full' | 'chunk',
+  chunkIndex: number,
+  adjacentChunks: number,
+  context: AttachmentReadContext,
+): string => {
+  const attachment = resolveAttachmentInChat(userId, context.chatId, attachmentUrl);
+  if (!attachment) return JSON.stringify({ status: 'not_found_or_forbidden' });
+  return readExtractedDocument(
+    attachment.name,
+    { attachment_url: attachment.url },
+    attachment.extracted_text || '',
+    mode,
+    chunkIndex,
+    adjacentChunks,
+    context,
+  );
 };
 
 export const searchChatAttachment = (
