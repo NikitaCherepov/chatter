@@ -680,7 +680,12 @@
       "licenseLink": "Lisans",
       "website": "Web Sitesi",
       "support": "Chatter Desteği",
-      "supportHelp": "Projenin ilerlemesine yardımcı olun"
+      "supportHelp": "Projenin ilerlemesine yardımcı olun",
+      "checkUpdates": "Güncellemeleri kontrol et",
+      "checkingUpdates": "Kontrol ediliyor...",
+      "upToDate": "En son sürümü kullanıyorsunuz",
+      "updateCheckFailed": "Güncellemeler kontrol edilemedi",
+      "updateCheckUnavailable": "Güncelleme kontrolleri geliştirme modunda kullanılamaz"
     }
   },
   "chat": {
@@ -1098,7 +1103,9 @@
       "fullscreen": "Tam ekran",
       "collapse": "Daralt",
       "browser": "Tarayıcı",
-      "webPages": "Web sayfaları"
+      "webPages": "Web sayfaları",
+      "jsonExtractor": "JSON Çıkarıcı",
+      "jsonExtractorDescription": "Bir belgeyi JSON'a dönüştürün"
     },
     "documents": {
       "selectChat": "Bir sohbet seçin",

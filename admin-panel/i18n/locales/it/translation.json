@@ -360,8 +360,11 @@
       "capabilityQuality": "qualità",
       "capabilityReferences": "riferimenti",
       "capabilitySupported": "supportato",
-      "capabilityNotClaimed": "non rivendicato"
-    }
+      "capabilityNotClaimed": "non rivendicato",
+      "enabled": "Generazione immagini abilitata",
+      "savingEnabled": "Salvataggio impostazione generazione immagini…"
+    },
+    "statusDisabled": "Disabilitato"
   },
   "services": {
     "telegram": {
@@ -734,6 +737,14 @@
         "switchedFound": "Passato a '{{tag}}'. Trovate nuove immagini — aggiornamento disponibile.",
         "switchedCurrent": "Passato a '{{tag}}'. Il server sta già eseguendo le immagini di questo canale.",
         "error": "Errore di cambio canale: {{message}}"
+      },
+      "restart": {
+        "title": "Riavvia backend",
+        "description": "Questa azione riavvia il backend. Le generazioni attive possono terminare prima del riavvio.",
+        "timeoutNotice": "Sono trascorsi 15 secondi, {{count}} utente(i) stanno ancora lavorando. Puoi continuare ad attendere, procedere ora o annullare.",
+        "softApply": "Attendi fino a 15s e continua",
+        "forceApply": "Procedi ora",
+        "applying": "In lavorazione…"
       }
     },
     "error": "Errore: {{message}}",

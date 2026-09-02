@@ -314,7 +314,12 @@
       "licenseLink": "Лицензия",
       "website": "Сайт",
       "support": "Поддержать Chatter",
-      "supportHelp": "Помочь проекту развиваться"
+      "supportHelp": "Помочь проекту развиваться",
+      "checkUpdates": "Проверить обновления",
+      "checkingUpdates": "Проверка...",
+      "upToDate": "Установлена последняя версия",
+      "updateCheckFailed": "Не удалось проверить обновления",
+      "updateCheckUnavailable": "Проверка обновлений недоступна в режиме разработки"
     },
     "toasts": {
       "saveSettingFailed": "Не удалось сохранить настройку",

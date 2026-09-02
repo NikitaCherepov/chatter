@@ -71,6 +71,7 @@ declare global {
         releaseNotes?: string;
         size?: number;
         error?: string;
+        disabled?: boolean;
       }>;
       updateDownload: () => Promise<{ success?: boolean; error?: string }>;
       updateInstall: () => Promise<{ success?: boolean; error?: string }>;

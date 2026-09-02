@@ -346,8 +346,11 @@
       "capabilityQuality": "kvalita",
       "capabilityReferences": "reference",
       "capabilitySupported": "podporováno",
-      "capabilityNotClaimed": "není deklarováno"
-    }
+      "capabilityNotClaimed": "není deklarováno",
+      "enabled": "Generování obrázků povoleno",
+      "savingEnabled": "Ukládání nastavení generování obrázků…"
+    },
+    "statusDisabled": "Zakázáno"
   },
   "services": {
     "telegram": {
@@ -727,6 +730,14 @@
         "switchedFound": "Přepnuto na '{{tag}}'. Byly nalezeny nové obrazy — je k dispozici aktualizace.",
         "switchedCurrent": "Přepnuto na '{{tag}}'. Server již používá obrazy tohoto kanálu.",
         "error": "Chyba přepnutí kanálu: {{message}}"
+      },
+      "restart": {
+        "title": "Restartovat backend",
+        "description": "Tato akce restartuje backend. Aktivní generování může být dokončeno před restartem.",
+        "timeoutNotice": "Uplynulo 15 sekund, {{count}} uživatel(é) stále pracují. Můžete počkat, pokračovat nyní nebo zrušit.",
+        "softApply": "Počkat až 15 s a pokračovat",
+        "forceApply": "Pokračovat nyní",
+        "applying": "Pracuji…"
       }
     },
     "error": "Chyba: {{message}}"

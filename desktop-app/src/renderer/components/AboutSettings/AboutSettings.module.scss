@@ -11,6 +11,10 @@
   gap: 14px;
 }
 
+.identityText {
+  min-width: 0;
+}
+
 .identity h2,
 .identity p,
 .details p {
@@ -38,6 +42,33 @@
   color: white;
   font-size: 20px;
   font-weight: 700;
+}
+
+.checkUpdates {
+  margin-left: auto;
+  padding: 7px 12px;
+  border: 1px solid var(--border-light);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    border-color 0.12s,
+    color 0.12s,
+    opacity 0.12s;
+}
+
+.checkUpdates:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.checkUpdates:disabled {
+  cursor: default;
+  opacity: 0.6;
 }
 
 .details {

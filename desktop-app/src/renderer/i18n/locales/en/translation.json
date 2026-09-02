@@ -337,7 +337,12 @@
       "licenseLink": "License",
       "website": "Website",
       "support": "Support Chatter",
-      "supportHelp": "Help keep the project moving"
+      "supportHelp": "Help keep the project moving",
+      "checkUpdates": "Check for updates",
+      "checkingUpdates": "Checking...",
+      "upToDate": "You are using the latest version",
+      "updateCheckFailed": "Could not check for updates",
+      "updateCheckUnavailable": "Update checks are unavailable in development mode"
     },
     "toasts": {
       "saveSettingFailed": "Could not save the setting",

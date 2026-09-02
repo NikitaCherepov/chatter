@@ -359,7 +359,12 @@
       "licenseLink": "Licencia",
       "website": "Sitio web",
       "support": "Soporte de Chatter",
-      "supportHelp": "Ayuda a mantener el proyecto en marcha"
+      "supportHelp": "Ayuda a mantener el proyecto en marcha",
+      "checkUpdates": "Buscar actualizaciones",
+      "checkingUpdates": "Comprobando...",
+      "upToDate": "Estás usando la última versión",
+      "updateCheckFailed": "No se pudo comprobar si hay actualizaciones",
+      "updateCheckUnavailable": "Las comprobaciones de actualizaciones no están disponibles en modo de desarrollo"
     }
   },
   "chat": {
@@ -777,7 +782,9 @@
       "fullscreen": "Pantalla completa",
       "collapse": "Contraer",
       "browser": "Navegador",
-      "webPages": "Páginas web"
+      "webPages": "Páginas web",
+      "jsonExtractor": "Extractor JSON",
+      "jsonExtractorDescription": "Convierte un documento en JSON"
     },
     "documents": {
       "selectChat": "Seleccione un chat",

@@ -360,8 +360,11 @@
       "capabilityQuality": "품질",
       "capabilityReferences": "참조",
       "capabilitySupported": "지원됨",
-      "capabilityNotClaimed": "주장되지 않음"
-    }
+      "capabilityNotClaimed": "주장되지 않음",
+      "enabled": "이미지 생성 활성화됨",
+      "savingEnabled": "이미지 생성 설정 저장 중…"
+    },
+    "statusDisabled": "비활성화됨"
   },
   "services": {
     "telegram": {
@@ -734,6 +737,14 @@
         "switchedFound": "'{{tag}}'(으)로 전환했습니다. 새 이미지를 찾았습니다 — 업데이트가 가능합니다.",
         "switchedCurrent": "'{{tag}}'(으)로 전환했습니다. 서버가 이미 이 채널의 이미지를 실행 중입니다.",
         "error": "채널 전환 오류: {{message}}"
+      },
+      "restart": {
+        "title": "백엔드 다시 시작",
+        "description": "이 작업은 백엔드를 다시 시작합니다. 활성 생성은 다시 시작 전에 완료될 수 있습니다.",
+        "timeoutNotice": "15초가 지났습니다. 아직 작업 중인 사용자 {{count}}명이 있습니다. 계속 기다리거나, 지금 계속하거나, 취소할 수 있습니다.",
+        "softApply": "최대 15초 기다렸다가 계속",
+        "forceApply": "지금 계속",
+        "applying": "작업 중…"
       }
     },
     "error": "오류: {{message}}",

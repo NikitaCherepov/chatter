@@ -680,7 +680,12 @@
       "licenseLink": "Licencja",
       "website": "Strona internetowa",
       "support": "Wsparcie Chatter",
-      "supportHelp": "Pomóż utrzymać projekt w ruchu"
+      "supportHelp": "Pomóż utrzymać projekt w ruchu",
+      "checkUpdates": "Sprawdź aktualizacje",
+      "checkingUpdates": "Sprawdzanie...",
+      "upToDate": "Używasz najnowszej wersji",
+      "updateCheckFailed": "Nie można sprawdzić aktualizacji",
+      "updateCheckUnavailable": "Sprawdzanie aktualizacji jest niedostępne w trybie deweloperskim"
     }
   },
   "chat": {
@@ -1098,7 +1103,9 @@
       "fullscreen": "Pełny ekran",
       "collapse": "Zwiń",
       "browser": "Przeglądarka",
-      "webPages": "Strony internetowe"
+      "webPages": "Strony internetowe",
+      "jsonExtractor": "Ekstraktor JSON",
+      "jsonExtractorDescription": "Zamień dokument na JSON"
     },
     "documents": {
       "selectChat": "Wybierz czat",

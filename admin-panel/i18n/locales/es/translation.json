@@ -360,8 +360,11 @@
       "capabilityQuality": "calidad",
       "capabilityReferences": "referencias",
       "capabilitySupported": "compatible",
-      "capabilityNotClaimed": "no reclamado"
-    }
+      "capabilityNotClaimed": "no reclamado",
+      "enabled": "Generación de imágenes habilitada",
+      "savingEnabled": "Guardando configuración de generación de imágenes…"
+    },
+    "statusDisabled": "Deshabilitado"
   },
   "services": {
     "telegram": {
@@ -734,6 +737,14 @@
         "forceNow": "Forzar actualización ahora",
         "timeoutNotice": "Han pasado 15 segundos, {{count}} usuario(s) aún trabajando. Puede seguir esperando, forzar la actualización o cancelar.",
         "pollError": "Error en la consulta de drenaje: {{message}}"
+      },
+      "restart": {
+        "title": "Reiniciar backend",
+        "description": "Esta acción reinicia el backend. Las generaciones activas pueden finalizar antes del reinicio.",
+        "timeoutNotice": "Han pasado 15 segundos, {{count}} usuario(s) aún trabajando. Puede seguir esperando, continuar ahora o cancelar.",
+        "softApply": "Esperar hasta 15 s y continuar",
+        "forceApply": "Continuar ahora",
+        "applying": "Trabajando…"
       }
     },
     "error": "Error: {{message}}",

@@ -680,7 +680,12 @@
       "licenseLink": "Licence",
       "website": "Webové stránky",
       "support": "Podpora Chatter",
-      "supportHelp": "Pomozte udržet projekt v chodu"
+      "supportHelp": "Pomozte udržet projekt v chodu",
+      "checkUpdates": "Zkontrolovat aktualizace",
+      "checkingUpdates": "Kontroluji...",
+      "upToDate": "Používáte nejnovější verzi",
+      "updateCheckFailed": "Nepodařilo se zkontrolovat aktualizace",
+      "updateCheckUnavailable": "Kontrola aktualizací není v režimu vývoje dostupná"
     }
   },
   "chat": {
@@ -1098,7 +1103,9 @@
       "fullscreen": "Celá obrazovka",
       "collapse": "Sbalit",
       "browser": "Prohlížeč",
-      "webPages": "Webové stránky"
+      "webPages": "Webové stránky",
+      "jsonExtractor": "JSON Extractor",
+      "jsonExtractorDescription": "Převést dokument na JSON"
     },
     "documents": {
       "selectChat": "Vyberte chat",

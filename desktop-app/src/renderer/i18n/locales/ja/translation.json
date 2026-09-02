@@ -359,7 +359,12 @@
       "licenseLink": "ライセンス",
       "website": "ウェブサイト",
       "support": "サポートチャッター",
-      "supportHelp": "プロジェクトの継続を支援する"
+      "supportHelp": "プロジェクトの継続を支援する",
+      "checkUpdates": "更新を確認",
+      "checkingUpdates": "確認中...",
+      "upToDate": "最新バージョンを使用しています",
+      "updateCheckFailed": "更新を確認できませんでした",
+      "updateCheckUnavailable": "開発モードでは更新確認は利用できません"
     }
   },
   "chat": {
@@ -777,7 +782,9 @@
       "fullscreen": "全画面表示",
       "collapse": "折りたたむ",
       "browser": "ブラウザ",
-      "webPages": "ウェブページ"
+      "webPages": "ウェブページ",
+      "jsonExtractor": "JSON抽出",
+      "jsonExtractorDescription": "ドキュメントをJSONに変換"
     },
     "documents": {
       "selectChat": "チャットを選択",

@@ -360,8 +360,11 @@
       "capabilityQuality": "jakość",
       "capabilityReferences": "odniesienia",
       "capabilitySupported": "obsługiwane",
-      "capabilityNotClaimed": "niezgłoszone"
-    }
+      "capabilityNotClaimed": "niezgłoszone",
+      "enabled": "Generowanie obrazów włączone",
+      "savingEnabled": "Zapisywanie ustawienia generowania obrazów…"
+    },
+    "statusDisabled": "Wyłączone"
   },
   "services": {
     "telegram": {
@@ -734,6 +737,14 @@
         "switchedFound": "Przełączono na '{{tag}}'. Znaleziono nowe obrazy — dostępna jest aktualizacja.",
         "switchedCurrent": "Przełączono na '{{tag}}'. Serwer już uruchamia obrazy tego kanału.",
         "error": "Błąd przełączania kanału: {{message}}"
+      },
+      "restart": {
+        "title": "Uruchom ponownie backend",
+        "description": "Ta akcja uruchamia ponownie backend. Aktywne generowania mogą zakończyć się przed ponownym uruchomieniem.",
+        "timeoutNotice": "Minęło 15 sekund, {{count}} użytkownik(ów) nadal pracuje. Możesz poczekać, kontynuować teraz lub anulować.",
+        "softApply": "Poczekaj do 15 s i kontynuuj",
+        "forceApply": "Kontynuuj teraz",
+        "applying": "Pracuję…"
       }
     },
     "error": "Błąd: {{message}}",

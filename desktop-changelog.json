@@ -1,69 +1,95 @@
 {
   "changes": {
     "en": [
-      "Added automatic reconnection: a health check ping detects if the server crashed during startup and reloads all pending requests",
-      "Fixed voice caching",
-      "Fixed model catalog loading"
+      "Added a JSON parser",
+      "Added a preview of sent messages",
+      "The bot can now send files and images it found on the internet or in email directly to the chat",
+      "Added temporary file storage for the bot (for example, so it can forward a file it saw in a message without sending it to you in the chat)",
+      "Added a manual update check in settings (previously it was automatic)"
     ],
     "cs": [
-      "Přidáno automatické znovupřipojení: ping kontroly stavu zjistí, zda server spadl během spouštění, a znovu načte všechny čekající požadavky",
-      "Opraveno ukládání hlasu do mezipaměti",
-      "Opraveno načítání katalogu modelů"
+      "Přidán analyzátor JSON",
+      "Přidán náhled odeslaných zpráv",
+      "Bot nyní může posílat soubory a obrázky, které našel na internetu nebo v e-mailu, přímo do chatu",
+      "Přidáno dočasné úložiště souborů pro bota (například, aby mohl přeposlat soubor, který viděl ve zprávě, aniž by vám ho poslal do chatu)",
+      "Přidána ruční kontrola aktualizací v nastavení (dříve byla automatická)"
     ],
     "de": [
-      "Automatische Wiederverbindung hinzugefügt: Ein Health-Check-Ping erkennt, ob der Server während des Starts abgestürzt ist, und lädt alle ausstehenden Anfragen neu",
-      "Sprach-Caching behoben",
-      "Laden des Modellkatalogs behoben"
+      "JSON-Parser hinzugefügt",
+      "Vorschau gesendeter Nachrichten hinzugefügt",
+      "Der Bot kann jetzt Dateien und Bilder, die er im Internet oder in E-Mails findet, direkt in den Chat senden",
+      "Temporären Dateispeicher für den Bot hinzugefügt (z. B. damit er eine Datei, die er in einer Nachricht gesehen hat, weiterleiten kann, ohne sie dir im Chat zu senden)",
+      "Manuellen Update-Check in den Einstellungen hinzugefügt (zuvor war er automatisch)"
     ],
     "es": [
-      "Reconexión automática añadida: un ping de verificación de salud detecta si el servidor se bloqueó durante el inicio y recarga todas las solicitudes pendientes",
-      "Corregido el almacenamiento en caché de voz",
-      "Corregida la carga del catálogo de modelos"
+      "Se añadió un analizador JSON",
+      "Se añadió una vista previa de los mensajes enviados",
+      "El bot ahora puede enviar archivos e imágenes que encuentre en internet o en el correo electrónico directamente al chat",
+      "Se añadió almacenamiento temporal de archivos para el bot (por ejemplo, para que pueda reenviar un archivo que vio en un mensaje sin enviártelo en el chat)",
+      "Se añadió una comprobación manual de actualizaciones en los ajustes (anteriormente era automática)"
     ],
     "fr": [
-      "Ajout de la reconnexion automatique : un ping de contrôle de santé détecte si le serveur a planté au démarrage et recharge toutes les requêtes en attente",
-      "Correction de la mise en cache vocale",
-      "Correction du chargement du catalogue de modèles"
+      "Ajout d'un analyseur JSON",
+      "Ajout d'un aperçu des messages envoyés",
+      "Le bot peut désormais envoyer directement dans le chat des fichiers et images trouvés sur Internet ou dans les e-mails",
+      "Ajout d'un stockage temporaire de fichiers pour le bot (par exemple, afin qu'il puisse transférer un fichier vu dans un message sans vous l'envoyer dans le chat)",
+      "Ajout d'une vérification manuelle des mises à jour dans les paramètres (auparavant, elle était automatique)"
     ],
     "it": [
-      "Aggiunta la riconnessione automatica: un ping di controllo salute rileva se il server è andato in crash durante l'avvio e ricarica tutte le richieste in sospeso",
-      "Corretta la memorizzazione nella cache vocale",
-      "Corretto il caricamento del catalogo modelli"
+      "Aggiunto un parser JSON",
+      "Aggiunta un'anteprima dei messaggi inviati",
+      "Il bot ora può inviare file e immagini trovati su internet o via email direttamente nella chat",
+      "Aggiunto uno storage temporaneo per i file del bot (ad esempio, per inoltrare un file visto in un messaggio senza inviartelo nella chat)",
+      "Aggiunto un controllo manuale degli aggiornamenti nelle impostazioni (in precedenza era automatico)"
     ],
     "ja": [
-      "自動再接続を追加: ヘルスチェックpingが起動中にサーバーがクラッシュしたことを検出し、保留中のすべてのリクエストを再読み込みします",
-      "音声キャッシュを修正",
-      "モデルカタログの読み込みを修正"
+      "JSONパーサーを追加しました",
+      "送信メッセージのプレビューを追加しました",
+      "ボットはインターネットやメールで見つけたファイルや画像をチャットに直接送信できるようになりました",
+      "ボット用の一時ファイルストレージを追加しました（例えば、メッセージ内で見たファイルをチャットで送信せずに転送できるようにするため）",
+      "設定に手動更新チェックを追加しました（以前は自動でした）"
     ],
     "ko": [
-      "자동 재연결 추가: 상태 확인 핑이 시작 중 서버 충돌을 감지하고 대기 중인 모든 요청을 다시 로드합니다",
-      "음성 캐싱 수정",
-      "모델 카탈로그 로딩 수정"
+      "JSON 파서 추가",
+      "보낸 메시지 미리보기 추가",
+      "봇이 인터넷이나 이메일에서 찾은 파일과 이미지를 이제 채팅으로 직접 보낼 수 있습니다",
+      "봇을 위한 임시 파일 저장소 추가 (예: 메시지에서 본 파일을 채팅으로 보내지 않고 전달할 수 있도록)",
+      "설정에 수동 업데이트 확인 추가 (이전에는 자동이었음)"
     ],
     "pl": [
-      "Dodano automatyczne ponowne łączenie: ping sprawdzający stan wykrywa, czy serwer uległ awarii podczas uruchamiania, i przeładowuje wszystkie oczekujące żądania",
-      "Naprawiono buforowanie głosu",
-      "Naprawiono ładowanie katalogu modeli"
+      "Dodano parser JSON",
+      "Dodano podgląd wysłanych wiadomości",
+      "Bot może teraz wysyłać pliki i obrazy znalezione w internecie lub e-mailach bezpośrednio na czat",
+      "Dodano tymczasowe przechowywanie plików dla bota (na przykład, aby mógł przekazać plik widziany w wiadomości bez wysyłania go do Ciebie na czacie)",
+      "Dodano ręczne sprawdzanie aktualizacji w ustawieniach (wcześniej było automatyczne)"
     ],
     "pt-BR": [
-      "Adicionada reconexão automática: um ping de verificação de saúde detecta se o servidor travou durante a inicialização e recarrega todas as solicitações pendentes",
-      "Corrigido o cache de voz",
-      "Corrigido o carregamento do catálogo de modelos"
+      "Adicionado um analisador JSON",
+      "Adicionada uma pré-visualização de mensagens enviadas",
+      "O bot agora pode enviar arquivos e imagens encontrados na internet ou em e-mails diretamente no chat",
+      "Adicionado armazenamento temporário de arquivos para o bot (por exemplo, para que ele possa encaminhar um arquivo visto em uma mensagem sem enviá-lo a você no chat)",
+      "Adicionada verificação manual de atualizações nas configurações (anteriormente era automática)"
     ],
     "ru": [
-      "Добавлено автоматическое переподключение: проверка связи обнаруживает, если сервер упал во время запуска, и перезагружает все ожидающие запросы",
-      "Исправлено кэширование голоса",
-      "Исправлена загрузка каталога моделей"
+      "Добавлен JSON-парсер",
+      "Добавлен предпросмотр отправленных сообщений",
+      "Бот теперь может отправлять файлы и изображения, найденные в интернете или в электронной почте, прямо в чат",
+      "Добавлено временное хранилище файлов для бота (например, чтобы он мог переслать файл, увиденный в сообщении, не отправляя его вам в чат)",
+      "Добавлена ручная проверка обновлений в настройках (ранее она была автоматической)"
     ],
     "tr": [
-      "Otomatik yeniden bağlanma eklendi: bir sağlık kontrolü ping'i, sunucunun başlangıç sırasında çöküp çökmediğini algılar ve bekleyen tüm istekleri yeniden yükler",
-      "Ses önbelleği düzeltildi",
-      "Model kataloğu yükleme düzeltildi"
+      "JSON ayrıştırıcı eklendi",
+      "Gönderilen mesajların önizlemesi eklendi",
+      "Bot artık internetten veya e-postadan bulduğu dosyaları ve görselleri doğrudan sohbete gönderebiliyor",
+      "Bot için geçici dosya depolama eklendi (örneğin, bir mesajda gördüğü bir dosyayı sohbette size göndermeden iletebilmesi için)",
+      "Ayarlara manuel güncelleme kontrolü eklendi (önceden otomatikti)"
     ],
     "zh-CN": [
-      "添加了自动重连：健康检查ping检测服务器在启动期间是否崩溃，并重新加载所有待处理请求",
-      "修复了语音缓存",
-      "修复了模型目录加载"
+      "添加了JSON解析器",
+      "添加了已发送消息的预览",
+      "机器人现在可以将它在互联网或电子邮件中找到的文件和图片直接发送到聊天中",
+      "为机器人添加了临时文件存储（例如，以便它可以转发在消息中看到的文件，而无需在聊天中发送给您）",
+      "在设置中添加了手动更新检查（以前是自动的）"
     ]
   }
 }

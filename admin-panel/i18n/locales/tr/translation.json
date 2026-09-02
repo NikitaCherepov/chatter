@@ -345,8 +345,11 @@
       "capabilityQuality": "kalite",
       "capabilityReferences": "referanslar",
       "capabilitySupported": "destekleniyor",
-      "capabilityNotClaimed": "belirtilmemiş"
-    }
+      "capabilityNotClaimed": "belirtilmemiş",
+      "enabled": "Görüntü oluşturma etkinleştirildi",
+      "savingEnabled": "Görüntü oluşturma ayarı kaydediliyor…"
+    },
+    "statusDisabled": "Devre dışı"
   },
   "services": {
     "telegram": {
@@ -726,6 +729,14 @@
         "switchedFound": "'{{tag}}' kanalına geçildi. Yeni görüntüler bulundu — güncelleme mevcut.",
         "switchedCurrent": "'{{tag}}' kanalına geçildi. Sunucu zaten bu kanalın görüntülerini çalıştırıyor.",
         "error": "Kanal geçiş hatası: {{message}}"
+      },
+      "restart": {
+        "title": "Arka ucu yeniden başlat",
+        "description": "Bu işlem arka ucu yeniden başlatır. Etkin oluşturmalar yeniden başlatmadan önce tamamlanabilir.",
+        "timeoutNotice": "15 saniye geçti, {{count}} kullanıcı hâlâ çalışıyor. Beklemeye devam edebilir, şimdi devam edebilir veya iptal edebilirsiniz.",
+        "softApply": "15 saniyeye kadar bekleyip devam et",
+        "forceApply": "Şimdi devam et",
+        "applying": "Çalışılıyor…"
       }
     },
     "error": "Hata: {{message}}"

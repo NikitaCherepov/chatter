@@ -360,8 +360,11 @@
       "capabilityQuality": "质量",
       "capabilityReferences": "参考",
       "capabilitySupported": "支持",
-      "capabilityNotClaimed": "未声明"
-    }
+      "capabilityNotClaimed": "未声明",
+      "enabled": "图像生成已启用",
+      "savingEnabled": "正在保存图像生成设置…"
+    },
+    "statusDisabled": "已禁用"
   },
   "services": {
     "telegram": {
@@ -734,6 +737,14 @@
         "switchedFound": "已切换到'{{tag}}'。发现新镜像——有可用更新。",
         "switchedCurrent": "已切换到'{{tag}}'。服务器已在运行该频道的镜像。",
         "error": "频道切换错误：{{message}}"
+      },
+      "restart": {
+        "title": "重启后端",
+        "description": "此操作将重启后端。活动生成任务可在重启前完成。",
+        "timeoutNotice": "已过15秒，{{count}} 位用户仍在工作。您可以继续等待、立即继续或取消。",
+        "softApply": "等待最多15秒后继续",
+        "forceApply": "立即继续",
+        "applying": "工作中…"
       }
     },
     "error": "错误：{{message}}",

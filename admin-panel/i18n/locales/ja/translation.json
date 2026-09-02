@@ -360,8 +360,11 @@
       "capabilityQuality": "品質",
       "capabilityReferences": "参照",
       "capabilitySupported": "対応",
-      "capabilityNotClaimed": "未申請"
-    }
+      "capabilityNotClaimed": "未申請",
+      "enabled": "画像生成が有効です",
+      "savingEnabled": "画像生成設定を保存中…"
+    },
+    "statusDisabled": "無効"
   },
   "services": {
     "telegram": {
@@ -734,6 +737,14 @@
         "switchedFound": "'{{tag}}' に切り替えました。新しいイメージが見つかりました — アップデートが利用可能です。",
         "switchedCurrent": "'{{tag}}' に切り替えました。サーバーは既にこのチャンネルのイメージを実行しています。",
         "error": "チャンネル切り替えエラー: {{message}}"
+      },
+      "restart": {
+        "title": "バックエンドを再起動",
+        "description": "この操作はバックエンドを再起動します。アクティブな生成は再起動前に完了できます。",
+        "timeoutNotice": "15秒が経過しました。まだ作業中のユーザーが{{count}}人います。待機を続けるか、今すぐ続行するか、キャンセルできます。",
+        "softApply": "最大15秒待って続行",
+        "forceApply": "今すぐ続行",
+        "applying": "処理中…"
       }
     },
     "error": "エラー: {{message}}",

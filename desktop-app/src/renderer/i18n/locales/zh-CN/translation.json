@@ -359,7 +359,12 @@
       "licenseLink": "许可证",
       "website": "网站",
       "support": "支持Chatter",
-      "supportHelp": "帮助项目继续前进"
+      "supportHelp": "帮助项目继续前进",
+      "checkUpdates": "检查更新",
+      "checkingUpdates": "正在检查...",
+      "upToDate": "您正在使用最新版本",
+      "updateCheckFailed": "无法检查更新",
+      "updateCheckUnavailable": "开发模式下无法检查更新"
     }
   },
   "chat": {
@@ -777,7 +782,9 @@
       "fullscreen": "全屏",
       "collapse": "折叠",
       "browser": "浏览器",
-      "webPages": "网页"
+      "webPages": "网页",
+      "jsonExtractor": "JSON 提取器",
+      "jsonExtractorDescription": "将文档转换为 JSON"
     },
     "documents": {
       "selectChat": "选择聊天",
