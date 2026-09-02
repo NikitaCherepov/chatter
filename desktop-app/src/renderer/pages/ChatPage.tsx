@@ -528,7 +528,7 @@ type MessageItemProps = {
   sending: boolean;
   regenHintText: string;
   showTokens: boolean;
-  resolveImageUrl: (url: string) => string;
+  resolveImageUrl: (url: string, thumbnailWidth?: number) => string;
   onSetMessages: React.Dispatch<React.SetStateAction<api.Message[]>>;
   onSetViewerImageSrc: (src: string, messageId?: number, url?: string) => void;
   onOpenAttachment: (attachment: api.MessageAttachment) => void;
@@ -792,17 +792,18 @@ const MessageItem = React.memo(function MessageItem({
           {msg.images && msg.images.length > 0 && (
             <div className={s.messageImages}>
               {msg.images.map((img, i) => {
-                const src = resolveImageUrl(img.url);
+                const fullSrc = resolveImageUrl(img.url);
+                const thumbSrc = resolveImageUrl(img.url, 560);
                 return (
                   <div key={i} className={s.messageImageWrap}>
-                    <img className={`${s.messageImage} ${img.type !== 'user_photo' ? s.generatedMessageImage : ''}`} src={src} alt={img.type === 'user_photo' ? t('chat.image.photoAlt') : t('chat.image.generatedAlt')} loading="lazy" onClick={() => onSetViewerImageSrc(src, msg.id, img.url)} />
+                    <img className={`${s.messageImage} ${img.type !== 'user_photo' ? s.generatedMessageImage : ''}`} src={thumbSrc} alt={img.type === 'user_photo' ? t('chat.image.photoAlt') : t('chat.image.generatedAlt')} loading="lazy" onClick={() => onSetViewerImageSrc(fullSrc, msg.id, img.url)} />
                     {msg.id > 0 && <button className={s.messageImageDelete} onClick={(e) => { e.stopPropagation(); onDeleteImage(msg.id, img.url); }} title={t('common.delete')}>
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <polyline points="3 6 5 6 21 6" />
                         <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
                       </svg>
                     </button>}
-                    <button className={s.messageImageDownload} onClick={(e) => { e.stopPropagation(); onDownloadImage(src); }} title={t('common.download')}>
+                    <button className={s.messageImageDownload} onClick={(e) => { e.stopPropagation(); onDownloadImage(fullSrc); }} title={t('common.download')}>
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                         <polyline points="7 10 12 15 17 10" />
@@ -3685,12 +3686,13 @@ export function ChatPage() {
     };
   }, []);
 
-  const resolveImageUrl = useCallback((url: string) => {
+  const resolveImageUrl = useCallback((url: string, thumbnailWidth?: number) => {
     if (!url.startsWith('/')) return url;
     const tokens = api.loadTokens();
-    const separator = url.includes('?') ? '&' : '?';
-    const authParam = tokens?.access_token ? `${separator}token=${tokens.access_token}` : '';
-    return `${api.API_BASE}${url}${authParam}`;
+    const resolved = new URL(`${api.API_BASE}${url}`);
+    if (tokens?.access_token) resolved.searchParams.set('token', tokens.access_token);
+    if (thumbnailWidth && thumbnailWidth > 0) resolved.searchParams.set('w', String(thumbnailWidth));
+    return resolved.toString();
   }, []);
 
   const handleDownloadImage = useCallback(async (src: string) => {
@@ -5314,23 +5316,24 @@ export function ChatPage() {
                       {msg.images && msg.images.length > 0 && (
                         <div className={s.messageImages}>
                           {msg.images.map((img, i) => {
-                            const src = resolveImageUrl(img.url);
+                            const fullSrc = resolveImageUrl(img.url);
+                            const thumbSrc = resolveImageUrl(img.url, 560);
                             return (
                               <div key={i} className={s.messageImageWrap}>
                                 <img
                                   className={`${s.messageImage} ${img.type !== 'user_photo' ? s.generatedMessageImage : ''}`}
-                                  src={src}
+                                  src={thumbSrc}
                                   alt={img.type === 'user_photo' ? t('chat.image.photoAlt') : t('chat.image.generatedAlt')}
                                   loading="lazy"
                                   onClick={() => {
-                                    setViewerImageSrc(src);
+                                    setViewerImageSrc(fullSrc);
                                     setViewerImageMsgId(msg.id);
                                     setViewerImageUrl(img.url);
                                   }}
                                 />
                                 <button
                                   className={s.messageImageDownload}
-                                  onClick={(e) => { e.stopPropagation(); handleDownloadImage(src); }}
+                                  onClick={(e) => { e.stopPropagation(); handleDownloadImage(fullSrc); }}
                                   title={t('common.download')}
                                 >
                                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
