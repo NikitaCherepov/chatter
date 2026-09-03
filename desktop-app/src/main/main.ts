@@ -305,6 +305,7 @@ function normalizeWhisperLanguage(value: unknown) {
 
 let mainWindow: BrowserWindow | null = null;
 let chatterBrowser: ChatterBrowser | null = null;
+let youtubeMusicBrowser: ChatterBrowser | null = null;
 const detachedToolWindows = new Map<string, BrowserWindow>();
 let tray: Tray | null = null;
 let isQuitting = false;
@@ -777,6 +778,10 @@ function createWindow() {
   });
 
   chatterBrowser = new ChatterBrowser(mainWindow);
+  youtubeMusicBrowser = new ChatterBrowser(mainWindow, {
+    homeUrl: 'https://music.youtube.com/',
+    stateChannel: 'youtube-music:state',
+  });
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     openExternalHttpUrl(url);
@@ -815,6 +820,8 @@ function createWindow() {
     detachedToolWindows.clear();
     chatterBrowser?.destroy();
     chatterBrowser = null;
+    youtubeMusicBrowser?.destroy();
+    youtubeMusicBrowser = null;
     mainWindow = null;
   });
 
@@ -846,7 +853,41 @@ function createWindow() {
   ipcMain.handle('browser:control', async (event, payload: BrowserControlPayload) => {
     assertTrustedIpcSender(event);
     if (!chatterBrowser) throw new Error('browser_unavailable');
+    if (payload?.action === 'youtube_music') {
+      if (!youtubeMusicBrowser) throw new Error('youtube_music_unavailable');
+      return youtubeMusicBrowser.control(payload);
+    }
     return chatterBrowser.control(payload);
+  });
+
+  ipcMain.handle('youtube-music:get-state', (event) => {
+    assertTrustedIpcSender(event);
+    if (!youtubeMusicBrowser) throw new Error('youtube_music_unavailable');
+    return youtubeMusicBrowser.getState();
+  });
+
+  ipcMain.handle('youtube-music:set-visible', (event, payload: {
+    visible?: boolean;
+    ownerId?: string;
+    bounds?: Electron.Rectangle;
+  }) => {
+    assertTrustedIpcSender(event);
+    if (!youtubeMusicBrowser) throw new Error('youtube_music_unavailable');
+    const host = BrowserWindow.fromWebContents(event.sender) || undefined;
+    return youtubeMusicBrowser.setVisible(payload?.visible === true, payload?.bounds, payload?.ownerId, host);
+  });
+
+  ipcMain.handle('youtube-music:set-bounds', (event, bounds: Electron.Rectangle) => {
+    assertTrustedIpcSender(event);
+    if (!youtubeMusicBrowser) throw new Error('youtube_music_unavailable');
+    youtubeMusicBrowser.setBounds(bounds);
+    return youtubeMusicBrowser.getState();
+  });
+
+  ipcMain.handle('youtube-music:control', async (event, payload: BrowserControlPayload) => {
+    assertTrustedIpcSender(event);
+    if (!youtubeMusicBrowser) throw new Error('youtube_music_unavailable');
+    return youtubeMusicBrowser.control(payload);
   });
 
   // ── Detached tool windows ────────────────────────────────────────────────
@@ -857,6 +898,7 @@ function createWindow() {
     'gallery',
     'documents',
     'browser',
+    'youtube-music',
     'json-extractor',
   ]);
 
@@ -882,7 +924,7 @@ function createWindow() {
       ? Number(payload.activeChatId)
       : undefined;
     const toolWindow = new BrowserWindow({
-      width: toolId === 'browser' ? 920 : 720,
+      width: toolId === 'browser' || toolId === 'youtube-music' ? 920 : 720,
       height: 760,
       minWidth: 380,
       minHeight: 420,
@@ -911,6 +953,9 @@ function createWindow() {
     toolWindow.on('close', () => {
       if (toolId === 'browser' && mainWindow && !mainWindow.isDestroyed()) {
         chatterBrowser?.moveToHost(mainWindow);
+      }
+      if (toolId === 'youtube-music' && mainWindow && !mainWindow.isDestroyed()) {
+        youtubeMusicBrowser?.moveToHost(mainWindow);
       }
     });
     toolWindow.on('closed', () => {

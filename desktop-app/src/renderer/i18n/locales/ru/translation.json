@@ -780,6 +780,8 @@
       "chatFiles": "Файлы чата",
       "browser": "Браузер",
       "webPages": "Веб-страницы",
+      "youtubeMusic": "YouTube Music",
+      "youtubeMusicDescription": "Музыкальный плеер",
       "tools": "Инструменты",
       "floating": "Плавающее окно",
       "fullscreen": "На весь экран",
@@ -794,6 +796,12 @@
       "loadingPage": "Страница браузера",
       "actionFailed": "Не удалось выполнить действие",
       "navigationFailed": "Не удалось открыть страницу"
+    },
+    "youtubeMusic": {
+      "title": "YouTube Music",
+      "home": "Главная YouTube Music",
+      "loading": "Загрузка YouTube Music",
+      "actionFailed": "Не удалось выполнить действие в YouTube Music"
     },
     "documents": {
       "selectChat": "Выберите чат",

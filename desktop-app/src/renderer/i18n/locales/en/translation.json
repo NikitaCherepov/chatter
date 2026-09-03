@@ -780,6 +780,8 @@
       "chatFiles": "Chat files",
       "browser": "Browser",
       "webPages": "Web pages",
+      "youtubeMusic": "YouTube Music",
+      "youtubeMusicDescription": "Music player",
       "tools": "Tools",
       "floating": "Floating window",
       "fullscreen": "Full screen",
@@ -794,6 +796,12 @@
       "loadingPage": "Browser page",
       "actionFailed": "Browser action failed",
       "navigationFailed": "Could not open the page"
+    },
+    "youtubeMusic": {
+      "title": "YouTube Music",
+      "home": "YouTube Music home",
+      "loading": "Loading YouTube Music",
+      "actionFailed": "YouTube Music action failed"
     },
     "documents": {
       "selectChat": "Select a chat",

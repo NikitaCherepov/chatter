@@ -15,7 +15,7 @@ export type BrowserState = {
 };
 
 export type BrowserControlPayload = {
-  action: 'open' | 'read' | 'back' | 'forward' | 'reload' | 'scroll' | 'click' | 'fill' | 'check_site_permission' | 'grant_site_permission' | 'resolve_download';
+  action: 'open' | 'read' | 'back' | 'forward' | 'reload' | 'scroll' | 'click' | 'fill' | 'check_site_permission' | 'grant_site_permission' | 'resolve_download' | 'youtube_music';
   url?: string;
   ref?: string;
   text?: string;
@@ -28,6 +28,13 @@ export type BrowserControlPayload = {
   download_id?: string;
   approved?: boolean;
   destination?: 'prompt' | 'downloads';
+  music_action?: 'search_and_play' | 'play' | 'pause' | 'toggle_play_pause' | 'next' | 'previous' | 'get_state' | 'show';
+  query?: string;
+};
+
+export type ChatterBrowserOptions = {
+  homeUrl?: string;
+  stateChannel?: string;
 };
 
 export type BrowserDownloadRequest = {
@@ -101,6 +108,7 @@ const MAX_VIEWPORT_ELEMENTS = 80;
 const MAX_BROWSER_FRAMES = 20;
 const BROWSER_WORLD_ID = 1004;
 const DOWNLOAD_CONFIRMATION_TTL_MS = 5 * 60 * 1000;
+const YOUTUBE_MUSIC_ORIGIN = 'https://music.youtube.com';
 
 type BrowserReadSnapshot = {
   url: string;
@@ -245,9 +253,13 @@ export class ChatterBrowser {
   private cursorPos: Point = { x: 0, y: 0 };
   /** Active cancellation token for the in-flight pointer sequence (if any). */
   private clickToken: CancellationToken | null = null;
+  private readonly homeUrl: string;
+  private readonly stateChannel: string;
 
-  constructor(host: BrowserWindow) {
+  constructor(host: BrowserWindow, options: ChatterBrowserOptions = {}) {
     this.host = host;
+    this.homeUrl = options.homeUrl || HOME_URL;
+    this.stateChannel = options.stateChannel || 'browser:state';
     this.view = new WebContentsView({
       webPreferences: {
         partition: 'persist:chatter-browser',
@@ -380,7 +392,7 @@ export class ChatterBrowser {
       && (!this.view.webContents.getURL() || this.view.webContents.getURL() === 'about:blank')
     ) {
       this.initialNavigationStarted = true;
-      const initialNavigation = this.view.webContents.loadURL(HOME_URL).catch((error) => {
+      const initialNavigation = this.view.webContents.loadURL(this.homeUrl).catch((error) => {
         if (!isAbortedNavigationError(error)) console.error('[browser] initial navigation failed:', error);
       }).finally(() => {
         if (this.initialNavigationPromise === initialNavigation) this.initialNavigationPromise = null;
@@ -459,6 +471,9 @@ export class ChatterBrowser {
         payload.approved === true,
         payload.destination === 'downloads' ? 'downloads' : 'prompt',
       );
+    }
+    if (action === 'youtube_music') {
+      return this.controlYouTubeMusic(payload);
     }
 
     if (action === 'open') {
@@ -556,6 +571,169 @@ export class ChatterBrowser {
     throw new Error('unsupported_browser_action');
   }
 
+  private async controlYouTubeMusic(payload: BrowserControlPayload): Promise<unknown> {
+    const musicAction = payload.music_action;
+    const supportedActions = new Set([
+      'search_and_play', 'play', 'pause', 'toggle_play_pause',
+      'next', 'previous', 'get_state', 'show',
+    ]);
+    if (!musicAction || !supportedActions.has(musicAction)) {
+      throw new Error('youtube_music_action_required');
+    }
+
+    if (this.interactionInProgress) this.abortInteraction();
+    this.interactionInProgress = true;
+    this.explicitNavigationRequested = true;
+    try {
+      const initialNavigation = this.initialNavigationPromise;
+      if (initialNavigation) {
+        this.view.webContents.stop();
+        await initialNavigation;
+      }
+
+      if (musicAction === 'search_and_play') {
+        const query = `${payload.query || ''}`.trim();
+        if (!query) throw new Error('youtube_music_query_required');
+        await this.navigateToUrl(`${YOUTUBE_MUSIC_ORIGIN}/search?q=${encodeURIComponent(query)}`);
+        await this.ensureReadablePage();
+        const before = await this.readYouTubeMusicState();
+
+        const selected = await this.waitForYouTubeMusicResult(15_000);
+        if (!selected) {
+          const currentUrl = this.view.webContents.getURL();
+          if (/accounts\.google\.com|consent\.youtube\.com/i.test(currentUrl)) {
+            throw new Error('youtube_music_authentication_required');
+          }
+          throw new Error('youtube_music_no_results');
+        }
+
+        await this.waitForYouTubeMusicPlaybackChange(before, 8_000);
+        return {
+          status: 'success',
+          action: musicAction,
+          query,
+          selected,
+          ...(await this.readYouTubeMusicState()),
+        };
+      }
+
+      if (musicAction === 'show') {
+        if (!this.isYouTubeMusicPage()) {
+          await this.navigateToUrl(YOUTUBE_MUSIC_ORIGIN);
+          await this.ensureReadablePage();
+        }
+        return { status: 'success', action: musicAction, ...(await this.readYouTubeMusicState()) };
+      }
+
+      if (!this.isYouTubeMusicPage()) {
+        throw new Error('youtube_music_not_open');
+      }
+      if (musicAction === 'get_state') {
+        return { status: 'success', action: musicAction, ...(await this.readYouTubeMusicState()) };
+      }
+
+      const result = await this.executeInBrowserWorld<{ clicked: boolean; already?: boolean; playback_state?: string }>(`(() => {
+        const action = ${JSON.stringify(musicAction)};
+        const playbackState = navigator.mediaSession?.playbackState || 'none';
+        const playerBar = document.querySelector('ytmusic-player-bar');
+        if (!playerBar) return { clicked: false, playback_state: playbackState };
+        if (action === 'play' && playbackState === 'playing') return { clicked: false, already: true, playback_state: playbackState };
+        if (action === 'pause' && playbackState === 'paused') return { clicked: false, already: true, playback_state: playbackState };
+        if (action === 'pause' && playbackState === 'none') return { clicked: false, playback_state: playbackState };
+
+        const selector = action === 'next'
+          ? '.next-button'
+          : action === 'previous'
+            ? '.previous-button'
+            : '.play-pause-button';
+        const button = playerBar.querySelector(selector);
+        if (!(button instanceof HTMLElement)) return { clicked: false, playback_state: playbackState };
+        button.click();
+        return { clicked: true, playback_state: playbackState };
+      })()`);
+      if (!result.clicked && !result.already) throw new Error('youtube_music_control_unavailable');
+      await new Promise(resolve => setTimeout(resolve, 350));
+      return { status: 'success', action: musicAction, ...result, ...(await this.readYouTubeMusicState()) };
+    } finally {
+      this.interactionInProgress = false;
+    }
+  }
+
+  private isYouTubeMusicPage(): boolean {
+    try {
+      return new URL(this.view.webContents.getURL()).origin === YOUTUBE_MUSIC_ORIGIN;
+    } catch {
+      return false;
+    }
+  }
+
+  private async readYouTubeMusicState(): Promise<{
+    url: string;
+    track: string | null;
+    artist: string | null;
+    album: string | null;
+    artwork_url: string | null;
+    playback_state: string;
+  }> {
+    const url = this.view.webContents.getURL();
+    if (!this.isYouTubeMusicPage()) {
+      return { url, track: null, artist: null, album: null, artwork_url: null, playback_state: 'none' };
+    }
+    return this.executeInBrowserWorld(`(() => {
+      const metadata = navigator.mediaSession?.metadata;
+      const playerBar = document.querySelector('ytmusic-player-bar');
+      const text = (selector) => playerBar?.querySelector(selector)?.textContent?.trim() || null;
+      const artwork = metadata?.artwork;
+      return {
+        url: location.href,
+        track: metadata?.title || text('.title'),
+        artist: metadata?.artist || text('.byline'),
+        album: metadata?.album || null,
+        artwork_url: Array.isArray(artwork) && artwork.length ? artwork[artwork.length - 1]?.src || null : null,
+        playback_state: navigator.mediaSession?.playbackState || 'none',
+      };
+    })()`);
+  }
+
+  private async waitForYouTubeMusicResult(timeoutMs: number): Promise<{ title: string; url: string } | null> {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      if (!this.isYouTubeMusicPage()) return null;
+      const selected = await this.executeInBrowserWorld<{ title: string; url: string } | null>(`(() => {
+        const anchors = Array.from(document.querySelectorAll('a[href*="watch?v="]'));
+        const candidate = anchors.find((node) => {
+          if (!(node instanceof HTMLAnchorElement) || node.closest('ytmusic-player-bar')) return false;
+          const rect = node.getBoundingClientRect();
+          return rect.width > 0 && rect.height > 0;
+        });
+        if (!(candidate instanceof HTMLAnchorElement)) return null;
+        const title = candidate.getAttribute('title')
+          || candidate.textContent?.trim()
+          || candidate.closest('ytmusic-responsive-list-item-renderer')?.querySelector('.title')?.textContent?.trim()
+          || 'First result';
+        const url = candidate.href;
+        candidate.click();
+        return { title, url };
+      })()`).catch(() => null);
+      if (selected) return selected;
+      await new Promise(resolve => setTimeout(resolve, 300));
+    }
+    return null;
+  }
+
+  private async waitForYouTubeMusicPlaybackChange(
+    before: { url: string; track: string | null; playback_state: string },
+    timeoutMs: number,
+  ): Promise<void> {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      await new Promise(resolve => setTimeout(resolve, 250));
+      const current = await this.readYouTubeMusicState().catch(() => null);
+      if (!current) continue;
+      if (current.url !== before.url || current.track !== before.track || current.playback_state === 'playing') return;
+    }
+  }
+
   private normalizeHttpOrigin(value: unknown): string | null {
     if (typeof value !== 'string' || !value.trim()) return null;
     try {
@@ -591,7 +769,7 @@ export class ChatterBrowser {
 
   private emitState(): void {
     if (this.host.isDestroyed()) return;
-    this.host.webContents.send('browser:state', this.getState());
+    this.host.webContents.send(this.stateChannel, this.getState());
   }
 
   private setMainDocumentReady(ready: boolean): void {
@@ -1211,7 +1389,7 @@ export class ChatterBrowser {
   private async ensureReadablePage(): Promise<void> {
     const contents = this.view.webContents;
     if (!contents.getURL() || contents.getURL() === 'about:blank') {
-      await this.navigateToUrl(HOME_URL);
+      await this.navigateToUrl(this.homeUrl);
     }
     if (!contents.isLoading()) return;
 

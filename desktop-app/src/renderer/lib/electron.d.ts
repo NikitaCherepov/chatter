@@ -15,6 +15,11 @@ declare global {
       browserSetBounds: (bounds: BrowserBounds) => Promise<BrowserState>;
       browserControl: (payload: BrowserControlPayload) => Promise<any>;
       onBrowserState: (callback: (payload: BrowserState) => void) => () => void;
+      youtubeMusicGetState: () => Promise<BrowserState>;
+      youtubeMusicSetVisible: (payload: { visible: boolean; ownerId: string; bounds?: BrowserBounds }) => Promise<BrowserState>;
+      youtubeMusicSetBounds: (bounds: BrowserBounds) => Promise<BrowserState>;
+      youtubeMusicControl: (payload: BrowserControlPayload) => Promise<any>;
+      onYouTubeMusicState: (callback: (payload: BrowserState) => void) => () => void;
       onBrowserDownloadRequested: (callback: (payload: BrowserDownloadRequest) => void) => () => void;
       onBrowserDownloadResolved: (callback: (payload: { download_id: string; status: string; file_path?: string }) => void) => () => void;
       openToolWindow: (payload: { toolId: string; title: string; activeChatId?: number | null }) => Promise<{ opened: boolean }>;
@@ -101,7 +106,7 @@ type BrowserState = {
 };
 
 type BrowserControlPayload = {
-  action: 'open' | 'read' | 'back' | 'forward' | 'reload' | 'scroll' | 'click' | 'fill' | 'check_site_permission' | 'grant_site_permission' | 'resolve_download';
+  action: 'open' | 'read' | 'back' | 'forward' | 'reload' | 'scroll' | 'click' | 'fill' | 'check_site_permission' | 'grant_site_permission' | 'resolve_download' | 'youtube_music';
   url?: string;
   ref?: string;
   text?: string;
@@ -114,6 +119,8 @@ type BrowserControlPayload = {
   download_id?: string;
   approved?: boolean;
   destination?: 'prompt' | 'downloads';
+  music_action?: 'search_and_play' | 'play' | 'pause' | 'toggle_play_pause' | 'next' | 'previous' | 'get_state' | 'show';
+  query?: string;
 };
 
 type BrowserDownloadRequest = {

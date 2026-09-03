@@ -24,7 +24,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   browserSetBounds: (bounds: { x: number; y: number; width: number; height: number }) =>
     ipcRenderer.invoke('browser:set-bounds', bounds),
   browserControl: (payload: {
-    action: 'open' | 'read' | 'back' | 'forward' | 'reload' | 'scroll' | 'click' | 'fill' | 'check_site_permission' | 'grant_site_permission' | 'resolve_download';
+    action: 'open' | 'read' | 'back' | 'forward' | 'reload' | 'scroll' | 'click' | 'fill' | 'check_site_permission' | 'grant_site_permission' | 'resolve_download' | 'youtube_music';
     url?: string;
     ref?: string;
     text?: string;
@@ -37,11 +37,30 @@ contextBridge.exposeInMainWorld('electronAPI', {
     download_id?: string;
     approved?: boolean;
     destination?: 'prompt' | 'downloads';
+    music_action?: 'search_and_play' | 'play' | 'pause' | 'toggle_play_pause' | 'next' | 'previous' | 'get_state' | 'show';
+    query?: string;
   }) => ipcRenderer.invoke('browser:control', payload),
   onBrowserState: (callback: (payload: unknown) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, payload: unknown) => callback(payload);
     ipcRenderer.on('browser:state', handler);
     return () => ipcRenderer.removeListener('browser:state', handler);
+  },
+  youtubeMusicGetState: () =>
+    ipcRenderer.invoke('youtube-music:get-state'),
+  youtubeMusicSetVisible: (payload: { visible: boolean; ownerId: string; bounds?: { x: number; y: number; width: number; height: number } }) =>
+    ipcRenderer.invoke('youtube-music:set-visible', payload),
+  youtubeMusicSetBounds: (bounds: { x: number; y: number; width: number; height: number }) =>
+    ipcRenderer.invoke('youtube-music:set-bounds', bounds),
+  youtubeMusicControl: (payload: {
+    action: 'open' | 'read' | 'back' | 'forward' | 'reload' | 'scroll' | 'click' | 'fill' | 'check_site_permission' | 'grant_site_permission' | 'resolve_download' | 'youtube_music';
+    url?: string;
+    music_action?: 'search_and_play' | 'play' | 'pause' | 'toggle_play_pause' | 'next' | 'previous' | 'get_state' | 'show';
+    query?: string;
+  }) => ipcRenderer.invoke('youtube-music:control', payload),
+  onYouTubeMusicState: (callback: (payload: unknown) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, payload: unknown) => callback(payload);
+    ipcRenderer.on('youtube-music:state', handler);
+    return () => ipcRenderer.removeListener('youtube-music:state', handler);
   },
   onBrowserDownloadRequested: (callback: (payload: unknown) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, payload: unknown) => callback(payload);

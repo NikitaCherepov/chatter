@@ -82,6 +82,14 @@ const TOOL_ICON_BROWSER = (
   </svg>
 );
 
+const TOOL_ICON_YOUTUBE_MUSIC = (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="9" />
+    <circle cx="12" cy="12" r="4" />
+    <path d="m11 10 3 2-3 2z" fill="currentColor" stroke="none" />
+  </svg>
+);
+
 const TOOL_ICON_JSON_EXTRACTOR = (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
     <path d="M8 3H6a2 2 0 0 0-2 2v3a2 2 0 0 1-2 2 2 2 0 0 1 2 2v3a2 2 0 0 0 2 2h2" />
@@ -127,6 +135,12 @@ const buildTools = (contentMax: number, t: (key: string) => string): ToolEntry[]
     title: t('tools.panel.browser'),
     description: t('tools.panel.webPages'),
     icon: TOOL_ICON_BROWSER,
+  },
+  {
+    id: 'youtube-music',
+    title: t('tools.panel.youtubeMusic'),
+    description: t('tools.panel.youtubeMusicDescription'),
+    icon: TOOL_ICON_YOUTUBE_MUSIC,
   },
   {
     id: 'json-extractor',
@@ -208,7 +222,7 @@ export function ToolsPanel({ plan, isAdmin, activeChatId, onImageClick, onChatSe
 
   // Sidebar panel width: expanded when open (regardless of whether a tool is active)
   const panelWidth = isOpen
-    ? (sidebarToolId === 'browser' || sidebarToolId === 'json-extractor' ? 420 : 260)
+    ? (sidebarToolId === 'browser' || sidebarToolId === 'youtube-music' || sidebarToolId === 'json-extractor' ? 420 : 260)
     : 65;
 
   const handleToggle = () => {

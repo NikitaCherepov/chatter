@@ -42,6 +42,26 @@
   }
 }
 
+.homeButton {
+  overflow: hidden;
+  min-width: 0;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 8px;
+  color: var(--text-primary);
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--bg-modal-hover);
+  }
+}
+
 .loading {
   animation: browserSpin 1s linear infinite;
 }

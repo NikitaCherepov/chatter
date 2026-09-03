@@ -2712,7 +2712,8 @@ Use when:
 - Need to open/close the tools panel — action=toggle_panel
 - Need to close a specific widget — action=close_widget, target=notebook
 - Need to open tasks — action=open_widget, target=tasks
-- Need to show the embedded browser — action=open_widget, target=browser`,
+- Need to show the embedded browser — action=open_widget, target=browser
+- Need to show YouTube Music — action=open_widget, target=youtube-music`,
       parameters: {
         type: 'object',
         properties: {
@@ -2723,8 +2724,8 @@ Use when:
           },
           target: {
             type: 'string',
-            enum: ['notebook', 'tasks', 'browser'],
-            description: 'Target widget. notebook — notebook/notes, tasks — tasks, browser — embedded web browser.'
+            enum: ['notebook', 'tasks', 'browser', 'youtube-music'],
+            description: 'Target widget. notebook — notebook/notes, tasks — tasks, browser — embedded web browser, youtube-music — YouTube Music player.'
           },
           value: {
             type: 'object',
@@ -2774,6 +2775,34 @@ If browser reading, scrolling, or interaction fails, do not call list_monitors o
         description: { type: 'string', description: 'Short human-readable description of the intended action target, used in the confirmation card.' },
         direction: { type: 'string', enum: ['up', 'down'], description: 'Scroll direction.' },
         amount: { type: 'number', description: 'Approximate scroll distance in CSS pixels (100–4000). The desktop varies it slightly and scrolls smoothly.' }
+      },
+      required: ['action']
+    }
+  }
+});
+
+/** Control YouTube Music through the persistent browser in Chatter Desktop. */
+const buildYouTubeMusicControlTool = () => ({
+  type: 'function' as const,
+  function: {
+    name: 'youtube_music_control',
+    description: `Controls YouTube Music in Chatter Desktop without opening the browser panel unless the user explicitly asks to see it.
+
+Use search_and_play when the user asks to play a song, artist, album, playlist, or mood. Use play, pause, next, or previous for playback controls. Use get_state when asked what is playing. Use show only when the user asks to open or show YouTube Music.
+
+Never start or change music proactively. The tool uses the user's local browser session; if authentication is required, tell the user to open the browser and sign in to YouTube Music.`,
+    parameters: {
+      type: 'object',
+      properties: {
+        action: {
+          type: 'string',
+          enum: ['search_and_play', 'play', 'pause', 'toggle_play_pause', 'next', 'previous', 'get_state', 'show'],
+          description: 'YouTube Music action.'
+        },
+        query: {
+          type: 'string',
+          description: 'Song, artist, album, playlist, or other search query. Required only for search_and_play.'
+        }
       },
       required: ['action']
     }
@@ -6553,6 +6582,40 @@ Respond in the user's language. Be detailed and precise.`
     }
   }
 
+  if (toolName === 'youtube_music_control') {
+    const action = typeof parsed.action === 'string' ? parsed.action.trim().toLowerCase() : '';
+    const allowedActions = new Set(['search_and_play', 'play', 'pause', 'toggle_play_pause', 'next', 'previous', 'get_state', 'show']);
+    if (!allowedActions.has(action)) {
+      return JSON.stringify({ status: 'error', message: 'Unknown YouTube Music action.' });
+    }
+    const query = typeof parsed.query === 'string' ? parsed.query.trim() : '';
+    if (action === 'search_and_play' && !query) {
+      return JSON.stringify({ status: 'error', message: 'query is required for search_and_play.' });
+    }
+    if (!isDesktopOnline(user.id)) {
+      return JSON.stringify({ status: 'error', message: 'Desktop client is offline. Ask the user to launch Chatter Desktop.' });
+    }
+
+    if (action === 'show') {
+      sendToDesktop(user.id, { type: 'desktop_action', action: 'open_widget', target: 'youtube-music' });
+    }
+
+    try {
+      const { sendIpcToDesktop } = await import('../ws-clients.js');
+      const result = await sendIpcToDesktop(user.id, 'browser_control', {
+        action: 'youtube_music',
+        music_action: action,
+        ...(query ? { query } : {}),
+      }, 45_000, signal);
+      return wrapUntrustedContent(JSON.stringify({
+        status: 'success',
+        ...(typeof result === 'object' && result !== null ? result : { result }),
+      }));
+    } catch (err: any) {
+      return JSON.stringify({ status: 'error', message: err?.message || String(err) });
+    }
+  }
+
   if (toolName === 'desktop_action') {
     const action: string = typeof parsed.action === 'string' ? parsed.action : '';
     const target: string | undefined = typeof parsed.target === 'string' ? parsed.target : undefined;
@@ -6848,6 +6911,9 @@ const getToolUserMessage = (language: unknown, toolName: string, argsRaw: string
     } catch {
       // Fall through to the generic desktop action status.
     }
+    return translateForLanguage(language, 'toolStatus.desktopAction');
+  }
+  if (toolName === 'youtube_music_control') {
     return translateForLanguage(language, 'toolStatus.desktopAction');
   }
 
@@ -7704,6 +7770,7 @@ export const sendMessageThroughAi = async (
     disabledToolSet.add('list_devops_runbooks');
     disabledToolSet.add('read_devops_runbook');
     disabledToolSet.add('browser_control');
+    disabledToolSet.add('youtube_music_control');
   }
   if (flags?.disable_internet) {
     disabledToolSet.add('search_web');
@@ -7711,6 +7778,7 @@ export const sendMessageThroughAi = async (
     disabledToolSet.add('generate_image');
     disabledToolSet.add('create_pixel_image');
     disabledToolSet.add('browser_control');
+    disabledToolSet.add('youtube_music_control');
   }
   if (flags?.disable_personal) {
     disabledToolSet.add('update_core_memory');
@@ -7781,7 +7849,7 @@ export const sendMessageThroughAi = async (
     buildExecutePcCommandTool(), buildGetFileInfoTool(),
     buildReadFileTool(), buildSearchFileKeywordsTool(), buildWriteFileTool(), buildEditFileLinesTool(),
     buildListMonitorsTool(), buildCaptureScreenTool(), buildExecuteVisualClickTool(), buildCaptureWebcamTool(),
-    buildBrowserControlTool(),
+    buildBrowserControlTool(), buildYouTubeMusicControlTool(),
     buildDescribeImageTool(),
   ];
   // UI actions can originate from any client (Telegram, future messengers, Desktop).
