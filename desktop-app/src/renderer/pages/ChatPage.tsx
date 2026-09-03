@@ -20,6 +20,7 @@ import { useUnreadChats } from '../lib/useUnreadChats';
 import * as api from '../lib/api';
 import { generateDocxBlob, generateChatDocxBlob } from '../lib/markdownToDocx';
 import { MarkdownRenderer } from '../components/MarkdownRenderer';
+import { EmailBodyPreview } from '../components/EmailBodyPreview';
 import { AttachModal, prepareAttachmentFiles } from '../components/AttachModal';
 import { RoomInvitesModal } from '../components/RoomInvitesModal';
 import { RejectWithComment } from '../components/RejectWithComment';
@@ -6443,7 +6444,7 @@ export function ChatPage() {
                     </div>
                   )}
                   <div style={{ fontSize: '12px', padding: '8px', background: 'var(--bg-modal-hover)', borderRadius: '6px', maxHeight: '200px', overflowY: 'auto' }}>
-                    <MarkdownRenderer content={conf.body} />
+                    <EmailBodyPreview body={conf.body} />
                   </div>
                   <div className={s.suggestMacroActions} style={{ marginTop: 10 }}>
                     <button
