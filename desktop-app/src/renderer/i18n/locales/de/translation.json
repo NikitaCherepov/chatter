@@ -784,7 +784,9 @@
       "browser": "Browser",
       "webPages": "Webseiten",
       "jsonExtractor": "JSON-Extraktor",
-      "jsonExtractorDescription": "Ein Dokument in JSON umwandeln"
+      "jsonExtractorDescription": "Ein Dokument in JSON umwandeln",
+      "youtubeMusic": "YouTube Music",
+      "youtubeMusicDescription": "Musikplayer"
     },
     "documents": {
       "selectChat": "Chat auswählen",
@@ -856,6 +858,12 @@
       "loadingPage": "Browserseite",
       "actionFailed": "Browseraktion fehlgeschlagen",
       "navigationFailed": "Seite konnte nicht geöffnet werden"
+    },
+    "youtubeMusic": {
+      "title": "YouTube Music",
+      "home": "YouTube Music-Startseite",
+      "loading": "YouTube Music wird geladen",
+      "actionFailed": "YouTube Music-Aktion fehlgeschlagen"
     }
   },
   "advanced": {

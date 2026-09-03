@@ -784,7 +784,9 @@
       "browser": "ブラウザ",
       "webPages": "ウェブページ",
       "jsonExtractor": "JSON抽出",
-      "jsonExtractorDescription": "ドキュメントをJSONに変換"
+      "jsonExtractorDescription": "ドキュメントをJSONに変換",
+      "youtubeMusic": "YouTube Music",
+      "youtubeMusicDescription": "音楽プレーヤー"
     },
     "documents": {
       "selectChat": "チャットを選択",
@@ -856,6 +858,12 @@
       "loadingPage": "ブラウザページ",
       "actionFailed": "ブラウザ操作に失敗しました",
       "navigationFailed": "ページを開けませんでした"
+    },
+    "youtubeMusic": {
+      "title": "YouTube Music",
+      "home": "YouTube Music ホーム",
+      "loading": "YouTube Music を読み込み中",
+      "actionFailed": "YouTube Music の操作に失敗しました"
     }
   },
   "advanced": {

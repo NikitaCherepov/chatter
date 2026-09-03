@@ -1105,7 +1105,9 @@
       "browser": "Prohlížeč",
       "webPages": "Webové stránky",
       "jsonExtractor": "JSON Extractor",
-      "jsonExtractorDescription": "Převést dokument na JSON"
+      "jsonExtractorDescription": "Převést dokument na JSON",
+      "youtubeMusic": "YouTube Music",
+      "youtubeMusicDescription": "Přehrávač hudby"
     },
     "documents": {
       "selectChat": "Vyberte chat",
@@ -1177,6 +1179,12 @@
       "loadingPage": "Stránka prohlížeče",
       "actionFailed": "Akce prohlížeče selhala",
       "navigationFailed": "Nelze otevřít stránku"
+    },
+    "youtubeMusic": {
+      "title": "YouTube Music",
+      "home": "Domovská stránka YouTube Music",
+      "loading": "Načítání YouTube Music",
+      "actionFailed": "Akce YouTube Music se nezdařila"
     }
   },
   "tts": {

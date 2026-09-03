@@ -1105,7 +1105,9 @@
       "browser": "브라우저",
       "webPages": "웹 페이지",
       "jsonExtractor": "JSON 추출기",
-      "jsonExtractorDescription": "문서를 JSON으로 변환"
+      "jsonExtractorDescription": "문서를 JSON으로 변환",
+      "youtubeMusic": "YouTube Music",
+      "youtubeMusicDescription": "음악 플레이어"
     },
     "documents": {
       "selectChat": "채팅 선택",
@@ -1177,6 +1179,12 @@
       "loadingPage": "브라우저 페이지",
       "actionFailed": "브라우저 작업 실패",
       "navigationFailed": "페이지를 열 수 없습니다"
+    },
+    "youtubeMusic": {
+      "title": "YouTube Music",
+      "home": "YouTube Music 홈",
+      "loading": "YouTube Music 로딩 중",
+      "actionFailed": "YouTube Music 작업 실패"
     }
   },
   "tts": {

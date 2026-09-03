@@ -784,7 +784,9 @@
       "browser": "浏览器",
       "webPages": "网页",
       "jsonExtractor": "JSON 提取器",
-      "jsonExtractorDescription": "将文档转换为 JSON"
+      "jsonExtractorDescription": "将文档转换为 JSON",
+      "youtubeMusic": "YouTube Music",
+      "youtubeMusicDescription": "音乐播放器"
     },
     "documents": {
       "selectChat": "选择聊天",
@@ -856,6 +858,12 @@
       "loadingPage": "浏览器页面",
       "actionFailed": "浏览器操作失败",
       "navigationFailed": "无法打开页面"
+    },
+    "youtubeMusic": {
+      "title": "YouTube Music",
+      "home": "YouTube Music 主页",
+      "loading": "正在加载 YouTube Music",
+      "actionFailed": "YouTube Music 操作失败"
     }
   },
   "advanced": {

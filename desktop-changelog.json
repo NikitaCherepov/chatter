@@ -1,95 +1,95 @@
 {
   "changes": {
     "en": [
-      "Added a JSON parser",
-      "Added a preview of sent messages",
-      "The bot can now send files and images it found on the internet or in email directly to the chat",
-      "Added temporary file storage for the bot (for example, so it can forward a file it saw in a message without sending it to you in the chat)",
-      "Added a manual update check in settings (previously it was automatic)"
+      "Added YouTube Music integration",
+      "Fixed bugs in the browser",
+      "Added an HTML preview when sending email",
+      "Fixed the voiceover of the bot's voice replies",
+      "Added Enter and Space support in the browser"
     ],
     "cs": [
-      "Přidán analyzátor JSON",
-      "Přidán náhled odeslaných zpráv",
-      "Bot nyní může posílat soubory a obrázky, které našel na internetu nebo v e-mailu, přímo do chatu",
-      "Přidáno dočasné úložiště souborů pro bota (například, aby mohl přeposlat soubor, který viděl ve zprávě, aniž by vám ho poslal do chatu)",
-      "Přidána ruční kontrola aktualizací v nastavení (dříve byla automatická)"
+      "Přidána integrace YouTube Music",
+      "Opraveny chyby v prohlížeči",
+      "Přidán náhled HTML při odesílání e-mailu",
+      "Opraven hlasový doprovod hlasových odpovědí bota",
+      "Přidána podpora kláves Enter a mezerník v prohlížeči"
     ],
     "de": [
-      "JSON-Parser hinzugefügt",
-      "Vorschau gesendeter Nachrichten hinzugefügt",
-      "Der Bot kann jetzt Dateien und Bilder, die er im Internet oder in E-Mails findet, direkt in den Chat senden",
-      "Temporären Dateispeicher für den Bot hinzugefügt (z. B. damit er eine Datei, die er in einer Nachricht gesehen hat, weiterleiten kann, ohne sie dir im Chat zu senden)",
-      "Manuellen Update-Check in den Einstellungen hinzugefügt (zuvor war er automatisch)"
+      "YouTube Music-Integration hinzugefügt",
+      "Fehler im Browser behoben",
+      "HTML-Vorschau beim Senden von E-Mails hinzugefügt",
+      "Sprachausgabe der Bot-Sprachantworten behoben",
+      "Enter- und Leertaste-Unterstützung im Browser hinzugefügt"
     ],
     "es": [
-      "Se añadió un analizador JSON",
-      "Se añadió una vista previa de los mensajes enviados",
-      "El bot ahora puede enviar archivos e imágenes que encuentre en internet o en el correo electrónico directamente al chat",
-      "Se añadió almacenamiento temporal de archivos para el bot (por ejemplo, para que pueda reenviar un archivo que vio en un mensaje sin enviártelo en el chat)",
-      "Se añadió una comprobación manual de actualizaciones en los ajustes (anteriormente era automática)"
+      "Se añadió la integración con YouTube Music",
+      "Se corrigieron errores en el navegador",
+      "Se añadió una vista previa HTML al enviar correos electrónicos",
+      "Se corrigió la locución de las respuestas de voz del bot",
+      "Se añadió soporte para Enter y Espacio en el navegador"
     ],
     "fr": [
-      "Ajout d'un analyseur JSON",
-      "Ajout d'un aperçu des messages envoyés",
-      "Le bot peut désormais envoyer directement dans le chat des fichiers et images trouvés sur Internet ou dans les e-mails",
-      "Ajout d'un stockage temporaire de fichiers pour le bot (par exemple, afin qu'il puisse transférer un fichier vu dans un message sans vous l'envoyer dans le chat)",
-      "Ajout d'une vérification manuelle des mises à jour dans les paramètres (auparavant, elle était automatique)"
+      "Intégration de YouTube Music ajoutée",
+      "Correction de bugs dans le navigateur",
+      "Ajout d'un aperçu HTML lors de l'envoi d'e-mails",
+      "Correction de la voix off des réponses vocales du bot",
+      "Ajout de la prise en charge d'Entrée et d'Espace dans le navigateur"
     ],
     "it": [
-      "Aggiunto un parser JSON",
-      "Aggiunta un'anteprima dei messaggi inviati",
-      "Il bot ora può inviare file e immagini trovati su internet o via email direttamente nella chat",
-      "Aggiunto uno storage temporaneo per i file del bot (ad esempio, per inoltrare un file visto in un messaggio senza inviartelo nella chat)",
-      "Aggiunto un controllo manuale degli aggiornamenti nelle impostazioni (in precedenza era automatico)"
+      "Aggiunta integrazione con YouTube Music",
+      "Corretti bug nel browser",
+      "Aggiunta anteprima HTML durante l'invio di email",
+      "Corretta la voce delle risposte vocali del bot",
+      "Aggiunto supporto a Invio e Spazio nel browser"
     ],
     "ja": [
-      "JSONパーサーを追加しました",
-      "送信メッセージのプレビューを追加しました",
-      "ボットはインターネットやメールで見つけたファイルや画像をチャットに直接送信できるようになりました",
-      "ボット用の一時ファイルストレージを追加しました（例えば、メッセージ内で見たファイルをチャットで送信せずに転送できるようにするため）",
-      "設定に手動更新チェックを追加しました（以前は自動でした）"
+      "YouTube Musicの統合を追加しました",
+      "ブラウザのバグを修正しました",
+      "メール送信時にHTMLプレビューを追加しました",
+      "ボットの音声返信のナレーションを修正しました",
+      "ブラウザでEnterキーとスペースキーのサポートを追加しました"
     ],
     "ko": [
-      "JSON 파서 추가",
-      "보낸 메시지 미리보기 추가",
-      "봇이 인터넷이나 이메일에서 찾은 파일과 이미지를 이제 채팅으로 직접 보낼 수 있습니다",
-      "봇을 위한 임시 파일 저장소 추가 (예: 메시지에서 본 파일을 채팅으로 보내지 않고 전달할 수 있도록)",
-      "설정에 수동 업데이트 확인 추가 (이전에는 자동이었음)"
+      "YouTube Music 통합 추가",
+      "브라우저의 버그 수정",
+      "이메일 전송 시 HTML 미리보기 추가",
+      "봇의 음성 응답 음성 해설 수정",
+      "브라우저에서 Enter 및 Space 지원 추가"
     ],
     "pl": [
-      "Dodano parser JSON",
-      "Dodano podgląd wysłanych wiadomości",
-      "Bot może teraz wysyłać pliki i obrazy znalezione w internecie lub e-mailach bezpośrednio na czat",
-      "Dodano tymczasowe przechowywanie plików dla bota (na przykład, aby mógł przekazać plik widziany w wiadomości bez wysyłania go do Ciebie na czacie)",
-      "Dodano ręczne sprawdzanie aktualizacji w ustawieniach (wcześniej było automatyczne)"
+      "Dodano integrację z YouTube Music",
+      "Naprawiono błędy w przeglądarce",
+      "Dodano podgląd HTML podczas wysyłania wiadomości e-mail",
+      "Naprawiono lektora odpowiedzi głosowych bota",
+      "Dodano obsługę klawiszy Enter i Spacja w przeglądarce"
     ],
     "pt-BR": [
-      "Adicionado um analisador JSON",
-      "Adicionada uma pré-visualização de mensagens enviadas",
-      "O bot agora pode enviar arquivos e imagens encontrados na internet ou em e-mails diretamente no chat",
-      "Adicionado armazenamento temporário de arquivos para o bot (por exemplo, para que ele possa encaminhar um arquivo visto em uma mensagem sem enviá-lo a você no chat)",
-      "Adicionada verificação manual de atualizações nas configurações (anteriormente era automática)"
+      "Adicionada integração com YouTube Music",
+      "Corrigidos bugs no navegador",
+      "Adicionada pré-visualização em HTML ao enviar e-mail",
+      "Corrigida a narração das respostas de voz do bot",
+      "Adicionado suporte a Enter e Espaço no navegador"
     ],
     "ru": [
-      "Добавлен JSON-парсер",
-      "Добавлен предпросмотр отправленных сообщений",
-      "Бот теперь может отправлять файлы и изображения, найденные в интернете или в электронной почте, прямо в чат",
-      "Добавлено временное хранилище файлов для бота (например, чтобы он мог переслать файл, увиденный в сообщении, не отправляя его вам в чат)",
-      "Добавлена ручная проверка обновлений в настройках (ранее она была автоматической)"
+      "Добавлена интеграция с YouTube Music",
+      "Исправлены ошибки в браузере",
+      "Добавлен HTML-предпросмотр при отправке электронной почты",
+      "Исправлено озвучивание голосовых ответов бота",
+      "Добавлена поддержка Enter и Space в браузере"
     ],
     "tr": [
-      "JSON ayrıştırıcı eklendi",
-      "Gönderilen mesajların önizlemesi eklendi",
-      "Bot artık internetten veya e-postadan bulduğu dosyaları ve görselleri doğrudan sohbete gönderebiliyor",
-      "Bot için geçici dosya depolama eklendi (örneğin, bir mesajda gördüğü bir dosyayı sohbette size göndermeden iletebilmesi için)",
-      "Ayarlara manuel güncelleme kontrolü eklendi (önceden otomatikti)"
+      "YouTube Music entegrasyonu eklendi",
+      "Tarayıcıdaki hatalar düzeltildi",
+      "E-posta gönderirken HTML önizlemesi eklendi",
+      "Botun sesli yanıtlarının seslendirmesi düzeltildi",
+      "Tarayıcıda Enter ve Boşluk desteği eklendi"
     ],
     "zh-CN": [
-      "添加了JSON解析器",
-      "添加了已发送消息的预览",
-      "机器人现在可以将它在互联网或电子邮件中找到的文件和图片直接发送到聊天中",
-      "为机器人添加了临时文件存储（例如，以便它可以转发在消息中看到的文件，而无需在聊天中发送给您）",
-      "在设置中添加了手动更新检查（以前是自动的）"
+      "新增 YouTube Music 集成",
+      "修复浏览器中的错误",
+      "发送邮件时新增 HTML 预览",
+      "修复机器人语音回复的旁白",
+      "在浏览器中新增 Enter 和 Space 支持"
     ]
   }
 }

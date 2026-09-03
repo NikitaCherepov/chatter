@@ -1105,7 +1105,9 @@
       "browser": "Tarayıcı",
       "webPages": "Web sayfaları",
       "jsonExtractor": "JSON Çıkarıcı",
-      "jsonExtractorDescription": "Bir belgeyi JSON'a dönüştürün"
+      "jsonExtractorDescription": "Bir belgeyi JSON'a dönüştürün",
+      "youtubeMusic": "YouTube Music",
+      "youtubeMusicDescription": "Müzik çalar"
     },
     "documents": {
       "selectChat": "Bir sohbet seçin",
@@ -1177,6 +1179,12 @@
       "loadingPage": "Tarayıcı sayfası",
       "actionFailed": "Tarayıcı işlemi başarısız oldu",
       "navigationFailed": "Sayfa açılamadı"
+    },
+    "youtubeMusic": {
+      "title": "YouTube Music",
+      "home": "YouTube Music ana sayfası",
+      "loading": "YouTube Music yükleniyor",
+      "actionFailed": "YouTube Music işlemi başarısız oldu"
     }
   },
   "tts": {
