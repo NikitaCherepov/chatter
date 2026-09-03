@@ -231,7 +231,7 @@ export function ToolsPanel({ plan, isAdmin, activeChatId, onImageClick, onChatSe
 
   const handleSelectTool = (id: ToolId) => {
     setToolLayout(id, { mode: 'sidebar' });
-    setToolsPanelState({ isOpen: true, openTools: [...openTools.filter(tid => tid !== id), id] });
+    setToolsPanelState({ isOpen: true, openTools: [id, ...openTools.filter(tid => tid !== id)] });
   };
 
   const handleBack = () => {

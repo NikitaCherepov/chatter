@@ -1524,6 +1524,13 @@ export class ChatterBrowser {
         let bottom = sourceRect.bottom;
         let ancestor = getComposedParent(element);
         while (ancestor) {
+          // Root scrolling elements can legitimately have a zero layout height
+          // while their document paints far beyond it (YouTube does this).
+          // The viewport check handles the root clip separately.
+          if (ancestor === document.body || ancestor === document.documentElement) {
+            ancestor = getComposedParent(ancestor);
+            continue;
+          }
           const style = window.getComputedStyle(ancestor);
           const clipsX = /^(hidden|clip|auto|scroll)$/.test(style.overflowX);
           const clipsY = /^(hidden|clip|auto|scroll)$/.test(style.overflowY);
@@ -2175,6 +2182,24 @@ export class ChatterBrowser {
     this.interactionInProgress = true;
 
     const contents = this.view.webContents;
+    const urlBeforeClick = contents.getURL();
+    if (expected.tag === 'a' && expected.href) {
+      try {
+        const parsed = new URL(expected.href);
+        if ((parsed.protocol === 'http:' || parsed.protocol === 'https:') && parsed.toString() !== urlBeforeClick) {
+          await contents.loadURL(parsed.toString());
+          this.interactionInProgress = false;
+          return {
+            status: 'success',
+            action: 'click',
+            element: expected,
+            ...this.getState(),
+          };
+        }
+      } catch {
+        // Non-navigation anchors still use the native pointer path below.
+      }
+    }
 
     // -- Phase 1: bring the element into view and read a stable clickable rect --
     const rectScript = `(async () => {

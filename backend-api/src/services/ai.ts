@@ -2786,9 +2786,9 @@ const buildYouTubeMusicControlTool = () => ({
   type: 'function' as const,
   function: {
     name: 'youtube_music_control',
-    description: `Controls YouTube Music in Chatter Desktop without opening the browser panel unless the user explicitly asks to see it.
+    description: `Controls YouTube Music in its own persistent browser tab in Chatter Desktop without opening the panel unless the user explicitly asks to see it.
 
-Use search_and_play when the user asks to play a song, artist, album, playlist, or mood. Use play, pause, next, previous, set_volume, mute, or unmute for playback controls. Volume is an integer from 0 to 100. Use get_state when asked what is playing. Use show only when the user asks to open or show YouTube Music.
+Use this tool when the user asks specifically for YouTube Music or wants to control music already playing in its dedicated panel. Use search_and_play when the user asks to play a song, artist, album, playlist, stream, or mood there. Use play, pause, next, previous, set_volume, mute, or unmute for playback controls. Volume is an integer from 0 to 100. Use get_state when asked what is playing. Use show only when the user asks to open or show YouTube Music.
 
 Never start or change music proactively. The tool uses the user's local browser session; if authentication is required, tell the user to open the browser and sign in to YouTube Music.`,
     parameters: {

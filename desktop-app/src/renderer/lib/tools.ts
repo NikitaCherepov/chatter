@@ -49,9 +49,7 @@ export function openTool(toolId?: ToolId) {
     setToolsPanelState({ isOpen: true });
     return;
   }
-  const next = currentState.openTools.includes(toolId)
-    ? currentState.openTools
-    : [...currentState.openTools, toolId];
+  const next = [toolId, ...currentState.openTools.filter(id => id !== toolId)];
   setToolsPanelState({ isOpen: true, openTools: next });
 }
 
