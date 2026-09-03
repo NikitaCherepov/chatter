@@ -24,10 +24,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   browserSetBounds: (bounds: { x: number; y: number; width: number; height: number }) =>
     ipcRenderer.invoke('browser:set-bounds', bounds),
   browserControl: (payload: {
-    action: 'open' | 'read' | 'back' | 'forward' | 'reload' | 'scroll' | 'click' | 'fill' | 'check_site_permission' | 'grant_site_permission' | 'resolve_download' | 'youtube_music';
+    action: 'open' | 'read' | 'back' | 'forward' | 'reload' | 'scroll' | 'click' | 'fill' | 'press_key' | 'check_site_permission' | 'grant_site_permission' | 'resolve_download' | 'youtube_music';
     url?: string;
     ref?: string;
     text?: string;
+    key?: 'Enter' | 'Space';
     permission_action?: 'click' | 'fill';
     origin?: string;
     expected_origin?: string;
@@ -53,7 +54,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   youtubeMusicSetBounds: (bounds: { x: number; y: number; width: number; height: number }) =>
     ipcRenderer.invoke('youtube-music:set-bounds', bounds),
   youtubeMusicControl: (payload: {
-    action: 'open' | 'read' | 'back' | 'forward' | 'reload' | 'scroll' | 'click' | 'fill' | 'check_site_permission' | 'grant_site_permission' | 'resolve_download' | 'youtube_music';
+    action: 'open' | 'read' | 'back' | 'forward' | 'reload' | 'scroll' | 'click' | 'fill' | 'press_key' | 'check_site_permission' | 'grant_site_permission' | 'resolve_download' | 'youtube_music';
     url?: string;
     music_action?: 'search_and_play' | 'play' | 'pause' | 'toggle_play_pause' | 'next' | 'previous' | 'set_volume' | 'mute' | 'unmute' | 'get_state' | 'show';
     query?: string;

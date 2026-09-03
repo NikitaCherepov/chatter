@@ -2755,9 +2755,10 @@ Use action=read when the user says "look at this page", or asks about a page the
 Workflow for interaction:
 1. Call read with mode=viewport to receive the current screen's text and stable element refs.
 2. Use click or fill with an exact ref from the latest read result.
-3. After an in-page change, prefer read with mode=delta. After navigation, use mode=viewport. Use mode=full only when the user explicitly needs the whole document.
+3. Use press_key with Enter or Space when the focused page element or media player needs a keyboard action.
+4. After an in-page change, prefer read with mode=delta. After navigation, use mode=viewport. Use mode=full only when the user explicitly needs the whole document.
 
-Depending on the user's Browser settings, open, click, and fill may require a separate explicit confirmation; call the action normally and the backend will request it when configured. read/back/forward/reload/scroll do not submit data. If an action starts a file download, it is paused until the user approves or rejects it; wait for that result before continuing. If the page shows a CAPTCHA, challenge, rate-limit warning, or access block, stop browser actions and tell the user. Values of ordinary text fields and drafts may be returned by read. Password fields cannot be read or filled by you.
+Depending on the user's Browser settings, open, click, fill, and press_key may require a separate explicit confirmation; call the action normally and the backend will request it when configured. read/back/forward/reload/scroll do not submit data. If an action starts a file download, it is paused until the user approves or rejects it; wait for that result before continuing. If the page shows a CAPTCHA, challenge, rate-limit warning, or access block, stop browser actions and tell the user. Values of ordinary text fields and drafts may be returned by read. Password fields cannot be read or filled by you.
 
 If browser reading, scrolling, or interaction fails, do not call list_monitors or capture_screen. Tell the user; ask them to scroll manually or send a screenshot themselves if needed.`,
     parameters: {
@@ -2765,12 +2766,13 @@ If browser reading, scrolling, or interaction fails, do not call list_monitors o
       properties: {
         action: {
           type: 'string',
-          enum: ['open', 'read', 'back', 'forward', 'reload', 'scroll', 'click', 'fill'],
+          enum: ['open', 'read', 'back', 'forward', 'reload', 'scroll', 'click', 'fill', 'press_key'],
           description: 'Browser action.'
         },
         url: { type: 'string', description: 'URL or search query for action=open.' },
         ref: { type: 'string', description: 'Temporary element ref from the latest read result. Required for click/fill.' },
         text: { type: 'string', description: 'Text to enter for action=fill. Never use for passwords or authentication codes.' },
+        key: { type: 'string', enum: ['Enter', 'Space'], description: 'Allowed keyboard key for action=press_key.' },
         mode: { type: 'string', enum: ['viewport', 'delta', 'full'], description: 'Read mode. viewport (default) returns the current screen, delta returns only changes since the previous read, full returns up to 30,000 characters and should be rare.' },
         description: { type: 'string', description: 'Short human-readable description of the intended action target, used in the confirmation card.' },
         direction: { type: 'string', enum: ['up', 'down'], description: 'Scroll direction.' },
@@ -6395,7 +6397,7 @@ Respond in the user's language. Be detailed and precise.`
 
   if (toolName === 'browser_control') {
     const action = typeof parsed.action === 'string' ? parsed.action.trim().toLowerCase() : '';
-    const allowedActions = new Set(['open', 'read', 'back', 'forward', 'reload', 'scroll', 'click', 'fill']);
+    const allowedActions = new Set(['open', 'read', 'back', 'forward', 'reload', 'scroll', 'click', 'fill', 'press_key']);
     if (!allowedActions.has(action)) {
       return JSON.stringify({ status: 'error', message: 'Unknown browser action.' });
     }
@@ -6406,6 +6408,7 @@ Respond in the user's language. Be detailed and precise.`
     const url = typeof parsed.url === 'string' ? parsed.url.trim() : undefined;
     const ref = typeof parsed.ref === 'string' ? parsed.ref.trim() : undefined;
     const text = typeof parsed.text === 'string' ? parsed.text : undefined;
+    const key = parsed.key === 'Enter' || parsed.key === 'Space' ? parsed.key : undefined;
     const mode = parsed.mode === 'delta' || parsed.mode === 'full' ? parsed.mode : 'viewport';
     const direction = parsed.direction === 'up' ? 'up' : 'down';
     const amount = typeof parsed.amount === 'number' && Number.isFinite(parsed.amount)
@@ -6421,6 +6424,9 @@ Respond in the user's language. Be detailed and precise.`
     if (action === 'fill' && text === undefined) {
       return JSON.stringify({ status: 'error', message: 'text is required for fill.' });
     }
+    if (action === 'press_key' && !key) {
+      return JSON.stringify({ status: 'error', message: 'key must be Enter or Space for press_key.' });
+    }
 
     // Make the browser visible before the operation. This is intentionally a normal
     // desktop action: it uses the same right-panel/fullscreen widget system as notes.
@@ -6434,6 +6440,7 @@ Respond in the user's language. Be detailed and precise.`
     if (url) ipcPayload.url = url;
     if (ref) ipcPayload.ref = ref;
     if (text !== undefined) ipcPayload.text = text;
+    if (key) ipcPayload.key = key;
     if (action === 'read') ipcPayload.mode = mode;
     if (action === 'scroll') {
       ipcPayload.direction = direction;
@@ -6449,7 +6456,7 @@ Respond in the user's language. Be detailed and precise.`
     } catch { /* use confirmation defaults */ }
     let confirmationRequired = action === 'open'
       ? browserConfirmationSettings.browser_confirm_open !== false
-      : action === 'click'
+      : action === 'click' || action === 'press_key'
         ? browserConfirmationSettings.browser_confirm_click !== false
         : action === 'fill'
           ? browserConfirmationSettings.browser_confirm_fill !== false
@@ -6465,11 +6472,11 @@ Respond in the user's language. Be detailed and precise.`
       placeholder?: string;
       sensitive?: boolean;
     } | undefined;
-    if (confirmationRequired && (action === 'click' || action === 'fill')) {
+    if (confirmationRequired && (action === 'click' || action === 'fill' || action === 'press_key')) {
       try {
         const permission = await sendIpcToDesktop(user.id, 'browser_control', {
           action: 'check_site_permission',
-          permission_action: action,
+          permission_action: action === 'press_key' ? 'click' : action,
           ref,
         }, 15000, signal) as { allowed?: boolean; origin?: string | null; target?: typeof siteTarget };
         if (typeof permission?.origin === 'string' && permission.origin) {
@@ -6513,14 +6520,17 @@ Respond in the user's language. Be detailed and precise.`
           ? `Open browser URL ${url}`
           : action === 'fill'
             ? `Fill browser element ${ref}`
-            : `Click browser element ${ref}`,
+            : action === 'press_key'
+              ? `Press ${key} in browser`
+              : `Click browser element ${ref}`,
         payload: {
           ipcType: 'browser_control',
           ipcPayload: {
-            action: action as 'open' | 'click' | 'fill',
+            action: action as 'open' | 'click' | 'fill' | 'press_key',
             ...(url ? { url } : {}),
             ...(ref ? { ref } : {}),
             ...(text !== undefined ? { text } : {}),
+            ...(key ? { key } : {}),
             ...(siteOrigin ? { expected_origin: siteOrigin } : {}),
           },
         },
@@ -6544,9 +6554,14 @@ Respond in the user's language. Be detailed and precise.`
         action_type: action,
         description: typeof parsed.description === 'string' && parsed.description.trim()
           ? parsed.description.trim()
-          : (action === 'open' ? url : ref),
+          : action === 'open'
+            ? url
+            : action === 'press_key'
+              ? `Press ${key}`
+              : ref,
         ...(url ? { url } : {}),
         ...(text !== undefined ? { text } : {}),
+        ...(key ? { key } : {}),
         ...(siteOrigin ? { origin: siteOrigin } : {}),
         ...(siteTarget ? { target_element: siteTarget } : {}),
       },

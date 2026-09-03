@@ -106,10 +106,11 @@ type BrowserState = {
 };
 
 type BrowserControlPayload = {
-  action: 'open' | 'read' | 'back' | 'forward' | 'reload' | 'scroll' | 'click' | 'fill' | 'check_site_permission' | 'grant_site_permission' | 'resolve_download' | 'youtube_music';
+  action: 'open' | 'read' | 'back' | 'forward' | 'reload' | 'scroll' | 'click' | 'fill' | 'press_key' | 'check_site_permission' | 'grant_site_permission' | 'resolve_download' | 'youtube_music';
   url?: string;
   ref?: string;
   text?: string;
+  key?: 'Enter' | 'Space';
   permission_action?: 'click' | 'fill';
   origin?: string;
   expected_origin?: string;

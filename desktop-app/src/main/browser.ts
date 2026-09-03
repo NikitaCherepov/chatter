@@ -15,10 +15,11 @@ export type BrowserState = {
 };
 
 export type BrowserControlPayload = {
-  action: 'open' | 'read' | 'back' | 'forward' | 'reload' | 'scroll' | 'click' | 'fill' | 'check_site_permission' | 'grant_site_permission' | 'resolve_download' | 'youtube_music';
+  action: 'open' | 'read' | 'back' | 'forward' | 'reload' | 'scroll' | 'click' | 'fill' | 'press_key' | 'check_site_permission' | 'grant_site_permission' | 'resolve_download' | 'youtube_music';
   url?: string;
   ref?: string;
   text?: string;
+  key?: 'Enter' | 'Space';
   permission_action?: 'click' | 'fill';
   origin?: string;
   expected_origin?: string;
@@ -567,6 +568,25 @@ export class ChatterBrowser {
       }
       if (action === 'click') return this.clickElement(`${payload.ref || ''}`);
       return this.fillElement(`${payload.ref || ''}`, `${payload.text || ''}`);
+    }
+    if (action === 'press_key') {
+      const expectedOrigin = payload.expected_origin ? this.normalizeHttpOrigin(payload.expected_origin) : null;
+      if (payload.expected_origin && (!expectedOrigin || expectedOrigin !== this.getCurrentHttpOrigin())) {
+        throw new Error('browser_origin_changed');
+      }
+      const key = payload.key;
+      if (key !== 'Enter' && key !== 'Space') throw new Error('browser_key_not_allowed');
+      if (this.interactionInProgress) throw new Error('browser_interaction_in_progress');
+      this.interactionInProgress = true;
+      try {
+        contents.focus();
+        contents.sendInputEvent({ type: 'keyDown', keyCode: key });
+        contents.sendInputEvent({ type: 'keyUp', keyCode: key });
+        await new Promise(resolve => setTimeout(resolve, 150));
+        return { status: 'success', action, key, ...this.getState() };
+      } finally {
+        this.interactionInProgress = false;
+      }
     }
 
     throw new Error('unsupported_browser_action');
