@@ -37,8 +37,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     download_id?: string;
     approved?: boolean;
     destination?: 'prompt' | 'downloads';
-    music_action?: 'search_and_play' | 'play' | 'pause' | 'toggle_play_pause' | 'next' | 'previous' | 'get_state' | 'show';
+    music_action?: 'search_and_play' | 'play' | 'pause' | 'toggle_play_pause' | 'next' | 'previous' | 'set_volume' | 'mute' | 'unmute' | 'get_state' | 'show';
     query?: string;
+    volume?: number;
   }) => ipcRenderer.invoke('browser:control', payload),
   onBrowserState: (callback: (payload: unknown) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, payload: unknown) => callback(payload);
@@ -54,8 +55,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   youtubeMusicControl: (payload: {
     action: 'open' | 'read' | 'back' | 'forward' | 'reload' | 'scroll' | 'click' | 'fill' | 'check_site_permission' | 'grant_site_permission' | 'resolve_download' | 'youtube_music';
     url?: string;
-    music_action?: 'search_and_play' | 'play' | 'pause' | 'toggle_play_pause' | 'next' | 'previous' | 'get_state' | 'show';
+    music_action?: 'search_and_play' | 'play' | 'pause' | 'toggle_play_pause' | 'next' | 'previous' | 'set_volume' | 'mute' | 'unmute' | 'get_state' | 'show';
     query?: string;
+    volume?: number;
   }) => ipcRenderer.invoke('youtube-music:control', payload),
   onYouTubeMusicState: (callback: (payload: unknown) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, payload: unknown) => callback(payload);

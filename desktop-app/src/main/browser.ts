@@ -28,8 +28,9 @@ export type BrowserControlPayload = {
   download_id?: string;
   approved?: boolean;
   destination?: 'prompt' | 'downloads';
-  music_action?: 'search_and_play' | 'play' | 'pause' | 'toggle_play_pause' | 'next' | 'previous' | 'get_state' | 'show';
+  music_action?: 'search_and_play' | 'play' | 'pause' | 'toggle_play_pause' | 'next' | 'previous' | 'set_volume' | 'mute' | 'unmute' | 'get_state' | 'show';
   query?: string;
+  volume?: number;
 };
 
 export type ChatterBrowserOptions = {
@@ -575,7 +576,7 @@ export class ChatterBrowser {
     const musicAction = payload.music_action;
     const supportedActions = new Set([
       'search_and_play', 'play', 'pause', 'toggle_play_pause',
-      'next', 'previous', 'get_state', 'show',
+      'next', 'previous', 'set_volume', 'mute', 'unmute', 'get_state', 'show',
     ]);
     if (!musicAction || !supportedActions.has(musicAction)) {
       throw new Error('youtube_music_action_required');
@@ -632,6 +633,28 @@ export class ChatterBrowser {
         return { status: 'success', action: musicAction, ...(await this.readYouTubeMusicState()) };
       }
 
+      if (musicAction === 'set_volume' || musicAction === 'mute' || musicAction === 'unmute') {
+        const volume = Number(payload.volume);
+        if (musicAction === 'set_volume' && (!Number.isFinite(volume) || volume < 0 || volume > 100)) {
+          throw new Error('youtube_music_volume_out_of_range');
+        }
+        const changed = await this.executeInBrowserWorld<boolean>(`(() => {
+          const media = document.querySelector('video, audio');
+          if (!(media instanceof HTMLMediaElement)) return false;
+          const action = ${JSON.stringify(musicAction)};
+          if (action === 'set_volume') {
+            media.volume = ${JSON.stringify(Number.isFinite(volume) ? volume / 100 : 0)};
+            if (media.volume > 0) media.muted = false;
+          } else {
+            media.muted = action === 'mute';
+          }
+          return true;
+        })()`);
+        if (!changed) throw new Error('youtube_music_control_unavailable');
+        await new Promise(resolve => setTimeout(resolve, 100));
+        return { status: 'success', action: musicAction, ...(await this.readYouTubeMusicState()) };
+      }
+
       const result = await this.executeInBrowserWorld<{ clicked: boolean; already?: boolean; playback_state?: string }>(`(() => {
         const action = ${JSON.stringify(musicAction)};
         const playbackState = navigator.mediaSession?.playbackState || 'none';
@@ -674,16 +697,19 @@ export class ChatterBrowser {
     album: string | null;
     artwork_url: string | null;
     playback_state: string;
+    volume_percent: number | null;
+    muted: boolean | null;
   }> {
     const url = this.view.webContents.getURL();
     if (!this.isYouTubeMusicPage()) {
-      return { url, track: null, artist: null, album: null, artwork_url: null, playback_state: 'none' };
+      return { url, track: null, artist: null, album: null, artwork_url: null, playback_state: 'none', volume_percent: null, muted: null };
     }
     return this.executeInBrowserWorld(`(() => {
       const metadata = navigator.mediaSession?.metadata;
       const playerBar = document.querySelector('ytmusic-player-bar');
       const text = (selector) => playerBar?.querySelector(selector)?.textContent?.trim() || null;
       const artwork = metadata?.artwork;
+      const media = document.querySelector('video, audio');
       return {
         url: location.href,
         track: metadata?.title || text('.title'),
@@ -691,6 +717,8 @@ export class ChatterBrowser {
         album: metadata?.album || null,
         artwork_url: Array.isArray(artwork) && artwork.length ? artwork[artwork.length - 1]?.src || null : null,
         playback_state: navigator.mediaSession?.playbackState || 'none',
+        volume_percent: media instanceof HTMLMediaElement ? Math.round(media.volume * 100) : null,
+        muted: media instanceof HTMLMediaElement ? media.muted : null,
       };
     })()`);
   }

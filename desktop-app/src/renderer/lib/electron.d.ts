@@ -119,8 +119,9 @@ type BrowserControlPayload = {
   download_id?: string;
   approved?: boolean;
   destination?: 'prompt' | 'downloads';
-  music_action?: 'search_and_play' | 'play' | 'pause' | 'toggle_play_pause' | 'next' | 'previous' | 'get_state' | 'show';
+  music_action?: 'search_and_play' | 'play' | 'pause' | 'toggle_play_pause' | 'next' | 'previous' | 'set_volume' | 'mute' | 'unmute' | 'get_state' | 'show';
   query?: string;
+  volume?: number;
 };
 
 type BrowserDownloadRequest = {

@@ -2788,7 +2788,7 @@ const buildYouTubeMusicControlTool = () => ({
     name: 'youtube_music_control',
     description: `Controls YouTube Music in Chatter Desktop without opening the browser panel unless the user explicitly asks to see it.
 
-Use search_and_play when the user asks to play a song, artist, album, playlist, or mood. Use play, pause, next, or previous for playback controls. Use get_state when asked what is playing. Use show only when the user asks to open or show YouTube Music.
+Use search_and_play when the user asks to play a song, artist, album, playlist, or mood. Use play, pause, next, previous, set_volume, mute, or unmute for playback controls. Volume is an integer from 0 to 100. Use get_state when asked what is playing. Use show only when the user asks to open or show YouTube Music.
 
 Never start or change music proactively. The tool uses the user's local browser session; if authentication is required, tell the user to open the browser and sign in to YouTube Music.`,
     parameters: {
@@ -2796,12 +2796,18 @@ Never start or change music proactively. The tool uses the user's local browser 
       properties: {
         action: {
           type: 'string',
-          enum: ['search_and_play', 'play', 'pause', 'toggle_play_pause', 'next', 'previous', 'get_state', 'show'],
+          enum: ['search_and_play', 'play', 'pause', 'toggle_play_pause', 'next', 'previous', 'set_volume', 'mute', 'unmute', 'get_state', 'show'],
           description: 'YouTube Music action.'
         },
         query: {
           type: 'string',
           description: 'Song, artist, album, playlist, or other search query. Required only for search_and_play.'
+        },
+        volume: {
+          type: 'integer',
+          minimum: 0,
+          maximum: 100,
+          description: 'Volume percentage. Required only for set_volume.'
         }
       },
       required: ['action']
@@ -6584,13 +6590,17 @@ Respond in the user's language. Be detailed and precise.`
 
   if (toolName === 'youtube_music_control') {
     const action = typeof parsed.action === 'string' ? parsed.action.trim().toLowerCase() : '';
-    const allowedActions = new Set(['search_and_play', 'play', 'pause', 'toggle_play_pause', 'next', 'previous', 'get_state', 'show']);
+    const allowedActions = new Set(['search_and_play', 'play', 'pause', 'toggle_play_pause', 'next', 'previous', 'set_volume', 'mute', 'unmute', 'get_state', 'show']);
     if (!allowedActions.has(action)) {
       return JSON.stringify({ status: 'error', message: 'Unknown YouTube Music action.' });
     }
     const query = typeof parsed.query === 'string' ? parsed.query.trim() : '';
     if (action === 'search_and_play' && !query) {
       return JSON.stringify({ status: 'error', message: 'query is required for search_and_play.' });
+    }
+    const volume = Number(parsed.volume);
+    if (action === 'set_volume' && (!Number.isInteger(volume) || volume < 0 || volume > 100)) {
+      return JSON.stringify({ status: 'error', message: 'volume must be an integer from 0 to 100.' });
     }
     if (!isDesktopOnline(user.id)) {
       return JSON.stringify({ status: 'error', message: 'Desktop client is offline. Ask the user to launch Chatter Desktop.' });
@@ -6606,6 +6616,7 @@ Respond in the user's language. Be detailed and precise.`
         action: 'youtube_music',
         music_action: action,
         ...(query ? { query } : {}),
+        ...(action === 'set_volume' ? { volume } : {}),
       }, 45_000, signal);
       return wrapUntrustedContent(JSON.stringify({
         status: 'success',
