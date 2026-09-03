@@ -462,7 +462,9 @@ export class ChatterBrowser {
     }
 
     if (action === 'open') {
-      if (this.interactionInProgress) throw new Error('browser_interaction_in_progress');
+      // Explicit navigation must remain an escape hatch when a complex SPA leaves
+      // an earlier click or fill waiting on a stale renderer context.
+      if (this.interactionInProgress) this.abortInteraction();
       this.interactionInProgress = true;
       this.explicitNavigationRequested = true;
       const url = normalizeBrowserUrl(`${payload.url || ''}`);
@@ -479,14 +481,17 @@ export class ChatterBrowser {
       }
     }
     if (action === 'back') {
+      this.abortInteraction();
       if (contents.navigationHistory.canGoBack()) contents.navigationHistory.goBack();
       return this.getState();
     }
     if (action === 'forward') {
+      this.abortInteraction();
       if (contents.navigationHistory.canGoForward()) contents.navigationHistory.goForward();
       return this.getState();
     }
     if (action === 'reload') {
+      this.abortInteraction();
       contents.reload();
       return this.getState();
     }
@@ -1146,6 +1151,7 @@ export class ChatterBrowser {
         contents.removeListener('did-navigate', onDidNavigate);
         contents.removeListener('did-navigate-in-page', onDidNavigateInPage);
         contents.removeListener('did-fail-load', onDidFailLoad);
+        contents.removeListener('will-prevent-unload', onWillPreventUnload);
       };
       const finish = (error?: Error) => {
         if (settled) return;
@@ -1181,11 +1187,17 @@ export class ChatterBrowser {
         if (errorCode === -3 || errorDescription.includes('ERR_ABORTED')) finish();
         else finish(new Error(`${errorDescription} (${errorCode})`));
       };
+      const onWillPreventUnload = (event: Electron.Event) => {
+        // An explicit browser-tool navigation is already a decision to leave the
+        // current page. Media sites may otherwise cancel loadURL via beforeunload.
+        event.preventDefault();
+      };
 
       contents.on('did-start-navigation', onDidStartNavigation);
       contents.on('did-navigate', onDidNavigate);
       contents.on('did-navigate-in-page', onDidNavigateInPage);
       contents.on('did-fail-load', onDidFailLoad);
+      contents.on('will-prevent-unload', onWillPreventUnload);
       void contents.loadURL(url).then(
         () => finish(),
         (error: any) => {

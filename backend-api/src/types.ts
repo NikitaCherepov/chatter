@@ -221,6 +221,8 @@ export type GeneratedImage = {
 
 export type AiSendResult = {
   reply_text: string;
+  /** Final assistant text only, excluding intermediate tool-call narration. */
+  final_reply_text?: string;
   user_only?: boolean;
   reasoning_content?: string | null;
   chat_id: number;

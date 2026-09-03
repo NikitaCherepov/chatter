@@ -2515,9 +2515,9 @@ export function ChatPage() {
         && event.is_voice
         && event.initiator_user_id === user?.id
         && event.result?.message_id
-        && event.result?.reply_text
+        && event.result?.final_reply_text
       ) {
-        ttsSpeak(event.result.message_id, event.result.reply_text);
+        ttsSpeak(event.result.message_id, event.result.final_reply_text);
       }
 
       if (event.chat_id !== activeChatIdRef.current) {

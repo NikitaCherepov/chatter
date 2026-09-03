@@ -8579,8 +8579,12 @@ iterations.push(currentIteration);
   chargeAborted = false;
 
   const applyAborted = abortController.signal.aborted;
+  const finalReplyText = !applyAborted
+    ? (finalAnswer || (!fullDbHistory && toolOutputsForFallback.length === 0 ? answer : ''))
+    : '';
   return {
     reply_text: applyAborted ? (fullDbHistory || answer) : answer,
+    final_reply_text: finalReplyText,
     ...(applyAborted ? { aborted: true } : {}),
     reasoning_content: reasoningContent,
     chat_id: chatId,

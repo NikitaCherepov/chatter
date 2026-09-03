@@ -161,7 +161,7 @@ export const runVoiceTurn = async (
   let voiceError: string | null = null;
 
   try {
-    const voice = await synthesizeVoice(aiResult.reply_text || '');
+    const voice = await synthesizeVoice(aiResult.final_reply_text || '');
     if (voice?.buffer?.length) {
       voiceAudioBase64 = voice.buffer.toString('base64');
       voiceMimeType = voice.contentType || null;
