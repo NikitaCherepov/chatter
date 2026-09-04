@@ -32,3 +32,6 @@ engines:
     disabled: false
   - name: wikipedia
     disabled: false
+    display_type:
+      - infobox
+      - list
