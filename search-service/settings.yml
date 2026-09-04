@@ -1,0 +1,37 @@
+use_default_settings:
+  engines:
+    keep_only:
+      - bing
+      - brave
+      - duckduckgo
+      - google
+      - wikipedia
+
+server:
+  secret_key: "chatter-internal-search"
+  limiter: false
+  public_instance: false
+  image_proxy: false
+
+search:
+  safe_search: 0
+  formats:
+    - json
+
+outgoing:
+  request_timeout: 4.0
+  max_request_timeout: 8.0
+  pool_connections: 20
+  pool_maxsize: 10
+
+engines:
+  - name: bing
+    disabled: false
+  - name: brave
+    disabled: false
+  - name: duckduckgo
+    disabled: false
+  - name: google
+    disabled: false
+  - name: wikipedia
+    disabled: false

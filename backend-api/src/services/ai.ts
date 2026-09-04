@@ -19,6 +19,7 @@ import { getMailAccountsForUser, resolveEmailAttachmentsForUser, runEmailAttachm
 import { runCoreMemoryMerge } from './memory.js';
 import { VectorMemoryService } from './vector-memory.js';
 import { getCleanTextFromUrl, wrapUntrustedContent } from './web-reader.js';
+import { runWebSearch } from './web-search.js';
 import { runImageGeneration } from './image-generation.js';
 import { sendIpcToDesktop, isDesktopOnline, sendToDesktop } from '../ws-clients.js';
 import { waitForNoPendingPcConfirmations } from './pc-command-confirmations.js';
@@ -241,8 +242,6 @@ const DEFAULT_MAIL_CHECK_LIMIT = 10;
 const TOKENS_PER_PRICE_BLOCK = 500_000;
 const PRICE_PER_PRICE_BLOCK_RUB = 102;
 const RUB_PER_TOKEN = PRICE_PER_PRICE_BLOCK_RUB / TOKENS_PER_PRICE_BLOCK;
-const TAVILY_API_KEY = `${process.env.TAVILY_API_KEY || ''}`.trim();
-const TAVILY_API_BASE_URL = `${process.env.TAVILY_API_BASE_URL || 'https://api.tavily.com'}`.replace(/\/+$/, '');
 
 const parseModelChain = (raw: string | undefined, fallback: string[]) => {
   const parsed = (raw || '').split(',').map(v => v.trim()).filter(Boolean);
@@ -1946,50 +1945,6 @@ const incrementUserWebSearchUsage = (userId: number, count = 1) => {
         total_web_search_count = COALESCE(total_web_search_count, 0) + ?
     WHERE id = ?
   `).run(safeCount, safeCount, userId);
-};
-
-const runWebSearch = async (query: string, signal?: AbortSignal) => {
-  if (!TAVILY_API_KEY) return 'Tool error: search service temporarily unavailable.';
-
-  try {
-    throwIfAborted(signal);
-    const response = await fetch(`${TAVILY_API_BASE_URL}/search`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${TAVILY_API_KEY}`,
-        'X-Client-Source': 'chatter-backend'
-      },
-      body: JSON.stringify({
-        query,
-        search_depth: 'basic',
-        max_results: 3,
-        include_answer: true
-      }),
-      signal
-    });
-
-    if (!response.ok) {
-      throw new Error(`tavily_http_${response.status}`);
-    }
-
-    const data = await response.json() as {
-      answer?: string;
-      results?: Array<{ title?: string; content?: string; url?: string }>;
-    };
-    const results = Array.isArray(data.results) ? data.results : [];
-
-    if (!results.length) {
-      return `No results found for query "${query}".`;
-    }
-
-    let resultText = data.answer ? `Summary: ${data.answer}\n\n` : '';
-    resultText += results.map((item, index) => `${index + 1}. ${item.title || 'Untitled'}\n${item.content || ''}\nSource: ${item.url || '-'}`).join('\n\n');
-    return wrapUntrustedContent(resultText);
-  } catch (err) {
-    if (isAbortError(err)) throw err;
-    return 'Tool error: search service temporarily unavailable.';
-  }
 };
 
 const formatTasksList = (tasks: ReturnType<typeof listTasks>, timezoneOffset: number, emptyText = 'No tasks found.') => {
