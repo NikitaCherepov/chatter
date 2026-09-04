@@ -787,7 +787,7 @@ const composeArgs = (...args) => [
   ...args
 ];
 
-function runDocker(args, timeoutMs = 20 * 60 * 1000) {
+function runDocker(args, timeoutMs = 20 * 60 * 1000, maxOutputChars = 20_000) {
   return new Promise((resolve, reject) => {
     const child = spawn(DOCKER_BIN, args, {
       cwd: PROJECT_DIR,
@@ -808,7 +808,8 @@ function runDocker(args, timeoutMs = 20 * 60 * 1000) {
     let stderr = '';
     const append = (current, chunk) => {
       const next = current + chunk.toString();
-      return next.length > 20000 ? next.slice(-20000) : next;
+      if (maxOutputChars <= 0 || next.length <= maxOutputChars) return next;
+      return next.slice(-maxOutputChars);
     };
     child.stdout.on('data', (chunk) => { stdout = append(stdout, chunk); });
     child.stderr.on('data', (chunk) => { stderr = append(stderr, chunk); });
@@ -862,7 +863,8 @@ async function updateServiceSelection() {
 
   const allProfileArgs = ['--profile', '*'];
   const [configOutput, existingOutput] = await Promise.all([
-    runDocker(composeArgs(...allProfileArgs, 'config', '--format', 'json'), 30000),
+    // Compose JSON grows with every service and must not use the small diagnostic-output buffer.
+    runDocker(composeArgs(...allProfileArgs, 'config', '--format', 'json'), 30000, 0),
     runDocker(composeArgs(...allProfileArgs, 'ps', '--services'), 30000),
   ]);
   const config = JSON.parse(configOutput);
