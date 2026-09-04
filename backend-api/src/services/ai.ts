@@ -3910,6 +3910,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     if (!webLimit.allowed && billingUser.is_admin !== 1) return webLimit.reason;
     incrementUserWebSearchUsage(billingUser.id, 1);
     return runWebSearch(query, {
+      userId: user.id,
       cursor: typeof parsed.cursor === 'string' ? parsed.cursor : undefined,
       wikipedia: parsed.wikipedia === true,
       language: user.language,

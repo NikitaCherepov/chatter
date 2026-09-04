@@ -1,4 +1,5 @@
 import { wrapUntrustedContent } from './web-reader.js';
+import { randomUUID } from 'node:crypto';
 
 const SEARXNG_BASE_URL = `${process.env.SEARXNG_BASE_URL || 'http://searxng:8080'}`.trim().replace(/\/+$/, '');
 const TAVILY_API_KEY = `${process.env.TAVILY_API_KEY || ''}`.trim();
@@ -6,11 +7,25 @@ const TAVILY_API_BASE_URL = `${process.env.TAVILY_API_BASE_URL || 'https://api.t
 const SEARCH_TIMEOUT_MS = 15_000;
 const MAX_RESULTS = 5;
 const MAX_SEARCH_PAGE = 10;
+const SEARCH_SESSION_TTL_MS = 10 * 60_000;
+const MAX_SEARCH_SESSIONS = 200;
 
 type WebSearchOptions = {
+  userId: number;
   cursor?: string;
   wikipedia?: boolean;
   language?: string | null;
+};
+
+type SearchSession = {
+  userId: number;
+  query: string;
+  wikipedia: boolean;
+  language: string;
+  results: SearxngResult[];
+  nextSearxngPage: number;
+  exhausted: boolean;
+  createdAt: number;
 };
 
 type SearxngResult = {
@@ -51,21 +66,29 @@ const getResultEngines = (result: SearxngResult): string[] => (
     : [result.engine || '']
 ).map(engine => `${engine}`.trim()).filter(Boolean);
 
-const parseSearchCursor = (cursor: string | undefined): { page: number; offset: number } | null => {
-  if (!cursor) return { page: 1, offset: 0 };
-  const match = /^(\d+):(\d+)$/.exec(cursor.trim());
-  if (!match) return null;
-  const page = Number(match[1]);
-  const offset = Number(match[2]);
-  if (!Number.isSafeInteger(page) || page < 1 || page > MAX_SEARCH_PAGE) return null;
-  if (!Number.isSafeInteger(offset) || offset < 0 || offset % MAX_RESULTS !== 0) return null;
-  return { page, offset };
+const searchSessions = new Map<string, SearchSession>();
+
+const pruneSearchSessions = () => {
+  const expiresBefore = Date.now() - SEARCH_SESSION_TTL_MS;
+  for (const [id, session] of searchSessions) {
+    if (session.createdAt < expiresBefore) searchSessions.delete(id);
+  }
+  while (searchSessions.size >= MAX_SEARCH_SESSIONS) {
+    const oldestId = searchSessions.keys().next().value as string | undefined;
+    if (!oldestId) break;
+    searchSessions.delete(oldestId);
+  }
 };
 
-const runSearxngWebSearch = async (query: string, options: WebSearchOptions = {}, signal?: AbortSignal): Promise<string> => {
-  const cursor = parseSearchCursor(options.cursor);
-  if (!cursor) return 'Tool error: invalid search cursor.';
+const parseSearchCursor = (cursor: string): { searchId: string; offset: number } | null => {
+  const match = /^([0-9a-f-]{36}):(\d+)$/i.exec(cursor.trim());
+  if (!match) return null;
+  const offset = Number(match[2]);
+  if (!Number.isSafeInteger(offset) || offset < 0) return null;
+  return { searchId: match[1], offset };
+};
 
+const fetchSearxngPage = async (session: SearchSession, page: number, signal?: AbortSignal): Promise<SearxngResult[]> => {
   const controller = new AbortController();
   const forwardAbort = () => controller.abort(signal?.reason);
   signal?.addEventListener('abort', forwardAbort, { once: true });
@@ -73,12 +96,11 @@ const runSearxngWebSearch = async (query: string, options: WebSearchOptions = {}
 
   try {
     const url = new URL(`${SEARXNG_BASE_URL}/search`);
-    const wikipediaOnly = options.wikipedia === true;
-    url.searchParams.set('q', wikipediaOnly ? `!wikipedia ${query}` : query);
+    url.searchParams.set('q', session.wikipedia ? `!wikipedia ${session.query}` : session.query);
     url.searchParams.set('format', 'json');
     url.searchParams.set('categories', 'general');
-    url.searchParams.set('language', wikipediaOnly ? (`${options.language || 'en'}`.trim() || 'en') : 'all');
-    url.searchParams.set('pageno', `${cursor.page}`);
+    url.searchParams.set('language', session.language);
+    url.searchParams.set('pageno', `${page}`);
 
     const response = await fetch(url, {
       headers: {
@@ -100,9 +122,8 @@ const runSearxngWebSearch = async (query: string, options: WebSearchOptions = {}
       .filter(failure => failure.engine);
 
     const engineReport = {
-      page: cursor.page,
-      offset: cursor.offset,
-      wikipediaOnly,
+      page,
+      wikipediaOnly: session.wikipedia,
       returned: returnedEngines,
       failed: failedEngines,
       resultCount: results.length,
@@ -116,37 +137,95 @@ const runSearxngWebSearch = async (query: string, options: WebSearchOptions = {}
       })),
     };
     console.info('[web-search] SearXNG engine report', JSON.stringify(engineReport, null, 2));
-
-    if (!results.length) return `No results found for query "${query}" on search page ${cursor.page}.`;
-
-    const visibleResults = results.slice(cursor.offset, cursor.offset + MAX_RESULTS);
-    if (!visibleResults.length) {
-      const nextCursor = cursor.page < MAX_SEARCH_PAGE ? `${cursor.page + 1}:0` : null;
-      return `No more results on search page ${cursor.page}. ${nextCursor ? `Continue with cursor "${nextCursor}".` : 'The search depth limit has been reached.'}`;
-    }
-
-    const resultText = visibleResults.map((item, index) => {
-      const engines = getResultEngines(item);
-      return `${cursor.offset + index + 1}. ${item.title || 'Untitled'}\n${item.content || ''}\nSource: ${item.url || '-'}\nSearch engines: ${engines.join(', ') || 'unknown'}`;
-    }).join('\n\n');
-    const nextOffset = cursor.offset + visibleResults.length;
-    const nextCursor = nextOffset < results.length
-      ? `${cursor.page}:${nextOffset}`
-      : (cursor.page < MAX_SEARCH_PAGE ? `${cursor.page + 1}:0` : null);
-    const pagination = nextCursor
-      ? `Search pagination: showing ${cursor.offset + 1}-${nextOffset} of ${results.length} results on search page ${cursor.page}. To continue, repeat the same query and wikipedia value with cursor "${nextCursor}".`
-      : `Search pagination: showing ${cursor.offset + 1}-${nextOffset} of ${results.length} results on search page ${cursor.page}. The search depth limit has been reached.`;
-    return `${wrapUntrustedContent(resultText)}\n\n${pagination}`;
+    return results;
   } catch (error) {
     if (signal?.aborted) throw error;
     console.error('[web-search] SearXNG request failed', {
       error: error instanceof Error ? error.message : String(error),
     });
-    return 'Tool error: search service temporarily unavailable.';
+    throw error;
   } finally {
     clearTimeout(timeout);
     signal?.removeEventListener('abort', forwardAbort);
   }
+};
+
+const runSearxngWebSearch = async (query: string, options: WebSearchOptions, signal?: AbortSignal): Promise<string> => {
+  pruneSearchSessions();
+
+  let searchId: string;
+  let offset = 0;
+  let session: SearchSession;
+
+  if (options.cursor) {
+    const cursor = parseSearchCursor(options.cursor);
+    const existing = cursor ? searchSessions.get(cursor.searchId) : undefined;
+    if (!cursor || !existing || existing.userId !== options.userId) {
+      return 'Tool error: search cursor is invalid or expired. Start a new search without a cursor.';
+    }
+    if (existing.query !== query || existing.wikipedia !== (options.wikipedia === true)) {
+      return 'Tool error: search cursor does not match this query or search mode. Start a new search without a cursor.';
+    }
+    searchId = cursor.searchId;
+    offset = cursor.offset;
+    session = existing;
+  } else {
+    searchId = randomUUID();
+    session = {
+      userId: options.userId,
+      query,
+      wikipedia: options.wikipedia === true,
+      language: options.wikipedia ? (`${options.language || 'en'}`.trim() || 'en') : 'all',
+      results: [],
+      nextSearxngPage: 1,
+      exhausted: false,
+      createdAt: Date.now(),
+    };
+    searchSessions.set(searchId, session);
+  }
+
+  try {
+    while (offset >= session.results.length && !session.exhausted) {
+      if (session.nextSearxngPage > MAX_SEARCH_PAGE) {
+        session.exhausted = true;
+        break;
+      }
+      const pageResults = await fetchSearxngPage(session, session.nextSearxngPage, signal);
+      session.nextSearxngPage += 1;
+      if (!pageResults.length) {
+        session.exhausted = true;
+        break;
+      }
+      const knownUrls = new Set(session.results.map(result => result.url).filter(Boolean));
+      const uniqueResults = pageResults.filter(result => {
+        if (!result.url) return true;
+        if (knownUrls.has(result.url)) return false;
+        knownUrls.add(result.url);
+        return true;
+      });
+      session.results.push(...uniqueResults);
+    }
+  } catch (error) {
+    if (signal?.aborted) throw error;
+    return 'Tool error: search service temporarily unavailable.';
+  }
+
+  const visibleResults = session.results.slice(offset, offset + MAX_RESULTS);
+  if (!visibleResults.length) {
+    return `No more results found for query "${query}". The search depth limit has been reached.`;
+  }
+
+  const resultText = visibleResults.map((item, index) => {
+    const engines = getResultEngines(item);
+    return `${offset + index + 1}. ${item.title || 'Untitled'}\n${item.content || ''}\nSource: ${item.url || '-'}\nSearch engines: ${engines.join(', ') || 'unknown'}`;
+  }).join('\n\n');
+  const nextOffset = offset + visibleResults.length;
+  const hasMore = nextOffset < session.results.length || !session.exhausted;
+  const nextCursor = hasMore ? `${searchId}:${nextOffset}` : null;
+  const pagination = nextCursor
+    ? `Search pagination: showing cached results ${offset + 1}-${nextOffset}. To continue, repeat the same query and wikipedia value with cursor "${nextCursor}".`
+    : `Search pagination: showing cached results ${offset + 1}-${nextOffset}. No more results are available.`;
+  return `${wrapUntrustedContent(resultText)}\n\n${pagination}`;
 };
 // Kept as an inactive fallback while SearXNG is tested in production.
 export const runTavilyWebSearch = async (query: string, signal?: AbortSignal): Promise<string> => {
