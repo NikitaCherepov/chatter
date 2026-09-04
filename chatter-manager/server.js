@@ -821,15 +821,6 @@ function runDocker(args, timeoutMs = 20 * 60 * 1000) {
   });
 }
 
-const SERVER_IMAGE_SUFFIXES = {
-  backend: 'backend',
-  'telegram-bot': 'telegram-bot',
-  'webapp-notes': 'webapp-notes',
-  voice: 'voice',
-  'admin-panel': 'admin-panel',
-  'chatter-manager': 'manager'
-};
-
 function serverUpdatesSupported() {
   const tag = currentImageTag();
   return process.env.CHATTER_PULL_IMAGES === '1'
@@ -863,15 +854,24 @@ function serverUpdateInProgress() {
 
 async function updateServiceSelection() {
   const settings = loadSettings();
-  const profiles = ['admin'];
-  if (settings.telegramEnabled) profiles.push('telegram');
-  if (settings.notesEnabled) profiles.push('notes');
-  if (settings.voiceMode === 'local') profiles.push('voice');
+  const desiredProfiles = new Set(['admin', 'gateway']);
+  if (settings.telegramEnabled) desiredProfiles.add('telegram');
+  if (settings.notesEnabled) desiredProfiles.add('notes');
+  if (settings.voiceMode === 'local') desiredProfiles.add('voice');
 
-  const profileArgs = profiles.flatMap(profile => ['--profile', profile]);
-  const output = await runDocker(composeArgs(...profileArgs, 'config', '--format', 'json'), 30000);
-  const config = JSON.parse(output);
-  const serviceEntries = Object.entries(config.services || {});
+  const allProfileArgs = ['--profile', '*'];
+  const [configOutput, existingOutput] = await Promise.all([
+    runDocker(composeArgs(...allProfileArgs, 'config', '--format', 'json'), 30000),
+    runDocker(composeArgs(...allProfileArgs, 'ps', '--services'), 30000),
+  ]);
+  const config = JSON.parse(configOutput);
+  const runningServices = new Set(existingOutput.split(/\r?\n/).filter(Boolean));
+  const serviceEntries = Object.entries(config.services || {}).filter(([service, definition]) => {
+    const serviceProfiles = Array.isArray(definition?.profiles) ? definition.profiles : [];
+    return serviceProfiles.length === 0
+      || runningServices.has(service)
+      || serviceProfiles.some(profile => desiredProfiles.has(profile));
+  });
   const services = serviceEntries.map(([service]) => service);
   const images = Object.fromEntries(serviceEntries.map(([service, definition]) => [
     service,
@@ -885,31 +885,63 @@ async function updateServiceSelection() {
     throw new Error('compose_manager_service_missing');
   }
 
-  return { profiles, services, images, releaseServices, externalServices };
+  return { profiles: ['*'], services, images, releaseServices, externalServices };
 }
-
 let lastPullTime = 0;
 const PULL_COOLDOWN_MS = 5 * 60 * 1000;
 
-function imageReference(service) {
-  const suffix = SERVER_IMAGE_SUFFIXES[service];
-  const prefix = currentImagePrefix();
-  const tag = currentImageTag();
-  if (!suffix || !prefix || !tag || /[\s'"`$]/.test(`${prefix}${tag}`)) throw new Error('invalid_server_image_reference');
-  return `${prefix}-${suffix}:${tag}`;
+const BUNDLED_PROJECT_DIR = '/app/release/project';
+const BUNDLED_COMPOSE_FILE = `${BUNDLED_PROJECT_DIR}/docker-compose.yml`;
+const BUNDLED_MANAGED_FILES_FILE = `${BUNDLED_PROJECT_DIR}/deploy/managed-files.txt`;
+
+async function currentManagerImageReference() {
+  const reference = await runDocker([
+    'inspect', '--format', '{{.Config.Image}}', os.hostname(),
+  ], 30000);
+  if (!reference) throw new Error('current_manager_image_missing');
+  return reference.trim();
 }
 
-const BUNDLED_COMPOSE_FILE = '/app/release/docker-compose.yml';
-
-async function syncBundledComposeFile() {
-  if (!serverUpdatesSupported()) return false;
+function readBundledDeploymentFiles() {
   if (!fs.existsSync(BUNDLED_COMPOSE_FILE)) throw new Error('bundled_compose_file_missing');
+  if (!fs.existsSync(BUNDLED_MANAGED_FILES_FILE)) throw new Error('bundled_managed_files_manifest_missing');
 
-  const bundledCompose = fs.readFileSync(BUNDLED_COMPOSE_FILE);
-  const installedCompose = fs.readFileSync(COMPOSE_FILE);
-  if (bundledCompose.equals(installedCompose)) return false;
+  const files = ['docker-compose.yml'];
+  const entries = fs.readFileSync(BUNDLED_MANAGED_FILES_FILE, 'utf8').split(/\r?\n/);
+  for (const entry of entries) {
+    const relative = entry.replace(/#.*$/, '').trim().replace(/\\/g, '/');
+    if (!relative) continue;
+    const parts = relative.split('/');
+    if (!relative.startsWith('deploy/')
+      || parts.some(part => !part || part === '.' || part === '..')
+      || !/^[A-Za-z0-9._/-]+$/.test(relative)) {
+      throw new Error(`invalid_managed_deployment_path:${relative}`);
+    }
+    if (!files.includes(relative)) files.push(relative);
+  }
 
-  const managerImage = imageReference('chatter-manager');
+  for (const relative of files) {
+    const source = path.join(BUNDLED_PROJECT_DIR, ...relative.split('/'));
+    if (!fs.existsSync(source) || !fs.statSync(source).isFile()) {
+      throw new Error(`bundled_deployment_file_missing:${relative}`);
+    }
+  }
+  return files;
+}
+
+function profileArgs(profiles) {
+  return profiles.flatMap(profile => ['--profile', profile]);
+}
+
+function shellProfileArgs(profiles) {
+  return profiles.flatMap(profile => ['--profile', JSON.stringify(profile)]);
+}
+
+async function syncBundledDeploymentFiles(managerImage = '') {
+  if (!serverUpdatesSupported()) return [];
+
+  const deploymentFiles = readBundledDeploymentFiles();
+  const image = managerImage || await currentManagerImageReference();
   await runDocker([
     'compose',
     '--project-name', PROJECT_NAME,
@@ -920,35 +952,109 @@ async function syncBundledComposeFile() {
     'config', '--format', 'json',
   ], 30000);
 
+  const syncCommands = deploymentFiles.map((relative) => {
+    const source = `${BUNDLED_PROJECT_DIR}/${relative}`;
+    return `sync_file '${source}' '/host-project/${relative}' '${relative}'`;
+  }).join('\n');
   const script = `set -eu
-if cmp -s /app/release/docker-compose.yml /host-project/docker-compose.yml; then
-  exit 0
-fi
-cp /host-project/docker-compose.yml /host-project/docker-compose.yml.previous
-cat /app/release/docker-compose.yml > /host-project/docker-compose.yml`;
+sync_file() {
+  SOURCE="$1"
+  TARGET="$2"
+  RELATIVE="$3"
+  if cmp -s "$SOURCE" "$TARGET"; then
+    return
+  fi
+  mkdir -p "$(dirname "$TARGET")"
+  if [ -f "$TARGET" ]; then
+    cp "$TARGET" "$TARGET.previous"
+  fi
+  cat "$SOURCE" > "$TARGET"
+  printf 'deployment_file_updated=%s\n' "$RELATIVE"
+}
+${syncCommands}`;
 
-  await runDocker([
+  const output = await runDocker([
     'run', '--rm',
     '--entrypoint', '/bin/sh',
     '--volume', `${HOST_PROJECT_DIR}:/host-project`,
+    image,
+    '-c', script,
+  ], 60000);
+  const updatedFiles = output.split(/\r?\n/)
+    .filter(line => line.startsWith('deployment_file_updated='))
+    .map(line => line.slice('deployment_file_updated='.length));
+  if (updatedFiles.length) {
+    console.log('[manager] synchronized bundled deployment files', {
+      files: updatedFiles,
+      backupSuffix: '.previous',
+    });
+  }
+  return updatedFiles;
+}
+
+async function launchComposeReconcileHelper(selection, forceRecreate) {
+  const managerImage = selection.images['chatter-manager'] || await currentManagerImageReference();
+  const forceArgs = forceRecreate ? ['--force-recreate'] : [];
+  const baseComposeCommand = [
+    'docker', 'compose', '--project-name', '"$COMPOSE_PROJECT_NAME"',
+    '--project-directory', '"$HOST_PROJECT_DIR"',
+    '--env-file', '"$HOST_CONFIG_DIR/compose.env"',
+    '-f', '"$HOST_PROJECT_DIR/docker-compose.yml"',
+    ...shellProfileArgs(selection.profiles),
+  ];
+  const listContainersCommand = [
+    ...baseComposeCommand,
+    'ps', '-a', '-q', ...selection.services.map(service => JSON.stringify(service)),
+  ].join(' ');
+  const composeCommand = [
+    ...baseComposeCommand,
+    'up', '-d', '--no-build', '--pull', 'never', ...forceArgs,
+    ...selection.services.map(service => JSON.stringify(service)),
+  ].join(' ');
+  const script = `set -eu
+sleep 2
+LOG_FILE="$HOST_CONFIG_DIR/deployment-sync.log"
+OLD_IMAGE_IDS=""
+for CONTAINER_ID in $(${listContainersCommand}); do
+  IMAGE_ID="$(docker inspect --format '{{.Image}}' "$CONTAINER_ID")"
+  OLD_IMAGE_IDS="$OLD_IMAGE_IDS $IMAGE_ID"
+done
+if ${composeCommand}; then
+  printf '%s deployment reconcile complete\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$LOG_FILE"
+else
+  CODE=$?
+  printf '%s deployment reconcile failed with code %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$CODE" >> "$LOG_FILE"
+  exit "$CODE"
+fi
+for IMAGE_ID in $OLD_IMAGE_IDS; do
+  docker image rm "$IMAGE_ID" >> "$LOG_FILE" 2>&1 || true
+done
+docker image prune -f >> "$LOG_FILE" 2>&1 || true`;
+
+  await runDocker([
+    'run', '--detach', '--rm', '--name', `chatter-compose-reconciler-${Date.now()}`,
+    '--entrypoint', '/bin/sh',
+    '--env', `HOST_PROJECT_DIR=${HOST_PROJECT_DIR}`,
+    '--env', `HOST_CONFIG_DIR=${HOST_CONFIG_DIR}`,
+    '--env', `COMPOSE_PROJECT_NAME=${PROJECT_NAME}`,
+    '--volume', '/var/run/docker.sock:/var/run/docker.sock',
+    '--volume', `${HOST_PROJECT_DIR}:${HOST_PROJECT_DIR}:ro`,
+    '--volume', `${HOST_CONFIG_DIR}:${HOST_CONFIG_DIR}`,
     managerImage,
     '-c', script,
   ], 60000);
-  console.log('[manager] synchronized bundled docker-compose.yml', {
-    backup: `${HOST_PROJECT_DIR}/docker-compose.yml.previous`,
-  });
-  return true;
 }
 
 async function reconcileNewComposeServices() {
   if (!serverUpdatesSupported()) return true;
   if (serverUpdateInProgress()) return false;
 
-  const composeChanged = await syncBundledComposeFile();
+  const managerImage = await currentManagerImageReference();
+  const updatedFiles = await syncBundledDeploymentFiles(managerImage);
   const selection = await updateServiceSelection();
-  const profileArgs = selection.profiles.flatMap(profile => ['--profile', profile]);
+  const selectedProfileArgs = profileArgs(selection.profiles);
   const existingOutput = await runDocker(
-    composeArgs(...profileArgs, 'ps', '-a', '--services'),
+    composeArgs(...selectedProfileArgs, 'ps', '-a', '--services'),
     30000,
   );
   const existingServices = new Set(existingOutput.split(/\r?\n/).filter(Boolean));
@@ -959,25 +1065,37 @@ async function reconcileNewComposeServices() {
     externalServices: selection.externalServices,
     missingServices,
   });
-  const servicesToReconcile = composeChanged
-    ? selection.services.filter(service => service !== 'chatter-manager')
-    : missingServices;
-  if (!servicesToReconcile.length) return true;
 
+  if (updatedFiles.length) {
+    if (process.env.CHATTER_PULL_IMAGES === '1') {
+      await runDocker(
+        composeArgs(...selectedProfileArgs, 'pull', ...selection.services),
+        60 * 60 * 1000,
+      );
+    }
+    await launchComposeReconcileHelper(
+      selection,
+      updatedFiles.some(relative => relative !== 'docker-compose.yml'),
+    );
+    console.log('[manager] launched deployment reconcile helper', {
+      files: updatedFiles,
+      services: selection.services,
+    });
+    return true;
+  }
+
+  if (!missingServices.length) return true;
   if (process.env.CHATTER_PULL_IMAGES === '1') {
     await runDocker(
-      composeArgs(...profileArgs, 'pull', ...servicesToReconcile),
+      composeArgs(...selectedProfileArgs, 'pull', ...missingServices),
       60 * 60 * 1000,
     );
   }
   await runDocker(
-    composeArgs(...profileArgs, 'up', '-d', '--no-build', '--pull', 'never', ...servicesToReconcile),
+    composeArgs(...selectedProfileArgs, 'up', '-d', '--no-build', '--pull', 'never', ...missingServices),
     10 * 60 * 1000,
   );
-  console.log('[manager] reconciled compose services', {
-    composeChanged,
-    services: servicesToReconcile,
-  });
+  console.log('[manager] started missing compose services', { services: missingServices });
   return true;
 }
 
@@ -993,7 +1111,6 @@ function scheduleComposeBootstrap(attempt = 1) {
       });
   }, 15000).unref();
 }
-
 async function inspectImage(reference) {
   const [idOutput, configOutput] = await Promise.all([
     runDocker(['image', 'inspect', '--format', '{{json .Id}}', reference], 30000),
@@ -1088,8 +1205,8 @@ async function getServerUpdateInfo({ pull = false, forcePull = false } = {}) {
 }
 
 async function launchServerUpdateHelper(targetHash, selection) {
-  const managerImage = selection.images['chatter-manager'] || imageReference('chatter-manager');
-  const profileArgs = selection.profiles.flatMap(profile => ['--profile', profile]);
+  const managerImage = selection.images['chatter-manager'] || await currentManagerImageReference();
+  const profileArgs = shellProfileArgs(selection.profiles);
   const listContainersCommand = [
     'docker', 'compose', '--project-name', '"$COMPOSE_PROJECT_NAME"',
     '--project-directory', '"$HOST_PROJECT_DIR"',

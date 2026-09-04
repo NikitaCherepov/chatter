@@ -5,7 +5,8 @@ RUN apk add --no-cache docker-cli docker-cli-compose sqlite
 WORKDIR /app
 
 COPY chatter-manager/server.js ./server.js
-COPY docker-compose.yml ./release/docker-compose.yml
+COPY docker-compose.yml ./release/project/docker-compose.yml
+COPY deploy ./release/project/deploy
 
 ENV NODE_ENV=production
 EXPOSE 8080

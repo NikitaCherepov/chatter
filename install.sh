@@ -141,7 +141,8 @@ download_source_file() {
 }
 
 bootstrap_installation() {
-  local staging_dir
+  local staging_dir managed_path
+  local -a managed_files=()
   staging_dir="$(mktemp -d)"
   trap 'rm -rf "$staging_dir"' RETURN
 
@@ -149,11 +150,27 @@ bootstrap_installation() {
   install -d -m 755 "$staging_dir/deploy" "$INSTALL_DIR/deploy"
   download_source_file install.sh "$staging_dir/install.sh" || fail "Could not download install.sh from GitHub."
   download_source_file docker-compose.yml "$staging_dir/docker-compose.yml" || fail "Could not download docker-compose.yml from GitHub."
-  download_source_file deploy/Caddyfile "$staging_dir/deploy/Caddyfile" || fail "Could not download deploy/Caddyfile from GitHub."
+  download_source_file deploy/managed-files.txt "$staging_dir/deploy/managed-files.txt" || fail "Could not download the managed deployment file manifest from GitHub."
+
+  while IFS= read -r managed_path || [[ -n "$managed_path" ]]; do
+    managed_path="${managed_path%%#*}"
+    managed_path="${managed_path#"${managed_path%%[![:space:]]*}"}"
+    managed_path="${managed_path%"${managed_path##*[![:space:]]}"}"
+    [[ -n "$managed_path" ]] || continue
+    if [[ ! "$managed_path" =~ ^deploy/[A-Za-z0-9._/-]+$ ]] || [[ "$managed_path" == *"//"* || "$managed_path" == *"/./"* || "$managed_path" == *"/../"* ]] || [[ "$managed_path" == */. || "$managed_path" == */.. ]]; then
+      fail "Invalid managed deployment path: ${managed_path}"
+    fi
+    managed_files+=("$managed_path")
+    install -d -m 755 "$(dirname "$staging_dir/$managed_path")" "$(dirname "$INSTALL_DIR/$managed_path")"
+    download_source_file "$managed_path" "$staging_dir/$managed_path" || fail "Could not download ${managed_path} from GitHub."
+  done < "$staging_dir/deploy/managed-files.txt"
 
   install -m 755 "$staging_dir/install.sh" "$INSTALL_DIR/install.sh"
   install -m 644 "$staging_dir/docker-compose.yml" "$INSTALL_DIR/docker-compose.yml"
-  install -m 644 "$staging_dir/deploy/Caddyfile" "$INSTALL_DIR/deploy/Caddyfile"
+  install -m 644 "$staging_dir/deploy/managed-files.txt" "$INSTALL_DIR/deploy/managed-files.txt"
+  for managed_path in "${managed_files[@]}"; do
+    install -m 644 "$staging_dir/$managed_path" "$INSTALL_DIR/$managed_path"
+  done
 
   log "Continuing installation from ${INSTALL_DIR}"
   exec bash "$INSTALL_DIR/install.sh" "$@"
@@ -288,12 +305,12 @@ write_private_file "$COMPOSE_ENV" \
 configure_firewall
 
 log "Downloading ready-to-run Chatter images"
-if ! docker compose --project-name chatter --env-file "$COMPOSE_ENV" --profile admin --profile gateway pull backend admin-panel chatter-manager gateway; then
-  fail "Could not download Chatter images. While GHCR packages are private, run 'sudo docker login ghcr.io' and retry."
+if ! docker compose --project-name chatter --env-file "$COMPOSE_ENV" --profile admin --profile gateway pull; then
+  fail "Could not download the deployment images. If a registry requires authentication, sign in with Docker and retry."
 fi
 
 log "Starting Chatter behind the HTTPS gateway"
-docker compose --project-name chatter --env-file "$COMPOSE_ENV" --profile admin --profile gateway up -d --no-build backend admin-panel chatter-manager gateway
+docker compose --project-name chatter --env-file "$COMPOSE_ENV" --profile admin --profile gateway up -d --no-build
 
 if [[ "$RESET_ADMIN" -eq 1 ]]; then
   docker compose --project-name chatter --env-file "$COMPOSE_ENV" --profile admin up -d --no-build --force-recreate chatter-manager

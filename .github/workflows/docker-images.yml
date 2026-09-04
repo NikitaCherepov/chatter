@@ -15,31 +15,53 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  prepare:
+    name: Discover images
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.matrix.outputs.value }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Build image matrix from Compose
+        id: matrix
+        shell: bash
+        env:
+          BACKEND_ENV_FILE: /dev/null
+          TELEGRAM_ENV_FILE: /dev/null
+          VOICE_ENV_FILE: /dev/null
+          CHATTER_MANAGER_ENV_FILE: /dev/null
+          CHATTER_IMAGE_PREFIX: chatter
+          CHATTER_IMAGE_TAG: local
+          CHATTER_PUBLIC_HOST: localhost
+        run: |
+          images="$(
+            docker compose --profile '*' config --no-path-resolution --format json |
+              jq -c '[
+                .services | to_entries[] |
+                select(.value.build != null) |
+                {
+                  image: (.value.image | capture("^chatter-(?<name>.+):local$").name),
+                  context: .value.build.context,
+                  dockerfile: (
+                    if .value.build.context == "." then .value.build.dockerfile
+                    else (.value.build.context + "/" + .value.build.dockerfile)
+                    end
+                  )
+                }
+              ]'
+          )"
+          jq -e 'length > 0 and any(.[]; .image == "manager")' <<<"$images" >/dev/null
+          echo "value={\"include\":${images}}" >> "$GITHUB_OUTPUT"
+
   build-and-push:
+    needs: prepare
     name: ${{ matrix.image }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - image: backend
-            context: ./backend-api
-            dockerfile: ./backend-api/Dockerfile
-          - image: telegram-bot
-            context: .
-            dockerfile: ./Dockerfile.bot
-          - image: webapp-notes
-            context: ./webapp-notes
-            dockerfile: ./webapp-notes/Dockerfile
-          - image: voice
-            context: ./voice-service
-            dockerfile: ./voice-service/Dockerfile
-          - image: admin-panel
-            context: ./admin-panel
-            dockerfile: ./admin-panel/Dockerfile
-          - image: manager
-            context: .
-            dockerfile: ./chatter-manager/Dockerfile
+      matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
 
     steps:
       - name: Check out repository

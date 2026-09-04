@@ -12,3 +12,5 @@
 !chatter-manager/Dockerfile
 !chatter-manager/server.js
 !docker-compose.yml
+!deploy/
+!deploy/**
