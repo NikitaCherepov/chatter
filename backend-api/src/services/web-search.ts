@@ -5,6 +5,13 @@ const TAVILY_API_KEY = `${process.env.TAVILY_API_KEY || ''}`.trim();
 const TAVILY_API_BASE_URL = `${process.env.TAVILY_API_BASE_URL || 'https://api.tavily.com'}`.trim().replace(/\/+$/, '');
 const SEARCH_TIMEOUT_MS = 15_000;
 const MAX_RESULTS = 5;
+const MAX_SEARCH_PAGE = 10;
+
+type WebSearchOptions = {
+  cursor?: string;
+  wikipedia?: boolean;
+  language?: string | null;
+};
 
 type SearxngResult = {
   title?: string;
@@ -44,7 +51,21 @@ const getResultEngines = (result: SearxngResult): string[] => (
     : [result.engine || '']
 ).map(engine => `${engine}`.trim()).filter(Boolean);
 
-const runSearxngWebSearch = async (query: string, signal?: AbortSignal): Promise<string> => {
+const parseSearchCursor = (cursor: string | undefined): { page: number; offset: number } | null => {
+  if (!cursor) return { page: 1, offset: 0 };
+  const match = /^(\d+):(\d+)$/.exec(cursor.trim());
+  if (!match) return null;
+  const page = Number(match[1]);
+  const offset = Number(match[2]);
+  if (!Number.isSafeInteger(page) || page < 1 || page > MAX_SEARCH_PAGE) return null;
+  if (!Number.isSafeInteger(offset) || offset < 0 || offset % MAX_RESULTS !== 0) return null;
+  return { page, offset };
+};
+
+const runSearxngWebSearch = async (query: string, options: WebSearchOptions = {}, signal?: AbortSignal): Promise<string> => {
+  const cursor = parseSearchCursor(options.cursor);
+  if (!cursor) return 'Tool error: invalid search cursor.';
+
   const controller = new AbortController();
   const forwardAbort = () => controller.abort(signal?.reason);
   signal?.addEventListener('abort', forwardAbort, { once: true });
@@ -52,10 +73,12 @@ const runSearxngWebSearch = async (query: string, signal?: AbortSignal): Promise
 
   try {
     const url = new URL(`${SEARXNG_BASE_URL}/search`);
-    url.searchParams.set('q', query);
+    const wikipediaOnly = options.wikipedia === true;
+    url.searchParams.set('q', wikipediaOnly ? `!wikipedia ${query}` : query);
     url.searchParams.set('format', 'json');
     url.searchParams.set('categories', 'general');
-    url.searchParams.set('language', 'all');
+    url.searchParams.set('language', wikipediaOnly ? (`${options.language || 'en'}`.trim() || 'en') : 'all');
+    url.searchParams.set('pageno', `${cursor.page}`);
 
     const response = await fetch(url, {
       headers: {
@@ -77,6 +100,9 @@ const runSearxngWebSearch = async (query: string, signal?: AbortSignal): Promise
       .filter(failure => failure.engine);
 
     const engineReport = {
+      page: cursor.page,
+      offset: cursor.offset,
+      wikipediaOnly,
       returned: returnedEngines,
       failed: failedEngines,
       resultCount: results.length,
@@ -91,13 +117,26 @@ const runSearxngWebSearch = async (query: string, signal?: AbortSignal): Promise
     };
     console.info('[web-search] SearXNG engine report', JSON.stringify(engineReport, null, 2));
 
-    if (!results.length) return `No results found for query "${query}".`;
+    if (!results.length) return `No results found for query "${query}" on search page ${cursor.page}.`;
 
-    const resultText = results.slice(0, MAX_RESULTS).map((item, index) => {
+    const visibleResults = results.slice(cursor.offset, cursor.offset + MAX_RESULTS);
+    if (!visibleResults.length) {
+      const nextCursor = cursor.page < MAX_SEARCH_PAGE ? `${cursor.page + 1}:0` : null;
+      return `No more results on search page ${cursor.page}. ${nextCursor ? `Continue with cursor "${nextCursor}".` : 'The search depth limit has been reached.'}`;
+    }
+
+    const resultText = visibleResults.map((item, index) => {
       const engines = getResultEngines(item);
-      return `${index + 1}. ${item.title || 'Untitled'}\n${item.content || ''}\nSource: ${item.url || '-'}\nSearch engines: ${engines.join(', ') || 'unknown'}`;
+      return `${cursor.offset + index + 1}. ${item.title || 'Untitled'}\n${item.content || ''}\nSource: ${item.url || '-'}\nSearch engines: ${engines.join(', ') || 'unknown'}`;
     }).join('\n\n');
-    return wrapUntrustedContent(resultText);
+    const nextOffset = cursor.offset + visibleResults.length;
+    const nextCursor = nextOffset < results.length
+      ? `${cursor.page}:${nextOffset}`
+      : (cursor.page < MAX_SEARCH_PAGE ? `${cursor.page + 1}:0` : null);
+    const pagination = nextCursor
+      ? `Search pagination: showing ${cursor.offset + 1}-${nextOffset} of ${results.length} results on search page ${cursor.page}. To continue, repeat the same query and wikipedia value with cursor "${nextCursor}".`
+      : `Search pagination: showing ${cursor.offset + 1}-${nextOffset} of ${results.length} results on search page ${cursor.page}. The search depth limit has been reached.`;
+    return `${wrapUntrustedContent(resultText)}\n\n${pagination}`;
   } catch (error) {
     if (signal?.aborted) throw error;
     console.error('[web-search] SearXNG request failed', {

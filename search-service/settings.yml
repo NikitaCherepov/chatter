@@ -31,7 +31,7 @@ engines:
   - name: google
     disabled: false
   - name: wikipedia
-    disabled: false
+    disabled: true
     display_type:
       - infobox
       - list

@@ -2044,7 +2044,9 @@ export const toolDefinitions = [
       parameters: {
         type: 'object',
         properties: {
-          query: { type: 'string', description: 'Search query' }
+          query: { type: 'string', description: 'Search query' },
+          cursor: { type: 'string', description: 'Pagination cursor returned by the previous search. Omit for the first search.' },
+          wikipedia: { type: 'boolean', description: 'When true, search only Wikipedia. Defaults to false for general web search.', default: false }
         },
         required: ['query']
       }
@@ -3907,7 +3909,11 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     const webLimit = checkWebSearchLimit(billingUser);
     if (!webLimit.allowed && billingUser.is_admin !== 1) return webLimit.reason;
     incrementUserWebSearchUsage(billingUser.id, 1);
-    return runWebSearch(query, signal);
+    return runWebSearch(query, {
+      cursor: typeof parsed.cursor === 'string' ? parsed.cursor : undefined,
+      wikipedia: parsed.wikipedia === true,
+      language: user.language,
+    }, signal);
   }
 
   if (toolName === 'read_webpage') {
