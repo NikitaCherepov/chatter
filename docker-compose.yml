@@ -146,8 +146,8 @@ services:
     profiles:
       - admin
     build:
-      context: ./chatter-manager
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: chatter-manager/Dockerfile
     image: "${CHATTER_IMAGE_PREFIX:-chatter}-manager:${CHATTER_IMAGE_TAG:-local}"
     restart: unless-stopped
     logging: *default-logging

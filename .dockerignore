@@ -7,3 +7,8 @@
 !i18n/**
 !Dockerfile.bot
 !.dockerignore
+# The manager image carries the deployment manifest used by server updates.
+!chatter-manager/
+!chatter-manager/Dockerfile
+!chatter-manager/server.js
+!docker-compose.yml

@@ -38,7 +38,7 @@ jobs:
             context: ./admin-panel
             dockerfile: ./admin-panel/Dockerfile
           - image: manager
-            context: ./chatter-manager
+            context: .
             dockerfile: ./chatter-manager/Dockerfile
 
     steps:

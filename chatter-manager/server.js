@@ -861,14 +861,31 @@ function serverUpdateInProgress() {
   return Boolean(updatePromise) || ['queued', 'backup', 'restarting'].includes(readUpdateState().status);
 }
 
-function updateServiceSelection() {
+async function updateServiceSelection() {
   const settings = loadSettings();
   const profiles = ['admin'];
-  const services = ['backend', 'admin-panel', 'chatter-manager'];
-  if (settings.telegramEnabled) { profiles.push('telegram'); services.push('telegram-bot'); }
-  if (settings.notesEnabled) { profiles.push('notes'); services.push('webapp-notes'); }
-  if (settings.voiceMode === 'local') { profiles.push('voice'); services.push('voice'); }
-  return { profiles, services };
+  if (settings.telegramEnabled) profiles.push('telegram');
+  if (settings.notesEnabled) profiles.push('notes');
+  if (settings.voiceMode === 'local') profiles.push('voice');
+
+  const profileArgs = profiles.flatMap(profile => ['--profile', profile]);
+  const output = await runDocker(composeArgs(...profileArgs, 'config', '--format', 'json'), 30000);
+  const config = JSON.parse(output);
+  const serviceEntries = Object.entries(config.services || {});
+  const services = serviceEntries.map(([service]) => service);
+  const images = Object.fromEntries(serviceEntries.map(([service, definition]) => [
+    service,
+    `${definition?.image || ''}`.trim(),
+  ]));
+  const releasePrefix = `${currentImagePrefix()}-`;
+  const releaseServices = services.filter(service => images[service].startsWith(releasePrefix));
+  const externalServices = services.filter(service => !releaseServices.includes(service));
+
+  if (!releaseServices.includes('chatter-manager')) {
+    throw new Error('compose_manager_service_missing');
+  }
+
+  return { profiles, services, images, releaseServices, externalServices };
 }
 
 let lastPullTime = 0;
@@ -880,6 +897,101 @@ function imageReference(service) {
   const tag = currentImageTag();
   if (!suffix || !prefix || !tag || /[\s'"`$]/.test(`${prefix}${tag}`)) throw new Error('invalid_server_image_reference');
   return `${prefix}-${suffix}:${tag}`;
+}
+
+const BUNDLED_COMPOSE_FILE = '/app/release/docker-compose.yml';
+
+async function syncBundledComposeFile() {
+  if (!serverUpdatesSupported()) return false;
+  if (!fs.existsSync(BUNDLED_COMPOSE_FILE)) throw new Error('bundled_compose_file_missing');
+
+  const bundledCompose = fs.readFileSync(BUNDLED_COMPOSE_FILE);
+  const installedCompose = fs.readFileSync(COMPOSE_FILE);
+  if (bundledCompose.equals(installedCompose)) return false;
+
+  const managerImage = imageReference('chatter-manager');
+  await runDocker([
+    'compose',
+    '--project-name', PROJECT_NAME,
+    '--project-directory', PROJECT_DIR,
+    '--env-file', COMPOSE_RUNTIME_ENV_FILE,
+    '-f', BUNDLED_COMPOSE_FILE,
+    '--profile', '*',
+    'config', '--format', 'json',
+  ], 30000);
+
+  const script = `set -eu
+if cmp -s /app/release/docker-compose.yml /host-project/docker-compose.yml; then
+  exit 0
+fi
+cp /host-project/docker-compose.yml /host-project/docker-compose.yml.previous
+cat /app/release/docker-compose.yml > /host-project/docker-compose.yml`;
+
+  await runDocker([
+    'run', '--rm',
+    '--entrypoint', '/bin/sh',
+    '--volume', `${HOST_PROJECT_DIR}:/host-project`,
+    managerImage,
+    '-c', script,
+  ], 60000);
+  console.log('[manager] synchronized bundled docker-compose.yml', {
+    backup: `${HOST_PROJECT_DIR}/docker-compose.yml.previous`,
+  });
+  return true;
+}
+
+async function reconcileNewComposeServices() {
+  if (!serverUpdatesSupported()) return true;
+  if (serverUpdateInProgress()) return false;
+
+  const composeChanged = await syncBundledComposeFile();
+  const selection = await updateServiceSelection();
+  const profileArgs = selection.profiles.flatMap(profile => ['--profile', profile]);
+  const existingOutput = await runDocker(
+    composeArgs(...profileArgs, 'ps', '-a', '--services'),
+    30000,
+  );
+  const existingServices = new Set(existingOutput.split(/\r?\n/).filter(Boolean));
+  const missingServices = selection.services.filter(service => !existingServices.has(service));
+
+  console.log('[manager] discovered compose services', {
+    releaseServices: selection.releaseServices,
+    externalServices: selection.externalServices,
+    missingServices,
+  });
+  const servicesToReconcile = composeChanged
+    ? selection.services.filter(service => service !== 'chatter-manager')
+    : missingServices;
+  if (!servicesToReconcile.length) return true;
+
+  if (process.env.CHATTER_PULL_IMAGES === '1') {
+    await runDocker(
+      composeArgs(...profileArgs, 'pull', ...servicesToReconcile),
+      60 * 60 * 1000,
+    );
+  }
+  await runDocker(
+    composeArgs(...profileArgs, 'up', '-d', '--no-build', '--pull', 'never', ...servicesToReconcile),
+    10 * 60 * 1000,
+  );
+  console.log('[manager] reconciled compose services', {
+    composeChanged,
+    services: servicesToReconcile,
+  });
+  return true;
+}
+
+function scheduleComposeBootstrap(attempt = 1) {
+  setTimeout(() => {
+    void reconcileNewComposeServices()
+      .then((complete) => {
+        if (!complete && attempt < 20) scheduleComposeBootstrap(attempt + 1);
+      })
+      .catch((error) => {
+        console.error('[manager] compose bootstrap failed', { attempt, error });
+        if (attempt < 20) scheduleComposeBootstrap(attempt + 1);
+      });
+  }, 15000).unref();
 }
 
 async function inspectImage(reference) {
@@ -943,20 +1055,20 @@ async function getServerUpdateInfo({ pull = false, forcePull = false } = {}) {
     operation: readUpdateState()
   };
   if (!result.supported) return result;
-  const selection = updateServiceSelection();
+  const selection = await updateServiceSelection();
   const profileArgs = selection.profiles.flatMap(profile => ['--profile', profile]);
   if (pull) {
     const now = Date.now();
     if (forcePull || now - lastPullTime >= PULL_COOLDOWN_MS) {
-      await runDocker(composeArgs(...profileArgs, 'pull', ...selection.services), 60 * 60 * 1000);
+      await runDocker(composeArgs(...profileArgs, 'pull', ...selection.releaseServices), 60 * 60 * 1000);
       lastPullTime = now;
     }
     result.checkedAt = new Date().toISOString();
   }
-  const comparisons = await Promise.all(selection.services.map(async (service) => {
+  const comparisons = await Promise.all(selection.releaseServices.map(async (service) => {
     const [running, latest] = await Promise.all([
       inspectRunningService(service, selection.profiles),
-      inspectImage(imageReference(service))
+      inspectImage(selection.images[service])
     ]);
     const changed = Boolean(running && latest.id && (
       running.revision && latest.revision
@@ -976,7 +1088,7 @@ async function getServerUpdateInfo({ pull = false, forcePull = false } = {}) {
 }
 
 async function launchServerUpdateHelper(targetHash, selection) {
-  const managerImage = imageReference('chatter-manager');
+  const managerImage = selection.images['chatter-manager'] || imageReference('chatter-manager');
   const profileArgs = selection.profiles.flatMap(profile => ['--profile', profile]);
   const listContainersCommand = [
     'docker', 'compose', '--project-name', '"$COMPOSE_PROJECT_NAME"',
@@ -1058,7 +1170,7 @@ printf '{"status":"complete","targetHash":"%s","message":"server_update_complete
 }
 
 async function performServerUpdate(snapshot) {
-  const selection = updateServiceSelection();
+  const selection = await updateServiceSelection();
   try {
     writeUpdateState({ status: 'backup', targetHash: snapshot.latestHash, message: 'creating_backup' });
     // Stop the data services BEFORE taking the backup. The backend keeps
@@ -2535,6 +2647,8 @@ if (process.env.ADMIN_TLS === '1') {
 server.requestTimeout = 60 * 60 * 1000;
 
 server.listen(PORT, '0.0.0.0', () => console.log(`Chatter Manager is listening on ${process.env.ADMIN_TLS === '1' ? 'https' : 'http'}://0.0.0.0:${PORT}`));
+scheduleComposeBootstrap();
+
 setTimeout(() => { void runScheduledBackupIfDue(); }, 10000).unref();
 setInterval(() => { void runScheduledBackupIfDue(); }, 5 * 60 * 1000).unref();
 void collectMetricsSnapshot();
