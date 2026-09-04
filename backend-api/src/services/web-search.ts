@@ -76,18 +76,20 @@ const runSearxngWebSearch = async (query: string, signal?: AbortSignal): Promise
       }))
       .filter(failure => failure.engine);
 
-    console.info('[web-search] SearXNG engine report', {
+    const engineReport = {
       returned: returnedEngines,
       failed: failedEngines,
       resultCount: results.length,
       results: results.map((result, index) => ({
         rank: index + 1,
+        title: result.title || '',
         engines: getResultEngines(result),
         positions: result.positions || [],
         score: result.score ?? null,
         url: result.url || '',
       })),
-    });
+    };
+    console.info('[web-search] SearXNG engine report', JSON.stringify(engineReport, null, 2));
 
     if (!results.length) return `No results found for query "${query}".`;
 
