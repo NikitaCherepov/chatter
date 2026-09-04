@@ -24,6 +24,8 @@ outgoing:
   pool_maxsize: 10
 
 engines:
+  - name: bing
+    disabled: true
   - name: brave
     disabled: false
   - name: duckduckgo
