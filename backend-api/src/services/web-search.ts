@@ -12,6 +12,8 @@ type SearxngResult = {
   url?: string;
   engine?: string;
   engines?: string[];
+  positions?: number[];
+  score?: number;
 };
 
 type SearxngResponse = {
@@ -35,6 +37,12 @@ const engineFailureReason = (failure: unknown): string => {
   }
   return '';
 };
+
+const getResultEngines = (result: SearxngResult): string[] => (
+  Array.isArray(result.engines) && result.engines.length
+    ? result.engines
+    : [result.engine || '']
+).map(engine => `${engine}`.trim()).filter(Boolean);
 
 const runSearxngWebSearch = async (query: string, signal?: AbortSignal): Promise<string> => {
   const controller = new AbortController();
@@ -60,11 +68,7 @@ const runSearxngWebSearch = async (query: string, signal?: AbortSignal): Promise
 
     const data = await response.json() as SearxngResponse;
     const results = Array.isArray(data.results) ? data.results : [];
-    const returnedEngines = [...new Set(results.flatMap(result => (
-      Array.isArray(result.engines) && result.engines.length
-        ? result.engines
-        : [result.engine || '']
-    )).map(engine => `${engine}`.trim()).filter(Boolean))].sort();
+    const returnedEngines = [...new Set(results.flatMap(getResultEngines))].sort();
     const failedEngines = (Array.isArray(data.unresponsive_engines) ? data.unresponsive_engines : [])
       .map(failure => ({
         engine: engineNameFromFailure(failure),
@@ -76,13 +80,21 @@ const runSearxngWebSearch = async (query: string, signal?: AbortSignal): Promise
       returned: returnedEngines,
       failed: failedEngines,
       resultCount: results.length,
+      results: results.map((result, index) => ({
+        rank: index + 1,
+        engines: getResultEngines(result),
+        positions: result.positions || [],
+        score: result.score ?? null,
+        url: result.url || '',
+      })),
     });
 
     if (!results.length) return `No results found for query "${query}".`;
 
-    const resultText = results.slice(0, MAX_RESULTS).map((item, index) => (
-      `${index + 1}. ${item.title || 'Untitled'}\n${item.content || ''}\nSource: ${item.url || '-'}`
-    )).join('\n\n');
+    const resultText = results.slice(0, MAX_RESULTS).map((item, index) => {
+      const engines = getResultEngines(item);
+      return `${index + 1}. ${item.title || 'Untitled'}\n${item.content || ''}\nSource: ${item.url || '-'}\nSearch engines: ${engines.join(', ') || 'unknown'}`;
+    }).join('\n\n');
     return wrapUntrustedContent(resultText);
   } catch (error) {
     if (signal?.aborted) throw error;
