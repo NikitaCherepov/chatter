@@ -310,6 +310,7 @@ let searchBrowser: ChatterBrowser | null = null;
 let googleAiBrowser: ChatterBrowser | null = null;
 let googleAiPreviewWindow: BrowserWindow | null = null;
 let googleAiPreviewTimer: ReturnType<typeof setTimeout> | null = null;
+let googleAiIdleTimer: ReturnType<typeof setTimeout> | null = null;
 let googleAiPreviewRun = 0;
 let searchChallengeWindow: BrowserWindow | null = null;
 let activeChallengeBrowser: ChatterBrowser | null = null;
@@ -326,6 +327,28 @@ let trayLabels = {
   quit: 'Quit',
   searchVerification: 'Complete search verification',
 };
+
+const GOOGLE_AI_IDLE_TIMEOUT_MS = 15 * 60 * 1000;
+
+function createGoogleAiBrowser(): ChatterBrowser {
+  if (!mainWindow || mainWindow.isDestroyed()) throw new Error('google_ai_unavailable');
+  return new ChatterBrowser(mainWindow, {
+    homeUrl: 'https://www.google.com/ai',
+    stateChannel: 'google-ai:state',
+    partition: 'persist:chatter-search',
+    backgroundSize: { width: 1280, height: 900 },
+  });
+}
+
+function getGoogleAiBrowser(): ChatterBrowser {
+  if (!googleAiBrowser) googleAiBrowser = createGoogleAiBrowser();
+  return googleAiBrowser;
+}
+
+function clearGoogleAiIdleTimer(): void {
+  if (googleAiIdleTimer) clearTimeout(googleAiIdleTimer);
+  googleAiIdleTimer = null;
+}
 
 function sendGoogleAiPreview(payload: { active: boolean; image?: string }): void {
   if (!mainWindow || mainWindow.isDestroyed()) return;
@@ -387,6 +410,36 @@ function stopGoogleAiPreview(browser: ChatterBrowser, run: number): void {
   sendGoogleAiPreview({ active: false });
   if (mainWindow && !mainWindow.isDestroyed()) browser.moveToHost(mainWindow);
   if (googleAiPreviewWindow && !googleAiPreviewWindow.isDestroyed()) googleAiPreviewWindow.hide();
+}
+
+function closeGoogleAiSession(reason: 'explicit' | 'idle_timeout' | 'shutdown'): boolean {
+  clearGoogleAiIdleTimer();
+  googleAiPreviewRun += 1;
+  if (googleAiPreviewTimer) clearTimeout(googleAiPreviewTimer);
+  googleAiPreviewTimer = null;
+  sendGoogleAiPreview({ active: false });
+
+  const browser = googleAiBrowser;
+  if (!browser) return false;
+  if (activeChallengeBrowser === browser) {
+    activeChallengeBrowser = null;
+    if (searchChallengeWindow && !searchChallengeWindow.isDestroyed()) searchChallengeWindow.close();
+  }
+  browser.destroy();
+  googleAiBrowser = null;
+  if (googleAiPreviewWindow && !googleAiPreviewWindow.isDestroyed()) googleAiPreviewWindow.destroy();
+  googleAiPreviewWindow = null;
+  console.log('[google-ai] session closed', { reason });
+  return true;
+}
+
+function scheduleGoogleAiIdleClose(browser: ChatterBrowser): void {
+  clearGoogleAiIdleTimer();
+  googleAiIdleTimer = setTimeout(() => {
+    googleAiIdleTimer = null;
+    if (googleAiBrowser === browser) closeGoogleAiSession('idle_timeout');
+  }, GOOGLE_AI_IDLE_TIMEOUT_MS);
+  googleAiIdleTimer.unref?.();
 }
 
 function showSearchChallengeWindow(
@@ -913,12 +966,7 @@ function createWindow() {
     partition: 'persist:chatter-search',
     backgroundSize: { width: 1280, height: 900 },
   });
-  googleAiBrowser = new ChatterBrowser(mainWindow, {
-    homeUrl: 'https://www.google.com/ai',
-    stateChannel: 'google-ai:state',
-    partition: 'persist:chatter-search',
-    backgroundSize: { width: 1280, height: 900 },
-  });
+  googleAiBrowser = createGoogleAiBrowser();
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     openExternalHttpUrl(url);
@@ -964,8 +1012,7 @@ function createWindow() {
     youtubeMusicBrowser = null;
     searchBrowser?.destroy();
     searchBrowser = null;
-    googleAiBrowser?.destroy();
-    googleAiBrowser = null;
+    closeGoogleAiSession('shutdown');
     if (googleAiPreviewTimer) clearTimeout(googleAiPreviewTimer);
     googleAiPreviewTimer = null;
     if (googleAiPreviewWindow && !googleAiPreviewWindow.isDestroyed()) googleAiPreviewWindow.destroy();
@@ -1018,8 +1065,11 @@ function createWindow() {
 
   ipcMain.handle('google-ai:control', async (event, payload: GoogleAiPayload) => {
     assertTrustedIpcSender(event);
-    if (!googleAiBrowser) throw new Error('google_ai_unavailable');
-    const browser = googleAiBrowser;
+    if (payload?.action === 'close_session') {
+      return { status: 'session_closed', closed: closeGoogleAiSession('explicit') };
+    }
+    clearGoogleAiIdleTimer();
+    const browser = getGoogleAiBrowser();
     const previewRun = startGoogleAiPreview(browser);
     try {
       const result = await browser.googleAi(payload) as { challenge?: string };
@@ -1028,6 +1078,7 @@ function createWindow() {
       return result;
     } finally {
       stopGoogleAiPreview(browser, previewRun);
+      if (googleAiBrowser === browser) scheduleGoogleAiIdleClose(browser);
     }
   });
 

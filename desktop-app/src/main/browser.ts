@@ -52,7 +52,7 @@ export type BrowserSearchPayload = {
 };
 
 export type GoogleAiPayload = {
-  action?: 'ask' | 'new_chat' | 'reload';
+  action?: 'ask' | 'new_chat' | 'reload' | 'close_session';
   message?: string;
 };
 

@@ -24,7 +24,7 @@ declare global {
         language?: string;
       }) => Promise<any>;
       googleAi: (payload: {
-        action?: 'ask' | 'new_chat' | 'reload';
+        action?: 'ask' | 'new_chat' | 'reload' | 'close_session';
         message?: string;
       }) => Promise<any>;
       cancelGoogleAi: () => Promise<{ cancelled: boolean }>;

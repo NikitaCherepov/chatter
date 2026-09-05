@@ -52,7 +52,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     language?: string;
   }) => ipcRenderer.invoke('search-browser:search', payload),
   googleAi: (payload: {
-    action?: 'ask' | 'new_chat' | 'reload';
+    action?: 'ask' | 'new_chat' | 'reload' | 'close_session';
     message?: string;
   }) => ipcRenderer.invoke('google-ai:control', payload),
   cancelGoogleAi: () => ipcRenderer.invoke('google-ai:cancel'),
