@@ -10,6 +10,7 @@ import ffmpeg from 'fluent-ffmpeg';
 import ffmpegStatic from 'ffmpeg-static';
 import { WakeWordOnnxService } from './wakeword';
 import { ChatterBrowser, type BrowserControlPayload, type BrowserSearchPayload, type GoogleAiPayload } from './browser';
+import { BrowserPreviewSession, type BrowserPreviewPayload } from './browser-preview';
 
 const execFileAsync = util.promisify(execFile);
 
@@ -308,10 +309,10 @@ let chatterBrowser: ChatterBrowser | null = null;
 let youtubeMusicBrowser: ChatterBrowser | null = null;
 let searchBrowser: ChatterBrowser | null = null;
 let googleAiBrowser: ChatterBrowser | null = null;
-let googleAiPreviewWindow: BrowserWindow | null = null;
-let googleAiPreviewTimer: ReturnType<typeof setTimeout> | null = null;
+let searchPreview: BrowserPreviewSession | null = null;
+let googleAiPreview: BrowserPreviewSession | null = null;
+let searchIdleTimer: ReturnType<typeof setTimeout> | null = null;
 let googleAiIdleTimer: ReturnType<typeof setTimeout> | null = null;
-let googleAiPreviewRun = 0;
 let searchChallengeWindow: BrowserWindow | null = null;
 let activeChallengeBrowser: ChatterBrowser | null = null;
 const detachedToolWindows = new Map<string, BrowserWindow>();
@@ -328,7 +329,28 @@ let trayLabels = {
   searchVerification: 'Complete search verification',
 };
 
+const SEARCH_IDLE_TIMEOUT_MS = 2 * 60 * 1000;
 const GOOGLE_AI_IDLE_TIMEOUT_MS = 15 * 60 * 1000;
+
+function createSearchBrowser(): ChatterBrowser {
+  if (!mainWindow || mainWindow.isDestroyed()) throw new Error('search_browser_unavailable');
+  return new ChatterBrowser(mainWindow, {
+    homeUrl: 'https://www.google.com/',
+    stateChannel: 'search-browser:state',
+    partition: 'persist:chatter-search',
+    backgroundSize: { width: 1280, height: 900 },
+  });
+}
+
+function getSearchBrowser(): ChatterBrowser {
+  if (!searchBrowser) searchBrowser = createSearchBrowser();
+  return searchBrowser;
+}
+
+function clearSearchIdleTimer(): void {
+  if (searchIdleTimer) clearTimeout(searchIdleTimer);
+  searchIdleTimer = null;
+}
 
 function createGoogleAiBrowser(): ChatterBrowser {
   if (!mainWindow || mainWindow.isDestroyed()) throw new Error('google_ai_unavailable');
@@ -350,74 +372,51 @@ function clearGoogleAiIdleTimer(): void {
   googleAiIdleTimer = null;
 }
 
-function sendGoogleAiPreview(payload: { active: boolean; image?: string }): void {
+function sendBrowserPreview(payload: BrowserPreviewPayload): void {
   if (!mainWindow || mainWindow.isDestroyed()) return;
-  mainWindow.webContents.send('google-ai:preview', payload);
+  mainWindow.webContents.send('browser-activity:preview', payload);
 }
 
-function getGoogleAiPreviewWindow(): BrowserWindow {
-  if (googleAiPreviewWindow && !googleAiPreviewWindow.isDestroyed()) return googleAiPreviewWindow;
-
-  const display = screen.getPrimaryDisplay();
-  googleAiPreviewWindow = new BrowserWindow({
-    x: display.bounds.x + display.bounds.width + 200,
-    y: display.bounds.y,
-    width: 1280,
-    height: 900,
-    show: false,
-    frame: false,
-    focusable: false,
-    skipTaskbar: true,
-    opacity: 0.01,
-    backgroundColor: '#ffffff',
-    webPreferences: {
-      nodeIntegration: false,
-      contextIsolation: true,
-      sandbox: true,
-      backgroundThrottling: false,
-    },
+function createBrowserPreview(source: BrowserPreviewPayload['source']): BrowserPreviewSession {
+  return new BrowserPreviewSession({
+    source,
+    getMainWindow: () => mainWindow,
+    emit: sendBrowserPreview,
   });
-  googleAiPreviewWindow.on('closed', () => {
-    googleAiPreviewWindow = null;
-  });
-  return googleAiPreviewWindow;
 }
 
-function startGoogleAiPreview(browser: ChatterBrowser): number {
-  const run = ++googleAiPreviewRun;
-  const previewWindow = getGoogleAiPreviewWindow();
-  const [width, height] = previewWindow.getContentSize();
-  browser.setVisible(true, { x: 0, y: 0, width, height }, 'google-ai-preview', previewWindow);
-  previewWindow.showInactive();
-  sendGoogleAiPreview({ active: true });
-
-  const capture = async () => {
-    if (run !== googleAiPreviewRun || !googleAiBrowser) return;
-    const image = await googleAiBrowser.capturePreview();
-    if (run !== googleAiPreviewRun) return;
-    if (image) sendGoogleAiPreview({ active: true, image });
-    googleAiPreviewTimer = setTimeout(capture, 500);
-  };
-  googleAiPreviewTimer = setTimeout(capture, 100);
-  return run;
+function dismissChallengeForBrowser(browser: ChatterBrowser): void {
+  if (activeChallengeBrowser !== browser) return;
+  activeChallengeBrowser = null;
+  if (searchChallengeWindow && !searchChallengeWindow.isDestroyed()) searchChallengeWindow.close();
 }
 
-function stopGoogleAiPreview(browser: ChatterBrowser, run: number): void {
-  if (run !== googleAiPreviewRun) return;
-  googleAiPreviewRun += 1;
-  if (googleAiPreviewTimer) clearTimeout(googleAiPreviewTimer);
-  googleAiPreviewTimer = null;
-  sendGoogleAiPreview({ active: false });
-  if (mainWindow && !mainWindow.isDestroyed()) browser.moveToHost(mainWindow);
-  if (googleAiPreviewWindow && !googleAiPreviewWindow.isDestroyed()) googleAiPreviewWindow.hide();
+function closeSearchSession(reason: 'idle_timeout' | 'shutdown'): boolean {
+  clearSearchIdleTimer();
+  const browser = searchBrowser;
+  if (!browser) return false;
+  if (activeChallengeBrowser === browser) {
+    activeChallengeBrowser = null;
+    if (searchChallengeWindow && !searchChallengeWindow.isDestroyed()) searchChallengeWindow.close();
+  }
+  searchPreview?.release(browser);
+  browser.destroy();
+  searchBrowser = null;
+  console.log('[web-search] desktop browser session closed', { reason });
+  return true;
+}
+
+function scheduleSearchIdleClose(browser: ChatterBrowser): void {
+  clearSearchIdleTimer();
+  searchIdleTimer = setTimeout(() => {
+    searchIdleTimer = null;
+    if (searchBrowser === browser) closeSearchSession('idle_timeout');
+  }, SEARCH_IDLE_TIMEOUT_MS);
+  searchIdleTimer.unref?.();
 }
 
 function closeGoogleAiSession(reason: 'explicit' | 'idle_timeout' | 'shutdown'): boolean {
   clearGoogleAiIdleTimer();
-  googleAiPreviewRun += 1;
-  if (googleAiPreviewTimer) clearTimeout(googleAiPreviewTimer);
-  googleAiPreviewTimer = null;
-  sendGoogleAiPreview({ active: false });
 
   const browser = googleAiBrowser;
   if (!browser) return false;
@@ -425,10 +424,9 @@ function closeGoogleAiSession(reason: 'explicit' | 'idle_timeout' | 'shutdown'):
     activeChallengeBrowser = null;
     if (searchChallengeWindow && !searchChallengeWindow.isDestroyed()) searchChallengeWindow.close();
   }
+  googleAiPreview?.release(browser);
   browser.destroy();
   googleAiBrowser = null;
-  if (googleAiPreviewWindow && !googleAiPreviewWindow.isDestroyed()) googleAiPreviewWindow.destroy();
-  googleAiPreviewWindow = null;
   console.log('[google-ai] session closed', { reason });
   return true;
 }
@@ -487,8 +485,10 @@ function showSearchChallengeWindow(
     if (activeChallengeBrowser && mainWindow && !mainWindow.isDestroyed()) activeChallengeBrowser.moveToHost(mainWindow);
   });
   challengeWindow.on('closed', () => {
+    const closedBrowser = activeChallengeBrowser;
     if (searchChallengeWindow === challengeWindow) searchChallengeWindow = null;
     activeChallengeBrowser = null;
+    if (closedBrowser && closedBrowser === searchBrowser) scheduleSearchIdleClose(closedBrowser);
   });
 
   syncBounds();
@@ -960,13 +960,10 @@ function createWindow() {
     homeUrl: 'https://music.youtube.com/',
     stateChannel: 'youtube-music:state',
   });
-  searchBrowser = new ChatterBrowser(mainWindow, {
-    homeUrl: 'https://www.google.com/',
-    stateChannel: 'search-browser:state',
-    partition: 'persist:chatter-search',
-    backgroundSize: { width: 1280, height: 900 },
-  });
+  searchBrowser = null;
   googleAiBrowser = createGoogleAiBrowser();
+  searchPreview = createBrowserPreview('web_search');
+  googleAiPreview = createBrowserPreview('google_ai');
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     openExternalHttpUrl(url);
@@ -1010,13 +1007,12 @@ function createWindow() {
     chatterBrowser = null;
     youtubeMusicBrowser?.destroy();
     youtubeMusicBrowser = null;
-    searchBrowser?.destroy();
-    searchBrowser = null;
+    closeSearchSession('shutdown');
     closeGoogleAiSession('shutdown');
-    if (googleAiPreviewTimer) clearTimeout(googleAiPreviewTimer);
-    googleAiPreviewTimer = null;
-    if (googleAiPreviewWindow && !googleAiPreviewWindow.isDestroyed()) googleAiPreviewWindow.destroy();
-    googleAiPreviewWindow = null;
+    searchPreview?.destroy();
+    searchPreview = null;
+    googleAiPreview?.destroy();
+    googleAiPreview = null;
     mainWindow = null;
   });
 
@@ -1057,10 +1053,24 @@ function createWindow() {
 
   ipcMain.handle('search-browser:search', async (event, payload: BrowserSearchPayload) => {
     assertTrustedIpcSender(event);
-    if (!searchBrowser) throw new Error('search_browser_unavailable');
-    const result = await searchBrowser.search(payload) as { challenge?: string };
-    if (result?.challenge === 'captcha') showSearchChallengeWindow(searchBrowser);
-    return result;
+    clearSearchIdleTimer();
+    const browser = getSearchBrowser();
+    dismissChallengeForBrowser(browser);
+    const preview = searchPreview || (searchPreview = createBrowserPreview('web_search'));
+    const previewRun = preview.start(browser);
+    let challengeShown = false;
+    try {
+      const result = await browser.search(payload) as { challenge?: string };
+      preview.stop(browser, previewRun);
+      if (result?.challenge === 'captcha') {
+        challengeShown = true;
+        showSearchChallengeWindow(browser);
+      }
+      return result;
+    } finally {
+      preview.stop(browser, previewRun);
+      if (!challengeShown && searchBrowser === browser) scheduleSearchIdleClose(browser);
+    }
   });
 
   ipcMain.handle('google-ai:control', async (event, payload: GoogleAiPayload) => {
@@ -1070,14 +1080,16 @@ function createWindow() {
     }
     clearGoogleAiIdleTimer();
     const browser = getGoogleAiBrowser();
-    const previewRun = startGoogleAiPreview(browser);
+    dismissChallengeForBrowser(browser);
+    const preview = googleAiPreview || (googleAiPreview = createBrowserPreview('google_ai'));
+    const previewRun = preview.start(browser);
     try {
       const result = await browser.googleAi(payload) as { challenge?: string };
-      stopGoogleAiPreview(browser, previewRun);
+      preview.stop(browser, previewRun);
       if (result?.challenge === 'captcha') showSearchChallengeWindow(browser);
       return result;
     } finally {
-      stopGoogleAiPreview(browser, previewRun);
+      preview.stop(browser, previewRun);
       if (googleAiBrowser === browser) scheduleGoogleAiIdleClose(browser);
     }
   });

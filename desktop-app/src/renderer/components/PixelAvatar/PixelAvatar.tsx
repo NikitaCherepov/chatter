@@ -36,7 +36,7 @@ function cacheMood(mood: BaseMood) {
 // ── Component ───────────────────────────────────────────────────────────────
 
 export function PixelAvatar() {
-  const [googleAiPreview, setGoogleAiPreview] = useState<{ active: boolean; image?: string }>({ active: false });
+  const [browserPreview, setBrowserPreview] = useState<{ active: boolean; source?: 'google_ai' | 'web_search'; image?: string }>({ active: false });
   // -- State: Media layer (highest priority) --
   const [mediaUrl, setMediaUrl] = useState<string | null>(null);
 
@@ -179,11 +179,15 @@ export function PixelAvatar() {
   }, [applyState]);
 
   useEffect(() => {
-    const unsubscribe = window.electronAPI?.onGoogleAiPreview?.((payload) => {
-      setGoogleAiPreview((current) => ({
-        active: payload.active,
-        image: payload.image ?? (payload.active ? current.image : undefined),
-      }));
+    const unsubscribe = window.electronAPI?.onBrowserActivityPreview?.((payload) => {
+      setBrowserPreview((current) => {
+        if (!payload.active && current.source !== payload.source) return current;
+        return {
+          active: payload.active,
+          source: payload.active ? payload.source : undefined,
+          image: payload.image ?? (payload.active && current.source === payload.source ? current.image : undefined),
+        };
+      });
     });
     return () => unsubscribe?.();
   }, []);
@@ -196,13 +200,13 @@ export function PixelAvatar() {
     ?? getBaseFace(baseMood, blinking);
 
   return (
-    <div className={`${s.container} ${googleAiPreview.active ? s.googleAiActive : ''}`}>
-      {googleAiPreview.active ? (
+    <div className={`${s.container} ${browserPreview.active ? s.browserPreviewActive : ''}`}>
+      {browserPreview.active ? (
         <>
-          {googleAiPreview.image
-            ? <img className={s.googleAiPreview} src={googleAiPreview.image} alt="" draggable={false} />
-            : <div className={s.googleAiLoading} />}
-          <span className={s.googleAiIndicator} />
+          {browserPreview.image
+            ? <img className={s.browserPreview} src={browserPreview.image} alt="" draggable={false} />
+            : <div className={s.browserPreviewLoading} />}
+          <span className={s.browserPreviewIndicator} />
         </>
       ) : (
         <img

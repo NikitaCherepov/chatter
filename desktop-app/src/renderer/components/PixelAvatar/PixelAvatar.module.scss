@@ -10,19 +10,19 @@
   overflow: hidden;
 }
 
-.googleAiActive {
+.browserPreviewActive {
   background: linear-gradient(135deg, #4285f4, #ea4335 38%, #fbbc05 68%, #34a853);
   padding: 2px;
 }
 
-.googleAiPreview,
-.googleAiLoading {
+.browserPreview,
+.browserPreviewLoading {
   width: 100%;
   height: 100%;
   border-radius: 6px;
 }
 
-.googleAiPreview {
+.browserPreview {
   display: block;
   object-fit: cover;
   object-position: center;
@@ -32,14 +32,14 @@
   -webkit-user-drag: none;
 }
 
-.googleAiLoading {
+.browserPreviewLoading {
   background:
     linear-gradient(100deg, transparent 25%, rgba(66, 133, 244, 0.22) 45%, transparent 65%) 0 0 / 220% 100%,
     #fff;
-  animation: googleAiLoading 1.15s linear infinite;
+  animation: browserPreviewLoading 1.15s linear infinite;
 }
 
-.googleAiIndicator {
+.browserPreviewIndicator {
   position: absolute;
   right: 5px;
   bottom: 5px;
@@ -48,14 +48,14 @@
   border-radius: 50%;
   background: #4285f4;
   box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.9);
-  animation: googleAiPulse 1s ease-in-out infinite alternate;
+  animation: browserPreviewPulse 1s ease-in-out infinite alternate;
 }
 
-@keyframes googleAiLoading {
+@keyframes browserPreviewLoading {
   to { background-position: -220% 0, 0 0; }
 }
 
-@keyframes googleAiPulse {
+@keyframes browserPreviewPulse {
   to { transform: scale(1.35); }
 }
 

@@ -28,7 +28,7 @@ declare global {
         message?: string;
       }) => Promise<any>;
       cancelGoogleAi: () => Promise<{ cancelled: boolean }>;
-      onGoogleAiPreview: (callback: (payload: { active: boolean; image?: string }) => void) => () => void;
+      onBrowserActivityPreview: (callback: (payload: { active: boolean; source: 'google_ai' | 'web_search'; image?: string }) => void) => () => void;
       onBrowserState: (callback: (payload: BrowserState) => void) => () => void;
       youtubeMusicGetState: () => Promise<BrowserState>;
       youtubeMusicSetVisible: (payload: { visible: boolean; ownerId: string; bounds?: BrowserBounds }) => Promise<BrowserState>;
