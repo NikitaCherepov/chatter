@@ -1,6 +1,7 @@
 {
   "toolStatus": {
     "search_web": "Buscando en la web...",
+    "google_ai": "Consultando a Google AI...",
     "read_webpage": "Abriendo página y extrayendo texto...",
     "get_smart_devices": "🏠 Obteniendo lista de dispositivos...",
     "control_smart_home": "🏠 Ejecutando comando de hogar inteligente...",

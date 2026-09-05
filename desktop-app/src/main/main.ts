@@ -324,7 +324,10 @@ let trayLabels = {
   searchVerification: 'Complete search verification',
 };
 
-function showSearchChallengeWindow(browser: ChatterBrowser): void {
+function showSearchChallengeWindow(
+  browser: ChatterBrowser,
+  title = trayLabels.searchVerification,
+): void {
   if (!mainWindow || mainWindow.isDestroyed()) return;
   if (searchChallengeWindow && !searchChallengeWindow.isDestroyed()) {
     if (activeChallengeBrowser !== browser) {
@@ -333,6 +336,7 @@ function showSearchChallengeWindow(browser: ChatterBrowser): void {
       const [width, height] = searchChallengeWindow.getContentSize();
       browser.setVisible(true, { x: 0, y: 0, width, height }, 'search-challenge', searchChallengeWindow);
     }
+    searchChallengeWindow.setTitle(`Chatter — ${title}`);
     searchChallengeWindow.show();
     searchChallengeWindow.focus();
     return;
@@ -344,7 +348,7 @@ function showSearchChallengeWindow(browser: ChatterBrowser): void {
     minWidth: 640,
     minHeight: 480,
     show: false,
-    title: `Chatter — ${trayLabels.searchVerification}`,
+    title: `Chatter — ${title}`,
     autoHideMenuBar: true,
     webPreferences: {
       nodeIntegration: false,
@@ -946,9 +950,18 @@ function createWindow() {
   ipcMain.handle('google-ai:control', async (event, payload: GoogleAiPayload) => {
     assertTrustedIpcSender(event);
     if (!googleAiBrowser) throw new Error('google_ai_unavailable');
-    const result = await googleAiBrowser.googleAi(payload) as { challenge?: string };
+    const resultPromise = googleAiBrowser.googleAi(payload) as Promise<{ challenge?: string }>;
+    // Temporary debug view: keep the real Google AI page visible so its DOM
+    // and submission behaviour can be observed while the tool is running.
+    showSearchChallengeWindow(googleAiBrowser, 'Google AI — debug');
+    const result = await resultPromise;
     if (result?.challenge === 'captcha') showSearchChallengeWindow(googleAiBrowser);
     return result;
+  });
+
+  ipcMain.handle('google-ai:cancel', (event) => {
+    assertTrustedIpcSender(event);
+    return googleAiBrowser?.cancelGoogleAi() || { cancelled: false };
   });
 
   ipcMain.handle('youtube-music:get-state', (event) => {

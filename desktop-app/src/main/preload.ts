@@ -55,6 +55,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     action?: 'ask' | 'new_chat' | 'reload';
     message?: string;
   }) => ipcRenderer.invoke('google-ai:control', payload),
+  cancelGoogleAi: () => ipcRenderer.invoke('google-ai:cancel'),
   onBrowserState: (callback: (payload: unknown) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, payload: unknown) => callback(payload);
     ipcRenderer.on('browser:state', handler);

@@ -1,6 +1,7 @@
 {
   "toolStatus": {
     "search_web": "Przeszukiwanie sieci...",
+    "google_ai": "Rozmawiam z Google AI...",
     "read_webpage": "Otwieranie strony i wyodrębnianie tekstu...",
     "get_smart_devices": "🏠 Pobieranie listy urządzeń...",
     "control_smart_home": "🏠 Wykonywanie polecenia inteligentnego domu...",

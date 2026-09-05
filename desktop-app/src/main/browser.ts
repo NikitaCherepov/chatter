@@ -260,6 +260,8 @@ export class ChatterBrowser {
   /** True once the current main document is usable by browser tools. */
   private mainDocumentReady = false;
   private interactionInProgress = false;
+  private googleAiInProgress = false;
+  private googleAiRunId = 0;
   private initialNavigationStarted = false;
   private initialNavigationPromise: Promise<void> | null = null;
   private explicitNavigationRequested = false;
@@ -352,6 +354,7 @@ export class ChatterBrowser {
 
   destroy(): void {
     this.abortInteraction();
+    this.cancelGoogleAi();
     void this.disposeOopifWorlds();
     this.view.webContents.session.removeListener('will-download', this.willDownloadHandler);
     for (const downloadId of [...this.pendingDownloads.keys()]) {
@@ -811,13 +814,23 @@ export class ChatterBrowser {
   async googleAi(payload: GoogleAiPayload): Promise<unknown> {
     const action = payload?.action === 'new_chat' || payload?.action === 'reload' ? payload.action : 'ask';
     const message = `${payload?.message || ''}`.trim();
+    const normalizedMessage = message.replace(/\s+/g, ' ').trim();
     if ((action === 'ask' || (action === 'new_chat' && message)) && (!message || message.length > 8_000)) {
       throw new Error(message ? 'google_ai_message_too_long' : 'google_ai_message_required');
     }
-    if (this.interactionInProgress) throw new Error('google_ai_in_progress');
+    // Reload/new_chat are recovery actions: they must be able to interrupt a
+    // request which is stuck waiting for Google instead of being rejected by it.
+    if ((action === 'reload' || action === 'new_chat') && this.googleAiInProgress) {
+      this.cancelGoogleAi();
+    }
+    if (this.googleAiInProgress) throw new Error('google_ai_in_progress');
 
     const contents = this.view.webContents;
-    this.interactionInProgress = true;
+    const runId = ++this.googleAiRunId;
+    const assertActive = () => {
+      if (runId !== this.googleAiRunId) throw new Error('google_ai_cancelled');
+    };
+    this.googleAiInProgress = true;
     this.explicitNavigationRequested = true;
     try {
       const currentUrl = contents.getURL();
@@ -833,18 +846,16 @@ export class ChatterBrowser {
       if (action === 'new_chat' || !onAiMode) {
         await this.navigateToUrl('https://www.google.com/ai');
         await this.ensureReadablePage();
+        assertActive();
       } else if (action === 'reload') {
         contents.reload();
         await this.ensureReadablePage();
+        assertActive();
       }
 
       if (action === 'reload') {
         return { status: 'reloaded', url: contents.getURL(), title: contents.getTitle() };
       }
-      if (action === 'new_chat' && !message) {
-        return { status: 'new_chat_started', url: contents.getURL(), title: contents.getTitle() };
-      }
-
       type AiSnapshot = {
         challenge: boolean;
         inputAvailable: boolean;
@@ -877,14 +888,20 @@ export class ChatterBrowser {
         });
         const sources = [];
         const seenSources = new Set();
-        main?.querySelectorAll('a[href]').forEach((anchor) => {
+        document.querySelectorAll('a[href]').forEach((anchor) => {
           try {
             let url = new URL(anchor.href, location.href);
             if (url.hostname.endsWith('google.com') && url.pathname === '/url') {
               const redirected = url.searchParams.get('q') || url.searchParams.get('url');
               if (redirected) url = new URL(redirected);
             }
-            if (!['http:', 'https:'].includes(url.protocol) || url.hostname.endsWith('google.com')) return;
+            const googleHost = /(^|\.)google\.[a-z.]+$/i.test(url.hostname);
+            const googleSourceRedirect = googleHost
+              && (url.pathname === '/goto' || url.pathname.includes('/grounding-api-redirect/'));
+            if (
+              !['http:', 'https:'].includes(url.protocol)
+              || (googleHost && !googleSourceRedirect)
+            ) return;
             if (seenSources.has(url.href)) return;
             seenSources.add(url.href);
             sources.push({ title: clean(anchor.innerText || anchor.textContent || url.hostname, 300), url: url.href });
@@ -895,7 +912,14 @@ export class ChatterBrowser {
         return {
           challenge,
           inputAvailable: editable.length > 0,
-          busy: Boolean(document.querySelector('[aria-busy="true"], [data-loading="true"]')),
+          busy: Array.from(document.querySelectorAll('[aria-busy="true"], [data-loading="true"], [role="progressbar"], mat-progress-spinner'))
+            .some(visible)
+            || Array.from(document.querySelectorAll('button')).some((button) => {
+              const hint = String(button.getAttribute('aria-label') || '') + ' '
+                + String(button.getAttribute('title') || '') + ' ' + String(button.textContent || '');
+              return visible(button)
+                && /(?:^|\s)stop(?:\s+(?:generating|response))?(?:\s|$)|остановить(?:\s+(?:генерацию|ответ))?/i.test(hint.trim());
+            }),
           text: clean(main?.innerText || main?.textContent || '', 30000),
           blocks: blocks.slice(-200),
           sources: sources.slice(-20),
@@ -905,13 +929,35 @@ export class ChatterBrowser {
       })()`);
 
       let baseline: AiSnapshot | null = null;
-      for (let attempt = 0; attempt < 40; attempt += 1) {
+      let stableInputSamples = 0;
+      let previousReadyText = '';
+      let previousReadyUrl = '';
+      for (let attempt = 0; attempt < 60; attempt += 1) {
+        assertActive();
         baseline = await readSnapshot();
         if (baseline.challenge) return { challenge: 'captcha', url: baseline.url, title: baseline.title };
-        if (baseline.inputAvailable) break;
+        if (baseline.inputAvailable) {
+          if (action !== 'new_chat') break;
+          if (baseline.text === previousReadyText && baseline.url === previousReadyUrl) {
+            stableInputSamples += 1;
+          } else {
+            stableInputSamples = 1;
+            previousReadyText = baseline.text;
+            previousReadyUrl = baseline.url;
+          }
+          // Google hydrates /ai after dom-ready and can replace the composer.
+          // Wait until the new composer has survived several observations.
+          if (stableInputSamples >= 3) break;
+        } else {
+          stableInputSamples = 0;
+        }
         await new Promise(resolve => setTimeout(resolve, 250));
       }
       if (!baseline?.inputAvailable) throw new Error('google_ai_input_not_found');
+      if (action === 'new_chat' && stableInputSamples < 3) throw new Error('google_ai_input_not_found');
+      if (action === 'new_chat' && !message) {
+        return { status: 'new_chat_started', url: contents.getURL(), title: contents.getTitle() };
+      }
 
       const filled = await this.executeInBrowserWorld<boolean>(`(() => {
         const message = ${JSON.stringify(message)};
@@ -954,42 +1000,223 @@ export class ChatterBrowser {
       contents.sendInputEvent({ type: 'keyDown', keyCode: 'Enter' });
       contents.sendInputEvent({ type: 'keyUp', keyCode: 'Enter' });
 
+      // Google can replace the composer between filling it and pressing Enter.
+      // Confirm submission against the current composer, not document.activeElement:
+      // focus often moves to body even when nothing was actually submitted.
+      let submission: {
+        inputCleared: boolean;
+        submitClicked: boolean;
+        busy: boolean;
+        inputAvailable: boolean;
+      } = { inputCleared: false, submitClicked: false, busy: false, inputAvailable: true };
+      for (let submitAttempt = 0; submitAttempt < 4; submitAttempt += 1) {
+        await new Promise(resolve => setTimeout(resolve, 700));
+        assertActive();
+        submission = await this.executeInBrowserWorld<{
+          inputCleared: boolean;
+          submitClicked: boolean;
+          busy: boolean;
+          inputAvailable: boolean;
+        }>(`(() => {
+        const visible = (element) => {
+          if (!(element instanceof HTMLElement)) return false;
+          const style = getComputedStyle(element);
+          const rect = element.getBoundingClientRect();
+          return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 10 && rect.height > 10;
+        };
+        const candidates = Array.from(document.querySelectorAll('textarea, input[type="text"], input[type="search"], [contenteditable="true"]'))
+          .filter(visible)
+          .map((element) => {
+            const rect = element.getBoundingClientRect();
+            const hint = String(element.getAttribute('placeholder') || '') + ' ' + String(element.getAttribute('aria-label') || '');
+            const semantic = /ask|anything|follow|question|спрос|задайте|вопрос|что угодно/i.test(hint) ? 1000 : 0;
+            const kind = element instanceof HTMLTextAreaElement ? 200 : element.isContentEditable ? 100 : 0;
+            return { element, score: semantic + kind + rect.top + rect.width / 10 };
+          })
+          .sort((left, right) => right.score - left.score);
+        const editable = candidates[0]?.element instanceof HTMLElement ? candidates[0].element : null;
+        const value = editable instanceof HTMLInputElement || editable instanceof HTMLTextAreaElement
+          ? editable.value
+          : editable?.textContent || '';
+        const busy = Boolean(document.querySelector('[aria-busy="true"], [data-loading="true"]'))
+          || Array.from(document.querySelectorAll('button')).some((button) => {
+            const hint = String(button.getAttribute('aria-label') || '') + ' '
+              + String(button.getAttribute('title') || '') + ' ' + String(button.textContent || '');
+            return visible(button)
+              && /(?:^|\\s)stop(?:\\s+(?:generating|response))?(?:\\s|$)|остановить(?:\\s+(?:генерацию|ответ))?/i.test(hint.trim());
+          });
+        let submitClicked = false;
+        if (${submitAttempt === 0 || submitAttempt === 2} && value.trim() && !busy && editable) {
+          const formButton = editable?.closest('form')?.querySelector('button[type="submit"]');
+          const semanticButton = Array.from(document.querySelectorAll('button')).find((button) => {
+            const hint = String(button.getAttribute('aria-label') || '') + ' '
+              + String(button.getAttribute('title') || '') + ' ' + String(button.textContent || '');
+            return visible(button) && !button.disabled && button.getAttribute('aria-disabled') !== 'true'
+              && /send|submit|search|отправ|поиск/i.test(hint);
+          });
+          const button = visible(formButton) ? formButton : semanticButton;
+          if (button instanceof HTMLElement) {
+            button.click();
+            submitClicked = true;
+          }
+        }
+        editable?.focus();
+        return {
+          inputCleared: Boolean(editable) && !value.trim(),
+          submitClicked,
+          busy,
+          inputAvailable: Boolean(editable)
+        };
+      })()`);
+
+        if (submission.inputCleared || submission.busy) break;
+        if (submission.submitClicked) continue;
+        if (!submission.inputAvailable) break;
+        if (submitAttempt >= 3) break;
+
+        // Retry through native input. This updates Google's controlled editor more
+        // reliably than assigning DOM values after a hydration/re-render race.
+        contents.focus();
+        contents.sendInputEvent({ type: 'keyDown', keyCode: 'A', modifiers: ['control'] });
+        contents.sendInputEvent({ type: 'keyUp', keyCode: 'A', modifiers: ['control'] });
+        contents.insertText(message);
+        contents.sendInputEvent({ type: 'keyDown', keyCode: 'Enter' });
+        contents.sendInputEvent({ type: 'keyUp', keyCode: 'Enter' });
+      }
+      console.log('[google-ai] submission', {
+        action,
+        messageLength: message.length,
+        inputCleared: submission.inputCleared,
+        submitClicked: submission.submitClicked,
+        busy: submission.busy,
+        url: contents.getURL(),
+      });
+      if (!submission.inputCleared && !submission.busy) {
+        throw new Error('google_ai_submit_failed');
+      }
+
       const baselineBlocks = new Set(baseline.blocks);
-      const baselineSourceUrls = new Set(baseline.sources.map(source => source.url));
       let latest = baseline;
       let previousText = baseline.text;
       let stableSamples = 0;
+      let stableTextSamples = 0;
       let answerObserved = false;
       for (let attempt = 0; attempt < 180; attempt += 1) {
         await new Promise(resolve => setTimeout(resolve, 500));
+        assertActive();
         latest = await readSnapshot();
         if (latest.challenge) return { challenge: 'captcha', url: latest.url, title: latest.title };
-        const newBlocks = latest.blocks.filter(block => !baselineBlocks.has(block) && block !== message);
+        const newBlocks = latest.blocks.filter(block => !baselineBlocks.has(block) && block !== normalizedMessage);
         answerObserved ||= newBlocks.length > 0 || (latest.text !== baseline.text && attempt >= 8);
         stableSamples = answerObserved && latest.text === previousText && !latest.busy ? stableSamples + 1 : 0;
+        stableTextSamples = answerObserved && latest.text === previousText ? stableTextSamples + 1 : 0;
         previousText = latest.text;
-        if (stableSamples >= 6) break;
+        // Google occasionally leaves an accessibility loading marker behind.
+        // A stable response for six seconds is therefore also a valid finish.
+        if (stableSamples >= 6 || stableTextSamples >= 12) break;
       }
-      if (!answerObserved) throw new Error('google_ai_response_timeout');
+      if (!answerObserved) {
+        console.warn('[google-ai] response timeout', {
+          action,
+          messageLength: message.length,
+          baselineTextLength: baseline.text.length,
+          latestTextLength: latest.text.length,
+          baselineBlockCount: baseline.blocks.length,
+          latestBlockCount: latest.blocks.length,
+          busy: latest.busy,
+          url: latest.url,
+        });
+        throw new Error('google_ai_response_timeout');
+      }
 
-      const newBlocks = latest.blocks.filter(block => !baselineBlocks.has(block) && block !== message);
-      let answer = newBlocks.join('\n').trim();
-      if (!answer) {
-        answer = latest.text.startsWith(baseline.text)
-          ? latest.text.slice(baseline.text.length).trim()
-          : latest.text.slice(-16_000).trim();
+      const newBlocks = latest.blocks.filter(block => !baselineBlocks.has(block) && block !== normalizedMessage);
+      const blockAnswer = newBlocks.join('\n').trim();
+      let addedText = '';
+      const baselineOffset = latest.text.indexOf(baseline.text);
+      if (baselineOffset >= 0) {
+        addedText = `${latest.text.slice(0, baselineOffset)} ${latest.text.slice(baselineOffset + baseline.text.length)}`.trim();
+      } else {
+        let commonPrefixLength = 0;
+        const maxPrefixLength = Math.min(baseline.text.length, latest.text.length);
+        while (
+          commonPrefixLength < maxPrefixLength
+          && baseline.text[commonPrefixLength] === latest.text[commonPrefixLength]
+        ) commonPrefixLength += 1;
+        addedText = latest.text.slice(commonPrefixLength).trim();
       }
+      const promptOffset = addedText.indexOf(normalizedMessage);
+      if (promptOffset >= 0) {
+        addedText = `${addedText.slice(0, promptOffset)} ${addedText.slice(promptOffset + normalizedMessage.length)}`.trim();
+      }
+      // Google AI frequently renders prose in plain nested divs while headings
+      // remain semantic h-elements. In that layout blockAnswer is only an
+      // outline, so prefer the complete text delta when it contains more data.
+      const answer = addedText.length > blockAnswer.length ? addedText : blockAnswer;
+      let sources = latest.sources;
+      const resolvedSources = await this.resolveGoogleAiSources(sources);
       return {
         status: 'success',
         action,
         answer: answer.slice(0, 24_000),
-        sources: latest.sources.filter(source => !baselineSourceUrls.has(source.url)),
+        // Include the currently visible session sources, not only links added
+        // during this turn. Follow-up questions may explicitly refer to an
+        // earlier answer and its citations.
+        sources: resolvedSources,
         url: latest.url,
         title: latest.title,
       };
     } finally {
-      this.interactionInProgress = false;
+      if (runId === this.googleAiRunId) this.googleAiInProgress = false;
     }
+  }
+
+  cancelGoogleAi(): { cancelled: boolean } {
+    const cancelled = this.googleAiInProgress;
+    this.googleAiRunId += 1;
+    this.googleAiInProgress = false;
+    return { cancelled };
+  }
+
+  private async resolveGoogleAiSources(
+    sources: Array<{ title: string; url: string }>,
+  ): Promise<Array<{ title: string; url: string; domain: string }>> {
+    const resolveSource = async (source: { title: string; url: string }) => {
+      let resolvedUrl = source.url;
+      try {
+        const parsed = new URL(source.url);
+        const googleHost = /(^|\.)google\.[a-z.]+$/i.test(parsed.hostname);
+        const isGoogleSourceRedirect = googleHost
+          && (parsed.pathname === '/goto' || parsed.pathname.includes('/grounding-api-redirect/'));
+        if (isGoogleSourceRedirect) {
+          const response = await this.view.webContents.session.fetch(source.url, {
+            redirect: 'follow',
+            signal: AbortSignal.timeout(6_000),
+          });
+          if (isAllowedRemoteUrl(response.url)) resolvedUrl = response.url;
+          await response.body?.cancel().catch(() => undefined);
+        }
+      } catch {
+        // The Google redirect itself remains a usable source link.
+      }
+      let domain = '';
+      try {
+        domain = new URL(resolvedUrl).hostname.replace(/^www\./i, '');
+      } catch {
+        // URL was already validated while reading the page.
+      }
+      return { title: source.title || domain, url: resolvedUrl, domain };
+    };
+
+    const resolved: Array<{ title: string; url: string; domain: string }> = [];
+    for (let offset = 0; offset < sources.length; offset += 4) {
+      resolved.push(...await Promise.all(sources.slice(offset, offset + 4).map(resolveSource)));
+    }
+    const seen = new Set<string>();
+    return resolved.filter((source) => {
+      if (!source.url || seen.has(source.url)) return false;
+      seen.add(source.url);
+      return true;
+    });
   }
 
   private async controlYouTubeMusic(payload: BrowserControlPayload): Promise<unknown> {

@@ -42,6 +42,7 @@
   },
   "toolStatus": {
     "search_web": "Поиск в интернете...",
+    "google_ai": "Общение с Google AI...",
     "list_mail_accounts": "📧 Проверяю подключённые почтовые ящики...",
     "check_emails": "📧 Проверяю почту...",
     "read_email_content": "📧 Читаю письмо...",

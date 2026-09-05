@@ -1,6 +1,7 @@
 {
   "toolStatus": {
     "search_web": "正在搜索网络...",
+    "google_ai": "正在询问 Google AI...",
     "read_webpage": "正在打开页面并提取文本...",
     "get_smart_devices": "🏠 正在获取设备列表...",
     "control_smart_home": "🏠 正在执行智能家居命令...",

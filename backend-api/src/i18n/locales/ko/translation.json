@@ -1,6 +1,7 @@
 {
   "toolStatus": {
     "search_web": "웹 검색 중...",
+    "google_ai": "Google AI에 묻는 중...",
     "read_webpage": "페이지 열기 및 텍스트 추출 중...",
     "get_smart_devices": "🏠 기기 목록 가져오는 중...",
     "control_smart_home": "🏠 스마트 홈 명령 실행 중...",

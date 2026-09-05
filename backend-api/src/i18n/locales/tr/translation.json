@@ -7,6 +7,7 @@
   },
   "toolStatus": {
     "search_web": "Web'de arama yapılıyor...",
+    "google_ai": "Google AI ile iletişim kuruluyor...",
     "list_mail_accounts": "📧 Bağlı e-posta hesapları kontrol ediliyor...",
     "check_emails": "📧 E-postalar kontrol ediliyor...",
     "read_email_content": "📧 E-posta okunuyor...",

@@ -1269,6 +1269,8 @@ export function initWebSocket(callbacks?: WsCallbacks) {
           });
           if (msg.ipc_type === 'convert_video') {
             (window as any).electronAPI?.cancelVideoConversion(msg.request_id).catch(console.error);
+          } else if (msg.ipc_type === 'google_ai') {
+            (window as any).electronAPI?.cancelGoogleAi().catch(console.error);
           }
           break;
         case 'ping':
@@ -1539,7 +1541,12 @@ async function handleExecuteIpc(msg: { request_id: string; ipc_type: string; pay
     console.log('[ipc] renderer start', {
       requestId: request_id,
       ipcType: ipc_type,
-      payloadPreview: JSON.stringify(payload).slice(0, 500),
+      payloadPreview: ipc_type === 'google_ai'
+        ? JSON.stringify({
+            action: payload?.action,
+            messageLength: typeof payload?.message === 'string' ? payload.message.length : 0,
+          })
+        : JSON.stringify(payload).slice(0, 500),
       hasElectronApi: Boolean((window as any).electronAPI),
     });
 

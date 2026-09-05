@@ -27,6 +27,7 @@ declare global {
         action?: 'ask' | 'new_chat' | 'reload';
         message?: string;
       }) => Promise<any>;
+      cancelGoogleAi: () => Promise<{ cancelled: boolean }>;
       onBrowserState: (callback: (payload: BrowserState) => void) => () => void;
       youtubeMusicGetState: () => Promise<BrowserState>;
       youtubeMusicSetVisible: (payload: { visible: boolean; ownerId: string; bounds?: BrowserBounds }) => Promise<BrowserState>;

@@ -7,6 +7,7 @@
   },
   "toolStatus": {
     "search_web": "Prohledávám web...",
+    "google_ai": "Komunikuji s Google AI...",
     "list_mail_accounts": "📧 Kontroluji připojené e-mailové účty...",
     "check_emails": "📧 Kontroluji e-maily...",
     "read_email_content": "📧 Čtu e-mail...",
