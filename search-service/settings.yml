@@ -4,7 +4,6 @@ use_default_settings:
       - brave
       - duckduckgo
       - google
-      - qwant
       - startpage
       - wikipedia
 
@@ -33,8 +32,6 @@ engines:
   - name: duckduckgo
     disabled: false
   - name: google
-    disabled: false
-  - name: qwant
     disabled: false
   - name: startpage
     disabled: false
