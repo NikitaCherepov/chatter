@@ -307,6 +307,7 @@ let mainWindow: BrowserWindow | null = null;
 let chatterBrowser: ChatterBrowser | null = null;
 let youtubeMusicBrowser: ChatterBrowser | null = null;
 let searchBrowser: ChatterBrowser | null = null;
+let searchChallengeWindow: BrowserWindow | null = null;
 const detachedToolWindows = new Map<string, BrowserWindow>();
 let tray: Tray | null = null;
 let isQuitting = false;
@@ -319,6 +320,48 @@ let trayLabels = {
   notifications: 'Notifications',
   quit: 'Quit',
 };
+
+function showSearchChallengeWindow(): void {
+  if (!searchBrowser || !mainWindow || mainWindow.isDestroyed()) return;
+  if (searchChallengeWindow && !searchChallengeWindow.isDestroyed()) {
+    searchChallengeWindow.show();
+    searchChallengeWindow.focus();
+    return;
+  }
+
+  const challengeWindow = new BrowserWindow({
+    width: 920,
+    height: 720,
+    minWidth: 640,
+    minHeight: 480,
+    show: false,
+    title: 'Chatter — Complete search verification',
+    autoHideMenuBar: true,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: true,
+    },
+  });
+  searchChallengeWindow = challengeWindow;
+
+  const syncBounds = () => {
+    if (!searchBrowser || challengeWindow.isDestroyed()) return;
+    const [width, height] = challengeWindow.getContentSize();
+    searchBrowser.setVisible(true, { x: 0, y: 0, width, height }, 'search-challenge', challengeWindow);
+  };
+  challengeWindow.on('resize', syncBounds);
+  challengeWindow.on('close', () => {
+    if (searchBrowser && mainWindow && !mainWindow.isDestroyed()) searchBrowser.moveToHost(mainWindow);
+  });
+  challengeWindow.on('closed', () => {
+    if (searchChallengeWindow === challengeWindow) searchChallengeWindow = null;
+  });
+
+  syncBounds();
+  challengeWindow.show();
+  challengeWindow.focus();
+}
 
 type DesktopNotificationPayload = {
   id: string;
@@ -821,6 +864,8 @@ function createWindow() {
   mainWindow.on('focus', closeConfirmationNotificationWindows);
 
   mainWindow.on('closed', () => {
+    if (searchChallengeWindow && !searchChallengeWindow.isDestroyed()) searchChallengeWindow.close();
+    searchChallengeWindow = null;
     for (const window of detachedToolWindows.values()) {
       if (!window.isDestroyed()) window.close();
     }
@@ -872,7 +917,9 @@ function createWindow() {
   ipcMain.handle('search-browser:search', async (event, payload: BrowserSearchPayload) => {
     assertTrustedIpcSender(event);
     if (!searchBrowser) throw new Error('search_browser_unavailable');
-    return searchBrowser.search(payload);
+    const result = await searchBrowser.search(payload) as { challenge?: string };
+    if (result?.challenge === 'captcha') showSearchChallengeWindow();
+    return result;
   });
 
   ipcMain.handle('youtube-music:get-state', (event) => {

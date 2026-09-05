@@ -252,7 +252,7 @@ const runDesktopWebSearch = async (query: string, options: WebSearchOptions, sig
     if (signal?.aborted) throw error;
     const message = error instanceof Error ? error.message : String(error);
     if (message === 'desktop_search_captcha_required') {
-      return 'Tool error: desktop search requires the user to complete a CAPTCHA.';
+      return 'Tool error: desktop search requires verification. A CAPTCHA window was opened in Chatter Desktop. Ask the user to complete it, then repeat the search.';
     }
     if (message === 'desktop_not_connected' || message === 'desktop_connection_stale') {
       return 'Tool error: Chatter Desktop must be connected to search from this device.';
