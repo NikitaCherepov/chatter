@@ -4,7 +4,6 @@ use_default_settings:
       - brave
       - duckduckgo
       - google
-      - github code
       - startpage
       - wikipedia
 
@@ -34,14 +33,6 @@ engines:
     disabled: false
   - name: google
     disabled: false
-  - name: github code
-    engine: github_code
-    shortcut: ghc
-    categories:
-      - it
-    disabled: false
-    ghc_auth:
-      type: none
   - name: startpage
     disabled: false
   - name: wikipedia

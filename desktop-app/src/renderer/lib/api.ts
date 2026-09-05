@@ -1623,6 +1623,16 @@ async function handleExecuteIpc(msg: { request_id: string; ipc_type: string; pay
         url: payload?.url,
       });
       result = await (window as any).electronAPI?.browserControl(payload);
+    } else if (ipc_type === 'web_search') {
+      console.log('[ipc] renderer invoke searchWeb', {
+        requestId: request_id,
+        mode: payload?.mode,
+        page: payload?.page,
+        query: payload?.query,
+      });
+      const searchWeb = (window as any).electronAPI?.searchWeb;
+      if (typeof searchWeb !== 'function') throw new Error('desktop_search_unsupported');
+      result = await searchWeb(payload);
     } else {
       throw new Error(`unknown ipc_type: ${ipc_type}`);
     }

@@ -1,5 +1,6 @@
 import { wrapUntrustedContent } from './web-reader.js';
 import { randomUUID } from 'node:crypto';
+import { sendIpcToDesktop } from '../ws-clients.js';
 
 const SEARXNG_BASE_URL = `${process.env.SEARXNG_BASE_URL || 'http://searxng:8080'}`.trim().replace(/\/+$/, '');
 const TAVILY_API_KEY = `${process.env.TAVILY_API_KEY || ''}`.trim();
@@ -14,11 +15,10 @@ type WebSearchOptions = {
   userId: number;
   cursor?: string;
   wikipedia?: boolean;
-  github?: boolean;
   language?: string | null;
 };
 
-type SearchMode = 'web' | 'wikipedia' | 'github';
+type SearchMode = 'web' | 'wikipedia';
 
 type SearchSession = {
   userId: number;
@@ -45,6 +45,15 @@ type SearxngResponse = {
   answers?: unknown[];
   results?: SearxngResult[];
   unresponsive_engines?: unknown[];
+};
+
+type DesktopSearchResponse = {
+  mode?: SearchMode;
+  page?: number;
+  url?: string;
+  title?: string;
+  challenge?: 'captcha' | null;
+  results?: SearxngResult[];
 };
 
 const engineNameFromFailure = (failure: unknown): string => {
@@ -102,7 +111,7 @@ const fetchSearxngPage = async (session: SearchSession, page: number, signal?: A
     const scopedQuery = session.mode === 'wikipedia' ? `!wikipedia ${session.query}` : session.query;
     url.searchParams.set('q', scopedQuery);
     url.searchParams.set('format', 'json');
-    url.searchParams.set('categories', session.mode === 'github' ? 'it' : 'general');
+    url.searchParams.set('categories', 'general');
     url.searchParams.set('language', session.language);
     url.searchParams.set('pageno', `${page}`);
 
@@ -154,12 +163,37 @@ const fetchSearxngPage = async (session: SearchSession, page: number, signal?: A
   }
 };
 
-const runSearxngWebSearch = async (query: string, options: WebSearchOptions, signal?: AbortSignal): Promise<string> => {
-  if (options.wikipedia === true && options.github === true) {
-    return 'Tool error: wikipedia and github search modes cannot be enabled together.';
-  }
+const fetchDesktopSearchPage = async (
+  session: SearchSession,
+  page: number,
+  signal?: AbortSignal,
+): Promise<SearxngResult[]> => {
+  const response = await sendIpcToDesktop(session.userId, 'web_search', {
+    query: session.query,
+    mode: session.mode,
+    page,
+    language: session.language,
+  }, 30_000, signal) as DesktopSearchResponse;
 
-  const mode: SearchMode = options.github === true ? 'github' : options.wikipedia === true ? 'wikipedia' : 'web';
+  if (response?.challenge === 'captcha') throw new Error('desktop_search_captcha_required');
+  const results = Array.isArray(response?.results) ? response.results : [];
+  console.info('[web-search] Desktop browser report', JSON.stringify({
+    page,
+    searchMode: session.mode,
+    url: response?.url || '',
+    title: response?.title || '',
+    resultCount: results.length,
+    results: results.map((result, index) => ({
+      rank: index + 1,
+      title: result.title || '',
+      url: result.url || '',
+    })),
+  }, null, 2));
+  return results;
+};
+
+const runDesktopWebSearch = async (query: string, options: WebSearchOptions, signal?: AbortSignal): Promise<string> => {
+  const mode: SearchMode = options.wikipedia === true ? 'wikipedia' : 'web';
   pruneSearchSessions();
 
   let searchId: string;
@@ -199,7 +233,7 @@ const runSearxngWebSearch = async (query: string, options: WebSearchOptions, sig
         session.exhausted = true;
         break;
       }
-      const pageResults = await fetchSearxngPage(session, session.nextSearxngPage, signal);
+      const pageResults = await fetchDesktopSearchPage(session, session.nextSearxngPage, signal);
       session.nextSearxngPage += 1;
       if (!pageResults.length) {
         session.exhausted = true;
@@ -216,6 +250,16 @@ const runSearxngWebSearch = async (query: string, options: WebSearchOptions, sig
     }
   } catch (error) {
     if (signal?.aborted) throw error;
+    const message = error instanceof Error ? error.message : String(error);
+    if (message === 'desktop_search_captcha_required') {
+      return 'Tool error: desktop search requires the user to complete a CAPTCHA.';
+    }
+    if (message === 'desktop_not_connected' || message === 'desktop_connection_stale') {
+      return 'Tool error: Chatter Desktop must be connected to search from this device.';
+    }
+    if (message === 'desktop_search_unsupported') {
+      return 'Tool error: this Chatter Desktop version does not support local web search yet.';
+    }
     return 'Tool error: search service temporarily unavailable.';
   }
 
@@ -232,7 +276,7 @@ const runSearxngWebSearch = async (query: string, options: WebSearchOptions, sig
   const hasMore = nextOffset < session.results.length || !session.exhausted;
   const nextCursor = hasMore ? `${searchId}:${nextOffset}` : null;
   const pagination = nextCursor
-    ? `Search pagination: showing cached results ${offset + 1}-${nextOffset}. To continue, repeat the same query and search mode (wikipedia/github) with cursor "${nextCursor}".`
+    ? `Search pagination: showing cached results ${offset + 1}-${nextOffset}. To continue, repeat the same query and wikipedia value with cursor "${nextCursor}".`
     : `Search pagination: showing cached results ${offset + 1}-${nextOffset}. No more results are available.`;
   return `${wrapUntrustedContent(resultText)}\n\n${pagination}`;
 };
@@ -279,5 +323,5 @@ export const runTavilyWebSearch = async (query: string, signal?: AbortSignal): P
   }
 };
 
-// The public tool uses only SearXNG during the current test phase.
-export const runWebSearch = runSearxngWebSearch;
+// The public tool temporarily uses the connected desktop browser during this test phase.
+export const runWebSearch = runDesktopWebSearch;

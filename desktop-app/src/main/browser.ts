@@ -37,6 +37,15 @@ export type BrowserControlPayload = {
 export type ChatterBrowserOptions = {
   homeUrl?: string;
   stateChannel?: string;
+  partition?: string;
+  backgroundSize?: { width: number; height: number };
+};
+
+export type BrowserSearchPayload = {
+  query?: string;
+  mode?: 'web' | 'wikipedia';
+  page?: number;
+  language?: string;
 };
 
 export type BrowserDownloadRequest = {
@@ -264,7 +273,7 @@ export class ChatterBrowser {
     this.stateChannel = options.stateChannel || 'browser:state';
     this.view = new WebContentsView({
       webPreferences: {
-        partition: 'persist:chatter-browser',
+        partition: options.partition || 'persist:chatter-browser',
         nodeIntegration: false,
         contextIsolation: true,
         sandbox: true,
@@ -276,6 +285,14 @@ export class ChatterBrowser {
     });
 
     host.contentView.addChildView(this.view);
+    if (options.backgroundSize) {
+      this.view.setBounds({
+        x: 0,
+        y: 0,
+        width: Math.max(800, Math.floor(options.backgroundSize.width)),
+        height: Math.max(600, Math.floor(options.backgroundSize.height)),
+      });
+    }
     this.view.setVisible(false);
 
     const contents = this.view.webContents;
@@ -590,6 +607,105 @@ export class ChatterBrowser {
     }
 
     throw new Error('unsupported_browser_action');
+  }
+
+  async search(payload: BrowserSearchPayload): Promise<unknown> {
+    const query = `${payload?.query || ''}`.trim();
+    if (!query || query.length > 500) throw new Error('desktop_search_query_invalid');
+    const mode = payload?.mode === 'wikipedia' ? 'wikipedia' : 'web';
+    const page = Math.max(1, Math.min(10, Math.floor(Number(payload?.page) || 1)));
+    const language = `${payload?.language || 'en'}`.trim().toLowerCase().split('-')[0];
+    const safeLanguage = /^[a-z]{2,3}$/.test(language) ? language : 'en';
+    const targetUrl = mode === 'wikipedia'
+      ? `https://${safeLanguage}.wikipedia.org/w/index.php?search=${encodeURIComponent(query)}&title=Special%3ASearch&fulltext=1&offset=${(page - 1) * 20}`
+      : `https://www.google.com/search?q=${encodeURIComponent(query)}&start=${(page - 1) * 10}&filter=0`;
+
+    if (this.interactionInProgress) throw new Error('desktop_search_in_progress');
+    this.interactionInProgress = true;
+    this.explicitNavigationRequested = true;
+    try {
+      await this.navigateToUrl(targetUrl);
+      await this.ensureReadablePage();
+
+      for (let attempt = 0; attempt < 20; attempt += 1) {
+        const state = await this.executeInBrowserWorld<{ ready: boolean; challenge: boolean; resultCount: number }>(`(() => {
+          const body = String(document.body?.innerText || '').toLowerCase();
+          const challenge = location.pathname.startsWith('/sorry/')
+            || Boolean(document.querySelector('#captcha-form, iframe[src*="recaptcha"], [data-sitekey]'))
+            || /unusual traffic|verify you are human/.test(body);
+          const mode = ${JSON.stringify(mode)};
+          const resultCount = mode === 'wikipedia'
+            ? document.querySelectorAll('.mw-search-result-heading a').length
+            : document.querySelectorAll('a h3').length;
+          return {
+            ready: document.readyState === 'complete' || document.readyState === 'interactive',
+            challenge,
+            resultCount,
+          };
+        })()`);
+        if (state.challenge || (state.ready && state.resultCount > 0)) break;
+        await new Promise(resolve => setTimeout(resolve, 250));
+      }
+
+      return await this.executeInBrowserWorld(`(() => {
+        const mode = ${JSON.stringify(mode)};
+        const clean = (value, max = 2000) => String(value || '').replace(/\\s+/g, ' ').trim().slice(0, max);
+        const bodyText = clean(document.body?.innerText || '', 20000).toLowerCase();
+        const challenge = location.pathname.startsWith('/sorry/')
+          || Boolean(document.querySelector('#captcha-form, iframe[src*="recaptcha"], [data-sitekey]'))
+          || /unusual traffic|verify you are human/.test(bodyText);
+        const results = [];
+        const seen = new Set();
+        const add = (title, url, content = '', engine = mode === 'web' ? 'google' : mode) => {
+          title = clean(title, 500);
+          content = clean(content, 1500);
+          try {
+            const parsed = new URL(url, location.href);
+            if (!['http:', 'https:'].includes(parsed.protocol)) return;
+            if (parsed.hostname.endsWith('google.com') && parsed.pathname === '/url') {
+              const redirected = parsed.searchParams.get('q') || parsed.searchParams.get('url');
+              if (redirected) url = redirected;
+            } else {
+              url = parsed.href;
+            }
+          } catch {
+            return;
+          }
+          if (!title || !url || seen.has(url)) return;
+          seen.add(url);
+          results.push({ title, content, url, engine, engines: [engine] });
+        };
+
+        if (mode === 'wikipedia') {
+          document.querySelectorAll('.mw-search-result').forEach((item) => {
+            const anchor = item.querySelector('.mw-search-result-heading a');
+            if (anchor instanceof HTMLAnchorElement) {
+              add(anchor.textContent, anchor.href, item.querySelector('.searchresult')?.textContent || '', 'wikipedia');
+            }
+          });
+        } else {
+          document.querySelectorAll('a h3').forEach((heading) => {
+            const anchor = heading.closest('a');
+            if (!(anchor instanceof HTMLAnchorElement)) return;
+            const container = heading.closest('div.MjjYud, div[data-snhf], div.g') || anchor.parentElement?.parentElement;
+            const text = clean(container?.textContent || '', 2000);
+            const title = clean(heading.textContent || '', 500);
+            add(title, anchor.href, text.startsWith(title) ? text.slice(title.length) : text, 'google');
+          });
+        }
+
+        return {
+          mode,
+          page: ${page},
+          url: location.href,
+          title: document.title,
+          challenge: challenge ? 'captcha' : null,
+          results: results.slice(0, 20),
+        };
+      })()`);
+    } finally {
+      this.interactionInProgress = false;
+    }
   }
 
   private async controlYouTubeMusic(payload: BrowserControlPayload): Promise<unknown> {

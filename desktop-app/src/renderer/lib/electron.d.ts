@@ -14,6 +14,12 @@ declare global {
       browserSetVisible: (payload: { visible: boolean; ownerId: string; bounds?: BrowserBounds }) => Promise<BrowserState>;
       browserSetBounds: (bounds: BrowserBounds) => Promise<BrowserState>;
       browserControl: (payload: BrowserControlPayload) => Promise<any>;
+      searchWeb: (payload: {
+        query: string;
+        mode?: 'web' | 'wikipedia';
+        page?: number;
+        language?: string;
+      }) => Promise<any>;
       onBrowserState: (callback: (payload: BrowserState) => void) => () => void;
       youtubeMusicGetState: () => Promise<BrowserState>;
       youtubeMusicSetVisible: (payload: { visible: boolean; ownerId: string; bounds?: BrowserBounds }) => Promise<BrowserState>;

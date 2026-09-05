@@ -9,7 +9,7 @@ import util from 'util';
 import ffmpeg from 'fluent-ffmpeg';
 import ffmpegStatic from 'ffmpeg-static';
 import { WakeWordOnnxService } from './wakeword';
-import { ChatterBrowser, type BrowserControlPayload } from './browser';
+import { ChatterBrowser, type BrowserControlPayload, type BrowserSearchPayload } from './browser';
 
 const execFileAsync = util.promisify(execFile);
 
@@ -306,6 +306,7 @@ function normalizeWhisperLanguage(value: unknown) {
 let mainWindow: BrowserWindow | null = null;
 let chatterBrowser: ChatterBrowser | null = null;
 let youtubeMusicBrowser: ChatterBrowser | null = null;
+let searchBrowser: ChatterBrowser | null = null;
 const detachedToolWindows = new Map<string, BrowserWindow>();
 let tray: Tray | null = null;
 let isQuitting = false;
@@ -782,6 +783,12 @@ function createWindow() {
     homeUrl: 'https://music.youtube.com/',
     stateChannel: 'youtube-music:state',
   });
+  searchBrowser = new ChatterBrowser(mainWindow, {
+    homeUrl: 'https://www.google.com/',
+    stateChannel: 'search-browser:state',
+    partition: 'persist:chatter-search',
+    backgroundSize: { width: 1280, height: 900 },
+  });
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     openExternalHttpUrl(url);
@@ -822,6 +829,8 @@ function createWindow() {
     chatterBrowser = null;
     youtubeMusicBrowser?.destroy();
     youtubeMusicBrowser = null;
+    searchBrowser?.destroy();
+    searchBrowser = null;
     mainWindow = null;
   });
 
@@ -858,6 +867,12 @@ function createWindow() {
       return youtubeMusicBrowser.control(payload);
     }
     return chatterBrowser.control(payload);
+  });
+
+  ipcMain.handle('search-browser:search', async (event, payload: BrowserSearchPayload) => {
+    assertTrustedIpcSender(event);
+    if (!searchBrowser) throw new Error('search_browser_unavailable');
+    return searchBrowser.search(payload);
   });
 
   ipcMain.handle('youtube-music:get-state', (event) => {

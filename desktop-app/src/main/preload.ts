@@ -42,6 +42,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
     query?: string;
     volume?: number;
   }) => ipcRenderer.invoke('browser:control', payload),
+  searchWeb: (payload: {
+    query: string;
+    mode?: 'web' | 'wikipedia';
+    page?: number;
+    language?: string;
+  }) => ipcRenderer.invoke('search-browser:search', payload),
   onBrowserState: (callback: (payload: unknown) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, payload: unknown) => callback(payload);
     ipcRenderer.on('browser:state', handler);
