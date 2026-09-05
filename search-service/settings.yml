@@ -4,6 +4,7 @@ use_default_settings:
       - brave
       - duckduckgo
       - google
+      - github code
       - startpage
       - wikipedia
 
@@ -33,6 +34,8 @@ engines:
     disabled: false
   - name: google
     disabled: false
+  - name: github code
+    disabled: true
   - name: startpage
     disabled: false
   - name: wikipedia

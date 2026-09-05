@@ -2046,7 +2046,8 @@ export const toolDefinitions = [
         properties: {
           query: { type: 'string', description: 'Search query' },
           cursor: { type: 'string', description: 'Pagination cursor returned by the previous search. Omit for the first search.' },
-          wikipedia: { type: 'boolean', description: 'When true, search only Wikipedia. Defaults to false for general web search.', default: false }
+          wikipedia: { type: 'boolean', description: 'When true, search only Wikipedia. Cannot be combined with github. Defaults to false.', default: false },
+          github: { type: 'boolean', description: 'When true, search only public code on GitHub. Cannot be combined with wikipedia. Defaults to false.', default: false }
         },
         required: ['query']
       }
@@ -3913,6 +3914,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
       userId: user.id,
       cursor: typeof parsed.cursor === 'string' ? parsed.cursor : undefined,
       wikipedia: parsed.wikipedia === true,
+      github: parsed.github === true,
       language: user.language,
     }, signal);
   }

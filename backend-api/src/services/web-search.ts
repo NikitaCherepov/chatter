@@ -14,13 +14,16 @@ type WebSearchOptions = {
   userId: number;
   cursor?: string;
   wikipedia?: boolean;
+  github?: boolean;
   language?: string | null;
 };
+
+type SearchMode = 'web' | 'wikipedia' | 'github';
 
 type SearchSession = {
   userId: number;
   query: string;
-  wikipedia: boolean;
+  mode: SearchMode;
   language: string;
   results: SearxngResult[];
   nextSearxngPage: number;
@@ -96,7 +99,13 @@ const fetchSearxngPage = async (session: SearchSession, page: number, signal?: A
 
   try {
     const url = new URL(`${SEARXNG_BASE_URL}/search`);
-    url.searchParams.set('q', session.wikipedia ? `!wikipedia ${session.query}` : session.query);
+    const scopedQuery =
+      session.mode === 'wikipedia'
+        ? `!wikipedia ${session.query}`
+        : session.mode === 'github'
+          ? `!ghc ${session.query}`
+          : session.query;
+    url.searchParams.set('q', scopedQuery);
     url.searchParams.set('format', 'json');
     url.searchParams.set('categories', 'general');
     url.searchParams.set('language', session.language);
@@ -123,7 +132,7 @@ const fetchSearxngPage = async (session: SearchSession, page: number, signal?: A
 
     const engineReport = {
       page,
-      wikipediaOnly: session.wikipedia,
+      searchMode: session.mode,
       returned: returnedEngines,
       failed: failedEngines,
       resultCount: results.length,
@@ -151,6 +160,11 @@ const fetchSearxngPage = async (session: SearchSession, page: number, signal?: A
 };
 
 const runSearxngWebSearch = async (query: string, options: WebSearchOptions, signal?: AbortSignal): Promise<string> => {
+  if (options.wikipedia === true && options.github === true) {
+    return 'Tool error: wikipedia and github search modes cannot be enabled together.';
+  }
+
+  const mode: SearchMode = options.github === true ? 'github' : options.wikipedia === true ? 'wikipedia' : 'web';
   pruneSearchSessions();
 
   let searchId: string;
@@ -163,7 +177,7 @@ const runSearxngWebSearch = async (query: string, options: WebSearchOptions, sig
     if (!cursor || !existing || existing.userId !== options.userId) {
       return 'Tool error: search cursor is invalid or expired. Start a new search without a cursor.';
     }
-    if (existing.query !== query || existing.wikipedia !== (options.wikipedia === true)) {
+    if (existing.query !== query || existing.mode !== mode) {
       return 'Tool error: search cursor does not match this query or search mode. Start a new search without a cursor.';
     }
     searchId = cursor.searchId;
@@ -174,8 +188,8 @@ const runSearxngWebSearch = async (query: string, options: WebSearchOptions, sig
     session = {
       userId: options.userId,
       query,
-      wikipedia: options.wikipedia === true,
-      language: options.wikipedia ? (`${options.language || 'en'}`.trim() || 'en') : 'all',
+      mode,
+      language: mode === 'wikipedia' ? (`${options.language || 'en'}`.trim() || 'en') : 'all',
       results: [],
       nextSearxngPage: 1,
       exhausted: false,
@@ -223,7 +237,7 @@ const runSearxngWebSearch = async (query: string, options: WebSearchOptions, sig
   const hasMore = nextOffset < session.results.length || !session.exhausted;
   const nextCursor = hasMore ? `${searchId}:${nextOffset}` : null;
   const pagination = nextCursor
-    ? `Search pagination: showing cached results ${offset + 1}-${nextOffset}. To continue, repeat the same query and wikipedia value with cursor "${nextCursor}".`
+    ? `Search pagination: showing cached results ${offset + 1}-${nextOffset}. To continue, repeat the same query and search mode (wikipedia/github) with cursor "${nextCursor}".`
     : `Search pagination: showing cached results ${offset + 1}-${nextOffset}. No more results are available.`;
   return `${wrapUntrustedContent(resultText)}\n\n${pagination}`;
 };
