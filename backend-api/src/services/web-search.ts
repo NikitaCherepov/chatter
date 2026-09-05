@@ -99,15 +99,10 @@ const fetchSearxngPage = async (session: SearchSession, page: number, signal?: A
 
   try {
     const url = new URL(`${SEARXNG_BASE_URL}/search`);
-    const scopedQuery =
-      session.mode === 'wikipedia'
-        ? `!wikipedia ${session.query}`
-        : session.mode === 'github'
-          ? `!ghc ${session.query}`
-          : session.query;
+    const scopedQuery = session.mode === 'wikipedia' ? `!wikipedia ${session.query}` : session.query;
     url.searchParams.set('q', scopedQuery);
     url.searchParams.set('format', 'json');
-    url.searchParams.set('categories', 'general');
+    url.searchParams.set('categories', session.mode === 'github' ? 'it' : 'general');
     url.searchParams.set('language', session.language);
     url.searchParams.set('pageno', `${page}`);
 

@@ -35,7 +35,13 @@ engines:
   - name: google
     disabled: false
   - name: github code
-    disabled: true
+    engine: github_code
+    shortcut: ghc
+    categories:
+      - it
+    disabled: false
+    ghc_auth:
+      type: none
   - name: startpage
     disabled: false
   - name: wikipedia
