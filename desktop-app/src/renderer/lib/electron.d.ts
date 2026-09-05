@@ -17,6 +17,9 @@ declare global {
       searchWeb: (payload: {
         query: string;
         mode?: 'web' | 'wikipedia';
+        searchType?: 'web' | 'news';
+        sort?: 'relevance' | 'date';
+        freshness?: 'any' | 'day' | 'week' | 'month' | 'year';
         page?: number;
         language?: string;
       }) => Promise<any>;
@@ -61,7 +64,7 @@ declare global {
       readSshKeys: () => Promise<{ name: string; filename: string; publicKey?: string; privateKey?: string }[]>;
       getNotificationsEnabled: () => Promise<boolean>;
       setNotificationsEnabled: (enabled: boolean) => Promise<boolean>;
-      setNotificationLabels: (labels: { open: string; notifications: string; quit: string }) => Promise<void>;
+      setNotificationLabels: (labels: { open: string; notifications: string; quit: string; searchVerification: string }) => Promise<void>;
       showDesktopNotification: (payload: {
         id: string;
         title: string;

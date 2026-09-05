@@ -11,10 +11,17 @@ const MAX_SEARCH_PAGE = 10;
 const SEARCH_SESSION_TTL_MS = 10 * 60_000;
 const MAX_SEARCH_SESSIONS = 200;
 
+type SearchType = 'web' | 'news';
+type SearchSort = 'relevance' | 'date';
+type SearchFreshness = 'any' | 'day' | 'week' | 'month' | 'year';
+
 type WebSearchOptions = {
   userId: number;
   cursor?: string;
   wikipedia?: boolean;
+  searchType?: SearchType;
+  sort?: SearchSort;
+  freshness?: SearchFreshness;
   language?: string | null;
 };
 
@@ -24,6 +31,9 @@ type SearchSession = {
   userId: number;
   query: string;
   mode: SearchMode;
+  searchType: SearchType;
+  sort: SearchSort;
+  freshness: SearchFreshness;
   language: string;
   results: SearxngResult[];
   nextSearxngPage: number;
@@ -111,9 +121,10 @@ const fetchSearxngPage = async (session: SearchSession, page: number, signal?: A
     const scopedQuery = session.mode === 'wikipedia' ? `!wikipedia ${session.query}` : session.query;
     url.searchParams.set('q', scopedQuery);
     url.searchParams.set('format', 'json');
-    url.searchParams.set('categories', 'general');
+    url.searchParams.set('categories', session.searchType === 'news' ? 'news' : 'general');
     url.searchParams.set('language', session.language);
     url.searchParams.set('pageno', `${page}`);
+    if (session.freshness !== 'any') url.searchParams.set('time_range', session.freshness);
 
     const response = await fetch(url, {
       headers: {
@@ -171,6 +182,9 @@ const fetchDesktopSearchPage = async (
   const response = await sendIpcToDesktop(session.userId, 'web_search', {
     query: session.query,
     mode: session.mode,
+    searchType: session.searchType,
+    sort: session.sort,
+    freshness: session.freshness,
     page,
     language: session.language,
   }, 30_000, signal) as DesktopSearchResponse;
@@ -180,6 +194,9 @@ const fetchDesktopSearchPage = async (
   console.info('[web-search] Desktop browser report', JSON.stringify({
     page,
     searchMode: session.mode,
+    searchType: session.searchType,
+    sort: session.sort,
+    freshness: session.freshness,
     url: response?.url || '',
     title: response?.title || '',
     resultCount: results.length,
@@ -194,6 +211,14 @@ const fetchDesktopSearchPage = async (
 
 const runDesktopWebSearch = async (query: string, options: WebSearchOptions, signal?: AbortSignal): Promise<string> => {
   const mode: SearchMode = options.wikipedia === true ? 'wikipedia' : 'web';
+  const searchType: SearchType = options.searchType === 'news' ? 'news' : 'web';
+  const sort: SearchSort = options.sort === 'date' ? 'date' : 'relevance';
+  const freshness: SearchFreshness = ['day', 'week', 'month', 'year'].includes(`${options.freshness || ''}`)
+    ? options.freshness as Exclude<SearchFreshness, 'any'>
+    : 'any';
+  if (mode === 'wikipedia' && (searchType !== 'web' || sort !== 'relevance' || freshness !== 'any')) {
+    return 'Tool error: Wikipedia search cannot be combined with news, date sorting, or freshness filters.';
+  }
   pruneSearchSessions();
 
   let searchId: string;
@@ -206,8 +231,14 @@ const runDesktopWebSearch = async (query: string, options: WebSearchOptions, sig
     if (!cursor || !existing || existing.userId !== options.userId) {
       return 'Tool error: search cursor is invalid or expired. Start a new search without a cursor.';
     }
-    if (existing.query !== query || existing.mode !== mode) {
-      return 'Tool error: search cursor does not match this query or search mode. Start a new search without a cursor.';
+    if (
+      existing.query !== query
+      || existing.mode !== mode
+      || existing.searchType !== searchType
+      || existing.sort !== sort
+      || existing.freshness !== freshness
+    ) {
+      return 'Tool error: search cursor does not match this query or search options. Start a new search without a cursor.';
     }
     searchId = cursor.searchId;
     offset = cursor.offset;
@@ -218,6 +249,9 @@ const runDesktopWebSearch = async (query: string, options: WebSearchOptions, sig
       userId: options.userId,
       query,
       mode,
+      searchType,
+      sort,
+      freshness,
       language: mode === 'wikipedia' ? (`${options.language || 'en'}`.trim() || 'en') : 'all',
       results: [],
       nextSearxngPage: 1,
@@ -276,7 +310,7 @@ const runDesktopWebSearch = async (query: string, options: WebSearchOptions, sig
   const hasMore = nextOffset < session.results.length || !session.exhausted;
   const nextCursor = hasMore ? `${searchId}:${nextOffset}` : null;
   const pagination = nextCursor
-    ? `Search pagination: showing cached results ${offset + 1}-${nextOffset}. To continue, repeat the same query and wikipedia value with cursor "${nextCursor}".`
+    ? `Search pagination: showing cached results ${offset + 1}-${nextOffset}. To continue, repeat the same query and search options with cursor "${nextCursor}".`
     : `Search pagination: showing cached results ${offset + 1}-${nextOffset}. No more results are available.`;
   return `${wrapUntrustedContent(resultText)}\n\n${pagination}`;
 };

@@ -44,6 +44,9 @@ export type ChatterBrowserOptions = {
 export type BrowserSearchPayload = {
   query?: string;
   mode?: 'web' | 'wikipedia';
+  searchType?: 'web' | 'news';
+  sort?: 'relevance' | 'date';
+  freshness?: 'any' | 'day' | 'week' | 'month' | 'year';
   page?: number;
   language?: string;
 };
@@ -613,12 +616,41 @@ export class ChatterBrowser {
     const query = `${payload?.query || ''}`.trim();
     if (!query || query.length > 500) throw new Error('desktop_search_query_invalid');
     const mode = payload?.mode === 'wikipedia' ? 'wikipedia' : 'web';
+    const searchType = payload?.searchType === 'news' ? 'news' : 'web';
+    const sort = payload?.sort === 'date' ? 'date' : 'relevance';
+    const freshness = payload?.freshness === 'day'
+      || payload?.freshness === 'week'
+      || payload?.freshness === 'month'
+      || payload?.freshness === 'year'
+      ? payload.freshness
+      : 'any';
     const page = Math.max(1, Math.min(10, Math.floor(Number(payload?.page) || 1)));
     const language = `${payload?.language || 'en'}`.trim().toLowerCase().split('-')[0];
     const safeLanguage = /^[a-z]{2,3}$/.test(language) ? language : 'en';
-    const targetUrl = mode === 'wikipedia'
-      ? `https://${safeLanguage}.wikipedia.org/w/index.php?search=${encodeURIComponent(query)}&title=Special%3ASearch&fulltext=1&offset=${(page - 1) * 20}`
-      : `https://www.google.com/search?q=${encodeURIComponent(query)}&start=${(page - 1) * 10}&filter=0`;
+    let targetUrl: string;
+    if (mode === 'wikipedia') {
+      targetUrl = `https://${safeLanguage}.wikipedia.org/w/index.php?search=${encodeURIComponent(query)}&title=Special%3ASearch&fulltext=1&offset=${(page - 1) * 20}`;
+    } else {
+      const googleUrl = new URL('https://www.google.com/search');
+      googleUrl.searchParams.set('q', query);
+      googleUrl.searchParams.set('start', `${(page - 1) * 10}`);
+      googleUrl.searchParams.set('filter', '0');
+      if (searchType === 'news') googleUrl.searchParams.set('tbm', 'nws');
+      const timeFilters: string[] = [];
+      const freshnessFilter = freshness === 'day'
+        ? 'qdr:d'
+        : freshness === 'week'
+          ? 'qdr:w'
+          : freshness === 'month'
+            ? 'qdr:m'
+            : freshness === 'year'
+              ? 'qdr:y'
+              : '';
+      if (freshnessFilter) timeFilters.push(freshnessFilter);
+      if (sort === 'date') timeFilters.push('sbd:1');
+      if (timeFilters.length) googleUrl.searchParams.set('tbs', timeFilters.join(','));
+      targetUrl = googleUrl.toString();
+    }
 
     if (this.interactionInProgress) throw new Error('desktop_search_in_progress');
     this.interactionInProgress = true;
@@ -634,9 +666,10 @@ export class ChatterBrowser {
             || Boolean(document.querySelector('#captcha-form, iframe[src*="recaptcha"], [data-sitekey]'))
             || /unusual traffic|verify you are human/.test(body);
           const mode = ${JSON.stringify(mode)};
+          const searchType = ${JSON.stringify(searchType)};
           const resultCount = mode === 'wikipedia'
             ? document.querySelectorAll('.mw-search-result-heading a').length
-            : document.querySelectorAll('a h3').length;
+            : document.querySelectorAll(searchType === 'news' ? 'a h3, a [role="heading"][aria-level="3"]' : 'a h3').length;
           return {
             ready: document.readyState === 'complete' || document.readyState === 'interactive',
             challenge,
@@ -649,6 +682,7 @@ export class ChatterBrowser {
 
       return await this.executeInBrowserWorld(`(() => {
         const mode = ${JSON.stringify(mode)};
+        const searchType = ${JSON.stringify(searchType)};
         const clean = (value, max = 2000) => String(value || '').replace(/\\s+/g, ' ').trim().slice(0, max);
         const bodyText = clean(document.body?.innerText || '', 20000).toLowerCase();
         const challenge = location.pathname.startsWith('/sorry/')
@@ -718,7 +752,7 @@ export class ChatterBrowser {
             }
           });
         } else {
-          const weatherCard = document.querySelector('#wob_wc');
+          const weatherCard = searchType === 'web' ? document.querySelector('#wob_wc') : null;
           if (weatherCard) {
             const locationName = clean(weatherCard.querySelector('#wob_loc')?.textContent || '', 200);
             const temperature = clean(weatherCard.querySelector('#wob_tm')?.textContent || '', 50);
@@ -743,16 +777,20 @@ export class ChatterBrowser {
             }
           }
 
-          document.querySelectorAll('a h3').forEach((heading) => {
+          const resultSelector = searchType === 'news' ? 'a h3, a [role="heading"][aria-level="3"]' : 'a h3';
+          document.querySelectorAll(resultSelector).forEach((heading) => {
             const anchor = heading.closest('a');
             if (!(anchor instanceof HTMLAnchorElement)) return;
             const title = clean(heading.textContent || '', 500);
-            add(title, anchor.href, extractGoogleSnippet(heading, anchor), 'google');
+            add(title, anchor.href, extractGoogleSnippet(heading, anchor), searchType === 'news' ? 'google-news' : 'google');
           });
         }
 
         return {
           mode,
+          searchType,
+          sort: ${JSON.stringify(sort)},
+          freshness: ${JSON.stringify(freshness)},
           page: ${page},
           url: location.href,
           title: document.title,

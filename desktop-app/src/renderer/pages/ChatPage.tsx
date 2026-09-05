@@ -1504,6 +1504,7 @@ export function ChatPage() {
       open: t('chat.desktopNotifications.openChatter'),
       notifications: t('chat.desktopNotifications.notifications'),
       quit: t('chat.desktopNotifications.quit'),
+      searchVerification: t('chat.desktopNotifications.searchVerification'),
     });
     const removeEnabled = window.electronAPI.onNotificationsEnabledChanged(setNotificationsEnabledState);
     const removeOpenChat = window.electronAPI.onNotificationOpenChat(({ chatId }) => {

@@ -2046,7 +2046,10 @@ export const toolDefinitions = [
         properties: {
           query: { type: 'string', description: 'Search query' },
           cursor: { type: 'string', description: 'Pagination cursor returned by the previous search. Omit for the first search.' },
-          wikipedia: { type: 'boolean', description: 'When true, search only Wikipedia. Defaults to false.', default: false }
+          wikipedia: { type: 'boolean', description: 'When true, search only Wikipedia. Cannot be combined with news, date sorting, or freshness filters. Defaults to false.', default: false },
+          search_type: { type: 'string', enum: ['web', 'news'], description: 'Search regular web pages or news. Defaults to web.', default: 'web' },
+          sort: { type: 'string', enum: ['relevance', 'date'], description: 'Sort results by relevance or newest first. Defaults to relevance.', default: 'relevance' },
+          freshness: { type: 'string', enum: ['any', 'day', 'week', 'month', 'year'], description: 'Limit results to a recent time period. Defaults to any.', default: 'any' }
         },
         required: ['query']
       }
@@ -3913,6 +3916,9 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
       userId: user.id,
       cursor: typeof parsed.cursor === 'string' ? parsed.cursor : undefined,
       wikipedia: parsed.wikipedia === true,
+      searchType: parsed.search_type === 'news' ? 'news' : 'web',
+      sort: parsed.sort === 'date' ? 'date' : 'relevance',
+      freshness: ['day', 'week', 'month', 'year'].includes(`${parsed.freshness || ''}`) ? parsed.freshness : 'any',
       language: user.language,
     }, signal);
   }

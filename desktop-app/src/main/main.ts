@@ -319,6 +319,7 @@ let trayLabels = {
   open: 'Open Chatter',
   notifications: 'Notifications',
   quit: 'Quit',
+  searchVerification: 'Complete search verification',
 };
 
 function showSearchChallengeWindow(): void {
@@ -335,7 +336,7 @@ function showSearchChallengeWindow(): void {
     minWidth: 640,
     minHeight: 480,
     show: false,
-    title: 'Chatter — Complete search verification',
+    title: `Chatter — ${trayLabels.searchVerification}`,
     autoHideMenuBar: true,
     webPreferences: {
       nodeIntegration: false,
@@ -764,6 +765,7 @@ ipcMain.handle('notifications:set-labels', (event, labels: Partial<typeof trayLa
     open: clean(labels?.open, trayLabels.open),
     notifications: clean(labels?.notifications, trayLabels.notifications),
     quit: clean(labels?.quit, trayLabels.quit),
+    searchVerification: clean(labels?.searchVerification, trayLabels.searchVerification),
   };
   rebuildTrayMenu();
 });

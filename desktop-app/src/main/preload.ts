@@ -45,6 +45,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   searchWeb: (payload: {
     query: string;
     mode?: 'web' | 'wikipedia';
+    searchType?: 'web' | 'news';
+    sort?: 'relevance' | 'date';
+    freshness?: 'any' | 'day' | 'week' | 'month' | 'year';
     page?: number;
     language?: string;
   }) => ipcRenderer.invoke('search-browser:search', payload),
@@ -216,7 +219,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setNotificationsEnabled: (enabled: boolean) =>
     ipcRenderer.invoke('notifications:set-enabled', enabled),
 
-  setNotificationLabels: (labels: { open: string; notifications: string; quit: string }) =>
+  setNotificationLabels: (labels: { open: string; notifications: string; quit: string; searchVerification: string }) =>
     ipcRenderer.invoke('notifications:set-labels', labels),
 
   showDesktopNotification: (payload: {
