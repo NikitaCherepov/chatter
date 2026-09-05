@@ -51,6 +51,11 @@ export type BrowserSearchPayload = {
   language?: string;
 };
 
+export type GoogleAiPayload = {
+  action?: 'ask' | 'new_chat' | 'reload';
+  message?: string;
+};
+
 export type BrowserDownloadRequest = {
   download_id: string;
   filename: string;
@@ -798,6 +803,190 @@ export class ChatterBrowser {
           results: results.slice(0, 20),
         };
       })()`);
+    } finally {
+      this.interactionInProgress = false;
+    }
+  }
+
+  async googleAi(payload: GoogleAiPayload): Promise<unknown> {
+    const action = payload?.action === 'new_chat' || payload?.action === 'reload' ? payload.action : 'ask';
+    const message = `${payload?.message || ''}`.trim();
+    if ((action === 'ask' || (action === 'new_chat' && message)) && (!message || message.length > 8_000)) {
+      throw new Error(message ? 'google_ai_message_too_long' : 'google_ai_message_required');
+    }
+    if (this.interactionInProgress) throw new Error('google_ai_in_progress');
+
+    const contents = this.view.webContents;
+    this.interactionInProgress = true;
+    this.explicitNavigationRequested = true;
+    try {
+      const currentUrl = contents.getURL();
+      let onAiMode = false;
+      try {
+        const parsed = new URL(currentUrl);
+        onAiMode = parsed.hostname.endsWith('google.com')
+          && (parsed.pathname === '/ai' || parsed.searchParams.get('udm') === '50');
+      } catch {
+        onAiMode = false;
+      }
+
+      if (action === 'new_chat' || !onAiMode) {
+        await this.navigateToUrl('https://www.google.com/ai');
+        await this.ensureReadablePage();
+      } else if (action === 'reload') {
+        contents.reload();
+        await this.ensureReadablePage();
+      }
+
+      if (action === 'reload') {
+        return { status: 'reloaded', url: contents.getURL(), title: contents.getTitle() };
+      }
+      if (action === 'new_chat' && !message) {
+        return { status: 'new_chat_started', url: contents.getURL(), title: contents.getTitle() };
+      }
+
+      type AiSnapshot = {
+        challenge: boolean;
+        inputAvailable: boolean;
+        busy: boolean;
+        text: string;
+        blocks: string[];
+        sources: Array<{ title: string; url: string }>;
+        url: string;
+        title: string;
+      };
+      const readSnapshot = () => this.executeInBrowserWorld<AiSnapshot>(`(() => {
+        const clean = (value, max = 30000) => String(value || '').replace(/\\s+/g, ' ').trim().slice(0, max);
+        const visible = (element) => {
+          if (!(element instanceof HTMLElement)) return false;
+          const style = getComputedStyle(element);
+          const rect = element.getBoundingClientRect();
+          return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 20 && rect.height > 10;
+        };
+        const editable = Array.from(document.querySelectorAll('textarea, input[type="text"], input[type="search"], [contenteditable="true"]'))
+          .filter(visible);
+        const main = document.querySelector('main') || document.body;
+        const bodyText = clean(document.body?.innerText || '', 30000).toLowerCase();
+        const challenge = location.pathname.startsWith('/sorry/')
+          || Boolean(document.querySelector('#captcha-form, iframe[src*="recaptcha"], [data-sitekey]'))
+          || /unusual traffic|verify you are human/.test(bodyText);
+        const blocks = [];
+        main?.querySelectorAll('p, li, h1, h2, h3, [role="heading"]').forEach((node) => {
+          const value = clean(node.innerText || node.textContent || '', 3000);
+          if (value && !blocks.includes(value)) blocks.push(value);
+        });
+        const sources = [];
+        const seenSources = new Set();
+        main?.querySelectorAll('a[href]').forEach((anchor) => {
+          try {
+            let url = new URL(anchor.href, location.href);
+            if (url.hostname.endsWith('google.com') && url.pathname === '/url') {
+              const redirected = url.searchParams.get('q') || url.searchParams.get('url');
+              if (redirected) url = new URL(redirected);
+            }
+            if (!['http:', 'https:'].includes(url.protocol) || url.hostname.endsWith('google.com')) return;
+            if (seenSources.has(url.href)) return;
+            seenSources.add(url.href);
+            sources.push({ title: clean(anchor.innerText || anchor.textContent || url.hostname, 300), url: url.href });
+          } catch {
+            // Ignore malformed and internal links.
+          }
+        });
+        return {
+          challenge,
+          inputAvailable: editable.length > 0,
+          busy: Boolean(document.querySelector('[aria-busy="true"], [data-loading="true"]')),
+          text: clean(main?.innerText || main?.textContent || '', 30000),
+          blocks: blocks.slice(-200),
+          sources: sources.slice(-20),
+          url: location.href,
+          title: document.title
+        };
+      })()`);
+
+      let baseline: AiSnapshot | null = null;
+      for (let attempt = 0; attempt < 40; attempt += 1) {
+        baseline = await readSnapshot();
+        if (baseline.challenge) return { challenge: 'captcha', url: baseline.url, title: baseline.title };
+        if (baseline.inputAvailable) break;
+        await new Promise(resolve => setTimeout(resolve, 250));
+      }
+      if (!baseline?.inputAvailable) throw new Error('google_ai_input_not_found');
+
+      const filled = await this.executeInBrowserWorld<boolean>(`(() => {
+        const message = ${JSON.stringify(message)};
+        const visible = (element) => {
+          if (!(element instanceof HTMLElement)) return false;
+          const style = getComputedStyle(element);
+          const rect = element.getBoundingClientRect();
+          return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 20 && rect.height > 10;
+        };
+        const candidates = Array.from(document.querySelectorAll('textarea, input[type="text"], input[type="search"], [contenteditable="true"]'))
+          .filter(visible)
+          .map((element) => {
+            const rect = element.getBoundingClientRect();
+            const hint = String(element.getAttribute('placeholder') || '') + ' ' + String(element.getAttribute('aria-label') || '');
+            const semantic = /ask|anything|follow|question|спрос|задайте|вопрос|что угодно/i.test(hint) ? 1000 : 0;
+            const kind = element instanceof HTMLTextAreaElement ? 200 : element.isContentEditable ? 100 : 0;
+            return { element, score: semantic + kind + rect.top + rect.width / 10 };
+          })
+          .sort((left, right) => right.score - left.score);
+        const element = candidates[0]?.element;
+        if (!(element instanceof HTMLElement)) return false;
+        element.focus();
+        if (element.isContentEditable) {
+          element.textContent = message;
+          element.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: message }));
+        } else if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
+          const prototype = element instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+          const setter = Object.getOwnPropertyDescriptor(prototype, 'value')?.set;
+          setter?.call(element, message);
+          element.dispatchEvent(new Event('input', { bubbles: true }));
+          element.dispatchEvent(new Event('change', { bubbles: true }));
+        } else {
+          return false;
+        }
+        return true;
+      })()`);
+      if (!filled) throw new Error('google_ai_input_not_found');
+
+      contents.focus();
+      contents.sendInputEvent({ type: 'keyDown', keyCode: 'Enter' });
+      contents.sendInputEvent({ type: 'keyUp', keyCode: 'Enter' });
+
+      const baselineBlocks = new Set(baseline.blocks);
+      const baselineSourceUrls = new Set(baseline.sources.map(source => source.url));
+      let latest = baseline;
+      let previousText = baseline.text;
+      let stableSamples = 0;
+      let answerObserved = false;
+      for (let attempt = 0; attempt < 180; attempt += 1) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+        latest = await readSnapshot();
+        if (latest.challenge) return { challenge: 'captcha', url: latest.url, title: latest.title };
+        const newBlocks = latest.blocks.filter(block => !baselineBlocks.has(block) && block !== message);
+        answerObserved ||= newBlocks.length > 0 || (latest.text !== baseline.text && attempt >= 8);
+        stableSamples = answerObserved && latest.text === previousText && !latest.busy ? stableSamples + 1 : 0;
+        previousText = latest.text;
+        if (stableSamples >= 6) break;
+      }
+      if (!answerObserved) throw new Error('google_ai_response_timeout');
+
+      const newBlocks = latest.blocks.filter(block => !baselineBlocks.has(block) && block !== message);
+      let answer = newBlocks.join('\n').trim();
+      if (!answer) {
+        answer = latest.text.startsWith(baseline.text)
+          ? latest.text.slice(baseline.text.length).trim()
+          : latest.text.slice(-16_000).trim();
+      }
+      return {
+        status: 'success',
+        action,
+        answer: answer.slice(0, 24_000),
+        sources: latest.sources.filter(source => !baselineSourceUrls.has(source.url)),
+        url: latest.url,
+        title: latest.title,
+      };
     } finally {
       this.interactionInProgress = false;
     }

@@ -1252,7 +1252,12 @@ export function initWebSocket(callbacks?: WsCallbacks) {
           console.log('[ws] execute_ipc received', {
             requestId: msg.request_id,
             ipcType: msg.ipc_type,
-            payloadPreview: JSON.stringify(msg.payload).slice(0, 500),
+            payloadPreview: msg.ipc_type === 'google_ai'
+              ? JSON.stringify({
+                  action: msg.payload?.action,
+                  messageLength: typeof msg.payload?.message === 'string' ? msg.payload.message.length : 0,
+                })
+              : JSON.stringify(msg.payload).slice(0, 500),
           });
           handleExecuteIpc(msg);
           break;
@@ -1633,6 +1638,15 @@ async function handleExecuteIpc(msg: { request_id: string; ipc_type: string; pay
       const searchWeb = (window as any).electronAPI?.searchWeb;
       if (typeof searchWeb !== 'function') throw new Error('desktop_search_unsupported');
       result = await searchWeb(payload);
+    } else if (ipc_type === 'google_ai') {
+      console.log('[ipc] renderer invoke googleAi', {
+        requestId: request_id,
+        action: payload?.action,
+        messageLength: typeof payload?.message === 'string' ? payload.message.length : 0,
+      });
+      const googleAi = (window as any).electronAPI?.googleAi;
+      if (typeof googleAi !== 'function') throw new Error('desktop_google_ai_unsupported');
+      result = await googleAi(payload);
     } else {
       throw new Error(`unknown ipc_type: ${ipc_type}`);
     }

@@ -9,7 +9,7 @@ import util from 'util';
 import ffmpeg from 'fluent-ffmpeg';
 import ffmpegStatic from 'ffmpeg-static';
 import { WakeWordOnnxService } from './wakeword';
-import { ChatterBrowser, type BrowserControlPayload, type BrowserSearchPayload } from './browser';
+import { ChatterBrowser, type BrowserControlPayload, type BrowserSearchPayload, type GoogleAiPayload } from './browser';
 
 const execFileAsync = util.promisify(execFile);
 
@@ -307,7 +307,9 @@ let mainWindow: BrowserWindow | null = null;
 let chatterBrowser: ChatterBrowser | null = null;
 let youtubeMusicBrowser: ChatterBrowser | null = null;
 let searchBrowser: ChatterBrowser | null = null;
+let googleAiBrowser: ChatterBrowser | null = null;
 let searchChallengeWindow: BrowserWindow | null = null;
+let activeChallengeBrowser: ChatterBrowser | null = null;
 const detachedToolWindows = new Map<string, BrowserWindow>();
 let tray: Tray | null = null;
 let isQuitting = false;
@@ -322,9 +324,15 @@ let trayLabels = {
   searchVerification: 'Complete search verification',
 };
 
-function showSearchChallengeWindow(): void {
-  if (!searchBrowser || !mainWindow || mainWindow.isDestroyed()) return;
+function showSearchChallengeWindow(browser: ChatterBrowser): void {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
   if (searchChallengeWindow && !searchChallengeWindow.isDestroyed()) {
+    if (activeChallengeBrowser !== browser) {
+      activeChallengeBrowser?.moveToHost(mainWindow);
+      activeChallengeBrowser = browser;
+      const [width, height] = searchChallengeWindow.getContentSize();
+      browser.setVisible(true, { x: 0, y: 0, width, height }, 'search-challenge', searchChallengeWindow);
+    }
     searchChallengeWindow.show();
     searchChallengeWindow.focus();
     return;
@@ -345,18 +353,20 @@ function showSearchChallengeWindow(): void {
     },
   });
   searchChallengeWindow = challengeWindow;
+  activeChallengeBrowser = browser;
 
   const syncBounds = () => {
-    if (!searchBrowser || challengeWindow.isDestroyed()) return;
+    if (!activeChallengeBrowser || challengeWindow.isDestroyed()) return;
     const [width, height] = challengeWindow.getContentSize();
-    searchBrowser.setVisible(true, { x: 0, y: 0, width, height }, 'search-challenge', challengeWindow);
+    activeChallengeBrowser.setVisible(true, { x: 0, y: 0, width, height }, 'search-challenge', challengeWindow);
   };
   challengeWindow.on('resize', syncBounds);
   challengeWindow.on('close', () => {
-    if (searchBrowser && mainWindow && !mainWindow.isDestroyed()) searchBrowser.moveToHost(mainWindow);
+    if (activeChallengeBrowser && mainWindow && !mainWindow.isDestroyed()) activeChallengeBrowser.moveToHost(mainWindow);
   });
   challengeWindow.on('closed', () => {
     if (searchChallengeWindow === challengeWindow) searchChallengeWindow = null;
+    activeChallengeBrowser = null;
   });
 
   syncBounds();
@@ -834,6 +844,12 @@ function createWindow() {
     partition: 'persist:chatter-search',
     backgroundSize: { width: 1280, height: 900 },
   });
+  googleAiBrowser = new ChatterBrowser(mainWindow, {
+    homeUrl: 'https://www.google.com/ai',
+    stateChannel: 'google-ai:state',
+    partition: 'persist:chatter-search',
+    backgroundSize: { width: 1280, height: 900 },
+  });
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     openExternalHttpUrl(url);
@@ -868,6 +884,7 @@ function createWindow() {
   mainWindow.on('closed', () => {
     if (searchChallengeWindow && !searchChallengeWindow.isDestroyed()) searchChallengeWindow.close();
     searchChallengeWindow = null;
+    activeChallengeBrowser = null;
     for (const window of detachedToolWindows.values()) {
       if (!window.isDestroyed()) window.close();
     }
@@ -878,6 +895,8 @@ function createWindow() {
     youtubeMusicBrowser = null;
     searchBrowser?.destroy();
     searchBrowser = null;
+    googleAiBrowser?.destroy();
+    googleAiBrowser = null;
     mainWindow = null;
   });
 
@@ -920,7 +939,15 @@ function createWindow() {
     assertTrustedIpcSender(event);
     if (!searchBrowser) throw new Error('search_browser_unavailable');
     const result = await searchBrowser.search(payload) as { challenge?: string };
-    if (result?.challenge === 'captcha') showSearchChallengeWindow();
+    if (result?.challenge === 'captcha') showSearchChallengeWindow(searchBrowser);
+    return result;
+  });
+
+  ipcMain.handle('google-ai:control', async (event, payload: GoogleAiPayload) => {
+    assertTrustedIpcSender(event);
+    if (!googleAiBrowser) throw new Error('google_ai_unavailable');
+    const result = await googleAiBrowser.googleAi(payload) as { challenge?: string };
+    if (result?.challenge === 'captcha') showSearchChallengeWindow(googleAiBrowser);
     return result;
   });
 

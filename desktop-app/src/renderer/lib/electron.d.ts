@@ -23,6 +23,10 @@ declare global {
         page?: number;
         language?: string;
       }) => Promise<any>;
+      googleAi: (payload: {
+        action?: 'ask' | 'new_chat' | 'reload';
+        message?: string;
+      }) => Promise<any>;
       onBrowserState: (callback: (payload: BrowserState) => void) => () => void;
       youtubeMusicGetState: () => Promise<BrowserState>;
       youtubeMusicSetVisible: (payload: { visible: boolean; ownerId: string; bounds?: BrowserBounds }) => Promise<BrowserState>;

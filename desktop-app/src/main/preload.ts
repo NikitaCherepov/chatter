@@ -51,6 +51,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     page?: number;
     language?: string;
   }) => ipcRenderer.invoke('search-browser:search', payload),
+  googleAi: (payload: {
+    action?: 'ask' | 'new_chat' | 'reload';
+    message?: string;
+  }) => ipcRenderer.invoke('google-ai:control', payload),
   onBrowserState: (callback: (payload: unknown) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, payload: unknown) => callback(payload);
     ipcRenderer.on('browser:state', handler);
