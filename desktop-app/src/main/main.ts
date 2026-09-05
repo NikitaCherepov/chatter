@@ -308,6 +308,9 @@ let chatterBrowser: ChatterBrowser | null = null;
 let youtubeMusicBrowser: ChatterBrowser | null = null;
 let searchBrowser: ChatterBrowser | null = null;
 let googleAiBrowser: ChatterBrowser | null = null;
+let googleAiPreviewWindow: BrowserWindow | null = null;
+let googleAiPreviewTimer: ReturnType<typeof setTimeout> | null = null;
+let googleAiPreviewRun = 0;
 let searchChallengeWindow: BrowserWindow | null = null;
 let activeChallengeBrowser: ChatterBrowser | null = null;
 const detachedToolWindows = new Map<string, BrowserWindow>();
@@ -323,6 +326,68 @@ let trayLabels = {
   quit: 'Quit',
   searchVerification: 'Complete search verification',
 };
+
+function sendGoogleAiPreview(payload: { active: boolean; image?: string }): void {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  mainWindow.webContents.send('google-ai:preview', payload);
+}
+
+function getGoogleAiPreviewWindow(): BrowserWindow {
+  if (googleAiPreviewWindow && !googleAiPreviewWindow.isDestroyed()) return googleAiPreviewWindow;
+
+  const display = screen.getPrimaryDisplay();
+  googleAiPreviewWindow = new BrowserWindow({
+    x: display.bounds.x + display.bounds.width + 200,
+    y: display.bounds.y,
+    width: 1280,
+    height: 900,
+    show: false,
+    frame: false,
+    focusable: false,
+    skipTaskbar: true,
+    opacity: 0.01,
+    backgroundColor: '#ffffff',
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: true,
+      backgroundThrottling: false,
+    },
+  });
+  googleAiPreviewWindow.on('closed', () => {
+    googleAiPreviewWindow = null;
+  });
+  return googleAiPreviewWindow;
+}
+
+function startGoogleAiPreview(browser: ChatterBrowser): number {
+  const run = ++googleAiPreviewRun;
+  const previewWindow = getGoogleAiPreviewWindow();
+  const [width, height] = previewWindow.getContentSize();
+  browser.setVisible(true, { x: 0, y: 0, width, height }, 'google-ai-preview', previewWindow);
+  previewWindow.showInactive();
+  sendGoogleAiPreview({ active: true });
+
+  const capture = async () => {
+    if (run !== googleAiPreviewRun || !googleAiBrowser) return;
+    const image = await googleAiBrowser.capturePreview();
+    if (run !== googleAiPreviewRun) return;
+    if (image) sendGoogleAiPreview({ active: true, image });
+    googleAiPreviewTimer = setTimeout(capture, 500);
+  };
+  googleAiPreviewTimer = setTimeout(capture, 100);
+  return run;
+}
+
+function stopGoogleAiPreview(browser: ChatterBrowser, run: number): void {
+  if (run !== googleAiPreviewRun) return;
+  googleAiPreviewRun += 1;
+  if (googleAiPreviewTimer) clearTimeout(googleAiPreviewTimer);
+  googleAiPreviewTimer = null;
+  sendGoogleAiPreview({ active: false });
+  if (mainWindow && !mainWindow.isDestroyed()) browser.moveToHost(mainWindow);
+  if (googleAiPreviewWindow && !googleAiPreviewWindow.isDestroyed()) googleAiPreviewWindow.hide();
+}
 
 function showSearchChallengeWindow(
   browser: ChatterBrowser,
@@ -901,6 +966,10 @@ function createWindow() {
     searchBrowser = null;
     googleAiBrowser?.destroy();
     googleAiBrowser = null;
+    if (googleAiPreviewTimer) clearTimeout(googleAiPreviewTimer);
+    googleAiPreviewTimer = null;
+    if (googleAiPreviewWindow && !googleAiPreviewWindow.isDestroyed()) googleAiPreviewWindow.destroy();
+    googleAiPreviewWindow = null;
     mainWindow = null;
   });
 
@@ -950,13 +1019,16 @@ function createWindow() {
   ipcMain.handle('google-ai:control', async (event, payload: GoogleAiPayload) => {
     assertTrustedIpcSender(event);
     if (!googleAiBrowser) throw new Error('google_ai_unavailable');
-    const resultPromise = googleAiBrowser.googleAi(payload) as Promise<{ challenge?: string }>;
-    // Temporary debug view: keep the real Google AI page visible so its DOM
-    // and submission behaviour can be observed while the tool is running.
-    showSearchChallengeWindow(googleAiBrowser, 'Google AI — debug');
-    const result = await resultPromise;
-    if (result?.challenge === 'captcha') showSearchChallengeWindow(googleAiBrowser);
-    return result;
+    const browser = googleAiBrowser;
+    const previewRun = startGoogleAiPreview(browser);
+    try {
+      const result = await browser.googleAi(payload) as { challenge?: string };
+      stopGoogleAiPreview(browser, previewRun);
+      if (result?.challenge === 'captcha') showSearchChallengeWindow(browser);
+      return result;
+    } finally {
+      stopGoogleAiPreview(browser, previewRun);
+    }
   });
 
   ipcMain.handle('google-ai:cancel', (event) => {

@@ -36,6 +36,7 @@ function cacheMood(mood: BaseMood) {
 // ── Component ───────────────────────────────────────────────────────────────
 
 export function PixelAvatar() {
+  const [googleAiPreview, setGoogleAiPreview] = useState<{ active: boolean; image?: string }>({ active: false });
   // -- State: Media layer (highest priority) --
   const [mediaUrl, setMediaUrl] = useState<string | null>(null);
 
@@ -177,6 +178,16 @@ export function PixelAvatar() {
     return () => window.removeEventListener('pixel-avatar:state', handler);
   }, [applyState]);
 
+  useEffect(() => {
+    const unsubscribe = window.electronAPI?.onGoogleAiPreview?.((payload) => {
+      setGoogleAiPreview((current) => ({
+        active: payload.active,
+        image: payload.image ?? (payload.active ? current.image : undefined),
+      }));
+    });
+    return () => unsubscribe?.();
+  }, []);
+
   // ── Determine what to render (priority: media > loop > reaction queue > base + blink) ─
 
   const renderSrc = mediaUrl
@@ -185,14 +196,23 @@ export function PixelAvatar() {
     ?? getBaseFace(baseMood, blinking);
 
   return (
-    <div className={s.container}>
-      <img
-        key={blinking ? `blink-${blinkKey}` : 'base'}
-        className={s.face}
-        src={renderSrc}
-        alt=""
-        draggable={false}
-      />
+    <div className={`${s.container} ${googleAiPreview.active ? s.googleAiActive : ''}`}>
+      {googleAiPreview.active ? (
+        <>
+          {googleAiPreview.image
+            ? <img className={s.googleAiPreview} src={googleAiPreview.image} alt="" draggable={false} />
+            : <div className={s.googleAiLoading} />}
+          <span className={s.googleAiIndicator} />
+        </>
+      ) : (
+        <img
+          key={blinking ? `blink-${blinkKey}` : 'base'}
+          className={s.face}
+          src={renderSrc}
+          alt=""
+          draggable={false}
+        />
+      )}
     </div>
   );
 }

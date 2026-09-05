@@ -56,6 +56,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     message?: string;
   }) => ipcRenderer.invoke('google-ai:control', payload),
   cancelGoogleAi: () => ipcRenderer.invoke('google-ai:cancel'),
+  onGoogleAiPreview: (callback: (payload: unknown) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, payload: unknown) => callback(payload);
+    ipcRenderer.on('google-ai:preview', handler);
+    return () => ipcRenderer.removeListener('google-ai:preview', handler);
+  },
   onBrowserState: (callback: (payload: unknown) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, payload: unknown) => callback(payload);
     ipcRenderer.on('browser:state', handler);

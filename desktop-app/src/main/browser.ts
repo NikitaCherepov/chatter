@@ -377,6 +377,25 @@ export class ChatterBrowser {
     this.attachToHost(host);
   }
 
+  async capturePreview(width = 192, height = 192): Promise<string | null> {
+    const contents = this.view.webContents;
+    if (contents.isDestroyed()) return null;
+
+    try {
+      const image = await contents.capturePage();
+      if (image.isEmpty()) return null;
+      const resized = image.resize({
+        width: Math.max(32, Math.floor(width)),
+        height: Math.max(32, Math.floor(height)),
+        quality: 'good',
+      });
+      return `data:image/jpeg;base64,${resized.toJPEG(58).toString('base64')}`;
+    } catch (error) {
+      console.warn('[browser] failed to capture preview:', error);
+      return null;
+    }
+  }
+
   getState(): BrowserState {
     const contents = this.view.webContents;
     return {
