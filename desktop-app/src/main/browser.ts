@@ -656,6 +656,14 @@ export class ChatterBrowser {
           || /unusual traffic|verify you are human/.test(bodyText);
         const results = [];
         const seen = new Set();
+        const snippetSelectors = [
+          '.VwiC3b',
+          '.IsZvec',
+          '.aCOpRe',
+          '.yXK7lf',
+          '[data-sncf]',
+          '[data-content-feature]'
+        ];
         const add = (title, url, content = '', engine = mode === 'web' ? 'google' : mode) => {
           title = clean(title, 500);
           content = clean(content, 1500);
@@ -675,6 +683,32 @@ export class ChatterBrowser {
           seen.add(url);
           results.push({ title, content, url, engine, engines: [engine] });
         };
+        const extractGoogleSnippet = (heading, anchor) => {
+          const roots = [];
+          const knownRoot = heading.closest('div.MjjYud, div.g, div[data-snhf]');
+          if (knownRoot) roots.push(knownRoot);
+
+          let ancestor = anchor.parentElement;
+          for (let depth = 0; ancestor && depth < 8; depth += 1, ancestor = ancestor.parentElement) {
+            if (!roots.includes(ancestor)) roots.push(ancestor);
+          }
+
+          for (const root of roots) {
+            const snippets = [];
+            root.querySelectorAll(snippetSelectors.join(',')).forEach((node) => {
+              const value = clean(node.innerText || node.textContent || '', 1500);
+              if (value && !snippets.includes(value)) snippets.push(value);
+            });
+            if (snippets.length) return clean(snippets.join(' '), 1500);
+          }
+
+          const title = clean(heading.innerText || heading.textContent || '', 500);
+          const fallback = roots
+            .map((root) => clean(root.innerText || root.textContent || '', 2500))
+            .filter((text) => text.length > title.length + 20 && text.length < 2500)
+            .sort((left, right) => left.length - right.length)[0] || '';
+          return clean(fallback.replace(title, ''), 1500);
+        };
 
         if (mode === 'wikipedia') {
           document.querySelectorAll('.mw-search-result').forEach((item) => {
@@ -684,13 +718,36 @@ export class ChatterBrowser {
             }
           });
         } else {
+          const weatherCard = document.querySelector('#wob_wc');
+          if (weatherCard) {
+            const locationName = clean(weatherCard.querySelector('#wob_loc')?.textContent || '', 200);
+            const temperature = clean(weatherCard.querySelector('#wob_tm')?.textContent || '', 50);
+            const temperatureUnit = Array.from(weatherCard.querySelectorAll('.wob-unit .wob_t, [aria-label*="Celsius"], [aria-label*="Fahrenheit"]'))
+              .map((node) => ({ node, value: clean(node.textContent || '', 20) }))
+              .find(({ node, value }) => value && getComputedStyle(node).display !== 'none')?.value || '';
+            const condition = clean(weatherCard.querySelector('#wob_dc')?.textContent || '', 200);
+            const observedAt = clean(weatherCard.querySelector('#wob_dts')?.textContent || '', 200);
+            const precipitation = clean(weatherCard.querySelector('#wob_pp')?.textContent || '', 100);
+            const humidity = clean(weatherCard.querySelector('#wob_hm')?.textContent || '', 100);
+            const wind = clean(weatherCard.querySelector('#wob_ws')?.textContent || '', 100);
+            const details = [
+              temperature && ('Temperature: ' + temperature + (temperatureUnit ? ' ' + temperatureUnit : '')),
+              condition && ('Conditions: ' + condition),
+              observedAt && ('Observed: ' + observedAt),
+              precipitation && ('Precipitation: ' + precipitation),
+              humidity && ('Humidity: ' + humidity),
+              wind && ('Wind: ' + wind)
+            ].filter(Boolean).join('. ');
+            if (temperature || condition) {
+              add(locationName ? ('Weather in ' + locationName) : 'Weather', location.href, details, 'google');
+            }
+          }
+
           document.querySelectorAll('a h3').forEach((heading) => {
             const anchor = heading.closest('a');
             if (!(anchor instanceof HTMLAnchorElement)) return;
-            const container = heading.closest('div.MjjYud, div[data-snhf], div.g') || anchor.parentElement?.parentElement;
-            const text = clean(container?.textContent || '', 2000);
             const title = clean(heading.textContent || '', 500);
-            add(title, anchor.href, text.startsWith(title) ? text.slice(title.length) : text, 'google');
+            add(title, anchor.href, extractGoogleSnippet(heading, anchor), 'google');
           });
         }
 
