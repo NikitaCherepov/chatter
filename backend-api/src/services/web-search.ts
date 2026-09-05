@@ -17,6 +17,7 @@ type SearchFreshness = 'any' | 'day' | 'week' | 'month' | 'year';
 
 type WebSearchOptions = {
   userId: number;
+  chatId?: number;
   cursor?: string;
   wikipedia?: boolean;
   searchType?: SearchType;
@@ -29,6 +30,7 @@ type SearchMode = 'web' | 'wikipedia';
 
 type SearchSession = {
   userId: number;
+  chatId?: number;
   query: string;
   mode: SearchMode;
   searchType: SearchType;
@@ -187,6 +189,7 @@ const fetchDesktopSearchPage = async (
     freshness: session.freshness,
     page,
     language: session.language,
+    ...(session.chatId ? { chat_id: session.chatId } : {}),
   }, 30_000, signal) as DesktopSearchResponse;
 
   if (response?.challenge === 'captcha') throw new Error('desktop_search_captcha_required');
@@ -228,7 +231,7 @@ const runDesktopWebSearch = async (query: string, options: WebSearchOptions, sig
   if (options.cursor) {
     const cursor = parseSearchCursor(options.cursor);
     const existing = cursor ? searchSessions.get(cursor.searchId) : undefined;
-    if (!cursor || !existing || existing.userId !== options.userId) {
+    if (!cursor || !existing || existing.userId !== options.userId || existing.chatId !== options.chatId) {
       return 'Tool error: search cursor is invalid or expired. Start a new search without a cursor.';
     }
     if (
@@ -247,6 +250,7 @@ const runDesktopWebSearch = async (query: string, options: WebSearchOptions, sig
     searchId = randomUUID();
     session = {
       userId: options.userId,
+      chatId: options.chatId,
       query,
       mode,
       searchType,

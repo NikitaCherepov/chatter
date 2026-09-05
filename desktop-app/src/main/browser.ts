@@ -49,11 +49,13 @@ export type BrowserSearchPayload = {
   freshness?: 'any' | 'day' | 'week' | 'month' | 'year';
   page?: number;
   language?: string;
+  chat_id?: number;
 };
 
 export type GoogleAiPayload = {
   action?: 'ask' | 'new_chat' | 'reload' | 'close_session';
   message?: string;
+  chat_id?: number;
 };
 
 export type BrowserDownloadRequest = {

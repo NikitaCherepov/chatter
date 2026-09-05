@@ -1113,6 +1113,7 @@ export function ChatPage() {
   const [activeChatId, setActiveChatId] = useState<number | null>(null);
   const activeChatIdRef = useRef<number | null>(activeChatId);
   activeChatIdRef.current = activeChatId;
+
   // Chats with a server-side room queue currently running (used to keep the
   // composer blocked when switching away and back).
   const roomStreamChatIdsRef = useRef(new Set<number>());
@@ -6962,7 +6963,7 @@ export function ChatPage() {
                 <line x1="8" y1="23" x2="16" y2="23" />
               </svg>
 
-              <PixelAvatar />
+              <PixelAvatar chatId={activeChatId} />
             </div>
           </>
         )}

@@ -5,8 +5,13 @@ export type BrowserPreviewSource = 'google_ai' | 'web_search';
 
 export type BrowserPreviewPayload = {
   active: boolean;
-  source: BrowserPreviewSource;
+  source?: BrowserPreviewSource;
+  chatId: number | null;
   image?: string;
+};
+
+type BrowserPreviewContext = {
+  chatId?: number | null;
 };
 
 type BrowserPreviewSessionOptions = {
@@ -20,26 +25,29 @@ export class BrowserPreviewSession {
   private previewWindow: BrowserWindow | null = null;
   private captureTimer: ReturnType<typeof setTimeout> | null = null;
   private activeBrowser: ChatterBrowser | null = null;
+  private activeChatId: number | null = null;
+  private externalHost: BrowserWindow | null = null;
   private run = 0;
 
   constructor(private readonly options: BrowserPreviewSessionOptions) {}
 
-  start(browser: ChatterBrowser): number {
+  start(browser: ChatterBrowser, context: BrowserPreviewContext = {}): number {
     if (this.activeBrowser) this.finish(this.activeBrowser, this.run, true);
 
     const run = ++this.run;
     const previewWindow = this.getPreviewWindow();
     const [width, height] = previewWindow.getContentSize();
     this.activeBrowser = browser;
+    this.activeChatId = Number.isInteger(context.chatId) && Number(context.chatId) > 0 ? Number(context.chatId) : null;
     browser.setVisible(true, { x: 0, y: 0, width, height }, `browser-preview:${this.options.source}`, previewWindow);
     previewWindow.showInactive();
-    this.options.emit({ active: true, source: this.options.source });
+    this.options.emit({ active: true, source: this.options.source, chatId: this.activeChatId });
 
     const capture = async () => {
       if (run !== this.run || this.activeBrowser !== browser) return;
       const image = await browser.capturePreview();
       if (run !== this.run || this.activeBrowser !== browser) return;
-      if (image) this.options.emit({ active: true, source: this.options.source, image });
+      if (image) this.options.emit({ active: true, source: this.options.source, chatId: this.activeChatId, image });
       this.captureTimer = setTimeout(capture, this.options.captureIntervalMs ?? 500);
     };
     this.captureTimer = setTimeout(capture, 100);
@@ -48,6 +56,26 @@ export class BrowserPreviewSession {
 
   stop(browser: ChatterBrowser, run: number): void {
     this.finish(browser, run, true);
+  }
+
+  showInHost(browser: ChatterBrowser, host: BrowserWindow): void {
+    this.externalHost = host;
+    const [width, height] = host.getContentSize();
+    browser.setVisible(true, { x: 0, y: 0, width, height }, `browser-session:${this.options.source}`, host);
+  }
+
+  releaseHost(browser: ChatterBrowser, host: BrowserWindow): void {
+    if (this.externalHost !== host) return;
+    this.externalHost = null;
+    if (this.activeBrowser === browser) {
+      const previewWindow = this.getPreviewWindow();
+      const [width, height] = previewWindow.getContentSize();
+      browser.setVisible(true, { x: 0, y: 0, width, height }, `browser-preview:${this.options.source}`, previewWindow);
+      previewWindow.showInactive();
+      return;
+    }
+    const mainWindow = this.options.getMainWindow();
+    if (mainWindow && !mainWindow.isDestroyed()) browser.moveToHost(mainWindow);
   }
 
   release(browser: ChatterBrowser): void {
@@ -68,10 +96,13 @@ export class BrowserPreviewSession {
     if (this.captureTimer) clearTimeout(this.captureTimer);
     this.captureTimer = null;
     this.activeBrowser = null;
-    this.options.emit({ active: false, source: this.options.source });
+    const chatId = this.activeChatId;
+    this.activeChatId = null;
+    this.options.emit({ active: false, source: this.options.source, chatId });
 
+    const externalHost = this.externalHost && !this.externalHost.isDestroyed() ? this.externalHost : null;
     const mainWindow = this.options.getMainWindow();
-    if (moveBack && mainWindow && !mainWindow.isDestroyed()) browser.moveToHost(mainWindow);
+    if (moveBack && !externalHost && mainWindow && !mainWindow.isDestroyed()) browser.moveToHost(mainWindow);
     if (this.previewWindow && !this.previewWindow.isDestroyed()) this.previewWindow.hide();
   }
 

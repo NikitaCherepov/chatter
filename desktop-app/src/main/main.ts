@@ -10,7 +10,8 @@ import ffmpeg from 'fluent-ffmpeg';
 import ffmpegStatic from 'ffmpeg-static';
 import { WakeWordOnnxService } from './wakeword';
 import { ChatterBrowser, type BrowserControlPayload, type BrowserSearchPayload, type GoogleAiPayload } from './browser';
-import { BrowserPreviewSession, type BrowserPreviewPayload } from './browser-preview';
+import { BrowserPreviewSession, type BrowserPreviewPayload, type BrowserPreviewSource } from './browser-preview';
+import { BrowserSessionRegistry, type BrowserSessionRegistrySnapshot } from './browser-session-registry';
 
 const execFileAsync = util.promisify(execFile);
 
@@ -307,12 +308,16 @@ function normalizeWhisperLanguage(value: unknown) {
 let mainWindow: BrowserWindow | null = null;
 let chatterBrowser: ChatterBrowser | null = null;
 let youtubeMusicBrowser: ChatterBrowser | null = null;
-let searchBrowser: ChatterBrowser | null = null;
-let googleAiBrowser: ChatterBrowser | null = null;
-let searchPreview: BrowserPreviewSession | null = null;
-let googleAiPreview: BrowserPreviewSession | null = null;
-let searchIdleTimer: ReturnType<typeof setTimeout> | null = null;
-let googleAiIdleTimer: ReturnType<typeof setTimeout> | null = null;
+type DesktopBrowserSession = {
+  chatId: number | null;
+  browser: ChatterBrowser;
+  preview: BrowserPreviewSession;
+  idleTimer: ReturnType<typeof setTimeout> | null;
+};
+
+const searchSessions = new Map<string, DesktopBrowserSession>();
+const googleAiSessions = new Map<string, DesktopBrowserSession>();
+const browserSessionWindows = new Map<string, BrowserWindow>();
 let searchChallengeWindow: BrowserWindow | null = null;
 let activeChallengeBrowser: ChatterBrowser | null = null;
 const detachedToolWindows = new Map<string, BrowserWindow>();
@@ -342,16 +347,6 @@ function createSearchBrowser(): ChatterBrowser {
   });
 }
 
-function getSearchBrowser(): ChatterBrowser {
-  if (!searchBrowser) searchBrowser = createSearchBrowser();
-  return searchBrowser;
-}
-
-function clearSearchIdleTimer(): void {
-  if (searchIdleTimer) clearTimeout(searchIdleTimer);
-  searchIdleTimer = null;
-}
-
 function createGoogleAiBrowser(): ChatterBrowser {
   if (!mainWindow || mainWindow.isDestroyed()) throw new Error('google_ai_unavailable');
   return new ChatterBrowser(mainWindow, {
@@ -362,26 +357,26 @@ function createGoogleAiBrowser(): ChatterBrowser {
   });
 }
 
-function getGoogleAiBrowser(): ChatterBrowser {
-  if (!googleAiBrowser) googleAiBrowser = createGoogleAiBrowser();
-  return googleAiBrowser;
-}
-
-function clearGoogleAiIdleTimer(): void {
-  if (googleAiIdleTimer) clearTimeout(googleAiIdleTimer);
-  googleAiIdleTimer = null;
-}
-
 function sendBrowserPreview(payload: BrowserPreviewPayload): void {
   if (!mainWindow || mainWindow.isDestroyed()) return;
   mainWindow.webContents.send('browser-activity:preview', payload);
 }
 
-function createBrowserPreview(source: BrowserPreviewPayload['source']): BrowserPreviewSession {
+function sendBrowserSessionState(snapshot: BrowserSessionRegistrySnapshot): void {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  mainWindow.webContents.send('browser-sessions:changed', snapshot);
+}
+
+const browserSessionRegistry = new BrowserSessionRegistry({
+  emitState: sendBrowserSessionState,
+  emitActivePreview: sendBrowserPreview,
+});
+
+function createBrowserPreview(source: BrowserPreviewSource): BrowserPreviewSession {
   return new BrowserPreviewSession({
     source,
     getMainWindow: () => mainWindow,
-    emit: sendBrowserPreview,
+    emit: (payload) => browserSessionRegistry.updatePreview(payload),
   });
 }
 
@@ -391,53 +386,71 @@ function dismissChallengeForBrowser(browser: ChatterBrowser): void {
   if (searchChallengeWindow && !searchChallengeWindow.isDestroyed()) searchChallengeWindow.close();
 }
 
-function closeSearchSession(reason: 'idle_timeout' | 'shutdown'): boolean {
-  clearSearchIdleTimer();
-  const browser = searchBrowser;
-  if (!browser) return false;
-  if (activeChallengeBrowser === browser) {
+const browserSessionKey = (chatId: number | null): string => `${chatId ?? 'unscoped'}`;
+
+function getBrowserSession(
+  sessions: Map<string, DesktopBrowserSession>,
+  source: BrowserPreviewSource,
+  chatId: number | null,
+  createBrowser: () => ChatterBrowser,
+): DesktopBrowserSession {
+  const key = browserSessionKey(chatId);
+  let session = sessions.get(key);
+  if (!session) {
+    session = { chatId, browser: createBrowser(), preview: createBrowserPreview(source), idleTimer: null };
+    sessions.set(key, session);
+  }
+  return session;
+}
+
+function clearBrowserIdleTimer(session: DesktopBrowserSession): void {
+  if (session.idleTimer) clearTimeout(session.idleTimer);
+  session.idleTimer = null;
+}
+
+function closeBrowserSession(
+  sessions: Map<string, DesktopBrowserSession>,
+  source: BrowserPreviewSource,
+  chatId: number | null,
+  reason: 'explicit' | 'idle_timeout' | 'shutdown',
+): boolean {
+  const key = browserSessionKey(chatId);
+  const session = sessions.get(key);
+  if (!session) return false;
+  clearBrowserIdleTimer(session);
+  sessions.delete(key);
+  const registryId = BrowserSessionRegistry.sessionId(source, chatId);
+  const viewer = browserSessionWindows.get(registryId);
+  if (viewer && !viewer.isDestroyed()) viewer.close();
+  browserSessionWindows.delete(registryId);
+  if (activeChallengeBrowser === session.browser) {
     activeChallengeBrowser = null;
     if (searchChallengeWindow && !searchChallengeWindow.isDestroyed()) searchChallengeWindow.close();
   }
-  searchPreview?.release(browser);
-  browser.destroy();
-  searchBrowser = null;
-  console.log('[web-search] desktop browser session closed', { reason });
+  session.preview.release(session.browser);
+  session.preview.destroy();
+  session.browser.destroy();
+  browserSessionRegistry.remove(source, chatId);
+  console.log(`[${source}] desktop browser session closed`, { chatId, reason });
   return true;
 }
 
-function scheduleSearchIdleClose(browser: ChatterBrowser): void {
-  clearSearchIdleTimer();
-  searchIdleTimer = setTimeout(() => {
-    searchIdleTimer = null;
-    if (searchBrowser === browser) closeSearchSession('idle_timeout');
-  }, SEARCH_IDLE_TIMEOUT_MS);
-  searchIdleTimer.unref?.();
-}
-
-function closeGoogleAiSession(reason: 'explicit' | 'idle_timeout' | 'shutdown'): boolean {
-  clearGoogleAiIdleTimer();
-
-  const browser = googleAiBrowser;
-  if (!browser) return false;
-  if (activeChallengeBrowser === browser) {
-    activeChallengeBrowser = null;
-    if (searchChallengeWindow && !searchChallengeWindow.isDestroyed()) searchChallengeWindow.close();
-  }
-  googleAiPreview?.release(browser);
-  browser.destroy();
-  googleAiBrowser = null;
-  console.log('[google-ai] session closed', { reason });
-  return true;
-}
-
-function scheduleGoogleAiIdleClose(browser: ChatterBrowser): void {
-  clearGoogleAiIdleTimer();
-  googleAiIdleTimer = setTimeout(() => {
-    googleAiIdleTimer = null;
-    if (googleAiBrowser === browser) closeGoogleAiSession('idle_timeout');
-  }, GOOGLE_AI_IDLE_TIMEOUT_MS);
-  googleAiIdleTimer.unref?.();
+function scheduleBrowserIdleClose(
+  sessions: Map<string, DesktopBrowserSession>,
+  source: BrowserPreviewSource,
+  session: DesktopBrowserSession,
+  timeoutMs: number,
+): void {
+  clearBrowserIdleTimer(session);
+  const viewer = browserSessionWindows.get(BrowserSessionRegistry.sessionId(source, session.chatId));
+  if (viewer && !viewer.isDestroyed()) return;
+  session.idleTimer = setTimeout(() => {
+    session.idleTimer = null;
+    if (sessions.get(browserSessionKey(session.chatId)) === session) {
+      closeBrowserSession(sessions, source, session.chatId, 'idle_timeout');
+    }
+  }, timeoutMs);
+  session.idleTimer.unref?.();
 }
 
 function showSearchChallengeWindow(
@@ -488,7 +501,13 @@ function showSearchChallengeWindow(
     const closedBrowser = activeChallengeBrowser;
     if (searchChallengeWindow === challengeWindow) searchChallengeWindow = null;
     activeChallengeBrowser = null;
-    if (closedBrowser && closedBrowser === searchBrowser) scheduleSearchIdleClose(closedBrowser);
+    const searchSession = [...searchSessions.values()].find((session) => session.browser === closedBrowser);
+    const googleAiSession = [...googleAiSessions.values()].find((session) => session.browser === closedBrowser);
+    if (searchSession) {
+      browserSessionRegistry.setStatus('web_search', searchSession.chatId, 'idle');
+      scheduleBrowserIdleClose(searchSessions, 'web_search', searchSession, SEARCH_IDLE_TIMEOUT_MS);
+    }
+    if (googleAiSession) browserSessionRegistry.setStatus('google_ai', googleAiSession.chatId, 'idle');
   });
 
   syncBounds();
@@ -960,10 +979,6 @@ function createWindow() {
     homeUrl: 'https://music.youtube.com/',
     stateChannel: 'youtube-music:state',
   });
-  searchBrowser = null;
-  googleAiBrowser = createGoogleAiBrowser();
-  searchPreview = createBrowserPreview('web_search');
-  googleAiPreview = createBrowserPreview('google_ai');
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     openExternalHttpUrl(url);
@@ -1007,12 +1022,13 @@ function createWindow() {
     chatterBrowser = null;
     youtubeMusicBrowser?.destroy();
     youtubeMusicBrowser = null;
-    closeSearchSession('shutdown');
-    closeGoogleAiSession('shutdown');
-    searchPreview?.destroy();
-    searchPreview = null;
-    googleAiPreview?.destroy();
-    googleAiPreview = null;
+    for (const session of [...searchSessions.values()]) {
+      closeBrowserSession(searchSessions, 'web_search', session.chatId, 'shutdown');
+    }
+    for (const session of [...googleAiSessions.values()]) {
+      closeBrowserSession(googleAiSessions, 'google_ai', session.chatId, 'shutdown');
+    }
+    browserSessionRegistry.clear();
     mainWindow = null;
   });
 
@@ -1053,50 +1069,119 @@ function createWindow() {
 
   ipcMain.handle('search-browser:search', async (event, payload: BrowserSearchPayload) => {
     assertTrustedIpcSender(event);
-    clearSearchIdleTimer();
-    const browser = getSearchBrowser();
+    const chatId = Number.isInteger(payload?.chat_id) && Number(payload.chat_id) > 0 ? Number(payload.chat_id) : null;
+    const session = getBrowserSession(searchSessions, 'web_search', chatId, createSearchBrowser);
+    clearBrowserIdleTimer(session);
+    const { browser, preview } = session;
     dismissChallengeForBrowser(browser);
-    const preview = searchPreview || (searchPreview = createBrowserPreview('web_search'));
-    const previewRun = preview.start(browser);
+    const previewRun = preview.start(browser, { chatId });
     let challengeShown = false;
     try {
       const result = await browser.search(payload) as { challenge?: string };
       preview.stop(browser, previewRun);
       if (result?.challenge === 'captcha') {
         challengeShown = true;
+        browserSessionRegistry.setStatus('web_search', chatId, 'challenge');
         showSearchChallengeWindow(browser);
       }
       return result;
     } finally {
       preview.stop(browser, previewRun);
-      if (!challengeShown && searchBrowser === browser) scheduleSearchIdleClose(browser);
+      if (!challengeShown && searchSessions.get(browserSessionKey(chatId)) === session) {
+        scheduleBrowserIdleClose(searchSessions, 'web_search', session, SEARCH_IDLE_TIMEOUT_MS);
+      }
     }
   });
 
   ipcMain.handle('google-ai:control', async (event, payload: GoogleAiPayload) => {
     assertTrustedIpcSender(event);
+    const chatId = Number.isInteger(payload?.chat_id) && Number(payload.chat_id) > 0 ? Number(payload.chat_id) : null;
     if (payload?.action === 'close_session') {
-      return { status: 'session_closed', closed: closeGoogleAiSession('explicit') };
+      return { status: 'session_closed', closed: closeBrowserSession(googleAiSessions, 'google_ai', chatId, 'explicit') };
     }
-    clearGoogleAiIdleTimer();
-    const browser = getGoogleAiBrowser();
+    const session = getBrowserSession(googleAiSessions, 'google_ai', chatId, createGoogleAiBrowser);
+    clearBrowserIdleTimer(session);
+    const { browser, preview } = session;
     dismissChallengeForBrowser(browser);
-    const preview = googleAiPreview || (googleAiPreview = createBrowserPreview('google_ai'));
-    const previewRun = preview.start(browser);
+    const previewRun = preview.start(browser, { chatId });
     try {
       const result = await browser.googleAi(payload) as { challenge?: string };
       preview.stop(browser, previewRun);
-      if (result?.challenge === 'captcha') showSearchChallengeWindow(browser);
+      if (result?.challenge === 'captcha') {
+        browserSessionRegistry.setStatus('google_ai', chatId, 'challenge');
+        showSearchChallengeWindow(browser);
+      }
       return result;
     } finally {
       preview.stop(browser, previewRun);
-      if (googleAiBrowser === browser) scheduleGoogleAiIdleClose(browser);
+      if (googleAiSessions.get(browserSessionKey(chatId)) === session) {
+        scheduleBrowserIdleClose(googleAiSessions, 'google_ai', session, GOOGLE_AI_IDLE_TIMEOUT_MS);
+      }
     }
   });
 
-  ipcMain.handle('google-ai:cancel', (event) => {
+  ipcMain.handle('google-ai:cancel', (event, payload?: { chat_id?: number }) => {
     assertTrustedIpcSender(event);
-    return googleAiBrowser?.cancelGoogleAi() || { cancelled: false };
+    const chatId = Number.isInteger(payload?.chat_id) && Number(payload?.chat_id) > 0 ? Number(payload?.chat_id) : null;
+    return googleAiSessions.get(browserSessionKey(chatId))?.browser.cancelGoogleAi() || { cancelled: false };
+  });
+
+  ipcMain.handle('browser-sessions:set-active-chat', (event, payload: { chatId?: number | null }) => {
+    assertTrustedIpcSender(event);
+    return browserSessionRegistry.setActiveChatId(payload?.chatId);
+  });
+
+  ipcMain.handle('browser-sessions:open', (event, payload: { id?: string }) => {
+    assertTrustedIpcSender(event);
+    const id = `${payload?.id || ''}`;
+    const source: BrowserPreviewSource | null = id.startsWith('web_search:')
+      ? 'web_search'
+      : id.startsWith('google_ai:') ? 'google_ai' : null;
+    if (!source) return { opened: false };
+    const sessions = source === 'web_search' ? searchSessions : googleAiSessions;
+    const session = [...sessions.values()].find((candidate) => (
+      BrowserSessionRegistry.sessionId(source, candidate.chatId) === id
+    ));
+    if (!session) return { opened: false };
+    const existing = browserSessionWindows.get(id);
+    if (existing && !existing.isDestroyed()) {
+      existing.show();
+      existing.focus();
+      return { opened: true };
+    }
+    const viewer = new BrowserWindow({
+      width: 1100,
+      height: 760,
+      minWidth: 640,
+      minHeight: 480,
+      show: false,
+      title: source === 'google_ai' ? 'Chatter — Google AI' : 'Chatter — Web search',
+      autoHideMenuBar: true,
+      webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true },
+    });
+    browserSessionWindows.set(id, viewer);
+    clearBrowserIdleTimer(session);
+    const syncBounds = () => {
+      if (viewer.isDestroyed()) return;
+      session.preview.showInHost(session.browser, viewer);
+    };
+    viewer.on('resize', syncBounds);
+    viewer.on('closed', () => {
+      browserSessionWindows.delete(id);
+      if (sessions.get(browserSessionKey(session.chatId)) === session) {
+        session.preview.releaseHost(session.browser, viewer);
+        scheduleBrowserIdleClose(
+          sessions,
+          source,
+          session,
+          source === 'web_search' ? SEARCH_IDLE_TIMEOUT_MS : GOOGLE_AI_IDLE_TIMEOUT_MS,
+        );
+      }
+    });
+    syncBounds();
+    viewer.show();
+    viewer.focus();
+    return { opened: true };
   });
 
   ipcMain.handle('youtube-music:get-state', (event) => {

@@ -50,16 +50,27 @@ contextBridge.exposeInMainWorld('electronAPI', {
     freshness?: 'any' | 'day' | 'week' | 'month' | 'year';
     page?: number;
     language?: string;
+    chat_id?: number;
   }) => ipcRenderer.invoke('search-browser:search', payload),
   googleAi: (payload: {
     action?: 'ask' | 'new_chat' | 'reload' | 'close_session';
     message?: string;
+    chat_id?: number;
   }) => ipcRenderer.invoke('google-ai:control', payload),
-  cancelGoogleAi: () => ipcRenderer.invoke('google-ai:cancel'),
+  cancelGoogleAi: (chatId?: number) => ipcRenderer.invoke('google-ai:cancel', { chat_id: chatId }),
   onBrowserActivityPreview: (callback: (payload: unknown) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, payload: unknown) => callback(payload);
     ipcRenderer.on('browser-activity:preview', handler);
     return () => ipcRenderer.removeListener('browser-activity:preview', handler);
+  },
+  setActiveBrowserChat: (chatId: number | null) =>
+    ipcRenderer.invoke('browser-sessions:set-active-chat', { chatId }),
+  openBrowserSession: (id: string) =>
+    ipcRenderer.invoke('browser-sessions:open', { id }),
+  onBrowserSessionsChanged: (callback: (payload: unknown) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, payload: unknown) => callback(payload);
+    ipcRenderer.on('browser-sessions:changed', handler);
+    return () => ipcRenderer.removeListener('browser-sessions:changed', handler);
   },
   onBrowserState: (callback: (payload: unknown) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, payload: unknown) => callback(payload);

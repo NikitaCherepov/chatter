@@ -413,6 +413,7 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
               // addition to Desktop. Without it the card only goes through
               // sendToDesktop(), so non-Desktop clients may never receive it.
               {
+                chatId: ctx.chatId,
                 manualModel: ctx.manualModel,
                 subagentMode: ctx.subagentMode,
                 subagentReasoningLevel: reasoningLevel,

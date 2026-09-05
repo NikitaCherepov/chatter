@@ -22,13 +22,18 @@ declare global {
         freshness?: 'any' | 'day' | 'week' | 'month' | 'year';
         page?: number;
         language?: string;
+        chat_id?: number;
       }) => Promise<any>;
       googleAi: (payload: {
         action?: 'ask' | 'new_chat' | 'reload' | 'close_session';
         message?: string;
+        chat_id?: number;
       }) => Promise<any>;
-      cancelGoogleAi: () => Promise<{ cancelled: boolean }>;
-      onBrowserActivityPreview: (callback: (payload: { active: boolean; source: 'google_ai' | 'web_search'; image?: string }) => void) => () => void;
+      cancelGoogleAi: (chatId?: number) => Promise<{ cancelled: boolean }>;
+      onBrowserActivityPreview: (callback: (payload: { active: boolean; source?: 'google_ai' | 'web_search'; chatId: number | null; image?: string }) => void) => () => void;
+      setActiveBrowserChat: (chatId: number | null) => Promise<{ activeChatId: number | null; sessions: BrowserSessionSnapshot[] }>;
+      openBrowserSession: (id: string) => Promise<{ opened: boolean }>;
+      onBrowserSessionsChanged: (callback: (payload: { activeChatId: number | null; sessions: BrowserSessionSnapshot[] }) => void) => () => void;
       onBrowserState: (callback: (payload: BrowserState) => void) => () => void;
       youtubeMusicGetState: () => Promise<BrowserState>;
       youtubeMusicSetVisible: (payload: { visible: boolean; ownerId: string; bounds?: BrowserBounds }) => Promise<BrowserState>;
@@ -110,6 +115,16 @@ declare global {
 }
 
 type BrowserBounds = { x: number; y: number; width: number; height: number };
+
+type BrowserSessionSnapshot = {
+  id: string;
+  chatId: number | null;
+  source: 'google_ai' | 'web_search';
+  status: 'working' | 'idle' | 'challenge';
+  image?: string;
+  title?: string;
+  updatedAt: number;
+};
 
 type BrowserState = {
   url: string;

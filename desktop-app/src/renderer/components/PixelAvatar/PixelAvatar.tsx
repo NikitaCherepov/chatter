@@ -35,8 +35,32 @@ function cacheMood(mood: BaseMood) {
 
 // ── Component ───────────────────────────────────────────────────────────────
 
-export function PixelAvatar() {
+type BrowserSessionView = {
+  id: string;
+  chatId: number | null;
+  source: 'google_ai' | 'web_search';
+  status: 'working' | 'idle' | 'challenge';
+  image?: string;
+  updatedAt: number;
+};
+
+type PixelAvatarProps = {
+  chatId?: number | null;
+};
+
+const sessionSourceLabel = (source: BrowserSessionView['source']) => (
+  source === 'google_ai' ? 'Google AI' : 'Web search'
+);
+
+const sessionStatusLabel = (status: BrowserSessionView['status']) => {
+  if (status === 'working') return 'Выполняется';
+  if (status === 'challenge') return 'Нужна проверка';
+  return 'Ожидает';
+};
+
+export function PixelAvatar({ chatId = null }: PixelAvatarProps) {
   const [browserPreview, setBrowserPreview] = useState<{ active: boolean; source?: 'google_ai' | 'web_search'; image?: string }>({ active: false });
+  const [browserSessions, setBrowserSessions] = useState<BrowserSessionView[]>([]);
   // -- State: Media layer (highest priority) --
   const [mediaUrl, setMediaUrl] = useState<string | null>(null);
 
@@ -181,7 +205,6 @@ export function PixelAvatar() {
   useEffect(() => {
     const unsubscribe = window.electronAPI?.onBrowserActivityPreview?.((payload) => {
       setBrowserPreview((current) => {
-        if (!payload.active && current.source !== payload.source) return current;
         return {
           active: payload.active,
           source: payload.active ? payload.source : undefined,
@@ -192,6 +215,15 @@ export function PixelAvatar() {
     return () => unsubscribe?.();
   }, []);
 
+  useEffect(() => {
+    const applySnapshot = (snapshot: { activeChatId: number | null; sessions: BrowserSessionView[] }) => {
+      if (snapshot.activeChatId === chatId) setBrowserSessions(snapshot.sessions);
+    };
+    const unsubscribe = window.electronAPI?.onBrowserSessionsChanged?.(applySnapshot);
+    void window.electronAPI?.setActiveBrowserChat?.(chatId).then(applySnapshot).catch(() => {});
+    return () => unsubscribe?.();
+  }, [chatId]);
+
   // ── Determine what to render (priority: media > loop > reaction queue > base + blink) ─
 
   const renderSrc = mediaUrl
@@ -200,22 +232,54 @@ export function PixelAvatar() {
     ?? getBaseFace(baseMood, blinking);
 
   return (
-    <div className={`${s.container} ${browserPreview.active ? s.browserPreviewActive : ''}`}>
-      {browserPreview.active ? (
-        <>
-          {browserPreview.image
-            ? <img className={s.browserPreview} src={browserPreview.image} alt="" draggable={false} />
-            : <div className={s.browserPreviewLoading} />}
-          <span className={s.browserPreviewIndicator} />
-        </>
-      ) : (
-        <img
-          key={blinking ? `blink-${blinkKey}` : 'base'}
-          className={s.face}
-          src={renderSrc}
-          alt=""
-          draggable={false}
-        />
+    <div className={s.container}>
+      <div className={`${s.avatarFrame} ${browserPreview.active ? s.browserPreviewActive : ''}`}>
+        {browserPreview.active ? (
+          <>
+            {browserPreview.image
+              ? <img className={s.browserPreview} src={browserPreview.image} alt="" draggable={false} />
+              : <div className={s.browserPreviewLoading} />}
+            <span className={s.browserPreviewIndicator} />
+          </>
+        ) : (
+          <img
+            key={blinking ? `blink-${blinkKey}` : 'base'}
+            className={s.face}
+            src={renderSrc}
+            alt=""
+            draggable={false}
+          />
+        )}
+      </div>
+
+      {browserSessions.length > 0 && (
+        <div className={s.sessionPanel}>
+          <div className={s.sessionPanelHeader}>Фоновые вкладки</div>
+          <div className={s.sessionList}>
+            {browserSessions.map((session) => (
+              <button
+                key={session.id}
+                type="button"
+                className={s.sessionCard}
+                onClick={() => void window.electronAPI.openBrowserSession(session.id)}
+              >
+                <span className={s.sessionThumbnail}>
+                  {session.image
+                    ? <img src={session.image} alt="" draggable={false} />
+                    : <span>{session.source === 'google_ai' ? 'G' : '⌕'}</span>}
+                </span>
+                <span className={s.sessionMeta}>
+                  <span className={s.sessionTitle}>{sessionSourceLabel(session.source)}</span>
+                  <span className={`${s.sessionStatus} ${s[`sessionStatus_${session.status}`]}`}>
+                    <span className={s.sessionStatusDot} />
+                    {sessionStatusLabel(session.status)}
+                  </span>
+                </span>
+                <span className={s.sessionOpen}>↗</span>
+              </button>
+            ))}
+          </div>
+        </div>
       )}
     </div>
   );

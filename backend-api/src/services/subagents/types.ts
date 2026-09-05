@@ -30,6 +30,8 @@ export interface SubagentTool {
 /** Context passed into every subagent run — mirrors the relevant parts of the main agent context. */
 export interface SubagentContext {
   userId: number;
+  /** Chat that owns browser-backed sessions started by this agent. */
+  chatId?: number;
   /** Full canonical account record used for plan checks and feature flags in shared tools. */
   user?: any;
   isDesktop: boolean;

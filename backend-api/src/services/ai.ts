@@ -3881,7 +3881,7 @@ const getTaskByUserAndId = (userId: number, taskId: number) => db.prepare(`
   WHERE user_id = ? AND id = ?
 `).get(userId, taskId) as { id: number; status: string } | undefined;
 
-export const runTool = async (user: UserRecord, timezoneOffset: number, toolName: string, argsRaw: string, aiCall: (requestPayload: Record<string, unknown>) => Promise<CompletionMeta>, generatedImages?: Array<{ image_base64: string; image_url?: string; prompt_used: string }>, displayStateSink?: { value: DisplayStatePayload | null }, desktopActionSink?: { value: DesktopActionPayload | null }, mapUpdateSink?: { value: MapUpdatePayload | null }, activeMacros?: Array<{ id: number; title: string; description?: string; commands: string[]; pinned?: boolean; return_output?: boolean }>, signal?: AbortSignal, subagentExtra?: { manualModel?: any; subagentMode?: 'auto' | 'manual'; subagentReasoningLevel?: ReasoningLevel | null; onToolStatus?: (text: string) => Promise<void> | void; onDesktopAction?: (action: any) => Promise<void> | void; displayManifest?: { moods?: string[]; reactions?: string[] } | null; currentDisplayState?: DisplayStatePayload | null; avatarControlEnabled?: boolean; onSubagentTrace?: (trace: any) => void; onSubagentUsageCall?: (agentName: string, usage: TokenUsageCall) => void; onVisionUsageCall?: (usage: TokenUsageCall) => void; shouldStopForQuota?: (usage: TokenUsageCall) => boolean; availableToolDefs?: any[]; attachmentReadContext?: AttachmentReadContext; responseFileSink?: ResponseFileSink }, autoRejectHitl?: boolean, userImages?: Array<{ base64: string; mimeType: string }>, billingUserId?: number) => {
+export const runTool = async (user: UserRecord, timezoneOffset: number, toolName: string, argsRaw: string, aiCall: (requestPayload: Record<string, unknown>) => Promise<CompletionMeta>, generatedImages?: Array<{ image_base64: string; image_url?: string; prompt_used: string }>, displayStateSink?: { value: DisplayStatePayload | null }, desktopActionSink?: { value: DesktopActionPayload | null }, mapUpdateSink?: { value: MapUpdatePayload | null }, activeMacros?: Array<{ id: number; title: string; description?: string; commands: string[]; pinned?: boolean; return_output?: boolean }>, signal?: AbortSignal, subagentExtra?: { chatId?: number; manualModel?: any; subagentMode?: 'auto' | 'manual'; subagentReasoningLevel?: ReasoningLevel | null; onToolStatus?: (text: string) => Promise<void> | void; onDesktopAction?: (action: any) => Promise<void> | void; displayManifest?: { moods?: string[]; reactions?: string[] } | null; currentDisplayState?: DisplayStatePayload | null; avatarControlEnabled?: boolean; onSubagentTrace?: (trace: any) => void; onSubagentUsageCall?: (agentName: string, usage: TokenUsageCall) => void; onVisionUsageCall?: (usage: TokenUsageCall) => void; shouldStopForQuota?: (usage: TokenUsageCall) => boolean; availableToolDefs?: any[]; attachmentReadContext?: AttachmentReadContext; responseFileSink?: ResponseFileSink }, autoRejectHitl?: boolean, userImages?: Array<{ base64: string; mimeType: string }>, billingUserId?: number) => {
   throwIfAborted(signal);
   const parsed = JSON.parse(argsRaw || '{}');
   // Room runs: `user` is the INITIATOR (data privacy: their servers, desktop,
@@ -3928,6 +3928,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     incrementUserWebSearchUsage(billingUser.id, 1);
     return runWebSearch(query, {
       userId: user.id,
+      chatId: subagentExtra?.chatId,
       cursor: typeof parsed.cursor === 'string' ? parsed.cursor : undefined,
       wikipedia: parsed.wikipedia === true,
       searchType: parsed.search_type === 'news' ? 'news' : 'web',
@@ -3953,6 +3954,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     try {
       const result = await sendIpcToDesktop(user.id, 'google_ai', {
         action,
+        ...(subagentExtra?.chatId ? { chat_id: subagentExtra.chatId } : {}),
         ...(message ? { message } : {}),
       }, 120_000, signal);
       if (result?.challenge === 'captcha') {
@@ -6722,6 +6724,7 @@ Respond in the user's language. Be detailed and precise.`
         context: contextData,
         ctx: {
           userId: user.id,
+          chatId: subagentExtra?.chatId,
           user,
           isDesktop: !!desktopActionSink,
           timezoneOffset,
@@ -6822,6 +6825,7 @@ Respond in the user's language. Be detailed and precise.`
         task,
         ctx: {
           userId: user.id,
+          chatId: subagentExtra?.chatId,
           user,
           isDesktop: !!desktopActionSink,
           timezoneOffset,
@@ -8339,6 +8343,7 @@ const runOneToolCall = async (toolCall: any, emitStatus = true): Promise<Execute
         options?.activeMacros,
         abortController.signal,
         {
+          chatId,
           manualModel: subagentManualModel,
           subagentMode,
           subagentReasoningLevel,

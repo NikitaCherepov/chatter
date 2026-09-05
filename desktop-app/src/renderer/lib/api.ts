@@ -1270,7 +1270,7 @@ export function initWebSocket(callbacks?: WsCallbacks) {
           if (msg.ipc_type === 'convert_video') {
             (window as any).electronAPI?.cancelVideoConversion(msg.request_id).catch(console.error);
           } else if (msg.ipc_type === 'google_ai') {
-            (window as any).electronAPI?.cancelGoogleAi().catch(console.error);
+            (window as any).electronAPI?.cancelGoogleAi(googleAiRequestChats.get(msg.request_id)).catch(console.error);
           }
           break;
         case 'ping':
@@ -1533,6 +1533,8 @@ async function sendChatTriggerSSE(payload: {
 
 // ── Handle execute_ipc from server ──
 
+const googleAiRequestChats = new Map<string, number | undefined>();
+
 async function handleExecuteIpc(msg: { request_id: string; ipc_type: string; payload: any }) {
   const { request_id, ipc_type, payload } = msg;
 
@@ -1653,6 +1655,7 @@ async function handleExecuteIpc(msg: { request_id: string; ipc_type: string; pay
       });
       const googleAi = (window as any).electronAPI?.googleAi;
       if (typeof googleAi !== 'function') throw new Error('desktop_google_ai_unsupported');
+      googleAiRequestChats.set(request_id, Number.isInteger(payload?.chat_id) ? Number(payload.chat_id) : undefined);
       result = await googleAi(payload);
     } else {
       throw new Error(`unknown ipc_type: ${ipc_type}`);
@@ -1675,6 +1678,8 @@ async function handleExecuteIpc(msg: { request_id: string; ipc_type: string; pay
     });
     ws?.send(JSON.stringify({ type: 'ipc_result', request_id, error: err?.message || String(err) }));
     console.log('[ipc] renderer ipc_result error sent', { requestId: request_id });
+  } finally {
+    googleAiRequestChats.delete(request_id);
   }
 }
 
