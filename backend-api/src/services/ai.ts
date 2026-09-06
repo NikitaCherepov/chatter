@@ -1928,15 +1928,15 @@ const formatUnixForTimezone = (unixSeconds: number, timezoneOffset: number) => {
   return { local, utc, tzLabel: `UTC${sign}${timezoneOffset}` };
 };
 
-const checkWebSearchLimit = (user: UserRecord) => {
+const checkTavilySearchLimit = (user: UserRecord) => {
   const limit = normalizeDailyWebSearchLimit(user.daily_web_search_limit);
   const count = Math.max(0, Math.floor(Number(user.daily_web_search_count || 0)));
-  if (limit <= 0) return { allowed: false, count, limit, reason: 'Web search is disabled for today under your plan.' };
-  if (count >= limit) return { allowed: false, count, limit, reason: `Web search limit exhausted for today (${count}/${limit}).` };
+  if (limit <= 0) return { allowed: false, count, limit, reason: 'Tavily fallback search is disabled under your plan.' };
+  if (count >= limit) return { allowed: false, count, limit, reason: `Tavily fallback search limit exhausted for today (${count}/${limit}).` };
   return { allowed: true, count, limit, reason: '' };
 };
 
-const incrementUserWebSearchUsage = (userId: number, count = 1) => {
+const incrementUserTavilySearchUsage = (userId: number, count = 1) => {
   const safeCount = Math.max(0, Math.floor(count));
   if (safeCount <= 0) return;
   db.prepare(`
@@ -3922,10 +3922,6 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
   if (toolName === 'search_web') {
     const query = `${parsed.query || ''}`.trim();
     if (!query) return 'Tool error: empty search query.';
-    // Quota is the bot owner's — the initiator only provides tool data.
-    const webLimit = checkWebSearchLimit(billingUser);
-    if (!webLimit.allowed && billingUser.is_admin !== 1) return webLimit.reason;
-    incrementUserWebSearchUsage(billingUser.id, 1);
     return runWebSearch(query, {
       userId: user.id,
       chatId: subagentExtra?.chatId,
@@ -3935,6 +3931,17 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
       sort: parsed.sort === 'date' ? 'date' : 'relevance',
       freshness: ['day', 'week', 'month', 'year'].includes(`${parsed.freshness || ''}`) ? parsed.freshness : 'any',
       language: user.language,
+      tavilyQuota: {
+        check: () => {
+          // Quota belongs to the bot owner and is checked only if both free
+          // search paths failed and the request is about to reach Tavily.
+          const currentBillingUser = getUserById(billingUser.id) ?? billingUser;
+          if (currentBillingUser.is_admin === 1) return null;
+          const limit = checkTavilySearchLimit(currentBillingUser);
+          return limit.allowed ? null : limit.reason;
+        },
+        consume: () => incrementUserTavilySearchUsage(billingUser.id, 1),
+      },
     }, signal);
   }
 
@@ -3945,11 +3952,6 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     if (message.length > 8_000) return 'Tool error: google_ai message is too long (maximum 8000 characters).';
     if (!isDesktopOnline(user.id)) {
       return 'Tool error: Google AI Mode requires the user\'s connected Chatter Desktop.';
-    }
-    if (message) {
-      const webLimit = checkWebSearchLimit(billingUser);
-      if (!webLimit.allowed && billingUser.is_admin !== 1) return webLimit.reason;
-      incrementUserWebSearchUsage(billingUser.id, 1);
     }
     try {
       const result = await sendIpcToDesktop(user.id, 'google_ai', {

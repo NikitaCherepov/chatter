@@ -300,9 +300,9 @@
       }
     },
     "webSearch": {
-      "pageDescription": "Поиск актуальной информации в интернете через Tavily.",
+      "pageDescription": "Настройка Tavily как последнего фоллбэка после десктопного поиска и SearXNG.",
       "sectionTitle": "Tavily",
-      "sectionIntro": "Используется инструментом поиска. Дневные ограничения пользователей настраиваются отдельно.",
+      "sectionIntro": "API-ключ и дневной лимит применяются только при переходе инструмента на Tavily. Десктопный поиск и SearXNG лимит не расходуют.",
       "apiUrlLabel": "Адрес API",
       "apiKeyLabel": "Tavily API-ключ"
     },
@@ -484,8 +484,8 @@
           "userRequests": "Запросы пользователя",
           "assistantResponses": "Ответы ассистента",
           "chats": "Чаты",
-          "searchToday": "Поиск сегодня",
-          "searchTotal": "Поиск всего",
+          "searchToday": "Поисков Tavily сегодня",
+          "searchTotal": "Поисков Tavily всего",
           "imagesToday": "Изображения сегодня",
           "imagesTotal": "Изображения всего",
           "messageLength": "Длина сообщений",
@@ -794,7 +794,7 @@
     "weeklyQuotaLabel": "Недельная квота токенов",
     "weeklyQuotaHint": "~{{units}} условных единиц в неделю. 0 = нет квоты (только флаги).",
     "contextLimitLabel": "Лимит контекста (токенов)",
-    "webSearchLabel": "Web-поиск в день",
+    "webSearchLabel": "Фоллбэк-поисков Tavily в день",
     "imageGenLabel": "Генераций картинок в день",
     "allowImageAttach": "Разрешить прикреплять изображения",
     "billingModeToggle": "Учёт: {{mode}}",

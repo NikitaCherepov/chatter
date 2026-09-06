@@ -300,9 +300,9 @@
       }
     },
     "webSearch": {
-      "pageDescription": "Search the internet for up-to-date information via Tavily.",
+      "pageDescription": "Configure Tavily as the final fallback after desktop search and SearXNG.",
       "sectionTitle": "Tavily",
-      "sectionIntro": "Used by the search tool. Daily user limits are configured separately.",
+      "sectionIntro": "The API key and daily user limit apply only when the search tool falls back to Tavily. Desktop search and SearXNG do not consume this limit.",
       "apiUrlLabel": "API URL",
       "apiKeyLabel": "Tavily API key"
     },
@@ -484,8 +484,8 @@
           "userRequests": "User requests",
           "assistantResponses": "Assistant responses",
           "chats": "Chats",
-          "searchToday": "Search today",
-          "searchTotal": "Search total",
+          "searchToday": "Tavily searches today",
+          "searchTotal": "Tavily searches total",
           "imagesToday": "Images today",
           "imagesTotal": "Images total",
           "messageLength": "Message length",
@@ -794,7 +794,7 @@
     "weeklyQuotaLabel": "Weekly token quota",
     "weeklyQuotaHint": "~{{units}} conditional units per week. 0 = no quota (flags only).",
     "contextLimitLabel": "Context limit (tokens)",
-    "webSearchLabel": "Web search per day",
+    "webSearchLabel": "Tavily fallback searches per day",
     "imageGenLabel": "Image generations per day",
     "allowImageAttach": "Allow image attachments",
     "actions": {
