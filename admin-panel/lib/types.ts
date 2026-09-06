@@ -58,6 +58,9 @@ export type PineconeSettings = {
 };
 
 export type WebSearchSettings = {
+  enabled: boolean;
+  searxngEnabled: boolean;
+  engines: Record<'google' | 'brave' | 'duckduckgo' | 'startpage' | 'wikipedia', boolean>;
   baseUrl: string;
   apiKey: string;
   hasApiKey: boolean;
@@ -158,6 +161,15 @@ export const emptySettings: Settings = {
     embeddingModel: 'text-embedding-3-small',
   },
   webSearch: {
+    enabled: true,
+    searxngEnabled: true,
+    engines: {
+      google: true,
+      brave: true,
+      duckduckgo: true,
+      startpage: true,
+      wikipedia: true,
+    },
     baseUrl: 'https://api.tavily.com',
     apiKey: '',
     hasApiKey: false,

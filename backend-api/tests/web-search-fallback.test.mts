@@ -1,12 +1,25 @@
 import assert from 'node:assert/strict';
+import { rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
-process.env.SEARXNG_ENABLED = 'false';
+const testDbPath = join(tmpdir(), `chatter-web-search-${process.pid}-${Date.now()}.db`);
+process.env.API_DB_PATH = testDbPath;
 process.env.TAVILY_API_KEY = 'test-key';
 
-let requestCount = 0;
+let tavilyRequestCount = 0;
 let requestBody: Record<string, unknown> | null = null;
-globalThis.fetch = (async (_input: string | URL | Request, init?: RequestInit) => {
-  requestCount += 1;
+globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+  const url = `${input}`;
+  if (url.includes('/search?') && init?.method !== 'POST') {
+    return new Response(JSON.stringify({
+      results: [
+        { title: 'Google result', url: 'https://example.com/google', content: 'Found by Google', engines: ['google'] },
+      ],
+      unresponsive_engines: [['brave', 'CAPTCHA']],
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  }
+  tavilyRequestCount += 1;
   requestBody = JSON.parse(`${init?.body || '{}'}`) as Record<string, unknown>;
   return new Response(JSON.stringify({
     answer: 'Test summary',
@@ -22,6 +35,12 @@ globalThis.fetch = (async (_input: string | URL | Request, init?: RequestInit) =
   }), { status: 200, headers: { 'Content-Type': 'application/json' } });
 }) as typeof fetch;
 
+const { db } = await import('../src/db.js');
+const {
+  getWebSearchStats,
+  updateWebSearchRuntimeSettings,
+} = await import('../src/services/web-search-runtime.js');
+updateWebSearchRuntimeSettings({ searxngEnabled: false });
 const { runWebSearch } = await import('../src/services/web-search.js');
 let quotaChecks = 0;
 let quotaConsumes = 0;
@@ -42,7 +61,7 @@ const options = {
 };
 
 const firstPage = await runWebSearch('fallback test', options);
-assert.equal(requestCount, 1);
+assert.equal(tavilyRequestCount, 1);
 assert.equal(quotaChecks, 1);
 assert.equal(quotaConsumes, 1);
 assert.equal(requestBody?.topic, 'news');
@@ -55,7 +74,7 @@ const cursor = firstPage.match(/cursor "([^"]+)"/)?.[1];
 assert.ok(cursor);
 
 const secondPage = await runWebSearch('fallback test', { ...options, cursor });
-assert.equal(requestCount, 1, 'cached Tavily pagination must not call the API again');
+assert.equal(tavilyRequestCount, 1, 'cached Tavily pagination must not call the API again');
 assert.equal(quotaChecks, 1);
 assert.equal(quotaConsumes, 1);
 assert.match(secondPage, /Result 2/);
@@ -66,7 +85,7 @@ const blocked = await runWebSearch('blocked fallback', {
   tavilyQuota: { check: () => 'Tavily quota blocked.', consume: () => assert.fail('blocked request was consumed') },
 });
 assert.equal(blocked, 'Tavily quota blocked.');
-assert.equal(requestCount, 1, 'quota must be checked before calling Tavily');
+assert.equal(tavilyRequestCount, 1, 'quota must be checked before calling Tavily');
 
 await runWebSearch('encyclopedia fallback', {
   userId: options.userId,
@@ -77,4 +96,28 @@ await runWebSearch('encyclopedia fallback', {
 });
 assert.deepEqual(requestBody?.include_domains, ['wikipedia.org']);
 
+updateWebSearchRuntimeSettings({
+  searxngEnabled: true,
+  engines: { google: true, brave: true, duckduckgo: false, startpage: false, wikipedia: true },
+});
+const searxngResult = await runWebSearch('engine health test', options);
+assert.match(searxngResult, /Google result/);
+assert.equal(tavilyRequestCount, 2, 'SearXNG success must not call Tavily again');
+
+const stats = getWebSearchStats();
+const tavily = stats.providers.find(row => row.provider === 'tavily');
+const google = stats.engines.find(row => row.engine === 'google');
+const brave = stats.engines.find(row => row.engine === 'brave');
+assert.equal(tavily?.successes, 2);
+assert.equal(tavily?.resultsReturned, 14);
+assert.equal(google?.successes, 1);
+assert.equal(google?.resultsReturned, 1);
+assert.equal(brave?.captchaFailures, 1);
+
+updateWebSearchRuntimeSettings({ enabled: false });
+const disabled = await runWebSearch('disabled search', options);
+assert.match(disabled, /disabled by the administrator/);
+
 console.log('web-search fallback test passed');
+db.close();
+rmSync(testDbPath, { force: true });

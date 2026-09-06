@@ -325,6 +325,15 @@ function publicSettings() {
       embeddingModel: backendEnv.TIMEWEB_EMBED_MODEL || backendEnv.VECTOR_EMBED_MODEL || 'text-embedding-3-small'
     },
     webSearch: {
+      enabled: true,
+      searxngEnabled: true,
+      engines: {
+        google: true,
+        brave: true,
+        duckduckgo: true,
+        startpage: true,
+        wikipedia: true,
+      },
       baseUrl: backendEnv.TAVILY_API_BASE_URL || 'https://api.tavily.com',
       apiKey: '',
       hasApiKey: Boolean(backendEnv.TAVILY_API_KEY)
@@ -2205,6 +2214,16 @@ async function handleRequest(req, res) {
     } catch {
       // Keep the safe default while backend is temporarily unavailable.
     }
+    try {
+      const runtime = await backendInternalRequest('/internal/admin/web-search/runtime');
+      settings.webSearch.enabled = runtime.enabled === true;
+      settings.webSearch.searxngEnabled = runtime.searxngEnabled === true;
+      settings.webSearch.engines = runtime.engines && typeof runtime.engines === 'object'
+        ? { ...settings.webSearch.engines, ...runtime.engines }
+        : settings.webSearch.engines;
+    } catch {
+      // Keep safe runtime defaults while backend is temporarily unavailable.
+    }
     return sendJson(res, 200, settings);
   }
   if (req.method === 'GET' && pathname === '/api/status') return sendJson(res, 200, { applying: Boolean(applyPromise), services: await getServiceStatus() });
@@ -2689,6 +2708,35 @@ async function handleRequest(req, res) {
       } catch (error) {
         return sendJson(res, 400, { error: error.message || 'image_generation_settings_save_failed' });
       }
+    }
+  }
+
+  if (pathname === '/api/web-search/runtime') {
+    if (req.method === 'GET') {
+      try {
+        return sendJson(res, 200, await backendInternalRequest('/internal/admin/web-search/runtime'));
+      } catch (error) {
+        return sendJson(res, 502, { error: error.message || 'web_search_settings_failed' });
+      }
+    }
+    if (req.method === 'PUT') {
+      const body = await readJson(req);
+      try {
+        return sendJson(res, 200, await backendInternalRequest('/internal/admin/web-search/runtime', {
+          method: 'PUT',
+          body: JSON.stringify(body),
+        }));
+      } catch (error) {
+        return sendJson(res, 400, { error: error.message || 'web_search_settings_save_failed' });
+      }
+    }
+  }
+
+  if (req.method === 'GET' && pathname === '/api/web-search/stats') {
+    try {
+      return sendJson(res, 200, await backendInternalRequest('/internal/admin/web-search/stats'));
+    } catch (error) {
+      return sendJson(res, 502, { error: error.message || 'web_search_stats_failed' });
     }
   }
 

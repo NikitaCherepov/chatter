@@ -25,6 +25,7 @@ import { getPendingVisualClick, deletePendingVisualClick } from './services/visu
 import { getPendingEmailConfirmation, deletePendingEmailConfirmation } from './services/email-confirmations.js';
 import { runImageGeneration } from './services/image-generation.js';
 import { isImageGenerationEnabled, setImageGenerationEnabled } from './services/system-settings.js';
+import { getWebSearchRuntimeSettings, getWebSearchStats, updateWebSearchRuntimeSettings } from './services/web-search-runtime.js';
 import { getSmartHomeSettings, setSmartHomeToken, deleteSmartHomeToken, setZigbeeToken, deleteZigbeeToken, listSmartDevices, syncSmartHomeDevices } from './services/smart-home.js';
 import { db } from './db.js';
 import { getCleanTextFromUrl } from './services/web-reader.js';
@@ -4340,6 +4341,21 @@ app.put('/internal/admin/image-generation/settings', internalAuth, (req, res) =>
     return res.status(400).json({ error: 'enabled_must_be_boolean' });
   }
   return res.json({ enabled: setImageGenerationEnabled(req.body.enabled) });
+});
+
+app.get('/internal/admin/web-search/runtime', internalAuth, (_req, res) => {
+  return res.json(getWebSearchRuntimeSettings());
+});
+
+app.put('/internal/admin/web-search/runtime', internalAuth, (req, res) => {
+  if (!req.body || typeof req.body !== 'object') {
+    return res.status(400).json({ error: 'bad_web_search_settings' });
+  }
+  return res.json(updateWebSearchRuntimeSettings(req.body));
+});
+
+app.get('/internal/admin/web-search/stats', internalAuth, (_req, res) => {
+  return res.json(getWebSearchStats());
 });
 
 app.post('/internal/admin/sync-plan-limits', internalAuth, (_req, res) => {

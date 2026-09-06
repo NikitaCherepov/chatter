@@ -300,11 +300,42 @@
       }
     },
     "webSearch": {
-      "pageDescription": "Configure Tavily as the final fallback after desktop search and SearXNG.",
+      "pageDescription": "Configure the desktop → SearXNG → Tavily search chain and inspect its health.",
       "sectionTitle": "Tavily",
       "sectionIntro": "The API key and daily user limit apply only when the search tool falls back to Tavily. Desktop search and SearXNG do not consume this limit.",
       "apiUrlLabel": "API URL",
-      "apiKeyLabel": "Tavily API key"
+      "apiKeyLabel": "Tavily API key",
+      "routingTitle": "Search routing",
+      "routingIntro": "These switches are stored in the database and apply immediately without restarting services.",
+      "enabled": "Enable web search",
+      "savingRuntime": "Saving…",
+      "searxngIntro": "Enable the self-hosted fallback and choose which engines it may query.",
+      "searxngEnabled": "Enable SearXNG",
+      "engines": {
+        "google": "Google",
+        "brave": "Brave",
+        "duckduckgo": "DuckDuckGo",
+        "startpage": "Startpage",
+        "wikipedia": "Wikipedia"
+      },
+      "statsTitle": "Search statistics",
+      "statsIntro": "Aggregated provider and SearXNG engine health since statistics collection was enabled.",
+      "statsLoading": "Loading…",
+      "statsRefresh": "Refresh statistics",
+      "providers": {
+        "desktop": "Desktop search",
+        "searxng": "SearXNG",
+        "tavily": "Tavily"
+      },
+      "statsEngine": "Engine",
+      "statsAttempts": "Attempts",
+      "statsSuccesses": "Successful",
+      "statsFailures": "Failed",
+      "statsEmpty": "Empty",
+      "statsResults": "Results",
+      "statsOther": "Other",
+      "statsLastAttempt": "Last attempt",
+      "statsLastFailure": "Last failure"
     },
     "webReader": {
       "pageDescription": "Open and clean web page content via Browserless.",

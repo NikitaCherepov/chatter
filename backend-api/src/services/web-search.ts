@@ -1,9 +1,13 @@
 import { randomUUID } from 'node:crypto';
 import { sendIpcToDesktop } from '../ws-clients.js';
 import { wrapUntrustedContent } from './web-reader.js';
+import {
+  getWebSearchRuntimeSettings,
+  recordWebSearchStat,
+  type WebSearchEngine,
+} from './web-search-runtime.js';
 
 const SEARXNG_BASE_URL = `${process.env.SEARXNG_BASE_URL || 'http://searxng:8080'}`.trim().replace(/\/+$/, '');
-const SEARXNG_ENABLED = !['0', 'false', 'off', 'disabled'].includes(`${process.env.SEARXNG_ENABLED || 'true'}`.trim().toLowerCase());
 const TAVILY_API_KEY = `${process.env.TAVILY_API_KEY || ''}`.trim();
 const TAVILY_API_BASE_URL = `${process.env.TAVILY_API_BASE_URL || 'https://api.tavily.com'}`.trim().replace(/\/+$/, '');
 const SEARCH_TIMEOUT_MS = 15_000;
@@ -57,6 +61,8 @@ type SearchSession = {
   sort: SearchSort;
   freshness: SearchFreshness;
   language: string;
+  searxngEnabled: boolean;
+  searxngEngines: WebSearchEngine[];
   provider: SearchProvider | null;
   results: SearchResult[];
   nextPage: number;
@@ -140,41 +146,52 @@ const withTimeout = async <T>(label: string, signal: AbortSignal | undefined, ac
 };
 
 const fetchDesktopPage = async (session: SearchSession, page: number, signal?: AbortSignal): Promise<SearchResult[]> => {
-  const response = await sendIpcToDesktop(session.userId, 'web_search', {
-    query: session.query,
-    mode: session.mode,
-    searchType: session.searchType,
-    sort: session.sort,
-    freshness: session.freshness,
-    page,
-    language: session.language,
-    ...(session.chatId ? { chat_id: session.chatId } : {}),
-  }, 30_000, signal) as DesktopSearchResponse;
-  if (response?.challenge === 'captcha') throw new Error('desktop_search_captcha_required');
-  const results = Array.isArray(response?.results) ? response.results : [];
-  console.info('[web-search] Desktop browser report', JSON.stringify({
-    page,
-    searchMode: session.mode,
-    searchType: session.searchType,
-    sort: session.sort,
-    freshness: session.freshness,
-    url: response?.url || '',
-    title: response?.title || '',
-    resultCount: results.length,
-    results: results.map((result, index) => ({ rank: index + 1, title: result.title || '', url: result.url || '' })),
-  }, null, 2));
-  return results;
+  try {
+    const response = await sendIpcToDesktop(session.userId, 'web_search', {
+      query: session.query,
+      mode: session.mode,
+      searchType: session.searchType,
+      sort: session.sort,
+      freshness: session.freshness,
+      page,
+      language: session.language,
+      ...(session.chatId ? { chat_id: session.chatId } : {}),
+    }, 30_000, signal) as DesktopSearchResponse;
+    if (response?.challenge === 'captcha') throw new Error('desktop_search_captcha_required');
+    const results = Array.isArray(response?.results) ? response.results : [];
+    recordWebSearchStat('desktop', '', results.length ? 'success' : 'empty', results.length);
+    console.info('[web-search] Desktop browser report', JSON.stringify({
+      page,
+      searchMode: session.mode,
+      searchType: session.searchType,
+      sort: session.sort,
+      freshness: session.freshness,
+      url: response?.url || '',
+      title: response?.title || '',
+      resultCount: results.length,
+      results: results.map((result, index) => ({ rank: index + 1, title: result.title || '', url: result.url || '' })),
+    }, null, 2));
+    return results;
+  } catch (error) {
+    if (!signal?.aborted) recordWebSearchStat('desktop', '', 'failure', 0, errorMessage(error));
+    throw error;
+  }
 };
 
 const fetchSearxngPage = async (session: SearchSession, page: number, signal?: AbortSignal): Promise<SearchResult[]> => {
-  if (!SEARXNG_ENABLED || !SEARXNG_BASE_URL) throw new Error('searxng_disabled');
-  return withTimeout('searxng', signal, async requestSignal => {
+  const selectedEngines = session.mode === 'wikipedia'
+    ? session.searxngEngines.filter(engine => engine === 'wikipedia')
+    : session.searxngEngines.filter(engine => engine !== 'wikipedia');
+  if (!session.searxngEnabled || !SEARXNG_BASE_URL || !selectedEngines.length) throw new Error('searxng_disabled');
+  try {
+    return await withTimeout('searxng', signal, async requestSignal => {
     const url = new URL(`${SEARXNG_BASE_URL}/search`);
     url.searchParams.set('q', session.mode === 'wikipedia' ? `!wikipedia ${session.query}` : session.query);
     url.searchParams.set('format', 'json');
     url.searchParams.set('categories', session.searchType === 'news' ? 'news' : 'general');
     url.searchParams.set('language', session.language);
     url.searchParams.set('pageno', `${page}`);
+    url.searchParams.set('engines', selectedEngines.join(','));
     if (session.freshness !== 'any') url.searchParams.set('time_range', session.freshness);
     const response = await fetch(url, {
       headers: { Accept: 'application/json', 'X-Client-Source': 'chatter-backend' },
@@ -186,10 +203,31 @@ const fetchSearxngPage = async (session: SearchSession, page: number, signal?: A
     const failures = (Array.isArray(data.unresponsive_engines) ? data.unresponsive_engines : [])
       .map(failure => ({ engine: failureName(failure), reason: failureReason(failure) }))
       .filter(failure => failure.engine);
+    const returnedEngines = new Set(results.flatMap(result => resultEngines(result)));
+    const failuresByEngine = new Map(failures.map(failure => [failure.engine, failure.reason]));
+    recordWebSearchStat(
+      'searxng',
+      '',
+      !results.length && failures.length ? 'failure' : results.length ? 'success' : 'empty',
+      results.length,
+      failures.map(failure => `${failure.engine}: ${failure.reason}`).join('; '),
+    );
+    for (const engine of selectedEngines) {
+      const engineResultCount = results.filter(result => resultEngines(result).includes(engine)).length;
+      const reason = failuresByEngine.get(engine) || '';
+      recordWebSearchStat(
+        'searxng',
+        engine,
+        returnedEngines.has(engine) ? 'success' : reason ? 'failure' : 'empty',
+        engineResultCount,
+        reason,
+      );
+    }
     console.info('[web-search] SearXNG engine report', JSON.stringify({
       page,
       searchMode: session.mode,
-      returned: [...new Set(results.flatMap(result => resultEngines(result)))].sort(),
+      requested: selectedEngines,
+      returned: [...returnedEngines].sort(),
       failed: failures,
       resultCount: results.length,
       results: results.map((result, index) => ({
@@ -203,7 +241,13 @@ const fetchSearxngPage = async (session: SearchSession, page: number, signal?: A
     }, null, 2));
     if (!results.length && failures.length) throw new Error('searxng_engines_unavailable');
     return results;
-  });
+    });
+  } catch (error) {
+    if (!signal?.aborted && errorMessage(error) !== 'searxng_engines_unavailable') {
+      recordWebSearchStat('searxng', '', 'failure', 0, errorMessage(error));
+    }
+    throw error;
+  }
 };
 
 const publishedTimestamp = (result: SearchResult): number => {
@@ -214,7 +258,8 @@ const publishedTimestamp = (result: SearchResult): number => {
 
 const fetchTavily = async (session: SearchSession, signal?: AbortSignal): Promise<TavilyResponse> => {
   if (!TAVILY_API_KEY) throw new Error('tavily_not_configured');
-  return withTimeout('tavily', signal, async requestSignal => {
+  try {
+    return await withTimeout('tavily', signal, async requestSignal => {
     const body: Record<string, unknown> = {
       query: session.query,
       search_depth: 'basic',
@@ -238,6 +283,7 @@ const fetchTavily = async (session: SearchSession, signal?: AbortSignal): Promis
     const data = await response.json() as TavilyResponse;
     const results = Array.isArray(data.results) ? data.results : [];
     if (session.sort === 'date') results.sort((left, right) => publishedTimestamp(right) - publishedTimestamp(left));
+    recordWebSearchStat('tavily', '', results.length ? 'success' : 'empty', results.length);
     console.info('[web-search] Tavily report', JSON.stringify({
       searchMode: session.mode,
       searchType: session.searchType,
@@ -255,7 +301,11 @@ const fetchTavily = async (session: SearchSession, signal?: AbortSignal): Promis
       })),
     }, null, 2));
     return { ...data, results };
-  });
+    });
+  } catch (error) {
+    if (!signal?.aborted) recordWebSearchStat('tavily', '', 'failure', 0, errorMessage(error));
+    throw error;
+  }
 };
 
 const appendUniqueResults = (session: SearchSession, incoming: SearchResult[]) => {
@@ -337,6 +387,8 @@ const loadMore = async (session: SearchSession, signal?: AbortSignal) => {
 };
 
 export const runWebSearch = async (query: string, options: WebSearchOptions, signal?: AbortSignal): Promise<string> => {
+  const runtimeSettings = getWebSearchRuntimeSettings();
+  if (!runtimeSettings.enabled) return 'Tool error: web search is disabled by the administrator.';
   const mode: SearchMode = options.wikipedia === true ? 'wikipedia' : 'web';
   const searchType: SearchType = options.searchType === 'news' ? 'news' : 'web';
   const sort: SearchSort = options.sort === 'date' ? 'date' : 'relevance';
@@ -374,6 +426,10 @@ export const runWebSearch = async (query: string, options: WebSearchOptions, sig
       sort,
       freshness,
       language: mode === 'wikipedia' ? (`${options.language || 'en'}`.trim() || 'en') : 'all',
+      searxngEnabled: runtimeSettings.searxngEnabled,
+      searxngEngines: Object.entries(runtimeSettings.engines)
+        .filter(([, enabled]) => enabled)
+        .map(([engine]) => engine as WebSearchEngine),
       provider: null,
       results: [],
       nextPage: 1,

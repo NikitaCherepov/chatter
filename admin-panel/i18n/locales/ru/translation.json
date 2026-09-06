@@ -300,11 +300,42 @@
       }
     },
     "webSearch": {
-      "pageDescription": "Настройка Tavily как последнего фоллбэка после десктопного поиска и SearXNG.",
+      "pageDescription": "Настройка цепочки десктоп → SearXNG → Tavily и контроль её состояния.",
       "sectionTitle": "Tavily",
       "sectionIntro": "API-ключ и дневной лимит применяются только при переходе инструмента на Tavily. Десктопный поиск и SearXNG лимит не расходуют.",
       "apiUrlLabel": "Адрес API",
-      "apiKeyLabel": "Tavily API-ключ"
+      "apiKeyLabel": "Tavily API-ключ",
+      "routingTitle": "Маршрутизация поиска",
+      "routingIntro": "Переключатели хранятся в базе и применяются сразу, без перезапуска сервисов.",
+      "enabled": "Включить поиск в интернете",
+      "savingRuntime": "Сохранение…",
+      "searxngIntro": "Включи собственный поисковый фоллбэк и выбери движки, к которым он может обращаться.",
+      "searxngEnabled": "Включить SearXNG",
+      "engines": {
+        "google": "Google",
+        "brave": "Brave",
+        "duckduckgo": "DuckDuckGo",
+        "startpage": "Startpage",
+        "wikipedia": "Wikipedia"
+      },
+      "statsTitle": "Статистика поиска",
+      "statsIntro": "Сводка по провайдерам и движкам SearXNG с момента включения сбора статистики.",
+      "statsLoading": "Загрузка…",
+      "statsRefresh": "Обновить статистику",
+      "providers": {
+        "desktop": "Десктопный поиск",
+        "searxng": "SearXNG",
+        "tavily": "Tavily"
+      },
+      "statsEngine": "Движок",
+      "statsAttempts": "Попытки",
+      "statsSuccesses": "Успешно",
+      "statsFailures": "Ошибки",
+      "statsEmpty": "Пустые ответы",
+      "statsResults": "Результаты",
+      "statsOther": "Прочее",
+      "statsLastAttempt": "Последняя попытка",
+      "statsLastFailure": "Последняя ошибка"
     },
     "webReader": {
       "pageDescription": "Открытие и очистка содержимого веб-страниц через Browserless.",

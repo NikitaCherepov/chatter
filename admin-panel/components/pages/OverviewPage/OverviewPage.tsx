@@ -83,7 +83,7 @@ export function OverviewPage({
     settings.proModels.length > 0 &&
     settings.liteModels.length > 0;
   const telegramReady = settings.telegramEnabled && settings.hasTelegramToken;
-  const webSearchReady = settings.webSearch.hasApiKey;
+  const webSearchReady = settings.webSearch.enabled;
   const webReaderReady = settings.webReader.hasToken;
   const pineconeReady = settings.pinecone.hasApiKey;
   const notesReady =

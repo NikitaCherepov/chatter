@@ -812,6 +812,37 @@ db.exec(`
   )
 `);
 
+// ── Web search health statistics ────────────────────────────────────────
+// Compact all-time counters. One row with an empty engine represents the
+// provider as a whole; SearXNG additionally stores one row per engine.
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS web_search_stats (
+    provider TEXT NOT NULL,
+    engine TEXT NOT NULL DEFAULT '',
+    attempts INTEGER NOT NULL DEFAULT 0,
+    successes INTEGER NOT NULL DEFAULT 0,
+    failures INTEGER NOT NULL DEFAULT 0,
+    empty_responses INTEGER NOT NULL DEFAULT 0,
+    captcha_failures INTEGER NOT NULL DEFAULT 0,
+    rate_limit_failures INTEGER NOT NULL DEFAULT 0,
+    parsing_failures INTEGER NOT NULL DEFAULT 0,
+    http_failures INTEGER NOT NULL DEFAULT 0,
+    other_failures INTEGER NOT NULL DEFAULT 0,
+    results_returned INTEGER NOT NULL DEFAULT 0,
+    last_attempt_at INTEGER,
+    last_success_at INTEGER,
+    last_failure_at INTEGER,
+    last_failure_reason TEXT,
+    PRIMARY KEY (provider, engine)
+  )
+`);
+
+const webSearchStatsColumns = db.prepare('PRAGMA table_info(web_search_stats)').all() as Array<{ name: string }>;
+if (!webSearchStatsColumns.some(column => column.name === 'empty_responses')) {
+  db.exec('ALTER TABLE web_search_stats ADD COLUMN empty_responses INTEGER NOT NULL DEFAULT 0');
+}
+
 // ── Standalone document extraction workspace ────────────────────────────
 // Files belong to the user rather than a chat so long-running extraction
 // projects remain available when the active chat changes or is deleted.
