@@ -2,11 +2,16 @@ import type { BrowserPreviewPayload, BrowserPreviewSource } from './browser-prev
 
 export type BrowserSessionStatus = 'working' | 'idle' | 'challenge';
 
+export type BrowserSessionOpenTarget =
+  | { type: 'browser_session' }
+  | { type: 'app_tool'; toolId: string; title?: string };
+
 export type BrowserSessionSnapshot = {
   id: string;
   chatId: number | null;
   source: BrowserPreviewSource;
   status: BrowserSessionStatus;
+  openTarget: BrowserSessionOpenTarget;
   image?: string;
   title?: string;
   updatedAt: number;
@@ -53,6 +58,7 @@ export class BrowserSessionRegistry {
       chatId,
       source: payload.source,
       status: payload.active ? 'working' : (previous?.status === 'challenge' ? 'challenge' : 'idle'),
+      openTarget: previous?.openTarget ?? { type: 'browser_session' },
       image: payload.image ?? previous?.image,
       title: previous?.title,
       updatedAt: Date.now(),
@@ -64,7 +70,7 @@ export class BrowserSessionRegistry {
     source: BrowserPreviewSource,
     chatIdValue: unknown,
     status: BrowserSessionStatus,
-    details: { image?: string; title?: string } = {},
+    details: { image?: string; title?: string; openTarget?: BrowserSessionOpenTarget } = {},
   ): BrowserSessionRegistrySnapshot {
     const chatId = normalizeChatId(chatIdValue);
     const id = BrowserSessionRegistry.sessionId(source, chatId);
@@ -74,6 +80,9 @@ export class BrowserSessionRegistry {
       chatId,
       source,
       status,
+      openTarget: details.openTarget
+        ?? previous?.openTarget
+        ?? { type: 'browser_session' },
       image: details.image ?? previous?.image,
       title: details.title ?? previous?.title,
       updatedAt: Date.now(),
@@ -95,7 +104,7 @@ export class BrowserSessionRegistry {
     return {
       activeChatId: this.activeChatId,
       sessions: [...this.sessions.values()]
-        .filter((session) => session.chatId === this.activeChatId)
+        .filter((session) => session.chatId === null || session.chatId === this.activeChatId)
         .sort((left, right) => right.updatedAt - left.updatedAt),
     };
   }

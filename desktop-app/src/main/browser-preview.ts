@@ -1,7 +1,7 @@
 import { BrowserWindow, screen } from 'electron';
 import { ChatterBrowser } from './browser';
 
-export type BrowserPreviewSource = 'google_ai' | 'web_search';
+export type BrowserPreviewSource = 'browser' | 'google_ai' | 'web_search';
 
 export type BrowserPreviewPayload = {
   active: boolean;

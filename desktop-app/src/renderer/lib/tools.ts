@@ -53,6 +53,30 @@ export function openTool(toolId?: ToolId) {
   setToolsPanelState({ isOpen: true, openTools: next });
 }
 
+/** Open a tool using its current layout instead of forcing it into the sidebar. */
+export function openToolInLastLayout(
+  toolId: ToolId,
+  options: { title?: string; activeChatId?: number | null } = {},
+) {
+  const layout = getToolLayout(toolId);
+  const next = [toolId, ...currentState.openTools.filter(id => id !== toolId)];
+  setToolsPanelState({
+    openTools: next,
+    isOpen: layout.mode === 'sidebar',
+  });
+  if (layout.mode === 'external') {
+    void window.electronAPI.openToolWindow({
+      toolId,
+      title: options.title || toolId,
+      activeChatId: options.activeChatId,
+    }).catch((error) => {
+      console.error('[tools] failed to open tool in its last layout:', error);
+      setToolLayout(toolId, { mode: 'sidebar' });
+      setToolsPanelState({ isOpen: true });
+    });
+  }
+}
+
 /**
  * Close a specific tool — removes from openTools.
  */

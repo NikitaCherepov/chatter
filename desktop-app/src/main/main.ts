@@ -309,6 +309,7 @@ let mainWindow: BrowserWindow | null = null;
 let chatterBrowser: ChatterBrowser | null = null;
 let youtubeMusicBrowser: ChatterBrowser | null = null;
 type DesktopBrowserSession = {
+  key: string;
   chatId: number | null;
   browser: ChatterBrowser;
   preview: BrowserPreviewSession;
@@ -318,6 +319,7 @@ type DesktopBrowserSession = {
 const searchSessions = new Map<string, DesktopBrowserSession>();
 const googleAiSessions = new Map<string, DesktopBrowserSession>();
 const browserSessionWindows = new Map<string, BrowserWindow>();
+let searchQueue: Promise<void> = Promise.resolve();
 let searchChallengeWindow: BrowserWindow | null = null;
 let activeChallengeBrowser: ChatterBrowser | null = null;
 const detachedToolWindows = new Map<string, BrowserWindow>();
@@ -372,6 +374,39 @@ const browserSessionRegistry = new BrowserSessionRegistry({
   emitActivePreview: sendBrowserPreview,
 });
 
+let chatterBrowserRegistryTimer: ReturnType<typeof setTimeout> | null = null;
+let chatterBrowserRegistryRun = 0;
+
+function scheduleChatterBrowserRegistrySync(): void {
+  if (chatterBrowserRegistryTimer) clearTimeout(chatterBrowserRegistryTimer);
+  const run = ++chatterBrowserRegistryRun;
+  chatterBrowserRegistryTimer = setTimeout(() => {
+    chatterBrowserRegistryTimer = null;
+    const browser = chatterBrowser;
+    if (!browser) return;
+    const state = browser.getState();
+    if (!state.url || state.url === 'about:blank') {
+      browserSessionRegistry.remove('browser', null);
+      return;
+    }
+    const status = state.isLoading ? 'working' : 'idle';
+    browserSessionRegistry.setStatus('browser', null, status, {
+      title: state.title || state.url,
+      openTarget: { type: 'app_tool', toolId: 'browser', title: 'Browser' },
+    });
+    void browser.capturePreview().then((image) => {
+      if (run !== chatterBrowserRegistryRun || chatterBrowser !== browser || !image) return;
+      const latest = browser.getState();
+      browserSessionRegistry.setStatus('browser', null, latest.isLoading ? 'working' : 'idle', {
+        image,
+        title: latest.title || latest.url,
+        openTarget: { type: 'app_tool', toolId: 'browser', title: 'Browser' },
+      });
+    });
+  }, 120);
+  chatterBrowserRegistryTimer.unref?.();
+}
+
 function createBrowserPreview(source: BrowserPreviewSource): BrowserPreviewSession {
   return new BrowserPreviewSession({
     source,
@@ -397,8 +432,31 @@ function getBrowserSession(
   const key = browserSessionKey(chatId);
   let session = sessions.get(key);
   if (!session) {
-    session = { chatId, browser: createBrowser(), preview: createBrowserPreview(source), idleTimer: null };
+    session = { key, chatId, browser: createBrowser(), preview: createBrowserPreview(source), idleTimer: null };
     sessions.set(key, session);
+  }
+  return session;
+}
+
+function getSharedSearchSession(chatId: number | null): DesktopBrowserSession {
+  const key = 'shared';
+  let session = searchSessions.get(key);
+  if (!session) {
+    session = { key, chatId, browser: createSearchBrowser(), preview: createBrowserPreview('web_search'), idleTimer: null };
+    searchSessions.set(key, session);
+    return session;
+  }
+  if (session.chatId !== chatId) {
+    const previousId = BrowserSessionRegistry.sessionId('web_search', session.chatId);
+    const previousViewer = browserSessionWindows.get(previousId);
+    // Temporarily detach the shared session so the viewer's close handler does
+    // not re-arm its idle timer under the old chat identity.
+    searchSessions.delete(key);
+    browserSessionWindows.delete(previousId);
+    if (previousViewer && !previousViewer.isDestroyed()) previousViewer.close();
+    browserSessionRegistry.remove('web_search', session.chatId);
+    session.chatId = chatId;
+    searchSessions.set(key, session);
   }
   return session;
 }
@@ -411,14 +469,13 @@ function clearBrowserIdleTimer(session: DesktopBrowserSession): void {
 function closeBrowserSession(
   sessions: Map<string, DesktopBrowserSession>,
   source: BrowserPreviewSource,
-  chatId: number | null,
+  session: DesktopBrowserSession,
   reason: 'explicit' | 'idle_timeout' | 'shutdown',
 ): boolean {
-  const key = browserSessionKey(chatId);
-  const session = sessions.get(key);
-  if (!session) return false;
+  if (sessions.get(session.key) !== session) return false;
+  const { chatId } = session;
   clearBrowserIdleTimer(session);
-  sessions.delete(key);
+  sessions.delete(session.key);
   const registryId = BrowserSessionRegistry.sessionId(source, chatId);
   const viewer = browserSessionWindows.get(registryId);
   if (viewer && !viewer.isDestroyed()) viewer.close();
@@ -446,8 +503,8 @@ function scheduleBrowserIdleClose(
   if (viewer && !viewer.isDestroyed()) return;
   session.idleTimer = setTimeout(() => {
     session.idleTimer = null;
-    if (sessions.get(browserSessionKey(session.chatId)) === session) {
-      closeBrowserSession(sessions, source, session.chatId, 'idle_timeout');
+    if (sessions.get(session.key) === session) {
+      closeBrowserSession(sessions, source, session, 'idle_timeout');
     }
   }, timeoutMs);
   session.idleTimer.unref?.();
@@ -974,7 +1031,9 @@ function createWindow() {
     },
   });
 
-  chatterBrowser = new ChatterBrowser(mainWindow);
+  chatterBrowser = new ChatterBrowser(mainWindow, {
+    onStateChange: scheduleChatterBrowserRegistrySync,
+  });
   youtubeMusicBrowser = new ChatterBrowser(mainWindow, {
     homeUrl: 'https://music.youtube.com/',
     stateChannel: 'youtube-music:state',
@@ -1020,13 +1079,16 @@ function createWindow() {
     detachedToolWindows.clear();
     chatterBrowser?.destroy();
     chatterBrowser = null;
+    if (chatterBrowserRegistryTimer) clearTimeout(chatterBrowserRegistryTimer);
+    chatterBrowserRegistryTimer = null;
+    chatterBrowserRegistryRun += 1;
     youtubeMusicBrowser?.destroy();
     youtubeMusicBrowser = null;
     for (const session of [...searchSessions.values()]) {
-      closeBrowserSession(searchSessions, 'web_search', session.chatId, 'shutdown');
+      closeBrowserSession(searchSessions, 'web_search', session, 'shutdown');
     }
     for (const session of [...googleAiSessions.values()]) {
-      closeBrowserSession(googleAiSessions, 'google_ai', session.chatId, 'shutdown');
+      closeBrowserSession(googleAiSessions, 'google_ai', session, 'shutdown');
     }
     browserSessionRegistry.clear();
     mainWindow = null;
@@ -1069,27 +1131,35 @@ function createWindow() {
 
   ipcMain.handle('search-browser:search', async (event, payload: BrowserSearchPayload) => {
     assertTrustedIpcSender(event);
-    const chatId = Number.isInteger(payload?.chat_id) && Number(payload.chat_id) > 0 ? Number(payload.chat_id) : null;
-    const session = getBrowserSession(searchSessions, 'web_search', chatId, createSearchBrowser);
-    clearBrowserIdleTimer(session);
-    const { browser, preview } = session;
-    dismissChallengeForBrowser(browser);
-    const previewRun = preview.start(browser, { chatId });
-    let challengeShown = false;
+    const previousSearch = searchQueue;
+    let releaseSearch!: () => void;
+    searchQueue = new Promise<void>((resolve) => { releaseSearch = resolve; });
+    await previousSearch;
     try {
-      const result = await browser.search(payload) as { challenge?: string };
-      preview.stop(browser, previewRun);
-      if (result?.challenge === 'captcha') {
-        challengeShown = true;
-        browserSessionRegistry.setStatus('web_search', chatId, 'challenge');
-        showSearchChallengeWindow(browser);
+      const chatId = Number.isInteger(payload?.chat_id) && Number(payload.chat_id) > 0 ? Number(payload.chat_id) : null;
+      const session = getSharedSearchSession(chatId);
+      clearBrowserIdleTimer(session);
+      const { browser, preview } = session;
+      dismissChallengeForBrowser(browser);
+      const previewRun = preview.start(browser, { chatId });
+      let challengeShown = false;
+      try {
+        const result = await browser.search(payload) as { challenge?: string };
+        preview.stop(browser, previewRun);
+        if (result?.challenge === 'captcha') {
+          challengeShown = true;
+          browserSessionRegistry.setStatus('web_search', chatId, 'challenge');
+          showSearchChallengeWindow(browser);
+        }
+        return result;
+      } finally {
+        preview.stop(browser, previewRun);
+        if (!challengeShown && searchSessions.get(session.key) === session) {
+          scheduleBrowserIdleClose(searchSessions, 'web_search', session, SEARCH_IDLE_TIMEOUT_MS);
+        }
       }
-      return result;
     } finally {
-      preview.stop(browser, previewRun);
-      if (!challengeShown && searchSessions.get(browserSessionKey(chatId)) === session) {
-        scheduleBrowserIdleClose(searchSessions, 'web_search', session, SEARCH_IDLE_TIMEOUT_MS);
-      }
+      releaseSearch();
     }
   });
 
@@ -1097,7 +1167,8 @@ function createWindow() {
     assertTrustedIpcSender(event);
     const chatId = Number.isInteger(payload?.chat_id) && Number(payload.chat_id) > 0 ? Number(payload.chat_id) : null;
     if (payload?.action === 'close_session') {
-      return { status: 'session_closed', closed: closeBrowserSession(googleAiSessions, 'google_ai', chatId, 'explicit') };
+      const session = googleAiSessions.get(browserSessionKey(chatId));
+      return { status: 'session_closed', closed: session ? closeBrowserSession(googleAiSessions, 'google_ai', session, 'explicit') : false };
     }
     const session = getBrowserSession(googleAiSessions, 'google_ai', chatId, createGoogleAiBrowser);
     clearBrowserIdleTimer(session);
@@ -1134,7 +1205,7 @@ function createWindow() {
   ipcMain.handle('browser-sessions:open', (event, payload: { id?: string }) => {
     assertTrustedIpcSender(event);
     const id = `${payload?.id || ''}`;
-    const source: BrowserPreviewSource | null = id.startsWith('web_search:')
+    const source: 'web_search' | 'google_ai' | null = id.startsWith('web_search:')
       ? 'web_search'
       : id.startsWith('google_ai:') ? 'google_ai' : null;
     if (!source) return { opened: false };
@@ -1168,7 +1239,7 @@ function createWindow() {
     viewer.on('resize', syncBounds);
     viewer.on('closed', () => {
       browserSessionWindows.delete(id);
-      if (sessions.get(browserSessionKey(session.chatId)) === session) {
+      if (sessions.get(session.key) === session) {
         session.preview.releaseHost(session.browser, viewer);
         scheduleBrowserIdleClose(
           sessions,

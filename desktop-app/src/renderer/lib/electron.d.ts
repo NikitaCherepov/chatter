@@ -30,7 +30,7 @@ declare global {
         chat_id?: number;
       }) => Promise<any>;
       cancelGoogleAi: (chatId?: number) => Promise<{ cancelled: boolean }>;
-      onBrowserActivityPreview: (callback: (payload: { active: boolean; source?: 'google_ai' | 'web_search'; chatId: number | null; image?: string }) => void) => () => void;
+      onBrowserActivityPreview: (callback: (payload: { active: boolean; source?: 'browser' | 'google_ai' | 'web_search'; chatId: number | null; image?: string }) => void) => () => void;
       setActiveBrowserChat: (chatId: number | null) => Promise<{ activeChatId: number | null; sessions: BrowserSessionSnapshot[] }>;
       openBrowserSession: (id: string) => Promise<{ opened: boolean }>;
       onBrowserSessionsChanged: (callback: (payload: { activeChatId: number | null; sessions: BrowserSessionSnapshot[] }) => void) => () => void;
@@ -119,8 +119,9 @@ type BrowserBounds = { x: number; y: number; width: number; height: number };
 type BrowserSessionSnapshot = {
   id: string;
   chatId: number | null;
-  source: 'google_ai' | 'web_search';
+  source: 'browser' | 'google_ai' | 'web_search';
   status: 'working' | 'idle' | 'challenge';
+  openTarget: { type: 'browser_session' } | { type: 'app_tool'; toolId: string; title?: string };
   image?: string;
   title?: string;
   updatedAt: number;

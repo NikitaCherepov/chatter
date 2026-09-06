@@ -39,6 +39,7 @@ export type ChatterBrowserOptions = {
   stateChannel?: string;
   partition?: string;
   backgroundSize?: { width: number; height: number };
+  onStateChange?: (state: BrowserState) => void;
 };
 
 export type BrowserSearchPayload = {
@@ -278,11 +279,13 @@ export class ChatterBrowser {
   private clickToken: CancellationToken | null = null;
   private readonly homeUrl: string;
   private readonly stateChannel: string;
+  private readonly onStateChange?: (state: BrowserState) => void;
 
   constructor(host: BrowserWindow, options: ChatterBrowserOptions = {}) {
     this.host = host;
     this.homeUrl = options.homeUrl || HOME_URL;
     this.stateChannel = options.stateChannel || 'browser:state';
+    this.onStateChange = options.onStateChange;
     this.view = new WebContentsView({
       webPreferences: {
         partition: options.partition || 'persist:chatter-browser',
@@ -386,9 +389,27 @@ export class ChatterBrowser {
     try {
       const image = await contents.capturePage();
       if (image.isEmpty()) return null;
-      const resized = image.resize({
-        width: Math.max(32, Math.floor(width)),
-        height: Math.max(32, Math.floor(height)),
+      const targetWidth = Math.max(32, Math.floor(width));
+      const targetHeight = Math.max(32, Math.floor(height));
+      const targetRatio = targetWidth / targetHeight;
+      const sourceSize = image.getSize();
+      const sourceRatio = sourceSize.width / sourceSize.height;
+      const crop = sourceRatio > targetRatio
+        ? {
+            x: Math.floor((sourceSize.width - sourceSize.height * targetRatio) / 2),
+            y: 0,
+            width: Math.floor(sourceSize.height * targetRatio),
+            height: sourceSize.height,
+          }
+        : {
+            x: 0,
+            y: Math.floor((sourceSize.height - sourceSize.width / targetRatio) / 2),
+            width: sourceSize.width,
+            height: Math.floor(sourceSize.width / targetRatio),
+          };
+      const resized = image.crop(crop).resize({
+        width: targetWidth,
+        height: targetHeight,
         quality: 'good',
       });
       return `data:image/jpeg;base64,${resized.toJPEG(58).toString('base64')}`;
@@ -1465,7 +1486,9 @@ export class ChatterBrowser {
 
   private emitState(): void {
     if (this.host.isDestroyed()) return;
-    this.host.webContents.send(this.stateChannel, this.getState());
+    const state = this.getState();
+    this.host.webContents.send(this.stateChannel, state);
+    this.onStateChange?.(state);
   }
 
   private setMainDocumentReady(ready: boolean): void {
