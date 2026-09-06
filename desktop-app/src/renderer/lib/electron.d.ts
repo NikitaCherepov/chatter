@@ -30,10 +30,12 @@ declare global {
         chat_id?: number;
       }) => Promise<any>;
       cancelGoogleAi: (chatId?: number) => Promise<{ cancelled: boolean }>;
-      onBrowserActivityPreview: (callback: (payload: { active: boolean; source?: 'browser' | 'google_ai' | 'web_search'; chatId: number | null; image?: string }) => void) => () => void;
-      setActiveBrowserChat: (chatId: number | null) => Promise<{ activeChatId: number | null; sessions: BrowserSessionSnapshot[] }>;
+      onBackgroundActivityPreview: (callback: (payload: { active: boolean; activityId?: string; chatId: number | null; image?: string }) => void) => () => void;
+      setActiveBackgroundChat: (chatId: number | null) => Promise<{ activeChatId: number | null; activities: BackgroundActivitySnapshot[] }>;
+      upsertBackgroundActivity: (payload: BackgroundActivityInput) => Promise<{ activeChatId: number | null; activities: BackgroundActivitySnapshot[] }>;
+      removeBackgroundActivity: (id: string) => Promise<{ activeChatId: number | null; activities: BackgroundActivitySnapshot[] }>;
       openBrowserSession: (id: string) => Promise<{ opened: boolean }>;
-      onBrowserSessionsChanged: (callback: (payload: { activeChatId: number | null; sessions: BrowserSessionSnapshot[] }) => void) => () => void;
+      onBackgroundActivitiesChanged: (callback: (payload: { activeChatId: number | null; activities: BackgroundActivitySnapshot[] }) => void) => () => void;
       onBrowserState: (callback: (payload: BrowserState) => void) => () => void;
       youtubeMusicGetState: () => Promise<BrowserState>;
       youtubeMusicSetVisible: (payload: { visible: boolean; ownerId: string; bounds?: BrowserBounds }) => Promise<BrowserState>;
@@ -116,16 +118,17 @@ declare global {
 
 type BrowserBounds = { x: number; y: number; width: number; height: number };
 
-type BrowserSessionSnapshot = {
+type BackgroundActivitySnapshot = {
   id: string;
   chatId: number | null;
-  source: 'browser' | 'google_ai' | 'web_search';
+  title: string;
   status: 'working' | 'idle' | 'challenge';
-  openTarget: { type: 'browser_session' } | { type: 'app_tool'; toolId: string; title?: string };
+  openTarget: { type: 'browser_session'; sessionId: string } | { type: 'app_tool'; toolId: string; title?: string };
   image?: string;
-  title?: string;
   updatedAt: number;
 };
+
+type BackgroundActivityInput = Omit<BackgroundActivitySnapshot, 'updatedAt'> & { updatedAt?: number };
 
 type BrowserState = {
   url: string;

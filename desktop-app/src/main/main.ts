@@ -11,7 +11,11 @@ import ffmpegStatic from 'ffmpeg-static';
 import { WakeWordOnnxService } from './wakeword';
 import { ChatterBrowser, type BrowserControlPayload, type BrowserSearchPayload, type GoogleAiPayload } from './browser';
 import { BrowserPreviewSession, type BrowserPreviewPayload, type BrowserPreviewSource } from './browser-preview';
-import { BrowserSessionRegistry, type BrowserSessionRegistrySnapshot } from './browser-session-registry';
+import {
+  BackgroundActivityRegistry,
+  type ActiveBackgroundActivityPreview,
+  type BackgroundActivitySnapshot,
+} from './background-activity-registry';
 
 const execFileAsync = util.promisify(execFile);
 
@@ -359,20 +363,25 @@ function createGoogleAiBrowser(): ChatterBrowser {
   });
 }
 
-function sendBrowserPreview(payload: BrowserPreviewPayload): void {
+function sendActiveBackgroundActivityPreview(payload: ActiveBackgroundActivityPreview): void {
   if (!mainWindow || mainWindow.isDestroyed()) return;
-  mainWindow.webContents.send('browser-activity:preview', payload);
+  mainWindow.webContents.send('background-activity:preview', payload);
 }
 
-function sendBrowserSessionState(snapshot: BrowserSessionRegistrySnapshot): void {
+function sendBackgroundActivityState(snapshot: BackgroundActivitySnapshot): void {
   if (!mainWindow || mainWindow.isDestroyed()) return;
-  mainWindow.webContents.send('browser-sessions:changed', snapshot);
+  mainWindow.webContents.send('background-activities:changed', snapshot);
 }
 
-const browserSessionRegistry = new BrowserSessionRegistry({
-  emitState: sendBrowserSessionState,
-  emitActivePreview: sendBrowserPreview,
+const backgroundActivityRegistry = new BackgroundActivityRegistry({
+  emitState: sendBackgroundActivityState,
+  emitActivePreview: sendActiveBackgroundActivityPreview,
 });
+
+const appToolActivityId = (toolId: string): string => `app-tool:${toolId}`;
+const browserSessionActivityId = (source: BrowserPreviewSource, chatId: number | null): string => (
+  `browser-session:${source}:${chatId ?? 'unscoped'}`
+);
 
 let chatterBrowserRegistryTimer: ReturnType<typeof setTimeout> | null = null;
 let chatterBrowserRegistryRun = 0;
@@ -386,18 +395,24 @@ function scheduleChatterBrowserRegistrySync(): void {
     if (!browser) return;
     const state = browser.getState();
     if (!state.url || state.url === 'about:blank') {
-      browserSessionRegistry.remove('browser', null);
+      backgroundActivityRegistry.remove(appToolActivityId('browser'));
       return;
     }
     const status = state.isLoading ? 'working' : 'idle';
-    browserSessionRegistry.setStatus('browser', null, status, {
+    backgroundActivityRegistry.upsert({
+      id: appToolActivityId('browser'),
+      chatId: null,
+      status,
       title: state.title || state.url,
       openTarget: { type: 'app_tool', toolId: 'browser', title: 'Browser' },
     });
     void browser.capturePreview().then((image) => {
       if (run !== chatterBrowserRegistryRun || chatterBrowser !== browser || !image) return;
       const latest = browser.getState();
-      browserSessionRegistry.setStatus('browser', null, latest.isLoading ? 'working' : 'idle', {
+      backgroundActivityRegistry.upsert({
+        id: appToolActivityId('browser'),
+        chatId: null,
+        status: latest.isLoading ? 'working' : 'idle',
         image,
         title: latest.title || latest.url,
         openTarget: { type: 'app_tool', toolId: 'browser', title: 'Browser' },
@@ -411,7 +426,21 @@ function createBrowserPreview(source: BrowserPreviewSource): BrowserPreviewSessi
   return new BrowserPreviewSession({
     source,
     getMainWindow: () => mainWindow,
-    emit: (payload) => browserSessionRegistry.updatePreview(payload),
+    emit: updateBrowserBackgroundActivity,
+  });
+}
+
+function updateBrowserBackgroundActivity(payload: BrowserPreviewPayload): void {
+  if (!payload.source) return;
+  const id = browserSessionActivityId(payload.source, payload.chatId);
+  const previous = backgroundActivityRegistry.get(id);
+  backgroundActivityRegistry.upsert({
+    id,
+    chatId: payload.chatId,
+    title: payload.source === 'google_ai' ? 'Google AI' : 'Web search',
+    status: payload.active ? 'working' : previous?.status === 'challenge' ? 'challenge' : 'idle',
+    image: payload.image ?? previous?.image,
+    openTarget: { type: 'browser_session', sessionId: id },
   });
 }
 
@@ -447,14 +476,14 @@ function getSharedSearchSession(chatId: number | null): DesktopBrowserSession {
     return session;
   }
   if (session.chatId !== chatId) {
-    const previousId = BrowserSessionRegistry.sessionId('web_search', session.chatId);
+    const previousId = browserSessionActivityId('web_search', session.chatId);
     const previousViewer = browserSessionWindows.get(previousId);
     // Temporarily detach the shared session so the viewer's close handler does
     // not re-arm its idle timer under the old chat identity.
     searchSessions.delete(key);
     browserSessionWindows.delete(previousId);
     if (previousViewer && !previousViewer.isDestroyed()) previousViewer.close();
-    browserSessionRegistry.remove('web_search', session.chatId);
+    backgroundActivityRegistry.remove(previousId);
     session.chatId = chatId;
     searchSessions.set(key, session);
   }
@@ -476,7 +505,7 @@ function closeBrowserSession(
   const { chatId } = session;
   clearBrowserIdleTimer(session);
   sessions.delete(session.key);
-  const registryId = BrowserSessionRegistry.sessionId(source, chatId);
+  const registryId = browserSessionActivityId(source, chatId);
   const viewer = browserSessionWindows.get(registryId);
   if (viewer && !viewer.isDestroyed()) viewer.close();
   browserSessionWindows.delete(registryId);
@@ -487,7 +516,7 @@ function closeBrowserSession(
   session.preview.release(session.browser);
   session.preview.destroy();
   session.browser.destroy();
-  browserSessionRegistry.remove(source, chatId);
+  backgroundActivityRegistry.remove(registryId);
   console.log(`[${source}] desktop browser session closed`, { chatId, reason });
   return true;
 }
@@ -499,7 +528,7 @@ function scheduleBrowserIdleClose(
   timeoutMs: number,
 ): void {
   clearBrowserIdleTimer(session);
-  const viewer = browserSessionWindows.get(BrowserSessionRegistry.sessionId(source, session.chatId));
+  const viewer = browserSessionWindows.get(browserSessionActivityId(source, session.chatId));
   if (viewer && !viewer.isDestroyed()) return;
   session.idleTimer = setTimeout(() => {
     session.idleTimer = null;
@@ -561,10 +590,12 @@ function showSearchChallengeWindow(
     const searchSession = [...searchSessions.values()].find((session) => session.browser === closedBrowser);
     const googleAiSession = [...googleAiSessions.values()].find((session) => session.browser === closedBrowser);
     if (searchSession) {
-      browserSessionRegistry.setStatus('web_search', searchSession.chatId, 'idle');
+      backgroundActivityRegistry.setStatus(browserSessionActivityId('web_search', searchSession.chatId), 'idle');
       scheduleBrowserIdleClose(searchSessions, 'web_search', searchSession, SEARCH_IDLE_TIMEOUT_MS);
     }
-    if (googleAiSession) browserSessionRegistry.setStatus('google_ai', googleAiSession.chatId, 'idle');
+    if (googleAiSession) {
+      backgroundActivityRegistry.setStatus(browserSessionActivityId('google_ai', googleAiSession.chatId), 'idle');
+    }
   });
 
   syncBounds();
@@ -1090,7 +1121,7 @@ function createWindow() {
     for (const session of [...googleAiSessions.values()]) {
       closeBrowserSession(googleAiSessions, 'google_ai', session, 'shutdown');
     }
-    browserSessionRegistry.clear();
+    backgroundActivityRegistry.clear();
     mainWindow = null;
   });
 
@@ -1148,7 +1179,7 @@ function createWindow() {
         preview.stop(browser, previewRun);
         if (result?.challenge === 'captcha') {
           challengeShown = true;
-          browserSessionRegistry.setStatus('web_search', chatId, 'challenge');
+          backgroundActivityRegistry.setStatus(browserSessionActivityId('web_search', chatId), 'challenge');
           showSearchChallengeWindow(browser);
         }
         return result;
@@ -1179,7 +1210,7 @@ function createWindow() {
       const result = await browser.googleAi(payload) as { challenge?: string };
       preview.stop(browser, previewRun);
       if (result?.challenge === 'captcha') {
-        browserSessionRegistry.setStatus('google_ai', chatId, 'challenge');
+        backgroundActivityRegistry.setStatus(browserSessionActivityId('google_ai', chatId), 'challenge');
         showSearchChallengeWindow(browser);
       }
       return result;
@@ -1197,21 +1228,63 @@ function createWindow() {
     return googleAiSessions.get(browserSessionKey(chatId))?.browser.cancelGoogleAi() || { cancelled: false };
   });
 
-  ipcMain.handle('browser-sessions:set-active-chat', (event, payload: { chatId?: number | null }) => {
+  ipcMain.handle('background-activities:set-active-chat', (event, payload: { chatId?: number | null }) => {
     assertTrustedIpcSender(event);
-    return browserSessionRegistry.setActiveChatId(payload?.chatId);
+    return backgroundActivityRegistry.setActiveChatId(payload?.chatId);
+  });
+
+  ipcMain.handle('background-activities:upsert', (event, payload: any) => {
+    assertTrustedIpcSender(event);
+    const id = `${payload?.id || ''}`.trim().slice(0, 160);
+    const title = `${payload?.title || ''}`.trim().slice(0, 160);
+    const status = payload?.status;
+    const target = payload?.openTarget;
+    if (!id || !title) throw new Error('invalid_background_activity');
+    if (status !== 'working' && status !== 'idle' && status !== 'challenge') {
+      throw new Error('invalid_background_activity_status');
+    }
+    const openTarget = target?.type === 'app_tool'
+      ? {
+          type: 'app_tool' as const,
+          toolId: `${target.toolId || ''}`.trim().slice(0, 120),
+          ...(`${target.title || ''}`.trim() ? { title: `${target.title}`.trim().slice(0, 160) } : {}),
+        }
+      : target?.type === 'browser_session'
+        ? { type: 'browser_session' as const, sessionId: `${target.sessionId || ''}`.trim().slice(0, 200) }
+        : null;
+    if (!openTarget || ('toolId' in openTarget ? !openTarget.toolId : !openTarget.sessionId)) {
+      throw new Error('invalid_background_activity_target');
+    }
+    const image = typeof payload?.image === 'string' && payload.image.length <= 2_000_000
+      ? payload.image
+      : undefined;
+    return backgroundActivityRegistry.upsert({
+      id,
+      chatId: payload?.chatId,
+      title,
+      status,
+      openTarget,
+      ...(image ? { image } : {}),
+    });
+  });
+
+  ipcMain.handle('background-activities:remove', (event, payload: { id?: string }) => {
+    assertTrustedIpcSender(event);
+    const id = `${payload?.id || ''}`.trim().slice(0, 160);
+    if (!id) throw new Error('invalid_background_activity');
+    return backgroundActivityRegistry.remove(id);
   });
 
   ipcMain.handle('browser-sessions:open', (event, payload: { id?: string }) => {
     assertTrustedIpcSender(event);
     const id = `${payload?.id || ''}`;
-    const source: 'web_search' | 'google_ai' | null = id.startsWith('web_search:')
+    const source: 'web_search' | 'google_ai' | null = id.startsWith('browser-session:web_search:')
       ? 'web_search'
-      : id.startsWith('google_ai:') ? 'google_ai' : null;
+      : id.startsWith('browser-session:google_ai:') ? 'google_ai' : null;
     if (!source) return { opened: false };
     const sessions = source === 'web_search' ? searchSessions : googleAiSessions;
     const session = [...sessions.values()].find((candidate) => (
-      BrowserSessionRegistry.sessionId(source, candidate.chatId) === id
+      browserSessionActivityId(source, candidate.chatId) === id
     ));
     if (!session) return { opened: false };
     const existing = browserSessionWindows.get(id);

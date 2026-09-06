@@ -37,14 +37,13 @@ function cacheMood(mood: BaseMood) {
 
 // ── Component ───────────────────────────────────────────────────────────────
 
-type BrowserSessionView = {
+type BackgroundActivityView = {
   id: string;
   chatId: number | null;
-  source: 'browser' | 'google_ai' | 'web_search';
+  title: string;
   status: 'working' | 'idle' | 'challenge';
-  openTarget: { type: 'browser_session' } | { type: 'app_tool'; toolId: string; title?: string };
+  openTarget: { type: 'browser_session'; sessionId: string } | { type: 'app_tool'; toolId: string; title?: string };
   image?: string;
-  title?: string;
   updatedAt: number;
 };
 
@@ -52,19 +51,15 @@ type PixelAvatarProps = {
   chatId?: number | null;
 };
 
-const sessionSourceLabel = (source: BrowserSessionView['source']) => (
-  source === 'browser' ? 'Browser' : source === 'google_ai' ? 'Google AI' : 'Web search'
-);
-
-const sessionStatusLabel = (status: BrowserSessionView['status']) => {
+const sessionStatusLabel = (status: BackgroundActivityView['status']) => {
   if (status === 'working') return 'Выполняется';
   if (status === 'challenge') return 'Нужна проверка';
   return 'Ожидает';
 };
 
 export function PixelAvatar({ chatId = null }: PixelAvatarProps) {
-  const [browserPreview, setBrowserPreview] = useState<{ active: boolean; source?: BrowserSessionView['source']; image?: string }>({ active: false });
-  const [browserSessions, setBrowserSessions] = useState<BrowserSessionView[]>([]);
+  const [activityPreview, setActivityPreview] = useState<{ active: boolean; activityId?: string; image?: string }>({ active: false });
+  const [backgroundActivities, setBackgroundActivities] = useState<BackgroundActivityView[]>([]);
   const [sessionDockOpen, setSessionDockOpen] = useState(false);
   const [sessionDockExpanded, setSessionDockExpanded] = useState(false);
   // -- State: Media layer (highest priority) --
@@ -210,12 +205,12 @@ export function PixelAvatar({ chatId = null }: PixelAvatarProps) {
   }, [applyState]);
 
   useEffect(() => {
-    const unsubscribe = window.electronAPI?.onBrowserActivityPreview?.((payload) => {
-      setBrowserPreview((current) => {
+    const unsubscribe = window.electronAPI?.onBackgroundActivityPreview?.((payload) => {
+      setActivityPreview((current) => {
         return {
           active: payload.active,
-          source: payload.active ? payload.source : undefined,
-          image: payload.image ?? (payload.active && current.source === payload.source ? current.image : undefined),
+          activityId: payload.active ? payload.activityId : undefined,
+          image: payload.image ?? (payload.active && current.activityId === payload.activityId ? current.image : undefined),
         };
       });
     });
@@ -223,15 +218,15 @@ export function PixelAvatar({ chatId = null }: PixelAvatarProps) {
   }, []);
 
   useEffect(() => {
-    setBrowserSessions([]);
+    setBackgroundActivities([]);
     setSessionDockOpen(false);
     setSessionDockExpanded(false);
 
-    const applySnapshot = (snapshot: { activeChatId: number | null; sessions: BrowserSessionView[] }) => {
-      if (snapshot.activeChatId === chatId) setBrowserSessions(snapshot.sessions);
+    const applySnapshot = (snapshot: { activeChatId: number | null; activities: BackgroundActivityView[] }) => {
+      if (snapshot.activeChatId === chatId) setBackgroundActivities(snapshot.activities);
     };
-    const unsubscribe = window.electronAPI?.onBrowserSessionsChanged?.(applySnapshot);
-    void window.electronAPI?.setActiveBrowserChat?.(chatId).then(applySnapshot).catch(() => {});
+    const unsubscribe = window.electronAPI?.onBackgroundActivitiesChanged?.(applySnapshot);
+    void window.electronAPI?.setActiveBackgroundChat?.(chatId).then(applySnapshot).catch(() => {});
     return () => unsubscribe?.();
   }, [chatId]);
 
@@ -253,15 +248,15 @@ export function PixelAvatar({ chatId = null }: PixelAvatarProps) {
     if (dockCloseTimerRef.current) clearTimeout(dockCloseTimerRef.current);
   }, []);
 
-  const openSession = useCallback((session: BrowserSessionView) => {
-    if (session.openTarget.type === 'app_tool') {
-      openToolInLastLayout(session.openTarget.toolId, {
-        title: session.openTarget.title || session.title || session.openTarget.toolId,
+  const openActivity = useCallback((activity: BackgroundActivityView) => {
+    if (activity.openTarget.type === 'app_tool') {
+      openToolInLastLayout(activity.openTarget.toolId, {
+        title: activity.openTarget.title || activity.title || activity.openTarget.toolId,
         activeChatId: chatId,
       });
       return;
     }
-    void window.electronAPI.openBrowserSession(session.id);
+    void window.electronAPI.openBrowserSession(activity.openTarget.sessionId);
   }, [chatId]);
 
   // ── Determine what to render (priority: media > loop > reaction queue > base + blink) ─
@@ -277,11 +272,11 @@ export function PixelAvatar({ chatId = null }: PixelAvatarProps) {
       onMouseEnter={showSessionDock}
       onMouseLeave={scheduleSessionDockClose}
     >
-      <div className={`${s.avatarFrame} ${browserPreview.active ? s.browserPreviewActive : ''}`}>
-        {browserPreview.active ? (
+      <div className={`${s.avatarFrame} ${activityPreview.active ? s.browserPreviewActive : ''}`}>
+        {activityPreview.active ? (
           <>
-            {browserPreview.image
-              ? <img className={s.browserPreview} src={browserPreview.image} alt="" draggable={false} />
+            {activityPreview.image
+              ? <img className={s.browserPreview} src={activityPreview.image} alt="" draggable={false} />
               : <div className={s.browserPreviewLoading} />}
             <span className={s.browserPreviewIndicator} />
           </>
@@ -296,7 +291,7 @@ export function PixelAvatar({ chatId = null }: PixelAvatarProps) {
         )}
       </div>
       <AnimatePresence>
-      {sessionDockOpen && browserSessions.length > 0 && (
+      {sessionDockOpen && backgroundActivities.length > 0 && (
         <motion.div
           className={s.sessionDock}
           initial={{ width: 64, opacity: 0, y: 16, scale: 0.96 }}
@@ -317,16 +312,16 @@ export function PixelAvatar({ chatId = null }: PixelAvatarProps) {
           onMouseLeave={() => setSessionDockExpanded(false)}
         >
           <div className={s.sessionDockList}>
-            {browserSessions.map((session, index) => (
+            {backgroundActivities.map((activity, index) => (
               <motion.button
-                key={session.id}
+                key={activity.id}
                 type="button"
                 className={s.sessionRow}
                 initial={{ opacity: 0, y: 14 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 8 }}
                 transition={{ duration: 0.16, delay: index * 0.045, ease: 'easeOut' }}
-                onClick={() => openSession(session)}
+                onClick={() => openActivity(activity)}
               >
                 <motion.span
                   className={s.sessionInfoCard}
@@ -335,23 +330,23 @@ export function PixelAvatar({ chatId = null }: PixelAvatarProps) {
                 >
                   <span className={s.sessionMeta}>
                     <span className={s.sessionTitle}>
-                      {session.openTarget.type === 'app_tool'
-                        ? session.openTarget.title || session.openTarget.toolId
-                        : sessionSourceLabel(session.source)}
+                      {activity.openTarget.type === 'app_tool'
+                        ? activity.openTarget.title || activity.title || activity.openTarget.toolId
+                        : activity.title}
                     </span>
-                    <span className={`${s.sessionStatus} ${s[`sessionStatus_${session.status}`]}`}>
+                    <span className={`${s.sessionStatus} ${s[`sessionStatus_${activity.status}`]}`}>
                       <span className={s.sessionStatusDot} />
-                      {sessionStatusLabel(session.status)}
+                      {sessionStatusLabel(activity.status)}
                     </span>
                   </span>
                   <span className={s.sessionOpen}>↗</span>
                 </motion.span>
                 <span className={s.sessionThumbnail}>
-                  {session.image
-                    ? <img src={session.image} alt="" draggable={false} />
-                    : <span>{session.openTarget.type === 'app_tool'
-                      ? session.openTarget.toolId.slice(0, 1).toUpperCase()
-                      : session.source === 'google_ai' ? 'G' : '⌕'}</span>}
+                  {activity.image
+                    ? <img src={activity.image} alt="" draggable={false} />
+                    : <span>{(activity.openTarget.type === 'app_tool'
+                      ? activity.openTarget.toolId
+                      : activity.title).slice(0, 1).toUpperCase()}</span>}
                 </span>
               </motion.button>
             ))}

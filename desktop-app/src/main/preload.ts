@@ -58,19 +58,23 @@ contextBridge.exposeInMainWorld('electronAPI', {
     chat_id?: number;
   }) => ipcRenderer.invoke('google-ai:control', payload),
   cancelGoogleAi: (chatId?: number) => ipcRenderer.invoke('google-ai:cancel', { chat_id: chatId }),
-  onBrowserActivityPreview: (callback: (payload: unknown) => void) => {
+  onBackgroundActivityPreview: (callback: (payload: unknown) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, payload: unknown) => callback(payload);
-    ipcRenderer.on('browser-activity:preview', handler);
-    return () => ipcRenderer.removeListener('browser-activity:preview', handler);
+    ipcRenderer.on('background-activity:preview', handler);
+    return () => ipcRenderer.removeListener('background-activity:preview', handler);
   },
-  setActiveBrowserChat: (chatId: number | null) =>
-    ipcRenderer.invoke('browser-sessions:set-active-chat', { chatId }),
+  setActiveBackgroundChat: (chatId: number | null) =>
+    ipcRenderer.invoke('background-activities:set-active-chat', { chatId }),
+  upsertBackgroundActivity: (payload: unknown) =>
+    ipcRenderer.invoke('background-activities:upsert', payload),
+  removeBackgroundActivity: (id: string) =>
+    ipcRenderer.invoke('background-activities:remove', { id }),
   openBrowserSession: (id: string) =>
     ipcRenderer.invoke('browser-sessions:open', { id }),
-  onBrowserSessionsChanged: (callback: (payload: unknown) => void) => {
+  onBackgroundActivitiesChanged: (callback: (payload: unknown) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, payload: unknown) => callback(payload);
-    ipcRenderer.on('browser-sessions:changed', handler);
-    return () => ipcRenderer.removeListener('browser-sessions:changed', handler);
+    ipcRenderer.on('background-activities:changed', handler);
+    return () => ipcRenderer.removeListener('background-activities:changed', handler);
   },
   onBrowserState: (callback: (payload: unknown) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, payload: unknown) => callback(payload);
