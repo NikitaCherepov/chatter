@@ -683,7 +683,8 @@
       "cameraAccess": "摄像头访问",
       "emailSend": "发送电子邮件至 {{to}}：{{subject}}",
       "credentialsUpdate": "更新 {{server}} 的服务器凭据",
-      "downloadFile": "下载 {{filename}}"
+      "downloadFile": "下载 {{filename}}",
+      "searchVerification": "完成搜索验证"
     },
     "logoutDialog": {
       "title": "退出登录？",

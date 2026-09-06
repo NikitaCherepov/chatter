@@ -683,7 +683,8 @@
       "cameraAccess": "Accès à la caméra",
       "emailSend": "Envoyer un e-mail à {{to}} : {{subject}}",
       "credentialsUpdate": "Mettre à jour les identifiants du serveur pour {{server}}",
-      "downloadFile": "Télécharger {{filename}}"
+      "downloadFile": "Télécharger {{filename}}",
+      "searchVerification": "Terminer la vérification de recherche"
     },
     "logoutDialog": {
       "title": "Se déconnecter ?",

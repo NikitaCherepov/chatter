@@ -683,7 +683,8 @@
       "cameraAccess": "カメラアクセス",
       "emailSend": "{{to}} にメールを送信: {{subject}}",
       "credentialsUpdate": "{{server}} のサーバー資格情報を更新",
-      "downloadFile": "{{filename}} をダウンロード"
+      "downloadFile": "{{filename}} をダウンロード",
+      "searchVerification": "検索の確認を完了する"
     },
     "logoutDialog": {
       "title": "ログアウトしますか?",

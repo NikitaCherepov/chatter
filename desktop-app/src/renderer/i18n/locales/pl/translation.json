@@ -1004,7 +1004,8 @@
       "cameraAccess": "Dostęp do kamery",
       "emailSend": "Wyślij e-mail do {{to}}: {{subject}}",
       "credentialsUpdate": "Zaktualizuj poświadczenia serwera dla {{server}}",
-      "downloadFile": "Pobierz {{filename}}"
+      "downloadFile": "Pobierz {{filename}}",
+      "searchVerification": "Ukończ weryfikację wyszukiwania"
     },
     "logoutDialog": {
       "title": "Wylogować się?",

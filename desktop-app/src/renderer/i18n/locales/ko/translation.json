@@ -1004,7 +1004,8 @@
       "cameraAccess": "카메라 액세스",
       "emailSend": "{{to}}에게 이메일 보내기: {{subject}}",
       "credentialsUpdate": "{{server}}의 서버 자격 증명 업데이트",
-      "downloadFile": "{{filename}} 다운로드"
+      "downloadFile": "{{filename}} 다운로드",
+      "searchVerification": "검색 인증 완료"
     },
     "logoutDialog": {
       "title": "로그아웃하시겠습니까?",

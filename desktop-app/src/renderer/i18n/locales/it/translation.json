@@ -1004,7 +1004,8 @@
       "cameraAccess": "Accesso alla fotocamera",
       "emailSend": "Invia email a {{to}}: {{subject}}",
       "credentialsUpdate": "Aggiorna le credenziali del server per {{server}}",
-      "downloadFile": "Scarica {{filename}}"
+      "downloadFile": "Scarica {{filename}}",
+      "searchVerification": "Completa la verifica di ricerca"
     },
     "logoutDialog": {
       "title": "Disconnettersi?",

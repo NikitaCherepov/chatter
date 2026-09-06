@@ -504,7 +504,8 @@
       "cameraAccess": "Доступ к камере",
       "emailSend": "Отправка письма для {{to}}: {{subject}}",
       "credentialsUpdate": "Изменение данных доступа к серверу {{server}}",
-      "downloadFile": "Скачивание файла {{filename}}"
+      "downloadFile": "Скачивание файла {{filename}}",
+      "searchVerification": "Завершите проверку поиска"
     },
     "logoutDialog": {
       "title": "Выйти из аккаунта?",
@@ -516,9 +517,24 @@
       "automatic": "Автоматический выбор",
       "freeBadge": "бесплатная",
       "meta": {
-        "intel": { "label": "Ум", "low": "базовый", "mid": "средний", "high": "умный" },
-        "speed": { "label": "Скорость", "low": "медленная", "mid": "средняя", "high": "быстрая" },
-        "price": { "label": "Цена", "low": "дёшево", "mid": "средне", "high": "дорого" }
+        "intel": {
+          "label": "Ум",
+          "low": "базовый",
+          "mid": "средний",
+          "high": "умный"
+        },
+        "speed": {
+          "label": "Скорость",
+          "low": "медленная",
+          "mid": "средняя",
+          "high": "быстрая"
+        },
+        "price": {
+          "label": "Цена",
+          "low": "дёшево",
+          "mid": "средне",
+          "high": "дорого"
+        }
       }
     },
     "messages": {

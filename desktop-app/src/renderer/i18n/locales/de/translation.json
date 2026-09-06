@@ -683,7 +683,8 @@
       "cameraAccess": "Kamerazugriff",
       "emailSend": "E-Mail an {{to}} senden: {{subject}}",
       "credentialsUpdate": "Serveranmeldeinformationen für {{server}} aktualisieren",
-      "downloadFile": "{{filename}} herunterladen"
+      "downloadFile": "{{filename}} herunterladen",
+      "searchVerification": "Suchüberprüfung abschließen"
     },
     "logoutDialog": {
       "title": "Abmelden?",

@@ -1004,7 +1004,8 @@
       "cameraAccess": "Přístup ke kameře",
       "emailSend": "Odeslat e-mail na adresu {{to}}: {{subject}}",
       "credentialsUpdate": "Aktualizovat přihlašovací údaje serveru pro {{server}}",
-      "downloadFile": "Stáhnout {{filename}}"
+      "downloadFile": "Stáhnout {{filename}}",
+      "searchVerification": "Dokončit ověření vyhledávání"
     },
     "logoutDialog": {
       "title": "Odhlásit se?",

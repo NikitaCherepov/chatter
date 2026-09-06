@@ -1004,7 +1004,8 @@
       "cameraAccess": "Kamera erişimi",
       "emailSend": "{{to}} adresine e-posta gönder: {{subject}}",
       "credentialsUpdate": "{{server}} için sunucu kimlik bilgilerini güncelle",
-      "downloadFile": "{{filename}} dosyasını indir"
+      "downloadFile": "{{filename}} dosyasını indir",
+      "searchVerification": "Arama doğrulamasını tamamlayın"
     },
     "logoutDialog": {
       "title": "Çıkış yapılsın mı?",
