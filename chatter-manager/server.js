@@ -140,6 +140,13 @@ let backupPromise = null;
 let restorePromise = null;
 let updatePromise = null;
 let activeLogStreams = 0;
+let deploymentLock = Promise.resolve();
+
+function runDeploymentExclusive(operation) {
+  const result = deploymentLock.then(operation, operation);
+  deploymentLock = result.catch(() => {});
+  return result;
+}
 
 const randomSecret = (bytes = 32) => crypto.randomBytes(bytes).toString('hex');
 const METRICS_MAX = 10080;
@@ -905,12 +912,17 @@ async function currentManagerImageReference() {
   return reference.trim();
 }
 
-function readBundledDeploymentFiles() {
-  if (!fs.existsSync(BUNDLED_COMPOSE_FILE)) throw new Error('bundled_compose_file_missing');
-  if (!fs.existsSync(BUNDLED_MANAGED_FILES_FILE)) throw new Error('bundled_managed_files_manifest_missing');
-
+async function readBundledDeploymentFiles(managerImage) {
+  const manifest = await runDocker([
+    'run', '--rm',
+    '--entrypoint', '/bin/sh',
+    managerImage,
+    '-c', `test -f '${BUNDLED_COMPOSE_FILE}' || exit 41
+test -f '${BUNDLED_MANAGED_FILES_FILE}' || exit 42
+cat '${BUNDLED_MANAGED_FILES_FILE}'`,
+  ], 60000, 0);
   const files = ['docker-compose.yml'];
-  const entries = fs.readFileSync(BUNDLED_MANAGED_FILES_FILE, 'utf8').split(/\r?\n/);
+  const entries = manifest.split(/\r?\n/);
   for (const entry of entries) {
     const relative = entry.replace(/#.*$/, '').trim().replace(/\\/g, '/');
     if (!relative) continue;
@@ -923,12 +935,6 @@ function readBundledDeploymentFiles() {
     if (!files.includes(relative)) files.push(relative);
   }
 
-  for (const relative of files) {
-    const source = path.join(BUNDLED_PROJECT_DIR, ...relative.split('/'));
-    if (!fs.existsSync(source) || !fs.statSync(source).isFile()) {
-      throw new Error(`bundled_deployment_file_missing:${relative}`);
-    }
-  }
   return files;
 }
 
@@ -943,17 +949,21 @@ function shellProfileArgs(profiles) {
 async function syncBundledDeploymentFiles(managerImage = '') {
   if (!serverUpdatesSupported()) return [];
 
-  const deploymentFiles = readBundledDeploymentFiles();
   const image = managerImage || await currentManagerImageReference();
+  const deploymentFiles = await readBundledDeploymentFiles(image);
   await runDocker([
-    'compose',
-    '--project-name', PROJECT_NAME,
-    '--project-directory', PROJECT_DIR,
-    '--env-file', COMPOSE_RUNTIME_ENV_FILE,
-    '-f', BUNDLED_COMPOSE_FILE,
-    '--profile', '*',
-    'config', '--format', 'json',
-  ], 30000);
+    'run', '--rm',
+    '--entrypoint', '/bin/sh',
+    '--env', 'BACKEND_ENV_FILE=/dev/null',
+    '--env', 'TELEGRAM_ENV_FILE=/dev/null',
+    '--env', 'VOICE_ENV_FILE=/dev/null',
+    '--env', 'CHATTER_MANAGER_ENV_FILE=/dev/null',
+    '--env', `CHATTER_IMAGE_PREFIX=${currentImagePrefix()}`,
+    '--env', `CHATTER_IMAGE_TAG=${currentImageTag()}`,
+    '--env', 'CHATTER_PUBLIC_HOST=localhost',
+    image,
+    '-c', `docker compose --profile '*' --project-directory '${BUNDLED_PROJECT_DIR}' -f '${BUNDLED_COMPOSE_FILE}' config --format json >/dev/null`,
+  ], 30000, 0);
 
   const syncCommands = deploymentFiles.map((relative) => {
     const source = `${BUNDLED_PROJECT_DIR}/${relative}`;
@@ -997,6 +1007,10 @@ ${syncCommands}`;
 
 async function launchComposeReconcileHelper(selection, forceRecreate) {
   const managerImage = selection.images['chatter-manager'] || await currentManagerImageReference();
+  // This is a bootstrap/deployment-file reconcile, not a version update. The
+  // running manager must stay alive while it owns the HTTP request and lock;
+  // a full server update replaces it later through launchServerUpdateHelper.
+  const reconcileServices = selection.services.filter(service => service !== 'chatter-manager');
   const forceArgs = forceRecreate ? ['--force-recreate'] : [];
   const baseComposeCommand = [
     'docker', 'compose', '--project-name', '"$COMPOSE_PROJECT_NAME"',
@@ -1006,13 +1020,13 @@ async function launchComposeReconcileHelper(selection, forceRecreate) {
     ...shellProfileArgs(selection.profiles),
   ];
   const listContainersCommand = [
-    ...baseComposeCommand,
-    'ps', '-a', '-q', ...selection.services.map(service => JSON.stringify(service)),
+    'docker', 'ps', '-a', '-q',
+    '--filter', 'label=com.docker.compose.project=$COMPOSE_PROJECT_NAME',
   ].join(' ');
   const composeCommand = [
     ...baseComposeCommand,
-    'up', '-d', '--no-build', '--pull', 'never', ...forceArgs,
-    ...selection.services.map(service => JSON.stringify(service)),
+    'up', '-d', '--no-build', '--pull', 'never', '--remove-orphans', ...forceArgs,
+    ...reconcileServices.map(service => JSON.stringify(service)),
   ].join(' ');
   const script = `set -eu
 sleep 2
@@ -1036,6 +1050,7 @@ docker image prune -f >> "$LOG_FILE" 2>&1 || true`;
 
   await runDocker([
     'run', '--detach', '--rm', '--name', `chatter-compose-reconciler-${Date.now()}`,
+    '--label', `io.chatter.compose-reconciler=${PROJECT_NAME}`,
     '--entrypoint', '/bin/sh',
     '--env', `HOST_PROJECT_DIR=${HOST_PROJECT_DIR}`,
     '--env', `HOST_CONFIG_DIR=${HOST_CONFIG_DIR}`,
@@ -1048,7 +1063,17 @@ docker image prune -f >> "$LOG_FILE" 2>&1 || true`;
   ], 60000);
 }
 
-async function reconcileNewComposeServices() {
+async function waitForComposeReconcileHelpers() {
+  const output = await runDocker([
+    'ps', '-q',
+    '--filter', `label=io.chatter.compose-reconciler=${PROJECT_NAME}`,
+  ], 30000);
+  const containerIds = output.split(/\r?\n/).filter(Boolean);
+  if (containerIds.length === 0) return;
+  await runDocker(['wait', ...containerIds], 10 * 60 * 1000);
+}
+
+async function reconcileNewComposeServicesUnlocked() {
   if (!serverUpdatesSupported()) return true;
   if (serverUpdateInProgress()) return false;
 
@@ -1102,6 +1127,10 @@ async function reconcileNewComposeServices() {
   return true;
 }
 
+function reconcileNewComposeServices() {
+  return runDeploymentExclusive(reconcileNewComposeServicesUnlocked);
+}
+
 function scheduleComposeBootstrap(attempt = 1) {
   setTimeout(() => {
     void reconcileNewComposeServices()
@@ -1150,9 +1179,19 @@ async function inspectRunningService(service, profiles) {
   const profileArgs = profiles.flatMap(profile => ['--profile', profile]);
   const containerId = await runDocker(composeArgs(...profileArgs, 'ps', '-a', '-q', service), 30000);
   if (!containerId) return null;
-  const imageId = await runDocker(['inspect', '--format', '{{.Image}}', containerId.split(/\r?\n/)[0]], 30000);
-  if (!imageId) return null;
-  return inspectImage(imageId);
+  // A tag can move while its old container is still running, and BuildKit or
+  // cleanup may already have removed the standalone image object. Container
+  // inspect keeps the immutable image ID and copied config labels, so update
+  // detection remains available even when `docker image inspect <old-id>` is not.
+  const output = await runDocker([
+    'inspect', '--format', '{{json .}}', containerId.split(/\r?\n/)[0],
+  ], 30000, 0);
+  const container = JSON.parse(output);
+  return {
+    id: `${container?.Image || ''}`,
+    revision: `${container?.Config?.Labels?.['org.opencontainers.image.revision'] || ''}`,
+    changelog: decodeImageChangelog(container?.Config?.Labels?.['io.chatter.server.changelog-base64']),
+  };
 }
 
 function shortImageHash(image) {
@@ -1161,7 +1200,7 @@ function shortImageHash(image) {
   return image.id.replace(/^sha256:/, '').slice(0, 12) || '—';
 }
 
-async function getServerUpdateInfo({ pull = false, forcePull = false } = {}) {
+async function getServerUpdateInfoUnlocked({ pull = false, forcePull = false } = {}) {
   const result = {
     supported: serverUpdatesSupported(),
     imageTag: currentImageTag(),
@@ -1175,16 +1214,24 @@ async function getServerUpdateInfo({ pull = false, forcePull = false } = {}) {
     operation: readUpdateState()
   };
   if (!result.supported) return result;
-  const selection = await updateServiceSelection();
-  const profileArgs = selection.profiles.flatMap(profile => ['--profile', profile]);
+  let selection;
   if (pull) {
     const now = Date.now();
     if (forcePull || now - lastPullTime >= PULL_COOLDOWN_MS) {
+      // The selected channel may contain a different service set. Pull its
+      // manager first and install the compose bundled in that exact image;
+      // only then discover and pull the rest of the target services.
+      const targetManagerImage = `${currentImagePrefix()}-manager:${currentImageTag()}`;
+      await runDocker(['pull', targetManagerImage], 60 * 60 * 1000);
+      await syncBundledDeploymentFiles(targetManagerImage);
+      selection = await updateServiceSelection();
+      const profileArgs = selection.profiles.flatMap(profile => ['--profile', profile]);
       await runDocker(composeArgs(...profileArgs, 'pull', ...selection.releaseServices), 60 * 60 * 1000);
       lastPullTime = now;
     }
     result.checkedAt = new Date().toISOString();
   }
+  if (!selection) selection = await updateServiceSelection();
   const comparisons = await Promise.all(selection.releaseServices.map(async (service) => {
     const [running, latest] = await Promise.all([
       inspectRunningService(service, selection.profiles),
@@ -1207,16 +1254,16 @@ async function getServerUpdateInfo({ pull = false, forcePull = false } = {}) {
   return result;
 }
 
+function getServerUpdateInfo(options) {
+  return runDeploymentExclusive(() => getServerUpdateInfoUnlocked(options));
+}
+
 async function launchServerUpdateHelper(targetHash, selection) {
   const managerImage = selection.images['chatter-manager'] || await currentManagerImageReference();
   const profileArgs = shellProfileArgs(selection.profiles);
   const listContainersCommand = [
-    'docker', 'compose', '--project-name', '"$COMPOSE_PROJECT_NAME"',
-    '--project-directory', '"$HOST_PROJECT_DIR"',
-    '--env-file', '"$HOST_CONFIG_DIR/compose.env"',
-    '-f', '"$HOST_PROJECT_DIR/docker-compose.yml"',
-    ...profileArgs,
-    'ps', '-a', '-q', ...selection.services
+    'docker', 'ps', '-a', '-q',
+    '--filter', 'label=com.docker.compose.project=$COMPOSE_PROJECT_NAME'
   ].join(' ');
   // Stop the running services BEFORE recreating them. Otherwise the backend
   // keeps chatter.db open and the recreation step fails with "database is
@@ -1237,7 +1284,7 @@ async function launchServerUpdateHelper(targetHash, selection) {
     '--env-file', '"$HOST_CONFIG_DIR/compose.env"',
     '-f', '"$HOST_PROJECT_DIR/docker-compose.yml"',
     ...profileArgs,
-    'up', '-d', '--no-build', '--pull', 'never', '--force-recreate', '--wait', '--wait-timeout', '180',
+    'up', '-d', '--no-build', '--pull', 'never', '--force-recreate', '--remove-orphans', '--wait', '--wait-timeout', '180',
     ...selection.services
   ].join(' ');
   const script = `set -eu
@@ -2206,10 +2253,18 @@ async function handleRequest(req, res) {
     if (!IMAGE_TAG_PATTERN.test(tag)) return sendJson(res, 400, { error: 'invalid_image_tag' });
     if (tag === 'local') return sendJson(res, 400, { error: 'invalid_image_tag' });
     try {
-      updateEnvFileValue(COMPOSE_ENV_FILE, 'CHATTER_IMAGE_TAG', tag);
-      updateEnvFileValue(COMPOSE_RUNTIME_ENV_FILE, 'CHATTER_IMAGE_TAG', tag);
+      await runDeploymentExclusive(async () => {
+        await waitForComposeReconcileHelpers();
+        // Do not persist a channel that cannot provide its manager. Keeping
+        // the old tag makes a typo, deleted tag, or incomplete publication a
+        // recoverable UI error instead of breaking every later Compose call.
+        const targetManagerImage = `${currentImagePrefix()}-manager:${tag}`;
+        await runDocker(['pull', targetManagerImage], 60 * 60 * 1000);
+        updateEnvFileValue(COMPOSE_ENV_FILE, 'CHATTER_IMAGE_TAG', tag);
+        updateEnvFileValue(COMPOSE_RUNTIME_ENV_FILE, 'CHATTER_IMAGE_TAG', tag);
+      });
     } catch (error) {
-      return sendJson(res, 500, { error: error.message || 'failed_to_persist_image_tag' });
+      return sendJson(res, 502, { error: error.message || 'target_update_channel_unavailable' });
     }
     lastPullTime = 0; // the next refresh should pull the new channel right away
     console.log(`[manager:server-update] image tag switched to '${tag}'`);
