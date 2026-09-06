@@ -160,17 +160,6 @@ const fetchDesktopPage = async (session: SearchSession, page: number, signal?: A
     if (response?.challenge === 'captcha') throw new Error('desktop_search_captcha_required');
     const results = Array.isArray(response?.results) ? response.results : [];
     recordWebSearchStat('desktop', '', results.length ? 'success' : 'empty', results.length);
-    console.info('[web-search] Desktop browser report', JSON.stringify({
-      page,
-      searchMode: session.mode,
-      searchType: session.searchType,
-      sort: session.sort,
-      freshness: session.freshness,
-      url: response?.url || '',
-      title: response?.title || '',
-      resultCount: results.length,
-      results: results.map((result, index) => ({ rank: index + 1, title: result.title || '', url: result.url || '' })),
-    }, null, 2));
     return results;
   } catch (error) {
     if (!signal?.aborted) recordWebSearchStat('desktop', '', 'failure', 0, errorMessage(error));
@@ -223,22 +212,6 @@ const fetchSearxngPage = async (session: SearchSession, page: number, signal?: A
         reason,
       );
     }
-    console.info('[web-search] SearXNG engine report', JSON.stringify({
-      page,
-      searchMode: session.mode,
-      requested: selectedEngines,
-      returned: [...returnedEngines].sort(),
-      failed: failures,
-      resultCount: results.length,
-      results: results.map((result, index) => ({
-        rank: index + 1,
-        title: result.title || '',
-        engines: resultEngines(result),
-        positions: result.positions || [],
-        score: result.score ?? null,
-        url: result.url || '',
-      })),
-    }, null, 2));
     if (!results.length && failures.length) throw new Error('searxng_engines_unavailable');
     return results;
     });
@@ -284,22 +257,6 @@ const fetchTavily = async (session: SearchSession, signal?: AbortSignal): Promis
     const results = Array.isArray(data.results) ? data.results : [];
     if (session.sort === 'date') results.sort((left, right) => publishedTimestamp(right) - publishedTimestamp(left));
     recordWebSearchStat('tavily', '', results.length ? 'success' : 'empty', results.length);
-    console.info('[web-search] Tavily report', JSON.stringify({
-      searchMode: session.mode,
-      searchType: session.searchType,
-      sort: session.sort,
-      freshness: session.freshness,
-      requestId: data.request_id || '',
-      credits: data.usage?.credits ?? null,
-      resultCount: results.length,
-      results: results.map((result, index) => ({
-        rank: index + 1,
-        title: result.title || '',
-        score: result.score ?? null,
-        publishedDate: result.published_date || result.publishedDate || '',
-        url: result.url || '',
-      })),
-    }, null, 2));
     return { ...data, results };
     });
   } catch (error) {
@@ -329,11 +286,9 @@ const initializeProvider = async (session: SearchSession, quota: TavilyQuotaGate
     return null;
   } catch (error) {
     if (signal?.aborted) throw error;
-    const message = errorMessage(error);
-    if (message === 'desktop_search_captcha_required') {
+    if (errorMessage(error) === 'desktop_search_captcha_required') {
       return 'Tool error: desktop search requires verification. A CAPTCHA window was opened in Chatter Desktop. Ask the user to complete it, then repeat the search.';
     }
-    console.info('[web-search] Desktop unavailable, trying SearXNG', { error: message });
   }
 
   try {
@@ -345,7 +300,6 @@ const initializeProvider = async (session: SearchSession, quota: TavilyQuotaGate
     return null;
   } catch (error) {
     if (signal?.aborted) throw error;
-    console.info('[web-search] SearXNG unavailable, trying Tavily', { error: errorMessage(error) });
   }
 
   if (!TAVILY_API_KEY) return 'Tool error: search service temporarily unavailable.';

@@ -36,11 +36,9 @@ const wsStateName = (state: number): string => {
 export function sendIpcToDesktop(userId: number, ipcType: string, payload: any, timeoutMs = 30000, signal?: AbortSignal): Promise<any> {
   const client = wsClients.get(userId);
   if (!client) {
-    console.log(`[DEBUG] sendIpcToDesktop: userId=${userId} NOT FOUND in wsClients (keys: [${[...wsClients.keys()].join(',')}])`);
     throw new Error('desktop_not_connected');
   }
   if (client.ws.readyState !== WebSocket.OPEN) {
-    console.log(`[DEBUG] sendIpcToDesktop: userId=${userId} ws not open (${wsStateName(client.ws.readyState)})`);
     throw new Error('desktop_not_connected');
   }
   const now = Date.now();
@@ -56,8 +54,6 @@ export function sendIpcToDesktop(userId: number, ipcType: string, payload: any, 
 
   // Если уже отменено — не отправляем вообще
   if (signal?.aborted) throw new DOMException('The user aborted a request.', 'AbortError');
-
-  console.log(`[DEBUG] sendIpcToDesktop: userId=${userId} FOUND, accountId=${client.accountId}`);
 
   const requestId = crypto.randomUUID();
   return new Promise((resolve, reject) => {
