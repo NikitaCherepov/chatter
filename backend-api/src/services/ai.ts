@@ -2505,7 +2505,7 @@ export const toolDefinitions = [
           },
           aspect_ratio: {
             type: 'string',
-            enum: ['auto', '1:1', '3:4', '4:3', '9:16', '16:9', '2:3', '3:2', '9:19.5', '19.5:9', '9:20', '20:9', '1:2', '2:1'],
+            enum: ['auto', '1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '2:3', '4:5', '5:4', '1:2', '2:1', '1:4', '4:1', '1:8', '8:1', '9:21', '21:9', '9:19.5', '19.5:9', '9:20', '20:9'],
             default: 'auto',
             description: 'Output aspect ratio. Use auto unless the user requests a square, portrait, landscape, phone-screen, or ultrawide format.'
           }

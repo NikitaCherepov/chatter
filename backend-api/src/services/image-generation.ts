@@ -14,18 +14,19 @@ const IMAGE_GEN_QUALITY = ['low', 'medium', 'high'].includes(`${process.env.IMAG
   ? process.env.IMAGE_GEN_QUALITY
   : 'auto';
 export const IMAGE_ASPECT_RATIOS = [
-  'auto', '1:1', '3:4', '4:3', '9:16', '16:9', '2:3', '3:2',
-  '9:19.5', '19.5:9', '9:20', '20:9', '1:2', '2:1',
+  'auto', '1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '2:3',
+  '4:5', '5:4', '1:2', '2:1', '1:4', '4:1', '1:8', '8:1',
+  '9:21', '21:9', '9:19.5', '19.5:9', '9:20', '20:9',
 ] as const;
 export type ImageAspectRatio = typeof IMAGE_ASPECT_RATIOS[number];
 
 const IMAGE_GEN_SUPPORTED_PARAMETERS = new Set(
   `${process.env.IMAGE_GEN_SUPPORTED_PARAMETERS === undefined
-    ? 'resolution,aspect_ratio,input_references'
+    ? 'resolution,input_references'
     : process.env.IMAGE_GEN_SUPPORTED_PARAMETERS}`
     .split(',')
     .map(value => value.trim())
-    .filter(value => ['resolution', 'aspect_ratio', 'quality', 'input_references'].includes(value))
+    .filter(value => ['resolution', 'quality', 'input_references'].includes(value))
 );
 
 const normalizeAspectRatio = (value: unknown): ImageAspectRatio => {
@@ -109,7 +110,7 @@ const generateOpenRouter = async (
     prompt,
   };
   if (IMAGE_GEN_SUPPORTED_PARAMETERS.has('resolution')) body.resolution = IMAGE_GEN_MAX_RESOLUTION;
-  if (IMAGE_GEN_SUPPORTED_PARAMETERS.has('aspect_ratio')) body.aspect_ratio = aspectRatio;
+  body.aspect_ratio = aspectRatio;
   if (IMAGE_GEN_SUPPORTED_PARAMETERS.has('quality')) body.quality = IMAGE_GEN_QUALITY;
 
   // Attach reference images
