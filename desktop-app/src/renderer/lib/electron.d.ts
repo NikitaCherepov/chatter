@@ -24,6 +24,8 @@ declare global {
         language?: string;
         chat_id?: number;
       }) => Promise<any>;
+      readWebPage: (payload: { url: string; chat_id?: number }) => Promise<any>;
+      cancelWebPageRead: () => Promise<{ cancelled: boolean }>;
       googleAi: (payload: {
         action?: 'ask' | 'new_chat' | 'reload' | 'close_session';
         message?: string;

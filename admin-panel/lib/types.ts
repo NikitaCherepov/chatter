@@ -67,6 +67,9 @@ export type WebSearchSettings = {
 };
 
 export type WebReaderSettings = {
+  enabled: boolean;
+  desktopEnabled: boolean;
+  browserlessEnabled: boolean;
   baseUrl: string;
   token: string;
   hasToken: boolean;
@@ -175,6 +178,9 @@ export const emptySettings: Settings = {
     hasApiKey: false,
   },
   webReader: {
+    enabled: true,
+    desktopEnabled: true,
+    browserlessEnabled: true,
     baseUrl: 'https://production-sfo.browserless.io',
     token: '',
     hasToken: false,

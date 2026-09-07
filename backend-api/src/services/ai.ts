@@ -3998,9 +3998,23 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     const url = `${parsed.url || ''}`.trim();
     if (!url) return 'Tool error: empty URL.';
     try {
-      return await getCleanTextFromUrl(url);
+      return await getCleanTextFromUrl(url, {
+        userId: user.id,
+        chatId: subagentExtra?.chatId,
+        signal,
+      });
     } catch (err: any) {
-      return `Tool error read_webpage: ${err?.message || String(err)}`;
+      const reason = `${err?.message || String(err)}`;
+      if (reason === 'web_reader_disabled') {
+        return 'Tool error: web page reading is disabled by the administrator.';
+      }
+      if (reason === 'web_reader_no_provider_available') {
+        return 'Tool error: no web page reader provider is currently enabled or available.';
+      }
+      if (reason === 'unsafe_url' || reason === 'desktop_web_reader_url_blocked') {
+        return 'Tool error: this URL is blocked because it targets a local or private network.';
+      }
+      return `Tool error read_webpage: ${reason}`;
     }
   }
 

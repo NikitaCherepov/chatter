@@ -40,6 +40,18 @@ export type ChatterBrowserOptions = {
   partition?: string;
   backgroundSize?: { width: number; height: number };
   onStateChange?: (state: BrowserState) => void;
+  blockDownloads?: boolean;
+  blockPrivateNetwork?: boolean;
+  clearStorageOnDestroy?: boolean;
+};
+
+export type BrowserWebPageResult = {
+  status: 'success';
+  title: string;
+  url: string;
+  text: string;
+  elements?: BrowserElement[];
+  truncated?: boolean;
 };
 
 export type BrowserSearchPayload = {
@@ -210,10 +222,36 @@ function normalizeBrowserUrl(value: string): string {
   }
 }
 
-function isAllowedRemoteUrl(value: string): boolean {
+function isPrivateNetworkHostname(value: string): boolean {
+  const hostname = value.toLowerCase().replace(/^\[|\]$/g, '').replace(/\.$/, '');
+  if (!hostname) return true;
+  if (hostname === 'localhost' || hostname.endsWith('.localhost') || hostname.endsWith('.local')) return true;
+
+  const ipv4 = hostname.split('.').map((part) => Number(part));
+  if (ipv4.length === 4 && ipv4.every((part) => Number.isInteger(part) && part >= 0 && part <= 255)) {
+    const [a, b] = ipv4;
+    return a === 0
+      || a === 10
+      || a === 127
+      || (a === 100 && b >= 64 && b <= 127)
+      || (a === 169 && b === 254)
+      || (a === 172 && b >= 16 && b <= 31)
+      || (a === 192 && b === 168)
+      || a >= 224;
+  }
+
+  if (hostname === '::' || hostname === '::1') return true;
+  if (/^(?:fc|fd)/i.test(hostname) || /^fe[89ab]/i.test(hostname)) return true;
+  const mappedIpv4 = hostname.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/i)?.[1];
+  return mappedIpv4 ? isPrivateNetworkHostname(mappedIpv4) : false;
+}
+
+function isAllowedRemoteUrl(value: string, blockPrivateNetwork = false): boolean {
   try {
     const url = new URL(value);
-    return url.protocol === 'http:' || url.protocol === 'https:';
+    if (url.href === 'about:blank') return true;
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return false;
+    return !blockPrivateNetwork || !isPrivateNetworkHostname(url.hostname);
   } catch {
     return false;
   }
@@ -280,12 +318,18 @@ export class ChatterBrowser {
   private readonly homeUrl: string;
   private readonly stateChannel: string;
   private readonly onStateChange?: (state: BrowserState) => void;
+  private readonly blockDownloads: boolean;
+  private readonly blockPrivateNetwork: boolean;
+  private readonly clearStorageOnDestroy: boolean;
 
   constructor(host: BrowserWindow, options: ChatterBrowserOptions = {}) {
     this.host = host;
     this.homeUrl = options.homeUrl || HOME_URL;
     this.stateChannel = options.stateChannel || 'browser:state';
     this.onStateChange = options.onStateChange;
+    this.blockDownloads = options.blockDownloads === true;
+    this.blockPrivateNetwork = options.blockPrivateNetwork === true;
+    this.clearStorageOnDestroy = options.clearStorageOnDestroy === true;
     this.view = new WebContentsView({
       webPreferences: {
         partition: options.partition || 'persist:chatter-browser',
@@ -324,16 +368,26 @@ export class ChatterBrowser {
 
     this.willDownloadHandler = (_event, item, webContents) => {
       if (webContents.id !== contents.id) return;
+      if (this.blockDownloads) {
+        item.cancel();
+        return;
+      }
       this.handleWillDownload(item);
     };
     browserSession.on('will-download', this.willDownloadHandler);
 
+    if (this.blockPrivateNetwork) {
+      browserSession.webRequest.onBeforeRequest({ urls: ['http://*/*', 'https://*/*'] }, (details, callback) => {
+        callback({ cancel: !isAllowedRemoteUrl(details.url, true) });
+      });
+    }
+
     contents.setWindowOpenHandler(({ url }) => {
-      if (isAllowedRemoteUrl(url)) void contents.loadURL(url);
+      if (isAllowedRemoteUrl(url, this.blockPrivateNetwork)) void contents.loadURL(url);
       return { action: 'deny' };
     });
     contents.on('will-navigate', (event, url) => {
-      if (!isAllowedRemoteUrl(url)) event.preventDefault();
+      if (!isAllowedRemoteUrl(url, this.blockPrivateNetwork)) event.preventDefault();
     });
     contents.on('did-start-loading', () => this.emitState());
     contents.on('did-start-navigation', (_event, _url, isInPlace, isMainFrame) => {
@@ -362,6 +416,8 @@ export class ChatterBrowser {
     this.cancelGoogleAi();
     void this.disposeOopifWorlds();
     this.view.webContents.session.removeListener('will-download', this.willDownloadHandler);
+    if (this.blockPrivateNetwork) this.view.webContents.session.webRequest.onBeforeRequest(null);
+    if (this.clearStorageOnDestroy) void this.view.webContents.session.clearStorageData().catch(() => {});
     for (const downloadId of [...this.pendingDownloads.keys()]) {
       this.cancelPendingDownload(downloadId, 'browser_destroyed');
     }
@@ -848,6 +904,25 @@ export class ChatterBrowser {
           results: results.slice(0, 20),
         };
       })()`);
+    } finally {
+      this.interactionInProgress = false;
+    }
+  }
+
+  async readWebPage(targetUrl: string): Promise<BrowserWebPageResult> {
+    const url = `${targetUrl || ''}`.trim();
+    if (!isAllowedRemoteUrl(url, this.blockPrivateNetwork) || url === 'about:blank') {
+      throw new Error('desktop_web_reader_url_blocked');
+    }
+    if (this.interactionInProgress) throw new Error('desktop_web_reader_in_progress');
+
+    this.interactionInProgress = true;
+    this.explicitNavigationRequested = true;
+    try {
+      await this.navigateToUrl(url);
+      const result = await this.readPage('full') as BrowserWebPageResult;
+      if (!`${result?.text || ''}`.trim()) throw new Error('desktop_web_reader_empty');
+      return result;
     } finally {
       this.interactionInProgress = false;
     }

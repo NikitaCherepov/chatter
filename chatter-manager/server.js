@@ -339,6 +339,9 @@ function publicSettings() {
       hasApiKey: Boolean(backendEnv.TAVILY_API_KEY)
     },
     webReader: {
+      enabled: true,
+      desktopEnabled: true,
+      browserlessEnabled: true,
       baseUrl: backendEnv.BROWSERLESS_BASE_URL || 'https://production-sfo.browserless.io',
       token: '',
       hasToken: Boolean(backendEnv.BROWSERLESS_TOKEN)
@@ -2224,6 +2227,14 @@ async function handleRequest(req, res) {
     } catch {
       // Keep safe runtime defaults while backend is temporarily unavailable.
     }
+    try {
+      const runtime = await backendInternalRequest('/internal/admin/web-reader/runtime');
+      settings.webReader.enabled = runtime.enabled === true;
+      settings.webReader.desktopEnabled = runtime.desktopEnabled === true;
+      settings.webReader.browserlessEnabled = runtime.browserlessEnabled === true;
+    } catch {
+      // Keep safe runtime defaults while backend is temporarily unavailable.
+    }
     return sendJson(res, 200, settings);
   }
   if (req.method === 'GET' && pathname === '/api/status') return sendJson(res, 200, { applying: Boolean(applyPromise), services: await getServiceStatus() });
@@ -2737,6 +2748,35 @@ async function handleRequest(req, res) {
       return sendJson(res, 200, await backendInternalRequest('/internal/admin/web-search/stats'));
     } catch (error) {
       return sendJson(res, 502, { error: error.message || 'web_search_stats_failed' });
+    }
+  }
+
+  if (pathname === '/api/web-reader/runtime') {
+    if (req.method === 'GET') {
+      try {
+        return sendJson(res, 200, await backendInternalRequest('/internal/admin/web-reader/runtime'));
+      } catch (error) {
+        return sendJson(res, 502, { error: error.message || 'web_reader_settings_failed' });
+      }
+    }
+    if (req.method === 'PUT') {
+      const body = await readJson(req);
+      try {
+        return sendJson(res, 200, await backendInternalRequest('/internal/admin/web-reader/runtime', {
+          method: 'PUT',
+          body: JSON.stringify(body),
+        }));
+      } catch (error) {
+        return sendJson(res, 400, { error: error.message || 'web_reader_settings_save_failed' });
+      }
+    }
+  }
+
+  if (req.method === 'GET' && pathname === '/api/web-reader/stats') {
+    try {
+      return sendJson(res, 200, await backendInternalRequest('/internal/admin/web-reader/stats'));
+    } catch (error) {
+      return sendJson(res, 502, { error: error.message || 'web_reader_stats_failed' });
     }
   }
 

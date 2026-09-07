@@ -52,6 +52,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     language?: string;
     chat_id?: number;
   }) => ipcRenderer.invoke('search-browser:search', payload),
+  readWebPage: (payload: { url: string; chat_id?: number }) =>
+    ipcRenderer.invoke('web-reader:read', payload),
+  cancelWebPageRead: () => ipcRenderer.invoke('web-reader:cancel'),
   googleAi: (payload: {
     action?: 'ask' | 'new_chat' | 'reload' | 'close_session';
     message?: string;

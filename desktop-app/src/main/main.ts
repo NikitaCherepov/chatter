@@ -322,8 +322,10 @@ type DesktopBrowserSession = {
 
 const searchSessions = new Map<string, DesktopBrowserSession>();
 const googleAiSessions = new Map<string, DesktopBrowserSession>();
+const webReaderSessions = new Map<string, DesktopBrowserSession>();
 const browserSessionWindows = new Map<string, BrowserWindow>();
 let searchQueue: Promise<void> = Promise.resolve();
+let webReaderQueue: Promise<void> = Promise.resolve();
 let searchChallengeWindow: BrowserWindow | null = null;
 let activeChallengeBrowser: ChatterBrowser | null = null;
 const detachedToolWindows = new Map<string, BrowserWindow>();
@@ -341,6 +343,7 @@ let trayLabels = {
 };
 
 const SEARCH_IDLE_TIMEOUT_MS = 2 * 60 * 1000;
+const WEB_READER_IDLE_TIMEOUT_MS = 2 * 60 * 1000;
 const GOOGLE_AI_IDLE_TIMEOUT_MS = 15 * 60 * 1000;
 
 function createSearchBrowser(): ChatterBrowser {
@@ -360,6 +363,19 @@ function createGoogleAiBrowser(): ChatterBrowser {
     stateChannel: 'google-ai:state',
     partition: 'persist:chatter-search',
     backgroundSize: { width: 1280, height: 900 },
+  });
+}
+
+function createWebReaderBrowser(): ChatterBrowser {
+  if (!mainWindow || mainWindow.isDestroyed()) throw new Error('web_reader_unavailable');
+  return new ChatterBrowser(mainWindow, {
+    homeUrl: 'about:blank',
+    stateChannel: 'web-reader:state',
+    partition: 'chatter-web-reader',
+    backgroundSize: { width: 1280, height: 900 },
+    blockDownloads: true,
+    blockPrivateNetwork: true,
+    clearStorageOnDestroy: true,
   });
 }
 
@@ -437,7 +453,7 @@ function updateBrowserBackgroundActivity(payload: BrowserPreviewPayload): void {
   backgroundActivityRegistry.upsert({
     id,
     chatId: payload.chatId,
-    title: payload.source === 'google_ai' ? 'Google AI' : 'Web search',
+    title: payload.source === 'google_ai' ? 'Google AI' : payload.source === 'web_reader' ? 'Web page' : 'Web search',
     status: payload.active ? 'working' : previous?.status === 'challenge' ? 'challenge' : 'idle',
     image: payload.image ?? previous?.image,
     openTarget: { type: 'browser_session', sessionId: id },
@@ -486,6 +502,27 @@ function getSharedSearchSession(chatId: number | null): DesktopBrowserSession {
     backgroundActivityRegistry.remove(previousId);
     session.chatId = chatId;
     searchSessions.set(key, session);
+  }
+  return session;
+}
+
+function getSharedWebReaderSession(chatId: number | null): DesktopBrowserSession {
+  const key = 'shared';
+  let session = webReaderSessions.get(key);
+  if (!session) {
+    session = { key, chatId, browser: createWebReaderBrowser(), preview: createBrowserPreview('web_reader'), idleTimer: null };
+    webReaderSessions.set(key, session);
+    return session;
+  }
+  if (session.chatId !== chatId) {
+    const previousId = browserSessionActivityId('web_reader', session.chatId);
+    const previousViewer = browserSessionWindows.get(previousId);
+    webReaderSessions.delete(key);
+    browserSessionWindows.delete(previousId);
+    if (previousViewer && !previousViewer.isDestroyed()) previousViewer.close();
+    backgroundActivityRegistry.remove(previousId);
+    session.chatId = chatId;
+    webReaderSessions.set(key, session);
   }
   return session;
 }
@@ -1121,6 +1158,9 @@ function createWindow() {
     for (const session of [...googleAiSessions.values()]) {
       closeBrowserSession(googleAiSessions, 'google_ai', session, 'shutdown');
     }
+    for (const session of [...webReaderSessions.values()]) {
+      closeBrowserSession(webReaderSessions, 'web_reader', session, 'shutdown');
+    }
     backgroundActivityRegistry.clear();
     mainWindow = null;
   });
@@ -1192,6 +1232,37 @@ function createWindow() {
     } finally {
       releaseSearch();
     }
+  });
+
+  ipcMain.handle('web-reader:read', async (event, payload: { url?: string; chat_id?: number }) => {
+    assertTrustedIpcSender(event);
+    const previousRead = webReaderQueue;
+    let releaseRead!: () => void;
+    webReaderQueue = new Promise<void>((resolve) => { releaseRead = resolve; });
+    await previousRead;
+    try {
+      const chatId = Number.isInteger(payload?.chat_id) && Number(payload.chat_id) > 0 ? Number(payload.chat_id) : null;
+      const session = getSharedWebReaderSession(chatId);
+      clearBrowserIdleTimer(session);
+      const { browser, preview } = session;
+      const previewRun = preview.start(browser, { chatId });
+      try {
+        return await browser.readWebPage(`${payload?.url || ''}`);
+      } finally {
+        preview.stop(browser, previewRun);
+        if (webReaderSessions.get(session.key) === session) {
+          scheduleBrowserIdleClose(webReaderSessions, 'web_reader', session, WEB_READER_IDLE_TIMEOUT_MS);
+        }
+      }
+    } finally {
+      releaseRead();
+    }
+  });
+
+  ipcMain.handle('web-reader:cancel', (event) => {
+    assertTrustedIpcSender(event);
+    const session = webReaderSessions.get('shared');
+    return { cancelled: session ? closeBrowserSession(webReaderSessions, 'web_reader', session, 'explicit') : false };
   });
 
   ipcMain.handle('google-ai:control', async (event, payload: GoogleAiPayload) => {
@@ -1278,11 +1349,13 @@ function createWindow() {
   ipcMain.handle('browser-sessions:open', (event, payload: { id?: string }) => {
     assertTrustedIpcSender(event);
     const id = `${payload?.id || ''}`;
-    const source: 'web_search' | 'google_ai' | null = id.startsWith('browser-session:web_search:')
+    const source: BrowserPreviewSource | null = id.startsWith('browser-session:web_search:')
       ? 'web_search'
-      : id.startsWith('browser-session:google_ai:') ? 'google_ai' : null;
+      : id.startsWith('browser-session:google_ai:')
+        ? 'google_ai'
+        : id.startsWith('browser-session:web_reader:') ? 'web_reader' : null;
     if (!source) return { opened: false };
-    const sessions = source === 'web_search' ? searchSessions : googleAiSessions;
+    const sessions = source === 'web_search' ? searchSessions : source === 'web_reader' ? webReaderSessions : googleAiSessions;
     const session = [...sessions.values()].find((candidate) => (
       browserSessionActivityId(source, candidate.chatId) === id
     ));
@@ -1299,7 +1372,7 @@ function createWindow() {
       minWidth: 640,
       minHeight: 480,
       show: false,
-      title: source === 'google_ai' ? 'Chatter — Google AI' : 'Chatter — Web search',
+      title: source === 'google_ai' ? 'Chatter — Google AI' : source === 'web_reader' ? 'Chatter — Web page' : 'Chatter — Web search',
       autoHideMenuBar: true,
       webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true },
     });
@@ -1318,7 +1391,7 @@ function createWindow() {
           sessions,
           source,
           session,
-          source === 'web_search' ? SEARCH_IDLE_TIMEOUT_MS : GOOGLE_AI_IDLE_TIMEOUT_MS,
+          source === 'web_search' ? SEARCH_IDLE_TIMEOUT_MS : source === 'web_reader' ? WEB_READER_IDLE_TIMEOUT_MS : GOOGLE_AI_IDLE_TIMEOUT_MS,
         );
       }
     });

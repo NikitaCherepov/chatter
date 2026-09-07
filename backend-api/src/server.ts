@@ -26,6 +26,7 @@ import { getPendingEmailConfirmation, deletePendingEmailConfirmation } from './s
 import { runImageGeneration } from './services/image-generation.js';
 import { isImageGenerationEnabled, setImageGenerationEnabled } from './services/system-settings.js';
 import { getWebSearchRuntimeSettings, getWebSearchStats, updateWebSearchRuntimeSettings } from './services/web-search-runtime.js';
+import { getWebReaderRuntimeSettings, getWebReaderStats, updateWebReaderRuntimeSettings } from './services/web-reader-runtime.js';
 import { getSmartHomeSettings, setSmartHomeToken, deleteSmartHomeToken, setZigbeeToken, deleteZigbeeToken, listSmartDevices, syncSmartHomeDevices } from './services/smart-home.js';
 import { db } from './db.js';
 import { getCleanTextFromUrl } from './services/web-reader.js';
@@ -4357,6 +4358,21 @@ app.put('/internal/admin/web-search/runtime', internalAuth, (req, res) => {
 
 app.get('/internal/admin/web-search/stats', internalAuth, (_req, res) => {
   return res.json(getWebSearchStats());
+});
+
+app.get('/internal/admin/web-reader/runtime', internalAuth, (_req, res) => {
+  return res.json(getWebReaderRuntimeSettings());
+});
+
+app.put('/internal/admin/web-reader/runtime', internalAuth, (req, res) => {
+  if (!req.body || typeof req.body !== 'object') {
+    return res.status(400).json({ error: 'bad_web_reader_settings' });
+  }
+  return res.json(updateWebReaderRuntimeSettings(req.body));
+});
+
+app.get('/internal/admin/web-reader/stats', internalAuth, (_req, res) => {
+  return res.json(getWebReaderStats());
 });
 
 app.post('/internal/admin/sync-plan-limits', internalAuth, (_req, res) => {

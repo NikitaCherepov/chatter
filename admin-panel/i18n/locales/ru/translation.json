@@ -338,12 +338,39 @@
       "statsLastFailure": "Последняя ошибка"
     },
     "webReader": {
-      "pageDescription": "Открытие и очистка содержимого веб-страниц через Browserless.",
+      "pageDescription": "Настройка цепочки чтения страниц десктоп → Browserless и контроль её состояния.",
       "sectionTitle": "Browserless",
-      "sectionIntro": "Backend использует Browserless BQL, чтобы открыть страницу и извлечь её текст.",
+      "sectionIntro": "Browserless используется только когда десктопное чтение недоступно или завершилось ошибкой.",
       "apiUrlLabel": "Адрес Browserless",
       "apiKeyLabel": "Browserless token",
-      "tokenPlaceholder": "Вставь токен Browserless"
+      "tokenPlaceholder": "Вставь токен Browserless",
+      "routingTitle": "Маршрутизация чтения страниц",
+      "routingIntro": "Переключатели хранятся в базе и применяются сразу, без перезапуска сервисов.",
+      "enabled": "Включить чтение веб-страниц",
+      "savingRuntime": "Сохранение…",
+      "desktopIntro": "Сначала используется подключённый Chatter Desktop: изолированная временная Chromium-сессия без загрузки файлов.",
+      "desktopEnabled": "Включить десктопный парсер",
+      "browserlessEnabled": "Включить фоллбэк Browserless",
+      "statsTitle": "Статистика чтения страниц",
+      "statsIntro": "Сводка состояния каждого провайдера с момента включения сбора статистики.",
+      "statsLoading": "Загрузка…",
+      "statsRefresh": "Обновить статистику",
+      "providers": {
+        "desktop": "Десктопный парсер",
+        "browserless": "Browserless"
+      },
+      "statsProvider": "Провайдер",
+      "statsAttempts": "Попытки",
+      "statsSuccesses": "Успешно",
+      "statsFailures": "Ошибки",
+      "statsEmpty": "Пустые ответы",
+      "statsCharacters": "Символы",
+      "statsUnavailable": "Недоступен",
+      "statsTimeout": "Таймаут",
+      "statsParsing": "Парсинг",
+      "statsOther": "Прочее",
+      "statsLastAttempt": "Последняя попытка",
+      "statsLastFailure": "Последняя ошибка"
     },
     "cloudTts": {
       "pageDescription": "Облачная озвучка и каталог голосов Cartesia.",

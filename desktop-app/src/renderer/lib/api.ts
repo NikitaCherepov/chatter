@@ -1271,6 +1271,8 @@ export function initWebSocket(callbacks?: WsCallbacks) {
             (window as any).electronAPI?.cancelVideoConversion(msg.request_id).catch(console.error);
           } else if (msg.ipc_type === 'google_ai') {
             (window as any).electronAPI?.cancelGoogleAi(googleAiRequestChats.get(msg.request_id)).catch(console.error);
+          } else if (msg.ipc_type === 'read_webpage') {
+            (window as any).electronAPI?.cancelWebPageRead().catch(console.error);
           }
           break;
         case 'ping':
@@ -1647,6 +1649,11 @@ async function handleExecuteIpc(msg: { request_id: string; ipc_type: string; pay
       const searchWeb = (window as any).electronAPI?.searchWeb;
       if (typeof searchWeb !== 'function') throw new Error('desktop_search_unsupported');
       result = await searchWeb(payload);
+    } else if (ipc_type === 'read_webpage') {
+      console.log('[ipc] renderer invoke readWebPage', { requestId: request_id, url: payload?.url });
+      const readWebPage = (window as any).electronAPI?.readWebPage;
+      if (typeof readWebPage !== 'function') throw new Error('desktop_web_reader_unsupported');
+      result = await readWebPage(payload);
     } else if (ipc_type === 'google_ai') {
       console.log('[ipc] renderer invoke googleAi', {
         requestId: request_id,

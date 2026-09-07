@@ -338,12 +338,39 @@
       "statsLastFailure": "Last failure"
     },
     "webReader": {
-      "pageDescription": "Open and clean web page content via Browserless.",
+      "pageDescription": "Configure the desktop → Browserless page-reading chain and inspect its health.",
       "sectionTitle": "Browserless",
-      "sectionIntro": "Backend uses Browserless BQL to open a page and extract its text.",
+      "sectionIntro": "Browserless is used only when desktop reading is unavailable or fails.",
       "apiUrlLabel": "Browserless URL",
       "apiKeyLabel": "Browserless token",
-      "tokenPlaceholder": "Paste Browserless token"
+      "tokenPlaceholder": "Paste Browserless token",
+      "routingTitle": "Page reader routing",
+      "routingIntro": "These switches are stored in the database and apply immediately without restarting services.",
+      "enabled": "Enable web page reading",
+      "savingRuntime": "Saving…",
+      "desktopIntro": "Uses the connected Chatter Desktop first, in an isolated temporary Chromium session with downloads blocked.",
+      "desktopEnabled": "Enable desktop reader",
+      "browserlessEnabled": "Enable Browserless fallback",
+      "statsTitle": "Page reader statistics",
+      "statsIntro": "Aggregated health for each provider since statistics collection was enabled.",
+      "statsLoading": "Loading…",
+      "statsRefresh": "Refresh statistics",
+      "providers": {
+        "desktop": "Desktop reader",
+        "browserless": "Browserless"
+      },
+      "statsProvider": "Provider",
+      "statsAttempts": "Attempts",
+      "statsSuccesses": "Successful",
+      "statsFailures": "Failed",
+      "statsEmpty": "Empty",
+      "statsCharacters": "Characters",
+      "statsUnavailable": "Unavailable",
+      "statsTimeout": "Timeout",
+      "statsParsing": "Parsing",
+      "statsOther": "Other",
+      "statsLastAttempt": "Last attempt",
+      "statsLastFailure": "Last failure"
     },
     "cloudTts": {
       "pageDescription": "Cloud TTS and Cartesia voice catalog.",

@@ -121,7 +121,8 @@ export function IntegrationsPage({
   const configured: Record<IntegrationId, boolean> = {
     pinecone: settings.pinecone.hasApiKey,
     'web-search': settings.webSearch.enabled,
-    'web-reader': settings.webReader.hasToken,
+    'web-reader': settings.webReader.enabled
+      && (settings.webReader.desktopEnabled || (settings.webReader.browserlessEnabled && settings.webReader.hasToken)),
     'cloud-tts': settings.cloudTts.hasApiKey,
     'image-generation': settings.imageGeneration.enabled && settings.imageGeneration.hasApiKey,
   };
@@ -158,6 +159,7 @@ export function IntegrationsPage({
               <em>
                 {(item.id === 'image-generation' && !settings.imageGeneration.enabled)
                   || (item.id === 'web-search' && !settings.webSearch.enabled)
+                  || (item.id === 'web-reader' && !settings.webReader.enabled)
                   ? t('integrations.statusDisabled')
                   : configured[item.id]
                     ? t('integrations.statusConfigured')
