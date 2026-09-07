@@ -626,12 +626,17 @@ function showSearchChallengeWindow(
     activeChallengeBrowser = null;
     const searchSession = [...searchSessions.values()].find((session) => session.browser === closedBrowser);
     const googleAiSession = [...googleAiSessions.values()].find((session) => session.browser === closedBrowser);
+    const webReaderSession = [...webReaderSessions.values()].find((session) => session.browser === closedBrowser);
     if (searchSession) {
       backgroundActivityRegistry.setStatus(browserSessionActivityId('web_search', searchSession.chatId), 'idle');
       scheduleBrowserIdleClose(searchSessions, 'web_search', searchSession, SEARCH_IDLE_TIMEOUT_MS);
     }
     if (googleAiSession) {
       backgroundActivityRegistry.setStatus(browserSessionActivityId('google_ai', googleAiSession.chatId), 'idle');
+    }
+    if (webReaderSession) {
+      backgroundActivityRegistry.setStatus(browserSessionActivityId('web_reader', webReaderSession.chatId), 'idle');
+      scheduleBrowserIdleClose(webReaderSessions, 'web_reader', webReaderSession, WEB_READER_IDLE_TIMEOUT_MS);
     }
   });
 
@@ -1245,12 +1250,26 @@ function createWindow() {
       const session = getSharedWebReaderSession(chatId);
       clearBrowserIdleTimer(session);
       const { browser, preview } = session;
+      dismissChallengeForBrowser(browser);
       const previewRun = preview.start(browser, { chatId });
+      let challengeShown = false;
       try {
-        return await browser.readWebPage(`${payload?.url || ''}`);
+        const result = await browser.readWebPage(`${payload?.url || ''}`, {
+          onChallenge: () => {
+            challengeShown = true;
+            backgroundActivityRegistry.setStatus(browserSessionActivityId('web_reader', chatId), 'challenge');
+            showSearchChallengeWindow(browser);
+            // Closing the verification window is the user's "stop".
+            searchChallengeWindow?.once('closed', () => browser.requestWebPageReadAbort());
+          },
+        });
+        if (challengeShown) {
+          backgroundActivityRegistry.setStatus(browserSessionActivityId('web_reader', chatId), 'idle');
+        }
+        return result;
       } finally {
         preview.stop(browser, previewRun);
-        if (webReaderSessions.get(session.key) === session) {
+        if (!challengeShown && webReaderSessions.get(session.key) === session) {
           scheduleBrowserIdleClose(webReaderSessions, 'web_reader', session, WEB_READER_IDLE_TIMEOUT_MS);
         }
       }

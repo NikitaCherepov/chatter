@@ -54,6 +54,10 @@ export type BrowserWebPageResult = {
   truncated?: boolean;
 };
 
+export type WebPageReadHooks = {
+  onChallenge?: () => void;
+};
+
 export type BrowserSearchPayload = {
   query?: string;
   mode?: 'web' | 'wikipedia';
@@ -145,6 +149,7 @@ const DOWNLOAD_CONFIRMATION_TTL_MS = 5 * 60 * 1000;
 const YOUTUBE_MUSIC_ORIGIN = 'https://music.youtube.com';
 const WEB_READER_REDIRECT_WAIT_MS = 12_000;
 const WEB_READER_POLL_INTERVAL_MS = 250;
+const WEB_READER_CHALLENGE_WAIT_MS = 45_000;
 
 type BrowserReadSnapshot = {
   url: string;
@@ -319,6 +324,7 @@ export class ChatterBrowser {
   /** True once the current main document is usable by browser tools. */
   private mainDocumentReady = false;
   private interactionInProgress = false;
+  private webPageReadAbortRequested = false;
   private googleAiInProgress = false;
   private googleAiRunId = 0;
   private initialNavigationStarted = false;
@@ -930,7 +936,7 @@ export class ChatterBrowser {
     }
   }
 
-  async readWebPage(targetUrl: string): Promise<BrowserWebPageResult> {
+  async readWebPage(targetUrl: string, hooks: WebPageReadHooks = {}): Promise<BrowserWebPageResult> {
     const url = `${targetUrl || ''}`.trim();
     if (!isAllowedRemoteUrl(url, this.blockPrivateNetwork) || url === 'about:blank') {
       throw new Error('desktop_web_reader_url_blocked');
@@ -940,6 +946,7 @@ export class ChatterBrowser {
     this.interactionInProgress = true;
     this.explicitNavigationRequested = true;
     try {
+      this.webPageReadAbortRequested = false;
       // Same escape hatch as control('open'): a pending initial navigation
       // must not abort or mask the requested load.
       const initialNavigation = this.initialNavigationPromise;
@@ -948,27 +955,46 @@ export class ChatterBrowser {
         await initialNavigation;
       }
       await this.navigateToUrl(url);
-      return await this.waitForReadableWebPage();
+      return await this.waitForReadableWebPage(hooks);
     } finally {
       this.interactionInProgress = false;
     }
+  }
+
+  /** Aborts an in-flight readWebPage wait (e.g. the challenge window was closed). */
+  requestWebPageReadAbort(): void {
+    this.webPageReadAbortRequested = true;
   }
 
   /**
    * Waits out client-side redirect chains and re-reads until text appears;
    * throws desktop_web_reader_empty so the backend fallback stays intact.
    */
-  private async waitForReadableWebPage(): Promise<BrowserWebPageResult> {
+  private async waitForReadableWebPage(hooks: WebPageReadHooks): Promise<BrowserWebPageResult> {
     const contents = this.view.webContents;
     const deadline = Date.now() + WEB_READER_REDIRECT_WAIT_MS;
+    let challengeDeadline = Number.NaN;
+    let challengeNotified = false;
 
-    while (Date.now() < deadline) {
+    const currentDeadline = () => (Number.isNaN(challengeDeadline) ? deadline : challengeDeadline);
+
+    while (Date.now() < currentDeadline()) {
       if (contents.isDestroyed()) throw new Error('browser_unavailable');
+      if (this.webPageReadAbortRequested) throw new Error('desktop_web_reader_aborted');
       // The redirect interstitial is a transition, not the result.
       if (!isClientRedirectorUrl(contents.getURL())) {
         try {
           const result = await this.readPage('full') as BrowserWebPageResult;
-          if (`${result?.text || ''}`.trim()) return result;
+          if (await this.probePageChallenge()) {
+            if (!challengeNotified) {
+              challengeNotified = true;
+              // Give the user time to solve before the backend IPC timeout.
+              challengeDeadline = Date.now() + WEB_READER_CHALLENGE_WAIT_MS;
+              hooks.onChallenge?.();
+            }
+          } else if (`${result?.text || ''}`.trim()) {
+            return result;
+          }
         } catch {
           /* frames are briefly unavailable mid-navigation; next poll re-reads */
         }
@@ -977,11 +1003,38 @@ export class ChatterBrowser {
     }
 
     if (contents.isDestroyed()) throw new Error('browser_unavailable');
+    if (this.webPageReadAbortRequested) throw new Error('desktop_web_reader_aborted');
+    if (isClientRedirectorUrl(contents.getURL()) || await this.probePageChallenge()) {
+      throw new Error('desktop_web_reader_empty');
+    }
     // Final read at the deadline propagates genuine read errors.
-    if (isClientRedirectorUrl(contents.getURL())) throw new Error('desktop_web_reader_empty');
     const result = await this.readPage('full') as BrowserWebPageResult;
     if (!`${result?.text || ''}`.trim()) throw new Error('desktop_web_reader_empty');
     return result;
+  }
+
+  /**
+   * A page is a challenge when a captcha marker exists and nothing substantial
+   * remains outside the captcha's own form/section — a widget buried in a
+   * comment form under an article is not a challenge, a form that IS the page
+   * (recaptcha demo, /sorry, Cloudflare) is.
+   */
+  private async probePageChallenge(): Promise<boolean> {
+    try {
+      return await this.executeInBrowserWorld<boolean>(`(() => {
+        const thin = (value) => value.replace(/\\s+/g, ' ').trim().length < 200;
+        const bodyText = String(document.body?.innerText || '');
+        if (location.pathname.startsWith('/sorry/') || document.querySelector('#captcha-form, #challenge-running, #challenge-form')) return true;
+        if (/unusual traffic|verify you are human/.test(bodyText.toLowerCase()) && thin(bodyText)) return true;
+        const captcha = document.querySelector('iframe[src*="recaptcha"], iframe[src*="challenges.cloudflare.com"], [data-sitekey]');
+        if (!captcha) return false;
+        const scope = captcha.closest('form, section, aside, footer, [class*="comment"], [id*="comment"]');
+        const scopeText = scope ? String(scope.innerText || '').trim() : '';
+        return scopeText ? thin(bodyText.split(scopeText).join(' ')) : thin(bodyText);
+      })()`);
+    } catch {
+      return false;
+    }
   }
 
   async googleAi(payload: GoogleAiPayload): Promise<unknown> {
