@@ -259,6 +259,11 @@ export function PixelAvatar({ chatId = null }: PixelAvatarProps) {
     void window.electronAPI.openBrowserSession(activity.openTarget.sessionId);
   }, [chatId]);
 
+  const stopActivity = useCallback((activity: BackgroundActivityView) => {
+    if (activity.openTarget.type !== 'browser_session') return;
+    void window.electronAPI.stopBrowserSession(activity.openTarget.sessionId);
+  }, []);
+
   // ── Determine what to render (priority: media > loop > reaction queue > base + blink) ─
 
   const renderSrc = mediaUrl
@@ -339,7 +344,30 @@ export function PixelAvatar({ chatId = null }: PixelAvatarProps) {
                       {sessionStatusLabel(activity.status)}
                     </span>
                   </span>
-                  <span className={s.sessionOpen}>↗</span>
+                  <span className={s.sessionActions}>
+                    {activity.openTarget.type === 'browser_session' && (
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        className={s.sessionStop}
+                        title="Остановить"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          stopActivity(activity);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            stopActivity(activity);
+                          }
+                        }}
+                      >
+                        ✕
+                      </span>
+                    )}
+                    <span className={s.sessionOpen}>↗</span>
+                  </span>
                 </motion.span>
                 <span className={s.sessionThumbnail}>
                   {activity.image

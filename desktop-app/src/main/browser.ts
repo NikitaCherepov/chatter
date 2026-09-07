@@ -150,6 +150,9 @@ const YOUTUBE_MUSIC_ORIGIN = 'https://music.youtube.com';
 const WEB_READER_REDIRECT_WAIT_MS = 12_000;
 const WEB_READER_POLL_INTERVAL_MS = 250;
 const WEB_READER_CHALLENGE_WAIT_MS = 45_000;
+const WEB_READER_NAVIGATE_TIMEOUT_MS = 30_000;
+const WEB_READER_READ_ATTEMPT_TIMEOUT_MS = 10_000;
+const WEB_READER_PROBE_TIMEOUT_MS = 3_000;
 
 type BrowserReadSnapshot = {
   url: string;
@@ -325,6 +328,7 @@ export class ChatterBrowser {
   private mainDocumentReady = false;
   private interactionInProgress = false;
   private webPageReadAbortRequested = false;
+  private webPageReadAbortWaiters: Array<() => void> = [];
   private googleAiInProgress = false;
   private googleAiRunId = 0;
   private initialNavigationStarted = false;
@@ -438,6 +442,8 @@ export class ChatterBrowser {
   destroy(): void {
     this.abortInteraction();
     this.cancelGoogleAi();
+    // Unblocks an in-flight web page read so its IPC handler can settle.
+    this.requestWebPageReadAbort();
     void this.disposeOopifWorlds();
     this.view.webContents.session.removeListener('will-download', this.willDownloadHandler);
     if (this.blockPrivateNetwork) this.view.webContents.session.webRequest.onBeforeRequest(null);
@@ -952,9 +958,9 @@ export class ChatterBrowser {
       const initialNavigation = this.initialNavigationPromise;
       if (initialNavigation) {
         this.view.webContents.stop();
-        await initialNavigation;
+        await this.raceWebPageReadInterrupt(initialNavigation, WEB_READER_NAVIGATE_TIMEOUT_MS);
       }
-      await this.navigateToUrl(url);
+      await this.raceWebPageReadInterrupt(this.navigateToUrl(url), WEB_READER_NAVIGATE_TIMEOUT_MS);
       return await this.waitForReadableWebPage(hooks);
     } finally {
       this.interactionInProgress = false;
@@ -964,6 +970,39 @@ export class ChatterBrowser {
   /** Aborts an in-flight readWebPage wait (e.g. the challenge window was closed). */
   requestWebPageReadAbort(): void {
     this.webPageReadAbortRequested = true;
+    const waiters = this.webPageReadAbortWaiters;
+    this.webPageReadAbortWaiters = [];
+    for (const resolve of waiters) resolve();
+  }
+
+  /**
+   * CDP commands on a dying webContents can stay pending forever; the poll
+   * loop only checks the abort flag between attempts. Racing every await
+   * point against abort + a hard timeout keeps readWebPage settleable, so
+   * the IPC queue can never be held hostage by a hung read.
+   */
+  private raceWebPageReadInterrupt<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+    if (this.webPageReadAbortRequested) return Promise.reject(new Error('desktop_web_reader_aborted'));
+    return new Promise<T>((resolve, reject) => {
+      let settled = false;
+      const onAbort = () => finish(() => reject(new Error('desktop_web_reader_aborted')));
+      const timer = setTimeout(() => finish(() => reject(new Error('desktop_web_reader_read_timeout'))), timeoutMs);
+      const cleanup = () => {
+        clearTimeout(timer);
+        this.webPageReadAbortWaiters = this.webPageReadAbortWaiters.filter((item) => item !== onAbort);
+      };
+      const finish = (settle: () => void) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        settle();
+      };
+      this.webPageReadAbortWaiters.push(onAbort);
+      promise.then(
+        (value) => finish(() => resolve(value)),
+        (error) => finish(() => reject(error)),
+      );
+    });
   }
 
   /**
@@ -984,7 +1023,10 @@ export class ChatterBrowser {
       // The redirect interstitial is a transition, not the result.
       if (!isClientRedirectorUrl(contents.getURL())) {
         try {
-          const result = await this.readPage('full') as BrowserWebPageResult;
+          const result = await this.raceWebPageReadInterrupt(
+            this.readPage('full'),
+            WEB_READER_READ_ATTEMPT_TIMEOUT_MS,
+          ) as BrowserWebPageResult;
           if (await this.probePageChallenge()) {
             if (!challengeNotified) {
               challengeNotified = true;
@@ -995,8 +1037,11 @@ export class ChatterBrowser {
           } else if (`${result?.text || ''}`.trim()) {
             return result;
           }
-        } catch {
-          /* frames are briefly unavailable mid-navigation; next poll re-reads */
+        } catch (error) {
+          if (this.webPageReadAbortRequested || contents.isDestroyed()) {
+            throw new Error('desktop_web_reader_aborted');
+          }
+          /* read timed out or frames are briefly unavailable; next poll re-reads */
         }
       }
       await new Promise(resolve => setTimeout(resolve, WEB_READER_POLL_INTERVAL_MS));
@@ -1008,7 +1053,10 @@ export class ChatterBrowser {
       throw new Error('desktop_web_reader_empty');
     }
     // Final read at the deadline propagates genuine read errors.
-    const result = await this.readPage('full') as BrowserWebPageResult;
+    const result = await this.raceWebPageReadInterrupt(
+      this.readPage('full'),
+      WEB_READER_READ_ATTEMPT_TIMEOUT_MS,
+    ) as BrowserWebPageResult;
     if (!`${result?.text || ''}`.trim()) throw new Error('desktop_web_reader_empty');
     return result;
   }
@@ -1021,7 +1069,8 @@ export class ChatterBrowser {
    */
   private async probePageChallenge(): Promise<boolean> {
     try {
-      return await this.executeInBrowserWorld<boolean>(`(() => {
+      return await this.raceWebPageReadInterrupt(
+        this.executeInBrowserWorld<boolean>(`(() => {
         const thin = (value) => value.replace(/\\s+/g, ' ').trim().length < 200;
         const bodyText = String(document.body?.innerText || '');
         if (location.pathname.startsWith('/sorry/') || document.querySelector('#captcha-form, #challenge-running, #challenge-form')) return true;
@@ -1031,7 +1080,9 @@ export class ChatterBrowser {
         const scope = captcha.closest('form, section, aside, footer, [class*="comment"], [id*="comment"]');
         const scopeText = scope ? String(scope.innerText || '').trim() : '';
         return scopeText ? thin(bodyText.split(scopeText).join(' ')) : thin(bodyText);
-      })()`);
+      })()`),
+        WEB_READER_PROBE_TIMEOUT_MS,
+      );
     } catch {
       return false;
     }

@@ -1420,6 +1420,25 @@ function createWindow() {
     return { opened: true };
   });
 
+  ipcMain.handle('browser-sessions:stop', (event, payload: { id?: string }) => {
+    assertTrustedIpcSender(event);
+    const id = `${payload?.id || ''}`;
+    const source: BrowserPreviewSource | null = id.startsWith('browser-session:web_search:')
+      ? 'web_search'
+      : id.startsWith('browser-session:google_ai:')
+        ? 'google_ai'
+        : id.startsWith('browser-session:web_reader:') ? 'web_reader' : null;
+    if (!source) return { stopped: false };
+    const sessions = source === 'web_search' ? searchSessions : source === 'web_reader' ? webReaderSessions : googleAiSessions;
+    const session = [...sessions.values()].find((candidate) => (
+      browserSessionActivityId(source, candidate.chatId) === id
+    ));
+    if (!session) return { stopped: false };
+    // Let an in-flight web page read unwind before the session is torn down.
+    if (source === 'web_reader') session.browser.requestWebPageReadAbort();
+    return { stopped: closeBrowserSession(sessions, source, session, 'explicit') };
+  });
+
   ipcMain.handle('youtube-music:get-state', (event) => {
     assertTrustedIpcSender(event);
     if (!youtubeMusicBrowser) throw new Error('youtube_music_unavailable');

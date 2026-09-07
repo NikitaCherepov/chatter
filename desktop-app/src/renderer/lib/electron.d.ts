@@ -37,6 +37,7 @@ declare global {
       upsertBackgroundActivity: (payload: BackgroundActivityInput) => Promise<{ activeChatId: number | null; activities: BackgroundActivitySnapshot[] }>;
       removeBackgroundActivity: (id: string) => Promise<{ activeChatId: number | null; activities: BackgroundActivitySnapshot[] }>;
       openBrowserSession: (id: string) => Promise<{ opened: boolean }>;
+      stopBrowserSession: (id: string) => Promise<{ stopped: boolean }>;
       onBackgroundActivitiesChanged: (callback: (payload: { activeChatId: number | null; activities: BackgroundActivitySnapshot[] }) => void) => () => void;
       onBrowserState: (callback: (payload: BrowserState) => void) => () => void;
       youtubeMusicGetState: () => Promise<BrowserState>;

@@ -74,6 +74,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('background-activities:remove', { id }),
   openBrowserSession: (id: string) =>
     ipcRenderer.invoke('browser-sessions:open', { id }),
+  stopBrowserSession: (id: string) =>
+    ipcRenderer.invoke('browser-sessions:stop', { id }),
   onBackgroundActivitiesChanged: (callback: (payload: unknown) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, payload: unknown) => callback(payload);
     ipcRenderer.on('background-activities:changed', handler);

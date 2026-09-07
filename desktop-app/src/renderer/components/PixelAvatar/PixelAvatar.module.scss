@@ -241,7 +241,32 @@
   background: #fbbc05;
 }
 
+.sessionActions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+
+.sessionStop {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+
+  &:hover {
+    color: #b91c1c;
+    background: rgba(185, 28, 28, 0.14);
+  }
+}
+
 .sessionOpen {
   color: var(--text-muted);
-  font-size: 15px;
+  font-size: 13px;
+  line-height: 1;
 }
