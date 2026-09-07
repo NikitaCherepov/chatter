@@ -143,6 +143,8 @@ const MAX_BROWSER_FRAMES = 20;
 const BROWSER_WORLD_ID = 1004;
 const DOWNLOAD_CONFIRMATION_TTL_MS = 5 * 60 * 1000;
 const YOUTUBE_MUSIC_ORIGIN = 'https://music.youtube.com';
+const WEB_READER_REDIRECT_WAIT_MS = 12_000;
+const WEB_READER_POLL_INTERVAL_MS = 250;
 
 type BrowserReadSnapshot = {
   url: string;
@@ -261,6 +263,22 @@ function isAbortedNavigationError(error: any): boolean {
   return error?.code === -3
     || error?.code === 'ERR_ABORTED'
     || `${error?.message || ''}`.includes('ERR_ABORTED');
+}
+
+/**
+ * google.com/goto-style interstitials forward to the target client-side;
+ * they are transitions, never read results.
+ */
+function isClientRedirectorUrl(value: string): boolean {
+  try {
+    const parsed = new URL(value);
+    if (!/(^|\.)google\.[a-z.]+$/i.test(parsed.hostname)) return false;
+    return parsed.pathname === '/goto'
+      || parsed.pathname.includes('/grounding-api-redirect/')
+      || parsed.pathname === '/url';
+  } catch {
+    return false;
+  }
 }
 
 export class ChatterBrowser {
@@ -517,6 +535,9 @@ export class ChatterBrowser {
       visible
       && !this.explicitNavigationRequested
       && !this.initialNavigationStarted
+      // An about:blank homeUrl must not trigger the initial navigation:
+      // its commit races the first explicit loadURL.
+      && this.homeUrl !== 'about:blank'
       && (!this.view.webContents.getURL() || this.view.webContents.getURL() === 'about:blank')
     ) {
       this.initialNavigationStarted = true;
@@ -919,13 +940,48 @@ export class ChatterBrowser {
     this.interactionInProgress = true;
     this.explicitNavigationRequested = true;
     try {
+      // Same escape hatch as control('open'): a pending initial navigation
+      // must not abort or mask the requested load.
+      const initialNavigation = this.initialNavigationPromise;
+      if (initialNavigation) {
+        this.view.webContents.stop();
+        await initialNavigation;
+      }
       await this.navigateToUrl(url);
-      const result = await this.readPage('full') as BrowserWebPageResult;
-      if (!`${result?.text || ''}`.trim()) throw new Error('desktop_web_reader_empty');
-      return result;
+      return await this.waitForReadableWebPage();
     } finally {
       this.interactionInProgress = false;
     }
+  }
+
+  /**
+   * Waits out client-side redirect chains and re-reads until text appears;
+   * throws desktop_web_reader_empty so the backend fallback stays intact.
+   */
+  private async waitForReadableWebPage(): Promise<BrowserWebPageResult> {
+    const contents = this.view.webContents;
+    const deadline = Date.now() + WEB_READER_REDIRECT_WAIT_MS;
+
+    while (Date.now() < deadline) {
+      if (contents.isDestroyed()) throw new Error('browser_unavailable');
+      // The redirect interstitial is a transition, not the result.
+      if (!isClientRedirectorUrl(contents.getURL())) {
+        try {
+          const result = await this.readPage('full') as BrowserWebPageResult;
+          if (`${result?.text || ''}`.trim()) return result;
+        } catch {
+          /* frames are briefly unavailable mid-navigation; next poll re-reads */
+        }
+      }
+      await new Promise(resolve => setTimeout(resolve, WEB_READER_POLL_INTERVAL_MS));
+    }
+
+    if (contents.isDestroyed()) throw new Error('browser_unavailable');
+    // Final read at the deadline propagates genuine read errors.
+    if (isClientRedirectorUrl(contents.getURL())) throw new Error('desktop_web_reader_empty');
+    const result = await this.readPage('full') as BrowserWebPageResult;
+    if (!`${result?.text || ''}`.trim()) throw new Error('desktop_web_reader_empty');
+    return result;
   }
 
   async googleAi(payload: GoogleAiPayload): Promise<unknown> {
