@@ -720,12 +720,13 @@ app.post('/internal/reset-daily-counters', internalAuth, (_req, res) => {
 app.post('/internal/ai/generate-image', internalAuth, async (req, res) => {
   const userId = resolveInternalAccountId(req.body?.user_id);
   const prompt = `${req.body?.prompt || ''}`.trim();
+  const aspectRatio = req.body?.aspect_ratio;
 
   if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
   if (!prompt) return res.status(400).json({ error: 'empty_prompt' });
 
   try {
-    const result = await runImageGeneration(Math.floor(userId), prompt);
+    const result = await runImageGeneration(Math.floor(userId), prompt, undefined, aspectRatio);
     if (!result.ok) {
       const errMsg = (result as any).error || 'image_gen_failed';
       if (errMsg === 'user_not_found') return res.status(404).json({ error: errMsg });

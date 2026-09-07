@@ -826,6 +826,7 @@ const runBackendAiStream = async (
         let finalResult: any = null;
         let streamError: string | null = null;
         let streamErrorMessage: string | null = null;
+        let processingQueue: Promise<void> = Promise.resolve();
 
         const processSSE = async (raw: string) => {
             const lines = raw.split('\n');
@@ -878,29 +879,27 @@ const runBackendAiStream = async (
             }
         };
 
-        stream.on('data', async (chunk: Buffer) => {
+        stream.on('data', (chunk: Buffer) => {
             buffer += chunk.toString();
             // SSE events separated by double newline
             const parts = buffer.split('\n\n');
             buffer = parts.pop() || '';
-            for (const part of parts) {
-                await processSSE(part);
+            if (parts.length > 0) {
+                // EventEmitter does not await async data handlers. Queue chunks so
+                // the final event (including generated image base64) cannot lose a
+                // race against the stream's end event.
+                processingQueue = processingQueue.then(async () => {
+                    for (const part of parts) {
+                        await processSSE(part);
+                    }
+                });
             }
         });
 
-        stream.on('end', () => {
-            // Process any remaining buffered data
-            if (buffer.trim()) {
-                processSSE(buffer).then(() => {
-                    if (streamError) {
-                        const err = new Error(streamError) as Error & { localizedMessage?: string };
-                        err.localizedMessage = streamErrorMessage || undefined;
-                        reject(err);
-                    } else {
-                        resolve(finalResult || { reply_text: '' });
-                    }
-                });
-            } else {
+        stream.on('end', async () => {
+            try {
+                await processingQueue;
+                if (buffer.trim()) await processSSE(buffer);
                 if (streamError) {
                     const err = new Error(streamError) as Error & { localizedMessage?: string };
                     err.localizedMessage = streamErrorMessage || undefined;
@@ -908,6 +907,8 @@ const runBackendAiStream = async (
                 } else {
                     resolve(finalResult || { reply_text: '' });
                 }
+            } catch (err) {
+                reject(err);
             }
         });
 

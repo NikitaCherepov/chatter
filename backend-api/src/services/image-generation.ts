@@ -13,14 +13,27 @@ const IMAGE_GEN_MAX_RESOLUTION = process.env.IMAGE_GEN_MAX_RESOLUTION === '1K' ?
 const IMAGE_GEN_QUALITY = ['low', 'medium', 'high'].includes(`${process.env.IMAGE_GEN_QUALITY || ''}`)
   ? process.env.IMAGE_GEN_QUALITY
   : 'auto';
+export const IMAGE_ASPECT_RATIOS = [
+  'auto', '1:1', '3:4', '4:3', '9:16', '16:9', '2:3', '3:2',
+  '9:19.5', '19.5:9', '9:20', '20:9', '1:2', '2:1',
+] as const;
+export type ImageAspectRatio = typeof IMAGE_ASPECT_RATIOS[number];
+
 const IMAGE_GEN_SUPPORTED_PARAMETERS = new Set(
   `${process.env.IMAGE_GEN_SUPPORTED_PARAMETERS === undefined
-    ? 'resolution,input_references'
+    ? 'resolution,aspect_ratio,input_references'
     : process.env.IMAGE_GEN_SUPPORTED_PARAMETERS}`
     .split(',')
     .map(value => value.trim())
-    .filter(value => ['resolution', 'quality', 'input_references'].includes(value))
+    .filter(value => ['resolution', 'aspect_ratio', 'quality', 'input_references'].includes(value))
 );
+
+const normalizeAspectRatio = (value: unknown): ImageAspectRatio => {
+  const normalized = `${value || 'auto'}`.trim();
+  return (IMAGE_ASPECT_RATIOS as readonly string[]).includes(normalized)
+    ? normalized as ImageAspectRatio
+    : 'auto';
+};
 
 const postJson = async (url: string, body: unknown, apiKey: string): Promise<any> => {
   const response = await fetch(url, {
@@ -84,7 +97,8 @@ export type ImageGenError = {
  */
 const generateOpenRouter = async (
   prompt: string,
-  inputImages?: Array<{ base64: string; mimeType: string }>
+  inputImages: Array<{ base64: string; mimeType: string }> | undefined,
+  aspectRatio: ImageAspectRatio,
 ): Promise<ImageGenResult | ImageGenError> => {
   if (!OPENROUTER_API_KEY) {
     return { ok: false, error: 'Генерация изображений не настроена (нет OPENROUTER_API_KEY).' };
@@ -95,6 +109,7 @@ const generateOpenRouter = async (
     prompt,
   };
   if (IMAGE_GEN_SUPPORTED_PARAMETERS.has('resolution')) body.resolution = IMAGE_GEN_MAX_RESOLUTION;
+  if (IMAGE_GEN_SUPPORTED_PARAMETERS.has('aspect_ratio')) body.aspect_ratio = aspectRatio;
   if (IMAGE_GEN_SUPPORTED_PARAMETERS.has('quality')) body.quality = IMAGE_GEN_QUALITY;
 
   // Attach reference images
@@ -126,7 +141,8 @@ const generateOpenRouter = async (
 export const runImageGeneration = async (
   userId: number,
   prompt: string,
-  inputImages?: Array<{ base64: string; mimeType: string }>
+  inputImages?: Array<{ base64: string; mimeType: string }>,
+  aspectRatioRaw: unknown = 'auto',
 ): Promise<ImageGenResult | ImageGenError> => {
   if (!isImageGenerationEnabled()) {
     return { ok: false, error: 'Image generation is disabled by the administrator.' };
@@ -142,9 +158,10 @@ export const runImageGeneration = async (
 
   const trimmedPrompt = (prompt || '').trim();
   if (!trimmedPrompt) return { ok: false, error: 'Пустой промпт для генерации изображения.' };
+  const aspectRatio = normalizeAspectRatio(aspectRatioRaw);
 
   try {
-    const result = await generateOpenRouter(trimmedPrompt, inputImages);
+    const result = await generateOpenRouter(trimmedPrompt, inputImages, aspectRatio);
 
     if (result.ok) {
       incrementUserImageGenUsage(userId, 1);

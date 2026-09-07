@@ -2502,6 +2502,12 @@ export const toolDefinitions = [
             type: 'array',
             items: { type: 'string' },
             description: 'Image URL(s) from [Attached image N: URL] markers in the current message or chat history. Use for image-to-image generation (editing/modifying the attached photo).'
+          },
+          aspect_ratio: {
+            type: 'string',
+            enum: ['auto', '1:1', '3:4', '4:3', '9:16', '16:9', '2:3', '3:2', '9:19.5', '19.5:9', '9:20', '20:9', '1:2', '2:1'],
+            default: 'auto',
+            description: 'Output aspect ratio. Use auto unless the user requests a square, portrait, landscape, phone-screen, or ultrawide format.'
           }
         },
         required: ['prompt']
@@ -4363,7 +4369,12 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
 
     selectedImages = selectedImages.slice(0, 3);
 
-    const result = await runImageGeneration(billingUser.id, prompt, selectedImages.length > 0 ? selectedImages : undefined);
+    const result = await runImageGeneration(
+      billingUser.id,
+      prompt,
+      selectedImages.length > 0 ? selectedImages : undefined,
+      parsed.aspect_ratio,
+    );
     if (!result.ok) return `Image generation error: ${(result as any).error || 'unknown'}`;
     // base64 НЕ возвращаем в tool_content — он сохраняется в массив generatedImages
     // LLM получает текстовую заглушку, чтобы не забивать контекст мегабайтами base64
