@@ -1,95 +1,95 @@
 {
   "changes": {
     "en": [
-      "Added YouTube Music integration",
-      "Fixed bugs in the browser",
-      "Added an HTML preview when sending email",
-      "Fixed the voiceover of the bot's voice replies",
-      "Added Enter and Space support in the browser"
+      "Added desktop-search: the bot can now use the built-in browser for searching — search limits are only consumed when your desktop-app is offline and server resources are used",
+      "Added desktop-app page parsing — same principle",
+      "Reworked the web search system",
+      "Added a tool that lets Chatter talk to Google's AI",
+      "Added a task manager: if a background process (search or browser) is running, you can open or stop it. All processes are temporary and terminate on their own after a while"
     ],
     "cs": [
-      "Přidána integrace YouTube Music",
-      "Opraveny chyby v prohlížeči",
-      "Přidán náhled HTML při odesílání e-mailu",
-      "Opraven hlasový doprovod hlasových odpovědí bota",
-      "Přidána podpora kláves Enter a mezerník v prohlížeči"
+      "Přidáno vyhledávání na ploše: bot nyní může používat vestavěný prohlížeč pro vyhledávání — limity vyhledávání se spotřebovávají pouze tehdy, když je vaše plocha offline a jsou použity serverové zdroje",
+      "Přidáno parsování stránek na ploše — stejný princip",
+      "Přepracován systém webového vyhledávání",
+      "Přidán nástroj, který umožňuje Chatterovi mluvit s AI od Googlu",
+      "Přidán správce úloh: pokud běží proces na pozadí (vyhledávání nebo prohlížeč), můžete jej otevřít nebo zastavit. Všechny procesy jsou dočasné a po chvíli se samy ukončí"
     ],
     "de": [
-      "YouTube Music-Integration hinzugefügt",
-      "Fehler im Browser behoben",
-      "HTML-Vorschau beim Senden von E-Mails hinzugefügt",
-      "Sprachausgabe der Bot-Sprachantworten behoben",
-      "Enter- und Leertaste-Unterstützung im Browser hinzugefügt"
+      "Desktop-Suche hinzugefügt: Der Bot kann jetzt den integrierten Browser für die Suche verwenden — Suchlimits werden nur verbraucht, wenn Ihr Desktop offline ist und Serverressourcen verwendet werden",
+      "Desktop-Seitenanalyse hinzugefügt — gleiches Prinzip",
+      "Websuchsystem überarbeitet",
+      "Ein Tool hinzugefügt, mit dem Chatter mit Googles KI sprechen kann",
+      "Aufgabenmanager hinzugefügt: Wenn ein Hintergrundprozess (Suche oder Browser) läuft, können Sie ihn öffnen oder stoppen. Alle Prozesse sind temporär und beenden sich nach einer Weile von selbst"
     ],
     "es": [
-      "Se añadió la integración con YouTube Music",
-      "Se corrigieron errores en el navegador",
-      "Se añadió una vista previa HTML al enviar correos electrónicos",
-      "Se corrigió la locución de las respuestas de voz del bot",
-      "Se añadió soporte para Enter y Espacio en el navegador"
+      "Añadida búsqueda de escritorio: el bot ahora puede usar el navegador integrado para buscar — los límites de búsqueda solo se consumen cuando tu escritorio está sin conexión y se usan recursos del servidor",
+      "Añadido análisis de páginas de escritorio — mismo principio",
+      "Reelaborado el sistema de búsqueda web",
+      "Añadida una herramienta que permite a Chatter hablar con la IA de Google",
+      "Añadido un administrador de tareas: si un proceso en segundo plano (búsqueda o navegador) está en ejecución, puedes abrirlo o detenerlo. Todos los procesos son temporales y terminan por sí solos después de un tiempo"
     ],
     "fr": [
-      "Intégration de YouTube Music ajoutée",
-      "Correction de bugs dans le navigateur",
-      "Ajout d'un aperçu HTML lors de l'envoi d'e-mails",
-      "Correction de la voix off des réponses vocales du bot",
-      "Ajout de la prise en charge d'Entrée et d'Espace dans le navigateur"
+      "Recherche sur le bureau ajoutée : le bot peut désormais utiliser le navigateur intégré pour la recherche — les limites de recherche ne sont consommées que lorsque votre bureau est hors ligne et que les ressources du serveur sont utilisées",
+      "Analyse de pages de bureau ajoutée — même principe",
+      "Système de recherche web retravaillé",
+      "Ajout d'un outil permettant à Chatter de discuter avec l'IA de Google",
+      "Gestionnaire de tâches ajouté : si un processus en arrière-plan (recherche ou navigateur) est en cours, vous pouvez l'ouvrir ou l'arrêter. Tous les processus sont temporaires et se terminent d'eux-mêmes après un certain temps"
     ],
     "it": [
-      "Aggiunta integrazione con YouTube Music",
-      "Corretti bug nel browser",
-      "Aggiunta anteprima HTML durante l'invio di email",
-      "Corretta la voce delle risposte vocali del bot",
-      "Aggiunto supporto a Invio e Spazio nel browser"
+      "Aggiunta ricerca desktop: il bot ora può usare il browser integrato per le ricerche — i limiti di ricerca vengono consumati solo quando il desktop è offline e vengono usate risorse del server",
+      "Aggiunta analisi delle pagine desktop — stesso principio",
+      "Rifatto il sistema di ricerca web",
+      "Aggiunto uno strumento che permette a Chatter di parlare con l'IA di Google",
+      "Aggiunto un gestore di attività: se un processo in background (ricerca o browser) è in esecuzione, puoi aprirlo o fermarlo. Tutti i processi sono temporanei e si terminano da soli dopo un po'"
     ],
     "ja": [
-      "YouTube Musicの統合を追加しました",
-      "ブラウザのバグを修正しました",
-      "メール送信時にHTMLプレビューを追加しました",
-      "ボットの音声返信のナレーションを修正しました",
-      "ブラウザでEnterキーとスペースキーのサポートを追加しました"
+      "デスクトップ検索を追加: ボットは内蔵ブラウザを検索に使用できるようになりました — 検索制限は、デスクトップがオフラインでサーバーリソースが使用される場合にのみ消費されます",
+      "デスクトップページ解析を追加 — 同じ原理です",
+      "ウェブ検索システムを再設計しました",
+      "ChatterがGoogleのAIと会話できるツールを追加しました",
+      "タスクマネージャーを追加: バックグラウンドプロセス（検索またはブラウザ）が実行中の場合、開くか停止できます。すべてのプロセスは一時的で、しばらくすると自動的に終了します"
     ],
     "ko": [
-      "YouTube Music 통합 추가",
-      "브라우저의 버그 수정",
-      "이메일 전송 시 HTML 미리보기 추가",
-      "봇의 음성 응답 음성 해설 수정",
-      "브라우저에서 Enter 및 Space 지원 추가"
+      "데스크톱 검색 추가: 봇이 이제 내장 브라우저를 사용하여 검색할 수 있습니다 — 검색 한도는 데스크톱이 오프라인일 때만 소비되며 서버 리소스가 사용됩니다",
+      "데스크톱 페이지 파싱 추가 — 동일한 원리",
+      "웹 검색 시스템 재작업",
+      "Chatter가 Google의 AI와 대화할 수 있는 도구 추가",
+      "작업 관리자 추가: 백그라운드 프로세스(검색 또는 브라우저)가 실행 중이면 열거나 중지할 수 있습니다. 모든 프로세스는 임시적이며 잠시 후 자동으로 종료됩니다"
     ],
     "pl": [
-      "Dodano integrację z YouTube Music",
-      "Naprawiono błędy w przeglądarce",
-      "Dodano podgląd HTML podczas wysyłania wiadomości e-mail",
-      "Naprawiono lektora odpowiedzi głosowych bota",
-      "Dodano obsługę klawiszy Enter i Spacja w przeglądarce"
+      "Dodano wyszukiwanie na pulpicie: bot może teraz korzystać z wbudowanej przeglądarki do wyszukiwania — limity wyszukiwania są zużywane tylko wtedy, gdy pulpit jest offline i używane są zasoby serwera",
+      "Dodano parsowanie stron na pulpicie — ta sama zasada",
+      "Przebudowano system wyszukiwania w sieci",
+      "Dodano narzędzie umożliwiające Chatterowi rozmowę z AI Google",
+      "Dodano menedżer zadań: jeśli proces w tle (wyszukiwanie lub przeglądarka) jest uruchomiony, możesz go otworzyć lub zatrzymać. Wszystkie procesy są tymczasowe i kończą się same po pewnym czasie"
     ],
     "pt-BR": [
-      "Adicionada integração com YouTube Music",
-      "Corrigidos bugs no navegador",
-      "Adicionada pré-visualização em HTML ao enviar e-mail",
-      "Corrigida a narração das respostas de voz do bot",
-      "Adicionado suporte a Enter e Espaço no navegador"
+      "Adicionada pesquisa de desktop: o bot agora pode usar o navegador integrado para pesquisar — os limites de pesquisa são consumidos apenas quando seu desktop está offline e os recursos do servidor são usados",
+      "Adicionada análise de páginas de desktop — mesmo princípio",
+      "Sistema de pesquisa na web reformulado",
+      "Adicionada uma ferramenta que permite ao Chatter conversar com a IA do Google",
+      "Adicionado um gerenciador de tarefas: se um processo em segundo plano (pesquisa ou navegador) estiver em execução, você pode abri-lo ou interrompê-lo. Todos os processos são temporários e terminam por conta própria após um tempo"
     ],
     "ru": [
-      "Добавлена интеграция с YouTube Music",
-      "Исправлены ошибки в браузере",
-      "Добавлен HTML-предпросмотр при отправке электронной почты",
-      "Исправлено озвучивание голосовых ответов бота",
-      "Добавлена поддержка Enter и Space в браузере"
+      "Добавлен поиск с рабочего стола: бот теперь может использовать встроенный браузер для поиска — лимиты поиска расходуются только тогда, когда ваше приложение оффлайн и используются серверные ресурсы",
+      "Добавлен парсинг страниц из приложения — тот же принцип",
+      "Переработана система веб-поиска",
+      "Добавлен инструмент, позволяющий Chatter общаться с ИИ от Google",
+      "Добавлен менеджер задач: если фоновый процесс (поиск или браузер) запущен, вы можете открыть или остановить его. Все процессы временные и завершаются сами через некоторое время"
     ],
     "tr": [
-      "YouTube Music entegrasyonu eklendi",
-      "Tarayıcıdaki hatalar düzeltildi",
-      "E-posta gönderirken HTML önizlemesi eklendi",
-      "Botun sesli yanıtlarının seslendirmesi düzeltildi",
-      "Tarayıcıda Enter ve Boşluk desteği eklendi"
+      "Masaüstü arama eklendi: bot artık yerleşik tarayıcıyı arama için kullanabilir — arama limitleri yalnızca masaüstünüz çevrimdışıyken ve sunucu kaynakları kullanıldığında tüketilir",
+      "Masaüstü sayfa ayrıştırma eklendi — aynı prensip",
+      "Web arama sistemi yeniden düzenlendi",
+      "Chatter'ın Google'ın yapay zekasıyla konuşmasını sağlayan bir araç eklendi",
+      "Görev yöneticisi eklendi: arka planda bir işlem (arama veya tarayıcı) çalışıyorsa, onu açabilir veya durdurabilirsiniz. Tüm işlemler geçicidir ve bir süre sonra kendiliğinden sona erer"
     ],
     "zh-CN": [
-      "新增 YouTube Music 集成",
-      "修复浏览器中的错误",
-      "发送邮件时新增 HTML 预览",
-      "修复机器人语音回复的旁白",
-      "在浏览器中新增 Enter 和 Space 支持"
+      "新增桌面搜索：机器人现在可以使用内置浏览器进行搜索——仅当您的桌面离线且使用服务器资源时，才会消耗搜索限制",
+      "新增桌面页面解析——原理相同",
+      "重新设计了网络搜索系统",
+      "新增一个工具，让Chatter可以与谷歌的AI对话",
+      "新增任务管理器：如果后台进程（搜索或浏览器）正在运行，您可以打开或停止它。所有进程都是临时的，并在一段时间后自动终止"
     ]
   }
 }
