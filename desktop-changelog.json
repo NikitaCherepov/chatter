@@ -8,88 +8,88 @@
       "Added a task manager: if a background process (search or browser) is running, you can open or stop it. All processes are temporary and terminate on their own after a while"
     ],
     "cs": [
-      "Přidáno vyhledávání na ploše: bot nyní může používat vestavěný prohlížeč pro vyhledávání — limity vyhledávání se spotřebovávají pouze tehdy, když je vaše plocha offline a jsou použity serverové zdroje",
-      "Přidáno parsování stránek na ploše — stejný princip",
+      "Přidáno vyhledávání na ploše: bot nyní může používat vestavěný prohlížeč pro vyhledávání — limity vyhledávání se spotřebovávají pouze tehdy, když je vaše desktopová aplikace offline a jsou použity serverové prostředky",
+      "Přidáno parsování stránek desktopové aplikace — stejný princip",
       "Přepracován systém webového vyhledávání",
       "Přidán nástroj, který umožňuje Chatterovi mluvit s AI od Googlu",
       "Přidán správce úloh: pokud běží proces na pozadí (vyhledávání nebo prohlížeč), můžete jej otevřít nebo zastavit. Všechny procesy jsou dočasné a po chvíli se samy ukončí"
     ],
     "de": [
-      "Desktop-Suche hinzugefügt: Der Bot kann jetzt den integrierten Browser für die Suche verwenden — Suchlimits werden nur verbraucht, wenn Ihr Desktop offline ist und Serverressourcen verwendet werden",
-      "Desktop-Seitenanalyse hinzugefügt — gleiches Prinzip",
+      "Desktop-Suche hinzugefügt: Der Bot kann jetzt den integrierten Browser für die Suche nutzen — Suchlimits werden nur verbraucht, wenn Ihre Desktop-App offline ist und Serverressourcen verwendet werden",
+      "Desktop-App-Seitenanalyse hinzugefügt — gleiches Prinzip",
       "Websuchsystem überarbeitet",
-      "Ein Tool hinzugefügt, mit dem Chatter mit Googles KI sprechen kann",
-      "Aufgabenmanager hinzugefügt: Wenn ein Hintergrundprozess (Suche oder Browser) läuft, können Sie ihn öffnen oder stoppen. Alle Prozesse sind temporär und beenden sich nach einer Weile von selbst"
+      "Tool hinzugefügt, mit dem Chatter mit Googles KI sprechen kann",
+      "Task-Manager hinzugefügt: Wenn ein Hintergrundprozess (Suche oder Browser) läuft, können Sie ihn öffnen oder stoppen. Alle Prozesse sind temporär und beenden sich nach einer Weile von selbst"
     ],
     "es": [
-      "Añadida búsqueda de escritorio: el bot ahora puede usar el navegador integrado para buscar — los límites de búsqueda solo se consumen cuando tu escritorio está sin conexión y se usan recursos del servidor",
-      "Añadido análisis de páginas de escritorio — mismo principio",
-      "Reelaborado el sistema de búsqueda web",
-      "Añadida una herramienta que permite a Chatter hablar con la IA de Google",
-      "Añadido un administrador de tareas: si un proceso en segundo plano (búsqueda o navegador) está en ejecución, puedes abrirlo o detenerlo. Todos los procesos son temporales y terminan por sí solos después de un tiempo"
+      "Se añadió la búsqueda de escritorio: el bot ahora puede usar el navegador integrado para buscar — los límites de búsqueda solo se consumen cuando tu aplicación de escritorio está sin conexión y se usan recursos del servidor",
+      "Se añadió el análisis de páginas de la aplicación de escritorio — mismo principio",
+      "Se rediseñó el sistema de búsqueda web",
+      "Se añadió una herramienta que permite a Chatter hablar con la IA de Google",
+      "Se añadió un administrador de tareas: si un proceso en segundo plano (búsqueda o navegador) está en ejecución, puedes abrirlo o detenerlo. Todos los procesos son temporales y se terminan por sí solos después de un tiempo"
     ],
     "fr": [
-      "Recherche sur le bureau ajoutée : le bot peut désormais utiliser le navigateur intégré pour la recherche — les limites de recherche ne sont consommées que lorsque votre bureau est hors ligne et que les ressources du serveur sont utilisées",
-      "Analyse de pages de bureau ajoutée — même principe",
+      "Recherche sur bureau ajoutée : le bot peut désormais utiliser le navigateur intégré pour rechercher — les limites de recherche ne sont consommées que lorsque votre application de bureau est hors ligne et que les ressources du serveur sont utilisées",
+      "Analyse de pages de l'application de bureau ajoutée — même principe",
       "Système de recherche web retravaillé",
-      "Ajout d'un outil permettant à Chatter de discuter avec l'IA de Google",
+      "Ajout d'un outil permettant à Chatter de parler à l'IA de Google",
       "Gestionnaire de tâches ajouté : si un processus en arrière-plan (recherche ou navigateur) est en cours, vous pouvez l'ouvrir ou l'arrêter. Tous les processus sont temporaires et se terminent d'eux-mêmes après un certain temps"
     ],
     "it": [
-      "Aggiunta ricerca desktop: il bot ora può usare il browser integrato per le ricerche — i limiti di ricerca vengono consumati solo quando il desktop è offline e vengono usate risorse del server",
-      "Aggiunta analisi delle pagine desktop — stesso principio",
-      "Rifatto il sistema di ricerca web",
+      "Aggiunta ricerca desktop: il bot ora può usare il browser integrato per le ricerche — i limiti di ricerca vengono consumati solo quando l'app desktop è offline e vengono usate risorse del server",
+      "Aggiunta analisi delle pagine dell'app desktop — stesso principio",
+      "Rielaborato il sistema di ricerca web",
       "Aggiunto uno strumento che permette a Chatter di parlare con l'IA di Google",
-      "Aggiunto un gestore di attività: se un processo in background (ricerca o browser) è in esecuzione, puoi aprirlo o fermarlo. Tutti i processi sono temporanei e si terminano da soli dopo un po'"
+      "Aggiunto un gestore di attività: se un processo in background (ricerca o browser) è in esecuzione, puoi aprirlo o fermarlo. Tutti i processi sono temporanei e terminano da soli dopo un po'"
     ],
     "ja": [
-      "デスクトップ検索を追加: ボットは内蔵ブラウザを検索に使用できるようになりました — 検索制限は、デスクトップがオフラインでサーバーリソースが使用される場合にのみ消費されます",
-      "デスクトップページ解析を追加 — 同じ原理です",
+      "デスクトップ検索を追加：ボットは内蔵ブラウザを検索に使用できるようになりました — 検索制限は、デスクトップアプリがオフラインでサーバーリソースが使用されている場合にのみ消費されます",
+      "デスクトップアプリのページ解析を追加 — 同じ原則",
       "ウェブ検索システムを再設計しました",
       "ChatterがGoogleのAIと会話できるツールを追加しました",
-      "タスクマネージャーを追加: バックグラウンドプロセス（検索またはブラウザ）が実行中の場合、開くか停止できます。すべてのプロセスは一時的で、しばらくすると自動的に終了します"
+      "タスクマネージャーを追加：バックグラウンドプロセス（検索またはブラウザ）が実行中の場合、開くか停止できます。すべてのプロセスは一時的で、しばらくすると自動的に終了します"
     ],
     "ko": [
-      "데스크톱 검색 추가: 봇이 이제 내장 브라우저를 사용하여 검색할 수 있습니다 — 검색 한도는 데스크톱이 오프라인일 때만 소비되며 서버 리소스가 사용됩니다",
-      "데스크톱 페이지 파싱 추가 — 동일한 원리",
+      "데스크톱 검색 추가: 봇이 이제 내장 브라우저를 사용하여 검색할 수 있습니다 — 검색 한도는 데스크톱 앱이 오프라인이고 서버 리소스가 사용될 때만 소비됩니다",
+      "데스크톱 앱 페이지 파싱 추가 — 동일한 원리",
       "웹 검색 시스템 재작업",
       "Chatter가 Google의 AI와 대화할 수 있는 도구 추가",
       "작업 관리자 추가: 백그라운드 프로세스(검색 또는 브라우저)가 실행 중이면 열거나 중지할 수 있습니다. 모든 프로세스는 임시적이며 잠시 후 자동으로 종료됩니다"
     ],
     "pl": [
-      "Dodano wyszukiwanie na pulpicie: bot może teraz korzystać z wbudowanej przeglądarki do wyszukiwania — limity wyszukiwania są zużywane tylko wtedy, gdy pulpit jest offline i używane są zasoby serwera",
-      "Dodano parsowanie stron na pulpicie — ta sama zasada",
-      "Przebudowano system wyszukiwania w sieci",
+      "Dodano wyszukiwanie na pulpicie: bot może teraz korzystać z wbudowanej przeglądarki do wyszukiwania — limity wyszukiwania są zużywane tylko wtedy, gdy aplikacja desktopowa jest offline i używane są zasoby serwera",
+      "Dodano parsowanie stron aplikacji desktopowej — ta sama zasada",
+      "Przeprojektowano system wyszukiwania w sieci",
       "Dodano narzędzie umożliwiające Chatterowi rozmowę z AI Google",
       "Dodano menedżer zadań: jeśli proces w tle (wyszukiwanie lub przeglądarka) jest uruchomiony, możesz go otworzyć lub zatrzymać. Wszystkie procesy są tymczasowe i kończą się same po pewnym czasie"
     ],
     "pt-BR": [
-      "Adicionada pesquisa de desktop: o bot agora pode usar o navegador integrado para pesquisar — os limites de pesquisa são consumidos apenas quando seu desktop está offline e os recursos do servidor são usados",
-      "Adicionada análise de páginas de desktop — mesmo princípio",
+      "Adicionada pesquisa de desktop: o bot agora pode usar o navegador integrado para pesquisar — os limites de pesquisa são consumidos apenas quando o aplicativo de desktop está offline e os recursos do servidor são usados",
+      "Adicionada análise de páginas do aplicativo de desktop — mesmo princípio",
       "Sistema de pesquisa na web reformulado",
       "Adicionada uma ferramenta que permite ao Chatter conversar com a IA do Google",
       "Adicionado um gerenciador de tarefas: se um processo em segundo plano (pesquisa ou navegador) estiver em execução, você pode abri-lo ou interrompê-lo. Todos os processos são temporários e terminam por conta própria após um tempo"
     ],
     "ru": [
-      "Добавлен поиск с рабочего стола: бот теперь может использовать встроенный браузер для поиска — лимиты поиска расходуются только тогда, когда ваше приложение оффлайн и используются серверные ресурсы",
-      "Добавлен парсинг страниц из приложения — тот же принцип",
+      "Добавлен поиск с рабочего стола: бот теперь может использовать встроенный браузер для поиска — лимиты поиска расходуются только когда ваше десктоп-приложение офлайн и используются серверные ресурсы",
+      "Добавлен парсинг страниц в десктоп-приложении — тот же принцип",
       "Переработана система веб-поиска",
       "Добавлен инструмент, позволяющий Chatter общаться с ИИ от Google",
       "Добавлен менеджер задач: если фоновый процесс (поиск или браузер) запущен, вы можете открыть или остановить его. Все процессы временные и завершаются сами через некоторое время"
     ],
     "tr": [
-      "Masaüstü arama eklendi: bot artık yerleşik tarayıcıyı arama için kullanabilir — arama limitleri yalnızca masaüstünüz çevrimdışıyken ve sunucu kaynakları kullanıldığında tüketilir",
-      "Masaüstü sayfa ayrıştırma eklendi — aynı prensip",
+      "Masaüstü arama eklendi: bot artık yerleşik tarayıcıyı arama için kullanabilir — arama limitleri yalnızca masaüstü uygulamanız çevrimdışıyken ve sunucu kaynakları kullanıldığında tüketilir",
+      "Masaüstü uygulama sayfa ayrıştırma eklendi — aynı prensip",
       "Web arama sistemi yeniden düzenlendi",
       "Chatter'ın Google'ın yapay zekasıyla konuşmasını sağlayan bir araç eklendi",
       "Görev yöneticisi eklendi: arka planda bir işlem (arama veya tarayıcı) çalışıyorsa, onu açabilir veya durdurabilirsiniz. Tüm işlemler geçicidir ve bir süre sonra kendiliğinden sona erer"
     ],
     "zh-CN": [
-      "新增桌面搜索：机器人现在可以使用内置浏览器进行搜索——仅当您的桌面离线且使用服务器资源时，才会消耗搜索限制",
-      "新增桌面页面解析——原理相同",
-      "重新设计了网络搜索系统",
+      "新增桌面搜索：机器人现在可以使用内置浏览器进行搜索——仅当您的桌面应用离线且使用服务器资源时，才会消耗搜索限制",
+      "新增桌面应用页面解析——原理相同",
+      "重新设计了网页搜索系统",
       "新增一个工具，让Chatter可以与谷歌的AI对话",
-      "新增任务管理器：如果后台进程（搜索或浏览器）正在运行，您可以打开或停止它。所有进程都是临时的，并在一段时间后自动终止"
+      "新增任务管理器：如果后台进程（搜索或浏览器）正在运行，您可以打开或停止它。所有进程都是临时的，并会在一段时间后自行终止"
     ]
   }
 }
