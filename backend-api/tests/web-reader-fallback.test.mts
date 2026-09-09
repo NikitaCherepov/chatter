@@ -15,6 +15,8 @@ globalThis.fetch = (async (input, init) => {
   const request = JSON.parse(String(init?.body || '{}'));
   assert.match(request.query, /evaluate\(content: \$extractor\)/);
   assert.doesNotMatch(request.query, /\bsolve\s*\(/);
+  assert.match(request.variables.extractor, /^\(\(\) => \{/);
+  assert.match(request.variables.extractor, /\}\)\(\)$/);
   const target = request?.variables?.target || 'https://example.com/fallback';
   const text = target.includes('/fallback')
     ? `Browserless fallback content ${'B'.repeat(31_000)}`

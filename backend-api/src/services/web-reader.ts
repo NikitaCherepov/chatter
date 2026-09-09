@@ -172,7 +172,7 @@ const toDesktopDocument = (requestedUrl: string, result: DesktopReadResult): Web
   };
 };
 
-const BROWSERLESS_EXTRACTOR = `() => {
+const BROWSERLESS_EXTRACTOR = `(() => {
   const clean = (value, max) => String(value || '').replace(/\\s+/g, ' ').trim().slice(0, max);
   const extractText = (node) => {
     if (!node) return '';
@@ -199,7 +199,7 @@ const BROWSERLESS_EXTRACTOR = `() => {
     links,
     truncated: selected.length > ${WEB_READER_MAX_TEXT},
   });
-}`;
+})()`;
 
 const requestSignal = (signal?: AbortSignal): { signal: AbortSignal; cleanup: () => void } => {
   const controller = new AbortController();
