@@ -13,6 +13,7 @@ type BillingMode = 'tokens' | 'budget';
 
 type PlanLimits = {
   daily_web_search_limit: number;
+  daily_web_reader_limit: number;
   daily_image_gen_limit: number;
   image_attachments_allowed: boolean;
   max_context_tokens: number;
@@ -25,9 +26,9 @@ type PlanLimits = {
 type PlanLimitsData = Record<'free' | 'standart' | 'pro', PlanLimits>;
 
 const emptyLimits: PlanLimitsData = {
-  free: { daily_web_search_limit: 0, daily_image_gen_limit: 0, image_attachments_allowed: false, max_context_tokens: 30000, weekly_token_quota: 5_000_000, billing_mode: 'tokens', budget_usd: 0, subscription_price: 0 },
-  standart: { daily_web_search_limit: 5, daily_image_gen_limit: 2, image_attachments_allowed: true, max_context_tokens: 60000, weekly_token_quota: 15_000_000, billing_mode: 'tokens', budget_usd: 0, subscription_price: 0 },
-  pro: { daily_web_search_limit: 20, daily_image_gen_limit: 5, image_attachments_allowed: true, max_context_tokens: 1_000_000, weekly_token_quota: 30_000_000, billing_mode: 'tokens', budget_usd: 0, subscription_price: 0 },
+  free: { daily_web_search_limit: 0, daily_web_reader_limit: 0, daily_image_gen_limit: 0, image_attachments_allowed: false, max_context_tokens: 30000, weekly_token_quota: 5_000_000, billing_mode: 'tokens', budget_usd: 0, subscription_price: 0 },
+  standart: { daily_web_search_limit: 5, daily_web_reader_limit: 5, daily_image_gen_limit: 2, image_attachments_allowed: true, max_context_tokens: 60000, weekly_token_quota: 15_000_000, billing_mode: 'tokens', budget_usd: 0, subscription_price: 0 },
+  pro: { daily_web_search_limit: 20, daily_web_reader_limit: 20, daily_image_gen_limit: 5, image_attachments_allowed: true, max_context_tokens: 1_000_000, weekly_token_quota: 30_000_000, billing_mode: 'tokens', budget_usd: 0, subscription_price: 0 },
 };
 
 const PLAN_IDS: ('free' | 'standart' | 'pro')[] = ['free', 'standart', 'pro'];
@@ -162,6 +163,17 @@ export function PlanLimitsPage() {
                   onChange={(e) => update(id, { max_context_tokens: Math.max(0, Number(e.target.value) || 0) })}
                 />
               </FormField>
+              <FormField label={t('planLimits.imageGenLabel')}>
+                <input
+                  type="number"
+                  min={0}
+                  step={1}
+                  value={cfg.daily_image_gen_limit}
+                  onChange={(e) => update(id, { daily_image_gen_limit: Math.max(0, Number(e.target.value) || 0) })}
+                />
+              </FormField>
+            </div>
+            <div className={styles.row}>
               <FormField label={t('planLimits.webSearchLabel')}>
                 <input
                   type="number"
@@ -171,13 +183,13 @@ export function PlanLimitsPage() {
                   onChange={(e) => update(id, { daily_web_search_limit: Math.max(0, Number(e.target.value) || 0) })}
                 />
               </FormField>
-              <FormField label={t('planLimits.imageGenLabel')}>
+              <FormField label={t('planLimits.webReaderLabel')}>
                 <input
                   type="number"
                   min={0}
                   step={1}
-                  value={cfg.daily_image_gen_limit}
-                  onChange={(e) => update(id, { daily_image_gen_limit: Math.max(0, Number(e.target.value) || 0) })}
+                  value={cfg.daily_web_reader_limit}
+                  onChange={(e) => update(id, { daily_web_reader_limit: Math.max(0, Number(e.target.value) || 0) })}
                 />
               </FormField>
             </div>

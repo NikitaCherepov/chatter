@@ -5,6 +5,7 @@ export type BillingMode = 'tokens' | 'budget';
 
 export type PlanLimits = {
   daily_web_search_limit: number;
+  daily_web_reader_limit: number;
   daily_image_gen_limit: number;
   image_attachments_allowed: boolean;
   max_context_tokens: number;
@@ -32,6 +33,7 @@ export const DEFAULT_BILLING_MODE: BillingMode = 'tokens';
 export const DEFAULT_PLAN_LIMITS: Record<UserPlan, PlanLimits> = {
   free: {
     daily_web_search_limit: 0,
+    daily_web_reader_limit: 0,
     daily_image_gen_limit: 0,
     image_attachments_allowed: false,
     max_context_tokens: 30_000,
@@ -42,6 +44,7 @@ export const DEFAULT_PLAN_LIMITS: Record<UserPlan, PlanLimits> = {
   },
   standart: {
     daily_web_search_limit: 5,
+    daily_web_reader_limit: 5,
     daily_image_gen_limit: 2,
     image_attachments_allowed: true,
     max_context_tokens: 60_000,
@@ -52,6 +55,7 @@ export const DEFAULT_PLAN_LIMITS: Record<UserPlan, PlanLimits> = {
   },
   pro: {
     daily_web_search_limit: 20,
+    daily_web_reader_limit: 20,
     daily_image_gen_limit: 5,
     image_attachments_allowed: true,
     max_context_tokens: 1_000_000,
@@ -77,8 +81,12 @@ const sanitizeConfig = (raw: unknown, plan: UserPlan): PlanLimits => {
     const n = typeof value === 'string' ? Number(value) : value;
     return Number.isFinite(n) && (n as number) >= 0 ? (n as number) : def;
   };
+  const dailyWebSearchLimit = num(cfg.daily_web_search_limit, fallback.daily_web_search_limit);
   return {
-    daily_web_search_limit: num(cfg.daily_web_search_limit, fallback.daily_web_search_limit),
+    daily_web_search_limit: dailyWebSearchLimit,
+    // Existing configs predate this field. Initially mirror their configured
+    // Tavily limit so an upgrade does not silently change plan availability.
+    daily_web_reader_limit: num(cfg.daily_web_reader_limit, dailyWebSearchLimit),
     daily_image_gen_limit: num(cfg.daily_image_gen_limit, fallback.daily_image_gen_limit),
     image_attachments_allowed: Boolean(cfg.image_attachments_allowed ?? fallback.image_attachments_allowed),
     max_context_tokens: num(cfg.max_context_tokens, fallback.max_context_tokens),

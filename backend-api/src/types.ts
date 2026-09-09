@@ -28,6 +28,9 @@ export type UserRecord = {
   daily_web_search_count?: number;
   daily_web_search_limit?: number;
   total_web_search_count?: number;
+  daily_web_reader_count?: number;
+  daily_web_reader_limit?: number;
+  total_web_reader_count?: number;
   mail_check_limit?: number;
   imap_provider?: string | null;
   daily_image_gen_count?: number;

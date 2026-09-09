@@ -1684,6 +1684,11 @@ const normalizeDailyWebSearchLimit = (value: number | null | undefined) => {
   return Math.max(0, Math.floor(Number(value)));
 };
 
+const normalizeDailyWebReaderLimit = (value: number | null | undefined) => {
+  if (!Number.isFinite(Number(value))) return 0;
+  return Math.max(0, Math.floor(Number(value)));
+};
+
 const clampTimezoneOffset = (offset: number) => {
   if (!Number.isFinite(offset)) return null;
   const rounded = Math.round(offset * 4) / 4;
@@ -1931,9 +1936,28 @@ const formatUnixForTimezone = (unixSeconds: number, timezoneOffset: number) => {
 const checkTavilySearchLimit = (user: UserRecord) => {
   const limit = normalizeDailyWebSearchLimit(user.daily_web_search_limit);
   const count = Math.max(0, Math.floor(Number(user.daily_web_search_count || 0)));
-  if (limit <= 0) return { allowed: false, count, limit, reason: 'Tavily fallback search is disabled under your plan.' };
-  if (count >= limit) return { allowed: false, count, limit, reason: `Tavily fallback search limit exhausted for today (${count}/${limit}).` };
+  if (limit <= 0) return { allowed: false, count, limit, reason: 'Tavily search is disabled under your plan.' };
+  if (count >= limit) return { allowed: false, count, limit, reason: `Tavily search limit exhausted for today (${count}/${limit}).` };
   return { allowed: true, count, limit, reason: '' };
+};
+
+const checkBrowserlessReadLimit = (user: UserRecord) => {
+  const limit = normalizeDailyWebReaderLimit(user.daily_web_reader_limit);
+  const count = Math.max(0, Math.floor(Number(user.daily_web_reader_count || 0)));
+  if (limit <= 0) return { allowed: false, count, limit, reason: 'Browserless page reading is disabled under your plan.' };
+  if (count >= limit) return { allowed: false, count, limit, reason: `Browserless page reading limit exhausted for today (${count}/${limit}).` };
+  return { allowed: true, count, limit, reason: '' };
+};
+
+const incrementUserBrowserlessReadUsage = (userId: number, count = 1) => {
+  const safeCount = Math.max(0, Math.floor(count));
+  if (safeCount <= 0) return;
+  db.prepare(`
+    UPDATE users
+    SET daily_web_reader_count = COALESCE(daily_web_reader_count, 0) + ?,
+        total_web_reader_count = COALESCE(total_web_reader_count, 0) + ?
+    WHERE id = ?
+  `).run(safeCount, safeCount, userId);
 };
 
 const incrementUserTavilySearchUsage = (userId: number, count = 1) => {
@@ -4006,6 +4030,15 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
         chatId: subagentExtra?.chatId,
         cursor: typeof parsed.cursor === 'string' ? parsed.cursor : undefined,
         signal,
+        browserlessQuota: {
+          check: () => {
+            const currentBillingUser = getUserById(billingUser.id) ?? billingUser;
+            if (currentBillingUser.is_admin === 1) return null;
+            const limit = checkBrowserlessReadLimit(currentBillingUser);
+            return limit.allowed ? null : limit.reason;
+          },
+          consume: () => incrementUserBrowserlessReadUsage(billingUser.id, 1),
+        },
       });
     } catch (err: any) {
       const reason = `${err?.message || String(err)}`;

@@ -8,6 +8,17 @@ process.env.API_DB_PATH = testDbPath;
 process.env.BROWSERLESS_TOKEN = 'test-token';
 
 let browserlessRequests = 0;
+let browserlessQuotaChecks = 0;
+let browserlessQuotaConsumes = 0;
+const browserlessQuota = {
+  check: () => {
+    browserlessQuotaChecks += 1;
+    return null;
+  },
+  consume: () => {
+    browserlessQuotaConsumes += 1;
+  },
+};
 globalThis.fetch = (async (input, init) => {
   browserlessRequests += 1;
   assert.match(String(input), /\/stealth\/bql\?/);
@@ -51,7 +62,7 @@ assert.deepEqual(getWebReaderRuntimeSettings(), {
   browserlessEnabled: true,
 });
 
-const fallback = await getCleanTextFromUrl('https://example.com/fallback', { userId: 701 });
+const fallback = await getCleanTextFromUrl('https://example.com/fallback', { userId: 701, browserlessQuota });
 assert.match(fallback, /Browserless fallback content/);
 assert.equal(browserlessRequests, 1);
 const fallbackCursor = fallback.match(/cursor "([^"]+)"/)?.[1];
@@ -59,10 +70,11 @@ assert.ok(fallbackCursor);
 const fallbackNext = await getCleanTextFromUrl('https://example.com/fallback', {
   userId: 701,
   cursor: fallbackCursor,
+  browserlessQuota,
 });
 assert.match(fallbackNext, /showing cached characters 15001-/);
 assert.equal(browserlessRequests, 1, 'Browserless cursor must use the cached document');
-await getCleanTextFromUrl('https://example.com/fallback', { userId: 701 });
+await getCleanTextFromUrl('https://example.com/fallback', { userId: 701, browserlessQuota });
 assert.equal(browserlessRequests, 1, 'repeating the URL must reuse the ten-minute cache');
 
 let desktopClient: any;
@@ -112,9 +124,20 @@ assert.match(desktopNext, /showing cached characters 15001-/);
 assert.equal(desktopRequests, 1, 'desktop cursor must not invoke the desktop again');
 
 updateWebReaderRuntimeSettings({ desktopEnabled: false });
-const browserlessOnly = await getCleanTextFromUrl('https://example.com/browserless-only', { userId: 701 });
+const browserlessOnly = await getCleanTextFromUrl('https://example.com/browserless-only', { userId: 701, browserlessQuota });
 assert.match(browserlessOnly, /Browserless fallback content/);
 assert.equal(browserlessRequests, 2);
+assert.equal(browserlessQuotaChecks, 2);
+assert.equal(browserlessQuotaConsumes, 2);
+
+await assert.rejects(
+  getCleanTextFromUrl('https://example.com/browserless-blocked', {
+    userId: 701,
+    browserlessQuota: { check: () => 'Browserless limit exhausted.', consume: () => assert.fail('blocked quota consumed') },
+  }),
+  /Browserless limit exhausted/,
+);
+assert.equal(browserlessRequests, 2, 'exhausted quota must block the Browserless HTTP request');
 
 const stats = getWebReaderStats().providers;
 assert.equal(stats.find(row => row.provider === 'desktop')?.attempts, 2);

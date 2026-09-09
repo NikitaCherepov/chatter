@@ -3817,6 +3817,7 @@ app.get('/internal/admin/users-overview/:id', internalAuth, (req, res) => {
       weekly_tokens_used, weekly_tokens_quota, weekly_window_started_at,
       weekly_cost_used, weekly_cost_quota, weekly_cost_quota_limit,
       daily_web_search_count, daily_web_search_limit, total_web_search_count,
+      daily_web_reader_count, daily_web_reader_limit, total_web_reader_count,
       daily_image_gen_count, daily_image_gen_limit, total_image_gen_count,
       total_message_length, preferred_model, reasoning_level,
       max_context_tokens_limit, max_context_tokens, attachment_max_tokens
@@ -4401,6 +4402,7 @@ app.put('/internal/admin/plan-limits', internalAuth, (req, res) => {
     }
     next[plan] = {
       daily_web_search_limit: Math.max(0, Math.floor(Number(entry.daily_web_search_limit) || 0)),
+      daily_web_reader_limit: Math.max(0, Math.floor(Number(entry.daily_web_reader_limit) || 0)),
       daily_image_gen_limit: Math.max(0, Math.floor(Number(entry.daily_image_gen_limit) || 0)),
       image_attachments_allowed: Boolean(entry.image_attachments_allowed),
       max_context_tokens: Math.max(0, Math.floor(Number(entry.max_context_tokens) || 0)),

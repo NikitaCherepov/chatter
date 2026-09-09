@@ -36,6 +36,9 @@ type UserDetail = {
   daily_web_search_count: number;
   daily_web_search_limit: number;
   total_web_search_count: number;
+  daily_web_reader_count: number;
+  daily_web_reader_limit: number;
+  total_web_reader_count: number;
   daily_image_gen_count: number;
   daily_image_gen_limit: number;
   total_image_gen_count: number;
@@ -250,6 +253,8 @@ export function UserDetailPage({ userId, onBack }: { userId: number; onBack: () 
     [t('users.detail.usage.stats.chats'), formatNumber(user.chats_count, i18n.language)],
     [t('users.detail.usage.stats.searchToday'), `${formatNumber(user.daily_web_search_count, i18n.language)} / ${formatNumber(user.daily_web_search_limit, i18n.language)}`],
     [t('users.detail.usage.stats.searchTotal'), formatNumber(user.total_web_search_count, i18n.language)],
+    [t('users.detail.usage.stats.webReaderToday'), `${formatNumber(user.daily_web_reader_count, i18n.language)} / ${formatNumber(user.daily_web_reader_limit, i18n.language)}`],
+    [t('users.detail.usage.stats.webReaderTotal'), formatNumber(user.total_web_reader_count, i18n.language)],
     [t('users.detail.usage.stats.imagesToday'), `${formatNumber(user.daily_image_gen_count, i18n.language)} / ${formatNumber(user.daily_image_gen_limit, i18n.language)}`],
     [t('users.detail.usage.stats.imagesTotal'), formatNumber(user.total_image_gen_count, i18n.language)],
     [t('users.detail.usage.stats.messageLength'), formatNumber(user.total_message_length, i18n.language)],

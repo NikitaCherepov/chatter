@@ -298,6 +298,15 @@ ensureUserColumn('weekly_cost_quota_limit', 'ALTER TABLE users ADD COLUMN weekly
 ensureUserColumn('daily_web_search_count', 'ALTER TABLE users ADD COLUMN daily_web_search_count INTEGER NOT NULL DEFAULT 0');
 ensureUserColumn('daily_web_search_limit', 'ALTER TABLE users ADD COLUMN daily_web_search_limit INTEGER NOT NULL DEFAULT 10');
 ensureUserColumn('total_web_search_count', 'ALTER TABLE users ADD COLUMN total_web_search_count INTEGER NOT NULL DEFAULT 0');
+const needsWebReaderLimitBackfill = !hasUserColumn('daily_web_reader_limit');
+ensureUserColumn('daily_web_reader_count', 'ALTER TABLE users ADD COLUMN daily_web_reader_count INTEGER NOT NULL DEFAULT 0');
+ensureUserColumn('daily_web_reader_limit', 'ALTER TABLE users ADD COLUMN daily_web_reader_limit INTEGER NOT NULL DEFAULT 0');
+ensureUserColumn('total_web_reader_count', 'ALTER TABLE users ADD COLUMN total_web_reader_count INTEGER NOT NULL DEFAULT 0');
+if (needsWebReaderLimitBackfill) {
+  // Preserve current plan/custom quota behavior on upgrade instead of
+  // unexpectedly disabling Browserless for every existing account.
+  db.exec('UPDATE users SET daily_web_reader_limit = MAX(0, COALESCE(daily_web_search_limit, 0))');
+}
 ensureUserColumn('mail_check_limit', 'ALTER TABLE users ADD COLUMN mail_check_limit INTEGER NOT NULL DEFAULT 10');
 ensureUserColumn('daily_image_gen_count', 'ALTER TABLE users ADD COLUMN daily_image_gen_count INTEGER NOT NULL DEFAULT 0');
 ensureUserColumn('daily_image_gen_limit', 'ALTER TABLE users ADD COLUMN daily_image_gen_limit INTEGER NOT NULL DEFAULT 3');

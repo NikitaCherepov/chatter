@@ -279,6 +279,7 @@ const resetDailyMessageCounters = () => db.prepare(`
   UPDATE users
   SET daily_message_count = 0,
       daily_web_search_count = 0,
+      daily_web_reader_count = 0,
       daily_image_gen_count = 0
 `).run();
 

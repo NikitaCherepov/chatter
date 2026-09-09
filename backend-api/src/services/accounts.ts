@@ -54,6 +54,8 @@ const additiveUserColumns = [
   'weekly_tokens_used',
   'daily_web_search_count',
   'total_web_search_count',
+  'daily_web_reader_count',
+  'total_web_reader_count',
   'daily_image_gen_count',
   'total_image_gen_count',
 ];

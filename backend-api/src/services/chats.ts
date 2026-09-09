@@ -42,17 +42,17 @@ export const upsertUserFromTelegram = (
   const weeklyCostQuota = limits.budget_usd > 0 ? limits.budget_usd / 4 : 0;
   const result = db.prepare(`
     INSERT INTO users (id, name, role, is_admin, status, plan, language,
-      daily_web_search_limit, daily_image_gen_limit,
+      daily_web_search_limit, daily_web_reader_limit, daily_image_gen_limit,
       max_context_tokens_limit, max_context_tokens,
       weekly_tokens_quota, weekly_cost_quota, weekly_cost_quota_limit)
-    VALUES (?, ?, ?, ?, 'none', 'free', ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, 'none', 'free', ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       name = COALESCE(users.name, excluded.name),
       language = COALESCE(users.language, excluded.language),
       is_admin = CASE WHEN users.is_admin = 1 THEN 1 ELSE excluded.is_admin END,
       role = CASE WHEN users.role = 'admin' THEN 'admin' ELSE excluded.role END
   `).run(accountId, name, 'user', 0, normalizedLanguage,
-    limits.daily_web_search_limit, limits.daily_image_gen_limit,
+    limits.daily_web_search_limit, limits.daily_web_reader_limit, limits.daily_image_gen_limit,
     limits.max_context_tokens, limits.max_context_tokens,
     limits.weekly_token_quota, weeklyCostQuota, weeklyCostQuota);
   ensureTelegramIdentity(accountId, userId, username);
@@ -2028,6 +2028,7 @@ export const resetDailyMessageCounters = () => db.prepare(`
   UPDATE users
   SET daily_message_count = 0,
       daily_web_search_count = 0,
+      daily_web_reader_count = 0,
       daily_image_gen_count = 0
 `).run();
 
@@ -2133,9 +2134,9 @@ export const upsertTelegramUser = (
 
   const result = db.prepare(`
     INSERT INTO users (id, name, role, is_admin, status, plan, language, selected_prompt_id,
-      daily_web_search_limit, daily_image_gen_limit, max_context_tokens_limit, max_context_tokens,
+      daily_web_search_limit, daily_web_reader_limit, daily_image_gen_limit, max_context_tokens_limit, max_context_tokens,
       weekly_tokens_quota, weekly_cost_quota, weekly_cost_quota_limit)
-    VALUES (?, ?, ?, ?, ?, 'free', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, 'free', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       name = excluded.name,
       role = excluded.role,
@@ -2144,7 +2145,7 @@ export const upsertTelegramUser = (
       language = COALESCE(users.language, excluded.language),
       selected_prompt_id = COALESCE(users.selected_prompt_id, excluded.selected_prompt_id)
   `).run(accountId, name, effectiveRole, effectiveIsAdmin, status, normalizedLanguage, defaultPromptId,
-    limits.daily_web_search_limit, limits.daily_image_gen_limit, limits.max_context_tokens, limits.max_context_tokens,
+    limits.daily_web_search_limit, limits.daily_web_reader_limit, limits.daily_image_gen_limit, limits.max_context_tokens, limits.max_context_tokens,
     limits.weekly_token_quota, weeklyCostQuota, weeklyCostQuota);
 
   ensureTelegramIdentity(accountId, tgId, tgUsername);
@@ -2165,15 +2166,15 @@ export const createPendingTelegramUser = (
   const weeklyCostQuota = limits.budget_usd > 0 ? limits.budget_usd / 4 : 0;
   const result = db.prepare(`
     INSERT INTO users (id, name, role, is_admin, status, plan, language, selected_prompt_id,
-      daily_web_search_limit, daily_image_gen_limit, max_context_tokens_limit, max_context_tokens,
+      daily_web_search_limit, daily_web_reader_limit, daily_image_gen_limit, max_context_tokens_limit, max_context_tokens,
       weekly_tokens_quota, weekly_cost_quota, weekly_cost_quota_limit)
-    VALUES (?, ?, 'user', 0, 'none', 'free', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, 'user', 0, 'none', 'free', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       name = COALESCE(excluded.name, users.name),
       language = COALESCE(users.language, excluded.language),
       selected_prompt_id = COALESCE(users.selected_prompt_id, excluded.selected_prompt_id)
   `).run(accountId, name, normalizedLanguage, defaultPromptId,
-    limits.daily_web_search_limit, limits.daily_image_gen_limit, limits.max_context_tokens, limits.max_context_tokens,
+    limits.daily_web_search_limit, limits.daily_web_reader_limit, limits.daily_image_gen_limit, limits.max_context_tokens, limits.max_context_tokens,
     limits.weekly_token_quota, weeklyCostQuota, weeklyCostQuota);
 
   ensureTelegramIdentity(accountId, tgId, tgUsername);
@@ -2299,6 +2300,7 @@ export const updateUserPlan = (userId: number, plan: UserPlan) => {
     UPDATE users
     SET plan = ?,
         daily_web_search_limit = ?,
+        daily_web_reader_limit = ?,
         daily_image_gen_limit = ?,
         max_context_tokens_limit = ?,
         max_context_tokens = ?,
@@ -2306,7 +2308,7 @@ export const updateUserPlan = (userId: number, plan: UserPlan) => {
         weekly_cost_quota_limit = ?,
         weekly_cost_quota = ?
     WHERE id = ?
-  `).run(plan, limits.daily_web_search_limit, limits.daily_image_gen_limit,
+  `).run(plan, limits.daily_web_search_limit, limits.daily_web_reader_limit, limits.daily_image_gen_limit,
     limits.max_context_tokens, limits.max_context_tokens,
     limits.weekly_token_quota, weeklyCostLimit, weeklyCostLimit, userId);
 };
@@ -2327,6 +2329,7 @@ export const syncAllUsersPlanLimits = () => {
     db.prepare(`
       UPDATE users
       SET daily_web_search_limit = ?,
+          daily_web_reader_limit = ?,
           daily_image_gen_limit = ?,
           max_context_tokens_limit = ?,
           max_context_tokens = ?,
@@ -2334,7 +2337,7 @@ export const syncAllUsersPlanLimits = () => {
           weekly_cost_quota_limit = ?,
           weekly_cost_quota = ?
       WHERE plan = ?
-    `).run(limits.daily_web_search_limit, limits.daily_image_gen_limit,
+    `).run(limits.daily_web_search_limit, limits.daily_web_reader_limit, limits.daily_image_gen_limit,
       limits.max_context_tokens, limits.max_context_tokens,
       limits.weekly_token_quota, weeklyCostLimit, weeklyCostLimit, plan);
   }

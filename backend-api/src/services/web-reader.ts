@@ -53,11 +53,17 @@ export const wrapUntrustedContent = (content: string): string => {
   return `<untrusted_web_content>${sanitized}</untrusted_web_content>`;
 };
 
+export type WebReaderQuotaGate = {
+  check: () => string | null;
+  consume: () => void;
+};
+
 type WebReaderOptions = {
   userId?: number;
   chatId?: number;
   cursor?: string;
   signal?: AbortSignal;
+  browserlessQuota?: WebReaderQuotaGate;
 };
 
 type WebPageLink = { text?: string; href?: string };
@@ -215,11 +221,17 @@ const requestSignal = (signal?: AbortSignal): { signal: AbortSignal; cleanup: ()
   };
 };
 
-const getCleanTextFromBrowserless = async (url: string, signal?: AbortSignal): Promise<WebPageDocument> => {
+const getCleanTextFromBrowserless = async (
+  url: string,
+  signal?: AbortSignal,
+  quota?: WebReaderQuotaGate,
+): Promise<WebPageDocument> => {
   if (!BROWSERLESS_TOKEN) {
     recordWebReaderStat('browserless', 'failure', 0, 'browserless_token_missing');
     throw new Error('browserless_token_missing');
   }
+  const quotaError = quota?.check();
+  if (quotaError) throw new Error(quotaError);
 
   const endpoint = `${BROWSERLESS_BASE_URL}/stealth/bql?token=${encodeURIComponent(BROWSERLESS_TOKEN)}&blockConsentModals=true&timeout=${BROWSERLESS_TIMEOUT_MS}`;
   const query = `
@@ -269,6 +281,7 @@ const getCleanTextFromBrowserless = async (url: string, signal?: AbortSignal): P
       truncated: Boolean(extracted.truncated) || text.length > WEB_READER_MAX_TEXT,
     };
     recordWebReaderStat('browserless', 'success', document.text.length);
+    quota?.consume();
     return document;
   } catch (error: any) {
     const errorDetails = error?.message || String(error);
@@ -334,7 +347,7 @@ export const getCleanTextFromUrl = async (targetUrl: string, options: WebReaderO
 
   if (!document) {
     if (!runtime.browserlessEnabled) throw new Error('web_reader_no_provider_available');
-    document = await getCleanTextFromBrowserless(url, options.signal);
+    document = await getCleanTextFromBrowserless(url, options.signal, options.browserlessQuota);
   }
 
   const sessionId = randomUUID();
