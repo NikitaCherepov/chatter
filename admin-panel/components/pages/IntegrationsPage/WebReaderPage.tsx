@@ -21,6 +21,7 @@ type ReaderStat = {
   parsingFailures: number;
   httpFailures: number;
   otherFailures: number;
+  cacheHits: number;
   charactersReturned: number;
   lastAttemptAt: number | null;
   lastFailureAt: number | null;
@@ -39,6 +40,7 @@ const emptyStat = (provider: ReaderProvider): ReaderStat => ({
   parsingFailures: 0,
   httpFailures: 0,
   otherFailures: 0,
+  cacheHits: 0,
   charactersReturned: 0,
   lastAttemptAt: null,
   lastFailureAt: null,
@@ -195,6 +197,7 @@ export function WebReaderPage({
                 <span>{t('integrations.webReader.statsSuccesses')}: {stat.successes}</span>
                 <span>{t('integrations.webReader.statsFailures')}: {stat.failures}</span>
                 <span>{t('integrations.webReader.statsEmpty')}: {stat.emptyResponses}</span>
+                <span>{t('integrations.webReader.statsCacheHits')}: {stat.cacheHits}</span>
                 <span>{t('integrations.webReader.statsCharacters')}: {stat.charactersReturned.toLocaleString()}</span>
                 <span>{t('integrations.webReader.statsLastAttempt')}: {formatTimestamp(stat.lastAttemptAt)}</span>
               </div>

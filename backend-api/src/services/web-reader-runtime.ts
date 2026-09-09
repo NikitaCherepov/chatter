@@ -20,6 +20,7 @@ export type WebReaderStat = {
   parsingFailures: number;
   httpFailures: number;
   otherFailures: number;
+  cacheHits: number;
   charactersReturned: number;
   lastAttemptAt: number | null;
   lastSuccessAt: number | null;
@@ -140,9 +141,19 @@ export const recordWebReaderStat = (
   });
 };
 
+const cacheHitStatement = db.prepare(`
+  INSERT INTO web_reader_stats (provider, cache_hits)
+  VALUES (?, 1)
+  ON CONFLICT(provider) DO UPDATE SET cache_hits = cache_hits + 1
+`);
+
+export const recordWebReaderCacheHit = (provider: WebReaderProvider): void => {
+  cacheHitStatement.run(provider);
+};
+
 type WebReaderStatRow = Omit<WebReaderStat,
   'emptyResponses' | 'unavailableFailures' | 'timeoutFailures' | 'parsingFailures'
-  | 'httpFailures' | 'otherFailures' | 'charactersReturned' | 'lastAttemptAt'
+  | 'httpFailures' | 'otherFailures' | 'cacheHits' | 'charactersReturned' | 'lastAttemptAt'
   | 'lastSuccessAt' | 'lastFailureAt' | 'lastFailureReason'> & {
   empty_responses: number;
   unavailable_failures: number;
@@ -150,6 +161,7 @@ type WebReaderStatRow = Omit<WebReaderStat,
   parsing_failures: number;
   http_failures: number;
   other_failures: number;
+  cache_hits: number;
   characters_returned: number;
   last_attempt_at: number | null;
   last_success_at: number | null;
@@ -174,6 +186,7 @@ export const getWebReaderStats = (): { providers: WebReaderStat[] } => {
       parsingFailures: row.parsing_failures,
       httpFailures: row.http_failures,
       otherFailures: row.other_failures,
+      cacheHits: row.cache_hits,
       charactersReturned: row.characters_returned,
       lastAttemptAt: row.last_attempt_at,
       lastSuccessAt: row.last_success_at,

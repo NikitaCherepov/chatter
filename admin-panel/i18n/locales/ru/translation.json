@@ -364,6 +364,7 @@
       "statsSuccesses": "Успешно",
       "statsFailures": "Ошибки",
       "statsEmpty": "Пустые ответы",
+      "statsCacheHits": "Попадания в кэш",
       "statsCharacters": "Символы",
       "statsUnavailable": "Недоступен",
       "statsTimeout": "Таймаут",

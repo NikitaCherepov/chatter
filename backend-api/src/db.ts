@@ -865,6 +865,10 @@ db.exec(`
     last_failure_reason TEXT
   )
 `);
+const webReaderStatsColumns = db.prepare('PRAGMA table_info(web_reader_stats)').all() as Array<{ name: string }>;
+if (!webReaderStatsColumns.some(column => column.name === 'cache_hits')) {
+  db.exec('ALTER TABLE web_reader_stats ADD COLUMN cache_hits INTEGER NOT NULL DEFAULT 0');
+}
 
 // ── Standalone document extraction workspace ────────────────────────────
 // Files belong to the user rather than a chat so long-running extraction

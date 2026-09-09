@@ -364,6 +364,7 @@
       "statsSuccesses": "Successful",
       "statsFailures": "Failed",
       "statsEmpty": "Empty",
+      "statsCacheHits": "Cache hits",
       "statsCharacters": "Characters",
       "statsUnavailable": "Unavailable",
       "statsTimeout": "Timeout",

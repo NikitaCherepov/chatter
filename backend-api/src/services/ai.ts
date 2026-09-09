@@ -2073,11 +2073,12 @@ export const toolDefinitions = [
     type: 'function',
     function: {
       name: 'read_webpage',
-      description: 'Reads and cleans webpage text through a backend reader (Browserless). Use when you need to extract the content of a specific page by URL.',
+      description: 'Reads the content of a webpage by URL. If a continuation cursor is returned, call the tool again with the same URL and cursor to read the next part.',
       parameters: {
         type: 'object',
         properties: {
-          url: { type: 'string', description: 'Full page URL (http/https).' }
+          url: { type: 'string', description: 'Full page URL (http/https).' },
+          cursor: { type: 'string', description: 'Continuation cursor returned by a previous read_webpage call. Keep the URL unchanged.' }
         },
         required: ['url']
       }
@@ -4003,6 +4004,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
       return await getCleanTextFromUrl(url, {
         userId: user.id,
         chatId: subagentExtra?.chatId,
+        cursor: typeof parsed.cursor === 'string' ? parsed.cursor : undefined,
         signal,
       });
     } catch (err: any) {
@@ -4015,6 +4017,9 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
       }
       if (reason === 'unsafe_url' || reason === 'desktop_web_reader_url_blocked') {
         return 'Tool error: this URL is blocked because it targets a local or private network.';
+      }
+      if (reason === 'web_reader_cursor_invalid' || reason === 'web_reader_cursor_expired' || reason === 'web_reader_cursor_mismatch') {
+        return 'Tool error: the web page cursor is invalid, expired, or belongs to another URL. Read the page again without a cursor.';
       }
       return `Tool error read_webpage: ${reason}`;
     }

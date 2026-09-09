@@ -140,8 +140,10 @@ type BrowserFrameInputSession = {
 
 const HOME_URL = 'https://www.google.com/';
 const MAX_PAGE_TEXT = 30_000;
+const MAX_WEB_READER_TEXT = 120_000;
 const MAX_VIEWPORT_TEXT = 10_000;
 const MAX_ELEMENTS = 160;
+const MAX_WEB_READER_ELEMENTS = 400;
 const MAX_VIEWPORT_ELEMENTS = 80;
 const MAX_BROWSER_FRAMES = 20;
 const BROWSER_WORLD_ID = 1004;
@@ -1024,7 +1026,7 @@ export class ChatterBrowser {
       if (!isClientRedirectorUrl(contents.getURL())) {
         try {
           const result = await this.raceWebPageReadInterrupt(
-            this.readPage('full'),
+            this.readPage('full', { maxText: MAX_WEB_READER_TEXT, maxElements: MAX_WEB_READER_ELEMENTS }),
             WEB_READER_READ_ATTEMPT_TIMEOUT_MS,
           ) as BrowserWebPageResult;
           if (await this.probePageChallenge()) {
@@ -1054,7 +1056,7 @@ export class ChatterBrowser {
     }
     // Final read at the deadline propagates genuine read errors.
     const result = await this.raceWebPageReadInterrupt(
-      this.readPage('full'),
+      this.readPage('full', { maxText: MAX_WEB_READER_TEXT, maxElements: MAX_WEB_READER_ELEMENTS }),
       WEB_READER_READ_ATTEMPT_TIMEOUT_MS,
     ) as BrowserWebPageResult;
     if (!`${result?.text || ''}`.trim()) throw new Error('desktop_web_reader_empty');
@@ -2399,12 +2401,15 @@ export class ChatterBrowser {
     });
   }
 
-  private async readPage(mode: 'viewport' | 'delta' | 'full'): Promise<unknown> {
+  private async readPage(
+    mode: 'viewport' | 'delta' | 'full',
+    limits?: { maxText?: number; maxElements?: number },
+  ): Promise<unknown> {
     await this.ensureReadablePage();
     const documentSeed = `e${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
     const effectiveMode = mode === 'full' ? 'full' : 'viewport';
-    const maxText = effectiveMode === 'full' ? MAX_PAGE_TEXT : MAX_VIEWPORT_TEXT;
-    const maxElements = effectiveMode === 'full' ? MAX_ELEMENTS : MAX_VIEWPORT_ELEMENTS;
+    const maxText = limits?.maxText ?? (effectiveMode === 'full' ? MAX_PAGE_TEXT : MAX_VIEWPORT_TEXT);
+    const maxElements = limits?.maxElements ?? (effectiveMode === 'full' ? MAX_ELEMENTS : MAX_VIEWPORT_ELEMENTS);
     const script = `(() => {
       const documentSeed = ${JSON.stringify(documentSeed)};
       const mode = ${JSON.stringify(effectiveMode)};
