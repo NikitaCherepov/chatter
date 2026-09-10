@@ -191,6 +191,125 @@
   white-space: nowrap;
 }
 
+.usageOverview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+.primaryQuota {
+  padding: var(--sp-4);
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--color-info) 6%, var(--bg-primary));
+}
+.primaryQuotaHeading,
+.serviceQuotaHeading,
+.serviceTotal {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-4);
+}
+.primaryQuotaHeading > div:first-child,
+.quotaReset {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.primaryQuotaHeading span,
+.serviceQuotaHeading span,
+.serviceTotal span,
+.activityGrid span {
+  color: var(--text-hint);
+  font-size: var(--fs-xs);
+}
+.primaryQuotaHeading > div:first-child > strong {
+  color: var(--text-primary);
+  font-size: var(--fs-lg);
+}
+.quotaReset {
+  align-items: flex-end;
+}
+.quotaReset strong {
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+}
+.progressTrack {
+  height: 6px;
+  margin-top: var(--sp-3);
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--border-light);
+}
+.progressFill {
+  height: 100%;
+  min-width: 0;
+  border-radius: inherit;
+  background: var(--color-success);
+  transition: width 180ms ease;
+}
+.serviceQuotaGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--sp-3);
+}
+.serviceQuota {
+  min-width: 0;
+  padding: var(--sp-4);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius);
+  background: var(--bg-secondary);
+}
+.serviceQuotaHeading {
+  align-items: flex-start;
+}
+.serviceQuotaHeading span {
+  min-width: 0;
+}
+.serviceQuotaHeading strong {
+  flex: 0 0 auto;
+  color: var(--text-primary);
+  font-size: var(--fs-sm);
+}
+.serviceTotal {
+  margin-top: var(--sp-3);
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--border-light);
+}
+.serviceTotal strong {
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
+}
+.activityGrid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  overflow: hidden;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius);
+}
+.activityGrid > div {
+  display: flex;
+  min-width: 0;
+  min-height: 64px;
+  justify-content: center;
+  flex-direction: column;
+  padding: var(--sp-3);
+  border-left: 1px solid var(--border-light);
+  background: var(--bg-primary);
+}
+.activityGrid > div:first-child {
+  border-left: 0;
+}
+.activityGrid strong {
+  overflow: hidden;
+  margin-top: var(--sp-1);
+  color: var(--text-primary);
+  font-size: var(--fs-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .usageRow {
   display: flex;
   flex-direction: column;
@@ -283,5 +402,40 @@
   }
   .connectionRow {
     grid-template-columns: 1fr 1.5fr;
+  }
+  .serviceQuotaGrid {
+    grid-template-columns: 1fr;
+  }
+  .activityGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .activityGrid > div:nth-child(4) {
+    border-left: 0;
+  }
+  .activityGrid > div:nth-child(n + 4) {
+    border-top: 1px solid var(--border-light);
+  }
+}
+@media (max-width: 620px) {
+  .primaryQuotaHeading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .quotaReset {
+    align-items: flex-start;
+  }
+  .activityGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .activityGrid > div,
+  .activityGrid > div:nth-child(4) {
+    border-left: 1px solid var(--border-light);
+    border-top: 1px solid var(--border-light);
+  }
+  .activityGrid > div:nth-child(odd) {
+    border-left: 0;
+  }
+  .activityGrid > div:nth-child(-n + 2) {
+    border-top: 0;
   }
 }

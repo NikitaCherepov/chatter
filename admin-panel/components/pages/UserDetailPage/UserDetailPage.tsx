@@ -243,21 +243,35 @@ export function UserDetailPage({ userId, onBack }: { userId: number; onBack: () 
     ? formatDateTime(new Date((user.weekly_window_started_at + 7 * 24 * 60 * 60) * 1000).toISOString(), locale)
     : '—';
 
-  const stats = [
-    [t('users.detail.usage.stats.weeklyQuota'), user.weekly_tokens_quota > 0
-      ? `${formatNumber(user.weekly_tokens_used, i18n.language)} / ${formatNumber(user.weekly_tokens_quota, i18n.language)} (${weeklyPercent}%)`
-      : '∞'],
-    [t('users.detail.usage.stats.quotaReset'), weeklyResetsAt],
+  const monthlyServices = [
+    {
+      label: t('users.detail.usage.stats.searchMonth'),
+      used: user.quota?.web_search.used ?? 0,
+      limit: user.quota?.web_search.limit ?? 0,
+      totalLabel: t('users.detail.usage.stats.searchTotal'),
+      total: user.total_web_search_count,
+    },
+    {
+      label: t('users.detail.usage.stats.webReaderMonth'),
+      used: user.quota?.web_reader.used ?? 0,
+      limit: user.quota?.web_reader.limit ?? 0,
+      totalLabel: t('users.detail.usage.stats.webReaderTotal'),
+      total: user.total_web_reader_count,
+    },
+    {
+      label: t('users.detail.usage.stats.imagesMonth'),
+      used: user.quota?.image_gen.used ?? 0,
+      limit: user.quota?.image_gen.limit ?? 0,
+      totalLabel: t('users.detail.usage.stats.imagesTotal'),
+      total: user.total_image_gen_count,
+    },
+  ];
+
+  const activityStats = [
     [t('users.detail.usage.stats.messages'), formatNumber(user.messages.total, i18n.language)],
     [t('users.detail.usage.stats.userRequests'), formatNumber(user.messages.user, i18n.language)],
     [t('users.detail.usage.stats.assistantResponses'), formatNumber(user.messages.assistant, i18n.language)],
     [t('users.detail.usage.stats.chats'), formatNumber(user.chats_count, i18n.language)],
-    [t('users.detail.usage.stats.searchMonth'), `${formatNumber(user.quota?.web_search.used ?? 0, i18n.language)} / ${formatNumber(user.quota?.web_search.limit ?? 0, i18n.language)}`],
-    [t('users.detail.usage.stats.searchTotal'), formatNumber(user.total_web_search_count, i18n.language)],
-    [t('users.detail.usage.stats.webReaderMonth'), `${formatNumber(user.quota?.web_reader.used ?? 0, i18n.language)} / ${formatNumber(user.quota?.web_reader.limit ?? 0, i18n.language)}`],
-    [t('users.detail.usage.stats.webReaderTotal'), formatNumber(user.total_web_reader_count, i18n.language)],
-    [t('users.detail.usage.stats.imagesMonth'), `${formatNumber(user.quota?.image_gen.used ?? 0, i18n.language)} / ${formatNumber(user.quota?.image_gen.limit ?? 0, i18n.language)}`],
-    [t('users.detail.usage.stats.imagesTotal'), formatNumber(user.total_image_gen_count, i18n.language)],
     [t('users.detail.usage.stats.messageLength'), formatNumber(user.total_message_length, i18n.language)],
     [t('users.detail.usage.stats.lastMessage'), formatDateTime(user.messages.last_message_at, locale)],
   ];
@@ -353,7 +367,61 @@ export function UserDetailPage({ userId, onBack }: { userId: number; onBack: () 
       </Card>
 
       <Card title={t('users.detail.usage.title')} description={t('users.detail.usage.description')}>
-        <div className={styles.statsGrid}>{stats.map(([label, value]) => <div key={label}><span>{label}</span><strong>{value}</strong></div>)}</div>
+        <div className={styles.usageOverview}>
+          <div className={styles.primaryQuota}>
+            <div className={styles.primaryQuotaHeading}>
+              <div>
+                <span>{t('users.detail.usage.stats.weeklyQuota')}</span>
+                <strong>
+                  {user.weekly_tokens_quota > 0
+                    ? `${formatNumber(user.weekly_tokens_used, i18n.language)} / ${formatNumber(user.weekly_tokens_quota, i18n.language)}`
+                    : '∞'}
+                </strong>
+              </div>
+              <div className={styles.quotaReset}>
+                <span>{t('users.detail.usage.stats.quotaReset')}</span>
+                <strong>{weeklyResetsAt}</strong>
+              </div>
+            </div>
+            {user.weekly_tokens_quota > 0 && (
+              <div className={styles.progressTrack} aria-label={`${weeklyPercent}%`}>
+                <div className={styles.progressFill} style={{ width: `${weeklyPercent}%` }} />
+              </div>
+            )}
+          </div>
+
+          <div className={styles.serviceQuotaGrid}>
+            {monthlyServices.map(service => {
+              const percent = service.limit > 0
+                ? Math.min(100, Math.round(service.used / service.limit * 100))
+                : 0;
+              return (
+                <div className={styles.serviceQuota} key={service.label}>
+                  <div className={styles.serviceQuotaHeading}>
+                    <span>{service.label}</span>
+                    <strong>{formatNumber(service.used, i18n.language)} / {formatNumber(service.limit, i18n.language)}</strong>
+                  </div>
+                  <div className={styles.progressTrack} aria-label={`${percent}%`}>
+                    <div className={styles.progressFill} style={{ width: `${percent}%` }} />
+                  </div>
+                  <div className={styles.serviceTotal}>
+                    <span>{service.totalLabel}</span>
+                    <strong>{formatNumber(service.total, i18n.language)}</strong>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className={styles.activityGrid}>
+            {activityStats.map(([label, value]) => (
+              <div key={label}>
+                <span>{label}</span>
+                <strong>{value}</strong>
+              </div>
+            ))}
+          </div>
+        </div>
       </Card>
 
       <UsageByModelCard
