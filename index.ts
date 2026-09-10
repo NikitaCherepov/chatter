@@ -29,7 +29,7 @@ const PLAN_MAX_CONTEXT_TOKENS: Record<UserPlan, number> = {
     standart: 60_000,
     pro: 1_000_000
 };
-const PLAN_DAILY_WEB_SEARCH_LIMITS: Record<UserPlan, number> = {
+const PLAN_MONTHLY_WEB_SEARCH_LIMITS: Record<UserPlan, number> = {
     free: 0,
     standart: 5,
     pro: 20
@@ -188,11 +188,14 @@ type UserRecord = {
     total_tokens_used: number;
     daily_cost_rub: number;
     total_cost_rub: number;
-    daily_web_search_count: number;
-    daily_web_search_limit: number;
+    monthly_web_search_count: number;
+    monthly_web_search_limit: number;
     total_web_search_count: number;
-    daily_image_gen_count: number;
-    daily_image_gen_limit: number;
+    monthly_web_reader_count: number;
+    monthly_web_reader_limit: number;
+    total_web_reader_count: number;
+    monthly_image_gen_count: number;
+    monthly_image_gen_limit: number;
     total_image_gen_count: number;
     max_context_tokens_limit?: number;
     max_context_tokens?: number;
@@ -1878,9 +1881,9 @@ const addUser = async (id: number, name: string, role: string, status: UserStatu
     return result.user;
 };
 
-const runBackendApplyUserPlan = async (userId: number, plan: UserPlan, endsAt: string | null, assignedBy: number | null) => {
+const runBackendApplyUserPlan = async (userId: number, plan: UserPlan, duration: PlanDurationCode, assignedBy: number | null) => {
     const response = await axios.post(`${BACKEND_API_BASE_URL}/internal/users/${userId}/plan`, {
-        plan, ends_at: endsAt, assigned_by: assignedBy, record_subscription: true
+        plan, duration, assigned_by: assignedBy
     }, { headers: backendHeaders(), timeout: BACKEND_TIMEOUT_DEFAULT_MS });
     return response.data as { ok: boolean; plan: UserPlan; ends_at: string | null };
 };
@@ -1893,6 +1896,9 @@ type UserPlanSubscriptionRecord = {
     ends_at: string | null;
     is_current: number;
     assigned_by?: number | null;
+    access_kind?: 'free' | 'subscription' | 'trial' | 'grant';
+    billing_interval?: 'month' | 'year' | null;
+    quota_anchor_at?: number;
 };
 
 const runBackendGetUserSubscription = async (userId: number) => {
@@ -1931,22 +1937,13 @@ const parsePlanFromDb = (raw: string | null | undefined): UserPlan => {
     return DEFAULT_USER_PLAN;
 };
 const getPlanMaxContextTokens = (plan: UserPlan) => PLAN_MAX_CONTEXT_TOKENS[plan] || PLAN_MAX_CONTEXT_TOKENS[DEFAULT_USER_PLAN];
-const getPlanDailyWebSearchLimit = (plan: UserPlan) => PLAN_DAILY_WEB_SEARCH_LIMITS[plan] ?? PLAN_DAILY_WEB_SEARCH_LIMITS[DEFAULT_USER_PLAN];
-const normalizeDailyWebSearchLimit = (value: number | null | undefined) => {
-    if (!Number.isFinite(value)) return getPlanDailyWebSearchLimit(DEFAULT_USER_PLAN);
+const getPlanMonthlyWebSearchLimit = (plan: UserPlan) => PLAN_MONTHLY_WEB_SEARCH_LIMITS[plan] ?? PLAN_MONTHLY_WEB_SEARCH_LIMITS[DEFAULT_USER_PLAN];
+const normalizeMonthlyWebSearchLimit = (value: number | null | undefined) => {
+    if (!Number.isFinite(value)) return getPlanMonthlyWebSearchLimit(DEFAULT_USER_PLAN);
     return Math.max(0, Math.floor(value as number));
 };
-const applyUserPlan = async (userId: number, plan: UserPlan, endsAt: string | null, assignedBy: number | null) => {
-    await runBackendApplyUserPlan(userId, plan, endsAt, assignedBy);
-};
-const getEndsAtForDuration = (duration: PlanDurationCode) => {
-    if (duration === 'forever') return null;
-    const dt = new Date();
-    if (duration === 'day') dt.setDate(dt.getDate() + 1);
-    if (duration === 'week') dt.setDate(dt.getDate() + 7);
-    if (duration === 'month') dt.setMonth(dt.getMonth() + 1);
-    if (duration === 'year') dt.setFullYear(dt.getFullYear() + 1);
-    return dt.toISOString().slice(0, 19).replace('T', ' ');
+const applyUserPlan = async (userId: number, plan: UserPlan, duration: PlanDurationCode, assignedBy: number | null) => {
+    await runBackendApplyUserPlan(userId, plan, duration, assignedBy);
 };
 const formatTokenCountShort = (tokens: number) => {
     const safe = Math.max(0, Math.floor(tokens || 0));
@@ -2157,11 +2154,14 @@ const showMenu = async (ctx: any) => {
         ? ctx.t('menu.context', { value: getContextWindowText(userRecord) })
         : ctx.t('menu.contextDefault', { value: `${(PLAN_MAX_CONTEXT_TOKENS[DEFAULT_USER_PLAN] / 1000).toFixed(0)}k` });
     const webLimitLine = userRecord
-        ? ctx.t('menu.webToday', { value: getDailyWebSearchLimitText(userRecord) })
-        : ctx.t('menu.webToday', { value: `0/${PLAN_DAILY_WEB_SEARCH_LIMITS[DEFAULT_USER_PLAN]}` });
+        ? ctx.t('menu.webMonth', { value: getMonthlyWebSearchLimitText(userRecord) })
+        : ctx.t('menu.webMonth', { value: `0/${PLAN_MONTHLY_WEB_SEARCH_LIMITS[DEFAULT_USER_PLAN]}` });
+    const webReaderLine = userRecord
+        ? ctx.t('menu.webReaderMonth', { value: `${userRecord.monthly_web_reader_count ?? 0}/${userRecord.monthly_web_reader_limit ?? 0}` })
+        : ctx.t('menu.webReaderMonth', { value: '0/0' });
     const imageGenLine = userRecord
-        ? ctx.t('menu.imagesToday', { value: `${userRecord.daily_image_gen_count ?? 0}/${userRecord.daily_image_gen_limit ?? 0}` })
-        : ctx.t('menu.imagesToday', { value: '0/0' });
+        ? ctx.t('menu.imagesMonth', { value: `${userRecord.monthly_image_gen_count ?? 0}/${userRecord.monthly_image_gen_limit ?? 0}` })
+        : ctx.t('menu.imagesMonth', { value: '0/0' });
     const modelLine = userRecord?.preferred_model
         ? ctx.t('menu.model', { model: userRecord.preferred_model })
         : ctx.t('menu.model', { model: ctx.t('menu.modelAuto') });
@@ -2192,6 +2192,8 @@ const showMenu = async (ctx: any) => {
         planLine,
         contextLine,
         webLimitLine,
+        webReaderLine,
+        ctx.t('menu.externalQuotaNote'),
         imageGenLine,
         modelLine,
         chatLine,
@@ -2592,9 +2594,9 @@ const getContextWindowText = (user: UserRecord) => {
         ? Math.floor(user.max_context_tokens_limit!) : getPlanMaxContextTokens(parsePlanFromDb(user.plan));
     return `${(effective / 1000).toFixed(0)}k/${(hardLimit / 1000).toFixed(0)}k`;
 };
-const getDailyWebSearchLimitText = (user: UserRecord) => {
-    const limit = normalizeDailyWebSearchLimit(user.daily_web_search_limit);
-    return `${user.daily_web_search_count ?? 0}/${limit}`;
+const getMonthlyWebSearchLimitText = (user: UserRecord) => {
+    const limit = normalizeMonthlyWebSearchLimit(user.monthly_web_search_limit);
+    return `${user.monthly_web_search_count ?? 0}/${limit}`;
 };
 const maybeCapturePendingName = async (ctx: any, user: UserRecord, text: string) => {
     if (ctx.from?.username) return false;
@@ -2629,10 +2631,10 @@ const buildAdminUsersListKeyboard = (rows: UserRecord[], page: number, total: nu
     const keyboardRows = rows.map(row => {
         const statusTag = row.status === 'banned' ? '⛔' : row.status === 'approved' ? '✅' : '🕓';
         const planTag = getPlanLabel(parsePlanFromDb(row.plan));
-        const webLimit = normalizeDailyWebSearchLimit(row.daily_web_search_limit);
+        const webLimit = normalizeMonthlyWebSearchLimit(row.monthly_web_search_limit);
         const notesStats = noteStatsMap.get(row.id) || { user_id: row.id, notes_count: 0, notes_chars: 0 };
         const ctxTokens = (row.max_context_tokens && row.max_context_tokens > 0) ? `${(row.max_context_tokens / 1000).toFixed(0)}k` : 'auto';
-        const usageTag = `msg:${row.daily_message_count ?? 0} tok:${formatTokenCountShort(row.daily_tokens_used ?? 0)} ctx:${ctxTokens} web:${row.daily_web_search_count ?? 0}/${webLimit} img:${row.daily_image_gen_count ?? 0}/${row.daily_image_gen_limit ?? 0} nts:${notesStats.notes_count} ch:${notesStats.notes_chars} ${formatRub(row.daily_cost_rub ?? 0)}`;
+        const usageTag = `msg:${row.daily_message_count ?? 0} tok:${formatTokenCountShort(row.daily_tokens_used ?? 0)} ctx:${ctxTokens} web:${row.monthly_web_search_count ?? 0}/${webLimit} img:${row.monthly_image_gen_count ?? 0}/${row.monthly_image_gen_limit ?? 0} nts:${notesStats.notes_count} ch:${notesStats.notes_chars} ${formatRub(row.daily_cost_rub ?? 0)}`;
         return [Markup.button.callback(
             `${statusTag} ${getUserDisplayName(row)} (#${row.id}) • ${planTag} • ${usageTag}`,
             `usr:view:${row.id}:${page}`
@@ -2663,9 +2665,9 @@ const buildAdminUserCardKeyboard = (user: UserRecord, page: number, t: BotTransl
     ]);
 };
 const buildAdminPlanChoiceKeyboard = (userId: number, page: number, t: BotTranslate) => Markup.inlineKeyboard([
-    [Markup.button.callback(t('generated.freePlanButton', { value: PLAN_MAX_CONTEXT_TOKENS.free / 1000, free: PLAN_DAILY_WEB_SEARCH_LIMITS.free }), `usr:plan:pick:${userId}:${page}:free`)],
-    [Markup.button.callback(t('generated.standardPlanButton', { value: PLAN_MAX_CONTEXT_TOKENS.standart / 1000, standart: PLAN_DAILY_WEB_SEARCH_LIMITS.standart }), `usr:plan:pick:${userId}:${page}:standart`)],
-    [Markup.button.callback(t('generated.proPlanButton', { value: PLAN_MAX_CONTEXT_TOKENS.pro / 1000, pro: PLAN_DAILY_WEB_SEARCH_LIMITS.pro }), `usr:plan:pick:${userId}:${page}:pro`)],
+    [Markup.button.callback(t('generated.freePlanButton', { value: PLAN_MAX_CONTEXT_TOKENS.free / 1000, free: PLAN_MONTHLY_WEB_SEARCH_LIMITS.free }), `usr:plan:pick:${userId}:${page}:free`)],
+    [Markup.button.callback(t('generated.standardPlanButton', { value: PLAN_MAX_CONTEXT_TOKENS.standart / 1000, standart: PLAN_MONTHLY_WEB_SEARCH_LIMITS.standart }), `usr:plan:pick:${userId}:${page}:standart`)],
+    [Markup.button.callback(t('generated.proPlanButton', { value: PLAN_MAX_CONTEXT_TOKENS.pro / 1000, pro: PLAN_MONTHLY_WEB_SEARCH_LIMITS.pro }), `usr:plan:pick:${userId}:${page}:pro`)],
     [Markup.button.callback(t('admin.buttons.backToUser'), `usr:view:${userId}:${page}`)]
 ]);
 const buildAdminPlanDurationKeyboard = (userId: number, page: number, plan: UserPlan, t: BotTranslate) => Markup.inlineKeyboard([
@@ -2741,10 +2743,10 @@ const renderAdminUserCard = async (ctx: any, user: UserRecord, page: number, mod
         role: user.role === 'admin' ? ctx.t('roles.admin') : ctx.t('roles.user'),
         status: ctx.t(`admin.statuses.${user.status}`), plan: getPlanLabel(plan), subscriptionEnds,
         context: getContextWindowText(user),
-        webLimit: getDailyWebSearchLimitText(user), imagesDaily: `${user.daily_image_gen_count ?? 0}/${user.daily_image_gen_limit ?? 0}`,
+        webLimit: getMonthlyWebSearchLimitText(user), imagesMonth: `${user.monthly_image_gen_count ?? 0}/${user.monthly_image_gen_limit ?? 0}`,
         prompt: `#${prompt.id} ${prompt.id === CUSTOM_PROMPT_ID ? ctx.t('prompt.customName') : prompt.name}${prompt.is_default ? ctx.t('prompt.currentDefaultMark') : ''}`,
         messagesToday: user.daily_message_count ?? 0, tokensToday: user.daily_tokens_used ?? 0,
-        costToday: formatRub(user.daily_cost_rub ?? 0), webToday: user.daily_web_search_count ?? 0,
+        costToday: formatRub(user.daily_cost_rub ?? 0), webMonth: user.monthly_web_search_count ?? 0,
         tokensTotal: user.total_tokens_used ?? 0, costTotal: formatRub(user.total_cost_rub ?? 0),
         webTotal: user.total_web_search_count ?? 0, imagesTotal: user.total_image_gen_count ?? 0,
         notes: notesStats.notes_count, noteChars: notesStats.notes_chars,
@@ -2763,7 +2765,7 @@ const renderAdminPlanChoiceCard = async (ctx: any, user: UserRecord, page: numbe
     return ctx.reply(text, keyboard);
 };
 const renderAdminPlanDurationCard = async (ctx: any, user: UserRecord, page: number, plan: UserPlan, mode: 'reply' | 'edit' = 'edit') => {
-    const text = ctx.t('admin.planDuration', { id: user.id, plan: getPlanLabel(plan), context: PLAN_MAX_CONTEXT_TOKENS[plan] / 1000, web: PLAN_DAILY_WEB_SEARCH_LIMITS[plan] });
+    const text = ctx.t('admin.planDuration', { id: user.id, plan: getPlanLabel(plan), context: PLAN_MAX_CONTEXT_TOKENS[plan] / 1000, web: PLAN_MONTHLY_WEB_SEARCH_LIMITS[plan] });
     const keyboard = buildAdminPlanDurationKeyboard(user.id, page, plan, ctx.t);
     if (mode === 'edit') return ctx.editMessageText(text, keyboard);
     return ctx.reply(text, keyboard);
@@ -4610,8 +4612,7 @@ bot.action(/^usr:plan:dur:(\d+):(\d+):(free|standart|pro):(day|week|month|year|f
         return;
     }
 
-    const endsAt = getEndsAtForDuration(duration);
-    await applyUserPlan(userId, plan, endsAt, adminId);
+    await applyUserPlan(userId, plan, duration, adminId);
     const refreshed = await getUser(userId);
     if (!refreshed) {
         await ctx.answerCbQuery(ctx.t('admin.updateError'));

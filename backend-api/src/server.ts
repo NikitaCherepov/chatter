@@ -8,7 +8,7 @@ import dotenv from 'dotenv';
 import { WebSocketServer, WebSocket } from 'ws';
 import { wsClients, registerWsClient, unregisterWsClient, isDesktopOnline, sendIpcToDesktop, sendToDesktop, WS_HEARTBEAT_GRACE_MS, WS_HEARTBEAT_INTERVAL_MS, type WsClient } from './ws-clients.js';
 import { adminMiddleware, authMiddleware, issueAuthTokens, makePasswordHash, refreshAccessToken, validateTelegramInitData, verifyPassword, verifyToken, verifyTokenIgnoreExpiry, type AuthedRequest } from './auth.js';
-import { activateUserChat, bindChatMessageTelegramMeta, clearAllUserMessages, clearUserChatMessages, countUserChats, createPasswordAccount, createOrUpdateUserForApiRegistration, createUserChat, deleteUserHistoryByRole, deleteUserHistoryMessage, ensureActiveChat, forkChat, getPasswordAccountByLogin, getChatMessages, getChatMedia, getAllUserMedia, getRecentUserHistory, getUserById, getUserChatById, getUserChatListItem, listUserChats, upsertUserFromTelegram, setUserTimezone, updateUserPrompt, selectUserCustomPrompt, updateUserCustomPrompt, resetUsersPromptIfDeleted, resetDailyMessageCounters, upsertTelegramUser, createPendingTelegramUser, updateUserStatus, updateUserRole, updateUserName, updateUserTelegramUsername, removeUser, getAllUsers, getUsersCount, getUsersPage, getPendingUsersCount, getPendingUsersPage, getBannedUsersCount, getBannedUsersPage, updateUserPlan, syncAllUsersPlanLimits, resetUserWeeklyUsage, resetAllUsersWeeklyUsage, updateUserWeeklyCostQuota, revokeUserAuthTokens, generateLinkCode, verifyLinkCode, getLinkCodeForUser, generatePasswordResetCode, verifyPasswordResetCode, signPasswordResetToken, verifyPasswordResetToken, adminApplyGeneratedPassword, renameUserChat, deleteUserChat, deleteUserMessage, editUserMessage, searchUserChats, updateChatMessageAudio, getChatContextTokens, resolveMaxContextTokens, updateUserMaxContextTokens, getChatAttachments, deleteMessageAttachment, deleteMessageImage, resolveAttachmentMaxTokens, updateUserAttachmentMaxTokens, setChatBotHidden, listChatFolders, createChatFolder, renameChatFolder, deleteChatFolder, moveUserChatToFolder, listChatFilterOptions } from './services/chats.js';
+import { activateUserChat, bindChatMessageTelegramMeta, clearAllUserMessages, clearUserChatMessages, countUserChats, createPasswordAccount, createOrUpdateUserForApiRegistration, createUserChat, deleteUserHistoryByRole, deleteUserHistoryMessage, ensureActiveChat, forkChat, getPasswordAccountByLogin, getChatMessages, getChatMedia, getAllUserMedia, getRecentUserHistory, getUserById, getUserChatById, getUserChatListItem, listUserChats, upsertUserFromTelegram, setUserTimezone, updateUserPrompt, selectUserCustomPrompt, updateUserCustomPrompt, resetUsersPromptIfDeleted, resetDailyMessageCounters, upsertTelegramUser, createPendingTelegramUser, updateUserStatus, updateUserRole, updateUserName, updateUserTelegramUsername, removeUser, getAllUsers, getUsersCount, getUsersPage, getPendingUsersCount, getPendingUsersPage, getBannedUsersCount, getBannedUsersPage, syncAllUsersPlanLimits, resetUserWeeklyUsage, resetAllUsersWeeklyUsage, updateUserWeeklyCostQuota, revokeUserAuthTokens, generateLinkCode, verifyLinkCode, getLinkCodeForUser, generatePasswordResetCode, verifyPasswordResetCode, signPasswordResetToken, verifyPasswordResetToken, adminApplyGeneratedPassword, renameUserChat, deleteUserChat, deleteUserMessage, editUserMessage, searchUserChats, updateChatMessageAudio, getChatContextTokens, resolveMaxContextTokens, updateUserMaxContextTokens, getChatAttachments, deleteMessageAttachment, deleteMessageImage, resolveAttachmentMaxTokens, updateUserAttachmentMaxTokens, setChatBotHidden, listChatFolders, createChatFolder, renameChatFolder, deleteChatFolder, moveUserChatToFolder, listChatFilterOptions } from './services/chats.js';
 import { createNote, countNotes, deleteNote, getNoteById, getNoteStats, getNoteStatsForUsers, listNotes, updateNoteContent } from './services/notes.js';
 import { createTask, deletePendingTask, getUserTaskById, listTasks } from './services/tasks.js';
 import { listMapPins, getMapPinById, createMapPin, updateMapPin, deleteMapPin } from './services/map-pins.js';
@@ -54,6 +54,7 @@ import {
   MAX_IMAGE_ATTACHMENTS_PER_REQUEST,
   MAX_IMAGE_ATTACHMENTS_TOTAL_BYTES,
 } from './services/plan-limits.js';
+import { assignUserPlan, ensureUserMonthlyUsageWindow, getUserQuotaPeriod, type PlanDuration } from './services/monthly-usage.js';
 import { resolveImageFile, getUploadsDir } from './services/image-storage.js';
 import { resolveAttachmentFile, MAX_RAW_FILE_SIZE as MAX_ATTACHMENT_BYTES } from './services/attachment-storage.js';
 import { parseDocument, SUPPORTED_EXTENSIONS } from './services/document-parser.js';
@@ -117,14 +118,7 @@ db.transaction(() => {
     const activeChatId = ensureActiveChat(user.id);
     db.prepare('UPDATE chat_messages SET chat_id = ? WHERE user_id = ? AND chat_id IS NULL')
       .run(activeChatId, user.id);
-    const currentSubscription = db.prepare('SELECT id FROM user_plan_subscriptions WHERE user_id = ? AND is_current = 1 LIMIT 1')
-      .get(user.id) as { id: number } | undefined;
-    if (!currentSubscription) {
-      db.prepare(`
-        INSERT INTO user_plan_subscriptions (user_id, plan, started_at, ends_at, is_current, assigned_by)
-        VALUES (?, ?, CURRENT_TIMESTAMP, NULL, 1, NULL)
-      `).run(user.id, user.plan);
-    }
+    ensureUserMonthlyUsageWindow(user.id);
   }
 })();
 
@@ -1417,9 +1411,16 @@ app.put('/api/v1/account/core-memory', (req: AuthedRequest, res: any) => {
 // Weekly quota / budget usage for the current user
 app.get('/api/v1/account/quota', (req: AuthedRequest, res) => {
   const userId = accountIdFromRequest(req);
+  // Lazily roll the monthly usage window forward before reading counters,
+  // so the client always sees a consistent (window, counters) pair.
+  const monthlyPeriod = getUserQuotaPeriod(userId);
   const row = db.prepare(`
     SELECT weekly_tokens_used, weekly_tokens_quota, weekly_window_started_at,
-           weekly_cost_used, weekly_cost_quota
+           weekly_cost_used, weekly_cost_quota,
+           monthly_usage_window_started_at,
+           monthly_web_search_count, monthly_web_search_limit,
+           monthly_web_reader_count, monthly_web_reader_limit,
+           monthly_image_gen_count, monthly_image_gen_limit
     FROM users WHERE id = ?
   `).get(userId) as {
     weekly_tokens_used: number;
@@ -1427,6 +1428,13 @@ app.get('/api/v1/account/quota', (req: AuthedRequest, res) => {
     weekly_window_started_at: number;
     weekly_cost_used: number;
     weekly_cost_quota: number;
+    monthly_usage_window_started_at: number;
+    monthly_web_search_count: number;
+    monthly_web_search_limit: number;
+    monthly_web_reader_count: number;
+    monthly_web_reader_limit: number;
+    monthly_image_gen_count: number;
+    monthly_image_gen_limit: number;
   } | undefined;
   if (!row) return res.status(404).json({ error: 'user_not_found' });
 
@@ -1443,6 +1451,8 @@ app.get('/api/v1/account/quota', (req: AuthedRequest, res) => {
     ? (row.weekly_window_started_at + WEEK_SECONDS) * 1000
     : null;
 
+  const monthlyResetsAt = monthlyPeriod ? monthlyPeriod.ends_at * 1000 : null;
+
   return res.json({
     billing_mode: planLimits.billing_mode,
     percent,
@@ -1455,6 +1465,21 @@ app.get('/api/v1/account/quota', (req: AuthedRequest, res) => {
       quota: row.weekly_cost_quota,
     },
     resets_at: resetsAt,
+    monthly: {
+      resets_at: monthlyResetsAt,
+      web_search: {
+        used: Math.max(0, Math.floor(Number(monthlyPeriod?.web_search_used) || 0)),
+        limit: Math.max(0, Math.floor(Number(monthlyPeriod?.web_search_limit) || 0)),
+      },
+      web_reader: {
+        used: Math.max(0, Math.floor(Number(monthlyPeriod?.web_reader_used) || 0)),
+        limit: Math.max(0, Math.floor(Number(monthlyPeriod?.web_reader_limit) || 0)),
+      },
+      image_gen: {
+        used: Math.max(0, Math.floor(Number(monthlyPeriod?.image_gen_used) || 0)),
+        limit: Math.max(0, Math.floor(Number(monthlyPeriod?.image_gen_limit) || 0)),
+      },
+    },
   });
 });
 
@@ -3810,15 +3835,18 @@ app.get('/internal/admin/users-overview/:id', internalAuth, (req, res) => {
   const userId = resolveInternalAccountId(req.params.id);
   if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
 
+  // Roll the monthly usage window forward first so admins see live counters.
+  ensureUserMonthlyUsageWindow(userId);
   const user = db.prepare(`
     SELECT
       id, name, role, is_admin, status, plan, language, created_at,
       daily_message_count,
       weekly_tokens_used, weekly_tokens_quota, weekly_window_started_at,
       weekly_cost_used, weekly_cost_quota, weekly_cost_quota_limit,
-      daily_web_search_count, daily_web_search_limit, total_web_search_count,
-      daily_web_reader_count, daily_web_reader_limit, total_web_reader_count,
-      daily_image_gen_count, daily_image_gen_limit, total_image_gen_count,
+      monthly_usage_window_started_at,
+      monthly_web_search_count, monthly_web_search_limit, total_web_search_count,
+      monthly_web_reader_count, monthly_web_reader_limit, total_web_reader_count,
+      monthly_image_gen_count, monthly_image_gen_limit, total_image_gen_count,
       total_message_length, preferred_model, reasoning_level,
       max_context_tokens_limit, max_context_tokens, attachment_max_tokens
     FROM users
@@ -3895,6 +3923,7 @@ app.get('/internal/users/by-telegram/:telegramId', internalAuth, (req, res) => {
   }
   const accountId = getAccountIdByTelegramId(telegramId);
   if (!accountId) return res.status(404).json({ error: 'telegram_identity_not_found' });
+  ensureUserMonthlyUsageWindow(accountId);
   const user = getUserById(accountId);
   if (!user) return res.status(404).json({ error: 'user_not_found' });
   return res.json({ user: withAccountIdentities(user) });
@@ -3903,6 +3932,7 @@ app.get('/internal/users/by-telegram/:telegramId', internalAuth, (req, res) => {
 app.get('/internal/users/:id', internalAuth, (req, res) => {
   const userId = resolveInternalAccountId(req.params.id);
   if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
+  ensureUserMonthlyUsageWindow(userId);
   const user = getUserById(userId);
   if (!user) return res.status(404).json({ error: 'user_not_found' });
   return res.json({ user: withAccountIdentities(user) });
@@ -4036,7 +4066,10 @@ app.post('/internal/users/:id/plan', internalAuth, (req, res) => {
   const user = getUserById(userId);
   if (!user) return res.status(404).json({ error: 'user_not_found' });
 
-  const recordSubscription = req.body?.record_subscription === true;
+  const durationRaw = `${req.body?.duration || ''}`.trim();
+  const duration = ['day', 'week', 'month', 'year', 'forever'].includes(durationRaw)
+    ? durationRaw as PlanDuration
+    : undefined;
   const endsAtRaw = req.body?.ends_at;
   const endsAt = typeof endsAtRaw === 'string' && endsAtRaw.trim() ? endsAtRaw.trim() : null;
   const assignedByRaw = req.body?.assigned_by;
@@ -4044,24 +4077,21 @@ app.post('/internal/users/:id/plan', internalAuth, (req, res) => {
     ? resolveInternalAccountId(assignedByRaw)
     : null;
 
-  db.transaction(() => {
-    updateUserPlan(userId, plan);
-    if (recordSubscription) {
-      db.prepare('UPDATE user_plan_subscriptions SET is_current = 0 WHERE user_id = ? AND is_current = 1').run(userId);
-      db.prepare(`
-        INSERT INTO user_plan_subscriptions (user_id, plan, started_at, ends_at, is_current, assigned_by)
-        VALUES (?, ?, CURRENT_TIMESTAMP, ?, 1, ?)
-      `).run(userId, plan, endsAt, assignedBy);
-    }
-  })();
-  return res.json({ ok: true, plan, ends_at: endsAt });
+  const assigned = assignUserPlan({ userId, plan, duration, endsAt, assignedBy });
+  return res.json({
+    ok: true,
+    plan,
+    ends_at: assigned.subscription.ends_at,
+    renewed: assigned.renewed,
+  });
 });
 
 app.get('/internal/users/:id/subscription', internalAuth, (req, res) => {
   const userId = resolveInternalAccountId(req.params.id);
   if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
   const subscription = db.prepare(`
-    SELECT id, user_id, plan, started_at, ends_at, is_current, assigned_by
+    SELECT id, user_id, plan, started_at, ends_at, is_current, assigned_by,
+           access_kind, billing_interval, quota_anchor_at, auto_renew, cancel_at_period_end
     FROM user_plan_subscriptions
     WHERE user_id = ? AND is_current = 1
     ORDER BY id DESC LIMIT 1
@@ -4276,34 +4306,21 @@ app.post('/api/v1/admin/users/:id/plan', adminMiddleware, (req: AuthedRequest, r
 
   const user = getUserById(userId);
   if (!user) return res.status(404).json({ error: 'user_not_found' });
-
-  // Close current subscription
-  db.prepare('UPDATE user_plan_subscriptions SET is_current = 0 WHERE user_id = ? AND is_current = 1').run(userId);
-
-  // Calculate end date
-  let endsAt: string | null = null;
-  if (duration !== 'forever') {
-    const now = new Date();
-    switch (duration) {
-      case 'day': now.setDate(now.getDate() + 1); break;
-      case 'week': now.setDate(now.getDate() + 7); break;
-      case 'month': now.setMonth(now.getMonth() + 1); break;
-      case 'year': now.setFullYear(now.getFullYear() + 1); break;
-      default: break;
-    }
-    if (['day', 'week', 'month', 'year'].includes(duration)) {
-      endsAt = now.toISOString();
-    }
+  if (!['day', 'week', 'month', 'year', 'forever'].includes(duration)) {
+    return res.status(400).json({ error: 'bad_duration' });
   }
-
-  // Create new subscription
-  db.prepare(`
-    INSERT INTO user_plan_subscriptions (user_id, plan, started_at, ends_at, is_current, assigned_by)
-    VALUES (?, ?, CURRENT_TIMESTAMP, ?, 1, ?)
-  `).run(userId, plan, endsAt, req.authUserId!);
-
-  updateUserPlan(userId, plan);
-  return res.json({ ok: true, plan, ends_at: endsAt });
+  const assigned = assignUserPlan({
+    userId,
+    plan,
+    duration: duration as PlanDuration,
+    assignedBy: req.authUserId!,
+  });
+  return res.json({
+    ok: true,
+    plan,
+    ends_at: assigned.subscription.ends_at,
+    renewed: assigned.renewed,
+  });
 });
 
 app.post('/api/v1/admin/users/:id/ban', adminMiddleware, async (req: AuthedRequest, res) => {
@@ -4401,9 +4418,10 @@ app.put('/internal/admin/plan-limits', internalAuth, (req, res) => {
       return res.status(400).json({ error: `missing_plan_${plan}` });
     }
     next[plan] = {
-      daily_web_search_limit: Math.max(0, Math.floor(Number(entry.daily_web_search_limit) || 0)),
-      daily_web_reader_limit: Math.max(0, Math.floor(Number(entry.daily_web_reader_limit) || 0)),
-      daily_image_gen_limit: Math.max(0, Math.floor(Number(entry.daily_image_gen_limit) || 0)),
+      // Accept legacy daily_* keys once (older admin panel builds); saves use monthly keys.
+      monthly_web_search_limit: Math.max(0, Math.floor(Number(entry.monthly_web_search_limit ?? entry.daily_web_search_limit) || 0)),
+      monthly_web_reader_limit: Math.max(0, Math.floor(Number(entry.monthly_web_reader_limit ?? entry.daily_web_reader_limit) || 0)),
+      monthly_image_gen_limit: Math.max(0, Math.floor(Number(entry.monthly_image_gen_limit ?? entry.daily_image_gen_limit) || 0)),
       image_attachments_allowed: Boolean(entry.image_attachments_allowed),
       max_context_tokens: Math.max(0, Math.floor(Number(entry.max_context_tokens) || 0)),
       weekly_token_quota: Math.max(0, Number(entry.weekly_token_quota) || 0),

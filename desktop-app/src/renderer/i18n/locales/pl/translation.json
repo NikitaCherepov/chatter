@@ -1197,7 +1197,16 @@
   },
   "quota": {
     "title": "Wykorzystanie limitu",
-    "resetsAt": "Reset:"
+    "resetsAt": "Reset:",
+    "monthly": {
+      "title": "Limity miesięczne",
+      "webSearch": "Wyszukiwania w sieci",
+      "webReader": "Czytanie stron",
+      "imageGen": "Generowanie obrazów",
+      "desktopNote": "Wyszukiwanie i czytanie stron zużywa ten limit tylko gdy aplikacja jest wyłączona",
+      "buy": "Kup więcej generacji",
+      "buyHint": "Zakup dodatkowych generacji wkrótce"
+    }
   },
   "forcePassword": {
     "title": "Zmień hasło",

@@ -1188,7 +1188,16 @@
   },
   "quota": {
     "title": "クォータ使用量",
-    "resetsAt": "リセット:"
+    "resetsAt": "リセット:",
+    "monthly": {
+      "title": "月間リミット",
+      "webSearch": "ウェブ検索",
+      "webReader": "ウェブページ閲覧",
+      "imageGen": "画像生成",
+      "desktopNote": "検索とページ閲覧はアプリ停止中のみこのリミットを消費します",
+      "buy": "生成を追加購入",
+      "buyHint": "追加生成の購入は近日公開予定"
+    }
   },
   "forcePassword": {
     "title": "パスワード変更",

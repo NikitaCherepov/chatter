@@ -1188,7 +1188,16 @@
   },
   "quota": {
     "title": "Uso de cuota",
-    "resetsAt": "Restablece:"
+    "resetsAt": "Restablece:",
+    "monthly": {
+      "title": "Límites mensuales",
+      "webSearch": "Búsquedas web",
+      "webReader": "Lectura de páginas web",
+      "imageGen": "Generaciones de imágenes",
+      "desktopNote": "La búsqueda y la lectura de páginas consumen este límite solo con la app apagada",
+      "buy": "Comprar más generaciones",
+      "buyHint": "La compra de generaciones adicionales llegará pronto"
+    }
   },
   "forcePassword": {
     "title": "Cambiar contraseña",

@@ -1188,7 +1188,16 @@
   },
   "quota": {
     "title": "配额使用情况",
-    "resetsAt": "重置时间："
+    "resetsAt": "重置时间：",
+    "monthly": {
+      "title": "每月限额",
+      "webSearch": "网页搜索",
+      "webReader": "网页阅读",
+      "imageGen": "图像生成",
+      "desktopNote": "仅在应用关闭时，搜索和网页阅读才会消耗此限额",
+      "buy": "购买更多生成次数",
+      "buyHint": "额外生成次数购买即将上线"
+    }
   },
   "forcePassword": {
     "title": "更改密码",

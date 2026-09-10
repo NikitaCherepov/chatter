@@ -196,6 +196,11 @@ db.exec(`
     ends_at DATETIME,
     is_current INTEGER NOT NULL DEFAULT 1 CHECK(is_current IN (0, 1)),
     assigned_by INTEGER,
+    access_kind TEXT NOT NULL DEFAULT 'free' CHECK(access_kind IN ('free', 'subscription', 'trial', 'grant')),
+    billing_interval TEXT CHECK(billing_interval IN ('month', 'year') OR billing_interval IS NULL),
+    quota_anchor_at INTEGER,
+    auto_renew INTEGER NOT NULL DEFAULT 0 CHECK(auto_renew IN (0, 1)),
+    cancel_at_period_end INTEGER NOT NULL DEFAULT 0 CHECK(cancel_at_period_end IN (0, 1)),
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
   );
 
@@ -203,6 +208,29 @@ db.exec(`
   ON user_plan_subscriptions(user_id);
   CREATE INDEX IF NOT EXISTS idx_user_plan_subscriptions_current
   ON user_plan_subscriptions(user_id, is_current, ends_at);
+
+  CREATE TABLE IF NOT EXISTS user_plan_quota_periods (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    subscription_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    plan TEXT NOT NULL CHECK(plan IN ('free', 'standart', 'pro')),
+    sequence INTEGER NOT NULL DEFAULT 0,
+    starts_at INTEGER NOT NULL,
+    ends_at INTEGER NOT NULL,
+    web_search_used INTEGER NOT NULL DEFAULT 0,
+    web_search_limit INTEGER NOT NULL DEFAULT 0,
+    web_reader_used INTEGER NOT NULL DEFAULT 0,
+    web_reader_limit INTEGER NOT NULL DEFAULT 0,
+    image_gen_used INTEGER NOT NULL DEFAULT 0,
+    image_gen_limit INTEGER NOT NULL DEFAULT 0,
+    is_current INTEGER NOT NULL DEFAULT 1 CHECK(is_current IN (0, 1)),
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_user_plan_quota_periods_current
+  ON user_plan_quota_periods(user_id, is_current, ends_at);
+  CREATE INDEX IF NOT EXISTS idx_user_plan_quota_periods_subscription
+  ON user_plan_quota_periods(subscription_id, sequence);
 
   CREATE TABLE IF NOT EXISTS server_access_keys (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -242,6 +270,29 @@ const ensureUserColumn = (name: string, sql: string) => {
   if (!hasUserColumn(name)) db.exec(sql);
 };
 
+const hasSubscriptionColumn = (columnName: string) => {
+  const columns = db.prepare('PRAGMA table_info(user_plan_subscriptions)').all() as Array<{ name: string }>;
+  return columns.some(column => column.name === columnName);
+};
+
+const ensureSubscriptionColumn = (name: string, sql: string) => {
+  if (!hasSubscriptionColumn(name)) db.exec(sql);
+};
+
+ensureSubscriptionColumn('access_kind', "ALTER TABLE user_plan_subscriptions ADD COLUMN access_kind TEXT NOT NULL DEFAULT 'free'");
+ensureSubscriptionColumn('billing_interval', 'ALTER TABLE user_plan_subscriptions ADD COLUMN billing_interval TEXT');
+ensureSubscriptionColumn('quota_anchor_at', 'ALTER TABLE user_plan_subscriptions ADD COLUMN quota_anchor_at INTEGER');
+ensureSubscriptionColumn('auto_renew', 'ALTER TABLE user_plan_subscriptions ADD COLUMN auto_renew INTEGER NOT NULL DEFAULT 0');
+ensureSubscriptionColumn('cancel_at_period_end', 'ALTER TABLE user_plan_subscriptions ADD COLUMN cancel_at_period_end INTEGER NOT NULL DEFAULT 0');
+db.exec(`
+  UPDATE user_plan_subscriptions
+  SET access_kind = CASE
+    WHEN plan = 'free' THEN 'free'
+    WHEN ends_at IS NULL THEN 'grant'
+    ELSE 'subscription'
+  END
+  WHERE access_kind IS NULL OR access_kind = 'free' AND plan <> 'free'
+`);
 const hasChatMessageColumn = (columnName: string) => {
   const columns = db.prepare('PRAGMA table_info(chat_messages)').all() as Array<{ name: string }>;
   return columns.some(c => c.name === columnName);
@@ -311,6 +362,52 @@ ensureUserColumn('mail_check_limit', 'ALTER TABLE users ADD COLUMN mail_check_li
 ensureUserColumn('daily_image_gen_count', 'ALTER TABLE users ADD COLUMN daily_image_gen_count INTEGER NOT NULL DEFAULT 0');
 ensureUserColumn('daily_image_gen_limit', 'ALTER TABLE users ADD COLUMN daily_image_gen_limit INTEGER NOT NULL DEFAULT 3');
 ensureUserColumn('total_image_gen_count', 'ALTER TABLE users ADD COLUMN total_image_gen_count INTEGER NOT NULL DEFAULT 0');
+const needsMonthlyUsageMigration = !hasUserColumn('monthly_usage_window_started_at');
+ensureUserColumn('monthly_usage_window_started_at', 'ALTER TABLE users ADD COLUMN monthly_usage_window_started_at INTEGER NOT NULL DEFAULT 0');
+ensureUserColumn('monthly_web_search_count', 'ALTER TABLE users ADD COLUMN monthly_web_search_count INTEGER NOT NULL DEFAULT 0');
+ensureUserColumn('monthly_web_search_limit', 'ALTER TABLE users ADD COLUMN monthly_web_search_limit INTEGER NOT NULL DEFAULT 0');
+ensureUserColumn('monthly_web_reader_count', 'ALTER TABLE users ADD COLUMN monthly_web_reader_count INTEGER NOT NULL DEFAULT 0');
+ensureUserColumn('monthly_web_reader_limit', 'ALTER TABLE users ADD COLUMN monthly_web_reader_limit INTEGER NOT NULL DEFAULT 0');
+ensureUserColumn('monthly_image_gen_count', 'ALTER TABLE users ADD COLUMN monthly_image_gen_count INTEGER NOT NULL DEFAULT 0');
+ensureUserColumn('monthly_image_gen_limit', 'ALTER TABLE users ADD COLUMN monthly_image_gen_limit INTEGER NOT NULL DEFAULT 0');
+if (needsMonthlyUsageMigration) {
+  // Preserve the current in-progress usage and configured limits while moving
+  // from daily counters to a monthly billing window.
+  db.exec(`
+    UPDATE users
+    SET monthly_usage_window_started_at = unixepoch(),
+        monthly_web_search_count = MAX(0, COALESCE(daily_web_search_count, 0)),
+        monthly_web_search_limit = MAX(0, COALESCE(daily_web_search_limit, 0)),
+        monthly_web_reader_count = MAX(0, COALESCE(daily_web_reader_count, 0)),
+        monthly_web_reader_limit = MAX(0, COALESCE(daily_web_reader_limit, 0)),
+        monthly_image_gen_count = MAX(0, COALESCE(daily_image_gen_count, 0)),
+        monthly_image_gen_limit = MAX(0, COALESCE(daily_image_gen_limit, 0))
+  `);
+}
+db.exec(`
+  UPDATE user_plan_subscriptions
+  SET quota_anchor_at = COALESCE(
+    (SELECT NULLIF(monthly_usage_window_started_at, 0) FROM users WHERE users.id = user_plan_subscriptions.user_id),
+    unixepoch(started_at),
+    unixepoch()
+  )
+  WHERE quota_anchor_at IS NULL OR quota_anchor_at <= 0
+`);
+// Repair historical duplicates before enforcing the one-active-record invariant.
+db.exec(`
+  UPDATE user_plan_subscriptions SET is_current = 0
+  WHERE is_current = 1 AND id NOT IN (
+    SELECT MAX(id) FROM user_plan_subscriptions WHERE is_current = 1 GROUP BY user_id
+  );
+  UPDATE user_plan_quota_periods SET is_current = 0
+  WHERE is_current = 1 AND id NOT IN (
+    SELECT MAX(id) FROM user_plan_quota_periods WHERE is_current = 1 GROUP BY user_id
+  );
+  CREATE UNIQUE INDEX IF NOT EXISTS uq_user_plan_subscriptions_one_current
+    ON user_plan_subscriptions(user_id) WHERE is_current = 1;
+  CREATE UNIQUE INDEX IF NOT EXISTS uq_user_plan_quota_periods_one_current
+    ON user_plan_quota_periods(user_id) WHERE is_current = 1;
+`);
 ensureUserColumn('timezone_offset', 'ALTER TABLE users ADD COLUMN timezone_offset INTEGER');
 ensureUserColumn('timezone_confirmed', 'ALTER TABLE users ADD COLUMN timezone_confirmed INTEGER NOT NULL DEFAULT 0');
 ensureUserColumn('total_message_length', 'ALTER TABLE users ADD COLUMN total_message_length INTEGER NOT NULL DEFAULT 0');

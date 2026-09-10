@@ -3,6 +3,7 @@ import { getUserById } from './chats.js';
 import { db } from '../db.js';
 import type { UserPlan, UserRecord } from '../types.js';
 import { isImageGenerationEnabled } from './system-settings.js';
+import { consumeUserQuota, getUserQuota } from './monthly-usage.js';
 
 dotenv.config();
 
@@ -62,22 +63,16 @@ const normalizeDailyImageGenLimit = (value: number | null | undefined) => {
 };
 
 const checkImageGenLimit = (user: UserRecord) => {
-  const limit = normalizeDailyImageGenLimit(user.daily_image_gen_limit);
-  const count = Math.max(0, Math.floor(Number(user.daily_image_gen_count || 0)));
+  const quota = getUserQuota(user.id, 'image_gen');
+  const limit = normalizeDailyImageGenLimit(quota?.limit ?? 0);
+  const count = Math.max(0, Math.floor(Number(quota?.used || 0)));
   if (limit <= 0) return { allowed: false, count, limit, reason: 'По твоему плану генерация изображений отключена.' };
-  if (count >= limit) return { allowed: false, count, limit, reason: `Лимит генерации изображений на сегодня исчерпан (${count}/${limit}).` };
+  if (count >= limit) return { allowed: false, count, limit, reason: `Месячный лимит генерации изображений исчерпан (${count}/${limit}).` };
   return { allowed: true, count, limit, reason: '' };
 };
 
 const incrementUserImageGenUsage = (userId: number, count = 1) => {
-  const safeCount = Math.max(0, Math.floor(count));
-  if (safeCount <= 0) return;
-  db.prepare(`
-    UPDATE users
-    SET daily_image_gen_count = COALESCE(daily_image_gen_count, 0) + ?,
-        total_image_gen_count = COALESCE(total_image_gen_count, 0) + ?
-    WHERE id = ?
-  `).run(safeCount, safeCount, userId);
+  consumeUserQuota(userId, 'image_gen', count);
 };
 
 export type ImageGenResult = {

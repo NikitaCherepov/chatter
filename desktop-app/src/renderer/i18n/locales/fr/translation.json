@@ -1188,7 +1188,16 @@
   },
   "quota": {
     "title": "Utilisation du quota",
-    "resetsAt": "Réinitialisation :"
+    "resetsAt": "Réinitialisation :",
+    "monthly": {
+      "title": "Limites mensuelles",
+      "webSearch": "Recherches web",
+      "webReader": "Lecture de pages web",
+      "imageGen": "Générations d'images",
+      "desktopNote": "La recherche et la lecture de pages consomment cette limite uniquement lorsque l'app est fermée",
+      "buy": "Acheter plus de générations",
+      "buyHint": "L'achat de générations supplémentaires arrive bientôt"
+    }
   },
   "forcePassword": {
     "title": "Changer le mot de passe",

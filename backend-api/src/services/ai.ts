@@ -31,6 +31,7 @@ import { listSubagentNames, buildSubagentListDescription, getSubagent } from './
 import { hasBackendTranslation, translateForLanguage } from '../i18n/index.js';
 import { readChatAttachment, searchChatAttachment, type AttachmentReadContext } from './chat-attachments.js';
 import { attachFileToResponse, saveTempFileForUse, type ResponseFileSink } from './response-attachments.js';
+import { consumeUserQuota, getUserQuota } from './monthly-usage.js';
 
 dotenv.config();
 
@@ -1934,41 +1935,29 @@ const formatUnixForTimezone = (unixSeconds: number, timezoneOffset: number) => {
 };
 
 const checkTavilySearchLimit = (user: UserRecord) => {
-  const limit = normalizeDailyWebSearchLimit(user.daily_web_search_limit);
-  const count = Math.max(0, Math.floor(Number(user.daily_web_search_count || 0)));
+  const quota = getUserQuota(user.id, 'web_search');
+  const limit = normalizeDailyWebSearchLimit(quota?.limit ?? 0);
+  const count = Math.max(0, Math.floor(Number(quota?.used || 0)));
   if (limit <= 0) return { allowed: false, count, limit, reason: 'Tavily search is disabled under your plan.' };
-  if (count >= limit) return { allowed: false, count, limit, reason: `Tavily search limit exhausted for today (${count}/${limit}).` };
+  if (count >= limit) return { allowed: false, count, limit, reason: `Monthly Tavily search limit exhausted (${count}/${limit}).` };
   return { allowed: true, count, limit, reason: '' };
 };
 
 const checkBrowserlessReadLimit = (user: UserRecord) => {
-  const limit = normalizeDailyWebReaderLimit(user.daily_web_reader_limit);
-  const count = Math.max(0, Math.floor(Number(user.daily_web_reader_count || 0)));
+  const quota = getUserQuota(user.id, 'web_reader');
+  const limit = normalizeDailyWebReaderLimit(quota?.limit ?? 0);
+  const count = Math.max(0, Math.floor(Number(quota?.used || 0)));
   if (limit <= 0) return { allowed: false, count, limit, reason: 'Browserless page reading is disabled under your plan.' };
-  if (count >= limit) return { allowed: false, count, limit, reason: `Browserless page reading limit exhausted for today (${count}/${limit}).` };
+  if (count >= limit) return { allowed: false, count, limit, reason: `Monthly Browserless page reading limit exhausted (${count}/${limit}).` };
   return { allowed: true, count, limit, reason: '' };
 };
 
 const incrementUserBrowserlessReadUsage = (userId: number, count = 1) => {
-  const safeCount = Math.max(0, Math.floor(count));
-  if (safeCount <= 0) return;
-  db.prepare(`
-    UPDATE users
-    SET daily_web_reader_count = COALESCE(daily_web_reader_count, 0) + ?,
-        total_web_reader_count = COALESCE(total_web_reader_count, 0) + ?
-    WHERE id = ?
-  `).run(safeCount, safeCount, userId);
+  consumeUserQuota(userId, 'web_reader', count);
 };
 
 const incrementUserTavilySearchUsage = (userId: number, count = 1) => {
-  const safeCount = Math.max(0, Math.floor(count));
-  if (safeCount <= 0) return;
-  db.prepare(`
-    UPDATE users
-    SET daily_web_search_count = COALESCE(daily_web_search_count, 0) + ?,
-        total_web_search_count = COALESCE(total_web_search_count, 0) + ?
-    WHERE id = ?
-  `).run(safeCount, safeCount, userId);
+  consumeUserQuota(userId, 'web_search', count);
 };
 
 const formatTasksList = (tasks: ReturnType<typeof listTasks>, timezoneOffset: number, emptyText = 'No tasks found.') => {

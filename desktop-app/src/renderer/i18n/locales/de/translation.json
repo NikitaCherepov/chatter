@@ -1188,7 +1188,16 @@
   },
   "quota": {
     "title": "Kontingentnutzung",
-    "resetsAt": "Zurücksetzen:"
+    "resetsAt": "Zurücksetzen:",
+    "monthly": {
+      "title": "Monatslimits",
+      "webSearch": "Websuchen",
+      "webReader": "Webseiten-Lesen",
+      "imageGen": "Bildgenerierungen",
+      "desktopNote": "Suche und Seitenlesen verbrauchen dieses Limit nur, während die App ausgeschaltet ist",
+      "buy": "Weitere Generierungen kaufen",
+      "buyHint": "Der Kauf zusätzlicher Generierungen kommt bald"
+    }
   },
   "forcePassword": {
     "title": "Passwort ändern",

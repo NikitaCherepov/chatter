@@ -1188,7 +1188,16 @@
   },
   "quota": {
     "title": "Uso da Cota",
-    "resetsAt": "Redefine em:"
+    "resetsAt": "Redefine em:",
+    "monthly": {
+      "title": "Limites mensais",
+      "webSearch": "Pesquisas na web",
+      "webReader": "Leitura de páginas",
+      "imageGen": "Gerações de imagens",
+      "desktopNote": "A pesquisa e a leitura de páginas consomem este limite apenas com o app desligado",
+      "buy": "Comprar mais gerações",
+      "buyHint": "A compra de gerações extras chega em breve"
+    }
   },
   "forcePassword": {
     "title": "Alterar Senha",

@@ -1197,7 +1197,16 @@
   },
   "quota": {
     "title": "할당량 사용량",
-    "resetsAt": "초기화:"
+    "resetsAt": "초기화:",
+    "monthly": {
+      "title": "월간 한도",
+      "webSearch": "웹 검색",
+      "webReader": "웹 페이지 읽기",
+      "imageGen": "이미지 생성",
+      "desktopNote": "검색과 페이지 읽기는 앱이 꺼져 있을 때만 이 한도를 사용합니다",
+      "buy": "생성 추가 구매",
+      "buyHint": "추가 생성 구매는 곧 제공됩니다"
+    }
   },
   "forcePassword": {
     "title": "비밀번호 변경",

@@ -36,6 +36,13 @@ export type UserRecord = {
   daily_image_gen_count?: number;
   daily_image_gen_limit?: number;
   total_image_gen_count?: number;
+  monthly_usage_window_started_at?: number;
+  monthly_web_search_count?: number;
+  monthly_web_search_limit?: number;
+  monthly_web_reader_count?: number;
+  monthly_web_reader_limit?: number;
+  monthly_image_gen_count?: number;
+  monthly_image_gen_limit?: number;
   preferred_model?: string | null;
   subagent_mode?: string | null;
   feature_flags?: string | null;

@@ -58,6 +58,9 @@ const additiveUserColumns = [
   'total_web_reader_count',
   'daily_image_gen_count',
   'total_image_gen_count',
+  'monthly_web_search_count',
+  'monthly_web_reader_count',
+  'monthly_image_gen_count',
 ];
 
 export const getRawAccountById = (accountId: number) => db
@@ -254,6 +257,14 @@ const moveSimpleOwnership = (sourceAccountId: number, targetAccountId: number) =
         .run(sourceAccountId);
     }
     db.prepare('UPDATE user_plan_subscriptions SET user_id = ? WHERE user_id = ?')
+      .run(targetAccountId, sourceAccountId);
+  }
+  if (tableHasColumn('user_plan_quota_periods', 'user_id')) {
+    if (tableHasColumn('user_plan_quota_periods', 'is_current')) {
+      db.prepare('UPDATE user_plan_quota_periods SET is_current = 0 WHERE user_id = ?')
+        .run(sourceAccountId);
+    }
+    db.prepare('UPDATE user_plan_quota_periods SET user_id = ? WHERE user_id = ?')
       .run(targetAccountId, sourceAccountId);
   }
 };

@@ -71,6 +71,95 @@
 }
 
 // ════════════════════════════════════════════
+// MONTHLY limits block — Account settings
+// ════════════════════════════════════════════
+.monthly {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 4px;
+}
+
+.monthlyHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.monthlyTitle {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.monthlyResets {
+  color: var(--text-hint);
+  font-size: 11px;
+}
+
+.monthlyRow {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas:
+    'label value'
+    'bar bar';
+  row-gap: 4px;
+  column-gap: 8px;
+}
+
+.monthlyLabel {
+  grid-area: label;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.monthlyValue {
+  grid-area: value;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.monthlyBar {
+  grid-area: bar;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border-light);
+  overflow: hidden;
+}
+
+.monthlyBarFill {
+  height: 100%;
+  border-radius: 2px;
+  background: var(--accent-icon);
+  transition: width 0.3s ease;
+}
+
+.monthlyNote {
+  color: var(--text-hint);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.monthlyActions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.buyButton {
+  padding: 6px 14px;
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-hint);
+  font-size: 12px;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+// ════════════════════════════════════════════
 // COMPACT variant — chat toolbar
 // ════════════════════════════════════════════
 .compact {

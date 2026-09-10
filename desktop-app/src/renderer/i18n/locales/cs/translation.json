@@ -1197,7 +1197,16 @@
   },
   "quota": {
     "title": "Využití kvóty",
-    "resetsAt": "Reset:"
+    "resetsAt": "Reset:",
+    "monthly": {
+      "title": "Měsíční limity",
+      "webSearch": "Webové vyhledávání",
+      "webReader": "Čtení webových stránek",
+      "imageGen": "Generování obrázků",
+      "desktopNote": "Vyhledávání a čtení stránek tento limit čerpají, jen když je aplikace vypnutá",
+      "buy": "Koupit další generace",
+      "buyHint": "Nákup dalších generací brzy přibude"
+    }
   },
   "forcePassword": {
     "title": "Změnit heslo",

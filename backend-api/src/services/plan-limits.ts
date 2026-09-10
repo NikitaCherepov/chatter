@@ -4,9 +4,9 @@ import type { UserPlan } from '../types.js';
 export type BillingMode = 'tokens' | 'budget';
 
 export type PlanLimits = {
-  daily_web_search_limit: number;
-  daily_web_reader_limit: number;
-  daily_image_gen_limit: number;
+  monthly_web_search_limit: number;
+  monthly_web_reader_limit: number;
+  monthly_image_gen_limit: number;
   image_attachments_allowed: boolean;
   max_context_tokens: number;
   /** Weekly quota in conditional units. 0 means no quota (only flag-based limits apply). */
@@ -32,9 +32,9 @@ export const DEFAULT_BILLING_MODE: BillingMode = 'tokens';
  */
 export const DEFAULT_PLAN_LIMITS: Record<UserPlan, PlanLimits> = {
   free: {
-    daily_web_search_limit: 0,
-    daily_web_reader_limit: 0,
-    daily_image_gen_limit: 0,
+    monthly_web_search_limit: 0,
+    monthly_web_reader_limit: 0,
+    monthly_image_gen_limit: 0,
     image_attachments_allowed: false,
     max_context_tokens: 30_000,
     weekly_token_quota: 5_000_000,
@@ -43,9 +43,9 @@ export const DEFAULT_PLAN_LIMITS: Record<UserPlan, PlanLimits> = {
     subscription_price: 0,
   },
   standart: {
-    daily_web_search_limit: 5,
-    daily_web_reader_limit: 5,
-    daily_image_gen_limit: 2,
+    monthly_web_search_limit: 5,
+    monthly_web_reader_limit: 5,
+    monthly_image_gen_limit: 2,
     image_attachments_allowed: true,
     max_context_tokens: 60_000,
     weekly_token_quota: 15_000_000,
@@ -54,9 +54,9 @@ export const DEFAULT_PLAN_LIMITS: Record<UserPlan, PlanLimits> = {
     subscription_price: 0,
   },
   pro: {
-    daily_web_search_limit: 20,
-    daily_web_reader_limit: 20,
-    daily_image_gen_limit: 5,
+    monthly_web_search_limit: 20,
+    monthly_web_reader_limit: 20,
+    monthly_image_gen_limit: 5,
     image_attachments_allowed: true,
     max_context_tokens: 1_000_000,
     weekly_token_quota: 30_000_000,
@@ -72,7 +72,7 @@ export const MAX_IMAGE_ATTACHMENTS_PER_REQUEST = 50;
 const sanitizeConfig = (raw: unknown, plan: UserPlan): PlanLimits => {
   const fallback = DEFAULT_PLAN_LIMITS[plan];
   if (!raw || typeof raw !== 'object') return { ...fallback };
-  const cfg = raw as Partial<PlanLimits>;
+  const cfg = raw as Partial<PlanLimits> & Record<string, unknown>;
   const num = (value: unknown, def: number): number => {
     const n = typeof value === 'string' ? Number(value) : value;
     return Number.isFinite(n) && (n as number) >= 0 ? Math.floor(n as number) : def;
@@ -81,13 +81,12 @@ const sanitizeConfig = (raw: unknown, plan: UserPlan): PlanLimits => {
     const n = typeof value === 'string' ? Number(value) : value;
     return Number.isFinite(n) && (n as number) >= 0 ? (n as number) : def;
   };
-  const dailyWebSearchLimit = num(cfg.daily_web_search_limit, fallback.daily_web_search_limit);
+  const monthlyWebSearchLimit = num(cfg.monthly_web_search_limit ?? cfg.daily_web_search_limit, fallback.monthly_web_search_limit);
   return {
-    daily_web_search_limit: dailyWebSearchLimit,
-    // Existing configs predate this field. Initially mirror their configured
-    // Tavily limit so an upgrade does not silently change plan availability.
-    daily_web_reader_limit: num(cfg.daily_web_reader_limit, dailyWebSearchLimit),
-    daily_image_gen_limit: num(cfg.daily_image_gen_limit, fallback.daily_image_gen_limit),
+    monthly_web_search_limit: monthlyWebSearchLimit,
+    // Accept legacy daily keys once during upgrades; saves use monthly keys.
+    monthly_web_reader_limit: num(cfg.monthly_web_reader_limit ?? cfg.daily_web_reader_limit, monthlyWebSearchLimit),
+    monthly_image_gen_limit: num(cfg.monthly_image_gen_limit ?? cfg.daily_image_gen_limit, fallback.monthly_image_gen_limit),
     image_attachments_allowed: Boolean(cfg.image_attachments_allowed ?? fallback.image_attachments_allowed),
     max_context_tokens: num(cfg.max_context_tokens, fallback.max_context_tokens),
     weekly_token_quota: real(cfg.weekly_token_quota, fallback.weekly_token_quota),

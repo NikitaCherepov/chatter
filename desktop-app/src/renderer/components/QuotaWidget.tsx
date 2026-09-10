@@ -82,8 +82,20 @@ export function QuotaWidget({ variant = 'full', className }: Props) {
   const isBudget = quota.billing_mode === 'budget';
   const activeQuota = isBudget ? quota.cost.quota : quota.tokens.quota;
 
-  // If no active quota, nothing to show
-  if (activeQuota <= 0) return null;
+  const monthly = quota.monthly;
+  const monthlyRows = monthly
+    ? [
+        { key: 'webSearch', entry: monthly.web_search },
+        { key: 'webReader', entry: monthly.web_reader },
+        { key: 'imageGen', entry: monthly.image_gen },
+      ]
+    : [];
+  // Keep the section (and the future purchase action) visible even when the
+  // current plan grants zero external-service usage.
+  const hasMonthly = Boolean(monthly);
+
+  // If no active quota and no monthly limits, nothing to show
+  if (activeQuota <= 0 && !hasMonthly) return null;
 
   // const usedLabel = isBudget
   //   ? `${formatCost(quota.cost.used)} / ${formatCost(quota.cost.quota)}`
@@ -91,6 +103,7 @@ export function QuotaWidget({ variant = 'full', className }: Props) {
 
   // ── Compact: small circle with percentage for the chat toolbar ──
   if (variant === 'compact') {
+    if (activeQuota <= 0) return null;
     return (
       <div
         className={`${s.compact} ${className || ''}`}
@@ -102,23 +115,64 @@ export function QuotaWidget({ variant = 'full', className }: Props) {
     );
   }
 
-  // ── Full: detailed card for Account settings — single donut ──
+  // ── Full: detailed card for Account settings — donut + monthly limits ──
   return (
     <div className={`${s.full} ${className || ''}`}>
-      <div className={s.donutBlock}>
-        <div className={s.donutWrap}>
-          <Donut percent={percent} size={96} />
-          <span className={s.donutPercent}>{percent}%</span>
+      {activeQuota > 0 && (
+        <>
+          <div className={s.donutBlock}>
+            <div className={s.donutWrap}>
+              <Donut percent={percent} size={96} />
+              <span className={s.donutPercent}>{percent}%</span>
+            </div>
+            {/* <div className={s.donutCaption}>
+              <strong>{usedLabel}</strong>
+              <small>{isBudget ? t('quota.weeklyCost') : t('quota.tokens')}</small>
+            </div> */}
+          </div>
+          <div className={s.resetInfo}>
+            <span className={s.resetLabel}>{t('quota.resetsAt')}</span>
+            <span className={s.resetValue}>{formatDate(quota.resets_at)}</span>
+          </div>
+        </>
+      )}
+
+      {hasMonthly && monthly && (
+        <div className={s.monthly}>
+          <div className={s.monthlyHeader}>
+            <span className={s.monthlyTitle}>{t('quota.monthly.title')}</span>
+            <span className={s.monthlyResets}>
+              {t('quota.resetsAt')} {formatDate(monthly.resets_at)}
+            </span>
+          </div>
+
+          {monthlyRows.map(row => (
+            <div key={row.key} className={s.monthlyRow}>
+              <span className={s.monthlyLabel}>{t(`quota.monthly.${row.key}`)}</span>
+              <span className={s.monthlyValue}>{row.entry.used} / {row.entry.limit}</span>
+              <div className={s.monthlyBar}>
+                <div
+                  className={s.monthlyBarFill}
+                  style={{ width: `${row.entry.limit > 0 ? Math.min(100, Math.round((row.entry.used / row.entry.limit) * 100)) : 0}%` }}
+                />
+              </div>
+            </div>
+          ))}
+
+          <div className={s.monthlyNote}>{t('quota.monthly.desktopNote')}</div>
+
+          <div className={s.monthlyActions}>
+            <button
+              type="button"
+              className={s.buyButton}
+              disabled
+              title={t('quota.monthly.buyHint')}
+            >
+              {t('quota.monthly.buy')}
+            </button>
+          </div>
         </div>
-        {/* <div className={s.donutCaption}>
-          <strong>{usedLabel}</strong>
-          <small>{isBudget ? t('quota.weeklyCost') : t('quota.tokens')}</small>
-        </div> */}
-      </div>
-      <div className={s.resetInfo}>
-        <span className={s.resetLabel}>{t('quota.resetsAt')}</span>
-        <span className={s.resetValue}>{formatDate(quota.resets_at)}</span>
-      </div>
+      )}
     </div>
   );
 }

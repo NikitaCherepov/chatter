@@ -1,7 +1,16 @@
 {
   "quota": {
     "title": "Quota Usage",
-    "resetsAt": "Resets:"
+    "resetsAt": "Resets:",
+    "monthly": {
+      "title": "Monthly limits",
+      "webSearch": "Web searches",
+      "webReader": "Web page reads",
+      "imageGen": "Image generations",
+      "desktopNote": "Search and page reads consume this limit only while the app is offline",
+      "buy": "Buy more generations",
+      "buyHint": "Buying extra generations is coming soon"
+    }
   },
   "common": {
     "loading": "Loading...",

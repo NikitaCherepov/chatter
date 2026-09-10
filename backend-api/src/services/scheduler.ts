@@ -1,6 +1,6 @@
 import OpenAI from 'openai';
 import type { TaskRecurrenceType } from '../types.js';
-import { getUserById, ensureActiveChat, createChat, appendChatMessage, updateUserPlan } from './chats.js';
+import { getUserById, ensureActiveChat, createChat, appendChatMessage } from './chats.js';
 import { runSmartHomeControl, type SmartHomeArgs } from './smart-home.js';
 import { getDueTasks, updateTaskNextExecution, updateTaskStatus } from './tasks.js';
 import { sendMessageThroughAi } from './ai.js';
@@ -10,6 +10,7 @@ import { fetchAndSaveCurrencyRates } from './currency.js';
 import { sendToDesktop, isDesktopOnline } from '../ws-clients.js';
 import { sendTelegramMessage } from './telegram-send.js';
 import { getTelegramIdentityForAccount } from './accounts.js';
+import { ensureUserMonthlyUsageWindow, resetExpiredMonthlyUsageWindows } from './monthly-usage.js';
 
 const PRO_MODEL_CHAIN = (process.env.TIMEWEB_MODEL || 'gemini/gemini-3.1-flash-lite-preview')
   .split(',')
@@ -273,14 +274,11 @@ const tick = async () => {
 let timer: NodeJS.Timeout | null = null;
 let running = false;
 
-// ── Daily reset + plan expiry ──────────────────────────────────────────────
+// ── Daily message reset + monthly usage windows + plan expiry ─────────────
 
 const resetDailyMessageCounters = () => db.prepare(`
   UPDATE users
-  SET daily_message_count = 0,
-      daily_web_search_count = 0,
-      daily_web_reader_count = 0,
-      daily_image_gen_count = 0
+  SET daily_message_count = 0
 `).run();
 
 const expireFinishedPlanSubscriptions = () => {
@@ -296,18 +294,7 @@ const expireFinishedPlanSubscriptions = () => {
     if (processedUsers.has(row.user_id)) continue;
     processedUsers.add(row.user_id);
 
-    const plan = 'free';
-
-    db.prepare(`
-      UPDATE user_plan_subscriptions SET is_current = 0 WHERE user_id = ? AND is_current = 1
-    `).run(row.user_id);
-
-    db.prepare(`
-      INSERT INTO user_plan_subscriptions (user_id, plan, started_at, ends_at, is_current, assigned_by)
-      VALUES (?, ?, CURRENT_TIMESTAMP, NULL, 1, NULL)
-    `).run(row.user_id, plan);
-
-    updateUserPlan(row.user_id, plan);
+    ensureUserMonthlyUsageWindow(row.user_id);
   }
 
   if (processedUsers.size > 0) {
@@ -327,6 +314,7 @@ const scheduleDailyCounterReset = () => {
   dailyResetTimer = setTimeout(() => {
     try {
       resetDailyMessageCounters();
+      resetExpiredMonthlyUsageWindows();
       console.log('[backend-scheduler] daily counters reset.');
     } catch (err) {
       console.error('[backend-scheduler] daily reset error:', err);

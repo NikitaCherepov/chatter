@@ -1197,7 +1197,16 @@
   },
   "quota": {
     "title": "Kota Kullanımı",
-    "resetsAt": "Sıfırlanma:"
+    "resetsAt": "Sıfırlanma:",
+    "monthly": {
+      "title": "Aylık limitler",
+      "webSearch": "Web aramaları",
+      "webReader": "Web sayfası okuma",
+      "imageGen": "Görsel oluşturma",
+      "desktopNote": "Arama ve sayfa okuma bu limiti yalnızca uygulama kapalıyken harcar",
+      "buy": "Daha fazla oluşturma satın al",
+      "buyHint": "Ek oluşturma satın alma yakında gelecek"
+    }
   },
   "forcePassword": {
     "title": "Şifre Değiştir",
