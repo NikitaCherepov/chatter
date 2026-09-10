@@ -23,7 +23,7 @@ import { normalizeSupportedLanguage } from '../i18n/languages.js';
 import { formatAutomaticChatTitle } from '../i18n/index.js';
 import { getPlanLimits, getDefaultUserPlanLimits, loadPlanLimitsFromDb } from './plan-limits.js';
 import { withAttachmentMetadata } from './chat-attachments.js';
-import { applyUserPlanEntitlements, refreshCurrentQuotaLimits } from './monthly-usage.js';
+import { applyUserPlanEntitlements, ensureUserMonthlyUsageWindow, refreshCurrentQuotaLimits } from './monthly-usage.js';
 
 export const getRawUserById = (userId: number) => db
   .prepare('SELECT * FROM users WHERE id = ?')
@@ -43,20 +43,20 @@ export const upsertUserFromTelegram = (
   const weeklyCostQuota = limits.budget_usd > 0 ? limits.budget_usd / 4 : 0;
   const result = db.prepare(`
     INSERT INTO users (id, name, role, is_admin, status, plan, language,
-      monthly_web_search_limit, monthly_web_reader_limit, monthly_image_gen_limit, monthly_usage_window_started_at,
       max_context_tokens_limit, max_context_tokens,
       weekly_tokens_quota, weekly_cost_quota, weekly_cost_quota_limit)
-    VALUES (?, ?, ?, ?, 'none', 'free', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, 'none', 'free', ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       name = COALESCE(users.name, excluded.name),
       language = COALESCE(users.language, excluded.language),
       is_admin = CASE WHEN users.is_admin = 1 THEN 1 ELSE excluded.is_admin END,
       role = CASE WHEN users.role = 'admin' THEN 'admin' ELSE excluded.role END
   `).run(accountId, name, 'user', 0, normalizedLanguage,
-    limits.monthly_web_search_limit, limits.monthly_web_reader_limit, limits.monthly_image_gen_limit, Math.floor(Date.now() / 1000),
     limits.max_context_tokens, limits.max_context_tokens,
     limits.weekly_token_quota, weeklyCostQuota, weeklyCostQuota);
   ensureTelegramIdentity(accountId, userId, username);
+  // Subscription + quota period are owned by the quota service from day one.
+  ensureUserMonthlyUsageWindow(accountId);
   return result;
 })();
 
@@ -68,6 +68,8 @@ export const createOrUpdateUserForApiRegistration = (name: string | null = null)
   `).run(userId, name);
   // Apply free plan limits (quota, context, dailies) immediately.
   updateUserPlan(userId, 'free');
+  // Subscription + quota period are owned by the quota service from day one.
+  ensureUserMonthlyUsageWindow(userId);
   ensureActiveChat(userId);
   return userId;
 };
@@ -2134,9 +2136,9 @@ export const upsertTelegramUser = (
 
   const result = db.prepare(`
     INSERT INTO users (id, name, role, is_admin, status, plan, language, selected_prompt_id,
-      monthly_web_search_limit, monthly_web_reader_limit, monthly_image_gen_limit, monthly_usage_window_started_at, max_context_tokens_limit, max_context_tokens,
+      max_context_tokens_limit, max_context_tokens,
       weekly_tokens_quota, weekly_cost_quota, weekly_cost_quota_limit)
-    VALUES (?, ?, ?, ?, ?, 'free', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, 'free', ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       name = excluded.name,
       role = excluded.role,
@@ -2145,11 +2147,13 @@ export const upsertTelegramUser = (
       language = COALESCE(users.language, excluded.language),
       selected_prompt_id = COALESCE(users.selected_prompt_id, excluded.selected_prompt_id)
   `).run(accountId, name, effectiveRole, effectiveIsAdmin, status, normalizedLanguage, defaultPromptId,
-    limits.monthly_web_search_limit, limits.monthly_web_reader_limit, limits.monthly_image_gen_limit, Math.floor(Date.now() / 1000), limits.max_context_tokens, limits.max_context_tokens,
+    limits.max_context_tokens, limits.max_context_tokens,
     limits.weekly_token_quota, weeklyCostQuota, weeklyCostQuota);
 
   ensureTelegramIdentity(accountId, tgId, tgUsername);
   ensureActiveChat(accountId);
+  // Subscription + quota period are owned by the quota service from day one.
+  ensureUserMonthlyUsageWindow(accountId);
   return result;
 })();
 
@@ -2166,19 +2170,20 @@ export const createPendingTelegramUser = (
   const weeklyCostQuota = limits.budget_usd > 0 ? limits.budget_usd / 4 : 0;
   const result = db.prepare(`
     INSERT INTO users (id, name, role, is_admin, status, plan, language, selected_prompt_id,
-      monthly_web_search_limit, monthly_web_reader_limit, monthly_image_gen_limit, monthly_usage_window_started_at, max_context_tokens_limit, max_context_tokens,
+      max_context_tokens_limit, max_context_tokens,
       weekly_tokens_quota, weekly_cost_quota, weekly_cost_quota_limit)
-    VALUES (?, ?, 'user', 0, 'none', 'free', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, 'user', 0, 'none', 'free', ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       name = COALESCE(excluded.name, users.name),
       language = COALESCE(users.language, excluded.language),
       selected_prompt_id = COALESCE(users.selected_prompt_id, excluded.selected_prompt_id)
   `).run(accountId, name, normalizedLanguage, defaultPromptId,
-    limits.monthly_web_search_limit, limits.monthly_web_reader_limit, limits.monthly_image_gen_limit, Math.floor(Date.now() / 1000), limits.max_context_tokens, limits.max_context_tokens,
+    limits.max_context_tokens, limits.max_context_tokens,
     limits.weekly_token_quota, weeklyCostQuota, weeklyCostQuota);
 
   ensureTelegramIdentity(accountId, tgId, tgUsername);
   ensureActiveChat(accountId);
+  ensureUserMonthlyUsageWindow(accountId);
   return result;
 })();
 
@@ -2313,19 +2318,17 @@ export const syncAllUsersPlanLimits = () => {
     const weeklyCostLimit = limits.budget_usd > 0 ? limits.budget_usd / 4 : 0;
     db.prepare(`
       UPDATE users
-      SET monthly_web_search_limit = ?,
-          monthly_web_reader_limit = ?,
-          monthly_image_gen_limit = ?,
-          max_context_tokens_limit = ?,
+      SET max_context_tokens_limit = ?,
           max_context_tokens = ?,
           weekly_tokens_quota = ?,
           weekly_cost_quota_limit = ?,
           weekly_cost_quota = ?
       WHERE plan = ?
-    `).run(limits.monthly_web_search_limit, limits.monthly_web_reader_limit, limits.monthly_image_gen_limit,
+    `).run(
       limits.max_context_tokens, limits.max_context_tokens,
       limits.weekly_token_quota, weeklyCostLimit, weeklyCostLimit, plan);
   }
+  // Monthly quota ceilings live in user_plan_quota_periods only.
   refreshCurrentQuotaLimits();
 };
 

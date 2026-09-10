@@ -1,5 +1,6 @@
 import { db } from '../db.js';
 import type { UserRecord } from '../types.js';
+import { ensureUserMonthlyUsageWindow } from './monthly-usage.js';
 
 export type AccountIdentityProvider = 'password' | 'telegram' | string;
 
@@ -58,9 +59,6 @@ const additiveUserColumns = [
   'total_web_reader_count',
   'daily_image_gen_count',
   'total_image_gen_count',
-  'monthly_web_search_count',
-  'monthly_web_reader_count',
-  'monthly_image_gen_count',
 ];
 
 export const getRawAccountById = (accountId: number) => db
@@ -485,6 +483,32 @@ export const mergeAccounts = (
   const target = getRawAccountById(targetAccountId);
   if (!source || !target) throw new Error('account_merge_user_not_found');
 
+  // Carry the merged-away account's in-period usage into the surviving
+  // account's current quota period BEFORE ownership moves (moveSimpleOwnership
+  // relocates the source subscription/periods as is_current = 0 history).
+  // Mirrors the additive lifetime totals and prevents resetting monthly
+  // counters by merging accounts.
+  const sourcePeriod = db.prepare(`
+    SELECT web_search_used, web_reader_used, image_gen_used
+    FROM user_plan_quota_periods WHERE user_id = ? AND is_current = 1
+  `).get(sourceAccountId) as
+    | { web_search_used: number; web_reader_used: number; image_gen_used: number }
+    | undefined;
+  if (sourcePeriod) {
+    ensureUserMonthlyUsageWindow(targetAccountId);
+    db.prepare(`
+      UPDATE user_plan_quota_periods SET
+        web_search_used = web_search_used + ?,
+        web_reader_used = web_reader_used + ?,
+        image_gen_used = image_gen_used + ?
+      WHERE user_id = ? AND is_current = 1
+    `).run(
+      Math.max(0, Math.floor(Number(sourcePeriod.web_search_used) || 0)),
+      Math.max(0, Math.floor(Number(sourcePeriod.web_reader_used) || 0)),
+      Math.max(0, Math.floor(Number(sourcePeriod.image_gen_used) || 0)),
+      targetAccountId);
+  }
+
   mergeUserScalarData(sourceAccountId, targetAccountId);
   moveSimpleOwnership(sourceAccountId, targetAccountId);
   moveRowsWithSourcePriority('mail_accounts', ['provider'], sourceAccountId, targetAccountId);
@@ -497,6 +521,8 @@ export const mergeAccounts = (
   moveIdentities(sourceAccountId, targetAccountId);
   createAccountRedirect(source, targetAccountId, reason);
   queueNamespaceMigration(sourceAccountId, targetAccountId);
+  // Note: the source account's subscription + quota periods were already
+  // relocated to the survivor as is_current = 0 history by moveSimpleOwnership.
   db.prepare('DELETE FROM users WHERE id = ?').run(sourceAccountId);
 
   rebuildMessageSearchIndex();

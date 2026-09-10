@@ -33,15 +33,16 @@ type UserDetail = {
   weekly_cost_used: number;
   weekly_cost_quota: number;
   weekly_cost_quota_limit: number;
-  monthly_web_search_count: number;
-  monthly_web_search_limit: number;
   total_web_search_count: number;
-  monthly_web_reader_count: number;
-  monthly_web_reader_limit: number;
   total_web_reader_count: number;
-  monthly_image_gen_count: number;
-  monthly_image_gen_limit: number;
   total_image_gen_count: number;
+  /** Monthly quota period state — the single source of truth for external-service limits. */
+  quota: {
+    period: { starts_at: number; ends_at: number };
+    web_search: { used: number; limit: number };
+    web_reader: { used: number; limit: number };
+    image_gen: { used: number; limit: number };
+  } | null;
   total_message_length: number;
   preferred_model: string | null;
   reasoning_level: string | null;
@@ -251,11 +252,11 @@ export function UserDetailPage({ userId, onBack }: { userId: number; onBack: () 
     [t('users.detail.usage.stats.userRequests'), formatNumber(user.messages.user, i18n.language)],
     [t('users.detail.usage.stats.assistantResponses'), formatNumber(user.messages.assistant, i18n.language)],
     [t('users.detail.usage.stats.chats'), formatNumber(user.chats_count, i18n.language)],
-    [t('users.detail.usage.stats.searchMonth'), `${formatNumber(user.monthly_web_search_count, i18n.language)} / ${formatNumber(user.monthly_web_search_limit, i18n.language)}`],
+    [t('users.detail.usage.stats.searchMonth'), `${formatNumber(user.quota?.web_search.used ?? 0, i18n.language)} / ${formatNumber(user.quota?.web_search.limit ?? 0, i18n.language)}`],
     [t('users.detail.usage.stats.searchTotal'), formatNumber(user.total_web_search_count, i18n.language)],
-    [t('users.detail.usage.stats.webReaderMonth'), `${formatNumber(user.monthly_web_reader_count, i18n.language)} / ${formatNumber(user.monthly_web_reader_limit, i18n.language)}`],
+    [t('users.detail.usage.stats.webReaderMonth'), `${formatNumber(user.quota?.web_reader.used ?? 0, i18n.language)} / ${formatNumber(user.quota?.web_reader.limit ?? 0, i18n.language)}`],
     [t('users.detail.usage.stats.webReaderTotal'), formatNumber(user.total_web_reader_count, i18n.language)],
-    [t('users.detail.usage.stats.imagesMonth'), `${formatNumber(user.monthly_image_gen_count, i18n.language)} / ${formatNumber(user.monthly_image_gen_limit, i18n.language)}`],
+    [t('users.detail.usage.stats.imagesMonth'), `${formatNumber(user.quota?.image_gen.used ?? 0, i18n.language)} / ${formatNumber(user.quota?.image_gen.limit ?? 0, i18n.language)}`],
     [t('users.detail.usage.stats.imagesTotal'), formatNumber(user.total_image_gen_count, i18n.language)],
     [t('users.detail.usage.stats.messageLength'), formatNumber(user.total_message_length, i18n.language)],
     [t('users.detail.usage.stats.lastMessage'), formatDateTime(user.messages.last_message_at, locale)],

@@ -82,7 +82,7 @@ export function QuotaWidget({ variant = 'full', className }: Props) {
   const isBudget = quota.billing_mode === 'budget';
   const activeQuota = isBudget ? quota.cost.quota : quota.tokens.quota;
 
-  const monthly = quota.monthly;
+  const monthly = quota.quota;
   const monthlyRows = monthly
     ? [
         { key: 'webSearch', entry: monthly.web_search },
@@ -142,7 +142,7 @@ export function QuotaWidget({ variant = 'full', className }: Props) {
           <div className={s.monthlyHeader}>
             <span className={s.monthlyTitle}>{t('quota.monthly.title')}</span>
             <span className={s.monthlyResets}>
-              {t('quota.resetsAt')} {formatDate(monthly.resets_at)}
+              {t('quota.resetsAt')} {formatDate(monthly.period.ends_at * 1000)}
             </span>
           </div>
 

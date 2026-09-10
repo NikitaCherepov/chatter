@@ -84,12 +84,10 @@ export const applyUserPlanEntitlements = (userId: number, plan: UserPlan) => {
   const limits = getPlanLimits(plan);
   const weeklyCostLimit = limits.budget_usd > 0 ? limits.budget_usd / 4 : 0;
   return db.prepare(`
-    UPDATE users SET plan = ?, monthly_web_search_limit = ?, monthly_web_reader_limit = ?,
-      monthly_image_gen_limit = ?, max_context_tokens_limit = ?, max_context_tokens = ?,
+    UPDATE users SET plan = ?, max_context_tokens_limit = ?, max_context_tokens = ?,
       weekly_tokens_quota = ?, weekly_cost_quota_limit = ?, weekly_cost_quota = ?
     WHERE id = ?
-  `).run(plan, limits.monthly_web_search_limit, limits.monthly_web_reader_limit,
-    limits.monthly_image_gen_limit, limits.max_context_tokens, limits.max_context_tokens,
+  `).run(plan, limits.max_context_tokens, limits.max_context_tokens,
     limits.weekly_token_quota, weeklyCostLimit, weeklyCostLimit, userId);
 };
 
@@ -104,23 +102,12 @@ const currentPeriod = (userId: number) => db.prepare(`
   ORDER BY id DESC LIMIT 1
 `).get(userId) as QuotaPeriod | undefined;
 
-const mirrorPeriodToUser = (period: QuotaPeriod) => {
-  db.prepare(`
-    UPDATE users SET monthly_usage_window_started_at = ?,
-      monthly_web_search_count = ?, monthly_web_search_limit = ?,
-      monthly_web_reader_count = ?, monthly_web_reader_limit = ?,
-      monthly_image_gen_count = ?, monthly_image_gen_limit = ?
-    WHERE id = ?
-  `).run(period.starts_at, period.web_search_used, period.web_search_limit,
-    period.web_reader_used, period.web_reader_limit,
-    period.image_gen_used, period.image_gen_limit, period.user_id);
-};
-
 const createPeriod = (
   subscription: SubscriptionRow,
   sequence: number,
   startsAt: number,
   carry?: Partial<Pick<QuotaPeriod, 'web_search_used' | 'web_reader_used' | 'image_gen_used'>>,
+  limitsOverride?: Partial<Pick<QuotaPeriod, 'web_search_limit' | 'web_reader_limit' | 'image_gen_limit'>>,
 ) => {
   const accessEnd = parseSqlDate(subscription.ends_at);
   const naturalEnd = subscription.access_kind === 'trial'
@@ -136,12 +123,10 @@ const createPeriod = (
       image_gen_used, image_gen_limit, is_current
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
   `).run(subscription.id, subscription.user_id, subscription.plan, sequence, startsAt, endsAt,
-    Math.max(0, carry?.web_search_used ?? 0), quota.webSearch,
-    Math.max(0, carry?.web_reader_used ?? 0), quota.webReader,
-    Math.max(0, carry?.image_gen_used ?? 0), quota.imageGen);
-  const period = db.prepare('SELECT * FROM user_plan_quota_periods WHERE id = ?').get(inserted.lastInsertRowid) as QuotaPeriod;
-  mirrorPeriodToUser(period);
-  return period;
+    Math.max(0, carry?.web_search_used ?? 0), Math.max(0, limitsOverride?.web_search_limit ?? quota.webSearch),
+    Math.max(0, carry?.web_reader_used ?? 0), Math.max(0, limitsOverride?.web_reader_limit ?? quota.webReader),
+    Math.max(0, carry?.image_gen_used ?? 0), Math.max(0, limitsOverride?.image_gen_limit ?? quota.imageGen));
+  return db.prepare('SELECT * FROM user_plan_quota_periods WHERE id = ?').get(inserted.lastInsertRowid) as QuotaPeriod;
 };
 
 const insertSubscription = (userId: number, plan: UserPlan, accessKind: AccessKind, billingInterval: 'month' | 'year' | null, startsAt: number, endsAt: number | null, assignedBy: number | null) => {
@@ -236,16 +221,11 @@ export const ensureUserMonthlyUsageWindow = (userId: number, now = nowEpoch()) =
     return assignUserPlan({ userId, plan: 'free', duration: 'forever', now }).period;
   }
 
+  // Legacy monthly_* columns in users are intentionally NOT consulted here:
+  // the one-time schema migration owns the legacy -> quota-periods transfer.
   let period = currentPeriod(userId);
   if (!period || period.subscription_id !== subscription.id) {
-    const legacy = db.prepare(`SELECT monthly_usage_window_started_at, monthly_web_search_count,
-      monthly_web_reader_count, monthly_image_gen_count FROM users WHERE id = ?`).get(userId) as any;
-    const startedAt = normalizeEpoch(legacy?.monthly_usage_window_started_at) || now;
-    period = createPeriod(subscription, 0, Math.min(startedAt, now), {
-      web_search_used: Math.max(0, Number(legacy?.monthly_web_search_count) || 0),
-      web_reader_used: Math.max(0, Number(legacy?.monthly_web_reader_count) || 0),
-      image_gen_used: Math.max(0, Number(legacy?.monthly_image_gen_count) || 0),
-    });
+    period = createPeriod(subscription, 0, now);
   }
 
   while (now >= period.ends_at) {
@@ -256,7 +236,6 @@ export const ensureUserMonthlyUsageWindow = (userId: number, now = nowEpoch()) =
     }
     period = createPeriod(subscription, period.sequence + 1, period.ends_at);
   }
-  mirrorPeriodToUser(period);
   return period;
 })();
 
@@ -276,26 +255,28 @@ export const consumeUserQuota = (userId: number, kind: QuotaKind, count = 1) => 
   const period = ensureUserMonthlyUsageWindow(userId);
   if (!period) return;
   const periodColumn = `${kind}_used`;
-  const userColumn = `monthly_${kind}_count`;
   const totalColumn = `total_${kind}_count`;
   db.prepare(`UPDATE user_plan_quota_periods SET ${periodColumn} = ${periodColumn} + ? WHERE id = ?`).run(safeCount, period.id);
-  db.prepare(`UPDATE users SET ${userColumn} = ${userColumn} + ?, ${totalColumn} = ${totalColumn} + ? WHERE id = ?`)
-    .run(safeCount, safeCount, userId);
+  // Lifetime statistics stay in users; the running period counters live only
+  // in user_plan_quota_periods — legacy monthly_* columns are never updated.
+  db.prepare(`UPDATE users SET ${totalColumn} = ${totalColumn} + ? WHERE id = ?`)
+    .run(safeCount, userId);
 })();
 
-export const refreshCurrentQuotaLimits = () => db.transaction(() => {
-  const periods = db.prepare(`
-    SELECT p.*, s.access_kind FROM user_plan_quota_periods p
-    JOIN user_plan_subscriptions s ON s.id = p.subscription_id
-    WHERE p.is_current = 1
-  `).all() as Array<QuotaPeriod & { access_kind: AccessKind }>;
-  for (const period of periods) {
-    const quota = limitsFor(period.plan, period.starts_at, period.ends_at, period.access_kind === 'trial');
-    db.prepare(`UPDATE user_plan_quota_periods SET web_search_limit = ?, web_reader_limit = ?, image_gen_limit = ? WHERE id = ?`)
-      .run(quota.webSearch, quota.webReader, quota.imageGen, period.id);
-    mirrorPeriodToUser({ ...period, web_search_limit: quota.webSearch, web_reader_limit: quota.webReader, image_gen_limit: quota.imageGen });
-  }
-})();
+export const refreshCurrentQuotaLimits = () => {
+  db.transaction(() => {
+    const periods = db.prepare(`
+      SELECT p.*, s.access_kind FROM user_plan_quota_periods p
+      JOIN user_plan_subscriptions s ON s.id = p.subscription_id
+      WHERE p.is_current = 1
+    `).all() as Array<QuotaPeriod & { access_kind: AccessKind }>;
+    for (const period of periods) {
+      const quota = limitsFor(period.plan, period.starts_at, period.ends_at, period.access_kind === 'trial');
+      db.prepare(`UPDATE user_plan_quota_periods SET web_search_limit = ?, web_reader_limit = ?, image_gen_limit = ? WHERE id = ?`)
+        .run(quota.webSearch, quota.webReader, quota.imageGen, period.id);
+    }
+  })();
+};
 
 export const resetExpiredMonthlyUsageWindows = () => {
   const users = db.prepare('SELECT id FROM users').all() as Array<{ id: number }>;
@@ -307,4 +288,58 @@ export const resetExpiredMonthlyUsageWindows = () => {
     if (before !== after) changed += 1;
   }
   return changed;
+};
+
+/**
+ * One-time schema migration body: transfer the exact legacy users.monthly_*
+ * state (window start, used counters, configured limits) into quota periods.
+ *
+ * - Users that already have an active period created by the runtime are kept
+ *   exactly as-is (nothing is overwritten).
+ * - Expired subscriptions are downgraded through the regular service flow.
+ * - Must run inside a single transaction owned by the migration runner.
+ */
+export const migrateLegacyQuotaPeriods = () => {
+  const now = nowEpoch();
+  const users = db.prepare(`
+    SELECT id, monthly_usage_window_started_at,
+      monthly_web_search_count, monthly_web_search_limit,
+      monthly_web_reader_count, monthly_web_reader_limit,
+      monthly_image_gen_count, monthly_image_gen_limit
+    FROM users
+  `).all() as Array<{
+    id: number;
+    monthly_usage_window_started_at: number;
+    monthly_web_search_count: number;
+    monthly_web_search_limit: number;
+    monthly_web_reader_count: number;
+    monthly_web_reader_limit: number;
+    monthly_image_gen_count: number;
+    monthly_image_gen_limit: number;
+  }>;
+  for (const user of users) {
+    if (currentPeriod(user.id)) continue;
+    const subscription = ensureSubscription(user.id, now);
+    if (!subscription) continue;
+
+    const subscriptionEnd = parseSqlDate(subscription.ends_at);
+    if (subscriptionEnd && now >= subscriptionEnd) {
+      // Expired access: let the service downgrade to free with a fresh period.
+      ensureUserMonthlyUsageWindow(user.id, now);
+      continue;
+    }
+
+    const startedAt = Math.min(normalizeEpoch(user.monthly_usage_window_started_at) || now, now);
+    createPeriod(subscription, 0, startedAt, {
+      web_search_used: Math.max(0, Number(user.monthly_web_search_count) || 0),
+      web_reader_used: Math.max(0, Number(user.monthly_web_reader_count) || 0),
+      image_gen_used: Math.max(0, Number(user.monthly_image_gen_count) || 0),
+    }, {
+      web_search_limit: Math.max(0, Number(user.monthly_web_search_limit) || 0),
+      web_reader_limit: Math.max(0, Number(user.monthly_web_reader_limit) || 0),
+      image_gen_limit: Math.max(0, Number(user.monthly_image_gen_limit) || 0),
+    });
+    // Roll forward in case the transferred window had already expired by now.
+    ensureUserMonthlyUsageWindow(user.id, now);
+  }
 };

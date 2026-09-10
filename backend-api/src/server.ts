@@ -55,6 +55,7 @@ import {
   MAX_IMAGE_ATTACHMENTS_TOTAL_BYTES,
 } from './services/plan-limits.js';
 import { assignUserPlan, ensureUserMonthlyUsageWindow, getUserQuotaPeriod, type PlanDuration } from './services/monthly-usage.js';
+import { runMigrations } from './services/migrations.js';
 import { resolveImageFile, getUploadsDir } from './services/image-storage.js';
 import { resolveAttachmentFile, MAX_RAW_FILE_SIZE as MAX_ATTACHMENT_BYTES } from './services/attachment-storage.js';
 import { parseDocument, SUPPORTED_EXTENSIONS } from './services/document-parser.js';
@@ -113,6 +114,9 @@ const broadcastModelCatalogUpdated = () => {
 
 dotenv.config();
 ensureDefaultPrompt();
+// Versioned one-time migrations (legacy monthly_* -> quota periods) must run
+// before any runtime code touches quota periods.
+runMigrations();
 db.transaction(() => {
   for (const user of getAllUsers()) {
     const activeChatId = ensureActiveChat(user.id);
@@ -1411,16 +1415,9 @@ app.put('/api/v1/account/core-memory', (req: AuthedRequest, res: any) => {
 // Weekly quota / budget usage for the current user
 app.get('/api/v1/account/quota', (req: AuthedRequest, res) => {
   const userId = accountIdFromRequest(req);
-  // Lazily roll the monthly usage window forward before reading counters,
-  // so the client always sees a consistent (window, counters) pair.
-  const monthlyPeriod = getUserQuotaPeriod(userId);
   const row = db.prepare(`
     SELECT weekly_tokens_used, weekly_tokens_quota, weekly_window_started_at,
-           weekly_cost_used, weekly_cost_quota,
-           monthly_usage_window_started_at,
-           monthly_web_search_count, monthly_web_search_limit,
-           monthly_web_reader_count, monthly_web_reader_limit,
-           monthly_image_gen_count, monthly_image_gen_limit
+           weekly_cost_used, weekly_cost_quota
     FROM users WHERE id = ?
   `).get(userId) as {
     weekly_tokens_used: number;
@@ -1428,13 +1425,6 @@ app.get('/api/v1/account/quota', (req: AuthedRequest, res) => {
     weekly_window_started_at: number;
     weekly_cost_used: number;
     weekly_cost_quota: number;
-    monthly_usage_window_started_at: number;
-    monthly_web_search_count: number;
-    monthly_web_search_limit: number;
-    monthly_web_reader_count: number;
-    monthly_web_reader_limit: number;
-    monthly_image_gen_count: number;
-    monthly_image_gen_limit: number;
   } | undefined;
   if (!row) return res.status(404).json({ error: 'user_not_found' });
 
@@ -1451,8 +1441,6 @@ app.get('/api/v1/account/quota', (req: AuthedRequest, res) => {
     ? (row.weekly_window_started_at + WEEK_SECONDS) * 1000
     : null;
 
-  const monthlyResetsAt = monthlyPeriod ? monthlyPeriod.ends_at * 1000 : null;
-
   return res.json({
     billing_mode: planLimits.billing_mode,
     percent,
@@ -1465,21 +1453,9 @@ app.get('/api/v1/account/quota', (req: AuthedRequest, res) => {
       quota: row.weekly_cost_quota,
     },
     resets_at: resetsAt,
-    monthly: {
-      resets_at: monthlyResetsAt,
-      web_search: {
-        used: Math.max(0, Math.floor(Number(monthlyPeriod?.web_search_used) || 0)),
-        limit: Math.max(0, Math.floor(Number(monthlyPeriod?.web_search_limit) || 0)),
-      },
-      web_reader: {
-        used: Math.max(0, Math.floor(Number(monthlyPeriod?.web_reader_used) || 0)),
-        limit: Math.max(0, Math.floor(Number(monthlyPeriod?.web_reader_limit) || 0)),
-      },
-      image_gen: {
-        used: Math.max(0, Math.floor(Number(monthlyPeriod?.image_gen_used) || 0)),
-        limit: Math.max(0, Math.floor(Number(monthlyPeriod?.image_gen_limit) || 0)),
-      },
-    },
+    // Monthly quota period state (quotaView lazily rolls the period forward
+    // before reading, so the client sees a consistent (period, counters) pair).
+    quota: quotaView(userId),
   });
 });
 
@@ -3683,6 +3659,32 @@ app.post('/internal/users/create-pending', internalAuth, (req, res) => {
   return res.json({ ok: true, user: user ? withAccountIdentities(user) : null });
 });
 
+// Shared monthly quota view (web_search / web_reader / image_gen) consumed by
+// the desktop app, the Telegram bot and the admin panel. The quota period is
+// the single source of truth; legacy users.monthly_* columns are never read.
+const quotaView = (userId: number) => {
+  const period = getUserQuotaPeriod(userId);
+  if (!period) return null;
+  return {
+    period: {
+      starts_at: period.starts_at,
+      ends_at: period.ends_at,
+    },
+    web_search: {
+      used: Math.max(0, Math.floor(Number(period.web_search_used) || 0)),
+      limit: Math.max(0, Math.floor(Number(period.web_search_limit) || 0)),
+    },
+    web_reader: {
+      used: Math.max(0, Math.floor(Number(period.web_reader_used) || 0)),
+      limit: Math.max(0, Math.floor(Number(period.web_reader_limit) || 0)),
+    },
+    image_gen: {
+      used: Math.max(0, Math.floor(Number(period.image_gen_used) || 0)),
+      limit: Math.max(0, Math.floor(Number(period.image_gen_limit) || 0)),
+    },
+  };
+};
+
 const withAccountIdentities = <T extends { id: number }>(user: T) => {
   const identities = getAccountIdentities(user.id);
   const telegramIdentity = identities.find(identity => identity.provider === 'telegram');
@@ -3691,6 +3693,7 @@ const withAccountIdentities = <T extends { id: number }>(user: T) => {
     account_id: user.id,
     telegram_id: telegramIdentity ? Number(telegramIdentity.provider_subject) : null,
     telegram_username: telegramIdentity?.username ?? null,
+    quota: quotaView(user.id),
     identities: identities.map(identity => ({
       provider: identity.provider,
       provider_subject: identity.provider_subject,
@@ -3843,10 +3846,7 @@ app.get('/internal/admin/users-overview/:id', internalAuth, (req, res) => {
       daily_message_count,
       weekly_tokens_used, weekly_tokens_quota, weekly_window_started_at,
       weekly_cost_used, weekly_cost_quota, weekly_cost_quota_limit,
-      monthly_usage_window_started_at,
-      monthly_web_search_count, monthly_web_search_limit, total_web_search_count,
-      monthly_web_reader_count, monthly_web_reader_limit, total_web_reader_count,
-      monthly_image_gen_count, monthly_image_gen_limit, total_image_gen_count,
+      total_web_search_count, total_web_reader_count, total_image_gen_count,
       total_message_length, preferred_model, reasoning_level,
       max_context_tokens_limit, max_context_tokens, attachment_max_tokens
     FROM users
@@ -3895,6 +3895,7 @@ app.get('/internal/admin/users-overview/:id', internalAuth, (req, res) => {
     user: {
       ...user,
       is_admin: user.is_admin === 1 || user.role === 'admin',
+      quota: quotaView(userId),
       identities,
       messages: {
         total: Number(messageStats.total) || 0,
@@ -4418,10 +4419,9 @@ app.put('/internal/admin/plan-limits', internalAuth, (req, res) => {
       return res.status(400).json({ error: `missing_plan_${plan}` });
     }
     next[plan] = {
-      // Accept legacy daily_* keys once (older admin panel builds); saves use monthly keys.
-      monthly_web_search_limit: Math.max(0, Math.floor(Number(entry.monthly_web_search_limit ?? entry.daily_web_search_limit) || 0)),
-      monthly_web_reader_limit: Math.max(0, Math.floor(Number(entry.monthly_web_reader_limit ?? entry.daily_web_reader_limit) || 0)),
-      monthly_image_gen_limit: Math.max(0, Math.floor(Number(entry.monthly_image_gen_limit ?? entry.daily_image_gen_limit) || 0)),
+      monthly_web_search_limit: Math.max(0, Math.floor(Number(entry.monthly_web_search_limit) || 0)),
+      monthly_web_reader_limit: Math.max(0, Math.floor(Number(entry.monthly_web_reader_limit) || 0)),
+      monthly_image_gen_limit: Math.max(0, Math.floor(Number(entry.monthly_image_gen_limit) || 0)),
       image_attachments_allowed: Boolean(entry.image_attachments_allowed),
       max_context_tokens: Math.max(0, Math.floor(Number(entry.max_context_tokens) || 0)),
       weekly_token_quota: Math.max(0, Number(entry.weekly_token_quota) || 0),

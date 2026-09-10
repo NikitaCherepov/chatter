@@ -13,6 +13,7 @@ const {
   consumeUserQuota,
   ensureUserMonthlyUsageWindow,
   getUserQuota,
+  refreshCurrentQuotaLimits,
 } = await import('../src/services/monthly-usage.js');
 
 const JAN_31 = Math.floor(Date.parse('2030-01-31T12:00:00.000Z') / 1000);
@@ -54,6 +55,18 @@ const freeSubscription = db.prepare(`SELECT plan, access_kind FROM user_plan_sub
 assert.equal(freeSubscription.plan, 'free');
 assert.equal(freeSubscription.access_kind, 'free');
 assert.equal(expired.plan, 'free');
+
+// ── Plan-limit saves must refresh the ceilings of active quota periods ──
+// (regression: the refresh transaction wrapper used to be created but never invoked)
+const { loadPlanLimitsFromDb, savePlanLimitsToDb } = await import('../src/services/plan-limits.js');
+const limits = loadPlanLimitsFromDb();
+const savedFreeSearch = limits.free.monthly_web_search_limit;
+limits.free.monthly_web_search_limit = 4;
+savePlanLimitsToDb(limits);
+refreshCurrentQuotaLimits();
+assert.equal(getUserQuota(1, 'web_search')?.limit, 4, 'saving plan limits must update active periods immediately');
+limits.free.monthly_web_search_limit = savedFreeSearch;
+savePlanLimitsToDb(limits);
 
 db.close();
 fs.rmSync(tempDir, { recursive: true, force: true });

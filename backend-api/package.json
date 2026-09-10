@@ -13,6 +13,7 @@
     "test:web-reader": "tsx tests/web-reader-fallback.test.mts",
     "test:subscription-quota": "tsx tests/subscription-quota.test.mts",
     "test:subscription-migration": "tsx tests/subscription-migration.test.mts",
+    "test:account-merge": "tsx tests/account-merge-quota.test.mts",
     "build": "node -e \"require('node:fs').rmSync('dist',{ recursive: true, force: true })\" && tsc -p tsconfig.json && node -e \"require('node:fs').cpSync('src/i18n/locales','dist/i18n/locales',{ recursive: true })\"",
     "start": "node dist/server.js"
   },

@@ -159,6 +159,13 @@ type UserHistoryRow = {
     telegram_message_id: number | null;
     created_at: string;
 };
+type UserQuotaEntry = { used: number; limit: number };
+type UserQuotaView = {
+    period: { starts_at: number; ends_at: number };
+    web_search: UserQuotaEntry;
+    web_reader: UserQuotaEntry;
+    image_gen: UserQuotaEntry;
+};
 type UserRecord = {
     id: number;
     account_id: number;
@@ -188,19 +195,15 @@ type UserRecord = {
     total_tokens_used: number;
     daily_cost_rub: number;
     total_cost_rub: number;
-    monthly_web_search_count: number;
-    monthly_web_search_limit: number;
     total_web_search_count: number;
-    monthly_web_reader_count: number;
-    monthly_web_reader_limit: number;
     total_web_reader_count: number;
-    monthly_image_gen_count: number;
-    monthly_image_gen_limit: number;
     total_image_gen_count: number;
     max_context_tokens_limit?: number;
     max_context_tokens?: number;
     preferred_model?: string | null;
     identities?: Array<{ provider: string; provider_subject: string; username: string | null }>;
+    /** Monthly quota period state from the backend (single source of truth). */
+    quota?: UserQuotaView | null;
 };
 type PlanDurationCode = 'day' | 'week' | 'month' | 'year' | 'forever';
 type TaskStatus = 'pending' | 'done' | 'error';
@@ -1938,10 +1941,16 @@ const parsePlanFromDb = (raw: string | null | undefined): UserPlan => {
 };
 const getPlanMaxContextTokens = (plan: UserPlan) => PLAN_MAX_CONTEXT_TOKENS[plan] || PLAN_MAX_CONTEXT_TOKENS[DEFAULT_USER_PLAN];
 const getPlanMonthlyWebSearchLimit = (plan: UserPlan) => PLAN_MONTHLY_WEB_SEARCH_LIMITS[plan] ?? PLAN_MONTHLY_WEB_SEARCH_LIMITS[DEFAULT_USER_PLAN];
-const normalizeMonthlyWebSearchLimit = (value: number | null | undefined) => {
-    if (!Number.isFinite(value)) return getPlanMonthlyWebSearchLimit(DEFAULT_USER_PLAN);
-    return Math.max(0, Math.floor(value as number));
+// Quota period counters come from the backend payload; web_search keeps the
+// plan default as a fallback for older backends that don't send the quota view.
+const getUserQuotaEntry = (user: UserRecord, kind: 'web_search' | 'web_reader' | 'image_gen'): UserQuotaEntry => {
+    const entry = user.quota?.[kind];
+    if (entry && Number.isFinite(entry.used) && Number.isFinite(entry.limit)) {
+        return { used: Math.max(0, Math.floor(entry.used)), limit: Math.max(0, Math.floor(entry.limit)) };
+    }
+    return { used: 0, limit: kind === 'web_search' ? getPlanMonthlyWebSearchLimit(parsePlanFromDb(user.plan)) : 0 };
 };
+const quotaEntryText = (entry: UserQuotaEntry) => `${entry.used}/${entry.limit}`;
 const applyUserPlan = async (userId: number, plan: UserPlan, duration: PlanDurationCode, assignedBy: number | null) => {
     await runBackendApplyUserPlan(userId, plan, duration, assignedBy);
 };
@@ -2154,13 +2163,13 @@ const showMenu = async (ctx: any) => {
         ? ctx.t('menu.context', { value: getContextWindowText(userRecord) })
         : ctx.t('menu.contextDefault', { value: `${(PLAN_MAX_CONTEXT_TOKENS[DEFAULT_USER_PLAN] / 1000).toFixed(0)}k` });
     const webLimitLine = userRecord
-        ? ctx.t('menu.webMonth', { value: getMonthlyWebSearchLimitText(userRecord) })
+        ? ctx.t('menu.webMonth', { value: quotaEntryText(getUserQuotaEntry(userRecord, 'web_search')) })
         : ctx.t('menu.webMonth', { value: `0/${PLAN_MONTHLY_WEB_SEARCH_LIMITS[DEFAULT_USER_PLAN]}` });
     const webReaderLine = userRecord
-        ? ctx.t('menu.webReaderMonth', { value: `${userRecord.monthly_web_reader_count ?? 0}/${userRecord.monthly_web_reader_limit ?? 0}` })
+        ? ctx.t('menu.webReaderMonth', { value: quotaEntryText(getUserQuotaEntry(userRecord, 'web_reader')) })
         : ctx.t('menu.webReaderMonth', { value: '0/0' });
     const imageGenLine = userRecord
-        ? ctx.t('menu.imagesMonth', { value: `${userRecord.monthly_image_gen_count ?? 0}/${userRecord.monthly_image_gen_limit ?? 0}` })
+        ? ctx.t('menu.imagesMonth', { value: quotaEntryText(getUserQuotaEntry(userRecord, 'image_gen')) })
         : ctx.t('menu.imagesMonth', { value: '0/0' });
     const modelLine = userRecord?.preferred_model
         ? ctx.t('menu.model', { model: userRecord.preferred_model })
@@ -2594,10 +2603,7 @@ const getContextWindowText = (user: UserRecord) => {
         ? Math.floor(user.max_context_tokens_limit!) : getPlanMaxContextTokens(parsePlanFromDb(user.plan));
     return `${(effective / 1000).toFixed(0)}k/${(hardLimit / 1000).toFixed(0)}k`;
 };
-const getMonthlyWebSearchLimitText = (user: UserRecord) => {
-    const limit = normalizeMonthlyWebSearchLimit(user.monthly_web_search_limit);
-    return `${user.monthly_web_search_count ?? 0}/${limit}`;
-};
+const getMonthlyWebSearchLimitText = (user: UserRecord) => quotaEntryText(getUserQuotaEntry(user, 'web_search'));
 const maybeCapturePendingName = async (ctx: any, user: UserRecord, text: string) => {
     if (ctx.from?.username) return false;
     if (user.name && user.name.trim()) return false;
@@ -2631,10 +2637,11 @@ const buildAdminUsersListKeyboard = (rows: UserRecord[], page: number, total: nu
     const keyboardRows = rows.map(row => {
         const statusTag = row.status === 'banned' ? '⛔' : row.status === 'approved' ? '✅' : '🕓';
         const planTag = getPlanLabel(parsePlanFromDb(row.plan));
-        const webLimit = normalizeMonthlyWebSearchLimit(row.monthly_web_search_limit);
+        const webQuota = getUserQuotaEntry(row, 'web_search');
+        const imageQuota = getUserQuotaEntry(row, 'image_gen');
         const notesStats = noteStatsMap.get(row.id) || { user_id: row.id, notes_count: 0, notes_chars: 0 };
         const ctxTokens = (row.max_context_tokens && row.max_context_tokens > 0) ? `${(row.max_context_tokens / 1000).toFixed(0)}k` : 'auto';
-        const usageTag = `msg:${row.daily_message_count ?? 0} tok:${formatTokenCountShort(row.daily_tokens_used ?? 0)} ctx:${ctxTokens} web:${row.monthly_web_search_count ?? 0}/${webLimit} img:${row.monthly_image_gen_count ?? 0}/${row.monthly_image_gen_limit ?? 0} nts:${notesStats.notes_count} ch:${notesStats.notes_chars} ${formatRub(row.daily_cost_rub ?? 0)}`;
+        const usageTag = `msg:${row.daily_message_count ?? 0} tok:${formatTokenCountShort(row.daily_tokens_used ?? 0)} ctx:${ctxTokens} web:${webQuota.used}/${webQuota.limit} img:${imageQuota.used}/${imageQuota.limit} nts:${notesStats.notes_count} ch:${notesStats.notes_chars} ${formatRub(row.daily_cost_rub ?? 0)}`;
         return [Markup.button.callback(
             `${statusTag} ${getUserDisplayName(row)} (#${row.id}) • ${planTag} • ${usageTag}`,
             `usr:view:${row.id}:${page}`
@@ -2743,10 +2750,10 @@ const renderAdminUserCard = async (ctx: any, user: UserRecord, page: number, mod
         role: user.role === 'admin' ? ctx.t('roles.admin') : ctx.t('roles.user'),
         status: ctx.t(`admin.statuses.${user.status}`), plan: getPlanLabel(plan), subscriptionEnds,
         context: getContextWindowText(user),
-        webLimit: getMonthlyWebSearchLimitText(user), imagesMonth: `${user.monthly_image_gen_count ?? 0}/${user.monthly_image_gen_limit ?? 0}`,
+        webLimit: getMonthlyWebSearchLimitText(user), imagesMonth: quotaEntryText(getUserQuotaEntry(user, 'image_gen')),
         prompt: `#${prompt.id} ${prompt.id === CUSTOM_PROMPT_ID ? ctx.t('prompt.customName') : prompt.name}${prompt.is_default ? ctx.t('prompt.currentDefaultMark') : ''}`,
         messagesToday: user.daily_message_count ?? 0, tokensToday: user.daily_tokens_used ?? 0,
-        costToday: formatRub(user.daily_cost_rub ?? 0), webMonth: user.monthly_web_search_count ?? 0,
+        costToday: formatRub(user.daily_cost_rub ?? 0), webMonth: getUserQuotaEntry(user, 'web_search').used,
         tokensTotal: user.total_tokens_used ?? 0, costTotal: formatRub(user.total_cost_rub ?? 0),
         webTotal: user.total_web_search_count ?? 0, imagesTotal: user.total_image_gen_count ?? 0,
         notes: notesStats.notes_count, noteChars: notesStats.notes_chars,

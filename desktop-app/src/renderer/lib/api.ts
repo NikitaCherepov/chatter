@@ -2139,7 +2139,15 @@ export async function setAttachmentTokenLimit(attachmentMaxTokens: number): Prom
 
 // ---------- Weekly Quota / Budget ----------
 
-export type QuotaMonthlyEntry = { used: number; limit: number };
+export type QuotaEntry = { used: number; limit: number };
+
+export type QuotaPeriodInfo = {
+  /** Unix seconds. */
+  period: { starts_at: number; ends_at: number };
+  web_search: QuotaEntry;
+  web_reader: QuotaEntry;
+  image_gen: QuotaEntry;
+};
 
 export type QuotaInfo = {
   billing_mode: 'tokens' | 'budget';
@@ -2147,13 +2155,12 @@ export type QuotaInfo = {
   tokens: { used: number; quota: number };
   cost: { used: number; quota: number };
   resets_at: number | null;
-  /** Monthly limits (search / page reads / image generations). Optional: older backends don't send it. */
-  monthly?: {
-    resets_at: number | null;
-    web_search: QuotaMonthlyEntry;
-    web_reader: QuotaMonthlyEntry;
-    image_gen: QuotaMonthlyEntry;
-  };
+  /**
+   * Monthly limits (search / page reads / image generations) from the current
+   * quota period — the single source of truth. Null when the backend has no
+   * active period for the account.
+   */
+  quota?: QuotaPeriodInfo | null;
 };
 
 export async function fetchQuota(): Promise<QuotaInfo> {

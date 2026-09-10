@@ -232,6 +232,11 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_user_plan_quota_periods_subscription
   ON user_plan_quota_periods(subscription_id, sequence);
 
+  CREATE TABLE IF NOT EXISTS schema_migrations (
+    name TEXT PRIMARY KEY,
+    applied_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
+
   CREATE TABLE IF NOT EXISTS server_access_keys (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
