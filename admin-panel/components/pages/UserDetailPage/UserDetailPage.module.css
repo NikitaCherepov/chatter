@@ -216,6 +216,24 @@
   flex-direction: column;
   gap: 3px;
 }
+.quotaLabel {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.billingMode {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 2px var(--sp-2);
+  border: 1px solid var(--border-light);
+  border-radius: 999px;
+  background: var(--bg-primary);
+  color: var(--text-muted) !important;
+  font-size: 11px !important;
+  font-weight: var(--fw-semibold);
+  line-height: 1;
+}
 .primaryQuotaHeading span,
 .serviceQuotaHeading span,
 .serviceTotal span,

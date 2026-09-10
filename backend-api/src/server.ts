@@ -3890,11 +3890,14 @@ app.get('/internal/admin/users-overview/:id', internalAuth, (req, res) => {
     WHERE user_id = ? AND is_current = 1
     ORDER BY id DESC LIMIT 1
   `).get(userId) || null;
+  const planLimitsMap = loadPlanLimitsFromDb();
+  const planLimits = planLimitsMap[String(user.plan) as keyof typeof planLimitsMap] ?? planLimitsMap.free;
 
   return res.json({
     user: {
       ...user,
       is_admin: user.is_admin === 1 || user.role === 'admin',
+      billing_mode: planLimits.billing_mode,
       quota: quotaView(userId),
       identities,
       messages: {

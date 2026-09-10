@@ -33,6 +33,7 @@ type UserDetail = {
   weekly_cost_used: number;
   weekly_cost_quota: number;
   weekly_cost_quota_limit: number;
+  billing_mode: 'tokens' | 'budget';
   total_web_search_count: number;
   total_web_reader_count: number;
   total_image_gen_count: number;
@@ -236,8 +237,11 @@ export function UserDetailPage({ userId, onBack }: { userId: number; onBack: () 
   if (loading && !user) return <div className={styles.loading}>{t('users.detail.loading')}</div>;
   if (!user) return <div className={styles.loading}>{t('users.detail.loadError', { error })}</div>;
 
-  const weeklyPercent = user.weekly_tokens_quota > 0
-    ? Math.min(100, Math.round((user.weekly_tokens_used || 0) / user.weekly_tokens_quota * 100))
+  const usesBudget = user.billing_mode === 'budget';
+  const activeQuotaUsed = usesBudget ? user.weekly_cost_used : user.weekly_tokens_used;
+  const activeQuotaLimit = usesBudget ? user.weekly_cost_quota : user.weekly_tokens_quota;
+  const weeklyPercent = activeQuotaLimit > 0
+    ? Math.min(100, Math.round((activeQuotaUsed || 0) / activeQuotaLimit * 100))
     : 0;
   const weeklyResetsAt = user.weekly_window_started_at
     ? formatDateTime(new Date((user.weekly_window_started_at + 7 * 24 * 60 * 60) * 1000).toISOString(), locale)
@@ -371,11 +375,18 @@ export function UserDetailPage({ userId, onBack }: { userId: number; onBack: () 
           <div className={styles.primaryQuota}>
             <div className={styles.primaryQuotaHeading}>
               <div>
-                <span>{t('users.detail.usage.stats.weeklyQuota')}</span>
+                <div className={styles.quotaLabel}>
+                  <span>{t('users.detail.usage.stats.weeklyQuota')}</span>
+                  <span className={styles.billingMode}>
+                    {t('planLimits.billingModeToggle', {
+                      mode: t(`planLimits.billingMode.${usesBudget ? 'budget' : 'tokens'}`),
+                    })}
+                  </span>
+                </div>
                 <strong>
-                  {user.weekly_tokens_quota > 0
-                    ? `${formatNumber(user.weekly_tokens_used, i18n.language)} / ${formatNumber(user.weekly_tokens_quota, i18n.language)}`
-                    : '∞'}
+                  {usesBudget
+                    ? `${formatCostUsd(activeQuotaUsed)} / ${formatCostUsd(activeQuotaLimit)}`
+                    : `${formatNumber(activeQuotaUsed, i18n.language)} / ${formatNumber(activeQuotaLimit, i18n.language)}`}
                 </strong>
               </div>
               <div className={styles.quotaReset}>
@@ -383,7 +394,7 @@ export function UserDetailPage({ userId, onBack }: { userId: number; onBack: () 
                 <strong>{weeklyResetsAt}</strong>
               </div>
             </div>
-            {user.weekly_tokens_quota > 0 && (
+            {activeQuotaLimit > 0 && (
               <div className={styles.progressTrack} aria-label={`${weeklyPercent}%`}>
                 <div className={styles.progressFill} style={{ width: `${weeklyPercent}%` }} />
               </div>
