@@ -371,7 +371,8 @@
       "statsParsing": "Ayrıştırma",
       "statsOther": "Diğer",
       "statsLastAttempt": "Son deneme",
-      "statsLastFailure": "Son hata"
+      "statsLastFailure": "Son hata",
+      "statsCacheHits": "Önbellek isabetleri"
     },
     "cloudTts": {
       "pageDescription": "Cloud TTS ve Cartesia ses kataloğu.",
@@ -549,7 +550,9 @@
           "imagesMonth": "Bu ayki görseller",
           "imagesTotal": "Toplam görseller",
           "messageLength": "Mesaj uzunluğu",
-          "lastMessage": "Son mesaj"
+          "lastMessage": "Son mesaj",
+          "webReaderMonth": "Bu ay tarayıcısız sayfa okumaları",
+          "webReaderTotal": "Toplam tarayıcısız sayfa okumaları"
         }
       },
       "contextLimits": {
@@ -893,7 +896,8 @@
     "subscriptionPriceHint": "Yalnızca bilgi amaçlıdır, ödeme yok.",
     "resetUsageConfirm": "TÜM kullanıcılar için haftalık kullanım sıfırlansın mı?",
     "resetting": "Sıfırlanıyor...",
-    "resetUsageDone": "Sıfırlama tamamlandı: {{count}} kullanıcı güncellendi."
+    "resetUsageDone": "Sıfırlama tamamlandı: {{count}} kullanıcı güncellendi.",
+    "webReaderLabel": "Aylık tarayıcısız sayfa okumaları"
   },
   "nav": {
     "overview": "Genel Bakış",

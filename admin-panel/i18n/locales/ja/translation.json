@@ -386,7 +386,8 @@
       "statsParsing": "解析中",
       "statsOther": "その他",
       "statsLastAttempt": "最終試行",
-      "statsLastFailure": "最終失敗"
+      "statsLastFailure": "最終失敗",
+      "statsCacheHits": "キャッシュヒット"
     },
     "cloudTts": {
       "pageDescription": "Cloud TTS と Cartesia 音声カタログ。",
@@ -564,7 +565,9 @@
           "imagesMonth": "今月の画像数",
           "imagesTotal": "総画像数",
           "messageLength": "メッセージ長",
-          "lastMessage": "最終メッセージ"
+          "lastMessage": "最終メッセージ",
+          "webReaderMonth": "今月のブラウザレスページ読み取り",
+          "webReaderTotal": "ブラウザレスページ読み取りの合計"
         }
       },
       "contextLimits": {
@@ -908,7 +911,8 @@
     "subscriptionPriceHint": "情報のみ、支払いは不要です。",
     "resetUsageConfirm": "すべてのユーザーの週間使用量をリセットしますか？",
     "resetting": "リセット中...",
-    "resetUsageDone": "リセット完了: {{count}} ユーザーを更新しました。"
+    "resetUsageDone": "リセット完了: {{count}} ユーザーを更新しました。",
+    "webReaderLabel": "月あたりのブラウザレスページ読み取り"
   },
   "nav": {
     "overview": "概要",

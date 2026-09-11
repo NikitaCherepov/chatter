@@ -386,7 +386,8 @@
       "statsParsing": "Parsowanie",
       "statsOther": "Inne",
       "statsLastAttempt": "Ostatnia próba",
-      "statsLastFailure": "Ostatnia awaria"
+      "statsLastFailure": "Ostatnia awaria",
+      "statsCacheHits": "Trafienia w pamięć podręczną"
     },
     "cloudTts": {
       "pageDescription": "Cloud TTS i katalog głosów Cartesia.",
@@ -564,7 +565,9 @@
           "imagesMonth": "Obrazy w tym miesiącu",
           "imagesTotal": "Obrazy łącznie",
           "messageLength": "Długość wiadomości",
-          "lastMessage": "Ostatnia wiadomość"
+          "lastMessage": "Ostatnia wiadomość",
+          "webReaderMonth": "Odczyty stron bez przeglądarki w tym miesiącu",
+          "webReaderTotal": "Odczyty stron bez przeglądarki łącznie"
         }
       },
       "contextLimits": {
@@ -908,7 +911,8 @@
     "subscriptionPriceHint": "Tylko informacyjnie, brak płatności.",
     "resetUsageConfirm": "Zresetować tygodniowe użycie dla WSZYSTKICH użytkowników?",
     "resetting": "Resetowanie...",
-    "resetUsageDone": "Resetowanie zakończone: zaktualizowano {{count}} użytkowników."
+    "resetUsageDone": "Resetowanie zakończone: zaktualizowano {{count}} użytkowników.",
+    "webReaderLabel": "Odczyty stron bez przeglądarki na miesiąc"
   },
   "nav": {
     "overview": "Przegląd",

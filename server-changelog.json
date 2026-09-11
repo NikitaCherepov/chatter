@@ -1,69 +1,56 @@
 {
   "changes": {
     "en": [
-      "Reworked the updates system",
-      "Reworked the web search system. It now uses a desktop-search → SearXNG → Tavily chain",
-      "Current search limits now apply only to Tavily"
+      "Reworked the user limits system",
+      "Reworked Browserless"
     ],
     "cs": [
-      "Přepracován systém aktualizací",
-      "Přepracován systém webového vyhledávání. Nyní používá řetězec desktop-search → SearXNG → Tavily",
-      "Současná omezení vyhledávání se nyní vztahují pouze na Tavily"
+      "Přepracován systém uživatelských limitů",
+      "Přepracováno Browserless"
     ],
     "de": [
-      "Überarbeitetes Updates-System",
-      "Überarbeitetes Websuchsystem. Es verwendet jetzt eine Desktop-Suche → SearXNG → Tavily-Kette",
-      "Aktuelle Suchlimits gelten jetzt nur für Tavily"
+      "Überarbeitetes System für Benutzerlimits",
+      "Überarbeitetes Browserless"
     ],
     "es": [
-      "Sistema de actualizaciones rediseñado",
-      "Sistema de búsqueda web rediseñado. Ahora utiliza una cadena de búsqueda de escritorio → SearXNG → Tavily",
-      "Los límites de búsqueda actuales ahora se aplican solo a Tavily"
+      "Sistema de límites de usuario rediseñado",
+      "Browserless rediseñado"
     ],
     "fr": [
-      "Système de mises à jour retravaillé",
-      "Système de recherche web retravaillé. Il utilise désormais une chaîne recherche de bureau → SearXNG → Tavily",
-      "Les limites de recherche actuelles ne s'appliquent désormais qu'à Tavily"
+      "Système de limites utilisateur retravaillé",
+      "Browserless retravaillé"
     ],
     "it": [
-      "Sistema di aggiornamenti rielaborato",
-      "Sistema di ricerca web rielaborato. Ora utilizza una catena desktop-search → SearXNG → Tavily",
-      "I limiti di ricerca attuali ora si applicano solo a Tavily"
+      "Sistema di limiti utente rielaborato",
+      "Browserless rielaborato"
     ],
     "ja": [
-      "更新システムを再設計しました",
-      "ウェブ検索システムを再設計しました。現在はデスクトップ検索 → SearXNG → Tavily のチェーンを使用しています",
-      "現在の検索制限はTavilyにのみ適用されます"
+      "ユーザー制限システムを再設計しました",
+      "Browserlessを再設計しました"
     ],
     "ko": [
-      "업데이트 시스템을 재작업했습니다",
-      "웹 검색 시스템을 재작업했습니다. 이제 데스크톱 검색 → SearXNG → Tavily 체인을 사용합니다",
-      "현재 검색 제한은 이제 Tavily에만 적용됩니다"
+      "사용자 제한 시스템을 재작업했습니다",
+      "Browserless를 재작업했습니다"
     ],
     "pl": [
-      "Przebudowano system aktualizacji",
-      "Przebudowano system wyszukiwania w sieci. Teraz używa łańcucha wyszukiwanie na pulpicie → SearXNG → Tavily",
-      "Obecne limity wyszukiwania dotyczą teraz tylko Tavily"
+      "Przebudowano system limitów użytkowników",
+      "Przebudowano Browserless"
     ],
     "pt-BR": [
-      "Sistema de atualizações reformulado",
-      "Sistema de pesquisa na web reformulado. Agora usa uma cadeia pesquisa-desktop → SearXNG → Tavily",
-      "Os limites de pesquisa atuais agora se aplicam apenas ao Tavily"
+      "Sistema de limites de usuário reformulado",
+      "Browserless reformulado"
     ],
     "ru": [
-      "Переработана система обновлений",
-      "Переработана система веб-поиска. Теперь она использует цепочку desktop-search → SearXNG → Tavily",
-      "Текущие лимиты поиска теперь применяются только к Tavily"
+      "Переработана система лимитов у пользователей",
+      "Переработан Browserless"
     ],
     "tr": [
-      "Güncelleme sistemi yeniden düzenlendi",
-      "Web arama sistemi yeniden düzenlendi. Artık masaüstü arama → SearXNG → Tavily zinciri kullanıyor",
-      "Mevcut arama limitleri artık yalnızca Tavily için geçerli"
+      "Kullanıcı limitleri sistemi yeniden düzenlendi",
+      "Browserless yeniden düzenlendi"
     ],
     "zh-CN": [
-      "重构了更新系统",
-      "重构了网络搜索系统。现在使用桌面搜索 → SearXNG → Tavily 链",
-      "当前的搜索限制现在仅适用于 Tavily"
+      "重新设计了用户限制系统",
+      "重新设计了Browserless"
     ]
   }
 }

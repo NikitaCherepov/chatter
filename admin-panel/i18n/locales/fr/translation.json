@@ -386,7 +386,8 @@
       "statsParsing": "Analyse",
       "statsOther": "Autre",
       "statsLastAttempt": "Dernière tentative",
-      "statsLastFailure": "Dernier échec"
+      "statsLastFailure": "Dernier échec",
+      "statsCacheHits": "Hits de cache"
     },
     "cloudTts": {
       "pageDescription": "Cloud TTS et catalogue de voix Cartesia.",
@@ -564,7 +565,9 @@
           "imagesMonth": "Images ce mois-ci",
           "imagesTotal": "Images total",
           "messageLength": "Longueur du message",
-          "lastMessage": "Dernier message"
+          "lastMessage": "Dernier message",
+          "webReaderMonth": "Lectures de pages sans navigateur ce mois-ci",
+          "webReaderTotal": "Lectures de pages sans navigateur au total"
         }
       },
       "contextLimits": {
@@ -908,7 +911,8 @@
     "subscriptionPriceHint": "À titre indicatif, aucun paiement.",
     "resetUsageConfirm": "Réinitialiser l'utilisation hebdomadaire pour TOUS les utilisateurs ?",
     "resetting": "Réinitialisation...",
-    "resetUsageDone": "Réinitialisation terminée : {{count}} utilisateurs mis à jour."
+    "resetUsageDone": "Réinitialisation terminée : {{count}} utilisateurs mis à jour.",
+    "webReaderLabel": "Lectures de pages sans navigateur par mois"
   },
   "nav": {
     "overview": "Aperçu",

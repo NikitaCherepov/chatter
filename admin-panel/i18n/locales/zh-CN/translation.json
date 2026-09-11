@@ -386,7 +386,8 @@
       "statsParsing": "解析中",
       "statsOther": "其他",
       "statsLastAttempt": "上次尝试",
-      "statsLastFailure": "上次失败"
+      "statsLastFailure": "上次失败",
+      "statsCacheHits": "缓存命中"
     },
     "cloudTts": {
       "pageDescription": "云端TTS和Cartesia语音目录。",
@@ -564,7 +565,9 @@
           "imagesMonth": "本月图片",
           "imagesTotal": "图片总数",
           "messageLength": "消息长度",
-          "lastMessage": "最后消息"
+          "lastMessage": "最后消息",
+          "webReaderMonth": "本月无浏览器页面读取次数",
+          "webReaderTotal": "无浏览器页面读取总次数"
         }
       },
       "contextLimits": {
@@ -908,7 +911,8 @@
     "subscriptionPriceHint": "仅供参考，无需付款。",
     "resetUsageConfirm": "重置所有用户的每周使用量？",
     "resetting": "正在重置...",
-    "resetUsageDone": "重置完成：已更新 {{count}} 个用户。"
+    "resetUsageDone": "重置完成：已更新 {{count}} 个用户。",
+    "webReaderLabel": "每月无浏览器页面读取次数"
   },
   "nav": {
     "overview": "概览",

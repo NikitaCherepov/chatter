@@ -372,7 +372,8 @@
       "statsParsing": "Analýza",
       "statsOther": "Jiné",
       "statsLastAttempt": "Poslední pokus",
-      "statsLastFailure": "Poslední selhání"
+      "statsLastFailure": "Poslední selhání",
+      "statsCacheHits": "Zásahy do mezipaměti"
     },
     "cloudTts": {
       "pageDescription": "Cloud TTS a katalog hlasů Cartesia.",
@@ -550,7 +551,9 @@
           "imagesMonth": "Obrázky tento měsíc",
           "imagesTotal": "Obrázky celkem",
           "messageLength": "Délka zprávy",
-          "lastMessage": "Poslední zpráva"
+          "lastMessage": "Poslední zpráva",
+          "webReaderMonth": "Bezprohlížečové čtení stránek tento měsíc",
+          "webReaderTotal": "Bezprohlížečové čtení stránek celkem"
         }
       },
       "contextLimits": {
@@ -894,7 +897,8 @@
     "subscriptionPriceHint": "Pouze pro informaci, bez platby.",
     "resetUsageConfirm": "Obnovit týdenní využití pro VŠECHNY uživatele?",
     "resetting": "Obnovování...",
-    "resetUsageDone": "Obnovení dokončeno: {{count}} uživatelů aktualizováno."
+    "resetUsageDone": "Obnovení dokončeno: {{count}} uživatelů aktualizováno.",
+    "webReaderLabel": "Bezprohlížečové čtení stránek za měsíc"
   },
   "nav": {
     "overview": "Přehled",

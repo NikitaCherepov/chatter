@@ -386,7 +386,8 @@
       "statsParsing": "Parsen",
       "statsOther": "Sonstiges",
       "statsLastAttempt": "Letzter Versuch",
-      "statsLastFailure": "Letzter Fehler"
+      "statsLastFailure": "Letzter Fehler",
+      "statsCacheHits": "Cache-Treffer"
     },
     "cloudTts": {
       "pageDescription": "Cloud TTS und Cartesia-Stimmkatalog.",
@@ -564,7 +565,9 @@
           "imagesMonth": "Bilder diesen Monat",
           "imagesTotal": "Bilder gesamt",
           "messageLength": "Nachrichtenlänge",
-          "lastMessage": "Letzte Nachricht"
+          "lastMessage": "Letzte Nachricht",
+          "webReaderMonth": "Browserless-Seitenaufrufe diesen Monat",
+          "webReaderTotal": "Browserless-Seitenaufrufe insgesamt"
         }
       },
       "contextLimits": {
@@ -908,7 +911,8 @@
     "subscriptionPriceHint": "Nur zur Information, keine Zahlung.",
     "resetUsageConfirm": "Wöchentliche Nutzung für ALLE Benutzer zurücksetzen?",
     "resetting": "Wird zurückgesetzt...",
-    "resetUsageDone": "Zurücksetzen abgeschlossen: {{count}} Benutzer aktualisiert."
+    "resetUsageDone": "Zurücksetzen abgeschlossen: {{count}} Benutzer aktualisiert.",
+    "webReaderLabel": "Browserless-Seitenaufrufe pro Monat"
   },
   "nav": {
     "overview": "Übersicht",

@@ -386,7 +386,8 @@
       "statsParsing": "구문 분석",
       "statsOther": "기타",
       "statsLastAttempt": "마지막 시도",
-      "statsLastFailure": "마지막 실패"
+      "statsLastFailure": "마지막 실패",
+      "statsCacheHits": "캐시 적중"
     },
     "cloudTts": {
       "pageDescription": "Cloud TTS 및 Cartesia 음성 카탈로그.",
@@ -564,7 +565,9 @@
           "imagesMonth": "이번 달 이미지",
           "imagesTotal": "전체 이미지",
           "messageLength": "메시지 길이",
-          "lastMessage": "마지막 메시지"
+          "lastMessage": "마지막 메시지",
+          "webReaderMonth": "이번 달 브라우저리스 페이지 읽기",
+          "webReaderTotal": "브라우저리스 페이지 읽기 총계"
         }
       },
       "contextLimits": {
@@ -908,7 +911,8 @@
     "subscriptionPriceHint": "참고용이며 결제는 없습니다.",
     "resetUsageConfirm": "모든 사용자의 주간 사용량을 초기화하시겠습니까?",
     "resetting": "초기화 중...",
-    "resetUsageDone": "초기화 완료: {{count}}명의 사용자가 업데이트되었습니다."
+    "resetUsageDone": "초기화 완료: {{count}}명의 사용자가 업데이트되었습니다.",
+    "webReaderLabel": "월별 브라우저리스 페이지 읽기"
   },
   "nav": {
     "overview": "개요",
