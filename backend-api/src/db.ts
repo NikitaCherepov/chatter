@@ -350,54 +350,12 @@ ensureUserColumn('weekly_cost_used', 'ALTER TABLE users ADD COLUMN weekly_cost_u
 ensureUserColumn('weekly_cost_quota', 'ALTER TABLE users ADD COLUMN weekly_cost_quota REAL NOT NULL DEFAULT 0');
 ensureUserColumn('weekly_cost_quota_limit', 'ALTER TABLE users ADD COLUMN weekly_cost_quota_limit REAL NOT NULL DEFAULT 0');
 // Legacy columns (daily_tokens_used, total_tokens_used, daily_cost_rub, total_cost_rub) are no longer created
-// for fresh installs. They are dropped below via dropLegacyUserColumns() for upgraded databases.
-ensureUserColumn('daily_web_search_count', 'ALTER TABLE users ADD COLUMN daily_web_search_count INTEGER NOT NULL DEFAULT 0');
-ensureUserColumn('daily_web_search_limit', 'ALTER TABLE users ADD COLUMN daily_web_search_limit INTEGER NOT NULL DEFAULT 10');
+// for fresh installs. They are dropped below via dropLegacyColumn() for upgraded databases.
+// The legacy daily_*/monthly_* quota columns are owned by migrations 0001/0002.
 ensureUserColumn('total_web_search_count', 'ALTER TABLE users ADD COLUMN total_web_search_count INTEGER NOT NULL DEFAULT 0');
-const needsWebReaderLimitBackfill = !hasUserColumn('daily_web_reader_limit');
-ensureUserColumn('daily_web_reader_count', 'ALTER TABLE users ADD COLUMN daily_web_reader_count INTEGER NOT NULL DEFAULT 0');
-ensureUserColumn('daily_web_reader_limit', 'ALTER TABLE users ADD COLUMN daily_web_reader_limit INTEGER NOT NULL DEFAULT 0');
 ensureUserColumn('total_web_reader_count', 'ALTER TABLE users ADD COLUMN total_web_reader_count INTEGER NOT NULL DEFAULT 0');
-if (needsWebReaderLimitBackfill) {
-  // Preserve current plan/custom quota behavior on upgrade instead of
-  // unexpectedly disabling Browserless for every existing account.
-  db.exec('UPDATE users SET daily_web_reader_limit = MAX(0, COALESCE(daily_web_search_limit, 0))');
-}
 ensureUserColumn('mail_check_limit', 'ALTER TABLE users ADD COLUMN mail_check_limit INTEGER NOT NULL DEFAULT 10');
-ensureUserColumn('daily_image_gen_count', 'ALTER TABLE users ADD COLUMN daily_image_gen_count INTEGER NOT NULL DEFAULT 0');
-ensureUserColumn('daily_image_gen_limit', 'ALTER TABLE users ADD COLUMN daily_image_gen_limit INTEGER NOT NULL DEFAULT 3');
 ensureUserColumn('total_image_gen_count', 'ALTER TABLE users ADD COLUMN total_image_gen_count INTEGER NOT NULL DEFAULT 0');
-const needsMonthlyUsageMigration = !hasUserColumn('monthly_usage_window_started_at');
-ensureUserColumn('monthly_usage_window_started_at', 'ALTER TABLE users ADD COLUMN monthly_usage_window_started_at INTEGER NOT NULL DEFAULT 0');
-ensureUserColumn('monthly_web_search_count', 'ALTER TABLE users ADD COLUMN monthly_web_search_count INTEGER NOT NULL DEFAULT 0');
-ensureUserColumn('monthly_web_search_limit', 'ALTER TABLE users ADD COLUMN monthly_web_search_limit INTEGER NOT NULL DEFAULT 0');
-ensureUserColumn('monthly_web_reader_count', 'ALTER TABLE users ADD COLUMN monthly_web_reader_count INTEGER NOT NULL DEFAULT 0');
-ensureUserColumn('monthly_web_reader_limit', 'ALTER TABLE users ADD COLUMN monthly_web_reader_limit INTEGER NOT NULL DEFAULT 0');
-ensureUserColumn('monthly_image_gen_count', 'ALTER TABLE users ADD COLUMN monthly_image_gen_count INTEGER NOT NULL DEFAULT 0');
-ensureUserColumn('monthly_image_gen_limit', 'ALTER TABLE users ADD COLUMN monthly_image_gen_limit INTEGER NOT NULL DEFAULT 0');
-if (needsMonthlyUsageMigration) {
-  // Preserve the current in-progress usage and configured limits while moving
-  // from daily counters to a monthly billing window.
-  db.exec(`
-    UPDATE users
-    SET monthly_usage_window_started_at = unixepoch(),
-        monthly_web_search_count = MAX(0, COALESCE(daily_web_search_count, 0)),
-        monthly_web_search_limit = MAX(0, COALESCE(daily_web_search_limit, 0)),
-        monthly_web_reader_count = MAX(0, COALESCE(daily_web_reader_count, 0)),
-        monthly_web_reader_limit = MAX(0, COALESCE(daily_web_reader_limit, 0)),
-        monthly_image_gen_count = MAX(0, COALESCE(daily_image_gen_count, 0)),
-        monthly_image_gen_limit = MAX(0, COALESCE(daily_image_gen_limit, 0))
-  `);
-}
-db.exec(`
-  UPDATE user_plan_subscriptions
-  SET quota_anchor_at = COALESCE(
-    (SELECT NULLIF(monthly_usage_window_started_at, 0) FROM users WHERE users.id = user_plan_subscriptions.user_id),
-    unixepoch(started_at),
-    unixepoch()
-  )
-  WHERE quota_anchor_at IS NULL OR quota_anchor_at <= 0
-`);
 // Repair historical duplicates before enforcing the one-active-record invariant.
 db.exec(`
   UPDATE user_plan_subscriptions SET is_current = 0
@@ -638,8 +596,6 @@ db.exec(`
   UPDATE users SET weekly_cost_quota = 0 WHERE weekly_cost_quota IS NULL OR weekly_cost_quota < 0;
   UPDATE users SET weekly_cost_quota_limit = 0 WHERE weekly_cost_quota_limit IS NULL OR weekly_cost_quota_limit < 0;
   UPDATE users SET weekly_window_started_at = 0 WHERE weekly_window_started_at IS NULL OR weekly_window_started_at < 0;
-  UPDATE users SET daily_web_search_count = 0 WHERE daily_web_search_count IS NULL;
-  UPDATE users SET daily_web_search_limit = 10 WHERE daily_web_search_limit IS NULL OR daily_web_search_limit < 0;
   UPDATE users SET total_web_search_count = 0 WHERE total_web_search_count IS NULL;
   UPDATE users SET core_memory = '' WHERE core_memory IS NULL;
   UPDATE users SET imap_port = 993 WHERE imap_port IS NULL OR imap_port <= 0;

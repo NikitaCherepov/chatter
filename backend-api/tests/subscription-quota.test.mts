@@ -16,6 +16,14 @@ const {
   refreshCurrentQuotaLimits,
 } = await import('../src/services/monthly-usage.js');
 
+// Fresh installs never create the legacy quota columns: both migrations apply as no-ops.
+const { runMigrations } = await import('../src/services/migrations.js');
+const migrationsRun = runMigrations();
+assert.deepEqual(migrationsRun.applied, ['0001_user_plan_quota_periods', '0002_drop_legacy_quota_user_columns']);
+const freshUserColumns = (db.prepare('PRAGMA table_info(users)').all() as Array<{ name: string }>).map(c => c.name);
+assert.ok(!freshUserColumns.includes('monthly_usage_window_started_at'), 'fresh installs must not carry legacy quota columns');
+assert.ok(!freshUserColumns.includes('daily_web_search_count'), 'fresh installs must not carry legacy quota columns');
+
 const JAN_31 = Math.floor(Date.parse('2030-01-31T12:00:00.000Z') / 1000);
 seedPlanLimitsIfEmpty();
 db.prepare(`INSERT INTO users (id, name, plan, status) VALUES (1, 'Quota test', 'free', 'approved')`).run();

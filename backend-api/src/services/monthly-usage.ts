@@ -290,6 +290,11 @@ export const resetExpiredMonthlyUsageWindows = () => {
   return changed;
 };
 
+const usersTableHasColumn = (column: string) => {
+  const columns = db.prepare('PRAGMA table_info(users)').all() as Array<{ name: string }>;
+  return columns.some(item => item.name === column);
+};
+
 /**
  * One-time schema migration body: transfer the exact legacy users.monthly_*
  * state (window start, used counters, configured limits) into quota periods.
@@ -301,6 +306,45 @@ export const resetExpiredMonthlyUsageWindows = () => {
  */
 export const migrateLegacyQuotaPeriods = () => {
   const now = nowEpoch();
+  if (!usersTableHasColumn('monthly_usage_window_started_at')) {
+    // Fresh install — nothing to transfer.
+    if (!usersTableHasColumn('daily_web_search_count')) return;
+    // Daily-era upgrade: recreate the full legacy schema first (ancient DBs may
+    // carry only a subset of the daily columns).
+    const dailyDefs: Array<[string, string]> = [
+      ['daily_web_search_count', 'INTEGER NOT NULL DEFAULT 0'],
+      ['daily_web_search_limit', 'INTEGER NOT NULL DEFAULT 0'],
+      ['daily_web_reader_count', 'INTEGER NOT NULL DEFAULT 0'],
+      ['daily_web_reader_limit', 'INTEGER NOT NULL DEFAULT 0'],
+      ['daily_image_gen_count', 'INTEGER NOT NULL DEFAULT 0'],
+      ['daily_image_gen_limit', 'INTEGER NOT NULL DEFAULT 0'],
+    ];
+    for (const [name, def] of dailyDefs) {
+      if (!usersTableHasColumn(name)) db.exec(`ALTER TABLE users ADD COLUMN ${name} ${def}`);
+    }
+    const columnDefs: Array<[string, string]> = [
+      ['monthly_usage_window_started_at', 'INTEGER NOT NULL DEFAULT 0'],
+      ['monthly_web_search_count', 'INTEGER NOT NULL DEFAULT 0'],
+      ['monthly_web_search_limit', 'INTEGER NOT NULL DEFAULT 0'],
+      ['monthly_web_reader_count', 'INTEGER NOT NULL DEFAULT 0'],
+      ['monthly_web_reader_limit', 'INTEGER NOT NULL DEFAULT 0'],
+      ['monthly_image_gen_count', 'INTEGER NOT NULL DEFAULT 0'],
+      ['monthly_image_gen_limit', 'INTEGER NOT NULL DEFAULT 0'],
+    ];
+    for (const [name, def] of columnDefs) {
+      if (!usersTableHasColumn(name)) db.exec(`ALTER TABLE users ADD COLUMN ${name} ${def}`);
+    }
+    db.exec(`
+      UPDATE users
+      SET monthly_usage_window_started_at = unixepoch(),
+          monthly_web_search_count = MAX(0, COALESCE(daily_web_search_count, 0)),
+          monthly_web_search_limit = MAX(0, COALESCE(daily_web_search_limit, 0)),
+          monthly_web_reader_count = MAX(0, COALESCE(daily_web_reader_count, 0)),
+          monthly_web_reader_limit = MAX(0, COALESCE(daily_web_reader_limit, 0)),
+          monthly_image_gen_count = MAX(0, COALESCE(daily_image_gen_count, 0)),
+          monthly_image_gen_limit = MAX(0, COALESCE(daily_image_gen_limit, 0))
+    `);
+  }
   const users = db.prepare(`
     SELECT id, monthly_usage_window_started_at,
       monthly_web_search_count, monthly_web_search_limit,
