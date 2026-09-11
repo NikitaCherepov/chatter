@@ -191,7 +191,13 @@
     "notActive": "タスク #{{id}} はもうアクティブではありません (ステータス: {{status}})。",
     "deleteError": "タスク #{{id}} の削除に失敗しました。",
     "deleted": "タスク #{{id}} を削除しました。\n\n現在のタスク ({{count}}/{{max}}):\n\n{{tasks}}",
-    "item": "#{{id}} | {{type}} | {{status}}\n日時: {{localTime}} ({{timezone}})\n日時 (UTC): {{utcTime}} UTC\nスケジュール: {{recurrence}}\n通知: {{notify}}\nデータ: {{payload}}",
+    "item": "#{{id}} | {{type}} | {{status}}\n日時: {{localTime}} ({{timezone}})\n日時 (UTC): {{utcTime}} UTC\nスケジュール: {{recurrence}}\n配信先: {{target}}\n通知: {{notify}}\nデータ: {{payload}}",
+    "target": {
+      "chat": "チャット #{{id}}「{{title}}」",
+      "chatNoTitle": "チャット #{{id}}",
+      "currentChat": "現在のチャット（実行時のアクティブなチャット）",
+      "newChat": "新しいチャット（実行ごとに作成）"
+    },
     "recurrence": {
       "once": "1回",
       "daily": "毎日",

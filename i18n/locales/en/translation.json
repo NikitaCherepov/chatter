@@ -191,7 +191,13 @@
     "notActive": "Task #{{id}} is no longer active (status: {{status}}).",
     "deleteError": "Failed to delete task #{{id}}.",
     "deleted": "Deleted task #{{id}}.\n\nCurrent tasks ({{count}}/{{max}}):\n\n{{tasks}}",
-    "item": "#{{id}} | {{type}} | {{status}}\nWhen: {{localTime}} ({{timezone}})\nWhen (UTC): {{utcTime}} UTC\nSchedule: {{recurrence}}\nNotifications: {{notify}}\nData: {{payload}}",
+    "item": "#{{id}} | {{type}} | {{status}}\nWhen: {{localTime}} ({{timezone}})\nWhen (UTC): {{utcTime}} UTC\nSchedule: {{recurrence}}\nDelivery: {{target}}\nNotifications: {{notify}}\nData: {{payload}}",
+    "target": {
+      "chat": "Chat #{{id}} “{{title}}”",
+      "chatNoTitle": "Chat #{{id}}",
+      "currentChat": "Current chat (active at execution)",
+      "newChat": "New chat (created on each run)"
+    },
     "recurrence": {
       "once": "Once",
       "daily": "Every day",

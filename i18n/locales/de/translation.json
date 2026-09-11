@@ -191,7 +191,13 @@
     "notActive": "Aufgabe #{{id}} ist nicht mehr aktiv (Status: {{status}}).",
     "deleteError": "Fehler beim Löschen der Aufgabe #{{id}}.",
     "deleted": "Aufgabe #{{id}} gelöscht.\n\nAktuelle Aufgaben ({{count}}/{{max}}):\n\n{{tasks}}",
-    "item": "#{{id}} | {{type}} | {{status}}\nWann: {{localTime}} ({{timezone}})\nWann (UTC): {{utcTime}} UTC\nZeitplan: {{recurrence}}\nBenachrichtigungen: {{notify}}\nDaten: {{payload}}",
+    "item": "#{{id}} | {{type}} | {{status}}\nWann: {{localTime}} ({{timezone}})\nWann (UTC): {{utcTime}} UTC\nZeitplan: {{recurrence}}\nZustellung: {{target}}\nBenachrichtigungen: {{notify}}\nDaten: {{payload}}",
+    "target": {
+      "chat": "Chat #{{id}} „{{title}}“",
+      "chatNoTitle": "Chat #{{id}}",
+      "currentChat": "Aktueller Chat (aktiv bei Ausführung)",
+      "newChat": "Neuer Chat (bei jedem Lauf erstellt)"
+    },
     "recurrence": {
       "once": "Einmalig",
       "daily": "Täglich",

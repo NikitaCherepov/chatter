@@ -191,7 +191,13 @@
     "notActive": "#{{id}} görevi artık aktif değil (durum: {{status}}).",
     "deleteError": "Görev #{{id}} silinemedi.",
     "deleted": "Görev #{{id}} silindi.\n\nMevcut görevler ({{count}}/{{max}}):\n\n{{tasks}}",
-    "item": "#{{id}} | {{type}} | {{status}}\nNe zaman: {{localTime}} ({{timezone}})\nNe zaman (UTC): {{utcTime}} UTC\nZamanlama: {{recurrence}}\nBildirimler: {{notify}}\nVeri: {{payload}}",
+    "item": "#{{id}} | {{type}} | {{status}}\nNe zaman: {{localTime}} ({{timezone}})\nNe zaman (UTC): {{utcTime}} UTC\nZamanlama: {{recurrence}}\nTeslimat: {{target}}\nBildirimler: {{notify}}\nVeri: {{payload}}",
+    "target": {
+      "chat": "Sohbet #{{id}} “{{title}}”",
+      "chatNoTitle": "Sohbet #{{id}}",
+      "currentChat": "Geçerli sohbet (çalışma anında etkin olan)",
+      "newChat": "Yeni sohbet (her çalıştırmada oluşturulur)"
+    },
     "recurrence": {
       "once": "Bir kere",
       "daily": "Her gün",

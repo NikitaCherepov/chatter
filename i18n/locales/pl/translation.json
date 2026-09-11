@@ -191,7 +191,13 @@
     "notActive": "Zadanie #{{id}} nie jest już aktywne (status: {{status}}).",
     "deleteError": "Nie udało się usunąć zadania #{{id}}.",
     "deleted": "Usunięto zadanie #{{id}}.\n\nAktualne zadania ({{count}}/{{max}}):\n\n{{tasks}}",
-    "item": "#{{id}} | {{type}} | {{status}}\nKiedy: {{localTime}} ({{timezone}})\nKiedy (UTC): {{utcTime}} UTC\nHarmonogram: {{recurrence}}\nPowiadomienia: {{notify}}\nDane: {{payload}}",
+    "item": "#{{id}} | {{type}} | {{status}}\nKiedy: {{localTime}} ({{timezone}})\nKiedy (UTC): {{utcTime}} UTC\nHarmonogram: {{recurrence}}\nDostawa: {{target}}\nPowiadomienia: {{notify}}\nDane: {{payload}}",
+    "target": {
+      "chat": "Czat #{{id}} „{{title}}”",
+      "chatNoTitle": "Czat #{{id}}",
+      "currentChat": "Bieżący czat (aktywny w chwili wykonania)",
+      "newChat": "Nowy czat (tworzony przy każdym uruchomieniu)"
+    },
     "recurrence": {
       "once": "Raz",
       "daily": "Codziennie",

@@ -3,7 +3,7 @@ import dotenv from 'dotenv';
 import nodeFetch from 'node-fetch';
 import { ProxyAgent } from 'proxy-agent';
 import { Readable } from 'node:stream';
-import type { AiSendResult, DesktopActionPayload, DisplayStatePayload, MapUpdatePayload, TaskNotifyMode, TaskRecurrenceType, TaskType, UserPlan, UserRecord, MessageAttachment, MessageImage, MessageUsage, NormalizedTokenUsage, TokenUsageCall } from '../types.js';
+import type { AiSendResult, DesktopActionPayload, DisplayStatePayload, MapUpdatePayload, TaskNotifyMode, TaskRecurrenceType, TaskTargetMode, TaskType, UserPlan, UserRecord, MessageAttachment, MessageImage, MessageUsage, NormalizedTokenUsage, TokenUsageCall } from '../types.js';
 import { appendChatMessage, ensureActiveChat, getHistoryForAi, getMessageTokens, getUserById, getUserChatListItem, renameUserChat, resolveMaxContextTokens, resolveAttachmentMaxTokens, injectAttachments, setUserTimezone, trimUserHistoryByChat, searchChatHistory, getChatMessagesAround, isMultiUserRoomChat, getChatContextTokens } from './chats.js';
 import { calculateChargedTokens, checkQuota, chargeTokens, getModelOverride, getPricingSnapshot, calculateEstimatedCostUsd, isModelFree } from './token-quota.js';
 import { recordModelTps, setKnownModelStatsFilter } from './model-stats.js';
@@ -12,7 +12,7 @@ import { getPlanLimits } from './plan-limits.js';
 import { resolvePromptForUser, AVATAR_PROMPT_HINT } from './prompts.js';
 import { getChatAgentForResponse, hasMultipleActiveChatAgents, canReadChatMessages } from './chat-rooms.js';
 import { createNote, deleteNote, getNoteById, listNotes } from './notes.js';
-import { createTask, deletePendingTask, getPendingTaskCount, listTasks } from './tasks.js';
+import { createTask, deletePendingTask, getPendingTaskCount, getUserTaskById, isOwnNonRoomChat, listTasks, MAX_PENDING_TASKS_PER_USER, updatePendingTask } from './tasks.js';
 import { listMapPinsForBot } from './map-pins.js';
 import { runSmartHomeControl, type SmartHomeArgs, listSmartDevicesForAi } from './smart-home.js';
 import { getMailAccountsForUser, resolveEmailAttachmentsForUser, runEmailAttachmentRead, runEmailCheck, runEmailRead } from './mail.js';
@@ -238,7 +238,6 @@ export const getUpdateState = () => ({
   activeUsers: activeGenerations.size + activeHitlWaits.size,
   elapsedMs: updatePreparingSince ? Date.now() - updatePreparingSince : 0,
 });
-const MAX_PENDING_TASKS_PER_USER = 10;
 const DEFAULT_MAIL_CHECK_LIMIT = 10;
 const TOKENS_PER_PRICE_BLOCK = 500_000;
 const PRICE_PER_PRICE_BLOCK_RUB = 102;
@@ -1960,6 +1959,16 @@ const incrementUserTavilySearchUsage = (userId: number, count = 1) => {
   consumeUserQuota(userId, 'web_search', count);
 };
 
+const formatTaskTargetText = (t: ReturnType<typeof listTasks>[number]) => {
+  if (t.target_mode === 'new_chat') return 'new chat (created per run)';
+  if (t.target_mode === 'id' && t.target_chat_id) {
+    return t.target_chat_title
+      ? `chat #${t.target_chat_id} "${t.target_chat_title}"`
+      : `chat #${t.target_chat_id}`;
+  }
+  return 'current chat (active at run time)';
+};
+
 const formatTasksList = (tasks: ReturnType<typeof listTasks>, timezoneOffset: number, emptyText = 'No tasks found.') => {
   if (!tasks.length) return emptyText;
   return tasks.map((t) => {
@@ -1967,8 +1976,36 @@ const formatTasksList = (tasks: ReturnType<typeof listTasks>, timezoneOffset: nu
     const notifyText = (t.notify_mode === 'on_match' || t.notify_mode === 'on_condition')
       ? `${t.notify_mode}: ${t.notify_condition || '(empty)'}`
       : t.notify_mode;
-    return `#${t.id} | ${t.task_type} | ${t.status}\nWhen: ${when.local} (${when.tzLabel})\nWhen (UTC): ${when.utc} UTC\nSchedule: ${t.recurrence_type}\nNotifications: ${notifyText}\nData: ${t.payload.slice(0, 180)}`;
+    return `#${t.id} | ${t.task_type} | ${t.status}\nWhen: ${when.local} (${when.tzLabel})\nWhen (UTC): ${when.utc} UTC\nSchedule: ${t.recurrence_type}\nTarget: ${formatTaskTargetText(t)}\nNotifications: ${notifyText}\nData: ${t.payload.slice(0, 180)}`;
   }).join('\n\n');
+};
+
+/** Validates target_mode / target_chat_id tool arguments. Rooms and foreign
+ *  chats are forbidden task targets: the chat must be owned by the user and
+ *  not be room-enabled. Returns an error string for the model on failure. */
+const resolveTaskTargetArgs = (
+  userId: number,
+  parsed: Record<string, any>
+): { ok: true; targetMode: TaskTargetMode; targetChatId: number | null } | { ok: false; error: string } => {
+  const targetMode = `${parsed.target_mode || 'current_chat'}` as TaskTargetMode;
+  if (!['id', 'current_chat', 'new_chat'].includes(targetMode)) {
+    return { ok: false, error: 'Error: Invalid target_mode (expected id, current_chat or new_chat).' };
+  }
+  if (targetMode !== 'id') {
+    if (parsed.target_chat_id !== undefined && parsed.target_chat_id !== null) {
+      return { ok: false, error: 'Error: target_chat_id must be used only together with target_mode=id.' };
+    }
+    return { ok: true, targetMode, targetChatId: null };
+  }
+  const rawChatId = Number(parsed.target_chat_id);
+  if (!Number.isFinite(rawChatId) || Math.floor(rawChatId) <= 0) {
+    return { ok: false, error: 'Error: For target_mode=id pass target_chat_id of the user\'s own personal chat.' };
+  }
+  const chatId = Math.floor(rawChatId);
+  if (!isOwnNonRoomChat(userId, chatId)) {
+    return { ok: false, error: `Error: Chat #${chatId} is not the user's own personal chat. Shared rooms and other users' chats are forbidden targets — use one of the user's personal chats, or target_mode=current_chat / new_chat.` };
+  }
+  return { ok: true, targetMode, targetChatId: chatId };
 };
 
 const runSaveNoteTool = (user: UserRecord, contentRaw: string, titleRaw = '') => {
@@ -2192,8 +2229,8 @@ export const toolDefinitions = [
           execute_at: { type: 'number', description: 'Legacy field: Unix timestamp in seconds. Use only if local_time/delay_seconds are not suitable.' },
           task_type: { type: 'string', enum: ['message', 'smart_home', 'ai_instruction'], description: 'message - reminder, smart_home - smart home command, ai_instruction - schedule AI instruction execution (web search, email check, data analysis, etc. — AI will call the needed tools itself).' },
           payload: { type: 'string', description: 'For message: reminder text. For smart_home: JSON string with device_id and action (on, off, set_color, set_brightness, or Zigbee set_property with property and value). For ai_instruction: instruction text that the AI will execute on schedule.' },
-          target_chat_id: { type: 'number', description: 'Chat ID where the task result will be saved and sent (ai_instruction only). If not specified — the active chat is used.' },
-          create_new_chat: { type: 'boolean', description: 'Create a new chat for the task result (ai_instruction only). If true — a new chat will be created. target_chat_id is ignored.' },
+          target_mode: { type: 'string', enum: ['current_chat', 'new_chat', 'id'], description: 'Where the task result is delivered. current_chat (default) - the user active chat at run time (rooms are refused with a user notification). new_chat - a fresh personal chat is created on every run. id - the exact chat from target_chat_id.' },
+          target_chat_id: { type: 'number', description: 'Chat ID for target_mode=id ONLY. Must be the user\'s own personal chat — shared rooms and other users\' chats are forbidden (the tool will return an error).' },
           recurrence_type: { type: 'string', enum: ['once', 'daily', 'weekly'], description: 'Schedule type: once - one time, daily - every day, weekly - every week.' },
           recurrence_weekday: { type: 'number', description: 'Day of week for weekly: 1=Monday ... 7=Sunday.' },
           notify_mode: { type: 'string', enum: ['always', 'never', 'on_match', 'on_condition'], description: 'Notification mode: always - always report the result, never - never report, on_match - report only if result contains notify_condition as substring, on_condition - AI will check the notify_condition and decide whether to send a notification.' },
@@ -2230,6 +2267,30 @@ export const toolDefinitions = [
           status: { type: 'string', enum: ['pending', 'done', 'error', 'all'], description: 'Filter by task status.' },
           limit: { type: 'number', description: 'How many tasks to return, from 1 to 50.' }
         }
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'update_my_task',
+      description: 'Edits an ACTIVE (pending) task of the current user by exact ID: reschedule, change text, recurrence, notifications or delivery target. Use it instead of delete+recreate when the user asks to move/change an existing reminder or task. Returns the updated task list.',
+      parameters: {
+        type: 'object',
+        properties: {
+          task_id: { type: 'number', description: 'Task ID to edit.' },
+          local_time: { type: 'string', description: 'New user local time in HH:MM format, e.g. 02:07.' },
+          delay_seconds: { type: 'number', description: 'New delay in seconds from now.' },
+          execute_at: { type: 'number', description: 'Legacy field: new Unix timestamp in seconds.' },
+          payload: { type: 'string', description: 'New task text/instruction (same format as in schedule_task).' },
+          recurrence_type: { type: 'string', enum: ['once', 'daily', 'weekly'], description: 'New schedule type.' },
+          recurrence_weekday: { type: 'number', description: 'Day of week for weekly: 1=Monday ... 7=Sunday.' },
+          notify_mode: { type: 'string', enum: ['always', 'never', 'on_match', 'on_condition'], description: 'New notification mode.' },
+          notify_condition: { type: 'string', description: 'Condition for notify_mode=on_match/on_condition.' },
+          target_mode: { type: 'string', enum: ['current_chat', 'new_chat', 'id'], description: 'New delivery target mode (see schedule_task).' },
+          target_chat_id: { type: 'number', description: 'Chat ID for target_mode=id ONLY (own personal chat, rooms forbidden).' }
+        },
+        required: ['task_id']
       }
     }
   },
@@ -4096,26 +4157,6 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     let payload = `${parsed.payload || ''}`.trim();
     if (!payload) return 'Error: payload_required';
 
-    // Для ai_instruction: упаковываем target_chat_id / create_new_chat в payload JSON
-    if (taskType === 'ai_instruction') {
-      const targetChatId = Number.isFinite(Number(parsed.target_chat_id)) ? Math.floor(Number(parsed.target_chat_id)) : null;
-      const createNewChat = parsed.create_new_chat === true;
-      if (targetChatId !== null || createNewChat) {
-        try {
-          const payloadObj = JSON.parse(payload);
-          if (targetChatId !== null) payloadObj._target_chat_id = targetChatId;
-          if (createNewChat) payloadObj._create_new_chat = true;
-          payload = JSON.stringify(payloadObj);
-        } catch {
-          // payload — не JSON, оборачиваем
-          const payloadObj: Record<string, unknown> = { instruction: payload };
-          if (targetChatId !== null) payloadObj._target_chat_id = targetChatId;
-          if (createNewChat) payloadObj._create_new_chat = true;
-          payload = JSON.stringify(payloadObj);
-        }
-      }
-    }
-
     const recurrenceType = `${parsed.recurrence_type || 'once'}` as TaskRecurrenceType;
     if (!['once', 'daily', 'weekly'].includes(recurrenceType)) return 'Error: Invalid recurrence_type';
 
@@ -4127,6 +4168,9 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     const notifyCondition = parsed.notify_condition == null ? null : `${parsed.notify_condition}`.trim();
     if ((notifyMode === 'on_match' || notifyMode === 'on_condition') && !notifyCondition) return 'Error: For notify_mode=on_match/on_condition, specify notify_condition.';
 
+    const target = resolveTaskTargetArgs(user.id, parsed);
+    if (target.ok === false) return target.error;
+
     if (getPendingTaskCount(user.id) >= MAX_PENDING_TASKS_PER_USER) {
       return `Active task limit: ${MAX_PENDING_TASKS_PER_USER}. Remove extras via delete_my_task or /task_delete <id>.`;
     }
@@ -4134,10 +4178,101 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     if (taskType === 'smart_home') payload = JSON.stringify(JSON.parse(payload) as SmartHomeArgs);
 
     const executeAt = computeExecuteAtFromScheduleArgs(parsed, timezoneOffset, recurrenceType, recurrenceWeekday);
-    createTask(user.id, executeAt, taskType, payload, recurrenceType, recurrenceType === 'weekly' ? recurrenceWeekday : null, timezoneOffset, notifyMode, (notifyMode === 'on_match' || notifyMode === 'on_condition') ? notifyCondition : null);
+    createTask(
+      user.id, executeAt, taskType, payload,
+      recurrenceType, recurrenceType === 'weekly' ? recurrenceWeekday : null, timezoneOffset,
+      notifyMode, (notifyMode === 'on_match' || notifyMode === 'on_condition') ? notifyCondition : null,
+      target.targetMode, target.targetChatId,
+    );
     const planned = formatUnixForTimezone(executeAt, timezoneOffset);
     const notifyInfo = (notifyMode === 'on_match' || notifyMode === 'on_condition') ? `${notifyMode} (${notifyCondition})` : notifyMode;
-    return `Successfully scheduled. Next run: ${planned.local} (${planned.tzLabel}). UTC time: ${planned.utc}. Schedule type: ${recurrenceType}. Notification mode: ${notifyInfo}.`;
+    return `Successfully scheduled. Next run: ${planned.local} (${planned.tzLabel}). UTC time: ${planned.utc}. Schedule type: ${recurrenceType}. Delivery target: ${target.targetMode === 'id' ? `chat #${target.targetChatId}` : target.targetMode}. Notification mode: ${notifyInfo}.`;
+  }
+
+  if (toolName === 'update_my_task') {
+    const taskId = Number(parsed.task_id);
+    if (!Number.isFinite(taskId) || taskId <= 0) return 'Error: Invalid task_id';
+    const normalizedTaskId = Math.floor(taskId);
+
+    const task = getUserTaskById(user.id, normalizedTaskId);
+    if (!task) return `Tool error update_my_task: Task #${normalizedTaskId} not found.`;
+    if (task.status !== 'pending') return `Tool error update_my_task: Task #${normalizedTaskId} is no longer active (status: ${task.status}). Only pending tasks can be edited.`;
+
+    const fields: Parameters<typeof updatePendingTask>[2] = {};
+
+    // New execution time — only when a time argument is provided.
+    const hasTimeArg = (typeof parsed.local_time === 'string' && parsed.local_time.trim())
+      || (typeof parsed.delay_seconds === 'number' && Number.isFinite(parsed.delay_seconds))
+      || (typeof parsed.execute_at === 'number' && Number.isFinite(parsed.execute_at) && parsed.execute_at > 0);
+    if (hasTimeArg) {
+      if (user.timezone_confirmed !== 1) return 'Scheduling error: timezone is not configured. Ask the user to name a city/country or specify a UTC offset, then call set_user_timezone.';
+      const effectiveRecurrence = `${parsed.recurrence_type || task.recurrence_type}` as TaskRecurrenceType;
+      const effectiveWeekday = Number.isFinite(Number(parsed.recurrence_weekday))
+        ? Math.floor(Number(parsed.recurrence_weekday))
+        : task.recurrence_weekday;
+      const effectiveOffset = task.timezone_offset ?? timezoneOffset;
+      fields.execute_at = computeExecuteAtFromScheduleArgs(parsed, effectiveOffset, effectiveRecurrence, effectiveWeekday);
+      fields.timezone_offset = effectiveOffset;
+    }
+
+    // Recurrence.
+    if (parsed.recurrence_type !== undefined) {
+      const recurrenceType = `${parsed.recurrence_type}` as TaskRecurrenceType;
+      if (!['once', 'daily', 'weekly'].includes(recurrenceType)) return 'Error: Invalid recurrence_type';
+      fields.recurrence_type = recurrenceType;
+      const effectiveWeekday = Number.isFinite(Number(parsed.recurrence_weekday))
+        ? Math.floor(Number(parsed.recurrence_weekday))
+        : task.recurrence_weekday;
+      if (recurrenceType === 'weekly' && (!effectiveWeekday || effectiveWeekday < 1 || effectiveWeekday > 7)) {
+        return 'Error: For weekly, specify recurrence_weekday from 1 to 7 (1=Monday).';
+      }
+      fields.recurrence_weekday = recurrenceType === 'weekly' ? effectiveWeekday : null;
+    } else if (Number.isFinite(Number(parsed.recurrence_weekday))) {
+      fields.recurrence_weekday = Math.floor(Number(parsed.recurrence_weekday));
+    }
+
+    // Payload text.
+    if (parsed.payload !== undefined) {
+      let payload = `${parsed.payload || ''}`.trim();
+      if (!payload) return 'Error: payload_required';
+      const effectiveType = `${parsed.task_type || task.task_type}` as TaskType;
+      if (effectiveType === 'smart_home') {
+        try {
+          payload = JSON.stringify(JSON.parse(payload) as SmartHomeArgs);
+        } catch {
+          return 'Error: For smart_home tasks payload must be a JSON string.';
+        }
+      }
+      fields.payload = payload;
+    }
+
+    // Notifications.
+    if (parsed.notify_mode !== undefined) {
+      const notifyMode = `${parsed.notify_mode}` as TaskNotifyMode;
+      if (!['always', 'never', 'on_match', 'on_condition'].includes(notifyMode)) return 'Error: Invalid notify_mode';
+      const notifyCondition = parsed.notify_condition === undefined
+        ? task.notify_condition
+        : (parsed.notify_condition == null ? null : `${parsed.notify_condition}`.trim());
+      if ((notifyMode === 'on_match' || notifyMode === 'on_condition') && !notifyCondition) return 'Error: For notify_mode=on_match/on_condition, specify notify_condition.';
+      fields.notify_mode = notifyMode;
+      fields.notify_condition = (notifyMode === 'on_match' || notifyMode === 'on_condition') ? notifyCondition : null;
+    } else if (parsed.notify_condition !== undefined) {
+      fields.notify_condition = parsed.notify_condition == null ? null : `${parsed.notify_condition}`.trim();
+    }
+
+    // Delivery target.
+    if (parsed.target_mode !== undefined || parsed.target_chat_id !== undefined) {
+      const target = resolveTaskTargetArgs(user.id, parsed);
+      if (target.ok === false) return target.error;
+      fields.target_mode = target.targetMode;
+      fields.target_chat_id = target.targetChatId;
+    }
+
+    const ok = updatePendingTask(user.id, normalizedTaskId, fields);
+    if (!ok) return `Tool error update_my_task: Failed to update task #${normalizedTaskId}.`;
+
+    const updated = listTasks(user.id, 20, 'pending');
+    return `Task #${normalizedTaskId} updated.\n\nUpdated active task list (${updated.length}/${MAX_PENDING_TASKS_PER_USER}):\n${formatTasksList(updated, timezoneOffset, 'No more active tasks.')}`;
   }
 
   if (toolName === 'delete_my_task') {
@@ -7841,6 +7976,7 @@ export const sendMessageThroughAi = async (
     disabledToolSet.add('list_my_macros');
     disabledToolSet.add('send_email');
     disabledToolSet.add('schedule_task');
+    disabledToolSet.add('update_my_task');
     disabledToolSet.add('delete_my_task');
   }
   // Full block: all desktop + control
@@ -7863,6 +7999,7 @@ export const sendMessageThroughAi = async (
     disabledToolSet.add('list_my_macros');
     disabledToolSet.add('send_email');
     disabledToolSet.add('schedule_task');
+    disabledToolSet.add('update_my_task');
     disabledToolSet.add('delete_my_task');
     // Plus read-only desktop
     disabledToolSet.add('control_smart_home');
@@ -7907,6 +8044,7 @@ export const sendMessageThroughAi = async (
     disabledToolSet.add('delete_note');
     disabledToolSet.add('schedule_task');
     disabledToolSet.add('get_my_tasks');
+    disabledToolSet.add('update_my_task');
     disabledToolSet.add('delete_my_task');
   }
   if (flags?.disable_specialized_subagents) {

@@ -10,7 +10,7 @@ import { wsClients, registerWsClient, unregisterWsClient, isDesktopOnline, sendI
 import { adminMiddleware, authMiddleware, issueAuthTokens, makePasswordHash, refreshAccessToken, validateTelegramInitData, verifyPassword, verifyToken, verifyTokenIgnoreExpiry, type AuthedRequest } from './auth.js';
 import { activateUserChat, bindChatMessageTelegramMeta, clearAllUserMessages, clearUserChatMessages, countUserChats, createPasswordAccount, createOrUpdateUserForApiRegistration, createUserChat, deleteUserHistoryByRole, deleteUserHistoryMessage, ensureActiveChat, forkChat, getPasswordAccountByLogin, getChatMessages, getChatMedia, getAllUserMedia, getRecentUserHistory, getUserById, getUserChatById, getUserChatListItem, listUserChats, upsertUserFromTelegram, setUserTimezone, updateUserPrompt, selectUserCustomPrompt, updateUserCustomPrompt, resetUsersPromptIfDeleted, resetDailyMessageCounters, upsertTelegramUser, createPendingTelegramUser, updateUserStatus, updateUserRole, updateUserName, updateUserTelegramUsername, removeUser, getAllUsers, getUsersCount, getUsersPage, getPendingUsersCount, getPendingUsersPage, getBannedUsersCount, getBannedUsersPage, syncAllUsersPlanLimits, resetUserWeeklyUsage, resetAllUsersWeeklyUsage, updateUserWeeklyCostQuota, revokeUserAuthTokens, generateLinkCode, verifyLinkCode, getLinkCodeForUser, generatePasswordResetCode, verifyPasswordResetCode, signPasswordResetToken, verifyPasswordResetToken, adminApplyGeneratedPassword, renameUserChat, deleteUserChat, deleteUserMessage, editUserMessage, searchUserChats, updateChatMessageAudio, getChatContextTokens, resolveMaxContextTokens, updateUserMaxContextTokens, getChatAttachments, deleteMessageAttachment, deleteMessageImage, resolveAttachmentMaxTokens, updateUserAttachmentMaxTokens, setChatBotHidden, listChatFolders, createChatFolder, renameChatFolder, deleteChatFolder, moveUserChatToFolder, listChatFilterOptions } from './services/chats.js';
 import { createNote, countNotes, deleteNote, getNoteById, getNoteStats, getNoteStatsForUsers, listNotes, updateNoteContent } from './services/notes.js';
-import { createTask, deletePendingTask, getUserTaskById, listTasks } from './services/tasks.js';
+import { createTask, deletePendingTask, getPendingTaskCount, getUserTaskById, isOwnNonRoomChat, listTasks, MAX_PENDING_TASKS_PER_USER, updatePendingTask } from './services/tasks.js';
 import { listMapPins, getMapPinById, createMapPin, updateMapPin, deleteMapPin } from './services/map-pins.js';
 import { sendMessageThroughAi, generateAdminOutreach, callLiteAi, ensureUtilityAiQuota, chargeUtilityAiCompletion, getModelsCatalog, getAutoReasoningLevels, getAutoVisionSupport, abortChatGeneration, abortUserGenerations, beginActiveHitlWait, endActiveHitlWait, getUpdateState, setUpdatePrepare, forceAbortActiveGenerations, clearUpdatePrepare, resolveManualModel } from './services/ai.js';
 import { initSubagentRunner } from './services/subagents/runner.js';
@@ -2760,26 +2760,163 @@ app.get('/api/v1/tasks', (req: AuthedRequest, res) => {
   res.json({ tasks });
 });
 
+// Shared task-field validation for the HTTP API (mirrors the schedule_task
+// tool rules). Returns either the validated fields or an error response code.
+const validateTaskFields = (
+  userId: number,
+  body: Record<string, any>,
+  opts: { requireAll: boolean }
+): { ok: true; fields: Record<string, any> } | { ok: false; error: string } => {
+  const taskType = `${body.task_type || ''}`;
+  if (opts.requireAll && !['message', 'smart_home', 'ai_instruction'].includes(taskType)) return { ok: false, error: 'bad_task_type' };
+  if (body.task_type !== undefined && !['message', 'smart_home', 'ai_instruction'].includes(`${body.task_type}`)) return { ok: false, error: 'bad_task_type' };
+
+  const recurrenceType = `${body.recurrence_type || 'once'}`;
+  if (!['once', 'daily', 'weekly'].includes(recurrenceType)) return { ok: false, error: 'bad_recurrence_type' };
+
+  const recurrenceWeekday = Number.isFinite(Number(body.recurrence_weekday))
+    ? Math.floor(Number(body.recurrence_weekday))
+    : null;
+  if (recurrenceType === 'weekly' && (!recurrenceWeekday || recurrenceWeekday < 1 || recurrenceWeekday > 7)) {
+    return { ok: false, error: 'bad_recurrence_weekday' };
+  }
+
+  const notifyMode = `${body.notify_mode || 'always'}`;
+  if (!['always', 'never', 'on_match', 'on_condition'].includes(notifyMode)) return { ok: false, error: 'bad_notify_mode' };
+  const notifyCondition = body.notify_condition == null ? null : `${body.notify_condition}`.trim();
+  if ((notifyMode === 'on_match' || notifyMode === 'on_condition') && !notifyCondition) return { ok: false, error: 'notify_condition_required' };
+
+  const targetMode = `${body.target_mode || 'current_chat'}`;
+  if (!['id', 'current_chat', 'new_chat'].includes(targetMode)) return { ok: false, error: 'bad_target_mode' };
+  let targetChatId: number | null = null;
+  if (targetMode !== 'id') {
+    if (body.target_chat_id !== undefined && body.target_chat_id !== null) return { ok: false, error: 'target_chat_id_requires_id_mode' };
+  } else {
+    const rawChatId = Number(body.target_chat_id);
+    if (!Number.isFinite(rawChatId) || Math.floor(rawChatId) <= 0) return { ok: false, error: 'bad_target_chat_id' };
+    targetChatId = Math.floor(rawChatId);
+    if (!isOwnNonRoomChat(userId, targetChatId)) return { ok: false, error: 'target_chat_forbidden' };
+  }
+
+  let payload: string | null = null;
+  if (body.payload !== undefined) {
+    payload = `${body.payload || ''}`.trim();
+    if (!payload) return { ok: false, error: 'payload_required' };
+    const effectiveType = `${body.task_type || 'message'}`;
+    if (effectiveType === 'smart_home') {
+      try {
+        payload = JSON.stringify(JSON.parse(payload));
+      } catch {
+        return { ok: false, error: 'bad_smart_home_payload' };
+      }
+    }
+  } else if (opts.requireAll) {
+    return { ok: false, error: 'payload_required' };
+  }
+
+  let executeAt: number | null = null;
+  if (body.execute_at !== undefined) {
+    executeAt = Number(body.execute_at);
+    if (!Number.isFinite(executeAt) || executeAt <= 0) return { ok: false, error: 'bad_execute_at' };
+    executeAt = Math.floor(executeAt);
+  } else if (opts.requireAll) {
+    return { ok: false, error: 'bad_execute_at' };
+  }
+
+  return {
+    ok: true,
+    fields: {
+      task_type: taskType,
+      payload,
+      execute_at: executeAt,
+      recurrence_type: recurrenceType,
+      recurrence_weekday: recurrenceType === 'weekly' ? recurrenceWeekday : null,
+      notify_mode: notifyMode,
+      notify_condition: (notifyMode === 'on_match' || notifyMode === 'on_condition') ? notifyCondition : null,
+      target_mode: targetMode,
+      target_chat_id: targetChatId,
+    },
+  };
+};
+
 app.post('/api/v1/tasks', (req: AuthedRequest, res) => {
   const userId = accountIdFromRequest(req);
-  const executeAt = Number(req.body?.execute_at);
-  const taskType = `${req.body?.task_type || ''}` as any;
-  const payload = `${req.body?.payload || ''}`;
-  const recurrenceType = `${req.body?.recurrence_type || 'once'}` as any;
-  const recurrenceWeekday = Number.isFinite(Number(req.body?.recurrence_weekday))
-    ? Math.floor(Number(req.body?.recurrence_weekday))
-    : null;
   const timezoneOffset = Number.isFinite(Number(req.body?.timezone_offset))
-    ? Math.round(Number(req.body?.timezone_offset) * 4) / 4
+    ? Math.round(Number(req.body.timezone_offset) * 4) / 4
     : null;
-  const notifyMode = `${req.body?.notify_mode || 'always'}` as any;
-  const notifyCondition = req.body?.notify_condition == null ? null : `${req.body.notify_condition}`;
 
-  if (!Number.isFinite(executeAt) || executeAt <= 0) return res.status(400).json({ error: 'bad_execute_at' });
-  if (!payload.trim()) return res.status(400).json({ error: 'payload_required' });
+  const validated = validateTaskFields(userId, req.body ?? {}, { requireAll: true });
+  if (validated.ok === false) return res.status(400).json({ error: validated.error });
 
-  const taskId = createTask(userId, Math.floor(executeAt), taskType, payload, recurrenceType, recurrenceWeekday, timezoneOffset, notifyMode, notifyCondition);
-  return res.status(201).json({ task_id: taskId });
+  if (getPendingTaskCount(userId) >= MAX_PENDING_TASKS_PER_USER) {
+    return res.status(429).json({ error: 'pending_task_limit', limit: MAX_PENDING_TASKS_PER_USER });
+  }
+
+  const f = validated.fields;
+  const taskId = createTask(
+    userId, f.execute_at, f.task_type, f.payload,
+    f.recurrence_type, f.recurrence_weekday, timezoneOffset,
+    f.notify_mode, f.notify_condition,
+    f.target_mode, f.target_chat_id,
+  );
+  return res.status(201).json({ task_id: taskId, task: getUserTaskById(userId, taskId) });
+});
+
+app.put('/api/v1/tasks/:id', (req: AuthedRequest, res) => {
+  const userId = accountIdFromRequest(req);
+  const taskId = Number.parseInt(req.params.id, 10);
+  if (!Number.isFinite(taskId) || taskId <= 0) return res.status(400).json({ error: 'bad_task_id' });
+
+  const existing = getUserTaskById(userId, taskId);
+  if (!existing) return res.status(404).json({ error: 'task_not_found' });
+  if (existing.status !== 'pending') return res.status(409).json({ error: 'task_not_pending' });
+
+  const body = req.body ?? {};
+  // Merge the patch over the current task so validators see effective values.
+  const merged = {
+    task_type: body.task_type ?? existing.task_type,
+    payload: body.payload !== undefined ? body.payload : undefined,
+    execute_at: body.execute_at ?? existing.execute_at,
+    recurrence_type: body.recurrence_type ?? existing.recurrence_type,
+    recurrence_weekday: body.recurrence_weekday !== undefined
+      ? body.recurrence_weekday
+      : (existing.recurrence_type === 'weekly' ? existing.recurrence_weekday : null),
+    notify_mode: body.notify_mode ?? existing.notify_mode,
+    notify_condition: body.notify_condition !== undefined ? body.notify_condition : existing.notify_condition,
+    target_mode: body.target_mode ?? existing.target_mode,
+    target_chat_id: body.target_chat_id !== undefined ? body.target_chat_id : existing.target_chat_id,
+  };
+  const validated = validateTaskFields(userId, merged, { requireAll: false });
+  if (validated.ok === false) return res.status(400).json({ error: validated.error });
+
+  const f = validated.fields;
+  const fields: Parameters<typeof updatePendingTask>[2] = {};
+  if (body.execute_at !== undefined) fields.execute_at = f.execute_at;
+  if (body.task_type !== undefined) fields.task_type = f.task_type;
+  if (body.payload !== undefined) fields.payload = f.payload;
+  if (body.recurrence_type !== undefined) {
+    fields.recurrence_type = f.recurrence_type;
+    fields.recurrence_weekday = f.recurrence_weekday;
+  } else if (body.recurrence_weekday !== undefined) {
+    fields.recurrence_weekday = f.recurrence_weekday;
+  }
+  if (body.notify_mode !== undefined) {
+    fields.notify_mode = f.notify_mode;
+    fields.notify_condition = f.notify_condition;
+  } else if (body.notify_condition !== undefined) {
+    fields.notify_condition = f.notify_condition;
+  }
+  if (body.timezone_offset !== undefined && Number.isFinite(Number(body.timezone_offset))) {
+    fields.timezone_offset = Math.round(Number(body.timezone_offset) * 4) / 4;
+  }
+  if (body.target_mode !== undefined || body.target_chat_id !== undefined) {
+    fields.target_mode = f.target_mode;
+    fields.target_chat_id = f.target_chat_id;
+  }
+
+  const ok = updatePendingTask(userId, taskId, fields);
+  if (!ok) return res.status(409).json({ error: 'task_not_pending' });
+  return res.json({ ok: true, task: getUserTaskById(userId, taskId) });
 });
 
 app.delete('/api/v1/tasks/:id', (req: AuthedRequest, res) => {

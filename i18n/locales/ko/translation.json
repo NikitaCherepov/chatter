@@ -191,7 +191,13 @@
     "notActive": "작업 #{{id}}이(가) 더 이상 활성 상태가 아닙니다 (상태: {{status}}).",
     "deleteError": "작업 #{{id}} 삭제에 실패했습니다.",
     "deleted": "작업 #{{id}}이(가) 삭제되었습니다.\n\n현재 작업 ({{count}}/{{max}}):\n\n{{tasks}}",
-    "item": "#{{id}} | {{type}} | {{status}}\n시간: {{localTime}} ({{timezone}})\nUTC 시간: {{utcTime}} UTC\n일정: {{recurrence}}\n알림: {{notify}}\n데이터: {{payload}}",
+    "item": "#{{id}} | {{type}} | {{status}}\n시간: {{localTime}} ({{timezone}})\nUTC 시간: {{utcTime}} UTC\n일정: {{recurrence}}\n전달: {{target}}\n알림: {{notify}}\n데이터: {{payload}}",
+    "target": {
+      "chat": "쇱 #{{id}} “{{title}}”",
+      "chatNoTitle": "쇱 #{{id}}",
+      "currentChat": "현재 쇱 (실행 시점의 활성 쇱)",
+      "newChat": "새 쇱 (실행할 때마다 생성)"
+    },
     "recurrence": {
       "once": "한 번",
       "daily": "매일",

@@ -4,6 +4,7 @@ export type TaskStatus = 'pending' | 'done' | 'error';
 export type TaskType = 'message' | 'smart_home' | 'ai_instruction';
 export type TaskRecurrenceType = 'once' | 'daily' | 'weekly';
 export type TaskNotifyMode = 'always' | 'never' | 'on_match' | 'on_condition';
+export type TaskTargetMode = 'id' | 'current_chat' | 'new_chat';
 
 export type UserRecord = {
   id: number;
@@ -186,6 +187,9 @@ export type TaskDto = {
   timezone_offset: number | null;
   notify_mode: TaskNotifyMode;
   notify_condition: string | null;
+  target_mode: TaskTargetMode;
+  target_chat_id: number | null;
+  target_chat_title?: string | null;
 };
 
 export type UsageDto = {

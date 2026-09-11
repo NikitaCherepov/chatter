@@ -191,7 +191,13 @@
     "notActive": "Tarefa #{{id}} não está mais ativa (status: {{status}}).",
     "deleteError": "Falha ao excluir tarefa #{{id}}.",
     "deleted": "Tarefa #{{id}} excluída.\n\nTarefas atuais ({{count}}/{{max}}):\n\n{{tasks}}",
-    "item": "#{{id}} | {{type}} | {{status}}\nQuando: {{localTime}} ({{timezone}})\nQuando (UTC): {{utcTime}} UTC\nAgenda: {{recurrence}}\nNotificações: {{notify}}\nDados: {{payload}}",
+    "item": "#{{id}} | {{type}} | {{status}}\nQuando: {{localTime}} ({{timezone}})\nQuando (UTC): {{utcTime}} UTC\nAgenda: {{recurrence}}\nEntrega: {{target}}\nNotificações: {{notify}}\nDados: {{payload}}",
+    "target": {
+      "chat": "Chat #{{id}} «{{title}}»",
+      "chatNoTitle": "Chat #{{id}}",
+      "currentChat": "Chat atual (ativo no momento da execução)",
+      "newChat": "Novo chat (criado a cada execução)"
+    },
     "recurrence": {
       "once": "Uma vez",
       "daily": "Todos os dias",

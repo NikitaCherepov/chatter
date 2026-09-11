@@ -151,6 +151,14 @@
   padding-left: 13px;
 }
 
+.taskItemTags {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  overflow: hidden;
+}
+
 .taskItemActions {
   display: flex;
   align-items: center;
@@ -163,6 +171,9 @@
   background-color: var(--bg-bubble);
   padding: 2px 6px;
   border-radius: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .taskItemId {

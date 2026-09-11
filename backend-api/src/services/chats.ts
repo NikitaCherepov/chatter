@@ -108,12 +108,21 @@ export const getUserChatById = (userId: number, chatId: number) => db.prepare(`
 export const ensureActiveChat = (userId: number) => {
   const user = db.prepare('SELECT active_chat_id, language FROM users WHERE id = ?').get(userId) as { active_chat_id: number | null; language: string | null } | undefined;
 
+  // The active chat may be a shared room the user joined as a member — validate
+  // via ownership OR membership, and never rewrite a still-valid selection.
   if (user?.active_chat_id) {
-    const exists = db.prepare('SELECT id FROM user_chats WHERE user_id = ? AND id = ?').get(userId, user.active_chat_id) as { id: number } | undefined;
-    if (exists) return exists.id;
+    if (canReadChatMessages(userId, user.active_chat_id)) return user.active_chat_id;
   }
 
-  const firstChat = db.prepare('SELECT id FROM user_chats WHERE user_id = ? ORDER BY id ASC LIMIT 1').get(userId) as { id: number } | undefined;
+  // First accessible chat: owned or joined room.
+  const firstChat = db.prepare(`
+    SELECT uc.id
+    FROM user_chats uc
+    WHERE uc.user_id = ?
+       OR EXISTS (SELECT 1 FROM chat_members cm WHERE cm.chat_id = uc.id AND cm.user_id = ?)
+    ORDER BY uc.id ASC
+    LIMIT 1
+  `).get(userId, userId) as { id: number } | undefined;
   const chatId = firstChat?.id ?? createUserChat(userId, '');
   db.prepare('UPDATE users SET active_chat_id = ? WHERE id = ?').run(chatId, userId);
   return chatId;

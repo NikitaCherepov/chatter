@@ -191,7 +191,13 @@
     "notActive": "Úkol #{{id}} již není aktivní (stav: {{status}}).",
     "deleteError": "Nepodařilo se smazat úlohu #{{id}}.",
     "deleted": "Smazána úloha #{{id}}.\n\nAktuální úlohy ({{count}}/{{max}}):\n\n{{tasks}}",
-    "item": "#{{id}} | {{type}} | {{status}}\nKdy: {{localTime}} ({{timezone}})\nKdy (UTC): {{utcTime}} UTC\nPlán: {{recurrence}}\nOznámení: {{notify}}\nData: {{payload}}",
+    "item": "#{{id}} | {{type}} | {{status}}\nKdy: {{localTime}} ({{timezone}})\nKdy (UTC): {{utcTime}} UTC\nPlán: {{recurrence}}\nDoručení: {{target}}\nOznámení: {{notify}}\nData: {{payload}}",
+    "target": {
+      "chat": "Chat #{{id}} „{{title}}“",
+      "chatNoTitle": "Chat #{{id}}",
+      "currentChat": "Aktuální chat (aktivní v okamžiku spuštění)",
+      "newChat": "Nový chat (vytvořen při každém spuštění)"
+    },
     "recurrence": {
       "once": "Jednou",
       "daily": "Každý den",

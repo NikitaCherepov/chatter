@@ -191,7 +191,13 @@
     "notActive": "L'attività #{{id}} non è più attiva (stato: {{status}}).",
     "deleteError": "Impossibile eliminare l'attività #{{id}}.",
     "deleted": "Attività #{{id}} eliminata.\n\nAttività correnti ({{count}}/{{max}}):\n\n{{tasks}}",
-    "item": "#{{id}} | {{type}} | {{status}}\nQuando: {{localTime}} ({{timezone}})\nQuando (UTC): {{utcTime}} UTC\nProgrammazione: {{recurrence}}\nNotifiche: {{notify}}\nDati: {{payload}}",
+    "item": "#{{id}} | {{type}} | {{status}}\nQuando: {{localTime}} ({{timezone}})\nQuando (UTC): {{utcTime}} UTC\nProgrammazione: {{recurrence}}\nConsegna: {{target}}\nNotifiche: {{notify}}\nDati: {{payload}}",
+    "target": {
+      "chat": "Chat #{{id}} «{{title}}»",
+      "chatNoTitle": "Chat #{{id}}",
+      "currentChat": "Chat attuale (attivo al momento dell'esecuzione)",
+      "newChat": "Nuova chat (creata a ogni esecuzione)"
+    },
     "recurrence": {
       "once": "Una volta",
       "daily": "Ogni giorno",

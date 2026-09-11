@@ -46,7 +46,8 @@ export function TasksTool() {
   const preview = (task: api.TaskDto, max = 140) => {
     const raw = (task.payload || '').trim();
 
-    // ai_instruction: payload may be JSON with metadata
+    // ai_instruction: payload is plain instruction text; tolerate any
+    // pre-migration JSON wrapper that may have slipped through.
     if (task.task_type === 'ai_instruction') {
       try {
         const parsed = JSON.parse(raw);
@@ -54,13 +55,7 @@ export function TasksTool() {
           const instruction = typeof parsed.instruction === 'string'
             ? parsed.instruction
             : (typeof parsed._instruction === 'string' ? parsed._instruction : '');
-          const createNewChat = parsed._create_new_chat === true;
-          const targetChatId = Number.isFinite(Number(parsed._target_chat_id)) ? Math.floor(Number(parsed._target_chat_id)) : null;
-          const parts: string[] = [];
-          if (instruction) parts.push(instruction.replace(/\s+/g, ' ').trim());
-          if (createNewChat) parts.push(t('tools.tasks.newChat'));
-          if (targetChatId) parts.push(`→ чат #${targetChatId}`);
-          const text = parts.join(' · ');
+          const text = instruction.replace(/\s+/g, ' ').trim();
           if (!text) return t('tools.tasks.noDescription');
           return text.length <= max ? text : text.slice(0, max) + '…';
         }
@@ -113,6 +108,16 @@ export function TasksTool() {
       case 'done': return s.dotDone;
       case 'error': return s.dotError;
     }
+  };
+
+  const targetLabel = (task: api.TaskDto) => {
+    if (task.target_mode === 'new_chat') return t('tools.tasks.newChat');
+    if (task.target_mode === 'id' && task.target_chat_id) {
+      return task.target_chat_title
+        ? t('tools.tasks.toChatTitled', { title: task.target_chat_title })
+        : t('tools.tasks.toChat', { id: task.target_chat_id });
+    }
+    return t('tools.tasks.currentChat');
   };
 
   const handleDelete = async (taskId: number) => {
@@ -171,9 +176,12 @@ export function TasksTool() {
                 </div>
                 <div className={s.taskItemPreview}>{preview(task)}</div>
                 <div className={s.taskItemMeta}>
-                  <span className={s.taskItemRecurrence}>
-                    {recurrenceLabels[task.recurrence_type] || task.recurrence_type}
-                  </span>
+                  <div className={s.taskItemTags}>
+                    <span className={s.taskItemRecurrence}>
+                      {recurrenceLabels[task.recurrence_type] || task.recurrence_type}
+                    </span>
+                    <span className={s.taskItemRecurrence}>{targetLabel(task)}</span>
+                  </div>
                   <div className={s.taskItemActions}>
                     <span className={s.taskItemId}>#{task.id}</span>
                     <button

@@ -1,8 +1,8 @@
 import OpenAI from 'openai';
-import type { TaskRecurrenceType } from '../types.js';
+import type { TaskDto, TaskRecurrenceType } from '../types.js';
 import { getUserById, ensureActiveChat, createChat, appendChatMessage } from './chats.js';
 import { runSmartHomeControl, type SmartHomeArgs } from './smart-home.js';
-import { getDueTasks, updateTaskNextExecution, updateTaskStatus } from './tasks.js';
+import { getDueTasks, updateTaskNextExecution, updateTaskStatus, updateTaskTargetChat } from './tasks.js';
 import { sendMessageThroughAi } from './ai.js';
 import { chargeTokens } from './token-quota.js';
 import { db } from '../db.js';
@@ -127,49 +127,82 @@ const computeNextRecurringExecuteAt = (
   return null;
 };
 
-const runScheduledAiInstructionTask = async (task: { user_id: number; payload: string }): Promise<{ reply_text: string; chat_id: number; is_new_chat: boolean }> => {
-  const rawPayload = task.payload.trim();
-  if (!rawPayload) return { reply_text: 'Не получилось выполнить AI-инструкцию: пустой payload задачи.', chat_id: 0, is_new_chat: false };
+// ── Task target routing ─────────────────────────────────────────────────────
+//
+// target_mode = 'id'           → deliver to the saved target_chat_id (own,
+//                                non-room chat). If the chat was deleted or
+//                                became a room, self-heal: create a fresh
+//                                personal chat and re-point the task.
+// target_mode = 'current_chat' → deliver to the user's active chat at run time.
+//                                Rooms are forbidden targets: if the active
+//                                chat is a room, skip delivery and notify.
+// target_mode = 'new_chat'     → create a fresh personal chat on every run.
 
-  // Parse payload: may contain _target_chat_id / _create_new_chat metadata
-  let instruction = rawPayload;
-  let targetChatId: number | null = null;
-  let createNewChat = false;
+type TaskChatResolution =
+  | { ok: true; chatId: number; isNewChat: boolean }
+  | { ok: false; reason: 'room' };
 
+const resolveTaskChat = (task: TaskDto & { user_id: number }, titleText: string): TaskChatResolution => {
+  if (task.target_mode === 'new_chat') {
+    const res = createChat(task.user_id, titleText.slice(0, 60));
+    return { ok: true, chatId: Number(res.lastInsertRowid), isNewChat: true };
+  }
+
+  if (task.target_mode === 'id' && task.target_chat_id) {
+    const chat = db.prepare('SELECT id, user_id, room_enabled FROM user_chats WHERE id = ?')
+      .get(task.target_chat_id) as { id: number; user_id: number; room_enabled: number } | undefined;
+    if (chat && chat.user_id === task.user_id && !chat.room_enabled) {
+      return { ok: true, chatId: chat.id, isNewChat: false };
+    }
+    // Self-healing: the saved target died or turned into a room — create a
+    // fresh personal chat, deliver there and re-point the task at it.
+    const res = createChat(task.user_id, titleText.slice(0, 60));
+    const chatId = Number(res.lastInsertRowid);
+    updateTaskTargetChat(task.id, chatId);
+    return { ok: true, chatId, isNewChat: true };
+  }
+
+  // current_chat (and the defensive fallback for inconsistent rows)
+  const activeChatId = ensureActiveChat(task.user_id);
+  const active = db.prepare('SELECT room_enabled FROM user_chats WHERE id = ?')
+    .get(activeChatId) as { room_enabled: number } | undefined;
+  if (active?.room_enabled) return { ok: false, reason: 'room' };
+  return { ok: true, chatId: activeChatId, isNewChat: false };
+};
+
+const notifyTaskRoomRefused = (task: TaskDto & { user_id: number }) => {
+  deliverTaskResult(
+    task.user_id,
+    `⚠️ Задача #${task.id} не доставлена: активный чат — общая комната, а доставка задач в комнаты запрещена. Переключись на личный чат, чтобы получать результаты.`,
+    0,
+    false,
+  );
+};
+
+/** Payload is plain instruction text since the target_mode migration; keep a
+ *  tolerant unwrap for any pre-migration JSON wrapper that may have slipped in. */
+const extractInstructionText = (payload: string): string => {
+  const raw = payload.trim();
   try {
-    const parsed = JSON.parse(rawPayload);
+    const parsed = JSON.parse(raw);
     if (parsed && typeof parsed === 'object') {
-      instruction = typeof parsed.instruction === 'string' ? parsed.instruction : (typeof parsed._instruction === 'string' ? parsed._instruction : rawPayload);
-      targetChatId = Number.isFinite(Number(parsed._target_chat_id)) ? Math.floor(Number(parsed._target_chat_id)) : null;
-      createNewChat = parsed._create_new_chat === true;
+      const inner = typeof parsed.instruction === 'string' ? parsed.instruction
+        : (typeof parsed._instruction === 'string' ? parsed._instruction : '');
+      if (inner.trim()) return inner.trim();
     }
   } catch {
-    // payload is plain text — use as-is
+    // plain text — use as-is
   }
+  return raw;
+};
 
-  instruction = instruction.trim();
-  if (!instruction) return { reply_text: 'Не получилось выполнить AI-инструкцию: пустая инструкция.', chat_id: 0, is_new_chat: false };
-
-  // Determine chat: create new, use specified, or fallback to active
-  let chatId: number | undefined;
-  let isNewChat = false;
-
-  if (createNewChat) {
-    const chatTitle = instruction.slice(0, 60);
-    const result = createChat(task.user_id, chatTitle);
-    chatId = Number(result.lastInsertRowid);
-    isNewChat = true;
-  } else if (targetChatId) {
-    // Verify chat belongs to user
-    const chat = db.prepare('SELECT id FROM user_chats WHERE user_id = ? AND id = ?').get(task.user_id, targetChatId) as { id: number } | undefined;
-    if (chat) {
-      chatId = chat.id;
-    }
-  }
-
-  if (!chatId) {
-    chatId = ensureActiveChat(task.user_id);
-  }
+const runScheduledAiInstructionTask = async (
+  task: { user_id: number; payload: string },
+  chatId: number,
+  isNewChat: boolean
+): Promise<{ reply_text: string; chat_id: number; is_new_chat: boolean }> => {
+  const instruction = extractInstructionText(task.payload);
+  if (!instruction) return { reply_text: 'Не получилось выполнить AI-инструкцию: пустая инструкция.', chat_id: chatId, is_new_chat: isNewChat };
 
   const result = await sendMessageThroughAi(task.user_id, `!!! ${instruction}`, chatId, {
     forcePro: true,
@@ -226,28 +259,57 @@ const shouldNotifyTaskResult = async (
   return false;
 };
 
+/**
+ * Finishes a task run. One-shot tasks are closed ('done' on success, 'error'
+ * on failure). Recurring tasks never die from a single failed delivery —
+ * the run is skipped and the next occurrence is scheduled as usual; only an
+ * inability to compute the next occurrence marks the task as broken.
+ */
+const finishTaskRun = (task: TaskDto & { user_id: number }, success: boolean) => {
+  if (task.recurrence_type === 'once') {
+    updateTaskStatus(task.id, success ? 'done' : 'error');
+    return;
+  }
+  const nextExecuteAt = computeNextRecurringExecuteAt(task);
+  if (!nextExecuteAt) {
+    console.error(`[backend-scheduler] cannot compute next run for recurring task #${task.id}, marking as error`);
+    updateTaskStatus(task.id, 'error');
+    return;
+  }
+  updateTaskNextExecution(task.id, nextExecuteAt);
+};
+
 const tick = async () => {
   const nowUnix = Math.floor(Date.now() / 1000);
   const pendingTasks = getDueTasks(nowUnix);
 
   for (const task of pendingTasks) {
     try {
+      // Resolve the destination chat first — rooms refuse delivery outright.
+      const titleText = task.task_type === 'ai_instruction'
+        ? extractInstructionText(task.payload)
+        : task.payload;
+      const target = resolveTaskChat(task, titleText);
+      if (!target.ok) {
+        notifyTaskRoomRefused(task);
+        finishTaskRun(task, false);
+        continue;
+      }
+
       let successMessage = '';
-      let chatId = 0;
-      let isNewChat = false;
+      let chatId = target.chatId;
+      let isNewChat = target.isNewChat;
 
       if (task.task_type === 'message') {
         successMessage = `🔔 *Напоминание:*\n\n${task.payload}`;
-        chatId = ensureActiveChat(task.user_id);
         await appendChatMessage(task.user_id, chatId, 'assistant', successMessage);
       } else if (task.task_type === 'smart_home') {
         const smartHomeArgs = JSON.parse(task.payload) as SmartHomeArgs;
         const result = await runSmartHomeControl(task.user_id, smartHomeArgs);
         successMessage = `🤖 *Автоматизация сработала:*\n${result}`;
-        chatId = ensureActiveChat(task.user_id);
         await appendChatMessage(task.user_id, chatId, 'assistant', successMessage);
       } else if (task.task_type === 'ai_instruction') {
-        const result = await runScheduledAiInstructionTask(task);
+        const result = await runScheduledAiInstructionTask(task, chatId, isNewChat);
         successMessage = result.reply_text ? `🤖 *Запланированная AI-инструкция выполнена:*\n\n${result.reply_text}` : '';
         chatId = result.chat_id;
         isNewChat = result.is_new_chat;
@@ -257,16 +319,10 @@ const tick = async () => {
         deliverTaskResult(task.user_id, successMessage, chatId, isNewChat);
       }
 
-      if (task.recurrence_type === 'once') {
-        updateTaskStatus(task.id, 'done');
-      } else {
-        const nextExecuteAt = computeNextRecurringExecuteAt(task);
-        if (!nextExecuteAt) throw new Error(`Не удалось вычислить следующий запуск для recurring-задачи #${task.id}`);
-        updateTaskNextExecution(task.id, nextExecuteAt);
-      }
+      finishTaskRun(task, true);
     } catch (err) {
       console.error(`[backend-scheduler] task #${task.id} failed:`, err);
-      updateTaskStatus(task.id, 'error');
+      finishTaskRun(task, false);
     }
   }
 };

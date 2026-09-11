@@ -210,6 +210,7 @@ type TaskStatus = 'pending' | 'done' | 'error';
 type TaskType = 'message' | 'smart_home' | 'ai_instruction';
 type TaskRecurrenceType = 'once' | 'daily' | 'weekly';
 type TaskNotifyMode = 'always' | 'never' | 'on_match' | 'on_condition';
+type TaskTargetMode = 'id' | 'current_chat' | 'new_chat';
 type TaskRecord = {
     id: number;
     user_id: number;
@@ -222,6 +223,9 @@ type TaskRecord = {
     timezone_offset: number | null;
     notify_mode: TaskNotifyMode;
     notify_condition: string | null;
+    target_mode: TaskTargetMode;
+    target_chat_id: number | null;
+    target_chat_title: string | null;
 };
 type PromptRecord = {
     id: number;
@@ -593,6 +597,16 @@ const formatUnixForTimezone = (unixSeconds: number, timezoneOffset: number) => {
     };
 };
 
+const formatTaskTargetForDisplay = (task: TaskRecord, t: BotTranslate) => {
+    if (task.target_mode === 'new_chat') return t('tasks.target.newChat');
+    if (task.target_mode === 'id' && task.target_chat_id) {
+        return task.target_chat_title
+            ? t('tasks.target.chat', { id: task.target_chat_id, title: task.target_chat_title })
+            : t('tasks.target.chatNoTitle', { id: task.target_chat_id });
+    }
+    return t('tasks.target.currentChat');
+};
+
 const formatTaskForDisplay = async (task: TaskRecord, t: BotTranslate) => {
     const payloadPreview = task.payload.length > 140 ? `${task.payload.slice(0, 140)}...` : task.payload;
     const recurrence = formatRecurrenceForDisplay(task, t);
@@ -613,6 +627,7 @@ const formatTaskForDisplay = async (task: TaskRecord, t: BotTranslate) => {
         timezone: when.tzLabel,
         utcTime: when.utc,
         recurrence,
+        target: formatTaskTargetForDisplay(task, t),
         notify: notifyText,
         payload: payloadPreview
     });

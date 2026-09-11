@@ -191,7 +191,13 @@
     "notActive": "La tâche #{{id}} n'est plus active (statut : {{status}}).",
     "deleteError": "Échec de la suppression de la tâche #{{id}}.",
     "deleted": "Tâche #{{id}} supprimée.\n\nTâches actuelles ({{count}}/{{max}}) :\n\n{{tasks}}",
-    "item": "#{{id}} | {{type}} | {{status}}\nQuand : {{localTime}} ({{timezone}})\nQuand (UTC) : {{utcTime}} UTC\nPlanification : {{recurrence}}\nNotifications : {{notify}}\nDonnées : {{payload}}",
+    "item": "#{{id}} | {{type}} | {{status}}\nQuand : {{localTime}} ({{timezone}})\nQuand (UTC) : {{utcTime}} UTC\nPlanification : {{recurrence}}\nLivraison : {{target}}\nNotifications : {{notify}}\nDonnées : {{payload}}",
+    "target": {
+      "chat": "Chat #{{id}} « {{title}} »",
+      "chatNoTitle": "Chat #{{id}}",
+      "currentChat": "Chat actuel (actif au moment de l'exécution)",
+      "newChat": "Nouveau chat (créé à chaque exécution)"
+    },
     "recurrence": {
       "once": "Une fois",
       "daily": "Tous les jours",

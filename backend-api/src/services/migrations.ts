@@ -16,6 +16,61 @@ const dropColumnIfPresent = (table: string, column: string) => {
   db.exec(`ALTER TABLE ${table} DROP COLUMN ${column}`);
 };
 
+// Backfills tasks.target_mode / tasks.target_chat_id from the legacy
+// ai_instruction payload JSON ({"instruction": ..., "_target_chat_id": ...,
+// "_create_new_chat": true}). The payload wrapper is unwrapped into plain
+// instruction text; rooms and foreign chats never were valid targets, so such
+// legacy entries fall back to 'current_chat'.
+const migrateTasksTargetMode = () => {
+  const rows = db.prepare(`
+    SELECT id, user_id, task_type, payload, target_mode, target_chat_id
+    FROM tasks
+    WHERE task_type = 'ai_instruction'
+  `).all() as Array<{ id: number; user_id: number; task_type: string; payload: string; target_mode: string; target_chat_id: number | null }>;
+
+  for (const row of rows) {
+    let targetMode: string | null = null;
+    let targetChatId: number | null = null;
+    let payload: string | null = null;
+
+    try {
+      const parsed = JSON.parse(row.payload);
+      if (parsed && typeof parsed === 'object') {
+        const instruction = typeof parsed.instruction === 'string'
+          ? parsed.instruction
+          : (typeof parsed._instruction === 'string' ? parsed._instruction : null);
+        if (instruction !== null && instruction.trim()) payload = instruction;
+
+        if (parsed._create_new_chat === true) {
+          targetMode = 'new_chat';
+        } else if (Number.isFinite(Number(parsed._target_chat_id))) {
+          const chatId = Math.floor(Number(parsed._target_chat_id));
+          // Rooms and foreign chats are forbidden targets — validate ownership.
+          const chat = db.prepare(`
+            SELECT id FROM user_chats
+            WHERE id = ? AND user_id = ? AND (room_enabled IS NULL OR room_enabled = 0)
+          `).get(chatId, row.user_id) as { id: number } | undefined;
+          if (chat) {
+            targetMode = 'id';
+            targetChatId = chatId;
+          } else {
+            targetMode = 'current_chat';
+          }
+        } else {
+          // Legacy wrapper without routing metadata — unwrap, deliver to active chat.
+          targetMode = 'current_chat';
+        }
+      }
+    } catch {
+      // Plain-text payload — no legacy routing metadata, keep 'current_chat'.
+    }
+
+    if (targetMode === null) continue; // nothing to migrate for this row
+    db.prepare('UPDATE tasks SET target_mode = ?, target_chat_id = ?, payload = ? WHERE id = ?')
+      .run(targetMode, targetChatId, payload ?? row.payload, row.id);
+  }
+};
+
 // Drops the legacy users quota columns; anchors quota_anchor_at from the legacy window first.
 const dropLegacyQuotaUserColumns = () => {
   if (tableHasColumn('users', 'monthly_usage_window_started_at')) {
@@ -52,6 +107,12 @@ const MIGRATIONS: Migration[] = [
     // Runs after 0001, so the legacy state is transferred before the columns disappear.
     name: '0002_drop_legacy_quota_user_columns',
     run: dropLegacyQuotaUserColumns,
+  },
+  {
+    // Unwraps legacy ai_instruction payload JSON into tasks.target_mode /
+    // tasks.target_chat_id columns (added to the tasks schema in db.ts).
+    name: '0003_tasks_target_mode',
+    run: migrateTasksTargetMode,
   },
 ];
 

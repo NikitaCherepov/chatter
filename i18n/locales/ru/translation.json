@@ -191,7 +191,13 @@
     "notActive": "Задача #{{id}} уже не активна (статус: {{status}}).",
     "deleteError": "Не удалось удалить задачу #{{id}}.",
     "deleted": "Удалил задачу #{{id}}.\n\nТекущие задачи ({{count}}/{{max}}):\n\n{{tasks}}",
-    "item": "#{{id}} | {{type}} | {{status}}\nКогда: {{localTime}} ({{timezone}})\nКогда (UTC): {{utcTime}} UTC\nРасписание: {{recurrence}}\nУведомления: {{notify}}\nДанные: {{payload}}",
+    "item": "#{{id}} | {{type}} | {{status}}\nКогда: {{localTime}} ({{timezone}})\nКогда (UTC): {{utcTime}} UTC\nРасписание: {{recurrence}}\nДоставка: {{target}}\nУведомления: {{notify}}\nДанные: {{payload}}",
+    "target": {
+      "chat": "Чат #{{id}} «{{title}}»",
+      "chatNoTitle": "Чат #{{id}}",
+      "currentChat": "Текущий чат (активный на момент запуска)",
+      "newChat": "Новый чат (создаётся при каждом запуске)"
+    },
     "recurrence": {
       "once": "Один раз",
       "daily": "Каждый день",

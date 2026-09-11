@@ -191,7 +191,13 @@
     "notActive": "任务 #{{id}} 不再活跃（状态：{{status}}）。",
     "deleteError": "删除任务 #{{id}} 失败。",
     "deleted": "已删除任务 #{{id}}。\n\n当前任务（{{count}}/{{max}}）：\n\n{{tasks}}",
-    "item": "#{{id}} | {{type}} | {{status}}\n时间：{{localTime}}（{{timezone}}）\n时间（UTC）：{{utcTime}} UTC\n计划：{{recurrence}}\n通知：{{notify}}\n数据：{{payload}}",
+    "item": "#{{id}} | {{type}} | {{status}}\n时间：{{localTime}}（{{timezone}}）\n时间（UTC）：{{utcTime}} UTC\n计划：{{recurrence}}\n送达: {{target}}\n通知：{{notify}}\n数据：{{payload}}",
+    "target": {
+      "chat": "聊天 #{{id}}「{{title}}」",
+      "chatNoTitle": "聊天 #{{id}}",
+      "currentChat": "当前聊天（执行时的活跃聊天）",
+      "newChat": "新聊天（每次执行时创建）"
+    },
     "recurrence": {
       "once": "一次",
       "daily": "每天",
