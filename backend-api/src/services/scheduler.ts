@@ -1,10 +1,8 @@
-import OpenAI from 'openai';
 import type { TaskDto, TaskRecurrenceType } from '../types.js';
 import { getUserById, ensureActiveChat, createChat, appendChatMessage } from './chats.js';
 import { runSmartHomeControl, type SmartHomeArgs } from './smart-home.js';
 import { getDueTasks, updateTaskNextExecution, updateTaskStatus, updateTaskTargetChat } from './tasks.js';
 import { sendMessageThroughAi } from './ai.js';
-import { chargeTokens } from './token-quota.js';
 import { db } from '../db.js';
 import { fetchAndSaveCurrencyRates } from './currency.js';
 import { sendToDesktop, isDesktopOnline } from '../ws-clients.js';
@@ -12,48 +10,7 @@ import { sendTelegramMessage } from './telegram-send.js';
 import { getTelegramIdentityForAccount } from './accounts.js';
 import { ensureUserMonthlyUsageWindow, resetExpiredMonthlyUsageWindows } from './monthly-usage.js';
 
-const PRO_MODEL_CHAIN = (process.env.TIMEWEB_MODEL || 'gemini/gemini-3.1-flash-lite-preview')
-  .split(',')
-  .map(v => v.trim())
-  .filter(Boolean);
-const PRO_API_KEY = `${process.env.TIMEWEB_API_KEY || ''}`.trim();
-const PRO_CLIENT = PRO_API_KEY
-  ? new OpenAI({
-      apiKey: PRO_API_KEY,
-      baseURL: process.env.TIMEWEB_BASE_URL
-    })
-  : null;
 const SCHEDULER_INTERVAL_MS = Math.max(5_000, Number.parseInt(process.env.BACKEND_SCHEDULER_INTERVAL_MS || '30000', 10) || 30_000);
-
-const createCompletionWithFallback = async (requestBody: Record<string, unknown>) => {
-  if (!PRO_CLIENT) throw new Error('timeweb_api_key_not_configured');
-  let lastErr: unknown = null;
-  for (const model of PRO_MODEL_CHAIN) {
-    try {
-      const response = await PRO_CLIENT.chat.completions.create({ ...(requestBody as any), model } as any);
-      return response;
-    } catch (err) {
-      lastErr = err;
-    }
-  }
-  throw lastErr || new Error('pro_model_chain_failed');
-};
-
-const incrementUserTokenUsage = (userId: number, tokensUsed: number) => {
-  const safeTokens = Math.max(0, Math.floor(tokensUsed || 0));
-  if (safeTokens <= 0) return;
-  // Charge via unified ledger.
-  chargeTokens({
-    userId,
-    route: 'scheduler-condition',
-    promptTokens: 0,
-    completionTokens: 0,
-    cacheHitTokens: 0,
-    cacheMissTokens: 0,
-    reasoningTokens: 0,
-    totalTokens: safeTokens,
-  });
-};
 
 // ── Delivery: unified push for task results ─────────────────────────────────
 
@@ -204,7 +161,14 @@ const runScheduledAiInstructionTask = async (
   const instruction = extractInstructionText(task.payload);
   if (!instruction) return { reply_text: 'Не получилось выполнить AI-инструкцию: пустая инструкция.', chat_id: chatId, is_new_chat: isNewChat };
 
-  const result = await sendMessageThroughAi(task.user_id, `!!! ${instruction}`, chatId, {
+  const aiTask = `[SCHEDULED TASK]: A scheduled task has fired for this user according to their own instruction.
+Execute the instruction using tools if needed.
+If, per the instruction's own conditions, there is nothing to report to the user — return a completely EMPTY answer (no text at all): an empty answer means the user will not be notified.
+Answer in the user's language.
+
+User's instruction: "${instruction}"`;
+
+  const result = await sendMessageThroughAi(task.user_id, aiTask, chatId, {
     forcePro: true,
     countAsUserMessage: false,
     persistUserText: `[AI-инструкция по расписанию] ${instruction}`,
@@ -219,44 +183,17 @@ const runScheduledAiInstructionTask = async (
   };
 };
 
-const shouldNotifyByAiCondition = async (
-  task: { user_id: number; task_type: string; notify_condition: string | null; payload: string },
-  resultText: string
-) => {
-  const condition = (task.notify_condition || (task.task_type === 'ai_instruction' ? task.payload : '')).trim();
-  if (!condition) return false;
-  try {
-    const completion = await createCompletionWithFallback({
-      messages: [
-        { role: 'system', content: 'Ты модуль принятия решения по уведомлению. Ответь строго одним словом: YES или NO.' },
-        { role: 'user', content: `Условие уведомления:\n${condition}\n\nРезультат выполнения задачи:\n${resultText.slice(0, 6000)}\n\nНужно ли отправить уведомление пользователю? Ответь только YES или NO.` }
-      ],
-      thinking: { type: 'disabled' }
-    });
-    const tokens = Number(completion?.usage?.total_tokens || 0);
-    incrementUserTokenUsage(task.user_id, tokens);
-    const raw = `${completion?.choices?.[0]?.message?.content || ''}`.trim().toUpperCase();
-    return raw.startsWith('YES') || raw.startsWith('ДА');
-  } catch {
-    return false;
-  }
-};
-
-const shouldNotifyTaskResult = async (
-  task: { notify_mode: string; notify_condition: string | null; payload: string; task_type: string; user_id: number },
+const shouldNotifyTaskResult = (
+  task: { notify_mode: string; notify_condition: string | null },
   resultText: string
 ) => {
   if (task.notify_mode === 'never') return false;
-  if (task.notify_mode === 'always') return true;
-  const condition = (task.notify_condition || '').trim().toLowerCase();
   if (task.notify_mode === 'on_match') {
+    const condition = (task.notify_condition || '').trim().toLowerCase();
     if (!condition) return false;
     return resultText.toLowerCase().includes(condition);
   }
-  if (task.notify_mode === 'on_condition') {
-    return shouldNotifyByAiCondition(task, resultText);
-  }
-  return false;
+  return true;
 };
 
 /**
@@ -315,7 +252,7 @@ const tick = async () => {
         isNewChat = result.is_new_chat;
       }
 
-      if (successMessage && await shouldNotifyTaskResult(task, successMessage)) {
+      if (successMessage && shouldNotifyTaskResult(task, successMessage)) {
         deliverTaskResult(task.user_id, successMessage, chatId, isNewChat);
       }
 
