@@ -16,13 +16,16 @@ const SCHEDULER_INTERVAL_MS = Math.max(5_000, Number.parseInt(process.env.BACKEN
 // ── Delivery: unified push for task results ─────────────────────────────────
 
 /**
- * Unified delivery: push task result to desktop (if online) AND Telegram (always).
+ * Unified delivery: push task result to desktop (if online) AND Telegram.
+ * `telegram: false` skips the external messenger duplication (desktop push is
+ * never skipped — the desktop itself decides whether to show a notification).
  */
 const deliverTaskResult = (
   userId: number,
   text: string,
   chatId: number,
   isNewChat: boolean,
+  { telegram = true }: { telegram?: boolean } = {},
 ) => {
   // Push to desktop via WS (if connected)
   if (isDesktopOnline(userId)) {
@@ -33,6 +36,8 @@ const deliverTaskResult = (
       is_new_chat: isNewChat,
     });
   }
+
+  if (!telegram) return;
 
   const telegramIdentity = getTelegramIdentityForAccount(userId);
   const telegramChatId = Number(telegramIdentity?.provider_subject);
@@ -227,14 +232,13 @@ const tick = async () => {
       resolvedIsNewChat = target.isNewChat;
 
       // Safety net fired: warn the user in the new chat that the previous
-      // chat turned out to be a room. Pushed to desktop/Telegram only when
-      // the task has redirect_notify enabled (default).
+      // chat turned out to be a room. Desktop push is unconditional; the
+      // task's redirect_notify only controls duplication to external
+      // messengers (Telegram).
       if (target.roomRedirect) {
         const warnText = translateForLanguage(language, 'tasks.roomRedirected', { id: task.id });
         await appendChatMessage(task.user_id, resolvedChatId, 'assistant', warnText);
-        if (task.redirect_notify) {
-          deliverTaskResult(task.user_id, warnText, resolvedChatId, true);
-        }
+        deliverTaskResult(task.user_id, warnText, resolvedChatId, true, { telegram: task.redirect_notify });
       }
 
       let successMessage = '';
