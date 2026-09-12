@@ -214,3 +214,18 @@ export const updateTaskTargetChat = (taskId: number, chatId: number) => db
 export const isOwnNonRoomChat = (userId: number, chatId: number) => Boolean(db.prepare(
   'SELECT 1 FROM user_chats WHERE id = ? AND user_id = ? AND (room_enabled IS NULL OR room_enabled = 0)'
 ).get(chatId, userId));
+
+/** Personal chats that may be selected as a scheduled-task destination. */
+export const listTaskTargetChats = (userId: number, limit = 100): Array<{ id: number; title: string }> => {
+  const safeLimit = Math.max(1, Math.min(100, Math.floor(Number(limit) || 100)));
+  return db.prepare(`
+    SELECT id, title
+    FROM user_chats
+    WHERE user_id = ? AND (room_enabled IS NULL OR room_enabled = 0)
+    ORDER BY updated_at DESC, id DESC
+    LIMIT ?
+  `).all(userId, safeLimit).map((row: any) => ({
+    id: Number(row.id),
+    title: String(row.title || ''),
+  }));
+};

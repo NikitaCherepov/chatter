@@ -1862,6 +1862,7 @@ export type TaskType = 'message' | 'smart_home' | 'ai_instruction';
 export type TaskStatus = 'pending' | 'done' | 'error';
 export type TaskRecurrenceType = 'once' | 'daily' | 'weekly';
 export type TaskTargetMode = 'chat' | 'new_chat';
+export type TaskNotifyMode = 'always' | 'never' | 'on_error';
 
 export type TaskDto = {
   id: number;
@@ -1872,6 +1873,7 @@ export type TaskDto = {
   recurrence_type: TaskRecurrenceType;
   recurrence_weekday: number | null;
   timezone_offset: number | null;
+  notify_mode: TaskNotifyMode | null;
   target_mode: TaskTargetMode;
   target_chat_id: number | null;
   target_chat_title?: string | null;
@@ -1886,6 +1888,36 @@ export async function listTasks(limit = 50, status: 'pending' | 'done' | 'error'
   params.set('limit', String(limit));
   params.set('status', status);
   return apiFetch(`/api/v1/tasks?${params.toString()}`);
+}
+
+export type TaskOptions = {
+  active_chat_id: number;
+  chats: Array<{ id: number; title: string }>;
+  tools: string[];
+};
+
+export type TaskUpdateInput = {
+  execute_at?: number;
+  payload?: string;
+  recurrence_type?: TaskRecurrenceType;
+  recurrence_weekday?: number | null;
+  timezone_offset?: number | null;
+  notify_mode?: TaskNotifyMode | null;
+  target_mode?: TaskTargetMode;
+  target_chat_id?: number | null;
+  redirect_notify?: boolean;
+  allowed_tools?: string[] | null;
+};
+
+export async function getTaskOptions(): Promise<TaskOptions> {
+  return apiFetch('/api/v1/tasks/options');
+}
+
+export async function updateTask(taskId: number, input: TaskUpdateInput): Promise<{ ok: boolean; task: TaskDto }> {
+  return apiFetch(`/api/v1/tasks/${taskId}`, {
+    method: 'PUT',
+    body: JSON.stringify(input),
+  });
 }
 
 export async function deleteTask(taskId: number): Promise<{ ok: boolean }> {
