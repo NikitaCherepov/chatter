@@ -131,7 +131,7 @@ const resolveTaskChat = (task: TaskDto & { user_id: number }, titleText: string)
 const notifyTaskRoomRefused = (task: TaskDto & { user_id: number }) => {
   deliverTaskResult(
     task.user_id,
-    `⚠️ Задача #${task.id} не доставлена: активный чат — общая комната, а доставка задач в комнаты запрещена. Переключись на личный чат, чтобы получать результаты.`,
+    translateForLanguage(getUserById(task.user_id)?.language, 'tasks.roomRefused', { id: task.id }),
     0,
     false,
   );
@@ -160,7 +160,8 @@ const runScheduledAiInstructionTask = async (
   isNewChat: boolean
 ): Promise<{ reply_text: string; chat_id: number; is_new_chat: boolean }> => {
   const instruction = extractInstructionText(task.payload);
-  if (!instruction) throw new Error(translateForLanguage(getUserById(task.user_id)?.language, 'tasks.emptyInstruction'));
+  const language = getUserById(task.user_id)?.language;
+  if (!instruction) throw new Error(translateForLanguage(language, 'tasks.emptyInstruction'));
 
   const aiTask = `[SCHEDULED TASK]: A scheduled task has fired for this user according to their own instruction.
 Execute the instruction using tools if needed.
@@ -172,7 +173,7 @@ User's instruction: "${instruction}"`;
   const result = await sendMessageThroughAi(task.user_id, aiTask, chatId, {
     forcePro: true,
     countAsUserMessage: false,
-    persistUserText: `[AI-инструкция по расписанию] ${instruction}`,
+    persistUserText: translateForLanguage(language, 'tasks.aiInstructionRun', { text: instruction }),
     autoRejectHitl: true,
     isBackgroundTask: true,
   });
@@ -215,6 +216,7 @@ const tick = async () => {
     let resolvedChatId: number | null = null;
     let resolvedIsNewChat = false;
     try {
+      const language = getUserById(task.user_id)?.language;
       // Resolve the destination chat first — rooms refuse delivery outright.
       const titleText = task.task_type === 'ai_instruction'
         ? extractInstructionText(task.payload)
@@ -231,17 +233,19 @@ const tick = async () => {
       let successMessage = '';
 
       if (task.task_type === 'message') {
-        successMessage = `🔔 *Напоминание:*\n\n${task.payload}`;
+        successMessage = translateForLanguage(language, 'tasks.reminder', { text: task.payload });
         await appendChatMessage(task.user_id, resolvedChatId, 'assistant', successMessage);
       } else if (task.task_type === 'smart_home') {
         const smartHomeArgs = JSON.parse(task.payload) as SmartHomeArgs;
         const result = await runSmartHomeControl(task.user_id, smartHomeArgs);
         if (SMART_HOME_ERROR_RE.test(result)) throw new Error(result);
-        successMessage = `🤖 *Автоматизация сработала:*\n${result}`;
+        successMessage = translateForLanguage(language, 'tasks.smartHomeDone', { result });
         await appendChatMessage(task.user_id, resolvedChatId, 'assistant', successMessage);
       } else if (task.task_type === 'ai_instruction') {
         const result = await runScheduledAiInstructionTask(task, resolvedChatId, resolvedIsNewChat);
-        successMessage = result.reply_text ? `🤖 *Запланированная AI-инструкция выполнена:*\n\n${result.reply_text}` : '';
+        successMessage = result.reply_text
+          ? translateForLanguage(language, 'tasks.aiInstructionDone', { text: result.reply_text })
+          : '';
         resolvedChatId = result.chat_id;
         resolvedIsNewChat = result.is_new_chat;
       }
@@ -260,7 +264,7 @@ const tick = async () => {
         const chatId = resolvedChatId ?? ensureActiveChat(task.user_id);
         deliverTaskResult(
           task.user_id,
-          `⚠️ *Задача #${task.id} упала с ошибкой:*\n\n${detail}`,
+          translateForLanguage(getUserById(task.user_id)?.language, 'tasks.failed', { id: task.id, error: detail }),
           chatId,
           resolvedIsNewChat,
         );
