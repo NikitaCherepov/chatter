@@ -1759,6 +1759,8 @@ export type PromptsResponse = {
   custom_prompts: CustomPromptInfo[];
   selected_prompt_id: number | null;
   custom_prompt_content: string | null;
+  /** Plan-derived max length (chars) of a custom prompt. */
+  max_custom_prompt_length?: number;
 };
 
 export async function getPrompts(): Promise<PromptsResponse> {

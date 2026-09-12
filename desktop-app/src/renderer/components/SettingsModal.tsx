@@ -161,6 +161,8 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
   const [customContent, setCustomContent] = useState('');
   const [promptName, setPromptName] = useState('');
   const [promptDesc, setPromptDesc] = useState('');
+  /** Plan-derived custom prompt limit; 20000 fallback until the server responds. */
+  const [maxPromptLength, setMaxPromptLength] = useState(20000);
   const [promptsLoading, setPromptsLoading] = useState(false);
   const [promptSaving, setPromptSaving] = useState(false);
   const [promptDeleting, setPromptDeleting] = useState(false);
@@ -700,6 +702,9 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
           setSelectedPromptId(def ? def.id : null);
         }
         setCustomContent(res.custom_prompt_content || '');
+        if (Number.isFinite(res.max_custom_prompt_length) && (res.max_custom_prompt_length as number) >= 0) {
+          setMaxPromptLength(res.max_custom_prompt_length as number);
+        }
       } catch (err) {
         console.error('Failed to load prompts:', err);
       } finally {
@@ -1370,10 +1375,10 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
                       <textarea
                         className={s.textareaInput}
                         value={customContent}
-                        onChange={(e) => setCustomContent(e.target.value.slice(0, 20000))}
+                        onChange={(e) => setCustomContent(e.target.value.slice(0, maxPromptLength))}
                         placeholder={t('settings.prompt.textPlaceholder')}
                         rows={6}
-                        maxLength={20000}
+                        maxLength={maxPromptLength}
                       />
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
                         <div style={{ display: 'flex', gap: '8px' }}>
@@ -1395,8 +1400,8 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
                             </button>
                           )}
                         </div>
-                        <span style={{ fontSize: '11px', color: customContent.length >= 20000 ? '#e74c3c' : 'var(--text-hint)' }}>
-                          {customContent.length} / 20000
+                        <span style={{ fontSize: '11px', color: customContent.length >= maxPromptLength ? '#e74c3c' : 'var(--text-hint)' }}>
+                          {customContent.length} / {maxPromptLength}
                         </span>
                       </div>
 

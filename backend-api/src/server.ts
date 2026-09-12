@@ -51,6 +51,7 @@ import type { MailProvider } from './services/mail.js';
 import { setBan, removeBan, getBanRecord } from './services/bans.js';
 import {
   areImageAttachmentsAllowedForPlan,
+  getMaxCustomPromptLength,
   MAX_IMAGE_ATTACHMENTS_PER_REQUEST,
   MAX_IMAGE_ATTACHMENTS_TOTAL_BYTES,
 } from './services/plan-limits.js';
@@ -3108,6 +3109,7 @@ app.get('/api/v1/prompts', (req: AuthedRequest, res) => {
     })),
     selected_prompt_id: user?.selected_prompt_id ?? null,
     custom_prompt_content: user?.custom_prompt_content ?? null,
+    max_custom_prompt_length: getMaxCustomPromptLength(user?.plan),
   });
 });
 
@@ -3141,7 +3143,10 @@ app.post('/api/v1/prompts/custom', (req: AuthedRequest, res) => {
   const description = `${req.body?.description || ''}`.trim();
   const content = `${req.body?.content || ''}`;
   if (!name) return res.status(400).json({ error: 'name_required' });
-  if (content.length > 20000) return res.status(400).json({ error: 'content_too_long' });
+  const user = getUserById(userId);
+  if (content.length > getMaxCustomPromptLength(user?.plan)) {
+    return res.status(400).json({ error: 'content_too_long', limit: getMaxCustomPromptLength(user?.plan) });
+  }
 
   const result = createUserPrompt(userId, name, description, content);
   const newRowId = Number(result.lastInsertRowid);
@@ -3175,7 +3180,11 @@ app.put('/api/v1/prompts/custom/:selectedId', (req: AuthedRequest, res) => {
   }
   if (req.body?.content !== undefined) {
     const content = `${req.body.content}`;
-    if (content.length > 20000) return res.status(400).json({ error: 'content_too_long' });
+    const user = getUserById(userId);
+    const limit = getMaxCustomPromptLength(user?.plan);
+    if (content.length > limit) {
+      return res.status(400).json({ error: 'content_too_long', limit });
+    }
     fields.content = content;
   }
 
@@ -3209,6 +3218,11 @@ app.delete('/api/v1/prompts/custom/:selectedId', (req: AuthedRequest, res) => {
 app.put('/api/v1/prompts/custom', (req: AuthedRequest, res) => {
   const userId = req.authUserId!;
   const content = `${req.body?.content || ''}`;
+  const legacyUser = getUserById(userId);
+  const legacyLimit = getMaxCustomPromptLength(legacyUser?.plan);
+  if (content.length > legacyLimit) {
+    return res.status(400).json({ error: 'content_too_long', limit: legacyLimit });
+  }
   updateUserCustomPrompt(userId, content);
   return res.json({ ok: true });
 });
@@ -4623,6 +4637,7 @@ app.put('/internal/admin/plan-limits', internalAuth, (req, res) => {
       billing_mode: entry.billing_mode === 'budget' ? 'budget' : 'tokens',
       budget_usd: Math.max(0, Number(entry.budget_usd) || 0),
       subscription_price: Math.max(0, Number(entry.subscription_price) || 0),
+      max_custom_prompt_length: Math.max(0, Math.floor(Number(entry.max_custom_prompt_length) || 0)),
     };
   }
   savePlanLimitsToDb(next);

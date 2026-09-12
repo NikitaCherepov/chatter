@@ -17,6 +17,8 @@ export type PlanLimits = {
   budget_usd: number;
   /** Subscription price in USD (informational only, no payment yet). */
   subscription_price: number;
+  /** Max length (chars) of a user-created custom prompt. 0 = custom prompts blocked. */
+  max_custom_prompt_length: number;
 };
 
 export const DEFAULT_USER_PLAN: UserPlan = 'free';
@@ -41,6 +43,7 @@ export const DEFAULT_PLAN_LIMITS: Record<UserPlan, PlanLimits> = {
     billing_mode: 'tokens',
     budget_usd: 0,
     subscription_price: 0,
+    max_custom_prompt_length: 5_000,
   },
   standart: {
     monthly_web_search_limit: 5,
@@ -52,6 +55,7 @@ export const DEFAULT_PLAN_LIMITS: Record<UserPlan, PlanLimits> = {
     billing_mode: 'tokens',
     budget_usd: 0,
     subscription_price: 0,
+    max_custom_prompt_length: 10_000,
   },
   pro: {
     monthly_web_search_limit: 20,
@@ -63,6 +67,7 @@ export const DEFAULT_PLAN_LIMITS: Record<UserPlan, PlanLimits> = {
     billing_mode: 'tokens',
     budget_usd: 0,
     subscription_price: 0,
+    max_custom_prompt_length: 30_000,
   },
 };
 
@@ -93,6 +98,7 @@ const sanitizeConfig = (raw: unknown, plan: UserPlan): PlanLimits => {
     billing_mode: cfg.billing_mode === 'budget' ? 'budget' : 'tokens',
     budget_usd: real(cfg.budget_usd, fallback.budget_usd),
     subscription_price: real(cfg.subscription_price, fallback.subscription_price),
+    max_custom_prompt_length: num(cfg.max_custom_prompt_length, fallback.max_custom_prompt_length),
   };
 };
 
@@ -157,3 +163,10 @@ export const getDefaultUserPlanLimits = (): PlanLimits =>
 
 export const areImageAttachmentsAllowedForPlan = (plan: string | null | undefined, isAdmin = false): boolean =>
   isAdmin || getPlanLimits(plan).image_attachments_allowed;
+
+/**
+ * Max length (chars) of a user-created custom prompt for the given plan.
+ * Resolved live from plan_limits_config — no per-user column, no sync needed.
+ */
+export const getMaxCustomPromptLength = (plan: string | null | undefined): number =>
+  getPlanLimits(plan).max_custom_prompt_length;

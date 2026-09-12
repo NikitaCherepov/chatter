@@ -21,14 +21,15 @@ type PlanLimits = {
   billing_mode: BillingMode;
   budget_usd: number;
   subscription_price: number;
+  max_custom_prompt_length: number;
 };
 
 type PlanLimitsData = Record<'free' | 'standart' | 'pro', PlanLimits>;
 
 const emptyLimits: PlanLimitsData = {
-  free: { monthly_web_search_limit: 0, monthly_web_reader_limit: 0, monthly_image_gen_limit: 0, image_attachments_allowed: false, max_context_tokens: 30000, weekly_token_quota: 5_000_000, billing_mode: 'tokens', budget_usd: 0, subscription_price: 0 },
-  standart: { monthly_web_search_limit: 5, monthly_web_reader_limit: 5, monthly_image_gen_limit: 2, image_attachments_allowed: true, max_context_tokens: 60000, weekly_token_quota: 15_000_000, billing_mode: 'tokens', budget_usd: 0, subscription_price: 0 },
-  pro: { monthly_web_search_limit: 20, monthly_web_reader_limit: 20, monthly_image_gen_limit: 5, image_attachments_allowed: true, max_context_tokens: 1_000_000, weekly_token_quota: 30_000_000, billing_mode: 'tokens', budget_usd: 0, subscription_price: 0 },
+  free: { monthly_web_search_limit: 0, monthly_web_reader_limit: 0, monthly_image_gen_limit: 0, image_attachments_allowed: false, max_context_tokens: 30000, weekly_token_quota: 5_000_000, billing_mode: 'tokens', budget_usd: 0, subscription_price: 0, max_custom_prompt_length: 5000 },
+  standart: { monthly_web_search_limit: 5, monthly_web_reader_limit: 5, monthly_image_gen_limit: 2, image_attachments_allowed: true, max_context_tokens: 60000, weekly_token_quota: 15_000_000, billing_mode: 'tokens', budget_usd: 0, subscription_price: 0, max_custom_prompt_length: 10000 },
+  pro: { monthly_web_search_limit: 20, monthly_web_reader_limit: 20, monthly_image_gen_limit: 5, image_attachments_allowed: true, max_context_tokens: 1_000_000, weekly_token_quota: 30_000_000, billing_mode: 'tokens', budget_usd: 0, subscription_price: 0, max_custom_prompt_length: 30000 },
 };
 
 const PLAN_IDS: ('free' | 'standart' | 'pro')[] = ['free', 'standart', 'pro'];
@@ -190,6 +191,20 @@ export function PlanLimitsPage() {
                   step={1}
                   value={cfg.monthly_web_reader_limit}
                   onChange={(e) => update(id, { monthly_web_reader_limit: Math.max(0, Number(e.target.value) || 0) })}
+                />
+              </FormField>
+            </div>
+            <div className={styles.row}>
+              <FormField
+                label={t('planLimits.maxPromptLengthLabel')}
+                hint={t('planLimits.maxPromptLengthHint')}
+              >
+                <input
+                  type="number"
+                  min={0}
+                  step={500}
+                  value={cfg.max_custom_prompt_length}
+                  onChange={(e) => update(id, { max_custom_prompt_length: Math.max(0, Number(e.target.value) || 0) })}
                 />
               </FormField>
             </div>

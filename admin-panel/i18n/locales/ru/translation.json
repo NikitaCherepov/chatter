@@ -859,6 +859,8 @@
     "webReaderLabel": "Чтений страниц Browserless в месяц",
     "imageGenLabel": "Генераций картинок в месяц",
     "allowImageAttach": "Разрешить прикреплять изображения",
+    "maxPromptLengthLabel": "Макс. длина кастомного промпта (символов)",
+    "maxPromptLengthHint": "0 = кастомные промпты запрещены на этом тарифе.",
     "billingModeToggle": "Учёт: {{mode}}",
     "billingMode": {
       "tokens": "Токены",

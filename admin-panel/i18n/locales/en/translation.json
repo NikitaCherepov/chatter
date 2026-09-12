@@ -859,6 +859,8 @@
     "webReaderLabel": "Browserless page reads per month",
     "imageGenLabel": "Image generations per month",
     "allowImageAttach": "Allow image attachments",
+    "maxPromptLengthLabel": "Max custom prompt length (chars)",
+    "maxPromptLengthHint": "0 = custom prompts are blocked for this plan.",
     "actions": {
       "title": "Actions",
       "description": "Apply limits to all current users",
