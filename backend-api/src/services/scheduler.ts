@@ -159,7 +159,7 @@ const runScheduledAiInstructionTask = async (
   isNewChat: boolean
 ): Promise<{ reply_text: string; chat_id: number; is_new_chat: boolean }> => {
   const instruction = extractInstructionText(task.payload);
-  if (!instruction) return { reply_text: 'Не получилось выполнить AI-инструкцию: пустая инструкция.', chat_id: chatId, is_new_chat: isNewChat };
+  if (!instruction) throw new Error('Пустая AI-инструкция — задача не выполнена.');
 
   const aiTask = `[SCHEDULED TASK]: A scheduled task has fired for this user according to their own instruction.
 Execute the instruction using tools if needed.
@@ -183,18 +183,8 @@ User's instruction: "${instruction}"`;
   };
 };
 
-const shouldNotifyTaskResult = (
-  task: { notify_mode: string; notify_condition: string | null },
-  resultText: string
-) => {
-  if (task.notify_mode === 'never') return false;
-  if (task.notify_mode === 'on_match') {
-    const condition = (task.notify_condition || '').trim().toLowerCase();
-    if (!condition) return false;
-    return resultText.toLowerCase().includes(condition);
-  }
-  return true;
-};
+// Smart home reports failures as error strings, not exceptions.
+const SMART_HOME_ERROR_RE = /^(Tool error|MQTT error):/;
 
 /**
  * Finishes a task run. One-shot tasks are closed ('done' on success, 'error'
@@ -221,6 +211,8 @@ const tick = async () => {
   const pendingTasks = getDueTasks(nowUnix);
 
   for (const task of pendingTasks) {
+    let resolvedChatId: number | null = null;
+    let resolvedIsNewChat = false;
     try {
       // Resolve the destination chat first — rooms refuse delivery outright.
       const titleText = task.task_type === 'ai_instruction'
@@ -232,33 +224,46 @@ const tick = async () => {
         finishTaskRun(task, false);
         continue;
       }
+      resolvedChatId = target.chatId;
+      resolvedIsNewChat = target.isNewChat;
 
       let successMessage = '';
-      let chatId = target.chatId;
-      let isNewChat = target.isNewChat;
 
       if (task.task_type === 'message') {
         successMessage = `🔔 *Напоминание:*\n\n${task.payload}`;
-        await appendChatMessage(task.user_id, chatId, 'assistant', successMessage);
+        await appendChatMessage(task.user_id, resolvedChatId, 'assistant', successMessage);
       } else if (task.task_type === 'smart_home') {
         const smartHomeArgs = JSON.parse(task.payload) as SmartHomeArgs;
         const result = await runSmartHomeControl(task.user_id, smartHomeArgs);
+        if (SMART_HOME_ERROR_RE.test(result)) throw new Error(result);
         successMessage = `🤖 *Автоматизация сработала:*\n${result}`;
-        await appendChatMessage(task.user_id, chatId, 'assistant', successMessage);
+        await appendChatMessage(task.user_id, resolvedChatId, 'assistant', successMessage);
       } else if (task.task_type === 'ai_instruction') {
-        const result = await runScheduledAiInstructionTask(task, chatId, isNewChat);
+        const result = await runScheduledAiInstructionTask(task, resolvedChatId, resolvedIsNewChat);
         successMessage = result.reply_text ? `🤖 *Запланированная AI-инструкция выполнена:*\n\n${result.reply_text}` : '';
-        chatId = result.chat_id;
-        isNewChat = result.is_new_chat;
+        resolvedChatId = result.chat_id;
+        resolvedIsNewChat = result.is_new_chat;
       }
 
-      if (successMessage && shouldNotifyTaskResult(task, successMessage)) {
-        deliverTaskResult(task.user_id, successMessage, chatId, isNewChat);
+      // 'always' and NULL (ai_instruction: the model decides — empty answer = silence)
+      // deliver every non-empty result; 'on_error' and 'never' stay silent on success.
+      if (successMessage && (task.notify_mode === null || task.notify_mode === 'always')) {
+        deliverTaskResult(task.user_id, successMessage, resolvedChatId, resolvedIsNewChat);
       }
 
       finishTaskRun(task, true);
     } catch (err) {
       console.error(`[backend-scheduler] task #${task.id} failed:`, err);
+      if (task.notify_mode === 'on_error') {
+        const detail = err instanceof Error ? err.message : String(err);
+        const chatId = resolvedChatId ?? ensureActiveChat(task.user_id);
+        deliverTaskResult(
+          task.user_id,
+          `⚠️ *Задача #${task.id} упала с ошибкой:*\n\n${detail}`,
+          chatId,
+          resolvedIsNewChat,
+        );
+      }
       finishTaskRun(task, false);
     }
   }

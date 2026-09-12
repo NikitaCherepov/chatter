@@ -224,12 +224,11 @@
       "error": "chyba"
     },
     "notify": {
-      "withCondition": "{{mode}}: {{condition}}",
       "modes": {
         "always": "Vždy",
+        "default": "Výchozí",
         "never": "Nikdy",
-        "on_match": "Při shodě",
-        "on_condition": "Při podmínce"
+        "on_error": "Při chybě"
       }
     }
   },

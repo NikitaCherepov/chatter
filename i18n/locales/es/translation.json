@@ -224,12 +224,11 @@
       "error": "error"
     },
     "notify": {
-      "withCondition": "{{mode}}: {{condition}}",
       "modes": {
         "always": "Siempre",
+        "default": "Predeterminado",
         "never": "Nunca",
-        "on_match": "Al coincidir",
-        "on_condition": "En condición"
+        "on_error": "En caso de error"
       }
     }
   },

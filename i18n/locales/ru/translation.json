@@ -224,12 +224,11 @@
       "error": "ошибка"
     },
     "notify": {
-      "withCondition": "{{mode}}: {{condition}}",
       "modes": {
         "always": "Всегда",
+        "default": "По умолчанию",
         "never": "Никогда",
-        "on_match": "При совпадении",
-        "on_condition": "При выполнении условия"
+        "on_error": "При ошибке"
       }
     }
   },

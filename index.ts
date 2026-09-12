@@ -209,7 +209,7 @@ type PlanDurationCode = 'day' | 'week' | 'month' | 'year' | 'forever';
 type TaskStatus = 'pending' | 'done' | 'error';
 type TaskType = 'message' | 'smart_home' | 'ai_instruction';
 type TaskRecurrenceType = 'once' | 'daily' | 'weekly';
-type TaskNotifyMode = 'always' | 'never' | 'on_match' | 'on_condition';
+type TaskNotifyMode = 'always' | 'never' | 'on_error';
 type TaskTargetMode = 'id' | 'current_chat' | 'new_chat';
 type TaskRecord = {
     id: number;
@@ -221,8 +221,7 @@ type TaskRecord = {
     recurrence_type: TaskRecurrenceType;
     recurrence_weekday: number | null;
     timezone_offset: number | null;
-    notify_mode: TaskNotifyMode;
-    notify_condition: string | null;
+    notify_mode: TaskNotifyMode | null;
     target_mode: TaskTargetMode;
     target_chat_id: number | null;
     target_chat_title: string | null;
@@ -487,8 +486,7 @@ type ScheduleTaskArgs = {
     create_new_chat?: boolean;
     recurrence_type?: TaskRecurrenceType;
     recurrence_weekday?: number;
-    notify_mode?: TaskNotifyMode;
-    notify_condition?: string;
+    notify_mode?: TaskNotifyMode | null;
 };
 
 const safeSendToUser = async (chatId: number, text: string) => {
@@ -613,11 +611,8 @@ const formatTaskForDisplay = async (task: TaskRecord, t: BotTranslate) => {
     const fallbackOffset = (await getUser(task.user_id))?.timezone_offset ?? 5;
     const timezoneOffset = typeof task.timezone_offset === 'number' ? task.timezone_offset : fallbackOffset;
     const when = formatUnixForTimezone(task.execute_at, timezoneOffset);
-    const notifyText = (task.notify_mode === 'on_match' || task.notify_mode === 'on_condition')
-        ? t('tasks.notify.withCondition', {
-            mode: t(`tasks.notify.modes.${task.notify_mode}`),
-            condition: task.notify_condition || t('tasks.empty')
-        })
+    const notifyText = task.notify_mode == null
+        ? t('tasks.notify.modes.default')
         : t(`tasks.notify.modes.${task.notify_mode}`);
     return t('tasks.item', {
         id: task.id,

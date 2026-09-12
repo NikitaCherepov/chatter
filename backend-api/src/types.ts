@@ -3,7 +3,7 @@ export type ChatRole = 'user' | 'assistant';
 export type TaskStatus = 'pending' | 'done' | 'error';
 export type TaskType = 'message' | 'smart_home' | 'ai_instruction';
 export type TaskRecurrenceType = 'once' | 'daily' | 'weekly';
-export type TaskNotifyMode = 'always' | 'never' | 'on_match' | 'on_condition';
+export type TaskNotifyMode = 'always' | 'never' | 'on_error';
 export type TaskTargetMode = 'id' | 'current_chat' | 'new_chat';
 
 export type UserRecord = {
@@ -185,8 +185,7 @@ export type TaskDto = {
   recurrence_type: TaskRecurrenceType;
   recurrence_weekday: number | null;
   timezone_offset: number | null;
-  notify_mode: TaskNotifyMode;
-  notify_condition: string | null;
+  notify_mode: TaskNotifyMode | null;
   target_mode: TaskTargetMode;
   target_chat_id: number | null;
   target_chat_title?: string | null;

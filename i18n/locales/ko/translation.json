@@ -224,12 +224,11 @@
       "error": "오류"
     },
     "notify": {
-      "withCondition": "{{mode}}: {{condition}}",
       "modes": {
         "always": "항상",
+        "default": "기본값",
         "never": "안 함",
-        "on_match": "일치 시",
-        "on_condition": "조건 시"
+        "on_error": "오류 시에만"
       }
     }
   },

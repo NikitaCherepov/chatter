@@ -2781,10 +2781,10 @@ const validateTaskFields = (
     return { ok: false, error: 'bad_recurrence_weekday' };
   }
 
-  const notifyMode = `${body.notify_mode || 'always'}`;
-  if (!['always', 'never', 'on_match', 'on_condition'].includes(notifyMode)) return { ok: false, error: 'bad_notify_mode' };
-  const notifyCondition = body.notify_condition == null ? null : `${body.notify_condition}`.trim();
-  if ((notifyMode === 'on_match' || notifyMode === 'on_condition') && !notifyCondition) return { ok: false, error: 'notify_condition_required' };
+  const notifyMode = body.notify_mode == null
+    ? (taskType === 'ai_instruction' ? null : 'always')
+    : `${body.notify_mode}`;
+  if (notifyMode !== null && !['always', 'never', 'on_error'].includes(notifyMode)) return { ok: false, error: 'bad_notify_mode' };
 
   const targetMode = `${body.target_mode || 'current_chat'}`;
   if (!['id', 'current_chat', 'new_chat'].includes(targetMode)) return { ok: false, error: 'bad_target_mode' };
@@ -2832,7 +2832,6 @@ const validateTaskFields = (
       recurrence_type: recurrenceType,
       recurrence_weekday: recurrenceType === 'weekly' ? recurrenceWeekday : null,
       notify_mode: notifyMode,
-      notify_condition: (notifyMode === 'on_match' || notifyMode === 'on_condition') ? notifyCondition : null,
       target_mode: targetMode,
       target_chat_id: targetChatId,
     },
@@ -2856,7 +2855,7 @@ app.post('/api/v1/tasks', (req: AuthedRequest, res) => {
   const taskId = createTask(
     userId, f.execute_at, f.task_type, f.payload,
     f.recurrence_type, f.recurrence_weekday, timezoneOffset,
-    f.notify_mode, f.notify_condition,
+    f.notify_mode,
     f.target_mode, f.target_chat_id,
   );
   return res.status(201).json({ task_id: taskId, task: getUserTaskById(userId, taskId) });
@@ -2881,8 +2880,7 @@ app.put('/api/v1/tasks/:id', (req: AuthedRequest, res) => {
     recurrence_weekday: body.recurrence_weekday !== undefined
       ? body.recurrence_weekday
       : (existing.recurrence_type === 'weekly' ? existing.recurrence_weekday : null),
-    notify_mode: body.notify_mode ?? existing.notify_mode,
-    notify_condition: body.notify_condition !== undefined ? body.notify_condition : existing.notify_condition,
+    notify_mode: body.notify_mode !== undefined ? body.notify_mode : existing.notify_mode,
     target_mode: body.target_mode ?? existing.target_mode,
     target_chat_id: body.target_chat_id !== undefined ? body.target_chat_id : existing.target_chat_id,
   };
@@ -2902,9 +2900,6 @@ app.put('/api/v1/tasks/:id', (req: AuthedRequest, res) => {
   }
   if (body.notify_mode !== undefined) {
     fields.notify_mode = f.notify_mode;
-    fields.notify_condition = f.notify_condition;
-  } else if (body.notify_condition !== undefined) {
-    fields.notify_condition = f.notify_condition;
   }
   if (body.timezone_offset !== undefined && Number.isFinite(Number(body.timezone_offset))) {
     fields.timezone_offset = Math.round(Number(body.timezone_offset) * 4) / 4;

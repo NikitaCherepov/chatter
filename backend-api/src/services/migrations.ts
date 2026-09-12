@@ -96,6 +96,34 @@ const dropLegacyQuotaUserColumns = () => {
   for (const column of legacyColumns) dropColumnIfPresent('users', column);
 };
 
+const migrateTasksNotify = () => {
+  db.exec(`
+    CREATE TABLE tasks_migrate (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      execute_at INTEGER NOT NULL,
+      task_type TEXT NOT NULL,
+      payload TEXT NOT NULL,
+      notify_mode TEXT,
+      recurrence_type TEXT NOT NULL DEFAULT 'once',
+      recurrence_weekday INTEGER,
+      timezone_offset INTEGER,
+      target_mode TEXT NOT NULL DEFAULT 'current_chat',
+      target_chat_id INTEGER,
+      status TEXT NOT NULL DEFAULT 'pending'
+    )
+  `);
+  db.exec(`
+    INSERT INTO tasks_migrate (id, user_id, execute_at, task_type, payload, notify_mode, recurrence_type, recurrence_weekday, timezone_offset, target_mode, target_chat_id, status)
+    SELECT id, user_id, execute_at, task_type, payload,
+      CASE WHEN notify_mode IN ('always', 'never', 'on_error') THEN notify_mode ELSE 'always' END,
+      recurrence_type, recurrence_weekday, timezone_offset, target_mode, target_chat_id, status
+    FROM tasks
+  `);
+  db.exec('DROP TABLE tasks');
+  db.exec('ALTER TABLE tasks_migrate RENAME TO tasks');
+};
+
 const MIGRATIONS: Migration[] = [
   {
     // Transfers legacy users.monthly_* quota state into user_plan_quota_periods.
@@ -113,6 +141,11 @@ const MIGRATIONS: Migration[] = [
     // tasks.target_chat_id columns (added to the tasks schema in db.ts).
     name: '0003_tasks_target_mode',
     run: migrateTasksTargetMode,
+  },
+  {
+    // notify_mode: NULL | 'always' | 'never' | 'on_error' (NULL only for ai_instruction).
+    name: '0004_tasks_notify',
+    run: migrateTasksNotify,
   },
 ];
 

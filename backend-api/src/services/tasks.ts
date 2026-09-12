@@ -6,7 +6,7 @@ export const MAX_PENDING_TASKS_PER_USER = 10;
 const TASK_COLUMNS = `
   t.id, t.execute_at, t.task_type, t.payload, t.status,
   t.recurrence_type, t.recurrence_weekday, t.timezone_offset,
-  t.notify_mode, t.notify_condition,
+  t.notify_mode,
   t.target_mode, t.target_chat_id, uc.title AS target_chat_title
 `;
 
@@ -19,8 +19,7 @@ const mapTaskRow = (row: any): TaskDto => ({
   recurrence_type: row.recurrence_type as TaskRecurrenceType,
   recurrence_weekday: row.recurrence_weekday == null ? null : Number(row.recurrence_weekday),
   timezone_offset: row.timezone_offset == null ? null : Number(row.timezone_offset),
-  notify_mode: row.notify_mode as TaskNotifyMode,
-  notify_condition: row.notify_condition == null ? null : String(row.notify_condition),
+  notify_mode: (row.notify_mode == null ? null : row.notify_mode) as TaskNotifyMode | null,
   target_mode: (row.target_mode || 'current_chat') as TaskTargetMode,
   target_chat_id: row.target_chat_id == null ? null : Number(row.target_chat_id),
   target_chat_title: row.target_chat_title == null ? null : String(row.target_chat_title),
@@ -57,15 +56,15 @@ export const createTask = (
   recurrenceType: TaskRecurrenceType = 'once',
   recurrenceWeekday: number | null = null,
   timezoneOffset: number | null = null,
-  notifyMode: TaskNotifyMode = 'always',
-  notifyCondition: string | null = null,
+  notifyMode: TaskNotifyMode | null = null,
   targetMode: TaskTargetMode = 'current_chat',
   targetChatId: number | null = null
 ) => {
+  const effectiveNotifyMode = notifyMode ?? (taskType === 'ai_instruction' ? null : 'always');
   const res = db.prepare(`
-    INSERT INTO tasks (user_id, execute_at, task_type, payload, recurrence_type, recurrence_weekday, timezone_offset, notify_mode, notify_condition, target_mode, target_chat_id)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(userId, executeAt, taskType, payload, recurrenceType, recurrenceWeekday, timezoneOffset, notifyMode, notifyCondition, targetMode, targetChatId);
+    INSERT INTO tasks (user_id, execute_at, task_type, payload, recurrence_type, recurrence_weekday, timezone_offset, notify_mode, target_mode, target_chat_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(userId, executeAt, taskType, payload, recurrenceType, recurrenceWeekday, timezoneOffset, effectiveNotifyMode, targetMode, targetChatId);
   return Number(res.lastInsertRowid);
 };
 
@@ -76,8 +75,7 @@ export type TaskUpdateFields = {
   recurrence_type?: TaskRecurrenceType;
   recurrence_weekday?: number | null;
   timezone_offset?: number | null;
-  notify_mode?: TaskNotifyMode;
-  notify_condition?: string | null;
+  notify_mode?: TaskNotifyMode | null;
   target_mode?: TaskTargetMode;
   target_chat_id?: number | null;
 };
@@ -118,10 +116,6 @@ export const updatePendingTask = (userId: number, taskId: number, fields: TaskUp
   if (fields.notify_mode !== undefined) {
     sets.push('notify_mode = ?');
     params.push(fields.notify_mode);
-  }
-  if (fields.notify_condition !== undefined) {
-    sets.push('notify_condition = ?');
-    params.push(fields.notify_condition);
   }
   if (fields.target_mode !== undefined) {
     sets.push('target_mode = ?');

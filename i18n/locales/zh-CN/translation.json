@@ -224,12 +224,11 @@
       "error": "错误"
     },
     "notify": {
-      "withCondition": "{{mode}}：{{condition}}",
       "modes": {
         "always": "始终",
+        "default": "默认",
         "never": "从不",
-        "on_match": "匹配时",
-        "on_condition": "条件满足时"
+        "on_error": "出错时"
       }
     }
   },

@@ -224,12 +224,11 @@
       "error": "hata"
     },
     "notify": {
-      "withCondition": "{{mode}}: {{condition}}",
       "modes": {
         "always": "Her zaman",
+        "default": "Varsayılan",
         "never": "Asla",
-        "on_match": "Eşleşmede",
-        "on_condition": "Koşulda"
+        "on_error": "Hata durumunda"
       }
     }
   },

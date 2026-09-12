@@ -134,8 +134,7 @@ db.exec(`
     execute_at INTEGER NOT NULL,
     task_type TEXT NOT NULL,
     payload TEXT NOT NULL,
-    notify_mode TEXT NOT NULL DEFAULT 'always',
-    notify_condition TEXT,
+    notify_mode TEXT,
     recurrence_type TEXT NOT NULL DEFAULT 'once',
     recurrence_weekday INTEGER,
     timezone_offset INTEGER,
@@ -580,8 +579,7 @@ db.exec('CREATE INDEX IF NOT EXISTS idx_chat_messages_agent ON chat_messages(age
 ensureTaskColumn('recurrence_type', "ALTER TABLE tasks ADD COLUMN recurrence_type TEXT NOT NULL DEFAULT 'once'");
 ensureTaskColumn('recurrence_weekday', 'ALTER TABLE tasks ADD COLUMN recurrence_weekday INTEGER');
 ensureTaskColumn('timezone_offset', 'ALTER TABLE tasks ADD COLUMN timezone_offset INTEGER');
-ensureTaskColumn('notify_mode', "ALTER TABLE tasks ADD COLUMN notify_mode TEXT NOT NULL DEFAULT 'always'");
-ensureTaskColumn('notify_condition', 'ALTER TABLE tasks ADD COLUMN notify_condition TEXT');
+ensureTaskColumn('notify_mode', 'ALTER TABLE tasks ADD COLUMN notify_mode TEXT');
 ensureTaskColumn('target_mode', "ALTER TABLE tasks ADD COLUMN target_mode TEXT NOT NULL DEFAULT 'current_chat'");
 ensureTaskColumn('target_chat_id', 'ALTER TABLE tasks ADD COLUMN target_chat_id INTEGER');
 if (!hasPromptColumn('description')) {

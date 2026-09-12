@@ -1973,9 +1973,9 @@ const formatTasksList = (tasks: ReturnType<typeof listTasks>, timezoneOffset: nu
   if (!tasks.length) return emptyText;
   return tasks.map((t) => {
     const when = formatUnixForTimezone(t.execute_at, t.timezone_offset ?? timezoneOffset);
-    const notifyText = (t.notify_mode === 'on_match' || t.notify_mode === 'on_condition')
-      ? `${t.notify_mode}: ${t.notify_condition || '(empty)'}`
-      : t.notify_mode;
+    const notifyText = t.notify_mode == null
+      ? 'AI decides (empty answer = no notification)'
+      : t.notify_mode === 'on_error' ? 'only on errors' : t.notify_mode;
     return `#${t.id} | ${t.task_type} | ${t.status}\nWhen: ${when.local} (${when.tzLabel})\nWhen (UTC): ${when.utc} UTC\nSchedule: ${t.recurrence_type}\nTarget: ${formatTaskTargetText(t)}\nNotifications: ${notifyText}\nData: ${t.payload.slice(0, 180)}`;
   }).join('\n\n');
 };
@@ -2233,8 +2233,7 @@ export const toolDefinitions = [
           target_chat_id: { type: 'number', description: 'Chat ID for target_mode=id ONLY. Must be the user\'s own personal chat — shared rooms and other users\' chats are forbidden (the tool will return an error).' },
           recurrence_type: { type: 'string', enum: ['once', 'daily', 'weekly'], description: 'Schedule type: once - one time, daily - every day, weekly - every week.' },
           recurrence_weekday: { type: 'number', description: 'Day of week for weekly: 1=Monday ... 7=Sunday.' },
-          notify_mode: { type: 'string', enum: ['always', 'never', 'on_match', 'on_condition'], description: 'Notification mode: always - always report the result, never - never report, on_match - report only if result contains notify_condition as substring, on_condition - AI will check the notify_condition and decide whether to send a notification.' },
-          notify_condition: { type: 'string', description: 'Condition for notify_mode=on_match/on_condition. For on_match: a short string/keyword. For on_condition: a meaningful condition ("there are important emails from X", "alarming news found", etc.).' }
+          notify_mode: { type: 'string', enum: ['always', 'never', 'on_error'], description: 'Notification mode. Default (omit): message/smart_home report every run; for ai_instruction the AI decides — an empty answer means no notification, so put any "only write if..." conditions directly into the instruction text. always - report every run. never - never report. on_error - report only when the run fails.' }
         },
         required: ['task_type', 'payload']
       }
@@ -2285,8 +2284,7 @@ export const toolDefinitions = [
           payload: { type: 'string', description: 'New task text/instruction (same format as in schedule_task).' },
           recurrence_type: { type: 'string', enum: ['once', 'daily', 'weekly'], description: 'New schedule type.' },
           recurrence_weekday: { type: 'number', description: 'Day of week for weekly: 1=Monday ... 7=Sunday.' },
-          notify_mode: { type: 'string', enum: ['always', 'never', 'on_match', 'on_condition'], description: 'New notification mode.' },
-          notify_condition: { type: 'string', description: 'Condition for notify_mode=on_match/on_condition.' },
+          notify_mode: { type: 'string', enum: ['always', 'never', 'on_error'], description: 'New notification mode (see schedule_task).' },
           target_mode: { type: 'string', enum: ['current_chat', 'new_chat', 'id'], description: 'New delivery target mode (see schedule_task).' },
           target_chat_id: { type: 'number', description: 'Chat ID for target_mode=id ONLY (own personal chat, rooms forbidden).' }
         },
@@ -4163,10 +4161,8 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     const recurrenceWeekday = Number.isFinite(Number(parsed.recurrence_weekday)) ? Math.floor(Number(parsed.recurrence_weekday)) : null;
     if (recurrenceType === 'weekly' && (!recurrenceWeekday || recurrenceWeekday < 1 || recurrenceWeekday > 7)) return 'Error: For weekly, specify recurrence_weekday from 1 to 7 (1=Monday).';
 
-    const notifyMode = `${parsed.notify_mode || 'always'}` as TaskNotifyMode;
-    if (!['always', 'never', 'on_match', 'on_condition'].includes(notifyMode)) return 'Error: Invalid notify_mode';
-    const notifyCondition = parsed.notify_condition == null ? null : `${parsed.notify_condition}`.trim();
-    if ((notifyMode === 'on_match' || notifyMode === 'on_condition') && !notifyCondition) return 'Error: For notify_mode=on_match/on_condition, specify notify_condition.';
+    const notifyMode = parsed.notify_mode == null ? null : `${parsed.notify_mode}` as TaskNotifyMode | null;
+    if (notifyMode !== null && !['always', 'never', 'on_error'].includes(notifyMode)) return 'Error: Invalid notify_mode';
 
     const target = resolveTaskTargetArgs(user.id, parsed);
     if (target.ok === false) return target.error;
@@ -4181,11 +4177,13 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     createTask(
       user.id, executeAt, taskType, payload,
       recurrenceType, recurrenceType === 'weekly' ? recurrenceWeekday : null, timezoneOffset,
-      notifyMode, (notifyMode === 'on_match' || notifyMode === 'on_condition') ? notifyCondition : null,
+      notifyMode,
       target.targetMode, target.targetChatId,
     );
     const planned = formatUnixForTimezone(executeAt, timezoneOffset);
-    const notifyInfo = (notifyMode === 'on_match' || notifyMode === 'on_condition') ? `${notifyMode} (${notifyCondition})` : notifyMode;
+    const notifyInfo = notifyMode === null
+      ? (taskType === 'ai_instruction' ? 'AI decides' : 'always')
+      : notifyMode;
     return `Successfully scheduled. Next run: ${planned.local} (${planned.tzLabel}). UTC time: ${planned.utc}. Schedule type: ${recurrenceType}. Delivery target: ${target.targetMode === 'id' ? `chat #${target.targetChatId}` : target.targetMode}. Notification mode: ${notifyInfo}.`;
   }
 
@@ -4248,16 +4246,12 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
 
     // Notifications.
     if (parsed.notify_mode !== undefined) {
-      const notifyMode = `${parsed.notify_mode}` as TaskNotifyMode;
-      if (!['always', 'never', 'on_match', 'on_condition'].includes(notifyMode)) return 'Error: Invalid notify_mode';
-      const notifyCondition = parsed.notify_condition === undefined
-        ? task.notify_condition
-        : (parsed.notify_condition == null ? null : `${parsed.notify_condition}`.trim());
-      if ((notifyMode === 'on_match' || notifyMode === 'on_condition') && !notifyCondition) return 'Error: For notify_mode=on_match/on_condition, specify notify_condition.';
+      const effectiveType = `${parsed.task_type || task.task_type}` as TaskType;
+      const notifyMode = parsed.notify_mode == null
+        ? (effectiveType === 'ai_instruction' ? null : 'always')
+        : `${parsed.notify_mode}` as TaskNotifyMode | null;
+      if (notifyMode !== null && !['always', 'never', 'on_error'].includes(notifyMode)) return 'Error: Invalid notify_mode';
       fields.notify_mode = notifyMode;
-      fields.notify_condition = (notifyMode === 'on_match' || notifyMode === 'on_condition') ? notifyCondition : null;
-    } else if (parsed.notify_condition !== undefined) {
-      fields.notify_condition = parsed.notify_condition == null ? null : `${parsed.notify_condition}`.trim();
     }
 
     // Delivery target.

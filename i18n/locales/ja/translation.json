@@ -224,12 +224,11 @@
       "error": "エラー"
     },
     "notify": {
-      "withCondition": "{{mode}}: {{condition}}",
       "modes": {
         "always": "常に",
+        "default": "デフォルト",
         "never": "しない",
-        "on_match": "一致時",
-        "on_condition": "条件時"
+        "on_error": "エラー時のみ"
       }
     }
   },
