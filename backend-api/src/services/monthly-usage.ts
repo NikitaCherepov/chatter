@@ -79,15 +79,39 @@ const limitsFor = (plan: UserPlan, startsAt: number, endsAt: number, prorated: b
   };
 };
 
+/**
+ * Context size policy on plan change / plan-limits sync. Keeps the user's
+ * choice inside the [50%, 100%] band of the new plan max:
+ * - never customized (0/NULL) → the new max
+ * - above the new max → clamp down to the new max
+ * - below 50% of the new max → raise to 50% of the new max
+ * - otherwise the stored choice survives untouched.
+ */
+export const clampContextTokensOnPlanChange = (current: number | null | undefined, newMax: number): number => {
+  const max = Math.max(1000, Math.floor(newMax));
+  const currentChoice = Number.isFinite(current as number) && (current as number) > 0
+    ? Math.floor(current as number)
+    : 0;
+  if (currentChoice === 0) return max;
+  if (currentChoice > max) return max;
+  const floor = Math.max(1000, Math.floor(max / 2));
+  if (currentChoice < floor) return floor;
+  return currentChoice;
+};
+
 /** Updates plan-derived entitlements without touching usage or period dates. */
 export const applyUserPlanEntitlements = (userId: number, plan: UserPlan) => {
   const limits = getPlanLimits(plan);
   const weeklyCostLimit = limits.budget_usd > 0 ? limits.budget_usd / 4 : 0;
+  const row = db.prepare('SELECT max_context_tokens FROM users WHERE id = ?').get(userId) as
+    | { max_context_tokens: number }
+    | undefined;
+  const nextContextTokens = clampContextTokensOnPlanChange(row?.max_context_tokens, limits.max_context_tokens);
   return db.prepare(`
     UPDATE users SET plan = ?, max_context_tokens_limit = ?, max_context_tokens = ?,
       weekly_tokens_quota = ?, weekly_cost_quota_limit = ?, weekly_cost_quota = ?
     WHERE id = ?
-  `).run(plan, limits.max_context_tokens, limits.max_context_tokens,
+  `).run(plan, limits.max_context_tokens, nextContextTokens,
     limits.weekly_token_quota, weeklyCostLimit, weeklyCostLimit, userId);
 };
 

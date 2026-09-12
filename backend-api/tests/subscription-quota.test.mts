@@ -19,7 +19,12 @@ const {
 // Fresh installs never create the legacy quota columns: both migrations apply as no-ops.
 const { runMigrations } = await import('../src/services/migrations.js');
 const migrationsRun = runMigrations();
-assert.deepEqual(migrationsRun.applied, ['0001_user_plan_quota_periods', '0002_drop_legacy_quota_user_columns']);
+assert.deepEqual(migrationsRun.applied, [
+  '0001_user_plan_quota_periods',
+  '0002_drop_legacy_quota_user_columns',
+  '0003_tasks_target_mode',
+  '0004_tasks_notify',
+]);
 const freshUserColumns = (db.prepare('PRAGMA table_info(users)').all() as Array<{ name: string }>).map(c => c.name);
 assert.ok(!freshUserColumns.includes('monthly_usage_window_started_at'), 'fresh installs must not carry legacy quota columns');
 assert.ok(!freshUserColumns.includes('daily_web_search_count'), 'fresh installs must not carry legacy quota columns');

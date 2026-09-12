@@ -23,7 +23,7 @@ import { normalizeSupportedLanguage } from '../i18n/languages.js';
 import { formatAutomaticChatTitle } from '../i18n/index.js';
 import { getPlanLimits, getDefaultUserPlanLimits, loadPlanLimitsFromDb } from './plan-limits.js';
 import { withAttachmentMetadata } from './chat-attachments.js';
-import { applyUserPlanEntitlements, ensureUserMonthlyUsageWindow, refreshCurrentQuotaLimits } from './monthly-usage.js';
+import { applyUserPlanEntitlements, clampContextTokensOnPlanChange, ensureUserMonthlyUsageWindow, refreshCurrentQuotaLimits } from './monthly-usage.js';
 
 export const getRawUserById = (userId: number) => db
   .prepare('SELECT * FROM users WHERE id = ?')
@@ -2315,27 +2315,37 @@ export const updateUserPlan = (userId: number, plan: UserPlan) => {
 /**
  * Hard-syncs all plan-derived fields on users with current plan_limits_config.
  *
- * Per-user overrides (max_context_tokens, weekly_cost_quota) are OVERWRITTEN by
- * the plan value — this is intentional. If admin raises OR lowers a plan limit,
- * every user on that plan must reflect it immediately. Per-user tuning happens
- * via dedicated endpoints AFTER sync, not by preserving stale values.
+ * max_context_tokens keeps each user's choice inside the [50%, 100%] band of
+ * the plan max (see clampContextTokensOnPlanChange): values above the max are
+ * clamped down, values below 50% are raised to 50%, everything else survives.
+ * weekly_cost_quota is OVERWRITTEN by the plan value — this is intentional.
+ * If admin raises OR lowers a plan limit, every user on that plan must reflect
+ * it immediately. Per-user tuning happens via dedicated endpoints AFTER sync.
  *
  * Use resetUserWeeklyCost() / resetAllUsersWeeklyCost() to zero usage counters.
  */
 export const syncAllUsersPlanLimits = () => {
   for (const [plan, limits] of Object.entries(loadPlanLimitsFromDb())) {
     const weeklyCostLimit = limits.budget_usd > 0 ? limits.budget_usd / 4 : 0;
-    db.prepare(`
+    const rows = db.prepare('SELECT id, max_context_tokens FROM users WHERE plan = ?')
+      .all(plan) as Array<{ id: number; max_context_tokens: number }>;
+    const updateOne = db.prepare(`
       UPDATE users
       SET max_context_tokens_limit = ?,
           max_context_tokens = ?,
           weekly_tokens_quota = ?,
           weekly_cost_quota_limit = ?,
           weekly_cost_quota = ?
-      WHERE plan = ?
-    `).run(
-      limits.max_context_tokens, limits.max_context_tokens,
-      limits.weekly_token_quota, weeklyCostLimit, weeklyCostLimit, plan);
+      WHERE id = ?
+    `);
+    db.transaction(() => {
+      for (const row of rows) {
+        updateOne.run(
+          limits.max_context_tokens,
+          clampContextTokensOnPlanChange(row.max_context_tokens, limits.max_context_tokens),
+          limits.weekly_token_quota, weeklyCostLimit, weeklyCostLimit, row.id);
+      }
+    })();
   }
   // Monthly quota ceilings live in user_plan_quota_periods only.
   refreshCurrentQuotaLimits();
