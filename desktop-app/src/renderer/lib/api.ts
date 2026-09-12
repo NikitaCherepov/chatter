@@ -1861,7 +1861,7 @@ export async function deleteNote(noteId: number): Promise<{ ok: boolean }> {
 export type TaskType = 'message' | 'smart_home' | 'ai_instruction';
 export type TaskStatus = 'pending' | 'done' | 'error';
 export type TaskRecurrenceType = 'once' | 'daily' | 'weekly';
-export type TaskTargetMode = 'id' | 'current_chat' | 'new_chat';
+export type TaskTargetMode = 'chat' | 'new_chat';
 
 export type TaskDto = {
   id: number;
@@ -1875,6 +1875,7 @@ export type TaskDto = {
   target_mode: TaskTargetMode;
   target_chat_id: number | null;
   target_chat_title?: string | null;
+  redirect_notify?: boolean;
 };
 
 export async function listTasks(limit = 50, status: 'pending' | 'done' | 'error' | 'all' = 'pending'): Promise<{ tasks: TaskDto[] }> {

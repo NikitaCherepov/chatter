@@ -138,8 +138,9 @@ db.exec(`
     recurrence_type TEXT NOT NULL DEFAULT 'once',
     recurrence_weekday INTEGER,
     timezone_offset INTEGER,
-    target_mode TEXT NOT NULL DEFAULT 'current_chat',
+    target_mode TEXT NOT NULL DEFAULT 'chat',
     target_chat_id INTEGER,
+    redirect_notify INTEGER NOT NULL DEFAULT 1,
     status TEXT NOT NULL DEFAULT 'pending'
   );
 
@@ -580,8 +581,9 @@ ensureTaskColumn('recurrence_type', "ALTER TABLE tasks ADD COLUMN recurrence_typ
 ensureTaskColumn('recurrence_weekday', 'ALTER TABLE tasks ADD COLUMN recurrence_weekday INTEGER');
 ensureTaskColumn('timezone_offset', 'ALTER TABLE tasks ADD COLUMN timezone_offset INTEGER');
 ensureTaskColumn('notify_mode', 'ALTER TABLE tasks ADD COLUMN notify_mode TEXT');
-ensureTaskColumn('target_mode', "ALTER TABLE tasks ADD COLUMN target_mode TEXT NOT NULL DEFAULT 'current_chat'");
+ensureTaskColumn('target_mode', "ALTER TABLE tasks ADD COLUMN target_mode TEXT NOT NULL DEFAULT 'chat'");
 ensureTaskColumn('target_chat_id', 'ALTER TABLE tasks ADD COLUMN target_chat_id INTEGER');
+ensureTaskColumn('redirect_notify', 'ALTER TABLE tasks ADD COLUMN redirect_notify INTEGER NOT NULL DEFAULT 1');
 if (!hasPromptColumn('description')) {
   db.exec("ALTER TABLE prompts ADD COLUMN description TEXT NOT NULL DEFAULT ''");
 }

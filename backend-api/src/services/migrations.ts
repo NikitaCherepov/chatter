@@ -19,8 +19,10 @@ const dropColumnIfPresent = (table: string, column: string) => {
 // Backfills tasks.target_mode / tasks.target_chat_id from the legacy
 // ai_instruction payload JSON ({"instruction": ..., "_target_chat_id": ...,
 // "_create_new_chat": true}). The payload wrapper is unwrapped into plain
-// instruction text; rooms and foreign chats never were valid targets, so such
-// legacy entries fall back to 'current_chat'.
+// instruction text. target_mode is two-valued: 'chat' (deliver to
+// target_chat_id; NULL means the user's active chat at run time — legacy
+// fallback) and 'new_chat'. Rooms and foreign chats never were valid targets,
+// so such legacy entries fall back to 'chat' with a NULL target.
 const migrateTasksTargetMode = () => {
   const rows = db.prepare(`
     SELECT id, user_id, task_type, payload, target_mode, target_chat_id
@@ -43,26 +45,21 @@ const migrateTasksTargetMode = () => {
 
         if (parsed._create_new_chat === true) {
           targetMode = 'new_chat';
-        } else if (Number.isFinite(Number(parsed._target_chat_id))) {
-          const chatId = Math.floor(Number(parsed._target_chat_id));
-          // Rooms and foreign chats are forbidden targets — validate ownership.
-          const chat = db.prepare(`
-            SELECT id FROM user_chats
-            WHERE id = ? AND user_id = ? AND (room_enabled IS NULL OR room_enabled = 0)
-          `).get(chatId, row.user_id) as { id: number } | undefined;
-          if (chat) {
-            targetMode = 'id';
-            targetChatId = chatId;
-          } else {
-            targetMode = 'current_chat';
-          }
         } else {
-          // Legacy wrapper without routing metadata — unwrap, deliver to active chat.
-          targetMode = 'current_chat';
+          targetMode = 'chat';
+          if (Number.isFinite(Number(parsed._target_chat_id))) {
+            const chatId = Math.floor(Number(parsed._target_chat_id));
+            // Rooms and foreign chats are forbidden targets — validate ownership.
+            const chat = db.prepare(`
+              SELECT id FROM user_chats
+              WHERE id = ? AND user_id = ? AND (room_enabled IS NULL OR room_enabled = 0)
+            `).get(chatId, row.user_id) as { id: number } | undefined;
+            if (chat) targetChatId = chatId;
+          }
         }
       }
     } catch {
-      // Plain-text payload — no legacy routing metadata, keep 'current_chat'.
+      // Plain-text payload — no legacy routing metadata, keep 'chat'.
     }
 
     if (targetMode === null) continue; // nothing to migrate for this row
@@ -108,16 +105,17 @@ const migrateTasksNotify = () => {
       recurrence_type TEXT NOT NULL DEFAULT 'once',
       recurrence_weekday INTEGER,
       timezone_offset INTEGER,
-      target_mode TEXT NOT NULL DEFAULT 'current_chat',
+      target_mode TEXT NOT NULL DEFAULT 'chat',
       target_chat_id INTEGER,
+      redirect_notify INTEGER NOT NULL DEFAULT 1,
       status TEXT NOT NULL DEFAULT 'pending'
     )
   `);
   db.exec(`
-    INSERT INTO tasks_migrate (id, user_id, execute_at, task_type, payload, notify_mode, recurrence_type, recurrence_weekday, timezone_offset, target_mode, target_chat_id, status)
+    INSERT INTO tasks_migrate (id, user_id, execute_at, task_type, payload, notify_mode, recurrence_type, recurrence_weekday, timezone_offset, target_mode, target_chat_id, redirect_notify, status)
     SELECT id, user_id, execute_at, task_type, payload,
       CASE WHEN notify_mode IN ('always', 'never', 'on_error') THEN notify_mode ELSE 'always' END,
-      recurrence_type, recurrence_weekday, timezone_offset, target_mode, target_chat_id, status
+      recurrence_type, recurrence_weekday, timezone_offset, target_mode, target_chat_id, COALESCE(redirect_notify, 1), status
     FROM tasks
   `);
   db.exec('DROP TABLE tasks');

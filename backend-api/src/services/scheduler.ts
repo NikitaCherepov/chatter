@@ -87,54 +87,54 @@ const computeNextRecurringExecuteAt = (
 
 // ── Task target routing ─────────────────────────────────────────────────────
 //
-// target_mode = 'id'           → deliver to the saved target_chat_id (own,
-//                                non-room chat). If the chat was deleted or
-//                                became a room, self-heal: create a fresh
-//                                personal chat and re-point the task.
-// target_mode = 'current_chat' → deliver to the user's active chat at run time.
-//                                Rooms are forbidden targets: if the active
-//                                chat is a room, skip delivery and notify.
-// target_mode = 'new_chat'     → create a fresh personal chat on every run.
+// target_mode = 'chat'     → deliver to the saved target_chat_id (own,
+//                            non-room chat). Legacy rows with NULL
+//                            target_chat_id fall back to the active chat.
+//                            Safety net: if at run time the target turned out
+//                            to be a room (or is gone), self-heal — create a
+//                            fresh personal chat, re-point the task and, for
+//                            rooms, warn the user in the new chat.
+// target_mode = 'new_chat' → create a fresh personal chat on every run.
 
-type TaskChatResolution =
-  | { ok: true; chatId: number; isNewChat: boolean }
-  | { ok: false; reason: 'room' };
+type TaskChatResolution = {
+  chatId: number;
+  isNewChat: boolean;
+  /** True when the previous target turned out to be a room and the result was
+   *  redirected into a freshly created chat (triggers the user warning). */
+  roomRedirect: boolean;
+};
 
 const resolveTaskChat = (task: TaskDto & { user_id: number }, titleText: string): TaskChatResolution => {
   if (task.target_mode === 'new_chat') {
     const res = createChat(task.user_id, titleText.slice(0, 60));
-    return { ok: true, chatId: Number(res.lastInsertRowid), isNewChat: true };
+    return { chatId: Number(res.lastInsertRowid), isNewChat: true, roomRedirect: false };
   }
 
-  if (task.target_mode === 'id' && task.target_chat_id) {
+  if (task.target_mode === 'chat' && task.target_chat_id) {
     const chat = db.prepare('SELECT id, user_id, room_enabled FROM user_chats WHERE id = ?')
       .get(task.target_chat_id) as { id: number; user_id: number; room_enabled: number } | undefined;
     if (chat && chat.user_id === task.user_id && !chat.room_enabled) {
-      return { ok: true, chatId: chat.id, isNewChat: false };
+      return { chatId: chat.id, isNewChat: false, roomRedirect: false };
     }
-    // Self-healing: the saved target died or turned into a room — create a
+    // Safety net: the pinned target died or turned out to be a room — create a
     // fresh personal chat, deliver there and re-point the task at it.
+    const isRoom = Boolean(chat && chat.user_id === task.user_id && chat.room_enabled);
     const res = createChat(task.user_id, titleText.slice(0, 60));
     const chatId = Number(res.lastInsertRowid);
     updateTaskTargetChat(task.id, chatId);
-    return { ok: true, chatId, isNewChat: true };
+    return { chatId, isNewChat: true, roomRedirect: isRoom };
   }
 
-  // current_chat (and the defensive fallback for inconsistent rows)
+  // Legacy 'chat' rows without a pinned chat: the user's active chat at run
+  // time. Rooms trigger the same safety net as above.
   const activeChatId = ensureActiveChat(task.user_id);
   const active = db.prepare('SELECT room_enabled FROM user_chats WHERE id = ?')
     .get(activeChatId) as { room_enabled: number } | undefined;
-  if (active?.room_enabled) return { ok: false, reason: 'room' };
-  return { ok: true, chatId: activeChatId, isNewChat: false };
-};
-
-const notifyTaskRoomRefused = (task: TaskDto & { user_id: number }) => {
-  deliverTaskResult(
-    task.user_id,
-    translateForLanguage(getUserById(task.user_id)?.language, 'tasks.roomRefused', { id: task.id }),
-    0,
-    false,
-  );
+  if (!active?.room_enabled) {
+    return { chatId: activeChatId, isNewChat: false, roomRedirect: false };
+  }
+  const res = createChat(task.user_id, titleText.slice(0, 60));
+  return { chatId: Number(res.lastInsertRowid), isNewChat: true, roomRedirect: true };
 };
 
 /** Payload is plain instruction text since the target_mode migration; keep a
@@ -217,18 +217,25 @@ const tick = async () => {
     let resolvedIsNewChat = false;
     try {
       const language = getUserById(task.user_id)?.language;
-      // Resolve the destination chat first — rooms refuse delivery outright.
+      // Resolve the destination chat first. A target that turned out to be a
+      // room at run time is redirected into a fresh personal chat.
       const titleText = task.task_type === 'ai_instruction'
         ? extractInstructionText(task.payload)
         : task.payload;
       const target = resolveTaskChat(task, titleText);
-      if (!target.ok) {
-        notifyTaskRoomRefused(task);
-        finishTaskRun(task, false);
-        continue;
-      }
       resolvedChatId = target.chatId;
       resolvedIsNewChat = target.isNewChat;
+
+      // Safety net fired: warn the user in the new chat that the previous
+      // chat turned out to be a room. Pushed to desktop/Telegram only when
+      // the task has redirect_notify enabled (default).
+      if (target.roomRedirect) {
+        const warnText = translateForLanguage(language, 'tasks.roomRedirected', { id: task.id });
+        await appendChatMessage(task.user_id, resolvedChatId, 'assistant', warnText);
+        if (task.redirect_notify) {
+          deliverTaskResult(task.user_id, warnText, resolvedChatId, true);
+        }
+      }
 
       let successMessage = '';
 

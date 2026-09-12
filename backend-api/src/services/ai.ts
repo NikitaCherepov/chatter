@@ -1961,7 +1961,7 @@ const incrementUserTavilySearchUsage = (userId: number, count = 1) => {
 
 const formatTaskTargetText = (t: ReturnType<typeof listTasks>[number]) => {
   if (t.target_mode === 'new_chat') return 'new chat (created per run)';
-  if (t.target_mode === 'id' && t.target_chat_id) {
+  if (t.target_mode === 'chat' && t.target_chat_id) {
     return t.target_chat_title
       ? `chat #${t.target_chat_id} "${t.target_chat_title}"`
       : `chat #${t.target_chat_id}`;
@@ -1980,32 +1980,45 @@ const formatTasksList = (tasks: ReturnType<typeof listTasks>, timezoneOffset: nu
   }).join('\n\n');
 };
 
-/** Validates target_mode / target_chat_id tool arguments. Rooms and foreign
- *  chats are forbidden task targets: the chat must be owned by the user and
- *  not be room-enabled. Returns an error string for the model on failure. */
+/** Validates target_mode / target_chat_id tool arguments. Two modes:
+ *  'chat' — deliver to target_chat_id: either a concrete chat ID (own,
+ *  non-room) or the literal 'current_chat' / omitted, which is substituted
+ *  with the user's active chat ID right away; rooms are an error.
+ *  'new_chat' — a fresh personal chat per run, target_chat_id must be null.
+ *  Rooms and foreign chats are forbidden targets: the chat must be owned by
+ *  the user and not be room-enabled. Returns an error string for the model. */
 const resolveTaskTargetArgs = (
   userId: number,
   parsed: Record<string, any>
 ): { ok: true; targetMode: TaskTargetMode; targetChatId: number | null } | { ok: false; error: string } => {
-  const targetMode = `${parsed.target_mode || 'current_chat'}` as TaskTargetMode;
-  if (!['id', 'current_chat', 'new_chat'].includes(targetMode)) {
-    return { ok: false, error: 'Error: Invalid target_mode (expected id, current_chat or new_chat).' };
+  const targetMode = `${parsed.target_mode || 'chat'}` as TaskTargetMode;
+  if (!['chat', 'new_chat'].includes(targetMode)) {
+    return { ok: false, error: 'Error: Invalid target_mode (expected chat or new_chat).' };
   }
-  if (targetMode !== 'id') {
+  if (targetMode === 'new_chat') {
     if (parsed.target_chat_id !== undefined && parsed.target_chat_id !== null) {
-      return { ok: false, error: 'Error: target_chat_id must be used only together with target_mode=id.' };
+      return { ok: false, error: 'Error: target_chat_id must be null/omitted for target_mode=new_chat.' };
     }
     return { ok: true, targetMode, targetChatId: null };
   }
-  const rawChatId = Number(parsed.target_chat_id);
-  if (!Number.isFinite(rawChatId) || Math.floor(rawChatId) <= 0) {
-    return { ok: false, error: 'Error: For target_mode=id pass target_chat_id of the user\'s own personal chat.' };
+  const raw = parsed.target_chat_id;
+  if (raw === undefined || raw === null || raw === 'current_chat') {
+    const activeChatId = ensureActiveChat(userId);
+    const active = db.prepare('SELECT room_enabled FROM user_chats WHERE id = ?')
+      .get(activeChatId) as { room_enabled: number } | undefined;
+    if (active?.room_enabled) {
+      return { ok: false, error: 'Error: The current chat is a shared room — task delivery into rooms is forbidden. Pass target_mode=new_chat, or a target_chat_id of one of the user\'s personal chats.' };
+    }
+    return { ok: true, targetMode: 'chat', targetChatId: activeChatId };
   }
-  const chatId = Math.floor(rawChatId);
+  const chatId = Math.floor(Number(raw));
+  if (!Number.isFinite(chatId) || chatId <= 0) {
+    return { ok: false, error: 'Error: For target_mode=chat pass target_chat_id — a chat ID, or the literal "current_chat".' };
+  }
   if (!isOwnNonRoomChat(userId, chatId)) {
-    return { ok: false, error: `Error: Chat #${chatId} is not the user's own personal chat. Shared rooms and other users' chats are forbidden targets — use one of the user's personal chats, or target_mode=current_chat / new_chat.` };
+    return { ok: false, error: `Error: Chat #${chatId} is not the user's own personal chat. Shared rooms and other users' chats are forbidden targets — use one of the user's personal chats, "current_chat", or target_mode=new_chat.` };
   }
-  return { ok: true, targetMode, targetChatId: chatId };
+  return { ok: true, targetMode: 'chat', targetChatId: chatId };
 };
 
 const runSaveNoteTool = (user: UserRecord, contentRaw: string, titleRaw = '') => {
@@ -2229,8 +2242,8 @@ export const toolDefinitions = [
           execute_at: { type: 'number', description: 'Legacy field: Unix timestamp in seconds. Use only if local_time/delay_seconds are not suitable.' },
           task_type: { type: 'string', enum: ['message', 'smart_home', 'ai_instruction'], description: 'message - reminder, smart_home - smart home command, ai_instruction - schedule AI instruction execution (web search, email check, data analysis, etc. — AI will call the needed tools itself).' },
           payload: { type: 'string', description: 'For message: reminder text. For smart_home: JSON string with device_id and action (on, off, set_color, set_brightness, or Zigbee set_property with property and value). For ai_instruction: instruction text that the AI will execute on schedule.' },
-          target_mode: { type: 'string', enum: ['current_chat', 'new_chat', 'id'], description: 'Where the task result is delivered. current_chat (default) - the user active chat at run time (rooms are refused with a user notification). new_chat - a fresh personal chat is created on every run. id - the exact chat from target_chat_id.' },
-          target_chat_id: { type: 'number', description: 'Chat ID for target_mode=id ONLY. Must be the user\'s own personal chat — shared rooms and other users\' chats are forbidden (the tool will return an error).' },
+          target_mode: { type: 'string', enum: ['chat', 'new_chat'], description: 'Where the task result is delivered. chat (default) - the chat set in target_chat_id (a chat ID, or the literal "current_chat" = the user\'s active personal chat at creation time). new_chat - a fresh personal chat is created on every run.' },
+          target_chat_id: { anyOf: [{ type: 'number' }, { type: 'string', enum: ['current_chat'] }], description: 'Target chat for target_mode=chat ONLY: a chat ID of the user\'s own personal chat, or the literal string "current_chat" (default) - substituted with the active chat ID right away. Must be null/omitted for new_chat. Shared rooms and other users\' chats are forbidden (the tool will return an error).' },
           recurrence_type: { type: 'string', enum: ['once', 'daily', 'weekly'], description: 'Schedule type: once - one time, daily - every day, weekly - every week.' },
           recurrence_weekday: { type: 'number', description: 'Day of week for weekly: 1=Monday ... 7=Sunday.' },
           notify_mode: { type: 'string', enum: ['always', 'never', 'on_error'], description: 'Notification mode. Default (omit): message/smart_home report every run; for ai_instruction the AI decides — an empty answer means no notification, so put any "only write if..." conditions directly into the instruction text. always - report every run. never - never report. on_error - report only when the run fails.' }
@@ -2285,8 +2298,8 @@ export const toolDefinitions = [
           recurrence_type: { type: 'string', enum: ['once', 'daily', 'weekly'], description: 'New schedule type.' },
           recurrence_weekday: { type: 'number', description: 'Day of week for weekly: 1=Monday ... 7=Sunday.' },
           notify_mode: { type: 'string', enum: ['always', 'never', 'on_error'], description: 'New notification mode (see schedule_task).' },
-          target_mode: { type: 'string', enum: ['current_chat', 'new_chat', 'id'], description: 'New delivery target mode (see schedule_task).' },
-          target_chat_id: { type: 'number', description: 'Chat ID for target_mode=id ONLY (own personal chat, rooms forbidden).' }
+          target_mode: { type: 'string', enum: ['chat', 'new_chat'], description: 'New delivery target mode (see schedule_task).' },
+          target_chat_id: { anyOf: [{ type: 'number' }, { type: 'string', enum: ['current_chat'] }], description: 'New target chat for target_mode=chat (chat ID or "current_chat"); null for new_chat.' }
         },
         required: ['task_id']
       }
@@ -4184,7 +4197,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     const notifyInfo = notifyMode === null
       ? (taskType === 'ai_instruction' ? 'AI decides' : 'always')
       : notifyMode;
-    return `Successfully scheduled. Next run: ${planned.local} (${planned.tzLabel}). UTC time: ${planned.utc}. Schedule type: ${recurrenceType}. Delivery target: ${target.targetMode === 'id' ? `chat #${target.targetChatId}` : target.targetMode}. Notification mode: ${notifyInfo}.`;
+    return `Successfully scheduled. Next run: ${planned.local} (${planned.tzLabel}). UTC time: ${planned.utc}. Schedule type: ${recurrenceType}. Delivery target: ${target.targetMode === 'chat' ? `chat #${target.targetChatId}` : 'new chat'}. Notification mode: ${notifyInfo}.`;
   }
 
   if (toolName === 'update_my_task') {

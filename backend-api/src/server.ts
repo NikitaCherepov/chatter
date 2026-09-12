@@ -2786,16 +2786,30 @@ const validateTaskFields = (
     : `${body.notify_mode}`;
   if (notifyMode !== null && !['always', 'never', 'on_error'].includes(notifyMode)) return { ok: false, error: 'bad_notify_mode' };
 
-  const targetMode = `${body.target_mode || 'current_chat'}`;
-  if (!['id', 'current_chat', 'new_chat'].includes(targetMode)) return { ok: false, error: 'bad_target_mode' };
+  const targetMode = `${body.target_mode || 'chat'}`;
+  if (!['chat', 'new_chat'].includes(targetMode)) return { ok: false, error: 'bad_target_mode' };
   let targetChatId: number | null = null;
-  if (targetMode !== 'id') {
-    if (body.target_chat_id !== undefined && body.target_chat_id !== null) return { ok: false, error: 'target_chat_id_requires_id_mode' };
+  if (targetMode === 'new_chat') {
+    if (body.target_chat_id !== undefined && body.target_chat_id !== null) return { ok: false, error: 'target_chat_id_not_allowed' };
   } else {
-    const rawChatId = Number(body.target_chat_id);
-    if (!Number.isFinite(rawChatId) || Math.floor(rawChatId) <= 0) return { ok: false, error: 'bad_target_chat_id' };
-    targetChatId = Math.floor(rawChatId);
-    if (!isOwnNonRoomChat(userId, targetChatId)) return { ok: false, error: 'target_chat_forbidden' };
+    const raw = body.target_chat_id;
+    if (raw === undefined || raw === null || raw === 'current_chat') {
+      // 'current_chat' (or omitted) — substituted with the active chat ID right
+      // away; rooms are forbidden targets.
+      const activeChatId = ensureActiveChat(userId);
+      const active = db.prepare('SELECT room_enabled FROM user_chats WHERE id = ?').get(activeChatId) as { room_enabled: number } | undefined;
+      if (active?.room_enabled) return { ok: false, error: 'target_chat_forbidden' };
+      targetChatId = activeChatId;
+    } else {
+      const rawChatId = Number(raw);
+      if (!Number.isFinite(rawChatId) || Math.floor(rawChatId) <= 0) return { ok: false, error: 'bad_target_chat_id' };
+      targetChatId = Math.floor(rawChatId);
+      if (!isOwnNonRoomChat(userId, targetChatId)) return { ok: false, error: 'target_chat_forbidden' };
+    }
+  }
+
+  if (body.redirect_notify !== undefined && typeof body.redirect_notify !== 'boolean') {
+    return { ok: false, error: 'bad_redirect_notify' };
   }
 
   let payload: string | null = null;
@@ -2834,6 +2848,7 @@ const validateTaskFields = (
       notify_mode: notifyMode,
       target_mode: targetMode,
       target_chat_id: targetChatId,
+      redirect_notify: body.redirect_notify === undefined ? true : body.redirect_notify,
     },
   };
 };
@@ -2856,7 +2871,7 @@ app.post('/api/v1/tasks', (req: AuthedRequest, res) => {
     userId, f.execute_at, f.task_type, f.payload,
     f.recurrence_type, f.recurrence_weekday, timezoneOffset,
     f.notify_mode,
-    f.target_mode, f.target_chat_id,
+    f.target_mode, f.target_chat_id, f.redirect_notify,
   );
   return res.status(201).json({ task_id: taskId, task: getUserTaskById(userId, taskId) });
 });
@@ -2871,6 +2886,7 @@ app.put('/api/v1/tasks/:id', (req: AuthedRequest, res) => {
   if (existing.status !== 'pending') return res.status(409).json({ error: 'task_not_pending' });
 
   const body = req.body ?? {};
+  const effectiveTargetMode = body.target_mode ?? existing.target_mode;
   // Merge the patch over the current task so validators see effective values.
   const merged = {
     task_type: body.task_type ?? existing.task_type,
@@ -2881,8 +2897,11 @@ app.put('/api/v1/tasks/:id', (req: AuthedRequest, res) => {
       ? body.recurrence_weekday
       : (existing.recurrence_type === 'weekly' ? existing.recurrence_weekday : null),
     notify_mode: body.notify_mode !== undefined ? body.notify_mode : existing.notify_mode,
-    target_mode: body.target_mode ?? existing.target_mode,
-    target_chat_id: body.target_chat_id !== undefined ? body.target_chat_id : existing.target_chat_id,
+    target_mode: effectiveTargetMode,
+    target_chat_id: effectiveTargetMode === 'new_chat'
+      ? null
+      : (body.target_chat_id !== undefined ? body.target_chat_id : existing.target_chat_id),
+    redirect_notify: body.redirect_notify !== undefined ? body.redirect_notify : existing.redirect_notify,
   };
   const validated = validateTaskFields(userId, merged, { requireAll: false });
   if (validated.ok === false) return res.status(400).json({ error: validated.error });
@@ -2907,6 +2926,9 @@ app.put('/api/v1/tasks/:id', (req: AuthedRequest, res) => {
   if (body.target_mode !== undefined || body.target_chat_id !== undefined) {
     fields.target_mode = f.target_mode;
     fields.target_chat_id = f.target_chat_id;
+  }
+  if (body.redirect_notify !== undefined) {
+    fields.redirect_notify = f.redirect_notify;
   }
 
   const ok = updatePendingTask(userId, taskId, fields);

@@ -112,7 +112,7 @@ export function TasksTool() {
 
   const targetLabel = (task: api.TaskDto) => {
     if (task.target_mode === 'new_chat') return t('tools.tasks.newChat');
-    if (task.target_mode === 'id' && task.target_chat_id) {
+    if (task.target_mode === 'chat' && task.target_chat_id) {
       return task.target_chat_title
         ? t('tools.tasks.toChatTitled', { title: task.target_chat_title })
         : t('tools.tasks.toChat', { id: task.target_chat_id });

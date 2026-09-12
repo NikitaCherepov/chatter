@@ -76,37 +76,37 @@ assert.deepEqual(
 );
 assert.deepEqual(
   { m: rows[1].target_mode, c: rows[1].target_chat_id, p: rows[1].payload },
-  { m: 'id', c: 1, p: 'Сводка новостей' },
-  'valid own chat → id + target_chat_id, payload unwrapped',
+  { m: 'chat', c: 1, p: 'Сводка новостей' },
+  'valid own chat → chat + target_chat_id, payload unwrapped',
 );
 assert.deepEqual(
   { m: rows[2].target_mode, c: rows[2].target_chat_id, p: rows[2].payload },
-  { m: 'current_chat', c: null, p: 'В комнату' },
-  'room target is forbidden → falls back to current_chat',
+  { m: 'chat', c: null, p: 'В комнату' },
+  'room target is forbidden → falls back to chat with NULL target',
 );
 assert.deepEqual(
   { m: rows[3].target_mode, c: rows[3].target_chat_id, p: rows[3].payload },
-  { m: 'current_chat', c: null, p: 'Чужой чат' },
-  'foreign chat target → falls back to current_chat',
+  { m: 'chat', c: null, p: 'Чужой чат' },
+  'foreign chat target → falls back to chat with NULL target',
 );
 assert.deepEqual(
   { m: rows[4].target_mode, c: rows[4].target_chat_id, p: rows[4].payload },
-  { m: 'current_chat', c: null, p: 'Просто обёртка' },
-  'wrapper without routing metadata → current_chat, payload unwrapped',
+  { m: 'chat', c: null, p: 'Просто обёртка' },
+  'wrapper without routing metadata → chat with NULL target, payload unwrapped',
 );
 assert.deepEqual(
   { m: rows[5].target_mode, c: rows[5].target_chat_id, p: rows[5].payload },
-  { m: 'id', c: 1, p: 'Старый ключ' },
+  { m: 'chat', c: 1, p: 'Старый ключ' },
   '_instruction key is unwrapped too',
 );
 assert.deepEqual(
   { m: rows[6].target_mode, c: rows[6].target_chat_id, p: rows[6].payload },
-  { m: 'current_chat', c: null, p: 'Плоский текст без JSON' },
+  { m: 'chat', c: null, p: 'Плоский текст без JSON' },
   'plain-text ai_instruction payload stays byte-identical, default mode kept',
 );
 assert.deepEqual(
   { m: rows[7].target_mode, c: rows[7].target_chat_id, p: rows[7].payload },
-  { m: 'current_chat', c: null, p: 'Напомни выпить воды' },
+  { m: 'chat', c: null, p: 'Напомни выпить воды' },
   'non-ai_instruction task is not rewritten',
 );
 

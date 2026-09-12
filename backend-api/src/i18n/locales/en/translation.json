@@ -137,7 +137,7 @@
   },
   "tasks": {
     "emptyInstruction": "Empty AI instruction \u2014 the task was not executed.",
-    "roomRefused": "\u26a0\ufe0f Task #{{id}} was not delivered: the active chat is a shared room, and task delivery into rooms is forbidden. Switch to a personal chat to receive results.",
+    "roomRedirected": "\u26a0\ufe0f Task #{{id}}: the previous chat turned out to be a shared room \u2014 a new chat was created and the result is delivered here.",
     "reminder": "\ud83d\udd14 *Reminder:*\n\n{{text}}",
     "smartHomeDone": "\ud83e\udd16 *Automation executed:*\n{{result}}",
     "aiInstructionDone": "\ud83e\udd16 *Scheduled AI instruction completed:*\n\n{{text}}",

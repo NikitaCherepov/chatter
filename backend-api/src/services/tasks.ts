@@ -7,7 +7,7 @@ const TASK_COLUMNS = `
   t.id, t.execute_at, t.task_type, t.payload, t.status,
   t.recurrence_type, t.recurrence_weekday, t.timezone_offset,
   t.notify_mode,
-  t.target_mode, t.target_chat_id, uc.title AS target_chat_title
+  t.target_mode, t.target_chat_id, t.redirect_notify, uc.title AS target_chat_title
 `;
 
 const mapTaskRow = (row: any): TaskDto => ({
@@ -20,8 +20,9 @@ const mapTaskRow = (row: any): TaskDto => ({
   recurrence_weekday: row.recurrence_weekday == null ? null : Number(row.recurrence_weekday),
   timezone_offset: row.timezone_offset == null ? null : Number(row.timezone_offset),
   notify_mode: (row.notify_mode == null ? null : row.notify_mode) as TaskNotifyMode | null,
-  target_mode: (row.target_mode || 'current_chat') as TaskTargetMode,
+  target_mode: (row.target_mode || 'chat') as TaskTargetMode,
   target_chat_id: row.target_chat_id == null ? null : Number(row.target_chat_id),
+  redirect_notify: row.redirect_notify == null ? true : Number(row.redirect_notify) !== 0,
   target_chat_title: row.target_chat_title == null ? null : String(row.target_chat_title),
 });
 
@@ -31,7 +32,7 @@ export const listTasks = (userId: number, limit = 50, status: 'pending' | 'done'
     ? db.prepare(`
       SELECT ${TASK_COLUMNS}
       FROM tasks t
-      LEFT JOIN user_chats uc ON t.target_mode = 'id' AND uc.id = t.target_chat_id
+      LEFT JOIN user_chats uc ON t.target_mode = 'chat' AND uc.id = t.target_chat_id
       WHERE t.user_id = ?
       ORDER BY t.execute_at ASC, t.id ASC
       LIMIT ?
@@ -39,7 +40,7 @@ export const listTasks = (userId: number, limit = 50, status: 'pending' | 'done'
     : db.prepare(`
       SELECT ${TASK_COLUMNS}
       FROM tasks t
-      LEFT JOIN user_chats uc ON t.target_mode = 'id' AND uc.id = t.target_chat_id
+      LEFT JOIN user_chats uc ON t.target_mode = 'chat' AND uc.id = t.target_chat_id
       WHERE t.user_id = ? AND t.status = ?
       ORDER BY t.execute_at ASC, t.id ASC
       LIMIT ?
@@ -57,14 +58,15 @@ export const createTask = (
   recurrenceWeekday: number | null = null,
   timezoneOffset: number | null = null,
   notifyMode: TaskNotifyMode | null = null,
-  targetMode: TaskTargetMode = 'current_chat',
-  targetChatId: number | null = null
+  targetMode: TaskTargetMode = 'chat',
+  targetChatId: number | null = null,
+  redirectNotify: boolean = true
 ) => {
   const effectiveNotifyMode = notifyMode ?? (taskType === 'ai_instruction' ? null : 'always');
   const res = db.prepare(`
-    INSERT INTO tasks (user_id, execute_at, task_type, payload, recurrence_type, recurrence_weekday, timezone_offset, notify_mode, target_mode, target_chat_id)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(userId, executeAt, taskType, payload, recurrenceType, recurrenceWeekday, timezoneOffset, effectiveNotifyMode, targetMode, targetChatId);
+    INSERT INTO tasks (user_id, execute_at, task_type, payload, recurrence_type, recurrence_weekday, timezone_offset, notify_mode, target_mode, target_chat_id, redirect_notify)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(userId, executeAt, taskType, payload, recurrenceType, recurrenceWeekday, timezoneOffset, effectiveNotifyMode, targetMode, targetChatId, redirectNotify ? 1 : 0);
   return Number(res.lastInsertRowid);
 };
 
@@ -78,6 +80,7 @@ export type TaskUpdateFields = {
   notify_mode?: TaskNotifyMode | null;
   target_mode?: TaskTargetMode;
   target_chat_id?: number | null;
+  redirect_notify?: boolean;
 };
 
 /** Edits a pending task. Only pending tasks are editable; returns false otherwise. */
@@ -125,6 +128,10 @@ export const updatePendingTask = (userId: number, taskId: number, fields: TaskUp
     sets.push('target_chat_id = ?');
     params.push(fields.target_chat_id);
   }
+  if (fields.redirect_notify !== undefined) {
+    sets.push('redirect_notify = ?');
+    params.push(fields.redirect_notify ? 1 : 0);
+  }
 
   if (sets.length === 0) return false;
 
@@ -148,7 +155,7 @@ export const getUserTaskById = (userId: number, taskId: number): TaskDto | null 
   const row = db.prepare(`
     SELECT ${TASK_COLUMNS}
     FROM tasks t
-    LEFT JOIN user_chats uc ON t.target_mode = 'id' AND uc.id = t.target_chat_id
+    LEFT JOIN user_chats uc ON t.target_mode = 'chat' AND uc.id = t.target_chat_id
     WHERE t.user_id = ? AND t.id = ? LIMIT 1
   `).get(userId, taskId) as any;
   if (!row) return null;
@@ -159,7 +166,7 @@ export const getDueTasks = (unixNow: number): Array<TaskDto & { user_id: number 
   const rows = db.prepare(`
     SELECT ${TASK_COLUMNS}, t.user_id
     FROM tasks t
-    LEFT JOIN user_chats uc ON t.target_mode = 'id' AND uc.id = t.target_chat_id
+    LEFT JOIN user_chats uc ON t.target_mode = 'chat' AND uc.id = t.target_chat_id
     WHERE t.status = 'pending' AND t.execute_at <= ?
     ORDER BY t.execute_at ASC, t.id ASC
   `).all(unixNow) as any[];
@@ -178,7 +185,7 @@ export const updateTaskNextExecution = (taskId: number, nextExecuteAt: number) =
   .prepare('UPDATE tasks SET execute_at = ? WHERE id = ?')
   .run(nextExecuteAt, taskId);
 
-/** Self-healing for target_mode='id': re-point the task at a fresh chat. */
+/** Self-healing for target_mode='chat': re-point the task at a fresh chat. */
 export const updateTaskTargetChat = (taskId: number, chatId: number) => db
   .prepare('UPDATE tasks SET target_chat_id = ? WHERE id = ?')
   .run(chatId, taskId);
