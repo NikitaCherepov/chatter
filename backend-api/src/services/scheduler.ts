@@ -9,6 +9,7 @@ import { sendToDesktop, isDesktopOnline } from '../ws-clients.js';
 import { sendTelegramMessage } from './telegram-send.js';
 import { getTelegramIdentityForAccount } from './accounts.js';
 import { ensureUserMonthlyUsageWindow, resetExpiredMonthlyUsageWindows } from './monthly-usage.js';
+import { translateForLanguage } from '../i18n/index.js';
 
 const SCHEDULER_INTERVAL_MS = Math.max(5_000, Number.parseInt(process.env.BACKEND_SCHEDULER_INTERVAL_MS || '30000', 10) || 30_000);
 
@@ -159,7 +160,7 @@ const runScheduledAiInstructionTask = async (
   isNewChat: boolean
 ): Promise<{ reply_text: string; chat_id: number; is_new_chat: boolean }> => {
   const instruction = extractInstructionText(task.payload);
-  if (!instruction) throw new Error('Пустая AI-инструкция — задача не выполнена.');
+  if (!instruction) throw new Error(translateForLanguage(getUserById(task.user_id)?.language, 'tasks.emptyInstruction'));
 
   const aiTask = `[SCHEDULED TASK]: A scheduled task has fired for this user according to their own instruction.
 Execute the instruction using tools if needed.

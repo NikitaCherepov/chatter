@@ -134,5 +134,8 @@
       "list_devops_servers": "[{{agent}}] Getting server list...",
       "runningTool": "[{{agent}}] Running {{tool}}..."
     }
+  },
+  "tasks": {
+    "emptyInstruction": "Empty AI instruction \u2014 the task was not executed."
   }
 }
