@@ -160,7 +160,7 @@ const extractInstructionText = (payload: string): string => {
 };
 
 const runScheduledAiInstructionTask = async (
-  task: { user_id: number; payload: string },
+  task: TaskDto & { user_id: number },
   chatId: number,
   isNewChat: boolean
 ): Promise<{ reply_text: string; chat_id: number; is_new_chat: boolean }> => {
@@ -181,6 +181,7 @@ User's instruction: "${instruction}"`;
     persistUserText: translateForLanguage(language, 'tasks.aiInstructionRun', { text: instruction }),
     autoRejectHitl: true,
     isBackgroundTask: true,
+    allowedTools: task.allowed_tools ?? null,
   });
 
   return {

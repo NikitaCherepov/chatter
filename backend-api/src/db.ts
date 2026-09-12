@@ -141,6 +141,7 @@ db.exec(`
     target_mode TEXT NOT NULL DEFAULT 'chat',
     target_chat_id INTEGER,
     redirect_notify INTEGER NOT NULL DEFAULT 1,
+    allowed_tools TEXT,
     status TEXT NOT NULL DEFAULT 'pending'
   );
 
@@ -584,6 +585,7 @@ ensureTaskColumn('notify_mode', 'ALTER TABLE tasks ADD COLUMN notify_mode TEXT')
 ensureTaskColumn('target_mode', "ALTER TABLE tasks ADD COLUMN target_mode TEXT NOT NULL DEFAULT 'chat'");
 ensureTaskColumn('target_chat_id', 'ALTER TABLE tasks ADD COLUMN target_chat_id INTEGER');
 ensureTaskColumn('redirect_notify', 'ALTER TABLE tasks ADD COLUMN redirect_notify INTEGER NOT NULL DEFAULT 1');
+ensureTaskColumn('allowed_tools', 'ALTER TABLE tasks ADD COLUMN allowed_tools TEXT');
 if (!hasPromptColumn('description')) {
   db.exec("ALTER TABLE prompts ADD COLUMN description TEXT NOT NULL DEFAULT ''");
 }

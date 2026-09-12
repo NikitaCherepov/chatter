@@ -1876,6 +1876,9 @@ export type TaskDto = {
   target_chat_id: number | null;
   target_chat_title?: string | null;
   redirect_notify?: boolean;
+  /** Tool whitelist for ai_instruction runs: null = all available tools,
+   *  [] = run without tools. */
+  allowed_tools?: string[] | null;
 };
 
 export async function listTasks(limit = 50, status: 'pending' | 'done' | 'error' | 'all' = 'pending'): Promise<{ tasks: TaskDto[] }> {

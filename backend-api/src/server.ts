@@ -14,7 +14,7 @@ import { createTask, deletePendingTask, getPendingTaskCount, getUserTaskById, is
 import { listMapPins, getMapPinById, createMapPin, updateMapPin, deleteMapPin } from './services/map-pins.js';
 import { sendMessageThroughAi, generateAdminOutreach, callLiteAi, ensureUtilityAiQuota, chargeUtilityAiCompletion, getModelsCatalog, getAutoReasoningLevels, getAutoVisionSupport, abortChatGeneration, abortUserGenerations, beginActiveHitlWait, endActiveHitlWait, getUpdateState, setUpdatePrepare, forceAbortActiveGenerations, clearUpdatePrepare, resolveManualModel } from './services/ai.js';
 import { initSubagentRunner } from './services/subagents/runner.js';
-import { runCompletion, runTool, throwIfAborted, withAbort, toolDefinitions, normalizeTokenUsage } from './services/ai.js';
+import { runCompletion, runTool, throwIfAborted, withAbort, toolDefinitions, normalizeTokenUsage, getTaskAllowedToolNames } from './services/ai.js';
 import { listMacros, getMacroById, getEnabledMacros, createMacro, updateMacro, deleteMacro } from './services/macros.js';
 import { listServers, getServerById, createServer, updateServer, deleteServer, listPolicies, createPolicy, deletePolicy, isAutoApproved, serverHasSudoPassword, listRunbooks, getRunbookById, createRunbook, updateRunbook, deleteRunbook, attachRunbookToServer, listSshKeys, createSshKey, deleteSshKey, buildInstallKeyScript, getSshPublicKey, listPublicRunbooks, getPublicRunbookById, createPublicRunbook, updatePublicRunbook, deletePublicRunbook } from './services/devops.js';
 import { execSshCommand, testSshConnection } from './services/ssh.js';
@@ -2812,6 +2812,25 @@ const validateTaskFields = (
     return { ok: false, error: 'bad_redirect_notify' };
   }
 
+  // Tool whitelist — ai_instruction only. null clears the restriction.
+  let allowedTools: string[] | null = null;
+  if (body.allowed_tools !== undefined) {
+    if (body.allowed_tools === null) {
+      allowedTools = null;
+    } else if (Array.isArray(body.allowed_tools) && body.allowed_tools.every((t: any) => typeof t === 'string')) {
+      if (taskType !== 'ai_instruction') return { ok: false, error: 'bad_allowed_tools' };
+      const known = new Set(getTaskAllowedToolNames());
+      const cleaned = Array.from(new Set(
+        (body.allowed_tools as string[]).map((t: string) => t.trim()).filter(Boolean)
+      )).slice(0, 50);
+      if (body.allowed_tools.length > 0 && cleaned.length === 0) return { ok: false, error: 'bad_allowed_tools' };
+      if (cleaned.some(t => !known.has(t))) return { ok: false, error: 'bad_allowed_tools' };
+      allowedTools = cleaned;
+    } else {
+      return { ok: false, error: 'bad_allowed_tools' };
+    }
+  }
+
   let payload: string | null = null;
   if (body.payload !== undefined) {
     payload = `${body.payload || ''}`.trim();
@@ -2849,6 +2868,7 @@ const validateTaskFields = (
       target_mode: targetMode,
       target_chat_id: targetChatId,
       redirect_notify: body.redirect_notify === undefined ? true : body.redirect_notify,
+      allowed_tools: allowedTools,
     },
   };
 };
@@ -2871,7 +2891,7 @@ app.post('/api/v1/tasks', (req: AuthedRequest, res) => {
     userId, f.execute_at, f.task_type, f.payload,
     f.recurrence_type, f.recurrence_weekday, timezoneOffset,
     f.notify_mode,
-    f.target_mode, f.target_chat_id, f.redirect_notify,
+    f.target_mode, f.target_chat_id, f.redirect_notify, f.allowed_tools,
   );
   return res.status(201).json({ task_id: taskId, task: getUserTaskById(userId, taskId) });
 });
@@ -2902,6 +2922,11 @@ app.put('/api/v1/tasks/:id', (req: AuthedRequest, res) => {
       ? null
       : (body.target_chat_id !== undefined ? body.target_chat_id : existing.target_chat_id),
     redirect_notify: body.redirect_notify !== undefined ? body.redirect_notify : existing.redirect_notify,
+    // A stale whitelist is only validated while the task stays ai_instruction;
+    // repatching the type without allowed_tools leaves the stored value as-is.
+    allowed_tools: (body.task_type ?? existing.task_type) === 'ai_instruction'
+      ? (body.allowed_tools !== undefined ? body.allowed_tools : existing.allowed_tools)
+      : body.allowed_tools,
   };
   const validated = validateTaskFields(userId, merged, { requireAll: false });
   if (validated.ok === false) return res.status(400).json({ error: validated.error });
@@ -2929,6 +2954,9 @@ app.put('/api/v1/tasks/:id', (req: AuthedRequest, res) => {
   }
   if (body.redirect_notify !== undefined) {
     fields.redirect_notify = f.redirect_notify;
+  }
+  if (body.allowed_tools !== undefined) {
+    fields.allowed_tools = f.allowed_tools;
   }
 
   const ok = updatePendingTask(userId, taskId, fields);

@@ -190,6 +190,9 @@ export type TaskDto = {
   target_chat_id: number | null;
   target_chat_title?: string | null;
   redirect_notify: boolean;
+  /** Tool whitelist for ai_instruction runs: null = all available tools,
+   *  [] = run without tools. Stored as a JSON string in the DB. */
+  allowed_tools: string[] | null;
 };
 
 export type UsageDto = {

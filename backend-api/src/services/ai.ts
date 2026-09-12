@@ -1976,7 +1976,10 @@ const formatTasksList = (tasks: ReturnType<typeof listTasks>, timezoneOffset: nu
     const notifyText = t.notify_mode == null
       ? 'AI decides (empty answer = no notification)'
       : t.notify_mode === 'on_error' ? 'only on errors' : t.notify_mode;
-    return `#${t.id} | ${t.task_type} | ${t.status}\nWhen: ${when.local} (${when.tzLabel})\nWhen (UTC): ${when.utc} UTC\nSchedule: ${t.recurrence_type}\nTarget: ${formatTaskTargetText(t)}\nNotifications: ${notifyText}\nData: ${t.payload.slice(0, 180)}`;
+    const toolsLine = t.task_type === 'ai_instruction'
+      ? `\nTools: ${formatTaskAllowedToolsText(t.allowed_tools)}`
+      : '';
+    return `#${t.id} | ${t.task_type} | ${t.status}\nWhen: ${when.local} (${when.tzLabel})\nWhen (UTC): ${when.utc} UTC\nSchedule: ${t.recurrence_type}\nTarget: ${formatTaskTargetText(t)}\nNotifications: ${notifyText}${toolsLine}\nData: ${t.payload.slice(0, 180)}`;
   }).join('\n\n');
 };
 
@@ -2246,7 +2249,8 @@ export const toolDefinitions = [
           target_chat_id: { anyOf: [{ type: 'number' }, { type: 'string', enum: ['current_chat'] }], description: 'Target chat for target_mode=chat ONLY: a chat ID of the user\'s own personal chat, or the literal string "current_chat" (default) - substituted with the active chat ID right away. Must be null/omitted for new_chat. Shared rooms and other users\' chats are forbidden (the tool will return an error).' },
           recurrence_type: { type: 'string', enum: ['once', 'daily', 'weekly'], description: 'Schedule type: once - one time, daily - every day, weekly - every week.' },
           recurrence_weekday: { type: 'number', description: 'Day of week for weekly: 1=Monday ... 7=Sunday.' },
-          notify_mode: { type: 'string', enum: ['always', 'never', 'on_error'], description: 'Notification mode. Default (omit): message/smart_home report every run; for ai_instruction the AI decides — an empty answer means no notification, so put any "only write if..." conditions directly into the instruction text. always - report every run. never - never report. on_error - report only when the run fails.' }
+          notify_mode: { type: 'string', enum: ['always', 'never', 'on_error'], description: 'Notification mode. Default (omit): message/smart_home report every run; for ai_instruction the AI decides — an empty answer means no notification, so put any "only write if..." conditions directly into the instruction text. always - report every run. never - never report. on_error - report only when the run fails.' },
+          allowed_tools: { anyOf: [{ type: 'array', items: { type: 'string' } }, { type: 'null' }], description: 'ai_instruction ONLY: restrict which tools the background run may use. Array of tool names (a subset of your own tools), [] = run without any tools, null/omitted = all available tools. Unknown names are dropped; the confirmation lists the effective set.' }
         },
         required: ['task_type', 'payload']
       }
@@ -2299,7 +2303,8 @@ export const toolDefinitions = [
           recurrence_weekday: { type: 'number', description: 'Day of week for weekly: 1=Monday ... 7=Sunday.' },
           notify_mode: { type: 'string', enum: ['always', 'never', 'on_error'], description: 'New notification mode (see schedule_task).' },
           target_mode: { type: 'string', enum: ['chat', 'new_chat'], description: 'New delivery target mode (see schedule_task).' },
-          target_chat_id: { anyOf: [{ type: 'number' }, { type: 'string', enum: ['current_chat'] }], description: 'New target chat for target_mode=chat (chat ID or "current_chat"); null for new_chat.' }
+          target_chat_id: { anyOf: [{ type: 'number' }, { type: 'string', enum: ['current_chat'] }], description: 'New target chat for target_mode=chat (chat ID or "current_chat"); null for new_chat.' },
+          allowed_tools: { anyOf: [{ type: 'array', items: { type: 'string' } }, { type: 'null' }], description: 'New tool whitelist for ai_instruction tasks (see schedule_task); null removes the restriction.' }
         },
         required: ['task_id']
       }
@@ -3858,6 +3863,81 @@ const buildLiteExecutionTools = (allowedToolNames: string[]) => {
   const filtered = toolDefinitions.filter(t => allowed.has(`${(t as any)?.function?.name || ''}`)) as any[];
   return [...filtered, ESCALATE_TO_PRO_TOOL as any];
 };
+
+// Tools that work from the server (SSH, maps, DevOps DB, PC command via WS) —
+// available to ALL clients. Hoisted so the canonical name list below can reuse
+// the same builders without duplicating the list.
+const serverOnlyToolBuilders = [
+  buildMapControlTool, buildGetMapPinsTool, buildFindTransitRouteTool, buildSearchNearbyTool,
+  buildListDevopsServersTool, buildExecuteSshCommandTool, buildListRunbooksTool,
+  buildReadRunbookTool, buildSuggestRunbookTool, buildInstallSshPublicKeyTool,
+  buildSuggestServerCredsUpdateTool, buildCreateServerUserTool, buildChangeServerUserPasswordTool,
+  buildExecutePcCommandTool, buildGetFileInfoTool,
+  buildReadFileTool, buildSearchFileKeywordsTool, buildWriteFileTool, buildEditFileLinesTool,
+  buildListMonitorsTool, buildCaptureScreenTool, buildExecuteVisualClickTool, buildCaptureWebcamTool,
+  buildBrowserControlTool, buildYouTubeMusicControlTool,
+  buildDescribeImageTool,
+];
+
+let taskAllowedToolNamesCache: string[] | null = null;
+
+/**
+ * Canonical tool names a scheduled ai_instruction task may be restricted to:
+ * static toolDefinitions + server-only tools + macro tools + desktop_action.
+ * (Subagent tools are excluded — background runs have no subagent access.)
+ * Availability at run time is still decided by feature flags and client type;
+ * the task whitelist is intersected with whatever the run actually has.
+ */
+export const getTaskAllowedToolNames = (): string[] => {
+  if (taskAllowedToolNamesCache) return taskAllowedToolNamesCache;
+  const defs = [
+    ...toolDefinitions,
+    ...serverOnlyToolBuilders.map(build => build()),
+    buildListMyMacrosTool(),
+    buildExecuteMacroTool(),
+    buildExploreFsTool(),
+    buildSuggestMacroTool(),
+    buildDesktopActionTool(),
+  ];
+  taskAllowedToolNamesCache = defs
+    .map((t: any) => `${t?.function?.name || ''}`)
+    .filter(Boolean);
+  return taskAllowedToolNamesCache;
+};
+
+/**
+ * Validates the allowed_tools tool argument for ai_instruction tasks.
+ * Mirrors spawn_subagent: unknown names are dropped; when EVERY requested name
+ * is unknown the model gets an error listing the valid names. `[]` is valid and
+ * means "run without tools"; null clears the restriction ("all available").
+ */
+const resolveTaskAllowedTools = (
+  raw: any
+): { ok: true; tools: string[] | null } | { ok: false; error: string } => {
+  if (raw === null) return { ok: true, tools: null };
+  if (!Array.isArray(raw)) {
+    return { ok: false, error: 'Error: allowed_tools must be an array of tool names (or null to allow all tools).' };
+  }
+  const known = new Set(getTaskAllowedToolNames());
+  const requested = Array.from(new Set(
+    raw.filter((t: any) => typeof t === 'string').map((t: string) => t.trim()).filter(Boolean)
+  )).slice(0, 50);
+  if (requested.length === 0 && raw.length > 0) {
+    return { ok: false, error: 'Error: allowed_tools must contain tool name strings.' };
+  }
+  const valid = requested.filter(t => known.has(t));
+  if (requested.length > 0 && valid.length === 0) {
+    return { ok: false, error: `Error: none of the allowed_tools names exist. Known tools: ${getTaskAllowedToolNames().join(', ')}` };
+  }
+  return { ok: true, tools: valid };
+};
+
+/** Short human/model-readable rendering of a task tool whitelist. */
+const formatTaskAllowedToolsText = (tools: string[] | null): string => {
+  if (tools == null) return 'all available';
+  if (tools.length === 0) return 'none (no tools)';
+  return tools.length <= 6 ? tools.join(', ') : `${tools.slice(0, 6).join(', ')} (+${tools.length - 6} more)`;
+};
 export const runCompletion = async (mode: 'pro' | 'lite' | 'vision-pro' | 'vision-lite', requestPayload: Record<string, unknown>, manualModel?: ManualModelEntry, signal?: AbortSignal, reasoningLevel?: ReasoningLevel | null, modelSettings?: ModelSettings | null, streamCallbacks?: StreamCallbacks): Promise<CompletionMeta & { manualFallback?: boolean }> => {
   // If the user selected a specific model — send directly, ignoring mode
   if (manualModel) {
@@ -4180,6 +4260,15 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     const target = resolveTaskTargetArgs(user.id, parsed);
     if (target.ok === false) return target.error;
 
+    // Tool whitelist — ai_instruction only.
+    let allowedTools: string[] | null = null;
+    if (parsed.allowed_tools !== undefined) {
+      if (taskType !== 'ai_instruction') return 'Error: allowed_tools is only valid for task_type=ai_instruction.';
+      const toolsRes = resolveTaskAllowedTools(parsed.allowed_tools);
+      if (toolsRes.ok === false) return toolsRes.error;
+      allowedTools = toolsRes.tools;
+    }
+
     if (getPendingTaskCount(user.id) >= MAX_PENDING_TASKS_PER_USER) {
       return `Active task limit: ${MAX_PENDING_TASKS_PER_USER}. Remove extras via delete_my_task or /task_delete <id>.`;
     }
@@ -4192,12 +4281,15 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
       recurrenceType, recurrenceType === 'weekly' ? recurrenceWeekday : null, timezoneOffset,
       notifyMode,
       target.targetMode, target.targetChatId,
+      true,
+      allowedTools,
     );
     const planned = formatUnixForTimezone(executeAt, timezoneOffset);
     const notifyInfo = notifyMode === null
       ? (taskType === 'ai_instruction' ? 'AI decides' : 'always')
       : notifyMode;
-    return `Successfully scheduled. Next run: ${planned.local} (${planned.tzLabel}). UTC time: ${planned.utc}. Schedule type: ${recurrenceType}. Delivery target: ${target.targetMode === 'chat' ? `chat #${target.targetChatId}` : 'new chat'}. Notification mode: ${notifyInfo}.`;
+    const toolsInfo = taskType === 'ai_instruction' ? ` Allowed tools: ${formatTaskAllowedToolsText(allowedTools)}.` : '';
+    return `Successfully scheduled. Next run: ${planned.local} (${planned.tzLabel}). UTC time: ${planned.utc}. Schedule type: ${recurrenceType}. Delivery target: ${target.targetMode === 'chat' ? `chat #${target.targetChatId}` : 'new chat'}. Notification mode: ${notifyInfo}.${toolsInfo}`;
   }
 
   if (toolName === 'update_my_task') {
@@ -4273,6 +4365,15 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
       if (target.ok === false) return target.error;
       fields.target_mode = target.targetMode;
       fields.target_chat_id = target.targetChatId;
+    }
+
+    // Tool whitelist — ai_instruction only.
+    if (parsed.allowed_tools !== undefined) {
+      const effectiveType = `${parsed.task_type || task.task_type}` as TaskType;
+      if (effectiveType !== 'ai_instruction') return 'Error: allowed_tools is only valid for ai_instruction tasks.';
+      const toolsRes = resolveTaskAllowedTools(parsed.allowed_tools);
+      if (toolsRes.ok === false) return toolsRes.error;
+      fields.allowed_tools = toolsRes.tools;
     }
 
     const ok = updatePendingTask(user.id, normalizedTaskId, fields);
@@ -7243,6 +7344,10 @@ export const sendMessageThroughAi = async (
     reasoningLevel?: ReasoningLevel | null;
     autoRejectHitl?: boolean;
     isBackgroundTask?: boolean;
+    /** Tool whitelist for background (scheduled ai_instruction) runs:
+     *  null/undefined = no restriction, [] = no tools. Intersected with the
+     *  user's feature flags — can only narrow, never widen. */
+    allowedTools?: string[] | null;
     /** Use a saved room-agent prompt snapshot for this response. */
     agentId?: number;
     /** Persist the user's message without starting an assistant generation. */
@@ -8102,17 +8207,7 @@ export const sendMessageThroughAi = async (
   let executionMode: 'pro' | 'lite' | 'vision-pro' | 'vision-lite' = 'pro';
   const subagentTool = options?.isDesktop ? buildInvokeSubagentTool() : null;
   // Tools that work from the server (SSH, maps, DevOps DB, PC command via WS) — available to ALL clients
-  const serverOnlyTools = [
-    buildMapControlTool(), buildGetMapPinsTool(), buildFindTransitRouteTool(), buildSearchNearbyTool(),
-    buildListDevopsServersTool(), buildExecuteSshCommandTool(), buildListRunbooksTool(),
-    buildReadRunbookTool(), buildSuggestRunbookTool(), buildInstallSshPublicKeyTool(),
-    buildSuggestServerCredsUpdateTool(), buildCreateServerUserTool(), buildChangeServerUserPasswordTool(),
-    buildExecutePcCommandTool(), buildGetFileInfoTool(),
-    buildReadFileTool(), buildSearchFileKeywordsTool(), buildWriteFileTool(), buildEditFileLinesTool(),
-    buildListMonitorsTool(), buildCaptureScreenTool(), buildExecuteVisualClickTool(), buildCaptureWebcamTool(),
-    buildBrowserControlTool(), buildYouTubeMusicControlTool(),
-    buildDescribeImageTool(),
-  ];
+  const serverOnlyTools = serverOnlyToolBuilders.map(build => build());
   // UI actions can originate from any client (Telegram, future messengers, Desktop).
   // Expose them whenever the request itself comes from Desktop or Desktop is online.
   const desktopUiAvailable = Boolean(options?.isDesktop || isDesktopOnline(userId) || (toolUser !== user && isDesktopOnline(toolUser.id)));
@@ -8142,8 +8237,15 @@ export const sendMessageThroughAi = async (
     ...desktopOnlyTools,
   ];
   const spawnSubagentTool = options?.isDesktop ? buildSpawnSubagentTool(allBaseToolDefs) : null;
+  // Background task whitelist: intersect the built set with the task's allowed
+  // tools. Applied AFTER the feature-flag filter, so a task can only narrow
+  // the set, never bypass user-disabled tools. [] = run without tools.
+  const allowedToolsFilter = options?.allowedTools != null ? new Set(options.allowedTools) : null;
+  const applyAllowedToolsFilter = (tools: any[]) =>
+    allowedToolsFilter ? tools.filter(t => allowedToolsFilter.has(t?.function?.name || '')) : tools;
+
   let executionTools: any[] = currentModelSupportsTools
-    ? [
+    ? applyAllowedToolsFilter([
         ...allBaseToolDefs,
         ...(subagentTool ? [subagentTool] : []),
         ...(spawnSubagentTool ? [spawnSubagentTool] : []),
@@ -8151,7 +8253,7 @@ export const sendMessageThroughAi = async (
         buildExecuteMacroTool(),
         buildExploreFsTool(),
         buildSuggestMacroTool(),
-      ].filter(t => !disabledToolSet.has(t?.function?.name || '')) as any[]
+      ].filter(t => !disabledToolSet.has(t?.function?.name || '')) as any[])
     : [];
 
   let executionHistory = history;
@@ -8700,11 +8802,11 @@ for (let toolCallIndex = 0; toolCallIndex < toolCalls.length; toolCallIndex += 1
     }
 
     executionMode = 'pro';
-    executionTools = [
+    executionTools = applyAllowedToolsFilter([
       ...baseToolDefinitions,
       ...(avatarControlEnabled ? [buildDisplayStateTool(options?.displayManifest)] : []),
       ...(desktopUiAvailable ? [buildDesktopActionTool()] : []),
-    ].filter((tool: any) => !disabledToolSet.has(tool?.function?.name || '')) as any[];
+    ].filter((tool: any) => !disabledToolSet.has(tool?.function?.name || '')) as any[]);
     currentMessages.length = 0;
     currentMessages.push(
       { role: 'system', content: proSystemPrompt },

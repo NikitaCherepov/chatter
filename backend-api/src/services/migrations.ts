@@ -108,14 +108,15 @@ const migrateTasksNotify = () => {
       target_mode TEXT NOT NULL DEFAULT 'chat',
       target_chat_id INTEGER,
       redirect_notify INTEGER NOT NULL DEFAULT 1,
+      allowed_tools TEXT,
       status TEXT NOT NULL DEFAULT 'pending'
     )
   `);
   db.exec(`
-    INSERT INTO tasks_migrate (id, user_id, execute_at, task_type, payload, notify_mode, recurrence_type, recurrence_weekday, timezone_offset, target_mode, target_chat_id, redirect_notify, status)
+    INSERT INTO tasks_migrate (id, user_id, execute_at, task_type, payload, notify_mode, recurrence_type, recurrence_weekday, timezone_offset, target_mode, target_chat_id, redirect_notify, allowed_tools, status)
     SELECT id, user_id, execute_at, task_type, payload,
       CASE WHEN notify_mode IN ('always', 'never', 'on_error') THEN notify_mode ELSE 'always' END,
-      recurrence_type, recurrence_weekday, timezone_offset, target_mode, target_chat_id, COALESCE(redirect_notify, 1), status
+      recurrence_type, recurrence_weekday, timezone_offset, target_mode, target_chat_id, COALESCE(redirect_notify, 1), allowed_tools, status
     FROM tasks
   `);
   db.exec('DROP TABLE tasks');

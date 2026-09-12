@@ -7,8 +7,20 @@ const TASK_COLUMNS = `
   t.id, t.execute_at, t.task_type, t.payload, t.status,
   t.recurrence_type, t.recurrence_weekday, t.timezone_offset,
   t.notify_mode,
-  t.target_mode, t.target_chat_id, t.redirect_notify, uc.title AS target_chat_title
+  t.target_mode, t.target_chat_id, t.redirect_notify, t.allowed_tools, uc.title AS target_chat_title
 `;
+
+/** allowed_tools is a JSON string array in the DB; tolerate legacy/corrupt values. */
+const parseAllowedTools = (raw: any): string[] | null => {
+  if (raw == null) return null;
+  try {
+    const parsed = JSON.parse(String(raw));
+    if (!Array.isArray(parsed)) return null;
+    return parsed.filter((t: any) => typeof t === 'string');
+  } catch {
+    return null;
+  }
+};
 
 const mapTaskRow = (row: any): TaskDto => ({
   id: Number(row.id),
@@ -23,6 +35,7 @@ const mapTaskRow = (row: any): TaskDto => ({
   target_mode: (row.target_mode || 'chat') as TaskTargetMode,
   target_chat_id: row.target_chat_id == null ? null : Number(row.target_chat_id),
   redirect_notify: row.redirect_notify == null ? true : Number(row.redirect_notify) !== 0,
+  allowed_tools: parseAllowedTools(row.allowed_tools),
   target_chat_title: row.target_chat_title == null ? null : String(row.target_chat_title),
 });
 
@@ -60,13 +73,14 @@ export const createTask = (
   notifyMode: TaskNotifyMode | null = null,
   targetMode: TaskTargetMode = 'chat',
   targetChatId: number | null = null,
-  redirectNotify: boolean = true
+  redirectNotify: boolean = true,
+  allowedTools: string[] | null = null
 ) => {
   const effectiveNotifyMode = notifyMode ?? (taskType === 'ai_instruction' ? null : 'always');
   const res = db.prepare(`
-    INSERT INTO tasks (user_id, execute_at, task_type, payload, recurrence_type, recurrence_weekday, timezone_offset, notify_mode, target_mode, target_chat_id, redirect_notify)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(userId, executeAt, taskType, payload, recurrenceType, recurrenceWeekday, timezoneOffset, effectiveNotifyMode, targetMode, targetChatId, redirectNotify ? 1 : 0);
+    INSERT INTO tasks (user_id, execute_at, task_type, payload, recurrence_type, recurrence_weekday, timezone_offset, notify_mode, target_mode, target_chat_id, redirect_notify, allowed_tools)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(userId, executeAt, taskType, payload, recurrenceType, recurrenceWeekday, timezoneOffset, effectiveNotifyMode, targetMode, targetChatId, redirectNotify ? 1 : 0, allowedTools == null ? null : JSON.stringify(allowedTools));
   return Number(res.lastInsertRowid);
 };
 
@@ -81,6 +95,7 @@ export type TaskUpdateFields = {
   target_mode?: TaskTargetMode;
   target_chat_id?: number | null;
   redirect_notify?: boolean;
+  allowed_tools?: string[] | null;
 };
 
 /** Edits a pending task. Only pending tasks are editable; returns false otherwise. */
@@ -131,6 +146,10 @@ export const updatePendingTask = (userId: number, taskId: number, fields: TaskUp
   if (fields.redirect_notify !== undefined) {
     sets.push('redirect_notify = ?');
     params.push(fields.redirect_notify ? 1 : 0);
+  }
+  if (fields.allowed_tools !== undefined) {
+    sets.push('allowed_tools = ?');
+    params.push(fields.allowed_tools == null ? null : JSON.stringify(fields.allowed_tools));
   }
 
   if (sets.length === 0) return false;

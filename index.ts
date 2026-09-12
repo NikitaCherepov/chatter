@@ -225,6 +225,7 @@ type TaskRecord = {
     target_mode: TaskTargetMode;
     target_chat_id: number | null;
     target_chat_title: string | null;
+    allowed_tools?: string[] | null;
 };
 type PromptRecord = {
     id: number;
