@@ -133,5 +133,14 @@
   },
   "models": {
     "selectionReset": "所选模型不再可用。Chatter 已将您切换到自动模型选择。"
+  },
+  "tasks": {
+    "emptyInstruction": "空的AI指令 — 任务未执行。",
+    "roomRedirected": "⚠️ 任务 #{{id}}：之前的聊天被确认为共享房间 — 已创建新聊天，结果将在此处交付。",
+    "reminder": "🔔 *提醒：*\n\n{{text}}",
+    "smartHomeDone": "🤖 *自动化已执行：*\n{{result}}",
+    "aiInstructionDone": "🤖 *定时AI指令已完成：*\n\n{{text}}",
+    "failed": "⚠️ *任务 #{{id}} 失败：*\n\n{{error}}",
+    "aiInstructionRun": "[计划中的 AI 指令] {{text}}"
   }
 }

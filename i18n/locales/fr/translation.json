@@ -81,7 +81,8 @@
       "help": "ℹ️ Aide",
       "notesWebApp": "📝 Notes (WebApp)",
       "chats": "💬 Discussions",
-      "recoverDesktop": "🔑 Récupérer la connexion bureau"
+      "recoverDesktop": "🔑 Récupérer la connexion bureau",
+      "tasks": "📋 Tâches"
     }
   },
   "language": {

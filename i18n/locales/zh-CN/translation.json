@@ -81,7 +81,8 @@
       "help": "ℹ️ 帮助",
       "notesWebApp": "📝 笔记（WebApp）",
       "chats": "💬 聊天",
-      "recoverDesktop": "🔑 恢复桌面登录"
+      "recoverDesktop": "🔑 恢复桌面登录",
+      "tasks": "📋 任务"
     }
   },
   "language": {

@@ -133,5 +133,14 @@
   },
   "models": {
     "selectionReset": "Seçilen model artık mevcut değil. Chatter sizi otomatik model seçimine geçirdi."
+  },
+  "tasks": {
+    "emptyInstruction": "Boş AI talimatı — görev yürütülmedi.",
+    "roomRedirected": "⚠️ Görev #{{id}}: önceki sohbetin paylaşımlı bir oda olduğu ortaya çıktı — yeni bir sohbet oluşturuldu ve sonuç buraya iletildi.",
+    "reminder": "🔔 *Hatırlatma:*\n\n{{text}}",
+    "smartHomeDone": "🤖 *Otomasyon yürütüldü:*\n{{result}}",
+    "aiInstructionDone": "🤖 *Zamanlanmış AI talimatı tamamlandı:*\n\n{{text}}",
+    "failed": "⚠️ *Görev #{{id}} başarısız oldu:*\n\n{{error}}",
+    "aiInstructionRun": "[Zamanlanmış AI talimatı] {{text}}"
   }
 }

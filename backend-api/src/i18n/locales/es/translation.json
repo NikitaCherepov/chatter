@@ -133,5 +133,14 @@
   },
   "models": {
     "selectionReset": "El modelo seleccionado ya no está disponible. Chatter te cambió a la selección automática de modelos."
+  },
+  "tasks": {
+    "emptyInstruction": "Instrucción de IA vacía: la tarea no se ejecutó.",
+    "roomRedirected": "⚠️ Tarea #{{id}}: el chat anterior resultó ser una sala compartida — se creó un nuevo chat y el resultado se entrega aquí.",
+    "reminder": "🔔 *Recordatorio:*\n\n{{text}}",
+    "smartHomeDone": "🤖 *Automatización ejecutada:*\n{{result}}",
+    "aiInstructionDone": "🤖 *Instrucción de IA programada completada:*\n\n{{text}}",
+    "failed": "⚠️ *Tarea #{{id}} falló:*\n\n{{error}}",
+    "aiInstructionRun": "[Instrucción de IA programada] {{text}}"
   }
 }

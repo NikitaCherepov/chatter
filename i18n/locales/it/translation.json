@@ -81,7 +81,8 @@
       "help": "ℹ️ Aiuto",
       "notesWebApp": "📝 Note (WebApp)",
       "chats": "💬 Chat",
-      "recoverDesktop": "🔑 Recupera accesso desktop"
+      "recoverDesktop": "🔑 Recupera accesso desktop",
+      "tasks": "📋 Attività"
     }
   },
   "language": {

@@ -133,5 +133,14 @@
   },
   "models": {
     "selectionReset": "Vybraný model již není dostupný. Chatter vás přepnul na automatický výběr modelu."
+  },
+  "tasks": {
+    "emptyInstruction": "Prázdná instrukce AI — úloha nebyla provedena.",
+    "roomRedirected": "⚠️ Úloha #{{id}}: předchozí chat se ukázal být sdílenou místností — byl vytvořen nový chat a výsledek je doručen sem.",
+    "reminder": "🔔 *Připomínka:*\n\n{{text}}",
+    "smartHomeDone": "🤖 *Automatizace provedena:*\n{{result}}",
+    "aiInstructionDone": "🤖 *Naplánovaná instrukce AI dokončena:*\n\n{{text}}",
+    "failed": "⚠️ *Úloha #{{id}} selhala:*\n\n{{error}}",
+    "aiInstructionRun": "[Naplánovaná AI instrukce] {{text}}"
   }
 }

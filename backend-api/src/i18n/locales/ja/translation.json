@@ -133,5 +133,14 @@
   },
   "models": {
     "selectionReset": "選択したモデルは利用できなくなりました。Chatterは自動モデル選択に切り替えました。"
+  },
+  "tasks": {
+    "emptyInstruction": "空のAI指示 — タスクは実行されませんでした。",
+    "roomRedirected": "⚠️ タスク #{{id}}: 以前のチャットが共有ルームであることが判明しました — 新しいチャットが作成され、結果はこちらに配信されます。",
+    "reminder": "🔔 *リマインダー:*\n\n{{text}}",
+    "smartHomeDone": "🤖 *自動化が実行されました:*\n{{result}}",
+    "aiInstructionDone": "🤖 *スケジュールされたAI指示が完了しました:*\n\n{{text}}",
+    "failed": "⚠️ *タスク #{{id}} が失敗しました:*\n\n{{error}}",
+    "aiInstructionRun": "[スケジュールされたAI指示] {{text}}"
   }
 }

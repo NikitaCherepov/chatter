@@ -81,7 +81,8 @@
       "help": "ℹ️ Hilfe",
       "notesWebApp": "📝 Notizen (WebApp)",
       "chats": "💬 Chats",
-      "recoverDesktop": "🔑 Desktop-Anmeldung wiederherstellen"
+      "recoverDesktop": "🔑 Desktop-Anmeldung wiederherstellen",
+      "tasks": "📋 Aufgaben"
     }
   },
   "language": {

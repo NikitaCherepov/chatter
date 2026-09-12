@@ -133,5 +133,14 @@
   },
   "models": {
     "selectionReset": "선택한 모델을 더 이상 사용할 수 없습니다. Chatter가 자동 모델 선택으로 전환했습니다."
+  },
+  "tasks": {
+    "emptyInstruction": "빈 AI 지침 — 작업이 실행되지 않았습니다.",
+    "roomRedirected": "⚠️ 작업 #{{id}}: 이전 채팅이 공유 방으로 확인되어 새 채팅이 생성되었으며 결과는 여기로 전달됩니다.",
+    "reminder": "🔔 *알림:*\n\n{{text}}",
+    "smartHomeDone": "🤖 *자동화 실행됨:*\n{{result}}",
+    "aiInstructionDone": "🤖 *예약된 AI 지침 완료:*\n\n{{text}}",
+    "failed": "⚠️ *작업 #{{id}} 실패:*\n\n{{error}}",
+    "aiInstructionRun": "[예약된 AI 지시] {{text}}"
   }
 }

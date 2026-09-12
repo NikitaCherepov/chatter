@@ -81,7 +81,8 @@
       "help": "ℹ️ 도움말",
       "notesWebApp": "📝 메모 (웹앱)",
       "chats": "💬 채팅",
-      "recoverDesktop": "🔑 데스크톱 로그인 복구"
+      "recoverDesktop": "🔑 데스크톱 로그인 복구",
+      "tasks": "📋 작업"
     }
   },
   "language": {

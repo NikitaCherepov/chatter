@@ -256,7 +256,7 @@ type NoteStatsRecord = {
     notes_count: number;
     notes_chars: number;
 };
-type MenuActionId = 'clear' | 'users' | 'rename' | 'add' | 'remove' | 'prompts' | 'current_prompt' | 'model' | 'context_size' | 'prompt_admin' | 'pending' | 'banned' | 'mail' | 'notes' | 'chats' | 'language' | 'help' | 'recover_desktop';
+type MenuActionId = 'clear' | 'users' | 'rename' | 'add' | 'remove' | 'prompts' | 'current_prompt' | 'model' | 'context_size' | 'prompt_admin' | 'pending' | 'banned' | 'mail' | 'notes' | 'chats' | 'tasks' | 'language' | 'help' | 'recover_desktop';
 type MenuActionButton = {
     id: MenuActionId;
     labelKey: string;
@@ -284,6 +284,7 @@ const MAIN_MENU_ACTIONS: MenuActionButton[] = [
     { id: 'language', labelKey: 'menu.buttons.language', adminOnly: false, row: 6 },
     { id: 'notes', labelKey: 'menu.buttons.notes', adminOnly: false, row: 7 },
     { id: 'chats', labelKey: 'menu.buttons.chats', adminOnly: false, row: 7 },
+    { id: 'tasks', labelKey: 'menu.buttons.tasks', adminOnly: false, row: 7 },
     { id: 'help', labelKey: 'menu.buttons.help', adminOnly: false, row: 8 },
     { id: 'recover_desktop', labelKey: 'menu.buttons.recoverDesktop', adminOnly: false, row: 9 }
 ];
@@ -3573,7 +3574,7 @@ bot.command('tz', async (ctx) => {
     return ctx.reply(ctx.t('timezone.changed', { offset: `${sign}${offset}` }), buildMenuTriggerKeyboard(ctx.t));
 });
 
-bot.command('tasks', async (ctx) => {
+const renderUserTasksList = async (ctx: any) => {
     const userId = ctx.state.accountId;
     if (!userId) return;
 
@@ -3585,12 +3586,15 @@ bot.command('tasks', async (ctx) => {
     const tasks = await runBackendGetTasks(userId, 'pending', 20);
     if (!tasks.length) return ctx.reply(ctx.t('tasks.noneActive'));
 
-    const text = ctx.t('tasks.list', {
+    return ctx.reply(ctx.t('tasks.list', {
         count: tasks.length,
         max: MAX_PENDING_TASKS_PER_USER,
         tasks: await formatTasksList(tasks, ctx.t)
-    });
-    return ctx.reply(text);
+    }));
+};
+
+bot.command('tasks', async (ctx) => {
+    await renderUserTasksList(ctx);
 });
 
 bot.command('task_delete', async (ctx) => {
@@ -3906,7 +3910,7 @@ bot.on('location', async (ctx) => {
     return ctx.reply(ctx.t('timezone.locationSet', { offset: `${sign}${offset}` }), buildMenuTriggerKeyboard(ctx.t));
 });
 
-bot.action(/^main:(clear|users|rename|add|remove|prompts|current_prompt|model|context_size|prompt_admin|pending|banned|mail|notes|chats|language|help|recover_desktop)$/, async (ctx) => {
+bot.action(/^main:(clear|users|rename|add|remove|prompts|current_prompt|model|context_size|prompt_admin|pending|banned|mail|notes|chats|tasks|language|help|recover_desktop)$/, async (ctx) => {
     const actionId = (ctx as any).match[1] as MenuActionId;
     const action = MENU_ACTION_BY_ID[actionId];
 
@@ -4061,6 +4065,11 @@ bot.action(/^main:(clear|users|rename|add|remove|prompts|current_prompt|model|co
         const userId = ctx.state.accountId;
         if (!userId) return;
         await renderChatsMenuList(ctx, userId, 0, 'reply');
+        return;
+    }
+
+    if (actionId === 'tasks') {
+        await renderUserTasksList(ctx);
         return;
     }
 

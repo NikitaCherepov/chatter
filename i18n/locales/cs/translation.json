@@ -81,7 +81,8 @@
       "language": "🌐 Jazyk",
       "help": "ℹ️ Nápověda",
       "notesWebApp": "📝 Poznámky (WebApp)",
-      "recoverDesktop": "🔑 Obnovit přihlášení k desktopu"
+      "recoverDesktop": "🔑 Obnovit přihlášení k desktopu",
+      "tasks": "📋 Úkoly"
     }
   },
   "language": {

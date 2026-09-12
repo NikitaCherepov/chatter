@@ -81,7 +81,8 @@
       "help": "ℹ️ Pomoc",
       "notesWebApp": "📝 Notatki (WebApp)",
       "chats": "💬 Czaty",
-      "recoverDesktop": "🔑 Odzyskaj login do pulpitu"
+      "recoverDesktop": "🔑 Odzyskaj login do pulpitu",
+      "tasks": "📋 Zadania"
     }
   },
   "language": {

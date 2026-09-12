@@ -81,7 +81,8 @@
       "help": "ℹ️ Ayuda",
       "notesWebApp": "📝 Notas (WebApp)",
       "chats": "💬 Chats",
-      "recoverDesktop": "🔑 Recuperar inicio de sesión de escritorio"
+      "recoverDesktop": "🔑 Recuperar inicio de sesión de escritorio",
+      "tasks": "📋 Tareas"
     }
   },
   "language": {

@@ -81,7 +81,8 @@
       "help": "ℹ️ ヘルプ",
       "notesWebApp": "📝 メモ（Webアプリ）",
       "chats": "💬 チャット",
-      "recoverDesktop": "🔑 デスクトップログインを復元"
+      "recoverDesktop": "🔑 デスクトップログインを復元",
+      "tasks": "📋 タスク"
     }
   },
   "language": {
