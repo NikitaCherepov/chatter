@@ -5,6 +5,65 @@ export type TaskType = 'message' | 'smart_home' | 'ai_instruction';
 export type TaskRecurrenceType = 'once' | 'daily' | 'weekly';
 export type TaskNotifyMode = 'always' | 'never' | 'on_error';
 export type TaskTargetMode = 'chat' | 'new_chat';
+export type NewspaperStyle = 'classic' | 'modern' | 'magical';
+export type NewspaperIssueStatus = 'draft' | 'ready' | 'failed' | 'cancelled';
+
+export type NewspaperSource = {
+  title: string;
+  url: string;
+};
+
+type NewspaperBlockBase = {
+  id: string;
+  title: string;
+  priority?: number;
+  sources?: NewspaperSource[];
+};
+
+export type NewspaperBlock =
+  | (NewspaperBlockBase & { type: 'hero'; summary: string; image_url?: string })
+  | (NewspaperBlockBase & { type: 'article'; summary: string; image_url?: string })
+  | (NewspaperBlockBase & { type: 'news_list'; items: Array<{ title: string; summary?: string; url?: string }> })
+  | (NewspaperBlockBase & { type: 'weather'; location: string; temperature: number; condition: string; details?: string })
+  | (NewspaperBlockBase & { type: 'image'; image_url?: string; caption?: string; prompt?: string })
+  | (NewspaperBlockBase & { type: 'humor'; text: string });
+
+export type NewspaperIssueDocument = {
+  version: 1;
+  title: string;
+  subtitle?: string;
+  date: string;
+  blocks: NewspaperBlock[];
+};
+
+export type NewspaperDto = {
+  id: number;
+  name: string;
+  editorial_brief: string;
+  interests: string;
+  preferences: string;
+  style: NewspaperStyle;
+  enabled: boolean;
+  issue_count: number;
+  latest_issue: NewspaperIssueSummaryDto | null;
+  created_at: number;
+  updated_at: number;
+};
+
+export type NewspaperIssueSummaryDto = {
+  id: number;
+  newspaper_id: number;
+  issue_number: number;
+  title: string;
+  subtitle: string;
+  status: NewspaperIssueStatus;
+  blocks_count: number;
+  published_at: number;
+};
+
+export type NewspaperIssueDto = NewspaperIssueSummaryDto & {
+  document: NewspaperIssueDocument;
+};
 
 export type UserRecord = {
   id: number;

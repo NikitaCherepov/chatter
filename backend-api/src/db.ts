@@ -157,6 +157,42 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_notes_user_created ON notes(user_id, created_at DESC);
   CREATE INDEX IF NOT EXISTS idx_notes_user_id_desc ON notes(user_id, id DESC);
 
+  CREATE TABLE IF NOT EXISTS newspapers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    editorial_brief TEXT NOT NULL DEFAULT '',
+    interests TEXT NOT NULL DEFAULT '',
+    preferences TEXT NOT NULL DEFAULT '',
+    style TEXT NOT NULL DEFAULT 'classic',
+    enabled INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1)),
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_newspapers_user_updated
+  ON newspapers(user_id, updated_at DESC, id DESC);
+
+  CREATE TABLE IF NOT EXISTS newspaper_issues (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    newspaper_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    issue_number INTEGER NOT NULL,
+    title TEXT NOT NULL,
+    subtitle TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'ready',
+    document_json TEXT NOT NULL,
+    published_at INTEGER NOT NULL,
+    created_at INTEGER NOT NULL,
+    UNIQUE(newspaper_id, issue_number)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_newspaper_issues_user_published
+  ON newspaper_issues(user_id, published_at DESC, id DESC);
+
+  CREATE INDEX IF NOT EXISTS idx_newspaper_issues_newspaper_number
+  ON newspaper_issues(newspaper_id, issue_number DESC);
+
   CREATE TABLE IF NOT EXISTS mail_accounts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,

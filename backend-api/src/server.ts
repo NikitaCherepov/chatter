@@ -11,6 +11,7 @@ import { adminMiddleware, authMiddleware, issueAuthTokens, makePasswordHash, ref
 import { activateUserChat, bindChatMessageTelegramMeta, clearAllUserMessages, clearUserChatMessages, countUserChats, createPasswordAccount, createOrUpdateUserForApiRegistration, createUserChat, deleteUserHistoryByRole, deleteUserHistoryMessage, ensureActiveChat, forkChat, getPasswordAccountByLogin, getChatMessages, getChatMedia, getAllUserMedia, getRecentUserHistory, getUserById, getUserChatById, getUserChatListItem, listUserChats, upsertUserFromTelegram, setUserTimezone, updateUserPrompt, selectUserCustomPrompt, updateUserCustomPrompt, resetUsersPromptIfDeleted, resetDailyMessageCounters, upsertTelegramUser, createPendingTelegramUser, updateUserStatus, updateUserRole, updateUserName, updateUserTelegramUsername, removeUser, getAllUsers, getUsersCount, getUsersPage, getPendingUsersCount, getPendingUsersPage, getBannedUsersCount, getBannedUsersPage, syncAllUsersPlanLimits, resetUserWeeklyUsage, resetAllUsersWeeklyUsage, updateUserWeeklyCostQuota, revokeUserAuthTokens, generateLinkCode, verifyLinkCode, getLinkCodeForUser, generatePasswordResetCode, verifyPasswordResetCode, signPasswordResetToken, verifyPasswordResetToken, adminApplyGeneratedPassword, renameUserChat, deleteUserChat, deleteUserMessage, editUserMessage, searchUserChats, updateChatMessageAudio, getChatContextTokens, resolveMaxContextTokens, updateUserMaxContextTokens, getChatAttachments, deleteMessageAttachment, deleteMessageImage, resolveAttachmentMaxTokens, updateUserAttachmentMaxTokens, setChatBotHidden, listChatFolders, createChatFolder, renameChatFolder, deleteChatFolder, moveUserChatToFolder, listChatFilterOptions } from './services/chats.js';
 import { createNote, countNotes, deleteNote, getNoteById, getNoteStats, getNoteStatsForUsers, listNotes, updateNoteContent } from './services/notes.js';
 import { createTask, deletePendingTask, getPendingTaskCount, getUserTaskById, isOwnNonRoomChat, listTaskTargetChats, listTasks, MAX_PENDING_TASKS_PER_USER, updatePendingTask } from './services/tasks.js';
+import { createDemoNewspaperIssue, createNewspaper, deleteNewspaperIssue, getNewspaperIssue, listNewspaperIssues, listNewspapers, updateNewspaper } from './services/newspapers.js';
 import { listMapPins, getMapPinById, createMapPin, updateMapPin, deleteMapPin } from './services/map-pins.js';
 import { sendMessageThroughAi, generateAdminOutreach, callLiteAi, ensureUtilityAiQuota, chargeUtilityAiCompletion, getModelsCatalog, getAutoReasoningLevels, getAutoVisionSupport, abortChatGeneration, abortUserGenerations, beginActiveHitlWait, endActiveHitlWait, getUpdateState, setUpdatePrepare, forceAbortActiveGenerations, clearUpdatePrepare, resolveManualModel } from './services/ai.js';
 import { initSubagentRunner } from './services/subagents/runner.js';
@@ -2750,6 +2751,62 @@ app.get('/api/v1/notes/:id', (req: AuthedRequest, res) => {
   const note = getNoteById(userId, noteId);
   if (!note) return res.status(404).json({ error: 'note_not_found' });
   return res.json({ note });
+});
+
+app.get('/api/v1/newspapers', (req: AuthedRequest, res) => {
+  const userId = accountIdFromRequest(req);
+  return res.json({ newspapers: listNewspapers(userId) });
+});
+
+app.post('/api/v1/newspapers', (req: AuthedRequest, res) => {
+  const userId = accountIdFromRequest(req);
+  const result = createNewspaper(userId, req.body ?? {});
+  if (!result.ok) return res.status(400).json({ error: result.error });
+  const newspaper = listNewspapers(userId).find(item => item.id === result.id) ?? null;
+  return res.status(201).json({ newspaper });
+});
+
+app.put('/api/v1/newspapers/:id', (req: AuthedRequest, res) => {
+  const userId = accountIdFromRequest(req);
+  const newspaperId = Number.parseInt(req.params.id, 10);
+  if (!Number.isFinite(newspaperId) || newspaperId <= 0) return res.status(400).json({ error: 'bad_newspaper_id' });
+  const result = updateNewspaper(userId, newspaperId, req.body ?? {});
+  if (!result.ok) return res.status(result.error === 'newspaper_not_found' ? 404 : 400).json({ error: result.error });
+  const newspaper = listNewspapers(userId).find(item => item.id === newspaperId) ?? null;
+  return res.json({ ok: true, newspaper });
+});
+
+app.get('/api/v1/newspapers/:id/issues', (req: AuthedRequest, res) => {
+  const userId = accountIdFromRequest(req);
+  const newspaperId = Number.parseInt(req.params.id, 10);
+  const limit = Number.parseInt(`${req.query.limit || '30'}`, 10);
+  if (!Number.isFinite(newspaperId) || newspaperId <= 0) return res.status(400).json({ error: 'bad_newspaper_id' });
+  const ownsNewspaper = listNewspapers(userId).some(item => item.id === newspaperId);
+  if (!ownsNewspaper) return res.status(404).json({ error: 'newspaper_not_found' });
+  return res.json({ issues: listNewspaperIssues(userId, newspaperId, limit) });
+});
+
+app.get('/api/v1/newspaper-issues/:id', (req: AuthedRequest, res) => {
+  const userId = accountIdFromRequest(req);
+  const issueId = Number.parseInt(req.params.id, 10);
+  if (!Number.isFinite(issueId) || issueId <= 0) return res.status(400).json({ error: 'bad_newspaper_issue_id' });
+  const issue = getNewspaperIssue(userId, issueId);
+  if (!issue) return res.status(404).json({ error: 'newspaper_issue_not_found' });
+  return res.json({ issue });
+});
+
+app.delete('/api/v1/newspaper-issues/:id', (req: AuthedRequest, res) => {
+  const userId = accountIdFromRequest(req);
+  const issueId = Number.parseInt(req.params.id, 10);
+  if (!Number.isFinite(issueId) || issueId <= 0) return res.status(400).json({ error: 'bad_newspaper_issue_id' });
+  if (!deleteNewspaperIssue(userId, issueId)) return res.status(404).json({ error: 'newspaper_issue_not_found' });
+  return res.json({ ok: true });
+});
+
+app.post('/api/v1/newspapers/demo', (req: AuthedRequest, res) => {
+  const userId = accountIdFromRequest(req);
+  const issue = createDemoNewspaperIssue(userId);
+  return res.status(201).json({ issue });
 });
 
 app.get('/api/v1/tasks', (req: AuthedRequest, res) => {

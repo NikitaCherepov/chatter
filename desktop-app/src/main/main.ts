@@ -1479,6 +1479,7 @@ function createWindow() {
     'browser',
     'youtube-music',
     'json-extractor',
+    'newspapers',
   ]);
 
   ipcMain.handle('tool-window:open', async (event, payload: {

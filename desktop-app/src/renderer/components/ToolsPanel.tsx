@@ -98,6 +98,14 @@ const TOOL_ICON_JSON_EXTRACTOR = (
   </svg>
 );
 
+const TOOL_ICON_NEWSPAPERS = (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M4 5h13a2 2 0 0 1 2 2v12H6a2 2 0 0 1-2-2V5z" />
+    <path d="M19 9h1a1 1 0 0 1 1 1v7a2 2 0 0 1-2 2" />
+    <path d="M7 9h8M7 12h8M7 15h5" />
+  </svg>
+);
+
 const buildTools = (contentMax: number, t: (key: string) => string): ToolEntry[] => [
   {
     id: 'notebook',
@@ -147,6 +155,12 @@ const buildTools = (contentMax: number, t: (key: string) => string): ToolEntry[]
     title: t('tools.panel.jsonExtractor'),
     description: t('tools.panel.jsonExtractorDescription'),
     icon: TOOL_ICON_JSON_EXTRACTOR,
+  },
+  {
+    id: 'newspapers',
+    title: t('tools.panel.newspapers'),
+    description: t('tools.panel.newspapersDescription'),
+    icon: TOOL_ICON_NEWSPAPERS,
   },
 ];
 
@@ -222,7 +236,7 @@ export function ToolsPanel({ plan, isAdmin, activeChatId, onImageClick, onChatSe
 
   // Sidebar panel width: expanded when open (regardless of whether a tool is active)
   const panelWidth = isOpen
-    ? (sidebarToolId === 'browser' || sidebarToolId === 'youtube-music' || sidebarToolId === 'json-extractor' ? 420 : 260)
+    ? (sidebarToolId === 'browser' || sidebarToolId === 'youtube-music' || sidebarToolId === 'json-extractor' || sidebarToolId === 'newspapers' ? 420 : 260)
     : 65;
 
   const handleToggle = () => {

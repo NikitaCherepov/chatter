@@ -802,6 +802,8 @@
       "documents": "Документы",
       "jsonExtractor": "JSON-экстрактор",
       "jsonExtractorDescription": "Превратить документ в JSON",
+      "newspapers": "Газеты",
+      "newspapersDescription": "Персональные AI-выпуски",
       "chatFiles": "Файлы чата",
       "browser": "Браузер",
       "webPages": "Веб-страницы",

@@ -19,6 +19,7 @@ const TOOL_TITLE_KEYS: Record<string, string> = {
   browser: 'tools.panel.browser',
   'youtube-music': 'tools.panel.youtubeMusic',
   'json-extractor': 'tools.panel.jsonExtractor',
+  newspapers: 'tools.panel.newspapers',
 };
 
 export function ToolWindowApp() {

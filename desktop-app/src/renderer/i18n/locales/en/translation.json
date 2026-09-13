@@ -787,6 +787,8 @@
       "documents": "Documents",
       "jsonExtractor": "JSON Extractor",
       "jsonExtractorDescription": "Turn a document into JSON",
+      "newspapers": "Newspapers",
+      "newspapersDescription": "Personal AI editions",
       "chatFiles": "Chat files",
       "browser": "Browser",
       "webPages": "Web pages",
