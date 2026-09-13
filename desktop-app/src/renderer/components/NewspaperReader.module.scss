@@ -22,11 +22,11 @@
 .toolbar {
   position: relative;
   z-index: 5;
-  display: grid;
-  grid-template-columns: 1fr 290px 1fr;
+  display: flex;
   min-height: 62px;
   flex: 0 0 auto;
   align-items: center;
+  justify-content: space-between;
   padding: 9px 12px 9px 18px;
   color: #dbe5f3;
 }
@@ -43,16 +43,28 @@
   font-size: 11px;
 }
 .styleSelect {
+  position: absolute;
+  left: 50%;
   width: 290px;
+  transform: translateX(-50%);
 }
+.toolbarActions,
+.zoomControls,
 .navigation {
   display: flex;
-  justify-content: flex-end;
-  gap: 7px;
+  align-items: center;
 }
+.toolbarActions {
+  gap: 10px;
+}
+.zoomControls,
+.navigation {
+  justify-content: flex-end;
+  gap: 6px;
+}
+.zoomControls button,
 .navigation button {
   display: grid;
-  width: 38px;
   height: 38px;
   place-items: center;
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -60,9 +72,27 @@
   background: rgba(255, 255, 255, 0.05);
   color: inherit;
   font: inherit;
-  font-size: 23px;
   cursor: pointer;
 }
+.zoomControls button {
+  width: 32px;
+  font-size: 17px;
+}
+.zoomControls .zoomValue {
+  width: 54px;
+  color: #aebdd0;
+  font-size: 11px;
+  font-weight: 700;
+}
+.navigation button {
+  width: 38px;
+  font-size: 23px;
+}
+.zoomControls button:hover,
+.navigation button:hover {
+  background: rgba(255, 255, 255, 0.09);
+}
+.zoomControls button:disabled,
 .navigation button:disabled {
   cursor: default;
   opacity: 0.22;
@@ -74,8 +104,13 @@
   padding: 0 16px 18px;
   border-radius: 0 0 14px 14px;
 }
+.zoomLayer {
+  width: max-content;
+  min-width: 100%;
+  transform-origin: top center;
+}
 .page {
-  width: min(900px, 100%);
+  width: min(900px, calc(97vw - 70px));
   min-height: calc(min(920px, 96vh) - 80px);
   margin: 0 auto;
   box-shadow: 0 16px 42px rgba(0, 0, 0, 0.35);
@@ -942,17 +977,31 @@
     border-radius: 0;
   }
   .toolbar {
+    display: grid;
     grid-template-columns: 1fr auto;
     padding-bottom: 9px;
   }
   .styleSelect {
+    position: static;
     grid-column: 1/-1;
     grid-row: 2;
     width: 100%;
     margin-top: 6px;
+    transform: none;
+  }
+  .toolbarActions {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .zoomControls {
+    display: none;
   }
   .viewport {
     padding: 0;
+  }
+  .zoomLayer {
+    width: 100%;
+    min-width: 0;
   }
   .page {
     width: 100%;
