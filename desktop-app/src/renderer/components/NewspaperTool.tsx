@@ -1,155 +1,64 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
-import * as api from '../lib/api';
-import { NewspaperReader } from './NewspaperReader';
+import React, { useState } from 'react';
+import { NewspaperReader, type NewspaperVisualStyle } from './NewspaperReader';
+import { DEMO_NEWSPAPER_PAGES } from './newspaperDemo';
 import s from './NewspaperTool.module.scss';
 
+const STYLE_KEY = 'chatter:newspaper-preview-style';
+const readStyle = (): NewspaperVisualStyle => {
+  const value = localStorage.getItem(STYLE_KEY);
+  return value === 'wizarding' || value === 'broadsheet' || value === 'deusEx' || value === 'massEffect' ? value : 'wizarding';
+};
+
 export function NewspaperTool() {
-  const { i18n } = useTranslation();
-  const ru = i18n.language.toLowerCase().startsWith('ru');
-  const tr = useCallback((en: string, russian: string) => ru ? russian : en, [ru]);
-  const [newspapers, setNewspapers] = useState<api.Newspaper[]>([]);
-  const [issues, setIssues] = useState<Record<number, api.NewspaperIssueSummary[]>>({});
-  const [selectedIssue, setSelectedIssue] = useState<api.NewspaperIssue | null>(null);
-  const [selectedStyle, setSelectedStyle] = useState<api.NewspaperStyle>('classic');
-  const [loading, setLoading] = useState(true);
-  const [creating, setCreating] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [pageIndex, setPageIndex] = useState(0);
+  const [style, setStyle] = useState<NewspaperVisualStyle>(readStyle);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const result = await api.listNewspapers();
-      const nextIssues: Record<number, api.NewspaperIssueSummary[]> = {};
-      await Promise.all(result.newspapers.map(async newspaper => {
-        const response = await api.listNewspaperIssues(newspaper.id);
-        nextIssues[newspaper.id] = response.issues;
-      }));
-      setNewspapers(result.newspapers);
-      setIssues(nextIssues);
-    } catch (error: any) {
-      toast.error(error?.message || tr('Could not load newspapers', 'Не удалось загрузить газеты'));
-    } finally {
-      setLoading(false);
-    }
-  }, [tr]);
-
-  useEffect(() => { void load(); }, [load]);
-
-  const openIssue = async (summary: api.NewspaperIssueSummary) => {
-    try {
-      const result = await api.getNewspaperIssue(summary.id);
-      const newspaper = newspapers.find(item => item.id === summary.newspaper_id);
-      setSelectedStyle(newspaper?.style || 'classic');
-      setSelectedIssue(result.issue);
-    } catch (error: any) {
-      toast.error(error?.message || tr('Could not open the issue', 'Не удалось открыть выпуск'));
-    }
+  const changeStyle = (next: NewspaperVisualStyle) => {
+    setStyle(next);
+    localStorage.setItem(STYLE_KEY, next);
   };
 
-  const createDemo = async () => {
-    setCreating(true);
-    try {
-      const result = await api.createDemoNewspaperIssue();
-      await load();
-      const newspaper = (await api.listNewspapers()).newspapers.find(item => item.id === result.issue.newspaper_id);
-      setSelectedStyle(newspaper?.style || 'classic');
-      setSelectedIssue(result.issue);
-    } catch (error: any) {
-      toast.error(error?.message || tr('Could not create a test issue', 'Не удалось создать тестовый выпуск'));
-    } finally {
-      setCreating(false);
-    }
-  };
-
-  const changeStyle = async (style: api.NewspaperStyle) => {
-    if (!selectedIssue || style === selectedStyle) return;
-    const previous = selectedStyle;
-    setSelectedStyle(style);
-    setNewspapers(current => current.map(item => item.id === selectedIssue.newspaper_id ? { ...item, style } : item));
-    try {
-      await api.updateNewspaper(selectedIssue.newspaper_id, { style });
-    } catch (error: any) {
-      setSelectedStyle(previous);
-      setNewspapers(current => current.map(item => item.id === selectedIssue.newspaper_id ? { ...item, style: previous } : item));
-      toast.error(error?.message || tr('Could not save the style', 'Не удалось сохранить стиль'));
-    }
-  };
-
-  const removeIssue = async (event: React.MouseEvent, issue: api.NewspaperIssueSummary) => {
-    event.stopPropagation();
-    if (!window.confirm(tr('Delete this issue?', 'Удалить этот выпуск?'))) return;
-    await api.deleteNewspaperIssue(issue.id);
-    if (selectedIssue?.id === issue.id) setSelectedIssue(null);
-    await load();
-  };
-
-  const currentIssueList = selectedIssue ? (issues[selectedIssue.newspaper_id] || []) : [];
-  const currentIndex = selectedIssue ? currentIssueList.findIndex(item => item.id === selectedIssue.id) : -1;
-  const goTo = (index: number) => {
-    const target = currentIssueList[index];
-    if (target) void openIssue(target);
+  const openIssue = () => {
+    setPageIndex(0);
+    setOpen(true);
   };
 
   return (
     <div className={s.root}>
       <div className={s.toolbar}>
-        <div>
-          <strong>{tr('Your newspapers', 'Ваши газеты')}</strong>
-          <span>{tr('Personal issues collected by Chatter', 'Персональные выпуски от Chatter')}</span>
-        </div>
-        <button type="button" onClick={() => void createDemo()} disabled={creating}>
-          {creating ? tr('Creating…', 'Создаю…') : tr('Test issue', 'Тестовый выпуск')}
-        </button>
+        <div><strong>Ваши газеты</strong><span>Локальный прототип оформления выпуска</span></div>
+        <button type="button" onClick={openIssue}>Открыть выпуск</button>
       </div>
-
       <div className={s.scroll}>
-        {loading && <div className={s.empty}>{tr('Loading…', 'Загрузка…')}</div>}
-        {!loading && newspapers.length === 0 && (
-          <div className={s.empty}>
-            <div className={s.emptyIcon}>Nº</div>
-            <strong>{tr('Your first issue is waiting', 'Первый выпуск ещё впереди')}</strong>
-            <span>{tr('Create a test newspaper to preview the format.', 'Создайте тестовую газету, чтобы посмотреть формат.')}</span>
-          </div>
-        )}
-        {newspapers.map(newspaper => (
-          <section className={s.newspaper} key={newspaper.id}>
-            <header>
-              <div><strong>{newspaper.name}</strong><span>{newspaper.issue_count} {tr('issues', 'выпусков')}</span></div>
-              <span className={s.style}>{newspaper.style}</span>
-            </header>
-            <div className={s.issueList}>
-              {(issues[newspaper.id] || []).map(issue => (
-                <div className={s.issueRow} key={issue.id}>
-                  <button type="button" className={s.issue} onClick={() => void openIssue(issue)}>
-                    <div className={s.issueNumber}>№{issue.issue_number}</div>
-                    <div className={s.issueInfo}>
-                      <strong>{issue.subtitle || issue.title}</strong>
-                      <span>{new Date(issue.published_at * 1000).toLocaleDateString(i18n.language, { day: 'numeric', month: 'long', year: 'numeric' })} · {issue.blocks_count} {tr('sections', 'разделов')}</span>
-                    </div>
-                    <span className={s.openArrow}>↗</span>
-                  </button>
-                  <button type="button" className={s.delete} onClick={event => void removeIssue(event, issue)} aria-label={tr('Delete issue', 'Удалить выпуск')}>×</button>
-                </div>
-              ))}
+        <section className={s.newspaper}>
+          <header><div><strong>Chatter Daily</strong><span>Тестовый макет</span></div><span className={s.style}>2 страницы</span></header>
+          <div className={s.issueList}>
+            <div className={s.issueRow}>
+              <button type="button" className={s.issue} onClick={openIssue}>
+                <div className={s.issueNumber}>№1</div>
+                <div className={s.issueInfo}><strong>Утренний выпуск</strong><span>14 сентября 2026 г. · локальное демо</span></div>
+                <span className={s.openArrow}>↗</span>
+              </button>
             </div>
-          </section>
-        ))}
+          </div>
+        </section>
       </div>
-
       <NewspaperReader
-        issue={selectedIssue}
-        style={selectedStyle}
-        canGoPrevious={currentIndex >= 0 && currentIndex < currentIssueList.length - 1}
-        canGoNext={currentIndex > 0}
-        onPrevious={() => goTo(currentIndex + 1)}
-        onNext={() => goTo(currentIndex - 1)}
-        onClose={() => setSelectedIssue(null)}
-        onStyleChange={style => void changeStyle(style)}
-        leadLabel={tr('Lead story', 'Главная история')}
-        previousLabel={tr('Previous issue', 'Предыдущий выпуск')}
-        nextLabel={tr('Next issue', 'Следующий выпуск')}
-        closeLabel={tr('Close', 'Закрыть')}
+        issue={open ? DEMO_NEWSPAPER_PAGES[pageIndex] : null}
+        style={style}
+        pageNumber={pageIndex + 1}
+        pageCount={DEMO_NEWSPAPER_PAGES.length}
+        canGoPrevious={pageIndex > 0}
+        canGoNext={pageIndex < DEMO_NEWSPAPER_PAGES.length - 1}
+        onPrevious={() => setPageIndex(index => Math.max(0, index - 1))}
+        onNext={() => setPageIndex(index => Math.min(DEMO_NEWSPAPER_PAGES.length - 1, index + 1))}
+        onClose={() => setOpen(false)}
+        onStyleChange={changeStyle}
+        leadLabel="Главная история"
+        previousLabel="Предыдущая страница"
+        nextLabel="Следующая страница"
+        closeLabel="Закрыть"
       />
     </div>
   );

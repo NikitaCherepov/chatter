@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 700">
+  <defs>
+    <linearGradient id="space" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#061827"/><stop offset=".65" stop-color="#183b52"/><stop offset="1" stop-color="#dd6e37"/></linearGradient>
+    <radialGradient id="planet"><stop stop-color="#d8f4ef"/><stop offset=".45" stop-color="#4aa3a9"/><stop offset="1" stop-color="#173046"/></radialGradient>
+  </defs>
+  <rect width="1200" height="700" fill="url(#space)"/>
+  <g fill="#d5faff" opacity=".8"><circle cx="90" cy="100" r="2"/><circle cx="220" cy="250" r="3"/><circle cx="980" cy="110" r="2"/><circle cx="1100" cy="330" r="3"/><circle cx="740" cy="80" r="2"/><circle cx="430" cy="140" r="2"/></g>
+  <circle cx="700" cy="365" r="205" fill="url(#planet)"/>
+  <ellipse cx="700" cy="365" rx="340" ry="90" fill="none" stroke="#ff8d43" stroke-width="9" opacity=".85" transform="rotate(-13 700 365)"/>
+  <g transform="translate(360 320) rotate(-12)">
+    <rect x="-110" y="-20" width="220" height="40" rx="8" fill="#d6e8e8"/><rect x="-25" y="-65" width="50" height="130" fill="#8fb8c4"/>
+    <path d="M-145-75h100v55h-100zm190 0h100v55H45zm-190 95h100v55h-100zm190 0h100v55H45z" fill="#3f8da4" stroke="#8be7ff" stroke-width="4"/>
+    <circle r="32" fill="#ff9448"/>
+  </g>
+  <path d="M0 610 Q280 520 520 625T1200 585V700H0Z" fill="#070d13" opacity=".75"/>
+</svg>

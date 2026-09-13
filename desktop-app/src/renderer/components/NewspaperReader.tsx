@@ -1,19 +1,21 @@
 import React, { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import type { NewspaperIssue, NewspaperSource, NewspaperStyle } from '../lib/api';
+import type { NewspaperBlock, NewspaperIssue, NewspaperSource } from '../lib/api';
 import { Select, type SelectOption } from './Select';
 import s from './NewspaperReader.module.scss';
 
 type Props = {
   issue: NewspaperIssue | null;
-  style: NewspaperStyle;
+  style: NewspaperVisualStyle;
+  pageNumber: number;
+  pageCount: number;
   canGoPrevious: boolean;
   canGoNext: boolean;
   onPrevious: () => void;
   onNext: () => void;
   onClose: () => void;
-  onStyleChange: (style: NewspaperStyle) => void;
+  onStyleChange: (style: NewspaperVisualStyle) => void;
   leadLabel: string;
   previousLabel: string;
   nextLabel: string;
@@ -25,6 +27,17 @@ const safeUrl = (value?: string) => {
   try {
     const url = new URL(value);
     return url.protocol === 'http:' || url.protocol === 'https:' ? url.href : null;
+  } catch {
+    return null;
+  }
+};
+
+const safeImageUrl = (value?: string) => {
+  if (!value) return null;
+  if (value.startsWith('data:image/') || value.startsWith('blob:')) return value;
+  try {
+    const url = new URL(value, window.location.href);
+    return url.protocol === 'http:' || url.protocol === 'https:' || url.protocol === 'file:' ? url.href : null;
   } catch {
     return null;
   }
@@ -44,13 +57,102 @@ function Sources({ sources }: { sources?: NewspaperSource[] }) {
   );
 }
 
+function renderBlock(block: NewspaperBlock, leadLabel: string) {
+  if (block.type === 'weather') return (
+    <section key={block.id} className={`${s.block} ${s.weather}`}>
+      <span className={s.kicker}>{block.location}</span>
+      <h2>{block.condition}</h2>
+      <div className={s.forecast}>
+        {block.periods.map(period => (
+          <div className={s.forecastPeriod} key={period.label}>
+            <span>{period.label}</span><strong>{Math.round(period.temperature)}°</strong>
+            {period.condition && <small>{period.condition}</small>}
+          </div>
+        ))}
+      </div>
+      {block.details && <p>{block.details}</p>}
+      <Sources sources={block.sources} />
+    </section>
+  );
+  if (block.type === 'news_list') return (
+    <section key={block.id} className={`${s.block} ${s.newsList}`}>
+      <h2>{block.title}</h2>
+      <ol>{block.items.map((item, index) => {
+        const url = safeUrl(item.url);
+        return <li key={`${item.title}-${index}`}>
+          {url ? <a href={url} target="_blank" rel="noreferrer">{item.title}</a> : <strong>{item.title}</strong>}
+          {item.summary && <p>{item.summary}</p>}
+        </li>;
+      })}</ol>
+      <Sources sources={block.sources} />
+    </section>
+  );
+  if (block.type === 'image') {
+    const imageUrl = safeImageUrl(block.image_url);
+    return (
+      <figure key={block.id} className={`${s.block} ${s.imageBlock}`}>
+        {imageUrl ? <img src={imageUrl} alt={block.caption || block.title} /> : <div className={s.imagePlaceholder}><span>◆</span><small>{block.prompt}</small></div>}
+        <figcaption><strong>{block.title}</strong>{block.caption && <span>{block.caption}</span>}</figcaption>
+        <Sources sources={block.sources} />
+      </figure>
+    );
+  }
+  if (block.type === 'humor') return <aside key={block.id} className={`${s.block} ${s.humor}`}><span>✦</span><h2>{block.title}</h2><p>{block.text}</p></aside>;
+  const imageUrl = safeImageUrl(block.image_url);
+  return (
+    <section key={block.id} className={`${s.block} ${block.type === 'hero' ? s.hero : s.article}`}>
+      {block.type === 'hero' && <span className={s.kicker}>{leadLabel}</span>}
+      {imageUrl && <img className={s.heroImage} src={imageUrl} alt="" />}
+      <div className={s.storyContent}><h2>{block.title}</h2><p>{block.summary}</p><Sources sources={block.sources} /></div>
+    </section>
+  );
+}
+
+function BlocksLayout({ blocks, style, leadLabel }: { blocks: NewspaperBlock[]; style: NewspaperVisualStyle; leadLabel: string }) {
+  const get = (type: NewspaperBlock['type']) => blocks.find(block => block.type === type);
+  const show = (type: NewspaperBlock['type']) => {
+    const block = get(type);
+    return block ? renderBlock(block, leadLabel) : null;
+  };
+
+  if (style === 'broadsheet') return (
+    <div className={s.broadsheetLayout}>
+      <aside className={s.broadsheetLeft}>{show('weather')}{show('news_list')}</aside>
+      <main className={s.broadsheetCenter}>{show('hero')}</main>
+      <aside className={s.broadsheetRight}>{show('article')}{show('humor')}</aside>
+      <footer className={s.broadsheetFooter}>{show('image')}</footer>
+    </div>
+  );
+  if (style === 'deusEx') return (
+    <div className={s.deusLayout}>
+      <main className={s.deusLead}>{show('hero')}</main>
+      <aside className={s.deusRail}>{show('weather')}{show('news_list')}</aside>
+      <section className={s.deusLower}>{show('article')}{show('image')}</section>
+      {show('humor')}
+    </div>
+  );
+  if (style === 'massEffect') return (
+    <div className={s.massLayout}>
+      <main className={s.massLead}>{show('hero')}</main>
+      <aside className={s.massTelemetry}>{show('weather')}</aside>
+      <section className={s.massFeed}>{show('news_list')}{show('article')}</section>
+      <aside className={s.massVisual}>{show('image')}</aside>
+      <footer className={s.massTicker}>{show('humor')}</footer>
+    </div>
+  );
+  return <div className={s.wizardingLayout}>{blocks.map(block => renderBlock(block, leadLabel))}</div>;
+}
+
 const styleOptions: SelectOption[] = [
-  { value: 'classic', label: 'Классика' },
-  { value: 'modern', label: 'Современный' },
-  { value: 'magical', label: 'Магический' },
+  { value: 'wizarding', label: 'Волшебная газета', hint: 'Пергамент и драматичная типографика' },
+  { value: 'broadsheet', label: 'Классическая газета', hint: 'Строгая чёрно-белая верстка' },
+  { value: 'deusEx', label: 'Deus Ex', hint: 'Чёрный интерфейс и золото' },
+  { value: 'massEffect', label: 'Mass Effect', hint: 'Циан, оранжевый и голограммы' },
 ];
 
-export function NewspaperReader({ issue, style, canGoPrevious, canGoNext, onPrevious, onNext, onClose, onStyleChange, leadLabel, previousLabel, nextLabel, closeLabel }: Props) {
+export type NewspaperVisualStyle = 'wizarding' | 'broadsheet' | 'deusEx' | 'massEffect';
+
+export function NewspaperReader({ issue, style, pageNumber, pageCount, canGoPrevious, canGoNext, onPrevious, onNext, onClose, onStyleChange, leadLabel, previousLabel, nextLabel, closeLabel }: Props) {
   useEffect(() => {
     if (!issue) return undefined;
     const onKeyDown = (event: KeyboardEvent) => {
@@ -78,11 +180,11 @@ export function NewspaperReader({ issue, style, canGoPrevious, canGoNext, onPrev
           >
             <header className={s.toolbar}>
               <div className={s.issueMeta}>
-                <strong>№{issue.issue_number}</strong>
-                <span>{issue.document.date}</span>
+                <strong>Выпуск №{issue.issue_number}</strong>
+                <span>{pageNumber} / {pageCount}</span>
               </div>
               <div className={s.styleSelect}>
-                <Select options={styleOptions} value={style} onChange={value => onStyleChange(value as NewspaperStyle)} />
+                <Select options={styleOptions} value={style} onChange={value => onStyleChange(value as NewspaperVisualStyle)} maxVisibleItems={4} />
               </div>
               <nav className={s.navigation}>
                 <button type="button" onClick={onPrevious} disabled={!canGoPrevious} aria-label={previousLabel}>‹</button>
@@ -109,69 +211,7 @@ export function NewspaperReader({ issue, style, canGoPrevious, canGoNext, onPrev
                   <div className={s.rule} />
                 </header>
 
-                <div className={s.grid}>
-                  {issue.document.blocks.map(block => {
-                    if (block.type === 'weather') return (
-                      <section key={block.id} className={`${s.block} ${s.weather}`}>
-                        <span className={s.kicker}>{block.location}</span>
-                        <h2>{block.condition}</h2>
-                        <div className={s.forecast}>
-                          {block.periods.map(period => (
-                            <div className={s.forecastPeriod} key={period.label}>
-                              <span>{period.label}</span>
-                              <strong>{Math.round(period.temperature)}°</strong>
-                              {period.condition && <small>{period.condition}</small>}
-                            </div>
-                          ))}
-                        </div>
-                        {block.details && <p>{block.details}</p>}
-                        <Sources sources={block.sources} />
-                      </section>
-                    );
-                    if (block.type === 'news_list') return (
-                      <section key={block.id} className={`${s.block} ${s.newsList}`}>
-                        <h2>{block.title}</h2>
-                        <ol>
-                          {block.items.map((item, index) => {
-                            const url = safeUrl(item.url);
-                            return (
-                              <li key={`${item.title}-${index}`}>
-                                {url ? <a href={url} target="_blank" rel="noreferrer">{item.title}</a> : <strong>{item.title}</strong>}
-                                {item.summary && <p>{item.summary}</p>}
-                              </li>
-                            );
-                          })}
-                        </ol>
-                        <Sources sources={block.sources} />
-                      </section>
-                    );
-                    if (block.type === 'image') {
-                      const imageUrl = safeUrl(block.image_url);
-                      return (
-                        <figure key={block.id} className={`${s.block} ${s.imageBlock}`}>
-                          {imageUrl
-                            ? <img src={imageUrl} alt={block.caption || block.title} />
-                            : <div className={s.imagePlaceholder}><span>🐈</span><small>{block.prompt}</small></div>}
-                          <figcaption><strong>{block.title}</strong>{block.caption && <span>{block.caption}</span>}</figcaption>
-                          <Sources sources={block.sources} />
-                        </figure>
-                      );
-                    }
-                    if (block.type === 'humor') return (
-                      <aside key={block.id} className={`${s.block} ${s.humor}`}>
-                        <span>✦</span><h2>{block.title}</h2><p>{block.text}</p>
-                      </aside>
-                    );
-                    return (
-                      <section key={block.id} className={`${s.block} ${block.type === 'hero' ? s.hero : s.article}`}>
-                        {block.type === 'hero' && <span className={s.kicker}>{leadLabel}</span>}
-                        <h2>{block.title}</h2>
-                        <p>{block.summary}</p>
-                        <Sources sources={block.sources} />
-                      </section>
-                    );
-                  })}
-                </div>
+                <BlocksLayout blocks={issue.document.blocks} style={style} leadLabel={leadLabel} />
               </motion.article>
             </div>
           </motion.div>
