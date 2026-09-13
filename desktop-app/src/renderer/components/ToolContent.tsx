@@ -6,7 +6,7 @@ import { MapTool } from './MapTool';
 import { NotebookTool } from './NotebookTool';
 import { TasksTool } from './TasksTool';
 import { JsonExtractorTool } from './JsonExtractorTool';
-import { NewspaperTool } from './NewspaperTool';
+import { NewspaperTool } from './newspaper';
 import { YouTubeMusicTool } from './YouTubeMusicTool';
 
 type Props = {
