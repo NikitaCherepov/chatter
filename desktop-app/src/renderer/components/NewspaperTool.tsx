@@ -6,7 +6,7 @@ import s from './NewspaperTool.module.scss';
 const STYLE_KEY = 'chatter:newspaper-preview-style';
 const readStyle = (): NewspaperVisualStyle => {
   const value = localStorage.getItem(STYLE_KEY);
-  return value === 'wizarding' || value === 'broadsheet' || value === 'deusEx' || value === 'massEffect' ? value : 'wizarding';
+  return value === 'wizarding' || value === 'editorial' || value === 'broadsheet' || value === 'deusEx' || value === 'massEffect' ? value : 'wizarding';
 };
 
 export function NewspaperTool() {

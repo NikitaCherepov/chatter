@@ -6,7 +6,7 @@ const publishedAt = Math.floor(new Date('2026-09-14T08:00:00+07:00').getTime() /
 
 export const DEMO_NEWSPAPER_PAGES: NewspaperIssue[] = [
   {
-    id: -1, newspaper_id: -1, issue_number: 1, title: 'Chatter Daily', subtitle: 'Утренний выпуск', status: 'ready', blocks_count: 5, published_at: publishedAt,
+    id: -1, newspaper_id: -1, issue_number: 1, title: 'Chatter Daily', subtitle: 'Утренний выпуск', status: 'ready', blocks_count: 6, published_at: publishedAt,
     document: {
       version: 1, title: 'Chatter Daily', subtitle: 'Утренний выпуск · Выпуск №1', date: '14 сентября 2026 г.',
       blocks: [
@@ -19,6 +19,7 @@ export const DEMO_NEWSPAPER_PAGES: NewspaperIssue[] = [
           { title: 'Веб-интерфейсы показывают прогресс агентов', summary: 'Фоновые процессы становятся заметными, но не мешают работе.', url: 'https://github.blog/' },
         ] },
         { id: 'article', type: 'article', title: 'Почему редактору не нужен огромный контекст', summary: 'Каждый исследователь возвращает только факты и ссылки. Редактор сравнивает материалы, удаляет повторы и определяет, что действительно достойно первой полосы.', sources: [{ title: 'Agents guide', url: 'https://openai.com/business/guides-and-resources/a-practical-guide-to-building-ai-agents/' }] },
+        { id: 'article-tools', type: 'article', title: 'Инструменты становятся частью интерфейса', summary: 'Вместо длинного лога пользователь видит короткое объяснение, текущий этап и готовый результат. Сложность остаётся внутри системы.', sources: [{ title: 'GitHub Blog', url: 'https://github.blog/' }] },
         { id: 'humor', type: 'humor', title: 'Последняя строка', text: 'Дедлайн был настолько гибким, что в итоге стал дорожной картой.' },
       ],
     },
