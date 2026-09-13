@@ -420,11 +420,26 @@
 
 .editorFooter {
   display: flex;
-  justify-content: flex-end;
+  flex-direction: column;
   gap: 7px;
   padding: 10px 12px;
   border-top: 1px solid var(--border-light);
   background: var(--bg-primary);
+}
+
+.footerRow {
+  display: flex;
+  justify-content: flex-end;
+  gap: 7px;
+
+  .secondaryButton,
+  .saveButton {
+    flex: 1;
+  }
+}
+
+.testButton {
+  width: 100%;
 }
 
 .secondaryButton,

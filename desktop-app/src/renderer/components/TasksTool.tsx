@@ -587,23 +587,25 @@ export function TasksTool() {
             </div>
 
             <div className={s.editorFooter}>
-              <button type="button" className={s.secondaryButton} onClick={backToList} disabled={saving || testing}>
-                {editable ? t('common.cancel') : t('common.back')}
-              </button>
+              <div className={s.footerRow}>
+                <button type="button" className={s.secondaryButton} onClick={backToList} disabled={saving || testing}>
+                  {editable ? t('common.cancel') : t('common.back')}
+                </button>
+                {editable && (
+                  <button type="button" className={s.saveButton} onClick={() => void handleSave()} disabled={saving || testing}>
+                    {saving ? t('common.saving') : t('common.save')}
+                  </button>
+                )}
+              </div>
               {editable && (
                 <button
                   type="button"
-                  className={s.secondaryButton}
+                  className={`${s.secondaryButton} ${s.testButton}`}
                   onClick={() => void handleTest()}
                   disabled={saving || testing}
                   title={t('tools.tasks.testHint')}
                 >
                   {testing ? t('tools.tasks.testRunning') : t('tools.tasks.test')}
-                </button>
-              )}
-              {editable && (
-                <button type="button" className={s.saveButton} onClick={() => void handleSave()} disabled={saving || testing}>
-                  {saving ? t('common.saving') : t('common.save')}
                 </button>
               )}
             </div>

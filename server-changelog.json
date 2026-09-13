@@ -1,56 +1,69 @@
 {
   "changes": {
     "en": [
-      "Reworked the user limits system",
-      "Reworked Browserless"
+      "Error 429 is now treated as retryable",
+      "Reworked the tasks system",
+      "Reworked the context size adjustment when switching plans"
     ],
     "cs": [
-      "Přepracován systém uživatelských limitů",
-      "Přepracováno Browserless"
+      "Chyba 429 je nyní považována za opakovatelnou",
+      "Přepracován systém úloh",
+      "Přepracováno přizpůsobení velikosti kontextu při přepínání plánů"
     ],
     "de": [
-      "Überarbeitetes System für Benutzerlimits",
-      "Überarbeitetes Browserless"
+      "Fehler 429 wird jetzt als wiederholbar behandelt",
+      "Aufgabensystem überarbeitet",
+      "Anpassung der Kontextgröße beim Planwechsel überarbeitet"
     ],
     "es": [
-      "Sistema de límites de usuario rediseñado",
-      "Browserless rediseñado"
+      "El error 429 ahora se trata como reintentable",
+      "Se rediseñó el sistema de tareas",
+      "Se rediseñó el ajuste del tamaño de contexto al cambiar de plan"
     ],
     "fr": [
-      "Système de limites utilisateur retravaillé",
-      "Browserless retravaillé"
+      "L'erreur 429 est désormais traitée comme réessayable",
+      "Refonte du système de tâches",
+      "Refonte de l'ajustement de la taille du contexte lors du changement de forfait"
     ],
     "it": [
-      "Sistema di limiti utente rielaborato",
-      "Browserless rielaborato"
+      "L'errore 429 è ora considerato come ritentabile",
+      "Rifatto il sistema delle attività",
+      "Rifatto l'adeguamento della dimensione del contesto quando si cambia piano"
     ],
     "ja": [
-      "ユーザー制限システムを再設計しました",
-      "Browserlessを再設計しました"
+      "エラー429は再試行可能として扱われるようになりました",
+      "タスクシステムを再設計しました",
+      "プラン切り替え時のコンテキストサイズ調整を再設計しました"
     ],
     "ko": [
-      "사용자 제한 시스템을 재작업했습니다",
-      "Browserless를 재작업했습니다"
+      "오류 429는 이제 재시도 가능으로 처리됩니다",
+      "작업 시스템을 재작업했습니다",
+      "플랜 전환 시 컨텍스트 크기 조정을 재작업했습니다"
     ],
     "pl": [
-      "Przebudowano system limitów użytkowników",
-      "Przebudowano Browserless"
+      "Błąd 429 jest teraz traktowany jako możliwy do ponowienia",
+      "Przebudowano system zadań",
+      "Przebudowano dostosowanie rozmiaru kontekstu przy zmianie planów"
     ],
     "pt-BR": [
-      "Sistema de limites de usuário reformulado",
-      "Browserless reformulado"
+      "O erro 429 agora é tratado como passível de nova tentativa",
+      "Sistema de tarefas reformulado",
+      "Ajuste do tamanho do contexto ao trocar de planos reformulado"
     ],
     "ru": [
-      "Переработана система лимитов у пользователей",
-      "Переработан Browserless"
+      "Ошибка 429 теперь считается повторяемой",
+      "Переработана система задач",
+      "Переработана настройка размера контекста при смене тарифов"
     ],
     "tr": [
-      "Kullanıcı limitleri sistemi yeniden düzenlendi",
-      "Browserless yeniden düzenlendi"
+      "Hata 429 artık yeniden denenebilir olarak ele alınıyor",
+      "Görev sistemi yeniden düzenlendi",
+      "Plan değiştirirken bağlam boyutu ayarı yeniden düzenlendi"
     ],
     "zh-CN": [
-      "重新设计了用户限制系统",
-      "重新设计了Browserless"
+      "错误429现在被视为可重试",
+      "重新设计了任务系统",
+      "重新设计了切换计划时的上下文大小调整"
     ]
   }
 }
