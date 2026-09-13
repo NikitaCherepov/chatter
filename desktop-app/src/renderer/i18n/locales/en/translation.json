@@ -910,7 +910,18 @@
         "selected": "Selected tools"
       },
       "searchTools": "Search tools…",
-      "noToolsFound": "No tools found"
+      "noToolsFound": "No tools found",
+      "test": "Test",
+      "testRunning": "Running…",
+      "testHint": "Run this task now exactly like the scheduler would. The saved version is used; the schedule is not changed.",
+      "testResultTitle": "Test result",
+      "testDelivered": "Delivered",
+      "testNotDelivered": "Not delivered",
+      "testRunFailed": "Run failed",
+      "testRoomRedirect": "Redirected from room",
+      "testNewChat": "New chat created",
+      "testSilent": "The task produced nothing to report (empty answer).",
+      "testFailed": "Failed to run the test"
     }
   },
   "advanced": {

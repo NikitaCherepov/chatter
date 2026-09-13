@@ -1207,7 +1207,18 @@
         "selected": "Wybrane narzędzia"
       },
       "searchTools": "Szukaj narzędzi…",
-      "noToolsFound": "Nie znaleziono narzędzi"
+      "noToolsFound": "Nie znaleziono narzędzi",
+      "test": "Test",
+      "testRunning": "Uruchamianie…",
+      "testHint": "Uruchom to zadanie teraz dokładnie tak, jak zrobiłby to harmonogram. Używana jest zapisana wersja; harmonogram nie jest zmieniany.",
+      "testResultTitle": "Wynik testu",
+      "testDelivered": "Dostarczono",
+      "testNotDelivered": "Nie dostarczono",
+      "testRunFailed": "Uruchomienie nie powiodło się",
+      "testRoomRedirect": "Przekierowano z pokoju",
+      "testNewChat": "Utworzono nowy czat",
+      "testSilent": "Zadanie nie wygenerowało nic do zgłoszenia (pusta odpowiedź).",
+      "testFailed": "Nie udało się uruchomić testu"
     },
     "browser": {
       "title": "Przeglądarka",

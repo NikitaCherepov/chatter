@@ -71,6 +71,8 @@ export function TasksTool() {
   const [loading, setLoading] = useState(false);
   const [optionsLoading, setOptionsLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<api.TaskTestResult | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('pending');
   const [selectedTask, setSelectedTask] = useState<api.TaskDto | null>(null);
 
@@ -183,6 +185,7 @@ export function TasksTool() {
     setSelectedTools(task.allowed_tools ?? []);
     setToolMode(task.allowed_tools == null ? 'all' : task.allowed_tools.length === 0 ? 'none' : 'selected');
     setToolQuery('');
+    setTestResult(null);
     setView('editor');
   };
 
@@ -296,6 +299,22 @@ export function TasksTool() {
       toast.error(t('tools.tasks.saveFailed'));
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Runs the saved version; the schedule is not advanced.
+  const handleTest = async () => {
+    if (!selectedTask || selectedTask.status !== 'pending' || testing) return;
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const result = await api.testTask(selectedTask.id);
+      setTestResult(result);
+    } catch (err) {
+      console.error('Failed to test task:', err);
+      toast.error(t('tools.tasks.testFailed'));
+    } finally {
+      setTesting(false);
     }
   };
 
@@ -535,14 +554,55 @@ export function TasksTool() {
                   )}
                 </section>
               )}
+
+              {testResult && (
+                <section className={s.formSection}>
+                  <div className={s.sectionTitle}>{t('tools.tasks.testResultTitle')}</div>
+                  <div className={s.testMeta}>
+                    {testResult.ok
+                      ? (
+                          testResult.delivered
+                            ? <span className={s.testTagOk}>{t('tools.tasks.testDelivered')}</span>
+                            : <span className={s.testTag}>{t('tools.tasks.testNotDelivered')}</span>
+                        )
+                      : <span className={s.testTagError}>{t('tools.tasks.testRunFailed')}</span>}
+                    {testResult.roomRedirect && (
+                      <span className={s.testTagWarn}>{t('tools.tasks.testRoomRedirect')}</span>
+                    )}
+                    {testResult.isNewChat && (
+                      <span className={s.testTag}>{t('tools.tasks.testNewChat')}</span>
+                    )}
+                    {testResult.chatTitle && (
+                      <span className={s.testTag}>
+                        {t('tools.tasks.toChatTitled', { title: testResult.chatTitle })}
+                      </span>
+                    )}
+                  </div>
+                  {testResult.error && <div className={s.testError}>{testResult.error}</div>}
+                  {testResult.resultText
+                    ? <div className={s.testText}>{testResult.resultText}</div>
+                    : testResult.ok && <div className={s.testSilent}>{t('tools.tasks.testSilent')}</div>}
+                </section>
+              )}
             </div>
 
             <div className={s.editorFooter}>
-              <button type="button" className={s.secondaryButton} onClick={backToList} disabled={saving}>
+              <button type="button" className={s.secondaryButton} onClick={backToList} disabled={saving || testing}>
                 {editable ? t('common.cancel') : t('common.back')}
               </button>
               {editable && (
-                <button type="button" className={s.saveButton} onClick={() => void handleSave()} disabled={saving}>
+                <button
+                  type="button"
+                  className={s.secondaryButton}
+                  onClick={() => void handleTest()}
+                  disabled={saving || testing}
+                  title={t('tools.tasks.testHint')}
+                >
+                  {testing ? t('tools.tasks.testRunning') : t('tools.tasks.test')}
+                </button>
+              )}
+              {editable && (
+                <button type="button" className={s.saveButton} onClick={() => void handleSave()} disabled={saving || testing}>
                   {saving ? t('common.saving') : t('common.save')}
                 </button>
               )}

@@ -1926,6 +1926,22 @@ export async function deleteTask(taskId: number): Promise<{ ok: boolean }> {
   return apiFetch(`/api/v1/tasks/${taskId}`, { method: 'DELETE' });
 }
 
+/** POST /api/v1/tasks/:id/test — run without finishing the task. */
+export type TaskTestResult = {
+  ok: boolean;
+  chatId: number | null;
+  chatTitle: string | null;
+  isNewChat: boolean;
+  roomRedirect: boolean;
+  resultText: string;
+  delivered: boolean;
+  error: string | null;
+};
+
+export async function testTask(taskId: number): Promise<TaskTestResult> {
+  return apiFetch(`/api/v1/tasks/${taskId}/test`, { method: 'POST' });
+}
+
 // ---------- Map Pins ----------
 
 export type MapPinDto = {

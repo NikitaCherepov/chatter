@@ -886,7 +886,18 @@
         "selected": "Ferramentas selecionadas"
       },
       "searchTools": "Pesquisar ferramentas…",
-      "noToolsFound": "Nenhuma ferramenta encontrada"
+      "noToolsFound": "Nenhuma ferramenta encontrada",
+      "test": "Teste",
+      "testRunning": "Executando…",
+      "testHint": "Execute esta tarefa agora exatamente como o agendador faria. A versão salva é usada; o agendamento não é alterado.",
+      "testResultTitle": "Resultado do teste",
+      "testDelivered": "Entregue",
+      "testNotDelivered": "Não entregue",
+      "testRunFailed": "Falha na execução",
+      "testRoomRedirect": "Redirecionado da sala",
+      "testNewChat": "Novo chat criado",
+      "testSilent": "A tarefa não produziu nada para relatar (resposta vazia).",
+      "testFailed": "Falha ao executar o teste"
     },
     "browser": {
       "title": "Navegador",

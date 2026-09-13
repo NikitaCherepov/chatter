@@ -886,7 +886,18 @@
         "selected": "Outils sélectionnés"
       },
       "searchTools": "Rechercher des outils…",
-      "noToolsFound": "Aucun outil trouvé"
+      "noToolsFound": "Aucun outil trouvé",
+      "test": "Test",
+      "testRunning": "Exécution…",
+      "testHint": "Exécutez cette tâche maintenant exactement comme le planificateur le ferait. La version enregistrée est utilisée ; le calendrier n'est pas modifié.",
+      "testResultTitle": "Résultat du test",
+      "testDelivered": "Livré",
+      "testNotDelivered": "Non livré",
+      "testRunFailed": "Échec de l'exécution",
+      "testRoomRedirect": "Redirigé depuis la salle",
+      "testNewChat": "Nouvelle conversation créée",
+      "testSilent": "La tâche n'a rien produit à signaler (réponse vide).",
+      "testFailed": "Échec de l'exécution du test"
     },
     "browser": {
       "title": "Navigateur",

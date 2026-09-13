@@ -1207,7 +1207,18 @@
         "selected": "Seçilen araçlar"
       },
       "searchTools": "Araçları ara…",
-      "noToolsFound": "Araç bulunamadı"
+      "noToolsFound": "Araç bulunamadı",
+      "test": "Test",
+      "testRunning": "Çalışıyor…",
+      "testHint": "Bu görevi zamanlayıcının yapacağı gibi şimdi çalıştırın. Kaydedilmiş sürüm kullanılır; zamanlama değiştirilmez.",
+      "testResultTitle": "Test sonucu",
+      "testDelivered": "Teslim edildi",
+      "testNotDelivered": "Teslim edilmedi",
+      "testRunFailed": "Çalıştırma başarısız",
+      "testRoomRedirect": "Odadan yönlendirildi",
+      "testNewChat": "Yeni sohbet oluşturuldu",
+      "testSilent": "Görev raporlanacak bir şey üretmedi (boş yanıt).",
+      "testFailed": "Test çalıştırılamadı"
     },
     "browser": {
       "title": "Tarayıcı",

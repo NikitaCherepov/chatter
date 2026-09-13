@@ -30,7 +30,7 @@ import { getWebReaderRuntimeSettings, getWebReaderStats, updateWebReaderRuntimeS
 import { getSmartHomeSettings, setSmartHomeToken, deleteSmartHomeToken, setZigbeeToken, deleteZigbeeToken, listSmartDevices, syncSmartHomeDevices } from './services/smart-home.js';
 import { db } from './db.js';
 import { getCleanTextFromUrl } from './services/web-reader.js';
-import { startTaskScheduler } from './services/scheduler.js';
+import { startTaskScheduler, runScheduledTask } from './services/scheduler.js';
 import {
   getMonitorSettings, saveMonitorSettings, getMonitorStates, runMonitorCycle,
   startOpenRouterMonitor, restartOpenRouterMonitor, sendTestNotification,
@@ -2973,6 +2973,20 @@ app.put('/api/v1/tasks/:id', (req: AuthedRequest, res) => {
   const ok = updatePendingTask(userId, taskId, fields);
   if (!ok) return res.status(409).json({ error: 'task_not_pending' });
   return res.json({ ok: true, task: getUserTaskById(userId, taskId) });
+});
+
+// Full scheduler-style run without finishing the task.
+app.post('/api/v1/tasks/:id/test', async (req: AuthedRequest, res) => {
+  const userId = accountIdFromRequest(req);
+  const taskId = Number.parseInt(req.params.id, 10);
+  if (!Number.isFinite(taskId) || taskId <= 0) return res.status(400).json({ error: 'bad_task_id' });
+
+  const existing = getUserTaskById(userId, taskId);
+  if (!existing) return res.status(404).json({ error: 'task_not_found' });
+  if (existing.status !== 'pending') return res.status(409).json({ error: 'task_not_pending' });
+
+  const summary = await runScheduledTask({ ...existing, user_id: userId }, { advanceSchedule: false });
+  return res.json(summary);
 });
 
 app.delete('/api/v1/tasks/:id', (req: AuthedRequest, res) => {

@@ -898,7 +898,9 @@
     "resetUsageConfirm": "Obnovit týdenní využití pro VŠECHNY uživatele?",
     "resetting": "Obnovování...",
     "resetUsageDone": "Obnovení dokončeno: {{count}} uživatelů aktualizováno.",
-    "webReaderLabel": "Bezprohlížečové čtení stránek za měsíc"
+    "webReaderLabel": "Bezprohlížečové čtení stránek za měsíc",
+    "maxPromptLengthLabel": "Max. délka vlastního promptu (znaky)",
+    "maxPromptLengthHint": "0 = vlastní prompty jsou pro tento plán blokovány."
   },
   "nav": {
     "overview": "Přehled",

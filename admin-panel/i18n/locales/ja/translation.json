@@ -912,7 +912,9 @@
     "resetUsageConfirm": "すべてのユーザーの週間使用量をリセットしますか？",
     "resetting": "リセット中...",
     "resetUsageDone": "リセット完了: {{count}} ユーザーを更新しました。",
-    "webReaderLabel": "月あたりのブラウザレスページ読み取り"
+    "webReaderLabel": "月あたりのブラウザレスページ読み取り",
+    "maxPromptLengthLabel": "最大カスタムプロンプト長（文字数）",
+    "maxPromptLengthHint": "0 = このプランではカスタムプロンプトがブロックされます。"
   },
   "nav": {
     "overview": "概要",

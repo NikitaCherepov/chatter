@@ -912,7 +912,9 @@
     "resetUsageConfirm": "重置所有用户的每周使用量？",
     "resetting": "正在重置...",
     "resetUsageDone": "重置完成：已更新 {{count}} 个用户。",
-    "webReaderLabel": "每月无浏览器页面读取次数"
+    "webReaderLabel": "每月无浏览器页面读取次数",
+    "maxPromptLengthLabel": "最大自定义提示长度（字符）",
+    "maxPromptLengthHint": "0 = 此计划的自定义提示被阻止。"
   },
   "nav": {
     "overview": "概览",

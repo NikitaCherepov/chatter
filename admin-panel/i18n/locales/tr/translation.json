@@ -897,7 +897,9 @@
     "resetUsageConfirm": "TÜM kullanıcılar için haftalık kullanım sıfırlansın mı?",
     "resetting": "Sıfırlanıyor...",
     "resetUsageDone": "Sıfırlama tamamlandı: {{count}} kullanıcı güncellendi.",
-    "webReaderLabel": "Aylık tarayıcısız sayfa okumaları"
+    "webReaderLabel": "Aylık tarayıcısız sayfa okumaları",
+    "maxPromptLengthLabel": "Maks. özel istem uzunluğu (karakter)",
+    "maxPromptLengthHint": "0 = bu plan için özel istemler engellenir."
   },
   "nav": {
     "overview": "Genel Bakış",

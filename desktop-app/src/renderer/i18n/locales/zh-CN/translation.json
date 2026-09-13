@@ -886,7 +886,18 @@
         "selected": "已选工具"
       },
       "searchTools": "搜索工具…",
-      "noToolsFound": "未找到工具"
+      "noToolsFound": "未找到工具",
+      "test": "测试",
+      "testRunning": "运行中…",
+      "testHint": "立即运行此任务，与调度器执行方式完全相同。使用已保存的版本；不更改计划。",
+      "testResultTitle": "测试结果",
+      "testDelivered": "已交付",
+      "testNotDelivered": "未送达",
+      "testRunFailed": "运行失败",
+      "testRoomRedirect": "从房间重定向",
+      "testNewChat": "已创建新聊天",
+      "testSilent": "任务未产生任何可报告的内容（空答案）。",
+      "testFailed": "运行测试失败"
     },
     "browser": {
       "title": "浏览器",

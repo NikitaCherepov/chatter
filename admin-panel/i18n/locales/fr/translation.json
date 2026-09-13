@@ -912,7 +912,9 @@
     "resetUsageConfirm": "Réinitialiser l'utilisation hebdomadaire pour TOUS les utilisateurs ?",
     "resetting": "Réinitialisation...",
     "resetUsageDone": "Réinitialisation terminée : {{count}} utilisateurs mis à jour.",
-    "webReaderLabel": "Lectures de pages sans navigateur par mois"
+    "webReaderLabel": "Lectures de pages sans navigateur par mois",
+    "maxPromptLengthLabel": "Longueur maximale du prompt personnalisé (caractères)",
+    "maxPromptLengthHint": "0 = les prompts personnalisés sont bloqués pour ce plan."
   },
   "nav": {
     "overview": "Aperçu",

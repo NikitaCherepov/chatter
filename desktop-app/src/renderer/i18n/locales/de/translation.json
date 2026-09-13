@@ -886,7 +886,18 @@
         "selected": "Ausgewählte Tools"
       },
       "searchTools": "Tools suchen…",
-      "noToolsFound": "Keine Tools gefunden"
+      "noToolsFound": "Keine Tools gefunden",
+      "test": "Test",
+      "testRunning": "Läuft…",
+      "testHint": "Führen Sie diese Aufgabe jetzt genau so aus, wie es der Planer tun würde. Die gespeicherte Version wird verwendet; der Zeitplan wird nicht geändert.",
+      "testResultTitle": "Testergebnis",
+      "testDelivered": "Zugestellt",
+      "testNotDelivered": "Nicht zugestellt",
+      "testRunFailed": "Ausführung fehlgeschlagen",
+      "testRoomRedirect": "Aus Raum umgeleitet",
+      "testNewChat": "Neuer Chat erstellt",
+      "testSilent": "Die Aufgabe hat nichts zu berichten (leere Antwort).",
+      "testFailed": "Test konnte nicht ausgeführt werden"
     },
     "browser": {
       "title": "Browser",

@@ -886,7 +886,18 @@
         "selected": "選択されたツール"
       },
       "searchTools": "ツールを検索…",
-      "noToolsFound": "ツールが見つかりません"
+      "noToolsFound": "ツールが見つかりません",
+      "test": "テスト",
+      "testRunning": "実行中…",
+      "testHint": "スケジューラが行うのとまったく同じように、このタスクを今すぐ実行します。保存されたバージョンが使用され、スケジュールは変更されません。",
+      "testResultTitle": "テスト結果",
+      "testDelivered": "配信済み",
+      "testNotDelivered": "配信されていません",
+      "testRunFailed": "実行に失敗しました",
+      "testRoomRedirect": "ルームからリダイレクトされました",
+      "testNewChat": "新しいチャットが作成されました",
+      "testSilent": "タスクは報告する内容を生成しませんでした（空の回答）。",
+      "testFailed": "テストの実行に失敗しました"
     },
     "browser": {
       "title": "ブラウザ",

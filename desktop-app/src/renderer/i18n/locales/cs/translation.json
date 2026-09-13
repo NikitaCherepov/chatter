@@ -1207,7 +1207,18 @@
         "selected": "Vybrané nástroje"
       },
       "searchTools": "Hledat nástroje…",
-      "noToolsFound": "Nebyly nalezeny žádné nástroje"
+      "noToolsFound": "Nebyly nalezeny žádné nástroje",
+      "test": "Test",
+      "testRunning": "Spouští se…",
+      "testHint": "Spustit tuto úlohu nyní přesně tak, jak by to udělal plánovač. Použije se uložená verze; plán se nemění.",
+      "testResultTitle": "Výsledek testu",
+      "testDelivered": "Doručeno",
+      "testNotDelivered": "Nedoručeno",
+      "testRunFailed": "Spuštění selhalo",
+      "testRoomRedirect": "Přesměrováno z místnosti",
+      "testNewChat": "Vytvořen nový chat",
+      "testSilent": "Úloha nevygenerovala žádnou zprávu (prázdná odpověď).",
+      "testFailed": "Spuštění testu se nezdařilo"
     },
     "browser": {
       "title": "Prohlížeč",

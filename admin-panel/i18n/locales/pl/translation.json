@@ -912,7 +912,9 @@
     "resetUsageConfirm": "Zresetować tygodniowe użycie dla WSZYSTKICH użytkowników?",
     "resetting": "Resetowanie...",
     "resetUsageDone": "Resetowanie zakończone: zaktualizowano {{count}} użytkowników.",
-    "webReaderLabel": "Odczyty stron bez przeglądarki na miesiąc"
+    "webReaderLabel": "Odczyty stron bez przeglądarki na miesiąc",
+    "maxPromptLengthLabel": "Maks. długość niestandardowego promptu (znaki)",
+    "maxPromptLengthHint": "0 = niestandardowe prompty są zablokowane dla tego planu."
   },
   "nav": {
     "overview": "Przegląd",

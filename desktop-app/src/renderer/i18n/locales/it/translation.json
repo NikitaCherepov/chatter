@@ -1207,7 +1207,18 @@
         "selected": "Strumenti selezionati"
       },
       "searchTools": "Cerca strumenti…",
-      "noToolsFound": "Nessuno strumento trovato"
+      "noToolsFound": "Nessuno strumento trovato",
+      "test": "Test",
+      "testRunning": "Esecuzione…",
+      "testHint": "Esegui questa attività ora esattamente come farebbe lo scheduler. Viene utilizzata la versione salvata; la pianificazione non viene modificata.",
+      "testResultTitle": "Risultato del test",
+      "testDelivered": "Consegnato",
+      "testNotDelivered": "Non consegnato",
+      "testRunFailed": "Esecuzione non riuscita",
+      "testRoomRedirect": "Reindirizzato dalla stanza",
+      "testNewChat": "Nuova chat creata",
+      "testSilent": "L'attività non ha prodotto nulla da segnalare (risposta vuota).",
+      "testFailed": "Impossibile eseguire il test"
     },
     "browser": {
       "title": "Browser",

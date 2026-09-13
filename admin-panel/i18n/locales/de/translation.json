@@ -912,7 +912,9 @@
     "resetUsageConfirm": "Wöchentliche Nutzung für ALLE Benutzer zurücksetzen?",
     "resetting": "Wird zurückgesetzt...",
     "resetUsageDone": "Zurücksetzen abgeschlossen: {{count}} Benutzer aktualisiert.",
-    "webReaderLabel": "Browserless-Seitenaufrufe pro Monat"
+    "webReaderLabel": "Browserless-Seitenaufrufe pro Monat",
+    "maxPromptLengthLabel": "Max. Länge benutzerdefinierter Prompts (Zeichen)",
+    "maxPromptLengthHint": "0 = benutzerdefinierte Prompts sind für diesen Plan blockiert."
   },
   "nav": {
     "overview": "Übersicht",

@@ -886,7 +886,18 @@
         "selected": "Herramientas seleccionadas"
       },
       "searchTools": "Buscar herramientas…",
-      "noToolsFound": "No se encontraron herramientas"
+      "noToolsFound": "No se encontraron herramientas",
+      "test": "Prueba",
+      "testRunning": "Ejecutando…",
+      "testHint": "Ejecuta esta tarea ahora exactamente como lo haría el programador. Se utiliza la versión guardada; el horario no se modifica.",
+      "testResultTitle": "Resultado de la prueba",
+      "testDelivered": "Entregado",
+      "testNotDelivered": "No entregado",
+      "testRunFailed": "Ejecución fallida",
+      "testRoomRedirect": "Redirigido desde la sala",
+      "testNewChat": "Nuevo chat creado",
+      "testSilent": "La tarea no produjo nada que informar (respuesta vacía).",
+      "testFailed": "No se pudo ejecutar la prueba"
     },
     "browser": {
       "title": "Navegador",
