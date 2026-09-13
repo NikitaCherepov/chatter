@@ -24,7 +24,7 @@ export type NewspaperBlock =
   | (NewspaperBlockBase & { type: 'hero'; summary: string; image_url?: string })
   | (NewspaperBlockBase & { type: 'article'; summary: string; image_url?: string })
   | (NewspaperBlockBase & { type: 'news_list'; items: Array<{ title: string; summary?: string; url?: string }> })
-  | (NewspaperBlockBase & { type: 'weather'; location: string; temperature: number; condition: string; details?: string })
+  | (NewspaperBlockBase & { type: 'weather'; location: string; condition: string; details?: string; periods: Array<{ label: string; temperature: number; condition?: string }> })
   | (NewspaperBlockBase & { type: 'image'; image_url?: string; caption?: string; prompt?: string })
   | (NewspaperBlockBase & { type: 'humor'; text: string });
 

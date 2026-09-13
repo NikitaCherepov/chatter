@@ -11,8 +11,8 @@
 
 .dialog {
   display: flex;
-  width: min(1120px, 96vw);
-  height: min(900px, 94vh);
+  width: min(1000px, 96vw);
+  height: min(820px, 92vh);
   overflow: hidden;
   flex-direction: column;
   border: 1px solid rgba(255, 255, 255, 0.14);
@@ -22,17 +22,17 @@
 }
 
 .toolbar {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr 180px 1fr;
   min-height: 54px;
   align-items: center;
-  justify-content: space-between;
   padding: 8px 12px 8px 18px;
   color: #dbe5f3;
 
-  > div { display: flex; align-items: baseline; gap: 10px; }
+  .issueMeta { display: flex; align-items: baseline; gap: 10px; }
   strong { font-size: 13px; }
   span { color: #8492a8; font-size: 11px; }
-  nav { display: flex; gap: 6px; }
+  .navigation { display: flex; justify-content: flex-end; gap: 6px; }
 
   button {
     display: grid;
@@ -51,13 +51,15 @@
   button:disabled { cursor: default; opacity: 0.25; }
 }
 
+.styleSelect { align-self: center; }
+
 .viewport { flex: 1; overflow: auto; padding: 0 18px 22px; }
 
 .paper {
-  width: min(920px, 100%);
+  width: min(800px, 100%);
   min-height: 100%;
   margin: 0 auto;
-  padding: clamp(24px, 4vw, 58px);
+  padding: clamp(22px, 3vw, 38px);
   background: #f3eedf;
   color: #211f1a;
   box-shadow: 0 16px 45px rgba(0, 0, 0, 0.28);
@@ -68,24 +70,28 @@
 .magical { background: #e9dfc3; color: #251c16; }
 
 .masthead { text-align: center; }
-.masthead h1 { margin: 10px 0 8px; font-size: clamp(38px, 7vw, 76px); font-weight: 800; letter-spacing: -0.055em; line-height: 0.9; }
+.masthead h1 { margin: 8px 0 6px; font-size: clamp(36px, 5vw, 58px); font-weight: 800; letter-spacing: -0.055em; line-height: 0.9; }
 .rule { height: 3px; border-top: 1px solid currentColor; border-bottom: 1px solid currentColor; }
 .mastMeta { display: flex; justify-content: space-between; gap: 16px; padding: 8px 2px; font-family: Inter, Arial, sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; }
 
-.grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 0; margin-top: 24px; border-top: 1px solid currentColor; }
-.block { margin: 0; padding: 22px; border-right: 1px solid rgba(33, 31, 26, 0.38); border-bottom: 1px solid rgba(33, 31, 26, 0.38); }
-.block h2 { margin: 0 0 10px; font-size: 24px; line-height: 1.05; }
-.block p { margin: 0; font-size: 15px; line-height: 1.55; }
+.grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 0; margin-top: 16px; border-top: 1px solid currentColor; }
+.block { margin: 0; padding: 16px; border-right: 1px solid rgba(33, 31, 26, 0.38); border-bottom: 1px solid rgba(33, 31, 26, 0.38); }
+.block h2 { margin: 0 0 8px; font-size: 21px; line-height: 1.05; }
+.block p { margin: 0; font-size: 13px; line-height: 1.45; }
 .hero { grid-column: span 8; }
-.hero h2 { font-size: clamp(30px, 4vw, 48px); letter-spacing: -0.025em; }
-.hero p { font-size: 18px; }
+.hero h2 { font-size: clamp(28px, 3.5vw, 40px); letter-spacing: -0.025em; }
+.hero p { font-size: 15px; }
 .article { grid-column: span 7; }
 .weather { grid-column: span 4; text-align: center; }
 .newsList { grid-column: span 5; }
 .imageBlock { grid-column: span 5; }
 .humor { grid-column: 1 / -1; text-align: center; }
 .humor > span { font-size: 20px; }
-.temperature { margin: 8px 0 0; font-size: 72px; font-weight: 700; line-height: 1; }
+.forecast { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 12px 0; }
+.forecastPeriod { display: flex; min-width: 0; flex-direction: column; align-items: center; gap: 2px; padding: 8px 3px; border-top: 1px solid rgba(33, 31, 26, 0.22); border-bottom: 1px solid rgba(33, 31, 26, 0.22); }
+.forecastPeriod span, .forecastPeriod small { font-family: Inter, Arial, sans-serif; font-size: 9px; }
+.forecastPeriod strong { font-size: 25px; line-height: 1; }
+.forecastPeriod small { overflow: hidden; max-width: 100%; opacity: 0.7; text-overflow: ellipsis; white-space: nowrap; }
 .kicker { display: block; margin-bottom: 8px; font-family: Inter, Arial, sans-serif; font-size: 10px; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; }
 
 .newsList h2 { padding-bottom: 10px; border-bottom: 3px double currentColor; }
@@ -96,8 +102,8 @@
 .newsList a:hover { text-decoration: underline; }
 .newsList li p { margin-top: 4px; font-size: 12px; }
 
-.imagePlaceholder { display: grid; min-height: 230px; place-items: center; align-content: center; gap: 10px; background: radial-gradient(circle at 35% 30%, #d7a463, #77604d 68%, #332b27); color: white; }
-.imagePlaceholder span { font-size: 72px; filter: drop-shadow(0 8px 10px rgba(0, 0, 0, 0.25)); }
+.imagePlaceholder { display: grid; min-height: 140px; place-items: center; align-content: center; gap: 8px; background: radial-gradient(circle at 35% 30%, #d7a463, #77604d 68%, #332b27); color: white; }
+.imagePlaceholder span { font-size: 54px; filter: drop-shadow(0 8px 10px rgba(0, 0, 0, 0.25)); }
 .imagePlaceholder small { font-family: Inter, Arial, sans-serif; opacity: 0.7; }
 .imageBlock img { display: block; width: 100%; max-height: 360px; object-fit: cover; }
 .imageBlock figcaption { display: flex; flex-direction: column; gap: 5px; padding-top: 10px; }
@@ -110,6 +116,8 @@
 @media (max-width: 720px) {
   .backdrop { padding: 0; }
   .dialog { width: 100vw; height: 100vh; border: 0; border-radius: 0; }
+  .toolbar { grid-template-columns: 1fr auto; }
+  .styleSelect { grid-column: 1 / -1; grid-row: 2; width: 100%; }
   .viewport { padding: 0; }
   .paper { padding: 24px 18px; }
   .grid { display: block; }

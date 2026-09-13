@@ -1953,7 +1953,7 @@ export type NewspaperBlock =
   | (NewspaperBlockBase & { type: 'hero'; summary: string; image_url?: string })
   | (NewspaperBlockBase & { type: 'article'; summary: string; image_url?: string })
   | (NewspaperBlockBase & { type: 'news_list'; items: Array<{ title: string; summary?: string; url?: string }> })
-  | (NewspaperBlockBase & { type: 'weather'; location: string; temperature: number; condition: string; details?: string })
+  | (NewspaperBlockBase & { type: 'weather'; location: string; condition: string; details?: string; periods: Array<{ label: string; temperature: number; condition?: string }> })
   | (NewspaperBlockBase & { type: 'image'; image_url?: string; caption?: string; prompt?: string })
   | (NewspaperBlockBase & { type: 'humor'; text: string });
 
@@ -1994,6 +1994,13 @@ export type Newspaper = {
 
 export async function listNewspapers(): Promise<{ newspapers: Newspaper[] }> {
   return apiFetch('/api/v1/newspapers');
+}
+
+export async function updateNewspaper(newspaperId: number, input: Partial<Pick<Newspaper, 'name' | 'editorial_brief' | 'interests' | 'preferences' | 'style' | 'enabled'>>): Promise<{ ok: boolean; newspaper: Newspaper }> {
+  return apiFetch(`/api/v1/newspapers/${newspaperId}`, {
+    method: 'PUT',
+    body: JSON.stringify(input),
+  });
 }
 
 export async function listNewspaperIssues(newspaperId: number, limit = 30): Promise<{ issues: NewspaperIssueSummary[] }> {

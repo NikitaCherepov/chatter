@@ -146,6 +146,12 @@ const MIGRATIONS: Migration[] = [
     name: '0004_tasks_notify',
     run: migrateTasksNotify,
   },
+  {
+    // Newspaper documents are still experimental. Discard test issues created
+    // with the initial weather block contract while preserving newspaper settings.
+    name: '0005_reset_experimental_newspaper_issues',
+    run: () => { db.exec('DELETE FROM newspaper_issues'); },
+  },
 ];
 
 /**

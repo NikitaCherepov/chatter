@@ -52,13 +52,27 @@ export function NewspaperTool() {
     try {
       const result = await api.createDemoNewspaperIssue();
       await load();
-      const newspaper = newspapers.find(item => item.id === result.issue.newspaper_id);
+      const newspaper = (await api.listNewspapers()).newspapers.find(item => item.id === result.issue.newspaper_id);
       setSelectedStyle(newspaper?.style || 'classic');
       setSelectedIssue(result.issue);
     } catch (error: any) {
       toast.error(error?.message || tr('Could not create a test issue', 'Не удалось создать тестовый выпуск'));
     } finally {
       setCreating(false);
+    }
+  };
+
+  const changeStyle = async (style: api.NewspaperStyle) => {
+    if (!selectedIssue || style === selectedStyle) return;
+    const previous = selectedStyle;
+    setSelectedStyle(style);
+    setNewspapers(current => current.map(item => item.id === selectedIssue.newspaper_id ? { ...item, style } : item));
+    try {
+      await api.updateNewspaper(selectedIssue.newspaper_id, { style });
+    } catch (error: any) {
+      setSelectedStyle(previous);
+      setNewspapers(current => current.map(item => item.id === selectedIssue.newspaper_id ? { ...item, style: previous } : item));
+      toast.error(error?.message || tr('Could not save the style', 'Не удалось сохранить стиль'));
     }
   };
 
@@ -131,6 +145,7 @@ export function NewspaperTool() {
         onPrevious={() => goTo(currentIndex + 1)}
         onNext={() => goTo(currentIndex - 1)}
         onClose={() => setSelectedIssue(null)}
+        onStyleChange={style => void changeStyle(style)}
         leadLabel={tr('Lead story', 'Главная история')}
         previousLabel={tr('Previous issue', 'Предыдущий выпуск')}
         nextLabel={tr('Next issue', 'Следующий выпуск')}

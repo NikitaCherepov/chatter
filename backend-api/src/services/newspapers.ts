@@ -158,47 +158,35 @@ export const deleteNewspaperIssue = (userId: number, issueId: number) => db
   .run(issueId, userId)
   .changes > 0;
 
-const demoDocument = (russian: boolean, issueNumber: number, displayName: string): NewspaperIssueDocument => russian ? {
+const demoDocument = (issueNumber: number): NewspaperIssueDocument => ({
   version: 1,
   title: 'Chatter Daily',
-  subtitle: `Доброе утро, ${displayName || 'читатель'} · выпуск №${issueNumber}`,
+  subtitle: `Утренний выпуск · №${issueNumber}`,
   date: new Intl.DateTimeFormat('ru-RU', { dateStyle: 'long' }).format(new Date()),
   blocks: [
-    { id: 'weather', type: 'weather', title: 'Утро в Томске', location: 'Томск', temperature: 12, condition: 'Облачно', details: 'Без сильного ветра. К вечеру станет прохладнее.', priority: 100 },
-    { id: 'hero-ai', type: 'hero', title: 'Агенты становятся частью обычных приложений', summary: 'Главная тема выпуска — как небольшие специализированные агенты превращают сложные процессы в понятные пользовательские функции.', priority: 90, sources: [{ title: 'OpenAI Research', url: 'https://openai.com/research/' }] },
+    { id: 'weather', type: 'weather', title: 'Погода на день', location: 'Томск', condition: 'Переменная облачность', details: 'Без сильного ветра и осадков.', periods: [
+      { label: 'Утро', temperature: 9, condition: 'Облачно' },
+      { label: 'День', temperature: 14, condition: 'Без дождя' },
+      { label: 'Вечер', temperature: 10, condition: 'Прохладно' },
+    ], priority: 100 },
+    { id: 'hero-ai', type: 'hero', title: issueNumber % 2 === 0 ? 'Интерфейсы учатся показывать работу агентов' : 'Агенты становятся частью обычных приложений', summary: issueNumber % 2 === 0 ? 'Второй тестовый выпуск посвящён прозрачным фоновым процессам: пользователь видит прогресс, но интерфейс не мешает основной работе.' : 'Главная тема выпуска — как небольшие специализированные агенты превращают сложные процессы в понятные пользовательские функции.', priority: 90, sources: [{ title: 'OpenAI Research', url: 'https://openai.com/research/' }] },
     { id: 'brief', type: 'news_list', title: 'Коротко', items: [
       { title: 'React продолжает улучшать серверный рендеринг', summary: 'Экосистема постепенно стандартизирует новые подходы.', url: 'https://react.dev/blog' },
       { title: 'Новый взгляд на космические телескопы', summary: 'Инженеры тестируют инструменты следующего поколения.', url: 'https://www.nasa.gov/' },
-      { title: 'Вечером можно наконец заняться D&D', summary: 'Самая важная редакционная рекомендация дня.' },
+      { title: 'Инструменты разработки становятся нагляднее', summary: 'Фоновые операции всё чаще показывают живой прогресс без лишних модальных окон.', url: 'https://github.blog/' },
     ], priority: 70 },
-    { id: 'deep-dive', type: 'article', title: 'Почему маленькие агенты лучше одного огромного контекста', summary: 'Разделение исследования на независимые задания снижает шум: редактор получает компактные факты и источники, а не десятки сырых страниц.', priority: 60 },
+    { id: 'deep-dive', type: 'article', title: 'Почему маленькие агенты лучше одного огромного контекста', summary: 'Разделение исследования на независимые задания снижает шум: редактор получает компактные факты и источники, а не десятки сырых страниц.', priority: 60, sources: [{ title: 'OpenAI Research', url: 'https://openai.com/research/' }] },
     { id: 'cat', type: 'image', title: 'Кот дня', caption: 'Редакция напоминает: иногда производительность повышается после десяти минут ничегонеделания.', prompt: 'sleepy newsroom cat', priority: 20 },
     { id: 'humor', type: 'humor', title: 'На последней полосе', text: 'Планёрка закончилась успешно: все задачи перенесли на следующую планёрку.', priority: 10 },
   ],
-} : {
-  version: 1,
-  title: 'Chatter Daily',
-  subtitle: `Good morning · issue no. ${issueNumber}`,
-  date: new Intl.DateTimeFormat('en-US', { dateStyle: 'long' }).format(new Date()),
-  blocks: [
-    { id: 'weather', type: 'weather', title: 'Morning weather', location: 'Tomsk', temperature: 12, condition: 'Cloudy', details: 'Light wind, becoming cooler this evening.', priority: 100 },
-    { id: 'hero-ai', type: 'hero', title: 'Agents are becoming ordinary product features', summary: 'Today’s lead story looks at how small specialist agents turn complex workflows into understandable user experiences.', priority: 90, sources: [{ title: 'OpenAI Research', url: 'https://openai.com/research/' }] },
-    { id: 'brief', type: 'news_list', title: 'In brief', items: [
-      { title: 'React keeps improving server rendering', summary: 'The ecosystem is gradually standardizing the newer patterns.', url: 'https://react.dev/blog' },
-      { title: 'A new generation of space telescopes', summary: 'Engineers are testing the next generation of instruments.', url: 'https://www.nasa.gov/' },
-    ], priority: 70 },
-    { id: 'deep-dive', type: 'article', title: 'Why small agents beat one enormous context', summary: 'Independent research assignments reduce noise: the editor receives compact facts and sources instead of dozens of raw pages.', priority: 60 },
-    { id: 'cat', type: 'image', title: 'Cat of the day', caption: 'The newsroom notes that productivity sometimes improves after ten minutes of doing nothing.', prompt: 'sleepy newsroom cat', priority: 20 },
-    { id: 'humor', type: 'humor', title: 'Back page', text: 'The planning meeting was a success: every task was moved to the next planning meeting.', priority: 10 },
-  ],
-};
+});
 
 export const createDemoNewspaperIssue = (userId: number): NewspaperIssueDto => db.transaction(() => {
   let newspaper = db.prepare('SELECT id FROM newspapers WHERE user_id = ? ORDER BY id ASC LIMIT 1').get(userId) as { id: number } | undefined;
   if (!newspaper) {
     const created = createNewspaper(userId, {
       name: 'Chatter Daily',
-      editorial_brief: 'A concise personal morning newspaper.',
+      editorial_brief: 'Краткая утренняя газета. В новостных блоках должны быть только проверяемые события с источниками; личные планы, советы и рекомендации новостями не считаются.',
       style: 'classic',
     });
     if (!created.ok) throw new Error(created.error);
@@ -206,20 +194,20 @@ export const createDemoNewspaperIssue = (userId: number): NewspaperIssueDto => d
   }
   const current = db.prepare('SELECT COALESCE(MAX(issue_number), 0) AS n FROM newspaper_issues WHERE newspaper_id = ?')
     .get(newspaper.id) as { n: number };
-  const issueNumber = Number(current.n) + 1;
-  const user = db.prepare('SELECT language, name FROM users WHERE id = ?').get(userId) as { language?: string | null; name?: string | null } | undefined;
-  const document = demoDocument(
-    String(user?.language || '').toLowerCase().startsWith('ru'),
-    issueNumber,
-    cleanText(user?.name, 80),
-  );
   const now = Math.floor(Date.now() / 1000);
-  const result = db.prepare(`
+  const insert = db.prepare(`
     INSERT INTO newspaper_issues (newspaper_id, user_id, issue_number, title, subtitle, status, document_json, published_at, created_at)
     VALUES (?, ?, ?, ?, ?, 'ready', ?, ?, ?)
-  `).run(newspaper.id, userId, issueNumber, document.title, document.subtitle || '', JSON.stringify(document), now, now);
+  `);
+  const issueNumbers = Number(current.n) === 0 ? [1, 2] : [Number(current.n) + 1];
+  let lastIssueId = 0;
+  for (const issueNumber of issueNumbers) {
+    const document = demoDocument(issueNumber);
+    const result = insert.run(newspaper.id, userId, issueNumber, document.title, document.subtitle || '', JSON.stringify(document), now, now);
+    lastIssueId = Number(result.lastInsertRowid);
+  }
   db.prepare('UPDATE newspapers SET updated_at = ? WHERE id = ?').run(now, newspaper.id);
-  const issue = getNewspaperIssue(userId, Number(result.lastInsertRowid));
+  const issue = getNewspaperIssue(userId, lastIssueId);
   if (!issue) throw new Error('newspaper_issue_create_failed');
   return issue;
 })();

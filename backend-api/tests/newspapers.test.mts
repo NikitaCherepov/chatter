@@ -49,13 +49,15 @@ assert.equal(newspapers[0].enabled, false);
 
 const issue = createDemoNewspaperIssue(101);
 assert.equal(issue.newspaper_id, created.id);
-assert.equal(issue.issue_number, 1);
+assert.equal(issue.issue_number, 2);
 assert.equal(issue.document.version, 1);
 assert.equal(issue.document.blocks.length, 6);
-assert.match(issue.document.subtitle || '', /Тестовый читатель/);
+assert.doesNotMatch(JSON.stringify(issue.document), /Тестовый читатель/);
+const weather = issue.document.blocks.find((block) => block.type === 'weather');
+assert.equal(weather?.type === 'weather' ? weather.periods.length : 0, 3);
 
-assert.equal(listNewspaperIssues(101, created.id).length, 1);
-assert.equal(listNewspapers(101)[0].issue_count, 1);
+assert.equal(listNewspaperIssues(101, created.id).length, 2);
+assert.equal(listNewspapers(101)[0].issue_count, 2);
 assert.equal(getNewspaperIssue(202, issue.id), null, 'another user must not read the issue');
 assert.equal(deleteNewspaperIssue(202, issue.id), false, 'another user must not delete the issue');
 assert.equal(deleteNewspaperIssue(101, issue.id), true);

@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import type { NewspaperIssue, NewspaperSource, NewspaperStyle } from '../lib/api';
+import { Select, type SelectOption } from './Select';
 import s from './NewspaperReader.module.scss';
 
 type Props = {
@@ -12,6 +13,7 @@ type Props = {
   onPrevious: () => void;
   onNext: () => void;
   onClose: () => void;
+  onStyleChange: (style: NewspaperStyle) => void;
   leadLabel: string;
   previousLabel: string;
   nextLabel: string;
@@ -42,7 +44,13 @@ function Sources({ sources }: { sources?: NewspaperSource[] }) {
   );
 }
 
-export function NewspaperReader({ issue, style, canGoPrevious, canGoNext, onPrevious, onNext, onClose, leadLabel, previousLabel, nextLabel, closeLabel }: Props) {
+const styleOptions: SelectOption[] = [
+  { value: 'classic', label: 'Классика' },
+  { value: 'modern', label: 'Современный' },
+  { value: 'magical', label: 'Магический' },
+];
+
+export function NewspaperReader({ issue, style, canGoPrevious, canGoNext, onPrevious, onNext, onClose, onStyleChange, leadLabel, previousLabel, nextLabel, closeLabel }: Props) {
   useEffect(() => {
     if (!issue) return undefined;
     const onKeyDown = (event: KeyboardEvent) => {
@@ -69,11 +77,14 @@ export function NewspaperReader({ issue, style, canGoPrevious, canGoNext, onPrev
             aria-modal="true"
           >
             <header className={s.toolbar}>
-              <div>
+              <div className={s.issueMeta}>
                 <strong>№{issue.issue_number}</strong>
                 <span>{issue.document.date}</span>
               </div>
-              <nav>
+              <div className={s.styleSelect}>
+                <Select options={styleOptions} value={style} onChange={value => onStyleChange(value as NewspaperStyle)} />
+              </div>
+              <nav className={s.navigation}>
                 <button type="button" onClick={onPrevious} disabled={!canGoPrevious} aria-label={previousLabel}>‹</button>
                 <button type="button" onClick={onNext} disabled={!canGoNext} aria-label={nextLabel}>›</button>
                 <button type="button" onClick={onClose} aria-label={closeLabel}>×</button>
@@ -103,8 +114,16 @@ export function NewspaperReader({ issue, style, canGoPrevious, canGoNext, onPrev
                     if (block.type === 'weather') return (
                       <section key={block.id} className={`${s.block} ${s.weather}`}>
                         <span className={s.kicker}>{block.location}</span>
-                        <div className={s.temperature}>{Math.round(block.temperature)}°</div>
                         <h2>{block.condition}</h2>
+                        <div className={s.forecast}>
+                          {block.periods.map(period => (
+                            <div className={s.forecastPeriod} key={period.label}>
+                              <span>{period.label}</span>
+                              <strong>{Math.round(period.temperature)}°</strong>
+                              {period.condition && <small>{period.condition}</small>}
+                            </div>
+                          ))}
+                        </div>
                         {block.details && <p>{block.details}</p>}
                         <Sources sources={block.sources} />
                       </section>
