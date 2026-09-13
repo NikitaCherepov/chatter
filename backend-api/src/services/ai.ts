@@ -8595,6 +8595,10 @@ User request: "${text}"`;
         // Раньше при наличии finalAnswer возвращался только последний кусок,
         // что приводило к перезаписи накопленного intermediate контента на десктопе.
         answer = fullDbHistory;
+      } else if (options?.isBackgroundTask) {
+        // Scheduled runs: an empty final answer is legitimate silence
+        // ("nothing to report") — no tool-output substitution, no fallback.
+        answer = '';
       } else if (toolOutputsForFallback.length) {
         answer = toolOutputsForFallback[toolOutputsForFallback.length - 1] || FALLBACK_ANSWER;
       }
