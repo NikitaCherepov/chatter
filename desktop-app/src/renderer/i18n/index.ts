@@ -127,7 +127,11 @@ export async function initializeI18n() {
       });
 
     i18n.on('languageChanged', syncDocumentLanguage);
-    void loadRemainingLocales();
+    void loadRemainingLocales().then(async () => {
+      if (i18n.language && i18n.language !== i18n.resolvedLanguage) {
+        await i18n.changeLanguage(i18n.language);
+      }
+    });
   } else {
     await i18n.changeLanguage(language);
   }

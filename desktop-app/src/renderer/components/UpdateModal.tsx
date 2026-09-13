@@ -114,7 +114,7 @@ export function UpdateModal({ info, onClose }: Props) {
   const sizeLabel = info.size > 0 ? formatBytes(info.size) : '';
   const releaseNotes = localizeReleaseNotes(
     info.releaseNotes,
-    i18n.resolvedLanguage || i18n.language || 'en',
+    i18n.language || i18n.resolvedLanguage || 'en',
   );
 
   return (
