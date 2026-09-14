@@ -1,6 +1,6 @@
 import type { NewspaperBlock } from '../../types';
 
-export type WizardingRecipe = 'hero-two-rails' | 'hero-left-rail' | 'hero-right-rail' | 'hero-full' | 'notes-page' | 'mosaic';
+export type WizardingRecipe = 'hero-two-rails' | 'hero-left-rail' | 'hero-right-rail' | 'hero-full' | 'notes-page-grid' | 'notes-page-columns' | 'mosaic';
 
 export type WizardingPageLayout = {
   recipe: WizardingRecipe;
@@ -15,15 +15,19 @@ function canLiveInRail(block: NewspaperBlock) {
   return block.type === 'notes_list' || block.type === 'note' || block.type === 'image';
 }
 
+function chooseNotesRecipe(seed: number): WizardingRecipe {
+  return Math.abs(seed) % 2 === 0 ? 'notes-page-columns' : 'notes-page-grid';
+}
+
 /**
  * Chooses one of the tabloid's own compositions. Block order belongs to the
  * editor; the composer only gives compact neighbours to an explicit hero.
  */
-export function composeWizardingPage(blocks: NewspaperBlock[]): WizardingPageLayout {
+export function composeWizardingPage(blocks: NewspaperBlock[], variantSeed = 0): WizardingPageLayout {
   const heroIndex = blocks.findIndex(block => block.type === 'article' && block.role === 'hero');
   if (heroIndex < 0) {
     const recipe = blocks.length > 0 && blocks.every(block => block.type === 'notes_list')
-      ? 'notes-page'
+      ? chooseNotesRecipe(variantSeed)
       : 'mosaic';
     return { recipe, body: blocks };
   }

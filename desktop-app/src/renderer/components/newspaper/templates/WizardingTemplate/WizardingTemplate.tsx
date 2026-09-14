@@ -7,7 +7,8 @@ import { composeWizardingPage } from './wizardingLayout';
 import t from './WizardingTemplate.module.scss';
 
 export function WizardingTemplate({ issue }: NewspaperTemplateProps) {
-  const layout = composeWizardingPage(issue.document.blocks);
+  const layout = composeWizardingPage(issue.document.blocks, issue.id);
+  const isNotesPage = layout.recipe === 'notes-page-grid' || layout.recipe === 'notes-page-columns';
 
   return <article className={`${s.page} ${s.wizarding}`}>
     <header className={s.wizardHead}><div className={s.wizardMicro}>OWL POST · CELESTIAL FORECAST · ENCHANTED EDITION</div><h1><span>The</span> Chatter Prophet</h1><div className={s.wizardRule}><b>EXCLUSIVE</b><span>{issue.document.date}</span><b>№ {issue.issue_number}</b></div></header>
@@ -16,8 +17,8 @@ export function WizardingTemplate({ issue }: NewspaperTemplateProps) {
       <main className={s.wizardMain}><div className={s.wizardStamp}>ЭКСКЛЮЗИВ</div><h2>{layout.hero.title}</h2><ArticleImage article={layout.hero}/><p>{layout.hero.text}</p><SourcesBlock sources={layout.hero.sources}/></main>
       {layout.rightRail && <WizardingRailBlock block={layout.rightRail}/>}
     </section> : null}
-    {layout.body.length > 0 && <section className={`${s.wizardBottom} ${t.body} ${layout.recipe === 'mosaic' ? t.mosaic : ''} ${layout.recipe === 'notes-page' ? t.notesPage : ''}`} data-recipe={layout.recipe}>
-      {layout.body.map(block => <WizardingBodyBlock key={block.id} block={block} notesPage={layout.recipe === 'notes-page'}/>)}
+    {layout.body.length > 0 && <section className={`${s.wizardBottom} ${t.body} ${layout.recipe === 'mosaic' ? t.mosaic : ''} ${isNotesPage ? t.notesPage : ''} ${layout.recipe === 'notes-page-columns' ? t.notesPageColumns : ''}`} data-recipe={layout.recipe}>
+      {layout.body.map(block => <WizardingBodyBlock key={block.id} block={block} notesPage={isNotesPage}/>)}
     </section>}
   </article>;
 }
