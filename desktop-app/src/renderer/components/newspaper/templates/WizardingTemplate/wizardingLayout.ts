@@ -25,8 +25,8 @@ export function composeWizardingPage(blocks: NewspaperBlock[]): WizardingPageLay
   const hero = blocks[heroIndex] as Extract<NewspaperBlock, { type: 'article' }>;
   const before = blocks.slice(0, heroIndex).filter(canLiveInRail);
   const after = blocks.slice(heroIndex + 1).filter(canLiveInRail);
-  let leftRail = before.at(-1);
-  let rightRail = after[0];
+  let leftRail: NewspaperBlock | undefined = before.at(-1);
+  let rightRail: NewspaperBlock | undefined = after[0];
 
   // Two blocks on the same side can frame the lead; a lone block keeps the
   // side implied by its position in the editor's array.

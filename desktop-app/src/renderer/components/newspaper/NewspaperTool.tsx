@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { DEMO_NEWSPAPER_ISSUE } from './demo/newspaperDemo';
+import { DEMO_WIZARDING_PAGES } from './demo/wizardingDemo';
 import { distributeIssue } from './layout/distributeIssue';
 import { NewspaperReader } from './NewspaperReader';
 import type { NewspaperVisualStyle } from './types';
@@ -15,7 +16,7 @@ export function NewspaperTool() {
   const [open, setOpen] = useState(false);
   const [pageIndex, setPageIndex] = useState(0);
   const [style, setStyle] = useState<NewspaperVisualStyle>(readStyle);
-  const pages = useMemo(() => distributeIssue(DEMO_NEWSPAPER_ISSUE, style), [style]);
+  const pages = useMemo(() => style === 'wizarding' ? DEMO_WIZARDING_PAGES : distributeIssue(DEMO_NEWSPAPER_ISSUE, style), [style]);
 
   useEffect(() => setPageIndex(index => Math.min(index, pages.length - 1)), [pages.length]);
 
