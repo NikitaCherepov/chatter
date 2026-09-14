@@ -1,4 +1,4 @@
-import type { ArticleBlockData, NewspaperBlock, NewspaperIssue, NewspaperNote, NewspaperVisualStyle } from '../types';
+import type { NewspaperBlock, NewspaperIssue, NewspaperVisualStyle } from '../types';
 import { MAX_NEWSPAPER_PAGES, TEMPLATE_CAPACITY } from './templateCapacity';
 
 type PageStats = { heroes: number; articles: number; notes: number; images: number };
@@ -11,50 +11,6 @@ function getStats(blocks: NewspaperBlock[]): PageStats {
     if (block.type === 'image') stats.images++;
     return stats;
   }, { heroes: 0, articles: 0, notes: 0, images: 0 });
-}
-
-function noteAsHero(note: NewspaperNote, fallbackTitle: string): ArticleBlockData {
-  return {
-    id: `hero-${note.id || fallbackTitle}`,
-    type: 'article',
-    role: 'hero',
-    title: note.title || fallbackTitle,
-    text: note.text || '',
-    image_url: note.image_url,
-    sources: note.url ? [{ title: note.title || fallbackTitle, url: note.url }] : undefined,
-  };
-}
-
-function ensurePageHero(blocks: NewspaperBlock[], fallbackTitle: string) {
-  if (blocks.some(block => block.type === 'article' && block.role === 'hero')) return;
-
-  const articleIndex = blocks.findIndex(block => block.type === 'article');
-  if (articleIndex >= 0) {
-    blocks[articleIndex] = { ...(blocks[articleIndex] as ArticleBlockData), role: 'hero' };
-    return;
-  }
-
-  const noteIndex = blocks.findIndex(block => block.type === 'note');
-  if (noteIndex >= 0) {
-    const note = blocks[noteIndex];
-    if (note.type === 'note') blocks[noteIndex] = noteAsHero(note, fallbackTitle);
-    return;
-  }
-
-  const listIndex = blocks.findIndex(block => block.type === 'notes_list' && block.items.length);
-  if (listIndex >= 0) {
-    const list = blocks[listIndex];
-    if (list.type !== 'notes_list') return;
-    const [first, ...rest] = list.items;
-    blocks.splice(listIndex, 1, noteAsHero(first, list.title || fallbackTitle), ...(rest.length ? [{ ...list, items: rest }] : []));
-    return;
-  }
-
-  const imageIndex = blocks.findIndex(block => block.type === 'image');
-  if (imageIndex >= 0) {
-    const image = blocks[imageIndex];
-    if (image.type === 'image') blocks[imageIndex] = { id: `hero-${image.id}`, type: 'article', role: 'hero', title: image.title, text: image.caption || '', image_url: image.image_url, sources: image.sources };
-  }
 }
 
 export function distributeIssue(issue: NewspaperIssue, style: NewspaperVisualStyle): NewspaperIssue[] {
@@ -101,7 +57,6 @@ export function distributeIssue(issue: NewspaperIssue, style: NewspaperVisualSty
   if (!nonEmptyPages.length) return [issue];
 
   return nonEmptyPages.map((blocks, index) => {
-    ensurePageHero(blocks, issue.document.title);
     const renderedBlocks = weather ? [{ ...weather, id: `${weather.id}-page-${index + 1}` }, ...blocks] : blocks;
     return {
       ...issue,
