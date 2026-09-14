@@ -5,6 +5,7 @@ import { distributeIssue } from './layout/distributeIssue';
 import { NewspaperReader } from './NewspaperReader';
 import type { NewspaperVisualStyle } from './types';
 import { distributeWizardingIssue } from './templates/WizardingTemplate/wizardingPagination';
+import { distributeBroadsheetIssue } from './templates/BroadsheetTemplate/broadsheetPagination';
 import s from './NewspaperTool.module.scss';
 
 const STYLE_KEY = 'chatter:newspaper-preview-style';
@@ -20,7 +21,9 @@ export function NewspaperTool() {
   const pages = useMemo(
     () => style === 'wizarding'
       ? distributeWizardingIssue(DEMO_WIZARDING_ISSUE)
-      : distributeIssue(DEMO_NEWSPAPER_ISSUE, style),
+      : style === 'broadsheet'
+        ? distributeBroadsheetIssue(DEMO_WIZARDING_ISSUE)
+        : distributeIssue(DEMO_NEWSPAPER_ISSUE, style),
     [style],
   );
 
