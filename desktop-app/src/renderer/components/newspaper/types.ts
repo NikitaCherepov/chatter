@@ -1,20 +1,19 @@
-import type { NewspaperBlock, NewspaperIssue, NewspaperSource } from '../../lib/api';
+import type { NewspaperBlock, NewspaperIssue, NewspaperNote, NewspaperSource } from '../../lib/api';
 
 export type NewspaperVisualStyle = 'wizarding' | 'editorial' | 'broadsheet' | 'deusEx' | 'massEffect';
 export type WeatherBlockData = Extract<NewspaperBlock, { type: 'weather' }>;
-export type HeroBlockData = Extract<NewspaperBlock, { type: 'hero' }>;
 export type ArticleBlockData = Extract<NewspaperBlock, { type: 'article' }>;
-export type NewsListBlockData = Extract<NewspaperBlock, { type: 'news_list' }>;
+export type NoteBlockData = Extract<NewspaperBlock, { type: 'note' }>;
+export type NotesListBlockData = Extract<NewspaperBlock, { type: 'notes_list' }>;
 export type ImageBlockData = Extract<NewspaperBlock, { type: 'image' }>;
-export type HumorBlockData = Extract<NewspaperBlock, { type: 'humor' }>;
 
 export type NewspaperPageContent = {
   weather?: WeatherBlockData;
-  hero?: HeroBlockData;
-  news?: NewsListBlockData;
+  hero?: ArticleBlockData;
   articles: ArticleBlockData[];
+  notes: NoteBlockData[];
+  noteLists: NotesListBlockData[];
   images: ImageBlockData[];
-  humor?: HumorBlockData;
 };
 
 export type NewspaperTemplateProps = {
@@ -22,4 +21,4 @@ export type NewspaperTemplateProps = {
   content: NewspaperPageContent;
 };
 
-export type { NewspaperBlock, NewspaperIssue, NewspaperSource };
+export type { NewspaperBlock, NewspaperIssue, NewspaperNote, NewspaperSource };

@@ -1948,14 +1948,17 @@ export type NewspaperStyle = 'classic' | 'modern' | 'magical';
 export type NewspaperIssueStatus = 'draft' | 'ready' | 'failed' | 'cancelled';
 
 export type NewspaperSource = { title: string; url: string };
-type NewspaperBlockBase = { id: string; title: string; priority?: number; sources?: NewspaperSource[] };
+export type NewspaperNote = { id?: string; title?: string; text?: string; url?: string; image_url?: string };
+type NewspaperBlockBase = { id: string; title?: string; sources?: NewspaperSource[] };
 export type NewspaperBlock =
-  | (NewspaperBlockBase & { type: 'hero'; summary: string; image_url?: string })
-  | (NewspaperBlockBase & { type: 'article'; summary: string; image_url?: string })
-  | (NewspaperBlockBase & { type: 'news_list'; items: Array<{ title: string; summary?: string; url?: string }> })
+  | (NewspaperBlockBase & { type: 'article'; role: 'hero' | 'feature' | 'standard'; title: string; text: string; image_url?: string })
+  | (NewspaperBlockBase & { type: 'note'; text?: string; url?: string; image_url?: string })
+  | (NewspaperBlockBase & { type: 'notes_list'; items: NewspaperNote[] })
   | (NewspaperBlockBase & { type: 'weather'; location: string; condition: string; details?: string; periods: Array<{ label: string; temperature: number; condition?: string }> })
-  | (NewspaperBlockBase & { type: 'image'; image_url?: string; caption?: string; prompt?: string })
-  | (NewspaperBlockBase & { type: 'humor'; text: string });
+  | (NewspaperBlockBase & { type: 'image'; title: string; image_url?: string; caption?: string; prompt?: string });
+
+// TODO: Add note variants only when templates have meaningfully different
+// renderers for news, humor, recommendations, quotes, and other note kinds.
 
 export type NewspaperIssueDocument = {
   version: 1;
