@@ -2540,65 +2540,6 @@
   }
 }
 
-// ====== IMAGE VIEWER ======
-
-.imageViewerOverlay {
-  position: fixed;
-  inset: var(--titlebar-height) 0 0;
-  z-index: 200;
-  background-color: rgba(0, 0, 0, 0.85);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-}
-
-.imageViewerImg {
-  max-width: 85vw;
-  max-height: 85vh;
-  object-fit: contain;
-  border-radius: 8px;
-  user-select: none;
-}
-
-.imageViewerDownload,
-.imageViewerDelete,
-.imageViewerClose {
-  position: fixed;
-  z-index: 201;
-  width: 40px;
-  height: 40px;
-  border-radius: 8px;
-  border: none;
-  background-color: rgba(255, 255, 255, 0.12);
-  color: #fff;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background-color 0.15s;
-  padding: 0;
-
-  &:hover {
-    background-color: rgba(255, 255, 255, 0.25);
-  }
-}
-
-.imageViewerDownload {
-  top: calc(var(--titlebar-height) + 20px);
-  right: 116px;
-}
-
-.imageViewerDelete {
-  top: calc(var(--titlebar-height) + 20px);
-  right: 68px;
-}
-
-.imageViewerClose {
-  top: calc(var(--titlebar-height) + 20px);
-  right: 20px;
-}
-
 // ====== DOCUMENT VIEWER ======
 
 .documentViewerOverlay {

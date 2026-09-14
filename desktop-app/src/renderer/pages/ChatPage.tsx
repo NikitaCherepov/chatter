@@ -35,6 +35,7 @@ import { Tooltip } from '../components/Tooltip';
 import { PixelAvatar, dispatchAvatarState, startAvatarLoop, stopAvatarLoop, getAvatarManifest } from '../components/PixelAvatar';
 import type { SetDisplayStatePayload } from '../components/PixelAvatar';
 import { ToolsPanel } from '../components/ToolsPanel';
+import { ImageViewerModal } from '../components/ImageViewerModal';
 import { QuotaWidget } from '../components/QuotaWidget';
 import { openTool, handleDesktopAction, dispatchMapData, emitSuggestMacro, setToolsPanelState } from '../lib/tools';
 import { createSpeechRecorder } from '../lib/speechRecorder';
@@ -43,6 +44,7 @@ import { getWakeWordEnabled } from '../lib/wakeWordToggle';
 import { ttsSpeak, ttsStop, ttsSubscribe, playSfx } from '../lib/tts';
 import { getSpeechRecognitionLanguage } from '../lib/speechRecognition';
 import { getRenderPerfBudget, getRenderPerfStep } from '../lib/renderPerf';
+import { saveImageFile } from '../lib/saveImageFile';
 import {
   DEFAULT_MAX_IMAGE_ATTACHMENTS_TOTAL_BYTES,
   prepareImageForUpload,
@@ -3701,34 +3703,12 @@ export function ChatPage() {
 
   const handleDownloadImage = useCallback(async (src: string) => {
     try {
-      const response = await fetch(src);
-      if (!response.ok) throw new Error('download failed');
-      const blob = await response.blob();
-      const buffer = await blob.arrayBuffer();
-      // Prefer the extension from the URL itself (works for any attachment
-      // type); fall back to MIME type, then to a generic extension.
-      const urlExt = (src.split('?')[0].match(/\.([a-zA-Z0-9]+)$/) || [])[1]?.toLowerCase();
-      const mimeExt: Record<string, string> = {
-        'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif',
-        'image/jpeg': 'jpg', 'image/svg+xml': 'svg', 'application/pdf': 'pdf',
-        'audio/mpeg': 'mp3', 'audio/wav': 'wav', 'audio/ogg': 'ogg',
-        'video/mp4': 'mp4', 'text/plain': 'txt', 'application/zip': 'zip',
-        'application/json': 'json',
-      };
-      const ext = urlExt && urlExt.length <= 5 ? urlExt : (mimeExt[blob.type] || 'bin');
-      const d = new Date();
-      const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-      const uuid = crypto.randomUUID().split('-')[0];
-      const fileName = `file_${dateStr}_${uuid}.${ext}`;
-      const result = await window.electronAPI?.saveFile(fileName, buffer);
-      if (result && !result.canceled) {
-        toast.success(t('chat.toasts.imageSaved'));
-      }
+      if (await saveImageFile(src)) toast.success(t('chat.toasts.imageSaved'));
     } catch (err) {
       console.error('Failed to download image:', err);
       toast.error(t('chat.toasts.imageSaveFailed'));
     }
-  }, []);
+  }, [t]);
 
   const handleOpenEmailAttachment = useCallback((attachment: {
     url: string;
@@ -7453,61 +7433,21 @@ export function ChatPage() {
           confirmLabel={deletingImage ? '...' : t('common.delete')}
         />
 
-        {viewerImageSrc && (
-          <motion.div
-            key="image-viewer"
-            className={s.imageViewerOverlay}
-            onClick={() => setViewerImageSrc(null)}
-            variants={{
-              hidden: { opacity: 0 },
-              visible: { opacity: 1 },
-              exit: { opacity: 0 },
-            }}
-            initial="hidden"
-            animate="visible"
-            exit="exit"
-          >
-            <button
-              className={s.imageViewerDownload}
-              onClick={(e) => { e.stopPropagation(); handleDownloadImage(viewerImageSrc); }}
-              title={t('common.download')}
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                <polyline points="7 10 12 15 17 10" />
-                <line x1="12" y1="15" x2="12" y2="3" />
-              </svg>
-            </button>
-            {viewerImageMsgId !== null && viewerImageMsgId > 0 && viewerImageUrl && (
-              <button
-                className={s.imageViewerDelete}
-                onClick={(e) => { e.stopPropagation(); setImageDeleteTarget({ messageId: viewerImageMsgId, url: viewerImageUrl }); }}
-                title={t('common.delete')}
-              >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="3 6 5 6 21 6" />
-                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                </svg>
-              </button>
-            )}
-            <button
-              className={s.imageViewerClose}
-              onClick={() => setViewerImageSrc(null)}
-              title={t('common.close')}
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
-              </svg>
-            </button>
-            <img
-              className={s.imageViewerImg}
-              src={viewerImageSrc}
-              alt=""
-              onClick={(e) => e.stopPropagation()}
-            />
-          </motion.div>
-        )}
+        {viewerImageSrc && <ImageViewerModal
+          key="image-viewer"
+          src={viewerImageSrc}
+          downloadLabel={t('common.download')}
+          deleteLabel={t('common.delete')}
+          closeLabel={t('common.close')}
+          onClose={() => setViewerImageSrc(null)}
+          onDownload={() => void handleDownloadImage(viewerImageSrc)}
+          onDelete={viewerImageMsgId !== null && viewerImageMsgId > 0 && viewerImageUrl
+            ? () => {
+              setViewerImageSrc(null);
+              setImageDeleteTarget({ messageId: viewerImageMsgId, url: viewerImageUrl });
+            }
+            : undefined}
+        />}
 
         {viewerAttachment && (
           <motion.div

@@ -371,6 +371,20 @@
   margin-top: 5px;
   font-size: 9px;
 }
+.imageOpen {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  overflow: hidden;
+}
+.imageOpen img {
+  display: block;
+}
 .wizarding .noteImage,
 .wizarding .articleImage {
   filter: sepia(0.85) grayscale(0.25) contrast(1.15);
