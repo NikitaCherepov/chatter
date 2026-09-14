@@ -24,6 +24,15 @@ function leadingNewsItems(pending: readonly NewspaperBlock[]) {
   return count;
 }
 
+function leadingImages(pending: readonly NewspaperBlock[]) {
+  let count = 0;
+  for (const block of pending) {
+    if (block.type !== 'image') break;
+    count += 1;
+  }
+  return count;
+}
+
 export const WIZARDING_PAGINATION_RULES: IssuePaginationRules = {
   recipes: [
     {
@@ -35,6 +44,21 @@ export const WIZARDING_PAGINATION_RULES: IssuePaginationRules = {
       canPlaceBlock: (page, block) => isHero(block)
         || page.some(isHero)
         || page.length < standardLimits.blocks - 1,
+    },
+    {
+      id: 'image-page',
+      priority: 20,
+      limits: {
+        blocks: 6,
+        mainHeaders: 0,
+        articles: 0,
+        images: 6,
+        weather: 0,
+        newsItems: 0,
+        notes: 0,
+      },
+      matches: pending => pending.every(block => block.type === 'image') || leadingImages(pending) >= 3,
+      canPlaceBlock: (_page, block) => block.type === 'image',
     },
     {
       id: 'notes-page',

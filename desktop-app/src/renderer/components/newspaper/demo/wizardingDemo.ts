@@ -52,6 +52,16 @@ function crowdedNotesCopy(index: number): NewspaperBlock {
   };
 }
 
+function imageCopy(id: string, index: number): NewspaperBlock {
+  const value = block(id);
+  if (value.type !== 'image') throw new Error(`Wizarding demo image must be an image block: ${id}`);
+  return {
+    ...value,
+    id: `${value.id}-gallery-${index}`,
+    title: `${value.title} · Кадр ${index}`,
+  };
+}
+
 const weeklyWeather: NewspaperBlock = {
   id: 'weekly-weather',
   type: 'weather',
@@ -143,6 +153,15 @@ const wizardingBlocks: NewspaperBlock[] = [
   block('text-only-note'),
 
   ...Array.from({ length: 6 }, (_, index) => crowdedNotesCopy(index + 1)),
+
+  imageCopy('image-observatory', 1),
+  imageCopy('image-editorial', 2),
+  imageCopy('image-observatory', 3),
+  imageCopy('image-editorial', 4),
+  imageCopy('image-observatory', 5),
+  imageCopy('image-editorial', 6),
+  imageCopy('image-observatory', 7),
+  imageCopy('image-editorial', 8),
 ];
 
 export const DEMO_WIZARDING_ISSUE: NewspaperIssue = {

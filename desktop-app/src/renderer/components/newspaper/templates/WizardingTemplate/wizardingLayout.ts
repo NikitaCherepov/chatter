@@ -1,6 +1,6 @@
 import type { NewspaperBlock } from '../../types';
 
-export type WizardingRecipe = 'hero-two-rails' | 'hero-left-rail' | 'hero-right-rail' | 'hero-full' | 'notes-page-grid' | 'notes-page-columns' | 'mosaic';
+export type WizardingRecipe = 'hero-two-rails' | 'hero-left-rail' | 'hero-right-rail' | 'hero-full' | 'image-page' | 'notes-page-grid' | 'notes-page-columns' | 'mosaic';
 
 export type WizardingPageLayout = {
   recipe: WizardingRecipe;
@@ -26,9 +26,9 @@ function chooseNotesRecipe(seed: number): WizardingRecipe {
 export function composeWizardingPage(blocks: NewspaperBlock[], variantSeed = 0): WizardingPageLayout {
   const heroIndex = blocks.findIndex(block => block.type === 'article' && block.role === 'hero');
   if (heroIndex < 0) {
-    const recipe = blocks.length > 0 && blocks.every(block => block.type === 'notes_list')
-      ? chooseNotesRecipe(variantSeed)
-      : 'mosaic';
+    const onlyImages = blocks.length > 0 && blocks.every(block => block.type === 'image');
+    const onlyNotes = blocks.length > 0 && blocks.every(block => block.type === 'notes_list');
+    const recipe = onlyImages ? 'image-page' : onlyNotes ? chooseNotesRecipe(variantSeed) : 'mosaic';
     return { recipe, body: blocks };
   }
 

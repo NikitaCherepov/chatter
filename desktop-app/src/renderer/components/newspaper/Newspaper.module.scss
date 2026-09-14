@@ -371,6 +371,10 @@
   margin-top: 5px;
   font-size: 9px;
 }
+.wizarding .noteImage,
+.wizarding .articleImage {
+  filter: sepia(0.85) grayscale(0.25) contrast(1.15);
+}
 
 /* Calm editorial style retained from the first prototype */
 .editorial {
