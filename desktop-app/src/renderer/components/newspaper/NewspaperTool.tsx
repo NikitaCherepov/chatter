@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { DEMO_NEWSPAPER_ISSUE } from './demo/newspaperDemo';
 import { DEMO_WIZARDING_ISSUE } from './demo/wizardingDemo';
+import { DEMO_BROADSHEET_ISSUE } from './demo/broadsheetDemo';
 import { distributeIssue } from './layout/distributeIssue';
 import { NewspaperReader } from './NewspaperReader';
 import type { NewspaperVisualStyle } from './types';
@@ -22,7 +23,7 @@ export function NewspaperTool() {
     () => style === 'wizarding'
       ? distributeWizardingIssue(DEMO_WIZARDING_ISSUE)
       : style === 'broadsheet'
-        ? distributeBroadsheetIssue(DEMO_WIZARDING_ISSUE)
+        ? distributeBroadsheetIssue(DEMO_BROADSHEET_ISSUE)
         : distributeIssue(DEMO_NEWSPAPER_ISSUE, style),
     [style],
   );

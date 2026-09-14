@@ -1,6 +1,6 @@
 import type { NewspaperBlock } from '../../types';
 
-export type BroadsheetRecipe = 'lead' | 'section-page' | 'briefs-page' | 'photo-page';
+export type BroadsheetRecipe = 'lead' | 'feature-left' | 'feature-columns' | 'section-page' | 'briefs-page' | 'photo-page';
 
 export type BroadsheetPageLayout = {
   recipe: BroadsheetRecipe;
@@ -12,7 +12,11 @@ export type BroadsheetPageLayout = {
   images: Extract<NewspaperBlock, { type: 'image' }>[];
 };
 
-export function composeBroadsheetPage(blocks: readonly NewspaperBlock[]): BroadsheetPageLayout {
+function stableVariant(value: string) {
+  return [...value].reduce((sum, character) => sum + character.charCodeAt(0), 0) % 2;
+}
+
+export function composeBroadsheetPage(blocks: readonly NewspaperBlock[], seed = 0): BroadsheetPageLayout {
   const articleBlocks = blocks.filter((block): block is Extract<NewspaperBlock, { type: 'article' }> => block.type === 'article');
   const hero = articleBlocks.find(article => article.role === 'hero');
   const articles = articleBlocks.filter(article => article !== hero);
@@ -22,7 +26,14 @@ export function composeBroadsheetPage(blocks: readonly NewspaperBlock[]): Broads
   const weather = blocks.find((block): block is Extract<NewspaperBlock, { type: 'weather' }> => block.type === 'weather');
   const onlyImages = blocks.length > 0 && blocks.every(block => block.type === 'image');
   const onlyBriefs = blocks.length > 0 && blocks.every(block => block.type === 'notes_list');
-  const recipe: BroadsheetRecipe = hero ? 'lead' : onlyImages ? 'photo-page' : onlyBriefs ? 'briefs-page' : 'section-page';
+  const recipe: BroadsheetRecipe = onlyImages
+    ? 'photo-page'
+    : onlyBriefs
+      ? 'briefs-page'
+      : hero && (weather || !hero.image_url)
+        ? 'lead'
+        : hero
+          ? stableVariant(`${hero.id}-${seed}`) === 0 ? 'feature-left' : 'feature-columns'
+          : 'section-page';
   return { recipe, hero, articles, weather, noteLists, notes, images };
 }
-

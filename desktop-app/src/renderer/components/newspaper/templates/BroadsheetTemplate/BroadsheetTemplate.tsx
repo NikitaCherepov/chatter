@@ -1,6 +1,6 @@
 import { ArticleBlock, ArticleImage } from '../../blocks/ArticleBlock/ArticleBlock';
 import { ImageBlock } from '../../blocks/ImageBlock/ImageBlock';
-import { NoteBlock } from '../../blocks/NoteBlock/NoteBlock';
+import { NoteBlock, NoteContent } from '../../blocks/NoteBlock/NoteBlock';
 import { NotesListBlock } from '../../blocks/NotesListBlock/NotesListBlock';
 import { SourcesBlock } from '../../blocks/SourcesBlock/SourcesBlock';
 import { WeatherForecast } from '../../blocks/WeatherBlock/WeatherBlock';
@@ -75,19 +75,46 @@ function SectionPage({ layout }: { layout: Layout }) {
   </>;
 }
 
+function FeaturePage({ layout, variant }: { layout: Layout; variant: 'left' | 'columns' }) {
+  const [sideStory, ...lowerStories] = layout.articles;
+  const [primaryList, ...otherLists] = layout.noteLists;
+  return <>
+    <div className={`${t.insideKicker} ${variant === 'columns' ? t.insideKickerColumns : ''}`}>
+      <span>Главная тема</span><h2>{layout.hero?.title}</h2>
+    </div>
+    <div className={`${t.featureGrid} ${variant === 'columns' ? t.featureGridColumns : ''}`}>
+      <section className={t.featureImage}><ArticleImage article={layout.hero}/><p>Материал редакции · Продолжение внутри выпуска</p><SourcesBlock sources={layout.hero?.sources}/></section>
+      <section className={t.featureBody}><p>{layout.hero?.text}</p></section>
+      {sideStory && <ArticleBlock article={sideStory} className={t.featureSideStory}/>}
+      {primaryList && <BriefsSection list={primaryList} className={`${t.featureBriefs} ${!sideStory ? t.featureBriefsTop : ''}`}/>}
+      {layout.images.map(image => <ImageBlock key={image.id} image={image} className={t.featureInset}/>)}
+      {lowerStories.map(article => <ArticleBlock key={article.id} article={article} className={t.featureLowerStory}/>)}
+      {otherLists.map(list => <BriefsSection key={list.id} list={list} className={t.featureLowerBriefs}/>)}
+      {layout.notes.map(note => <NoteBlock key={note.id} note={note} className={t.featureNote}/>)}
+    </div>
+  </>;
+}
+
 function BriefsPage({ layout }: { layout: Layout }) {
-  return <><div className={t.sectionBanner}><span>Коротким форматом</span><h2>Сводка дня</h2></div><div className={t.briefsGrid} data-list-count={layout.noteLists.length}>{layout.noteLists.map(list => <BriefsSection key={list.id} list={list} className={t.briefsColumn}/>)}</div></>;
+  const briefs = layout.noteLists.flatMap(list => list.items.map((item, itemIndex) => ({
+    item,
+    key: item.id || `${list.id}-${itemIndex}`,
+    section: itemIndex === 0 ? list.title : undefined,
+  })));
+  return <><div className={`${t.sectionBanner} ${t.briefsBanner}`}><span>Коротким форматом</span><h2>Сводка дня</h2><p>Новости, наблюдения и редакционные заметки — колонка за колонкой</p></div><div className={t.briefsWall}>{briefs.map((brief, index) => <article key={brief.key} className={t.wallBrief}>{brief.section && <h3>{brief.section}</h3>}<div className={t.wallBriefBody}><span>{String(index + 1).padStart(2, '0')}</span><div><NoteContent note={brief.item}/></div></div></article>)}</div></>;
 }
 
 function PhotoPage({ layout }: { layout: Layout }) {
-  return <><div className={t.sectionBanner}><span>Фотохроника</span><h2>В объективе</h2></div><div className={t.photoGrid} data-image-count={layout.images.length}>{layout.images.map(image => <ImageBlock key={image.id} image={image} className={t.photo}/>)}</div></>;
+  return <><div className={`${t.sectionBanner} ${t.photoBanner}`}><span>Фотохроника</span><h2>Неделя в снимках</h2><p>Фотографии, схемы и наблюдения выпуска</p></div><div className={t.photoGrid} data-image-count={layout.images.length}>{layout.images.map((image, index) => <div className={t.photoCell} key={image.id} data-photo-number={String(index + 1).padStart(2, '0')}><ImageBlock image={image} className={t.photo}/></div>)}</div></>;
 }
 
 export function BroadsheetTemplate({ issue }: NewspaperTemplateProps) {
-  const layout = composeBroadsheetPage(issue.document.blocks);
+  const layout = composeBroadsheetPage(issue.document.blocks, issue.id);
   return <article className={`${s.page} ${s.broadsheet} ${t.paper}`} data-recipe={layout.recipe}>
     <Masthead issue={issue}/>
     {layout.recipe === 'lead' && <LeadPage layout={layout}/>}
+    {layout.recipe === 'feature-left' && <FeaturePage layout={layout} variant="left"/>}
+    {layout.recipe === 'feature-columns' && <FeaturePage layout={layout} variant="columns"/>}
     {layout.recipe === 'section-page' && <SectionPage layout={layout}/>}
     {layout.recipe === 'briefs-page' && <BriefsPage layout={layout}/>}
     {layout.recipe === 'photo-page' && <PhotoPage layout={layout}/>}
