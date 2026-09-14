@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { DEMO_NEWSPAPER_ISSUE } from './demo/newspaperDemo';
-import { DEMO_WIZARDING_PAGES } from './demo/wizardingDemo';
+import { DEMO_WIZARDING_ISSUE } from './demo/wizardingDemo';
 import { distributeIssue } from './layout/distributeIssue';
 import { NewspaperReader } from './NewspaperReader';
 import type { NewspaperVisualStyle } from './types';
+import { distributeWizardingIssue } from './templates/WizardingTemplate/wizardingPagination';
 import s from './NewspaperTool.module.scss';
 
 const STYLE_KEY = 'chatter:newspaper-preview-style';
@@ -16,7 +17,12 @@ export function NewspaperTool() {
   const [open, setOpen] = useState(false);
   const [pageIndex, setPageIndex] = useState(0);
   const [style, setStyle] = useState<NewspaperVisualStyle>(readStyle);
-  const pages = useMemo(() => style === 'wizarding' ? DEMO_WIZARDING_PAGES : distributeIssue(DEMO_NEWSPAPER_ISSUE, style), [style]);
+  const pages = useMemo(
+    () => style === 'wizarding'
+      ? distributeWizardingIssue(DEMO_WIZARDING_ISSUE)
+      : distributeIssue(DEMO_NEWSPAPER_ISSUE, style),
+    [style],
+  );
 
   useEffect(() => setPageIndex(index => Math.min(index, pages.length - 1)), [pages.length]);
 

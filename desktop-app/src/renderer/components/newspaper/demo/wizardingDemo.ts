@@ -9,6 +9,12 @@ function block(id: string): NewspaperBlock {
   return value;
 }
 
+function hero(id: string): NewspaperBlock {
+  const value = block(id);
+  if (value.type !== 'article') throw new Error(`Wizarding hero must be an article: ${id}`);
+  return { ...value, role: 'hero' };
+}
+
 function page(pageNumber: number, blocks: NewspaperBlock[]): NewspaperIssue {
   return {
     ...DEMO_NEWSPAPER_ISSUE,
@@ -97,3 +103,42 @@ export const DEMO_WIZARDING_PAGES: NewspaperIssue[] = [
     block('text-only-note'),
   ]),
 ];
+
+/**
+ * The same visual cases expressed as one editor-ordered stream. Unlike the
+ * reference pages above, every material occurs once; page boundaries are
+ * produced exclusively by the Wizarding pagination profile.
+ */
+const wizardingBlocks: NewspaperBlock[] = [
+  block('weather'),
+  block('hero'),
+  block('briefs'),
+
+  block('image-editorial'),
+  hero('article-context'),
+  block('article-tools'),
+
+  block('article-data'),
+  block('untitled-notes'),
+  block('article-cache'),
+
+  hero('article-observatories'),
+  block('article-layout'),
+
+  crowdedNotes,
+  block('image-observatory'),
+  block('last-line'),
+
+  weeklyWeather,
+  block('illustrated-note'),
+  block('text-only-note'),
+];
+
+export const DEMO_WIZARDING_ISSUE: NewspaperIssue = {
+  ...DEMO_NEWSPAPER_ISSUE,
+  blocks_count: wizardingBlocks.length,
+  document: {
+    ...DEMO_NEWSPAPER_ISSUE.document,
+    blocks: wizardingBlocks,
+  },
+};
