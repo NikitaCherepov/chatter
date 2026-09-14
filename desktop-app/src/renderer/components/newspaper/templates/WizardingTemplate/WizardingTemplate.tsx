@@ -15,7 +15,7 @@ export function WizardingTemplate({ issue, content }: NewspaperTemplateProps) {
     <section className={s.wizardLead}>
       <aside className={s.wizardSide}><h3>ПОГОДА</h3><strong>{weather?.condition}</strong><WeatherForecast weather={weather} compact/><p>{weather?.details}</p></aside>
       <main className={s.wizardMain}><div className={s.wizardStamp}>ЭКСКЛЮЗИВ</div><h2>{hero?.title}</h2><ArticleImage article={hero}/><p>{hero?.text}</p><SourcesBlock sources={hero?.sources}/></main>
-      <aside className={s.wizardSide}>{noteLists.map(list => <section key={list.id}><h3>{list.title || 'СЕГОДНЯ'}</h3><NotesListBlock list={list}/></section>)}</aside>
+      <aside className={s.wizardSide}>{noteLists.map(list => <section key={list.id}>{list.title && <h3>{list.title}</h3>}<NotesListBlock list={list}/></section>)}</aside>
     </section>
     <section className={s.wizardBottom}>
       {articles.map(article => <ArticleBlock key={article.id} article={article}/>)}

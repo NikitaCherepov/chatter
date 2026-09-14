@@ -11,7 +11,7 @@ export const DEMO_NEWSPAPER_ISSUE: NewspaperIssue = {
   title: 'Chatter Daily',
   subtitle: 'Утренний выпуск',
   status: 'ready',
-  blocks_count: 12,
+  blocks_count: 15,
   published_at: publishedAt,
   document: {
     version: 1,
@@ -25,11 +25,12 @@ export const DEMO_NEWSPAPER_ISSUE: NewspaperIssue = {
       { id: 'hero', type: 'article', role: 'hero', title: 'Маленькие агенты собирают большую картину', text: 'Редактор распределяет исследование между короткими независимыми задачами, проверяет источники и превращает результат в один ясный выпуск.', image_url: agentNetwork, sources: [{ title: 'Исследования OpenAI', url: 'https://openai.com/research/' }] },
       { id: 'briefs', type: 'notes_list', title: 'Коротко', items: [
         { title: 'React развивает серверный рендеринг', text: 'Инструменты постепенно становятся проще для продуктовых команд.', url: 'https://react.dev/blog' },
-        { title: 'Веб-интерфейсы показывают прогресс агентов', text: 'Фоновые процессы становятся заметными, но не мешают работе.', url: 'https://github.blog/' },
-        { title: 'Открытые архивы ускоряют научную проверку', text: 'Команды сопоставляют результаты разных миссий без ручного обмена наборами данных.', url: 'https://science.nasa.gov/' },
-        { title: 'Локальные модели учатся работать экономнее', text: 'Новые способы квантизации уменьшают требования к памяти.', url: 'https://huggingface.co/blog' },
-        { title: 'Дизайн-системы становятся динамическими', text: 'Компоненты начинают учитывать контекст и плотность информации.', url: 'https://web.dev/' },
-        { title: 'Инженеры испытывают автономную навигацию', text: 'Аппараты смогут быстрее реагировать на редкие события.', url: 'https://www.jpl.nasa.gov/' },
+        { title: 'Веб-интерфейсы показывают прогресс агентов', text: 'Фоновые процессы становятся заметными, но не мешают работе.', image_url: agentNetwork },
+        { title: 'Открытые архивы научных наблюдений', url: 'https://science.nasa.gov/' },
+      ] },
+      { id: 'untitled-notes', type: 'notes_list', items: [
+        { text: 'Иногда лучшая короткая заметка обходится вообще без заголовка.' },
+        { url: 'https://www.jpl.nasa.gov/' },
       ] },
       { id: 'article-context', type: 'article', role: 'feature', title: 'Почему редактору не нужен огромный контекст', text: 'Каждый исследователь возвращает только факты и ссылки. Редактор сравнивает материалы, удаляет повторы и определяет, что действительно достойно первой полосы.', sources: [{ title: 'Agents guide', url: 'https://openai.com/business/guides-and-resources/a-practical-guide-to-building-ai-agents/' }] },
       { id: 'article-tools', type: 'article', role: 'standard', title: 'Инструменты становятся частью интерфейса', text: 'Вместо длинного лога пользователь видит короткое объяснение, текущий этап и готовый результат. Сложность остаётся внутри системы.', sources: [{ title: 'GitHub Blog', url: 'https://github.blog/' }] },
@@ -40,6 +41,8 @@ export const DEMO_NEWSPAPER_ISSUE: NewspaperIssue = {
       { id: 'image-observatory', type: 'image', title: 'Орбитальная обсерватория', image_url: orbitalObservatory, caption: 'Художественная схема обсерватории следующего поколения.' },
       { id: 'image-editorial', type: 'image', title: 'Редакционная карта', image_url: agentNetwork, caption: 'Так независимые исследования сходятся в единую историю.' },
       { id: 'last-line', type: 'note', title: 'Последняя строка', text: 'Дедлайн был настолько гибким, что в итоге стал дорожной картой.' },
+      { id: 'text-only-note', type: 'note', text: 'Эта самостоятельная заметка намеренно не имеет заголовка.' },
+      { id: 'illustrated-note', type: 'note', title: 'Схема дня', text: 'Картинка появляется внутри заметки только тогда, когда помогает понять её смысл.', url: 'https://openai.com/research/', image_url: agentNetwork },
     ],
   },
 };
