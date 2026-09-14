@@ -22,10 +22,13 @@
 }
 
 .bodyArticle[data-role='feature'],
-.bodyList:has(article:nth-child(4)),
 .bodyImage,
 .bodyNote:has(img) {
   grid-column: span 2;
+}
+
+.bodyListLarge {
+  grid-column: 1 / -1;
 }
 
 .bodyArticle img,
@@ -143,6 +146,17 @@
   }
 }
 
+.bodyListColumns {
+  column-count: 3;
+  column-gap: 0;
+  column-rule: 1px solid rgba(29, 22, 14, 0.55);
+
+  > article {
+    break-inside: avoid;
+    padding-inline: 10px;
+  }
+}
+
 .notesPageColumns {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: start;
@@ -154,7 +168,7 @@
     border-right: 1px solid rgba(29, 22, 14, 0.55);
   }
 
-  .bodyList:has(article:nth-child(4)) {
+  .bodyListLarge {
     grid-column: auto;
   }
 
@@ -180,6 +194,10 @@
     > article:nth-child(3n) {
       border-right: 0;
     }
+  }
+
+  .bodyListColumns {
+    column-count: 1;
   }
 }
 
