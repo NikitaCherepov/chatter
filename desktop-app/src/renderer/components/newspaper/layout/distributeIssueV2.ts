@@ -10,9 +10,16 @@ export type PageContentLimits = {
   notes: number;
 };
 
-export type IssuePaginationRules = {
+export type IssuePageRecipe = {
+  id: string;
+  priority?: number;
   limits: PageContentLimits;
+  matches?: (pending: readonly NewspaperBlock[]) => boolean;
   canPlaceBlock?: (page: readonly NewspaperBlock[], block: NewspaperBlock) => boolean;
+};
+
+export type IssuePaginationRules = {
+  recipes: readonly IssuePageRecipe[];
 };
 
 type PageStats = PageContentLimits;
@@ -86,6 +93,74 @@ function continuedList(
   };
 }
 
+type PageFill = {
+  page: NewspaperBlock[];
+  deferred: NewspaperBlock[];
+};
+
+function fillPage(pending: readonly NewspaperBlock[], recipe: IssuePageRecipe): PageFill {
+  const page: NewspaperBlock[] = [];
+  const deferred: NewspaperBlock[] = [];
+
+  for (const block of pending) {
+    const allowed = recipe.canPlaceBlock?.(page, block) ?? true;
+    if (!allowed) {
+      deferred.push(block);
+      continue;
+    }
+
+    if (block.type === 'notes_list') {
+      const stats = getStats(page);
+      const hasBlockSlot = stats.blocks < recipe.limits.blocks;
+      const availableItems = recipe.limits.newsItems - stats.newsItems;
+      if (!hasBlockSlot || availableItems <= 0) {
+        deferred.push(block);
+        continue;
+      }
+
+      const placedItems = block.items.slice(0, availableItems);
+      const remainingItems = block.items.slice(placedItems.length);
+      const candidate: NewspaperBlock = { ...block, items: placedItems };
+      if (!isWithinLimits(getStats([...page, candidate]), recipe.limits)) {
+        deferred.push(block);
+        continue;
+      }
+
+      page.push(candidate);
+      if (remainingItems.length > 0) deferred.push(continuedList(block, remainingItems));
+      continue;
+    }
+
+    const candidate = [...page, block];
+    if (isWithinLimits(getStats(candidate), recipe.limits)) page.push(block);
+    else deferred.push(block);
+  }
+
+  return { page, deferred };
+}
+
+function chooseFill(pending: readonly NewspaperBlock[], recipes: readonly IssuePageRecipe[]): PageFill {
+  const candidates = recipes
+    .filter(recipe => recipe.matches?.(pending) ?? true)
+    .map((recipe, order) => ({ recipe, order, fill: fillPage(pending, recipe) }))
+    .filter(candidate => candidate.fill.page.length > 0);
+
+  candidates.sort((left, right) => {
+    const priority = (right.recipe.priority ?? 0) - (left.recipe.priority ?? 0);
+    if (priority !== 0) return priority;
+
+    const blocks = right.fill.page.length - left.fill.page.length;
+    if (blocks !== 0) return blocks;
+
+    const newsItems = getStats(right.fill.page).newsItems - getStats(left.fill.page).newsItems;
+    if (newsItems !== 0) return newsItems;
+
+    return left.order - right.order;
+  });
+
+  return candidates[0]?.fill ?? { page: [], deferred: [...pending] };
+}
+
 /**
  * Fills pages from an editor-ordered flat array using stable deferral.
  *
@@ -98,42 +173,7 @@ export function distributeIssueV2(issue: NewspaperIssue, rules: IssuePaginationR
   let pending = issue.document.blocks.map(block => ({ ...block }));
 
   while (pending.length > 0) {
-    const page: NewspaperBlock[] = [];
-    const deferred: NewspaperBlock[] = [];
-
-    for (const block of pending) {
-      const allowed = rules.canPlaceBlock?.(page, block) ?? true;
-      if (!allowed) {
-        deferred.push(block);
-        continue;
-      }
-
-      if (block.type === 'notes_list') {
-        const stats = getStats(page);
-        const hasBlockSlot = stats.blocks < rules.limits.blocks;
-        const availableItems = rules.limits.newsItems - stats.newsItems;
-        if (!hasBlockSlot || availableItems <= 0) {
-          deferred.push(block);
-          continue;
-        }
-
-        const placedItems = block.items.slice(0, availableItems);
-        const remainingItems = block.items.slice(placedItems.length);
-        const candidate: NewspaperBlock = { ...block, items: placedItems };
-        if (!isWithinLimits(getStats([...page, candidate]), rules.limits)) {
-          deferred.push(block);
-          continue;
-        }
-
-        page.push(candidate);
-        if (remainingItems.length > 0) deferred.push(continuedList(block, remainingItems));
-        continue;
-      }
-
-      const candidate = [...page, block];
-      if (isWithinLimits(getStats(candidate), rules.limits)) page.push(block);
-      else deferred.push(block);
-    }
+    const { page, deferred } = chooseFill(pending, rules.recipes);
 
     // A malformed future profile must not create an endless loop or lose data.
     if (page.length === 0) {

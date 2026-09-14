@@ -103,6 +103,46 @@
   border-top: 1px solid rgba(29, 22, 14, 0.65);
 }
 
+.notesPage {
+  grid-template-columns: 1fr;
+  margin-top: 0;
+  border-top: 3px double rgba(29, 22, 14, 0.75);
+
+  .bodyList {
+    grid-column: 1 / -1;
+    padding: 12px 0 0;
+    border-bottom: 0;
+  }
+
+  .bodyList + .bodyList {
+    padding-top: 16px;
+    border-top: 3px double rgba(29, 22, 14, 0.75);
+  }
+
+  .bodyList > h2 {
+    padding: 0 10px 8px;
+    font-size: 26px;
+    text-align: center;
+  }
+}
+
+.notesColumns {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+
+  > article {
+    align-content: start;
+    min-width: 0;
+    padding: 10px;
+    border-top: 1px solid rgba(29, 22, 14, 0.55);
+    border-right: 1px solid rgba(29, 22, 14, 0.55);
+  }
+
+  > article:nth-child(3n) {
+    border-right: 0;
+  }
+}
+
 @media (max-width: 760px) {
   .lead[data-recipe] {
     grid-template-columns: 1fr;
@@ -117,5 +157,13 @@
 
   .weekWeather > div {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .notesColumns {
+    grid-template-columns: 1fr;
+
+    > article {
+      border-right: 0;
+    }
   }
 }

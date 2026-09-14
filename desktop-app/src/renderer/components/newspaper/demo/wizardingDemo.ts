@@ -43,6 +43,15 @@ const crowdedNotes: NewspaperBlock = {
   ],
 };
 
+function crowdedNotesCopy(index: number): NewspaperBlock {
+  if (crowdedNotes.type !== 'notes_list') throw new Error('Wizarding demo notes must be a notes list');
+  return {
+    ...crowdedNotes,
+    id: `${crowdedNotes.id}-${index}`,
+    title: `${crowdedNotes.title} · Подборка ${index}`,
+  };
+}
+
 const weeklyWeather: NewspaperBlock = {
   id: 'weekly-weather',
   type: 'weather',
@@ -132,6 +141,8 @@ const wizardingBlocks: NewspaperBlock[] = [
   weeklyWeather,
   block('illustrated-note'),
   block('text-only-note'),
+
+  ...Array.from({ length: 6 }, (_, index) => crowdedNotesCopy(index + 1)),
 ];
 
 export const DEMO_WIZARDING_ISSUE: NewspaperIssue = {

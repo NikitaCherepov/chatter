@@ -1,6 +1,6 @@
 import type { NewspaperBlock } from '../../types';
 
-export type WizardingRecipe = 'hero-two-rails' | 'hero-left-rail' | 'hero-right-rail' | 'hero-full' | 'mosaic';
+export type WizardingRecipe = 'hero-two-rails' | 'hero-left-rail' | 'hero-right-rail' | 'hero-full' | 'notes-page' | 'mosaic';
 
 export type WizardingPageLayout = {
   recipe: WizardingRecipe;
@@ -21,7 +21,12 @@ function canLiveInRail(block: NewspaperBlock) {
  */
 export function composeWizardingPage(blocks: NewspaperBlock[]): WizardingPageLayout {
   const heroIndex = blocks.findIndex(block => block.type === 'article' && block.role === 'hero');
-  if (heroIndex < 0) return { recipe: 'mosaic', body: blocks };
+  if (heroIndex < 0) {
+    const recipe = blocks.length > 0 && blocks.every(block => block.type === 'notes_list')
+      ? 'notes-page'
+      : 'mosaic';
+    return { recipe, body: blocks };
+  }
 
   const hero = blocks[heroIndex] as Extract<NewspaperBlock, { type: 'article' }>;
   const before = blocks.slice(0, heroIndex).filter(canLiveInRail);

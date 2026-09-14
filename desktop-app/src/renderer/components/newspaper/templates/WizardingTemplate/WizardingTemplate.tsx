@@ -16,8 +16,8 @@ export function WizardingTemplate({ issue }: NewspaperTemplateProps) {
       <main className={s.wizardMain}><div className={s.wizardStamp}>ЭКСКЛЮЗИВ</div><h2>{layout.hero.title}</h2><ArticleImage article={layout.hero}/><p>{layout.hero.text}</p><SourcesBlock sources={layout.hero.sources}/></main>
       {layout.rightRail && <WizardingRailBlock block={layout.rightRail}/>}
     </section> : null}
-    {layout.body.length > 0 && <section className={`${s.wizardBottom} ${t.body} ${layout.recipe === 'mosaic' ? t.mosaic : ''}`}>
-      {layout.body.map(block => <WizardingBodyBlock key={block.id} block={block}/>)}
+    {layout.body.length > 0 && <section className={`${s.wizardBottom} ${t.body} ${layout.recipe === 'mosaic' ? t.mosaic : ''} ${layout.recipe === 'notes-page' ? t.notesPage : ''}`} data-recipe={layout.recipe}>
+      {layout.body.map(block => <WizardingBodyBlock key={block.id} block={block} notesPage={layout.recipe === 'notes-page'}/>)}
     </section>}
   </article>;
 }
