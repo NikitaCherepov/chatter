@@ -142,6 +142,9 @@
   max-height: 90px;
   margin-bottom: 5px;
 }
+.noteBody a {
+  color: inherit;
+}
 .forecast {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -463,6 +466,24 @@
   display: flex;
   align-items: center;
   gap: 15px;
+}
+.editorialHumor .noteBody {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 15px;
+}
+.editorialHumor .noteImage {
+  width: min(48%, 450px);
+  max-height: 120px;
+  flex: 0 0 auto;
+  margin: 0;
+}
+.editorialHumor a,
+.editorialHumor strong {
+  color: inherit;
+  font-weight: 700;
 }
 .editorialHumor h2 {
   margin: 0;
@@ -1008,6 +1029,9 @@
   grid-template-columns: 1.65fr 0.75fr;
   gap: 8px;
   margin-top: 8px;
+}
+.annModulesSingle {
+  grid-template-columns: 1fr;
 }
 .annModules > * {
   border: 1px solid rgba(83, 210, 235, 0.44);

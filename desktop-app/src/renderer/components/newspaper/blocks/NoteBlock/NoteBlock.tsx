@@ -9,5 +9,5 @@ export function NoteContent({ note }: { note: NewspaperNote | NoteBlockData }) {
 }
 
 export function NoteBlock({ note, className, prefix }: { note: NoteBlockData; className?: string; prefix?: string }) {
-  return <aside className={className}>{prefix && <b>{prefix}</b>}<NoteContent note={note}/></aside>;
+  return <aside className={className}>{prefix && <b>{prefix}</b>}<div className={s.noteBody}><NoteContent note={note}/></div></aside>;
 }
