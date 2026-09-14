@@ -37,6 +37,24 @@ const crowdedNotes: NewspaperBlock = {
   ],
 };
 
+const weeklyWeather: NewspaperBlock = {
+  id: 'weekly-weather',
+  type: 'weather',
+  title: 'Небесный прогноз на неделю',
+  location: 'Томск',
+  condition: 'Неделя переменчивого неба',
+  details: 'К выходным станет теплее; самые ясные часы ожидаются в субботу днём.',
+  periods: [
+    { label: 'Пн', temperature: 9, condition: 'Облачно' },
+    { label: 'Вт', temperature: 11, condition: 'Дождь' },
+    { label: 'Ср', temperature: 12, condition: 'Облачно' },
+    { label: 'Чт', temperature: 14, condition: 'Ясно' },
+    { label: 'Пт', temperature: 13, condition: 'Ветер' },
+    { label: 'Сб', temperature: 16, condition: 'Солнце' },
+    { label: 'Вс', temperature: 15, condition: 'Ясно' },
+  ],
+};
+
 export const DEMO_WIZARDING_PAGES: NewspaperIssue[] = [
   page(1, [
     block('weather'),
@@ -71,5 +89,11 @@ export const DEMO_WIZARDING_PAGES: NewspaperIssue[] = [
     block('image-observatory'),
     block('illustrated-note'),
     block('last-line'),
+  ]),
+  page(6, [
+    weeklyWeather,
+    block('article-layout'),
+    block('briefs'),
+    block('text-only-note'),
   ]),
 ];

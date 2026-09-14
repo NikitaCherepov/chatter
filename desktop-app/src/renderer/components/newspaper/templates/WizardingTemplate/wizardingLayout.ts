@@ -11,7 +11,8 @@ export type WizardingPageLayout = {
 };
 
 function canLiveInRail(block: NewspaperBlock) {
-  return block.type === 'weather' || block.type === 'notes_list' || block.type === 'note' || block.type === 'image';
+  if (block.type === 'weather') return block.periods.length <= 3;
+  return block.type === 'notes_list' || block.type === 'note' || block.type === 'image';
 }
 
 /**

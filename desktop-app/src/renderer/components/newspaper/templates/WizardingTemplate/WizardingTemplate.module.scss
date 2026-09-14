@@ -58,6 +58,28 @@
   text-transform: uppercase;
 }
 
+.weekWeather {
+  grid-column: 1 / -1;
+  padding-block: 14px;
+  border-block: 3px double rgba(29, 22, 14, 0.75) !important;
+}
+
+.weekWeather > h2 {
+  margin: 3px 0;
+  font-size: 27px;
+  text-transform: uppercase;
+}
+
+.weekWeather > strong {
+  display: block;
+  margin-bottom: 9px;
+  font-size: 12px;
+}
+
+.weekWeather > div {
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
 .bodyNote,
 .railNote {
   display: flex;
@@ -91,5 +113,9 @@
   .bodyImage,
   .bodyNote {
     grid-column: auto;
+  }
+
+  .weekWeather > div {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

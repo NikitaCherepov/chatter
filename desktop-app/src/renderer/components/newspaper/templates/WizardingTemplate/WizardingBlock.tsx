@@ -26,5 +26,6 @@ export function WizardingBodyBlock({ block }: { block: NewspaperBlock }) {
   if (block.type === 'notes_list') {
     return <section className={t.bodyList}>{block.title && <h2>{block.title}</h2>}<NotesListBlock list={block}/></section>;
   }
-  return <section className={t.bodyWeather}><b>{block.location}</b><h2>{block.condition}</h2><WeatherForecast weather={block} compact/><p>{block.details}</p></section>;
+  const weekly = block.periods.length > 3;
+  return <section className={`${t.bodyWeather} ${weekly ? t.weekWeather : ''}`}><b>{block.location}</b><h2>{weekly ? block.title || 'Прогноз на неделю' : block.condition}</h2>{weekly && <strong>{block.condition}</strong>}<WeatherForecast weather={block} compact={!weekly}/><p>{block.details}</p></section>;
 }
