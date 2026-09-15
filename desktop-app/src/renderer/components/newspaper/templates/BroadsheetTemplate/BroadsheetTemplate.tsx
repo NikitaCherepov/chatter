@@ -4,12 +4,21 @@ import { NoteBlock, NoteContent } from '../../blocks/NoteBlock/NoteBlock';
 import { NotesListBlock } from '../../blocks/NotesListBlock/NotesListBlock';
 import { SourcesBlock } from '../../blocks/SourcesBlock/SourcesBlock';
 import { WeatherForecast } from '../../blocks/WeatherBlock/WeatherBlock';
-import type { NewspaperTemplateProps, NotesListBlockData } from '../../types';
+import type { ArticleBlockData, NewspaperTemplateProps, NotesListBlockData } from '../../types';
+import { safeUrl } from '../../utils/media';
 import { composeBroadsheetPage } from './broadsheetLayout';
 import s from '../../Newspaper.module.scss';
 import t from './BroadsheetTemplate.module.scss';
 
 type Layout = ReturnType<typeof composeBroadsheetPage>;
+
+function ArticleTitle({ article }: { article: ArticleBlockData | undefined }) {
+  if (!article) return null;
+  const articleUrl = safeUrl(article.url);
+  return <h2>{articleUrl
+    ? <a data-article-title-link="true" href={articleUrl} target="_blank" rel="noreferrer">{article.title}</a>
+    : article.title}</h2>;
+}
 
 function Masthead({ issue }: Pick<NewspaperTemplateProps, 'issue'>) {
   return <header className={t.masthead}>
@@ -45,14 +54,14 @@ function LeadPage({ layout }: { layout: Layout }) {
         {layout.notes.slice(0, 1).map(note => <NoteBlock key={note.id} note={note} className={t.railNote}/>)}
       </aside>
       <main className={`${t.leadStory} ${layout.hero?.image_url ? '' : t.leadStoryTextOnly}`}>
-        <span className={t.overline}>Главная история</span><h2>{layout.hero?.title}</h2><p className={t.deck}>{layout.hero?.text}</p>
+        <span className={t.overline}>Главная история</span><ArticleTitle article={layout.hero}/><p className={t.deck}>{layout.hero?.text}</p>
         <ArticleImage article={layout.hero}/><p className={t.caption}>Главный материал выпуска · Редакционная публикация</p><SourcesBlock sources={layout.hero?.sources}/>
         {centerList && <BriefsSection list={centerList} className={t.centerBriefs}/>}
       </main>
-      <aside className={t.rightRail}>{rightArticles.map(article => <ArticleBlock key={article.id} article={article} className={t.railArticle}/>)}{rightList && <BriefsSection list={rightList}/>}</aside>
+      <aside className={t.rightRail}>{rightArticles.map(article => <ArticleBlock key={article.id} article={article} className={t.railArticle} titleLink/>)}{rightList && <BriefsSection list={rightList}/>}</aside>
     </div>
     {(lowerArticles.length > 0 || footerLists.length > 0 || layout.images.length > 0 || layout.notes.length > 1) && <div className={t.lowerGrid}>
-      {lowerArticles.map(article => <ArticleBlock key={article.id} article={article} className={t.lowerArticle}/>)}
+      {lowerArticles.map(article => <ArticleBlock key={article.id} article={article} className={t.lowerArticle} titleLink/>)}
       {footerLists.map(list => <BriefsSection key={list.id} list={list} className={t.lowerBriefs}/>)}
       {layout.images.map(image => <ImageBlock key={image.id} image={image} className={t.lowerImage}/>)}
       {layout.notes.slice(1).map(note => <NoteBlock key={note.id} note={note} className={t.lowerNote}/>)}
@@ -65,8 +74,8 @@ function SectionPage({ layout }: { layout: Layout }) {
   return <>
     <div className={t.sectionBanner}><span>Внутри выпуска</span><h2>{feature?.title || layout.noteLists[0]?.title || 'Новости и наблюдения'}</h2></div>
     <div className={t.sectionGrid}>
-      {feature && <ArticleBlock article={feature} className={t.sectionFeature}/>}
-      {articles.length > 0 && <div className={t.storyColumns}>{articles.map(article => <ArticleBlock key={article.id} article={article} className={t.columnStory}/>)}</div>}
+      {feature && <ArticleBlock article={feature} className={t.sectionFeature} titleLink/>}
+      {articles.length > 0 && <div className={t.storyColumns}>{articles.map(article => <ArticleBlock key={article.id} article={article} className={t.columnStory} titleLink/>)}</div>}
       {layout.weather && <section className={t.sectionWeather}><h3>{layout.weather.location}</h3><h2>{layout.weather.condition}</h2><WeatherForecast weather={layout.weather}/></section>}
       {layout.noteLists.map(list => <BriefsSection key={list.id} list={list} className={t.sectionBriefs}/>)}
       {layout.images.map(image => <ImageBlock key={image.id} image={image} className={t.sectionImage}/>)}
@@ -80,15 +89,15 @@ function FeaturePage({ layout, variant }: { layout: Layout; variant: 'left' | 'c
   const [primaryList, ...otherLists] = layout.noteLists;
   return <>
     <div className={`${t.insideKicker} ${variant === 'columns' ? t.insideKickerColumns : ''}`}>
-      <span>Главная тема</span><h2>{layout.hero?.title}</h2>
+      <span>Главная тема</span><ArticleTitle article={layout.hero}/>
     </div>
     <div className={`${t.featureGrid} ${variant === 'columns' ? t.featureGridColumns : ''}`}>
       <section className={t.featureImage}><ArticleImage article={layout.hero}/><p>Материал редакции · Продолжение внутри выпуска</p><SourcesBlock sources={layout.hero?.sources}/></section>
       <section className={t.featureBody}><p>{layout.hero?.text}</p></section>
-      {sideStory && <ArticleBlock article={sideStory} className={t.featureSideStory}/>}
+      {sideStory && <ArticleBlock article={sideStory} className={t.featureSideStory} titleLink/>}
       {primaryList && <BriefsSection list={primaryList} className={`${t.featureBriefs} ${!sideStory ? t.featureBriefsTop : ''}`}/>}
       {layout.images.map(image => <ImageBlock key={image.id} image={image} className={t.featureInset}/>)}
-      {lowerStories.map(article => <ArticleBlock key={article.id} article={article} className={t.featureLowerStory}/>)}
+      {lowerStories.map(article => <ArticleBlock key={article.id} article={article} className={t.featureLowerStory} titleLink/>)}
       {otherLists.map(list => <BriefsSection key={list.id} list={list} className={t.featureLowerBriefs}/>)}
       {layout.notes.map(note => <NoteBlock key={note.id} note={note} className={t.featureNote}/>)}
     </div>

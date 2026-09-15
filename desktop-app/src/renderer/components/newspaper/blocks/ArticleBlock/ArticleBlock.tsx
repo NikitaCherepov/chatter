@@ -8,42 +8,43 @@ export function ArticleBlock({
   className,
   eyebrow,
   interactive = false,
+  titleLink = false,
 }: {
   article: ArticleBlockData;
   className?: string;
   eyebrow?: string;
   interactive?: boolean;
+  titleLink?: boolean;
 }) {
   const image = safeImageUrl(article.image_url);
-  const source = interactive
-    ? article.sources?.map((item) => safeUrl(item.url)).find(Boolean)
-    : null;
-  const openSource = () => {
-    if (source) window.open(source, '_blank', 'noopener,noreferrer');
+  const articleUrl = safeUrl(article.url);
+  const panelUrl = interactive ? articleUrl : null;
+  const openArticle = () => {
+    if (panelUrl) window.open(panelUrl, '_blank', 'noopener,noreferrer');
   };
   return (
     <article
       className={className}
       data-role={article.role}
-      data-clickable={source ? 'true' : undefined}
-      role={source ? 'link' : undefined}
-      tabIndex={source ? 0 : undefined}
+      data-clickable={panelUrl ? 'true' : undefined}
+      role={panelUrl ? 'link' : undefined}
+      tabIndex={panelUrl ? 0 : undefined}
       onClick={
-        source
+        panelUrl
           ? (event) => {
-              if (!(event.target as HTMLElement).closest('a, button')) openSource();
+              if (!(event.target as HTMLElement).closest('a, button')) openArticle();
             }
           : undefined
       }
       onKeyDown={
-        source
+        panelUrl
           ? (event) => {
               if (
                 event.target === event.currentTarget &&
                 (event.key === 'Enter' || event.key === ' ')
               ) {
                 event.preventDefault();
-                openSource();
+                openArticle();
               }
             }
           : undefined
@@ -51,7 +52,9 @@ export function ArticleBlock({
     >
       {eyebrow && <span>{eyebrow}</span>}
       {image && <img className={s.articleImage} src={image} alt="" />}
-      <h2>{article.title}</h2>
+      <h2>{titleLink && articleUrl
+        ? <a data-article-title-link="true" href={articleUrl} target="_blank" rel="noreferrer">{article.title}</a>
+        : article.title}</h2>
       <p>{article.text}</p>
       <SourcesBlock sources={article.sources} />
     </article>

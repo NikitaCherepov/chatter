@@ -1949,9 +1949,9 @@ export type NewspaperIssueStatus = 'draft' | 'ready' | 'failed' | 'cancelled';
 
 export type NewspaperSource = { title: string; url: string };
 export type NewspaperNote = { id?: string; title?: string; text?: string; url?: string; image_url?: string };
-type NewspaperBlockBase = { id: string; title?: string; sources?: NewspaperSource[] };
+type NewspaperBlockBase = { id: string; title?: string };
 export type NewspaperBlock =
-  | (NewspaperBlockBase & { type: 'article'; role: 'hero' | 'feature' | 'standard'; title: string; text: string; image_url?: string })
+  | (NewspaperBlockBase & { type: 'article'; role: 'hero' | 'feature' | 'standard'; title: string; text: string; url?: string; image_url?: string; sources?: NewspaperSource[] })
   | (NewspaperBlockBase & { type: 'note'; text?: string; url?: string; image_url?: string })
   | (NewspaperBlockBase & { type: 'notes_list'; items: NewspaperNote[] })
   | (NewspaperBlockBase & { type: 'weather'; location: string; condition: string; details?: string; periods: Array<{ label: string; temperature: number; condition?: string }> })

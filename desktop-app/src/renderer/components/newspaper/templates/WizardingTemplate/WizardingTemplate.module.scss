@@ -12,6 +12,26 @@
   }
 }
 
+.lead [data-article-title-link='true'],
+.body [data-article-title-link='true'] {
+  display: inline-block;
+  color: inherit;
+  cursor: pointer;
+  text-decoration: none;
+  transition: transform 0.22s ease-out;
+}
+
+.lead [data-article-title-link='true']:hover,
+.body [data-article-title-link='true']:hover {
+  transform: scale(1.025);
+}
+
+.lead [data-article-title-link='true']:focus-visible,
+.body [data-article-title-link='true']:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 3px;
+}
+
 .body {
   grid-auto-flow: dense;
 

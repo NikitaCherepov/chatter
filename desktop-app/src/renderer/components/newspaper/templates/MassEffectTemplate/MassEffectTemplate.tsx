@@ -18,20 +18,20 @@ function mediaUrl(block: MediaBlock | undefined) {
 }
 
 function articlePanelProps(article: Extract<MediaBlock, { type: 'article' }> | undefined) {
-  const source = article?.sources?.map((item) => safeUrl(item.url)).find(Boolean);
-  if (!source) return {};
-  const openSource = () => window.open(source, '_blank', 'noopener,noreferrer');
+  const articleUrl = safeUrl(article?.url);
+  if (!articleUrl) return {};
+  const openArticle = () => window.open(articleUrl, '_blank', 'noopener,noreferrer');
   return {
     'data-clickable': 'true',
     role: 'link',
     tabIndex: 0,
     onClick: (event: React.MouseEvent<HTMLElement>) => {
-      if (!(event.target as HTMLElement).closest('a, button')) openSource();
+      if (!(event.target as HTMLElement).closest('a, button')) openArticle();
     },
     onKeyDown: (event: React.KeyboardEvent<HTMLElement>) => {
       if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) {
         event.preventDefault();
-        openSource();
+        openArticle();
       }
     },
   };

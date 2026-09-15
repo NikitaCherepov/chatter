@@ -4,14 +4,22 @@ import { NoteBlock, NoteContent } from '../../blocks/NoteBlock/NoteBlock';
 import { NotesListBlock } from '../../blocks/NotesListBlock/NotesListBlock';
 import { SourcesBlock } from '../../blocks/SourcesBlock/SourcesBlock';
 import { WeatherForecast } from '../../blocks/WeatherBlock/WeatherBlock';
-import type { NewspaperBlock, NewspaperTemplateProps } from '../../types';
-import { safeImageUrl } from '../../utils/media';
+import type { ArticleBlockData, NewspaperBlock, NewspaperTemplateProps } from '../../types';
+import { safeImageUrl, safeUrl } from '../../utils/media';
 import { composeDeusExPage } from './deusExLayout';
 import s from '../../Newspaper.module.scss';
 import t from './DeusExTemplate.module.scss';
 
 type Layout = ReturnType<typeof composeDeusExPage>;
 type MediaBlock = Extract<NewspaperBlock, { type: 'article' | 'image' }>;
+
+function ArticleTitle({ article, as = 'h2' }: { article: ArticleBlockData; as?: 'h2' | 'strong' }) {
+  const articleUrl = safeUrl(article.url);
+  const content = articleUrl
+    ? <a data-article-title-link="true" href={articleUrl} target="_blank" rel="noreferrer">{article.title}</a>
+    : article.title;
+  return as === 'strong' ? <strong>{content}</strong> : <h2>{content}</h2>;
+}
 
 function mediaUrl(block: MediaBlock) {
   return safeImageUrl(block.image_url);
@@ -30,7 +38,7 @@ function SignalStrip({ blocks }: { blocks: MediaBlock[] }) {
   if (blocks.length === 0) return null;
   return <section className={t.signalStrip} aria-label="Входящие сигналы"><div className={t.signalLabel}><span>LIVE FEEDS</span><b>SIGNAL / REPORTS</b></div>{blocks.slice(0, 5).map((block, index) => {
     const url = mediaUrl(block);
-    return <article key={block.id} className={t.signal}>{url && <img src={url} alt=""/>}<span>{String(index + 1).padStart(2, '0')}</span><strong>{block.title}</strong></article>;
+    return <article key={block.id} className={t.signal}>{url && <img src={url} alt=""/>}<span>{String(index + 1).padStart(2, '0')}</span>{block.type === 'article' ? <ArticleTitle article={block} as="strong"/> : <strong>{block.title}</strong>}</article>;
   })}</section>;
 }
 
@@ -48,12 +56,12 @@ function PriorityPage({ layout }: { layout: Layout }) {
   return <>
     <SignalStrip blocks={signals}/>
     <section className={t.priorityGrid}>
-      <div className={t.priorityMedia}>{leadImage && <img src={leadImage} alt=""/>}<div><span>PRIORITY REPORT</span><h2>{layout.hero?.title}</h2></div></div>
-      <div className={t.sideStack}><WeatherModule weather={layout.weather}/>{sideArticle && <ArticleBlock article={sideArticle} className={t.sideReport} eyebrow="SIDE INTEL"/>}</div>
+      <div className={t.priorityMedia}>{leadImage && <img src={leadImage} alt=""/>}<div><span>PRIORITY REPORT</span>{layout.hero && <ArticleTitle article={layout.hero}/>}</div></div>
+      <div className={t.sideStack}><WeatherModule weather={layout.weather}/>{sideArticle && <ArticleBlock article={sideArticle} className={t.sideReport} eyebrow="SIDE INTEL" titleLink/>}</div>
       <article className={t.reportBody}><span>FULL ANALYSIS</span><h2>{layout.hero?.title}</h2><p>{layout.hero?.text}</p><SourcesBlock sources={layout.hero?.sources}/></article>
       <div className={t.dispatch}>{layout.noteLists.slice(0, 1).map(list => <section key={list.id}><h2>{list.title || 'Incoming dispatches'}</h2><NotesListBlock list={list} numbered/></section>)}</div>
     </section>
-    <section className={t.analysisGrid}>{analysis.map(article => <ArticleBlock key={article.id} article={article} className={t.analysis} eyebrow="ANALYSIS"/>)}{layout.images.slice(fallbackImage ? 1 : 0).map(image => <ImageBlock key={image.id} image={image} className={t.mediaCard}/>)}</section>
+    <section className={t.analysisGrid}>{analysis.map(article => <ArticleBlock key={article.id} article={article} className={t.analysis} eyebrow="ANALYSIS" titleLink/>)}{layout.images.slice(fallbackImage ? 1 : 0).map(image => <ImageBlock key={image.id} image={image} className={t.mediaCard}/>)}</section>
     <div className={t.extraDispatches}>{layout.noteLists.slice(1).map(list => <section key={list.id}><h2>{list.title || 'Network feed'}</h2><NotesListBlock list={list} numbered/></section>)}</div>
     {layout.notes.map(note => <NoteBlock key={note.id} note={note} className={t.ticker} prefix="PICUS // CULTURE"/>)}
   </>;
@@ -62,17 +70,17 @@ function PriorityPage({ layout }: { layout: Layout }) {
 function IntelBoard({ layout }: { layout: Layout }) {
   const [feature, ...articles] = layout.articles;
   const signals: MediaBlock[] = [...layout.images, ...layout.articles.filter(article => article.image_url)];
-  return <><SignalStrip blocks={signals}/><div className={t.boardTitle}><span>INTELLIGENCE BOARD</span><h2>{feature?.title || layout.noteLists[0]?.title || 'Network situation report'}</h2></div><section className={t.intelGrid}>{feature && <ArticleBlock article={feature} className={t.intelFeature} eyebrow="LEAD ANALYSIS"/>}<WeatherModule weather={layout.weather}/>{articles.map(article => <ArticleBlock key={article.id} article={article} className={t.intelCard} eyebrow="FIELD REPORT"/>)}{layout.images.map(image => <ImageBlock key={image.id} image={image} className={t.intelMedia}/>)}</section><div className={t.extraDispatches}>{layout.noteLists.map(list => <section key={list.id}><h2>{list.title || 'Network feed'}</h2><NotesListBlock list={list} numbered/></section>)}</div>{layout.notes.map(note => <NoteBlock key={note.id} note={note} className={t.ticker} prefix="PICUS // INTEL"/>)}</>;
+  return <><SignalStrip blocks={signals}/><div className={t.boardTitle}><span>INTELLIGENCE BOARD</span><h2>{feature?.title || layout.noteLists[0]?.title || 'Network situation report'}</h2></div><section className={t.intelGrid}>{feature && <ArticleBlock article={feature} className={t.intelFeature} eyebrow="LEAD ANALYSIS" titleLink/>}<WeatherModule weather={layout.weather}/>{articles.map(article => <ArticleBlock key={article.id} article={article} className={t.intelCard} eyebrow="FIELD REPORT" titleLink/>)}{layout.images.map(image => <ImageBlock key={image.id} image={image} className={t.intelMedia}/>)}</section><div className={t.extraDispatches}>{layout.noteLists.map(list => <section key={list.id}><h2>{list.title || 'Network feed'}</h2><NotesListBlock list={list} numbered/></section>)}</div>{layout.notes.map(note => <NoteBlock key={note.id} note={note} className={t.ticker} prefix="PICUS // INTEL"/>)}</>;
 }
 
 function DispatchPage({ layout }: { layout: Layout }) {
   const dispatches = layout.noteLists.flatMap(list => list.items.map((item, index) => ({ item, key: item.id || `${list.id}-${index}`, section: index === 0 ? list.title : undefined })));
-  return <><div className={t.boardTitle}><span>ENCRYPTED DISPATCH</span><h2>Live intelligence feed</h2></div><section className={t.dispatchWall}>{dispatches.map((dispatch, index) => <article key={dispatch.key}>{dispatch.section && <h3>{dispatch.section}</h3>}<span>{String(index + 1).padStart(2, '0')}</span><div><NoteContent note={dispatch.item}/></div></article>)}</section><section className={t.analysisGrid}>{layout.articles.map(article => <ArticleBlock key={article.id} article={article} className={t.analysis} eyebrow="ANALYSIS"/>)}{layout.images.map(image => <ImageBlock key={image.id} image={image} className={t.mediaCard}/>)}</section>{layout.notes.map(note => <NoteBlock key={note.id} note={note} className={t.ticker} prefix="PICUS // LIVE"/>)}</>;
+  return <><div className={t.boardTitle}><span>ENCRYPTED DISPATCH</span><h2>Live intelligence feed</h2></div><section className={t.dispatchWall}>{dispatches.map((dispatch, index) => <article key={dispatch.key}>{dispatch.section && <h3>{dispatch.section}</h3>}<span>{String(index + 1).padStart(2, '0')}</span><div><NoteContent note={dispatch.item}/></div></article>)}</section><section className={t.analysisGrid}>{layout.articles.map(article => <ArticleBlock key={article.id} article={article} className={t.analysis} eyebrow="ANALYSIS" titleLink/>)}{layout.images.map(image => <ImageBlock key={image.id} image={image} className={t.mediaCard}/>)}</section>{layout.notes.map(note => <NoteBlock key={note.id} note={note} className={t.ticker} prefix="PICUS // LIVE"/>)}</>;
 }
 
 function MediaMonitor({ layout }: { layout: Layout }) {
   const media: MediaBlock[] = [...layout.images, ...layout.articles];
-  return <><SignalStrip blocks={media}/><div className={t.boardTitle}><span>VISUAL INTELLIGENCE</span><h2>Media monitoring array</h2></div><section className={t.mediaWall}>{media.map(block => block.type === 'image' ? <ImageBlock key={block.id} image={block} className={t.monitorCard}/> : <article key={block.id} className={t.monitorCard}><ArticleImage article={block}/><span>FIELD REPORT</span><h2>{block.title}</h2><p>{block.text}</p></article>)}</section></>;
+  return <><SignalStrip blocks={media}/><div className={t.boardTitle}><span>VISUAL INTELLIGENCE</span><h2>Media monitoring array</h2></div><section className={t.mediaWall}>{media.map(block => block.type === 'image' ? <ImageBlock key={block.id} image={block} className={t.monitorCard}/> : <article key={block.id} className={t.monitorCard}><ArticleImage article={block}/><span>FIELD REPORT</span><ArticleTitle article={block}/><p>{block.text}</p></article>)}</section></>;
 }
 
 export function DeusExTemplate({ issue }: NewspaperTemplateProps) {

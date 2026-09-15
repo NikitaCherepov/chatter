@@ -20,7 +20,7 @@ export function WizardingRailBlock({ block }: { block: NewspaperBlock }) {
 }
 
 export function WizardingBodyBlock({ block, notesPage = false }: { block: NewspaperBlock; notesPage?: boolean }) {
-  if (block.type === 'article') return <ArticleBlock article={block} className={t.bodyArticle}/>;
+  if (block.type === 'article') return <ArticleBlock article={block} className={t.bodyArticle} titleLink/>;
   if (block.type === 'note') return <NoteBlock note={block} className={`${s.wizardHumor} ${t.bodyNote}`} prefix="✦"/>;
   if (block.type === 'image') return <ImageBlock image={block} className={`${s.wizardImage} ${t.bodyImage}`}/>;
   if (block.type === 'notes_list') {

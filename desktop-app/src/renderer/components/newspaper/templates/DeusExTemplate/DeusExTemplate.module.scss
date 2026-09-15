@@ -12,6 +12,23 @@
   font-family: Bahnschrift, 'Segoe UI', Arial, sans-serif;
 }
 
+.page [data-article-title-link='true'] {
+  display: inline-block;
+  color: inherit;
+  cursor: pointer;
+  text-decoration: none;
+  transition: transform 0.2s ease-out;
+}
+
+.page [data-article-title-link='true']:hover {
+  transform: scale(1.025);
+}
+
+.page [data-article-title-link='true']:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 3px;
+}
+
 .page::after { position: absolute; inset: 0; pointer-events: none; background: repeating-linear-gradient(0deg, rgba(255,255,255,.012) 0 1px, transparent 1px 4px); content: ''; }
 .head { position: relative; height: 72px; margin-top: 8px; border: 1px solid #624b10; border-bottom: 0; background: linear-gradient(180deg, #11110e, #050605); }
 .crown { position: absolute; top: -18px; left: 18px; display: flex; width: 290px; height: 90px; align-items: center; gap: 10px; padding: 10px 20px; background: radial-gradient(circle, #2d2b22 1px, transparent 2px), #080908; background-size: 8px 8px; clip-path: polygon(15% 0, 84% 0, 100% 35%, 100% 100%, 0 100%, 0 35%); }
