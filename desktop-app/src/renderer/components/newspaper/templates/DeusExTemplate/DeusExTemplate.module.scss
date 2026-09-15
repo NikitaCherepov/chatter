@@ -12,7 +12,8 @@
   font-family: Bahnschrift, 'Segoe UI', Arial, sans-serif;
 }
 
-.page [data-article-title-link='true'] {
+.page [data-article-title-link='true'],
+.page [data-note-link='true'] {
   display: inline-block;
   color: inherit;
   cursor: pointer;
@@ -20,11 +21,13 @@
   transition: transform 0.2s ease-out;
 }
 
-.page [data-article-title-link='true']:hover {
+.page [data-article-title-link='true']:hover,
+.page [data-note-link='true']:hover {
   transform: scale(1.025);
 }
 
-.page [data-article-title-link='true']:focus-visible {
+.page [data-article-title-link='true']:focus-visible,
+.page [data-note-link='true']:focus-visible {
   outline: 2px solid currentColor;
   outline-offset: 3px;
 }

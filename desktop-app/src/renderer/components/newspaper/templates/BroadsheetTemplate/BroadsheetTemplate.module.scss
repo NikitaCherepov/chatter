@@ -8,20 +8,23 @@
   background-image: radial-gradient(circle at 18% 12%, rgba(92, 72, 40, 0.04), transparent 26%), repeating-linear-gradient(0deg, rgba(40, 32, 20, 0.018) 0 1px, transparent 1px 4px);
 }
 
-.paper [data-article-title-link='true'] {
+.paper [data-article-title-link='true'],
+.paper [data-note-link='true'] {
   display: inline-block;
   color: inherit;
   cursor: pointer;
   text-decoration: none;
 }
 
-.paper [data-article-title-link='true']:hover {
+.paper [data-article-title-link='true']:hover,
+.paper [data-note-link='true']:hover {
   text-decoration: underline;
   text-decoration-thickness: 1px;
   text-underline-offset: 0.14em;
 }
 
-.paper [data-article-title-link='true']:focus-visible {
+.paper [data-article-title-link='true']:focus-visible,
+.paper [data-note-link='true']:focus-visible {
   outline: 2px solid currentColor;
   outline-offset: 3px;
 }

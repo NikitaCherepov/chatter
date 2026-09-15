@@ -13,7 +13,9 @@
 }
 
 .lead [data-article-title-link='true'],
-.body [data-article-title-link='true'] {
+.body [data-article-title-link='true'],
+.lead [data-note-link='true'],
+.body [data-note-link='true'] {
   display: inline-block;
   color: inherit;
   cursor: pointer;
@@ -22,12 +24,16 @@
 }
 
 .lead [data-article-title-link='true']:hover,
-.body [data-article-title-link='true']:hover {
+.body [data-article-title-link='true']:hover,
+.lead [data-note-link='true']:hover,
+.body [data-note-link='true']:hover {
   transform: scale(1.025);
 }
 
 .lead [data-article-title-link='true']:focus-visible,
-.body [data-article-title-link='true']:focus-visible {
+.body [data-article-title-link='true']:focus-visible,
+.lead [data-note-link='true']:focus-visible,
+.body [data-note-link='true']:focus-visible {
   outline: 2px solid currentColor;
   outline-offset: 3px;
 }
