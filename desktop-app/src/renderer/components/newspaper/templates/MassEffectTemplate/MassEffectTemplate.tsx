@@ -72,7 +72,7 @@ function VisualRelay({ layout }: { layout: Layout }) {
   const [primary, ...signals] = media;
   return <>
     <div className={t.screenTitle}><span>VISUAL RELAY</span><h2>Extranet signal monitor</h2><b>{media.length} CHANNELS</b></div>
-    <section className={t.relay}><div className={t.relayPrimary}>{mediaUrl(primary) && <img src={mediaUrl(primary)} alt=""/>}<span>PRIMARY VISUAL FEED</span><h2>{primary?.title}</h2></div><div className={t.relayStack}>{signals.map((block, index) => <article key={block.id}>{mediaUrl(block) && <img src={mediaUrl(block)} alt=""/>}<span>CH {String(index + 2).padStart(2, '0')}</span><b>{block.title}</b></article>)}</div></section>
+    <section className={t.relay}><div className={t.relayPrimary}>{primary?.type === 'image' ? <ImageBlock image={primary} className={t.relayImage}/> : primary && <ArticleImage article={primary} className={t.relayArticleImage}/>}<span>PRIMARY VISUAL FEED</span><h2>{primary?.title}</h2></div><div className={t.relayStack}>{signals.map((block, index) => <article key={block.id}>{block.type === 'image' ? <ImageBlock image={block} className={t.relayImage}/> : <ArticleImage article={block} className={t.relayArticleImage}/>}<span>CH {String(index + 2).padStart(2, '0')}</span><b>{block.title}</b></article>)}</div></section>
   </>;
 }
 
