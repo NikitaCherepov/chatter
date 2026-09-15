@@ -2,11 +2,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { DEMO_NEWSPAPER_ISSUE } from './demo/newspaperDemo';
 import { DEMO_WIZARDING_ISSUE } from './demo/wizardingDemo';
 import { DEMO_BROADSHEET_ISSUE } from './demo/broadsheetDemo';
+import { DEMO_DEUS_EX_ISSUE } from './demo/deusExDemo';
 import { distributeIssue } from './layout/distributeIssue';
 import { NewspaperReader } from './NewspaperReader';
 import type { NewspaperVisualStyle } from './types';
 import { distributeWizardingIssue } from './templates/WizardingTemplate/wizardingPagination';
 import { distributeBroadsheetIssue } from './templates/BroadsheetTemplate/broadsheetPagination';
+import { distributeDeusExIssue } from './templates/DeusExTemplate/deusExPagination';
 import s from './NewspaperTool.module.scss';
 
 const STYLE_KEY = 'chatter:newspaper-preview-style';
@@ -24,6 +26,8 @@ export function NewspaperTool() {
       ? distributeWizardingIssue(DEMO_WIZARDING_ISSUE)
       : style === 'broadsheet'
         ? distributeBroadsheetIssue(DEMO_BROADSHEET_ISSUE)
+        : style === 'deusEx'
+          ? distributeDeusExIssue(DEMO_DEUS_EX_ISSUE)
         : distributeIssue(DEMO_NEWSPAPER_ISSUE, style),
     [style],
   );
