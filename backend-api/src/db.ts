@@ -193,6 +193,45 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_newspaper_issues_newspaper_number
   ON newspaper_issues(newspaper_id, issue_number DESC);
 
+  CREATE TABLE IF NOT EXISTS newspaper_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    newspaper_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    status TEXT NOT NULL DEFAULT 'queued',
+    phase TEXT NOT NULL DEFAULT 'queued',
+    draft_json TEXT,
+    editor_trace_json TEXT,
+    issue_id INTEGER,
+    error TEXT NOT NULL DEFAULT '',
+    created_at INTEGER NOT NULL,
+    started_at INTEGER,
+    finished_at INTEGER
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_newspaper_runs_user_created
+  ON newspaper_runs(user_id, created_at DESC, id DESC);
+
+  CREATE INDEX IF NOT EXISTS idx_newspaper_runs_newspaper_created
+  ON newspaper_runs(newspaper_id, created_at DESC, id DESC);
+
+  CREATE TABLE IF NOT EXISTS newspaper_run_agents (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id INTEGER NOT NULL,
+    agent_type TEXT NOT NULL,
+    task TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'running',
+    tools_used_json TEXT,
+    result_json TEXT,
+    trace_json TEXT,
+    error TEXT NOT NULL DEFAULT '',
+    created_at INTEGER NOT NULL,
+    started_at INTEGER NOT NULL,
+    finished_at INTEGER
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_newspaper_run_agents_run
+  ON newspaper_run_agents(run_id, created_at ASC, id ASC);
+
   CREATE TABLE IF NOT EXISTS mail_accounts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,

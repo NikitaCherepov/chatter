@@ -227,6 +227,7 @@ const moveSimpleOwnership = (sourceAccountId: number, targetAccountId: number) =
     'tasks',
     'newspapers',
     'newspaper_issues',
+    'newspaper_runs',
     'macros',
     'user_prompts',
     'map_pins',

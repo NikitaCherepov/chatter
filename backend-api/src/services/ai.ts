@@ -36,7 +36,7 @@ import { consumeUserQuota, getUserQuota } from './monthly-usage.js';
 dotenv.config();
 
 const FALLBACK_ANSWER = `Hey, I'm stuck. Try again?`;
-const MAX_TOOL_LOOPS = 80;
+const MAX_TOOL_LOOPS = 2000;
 const MAX_TOOL_LOOPS_VOICE = 10;
 const MAX_PARALLEL_SPAWN_SUBAGENTS = 3;
 const TOOL_RESULT_PREVIEW_MAX = 250;
@@ -4055,7 +4055,7 @@ const getTaskByUserAndId = (userId: number, taskId: number) => db.prepare(`
   WHERE user_id = ? AND id = ?
 `).get(userId, taskId) as { id: number; status: string } | undefined;
 
-export const runTool = async (user: UserRecord, timezoneOffset: number, toolName: string, argsRaw: string, aiCall: (requestPayload: Record<string, unknown>) => Promise<CompletionMeta>, generatedImages?: Array<{ image_base64: string; image_url?: string; prompt_used: string }>, displayStateSink?: { value: DisplayStatePayload | null }, desktopActionSink?: { value: DesktopActionPayload | null }, mapUpdateSink?: { value: MapUpdatePayload | null }, activeMacros?: Array<{ id: number; title: string; description?: string; commands: string[]; pinned?: boolean; return_output?: boolean }>, signal?: AbortSignal, subagentExtra?: { chatId?: number; manualModel?: any; subagentMode?: 'auto' | 'manual'; subagentReasoningLevel?: ReasoningLevel | null; onToolStatus?: (text: string) => Promise<void> | void; onDesktopAction?: (action: any) => Promise<void> | void; displayManifest?: { moods?: string[]; reactions?: string[] } | null; currentDisplayState?: DisplayStatePayload | null; avatarControlEnabled?: boolean; onSubagentTrace?: (trace: any) => void; onSubagentUsageCall?: (agentName: string, usage: TokenUsageCall) => void; onVisionUsageCall?: (usage: TokenUsageCall) => void; shouldStopForQuota?: (usage: TokenUsageCall) => boolean; availableToolDefs?: any[]; attachmentReadContext?: AttachmentReadContext; responseFileSink?: ResponseFileSink }, autoRejectHitl?: boolean, userImages?: Array<{ base64: string; mimeType: string }>, billingUserId?: number) => {
+export const runTool = async (user: UserRecord, timezoneOffset: number, toolName: string, argsRaw: string, aiCall: (requestPayload: Record<string, unknown>) => Promise<CompletionMeta>, generatedImages?: Array<{ image_base64: string; image_url?: string; prompt_used: string }>, displayStateSink?: { value: DisplayStatePayload | null }, desktopActionSink?: { value: DesktopActionPayload | null }, mapUpdateSink?: { value: MapUpdatePayload | null }, activeMacros?: Array<{ id: number; title: string; description?: string; commands: string[]; pinned?: boolean; return_output?: boolean }>, signal?: AbortSignal, subagentExtra?: { chatId?: number; manualModel?: any; subagentMode?: 'auto' | 'manual'; subagentReasoningLevel?: ReasoningLevel | null; onToolStatus?: (text: string) => Promise<void> | void; onDesktopAction?: (action: any) => Promise<void> | void; displayManifest?: { moods?: string[]; reactions?: string[] } | null; currentDisplayState?: DisplayStatePayload | null; avatarControlEnabled?: boolean; onSubagentTrace?: (trace: any) => void; onSubagentUsageCall?: (agentName: string, usage: TokenUsageCall) => void; onVisionUsageCall?: (usage: TokenUsageCall) => void; shouldStopForQuota?: (usage: TokenUsageCall) => boolean; availableToolDefs?: any[]; attachmentReadContext?: AttachmentReadContext; responseFileSink?: ResponseFileSink; onSubagentStart?: (data: { agent: string; task: string; context?: unknown }) => Promise<{ id?: number; signal?: AbortSignal } | void> | { id?: number; signal?: AbortSignal } | void; onSubagentFinish?: (data: { id?: number; agent: string; task: string; trace?: unknown; error?: string }) => Promise<void> | void }, autoRejectHitl?: boolean, userImages?: Array<{ base64: string; mimeType: string }>, billingUserId?: number) => {
   throwIfAborted(signal);
   const parsed = JSON.parse(argsRaw || '{}');
   // Room runs: `user` is the INITIATOR (data privacy: their servers, desktop,
@@ -7015,6 +7015,15 @@ Respond in the user's language. Be detailed and precise.`
     if (!agentName) return JSON.stringify({ status: 'error', message: 'agent (subagent name) is required' });
     if (!task) return JSON.stringify({ status: 'error', message: 'task (task description) is required' });
 
+    let lifecycle: { id?: number; signal?: AbortSignal } | undefined;
+    if (subagentExtra?.onSubagentStart) {
+      lifecycle = (await subagentExtra.onSubagentStart({
+        agent: agentName,
+        task,
+        context: contextData,
+      })) || undefined;
+    }
+    const subagentSignal = lifecycle?.signal || signal;
     try {
       const { runSubagent } = await import('./subagents/runner.js');
       const result = await runSubagent({
@@ -7027,7 +7036,7 @@ Respond in the user's language. Be detailed and precise.`
           user,
           isDesktop: !!desktopActionSink,
           timezoneOffset,
-          signal,
+          signal: subagentSignal,
           desktopActionSink: desktopActionSink || undefined,
           onDesktopAction: subagentExtra?.onDesktopAction,
           onToolStatus: subagentExtra?.onToolStatus,
@@ -7054,6 +7063,12 @@ Respond in the user's language. Be detailed and precise.`
         usage: result.usage || null,
       };
       subagentExtra?.onSubagentTrace?.(subagentTrace);
+      await subagentExtra?.onSubagentFinish?.({
+        id: lifecycle?.id,
+        agent: agentName,
+        task,
+        trace: subagentTrace,
+      });
 
       return JSON.stringify({
         status: 'success',
@@ -7064,6 +7079,12 @@ Respond in the user's language. Be detailed and precise.`
       });
     } catch (err: any) {
       console.warn('[ai] invoke_subagent error:', err?.message || err);
+      await subagentExtra?.onSubagentFinish?.({
+        id: lifecycle?.id,
+        agent: agentName,
+        task,
+        error: err?.message || String(err),
+      });
       return JSON.stringify({
         status: 'error',
         message: `Subagent error ${agentName}: ${err?.message || String(err)}`,
@@ -7356,6 +7377,11 @@ export const sendMessageThroughAi = async (
     notifyDesktopChatUpdates?: boolean;
     /** External signal (e.g. room queue stop) that aborts this generation. */
     externalAbortSignal?: AbortSignal;
+    /** Internal domain runners may replace the ordinary chat system prompt. */
+    systemPromptOverride?: string;
+    /** Lifecycle hooks for fixed subagents launched by an internal domain runner. */
+    onSubagentStart?: (data: { agent: string; task: string; context?: unknown }) => Promise<{ id?: number; signal?: AbortSignal } | void> | { id?: number; signal?: AbortSignal } | void;
+    onSubagentFinish?: (data: { id?: number; agent: string; task: string; trace?: unknown; error?: string }) => Promise<void> | void;
     /** Room runs: who triggered the generation (button / message / @mention /
      *  regenerate). Billing + model stay on `userId` (the bot owner), but ALL
      *  tools in runTool execute under the initiator's account (their servers,
@@ -8200,7 +8226,8 @@ export const sendMessageThroughAi = async (
     try { await safeOnDiceRoll?.(diceRollValue); } catch { /* ignore */ }
   }
 
-  const proSystemPrompt = `${voicePromptHint}${buildSystemPrompt(`${roomIdentityPrompt}${promptContent}`, user.name || 'User', coreMemoryForPrompt, currentModelSupportsTools)}${pinnedHintForPrompt}${dynamicContextToolHint}${avatarPromptHint}`;
+  const proSystemPrompt = options?.systemPromptOverride?.trim()
+    || `${voicePromptHint}${buildSystemPrompt(`${roomIdentityPrompt}${promptContent}`, user.name || 'User', coreMemoryForPrompt, currentModelSupportsTools)}${pinnedHintForPrompt}${dynamicContextToolHint}${avatarPromptHint}`;
 
   // executionMode больше не переключается на vision-pro/lite при наличии фото.
   // Фото идёт через нативный vision (если модель поддерживает) или через tool describe_image.
@@ -8688,6 +8715,8 @@ const runOneToolCall = async (toolCall: any, emitStatus = true): Promise<Execute
             },
             capacityState: attachmentCapacityState,
           },
+          onSubagentStart: options?.onSubagentStart,
+          onSubagentFinish: options?.onSubagentFinish,
           ...(!options?.skipHistory ? { responseFileSink } : {}),
         },
         options?.autoRejectHitl,
@@ -8822,12 +8851,12 @@ for (let toolCallIndex = 0; toolCallIndex < toolCalls.length; toolCallIndex += 1
     break;
   }
 
-  if (toolName === 'spawn_subagent') {
+  if (toolName === 'spawn_subagent' || toolName === 'invoke_subagent') {
     const batch = [toolCall];
     while (toolCallIndex + 1 < toolCalls.length) {
       const nextToolCall = toolCalls[toolCallIndex + 1];
       const nextToolName = `${nextToolCall.function?.name || ''}`;
-      if (nextToolName !== 'spawn_subagent') break;
+      if (nextToolName !== toolName) break;
       batch.push(nextToolCall);
       toolCallIndex += 1;
     }

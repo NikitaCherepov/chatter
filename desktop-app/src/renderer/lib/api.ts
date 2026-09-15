@@ -973,6 +973,7 @@ type WsCallbacks = StreamCallbacks & {
   onDisconnect?: () => void;
   onModelCatalogUpdated?: () => void;
   onTaskResult?: (data: { chat_id: number; text: string; is_new_chat: boolean }) => void;
+  onNewspaperRunEvent?: (run: NewspaperRun) => void;
   onRoomEvent?: (event: RoomEvent) => void;
   onChatUpdated?: (data: {
     chat_id: number;
@@ -1099,6 +1100,15 @@ export function onTaskResult(cb: WsCallbacks['onTaskResult']) {
   };
 }
 
+export function onNewspaperRunEvent(cb: WsCallbacks['onNewspaperRunEvent']) {
+  wsCallbacks.onNewspaperRunEvent = cb;
+  return () => {
+    if (wsCallbacks.onNewspaperRunEvent === cb) {
+      wsCallbacks.onNewspaperRunEvent = undefined;
+    }
+  };
+}
+
 /** Register a global handler for multi-user room events. */
 export function onRoomEvent(cb: WsCallbacks['onRoomEvent']) {
   wsCallbacks.onRoomEvent = cb;
@@ -1185,6 +1195,7 @@ export function initWebSocket(callbacks?: WsCallbacks) {
 
       switch (msg.type) {
         case 'task_result': wsCallbacks.onTaskResult?.({ chat_id: msg.chat_id, text: msg.text, is_new_chat: msg.is_new_chat }); break;
+        case 'newspaper_run_updated': wsCallbacks.onNewspaperRunEvent?.(msg.run); break;
         case 'model_catalog_updated': wsCallbacks.onModelCatalogUpdated?.(); break;
         case 'chat_agent_start':
         case 'chat_agent_token':
@@ -1944,8 +1955,10 @@ export async function testTask(taskId: number): Promise<TaskTestResult> {
 
 // ---------- Newspapers ----------
 
-export type NewspaperStyle = 'classic' | 'modern' | 'magical';
+export type NewspaperStyle = 'wizarding' | 'broadsheet' | 'deusEx' | 'massEffect';
 export type NewspaperIssueStatus = 'draft' | 'ready' | 'failed' | 'cancelled';
+export type NewspaperRunStatus = 'queued' | 'running' | 'ready' | 'failed' | 'cancelled';
+export type NewspaperAgentRunStatus = 'queued' | 'running' | 'ready' | 'failed' | 'cancelled';
 
 export type NewspaperSource = { title: string; url: string };
 export type NewspaperNote = { id?: string; title?: string; text?: string; url?: string; image_url?: string };
@@ -1995,6 +2008,37 @@ export type Newspaper = {
   updated_at: number;
 };
 
+export type NewspaperAgentRun = {
+  id: number;
+  run_id: number;
+  agent_type: string;
+  task: string;
+  status: NewspaperAgentRunStatus;
+  tools_used: string[];
+  result: unknown;
+  trace: unknown;
+  error: string;
+  created_at: number;
+  started_at: number;
+  finished_at: number | null;
+};
+
+export type NewspaperRun = {
+  id: number;
+  newspaper_id: number;
+  user_id: number;
+  status: NewspaperRunStatus;
+  phase: string;
+  draft: unknown;
+  editor_trace: unknown;
+  issue_id: number | null;
+  error: string;
+  agents: NewspaperAgentRun[];
+  created_at: number;
+  started_at: number | null;
+  finished_at: number | null;
+};
+
 export async function listNewspapers(): Promise<{ newspapers: Newspaper[] }> {
   return apiFetch('/api/v1/newspapers');
 }
@@ -2012,6 +2056,22 @@ export async function listNewspaperIssues(newspaperId: number, limit = 30): Prom
 
 export async function getNewspaperIssue(issueId: number): Promise<{ issue: NewspaperIssue }> {
   return apiFetch(`/api/v1/newspaper-issues/${issueId}`);
+}
+
+export async function listNewspaperRuns(newspaperId: number, limit = 10): Promise<{ runs: NewspaperRun[] }> {
+  return apiFetch(`/api/v1/newspapers/${newspaperId}/runs?limit=${limit}`);
+}
+
+export async function startNewspaperRun(newspaperId: number): Promise<{ run: NewspaperRun }> {
+  return apiFetch(`/api/v1/newspapers/${newspaperId}/runs`, { method: 'POST' });
+}
+
+export async function cancelNewspaperRun(runId: number): Promise<{ ok: boolean; run: NewspaperRun }> {
+  return apiFetch(`/api/v1/newspaper-runs/${runId}/cancel`, { method: 'POST' });
+}
+
+export async function cancelNewspaperAgentRun(runId: number, agentId: number): Promise<{ ok: boolean }> {
+  return apiFetch(`/api/v1/newspaper-runs/${runId}/agents/${agentId}/cancel`, { method: 'POST' });
 }
 
 export async function createDemoNewspaperIssue(): Promise<{ issue: NewspaperIssue }> {

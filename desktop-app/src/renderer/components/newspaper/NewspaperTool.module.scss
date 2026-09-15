@@ -43,6 +43,18 @@
   cursor: default;
   opacity: 0.55;
 }
+.toolbarActions {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center;
+  gap: 6px !important;
+}
+.toolbar .secondaryButton,
+.secondaryButton {
+  border-color: var(--border-medium);
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+}
 .scroll {
   display: flex;
   min-height: 0;
@@ -211,4 +223,171 @@
 .delete:hover {
   background: color-mix(in srgb, var(--color-error) 12%, transparent);
   color: var(--color-error);
+}
+
+.settings,
+.run {
+  overflow: hidden;
+  border: 1px solid var(--border-light);
+  border-radius: 10px;
+  background: var(--bg-primary);
+}
+.settings {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+}
+.settings label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 600;
+}
+.settings textarea {
+  min-height: 64px;
+  resize: vertical;
+  padding: 8px;
+  border: 1px solid var(--border-medium);
+  border-radius: 7px;
+  outline: none;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 10px;
+  line-height: 1.45;
+}
+.settings textarea:focus {
+  border-color: var(--accent);
+}
+.settingsActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.settingsActions button,
+.stopButton,
+.agent button {
+  padding: 6px 8px;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font: inherit;
+  font-size: 9px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.run {
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border-light));
+}
+.run > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 11px;
+  border-bottom: 1px solid var(--border-light);
+}
+.run > header > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+.run > header strong {
+  color: var(--text-primary);
+  font-size: 11px;
+}
+.run > header span {
+  color: var(--text-hint);
+  font-size: 9px;
+}
+.run.running > header strong::before,
+.run.queued > header strong::before {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  content: '';
+  animation: pulse 1.2s ease-in-out infinite;
+}
+.stopButton,
+.agent button {
+  border-color: color-mix(in srgb, var(--color-error) 45%, var(--border-medium));
+  background: transparent;
+  color: var(--color-error);
+}
+.agents {
+  display: flex;
+  flex-direction: column;
+}
+.agent {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 11px;
+  border-bottom: 1px solid var(--border-light);
+}
+.agent > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+.agent strong {
+  color: var(--text-secondary);
+  font-size: 10px;
+}
+.agent span {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--text-hint);
+  font-size: 9px;
+  line-height: 1.35;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.agent em {
+  color: var(--text-muted);
+  font-size: 8px;
+  font-style: normal;
+  text-transform: uppercase;
+}
+.json summary {
+  padding: 8px 11px;
+  color: var(--text-muted);
+  font-size: 9px;
+  cursor: pointer;
+}
+.json pre {
+  max-height: 260px;
+  overflow: auto;
+  margin: 0;
+  padding: 10px;
+  border-top: 1px solid var(--border-light);
+  background: var(--bg-input);
+  color: var(--text-secondary);
+  font-family: Consolas, monospace;
+  font-size: 8px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.error {
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--color-error) 35%, transparent);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--color-error) 8%, transparent);
+  color: var(--color-error);
+  font-size: 9px;
+  line-height: 1.4;
+}
+@keyframes pulse {
+  50% { opacity: 0.3; transform: scale(0.8); }
 }

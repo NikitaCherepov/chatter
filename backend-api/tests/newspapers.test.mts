@@ -10,11 +10,15 @@ const { db } = await import('../src/db.js');
 const {
   createDemoNewspaperIssue,
   createNewspaper,
+  createNewspaperRun,
   deleteNewspaperIssue,
   getNewspaperIssue,
+  getNewspaperRun,
   listNewspaperIssues,
+  listNewspaperRuns,
   listNewspapers,
   updateNewspaper,
+  validateNewspaperDocument,
 } = await import('../src/services/newspapers.js');
 
 db.prepare(`
@@ -31,14 +35,14 @@ const created = createNewspaper(101, {
   editorial_brief: 'Только действительно важное.',
   interests: 'AI, React, космос',
   preferences: 'Без крипты',
-  style: 'magical',
+  style: 'wizarding',
 });
 assert.equal(created.ok, true);
 
 let newspapers = listNewspapers(101);
 assert.equal(newspapers.length, 1);
 assert.equal(newspapers[0].name, 'Утренний ритуал');
-assert.equal(newspapers[0].style, 'magical');
+assert.equal(newspapers[0].style, 'wizarding');
 assert.equal(newspapers[0].issue_count, 0);
 
 const updated = updateNewspaper(101, created.id, { name: 'Chatter Daily', enabled: false });
@@ -49,17 +53,39 @@ assert.equal(newspapers[0].enabled, false);
 
 const issue = createDemoNewspaperIssue(101);
 assert.equal(issue.newspaper_id, created.id);
-assert.equal(issue.issue_number, 2);
+assert.equal(issue.issue_number, 1);
 assert.equal(issue.document.version, 1);
-assert.equal(issue.document.blocks.length, 6);
+assert.equal(issue.document.blocks.length, 5);
+assert.deepEqual(
+  new Set(issue.document.blocks.map((block) => block.type)),
+  new Set(['article', 'note', 'notes_list', 'weather', 'image']),
+);
 assert.doesNotMatch(JSON.stringify(issue.document), /Тестовый читатель/);
 const weather = issue.document.blocks.find((block) => block.type === 'weather');
 assert.equal(weather?.type === 'weather' ? weather.periods.length : 0, 3);
 
-assert.equal(listNewspaperIssues(101, created.id).length, 2);
-assert.equal(listNewspapers(101)[0].issue_count, 2);
+assert.equal(listNewspaperIssues(101, created.id).length, 1);
+assert.equal(listNewspapers(101)[0].issue_count, 1);
 assert.equal(getNewspaperIssue(202, issue.id), null, 'another user must not read the issue');
 assert.equal(deleteNewspaperIssue(202, issue.id), false, 'another user must not delete the issue');
+
+assert.throws(() => validateNewspaperDocument({
+  version: 1,
+  title: 'Legacy',
+  date: '2026-09-16',
+  blocks: [{ id: 'legacy', type: 'hero', title: 'Nope', text: 'Nope' }],
+}), /invalid_newspaper_block/);
+
+const runResult = createNewspaperRun(101, created.id);
+assert.equal(runResult.ok, true);
+if (!runResult.ok) throw new Error('run must be created');
+assert.equal(runResult.run.status, 'queued');
+assert.equal(getNewspaperRun(202, runResult.run.id), null, 'another user must not read the run');
+assert.equal(listNewspaperRuns(101, created.id).length, 1);
+const duplicateRun = createNewspaperRun(101, created.id);
+assert.equal(duplicateRun.ok, false);
+assert.equal(duplicateRun.error, 'newspaper_run_active');
+
 assert.equal(deleteNewspaperIssue(101, issue.id), true);
 assert.equal(getNewspaperIssue(101, issue.id), null);
 

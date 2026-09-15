@@ -11,7 +11,8 @@ import { adminMiddleware, authMiddleware, issueAuthTokens, makePasswordHash, ref
 import { activateUserChat, bindChatMessageTelegramMeta, clearAllUserMessages, clearUserChatMessages, countUserChats, createPasswordAccount, createOrUpdateUserForApiRegistration, createUserChat, deleteUserHistoryByRole, deleteUserHistoryMessage, ensureActiveChat, forkChat, getPasswordAccountByLogin, getChatMessages, getChatMedia, getAllUserMedia, getRecentUserHistory, getUserById, getUserChatById, getUserChatListItem, listUserChats, upsertUserFromTelegram, setUserTimezone, updateUserPrompt, selectUserCustomPrompt, updateUserCustomPrompt, resetUsersPromptIfDeleted, resetDailyMessageCounters, upsertTelegramUser, createPendingTelegramUser, updateUserStatus, updateUserRole, updateUserName, updateUserTelegramUsername, removeUser, getAllUsers, getUsersCount, getUsersPage, getPendingUsersCount, getPendingUsersPage, getBannedUsersCount, getBannedUsersPage, syncAllUsersPlanLimits, resetUserWeeklyUsage, resetAllUsersWeeklyUsage, updateUserWeeklyCostQuota, revokeUserAuthTokens, generateLinkCode, verifyLinkCode, getLinkCodeForUser, generatePasswordResetCode, verifyPasswordResetCode, signPasswordResetToken, verifyPasswordResetToken, adminApplyGeneratedPassword, renameUserChat, deleteUserChat, deleteUserMessage, editUserMessage, searchUserChats, updateChatMessageAudio, getChatContextTokens, resolveMaxContextTokens, updateUserMaxContextTokens, getChatAttachments, deleteMessageAttachment, deleteMessageImage, resolveAttachmentMaxTokens, updateUserAttachmentMaxTokens, setChatBotHidden, listChatFolders, createChatFolder, renameChatFolder, deleteChatFolder, moveUserChatToFolder, listChatFilterOptions } from './services/chats.js';
 import { createNote, countNotes, deleteNote, getNoteById, getNoteStats, getNoteStatsForUsers, listNotes, updateNoteContent } from './services/notes.js';
 import { createTask, deletePendingTask, getPendingTaskCount, getUserTaskById, isOwnNonRoomChat, listTaskTargetChats, listTasks, MAX_PENDING_TASKS_PER_USER, updatePendingTask } from './services/tasks.js';
-import { createDemoNewspaperIssue, createNewspaper, deleteNewspaperIssue, getNewspaperIssue, listNewspaperIssues, listNewspapers, updateNewspaper } from './services/newspapers.js';
+import { createDemoNewspaperIssue, createNewspaper, createNewspaperRun, deleteNewspaperIssue, ensureDefaultNewspaper, getNewspaperIssue, getNewspaperRun, listNewspaperIssues, listNewspaperRuns, listNewspapers, markInterruptedNewspaperRuns, updateNewspaper } from './services/newspapers.js';
+import { cancelNewspaperAgentRun, cancelNewspaperRun, startNewspaperRun } from './services/newspaper-runner.js';
 import { listMapPins, getMapPinById, createMapPin, updateMapPin, deleteMapPin } from './services/map-pins.js';
 import { sendMessageThroughAi, generateAdminOutreach, callLiteAi, ensureUtilityAiQuota, chargeUtilityAiCompletion, getModelsCatalog, getAutoReasoningLevels, getAutoVisionSupport, abortChatGeneration, abortUserGenerations, beginActiveHitlWait, endActiveHitlWait, getUpdateState, setUpdatePrepare, forceAbortActiveGenerations, clearUpdatePrepare, resolveManualModel } from './services/ai.js';
 import { initSubagentRunner } from './services/subagents/runner.js';
@@ -2755,6 +2756,7 @@ app.get('/api/v1/notes/:id', (req: AuthedRequest, res) => {
 
 app.get('/api/v1/newspapers', (req: AuthedRequest, res) => {
   const userId = accountIdFromRequest(req);
+  ensureDefaultNewspaper(userId);
   return res.json({ newspapers: listNewspapers(userId) });
 });
 
@@ -2784,6 +2786,59 @@ app.get('/api/v1/newspapers/:id/issues', (req: AuthedRequest, res) => {
   const ownsNewspaper = listNewspapers(userId).some(item => item.id === newspaperId);
   if (!ownsNewspaper) return res.status(404).json({ error: 'newspaper_not_found' });
   return res.json({ issues: listNewspaperIssues(userId, newspaperId, limit) });
+});
+
+app.post('/api/v1/newspapers/:id/runs', (req: AuthedRequest, res) => {
+  const userId = accountIdFromRequest(req);
+  const newspaperId = Number.parseInt(req.params.id, 10);
+  if (!Number.isFinite(newspaperId) || newspaperId <= 0) return res.status(400).json({ error: 'bad_newspaper_id' });
+  const result = createNewspaperRun(userId, newspaperId);
+  if (!result.ok) {
+    if (result.error === 'newspaper_not_found') return res.status(404).json({ error: result.error });
+    return res.status(409).json({ error: result.error, run: result.run });
+  }
+  startNewspaperRun(result.run.id);
+  return res.status(202).json({ run: getNewspaperRun(userId, result.run.id) || result.run });
+});
+
+app.get('/api/v1/newspapers/:id/runs', (req: AuthedRequest, res) => {
+  const userId = accountIdFromRequest(req);
+  const newspaperId = Number.parseInt(req.params.id, 10);
+  const limit = Number.parseInt(`${req.query.limit || '10'}`, 10);
+  if (!Number.isFinite(newspaperId) || newspaperId <= 0) return res.status(400).json({ error: 'bad_newspaper_id' });
+  const ownsNewspaper = listNewspapers(userId).some(item => item.id === newspaperId);
+  if (!ownsNewspaper) return res.status(404).json({ error: 'newspaper_not_found' });
+  return res.json({ runs: listNewspaperRuns(userId, newspaperId, limit) });
+});
+
+app.get('/api/v1/newspaper-runs/:id', (req: AuthedRequest, res) => {
+  const userId = accountIdFromRequest(req);
+  const runId = Number.parseInt(req.params.id, 10);
+  if (!Number.isFinite(runId) || runId <= 0) return res.status(400).json({ error: 'bad_newspaper_run_id' });
+  const run = getNewspaperRun(userId, runId);
+  if (!run) return res.status(404).json({ error: 'newspaper_run_not_found' });
+  return res.json({ run });
+});
+
+app.post('/api/v1/newspaper-runs/:id/cancel', (req: AuthedRequest, res) => {
+  const userId = accountIdFromRequest(req);
+  const runId = Number.parseInt(req.params.id, 10);
+  if (!Number.isFinite(runId) || runId <= 0) return res.status(400).json({ error: 'bad_newspaper_run_id' });
+  if (!cancelNewspaperRun(userId, runId)) return res.status(409).json({ error: 'newspaper_run_not_active' });
+  return res.json({ ok: true, run: getNewspaperRun(userId, runId) });
+});
+
+app.post('/api/v1/newspaper-runs/:runId/agents/:agentId/cancel', (req: AuthedRequest, res) => {
+  const userId = accountIdFromRequest(req);
+  const runId = Number.parseInt(req.params.runId, 10);
+  const agentId = Number.parseInt(req.params.agentId, 10);
+  if (!Number.isFinite(runId) || runId <= 0 || !Number.isFinite(agentId) || agentId <= 0) {
+    return res.status(400).json({ error: 'bad_newspaper_agent_run_id' });
+  }
+  if (!cancelNewspaperAgentRun(userId, runId, agentId)) {
+    return res.status(409).json({ error: 'newspaper_agent_not_active' });
+  }
+  return res.json({ ok: true });
 });
 
 app.get('/api/v1/newspaper-issues/:id', (req: AuthedRequest, res) => {
@@ -6834,6 +6889,8 @@ app.use((err: any, _req: any, res: any, _next: any) => {
   console.error('API error:', formatSafeError(err));
   res.status(500).json({ error: 'internal_error' });
 });
+
+markInterruptedNewspaperRuns();
 
 const server = app.listen(PORT, () => {
   console.log(`[backend-api] started on :${PORT}`);

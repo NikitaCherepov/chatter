@@ -2253,6 +2253,8 @@ export const removeUser = (userId: number) => {
   db.prepare('DELETE FROM chat_folders WHERE user_id = ?').run(userId);
   db.prepare('DELETE FROM notes WHERE user_id = ?').run(userId);
   db.prepare('DELETE FROM tasks WHERE user_id = ?').run(userId);
+  db.prepare('DELETE FROM newspaper_run_agents WHERE run_id IN (SELECT id FROM newspaper_runs WHERE user_id = ?)').run(userId);
+  db.prepare('DELETE FROM newspaper_runs WHERE user_id = ?').run(userId);
   db.prepare('DELETE FROM newspaper_issues WHERE user_id = ?').run(userId);
   db.prepare('DELETE FROM newspapers WHERE user_id = ?').run(userId);
   db.prepare('DELETE FROM mail_accounts WHERE user_id = ?').run(userId);

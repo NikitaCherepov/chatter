@@ -5,7 +5,7 @@ export type TaskType = 'message' | 'smart_home' | 'ai_instruction';
 export type TaskRecurrenceType = 'once' | 'daily' | 'weekly';
 export type TaskNotifyMode = 'always' | 'never' | 'on_error';
 export type TaskTargetMode = 'chat' | 'new_chat';
-export type NewspaperStyle = 'classic' | 'modern' | 'magical';
+export type NewspaperStyle = 'wizarding' | 'broadsheet' | 'deusEx' | 'massEffect';
 export type NewspaperIssueStatus = 'draft' | 'ready' | 'failed' | 'cancelled';
 
 export type NewspaperSource = {
@@ -15,18 +15,15 @@ export type NewspaperSource = {
 
 type NewspaperBlockBase = {
   id: string;
-  title: string;
-  priority?: number;
-  sources?: NewspaperSource[];
+  title?: string;
 };
 
 export type NewspaperBlock =
-  | (NewspaperBlockBase & { type: 'hero'; summary: string; image_url?: string })
-  | (NewspaperBlockBase & { type: 'article'; summary: string; image_url?: string })
-  | (NewspaperBlockBase & { type: 'news_list'; items: Array<{ title: string; summary?: string; url?: string }> })
+  | (NewspaperBlockBase & { type: 'article'; role: 'hero' | 'feature' | 'standard'; title: string; text: string; url?: string; image_url?: string; sources?: NewspaperSource[] })
+  | (NewspaperBlockBase & { type: 'note'; text?: string; url?: string; image_url?: string })
+  | (NewspaperBlockBase & { type: 'notes_list'; items: Array<{ id?: string; title?: string; text?: string; url?: string; image_url?: string }> })
   | (NewspaperBlockBase & { type: 'weather'; location: string; condition: string; details?: string; periods: Array<{ label: string; temperature: number; condition?: string }> })
-  | (NewspaperBlockBase & { type: 'image'; image_url?: string; caption?: string; prompt?: string })
-  | (NewspaperBlockBase & { type: 'humor'; text: string });
+  | (NewspaperBlockBase & { type: 'image'; title: string; image_url?: string; caption?: string; prompt?: string });
 
 export type NewspaperIssueDocument = {
   version: 1;
@@ -63,6 +60,40 @@ export type NewspaperIssueSummaryDto = {
 
 export type NewspaperIssueDto = NewspaperIssueSummaryDto & {
   document: NewspaperIssueDocument;
+};
+
+export type NewspaperRunStatus = 'queued' | 'running' | 'ready' | 'failed' | 'cancelled';
+export type NewspaperAgentRunStatus = 'running' | 'ready' | 'failed' | 'cancelled';
+
+export type NewspaperAgentRunDto = {
+  id: number;
+  run_id: number;
+  agent_type: string;
+  task: string;
+  status: NewspaperAgentRunStatus;
+  tools_used: string[];
+  result: unknown;
+  trace: unknown;
+  error: string;
+  created_at: number;
+  started_at: number;
+  finished_at: number | null;
+};
+
+export type NewspaperRunDto = {
+  id: number;
+  newspaper_id: number;
+  user_id: number;
+  status: NewspaperRunStatus;
+  phase: string;
+  draft: unknown;
+  editor_trace: unknown;
+  issue_id: number | null;
+  error: string;
+  agents: NewspaperAgentRunDto[];
+  created_at: number;
+  started_at: number | null;
+  finished_at: number | null;
 };
 
 export type UserRecord = {

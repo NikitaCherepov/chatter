@@ -54,6 +54,14 @@ export function clearPromptCache(): void {
 // ---------------------------------------------------------------------------
 
 const REGISTRY: Record<string, SubagentConfig> = {
+  news_researcher: {
+    name: 'news_researcher',
+    description: 'Researches one focused newspaper topic using web search and webpage reading, then returns a concise source-grounded dossier.',
+    promptFile: 'news-researcher.md',
+    ownTools: [],
+    sharedTools: ['search_web', 'read_webpage'],
+    maxLoops: 20,
+  },
   file_converter: {
     name: 'file_converter',
     description: 'Converts local files through the desktop application. Currently supports video only and must refuse audio, document, or any other operation that has no dedicated tool without taking action.',
