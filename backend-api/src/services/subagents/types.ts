@@ -49,8 +49,6 @@ export interface SubagentContext {
   subagentMode?: SubagentMode;
   /** User's reasoning level preference for subagent completions. */
   subagentReasoningLevel?: string | null;
-  /** Maximum output tokens for each model completion in this agent loop. */
-  maxTokens?: number;
   /** Optional streaming sink for assistant text. */
   onStreamToken?: (text: string) => Promise<void> | void;
   /** Optional streaming sink for reasoning text. */
@@ -132,4 +130,6 @@ export interface SubagentConfig {
   sharedTools: string[];
   /** Maximum agent-loop iterations for this subagent. */
   maxLoops: number;
+  /** Maximum output tokens for each model completion in this agent loop. */
+  maxTokens?: number;
 }

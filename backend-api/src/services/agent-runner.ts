@@ -146,6 +146,7 @@ export const runAgent = async (params: RunAgentParams): Promise<RunAgentResult> 
     ownTools: params.tools || [],
     sharedTools: [],
     maxLoops: Math.max(1, Math.floor(params.maxLoops || 32)),
+    maxTokens: Math.max(256, Math.floor(params.maxTokens || 8192)),
   };
   const result = await runSubagent({
     agent,
@@ -162,7 +163,6 @@ export const runAgent = async (params: RunAgentParams): Promise<RunAgentResult> 
       subagentReasoningLevel: params.reasoningLevel !== undefined
         ? params.reasoningLevel
         : normalizeReasoningLevel(user.reasoning_level),
-      maxTokens: params.maxTokens,
       onStreamToken: params.onStreamToken,
       onReasoningStream: params.onReasoningStream,
       onUsageCall,

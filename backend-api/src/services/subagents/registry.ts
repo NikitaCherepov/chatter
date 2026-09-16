@@ -61,6 +61,7 @@ const REGISTRY: Record<string, SubagentConfig> = {
     ownTools: [],
     sharedTools: ['search_web', 'read_webpage'],
     maxLoops: 20,
+    maxTokens: 16_384,
   },
   file_converter: {
     name: 'file_converter',

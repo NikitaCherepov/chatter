@@ -303,7 +303,7 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
     // Call AI — use user's preferred model if set, otherwise agent's configured mode
     const requestPayload: Record<string, unknown> = {
         messages,
-        max_tokens: Math.max(256, Math.floor(ctx.maxTokens || 8192)),
+        max_tokens: Math.max(256, Math.floor(agent.maxTokens || 8192)),
       };
       if (!finalizeForQuota && allToolDefs.length > 0) {
         requestPayload.tools = allToolDefs;
