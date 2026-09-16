@@ -198,6 +198,57 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_newspaper_issues_newspaper_number
   ON newspaper_issues(newspaper_id, issue_number DESC);
 
+  CREATE TABLE IF NOT EXISTS media_assets (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    storage_filename TEXT NOT NULL UNIQUE,
+    local_url TEXT NOT NULL UNIQUE,
+    mime_type TEXT NOT NULL,
+    kind TEXT NOT NULL DEFAULT 'image',
+    retention TEXT NOT NULL DEFAULT 'temporary'
+      CHECK(retention IN ('temporary', 'persistent')),
+    source_url TEXT,
+    source_page_url TEXT,
+    credit TEXT,
+    width INTEGER,
+    height INTEGER,
+    size_bytes INTEGER NOT NULL DEFAULT 0,
+    metadata_json TEXT,
+    expires_at INTEGER,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_media_assets_user_created
+  ON media_assets(user_id, created_at DESC, id DESC);
+
+  CREATE INDEX IF NOT EXISTS idx_media_assets_expiration
+  ON media_assets(retention, expires_at);
+
+  CREATE TABLE IF NOT EXISTS media_asset_references (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    asset_id INTEGER NOT NULL,
+    entity_type TEXT NOT NULL,
+    entity_id INTEGER NOT NULL,
+    slot TEXT NOT NULL DEFAULT 'default',
+    created_at INTEGER NOT NULL,
+    UNIQUE(asset_id, entity_type, entity_id, slot),
+    FOREIGN KEY(asset_id) REFERENCES media_assets(id) ON DELETE CASCADE
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_media_asset_references_entity
+  ON media_asset_references(entity_type, entity_id);
+
+  CREATE INDEX IF NOT EXISTS idx_media_asset_references_asset
+  ON media_asset_references(asset_id);
+
+  CREATE TRIGGER IF NOT EXISTS trg_chat_messages_delete_media_refs
+  AFTER DELETE ON chat_messages
+  BEGIN
+    DELETE FROM media_asset_references
+    WHERE entity_type = 'chat_message' AND entity_id = OLD.id;
+  END;
+
   CREATE TABLE IF NOT EXISTS newspaper_runs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     newspaper_id INTEGER NOT NULL,

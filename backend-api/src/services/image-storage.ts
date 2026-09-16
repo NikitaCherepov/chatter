@@ -21,10 +21,17 @@ const ensureUploadsDir = () => {
   }
 };
 
-export type SavedImage = {
+export type SavedImageFile = {
   url: string;       // relative URL: /api/v1/images/abc123.webp
   filename: string;  // abc123.webp
-  mime_type?: string;
+  mime_type: string;
+  width: number | null;
+  height: number | null;
+  size_bytes: number;
+};
+
+export type SaveImageFileOptions = {
+  transform?: 'preserve' | 'thumbnail';
 };
 
 const DISPLAY_IMAGE_FORMATS: Record<string, { extension: string; mimeType: string }> = {
@@ -36,14 +43,27 @@ const DISPLAY_IMAGE_FORMATS: Record<string, { extension: string; mimeType: strin
 };
 const CONVERTIBLE_IMAGE_FORMATS = new Set(['tiff', 'heif', 'heic', 'jp2', 'jxl']);
 
-/** Save a validated raster image using its real format, not a caller-provided MIME type. */
-export const saveExternalImage = async (buffer: Buffer): Promise<SavedImage | null> => {
+/**
+ * The only physical image writer. Ownership and lifetime live in media-assets.ts;
+ * this module is deliberately limited to validating and writing bytes.
+ */
+export const saveImageFile = async (
+  data: Buffer | string,
+  options: SaveImageFileOptions = {},
+): Promise<SavedImageFile | null> => {
   ensureUploadsDir();
 
+  const buffer = Buffer.isBuffer(data) ? data : Buffer.from(data, 'base64');
+  if (!buffer.length) return null;
+
   let format = '';
+  let width: number | null = null;
+  let height: number | null = null;
   try {
     const metadata = await sharp(buffer, { failOn: 'none', animated: true, limitInputPixels: 60_000_000 }).metadata();
     format = `${metadata.format || ''}`.toLowerCase();
+    width = metadata.width ?? null;
+    height = metadata.height ?? null;
     if ((metadata.width || 0) * (metadata.height || 0) > 60_000_000) return null;
   } catch {
     return null;
@@ -51,55 +71,51 @@ export const saveExternalImage = async (buffer: Buffer): Promise<SavedImage | nu
   if (!format || (!DISPLAY_IMAGE_FORMATS[format] && !CONVERTIBLE_IMAGE_FORMATS.has(format))) return null;
 
   const id = crypto.randomBytes(12).toString('hex');
+  if (options.transform === 'thumbnail') {
+    const filename = `${id}_thumb.webp`;
+    const info = await sharp(buffer, { failOn: 'none', limitInputPixels: 60_000_000 })
+      .resize(THUMBNAIL_MAX_WIDTH, THUMBNAIL_MAX_HEIGHT, {
+        fit: 'inside',
+        withoutEnlargement: true,
+      })
+      .webp({ quality: THUMBNAIL_QUALITY })
+      .toFile(path.join(UPLOADS_DIR, filename));
+    return {
+      url: `/api/v1/images/${filename}`,
+      filename,
+      mime_type: 'image/webp',
+      width: info.width,
+      height: info.height,
+      size_bytes: info.size,
+    };
+  }
+
   const displayFormat = DISPLAY_IMAGE_FORMATS[format];
   if (displayFormat) {
     const filename = `${id}.${displayFormat.extension}`;
     await fs.promises.writeFile(path.join(UPLOADS_DIR, filename), buffer);
-    return { url: `/api/v1/images/${filename}`, filename, mime_type: displayFormat.mimeType };
+    return {
+      url: `/api/v1/images/${filename}`,
+      filename,
+      mime_type: displayFormat.mimeType,
+      width,
+      height,
+      size_bytes: buffer.length,
+    };
   }
 
   const filename = `${id}.webp`;
-  await sharp(buffer, { failOn: 'none', limitInputPixels: 60_000_000 }).webp({ quality: 90 }).toFile(path.join(UPLOADS_DIR, filename));
-  return { url: `/api/v1/images/${filename}`, filename, mime_type: 'image/webp' };
-};
-
-/**
- * Save a thumbnail version of a user-uploaded image.
- * Returns the relative URL and filename.
- */
-export const saveUserImageThumbnail = async (
-  base64: string,
-  mimeType?: string
-): Promise<SavedImage> => {
-  ensureUploadsDir();
-
-  const buffer = Buffer.from(base64, 'base64');
-  const id = crypto.randomBytes(12).toString('hex');
-  const filename = `${id}_thumb.webp`;
-  const filepath = path.join(UPLOADS_DIR, filename);
-
-  await sharp(buffer, { failOn: 'none' })
-    .resize(THUMBNAIL_MAX_WIDTH, THUMBNAIL_MAX_HEIGHT, {
-      fit: 'inside',
-      withoutEnlargement: true
-    })
-    .webp({ quality: THUMBNAIL_QUALITY })
-    .toFile(filepath);
-
-  return { url: `/api/v1/images/${filename}`, filename };
-};
-
-/**
- * Save a generated image as-is (no compression/resize).
- * Returns the relative URL and filename.
- */
-export const saveGeneratedImage = async (
-  base64: string
-): Promise<SavedImage> => {
-  const buffer = Buffer.from(base64, 'base64');
-  const saved = await saveExternalImage(buffer);
-  if (!saved) throw new Error('generated_image_format_not_supported');
-  return saved;
+  const info = await sharp(buffer, { failOn: 'none', limitInputPixels: 60_000_000 })
+    .webp({ quality: 90 })
+    .toFile(path.join(UPLOADS_DIR, filename));
+  return {
+    url: `/api/v1/images/${filename}`,
+    filename,
+    mime_type: 'image/webp',
+    width: info.width,
+    height: info.height,
+    size_bytes: info.size,
+  };
 };
 
 /**

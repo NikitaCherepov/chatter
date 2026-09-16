@@ -69,7 +69,15 @@ assert.ok(!anchorBefore.quota_anchor_at, '0001 must leave quota_anchor_at to the
 // ── 0002: anchors from the legacy window, then drops the legacy columns ──
 // (0003/0004 ride along in this run; they have their own tests)
 const second = runMigrations();
-assert.deepEqual(second.applied, ['0002_drop_legacy_quota_user_columns', '0003_tasks_target_mode', '0004_tasks_notify']);
+assert.deepEqual(second.applied, [
+  '0002_drop_legacy_quota_user_columns',
+  '0003_tasks_target_mode',
+  '0004_tasks_notify',
+  '0005_reset_experimental_newspaper_issues',
+  '0006_media_assets',
+  '0007_backfill_media_assets',
+  '0008_chat_message_media_cleanup',
+]);
 
 const subscription = db.prepare(`
   SELECT access_kind, quota_anchor_at FROM user_plan_subscriptions

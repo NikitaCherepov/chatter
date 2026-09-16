@@ -61,6 +61,8 @@ import {
 import { assignUserPlan, ensureUserMonthlyUsageWindow, getUserQuotaPeriod, type PlanDuration } from './services/monthly-usage.js';
 import { runMigrations } from './services/migrations.js';
 import { resolveImageFile, getUploadsDir } from './services/image-storage.js';
+import { pruneExpiredMediaAssets } from './services/media-assets.js';
+import { canUserReadRegisteredImage } from './services/media-access.js';
 import { resolveAttachmentFile, MAX_RAW_FILE_SIZE as MAX_ATTACHMENT_BYTES } from './services/attachment-storage.js';
 import { parseDocument, SUPPORTED_EXTENSIONS } from './services/document-parser.js';
 import {
@@ -121,6 +123,7 @@ ensureDefaultPrompt();
 // Versioned one-time migrations (legacy monthly_* -> quota periods) must run
 // before any runtime code touches quota periods.
 runMigrations();
+pruneExpiredMediaAssets();
 db.transaction(() => {
   for (const user of getAllUsers()) {
     const activeChatId = ensureActiveChat(user.id);
@@ -1036,21 +1039,24 @@ app.get('/api/v1/images/:filename', async (req: AuthedRequest, res) => {
   const filepath = resolveImageFile(filename);
   if (!filepath) return res.status(404).json({ error: 'image_not_found' });
 
-  // Verify access: the requester owns the message OR can read the chat it
-  // belongs to (room members see each other's images).
-  // images column may be JSON: [{"url":"/api/v1/images/xxx.png",...}] or plain text: "generated: /uploads/xxx.png"
+  // Registry is authoritative for new/backfilled images. Owners may read their
+  // temporary assets; references grant access through chats/rooms/newspapers.
   const likePattern = `%${filename}%`;
-  console.log(`[image-access] userId=${userId}, effectiveId=${effectiveId}, filename=${filename}`);
-  const rows = db.prepare(`
-    SELECT user_id, chat_id FROM chat_messages
-    WHERE images LIKE ?
-    LIMIT 10
-  `).all(likePattern) as Array<{ user_id: number; chat_id: number }>;
+  const registeredAccess = canUserReadRegisteredImage(effectiveId, filename);
+  let allowed = registeredAccess === true;
 
-  const allowed = rows.some(r => r.user_id === effectiveId || canReadChatMessages(effectiveId, r.chat_id));
+  // Compatibility fallback for an old local file that was not registered
+  // because its JSON was malformed when the backfill ran.
+  if (registeredAccess === null) {
+    const rows = db.prepare(`
+      SELECT user_id, chat_id FROM chat_messages
+      WHERE images LIKE ?
+      LIMIT 10
+    `).all(likePattern) as Array<{ user_id: number; chat_id: number }>;
+    allowed = rows.some(row => row.user_id === effectiveId || canReadChatMessages(effectiveId, row.chat_id));
+  }
 
   if (!allowed) {
-    console.log(`[image-access] DENIED - no matching row for effectiveId=${effectiveId}, pattern=${likePattern}`);
     return res.status(403).json({ error: 'access_denied' });
   }
 
@@ -2412,10 +2418,16 @@ app.post('/api/v1/chat/send', async (req: AuthedRequest, res) => {
   let savedUserImages: Array<{ url: string; type: 'user_photo' }> | null = null;
   if (images.length > 0) {
     try {
-      const { saveUserImageThumbnail } = await import('./services/image-storage.js');
+      const { saveImageAsset } = await import('./services/media-assets.js');
       const saved: Array<{ url: string; type: 'user_photo' }> = [];
       for (const img of images) {
-        const result = await saveUserImageThumbnail(img.base64, img.mimeType);
+        const result = await saveImageAsset({
+          userId,
+          data: img.base64,
+          retention: 'temporary',
+          kind: 'user_photo',
+          transform: 'thumbnail',
+        });
         saved.push({ url: result.url, type: 'user_photo' });
       }
       savedUserImages = saved;
@@ -7319,10 +7331,16 @@ async function handleWsChatSend(client: WsClient, msg: any) {
   let savedUserImages: Array<{ url: string; type: 'user_photo' }> | null = null;
   if (parsedImages.length > 0) {
     try {
-      const { saveUserImageThumbnail } = await import('./services/image-storage.js');
+      const { saveImageAsset } = await import('./services/media-assets.js');
       const saved: Array<{ url: string; type: 'user_photo' }> = [];
       for (const img of parsedImages) {
-        const result = await saveUserImageThumbnail(img.base64, img.mimeType);
+        const result = await saveImageAsset({
+          userId,
+          data: img.base64,
+          retention: 'temporary',
+          kind: 'user_photo',
+          transform: 'thumbnail',
+        });
         saved.push({ url: result.url, type: 'user_photo' });
       }
       savedUserImages = saved;

@@ -4,6 +4,12 @@ import { db, toUnix } from '../db.js';
 import type { ChatDto, MessageDto, MessageImage, MessageAudio, MessageAttachment, ChatRole, UserRecord, MessageUsage } from '../types.js';
 import { copyAttachmentFile, deleteAttachmentFile } from './attachment-storage.js';
 import { deleteImageFile, filenameFromUrl, resolveImageFile } from './image-storage.js';
+import {
+  attachImageUrlsToEntity,
+  deleteMediaAssetByFilenameIfUnreferenced,
+  detachImageUrlFromEntity,
+  getMediaAssetByFilename,
+} from './media-assets.js';
 import type { ToolIteration } from './ai.js';
 import { countTokens, countMessageTokens, countToolCallTokens, countToolResultTokens } from './tokenizer.js';
 import { buildBaseSystemPromptForUser } from './system-prompt.js';
@@ -669,7 +675,7 @@ export const forkChat = (
         }
       }
 
-      insertStmt.run(
+      const inserted = insertStmt.run(
         userId,
         row.role,
         row.content,
@@ -691,6 +697,19 @@ export const forkChat = (
         row.archived,          // preserve archived state
         row.created_at         // preserve original timestamps
       );
+      if (row.images) {
+        try {
+          const images = JSON.parse(row.images) as MessageImage[];
+          if (Array.isArray(images)) {
+            attachImageUrlsToEntity({
+              userId,
+              urls: images.map(image => image?.url).filter((url): url is string => Boolean(url)),
+              entityType: 'chat_message',
+              entityId: Number(inserted.lastInsertRowid),
+            });
+          }
+        } catch { /* invalid legacy JSON: keep the copied value unchanged */ }
+      }
     }
 
     // 3. Bump the new chat's updated_at.
@@ -752,7 +771,11 @@ export const clearUserChatMessages = (userId: number, chatId: number): boolean =
 };
 
 export const clearAllUserMessages = (userId: number) => {
-  const chats = db.prepare('SELECT id FROM user_chats WHERE user_id = ?').all(userId) as Array<{ id: number }>;
+  const chats = db.prepare(`
+    SELECT DISTINCT chat_id AS id
+    FROM chat_messages
+    WHERE user_id = ? AND chat_id IS NOT NULL
+  `).all(userId) as Array<{ id: number }>;
   const imageFilenames = new Set<string>();
   for (const chat of chats) {
     for (const filename of cleanupMessageFiles(userId, chat.id)) imageFilenames.add(filename);
@@ -885,6 +908,11 @@ const isImageFilenameReferenced = (filename: string): boolean => {
 
 const cleanupUnreferencedImages = (filenames: Iterable<string>): void => {
   for (const filename of new Set(filenames)) {
+    const asset = getMediaAssetByFilename(filename);
+    if (asset) {
+      deleteMediaAssetByFilenameIfUnreferenced(filename);
+      continue;
+    }
     if (!isImageFilenameReferenced(filename)) deleteImageFile(filename);
   }
 };
@@ -1044,7 +1072,14 @@ export const deleteMessageImage = (
     'UPDATE chat_messages SET images = ? WHERE id = ? AND user_id = ?'
   ).run(newJson, messageId, userId);
 
-  // 3. Delete the file only when neither the original message nor another branch still uses it.
+  // 3. Remove this message's logical reference. Other messages/issues keep theirs.
+  detachImageUrlFromEntity({
+    url: target.url,
+    entityType: 'chat_message',
+    entityId: messageId,
+  });
+
+  // 4. Delete the file only when neither the original message nor another branch still uses it.
   const filename = filenameFromUrl(target.url);
   if (filename) cleanupUnreferencedImages([filename]);
 
@@ -1365,8 +1400,17 @@ export const appendChatMessage = async (
     imagesJson, reasoning, tcJson, tokenCount, reasoningTokens,
     attachmentsJson, saj, usageJson, promptId, promptName, modelName, providerName, agentId
   );
+  const messageId = Number(inserted.lastInsertRowid);
+  if (images && images.length > 0) {
+    attachImageUrlsToEntity({
+      userId,
+      urls: images.map(image => image.url),
+      entityType: 'chat_message',
+      entityId: messageId,
+    });
+  }
   db.prepare('UPDATE user_chats SET updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND id = ?').run(userId, chatId);
-  return Number(inserted.lastInsertRowid);
+  return messageId;
 };
 
 export const bindChatMessageTelegramMeta = (
@@ -2247,7 +2291,7 @@ export const removeUser = (userId: number) => {
     SET is_active = 0, deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
     WHERE owner_user_id = ? AND is_active = 1
   `).run(userId);
-  db.prepare('DELETE FROM chat_messages WHERE user_id = ?').run(userId);
+  clearAllUserMessages(userId);
   db.prepare('DELETE FROM chat_members WHERE user_id = ?').run(userId);
   db.prepare('DELETE FROM user_chats WHERE user_id = ?').run(userId);
   db.prepare('DELETE FROM chat_folders WHERE user_id = ?').run(userId);

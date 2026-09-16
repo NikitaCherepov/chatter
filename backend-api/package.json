@@ -17,6 +17,7 @@
     "test:tasks-notify": "tsx tests/tasks-notify.test.mts",
     "test:tasks-allowed-tools": "tsx tests/tasks-allowed-tools.test.mts",
     "test:newspapers": "tsx tests/newspapers.test.mts",
+    "test:media-assets": "tsx tests/media-assets.test.mts",
     "test:context-plan-clamp": "tsx tests/context-plan-clamp.test.mts",
     "test:account-merge": "tsx tests/account-merge-quota.test.mts",
     "build": "node -e \"require('node:fs').rmSync('dist',{ recursive: true, force: true })\" && tsc -p tsconfig.json && node -e \"require('node:fs').cpSync('src/i18n/locales','dist/i18n/locales',{ recursive: true })\"",

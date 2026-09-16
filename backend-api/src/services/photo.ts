@@ -1,6 +1,6 @@
 import { sendMessageThroughAi } from './ai.js';
 import { getUserById } from './chats.js';
-import { saveUserImageThumbnail } from './image-storage.js';
+import { saveImageAsset } from './media-assets.js';
 import {
   areImageAttachmentsAllowedForPlan,
   MAX_IMAGE_ATTACHMENTS_PER_REQUEST,
@@ -64,7 +64,13 @@ export const runPhotoAnalyzeTurn = async (
   try {
     const saved: Array<{ url: string; type: 'user_photo' }> = [];
     for (const img of allImages) {
-      const result = await saveUserImageThumbnail(img.base64, img.mimeType);
+      const result = await saveImageAsset({
+        userId,
+        data: img.base64,
+        retention: 'temporary',
+        kind: 'user_photo',
+        transform: 'thumbnail',
+      });
       saved.push({ url: result.url, type: 'user_photo' });
     }
     userImages = saved;

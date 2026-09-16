@@ -82,22 +82,33 @@ const toPngBase64 = async (buf: Buffer, width: number, height: number): Promise<
  *  - original: 1:1 (16x16 или 32x32 пикселей)
  */
 export const createPixelArt = async (
-  pixels: unknown
+  userId: number,
+  pixels: unknown,
 ): Promise<PixelArtResult> => {
   validatePixels(pixels);
   const px = pixels as string[][];
 
-  const { saveGeneratedImage } = await import('./image-storage.js');
+  const { saveImageAsset } = await import('./media-assets.js');
 
   // Preview — увеличенный
   const previewRender = renderPixelArt(px, PIXEL_SIZE);
   const previewBase64 = await toPngBase64(previewRender.buf, previewRender.width, previewRender.height);
-  const previewSaved = await saveGeneratedImage(previewBase64);
+  const previewSaved = await saveImageAsset({
+    userId,
+    data: previewBase64,
+    retention: 'temporary',
+    kind: 'generated',
+  });
 
   // Original — 1:1
   const originalRender = renderPixelArt(px, 1);
   const originalBase64 = await toPngBase64(originalRender.buf, originalRender.width, originalRender.height);
-  const originalSaved = await saveGeneratedImage(originalBase64);
+  const originalSaved = await saveImageAsset({
+    userId,
+    data: originalBase64,
+    retention: 'temporary',
+    kind: 'generated',
+  });
 
   return {
     preview: { base64: previewBase64, url: previewSaved.url },

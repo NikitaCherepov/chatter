@@ -4445,8 +4445,13 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
       // Save to disk and get URL
       let imageUrl: string | undefined;
       try {
-        const { saveGeneratedImage } = await import('./image-storage.js');
-        const saved = await saveGeneratedImage(result.image_base64);
+        const { saveImageAsset } = await import('./media-assets.js');
+        const saved = await saveImageAsset({
+          userId: user.id,
+          data: result.image_base64,
+          retention: 'temporary',
+          kind: 'generated',
+        });
         imageUrl = saved.url;
       } catch (err) {
         console.error('[generate_image] failed to save generated image to disk:', err);
@@ -4463,7 +4468,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
   if (toolName === 'create_pixel_image') {
     try {
       const { createPixelArt } = await import('./pixel-art.js');
-      const result = await createPixelArt(parsed.pixels);
+      const result = await createPixelArt(user.id, parsed.pixels);
 
       if (Array.isArray(generatedImages)) {
         generatedImages.push({ image_base64: result.preview.base64, image_url: result.preview.url, prompt_used: 'pixel-art (preview)' });
@@ -4850,7 +4855,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
 
       // 2. Compress via sharp → JPEG
       const { default: sharpLib } = await import('sharp');
-      const { saveGeneratedImage } = await import('./image-storage.js');
+      const { saveImageAsset } = await import('./media-assets.js');
       const captures: Array<{ display_id: string; name: string; data_url: string; compressed_b64: string }> = [];
 
       for (const disp of displays) {
@@ -4867,7 +4872,12 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
           // Save to disk → show in chat (same as generate_image)
           if (Array.isArray(generatedImages)) {
             try {
-              const saved = await saveGeneratedImage(compressedB64);
+              const saved = await saveImageAsset({
+                userId: user.id,
+                data: compressedB64,
+                retention: 'temporary',
+                kind: 'screenshot',
+              });
               generatedImages.push({
                 image_base64: compressedB64,
                 image_url: saved.url,
@@ -5018,7 +5028,7 @@ If the task is a description, return a detailed text response.`
 
       // Compress via sharp → JPEG
       const { default: sharpLib } = await import('sharp');
-      const { saveGeneratedImage } = await import('./image-storage.js');
+      const { saveImageAsset } = await import('./media-assets.js');
 
       const buf = Buffer.from(captureResult.screenshot_base64, 'base64');
       const compressed = await sharpLib(buf, { failOn: 'none' })
@@ -5031,7 +5041,12 @@ If the task is a description, return a detailed text response.`
       // Save to disk → show in chat
       if (Array.isArray(generatedImages)) {
         try {
-          const saved = await saveGeneratedImage(compressedB64);
+          const saved = await saveImageAsset({
+            userId: user.id,
+            data: compressedB64,
+            retention: 'temporary',
+            kind: 'webcam',
+          });
           generatedImages.push({
             image_base64: compressedB64,
             image_url: saved.url,
@@ -5186,7 +5201,7 @@ Respond in the user's language. Be detailed and precise.`
     let previewImageBase64: string | undefined;
     try {
       const { default: sharpLib } = await import('sharp');
-      const { saveGeneratedImage } = await import('./image-storage.js');
+      const { saveImageAsset } = await import('./media-assets.js');
       const freshResult = await sendIpcToDesktop(user.id, 'capture_screen', {}, 15000, signal);
       const freshDisplays: any[] = freshResult.displays || [];
       const targetDisp = freshDisplays.find((d: any) => d.display_id === displayId) || freshDisplays[0];
@@ -5217,7 +5232,12 @@ Respond in the user's language. Be detailed and precise.`
           .jpeg({ quality: 80 })
           .toBuffer();
         const annotatedB64 = annotated.toString('base64');
-        const saved = await saveGeneratedImage(annotatedB64);
+        const saved = await saveImageAsset({
+          userId: user.id,
+          data: annotatedB64,
+          retention: 'temporary',
+          kind: 'interaction_preview',
+        });
         previewImageUrl = saved.url;
         previewImageBase64 = annotatedB64;
       }

@@ -5,7 +5,7 @@ import type { MessageAttachment, MessageImage } from '../types.js';
 import { saveUserDocument } from './attachment-storage.js';
 import { checkBotFilePermission } from './bot-file-policy.js';
 import { parseDocument } from './document-parser.js';
-import { saveExternalImage } from './image-storage.js';
+import { saveImageAsset } from './media-assets.js';
 import { resolveEmailAttachmentReference } from './mail.js';
 import { saveTemporaryUserFile, TEMPORARY_FILE_TTL_SECONDS } from './temporary-files.js';
 import { countTokens } from './tokenizer.js';
@@ -240,7 +240,13 @@ export const attachFileToResponse = async (
   }
 
   const savedImage = allowedFile.kind === 'image'
-    ? await saveExternalImage(source.buffer)
+    ? await saveImageAsset({
+      userId,
+      data: source.buffer,
+      retention: 'temporary',
+      kind: 'external',
+      sourceUrl: remoteUrl || null,
+    })
     : null;
   if (savedImage) {
     const image: MessageImage = { url: savedImage.url, type: 'external' };

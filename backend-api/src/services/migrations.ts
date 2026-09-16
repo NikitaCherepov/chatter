@@ -1,5 +1,8 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { db } from '../db.js';
 import { migrateLegacyQuotaPeriods } from './monthly-usage.js';
+import { filenameFromUrl, resolveImageFile } from './image-storage.js';
 
 type Migration = {
   name: string;
@@ -123,6 +126,69 @@ const migrateTasksNotify = () => {
   db.exec('ALTER TABLE tasks_migrate RENAME TO tasks');
 };
 
+const mimeTypeFromFilename = (filename: string): string => {
+  const extension = path.extname(filename).toLowerCase();
+  if (extension === '.png') return 'image/png';
+  if (extension === '.webp') return 'image/webp';
+  if (extension === '.gif') return 'image/gif';
+  if (extension === '.avif') return 'image/avif';
+  return 'image/jpeg';
+};
+
+const backfillMediaAssets = () => {
+  const rows = db.prepare(`
+    SELECT id, user_id, images
+    FROM chat_messages
+    WHERE images IS NOT NULL AND TRIM(images) NOT IN ('', '[]', 'null')
+    ORDER BY id ASC
+  `).all() as Array<{ id: number; user_id: number; images: string }>;
+  const now = Math.floor(Date.now() / 1000);
+
+  for (const row of rows) {
+    let images: Array<{ url?: unknown; type?: unknown }>;
+    try {
+      const parsed = JSON.parse(row.images);
+      if (!Array.isArray(parsed)) continue;
+      images = parsed;
+    } catch {
+      continue;
+    }
+
+    images.forEach((image, index) => {
+      const url = typeof image?.url === 'string' ? image.url : '';
+      const filename = filenameFromUrl(url);
+      if (!filename) return;
+      const filepath = resolveImageFile(filename);
+      if (!filepath) return;
+
+      db.prepare(`
+        INSERT OR IGNORE INTO media_assets (
+          user_id, storage_filename, local_url, mime_type, kind, retention,
+          size_bytes, expires_at, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, 'persistent', ?, NULL, ?, ?)
+      `).run(
+        row.user_id,
+        filename,
+        url,
+        mimeTypeFromFilename(filename),
+        typeof image.type === 'string' && image.type.trim() ? image.type.trim() : 'legacy',
+        fs.statSync(filepath).size,
+        now,
+        now,
+      );
+
+      const asset = db.prepare('SELECT id FROM media_assets WHERE storage_filename = ?')
+        .get(filename) as { id: number } | undefined;
+      if (!asset) return;
+      db.prepare(`
+        INSERT OR IGNORE INTO media_asset_references (
+          asset_id, entity_type, entity_id, slot, created_at
+        ) VALUES (?, 'chat_message', ?, ?, ?)
+      `).run(asset.id, row.id, `image:${index}`, now);
+    });
+  }
+};
+
 const MIGRATIONS: Migration[] = [
   {
     // Transfers legacy users.monthly_* quota state into user_plan_quota_periods.
@@ -151,6 +217,80 @@ const MIGRATIONS: Migration[] = [
     // with the initial weather block contract while preserving newspaper settings.
     name: '0005_reset_experimental_newspaper_issues',
     run: () => { db.exec('DELETE FROM newspaper_issues'); },
+  },
+  {
+    // Media storage and ownership are separate concerns: assets describe the
+    // saved file, while references attach it to chats, newspaper issues, or
+    // future entity types without duplicating the physical image.
+    name: '0006_media_assets',
+    run: () => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS media_assets (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id INTEGER NOT NULL,
+          storage_filename TEXT NOT NULL UNIQUE,
+          local_url TEXT NOT NULL UNIQUE,
+          mime_type TEXT NOT NULL,
+          kind TEXT NOT NULL DEFAULT 'image',
+          retention TEXT NOT NULL DEFAULT 'temporary'
+            CHECK(retention IN ('temporary', 'persistent')),
+          source_url TEXT,
+          source_page_url TEXT,
+          credit TEXT,
+          width INTEGER,
+          height INTEGER,
+          size_bytes INTEGER NOT NULL DEFAULT 0,
+          metadata_json TEXT,
+          expires_at INTEGER,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_media_assets_user_created
+        ON media_assets(user_id, created_at DESC, id DESC);
+
+        CREATE INDEX IF NOT EXISTS idx_media_assets_expiration
+        ON media_assets(retention, expires_at);
+
+        CREATE TABLE IF NOT EXISTS media_asset_references (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          asset_id INTEGER NOT NULL,
+          entity_type TEXT NOT NULL,
+          entity_id INTEGER NOT NULL,
+          slot TEXT NOT NULL DEFAULT 'default',
+          created_at INTEGER NOT NULL,
+          UNIQUE(asset_id, entity_type, entity_id, slot),
+          FOREIGN KEY(asset_id) REFERENCES media_assets(id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_media_asset_references_entity
+        ON media_asset_references(entity_type, entity_id);
+
+        CREATE INDEX IF NOT EXISTS idx_media_asset_references_asset
+        ON media_asset_references(asset_id);
+      `);
+    },
+  },
+  {
+    // Register existing chat image files and connect every historical message
+    // to the shared asset without moving or rewriting the physical files.
+    name: '0007_backfill_media_assets',
+    run: backfillMediaAssets,
+  },
+  {
+    // Keep the polymorphic registry consistent even when a message is deleted
+    // by a bulk SQL path rather than through a single service method.
+    name: '0008_chat_message_media_cleanup',
+    run: () => {
+      db.exec(`
+        CREATE TRIGGER IF NOT EXISTS trg_chat_messages_delete_media_refs
+        AFTER DELETE ON chat_messages
+        BEGIN
+          DELETE FROM media_asset_references
+          WHERE entity_type = 'chat_message' AND entity_id = OLD.id;
+        END;
+      `);
+    },
   },
 ];
 
