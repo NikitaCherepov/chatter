@@ -815,15 +815,15 @@
       "volumeOptions": {
         "compact": {
           "label": "Compact",
-          "hint": "About 4–6 stories, including 1–2 developed articles"
+          "hint": "Usually 6–10 stories, including 1–3 developed articles"
         },
         "standard": {
           "label": "Standard",
-          "hint": "About 7–10 stories, including 2–4 developed articles"
+          "hint": "Usually 12–20 stories, including 4–7 developed articles"
         },
         "extended": {
           "label": "Extended",
-          "hint": "About 11–16 stories, including 4–6 developed articles"
+          "hint": "Usually 20–35 stories, including 7–12 developed articles"
         }
       },
       "weather": "Weather",

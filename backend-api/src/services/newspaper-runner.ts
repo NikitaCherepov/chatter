@@ -26,7 +26,16 @@ const editorSystemPrompt = `You are the autonomous editor of a personal newspape
 
 You do not have direct web access. Your only tool is invoke_subagent. You may invoke only the fixed "news_researcher" agent. Delegate focused research tasks, preferably several independent topics, then assess the returned dossiers yourself.
 
-User interests are positive editorial signals, not a checklist. User preferences are hard constraints. Do not include excluded topics. Prefer recent, consequential, verifiable information and primary sources. Reject weak, duplicated, promotional, stale, or unverified material.
+User interests are positive editorial signals, not a checklist. User preferences are hard constraints. Do not include excluded topics. Prefer consequential, verifiable information and primary sources. Reject weak, duplicated, promotional, misleading, or unverified material.
+
+Create a complete personal newspaper, not merely a list of breaking-news summaries. Build the issue from three editorial layers:
+1. Current events: important and relevant developments from the current news period.
+2. Depth and context: explanations, analysis, background, and retrospectives related to the reader's interests. These may use older material when it provides useful context or has a clear reason to be included now.
+3. Discovery and enjoyment: evergreen stories, culture, science, technology, games, recommendations, unusual discoveries, and other enjoyable material selected for this reader. These may come from any time period.
+
+Freshness restrictions apply strictly only to content presented as current news. Never present an older article or event as new. Frame older material honestly as context, analysis, a retrospective, a recommendation, or an interesting discovery. The reader's explicit interests, preferences, and restrictions override the default balance between these layers.
+
+Research a broader candidate pool before applying the requested edition size. Editorial selection must happen after the available material has been evaluated; do not ask researchers for only the exact number of stories expected in the final issue.
 
 The run request specifies the reader's selected language. Write all reader-facing newspaper prose in that language, including article and note titles and text, list items, captions, and weather descriptions. Source material may be in any language: translate and adapt it for the reader without changing facts, names, direct URLs, or the meaning of quotations.
 
@@ -94,13 +103,14 @@ const localDate = (timezoneOffset: number) => {
 };
 
 const volumeInstruction = (volume: 'compact' | 'standard' | 'extended') => {
+  const sharedRules = `Count distinct stories across articles, individual notes, and notes_list items. All numerical ranges are soft editorial guidance, not quotas or hard limits. Never add weak, repetitive, or irrelevant material merely to reach a minimum. Never exclude an important, trustworthy, and highly relevant story merely to remain below a maximum. Never reduce a story that deserves a full article into a note solely to satisfy the suggested article count. If the available material is unusually strong, the issue may exceed the typical range. If there is not enough strong material, publish a smaller issue instead of filling it with noise.`;
   if (volume === 'compact') {
-    return 'Editorial volume: compact. Aim for roughly 4-6 distinct stories total across articles, notes, and notes_list items. Develop 1-2 as articles and keep the rest brief.';
+    return `Selected edition size: COMPACT. Produce a concise but complete issue, typically containing 6-10 distinct stories. Usually develop 1-3 of the strongest stories as full articles and present the remaining material as individual notes or thematic notes_list blocks. Apply a high editorial threshold: include only the most important or especially reader-relevant material. ${sharedRules}`;
   }
   if (volume === 'extended') {
-    return 'Editorial volume: extended. Aim for roughly 11-16 distinct stories total across articles, notes, and notes_list items. Develop 4-6 as articles and use concise notes for the rest.';
+    return `Selected edition size: EXTENDED. Produce a broad issue, typically containing 20-35 distinct stories. Usually develop 7-12 stories as full articles. Cover both major and more niche topics relevant to the reader. Organize shorter material into several thematic notes_list blocks instead of one miscellaneous collection. ${sharedRules}`;
   }
-  return 'Editorial volume: standard. Aim for roughly 7-10 distinct stories total across articles, notes, and notes_list items. Develop 2-4 as articles and use concise notes for the rest.';
+  return `Selected edition size: STANDARD. Produce a substantial issue, typically containing 12-20 distinct stories. Usually develop 4-7 stories as full articles. Use several thematic notes_list blocks where appropriate and balance current events, deeper reading, and enjoyable discoveries. ${sharedRules}`;
 };
 
 const resolveWeatherMode = (newspaper: ReturnType<typeof getNewspaper>) => {
@@ -183,7 +193,7 @@ export const startNewspaperRun = (runId: number): boolean => {
       `Reader language: ${languageName} (${language}). Write the entire issue in this language even when the original sources use another language.`,
       `Reader interests:\n${newspaper.interests || 'No explicit interests; choose broadly important current stories.'}`,
       `Reader preferences and restrictions:\n${newspaper.preferences || 'No additional restrictions.'}`,
-      `${volumeInstruction(newspaper.issue_volume)} This is an editorial content target, not a page count. Do not pad the issue with weak or duplicated material merely to hit the range.`,
+      volumeInstruction(newspaper.issue_volume),
     ];
     if (newspaper.source_recommendations.trim()) {
       editorInput.push(
