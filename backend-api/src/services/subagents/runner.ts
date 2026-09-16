@@ -238,22 +238,22 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
     };
   };
 
-  // 2. Build tool list: own tools + shared tools from main agent
-  const ownTools = agent.ownTools || [];
-  const ownToolDefs = ownTools.map(t => t.definition);
+  // 2. Build tool list: direct tool objects + legacy shared-tool names
+  const directTools = agent.tools || [];
+  const directToolDefs = directTools.map(t => t.definition);
+  const sharedToolNames = agent.sharedTools || [];
   // Resolve shared tool definitions: prefer runtime defs (includes serverOnlyTools, desktopOnlyTools, etc.),
   // fall back to the static _toolDefinitions if runtime defs weren't provided.
   const sharedToolSource = (ctx.runtimeToolDefs && ctx.runtimeToolDefs.length > 0)
     ? ctx.runtimeToolDefs
     : (_toolDefinitions as unknown as any[]);
   const sharedToolDefs = sharedToolSource.filter(
-    (t: any) => agent.sharedTools.includes(t?.function?.name || '')
+    (t: any) => sharedToolNames.includes(t?.function?.name || '')
   );
 
-  const allToolDefs = [...ownToolDefs, ...sharedToolDefs];
+  const allToolDefs = [...directToolDefs, ...sharedToolDefs];
 
-  // Create a lookup for own tools
-  const ownToolsMap = new Map(ownTools.map(t => [t.definition.function.name, t]));
+  const directToolsMap = new Map(directTools.map(t => [t.definition.function.name, t]));
 
   // 3. Build messages
   const userMessageParts = [`Задача: ${task}`];
@@ -392,24 +392,23 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
         try { await ctx.onToolStatus(statusMsg); } catch {}
       }
 
-      // Check if it's an own tool
-      const ownTool = ownToolsMap.get(toolName);
-      if (ownTool) {
-        // Execute own tool handler directly
+      const directTool = directToolsMap.get(toolName);
+      if (directTool) {
+        // Execute a directly imported tool handler.
         try {
           const parsedArgs = JSON.parse(argsRaw);
           // Inject subagent context (server_id, api_token, port, etc.) into ctx
           const ctxForTool = { ...ctx, subagentContext: context };
           toolContent = await _withAbort(
-            ownTool.handler(parsedArgs, ctxForTool),
+            directTool.handler(parsedArgs, ctxForTool),
             ctx.signal,
           );
         } catch (err: any) {
           if (_isAbortError(err)) throw err;
-          console.warn(`[subagent:${resolvedAgentName}] own tool "${toolName}" error:`, err?.message || err);
+          console.warn(`[subagent:${resolvedAgentName}] direct tool "${toolName}" error:`, err?.message || err);
           toolContent = JSON.stringify({ status: 'error', message: err?.message || String(err) });
         }
-      } else if (agent.sharedTools.includes(toolName)) {
+      } else if (sharedToolNames.includes(toolName)) {
         // Shared tool — delegate to the main agent's runTool
         // This ensures auto-approve policies, HitL confirmations, sudo passwords, etc.
         // Pass the full canonical account record for plan checks and feature flags.

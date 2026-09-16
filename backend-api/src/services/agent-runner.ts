@@ -9,8 +9,8 @@ import type {
   SubagentIteration,
   SubagentTool,
   SubagentTraceEntry,
-  ToolDefinition,
 } from './subagents/types.js';
+import type { ToolDefinition } from './tools/types.js';
 import type { MessageUsage, TokenUsageCall, UserRecord } from '../types.js';
 
 export type AgentTool = SubagentTool;
@@ -143,8 +143,7 @@ export const runAgent = async (params: RunAgentParams): Promise<RunAgentResult> 
     description: `Independent agent: ${params.name}`,
     systemPromptText: params.systemPrompt,
     systemPrompt: params.systemPrompt,
-    ownTools: params.tools || [],
-    sharedTools: [],
+    tools: params.tools || [],
     maxLoops: Math.max(1, Math.floor(params.maxLoops || 32)),
     maxTokens: Math.max(256, Math.floor(params.maxTokens || 8192)),
   };
@@ -253,7 +252,10 @@ export const createInvokeSubagentTool = (options: {
         const trace: SubagentTraceEntry = {
           task,
           system_prompt: registered.systemPrompt.slice(0, 2000),
-          tools: registered.sharedTools,
+          tools: [
+            ...(registered.tools || []).map(tool => tool.definition.function.name),
+            ...(registered.sharedTools || []),
+          ],
           tools_used: result.toolCallsHistory.map(call => call.tool),
           answer: result.answer,
           summary: result.summary,

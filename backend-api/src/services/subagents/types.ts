@@ -6,37 +6,16 @@
  */
 
 import type { MessageUsage, TokenUsageCall } from '../../types.js';
+import type { Tool, ToolContext } from '../tools/types.js';
 
-/** OpenAI-compatible tool definition shape. */
-export interface ToolDefinition {
-  type: 'function';
-  function: {
-    name: string;
-    description: string;
-    parameters: {
-      type: 'object';
-      properties: Record<string, any>;
-      required?: string[];
-    };
-  };
-}
+export type { ToolDefinition } from '../tools/types.js';
 
 /** A tool paired with its handler function. */
-export interface SubagentTool {
-  definition: ToolDefinition;
-  handler: (args: Record<string, any>, ctx: SubagentContext) => Promise<string>;
-}
+export type SubagentTool = Tool<SubagentContext>;
 
 /** Context passed into every subagent run — mirrors the relevant parts of the main agent context. */
-export interface SubagentContext {
-  userId: number;
-  /** Chat that owns browser-backed sessions started by this agent. */
-  chatId?: number;
-  /** Full canonical account record used for plan checks and feature flags in shared tools. */
-  user?: any;
+export interface SubagentContext extends ToolContext {
   isDesktop: boolean;
-  timezoneOffset: number;
-  signal?: AbortSignal;
   /** Sink for pushing desktop actions (confirmation cards, etc.) out of band. */
   desktopActionSink?: { value: any | null };
   /** Callback the runner calls when a desktop_action is produced by a shared tool. */
@@ -124,10 +103,10 @@ export interface SubagentConfig {
   promptFile?: string;
   /** Direct system prompt text — used for ad-hoc subagents (no file needed). */
   systemPromptText?: string;
-  /** Tools exclusive to this subagent. Empty/omitted for ad-hoc subagents. */
-  ownTools?: SubagentTool[];
+  /** Complete tool objects passed directly to this subagent. */
+  tools?: SubagentTool[];
   /** Names of shared tools from the main agent's toolDefinitions the subagent may use. */
-  sharedTools: string[];
+  sharedTools?: string[];
   /** Maximum agent-loop iterations for this subagent. */
   maxLoops: number;
   /** Maximum output tokens for each model completion in this agent loop. */

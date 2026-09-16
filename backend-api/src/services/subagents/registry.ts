@@ -12,6 +12,7 @@ import { join } from 'path';
 
 import { SubagentConfig } from './types.js';
 import { fileConverterTools } from './tools/file-converter-tools.js';
+import { readWebpageTool, searchWebTool } from '../tools/registry.js';
 
 // ---------------------------------------------------------------------------
 // Prompt loader
@@ -58,8 +59,7 @@ const REGISTRY: Record<string, SubagentConfig> = {
     name: 'news_researcher',
     description: 'Researches one focused newspaper topic using web search and webpage reading, then returns a concise source-grounded dossier.',
     promptFile: 'news-researcher.md',
-    ownTools: [],
-    sharedTools: ['search_web', 'read_webpage'],
+    tools: [searchWebTool, readWebpageTool],
     maxLoops: 20,
     maxTokens: 16_384,
   },
@@ -67,8 +67,7 @@ const REGISTRY: Record<string, SubagentConfig> = {
     name: 'file_converter',
     description: 'Converts local files through the desktop application. Currently supports video only and must refuse audio, document, or any other operation that has no dedicated tool without taking action.',
     promptFile: 'file-converter.md',
-    ownTools: fileConverterTools,
-    sharedTools: [],
+    tools: fileConverterTools,
     maxLoops: 8,
   },
 };
@@ -100,7 +99,7 @@ export function listSubagentNames(): string[] {
 }
 
 /**
- * Build an ad-hoc subagent from a direct system prompt (no file, no ownTools).
+ * Build an ad-hoc subagent from a direct system prompt (no file, direct tools omitted).
  * Used by the `spawn_subagent` tool — the main agent creates a subagent on the fly.
  */
 export function buildAdhocSubagent(opts: {
@@ -115,7 +114,7 @@ export function buildAdhocSubagent(opts: {
     systemPromptText: opts.systemPrompt,
     systemPrompt: opts.systemPrompt,
     sharedTools: opts.sharedTools,
-    ownTools: [],
+    tools: [],
     maxLoops: opts.maxLoops,
   };
 }
