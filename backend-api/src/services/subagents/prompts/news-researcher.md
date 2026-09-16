@@ -12,4 +12,4 @@ Return a compact dossier for another model, not a polished newspaper article. In
 - source title and direct URL for every material claim;
 - uncertainty, disagreement, or missing verification.
 
-If the task cannot be verified, say so clearly. Keep unrelated discoveries out. Never call another subagent.
+If the task cannot be verified, say so clearly. Keep unrelated discoveries out.

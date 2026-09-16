@@ -1,5 +1,5 @@
 import { getUserById } from './chats.js';
-import { sendMessageThroughAi } from './ai.js';
+import { createInvokeSubagentTool, runAgent } from './agent-runner.js';
 import { DEFAULT_LANGUAGE, getLanguageDisplayName, normalizeSupportedLanguage } from '../i18n/languages.js';
 import {
   createNewspaperAgentRun,
@@ -122,42 +122,10 @@ export const startNewspaperRun = (runId: number): boolean => {
     let streamedDraft = '';
     let lastDraftWrite = 0;
 
-    const result = await sendMessageThroughAi(
-      run.user_id,
-      [
-        `Create a personal newspaper issue for local date ${date} (UTC${timezoneOffset >= 0 ? '+' : ''}${timezoneOffset}).`,
-        `Newspaper name: ${newspaper.name}`,
-        `Reader language: ${languageName} (${language}). Write the entire issue in this language even when the original sources use another language.`,
-        `Reader interests:\n${newspaper.interests || 'No explicit interests; choose broadly important current stories.'}`,
-        `Reader preferences and restrictions:\n${newspaper.preferences || 'No additional restrictions.'}`,
-        'Research first. Then return the final issue JSON.',
-      ].join('\n\n'),
-      undefined,
-      {
-        forcePro: true,
-        countAsUserMessage: false,
-        skipHistory: true,
-        isDesktop: true,
-        isBackgroundTask: true,
-        allowedTools: ['invoke_subagent'],
-        systemPromptOverride: editorSystemPrompt,
-        externalAbortSignal: controller.signal,
-        featureFlags: { disable_adhoc_subagents: true },
-        onToolStatus: async (text) => {
-          setNewspaperRunPhase(runId, text || 'researching');
-          emitRun(runId);
-        },
-        onStreamToken: async (text) => {
-          streamedDraft += text;
-          const now = Date.now();
-          if (now - lastDraftWrite < 500) return;
-          lastDraftWrite = now;
-          setNewspaperRunPhase(runId, 'writing_issue');
-          setNewspaperRunDraft(runId, streamedDraft);
-          emitRun(runId);
-        },
-        onSubagentStart: async ({ agent, task }) => {
-          if (agent !== 'news_researcher') throw new Error('newspaper_subagent_not_allowed');
+    const invokeSubagent = createInvokeSubagentTool({
+      allowedSubagents: ['news_researcher'],
+      lifecycle: {
+        onStart: async ({ agent, task }) => {
           const agentRunId = createNewspaperAgentRun(runId, agent, task);
           const childController = new AbortController();
           const abortChild = () => childController.abort();
@@ -167,10 +135,10 @@ export const startNewspaperRun = (runId: number): boolean => {
           emitRun(runId);
           return { id: agentRunId, signal: childController.signal };
         },
-        onSubagentFinish: async ({ id, trace, error }) => {
+        onFinish: async ({ id, trace, error }) => {
           if (!id) return;
           const child = active.agents.get(id);
-          const cancelled = child?.signal.aborted || (trace as any)?.aborted;
+          const cancelled = child?.signal.aborted || trace?.aborted;
           finishNewspaperAgentRun(id, {
             status: cancelled ? 'cancelled' : error ? 'failed' : 'ready',
             trace,
@@ -180,14 +148,46 @@ export const startNewspaperRun = (runId: number): boolean => {
           emitRun(runId);
         },
       },
-    );
+    });
+
+    const result = await runAgent({
+      userId: run.user_id,
+      name: 'newspaper_editor',
+      systemPrompt: editorSystemPrompt,
+      input: [
+        `Create a personal newspaper issue for local date ${date} (UTC${timezoneOffset >= 0 ? '+' : ''}${timezoneOffset}).`,
+        `Newspaper name: ${newspaper.name}`,
+        `Reader language: ${languageName} (${language}). Write the entire issue in this language even when the original sources use another language.`,
+        `Reader interests:\n${newspaper.interests || 'No explicit interests; choose broadly important current stories.'}`,
+        `Reader preferences and restrictions:\n${newspaper.preferences || 'No additional restrictions.'}`,
+        'Research first. Then return the final issue JSON.',
+      ].join('\n\n'),
+      tools: [invokeSubagent],
+      maxLoops: 2000,
+      maxTokens: 16_384,
+      timezoneOffset,
+      signal: controller.signal,
+      onToolStatus: async (text) => {
+        setNewspaperRunPhase(runId, text || 'researching');
+        emitRun(runId);
+      },
+      onStreamToken: async (text) => {
+        streamedDraft += text;
+        const now = Date.now();
+        if (now - lastDraftWrite < 500) return;
+        lastDraftWrite = now;
+        setNewspaperRunPhase(runId, 'writing_issue');
+        setNewspaperRunDraft(runId, streamedDraft);
+        emitRun(runId);
+      },
+    });
 
     if (controller.signal.aborted || result.aborted) {
       finishNewspaperRun(runId, {
         status: 'cancelled',
         phase: 'cancelled',
         draft: streamedDraft || null,
-        editorTrace: { tool_calls: result.tool_calls, subagents: result.subagents, usage: result.usage },
+        editorTrace: { tool_calls: result.toolCalls, iterations: result.iterations, usage: result.usage },
       });
       emitRun(runId);
       return;
@@ -195,7 +195,7 @@ export const startNewspaperRun = (runId: number): boolean => {
 
     setNewspaperRunPhase(runId, 'validating');
     emitRun(runId);
-    const rawDocument = extractJson(result.final_reply_text || result.reply_text);
+    const rawDocument = extractJson(result.finalText);
     const document = validateNewspaperDocument({
       ...(rawDocument as Record<string, unknown>),
       date,
@@ -206,7 +206,7 @@ export const startNewspaperRun = (runId: number): boolean => {
       phase: 'ready',
       issueId: issue.id,
       draft: document,
-      editorTrace: { tool_calls: result.tool_calls, subagents: result.subagents, usage: result.usage },
+      editorTrace: { tool_calls: result.toolCalls, iterations: result.iterations, usage: result.usage },
     });
     emitRun(runId);
   })().catch((error: any) => {

@@ -49,6 +49,12 @@ export interface SubagentContext {
   subagentMode?: SubagentMode;
   /** User's reasoning level preference for subagent completions. */
   subagentReasoningLevel?: string | null;
+  /** Maximum output tokens for each model completion in this agent loop. */
+  maxTokens?: number;
+  /** Optional streaming sink for assistant text. */
+  onStreamToken?: (text: string) => Promise<void> | void;
+  /** Optional streaming sink for reasoning text. */
+  onReasoningStream?: (text: string) => Promise<void> | void;
   /** Extra context data passed from the main agent when invoking the subagent (e.g. server_id, api_token, port). */
   subagentContext?: Record<string, any>;
   /** Optional: called by spawn_subagent handler when the subagent finishes, to capture the full trace for UI display. */

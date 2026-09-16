@@ -26,7 +26,18 @@ let _withAbort: typeof import('../ai.js').withAbort;
 let _toolDefinitions: typeof import('../ai.js').toolDefinitions;
 let _normalizeTokenUsage: (rawUsage: any) => NormalizedTokenUsage;
 
-type RunCompletionFn = (mode: 'pro' | 'lite' | 'vision-pro' | 'vision-lite', requestPayload: Record<string, unknown>, manualModel?: any, signal?: AbortSignal, reasoningLevel?: any) => Promise<any>;
+type RunCompletionFn = (
+  mode: 'pro' | 'lite' | 'vision-pro' | 'vision-lite',
+  requestPayload: Record<string, unknown>,
+  manualModel?: any,
+  signal?: AbortSignal,
+  reasoningLevel?: any,
+  modelSettings?: any,
+  streamCallbacks?: {
+    onToken?: (text: string) => void;
+    onReasoningToken?: (text: string) => void;
+  },
+) => Promise<any>;
 type SubagentExtra = {
   manualModel?: any;
   subagentMode?: 'auto' | 'manual';
@@ -169,12 +180,29 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
       model: completion?.usedModel || 'unknown',
       provider: completion?.usedProvider || 'unknown',
       uniqueId: completion?.usedUniqueId ?? null,
+      upstreamProviderSlug: completion?.upstreamProviderSlug ?? null,
+      actualCostUsd: completion?.actualCostUsd ?? null,
     };
     usageCalls.push(call);
     ctx.onUsageCall?.(resolvedAgentName, call);
   };
   const trackedCompletion = async (payload: Record<string, unknown>) => {
-    const completion = await _runCompletion(mode, payload, manualModel, ctx.signal, reasoningLevel);
+    const completion = await _runCompletion(
+      mode,
+      payload,
+      manualModel,
+      ctx.signal,
+      reasoningLevel,
+      undefined,
+      (ctx.onStreamToken || ctx.onReasoningStream) ? {
+        onToken: ctx.onStreamToken
+          ? (text) => { void ctx.onStreamToken?.(text); }
+          : undefined,
+        onReasoningToken: ctx.onReasoningStream
+          ? (text) => { void ctx.onReasoningStream?.(text); }
+          : undefined,
+      } : undefined,
+    );
     recordUsage(completion);
     return completion;
   };
@@ -275,7 +303,7 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
     // Call AI — use user's preferred model if set, otherwise agent's configured mode
     const requestPayload: Record<string, unknown> = {
         messages,
-        max_tokens: 8192,
+        max_tokens: Math.max(256, Math.floor(ctx.maxTokens || 8192)),
       };
       if (!finalizeForQuota && allToolDefs.length > 0) {
         requestPayload.tools = allToolDefs;
