@@ -93,6 +93,33 @@ const localDate = (timezoneOffset: number) => {
   return shifted.toISOString().slice(0, 10);
 };
 
+const volumeInstruction = (volume: 'compact' | 'standard' | 'extended') => {
+  if (volume === 'compact') {
+    return 'Editorial volume: compact. Aim for roughly 4-6 distinct stories total across articles, notes, and notes_list items. Develop 1-2 as articles and keep the rest brief.';
+  }
+  if (volume === 'extended') {
+    return 'Editorial volume: extended. Aim for roughly 11-16 distinct stories total across articles, notes, and notes_list items. Develop 4-6 as articles and use concise notes for the rest.';
+  }
+  return 'Editorial volume: standard. Aim for roughly 7-10 distinct stories total across articles, notes, and notes_list items. Develop 2-4 as articles and use concise notes for the rest.';
+};
+
+const resolveWeatherMode = (newspaper: ReturnType<typeof getNewspaper>) => {
+  if (!newspaper || newspaper.weather_mode !== 'auto') return newspaper?.weather_mode || 'off';
+  if (newspaper.delivery_frequency === 'weekly') return 'week';
+  if (newspaper.delivery_frequency === 'daily' || newspaper.delivery_frequency === 'every_two_days') return 'today';
+  return 'off';
+};
+
+const weatherInstruction = (newspaper: NonNullable<ReturnType<typeof getNewspaper>>) => {
+  const mode = resolveWeatherMode(newspaper);
+  const location = newspaper.weather_location.trim();
+  if (mode === 'off' || !location) return '';
+  if (mode === 'week') {
+    return `Weather request: include one verified weather block for ${location} covering the next seven calendar days. Use exactly seven periods, one per day, with clear day/date labels. Delegate weather verification to the researcher; do not invent a forecast.`;
+  }
+  return `Weather request: include one verified weather block for ${location} covering the current local day. Prefer Morning, Day, and Evening periods. Delegate weather verification to the researcher; do not invent a forecast.`;
+};
+
 const extractJson = (text: string): unknown => {
   const trimmed = text.trim();
   const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
@@ -150,18 +177,28 @@ export const startNewspaperRun = (runId: number): boolean => {
       },
     });
 
+    const editorInput = [
+      `Create a personal newspaper issue for local date ${date} (UTC${timezoneOffset >= 0 ? '+' : ''}${timezoneOffset}).`,
+      `Newspaper name: ${newspaper.name}`,
+      `Reader language: ${languageName} (${language}). Write the entire issue in this language even when the original sources use another language.`,
+      `Reader interests:\n${newspaper.interests || 'No explicit interests; choose broadly important current stories.'}`,
+      `Reader preferences and restrictions:\n${newspaper.preferences || 'No additional restrictions.'}`,
+      `${volumeInstruction(newspaper.issue_volume)} This is an editorial content target, not a page count. Do not pad the issue with weak or duplicated material merely to hit the range.`,
+    ];
+    if (newspaper.source_recommendations.trim()) {
+      editorInput.push(
+        `Reader-recommended research sources (soft guidance, not an allowlist):\n${newspaper.source_recommendations.trim()}\nAsk researchers to check these sources where relevant, but verify their claims and use other reliable sources whenever useful.`,
+      );
+    }
+    const requestedWeather = weatherInstruction(newspaper);
+    if (requestedWeather) editorInput.push(requestedWeather);
+    editorInput.push('Research first. Then return the final issue JSON.');
+
     const result = await runAgent({
       userId: run.user_id,
       name: 'newspaper_editor',
       systemPrompt: editorSystemPrompt,
-      input: [
-        `Create a personal newspaper issue for local date ${date} (UTC${timezoneOffset >= 0 ? '+' : ''}${timezoneOffset}).`,
-        `Newspaper name: ${newspaper.name}`,
-        `Reader language: ${languageName} (${language}). Write the entire issue in this language even when the original sources use another language.`,
-        `Reader interests:\n${newspaper.interests || 'No explicit interests; choose broadly important current stories.'}`,
-        `Reader preferences and restrictions:\n${newspaper.preferences || 'No additional restrictions.'}`,
-        'Research first. Then return the final issue JSON.',
-      ].join('\n\n'),
+      input: editorInput.join('\n\n'),
       tools: [invokeSubagent],
       maxLoops: 2000,
       maxTokens: 16_384,

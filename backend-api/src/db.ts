@@ -164,6 +164,11 @@ db.exec(`
     editorial_brief TEXT NOT NULL DEFAULT '',
     interests TEXT NOT NULL DEFAULT '',
     preferences TEXT NOT NULL DEFAULT '',
+    source_recommendations TEXT NOT NULL DEFAULT '',
+    issue_volume TEXT NOT NULL DEFAULT 'standard',
+    weather_mode TEXT NOT NULL DEFAULT 'off',
+    weather_location TEXT NOT NULL DEFAULT '',
+    delivery_frequency TEXT NOT NULL DEFAULT 'manual',
     style TEXT NOT NULL DEFAULT 'classic',
     enabled INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1)),
     created_at INTEGER NOT NULL,
@@ -352,6 +357,21 @@ const hasUserColumn = (columnName: string) => {
 const ensureUserColumn = (name: string, sql: string) => {
   if (!hasUserColumn(name)) db.exec(sql);
 };
+
+const hasNewspaperColumn = (columnName: string) => {
+  const columns = db.prepare('PRAGMA table_info(newspapers)').all() as Array<{ name: string }>;
+  return columns.some(column => column.name === columnName);
+};
+
+const ensureNewspaperColumn = (name: string, sql: string) => {
+  if (!hasNewspaperColumn(name)) db.exec(sql);
+};
+
+ensureNewspaperColumn('source_recommendations', "ALTER TABLE newspapers ADD COLUMN source_recommendations TEXT NOT NULL DEFAULT ''");
+ensureNewspaperColumn('issue_volume', "ALTER TABLE newspapers ADD COLUMN issue_volume TEXT NOT NULL DEFAULT 'standard'");
+ensureNewspaperColumn('weather_mode', "ALTER TABLE newspapers ADD COLUMN weather_mode TEXT NOT NULL DEFAULT 'off'");
+ensureNewspaperColumn('weather_location', "ALTER TABLE newspapers ADD COLUMN weather_location TEXT NOT NULL DEFAULT ''");
+ensureNewspaperColumn('delivery_frequency', "ALTER TABLE newspapers ADD COLUMN delivery_frequency TEXT NOT NULL DEFAULT 'manual'");
 
 const hasSubscriptionColumn = (columnName: string) => {
   const columns = db.prepare('PRAGMA table_info(user_plan_subscriptions)').all() as Array<{ name: string }>;

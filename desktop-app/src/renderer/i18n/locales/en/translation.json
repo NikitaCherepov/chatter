@@ -799,6 +799,99 @@
       "fullscreen": "Full screen",
       "collapse": "Collapse"
     },
+    "newspapers": {
+      "title": "Your newspapers",
+      "subtitle": "A personal edition from the editor and researchers",
+      "configure": "Configure",
+      "create": "Create",
+      "interests": "Interests",
+      "interestsPlaceholder": "AI, space, games, science…",
+      "preferences": "Preferences",
+      "preferencesPlaceholder": "For example: no politics, fewer rumors…",
+      "recommendedSources": "Recommended sources",
+      "sourcesPlaceholder": "For example: NASA, Ars Technica, Habr, or specific blogs…",
+      "sourcesHint": "The editor will ask the researcher to check these first, but will not be limited to them.",
+      "volume": "Edition size",
+      "volumeOptions": {
+        "compact": {
+          "label": "Compact",
+          "hint": "About 4–6 stories, including 1–2 developed articles"
+        },
+        "standard": {
+          "label": "Standard",
+          "hint": "About 7–10 stories, including 2–4 developed articles"
+        },
+        "extended": {
+          "label": "Extended",
+          "hint": "About 11–16 stories, including 4–6 developed articles"
+        }
+      },
+      "weather": "Weather",
+      "weatherOptions": {
+        "off": { "label": "No weather" },
+        "today": { "label": "Today", "hint": "Morning, afternoon, and evening" },
+        "week": { "label": "This week", "hint": "A seven-day forecast" },
+        "auto": { "label": "Automatic", "hint": "Based on the delivery schedule" }
+      },
+      "soon": "soon",
+      "weatherLocation": "City or region",
+      "weatherLocationPlaceholder": "For example: Tomsk",
+      "delivery": "Automatic delivery",
+      "deliveryOptions": {
+        "manual": "Do not deliver automatically",
+        "daily": "Every day",
+        "everyTwoDays": "Every two days",
+        "weekly": "Once a week"
+      },
+      "deliveryHint": "Scheduling will be connected in the next stage.",
+      "autoFill": "Fill automatically",
+      "autoFilling": "Studying your chats…",
+      "stopAll": "Stop all",
+      "stop": "Stop",
+      "researcher": "Researcher",
+      "editorLog": "Editor JSON and activity log",
+      "loading": "Loading editions…",
+      "issueCount_one": "{{count}} edition",
+      "issueCount_other": "{{count}} editions",
+      "issueNumber": "No. {{number}}",
+      "blockCount_one": "{{count}} block",
+      "blockCount_other": "{{count}} blocks",
+      "empty": "No editions yet",
+      "emptyHint": "Configure your interests and start the editor.",
+      "previousPage": "Previous page",
+      "nextPage": "Next page",
+      "runNumber": "Run #{{number}}",
+      "runStatus": {
+        "queued": "The editor is waiting to start",
+        "running": "The editor is working",
+        "ready": "The edition is ready",
+        "failed": "Could not create the edition",
+        "cancelled": "Stopped"
+      },
+      "agentStatus": {
+        "queued": "Queued",
+        "running": "Running",
+        "ready": "Ready",
+        "failed": "Failed",
+        "cancelled": "Cancelled"
+      },
+      "styles": {
+        "wizarding": "Wizarding",
+        "broadsheet": "Chatter Times",
+        "deusEx": "Deus Ex",
+        "massEffect": "Mass Effect"
+      },
+      "errors": {
+        "load": "Could not load the newspaper",
+        "save": "Could not save the settings",
+        "autoFill": "Could not fill the settings automatically",
+        "weatherLocation": "Specify a city or region for the weather forecast",
+        "start": "Could not start the editor",
+        "open": "Could not open the edition",
+        "stop": "Could not stop the editor",
+        "stopResearcher": "Could not stop the researcher"
+      }
+    },
     "browser": {
       "title": "Browser",
       "forward": "Forward",

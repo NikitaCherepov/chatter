@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   cancelNewspaperAgentRun,
   cancelNewspaperRun,
@@ -8,12 +9,17 @@ import {
   listNewspapers,
   onNewspaperRunEvent,
   startNewspaperRun,
+  suggestNewspaperSettings,
   updateNewspaper,
   type Newspaper,
+  type NewspaperDeliveryFrequency,
   type NewspaperIssue,
   type NewspaperIssueSummary,
   type NewspaperRun,
+  type NewspaperVolume,
+  type NewspaperWeatherMode,
 } from '../../lib/api';
+import { Select, type SelectOption } from '../Select';
 import { distributeIssue } from './layout/distributeIssue';
 import { NewspaperReader } from './NewspaperReader';
 import { distributeBroadsheetIssue } from './templates/BroadsheetTemplate/broadsheetPagination';
@@ -25,13 +31,7 @@ import s from './NewspaperTool.module.scss';
 
 const STYLE_KEY = 'chatter:newspaper-preview-style';
 const ACTIVE_STATUSES = new Set(['queued', 'running']);
-const STYLE_LABELS: Record<Exclude<NewspaperVisualStyle, 'editorial'>, string> = {
-  wizarding: 'Волшебная',
-  broadsheet: 'Chatter Times',
-  deusEx: 'Deus Ex',
-  massEffect: 'Mass Effect',
-};
-
+const DELIVERY_SCHEDULING_ENABLED = false;
 const readStyle = (): Exclude<NewspaperVisualStyle, 'editorial'> => {
   const value = localStorage.getItem(STYLE_KEY);
   return value === 'wizarding' || value === 'broadsheet' || value === 'deusEx' || value === 'massEffect'
@@ -39,21 +39,14 @@ const readStyle = (): Exclude<NewspaperVisualStyle, 'editorial'> => {
     : 'wizarding';
 };
 
-const formatDate = (timestamp: number) => new Intl.DateTimeFormat('ru-RU', {
+const formatDate = (timestamp: number, locale: string) => new Intl.DateTimeFormat(locale, {
   day: 'numeric',
   month: 'long',
   year: 'numeric',
 }).format(new Date(timestamp * 1000));
 
-const runStatus = (run: NewspaperRun) => {
-  if (run.status === 'queued') return 'Редактор ожидает запуска';
-  if (run.status === 'running') return run.phase || 'Редактор работает';
-  if (run.status === 'ready') return 'Выпуск готов';
-  if (run.status === 'cancelled') return 'Остановлено';
-  return run.error || 'Не удалось создать выпуск';
-};
-
 export function NewspaperTool() {
+  const { t, i18n } = useTranslation();
   const [newspaper, setNewspaper] = useState<Newspaper | null>(null);
   const [issues, setIssues] = useState<NewspaperIssueSummary[]>([]);
   const [run, setRun] = useState<NewspaperRun | null>(null);
@@ -63,6 +56,12 @@ export function NewspaperTool() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [interests, setInterests] = useState('');
   const [preferences, setPreferences] = useState('');
+  const [sourceRecommendations, setSourceRecommendations] = useState('');
+  const [issueVolume, setIssueVolume] = useState<NewspaperVolume>('standard');
+  const [weatherMode, setWeatherMode] = useState<NewspaperWeatherMode>('off');
+  const [weatherLocation, setWeatherLocation] = useState('');
+  const [deliveryFrequency, setDeliveryFrequency] = useState<NewspaperDeliveryFrequency>('manual');
+  const [autoFilling, setAutoFilling] = useState(false);
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState('');
 
@@ -82,6 +81,11 @@ export function NewspaperTool() {
         if (!current) return;
         setInterests(current.interests);
         setPreferences(current.preferences);
+        setSourceRecommendations(current.source_recommendations);
+        setIssueVolume(current.issue_volume);
+        setWeatherMode(current.weather_mode);
+        setWeatherLocation(current.weather_location);
+        setDeliveryFrequency(current.delivery_frequency);
         setStyle(current.style);
         localStorage.setItem(STYLE_KEY, current.style);
         const [issueResponse, runResponse] = await Promise.all([
@@ -92,13 +96,13 @@ export function NewspaperTool() {
         setIssues(issueResponse.issues);
         setRun(runResponse.runs[0] || null);
       } catch (cause) {
-        if (alive) setError(cause instanceof Error ? cause.message : 'Не удалось загрузить газету');
+        if (alive) setError(cause instanceof Error ? cause.message : t('tools.newspapers.errors.load'));
       } finally {
         if (alive) setBusy(false);
       }
     })();
     return () => { alive = false; };
-  }, []);
+  }, [t]);
 
   useEffect(() => onNewspaperRunEvent((nextRun) => {
     if (newspaper && nextRun.newspaper_id !== newspaper.id) return;
@@ -133,25 +137,71 @@ export function NewspaperTool() {
   const saveSettings = async () => {
     if (!newspaper) return;
     setError('');
+    if (weatherMode !== 'off' && !weatherLocation.trim()) {
+      setError(t('tools.newspapers.errors.weatherLocation'));
+      return;
+    }
     try {
-      const response = await updateNewspaper(newspaper.id, { interests, preferences, style });
+      const response = await updateNewspaper(newspaper.id, {
+        interests,
+        preferences,
+        source_recommendations: sourceRecommendations,
+        issue_volume: issueVolume,
+        weather_mode: weatherMode,
+        weather_location: weatherLocation,
+        delivery_frequency: deliveryFrequency,
+        style,
+      });
       setNewspaper(response.newspaper);
       setSettingsOpen(false);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Не удалось сохранить настройки');
+      setError(cause instanceof Error ? cause.message : t('tools.newspapers.errors.save'));
+    }
+  };
+
+  const fillSettingsAutomatically = async () => {
+    if (!newspaper || autoFilling) return;
+    setError('');
+    setAutoFilling(true);
+    try {
+      const response = await suggestNewspaperSettings(newspaper.id);
+      setInterests(response.settings.interests);
+      setPreferences(response.settings.preferences);
+      setSourceRecommendations(response.settings.source_recommendations);
+      if (response.settings.weather_location) {
+        setWeatherLocation(response.settings.weather_location);
+      }
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : t('tools.newspapers.errors.autoFill'));
+    } finally {
+      setAutoFilling(false);
     }
   };
 
   const createIssue = async () => {
     if (!newspaper || (run && ACTIVE_STATUSES.has(run.status))) return;
     setError('');
+    if (weatherMode !== 'off' && !weatherLocation.trim()) {
+      setError(t('tools.newspapers.errors.weatherLocation'));
+      setSettingsOpen(true);
+      return;
+    }
     try {
-      const saved = await updateNewspaper(newspaper.id, { interests, preferences, style });
+      const saved = await updateNewspaper(newspaper.id, {
+        interests,
+        preferences,
+        source_recommendations: sourceRecommendations,
+        issue_volume: issueVolume,
+        weather_mode: weatherMode,
+        weather_location: weatherLocation,
+        delivery_frequency: deliveryFrequency,
+        style,
+      });
       setNewspaper(saved.newspaper);
       const response = await startNewspaperRun(newspaper.id);
       setRun(response.run);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Не удалось запустить редактора');
+      setError(cause instanceof Error ? cause.message : t('tools.newspapers.errors.start'));
     }
   };
 
@@ -162,7 +212,7 @@ export function NewspaperTool() {
       setSelectedIssue(response.issue);
       setPageIndex(0);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Не удалось открыть выпуск');
+      setError(cause instanceof Error ? cause.message : t('tools.newspapers.errors.open'));
     }
   };
 
@@ -172,7 +222,7 @@ export function NewspaperTool() {
       const response = await cancelNewspaperRun(run.id);
       setRun(response.run);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Не удалось остановить редактора');
+      setError(cause instanceof Error ? cause.message : t('tools.newspapers.errors.stop'));
     }
   };
 
@@ -181,28 +231,84 @@ export function NewspaperTool() {
     try {
       await cancelNewspaperAgentRun(run.id, agentId);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Не удалось остановить исследователя');
+      setError(cause instanceof Error ? cause.message : t('tools.newspapers.errors.stopResearcher'));
     }
   };
 
   const active = !!run && ACTIVE_STATUSES.has(run.status);
+  const volumeOptions: SelectOption[] = [
+    { value: 'compact', label: t('tools.newspapers.volumeOptions.compact.label'), hint: t('tools.newspapers.volumeOptions.compact.hint') },
+    { value: 'standard', label: t('tools.newspapers.volumeOptions.standard.label'), hint: t('tools.newspapers.volumeOptions.standard.hint') },
+    { value: 'extended', label: t('tools.newspapers.volumeOptions.extended.label'), hint: t('tools.newspapers.volumeOptions.extended.hint') },
+  ];
+  const weatherOptions = ([
+    { value: 'off', label: t('tools.newspapers.weatherOptions.off.label') },
+    { value: 'today', label: t('tools.newspapers.weatherOptions.today.label'), hint: t('tools.newspapers.weatherOptions.today.hint') },
+    { value: 'week', label: t('tools.newspapers.weatherOptions.week.label'), hint: t('tools.newspapers.weatherOptions.week.hint') },
+    { value: 'auto', label: t('tools.newspapers.weatherOptions.auto.label'), hint: t('tools.newspapers.weatherOptions.auto.hint'), badge: { text: t('tools.newspapers.soon'), color: 'info' } },
+  ] satisfies SelectOption[]).map(option => option.value === 'auto'
+    ? { ...option, disabled: !DELIVERY_SCHEDULING_ENABLED || deliveryFrequency === 'manual' }
+    : option);
+  const deliveryOptions: SelectOption[] = [
+    { value: 'manual', label: t('tools.newspapers.deliveryOptions.manual') },
+    { value: 'daily', label: t('tools.newspapers.deliveryOptions.daily') },
+    { value: 'every_two_days', label: t('tools.newspapers.deliveryOptions.everyTwoDays') },
+    { value: 'weekly', label: t('tools.newspapers.deliveryOptions.weekly') },
+  ];
+  const currentRunStatus = run
+    ? run.status === 'running' && run.phase
+      ? run.phase
+      : run.error || t(`tools.newspapers.runStatus.${run.status}`)
+    : '';
 
   return <div className={s.root}>
     <div className={s.toolbar}>
-      <div><strong>Ваши газеты</strong><span>Персональный выпуск от редактора и исследователей</span></div>
+      <div><strong>{t('tools.newspapers.title')}</strong><span>{t('tools.newspapers.subtitle')}</span></div>
       <div className={s.toolbarActions}>
-        <button type="button" className={s.secondaryButton} onClick={() => setSettingsOpen(value => !value)}>Настроить</button>
-        <button type="button" onClick={createIssue} disabled={!newspaper || active}>Создать</button>
+        <button type="button" className={s.secondaryButton} onClick={() => setSettingsOpen(value => !value)}>{t('tools.newspapers.configure')}</button>
+        <button type="button" onClick={createIssue} disabled={!newspaper || active}>{t('tools.newspapers.create')}</button>
       </div>
     </div>
 
     <div className={s.scroll}>
       {settingsOpen && <section className={s.settings}>
-        <label>Интересы<textarea value={interests} onChange={event => setInterests(event.target.value)} placeholder="AI, космос, игры, наука…" /></label>
-        <label>Предпочтения<textarea value={preferences} onChange={event => setPreferences(event.target.value)} placeholder="Например: без политики, меньше слухов…" /></label>
+        <label>{t('tools.newspapers.interests')}<textarea value={interests} onChange={event => setInterests(event.target.value)} placeholder={t('tools.newspapers.interestsPlaceholder')} /></label>
+        <label>{t('tools.newspapers.preferences')}<textarea value={preferences} onChange={event => setPreferences(event.target.value)} placeholder={t('tools.newspapers.preferencesPlaceholder')} /></label>
+        <label>
+          {t('tools.newspapers.recommendedSources')}
+          <textarea value={sourceRecommendations} onChange={event => setSourceRecommendations(event.target.value)} placeholder={t('tools.newspapers.sourcesPlaceholder')} />
+          <span className={s.settingsHint}>{t('tools.newspapers.sourcesHint')}</span>
+        </label>
+        <div className={s.settingsGrid}>
+          <div className={s.settingField}>
+            <span>{t('tools.newspapers.volume')}</span>
+            <Select options={volumeOptions} value={issueVolume} onChange={value => setIssueVolume(value as NewspaperVolume)} />
+          </div>
+          <div className={s.settingField}>
+            <span>{t('tools.newspapers.weather')}</span>
+            <Select options={weatherOptions} value={weatherMode} onChange={value => setWeatherMode(value as NewspaperWeatherMode)} />
+          </div>
+        </div>
+        {weatherMode !== 'off' && <label>
+          {t('tools.newspapers.weatherLocation')}
+          <input value={weatherLocation} onChange={event => setWeatherLocation(event.target.value)} placeholder={t('tools.newspapers.weatherLocationPlaceholder')} />
+        </label>}
+        <div className={s.settingField}>
+          <span>{t('tools.newspapers.delivery')}</span>
+          <Select
+            options={deliveryOptions}
+            value={deliveryFrequency}
+            onChange={value => setDeliveryFrequency(value as NewspaperDeliveryFrequency)}
+            disabled={!DELIVERY_SCHEDULING_ENABLED}
+          />
+          <span className={s.settingsHint}>{t('tools.newspapers.deliveryHint')}</span>
+        </div>
         <div className={s.settingsActions}>
-          <button type="button" className={s.secondaryButton} onClick={() => setSettingsOpen(false)}>Отмена</button>
-          <button type="button" onClick={saveSettings}>Сохранить</button>
+          <button type="button" className={s.secondaryButton} onClick={fillSettingsAutomatically} disabled={autoFilling || !newspaper}>
+            {autoFilling ? t('tools.newspapers.autoFilling') : t('tools.newspapers.autoFill')}
+          </button>
+          <button type="button" className={s.secondaryButton} onClick={() => setSettingsOpen(false)}>{t('common.cancel')}</button>
+          <button type="button" onClick={saveSettings}>{t('common.save')}</button>
         </div>
       </section>}
 
@@ -210,36 +316,36 @@ export function NewspaperTool() {
 
       {run && <section className={`${s.run} ${s[run.status] || ''}`}>
         <header>
-          <div><strong>{runStatus(run)}</strong><span>Запуск #{run.id}</span></div>
-          {active && <button type="button" className={s.stopButton} onClick={stopRun}>Остановить всё</button>}
+          <div><strong>{currentRunStatus}</strong><span>{t('tools.newspapers.runNumber', { number: run.id })}</span></div>
+          {active && <button type="button" className={s.stopButton} onClick={stopRun}>{t('tools.newspapers.stopAll')}</button>}
         </header>
         {run.agents.length > 0 && <div className={s.agents}>
           {run.agents.map(agent => <div className={s.agent} key={agent.id}>
-            <div><strong>{agent.agent_type === 'news_researcher' ? 'Исследователь' : agent.agent_type}</strong><span>{agent.task}</span></div>
-            <em>{agent.status}</em>
-            {agent.status === 'running' && <button type="button" onClick={() => stopAgent(agent.id)}>Стоп</button>}
+            <div><strong>{agent.agent_type === 'news_researcher' ? t('tools.newspapers.researcher') : agent.agent_type}</strong><span>{agent.task}</span></div>
+            <em>{t(`tools.newspapers.agentStatus.${agent.status}`)}</em>
+            {agent.status === 'running' && <button type="button" onClick={() => stopAgent(agent.id)}>{t('tools.newspapers.stop')}</button>}
           </div>)}
         </div>}
         {(run.draft != null || run.editor_trace != null || run.agents.length > 0) && <details className={s.json}>
-          <summary>JSON и журнал редактора</summary>
+          <summary>{t('tools.newspapers.editorLog')}</summary>
           <pre>{JSON.stringify({ draft: run.draft, editor_trace: run.editor_trace, agents: run.agents }, null, 2)}</pre>
         </details>}
       </section>}
 
-      {busy ? <div className={s.empty}><span>Загружаю выпуски…</span></div> : newspaper && <section className={s.newspaper}>
+      {busy ? <div className={s.empty}><span>{t('tools.newspapers.loading')}</span></div> : newspaper && <section className={s.newspaper}>
         <header>
-          <div><strong>{newspaper.name}</strong><span>{STYLE_LABELS[style]}</span></div>
-          <span className={s.style}>{issues.length} вып.</span>
+          <div><strong>{newspaper.name}</strong><span>{t(`tools.newspapers.styles.${style}`)}</span></div>
+          <span className={s.style}>{t('tools.newspapers.issueCount', { count: issues.length })}</span>
         </header>
         {issues.length > 0 ? <div className={s.issueList}>
           {issues.map(issue => <div className={s.issueRow} key={issue.id}>
             <button type="button" className={s.issue} onClick={() => openIssue(issue)}>
-              <div className={s.issueNumber}>№{issue.issue_number}</div>
-              <div className={s.issueInfo}><strong>{issue.title}</strong><span>{formatDate(issue.published_at)} · {issue.blocks_count} блоков</span></div>
+              <div className={s.issueNumber}>{t('tools.newspapers.issueNumber', { number: issue.issue_number })}</div>
+              <div className={s.issueInfo}><strong>{issue.title}</strong><span>{formatDate(issue.published_at, i18n.language)} · {t('tools.newspapers.blockCount', { count: issue.blocks_count })}</span></div>
               <span className={s.openArrow}>↗</span>
             </button>
           </div>)}
-        </div> : <div className={s.empty}><div className={s.emptyIcon}>N</div><strong>Выпусков пока нет</strong><span>Настройте интересы и запустите редактора.</span></div>}
+        </div> : <div className={s.empty}><div className={s.emptyIcon}>N</div><strong>{t('tools.newspapers.empty')}</strong><span>{t('tools.newspapers.emptyHint')}</span></div>}
       </section>}
     </div>
 
@@ -254,9 +360,9 @@ export function NewspaperTool() {
       onNext={() => setPageIndex(index => Math.min(pages.length - 1, index + 1))}
       onClose={() => setSelectedIssue(null)}
       onStyleChange={changeStyle}
-      previousLabel="Предыдущая страница"
-      nextLabel="Следующая страница"
-      closeLabel="Закрыть"
+      previousLabel={t('tools.newspapers.previousPage')}
+      nextLabel={t('tools.newspapers.nextPage')}
+      closeLabel={t('common.close')}
     />
   </div>;
 }

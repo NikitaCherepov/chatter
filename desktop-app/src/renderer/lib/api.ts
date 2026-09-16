@@ -1956,6 +1956,9 @@ export async function testTask(taskId: number): Promise<TaskTestResult> {
 // ---------- Newspapers ----------
 
 export type NewspaperStyle = 'wizarding' | 'broadsheet' | 'deusEx' | 'massEffect';
+export type NewspaperVolume = 'compact' | 'standard' | 'extended';
+export type NewspaperWeatherMode = 'off' | 'today' | 'week' | 'auto';
+export type NewspaperDeliveryFrequency = 'manual' | 'daily' | 'every_two_days' | 'weekly';
 export type NewspaperIssueStatus = 'draft' | 'ready' | 'failed' | 'cancelled';
 export type NewspaperRunStatus = 'queued' | 'running' | 'ready' | 'failed' | 'cancelled';
 export type NewspaperAgentRunStatus = 'queued' | 'running' | 'ready' | 'failed' | 'cancelled';
@@ -2000,6 +2003,11 @@ export type Newspaper = {
   editorial_brief: string;
   interests: string;
   preferences: string;
+  source_recommendations: string;
+  issue_volume: NewspaperVolume;
+  weather_mode: NewspaperWeatherMode;
+  weather_location: string;
+  delivery_frequency: NewspaperDeliveryFrequency;
   style: NewspaperStyle;
   enabled: boolean;
   issue_count: number;
@@ -2043,11 +2051,31 @@ export async function listNewspapers(): Promise<{ newspapers: Newspaper[] }> {
   return apiFetch('/api/v1/newspapers');
 }
 
-export async function updateNewspaper(newspaperId: number, input: Partial<Pick<Newspaper, 'name' | 'editorial_brief' | 'interests' | 'preferences' | 'style' | 'enabled'>>): Promise<{ ok: boolean; newspaper: Newspaper }> {
+export async function updateNewspaper(newspaperId: number, input: Partial<Pick<Newspaper,
+  | 'name'
+  | 'editorial_brief'
+  | 'interests'
+  | 'preferences'
+  | 'source_recommendations'
+  | 'issue_volume'
+  | 'weather_mode'
+  | 'weather_location'
+  | 'delivery_frequency'
+  | 'style'
+  | 'enabled'
+>>): Promise<{ ok: boolean; newspaper: Newspaper }> {
   return apiFetch(`/api/v1/newspapers/${newspaperId}`, {
     method: 'PUT',
     body: JSON.stringify(input),
   });
+}
+
+export type NewspaperSettingsSuggestion = Pick<Newspaper,
+  'interests' | 'preferences' | 'source_recommendations' | 'weather_location'
+>;
+
+export async function suggestNewspaperSettings(newspaperId: number): Promise<{ settings: NewspaperSettingsSuggestion }> {
+  return apiFetch(`/api/v1/newspapers/${newspaperId}/suggest-settings`, { method: 'POST' });
 }
 
 export async function listNewspaperIssues(newspaperId: number, limit = 30): Promise<{ issues: NewspaperIssueSummary[] }> {

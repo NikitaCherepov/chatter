@@ -6,6 +6,9 @@ export type TaskRecurrenceType = 'once' | 'daily' | 'weekly';
 export type TaskNotifyMode = 'always' | 'never' | 'on_error';
 export type TaskTargetMode = 'chat' | 'new_chat';
 export type NewspaperStyle = 'wizarding' | 'broadsheet' | 'deusEx' | 'massEffect';
+export type NewspaperVolume = 'compact' | 'standard' | 'extended';
+export type NewspaperWeatherMode = 'off' | 'today' | 'week' | 'auto';
+export type NewspaperDeliveryFrequency = 'manual' | 'daily' | 'every_two_days' | 'weekly';
 export type NewspaperIssueStatus = 'draft' | 'ready' | 'failed' | 'cancelled';
 
 export type NewspaperSource = {
@@ -39,6 +42,11 @@ export type NewspaperDto = {
   editorial_brief: string;
   interests: string;
   preferences: string;
+  source_recommendations: string;
+  issue_volume: NewspaperVolume;
+  weather_mode: NewspaperWeatherMode;
+  weather_location: string;
+  delivery_frequency: NewspaperDeliveryFrequency;
   style: NewspaperStyle;
   enabled: boolean;
   issue_count: number;

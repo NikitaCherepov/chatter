@@ -9,7 +9,10 @@ import type {
   NewspaperIssueSummaryDto,
   NewspaperRunDto,
   NewspaperRunStatus,
+  NewspaperDeliveryFrequency,
   NewspaperStyle,
+  NewspaperVolume,
+  NewspaperWeatherMode,
 } from '../types.js';
 
 const STYLES = new Set<NewspaperStyle>(['wizarding', 'broadsheet', 'deusEx', 'massEffect']);
@@ -21,6 +24,12 @@ const cleanText = (value: unknown, max = MAX_TEXT) => `${value ?? ''}`.trim().sl
 const cleanStyle = (value: unknown): NewspaperStyle => STYLES.has(value as NewspaperStyle)
   ? value as NewspaperStyle
   : 'wizarding';
+const cleanVolume = (value: unknown): NewspaperVolume =>
+  value === 'compact' || value === 'extended' ? value : 'standard';
+const cleanWeatherMode = (value: unknown): NewspaperWeatherMode =>
+  value === 'today' || value === 'week' || value === 'auto' ? value : 'off';
+const cleanDeliveryFrequency = (value: unknown): NewspaperDeliveryFrequency =>
+  value === 'daily' || value === 'every_two_days' || value === 'weekly' ? value : 'manual';
 const isRecord = (value: unknown): value is Record<string, any> =>
   !!value && typeof value === 'object' && !Array.isArray(value);
 const optionalText = (value: unknown, max = MAX_TEXT): string | undefined => {
@@ -194,6 +203,11 @@ const mapNewspaper = (row: any): NewspaperDto => ({
   editorial_brief: String(row.editorial_brief || ''),
   interests: String(row.interests || ''),
   preferences: String(row.preferences || ''),
+  source_recommendations: String(row.source_recommendations || ''),
+  issue_volume: cleanVolume(row.issue_volume),
+  weather_mode: cleanWeatherMode(row.weather_mode),
+  weather_location: String(row.weather_location || ''),
+  delivery_frequency: cleanDeliveryFrequency(row.delivery_frequency),
   style: cleanStyle(row.style),
   enabled: Number(row.enabled) !== 0,
   issue_count: Number(row.issue_count || 0),
@@ -273,15 +287,36 @@ export const createNewspaper = (userId: number, input: {
   editorial_brief?: unknown;
   interests?: unknown;
   preferences?: unknown;
+  source_recommendations?: unknown;
+  issue_volume?: unknown;
+  weather_mode?: unknown;
+  weather_location?: unknown;
+  delivery_frequency?: unknown;
   style?: unknown;
 }) => {
   const name = cleanText(input.name, 120);
   if (!name) return { ok: false as const, error: 'name_required' };
   const now = Math.floor(Date.now() / 1000);
   const result = db.prepare(`
-    INSERT INTO newspapers (user_id, name, editorial_brief, interests, preferences, style, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(userId, name, cleanText(input.editorial_brief), cleanText(input.interests), cleanText(input.preferences), cleanStyle(input.style), now, now);
+    INSERT INTO newspapers (
+      user_id, name, editorial_brief, interests, preferences, source_recommendations,
+      issue_volume, weather_mode, weather_location, delivery_frequency, style, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    userId,
+    name,
+    cleanText(input.editorial_brief),
+    cleanText(input.interests),
+    cleanText(input.preferences),
+    cleanText(input.source_recommendations),
+    cleanVolume(input.issue_volume),
+    cleanWeatherMode(input.weather_mode),
+    cleanText(input.weather_location, 240),
+    cleanDeliveryFrequency(input.delivery_frequency),
+    cleanStyle(input.style),
+    now,
+    now,
+  );
   return { ok: true as const, id: Number(result.lastInsertRowid) };
 };
 
@@ -299,13 +334,21 @@ export const updateNewspaper = (userId: number, newspaperId: number, input: Reco
   const name = input.name === undefined ? String(existing.name) : cleanText(input.name, 120);
   if (!name) return { ok: false as const, error: 'name_required' };
   db.prepare(`
-    UPDATE newspapers SET name = ?, editorial_brief = ?, interests = ?, preferences = ?, style = ?, enabled = ?, updated_at = ?
+    UPDATE newspapers SET
+      name = ?, editorial_brief = ?, interests = ?, preferences = ?, source_recommendations = ?,
+      issue_volume = ?, weather_mode = ?, weather_location = ?, delivery_frequency = ?,
+      style = ?, enabled = ?, updated_at = ?
     WHERE id = ? AND user_id = ?
   `).run(
     name,
     input.editorial_brief === undefined ? existing.editorial_brief : cleanText(input.editorial_brief),
     input.interests === undefined ? existing.interests : cleanText(input.interests),
     input.preferences === undefined ? existing.preferences : cleanText(input.preferences),
+    input.source_recommendations === undefined ? existing.source_recommendations : cleanText(input.source_recommendations),
+    input.issue_volume === undefined ? cleanVolume(existing.issue_volume) : cleanVolume(input.issue_volume),
+    input.weather_mode === undefined ? cleanWeatherMode(existing.weather_mode) : cleanWeatherMode(input.weather_mode),
+    input.weather_location === undefined ? existing.weather_location : cleanText(input.weather_location, 240),
+    input.delivery_frequency === undefined ? cleanDeliveryFrequency(existing.delivery_frequency) : cleanDeliveryFrequency(input.delivery_frequency),
     input.style === undefined ? cleanStyle(existing.style) : cleanStyle(input.style),
     input.enabled === undefined ? existing.enabled : (input.enabled ? 1 : 0),
     Math.floor(Date.now() / 1000),

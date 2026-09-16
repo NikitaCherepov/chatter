@@ -33,6 +33,7 @@ export type SelectOption = {
   hint?: string;
   badge?: SelectBadge;
   meta?: SelectOptionMeta;
+  disabled?: boolean;
 };
 
 type Props = {
@@ -96,8 +97,9 @@ export function Select({
     }
   }, [isOpen, searchable]);
 
-  const handleSelect = (val: string) => {
-    onChange(val);
+  const handleSelect = (option: SelectOption) => {
+    if (option.disabled) return;
+    onChange(option.value);
     setIsOpen(false);
     setSearch('');
   };
@@ -211,7 +213,8 @@ export function Select({
               <button
                 key={opt.value}
                 className={`${s.option} ${opt.value === value ? s.optionActive : ''}`}
-                onClick={() => handleSelect(opt.value)}
+                onClick={() => handleSelect(opt)}
+                disabled={opt.disabled}
                 type="button"
               >
                 <div className={s.optionMain}>

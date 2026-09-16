@@ -13,6 +13,7 @@ import { createNote, countNotes, deleteNote, getNoteById, getNoteStats, getNoteS
 import { createTask, deletePendingTask, getPendingTaskCount, getUserTaskById, isOwnNonRoomChat, listTaskTargetChats, listTasks, MAX_PENDING_TASKS_PER_USER, updatePendingTask } from './services/tasks.js';
 import { createDemoNewspaperIssue, createNewspaper, createNewspaperRun, deleteNewspaperIssue, ensureDefaultNewspaper, getNewspaperIssue, getNewspaperRun, listNewspaperIssues, listNewspaperRuns, listNewspapers, markInterruptedNewspaperRuns, updateNewspaper } from './services/newspapers.js';
 import { cancelNewspaperAgentRun, cancelNewspaperRun, startNewspaperRun } from './services/newspaper-runner.js';
+import { suggestNewspaperSettings } from './services/newspaper-settings-agent.js';
 import { listMapPins, getMapPinById, createMapPin, updateMapPin, deleteMapPin } from './services/map-pins.js';
 import { sendMessageThroughAi, generateAdminOutreach, callLiteAi, ensureUtilityAiQuota, chargeUtilityAiCompletion, getModelsCatalog, getAutoReasoningLevels, getAutoVisionSupport, abortChatGeneration, abortUserGenerations, beginActiveHitlWait, endActiveHitlWait, getUpdateState, setUpdatePrepare, forceAbortActiveGenerations, clearUpdatePrepare, resolveManualModel } from './services/ai.js';
 import { initSubagentRunner } from './services/subagents/runner.js';
@@ -2776,6 +2777,22 @@ app.put('/api/v1/newspapers/:id', (req: AuthedRequest, res) => {
   if (!result.ok) return res.status(result.error === 'newspaper_not_found' ? 404 : 400).json({ error: result.error });
   const newspaper = listNewspapers(userId).find(item => item.id === newspaperId) ?? null;
   return res.json({ ok: true, newspaper });
+});
+
+app.post('/api/v1/newspapers/:id/suggest-settings', async (req: AuthedRequest, res) => {
+  const userId = accountIdFromRequest(req);
+  const newspaperId = Number.parseInt(req.params.id, 10);
+  if (!Number.isFinite(newspaperId) || newspaperId <= 0) return res.status(400).json({ error: 'bad_newspaper_id' });
+  try {
+    const settings = await suggestNewspaperSettings(userId, newspaperId);
+    return res.json({ settings });
+  } catch (error: any) {
+    const code = `${error?.message || 'newspaper_settings_suggestion_failed'}`;
+    if (code === 'newspaper_not_found') return res.status(404).json({ error: code });
+    if (code === 'quota_exceeded') return res.status(429).json({ error: code });
+    console.error('[newspaper-settings-agent] failed:', code);
+    return res.status(500).json({ error: 'newspaper_settings_suggestion_failed' });
+  }
 });
 
 app.get('/api/v1/newspapers/:id/issues', (req: AuthedRequest, res) => {

@@ -146,6 +146,16 @@
       background-color: var(--bg-input);
     }
   }
+
+  &:disabled {
+    cursor: default;
+    opacity: 0.48;
+
+    &:hover {
+      background: none;
+      color: var(--text-secondary);
+    }
+  }
 }
 
 .optionLabel {

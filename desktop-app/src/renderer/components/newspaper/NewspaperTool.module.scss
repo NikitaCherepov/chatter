@@ -21,11 +21,11 @@
 }
 .toolbar strong {
   color: var(--text-primary);
-  font-size: 12px;
+  font-size: 14px;
 }
 .toolbar span {
   color: var(--text-hint);
-  font-size: 9px;
+  font-size: 11px;
 }
 .toolbar button {
   flex: 0 0 auto;
@@ -35,7 +35,7 @@
   background: var(--accent);
   color: var(--accent-contrast);
   font: inherit;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
   cursor: pointer;
 }
@@ -77,11 +77,11 @@
 }
 .empty strong {
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: 13px;
 }
 .empty span {
   max-width: 220px;
-  font-size: 10px;
+  font-size: 11px;
   line-height: 1.45;
 }
 .emptyIcon {
@@ -126,7 +126,7 @@
 }
 .newspaper > header span {
   color: var(--text-hint);
-  font-size: 9px;
+  font-size: 10px;
 }
 .style {
   padding: 3px 6px;
@@ -172,7 +172,7 @@
   background: #e9e1ce;
   color: #302b22;
   font-family: Georgia, serif;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
 }
 .issueInfo {
@@ -186,14 +186,14 @@
   display: -webkit-box;
   overflow: hidden;
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.3;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }
 .issueInfo span {
   color: var(--text-hint);
-  font-size: 9px;
+  font-size: 10px;
 }
 .openArrow {
   color: var(--text-hint);
@@ -236,17 +236,20 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
+  overflow: visible;
   padding: 12px;
 }
-.settings label {
+.settings label,
+.settingField {
   display: flex;
   flex-direction: column;
   gap: 5px;
   color: var(--text-secondary);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 600;
 }
-.settings textarea {
+.settings textarea,
+.settings input {
   min-height: 64px;
   resize: vertical;
   padding: 8px;
@@ -256,14 +259,30 @@
   background: var(--bg-input);
   color: var(--text-primary);
   font: inherit;
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.45;
 }
-.settings textarea:focus {
+.settings input {
+  min-height: 34px;
+}
+.settings textarea:focus,
+.settings input:focus {
   border-color: var(--accent);
+}
+.settingsGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.settingsHint {
+  color: var(--text-hint);
+  font-size: 10px;
+  font-weight: 400;
+  line-height: 1.4;
 }
 .settingsActions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
   gap: 6px;
 }
@@ -276,9 +295,13 @@
   background: var(--accent);
   color: var(--accent-contrast);
   font: inherit;
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 600;
   cursor: pointer;
+}
+.settingsActions button:disabled {
+  cursor: default;
+  opacity: 0.55;
 }
 .run {
   border-color: color-mix(in srgb, var(--accent) 35%, var(--border-light));
@@ -299,11 +322,11 @@
 }
 .run > header strong {
   color: var(--text-primary);
-  font-size: 11px;
+  font-size: 12px;
 }
 .run > header span {
   color: var(--text-hint);
-  font-size: 9px;
+  font-size: 10px;
 }
 .run.running > header strong::before,
 .run.queued > header strong::before {
@@ -342,27 +365,27 @@
 }
 .agent strong {
   color: var(--text-secondary);
-  font-size: 10px;
+  font-size: 11px;
 }
 .agent span {
   display: -webkit-box;
   overflow: hidden;
   color: var(--text-hint);
-  font-size: 9px;
+  font-size: 10px;
   line-height: 1.35;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }
 .agent em {
   color: var(--text-muted);
-  font-size: 8px;
+  font-size: 9px;
   font-style: normal;
   text-transform: uppercase;
 }
 .json summary {
   padding: 8px 11px;
   color: var(--text-muted);
-  font-size: 9px;
+  font-size: 10px;
   cursor: pointer;
 }
 .json pre {
@@ -374,7 +397,7 @@
   background: var(--bg-input);
   color: var(--text-secondary);
   font-family: Consolas, monospace;
-  font-size: 8px;
+  font-size: 9px;
   line-height: 1.45;
   white-space: pre-wrap;
   word-break: break-word;
@@ -385,7 +408,7 @@
   border-radius: 7px;
   background: color-mix(in srgb, var(--color-error) 8%, transparent);
   color: var(--color-error);
-  font-size: 9px;
+  font-size: 11px;
   line-height: 1.4;
 }
 @keyframes pulse {

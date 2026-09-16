@@ -35,6 +35,11 @@ const created = createNewspaper(101, {
   editorial_brief: 'Только действительно важное.',
   interests: 'AI, React, космос',
   preferences: 'Без крипты',
+  source_recommendations: 'NASA, Ars Technica',
+  issue_volume: 'compact',
+  weather_mode: 'today',
+  weather_location: 'Томск',
+  delivery_frequency: 'manual',
   style: 'wizarding',
 });
 assert.equal(created.ok, true);
@@ -43,13 +48,25 @@ let newspapers = listNewspapers(101);
 assert.equal(newspapers.length, 1);
 assert.equal(newspapers[0].name, 'Утренний ритуал');
 assert.equal(newspapers[0].style, 'wizarding');
+assert.equal(newspapers[0].source_recommendations, 'NASA, Ars Technica');
+assert.equal(newspapers[0].issue_volume, 'compact');
+assert.equal(newspapers[0].weather_mode, 'today');
+assert.equal(newspapers[0].weather_location, 'Томск');
+assert.equal(newspapers[0].delivery_frequency, 'manual');
 assert.equal(newspapers[0].issue_count, 0);
 
-const updated = updateNewspaper(101, created.id, { name: 'Chatter Daily', enabled: false });
+const updated = updateNewspaper(101, created.id, {
+  name: 'Chatter Daily',
+  enabled: false,
+  issue_volume: 'extended',
+  weather_mode: 'week',
+});
 assert.equal(updated.ok, true);
 newspapers = listNewspapers(101);
 assert.equal(newspapers[0].name, 'Chatter Daily');
 assert.equal(newspapers[0].enabled, false);
+assert.equal(newspapers[0].issue_volume, 'extended');
+assert.equal(newspapers[0].weather_mode, 'week');
 
 const issue = createDemoNewspaperIssue(101);
 assert.equal(issue.newspaper_id, created.id);
