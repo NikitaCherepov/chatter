@@ -14,6 +14,8 @@ import { parseDocument, SUPPORTED_EXTENSIONS } from './document-parser.js';
 import { readExtractedDocument, type AttachmentReadContext } from './chat-attachments.js';
 import type { MessageAttachment } from '../types.js';
 import { resolveTemporaryUserFile } from './temporary-files.js';
+import { getMediaAssetByFilename, pruneExpiredMediaAssets } from './media-assets.js';
+import { resolveImageFile } from './image-storage.js';
 
 export type MailProvider = 'yandex' | 'google' | 'custom';
 
@@ -53,6 +55,7 @@ type ReadableMailbox = {
 export type ResolvedEmailAttachment = {
   url: string;
   filename: string;
+  filepath: string;
   name: string;
   mimeType: string;
   sizeBytes: number;
@@ -75,7 +78,9 @@ export const resolveEmailAttachmentsForUser = async (
   let totalBytes = 0;
 
   for (const url of urls) {
-    const match = url.match(/^\/api\/v1\/attachments\/([^/?#]+)(?:[?#].*)?$/);
+    const attachmentMatch = url.match(/^\/api\/v1\/attachments\/([^/?#]+)(?:[?#].*)?$/);
+    const imageMatch = url.match(/^\/api\/v1\/images\/([^/?#]+)(?:[?#].*)?$/);
+    const match = attachmentMatch || imageMatch;
     if (!match) throw new Error('invalid_email_attachment_url');
 
     let filename = '';
@@ -85,6 +90,35 @@ export const resolveEmailAttachmentsForUser = async (
       throw new Error('invalid_email_attachment_url');
     }
     if (!filename || filename !== path.basename(filename)) throw new Error('invalid_email_attachment_url');
+
+    if (imageMatch) {
+      pruneExpiredMediaAssets();
+      const asset = getMediaAssetByFilename(filename);
+      if (!asset || asset.user_id !== userId) throw new Error('email_attachment_not_owned');
+      const filepath = resolveImageFile(filename);
+      if (!filepath) throw new Error('email_attachment_not_found');
+      const stat = await fs.promises.stat(filepath);
+      if (!stat.isFile() || stat.size !== asset.size_bytes) throw new Error('email_attachment_changed');
+      totalBytes += stat.size;
+      if (totalBytes > MAX_EMAIL_ATTACHMENTS_BYTES) throw new Error('email_attachments_too_large');
+      let originalName = filename;
+      try {
+        const metadata = asset.metadata_json ? JSON.parse(asset.metadata_json) : null;
+        if (typeof metadata?.original_filename === 'string' && metadata.original_filename.trim()) {
+          originalName = path.basename(metadata.original_filename.trim());
+        }
+      } catch { /* malformed optional metadata: use storage filename */ }
+      resolved.push({
+        url,
+        filename,
+        filepath,
+        name: originalName,
+        mimeType: asset.mime_type,
+        sizeBytes: stat.size,
+        sha256: await hashFileSha256(filepath),
+      });
+      continue;
+    }
 
     const rows = db.prepare(`
       SELECT attachments
@@ -111,6 +145,7 @@ export const resolveEmailAttachmentsForUser = async (
       resolved.push({
         url: temporary.url,
         filename: temporary.filename,
+        filepath: temporary.filepath,
         name: temporary.name,
         mimeType: temporary.mime_type,
         sizeBytes: temporary.size_bytes,
@@ -130,6 +165,7 @@ export const resolveEmailAttachmentsForUser = async (
     resolved.push({
       url,
       filename,
+      filepath,
       name: attachment.name,
       mimeType: attachment.mime_type || 'application/octet-stream',
       sizeBytes: stat.size,
@@ -1326,7 +1362,7 @@ export const runEmailSend = async (
     html: composed.html,
     attachments: verifiedAttachments.map(attachment => ({
       filename: attachment.name,
-      path: resolveAttachmentFile(attachment.filename)!,
+      path: attachment.filepath,
       contentType: attachment.mimeType,
     })),
   };

@@ -45,7 +45,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   searchWeb: (payload: {
     query: string;
     mode?: 'web' | 'wikipedia';
-    searchType?: 'web' | 'news';
+    searchType?: 'web' | 'news' | 'images';
     sort?: 'relevance' | 'date';
     freshness?: 'any' | 'day' | 'week' | 'month' | 'year';
     page?: number;

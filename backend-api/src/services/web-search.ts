@@ -17,7 +17,7 @@ const TAVILY_MAX_RESULTS = 20;
 const SEARCH_SESSION_TTL_MS = 10 * 60_000;
 const MAX_SEARCH_SESSIONS = 200;
 
-type SearchType = 'web' | 'news';
+type SearchType = 'web' | 'news' | 'images';
 type SearchSort = 'relevance' | 'date';
 type SearchFreshness = 'any' | 'day' | 'week' | 'month' | 'year';
 type SearchMode = 'web' | 'wikipedia';
@@ -50,6 +50,14 @@ type SearchResult = {
   score?: number;
   published_date?: string;
   publishedDate?: string;
+  img_src?: string;
+  thumbnail_src?: string;
+  thumbnail?: string;
+  resolution?: string;
+  img_format?: string;
+  source?: string;
+  author?: string;
+  images?: Array<string | { url?: string; description?: string }>;
 };
 
 type SearchSession = {
@@ -88,6 +96,7 @@ type TavilyResponse = {
   request_id?: string;
   usage?: { credits?: number };
   results?: SearchResult[];
+  images?: Array<string | { url?: string; description?: string }>;
 };
 
 const searchSessions = new Map<string, SearchSession>();
@@ -171,16 +180,16 @@ const fetchSearxngPage = async (session: SearchSession, page: number, signal?: A
   const selectedEngines = session.mode === 'wikipedia'
     ? session.searxngEngines.filter(engine => engine === 'wikipedia')
     : session.searxngEngines.filter(engine => engine !== 'wikipedia');
-  if (!session.searxngEnabled || !SEARXNG_BASE_URL || !selectedEngines.length) throw new Error('searxng_disabled');
+  if (!session.searxngEnabled || !SEARXNG_BASE_URL || (session.searchType !== 'images' && !selectedEngines.length)) throw new Error('searxng_disabled');
   try {
     return await withTimeout('searxng', signal, async requestSignal => {
     const url = new URL(`${SEARXNG_BASE_URL}/search`);
     url.searchParams.set('q', session.mode === 'wikipedia' ? `!wikipedia ${session.query}` : session.query);
     url.searchParams.set('format', 'json');
-    url.searchParams.set('categories', session.searchType === 'news' ? 'news' : 'general');
+    url.searchParams.set('categories', session.searchType === 'news' ? 'news' : session.searchType === 'images' ? 'images' : 'general');
     url.searchParams.set('language', session.language);
     url.searchParams.set('pageno', `${page}`);
-    url.searchParams.set('engines', selectedEngines.join(','));
+    if (session.searchType !== 'images') url.searchParams.set('engines', selectedEngines.join(','));
     if (session.freshness !== 'any') url.searchParams.set('time_range', session.freshness);
     const response = await fetch(url, {
       headers: { Accept: 'application/json', 'X-Client-Source': 'chatter-backend' },
@@ -240,6 +249,11 @@ const fetchTavily = async (session: SearchSession, signal?: AbortSignal): Promis
       max_results: TAVILY_MAX_RESULTS,
       include_answer: true,
     };
+    if (session.searchType === 'images') {
+      body.include_answer = false;
+      body.include_images = true;
+      body.include_image_descriptions = true;
+    }
     if (session.freshness !== 'any') body.time_range = session.freshness;
     if (session.mode === 'wikipedia') body.include_domains = ['wikipedia.org'];
     const response = await fetch(`${TAVILY_API_BASE_URL}/search`, {
@@ -254,7 +268,19 @@ const fetchTavily = async (session: SearchSession, signal?: AbortSignal): Promis
     });
     if (!response.ok) throw new Error(`tavily_http_${response.status}`);
     const data = await response.json() as TavilyResponse;
-    const results = Array.isArray(data.results) ? data.results : [];
+    const results = session.searchType === 'images'
+      ? (() => {
+        const pageImages = (Array.isArray(data.results) ? data.results : []).flatMap(result =>
+          (Array.isArray(result.images) ? result.images : []).map(image => typeof image === 'string'
+            ? { img_src: image, url: result.url, title: result.title, source: 'tavily' }
+            : { img_src: image.url, url: result.url, title: result.title, content: image.description, source: 'tavily' })
+        );
+        if (pageImages.length) return pageImages;
+        return (Array.isArray(data.images) ? data.images : []).map(image => typeof image === 'string'
+          ? { img_src: image, source: 'tavily' }
+          : { img_src: image.url, content: image.description, source: 'tavily' });
+      })()
+      : (Array.isArray(data.results) ? data.results : []);
     if (session.sort === 'date') results.sort((left, right) => publishedTimestamp(right) - publishedTimestamp(left));
     recordWebSearchStat('tavily', '', results.length ? 'success' : 'empty', results.length);
     return { ...data, results };
@@ -266,10 +292,13 @@ const fetchTavily = async (session: SearchSession, signal?: AbortSignal): Promis
 };
 
 const appendUniqueResults = (session: SearchSession, incoming: SearchResult[]) => {
-  const knownUrls = new Set(session.results.map(result => result.url).filter(Boolean));
+  const resultKey = (result: SearchResult) => session.searchType === 'images' ? result.img_src : result.url;
+  const knownUrls = new Set(session.results.map(resultKey).filter(Boolean));
   for (const result of incoming) {
-    if (result.url && knownUrls.has(result.url)) continue;
-    if (result.url) knownUrls.add(result.url);
+    const key = resultKey(result);
+    if (session.searchType === 'images' && !key) continue;
+    if (key && knownUrls.has(key)) continue;
+    if (key) knownUrls.add(key);
     session.results.push(result);
   }
 };
@@ -279,11 +308,16 @@ const errorMessage = (error: unknown) => error instanceof Error ? error.message 
 const initializeProvider = async (session: SearchSession, quota: TavilyQuotaGate | undefined, signal?: AbortSignal): Promise<string | null> => {
   try {
     const results = await fetchDesktopPage(session, 1, signal);
-    session.provider = 'desktop';
-    session.nextPage = 2;
-    session.exhausted = !results.length;
-    appendUniqueResults(session, results);
-    return null;
+    const usableResults = session.searchType === 'images'
+      ? results.filter(result => Boolean(result.img_src))
+      : results;
+    if (usableResults.length) {
+      session.provider = 'desktop';
+      session.nextPage = 2;
+      session.exhausted = false;
+      appendUniqueResults(session, usableResults);
+      return null;
+    }
   } catch (error) {
     if (signal?.aborted) throw error;
     if (errorMessage(error) === 'desktop_search_captcha_required') {
@@ -293,11 +327,16 @@ const initializeProvider = async (session: SearchSession, quota: TavilyQuotaGate
 
   try {
     const results = await fetchSearxngPage(session, 1, signal);
-    session.provider = 'searxng';
-    session.nextPage = 2;
-    session.exhausted = !results.length;
-    appendUniqueResults(session, results);
-    return null;
+    const usableResults = session.searchType === 'images'
+      ? results.filter(result => Boolean(result.img_src))
+      : results;
+    if (usableResults.length) {
+      session.provider = 'searxng';
+      session.nextPage = 2;
+      session.exhausted = false;
+      appendUniqueResults(session, usableResults);
+      return null;
+    }
   } catch (error) {
     if (signal?.aborted) throw error;
   }
@@ -344,13 +383,13 @@ export const runWebSearch = async (query: string, options: WebSearchOptions, sig
   const runtimeSettings = getWebSearchRuntimeSettings();
   if (!runtimeSettings.enabled) return 'Tool error: web search is disabled by the administrator.';
   const mode: SearchMode = options.wikipedia === true ? 'wikipedia' : 'web';
-  const searchType: SearchType = options.searchType === 'news' ? 'news' : 'web';
+  const searchType: SearchType = options.searchType === 'news' ? 'news' : options.searchType === 'images' ? 'images' : 'web';
   const sort: SearchSort = options.sort === 'date' ? 'date' : 'relevance';
   const freshness: SearchFreshness = ['day', 'week', 'month', 'year'].includes(`${options.freshness || ''}`)
     ? options.freshness as Exclude<SearchFreshness, 'any'>
     : 'any';
   if (mode === 'wikipedia' && (searchType !== 'web' || sort !== 'relevance' || freshness !== 'any')) {
-    return 'Tool error: Wikipedia search cannot be combined with news, date sorting, or freshness filters.';
+    return 'Tool error: Wikipedia search cannot be combined with news/images, date sorting, or freshness filters.';
   }
   pruneSearchSessions();
 
@@ -410,6 +449,21 @@ export const runWebSearch = async (query: string, options: WebSearchOptions, sig
   const resultText = visibleResults.map((item, index) => {
     const engines = resultEngines(item, session.provider);
     const published = item.published_date || item.publishedDate;
+    if (session.searchType === 'images') {
+      return JSON.stringify({
+        index: offset + index + 1,
+        title: item.title || null,
+        description: item.content || null,
+        image_url: item.img_src || item.url || null,
+        thumbnail_url: item.thumbnail_src || item.thumbnail || null,
+        source_page_url: item.img_src ? item.url || null : null,
+        credit: item.author || item.source || null,
+        resolution: item.resolution || null,
+        format: item.img_format || null,
+        provider: session.provider,
+        search_engines: engines,
+      });
+    }
     return `${offset + index + 1}. ${item.title || 'Untitled'}\n${item.content || ''}\nSource: ${item.url || '-'}${published ? `\nPublished: ${published}` : ''}\nSearch engines: ${engines.join(', ') || 'unknown'}`;
   }).join('\n\n');
   const summary = offset === 0 && session.answer ? `Summary: ${session.answer}\n\n` : '';

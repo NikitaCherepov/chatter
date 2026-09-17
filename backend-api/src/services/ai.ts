@@ -29,7 +29,7 @@ import { countTokens } from './tokenizer.js';
 import { listSubagentNames, buildSubagentListDescription, getSubagent } from './subagents/registry.js';
 import { hasBackendTranslation, translateForLanguage } from '../i18n/index.js';
 import { readChatAttachment, searchChatAttachment, type AttachmentReadContext } from './chat-attachments.js';
-import { attachFileToResponse, saveTempFileForUse, type ResponseFileSink } from './response-attachments.js';
+import { attachFileToResponse, materializeAssetInput, type ResponseFileSink } from './response-attachments.js';
 import { getModularTool, modularToolDefinitions } from './tools/registry.js';
 
 dotenv.config();
@@ -2323,29 +2323,14 @@ export const toolDefinitions = [
   {
     type: 'function',
     function: {
-      name: 'save_temp_file',
-      description: 'Temporarily saves a file for one hour and returns a relative attachment_url that other tools can use. Use this when the situation does not require attaching the file to the user-facing chat, but you need to use it elsewhere, for example as an email attachment. Pass an external absolute URL or an exact email file_ref. Reuse the returned relative URL instead of saving the same file again.',
-      parameters: {
-        type: 'object',
-        properties: {
-          file_ref: { type: 'string', description: 'Exact short-lived file_ref returned for an email attachment by read_email_content.' },
-          url: { type: 'string', description: 'Exact public absolute http(s) URL of the file. Do not invent or alter URLs.' },
-          filename: { type: 'string', description: 'Optional filename to use for the temporary file.' },
-        },
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
       name: 'attach_file_to_response',
-      description: 'Attaches an existing email attachment or a public Internet file to your current response. Use the exact file_ref returned by read_email_content, or an exact public http(s) URL. The file is saved by Chatter and appears on your assistant message; images appear inline. This does not read the file contents.',
+      description: 'Attach one image or file to the current chat response. Pass an exact public URL, a stored relative URL such as /api/v1/images/... or /api/v1/attachments/..., or an email file_ref. The file is fetched and stored automatically.',
       parameters: {
         type: 'object',
         properties: {
-          file_ref: { type: 'string', description: 'Exact short-lived file_ref returned for an email attachment by read_email_content.' },
-          url: { type: 'string', description: 'Exact public http(s) URL to download. Do not invent or alter URLs.' },
-          filename: { type: 'string', description: 'Optional display filename.' },
+          url: { type: 'string', description: 'Exact public http(s) URL or stored relative /api/v1/... URL.' },
+          file_ref: { type: 'string', description: 'Exact short-lived file_ref returned for an email attachment.' },
+          filename: { type: 'string', description: 'Optional filename when the source URL does not provide a useful one.' },
         },
       },
     },
@@ -2354,7 +2339,7 @@ export const toolDefinitions = [
     type: 'function',
     function: {
       name: 'send_email',
-      description: 'Sends an email on behalf of the user. Use when the user explicitly asks to send an email. Email attachments must be relative attachment_url values for files already saved in Chatter. If you only have an external absolute URL or an email file_ref, first call save_temp_file and then pass its returned attachment_url. If the user explicitly specifies yandex/google — pass provider.',
+      description: 'Sends an email on behalf of the user. Use when the user explicitly asks to send an email. Attachments may be exact public URLs, stored relative /api/v1/... URLs, or email file_ref values; they are fetched and snapshotted automatically before the confirmation preview. If the user explicitly specifies yandex/google — pass provider.',
       parameters: {
         type: 'object',
         properties: {
@@ -2367,7 +2352,7 @@ export const toolDefinitions = [
             type: 'array',
             maxItems: 5,
             items: { type: 'string' },
-            description: 'Exact relative /api/v1/attachments/... URLs for files already saved in Chatter or returned by save_temp_file. Absolute URLs and email file_ref values are not accepted. Never invent or alter these URLs.'
+            description: 'Exact public URLs, stored relative /api/v1/... URLs, or email file_ref values. Never invent or alter them.'
           }
         },
         required: ['to', 'subject', 'body']
@@ -3164,7 +3149,25 @@ If the camera is not found — return an error.`,
 
 
 /** Build describe_image tool — sends image(s) to vision model for analysis */
-const buildDescribeImageTool = () => {
+const buildDescribeImageTool = (supportsDirectView = false) => {
+  const properties: Record<string, unknown> = {
+    question: {
+      type: 'string',
+      description: 'Specific task or question (e.g.: "Describe the image", "Read the text").'
+    },
+    image_url: {
+      type: 'string',
+      description: 'REQUIRED. Exact public URL or stored relative /api/v1/images/... URL of the image to analyze.'
+    },
+  };
+  if (supportsDirectView) {
+    properties.mode = {
+      type: 'string',
+      enum: ['description', 'direct'],
+      default: 'description',
+      description: 'description returns a text analysis from a vision helper. direct loads the pixels into your own next turn so you can inspect them yourself.',
+    };
+  }
   return {
     type: 'function' as const,
     function: {
@@ -3172,16 +3175,7 @@ const buildDescribeImageTool = () => {
       description: 'Analyzes the specified image using a vision model. Supports user photos and images from chat history.',
       parameters: {
         type: 'object',
-        properties: {
-          question: {
-            type: 'string',
-            description: 'Specific task or question (e.g.: "Describe the image", "Read the text").'
-          },
-          image_url: {
-            type: 'string',
-            description: 'REQUIRED. Image URL copied exactly from the [Attached image N: URL] marker of the image to analyze.'
-          }
-        },
+        properties,
         required: ['question', 'image_url']
       }
     }
@@ -3920,7 +3914,7 @@ const getTaskByUserAndId = (userId: number, taskId: number) => db.prepare(`
   WHERE user_id = ? AND id = ?
 `).get(userId, taskId) as { id: number; status: string } | undefined;
 
-export const runTool = async (user: UserRecord, timezoneOffset: number, toolName: string, argsRaw: string, aiCall: (requestPayload: Record<string, unknown>) => Promise<CompletionMeta>, generatedImages?: Array<{ image_base64: string; image_url?: string; prompt_used: string }>, displayStateSink?: { value: DisplayStatePayload | null }, desktopActionSink?: { value: DesktopActionPayload | null }, mapUpdateSink?: { value: MapUpdatePayload | null }, activeMacros?: Array<{ id: number; title: string; description?: string; commands: string[]; pinned?: boolean; return_output?: boolean }>, signal?: AbortSignal, subagentExtra?: { chatId?: number; manualModel?: any; subagentMode?: 'auto' | 'manual'; subagentReasoningLevel?: ReasoningLevel | null; onToolStatus?: (text: string) => Promise<void> | void; onDesktopAction?: (action: any) => Promise<void> | void; displayManifest?: { moods?: string[]; reactions?: string[] } | null; currentDisplayState?: DisplayStatePayload | null; avatarControlEnabled?: boolean; onSubagentTrace?: (trace: any) => void; onSubagentUsageCall?: (agentName: string, usage: TokenUsageCall) => void; onVisionUsageCall?: (usage: TokenUsageCall) => void; shouldStopForQuota?: (usage: TokenUsageCall) => boolean; availableToolDefs?: any[]; attachmentReadContext?: AttachmentReadContext; responseFileSink?: ResponseFileSink }, autoRejectHitl?: boolean, userImages?: Array<{ base64: string; mimeType: string }>, billingUserId?: number) => {
+export const runTool = async (user: UserRecord, timezoneOffset: number, toolName: string, argsRaw: string, aiCall: (requestPayload: Record<string, unknown>) => Promise<CompletionMeta>, generatedImages?: Array<{ image_base64: string; image_url?: string; prompt_used: string }>, displayStateSink?: { value: DisplayStatePayload | null }, desktopActionSink?: { value: DesktopActionPayload | null }, mapUpdateSink?: { value: MapUpdatePayload | null }, activeMacros?: Array<{ id: number; title: string; description?: string; commands: string[]; pinned?: boolean; return_output?: boolean }>, signal?: AbortSignal, subagentExtra?: { chatId?: number; manualModel?: any; subagentMode?: 'auto' | 'manual'; subagentReasoningLevel?: ReasoningLevel | null; onToolStatus?: (text: string) => Promise<void> | void; onDesktopAction?: (action: any) => Promise<void> | void; displayManifest?: { moods?: string[]; reactions?: string[] } | null; currentDisplayState?: DisplayStatePayload | null; avatarControlEnabled?: boolean; onSubagentTrace?: (trace: any) => void; onSubagentUsageCall?: (agentName: string, usage: TokenUsageCall) => void; onVisionUsageCall?: (usage: TokenUsageCall) => void; shouldStopForQuota?: (usage: TokenUsageCall) => boolean; availableToolDefs?: any[]; attachmentReadContext?: AttachmentReadContext; responseFileSink?: ResponseFileSink; currentModelSupportsVision?: boolean; directImageSink?: { items: Array<{ base64: string; mimeType: string; question: string; localUrl?: string }> } }, autoRejectHitl?: boolean, userImages?: Array<{ base64: string; mimeType: string }>, billingUserId?: number) => {
   throwIfAborted(signal);
   const parsed = JSON.parse(argsRaw || '{}');
   // Room runs: `user` is the INITIATOR (data privacy: their servers, desktop,
@@ -4257,25 +4251,35 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     if (!sink) return JSON.stringify({ status: 'unavailable', message: 'Attachments cannot be persisted for this response.' });
     return attachFileToResponse(user.id, parsed, sink);
   }
-  if (toolName === 'save_temp_file') {
-    return saveTempFileForUse(user.id, parsed);
-  }
   if (toolName === 'send_email') {
     const to: string = typeof parsed.to === 'string' ? parsed.to.trim() : '';
     const subject: string = typeof parsed.subject === 'string' ? parsed.subject.trim() : '';
     const body: string = typeof parsed.body === 'string' ? parsed.body : '';
     const provider: string = typeof parsed.provider === 'string' ? parsed.provider : '';
     const mailAccountId = Number.isFinite(Number(parsed.mail_account_id)) ? Number(parsed.mail_account_id) : undefined;
-    const attachmentUrls = Array.isArray(parsed.attachment_urls)
+    const attachmentInputs = Array.isArray(parsed.attachment_urls)
       ? parsed.attachment_urls.filter((value: unknown): value is string => typeof value === 'string')
       : [];
 
     // Basic validation before asking user
     if (!to || !subject || !body) return JSON.stringify({ status: 'error', message: 'to, subject and body are required.' });
+    if (attachmentInputs.length > 5) return JSON.stringify({ status: 'error', message: 'A maximum of 5 attachments is allowed.' });
 
     let attachments;
     try {
-      attachments = await resolveEmailAttachmentsForUser(user.id, attachmentUrls);
+      const materializedUrls: string[] = [];
+      for (const input of attachmentInputs) {
+        const value = input.trim();
+        if (!value) continue;
+        const inputArgs = /^(?:https?:\/\/|\/api\/v1\/)/i.test(value)
+          ? { url: value, retention: 'temporary' }
+          : /^(?:media|file):/i.test(value)
+            ? { asset_ref: value, retention: 'temporary' }
+            : { file_ref: value, retention: 'temporary' };
+        const materialized = await materializeAssetInput(user.id, inputArgs);
+        materializedUrls.push(materialized.attachmentUrl);
+      }
+      attachments = await resolveEmailAttachmentsForUser(user.id, materializedUrls);
     } catch (err: any) {
       const errorCode = `${err?.message || ''}`;
       const invalidLink = errorCode === 'invalid_email_attachment_url';
@@ -4288,9 +4292,9 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
       return JSON.stringify({
         status: 'error',
         message: invalidLink
-          ? 'Email attachments require a relative /api/v1/attachments/... URL. Call save_temp_file first when you only have an absolute URL or email file_ref.'
+          ? 'One of the attachment references is not a valid public URL, stored relative URL, or email file_ref.'
           : unavailable
-            ? 'The file does not exist, has expired, or was deleted. Save it again with save_temp_file before using it.'
+            ? 'The file does not exist, has expired, or was deleted.'
             : `Cannot attach the requested documents: ${err?.message || String(err)}`,
       });
     }
@@ -5111,23 +5115,14 @@ If the task is a description, return a detailed text response.`
       type ImgData = { base64: string; mimeType: string };
       let imagesToAnalyze: ImgData[] = [];
 
+      let localUrl: string | undefined;
       if (imageUrl) {
-        // Load from disk by URL
-        const { resolveImageFile, filenameFromUrl } = await import('./image-storage.js');
-        const filename = filenameFromUrl(imageUrl);
-        if (!filename) {
-          return JSON.stringify({ status: 'error', message: `Invalid image URL: ${imageUrl}` });
+        const materialized = await materializeAssetInput(user.id, { url: imageUrl, retention: 'temporary' });
+        if (materialized.kind !== 'image') {
+          return JSON.stringify({ status: 'error', message: 'The supplied reference is not an image.' });
         }
-        const filepath = resolveImageFile(filename);
-        if (!filepath) {
-          return JSON.stringify({ status: 'error', message: `Image file not found: ${imageUrl}` });
-        }
-        const fs = await import('node:fs');
-        const nodePath = await import('node:path');
-        const buf = fs.readFileSync(filepath);
-        const ext = nodePath.extname(filename).toLowerCase();
-        const mimeType = ext === '.webp' ? 'image/webp' : ext === '.png' ? 'image/png' : ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg' : 'image/jpeg';
-        imagesToAnalyze = [{ base64: buf.toString('base64'), mimeType }];
+        localUrl = materialized.localUrl;
+        imagesToAnalyze = [{ base64: materialized.buffer.toString('base64'), mimeType: materialized.mimeType }];
       } else if (userImages && userImages.length > 0) {
         // From current request
         imagesToAnalyze = userImages;
@@ -5135,6 +5130,20 @@ If the task is a description, return a detailed text response.`
 
       if (imagesToAnalyze.length === 0) {
         return JSON.stringify({ status: 'error', message: 'Image is unavailable. It may have been deleted or not yet saved.' });
+      }
+
+      if (parsed.mode === 'direct') {
+        if (!subagentExtra?.currentModelSupportsVision || !subagentExtra.directImageSink) {
+          return JSON.stringify({ status: 'error', message: 'Direct image viewing is unavailable for this model. Use description mode.' });
+        }
+        for (const image of imagesToAnalyze) {
+          subagentExtra.directImageSink.items.push({ ...image, question, localUrl });
+        }
+        return JSON.stringify({
+          status: 'loaded_for_direct_view',
+          images_loaded: imagesToAnalyze.length,
+          image_url: localUrl ?? imageUrl ?? null,
+        });
       }
 
       const visionMessages = [
@@ -8008,7 +8017,10 @@ export const sendMessageThroughAi = async (
   let executionMode: 'pro' | 'lite' | 'vision-pro' | 'vision-lite' = 'pro';
   const subagentTool = options?.isDesktop ? buildInvokeSubagentTool() : null;
   // Tools that work from the server (SSH, maps, DevOps DB, PC command via WS) — available to ALL clients
-  const serverOnlyTools = serverOnlyToolBuilders.map(build => build());
+  const serverOnlyTools = [
+    ...serverOnlyToolBuilders.filter(build => build !== buildDescribeImageTool).map(build => build()),
+    buildDescribeImageTool(currentModelSupportsVision),
+  ];
   // UI actions can originate from any client (Telegram, future messengers, Desktop).
   // Expose them whenever the request itself comes from Desktop or Desktop is online.
   const desktopUiAvailable = Boolean(options?.isDesktop || isDesktopOnline(userId) || (toolUser !== user && isDesktopOnline(toolUser.id)));
@@ -8419,7 +8431,10 @@ type ExecutedToolCall = {
   toolCall: any;
   toolName: string;
   toolContent: string;
+  directImages: Array<{ base64: string; mimeType: string; question: string; localUrl?: string }>;
 };
+
+const directImagesForNextTurn: Array<{ base64: string; mimeType: string; question: string; localUrl?: string }> = [];
 
 const runOneToolCall = async (toolCall: any, emitStatus = true): Promise<ExecutedToolCall> => {
   throwIfAborted(abortController.signal);
@@ -8433,6 +8448,7 @@ const runOneToolCall = async (toolCall: any, emitStatus = true): Promise<Execute
   }
 
   let toolContent = '';
+  const directImageSink: { items: Array<{ base64: string; mimeType: string; question: string; localUrl?: string }> } = { items: [] };
   try {
     if (disabledToolSet.has(toolName)) {
       toolContent = `Tool "${toolName}" is disabled by current restriction settings.`;
@@ -8474,7 +8490,7 @@ const runOneToolCall = async (toolCall: any, emitStatus = true): Promise<Execute
               && t.function.name !== 'spawn_subagent'
               && t.function.name !== 'invoke_subagent'
               && t.function.name !== 'attach_file_to_response'
-          ),
+          ).map((t: any) => t?.function?.name === 'describe_image' ? buildDescribeImageTool(false) : t),
           attachmentReadContext: {
             chatId,
             maxContextTokens,
@@ -8490,6 +8506,8 @@ const runOneToolCall = async (toolCall: any, emitStatus = true): Promise<Execute
             capacityState: attachmentCapacityState,
           },
           ...(!options?.skipHistory ? { responseFileSink } : {}),
+          currentModelSupportsVision,
+          directImageSink,
         },
         options?.autoRejectHitl,
         images,
@@ -8520,11 +8538,12 @@ const runOneToolCall = async (toolCall: any, emitStatus = true): Promise<Execute
     toolContent = `Tool error ${toolName}: ${err?.message || String(err)}`;
   }
 
-  return { toolCall, toolName, toolContent };
+  return { toolCall, toolName, toolContent, directImages: directImageSink.items };
 };
 
 const applyExecutedToolCall = (executed: ExecutedToolCall) => {
   const { toolCall, toolName, toolContent } = executed;
+  directImagesForNextTurn.push(...executed.directImages);
   const resultPreview = formatToolResultPreview(toolContent);
   if (resultPreview) {
     const historyEntry = [...toolCallsHistory]
@@ -8643,13 +8662,31 @@ for (let toolCallIndex = 0; toolCallIndex < toolCalls.length; toolCallIndex += 1
   } catch (err: any) {
     if (isAbortError(err)) break;
     const toolContent = `Tool error ${toolName}: ${err?.message || String(err)}`;
-    applyExecutedToolCall({ toolCall, toolName, toolContent });
+    applyExecutedToolCall({ toolCall, toolName, toolContent, directImages: [] });
   }
 }
 
 if (escalatedToPro) {
   // При эскалации в PRO история пересоздаётся с нуля — текущая итерация не валидна для trace.
+  directImagesForNextTurn.splice(0);
   continue;
+}
+
+if (directImagesForNextTurn.length > 0 && !abortController.signal.aborted) {
+  const directImages = directImagesForNextTurn.splice(0);
+  currentMessages.push({
+    role: 'user',
+    content: [
+      {
+        type: 'text',
+        text: directImages.map((item, index) => `Image ${index + 1}: ${item.question}`).join('\n'),
+      },
+      ...directImages.map(item => ({
+        type: 'image_url',
+        image_url: { url: `data:${item.mimeType};base64,${item.base64}` },
+      })),
+    ],
+  });
 }
 
 // Если были прерваны во время tool_calls — фиксируем partial-итерацию в trace

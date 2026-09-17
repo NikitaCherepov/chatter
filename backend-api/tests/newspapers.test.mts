@@ -20,6 +20,7 @@ const {
   updateNewspaper,
   validateNewspaperDocument,
 } = await import('../src/services/newspapers.js');
+const { attachMediaAsset, getMediaAssetById } = await import('../src/services/media-assets.js');
 
 db.prepare(`
   INSERT INTO users (id, name, role, is_admin, status, plan, language)
@@ -93,6 +94,35 @@ assert.throws(() => validateNewspaperDocument({
   blocks: [{ id: 'legacy', type: 'hero', title: 'Nope', text: 'Nope' }],
 }), /invalid_newspaper_block/);
 
+const localImageDocument = validateNewspaperDocument({
+  version: 1,
+  title: 'Local image',
+  date: '2026-09-17',
+  blocks: [{
+    id: 'local-image',
+    type: 'article',
+    role: 'hero',
+    title: 'Stored safely',
+    text: 'The local image URL must survive validation.',
+    image_url: '/api/v1/images/newspaper-test.webp',
+  }],
+});
+assert.equal(localImageDocument.blocks[0].type === 'article' ? localImageDocument.blocks[0].image_url : null, '/api/v1/images/newspaper-test.webp');
+const unsafeImageDocument = validateNewspaperDocument({
+  version: 1,
+  title: 'Unsafe image',
+  date: '2026-09-17',
+  blocks: [{
+    id: 'unsafe-image',
+    type: 'article',
+    role: 'hero',
+    title: 'Rejected path',
+    text: 'Traversal must not survive validation.',
+    image_url: '/api/v1/images/%2e%2e%2fsecret.png',
+  }],
+});
+assert.equal(unsafeImageDocument.blocks[0].type === 'article' ? unsafeImageDocument.blocks[0].image_url : undefined, undefined);
+
 const runResult = createNewspaperRun(101, created.id);
 assert.equal(runResult.ok, true);
 if (!runResult.ok) throw new Error('run must be created');
@@ -103,8 +133,25 @@ const duplicateRun = createNewspaperRun(101, created.id);
 assert.equal(duplicateRun.ok, false);
 assert.equal(duplicateRun.error, 'newspaper_run_active');
 
+const now = Math.floor(Date.now() / 1000);
+const mediaId = Number(db.prepare(`
+  INSERT INTO media_assets (
+    user_id, storage_filename, local_url, mime_type, kind, retention,
+    size_bytes, created_at, updated_at
+  ) VALUES (101, 'newspaper-test.webp', '/api/v1/images/newspaper-test.webp',
+            'image/webp', 'external', 'temporary', 10, ?, ?)
+`).run(now, now).lastInsertRowid);
+attachMediaAsset({
+  assetId: mediaId,
+  entityType: 'newspaper_issue',
+  entityId: issue.id,
+  slot: 'image',
+});
+assert.equal(getMediaAssetById(mediaId)?.retention, 'persistent');
+
 assert.equal(deleteNewspaperIssue(101, issue.id), true);
 assert.equal(getNewspaperIssue(101, issue.id), null);
+assert.equal(getMediaAssetById(mediaId), null, 'deleting the last newspaper reference removes its asset');
 
 db.close();
 fs.rmSync(tempDir, { recursive: true, force: true });

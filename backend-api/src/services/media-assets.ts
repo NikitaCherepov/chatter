@@ -97,9 +97,33 @@ export const getMediaAssetByFilename = (filename: string): MediaAsset | null => 
     .get(safeFilename) as MediaAsset | undefined) ?? null;
 };
 
+export const getMediaAssetById = (assetId: number): MediaAsset | null =>
+  (db.prepare('SELECT * FROM media_assets WHERE id = ?').get(assetId) as MediaAsset | undefined) ?? null;
+
 export const getMediaAssetByUrl = (url: string): MediaAsset | null => {
   const filename = filenameFromUrl(url);
   return filename ? getMediaAssetByFilename(filename) : null;
+};
+
+export const getReusableMediaAssetBySourceUrl = (
+  userId: number,
+  sourceUrl: string,
+): MediaAsset | null => {
+  pruneExpiredMediaAssets();
+  const rows = db.prepare(`
+    SELECT * FROM media_assets
+    WHERE user_id = ? AND source_url = ?
+    ORDER BY id DESC
+  `).all(userId, sourceUrl) as MediaAsset[];
+  const asset = rows.find(item => Boolean(resolveImageFile(item.storage_filename))) ?? null;
+  if (!asset || asset.retention !== 'temporary') return asset;
+  const now = Math.floor(Date.now() / 1000);
+  db.prepare(`
+    UPDATE media_assets
+    SET expires_at = MAX(COALESCE(expires_at, 0), ?), updated_at = ?
+    WHERE id = ? AND retention = 'temporary'
+  `).run(now + DEFAULT_TEMPORARY_TTL_SECONDS, now, asset.id);
+  return getMediaAssetById(asset.id);
 };
 
 /** Register a pre-registry file without rewriting or copying it. */

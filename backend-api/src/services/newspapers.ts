@@ -14,6 +14,7 @@ import type {
   NewspaperVolume,
   NewspaperWeatherMode,
 } from '../types.js';
+import { deleteMediaAssetIfUnreferenced, removeMediaReferencesForEntity } from './media-assets.js';
 
 const STYLES = new Set<NewspaperStyle>(['wizarding', 'broadsheet', 'deusEx', 'massEffect']);
 const ARTICLE_ROLES = new Set(['hero', 'feature', 'standard']);
@@ -45,6 +46,22 @@ const optionalUrl = (value: unknown): string | undefined => {
   } catch {
     return undefined;
   }
+};
+const optionalImageUrl = (value: unknown): string | undefined => {
+  const text = cleanText(value, 4_000);
+  if (!text) return undefined;
+  const localMatch = text.match(/^\/api\/v1\/images\/([^/?#]+)$/);
+  if (localMatch) {
+    try {
+      const filename = decodeURIComponent(localMatch[1]);
+      return filename && !filename.includes('/') && !filename.includes('\\') && filename !== '.' && filename !== '..'
+        ? text
+        : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+  return optionalUrl(text);
 };
 const parseJson = (raw: unknown): unknown => {
   if (raw == null || raw === '') return null;
@@ -88,7 +105,7 @@ export const validateNewspaperDocument = (raw: unknown): NewspaperIssueDocument 
         title,
         text,
         ...(optionalUrl(source.url) ? { url: optionalUrl(source.url) } : {}),
-        ...(optionalUrl(source.image_url) ? { image_url: optionalUrl(source.image_url) } : {}),
+        ...(optionalImageUrl(source.image_url) ? { image_url: optionalImageUrl(source.image_url) } : {}),
         ...(sources?.length ? { sources } : {}),
       };
     }
@@ -96,7 +113,7 @@ export const validateNewspaperDocument = (raw: unknown): NewspaperIssueDocument 
     if (source.type === 'note') {
       const text = optionalText(source.text);
       const url = optionalUrl(source.url);
-      const imageUrl = optionalUrl(source.image_url);
+      const imageUrl = optionalImageUrl(source.image_url);
       if (!titleValue && !text && !url && !imageUrl) throw new Error(`invalid_note_${index}`);
       return {
         id,
@@ -117,7 +134,7 @@ export const validateNewspaperDocument = (raw: unknown): NewspaperIssueDocument 
         const itemTitle = optionalText(item.title, 500);
         const text = optionalText(item.text);
         const url = optionalUrl(item.url);
-        const imageUrl = optionalUrl(item.image_url);
+        const imageUrl = optionalImageUrl(item.image_url);
         if (!itemTitle && !text && !url && !imageUrl) throw new Error(`invalid_note_item_${index}_${itemIndex}`);
         return {
           ...(optionalText(item.id, 120) ? { id: optionalText(item.id, 120) } : {}),
@@ -164,7 +181,7 @@ export const validateNewspaperDocument = (raw: unknown): NewspaperIssueDocument 
       id,
       type: 'image' as const,
       title: imageTitle,
-      ...(optionalUrl(source.image_url) ? { image_url: optionalUrl(source.image_url) } : {}),
+      ...(optionalImageUrl(source.image_url) ? { image_url: optionalImageUrl(source.image_url) } : {}),
       ...(optionalText(source.caption) ? { caption: optionalText(source.caption) } : {}),
       ...(optionalText(source.prompt, 2_000) ? { prompt: optionalText(source.prompt, 2_000) } : {}),
     };
@@ -391,9 +408,15 @@ export const createNewspaperIssue = (userId: number, newspaperId: number, rawDoc
     return issue;
   })();
 
-export const deleteNewspaperIssue = (userId: number, issueId: number) => db
-  .prepare('DELETE FROM newspaper_issues WHERE id = ? AND user_id = ?')
-  .run(issueId, userId).changes > 0;
+export const deleteNewspaperIssue = (userId: number, issueId: number) => {
+  const exists = db.prepare('SELECT 1 FROM newspaper_issues WHERE id = ? AND user_id = ?')
+    .get(issueId, userId);
+  if (!exists) return false;
+  const assetIds = removeMediaReferencesForEntity('newspaper_issue', issueId);
+  db.prepare('DELETE FROM newspaper_issues WHERE id = ? AND user_id = ?').run(issueId, userId);
+  for (const assetId of assetIds) deleteMediaAssetIfUnreferenced(assetId);
+  return true;
+};
 
 export const createNewspaperRun = (userId: number, newspaperId: number) => {
   if (!getNewspaper(userId, newspaperId)) return { ok: false as const, error: 'newspaper_not_found' };

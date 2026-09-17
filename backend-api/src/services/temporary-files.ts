@@ -107,6 +107,19 @@ export const resolveTemporaryUserFile = (
   return { ...row, filepath };
 };
 
+export const extendTemporaryUserFile = (
+  userId: number,
+  url: string,
+  ttlSeconds = TEMPORARY_FILE_TTL_SECONDS,
+): void => {
+  const expiresAt = Math.floor(Date.now() / 1000) + Math.max(60, Math.floor(ttlSeconds));
+  db.prepare(`
+    UPDATE temporary_user_files
+    SET expires_at = MAX(expires_at, ?)
+    WHERE user_id = ? AND url = ?
+  `).run(expiresAt, userId, url);
+};
+
 cleanupExpiredTemporaryFiles();
 const cleanupTimer = setInterval(cleanupExpiredTemporaryFiles, 10 * 60 * 1000);
 cleanupTimer.unref();

@@ -54,6 +54,8 @@ const {
 } = await import('../src/services/media-assets.js');
 const { canUserReadRegisteredImage } = await import('../src/services/media-access.js');
 const { appendChatMessage, deleteUserMessage } = await import('../src/services/chats.js');
+const { attachFileToResponse } = await import('../src/services/response-attachments.js');
+const { resolveEmailAttachmentsForUser } = await import('../src/services/mail.js');
 
 assert.equal(canUserReadRegisteredImage(1, legacyFilename), true, 'owner reads own asset');
 assert.equal(canUserReadRegisteredImage(2, legacyFilename), false, 'unrelated user must not read asset');
@@ -84,6 +86,42 @@ assert.equal(generated.retention, 'temporary');
 assert.ok(generated.expires_at);
 assert.equal(canUserReadRegisteredImage(1, generated.storage_filename), true);
 assert.equal(canUserReadRegisteredImage(2, generated.storage_filename), false, 'temporary asset stays private');
+
+const responseSink = {
+  images: [],
+  attachments: [],
+  sourceKeys: new Set<string>(),
+};
+const attachResult = JSON.parse(await attachFileToResponse(
+  1,
+  { url: generated.url },
+  responseSink,
+));
+assert.equal(attachResult.status, 'attached');
+assert.deepEqual(responseSink.images, [{ url: generated.url, type: 'external' }]);
+assert.equal(
+  JSON.parse(await attachFileToResponse(1, { url: generated.url }, responseSink)).status,
+  'already_attached',
+);
+await assert.rejects(
+  () => attachFileToResponse(3, { url: generated.url }, {
+    images: [],
+    attachments: [],
+    sourceKeys: new Set<string>(),
+  }),
+  /media_asset_not_found_or_not_owned/,
+  'another user cannot attach the asset',
+);
+
+const emailAttachments = await resolveEmailAttachmentsForUser(1, [generated.url]);
+assert.equal(emailAttachments.length, 1);
+assert.equal(emailAttachments[0].filepath, path.join(uploadsDir, generated.storage_filename));
+assert.equal(emailAttachments[0].mimeType, generated.mime_type);
+await assert.rejects(
+  () => resolveEmailAttachmentsForUser(3, [generated.url]),
+  /email_attachment_not_owned/,
+  'another user cannot use the image as an email attachment',
+);
 
 const image = { url: generated.url, type: 'generated' as const };
 const firstMessageId = await appendChatMessage(1, chatId, 'assistant', 'first', null, null, [image]);

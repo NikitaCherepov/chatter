@@ -1,5 +1,7 @@
 import { getUserById } from './chats.js';
 import { createInvokeSubagentTool, runAgent } from './agent-runner.js';
+import { materializeAssetInput } from './response-attachments.js';
+import { attachMediaAsset } from './media-assets.js';
 import { DEFAULT_LANGUAGE, getLanguageDisplayName, normalizeSupportedLanguage } from '../i18n/languages.js';
 import {
   createNewspaperAgentRun,
@@ -53,6 +55,7 @@ After research, return exactly one valid JSON object and no markdown or commenta
       "title": "string",
       "text": "string",
       "url": "optional direct URL of the main material",
+      "image_url": "optional exact image URL",
       "sources": [{ "title": "string", "url": "direct URL" }]
     },
     {
@@ -60,13 +63,14 @@ After research, return exactly one valid JSON object and no markdown or commenta
       "type": "note",
       "title": "optional string",
       "text": "optional string",
-      "url": "optional direct URL"
+      "url": "optional direct URL",
+      "image_url": "optional exact image URL"
     },
     {
       "id": "unique string",
       "type": "notes_list",
       "title": "optional string",
-      "items": [{ "id": "optional string", "title": "optional string", "text": "optional string", "url": "optional direct URL" }]
+      "items": [{ "id": "optional string", "title": "optional string", "text": "optional string", "url": "optional direct URL", "image_url": "optional exact image URL" }]
     },
     {
       "id": "unique string",
@@ -90,7 +94,7 @@ After research, return exactly one valid JSON object and no markdown or commenta
 
 There are exactly five block types: article, note, notes_list, weather, image. "hero" is never a block type; it is an article role. Articles may keep multiple sources. Notes have only their own url and never sources.
 
-For the current version do not create image blocks, because image research/generation is not connected yet. Do not invent weather; include weather only if the assigned context explicitly requests it and a researcher verifies it. Use article for developed stories, note for one compact item, and notes_list for related briefs. Include at most one hero article.`;
+Do not invent weather; include weather only if the assigned context explicitly requests it and a researcher verifies it. Use article for developed stories, note for one compact item, and notes_list for related briefs. Include at most one hero article.`;
 
 const emitRun = (runId: number) => {
   const run = getNewspaperRunInternal(runId);
@@ -137,6 +141,45 @@ const extractJson = (text: string): unknown => {
     || trimmed.slice(trimmed.indexOf('{'), trimmed.lastIndexOf('}') + 1);
   if (!candidate) throw new Error('newspaper_editor_returned_no_json');
   return JSON.parse(candidate);
+};
+
+const materializeNewspaperImages = async (
+  userId: number,
+  document: ReturnType<typeof validateNewspaperDocument>,
+) => {
+  const assetIds = new Set<number>();
+  const resolved = new Map<string, string | null>();
+  const normalizeImageUrl = async (url: string | undefined): Promise<string | undefined> => {
+    if (!url) return undefined;
+    if (resolved.has(url)) return resolved.get(url) || undefined;
+    try {
+      const materialized = await materializeAssetInput(userId, { url, retention: 'temporary' });
+      if (materialized.kind !== 'image' || !materialized.mediaAsset) throw new Error('not_an_image');
+      assetIds.add(materialized.mediaAsset.id);
+      resolved.set(url, materialized.localUrl);
+      return materialized.localUrl;
+    } catch (error: any) {
+      console.warn('[newspaper] image materialization failed:', url, error?.message || error);
+      resolved.set(url, null);
+      return undefined;
+    }
+  };
+
+  for (const block of document.blocks) {
+    if ('image_url' in block) {
+      const normalized = await normalizeImageUrl(block.image_url);
+      if (normalized) block.image_url = normalized;
+      else delete block.image_url;
+    }
+    if (block.type === 'notes_list') {
+      for (const item of block.items) {
+        const normalized = await normalizeImageUrl(item.image_url);
+        if (normalized) item.image_url = normalized;
+        else delete item.image_url;
+      }
+    }
+  }
+  return { document, assetIds };
 };
 
 export const startNewspaperRun = (runId: number): boolean => {
@@ -186,7 +229,6 @@ export const startNewspaperRun = (runId: number): boolean => {
         },
       },
     });
-
     const editorInput = [
       `Create a personal newspaper issue for local date ${date} (UTC${timezoneOffset >= 0 ? '+' : ''}${timezoneOffset}).`,
       `Newspaper name: ${newspaper.name}`,
@@ -243,11 +285,20 @@ export const startNewspaperRun = (runId: number): boolean => {
     setNewspaperRunPhase(runId, 'validating');
     emitRun(runId);
     const rawDocument = extractJson(result.finalText);
-    const document = validateNewspaperDocument({
+    const validatedDocument = validateNewspaperDocument({
       ...(rawDocument as Record<string, unknown>),
       date,
     });
+    const { document, assetIds } = await materializeNewspaperImages(run.user_id, validatedDocument);
     const issue = createNewspaperIssue(run.user_id, run.newspaper_id, document);
+    for (const assetId of assetIds) {
+      attachMediaAsset({
+        assetId,
+        entityType: 'newspaper_issue',
+        entityId: issue.id,
+        slot: 'image',
+      });
+    }
     finishNewspaperRun(runId, {
       status: 'ready',
       phase: 'ready',

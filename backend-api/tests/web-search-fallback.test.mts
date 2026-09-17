@@ -21,6 +21,19 @@ globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) =>
   }
   tavilyRequestCount += 1;
   requestBody = JSON.parse(`${init?.body || '{}'}`) as Record<string, unknown>;
+  if (requestBody.include_images === true) {
+    return new Response(JSON.stringify({
+      images: [
+        { url: 'https://cdn.example.com/fallback.jpg', description: 'Fallback image' },
+      ],
+      results: [{
+        title: 'Image source page',
+        url: 'https://example.com/image-source',
+        images: [{ url: 'https://cdn.example.com/source.jpg', description: 'Source image' }],
+      }],
+      usage: { credits: 1 },
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  }
   return new Response(JSON.stringify({
     answer: 'Test summary',
     request_id: 'test-request',
@@ -113,6 +126,19 @@ assert.equal(tavily?.resultsReturned, 14);
 assert.equal(google?.successes, 1);
 assert.equal(google?.resultsReturned, 1);
 assert.equal(brave?.captchaFailures, 1);
+
+// A connected search provider may return ordinary page results for an image
+// request. Those are not usable image URLs, so the chain must continue.
+const imageResult = await runWebSearch('image fallback test', {
+  ...options,
+  searchType: 'images',
+  sort: 'relevance',
+  freshness: 'any',
+});
+assert.equal(requestBody?.include_images, true);
+assert.equal(requestBody?.include_image_descriptions, true);
+assert.match(imageResult, /"image_url":"https:\/\/cdn\.example\.com\/source\.jpg"/);
+assert.match(imageResult, /"source_page_url":"https:\/\/example\.com\/image-source"/);
 
 updateWebSearchRuntimeSettings({ enabled: false });
 const disabled = await runWebSearch('disabled search', options);

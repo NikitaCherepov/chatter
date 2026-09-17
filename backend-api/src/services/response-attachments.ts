@@ -1,13 +1,21 @@
 import net from 'node:net';
+import fs from 'node:fs';
 import path from 'node:path';
 import { lookup } from 'node:dns/promises';
 import type { MessageAttachment, MessageImage } from '../types.js';
 import { saveUserDocument } from './attachment-storage.js';
 import { checkBotFilePermission } from './bot-file-policy.js';
 import { parseDocument } from './document-parser.js';
-import { saveImageAsset } from './media-assets.js';
+import {
+  getMediaAssetById,
+  getMediaAssetByUrl,
+  getReusableMediaAssetBySourceUrl,
+  saveImageAsset,
+  type MediaAsset,
+} from './media-assets.js';
+import { resolveImageFile } from './image-storage.js';
 import { resolveEmailAttachmentReference } from './mail.js';
-import { saveTemporaryUserFile, TEMPORARY_FILE_TTL_SECONDS } from './temporary-files.js';
+import { extendTemporaryUserFile, resolveTemporaryUserFile, saveTemporaryUserFile } from './temporary-files.js';
 import { countTokens } from './tokenizer.js';
 
 const MAX_RESPONSE_FILE_BYTES = 20 * 1024 * 1024;
@@ -139,19 +147,125 @@ const downloadRemoteFile = async (value: string): Promise<FileSource> => {
   throw new Error('too_many_redirects');
 };
 
-export const saveTempFileForUse = async (
+export type MaterializedAsset = {
+  assetRef: string;
+  kind: 'image' | 'file';
+  localUrl: string;
+  attachmentUrl: string;
+  filename: string;
+  mimeType: string;
+  sizeBytes: number;
+  buffer: Buffer;
+  mediaAsset?: MediaAsset;
+};
+
+const materializedImage = (asset: MediaAsset, buffer: Buffer): MaterializedAsset => ({
+  assetRef: `media:${asset.id}`,
+  kind: 'image',
+  localUrl: asset.local_url,
+  attachmentUrl: asset.local_url,
+  filename: asset.storage_filename,
+  mimeType: asset.mime_type,
+  sizeBytes: asset.size_bytes,
+  buffer,
+  mediaAsset: asset,
+});
+
+const readMediaAsset = (asset: MediaAsset): MaterializedAsset => {
+  const filepath = resolveImageFile(asset.storage_filename);
+  if (!filepath) throw new Error('media_asset_file_missing');
+  return materializedImage(asset, fs.readFileSync(filepath));
+};
+
+export const materializeAssetInput = async (
   userId: number,
-  args: { file_ref?: unknown; url?: unknown; filename?: unknown },
-): Promise<string> => {
+  args: {
+    asset_ref?: unknown;
+    file_ref?: unknown;
+    url?: unknown;
+    filename?: unknown;
+    retention?: unknown;
+    source_page_url?: unknown;
+    title?: unknown;
+    caption?: unknown;
+    credit?: unknown;
+  },
+): Promise<MaterializedAsset> => {
+  const assetRef = typeof args.asset_ref === 'string' ? args.asset_ref.trim() : '';
   const fileRef = typeof args.file_ref === 'string' ? args.file_ref.trim() : '';
-  const remoteUrl = typeof args.url === 'string' ? args.url.trim() : '';
-  if (Boolean(fileRef) === Boolean(remoteUrl)) {
-    return JSON.stringify({ status: 'error', message: 'Provide exactly one of file_ref or url.' });
+  const inputUrl = typeof args.url === 'string' ? args.url.trim() : '';
+  if ([assetRef, fileRef, inputUrl].filter(Boolean).length !== 1) {
+    throw new Error('provide_exactly_one_asset_input');
+  }
+
+  if (assetRef.startsWith('media:')) {
+    const assetId = Number(assetRef.slice('media:'.length));
+    const asset = Number.isSafeInteger(assetId) && assetId > 0 ? getMediaAssetById(assetId) : null;
+    if (!asset || asset.user_id !== userId) throw new Error('media_asset_not_found_or_not_owned');
+    return readMediaAsset(asset);
+  }
+  if (assetRef.startsWith('file:')) {
+    const temporary = resolveTemporaryUserFile(userId, assetRef.slice('file:'.length));
+    if (!temporary) throw new Error('saved_asset_missing_or_expired');
+    extendTemporaryUserFile(userId, temporary.url);
+    return {
+      assetRef,
+      kind: 'file',
+      localUrl: temporary.url,
+      attachmentUrl: temporary.url,
+      filename: temporary.name,
+      mimeType: temporary.mime_type,
+      sizeBytes: temporary.size_bytes,
+      buffer: fs.readFileSync(temporary.filepath),
+    };
+  }
+  if (assetRef) throw new Error('invalid_asset_ref');
+
+  if (inputUrl.startsWith('/api/v1/images/') || inputUrl.startsWith('/uploads/')) {
+    const asset = getMediaAssetByUrl(inputUrl);
+    if (!asset || asset.user_id !== userId) throw new Error('media_asset_not_found_or_not_owned');
+    return readMediaAsset(asset);
+  }
+
+  if (inputUrl.startsWith('/api/v1/attachments/')) {
+    const temporary = resolveTemporaryUserFile(userId, inputUrl);
+    if (temporary) {
+      extendTemporaryUserFile(userId, temporary.url);
+      return {
+        assetRef: `file:${temporary.url}`,
+        kind: 'file',
+        localUrl: temporary.url,
+        attachmentUrl: temporary.url,
+        filename: temporary.name,
+        mimeType: temporary.mime_type,
+        sizeBytes: temporary.size_bytes,
+        buffer: fs.readFileSync(temporary.filepath),
+      };
+    }
+    const [attachment] = await import('./mail.js').then(module =>
+      module.resolveEmailAttachmentsForUser(userId, [inputUrl])
+    );
+    if (!attachment) throw new Error('attachment_not_found_or_not_owned');
+    return {
+      assetRef: `file:${attachment.url}`,
+      kind: 'file',
+      localUrl: attachment.url,
+      attachmentUrl: attachment.url,
+      filename: attachment.name,
+      mimeType: attachment.mimeType,
+      sizeBytes: attachment.sizeBytes,
+      buffer: fs.readFileSync(attachment.filepath),
+    };
+  }
+
+  if (inputUrl) {
+    const cached = getReusableMediaAssetBySourceUrl(userId, inputUrl);
+    if (cached) return readMediaAsset(cached);
   }
 
   const source = fileRef
     ? await resolveEmailAttachmentReference(userId, fileRef)
-    : await downloadRemoteFile(remoteUrl);
+    : await downloadRemoteFile(inputUrl);
   if (!source.buffer.length) throw new Error('empty_file');
   if (source.buffer.length > MAX_RESPONSE_FILE_BYTES) throw new Error('file_too_large');
 
@@ -162,20 +276,29 @@ export const saveTempFileForUse = async (
     MAX_RESPONSE_FILE_BYTES,
   );
   if (!allowedFile) {
-    const filename = path.basename(`${args.filename || source.filename || 'attachment'}`);
-    return JSON.stringify({
-      status: 'unsupported_file_type',
-      filename,
-      extension: path.extname(filename).slice(1).toLowerCase() || null,
-    });
+    throw new Error('unsupported_file_type');
   }
   if (source.buffer.length > allowedFile.maxSizeBytes) {
-    return JSON.stringify({
-      status: 'file_too_large',
-      filename: allowedFile.filename,
-      size_bytes: source.buffer.length,
-      max_size_bytes: allowedFile.maxSizeBytes,
+    throw new Error('file_too_large');
+  }
+
+  if (allowedFile.kind === 'image') {
+    const retention = args.retention === 'persistent' ? 'persistent' : 'temporary';
+    const saved = await saveImageAsset({
+      userId,
+      data: source.buffer,
+      retention,
+      kind: 'external',
+      sourceUrl: inputUrl || null,
+      sourcePageUrl: typeof args.source_page_url === 'string' ? args.source_page_url : null,
+      credit: typeof args.credit === 'string' ? args.credit : null,
+      metadata: {
+        title: typeof args.title === 'string' ? args.title : null,
+        caption: typeof args.caption === 'string' ? args.caption : null,
+        original_filename: allowedFile.filename,
+      },
     });
+    return materializedImage(saved, source.buffer);
   }
 
   const saved = await saveTemporaryUserFile(
@@ -184,46 +307,58 @@ export const saveTempFileForUse = async (
     allowedFile.filename,
     allowedFile.mimeType,
   );
-  return JSON.stringify({
-    status: 'saved',
+  return {
+    assetRef: `file:${saved.url}`,
+    kind: 'file',
+    localUrl: saved.url,
+    attachmentUrl: saved.url,
     filename: allowedFile.filename,
-    mime_type: allowedFile.mimeType,
-    size_bytes: saved.size_bytes,
-    attachment_url: saved.url,
-    expires_in_seconds: TEMPORARY_FILE_TTL_SECONDS,
-    instruction: 'Use this exact relative attachment_url when another tool asks for a saved file.',
-  });
+    mimeType: allowedFile.mimeType,
+    sizeBytes: saved.size_bytes,
+    buffer: source.buffer,
+  };
 };
 
 export const attachFileToResponse = async (
   userId: number,
-  args: { file_ref?: unknown; url?: unknown; filename?: unknown },
+  args: { asset_ref?: unknown; file_ref?: unknown; url?: unknown; filename?: unknown },
   sink: ResponseFileSink,
 ): Promise<string> => {
-  const fileRef = typeof args.file_ref === 'string' ? args.file_ref.trim() : '';
-  const remoteUrl = typeof args.url === 'string' ? args.url.trim() : '';
-  if (Boolean(fileRef) === Boolean(remoteUrl)) {
-    return JSON.stringify({ status: 'error', message: 'Provide exactly one of file_ref or url.' });
-  }
-
-  const sourceKey = fileRef ? `ref:${fileRef}` : `url:${remoteUrl}`;
+  const materialized = await materializeAssetInput(userId, args);
+  const sourceKey = `asset:${materialized.assetRef}`;
   if (sink.sourceKeys.has(sourceKey)) {
     return JSON.stringify({ status: 'already_attached' });
   }
 
-  const source = fileRef
-    ? await resolveEmailAttachmentReference(userId, fileRef)
-    : await downloadRemoteFile(remoteUrl);
+  if (materialized.kind === 'image') {
+    const image: MessageImage = { url: materialized.localUrl, type: 'external' };
+    sink.images.push(image);
+    sink.sourceKeys.add(sourceKey);
+    return JSON.stringify({
+      status: 'attached',
+      kind: 'image',
+      filename: materialized.filename,
+      mime_type: materialized.mimeType,
+      size_bytes: materialized.sizeBytes,
+      url: materialized.localUrl,
+    });
+  }
+
+  const source = {
+    buffer: materialized.buffer,
+    filename: materialized.filename,
+    mimeType: materialized.mimeType,
+  };
   if (!source.buffer.length) throw new Error('empty_file');
   if (source.buffer.length > MAX_RESPONSE_FILE_BYTES) throw new Error('file_too_large');
   const allowedFile = checkBotFilePermission(
-    args.filename,
+    undefined,
     source.filename,
     source.mimeType,
     MAX_RESPONSE_FILE_BYTES,
   );
   if (!allowedFile) {
-    const filename = path.basename(`${args.filename || source.filename || 'attachment'}`);
+    const filename = path.basename(source.filename || 'attachment');
     return JSON.stringify({
       status: 'unsupported_file_type',
       filename,
@@ -236,29 +371,6 @@ export const attachFileToResponse = async (
       filename: allowedFile.filename,
       size_bytes: source.buffer.length,
       max_size_bytes: allowedFile.maxSizeBytes,
-    });
-  }
-
-  const savedImage = allowedFile.kind === 'image'
-    ? await saveImageAsset({
-      userId,
-      data: source.buffer,
-      retention: 'temporary',
-      kind: 'external',
-      sourceUrl: remoteUrl || null,
-    })
-    : null;
-  if (savedImage) {
-    const image: MessageImage = { url: savedImage.url, type: 'external' };
-    sink.images.push(image);
-    sink.sourceKeys.add(sourceKey);
-    return JSON.stringify({
-      status: 'attached',
-      kind: 'image',
-      filename: allowedFile.filename,
-      mime_type: savedImage.mime_type,
-      size_bytes: source.buffer.length,
-      url: savedImage.url,
     });
   }
 

@@ -61,7 +61,7 @@ export type WebPageReadHooks = {
 export type BrowserSearchPayload = {
   query?: string;
   mode?: 'web' | 'wikipedia';
-  searchType?: 'web' | 'news';
+  searchType?: 'web' | 'news' | 'images';
   sort?: 'relevance' | 'date';
   freshness?: 'any' | 'day' | 'week' | 'month' | 'year';
   page?: number;
@@ -757,7 +757,11 @@ export class ChatterBrowser {
     const query = `${payload?.query || ''}`.trim();
     if (!query || query.length > 500) throw new Error('desktop_search_query_invalid');
     const mode = payload?.mode === 'wikipedia' ? 'wikipedia' : 'web';
-    const searchType = payload?.searchType === 'news' ? 'news' : 'web';
+    const searchType = payload?.searchType === 'news'
+      ? 'news'
+      : payload?.searchType === 'images'
+        ? 'images'
+        : 'web';
     const sort = payload?.sort === 'date' ? 'date' : 'relevance';
     const freshness = payload?.freshness === 'day'
       || payload?.freshness === 'week'
@@ -777,6 +781,7 @@ export class ChatterBrowser {
       googleUrl.searchParams.set('start', `${(page - 1) * 10}`);
       googleUrl.searchParams.set('filter', '0');
       if (searchType === 'news') googleUrl.searchParams.set('tbm', 'nws');
+      if (searchType === 'images') googleUrl.searchParams.set('tbm', 'isch');
       const timeFilters: string[] = [];
       const freshnessFilter = freshness === 'day'
         ? 'qdr:d'
@@ -810,7 +815,9 @@ export class ChatterBrowser {
           const searchType = ${JSON.stringify(searchType)};
           const resultCount = mode === 'wikipedia'
             ? document.querySelectorAll('.mw-search-result-heading a').length
-            : document.querySelectorAll(searchType === 'news' ? 'a h3, a [role="heading"][aria-level="3"]' : 'a h3').length;
+            : searchType === 'images'
+              ? document.querySelectorAll('a[href*="/imgres?"] img, a[href*="imgurl="] img').length
+              : document.querySelectorAll(searchType === 'news' ? 'a h3, a [role="heading"][aria-level="3"]' : 'a h3').length;
           return {
             ready: document.readyState === 'complete' || document.readyState === 'interactive',
             challenge,
@@ -857,6 +864,31 @@ export class ChatterBrowser {
           if (!title || !url || seen.has(url)) return;
           seen.add(url);
           results.push({ title, content, url, engine, engines: [engine] });
+        };
+        const addImage = (imageUrl, thumbnailUrl, sourcePageUrl, title) => {
+          const normalizeHttpUrl = (value) => {
+            try {
+              const parsed = new URL(value, location.href);
+              return ['http:', 'https:'].includes(parsed.protocol) ? parsed.href : '';
+            } catch {
+              return '';
+            }
+          };
+          imageUrl = normalizeHttpUrl(imageUrl);
+          thumbnailUrl = normalizeHttpUrl(thumbnailUrl);
+          sourcePageUrl = normalizeHttpUrl(sourcePageUrl);
+          if (!imageUrl || seen.has(imageUrl)) return;
+          seen.add(imageUrl);
+          results.push({
+            title: clean(title, 500) || 'Image result',
+            content: '',
+            url: sourcePageUrl || imageUrl,
+            img_src: imageUrl,
+            thumbnail_src: thumbnailUrl || imageUrl,
+            source: 'google-images',
+            engine: 'google-images',
+            engines: ['google-images'],
+          });
         };
         const extractGoogleSnippet = (heading, anchor) => {
           const roots = [];
@@ -918,13 +950,30 @@ export class ChatterBrowser {
             }
           }
 
-          const resultSelector = searchType === 'news' ? 'a h3, a [role="heading"][aria-level="3"]' : 'a h3';
-          document.querySelectorAll(resultSelector).forEach((heading) => {
-            const anchor = heading.closest('a');
-            if (!(anchor instanceof HTMLAnchorElement)) return;
-            const title = clean(heading.textContent || '', 500);
-            add(title, anchor.href, extractGoogleSnippet(heading, anchor), searchType === 'news' ? 'google-news' : 'google');
-          });
+          if (searchType === 'images') {
+            document.querySelectorAll('a[href*="/imgres?"], a[href*="imgurl="]').forEach((node) => {
+              if (!(node instanceof HTMLAnchorElement)) return;
+              const image = node.querySelector('img');
+              if (!(image instanceof HTMLImageElement)) return;
+              let imageUrl = '';
+              let sourcePageUrl = '';
+              try {
+                const resultUrl = new URL(node.href, location.href);
+                imageUrl = resultUrl.searchParams.get('imgurl') || resultUrl.searchParams.get('mediaurl') || '';
+                sourcePageUrl = resultUrl.searchParams.get('imgrefurl') || resultUrl.searchParams.get('url') || '';
+              } catch {}
+              const thumbnailUrl = image.currentSrc || image.src || image.dataset.src || '';
+              addImage(imageUrl || thumbnailUrl, thumbnailUrl, sourcePageUrl, image.alt || image.title || node.getAttribute('aria-label') || '');
+            });
+          } else {
+            const resultSelector = searchType === 'news' ? 'a h3, a [role="heading"][aria-level="3"]' : 'a h3';
+            document.querySelectorAll(resultSelector).forEach((heading) => {
+              const anchor = heading.closest('a');
+              if (!(anchor instanceof HTMLAnchorElement)) return;
+              const title = clean(heading.textContent || '', 500);
+              add(title, anchor.href, extractGoogleSnippet(heading, anchor), searchType === 'news' ? 'google-news' : 'google');
+            });
+          }
         }
 
         return {
