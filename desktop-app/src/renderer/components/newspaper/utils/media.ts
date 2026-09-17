@@ -1,4 +1,4 @@
-import { API_BASE, loadTokens } from '../../../lib/api';
+import { resolveAuthenticatedAssetUrl } from '../../../lib/api';
 
 export function safeUrl(value?: string) {
   if (!value) return null;
@@ -10,17 +10,14 @@ export function safeUrl(value?: string) {
   }
 }
 
-export function safeImageUrl(value?: string) {
+export function safeImageUrl(value?: string, width = 1200) {
   if (!value) return null;
   if (value.startsWith('data:image/') || value.startsWith('blob:')) return value;
   try {
-    const url = value.startsWith('/')
-      ? new URL(API_BASE + value)
-      : new URL(value, window.location.href);
-    if (value.startsWith('/')) {
-      const token = loadTokens()?.access_token;
-      if (token) url.searchParams.set('token', token);
-    }
+    const resolved = value.startsWith('/')
+      ? resolveAuthenticatedAssetUrl(value, { width, preserveAnimation: true })
+      : new URL(value, window.location.href).href;
+    const url = new URL(resolved);
     return ['http:', 'https:', 'file:'].includes(url.protocol) ? url.href : null;
   } catch {
     return null;

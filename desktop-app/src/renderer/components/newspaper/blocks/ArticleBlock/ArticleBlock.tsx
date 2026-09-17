@@ -16,7 +16,7 @@ export function ArticleBlock({
   interactive?: boolean;
   titleLink?: boolean;
 }) {
-  const image = safeImageUrl(article.image_url);
+  const image = safeImageUrl(article.image_url, 1200);
   const articleUrl = safeUrl(article.url);
   const panelUrl = interactive ? articleUrl : null;
   const openArticle = () => {
@@ -68,6 +68,6 @@ export function ArticleImage({
   article?: ArticleBlockData;
   className?: string;
 }) {
-  const image = safeImageUrl(article?.image_url);
+  const image = safeImageUrl(article?.image_url, 1200);
   return image ? <img className={className} src={image} alt="" /> : null;
 }

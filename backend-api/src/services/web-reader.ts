@@ -67,6 +67,14 @@ type WebReaderOptions = {
 };
 
 type WebPageLink = { text?: string; href?: string };
+type WebPageImage = {
+  url?: string;
+  alt?: string;
+  caption?: string;
+  width?: number;
+  height?: number;
+  animated?: boolean;
+};
 
 type WebPageDocument = {
   provider: WebReaderProvider;
@@ -75,6 +83,7 @@ type WebPageDocument = {
   url: string;
   text: string;
   links: WebPageLink[];
+  images?: WebPageImage[];
   description?: string;
   language?: string;
   canonicalUrl?: string;
@@ -93,6 +102,7 @@ type DesktopReadResult = {
   url?: string;
   text?: string;
   elements?: WebPageLink[];
+  images?: WebPageImage[];
   truncated?: boolean;
 };
 
@@ -138,6 +148,19 @@ const normalizeLinks = (links: WebPageLink[]): WebPageLink[] => links
   .filter((link, index, items) => items.findIndex(candidate => candidate.href === link.href) === index)
   .slice(0, 40);
 
+const normalizeImages = (images: WebPageImage[] = []): WebPageImage[] => images
+  .map(image => ({
+    url: `${image?.url || ''}`.trim(),
+    alt: `${image?.alt || ''}`.replace(/\s+/g, ' ').trim().slice(0, 500),
+    caption: `${image?.caption || ''}`.replace(/\s+/g, ' ').trim().slice(0, 500),
+    ...(Number.isFinite(image?.width) && Number(image.width) > 0 ? { width: Math.round(Number(image.width)) } : {}),
+    ...(Number.isFinite(image?.height) && Number(image.height) > 0 ? { height: Math.round(Number(image.height)) } : {}),
+    ...(image?.animated === true ? { animated: true } : {}),
+  }))
+  .filter(image => /^https?:\/\//i.test(image.url || ''))
+  .filter((image, index, items) => items.findIndex(candidate => candidate.url === image.url) === index)
+  .slice(0, 12);
+
 const renderDocumentChunk = (sessionId: string, session: WebReaderSession, offset: number): string => {
   const { document } = session;
   if (offset >= document.text.length && document.text.length > 0) throw new Error('web_reader_cursor_invalid');
@@ -145,6 +168,14 @@ const renderDocumentChunk = (sessionId: string, session: WebReaderSession, offse
   const links = normalizeLinks(document.links)
     .map(link => `- ${link.text || link.href}: ${link.href}`)
     .join('\n');
+  const images = offset === 0 ? normalizeImages(document.images)
+    .map(image => {
+      const details = [image.alt, image.caption, image.width && image.height ? `${image.width}x${image.height}` : '', image.animated ? 'animated GIF' : '']
+        .filter(Boolean)
+        .join(' · ');
+      return `- ${image.url}${details ? ` — ${details}` : ''}`;
+    })
+    .join('\n') : '';
   const metadata = [
     document.title ? `Title: ${document.title}` : '',
     `URL: ${document.url}`,
@@ -153,6 +184,7 @@ const renderDocumentChunk = (sessionId: string, session: WebReaderSession, offse
     document.language ? `Language: ${document.language}` : '',
     `Reader: ${document.provider}`,
     links ? `Links:\n${links}` : '',
+    images ? `Image candidates from this page (exact URLs; inspect before use):\n${images}` : '',
     '',
     document.text.slice(offset, end),
     document.truncated && end >= document.text.length ? '[Content truncated by reader safety limit]' : '',
@@ -174,6 +206,7 @@ const toDesktopDocument = (requestedUrl: string, result: DesktopReadResult): Web
     url: `${result.url || requestedUrl}`.trim(),
     text: text.slice(0, WEB_READER_MAX_TEXT),
     links: result.elements || [],
+    images: result.images || [],
     truncated: Boolean(result.truncated) || text.length > WEB_READER_MAX_TEXT,
   };
 };
@@ -195,6 +228,24 @@ const BROWSERLESS_EXTRACTOR = `(() => {
     text: clean(anchor.innerText || anchor.textContent || '', 240),
     href: anchor.href,
   })).filter((link) => /^https?:\\/\\//i.test(link.href)).slice(0, 160);
+  const images = [];
+  const seenImages = new Set();
+  const addImage = (rawUrl, image, fallbackAlt = '') => {
+    try {
+      const url = new URL(String(rawUrl || ''), location.href);
+      if (!['http:', 'https:'].includes(url.protocol) || seenImages.has(url.href)) return;
+      const width = Math.round(Number(image?.naturalWidth || image?.width || image?.getAttribute?.('width') || 0));
+      const height = Math.round(Number(image?.naturalHeight || image?.height || image?.getAttribute?.('height') || 0));
+      if (width > 0 && height > 0 && width < 160 && height < 160) return;
+      const caption = clean(image?.closest?.('figure')?.querySelector?.('figcaption')?.innerText || '', 500);
+      const alt = clean(image?.alt || image?.title || fallbackAlt, 500);
+      seenImages.add(url.href);
+      images.push({ url: url.href, ...(alt ? { alt } : {}), ...(caption ? { caption } : {}), ...(width > 0 ? { width } : {}), ...(height > 0 ? { height } : {}), ...(/\\.gif(?:$|[?#])/i.test(url.href) ? { animated: true } : {}) });
+    } catch {}
+  };
+  const socialImage = document.querySelector('meta[property="og:image"], meta[name="twitter:image"]')?.content;
+  if (socialImage) addImage(socialImage, null, document.title);
+  document.querySelectorAll('article img, main img, [role="main"] img, figure img').forEach((image) => addImage(image.currentSrc || image.src || image.getAttribute('data-src'), image));
   return JSON.stringify({
     title: clean(document.title, 500),
     url: location.href,
@@ -203,6 +254,7 @@ const BROWSERLESS_EXTRACTOR = `(() => {
     language: clean(document.documentElement.lang, 50),
     text: selected.slice(0, ${WEB_READER_MAX_TEXT}),
     links,
+    images: images.slice(0, 30),
     truncated: selected.length > ${WEB_READER_MAX_TEXT},
   });
 })()`;
@@ -278,6 +330,7 @@ const getCleanTextFromBrowserless = async (
       language: `${extracted.language || ''}`.trim(),
       text: text.slice(0, WEB_READER_MAX_TEXT),
       links: Array.isArray(extracted.links) ? extracted.links : [],
+      images: Array.isArray(extracted.images) ? extracted.images : [],
       truncated: Boolean(extracted.truncated) || text.length > WEB_READER_MAX_TEXT,
     };
     recordWebReaderStat('browserless', 'success', document.text.length);

@@ -51,6 +51,7 @@ export type BrowserWebPageResult = {
   url: string;
   text: string;
   elements?: BrowserElement[];
+  images?: BrowserPageImage[];
   truncated?: boolean;
 };
 
@@ -110,6 +111,15 @@ type BrowserElement = {
   frame?: string;
 };
 
+type BrowserPageImage = {
+  url: string;
+  alt?: string;
+  caption?: string;
+  width?: number;
+  height?: number;
+  animated?: boolean;
+};
+
 type BrowserFrameSnapshot = {
   frameTreeNodeId: number;
   frameUrl: string;
@@ -129,6 +139,7 @@ type BrowserFrameReadResult = {
   url?: string;
   text?: string;
   elements?: BrowserElement[];
+  images?: BrowserPageImage[];
   truncated?: boolean;
   scroll?: { y: number; viewport_width: number; viewport_height: number; document_height: number };
 };
@@ -2936,6 +2947,36 @@ export class ChatterBrowser {
           expanded: ariaExpanded === 'true' ? true : ariaExpanded === 'false' ? false : undefined,
         };
       });
+      const images = [];
+      if (mode === 'full') {
+        const seenImages = new Set();
+        const addImage = (rawUrl, image, fallbackAlt = '') => {
+          try {
+            const url = new URL(String(rawUrl || ''), location.href);
+            if (!['http:', 'https:'].includes(url.protocol) || seenImages.has(url.href)) return;
+            const width = Math.round(Number(image?.naturalWidth || image?.width || image?.getAttribute?.('width') || 0));
+            const height = Math.round(Number(image?.naturalHeight || image?.height || image?.getAttribute?.('height') || 0));
+            if (width > 0 && height > 0 && width < 160 && height < 160) return;
+            const figure = image?.closest?.('figure');
+            const caption = clean(figure?.querySelector?.('figcaption')?.innerText || '', 500);
+            const alt = clean(image?.alt || image?.title || fallbackAlt, 500);
+            seenImages.add(url.href);
+            images.push({
+              url: url.href,
+              ...(alt ? { alt } : {}),
+              ...(caption ? { caption } : {}),
+              ...(width > 0 ? { width } : {}),
+              ...(height > 0 ? { height } : {}),
+              ...(/\.gif(?:$|[?#])/i.test(url.href) ? { animated: true } : {}),
+            });
+          } catch {}
+        };
+        const socialImage = document.querySelector('meta[property="og:image"], meta[name="twitter:image"]')?.content;
+        if (socialImage) addImage(socialImage, null, document.title);
+        document.querySelectorAll('article img, main img, [role="main"] img, figure img').forEach((image) => {
+          addImage(image.currentSrc || image.src || image.getAttribute('data-src'), image);
+        });
+      }
       const textResult = collectText(document.body, mode !== 'full');
       const rawText = textResult.text;
       return {
@@ -2943,6 +2984,7 @@ export class ChatterBrowser {
         url: location.href,
         text: rawText.slice(0, maxText),
         elements,
+        images: images.slice(0, 30),
         truncated: textResult.truncated,
         scroll: {
           y: Math.round(window.scrollY),
@@ -2993,6 +3035,8 @@ export class ChatterBrowser {
     const url = `${mainRead.result.url || contents.getURL()}`;
     const textParts: string[] = [];
     const elements: BrowserElement[] = [];
+    const images: BrowserPageImage[] = [];
+    const seenImageUrls = new Set<string>();
     const frameInfos: BrowserFrameInfo[] = [];
     const frameSnapshots = new Map<string, BrowserFrameSnapshot>();
     let textLength = 0;
@@ -3054,6 +3098,13 @@ export class ChatterBrowser {
           internalRef,
         });
       }
+      for (const image of result.images || []) {
+        if (images.length >= 30) break;
+        if (!seenImageUrls.has(image.url)) {
+          seenImageUrls.add(image.url);
+          images.push(image);
+        }
+      }
     }
 
     const text = textParts.join('');
@@ -3071,6 +3122,7 @@ export class ChatterBrowser {
       url,
       scroll: mainRead.result.scroll,
       truncated,
+      ...(images.length > 0 ? { images } : {}),
       ...(frameInfos.length > 0 ? { frames: frameInfos } : {}),
     };
 

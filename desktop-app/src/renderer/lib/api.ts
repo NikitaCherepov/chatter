@@ -765,14 +765,22 @@ export async function getAllMedia(limit = 100, offset = 0): Promise<{ media: Cha
   return apiFetch(`/api/v1/media/all?limit=${limit}&offset=${offset}`);
 }
 
-export function resolveImageUrl(url: string, thumbnailWidth?: number): string {
+export function resolveAuthenticatedAssetUrl(
+  url: string,
+  options: { width?: number; firstFrame?: boolean; preserveAnimation?: boolean } = {},
+): string {
   if (!url.startsWith('/')) return url;
   const tokens = loadTokens();
-  const params = new URLSearchParams();
-  if (tokens?.access_token) params.set('token', tokens.access_token);
-  if (thumbnailWidth && thumbnailWidth > 0) params.set('w', String(thumbnailWidth));
-  const qs = params.toString();
-  return `${API_BASE}${url}${qs ? `?${qs}` : ''}`;
+  const resolved = new URL(`${API_BASE}${url}`);
+  if (tokens?.access_token) resolved.searchParams.set('token', tokens.access_token);
+  if (options.width && options.width > 0) resolved.searchParams.set('w', String(Math.round(options.width)));
+  if (options.firstFrame) resolved.searchParams.set('frame', 'first');
+  if (options.preserveAnimation) resolved.searchParams.set('animated', '1');
+  return resolved.toString();
+}
+
+export function resolveImageUrl(url: string, thumbnailWidth?: number): string {
+  return resolveAuthenticatedAssetUrl(url, { width: thumbnailWidth });
 }
 
 export async function sendMessageToTelegram(messageId: number): Promise<{ ok: boolean }> {

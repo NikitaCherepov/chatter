@@ -3692,14 +3692,9 @@ export function ChatPage() {
     };
   }, []);
 
-  const resolveImageUrl = useCallback((url: string, thumbnailWidth?: number) => {
-    if (!url.startsWith('/')) return url;
-    const tokens = api.loadTokens();
-    const resolved = new URL(`${api.API_BASE}${url}`);
-    if (tokens?.access_token) resolved.searchParams.set('token', tokens.access_token);
-    if (thumbnailWidth && thumbnailWidth > 0) resolved.searchParams.set('w', String(thumbnailWidth));
-    return resolved.toString();
-  }, []);
+  const resolveImageUrl = useCallback((url: string, thumbnailWidth?: number) => (
+    api.resolveAuthenticatedAssetUrl(url, { width: thumbnailWidth })
+  ), []);
 
   const handleDownloadImage = useCallback(async (src: string) => {
     try {

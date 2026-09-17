@@ -296,6 +296,8 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
   // UI settings (app tab)
   const [uiSettings, setUiSettingsState] = useState<api.UiSettings>({ show_tokens: true });
   const [uiSettingsSaving, setUiSettingsSaving] = useState(false);
+  const [desktopBrowserSettings, setDesktopBrowserSettingsState] = useState({ concurrency: 2, searchEnabled: true, readerEnabled: true });
+  const [desktopBrowserSettingsSaving, setDesktopBrowserSettingsSaving] = useState(false);
   const [languagePreference, setLanguagePreferenceState] = useState<LanguagePreference>(
     () => getLanguagePreference(),
   );
@@ -399,6 +401,9 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
       api.getSubagentReasoningLevel()
         .then((res) => setSubagentReasoningLevelState(res.reasoning_level))
         .catch(() => {});
+      window.electronAPI.getDesktopBrowserSettings()
+        .then(setDesktopBrowserSettingsState)
+        .catch(() => {});
     }
   }, [section]);
 
@@ -472,6 +477,25 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
     setRenderPerfState(value as RenderPerfLevel);
     setRenderPerfLevel(value as RenderPerfLevel);
     toast.success(t('settings.app.renderPerfSaved'));
+  };
+
+  const desktopBrowserConcurrencyOptions = useMemo<SelectOption[]>(() => [1, 2, 3, 4, 5, 6].map(value => ({
+    value: String(value),
+    label: String(value),
+  })), []);
+
+  const saveDesktopBrowserSettings = async (next: typeof desktopBrowserSettings) => {
+    const previous = desktopBrowserSettings;
+    setDesktopBrowserSettingsState(next);
+    setDesktopBrowserSettingsSaving(true);
+    try {
+      setDesktopBrowserSettingsState(await window.electronAPI.setDesktopBrowserSettings(next));
+    } catch {
+      setDesktopBrowserSettingsState(previous);
+      toast.error(t('settings.toasts.saveSettingFailed'));
+    } finally {
+      setDesktopBrowserSettingsSaving(false);
+    }
   };
 
   const handleTelegramLinked = async () => {
@@ -2032,6 +2056,48 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
                   {t('settings.app.renderPerfHelp')}
                 </div>
               </div>
+
+              <div className={s.voiceDivider} />
+              <div className={s.voiceSectionTitle}>{t('settings.app.desktopBrowserTitle')}</div>
+
+              <div className={s.fieldGroup}>
+                <label className={s.fieldLabel}>{t('settings.app.desktopBrowserConcurrency')}</label>
+                <Select
+                  options={desktopBrowserConcurrencyOptions}
+                  value={String(desktopBrowserSettings.concurrency)}
+                  onChange={(value) => void saveDesktopBrowserSettings({ ...desktopBrowserSettings, concurrency: Number(value) })}
+                  disabled={desktopBrowserSettingsSaving}
+                />
+                <div style={{ fontSize: 11, color: 'var(--text-hint)', marginTop: 2 }}>
+                  {t('settings.app.desktopBrowserConcurrencyHelp')}
+                </div>
+              </div>
+
+              <div className={s.fieldGroup}>
+                <Checkbox
+                  checked={desktopBrowserSettings.searchEnabled}
+                  onChange={(checked) => void saveDesktopBrowserSettings({ ...desktopBrowserSettings, searchEnabled: checked })}
+                  label={t('settings.app.desktopSearch')}
+                  disabled={desktopBrowserSettingsSaving}
+                />
+                <div style={{ fontSize: 11, color: 'var(--text-hint)', marginTop: 2 }}>
+                  {t('settings.app.desktopSearchHelp')}
+                </div>
+              </div>
+
+              <div className={s.fieldGroup}>
+                <Checkbox
+                  checked={desktopBrowserSettings.readerEnabled}
+                  onChange={(checked) => void saveDesktopBrowserSettings({ ...desktopBrowserSettings, readerEnabled: checked })}
+                  label={t('settings.app.desktopReader')}
+                  disabled={desktopBrowserSettingsSaving}
+                />
+                <div style={{ fontSize: 11, color: 'var(--text-hint)', marginTop: 2 }}>
+                  {t('settings.app.desktopReaderHelp')}
+                </div>
+              </div>
+
+              <div className={s.voiceDivider} />
 
               <div className={s.fieldGroup}>
                 <Checkbox

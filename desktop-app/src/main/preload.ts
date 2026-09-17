@@ -54,6 +54,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   }) => ipcRenderer.invoke('search-browser:search', payload),
   readWebPage: (payload: { url: string; chat_id?: number }) =>
     ipcRenderer.invoke('web-reader:read', payload),
+  getDesktopBrowserSettings: () => ipcRenderer.invoke('browser-runtime:get-settings'),
+  setDesktopBrowserSettings: (settings: { concurrency: number; searchEnabled: boolean; readerEnabled: boolean }) =>
+    ipcRenderer.invoke('browser-runtime:set-settings', settings),
   cancelWebPageRead: () => ipcRenderer.invoke('web-reader:cancel'),
   googleAi: (payload: {
     action?: 'ask' | 'new_chat' | 'reload' | 'close_session';

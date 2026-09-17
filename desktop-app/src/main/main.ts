@@ -318,16 +318,33 @@ type DesktopBrowserSession = {
   browser: ChatterBrowser;
   preview: BrowserPreviewSession;
   idleTimer: ReturnType<typeof setTimeout> | null;
+  busy: boolean;
+  releaseJobSlot: (() => void) | null;
 };
 
 const searchSessions = new Map<string, DesktopBrowserSession>();
 const googleAiSessions = new Map<string, DesktopBrowserSession>();
 const webReaderSessions = new Map<string, DesktopBrowserSession>();
 const browserSessionWindows = new Map<string, BrowserWindow>();
-let searchQueue: Promise<void> = Promise.resolve();
-let webReaderQueue: Promise<void> = Promise.resolve();
+type DesktopBrowserRuntimeSettings = {
+  concurrency: number;
+  searchEnabled: boolean;
+  readerEnabled: boolean;
+};
+
+const DEFAULT_BROWSER_RUNTIME_SETTINGS: DesktopBrowserRuntimeSettings = {
+  concurrency: 2,
+  searchEnabled: true,
+  readerEnabled: true,
+};
+let browserRuntimeSettings = { ...DEFAULT_BROWSER_RUNTIME_SETTINGS };
+let activeBrowserJobs = 0;
+const browserJobWaiters: Array<() => void> = [];
+let nextBrowserWorkerId = 0;
 let searchChallengeWindow: BrowserWindow | null = null;
 let activeChallengeBrowser: ChatterBrowser | null = null;
+type QueuedBrowserChallenge = { browser: ChatterBrowser; title: string; onClosed?: () => void };
+const queuedBrowserChallenges: QueuedBrowserChallenge[] = [];
 const detachedToolWindows = new Map<string, BrowserWindow>();
 let tray: Tray | null = null;
 let isQuitting = false;
@@ -343,6 +360,63 @@ let trayLabels = {
 };
 
 const SEARCH_IDLE_TIMEOUT_MS = 2 * 60 * 1000;
+const BROWSER_JOB_CONCURRENCY_MIN = 1;
+const BROWSER_JOB_CONCURRENCY_MAX = 6;
+
+function browserRuntimeSettingsPath(): string {
+  return path.join(app.getPath('userData'), 'desktop-browser-settings.json');
+}
+
+function normalizeBrowserRuntimeSettings(value: any): DesktopBrowserRuntimeSettings {
+  const concurrency = Math.min(BROWSER_JOB_CONCURRENCY_MAX, Math.max(
+    BROWSER_JOB_CONCURRENCY_MIN,
+    Math.round(Number(value?.concurrency) || DEFAULT_BROWSER_RUNTIME_SETTINGS.concurrency),
+  ));
+  return {
+    concurrency,
+    searchEnabled: value?.searchEnabled !== false,
+    readerEnabled: value?.readerEnabled !== false,
+  };
+}
+
+function loadBrowserRuntimeSettings(): void {
+  try {
+    browserRuntimeSettings = normalizeBrowserRuntimeSettings(JSON.parse(fs.readFileSync(browserRuntimeSettingsPath(), 'utf8')));
+  } catch {
+    browserRuntimeSettings = { ...DEFAULT_BROWSER_RUNTIME_SETTINGS };
+  }
+}
+
+function saveBrowserRuntimeSettings(): void {
+  fs.writeFileSync(browserRuntimeSettingsPath(), JSON.stringify(browserRuntimeSettings), 'utf8');
+}
+
+function drainBrowserJobQueue(): void {
+  while (activeBrowserJobs < browserRuntimeSettings.concurrency && browserJobWaiters.length > 0) {
+    activeBrowserJobs += 1;
+    browserJobWaiters.shift()?.();
+  }
+}
+
+function acquireBrowserJobSlot(): Promise<() => void> {
+  return new Promise(resolve => {
+    const grant = () => {
+      let released = false;
+      resolve(() => {
+        if (released) return;
+        released = true;
+        activeBrowserJobs = Math.max(0, activeBrowserJobs - 1);
+        drainBrowserJobQueue();
+      });
+    };
+    if (activeBrowserJobs < browserRuntimeSettings.concurrency) {
+      activeBrowserJobs += 1;
+      grant();
+    } else {
+      browserJobWaiters.push(grant);
+    }
+  });
+}
 const WEB_READER_IDLE_TIMEOUT_MS = 2 * 60 * 1000;
 const GOOGLE_AI_IDLE_TIMEOUT_MS = 15 * 60 * 1000;
 
@@ -477,54 +551,57 @@ function getBrowserSession(
   const key = browserSessionKey(chatId);
   let session = sessions.get(key);
   if (!session) {
-    session = { key, chatId, browser: createBrowser(), preview: createBrowserPreview(source), idleTimer: null };
+    session = { key, chatId, browser: createBrowser(), preview: createBrowserPreview(source), idleTimer: null, busy: false, releaseJobSlot: null };
     sessions.set(key, session);
   }
   return session;
 }
 
-function getSharedSearchSession(chatId: number | null): DesktopBrowserSession {
-  const key = 'shared';
-  let session = searchSessions.get(key);
-  if (!session) {
-    session = { key, chatId, browser: createSearchBrowser(), preview: createBrowserPreview('web_search'), idleTimer: null };
-    searchSessions.set(key, session);
-    return session;
+async function acquirePooledBrowserSession(
+  sessions: Map<string, DesktopBrowserSession>,
+  source: BrowserPreviewSource,
+  chatId: number | null,
+  createBrowser: () => ChatterBrowser,
+): Promise<DesktopBrowserSession> {
+  const releaseJobSlot = await acquireBrowserJobSlot();
+  let session: DesktopBrowserSession | undefined;
+  try {
+    session = [...sessions.values()].find(candidate => !candidate.busy);
+    if (!session) {
+      const key = `worker-${++nextBrowserWorkerId}`;
+      session = { key, chatId, browser: createBrowser(), preview: createBrowserPreview(source), idleTimer: null, busy: false, releaseJobSlot: null };
+      sessions.set(key, session);
+    }
+  } catch (error) {
+    releaseJobSlot();
+    throw error;
   }
+  clearBrowserIdleTimer(session);
+  session.busy = true;
+  session.releaseJobSlot = releaseJobSlot;
   if (session.chatId !== chatId) {
-    const previousId = browserSessionActivityId('web_search', session.chatId);
+    const previousId = browserSessionActivityId(source, session.chatId);
     const previousViewer = browserSessionWindows.get(previousId);
-    // Temporarily detach the shared session so the viewer's close handler does
-    // not re-arm its idle timer under the old chat identity.
-    searchSessions.delete(key);
-    browserSessionWindows.delete(previousId);
     if (previousViewer && !previousViewer.isDestroyed()) previousViewer.close();
+    browserSessionWindows.delete(previousId);
     backgroundActivityRegistry.remove(previousId);
     session.chatId = chatId;
-    searchSessions.set(key, session);
   }
   return session;
 }
 
-function getSharedWebReaderSession(chatId: number | null): DesktopBrowserSession {
-  const key = 'shared';
-  let session = webReaderSessions.get(key);
-  if (!session) {
-    session = { key, chatId, browser: createWebReaderBrowser(), preview: createBrowserPreview('web_reader'), idleTimer: null };
-    webReaderSessions.set(key, session);
-    return session;
-  }
-  if (session.chatId !== chatId) {
-    const previousId = browserSessionActivityId('web_reader', session.chatId);
-    const previousViewer = browserSessionWindows.get(previousId);
-    webReaderSessions.delete(key);
-    browserSessionWindows.delete(previousId);
-    if (previousViewer && !previousViewer.isDestroyed()) previousViewer.close();
-    backgroundActivityRegistry.remove(previousId);
-    session.chatId = chatId;
-    webReaderSessions.set(key, session);
-  }
-  return session;
+function releasePooledBrowserSession(
+  sessions: Map<string, DesktopBrowserSession>,
+  source: BrowserPreviewSource,
+  session: DesktopBrowserSession,
+  timeoutMs: number,
+): void {
+  if (!session.busy) return;
+  session.busy = false;
+  const release = session.releaseJobSlot;
+  session.releaseJobSlot = null;
+  release?.();
+  if (sessions.get(session.key) === session) scheduleBrowserIdleClose(sessions, source, session, timeoutMs);
 }
 
 function clearBrowserIdleTimer(session: DesktopBrowserSession): void {
@@ -541,6 +618,12 @@ function closeBrowserSession(
   if (sessions.get(session.key) !== session) return false;
   const { chatId } = session;
   clearBrowserIdleTimer(session);
+  if (session.busy) {
+    session.busy = false;
+    const release = session.releaseJobSlot;
+    session.releaseJobSlot = null;
+    release?.();
+  }
   sessions.delete(session.key);
   const registryId = browserSessionActivityId(source, chatId);
   const viewer = browserSessionWindows.get(registryId);
@@ -565,6 +648,7 @@ function scheduleBrowserIdleClose(
   timeoutMs: number,
 ): void {
   clearBrowserIdleTimer(session);
+  if (session.busy) return;
   const viewer = browserSessionWindows.get(browserSessionActivityId(source, session.chatId));
   if (viewer && !viewer.isDestroyed()) return;
   session.idleTimer = setTimeout(() => {
@@ -579,18 +663,19 @@ function scheduleBrowserIdleClose(
 function showSearchChallengeWindow(
   browser: ChatterBrowser,
   title = trayLabels.searchVerification,
+  onClosed?: () => void,
 ): void {
-  if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    onClosed?.();
+    return;
+  }
   if (searchChallengeWindow && !searchChallengeWindow.isDestroyed()) {
-    if (activeChallengeBrowser !== browser) {
-      activeChallengeBrowser?.moveToHost(mainWindow);
-      activeChallengeBrowser = browser;
-      const [width, height] = searchChallengeWindow.getContentSize();
-      browser.setVisible(true, { x: 0, y: 0, width, height }, 'search-challenge', searchChallengeWindow);
+    if (activeChallengeBrowser === browser) {
+      searchChallengeWindow.show();
+      searchChallengeWindow.focus();
+    } else if (!queuedBrowserChallenges.some(item => item.browser === browser)) {
+      queuedBrowserChallenges.push({ browser, title, onClosed });
     }
-    searchChallengeWindow.setTitle(`Chatter — ${title}`);
-    searchChallengeWindow.show();
-    searchChallengeWindow.focus();
     return;
   }
 
@@ -622,6 +707,7 @@ function showSearchChallengeWindow(
   });
   challengeWindow.on('closed', () => {
     const closedBrowser = activeChallengeBrowser;
+    onClosed?.();
     if (searchChallengeWindow === challengeWindow) searchChallengeWindow = null;
     activeChallengeBrowser = null;
     const searchSession = [...searchSessions.values()].find((session) => session.browser === closedBrowser);
@@ -634,10 +720,12 @@ function showSearchChallengeWindow(
     if (googleAiSession) {
       backgroundActivityRegistry.setStatus(browserSessionActivityId('google_ai', googleAiSession.chatId), 'idle');
     }
-    if (webReaderSession) {
+    if (webReaderSession && !webReaderSession.busy) {
       backgroundActivityRegistry.setStatus(browserSessionActivityId('web_reader', webReaderSession.chatId), 'idle');
       scheduleBrowserIdleClose(webReaderSessions, 'web_reader', webReaderSession, WEB_READER_IDLE_TIMEOUT_MS);
     }
+    const nextChallenge = queuedBrowserChallenges.shift();
+    if (nextChallenge) setImmediate(() => showSearchChallengeWindow(nextChallenge.browser, nextChallenge.title, nextChallenge.onClosed));
   });
 
   syncBounds();
@@ -1205,83 +1293,77 @@ function createWindow() {
     return chatterBrowser.control(payload);
   });
 
+  ipcMain.handle('browser-runtime:get-settings', (event) => {
+    assertTrustedIpcSender(event);
+    return browserRuntimeSettings;
+  });
+
+  ipcMain.handle('browser-runtime:set-settings', (event, value: unknown) => {
+    assertTrustedIpcSender(event);
+    browserRuntimeSettings = normalizeBrowserRuntimeSettings(value);
+    saveBrowserRuntimeSettings();
+    drainBrowserJobQueue();
+    return browserRuntimeSettings;
+  });
+
   ipcMain.handle('search-browser:search', async (event, payload: BrowserSearchPayload) => {
     assertTrustedIpcSender(event);
-    const previousSearch = searchQueue;
-    let releaseSearch!: () => void;
-    searchQueue = new Promise<void>((resolve) => { releaseSearch = resolve; });
-    await previousSearch;
+    if (!browserRuntimeSettings.searchEnabled) throw new Error('desktop_web_search_disabled');
+    const chatId = Number.isInteger(payload?.chat_id) && Number(payload.chat_id) > 0 ? Number(payload.chat_id) : null;
+    const session = await acquirePooledBrowserSession(searchSessions, 'web_search', chatId, createSearchBrowser);
+    const { browser, preview } = session;
+    const previewRun = preview.start(browser, { chatId });
+    let heldForChallenge = false;
     try {
-      const chatId = Number.isInteger(payload?.chat_id) && Number(payload.chat_id) > 0 ? Number(payload.chat_id) : null;
-      const session = getSharedSearchSession(chatId);
-      clearBrowserIdleTimer(session);
-      const { browser, preview } = session;
-      dismissChallengeForBrowser(browser);
-      const previewRun = preview.start(browser, { chatId });
-      let challengeShown = false;
-      try {
-        const result = await browser.search(payload) as { challenge?: string };
-        preview.stop(browser, previewRun);
-        if (result?.challenge === 'captcha') {
-          challengeShown = true;
-          backgroundActivityRegistry.setStatus(browserSessionActivityId('web_search', chatId), 'challenge');
-          showSearchChallengeWindow(browser);
-        }
-        return result;
-      } finally {
-        preview.stop(browser, previewRun);
-        if (!challengeShown && searchSessions.get(session.key) === session) {
-          scheduleBrowserIdleClose(searchSessions, 'web_search', session, SEARCH_IDLE_TIMEOUT_MS);
-        }
+      const result = await browser.search(payload) as { challenge?: string };
+      preview.stop(browser, previewRun);
+      if (result?.challenge === 'captcha') {
+        heldForChallenge = true;
+        backgroundActivityRegistry.setStatus(browserSessionActivityId('web_search', chatId), 'challenge');
+        showSearchChallengeWindow(browser, trayLabels.searchVerification, () => {
+          backgroundActivityRegistry.setStatus(browserSessionActivityId('web_search', session.chatId), 'idle');
+          releasePooledBrowserSession(searchSessions, 'web_search', session, SEARCH_IDLE_TIMEOUT_MS);
+        });
       }
+      return result;
     } finally {
-      releaseSearch();
+      preview.stop(browser, previewRun);
+      if (!heldForChallenge) releasePooledBrowserSession(searchSessions, 'web_search', session, SEARCH_IDLE_TIMEOUT_MS);
     }
   });
 
   ipcMain.handle('web-reader:read', async (event, payload: { url?: string; chat_id?: number }) => {
     assertTrustedIpcSender(event);
-    const previousRead = webReaderQueue;
-    let releaseRead!: () => void;
-    webReaderQueue = new Promise<void>((resolve) => { releaseRead = resolve; });
-    await previousRead;
+    if (!browserRuntimeSettings.readerEnabled) throw new Error('desktop_web_reader_disabled');
+    const chatId = Number.isInteger(payload?.chat_id) && Number(payload.chat_id) > 0 ? Number(payload.chat_id) : null;
+    const session = await acquirePooledBrowserSession(webReaderSessions, 'web_reader', chatId, createWebReaderBrowser);
+    const { browser, preview } = session;
+    const previewRun = preview.start(browser, { chatId });
+    let challengeShown = false;
     try {
-      const chatId = Number.isInteger(payload?.chat_id) && Number(payload.chat_id) > 0 ? Number(payload.chat_id) : null;
-      const session = getSharedWebReaderSession(chatId);
-      clearBrowserIdleTimer(session);
-      const { browser, preview } = session;
-      dismissChallengeForBrowser(browser);
-      const previewRun = preview.start(browser, { chatId });
-      let challengeShown = false;
-      try {
-        const result = await browser.readWebPage(`${payload?.url || ''}`, {
-          onChallenge: () => {
-            challengeShown = true;
-            backgroundActivityRegistry.setStatus(browserSessionActivityId('web_reader', chatId), 'challenge');
-            showSearchChallengeWindow(browser);
-            // Closing the verification window is the user's "stop".
-            searchChallengeWindow?.once('closed', () => browser.requestWebPageReadAbort());
-          },
-        });
-        if (challengeShown) {
-          backgroundActivityRegistry.setStatus(browserSessionActivityId('web_reader', chatId), 'idle');
-        }
-        return result;
-      } finally {
-        preview.stop(browser, previewRun);
-        if (!challengeShown && webReaderSessions.get(session.key) === session) {
-          scheduleBrowserIdleClose(webReaderSessions, 'web_reader', session, WEB_READER_IDLE_TIMEOUT_MS);
-        }
-      }
+      const result = await browser.readWebPage(`${payload?.url || ''}`, {
+        onChallenge: () => {
+          challengeShown = true;
+          backgroundActivityRegistry.setStatus(browserSessionActivityId('web_reader', chatId), 'challenge');
+          showSearchChallengeWindow(browser, trayLabels.searchVerification, () => browser.requestWebPageReadAbort());
+        },
+      });
+      if (challengeShown) dismissChallengeForBrowser(browser);
+      return result;
     } finally {
-      releaseRead();
+      preview.stop(browser, previewRun);
+      releasePooledBrowserSession(webReaderSessions, 'web_reader', session, WEB_READER_IDLE_TIMEOUT_MS);
     }
   });
-
   ipcMain.handle('web-reader:cancel', (event) => {
     assertTrustedIpcSender(event);
-    const session = webReaderSessions.get('shared');
-    return { cancelled: session ? closeBrowserSession(webReaderSessions, 'web_reader', session, 'explicit') : false };
+    let cancelled = false;
+    for (const session of webReaderSessions.values()) {
+      if (!session.busy) continue;
+      session.browser.requestWebPageReadAbort();
+      cancelled = true;
+    }
+    return { cancelled };
   });
 
   ipcMain.handle('google-ai:control', async (event, payload: GoogleAiPayload) => {
@@ -2990,6 +3072,7 @@ if (!hasSingleInstanceLock) {
       app.setAppUserModelId('com.ncherepov.chatter');
     }
     loadNotificationSettings();
+    loadBrowserRuntimeSettings();
     loadTrustedServerOrigin();
     setupContentSecurityPolicy();
     if (process.platform !== 'darwin') {

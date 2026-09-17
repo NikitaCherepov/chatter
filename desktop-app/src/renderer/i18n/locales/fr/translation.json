@@ -292,7 +292,12 @@
       "renderPerfHigh": "Élevé (PCs puissants)",
       "renderPerfUltra": "Ultra",
       "renderPerfHelp": "Nombre de caractères à afficher dans la liste du chat avant de masquer les messages plus anciens. Plus bas = défilement plus rapide.",
-      "renderPerfSaved": "Performance de rendu enregistrée. S'appliquera au prochain chat ouvert."
+      "renderPerfSaved": "Performance de rendu enregistrée. S'appliquera au prochain chat ouvert.",
+      "desktopBrowserTitle": "Outils web de bureau",
+      "desktopBrowserConcurrency": "Instances de navigateur parallèles",
+      "desktopBrowserConcurrencyHelp": "Nombre maximal de recherches web de bureau et de lectures de pages pouvant s'exécuter en même temps. Un navigateur attendant un CAPTCHA conserve son emplacement jusqu'à ce que vous fermiez la fenêtre de vérification.",
+      "desktopSearch": "Utiliser le navigateur de bureau pour la recherche web",
+      "desktopSearchHelp": "Autoriser search_web à utiliser le navigateur de bureau local lorsque ce fournisseur est sélectionné."
     },
     "toasts": {
       "saveSettingFailed": "Échec de l'enregistrement du paramètre",

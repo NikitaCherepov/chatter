@@ -292,7 +292,14 @@
       "renderPerfHigh": "Alto (PCs potentes)",
       "renderPerfUltra": "Ultra",
       "renderPerfHelp": "Cuántos caracteres renderizar en la lista de chat antes de ocultar mensajes antiguos. Menor = desplazamiento más rápido.",
-      "renderPerfSaved": "Rendimiento de renderizado guardado. Se aplicará al próximo chat abierto."
+      "renderPerfSaved": "Rendimiento de renderizado guardado. Se aplicará al próximo chat abierto.",
+      "desktopBrowserTitle": "Herramientas web de escritorio",
+      "desktopBrowserConcurrency": "Instancias de navegador en paralelo",
+      "desktopBrowserConcurrencyHelp": "Número máximo de búsquedas web de escritorio y lecturas de página que pueden ejecutarse a la vez. Un navegador que espera un CAPTCHA mantiene su ranura hasta que cierres la ventana de verificación.",
+      "desktopSearch": "Usar navegador de escritorio para búsqueda web",
+      "desktopSearchHelp": "Permitir que search_web use el navegador de escritorio local cuando ese proveedor esté seleccionado.",
+      "desktopReader": "Usar navegador de escritorio para el análisis de páginas",
+      "desktopReaderHelp": "Permitir que read_webpage analice páginas en el navegador de escritorio local. Cuando está desactivado, el backend puede usar otro lector configurado."
     },
     "toasts": {
       "saveSettingFailed": "No se pudo guardar la configuración",
@@ -787,7 +794,9 @@
       "jsonExtractor": "Extractor JSON",
       "jsonExtractorDescription": "Convierte un documento en JSON",
       "youtubeMusic": "YouTube Music",
-      "youtubeMusicDescription": "Reproductor de música"
+      "youtubeMusicDescription": "Reproductor de música",
+      "newspapers": "Periódicos",
+      "newspapersDescription": "Ediciones personales de IA"
     },
     "documents": {
       "selectChat": "Seleccione un chat",
@@ -914,6 +923,113 @@
       "home": "Inicio de YouTube Music",
       "loading": "Cargando YouTube Music",
       "actionFailed": "La acción de YouTube Music falló"
+    },
+    "newspapers": {
+      "title": "Tus periódicos",
+      "subtitle": "Una edición personal del editor e investigadores",
+      "configure": "Configurar",
+      "create": "Crear",
+      "interests": "Intereses",
+      "interestsPlaceholder": "IA, espacio, juegos, ciencia…",
+      "preferences": "Preferencias",
+      "preferencesPlaceholder": "Por ejemplo: sin política, menos rumores…",
+      "recommendedSources": "Fuentes recomendadas",
+      "sourcesPlaceholder": "Por ejemplo: NASA, Ars Technica, Habr, o blogs específicos…",
+      "sourcesHint": "El editor le pedirá al investigador que revise estas primero, pero no se limitará a ellas.",
+      "volume": "Tamaño de la edición",
+      "volumeOptions": {
+        "compact": {
+          "label": "Compacto",
+          "hint": "Generalmente de 6 a 10 historias, incluyendo de 1 a 3 artículos desarrollados"
+        },
+        "standard": {
+          "label": "Estándar",
+          "hint": "Generalmente de 12 a 20 historias, incluyendo de 4 a 7 artículos desarrollados"
+        },
+        "extended": {
+          "label": "Extendido",
+          "hint": "Generalmente 20–35 historias, incluyendo 7–12 artículos desarrollados"
+        }
+      },
+      "weather": "Clima",
+      "weatherOptions": {
+        "off": {
+          "label": "Sin clima"
+        },
+        "today": {
+          "label": "Hoy",
+          "hint": "Mañana, tarde y noche"
+        },
+        "week": {
+          "label": "Esta semana",
+          "hint": "Pronóstico de siete días"
+        },
+        "auto": {
+          "label": "Automático",
+          "hint": "Según el horario de entrega"
+        }
+      },
+      "soon": "pronto",
+      "weatherLocation": "Ciudad o región",
+      "weatherLocationPlaceholder": "Por ejemplo: Tomsk",
+      "delivery": "Entrega automática",
+      "deliveryOptions": {
+        "manual": "No entregar automáticamente",
+        "daily": "Todos los días",
+        "everyTwoDays": "Cada dos días",
+        "weekly": "Una vez a la semana"
+      },
+      "deliveryHint": "La programación se conectará en la siguiente etapa.",
+      "autoFill": "Rellenar automáticamente",
+      "autoFilling": "Estudiando tus chats…",
+      "stopAll": "Detener todo",
+      "stop": "Detener",
+      "researcher": "Investigador",
+      "editorLog": "Editor JSON y registro de actividad",
+      "downloadRun": "Descargar registro",
+      "downloadIssue": "Descargar JSON de la edición",
+      "loading": "Cargando ediciones…",
+      "issueCount_one": "{{count}} edición",
+      "issueCount_other": "{{count}} ediciones",
+      "issueNumber": "N.º {{number}}",
+      "blockCount_one": "{{count}} bloque",
+      "blockCount_other": "{{count}} bloques",
+      "empty": "Aún no hay ediciones",
+      "emptyHint": "Configura tus intereses y abre el editor.",
+      "previousPage": "Página anterior",
+      "nextPage": "Página siguiente",
+      "runNumber": "Ejecución #{{number}}",
+      "runStatus": {
+        "queued": "El editor está esperando para comenzar",
+        "running": "El editor está trabajando",
+        "ready": "La edición está lista",
+        "failed": "No se pudo crear la edición",
+        "cancelled": "Detenido"
+      },
+      "agentStatus": {
+        "queued": "En cola",
+        "running": "En ejecución",
+        "ready": "Listo",
+        "failed": "Fallido",
+        "cancelled": "Cancelado"
+      },
+      "styles": {
+        "wizarding": "Mágico",
+        "broadsheet": "Chatter Times",
+        "deusEx": "Deus Ex",
+        "massEffect": "Mass Effect"
+      },
+      "errors": {
+        "load": "No se pudo cargar el periódico",
+        "save": "No se pudieron guardar los ajustes",
+        "autoFill": "No se pudieron completar los ajustes automáticamente",
+        "weatherLocation": "Especifique una ciudad o región para el pronóstico del tiempo",
+        "start": "No se pudo iniciar el editor",
+        "open": "No se pudo abrir la edición",
+        "stop": "No se pudo detener el editor",
+        "stopResearcher": "No se pudo detener al investigador",
+        "export": "No se pudo exportar los datos del periódico"
+      }
     }
   },
   "advanced": {

@@ -41,6 +41,7 @@ globalThis.fetch = (async (input, init) => {
           url: target,
           text,
           links: [{ text: 'Browserless reference', href: 'https://example.com/browserless-reference' }],
+          images: [{ url: 'https://cdn.example.com/browserless-hero.gif', alt: 'Animated hero', width: 1200, height: 800, animated: true }],
           truncated: false,
         }),
       },
@@ -64,6 +65,8 @@ assert.deepEqual(getWebReaderRuntimeSettings(), {
 
 const fallback = await getCleanTextFromUrl('https://example.com/fallback', { userId: 701, browserlessQuota });
 assert.match(fallback, /Browserless fallback content/);
+assert.match(fallback, /browserless-hero\.gif/);
+assert.match(fallback, /animated GIF/);
 assert.equal(browserlessRequests, 1);
 const fallbackCursor = fallback.match(/cursor "([^"]+)"/)?.[1];
 assert.ok(fallbackCursor);
@@ -73,6 +76,7 @@ const fallbackNext = await getCleanTextFromUrl('https://example.com/fallback', {
   browserlessQuota,
 });
 assert.match(fallbackNext, /showing cached characters 15001-/);
+assert.doesNotMatch(fallbackNext, /browserless-hero\.gif/, 'image candidates are emitted only on the first chunk');
 assert.equal(browserlessRequests, 1, 'Browserless cursor must use the cached document');
 await getCleanTextFromUrl('https://example.com/fallback', { userId: 701, browserlessQuota });
 assert.equal(browserlessRequests, 1, 'repeating the URL must reuse the ten-minute cache');
@@ -93,6 +97,7 @@ desktopClient = {
         url: 'https://example.com/desktop',
         text: `Desktop Chromium content ${'D'.repeat(31_000)}`,
         elements: [{ text: 'Reference', href: 'https://example.com/reference' }],
+        images: [{ url: 'https://cdn.example.com/desktop-photo.jpg', alt: 'Desktop photo', width: 900, height: 600 }],
       }), 0);
     },
   },
@@ -112,6 +117,7 @@ registerWsClient(desktopClient);
 const desktop = await getCleanTextFromUrl('https://example.com/desktop', { userId: 701, chatId: 9 });
 assert.match(desktop, /Desktop Chromium content/);
 assert.match(desktop, /https:\/\/example.com\/reference/);
+assert.match(desktop, /desktop-photo\.jpg/);
 assert.equal(browserlessRequests, 1, 'desktop success must not call Browserless');
 const desktopCursor = desktop.match(/cursor "([^"]+)"/)?.[1];
 assert.ok(desktopCursor);

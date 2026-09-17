@@ -4,7 +4,7 @@ import s from '../../Newspaper.module.scss';
 
 export function NoteContent({ note }: { note: NewspaperNote | NoteBlockData }) {
   const url = safeUrl(note.url);
-  const image = safeImageUrl(note.image_url);
+  const image = safeImageUrl(note.image_url, 640);
   return <>{image && <img className={s.noteImage} src={image} alt=""/>}{note.title && (url ? <a data-note-link="true" href={url} target="_blank" rel="noreferrer">{note.title}</a> : <strong>{note.title}</strong>)}{note.text && <p>{note.text}</p>}{!note.title && url && <a data-note-link="true" href={url} target="_blank" rel="noreferrer">Открыть</a>}</>;
 }
 

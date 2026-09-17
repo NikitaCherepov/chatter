@@ -5131,6 +5131,14 @@ If the task is a description, return a detailed text response.`
       if (imagesToAnalyze.length === 0) {
         return JSON.stringify({ status: 'error', message: 'Image is unavailable. It may have been deleted or not yet saved.' });
       }
+      imagesToAnalyze = await Promise.all(imagesToAnalyze.map(async image => {
+        if (image.mimeType !== 'image/gif') return image;
+        const sharp = (await import('sharp')).default;
+        const firstFrame = await sharp(Buffer.from(image.base64, 'base64'), { failOn: 'none' })
+          .webp({ quality: 85 })
+          .toBuffer();
+        return { base64: firstFrame.toString('base64'), mimeType: 'image/webp' };
+      }));
 
       if (parsed.mode === 'direct') {
         if (!subagentExtra?.currentModelSupportsVision || !subagentExtra.directImageSink) {

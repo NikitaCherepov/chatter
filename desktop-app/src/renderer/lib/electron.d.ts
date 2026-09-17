@@ -25,6 +25,8 @@ declare global {
         chat_id?: number;
       }) => Promise<any>;
       readWebPage: (payload: { url: string; chat_id?: number }) => Promise<any>;
+      getDesktopBrowserSettings: () => Promise<{ concurrency: number; searchEnabled: boolean; readerEnabled: boolean }>;
+      setDesktopBrowserSettings: (settings: { concurrency: number; searchEnabled: boolean; readerEnabled: boolean }) => Promise<{ concurrency: number; searchEnabled: boolean; readerEnabled: boolean }>;
       cancelWebPageRead: () => Promise<{ cancelled: boolean }>;
       googleAi: (payload: {
         action?: 'ask' | 'new_chat' | 'reload' | 'close_session';

@@ -292,7 +292,14 @@
       "renderPerfHigh": "Hoch (leistungsstarke PCs)",
       "renderPerfUltra": "Ultra",
       "renderPerfHelp": "Wie viele Zeichen in der Chat-Liste gerendert werden, bevor ältere Nachrichten ausgeblendet werden. Niedriger = schnelleres Scrollen.",
-      "renderPerfSaved": "Rendering-Leistung gespeichert. Wird beim nächsten geöffneten Chat angewendet."
+      "renderPerfSaved": "Rendering-Leistung gespeichert. Wird beim nächsten geöffneten Chat angewendet.",
+      "desktopBrowserTitle": "Desktop-Webtools",
+      "desktopBrowserConcurrency": "Parallele Browser-Instanzen",
+      "desktopBrowserConcurrencyHelp": "Maximale Anzahl gleichzeitiger Desktop-Websuchen und Seitenaufrufe. Ein Browser, der auf CAPTCHA wartet, behält seinen Slot, bis Sie das Verifizierungsfenster schließen.",
+      "desktopSearch": "Desktop-Browser für Websuche verwenden",
+      "desktopSearchHelp": "Erlauben Sie search_web, den lokalen Desktop-Browser zu verwenden, wenn dieser Anbieter ausgewählt ist.",
+      "desktopReader": "Desktop-Browser für Seitenanalyse verwenden",
+      "desktopReaderHelp": "Erlauben Sie read_webpage, Seiten im lokalen Desktop-Browser zu analysieren. Wenn deaktiviert, kann das Backend einen anderen konfigurierten Reader verwenden."
     },
     "toasts": {
       "saveSettingFailed": "Einstellung konnte nicht gespeichert werden",
@@ -787,7 +794,9 @@
       "jsonExtractor": "JSON-Extraktor",
       "jsonExtractorDescription": "Ein Dokument in JSON umwandeln",
       "youtubeMusic": "YouTube Music",
-      "youtubeMusicDescription": "Musikplayer"
+      "youtubeMusicDescription": "Musikplayer",
+      "newspapers": "Zeitungen",
+      "newspapersDescription": "Persönliche KI-Ausgaben"
     },
     "documents": {
       "selectChat": "Chat auswählen",
@@ -914,6 +923,113 @@
       "home": "YouTube Music-Startseite",
       "loading": "YouTube Music wird geladen",
       "actionFailed": "YouTube Music-Aktion fehlgeschlagen"
+    },
+    "newspapers": {
+      "title": "Ihre Zeitungen",
+      "subtitle": "Eine persönliche Ausgabe von Redaktion und Forschern",
+      "configure": "Konfigurieren",
+      "create": "Erstellen",
+      "interests": "Interessen",
+      "interestsPlaceholder": "KI, Weltraum, Spiele, Wissenschaft…",
+      "preferences": "Einstellungen",
+      "preferencesPlaceholder": "Zum Beispiel: keine Politik, weniger Gerüchte…",
+      "recommendedSources": "Empfohlene Quellen",
+      "sourcesPlaceholder": "Zum Beispiel: NASA, Ars Technica, Habr oder spezifische Blogs…",
+      "sourcesHint": "Der Redakteur wird den Forscher bitten, diese zuerst zu prüfen, ist aber nicht darauf beschränkt.",
+      "volume": "Ausgabengröße",
+      "volumeOptions": {
+        "compact": {
+          "label": "Kompakt",
+          "hint": "In der Regel 6–10 Geschichten, einschließlich 1–3 ausführlicher Artikel"
+        },
+        "standard": {
+          "label": "Standard",
+          "hint": "In der Regel 12–20 Geschichten, einschließlich 4–7 ausführlicher Artikel"
+        },
+        "extended": {
+          "label": "Erweitert",
+          "hint": "Normalerweise 20–35 Geschichten, einschließlich 7–12 ausführlicher Artikel"
+        }
+      },
+      "weather": "Wetter",
+      "weatherOptions": {
+        "off": {
+          "label": "Kein Wetter"
+        },
+        "today": {
+          "label": "Heute",
+          "hint": "Morgen, Nachmittag und Abend"
+        },
+        "week": {
+          "label": "Diese Woche",
+          "hint": "Eine Sieben-Tage-Vorhersage"
+        },
+        "auto": {
+          "label": "Automatisch",
+          "hint": "Basierend auf dem Lieferplan"
+        }
+      },
+      "soon": "bald",
+      "weatherLocation": "Stadt oder Region",
+      "weatherLocationPlaceholder": "Zum Beispiel: Tomsk",
+      "delivery": "Automatische Zustellung",
+      "deliveryOptions": {
+        "manual": "Nicht automatisch zustellen",
+        "daily": "Täglich",
+        "everyTwoDays": "Alle zwei Tage",
+        "weekly": "Einmal pro Woche"
+      },
+      "deliveryHint": "Die Planung wird in der nächsten Stufe verbunden.",
+      "autoFill": "Automatisch ausfüllen",
+      "autoFilling": "Ihre Chats werden analysiert…",
+      "stopAll": "Alle stoppen",
+      "stop": "Stopp",
+      "researcher": "Forscher",
+      "editorLog": "Editor-JSON und Aktivitätsprotokoll",
+      "downloadRun": "Download-Protokoll",
+      "downloadIssue": "Ausgabe-JSON herunterladen",
+      "loading": "Ausgaben werden geladen…",
+      "issueCount_one": "{{count}} Ausgabe",
+      "issueCount_other": "{{count}} Ausgaben",
+      "issueNumber": "Nr. {{number}}",
+      "blockCount_one": "{{count}} Block",
+      "blockCount_other": "{{count}} Blöcke",
+      "empty": "Noch keine Ausgaben",
+      "emptyHint": "Konfigurieren Sie Ihre Interessen und starten Sie den Editor.",
+      "previousPage": "Vorherige Seite",
+      "nextPage": "Nächste Seite",
+      "runNumber": "Lauf #{{number}}",
+      "runStatus": {
+        "queued": "Der Editor wartet auf den Start",
+        "running": "Der Editor arbeitet",
+        "ready": "Die Ausgabe ist bereit",
+        "failed": "Die Ausgabe konnte nicht erstellt werden",
+        "cancelled": "Gestoppt"
+      },
+      "agentStatus": {
+        "queued": "In Warteschlange",
+        "running": "Läuft",
+        "ready": "Bereit",
+        "failed": "Fehlgeschlagen",
+        "cancelled": "Abgebrochen"
+      },
+      "styles": {
+        "wizarding": "Zauberhaft",
+        "broadsheet": "Chatter Times",
+        "deusEx": "Deus Ex",
+        "massEffect": "Mass Effect"
+      },
+      "errors": {
+        "load": "Die Zeitung konnte nicht geladen werden",
+        "save": "Die Einstellungen konnten nicht gespeichert werden",
+        "autoFill": "Die Einstellungen konnten nicht automatisch ausgefüllt werden",
+        "weatherLocation": "Geben Sie eine Stadt oder Region für die Wettervorhersage an",
+        "start": "Der Editor konnte nicht gestartet werden",
+        "open": "Die Ausgabe konnte nicht geöffnet werden",
+        "stop": "Der Editor konnte nicht beendet werden",
+        "stopResearcher": "Der Forscher konnte nicht beendet werden",
+        "export": "Die Zeitungsdaten konnten nicht exportiert werden"
+      }
     }
   },
   "advanced": {

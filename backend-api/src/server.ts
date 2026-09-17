@@ -1082,13 +1082,19 @@ app.get('/api/v1/images/:filename', async (req: AuthedRequest, res) => {
     return res.status(403).json({ error: 'access_denied' });
   }
 
-  // On-the-fly resize for gallery thumbnails
+  // Generate a lightweight preview. Animated newspaper images keep their
+  // frames; explicit first-frame requests remain static for vision analysis.
   const targetWidth = Number.parseInt(`${req.query.w || ''}`, 10);
-  if (targetWidth > 0 && targetWidth <= 1920) {
+  const firstFrame = `${req.query.frame || ''}` === 'first';
+  const preserveAnimation = `${req.query.animated || ''}` === '1';
+  if ((targetWidth > 0 && targetWidth <= 1920) || firstFrame || preserveAnimation) {
     try {
       const sharp = (await import('sharp')).default;
-      const resized = await sharp(filepath, { failOn: 'none' })
-        .resize(targetWidth, targetWidth, { fit: 'inside', withoutEnlargement: true })
+      let pipeline = sharp(filepath, { failOn: 'none', animated: preserveAnimation && !firstFrame });
+      if (targetWidth > 0 && targetWidth <= 1920) {
+        pipeline = pipeline.resize(targetWidth, targetWidth, { fit: 'inside', withoutEnlargement: true });
+      }
+      const resized = await pipeline
         .webp({ quality: 75 })
         .toBuffer();
       res.setHeader('Content-Type', 'image/webp');
