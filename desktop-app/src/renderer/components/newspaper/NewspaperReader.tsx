@@ -11,14 +11,11 @@ import { NewspaperImageViewerProvider } from './NewspaperImageViewerContext';
 import type { NewspaperIssue, NewspaperVisualStyle } from './types';
 import s from './Newspaper.module.scss';
 
-const ZOOM_MIN = 70;
-const ZOOM_MAX = 130;
+const ZOOM_MIN = 100;
+const ZOOM_MAX = 150;
 const ZOOM_STEP = 10;
-const zoomKey = (style: NewspaperVisualStyle) => `chatter:newspaper-preview-zoom:${style}`;
-const readZoom = (style: NewspaperVisualStyle) => {
-  const value = Number(localStorage.getItem(zoomKey(style)) || 100);
-  return Number.isFinite(value) ? Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, value)) : 100;
-};
+const ZOOM_DEFAULT = 100;
+const SHOW_READER_CHROME = false;
 
 type Props = {
   issue: NewspaperIssue | null;
@@ -47,10 +44,11 @@ export function NewspaperReader({ issue, style, pageNumber, pageCount, canGoPrev
   const { t } = useTranslation();
   const viewportRef = useRef<HTMLDivElement>(null);
   const pageRef = useRef<HTMLDivElement>(null);
-  const [zoom, setZoom] = useState(() => readZoom(style));
+  const dragRef = useRef<{ pointerId: number; x: number; y: number; scrollLeft: number; scrollTop: number } | null>(null);
+  const [zoom, setZoom] = useState(ZOOM_DEFAULT);
+  const [dragging, setDragging] = useState(false);
   const [viewerImage, setViewerImage] = useState<{ src: string; title?: string } | null>(null);
 
-  useEffect(() => setZoom(readZoom(style)), [style]);
   useEffect(() => {
     if (!issue) setViewerImage(null);
   }, [issue]);
@@ -67,6 +65,32 @@ export function NewspaperReader({ issue, style, pageNumber, pageCount, canGoPrev
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [canGoNext, canGoPrevious, issue, onClose, onNext, onPrevious, viewerImage]);
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (!issue || !viewport) return;
+    const handleWheel = (event: WheelEvent) => {
+      if (!event.ctrlKey) return;
+      event.preventDefault();
+      setZoom(current => {
+        const direction = event.deltaY < 0 ? 1 : -1;
+        const next = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, current + direction * ZOOM_STEP));
+        if (next === current) return current;
+        const rect = viewport.getBoundingClientRect();
+        const pointerX = event.clientX - rect.left;
+        const pointerY = event.clientY - rect.top;
+        const scale = next / current;
+        const nextLeft = (viewport.scrollLeft + pointerX) * scale - pointerX;
+        const nextTop = (viewport.scrollTop + pointerY) * scale - pointerY;
+        requestAnimationFrame(() => {
+          viewport.scrollLeft = nextLeft;
+          viewport.scrollTop = nextTop;
+        });
+        return next;
+      });
+    };
+    viewport.addEventListener('wheel', handleWheel, { passive: false });
+    return () => viewport.removeEventListener('wheel', handleWheel);
+  }, [issue]);
 
   const downloadViewerImage = useCallback(async () => {
     if (!viewerImage) return;
@@ -81,7 +105,6 @@ export function NewspaperReader({ issue, style, pageNumber, pageCount, canGoPrev
   const applyZoom = (value: number) => {
     const next = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round(value / ZOOM_STEP) * ZOOM_STEP));
     setZoom(next);
-    localStorage.setItem(zoomKey(style), String(next));
   };
   const fitToWindow = () => {
     const viewport = viewportRef.current;
@@ -95,10 +118,40 @@ export function NewspaperReader({ issue, style, pageNumber, pageCount, canGoPrev
     const scale = Math.min((viewport.clientWidth - 24) / naturalWidth, (viewport.clientHeight - 18) / naturalHeight);
     applyZoom(Math.floor(scale * 100 / ZOOM_STEP) * ZOOM_STEP);
   };
+  const startDragging = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0 || (event.target as HTMLElement).closest('a, button, input, textarea, select, [role="button"], [role="link"], [data-clickable="true"]')) return;
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    dragRef.current = {
+      pointerId: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+      scrollLeft: viewport.scrollLeft,
+      scrollTop: viewport.scrollTop,
+    };
+    viewport.setPointerCapture(event.pointerId);
+    setDragging(true);
+  };
+  const moveDragging = (event: React.PointerEvent<HTMLDivElement>) => {
+    const drag = dragRef.current;
+    const viewport = viewportRef.current;
+    if (!drag || !viewport || drag.pointerId !== event.pointerId) return;
+    event.preventDefault();
+    viewport.scrollLeft = drag.scrollLeft - (event.clientX - drag.x);
+    viewport.scrollTop = drag.scrollTop - (event.clientY - drag.y);
+  };
+  const stopDragging = (event: React.PointerEvent<HTMLDivElement>) => {
+    const drag = dragRef.current;
+    const viewport = viewportRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    if (viewport?.hasPointerCapture(event.pointerId)) viewport.releasePointerCapture(event.pointerId);
+    dragRef.current = null;
+    setDragging(false);
+  };
 
   return createPortal(<AnimatePresence>{issue && <motion.div key="newspaper-reader" className={s.backdrop} initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} onMouseDown={onClose}><motion.div className={s.dialog} initial={{opacity:0,y:20,scale:.985}} animate={{opacity:1,y:0,scale:1}} exit={{opacity:0,y:14,scale:.99}} onMouseDown={event=>event.stopPropagation()} role="dialog" aria-modal="true">
-    <header className={s.toolbar}><div className={s.issueMeta}><strong>Выпуск №{issue.issue_number}</strong><span>{pageNumber} / {pageCount}</span></div><div className={s.styleSelect}><Select options={styleOptions} value={style} onChange={value=>onStyleChange(value as NewspaperVisualStyle)} maxVisibleItems={4}/></div><div className={s.toolbarActions}><div className={s.zoomControls}><button type="button" onClick={()=>applyZoom(zoom-ZOOM_STEP)} disabled={zoom<=ZOOM_MIN} aria-label="Уменьшить масштаб">−</button><button type="button" className={s.zoomValue} onClick={fitToWindow} title="Вписать газету в окно">{zoom}%</button><button type="button" onClick={()=>applyZoom(zoom+ZOOM_STEP)} disabled={zoom>=ZOOM_MAX} aria-label="Увеличить масштаб">+</button></div><nav className={s.navigation}><button type="button" onClick={onPrevious} disabled={!canGoPrevious} aria-label={previousLabel}>‹</button><button type="button" onClick={onNext} disabled={!canGoNext} aria-label={nextLabel}>›</button><button type="button" onClick={onClose} aria-label={closeLabel}>×</button></nav></div></header>
-    <div className={s.viewport} ref={viewportRef}><motion.div ref={pageRef} className={s.zoomLayer} style={{zoom:zoom/100} as React.CSSProperties} key={`${issue.id}-${style}`} initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} transition={{duration:.18}}><NewspaperImageViewerProvider onOpen={(src, title) => setViewerImage({ src, title })}><TemplateRenderer issue={issue} style={style}/></NewspaperImageViewerProvider></motion.div></div>
+    {SHOW_READER_CHROME && <header className={s.toolbar}><div className={s.issueMeta}><strong>Выпуск №{issue.issue_number}</strong><span>{pageNumber} / {pageCount}</span></div><div className={s.styleSelect}><Select options={styleOptions} value={style} onChange={value=>onStyleChange(value as NewspaperVisualStyle)} maxVisibleItems={4}/></div><div className={s.toolbarActions}><div className={s.zoomControls}><button type="button" onClick={()=>applyZoom(zoom-ZOOM_STEP)} disabled={zoom<=ZOOM_MIN} aria-label="Уменьшить масштаб">−</button><button type="button" className={s.zoomValue} onClick={fitToWindow} title="Вписать газету в окно">{zoom}%</button><button type="button" onClick={()=>applyZoom(zoom+ZOOM_STEP)} disabled={zoom>=ZOOM_MAX} aria-label="Увеличить масштаб">+</button></div><nav className={s.navigation}><button type="button" onClick={onPrevious} disabled={!canGoPrevious} aria-label={previousLabel}>‹</button><button type="button" onClick={onNext} disabled={!canGoNext} aria-label={nextLabel}>›</button><button type="button" onClick={onClose} aria-label={closeLabel}>×</button></nav></div></header>}
+    <div className={`${s.viewport} ${dragging ? s.viewportDragging : ''}`} ref={viewportRef} onPointerDown={startDragging} onPointerMove={moveDragging} onPointerUp={stopDragging} onPointerCancel={stopDragging} onDragStart={event=>event.preventDefault()}><motion.div ref={pageRef} className={s.zoomLayer} style={{zoom:zoom/100} as React.CSSProperties} key={`${issue.id}-${style}`} initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} transition={{duration:.18}}><NewspaperImageViewerProvider onOpen={(src, title) => setViewerImage({ src, title })}><TemplateRenderer issue={issue} style={style}/></NewspaperImageViewerProvider></motion.div></div>
   </motion.div></motion.div>}
   {viewerImage && <ImageViewerModal key="newspaper-image-viewer" src={viewerImage.src} alt={viewerImage.title} downloadLabel={t('common.download')} closeLabel={t('common.close')} onClose={() => setViewerImage(null)} onDownload={() => void downloadViewerImage()} aboveNewspaper/>}</AnimatePresence>, document.body);
 }

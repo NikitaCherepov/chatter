@@ -1,7 +1,7 @@
 .backdrop {
   position: fixed;
   z-index: 10000;
-  inset: 0;
+  inset: var(--titlebar-height) 0 0;
   display: grid;
   place-items: center;
   padding: 14px;
@@ -10,14 +10,11 @@
 }
 .dialog {
   display: flex;
-  width: min(1080px, 97vw);
-  height: min(920px, 96vh);
+  width: min(900px, calc(100vw - 28px));
+  height: min(920px, calc(100vh - var(--titlebar-height) - 28px));
   overflow: visible;
   flex-direction: column;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 14px;
-  background: #101827;
-  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.55);
+  background: transparent;
 }
 .toolbar {
   position: relative;
@@ -101,8 +98,15 @@
   min-height: 0;
   flex: 1;
   overflow: auto;
-  padding: 0 16px 18px;
-  border-radius: 0 0 14px 14px;
+  padding: 0;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+.viewport::-webkit-scrollbar {
+  display: none;
+}
+.viewportDragging {
+  user-select: none;
 }
 .zoomLayer {
   width: max-content;
@@ -110,8 +114,8 @@
   transform-origin: top center;
 }
 .page {
-  width: min(900px, calc(97vw - 70px));
-  min-height: calc(min(920px, 96vh) - 80px);
+  width: min(900px, calc(100vw - 28px));
+  min-height: 100%;
   margin: 0 auto;
   box-shadow: 0 16px 42px rgba(0, 0, 0, 0.35);
 }
