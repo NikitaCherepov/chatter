@@ -64,6 +64,7 @@ import { resolveImageFile, getUploadsDir } from './services/image-storage.js';
 import { pruneExpiredMediaAssets } from './services/media-assets.js';
 import { canUserReadRegisteredImage } from './services/media-access.js';
 import { resolveAttachmentFile, MAX_RAW_FILE_SIZE as MAX_ATTACHMENT_BYTES } from './services/attachment-storage.js';
+import { materializeAssetInput } from './services/response-attachments.js';
 import { parseDocument, SUPPORTED_EXTENSIONS } from './services/document-parser.js';
 import {
   cancelExtractionJob,
@@ -743,6 +744,27 @@ app.post('/internal/ai/generate-image', internalAuth, async (req, res) => {
   } catch (err: any) {
     const code = `${err?.message || 'image_gen_failed'}`;
     return res.status(500).json({ error: code });
+  }
+});
+
+app.post('/internal/media/read', internalAuth, async (req, res) => {
+  const userId = resolveInternalAccountId(req.body?.user_id);
+  const url = typeof req.body?.url === 'string' ? req.body.url.trim() : '';
+  if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
+  if (!/^\/api\/v1\/(?:images|attachments)\//.test(url)) {
+    return res.status(400).json({ error: 'invalid_media_url' });
+  }
+  try {
+    const media = await materializeAssetInput(Math.floor(userId), { url });
+    res.setHeader('Content-Type', media.mimeType || 'application/octet-stream');
+    res.setHeader('Content-Length', `${media.buffer.length}`);
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Disposition', `attachment; filename="${path.basename(media.filename).replace(/["\\]/g, '_')}"`);
+    return res.send(media.buffer);
+  } catch (error: any) {
+    const code = `${error?.message || 'media_unavailable'}`;
+    const forbidden = code.includes('not_owned') || code.includes('access_denied');
+    return res.status(forbidden ? 403 : 404).json({ error: code });
   }
 });
 

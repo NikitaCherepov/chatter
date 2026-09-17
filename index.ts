@@ -763,6 +763,8 @@ const runBackendAiSend = async (
         model_fallback_notice?: string | null;
         tool_user_messages?: string[];
         generated_images?: Array<{ image_base64: string; prompt_used: string }>;
+        response_images?: Array<{ url: string; type: string }>;
+        response_attachments?: Array<{ name: string; mime_type: string; size_bytes: number; url: string }>;
         usage?: {
             tokens_used?: number;
             used_model?: string;
@@ -799,6 +801,8 @@ const runBackendAiStream = async (
     model_fallback_notice?: string | null;
     tool_user_messages?: string[];
     generated_images?: Array<{ image_base64: string; prompt_used: string }>;
+    response_images?: Array<{ url: string; type: string }>;
+    response_attachments?: Array<{ name: string; mime_type: string; size_bytes: number; url: string }>;
     usage?: {
         tokens_used?: number;
         used_model?: string;
@@ -934,6 +938,59 @@ const runBackendAiStream = async (
             reject(err);
         });
     });
+};
+
+const readBackendResponseMedia = async (userId: number, url: string): Promise<Buffer> => {
+    const response = await axios.post(
+        `${BACKEND_API_BASE_URL}/internal/media/read`,
+        { user_id: userId, url },
+        {
+            headers: { Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}` },
+            timeout: BACKEND_TIMEOUT_MEDIA_MS,
+            responseType: 'arraybuffer'
+        }
+    );
+    return Buffer.from(response.data);
+};
+
+const sendBackendResponseMedia = async (
+    ctx: any,
+    userId: number,
+    backend: {
+        response_images?: Array<{ url: string; type: string }>;
+        response_attachments?: Array<{ name: string; mime_type: string; size_bytes: number; url: string }>;
+    }
+) => {
+    const sentUrls = new Set<string>();
+    for (const image of Array.isArray(backend.response_images) ? backend.response_images : []) {
+        const url = `${image?.url || ''}`.trim();
+        if (!url || image?.type === 'generated' || sentUrls.has(url)) continue;
+        sentUrls.add(url);
+        try {
+            const buffer = await readBackendResponseMedia(userId, url);
+            try {
+                await ctx.replyWithPhoto({ source: buffer });
+            } catch {
+                await ctx.replyWithDocument({ source: buffer, filename: 'image' });
+            }
+        } catch (error) {
+            console.error('Ошибка отправки прикреплённого изображения:', formatSafeError(error));
+        }
+    }
+    for (const attachment of Array.isArray(backend.response_attachments) ? backend.response_attachments : []) {
+        const url = `${attachment?.url || ''}`.trim();
+        if (!url || sentUrls.has(url)) continue;
+        sentUrls.add(url);
+        try {
+            const buffer = await readBackendResponseMedia(userId, url);
+            await ctx.replyWithDocument({
+                source: buffer,
+                filename: `${attachment?.name || 'attachment'}`,
+            });
+        } catch (error) {
+            console.error('Ошибка отправки прикреплённого файла:', formatSafeError(error));
+        }
+    }
 };
 
 const runBackendStopGeneration = async (userId: number) => {
@@ -6728,6 +6785,7 @@ const processUserTextThroughAi = async (
                     }
                 }
             }
+            await sendBackendResponseMedia(ctx, userId, backend);
         }
         if (options?.onAssistantReply) {
             await options.onAssistantReply(assistantText);

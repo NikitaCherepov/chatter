@@ -291,16 +291,19 @@ const fetchTavily = async (session: SearchSession, signal?: AbortSignal): Promis
   }
 };
 
-const appendUniqueResults = (session: SearchSession, incoming: SearchResult[]) => {
+const appendUniqueResults = (session: SearchSession, incoming: SearchResult[]): number => {
   const resultKey = (result: SearchResult) => session.searchType === 'images' ? result.img_src : result.url;
   const knownUrls = new Set(session.results.map(resultKey).filter(Boolean));
+  let added = 0;
   for (const result of incoming) {
     const key = resultKey(result);
     if (session.searchType === 'images' && !key) continue;
     if (key && knownUrls.has(key)) continue;
     if (key) knownUrls.add(key);
     session.results.push(result);
+    added += 1;
   }
+  return added;
 };
 
 const errorMessage = (error: unknown) => error instanceof Error ? error.message : String(error);
@@ -370,8 +373,8 @@ const loadMore = async (session: SearchSession, signal?: AbortSignal) => {
       ? await fetchDesktopPage(session, session.nextPage, signal)
       : await fetchSearxngPage(session, session.nextPage, signal);
     session.nextPage += 1;
-    if (!results.length) session.exhausted = true;
-    appendUniqueResults(session, results);
+    const added = appendUniqueResults(session, results);
+    if (!results.length || added === 0) session.exhausted = true;
   } catch (error) {
     if (signal?.aborted) throw error;
     console.error('[web-search] Search pagination failed', { provider: session.provider, error: errorMessage(error) });
@@ -473,5 +476,5 @@ export const runWebSearch = async (query: string, options: WebSearchOptions, sig
   const pagination = nextCursor
     ? `Search pagination: showing cached results ${offset + 1}-${nextOffset} from ${session.provider}. To continue, repeat the same query and search options with cursor "${nextCursor}".`
     : `Search pagination: showing cached results ${offset + 1}-${nextOffset} from ${session.provider}. No more results are available.`;
-  return `${wrapUntrustedContent(`${summary}${resultText}`)}\n\n${pagination}`;
+  return `${pagination}\n\n${wrapUntrustedContent(`${summary}${resultText}`)}`;
 };

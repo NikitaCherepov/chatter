@@ -778,7 +778,7 @@ export class ChatterBrowser {
     } else {
       const googleUrl = new URL('https://www.google.com/search');
       googleUrl.searchParams.set('q', query);
-      googleUrl.searchParams.set('start', `${(page - 1) * 10}`);
+      if (searchType !== 'images') googleUrl.searchParams.set('start', `${(page - 1) * 10}`);
       googleUrl.searchParams.set('filter', '0');
       if (searchType === 'news') googleUrl.searchParams.set('tbm', 'nws');
       if (searchType === 'images') googleUrl.searchParams.set('tbm', 'isch');
@@ -802,8 +802,24 @@ export class ChatterBrowser {
     this.interactionInProgress = true;
     this.explicitNavigationRequested = true;
     try {
-      await this.navigateToUrl(targetUrl);
-      await this.ensureReadablePage();
+      let imagePageAlreadyOpen = false;
+      if (searchType === 'images' && page > 1) {
+        try {
+          const currentUrl = new URL(this.view.webContents.getURL());
+          imagePageAlreadyOpen = /(^|\.)google\.[a-z.]+$/i.test(currentUrl.hostname)
+            && currentUrl.pathname === '/search'
+            && currentUrl.searchParams.get('tbm') === 'isch'
+            && currentUrl.searchParams.get('q') === query
+            && currentUrl.searchParams.get('tbs') === new URL(targetUrl).searchParams.get('tbs');
+        } catch {
+          imagePageAlreadyOpen = false;
+        }
+      }
+
+      if (!imagePageAlreadyOpen) {
+        await this.navigateToUrl(targetUrl);
+        await this.ensureReadablePage();
+      }
 
       for (let attempt = 0; attempt < 20; attempt += 1) {
         const state = await this.executeInBrowserWorld<{ ready: boolean; challenge: boolean; resultCount: number }>(`(() => {
@@ -828,9 +844,42 @@ export class ChatterBrowser {
         await new Promise(resolve => setTimeout(resolve, 250));
       }
 
+      if (searchType === 'images' && page > 1) {
+        const scrollBatches = imagePageAlreadyOpen ? 1 : page - 1;
+        for (let batch = 0; batch < scrollBatches; batch += 1) {
+          let stagnantSamples = 0;
+          let previousCount = -1;
+          for (let step = 0; step < 8; step += 1) {
+            const state = await this.executeInBrowserWorld<{ count: number; height: number; y: number }>(`(() => {
+              const selector = 'a[href*="/imgres?"] img, a[href*="imgurl="] img';
+              const before = document.querySelectorAll(selector).length;
+              const moreButton = Array.from(document.querySelectorAll('button, input[type="button"]')).find((node) => {
+                const label = String(node.getAttribute('aria-label') || node.textContent || node.getAttribute('value') || '').toLowerCase();
+                return /show more|more results|показать ещё|ещё результаты/.test(label);
+              });
+              if (moreButton instanceof HTMLElement) moreButton.click();
+              window.scrollTo(0, Math.max(document.body?.scrollHeight || 0, document.documentElement?.scrollHeight || 0));
+              return {
+                count: before,
+                height: Math.max(document.body?.scrollHeight || 0, document.documentElement?.scrollHeight || 0),
+                y: window.scrollY,
+              };
+            })()`);
+            await new Promise(resolve => setTimeout(resolve, 450));
+            const nextCount = await this.executeInBrowserWorld<number>(`document.querySelectorAll('a[href*="/imgres?"] img, a[href*="imgurl="] img').length`);
+            if (nextCount > Math.max(previousCount, state.count)) stagnantSamples = 0;
+            else stagnantSamples += 1;
+            previousCount = nextCount;
+            if (stagnantSamples >= 3) break;
+          }
+        }
+      }
+
       return await this.executeInBrowserWorld(`(() => {
         const mode = ${JSON.stringify(mode)};
         const searchType = ${JSON.stringify(searchType)};
+        const requestedPage = ${page};
+        const imagePageSize = 20;
         const clean = (value, max = 2000) => String(value || '').replace(/\\s+/g, ' ').trim().slice(0, max);
         const bodyText = clean(document.body?.innerText || '', 20000).toLowerCase();
         const challenge = location.pathname.startsWith('/sorry/')
@@ -981,11 +1030,13 @@ export class ChatterBrowser {
           searchType,
           sort: ${JSON.stringify(sort)},
           freshness: ${JSON.stringify(freshness)},
-          page: ${page},
+          page: requestedPage,
           url: location.href,
           title: document.title,
           challenge: challenge ? 'captcha' : null,
-          results: results.slice(0, 20),
+          results: searchType === 'images'
+            ? results.slice((requestedPage - 1) * imagePageSize, requestedPage * imagePageSize)
+            : results.slice(0, 20),
         };
       })()`);
     } finally {

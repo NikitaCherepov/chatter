@@ -9,9 +9,26 @@ process.env.TAVILY_API_KEY = 'test-key';
 
 let tavilyRequestCount = 0;
 let requestBody: Record<string, unknown> | null = null;
+const searxImagePages: number[] = [];
 globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
   const url = `${input}`;
   if (url.includes('/search?') && init?.method !== 'POST') {
+    const parsedUrl = new URL(url);
+    if (parsedUrl.searchParams.get('q') === 'searx image pagination') {
+      const page = Number(parsedUrl.searchParams.get('pageno') || 1);
+      searxImagePages.push(page);
+      const start = page === 1 ? 1 : 7;
+      const count = page === 1 ? 6 : 2;
+      return new Response(JSON.stringify({
+        results: Array.from({ length: count }, (_, index) => ({
+          title: `SearX image ${start + index}`,
+          url: `https://example.com/searx-source-${start + index}`,
+          img_src: `https://cdn.example.com/searx-${start + index}.jpg`,
+          thumbnail_src: `https://cdn.example.com/searx-${start + index}-thumb.jpg`,
+          engines: ['google images'],
+        })),
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
     return new Response(JSON.stringify({
       results: [
         { title: 'Google result', url: 'https://example.com/google', content: 'Found by Google', engines: ['google'] },
@@ -29,7 +46,10 @@ globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) =>
       results: [{
         title: 'Image source page',
         url: 'https://example.com/image-source',
-        images: [{ url: 'https://cdn.example.com/source.jpg', description: 'Source image' }],
+        images: Array.from({ length: 7 }, (_, index) => ({
+          url: `https://cdn.example.com/source-${index + 1}.jpg`,
+          description: `Source image ${index + 1}`,
+        })),
       }],
       usage: { credits: 1 },
     }), { status: 200, headers: { 'Content-Type': 'application/json' } });
@@ -137,8 +157,41 @@ const imageResult = await runWebSearch('image fallback test', {
 });
 assert.equal(requestBody?.include_images, true);
 assert.equal(requestBody?.include_image_descriptions, true);
-assert.match(imageResult, /"image_url":"https:\/\/cdn\.example\.com\/source\.jpg"/);
+assert.match(imageResult, /"image_url":"https:\/\/cdn\.example\.com\/source-1\.jpg"/);
 assert.match(imageResult, /"source_page_url":"https:\/\/example\.com\/image-source"/);
+const tavilyImageCursor = imageResult.match(/cursor "([^"]+)"/)?.[1];
+assert.ok(tavilyImageCursor);
+assert.ok(
+  imageResult.indexOf('Search pagination:') < imageResult.indexOf('<untrusted_web_content>'),
+  'pagination metadata must precede large result payloads so truncation cannot hide the cursor',
+);
+const tavilyRequestsBeforeCachedPage = tavilyRequestCount;
+const secondTavilyImagePage = await runWebSearch('image fallback test', {
+  ...options,
+  searchType: 'images',
+  sort: 'relevance',
+  freshness: 'any',
+  cursor: tavilyImageCursor,
+});
+assert.equal(tavilyRequestCount, tavilyRequestsBeforeCachedPage, 'Tavily image cursor must page through cached results');
+assert.match(secondTavilyImagePage, /"image_url":"https:\/\/cdn\.example\.com\/source-7\.jpg"/);
+
+const searxImageOptions = {
+  ...options,
+  searchType: 'images' as const,
+  sort: 'relevance' as const,
+  freshness: 'any' as const,
+};
+const firstSearxImagePage = await runWebSearch('searx image pagination', searxImageOptions);
+const firstSearxCursor = firstSearxImagePage.match(/cursor "([^"]+)"/)?.[1];
+assert.ok(firstSearxCursor);
+const secondSearxImagePage = await runWebSearch('searx image pagination', { ...searxImageOptions, cursor: firstSearxCursor });
+const secondSearxCursor = secondSearxImagePage.match(/cursor "([^"]+)"/)?.[1];
+assert.ok(secondSearxCursor);
+const thirdSearxImagePage = await runWebSearch('searx image pagination', { ...searxImageOptions, cursor: secondSearxCursor });
+assert.deepEqual(searxImagePages, [1, 2]);
+assert.match(thirdSearxImagePage, /"image_url":"https:\/\/cdn\.example\.com\/searx-8\.jpg"/);
+assert.equal(tavilyRequestCount, tavilyRequestsBeforeCachedPage, 'SearXNG image pagination must not fall through to Tavily');
 
 updateWebSearchRuntimeSettings({ enabled: false });
 const disabled = await runWebSearch('disabled search', options);
