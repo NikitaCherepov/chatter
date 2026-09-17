@@ -613,7 +613,14 @@
       "renderPerfHigh": "높음 (강력한 PC)",
       "renderPerfUltra": "울트라",
       "renderPerfHelp": "채팅 목록에서 이전 메시지를 숨기기 전에 렌더링할 문자 수입니다. 낮을수록 스크롤이 빠릅니다.",
-      "renderPerfSaved": "렌더링 성능이 저장되었습니다. 다음에 열리는 채팅에 적용됩니다."
+      "renderPerfSaved": "렌더링 성능이 저장되었습니다. 다음에 열리는 채팅에 적용됩니다.",
+      "desktopBrowserTitle": "데스크톱 웹 도구",
+      "desktopBrowserConcurrency": "병렬 브라우저 인스턴스",
+      "desktopBrowserConcurrencyHelp": "동시에 실행할 수 있는 데스크톱 웹 검색 및 페이지 읽기의 최대 수입니다. CAPTCHA를 기다리는 브라우저는 확인 창을 닫을 때까지 슬롯을 유지합니다.",
+      "desktopSearch": "웹 검색에 데스크톱 브라우저 사용",
+      "desktopSearchHelp": "해당 공급자가 선택된 경우 search_web이 로컬 데스크톱 브라우저를 사용하도록 허용합니다.",
+      "desktopReader": "데스크톱 브라우저를 사용하여 페이지 구문 분석",
+      "desktopReaderHelp": "read_webpage가 로컬 데스크톱 브라우저에서 페이지를 구문 분석하도록 허용합니다. 비활성화하면 백엔드가 다른 구성된 리더를 사용할 수 있습니다."
     },
     "toasts": {
       "saveSettingFailed": "설정을 저장하지 못했습니다",
@@ -1108,7 +1115,9 @@
       "jsonExtractor": "JSON 추출기",
       "jsonExtractorDescription": "문서를 JSON으로 변환",
       "youtubeMusic": "YouTube Music",
-      "youtubeMusicDescription": "음악 플레이어"
+      "youtubeMusicDescription": "음악 플레이어",
+      "newspapers": "신문",
+      "newspapersDescription": "개인 AI 에디션"
     },
     "documents": {
       "selectChat": "채팅 선택",
@@ -1235,6 +1244,113 @@
       "home": "YouTube Music 홈",
       "loading": "YouTube Music 로딩 중",
       "actionFailed": "YouTube Music 작업 실패"
+    },
+    "newspapers": {
+      "title": "내 신문",
+      "subtitle": "편집자와 연구자들이 만든 개인 맞춤판",
+      "configure": "구성",
+      "create": "만들기",
+      "interests": "관심사",
+      "interestsPlaceholder": "AI, 우주, 게임, 과학…",
+      "preferences": "환경 설정",
+      "preferencesPlaceholder": "예: 정치 없음, 루머 줄이기…",
+      "recommendedSources": "추천 소스",
+      "sourcesPlaceholder": "예: NASA, Ars Technica, Habr 또는 특정 블로그…",
+      "sourcesHint": "편집자가 연구자에게 먼저 확인하도록 요청하지만, 이에 국한되지는 않습니다.",
+      "volume": "판 부수",
+      "volumeOptions": {
+        "compact": {
+          "label": "컴팩트",
+          "hint": "보통 6~10개의 기사, 1~3개의 심층 기사 포함"
+        },
+        "standard": {
+          "label": "표준",
+          "hint": "보통 12~20개의 기사, 4~7개의 심층 기사 포함"
+        },
+        "extended": {
+          "label": "확장",
+          "hint": "보통 20–35개의 기사, 7–12개의 심층 기사 포함"
+        }
+      },
+      "weather": "날씨",
+      "weatherOptions": {
+        "off": {
+          "label": "날씨 없음"
+        },
+        "today": {
+          "label": "오늘",
+          "hint": "아침, 오후, 저녁"
+        },
+        "week": {
+          "label": "이번 주",
+          "hint": "7일 예보"
+        },
+        "auto": {
+          "label": "자동",
+          "hint": "배송 일정에 따라"
+        }
+      },
+      "soon": "곧",
+      "weatherLocation": "도시 또는 지역",
+      "weatherLocationPlaceholder": "예: 톰스크",
+      "delivery": "자동 전달",
+      "deliveryOptions": {
+        "manual": "자동으로 전달하지 않음",
+        "daily": "매일",
+        "everyTwoDays": "이틀마다",
+        "weekly": "일주일에 한 번"
+      },
+      "deliveryHint": "일정은 다음 단계에서 연결됩니다.",
+      "autoFill": "자동으로 채우기",
+      "autoFilling": "채팅을 분석하는 중…",
+      "stopAll": "모두 중지",
+      "stop": "중지",
+      "researcher": "연구원",
+      "editorLog": "편집자 JSON 및 활동 로그",
+      "downloadRun": "로그 다운로드",
+      "downloadIssue": "에디션 JSON 다운로드",
+      "loading": "에디션 로드 중…",
+      "issueCount_one": "에디션 {{count}}개",
+      "issueCount_other": "에디션 {{count}}개",
+      "issueNumber": "제 {{number}}호",
+      "blockCount_one": "블록 {{count}}개",
+      "blockCount_other": "블록 {{count}}개",
+      "empty": "아직 판이 없습니다",
+      "emptyHint": "관심사를 설정하고 편집기를 시작하세요.",
+      "previousPage": "이전 페이지",
+      "nextPage": "다음 페이지",
+      "runNumber": "실행 #{{number}}",
+      "runStatus": {
+        "queued": "편집기가 시작을 기다리고 있습니다",
+        "running": "편집기가 작업 중입니다",
+        "ready": "판이 준비되었습니다",
+        "failed": "판을 만들 수 없습니다",
+        "cancelled": "중지됨"
+      },
+      "agentStatus": {
+        "queued": "대기 중",
+        "running": "실행 중",
+        "ready": "준비됨",
+        "failed": "실패",
+        "cancelled": "취소됨"
+      },
+      "styles": {
+        "wizarding": "마법",
+        "broadsheet": "채터 타임즈",
+        "deusEx": "Deus Ex",
+        "massEffect": "Mass Effect"
+      },
+      "errors": {
+        "load": "신문을 불러올 수 없습니다",
+        "save": "설정을 저장할 수 없습니다",
+        "autoFill": "설정을 자동으로 채울 수 없습니다",
+        "weatherLocation": "날씨 예보를 위해 도시 또는 지역을 지정하세요",
+        "start": "편집기를 시작할 수 없습니다",
+        "open": "판을 열 수 없습니다",
+        "stop": "편집기를 중지할 수 없습니다",
+        "stopResearcher": "연구자를 중지할 수 없습니다",
+        "export": "신문 데이터를 내보낼 수 없습니다"
+      }
     }
   },
   "tts": {

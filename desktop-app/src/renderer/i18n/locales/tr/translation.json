@@ -636,7 +636,14 @@
       "renderPerfHigh": "Yüksek (güçlü bilgisayarlar)",
       "renderPerfUltra": "Ultra",
       "renderPerfHelp": "Sohbet listesinde eski mesajları gizlemeden önce kaç karakterin işleneceği. Düşük = daha hızlı kaydırma.",
-      "renderPerfSaved": "İşleme performansı kaydedildi. Bir sonraki açılan sohbete uygulanacak."
+      "renderPerfSaved": "İşleme performansı kaydedildi. Bir sonraki açılan sohbete uygulanacak.",
+      "desktopBrowserTitle": "Masaüstü web araçları",
+      "desktopBrowserConcurrency": "Paralel tarayıcı örnekleri",
+      "desktopBrowserConcurrencyHelp": "Aynı anda çalışabilecek maksimum masaüstü web araması ve sayfa okuma sayısı. CAPTCHA bekleyen bir tarayıcı, doğrulama penceresini kapatana kadar yuvasını tutar.",
+      "desktopSearch": "Web araması için masaüstü tarayıcıyı kullan",
+      "desktopSearchHelp": "Bu sağlayıcı seçildiğinde search_web'in yerel masaüstü tarayıcıyı kullanmasına izin ver.",
+      "desktopReader": "Sayfa ayrıştırma için masaüstü tarayıcıyı kullan",
+      "desktopReaderHelp": "read_webpage'in sayfaları yerel masaüstü tarayıcısında ayrıştırmasına izin ver. Devre dışı bırakıldığında, arka uç başka bir yapılandırılmış okuyucu kullanabilir."
     },
     "toasts": {
       "saveSettingFailed": "Ayar kaydedilemedi",
@@ -1108,7 +1115,9 @@
       "jsonExtractor": "JSON Çıkarıcı",
       "jsonExtractorDescription": "Bir belgeyi JSON'a dönüştürün",
       "youtubeMusic": "YouTube Music",
-      "youtubeMusicDescription": "Müzik çalar"
+      "youtubeMusicDescription": "Müzik çalar",
+      "newspapers": "Gazeteler",
+      "newspapersDescription": "Kişisel AI sürümleri"
     },
     "documents": {
       "selectChat": "Bir sohbet seçin",
@@ -1235,6 +1244,113 @@
       "home": "YouTube Music ana sayfası",
       "loading": "YouTube Music yükleniyor",
       "actionFailed": "YouTube Music işlemi başarısız oldu"
+    },
+    "newspapers": {
+      "title": "Gazeteleriniz",
+      "subtitle": "Editör ve araştırmacılardan kişisel bir baskı",
+      "configure": "Yapılandır",
+      "create": "Oluştur",
+      "interests": "İlgi alanları",
+      "interestsPlaceholder": "Yapay zeka, uzay, oyunlar, bilim…",
+      "preferences": "Tercihler",
+      "preferencesPlaceholder": "Örneğin: siyaset yok, daha az söylenti…",
+      "recommendedSources": "Önerilen kaynaklar",
+      "sourcesPlaceholder": "Örneğin: NASA, Ars Technica, Habr veya belirli bloglar…",
+      "sourcesHint": "Editör, araştırmacıdan önce bunları kontrol etmesini isteyecek, ancak bunlarla sınırlı kalmayacaktır.",
+      "volume": "Baskı boyutu",
+      "volumeOptions": {
+        "compact": {
+          "label": "Kompakt",
+          "hint": "Genellikle 6–10 haber, 1–3 gelişmiş makale dahil"
+        },
+        "standard": {
+          "label": "Standart",
+          "hint": "Genellikle 12–20 haber, 4–7 gelişmiş makale dahil"
+        },
+        "extended": {
+          "label": "Genişletilmiş",
+          "hint": "Genellikle 20–35 haber, 7–12 geliştirilmiş makale dahil"
+        }
+      },
+      "weather": "Hava durumu",
+      "weatherOptions": {
+        "off": {
+          "label": "Hava durumu yok"
+        },
+        "today": {
+          "label": "Bugün",
+          "hint": "Sabah, öğleden sonra ve akşam"
+        },
+        "week": {
+          "label": "Bu hafta",
+          "hint": "Yedi günlük tahmin"
+        },
+        "auto": {
+          "label": "Otomatik",
+          "hint": "Teslimat programına göre"
+        }
+      },
+      "soon": "yakında",
+      "weatherLocation": "Şehir veya bölge",
+      "weatherLocationPlaceholder": "Örneğin: Tomsk",
+      "delivery": "Otomatik teslimat",
+      "deliveryOptions": {
+        "manual": "Otomatik teslim etme",
+        "daily": "Her gün",
+        "everyTwoDays": "İki günde bir",
+        "weekly": "Haftada bir"
+      },
+      "deliveryHint": "Zamanlama bir sonraki aşamada bağlanacaktır.",
+      "autoFill": "Otomatik doldur",
+      "autoFilling": "Sohbetleriniz inceleniyor…",
+      "stopAll": "Tümünü durdur",
+      "stop": "Durdur",
+      "researcher": "Araştırmacı",
+      "editorLog": "Editör JSON ve etkinlik günlüğü",
+      "downloadRun": "Günlüğü indir",
+      "downloadIssue": "Baskı JSON'ını indir",
+      "loading": "Baskılar yükleniyor…",
+      "issueCount_one": "{{count}} baskı",
+      "issueCount_other": "{{count}} baskı",
+      "issueNumber": "No. {{number}}",
+      "blockCount_one": "{{count}} blok",
+      "blockCount_other": "{{count}} blok",
+      "empty": "Henüz baskı yok",
+      "emptyHint": "İlgi alanlarınızı yapılandırın ve editörü başlatın.",
+      "previousPage": "Önceki sayfa",
+      "nextPage": "Sonraki sayfa",
+      "runNumber": "Çalıştırma #{{number}}",
+      "runStatus": {
+        "queued": "Editör başlamayı bekliyor",
+        "running": "Editör çalışıyor",
+        "ready": "Baskı hazır",
+        "failed": "Baskı oluşturulamadı",
+        "cancelled": "Durduruldu"
+      },
+      "agentStatus": {
+        "queued": "Sırada",
+        "running": "Çalışıyor",
+        "ready": "Hazır",
+        "failed": "Başarısız",
+        "cancelled": "İptal edildi"
+      },
+      "styles": {
+        "wizarding": "Büyücülük",
+        "broadsheet": "Chatter Times",
+        "deusEx": "Deus Ex",
+        "massEffect": "Mass Effect"
+      },
+      "errors": {
+        "load": "Gazete yüklenemedi",
+        "save": "Ayarlar kaydedilemedi",
+        "autoFill": "Ayarlar otomatik olarak doldurulamadı",
+        "weatherLocation": "Hava durumu tahmini için bir şehir veya bölge belirtin",
+        "start": "Editör başlatılamadı",
+        "open": "Baskı açılamadı",
+        "stop": "Editör durdurulamadı",
+        "stopResearcher": "Araştırmacı durdurulamadı",
+        "export": "Gazete verileri dışa aktarılamadı"
+      }
     }
   },
   "tts": {

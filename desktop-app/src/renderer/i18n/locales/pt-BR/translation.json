@@ -292,7 +292,14 @@
       "renderPerfHigh": "Alto (PCs potentes)",
       "renderPerfUltra": "Ultra",
       "renderPerfHelp": "Quantos caracteres renderizar na lista de chat antes de ocultar mensagens mais antigas. Menor = rolagem mais rápida.",
-      "renderPerfSaved": "Desempenho de renderização salvo. Será aplicado ao próximo chat aberto."
+      "renderPerfSaved": "Desempenho de renderização salvo. Será aplicado ao próximo chat aberto.",
+      "desktopBrowserTitle": "Ferramentas web para desktop",
+      "desktopBrowserConcurrency": "Instâncias paralelas do navegador",
+      "desktopBrowserConcurrencyHelp": "Número máximo de pesquisas web e leituras de páginas no desktop que podem ser executadas ao mesmo tempo. Um navegador aguardando CAPTCHA mantém sua vaga até você fechar a janela de verificação.",
+      "desktopSearch": "Usar navegador desktop para pesquisa web",
+      "desktopSearchHelp": "Permitir que search_web use o navegador desktop local quando esse provedor estiver selecionado.",
+      "desktopReader": "Usar navegador de desktop para análise de páginas",
+      "desktopReaderHelp": "Permitir que read_webpage analise páginas no navegador de desktop local. Quando desativado, o backend pode usar outro leitor configurado."
     },
     "toasts": {
       "saveSettingFailed": "Falha ao salvar a configuração",
@@ -787,7 +794,9 @@
       "jsonExtractor": "Extrator de JSON",
       "jsonExtractorDescription": "Transforme um documento em JSON",
       "youtubeMusic": "YouTube Music",
-      "youtubeMusicDescription": "Player de música"
+      "youtubeMusicDescription": "Player de música",
+      "newspapers": "Jornais",
+      "newspapersDescription": "Edições pessoais de IA"
     },
     "documents": {
       "selectChat": "Selecione o chat",
@@ -914,6 +923,113 @@
       "home": "Página inicial do YouTube Music",
       "loading": "Carregando YouTube Music",
       "actionFailed": "Ação do YouTube Music falhou"
+    },
+    "newspapers": {
+      "title": "Seus jornais",
+      "subtitle": "Uma edição pessoal do editor e pesquisadores",
+      "configure": "Configurar",
+      "create": "Criar",
+      "interests": "Interesses",
+      "interestsPlaceholder": "IA, espaço, jogos, ciência…",
+      "preferences": "Preferências",
+      "preferencesPlaceholder": "Por exemplo: sem política, menos boatos…",
+      "recommendedSources": "Fontes recomendadas",
+      "sourcesPlaceholder": "Por exemplo: NASA, Ars Technica, Habr, ou blogs específicos…",
+      "sourcesHint": "O editor pedirá ao pesquisador para verificar estas primeiro, mas não se limitará a elas.",
+      "volume": "Tamanho da edição",
+      "volumeOptions": {
+        "compact": {
+          "label": "Compacto",
+          "hint": "Geralmente 6–10 notícias, incluindo 1–3 artigos desenvolvidos"
+        },
+        "standard": {
+          "label": "Padrão",
+          "hint": "Geralmente 12–20 notícias, incluindo 4–7 artigos desenvolvidos"
+        },
+        "extended": {
+          "label": "Estendido",
+          "hint": "Geralmente 20–35 histórias, incluindo 7–12 artigos desenvolvidos"
+        }
+      },
+      "weather": "Clima",
+      "weatherOptions": {
+        "off": {
+          "label": "Sem clima"
+        },
+        "today": {
+          "label": "Hoje",
+          "hint": "Manhã, tarde e noite"
+        },
+        "week": {
+          "label": "Esta semana",
+          "hint": "Previsão de sete dias"
+        },
+        "auto": {
+          "label": "Automático",
+          "hint": "Baseado no cronograma de entrega"
+        }
+      },
+      "soon": "em breve",
+      "weatherLocation": "Cidade ou região",
+      "weatherLocationPlaceholder": "Por exemplo: Tomsk",
+      "delivery": "Entrega automática",
+      "deliveryOptions": {
+        "manual": "Não entregar automaticamente",
+        "daily": "Todos os dias",
+        "everyTwoDays": "A cada dois dias",
+        "weekly": "Uma vez por semana"
+      },
+      "deliveryHint": "O agendamento será conectado na próxima etapa.",
+      "autoFill": "Preencher automaticamente",
+      "autoFilling": "Estudando seus chats…",
+      "stopAll": "Parar todos",
+      "stop": "Parar",
+      "researcher": "Pesquisador",
+      "editorLog": "Editor JSON e registro de atividades",
+      "downloadRun": "Baixar log",
+      "downloadIssue": "Baixar JSON da edição",
+      "loading": "Carregando edições…",
+      "issueCount_one": "{{count}} edição",
+      "issueCount_other": "{{count}} edições",
+      "issueNumber": "Nº {{number}}",
+      "blockCount_one": "{{count}} bloco",
+      "blockCount_other": "{{count}} blocos",
+      "empty": "Nenhuma edição ainda",
+      "emptyHint": "Configure seus interesses e inicie o editor.",
+      "previousPage": "Página anterior",
+      "nextPage": "Próxima página",
+      "runNumber": "Execução nº {{number}}",
+      "runStatus": {
+        "queued": "O editor está aguardando para começar",
+        "running": "O editor está trabalhando",
+        "ready": "A edição está pronta",
+        "failed": "Não foi possível criar a edição",
+        "cancelled": "Parado"
+      },
+      "agentStatus": {
+        "queued": "Na fila",
+        "running": "Em execução",
+        "ready": "Pronto",
+        "failed": "Falhou",
+        "cancelled": "Cancelado"
+      },
+      "styles": {
+        "wizarding": "Mágico",
+        "broadsheet": "Chatter Times",
+        "deusEx": "Deus Ex",
+        "massEffect": "Mass Effect"
+      },
+      "errors": {
+        "load": "Não foi possível carregar o jornal",
+        "save": "Não foi possível salvar as configurações",
+        "autoFill": "Não foi possível preencher as configurações automaticamente",
+        "weatherLocation": "Especifique uma cidade ou região para a previsão do tempo",
+        "start": "Não foi possível iniciar o editor",
+        "open": "Não foi possível abrir a edição",
+        "stop": "Não foi possível parar o editor",
+        "stopResearcher": "Não foi possível parar o pesquisador",
+        "export": "Não foi possível exportar os dados do jornal"
+      }
     }
   },
   "advanced": {

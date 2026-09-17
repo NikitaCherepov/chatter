@@ -297,7 +297,9 @@
       "desktopBrowserConcurrency": "Instances de navigateur parallèles",
       "desktopBrowserConcurrencyHelp": "Nombre maximal de recherches web de bureau et de lectures de pages pouvant s'exécuter en même temps. Un navigateur attendant un CAPTCHA conserve son emplacement jusqu'à ce que vous fermiez la fenêtre de vérification.",
       "desktopSearch": "Utiliser le navigateur de bureau pour la recherche web",
-      "desktopSearchHelp": "Autoriser search_web à utiliser le navigateur de bureau local lorsque ce fournisseur est sélectionné."
+      "desktopSearchHelp": "Autoriser search_web à utiliser le navigateur de bureau local lorsque ce fournisseur est sélectionné.",
+      "desktopReader": "Utiliser le navigateur de bureau pour l'analyse des pages",
+      "desktopReaderHelp": "Permettre à read_webpage d'analyser les pages dans le navigateur de bureau local. Lorsque désactivé, le backend peut utiliser un autre lecteur configuré."
     },
     "toasts": {
       "saveSettingFailed": "Échec de l'enregistrement du paramètre",
@@ -792,7 +794,9 @@
       "jsonExtractor": "Extracteur JSON",
       "jsonExtractorDescription": "Convertir un document en JSON",
       "youtubeMusic": "YouTube Music",
-      "youtubeMusicDescription": "Lecteur de musique"
+      "youtubeMusicDescription": "Lecteur de musique",
+      "newspapers": "Journaux",
+      "newspapersDescription": "Éditions personnelles IA"
     },
     "documents": {
       "selectChat": "Sélectionnez un chat",
@@ -919,6 +923,113 @@
       "home": "Accueil YouTube Music",
       "loading": "Chargement de YouTube Music",
       "actionFailed": "Action YouTube Music échouée"
+    },
+    "newspapers": {
+      "title": "Vos journaux",
+      "subtitle": "Une édition personnelle de la rédaction et des chercheurs",
+      "configure": "Configurer",
+      "create": "Créer",
+      "interests": "Centres d'intérêt",
+      "interestsPlaceholder": "IA, espace, jeux, science…",
+      "preferences": "Préférences",
+      "preferencesPlaceholder": "Par exemple : pas de politique, moins de rumeurs…",
+      "recommendedSources": "Sources recommandées",
+      "sourcesPlaceholder": "Par exemple : NASA, Ars Technica, Habr, ou des blogs spécifiques…",
+      "sourcesHint": "L'éditeur demandera au chercheur de vérifier celles-ci en premier, mais ne s'y limitera pas.",
+      "volume": "Taille de l'édition",
+      "volumeOptions": {
+        "compact": {
+          "label": "Compact",
+          "hint": "Généralement 6 à 10 articles, dont 1 à 3 articles développés"
+        },
+        "standard": {
+          "label": "Standard",
+          "hint": "Généralement 12 à 20 articles, dont 4 à 7 articles développés"
+        },
+        "extended": {
+          "label": "Étendu",
+          "hint": "Généralement 20 à 35 histoires, dont 7 à 12 articles développés"
+        }
+      },
+      "weather": "Météo",
+      "weatherOptions": {
+        "off": {
+          "label": "Pas de météo"
+        },
+        "today": {
+          "label": "Aujourd'hui",
+          "hint": "Matin, après-midi et soir"
+        },
+        "week": {
+          "label": "Cette semaine",
+          "hint": "Prévisions sur sept jours"
+        },
+        "auto": {
+          "label": "Automatique",
+          "hint": "Basé sur le calendrier de livraison"
+        }
+      },
+      "soon": "bientôt",
+      "weatherLocation": "Ville ou région",
+      "weatherLocationPlaceholder": "Par exemple : Tomsk",
+      "delivery": "Livraison automatique",
+      "deliveryOptions": {
+        "manual": "Ne pas livrer automatiquement",
+        "daily": "Tous les jours",
+        "everyTwoDays": "Tous les deux jours",
+        "weekly": "Une fois par semaine"
+      },
+      "deliveryHint": "La planification sera connectée à l'étape suivante.",
+      "autoFill": "Remplir automatiquement",
+      "autoFilling": "Étude de vos conversations…",
+      "stopAll": "Tout arrêter",
+      "stop": "Arrêter",
+      "researcher": "Chercheur",
+      "editorLog": "Journal de l'éditeur JSON et d'activité",
+      "downloadRun": "Télécharger le journal",
+      "downloadIssue": "Télécharger le JSON de l'édition",
+      "loading": "Chargement des éditions…",
+      "issueCount_one": "{{count}} édition",
+      "issueCount_other": "{{count}} éditions",
+      "issueNumber": "N° {{number}}",
+      "blockCount_one": "{{count}} bloc",
+      "blockCount_other": "{{count}} blocs",
+      "empty": "Aucune édition pour l'instant",
+      "emptyHint": "Configurez vos centres d'intérêt et lancez l'éditeur.",
+      "previousPage": "Page précédente",
+      "nextPage": "Page suivante",
+      "runNumber": "Exécution #{{number}}",
+      "runStatus": {
+        "queued": "L'éditeur attend de démarrer",
+        "running": "L'éditeur travaille",
+        "ready": "L'édition est prête",
+        "failed": "Impossible de créer l'édition",
+        "cancelled": "Arrêté"
+      },
+      "agentStatus": {
+        "queued": "En file d'attente",
+        "running": "En cours",
+        "ready": "Prêt",
+        "failed": "Échec",
+        "cancelled": "Annulé"
+      },
+      "styles": {
+        "wizarding": "Magique",
+        "broadsheet": "Chatter Times",
+        "deusEx": "Deus Ex",
+        "massEffect": "Mass Effect"
+      },
+      "errors": {
+        "load": "Impossible de charger le journal",
+        "save": "Impossible d'enregistrer les paramètres",
+        "autoFill": "Impossible de remplir les paramètres automatiquement",
+        "weatherLocation": "Spécifiez une ville ou une région pour les prévisions météo",
+        "start": "Impossible de démarrer l'éditeur",
+        "open": "Impossible d'ouvrir l'édition",
+        "stop": "Impossible d'arrêter l'éditeur",
+        "stopResearcher": "Impossible d'arrêter le chercheur",
+        "export": "Impossible d'exporter les données du journal"
+      }
     }
   },
   "advanced": {

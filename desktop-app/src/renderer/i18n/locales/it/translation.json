@@ -613,7 +613,14 @@
       "renderPerfHigh": "Alta (PC potenti)",
       "renderPerfUltra": "Ultra",
       "renderPerfHelp": "Quanti caratteri visualizzare nell'elenco chat prima di nascondere i messaggi più vecchi. Più basso = scorrimento più veloce.",
-      "renderPerfSaved": "Prestazioni rendering salvate. Verranno applicate alla prossima chat aperta."
+      "renderPerfSaved": "Prestazioni rendering salvate. Verranno applicate alla prossima chat aperta.",
+      "desktopBrowserTitle": "Strumenti web desktop",
+      "desktopBrowserConcurrency": "Istanze browser parallele",
+      "desktopBrowserConcurrencyHelp": "Numero massimo di ricerche web desktop e letture di pagine che possono essere eseguite contemporaneamente. Un browser in attesa di CAPTCHA mantiene il suo slot finché non chiudi la finestra di verifica.",
+      "desktopSearch": "Usa il browser desktop per la ricerca web",
+      "desktopSearchHelp": "Consenti a search_web di usare il browser desktop locale quando quel provider è selezionato.",
+      "desktopReader": "Usa il browser desktop per l'analisi delle pagine",
+      "desktopReaderHelp": "Consenti a read_webpage di analizzare le pagine nel browser desktop locale. Se disattivato, il backend può utilizzare un altro lettore configurato."
     },
     "toasts": {
       "saveSettingFailed": "Impossibile salvare l'impostazione",
@@ -1108,7 +1115,9 @@
       "jsonExtractor": "Estrattore JSON",
       "jsonExtractorDescription": "Trasforma un documento in JSON",
       "youtubeMusic": "YouTube Music",
-      "youtubeMusicDescription": "Lettore musicale"
+      "youtubeMusicDescription": "Lettore musicale",
+      "newspapers": "Giornali",
+      "newspapersDescription": "Edizioni AI personali"
     },
     "documents": {
       "selectChat": "Seleziona chat",
@@ -1235,6 +1244,113 @@
       "home": "Home di YouTube Music",
       "loading": "Caricamento di YouTube Music",
       "actionFailed": "Azione di YouTube Music non riuscita"
+    },
+    "newspapers": {
+      "title": "I tuoi giornali",
+      "subtitle": "Un'edizione personale dall'editore e dai ricercatori",
+      "configure": "Configura",
+      "create": "Crea",
+      "interests": "Interessi",
+      "interestsPlaceholder": "IA, spazio, giochi, scienza…",
+      "preferences": "Preferenze",
+      "preferencesPlaceholder": "Ad esempio: niente politica, meno voci…",
+      "recommendedSources": "Fonti consigliate",
+      "sourcesPlaceholder": "Ad esempio: NASA, Ars Technica, Habr, o blog specifici…",
+      "sourcesHint": "L'editor chiederà al ricercatore di controllare prima queste, ma non si limiterà a esse.",
+      "volume": "Dimensione dell'edizione",
+      "volumeOptions": {
+        "compact": {
+          "label": "Compatta",
+          "hint": "Di solito 6–10 notizie, incluse 1–3 articoli approfonditi"
+        },
+        "standard": {
+          "label": "Standard",
+          "hint": "Di solito 12–20 notizie, incluse 4–7 articoli approfonditi"
+        },
+        "extended": {
+          "label": "Estesa",
+          "hint": "Di solito 20–35 storie, incluse 7–12 articoli sviluppati"
+        }
+      },
+      "weather": "Meteo",
+      "weatherOptions": {
+        "off": {
+          "label": "Nessun meteo"
+        },
+        "today": {
+          "label": "Oggi",
+          "hint": "Mattina, pomeriggio e sera"
+        },
+        "week": {
+          "label": "Questa settimana",
+          "hint": "Previsioni su sette giorni"
+        },
+        "auto": {
+          "label": "Automatico",
+          "hint": "In base al programma di consegna"
+        }
+      },
+      "soon": "presto",
+      "weatherLocation": "Città o regione",
+      "weatherLocationPlaceholder": "Ad esempio: Tomsk",
+      "delivery": "Consegna automatica",
+      "deliveryOptions": {
+        "manual": "Non consegnare automaticamente",
+        "daily": "Ogni giorno",
+        "everyTwoDays": "Ogni due giorni",
+        "weekly": "Una volta a settimana"
+      },
+      "deliveryHint": "La pianificazione sarà collegata nella fase successiva.",
+      "autoFill": "Compila automaticamente",
+      "autoFilling": "Studiando le tue chat…",
+      "stopAll": "Ferma tutto",
+      "stop": "Ferma",
+      "researcher": "Ricercatore",
+      "editorLog": "JSON dell'editor e registro attività",
+      "downloadRun": "Scarica log",
+      "downloadIssue": "Scarica JSON edizione",
+      "loading": "Caricamento edizioni…",
+      "issueCount_one": "{{count}} edizione",
+      "issueCount_other": "{{count}} edizioni",
+      "issueNumber": "N. {{number}}",
+      "blockCount_one": "{{count}} blocco",
+      "blockCount_other": "{{count}} blocchi",
+      "empty": "Nessuna edizione ancora",
+      "emptyHint": "Configura i tuoi interessi e avvia l'editor.",
+      "previousPage": "Pagina precedente",
+      "nextPage": "Pagina successiva",
+      "runNumber": "Esecuzione #{{number}}",
+      "runStatus": {
+        "queued": "L'editor è in attesa di iniziare",
+        "running": "L'editor sta lavorando",
+        "ready": "L'edizione è pronta",
+        "failed": "Impossibile creare l'edizione",
+        "cancelled": "Fermato"
+      },
+      "agentStatus": {
+        "queued": "In coda",
+        "running": "In esecuzione",
+        "ready": "Pronto",
+        "failed": "Non riuscito",
+        "cancelled": "Annullato"
+      },
+      "styles": {
+        "wizarding": "Magico",
+        "broadsheet": "Chatter Times",
+        "deusEx": "Deus Ex",
+        "massEffect": "Mass Effect"
+      },
+      "errors": {
+        "load": "Impossibile caricare il giornale",
+        "save": "Impossibile salvare le impostazioni",
+        "autoFill": "Impossibile compilare automaticamente le impostazioni",
+        "weatherLocation": "Specifica una città o regione per le previsioni del tempo",
+        "start": "Impossibile avviare l'editor",
+        "open": "Impossibile aprire l'edizione",
+        "stop": "Impossibile fermare l'editor",
+        "stopResearcher": "Impossibile fermare il ricercatore",
+        "export": "Impossibile esportare i dati del giornale"
+      }
     }
   },
   "tts": {

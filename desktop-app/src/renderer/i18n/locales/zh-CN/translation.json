@@ -292,7 +292,14 @@
       "renderPerfHigh": "高（高性能电脑）",
       "renderPerfUltra": "极致",
       "renderPerfHelp": "在聊天列表中隐藏较早消息前渲染的字符数。数值越低，滚动越快。",
-      "renderPerfSaved": "渲染性能已保存。将在下次打开的聊天中生效。"
+      "renderPerfSaved": "渲染性能已保存。将在下次打开的聊天中生效。",
+      "desktopBrowserTitle": "桌面网页工具",
+      "desktopBrowserConcurrency": "并行浏览器实例",
+      "desktopBrowserConcurrencyHelp": "可同时运行的桌面网页搜索和页面读取的最大数量。等待验证码的浏览器会占用其槽位，直到您关闭验证窗口。",
+      "desktopSearch": "使用桌面浏览器进行网页搜索",
+      "desktopSearchHelp": "当选择该提供商时，允许search_web使用本地桌面浏览器。",
+      "desktopReader": "使用桌面浏览器解析页面",
+      "desktopReaderHelp": "允许read_webpage在本地桌面浏览器中解析页面。禁用时，后端可能使用其他配置的阅读器。"
     },
     "toasts": {
       "saveSettingFailed": "保存设置失败",
@@ -787,7 +794,9 @@
       "jsonExtractor": "JSON 提取器",
       "jsonExtractorDescription": "将文档转换为 JSON",
       "youtubeMusic": "YouTube Music",
-      "youtubeMusicDescription": "音乐播放器"
+      "youtubeMusicDescription": "音乐播放器",
+      "newspapers": "报纸",
+      "newspapersDescription": "个人AI版本"
     },
     "documents": {
       "selectChat": "选择聊天",
@@ -914,6 +923,113 @@
       "home": "YouTube Music 主页",
       "loading": "正在加载 YouTube Music",
       "actionFailed": "YouTube Music 操作失败"
+    },
+    "newspapers": {
+      "title": "您的报纸",
+      "subtitle": "编辑和研究人员为您打造的个人版",
+      "configure": "配置",
+      "create": "创建",
+      "interests": "兴趣",
+      "interestsPlaceholder": "AI、太空、游戏、科学……",
+      "preferences": "偏好设置",
+      "preferencesPlaceholder": "例如：不涉及政治，少些谣言……",
+      "recommendedSources": "推荐来源",
+      "sourcesPlaceholder": "例如：NASA、Ars Technica、Habr 或特定博客……",
+      "sourcesHint": "编辑会要求研究员优先检查这些来源，但不会仅限于这些。",
+      "volume": "版面规模",
+      "volumeOptions": {
+        "compact": {
+          "label": "紧凑",
+          "hint": "通常包含6-10篇报道，包括1-3篇深度文章"
+        },
+        "standard": {
+          "label": "标准",
+          "hint": "通常包含12-20篇报道，包括4-7篇深度文章"
+        },
+        "extended": {
+          "label": "扩展",
+          "hint": "通常包含20–35篇报道，包括7–12篇深度文章"
+        }
+      },
+      "weather": "天气",
+      "weatherOptions": {
+        "off": {
+          "label": "无天气"
+        },
+        "today": {
+          "label": "今天",
+          "hint": "上午、下午和晚上"
+        },
+        "week": {
+          "label": "本周",
+          "hint": "七天预报"
+        },
+        "auto": {
+          "label": "自动",
+          "hint": "根据投递时间表"
+        }
+      },
+      "soon": "即将推出",
+      "weatherLocation": "城市或地区",
+      "weatherLocationPlaceholder": "例如：托木斯克",
+      "delivery": "自动投递",
+      "deliveryOptions": {
+        "manual": "不自动投递",
+        "daily": "每天",
+        "everyTwoDays": "每两天",
+        "weekly": "每周一次"
+      },
+      "deliveryHint": "调度将在下一阶段连接。",
+      "autoFill": "自动填充",
+      "autoFilling": "正在研究您的聊天记录…",
+      "stopAll": "全部停止",
+      "stop": "停止",
+      "researcher": "研究员",
+      "editorLog": "编辑JSON和活动日志",
+      "downloadRun": "下载日志",
+      "downloadIssue": "下载版本 JSON",
+      "loading": "正在加载版本…",
+      "issueCount_one": "{{count}} 个版本",
+      "issueCount_other": "{{count}} 个版本",
+      "issueNumber": "第 {{number}} 期",
+      "blockCount_one": "{{count}} 个板块",
+      "blockCount_other": "{{count}} 个板块",
+      "empty": "暂无版本",
+      "emptyHint": "配置您的兴趣并启动编辑器。",
+      "previousPage": "上一页",
+      "nextPage": "下一页",
+      "runNumber": "运行 #{{number}}",
+      "runStatus": {
+        "queued": "编辑器正在等待开始",
+        "running": "编辑器正在工作",
+        "ready": "版本已就绪",
+        "failed": "无法创建版本",
+        "cancelled": "已停止"
+      },
+      "agentStatus": {
+        "queued": "已排队",
+        "running": "运行中",
+        "ready": "就绪",
+        "failed": "失败",
+        "cancelled": "已取消"
+      },
+      "styles": {
+        "wizarding": "魔法",
+        "broadsheet": "闲聊时报",
+        "deusEx": "Deus Ex",
+        "massEffect": "Mass Effect"
+      },
+      "errors": {
+        "load": "无法加载报纸",
+        "save": "无法保存设置",
+        "autoFill": "无法自动填充设置",
+        "weatherLocation": "请指定一个城市或地区以获取天气预报",
+        "start": "无法启动编辑器",
+        "open": "无法打开版本",
+        "stop": "无法停止编辑器",
+        "stopResearcher": "无法停止研究员",
+        "export": "无法导出报纸数据"
+      }
     }
   },
   "advanced": {

@@ -636,7 +636,14 @@
       "renderPerfHigh": "Vysoký (výkonné PC)",
       "renderPerfUltra": "Ultra",
       "renderPerfHelp": "Kolik znaků vykreslit v seznamu chatu před skrytím starších zpráv. Nižší = rychlejší posouvání.",
-      "renderPerfSaved": "Výkon vykreslování uložen. Projeví se při příštím otevření chatu."
+      "renderPerfSaved": "Výkon vykreslování uložen. Projeví se při příštím otevření chatu.",
+      "desktopBrowserTitle": "Desktop webové nástroje",
+      "desktopBrowserConcurrency": "Paralelní instance prohlížeče",
+      "desktopBrowserConcurrencyHelp": "Maximální počet desktopových webových vyhledávání a čtení stránek, které mohou běžet současně. Prohlížeč čekající na CAPTCHA drží své místo, dokud nezavřete ověřovací okno.",
+      "desktopSearch": "Použít desktopový prohlížeč pro webové vyhledávání",
+      "desktopSearchHelp": "Povolit search_web použití místního desktopového prohlížeče, když je tento poskytovatel vybrán.",
+      "desktopReader": "Použít desktopový prohlížeč pro analýzu stránek",
+      "desktopReaderHelp": "Umožnit read_webpage analyzovat stránky v místním desktopovém prohlížeči. Pokud je zakázáno, backend může použít jiný nakonfigurovaný čtečku."
     },
     "toasts": {
       "saveSettingFailed": "Nepodařilo se uložit nastavení",
@@ -1108,7 +1115,9 @@
       "jsonExtractor": "JSON Extractor",
       "jsonExtractorDescription": "Převést dokument na JSON",
       "youtubeMusic": "YouTube Music",
-      "youtubeMusicDescription": "Přehrávač hudby"
+      "youtubeMusicDescription": "Přehrávač hudby",
+      "newspapers": "Noviny",
+      "newspapersDescription": "Osobní AI edice"
     },
     "documents": {
       "selectChat": "Vyberte chat",
@@ -1235,6 +1244,113 @@
       "home": "Domovská stránka YouTube Music",
       "loading": "Načítání YouTube Music",
       "actionFailed": "Akce YouTube Music se nezdařila"
+    },
+    "newspapers": {
+      "title": "Vaše noviny",
+      "subtitle": "Osobní vydání od editora a výzkumníků",
+      "configure": "Nastavit",
+      "create": "Vytvořit",
+      "interests": "Zájmy",
+      "interestsPlaceholder": "AI, vesmír, hry, věda…",
+      "preferences": "Předvolby",
+      "preferencesPlaceholder": "Například: žádná politika, méně fám…",
+      "recommendedSources": "Doporučené zdroje",
+      "sourcesPlaceholder": "Například: NASA, Ars Technica, Habr nebo konkrétní blogy…",
+      "sourcesHint": "Editor požádá výzkumníka, aby tyto zdroje zkontroloval jako první, ale nebude se na ně omezovat.",
+      "volume": "Velikost vydání",
+      "volumeOptions": {
+        "compact": {
+          "label": "Kompaktní",
+          "hint": "Obvykle 6–10 příběhů, včetně 1–3 rozvinutých článků"
+        },
+        "standard": {
+          "label": "Standardní",
+          "hint": "Obvykle 12–20 příběhů, včetně 4–7 rozvinutých článků"
+        },
+        "extended": {
+          "label": "Rozšířené",
+          "hint": "Obvykle 20–35 příběhů, včetně 7–12 rozvinutých článků"
+        }
+      },
+      "weather": "Počasí",
+      "weatherOptions": {
+        "off": {
+          "label": "Bez počasí"
+        },
+        "today": {
+          "label": "Dnes",
+          "hint": "Ráno, odpoledne a večer"
+        },
+        "week": {
+          "label": "Tento týden",
+          "hint": "Předpověď na sedm dní"
+        },
+        "auto": {
+          "label": "Automaticky",
+          "hint": "Na základě plánu doručení"
+        }
+      },
+      "soon": "brzy",
+      "weatherLocation": "Město nebo region",
+      "weatherLocationPlaceholder": "Například: Tomsk",
+      "delivery": "Automatické doručování",
+      "deliveryOptions": {
+        "manual": "Nedoručovat automaticky",
+        "daily": "Každý den",
+        "everyTwoDays": "Každé dva dny",
+        "weekly": "Jednou týdně"
+      },
+      "deliveryHint": "Plánování bude propojeno v další fázi.",
+      "autoFill": "Vyplnit automaticky",
+      "autoFilling": "Studuji vaše chaty…",
+      "stopAll": "Zastavit vše",
+      "stop": "Zastavit",
+      "researcher": "Výzkumník",
+      "editorLog": "Editor JSON a protokol aktivit",
+      "downloadRun": "Stáhnout protokol",
+      "downloadIssue": "Stáhnout JSON vydání",
+      "loading": "Načítání vydání…",
+      "issueCount_one": "{{count}} vydání",
+      "issueCount_other": "{{count}} vydání",
+      "issueNumber": "Č. {{number}}",
+      "blockCount_one": "{{count}} blok",
+      "blockCount_other": "{{count}} bloky",
+      "empty": "Zatím žádná vydání",
+      "emptyHint": "Nastavte své zájmy a spusťte editor.",
+      "previousPage": "Předchozí stránka",
+      "nextPage": "Další stránka",
+      "runNumber": "Spuštění #{{number}}",
+      "runStatus": {
+        "queued": "Editor čeká na spuštění",
+        "running": "Editor pracuje",
+        "ready": "Vydání je připraveno",
+        "failed": "Vydání se nepodařilo vytvořit",
+        "cancelled": "Zastaveno"
+      },
+      "agentStatus": {
+        "queued": "Ve frontě",
+        "running": "Probíhá",
+        "ready": "Připraveno",
+        "failed": "Selhalo",
+        "cancelled": "Zrušeno"
+      },
+      "styles": {
+        "wizarding": "Kouzelnický",
+        "broadsheet": "Chatter Times",
+        "deusEx": "Deus Ex",
+        "massEffect": "Mass Effect"
+      },
+      "errors": {
+        "load": "Nelze načíst noviny",
+        "save": "Nelze uložit nastavení",
+        "autoFill": "Nelze automaticky vyplnit nastavení",
+        "weatherLocation": "Zadejte město nebo region pro předpověď počasí",
+        "start": "Editor se nepodařilo spustit",
+        "open": "Vydání se nepodařilo otevřít",
+        "stop": "Editor se nepodařilo zastavit",
+        "stopResearcher": "Výzkumníka se nepodařilo zastavit",
+        "export": "Nelze exportovat data novin"
+      }
     }
   },
   "tts": {

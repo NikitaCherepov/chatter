@@ -292,7 +292,14 @@
       "renderPerfHigh": "高（高性能PC）",
       "renderPerfUltra": "ウルトラ",
       "renderPerfHelp": "チャットリストで表示する文字数。古いメッセージは非表示になります。低いほどスクロールが速くなります。",
-      "renderPerfSaved": "レンダリングパフォーマンスを保存しました。次に開くチャットに適用されます。"
+      "renderPerfSaved": "レンダリングパフォーマンスを保存しました。次に開くチャットに適用されます。",
+      "desktopBrowserTitle": "デスクトップウェブツール",
+      "desktopBrowserConcurrency": "並列ブラウザインスタンス",
+      "desktopBrowserConcurrencyHelp": "同時に実行できるデスクトップウェブ検索とページ読み取りの最大数。CAPTCHAを待っているブラウザは、検証ウィンドウを閉じるまでスロットを保持します。",
+      "desktopSearch": "ウェブ検索にデスクトップブラウザを使用",
+      "desktopSearchHelp": "そのプロバイダーが選択されている場合、search_webがローカルデスクトップブラウザを使用できるようにします。",
+      "desktopReader": "ページ解析にデスクトップブラウザを使用",
+      "desktopReaderHelp": "read_webpageがローカルのデスクトップブラウザでページを解析できるようにします。無効にすると、バックエンドは別の設定済みリーダーを使用する場合があります。"
     },
     "toasts": {
       "saveSettingFailed": "設定の保存に失敗しました",
@@ -787,7 +794,9 @@
       "jsonExtractor": "JSON抽出",
       "jsonExtractorDescription": "ドキュメントをJSONに変換",
       "youtubeMusic": "YouTube Music",
-      "youtubeMusicDescription": "音楽プレーヤー"
+      "youtubeMusicDescription": "音楽プレーヤー",
+      "newspapers": "新聞",
+      "newspapersDescription": "パーソナルAI版"
     },
     "documents": {
       "selectChat": "チャットを選択",
@@ -914,6 +923,113 @@
       "home": "YouTube Music ホーム",
       "loading": "YouTube Music を読み込み中",
       "actionFailed": "YouTube Music の操作に失敗しました"
+    },
+    "newspapers": {
+      "title": "あなたの新聞",
+      "subtitle": "編集者と研究者によるパーソナル版",
+      "configure": "設定",
+      "create": "作成",
+      "interests": "興味",
+      "interestsPlaceholder": "AI、宇宙、ゲーム、科学…",
+      "preferences": "設定",
+      "preferencesPlaceholder": "例: 政治は不要、噂は少なめ…",
+      "recommendedSources": "推奨ソース",
+      "sourcesPlaceholder": "例: NASA、Ars Technica、Habr、または特定のブログ…",
+      "sourcesHint": "編集者はリサーチャーにこれらを最初に確認するよう依頼しますが、これらに限定されるわけではありません。",
+      "volume": "版サイズ",
+      "volumeOptions": {
+        "compact": {
+          "label": "コンパクト",
+          "hint": "通常6〜10の記事、うち1〜3の詳細記事を含む"
+        },
+        "standard": {
+          "label": "標準",
+          "hint": "通常12〜20の記事、うち4〜7の詳細記事を含む"
+        },
+        "extended": {
+          "label": "拡張",
+          "hint": "通常20〜35の記事、うち7〜12の詳細記事を含む"
+        }
+      },
+      "weather": "天気",
+      "weatherOptions": {
+        "off": {
+          "label": "天気なし"
+        },
+        "today": {
+          "label": "今日",
+          "hint": "朝、午後、夕方"
+        },
+        "week": {
+          "label": "今週",
+          "hint": "7日間の予報"
+        },
+        "auto": {
+          "label": "自動",
+          "hint": "配信スケジュールに基づく"
+        }
+      },
+      "soon": "近日公開",
+      "weatherLocation": "都市または地域",
+      "weatherLocationPlaceholder": "例：トムスク",
+      "delivery": "自動配信",
+      "deliveryOptions": {
+        "manual": "自動配信しない",
+        "daily": "毎日",
+        "everyTwoDays": "2日ごと",
+        "weekly": "週1回"
+      },
+      "deliveryHint": "スケジュールは次の段階で接続されます。",
+      "autoFill": "自動入力",
+      "autoFilling": "チャットを研究中…",
+      "stopAll": "すべて停止",
+      "stop": "停止",
+      "researcher": "リサーチャー",
+      "editorLog": "エディタJSONとアクティビティログ",
+      "downloadRun": "ログをダウンロード",
+      "downloadIssue": "版JSONをダウンロード",
+      "loading": "版を読み込み中…",
+      "issueCount_one": "{{count}}版",
+      "issueCount_other": "{{count}}版",
+      "issueNumber": "第{{number}}号",
+      "blockCount_one": "{{count}}ブロック",
+      "blockCount_other": "{{count}}ブロック",
+      "empty": "まだ版がありません",
+      "emptyHint": "興味を設定してエディターを開始してください。",
+      "previousPage": "前のページ",
+      "nextPage": "次のページ",
+      "runNumber": "実行 #{{number}}",
+      "runStatus": {
+        "queued": "エディターが開始を待っています",
+        "running": "エディターが作業中です",
+        "ready": "版の準備ができました",
+        "failed": "版を作成できませんでした",
+        "cancelled": "停止しました"
+      },
+      "agentStatus": {
+        "queued": "キューに追加されました",
+        "running": "実行中",
+        "ready": "準備完了",
+        "failed": "失敗",
+        "cancelled": "キャンセル済み"
+      },
+      "styles": {
+        "wizarding": "魔法界",
+        "broadsheet": "チャッター・タイムズ",
+        "deusEx": "デウスエクス",
+        "massEffect": "マスエフェクト"
+      },
+      "errors": {
+        "load": "新聞を読み込めませんでした",
+        "save": "設定を保存できませんでした",
+        "autoFill": "設定を自動入力できませんでした",
+        "weatherLocation": "天気予報の都市または地域を指定してください",
+        "start": "エディターを起動できませんでした",
+        "open": "版を開けませんでした",
+        "stop": "エディターを停止できませんでした",
+        "stopResearcher": "リサーチャーを停止できませんでした",
+        "export": "新聞データをエクスポートできませんでした"
+      }
     }
   },
   "advanced": {

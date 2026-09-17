@@ -613,7 +613,14 @@
       "renderPerfHigh": "Wysoka (wydajne komputery)",
       "renderPerfUltra": "Ultra",
       "renderPerfHelp": "Ile znaków renderować na liście czatu przed ukryciem starszych wiadomości. Niższa wartość = szybsze przewijanie.",
-      "renderPerfSaved": "Wydajność renderowania zapisana. Zostanie zastosowana przy następnym otwarciu czatu."
+      "renderPerfSaved": "Wydajność renderowania zapisana. Zostanie zastosowana przy następnym otwarciu czatu.",
+      "desktopBrowserTitle": "Narzędzia internetowe na komputerze",
+      "desktopBrowserConcurrency": "Równoległe instancje przeglądarki",
+      "desktopBrowserConcurrencyHelp": "Maksymalna liczba wyszukiwań w sieci i odczytów stron na komputerze, które mogą działać jednocześnie. Przeglądarka oczekująca na CAPTCHA zajmuje swoje miejsce, dopóki nie zamkniesz okna weryfikacji.",
+      "desktopSearch": "Użyj przeglądarki komputerowej do wyszukiwania w sieci",
+      "desktopSearchHelp": "Zezwól search_web na korzystanie z lokalnej przeglądarki komputerowej, gdy ten dostawca jest wybrany.",
+      "desktopReader": "Użyj przeglądarki desktopowej do parsowania stron",
+      "desktopReaderHelp": "Zezwól read_webpage na parsowanie stron w lokalnej przeglądarce desktopowej. Gdy wyłączone, backend może użyć innego skonfigurowanego czytnika."
     },
     "toasts": {
       "saveSettingFailed": "Nie udało się zapisać ustawienia",
@@ -1108,7 +1115,9 @@
       "jsonExtractor": "Ekstraktor JSON",
       "jsonExtractorDescription": "Zamień dokument na JSON",
       "youtubeMusic": "YouTube Music",
-      "youtubeMusicDescription": "Odtwarzacz muzyki"
+      "youtubeMusicDescription": "Odtwarzacz muzyki",
+      "newspapers": "Gazety",
+      "newspapersDescription": "Osobiste wydania AI"
     },
     "documents": {
       "selectChat": "Wybierz czat",
@@ -1235,6 +1244,113 @@
       "home": "Strona główna YouTube Music",
       "loading": "Ładowanie YouTube Music",
       "actionFailed": "Akcja YouTube Music nie powiodła się"
+    },
+    "newspapers": {
+      "title": "Twoje gazety",
+      "subtitle": "Osobiste wydanie od redaktora i badaczy",
+      "configure": "Konfiguruj",
+      "create": "Utwórz",
+      "interests": "Zainteresowania",
+      "interestsPlaceholder": "AI, kosmos, gry, nauka…",
+      "preferences": "Preferencje",
+      "preferencesPlaceholder": "Na przykład: bez polityki, mniej plotek…",
+      "recommendedSources": "Polecane źródła",
+      "sourcesPlaceholder": "Na przykład: NASA, Ars Technica, Habr lub konkretne blogi…",
+      "sourcesHint": "Redaktor poprosi badacza, aby najpierw je sprawdził, ale nie będzie się do nich ograniczać.",
+      "volume": "Wielkość wydania",
+      "volumeOptions": {
+        "compact": {
+          "label": "Kompaktowe",
+          "hint": "Zwykle 6–10 artykułów, w tym 1–3 rozbudowanych"
+        },
+        "standard": {
+          "label": "Standardowe",
+          "hint": "Zwykle 12–20 artykułów, w tym 4–7 rozbudowanych"
+        },
+        "extended": {
+          "label": "Rozszerzony",
+          "hint": "Zwykle 20–35 artykułów, w tym 7–12 rozbudowanych"
+        }
+      },
+      "weather": "Pogoda",
+      "weatherOptions": {
+        "off": {
+          "label": "Bez pogody"
+        },
+        "today": {
+          "label": "Dziś",
+          "hint": "Rano, po południu i wieczorem"
+        },
+        "week": {
+          "label": "W tym tygodniu",
+          "hint": "Prognoza na siedem dni"
+        },
+        "auto": {
+          "label": "Automatycznie",
+          "hint": "Na podstawie harmonogramu dostaw"
+        }
+      },
+      "soon": "wkrótce",
+      "weatherLocation": "Miasto lub region",
+      "weatherLocationPlaceholder": "Na przykład: Tomsk",
+      "delivery": "Automatyczna dostawa",
+      "deliveryOptions": {
+        "manual": "Nie dostarczaj automatycznie",
+        "daily": "Codziennie",
+        "everyTwoDays": "Co dwa dni",
+        "weekly": "Raz w tygodniu"
+      },
+      "deliveryHint": "Planowanie zostanie połączone w następnym etapie.",
+      "autoFill": "Wypełnij automatycznie",
+      "autoFilling": "Analizuję Twoje czaty…",
+      "stopAll": "Zatrzymaj wszystkie",
+      "stop": "Zatrzymaj",
+      "researcher": "Badacz",
+      "editorLog": "JSON edytora i dziennik aktywności",
+      "downloadRun": "Pobierz log",
+      "downloadIssue": "Pobierz JSON wydania",
+      "loading": "Ładowanie wydań…",
+      "issueCount_one": "{{count}} wydanie",
+      "issueCount_other": "{{count}} wydań",
+      "issueNumber": "Nr {{number}}",
+      "blockCount_one": "{{count}} blok",
+      "blockCount_other": "{{count}} bloki",
+      "empty": "Brak wydań",
+      "emptyHint": "Skonfiguruj swoje zainteresowania i uruchom edytor.",
+      "previousPage": "Poprzednia strona",
+      "nextPage": "Następna strona",
+      "runNumber": "Uruchomienie #{{number}}",
+      "runStatus": {
+        "queued": "Edytor czeka na rozpoczęcie",
+        "running": "Edytor pracuje",
+        "ready": "Wydanie jest gotowe",
+        "failed": "Nie udało się utworzyć wydania",
+        "cancelled": "Zatrzymano"
+      },
+      "agentStatus": {
+        "queued": "W kolejce",
+        "running": "W trakcie",
+        "ready": "Gotowy",
+        "failed": "Nieudany",
+        "cancelled": "Anulowano"
+      },
+      "styles": {
+        "wizarding": "Czarodziejski",
+        "broadsheet": "Chatter Times",
+        "deusEx": "Deus Ex",
+        "massEffect": "Mass Effect"
+      },
+      "errors": {
+        "load": "Nie można wczytać gazety",
+        "save": "Nie można zapisać ustawień",
+        "autoFill": "Nie można automatycznie wypełnić ustawień",
+        "weatherLocation": "Podaj miasto lub region dla prognozy pogody",
+        "start": "Nie można uruchomić edytora",
+        "open": "Nie można otworzyć wydania",
+        "stop": "Nie można zatrzymać edytora",
+        "stopResearcher": "Nie można zatrzymać badacza",
+        "export": "Nie można wyeksportować danych gazety"
+      }
     }
   },
   "tts": {
