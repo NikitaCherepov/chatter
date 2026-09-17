@@ -183,10 +183,42 @@ export function NewspaperReader({ issue, style, pageNumber, pageCount, canGoPrev
       <header className={s.readerPanelHeader}><div><span>ISSUE CONTROL</span><strong>Выпуск №{issue.issue_number}</strong></div><small>{pageNumber} / {pageCount}</small></header>
       <div className={s.readerControlGroup}><span>Стиль</span><NewspaperStyleSelect options={styleOptions} value={style} onChange={onStyleChange}/></div>
       <div className={s.readerControlGroup}><span>Масштаб</span><div className={s.readerZoomRow}><button type="button" onClick={()=>applyZoom(zoom-ZOOM_STEP)} disabled={zoom<=ZOOM_MIN}>−</button><strong>{zoom}%</strong><button type="button" onClick={()=>applyZoom(zoom+ZOOM_STEP)} disabled={zoom>=ZOOM_MAX}>+</button></div></div>
-      <div className={s.readerPanelActions}><button type="button" onClick={onPrevious} disabled={!canGoPrevious} aria-label={previousLabel}>←</button><button type="button" onClick={onNext} disabled={!canGoNext} aria-label={nextLabel}>→</button><button type="button" className={s.readerClose} onClick={() => setControlsOpen(false)}>{closeLabel}</button></div>
+      <div className={s.readerPanelActions}><button type="button" className={s.readerClose} onClick={() => setControlsOpen(false)}>{closeLabel}</button></div>
     </motion.aside>}</AnimatePresence>
+    <AnimatePresence initial={false}>
+      {canGoPrevious && <motion.button
+        key="reader-previous"
+        type="button"
+        className={`${s.readerPageTab} ${s.readerPageTabPrevious}`}
+        data-style={style}
+        data-reader-controls
+        aria-label={previousLabel}
+        initial={{ opacity: 0, x: 46 }}
+        animate={{ opacity: 1, x: 0 }}
+        whileHover={{ x: -8 }}
+        whileTap={{ scale: .96 }}
+        exit={{ opacity: 0, x: 46 }}
+        transition={{ duration: .18, ease: 'easeOut' }}
+        onClick={onPrevious}
+      ><span className={s.readerPageTabContent}><b>‹</b><small>{style === 'deusEx' ? 'PREV' : style === 'massEffect' ? 'BACK' : 'Назад'}</small></span></motion.button>}
+      {canGoNext && <motion.button
+        key="reader-next"
+        type="button"
+        className={`${s.readerPageTab} ${s.readerPageTabNext}`}
+        data-style={style}
+        data-reader-controls
+        aria-label={nextLabel}
+        initial={{ opacity: 0, x: -46 }}
+        animate={{ opacity: 1, x: 0 }}
+        whileHover={{ x: 8 }}
+        whileTap={{ scale: .96 }}
+        exit={{ opacity: 0, x: -46 }}
+        transition={{ duration: .18, ease: 'easeOut' }}
+        onClick={onNext}
+      ><span className={s.readerPageTabContent}><b>›</b><small>{style === 'deusEx' ? 'NEXT' : style === 'massEffect' ? 'FWD' : 'Вперёд'}</small></span></motion.button>}
+    </AnimatePresence>
     {SHOW_READER_CHROME && <header className={s.toolbar}><div className={s.issueMeta}><strong>Выпуск №{issue.issue_number}</strong><span>{pageNumber} / {pageCount}</span></div><div className={s.styleSelect}><Select options={styleOptions} value={style} onChange={value=>onStyleChange(value as NewspaperVisualStyle)} maxVisibleItems={4}/></div><div className={s.toolbarActions}><div className={s.zoomControls}><button type="button" onClick={()=>applyZoom(zoom-ZOOM_STEP)} disabled={zoom<=ZOOM_MIN} aria-label="Уменьшить масштаб">−</button><button type="button" className={s.zoomValue} onClick={fitToWindow} title="Вписать газету в окно">{zoom}%</button><button type="button" onClick={()=>applyZoom(zoom+ZOOM_STEP)} disabled={zoom>=ZOOM_MAX} aria-label="Увеличить масштаб">+</button></div><nav className={s.navigation}><button type="button" onClick={onPrevious} disabled={!canGoPrevious} aria-label={previousLabel}>‹</button><button type="button" onClick={onNext} disabled={!canGoNext} aria-label={nextLabel}>›</button><button type="button" onClick={onClose} aria-label={closeLabel}>×</button></nav></div></header>}
-    <div className={`${s.viewport} ${dragging ? s.viewportDragging : ''}`} ref={viewportRef} onPointerDown={startDragging} onPointerMove={moveDragging} onPointerUp={stopDragging} onPointerCancel={stopDragging} onDragStart={event=>event.preventDefault()}><motion.div ref={pageRef} className={s.zoomLayer} style={{zoom:zoom/100} as React.CSSProperties} key={`${issue.id}-${style}`} initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} transition={{duration:.18}}><NewspaperImageViewerProvider onOpen={(src, title) => setViewerImage({ src, title })}><TemplateRenderer issue={issue} style={style}/></NewspaperImageViewerProvider></motion.div></div>
+    <div className={`${s.viewport} ${dragging ? s.viewportDragging : ''}`} data-style={style} ref={viewportRef} onPointerDown={startDragging} onPointerMove={moveDragging} onPointerUp={stopDragging} onPointerCancel={stopDragging} onDragStart={event=>event.preventDefault()}><motion.div ref={pageRef} className={s.zoomLayer} style={{zoom:zoom/100} as React.CSSProperties} key={`${issue.id}-${style}`} initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} transition={{duration:.18}}><NewspaperImageViewerProvider onOpen={(src, title) => setViewerImage({ src, title })}><TemplateRenderer issue={issue} style={style}/></NewspaperImageViewerProvider></motion.div></div>
   </motion.div></motion.div>}
   {viewerImage && <ImageViewerModal key="newspaper-image-viewer" src={viewerImage.src} alt={viewerImage.title} downloadLabel={t('common.download')} closeLabel={t('common.close')} onClose={() => setViewerImage(null)} onDownload={() => void downloadViewerImage()} aboveNewspaper/>}</AnimatePresence>, document.body);
 }
