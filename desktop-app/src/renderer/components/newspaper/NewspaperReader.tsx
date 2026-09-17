@@ -62,6 +62,7 @@ export function NewspaperReader({ issue, style, pageNumber, pageCount, canGoPrev
     if (!issue || pageTransition) return;
     if (direction === 'previous' ? !canGoPrevious : !canGoNext) return;
     if (style !== 'deusEx') {
+      if (viewportRef.current) viewportRef.current.scrollTop = 0;
       if (direction === 'previous') onPrevious();
       else onNext();
       return;
@@ -184,6 +185,7 @@ export function NewspaperReader({ issue, style, pageNumber, pageCount, canGoPrev
     if (!pageTransition) return;
     if (pageTransition.phase === 'cover') {
       setPageTransition({ ...pageTransition, phase: 'covered' });
+      if (viewportRef.current) viewportRef.current.scrollTop = 0;
       if (pageTransition.direction === 'previous') onPrevious();
       else onNext();
       return;
