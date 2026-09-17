@@ -29,6 +29,9 @@
   flex-direction: column;
   gap: 2px;
 }
+.toolbar > div:first-child {
+  flex: 1 1 auto;
+}
 .toolbar strong {
   color: var(--text-primary);
   font-size: 14px;
@@ -55,9 +58,13 @@
 }
 .toolbarActions {
   display: flex !important;
+  flex: 0 0 auto;
   flex-direction: row !important;
   align-items: center;
   gap: 6px !important;
+}
+.toolbarActions button {
+  white-space: nowrap;
 }
 .toolbar .secondaryButton,
 .secondaryButton {
@@ -362,6 +369,31 @@
 .run > header span {
   color: var(--text-hint);
   font-size: 10px;
+}
+.runActions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 7px;
+}
+.collapseButton {
+  display: grid;
+  width: 27px;
+  height: 27px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--border-medium);
+  border-radius: 6px;
+  background: var(--bg-input);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+}
+.collapseButton:hover {
+  border-color: var(--accent);
+  color: var(--text-primary);
 }
 .run.running > header strong::before,
 .run.queued > header strong::before {

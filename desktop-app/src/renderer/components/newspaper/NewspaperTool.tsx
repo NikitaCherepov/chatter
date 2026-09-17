@@ -72,6 +72,7 @@ export function NewspaperTool() {
   const [weatherLocation, setWeatherLocation] = useState('');
   const [deliveryFrequency, setDeliveryFrequency] = useState<NewspaperDeliveryFrequency>('manual');
   const [autoFilling, setAutoFilling] = useState(false);
+  const [runCollapsed, setRunCollapsed] = useState(false);
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState('');
 
@@ -210,6 +211,7 @@ export function NewspaperTool() {
       setNewspaper(saved.newspaper);
       const response = await startNewspaperRun(newspaper.id);
       setRun(response.run);
+      setRunCollapsed(false);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : t('tools.newspapers.errors.start'));
     }
@@ -337,16 +339,26 @@ export function NewspaperTool() {
       {run && <section className={`${s.run} ${s[run.status] || ''}`}>
         <header>
           <div><strong>{currentRunStatus}</strong><span>{t('tools.newspapers.runNumber', { number: run.id })}</span></div>
-          {active && <button type="button" className={s.stopButton} onClick={stopRun}>{t('tools.newspapers.stopAll')}</button>}
+          <div className={s.runActions}>
+            {active && <button type="button" className={s.stopButton} onClick={stopRun}>{t('tools.newspapers.stopAll')}</button>}
+            <button
+              type="button"
+              className={s.collapseButton}
+              aria-expanded={!runCollapsed}
+              onClick={() => setRunCollapsed(value => !value)}
+            >
+              {runCollapsed ? '+' : '−'}
+            </button>
+          </div>
         </header>
-        {run.agents.length > 0 && <div className={s.agents}>
+        {!runCollapsed && run.agents.length > 0 && <div className={s.agents}>
           {run.agents.map(agent => <div className={s.agent} key={agent.id}>
             <div><strong>{agent.agent_type === 'news_researcher' ? t('tools.newspapers.researcher') : agent.agent_type}</strong><span>{agent.task}</span></div>
             <em>{t(`tools.newspapers.agentStatus.${agent.status}`)}</em>
             {agent.status === 'running' && <button type="button" onClick={() => stopAgent(agent.id)}>{t('tools.newspapers.stop')}</button>}
           </div>)}
         </div>}
-        {(run.draft != null || run.editor_trace != null || run.agents.length > 0) && <details className={s.json}>
+        {!runCollapsed && (run.draft != null || run.editor_trace != null || run.agents.length > 0) && <details className={s.json}>
           <summary><span>{t('tools.newspapers.editorLog')}</span><button type="button" onClick={event => { event.preventDefault(); event.stopPropagation(); downloadJson(`newspaper-run-${run.id}.json`, run); }}>{t('tools.newspapers.downloadRun')}</button></summary>
           <pre>{JSON.stringify({ draft: run.draft, editor_trace: run.editor_trace, agents: run.agents }, null, 2)}</pre>
         </details>}
