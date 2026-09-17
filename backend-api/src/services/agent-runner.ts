@@ -165,6 +165,7 @@ export const runAgent = async (params: RunAgentParams): Promise<RunAgentResult> 
       onStreamToken: params.onStreamToken,
       onReasoningStream: params.onReasoningStream,
       onUsageCall,
+      onVisionUsageCall: (usage) => onUsageCall(`${params.name}:vision`, usage),
       shouldStopForQuota,
     },
   });
@@ -243,6 +244,9 @@ export const createInvokeSubagentTool = (options: {
             manualModel: childModel,
             subagentMode: childModel ? 'manual' : 'auto',
             subagentReasoningLevel: normalizeReasoningLevel(parentCtx.user?.subagent_reasoning_level),
+            onVisionUsageCall: parentCtx.onUsageCall
+              ? (usage) => parentCtx.onUsageCall?.(`${agentName}:vision`, usage)
+              : parentCtx.onVisionUsageCall,
             runtimeToolDefs: undefined,
             onStreamToken: undefined,
             onReasoningStream: undefined,

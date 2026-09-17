@@ -3149,7 +3149,7 @@ If the camera is not found — return an error.`,
 
 
 /** Build describe_image tool — sends image(s) to vision model for analysis */
-const buildDescribeImageTool = (supportsDirectView = false) => {
+export const buildDescribeImageTool = (supportsDirectView = false) => {
   const properties: Record<string, unknown> = {
     question: {
       type: 'string',
@@ -3172,7 +3172,7 @@ const buildDescribeImageTool = (supportsDirectView = false) => {
     type: 'function' as const,
     function: {
       name: 'describe_image',
-      description: 'Analyzes the specified image using a vision model. Supports user photos and images from chat history.',
+      description: 'Analyzes the specified image using a vision model. Supports web image URLs, user photos, and images from chat history.',
       parameters: {
         type: 'object',
         properties,

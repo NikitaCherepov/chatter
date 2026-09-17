@@ -60,6 +60,7 @@ const REGISTRY: Record<string, SubagentConfig> = {
     description: 'Researches one focused newspaper topic using web search and webpage reading, then returns a concise source-grounded dossier.',
     promptFile: 'news-researcher.md',
     tools: [searchWebTool, readWebpageTool],
+    sharedTools: ['describe_image'],
     maxLoops: 20,
     maxTokens: 16_384,
   },

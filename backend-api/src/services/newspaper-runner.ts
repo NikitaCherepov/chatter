@@ -39,6 +39,12 @@ Freshness restrictions apply strictly only to content presented as current news.
 
 Research a broader candidate pool before applying the requested edition size. Editorial selection must happen after the available material has been evaluated; do not ask researchers for only the exact number of stories expected in the final issue.
 
+Images are optional editorial elements, not a quota. Ask researchers to bring back suitable image candidates when a story would benefit from illustration. Researchers may also include strong images they encounter naturally. If the factual research is already complete but an important story still needs an image, invoke a researcher with a focused image-finding task and provide the known story context and source URLs; do not ask it to repeat the full topic research.
+
+Use only exact image URLs actually returned and, when appropriate, visually checked by researchers. Never invent, reconstruct, or guess an image URL. Prefer meaningful images for hero and feature stories, then use them selectively elsewhere. Avoid repetitive decoration, irrelevant stock imagery, avatars, logos, advertisements, interface graphics, and poor thumbnails unless they are themselves the subject. A normal issue should remain a newspaper rather than becoming an accidental gallery. However, when the reader's interests or the issue concept are inherently visual—for example photography, art, design, travel imagery, or a requested collection of cat pictures—an image-rich issue or deliberate gallery-like sequence is appropriate. Let editorial relevance determine visual density rather than a fixed count.
+
+Use an image block only when the image itself is editorial content and an actual image_url is available. If no trustworthy and relevant image was found, omit image_url instead of substituting a weak or invented image.
+
 The run request specifies the reader's selected language. Write all reader-facing newspaper prose in that language, including article and note titles and text, list items, captions, and weather descriptions. Source material may be in any language: translate and adapt it for the reader without changing facts, names, direct URLs, or the meaning of quotations.
 
 After research, return exactly one valid JSON object and no markdown or commentary. It must follow this contract:
