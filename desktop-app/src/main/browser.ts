@@ -579,6 +579,86 @@ export class ChatterBrowser {
     this.view.setBounds({ x, y, width, height });
   }
 
+  private async performNaturalScroll(direction: -1 | 1, requestedAmount: number): Promise<{
+    requested: number;
+    actual: number;
+    startY: number;
+    endY: number;
+  }> {
+    const amount = Math.max(100, Math.min(4000, Math.floor(requestedAmount || 700)));
+    const distanceVariance = 0.86 + Math.random() * 0.28;
+    const distance = direction * Math.max(80, Math.round(amount * distanceVariance));
+    const before = await this.executeInBrowserWorld<{ startY: number; viewportW: number; viewportH: number }>(
+      `(() => ({ startY: Math.round(window.scrollY), viewportW: window.innerWidth, viewportH: window.innerHeight }))()`,
+    );
+    const wheelCursorPos: Point = (this.cursorPos.x > 0 && this.cursorPos.y > 0)
+      ? {
+          x: Math.min(this.cursorPos.x, before.viewportW - 1),
+          y: Math.min(this.cursorPos.y, before.viewportH - 1),
+        }
+      : { x: before.viewportW / 2, y: before.viewportH / 2 };
+
+    const token: CancellationToken = { cancelled: false };
+    this.clickToken = token;
+    try {
+      await scrollWheel(this.view.webContents, distance, wheelCursorPos, token);
+    } finally {
+      if (this.clickToken === token) this.clickToken = null;
+    }
+
+    const endY = await this.executeInBrowserWorld<number>(`(window.scrollY)`);
+    return {
+      requested: distance,
+      actual: endY - before.startY,
+      startY: before.startY,
+      endY,
+    };
+  }
+
+  private async clickNativeSearchMoreButton(button: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    viewportW: number;
+    viewportH: number;
+  }): Promise<boolean> {
+    const contents = this.view.webContents;
+    if (button.width < 1 || button.height < 1) return false;
+    const viewport = { width: button.viewportW, height: button.viewportH };
+    if (this.cursorPos.x <= 0 || this.cursorPos.y <= 0) {
+      this.cursorPos = { x: viewport.width / 2, y: viewport.height / 2 };
+    }
+    const rect = { x: button.x, y: button.y, width: button.width, height: button.height };
+    const target = pickTargetPoint(rect, viewport);
+    const trajectory = generateTrajectory(this.cursorPos, target);
+    const token: CancellationToken = { cancelled: false };
+    this.clickToken = token;
+    try {
+      this.cursorPos = await naturalClick(
+        contents,
+        rect,
+        this.cursorPos,
+        token,
+        target,
+        trajectory,
+        () => this.executeInBrowserWorld<boolean>(`(() => {
+          const hit = document.elementFromPoint(${target.x}, ${target.y});
+          const button = hit?.closest?.('button, input[type="button"]');
+          if (!button) return false;
+          const label = String(button.getAttribute('aria-label') || button.textContent || button.getAttribute('value') || '').toLowerCase();
+          return /show more|more results|показать ещё|ещё результаты/.test(label);
+        })()`),
+      );
+      return true;
+    } catch (error) {
+      if (token.cancelled) throw error;
+      return false;
+    } finally {
+      if (this.clickToken === token) this.clickToken = null;
+    }
+  }
+
   async control(payload: BrowserControlPayload): Promise<unknown> {
     const action = payload?.action;
     const contents = this.view.webContents;
@@ -681,41 +761,11 @@ export class ChatterBrowser {
       try {
         const direction = payload.direction === 'up' ? -1 : 1;
         const requestedAmount = Math.max(100, Math.min(4000, Math.floor(Number(payload.amount) || 700)));
-        const distanceVariance = 0.86 + Math.random() * 0.28;
-        const distance = direction * Math.max(80, Math.round(requestedAmount * distanceVariance));
-
-        // Read scroll position and viewport before scrolling.
-        const before = await this.executeInBrowserWorld<{ startY: number; viewportW: number; viewportH: number }>(
-          `(() => ({ startY: Math.round(window.scrollY), viewportW: window.innerWidth, viewportH: window.innerHeight }))()`,
-        );
-
-        // Ensure cursor is positioned within the viewport.
-        const wheelCursorPos: Point = (this.cursorPos.x > 0 && this.cursorPos.y > 0)
-          ? {
-              x: Math.min(this.cursorPos.x, before.viewportW - 1),
-              y: Math.min(this.cursorPos.y, before.viewportH - 1),
-            }
-          : { x: before.viewportW / 2, y: before.viewportH / 2 };
-
-        this.clickToken = { cancelled: false };
-        try {
-          await scrollWheel(this.view.webContents, distance, wheelCursorPos, this.clickToken);
-        } finally {
-          this.clickToken = null;
-        }
-
-        // Read scroll position after to report actual delta.
-        const endY = await this.executeInBrowserWorld<number>(`(window.scrollY)`);
-        const actual = endY - before.startY;
+        const scroll = await this.performNaturalScroll(direction, requestedAmount);
 
         return {
           status: 'success',
-          scroll: {
-            requested: distance,
-            actual,
-            startY: before.startY,
-            endY,
-          },
+          scroll,
           ...this.getState(),
         };
       } finally {
@@ -772,6 +822,8 @@ export class ChatterBrowser {
     const page = Math.max(1, Math.min(10, Math.floor(Number(payload?.page) || 1)));
     const language = `${payload?.language || 'en'}`.trim().toLowerCase().split('-')[0];
     const safeLanguage = /^[a-z]{2,3}$/.test(language) ? language : 'en';
+    const imagePageSize = 20;
+    const imageResultSelector = '#search a[href] img, main a[href] img, a[href*="/imgres?"] img, a[href*="imgurl="] img';
     let targetUrl: string;
     if (mode === 'wikipedia') {
       targetUrl = `https://${safeLanguage}.wikipedia.org/w/index.php?search=${encodeURIComponent(query)}&title=Special%3ASearch&fulltext=1&offset=${(page - 1) * 20}`;
@@ -832,7 +884,7 @@ export class ChatterBrowser {
           const resultCount = mode === 'wikipedia'
             ? document.querySelectorAll('.mw-search-result-heading a').length
             : searchType === 'images'
-              ? document.querySelectorAll('a[href*="/imgres?"] img, a[href*="imgurl="] img').length
+              ? document.querySelectorAll(${JSON.stringify(imageResultSelector)}).length
               : document.querySelectorAll(searchType === 'news' ? 'a h3, a [role="heading"][aria-level="3"]' : 'a h3').length;
           return {
             ready: document.readyState === 'complete' || document.readyState === 'interactive',
@@ -845,33 +897,86 @@ export class ChatterBrowser {
       }
 
       if (searchType === 'images' && page > 1) {
-        const scrollBatches = imagePageAlreadyOpen ? 1 : page - 1;
-        for (let batch = 0; batch < scrollBatches; batch += 1) {
-          let stagnantSamples = 0;
-          let previousCount = -1;
-          for (let step = 0; step < 8; step += 1) {
-            const state = await this.executeInBrowserWorld<{ count: number; height: number; y: number }>(`(() => {
-              const selector = 'a[href*="/imgres?"] img, a[href*="imgurl="] img';
-              const before = document.querySelectorAll(selector).length;
+        const desiredCount = page * imagePageSize;
+        const maxSteps = Math.min(30, Math.max(10, page * 5));
+        let stagnantSamples = 0;
+        let previousCount = -1;
+        for (let step = 0; step < maxSteps; step += 1) {
+            const state = await this.executeInBrowserWorld<{
+              count: number;
+              viewportHeight: number;
+              moreButton: {
+                x: number;
+                y: number;
+                width: number;
+                height: number;
+                viewportW: number;
+                viewportH: number;
+              } | null;
+            }>(`(() => {
+              const imageSources = Array.from(document.querySelectorAll(${JSON.stringify(imageResultSelector)})).map((node) => {
+                if (!(node instanceof HTMLImageElement) || !node.closest('a[href]')) return '';
+                const source = [node.currentSrc, node.dataset.src, node.src].find((value) => {
+                  try { return ['http:', 'https:'].includes(new URL(value || '', location.href).protocol); } catch { return false; }
+                }) || '';
+                const rect = node.getBoundingClientRect();
+                const width = Math.max(node.naturalWidth || 0, rect.width || 0);
+                const height = Math.max(node.naturalHeight || 0, rect.height || 0);
+                return source && width >= 60 && height >= 45 && !/googlelogo|\\/logos\\//i.test(source) ? source : '';
+              }).filter(Boolean);
+              const before = new Set(imageSources).size;
               const moreButton = Array.from(document.querySelectorAll('button, input[type="button"]')).find((node) => {
                 const label = String(node.getAttribute('aria-label') || node.textContent || node.getAttribute('value') || '').toLowerCase();
                 return /show more|more results|показать ещё|ещё результаты/.test(label);
               });
-              if (moreButton instanceof HTMLElement) moreButton.click();
-              window.scrollTo(0, Math.max(document.body?.scrollHeight || 0, document.documentElement?.scrollHeight || 0));
+              let buttonRect = null;
+              if (moreButton instanceof HTMLElement) {
+                const rect = moreButton.getBoundingClientRect();
+                if (rect.width > 0 && rect.height > 0 && rect.bottom > 0 && rect.top < window.innerHeight) {
+                  buttonRect = {
+                    x: rect.left,
+                    y: rect.top,
+                    width: rect.width,
+                    height: rect.height,
+                    viewportW: window.innerWidth,
+                    viewportH: window.innerHeight,
+                  };
+                }
+              }
               return {
                 count: before,
-                height: Math.max(document.body?.scrollHeight || 0, document.documentElement?.scrollHeight || 0),
-                y: window.scrollY,
+                viewportHeight: window.innerHeight,
+                moreButton: buttonRect,
               };
             })()`);
+            if (state.count >= desiredCount) break;
+            let progressed = false;
+            if (state.moreButton) progressed = await this.clickNativeSearchMoreButton(state.moreButton);
+            if (!progressed) {
+              const scrollAmount = Math.max(500, Math.min(1200, Math.round(state.viewportHeight * 0.85)));
+              const scroll = await this.performNaturalScroll(1, scrollAmount);
+              progressed = Math.abs(scroll.actual) >= 10;
+            }
             await new Promise(resolve => setTimeout(resolve, 450));
-            const nextCount = await this.executeInBrowserWorld<number>(`document.querySelectorAll('a[href*="/imgres?"] img, a[href*="imgurl="] img').length`);
+            const nextCount = await this.executeInBrowserWorld<number>(`(() => {
+              const imageSources = Array.from(document.querySelectorAll(${JSON.stringify(imageResultSelector)})).map((node) => {
+                if (!(node instanceof HTMLImageElement) || !node.closest('a[href]')) return '';
+                const source = [node.currentSrc, node.dataset.src, node.src].find((value) => {
+                  try { return ['http:', 'https:'].includes(new URL(value || '', location.href).protocol); } catch { return false; }
+                }) || '';
+                const rect = node.getBoundingClientRect();
+                const width = Math.max(node.naturalWidth || 0, rect.width || 0);
+                const height = Math.max(node.naturalHeight || 0, rect.height || 0);
+                return source && width >= 60 && height >= 45 && !/googlelogo|\\/logos\\//i.test(source) ? source : '';
+              }).filter(Boolean);
+              return new Set(imageSources).size;
+            })()`);
             if (nextCount > Math.max(previousCount, state.count)) stagnantSamples = 0;
-            else stagnantSamples += 1;
+            else if (!progressed) stagnantSamples += 1;
+            else stagnantSamples = 0;
             previousCount = nextCount;
+            if (nextCount >= desiredCount) break;
             if (stagnantSamples >= 3) break;
-          }
         }
       }
 
@@ -879,7 +984,7 @@ export class ChatterBrowser {
         const mode = ${JSON.stringify(mode)};
         const searchType = ${JSON.stringify(searchType)};
         const requestedPage = ${page};
-        const imagePageSize = 20;
+        const imagePageSize = ${imagePageSize};
         const clean = (value, max = 2000) => String(value || '').replace(/\\s+/g, ' ').trim().slice(0, max);
         const bodyText = clean(document.body?.innerText || '', 20000).toLowerCase();
         const challenge = location.pathname.startsWith('/sorry/')
@@ -1000,19 +1105,33 @@ export class ChatterBrowser {
           }
 
           if (searchType === 'images') {
-            document.querySelectorAll('a[href*="/imgres?"], a[href*="imgurl="]').forEach((node) => {
-              if (!(node instanceof HTMLAnchorElement)) return;
-              const image = node.querySelector('img');
-              if (!(image instanceof HTMLImageElement)) return;
+            document.querySelectorAll(${JSON.stringify(imageResultSelector)}).forEach((node) => {
+              if (!(node instanceof HTMLImageElement)) return;
+              const anchor = node.closest('a[href]');
+              if (!(anchor instanceof HTMLAnchorElement)) return;
+              const thumbnailUrl = [node.currentSrc, node.dataset.src, node.src].find((value) => {
+                try { return ['http:', 'https:'].includes(new URL(value || '', location.href).protocol); } catch { return false; }
+              }) || '';
+              const rect = node.getBoundingClientRect();
+              const width = Math.max(node.naturalWidth || 0, rect.width || 0);
+              const height = Math.max(node.naturalHeight || 0, rect.height || 0);
+              if (!thumbnailUrl || width < 60 || height < 45 || /googlelogo|\\/logos\\//i.test(thumbnailUrl)) return;
               let imageUrl = '';
               let sourcePageUrl = '';
               try {
-                const resultUrl = new URL(node.href, location.href);
+                const resultUrl = new URL(anchor.href, location.href);
                 imageUrl = resultUrl.searchParams.get('imgurl') || resultUrl.searchParams.get('mediaurl') || '';
                 sourcePageUrl = resultUrl.searchParams.get('imgrefurl') || resultUrl.searchParams.get('url') || '';
+                if (!sourcePageUrl && !/(^|\\.)google\\.[a-z.]+$/i.test(resultUrl.hostname)) sourcePageUrl = resultUrl.href;
               } catch {}
-              const thumbnailUrl = image.currentSrc || image.src || image.dataset.src || '';
-              addImage(imageUrl || thumbnailUrl, thumbnailUrl, sourcePageUrl, image.alt || image.title || node.getAttribute('aria-label') || '');
+              const metadata = node.closest('[data-iurl], [data-ou]');
+              imageUrl = imageUrl || metadata?.getAttribute('data-iurl') || metadata?.getAttribute('data-ou') || '';
+              addImage(
+                imageUrl || thumbnailUrl,
+                thumbnailUrl,
+                sourcePageUrl,
+                node.alt || node.title || anchor.getAttribute('aria-label') || '',
+              );
             });
           } else {
             const resultSelector = searchType === 'news' ? 'a h3, a [role="heading"][aria-level="3"]' : 'a h3';
