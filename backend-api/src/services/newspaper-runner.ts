@@ -2,6 +2,8 @@ import { getUserById } from './chats.js';
 import { createInvokeSubagentTool, runAgent } from './agent-runner.js';
 import { materializeAssetInput } from './response-attachments.js';
 import { attachMediaAsset } from './media-assets.js';
+import { parseRepairAndValidateNewspaper } from './newspaper-json.js';
+import { createAssemblyTools } from './newspaper-assembly.js';
 import { DEFAULT_LANGUAGE, getLanguageDisplayName, normalizeSupportedLanguage } from '../i18n/languages.js';
 import {
   createNewspaperAgentRun,
@@ -13,9 +15,9 @@ import {
   markNewspaperRunStarted,
   setNewspaperRunDraft,
   setNewspaperRunPhase,
-  validateNewspaperDocument,
 } from './newspapers.js';
 import { sendToDesktop } from '../ws-clients.js';
+import type { NewspaperIssueDocument } from '../types.js';
 
 type ActiveRun = {
   controller: AbortController;
@@ -26,7 +28,9 @@ const activeRuns = new Map<number, ActiveRun>();
 
 const editorSystemPrompt = `You are the autonomous editor of a personal newspaper.
 
-You do not have direct web access. Your only tool is invoke_subagent. You may invoke only the fixed "news_researcher" agent. Delegate focused research tasks, preferably several independent topics, then assess the returned dossiers yourself. Invoke multiple independent researchers together in the same assistant turn so they run in parallel; do not wait for one independent topic before starting the next.
+You do not have direct web access. Your research tool is invoke_subagent, which may invoke only the fixed "news_researcher" agent. Delegate focused research tasks, preferably several independent topics, then assess the returned dossiers yourself. Invoke multiple independent researchers together in the same assistant turn so they run in parallel; do not wait for one independent topic before starting the next.
+
+You assemble the issue itself incrementally with the add_blocks and finalize_issue tools. Never output the issue as plain text or as a single large JSON message: all issue content goes exclusively through add_blocks, in batches of several related blocks at a time, in final editorial order and with final reader-language prose. Blocks are validated the moment you send them and cannot be edited or removed afterwards, so only send finished material. When the whole issue has been assembled, call finalize_issue exactly once with the issue title (and optional subtitle); the date is set for you automatically.
 
 User interests are positive editorial signals, not a checklist. User preferences are hard constraints. Do not include excluded topics. Prefer consequential, verifiable information and primary sources. Reject weak, duplicated, promotional, misleading, or unverified material.
 
@@ -47,60 +51,11 @@ Use an image block only when the image itself is editorial content and an actual
 
 The run request specifies the reader's selected language. Write all reader-facing newspaper prose in that language, including article and note titles and text, list items, captions, and weather descriptions. Source material may be in any language: translate and adapt it for the reader without changing facts, names, direct URLs, or the meaning of quotations.
 
-After research, return exactly one valid JSON object and no markdown or commentary. It must follow this contract:
-{
-  "version": 1,
-  "title": "string",
-  "subtitle": "optional string",
-  "date": "string",
-  "blocks": [
-    {
-      "id": "unique string",
-      "type": "article",
-      "role": "hero | feature | standard",
-      "title": "string",
-      "text": "string",
-      "url": "optional direct URL of the main material",
-      "image_url": "optional exact image URL",
-      "sources": [{ "title": "string", "url": "direct URL" }]
-    },
-    {
-      "id": "unique string",
-      "type": "note",
-      "title": "optional string",
-      "text": "optional string",
-      "url": "optional direct URL",
-      "image_url": "optional exact image URL"
-    },
-    {
-      "id": "unique string",
-      "type": "notes_list",
-      "title": "optional string",
-      "items": [{ "id": "optional string", "title": "optional string", "text": "optional string", "url": "optional direct URL", "image_url": "optional exact image URL" }]
-    },
-    {
-      "id": "unique string",
-      "type": "weather",
-      "title": "optional string",
-      "location": "string",
-      "condition": "string",
-      "details": "optional string",
-      "periods": [{ "label": "string", "temperature": 0, "condition": "optional string" }]
-    },
-    {
-      "id": "unique string",
-      "type": "image",
-      "title": "string",
-      "image_url": "optional URL",
-      "caption": "optional string",
-      "prompt": "optional string"
-    }
-  ]
-}
+There are exactly five block types: article, note, notes_list, weather, image. "hero" is never a block type; it is an article role. Articles may keep multiple sources. Notes have only their own url and never sources. The add_blocks tool description contains the exact block shapes; every block needs a unique non-empty "id".
 
-There are exactly five block types: article, note, notes_list, weather, image. "hero" is never a block type; it is an article role. Articles may keep multiple sources. Notes have only their own url and never sources.
+Do not invent weather; include weather only if the assigned context explicitly requests it and a researcher verifies it. Use article for developed stories, note for one compact item, and notes_list for related briefs. Include at most one hero article.
 
-Do not invent weather; include weather only if the assigned context explicitly requests it and a researcher verifies it. Use article for developed stories, note for one compact item, and notes_list for related briefs. Include at most one hero article.`;
+The run ends when you call finalize_issue. Never print the assembled issue as text instead of using the tools.`;
 
 const emitRun = (runId: number) => {
   const run = getNewspaperRunInternal(runId);
@@ -140,18 +95,9 @@ const weatherInstruction = (newspaper: NonNullable<ReturnType<typeof getNewspape
   return `Weather request: include one verified weather block for ${location} covering the current local day. Prefer Morning, Day, and Evening periods. Delegate weather verification to the researcher; do not invent a forecast.`;
 };
 
-const extractJson = (text: string): unknown => {
-  const trimmed = text.trim();
-  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  const candidate = fenced?.[1]?.trim()
-    || trimmed.slice(trimmed.indexOf('{'), trimmed.lastIndexOf('}') + 1);
-  if (!candidate) throw new Error('newspaper_editor_returned_no_json');
-  return JSON.parse(candidate);
-};
-
 const materializeNewspaperImages = async (
   userId: number,
-  document: ReturnType<typeof validateNewspaperDocument>,
+  document: NewspaperIssueDocument,
 ) => {
   const assetIds = new Set<number>();
   const resolved = new Map<string, string | null>();
@@ -250,14 +196,23 @@ export const startNewspaperRun = (runId: number): boolean => {
     }
     const requestedWeather = weatherInstruction(newspaper);
     if (requestedWeather) editorInput.push(requestedWeather);
-    editorInput.push('Research first. Then return the final issue JSON.');
+    editorInput.push('Research first. Then assemble the issue through add_blocks and finish with finalize_issue.');
+
+    const assembly = createAssemblyTools({
+      date,
+      onBlocksChanged: async (draft) => {
+        setNewspaperRunPhase(runId, 'assembling_issue');
+        setNewspaperRunDraft(runId, draft);
+        emitRun(runId);
+      },
+    });
 
     const result = await runAgent({
       userId: run.user_id,
       name: 'newspaper_editor',
       systemPrompt: editorSystemPrompt,
       input: editorInput.join('\n\n'),
-      tools: [invokeSubagent],
+      tools: [invokeSubagent, ...assembly.tools],
       maxLoops: 2000,
       maxTokens: 16_384,
       timezoneOffset,
@@ -267,12 +222,13 @@ export const startNewspaperRun = (runId: number): boolean => {
         emitRun(runId);
       },
       onStreamToken: async (text) => {
+        // The draft is structured (assembled blocks), so the token stream is only
+        // kept as forensic raw output in case the editor ignores the tool contract.
         streamedDraft += text;
         const now = Date.now();
         if (now - lastDraftWrite < 500) return;
         lastDraftWrite = now;
         setNewspaperRunPhase(runId, 'writing_issue');
-        setNewspaperRunDraft(runId, streamedDraft);
         emitRun(runId);
       },
     });
@@ -281,7 +237,9 @@ export const startNewspaperRun = (runId: number): boolean => {
       finishNewspaperRun(runId, {
         status: 'cancelled',
         phase: 'cancelled',
-        draft: streamedDraft || null,
+        draft: assembly.state.blocks.length
+          ? { version: 1, date, blocks: assembly.state.blocks }
+          : (streamedDraft || null),
         editorTrace: { tool_calls: result.toolCalls, iterations: result.iterations, usage: result.usage },
       });
       emitRun(runId);
@@ -290,29 +248,68 @@ export const startNewspaperRun = (runId: number): boolean => {
 
     setNewspaperRunPhase(runId, 'validating');
     emitRun(runId);
-    const rawDocument = extractJson(result.finalText);
-    const validatedDocument = validateNewspaperDocument({
-      ...(rawDocument as Record<string, unknown>),
-      date,
-    });
-    const { document, assetIds } = await materializeNewspaperImages(run.user_id, validatedDocument);
-    const issue = createNewspaperIssue(run.user_id, run.newspaper_id, document);
-    for (const assetId of assetIds) {
-      attachMediaAsset({
-        assetId,
-        entityType: 'newspaper_issue',
-        entityId: issue.id,
-        slot: 'image',
+    const editorTrace = {
+      tool_calls: result.toolCalls,
+      iterations: result.iterations,
+      usage: result.usage,
+    };
+    try {
+      const usedTools = !!assembly.state.meta || assembly.state.blocks.length > 0;
+      // Editor ignored the tool contract and answered with text: run the raw JSON
+      // pipeline (parse -> jsonrepair -> bounded LLM repair) as a fallback.
+      const fallback = usedTools ? null : await parseRepairAndValidateNewspaper(result.finalText, {
+        date,
+        userId: run.user_id,
+        signal: controller.signal,
+        onProgress: async ({ attempt }) => {
+          setNewspaperRunPhase(runId, `repairing_json_${attempt}`);
+          emitRun(runId);
+        },
       });
+      // If the editor assembled blocks but died before finalize_issue, salvage the
+      // issue under the newspaper's own name instead of discarding valid material.
+      const assembledVia = fallback ? 'text_fallback' : (assembly.state.meta ? 'tools' : 'auto_finalized');
+      const validatedDocument = fallback
+        ? fallback.document
+        : assembly.buildDocument(newspaper.name);
+      const { document, assetIds } = await materializeNewspaperImages(run.user_id, validatedDocument);
+      const issue = createNewspaperIssue(run.user_id, run.newspaper_id, document);
+      for (const assetId of assetIds) {
+        attachMediaAsset({
+          assetId,
+          entityType: 'newspaper_issue',
+          entityId: issue.id,
+          slot: 'image',
+        });
+      }
+      finishNewspaperRun(runId, {
+        status: 'ready',
+        phase: 'ready',
+        issueId: issue.id,
+        draft: document,
+        editorTrace: {
+          ...editorTrace,
+          assembly: { via: assembledVia, blocks: document.blocks.length },
+          ...(fallback ? { json_repairs: fallback.attempts, json_repair_usage: fallback.llmRepairUsage } : {}),
+        },
+      });
+      emitRun(runId);
+    } catch (error: any) {
+      // Keep the assembled blocks (or the raw editor output) plus the whole editor
+      // trace: research is expensive, and the assembly can be recovered manually.
+      const cancelled = controller.signal.aborted;
+      finishNewspaperRun(runId, {
+        status: cancelled ? 'cancelled' : 'failed',
+        phase: cancelled ? 'cancelled' : 'failed',
+        draft: assembly.state.blocks.length
+          ? { version: 1, date, blocks: assembly.state.blocks }
+          : (result.finalText || streamedDraft || null),
+        editorTrace,
+        error: cancelled ? '' : (error?.message || String(error)),
+      });
+      emitRun(runId);
     }
-    finishNewspaperRun(runId, {
-      status: 'ready',
-      phase: 'ready',
-      issueId: issue.id,
-      draft: document,
-      editorTrace: { tool_calls: result.toolCalls, iterations: result.iterations, usage: result.usage },
-    });
-    emitRun(runId);
+    return;
   })().catch((error: any) => {
     const cancelled = controller.signal.aborted;
     finishNewspaperRun(runId, {

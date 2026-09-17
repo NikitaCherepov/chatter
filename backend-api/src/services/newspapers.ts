@@ -2,6 +2,7 @@ import { db } from '../db.js';
 import type {
   NewspaperAgentRunDto,
   NewspaperAgentRunStatus,
+  NewspaperBlock,
   NewspaperDto,
   NewspaperIssueDocument,
   NewspaperIssueDto,
@@ -68,6 +69,120 @@ const parseJson = (raw: unknown): unknown => {
   try { return JSON.parse(String(raw)); } catch { return null; }
 };
 
+/**
+ * Validates a single newspaper block and registers its id in `ids`.
+ * Shared by the whole-document validator and the incremental add_blocks tool,
+ * so tool payloads and stored documents obey the exact same rules.
+ * Error codes carry the block index for actionable feedback.
+ */
+export const validateNewspaperBlock = (source: unknown, index: number, ids: Set<string>): NewspaperBlock => {
+  if (!isRecord(source) || !BLOCK_TYPES.has(source.type)) throw new Error(`invalid_newspaper_block_${index}`);
+  const id = cleanText(source.id, 120);
+  if (!id || ids.has(id)) throw new Error(`invalid_newspaper_block_id_${index}`);
+  ids.add(id);
+  const titleValue = optionalText(source.title, 500);
+
+  if (source.type === 'article') {
+    const title = titleValue || '';
+    const text = cleanText(source.text);
+    if (!title || !text || !ARTICLE_ROLES.has(source.role)) throw new Error(`invalid_article_${index}`);
+    const sources = Array.isArray(source.sources)
+      ? source.sources.slice(0, 20).flatMap((item: unknown) => {
+          if (!isRecord(item)) return [];
+          const sourceTitle = cleanText(item.title, 500);
+          const url = optionalUrl(item.url);
+          return sourceTitle && url ? [{ title: sourceTitle, url }] : [];
+        })
+      : undefined;
+    return {
+      id,
+      type: 'article' as const,
+      role: source.role as 'hero' | 'feature' | 'standard',
+      title,
+      text,
+      ...(optionalUrl(source.url) ? { url: optionalUrl(source.url) } : {}),
+      ...(optionalImageUrl(source.image_url) ? { image_url: optionalImageUrl(source.image_url) } : {}),
+      ...(sources?.length ? { sources } : {}),
+    };
+  }
+
+  if (source.type === 'note') {
+    const text = optionalText(source.text);
+    const url = optionalUrl(source.url);
+    const imageUrl = optionalImageUrl(source.image_url);
+    if (!titleValue && !text && !url && !imageUrl) throw new Error(`invalid_note_${index}`);
+    return {
+      id,
+      type: 'note' as const,
+      ...(titleValue ? { title: titleValue } : {}),
+      ...(text ? { text } : {}),
+      ...(url ? { url } : {}),
+      ...(imageUrl ? { image_url: imageUrl } : {}),
+    };
+  }
+
+  if (source.type === 'notes_list') {
+    if (!Array.isArray(source.items) || source.items.length === 0 || source.items.length > 40) {
+      throw new Error(`invalid_notes_list_${index}`);
+    }
+    const items = source.items.map((item: unknown, itemIndex: number) => {
+      if (!isRecord(item)) throw new Error(`invalid_note_item_${index}_${itemIndex}`);
+      const itemTitle = optionalText(item.title, 500);
+      const text = optionalText(item.text);
+      const url = optionalUrl(item.url);
+      const imageUrl = optionalImageUrl(item.image_url);
+      if (!itemTitle && !text && !url && !imageUrl) throw new Error(`invalid_note_item_${index}_${itemIndex}`);
+      return {
+        ...(optionalText(item.id, 120) ? { id: optionalText(item.id, 120) } : {}),
+        ...(itemTitle ? { title: itemTitle } : {}),
+        ...(text ? { text } : {}),
+        ...(url ? { url } : {}),
+        ...(imageUrl ? { image_url: imageUrl } : {}),
+      };
+    });
+    return { id, type: 'notes_list' as const, ...(titleValue ? { title: titleValue } : {}), items };
+  }
+
+  if (source.type === 'weather') {
+    const location = cleanText(source.location, 240);
+    const condition = cleanText(source.condition, 500);
+    if (!location || !condition || !Array.isArray(source.periods) || source.periods.length === 0 || source.periods.length > 14) {
+      throw new Error(`invalid_weather_${index}`);
+    }
+    const periods = source.periods.map((period: unknown, periodIndex: number) => {
+      if (!isRecord(period)) throw new Error(`invalid_weather_period_${index}_${periodIndex}`);
+      const label = cleanText(period.label, 120);
+      const temperature = Number(period.temperature);
+      if (!label || !Number.isFinite(temperature)) throw new Error(`invalid_weather_period_${index}_${periodIndex}`);
+      return {
+        label,
+        temperature,
+        ...(optionalText(period.condition, 240) ? { condition: optionalText(period.condition, 240) } : {}),
+      };
+    });
+    return {
+      id,
+      type: 'weather' as const,
+      ...(titleValue ? { title: titleValue } : {}),
+      location,
+      condition,
+      ...(optionalText(source.details) ? { details: optionalText(source.details) } : {}),
+      periods,
+    };
+  }
+
+  const imageTitle = titleValue || '';
+  if (!imageTitle) throw new Error(`invalid_image_${index}`);
+  return {
+    id,
+    type: 'image' as const,
+    title: imageTitle,
+    ...(optionalImageUrl(source.image_url) ? { image_url: optionalImageUrl(source.image_url) } : {}),
+    ...(optionalText(source.caption) ? { caption: optionalText(source.caption) } : {}),
+    ...(optionalText(source.prompt, 2_000) ? { prompt: optionalText(source.prompt, 2_000) } : {}),
+  };
+};
+
 export const validateNewspaperDocument = (raw: unknown): NewspaperIssueDocument => {
   if (!isRecord(raw) || raw.version !== 1 || !Array.isArray(raw.blocks)) {
     throw new Error('invalid_newspaper_document');
@@ -79,113 +194,7 @@ export const validateNewspaperDocument = (raw: unknown): NewspaperIssueDocument 
   }
 
   const ids = new Set<string>();
-  const blocks = raw.blocks.map((source: unknown, index: number) => {
-    if (!isRecord(source) || !BLOCK_TYPES.has(source.type)) throw new Error(`invalid_newspaper_block_${index}`);
-    const id = cleanText(source.id, 120);
-    if (!id || ids.has(id)) throw new Error(`invalid_newspaper_block_id_${index}`);
-    ids.add(id);
-    const titleValue = optionalText(source.title, 500);
-
-    if (source.type === 'article') {
-      const title = titleValue || '';
-      const text = cleanText(source.text);
-      if (!title || !text || !ARTICLE_ROLES.has(source.role)) throw new Error(`invalid_article_${index}`);
-      const sources = Array.isArray(source.sources)
-        ? source.sources.slice(0, 20).flatMap((item: unknown) => {
-            if (!isRecord(item)) return [];
-            const sourceTitle = cleanText(item.title, 500);
-            const url = optionalUrl(item.url);
-            return sourceTitle && url ? [{ title: sourceTitle, url }] : [];
-          })
-        : undefined;
-      return {
-        id,
-        type: 'article' as const,
-        role: source.role as 'hero' | 'feature' | 'standard',
-        title,
-        text,
-        ...(optionalUrl(source.url) ? { url: optionalUrl(source.url) } : {}),
-        ...(optionalImageUrl(source.image_url) ? { image_url: optionalImageUrl(source.image_url) } : {}),
-        ...(sources?.length ? { sources } : {}),
-      };
-    }
-
-    if (source.type === 'note') {
-      const text = optionalText(source.text);
-      const url = optionalUrl(source.url);
-      const imageUrl = optionalImageUrl(source.image_url);
-      if (!titleValue && !text && !url && !imageUrl) throw new Error(`invalid_note_${index}`);
-      return {
-        id,
-        type: 'note' as const,
-        ...(titleValue ? { title: titleValue } : {}),
-        ...(text ? { text } : {}),
-        ...(url ? { url } : {}),
-        ...(imageUrl ? { image_url: imageUrl } : {}),
-      };
-    }
-
-    if (source.type === 'notes_list') {
-      if (!Array.isArray(source.items) || source.items.length === 0 || source.items.length > 40) {
-        throw new Error(`invalid_notes_list_${index}`);
-      }
-      const items = source.items.map((item: unknown, itemIndex: number) => {
-        if (!isRecord(item)) throw new Error(`invalid_note_item_${index}_${itemIndex}`);
-        const itemTitle = optionalText(item.title, 500);
-        const text = optionalText(item.text);
-        const url = optionalUrl(item.url);
-        const imageUrl = optionalImageUrl(item.image_url);
-        if (!itemTitle && !text && !url && !imageUrl) throw new Error(`invalid_note_item_${index}_${itemIndex}`);
-        return {
-          ...(optionalText(item.id, 120) ? { id: optionalText(item.id, 120) } : {}),
-          ...(itemTitle ? { title: itemTitle } : {}),
-          ...(text ? { text } : {}),
-          ...(url ? { url } : {}),
-          ...(imageUrl ? { image_url: imageUrl } : {}),
-        };
-      });
-      return { id, type: 'notes_list' as const, ...(titleValue ? { title: titleValue } : {}), items };
-    }
-
-    if (source.type === 'weather') {
-      const location = cleanText(source.location, 240);
-      const condition = cleanText(source.condition, 500);
-      if (!location || !condition || !Array.isArray(source.periods) || source.periods.length === 0 || source.periods.length > 14) {
-        throw new Error(`invalid_weather_${index}`);
-      }
-      const periods = source.periods.map((period: unknown, periodIndex: number) => {
-        if (!isRecord(period)) throw new Error(`invalid_weather_period_${index}_${periodIndex}`);
-        const label = cleanText(period.label, 120);
-        const temperature = Number(period.temperature);
-        if (!label || !Number.isFinite(temperature)) throw new Error(`invalid_weather_period_${index}_${periodIndex}`);
-        return {
-          label,
-          temperature,
-          ...(optionalText(period.condition, 240) ? { condition: optionalText(period.condition, 240) } : {}),
-        };
-      });
-      return {
-        id,
-        type: 'weather' as const,
-        ...(titleValue ? { title: titleValue } : {}),
-        location,
-        condition,
-        ...(optionalText(source.details) ? { details: optionalText(source.details) } : {}),
-        periods,
-      };
-    }
-
-    const imageTitle = titleValue || '';
-    if (!imageTitle) throw new Error(`invalid_image_${index}`);
-    return {
-      id,
-      type: 'image' as const,
-      title: imageTitle,
-      ...(optionalImageUrl(source.image_url) ? { image_url: optionalImageUrl(source.image_url) } : {}),
-      ...(optionalText(source.caption) ? { caption: optionalText(source.caption) } : {}),
-      ...(optionalText(source.prompt, 2_000) ? { prompt: optionalText(source.prompt, 2_000) } : {}),
-    };
-  });
+  const blocks = raw.blocks.map((source: unknown, index: number) => validateNewspaperBlock(source, index, ids));
 
   return {
     version: 1,
