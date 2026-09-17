@@ -64,7 +64,7 @@
 
 .priorityGrid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 9px; }
 .priorityMedia { position: relative; grid-column: span 9; min-height: 300px; overflow: hidden; border: 1px solid #76570d; background: #090a08; }
-.priorityMedia > img { width: 100%; height: 300px; object-fit: cover; filter: sepia(1) saturate(1.3) brightness(.62) contrast(1.2); }
+.priorityMedia > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; filter: sepia(1) saturate(1.3) brightness(.62) contrast(1.2); }
 .priorityMedia > div { position: absolute; inset: auto 0 0; padding: 55px 16px 14px; background: linear-gradient(transparent, rgba(0,0,0,.96)); }
 .priorityMedia h2 { max-width: 760px; margin: 4px 0 0; color: #eee; font-size: 28px; line-height: .98; text-transform: uppercase; }
 .sideStack { display: grid; grid-column: span 3; gap: 9px; align-content: stretch; }
