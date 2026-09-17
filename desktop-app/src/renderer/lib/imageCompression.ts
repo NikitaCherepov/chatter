@@ -3,6 +3,11 @@ export const DEFAULT_MAX_IMAGE_ATTACHMENTS_TOTAL_BYTES = 32 * 1024 * 1024;
 const MAX_SOURCE_IMAGE_BYTES = 50 * 1024 * 1024;
 const MAX_IMAGE_DIMENSION = 2048;
 const MAX_PREPARED_IMAGE_BYTES = 8 * 1024 * 1024;
+/** Compact originals (≤1MB, within the dimension limit) are not re-encoded:
+ *  re-encoding saves little but loses quality and fine details (text on
+ *  screenshots). The total attachment budget (32MB) is enforced separately
+ *  at attach time and at send time. */
+const IMAGE_PASS_THROUGH_BYTES = 1024 * 1024;
 
 export type PreparedImage = {
   file: File;
@@ -41,6 +46,23 @@ export async function prepareImageForUpload(file: File): Promise<PreparedImage> 
 
   const bitmap = await createImageBitmap(file);
   try {
+    // Fast path: compact original within the dimension limits — send it
+    // as-is, byte-identical, skipping the decode/encode round-trip. Animated
+    // GIF/WebP also keep their animation, which a canvas re-encode strips.
+    if (
+      file.size <= IMAGE_PASS_THROUGH_BYTES
+      && bitmap.width <= MAX_IMAGE_DIMENSION
+      && bitmap.height <= MAX_IMAGE_DIMENSION
+    ) {
+      return {
+        file,
+        preview: URL.createObjectURL(file),
+        base64: await blobToBase64(file),
+        mime_type: file.type || 'image/webp',
+        size_bytes: file.size,
+      };
+    }
+
     let scale = Math.min(1, MAX_IMAGE_DIMENSION / Math.max(bitmap.width, bitmap.height));
     let output: Blob | null = null;
 
