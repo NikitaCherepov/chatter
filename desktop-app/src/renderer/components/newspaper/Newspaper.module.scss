@@ -450,6 +450,57 @@
 .deusPageTransition[data-phase='covered']::after {
   opacity: 0;
 }
+.massEffectOutgoingPage,
+.massEffectDividerLayer {
+  position: absolute;
+  z-index: 3;
+  top: 0;
+  left: 0;
+  width: max-content;
+  height: 100%;
+  min-width: 100%;
+  pointer-events: none;
+  transform-origin: top center;
+}
+.massEffectOutgoingPage {
+  will-change: clip-path;
+}
+.massEffectDividerLayer {
+  z-index: 4;
+  overflow: hidden;
+}
+.massEffectDividerLayer i {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: rgba(176, 244, 252, .96);
+  box-shadow:
+    -2px 0 8px rgba(103, 217, 235, .82),
+    2px 0 8px rgba(103, 217, 235, .82),
+    -12px 0 24px rgba(48, 174, 211, .32),
+    12px 0 24px rgba(48, 174, 211, .32);
+  transform: translateX(-1px);
+}
+.massEffectDividerLayer i::before {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -12px;
+  width: 26px;
+  background: linear-gradient(90deg, transparent, rgba(122, 226, 240, .12), transparent);
+  content: '';
+}
+.massEffectDividerLayer i::after {
+  position: absolute;
+  top: 36%;
+  left: -2px;
+  width: 5px;
+  height: 58px;
+  background: #ff8750;
+  box-shadow: 0 0 10px rgba(255, 135, 80, .86);
+  content: '';
+}
 .zoomLayer {
   width: max-content;
   height: 100%;

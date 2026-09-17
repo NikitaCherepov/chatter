@@ -24,6 +24,13 @@ type PageTransition = {
   sourcePageNumber: number;
 };
 
+type MassEffectTransition = {
+  direction: PageTransition['direction'];
+  phase: 'waiting' | 'reveal';
+  sourcePageNumber: number;
+  outgoingIssue: NewspaperIssue;
+};
+
 type Props = {
   issue: NewspaperIssue | null;
   style: NewspaperVisualStyle;
@@ -57,10 +64,18 @@ export function NewspaperReader({ issue, style, pageNumber, pageCount, canGoPrev
   const [controlsOpen, setControlsOpen] = useState(false);
   const [viewerImage, setViewerImage] = useState<{ src: string; title?: string } | null>(null);
   const [pageTransition, setPageTransition] = useState<PageTransition | null>(null);
+  const [massEffectTransition, setMassEffectTransition] = useState<MassEffectTransition | null>(null);
 
   const navigatePage = useCallback((direction: PageTransition['direction']) => {
-    if (!issue || pageTransition) return;
+    if (!issue || pageTransition || massEffectTransition) return;
     if (direction === 'previous' ? !canGoPrevious : !canGoNext) return;
+    if (style === 'massEffect') {
+      setMassEffectTransition({ direction, phase: 'waiting', sourcePageNumber: pageNumber, outgoingIssue: issue });
+      if (viewportRef.current) viewportRef.current.scrollTop = 0;
+      if (direction === 'previous') onPrevious();
+      else onNext();
+      return;
+    }
     if (style !== 'deusEx') {
       if (viewportRef.current) viewportRef.current.scrollTop = 0;
       if (direction === 'previous') onPrevious();
@@ -68,7 +83,7 @@ export function NewspaperReader({ issue, style, pageNumber, pageCount, canGoPrev
       return;
     }
     setPageTransition({ direction, phase: 'cover', sourcePageNumber: pageNumber });
-  }, [canGoNext, canGoPrevious, issue, onNext, onPrevious, pageNumber, pageTransition, style]);
+  }, [canGoNext, canGoPrevious, issue, massEffectTransition, onNext, onPrevious, pageNumber, pageTransition, style]);
 
   useEffect(() => {
     if (!issue) setViewerImage(null);
@@ -92,12 +107,22 @@ export function NewspaperReader({ issue, style, pageNumber, pageCount, canGoPrev
     if (!issue || style !== 'deusEx') setPageTransition(null);
   }, [issue, style]);
   useEffect(() => {
+    if (!issue || style !== 'massEffect') setMassEffectTransition(null);
+  }, [issue, style]);
+  useEffect(() => {
     if (!pageTransition || pageTransition.phase !== 'covered' || pageNumber === pageTransition.sourcePageNumber) return;
     const frame = requestAnimationFrame(() => {
       setPageTransition(current => current?.phase === 'covered' ? { ...current, phase: 'reveal' } : current);
     });
     return () => cancelAnimationFrame(frame);
   }, [pageNumber, pageTransition]);
+  useEffect(() => {
+    if (!massEffectTransition || massEffectTransition.phase !== 'waiting' || pageNumber === massEffectTransition.sourcePageNumber) return;
+    const frame = requestAnimationFrame(() => {
+      setMassEffectTransition(current => current?.phase === 'waiting' ? { ...current, phase: 'reveal' } : current);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [massEffectTransition, pageNumber]);
   useEffect(() => {
     const viewport = viewportRef.current;
     if (!issue || !viewport) return;
@@ -152,6 +177,7 @@ export function NewspaperReader({ issue, style, pageNumber, pageCount, canGoPrev
     applyZoom(Math.floor(scale * 100 / ZOOM_STEP) * ZOOM_STEP);
   };
   const startDragging = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (massEffectTransition) return;
     if (event.button !== 0 || (event.target as HTMLElement).closest('a, button, input, textarea, select, [role="button"], [role="link"], [data-clickable="true"]')) return;
     const viewport = viewportRef.current;
     if (!viewport) return;
@@ -258,7 +284,32 @@ export function NewspaperReader({ issue, style, pageNumber, pageCount, canGoPrev
       ><span className={s.readerPageTabContent}><b>›</b><small>{style === 'deusEx' ? 'NEXT' : style === 'massEffect' ? 'FWD' : 'Вперёд'}</small></span></motion.button>}
     </AnimatePresence>
     {SHOW_READER_CHROME && <header className={s.toolbar}><div className={s.issueMeta}><strong>Выпуск №{issue.issue_number}</strong><span>{pageNumber} / {pageCount}</span></div><div className={s.styleSelect}><Select options={styleOptions} value={style} onChange={value=>onStyleChange(value as NewspaperVisualStyle)} maxVisibleItems={4}/></div><div className={s.toolbarActions}><div className={s.zoomControls}><button type="button" onClick={()=>applyZoom(zoom-ZOOM_STEP)} disabled={zoom<=ZOOM_MIN} aria-label="Уменьшить масштаб">−</button><button type="button" className={s.zoomValue} onClick={fitToWindow} title="Вписать газету в окно">{zoom}%</button><button type="button" onClick={()=>applyZoom(zoom+ZOOM_STEP)} disabled={zoom>=ZOOM_MAX} aria-label="Увеличить масштаб">+</button></div><nav className={s.navigation}><button type="button" onClick={onPrevious} disabled={!canGoPrevious} aria-label={previousLabel}>‹</button><button type="button" onClick={onNext} disabled={!canGoNext} aria-label={nextLabel}>›</button><button type="button" onClick={onClose} aria-label={closeLabel}>×</button></nav></div></header>}
-    <div className={`${s.viewport} ${dragging ? s.viewportDragging : ''}`} data-style={style} ref={viewportRef} onPointerDown={startDragging} onPointerMove={moveDragging} onPointerUp={stopDragging} onPointerCancel={stopDragging} onDragStart={event=>event.preventDefault()}><motion.div ref={pageRef} className={s.zoomLayer} style={{zoom:zoom/100} as React.CSSProperties} key={`${issue.id}-${style}`} initial={style === 'deusEx' ? false : {opacity:0,y:8}} animate={{opacity:1,y:0}} transition={{duration:.18}}><NewspaperImageViewerProvider onOpen={(src, title) => setViewerImage({ src, title })}><TemplateRenderer issue={issue} style={style}/></NewspaperImageViewerProvider></motion.div></div>
+    <div className={`${s.viewport} ${dragging ? s.viewportDragging : ''}`} data-style={style} ref={viewportRef} onPointerDown={startDragging} onPointerMove={moveDragging} onPointerUp={stopDragging} onPointerCancel={stopDragging} onDragStart={event=>event.preventDefault()}>
+      <motion.div ref={pageRef} className={s.zoomLayer} style={{zoom:zoom/100} as React.CSSProperties} key={`${issue.id}-${style}`} initial={style === 'deusEx' || style === 'massEffect' ? false : {opacity:0,y:8}} animate={{opacity:1,y:0}} transition={{duration:.18}}><NewspaperImageViewerProvider onOpen={(src, title) => setViewerImage({ src, title })}><TemplateRenderer issue={issue} style={style}/></NewspaperImageViewerProvider></motion.div>
+      <AnimatePresence>{massEffectTransition && <motion.div
+        key={`mass-effect-outgoing-${massEffectTransition.outgoingIssue.id}`}
+        className={s.massEffectOutgoingPage}
+        style={{zoom:zoom/100} as React.CSSProperties}
+        initial={false}
+        animate={{ clipPath: massEffectTransition.phase === 'reveal'
+          ? (massEffectTransition.direction === 'next' ? 'inset(0 100% 0 0)' : 'inset(0 0 0 100%)')
+          : 'inset(0 0 0 0)' }}
+        transition={{ duration: massEffectTransition.phase === 'reveal' ? .48 : 0, ease: [0.76, 0, 0.24, 1] }}
+        onAnimationComplete={() => {
+          if (massEffectTransition.phase === 'reveal') setMassEffectTransition(null);
+        }}
+      ><NewspaperImageViewerProvider onOpen={() => undefined}><TemplateRenderer issue={massEffectTransition.outgoingIssue} style="massEffect"/></NewspaperImageViewerProvider></motion.div>}</AnimatePresence>
+      <AnimatePresence>{massEffectTransition?.phase === 'reveal' && <motion.div
+        key="mass-effect-divider"
+        className={s.massEffectDividerLayer}
+        style={{zoom:zoom/100} as React.CSSProperties}
+        initial={false}
+      ><motion.i
+        initial={{ left: massEffectTransition.direction === 'next' ? '100%' : '0%' }}
+        animate={{ left: massEffectTransition.direction === 'next' ? '0%' : '100%' }}
+        transition={{ duration: .48, ease: [0.76, 0, 0.24, 1] }}
+      /></motion.div>}</AnimatePresence>
+    </div>
     <AnimatePresence>{pageTransition && <motion.div
       key="deus-page-transition"
       className={s.deusPageTransition}
