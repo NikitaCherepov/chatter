@@ -18,6 +18,12 @@ const ZOOM_STEP = 10;
 const ZOOM_DEFAULT = 100;
 const SHOW_READER_CHROME = false;
 
+type PageTransition = {
+  direction: 'previous' | 'next';
+  phase: 'cover' | 'covered' | 'reveal';
+  sourcePageNumber: number;
+};
+
 type Props = {
   issue: NewspaperIssue | null;
   style: NewspaperVisualStyle;
@@ -50,6 +56,18 @@ export function NewspaperReader({ issue, style, pageNumber, pageCount, canGoPrev
   const [dragging, setDragging] = useState(false);
   const [controlsOpen, setControlsOpen] = useState(false);
   const [viewerImage, setViewerImage] = useState<{ src: string; title?: string } | null>(null);
+  const [pageTransition, setPageTransition] = useState<PageTransition | null>(null);
+
+  const navigatePage = useCallback((direction: PageTransition['direction']) => {
+    if (!issue || pageTransition) return;
+    if (direction === 'previous' ? !canGoPrevious : !canGoNext) return;
+    if (style !== 'deusEx') {
+      if (direction === 'previous') onPrevious();
+      else onNext();
+      return;
+    }
+    setPageTransition({ direction, phase: 'cover', sourcePageNumber: pageNumber });
+  }, [canGoNext, canGoPrevious, issue, onNext, onPrevious, pageNumber, pageTransition, style]);
 
   useEffect(() => {
     if (!issue) setViewerImage(null);
@@ -63,12 +81,22 @@ export function NewspaperReader({ issue, style, pageNumber, pageCount, canGoPrev
         else onClose();
         return;
       }
-      if (event.key === 'ArrowLeft' && canGoPrevious) onPrevious();
-      if (event.key === 'ArrowRight' && canGoNext) onNext();
+      if (event.key === 'ArrowLeft' && canGoPrevious) navigatePage('previous');
+      if (event.key === 'ArrowRight' && canGoNext) navigatePage('next');
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [canGoNext, canGoPrevious, controlsOpen, issue, onClose, onNext, onPrevious, viewerImage]);
+  }, [canGoNext, canGoPrevious, controlsOpen, issue, navigatePage, onClose, viewerImage]);
+  useEffect(() => {
+    if (!issue || style !== 'deusEx') setPageTransition(null);
+  }, [issue, style]);
+  useEffect(() => {
+    if (!pageTransition || pageTransition.phase !== 'covered' || pageNumber === pageTransition.sourcePageNumber) return;
+    const frame = requestAnimationFrame(() => {
+      setPageTransition(current => current?.phase === 'covered' ? { ...current, phase: 'reveal' } : current);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [pageNumber, pageTransition]);
   useEffect(() => {
     const viewport = viewportRef.current;
     if (!issue || !viewport) return;
@@ -152,6 +180,16 @@ export function NewspaperReader({ issue, style, pageNumber, pageCount, canGoPrev
     dragRef.current = null;
     setDragging(false);
   };
+  const completePageTransitionStep = () => {
+    if (!pageTransition) return;
+    if (pageTransition.phase === 'cover') {
+      setPageTransition({ ...pageTransition, phase: 'covered' });
+      if (pageTransition.direction === 'previous') onPrevious();
+      else onNext();
+      return;
+    }
+    if (pageTransition.phase === 'reveal') setPageTransition(null);
+  };
 
   return createPortal(<AnimatePresence>{issue && <motion.div key="newspaper-reader" className={s.backdrop} initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} onMouseDown={() => controlsOpen ? setControlsOpen(false) : onClose()}><motion.div className={s.dialog} initial={{opacity:0,y:20,scale:.985}} animate={{opacity:1,y:0,scale:1}} exit={{opacity:0,y:14,scale:.99}} onMouseDown={event=>{ event.stopPropagation(); if (controlsOpen && !(event.target as HTMLElement).closest('[data-reader-controls]')) setControlsOpen(false); }} role="dialog" aria-modal="true">
     <AnimatePresence initial={false} mode="wait">{!controlsOpen ? <motion.button
@@ -199,7 +237,7 @@ export function NewspaperReader({ issue, style, pageNumber, pageCount, canGoPrev
         whileTap={{ scale: .96 }}
         exit={{ opacity: 0, x: 46 }}
         transition={{ duration: .18, ease: 'easeOut' }}
-        onClick={onPrevious}
+        onClick={() => navigatePage('previous')}
       ><span className={s.readerPageTabContent}><b>‹</b><small>{style === 'deusEx' ? 'PREV' : style === 'massEffect' ? 'BACK' : 'Назад'}</small></span></motion.button>}
       {canGoNext && <motion.button
         key="reader-next"
@@ -214,11 +252,25 @@ export function NewspaperReader({ issue, style, pageNumber, pageCount, canGoPrev
         whileTap={{ scale: .96 }}
         exit={{ opacity: 0, x: -46 }}
         transition={{ duration: .18, ease: 'easeOut' }}
-        onClick={onNext}
+        onClick={() => navigatePage('next')}
       ><span className={s.readerPageTabContent}><b>›</b><small>{style === 'deusEx' ? 'NEXT' : style === 'massEffect' ? 'FWD' : 'Вперёд'}</small></span></motion.button>}
     </AnimatePresence>
     {SHOW_READER_CHROME && <header className={s.toolbar}><div className={s.issueMeta}><strong>Выпуск №{issue.issue_number}</strong><span>{pageNumber} / {pageCount}</span></div><div className={s.styleSelect}><Select options={styleOptions} value={style} onChange={value=>onStyleChange(value as NewspaperVisualStyle)} maxVisibleItems={4}/></div><div className={s.toolbarActions}><div className={s.zoomControls}><button type="button" onClick={()=>applyZoom(zoom-ZOOM_STEP)} disabled={zoom<=ZOOM_MIN} aria-label="Уменьшить масштаб">−</button><button type="button" className={s.zoomValue} onClick={fitToWindow} title="Вписать газету в окно">{zoom}%</button><button type="button" onClick={()=>applyZoom(zoom+ZOOM_STEP)} disabled={zoom>=ZOOM_MAX} aria-label="Увеличить масштаб">+</button></div><nav className={s.navigation}><button type="button" onClick={onPrevious} disabled={!canGoPrevious} aria-label={previousLabel}>‹</button><button type="button" onClick={onNext} disabled={!canGoNext} aria-label={nextLabel}>›</button><button type="button" onClick={onClose} aria-label={closeLabel}>×</button></nav></div></header>}
-    <div className={`${s.viewport} ${dragging ? s.viewportDragging : ''}`} data-style={style} ref={viewportRef} onPointerDown={startDragging} onPointerMove={moveDragging} onPointerUp={stopDragging} onPointerCancel={stopDragging} onDragStart={event=>event.preventDefault()}><motion.div ref={pageRef} className={s.zoomLayer} style={{zoom:zoom/100} as React.CSSProperties} key={`${issue.id}-${style}`} initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} transition={{duration:.18}}><NewspaperImageViewerProvider onOpen={(src, title) => setViewerImage({ src, title })}><TemplateRenderer issue={issue} style={style}/></NewspaperImageViewerProvider></motion.div></div>
+    <div className={`${s.viewport} ${dragging ? s.viewportDragging : ''}`} data-style={style} ref={viewportRef} onPointerDown={startDragging} onPointerMove={moveDragging} onPointerUp={stopDragging} onPointerCancel={stopDragging} onDragStart={event=>event.preventDefault()}><motion.div ref={pageRef} className={s.zoomLayer} style={{zoom:zoom/100} as React.CSSProperties} key={`${issue.id}-${style}`} initial={style === 'deusEx' ? false : {opacity:0,y:8}} animate={{opacity:1,y:0}} transition={{duration:.18}}><NewspaperImageViewerProvider onOpen={(src, title) => setViewerImage({ src, title })}><TemplateRenderer issue={issue} style={style}/></NewspaperImageViewerProvider></motion.div></div>
+    <AnimatePresence>{pageTransition && <motion.div
+      key="deus-page-transition"
+      className={s.deusPageTransition}
+      data-direction={pageTransition.direction}
+      data-phase={pageTransition.phase}
+      initial={{ scaleX: 0 }}
+      animate={{ scaleX: pageTransition.phase === 'reveal' ? 0 : 1 }}
+      exit={{ opacity: 0 }}
+      style={{ transformOrigin: pageTransition.phase === 'reveal'
+        ? (pageTransition.direction === 'next' ? 'left center' : 'right center')
+        : (pageTransition.direction === 'next' ? 'right center' : 'left center') }}
+      transition={{ duration: pageTransition.phase === 'covered' ? 0 : .34, ease: [0.76, 0, 0.24, 1] }}
+      onAnimationComplete={completePageTransitionStep}
+    ><span>DISPLAY BUFFER // REFRESHING</span></motion.div>}</AnimatePresence>
   </motion.div></motion.div>}
   {viewerImage && <ImageViewerModal key="newspaper-image-viewer" src={viewerImage.src} alt={viewerImage.title} downloadLabel={t('common.download')} closeLabel={t('common.close')} onClose={() => setViewerImage(null)} onDownload={() => void downloadViewerImage()} aboveNewspaper/>}</AnimatePresence>, document.body);
 }

@@ -408,6 +408,48 @@
 .viewportDragging {
   user-select: none;
 }
+.deusPageTransition {
+  position: absolute;
+  z-index: 4;
+  inset: 0;
+  display: grid;
+  overflow: hidden;
+  place-items: center;
+  border-block: 1px solid rgba(210, 172, 57, .5);
+  background:
+    linear-gradient(90deg, rgba(210, 172, 57, .08), transparent 22%, transparent 78%, rgba(210, 172, 57, .08)),
+    repeating-linear-gradient(0deg, rgba(210, 172, 57, .025) 0 1px, transparent 1px 5px),
+    #030403;
+  color: rgba(210, 172, 57, .58);
+  cursor: wait;
+  font: 700 9px/1 Bahnschrift, 'Segoe UI', Arial, sans-serif;
+  letter-spacing: .2em;
+  pointer-events: auto;
+  text-transform: uppercase;
+}
+.deusPageTransition::after {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: #e4bd3f;
+  box-shadow:
+    0 0 6px #e4bd3f,
+    0 0 18px rgba(228, 189, 63, .86),
+    0 0 44px rgba(228, 189, 63, .5);
+  content: '';
+}
+.deusPageTransition[data-direction='previous'][data-phase='cover']::after,
+.deusPageTransition[data-direction='next'][data-phase='reveal']::after {
+  right: 0;
+}
+.deusPageTransition[data-direction='next'][data-phase='cover']::after,
+.deusPageTransition[data-direction='previous'][data-phase='reveal']::after {
+  left: 0;
+}
+.deusPageTransition[data-phase='covered']::after {
+  opacity: 0;
+}
 .zoomLayer {
   width: max-content;
   height: 100%;
