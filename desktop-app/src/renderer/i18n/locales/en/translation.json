@@ -850,6 +850,8 @@
       "stop": "Stop",
       "researcher": "Researcher",
       "editorLog": "Editor JSON and activity log",
+      "downloadRun": "Download log",
+      "downloadIssue": "Download edition JSON",
       "loading": "Loading editions…",
       "issueCount_one": "{{count}} edition",
       "issueCount_other": "{{count}} editions",
@@ -889,7 +891,8 @@
         "start": "Could not start the editor",
         "open": "Could not open the edition",
         "stop": "Could not stop the editor",
-        "stopResearcher": "Could not stop the researcher"
+        "stopResearcher": "Could not stop the researcher",
+        "export": "Could not export the newspaper data"
       }
     },
     "browser": {

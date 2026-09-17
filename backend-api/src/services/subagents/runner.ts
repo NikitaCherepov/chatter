@@ -375,7 +375,54 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
       };
     }
 
-    // Process tool calls
+    // A model may emit several independent subagent delegations in one turn.
+    // Run that batch concurrently, while preserving tool-result order. Other
+    // tools remain sequential because they may be stateful or dependent.
+    const parallelSubagentBatch = toolCalls.length > 1 && toolCalls.every((toolCall: any) => {
+      const toolName = toolCall.function?.name || '';
+      return toolName === 'invoke_subagent' && directToolsMap.has(toolName);
+    });
+    if (parallelSubagentBatch) {
+      const batchResults = await Promise.all(toolCalls.map(async (toolCall: any) => {
+        _throwIfAborted(ctx.signal);
+        const toolName = toolCall.function?.name || '';
+        const argsRaw = toolCall.function?.arguments || '{}';
+        console.log(`[subagent:${resolvedAgentName}][tool_call] ${toolName}(${argsRaw.slice(0, 500)})`);
+        const statusMsg = getToolStatusMessage(ctx.user?.language, resolvedAgentName, toolName);
+        if (ctx.onToolStatus) {
+          try { await ctx.onToolStatus(statusMsg); } catch {}
+        }
+
+        let toolContent: string;
+        try {
+          const parsedArgs = JSON.parse(argsRaw);
+          const ctxForTool = { ...ctx, subagentContext: context };
+          toolContent = await _withAbort(
+            directToolsMap.get(toolName)!.handler(parsedArgs, ctxForTool),
+            ctx.signal,
+          );
+        } catch (err: any) {
+          if (_isAbortError(err)) throw err;
+          console.warn(`[subagent:${resolvedAgentName}] direct tool "${toolName}" error:`, err?.message || err);
+          toolContent = JSON.stringify({ status: 'error', message: err?.message || String(err) });
+        }
+        console.log(`[subagent:${resolvedAgentName}][tool_result] ${toolName} -> ${toolContent.slice(0, 1000)}`);
+        let parsedArgs: any;
+        try { parsedArgs = JSON.parse(argsRaw); } catch { parsedArgs = { _raw: argsRaw }; }
+        return { toolCall, toolName, parsedArgs, toolContent };
+      }));
+
+      for (const { toolCall, toolName, parsedArgs, toolContent } of batchResults) {
+        toolCallsHistory.push({ tool: toolName, args: parsedArgs, result: toolContent });
+        currentIteration.tool_calls.push({ id: toolCall.id, name: toolName, arguments: parsedArgs });
+        currentIteration.results.push({ id: toolCall.id, name: toolName, content: truncateToolResult(toolContent) });
+        messages.push({ role: 'tool', tool_call_id: toolCall.id, content: toolContent });
+      }
+      iterations.push(currentIteration);
+      continue;
+    }
+
+    // Process stateful or dependent tool calls sequentially.
     for (const toolCall of toolCalls) {
       _throwIfAborted(ctx.signal);
 

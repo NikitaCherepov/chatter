@@ -45,6 +45,16 @@ const formatDate = (timestamp: number, locale: string) => new Intl.DateTimeForma
   year: 'numeric',
 }).format(new Date(timestamp * 1000));
 
+const downloadJson = (filename: string, value: unknown) => {
+  const blob = new Blob([JSON.stringify(value, null, 2)], { type: 'application/json;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
+};
+
 export function NewspaperTool() {
   const { t, i18n } = useTranslation();
   const [newspaper, setNewspaper] = useState<Newspaper | null>(null);
@@ -216,6 +226,16 @@ export function NewspaperTool() {
     }
   };
 
+  const downloadIssue = async (summary: NewspaperIssueSummary) => {
+    setError('');
+    try {
+      const response = await getNewspaperIssue(summary.id);
+      downloadJson(`newspaper-issue-${summary.issue_number}.json`, response.issue);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : t('tools.newspapers.errors.export'));
+    }
+  };
+
   const stopRun = async () => {
     if (!run) return;
     try {
@@ -327,7 +347,7 @@ export function NewspaperTool() {
           </div>)}
         </div>}
         {(run.draft != null || run.editor_trace != null || run.agents.length > 0) && <details className={s.json}>
-          <summary>{t('tools.newspapers.editorLog')}</summary>
+          <summary><span>{t('tools.newspapers.editorLog')}</span><button type="button" onClick={event => { event.preventDefault(); event.stopPropagation(); downloadJson(`newspaper-run-${run.id}.json`, run); }}>{t('tools.newspapers.downloadRun')}</button></summary>
           <pre>{JSON.stringify({ draft: run.draft, editor_trace: run.editor_trace, agents: run.agents }, null, 2)}</pre>
         </details>}
       </section>}
@@ -344,6 +364,7 @@ export function NewspaperTool() {
               <div className={s.issueInfo}><strong>{issue.title}</strong><span>{formatDate(issue.published_at, i18n.language)} · {t('tools.newspapers.blockCount', { count: issue.blocks_count })}</span></div>
               <span className={s.openArrow}>↗</span>
             </button>
+            <button type="button" className={s.downloadIssue} onClick={() => downloadIssue(issue)} title={t('tools.newspapers.downloadIssue')}>↓</button>
           </div>)}
         </div> : <div className={s.empty}><div className={s.emptyIcon}>N</div><strong>{t('tools.newspapers.empty')}</strong><span>{t('tools.newspapers.emptyHint')}</span></div>}
       </section>}
