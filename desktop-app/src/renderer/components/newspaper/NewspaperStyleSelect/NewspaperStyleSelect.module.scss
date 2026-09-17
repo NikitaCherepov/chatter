@@ -1,0 +1,179 @@
+.root {
+  --select-accent: #d0a92e;
+  --select-text: #deded8;
+  --select-muted: #777970;
+  --select-bg: #070906;
+  --select-line: rgba(208, 169, 46, .48);
+  position: relative;
+  width: 100%;
+  color: var(--select-text);
+  font-family: Bahnschrift, 'Segoe UI', Arial, sans-serif;
+}
+.root[data-style='massEffect'] {
+  --select-accent: #69e1f2;
+  --select-text: #effdff;
+  --select-muted: #73aeb8;
+  --select-bg: #061721;
+  --select-line: rgba(105, 225, 242, .5);
+}
+.root[data-style='wizarding'] {
+  --select-accent: #6f3f19;
+  --select-text: #26190d;
+  --select-muted: #765c3e;
+  --select-bg: #e3cfa5;
+  --select-line: rgba(67, 39, 17, .46);
+  font-family: Georgia, 'Times New Roman', serif;
+}
+.root[data-style='broadsheet'],
+.root[data-style='editorial'] {
+  --select-accent: #111;
+  --select-text: #111;
+  --select-muted: #5c5c5c;
+  --select-bg: #f7f4ea;
+  --select-line: rgba(17, 17, 17, .52);
+  font-family: Georgia, 'Times New Roman', serif;
+}
+.trigger,
+.option {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.trigger {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 10px 11px;
+  border: 1px solid var(--select-line);
+  background:
+    linear-gradient(100deg, color-mix(in srgb, var(--select-accent) 12%, transparent), transparent 60%),
+    var(--select-bg);
+  clip-path: polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px);
+}
+.signal {
+  color: var(--select-accent);
+  font-size: 7px;
+  font-weight: 900;
+  letter-spacing: .16em;
+}
+.selection {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.selection strong {
+  font-size: 14px;
+  line-height: 1;
+  text-transform: uppercase;
+}
+.selection i {
+  color: var(--select-accent);
+  font-size: 18px;
+  font-style: normal;
+  line-height: 1;
+}
+.trigger small,
+.option small {
+  color: var(--select-muted);
+  font-size: 8px;
+  line-height: 1.25;
+}
+.trigger:hover,
+.trigger:focus-visible {
+  border-color: var(--select-accent);
+  outline: none;
+  filter: brightness(1.12);
+}
+.options {
+  overflow: hidden;
+  border: 1px solid var(--select-line);
+  border-top: 0;
+  background: var(--select-bg);
+}
+.option {
+  display: grid;
+  grid-template-columns: 25px 1fr;
+  gap: 8px;
+  padding: 8px 9px;
+  border-bottom: 1px solid color-mix(in srgb, var(--select-line) 58%, transparent);
+}
+.option:last-child {
+  border-bottom: 0;
+}
+.option > span:last-child {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+.option strong {
+  font-size: 10px;
+  text-transform: uppercase;
+}
+.optionIndex {
+  color: var(--select-accent);
+  font-size: 8px;
+  font-weight: 900;
+}
+.option:hover,
+.option[aria-selected='true'] {
+  background: color-mix(in srgb, var(--select-accent) 13%, transparent);
+}
+.option[aria-selected='true'] {
+  box-shadow: inset 3px 0 var(--select-accent);
+}
+.root[data-style='massEffect'] .trigger,
+.root[data-style='massEffect'] .options {
+  border-left: 3px solid #ff8750;
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 9px), calc(100% - 9px) 100%, 0 100%);
+  box-shadow: 0 0 12px rgba(105, 225, 242, .1);
+}
+.root[data-style='wizarding'] .trigger,
+.root[data-style='wizarding'] .options {
+  border: 1px solid var(--select-line);
+  background:
+    radial-gradient(circle at 15% 20%, rgba(97, 55, 20, .11), transparent 26%),
+    var(--select-bg);
+  clip-path: none;
+  box-shadow: inset 0 0 18px rgba(81, 46, 17, .08);
+}
+.root[data-style='wizarding'] .selection strong,
+.root[data-style='wizarding'] .option strong {
+  text-transform: none;
+}
+.root[data-style='wizarding'] .optionIndex {
+  font-size: 0;
+}
+.root[data-style='wizarding'] .optionIndex::after {
+  font-size: 11px;
+  content: '✦';
+}
+.root[data-style='broadsheet'] .trigger,
+.root[data-style='broadsheet'] .options,
+.root[data-style='editorial'] .trigger,
+.root[data-style='editorial'] .options {
+  border: 2px solid var(--select-accent);
+  background: var(--select-bg);
+  clip-path: none;
+}
+.root[data-style='broadsheet'] .options,
+.root[data-style='editorial'] .options {
+  border-top: 0;
+}
+.root[data-style='broadsheet'] .selection strong,
+.root[data-style='editorial'] .selection strong {
+  font-size: 16px;
+  text-transform: none;
+}
+.root[data-style='broadsheet'] .signal,
+.root[data-style='editorial'] .signal {
+  padding-bottom: 4px;
+  border-bottom: 3px double var(--select-accent);
+  color: var(--select-text);
+}
