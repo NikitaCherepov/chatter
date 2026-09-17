@@ -62,20 +62,20 @@
 .signal span { position: absolute; top: 4px; left: 5px; padding: 2px 3px; background: #d0a92e; color: #090a08; font-size: 7px; font-weight: 900; }
 .signal strong { display: block; padding: 4px 6px; overflow: hidden; color: #c9c9c4; font-size: 8px; line-height: 1.05; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
 
-.priorityGrid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 9px; }
-.priorityMedia { position: relative; grid-column: span 9; min-height: 300px; overflow: hidden; border: 1px solid #76570d; background: #090a08; }
+.priorityGrid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); grid-template-rows: 330px auto auto; gap: 9px; }
+.priorityMedia { position: relative; grid-column: 1 / span 9; grid-row: 1; min-height: 300px; overflow: hidden; border: 1px solid #76570d; background: #090a08; }
 .priorityMedia > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; filter: sepia(1) saturate(1.3) brightness(.62) contrast(1.2); }
 .priorityMedia > div { position: absolute; inset: auto 0 0; padding: 55px 16px 14px; background: linear-gradient(transparent, rgba(0,0,0,.96)); }
 .priorityMedia h2 { max-width: 760px; margin: 4px 0 0; color: #eee; font-size: 28px; line-height: .98; text-transform: uppercase; }
-.sideStack { display: grid; grid-column: span 3; gap: 9px; align-content: stretch; }
+.sideStack { display: grid; grid-column: 10 / -1; grid-row: 1 / -1; gap: 9px; align-content: start; }
 .weather, .systemModule, .sideReport { min-width: 0; padding: 12px; border: 1px solid #76570d; background: #090a08; }
 .weather h2, .sideReport h2 { margin: 5px 0 8px; color: #d0a92e; font-size: 18px; line-height: 1.02; text-transform: uppercase; }
 .weather p, .systemModule p, .sideReport p { font-size: 8px; line-height: 1.35; }
 .systemModule b { display: block; margin-top: 10px; color: #eee; font-size: 16px; }
-.reportBody { grid-column: span 8; padding: 13px 15px; border-top: 2px solid #d0a92e; background: #0b0c09; }
+.reportBody { grid-column: 1 / span 9; grid-row: 2; padding: 13px 15px; border-top: 2px solid #d0a92e; background: #0b0c09; }
 .reportBody h2 { margin: 5px 0 8px; color: #d0a92e; font-size: 21px; text-transform: uppercase; }
 .reportBody p { margin: 0 0 8px; font-size: 10px; line-height: 1.45; }
-.dispatch { grid-column: span 4; padding: 11px 14px; border-top: 2px solid #858680; background: #090a08; }
+.dispatch { grid-column: 1 / span 9; grid-row: 3; padding: 11px 14px; border-top: 2px solid #858680; background: #090a08; }
 .dispatch h2, .extraDispatches h2 { margin: 0 0 6px; color: #d0a92e; font-size: 13px; text-transform: uppercase; }
 .dispatch article, .extraDispatches article { padding: 6px 0; }
 .dispatch article strong, .dispatch article a, .extraDispatches article strong, .extraDispatches article a { color: #d0a92e; font-size: 10px; text-transform: uppercase; }
@@ -106,7 +106,7 @@
 .dispatchWall { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-bottom: 1px solid #76570d; }
 .dispatchWall > article { position: relative; min-height: 84px; padding: 10px 11px 10px 34px; border-right: 1px solid #4d3c0e; border-bottom: 1px solid #4d3c0e; background: #080907; }
 .dispatchWall > article > span { position: absolute; top: 11px; left: 9px; color: #d0a92e; font-size: 8px; font-weight: 900; }
-.dispatchWall h3 { margin: -10px -11px 8px -34px; padding: 6px 9px; border-bottom: 2px solid #d0a92e; color: #eee; font-size: 9px; text-transform: uppercase; }
+.dispatchWall h3 { margin: -10px -11px 8px -34px; padding: 6px 9px 6px 42px; border-bottom: 2px solid #d0a92e; color: #eee; font-size: 9px; text-transform: uppercase; }
 .dispatchWall strong, .dispatchWall a { color: #d0a92e; font-size: 11px; text-transform: uppercase; }
 .dispatchWall p { margin: 4px 0 0; font-size: 8px; line-height: 1.32; }
 
