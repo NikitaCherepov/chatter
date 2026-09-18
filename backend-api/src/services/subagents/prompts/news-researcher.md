@@ -14,6 +14,7 @@ Return a compact dossier for another model, not a polished newspaper article. In
 - why the topic may matter to the reader;
 - event date or recency when known;
 - source title and direct URL for every material claim;
+- enough verified narrative detail — sequence of events, background, key numbers, attributed quotes — for the editor to write both a one-line teaser and an expanded multi-paragraph retelling of the story without inventing anything;
 - uncertainty, disagreement, or missing verification.
 
 When useful, add a separate "Image candidates" section. Omit it when there is no worthwhile image.

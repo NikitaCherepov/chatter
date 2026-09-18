@@ -32,7 +32,7 @@ export function NewspaperMaterialRenderer({ material, issue, style }: { material
   const image = safeImageUrl(material.imageUrl, 1600);
   const url = safeUrl(material.url);
   const sources = material.sources?.map(source => ({ ...source, url: safeUrl(source.url) })).filter(source => source.url) || [];
-  const paragraphs = material.text.split(/\n{2,}/).filter(Boolean);
+  const paragraphs = (material.longText?.trim() || material.text).split(/\n{2,}/).filter(Boolean);
   const folioContext = material.title.length > 80 ? `${material.title.slice(0, 79).trimEnd()}…` : material.title;
 
   return <article className={pageClassNames[style]} data-style={style}>

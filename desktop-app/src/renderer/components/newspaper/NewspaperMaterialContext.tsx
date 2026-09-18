@@ -6,6 +6,7 @@ export type NewspaperMaterial = {
   kind: 'article' | 'note';
   title: string;
   text: string;
+  longText?: string;
   url?: string;
   imageUrl?: string;
   sources?: ArticleBlockData['sources'];
@@ -19,6 +20,7 @@ export const articleMaterial = (article: ArticleBlockData): NewspaperMaterial =>
   kind: 'article',
   title: article.title,
   text: article.text,
+  longText: article.long_text,
   url: article.url,
   imageUrl: article.image_url,
   sources: article.sources,
@@ -29,8 +31,10 @@ export const noteMaterial = (note: NewspaperNote | NoteBlockData, fallbackId: st
   kind: 'note',
   title: note.title || 'Короткая заметка',
   text: note.text || '',
+  longText: note.long_text,
   url: note.url,
   imageUrl: note.image_url,
+  sources: note.sources,
 });
 
 export function NewspaperMaterialProvider({ onOpen, children }: { onOpen: OpenMaterial; children: ReactNode }) {

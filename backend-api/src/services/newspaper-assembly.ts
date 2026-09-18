@@ -69,9 +69,9 @@ const describeBlockProblem = (code: string): string => {
 };
 
 const blockShapeDescription = `Block shapes (exactly five types; "hero" is an article role, never a type):
-- article: { "id": "unique string", "type": "article", "role": "hero | feature | standard", "title": "string", "text": "string", "url": "optional direct URL", "image_url": "optional exact image URL", "sources": [{ "title": "string", "url": "direct URL" }] }
-- note: { "id": "unique string", "type": "note", "title": "optional string", "text": "optional string", "url": "optional direct URL", "image_url": "optional exact image URL" }
-- notes_list: { "id": "unique string", "type": "notes_list", "title": "optional string", "items": [{ "id": "optional string", "title": "optional string", "text": "optional string", "url": "optional direct URL", "image_url": "optional exact image URL" }] }
+- article: { "id": "unique string", "type": "article", "role": "hero | feature | standard", "title": "string", "text": "string", "long_text": "optional expanded reader version shown when the item is opened individually", "url": "optional direct URL", "image_url": "optional exact image URL", "sources": [{ "title": "string", "url": "direct URL" }] }
+- note: { "id": "unique string", "type": "note", "title": "optional string", "text": "optional string", "long_text": "optional expanded reader version", "url": "optional direct URL", "image_url": "optional exact image URL", "sources": [{ "title": "string", "url": "direct URL" }] }
+- notes_list: { "id": "unique string", "type": "notes_list", "title": "optional string", "items": [{ "id": "optional string", "title": "optional string", "text": "optional string", "long_text": "optional expanded reader version", "url": "optional direct URL", "image_url": "optional exact image URL", "sources": [{ "title": "string", "url": "direct URL" }] }] }
 - weather: { "id": "unique string", "type": "weather", "title": "optional string", "location": "string", "condition": "string", "details": "optional string", "periods": [{ "label": "string", "temperature": 0, "condition": "optional string" }] }
 - image: { "id": "unique string", "type": "image", "title": "string", "image_url": "optional URL", "caption": "optional string", "prompt": "optional string" }`;
 

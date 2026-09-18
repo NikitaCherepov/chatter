@@ -22,9 +22,9 @@ type NewspaperBlockBase = {
 };
 
 export type NewspaperBlock =
-  | (NewspaperBlockBase & { type: 'article'; role: 'hero' | 'feature' | 'standard'; title: string; text: string; url?: string; image_url?: string; sources?: NewspaperSource[] })
-  | (NewspaperBlockBase & { type: 'note'; text?: string; url?: string; image_url?: string })
-  | (NewspaperBlockBase & { type: 'notes_list'; items: Array<{ id?: string; title?: string; text?: string; url?: string; image_url?: string }> })
+  | (NewspaperBlockBase & { type: 'article'; role: 'hero' | 'feature' | 'standard'; title: string; text: string; long_text?: string; url?: string; image_url?: string; sources?: NewspaperSource[] })
+  | (NewspaperBlockBase & { type: 'note'; text?: string; long_text?: string; url?: string; image_url?: string; sources?: NewspaperSource[] })
+  | (NewspaperBlockBase & { type: 'notes_list'; items: Array<{ id?: string; title?: string; text?: string; long_text?: string; url?: string; image_url?: string; sources?: NewspaperSource[] }> })
   | (NewspaperBlockBase & { type: 'weather'; location: string; condition: string; details?: string; periods: Array<{ label: string; temperature: number; condition?: string }> })
   | (NewspaperBlockBase & { type: 'image'; title: string; image_url?: string; caption?: string; prompt?: string });
 

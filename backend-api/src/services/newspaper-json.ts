@@ -99,7 +99,7 @@ const repairSystemPrompt = `You are a JSON repair specialist inside a personal n
 The newspaper editor produced output that is either syntactically invalid JSON or violates the newspaper schema.
 
 Fix ONLY the reported problems. Do not rewrite, translate, summarize, condense, add, remove, or reorder content.
-Keep every block, id, title, text, url, image_url, source, and the block order exactly as provided.
+Keep every block, id, title, text, long_text, url, image_url, source, and the block order exactly as provided.
 Only change what the reported problems require, for example: closing truncated JSON, fixing commas and quotes, correcting a block "type", filling a required field from the block's own content, or making ids unique.
 
 Required document contract:
@@ -109,9 +109,9 @@ Required document contract:
   "subtitle": "optional string",
   "date": "string",
   "blocks": [
-    { "id": "unique string", "type": "article", "role": "hero | feature | standard", "title": "string", "text": "string", "url": "optional URL", "image_url": "optional URL", "sources": [{ "title": "string", "url": "URL" }] },
-    { "id": "unique string", "type": "note", "title": "optional string", "text": "optional string", "url": "optional URL", "image_url": "optional URL" },
-    { "id": "unique string", "type": "notes_list", "title": "optional string", "items": [{ "id": "optional string", "title": "optional string", "text": "optional string", "url": "optional URL", "image_url": "optional URL" }] },
+    { "id": "unique string", "type": "article", "role": "hero | feature | standard", "title": "string", "text": "string", "long_text": "optional string", "url": "optional URL", "image_url": "optional URL", "sources": [{ "title": "string", "url": "URL" }] },
+    { "id": "unique string", "type": "note", "title": "optional string", "text": "optional string", "long_text": "optional string", "url": "optional URL", "image_url": "optional URL", "sources": [{ "title": "string", "url": "URL" }] },
+    { "id": "unique string", "type": "notes_list", "title": "optional string", "items": [{ "id": "optional string", "title": "optional string", "text": "optional string", "long_text": "optional string", "url": "optional URL", "image_url": "optional URL", "sources": [{ "title": "string", "url": "URL" }] }] },
     { "id": "unique string", "type": "weather", "title": "optional string", "location": "string", "condition": "string", "details": "optional string", "periods": [{ "label": "string", "temperature": 0, "condition": "optional string" }] },
     { "id": "unique string", "type": "image", "title": "string", "image_url": "optional URL", "caption": "optional string", "prompt": "optional string" }
   ]

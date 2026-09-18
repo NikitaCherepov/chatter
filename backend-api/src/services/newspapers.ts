@@ -10,6 +10,7 @@ import type {
   NewspaperIssueSummaryDto,
   NewspaperRunDto,
   NewspaperRunStatus,
+  NewspaperSource,
   NewspaperDeliveryFrequency,
   NewspaperStyle,
   NewspaperVolume,
@@ -47,6 +48,17 @@ const optionalUrl = (value: unknown): string | undefined => {
   } catch {
     return undefined;
   }
+};
+/** Shared source-list parsing for articles, notes, and notes_list items. */
+const optionalSources = (value: unknown): NewspaperSource[] | undefined => {
+  if (!Array.isArray(value)) return undefined;
+  const sources = value.slice(0, 20).flatMap((item: unknown) => {
+    if (!isRecord(item)) return [];
+    const sourceTitle = cleanText(item.title, 500);
+    const url = optionalUrl(item.url);
+    return sourceTitle && url ? [{ title: sourceTitle, url }] : [];
+  });
+  return sources.length ? sources : undefined;
 };
 const optionalImageUrl = (value: unknown): string | undefined => {
   const text = cleanText(value, 4_000);
@@ -86,38 +98,37 @@ export const validateNewspaperBlock = (source: unknown, index: number, ids: Set<
     const title = titleValue || '';
     const text = cleanText(source.text);
     if (!title || !text || !ARTICLE_ROLES.has(source.role)) throw new Error(`invalid_article_${index}`);
-    const sources = Array.isArray(source.sources)
-      ? source.sources.slice(0, 20).flatMap((item: unknown) => {
-          if (!isRecord(item)) return [];
-          const sourceTitle = cleanText(item.title, 500);
-          const url = optionalUrl(item.url);
-          return sourceTitle && url ? [{ title: sourceTitle, url }] : [];
-        })
-      : undefined;
+    const longText = optionalText(source.long_text);
+    const sources = optionalSources(source.sources);
     return {
       id,
       type: 'article' as const,
       role: source.role as 'hero' | 'feature' | 'standard',
       title,
       text,
+      ...(longText ? { long_text: longText } : {}),
       ...(optionalUrl(source.url) ? { url: optionalUrl(source.url) } : {}),
       ...(optionalImageUrl(source.image_url) ? { image_url: optionalImageUrl(source.image_url) } : {}),
-      ...(sources?.length ? { sources } : {}),
+      ...(sources ? { sources } : {}),
     };
   }
 
   if (source.type === 'note') {
     const text = optionalText(source.text);
+    const longText = optionalText(source.long_text);
     const url = optionalUrl(source.url);
     const imageUrl = optionalImageUrl(source.image_url);
+    const sources = optionalSources(source.sources);
     if (!titleValue && !text && !url && !imageUrl) throw new Error(`invalid_note_${index}`);
     return {
       id,
       type: 'note' as const,
       ...(titleValue ? { title: titleValue } : {}),
       ...(text ? { text } : {}),
+      ...(longText ? { long_text: longText } : {}),
       ...(url ? { url } : {}),
       ...(imageUrl ? { image_url: imageUrl } : {}),
+      ...(sources ? { sources } : {}),
     };
   }
 
@@ -129,15 +140,19 @@ export const validateNewspaperBlock = (source: unknown, index: number, ids: Set<
       if (!isRecord(item)) throw new Error(`invalid_note_item_${index}_${itemIndex}`);
       const itemTitle = optionalText(item.title, 500);
       const text = optionalText(item.text);
+      const longText = optionalText(item.long_text);
       const url = optionalUrl(item.url);
       const imageUrl = optionalImageUrl(item.image_url);
+      const sources = optionalSources(item.sources);
       if (!itemTitle && !text && !url && !imageUrl) throw new Error(`invalid_note_item_${index}_${itemIndex}`);
       return {
         ...(optionalText(item.id, 120) ? { id: optionalText(item.id, 120) } : {}),
         ...(itemTitle ? { title: itemTitle } : {}),
         ...(text ? { text } : {}),
+        ...(longText ? { long_text: longText } : {}),
         ...(url ? { url } : {}),
         ...(imageUrl ? { image_url: imageUrl } : {}),
+        ...(sources ? { sources } : {}),
       };
     });
     return { id, type: 'notes_list' as const, ...(titleValue ? { title: titleValue } : {}), items };

@@ -1972,11 +1972,11 @@ export type NewspaperRunStatus = 'queued' | 'running' | 'ready' | 'failed' | 'ca
 export type NewspaperAgentRunStatus = 'queued' | 'running' | 'ready' | 'failed' | 'cancelled';
 
 export type NewspaperSource = { title: string; url: string };
-export type NewspaperNote = { id?: string; title?: string; text?: string; url?: string; image_url?: string };
+export type NewspaperNote = { id?: string; title?: string; text?: string; long_text?: string; url?: string; image_url?: string; sources?: NewspaperSource[] };
 type NewspaperBlockBase = { id: string; title?: string };
 export type NewspaperBlock =
-  | (NewspaperBlockBase & { type: 'article'; role: 'hero' | 'feature' | 'standard'; title: string; text: string; url?: string; image_url?: string; sources?: NewspaperSource[] })
-  | (NewspaperBlockBase & { type: 'note'; text?: string; url?: string; image_url?: string })
+  | (NewspaperBlockBase & { type: 'article'; role: 'hero' | 'feature' | 'standard'; title: string; text: string; long_text?: string; url?: string; image_url?: string; sources?: NewspaperSource[] })
+  | (NewspaperBlockBase & { type: 'note'; text?: string; long_text?: string; url?: string; image_url?: string; sources?: NewspaperSource[] })
   | (NewspaperBlockBase & { type: 'notes_list'; items: NewspaperNote[] })
   | (NewspaperBlockBase & { type: 'weather'; location: string; condition: string; details?: string; periods: Array<{ label: string; temperature: number; condition?: string }> })
   | (NewspaperBlockBase & { type: 'image'; title: string; image_url?: string; caption?: string; prompt?: string });
