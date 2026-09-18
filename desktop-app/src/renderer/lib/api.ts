@@ -2091,8 +2091,12 @@ export type NewspaperChatContext = {
   issue_id: number;
   page: number;
   page_count: number;
+  /** Stable renderer-side identity of the exact paginated page. */
+  page_id?: string;
   /** Page view: ids of blocks visible on the current page. */
   block_ids?: string[];
+  /** Visible notes_list item ids, keyed by the source block id. */
+  block_item_ids?: Record<string, string[]>;
   /** Material view: the article/note (or notes_list item) the reader opened. */
   block_id?: string;
   block_kind?: string;

@@ -28,8 +28,12 @@ export type NewspaperChatView = {
   issueId: number;
   page: number;
   pageCount: number;
+  /** Stable id produced by the renderer for this exact paginated page. */
+  pageId?: string;
   /** Page view: ids of blocks visible on the current page (as split by the reader). */
   blockIds?: string[];
+  /** Visible notes_list item ids, keyed by canonical source block id. */
+  blockItemIds?: Record<string, string[]>;
   /** Material view: id of the block (or notes_list item) the reader opened. */
   blockId?: string;
   blockKind?: string;
@@ -44,13 +48,25 @@ export const parseNewspaperChatView = (raw: unknown): { ok: true; view: Newspape
   const issueId = Number(record.issue_id);
   if (!Number.isSafeInteger(issueId) || issueId <= 0) return { ok: false, error: 'bad_newspaper_context' };
   const blockId = typeof record.block_id === 'string' && record.block_id.trim() ? record.block_id.trim() : undefined;
+  const rawBlockItemIds = record.block_item_ids;
+  const blockItemIds = !blockId && rawBlockItemIds && typeof rawBlockItemIds === 'object' && !Array.isArray(rawBlockItemIds)
+    ? Object.fromEntries(Object.entries(rawBlockItemIds as Record<string, unknown>)
+        .slice(0, 100)
+        .map(([key, value]) => [
+          `${key}`.slice(0, 160),
+          Array.isArray(value) ? value.map(id => `${id}`).filter(Boolean).slice(0, 100) : [],
+        ])
+        .filter(([key]) => Boolean(key)))
+    : undefined;
   const view: NewspaperChatView = {
     issueId,
     page: Number.isSafeInteger(Number(record.page)) && Number(record.page) > 0 ? Number(record.page) : 1,
     pageCount: Number.isSafeInteger(Number(record.page_count)) && Number(record.page_count) > 0 ? Number(record.page_count) : 0,
+    pageId: typeof record.page_id === 'string' && record.page_id.trim() ? record.page_id.trim() : undefined,
     blockIds: !blockId && Array.isArray(record.block_ids)
       ? (record.block_ids as unknown[]).map(id => `${id}`).filter(Boolean).slice(0, 100)
       : undefined,
+    blockItemIds,
     blockId,
     blockKind: typeof record.block_kind === 'string' && record.block_kind.trim() ? record.block_kind.trim() : undefined,
   };
@@ -143,15 +159,23 @@ export const injectNewspaperContext = async (userId: number, chatId: number, vie
   const page = Number.isSafeInteger(view.page) && view.page > 0 ? view.page : 1;
   const pageCount = Number.isSafeInteger(view.pageCount) && view.pageCount > 0 ? view.pageCount : 0;
   const issue = getNewspaperIssue(userId, view.issueId);
-  if (!issue) return; // stale/deleted issue — nothing meaningful to record
+  if (!issue) {
+    // stale/deleted issue — nothing meaningful to record. Loud on purpose:
+    // this is the "injection silently did nothing" case.
+    console.warn(`[newspaper-chat] user=${userId} chat=${chatId} issue=${view.issueId} NOT FOUND — no context recorded`);
+    return;
+  }
 
   const isItemView = Boolean(view.blockId);
   const viewId = isItemView
     ? `issue-${issue.id}:${sanitizeViewToken(view.blockKind || 'item')}-${sanitizeViewToken(view.blockId || '')}`
-    : `issue-${issue.id}:page-${page}`;
+    : sanitizeViewToken(view.pageId || '') || `issue-${issue.id}:page-${page}`;
 
   await appendChatMessage(userId, chatId, 'user', buildActiveViewText(isItemView ? 'newspaper_item' : 'newspaper_page', issue.id, viewId));
-  if (hasContextRowFor(chatId, viewId)) return;
+  if (hasContextRowFor(chatId, viewId)) {
+    console.log(`[newspaper-chat] user=${userId} chat=${chatId} view=${viewId} marker written, full row deduped`);
+    return;
+  }
 
   const newspaperName = newspaperNameFor(userId, issue.newspaper_id);
   const issueHeader = (position: string) =>
@@ -177,17 +201,31 @@ export const injectNewspaperContext = async (userId: number, chatId: number, vie
       '[/NEWSPAPER CONTEXT]',
     );
     await appendChatMessage(userId, chatId, 'user', lines.join('\n'));
+    console.log(`[newspaper-chat] user=${userId} chat=${chatId} view=${viewId} material context row written`);
     return;
   }
 
   const blockIds = new Set((view.blockIds || []).map(id => `${id}`));
+  const hasExplicitBlockScope = Array.isArray(view.blockIds);
   const lines = [
     `[NEWSPAPER CONTEXT view_id="${viewId}"]`,
     issueHeader(pageCount > 0 ? `, currently viewing page ${page} of ${pageCount}` : ', currently viewing the issue'),
     'Items visible on this page (ids can be passed to the read_newspaper_item tool for full text and sources):',
   ];
   for (const block of issue.document.blocks) {
-    if (blockIds.size > 0 && !blockIds.has(block.id)) continue;
+    if (hasExplicitBlockScope && !blockIds.has(block.id)) continue;
+    if (block.type === 'notes_list' && view.blockItemIds && Object.hasOwn(view.blockItemIds, block.id)) {
+      const visibleItemIds = new Set(view.blockItemIds[block.id]);
+      const visibleItems = block.items.filter((item, index) =>
+        visibleItemIds.has(newspaperItemId(block.id, item, index)));
+      if (visibleItems.length === 0) continue;
+      lines.push(`- [notes_list ${block.id}] "${block.title || 'Brief notes'}":`);
+      lines.push(...visibleItems.map((item, index) => {
+        const originalIndex = block.items.indexOf(item);
+        return `-   [note ${newspaperItemId(block.id, item, originalIndex >= 0 ? originalIndex : index)}] "${item.title || 'Note'}" — ${firstTeaser(item.text)}`;
+      }));
+      continue;
+    }
     lines.push(...describeNewspaperBlockLines(block).map(line => `- ${line}`));
   }
   lines.push(
@@ -196,6 +234,7 @@ export const injectNewspaperContext = async (userId: number, chatId: number, vie
     '[/NEWSPAPER CONTEXT]',
   );
   await appendChatMessage(userId, chatId, 'user', lines.join('\n'));
+  console.log(`[newspaper-chat] user=${userId} chat=${chatId} view=${viewId} page context row written`);
 };
 
 /** The issue the reader currently has open — the most recent [ACTIVE_VIEW]

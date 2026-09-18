@@ -384,6 +384,7 @@ export function NewspaperTool() {
 
     <NewspaperReader
       issue={selectedIssue ? pages[pageIndex] || null : null}
+      sourceIssueId={selectedIssue?.id ?? null}
       style={style}
       pageNumber={pageIndex + 1}
       pageCount={pages.length}

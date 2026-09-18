@@ -27,7 +27,7 @@ export const articleMaterial = (article: ArticleBlockData): NewspaperMaterial =>
 });
 
 export const noteMaterial = (note: NewspaperNote | NoteBlockData, fallbackId: string): NewspaperMaterial => ({
-  id: note.id || fallbackId,
+  id: (note as NewspaperNote & { source_id?: string }).source_id || note.id || fallbackId,
   kind: 'note',
   title: note.title || 'Короткая заметка',
   text: note.text || '',

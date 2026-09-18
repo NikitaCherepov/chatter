@@ -74,6 +74,7 @@ type ReaderMessage = { id: string; role: 'assistant' | 'user'; text: string };
 
 type Props = {
   issue: NewspaperIssue | null;
+  sourceIssueId: number | null;
   style: NewspaperVisualStyle;
   pageNumber: number;
   pageCount: number;
@@ -95,7 +96,7 @@ const styleOptions: NewspaperStyleOption[] = [
   { value: 'massEffect', label: 'Mass Effect', hint: 'ANN: циан, оранжевый и HUD' },
 ];
 
-export function NewspaperReader({ issue, style, pageNumber, pageCount, canGoPrevious, canGoNext, onPrevious, onNext, onClose, onStyleChange, previousLabel, nextLabel, closeLabel }: Props) {
+export function NewspaperReader({ issue, sourceIssueId, style, pageNumber, pageCount, canGoPrevious, canGoNext, onPrevious, onNext, onClose, onStyleChange, previousLabel, nextLabel, closeLabel }: Props) {
   const { t } = useTranslation();
   const viewportRef = useRef<HTMLDivElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -604,11 +605,32 @@ export function NewspaperReader({ issue, style, pageNumber, pageCount, canGoPrev
   const sendReaderMessage = async (event: React.FormEvent) => {
     event.preventDefault();
     const text = chatDraft.trim();
-    if (!text || !issue || chatBusy || readerChatId === null) return;
+    if (!text || !issue || sourceIssueId === null || chatBusy || readerChatId === null) return;
     // Send-time reading context: the opened material, or the current page.
+    const page = issue as NewspaperIssue & { page_id?: string };
+    const visibleBlocks = issue.document.blocks.map(block => ({
+      block,
+      sourceId: (block as typeof block & { source_id?: string }).source_id || block.id,
+    }));
+    const blockItemIds = Object.fromEntries(visibleBlocks
+      .filter(({ block }) => block.type === 'notes_list')
+      .map(({ block, sourceId }) => [
+        sourceId,
+        block.type === 'notes_list'
+          ? block.items.map((item, index) =>
+              (item as typeof item & { source_id?: string }).source_id || item.id || `${sourceId}-${index}`)
+          : [],
+      ]));
     const newspaperContext: NewspaperChatContext = material
-      ? { issue_id: issue.id, page: pageNumber, page_count: pageCount, block_id: material.id, block_kind: material.kind }
-      : { issue_id: issue.id, page: pageNumber, page_count: pageCount, block_ids: issue.document.blocks.map(block => block.id) };
+      ? { issue_id: sourceIssueId, page: pageNumber, page_count: pageCount, page_id: page.page_id, block_id: material.id, block_kind: material.kind }
+      : {
+          issue_id: sourceIssueId,
+          page: pageNumber,
+          page_count: pageCount,
+          page_id: page.page_id,
+          block_ids: visibleBlocks.map(({ sourceId }) => sourceId),
+          block_item_ids: blockItemIds,
+        };
     setChatMessages(current => [...current, { id: `user-${Date.now()}`, role: 'user', text }]);
     setChatDraft('');
     setChatBusy(true);

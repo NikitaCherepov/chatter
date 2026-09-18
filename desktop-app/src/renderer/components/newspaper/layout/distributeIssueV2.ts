@@ -1,5 +1,15 @@
 import type { NewspaperBlock, NewspaperIssue, NewspaperNote } from '../types';
 
+type PaginatedNote = NewspaperNote & { source_id?: string };
+type PaginatedBlock = NewspaperBlock & { source_id?: string; page_id?: string };
+type PaginatedIssue = NewspaperIssue & { source_issue_id?: number; page_id?: string };
+
+const sourceBlockId = (block: NewspaperBlock): string =>
+  (block as PaginatedBlock).source_id || block.id;
+
+const sourceNoteId = (blockId: string, note: NewspaperNote, index: number): string =>
+  (note as PaginatedNote).source_id || note.id || `${blockId}-${index}`;
+
 export type PageContentLimits = {
   blocks: number;
   mainHeaders: number;
@@ -63,9 +73,12 @@ function isWithinLimits(stats: PageStats, limits: PageContentLimits) {
 }
 
 function createPage(issue: NewspaperIssue, blocks: NewspaperBlock[], index: number): NewspaperIssue {
+  const pageNumber = index + 1;
   return {
     ...issue,
     id: issue.id * 100 - index,
+    source_issue_id: issue.id,
+    page_id: `issue-${issue.id}-page-${pageNumber}`,
     subtitle: index === 0 ? issue.subtitle : `${issue.subtitle} · Продолжение`,
     blocks_count: blocks.length,
     document: {
@@ -73,9 +86,13 @@ function createPage(issue: NewspaperIssue, blocks: NewspaperBlock[], index: numb
       subtitle: index === 0
         ? issue.document.subtitle
         : `${issue.document.subtitle || issue.subtitle} · Страница ${index + 1}`,
-      blocks,
+      blocks: blocks.map(block => ({
+        ...block,
+        source_id: sourceBlockId(block),
+        page_id: `${sourceBlockId(block)}-page-${pageNumber}`,
+      })),
     },
-  };
+  } as PaginatedIssue;
 }
 
 function continuedList(
@@ -87,10 +104,11 @@ function continuedList(
     : `${block.title || 'Новости'} · Продолжение`;
   return {
     ...block,
-    id: `${block.id}-continuation`,
+    id: sourceBlockId(block),
+    source_id: sourceBlockId(block),
     title: continuedTitle,
     items,
-  };
+  } as PaginatedBlock;
 }
 
 type PageFill = {
@@ -170,7 +188,18 @@ function chooseFill(pending: readonly NewspaperBlock[], recipes: readonly IssueP
  */
 export function distributeIssueV2(issue: NewspaperIssue, rules: IssuePaginationRules): NewspaperIssue[] {
   const pages: NewspaperBlock[][] = [];
-  let pending = issue.document.blocks.map(block => ({ ...block }));
+  let pending = issue.document.blocks.map(block => {
+    const source_id = block.id;
+    if (block.type !== 'notes_list') return { ...block, source_id } as PaginatedBlock;
+    return {
+      ...block,
+      source_id,
+      items: block.items.map((item, index) => ({
+        ...item,
+        source_id: sourceNoteId(source_id, item, index),
+      })),
+    } as PaginatedBlock;
+  });
 
   while (pending.length > 0) {
     const { page, deferred } = chooseFill(pending, rules.recipes);
