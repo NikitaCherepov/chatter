@@ -12,13 +12,17 @@ function ArticleTitle({ article }: { article: ArticleBlockData }) {
   return <h2><button type="button" className={s.materialOpenTitle} onClick={() => openMaterial?.(articleMaterial(article))}>{article.title}</button></h2>;
 }
 
+export function WizardingHead({ issue }: Pick<NewspaperTemplateProps, 'issue'>) {
+  return <header className={s.wizardHead}><div className={s.wizardMicro}>OWL POST · CELESTIAL FORECAST · ENCHANTED EDITION</div><h1><span>The</span> Chatter Prophet</h1><div className={s.wizardRule}><b>EXCLUSIVE</b><span>{issue.document.date}</span><b>№ {issue.issue_number}</b></div></header>;
+}
+
 export function WizardingTemplate({ issue }: NewspaperTemplateProps) {
   const layout = composeWizardingPage(issue.document.blocks, issue.id);
   const isNotesPage = layout.recipe === 'notes-page-grid' || layout.recipe === 'notes-page-columns';
   const isImagePage = layout.recipe === 'image-page';
 
   return <article className={`${s.page} ${s.wizarding}`}>
-    <header className={s.wizardHead}><div className={s.wizardMicro}>OWL POST · CELESTIAL FORECAST · ENCHANTED EDITION</div><h1><span>The</span> Chatter Prophet</h1><div className={s.wizardRule}><b>EXCLUSIVE</b><span>{issue.document.date}</span><b>№ {issue.issue_number}</b></div></header>
+    <WizardingHead issue={issue}/>
     {layout.hero ? <section className={`${s.wizardLead} ${t.lead}`} data-recipe={layout.recipe}>
       {layout.leftRail && <WizardingRailBlock block={layout.leftRail}/>}
       <main className={s.wizardMain}><div className={s.wizardStamp}>ЭКСКЛЮЗИВ</div><ArticleTitle article={layout.hero}/><ArticleImage article={layout.hero}/><p>{layout.hero.text}</p><SourcesBlock sources={layout.hero.sources}/></main>

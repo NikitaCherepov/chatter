@@ -22,7 +22,7 @@ function InteractiveArticleTitle({ article }: { article: ArticleBlockData }) {
   return <h2><button type="button" className={s.materialOpenTitle} onClick={() => openMaterial?.(articleMaterial(article))}>{article.title}</button></h2>;
 }
 
-function Masthead({ issue }: Pick<NewspaperTemplateProps, 'issue'>) {
+export function Masthead({ issue }: Pick<NewspaperTemplateProps, 'issue'>) {
   return <header className={t.masthead}>
     <div className={t.mastheadRow}>
       <div className={t.ear}><small>Основана в 2026 году</small><strong>Факты<br/>прежде шума</strong></div>
@@ -31,6 +31,10 @@ function Masthead({ issue }: Pick<NewspaperTemplateProps, 'issue'>) {
     </div>
     <div className={t.dateline}><span>VOL. I · NO. {issue.issue_number}</span><span>{issue.document.date}</span><span>TOMSK · OPEN ACCESS</span></div>
   </header>;
+}
+
+export function BroadsheetFolio({ issue }: Pick<NewspaperTemplateProps, 'issue'>) {
+  return <footer className={t.folio}><span>The Chatter Times</span><span>{issue.document.subtitle}</span><span>{String(Math.abs(issue.id) % 100 + 1).padStart(2, '0')}</span></footer>;
 }
 
 function BriefsSection({ list, className = '' }: { list: NotesListBlockData; className?: string }) {
@@ -129,6 +133,6 @@ export function BroadsheetTemplate({ issue }: NewspaperTemplateProps) {
     {layout.recipe === 'section-page' && <SectionPage layout={layout}/>}
     {layout.recipe === 'briefs-page' && <BriefsPage layout={layout}/>}
     {layout.recipe === 'photo-page' && <PhotoPage layout={layout}/>}
-    <footer className={t.folio}><span>The Chatter Times</span><span>{issue.document.subtitle}</span><span>{String(Math.abs(issue.id) % 100 + 1).padStart(2, '0')}</span></footer>
+    <BroadsheetFolio issue={issue}/>
   </article>;
 }

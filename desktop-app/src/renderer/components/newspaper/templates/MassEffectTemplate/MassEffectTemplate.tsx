@@ -44,12 +44,7 @@ function ArticlePanel({ article, as: Tag = 'div', className, children }: {
   >{children}</Tag>;
 }
 
-function AnnHeader({ issue, layout }: { issue: NewspaperTemplateProps['issue']; layout: Layout }) {
-  const reports =
-    (layout.hero ? 1 : 0) +
-    layout.articles.length +
-    layout.noteLists.reduce((sum, list) => sum + list.items.length, 0) +
-    layout.notes.length;
+export function AnnHeader({ issue, reports }: { issue: NewspaperTemplateProps['issue']; reports: number }) {
   return (
     <>
       <header className={t.head}>
@@ -72,6 +67,16 @@ function AnnHeader({ issue, layout }: { issue: NewspaperTemplateProps['issue']; 
         <span>SECTOR 47-K // LIVE</span>
       </div>
     </>
+  );
+}
+
+export function MassEffectFooter({ issue }: Pick<NewspaperTemplateProps, 'issue'>) {
+  return (
+    <footer className={t.footer}>
+      <span>ALLIANCE NEWS NETWORK</span>
+      <span>{issue.document.subtitle}</span>
+      <span>ANN-{String(Math.abs(issue.id) % 1000).padStart(3, '0')}</span>
+    </footer>
   );
 }
 
@@ -307,18 +312,19 @@ function VisualRelay({ layout }: { layout: Layout }) {
 
 export function MassEffectTemplate({ issue }: NewspaperTemplateProps) {
   const layout = composeMassEffectPage(issue.document.blocks);
+  const reports =
+    (layout.hero ? 1 : 0) +
+    layout.articles.length +
+    layout.noteLists.reduce((sum, list) => sum + list.items.length, 0) +
+    layout.notes.length;
   return (
     <article className={`${s.page} ${t.page}`} data-recipe={layout.recipe}>
-      <AnnHeader issue={issue} layout={layout} />
+      <AnnHeader issue={issue} reports={reports} />
       {layout.recipe === 'priority-broadcast' && <PriorityBroadcast layout={layout} />}{' '}
       {layout.recipe === 'operations-grid' && <OperationsGrid layout={layout} />}{' '}
       {layout.recipe === 'briefing-stream' && <BriefingStream layout={layout} />}{' '}
       {layout.recipe === 'visual-relay' && <VisualRelay layout={layout} />}
-      <footer className={t.footer}>
-        <span>ALLIANCE NEWS NETWORK</span>
-        <span>{issue.document.subtitle}</span>
-        <span>ANN-{String(Math.abs(issue.id) % 1000).padStart(3, '0')}</span>
-      </footer>
+      <MassEffectFooter issue={issue} />
     </article>
   );
 }

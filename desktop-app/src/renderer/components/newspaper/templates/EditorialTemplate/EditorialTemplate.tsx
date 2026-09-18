@@ -9,10 +9,14 @@ import { articleMaterial, useNewspaperMaterialViewer } from '../../NewspaperMate
 import type { NewspaperTemplateProps } from '../../types';
 import s from '../../Newspaper.module.scss';
 
+export function EditorialHead({ issue }: Pick<NewspaperTemplateProps, 'issue'>) {
+  return <header className={s.editorialHead}><div/><h1>{issue.document.title}</h1><p><span>{issue.document.subtitle}</span><span>{issue.document.date}</span></p></header>;
+}
+
 export function EditorialTemplate({ issue, content }: NewspaperTemplateProps) {
   const openMaterial = useNewspaperMaterialViewer();
   const { hero, weather, noteLists, notes, articles, images } = content;
-  return <article className={`${s.page} ${s.editorial}`}><header className={s.editorialHead}><div/><h1>{issue.document.title}</h1><p><span>{issue.document.subtitle}</span><span>{issue.document.date}</span></p></header><div className={s.editorialGrid}>
+  return <article className={`${s.page} ${s.editorial}`}><EditorialHead issue={issue}/><div className={s.editorialGrid}>
     <aside className={s.editorialWeather}><b>{weather?.location}</b><h2>{weather?.condition}</h2><WeatherForecast weather={weather}/><p>{weather?.details}</p></aside>
     <main className={s.editorialLead}><ArticleImage article={hero}/><h2>{hero && <button type="button" className={s.materialOpenTitle} onClick={() => openMaterial?.(articleMaterial(hero))}>{hero.title}</button>}</h2><p>{hero?.text}</p><SourcesBlock sources={hero?.sources}/></main>
     <section className={s.editorialNews}>{noteLists.map(list => <section key={list.id}>{list.title && <h2>{list.title}</h2>}<NotesListBlock list={list} numbered/></section>)}</section>

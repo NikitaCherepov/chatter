@@ -24,13 +24,16 @@ function mediaUrl(block: MediaBlock) {
   return safeImageUrl(block.image_url);
 }
 
-function ShellHeader({ issue, layout }: { issue: NewspaperTemplateProps['issue']; layout: Layout }) {
-  const reports = (layout.hero ? 1 : 0) + layout.articles.length + layout.noteLists.reduce((count, list) => count + list.items.length, 0) + layout.notes.length;
+export function DeusExShellHeader({ issue, signals, reports, relevance }: { issue: NewspaperTemplateProps['issue']; signals: number; reports: number; relevance: 'HIGH' | 'LIVE' }) {
   return <>
     <header className={t.head}><div className={t.crown}><span>CD</span><div><small>THE</small><b>CHATTER DAILY</b><em>STANDARD</em></div></div><div className={t.tag}>ONE NETWORK. ONE SOURCE. VERIFIED.</div></header>
     <div className={t.skyline}><span>NETWORK // 318A.768B</span><strong>CONNECTION ESTABLISHED</strong><i>{issue.document.date}</i></div>
-    <div className={t.metrics}><span><b>{layout.images.length || layout.articles.filter(article => article.image_url).length}</b> SIGNALS</span><span><b>{String(reports).padStart(2, '0')}</b> REPORTS</span><span><b>{layout.recipe === 'priority-report' ? 'HIGH' : 'LIVE'}</b> RELEVANCE</span><span><b>{String(issue.issue_number).padStart(2, '0')}:42</b> UPDATED</span></div>
+    <div className={t.metrics}><span><b>{signals}</b> SIGNALS</span><span><b>{String(reports).padStart(2, '0')}</b> REPORTS</span><span><b>{relevance}</b> RELEVANCE</span><span><b>{String(issue.issue_number).padStart(2, '0')}:42</b> UPDATED</span></div>
   </>;
+}
+
+export function DeusExFolio({ issue }: Pick<NewspaperTemplateProps, 'issue'>) {
+  return <footer className={t.folio}><span>PICUS COMMUNICATION NETWORK</span><span>{issue.document.subtitle}</span><span>{String(Math.abs(issue.id) % 100 + 1).padStart(2, '0')}</span></footer>;
 }
 
 function SignalStrip({ blocks }: { blocks: MediaBlock[] }) {
@@ -84,5 +87,7 @@ function MediaMonitor({ layout }: { layout: Layout }) {
 
 export function DeusExTemplate({ issue }: NewspaperTemplateProps) {
   const layout = composeDeusExPage(issue.document.blocks);
-  return <article className={`${s.page} ${t.page}`} data-recipe={layout.recipe}><ShellHeader issue={issue} layout={layout}/>{layout.recipe === 'priority-report' && <PriorityPage layout={layout}/>} {layout.recipe === 'intel-board' && <IntelBoard layout={layout}/>} {layout.recipe === 'dispatch-feed' && <DispatchPage layout={layout}/>} {layout.recipe === 'media-monitor' && <MediaMonitor layout={layout}/>}<footer className={t.folio}><span>PICUS COMMUNICATION NETWORK</span><span>{issue.document.subtitle}</span><span>{String(Math.abs(issue.id) % 100 + 1).padStart(2, '0')}</span></footer></article>;
+  const reports = (layout.hero ? 1 : 0) + layout.articles.length + layout.noteLists.reduce((count, list) => count + list.items.length, 0) + layout.notes.length;
+  const signals = layout.images.length || layout.articles.filter(article => article.image_url).length;
+  return <article className={`${s.page} ${t.page}`} data-recipe={layout.recipe}><DeusExShellHeader issue={issue} signals={signals} reports={reports} relevance={layout.recipe === 'priority-report' ? 'HIGH' : 'LIVE'}/>{layout.recipe === 'priority-report' && <PriorityPage layout={layout}/>} {layout.recipe === 'intel-board' && <IntelBoard layout={layout}/>} {layout.recipe === 'dispatch-feed' && <DispatchPage layout={layout}/>} {layout.recipe === 'media-monitor' && <MediaMonitor layout={layout}/>}<DeusExFolio issue={issue}/></article>;
 }

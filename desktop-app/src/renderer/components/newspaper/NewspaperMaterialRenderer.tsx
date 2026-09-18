@@ -2,38 +2,50 @@ import type { NewspaperIssue, NewspaperVisualStyle } from './types';
 import type { NewspaperMaterial } from './NewspaperMaterialContext';
 import { safeImageUrl, safeUrl } from './utils/media';
 import m from './NewspaperMaterial.module.scss';
+import n from './Newspaper.module.scss';
+import { AnnHeader, MassEffectFooter } from './templates/MassEffectTemplate/MassEffectTemplate';
+import me from './templates/MassEffectTemplate/MassEffectTemplate.module.scss';
+import { Masthead, BroadsheetFolio } from './templates/BroadsheetTemplate/BroadsheetTemplate';
+import br from './templates/BroadsheetTemplate/BroadsheetTemplate.module.scss';
+import { DeusExShellHeader, DeusExFolio } from './templates/DeusExTemplate/DeusExTemplate';
+import dx from './templates/DeusExTemplate/DeusExTemplate.module.scss';
+import { WizardingHead } from './templates/WizardingTemplate/WizardingTemplate';
+import { EditorialHead } from './templates/EditorialTemplate/EditorialTemplate';
 
-const labels: Record<NewspaperVisualStyle, { channel: string; back: string; source: string }> = {
-  broadsheet: { channel: 'Продолжение материала', back: 'The Chatter Times', source: 'Открыть первоисточник' },
-  editorial: { channel: 'Полный материал', back: 'The Chatter', source: 'Открыть первоисточник' },
-  wizarding: { channel: 'Развёрнутая хроника', back: 'Chatter Prophet', source: 'Перейти к источнику' },
-  deusEx: { channel: 'PICUS // EXPANDED FILE', back: 'CHATTER DAILY ARCHIVE', source: 'OPEN SOURCE UPLINK' },
-  massEffect: { channel: 'ANN // EXPANDED REPORT', back: 'ALLIANCE NEWS NETWORK', source: 'OPEN EXTRANET SOURCE' },
+const sourceLabels: Record<NewspaperVisualStyle, string> = {
+  broadsheet: 'Открыть первоисточник',
+  editorial: 'Открыть первоисточник',
+  wizarding: 'Перейти к источнику',
+  deusEx: 'OPEN SOURCE UPLINK',
+  massEffect: 'OPEN EXTRANET SOURCE',
+};
+
+const pageClassNames: Record<NewspaperVisualStyle, string> = {
+  broadsheet: `${m.page} ${n.broadsheet} ${br.paper}`,
+  editorial: `${m.page} ${n.editorial}`,
+  wizarding: `${m.page} ${n.wizarding}`,
+  deusEx: `${m.page} ${dx.page}`,
+  massEffect: `${m.page} ${me.page}`,
 };
 
 export function NewspaperMaterialRenderer({ material, issue, style }: { material: NewspaperMaterial; issue: NewspaperIssue; style: NewspaperVisualStyle }) {
-  const label = labels[style];
   const image = safeImageUrl(material.imageUrl, 1600);
   const url = safeUrl(material.url);
   const sources = material.sources?.map(source => ({ ...source, url: safeUrl(source.url) })).filter(source => source.url) || [];
   const paragraphs = material.text.split(/\n{2,}/).filter(Boolean);
 
-  return <article className={m.page} data-style={style}>
-    <header className={m.header}>
-      <div><span>{label.channel}</span><strong>{label.back}</strong></div>
-      <div><small>{issue.document.date}</small><b>№ {issue.issue_number}</b></div>
-    </header>
+  return <article className={pageClassNames[style]} data-style={style}>
+    {style === 'massEffect' ? <AnnHeader issue={issue} reports={1}/> : style === 'deusEx' ? <DeusExShellHeader issue={issue} signals={image ? 1 : 0} reports={1} relevance="HIGH"/> : style === 'broadsheet' ? <Masthead issue={issue}/> : style === 'wizarding' ? <WizardingHead issue={issue}/> : <EditorialHead issue={issue}/>}
     <main className={m.content}>
-      <div className={m.kicker}>{material.kind === 'article' ? 'ARTICLE / REPORT' : 'BRIEF / DISPATCH'}</div>
       <h1>{material.title}</h1>
       {image && <figure className={m.hero}><img src={image} alt=""/><figcaption>{issue.document.title}</figcaption></figure>}
       <div className={m.body}>{paragraphs.map((paragraph, index) => <p key={index}>{paragraph}</p>)}</div>
       {(url || sources.length > 0) && <footer className={m.sources}>
         <span>Источники</span>
-        {url && <a href={url} target="_blank" rel="noreferrer">{label.source} ↗</a>}
+        {url && <a href={url} target="_blank" rel="noreferrer">{sourceLabels[style]} ↗</a>}
         {sources.map((source, index) => <a key={`${source.url}-${index}`} href={source.url || undefined} target="_blank" rel="noreferrer">{source.title || `Источник ${index + 1}`} ↗</a>)}
       </footer>}
     </main>
-    <footer className={m.folio}><span>{label.back}</span><span>{issue.document.subtitle}</span><span>FOCUS</span></footer>
+    {style === 'massEffect' ? <MassEffectFooter issue={issue}/> : style === 'deusEx' ? <DeusExFolio issue={issue}/> : style === 'broadsheet' ? <BroadsheetFolio issue={issue}/> : null}
   </article>;
 }
