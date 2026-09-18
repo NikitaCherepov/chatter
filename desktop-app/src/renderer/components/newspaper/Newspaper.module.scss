@@ -501,6 +501,15 @@
   box-shadow: 0 0 10px rgba(255, 135, 80, .86);
   content: '';
 }
+.wizardBurnCanvas {
+  position: absolute;
+  z-index: 3;
+  top: 0;
+  left: 0;
+  display: block;
+  pointer-events: none;
+  will-change: contents;
+}
 .zoomLayer {
   width: max-content;
   height: 100%;

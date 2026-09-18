@@ -10,6 +10,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setTitleBarOverlay: (colors: { color: string; symbolColor: string }) =>
     ipcRenderer.invoke('window:set-title-bar-overlay', colors),
 
+  capturePageRegion: (bounds: { x: number; y: number; width: number; height: number }) =>
+    ipcRenderer.invoke('window:capture-page-region', bounds),
+
   authorizeServer: (server: string, key: string, forceValidation = false) =>
     ipcRenderer.invoke('security:authorize-server', server, key, forceValidation),
 

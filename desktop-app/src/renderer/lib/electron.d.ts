@@ -8,6 +8,7 @@ declare global {
       appVersion: string;
       getSystemLanguages: () => Promise<string[]>;
       setTitleBarOverlay: (colors: { color: string; symbolColor: string }) => Promise<void>;
+      capturePageRegion: (bounds: BrowserBounds) => Promise<{ dataUrl: string }>;
       authorizeServer: (server: string, key: string, forceValidation?: boolean) => Promise<{ apiBase: string; reloadRequired: boolean }>;
       clearTrustedServer: () => Promise<{ reloadRequired: boolean }>;
       browserGetState: () => Promise<BrowserState>;

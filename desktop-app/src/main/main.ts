@@ -1114,6 +1114,22 @@ ipcMain.handle('window:set-title-bar-overlay', (event, colors: { color?: unknown
   });
 });
 
+ipcMain.handle('window:capture-page-region', async (event, bounds: Partial<Electron.Rectangle>) => {
+  assertTrustedIpcSender(event);
+  const values = [bounds?.x, bounds?.y, bounds?.width, bounds?.height];
+  if (!values.every(value => typeof value === 'number' && Number.isFinite(value))) {
+    throw new Error('invalid_capture_bounds');
+  }
+  const rectangle = {
+    x: Math.max(0, Math.floor(bounds.x!)),
+    y: Math.max(0, Math.floor(bounds.y!)),
+    width: Math.min(8192, Math.max(1, Math.ceil(bounds.width!))),
+    height: Math.min(8192, Math.max(1, Math.ceil(bounds.height!))),
+  };
+  const image = await event.sender.capturePage(rectangle);
+  return { dataUrl: image.toDataURL() };
+});
+
 ipcMain.handle('notifications:get-enabled', (event) => {
   assertTrustedIpcSender(event);
   return notificationsEnabled;
