@@ -615,6 +615,12 @@ if (!hasUserChatColumn('room_next_agent_id')) {
 if (!hasUserChatColumn('default_prompt_id')) {
   db.exec('ALTER TABLE user_chats ADD COLUMN default_prompt_id INTEGER');
 }
+// ── user_chats: retention ───────────────────────────────────────────────────
+// 'temporary' chats (newspaper reader etc.) are excluded from chat lists and
+// swept after an idle TTL. Values: 'temporary' | 'persistent' (default).
+if (!hasUserChatColumn('retention')) {
+  db.exec("ALTER TABLE user_chats ADD COLUMN retention TEXT NOT NULL DEFAULT 'persistent'");
+}
 
 // ── Multi-user rooms: per-member settings ────────────────────────────────
 // Room response settings (mode / auto_respond / selected agent) live on the

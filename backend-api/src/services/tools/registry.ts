@@ -4,6 +4,7 @@ import { searchChatHistoryTool } from './chats/search-chat-history.js';
 import { searchColdMemoryTool } from './memory/search-cold-memory.js';
 import { readWebpageTool } from './web/read-webpage.js';
 import { searchWebTool } from './web/search-web.js';
+import { newspaperIssueContentsTool, newspapersListTool, readNewspaperItemTool } from './newspapers.js';
 
 export {
   readChatContextTool,
@@ -19,6 +20,9 @@ export const toolRegistry: Readonly<Record<string, Tool>> = {
   search_cold_memory: searchColdMemoryTool,
   search_chat_history: searchChatHistoryTool,
   read_chat_context: readChatContextTool,
+  newspapers_list: newspapersListTool,
+  newspaper_issue_contents: newspaperIssueContentsTool,
+  read_newspaper_item: readNewspaperItemTool,
 };
 
 export const modularToolDefinitions = Object.values(toolRegistry).map(tool => tool.definition);

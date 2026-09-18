@@ -471,6 +471,15 @@
   border-left: 0;
   background: color-mix(in srgb, var(--reader-accent) 15%, transparent);
 }
+.readerChatMessages > div[data-streaming] {
+  opacity: .82;
+  font-style: italic;
+  animation: readerChatStreamPulse 1.4s ease-in-out infinite;
+}
+@keyframes readerChatStreamPulse {
+  0%, 100% { opacity: .82; }
+  50% { opacity: .5; }
+}
 .readerChatPanel form {
   display: grid;
   gap: 8px;

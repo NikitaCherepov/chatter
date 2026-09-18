@@ -2487,6 +2487,10 @@ export function ChatPage() {
   const roomEventAgentMsgIds = useRef(new Map<number, { agentId: number | null; tempId: number; created: boolean }>());
   useEffect(() => {
     return api.onRoomEvent((event) => {
+      // The newspaper reader's temporary chat is invisible to the main UI: no
+      // unread badges, no native notifications, no stream bookkeeping. The
+      // reader consumes its events through api.subscribeRoomEvents().
+      if (api.isNewspaperChat(event.chat_id)) return;
       // Keep bookkeeping for in-flight room streams even when this chat is not
       // open, so switching back mid-generation can resume the stream.
       // Any server event for this chat proves the trigger was picked up —

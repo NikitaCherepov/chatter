@@ -992,6 +992,29 @@ type WsCallbacks = StreamCallbacks & {
 
 let wsCallbacks: WsCallbacks = {};
 
+// Additional room-event subscribers (newspaper reader chat etc.). Unlike the
+// single-slot wsCallbacks.onRoomEvent, multiple components can subscribe at
+// once and filter events by chat_id themselves.
+const roomEventSubscribers = new Set<(event: RoomEvent) => void>();
+
+/** Subscribe to the unified chat event stream (chat_agent_*, room_*, chat_*).
+ *  Returns an unsubscribe function. */
+export function subscribeRoomEvents(cb: (event: RoomEvent) => void): () => void {
+  roomEventSubscribers.add(cb);
+  return () => {
+    roomEventSubscribers.delete(cb);
+  };
+}
+
+const dispatchRoomEvent = (event: RoomEvent) => {
+  wsCallbacks.onRoomEvent?.(event);
+  for (const cb of roomEventSubscribers) {
+    try { cb(event); } catch (err) {
+      console.warn('[ws] room event subscriber failed:', err);
+    }
+  }
+};
+
 const flushBrowserDownloadEvents = (socket: WebSocket) => {
   if (socket.readyState !== WebSocket.OPEN) return;
   for (const download of pendingBrowserDownloadEvents.values()) {
@@ -1222,7 +1245,7 @@ export function initWebSocket(callbacks?: WsCallbacks) {
         case 'room_message_deleted':
         case 'room_message_edited':
         case 'chat_queue_done':
-          wsCallbacks.onRoomEvent?.(msg);
+          dispatchRoomEvent(msg);
           break;
         // Legacy push channel still used for unwrapped backend events,
         // including automatic titles and confirmation cards. Do not remove.
@@ -1394,6 +1417,7 @@ export async function sendChatTrigger(payload: {
   agentId?: number;
   userOnly?: boolean;
   countAsUserMessage?: boolean;
+  newspaperContext?: NewspaperChatContext;
 }) {
   if (ws && ws.readyState === WebSocket.OPEN) {
     const msg: Record<string, unknown> = { type: 'chat_send', text: payload.text };
@@ -1411,6 +1435,7 @@ export async function sendChatTrigger(payload: {
     if (payload.agentId) msg.agent_id = payload.agentId;
     if (payload.userOnly) msg.user_only = true;
     if (payload.countAsUserMessage === false) msg.count_as_user_message = false;
+    if (payload.newspaperContext) msg.newspaper_context = payload.newspaperContext;
     let wsSent = false;
     try {
       ws.send(JSON.stringify(msg));
@@ -1456,6 +1481,7 @@ async function sendChatTriggerSSE(payload: {
   agentId?: number;
   userOnly?: boolean;
   countAsUserMessage?: boolean;
+  newspaperContext?: NewspaperChatContext;
 }) {
   const attempt = async (isRetry = false): Promise<boolean> => {
     const tokens = loadTokens();
@@ -1477,6 +1503,7 @@ async function sendChatTriggerSSE(payload: {
     if (payload.agentId) body.agent_id = payload.agentId;
     if (payload.userOnly) body.user_only = true;
     if (payload.countAsUserMessage === false) body.count_as_user_message = false;
+    if (payload.newspaperContext) body.newspaper_context = payload.newspaperContext;
 
     const res = await fetch(`${API_BASE}/api/v1/chat/send`, {
       method: 'POST',
@@ -1527,7 +1554,7 @@ async function sendChatTriggerSSE(payload: {
             if (dataStr) {
               try {
                 const data = JSON.parse(dataStr);
-                if (data?.type) wsCallbacks.onRoomEvent?.(data);
+                if (data?.type) dispatchRoomEvent(data);
               } catch {
                 // ignore malformed JSON
               }
@@ -1537,7 +1564,7 @@ async function sendChatTriggerSSE(payload: {
       } catch (err: any) {
         console.warn('[sse] unified chat stream failed mid-stream:', err?.message || String(err));
         if (sseChatId) {
-          wsCallbacks.onRoomEvent?.({ type: 'chat_agent_error', chat_id: sseChatId, agent_id: null, error: 'connection_lost' });
+          dispatchRoomEvent({ type: 'chat_agent_error', chat_id: sseChatId, agent_id: null, error: 'connection_lost' });
         }
       }
     })();
@@ -2057,6 +2084,34 @@ export type NewspaperRun = {
 
 export async function listNewspapers(): Promise<{ newspapers: Newspaper[] }> {
   return apiFetch('/api/v1/newspapers');
+}
+
+/** Reading-context payload for the newspaper reader's temporary chat. */
+export type NewspaperChatContext = {
+  issue_id: number;
+  page: number;
+  page_count: number;
+  /** Page view: ids of blocks visible on the current page. */
+  block_ids?: string[];
+  /** Material view: the article/note (or notes_list item) the reader opened. */
+  block_id?: string;
+  block_kind?: string;
+};
+
+/** The newspaper reader's temporary chat id (renderer-local best effort).
+ *  Used to keep its events out of the main chat UI: the temp chat is invisible
+ *  there, so unread badges and native notifications for it must not fire. */
+let newspaperChatId: number | null = null;
+
+export const isNewspaperChat = (chatId: number | null | undefined): boolean =>
+  Number.isFinite(Number(chatId)) && Number(chatId) === newspaperChatId;
+
+/** Ensure (or reuse) the per-user temporary newspaper chat; opening it counts
+ *  as activity for the idle TTL sweep. */
+export async function getNewspaperChat(): Promise<{ chat_id: number }> {
+  const result = await apiFetch<{ chat_id: number }>('/api/v1/newspapers/chat', { method: 'POST' });
+  if (Number.isFinite(Number(result?.chat_id))) newspaperChatId = Number(result.chat_id);
+  return result;
 }
 
 export async function updateNewspaper(newspaperId: number, input: Partial<Pick<Newspaper,

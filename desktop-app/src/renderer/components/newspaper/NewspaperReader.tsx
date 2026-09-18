@@ -15,6 +15,7 @@ import { NewspaperFocusTransition } from './NewspaperFocusTransition';
 import { MassEffectPageTransition, type MassEffectPageTransitionState } from './MassEffectPageTransition';
 import { NewspaperMaterialProvider, type NewspaperMaterial } from './NewspaperMaterialContext';
 import { NewspaperMaterialRenderer } from './NewspaperMaterialRenderer';
+import { getMessages, getNewspaperChat, sendChatTrigger, subscribeRoomEvents, type NewspaperChatContext } from '../../lib/api';
 import type { NewspaperIssue, NewspaperVisualStyle } from './types';
 import s from './Newspaper.module.scss';
 
@@ -115,6 +116,11 @@ export function NewspaperReader({ issue, style, pageNumber, pageCount, canGoPrev
   const [chatOpen, setChatOpen] = useState(false);
   const [chatDraft, setChatDraft] = useState('');
   const [chatMessages, setChatMessages] = useState<ReaderMessage[]>([]);
+  const [readerChatId, setReaderChatId] = useState<number | null>(null);
+  const [chatBusy, setChatBusy] = useState(false);
+  const [chatStreaming, setChatStreaming] = useState('');
+  const chatRunSeenRef = useRef(false);
+  const chatWatchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const resetPageViewport = useCallback(() => {
     const viewport = viewportRef.current;
@@ -531,12 +537,102 @@ export function NewspaperReader({ issue, style, pageNumber, pageCount, canGoPrev
     setFocusTransition(null);
   }, []);
 
-  const sendReaderMessage = (event: React.FormEvent) => {
+  // ── Reader chat (per-user temporary newspaper chat) ───────────────────────
+  // Server-side context rows ([ACTIVE_VIEW] / [NEWSPAPER CONTEXT]) are history
+  // payload for the model, not conversation for the reader — filtered out.
+  const isAutomatedReaderContext = (text: string) =>
+    text.startsWith('[ACTIVE_VIEW]') || text.startsWith('[NEWSPAPER CONTEXT');
+
+  const loadReaderChat = useCallback(async (reloadHistory: boolean) => {
+    try {
+      const { chat_id } = await getNewspaperChat();
+      setReaderChatId(current => current === chat_id ? current : chat_id);
+      if (!reloadHistory) return;
+      const { messages } = await getMessages(chat_id, 100);
+      setChatMessages(messages
+        .filter(message => !isAutomatedReaderContext(message.content))
+        .map(message => ({ id: `msg-${message.id}`, role: message.role, text: message.content })));
+    } catch (error) {
+      console.error('Failed to load the newspaper chat:', error);
+    }
+  }, []);
+
+  // Opening the chat panel ensures the temporary chat, loads its history and
+  // keeps it alive: the periodic touch refreshes the idle-TTL activity marker
+  // (server bumps user_chats.updated_at on every open).
+  useEffect(() => {
+    if (!chatOpen) return;
+    setChatBusy(false);
+    setChatStreaming('');
+    void loadReaderChat(true);
+    const keepAlive = setInterval(() => { void loadReaderChat(false); }, 4 * 60 * 1000);
+    return () => clearInterval(keepAlive);
+  }, [chatOpen, loadReaderChat]);
+
+  // Unified chat events for the reader chat (WS and SSE transports both land
+  // here; ChatPage ignores this chat via api.isNewspaperChat).
+  useEffect(() => {
+    return subscribeRoomEvents(event => {
+      if (readerChatId === null || event.chat_id !== readerChatId) return;
+      if (event.type === 'chat_agent_start') {
+        chatRunSeenRef.current = true;
+        setChatBusy(true);
+        setChatStreaming('');
+      } else if (event.type === 'chat_agent_token') {
+        chatRunSeenRef.current = true;
+        setChatBusy(true);
+        setChatStreaming(current => current + event.text);
+      } else if (event.type === 'chat_agent_done') {
+        chatRunSeenRef.current = true;
+        setChatBusy(false);
+        setChatStreaming('');
+        const text = `${event.result?.reply_text || ''}`.trim();
+        if (text) setChatMessages(current => [...current, { id: `assistant-${Date.now()}`, role: 'assistant', text }]);
+      } else if (event.type === 'chat_agent_error') {
+        chatRunSeenRef.current = true;
+        setChatBusy(false);
+        setChatStreaming('');
+        toast.error(event.message || 'Ответ не получен');
+      }
+    });
+  }, [readerChatId]);
+
+  useEffect(() => () => {
+    if (chatWatchdogRef.current) clearTimeout(chatWatchdogRef.current);
+  }, []);
+
+  const sendReaderMessage = async (event: React.FormEvent) => {
     event.preventDefault();
     const text = chatDraft.trim();
-    if (!text) return;
+    if (!text || !issue || chatBusy || readerChatId === null) return;
+    // Send-time reading context: the opened material, or the current page.
+    const newspaperContext: NewspaperChatContext = material
+      ? { issue_id: issue.id, page: pageNumber, page_count: pageCount, block_id: material.id, block_kind: material.kind }
+      : { issue_id: issue.id, page: pageNumber, page_count: pageCount, block_ids: issue.document.blocks.map(block => block.id) };
     setChatMessages(current => [...current, { id: `user-${Date.now()}`, role: 'user', text }]);
     setChatDraft('');
+    setChatBusy(true);
+    // Safety net for dropped triggers (e.g. a WS error the client ignores):
+    // if no event for this run arrives in time, unlock the composer.
+    chatRunSeenRef.current = false;
+    if (chatWatchdogRef.current) clearTimeout(chatWatchdogRef.current);
+    chatWatchdogRef.current = setTimeout(() => {
+      if (chatRunSeenRef.current) return;
+      setChatBusy(false);
+      toast.error('Ответ не получен — попробуйте ещё раз');
+    }, 45_000);
+    try {
+      const sent = await sendChatTrigger({ text, chatId: readerChatId, newspaperContext });
+      if (!sent) {
+        chatRunSeenRef.current = true;
+        setChatBusy(false);
+        toast.error('Не удалось отправить сообщение');
+      }
+    } catch (error) {
+      chatRunSeenRef.current = true;
+      setChatBusy(false);
+      console.error('Failed to send the newspaper chat message:', error);
+    }
   };
 
   const applyZoom = (value: number) => {
@@ -702,8 +798,8 @@ export function NewspaperReader({ issue, style, pageNumber, pageCount, canGoPrev
       transition={{ duration: .24, ease: [0.22, 1, 0.36, 1] }}
     >
       <header><div><span>{style === 'deusEx' ? 'PICUS // ANALYST' : style === 'massEffect' ? 'ANN // ASSIST' : 'Разговор с редакцией'}</span><strong>{material?.title || issue.document.title}</strong></div><button type="button" className={s.readerChatClose} onClick={() => setChatOpen(false)}>Закрыть</button></header>
-      <div className={s.readerChatMessages}>{chatMessages.map(message => <div key={message.id} data-role={message.role}>{message.text}</div>)}</div>
-      <form onSubmit={sendReaderMessage}><textarea value={chatDraft} onChange={event => setChatDraft(event.target.value)} placeholder={material ? 'Спросить об этом материале…' : 'Спросить об этом выпуске…'} rows={3}/><button type="submit" disabled={!chatDraft.trim()}>Отправить</button></form>
+      <div className={s.readerChatMessages}>{chatMessages.map(message => <div key={message.id} data-role={message.role}>{message.text}</div>)}{chatBusy && <div data-role="assistant" data-streaming={chatStreaming ? undefined : 'pending'}>{chatStreaming || '…'}</div>}</div>
+      <form onSubmit={sendReaderMessage}><textarea value={chatDraft} onChange={event => setChatDraft(event.target.value)} placeholder={material ? 'Спросить об этом материале…' : 'Спросить об этом выпуске…'} rows={3} disabled={readerChatId === null}/><button type="submit" disabled={!chatDraft.trim() || chatBusy || readerChatId === null}>Отправить</button></form>
     </motion.aside>}</AnimatePresence>
     {SHOW_READER_CHROME && <header className={s.toolbar}><div className={s.issueMeta}><strong>Выпуск №{issue.issue_number}</strong><span>{pageNumber} / {pageCount}</span></div><div className={s.styleSelect}><Select options={styleOptions} value={style} onChange={value=>onStyleChange(value as NewspaperVisualStyle)} maxVisibleItems={4}/></div><div className={s.toolbarActions}><div className={s.zoomControls}><button type="button" onClick={()=>applyZoom(zoom-ZOOM_STEP)} disabled={zoom<=ZOOM_MIN} aria-label="Уменьшить масштаб">−</button><button type="button" className={s.zoomValue} onClick={fitToWindow} title="Вписать газету в окно">{zoom}%</button><button type="button" onClick={()=>applyZoom(zoom+ZOOM_STEP)} disabled={zoom>=ZOOM_MAX} aria-label="Увеличить масштаб">+</button></div><nav className={s.navigation}><button type="button" onClick={onPrevious} disabled={!canGoPrevious} aria-label={previousLabel}>‹</button><button type="button" onClick={onNext} disabled={!canGoNext} aria-label={nextLabel}>›</button><button type="button" onClick={onClose} aria-label={closeLabel}>×</button></nav></div></header>}
     <div className={`${s.viewport} ${dragging ? s.viewportDragging : ''}`} data-style={style} ref={viewportRef} onPointerDown={startDragging} onPointerMove={moveDragging} onPointerUp={stopDragging} onPointerCancel={stopDragging} onDragStart={event=>event.preventDefault()}>

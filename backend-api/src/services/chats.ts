@@ -105,6 +105,40 @@ export const createChat = (userId: number, title: string) => db.prepare(`
   VALUES (?, ?)
 `).run(userId, title);
 
+// ── Temporary chats (newspaper reader etc.) ─────────────────────────────────
+// A temporary chat lives outside the chat list and is swept after an idle TTL
+// (see listStaleTemporaryChats callers). One per user per purpose, reused
+// across sessions until it expires — history and context survive closes.
+
+export const isTemporaryChat = (chatId: number): boolean => {
+  const row = db.prepare('SELECT retention FROM user_chats WHERE id = ?').get(chatId) as { retention: string } | undefined;
+  return row?.retention === 'temporary';
+};
+
+export const getOrCreateTemporaryChat = (userId: number, title: string): number => {
+  const existing = db.prepare(
+    "SELECT id FROM user_chats WHERE user_id = ? AND retention = 'temporary' ORDER BY id DESC LIMIT 1"
+  ).get(userId) as { id: number } | undefined;
+  if (existing) return existing.id;
+  const inserted = db.prepare(
+    "INSERT INTO user_chats (user_id, title, retention) VALUES (?, ?, 'temporary')"
+  ).run(userId, title);
+  return Number(inserted.lastInsertRowid);
+};
+
+/** Idle temporary chats (candidates for the TTL sweep). Activity is
+ *  user_chats.updated_at — bumped by every appendChatMessage. */
+export const listStaleTemporaryChats = (idleMs: number): Array<{ id: number; user_id: number }> => {
+  const cutoff = new Date(Date.now() - Math.max(0, idleMs)).toISOString().replace('T', ' ').slice(0, 19);
+  return db.prepare(
+    "SELECT id, user_id FROM user_chats WHERE retention = 'temporary' AND updated_at < ?"
+  ).all(cutoff) as Array<{ id: number; user_id: number }>;
+};
+
+export const touchUserChat = (userId: number, chatId: number) => {
+  db.prepare('UPDATE user_chats SET updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND id = ?').run(userId, chatId);
+};
+
 export const getUserChatById = (userId: number, chatId: number) => db.prepare(`
   SELECT id, user_id, title, created_at, updated_at
   FROM user_chats
@@ -120,12 +154,14 @@ export const ensureActiveChat = (userId: number) => {
     if (canReadChatMessages(userId, user.active_chat_id)) return user.active_chat_id;
   }
 
-  // First accessible chat: owned or joined room.
+  // First accessible chat: owned or joined room. Temporary chats (newspaper
+  // reader etc.) never become the fallback active chat.
   const firstChat = db.prepare(`
     SELECT uc.id
     FROM user_chats uc
-    WHERE uc.user_id = ?
-       OR EXISTS (SELECT 1 FROM chat_members cm WHERE cm.chat_id = uc.id AND cm.user_id = ?)
+    WHERE (uc.user_id = ?
+       OR EXISTS (SELECT 1 FROM chat_members cm WHERE cm.chat_id = uc.id AND cm.user_id = ?))
+      AND uc.retention = 'persistent'
     ORDER BY uc.id ASC
     LIMIT 1
   `).get(userId, userId) as { id: number } | undefined;
@@ -146,6 +182,8 @@ const buildUserChatFilter = (userId: number, filters: ChatListFilters) => {
   // Owned chats + rooms the user has joined as a member.
   const conditions = [`(uc.user_id = ? OR EXISTS (SELECT 1 FROM chat_members um WHERE um.chat_id = uc.id AND um.user_id = ?))`];
   const params: Array<string | number> = [userId, userId];
+  // Temporary chats (newspaper reader etc.) never appear in chat lists.
+  conditions.push(`uc.retention = 'persistent'`);
   // Message-based filters match on chat_id only: in shared rooms messages may
   // belong to other authors.
   if (Number.isSafeInteger(filters.promptId) && filters.promptId !== 0) {

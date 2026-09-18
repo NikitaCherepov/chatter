@@ -8,11 +8,12 @@ import dotenv from 'dotenv';
 import { WebSocketServer, WebSocket } from 'ws';
 import { wsClients, registerWsClient, unregisterWsClient, isDesktopOnline, sendIpcToDesktop, sendToDesktop, WS_HEARTBEAT_GRACE_MS, WS_HEARTBEAT_INTERVAL_MS, type WsClient } from './ws-clients.js';
 import { adminMiddleware, authMiddleware, issueAuthTokens, makePasswordHash, refreshAccessToken, validateTelegramInitData, verifyPassword, verifyToken, verifyTokenIgnoreExpiry, type AuthedRequest } from './auth.js';
-import { activateUserChat, bindChatMessageTelegramMeta, clearAllUserMessages, clearUserChatMessages, countUserChats, createPasswordAccount, createOrUpdateUserForApiRegistration, createUserChat, deleteUserHistoryByRole, deleteUserHistoryMessage, ensureActiveChat, forkChat, getPasswordAccountByLogin, getChatMessages, getChatMedia, getAllUserMedia, getRecentUserHistory, getUserById, getUserChatById, getUserChatListItem, listUserChats, upsertUserFromTelegram, setUserTimezone, updateUserPrompt, selectUserCustomPrompt, updateUserCustomPrompt, resetUsersPromptIfDeleted, resetDailyMessageCounters, upsertTelegramUser, createPendingTelegramUser, updateUserStatus, updateUserRole, updateUserName, updateUserTelegramUsername, removeUser, getAllUsers, getUsersCount, getUsersPage, getPendingUsersCount, getPendingUsersPage, getBannedUsersCount, getBannedUsersPage, syncAllUsersPlanLimits, resetUserWeeklyUsage, resetAllUsersWeeklyUsage, updateUserWeeklyCostQuota, revokeUserAuthTokens, generateLinkCode, verifyLinkCode, getLinkCodeForUser, generatePasswordResetCode, verifyPasswordResetCode, signPasswordResetToken, verifyPasswordResetToken, adminApplyGeneratedPassword, renameUserChat, deleteUserChat, deleteUserMessage, editUserMessage, searchUserChats, updateChatMessageAudio, getChatContextTokens, resolveMaxContextTokens, updateUserMaxContextTokens, getChatAttachments, deleteMessageAttachment, deleteMessageImage, resolveAttachmentMaxTokens, updateUserAttachmentMaxTokens, setChatBotHidden, listChatFolders, createChatFolder, renameChatFolder, deleteChatFolder, moveUserChatToFolder, listChatFilterOptions } from './services/chats.js';
+import { activateUserChat, bindChatMessageTelegramMeta, clearAllUserMessages, clearUserChatMessages, countUserChats, createPasswordAccount, createOrUpdateUserForApiRegistration, createUserChat, deleteUserHistoryByRole, deleteUserHistoryMessage, ensureActiveChat, forkChat, getPasswordAccountByLogin, getChatMessages, getChatMedia, getAllUserMedia, getRecentUserHistory, getUserById, getUserChatById, getUserChatListItem, listUserChats, upsertUserFromTelegram, setUserTimezone, updateUserPrompt, selectUserCustomPrompt, updateUserCustomPrompt, resetUsersPromptIfDeleted, resetDailyMessageCounters, upsertTelegramUser, createPendingTelegramUser, updateUserStatus, updateUserRole, updateUserName, updateUserTelegramUsername, removeUser, getAllUsers, getUsersCount, getUsersPage, getPendingUsersCount, getPendingUsersPage, getBannedUsersCount, getBannedUsersPage, syncAllUsersPlanLimits, resetUserWeeklyUsage, resetAllUsersWeeklyUsage, updateUserWeeklyCostQuota, revokeUserAuthTokens, generateLinkCode, verifyLinkCode, getLinkCodeForUser, generatePasswordResetCode, verifyPasswordResetCode, signPasswordResetToken, verifyPasswordResetToken, adminApplyGeneratedPassword, renameUserChat, deleteUserChat, deleteUserMessage, editUserMessage, searchUserChats, updateChatMessageAudio, getChatContextTokens, resolveMaxContextTokens, updateUserMaxContextTokens, getChatAttachments, deleteMessageAttachment, deleteMessageImage, resolveAttachmentMaxTokens, updateUserAttachmentMaxTokens, setChatBotHidden, listChatFolders, createChatFolder, renameChatFolder, deleteChatFolder, moveUserChatToFolder, listChatFilterOptions, listStaleTemporaryChats, touchUserChat } from './services/chats.js';
 import { createNote, countNotes, deleteNote, getNoteById, getNoteStats, getNoteStatsForUsers, listNotes, updateNoteContent } from './services/notes.js';
 import { createTask, deletePendingTask, getPendingTaskCount, getUserTaskById, isOwnNonRoomChat, listTaskTargetChats, listTasks, MAX_PENDING_TASKS_PER_USER, updatePendingTask } from './services/tasks.js';
 import { createDemoNewspaperIssue, createNewspaper, createNewspaperRun, deleteNewspaperIssue, ensureDefaultNewspaper, getNewspaperIssue, getNewspaperRun, listNewspaperIssues, listNewspaperRuns, listNewspapers, markInterruptedNewspaperRuns, updateNewspaper } from './services/newspapers.js';
 import { cancelNewspaperAgentRun, cancelNewspaperRun, startNewspaperRun } from './services/newspaper-runner.js';
+import { getOrCreateNewspaperChat, injectNewspaperContext, parseNewspaperChatView } from './services/newspaper-chat.js';
 import { suggestNewspaperSettings } from './services/newspaper-settings-agent.js';
 import { listMapPins, getMapPinById, createMapPin, updateMapPin, deleteMapPin } from './services/map-pins.js';
 import { sendMessageThroughAi, generateAdminOutreach, callLiteAi, ensureUtilityAiQuota, chargeUtilityAiCompletion, getModelsCatalog, getAutoReasoningLevels, getAutoVisionSupport, abortChatGeneration, abortUserGenerations, beginActiveHitlWait, endActiveHitlWait, getUpdateState, setUpdatePrepare, forceAbortActiveGenerations, clearUpdatePrepare, resolveManualModel } from './services/ai.js';
@@ -95,7 +96,7 @@ import { normalizeSupportedLanguage, SUPPORTED_LANGUAGES } from './i18n/language
 import { translateForLanguage } from './i18n/index.js';
 import { associateServerAccessKeyUser, createServerAccessKey, getLastServerAccessKeyForUser, isServerAccessKeyGateEnabled, listServerAccessKeys, revokeServerAccessKey, validateServerAccessKey } from './services/server-access-keys.js';
 import { addChatAgent, canReadChatMessages, createChatRoom, createChatRoomInvite, deleteChatRoom, getChatAgentForResponse, getChatRoom, getChatRoomInviteInfo, joinChatRoomByInvite, leaveChatRoom, listChatReaderUserIds, listChatRoomInvites, removeChatAgent, removeChatRoomMember, revokeChatRoomInvite, reorderChatAgents, reorderChatMembers, updateChatAgent, updateChatRoomSettings } from './services/chat-rooms.js';
-import { runChatSteps } from './services/chat-runner.js';
+import { runChatSteps, hasActiveChatRun } from './services/chat-runner.js';
 import { isRoomChat, runRoomAgents, runRoomResponseQueue, stopRoomQueue, hasActiveRoomRun } from './services/room-runner.js';
 
 /** Fire-and-forget WS broadcast to every chat reader (owner for single, owner+members for rooms). */
@@ -2503,6 +2504,18 @@ app.post('/api/v1/chat/send', async (req: AuthedRequest, res) => {
     return res.status(400).json({ error: 'bad_agent_id' });
   }
 
+  // Newspaper reader context: send-time [ACTIVE_VIEW] + idempotent full
+  // context injection into the user's temporary newspaper chat.
+  const newspaperContextResult = parseNewspaperChatView(req.body?.newspaper_context);
+  if (newspaperContextResult?.ok === false) {
+    return res.status(400).json({ error: newspaperContextResult.error });
+  }
+  const newspaperContext = newspaperContextResult?.ok ? newspaperContextResult.view : null;
+  // The context belongs only to the temporary newspaper chat.
+  if (newspaperContext && Number.isFinite(chatId) && chatId > 0 && chatId !== getOrCreateNewspaperChat(userId)) {
+    return res.status(400).json({ error: 'newspaper_context_requires_newspaper_chat' });
+  }
+
   // Load enabled macros from DB
   const enabledMacros = getEnabledMacros(userId);
 
@@ -2519,8 +2532,16 @@ app.post('/api/v1/chat/send', async (req: AuthedRequest, res) => {
 
   try {
     const rawUserRecord = getUserById(userId);
-    const targetChatId = Number.isFinite(chatId) && chatId > 0 ? chatId : ensureActiveChat(userId);
+    const targetChatId = newspaperContext
+      ? getOrCreateNewspaperChat(userId)
+      : (Number.isFinite(chatId) && chatId > 0 ? chatId : ensureActiveChat(userId));
     resolvedChatId = targetChatId;
+
+    // Newspaper reader context rows must land BEFORE the queued run reads the
+    // chat history (send-time injection, idempotent per view_id).
+    if (newspaperContext) {
+      await injectNewspaperContext(userId, targetChatId, newspaperContext);
+    }
 
     const writeEvent = (payload: Record<string, unknown>) => {
       res.write(`data: ${JSON.stringify(payload)}\n\n`);
@@ -2919,6 +2940,21 @@ app.post('/api/v1/newspapers/demo', (req: AuthedRequest, res) => {
   const userId = accountIdFromRequest(req);
   const issue = createDemoNewspaperIssue(userId);
   return res.status(201).json({ issue });
+});
+
+// The newspaper reader's discussion chat: a per-user temporary chat that never
+// appears in chat lists and is swept after an idle TTL. Creating/opening the
+// reader chat panel counts as activity (keeps the chat alive while typing).
+app.post('/api/v1/newspapers/chat', (req: AuthedRequest, res) => {
+  const userId = accountIdFromRequest(req);
+  try {
+    const chatId = getOrCreateNewspaperChat(userId);
+    touchUserChat(userId, chatId);
+    return res.json({ chat_id: chatId });
+  } catch (err: any) {
+    console.error('[newspapers/chat] failed to ensure chat:', err?.message || String(err));
+    return res.status(500).json({ error: 'newspaper_chat_failed' });
+  }
 });
 
 app.get('/api/v1/tasks', (req: AuthedRequest, res) => {
@@ -7316,6 +7352,23 @@ setInterval(() => {
   }
 }, WS_HEARTBEAT_INTERVAL_MS);
 
+// ── Temporary chat TTL sweep (newspaper reader etc.) ─────────────────────────
+// Temporary chats are deleted after 10 idle minutes. Activity is
+// user_chats.updated_at — bumped by every appended message and by opening the
+// reader's chat panel (touchUserChat). A chat with an active generation run is
+// skipped; it will be reconsidered on the next tick.
+const TEMPORARY_CHAT_TTL_MS = 10 * 60 * 1000;
+setInterval(() => {
+  for (const row of listStaleTemporaryChats(TEMPORARY_CHAT_TTL_MS)) {
+    if (hasActiveChatRun(row.id)) continue;
+    try {
+      deleteUserChat(row.user_id, row.id);
+    } catch (err: any) {
+      console.error('[temporary-chats] TTL sweep failed:', err?.message || String(err));
+    }
+  }
+}, 60 * 1000).unref();
+
 // ── WS chat_send handler ────────────────────────────────────────────────────
 
 async function handleWsChatSend(client: WsClient, msg: any) {
@@ -7324,6 +7377,20 @@ async function handleWsChatSend(client: WsClient, msg: any) {
   const requestedAgentId = msg.agent_id === undefined ? undefined : Number(msg.agent_id);
   if (requestedAgentId !== undefined && (!Number.isSafeInteger(requestedAgentId) || requestedAgentId <= 0)) {
     client.ws.send(JSON.stringify({ type: 'error', error: 'bad_agent_id' }));
+    return;
+  }
+
+  // Newspaper reader context: send-time [ACTIVE_VIEW] + idempotent full
+  // context injection into the user's temporary newspaper chat.
+  const newspaperContextResult = parseNewspaperChatView(msg.newspaper_context);
+  if (newspaperContextResult?.ok === false) {
+    client.ws.send(JSON.stringify({ type: 'error', error: newspaperContextResult.error }));
+    return;
+  }
+  const newspaperContext = newspaperContextResult?.ok ? newspaperContextResult.view : null;
+  // The context belongs only to the temporary newspaper chat.
+  if (newspaperContext && Number.isFinite(chat_id) && chat_id > 0 && chat_id !== getOrCreateNewspaperChat(userId)) {
+    client.ws.send(JSON.stringify({ type: 'error', error: 'newspaper_context_requires_newspaper_chat' }));
     return;
   }
 
@@ -7473,8 +7540,16 @@ async function handleWsChatSend(client: WsClient, msg: any) {
 
   try {
     const rawUserRecord = getUserById(userId);
-    const targetChatId = Number.isFinite(chat_id) && chat_id > 0 ? chat_id : ensureActiveChat(userId);
+    const targetChatId = newspaperContext
+      ? getOrCreateNewspaperChat(userId)
+      : (Number.isFinite(chat_id) && chat_id > 0 ? chat_id : ensureActiveChat(userId));
     resolvedChatId = targetChatId;
+
+    // Newspaper reader context rows must land BEFORE the queued run reads the
+    // chat history (send-time injection, idempotent per view_id).
+    if (newspaperContext) {
+      await injectNewspaperContext(userId, targetChatId, newspaperContext);
+    }
 
     const commonOptions = {
       ...(parsedImages.length > 0 ? { images: parsedImages } : {}),
