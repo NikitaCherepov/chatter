@@ -392,7 +392,7 @@
   position: absolute;
   z-index: 1;
   right: 100%;
-  bottom: 24px;
+  bottom: 0;
   display: flex;
   width: min(350px, calc(100vw - 32px));
   height: min(560px, calc(100vh - var(--titlebar-height) - 56px));

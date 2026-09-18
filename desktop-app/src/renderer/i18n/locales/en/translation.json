@@ -869,6 +869,7 @@
       "emptyHint": "Configure your interests and start the editor.",
       "previousPage": "Previous page",
       "nextPage": "Next page",
+      "backToIssue": "Back to issue",
       "runNumber": "Run #{{number}}",
       "runStatus": {
         "queued": "The editor is waiting to start",

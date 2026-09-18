@@ -648,36 +648,21 @@ export function NewspaperReader({ issue, style, pageNumber, pageCount, canGoPrev
       <div className={s.readerPanelActions}><button type="button" className={s.readerClose} onClick={() => setControlsOpen(false)}>{closeLabel}</button></div>
     </motion.aside>}</AnimatePresence>
     <AnimatePresence initial={false}>
-      {material && <motion.button
-        key="reader-material-back"
-        type="button"
-        className={`${s.readerPageTab} ${s.readerPageTabPrevious} ${s.readerMaterialBack}`}
-        data-style={style}
-        data-reader-controls
-        aria-label="Вернуться к выпуску"
-        initial={{ opacity: 0, x: 46 }}
-        animate={{ opacity: 1, x: 0 }}
-        whileHover={{ x: -8 }}
-        whileTap={{ scale: .96 }}
-        exit={{ opacity: 0, x: 46 }}
-        transition={{ duration: .18, ease: 'easeOut' }}
-        onClick={() => void focusMaterial(null)}
-      ><span className={s.readerPageTabContent}><b>‹</b><small>{style === 'deusEx' ? 'ISSUE' : style === 'massEffect' ? 'FEED' : 'В выпуск'}</small></span></motion.button>}
-      {!material && canGoPrevious && <motion.button
+      {(material || canGoPrevious) && <motion.button
         key="reader-previous"
         type="button"
-        className={`${s.readerPageTab} ${s.readerPageTabPrevious}`}
+        className={`${s.readerPageTab} ${s.readerPageTabPrevious}${material ? ` ${s.readerMaterialBack}` : ''}`}
         data-style={style}
         data-reader-controls
-        aria-label={previousLabel}
+        aria-label={material ? t('tools.newspapers.backToIssue') : previousLabel}
         initial={{ opacity: 0, x: 46 }}
         animate={{ opacity: 1, x: 0 }}
         whileHover={{ x: -8 }}
         whileTap={{ scale: .96 }}
         exit={{ opacity: 0, x: 46 }}
         transition={{ duration: .18, ease: 'easeOut' }}
-        onClick={() => navigatePage('previous')}
-      ><span className={s.readerPageTabContent}><b>‹</b><small>{style === 'deusEx' ? 'PREV' : style === 'massEffect' ? 'BACK' : 'Назад'}</small></span></motion.button>}
+        onClick={() => { if (material) void focusMaterial(null); else navigatePage('previous'); }}
+      ><span className={s.readerPageTabContent}><b>‹</b><small>{material ? (style === 'deusEx' ? 'ISSUE' : style === 'massEffect' ? 'FEED' : 'В выпуск') : (style === 'deusEx' ? 'PREV' : style === 'massEffect' ? 'BACK' : 'Назад')}</small></span></motion.button>}
       {!material && canGoNext && <motion.button
         key="reader-next"
         type="button"
