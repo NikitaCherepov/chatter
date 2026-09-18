@@ -33,8 +33,8 @@ export function Masthead({ issue }: Pick<NewspaperTemplateProps, 'issue'>) {
   </header>;
 }
 
-export function BroadsheetFolio({ issue }: Pick<NewspaperTemplateProps, 'issue'>) {
-  return <footer className={t.folio}><span>The Chatter Times</span><span>{issue.document.subtitle}</span><span>{String(Math.abs(issue.id) % 100 + 1).padStart(2, '0')}</span></footer>;
+export function BroadsheetFolio({ issue, context }: Pick<NewspaperTemplateProps, 'issue'> & { context?: string }) {
+  return <footer className={t.folio}><span>The Chatter Times</span><span>{context ?? issue.document.subtitle}</span><span>{String(Math.abs(issue.id) % 100 + 1).padStart(2, '0')}</span></footer>;
 }
 
 function BriefsSection({ list, className = '' }: { list: NotesListBlockData; className?: string }) {

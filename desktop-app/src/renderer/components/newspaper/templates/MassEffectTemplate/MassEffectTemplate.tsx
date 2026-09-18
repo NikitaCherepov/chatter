@@ -70,11 +70,11 @@ export function AnnHeader({ issue, reports }: { issue: NewspaperTemplateProps['i
   );
 }
 
-export function MassEffectFooter({ issue }: Pick<NewspaperTemplateProps, 'issue'>) {
+export function MassEffectFooter({ issue, context }: Pick<NewspaperTemplateProps, 'issue'> & { context?: string }) {
   return (
     <footer className={t.footer}>
       <span>ALLIANCE NEWS NETWORK</span>
-      <span>{issue.document.subtitle}</span>
+      <span>{context ?? issue.document.subtitle}</span>
       <span>ANN-{String(Math.abs(issue.id) % 1000).padStart(3, '0')}</span>
     </footer>
   );

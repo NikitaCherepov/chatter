@@ -32,8 +32,8 @@ export function DeusExShellHeader({ issue, signals, reports, relevance }: { issu
   </>;
 }
 
-export function DeusExFolio({ issue }: Pick<NewspaperTemplateProps, 'issue'>) {
-  return <footer className={t.folio}><span>PICUS COMMUNICATION NETWORK</span><span>{issue.document.subtitle}</span><span>{String(Math.abs(issue.id) % 100 + 1).padStart(2, '0')}</span></footer>;
+export function DeusExFolio({ issue, context }: Pick<NewspaperTemplateProps, 'issue'> & { context?: string }) {
+  return <footer className={t.folio}><span>PICUS COMMUNICATION NETWORK</span><span>{context ?? issue.document.subtitle}</span><span>{String(Math.abs(issue.id) % 100 + 1).padStart(2, '0')}</span></footer>;
 }
 
 function SignalStrip({ blocks }: { blocks: MediaBlock[] }) {

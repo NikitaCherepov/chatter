@@ -33,6 +33,7 @@ export function NewspaperMaterialRenderer({ material, issue, style }: { material
   const url = safeUrl(material.url);
   const sources = material.sources?.map(source => ({ ...source, url: safeUrl(source.url) })).filter(source => source.url) || [];
   const paragraphs = material.text.split(/\n{2,}/).filter(Boolean);
+  const folioContext = material.title.length > 80 ? `${material.title.slice(0, 79).trimEnd()}…` : material.title;
 
   return <article className={pageClassNames[style]} data-style={style}>
     {style === 'massEffect' ? <AnnHeader issue={issue} reports={1}/> : style === 'deusEx' ? <DeusExShellHeader issue={issue} signals={image ? 1 : 0} reports={1} relevance="HIGH"/> : style === 'broadsheet' ? <Masthead issue={issue}/> : style === 'wizarding' ? <WizardingHead issue={issue}/> : <EditorialHead issue={issue}/>}
@@ -46,6 +47,6 @@ export function NewspaperMaterialRenderer({ material, issue, style }: { material
         {sources.map((source, index) => <a key={`${source.url}-${index}`} href={source.url || undefined} target="_blank" rel="noreferrer">{source.title || `Источник ${index + 1}`} ↗</a>)}
       </footer>}
     </main>
-    {style === 'massEffect' ? <MassEffectFooter issue={issue}/> : style === 'deusEx' ? <DeusExFolio issue={issue}/> : style === 'broadsheet' ? <BroadsheetFolio issue={issue}/> : null}
+    {style === 'massEffect' ? <MassEffectFooter issue={issue} context={folioContext}/> : style === 'deusEx' ? <DeusExFolio issue={issue} context={folioContext}/> : style === 'broadsheet' ? <BroadsheetFolio issue={issue} context={folioContext}/> : null}
   </article>;
 }
