@@ -164,6 +164,10 @@ vec4 pageCurl(vec2 point) {
 void main() {
   vec2 uv = vec2(vUv.x, 1.0 - vUv.y);
   vec2 geometryUv = uDirection > 0.0 ? uv : vec2(1.0 - uv.x, uv.y);
+  if (uProgress <= 0.0001) {
+    outColor = fromColor(geometryUv);
+    return;
+  }
   outColor = pageCurl(geometryUv);
 }
 `;
