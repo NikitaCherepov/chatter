@@ -1,17 +1,15 @@
 import { ArticleImage } from '../../blocks/ArticleBlock/ArticleBlock';
 import { SourcesBlock } from '../../blocks/SourcesBlock/SourcesBlock';
+import { articleMaterial, useNewspaperMaterialViewer } from '../../NewspaperMaterialContext';
 import type { ArticleBlockData, NewspaperTemplateProps } from '../../types';
-import { safeUrl } from '../../utils/media';
 import s from '../../Newspaper.module.scss';
 import { WizardingBodyBlock, WizardingRailBlock } from './WizardingBlock';
 import { composeWizardingPage } from './wizardingLayout';
 import t from './WizardingTemplate.module.scss';
 
 function ArticleTitle({ article }: { article: ArticleBlockData }) {
-  const articleUrl = safeUrl(article.url);
-  return <h2>{articleUrl
-    ? <a data-article-title-link="true" href={articleUrl} target="_blank" rel="noreferrer">{article.title}</a>
-    : article.title}</h2>;
+  const openMaterial = useNewspaperMaterialViewer();
+  return <h2><button type="button" className={s.materialOpenTitle} onClick={() => openMaterial?.(articleMaterial(article))}>{article.title}</button></h2>;
 }
 
 export function WizardingTemplate({ issue }: NewspaperTemplateProps) {

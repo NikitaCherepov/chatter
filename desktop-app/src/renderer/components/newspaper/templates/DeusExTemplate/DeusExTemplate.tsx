@@ -3,9 +3,10 @@ import { ImageBlock } from '../../blocks/ImageBlock/ImageBlock';
 import { NoteBlock, NoteContent } from '../../blocks/NoteBlock/NoteBlock';
 import { NotesListBlock } from '../../blocks/NotesListBlock/NotesListBlock';
 import { SourcesBlock } from '../../blocks/SourcesBlock/SourcesBlock';
+import { articleMaterial, useNewspaperMaterialViewer } from '../../NewspaperMaterialContext';
 import { WeatherForecast } from '../../blocks/WeatherBlock/WeatherBlock';
 import type { ArticleBlockData, NewspaperBlock, NewspaperTemplateProps } from '../../types';
-import { safeImageUrl, safeUrl } from '../../utils/media';
+import { safeImageUrl } from '../../utils/media';
 import { composeDeusExPage } from './deusExLayout';
 import s from '../../Newspaper.module.scss';
 import t from './DeusExTemplate.module.scss';
@@ -14,10 +15,8 @@ type Layout = ReturnType<typeof composeDeusExPage>;
 type MediaBlock = Extract<NewspaperBlock, { type: 'article' | 'image' }>;
 
 function ArticleTitle({ article, as = 'h2' }: { article: ArticleBlockData; as?: 'h2' | 'strong' }) {
-  const articleUrl = safeUrl(article.url);
-  const content = articleUrl
-    ? <a data-article-title-link="true" href={articleUrl} target="_blank" rel="noreferrer">{article.title}</a>
-    : article.title;
+  const openMaterial = useNewspaperMaterialViewer();
+  const content = <button type="button" className={s.materialOpenTitle} onClick={() => openMaterial?.(articleMaterial(article))}>{article.title}</button>;
   return as === 'strong' ? <strong>{content}</strong> : <h2>{content}</h2>;
 }
 

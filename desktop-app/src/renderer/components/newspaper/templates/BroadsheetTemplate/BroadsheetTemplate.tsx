@@ -3,9 +3,9 @@ import { ImageBlock } from '../../blocks/ImageBlock/ImageBlock';
 import { NoteBlock, NoteContent } from '../../blocks/NoteBlock/NoteBlock';
 import { NotesListBlock } from '../../blocks/NotesListBlock/NotesListBlock';
 import { SourcesBlock } from '../../blocks/SourcesBlock/SourcesBlock';
+import { articleMaterial, useNewspaperMaterialViewer } from '../../NewspaperMaterialContext';
 import { WeatherForecast } from '../../blocks/WeatherBlock/WeatherBlock';
 import type { ArticleBlockData, NewspaperTemplateProps, NotesListBlockData } from '../../types';
-import { safeUrl } from '../../utils/media';
 import { composeBroadsheetPage } from './broadsheetLayout';
 import s from '../../Newspaper.module.scss';
 import t from './BroadsheetTemplate.module.scss';
@@ -14,10 +14,12 @@ type Layout = ReturnType<typeof composeBroadsheetPage>;
 
 function ArticleTitle({ article }: { article: ArticleBlockData | undefined }) {
   if (!article) return null;
-  const articleUrl = safeUrl(article.url);
-  return <h2>{articleUrl
-    ? <a data-article-title-link="true" href={articleUrl} target="_blank" rel="noreferrer">{article.title}</a>
-    : article.title}</h2>;
+  return <InteractiveArticleTitle article={article}/>;
+}
+
+function InteractiveArticleTitle({ article }: { article: ArticleBlockData }) {
+  const openMaterial = useNewspaperMaterialViewer();
+  return <h2><button type="button" className={s.materialOpenTitle} onClick={() => openMaterial?.(articleMaterial(article))}>{article.title}</button></h2>;
 }
 
 function Masthead({ issue }: Pick<NewspaperTemplateProps, 'issue'>) {

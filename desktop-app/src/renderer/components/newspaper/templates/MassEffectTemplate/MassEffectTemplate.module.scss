@@ -1,3 +1,5 @@
+@use '../../NewspaperSurfaces' as surfaces;
+
 .page {
   position: relative;
   display: flex;
@@ -5,9 +7,7 @@
   flex-direction: column;
   padding: 22px 26px;
   overflow: hidden;
-  background:
-    radial-gradient(circle at 50% 0, #12344b 0, transparent 38%),
-    repeating-linear-gradient(0deg, rgba(72, 210, 239, 0.025) 0 1px, transparent 1px 4px), #06121f;
+  @include surfaces.mass-effect;
   color: #d8edf2;
   font-family: Bahnschrift, 'Segoe UI', Arial, sans-serif;
 }

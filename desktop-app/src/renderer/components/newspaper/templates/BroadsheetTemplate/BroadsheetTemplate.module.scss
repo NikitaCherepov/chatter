@@ -1,11 +1,12 @@
+@use '../../NewspaperSurfaces' as surfaces;
+
 .paper {
   position: relative;
   display: flex;
   flex-direction: column;
   min-height: 1060px;
   padding: 14px 20px 16px;
-  background-color: #f4f0e4;
-  background-image: radial-gradient(circle at 18% 12%, rgba(92, 72, 40, 0.04), transparent 26%), repeating-linear-gradient(0deg, rgba(40, 32, 20, 0.018) 0 1px, transparent 1px 4px);
+  @include surfaces.broadsheet;
 }
 
 .paper [data-article-title-link='true'],

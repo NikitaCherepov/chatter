@@ -1,0 +1,98 @@
+@use './NewspaperSurfaces' as surfaces;
+
+.page {
+  --accent: #171717;
+  --paper: #fbfaf6;
+  --text: #141414;
+  --muted: #6d685f;
+  --line: rgba(20, 20, 20, .4);
+  display: flex;
+  width: min(900px, calc(100vw - 28px));
+  min-height: 100%;
+  flex-direction: column;
+  @include surfaces.broadsheet;
+  color: var(--text);
+  font-family: Georgia, 'Times New Roman', serif;
+  box-shadow: 0 16px 55px rgba(0, 0, 0, .32);
+}
+.page[data-style='wizarding'] {
+  --accent: #743a19;
+  --paper: #eadab2;
+  --text: #24170c;
+  --muted: #72583a;
+  --line: rgba(70, 40, 17, .48);
+  @include surfaces.wizarding;
+  box-shadow: 0 18px 58px rgba(0, 0, 0, .42), inset 0 0 50px rgba(72, 39, 14, .14);
+}
+.page[data-style='deusEx'] {
+  --accent: #d0a92e;
+  --paper: #0b0c09;
+  --text: #ece9da;
+  --muted: #8f8e82;
+  --line: rgba(208, 169, 46, .52);
+  @include surfaces.deus-ex;
+  font-family: Bahnschrift, 'Segoe UI', sans-serif;
+  clip-path: polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px);
+}
+.page[data-style='massEffect'] {
+  --accent: #61dced;
+  --paper: #091f2c;
+  --text: #ecfcff;
+  --muted: #75aebb;
+  --line: rgba(97, 220, 237, .5);
+  @include surfaces.mass-effect;
+  font-family: 'Segoe UI', Arial, sans-serif;
+  clip-path: polygon(22px 0, 100% 0, 100% calc(100% - 22px), calc(100% - 22px) 100%, 0 100%, 0 22px);
+  box-shadow: inset 4px 0 #ff8750, 0 16px 55px rgba(0, 0, 0, .45);
+}
+.header,
+.folio {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  border-color: var(--line);
+}
+.header {
+  min-height: 72px;
+  padding: 13px 22px;
+  border-bottom: 1px solid var(--line);
+}
+.header > div { display: flex; flex-direction: column; gap: 3px; }
+.header > div:last-child { align-items: flex-end; }
+.header span,
+.header b,
+.kicker { color: var(--accent); font-size: 9px; font-weight: 900; letter-spacing: .16em; text-transform: uppercase; }
+.header strong { font-size: 15px; text-transform: uppercase; }
+.header small { color: var(--muted); font-size: 10px; }
+.content { width: min(820px, calc(100% - 48px)); margin: 0 auto; padding: clamp(34px, 5vw, 60px) 0 55px; }
+.kicker { margin-bottom: 11px; }
+.content h1 { max-width: 21ch; margin: 0 0 27px; font-size: 35px; line-height: .98; letter-spacing: -.035em; }
+[data-style='wizarding'] .content h1 { max-width: 20ch; font-size: 30px; }
+[data-style='deusEx'] .content h1,
+[data-style='massEffect'] .content h1 { max-width: 25ch; font-family: Bahnschrift, 'Segoe UI', sans-serif; letter-spacing: -.02em; text-transform: uppercase; }
+[data-style='deusEx'] .content h1 { font-size: 28px; }
+[data-style='massEffect'] .content h1 { font-size: 31px; }
+.hero { margin: 0 0 28px; }
+.hero img { display: block; width: 100%; max-height: 390px; border: 1px solid var(--line); filter: saturate(.9) contrast(1.04); object-fit: cover; }
+[data-style='wizarding'] .hero img { filter: sepia(.18) saturate(.82) contrast(1.08); }
+[data-style='deusEx'] .hero img,
+[data-style='massEffect'] .hero img { filter: saturate(.72) contrast(1.16); }
+.hero figcaption { padding-top: 6px; color: var(--muted); font-size: 9px; text-transform: uppercase; }
+.body { column-gap: 34px; font-size: 10px; line-height: 1.45; }
+.body p { margin: 0 0 1.05em; }
+.body p:first-child::first-letter { float: left; margin: .05em .1em 0 0; color: var(--accent); font-size: 3.2em; font-weight: 800; line-height: .8; }
+[data-style='wizarding'] .body { font-size: 11px; line-height: 1.5; }
+[data-style='deusEx'] .body,
+[data-style='massEffect'] .body { font-size: 9px; line-height: 1.45; }
+.sources { display: flex; gap: 8px 18px; margin-top: 36px; padding-top: 15px; border-top: 1px solid var(--line); flex-wrap: wrap; }
+.sources span { width: 100%; color: var(--muted); font-size: 9px; font-weight: 900; letter-spacing: .14em; text-transform: uppercase; }
+.sources a { color: var(--accent); font-size: 12px; font-weight: 800; text-decoration: none; }
+.sources a:hover { text-decoration: underline; }
+.folio { margin-top: auto; padding: 9px 18px; border-top: 1px solid var(--line); color: var(--muted); font-size: 8px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+@media (min-width: 1000px) {
+  .body { columns: 2; }
+  [data-style='deusEx'] .body,
+  [data-style='massEffect'] .body { columns: 1; max-width: 72ch; }
+}

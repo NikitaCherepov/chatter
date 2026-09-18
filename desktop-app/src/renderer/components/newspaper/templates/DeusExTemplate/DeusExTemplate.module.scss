@@ -1,3 +1,5 @@
+@use '../../NewspaperSurfaces' as surfaces;
+
 .page {
   position: relative;
   display: flex;
@@ -5,14 +7,7 @@
   min-height: 1060px;
   padding: 20px 26px 22px;
   overflow: hidden;
-  background:
-    linear-gradient(
-      120deg,
-      transparent 0 72%,
-      rgba(205, 163, 38, 0.035) 72% 72.15%,
-      transparent 72.15%
-    ),
-    radial-gradient(circle at 50% -10%, #2b210d 0, transparent 34%), #030403;
+  @include surfaces.deus-ex;
   color: #c8c9c4;
   font-family: Bahnschrift, 'Segoe UI', Arial, sans-serif;
 }

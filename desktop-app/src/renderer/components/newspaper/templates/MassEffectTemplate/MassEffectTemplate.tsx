@@ -4,8 +4,9 @@ import { NoteBlock, NoteContent } from '../../blocks/NoteBlock/NoteBlock';
 import { NotesListBlock } from '../../blocks/NotesListBlock/NotesListBlock';
 import { SourcesBlock } from '../../blocks/SourcesBlock/SourcesBlock';
 import { WeatherForecast } from '../../blocks/WeatherBlock/WeatherBlock';
+import { articleMaterial, useNewspaperMaterialViewer } from '../../NewspaperMaterialContext';
 import type { NewspaperBlock, NewspaperTemplateProps } from '../../types';
-import { safeImageUrl, safeUrl } from '../../utils/media';
+import { safeImageUrl } from '../../utils/media';
 import { composeMassEffectPage } from './massEffectLayout';
 import s from '../../Newspaper.module.scss';
 import t from './MassEffectTemplate.module.scss';
@@ -17,24 +18,30 @@ function mediaUrl(block: MediaBlock | undefined) {
   return safeImageUrl(block?.image_url) || undefined;
 }
 
-function articlePanelProps(article: Extract<MediaBlock, { type: 'article' }> | undefined) {
-  const articleUrl = safeUrl(article?.url);
-  if (!articleUrl) return {};
-  const openArticle = () => window.open(articleUrl, '_blank', 'noopener,noreferrer');
-  return {
-    'data-clickable': 'true',
-    role: 'link',
-    tabIndex: 0,
-    onClick: (event: React.MouseEvent<HTMLElement>) => {
-      if (!(event.target as HTMLElement).closest('a, button')) openArticle();
-    },
-    onKeyDown: (event: React.KeyboardEvent<HTMLElement>) => {
-      if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) {
+function ArticlePanel({ article, as: Tag = 'div', className, children }: {
+  article: Extract<MediaBlock, { type: 'article' }> | undefined;
+  as?: 'div' | 'section' | 'article';
+  className?: string;
+  children: React.ReactNode;
+}) {
+  const openMaterial = useNewspaperMaterialViewer();
+  const interactive = Boolean(article && openMaterial);
+  const open = () => article && openMaterial?.(articleMaterial(article));
+  return <Tag
+    className={className}
+    data-clickable={interactive ? 'true' : undefined}
+    role={interactive ? 'button' : undefined}
+    tabIndex={interactive ? 0 : undefined}
+    onClick={event => {
+      if (interactive && !(event.target as HTMLElement).closest('a, button')) open();
+    }}
+    onKeyDown={event => {
+      if (interactive && event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) {
         event.preventDefault();
-        openArticle();
+        open();
       }
-    },
-  };
+    }}
+  >{children}</Tag>;
 }
 
 function AnnHeader({ issue, layout }: { issue: NewspaperTemplateProps['issue']; layout: Layout }) {
@@ -118,7 +125,7 @@ function PriorityBroadcast({ layout }: { layout: Layout }) {
   const fallbackUrl = mediaUrl(fallbackImage);
   return (
     <>
-      <section className={t.hero} {...articlePanelProps(layout.hero)}>
+      <ArticlePanel as="section" className={t.hero} article={layout.hero}>
         <ArticleImage article={layout.hero} />
         {!heroImage && fallbackUrl && <img src={fallbackUrl} alt="" />}
         <div>
@@ -127,7 +134,7 @@ function PriorityBroadcast({ layout }: { layout: Layout }) {
           <p>{layout.hero?.text}</p>
           <SourcesBlock sources={layout.hero?.sources} />
         </div>
-      </section>
+      </ArticlePanel>
       <section className={t.commandDeck}>
         <BriefingRail lists={layout.noteLists.slice(0, 1)} />
         <Telemetry weather={layout.weather} />
@@ -267,10 +274,7 @@ function VisualRelay({ layout }: { layout: Layout }) {
         <b>{media.length} CHANNELS</b>
       </div>
       <section className={t.relay}>
-        <div
-          className={t.relayPrimary}
-          {...articlePanelProps(primary?.type === 'article' ? primary : undefined)}
-        >
+        <ArticlePanel className={t.relayPrimary} article={primary?.type === 'article' ? primary : undefined}>
           {primary?.type === 'image' ? (
             <ImageBlock image={primary} className={t.relayImage} />
           ) : (
@@ -278,12 +282,13 @@ function VisualRelay({ layout }: { layout: Layout }) {
           )}
           <span>PRIMARY VISUAL FEED</span>
           <h2>{primary?.title}</h2>
-        </div>
+        </ArticlePanel>
         <div className={t.relayStack}>
           {signals.map((block, index) => (
-            <article
+            <ArticlePanel
               key={block.id}
-              {...articlePanelProps(block.type === 'article' ? block : undefined)}
+              as="article"
+              article={block.type === 'article' ? block : undefined}
             >
               {block.type === 'image' ? (
                 <ImageBlock image={block} className={t.relayImage} />
@@ -292,7 +297,7 @@ function VisualRelay({ layout }: { layout: Layout }) {
               )}
               <span>CH {String(index + 2).padStart(2, '0')}</span>
               <b>{block.title}</b>
-            </article>
+            </ArticlePanel>
           ))}
         </div>
       </section>

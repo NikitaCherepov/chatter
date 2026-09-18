@@ -1,0 +1,32 @@
+@mixin wizarding {
+  background-color: #e8d8ae;
+  background-image:
+    radial-gradient(circle at 20% 10%, rgba(98, 58, 20, 0.16), transparent 22%),
+    repeating-linear-gradient(90deg, rgba(55, 35, 15, 0.025) 0 2px, transparent 2px 5px);
+}
+
+@mixin broadsheet {
+  background-color: #f4f0e4;
+  background-image:
+    radial-gradient(circle at 18% 12%, rgba(92, 72, 40, 0.04), transparent 26%),
+    repeating-linear-gradient(0deg, rgba(40, 32, 20, 0.018) 0 1px, transparent 1px 4px);
+}
+
+@mixin deus-ex {
+  background-color: #030403;
+  background-image:
+    linear-gradient(
+      120deg,
+      transparent 0 72%,
+      rgba(205, 163, 38, 0.035) 72% 72.15%,
+      transparent 72.15%
+    ),
+    radial-gradient(circle at 50% -10%, #2b210d 0, transparent 34%);
+}
+
+@mixin mass-effect {
+  background-color: #06121f;
+  background-image:
+    radial-gradient(circle at 50% 0, #12344b 0, transparent 38%),
+    repeating-linear-gradient(0deg, rgba(72, 210, 239, 0.025) 0 1px, transparent 1px 4px);
+}

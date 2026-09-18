@@ -1,6 +1,7 @@
 import type { ArticleBlockData } from '../../types';
 import { safeImageUrl, safeUrl } from '../../utils/media';
 import { SourcesBlock } from '../SourcesBlock/SourcesBlock';
+import { articleMaterial, useNewspaperMaterialViewer } from '../../NewspaperMaterialContext';
 import s from '../../Newspaper.module.scss';
 
 export function ArticleBlock({
@@ -16,28 +17,31 @@ export function ArticleBlock({
   interactive?: boolean;
   titleLink?: boolean;
 }) {
+  const openMaterial = useNewspaperMaterialViewer();
   const image = safeImageUrl(article.image_url, 1200);
   const articleUrl = safeUrl(article.url);
   const panelUrl = interactive ? articleUrl : null;
   const openArticle = () => {
-    if (panelUrl) window.open(panelUrl, '_blank', 'noopener,noreferrer');
+    if (openMaterial) openMaterial(articleMaterial(article));
+    else if (panelUrl) window.open(panelUrl, '_blank', 'noopener,noreferrer');
   };
+  const clickable = Boolean(openMaterial || panelUrl);
   return (
     <article
       className={className}
       data-role={article.role}
-      data-clickable={panelUrl ? 'true' : undefined}
-      role={panelUrl ? 'link' : undefined}
-      tabIndex={panelUrl ? 0 : undefined}
+      data-clickable={clickable ? 'true' : undefined}
+      role={clickable ? 'button' : undefined}
+      tabIndex={clickable ? 0 : undefined}
       onClick={
-        panelUrl
+        clickable
           ? (event) => {
               if (!(event.target as HTMLElement).closest('a, button')) openArticle();
             }
           : undefined
       }
       onKeyDown={
-        panelUrl
+        clickable
           ? (event) => {
               if (
                 event.target === event.currentTarget &&
@@ -52,7 +56,9 @@ export function ArticleBlock({
     >
       {eyebrow && <span>{eyebrow}</span>}
       {image && <img className={s.articleImage} src={image} alt="" />}
-      <h2>{titleLink && articleUrl
+      <h2>{openMaterial
+        ? <button type="button" className={s.materialOpenTitle} onClick={openArticle}>{article.title}</button>
+        : titleLink && articleUrl
         ? <a data-article-title-link="true" href={articleUrl} target="_blank" rel="noreferrer">{article.title}</a>
         : article.title}</h2>
       <p>{article.text}</p>
