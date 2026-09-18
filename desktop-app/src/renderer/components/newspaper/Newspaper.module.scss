@@ -510,6 +510,15 @@
   pointer-events: none;
   will-change: contents;
 }
+.broadsheetCurlCanvas {
+  position: absolute;
+  z-index: 3;
+  top: 0;
+  left: 0;
+  display: block;
+  pointer-events: none;
+  will-change: contents;
+}
 .zoomLayer {
   width: max-content;
   height: 100%;

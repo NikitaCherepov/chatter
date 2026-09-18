@@ -9,6 +9,7 @@ import { saveImageFile } from '../../lib/saveImageFile';
 import { TemplateRenderer } from './templates/TemplateRenderer';
 import { NewspaperImageViewerProvider } from './NewspaperImageViewerContext';
 import { NewspaperStyleSelect, type NewspaperStyleOption } from './NewspaperStyleSelect/NewspaperStyleSelect';
+import { BroadsheetCurlTransition } from './BroadsheetCurlTransition';
 import { WizardBurnTransition } from './WizardBurnTransition';
 import type { NewspaperIssue, NewspaperVisualStyle } from './types';
 import s from './Newspaper.module.scss';
@@ -35,6 +36,17 @@ type MassEffectTransition = {
 type WizardingTransition = {
   direction: PageTransition['direction'];
   phase: 'capturing' | 'holding' | 'waiting' | 'burning';
+  sourcePageNumber: number;
+  snapshot?: HTMLCanvasElement;
+  left?: number;
+  top?: number;
+  width?: number;
+  height?: number;
+};
+
+type BroadsheetTransition = {
+  direction: PageTransition['direction'];
+  phase: 'capturing' | 'holding' | 'waiting' | 'curling';
   sourcePageNumber: number;
   snapshot?: HTMLCanvasElement;
   left?: number;
@@ -80,10 +92,63 @@ export function NewspaperReader({ issue, style, pageNumber, pageCount, canGoPrev
   const [pageTransition, setPageTransition] = useState<PageTransition | null>(null);
   const [massEffectTransition, setMassEffectTransition] = useState<MassEffectTransition | null>(null);
   const [wizardingTransition, setWizardingTransition] = useState<WizardingTransition | null>(null);
+  const [broadsheetTransition, setBroadsheetTransition] = useState<BroadsheetTransition | null>(null);
 
   const navigatePage = useCallback(async (direction: PageTransition['direction']) => {
-    if (!issue || transitionLockRef.current || pageTransition || massEffectTransition || wizardingTransition) return;
+    if (!issue || transitionLockRef.current || pageTransition || massEffectTransition || wizardingTransition || broadsheetTransition) return;
     if (direction === 'previous' ? !canGoPrevious : !canGoNext) return;
+    if (style === 'broadsheet') {
+      const page = pageRef.current?.querySelector<HTMLElement>(':scope > article');
+      const viewport = viewportRef.current;
+      const dialog = dialogRef.current;
+      if (!page || !viewport || !dialog) return;
+      transitionLockRef.current = true;
+      setBroadsheetTransition({ direction, phase: 'capturing', sourcePageNumber: pageNumber });
+      try {
+        const pageBounds = page.getBoundingClientRect();
+        const viewportBounds = viewport.getBoundingClientRect();
+        const dialogBounds = dialog.getBoundingClientRect();
+        const left = Math.max(pageBounds.left, viewportBounds.left);
+        const top = Math.max(pageBounds.top, viewportBounds.top);
+        const right = Math.min(pageBounds.right, viewportBounds.right);
+        const bottom = Math.min(pageBounds.bottom, viewportBounds.bottom);
+        if (right <= left || bottom <= top) throw new Error('Broadsheet page is outside the viewport');
+        const pixelRatio = window.devicePixelRatio || 1;
+        const captureBounds = {
+          x: Math.floor(left * pixelRatio),
+          y: Math.floor(top * pixelRatio),
+          width: Math.ceil(right * pixelRatio) - Math.floor(left * pixelRatio),
+          height: Math.ceil(bottom * pixelRatio) - Math.floor(top * pixelRatio),
+        };
+        const capture = await window.electronAPI.capturePageRegion(captureBounds);
+        const image = new Image();
+        image.src = capture.dataUrl;
+        await image.decode();
+        const snapshot = document.createElement('canvas');
+        snapshot.width = image.naturalWidth;
+        snapshot.height = image.naturalHeight;
+        const context = snapshot.getContext('2d');
+        if (!context) throw new Error('Unable to create broadsheet snapshot canvas');
+        context.drawImage(image, 0, 0);
+        setBroadsheetTransition({
+          direction,
+          phase: 'holding',
+          sourcePageNumber: pageNumber,
+          snapshot,
+          left: captureBounds.x / pixelRatio - dialogBounds.left,
+          top: captureBounds.y / pixelRatio - dialogBounds.top,
+          width: captureBounds.width / pixelRatio,
+          height: captureBounds.height / pixelRatio,
+        });
+      } catch (error) {
+        console.error('Failed to capture broadsheet newspaper page:', error);
+        setBroadsheetTransition(null);
+        transitionLockRef.current = false;
+        if (direction === 'previous') onPrevious();
+        else onNext();
+      }
+      return;
+    }
     if (style === 'wizarding') {
       const page = pageRef.current;
       const viewport = viewportRef.current;
@@ -144,7 +209,7 @@ export function NewspaperReader({ issue, style, pageNumber, pageCount, canGoPrev
       return;
     }
     setPageTransition({ direction, phase: 'cover', sourcePageNumber: pageNumber });
-  }, [canGoNext, canGoPrevious, issue, massEffectTransition, onNext, onPrevious, pageNumber, pageTransition, style, wizardingTransition]);
+  }, [broadsheetTransition, canGoNext, canGoPrevious, issue, massEffectTransition, onNext, onPrevious, pageNumber, pageTransition, style, wizardingTransition]);
 
   useEffect(() => {
     if (!issue) setViewerImage(null);
@@ -173,6 +238,12 @@ export function NewspaperReader({ issue, style, pageNumber, pageCount, canGoPrev
   useEffect(() => {
     if (!issue || style !== 'wizarding') {
       setWizardingTransition(null);
+      transitionLockRef.current = false;
+    }
+  }, [issue, style]);
+  useEffect(() => {
+    if (!issue || style !== 'broadsheet') {
+      setBroadsheetTransition(null);
       transitionLockRef.current = false;
     }
   }, [issue, style]);
@@ -207,12 +278,35 @@ export function NewspaperReader({ issue, style, pageNumber, pageCount, canGoPrev
     };
   }, [onNext, onPrevious, wizardingTransition]);
   useEffect(() => {
+    if (!broadsheetTransition || broadsheetTransition.phase !== 'holding') return;
+    let navigationFrame = 0;
+    const presentationFrame = requestAnimationFrame(() => {
+      navigationFrame = requestAnimationFrame(() => {
+        setBroadsheetTransition(current => current?.phase === 'holding' ? { ...current, phase: 'waiting' } : current);
+        if (viewportRef.current) viewportRef.current.scrollTop = 0;
+        if (broadsheetTransition.direction === 'previous') onPrevious();
+        else onNext();
+      });
+    });
+    return () => {
+      cancelAnimationFrame(presentationFrame);
+      cancelAnimationFrame(navigationFrame);
+    };
+  }, [broadsheetTransition, onNext, onPrevious]);
+  useEffect(() => {
     if (!wizardingTransition || wizardingTransition.phase !== 'waiting' || pageNumber === wizardingTransition.sourcePageNumber) return;
     const frame = requestAnimationFrame(() => {
       setWizardingTransition(current => current?.phase === 'waiting' ? { ...current, phase: 'burning' } : current);
     });
     return () => cancelAnimationFrame(frame);
   }, [pageNumber, wizardingTransition]);
+  useEffect(() => {
+    if (!broadsheetTransition || broadsheetTransition.phase !== 'waiting' || pageNumber === broadsheetTransition.sourcePageNumber) return;
+    const frame = requestAnimationFrame(() => {
+      setBroadsheetTransition(current => current?.phase === 'waiting' ? { ...current, phase: 'curling' } : current);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [broadsheetTransition, pageNumber]);
   useEffect(() => {
     const viewport = viewportRef.current;
     if (!issue || !viewport) return;
@@ -267,7 +361,7 @@ export function NewspaperReader({ issue, style, pageNumber, pageCount, canGoPrev
     applyZoom(Math.floor(scale * 100 / ZOOM_STEP) * ZOOM_STEP);
   };
   const startDragging = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (massEffectTransition || wizardingTransition) return;
+    if (massEffectTransition || wizardingTransition || broadsheetTransition) return;
     if (event.button !== 0 || (event.target as HTMLElement).closest('a, button, input, textarea, select, [role="button"], [role="link"], [data-clickable="true"]')) return;
     const viewport = viewportRef.current;
     if (!viewport) return;
@@ -410,6 +504,19 @@ export function NewspaperReader({ issue, style, pageNumber, pageCount, canGoPrev
       onComplete={() => {
         transitionLockRef.current = false;
         setWizardingTransition(null);
+      }}
+    />}
+    {broadsheetTransition?.snapshot && <BroadsheetCurlTransition
+      snapshot={broadsheetTransition.snapshot}
+      direction={broadsheetTransition.direction}
+      left={broadsheetTransition.left ?? 0}
+      top={broadsheetTransition.top ?? 0}
+      width={broadsheetTransition.width ?? broadsheetTransition.snapshot.width}
+      height={broadsheetTransition.height ?? broadsheetTransition.snapshot.height}
+      running={broadsheetTransition.phase === 'curling'}
+      onComplete={() => {
+        transitionLockRef.current = false;
+        setBroadsheetTransition(null);
       }}
     />}
     <AnimatePresence>{pageTransition && <motion.div
