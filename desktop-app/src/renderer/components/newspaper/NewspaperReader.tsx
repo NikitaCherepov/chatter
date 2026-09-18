@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
@@ -12,6 +12,7 @@ import { NewspaperStyleSelect, type NewspaperStyleOption } from './NewspaperStyl
 import { BroadsheetCurlTransition } from './BroadsheetCurlTransition';
 import { WizardBurnTransition } from './WizardBurnTransition';
 import { NewspaperFocusTransition } from './NewspaperFocusTransition';
+import { MassEffectPageTransition, type MassEffectPageTransitionState } from './MassEffectPageTransition';
 import { NewspaperMaterialProvider, type NewspaperMaterial } from './NewspaperMaterialContext';
 import { NewspaperMaterialRenderer } from './NewspaperMaterialRenderer';
 import type { NewspaperIssue, NewspaperVisualStyle } from './types';
@@ -27,13 +28,6 @@ type PageTransition = {
   direction: 'previous' | 'next';
   phase: 'cover' | 'covered' | 'reveal';
   sourcePageNumber: number;
-};
-
-type MassEffectTransition = {
-  direction: PageTransition['direction'];
-  phase: 'waiting' | 'reveal';
-  sourcePageNumber: number;
-  outgoingIssue: NewspaperIssue;
 };
 
 type WizardingTransition = {
@@ -107,13 +101,13 @@ export function NewspaperReader({ issue, style, pageNumber, pageCount, canGoPrev
   const pageRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ pointerId: number; x: number; y: number; scrollLeft: number; scrollTop: number } | null>(null);
   const transitionLockRef = useRef(false);
-  const issueViewRef = useRef({ scrollLeft: 0, scrollTop: 0, zoom: ZOOM_DEFAULT });
+  const materialIssueViewRef = useRef({ scrollLeft: 0, scrollTop: 0, zoom: ZOOM_DEFAULT });
   const [zoom, setZoom] = useState(ZOOM_DEFAULT);
   const [dragging, setDragging] = useState(false);
   const [controlsOpen, setControlsOpen] = useState(false);
   const [viewerImage, setViewerImage] = useState<{ src: string; title?: string } | null>(null);
   const [pageTransition, setPageTransition] = useState<PageTransition | null>(null);
-  const [massEffectTransition, setMassEffectTransition] = useState<MassEffectTransition | null>(null);
+  const [massEffectTransition, setMassEffectTransition] = useState<MassEffectPageTransitionState | null>(null);
   const [wizardingTransition, setWizardingTransition] = useState<WizardingTransition | null>(null);
   const [broadsheetTransition, setBroadsheetTransition] = useState<BroadsheetTransition | null>(null);
   const [material, setMaterial] = useState<NewspaperMaterial | null>(null);
@@ -121,6 +115,13 @@ export function NewspaperReader({ issue, style, pageNumber, pageCount, canGoPrev
   const [chatOpen, setChatOpen] = useState(false);
   const [chatDraft, setChatDraft] = useState('');
   const [chatMessages, setChatMessages] = useState<ReaderMessage[]>([]);
+
+  const resetPageViewport = useCallback(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    viewport.scrollLeft = 0;
+    viewport.scrollTop = 0;
+  }, []);
 
   const navigatePage = useCallback(async (direction: PageTransition['direction']) => {
     if (!issue || material || transitionLockRef.current || pageTransition || massEffectTransition || wizardingTransition || broadsheetTransition || focusTransition) return;
@@ -172,6 +173,7 @@ export function NewspaperReader({ issue, style, pageNumber, pageCount, canGoPrev
         console.error('Failed to capture broadsheet newspaper page:', error);
         setBroadsheetTransition(null);
         transitionLockRef.current = false;
+        resetPageViewport();
         if (direction === 'previous') onPrevious();
         else onNext();
       }
@@ -218,26 +220,38 @@ export function NewspaperReader({ issue, style, pageNumber, pageCount, canGoPrev
         console.error('Failed to capture wizarding newspaper page:', error);
         setWizardingTransition(null);
         transitionLockRef.current = false;
+        resetPageViewport();
         if (direction === 'previous') onPrevious();
         else onNext();
       }
       return;
     }
     if (style === 'massEffect') {
-      setMassEffectTransition({ direction, phase: 'waiting', sourcePageNumber: pageNumber, outgoingIssue: issue });
-      if (viewportRef.current) viewportRef.current.scrollTop = 0;
+      const viewport = viewportRef.current;
+      setMassEffectTransition({
+        direction,
+        phase: 'waiting',
+        sourcePageNumber: pageNumber,
+        outgoingIssue: issue,
+        scrollLeft: viewport?.scrollLeft ?? 0,
+        scrollTop: viewport?.scrollTop ?? 0,
+      });
+      if (viewport) {
+        viewport.scrollLeft = 0;
+        viewport.scrollTop = 0;
+      }
       if (direction === 'previous') onPrevious();
       else onNext();
       return;
     }
     if (style !== 'deusEx') {
-      if (viewportRef.current) viewportRef.current.scrollTop = 0;
+      resetPageViewport();
       if (direction === 'previous') onPrevious();
       else onNext();
       return;
     }
     setPageTransition({ direction, phase: 'cover', sourcePageNumber: pageNumber });
-  }, [broadsheetTransition, canGoNext, canGoPrevious, focusTransition, issue, massEffectTransition, material, onNext, onPrevious, pageNumber, pageTransition, style, wizardingTransition]);
+  }, [broadsheetTransition, canGoNext, canGoPrevious, focusTransition, issue, massEffectTransition, material, onNext, onPrevious, pageNumber, pageTransition, resetPageViewport, style, wizardingTransition]);
 
   const focusMaterial = useCallback(async (target: NewspaperMaterial | null) => {
     if (!issue || pageTransition || massEffectTransition || wizardingTransition || broadsheetTransition || focusTransition) return;
@@ -245,7 +259,7 @@ export function NewspaperReader({ issue, style, pageNumber, pageCount, canGoPrev
     const dialog = dialogRef.current;
     if (!viewport || !dialog) return;
     if (target && !material) {
-      issueViewRef.current = { scrollLeft: viewport.scrollLeft, scrollTop: viewport.scrollTop, zoom };
+      materialIssueViewRef.current = { scrollLeft: viewport.scrollLeft, scrollTop: viewport.scrollTop, zoom };
     }
     const direction = target ? 'open' : 'close';
     transitionLockRef.current = true;
@@ -292,8 +306,8 @@ export function NewspaperReader({ issue, style, pageNumber, pageCount, canGoPrev
       transitionLockRef.current = false;
       requestAnimationFrame(() => {
         if (!viewportRef.current) return;
-        viewportRef.current.scrollLeft = target ? 0 : issueViewRef.current.scrollLeft;
-        viewportRef.current.scrollTop = target ? 0 : issueViewRef.current.scrollTop;
+        viewportRef.current.scrollLeft = target ? 0 : materialIssueViewRef.current.scrollLeft;
+        viewportRef.current.scrollTop = target ? 0 : materialIssueViewRef.current.scrollTop;
       });
     }
   }, [broadsheetTransition, focusTransition, issue, massEffectTransition, material, pageTransition, style, wizardingTransition, zoom]);
@@ -333,10 +347,6 @@ export function NewspaperReader({ issue, style, pageNumber, pageCount, canGoPrev
       switchFrame = requestAnimationFrame(() => {
         setFocusTransition(current => current?.phase === 'holding' ? { ...current, phase: 'waiting' } : current);
         setMaterial(focusTransition.target);
-        if (viewportRef.current) {
-          viewportRef.current.scrollLeft = 0;
-          viewportRef.current.scrollTop = 0;
-        }
       });
     });
     return () => {
@@ -344,6 +354,16 @@ export function NewspaperReader({ issue, style, pageNumber, pageCount, canGoPrev
       cancelAnimationFrame(switchFrame);
     };
   }, [focusTransition]);
+  useLayoutEffect(() => {
+    if (!focusTransition || focusTransition.kind !== 'snapshot' || focusTransition.phase !== 'waiting') return;
+    const targetMatches = focusTransition.target
+      ? material?.id === focusTransition.target.id && material.kind === focusTransition.target.kind
+      : material === null;
+    const viewport = viewportRef.current;
+    if (!targetMatches || !viewport) return;
+    viewport.scrollLeft = focusTransition.target ? 0 : materialIssueViewRef.current.scrollLeft;
+    viewport.scrollTop = focusTransition.target ? 0 : materialIssueViewRef.current.scrollTop;
+  }, [focusTransition, material]);
   useEffect(() => {
     if (!focusTransition || focusTransition.kind !== 'snapshot' || focusTransition.phase !== 'waiting') return;
     const targetMatches = focusTransition.target
@@ -353,10 +373,6 @@ export function NewspaperReader({ issue, style, pageNumber, pageCount, canGoPrev
     let restoreFrame = 0;
     const animationFrame = requestAnimationFrame(() => {
       restoreFrame = requestAnimationFrame(() => {
-        if (!focusTransition.target && viewportRef.current) {
-          viewportRef.current.scrollLeft = issueViewRef.current.scrollLeft;
-          viewportRef.current.scrollTop = issueViewRef.current.scrollTop;
-        }
         setFocusTransition(current => current?.phase === 'waiting' ? { ...current, phase: 'animating' } : current);
       });
     });
@@ -433,7 +449,7 @@ export function NewspaperReader({ issue, style, pageNumber, pageCount, canGoPrev
     const presentationFrame = requestAnimationFrame(() => {
       navigationFrame = requestAnimationFrame(() => {
         setWizardingTransition(current => current?.phase === 'holding' ? { ...current, phase: 'waiting' } : current);
-        if (viewportRef.current) viewportRef.current.scrollTop = 0;
+        resetPageViewport();
         if (wizardingTransition.direction === 'previous') onPrevious();
         else onNext();
       });
@@ -442,14 +458,14 @@ export function NewspaperReader({ issue, style, pageNumber, pageCount, canGoPrev
       cancelAnimationFrame(presentationFrame);
       cancelAnimationFrame(navigationFrame);
     };
-  }, [onNext, onPrevious, wizardingTransition]);
+  }, [onNext, onPrevious, resetPageViewport, wizardingTransition]);
   useEffect(() => {
     if (!broadsheetTransition || broadsheetTransition.phase !== 'holding') return;
     let navigationFrame = 0;
     const presentationFrame = requestAnimationFrame(() => {
       navigationFrame = requestAnimationFrame(() => {
         setBroadsheetTransition(current => current?.phase === 'holding' ? { ...current, phase: 'waiting' } : current);
-        if (viewportRef.current) viewportRef.current.scrollTop = 0;
+        resetPageViewport();
         if (broadsheetTransition.direction === 'previous') onPrevious();
         else onNext();
       });
@@ -458,7 +474,7 @@ export function NewspaperReader({ issue, style, pageNumber, pageCount, canGoPrev
       cancelAnimationFrame(presentationFrame);
       cancelAnimationFrame(navigationFrame);
     };
-  }, [broadsheetTransition, onNext, onPrevious]);
+  }, [broadsheetTransition, onNext, onPrevious, resetPageViewport]);
   useEffect(() => {
     if (!wizardingTransition || wizardingTransition.phase !== 'waiting' || pageNumber === wizardingTransition.sourcePageNumber) return;
     const frame = requestAnimationFrame(() => {
@@ -574,7 +590,7 @@ export function NewspaperReader({ issue, style, pageNumber, pageCount, canGoPrev
     if (!pageTransition) return;
     if (pageTransition.phase === 'cover') {
       setPageTransition({ ...pageTransition, phase: 'covered' });
-      if (viewportRef.current) viewportRef.current.scrollTop = 0;
+      resetPageViewport();
       if (pageTransition.direction === 'previous') onPrevious();
       else onNext();
       return;
@@ -588,8 +604,8 @@ export function NewspaperReader({ issue, style, pageNumber, pageCount, canGoPrev
       setMaterial(focusTransition.target);
       requestAnimationFrame(() => {
         if (!viewportRef.current) return;
-        viewportRef.current.scrollLeft = focusTransition.target ? 0 : issueViewRef.current.scrollLeft;
-        viewportRef.current.scrollTop = focusTransition.target ? 0 : issueViewRef.current.scrollTop;
+        viewportRef.current.scrollLeft = focusTransition.target ? 0 : materialIssueViewRef.current.scrollLeft;
+        viewportRef.current.scrollTop = focusTransition.target ? 0 : materialIssueViewRef.current.scrollTop;
       });
       return;
     }
@@ -707,29 +723,7 @@ export function NewspaperReader({ issue, style, pageNumber, pageCount, canGoPrev
     {SHOW_READER_CHROME && <header className={s.toolbar}><div className={s.issueMeta}><strong>Выпуск №{issue.issue_number}</strong><span>{pageNumber} / {pageCount}</span></div><div className={s.styleSelect}><Select options={styleOptions} value={style} onChange={value=>onStyleChange(value as NewspaperVisualStyle)} maxVisibleItems={4}/></div><div className={s.toolbarActions}><div className={s.zoomControls}><button type="button" onClick={()=>applyZoom(zoom-ZOOM_STEP)} disabled={zoom<=ZOOM_MIN} aria-label="Уменьшить масштаб">−</button><button type="button" className={s.zoomValue} onClick={fitToWindow} title="Вписать газету в окно">{zoom}%</button><button type="button" onClick={()=>applyZoom(zoom+ZOOM_STEP)} disabled={zoom>=ZOOM_MAX} aria-label="Увеличить масштаб">+</button></div><nav className={s.navigation}><button type="button" onClick={onPrevious} disabled={!canGoPrevious} aria-label={previousLabel}>‹</button><button type="button" onClick={onNext} disabled={!canGoNext} aria-label={nextLabel}>›</button><button type="button" onClick={onClose} aria-label={closeLabel}>×</button></nav></div></header>}
     <div className={`${s.viewport} ${dragging ? s.viewportDragging : ''}`} data-style={style} ref={viewportRef} onPointerDown={startDragging} onPointerMove={moveDragging} onPointerUp={stopDragging} onPointerCancel={stopDragging} onDragStart={event=>event.preventDefault()}>
       <motion.div ref={pageRef} className={s.zoomLayer} style={{zoom:zoom/100} as React.CSSProperties} key={`${issue.id}-${style}-${material ? `${material.kind}-${material.id}` : 'issue'}`} initial={false}><NewspaperImageViewerProvider onOpen={(src, title) => setViewerImage({ src, title })}><NewspaperMaterialProvider onOpen={nextMaterial => focusMaterial(nextMaterial)}>{material ? <NewspaperMaterialRenderer material={material} issue={issue} style={style}/> : <TemplateRenderer issue={issue} style={style}/>}</NewspaperMaterialProvider></NewspaperImageViewerProvider></motion.div>
-      <AnimatePresence>{massEffectTransition && <motion.div
-        key={`mass-effect-outgoing-${massEffectTransition.outgoingIssue.id}`}
-        className={s.massEffectOutgoingPage}
-        style={{zoom:zoom/100} as React.CSSProperties}
-        initial={false}
-        animate={{ clipPath: massEffectTransition.phase === 'reveal'
-          ? (massEffectTransition.direction === 'next' ? 'inset(0 100% 0 0)' : 'inset(0 0 0 100%)')
-          : 'inset(0 0 0 0)' }}
-        transition={{ duration: massEffectTransition.phase === 'reveal' ? .48 : 0, ease: [0.76, 0, 0.24, 1] }}
-        onAnimationComplete={() => {
-          if (massEffectTransition.phase === 'reveal') setMassEffectTransition(null);
-        }}
-      ><NewspaperImageViewerProvider onOpen={() => undefined}><TemplateRenderer issue={massEffectTransition.outgoingIssue} style="massEffect"/></NewspaperImageViewerProvider></motion.div>}</AnimatePresence>
-      <AnimatePresence>{massEffectTransition?.phase === 'reveal' && <motion.div
-        key="mass-effect-divider"
-        className={s.massEffectDividerLayer}
-        style={{zoom:zoom/100} as React.CSSProperties}
-        initial={false}
-      ><motion.i
-        initial={{ left: massEffectTransition.direction === 'next' ? '100%' : '0%' }}
-        animate={{ left: massEffectTransition.direction === 'next' ? '0%' : '100%' }}
-        transition={{ duration: .48, ease: [0.76, 0, 0.24, 1] }}
-      /></motion.div>}</AnimatePresence>
+      <MassEffectPageTransition transition={massEffectTransition} zoom={zoom} onComplete={() => setMassEffectTransition(null)}/>
     </div>
     {wizardingTransition?.snapshot && <WizardBurnTransition
       snapshot={wizardingTransition.snapshot}
@@ -775,7 +769,7 @@ export function NewspaperReader({ issue, style, pageNumber, pageCount, canGoPrev
       running={focusTransition.phase === 'animating'}
       onComplete={finishFocusTransition}
     />}
-    {focusTransition?.kind === 'snapshot' && focusTransition.snapshot && style !== 'wizarding' && style !== 'broadsheet' && focusTransition.phase === 'animating' && <NewspaperFocusTransition
+    {focusTransition?.kind === 'snapshot' && focusTransition.snapshot && style !== 'wizarding' && style !== 'broadsheet' && <NewspaperFocusTransition
       snapshot={focusTransition.snapshot}
       style={style}
       direction={focusTransition.direction}
@@ -783,6 +777,7 @@ export function NewspaperReader({ issue, style, pageNumber, pageCount, canGoPrev
       top={focusTransition.top ?? 0}
       width={focusTransition.width ?? focusTransition.snapshot.width}
       height={focusTransition.height ?? focusTransition.snapshot.height}
+      running={focusTransition.phase === 'animating'}
       onComplete={finishFocusTransition}
     />}
     <AnimatePresence>{focusTransition?.kind === 'buffer' && <motion.div

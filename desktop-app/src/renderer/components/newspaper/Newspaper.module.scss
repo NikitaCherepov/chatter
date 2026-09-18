@@ -662,11 +662,11 @@
   text-underline-offset: .1em;
 }
 .materialOpenTitle:focus-visible,
-.materialNote[data-clickable='true']:focus-visible {
+.materialNote[data-material-open='true']:focus-visible {
   outline: 2px solid currentColor;
   outline-offset: 3px;
 }
-.materialNote[data-clickable='true'] {
+.materialNote[data-material-open='true'] {
   cursor: pointer;
 }
 .focusTransition {
