@@ -242,11 +242,12 @@
 .featureGridColumns .featureImage > img { height: 305px; }
 .featureGridColumns .featureBody { grid-column: 5 / 7; }
 .featureGridColumns .featureBody p { columns: 1; font-size: 11px; }
-.featureGridColumns .featureSideStory { grid-column: 7 / 10; }
-.featureGridColumns .featureBriefs { grid-column: span 4; }
-.featureGridColumns .featureBriefsTop { grid-column: 7 / 10; grid-row: 1; }
+.featureGridColumns .featureSideStory { grid-column: 7 / 10; border-right: 1px solid #111 !important; }
+.featureGridColumns .featureBriefs { grid-column: span 6; }
+.featureGridColumns .featureBriefsTop { grid-column: 7 / 10; grid-row: 1; border-right: 1px solid #111 !important; }
 .featureGridColumns .featureInset { grid-column: 10 / 13; grid-row: 1; padding-left: 10px !important; border-right: 0; }
 .featureGridColumns .featureInset img { height: 190px; }
+.featureGridColumns .featureLowerStory { grid-column: span 6; }
 .featureGridColumns .featureLowerBriefs { grid-column: span 6; }
 .featureGrid:not(.featureGridColumns) .featureLowerBriefs { grid-column: span 4; }
 .featureGrid:not(.featureGridColumns) .featureLowerBriefs .briefItems { columns: 1; }
