@@ -1,5 +1,6 @@
 import type { NewspaperIssue, NewspaperVisualStyle } from './types';
 import type { NewspaperMaterial } from './NewspaperMaterialContext';
+import { useNewspaperImageViewer } from './NewspaperImageViewerContext';
 import { safeImageUrl, safeUrl } from './utils/media';
 import m from './NewspaperMaterial.module.scss';
 import n from './Newspaper.module.scss';
@@ -30,16 +31,18 @@ const pageClassNames: Record<NewspaperVisualStyle, string> = {
 
 export function NewspaperMaterialRenderer({ material, issue, style }: { material: NewspaperMaterial; issue: NewspaperIssue; style: NewspaperVisualStyle }) {
   const image = safeImageUrl(material.imageUrl, 1600);
+  const fullImage = safeImageUrl(material.imageUrl, 2400);
+  const openImage = useNewspaperImageViewer();
   const url = safeUrl(material.url);
   const sources = material.sources?.map(source => ({ ...source, url: safeUrl(source.url) })).filter(source => source.url) || [];
   const paragraphs = (material.longText?.trim() || material.text).split(/\n{2,}/).filter(Boolean);
   const folioContext = material.title.length > 80 ? `${material.title.slice(0, 79).trimEnd()}…` : material.title;
 
-  return <article className={pageClassNames[style]} data-style={style}>
+  return <article className={pageClassNames[style]} data-style={style} data-material-kind={material.kind}>
     {style === 'massEffect' ? <AnnHeader issue={issue} reports={1}/> : style === 'deusEx' ? <DeusExShellHeader issue={issue} signals={image ? 1 : 0} reports={1} relevance="HIGH"/> : style === 'broadsheet' ? <Masthead issue={issue}/> : style === 'wizarding' ? <WizardingHead issue={issue}/> : <EditorialHead issue={issue}/>}
     <main className={m.content}>
       <h1>{material.title}</h1>
-      {image && <figure className={m.hero}><img src={image} alt=""/><figcaption>{issue.document.title}</figcaption></figure>}
+      {image && <figure className={m.hero}><button type="button" className={m.heroOpen} onClick={() => openImage?.(fullImage || image, material.title)} aria-label={`Открыть изображение: ${material.title}`}><img src={image} alt=""/></button><figcaption>{issue.document.title}</figcaption></figure>}
       <div className={m.body}>{paragraphs.map((paragraph, index) => <p key={index}>{paragraph}</p>)}</div>
       {(url || sources.length > 0) && <footer className={m.sources}>
         <span>Источники</span>

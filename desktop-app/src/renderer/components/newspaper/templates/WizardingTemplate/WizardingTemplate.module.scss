@@ -120,6 +120,24 @@
   margin: 0;
 }
 
+.railNote [data-note-link='true'],
+.railNote strong {
+  display: block;
+  margin: 5px 0 4px;
+  font-family: Impact, Haettenschweiler, 'Arial Narrow Bold', sans-serif;
+  font-size: 18px;
+  line-height: 0.98;
+  letter-spacing: 0.015em;
+  overflow-wrap: anywhere;
+  text-transform: uppercase;
+}
+
+.railNote p {
+  margin: 0;
+  font-size: 10px;
+  line-height: 1.38;
+}
+
 .railImage figcaption,
 .bodyImage figcaption {
   display: flex;

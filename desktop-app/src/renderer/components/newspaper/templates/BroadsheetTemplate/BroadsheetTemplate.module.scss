@@ -14,7 +14,15 @@
   display: inline-block;
   color: inherit;
   cursor: pointer;
+  overflow-wrap: anywhere;
   text-decoration: none;
+}
+
+.paper h1,
+.paper h2,
+.paper h3,
+.paper strong {
+  overflow-wrap: anywhere;
 }
 
 .paper [data-article-title-link='true']:hover,

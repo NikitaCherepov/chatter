@@ -2,68 +2,364 @@
   --accent: #171717;
   --text: #141414;
   --muted: #6d685f;
-  --line: rgba(20, 20, 20, .4);
+  --line: rgba(20, 20, 20, 0.4);
   display: flex;
   width: min(900px, calc(100vw - 28px));
   min-height: 100%;
   margin: 0 auto;
   flex-direction: column;
-  box-shadow: 0 16px 42px rgba(0, 0, 0, .35);
+  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.35);
 }
+
 .page[data-style='wizarding'] {
   --accent: #743a19;
   --text: #1d160e;
   --muted: #72583a;
-  --line: rgba(70, 40, 17, .48);
+  --line: rgba(70, 40, 17, 0.48);
 }
+
 .page[data-style='editorial'] {
   --text: #261e14;
 }
+
 .page[data-style='broadsheet'] {
   --text: #050505;
 }
+
 .page[data-style='deusEx'] {
   --accent: #d0a92e;
   --text: #c8c9c4;
   --muted: #8f8e82;
-  --line: rgba(208, 169, 46, .52);
+  --line: rgba(208, 169, 46, 0.52);
 }
+
 .page[data-style='massEffect'] {
   --accent: #61dced;
   --text: #d8edf2;
   --muted: #75aebb;
-  --line: rgba(97, 220, 237, .5);
+  --line: rgba(97, 220, 237, 0.5);
 }
+
 .content {
-  width: min(820px, 100%);
+  display: flex;
+  width: min(820px, calc(100% - clamp(36px, 7vw, 80px)));
+  min-height: 0;
   margin: 0 auto;
   padding: clamp(34px, 5vw, 60px) 0 55px;
+  box-sizing: border-box;
   color: var(--text);
+  flex: 1;
+  flex-direction: column;
 }
-.content h1 { max-width: 21ch; margin: 0 0 27px; font-size: 35px; line-height: .98; letter-spacing: -.035em; }
-[data-style='wizarding'] .content h1 { max-width: 20ch; font-size: 30px; }
-[data-style='deusEx'] .content h1,
-[data-style='massEffect'] .content h1 { max-width: 25ch; font-family: Bahnschrift, 'Segoe UI', sans-serif; letter-spacing: -.02em; text-transform: uppercase; }
-[data-style='deusEx'] .content h1 { font-size: 28px; }
-[data-style='massEffect'] .content h1 { font-size: 31px; }
-.hero { margin: 0 0 28px; }
-.hero img { display: block; width: 100%; max-height: 390px; border: 1px solid var(--line); filter: saturate(.9) contrast(1.04); object-fit: cover; }
-[data-style='wizarding'] .hero img { filter: sepia(.18) saturate(.82) contrast(1.08); }
-[data-style='deusEx'] .hero img,
-[data-style='massEffect'] .hero img { filter: saturate(.72) contrast(1.16); }
-.hero figcaption { padding-top: 6px; color: var(--muted); font-size: 9px; text-transform: uppercase; }
-.body { column-gap: 34px; font-size: 10px; line-height: 1.45; }
-.body p { margin: 0 0 1.05em; }
-.body p:first-child::first-letter { float: left; margin: .05em .1em 0 0; color: var(--accent); font-size: 3.2em; font-weight: 800; line-height: .8; }
-[data-style='wizarding'] .body { font-size: 11px; line-height: 1.5; }
-[data-style='deusEx'] .body,
-[data-style='massEffect'] .body { font-size: 9px; line-height: 1.45; }
-.sources { display: flex; gap: 8px 18px; margin-top: 36px; padding-top: 15px; border-top: 1px solid var(--line); flex-wrap: wrap; }
-.sources span { width: 100%; color: var(--muted); font-size: 9px; font-weight: 900; letter-spacing: .14em; text-transform: uppercase; }
-.sources a { color: var(--accent); font-size: 12px; font-weight: 800; text-decoration: none; }
-.sources a:hover { text-decoration: underline; }
-@media (min-width: 1000px) {
-  .body { columns: 2; }
+
+.content::before {
+  display: block;
+  margin-bottom: 13px;
+  color: var(--accent);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+[data-style='wizarding'] .content::before { content: 'Расширенный материал · The Chatter Prophet'; }
+[data-style='broadsheet'] .content::before { content: 'Полный материал · The Chatter Times'; }
+[data-style='deusEx'] .content::before { content: 'PICUS // ARCHIVE FILE // FULL ANALYSIS'; }
+[data-style='massEffect'] .content::before { content: 'ANN // VERIFIED REPORT // EXTRANET ARCHIVE'; }
+
+.content h1 {
+  width: 100%;
+  max-width: none;
+  margin: 0 0 30px;
+  font-size: clamp(36px, 4.6vw, 51px);
+  line-height: 0.98;
+  letter-spacing: -0.035em;
+  overflow-wrap: anywhere;
+}
+
+.hero {
+  margin: 0 0 30px;
+}
+
+.heroOpen {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+
+.heroOpen:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 4px;
+}
+
+.hero img {
+  display: block;
+  width: 100%;
+  max-height: 440px;
+  border: 1px solid var(--line);
+  filter: saturate(0.9) contrast(1.04);
+  object-fit: cover;
+  transition: filter 180ms ease, transform 280ms ease;
+}
+
+.heroOpen:hover img {
+  transform: scale(1.012);
+}
+
+.hero figcaption {
+  padding-top: 7px;
+  color: var(--muted);
+  font-size: 9px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.body {
+  width: 100%;
+  column-gap: 42px;
+  font-size: 14px;
+  line-height: 1.62;
+}
+
+.body p {
+  margin: 0 0 1.15em;
+  break-inside: avoid;
+}
+
+.body p:first-child::first-letter {
+  float: left;
+  margin: 0.06em 0.11em 0 0;
+  color: var(--accent);
+  font-size: 3.2em;
+  font-weight: 800;
+  line-height: 0.78;
+}
+
+.sources {
+  display: flex;
+  gap: 9px 20px;
+  margin-top: auto;
+  padding-top: 42px;
+  border-bottom: 0;
+  border-top: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+
+.sources span {
+  width: 100%;
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.sources a {
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+  text-decoration: none;
+}
+
+.sources a:hover {
+  text-decoration: underline;
+}
+
+/* The Prophet reads like a deliberately oversized enchanted tabloid. */
+[data-style='wizarding'] .content::before {
+  padding-bottom: 9px;
+  border-bottom: 3px double var(--line);
+  text-align: center;
+}
+
+[data-style='wizarding'] .content h1 {
+  max-width: 16ch;
+  margin-inline: auto;
+  font-family: Impact, Haettenschweiler, 'Arial Narrow Bold', sans-serif;
+  font-size: clamp(42px, 6vw, 62px);
+  line-height: 0.91;
+  letter-spacing: 0.005em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+[data-style='wizarding'] .hero {
+  padding-block: 9px;
+  border-block: 3px double var(--line);
+}
+
+[data-style='wizarding'] .hero img {
+  border: 0;
+  filter: sepia(0.72) saturate(0.78) contrast(1.12);
+}
+
+[data-style='wizarding'] .body {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 15px;
+  line-height: 1.58;
+  text-align: justify;
+}
+
+[data-style='wizarding'] .sources {
+  border-top: 3px double var(--line);
+}
+
+/* Broadsheet keeps the stricter, quieter newspaper hierarchy. */
+[data-style='broadsheet'] .content::before {
+  padding-bottom: 6px;
+  border-bottom: 1px solid #111;
+}
+
+[data-style='broadsheet'] .content h1 {
+  max-width: 22ch;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: clamp(39px, 5vw, 55px);
+  line-height: 0.98;
+  letter-spacing: -0.045em;
+}
+
+[data-style='broadsheet'] .hero {
+  padding-block: 8px;
+  border-block: 1px solid #111;
+}
+
+[data-style='broadsheet'] .hero img {
+  border: 0;
+  filter: grayscale(1) contrast(1.13);
+}
+
+[data-style='broadsheet'] .body {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 14.5px;
+  line-height: 1.57;
+  text-align: justify;
+}
+
+[data-style='broadsheet'] .sources {
+  border-top: 3px double #111;
+}
+
+/* Deus Ex becomes a dense analysis dossier instead of a newspaper column. */
+[data-style='deusEx'] .content {
+  width: min(820px, calc(100% - clamp(48px, 8vw, 96px)));
+}
+
+[data-style='deusEx'] .content::before {
+  padding: 8px 10px;
+  border-left: 4px solid var(--accent);
+  background: rgba(208, 169, 46, 0.08);
+}
+
+[data-style='deusEx'] .content h1 {
+  max-width: 25ch;
+  font-family: Bahnschrift, 'Segoe UI', sans-serif;
+  font-size: clamp(37px, 4.7vw, 50px);
+  line-height: 0.96;
+  letter-spacing: -0.025em;
+  text-transform: uppercase;
+}
+
+[data-style='deusEx'] .hero {
+  padding: 8px;
+  border: 1px solid var(--accent);
+  background: rgba(208, 169, 46, 0.04);
+}
+
+[data-style='deusEx'] .hero img {
+  border: 0;
+  filter: sepia(1) saturate(1.35) brightness(0.66) contrast(1.18);
+}
+
+[data-style='deusEx'] .body {
+  padding: 20px 22px;
+  border-left: 3px solid var(--accent);
+  box-sizing: border-box;
+  background: rgba(208, 169, 46, 0.035);
+  font-family: Bahnschrift, 'Segoe UI', sans-serif;
+  font-size: 13.5px;
+  line-height: 1.65;
+}
+
+[data-style='deusEx'] .sources {
+  border-color: var(--accent);
+}
+
+/* Mass Effect uses wider breathing room and illuminated terminal panels. */
+[data-style='massEffect'] .content {
+  width: min(820px, calc(100% - clamp(48px, 8vw, 96px)));
+}
+
+[data-style='massEffect'] .content::before {
+  padding: 8px 12px;
+  border-block: 1px solid var(--accent);
+  background: linear-gradient(90deg, rgba(97, 220, 237, 0.12), transparent 70%);
+}
+
+[data-style='massEffect'] .content h1 {
+  max-width: 24ch;
+  font-family: Bahnschrift, 'Segoe UI', sans-serif;
+  font-size: clamp(38px, 4.8vw, 52px);
+  line-height: 0.98;
+  letter-spacing: -0.025em;
+  text-transform: uppercase;
+}
+
+[data-style='massEffect'] .hero {
+  padding: 7px;
+  border: 1px solid rgba(97, 220, 237, 0.72);
+  background: rgba(97, 220, 237, 0.055);
+  box-shadow: 0 0 22px rgba(97, 220, 237, 0.09);
+}
+
+[data-style='massEffect'] .hero img {
+  border: 0;
+  filter: saturate(1.25) contrast(1.08);
+}
+
+[data-style='massEffect'] .body {
+  padding: 20px 22px;
+  border-block: 1px solid rgba(97, 220, 237, 0.3);
+  box-sizing: border-box;
+  background: linear-gradient(90deg, rgba(97, 220, 237, 0.065), transparent 85%);
+  font-family: Bahnschrift, 'Segoe UI', sans-serif;
+  font-size: 13.5px;
+  line-height: 1.65;
+}
+
+@media (min-width: 800px) {
+  .body {
+    columns: 2;
+  }
+}
+
+@media (max-width: 799px) {
+  .content {
+    width: calc(100% - 28px) !important;
+    padding-block: 28px 40px;
+  }
+
+  .content h1,
+  [data-style='wizarding'] .content h1,
+  [data-style='broadsheet'] .content h1,
+  [data-style='deusEx'] .content h1,
+  [data-style='massEffect'] .content h1 {
+    max-width: none;
+    font-size: clamp(31px, 9vw, 44px);
+  }
+
+  .body,
+  [data-style='wizarding'] .body,
+  [data-style='broadsheet'] .body,
   [data-style='deusEx'] .body,
-  [data-style='massEffect'] .body { columns: 1; max-width: 72ch; }
+  [data-style='massEffect'] .body {
+    columns: 1;
+    font-size: 14px;
+  }
 }
