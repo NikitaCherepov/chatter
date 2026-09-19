@@ -105,6 +105,10 @@ function _isAbortError(err: any): boolean {
 /** Лимит на сохраняемый полный результат инструмента в trace (аналог TOOL_RESULT_FULL_MAX в ai.ts). */
 const SUBAGENT_TOOL_RESULT_MAX = 80_000;
 
+/** Verbose-логи цикла субагентов (итерации, тексты модели, тулколлы и результаты).
+ *  В проде выключены — включать локально для отладки. */
+const SUBAGENT_LOGS = false;
+
 function truncateToolResult(content: string): string {
   if (content.length > SUBAGENT_TOOL_RESULT_MAX) {
     return content.slice(0, SUBAGENT_TOOL_RESULT_MAX) + `\n\n[...результат обрезан, всего ${content.length} символов]`;
@@ -298,6 +302,8 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
       });
     }
 
+    if (SUBAGENT_LOGS) console.log(`[subagent:${resolvedAgentName}] === loop ${loop + 1}/${maxLoops} === (messages: ${messages.length})`);
+
     // Call AI — use user's preferred model if set, otherwise agent's configured mode
     const requestPayload: Record<string, unknown> = {
         messages,
@@ -335,6 +341,12 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
       }
     }
 
+    // Log assistant text (reasoning / intermediate message)
+    if (SUBAGENT_LOGS && message.content) {
+      const text = String(message.content);
+      console.log(`[subagent:${resolvedAgentName}][text] ${text.slice(0, 2000)}`);
+    }
+
     // Push assistant message to history
     messages.push(message);
 
@@ -355,6 +367,7 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
         .map(m => m.content)
         .pop() as string | undefined;
       const content = message.content || previousContent || 'Token quota exhausted before the subagent could produce a final answer.';
+      if (SUBAGENT_LOGS) console.log(`[subagent:${resolvedAgentName}] === finished after ${loop + 1} loops, answer: ${content.slice(0, 500)}`);
       currentIteration.is_final = true;
       iterations.push(currentIteration);
       return {
@@ -378,6 +391,7 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
         _throwIfAborted(ctx.signal);
         const toolName = toolCall.function?.name || '';
         const argsRaw = toolCall.function?.arguments || '{}';
+        if (SUBAGENT_LOGS) console.log(`[subagent:${resolvedAgentName}][tool_call] ${toolName}(${argsRaw.slice(0, 500)})`);
         const statusMsg = getToolStatusMessage(ctx.user?.language, resolvedAgentName, toolName);
         if (ctx.onToolStatus) {
           try { await ctx.onToolStatus(statusMsg); } catch {}
@@ -396,6 +410,7 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
           console.warn(`[subagent:${resolvedAgentName}] direct tool "${toolName}" error:`, err?.message || err);
           toolContent = JSON.stringify({ status: 'error', message: err?.message || String(err) });
         }
+        if (SUBAGENT_LOGS) console.log(`[subagent:${resolvedAgentName}][tool_result] ${toolName} -> ${toolContent.slice(0, 1000)}`);
         let parsedArgs: any;
         try { parsedArgs = JSON.parse(argsRaw); } catch { parsedArgs = { _raw: argsRaw }; }
         return { toolCall, toolName, parsedArgs, toolContent };
@@ -418,6 +433,9 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
       const toolName = toolCall.function?.name || '';
       const argsRaw = toolCall.function?.arguments || '{}';
       let toolContent: string;
+
+      // Log tool call with arguments
+      if (SUBAGENT_LOGS) console.log(`[subagent:${resolvedAgentName}][tool_call] ${toolName}(${argsRaw.slice(0, 500)})`);
 
       // Broadcast tool status to client
       const statusMsg = getToolStatusMessage(ctx.user?.language, resolvedAgentName, toolName);
@@ -506,6 +524,9 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
         });
       }
 
+      // Log tool result
+      if (SUBAGENT_LOGS) console.log(`[subagent:${resolvedAgentName}][tool_result] ${toolName} -> ${toolContent.slice(0, 1000)}`);
+
       // Record flat history
       let parsedArgs: any;
       try { parsedArgs = JSON.parse(argsRaw); } catch { parsedArgs = { _raw: argsRaw }; }
@@ -549,7 +570,7 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
     // Soft abort: возвращаем partial-результат вместо throw,
     // чтобы основной агент получил tool_result и мог продолжить.
     if (_isAbortError(err)) {
-      console.log(`[subagent:${resolvedAgentName}] aborted, returning partial result (${toolCallsHistory.length} tool calls performed)`);
+      if (SUBAGENT_LOGS) console.log(`[subagent:${resolvedAgentName}] aborted, returning partial result (${toolCallsHistory.length} tool calls performed)`);
       const partialAnswer = messages
         .filter(m => m.role === 'assistant' && typeof m.content === 'string' && m.content.trim())
         .map(m => m.content)
