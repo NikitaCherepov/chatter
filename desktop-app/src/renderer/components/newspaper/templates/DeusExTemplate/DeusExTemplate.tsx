@@ -8,6 +8,7 @@ import { WeatherForecast } from '../../blocks/WeatherBlock/WeatherBlock';
 import type { ArticleBlockData, NewspaperBlock, NewspaperTemplateProps } from '../../types';
 import { safeImageUrl } from '../../utils/media';
 import { composeDeusExPage } from './deusExLayout';
+import type { ReactNode } from 'react';
 import s from '../../Newspaper.module.scss';
 import t from './DeusExTemplate.module.scss';
 
@@ -22,6 +23,13 @@ function ArticleTitle({ article, as = 'h2' }: { article: ArticleBlockData; as?: 
 
 function mediaUrl(block: MediaBlock) {
   return safeImageUrl(block.image_url);
+}
+
+function MaterialArticleCard({ article, className, children }: { article?: ArticleBlockData; className: string; children: ReactNode }) {
+  const openMaterial = useNewspaperMaterialViewer();
+  const clickable = Boolean(article && openMaterial);
+  const open = () => article && openMaterial?.(articleMaterial(article));
+  return <article className={className} data-clickable={clickable ? 'true' : undefined} role={clickable ? 'button' : undefined} tabIndex={clickable ? 0 : undefined} onClick={clickable ? event => { if (!(event.target as HTMLElement).closest('a, button')) open(); } : undefined} onKeyDown={clickable ? event => { if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); open(); } } : undefined}>{children}</article>;
 }
 
 export function DeusExShellHeader({ issue, signals, reports, relevance }: { issue: NewspaperTemplateProps['issue']; signals: number; reports: number; relevance: 'HIGH' | 'LIVE' }) {
@@ -66,9 +74,9 @@ function PriorityPage({ layout }: { layout: Layout }) {
   return <>
     <SignalStrip blocks={signals}/>
     <section className={t.priorityGrid}>
-      <div className={t.priorityMedia}>{leadImage && <img src={leadImage} alt=""/>}<div><span>PRIORITY REPORT</span>{layout.hero && <ArticleTitle article={layout.hero}/>}</div></div>
+      <MaterialArticleCard article={layout.hero} className={t.priorityMedia}>{leadImage && <img src={leadImage} alt=""/>}<div><span>PRIORITY REPORT</span>{layout.hero && <ArticleTitle article={layout.hero}/>}</div></MaterialArticleCard>
       <div className={t.sideStack}><WeatherModule weather={layout.weather}/>{sideArticle && <ArticleBlock article={sideArticle} className={t.sideReport} eyebrow="SIDE INTEL" titleLink/>}</div>
-      <article className={t.reportBody}><span>FULL ANALYSIS</span><h2>{layout.hero?.title}</h2><p>{layout.hero?.text}</p><SourcesBlock sources={layout.hero?.sources}/></article>
+      <MaterialArticleCard article={layout.hero} className={t.reportBody}><span>FULL ANALYSIS</span><h2>{layout.hero?.title}</h2><p>{layout.hero?.text}</p><SourcesBlock sources={layout.hero?.sources}/></MaterialArticleCard>
       <div className={t.dispatch}>{layout.noteLists.slice(0, 1).map(list => <section key={list.id}><h2>{list.title || 'Incoming dispatches'}</h2><NotesListBlock list={list} numbered/></section>)}</div>
     </section>
     <section className={t.analysisGrid}>{analysis.map(article => <ArticleBlock key={article.id} article={article} className={t.analysis} eyebrow="ANALYSIS" titleLink/>)}{layout.images.slice(fallbackImage ? 1 : 0).map(image => <ImageBlock key={image.id} image={image} className={t.mediaCard}/>)}</section>
@@ -90,7 +98,7 @@ function DispatchPage({ layout }: { layout: Layout }) {
 
 function MediaMonitor({ layout }: { layout: Layout }) {
   const media: MediaBlock[] = [...layout.images, ...layout.articles];
-  return <><SignalStrip blocks={media}/><div className={t.boardTitle}><span>VISUAL INTELLIGENCE</span><h2>Media monitoring array</h2></div><section className={t.mediaWall}>{media.map(block => block.type === 'image' ? <ImageBlock key={block.id} image={block} className={t.monitorCard}/> : <article key={block.id} className={t.monitorCard}><ArticleImage article={block}/><span>FIELD REPORT</span><ArticleTitle article={block}/><p>{block.text}</p></article>)}</section></>;
+  return <><SignalStrip blocks={media}/><div className={t.boardTitle}><span>VISUAL INTELLIGENCE</span><h2>Media monitoring array</h2></div><section className={t.mediaWall}>{media.map(block => block.type === 'image' ? <ImageBlock key={block.id} image={block} className={t.monitorCard}/> : <MaterialArticleCard key={block.id} article={block} className={t.monitorCard}><ArticleImage article={block}/><span>FIELD REPORT</span><ArticleTitle article={block}/><p>{block.text}</p></MaterialArticleCard>)}</section></>;
 }
 
 export function DeusExTemplate({ issue }: NewspaperTemplateProps) {

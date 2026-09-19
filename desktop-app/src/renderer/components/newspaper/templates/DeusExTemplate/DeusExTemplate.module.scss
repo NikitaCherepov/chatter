@@ -35,6 +35,30 @@
   outline-offset: 3px;
 }
 
+.page article[data-clickable='true'] {
+  cursor: pointer;
+  transition: background-color 0.22s ease, box-shadow 0.22s ease, filter 0.22s ease, transform 0.22s ease;
+}
+
+.page article[data-clickable='true']:hover {
+  background-color: rgba(208, 169, 46, 0.025);
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.3), 0 0 26px rgba(208, 169, 46, 0.13);
+  filter: brightness(1.07) drop-shadow(0 0 7px rgba(208, 169, 46, 0.14));
+  transform: translateY(-3px);
+}
+
+.page article[data-clickable='true']:focus-visible {
+  outline: 2px solid rgba(230, 190, 52, 0.86);
+  outline-offset: 3px;
+}
+
+.page article[data-clickable='true'] [data-article-title-link='true'],
+.page article[data-clickable='true'] [data-article-title-link='true']:hover {
+  filter: none;
+  text-shadow: none;
+  transform: none;
+}
+
 .page::after {
   position: absolute;
   inset: 0;
