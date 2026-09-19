@@ -1828,13 +1828,21 @@ export function ChatPage() {
    *   3. Страховка: если следующее сообщение превышает остаток бюджета —
    *      показываем его целиком (не прячем одно сообщение).
    */
+  /** Promoted newspaper chats keep model-payload rows ([ACTIVE_VIEW] /
+   *  [NEWSPAPER CONTEXT ...]) in history — never shown as conversation. */
+  const displayMessages = useMemo<api.Message[]>(() =>
+    messages.filter(message =>
+      !message.content?.startsWith('[ACTIVE_VIEW]')
+      && !message.content?.startsWith('[NEWSPAPER CONTEXT')),
+    [messages]);
+
   const visibleMessages = useMemo<api.Message[]>(() => {
-    if (messages.length <= MIN_VISIBLE_MESSAGES) return messages;
+    if (displayMessages.length <= MIN_VISIBLE_MESSAGES) return displayMessages;
     let sumChars = 0;
-    let cutIndex = messages.length;
-    for (let i = messages.length - 1; i >= 0; i--) {
-      const len = messages[i].content?.length ?? 0;
-      const withinMin = i >= messages.length - MIN_VISIBLE_MESSAGES;
+    let cutIndex = displayMessages.length;
+    for (let i = displayMessages.length - 1; i >= 0; i--) {
+      const len = displayMessages[i].content?.length ?? 0;
+      const withinMin = i >= displayMessages.length - MIN_VISIBLE_MESSAGES;
       if (!withinMin && sumChars + len > charBudget) {
         cutIndex = i + 1;
         break;
@@ -1842,11 +1850,11 @@ export function ChatPage() {
       sumChars += len;
       cutIndex = i;
     }
-    return messages.slice(Math.max(0, cutIndex));
-  }, [messages, charBudget]);
+    return displayMessages.slice(Math.max(0, cutIndex));
+  }, [displayMessages, charBudget]);
 
   /** How many messages are hidden (not rendered in DOM) beyond visibleMessages. */
-  const hiddenMessagesCount = messages.length - visibleMessages.length;
+  const hiddenMessagesCount = displayMessages.length - visibleMessages.length;
 
   /** How many messages will actually be revealed on the next click.
    *  Simulates increasing charBudget by one step and computes the difference. */
@@ -1855,10 +1863,10 @@ export function ChatPage() {
     const step = getRenderPerfStep();
     const nextBudget = charBudget + step;
     let sumChars = 0;
-    let cutIndex = messages.length;
-    for (let i = messages.length - 1; i >= 0; i--) {
-      const len = messages[i].content?.length ?? 0;
-      const withinMin = i >= messages.length - MIN_VISIBLE_MESSAGES;
+    let cutIndex = displayMessages.length;
+    for (let i = displayMessages.length - 1; i >= 0; i--) {
+      const len = displayMessages[i].content?.length ?? 0;
+      const withinMin = i >= displayMessages.length - MIN_VISIBLE_MESSAGES;
       if (!withinMin && sumChars + len > nextBudget) {
         cutIndex = i + 1;
         break;
@@ -1866,9 +1874,9 @@ export function ChatPage() {
       sumChars += len;
       cutIndex = i;
     }
-    const nextVisible = messages.length - cutIndex;
+    const nextVisible = displayMessages.length - cutIndex;
     return Math.max(0, nextVisible - visibleMessages.length);
-  }, [messages, charBudget, hiddenMessagesCount, visibleMessages.length]);
+  }, [displayMessages, charBudget, hiddenMessagesCount, visibleMessages.length]);
 
   /** Reveal another batch of hidden messages.
    *  If all in-memory messages are already visible — fall back to server fetch. */

@@ -2113,6 +2113,22 @@ export async function getNewspaperChat(): Promise<{ chat_id: number }> {
   return result;
 }
 
+/** Wipe the reader chat's history; the chat itself stays temporary. */
+export async function clearNewspaperChat(): Promise<{ ok: boolean; chat_id: number }> {
+  return apiFetch('/api/v1/newspapers/chat/messages', { method: 'DELETE' });
+}
+
+/** Move the reader chat into the normal chat list. Afterwards the reader's
+ *  temp slot frees up: the next open starts a fresh temporary chat. */
+export async function keepNewspaperChat(title: string): Promise<{ ok: boolean; chat_id: number }> {
+  const result = await apiFetch<{ ok: boolean; chat_id: number }>('/api/v1/newspapers/chat/keep', {
+    method: 'POST',
+    body: JSON.stringify({ title }),
+  });
+  newspaperChatId = null;
+  return result;
+}
+
 export async function updateNewspaper(newspaperId: number, input: Partial<Pick<Newspaper,
   | 'name'
   | 'editorial_brief'

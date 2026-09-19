@@ -139,6 +139,16 @@ export const touchUserChat = (userId: number, chatId: number) => {
   db.prepare('UPDATE user_chats SET updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND id = ?').run(userId, chatId);
 };
 
+/** Turn a temporary chat into a normal listed chat: out of the TTL sweep,
+ *  visible in chat lists. Returns false if it is missing or already persistent. */
+export const promoteTemporaryChat = (userId: number, chatId: number, title?: string): boolean => {
+  const safeTitle = typeof title === 'string' && title.trim() ? title.trim().slice(0, 120) : null;
+  const result = db.prepare(
+    "UPDATE user_chats SET retention = 'persistent', title = COALESCE(?, title) WHERE user_id = ? AND id = ? AND retention = 'temporary'"
+  ).run(safeTitle, userId, chatId);
+  return result.changes > 0;
+};
+
 export const getUserChatById = (userId: number, chatId: number) => db.prepare(`
   SELECT id, user_id, title, created_at, updated_at
   FROM user_chats

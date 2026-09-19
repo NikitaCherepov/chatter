@@ -511,11 +511,20 @@
   0%, 100% { opacity: .82; }
   50% { opacity: .5; }
 }
+.readerChatComposer {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  border-top: 1px solid var(--reader-line);
+}
+.readerChatComposer form {
+  flex: 1;
+  min-width: 0;
+}
 .readerChatPanel form {
   display: grid;
   gap: 8px;
   padding: 12px;
-  border-top: 1px solid var(--reader-line);
 }
 .readerChatPanel textarea {
   resize: none;
@@ -544,6 +553,68 @@
 .readerChatPanel form button:disabled {
   cursor: default;
   opacity: .34;
+}
+.readerChatMenuWrap {
+  position: relative;
+  flex: 0 0 auto;
+  margin: 0 0 12px 12px;
+}
+.readerChatMenuToggle {
+  display: inline-flex;
+  height: 25px;
+  width: 27px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--reader-line);
+  background: color-mix(in srgb, var(--reader-accent) 8%, transparent);
+  color: var(--reader-accent);
+  cursor: pointer;
+  font: 800 12px/1 inherit;
+}
+.readerChatMenuToggle:hover,
+.readerChatMenuToggle:focus-visible,
+.readerChatMenuToggle[data-open='true'] {
+  border-color: var(--reader-accent);
+  filter: brightness(1.2);
+}
+.readerChatMenuToggle:disabled {
+  cursor: default;
+  opacity: .34;
+}
+.readerChatMenu {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 6px);
+  z-index: 2;
+  display: grid;
+  min-width: 168px;
+  border: 1px solid var(--reader-line);
+  background: color-mix(in srgb, var(--reader-panel) 92%, black);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, .45);
+}
+.readerChatMenu button {
+  padding: 10px 14px;
+  border: 0;
+  border-bottom: 1px solid var(--reader-line);
+  background: transparent;
+  color: var(--reader-text);
+  cursor: pointer;
+  font: 700 9px/1 inherit;
+  letter-spacing: .1em;
+  text-align: left;
+  text-transform: uppercase;
+}
+.readerChatMenu button:last-child {
+  border-bottom: 0;
+}
+.readerChatMenu button:hover:not(:disabled),
+.readerChatMenu button:focus-visible:not(:disabled) {
+  background: color-mix(in srgb, var(--reader-accent) 12%, transparent);
+  color: var(--reader-accent);
+}
+.readerChatMenu button:disabled {
+  cursor: default;
+  opacity: .4;
 }
 .readerChatPanel[data-style='wizarding'],
 .readerChatPanel[data-style='broadsheet'],

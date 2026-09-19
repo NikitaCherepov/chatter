@@ -8,7 +8,7 @@ import dotenv from 'dotenv';
 import { WebSocketServer, WebSocket } from 'ws';
 import { wsClients, registerWsClient, unregisterWsClient, isDesktopOnline, sendIpcToDesktop, sendToDesktop, WS_HEARTBEAT_GRACE_MS, WS_HEARTBEAT_INTERVAL_MS, type WsClient } from './ws-clients.js';
 import { adminMiddleware, authMiddleware, issueAuthTokens, makePasswordHash, refreshAccessToken, validateTelegramInitData, verifyPassword, verifyToken, verifyTokenIgnoreExpiry, type AuthedRequest } from './auth.js';
-import { activateUserChat, bindChatMessageTelegramMeta, clearAllUserMessages, clearUserChatMessages, countUserChats, createPasswordAccount, createOrUpdateUserForApiRegistration, createUserChat, deleteUserHistoryByRole, deleteUserHistoryMessage, ensureActiveChat, forkChat, getPasswordAccountByLogin, getChatMessages, getChatMedia, getAllUserMedia, getRecentUserHistory, getUserById, getUserChatById, getUserChatListItem, listUserChats, upsertUserFromTelegram, setUserTimezone, updateUserPrompt, selectUserCustomPrompt, updateUserCustomPrompt, resetUsersPromptIfDeleted, resetDailyMessageCounters, upsertTelegramUser, createPendingTelegramUser, updateUserStatus, updateUserRole, updateUserName, updateUserTelegramUsername, removeUser, getAllUsers, getUsersCount, getUsersPage, getPendingUsersCount, getPendingUsersPage, getBannedUsersCount, getBannedUsersPage, syncAllUsersPlanLimits, resetUserWeeklyUsage, resetAllUsersWeeklyUsage, updateUserWeeklyCostQuota, revokeUserAuthTokens, generateLinkCode, verifyLinkCode, getLinkCodeForUser, generatePasswordResetCode, verifyPasswordResetCode, signPasswordResetToken, verifyPasswordResetToken, adminApplyGeneratedPassword, renameUserChat, deleteUserChat, deleteUserMessage, editUserMessage, searchUserChats, updateChatMessageAudio, getChatContextTokens, resolveMaxContextTokens, updateUserMaxContextTokens, getChatAttachments, deleteMessageAttachment, deleteMessageImage, resolveAttachmentMaxTokens, updateUserAttachmentMaxTokens, setChatBotHidden, listChatFolders, createChatFolder, renameChatFolder, deleteChatFolder, moveUserChatToFolder, listChatFilterOptions, listStaleTemporaryChats, touchUserChat } from './services/chats.js';
+import { activateUserChat, bindChatMessageTelegramMeta, clearAllUserMessages, clearUserChatMessages, countUserChats, createPasswordAccount, createOrUpdateUserForApiRegistration, createUserChat, deleteUserHistoryByRole, deleteUserHistoryMessage, ensureActiveChat, forkChat, getPasswordAccountByLogin, getChatMessages, getChatMedia, getAllUserMedia, getRecentUserHistory, getUserById, getUserChatById, getUserChatListItem, listUserChats, promoteTemporaryChat, upsertUserFromTelegram, setUserTimezone, updateUserPrompt, selectUserCustomPrompt, updateUserCustomPrompt, resetUsersPromptIfDeleted, resetDailyMessageCounters, upsertTelegramUser, createPendingTelegramUser, updateUserStatus, updateUserRole, updateUserName, updateUserTelegramUsername, removeUser, getAllUsers, getUsersCount, getUsersPage, getPendingUsersCount, getPendingUsersPage, getBannedUsersCount, getBannedUsersPage, syncAllUsersPlanLimits, resetUserWeeklyUsage, resetAllUsersWeeklyUsage, updateUserWeeklyCostQuota, revokeUserAuthTokens, generateLinkCode, verifyLinkCode, getLinkCodeForUser, generatePasswordResetCode, verifyPasswordResetCode, signPasswordResetToken, verifyPasswordResetToken, adminApplyGeneratedPassword, renameUserChat, deleteUserChat, deleteUserMessage, editUserMessage, searchUserChats, updateChatMessageAudio, getChatContextTokens, resolveMaxContextTokens, updateUserMaxContextTokens, getChatAttachments, deleteMessageAttachment, deleteMessageImage, resolveAttachmentMaxTokens, updateUserAttachmentMaxTokens, setChatBotHidden, listChatFolders, createChatFolder, renameChatFolder, deleteChatFolder, moveUserChatToFolder, listChatFilterOptions, listStaleTemporaryChats, touchUserChat } from './services/chats.js';
 import { createNote, countNotes, deleteNote, getNoteById, getNoteStats, getNoteStatsForUsers, listNotes, updateNoteContent } from './services/notes.js';
 import { createTask, deletePendingTask, getPendingTaskCount, getUserTaskById, isOwnNonRoomChat, listTaskTargetChats, listTasks, MAX_PENDING_TASKS_PER_USER, updatePendingTask } from './services/tasks.js';
 import { createDemoNewspaperIssue, createNewspaper, createNewspaperRun, deleteNewspaperIssue, ensureDefaultNewspaper, getNewspaperIssue, getNewspaperRun, listNewspaperIssues, listNewspaperRuns, listNewspapers, markInterruptedNewspaperRuns, updateNewspaper } from './services/newspapers.js';
@@ -2954,6 +2954,35 @@ app.post('/api/v1/newspapers/chat', (req: AuthedRequest, res) => {
   } catch (err: any) {
     console.error('[newspapers/chat] failed to ensure chat:', err?.message || String(err));
     return res.status(500).json({ error: 'newspaper_chat_failed' });
+  }
+});
+
+// Wipe the reader chat's messages in place — the chat itself stays temporary,
+// so its id, event routing and context dedup keep working.
+app.delete('/api/v1/newspapers/chat/messages', (req: AuthedRequest, res) => {
+  const userId = accountIdFromRequest(req);
+  try {
+    const chatId = getOrCreateNewspaperChat(userId);
+    if (!clearUserChatMessages(userId, chatId)) return res.status(404).json({ error: 'chat_not_found' });
+    return res.json({ ok: true, chat_id: chatId });
+  } catch (err: any) {
+    console.error('[newspapers/chat/messages] failed to clear:', err?.message || String(err));
+    return res.status(500).json({ error: 'newspaper_chat_clear_failed' });
+  }
+});
+
+// Promote the reader chat to a normal listed chat: out of the TTL sweep,
+// visible in chat lists; the next reader open starts a fresh temporary chat.
+app.post('/api/v1/newspapers/chat/keep', (req: AuthedRequest, res) => {
+  const userId = accountIdFromRequest(req);
+  try {
+    const chatId = getOrCreateNewspaperChat(userId);
+    const title = typeof req.body?.title === 'string' ? req.body.title : undefined;
+    if (!promoteTemporaryChat(userId, chatId, title)) return res.status(409).json({ error: 'chat_not_temporary' });
+    return res.json({ ok: true, chat_id: chatId });
+  } catch (err: any) {
+    console.error('[newspapers/chat/keep] failed to promote:', err?.message || String(err));
+    return res.status(500).json({ error: 'newspaper_chat_keep_failed' });
   }
 });
 

@@ -16,7 +16,7 @@ import { MassEffectPageTransition, type MassEffectPageTransitionState } from './
 import { NewspaperMaterialProvider, type NewspaperMaterial } from './NewspaperMaterialContext';
 import { NewspaperMaterialRenderer } from './NewspaperMaterialRenderer';
 import { MarkdownRenderer } from '../MarkdownRenderer';
-import { getMessages, getNewspaperChat, sendChatTrigger, subscribeRoomEvents, type NewspaperChatContext } from '../../lib/api';
+import { clearNewspaperChat, getMessages, getNewspaperChat, keepNewspaperChat, sendChatTrigger, subscribeRoomEvents, type NewspaperChatContext } from '../../lib/api';
 import type { NewspaperIssue, NewspaperVisualStyle } from './types';
 import s from './Newspaper.module.scss';
 
@@ -121,6 +121,7 @@ export function NewspaperReader({ issue, sourceIssueId, style, pageNumber, pageC
   const [readerChatId, setReaderChatId] = useState<number | null>(null);
   const [chatBusy, setChatBusy] = useState(false);
   const [chatStreaming, setChatStreaming] = useState('');
+  const [chatMenuOpen, setChatMenuOpen] = useState(false);
   const chatRunSeenRef = useRef(false);
   const chatWatchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -337,6 +338,7 @@ export function NewspaperReader({ issue, sourceIssueId, style, pageNumber, pageC
       if (event.key === 'Escape') {
         if (viewerImage) setViewerImage(null);
         else if (controlsOpen) setControlsOpen(false);
+        else if (chatMenuOpen) setChatMenuOpen(false);
         else if (chatOpen) setChatOpen(false);
         else if (material) void focusMaterial(null);
         else onClose();
@@ -347,7 +349,7 @@ export function NewspaperReader({ issue, sourceIssueId, style, pageNumber, pageC
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [canGoNext, canGoPrevious, chatOpen, controlsOpen, focusMaterial, issue, material, navigatePage, onClose, viewerImage]);
+  }, [canGoNext, canGoPrevious, chatMenuOpen, chatOpen, controlsOpen, focusMaterial, issue, material, navigatePage, onClose, viewerImage]);
   useEffect(() => {
     if (!focusTransition || focusTransition.kind !== 'snapshot' || focusTransition.phase !== 'holding') return;
     let switchFrame = 0;
@@ -641,6 +643,35 @@ export function NewspaperReader({ issue, sourceIssueId, style, pageNumber, pageC
     }
   };
 
+  const clearReaderChat = async () => {
+    if (chatBusy || readerChatId === null) return;
+    try {
+      await clearNewspaperChat();
+      setChatMessages([]);
+      setChatMenuOpen(false);
+    } catch (error) {
+      console.error('Failed to clear the newspaper chat:', error);
+      toast.error('Не удалось очистить чат');
+    }
+  };
+
+  // Move the reader chat into the normal chat list; the reader's temp slot
+  // frees up, so the next open starts a fresh temporary chat.
+  const keepReaderChat = async () => {
+    if (chatBusy || readerChatId === null || !issue) return;
+    try {
+      await keepNewspaperChat(`Газета — ${issue.document.title}`);
+      setChatMenuOpen(false);
+      setChatOpen(false);
+      setReaderChatId(null);
+      setChatMessages([]);
+      toast.success('Чат вынесен в общий список');
+    } catch (error) {
+      console.error('Failed to keep the newspaper chat:', error);
+      toast.error('Не удалось вынести чат');
+    }
+  };
+
   const applyZoom = (value: number) => {
     const next = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round(value / ZOOM_STEP) * ZOOM_STEP));
     setZoom(next);
@@ -717,7 +748,7 @@ export function NewspaperReader({ issue, sourceIssueId, style, pageNumber, pageC
     }
   };
 
-  return createPortal(<AnimatePresence>{issue && <motion.div key="newspaper-reader" className={s.backdrop} initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} onMouseDown={() => controlsOpen ? setControlsOpen(false) : onClose()}><motion.div ref={dialogRef} className={s.dialog} initial={{opacity:0,y:20,scale:.985}} animate={{opacity:1,y:0,scale:1}} exit={{opacity:0,y:14,scale:.99}} onMouseDown={event=>{ event.stopPropagation(); if (controlsOpen && !(event.target as HTMLElement).closest('[data-reader-controls]')) setControlsOpen(false); }} role="dialog" aria-modal="true">
+  return createPortal(<AnimatePresence>{issue && <motion.div key="newspaper-reader" className={s.backdrop} initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} onMouseDown={() => { if (controlsOpen || chatMenuOpen) { setControlsOpen(false); setChatMenuOpen(false); } else onClose(); }}><motion.div ref={dialogRef} className={s.dialog} initial={{opacity:0,y:20,scale:.985}} animate={{opacity:1,y:0,scale:1}} exit={{opacity:0,y:14,scale:.99}} onMouseDown={event=>{ event.stopPropagation(); if (controlsOpen && !(event.target as HTMLElement).closest('[data-reader-controls]')) setControlsOpen(false); if (chatMenuOpen && !(event.target as HTMLElement).closest('[data-reader-chat-menu]')) setChatMenuOpen(false); }} role="dialog" aria-modal="true">
     <AnimatePresence initial={false} mode="wait">{!controlsOpen ? <motion.button
       key="reader-handle"
       type="button"
@@ -805,7 +836,33 @@ export function NewspaperReader({ issue, sourceIssueId, style, pageNumber, pageC
     >
       <header><div><span>{style === 'deusEx' ? 'PICUS // ANALYST' : style === 'massEffect' ? 'ANN // ASSIST' : 'Разговор с редакцией'}</span><strong>{material?.title || issue.document.title}</strong></div><button type="button" className={s.readerChatClose} onClick={() => setChatOpen(false)}>Закрыть</button></header>
       <div className={s.readerChatMessages}>{chatMessages.map(message => <div key={message.id} data-role={message.role}>{message.role === 'assistant' ? <MarkdownRenderer content={message.text} className={s.readerMarkdown}/> : message.text}</div>)}{chatBusy && <div data-role="assistant" data-streaming={chatStreaming ? undefined : 'pending'}><MarkdownRenderer content={chatStreaming || '…'} className={s.readerMarkdown}/></div>}</div>
-      <form onSubmit={event => { event.preventDefault(); void sendReaderMessage(); }}><textarea value={chatDraft} onChange={event => setChatDraft(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void sendReaderMessage(); } }} placeholder={material ? 'Спросить об этом материале…' : 'Спросить об этом выпуске…'} rows={3} disabled={readerChatId === null}/><button type="submit" disabled={!chatDraft.trim() || chatBusy || readerChatId === null}>Отправить</button></form>
+      <div className={s.readerChatComposer}>
+        <div className={s.readerChatMenuWrap} data-reader-chat-menu>
+          <AnimatePresence initial={false}>{chatMenuOpen && <motion.div
+            key="reader-chat-menu"
+            className={s.readerChatMenu}
+            role="menu"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 8 }}
+            transition={{ duration: .16, ease: 'easeOut' }}
+          >
+            <button type="button" role="menuitem" disabled={chatBusy} onClick={() => void clearReaderChat()}>Очистить</button>
+            <button type="button" role="menuitem" disabled={chatBusy} onClick={() => void keepReaderChat()}>Вынести в чаты</button>
+          </motion.div>}</AnimatePresence>
+          <button
+            type="button"
+            className={s.readerChatMenuToggle}
+            aria-label="Действия с чатом"
+            aria-haspopup="menu"
+            aria-expanded={chatMenuOpen}
+            data-open={chatMenuOpen ? 'true' : undefined}
+            disabled={readerChatId === null || chatBusy}
+            onClick={() => setChatMenuOpen(open => !open)}
+          >⋯</button>
+        </div>
+        <form onSubmit={event => { event.preventDefault(); void sendReaderMessage(); }}><textarea value={chatDraft} onChange={event => setChatDraft(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void sendReaderMessage(); } }} placeholder={material ? 'Спросить об этом материале…' : 'Спросить об этом выпуске…'} rows={3} disabled={readerChatId === null}/><button type="submit" disabled={!chatDraft.trim() || chatBusy || readerChatId === null}>Отправить</button></form>
+      </div>
     </motion.aside>}</AnimatePresence>
     {SHOW_READER_CHROME && <header className={s.toolbar}><div className={s.issueMeta}><strong>Выпуск №{issue.issue_number}</strong><span>{pageNumber} / {pageCount}</span></div><div className={s.styleSelect}><Select options={styleOptions} value={style} onChange={value=>onStyleChange(value as NewspaperVisualStyle)} maxVisibleItems={4}/></div><div className={s.toolbarActions}><div className={s.zoomControls}><button type="button" onClick={()=>applyZoom(zoom-ZOOM_STEP)} disabled={zoom<=ZOOM_MIN} aria-label="Уменьшить масштаб">−</button><button type="button" className={s.zoomValue} onClick={fitToWindow} title="Вписать газету в окно">{zoom}%</button><button type="button" onClick={()=>applyZoom(zoom+ZOOM_STEP)} disabled={zoom>=ZOOM_MAX} aria-label="Увеличить масштаб">+</button></div><nav className={s.navigation}><button type="button" onClick={onPrevious} disabled={!canGoPrevious} aria-label={previousLabel}>‹</button><button type="button" onClick={onNext} disabled={!canGoNext} aria-label={nextLabel}>›</button><button type="button" onClick={onClose} aria-label={closeLabel}>×</button></nav></div></header>}
     <div className={`${s.viewport} ${dragging ? s.viewportDragging : ''}`} data-style={style} ref={viewportRef} onPointerDown={startDragging} onPointerMove={moveDragging} onPointerUp={stopDragging} onPointerCancel={stopDragging} onDragStart={event=>event.preventDefault()}>
