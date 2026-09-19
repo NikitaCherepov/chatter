@@ -68,8 +68,8 @@ export const generateImageTool: Tool = {
       }
     }
 
-    selectedImages = selectedImages.slice(0, 3);
-
+    // No hard reference cap here: the active provider adapter applies its own
+    // limit (OpenRouter: 3, Cloudflare: 4 input_image_N parts).
     const result = await runImageGeneration(
       billingUser.id,
       prompt,
@@ -77,8 +77,9 @@ export const generateImageTool: Tool = {
       args.aspect_ratio,
     );
     if (!result.ok) return `Image generation error: ${(result as any).error || 'unknown'}`;
-    // base64 НЕ возвращаем в tool_content — он сохраняется в массив generatedImages
-    // LLM получает текстовую заглушку, чтобы не забивать контекст мегабайтами base64
+    // base64 is NOT returned in tool_content — it is pushed into the
+    // generatedImages side channel; the LLM only gets a textual stub so the
+    // context is not flooded with megabytes of base64.
     const generatedImages = context.generatedImages;
     if (Array.isArray(generatedImages)) {
       // Save to disk and get URL

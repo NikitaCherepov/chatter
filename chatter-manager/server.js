@@ -31,6 +31,14 @@ const MAX_BACKUP_UPLOAD_BYTES = Number.parseInt(process.env.MAX_BACKUP_UPLOAD_BY
 const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
 const OPENROUTER_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes cache
 const openRouterCache = new Map();
+const LEGACY_IMAGE_ENV_KEYS = [
+  'OPENROUTER_API_KEY',
+  'OPENROUTER_BASE_URL',
+  'IMAGE_GEN_MODEL',
+  'IMAGE_GEN_MAX_RESOLUTION',
+  'IMAGE_GEN_QUALITY',
+  'IMAGE_GEN_SUPPORTED_PARAMETERS',
+];
 
 function openRouterCacheKey(url) {
   return `GET:${url}`;
@@ -44,8 +52,6 @@ function openRouterCacheGet(url) {
   }
   return entry.data;
 }
-//test
-
 function openRouterCacheSet(url, data) {
   openRouterCache.set(openRouterCacheKey(url), {
     data,
@@ -351,23 +357,60 @@ function publicSettings() {
       hasApiKey: Boolean(backendEnv.CARTESIA_API_KEY),
       model: backendEnv.CARTESIA_MODEL_ID || 'sonic-3.5'
     },
-    imageGeneration: {
-      enabled: true,
-      baseUrl: OPENROUTER_BASE_URL,
-      apiKey: '',
-      hasApiKey: Boolean(backendEnv.OPENROUTER_API_KEY),
-      model: backendEnv.IMAGE_GEN_MODEL || 'x-ai/grok-imagine-image-quality',
-      maxResolution: backendEnv.IMAGE_GEN_MAX_RESOLUTION === '1K' ? '1K' : '2K',
-      quality: ['low', 'medium', 'high'].includes(backendEnv.IMAGE_GEN_QUALITY) ? backendEnv.IMAGE_GEN_QUALITY : 'auto',
-      supportedParameters: `${backendEnv.IMAGE_GEN_SUPPORTED_PARAMETERS || (
-        (backendEnv.IMAGE_GEN_MODEL || 'x-ai/grok-imagine-image-quality') === 'x-ai/grok-imagine-image-quality'
+    imageGeneration: (() => {
+      // Mirrors the backend env seed so the panel keeps a sane shape even
+      // while the backend is temporarily unreachable (secrets are blank).
+      const supported = new Set(
+        `${backendEnv.IMAGE_GEN_SUPPORTED_PARAMETERS === undefined
           ? 'resolution,input_references'
-          : ''
-      )}`
-        .split(',')
-        .map((value) => value.trim())
-        .filter((value) => ['resolution', 'quality', 'input_references'].includes(value))
-    }
+          : backendEnv.IMAGE_GEN_SUPPORTED_PARAMETERS}`
+          .split(',')
+          .map((value) => value.trim())
+          .filter((value) => ['resolution', 'quality', 'input_references'].includes(value))
+      );
+      const maxResolution = backendEnv.IMAGE_GEN_MAX_RESOLUTION === '1K' ? '1K' : '2K';
+      const quality = ['low', 'medium', 'high'].includes(backendEnv.IMAGE_GEN_QUALITY || '')
+        ? backendEnv.IMAGE_GEN_QUALITY
+        : 'auto';
+      return {
+        enabled: true,
+        img2imgEnabled: supported.has('input_references'),
+        provider: 'openrouter',
+        openrouter: {
+          apiKeyId: null,
+          apiKey: '',
+          hasApiKey: Boolean(backendEnv.OPENROUTER_API_KEY),
+          baseUrl: backendEnv.OPENROUTER_BASE_URL || OPENROUTER_BASE_URL,
+          model: {
+            id: backendEnv.IMAGE_GEN_MODEL || 'x-ai/grok-imagine-image-quality',
+            name: 'Grok Imagine',
+            capabilities: null,
+            params: {
+              resolution: supported.has('resolution')
+                ? { allowed: [maxResolution], default: maxResolution }
+                : null,
+              quality: supported.has('quality')
+                ? { allowed: [quality], default: quality }
+                : null,
+            },
+          },
+        },
+        cloudflare: {
+          apiTokenId: null,
+          apiToken: '',
+          hasApiToken: false,
+          accountId: '',
+          model: {
+            id: '@cf/black-forest-labs/flux-2-klein-4b',
+            name: 'FLUX.2 [klein] 4B',
+            capabilities: null,
+            params: {
+              quality: { allowed: ['auto', 'low', 'medium', 'high'], default: 'auto' },
+            },
+          },
+        },
+      };
+    })()
   };
 }
 
@@ -504,6 +547,18 @@ function mergeSecret(value, existing, fieldName) {
   const secret = `${value || ''}`.trim() || `${existing || ''}`;
   if (/[\r\n\0]/.test(secret)) throw new Error(`${fieldName} contains invalid characters`);
   return secret;
+}
+
+function removeLegacyImageGenerationEnv() {
+  const backendEnv = parseEnv(BACKEND_ENV_FILE);
+  let changed = false;
+  for (const key of LEGACY_IMAGE_ENV_KEYS) {
+    if (Object.prototype.hasOwnProperty.call(backendEnv, key)) {
+      delete backendEnv[key];
+      changed = true;
+    }
+  }
+  if (changed) writeEnv(BACKEND_ENV_FILE, backendEnv);
 }
 
 function mergeProviderModels(input, existing, label, { required = false } = {}) {
@@ -742,11 +797,8 @@ function saveSettings(input) {
     'Cloud TTS model'
   );
   // Image generation settings moved to the backend DB (image_generation_settings
-  // in system_settings). The old OPENROUTER_*/IMAGE_GEN_* env vars are kept
-  // untouched in the file on purpose: they act as the one-time seed for the DB
-  // migration, so existing installs keep their keys after the upgrade. They are
-  // no longer written here; the panel payload is forwarded to the backend
-  // runtime API in the PUT /api/settings handler below.
+  // in system_settings). Legacy env values are one-time migration input and
+  // are removed after the backend confirms the encrypted vault reference.
 
   Object.assign(telegramEnv, {
     TELEGRAM_TOKEN: telegramToken,
@@ -2015,27 +2067,55 @@ function mergeCapability(target, name, descriptor) {
   };
 }
 
+async function getOpenRouterImageConfig(input = {}) {
+  // The stored key lives in the backend DB now; env is only a transition
+  // fallback for when the backend is temporarily unreachable.
+  let savedApiKey = parseEnv(BACKEND_ENV_FILE).OPENROUTER_API_KEY || '';
+  let savedBaseUrl = parseEnv(BACKEND_ENV_FILE).OPENROUTER_BASE_URL || OPENROUTER_BASE_URL;
+  try {
+    const runtime = await backendInternalRequest('/internal/admin/image-generation/settings');
+    savedApiKey = `${runtime?.openrouter?.apiKey || ''}`.trim() || savedApiKey;
+    savedBaseUrl = `${runtime?.openrouter?.baseUrl || ''}`.trim() || savedBaseUrl;
+  } catch {
+    // Keep the env-derived key while backend is unavailable.
+  }
+  const apiKey = `${input.apiKey || ''}`.trim() || savedApiKey;
+  if (!apiKey) throw new Error('OpenRouter API key is required for image models');
+  const baseUrl = (`${input.baseUrl || ''}`.trim() || savedBaseUrl).replace(/\/+$/, '');
+  return { apiKey, baseUrl };
+}
+
+async function listOpenRouterImageModels(query) {
+  const { apiKey, baseUrl } = await getOpenRouterImageConfig();
+  const cacheKey = `image-models:${baseUrl}`;
+  let payload = openRouterCacheGet(cacheKey);
+  if (!payload) {
+    const response = await fetch(`${baseUrl}/images/models`, {
+      headers: { Authorization: `Bearer ${apiKey}`, Accept: 'application/json' },
+      signal: AbortSignal.timeout(15000)
+    });
+    if (!response.ok) throw new Error(`OpenRouter image models failed (HTTP ${response.status})`);
+    payload = await response.json();
+    openRouterCacheSet(cacheKey, payload);
+  }
+  const needle = `${query || ''}`.trim().toLowerCase();
+  const models = Array.isArray(payload?.data) ? payload.data : [];
+  const data = needle
+    ? models.filter((entry) => `${entry?.id || ''} ${entry?.name || ''} ${entry?.description || ''}`.toLowerCase().includes(needle))
+    : models;
+  return { ...payload, data };
+}
+
 async function getOpenRouterImageCapabilities(input) {
   const model = `${input.model || ''}`.trim();
   const modelParts = model.split('/');
   if (modelParts.length < 2 || modelParts.some((part) => !/^[A-Za-z0-9._:@-]+$/.test(part))) {
     throw new Error('Use an OpenRouter model slug such as x-ai/grok-imagine-image-quality');
   }
-
-  // The stored key lives in the backend DB now; env is only a transition
-  // fallback for when the backend is temporarily unreachable.
-  let savedApiKey = parseEnv(BACKEND_ENV_FILE).OPENROUTER_API_KEY || '';
-  try {
-    const runtime = await backendInternalRequest('/internal/admin/image-generation/settings');
-    savedApiKey = `${runtime?.openrouter?.apiKey || ''}`.trim() || savedApiKey;
-  } catch {
-    // Keep the env-derived key while backend is unavailable.
-  }
-  const apiKey = `${input.apiKey || ''}`.trim() || savedApiKey;
-  if (!apiKey) throw new Error('OpenRouter API key is required to check the model');
+  const { apiKey, baseUrl } = await getOpenRouterImageConfig(input);
 
   const modelPath = modelParts.map(encodeURIComponent).join('/');
-  const response = await fetch(`${OPENROUTER_BASE_URL}/images/models/${modelPath}/endpoints`, {
+  const response = await fetch(`${baseUrl}/images/models/${modelPath}/endpoints`, {
     headers: { Authorization: `Bearer ${apiKey}`, Accept: 'application/json' },
     signal: AbortSignal.timeout(15000)
   });
@@ -2060,6 +2140,68 @@ async function getOpenRouterImageCapabilities(input) {
     endpointCount: endpoints.length,
     supportedParameters: [...merged.supportedParameters].sort(),
     parameters: merged.parameters
+  };
+}
+
+const CLOUDFLARE_API_BASE = 'https://api.cloudflare.com/client/v4';
+
+async function getCloudflareImageCredentials() {
+  let savedToken = '';
+  let savedAccountId = '';
+  try {
+    const runtime = await backendInternalRequest('/internal/admin/image-generation/settings');
+    savedToken = `${runtime?.cloudflare?.apiToken || ''}`.trim();
+    savedAccountId = `${runtime?.cloudflare?.accountId || ''}`.trim();
+  } catch {
+    // Backend temporarily unreachable — caller falls back to the input only.
+  }
+  return { savedToken, savedAccountId };
+}
+
+async function getCloudflareImageCapabilities(input) {
+  const model = `${input.model || ''}`.trim();
+  if (!/^@cf\/[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/.test(model)) {
+    throw new Error('Use a Cloudflare model id such as @cf/black-forest-labs/flux-2-klein-4b');
+  }
+
+  const { savedToken, savedAccountId } = await getCloudflareImageCredentials();
+  const token = `${input.apiKey || ''}`.trim() || savedToken;
+  const accountId = `${input.accountId || ''}`.trim() || savedAccountId;
+  if (!token) throw new Error('Cloudflare API token is required to check the model');
+  if (!accountId) throw new Error('Cloudflare Account ID is required to check the model');
+
+  // Lists the account's available Workers AI models — validates the token,
+  // the account id, and that the account can actually run this model.
+  const response = await fetch(
+    `${CLOUDFLARE_API_BASE}/accounts/${encodeURIComponent(accountId)}/ai/models/search?task=text-to-image&per_page=100`,
+    {
+      headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+      signal: AbortSignal.timeout(15000)
+    }
+  );
+  const payload = await response.json().catch(() => null);
+  if (!response.ok || payload?.success !== true) {
+    const detail = payload?.errors?.[0]?.message ? `: ${payload.errors[0].message}` : '';
+    throw new Error(`Cloudflare model check failed (HTTP ${response.status})${detail}`);
+  }
+
+  const models = Array.isArray(payload?.result) ? payload.result : [];
+  if (!models.some((entry) => `${entry?.name || ''}` === model)) {
+    throw new Error('This Cloudflare model is not available for the account (check the model id)');
+  }
+
+  // Static capability descriptor for the FLUX.2 Klein family; width/height are
+  // derived from aspect_ratio x quality by the backend adapter.
+  return {
+    model,
+    endpointCount: 1,
+    supportedParameters: ['input_references', 'quality'],
+    parameters: {
+      quality: { type: 'enum', values: ['auto', 'low', 'medium', 'high'] },
+      input_references: { type: 'images', max: 4, maxSide: 512 },
+      width: { type: 'integer', min: 256, max: 1920, default: 1024 },
+      height: { type: 'integer', min: 256, max: 1920, default: 768 }
+    }
   };
 }
 
@@ -2205,22 +2347,48 @@ async function handleRequest(req, res) {
     const settings = publicSettings();
     try {
       const runtime = await backendInternalRequest('/internal/admin/image-generation/settings');
+      removeLegacyImageGenerationEnv();
       const or = runtime.openrouter || {};
       const orModel = or.model || {};
       const orParams = orModel.params || {};
+      const cf = runtime.cloudflare || {};
+      const cfModel = cf.model || {};
+      const cfParams = cfModel.params || {};
       settings.imageGeneration = {
         enabled: runtime.enabled === true,
-        baseUrl: or.baseUrl || OPENROUTER_BASE_URL,
-        apiKey: '',
-        hasApiKey: Boolean(or.apiKey),
-        model: orModel.id || 'x-ai/grok-imagine-image-quality',
-        maxResolution: orParams.resolution?.default === '1K' ? '1K' : '2K',
-        quality: ['low', 'medium', 'high'].includes(orParams.quality?.default) ? orParams.quality.default : 'auto',
-        supportedParameters: [
-          ...(orParams.resolution ? ['resolution'] : []),
-          ...(orParams.quality ? ['quality'] : []),
-          ...(runtime.img2imgEnabled ? ['input_references'] : []),
-        ],
+        img2imgEnabled: runtime.img2imgEnabled === true,
+        provider: runtime.provider === 'cloudflare' ? 'cloudflare' : 'openrouter',
+        // Secrets are never exposed: empty string means "keep the stored
+        // value" (secret merge on the backend).
+        openrouter: {
+          apiKeyId: Number.isInteger(or.apiKeyId) ? or.apiKeyId : null,
+          apiKey: '',
+          hasApiKey: Boolean(or.apiKey),
+          baseUrl: or.baseUrl || OPENROUTER_BASE_URL,
+          model: {
+            id: orModel.id || 'x-ai/grok-imagine-image-quality',
+            name: orModel.name || orModel.id || 'Grok Imagine',
+            capabilities: orModel.capabilities ?? null,
+            params: {
+              resolution: orParams.resolution || null,
+              quality: orParams.quality || null,
+            },
+          },
+        },
+        cloudflare: {
+          apiTokenId: Number.isInteger(cf.apiTokenId) ? cf.apiTokenId : null,
+          apiToken: '',
+          hasApiToken: Boolean(cf.apiToken),
+          accountId: cf.accountId || '',
+          model: {
+            id: cfModel.id || '@cf/black-forest-labs/flux-2-klein-4b',
+            name: cfModel.name || cfModel.id || 'FLUX.2 [klein] 4B',
+            capabilities: cfModel.capabilities ?? null,
+            params: {
+              quality: cfParams.quality || { allowed: ['auto', 'low', 'medium', 'high'], default: 'auto' },
+            },
+          },
+        },
       };
     } catch {
       // Keep the safe env-derived default while backend is temporarily unavailable.
@@ -2687,6 +2855,16 @@ async function handleRequest(req, res) {
     }
   }
 
+  if (req.method === 'GET' && pathname === '/api/openrouter/image-models') {
+    const query = `${url.searchParams.get('q') || ''}`.trim();
+    if (!query || query.length < 2) return sendJson(res, 400, { error: 'query_too_short' });
+    try {
+      return sendJson(res, 200, await listOpenRouterImageModels(query));
+    } catch (error) {
+      return sendJson(res, 502, { error: error.message || 'openrouter_image_models_failed' });
+    }
+  }
+
   // ── OpenRouter model provider endpoints ───────────────────────────────────
   const orEndpointsMatch = pathname.match(/^\/api\/openrouter\/models\/([^/]+)\/([^/]+)\/endpoints$/);
   if (req.method === 'GET' && orEndpointsMatch) {
@@ -2706,8 +2884,9 @@ async function handleRequest(req, res) {
     if (req.method === 'GET') {
       try {
         const runtime = await backendInternalRequest('/internal/admin/image-generation/settings');
-        // Never expose the stored API key to the panel.
+        // Never expose stored secrets to the panel.
         if (runtime?.openrouter) runtime.openrouter.apiKey = '';
+        if (runtime?.cloudflare) runtime.cloudflare.apiToken = '';
         return sendJson(res, 200, runtime);
       } catch (error) {
         return sendJson(res, 502, { error: error.message || 'image_generation_settings_failed' });
@@ -2721,6 +2900,7 @@ async function handleRequest(req, res) {
           body: JSON.stringify(body),
         });
         if (runtime?.openrouter) runtime.openrouter.apiKey = '';
+        if (runtime?.cloudflare) runtime.cloudflare.apiToken = '';
         return sendJson(res, 200, runtime);
       } catch (error) {
         return sendJson(res, 400, { error: error.message || 'image_generation_settings_save_failed' });
@@ -2863,10 +3043,14 @@ async function handleRequest(req, res) {
   }
 
   if (req.method === 'POST' && pathname === '/api/image-model/check') {
+    const body = await readJson(req);
     try {
-      return sendJson(res, 200, await getOpenRouterImageCapabilities(await readJson(req)));
+      if (body.provider === 'cloudflare') {
+        return sendJson(res, 200, await getCloudflareImageCapabilities(body));
+      }
+      return sendJson(res, 200, await getOpenRouterImageCapabilities(body));
     } catch (error) {
-      return sendJson(res, 400, { error: error.message || 'openrouter_model_check_failed' });
+      return sendJson(res, 400, { error: error.message || 'image_model_check_failed' });
     }
   }
 
@@ -2890,6 +3074,7 @@ async function handleRequest(req, res) {
           body: JSON.stringify(input.imageGeneration),
           timeoutMs: 10_000,
         });
+        removeLegacyImageGenerationEnv();
       } catch (error) {
         return sendJson(res, 502, { error: `image_generation_settings_failed: ${error.message || 'unknown'}` });
       }

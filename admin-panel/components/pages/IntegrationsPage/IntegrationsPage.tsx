@@ -124,7 +124,11 @@ export function IntegrationsPage({
     'web-reader': settings.webReader.enabled
       && (settings.webReader.desktopEnabled || (settings.webReader.browserlessEnabled && settings.webReader.hasToken)),
     'cloud-tts': settings.cloudTts.hasApiKey,
-    'image-generation': settings.imageGeneration.enabled && settings.imageGeneration.hasApiKey,
+    'image-generation': settings.imageGeneration.enabled && (
+      settings.imageGeneration.provider === 'cloudflare'
+        ? settings.imageGeneration.cloudflare.hasApiToken
+        : settings.imageGeneration.openrouter.hasApiKey
+    ),
   };
 
   return (

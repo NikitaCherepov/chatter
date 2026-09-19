@@ -81,15 +81,51 @@ export type CloudTtsSettings = {
   model: string;
 };
 
+/** Allowlist for one request parameter; `default` is used when the tool call omits it. */
+export type ImageGenParamPolicy = {
+  allowed: string[];
+  default: string;
+};
+
+/**
+ * Mirrors the backend runtime-patch contract (the manager forwards this
+ * object verbatim to the backend on save). Secrets are referenced by their
+ * encrypted API-key-vault IDs; raw secret fields stay empty in the browser.
+ * `hasApiKey`/`hasApiToken` are UI-only availability flags.
+ */
 export type ImageGenerationSettings = {
   enabled: boolean;
-  baseUrl: string;
-  apiKey: string;
-  hasApiKey: boolean;
-  model: string;
-  maxResolution: '1K' | '2K';
-  quality: 'auto' | 'low' | 'medium' | 'high';
-  supportedParameters: string[];
+  img2imgEnabled: boolean;
+  provider: 'openrouter' | 'cloudflare';
+  openrouter: {
+    apiKeyId: number | null;
+    apiKey: string;
+    hasApiKey: boolean;
+    baseUrl: string;
+    model: {
+      id: string;
+      name: string;
+      capabilities?: unknown;
+      params: {
+        resolution: ImageGenParamPolicy | null;
+        quality: ImageGenParamPolicy | null;
+      };
+    };
+  };
+  cloudflare: {
+    apiTokenId: number | null;
+    apiToken: string;
+    hasApiToken: boolean;
+    accountId: string;
+    model: {
+      id: string;
+      name: string;
+      capabilities?: unknown;
+      params: {
+        quality: ImageGenParamPolicy | null;
+      };
+    };
+  };
 };
 
 export type Settings = {
@@ -192,12 +228,36 @@ export const emptySettings: Settings = {
   },
   imageGeneration: {
     enabled: true,
-    baseUrl: 'https://openrouter.ai/api/v1',
-    apiKey: '',
-    hasApiKey: false,
-    model: 'x-ai/grok-imagine-image-quality',
-    maxResolution: '2K',
-    quality: 'auto',
-    supportedParameters: ['resolution', 'input_references'],
+    img2imgEnabled: true,
+    provider: 'openrouter',
+    openrouter: {
+      apiKeyId: null,
+      apiKey: '',
+      hasApiKey: false,
+      baseUrl: 'https://openrouter.ai/api/v1',
+      model: {
+        id: 'x-ai/grok-imagine-image-quality',
+        name: 'Grok Imagine',
+        capabilities: null,
+        params: {
+          resolution: { allowed: ['2K'], default: '2K' },
+          quality: null,
+        },
+      },
+    },
+    cloudflare: {
+      apiTokenId: null,
+      apiToken: '',
+      hasApiToken: false,
+      accountId: '',
+      model: {
+        id: '@cf/black-forest-labs/flux-2-klein-4b',
+        name: 'FLUX.2 [klein] 4B',
+        capabilities: null,
+        params: {
+          quality: { allowed: ['auto', 'low', 'medium', 'high'], default: 'auto' },
+        },
+      },
+    },
   },
 };

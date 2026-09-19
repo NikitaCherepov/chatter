@@ -21,6 +21,7 @@
     "test:newspaper-assembly": "tsx tests/newspaper-assembly.test.mts",
     "test:media-assets": "tsx tests/media-assets.test.mts",
     "test:image-gen-settings": "tsx tests/image-generation-settings.test.mts",
+    "test:image-gen-cloudflare": "tsx tests/image-generation-cloudflare.test.mts",
     "test:context-plan-clamp": "tsx tests/context-plan-clamp.test.mts",
     "test:account-merge": "tsx tests/account-merge-quota.test.mts",
     "build": "node -e \"require('node:fs').rmSync('dist',{ recursive: true, force: true })\" && tsc -p tsconfig.json && node -e \"require('node:fs').cpSync('src/i18n/locales','dist/i18n/locales',{ recursive: true })\"",

@@ -6,6 +6,7 @@ import {
   type ImageAspectRatio,
   type ImageGenerationRuntimeSettings,
 } from './image-generation-settings.js';
+import { generateCloudflare } from './image-generation-cloudflare.js';
 import { consumeUserQuota, getUserQuota } from './monthly-usage.js';
 
 const normalizeAspectRatio = (value: unknown, allowed?: readonly string[]): ImageAspectRatio => {
@@ -139,13 +140,19 @@ export const runImageGeneration = async (
 
   const trimmedPrompt = (prompt || '').trim();
   if (!trimmedPrompt) return { ok: false, error: 'Empty prompt for image generation.' };
-  const aspectRatio = normalizeAspectRatio(aspectRatioRaw, settings.openrouter.model.params.aspectRatio.allowed);
+  const aspectPolicy = settings.provider === 'cloudflare'
+    ? settings.cloudflare.model.params.aspectRatio
+    : settings.openrouter.model.params.aspectRatio;
+  const aspectRatio = normalizeAspectRatio(aspectRatioRaw, aspectPolicy.allowed);
 
   try {
     let result: ImageGenResult | ImageGenError;
     switch (settings.provider) {
       case 'openrouter':
         result = await generateOpenRouter(settings, trimmedPrompt, inputImages, aspectRatio);
+        break;
+      case 'cloudflare':
+        result = await generateCloudflare(settings, trimmedPrompt, inputImages, aspectRatio);
         break;
       default:
         return { ok: false, error: `Unknown image generation provider: ${settings.provider}` };

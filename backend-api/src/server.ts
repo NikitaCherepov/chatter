@@ -28,7 +28,12 @@ import { registerPendingPcConfirmation, getPendingPcConfirmation, deletePendingP
 import { getPendingVisualClick, deletePendingVisualClick } from './services/visual-click-confirmations.js';
 import { getPendingEmailConfirmation, deletePendingEmailConfirmation } from './services/email-confirmations.js';
 import { runImageGeneration } from './services/image-generation.js';
-import { getImageGenerationSettings, updateImageGenerationSettings } from './services/image-generation-settings.js';
+import {
+  getImageGenerationApiKeyUsage,
+  getImageGenerationSettings,
+  replaceImageGenerationApiKeyReference,
+  updateImageGenerationSettings,
+} from './services/image-generation-settings.js';
 import { getWebSearchRuntimeSettings, getWebSearchStats, updateWebSearchRuntimeSettings } from './services/web-search-runtime.js';
 import { getWebReaderRuntimeSettings, getWebReaderStats, updateWebReaderRuntimeSettings } from './services/web-reader-runtime.js';
 import { getSmartHomeSettings, setSmartHomeToken, deleteSmartHomeToken, setZigbeeToken, deleteZigbeeToken, listSmartDevices, syncSmartHomeDevices } from './services/smart-home.js';
@@ -5260,7 +5265,7 @@ app.get('/internal/admin/api-keys/:id/used-by', internalAuth, async (req, res) =
     const models = db.prepare(
       'SELECT model_id FROM model_overrides WHERE selected_api_key_id = ?'
     ).all(keyId) as Array<{ model_id: string }>;
-    res.json({ models: models.map(m => m.model_id) });
+    res.json({ models: [...models.map(m => m.model_id), ...getImageGenerationApiKeyUsage(keyId)] });
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'internal_error' });
   }
@@ -5294,6 +5299,7 @@ app.delete('/internal/admin/api-keys/:id', internalAuth, async (req, res) => {
 
     // Atomic: reassign/nullify references and delete the key in a single tx
     const tx = db.transaction(() => {
+      replaceImageGenerationApiKeyReference(keyId, replacementIdNum);
       if (replacementIdNum === null) {
         db.prepare('UPDATE model_overrides SET selected_api_key_id = NULL WHERE selected_api_key_id = ?').run(keyId);
       } else {
