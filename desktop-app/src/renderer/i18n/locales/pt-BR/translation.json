@@ -1029,7 +1029,8 @@
         "stop": "Não foi possível parar o editor",
         "stopResearcher": "Não foi possível parar o pesquisador",
         "export": "Não foi possível exportar os dados do jornal"
-      }
+      },
+      "backToIssue": "Voltar para a edição"
     }
   },
   "advanced": {

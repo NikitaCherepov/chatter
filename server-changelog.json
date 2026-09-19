@@ -1,69 +1,43 @@
 {
   "changes": {
     "en": [
-      "Error 429 is now treated as retryable",
-      "Reworked the tasks system",
-      "Reworked the context size adjustment when switching plans"
+      "Added newspapers! Open the editor, and AI agents will gather the material — then read the result styled after Deus Ex, Mass Effect, the Daily Prophet from Harry Potter, or the New York Times. Auto-generation is coming soon"
     ],
     "cs": [
-      "Chyba 429 je nyní považována za opakovatelnou",
-      "Přepracován systém úloh",
-      "Přepracováno přizpůsobení velikosti kontextu při přepínání plánů"
+      "Přidány noviny! Otevřete editor a AI agenti shromáždí materiál — pak si přečtěte výsledek stylizovaný podle Deus Ex, Mass Effect, Denního věštce z Harryho Pottera nebo New York Times. Automatické generování brzy přijde"
     ],
     "de": [
-      "Fehler 429 wird jetzt als wiederholbar behandelt",
-      "Aufgabensystem überarbeitet",
-      "Anpassung der Kontextgröße beim Planwechsel überarbeitet"
+      "Zeitungen hinzugefügt! Öffnen Sie den Editor, und KI-Agenten sammeln das Material – lesen Sie dann das Ergebnis im Stil von Deus Ex, Mass Effect, dem Tagespropheten aus Harry Potter oder der New York Times. Automatische Generierung folgt bald"
     ],
     "es": [
-      "El error 429 ahora se trata como reintentable",
-      "Se rediseñó el sistema de tareas",
-      "Se rediseñó el ajuste del tamaño de contexto al cambiar de plan"
+      "¡Periódicos añadidos! Abre el editor, y los agentes de IA recopilarán el material — luego lee el resultado con estilo de Deus Ex, Mass Effect, el Profeta Diario de Harry Potter o el New York Times. La generación automática llegará pronto"
     ],
     "fr": [
-      "L'erreur 429 est désormais traitée comme réessayable",
-      "Refonte du système de tâches",
-      "Refonte de l'ajustement de la taille du contexte lors du changement de forfait"
+      "Journaux ajoutés ! Ouvrez l'éditeur, et les agents IA rassembleront le matériel — puis lisez le résultat stylisé d'après Deus Ex, Mass Effect, le Daily Prophet de Harry Potter, ou le New York Times. La génération automatique arrive bientôt"
     ],
     "it": [
-      "L'errore 429 è ora considerato come ritentabile",
-      "Rifatto il sistema delle attività",
-      "Rifatto l'adeguamento della dimensione del contesto quando si cambia piano"
+      "Aggiunti i giornali! Apri l'editor e gli agenti AI raccoglieranno il materiale — poi leggi il risultato in stile Deus Ex, Mass Effect, il Daily Prophet di Harry Potter o il New York Times. La generazione automatica arriverà presto"
     ],
     "ja": [
-      "エラー429は再試行可能として扱われるようになりました",
-      "タスクシステムを再設計しました",
-      "プラン切り替え時のコンテキストサイズ調整を再設計しました"
+      "新聞を追加しました！エディターを開くと、AIエージェントが素材を集め、Deus Ex、Mass Effect、ハリー・ポッターのデイリー・プロフェット、またはニューヨーク・タイムズ風にスタイルされた結果を読むことができます。自動生成は近日公開予定です"
     ],
     "ko": [
-      "오류 429는 이제 재시도 가능으로 처리됩니다",
-      "작업 시스템을 재작업했습니다",
-      "플랜 전환 시 컨텍스트 크기 조정을 재작업했습니다"
+      "신문이 추가되었습니다! 편집기를 열면 AI 에이전트가 자료를 수집하고, Deus Ex, Mass Effect, 해리포터의 Daily Prophet, 또는 New York Times 스타일로 꾸며진 결과를 읽을 수 있습니다. 자동 생성이 곧 제공될 예정입니다."
     ],
     "pl": [
-      "Błąd 429 jest teraz traktowany jako możliwy do ponowienia",
-      "Przebudowano system zadań",
-      "Przebudowano dostosowanie rozmiaru kontekstu przy zmianie planów"
+      "Dodano gazety! Otwórz edytor, a agenci AI zbiorą materiał — następnie przeczytaj wynik stylizowany na Deus Ex, Mass Effect, Proroka Codziennego z Harry'ego Pottera lub New York Times. Auto-generowanie wkrótce"
     ],
     "pt-BR": [
-      "O erro 429 agora é tratado como passível de nova tentativa",
-      "Sistema de tarefas reformulado",
-      "Ajuste do tamanho do contexto ao trocar de planos reformulado"
+      "Jornais adicionados! Abra o editor, e agentes de IA reunirão o material — depois leia o resultado estilizado como Deus Ex, Mass Effect, o Profeta Diário de Harry Potter ou o New York Times. A geração automática chegará em breve"
     ],
     "ru": [
-      "Ошибка 429 теперь считается повторяемой",
-      "Переработана система задач",
-      "Переработана настройка размера контекста при смене тарифов"
+      "Добавлены газеты! Откройте редактор, и ИИ-агенты соберут материал — затем читайте результат в стиле Deus Ex, Mass Effect, «Ежедневного пророка» из Гарри Поттера или New York Times. Автогенерация скоро появится"
     ],
     "tr": [
-      "Hata 429 artık yeniden denenebilir olarak ele alınıyor",
-      "Görev sistemi yeniden düzenlendi",
-      "Plan değiştirirken bağlam boyutu ayarı yeniden düzenlendi"
+      "Gazeteler eklendi! Editörü açın, AI ajanları materyali toplayacak — ardından Deus Ex, Mass Effect, Harry Potter'daki Günlük Kahin veya New York Times tarzında sonucu okuyun. Otomatik oluşturma yakında geliyor"
     ],
     "zh-CN": [
-      "错误429现在被视为可重试",
-      "重新设计了任务系统",
-      "重新设计了切换计划时的上下文大小调整"
+      "新增报纸！打开编辑器，AI代理将收集素材——然后阅读以《杀出重围》、《质量效应》、《哈利·波特》中的《预言家日报》或《纽约时报》风格呈现的结果。自动生成即将推出"
     ]
   }
 }

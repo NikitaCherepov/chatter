@@ -1,43 +1,43 @@
 {
   "changes": {
     "en": [
-      "Reworked the tasks system. Try it out and take a look in the panel"
+      "Added newspapers! Open the editor, and AI agents will gather the material — then read the result styled after Deus Ex, Mass Effect, the Daily Prophet from Harry Potter, or the New York Times. Auto-generation is coming soon"
     ],
     "cs": [
-      "Přepracovali jsme systém úkolů. Vyzkoušejte to a podívejte se do panelu"
+      "Přidány noviny! Otevřete editor a AI agenti shromáždí materiál — pak si přečtěte výsledek stylizovaný podle Deus Ex, Mass Effect, Denního věštce z Harryho Pottera nebo New York Times. Automatické generování brzy přijde"
     ],
     "de": [
-      "Überarbeitetes Aufgaben-System. Probieren Sie es aus und werfen Sie einen Blick in das Panel"
+      "Zeitungen hinzugefügt! Öffnen Sie den Editor, und KI-Agenten sammeln das Material – lesen Sie dann das Ergebnis im Stil von Deus Ex, Mass Effect, dem Tagespropheten aus Harry Potter oder der New York Times. Automatische Generierung folgt in Kürze"
     ],
     "es": [
-      "Sistema de tareas rediseñado. Pruébalo y echa un vistazo al panel"
+      "¡Periódicos añadidos! Abre el editor, y los agentes de IA recopilarán el material — luego lee el resultado con estilo de Deus Ex, Mass Effect, el Profeta Diario de Harry Potter o el New York Times. La generación automática llegará pronto"
     ],
     "fr": [
-      "Système de tâches retravaillé. Essayez-le et jetez un œil au panneau"
+      "Journaux ajoutés ! Ouvrez l'éditeur, et les agents IA rassembleront le matériel — puis lisez le résultat stylisé d'après Deus Ex, Mass Effect, le Daily Prophet de Harry Potter, ou le New York Times. La génération automatique arrive bientôt"
     ],
     "it": [
-      "Sistema di attività rielaborato. Provalo e dai un'occhiata al pannello"
+      "Aggiunti i giornali! Apri l'editor e gli agenti AI raccoglieranno il materiale — poi leggi il risultato in stile Deus Ex, Mass Effect, il Daily Prophet di Harry Potter o il New York Times. La generazione automatica arriverà presto"
     ],
     "ja": [
-      "タスクシステムを再設計しました。試してみて、パネルで確認してください"
+      "新聞を追加しました！エディターを開くと、AIエージェントが素材を集め、Deus Ex、Mass Effect、ハリー・ポッターのデイリー・プロフェット、またはニューヨーク・タイムズ風の結果を読み取ります。自動生成は近日公開予定です"
     ],
     "ko": [
-      "작업 시스템을 재작업했습니다. 사용해 보고 패널에서 확인해 보세요."
+      "신문이 추가되었습니다! 편집기를 열면 AI 에이전트가 자료를 수집하고, Deus Ex, Mass Effect, 해리포터의 Daily Prophet, 또는 New York Times 스타일로 결과를 읽을 수 있습니다. 자동 생성이 곧 제공됩니다."
     ],
     "pl": [
-      "Przebudowano system zadań. Wypróbuj go i zajrzyj do panelu"
+      "Dodano gazety! Otwórz edytor, a agenci AI zbiorą materiał — następnie przeczytaj wynik w stylu Deus Ex, Mass Effect, Proroka Codziennego z Harry'ego Pottera lub New York Times. Automatyczne generowanie wkrótce"
     ],
     "pt-BR": [
-      "Reformulamos o sistema de tarefas. Experimente e dê uma olhada no painel"
+      "Jornais adicionados! Abra o editor, e agentes de IA reunirão o material — depois leia o resultado estilizado como Deus Ex, Mass Effect, o Profeta Diário de Harry Potter ou o New York Times. A geração automática chegará em breve"
     ],
     "ru": [
-      "Переработана система задач. Попробуйте её и загляните в панель"
+      "Добавлены газеты! Откройте редактор, и ИИ-агенты соберут материал — затем читайте результат в стиле Deus Ex, Mass Effect, «Ежедневного пророка» из Гарри Поттера или New York Times. Автогенерация скоро появится"
     ],
     "tr": [
-      "Görev sistemi yeniden düzenlendi. Deneyin ve panelde bir göz atın"
+      "Gazeteler eklendi! Editörü açın, AI ajanları materyali toplayacak — ardından Deus Ex, Mass Effect, Harry Potter'daki Günlük Kahin veya New York Times tarzında sonucu okuyun. Otomatik oluşturma yakında geliyor"
     ],
     "zh-CN": [
-      "重新设计了任务系统。试试看，并在面板中查看"
+      "新增报纸！打开编辑器，AI代理将收集素材——然后阅读以《杀出重围》、《质量效应》、《哈利·波特》中的《预言家日报》或《纽约时报》风格呈现的结果。自动生成即将推出"
     ]
   }
 }

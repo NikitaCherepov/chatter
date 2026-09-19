@@ -1350,7 +1350,8 @@
         "stop": "Editor se nepodařilo zastavit",
         "stopResearcher": "Výzkumníka se nepodařilo zastavit",
         "export": "Nelze exportovat data novin"
-      }
+      },
+      "backToIssue": "Zpět na vydání"
     }
   },
   "tts": {

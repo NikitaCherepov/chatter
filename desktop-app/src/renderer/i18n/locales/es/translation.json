@@ -1029,7 +1029,8 @@
         "stop": "No se pudo detener el editor",
         "stopResearcher": "No se pudo detener al investigador",
         "export": "No se pudo exportar los datos del periódico"
-      }
+      },
+      "backToIssue": "Volver al número"
     }
   },
   "advanced": {

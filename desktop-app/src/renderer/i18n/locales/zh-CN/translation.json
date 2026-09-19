@@ -1029,7 +1029,8 @@
         "stop": "无法停止编辑器",
         "stopResearcher": "无法停止研究员",
         "export": "无法导出报纸数据"
-      }
+      },
+      "backToIssue": "返回期刊"
     }
   },
   "advanced": {

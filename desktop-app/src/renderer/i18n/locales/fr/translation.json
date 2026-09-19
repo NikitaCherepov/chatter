@@ -1029,7 +1029,8 @@
         "stop": "Impossible d'arrêter l'éditeur",
         "stopResearcher": "Impossible d'arrêter le chercheur",
         "export": "Impossible d'exporter les données du journal"
-      }
+      },
+      "backToIssue": "Retour au numéro"
     }
   },
   "advanced": {

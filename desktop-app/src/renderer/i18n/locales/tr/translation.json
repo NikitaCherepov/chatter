@@ -1350,7 +1350,8 @@
         "stop": "Editör durdurulamadı",
         "stopResearcher": "Araştırmacı durdurulamadı",
         "export": "Gazete verileri dışa aktarılamadı"
-      }
+      },
+      "backToIssue": "Sayıya geri dön"
     }
   },
   "tts": {

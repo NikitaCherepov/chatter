@@ -1029,7 +1029,8 @@
         "stop": "Der Editor konnte nicht beendet werden",
         "stopResearcher": "Der Forscher konnte nicht beendet werden",
         "export": "Die Zeitungsdaten konnten nicht exportiert werden"
-      }
+      },
+      "backToIssue": "Zurück zur Ausgabe"
     }
   },
   "advanced": {

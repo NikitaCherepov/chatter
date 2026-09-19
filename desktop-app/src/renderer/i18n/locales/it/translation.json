@@ -1350,7 +1350,8 @@
         "stop": "Impossibile fermare l'editor",
         "stopResearcher": "Impossibile fermare il ricercatore",
         "export": "Impossibile esportare i dati del giornale"
-      }
+      },
+      "backToIssue": "Torna al numero"
     }
   },
   "tts": {

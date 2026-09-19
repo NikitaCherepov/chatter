@@ -1350,7 +1350,8 @@
         "stop": "Nie można zatrzymać edytora",
         "stopResearcher": "Nie można zatrzymać badacza",
         "export": "Nie można wyeksportować danych gazety"
-      }
+      },
+      "backToIssue": "Wróć do wydania"
     }
   },
   "tts": {
