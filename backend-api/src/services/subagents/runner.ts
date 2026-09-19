@@ -298,8 +298,6 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
       });
     }
 
-    console.log(`[subagent:${resolvedAgentName}] === loop ${loop + 1}/${maxLoops} === (messages: ${messages.length})`);
-
     // Call AI — use user's preferred model if set, otherwise agent's configured mode
     const requestPayload: Record<string, unknown> = {
         messages,
@@ -337,12 +335,6 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
       }
     }
 
-    // Log assistant text (reasoning / intermediate message)
-    if (message.content) {
-      const text = String(message.content);
-      console.log(`[subagent:${resolvedAgentName}][text] ${text.slice(0, 2000)}`);
-    }
-
     // Push assistant message to history
     messages.push(message);
 
@@ -363,7 +355,6 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
         .map(m => m.content)
         .pop() as string | undefined;
       const content = message.content || previousContent || 'Token quota exhausted before the subagent could produce a final answer.';
-      console.log(`[subagent:${resolvedAgentName}] === finished after ${loop + 1} loops, answer: ${content.slice(0, 500)}`);
       currentIteration.is_final = true;
       iterations.push(currentIteration);
       return {
@@ -387,7 +378,6 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
         _throwIfAborted(ctx.signal);
         const toolName = toolCall.function?.name || '';
         const argsRaw = toolCall.function?.arguments || '{}';
-        console.log(`[subagent:${resolvedAgentName}][tool_call] ${toolName}(${argsRaw.slice(0, 500)})`);
         const statusMsg = getToolStatusMessage(ctx.user?.language, resolvedAgentName, toolName);
         if (ctx.onToolStatus) {
           try { await ctx.onToolStatus(statusMsg); } catch {}
@@ -406,7 +396,6 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
           console.warn(`[subagent:${resolvedAgentName}] direct tool "${toolName}" error:`, err?.message || err);
           toolContent = JSON.stringify({ status: 'error', message: err?.message || String(err) });
         }
-        console.log(`[subagent:${resolvedAgentName}][tool_result] ${toolName} -> ${toolContent.slice(0, 1000)}`);
         let parsedArgs: any;
         try { parsedArgs = JSON.parse(argsRaw); } catch { parsedArgs = { _raw: argsRaw }; }
         return { toolCall, toolName, parsedArgs, toolContent };
@@ -429,9 +418,6 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
       const toolName = toolCall.function?.name || '';
       const argsRaw = toolCall.function?.arguments || '{}';
       let toolContent: string;
-
-      // Log tool call with arguments
-      console.log(`[subagent:${resolvedAgentName}][tool_call] ${toolName}(${argsRaw.slice(0, 500)})`);
 
       // Broadcast tool status to client
       const statusMsg = getToolStatusMessage(ctx.user?.language, resolvedAgentName, toolName);
@@ -519,9 +505,6 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
           message: `Инструмент "${toolName}" недоступен для этого субагента.`,
         });
       }
-
-      // Log tool result
-      console.log(`[subagent:${resolvedAgentName}][tool_result] ${toolName} -> ${toolContent.slice(0, 1000)}`);
 
       // Record flat history
       let parsedArgs: any;
