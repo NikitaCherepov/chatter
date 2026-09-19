@@ -129,10 +129,10 @@
 
 .body p {
   margin: 0 0 1.15em;
-  break-inside: avoid;
 }
 
-.body p:first-child::first-letter {
+[data-style='broadsheet'] .body p:first-child::first-letter,
+[data-style='wizarding'] .body p:first-child::first-letter {
   float: left;
   margin: 0.06em 0.11em 0 0;
   color: var(--accent);
@@ -180,13 +180,14 @@
 }
 
 [data-style='wizarding'] .content h1 {
-  max-width: 16ch;
+  max-width: 21ch;
   margin-inline: auto;
   font-family: Impact, Haettenschweiler, 'Arial Narrow Bold', sans-serif;
-  font-size: clamp(42px, 6vw, 62px);
+  font-size: clamp(40px, 5.3vw, 55px);
   line-height: 0.91;
   letter-spacing: 0.005em;
   text-align: center;
+  text-wrap: balance;
   text-transform: uppercase;
 }
 
