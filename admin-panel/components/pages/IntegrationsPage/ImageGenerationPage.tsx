@@ -130,6 +130,11 @@ export function ImageGenerationPage({
   const [toggleSaving, setToggleSaving] = useState(false);
   const [toggleError, setToggleError] = useState('');
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
+  const [showCreateKey, setShowCreateKey] = useState(false);
+  const [newKeyName, setNewKeyName] = useState('');
+  const [newKeyValue, setNewKeyValue] = useState('');
+  const [creatingKey, setCreatingKey] = useState(false);
+  const [createKeyError, setCreateKeyError] = useState('');
   const [openRouterModelOptions, setOpenRouterModelOptions] = useState<SelectOption[]>(OPENROUTER_MODEL_OPTIONS);
   const modelSearchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
   const modelMetadata = useRef<Map<string, OpenRouterSearchModel>>(new Map());
@@ -170,6 +175,117 @@ export function ImageGenerationPage({
     label: key.name,
     hint: key.key_prefix,
   }));
+  const apiKeySelectOptions: SelectOption[] = [
+    ...apiKeyOptions,
+    { value: '__create__', label: t('security.apiKeyCreateNew') },
+  ];
+  const selectedApiKeyId = isCloudflare
+    ? settings.cloudflare.apiTokenId
+    : settings.openrouter.apiKeyId;
+
+  const selectApiKey = (apiKeyId: number | null) => {
+    if (isCloudflare) {
+      patchCloudflare({ apiTokenId: apiKeyId, apiToken: '' });
+    } else {
+      patchOpenRouter({ apiKeyId, apiKey: '' });
+    }
+  };
+
+  const handleApiKeyChange = (value: string) => {
+    if (value === '__create__') {
+      setCreateKeyError('');
+      setShowCreateKey(true);
+      return;
+    }
+
+    selectApiKey(value.startsWith('key:') ? Number(value.slice(4)) : null);
+  };
+
+  const createApiKey = async () => {
+    const name = newKeyName.trim();
+    const key = newKeyValue.trim();
+    if (!name || !key) return;
+
+    setCreatingKey(true);
+    setCreateKeyError('');
+    try {
+      const created = await api<ApiKey>('/api/api-keys', {
+        method: 'POST',
+        body: JSON.stringify({ name, key }),
+      });
+      setApiKeys((current) => [
+        ...current.filter((item) => item.id !== created.id),
+        created,
+      ]);
+      selectApiKey(created.id);
+      setNewKeyName('');
+      setNewKeyValue('');
+      setShowCreateKey(false);
+      window.dispatchEvent(new Event('chatter:api-keys-changed'));
+    } catch (error) {
+      setCreateKeyError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setCreatingKey(false);
+    }
+  };
+
+  const apiKeyField = showCreateKey ? (
+    <div className={styles.createKeyPanel}>
+      <FormField label={t('security.apiKeyName')}>
+        <Input
+          value={newKeyName}
+          onChange={(event) => setNewKeyName(event.target.value)}
+          placeholder={t('security.apiKeyNamePlaceholder')}
+          autoFocus
+        />
+      </FormField>
+      <FormField label={t('security.apiKeyValue')}>
+        <Input
+          type="password"
+          value={newKeyValue}
+          onChange={(event) => setNewKeyValue(event.target.value)}
+          placeholder={t('security.apiKeyValuePlaceholder')}
+        />
+      </FormField>
+      {createKeyError && <p className={styles.createKeyError}>{createKeyError}</p>}
+      <div className={styles.createKeyActions}>
+        <button
+          type="button"
+          disabled={creatingKey || !newKeyName.trim() || !newKeyValue.trim()}
+          onClick={() => void createApiKey()}
+        >
+          {t('security.apiKeyCreate')}
+        </button>
+        <button
+          type="button"
+          className="buttonSecondary"
+          disabled={creatingKey}
+          onClick={() => {
+            setShowCreateKey(false);
+            setCreateKeyError('');
+          }}
+        >
+          {t('common.cancel')}
+        </button>
+      </div>
+    </div>
+  ) : (
+    <FormField
+      label={
+        isCloudflare
+          ? t('integrations.imageGeneration.apiTokenLabel')
+          : t('integrations.imageGeneration.apiKeyLabel')
+      }
+      state={<SecretState configured={secretReady} />}
+    >
+      <Select
+        options={apiKeySelectOptions}
+        value={selectedApiKeyId ? `key:${selectedApiKeyId}` : ''}
+        onChange={handleApiKeyChange}
+        placeholder={t('security.apiKeySelectPlaceholder')}
+      />
+    </FormField>
+  );
 
   const resetCheck = () => {
     setCheckResult(null);
@@ -353,6 +469,8 @@ export function ImageGenerationPage({
               value={settings.provider}
               onChange={(value) => {
                 resetCheck();
+                setShowCreateKey(false);
+                setCreateKeyError('');
                 onChange({ provider: value as ImageGenerationSettings['provider'] });
               }}
               options={PROVIDER_OPTIONS}
@@ -361,20 +479,7 @@ export function ImageGenerationPage({
           </FormField>
           {isCloudflare ? (
             <>
-              <FormField
-                label={t('integrations.imageGeneration.apiTokenLabel')}
-                state={<SecretState configured={settings.cloudflare.hasApiToken} />}
-              >
-                <Select
-                  options={apiKeyOptions}
-                  value={settings.cloudflare.apiTokenId ? `key:${settings.cloudflare.apiTokenId}` : ''}
-                  onChange={(value) => patchCloudflare({
-                    apiTokenId: value.startsWith('key:') ? Number(value.slice(4)) : null,
-                    apiToken: '',
-                  })}
-                  placeholder={t('security.apiKeySelectPlaceholder')}
-                />
-              </FormField>
+              {apiKeyField}
               <FormField
                 label={t('integrations.imageGeneration.accountIdLabel')}
                 hint={t('integrations.imageGeneration.accountIdHint')}
@@ -393,20 +498,7 @@ export function ImageGenerationPage({
               <FormField label={t('integrations.imageGeneration.apiUrlLabel')} hint={t('integrations.imageGeneration.apiUrlHint')}>
                 <Input type="url" value={settings.openrouter.baseUrl || OPENROUTER_BASE_URL} readOnly />
               </FormField>
-              <FormField
-                label={t('integrations.imageGeneration.apiKeyLabel')}
-                state={<SecretState configured={settings.openrouter.hasApiKey} />}
-              >
-                <Select
-                  options={apiKeyOptions}
-                  value={settings.openrouter.apiKeyId ? `key:${settings.openrouter.apiKeyId}` : ''}
-                  onChange={(value) => patchOpenRouter({
-                    apiKeyId: value.startsWith('key:') ? Number(value.slice(4)) : null,
-                    apiKey: '',
-                  })}
-                  placeholder={t('security.apiKeySelectPlaceholder')}
-                />
-              </FormField>
+              {apiKeyField}
             </>
           )}
           <FormField
