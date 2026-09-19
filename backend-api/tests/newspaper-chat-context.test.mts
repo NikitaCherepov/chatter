@@ -10,10 +10,13 @@ import path from 'node:path';
 
 const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'chatter-newspaper-chat-'));
 process.env.API_DB_PATH = path.join(tempDir, 'newspaper-chat.db');
+process.env.UPLOADS_DIR = path.join(tempDir, 'uploads');
 
 const { db } = await import('../src/db.js');
 const { createDemoNewspaperIssue, getNewspaperIssue, listNewspapers } = await import('../src/services/newspapers.js');
 const {
+  describeNewspaperBlockLines,
+  findNewspaperMaterial,
   getOrCreateNewspaperChat,
   injectNewspaperContext,
   isNewspaperContextContent,
@@ -21,6 +24,7 @@ const {
   parseNewspaperChatView,
   resolveCurrentIssueFromChat,
 } = await import('../src/services/newspaper-chat.js');
+const { saveImageAsset } = await import('../src/services/media-assets.js');
 const { getHistoryForAi, listStaleTemporaryChats, touchUserChat } = await import('../src/services/chats.js');
 const { newspaperIssueContentsTool, newspapersListTool, readNewspaperItemTool } = await import('../src/services/tools/newspapers.js');
 
@@ -147,6 +151,39 @@ if (notesList) {
   assert.ok(!paginatedRow.includes(`[note ${hiddenId}]`), 'hidden notes_list item is NOT listed');
 }
 
+// ── Images: visible illustrations are attached as compressed variants ────────
+const sharp = (await import('sharp')).default;
+const png = await sharp({ create: { width: 8, height: 8, channels: 3, background: '#336699' } }).png().toBuffer();
+const catAsset = await saveImageAsset({ userId: 101, data: png, retention: 'persistent', kind: 'newspaper_image' });
+const heroAsset = await saveImageAsset({ userId: 101, data: png, retention: 'persistent', kind: 'newspaper_image' });
+const doc = JSON.parse((db.prepare('SELECT document_json FROM newspaper_issues WHERE id = ?').get(issue.id) as { document_json: string }).document_json);
+doc.blocks.find((block: any) => block.id === 'cat').image_url = catAsset.url;
+doc.blocks.find((block: any) => block.id === 'hero-ai').image_url = heroAsset.url;
+db.prepare('UPDATE newspaper_issues SET document_json = ? WHERE id = ?').run(JSON.stringify(doc), issue.id);
+
+const imageView = parseNewspaperChatView({ issue_id: issue.id, page: 3, page_count: 3, page_id: `issue-${issue.id}-page-3`, block_ids: ['cat', 'hero-ai'] });
+assert.equal(imageView?.ok, true);
+await injectNewspaperContext(101, chatId, (imageView as { ok: true; view: any }).view);
+
+const imageRows = db.prepare("SELECT content, images FROM chat_messages WHERE chat_id = ? AND content LIKE '[NEWSPAPER CONTEXT%' ORDER BY id").all(chatId) as Array<{ content: string; images: string | null }>;
+const imageRow = imageRows[imageRows.length - 1];
+const attached = JSON.parse(imageRow.images || '[]') as Array<{ url: string; type: string }>;
+assert.equal(attached.length, 2, 'both visible images are attached');
+assert.ok(attached.every(image => image.type === 'external' && image.url.includes('_thumb.webp')), 'attached as compressed variants');
+assert.ok(attached.every(image => imageRow.content.includes(`(image_url: ${image.url})`)), 'item lines reference the variant urls');
+assert.ok(!imageRow.content.includes(`(image_url: ${catAsset.url})`), 'original urls are not leaked into the row');
+
+// read_newspaper_item returns illustrations; image blocks are readable materials.
+const catResult = await readNewspaperItemTool.handler({ item_id: 'cat' }, toolContext);
+assert.ok(catResult.includes('Illustration') && catResult.includes(catAsset.url), 'image material carries its illustration url');
+const heroMaterial = findNewspaperMaterial(getNewspaperIssue(101, issue.id)!.document, 'hero-ai');
+assert.equal(heroMaterial?.imageUrl, heroAsset.url, 'article material exposes its illustration');
+
+// describeNewspaperBlockLines: url suffix + remap for chat variants.
+const imageBlock = { id: 'x1', type: 'image', title: 'T', caption: 'C', image_url: '/api/v1/images/orig.webp' } as any;
+assert.ok(describeNewspaperBlockLines(imageBlock)[0].includes('image_url: /api/v1/images/orig.webp'));
+assert.ok(describeNewspaperBlockLines(imageBlock, () => '/api/v1/images/thumb.webp')[0].includes('image_url: /api/v1/images/thumb.webp'), 'remap swaps in the chat variant');
+
 // ── TTL sweep: stale temp chats are listed, activity keeps them alive ────────
 touchUserChat(101, chatId);
 assert.equal(listStaleTemporaryChats(10 * 60 * 1000).length, 0, 'fresh temp chat is not stale');
@@ -156,7 +193,7 @@ assert.ok(listStaleTemporaryChats(10 * 60 * 1000).some(row => row.id === chatId)
 // Stale issue id: injection no-ops silently (nothing recorded).
 await injectNewspaperContext(101, chatId, (parseNewspaperChatView({ issue_id: 424242, page: 1, page_count: 1 }) as { ok: true; view: any }).view);
 const markersAfterStale = (db.prepare("SELECT COUNT(*) AS n FROM chat_messages WHERE chat_id = ? AND content LIKE '[ACTIVE_VIEW]%'").get(chatId) as { n: number }).n;
-assert.equal(markersAfterStale, 5, 'stale issue id records nothing');
+assert.equal(markersAfterStale, 6, 'stale issue id records nothing');
 
 // Sanity: the issue still resolves.
 assert.ok(getNewspaperIssue(101, issue.id), 'issue still resolvable');

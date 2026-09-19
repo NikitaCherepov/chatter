@@ -107,6 +107,7 @@ export const readNewspaperItemTool: Tool = {
       material.text || '(no text)',
     ];
     if (material.url) lines.push('', `Source article: ${material.url}`);
+    if (material.imageUrl) lines.push('', `Illustration (image_url, can be passed to describe_image): ${material.imageUrl}`);
     if (material.sources && material.sources.length > 0) {
       lines.push('', 'Sources:', ...material.sources.map(source => `- ${source.title} — ${source.url}`));
     }

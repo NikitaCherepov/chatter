@@ -1,7 +1,10 @@
+import fs from 'node:fs';
 import { db } from '../db.js';
-import type { NewspaperBlock, NewspaperIssueDocument, NewspaperSource } from '../types.js';
+import type { MessageImage, NewspaperBlock, NewspaperIssueDocument, NewspaperSource } from '../types.js';
 import { appendChatMessage, getOrCreateTemporaryChat } from './chats.js';
 import { getNewspaperIssue, listNewspapers } from './newspapers.js';
+import { getMediaAssetByUrl, getReusableMediaAssetBySourceUrl, saveImageAsset } from './media-assets.js';
+import { resolveImageFile } from './image-storage.js';
 
 /**
  * Newspaper reader chat (temporary): one per user, hidden from chat lists,
@@ -86,47 +89,80 @@ const firstTeaser = (text: string | undefined, max = 220): string => {
   return flat.length > max ? `${flat.slice(0, max - 1).trimEnd()}…` : flat;
 };
 
+/** Suffix exposing a local image asset url — the model can pass it to describe_image. */
+const imageSuffix = (url: string | undefined, remap?: (url: string) => string): string =>
+  url ? ` (image_url: ${remap ? remap(url) : url})` : '';
+
+/** Compressed chat variant of a newspaper image (thumbnail webp, GIF → first frame) —
+ *  the same pipeline as user-attached photos, reused per source url. */
+const chatImageVariantUrl = async (userId: number, url: string): Promise<string> => {
+  try {
+    const reused = getReusableMediaAssetBySourceUrl(userId, url);
+    if (reused) return reused.local_url;
+    const asset = getMediaAssetByUrl(url);
+    const filepath = asset ? resolveImageFile(asset.storage_filename) : null;
+    if (!filepath) return url;
+    const saved = await saveImageAsset({
+      userId,
+      data: fs.readFileSync(filepath),
+      retention: 'temporary',
+      kind: 'newspaper_chat_image',
+      transform: 'thumbnail',
+      sourceUrl: url,
+      ttlSeconds: 24 * 60 * 60,
+    });
+    return saved.url;
+  } catch {
+    return url;
+  }
+};
+
+const attachedChatImages = (urls: string[]): MessageImage[] | null =>
+  urls.length > 0 ? urls.map(url => ({ url, type: 'external' })) : null;
+
 /** Human-readable one-line descriptions of issue items (shared with tools). */
-export const describeNewspaperBlockLines = (block: NewspaperBlock): string[] => {
+export const describeNewspaperBlockLines = (block: NewspaperBlock, remapImageUrl?: (url: string) => string): string[] => {
   switch (block.type) {
     case 'article':
-      return [`[article ${block.id}] "${block.title}" — ${firstTeaser(block.text)}`];
+      return [`[article ${block.id}] "${block.title}" — ${firstTeaser(block.text)}${imageSuffix(block.image_url, remapImageUrl)}`];
     case 'note':
-      return [`[note ${block.id}] "${block.title || 'Note'}" — ${firstTeaser(block.text)}`];
+      return [`[note ${block.id}] "${block.title || 'Note'}" — ${firstTeaser(block.text)}${imageSuffix(block.image_url, remapImageUrl)}`];
     case 'notes_list':
       return [
         `[notes_list ${block.id}] "${block.title || 'Brief notes'}":`,
         ...block.items.map((item, index) =>
-          `  [note ${newspaperItemId(block.id, item, index)}] "${item.title || 'Note'}" — ${firstTeaser(item.text)}`),
+          `  [note ${newspaperItemId(block.id, item, index)}] "${item.title || 'Note'}" — ${firstTeaser(item.text)}${imageSuffix(item.image_url, remapImageUrl)}`),
       ];
     case 'weather':
       return [`[weather ${block.id}] ${block.location}: ${block.condition}${block.details ? ` (${block.details})` : ''}`];
     case 'image':
-      return [`[image ${block.id}] "${block.title}"${block.caption ? ` — ${firstTeaser(block.caption, 120)}` : ''}`];
+      return [`[image ${block.id}] "${block.title}"${block.caption ? ` — ${firstTeaser(block.caption, 120)}` : ''}${imageSuffix(block.image_url, remapImageUrl)}`];
   }
 };
 
 type NewspaperMaterialLike = {
-  kind: 'article' | 'note' | 'list';
+  kind: 'article' | 'note' | 'list' | 'image';
   title: string;
   text: string;
   url?: string;
+  imageUrl?: string;
   sources?: NewspaperSource[];
 };
 
-/** Find an openable material by id: article/note blocks and notes_list items. */
+/** Find an openable material by id: article/note/image blocks and notes_list items. */
 export const findNewspaperMaterial = (document: NewspaperIssueDocument, materialId: string): NewspaperMaterialLike | null => {
   for (const block of document.blocks) {
     if (block.id === materialId) {
-      if (block.type === 'article') return { kind: 'article', title: block.title, text: block.long_text || block.text, url: block.url, sources: block.sources };
-      if (block.type === 'note') return { kind: 'note', title: block.title || 'Note', text: block.long_text || block.text || '', url: block.url, sources: block.sources };
+      if (block.type === 'article') return { kind: 'article', title: block.title, text: block.long_text || block.text, url: block.url, imageUrl: block.image_url, sources: block.sources };
+      if (block.type === 'note') return { kind: 'note', title: block.title || 'Note', text: block.long_text || block.text || '', url: block.url, imageUrl: block.image_url, sources: block.sources };
+      if (block.type === 'image') return { kind: 'image', title: block.title, text: block.caption || block.prompt || '', imageUrl: block.image_url };
       continue;
     }
     if (block.type === 'notes_list') {
       const index = block.items.findIndex((item, i) => newspaperItemId(block.id, item, i) === materialId);
       if (index >= 0) {
         const item = block.items[index];
-        return { kind: 'note', title: item.title || 'Note', text: item.long_text || item.text || '', url: item.url, sources: item.sources };
+        return { kind: 'note', title: item.title || 'Note', text: item.long_text || item.text || '', url: item.url, imageUrl: item.image_url, sources: item.sources };
       }
     }
   }
@@ -145,6 +181,29 @@ const hasContextRowFor = (chatId: number, viewId: string): boolean => Boolean(
   db.prepare('SELECT 1 FROM chat_messages WHERE chat_id = ? AND content LIKE ? LIMIT 1')
     .get(chatId, `%[NEWSPAPER CONTEXT view_id="${viewId}"%`)
 );
+
+/** Image urls visible in the page view (respects the reader's block/item scope). */
+const collectViewImageUrls = (
+  document: NewspaperIssueDocument,
+  view: NewspaperChatView,
+  hasExplicitBlockScope: boolean,
+  blockIds: Set<string>,
+): string[] => {
+  const urls: string[] = [];
+  const push = (url: string | undefined) => { if (url) urls.push(url); };
+  for (const block of document.blocks) {
+    if (hasExplicitBlockScope && !blockIds.has(block.id)) continue;
+    if (block.type === 'notes_list' && view.blockItemIds && Object.hasOwn(view.blockItemIds, block.id)) {
+      const visibleItemIds = new Set(view.blockItemIds[block.id]);
+      block.items.forEach((item, index) => {
+        if (visibleItemIds.has(newspaperItemId(block.id, item, index))) push(item.image_url);
+      });
+      continue;
+    }
+    if (block.type === 'image' || block.type === 'article' || block.type === 'note') push(block.image_url);
+  }
+  return [...new Set(urls)];
+};
 
 /** Idempotent send-time context injection into the newspaper chat. */
 export const injectNewspaperContext = async (userId: number, chatId: number, view: NewspaperChatView): Promise<void> => {
@@ -175,6 +234,7 @@ export const injectNewspaperContext = async (userId: number, chatId: number, vie
   if (isItemView) {
     const material = findNewspaperMaterial(issue.document, view.blockId as string);
     if (!material) return; // unknown id — ACTIVE_VIEW above is enough
+    const illustrationUrl = material.imageUrl ? await chatImageVariantUrl(userId, material.imageUrl) : null;
     const position = pageCount > 0 ? `, currently on page ${page} of ${pageCount}` : '';
     const lines = [
       `[NEWSPAPER CONTEXT view_id="${viewId}"]`,
@@ -184,6 +244,7 @@ export const injectNewspaperContext = async (userId: number, chatId: number, vie
       material.text || '(no text)',
     ];
     if (material.url) lines.push('', `Source article: ${material.url}`);
+    if (illustrationUrl) lines.push('', `Illustration: ${illustrationUrl}`);
     const sources = formatSources(material.sources);
     if (sources.length > 0) lines.push('', ...sources);
     lines.push(
@@ -191,13 +252,20 @@ export const injectNewspaperContext = async (userId: number, chatId: number, vie
       'This block is automated reading context, not a message from the reader. Do not reply to it directly.',
       '[/NEWSPAPER CONTEXT]',
     );
-    await appendChatMessage(userId, chatId, 'user', lines.join('\n'));
+    await appendChatMessage(userId, chatId, 'user', lines.join('\n'), null, null, attachedChatImages(illustrationUrl ? [illustrationUrl] : []));
     console.log(`[newspaper-chat] user=${userId} chat=${chatId} view=${viewId} material context row written`);
     return;
   }
 
   const blockIds = new Set((view.blockIds || []).map(id => `${id}`));
   const hasExplicitBlockScope = Array.isArray(view.blockIds);
+  // Compressed variants for the view's images — attached to this row so vision
+  // models see them inline; non-vision models get [Attached image N: url] markers.
+  const variantMap = new Map(await Promise.all(
+    collectViewImageUrls(issue.document, view, hasExplicitBlockScope, blockIds)
+      .map(async url => [url, await chatImageVariantUrl(userId, url)] as const)));
+  const variantUrls = [...variantMap.values()];
+  const remapImageUrl = (url: string) => variantMap.get(url) || url;
   const lines = [
     `[NEWSPAPER CONTEXT view_id="${viewId}"]`,
     issueHeader(pageCount > 0 ? `, currently viewing page ${page} of ${pageCount}` : ', currently viewing the issue'),
@@ -213,18 +281,18 @@ export const injectNewspaperContext = async (userId: number, chatId: number, vie
       lines.push(`- [notes_list ${block.id}] "${block.title || 'Brief notes'}":`);
       lines.push(...visibleItems.map((item, index) => {
         const originalIndex = block.items.indexOf(item);
-        return `-   [note ${newspaperItemId(block.id, item, originalIndex >= 0 ? originalIndex : index)}] "${item.title || 'Note'}" — ${firstTeaser(item.text)}`;
+        return `-   [note ${newspaperItemId(block.id, item, originalIndex >= 0 ? originalIndex : index)}] "${item.title || 'Note'}" — ${firstTeaser(item.text)}${imageSuffix(item.image_url, remapImageUrl)}`;
       }));
       continue;
     }
-    lines.push(...describeNewspaperBlockLines(block).map(line => `- ${line}`));
+    lines.push(...describeNewspaperBlockLines(block, remapImageUrl).map(line => `- ${line}`));
   }
   lines.push(
     '',
     'This block is automated reading context, not a message from the reader. Do not reply to it directly.',
     '[/NEWSPAPER CONTEXT]',
   );
-  await appendChatMessage(userId, chatId, 'user', lines.join('\n'));
+  await appendChatMessage(userId, chatId, 'user', lines.join('\n'), null, null, attachedChatImages(variantUrls));
   console.log(`[newspaper-chat] user=${userId} chat=${chatId} view=${viewId} page context row written`);
 };
 
