@@ -107,7 +107,7 @@ const SUBAGENT_TOOL_RESULT_MAX = 80_000;
 
 /** Verbose-логи цикла субагентов (итерации, тексты модели, тулколлы и результаты).
  *  В проде выключены — включать локально для отладки. */
-const SUBAGENT_LOGS = false;
+const SUBAGENT_LOGS = true;
 
 function truncateToolResult(content: string): string {
   if (content.length > SUBAGENT_TOOL_RESULT_MAX) {
