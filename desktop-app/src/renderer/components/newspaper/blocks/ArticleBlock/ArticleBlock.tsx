@@ -57,7 +57,7 @@ export function ArticleBlock({
       {eyebrow && <span>{eyebrow}</span>}
       {image && <img className={s.articleImage} src={image} alt="" />}
       <h2>{openMaterial
-        ? <button type="button" className={s.materialOpenTitle} onClick={openArticle}>{article.title}</button>
+        ? <button type="button" className={s.materialOpenTitle} data-article-title-link="true" onClick={openArticle}>{article.title}</button>
         : titleLink && articleUrl
         ? <a data-article-title-link="true" href={articleUrl} target="_blank" rel="noreferrer">{article.title}</a>
         : article.title}</h2>

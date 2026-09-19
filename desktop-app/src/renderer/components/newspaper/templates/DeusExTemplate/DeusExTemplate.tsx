@@ -16,7 +16,7 @@ type MediaBlock = Extract<NewspaperBlock, { type: 'article' | 'image' }>;
 
 function ArticleTitle({ article, as = 'h2' }: { article: ArticleBlockData; as?: 'h2' | 'strong' }) {
   const openMaterial = useNewspaperMaterialViewer();
-  const content = <button type="button" className={s.materialOpenTitle} onClick={() => openMaterial?.(articleMaterial(article))}>{article.title}</button>;
+  const content = <button type="button" className={s.materialOpenTitle} data-article-title-link="true" onClick={() => openMaterial?.(articleMaterial(article))}>{article.title}</button>;
   return as === 'strong' ? <strong>{content}</strong> : <h2>{content}</h2>;
 }
 
@@ -37,10 +37,18 @@ export function DeusExFolio({ issue, context }: Pick<NewspaperTemplateProps, 'is
 }
 
 function SignalStrip({ blocks }: { blocks: MediaBlock[] }) {
+  const openMaterial = useNewspaperMaterialViewer();
   if (blocks.length === 0) return null;
   return <section className={t.signalStrip} aria-label="Входящие сигналы"><div className={t.signalLabel}><span>LIVE FEEDS</span><b>SIGNAL / REPORTS</b></div>{blocks.slice(0, 5).map((block, index) => {
     const url = mediaUrl(block);
-    return <article key={block.id} className={t.signal}>{url && <img src={url} alt=""/>}<span>{String(index + 1).padStart(2, '0')}</span>{block.type === 'article' ? <ArticleTitle article={block} as="strong"/> : <strong>{block.title}</strong>}</article>;
+    const material = block.type === 'article' ? articleMaterial(block) : {
+      id: block.id,
+      kind: 'note' as const,
+      title: block.title,
+      text: block.caption || block.prompt || '',
+      imageUrl: block.image_url,
+    };
+    return <button key={block.id} type="button" className={t.signal} onClick={() => openMaterial?.(material)} aria-label={`Открыть материал: ${block.title}`}>{url && <img src={url} alt=""/>}<span>{String(index + 1).padStart(2, '0')}</span><strong>{block.title}</strong></button>;
   })}</section>;
 }
 
