@@ -15,6 +15,7 @@ import { NewspaperFocusTransition } from './NewspaperFocusTransition';
 import { MassEffectPageTransition, type MassEffectPageTransitionState } from './MassEffectPageTransition';
 import { NewspaperMaterialProvider, type NewspaperMaterial } from './NewspaperMaterialContext';
 import { NewspaperMaterialRenderer } from './NewspaperMaterialRenderer';
+import { MarkdownRenderer } from '../MarkdownRenderer';
 import { getMessages, getNewspaperChat, sendChatTrigger, subscribeRoomEvents, type NewspaperChatContext } from '../../lib/api';
 import type { NewspaperIssue, NewspaperVisualStyle } from './types';
 import s from './Newspaper.module.scss';
@@ -538,9 +539,8 @@ export function NewspaperReader({ issue, sourceIssueId, style, pageNumber, pageC
     setFocusTransition(null);
   }, []);
 
-  // ── Reader chat (per-user temporary newspaper chat) ───────────────────────
-  // Server-side context rows ([ACTIVE_VIEW] / [NEWSPAPER CONTEXT]) are history
-  // payload for the model, not conversation for the reader — filtered out.
+  // ── Reader chat (temporary newspaper chat) ────────────────────────────────
+  // Context rows are model payload, not reader conversation — filtered out.
   const isAutomatedReaderContext = (text: string) =>
     text.startsWith('[ACTIVE_VIEW]') || text.startsWith('[NEWSPAPER CONTEXT');
 
@@ -558,9 +558,7 @@ export function NewspaperReader({ issue, sourceIssueId, style, pageNumber, pageC
     }
   }, []);
 
-  // Opening the chat panel ensures the temporary chat, loads its history and
-  // keeps it alive: the periodic touch refreshes the idle-TTL activity marker
-  // (server bumps user_chats.updated_at on every open).
+  // Keep-alive: the periodic open refreshes the idle-TTL activity marker.
   useEffect(() => {
     if (!chatOpen) return;
     setChatBusy(false);
@@ -570,8 +568,7 @@ export function NewspaperReader({ issue, sourceIssueId, style, pageNumber, pageC
     return () => clearInterval(keepAlive);
   }, [chatOpen, loadReaderChat]);
 
-  // Unified chat events for the reader chat (WS and SSE transports both land
-  // here; ChatPage ignores this chat via api.isNewspaperChat).
+  // Chat events for the reader chat; ChatPage ignores it via api.isNewspaperChat.
   useEffect(() => {
     return subscribeRoomEvents(event => {
       if (readerChatId === null || event.chat_id !== readerChatId) return;
@@ -602,11 +599,10 @@ export function NewspaperReader({ issue, sourceIssueId, style, pageNumber, pageC
     if (chatWatchdogRef.current) clearTimeout(chatWatchdogRef.current);
   }, []);
 
-  const sendReaderMessage = async (event: React.FormEvent) => {
-    event.preventDefault();
+  const sendReaderMessage = async () => {
     const text = chatDraft.trim();
     if (!text || !issue || sourceIssueId === null || chatBusy || readerChatId === null) return;
-    // Send-time reading context: the opened material, or the current page.
+    // Send-time reading context: opened material, or current page.
     const page = issue as NewspaperIssue & { page_id?: string };
     const visibleBlocks = issue.document.blocks.map(block => ({
       block,
@@ -634,8 +630,7 @@ export function NewspaperReader({ issue, sourceIssueId, style, pageNumber, pageC
     setChatMessages(current => [...current, { id: `user-${Date.now()}`, role: 'user', text }]);
     setChatDraft('');
     setChatBusy(true);
-    // Safety net for dropped triggers (e.g. a WS error the client ignores):
-    // if no event for this run arrives in time, unlock the composer.
+    // Watchdog: unlock the composer if no run event arrives in time.
     chatRunSeenRef.current = false;
     if (chatWatchdogRef.current) clearTimeout(chatWatchdogRef.current);
     chatWatchdogRef.current = setTimeout(() => {
@@ -820,8 +815,8 @@ export function NewspaperReader({ issue, sourceIssueId, style, pageNumber, pageC
       transition={{ duration: .24, ease: [0.22, 1, 0.36, 1] }}
     >
       <header><div><span>{style === 'deusEx' ? 'PICUS // ANALYST' : style === 'massEffect' ? 'ANN // ASSIST' : 'Разговор с редакцией'}</span><strong>{material?.title || issue.document.title}</strong></div><button type="button" className={s.readerChatClose} onClick={() => setChatOpen(false)}>Закрыть</button></header>
-      <div className={s.readerChatMessages}>{chatMessages.map(message => <div key={message.id} data-role={message.role}>{message.text}</div>)}{chatBusy && <div data-role="assistant" data-streaming={chatStreaming ? undefined : 'pending'}>{chatStreaming || '…'}</div>}</div>
-      <form onSubmit={sendReaderMessage}><textarea value={chatDraft} onChange={event => setChatDraft(event.target.value)} placeholder={material ? 'Спросить об этом материале…' : 'Спросить об этом выпуске…'} rows={3} disabled={readerChatId === null}/><button type="submit" disabled={!chatDraft.trim() || chatBusy || readerChatId === null}>Отправить</button></form>
+      <div className={s.readerChatMessages}>{chatMessages.map(message => <div key={message.id} data-role={message.role}>{message.role === 'assistant' ? <MarkdownRenderer content={message.text} className={s.readerMarkdown}/> : message.text}</div>)}{chatBusy && <div data-role="assistant" data-streaming={chatStreaming ? undefined : 'pending'}><MarkdownRenderer content={chatStreaming || '…'} className={s.readerMarkdown}/></div>}</div>
+      <form onSubmit={event => { event.preventDefault(); void sendReaderMessage(); }}><textarea value={chatDraft} onChange={event => setChatDraft(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void sendReaderMessage(); } }} placeholder={material ? 'Спросить об этом материале…' : 'Спросить об этом выпуске…'} rows={3} disabled={readerChatId === null}/><button type="submit" disabled={!chatDraft.trim() || chatBusy || readerChatId === null}>Отправить</button></form>
     </motion.aside>}</AnimatePresence>
     {SHOW_READER_CHROME && <header className={s.toolbar}><div className={s.issueMeta}><strong>Выпуск №{issue.issue_number}</strong><span>{pageNumber} / {pageCount}</span></div><div className={s.styleSelect}><Select options={styleOptions} value={style} onChange={value=>onStyleChange(value as NewspaperVisualStyle)} maxVisibleItems={4}/></div><div className={s.toolbarActions}><div className={s.zoomControls}><button type="button" onClick={()=>applyZoom(zoom-ZOOM_STEP)} disabled={zoom<=ZOOM_MIN} aria-label="Уменьшить масштаб">−</button><button type="button" className={s.zoomValue} onClick={fitToWindow} title="Вписать газету в окно">{zoom}%</button><button type="button" onClick={()=>applyZoom(zoom+ZOOM_STEP)} disabled={zoom>=ZOOM_MAX} aria-label="Увеличить масштаб">+</button></div><nav className={s.navigation}><button type="button" onClick={onPrevious} disabled={!canGoPrevious} aria-label={previousLabel}>‹</button><button type="button" onClick={onNext} disabled={!canGoNext} aria-label={nextLabel}>›</button><button type="button" onClick={onClose} aria-label={closeLabel}>×</button></nav></div></header>}
     <div className={`${s.viewport} ${dragging ? s.viewportDragging : ''}`} data-style={style} ref={viewportRef} onPointerDown={startDragging} onPointerMove={moveDragging} onPointerUp={stopDragging} onPointerCancel={stopDragging} onDragStart={event=>event.preventDefault()}>

@@ -456,6 +456,22 @@
   flex-direction: column;
   gap: 10px;
   padding: 14px;
+  // Themed via the panel's --reader-accent.
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--reader-accent) 45%, transparent) transparent;
+}
+.readerChatMessages::-webkit-scrollbar {
+  width: 6px;
+}
+.readerChatMessages::-webkit-scrollbar-track {
+  background: transparent;
+}
+.readerChatMessages::-webkit-scrollbar-thumb {
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--reader-accent) 45%, transparent);
+}
+.readerChatMessages::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--reader-accent) 70%, transparent);
 }
 .readerChatMessages > div {
   max-width: 88%;
@@ -475,6 +491,21 @@
   opacity: .82;
   font-style: italic;
   animation: readerChatStreamPulse 1.4s ease-in-out infinite;
+}
+// Re-theme the shared markdown renderer for the themed reader panel.
+.readerChatMessages .readerMarkdown {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--reader-text);
+
+  // .strong/.link use app-theme vars that vanish on light parchment styles.
+  strong {
+    color: var(--reader-text);
+  }
+
+  a {
+    color: var(--reader-accent);
+  }
 }
 @keyframes readerChatStreamPulse {
   0%, 100% { opacity: .82; }

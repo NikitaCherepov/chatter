@@ -7,9 +7,11 @@ import s from './MarkdownRenderer.module.scss';
 
 type MarkdownRendererProps = {
   content: string;
+  /** Scoping class appended after .md for embedder re-theming. */
+  className?: string;
 };
 
-export function MarkdownRenderer({ content }: MarkdownRendererProps) {
+export function MarkdownRenderer({ content, className }: MarkdownRendererProps) {
   const { t } = useTranslation();
   const codeRefs = useRef<Map<string, HTMLElement>>(new Map());
 
@@ -20,7 +22,7 @@ export function MarkdownRenderer({ content }: MarkdownRendererProps) {
   }, []);
 
   return (
-    <div className={s.md}>
+    <div className={className ? `${s.md} ${className}` : s.md}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         rehypePlugins={[rehypeHighlight]}

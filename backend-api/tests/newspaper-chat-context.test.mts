@@ -4,9 +4,8 @@ import os from 'node:os';
 import path from 'node:path';
 
 /**
- * Integration test for the newspaper reader's temporary chat:
- * send-time context injection → chat_messages rows → model history →
- * newspaper tools' "current issue" resolution → TTL sweep listing.
+ * Integration test: injection → chat_messages rows → model history →
+ * newspaper tools' "current issue" resolution → TTL sweep.
  */
 
 const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'chatter-newspaper-chat-'));
@@ -120,11 +119,8 @@ if (notesList) {
 const noChatResult = await newspaperIssueContentsTool.handler({}, { userId: 101, timezoneOffset: 0 } as any);
 assert.ok(noChatResult.includes('No newspaper issue is currently open'), 'without chatId the tool explains itself');
 
-// ── Paginated payload: renderer sends the REAL issue id + canonical block
-// ids (source_id) + a stable renderer page_id + per-list visible item ids.
-// Regression: the reader used to send the page slice's fake issue id
-// (issue.id * 100 - index) and regenerated per-page block ids, which made the
-// injection silently record nothing and the ids unresolvable.
+// ── Paginated payload (regression): the reader used to send the page slice's
+// fake issue id and regenerated block ids — injection silently recorded nothing.
 const visibleNoteIds = notesList ? [newspaperItemId(notesList.id, notesList.items[0], 0)] : [];
 const paginatedPayload: Record<string, unknown> = {
   issue_id: issue.id,
@@ -162,7 +158,7 @@ await injectNewspaperContext(101, chatId, (parseNewspaperChatView({ issue_id: 42
 const markersAfterStale = (db.prepare("SELECT COUNT(*) AS n FROM chat_messages WHERE chat_id = ? AND content LIKE '[ACTIVE_VIEW]%'").get(chatId) as { n: number }).n;
 assert.equal(markersAfterStale, 5, 'stale issue id records nothing');
 
-// The issue survives deletion of... well, it must still resolve while present:
+// Sanity: the issue still resolves.
 assert.ok(getNewspaperIssue(101, issue.id), 'issue still resolvable');
 
 console.log('newspaper-chat-context: ok');

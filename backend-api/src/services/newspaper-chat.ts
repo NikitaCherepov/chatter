@@ -4,22 +4,14 @@ import { appendChatMessage, getOrCreateTemporaryChat } from './chats.js';
 import { getNewspaperIssue, listNewspapers } from './newspapers.js';
 
 /**
- * Newspaper reader chat (temporary).
- *
- * The reader keeps a single temporary chat per user: it never appears in chat
- * lists, survives closing/switching issues, and is swept after an idle TTL.
- * Context injection is strictly send-time and idempotent:
- *
- *  - [ACTIVE_VIEW] — a tiny marker row written on EVERY send, so the bot
- *    always knows what the reader is looking at right now (page or material).
- *    Newspaper tools also use it to resolve the "current" issue.
- *  - [NEWSPAPER CONTEXT view_id="…"] — the full payload for a view (page
- *    items or the opened material's full text + sources), written exactly
- *    once per view_id per chat lifetime (dedup scan below).
- *
- * Both rows are ordinary user-role messages: the system prompt and the tool
- * set stay untouched (prompt-cache prefix stays stable), history stays
- * append-only (each context block is paid for exactly once).
+ * Newspaper reader chat (temporary): one per user, hidden from chat lists,
+ * swept after an idle TTL. Injection is send-time and idempotent:
+ *  - [ACTIVE_VIEW] — marker on every send; newspaper tools resolve the
+ *    "current" issue from it;
+ *  - [NEWSPAPER CONTEXT view_id="…"] — full view payload, written once per
+ *    view_id (dedup scan).
+ * Both are ordinary user-role rows, so the system prompt, toolset and
+ * prompt-cache prefix stay stable.
  */
 
 const NEWSPAPER_CHAT_TITLE = 'Newspaper';
@@ -160,8 +152,7 @@ export const injectNewspaperContext = async (userId: number, chatId: number, vie
   const pageCount = Number.isSafeInteger(view.pageCount) && view.pageCount > 0 ? view.pageCount : 0;
   const issue = getNewspaperIssue(userId, view.issueId);
   if (!issue) {
-    // stale/deleted issue — nothing meaningful to record. Loud on purpose:
-    // this is the "injection silently did nothing" case.
+    // Loud on purpose: this was the "injection silently did nothing" case.
     console.warn(`[newspaper-chat] user=${userId} chat=${chatId} issue=${view.issueId} NOT FOUND — no context recorded`);
     return;
   }
@@ -237,8 +228,7 @@ export const injectNewspaperContext = async (userId: number, chatId: number, vie
   console.log(`[newspaper-chat] user=${userId} chat=${chatId} view=${viewId} page context row written`);
 };
 
-/** The issue the reader currently has open — the most recent [ACTIVE_VIEW]
- *  marker in this chat. Used by newspaper tools to resolve "current". */
+/** Current issue = the most recent [ACTIVE_VIEW] marker; used by newspaper tools. */
 export const resolveCurrentIssueFromChat = (chatId: number): number | null => {
   const rows = db.prepare(
     'SELECT content FROM chat_messages WHERE chat_id = ? AND content LIKE ? ORDER BY id DESC LIMIT 20'

@@ -992,9 +992,7 @@ type WsCallbacks = StreamCallbacks & {
 
 let wsCallbacks: WsCallbacks = {};
 
-// Additional room-event subscribers (newspaper reader chat etc.). Unlike the
-// single-slot wsCallbacks.onRoomEvent, multiple components can subscribe at
-// once and filter events by chat_id themselves.
+// Multi-subscriber room events (newspaper reader chat etc.), filtered by chat_id.
 const roomEventSubscribers = new Set<(event: RoomEvent) => void>();
 
 /** Subscribe to the unified chat event stream (chat_agent_*, room_*, chat_*).
@@ -2102,16 +2100,13 @@ export type NewspaperChatContext = {
   block_kind?: string;
 };
 
-/** The newspaper reader's temporary chat id (renderer-local best effort).
- *  Used to keep its events out of the main chat UI: the temp chat is invisible
- *  there, so unread badges and native notifications for it must not fire. */
+/** The reader's temp chat id — keeps its events out of the main chat UI. */
 let newspaperChatId: number | null = null;
 
 export const isNewspaperChat = (chatId: number | null | undefined): boolean =>
   Number.isFinite(Number(chatId)) && Number(chatId) === newspaperChatId;
 
-/** Ensure (or reuse) the per-user temporary newspaper chat; opening it counts
- *  as activity for the idle TTL sweep. */
+/** Ensure (or reuse) the temporary newspaper chat; counts as TTL activity. */
 export async function getNewspaperChat(): Promise<{ chat_id: number }> {
   const result = await apiFetch<{ chat_id: number }>('/api/v1/newspapers/chat', { method: 'POST' });
   if (Number.isFinite(Number(result?.chat_id))) newspaperChatId = Number(result.chat_id);
