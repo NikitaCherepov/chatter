@@ -409,17 +409,6 @@ export function NewspaperReader({ issue, sourceIssueId, style, pageNumber, pageC
     return () => cancelAnimationFrame(frame);
   }, [focusTransition, material]);
   useEffect(() => {
-    if (!issue) return;
-    const contextId = material ? `${material.kind}-${material.id}` : `issue-${issue.id}-${pageNumber}`;
-    const text = material
-      ? `Я вижу материал «${material.title}». Что хочешь в нём разобрать?`
-      : `Я вижу текущую полосу выпуска №${issue.issue_number}. Можем обсудить её темы и заголовки.`;
-    setChatMessages(current => current.length
-      ? [...current, { id: `context-${contextId}-${Date.now()}`, role: 'assistant', text }]
-      : [{ id: `intro-${contextId}`, role: 'assistant', text }]);
-    setChatDraft('');
-  }, [issue?.id, material?.id, material?.kind, pageNumber]);
-  useEffect(() => {
     if (!issue || style !== 'deusEx') setPageTransition(null);
   }, [issue, style]);
   useEffect(() => {
