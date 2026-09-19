@@ -1,37 +1,19 @@
-import dotenv from 'dotenv';
 import { getUserById } from './chats.js';
-import { db } from '../db.js';
-import type { UserPlan, UserRecord } from '../types.js';
-import { isImageGenerationEnabled } from './system-settings.js';
+import type { UserRecord } from '../types.js';
+import {
+  getImageGenerationSettings,
+  IMAGE_ASPECT_RATIOS,
+  type ImageAspectRatio,
+  type ImageGenerationRuntimeSettings,
+} from './image-generation-settings.js';
 import { consumeUserQuota, getUserQuota } from './monthly-usage.js';
 
-dotenv.config();
-
-const OPENROUTER_API_KEY = `${process.env.OPENROUTER_API_KEY || ''}`.trim();
-const OPENROUTER_BASE_URL = `${process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1'}`.trim();
-const IMAGE_GEN_MODEL = `${process.env.IMAGE_GEN_MODEL || 'x-ai/grok-imagine-image-quality'}`.trim();
-const IMAGE_GEN_MAX_RESOLUTION = process.env.IMAGE_GEN_MAX_RESOLUTION === '1K' ? '1K' : '2K';
-const IMAGE_GEN_QUALITY = ['low', 'medium', 'high'].includes(`${process.env.IMAGE_GEN_QUALITY || ''}`)
-  ? process.env.IMAGE_GEN_QUALITY
-  : 'auto';
-export const IMAGE_ASPECT_RATIOS = [
-  'auto', '1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '2:3',
-  '4:5', '5:4', '1:2', '2:1', '1:4', '4:1', '1:8', '8:1',
-  '9:21', '21:9', '9:19.5', '19.5:9', '9:20', '20:9',
-] as const;
-export type ImageAspectRatio = typeof IMAGE_ASPECT_RATIOS[number];
-
-const IMAGE_GEN_SUPPORTED_PARAMETERS = new Set(
-  `${process.env.IMAGE_GEN_SUPPORTED_PARAMETERS === undefined
-    ? 'resolution,input_references'
-    : process.env.IMAGE_GEN_SUPPORTED_PARAMETERS}`
-    .split(',')
-    .map(value => value.trim())
-    .filter(value => ['resolution', 'quality', 'input_references'].includes(value))
-);
-
-const normalizeAspectRatio = (value: unknown): ImageAspectRatio => {
+const normalizeAspectRatio = (value: unknown, allowed?: readonly string[]): ImageAspectRatio => {
   const normalized = `${value || 'auto'}`.trim();
+  if (allowed && allowed.length > 0) {
+    if (allowed.includes(normalized)) return normalized as ImageAspectRatio;
+    return (allowed.includes('auto') ? 'auto' : allowed[0]) as ImageAspectRatio;
+  }
   return (IMAGE_ASPECT_RATIOS as readonly string[]).includes(normalized)
     ? normalized as ImageAspectRatio
     : 'auto';
@@ -66,8 +48,8 @@ const checkImageGenLimit = (user: UserRecord) => {
   const quota = getUserQuota(user.id, 'image_gen');
   const limit = normalizeDailyImageGenLimit(quota?.limit ?? 0);
   const count = Math.max(0, Math.floor(Number(quota?.used || 0)));
-  if (limit <= 0) return { allowed: false, count, limit, reason: 'По твоему плану генерация изображений отключена.' };
-  if (count >= limit) return { allowed: false, count, limit, reason: `Месячный лимит генерации изображений исчерпан (${count}/${limit}).` };
+  if (limit <= 0) return { allowed: false, count, limit, reason: 'Image generation is disabled by your plan.' };
+  if (count >= limit) return { allowed: false, count, limit, reason: `Monthly image generation limit reached (${count}/${limit}).` };
   return { allowed: true, count, limit, reason: '' };
 };
 
@@ -92,24 +74,26 @@ export type ImageGenError = {
  * Expects response.data[0].b64_json.
  */
 const generateOpenRouter = async (
+  settings: ImageGenerationRuntimeSettings,
   prompt: string,
   inputImages: Array<{ base64: string; mimeType: string }> | undefined,
   aspectRatio: ImageAspectRatio,
 ): Promise<ImageGenResult | ImageGenError> => {
-  if (!OPENROUTER_API_KEY) {
-    return { ok: false, error: 'Генерация изображений не настроена (нет OPENROUTER_API_KEY).' };
+  const { apiKey, baseUrl, model } = settings.openrouter;
+  if (!apiKey) {
+    return { ok: false, error: 'Image generation is not configured (missing OpenRouter API key).' };
   }
 
   const body: Record<string, unknown> = {
-    model: IMAGE_GEN_MODEL,
+    model: model.id,
     prompt,
   };
-  if (IMAGE_GEN_SUPPORTED_PARAMETERS.has('resolution')) body.resolution = IMAGE_GEN_MAX_RESOLUTION;
+  if (model.params.resolution) body.resolution = model.params.resolution.default;
   body.aspect_ratio = aspectRatio;
-  if (IMAGE_GEN_SUPPORTED_PARAMETERS.has('quality')) body.quality = IMAGE_GEN_QUALITY;
+  if (model.params.quality) body.quality = model.params.quality.default;
 
-  // Attach reference images
-  if (IMAGE_GEN_SUPPORTED_PARAMETERS.has('input_references') && inputImages && inputImages.length > 0) {
+  // Attach reference images (image-to-image)
+  if (settings.img2imgEnabled && inputImages && inputImages.length > 0) {
     body.input_references = inputImages.slice(0, 3).map(img => ({
       type: 'image_url',
       image_url: { url: `data:${img.mimeType};base64,${img.base64}` }
@@ -117,14 +101,14 @@ const generateOpenRouter = async (
   }
 
   const responseData = await postJson(
-    `${OPENROUTER_BASE_URL}/images`,
+    `${baseUrl}/images`,
     body,
-    OPENROUTER_API_KEY,
+    apiKey,
   );
 
   const base64Data = responseData?.data?.[0]?.b64_json;
   if (!base64Data) {
-    return { ok: false, error: 'OpenRouter API не вернул данные изображения.' };
+    return { ok: false, error: 'OpenRouter API did not return image data.' };
   }
 
   return {
@@ -140,7 +124,8 @@ export const runImageGeneration = async (
   inputImages?: Array<{ base64: string; mimeType: string }>,
   aspectRatioRaw: unknown = 'auto',
 ): Promise<ImageGenResult | ImageGenError> => {
-  if (!isImageGenerationEnabled()) {
+  const settings = getImageGenerationSettings();
+  if (!settings.enabled) {
     return { ok: false, error: 'Image generation is disabled by the administrator.' };
   }
   const user = getUserById(userId);
@@ -153,11 +138,18 @@ export const runImageGeneration = async (
   }
 
   const trimmedPrompt = (prompt || '').trim();
-  if (!trimmedPrompt) return { ok: false, error: 'Пустой промпт для генерации изображения.' };
-  const aspectRatio = normalizeAspectRatio(aspectRatioRaw);
+  if (!trimmedPrompt) return { ok: false, error: 'Empty prompt for image generation.' };
+  const aspectRatio = normalizeAspectRatio(aspectRatioRaw, settings.openrouter.model.params.aspectRatio.allowed);
 
   try {
-    const result = await generateOpenRouter(trimmedPrompt, inputImages, aspectRatio);
+    let result: ImageGenResult | ImageGenError;
+    switch (settings.provider) {
+      case 'openrouter':
+        result = await generateOpenRouter(settings, trimmedPrompt, inputImages, aspectRatio);
+        break;
+      default:
+        return { ok: false, error: `Unknown image generation provider: ${settings.provider}` };
+    }
 
     if (result.ok) {
       incrementUserImageGenUsage(userId, 1);
@@ -167,7 +159,7 @@ export const runImageGeneration = async (
   } catch (err: any) {
     const status = err?.response?.status || 0;
     const message = err?.response?.data?.error?.message || err?.message || String(err);
-    console.error(`[image-generation] Ошибка генерации OpenRouter (status=${status}):`, message);
-    return { ok: false, error: `Ошибка генерации изображения: ${message}` };
+    console.error(`[image-generation] ${settings.provider} generation failed (status=${status}):`, message);
+    return { ok: false, error: `Image generation failed: ${message}` };
   }
 };

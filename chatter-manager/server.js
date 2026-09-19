@@ -627,9 +627,6 @@ function saveSettings(input) {
   const webSearchInput = input.webSearch && typeof input.webSearch === 'object' ? input.webSearch : {};
   const webReaderInput = input.webReader && typeof input.webReader === 'object' ? input.webReader : {};
   const cloudTtsInput = input.cloudTts && typeof input.cloudTts === 'object' ? input.cloudTts : {};
-  const imageGenerationInput = input.imageGeneration && typeof input.imageGeneration === 'object'
-    ? input.imageGeneration
-    : {};
   if (!Array.isArray(input.proModels) && proModels.length === 0 && legacyAiApiKey && legacyAiModel) {
     proModels.push({ id: 'pro-legacy', baseUrl: legacyAiBaseUrl, apiKey: legacyAiApiKey, model: legacyAiModel });
   }
@@ -744,25 +741,12 @@ function saveSettings(input) {
     cloudTtsInput.model ?? backendEnv.CARTESIA_MODEL_ID ?? 'sonic-3.5',
     'Cloud TTS model'
   );
-  backendEnv.OPENROUTER_BASE_URL = OPENROUTER_BASE_URL;
-  backendEnv.OPENROUTER_API_KEY = mergeSecret(
-    imageGenerationInput.apiKey,
-    backendEnv.OPENROUTER_API_KEY,
-    'OpenRouter image API key'
-  );
-  backendEnv.IMAGE_GEN_MODEL = validateEnvPart(
-    imageGenerationInput.model ?? backendEnv.IMAGE_GEN_MODEL ?? 'x-ai/grok-imagine-image-quality',
-    'Image generation model'
-  );
-  backendEnv.IMAGE_GEN_MAX_RESOLUTION = imageGenerationInput.maxResolution === '1K' ? '1K' : '2K';
-  backendEnv.IMAGE_GEN_QUALITY = ['low', 'medium', 'high'].includes(imageGenerationInput.quality)
-    ? imageGenerationInput.quality
-    : 'auto';
-  backendEnv.IMAGE_GEN_SUPPORTED_PARAMETERS = Array.isArray(imageGenerationInput.supportedParameters)
-    ? imageGenerationInput.supportedParameters
-      .filter((value) => ['resolution', 'quality', 'input_references'].includes(value))
-      .join(',') || 'none'
-    : backendEnv.IMAGE_GEN_SUPPORTED_PARAMETERS || 'resolution,input_references';
+  // Image generation settings moved to the backend DB (image_generation_settings
+  // in system_settings). The old OPENROUTER_*/IMAGE_GEN_* env vars are kept
+  // untouched in the file on purpose: they act as the one-time seed for the DB
+  // migration, so existing installs keep their keys after the upgrade. They are
+  // no longer written here; the panel payload is forwarded to the backend
+  // runtime API in the PUT /api/settings handler below.
 
   Object.assign(telegramEnv, {
     TELEGRAM_TOKEN: telegramToken,
@@ -2038,7 +2022,15 @@ async function getOpenRouterImageCapabilities(input) {
     throw new Error('Use an OpenRouter model slug such as x-ai/grok-imagine-image-quality');
   }
 
-  const savedApiKey = parseEnv(BACKEND_ENV_FILE).OPENROUTER_API_KEY || '';
+  // The stored key lives in the backend DB now; env is only a transition
+  // fallback for when the backend is temporarily unreachable.
+  let savedApiKey = parseEnv(BACKEND_ENV_FILE).OPENROUTER_API_KEY || '';
+  try {
+    const runtime = await backendInternalRequest('/internal/admin/image-generation/settings');
+    savedApiKey = `${runtime?.openrouter?.apiKey || ''}`.trim() || savedApiKey;
+  } catch {
+    // Keep the env-derived key while backend is unavailable.
+  }
   const apiKey = `${input.apiKey || ''}`.trim() || savedApiKey;
   if (!apiKey) throw new Error('OpenRouter API key is required to check the model');
 
@@ -2213,9 +2205,25 @@ async function handleRequest(req, res) {
     const settings = publicSettings();
     try {
       const runtime = await backendInternalRequest('/internal/admin/image-generation/settings');
-      settings.imageGeneration.enabled = runtime.enabled === true;
+      const or = runtime.openrouter || {};
+      const orModel = or.model || {};
+      const orParams = orModel.params || {};
+      settings.imageGeneration = {
+        enabled: runtime.enabled === true,
+        baseUrl: or.baseUrl || OPENROUTER_BASE_URL,
+        apiKey: '',
+        hasApiKey: Boolean(or.apiKey),
+        model: orModel.id || 'x-ai/grok-imagine-image-quality',
+        maxResolution: orParams.resolution?.default === '1K' ? '1K' : '2K',
+        quality: ['low', 'medium', 'high'].includes(orParams.quality?.default) ? orParams.quality.default : 'auto',
+        supportedParameters: [
+          ...(orParams.resolution ? ['resolution'] : []),
+          ...(orParams.quality ? ['quality'] : []),
+          ...(runtime.img2imgEnabled ? ['input_references'] : []),
+        ],
+      };
     } catch {
-      // Keep the safe default while backend is temporarily unavailable.
+      // Keep the safe env-derived default while backend is temporarily unavailable.
     }
     try {
       const runtime = await backendInternalRequest('/internal/admin/web-search/runtime');
@@ -2697,7 +2705,10 @@ async function handleRequest(req, res) {
   if (pathname === '/api/image-generation/settings') {
     if (req.method === 'GET') {
       try {
-        return sendJson(res, 200, await backendInternalRequest('/internal/admin/image-generation/settings'));
+        const runtime = await backendInternalRequest('/internal/admin/image-generation/settings');
+        // Never expose the stored API key to the panel.
+        if (runtime?.openrouter) runtime.openrouter.apiKey = '';
+        return sendJson(res, 200, runtime);
       } catch (error) {
         return sendJson(res, 502, { error: error.message || 'image_generation_settings_failed' });
       }
@@ -2705,10 +2716,12 @@ async function handleRequest(req, res) {
     if (req.method === 'PUT') {
       const body = await readJson(req);
       try {
-        return sendJson(res, 200, await backendInternalRequest('/internal/admin/image-generation/settings', {
+        const runtime = await backendInternalRequest('/internal/admin/image-generation/settings', {
           method: 'PUT',
-          body: JSON.stringify({ enabled: body.enabled }),
-        }));
+          body: JSON.stringify(body),
+        });
+        if (runtime?.openrouter) runtime.openrouter.apiKey = '';
+        return sendJson(res, 200, runtime);
       } catch (error) {
         return sendJson(res, 400, { error: error.message || 'image_generation_settings_save_failed' });
       }
@@ -2859,10 +2872,27 @@ async function handleRequest(req, res) {
 
   if (req.method === 'PUT' && pathname === '/api/settings') {
     if (applyPromise || serverUpdateInProgress()) return sendJson(res, 409, { error: 'configuration_is_being_applied' });
+    let input;
     try {
-      saveSettings(await readJson(req));
+      input = await readJson(req);
+      saveSettings(input);
     } catch (error) {
       return sendJson(res, 400, { error: error.message || 'invalid_settings' });
+    }
+    // Image generation lives in the backend DB now: forward the panel payload
+    // to the runtime API. Done BEFORE applyConfiguration — the DB write survives
+    // container restarts, and a failure here should block the restart so the
+    // admin can retry instead of silently losing image settings.
+    if (input.imageGeneration && typeof input.imageGeneration === 'object') {
+      try {
+        await backendInternalRequest('/internal/admin/image-generation/settings', {
+          method: 'PUT',
+          body: JSON.stringify(input.imageGeneration),
+          timeoutMs: 10_000,
+        });
+      } catch (error) {
+        return sendJson(res, 502, { error: `image_generation_settings_failed: ${error.message || 'unknown'}` });
+      }
     }
     applyPromise = applyConfiguration().finally(() => { applyPromise = null; });
     await applyPromise;

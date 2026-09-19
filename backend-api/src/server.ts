@@ -28,7 +28,7 @@ import { registerPendingPcConfirmation, getPendingPcConfirmation, deletePendingP
 import { getPendingVisualClick, deletePendingVisualClick } from './services/visual-click-confirmations.js';
 import { getPendingEmailConfirmation, deletePendingEmailConfirmation } from './services/email-confirmations.js';
 import { runImageGeneration } from './services/image-generation.js';
-import { isImageGenerationEnabled, setImageGenerationEnabled } from './services/system-settings.js';
+import { getImageGenerationSettings, updateImageGenerationSettings } from './services/image-generation-settings.js';
 import { getWebSearchRuntimeSettings, getWebSearchStats, updateWebSearchRuntimeSettings } from './services/web-search-runtime.js';
 import { getWebReaderRuntimeSettings, getWebReaderStats, updateWebReaderRuntimeSettings } from './services/web-reader-runtime.js';
 import { getSmartHomeSettings, setSmartHomeToken, deleteSmartHomeToken, setZigbeeToken, deleteZigbeeToken, listSmartDevices, syncSmartHomeDevices } from './services/smart-home.js';
@@ -4808,17 +4808,21 @@ app.delete('/api/v1/admin/users/:id/ban', adminMiddleware, async (req: AuthedReq
   return res.json({ ok: true, status: 'none' });
 });
 
-// ─── Plan limits config (admin-editable) ────────────────────────────────────
+// ─── Image generation runtime settings (admin-editable, DB-backed) ─────────
 
 app.get('/internal/admin/image-generation/settings', internalAuth, (_req, res) => {
-  return res.json({ enabled: isImageGenerationEnabled() });
+  return res.json(getImageGenerationSettings());
 });
 
 app.put('/internal/admin/image-generation/settings', internalAuth, (req, res) => {
-  if (typeof req.body?.enabled !== 'boolean') {
-    return res.status(400).json({ error: 'enabled_must_be_boolean' });
+  if (!req.body || typeof req.body !== 'object') {
+    return res.status(400).json({ error: 'bad_image_generation_settings' });
   }
-  return res.json({ enabled: setImageGenerationEnabled(req.body.enabled) });
+  try {
+    return res.json(updateImageGenerationSettings(req.body));
+  } catch (err: any) {
+    return res.status(400).json({ error: err?.message || 'bad_image_generation_settings' });
+  }
 });
 
 app.get('/internal/admin/web-search/runtime', internalAuth, (_req, res) => {
