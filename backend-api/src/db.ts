@@ -1318,6 +1318,128 @@ db.exec("CREATE INDEX IF NOT EXISTS idx_utu_user_created ON user_token_usage(use
 db.exec("CREATE INDEX IF NOT EXISTS idx_utu_user_model_created ON user_token_usage(user_id, model_id, created_at)");
 db.exec("CREATE INDEX IF NOT EXISTS idx_utu_created_at ON user_token_usage(created_at)");
 
+// ── User personas and scoped vector memory ────────────────────────────────
+// A persona describes the human participant (name + always-on core memory).
+// Memory spaces are logical collections. Pinecone maps them to namespaces;
+// the local backend maps them to memory_space_id rows in SQLite.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS personas (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    core_memory TEXT NOT NULL DEFAULT '',
+    is_primary INTEGER NOT NULL DEFAULT 0 CHECK (is_primary IN (0, 1)),
+    is_default INTEGER NOT NULL DEFAULT 0 CHECK (is_default IN (0, 1)),
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS memory_spaces (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    kind TEXT NOT NULL CHECK (kind IN ('general', 'chat')),
+    chat_id INTEGER,
+    namespace_key TEXT NOT NULL UNIQUE,
+    is_default INTEGER NOT NULL DEFAULT 0 CHECK (is_default IN (0, 1)),
+    archived_at INTEGER,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    CHECK (
+      (kind = 'general' AND chat_id IS NULL)
+      OR (kind = 'chat' AND chat_id IS NOT NULL)
+    )
+  );
+
+  CREATE TABLE IF NOT EXISTS chat_memory_settings (
+    user_id INTEGER NOT NULL,
+    chat_id INTEGER NOT NULL,
+    persona_id INTEGER NOT NULL,
+    persona_override_id INTEGER,
+    general_space_id INTEGER NOT NULL,
+    chat_space_id INTEGER,
+    memory_mode TEXT NOT NULL DEFAULT 'general'
+      CHECK (memory_mode IN ('off', 'general', 'chat', 'both')),
+    write_target TEXT NOT NULL DEFAULT 'general'
+      CHECK (write_target IN ('general', 'chat')),
+    use_core_memory INTEGER NOT NULL DEFAULT 1 CHECK (use_core_memory IN (0, 1)),
+    allow_core_memory_update INTEGER NOT NULL DEFAULT 1 CHECK (allow_core_memory_update IN (0, 1)),
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    PRIMARY KEY (user_id, chat_id)
+  );
+
+  CREATE TABLE IF NOT EXISTS memory_records (
+    id TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    memory_space_id INTEGER NOT NULL,
+    text TEXT NOT NULL,
+    source TEXT NOT NULL DEFAULT 'manual',
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    deleted_at INTEGER
+  );
+
+  CREATE TABLE IF NOT EXISTS memory_chunks (
+    id TEXT PRIMARY KEY,
+    memory_record_id TEXT NOT NULL,
+    user_id INTEGER NOT NULL,
+    memory_space_id INTEGER NOT NULL,
+    text TEXT NOT NULL,
+    chunk_index INTEGER NOT NULL,
+    total_chunks INTEGER NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS memory_vectors (
+    chunk_id TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    memory_space_id INTEGER NOT NULL,
+    embedding_model TEXT NOT NULL,
+    dimension INTEGER NOT NULL,
+    vector BLOB NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  );
+
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_personas_one_default
+    ON personas(user_id) WHERE is_default = 1;
+  CREATE INDEX IF NOT EXISTS idx_personas_user
+    ON personas(user_id, id);
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_memory_spaces_one_default
+    ON memory_spaces(user_id) WHERE is_default = 1 AND kind = 'general';
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_memory_spaces_user_kind
+    ON memory_spaces(user_id, kind, archived_at, id);
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_memory_spaces_user_chat
+    ON memory_spaces(user_id, chat_id) WHERE kind = 'chat';
+  CREATE INDEX IF NOT EXISTS idx_chat_memory_settings_user_chat
+    ON chat_memory_settings(user_id, chat_id);
+  CREATE INDEX IF NOT EXISTS idx_memory_records_user_space
+    ON memory_records(user_id, memory_space_id, deleted_at, created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_memory_chunks_record
+    ON memory_chunks(user_id, memory_record_id, chunk_index);
+  CREATE INDEX IF NOT EXISTS idx_memory_vectors_scope
+    ON memory_vectors(user_id, memory_space_id, embedding_model);
+`);
+
+const ensureMemoryColumn = (table: string, column: string, sql: string) => {
+  const columns = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+  if (!columns.some(item => item.name === column)) db.exec(sql);
+};
+ensureMemoryColumn('personas', 'description', "ALTER TABLE personas ADD COLUMN description TEXT NOT NULL DEFAULT ''");
+ensureMemoryColumn('personas', 'is_primary', 'ALTER TABLE personas ADD COLUMN is_primary INTEGER NOT NULL DEFAULT 0 CHECK (is_primary IN (0, 1))');
+ensureMemoryColumn('chat_memory_settings', 'persona_override_id', 'ALTER TABLE chat_memory_settings ADD COLUMN persona_override_id INTEGER');
+db.exec(`
+  UPDATE personas
+  SET is_primary = 1
+  WHERE id IN (SELECT MIN(id) FROM personas GROUP BY user_id)
+    AND user_id NOT IN (SELECT user_id FROM personas WHERE is_primary = 1);
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_personas_one_primary
+    ON personas(user_id) WHERE is_primary = 1;
+`);
+
 // ── Migrations for user_token_usage (add columns if missing) ──────────────────
 const hasUtoColumn = (columnName: string) => {
   const columns = db.prepare('PRAGMA table_info(user_token_usage)').all() as Array<{ name: string }>;

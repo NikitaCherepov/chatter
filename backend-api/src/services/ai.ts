@@ -18,6 +18,7 @@ import { runSmartHomeControl, type SmartHomeArgs, listSmartDevicesForAi } from '
 import { getMailAccountsForUser, resolveEmailAttachmentsForUser, runEmailAttachmentRead, runEmailCheck, runEmailRead } from './mail.js';
 import { runCoreMemoryMerge } from './memory.js';
 import { VectorMemoryService } from './vector-memory.js';
+import { resolvePersonaForChat } from './memory-foundation.js';
 import { wrapUntrustedContent } from './web-reader.js';
 import { sendIpcToDesktop, isDesktopOnline, sendToDesktop } from '../ws-clients.js';
 import { waitForNoPendingPcConfirmations } from './pc-command-confirmations.js';
@@ -4352,15 +4353,21 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
   if (toolName === 'save_to_cold_memory') {
     const textToSave = typeof parsed.text === 'string' ? parsed.text : '';
     const source = typeof parsed.source === 'string' ? parsed.source : 'manual';
-    const result = await VectorMemoryService.saveFactBatched(user.id, textToSave, source);
+    const result = await VectorMemoryService.saveFactBatched(user.id, textToSave, source, subagentExtra?.chatId);
     return `Successfully saved to archive (${result.chunks_saved} fragments).`;
   }
   if (toolName === 'delete_from_cold_memory') {
     const chunkId = typeof parsed.chunk_id === 'string' ? parsed.chunk_id : '';
-    const result = await VectorMemoryService.deleteChunk(user.id, chunkId);
+    const result = await VectorMemoryService.deleteChunk(user.id, chunkId, subagentExtra?.chatId);
     return `Record [${result.record_id}] successfully deleted from memory (${result.chunks_deleted} fragments).`;
   }
-  if (toolName === 'update_core_memory') return runCoreMemoryMerge(aiCall, user.id, typeof parsed.new_fact === 'string' ? parsed.new_fact : '', Boolean(parsed.explicit_request));
+  if (toolName === 'update_core_memory') return runCoreMemoryMerge(
+    aiCall,
+    user.id,
+    typeof parsed.new_fact === 'string' ? parsed.new_fact : '',
+    Boolean(parsed.explicit_request),
+    subagentExtra?.chatId,
+  );
 
   // ── Chat history search tools ───────────────────────────────────────────────
 
@@ -7908,7 +7915,8 @@ export const sendMessageThroughAi = async (
     : '';
   responsePromptId = responseAgent?.source_prompt_id ?? resolvedPrompt?.id ?? null;
   responsePromptName = responseAgent?.name || resolvedPrompt?.name || (isGuestMode ? 'Guest' : 'Chatter');
-  const coreMemoryForPrompt = isGuestMode ? '' : (user.core_memory || '');
+  const activePersona = isGuestMode ? null : resolvePersonaForChat(toolUser.id, chatId);
+  const coreMemoryForPrompt = activePersona?.useCoreMemory ? activePersona.persona.core_memory : '';
   const pinnedHintForPrompt = isGuestMode || !currentModelSupportsTools ? '' : pinnedHint;
 
   // ── Dice Roll Mode (d20 roleplay) ──
@@ -7928,7 +7936,7 @@ export const sendMessageThroughAi = async (
     try { await safeOnDiceRoll?.(diceRollValue); } catch { /* ignore */ }
   }
 
-  const proSystemPrompt = `${voicePromptHint}${buildSystemPrompt(`${roomIdentityPrompt}${promptContent}`, user.name || 'User', coreMemoryForPrompt, currentModelSupportsTools)}${pinnedHintForPrompt}${dynamicContextToolHint}${avatarPromptHint}`;
+  const proSystemPrompt = `${voicePromptHint}${buildSystemPrompt(`${roomIdentityPrompt}${promptContent}`, activePersona?.persona.name || toolUser.name || 'User', coreMemoryForPrompt, currentModelSupportsTools)}${pinnedHintForPrompt}${dynamicContextToolHint}${avatarPromptHint}`;
 
   // executionMode больше не переключается на vision-pro/lite при наличии фото.
   // Фото идёт через нативный vision (если модель поддерживает) или через tool describe_image.

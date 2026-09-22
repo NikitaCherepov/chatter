@@ -2,6 +2,16 @@ import OpenAI from 'openai';
 import { Pinecone } from '@pinecone-database/pinecone';
 import { db } from '../db.js';
 import { resolveAccountId } from './accounts.js';
+import { getVectorMemoryStorage } from './vector-memory-settings.js';
+import {
+  createMemoryRecord,
+  getOwnedMemoryRecord,
+  getRecordChunks,
+  removeCanonicalMemoryRecord,
+  resolveReadMemorySpaces,
+  resolveWriteMemorySpace,
+  type MemorySpace,
+} from './memory-foundation.js';
 
 const TIMEWEB_EMBED_API_KEY = `${process.env.TIMEWEB_EMBED_API_KEY || ''}`.trim();
 const TIMEWEB_EMBED_BASE_URL = `${process.env.TIMEWEB_EMBED_BASE_URL || process.env.TIMEWEB_BASE_URL || 'https://api.timeweb.ai/v1'}`.trim();
@@ -126,6 +136,39 @@ const getEmbedding = async (text: string): Promise<number[]> => {
   return embedding as number[];
 };
 
+const encodeVector = (values: number[]) => {
+  const vector = new Float32Array(values);
+  return Buffer.from(vector.buffer, vector.byteOffset, vector.byteLength);
+};
+
+const decodeVector = (value: Buffer) => {
+  const copy = Buffer.from(value);
+  return new Float32Array(copy.buffer, copy.byteOffset, Math.floor(copy.byteLength / Float32Array.BYTES_PER_ELEMENT));
+};
+
+const cosineSimilarity = (left: number[], rightBuffer: Buffer) => {
+  const right = decodeVector(rightBuffer);
+  if (left.length !== right.length || left.length === 0) return -1;
+  let dot = 0;
+  let leftNorm = 0;
+  let rightNorm = 0;
+  for (let index = 0; index < left.length; index += 1) {
+    const leftValue = Number(left[index] || 0);
+    const rightValue = Number(right[index] || 0);
+    dot += leftValue * rightValue;
+    leftNorm += leftValue * leftValue;
+    rightNorm += rightValue * rightValue;
+  }
+  if (!leftNorm || !rightNorm) return -1;
+  return dot / (Math.sqrt(leftNorm) * Math.sqrt(rightNorm));
+};
+
+const namespacesForSpace = (userId: number, space: MemorySpace) => (
+  space.is_default === 1
+    ? getReadableNamespaces(userId)
+    : [space.namespace_key]
+);
+
 const chunkText = (text: string, chunkSize = VECTOR_MEMORY_CHUNK_SIZE, overlap = VECTOR_MEMORY_CHUNK_OVERLAP): string[] => {
   const chunks: string[] = [];
   const paragraphs = text.split(/\n\n+/);
@@ -164,7 +207,7 @@ const chunkText = (text: string, chunkSize = VECTOR_MEMORY_CHUNK_SIZE, overlap =
 };
 
 export class VectorMemoryService {
-  static async saveFactBatched(userId: number, fullText: string, sourceTag: string) {
+  static async saveFactBatched(userId: number, fullText: string, sourceTag: string, chatId?: number) {
     try {
       const safeText = `${fullText || ''}`.trim();
       if (!safeText) throw new Error('text_required');
@@ -172,7 +215,8 @@ export class VectorMemoryService {
 
       const safeSource = `${sourceTag || ''}`.trim().slice(0, 240) || 'manual';
       const chunks = chunkText(safeText, VECTOR_MEMORY_CHUNK_SIZE, VECTOR_MEMORY_CHUNK_OVERLAP);
-      const namespace = canonicalNamespace(userId);
+      const space = resolveWriteMemorySpace(userId, chatId);
+      const namespace = space.namespace_key;
 
       const openai = getOpenAIClient();
 
@@ -206,8 +250,43 @@ export class VectorMemoryService {
         };
       });
 
-      const index = getPineconeIndex();
-      await index.namespace(namespace).upsert(records as any);
+      if (getVectorMemoryStorage() === 'sqlite') {
+        const insertVector = db.prepare(`
+          INSERT INTO memory_vectors (
+            chunk_id, user_id, memory_space_id, embedding_model, dimension, vector, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+        db.transaction(() => records.forEach(record => insertVector.run(
+          record.id, resolveAccountId(Math.floor(userId)), space.id, TIMEWEB_EMBED_MODEL,
+          record.values.length, encodeVector(record.values), now, now,
+        )))();
+      } else {
+        await getPineconeIndex().namespace(namespace).upsert(records as any);
+      }
+
+      try {
+        createMemoryRecord({
+          id: baseId,
+          userId,
+          spaceId: space.id,
+          text: safeText,
+          source: safeSource,
+          createdAt: now,
+          chunks: chunks.map((chunk, chunkIndex) => ({
+            id: `${baseId}_chunk_${chunkIndex}`,
+            text: inputForEmbeddings[chunkIndex] || chunk,
+            index: chunkIndex,
+          })),
+        });
+      } catch (error) {
+        if (getVectorMemoryStorage() === 'sqlite') {
+          db.prepare('DELETE FROM memory_vectors WHERE user_id = ? AND memory_space_id = ? AND chunk_id LIKE ?')
+            .run(resolveAccountId(Math.floor(userId)), space.id, `${baseId}_chunk_%`);
+        } else {
+          await deletePineconeResource(() => getPineconeIndex().namespace(namespace).deleteMany(records.map(record => record.id)));
+        }
+        throw error;
+      }
 
       const result = {
         ok: true,
@@ -243,38 +322,61 @@ export class VectorMemoryService {
     }
   }
 
-  static async saveChunk(userId: number, textChunk: string, sourceTag: string) {
-    return this.saveFactBatched(userId, textChunk, sourceTag);
+  static async saveChunk(userId: number, textChunk: string, sourceTag: string, chatId?: number) {
+    return this.saveFactBatched(userId, textChunk, sourceTag, chatId);
   }
 
-  static async search(userId: number, query: string, topK = 3) {
+  static async search(userId: number, query: string, topK = 3, chatId?: number) {
     try {
       const safeQuery = `${query || ''}`.trim();
       if (!safeQuery) throw new Error('query_required');
       if (safeQuery.length > VECTOR_MEMORY_MAX_QUERY) throw new Error(`query_too_long_max_${VECTOR_MEMORY_MAX_QUERY}`);
 
       const safeTopK = Math.max(1, Math.min(VECTOR_MEMORY_TOP_K_MAX, Math.floor(Number(topK) || 3)));
-      const namespace = canonicalNamespace(userId);
-      const readableNamespaces = getReadableNamespaces(userId);
+      const spaces = resolveReadMemorySpaces(userId, chatId);
+      const namespace = spaces.map(space => space.namespace_key).join(',');
+      if (!spaces.length) {
+        return { ok: true, namespace: '', top_k: safeTopK, matches: [], text: '' };
+      }
       const queryVector = await getEmbedding(safeQuery);
-      const index = getPineconeIndex();
-
-      const results = await Promise.all(readableNamespaces.map(readableNamespace =>
-        index.namespace(readableNamespace).query({
-          vector: queryVector,
-          topK: safeTopK,
-          includeMetadata: true
-        } as any)
-      ));
-
       const matchesById = new Map<string, any>();
-      for (const result of results) {
-        const matches = Array.isArray(result?.matches) ? result.matches : [];
-        for (const match of matches) {
-          const id = `${match?.id || ''}`;
-          const previous = matchesById.get(id);
-          if (!previous || Number(match?.score || 0) > Number(previous?.score || 0)) {
-            matchesById.set(id, match);
+
+      if (getVectorMemoryStorage() === 'sqlite') {
+        const ids = spaces.map(space => space.id);
+        const placeholders = ids.map(() => '?').join(', ');
+        const rows = db.prepare(`
+          SELECT v.chunk_id AS id, v.vector, c.text, r.source, r.created_at AS timestamp
+          FROM memory_vectors v
+          JOIN memory_chunks c ON c.id = v.chunk_id AND c.user_id = v.user_id
+          JOIN memory_records r ON r.id = c.memory_record_id AND r.user_id = v.user_id
+          WHERE v.user_id = ? AND v.memory_space_id IN (${placeholders})
+            AND v.embedding_model = ? AND r.deleted_at IS NULL
+        `).all(resolveAccountId(Math.floor(userId)), ...ids, TIMEWEB_EMBED_MODEL) as Array<{
+          id: string; vector: Buffer; text: string; source: string; timestamp: number;
+        }>;
+        rows.forEach(row => matchesById.set(row.id, {
+          id: row.id,
+          score: cosineSimilarity(queryVector, row.vector),
+          metadata: { text: row.text, source: row.source, timestamp: row.timestamp },
+        }));
+      } else {
+        const index = getPineconeIndex();
+        const readableNamespaces = [...new Set(spaces.flatMap(space => namespacesForSpace(userId, space)))];
+        const results = await Promise.all(readableNamespaces.map(readableNamespace =>
+          index.namespace(readableNamespace).query({
+            vector: queryVector,
+            topK: safeTopK,
+            includeMetadata: true
+          } as any)
+        ));
+        for (const result of results) {
+          const matches = Array.isArray(result?.matches) ? result.matches : [];
+          for (const match of matches) {
+            const id = `${match?.id || ''}`;
+            const previous = matchesById.get(id);
+            if (!previous || Number(match?.score || 0) > Number(previous?.score || 0)) {
+              matchesById.set(id, match);
+            }
           }
         }
       }
@@ -321,10 +423,53 @@ export class VectorMemoryService {
     }
   }
 
-  static async deleteChunk(userId: number, chunkId: string) {
+  static async deleteChunk(userId: number, chunkId: string, chatId?: number) {
     try {
       const safeChunkId = `${chunkId || ''}`.trim();
       if (!safeChunkId) throw new Error('chunk_id_required');
+
+      const accountId = resolveAccountId(Math.floor(userId));
+      const canonicalChunk = db.prepare(`
+        SELECT c.memory_record_id, c.memory_space_id
+        FROM memory_chunks c
+        JOIN memory_spaces s ON s.id = c.memory_space_id
+        WHERE c.id = ? AND c.user_id = ? AND s.user_id = ?
+      `).get(safeChunkId, accountId, accountId) as {
+        memory_record_id: string; memory_space_id: number;
+      } | undefined;
+      if (canonicalChunk) {
+        const readableSpaceIds = new Set(resolveReadMemorySpaces(userId, chatId).map(space => space.id));
+        if (!readableSpaceIds.has(canonicalChunk.memory_space_id)) throw new Error('chunk_not_found');
+        const record = getOwnedMemoryRecord(userId, canonicalChunk.memory_record_id);
+        if (!record) throw new Error('chunk_not_found');
+        const chunks = getRecordChunks(userId, record.id);
+        const space = db.prepare('SELECT * FROM memory_spaces WHERE id = ? AND user_id = ?')
+          .get(record.memory_space_id, accountId) as MemorySpace | undefined;
+        if (!space) throw new Error('chunk_not_found');
+        if (getVectorMemoryStorage() === 'sqlite') {
+          db.prepare(`
+            DELETE FROM memory_vectors
+            WHERE user_id = ? AND memory_space_id = ?
+              AND chunk_id IN (SELECT id FROM memory_chunks WHERE memory_record_id = ? AND user_id = ?)
+          `).run(accountId, space.id, record.id, accountId);
+        } else {
+          await deletePineconeResource(() =>
+            getPineconeIndex().namespace(space.namespace_key).deleteMany(chunks.map(chunk => chunk.id))
+          );
+        }
+        removeCanonicalMemoryRecord(userId, record.id);
+        return {
+          ok: true,
+          namespace: space.namespace_key,
+          id: safeChunkId,
+          chunk_id: safeChunkId,
+          record_id: record.id,
+          deleted_ids: chunks.map(chunk => chunk.id),
+          chunks_deleted: chunks.length,
+          namespaces_deleted: [space.namespace_key],
+        };
+      }
+      if (getVectorMemoryStorage() === 'sqlite') throw new Error('chunk_not_found');
 
       const namespace = canonicalNamespace(userId);
       const readableNamespaces = getReadableNamespaces(userId);
@@ -390,6 +535,91 @@ export class VectorMemoryService {
       });
       throw error;
     }
+  }
+
+  static async deleteRecord(userId: number, recordId: string) {
+    const record = getOwnedMemoryRecord(userId, `${recordId || ''}`.trim());
+    if (!record) throw new Error('memory_record_not_found');
+    const accountId = resolveAccountId(Math.floor(userId));
+    const chunks = getRecordChunks(accountId, record.id);
+    const space = db.prepare('SELECT * FROM memory_spaces WHERE id = ? AND user_id = ?')
+      .get(record.memory_space_id, accountId) as MemorySpace | undefined;
+    if (!space) throw new Error('memory_space_not_found');
+    if (getVectorMemoryStorage() === 'sqlite') {
+      db.prepare('DELETE FROM memory_vectors WHERE user_id = ? AND memory_space_id = ? AND chunk_id IN (SELECT id FROM memory_chunks WHERE memory_record_id = ? AND user_id = ?)')
+        .run(accountId, space.id, record.id, accountId);
+    } else if (chunks.length) {
+      await deletePineconeResource(() =>
+        getPineconeIndex().namespace(space.namespace_key).deleteMany(chunks.map(chunk => chunk.id))
+      );
+    }
+    removeCanonicalMemoryRecord(accountId, record.id);
+    return { ok: true, record_id: record.id, chunks_deleted: chunks.length };
+  }
+
+  static async updateRecord(userId: number, recordId: string, fullText: string, sourceTag?: string) {
+    const safeText = `${fullText || ''}`.trim();
+    if (!safeText) throw new Error('text_required');
+    if (safeText.length > VECTOR_MEMORY_MAX_TEXT) throw new Error(`text_too_long_max_${VECTOR_MEMORY_MAX_TEXT}`);
+    const accountId = resolveAccountId(Math.floor(userId));
+    const record = getOwnedMemoryRecord(accountId, `${recordId || ''}`.trim());
+    if (!record) throw new Error('memory_record_not_found');
+    const space = db.prepare('SELECT * FROM memory_spaces WHERE id = ? AND user_id = ?')
+      .get(record.memory_space_id, accountId) as MemorySpace | undefined;
+    if (!space) throw new Error('memory_space_not_found');
+    const safeSource = sourceTag === undefined
+      ? record.source
+      : `${sourceTag || ''}`.trim().slice(0, 240) || 'manual';
+    const chunks = chunkText(safeText, VECTOR_MEMORY_CHUNK_SIZE, VECTOR_MEMORY_CHUNK_OVERLAP);
+    const input = chunks.map(chunk => `[Контекст: ${safeSource}] ${chunk}`.replace(/\n/g, ' ').trim());
+    const response = await getOpenAIClient().embeddings.create({ model: TIMEWEB_EMBED_MODEL, input } as any);
+    const embeddings = Array.isArray(response?.data) ? response.data : [];
+    if (embeddings.length !== chunks.length) throw new Error('embedding_empty');
+    const oldChunks = getRecordChunks(accountId, record.id);
+    const now = Math.floor(Date.now() / 1000);
+    const vectors = embeddings.map((entry: any, index: number) => ({
+      id: `${record.id}_chunk_${index}`,
+      values: Array.isArray(entry?.embedding) ? entry.embedding as number[] : [],
+      metadata: {
+        text: input[index], source: safeSource, timestamp: record.created_at,
+        chunk_index: index, total_chunks: chunks.length, record_id: record.id,
+      },
+    }));
+    if (vectors.some(vector => !vector.values.length)) throw new Error('embedding_empty');
+    if (getVectorMemoryStorage() === 'sqlite') {
+      db.transaction(() => {
+        db.prepare('DELETE FROM memory_vectors WHERE user_id = ? AND memory_space_id = ? AND chunk_id IN (SELECT id FROM memory_chunks WHERE memory_record_id = ? AND user_id = ?)')
+          .run(accountId, space.id, record.id, accountId);
+        const insert = db.prepare(`
+          INSERT INTO memory_vectors (chunk_id, user_id, memory_space_id, embedding_model, dimension, vector, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+        vectors.forEach(vector => insert.run(
+          vector.id, accountId, space.id, TIMEWEB_EMBED_MODEL, vector.values.length,
+          encodeVector(vector.values), now, now,
+        ));
+      })();
+    } else {
+      if (oldChunks.length) {
+        await deletePineconeResource(() =>
+          getPineconeIndex().namespace(space.namespace_key).deleteMany(oldChunks.map(chunk => chunk.id))
+        );
+      }
+      await getPineconeIndex().namespace(space.namespace_key).upsert(vectors as any);
+    }
+    db.transaction(() => {
+      db.prepare('DELETE FROM memory_chunks WHERE memory_record_id = ? AND user_id = ?').run(record.id, accountId);
+      db.prepare('UPDATE memory_records SET text = ?, source = ?, updated_at = ? WHERE id = ? AND user_id = ?')
+        .run(safeText, safeSource, now, record.id, accountId);
+      const insertChunk = db.prepare(`
+        INSERT INTO memory_chunks (id, memory_record_id, user_id, memory_space_id, text, chunk_index, total_chunks, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      vectors.forEach((vector, index) => insertChunk.run(
+        vector.id, record.id, accountId, space.id, input[index], index, vectors.length, record.created_at, now,
+      ));
+    })();
+    return getOwnedMemoryRecord(accountId, record.id)!;
   }
 
   static async deleteAll(userId: number) {

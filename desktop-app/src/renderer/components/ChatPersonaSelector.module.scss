@@ -1,0 +1,21 @@
+.root {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex: 0 1 210px;
+  min-width: 145px;
+}
+.label {
+  color: var(--text-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.select {
+  flex: 1;
+  min-width: 0;
+}
+.embedded {
+  width: 100%;
+  min-width: 0;
+  flex: none;
+}

@@ -37,6 +37,7 @@ import type { SetDisplayStatePayload } from '../components/PixelAvatar';
 import { ToolsPanel } from '../components/ToolsPanel';
 import { ImageViewerModal } from '../components/ImageViewerModal';
 import { QuotaWidget } from '../components/QuotaWidget';
+import { MemoryPopover } from '../components/MemoryPopover';
 import { openTool, handleDesktopAction, dispatchMapData, emitSuggestMacro, setToolsPanelState } from '../lib/tools';
 import { createSpeechRecorder } from '../lib/speechRecorder';
 import { startWakeWordAudioStream, stopWakeWordAudioStream } from '../lib/wakeWordAudio';
@@ -5068,6 +5069,7 @@ export function ChatPage() {
                   </>
                 )}
               </button>
+              <MemoryPopover chatId={activeChatId} />
               {showTokens && contextTokens && (
                 <div
                   className={s.contextTokensCompact}

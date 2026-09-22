@@ -19,11 +19,18 @@ type Props = {
   placeholder?: string;
   maxVisibleItems?: number;
   allowCreate?: boolean;
+  labels?: {
+    defaultBadge?: string;
+    customBadge?: string;
+    customSection?: string;
+    createTitle?: string;
+    createDescription?: string;
+  };
 };
 
 const NEW_PROMPT_ID = -1;
 
-export function PromptSelector({ options, value, onChange, disabled = false, placeholder, maxVisibleItems = 6, allowCreate = true }: Props) {
+export function PromptSelector({ options, value, onChange, disabled = false, placeholder, maxVisibleItems = 6, allowCreate = true, labels }: Props) {
   const { t } = useTranslation();
   const resolvedPlaceholder = placeholder ?? t('promptSelector.placeholder');
   const [isOpen, setIsOpen] = useState(false);
@@ -39,10 +46,10 @@ export function PromptSelector({ options, value, onChange, disabled = false, pla
   const filteredCustoms  = useMemo(() => q ? customs.filter(p  => p.name.toLowerCase().includes(q) || p.description.toLowerCase().includes(q)) : customs,  [q, customs]);
 
   const selectedLabel = useMemo(() => {
-    if (value === NEW_PROMPT_ID) return t('promptSelector.newPrompt');
+    if (value === NEW_PROMPT_ID) return labels?.createTitle ?? t('promptSelector.newPrompt');
     const found = options.find(p => p.id === value);
     return found ? found.name : resolvedPlaceholder;
-  }, [value, options, resolvedPlaceholder, t]);
+  }, [value, options, resolvedPlaceholder, labels?.createTitle, t]);
 
   // Close on outside click
   useEffect(() => {
@@ -72,7 +79,7 @@ export function PromptSelector({ options, value, onChange, disabled = false, pla
 
   const renderBadge = (kind: 'default' | 'custom') => (
     <span className={`${s.badge} ${kind === 'default' ? s.badgeDefault : s.badgeCustom}`}>
-      {kind === 'default' ? t('promptSelector.defaultBadge') : t('promptSelector.customBadge')}
+      {kind === 'default' ? (labels?.defaultBadge ?? t('promptSelector.defaultBadge')) : (labels?.customBadge ?? t('promptSelector.customBadge'))}
     </span>
   );
 
@@ -126,7 +133,7 @@ export function PromptSelector({ options, value, onChange, disabled = false, pla
 
             {filteredCustoms.length > 0 && (
               <>
-                <div className={s.sectionLabel}>{t('promptSelector.myPrompts')}</div>
+                <div className={s.sectionLabel}>{labels?.customSection ?? t('promptSelector.myPrompts')}</div>
                 {filteredCustoms.map(p => (
                   <button
                     key={p.id}
@@ -157,10 +164,10 @@ export function PromptSelector({ options, value, onChange, disabled = false, pla
                   type="button"
                 >
                   <span className={s.optionTop}>
-                    <span className={s.optionName}>{t('promptSelector.newPrompt')}</span>
+                    <span className={s.optionName}>{labels?.createTitle ?? t('promptSelector.newPrompt')}</span>
                     {renderBadge('custom')}
                   </span>
-                  <span className={s.optionDesc}>{t('promptSelector.createOwn')}</span>
+                  <span className={s.optionDesc}>{labels?.createDescription ?? t('promptSelector.createOwn')}</span>
                 </button>
               </>
             )}

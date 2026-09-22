@@ -24,6 +24,7 @@
     "test:image-gen-cloudflare": "tsx tests/image-generation-cloudflare.test.mts",
     "test:context-plan-clamp": "tsx tests/context-plan-clamp.test.mts",
     "test:account-merge": "tsx tests/account-merge-quota.test.mts",
+    "test:memory-foundation": "tsx tests/memory-foundation.test.mts",
     "build": "node -e \"require('node:fs').rmSync('dist',{ recursive: true, force: true })\" && tsc -p tsconfig.json && node -e \"require('node:fs').cpSync('src/i18n/locales','dist/i18n/locales',{ recursive: true })\"",
     "start": "node dist/server.js"
   },

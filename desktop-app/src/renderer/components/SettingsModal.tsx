@@ -52,6 +52,16 @@ type Props = {
 type Section = 'account' | 'connections' | 'prompt' | 'voice' | 'app' | 'limits' | 'billing' | 'macros' | 'pc' | 'browser' | 'servers' | 'runbooks' | 'sshkeys' | 'mail' | 'smart_home' | 'restrictions' | 'models' | 'about';
 
 const CUSTOM_PROMPT_ID = -1;
+const NEW_PERSONA_ID = -1;
+
+type PersonaInfo = {
+  id: number;
+  name: string;
+  description: string;
+  core_memory: string;
+  is_primary: number;
+  is_default: number;
+};
 
 const ZOOM_STEP_PCT = 5;
 const ZOOM_MIN_PCT = 40;
@@ -271,6 +281,11 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
 
   const [coreMemory, setCoreMemory] = useState('');
   const [coreMemorySaving, setCoreMemorySaving] = useState(false);
+  const [personas, setPersonas] = useState<PersonaInfo[]>([]);
+  const [selectedPersonaId, setSelectedPersonaId] = useState<number | null>(null);
+  const [personaName, setPersonaName] = useState('');
+  const [personaDescription, setPersonaDescription] = useState('');
+  const [personaDeleting, setPersonaDeleting] = useState(false);
 
   // Feature flags (restrictions)
   const [featureFlags, setFeatureFlagsState] = useState<api.FeatureFlags>({
@@ -357,6 +372,35 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
         .catch(() => {});
     }
   }, [section]);
+
+  const loadPersonas = useCallback(async (preferredId?: number) => {
+    const result = await api.apiFetch<{ personas: PersonaInfo[] }>('/api/v1/memory/personas');
+    setPersonas(result.personas);
+    const selected = preferredId !== undefined
+      ? result.personas.find(persona => persona.id === preferredId)
+      : result.personas.find(persona => persona.is_default === 1);
+    const persona = selected || result.personas[0];
+    if (persona) setSelectedPersonaId(persona.id);
+  }, []);
+
+  useEffect(() => {
+    if (section !== 'account') return;
+    void loadPersonas().catch(() => toast.error('Не удалось загрузить персоны'));
+  }, [section, loadPersonas]);
+
+  useEffect(() => {
+    if (selectedPersonaId === NEW_PERSONA_ID) {
+      setPersonaName('');
+      setPersonaDescription('');
+      setCoreMemory('');
+      return;
+    }
+    const persona = personas.find(item => item.id === selectedPersonaId);
+    if (!persona) return;
+    setPersonaName(persona.name);
+    setPersonaDescription(persona.description || '');
+    setCoreMemory(persona.core_memory || '');
+  }, [selectedPersonaId, personas]);
 
   // Load feature flags when restrictions tab opens
   useEffect(() => {
@@ -762,6 +806,8 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
     setSaving(true);
     try {
       await api.setUserName(trimmed);
+      await loadPersonas(selectedPersonaId ?? undefined);
+      window.dispatchEvent(new Event('chatter:personas-changed'));
       const updated = { ...user!, name: trimmed };
       setUser(updated);
       localStorage.setItem('chatter_user', JSON.stringify(updated));
@@ -862,21 +908,77 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
     }
   };
 
+  const handleSelectPersona = async (personaId: number) => {
+    setSelectedPersonaId(personaId);
+    if (personaId === NEW_PERSONA_ID) return;
+    try {
+      await api.apiFetch(`/api/v1/memory/personas/${personaId}/activate`, { method: 'POST' });
+      setPersonas(previous => previous.map(persona => ({ ...persona, is_default: persona.id === personaId ? 1 : 0 })));
+      window.dispatchEvent(new Event('chatter:personas-changed'));
+      const persona = personas.find(item => item.id === personaId);
+      if (persona?.is_primary === 1 && user) {
+        const updated = { ...user, core_memory: persona.core_memory };
+        setUser(updated);
+        localStorage.setItem('chatter_user', JSON.stringify(updated));
+      }
+    } catch {
+      toast.error('Не удалось выбрать персону');
+    }
+  };
+
   const handleSaveCoreMemory = async () => {
+    const selectedPersona = personas.find(persona => persona.id === selectedPersonaId);
+    const isPrimary = selectedPersona?.is_primary === 1;
+    const name = personaName.trim();
+    if (!isPrimary && !name) {
+      toast.error('Введите имя персоны');
+      return;
+    }
     setCoreMemorySaving(true);
     try {
-      await api.apiFetch('/api/v1/account/core-memory', {
-        method: 'PUT',
-        body: JSON.stringify({ content: coreMemory }),
-      });
-      const updated = { ...user!, core_memory: coreMemory };
-      setUser(updated);
-      localStorage.setItem('chatter_user', JSON.stringify(updated));
+      let personaId = selectedPersonaId;
+      if (personaId === NEW_PERSONA_ID || personaId === null) {
+        const created = await api.apiFetch<{ persona: PersonaInfo }>('/api/v1/memory/personas', {
+          method: 'POST',
+          body: JSON.stringify({ name, description: personaDescription.trim(), core_memory: coreMemory }),
+        });
+        personaId = created.persona.id;
+      } else {
+        await api.apiFetch(`/api/v1/memory/personas/${personaId}`, {
+          method: 'PATCH',
+          body: JSON.stringify(isPrimary
+            ? { core_memory: coreMemory }
+            : { name, description: personaDescription.trim(), core_memory: coreMemory }),
+        });
+      }
+      await api.apiFetch(`/api/v1/memory/personas/${personaId}/activate`, { method: 'POST' });
+      await loadPersonas(personaId);
+      window.dispatchEvent(new Event('chatter:personas-changed'));
+      if (isPrimary) {
+        const updated = { ...user!, core_memory: coreMemory };
+        setUser(updated);
+        localStorage.setItem('chatter_user', JSON.stringify(updated));
+      }
       toast.success(t('settings.toasts.memorySaved'));
     } catch {
       toast.error(t('settings.toasts.memorySaveFailed'));
     } finally {
       setCoreMemorySaving(false);
+    }
+  };
+
+  const handleDeletePersona = async () => {
+    if (selectedPersonaId === null || selectedPersonaId === NEW_PERSONA_ID) return;
+    setPersonaDeleting(true);
+    try {
+      await api.apiFetch(`/api/v1/memory/personas/${selectedPersonaId}`, { method: 'DELETE' });
+      await loadPersonas();
+      window.dispatchEvent(new Event('chatter:personas-changed'));
+      toast.success('Персона удалена; её чаты переключены на «Автоматически»');
+    } catch {
+      toast.error('Не удалось удалить персону');
+    } finally {
+      setPersonaDeleting(false);
     }
   };
 
@@ -1112,6 +1214,9 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
     }, 50);
   };
 
+  const selectedPersona = personas.find(persona => persona.id === selectedPersonaId);
+  const selectedPersonaIsPrimary = selectedPersona?.is_primary === 1;
+
   return (
     <motion.div
       className={s.overlay}
@@ -1161,7 +1266,7 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
                 <span className={s.planBadge}>{(user?.plan || 'free').toUpperCase()}</span>
               </div>
               <div className={s.fieldGroup}>
-                <label className={s.fieldLabel}>{t('settings.account.name')}</label>
+                <label className={s.fieldLabel}>{selectedPersonaIsPrimary ? t('settings.account.name') : 'Имя аккаунта'}</label>
                 <input
                   className={s.fieldInput}
                   type="text"
@@ -1181,10 +1286,49 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
               </div>
 
               <div className={s.fieldGroup}>
-                <label className={s.fieldLabel}>{t('settings.account.memory')}</label>
+                <label className={s.fieldLabel}>Персона</label>
                 <span className={s.fieldLabel} style={{ marginTop: '-4px', display: 'block' }}>
-                  {t('settings.account.memoryHelp')}
+                  «Основное» сохраняет обычное имя и горячую память. Дополнительные персоны можно выбирать отдельно для каждого чата.
                 </span>
+                <PromptSelector
+                  options={personas.map(persona => ({
+                    id: persona.id,
+                    name: persona.is_primary === 1 ? 'Основное' : persona.name,
+                    description: persona.is_primary === 1 ? `Имя аккаунта: ${persona.name}` : persona.description,
+                    kind: persona.is_primary === 1 ? 'default' as const : 'custom' as const,
+                  }))}
+                  value={selectedPersonaId}
+                  onChange={handleSelectPersona}
+                  disabled={coreMemorySaving || personaDeleting}
+                  placeholder="Выберите персону"
+                  maxVisibleItems={5}
+                  labels={{
+                    defaultBadge: 'основное',
+                    customBadge: 'персона',
+                    customSection: 'Другие персоны',
+                    createTitle: 'Новая персона',
+                    createDescription: 'Добавить имя, описание и горячую память',
+                  }}
+                />
+                {!selectedPersonaIsPrimary && (
+                  <>
+                    <input
+                      className={s.fieldInput}
+                      value={personaName}
+                      onChange={(e) => setPersonaName(e.target.value.slice(0, 80))}
+                      placeholder="Имя персоны"
+                      maxLength={80}
+                    />
+                    <input
+                      className={s.fieldInput}
+                      value={personaDescription}
+                      onChange={(e) => setPersonaDescription(e.target.value.slice(0, 240))}
+                      placeholder="Короткое описание"
+                      maxLength={240}
+                    />
+                  </>
+                )}
+                <label className={s.fieldLabel}>Горячая память</label>
                 <textarea
                   className={s.textareaInput}
                   value={coreMemory}
@@ -1193,14 +1337,21 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
                   rows={5}
                   maxLength={800}
                 />
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <button
-                    className={s.saveBtn}
-                    onClick={handleSaveCoreMemory}
-                    disabled={coreMemorySaving}
-                  >
-                    {coreMemorySaving ? t('common.saving') : t('common.save')}
-                  </button>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button
+                      className={s.saveBtn}
+                      onClick={handleSaveCoreMemory}
+                      disabled={coreMemorySaving || (!selectedPersonaIsPrimary && !personaName.trim())}
+                    >
+                      {coreMemorySaving ? t('common.saving') : (selectedPersonaId === NEW_PERSONA_ID ? t('common.create') : t('common.save'))}
+                    </button>
+                    {selectedPersonaId !== null && selectedPersonaId !== NEW_PERSONA_ID && !selectedPersonaIsPrimary && (
+                      <button className={s.cancelBtn} onClick={handleDeletePersona} disabled={personaDeleting} style={{ color: 'var(--color-error)' }}>
+                        {personaDeleting ? t('common.deleting') : t('common.delete')}
+                      </button>
+                    )}
+                  </div>
                   <span style={{ fontSize: '11px', color: coreMemory.length > 700 ? '#e74c3c' : 'var(--text-hint)' }}>
                     {coreMemory.length} / 800
                   </span>

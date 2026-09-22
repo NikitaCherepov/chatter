@@ -22,7 +22,7 @@ export const searchColdMemoryTool: Tool = {
     if (!query) return 'No results: empty memory query.';
     const topK = Number.isFinite(Number(args.top_k)) ? Number(args.top_k) : 5;
     try {
-      const result = await VectorMemoryService.search(context.userId, query, topK);
+      const result = await VectorMemoryService.search(context.userId, query, topK, context.chatId);
       if (!result.matches.length) return `No results found in memory for query "${query}".`;
       const matches = result.matches
         .map(match => `[chunk_id: ${match.chunk_id}]\n[Source: ${match.source || 'unknown'}]\n${match.text}`)

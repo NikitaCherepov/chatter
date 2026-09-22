@@ -1,6 +1,5 @@
-import { db } from '../db.js';
-import { getUserById } from './chats.js';
 import { chargeTokens } from './token-quota.js';
+import { resolvePersonaForChat, setPersonaCoreMemory } from './memory-foundation.js';
 
 const MAX_CORE_MEMORY_LENGTH = 400;
 
@@ -10,19 +9,18 @@ export const runCoreMemoryMerge = async (
   aiCall: (requestPayload: Record<string, unknown>) => Promise<{ response: any; usedModel: string; usedProvider: string }>,
   userId: number,
   newFact: string,
-  explicitRequest: boolean
+  explicitRequest: boolean,
+  chatId?: number,
 ) => {
-  const user = getUserById(userId);
-  if (!user) {
-    return 'Ошибка памяти: пользователь не найден.';
-  }
+  const resolvedPersona = resolvePersonaForChat(userId, chatId);
+  if (!resolvedPersona.allowCoreMemoryUpdate) return 'Обновление горячей памяти отключено пользователем для этого чата.';
 
   const fact = newFact.trim();
   if (!fact) {
     return 'Ошибка памяти: пустой факт.';
   }
 
-  const currentMemory = (user.core_memory || '').trim();
+  const currentMemory = (resolvedPersona.persona.core_memory || '').trim();
   const mergePrompt = `Ты — безжалостный редактор памяти ИИ-ассистента.
 Твоя задача: обновить профиль пользователя, интегрировав в него новый факт.
 
@@ -90,7 +88,7 @@ ${fact}
   }
 
   if (mergedMemory !== currentMemory) {
-    db.prepare('UPDATE users SET core_memory = ? WHERE id = ?').run(mergedMemory, userId);
+    setPersonaCoreMemory(userId, resolvedPersona.persona.id, mergedMemory);
   }
 
   return `Память: ${action}.
