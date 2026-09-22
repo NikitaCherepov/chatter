@@ -468,6 +468,7 @@
     "sections": {
       "browser": "브라우저",
       "account": "계정",
+      "memory": "메모리",
       "prompt": "프롬프트",
       "voice": "음성",
       "macros": "매크로",

@@ -11,6 +11,7 @@ export type Persona = {
   name: string;
   description: string;
   core_memory: string;
+  allow_core_memory_update: number;
   is_primary: number;
   is_default: number;
   created_at: number;
@@ -104,8 +105,8 @@ export const ensureMemoryDefaults = (userId: number): { persona: Persona; space:
         persona = { ...persona, is_default: 1, updated_at: now };
       } else {
         const inserted = db.prepare(`
-          INSERT INTO personas (user_id, name, description, core_memory, is_primary, is_default, created_at, updated_at)
-          VALUES (?, ?, '', ?, 1, 1, ?, ?)
+          INSERT INTO personas (user_id, name, description, core_memory, allow_core_memory_update, is_primary, is_default, created_at, updated_at)
+          VALUES (?, ?, '', ?, 1, 1, 1, ?, ?)
         `).run(user.id, `${user.name || 'User'}`.trim().slice(0, 80) || 'User', `${user.core_memory || ''}`.slice(0, 800), now, now);
         persona = db.prepare('SELECT * FROM personas WHERE id = ?').get(Number(inserted.lastInsertRowid)) as Persona;
       }
@@ -135,23 +136,29 @@ export const listPersonas = (userId: number): Persona[] => {
     .all(accountId) as Persona[];
 };
 
-export const createPersona = (userId: number, name: string, description = '', coreMemory = ''): Persona => {
+export const createPersona = (
+  userId: number,
+  name: string,
+  description = '',
+  coreMemory = '',
+  allowCoreMemoryUpdate = true,
+): Persona => {
   const accountId = canonicalUserId(userId);
   ensureMemoryDefaults(accountId);
   const safeName = `${name || ''}`.trim().replace(/\s+/g, ' ').slice(0, 80);
   if (!safeName) throw new Error('persona_name_required');
   const now = getNowUnix();
   const inserted = db.prepare(`
-    INSERT INTO personas (user_id, name, description, core_memory, is_primary, is_default, created_at, updated_at)
-    VALUES (?, ?, ?, ?, 0, 0, ?, ?)
-  `).run(accountId, safeName, `${description || ''}`.trim().slice(0, 240), `${coreMemory || ''}`.slice(0, 800), now, now);
+    INSERT INTO personas (user_id, name, description, core_memory, allow_core_memory_update, is_primary, is_default, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, 0, 0, ?, ?)
+  `).run(accountId, safeName, `${description || ''}`.trim().slice(0, 240), `${coreMemory || ''}`.slice(0, 800), allowCoreMemoryUpdate ? 1 : 0, now, now);
   return db.prepare('SELECT * FROM personas WHERE id = ?').get(Number(inserted.lastInsertRowid)) as Persona;
 };
 
 export const updatePersona = (
   userId: number,
   personaId: number,
-  patch: { name?: string; description?: string; core_memory?: string },
+  patch: { name?: string; description?: string; core_memory?: string; allow_core_memory_update?: number },
 ): Persona => {
   const accountId = canonicalUserId(userId);
   const persona = db.prepare('SELECT * FROM personas WHERE id = ? AND user_id = ?')
@@ -167,10 +174,13 @@ export const updatePersona = (
   const description = patch.description === undefined
     ? persona.description
     : `${patch.description}`.trim().slice(0, 240);
+  const allowCoreMemoryUpdate = patch.allow_core_memory_update === undefined
+    ? persona.allow_core_memory_update
+    : patch.allow_core_memory_update ? 1 : 0;
   db.prepare(`
-    UPDATE personas SET name = ?, description = ?, core_memory = ?, updated_at = ?
+    UPDATE personas SET name = ?, description = ?, core_memory = ?, allow_core_memory_update = ?, updated_at = ?
     WHERE id = ? AND user_id = ?
-  `).run(name, description, coreMemory, getNowUnix(), personaId, accountId);
+  `).run(name, description, coreMemory, allowCoreMemoryUpdate, getNowUnix(), personaId, accountId);
   if (persona.is_primary === 1) {
     db.prepare('UPDATE users SET core_memory = ? WHERE id = ?').run(coreMemory, accountId);
   }
@@ -237,6 +247,26 @@ export const createGeneralMemorySpace = (userId: number, name: string): MemorySp
   return db.prepare('SELECT * FROM memory_spaces WHERE id = ?').get(Number(inserted.lastInsertRowid)) as MemorySpace;
 };
 
+export const setDefaultGeneralMemorySpace = (userId: number, spaceId: number): MemorySpace => {
+  const accountId = canonicalUserId(userId);
+  ensureMemoryDefaults(accountId);
+  const space = db.prepare(`
+    SELECT * FROM memory_spaces
+    WHERE id = ? AND user_id = ? AND kind = 'general' AND archived_at IS NULL
+  `).get(spaceId, accountId) as MemorySpace | undefined;
+  if (!space) throw new Error('memory_space_not_found');
+  const now = getNowUnix();
+  db.transaction(() => {
+    db.prepare("UPDATE memory_spaces SET is_default = 0, updated_at = ? WHERE user_id = ? AND kind = 'general' AND is_default = 1")
+      .run(now, accountId);
+    db.prepare('UPDATE memory_spaces SET is_default = 1, updated_at = ? WHERE id = ? AND user_id = ?')
+      .run(now, spaceId, accountId);
+    db.prepare('UPDATE chat_memory_settings SET general_space_id = ?, updated_at = ? WHERE user_id = ?')
+      .run(spaceId, now, accountId);
+  })();
+  return db.prepare('SELECT * FROM memory_spaces WHERE id = ?').get(spaceId) as MemorySpace;
+};
+
 const ensureChatMemorySpace = (userId: number, chatId: number): MemorySpace => {
   const accountId = requireChatAccess(userId, chatId);
   let space = db.prepare(`
@@ -272,16 +302,27 @@ export const getChatMemorySettings = (userId: number, chatId: number): ChatMemor
       created_at, updated_at
     ) VALUES (?, ?, ?, NULL, ?, NULL, 'general', 'general', 1, 1, ?, ?)
   `).run(accountId, chatId, defaults.persona.id, defaults.space.id, now, now);
-  return db.prepare(`
+  let settings = db.prepare(`
     SELECT * FROM chat_memory_settings WHERE user_id = ? AND chat_id = ?
   `).get(accountId, chatId) as ChatMemorySettings;
+  const normalizedTarget = settings.memory_mode === 'chat'
+    ? 'chat'
+    : settings.memory_mode === 'off' || settings.memory_mode === 'general'
+      ? 'general'
+      : settings.write_target;
+  if (normalizedTarget !== settings.write_target) {
+    db.prepare('UPDATE chat_memory_settings SET write_target = ?, updated_at = ? WHERE user_id = ? AND chat_id = ?')
+      .run(normalizedTarget, now, accountId, chatId);
+    settings = { ...settings, write_target: normalizedTarget, updated_at: now };
+  }
+  return settings;
 };
 
 export const updateChatMemorySettings = (
   userId: number,
   chatId: number,
   patch: Partial<Pick<ChatMemorySettings,
-    'persona_override_id' | 'general_space_id' | 'memory_mode' | 'write_target' |
+    'persona_override_id' | 'memory_mode' | 'write_target' |
     'use_core_memory' | 'allow_core_memory_update'>>,
 ): ChatMemorySettings => {
   const accountId = requireChatAccess(userId, chatId);
@@ -289,7 +330,7 @@ export const updateChatMemorySettings = (
   const personaOverrideId = patch.persona_override_id === undefined
     ? current.persona_override_id
     : patch.persona_override_id;
-  const generalSpaceId = patch.general_space_id ?? current.general_space_id;
+  const generalSpaceId = ensureMemoryDefaults(accountId).space.id;
   const memoryMode = patch.memory_mode ?? current.memory_mode;
   let writeTarget = patch.write_target ?? current.write_target;
   if (!['off', 'general', 'chat', 'both'].includes(memoryMode)) throw new Error('bad_memory_mode');
@@ -308,6 +349,7 @@ export const updateChatMemorySettings = (
     chatSpaceId = ensureChatMemorySpace(accountId, chatId).id;
   }
   if (memoryMode === 'off' || memoryMode === 'general') writeTarget = 'general';
+  if (memoryMode === 'chat') writeTarget = 'chat';
   const useCoreMemory = patch.use_core_memory === undefined
     ? current.use_core_memory
     : patch.use_core_memory ? 1 : 0;
@@ -330,7 +372,7 @@ export const resolvePersonaForChat = (userId: number, chatId?: number | null) =>
   const accountId = canonicalUserId(userId);
   const defaults = ensureMemoryDefaults(accountId);
   if (!chatId) {
-    return { persona: defaults.persona, useCoreMemory: true, allowCoreMemoryUpdate: true };
+    return { persona: defaults.persona, useCoreMemory: true, allowCoreMemoryUpdate: defaults.persona.allow_core_memory_update === 1 };
   }
   const settings = getChatMemorySettings(accountId, chatId);
   const persona = settings.persona_override_id === null
@@ -339,8 +381,8 @@ export const resolvePersonaForChat = (userId: number, chatId?: number | null) =>
       .get(settings.persona_override_id, accountId) as Persona | undefined;
   return {
     persona: persona || defaults.persona,
-    useCoreMemory: settings.use_core_memory === 1,
-    allowCoreMemoryUpdate: settings.allow_core_memory_update === 1,
+    useCoreMemory: true,
+    allowCoreMemoryUpdate: (persona || defaults.persona).allow_core_memory_update === 1,
   };
 };
 
@@ -427,6 +469,42 @@ export const listMemoryRecords = (
     WHERE user_id = ? AND deleted_at IS NULL
     ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?
   `).all(accountId, safeLimit, safeOffset) as MemoryRecord[];
+};
+
+export const listChatMemoryRecords = (userId: number, chatId: number): MemoryRecord[] => {
+  const settings = getChatMemorySettings(userId, chatId);
+  if (!settings.chat_space_id) return [];
+  return listMemoryRecords(userId, settings.chat_space_id);
+};
+
+export const listGeneralMemoryRecords = (userId: number, spaceId?: number): MemoryRecord[] => {
+  const accountId = canonicalUserId(userId);
+  const defaults = ensureMemoryDefaults(accountId);
+  const targetSpaceId = spaceId ?? defaults.space.id;
+  if (!db.prepare(`
+    SELECT 1 FROM memory_spaces
+    WHERE id = ? AND user_id = ? AND kind = 'general' AND archived_at IS NULL
+  `).get(targetSpaceId, accountId)) throw new Error('memory_space_not_found');
+  return listMemoryRecords(accountId, targetSpaceId);
+};
+
+export const requireChatMemoryRecord = (userId: number, chatId: number, recordId: string): MemoryRecord => {
+  const settings = getChatMemorySettings(userId, chatId);
+  const record = getOwnedMemoryRecord(userId, recordId);
+  if (!record || !settings.chat_space_id || record.memory_space_id !== settings.chat_space_id) {
+    throw new Error('memory_record_not_found');
+  }
+  return record;
+};
+
+export const requireGeneralMemoryRecord = (userId: number, recordId: string): MemoryRecord => {
+  const accountId = canonicalUserId(userId);
+  const record = getOwnedMemoryRecord(accountId, recordId);
+  if (!record || !db.prepare(`
+    SELECT 1 FROM memory_spaces
+    WHERE id = ? AND user_id = ? AND kind = 'general' AND archived_at IS NULL
+  `).get(record.memory_space_id, accountId)) throw new Error('memory_record_not_found');
+  return record;
 };
 
 export const getOwnedMemoryRecord = (userId: number, recordId: string): MemoryRecord | undefined => {

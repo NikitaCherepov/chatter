@@ -147,6 +147,7 @@
     "sections": {
       "browser": "Navigateur",
       "account": "Compte",
+      "memory": "Mémoire",
       "prompt": "Prompt",
       "voice": "Voix",
       "macros": "Macros",

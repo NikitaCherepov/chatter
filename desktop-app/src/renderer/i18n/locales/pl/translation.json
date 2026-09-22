@@ -468,6 +468,7 @@
     "sections": {
       "browser": "Przeglądarka",
       "account": "Konto",
+      "memory": "Pamięć",
       "prompt": "Prompt",
       "voice": "Głos",
       "macros": "Makra",

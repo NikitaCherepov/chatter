@@ -468,6 +468,7 @@
     "sections": {
       "browser": "Prohlížeč",
       "account": "Účet",
+      "memory": "Paměť",
       "connections": "Propojené účty",
       "prompt": "Výzva",
       "voice": "Hlas",

@@ -468,6 +468,7 @@
     "sections": {
       "browser": "Browser",
       "account": "Account",
+      "memory": "Memoria",
       "prompt": "Prompt",
       "voice": "Voce",
       "macros": "Macro",

@@ -1,0 +1,18 @@
+.panel { flex: 1; padding: 20px 24px; overflow-y: auto; }
+.title { margin-bottom: 8px; color: var(--text-primary); font-size: 14px; font-weight: 600; }
+.hint { margin-bottom: 18px; color: var(--text-muted); font-size: 12px; line-height: 1.5; }
+.field { display: grid; gap: 7px; margin-bottom: 22px; }
+.field label, .sectionTitle { color: var(--text-secondary); font-size: 12px; font-weight: 600; }
+.selectorRow { display: flex; align-items: flex-start; gap: 8px; }
+.selector { flex: 1; min-width: 0; }
+.addButton { width: 38px; height: 38px; border: 1px solid var(--border-input); border-radius: 7px; background: var(--bg-input); color: var(--text-primary); cursor: pointer; font-size: 18px; }
+.addButton:hover { background: var(--bg-modal-hover); border-color: var(--border-medium); }
+.sectionTitle { margin-bottom: 9px; }
+.records { display: grid; gap: 8px; }
+.empty { padding: 24px; border: 1px dashed var(--border-light); border-radius: 8px; color: var(--text-hint); text-align: center; font-size: 12px; }
+.record { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 11px; border: 1px solid var(--border-light); border-radius: 8px; background: var(--bg-input); }
+.record strong { display: block; color: var(--text-secondary); font-size: 10px; }
+.record p { margin: 4px 0 0; color: var(--text-primary); font-size: 12px; line-height: 1.45; white-space: pre-wrap; }
+.record > span { display: flex; gap: 3px; }
+.record button { border: 0; background: transparent; color: var(--text-secondary); cursor: pointer; font-size: 15px; }
+.record button:hover { color: var(--text-primary); }

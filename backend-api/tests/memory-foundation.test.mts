@@ -7,6 +7,7 @@ process.env.API_DB_PATH = path.join(os.tmpdir(), `chatter-memory-foundation-${pr
 const { db } = await import('../src/db.js');
 const {
   canAccessChat,
+  createGeneralMemorySpace,
   createPersona,
   deletePersona,
   getChatMemorySettings,
@@ -14,7 +15,9 @@ const {
   resolvePersonaForChat,
   resolveReadMemorySpaces,
   setActivePersona,
+  setDefaultGeneralMemorySpace,
   syncPrimaryPersonaName,
+  updatePersona,
   updateChatMemorySettings,
 } = await import('../src/services/memory-foundation.js');
 
@@ -47,6 +50,8 @@ assert.equal(getPrimaryPersona(202).name, 'Renamed member', 'account rename upda
 assert.equal((db.prepare('SELECT name FROM personas WHERE id = ?').get(workPersona.id) as { name: string }).name, 'Work member', 'custom persona name remains independent');
 setActivePersona(202, workPersona.id);
 assert.equal(resolvePersonaForChat(202, roomId).persona.id, workPersona.id, 'automatic chat follows global persona');
+updatePersona(202, workPersona.id, { allow_core_memory_update: 0 });
+assert.equal(resolvePersonaForChat(202, roomId).allowCoreMemoryUpdate, false, 'hot-memory updates are controlled by the selected persona');
 updateChatMemorySettings(202, roomId, { persona_override_id: primaryPersona.id });
 assert.equal(resolvePersonaForChat(202, roomId).persona.id, primaryPersona.id, 'chat can explicitly select Main');
 updateChatMemorySettings(202, roomId, { persona_override_id: null });
@@ -60,6 +65,10 @@ assert.equal(resolvePersonaForChat(202, roomId).persona.id, roleplayPersona.id, 
 deletePersona(202, roleplayPersona.id);
 assert.equal(getChatMemorySettings(202, roomId).persona_override_id, null, 'deleting persona resets override to automatic');
 assert.equal(resolvePersonaForChat(202, roomId).persona.id, workPersona.id, 'reset chat follows global persona again');
+
+const alternateGeneral = createGeneralMemorySpace(202, 'Alternate');
+setDefaultGeneralMemorySpace(202, alternateGeneral.id);
+assert.equal(getChatMemorySettings(202, roomId).general_space_id, alternateGeneral.id, 'global memory selection is shared by chats');
 
 const memberChatSettings = updateChatMemorySettings(202, roomId, {
   memory_mode: 'both',

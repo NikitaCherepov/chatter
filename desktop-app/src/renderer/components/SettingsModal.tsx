@@ -38,6 +38,7 @@ import { LinkTelegramModal } from './LinkTelegramModal';
 import { QuotaWidget } from './QuotaWidget';
 import { SubagentModelSettings } from './SubagentModelSettings/SubagentModelSettings';
 import { AboutSettings } from './AboutSettings/AboutSettings';
+import { GlobalMemorySettings } from './GlobalMemorySettings';
 import telegramIcon from '../assets/integrations/telegram.webp';
 import s from './SettingsModal.module.scss';
 
@@ -49,7 +50,7 @@ type Props = {
   onAuthInvalidated?: () => void;
 };
 
-type Section = 'account' | 'connections' | 'prompt' | 'voice' | 'app' | 'limits' | 'billing' | 'macros' | 'pc' | 'browser' | 'servers' | 'runbooks' | 'sshkeys' | 'mail' | 'smart_home' | 'restrictions' | 'models' | 'about';
+type Section = 'account' | 'memory' | 'connections' | 'prompt' | 'voice' | 'app' | 'limits' | 'billing' | 'macros' | 'pc' | 'browser' | 'servers' | 'runbooks' | 'sshkeys' | 'mail' | 'smart_home' | 'restrictions' | 'models' | 'about';
 
 const CUSTOM_PROMPT_ID = -1;
 const NEW_PERSONA_ID = -1;
@@ -59,6 +60,7 @@ type PersonaInfo = {
   name: string;
   description: string;
   core_memory: string;
+  allow_core_memory_update: number;
   is_primary: number;
   is_default: number;
 };
@@ -98,6 +100,7 @@ const modalVariants = {
 
 const SECTIONS: { key: Section; labelKey: string }[] = [
   { key: 'account', labelKey: 'settings.sections.account' },
+  { key: 'memory', labelKey: 'settings.sections.memory' },
   { key: 'connections', labelKey: 'settings.sections.connections' },
   { key: 'prompt', labelKey: 'settings.sections.prompt' },
   { key: 'voice', labelKey: 'settings.sections.voice' },
@@ -285,6 +288,7 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
   const [selectedPersonaId, setSelectedPersonaId] = useState<number | null>(null);
   const [personaName, setPersonaName] = useState('');
   const [personaDescription, setPersonaDescription] = useState('');
+  const [allowCoreMemoryUpdate, setAllowCoreMemoryUpdate] = useState(true);
   const [personaDeleting, setPersonaDeleting] = useState(false);
 
   // Feature flags (restrictions)
@@ -393,6 +397,7 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
       setPersonaName('');
       setPersonaDescription('');
       setCoreMemory('');
+      setAllowCoreMemoryUpdate(true);
       return;
     }
     const persona = personas.find(item => item.id === selectedPersonaId);
@@ -400,6 +405,7 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
     setPersonaName(persona.name);
     setPersonaDescription(persona.description || '');
     setCoreMemory(persona.core_memory || '');
+    setAllowCoreMemoryUpdate(persona.allow_core_memory_update === 1);
   }, [selectedPersonaId, personas]);
 
   // Load feature flags when restrictions tab opens
@@ -940,15 +946,15 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
       if (personaId === NEW_PERSONA_ID || personaId === null) {
         const created = await api.apiFetch<{ persona: PersonaInfo }>('/api/v1/memory/personas', {
           method: 'POST',
-          body: JSON.stringify({ name, description: personaDescription.trim(), core_memory: coreMemory }),
+          body: JSON.stringify({ name, description: personaDescription.trim(), core_memory: coreMemory, allow_core_memory_update: allowCoreMemoryUpdate }),
         });
         personaId = created.persona.id;
       } else {
         await api.apiFetch(`/api/v1/memory/personas/${personaId}`, {
           method: 'PATCH',
           body: JSON.stringify(isPrimary
-            ? { core_memory: coreMemory }
-            : { name, description: personaDescription.trim(), core_memory: coreMemory }),
+            ? { core_memory: coreMemory, allow_core_memory_update: allowCoreMemoryUpdate }
+            : { name, description: personaDescription.trim(), core_memory: coreMemory, allow_core_memory_update: allowCoreMemoryUpdate }),
         });
       }
       await api.apiFetch(`/api/v1/memory/personas/${personaId}/activate`, { method: 'POST' });
@@ -1337,6 +1343,12 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
                   rows={5}
                   maxLength={800}
                 />
+                <Checkbox
+                  checked={allowCoreMemoryUpdate}
+                  onChange={setAllowCoreMemoryUpdate}
+                  label="Автоматически обновлять горячую память"
+                  disabled={coreMemorySaving}
+                />
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
                   <div style={{ display: 'flex', gap: '8px' }}>
                     <button
@@ -1445,6 +1457,8 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
               </div>
             </div>
           )}
+
+          {section === 'memory' && <GlobalMemorySettings />}
 
           {section === 'connections' && (
             <div className={s.panel}>

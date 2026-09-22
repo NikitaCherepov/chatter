@@ -170,6 +170,7 @@
     "sections": {
       "browser": "Browser",
       "account": "Account",
+      "memory": "Memory",
       "connections": "Linked accounts",
       "prompt": "Prompt",
       "voice": "Voice",
@@ -462,6 +463,32 @@
     },
     "export": {
       "defaultTitle": "Chat"
+    },
+    "memory": {
+      "trigger": "Memory",
+      "triggerTitle": "Chat memory",
+      "headerTitle": "Chat memory",
+      "headerHint": "Settings apply instantly",
+      "persona": "Persona",
+      "modeLabel": "Use memory",
+      "mode": {
+        "off": "Disabled",
+        "general": "Shared only",
+        "chat": "This chat only",
+        "both": "Shared and this chat"
+      },
+      "writeTargetLabel": "Save to",
+      "writeTarget": {
+        "general": "Shared memory",
+        "chat": "This chat's memory"
+      },
+      "chatMemoryTitle": "This chat's memory",
+      "empty": "Nothing here yet",
+      "promptText": "Memory text",
+      "confirmDelete": "Delete this memory?",
+      "loadSettingsFailed": "Could not load memory settings",
+      "loadRecordsFailed": "Could not load memories",
+      "saveSettingsFailed": "Could not save memory settings"
     },
     "sidebar": {
       "chats": "Chats",

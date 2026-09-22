@@ -147,6 +147,7 @@
     "sections": {
       "browser": "浏览器",
       "account": "账户",
+      "memory": "记忆",
       "prompt": "提示",
       "voice": "语音",
       "macros": "宏",

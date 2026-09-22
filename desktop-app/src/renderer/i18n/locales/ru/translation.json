@@ -170,6 +170,7 @@
     "sections": {
       "browser": "Браузер",
       "account": "Аккаунт",
+      "memory": "Память",
       "prompt": "Промпт",
       "voice": "Голос",
       "macros": "Макросы",

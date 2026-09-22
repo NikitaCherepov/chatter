@@ -1329,6 +1329,7 @@ db.exec(`
     name TEXT NOT NULL,
     description TEXT NOT NULL DEFAULT '',
     core_memory TEXT NOT NULL DEFAULT '',
+    allow_core_memory_update INTEGER NOT NULL DEFAULT 1 CHECK (allow_core_memory_update IN (0, 1)),
     is_primary INTEGER NOT NULL DEFAULT 0 CHECK (is_primary IN (0, 1)),
     is_default INTEGER NOT NULL DEFAULT 0 CHECK (is_default IN (0, 1)),
     created_at INTEGER NOT NULL,
@@ -1430,6 +1431,7 @@ const ensureMemoryColumn = (table: string, column: string, sql: string) => {
 };
 ensureMemoryColumn('personas', 'description', "ALTER TABLE personas ADD COLUMN description TEXT NOT NULL DEFAULT ''");
 ensureMemoryColumn('personas', 'is_primary', 'ALTER TABLE personas ADD COLUMN is_primary INTEGER NOT NULL DEFAULT 0 CHECK (is_primary IN (0, 1))');
+ensureMemoryColumn('personas', 'allow_core_memory_update', 'ALTER TABLE personas ADD COLUMN allow_core_memory_update INTEGER NOT NULL DEFAULT 1 CHECK (allow_core_memory_update IN (0, 1))');
 ensureMemoryColumn('chat_memory_settings', 'persona_override_id', 'ALTER TABLE chat_memory_settings ADD COLUMN persona_override_id INTEGER');
 db.exec(`
   UPDATE personas

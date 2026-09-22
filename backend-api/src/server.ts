@@ -57,14 +57,19 @@ import {
   ensureMemoryDefaults,
   getChatMemorySettings,
   getPrimaryPersona,
+  listChatMemoryRecords,
+  listGeneralMemoryRecords,
   listMemoryRecords,
   listMemorySpaces,
   listPersonas,
   setActivePersona,
+  setDefaultGeneralMemorySpace,
   setPersonaCoreMemory,
   syncPrimaryPersonaName,
   updateChatMemorySettings,
   updatePersona,
+  requireChatMemoryRecord,
+  requireGeneralMemoryRecord,
 } from './services/memory-foundation.js';
 import { seedPlanLimitsIfEmpty, loadPlanLimitsFromDb, savePlanLimitsToDb, DEFAULT_PLAN_LIMITS, PLAN_IDS, type PlanLimits } from './services/plan-limits.js';
 import { refreshCoefficientCache, setCoefficient, setModelProvider, getModelOverride, getOverrideMap } from './services/token-quota.js';
@@ -1485,6 +1490,7 @@ app.post('/api/v1/memory/personas', (req: AuthedRequest, res: any) => {
       `${req.body?.name || ''}`,
       `${req.body?.description || ''}`,
       `${req.body?.core_memory || ''}`,
+      req.body?.allow_core_memory_update !== false,
     );
     return res.status(201).json({ persona });
   } catch (error: any) {
@@ -1498,6 +1504,9 @@ app.patch('/api/v1/memory/personas/:personaId', (req: AuthedRequest, res: any) =
       ...(typeof req.body?.name === 'string' ? { name: req.body.name } : {}),
       ...(typeof req.body?.description === 'string' ? { description: req.body.description } : {}),
       ...(typeof req.body?.core_memory === 'string' ? { core_memory: req.body.core_memory } : {}),
+      ...(typeof req.body?.allow_core_memory_update === 'boolean'
+        ? { allow_core_memory_update: req.body.allow_core_memory_update ? 1 : 0 }
+        : {}),
     });
     return res.json({ persona });
   } catch (error: any) {
@@ -1534,6 +1543,14 @@ app.post('/api/v1/memory/spaces', (req: AuthedRequest, res: any) => {
   }
 });
 
+app.post('/api/v1/memory/spaces/:spaceId/activate', (req: AuthedRequest, res: any) => {
+  try {
+    return res.json({ space: setDefaultGeneralMemorySpace(accountIdFromRequest(req), Number(req.params.spaceId)) });
+  } catch (error: any) {
+    return res.status(400).json({ error: error?.message || 'memory_space_activate_failed' });
+  }
+});
+
 app.get('/api/v1/chats/:chatId/memory-settings', (req: AuthedRequest, res: any) => {
   try {
     return res.json({ settings: getChatMemorySettings(accountIdFromRequest(req), Number(req.params.chatId)) });
@@ -1549,11 +1566,8 @@ app.patch('/api/v1/chats/:chatId/memory-settings', (req: AuthedRequest, res: any
       ...('persona_override_id' in body
         ? { persona_override_id: body.persona_override_id === null ? null : Number(body.persona_override_id) }
         : {}),
-      ...(Number.isSafeInteger(Number(body.general_space_id)) ? { general_space_id: Number(body.general_space_id) } : {}),
       ...(typeof body.memory_mode === 'string' ? { memory_mode: body.memory_mode } : {}),
       ...(typeof body.write_target === 'string' ? { write_target: body.write_target } : {}),
-      ...(typeof body.use_core_memory === 'boolean' ? { use_core_memory: body.use_core_memory ? 1 : 0 } : {}),
-      ...(typeof body.allow_core_memory_update === 'boolean' ? { allow_core_memory_update: body.allow_core_memory_update ? 1 : 0 } : {}),
     });
     return res.json({ settings });
   } catch (error: any) {
@@ -1564,11 +1578,47 @@ app.patch('/api/v1/chats/:chatId/memory-settings', (req: AuthedRequest, res: any
 app.get('/api/v1/memory/records', (req: AuthedRequest, res: any) => {
   const rawSpaceId = Number(req.query?.space_id);
   const spaceId = Number.isSafeInteger(rawSpaceId) && rawSpaceId > 0 ? rawSpaceId : undefined;
-  return res.json({ records: listMemoryRecords(accountIdFromRequest(req), spaceId) });
+  try {
+    return res.json({ records: listGeneralMemoryRecords(accountIdFromRequest(req), spaceId) });
+  } catch (error: any) {
+    return res.status(400).json({ error: error?.message || 'memory_records_load_failed' });
+  }
+});
+
+app.get('/api/v1/chats/:chatId/memory-records', (req: AuthedRequest, res: any) => {
+  try {
+    return res.json({ records: listChatMemoryRecords(accountIdFromRequest(req), Number(req.params.chatId)) });
+  } catch (error: any) {
+    return res.status(error?.message === 'chat_not_found' ? 404 : 400).json({ error: error?.message || 'memory_records_load_failed' });
+  }
+});
+
+app.patch('/api/v1/chats/:chatId/memory-records/:recordId', async (req: AuthedRequest, res: any) => {
+  try {
+    requireChatMemoryRecord(accountIdFromRequest(req), Number(req.params.chatId), req.params.recordId);
+    const record = await VectorMemoryService.updateRecord(
+      accountIdFromRequest(req), req.params.recordId,
+      typeof req.body?.text === 'string' ? req.body.text : '',
+      typeof req.body?.source === 'string' ? req.body.source : undefined,
+    );
+    return res.json({ record });
+  } catch (error: any) {
+    return res.status(error?.message === 'memory_record_not_found' ? 404 : 400).json({ error: error?.message || 'memory_record_update_failed' });
+  }
+});
+
+app.delete('/api/v1/chats/:chatId/memory-records/:recordId', async (req: AuthedRequest, res: any) => {
+  try {
+    requireChatMemoryRecord(accountIdFromRequest(req), Number(req.params.chatId), req.params.recordId);
+    return res.json(await VectorMemoryService.deleteRecord(accountIdFromRequest(req), req.params.recordId));
+  } catch (error: any) {
+    return res.status(error?.message === 'memory_record_not_found' ? 404 : 400).json({ error: error?.message || 'memory_record_delete_failed' });
+  }
 });
 
 app.patch('/api/v1/memory/records/:recordId', async (req: AuthedRequest, res: any) => {
   try {
+    requireGeneralMemoryRecord(accountIdFromRequest(req), req.params.recordId);
     const record = await VectorMemoryService.updateRecord(
       accountIdFromRequest(req),
       req.params.recordId,
@@ -1583,6 +1633,7 @@ app.patch('/api/v1/memory/records/:recordId', async (req: AuthedRequest, res: an
 
 app.delete('/api/v1/memory/records/:recordId', async (req: AuthedRequest, res: any) => {
   try {
+    requireGeneralMemoryRecord(accountIdFromRequest(req), req.params.recordId);
     return res.json(await VectorMemoryService.deleteRecord(accountIdFromRequest(req), req.params.recordId));
   } catch (error: any) {
     return res.status(error?.message === 'memory_record_not_found' ? 404 : 400).json({ error: error?.message || 'memory_record_delete_failed' });

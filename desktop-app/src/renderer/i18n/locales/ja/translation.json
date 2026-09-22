@@ -147,6 +147,7 @@
     "sections": {
       "browser": "ブラウザ",
       "account": "アカウント",
+      "memory": "メモリ",
       "prompt": "プロンプト",
       "voice": "音声",
       "macros": "マクロ",

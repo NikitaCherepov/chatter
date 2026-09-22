@@ -468,6 +468,7 @@
     "sections": {
       "browser": "Tarayıcı",
       "account": "Hesap",
+      "memory": "Bellek",
       "connections": "Bağlı hesaplar",
       "prompt": "İstem",
       "voice": "Ses",
