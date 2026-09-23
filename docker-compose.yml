@@ -42,7 +42,10 @@ services:
       retries: 5
 
   qdrant:
-    image: qdrant/qdrant:v1.19.0
+    build:
+      context: ./qdrant
+      dockerfile: Dockerfile
+    image: "${CHATTER_IMAGE_PREFIX:-chatter}-qdrant:${CHATTER_IMAGE_TAG:-local}"
     restart: unless-stopped
     logging: *default-logging
     volumes:

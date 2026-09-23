@@ -771,9 +771,6 @@ function saveSettings(input) {
     backendEnv.TIMEWEB_EMBED_API_KEY,
     'Embedding API key'
   );
-  if (backendEnv.PINECONE_API_KEY) {
-    if (!backendEnv.TIMEWEB_EMBED_API_KEY) throw new Error('Embedding API key is required');
-  }
   backendEnv.TIMEWEB_EMBED_MODEL = validateEnvPart(
     pineconeInput.embeddingModel ?? backendEnv.TIMEWEB_EMBED_MODEL ?? backendEnv.VECTOR_EMBED_MODEL ?? 'text-embedding-3-small',
     'Embedding model'
@@ -1274,12 +1271,6 @@ async function getServerUpdateInfoUnlocked({ pull = false, forcePull = false } =
       selection = await updateServiceSelection();
       const profileArgs = selection.profiles.flatMap(profile => ['--profile', profile]);
       await runDocker(composeArgs(...profileArgs, 'pull', ...selection.releaseServices), 60 * 60 * 1000);
-      if (selection.externalServices.length) {
-        await runDocker(
-          composeArgs(...profileArgs, 'pull', ...selection.externalServices),
-          60 * 60 * 1000,
-        );
-      }
       lastPullTime = now;
     }
     result.checkedAt = new Date().toISOString();
@@ -1389,9 +1380,36 @@ printf '{"status":"complete","targetHash":"%s","message":"server_update_complete
   ], 60000);
 }
 
+async function ensureSelectedImagesAvailable(selection) {
+  const missingServices = [];
+  for (const service of selection.services) {
+    const image = selection.images[service];
+    if (!image) throw new Error(`compose_image_missing:${service}`);
+    try {
+      await runDocker(['image', 'inspect', image], 30000, 0);
+    } catch {
+      missingServices.push(service);
+    }
+  }
+  if (!missingServices.length) return;
+
+  const profileArgs = selection.profiles.flatMap(profile => ['--profile', profile]);
+  await runDocker(
+    composeArgs(...profileArgs, 'pull', ...missingServices),
+    60 * 60 * 1000,
+  );
+  for (const service of missingServices) {
+    await runDocker(['image', 'inspect', selection.images[service]], 30000, 0);
+  }
+}
+
 async function performServerUpdate(snapshot) {
   const selection = await updateServiceSelection();
   try {
+    // Never stop a working installation until every image required by the
+    // target Compose file is present locally. This also covers a release that
+    // introduces a previously unseen service.
+    await ensureSelectedImagesAvailable(selection);
     writeUpdateState({ status: 'backup', targetHash: snapshot.latestHash, message: 'creating_backup' });
     // Stop the data services BEFORE taking the backup. The backend keeps
     // chatter.db open; running `sqlite3 .backup` against a live database on
