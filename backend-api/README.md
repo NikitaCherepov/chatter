@@ -701,6 +701,9 @@ Created by the model via `spawn_subagent` without registration in `REGISTRY`. Pa
 ### Vector Memory (JWT, feature-flag)
 
 - Requires `BACKEND_VECTOR_MEMORY_API_ENABLED=1`.
+- The active vector engine (`qdrant` or `pinecone`) is stored in `system_settings` under `vector_memory_settings`. Fresh installations without Pinecone credentials default to the bundled Qdrant service; existing Pinecone installations stay on Pinecone until the verified migration is run.
+- SQLite remains the canonical catalog for memory text, ownership, personas, and spaces. Qdrant or Pinecone stores the vector index selected for search and new writes.
+- `POST /internal/admin/vector-memory/migrate-to-qdrant` copies Pinecone vectors without regenerating embeddings, verifies every Qdrant point, and switches engines only after success. Pinecone is not cleared.
 - `POST /api/v1/vector-memory/chunks` → input `{ text, source? }`, output: created chunk.
 - `POST /api/v1/vector-memory/search` → input `{ query, top_k? }`, output: found chunks.
 - `DELETE /api/v1/vector-memory/chunks/:id` → output `{ ok: true, ... }`.

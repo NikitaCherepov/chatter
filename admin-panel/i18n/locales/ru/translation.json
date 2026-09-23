@@ -37,7 +37,7 @@
       },
       "pinecone": {
         "title": "Векторная память",
-        "description": "Pinecone — долговременная память и контекст"
+        "description": "Qdrant или Pinecone — долговременная память и контекст"
       },
       "notes": {
         "title": "Webapp Notes",
@@ -255,8 +255,8 @@
     },
     "items": {
       "pinecone": {
-        "name": "Pinecone",
-        "description": "Векторная память",
+        "name": "Векторная память",
+        "description": "Qdrant или Pinecone",
         "group": "Память"
       },
       "web-search": {
@@ -286,25 +286,24 @@
       "placeholderExisting": "Оставь пустым, чтобы не менять"
     },
     "pinecone": {
-      "pageDescription": "Векторная память Chatter. Pinecone хранит данные, а embedding-модель превращает текст в векторы.",
+      "pageDescription": "Векторная память Chatter. Qdrant работает локально, Pinecone доступен как облачный вариант, а embedding-модель превращает текст в векторы.",
       "sectionTitle": "Pinecone",
       "sectionIntro": "Создай индекс в Pinecone и укажи его имя вместе с API-ключом.",
       "apiKeyLabel": "Pinecone API-ключ",
       "indexNameLabel": "Название индекса",
       "storage": {
-        "title": "Хранилище векторной памяти",
-        "intro": "Выбор влияет на поиск и новые записи. Локальная база активируется только после проверенной миграции.",
-        "label": "Активное хранилище",
+        "title": "Векторный движок",
+        "intro": "Выбор влияет на векторный поиск и новые записи. Qdrant устанавливается вместе с Chatter и активируется только после проверенной миграции.",
+        "label": "Активный векторный движок",
         "pineconeHint": "Удалённый векторный индекс",
-        "sqlite": "Локальная база",
-        "sqliteHint": "Векторы хранятся на сервере Chatter",
+        "qdrantHint": "Локальный векторный индекс внутри Chatter",
         "migrateAction": "Перенести и переключить",
         "switchAction": "Переключить хранилище",
-        "migrateTitle": "Перенести память в локальную базу?",
+        "migrateTitle": "Перенести память в Qdrant?",
         "switchTitle": "Переключиться на Pinecone?",
         "migrateText": "Все векторы и metadata будут скопированы из Pinecone без повторной генерации embeddings.",
-        "backupText": "Pinecone не будет очищен. Локальная база станет активной только после проверки переноса.",
-        "switchText": "Будет активирован Pinecone. Данные из локальной базы автоматически обратно не переносятся.",
+        "backupText": "Pinecone не будет очищен. Qdrant станет активным только после проверки каждого перенесённого вектора.",
+        "switchText": "Будет активирован Pinecone. Данные из Qdrant автоматически обратно не переносятся.",
         "cancel": "Отмена",
         "migrating": "Перенос…",
         "switched": "Хранилище переключено.",

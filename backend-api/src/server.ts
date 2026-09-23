@@ -50,7 +50,7 @@ import { runVoiceTurn } from './services/voice.js';
 import { runPhotoAnalyzeTurn } from './services/photo.js';
 import { migratePendingAccountNamespaces, VectorMemoryService } from './services/vector-memory.js';
 import { getVectorMemorySettings, updateVectorMemorySettings } from './services/vector-memory-settings.js';
-import { migrateVectorMemoryToSqlite } from './services/vector-memory-migration.js';
+import { migrateVectorMemoryToQdrant } from './services/vector-memory-migration.js';
 import {
   createGeneralMemorySpace,
   createPersona,
@@ -5031,15 +5031,18 @@ app.get('/internal/admin/vector-memory/settings', internalAuth, (_req, res) => {
 
 app.put('/internal/admin/vector-memory/settings', internalAuth, (req, res) => {
   try {
+    if (getVectorMemorySettings().storage === 'pinecone' && req.body?.storage === 'qdrant') {
+      throw new Error('pinecone_to_qdrant_migration_required');
+    }
     return res.json(updateVectorMemorySettings(req.body));
   } catch (err: any) {
     return res.status(400).json({ error: err?.message || 'bad_vector_memory_settings' });
   }
 });
 
-app.post('/internal/admin/vector-memory/migrate-to-sqlite', internalAuth, async (_req, res) => {
+app.post('/internal/admin/vector-memory/migrate-to-qdrant', internalAuth, async (_req, res) => {
   try {
-    return res.json(await migrateVectorMemoryToSqlite());
+    return res.json(await migrateVectorMemoryToQdrant());
   } catch (err: any) {
     return res.status(400).json({ error: err?.message || 'vector_memory_migration_failed' });
   }

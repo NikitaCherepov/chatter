@@ -86,7 +86,7 @@ export function OverviewPage({
   const webSearchReady = settings.webSearch.enabled;
   const webReaderReady = settings.webReader.enabled
     && (settings.webReader.desktopEnabled || (settings.webReader.browserlessEnabled && settings.webReader.hasToken));
-  const pineconeReady = settings.pinecone.hasApiKey;
+  const pineconeReady = settings.pinecone.hasEmbeddingApiKey;
   const notesReady =
     settings.notesEnabled && settings.hasTelegramToken && Boolean(settings.notesUrl);
 

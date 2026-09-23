@@ -1394,17 +1394,6 @@ db.exec(`
     updated_at INTEGER NOT NULL
   );
 
-  CREATE TABLE IF NOT EXISTS memory_vectors (
-    chunk_id TEXT PRIMARY KEY,
-    user_id INTEGER NOT NULL,
-    memory_space_id INTEGER NOT NULL,
-    embedding_model TEXT NOT NULL,
-    dimension INTEGER NOT NULL,
-    vector BLOB NOT NULL,
-    created_at INTEGER NOT NULL,
-    updated_at INTEGER NOT NULL
-  );
-
   CREATE UNIQUE INDEX IF NOT EXISTS idx_personas_one_default
     ON personas(user_id) WHERE is_default = 1;
   CREATE INDEX IF NOT EXISTS idx_personas_user
@@ -1421,9 +1410,11 @@ db.exec(`
     ON memory_records(user_id, memory_space_id, deleted_at, created_at DESC);
   CREATE INDEX IF NOT EXISTS idx_memory_chunks_record
     ON memory_chunks(user_id, memory_record_id, chunk_index);
-  CREATE INDEX IF NOT EXISTS idx_memory_vectors_scope
-    ON memory_vectors(user_id, memory_space_id, embedding_model);
 `);
+
+// The short-lived SQLite vector backend was replaced by bundled Qdrant.
+// Text, chunks and ownership remain in the canonical memory tables above.
+db.exec('DROP TABLE IF EXISTS memory_vectors');
 
 const ensureMemoryColumn = (table: string, column: string, sql: string) => {
   const columns = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;

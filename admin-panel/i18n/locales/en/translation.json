@@ -37,7 +37,7 @@
       },
       "pinecone": {
         "title": "Vector Memory",
-        "description": "Pinecone — long-term memory and context"
+        "description": "Qdrant or Pinecone — long-term memory and context"
       },
       "notes": {
         "title": "Webapp Notes",
@@ -255,8 +255,8 @@
     },
     "items": {
       "pinecone": {
-        "name": "Pinecone",
-        "description": "Vector memory",
+        "name": "Vector memory",
+        "description": "Qdrant or Pinecone",
         "group": "Memory"
       },
       "web-search": {
@@ -286,25 +286,24 @@
       "placeholderExisting": "Leave empty to keep unchanged"
     },
     "pinecone": {
-      "pageDescription": "Chatter vector memory. Pinecone stores data, and the embedding model turns text into vectors.",
+      "pageDescription": "Chatter vector memory. Qdrant is local, Pinecone is optional cloud storage, and the embedding model turns text into vectors.",
       "sectionTitle": "Pinecone",
       "sectionIntro": "Create an index in Pinecone and provide its name along with the API key.",
       "apiKeyLabel": "Pinecone API key",
       "indexNameLabel": "Index name",
       "storage": {
-        "title": "Vector storage",
-        "intro": "This selection controls search and new writes. Local storage is activated only after a verified migration.",
-        "label": "Active storage",
+        "title": "Vector engine",
+        "intro": "This selection controls vector search and new writes. Qdrant is bundled with Chatter and activates only after a verified migration.",
+        "label": "Active vector engine",
         "pineconeHint": "Remote vector index",
-        "sqlite": "Local database",
-        "sqliteHint": "Vectors are stored on the Chatter server",
+        "qdrantHint": "Local vector index bundled with Chatter",
         "migrateAction": "Migrate and switch",
         "switchAction": "Switch storage",
-        "migrateTitle": "Migrate memory to the local database?",
+        "migrateTitle": "Migrate memory to Qdrant?",
         "switchTitle": "Switch to Pinecone?",
         "migrateText": "All vectors and metadata will be copied from Pinecone without regenerating embeddings.",
-        "backupText": "Pinecone will not be cleared. The local database becomes active only after verification.",
-        "switchText": "Pinecone will become active. Local data is not migrated back automatically.",
+        "backupText": "Pinecone will not be cleared. Qdrant becomes active only after every copied vector is verified.",
+        "switchText": "Pinecone will become active. Qdrant data is not migrated back automatically.",
         "cancel": "Cancel",
         "migrating": "Migrating…",
         "switched": "Storage switched.",

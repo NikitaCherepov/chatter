@@ -25,15 +25,15 @@ export function PineconePage({
   onSave: (event: FormEvent) => void;
 }) {
   const { t } = useTranslation();
-  const [activeStorage, setActiveStorage] = useState<'pinecone' | 'sqlite'>('pinecone');
-  const [selectedStorage, setSelectedStorage] = useState<'pinecone' | 'sqlite'>('pinecone');
+  const [activeStorage, setActiveStorage] = useState<'pinecone' | 'qdrant'>('pinecone');
+  const [selectedStorage, setSelectedStorage] = useState<'pinecone' | 'qdrant'>('pinecone');
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [migrating, setMigrating] = useState(false);
   const [migrationState, setMigrationState] = useState('');
   const [migrationOk, setMigrationOk] = useState(false);
 
   useEffect(() => {
-    void api<{ storage: 'pinecone' | 'sqlite' }>('/api/vector-memory/settings')
+    void api<{ storage: 'pinecone' | 'qdrant' }>('/api/vector-memory/settings')
       .then(result => { setActiveStorage(result.storage); setSelectedStorage(result.storage); })
       .catch(error => { setMigrationOk(false); setMigrationState(error instanceof Error ? error.message : String(error)); });
   }, []);
@@ -43,8 +43,8 @@ export function PineconePage({
     setMigrationState('');
     setMigrationOk(false);
     try {
-      if (activeStorage === 'pinecone' && selectedStorage === 'sqlite') {
-        const result = await api<{ copied_vectors: number; records: number }>('/api/vector-memory/migrate-to-sqlite', { method: 'POST' });
+      if (activeStorage === 'pinecone' && selectedStorage === 'qdrant') {
+        const result = await api<{ copied_vectors: number; records: number }>('/api/vector-memory/migrate-to-qdrant', { method: 'POST' });
         setMigrationState(t('integrations.pinecone.storage.result', { vectors: result.copied_vectors, records: result.records }));
       } else {
         await api('/api/vector-memory/settings', { method: 'PUT', body: JSON.stringify({ storage: selectedStorage }) });
@@ -62,7 +62,7 @@ export function PineconePage({
   };
   return (
     <IntegrationDetailPage
-      title="Pinecone"
+      title={t('integrations.items.pinecone.name')}
       description={t('integrations.pinecone.pageDescription')}
       saving={saving}
       saveState={saveState}
@@ -78,16 +78,16 @@ export function PineconePage({
           <FormField label={t('integrations.pinecone.storage.label')}>
             <Select
               value={selectedStorage}
-              onChange={value => setSelectedStorage(value as 'pinecone' | 'sqlite')}
+              onChange={value => setSelectedStorage(value as 'pinecone' | 'qdrant')}
               options={[
                 { value: 'pinecone', label: 'Pinecone', hint: t('integrations.pinecone.storage.pineconeHint') },
-                { value: 'sqlite', label: t('integrations.pinecone.storage.sqlite'), hint: t('integrations.pinecone.storage.sqliteHint') },
+                { value: 'qdrant', label: 'Qdrant', hint: t('integrations.pinecone.storage.qdrantHint') },
               ]}
             />
           </FormField>
           {selectedStorage !== activeStorage && (
             <button type="button" className={styles.checkButton} onClick={() => setConfirmOpen(true)}>
-              {selectedStorage === 'sqlite' ? t('integrations.pinecone.storage.migrateAction') : t('integrations.pinecone.storage.switchAction')}
+              {selectedStorage === 'qdrant' ? t('integrations.pinecone.storage.migrateAction') : t('integrations.pinecone.storage.switchAction')}
             </button>
           )}
           {migrationState && <div className={migrationOk ? styles.checkSuccess : styles.checkError}>{migrationState}</div>}
@@ -104,14 +104,14 @@ export function PineconePage({
             value={settings.apiKey}
             configured={settings.hasApiKey}
             onChange={(apiKey) => onChange({ apiKey })}
-            required
+            required={selectedStorage === 'pinecone'}
           />
           <FormField label={t('integrations.pinecone.indexNameLabel')}>
             <input
               value={settings.indexName}
               onChange={(event) => onChange({ indexName: event.target.value })}
               placeholder="bot-memory"
-              required
+              required={selectedStorage === 'pinecone'}
             />
           </FormField>
         </div>
@@ -150,14 +150,14 @@ export function PineconePage({
       </section>
       {confirmOpen && (
         <ConfirmModal
-          title={selectedStorage === 'sqlite' ? t('integrations.pinecone.storage.migrateTitle') : t('integrations.pinecone.storage.switchTitle')}
+          title={selectedStorage === 'qdrant' ? t('integrations.pinecone.storage.migrateTitle') : t('integrations.pinecone.storage.switchTitle')}
           onClose={() => { if (!migrating) setConfirmOpen(false); }}
           actions={[
             { label: t('integrations.pinecone.storage.cancel'), onClick: () => setConfirmOpen(false), disabled: migrating },
-            { label: migrating ? t('integrations.pinecone.storage.migrating') : selectedStorage === 'sqlite' ? t('integrations.pinecone.storage.migrateAction') : t('integrations.pinecone.storage.switchAction'), onClick: applyStorage, variant: 'primary', disabled: migrating },
+            { label: migrating ? t('integrations.pinecone.storage.migrating') : selectedStorage === 'qdrant' ? t('integrations.pinecone.storage.migrateAction') : t('integrations.pinecone.storage.switchAction'), onClick: applyStorage, variant: 'primary', disabled: migrating },
           ]}
         >
-          {selectedStorage === 'sqlite' ? (
+          {selectedStorage === 'qdrant' ? (
             <><p>{t('integrations.pinecone.storage.migrateText')}</p><p>{t('integrations.pinecone.storage.backupText')}</p></>
           ) : (
             <p>{t('integrations.pinecone.storage.switchText')}</p>

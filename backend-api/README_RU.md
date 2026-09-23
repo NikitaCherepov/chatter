@@ -617,7 +617,9 @@ services/subagents/
 ### Vector Memory (JWT, feature-flag)
 
 - Нужно `BACKEND_VECTOR_MEMORY_API_ENABLED=1`.
-- Режим хранения векторов (`pinecone` или `sqlite`) хранится в таблице `system_settings` под ключом `vector_memory_settings` и меняется через `GET/PUT /internal/admin/vector-memory/settings`. По умолчанию используется Pinecone. Модель эмбеддингов в обоих режимах задаётся через `TIMEWEB_EMBED_*`.
+- Активный векторный движок (`qdrant` или `pinecone`) хранится в таблице `system_settings` под ключом `vector_memory_settings`. Новые установки без настроенного Pinecone используют встроенный Qdrant; существующие установки остаются на Pinecone до подтверждённой миграции.
+- SQLite остаётся каноническим каталогом текста воспоминаний, владельцев, персон и пространств. В Qdrant или Pinecone хранится выбранный векторный индекс для поиска и новых записей.
+- `POST /internal/admin/vector-memory/migrate-to-qdrant` переносит готовые векторы из Pinecone без повторной генерации embeddings, проверяет каждую точку и переключает движок только после успеха. Pinecone не очищается.
 - Области памяти и настройки чата всегда изолированы парой `user_id + chat_id`; участники одной комнаты не разделяют личную память.
 - `POST /api/v1/vector-memory/chunks` -> ввод `{ text, source? }`, вывод: созданный chunk.
 - `POST /api/v1/vector-memory/search` -> ввод `{ query, top_k? }`, вывод: найденные chunk.

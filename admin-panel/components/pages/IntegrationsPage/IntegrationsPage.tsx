@@ -119,7 +119,7 @@ export function IntegrationsPage({
   }
 
   const configured: Record<IntegrationId, boolean> = {
-    pinecone: settings.pinecone.hasApiKey,
+    pinecone: settings.pinecone.hasEmbeddingApiKey,
     'web-search': settings.webSearch.enabled,
     'web-reader': settings.webReader.enabled
       && (settings.webReader.desktopEnabled || (settings.webReader.browserlessEnabled && settings.webReader.hasToken)),

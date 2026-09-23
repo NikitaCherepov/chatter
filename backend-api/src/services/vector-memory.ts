@@ -4,6 +4,12 @@ import { db } from '../db.js';
 import { resolveAccountId } from './accounts.js';
 import { getVectorMemoryStorage } from './vector-memory-settings.js';
 import {
+  deleteQdrantChunks,
+  deleteQdrantUser,
+  queryQdrantVectors,
+  upsertQdrantVectors,
+} from './qdrant-memory.js';
+import {
   createMemoryRecord,
   getOwnedMemoryRecord,
   getRecordChunks,
@@ -137,33 +143,6 @@ const getEmbedding = async (text: string): Promise<number[]> => {
   return embedding as number[];
 };
 
-const encodeVector = (values: number[]) => {
-  const vector = new Float32Array(values);
-  return Buffer.from(vector.buffer, vector.byteOffset, vector.byteLength);
-};
-
-const decodeVector = (value: Buffer) => {
-  const copy = Buffer.from(value);
-  return new Float32Array(copy.buffer, copy.byteOffset, Math.floor(copy.byteLength / Float32Array.BYTES_PER_ELEMENT));
-};
-
-const cosineSimilarity = (left: number[], rightBuffer: Buffer) => {
-  const right = decodeVector(rightBuffer);
-  if (left.length !== right.length || left.length === 0) return -1;
-  let dot = 0;
-  let leftNorm = 0;
-  let rightNorm = 0;
-  for (let index = 0; index < left.length; index += 1) {
-    const leftValue = Number(left[index] || 0);
-    const rightValue = Number(right[index] || 0);
-    dot += leftValue * rightValue;
-    leftNorm += leftValue * leftValue;
-    rightNorm += rightValue * rightValue;
-  }
-  if (!leftNorm || !rightNorm) return -1;
-  return dot / (Math.sqrt(leftNorm) * Math.sqrt(rightNorm));
-};
-
 const namespacesForSpace = (userId: number, space: MemorySpace) => (
   space.is_default === 1
     ? getReadableNamespaces(userId)
@@ -211,7 +190,7 @@ export class VectorMemoryService {
   static async listRecords(userId: number, space: MemorySpace) {
     const accountId = resolveAccountId(Math.floor(userId));
     if (space.user_id !== accountId) throw new Error('memory_space_not_found');
-    if (getVectorMemoryStorage() === 'sqlite') return listMemoryRecords(accountId, space.id);
+    if (getVectorMemoryStorage() === 'qdrant') return listMemoryRecords(accountId, space.id);
 
     const groups = new Map<string, Array<{ id: string; text: string; source: string; timestamp: number; index: number }>>();
     const seenChunks = new Set<string>();
@@ -304,16 +283,8 @@ export class VectorMemoryService {
         };
       });
 
-      if (getVectorMemoryStorage() === 'sqlite') {
-        const insertVector = db.prepare(`
-          INSERT INTO memory_vectors (
-            chunk_id, user_id, memory_space_id, embedding_model, dimension, vector, created_at, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        `);
-        db.transaction(() => records.forEach(record => insertVector.run(
-          record.id, resolveAccountId(Math.floor(userId)), space.id, TIMEWEB_EMBED_MODEL,
-          record.values.length, encodeVector(record.values), now, now,
-        )))();
+      if (getVectorMemoryStorage() === 'qdrant') {
+        await upsertQdrantVectors(resolveAccountId(Math.floor(userId)), space, TIMEWEB_EMBED_MODEL, records);
       } else {
         await getPineconeIndex().namespace(namespace).upsert(records as any);
       }
@@ -333,9 +304,12 @@ export class VectorMemoryService {
           })),
         });
       } catch (error) {
-        if (getVectorMemoryStorage() === 'sqlite') {
-          db.prepare('DELETE FROM memory_vectors WHERE user_id = ? AND memory_space_id = ? AND chunk_id LIKE ?')
-            .run(resolveAccountId(Math.floor(userId)), space.id, `${baseId}_chunk_%`);
+        if (getVectorMemoryStorage() === 'qdrant') {
+          await deleteQdrantChunks(
+            resolveAccountId(Math.floor(userId)),
+            space.id,
+            records.map(record => record.id),
+          );
         } else {
           await deletePineconeResource(() => getPineconeIndex().namespace(namespace).deleteMany(records.map(record => record.id)));
         }
@@ -395,24 +369,28 @@ export class VectorMemoryService {
       const queryVector = await getEmbedding(safeQuery);
       const matchesById = new Map<string, any>();
 
-      if (getVectorMemoryStorage() === 'sqlite') {
-        const ids = spaces.map(space => space.id);
-        const placeholders = ids.map(() => '?').join(', ');
-        const rows = db.prepare(`
-          SELECT v.chunk_id AS id, v.vector, c.text, r.source, r.created_at AS timestamp
-          FROM memory_vectors v
-          JOIN memory_chunks c ON c.id = v.chunk_id AND c.user_id = v.user_id
-          JOIN memory_records r ON r.id = c.memory_record_id AND r.user_id = v.user_id
-          WHERE v.user_id = ? AND v.memory_space_id IN (${placeholders})
-            AND v.embedding_model = ? AND r.deleted_at IS NULL
-        `).all(resolveAccountId(Math.floor(userId)), ...ids, TIMEWEB_EMBED_MODEL) as Array<{
-          id: string; vector: Buffer; text: string; source: string; timestamp: number;
-        }>;
-        rows.forEach(row => matchesById.set(row.id, {
-          id: row.id,
-          score: cosineSimilarity(queryVector, row.vector),
-          metadata: { text: row.text, source: row.source, timestamp: row.timestamp },
-        }));
+      if (getVectorMemoryStorage() === 'qdrant') {
+        const points = await queryQdrantVectors(
+          resolveAccountId(Math.floor(userId)),
+          spaces,
+          TIMEWEB_EMBED_MODEL,
+          queryVector,
+          safeTopK,
+        );
+        points.forEach(point => {
+          const payload = point.payload as Record<string, unknown> | null | undefined;
+          const id = `${payload?.chunk_id || point.id || ''}`;
+          if (!id) return;
+          matchesById.set(id, {
+            id,
+            score: Number(point.score || 0),
+            metadata: {
+              text: `${payload?.text || ''}`,
+              source: `${payload?.source || ''}`,
+              timestamp: Number(payload?.timestamp || 0),
+            },
+          });
+        });
       } else {
         const index = getPineconeIndex();
         const readableNamespaces = [...new Set(spaces.flatMap(space => namespacesForSpace(userId, space)))];
@@ -500,12 +478,8 @@ export class VectorMemoryService {
         const space = db.prepare('SELECT * FROM memory_spaces WHERE id = ? AND user_id = ?')
           .get(record.memory_space_id, accountId) as MemorySpace | undefined;
         if (!space) throw new Error('chunk_not_found');
-        if (getVectorMemoryStorage() === 'sqlite') {
-          db.prepare(`
-            DELETE FROM memory_vectors
-            WHERE user_id = ? AND memory_space_id = ?
-              AND chunk_id IN (SELECT id FROM memory_chunks WHERE memory_record_id = ? AND user_id = ?)
-          `).run(accountId, space.id, record.id, accountId);
+        if (getVectorMemoryStorage() === 'qdrant') {
+          await deleteQdrantChunks(accountId, space.id, chunks.map(chunk => chunk.id));
         } else {
           await deletePineconeResource(() =>
             getPineconeIndex().namespace(space.namespace_key).deleteMany(chunks.map(chunk => chunk.id))
@@ -523,7 +497,7 @@ export class VectorMemoryService {
           namespaces_deleted: [space.namespace_key],
         };
       }
-      if (getVectorMemoryStorage() === 'sqlite') throw new Error('chunk_not_found');
+      if (getVectorMemoryStorage() === 'qdrant') throw new Error('chunk_not_found');
 
       const namespace = canonicalNamespace(userId);
       const readableNamespaces = getReadableNamespaces(userId);
@@ -599,9 +573,8 @@ export class VectorMemoryService {
     const space = db.prepare('SELECT * FROM memory_spaces WHERE id = ? AND user_id = ?')
       .get(record.memory_space_id, accountId) as MemorySpace | undefined;
     if (!space) throw new Error('memory_space_not_found');
-    if (getVectorMemoryStorage() === 'sqlite') {
-      db.prepare('DELETE FROM memory_vectors WHERE user_id = ? AND memory_space_id = ? AND chunk_id IN (SELECT id FROM memory_chunks WHERE memory_record_id = ? AND user_id = ?)')
-        .run(accountId, space.id, record.id, accountId);
+    if (getVectorMemoryStorage() === 'qdrant') {
+      await deleteQdrantChunks(accountId, space.id, chunks.map(chunk => chunk.id));
     } else if (chunks.length) {
       await deletePineconeResource(() =>
         getPineconeIndex().namespace(space.namespace_key).deleteMany(chunks.map(chunk => chunk.id))
@@ -640,19 +613,9 @@ export class VectorMemoryService {
       },
     }));
     if (vectors.some(vector => !vector.values.length)) throw new Error('embedding_empty');
-    if (getVectorMemoryStorage() === 'sqlite') {
-      db.transaction(() => {
-        db.prepare('DELETE FROM memory_vectors WHERE user_id = ? AND memory_space_id = ? AND chunk_id IN (SELECT id FROM memory_chunks WHERE memory_record_id = ? AND user_id = ?)')
-          .run(accountId, space.id, record.id, accountId);
-        const insert = db.prepare(`
-          INSERT INTO memory_vectors (chunk_id, user_id, memory_space_id, embedding_model, dimension, vector, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        `);
-        vectors.forEach(vector => insert.run(
-          vector.id, accountId, space.id, TIMEWEB_EMBED_MODEL, vector.values.length,
-          encodeVector(vector.values), now, now,
-        ));
-      })();
+    if (getVectorMemoryStorage() === 'qdrant') {
+      await deleteQdrantChunks(accountId, space.id, oldChunks.map(chunk => chunk.id));
+      await upsertQdrantVectors(accountId, space, TIMEWEB_EMBED_MODEL, vectors);
     } else {
       if (oldChunks.length) {
         await deletePineconeResource(() =>
@@ -679,6 +642,10 @@ export class VectorMemoryService {
   static async deleteAll(userId: number) {
     try {
       const namespace = canonicalNamespace(userId);
+      if (getVectorMemoryStorage() === 'qdrant') {
+        await deleteQdrantUser(resolveAccountId(Math.floor(userId)));
+        return { ok: true, namespace, deleted_all: true };
+      }
       const readableNamespaces = getReadableNamespaces(userId);
       const index = getPineconeIndex();
       await Promise.all(readableNamespaces.map(readableNamespace =>
@@ -769,6 +736,7 @@ const migrateNamespace = async (migration: NamespaceMigration) => {
 };
 
 export const migratePendingAccountNamespaces = async () => {
+  if (getVectorMemoryStorage() !== 'pinecone') return { migrated: 0, failed: 0 };
   if (!PINECONE_API_KEY || !PINECONE_INDEX_NAME) return { migrated: 0, failed: 0 };
 
   const migrations = db.prepare(`

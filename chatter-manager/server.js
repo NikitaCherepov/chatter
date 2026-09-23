@@ -771,8 +771,7 @@ function saveSettings(input) {
     backendEnv.TIMEWEB_EMBED_API_KEY,
     'Embedding API key'
   );
-  if (backendEnv.PINECONE_API_KEY || backendEnv.TIMEWEB_EMBED_API_KEY) {
-    if (!backendEnv.PINECONE_API_KEY) throw new Error('Pinecone API key is required');
+  if (backendEnv.PINECONE_API_KEY) {
     if (!backendEnv.TIMEWEB_EMBED_API_KEY) throw new Error('Embedding API key is required');
   }
   backendEnv.TIMEWEB_EMBED_MODEL = validateEnvPart(
@@ -1275,6 +1274,12 @@ async function getServerUpdateInfoUnlocked({ pull = false, forcePull = false } =
       selection = await updateServiceSelection();
       const profileArgs = selection.profiles.flatMap(profile => ['--profile', profile]);
       await runDocker(composeArgs(...profileArgs, 'pull', ...selection.releaseServices), 60 * 60 * 1000);
+      if (selection.externalServices.length) {
+        await runDocker(
+          composeArgs(...profileArgs, 'pull', ...selection.externalServices),
+          60 * 60 * 1000,
+        );
+      }
       lastPullTime = now;
     }
     result.checkedAt = new Date().toISOString();
@@ -2949,9 +2954,9 @@ async function handleRequest(req, res) {
     }
   }
 
-  if (req.method === 'POST' && pathname === '/api/vector-memory/migrate-to-sqlite') {
+  if (req.method === 'POST' && pathname === '/api/vector-memory/migrate-to-qdrant') {
     try {
-      return sendJson(res, 200, await backendInternalRequest('/internal/admin/vector-memory/migrate-to-sqlite', {
+      return sendJson(res, 200, await backendInternalRequest('/internal/admin/vector-memory/migrate-to-qdrant', {
         method: 'POST', timeoutMs: 10 * 60 * 1000,
       }));
     } catch (error) {

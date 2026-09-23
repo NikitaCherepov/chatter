@@ -538,8 +538,6 @@ export const removeCanonicalMemoryRecord = (userId: number, recordId: string) =>
   const record = getOwnedMemoryRecord(accountId, recordId);
   if (!record) throw new Error('memory_record_not_found');
   const chunks = getRecordChunks(accountId, recordId);
-  db.prepare('DELETE FROM memory_vectors WHERE user_id = ? AND memory_space_id = ? AND chunk_id IN (SELECT id FROM memory_chunks WHERE memory_record_id = ? AND user_id = ?)')
-    .run(accountId, record.memory_space_id, recordId, accountId);
   db.prepare('DELETE FROM memory_chunks WHERE memory_record_id = ? AND user_id = ?').run(recordId, accountId);
   db.prepare('UPDATE memory_records SET deleted_at = ?, updated_at = ? WHERE id = ? AND user_id = ?')
     .run(getNowUnix(), getNowUnix(), recordId, accountId);
