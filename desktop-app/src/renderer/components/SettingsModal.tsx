@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
@@ -284,12 +284,19 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
 
   const [coreMemory, setCoreMemory] = useState('');
   const [coreMemorySaving, setCoreMemorySaving] = useState(false);
-  const [personas, setPersonas] = useState<PersonaInfo[]>([]);
   const [selectedPersonaId, setSelectedPersonaId] = useState<number | null>(null);
   const [personaName, setPersonaName] = useState('');
   const [personaDescription, setPersonaDescription] = useState('');
   const [allowCoreMemoryUpdate, setAllowCoreMemoryUpdate] = useState(true);
   const [personaDeleting, setPersonaDeleting] = useState(false);
+  const personaDraftSourceRef = useRef<number | null>(null);
+  const personasQuery = useQuery({
+    queryKey: ['memory-personas'],
+    queryFn: () => api.apiFetch<{ personas: PersonaInfo[] }>('/api/v1/memory/personas'),
+    enabled: section === 'account',
+    staleTime: 30_000,
+  });
+  const personas = personasQuery.data?.personas ?? [];
 
   // Feature flags (restrictions)
   const [featureFlags, setFeatureFlagsState] = useState<api.FeatureFlags>({
@@ -351,7 +358,6 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
   useEffect(() => {
     if (user) {
       setNameValue(user.name || '');
-      setCoreMemory(user.core_memory || '');
       const savedOffset = Number(user.timezone_offset);
       setTimezoneValue(String(
         user.timezone_confirmed && Number.isFinite(savedOffset)
@@ -366,7 +372,6 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
     if (section === 'account') {
       api.apiFetch('/api/v1/auth/me')
         .then((res: any) => {
-          setCoreMemory(res.user.core_memory || '');
           if (user) {
             const updated = { ...user, ...res.user, core_memory: res.user.core_memory || '' };
             setUser(updated);
@@ -378,22 +383,31 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
   }, [section]);
 
   const loadPersonas = useCallback(async (preferredId?: number) => {
-    const result = await api.apiFetch<{ personas: PersonaInfo[] }>('/api/v1/memory/personas');
-    setPersonas(result.personas);
+    const refreshed = await personasQuery.refetch();
+    const result = refreshed.data ?? { personas: [] };
     const selected = preferredId !== undefined
       ? result.personas.find(persona => persona.id === preferredId)
       : result.personas.find(persona => persona.is_default === 1);
     const persona = selected || result.personas[0];
-    if (persona) setSelectedPersonaId(persona.id);
-  }, []);
+    if (persona) {
+      personaDraftSourceRef.current = null;
+      setSelectedPersonaId(persona.id);
+    }
+  }, [personasQuery.refetch]);
 
   useEffect(() => {
-    if (section !== 'account') return;
-    void loadPersonas().catch(() => toast.error('Не удалось загрузить персоны'));
-  }, [section, loadPersonas]);
+    if (section !== 'account' || !personas.length) return;
+    if (selectedPersonaId === null || !personas.some(persona => persona.id === selectedPersonaId)) {
+      const persona = personas.find(item => item.is_default === 1) || personas[0];
+      personaDraftSourceRef.current = null;
+      setSelectedPersonaId(persona.id);
+    }
+  }, [section, personas, selectedPersonaId]);
 
   useEffect(() => {
     if (selectedPersonaId === NEW_PERSONA_ID) {
+      if (personaDraftSourceRef.current === NEW_PERSONA_ID) return;
+      personaDraftSourceRef.current = NEW_PERSONA_ID;
       setPersonaName('');
       setPersonaDescription('');
       setCoreMemory('');
@@ -402,6 +416,8 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
     }
     const persona = personas.find(item => item.id === selectedPersonaId);
     if (!persona) return;
+    if (personaDraftSourceRef.current === persona.id) return;
+    personaDraftSourceRef.current = persona.id;
     setPersonaName(persona.name);
     setPersonaDescription(persona.description || '');
     setCoreMemory(persona.core_memory || '');
@@ -915,11 +931,12 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
   };
 
   const handleSelectPersona = async (personaId: number) => {
+    personaDraftSourceRef.current = null;
     setSelectedPersonaId(personaId);
     if (personaId === NEW_PERSONA_ID) return;
     try {
       await api.apiFetch(`/api/v1/memory/personas/${personaId}/activate`, { method: 'POST' });
-      setPersonas(previous => previous.map(persona => ({ ...persona, is_default: persona.id === personaId ? 1 : 0 })));
+      await personasQuery.refetch();
       window.dispatchEvent(new Event('chatter:personas-changed'));
       const persona = personas.find(item => item.id === personaId);
       if (persona?.is_primary === 1 && user) {

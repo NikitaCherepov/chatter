@@ -69,30 +69,6 @@ export function GlobalMemorySettings() {
     }
   };
 
-  const editRecord = async (record: MemoryRecord) => {
-    const text = window.prompt('Текст воспоминания', record.text);
-    if (text === null || !text.trim()) return;
-    try {
-      await api.apiFetch(`/api/v1/memory/records/${encodeURIComponent(record.id)}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ text, source: record.source }),
-      });
-      await loadRecords(selectedId);
-    } catch {
-      toast.error('Не удалось изменить воспоминание');
-    }
-  };
-
-  const deleteRecord = async (record: MemoryRecord) => {
-    if (!window.confirm('Удалить это воспоминание?')) return;
-    try {
-      await api.apiFetch(`/api/v1/memory/records/${encodeURIComponent(record.id)}`, { method: 'DELETE' });
-      await loadRecords(selectedId);
-    } catch {
-      toast.error('Не удалось удалить воспоминание');
-    }
-  };
-
   return (
     <div className={s.panel}>
       <div className={s.title}>Память</div>
@@ -117,10 +93,6 @@ export function GlobalMemorySettings() {
         {records.map(record => (
           <div key={record.id} className={s.record}>
             <div><strong>{record.source}</strong><p>{record.text}</p></div>
-            <span>
-              <button type="button" onClick={() => void editRecord(record)} title="Редактировать">✎</button>
-              <button type="button" onClick={() => void deleteRecord(record)} title="Удалить">×</button>
-            </span>
           </div>
         ))}
       </div>

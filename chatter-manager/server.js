@@ -2929,6 +2929,36 @@ async function handleRequest(req, res) {
     }
   }
 
+  if (pathname === '/api/vector-memory/settings') {
+    if (req.method === 'GET') {
+      try {
+        return sendJson(res, 200, await backendInternalRequest('/internal/admin/vector-memory/settings'));
+      } catch (error) {
+        return sendJson(res, 502, { error: error.message || 'vector_memory_settings_failed' });
+      }
+    }
+    if (req.method === 'PUT') {
+      const body = await readJson(req);
+      try {
+        return sendJson(res, 200, await backendInternalRequest('/internal/admin/vector-memory/settings', {
+          method: 'PUT', body: JSON.stringify(body),
+        }));
+      } catch (error) {
+        return sendJson(res, 400, { error: error.message || 'vector_memory_settings_save_failed' });
+      }
+    }
+  }
+
+  if (req.method === 'POST' && pathname === '/api/vector-memory/migrate-to-sqlite') {
+    try {
+      return sendJson(res, 200, await backendInternalRequest('/internal/admin/vector-memory/migrate-to-sqlite', {
+        method: 'POST', timeoutMs: 10 * 60 * 1000,
+      }));
+    } catch (error) {
+      return sendJson(res, 400, { error: error.message || 'vector_memory_migration_failed' });
+    }
+  }
+
   if (req.method === 'GET' && pathname === '/api/web-search/stats') {
     try {
       return sendJson(res, 200, await backendInternalRequest('/internal/admin/web-search/stats'));

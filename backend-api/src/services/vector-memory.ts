@@ -7,6 +7,7 @@ import {
   createMemoryRecord,
   getOwnedMemoryRecord,
   getRecordChunks,
+  listMemoryRecords,
   removeCanonicalMemoryRecord,
   resolveReadMemorySpaces,
   resolveWriteMemorySpace,
@@ -207,6 +208,59 @@ const chunkText = (text: string, chunkSize = VECTOR_MEMORY_CHUNK_SIZE, overlap =
 };
 
 export class VectorMemoryService {
+  static async listRecords(userId: number, space: MemorySpace) {
+    const accountId = resolveAccountId(Math.floor(userId));
+    if (space.user_id !== accountId) throw new Error('memory_space_not_found');
+    if (getVectorMemoryStorage() === 'sqlite') return listMemoryRecords(accountId, space.id);
+
+    const groups = new Map<string, Array<{ id: string; text: string; source: string; timestamp: number; index: number }>>();
+    const seenChunks = new Set<string>();
+    for (const namespace of [...new Set(namespacesForSpace(accountId, space))]) {
+      const scoped = getPineconeIndex().namespace(namespace);
+      let paginationToken: string | undefined;
+      do {
+        const page = await scoped.listPaginated({ limit: 100, ...(paginationToken ? { paginationToken } : {}) });
+        const ids = (page.vectors || []).map(item => `${item.id || ''}`.trim()).filter(Boolean);
+        if (ids.length) {
+          const fetched = await scoped.fetch(ids);
+          for (const id of ids) {
+            if (seenChunks.has(id)) continue;
+            const vector = fetched.records?.[id];
+            if (!vector) continue;
+            seenChunks.add(id);
+            const metadata = vector.metadata as Record<string, unknown> | undefined;
+            const recordId = id.match(/^(.*)_chunk_\d+$/)?.[1] || id;
+            const source = `${metadata?.source || 'memory'}`;
+            const rawText = `${metadata?.text || ''}`;
+            const prefix = `[Контекст: ${source}] `;
+            const group = groups.get(recordId) || [];
+            group.push({
+              id,
+              text: rawText.startsWith(prefix) ? rawText.slice(prefix.length) : rawText,
+              source,
+              timestamp: Number(metadata?.timestamp) || 0,
+              index: Number.isSafeInteger(Number(metadata?.chunk_index))
+                ? Number(metadata?.chunk_index)
+                : Number(id.match(/_chunk_(\d+)$/)?.[1] || 0),
+            });
+            groups.set(recordId, group);
+          }
+        }
+        paginationToken = page.pagination?.next || undefined;
+      } while (paginationToken);
+    }
+    return [...groups.entries()].map(([id, chunks]) => {
+      const sorted = chunks.sort((left, right) => left.index - right.index);
+      const timestamp = Math.max(...sorted.map(chunk => chunk.timestamp), 0);
+      return {
+        id, user_id: accountId, memory_space_id: space.id,
+        text: sorted.map(chunk => chunk.text).join('\n\n').trim(),
+        source: sorted[0]?.source || 'memory',
+        created_at: timestamp, updated_at: timestamp, deleted_at: null,
+      };
+    }).sort((left, right) => right.created_at - left.created_at);
+  }
+
   static async saveFactBatched(userId: number, fullText: string, sourceTag: string, chatId?: number) {
     try {
       const safeText = `${fullText || ''}`.trim();

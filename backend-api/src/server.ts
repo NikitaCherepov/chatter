@@ -50,6 +50,7 @@ import { runVoiceTurn } from './services/voice.js';
 import { runPhotoAnalyzeTurn } from './services/photo.js';
 import { migratePendingAccountNamespaces, VectorMemoryService } from './services/vector-memory.js';
 import { getVectorMemorySettings, updateVectorMemorySettings } from './services/vector-memory-settings.js';
+import { migrateVectorMemoryToSqlite } from './services/vector-memory-migration.js';
 import {
   createGeneralMemorySpace,
   createPersona,
@@ -57,9 +58,6 @@ import {
   ensureMemoryDefaults,
   getChatMemorySettings,
   getPrimaryPersona,
-  listChatMemoryRecords,
-  listGeneralMemoryRecords,
-  listMemoryRecords,
   listMemorySpaces,
   listPersonas,
   setActivePersona,
@@ -1575,19 +1573,30 @@ app.patch('/api/v1/chats/:chatId/memory-settings', (req: AuthedRequest, res: any
   }
 });
 
-app.get('/api/v1/memory/records', (req: AuthedRequest, res: any) => {
+app.get('/api/v1/memory/records', async (req: AuthedRequest, res: any) => {
   const rawSpaceId = Number(req.query?.space_id);
   const spaceId = Number.isSafeInteger(rawSpaceId) && rawSpaceId > 0 ? rawSpaceId : undefined;
   try {
-    return res.json({ records: listGeneralMemoryRecords(accountIdFromRequest(req), spaceId) });
+    const accountId = accountIdFromRequest(req);
+    const spaces = listMemorySpaces(accountId);
+    const targetId = spaceId ?? spaces.find(item => item.kind === 'general' && item.is_default === 1)?.id;
+    const space = spaces.find(item => item.kind === 'general' && item.id === targetId);
+    if (!space) throw new Error('memory_space_not_found');
+    return res.json({ records: await VectorMemoryService.listRecords(accountId, space) });
   } catch (error: any) {
     return res.status(400).json({ error: error?.message || 'memory_records_load_failed' });
   }
 });
 
-app.get('/api/v1/chats/:chatId/memory-records', (req: AuthedRequest, res: any) => {
+app.get('/api/v1/chats/:chatId/memory-records', async (req: AuthedRequest, res: any) => {
   try {
-    return res.json({ records: listChatMemoryRecords(accountIdFromRequest(req), Number(req.params.chatId)) });
+    const accountId = accountIdFromRequest(req);
+    const chatId = Number(req.params.chatId);
+    const settings = getChatMemorySettings(accountId, chatId);
+    if (!settings.chat_space_id) return res.json({ records: [] });
+    const space = listMemorySpaces(accountId).find(item => item.kind === 'chat' && item.id === settings.chat_space_id && item.chat_id === chatId);
+    if (!space) return res.json({ records: [] });
+    return res.json({ records: await VectorMemoryService.listRecords(accountId, space) });
   } catch (error: any) {
     return res.status(error?.message === 'chat_not_found' ? 404 : 400).json({ error: error?.message || 'memory_records_load_failed' });
   }
@@ -5025,6 +5034,14 @@ app.put('/internal/admin/vector-memory/settings', internalAuth, (req, res) => {
     return res.json(updateVectorMemorySettings(req.body));
   } catch (err: any) {
     return res.status(400).json({ error: err?.message || 'bad_vector_memory_settings' });
+  }
+});
+
+app.post('/internal/admin/vector-memory/migrate-to-sqlite', internalAuth, async (_req, res) => {
+  try {
+    return res.json(await migrateVectorMemoryToSqlite());
+  } catch (err: any) {
+    return res.status(400).json({ error: err?.message || 'vector_memory_migration_failed' });
   }
 });
 

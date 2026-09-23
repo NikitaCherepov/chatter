@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import * as api from '../lib/api';
 import { ChatPersonaSelector } from './ChatPersonaSelector';
+import { Select } from './Select';
 import s from './MemoryPopover.module.scss';
 
 type MemorySettings = {
@@ -75,22 +76,6 @@ export function MemoryPopover({ chatId }: { chatId: number }) {
     }
   };
 
-  const editRecord = async (record: MemoryRecord) => {
-    const text = window.prompt(t('chat.memory.promptText'), record.text);
-    if (text === null || !text.trim()) return;
-    await api.apiFetch(`/api/v1/chats/${chatId}/memory-records/${encodeURIComponent(record.id)}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ text, source: record.source }),
-    });
-    await loadRecords();
-  };
-
-  const deleteRecord = async (record: MemoryRecord) => {
-    if (!window.confirm(t('chat.memory.confirmDelete'))) return;
-    await api.apiFetch(`/api/v1/chats/${chatId}/memory-records/${encodeURIComponent(record.id)}`, { method: 'DELETE' });
-    await loadRecords();
-  };
-
   return (
     <div className={s.root} ref={rootRef}>
       <button
@@ -114,21 +99,29 @@ export function MemoryPopover({ chatId }: { chatId: number }) {
               <label className={s.field}>{t('chat.memory.persona')}
                 <ChatPersonaSelector chatId={chatId} embedded />
               </label>
-              <label className={s.field}>{t('chat.memory.modeLabel')}
-                <select value={settings.memory_mode} onChange={event => void patchSettings({ memory_mode: event.target.value as MemorySettings['memory_mode'] })}>
-                  <option value="off">{t('chat.memory.mode.off')}</option>
-                  <option value="general">{t('chat.memory.mode.general')}</option>
-                  <option value="chat">{t('chat.memory.mode.chat')}</option>
-                  <option value="both">{t('chat.memory.mode.both')}</option>
-                </select>
-              </label>
+              <div className={s.field}>{t('chat.memory.modeLabel')}
+                <Select
+                  value={settings.memory_mode}
+                  onChange={value => void patchSettings({ memory_mode: value as MemorySettings['memory_mode'] })}
+                  options={[
+                    { value: 'off', label: t('chat.memory.mode.off') },
+                    { value: 'general', label: t('chat.memory.mode.general') },
+                    { value: 'chat', label: t('chat.memory.mode.chat') },
+                    { value: 'both', label: t('chat.memory.mode.both') },
+                  ]}
+                />
+              </div>
               {settings.memory_mode === 'both' && (
-                <label className={s.field}>{t('chat.memory.writeTargetLabel')}
-                  <select value={settings.write_target} onChange={event => void patchSettings({ write_target: event.target.value as MemorySettings['write_target'] })}>
-                    <option value="general">{t('chat.memory.writeTarget.general')}</option>
-                    <option value="chat">{t('chat.memory.writeTarget.chat')}</option>
-                  </select>
-                </label>
+                <div className={s.field}>{t('chat.memory.writeTargetLabel')}
+                  <Select
+                    value={settings.write_target}
+                    onChange={value => void patchSettings({ write_target: value as MemorySettings['write_target'] })}
+                    options={[
+                      { value: 'general', label: t('chat.memory.writeTarget.general') },
+                      { value: 'chat', label: t('chat.memory.writeTarget.chat') },
+                    ]}
+                  />
+                </div>
               )}
               {(settings.memory_mode === 'chat' || settings.memory_mode === 'both') && (
                 <>
@@ -139,7 +132,6 @@ export function MemoryPopover({ chatId }: { chatId: number }) {
                     {records.map(record => (
                       <div key={record.id} className={s.record}>
                         <div><strong>{record.source}</strong><p>{record.text}</p></div>
-                        <span><button type="button" onClick={() => void editRecord(record)}>✎</button><button type="button" onClick={() => void deleteRecord(record)}>×</button></span>
                       </div>
                     ))}
                   </div>
