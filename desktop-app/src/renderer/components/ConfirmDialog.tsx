@@ -5,7 +5,7 @@ import s from './ConfirmDialog.module.scss';
 type ConfirmDialogProps = {
   open: boolean;
   title: string;
-  text: string;
+  text?: string;
   confirmLabel?: string;
   confirmTone?: 'danger' | 'primary';
   confirmFirst?: boolean;
@@ -14,6 +14,7 @@ type ConfirmDialogProps = {
     value: string;
     placeholder?: string;
     maxLength?: number;
+    multiline?: boolean;
     onChange: (value: string) => void;
   };
   onCancel: () => void;
@@ -73,8 +74,21 @@ export function ConfirmDialog({
         exit="exit"
       >
         <div className={s.confirmTitle}>{title}</div>
-        <div className={s.confirmText}>{text}</div>
-        {input && (
+        {text && <div className={s.confirmText}>{text}</div>}
+        {input && (input.multiline ? (
+          <textarea
+            className={`${s.confirmInput} ${s.confirmTextarea}`}
+            value={input.value}
+            placeholder={input.placeholder}
+            maxLength={input.maxLength}
+            autoFocus
+            onChange={event => input.onChange(event.target.value)}
+            onKeyDown={event => {
+              if (event.key === 'Escape') onCancel();
+              if ((event.ctrlKey || event.metaKey) && event.key === 'Enter' && !confirmDisabled) onConfirm();
+            }}
+          />
+        ) : (
           <input
             className={s.confirmInput}
             value={input.value}
@@ -87,7 +101,7 @@ export function ConfirmDialog({
               if (event.key === 'Enter' && !confirmDisabled) onConfirm();
             }}
           />
-        )}
+        ))}
         <div className={s.confirmBtns}>
           {confirmFirst && confirmButton}
           {cancelButton}

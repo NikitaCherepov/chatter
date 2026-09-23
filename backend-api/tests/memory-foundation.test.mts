@@ -7,6 +7,7 @@ process.env.API_DB_PATH = path.join(os.tmpdir(), `chatter-memory-foundation-${pr
 const { db } = await import('../src/db.js');
 const {
   canAccessChat,
+  archiveGeneralMemorySpace,
   createGeneralMemorySpace,
   createPersona,
   deletePersona,
@@ -14,6 +15,7 @@ const {
   getPrimaryPersona,
   resolvePersonaForChat,
   resolveReadMemorySpaces,
+  renameGeneralMemorySpace,
   setActivePersona,
   setDefaultGeneralMemorySpace,
   syncPrimaryPersonaName,
@@ -67,8 +69,17 @@ assert.equal(getChatMemorySettings(202, roomId).persona_override_id, null, 'dele
 assert.equal(resolvePersonaForChat(202, roomId).persona.id, workPersona.id, 'reset chat follows global persona again');
 
 const alternateGeneral = createGeneralMemorySpace(202, 'Alternate');
+assert.equal(alternateGeneral.is_primary, 0, 'custom memory space is not primary');
+assert.throws(() => renameGeneralMemorySpace(303, alternateGeneral.id, 'Stolen'), /memory_space_not_found/);
+assert.throws(() => archiveGeneralMemorySpace(303, alternateGeneral.id), /memory_space_not_found/);
+assert.equal(renameGeneralMemorySpace(202, alternateGeneral.id, 'Renamed alternate').name, 'Renamed alternate');
 setDefaultGeneralMemorySpace(202, alternateGeneral.id);
 assert.equal(getChatMemorySettings(202, roomId).general_space_id, alternateGeneral.id, 'global memory selection is shared by chats');
+const primaryGeneral = db.prepare("SELECT * FROM memory_spaces WHERE user_id = ? AND kind = 'general' AND is_primary = 1")
+  .get(202) as { id: number };
+assert.throws(() => archiveGeneralMemorySpace(202, primaryGeneral.id), /primary_memory_space_cannot_be_deleted/);
+assert.equal(archiveGeneralMemorySpace(202, alternateGeneral.id).id, primaryGeneral.id, 'deleting active custom memory returns to primary');
+assert.equal(getChatMemorySettings(202, roomId).general_space_id, primaryGeneral.id, 'chat settings return to primary memory');
 
 const memberChatSettings = updateChatMemorySettings(202, roomId, {
   memory_mode: 'both',

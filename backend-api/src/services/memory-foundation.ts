@@ -26,6 +26,7 @@ export type MemorySpace = {
   chat_id: number | null;
   namespace_key: string;
   is_default: number;
+  is_primary: number;
   archived_at: number | null;
   created_at: number;
   updated_at: number;
@@ -120,8 +121,8 @@ export const ensureMemoryDefaults = (userId: number): { persona: Persona; space:
     if (!space) {
       const inserted = db.prepare(`
         INSERT INTO memory_spaces (
-          user_id, name, kind, chat_id, namespace_key, is_default, created_at, updated_at
-        ) VALUES (?, 'Main memory', 'general', NULL, ?, 1, ?, ?)
+          user_id, name, kind, chat_id, namespace_key, is_default, is_primary, created_at, updated_at
+        ) VALUES (?, 'Main memory', 'general', NULL, ?, 1, 1, ?, ?)
       `).run(user.id, `${user.id}`, now, now);
       space = db.prepare('SELECT * FROM memory_spaces WHERE id = ?').get(Number(inserted.lastInsertRowid)) as MemorySpace;
     }
@@ -245,6 +246,58 @@ export const createGeneralMemorySpace = (userId: number, name: string): MemorySp
     ) VALUES (?, ?, 'general', NULL, ?, 0, ?, ?)
   `).run(accountId, safeName, `account-${accountId}-general-${randomUUID()}`, now, now);
   return db.prepare('SELECT * FROM memory_spaces WHERE id = ?').get(Number(inserted.lastInsertRowid)) as MemorySpace;
+};
+
+export const renameGeneralMemorySpace = (userId: number, spaceId: number, name: string): MemorySpace => {
+  const accountId = canonicalUserId(userId);
+  const safeName = `${name || ''}`.trim().replace(/\s+/g, ' ').slice(0, 100);
+  if (!safeName) throw new Error('memory_space_name_required');
+  const result = db.prepare(`
+    UPDATE memory_spaces SET name = ?, updated_at = ?
+    WHERE id = ? AND user_id = ? AND kind = 'general' AND archived_at IS NULL
+  `).run(safeName, getNowUnix(), spaceId, accountId);
+  if (result.changes === 0) throw new Error('memory_space_not_found');
+  return db.prepare('SELECT * FROM memory_spaces WHERE id = ? AND user_id = ?')
+    .get(spaceId, accountId) as MemorySpace;
+};
+
+export const archiveGeneralMemorySpace = (userId: number, spaceId: number): MemorySpace => {
+  const accountId = canonicalUserId(userId);
+  const defaults = ensureMemoryDefaults(accountId);
+  const space = db.prepare(`
+    SELECT * FROM memory_spaces
+    WHERE id = ? AND user_id = ? AND kind = 'general' AND archived_at IS NULL
+  `).get(spaceId, accountId) as MemorySpace | undefined;
+  if (!space) throw new Error('memory_space_not_found');
+  if (space.is_primary === 1) throw new Error('primary_memory_space_cannot_be_deleted');
+  const primary = db.prepare(`
+    SELECT * FROM memory_spaces
+    WHERE user_id = ? AND kind = 'general' AND is_primary = 1 AND archived_at IS NULL
+    LIMIT 1
+  `).get(accountId) as MemorySpace | undefined || defaults.space;
+  const now = getNowUnix();
+  db.transaction(() => {
+    db.prepare('DELETE FROM memory_chunks WHERE user_id = ? AND memory_space_id = ?').run(accountId, space.id);
+    db.prepare(`
+      UPDATE memory_records SET deleted_at = ?, updated_at = ?
+      WHERE user_id = ? AND memory_space_id = ? AND deleted_at IS NULL
+    `).run(now, now, accountId, space.id);
+    db.prepare(`
+      UPDATE memory_spaces SET archived_at = ?, is_default = 0, updated_at = ?
+      WHERE id = ? AND user_id = ?
+    `).run(now, now, space.id, accountId);
+    if (space.is_default === 1) {
+      db.prepare("UPDATE memory_spaces SET is_default = 0, updated_at = ? WHERE user_id = ? AND kind = 'general'")
+        .run(now, accountId);
+      db.prepare('UPDATE memory_spaces SET is_default = 1, updated_at = ? WHERE id = ? AND user_id = ?')
+        .run(now, primary.id, accountId);
+    }
+    db.prepare(`
+      UPDATE chat_memory_settings SET general_space_id = ?, updated_at = ?
+      WHERE user_id = ? AND general_space_id = ?
+    `).run(primary.id, now, accountId, space.id);
+  })();
+  return db.prepare('SELECT * FROM memory_spaces WHERE id = ?').get(primary.id) as MemorySpace;
 };
 
 export const setDefaultGeneralMemorySpace = (userId: number, spaceId: number): MemorySpace => {

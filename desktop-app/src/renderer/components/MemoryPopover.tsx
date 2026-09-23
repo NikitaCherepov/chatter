@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import * as api from '../lib/api';
 import { ChatPersonaSelector } from './ChatPersonaSelector';
+import { ConfirmDialog } from './ConfirmDialog';
 import { Select } from './Select';
 import s from './MemoryPopover.module.scss';
 
@@ -13,6 +14,7 @@ type MemorySettings = {
   write_target: 'general' | 'chat';
 };
 type MemoryRecord = { id: string; memory_space_id: number; text: string; source: string; updated_at: number };
+type RecordDialog = { type: 'edit' | 'delete'; record: MemoryRecord };
 
 export function MemoryPopover({ chatId }: { chatId: number }) {
   const { t } = useTranslation();
@@ -21,6 +23,9 @@ export function MemoryPopover({ chatId }: { chatId: number }) {
   const [loading, setLoading] = useState(false);
   const [settings, setSettings] = useState<MemorySettings | null>(null);
   const [records, setRecords] = useState<MemoryRecord[]>([]);
+  const [dialog, setDialog] = useState<RecordDialog | null>(null);
+  const [draft, setDraft] = useState('');
+  const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -73,6 +78,37 @@ export function MemoryPopover({ chatId }: { chatId: number }) {
     } catch {
       setSettings(previous);
       toast.error(t('chat.memory.saveSettingsFailed'));
+    }
+  };
+
+  const updateRecord = async () => {
+    if (dialog?.type !== 'edit' || !draft.trim() || saving) return;
+    setSaving(true);
+    try {
+      const result = await api.apiFetch<{ record: MemoryRecord }>(
+        `/api/v1/chats/${chatId}/memory-records/${encodeURIComponent(dialog.record.id)}`,
+        { method: 'PATCH', body: JSON.stringify({ text: draft.trim() }) },
+      );
+      setRecords(items => items.map(record => record.id === result.record.id ? result.record : record));
+      setDialog(null);
+    } catch {
+      toast.error(t('advanced.common.saveFailed'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deleteRecord = async () => {
+    if (dialog?.type !== 'delete' || saving) return;
+    setSaving(true);
+    try {
+      await api.apiFetch(`/api/v1/chats/${chatId}/memory-records/${encodeURIComponent(dialog.record.id)}`, { method: 'DELETE' });
+      setRecords(items => items.filter(record => record.id !== dialog.record.id));
+      setDialog(null);
+    } catch {
+      toast.error(t('advanced.common.deleteFailed'));
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -132,12 +168,64 @@ export function MemoryPopover({ chatId }: { chatId: number }) {
                     {records.map(record => (
                       <div key={record.id} className={s.record}>
                         <div><strong>{record.source}</strong><p>{record.text}</p></div>
+                        <span className={s.recordActions}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setDraft(record.text);
+                              setDialog({ type: 'edit', record });
+                            }}
+                            title={t('common.edit')}
+                            aria-label={t('common.edit')}
+                          >
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                          </button>
+                          <button
+                            type="button"
+                            className={s.dangerButton}
+                            onClick={() => setDialog({ type: 'delete', record })}
+                            title={t('common.delete')}
+                            aria-label={t('common.delete')}
+                          >
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg>
+                          </button>
+                        </span>
                       </div>
                     ))}
                   </div>
                 </>
               )}
             </>
+          )}
+          {dialog?.type === 'edit' && (
+            <ConfirmDialog
+              open
+              title={t('common.edit')}
+              confirmLabel={saving ? t('common.saving') : t('common.save')}
+              confirmTone="primary"
+              confirmFirst
+              confirmDisabled={!draft.trim() || saving}
+              input={{
+                value: draft,
+                placeholder: t('chat.memory.promptText'),
+                maxLength: 4000,
+                multiline: true,
+                onChange: setDraft,
+              }}
+              onCancel={() => { if (!saving) setDialog(null); }}
+              onConfirm={() => void updateRecord()}
+            />
+          )}
+          {dialog?.type === 'delete' && (
+            <ConfirmDialog
+              open
+              title={t('common.delete')}
+              text={t('chat.memory.confirmDelete')}
+              confirmLabel={saving ? t('common.deleting') : t('common.delete')}
+              confirmDisabled={saving}
+              onCancel={() => { if (!saving) setDialog(null); }}
+              onConfirm={() => void deleteRecord()}
+            />
           )}
         </div>
       )}

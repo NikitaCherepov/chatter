@@ -149,6 +149,20 @@ export const deleteQdrantChunks = async (userId: number, memorySpaceId: number, 
   });
 };
 
+export const deleteQdrantSpace = async (userId: number, memorySpaceId: number) => {
+  const exists = await getQdrantClient().collectionExists(QDRANT_COLLECTION);
+  if (!exists.exists) return;
+  await getQdrantClient().delete(QDRANT_COLLECTION, {
+    wait: true,
+    filter: {
+      must: [
+        { key: 'user_id', match: { value: Math.floor(userId) } },
+        { key: 'memory_space_id', match: { value: Math.floor(memorySpaceId) } },
+      ],
+    },
+  });
+};
+
 export const deleteQdrantUser = async (userId: number) => {
   const exists = await getQdrantClient().collectionExists(QDRANT_COLLECTION);
   if (!exists.exists) return;

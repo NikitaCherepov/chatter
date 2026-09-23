@@ -55,6 +55,12 @@
   }
 }
 
+.confirmTextarea {
+  min-height: 150px;
+  resize: vertical;
+  line-height: 1.45;
+}
+
 .confirmBtns {
   display: flex;
   flex-direction: row;

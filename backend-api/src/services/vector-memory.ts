@@ -5,6 +5,7 @@ import { resolveAccountId } from './accounts.js';
 import { getVectorMemoryStorage } from './vector-memory-settings.js';
 import {
   deleteQdrantChunks,
+  deleteQdrantSpace,
   deleteQdrantUser,
   queryQdrantVectors,
   upsertQdrantVectors,
@@ -18,6 +19,7 @@ import {
   resolveReadMemorySpaces,
   resolveWriteMemorySpace,
   type MemorySpace,
+  archiveGeneralMemorySpace,
 } from './memory-foundation.js';
 
 const TIMEWEB_EMBED_API_KEY = `${process.env.TIMEWEB_EMBED_API_KEY || ''}`.trim();
@@ -582,6 +584,21 @@ export class VectorMemoryService {
     }
     removeCanonicalMemoryRecord(accountId, record.id);
     return { ok: true, record_id: record.id, chunks_deleted: chunks.length };
+  }
+
+  static async deleteGeneralSpace(userId: number, space: MemorySpace) {
+    const accountId = resolveAccountId(Math.floor(userId));
+    if (space.user_id !== accountId || space.kind !== 'general' || space.archived_at !== null) {
+      throw new Error('memory_space_not_found');
+    }
+    if (space.is_primary === 1) throw new Error('primary_memory_space_cannot_be_deleted');
+    if (getVectorMemoryStorage() === 'qdrant') {
+      await deleteQdrantSpace(accountId, space.id);
+    } else {
+      await deletePineconeResource(() => getPineconeIndex().namespace(space.namespace_key).deleteAll());
+    }
+    const activeSpace = archiveGeneralMemorySpace(accountId, space.id);
+    return { ok: true, active_space: activeSpace };
   }
 
   static async updateRecord(userId: number, recordId: string, fullText: string, sourceTag?: string) {

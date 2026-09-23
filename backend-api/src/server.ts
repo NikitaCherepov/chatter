@@ -68,6 +68,7 @@ import {
   updatePersona,
   requireChatMemoryRecord,
   requireGeneralMemoryRecord,
+  renameGeneralMemorySpace,
 } from './services/memory-foundation.js';
 import { seedPlanLimitsIfEmpty, loadPlanLimitsFromDb, savePlanLimitsToDb, DEFAULT_PLAN_LIMITS, PLAN_IDS, type PlanLimits } from './services/plan-limits.js';
 import { refreshCoefficientCache, setCoefficient, setModelProvider, getModelOverride, getOverrideMap } from './services/token-quota.js';
@@ -1546,6 +1547,33 @@ app.post('/api/v1/memory/spaces/:spaceId/activate', (req: AuthedRequest, res: an
     return res.json({ space: setDefaultGeneralMemorySpace(accountIdFromRequest(req), Number(req.params.spaceId)) });
   } catch (error: any) {
     return res.status(400).json({ error: error?.message || 'memory_space_activate_failed' });
+  }
+});
+
+app.patch('/api/v1/memory/spaces/:spaceId', (req: AuthedRequest, res: any) => {
+  try {
+    const space = renameGeneralMemorySpace(
+      accountIdFromRequest(req),
+      Number(req.params.spaceId),
+      typeof req.body?.name === 'string' ? req.body.name : '',
+    );
+    return res.json({ space });
+  } catch (error: any) {
+    const status = error?.message === 'memory_space_not_found' ? 404 : 400;
+    return res.status(status).json({ error: error?.message || 'memory_space_update_failed' });
+  }
+});
+
+app.delete('/api/v1/memory/spaces/:spaceId', async (req: AuthedRequest, res: any) => {
+  try {
+    const accountId = accountIdFromRequest(req);
+    const spaceId = Number(req.params.spaceId);
+    const space = listMemorySpaces(accountId).find(item => item.id === spaceId && item.kind === 'general');
+    if (!space) throw new Error('memory_space_not_found');
+    return res.json(await VectorMemoryService.deleteGeneralSpace(accountId, space));
+  } catch (error: any) {
+    const status = error?.message === 'memory_space_not_found' ? 404 : 400;
+    return res.status(status).json({ error: error?.message || 'memory_space_delete_failed' });
   }
 });
 

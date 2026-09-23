@@ -1344,6 +1344,7 @@ db.exec(`
     chat_id INTEGER,
     namespace_key TEXT NOT NULL UNIQUE,
     is_default INTEGER NOT NULL DEFAULT 0 CHECK (is_default IN (0, 1)),
+    is_primary INTEGER NOT NULL DEFAULT 0 CHECK (is_primary IN (0, 1)),
     archived_at INTEGER,
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL,
@@ -1424,6 +1425,26 @@ ensureMemoryColumn('personas', 'description', "ALTER TABLE personas ADD COLUMN d
 ensureMemoryColumn('personas', 'is_primary', 'ALTER TABLE personas ADD COLUMN is_primary INTEGER NOT NULL DEFAULT 0 CHECK (is_primary IN (0, 1))');
 ensureMemoryColumn('personas', 'allow_core_memory_update', 'ALTER TABLE personas ADD COLUMN allow_core_memory_update INTEGER NOT NULL DEFAULT 1 CHECK (allow_core_memory_update IN (0, 1))');
 ensureMemoryColumn('chat_memory_settings', 'persona_override_id', 'ALTER TABLE chat_memory_settings ADD COLUMN persona_override_id INTEGER');
+ensureMemoryColumn('memory_spaces', 'is_primary', 'ALTER TABLE memory_spaces ADD COLUMN is_primary INTEGER NOT NULL DEFAULT 0 CHECK (is_primary IN (0, 1))');
+db.exec(`
+  UPDATE memory_spaces
+  SET is_primary = 1
+  WHERE kind = 'general'
+    AND id IN (
+      SELECT MIN(candidate.id)
+      FROM memory_spaces candidate
+      WHERE candidate.kind = 'general'
+      GROUP BY candidate.user_id
+    )
+    AND NOT EXISTS (
+      SELECT 1 FROM memory_spaces existing
+      WHERE existing.user_id = memory_spaces.user_id
+        AND existing.kind = 'general'
+        AND existing.is_primary = 1
+    );
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_memory_spaces_one_primary
+    ON memory_spaces(user_id) WHERE is_primary = 1 AND kind = 'general';
+`);
 db.exec(`
   UPDATE personas
   SET is_primary = 1

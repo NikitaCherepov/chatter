@@ -133,3 +133,37 @@
   display: flex;
   gap: 3px;
 }
+.record > div {
+  min-width: 0;
+}
+.recordActions {
+  flex: 0 0 auto;
+}
+.recordActions button {
+  width: 27px;
+  height: 27px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.recordActions button:hover {
+  color: var(--text-body);
+  background: var(--bg-modal-hover);
+}
+.recordActions .dangerButton:hover {
+  color: var(--color-error);
+}
+.recordActions svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
