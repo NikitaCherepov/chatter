@@ -7,12 +7,44 @@ type ConfirmDialogProps = {
   title: string;
   text: string;
   confirmLabel?: string;
+  confirmTone?: 'danger' | 'primary';
+  confirmFirst?: boolean;
+  confirmDisabled?: boolean;
+  input?: {
+    value: string;
+    placeholder?: string;
+    maxLength?: number;
+    onChange: (value: string) => void;
+  };
   onCancel: () => void;
   onConfirm: () => void;
 };
 
-export function ConfirmDialog({ open, title, text, confirmLabel, onCancel, onConfirm }: ConfirmDialogProps) {
+export function ConfirmDialog({
+  open,
+  title,
+  text,
+  confirmLabel,
+  confirmTone = 'danger',
+  confirmFirst = false,
+  confirmDisabled = false,
+  input,
+  onCancel,
+  onConfirm,
+}: ConfirmDialogProps) {
   const { t } = useTranslation();
+  const cancelButton = (
+    <button className={s.confirmCancel} onClick={onCancel}>{t('common.cancel')}</button>
+  );
+  const confirmButton = (
+    <button
+      className={confirmTone === 'primary' ? s.confirmPrimary : s.confirmDanger}
+      onClick={onConfirm}
+      disabled={confirmDisabled}
+    >
+      {confirmLabel ?? t('common.delete')}
+    </button>
+  );
   return (
     <motion.div
       key="confirm-dialog"
@@ -42,9 +74,24 @@ export function ConfirmDialog({ open, title, text, confirmLabel, onCancel, onCon
       >
         <div className={s.confirmTitle}>{title}</div>
         <div className={s.confirmText}>{text}</div>
+        {input && (
+          <input
+            className={s.confirmInput}
+            value={input.value}
+            placeholder={input.placeholder}
+            maxLength={input.maxLength}
+            autoFocus
+            onChange={event => input.onChange(event.target.value)}
+            onKeyDown={event => {
+              if (event.key === 'Escape') onCancel();
+              if (event.key === 'Enter' && !confirmDisabled) onConfirm();
+            }}
+          />
+        )}
         <div className={s.confirmBtns}>
-          <button className={s.confirmCancel} onClick={onCancel}>{t('common.cancel')}</button>
-          <button className={s.confirmDanger} onClick={onConfirm}>{confirmLabel ?? t('common.delete')}</button>
+          {confirmFirst && confirmButton}
+          {cancelButton}
+          {!confirmFirst && confirmButton}
         </div>
       </motion.div>
     </motion.div>

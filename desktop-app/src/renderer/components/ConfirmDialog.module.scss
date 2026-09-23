@@ -33,8 +33,31 @@
   margin-bottom: 20px;
 }
 
+.confirmInput {
+  width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 20px;
+  padding: 8px 12px;
+  border: 1px solid var(--border-input);
+  border-radius: 6px;
+  outline: none;
+  background-color: var(--bg-input);
+  color: var(--text-body);
+  font-size: 13px;
+  transition: border-color 0.1s;
+
+  &::placeholder {
+    color: var(--text-hint);
+  }
+
+  &:focus {
+    border-color: var(--accent);
+  }
+}
+
 .confirmBtns {
   display: flex;
+  flex-direction: row;
   justify-content: flex-end;
   gap: 8px;
 }
@@ -42,10 +65,11 @@
 .confirmCancel {
   padding: 8px 16px;
   border-radius: 6px;
-  border: 1px solid var(--border-medium);
-  background-color: transparent;
+  border: 1px solid var(--border-input);
+  background: none;
   color: var(--text-secondary);
   font-size: 13px;
+  font-weight: 500;
   cursor: pointer;
   transition: background-color 0.1s;
 
@@ -67,5 +91,26 @@
 
   &:hover {
     opacity: 0.85;
+  }
+}
+
+.confirmPrimary {
+  padding: 8px 20px;
+  border-radius: 6px;
+  border: none;
+  background-color: var(--accent);
+  color: var(--accent-contrast);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.15s;
+
+  &:hover {
+    opacity: 0.85;
+  }
+
+  &:disabled {
+    cursor: default;
+    opacity: 0.4;
   }
 }

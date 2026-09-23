@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import * as api from '../lib/api';
+import { ConfirmDialog } from './ConfirmDialog';
 import { Select } from './Select';
 import s from './GlobalMemorySettings.module.scss';
 
@@ -12,6 +13,9 @@ export function GlobalMemorySettings() {
   const [selectedId, setSelectedId] = useState('');
   const [records, setRecords] = useState<MemoryRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [newSpaceName, setNewSpaceName] = useState('');
+  const [creating, setCreating] = useState(false);
 
   const generalSpaces = useMemo(() => spaces.filter(space => space.kind === 'general'), [spaces]);
 
@@ -55,8 +59,9 @@ export function GlobalMemorySettings() {
   };
 
   const createSpace = async () => {
-    const name = window.prompt('Название общей памяти');
-    if (!name?.trim()) return;
+    const name = newSpaceName.trim();
+    if (!name || creating) return;
+    setCreating(true);
     try {
       const result = await api.apiFetch<{ space: MemorySpace }>('/api/v1/memory/spaces', {
         method: 'POST',
@@ -64,8 +69,12 @@ export function GlobalMemorySettings() {
       });
       await api.apiFetch(`/api/v1/memory/spaces/${result.space.id}/activate`, { method: 'POST' });
       await loadSpaces(result.space.id);
+      setCreateOpen(false);
+      setNewSpaceName('');
     } catch {
       toast.error('Не удалось создать общую память');
+    } finally {
+      setCreating(false);
     }
   };
 
@@ -84,7 +93,15 @@ export function GlobalMemorySettings() {
               disabled={loading}
             />
           </div>
-          <button type="button" className={s.addButton} onClick={() => void createSpace()} title="Создать общую память">+</button>
+          <button
+            type="button"
+            className={s.addButton}
+            onClick={() => {
+              setNewSpaceName('');
+              setCreateOpen(true);
+            }}
+            title="Создать общую память"
+          >+</button>
         </div>
       </div>
       <div className={s.sectionTitle}>Воспоминания</div>
@@ -96,6 +113,27 @@ export function GlobalMemorySettings() {
           </div>
         ))}
       </div>
+      {createOpen && (
+        <ConfirmDialog
+          open
+          title="Новая общая память"
+          text="Введите название пространства памяти."
+          confirmLabel={creating ? 'Создание…' : 'Создать'}
+          confirmTone="primary"
+          confirmFirst
+          confirmDisabled={!newSpaceName.trim() || creating}
+          input={{
+            value: newSpaceName,
+            placeholder: 'Название памяти',
+            maxLength: 100,
+            onChange: setNewSpaceName,
+          }}
+          onCancel={() => {
+            if (!creating) setCreateOpen(false);
+          }}
+          onConfirm={() => void createSpace()}
+        />
+      )}
     </div>
   );
 }
