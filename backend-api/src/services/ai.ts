@@ -3886,7 +3886,7 @@ const getTaskByUserAndId = (userId: number, taskId: number) => db.prepare(`
   WHERE user_id = ? AND id = ?
 `).get(userId, taskId) as { id: number; status: string } | undefined;
 
-export const runTool = async (user: UserRecord, timezoneOffset: number, toolName: string, argsRaw: string, aiCall: (requestPayload: Record<string, unknown>) => Promise<CompletionMeta>, generatedImages?: Array<{ image_base64: string; image_url?: string; prompt_used: string }>, displayStateSink?: { value: DisplayStatePayload | null }, desktopActionSink?: { value: DesktopActionPayload | null }, mapUpdateSink?: { value: MapUpdatePayload | null }, activeMacros?: Array<{ id: number; title: string; description?: string; commands: string[]; pinned?: boolean; return_output?: boolean }>, signal?: AbortSignal, subagentExtra?: { chatId?: number; manualModel?: any; subagentMode?: 'auto' | 'manual'; subagentReasoningLevel?: ReasoningLevel | null; onToolStatus?: (text: string) => Promise<void> | void; onDesktopAction?: (action: any) => Promise<void> | void; displayManifest?: { moods?: string[]; reactions?: string[] } | null; currentDisplayState?: DisplayStatePayload | null; avatarControlEnabled?: boolean; onSubagentTrace?: (trace: any) => void; onSubagentUsageCall?: (agentName: string, usage: TokenUsageCall) => void; onVisionUsageCall?: (usage: TokenUsageCall) => void; shouldStopForQuota?: (usage: TokenUsageCall) => boolean; availableToolDefs?: any[]; attachmentReadContext?: AttachmentReadContext; responseFileSink?: ResponseFileSink; currentModelSupportsVision?: boolean; directImageSink?: { items: Array<{ base64: string; mimeType: string; question: string; localUrl?: string }> } }, autoRejectHitl?: boolean, userImages?: Array<{ base64: string; mimeType: string }>, billingUserId?: number) => {
+export const runTool = async (user: UserRecord, timezoneOffset: number, toolName: string, argsRaw: string, aiCall: (requestPayload: Record<string, unknown>) => Promise<CompletionMeta>, generatedImages?: Array<{ image_base64: string; image_url?: string; prompt_used: string }>, displayStateSink?: { value: DisplayStatePayload | null }, desktopActionSink?: { value: DesktopActionPayload | null }, mapUpdateSink?: { value: MapUpdatePayload | null }, activeMacros?: Array<{ id: number; title: string; description?: string; commands: string[]; pinned?: boolean; return_output?: boolean }>, signal?: AbortSignal, subagentExtra?: { chatId?: number; originMessageCursor?: number; manualModel?: any; subagentMode?: 'auto' | 'manual'; subagentReasoningLevel?: ReasoningLevel | null; onToolStatus?: (text: string) => Promise<void> | void; onDesktopAction?: (action: any) => Promise<void> | void; displayManifest?: { moods?: string[]; reactions?: string[] } | null; currentDisplayState?: DisplayStatePayload | null; avatarControlEnabled?: boolean; onSubagentTrace?: (trace: any) => void; onSubagentUsageCall?: (agentName: string, usage: TokenUsageCall) => void; onVisionUsageCall?: (usage: TokenUsageCall) => void; shouldStopForQuota?: (usage: TokenUsageCall) => boolean; availableToolDefs?: any[]; attachmentReadContext?: AttachmentReadContext; responseFileSink?: ResponseFileSink; currentModelSupportsVision?: boolean; directImageSink?: { items: Array<{ base64: string; mimeType: string; question: string; localUrl?: string }> } }, autoRejectHitl?: boolean, userImages?: Array<{ base64: string; mimeType: string }>, billingUserId?: number) => {
   throwIfAborted(signal);
   const parsed = JSON.parse(argsRaw || '{}');
   // Room runs: `user` is the INITIATOR (data privacy: their servers, desktop,
@@ -3902,6 +3902,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
       user,
       billingUser,
       chatId: subagentExtra?.chatId,
+      originMessageCursor: subagentExtra?.originMessageCursor,
       timezoneOffset,
       signal,
       generatedImages,
@@ -4353,7 +4354,13 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
   if (toolName === 'save_to_cold_memory') {
     const textToSave = typeof parsed.text === 'string' ? parsed.text : '';
     const source = typeof parsed.source === 'string' ? parsed.source : 'manual';
-    const result = await VectorMemoryService.saveFactBatched(user.id, textToSave, source, subagentExtra?.chatId);
+    const result = await VectorMemoryService.saveFactBatched(
+      user.id,
+      textToSave,
+      source,
+      subagentExtra?.chatId,
+      subagentExtra?.originMessageCursor,
+    );
     return `Successfully saved to archive (${result.chunks_saved} fragments).`;
   }
   if (toolName === 'delete_from_cold_memory') {
@@ -6755,6 +6762,7 @@ Respond in the user's language. Be detailed and precise.`
         ctx: {
           userId: user.id,
           chatId: subagentExtra?.chatId,
+          originMessageCursor: subagentExtra?.originMessageCursor,
           user,
           billingUser,
           isDesktop: !!desktopActionSink,
@@ -6860,6 +6868,7 @@ Respond in the user's language. Be detailed and precise.`
         ctx: {
           userId: user.id,
           chatId: subagentExtra?.chatId,
+          originMessageCursor: subagentExtra?.originMessageCursor,
           user,
           isDesktop: !!desktopActionSink,
           timezoneOffset,
@@ -7552,6 +7561,7 @@ export const sendMessageThroughAi = async (
   };
   let assistantTelegramChatId: number | null = null;
   let userMessageId = 0;
+  let userMessageCursor: number | undefined;
   const telegramOriginChatId = Number(options?.userTelegramChatId);
   const externalChatOrigin = options?.notifyDesktopChatUpdates === true
     || (Number.isFinite(telegramOriginChatId) && telegramOriginChatId !== 0);
@@ -7690,6 +7700,13 @@ export const sendMessageThroughAi = async (
     }
   }
   const isRegeneratingFromHistory = Boolean(regenerateUserMessage);
+  if (isRegeneratingFromHistory) {
+    userMessageCursor = (db.prepare(`
+      SELECT timeline_index FROM chat_messages
+      WHERE chat_id = ? AND user_id = ? AND role = 'user' AND archived = 0
+      ORDER BY id DESC LIMIT 1
+    `).get(chatId, userId) as { timeline_index: number } | undefined)?.timeline_index;
+  }
 
   // ── Persist the user message EARLY, before any long AI work begins ──
   // This guarantees the user's request survives even if generation is
@@ -7709,6 +7726,10 @@ export const sendMessageThroughAi = async (
     const userMessageImages = options?.userImages?.length ? options.userImages : null;
     const userMessageAttachments = options?.userAttachments?.length ? options.userAttachments : null;
     userMessageId = await appendChatMessage(userId, chatId, 'user', userTextForHistory, userTelegramChatId, userTelegramMessageId, userMessageImages, null, null, userMessageAttachments);
+    userMessageCursor = (db.prepare(`
+      SELECT timeline_index FROM chat_messages
+      WHERE id = ? AND chat_id = ? AND user_id = ?
+    `).get(userMessageId, chatId, userId) as { timeline_index: number } | undefined)?.timeline_index;
     if (options?.onUserMessageSaved) {
       await Promise.resolve(options.onUserMessageSaved({
         message_id: userMessageId,
@@ -8394,6 +8415,7 @@ const runOneToolCall = async (toolCall: any, emitStatus = true): Promise<Execute
         abortController.signal,
         {
           chatId,
+          originMessageCursor: userMessageCursor,
           manualModel: subagentManualModel,
           subagentMode,
           subagentReasoningLevel,

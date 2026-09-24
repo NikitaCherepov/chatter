@@ -39,6 +39,8 @@ type RunCompletionFn = (
   },
 ) => Promise<any>;
 type SubagentExtra = {
+  chatId?: number;
+  originMessageCursor?: number;
   manualModel?: any;
   subagentMode?: 'auto' | 'manual';
   subagentReasoningLevel?: any;
@@ -492,6 +494,7 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
               // sendToDesktop(), so non-Desktop clients may never receive it.
               {
                 chatId: ctx.chatId,
+                originMessageCursor: ctx.originMessageCursor,
                 manualModel: ctx.manualModel,
                 subagentMode: ctx.subagentMode,
                 subagentReasoningLevel: reasoningLevel,

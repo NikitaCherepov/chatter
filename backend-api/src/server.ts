@@ -2196,7 +2196,7 @@ app.get('/api/v1/chats/:id/room/status', (req: AuthedRequest, res) => {
   return res.json({ active: hasActiveRoomRun(chatId) });
 });
 
-app.post('/api/v1/chats/:id/fork', (req: AuthedRequest, res) => {
+app.post('/api/v1/chats/:id/fork', async (req: AuthedRequest, res) => {
   const userId = accountIdFromRequest(req);
   const sourceChatId = Number.parseInt(req.params.id, 10);
   if (!Number.isFinite(sourceChatId) || sourceChatId <= 0) {
@@ -2217,7 +2217,30 @@ app.post('/api/v1/chats/:id/fork', (req: AuthedRequest, res) => {
   }
   const result = forkChat(userId, sourceChatId, fromMessageId, title);
   if (!result) return res.status(404).json({ error: 'chat_or_message_not_found' });
-  return res.status(201).json(result);
+  const { anchor_timeline_index, ...forkResult } = result;
+  try {
+    const memoryClone = await VectorMemoryService.cloneChatMemoryForFork(
+      userId,
+      sourceChatId,
+      result.chat_id,
+      anchor_timeline_index,
+    );
+    return res.status(201).json({ ...forkResult, memory_clone: { status: 'completed', ...memoryClone } });
+  } catch (error) {
+    // The chat and its message history are already committed. Returning 201
+    // avoids a retry creating a duplicate branch, while making the partial
+    // memory failure visible to clients and server logs.
+    console.error('[chat-fork] memory clone failed', {
+      user_id: userId,
+      source_chat_id: sourceChatId,
+      target_chat_id: result.chat_id,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return res.status(201).json({
+      ...forkResult,
+      memory_clone: { status: 'failed', error: 'memory_clone_failed' },
+    });
+  }
 });
 
 app.post('/api/v1/chats/:id/activate', (req: AuthedRequest, res) => {

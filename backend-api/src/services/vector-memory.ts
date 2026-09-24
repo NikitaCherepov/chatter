@@ -1,5 +1,6 @@
 import OpenAI from 'openai';
 import { Pinecone } from '@pinecone-database/pinecone';
+import { randomUUID } from 'node:crypto';
 import { db } from '../db.js';
 import { resolveAccountId } from './accounts.js';
 import { getVectorMemoryStorage } from './vector-memory-settings.js';
@@ -7,6 +8,7 @@ import {
   deleteQdrantChunks,
   deleteQdrantSpace,
   deleteQdrantUser,
+  fetchQdrantVectors,
   queryQdrantVectors,
   upsertQdrantVectors,
 } from './qdrant-memory.js';
@@ -14,6 +16,7 @@ import {
   createMemoryRecord,
   getOwnedMemoryRecord,
   getRecordChunks,
+  initializeForkedChatMemory,
   listMemoryRecords,
   removeCanonicalMemoryRecord,
   resolveReadMemorySpaces,
@@ -242,7 +245,13 @@ export class VectorMemoryService {
     }).sort((left, right) => right.created_at - left.created_at);
   }
 
-  static async saveFactBatched(userId: number, fullText: string, sourceTag: string, chatId?: number) {
+  static async saveFactBatched(
+    userId: number,
+    fullText: string,
+    sourceTag: string,
+    chatId?: number,
+    originMessageCursor?: number | null,
+  ) {
     try {
       const safeText = `${fullText || ''}`.trim();
       if (!safeText) throw new Error('text_required');
@@ -298,6 +307,7 @@ export class VectorMemoryService {
           spaceId: space.id,
           text: safeText,
           source: safeSource,
+          originMessageCursor,
           createdAt: now,
           chunks: chunks.map((chunk, chunkIndex) => ({
             id: `${baseId}_chunk_${chunkIndex}`,
@@ -354,6 +364,127 @@ export class VectorMemoryService {
 
   static async saveChunk(userId: number, textChunk: string, sourceTag: string, chatId?: number) {
     return this.saveFactBatched(userId, textChunk, sourceTag, chatId);
+  }
+
+  static async cloneChatMemoryForFork(
+    userId: number,
+    sourceChatId: number,
+    targetChatId: number,
+    anchorTimelineIndex: number,
+  ) {
+    const accountId = resolveAccountId(Math.floor(userId));
+    const plan = initializeForkedChatMemory(
+      accountId,
+      sourceChatId,
+      targetChatId,
+      anchorTimelineIndex,
+    );
+    if (!plan.sourceSpace || !plan.targetSpace || !plan.records.length) {
+      return { copied_records: 0, copied_chunks: 0 };
+    }
+    if (plan.records.some(item => item.chunks.length === 0)) {
+      throw new Error('memory_chunks_not_found');
+    }
+
+    const sourceChunkIds = plan.records.flatMap(item => item.chunks.map(chunk => chunk.id));
+    const sourceVectors = new Map<string, {
+      values: number[];
+      metadata?: Record<string, unknown>;
+    }>();
+    if (getVectorMemoryStorage() === 'qdrant') {
+      const vectors = await fetchQdrantVectors(accountId, plan.sourceSpace.id, sourceChunkIds);
+      vectors.forEach(vector => sourceVectors.set(vector.id, vector));
+    } else {
+      const namespace = getPineconeIndex().namespace(plan.sourceSpace.namespace_key);
+      for (let offset = 0; offset < sourceChunkIds.length; offset += 100) {
+        const batch = sourceChunkIds.slice(offset, offset + 100);
+        const fetched = await namespace.fetch(batch);
+        for (const chunkId of batch) {
+          const vector = fetched.records?.[chunkId];
+          if (!vector?.values?.length) throw new Error(`memory_vector_not_found:${chunkId}`);
+          sourceVectors.set(chunkId, {
+            values: vector.values,
+            metadata: vector.metadata as Record<string, unknown> | undefined,
+          });
+        }
+      }
+    }
+
+    const clones = plan.records.map(item => {
+      const recordId = `fact_${randomUUID()}`;
+      const chunks = item.chunks.map((chunk, index) => {
+        const sourceVector = sourceVectors.get(chunk.id);
+        if (!sourceVector) throw new Error(`memory_vector_not_found:${chunk.id}`);
+        const chunkId = `${recordId}_chunk_${index}`;
+        return {
+          id: chunkId,
+          text: chunk.text,
+          index,
+          values: sourceVector.values,
+          metadata: {
+            ...(sourceVector.metadata || {}),
+            text: chunk.text,
+            source: item.record.source,
+            timestamp: item.record.created_at,
+            chunk_index: index,
+            total_chunks: item.chunks.length,
+            record_id: recordId,
+          },
+        };
+      });
+      return { recordId, source: item.record, chunks };
+    });
+    const targetVectors = clones.flatMap(clone => clone.chunks.map(chunk => ({
+      id: chunk.id,
+      values: chunk.values,
+      metadata: chunk.metadata,
+    })));
+
+    try {
+      if (getVectorMemoryStorage() === 'qdrant') {
+        const vectorsByModel = new Map<string, typeof targetVectors>();
+        for (const vector of targetVectors) {
+          const embeddingModel = `${(vector.metadata as Record<string, unknown>).embedding_model || TIMEWEB_EMBED_MODEL}`;
+          const group = vectorsByModel.get(embeddingModel) || [];
+          group.push(vector);
+          vectorsByModel.set(embeddingModel, group);
+        }
+        for (const [embeddingModel, vectors] of vectorsByModel) {
+          await upsertQdrantVectors(accountId, plan.targetSpace, embeddingModel, vectors);
+        }
+      } else {
+        await getPineconeIndex().namespace(plan.targetSpace.namespace_key).upsert(targetVectors as any);
+      }
+      db.transaction(() => {
+        for (const clone of clones) {
+          createMemoryRecord({
+            id: clone.recordId,
+            userId: accountId,
+            spaceId: plan.targetSpace!.id,
+            text: clone.source.text,
+            source: clone.source.source,
+            originMessageCursor: clone.source.origin_message_cursor,
+            createdAt: clone.source.created_at,
+            chunks: clone.chunks.map(chunk => ({
+              id: chunk.id,
+              text: chunk.text,
+              index: chunk.index,
+            })),
+          });
+        }
+      })();
+    } catch (error) {
+      if (getVectorMemoryStorage() === 'qdrant') {
+        await deleteQdrantChunks(accountId, plan.targetSpace.id, targetVectors.map(vector => vector.id));
+      } else {
+        await deletePineconeResource(() =>
+          getPineconeIndex().namespace(plan.targetSpace!.namespace_key)
+            .deleteMany(targetVectors.map(vector => vector.id))
+        );
+      }
+      throw error;
+    }
+    return { copied_records: clones.length, copied_chunks: targetVectors.length };
   }
 
   static async search(userId: number, query: string, topK = 3, chatId?: number) {

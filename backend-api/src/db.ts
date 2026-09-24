@@ -61,6 +61,7 @@ db.exec(`
     chat_id INTEGER,
     telegram_chat_id INTEGER,
     telegram_message_id INTEGER,
+    timeline_index INTEGER,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
@@ -587,6 +588,27 @@ ensureChatMessageColumn('agent_id', 'ALTER TABLE chat_messages ADD COLUMN agent_
 ensureChatMessageColumn('attachments', 'ALTER TABLE chat_messages ADD COLUMN attachments TEXT');
 // Subagent traces — полные trace ad-hoc субагентов для UI-отображения (не уходит в AI-контекст)
 ensureChatMessageColumn('subagents_json', 'ALTER TABLE chat_messages ADD COLUMN subagents_json TEXT');
+// Stable position inside a chat timeline. Unlike the global row id, this value
+// is preserved when a chat is forked, so memory provenance remains comparable
+// in branches of branches. Deleted messages intentionally leave gaps.
+ensureChatMessageColumn('timeline_index', 'ALTER TABLE chat_messages ADD COLUMN timeline_index INTEGER');
+db.exec(`
+  UPDATE chat_messages SET timeline_index = id WHERE timeline_index IS NULL;
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_chat_messages_chat_timeline
+    ON chat_messages(chat_id, timeline_index) WHERE chat_id IS NOT NULL;
+  CREATE TRIGGER IF NOT EXISTS trg_chat_messages_timeline_ai
+  AFTER INSERT ON chat_messages
+  WHEN NEW.timeline_index IS NULL
+  BEGIN
+    UPDATE chat_messages
+    SET timeline_index = COALESCE((
+      SELECT MAX(existing.timeline_index)
+      FROM chat_messages existing
+      WHERE existing.chat_id = NEW.chat_id AND existing.id <> NEW.id
+    ), 0) + 1
+    WHERE id = NEW.id;
+  END;
+`);
 
 // ── user_chats: bot visibility flag ────────────────────────────────────────
 // bot_hidden = 1 excludes the chat from the bot's search_chat_history tool.
@@ -1378,6 +1400,7 @@ db.exec(`
     memory_space_id INTEGER NOT NULL,
     text TEXT NOT NULL,
     source TEXT NOT NULL DEFAULT 'manual',
+    origin_message_cursor INTEGER,
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL,
     deleted_at INTEGER
@@ -1426,6 +1449,7 @@ ensureMemoryColumn('personas', 'is_primary', 'ALTER TABLE personas ADD COLUMN is
 ensureMemoryColumn('personas', 'allow_core_memory_update', 'ALTER TABLE personas ADD COLUMN allow_core_memory_update INTEGER NOT NULL DEFAULT 1 CHECK (allow_core_memory_update IN (0, 1))');
 ensureMemoryColumn('chat_memory_settings', 'persona_override_id', 'ALTER TABLE chat_memory_settings ADD COLUMN persona_override_id INTEGER');
 ensureMemoryColumn('memory_spaces', 'is_primary', 'ALTER TABLE memory_spaces ADD COLUMN is_primary INTEGER NOT NULL DEFAULT 0 CHECK (is_primary IN (0, 1))');
+ensureMemoryColumn('memory_records', 'origin_message_cursor', 'ALTER TABLE memory_records ADD COLUMN origin_message_cursor INTEGER');
 db.exec(`
   UPDATE memory_spaces
   SET is_primary = 1

@@ -53,6 +53,7 @@ export type MemoryRecord = {
   memory_space_id: number;
   text: string;
   source: string;
+  origin_message_cursor: number | null;
   created_at: number;
   updated_at: number;
   deleted_at: number | null;
@@ -475,6 +476,7 @@ export const createMemoryRecord = (input: {
   spaceId: number;
   text: string;
   source: string;
+  originMessageCursor?: number | null;
   chunks: Array<{ id: string; text: string; index: number }>;
   createdAt?: number;
 }) => db.transaction(() => {
@@ -484,9 +486,13 @@ export const createMemoryRecord = (input: {
   if (!space) throw new Error('memory_space_not_found');
   const now = input.createdAt || getNowUnix();
   db.prepare(`
-    INSERT INTO memory_records (id, user_id, memory_space_id, text, source, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(input.id, accountId, input.spaceId, input.text, input.source, now, now);
+    INSERT INTO memory_records (
+      id, user_id, memory_space_id, text, source, origin_message_cursor, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    input.id, accountId, input.spaceId, input.text, input.source,
+    input.originMessageCursor ?? null, now, now,
+  );
   const insertChunk = db.prepare(`
     INSERT INTO memory_chunks (
       id, memory_record_id, user_id, memory_space_id, text,
@@ -498,6 +504,98 @@ export const createMemoryRecord = (input: {
     chunk.index, input.chunks.length, now, now,
   ));
 })();
+
+export type ForkableMemoryRecord = {
+  record: MemoryRecord;
+  chunks: Array<{
+    id: string;
+    text: string;
+    index: number;
+  }>;
+};
+
+export type ChatMemoryForkPlan = {
+  sourceSpace: MemorySpace | null;
+  targetSpace: MemorySpace | null;
+  records: ForkableMemoryRecord[];
+};
+
+/**
+ * Copy chat-level memory settings and prepare a separate chat memory space for
+ * a fork. General memory is referenced, never duplicated. Records with a NULL
+ * cursor are manual/legacy memories and intentionally follow the branch.
+ */
+export const initializeForkedChatMemory = (
+  userId: number,
+  sourceChatId: number,
+  targetChatId: number,
+  anchorTimelineIndex: number,
+): ChatMemoryForkPlan => {
+  const accountId = requireChatAccess(userId, sourceChatId);
+  requireChatAccess(accountId, targetChatId);
+  const sourceSettings = db.prepare(`
+    SELECT * FROM chat_memory_settings WHERE user_id = ? AND chat_id = ?
+  `).get(accountId, sourceChatId) as ChatMemorySettings | undefined;
+  if (!sourceSettings) return { sourceSpace: null, targetSpace: null, records: [] };
+
+  return db.transaction(() => {
+    const sourceSpace = sourceSettings.chat_space_id === null
+      ? null
+      : db.prepare(`
+          SELECT * FROM memory_spaces
+          WHERE id = ? AND user_id = ? AND kind = 'chat' AND chat_id = ? AND archived_at IS NULL
+        `).get(sourceSettings.chat_space_id, accountId, sourceChatId) as MemorySpace | undefined;
+    const targetSpace = sourceSpace ? ensureChatMemorySpace(accountId, targetChatId) : null;
+    const now = getNowUnix();
+    db.prepare(`
+      INSERT INTO chat_memory_settings (
+        user_id, chat_id, persona_id, persona_override_id, general_space_id, chat_space_id,
+        memory_mode, write_target, use_core_memory, allow_core_memory_update, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(user_id, chat_id) DO UPDATE SET
+        persona_id = excluded.persona_id,
+        persona_override_id = excluded.persona_override_id,
+        general_space_id = excluded.general_space_id,
+        chat_space_id = excluded.chat_space_id,
+        memory_mode = excluded.memory_mode,
+        write_target = excluded.write_target,
+        use_core_memory = excluded.use_core_memory,
+        allow_core_memory_update = excluded.allow_core_memory_update,
+        updated_at = excluded.updated_at
+    `).run(
+      accountId, targetChatId, sourceSettings.persona_id, sourceSettings.persona_override_id,
+      sourceSettings.general_space_id, targetSpace?.id ?? null, sourceSettings.memory_mode,
+      sourceSettings.write_target, sourceSettings.use_core_memory,
+      sourceSettings.allow_core_memory_update, now, now,
+    );
+
+    if (!sourceSpace || !targetSpace) {
+      return { sourceSpace: sourceSpace ?? null, targetSpace, records: [] };
+    }
+    const records = db.prepare(`
+      SELECT * FROM memory_records
+      WHERE user_id = ? AND memory_space_id = ? AND deleted_at IS NULL
+        AND (origin_message_cursor IS NULL OR origin_message_cursor <= ?)
+      ORDER BY created_at ASC, id ASC
+    `).all(accountId, sourceSpace.id, anchorTimelineIndex) as MemoryRecord[];
+    return {
+      sourceSpace,
+      targetSpace,
+      records: records.map(record => ({
+        record,
+        chunks: (db.prepare(`
+          SELECT id, text, chunk_index FROM memory_chunks
+          WHERE user_id = ? AND memory_record_id = ?
+          ORDER BY chunk_index ASC
+        `).all(accountId, record.id) as Array<{ id: string; text: string; chunk_index: number }>).map(chunk => ({
+          id: chunk.id,
+          text: chunk.text,
+          index: chunk.chunk_index,
+        })),
+      })),
+    };
+  })();
+};
 
 export const listMemoryRecords = (
   userId: number,

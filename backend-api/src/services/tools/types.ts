@@ -18,6 +18,7 @@ export interface ToolContext {
   user?: UserRecord;
   billingUser?: UserRecord;
   chatId?: number;
+  originMessageCursor?: number;
   timezoneOffset: number;
   signal?: AbortSignal;
   /**

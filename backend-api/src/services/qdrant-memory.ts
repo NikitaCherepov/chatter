@@ -141,6 +141,35 @@ export const verifyQdrantVectors = async (pointIds: string[]) => {
   return found.size === new Set(pointIds).size;
 };
 
+export const fetchQdrantVectors = async (
+  userId: number,
+  memorySpaceId: number,
+  chunkIds: string[],
+): Promise<QdrantVectorInput[]> => {
+  if (!chunkIds.length) return [];
+  const byChunkId = new Map<string, QdrantVectorInput>();
+  for (let offset = 0; offset < chunkIds.length; offset += 256) {
+    const batch = chunkIds.slice(offset, offset + 256);
+    const points = await getQdrantClient().retrieve(QDRANT_COLLECTION, {
+      ids: batch.map(chunkId => qdrantPointId(userId, memorySpaceId, chunkId)),
+      with_payload: true,
+      with_vector: true,
+    });
+    for (const point of points) {
+      const payload = point.payload as Record<string, unknown> | null | undefined;
+      const chunkId = `${payload?.chunk_id || ''}`;
+      const values = Array.isArray(point.vector) ? point.vector.map(Number) : [];
+      if (!chunkId || !values.length) continue;
+      byChunkId.set(chunkId, { id: chunkId, values, metadata: payload || {} });
+    }
+  }
+  return chunkIds.map(chunkId => {
+    const vector = byChunkId.get(chunkId);
+    if (!vector) throw new Error(`memory_vector_not_found:${chunkId}`);
+    return vector;
+  });
+};
+
 export const deleteQdrantChunks = async (userId: number, memorySpaceId: number, chunkIds: string[]) => {
   if (!chunkIds.length) return;
   await getQdrantClient().delete(QDRANT_COLLECTION, {

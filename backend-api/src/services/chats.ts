@@ -531,7 +531,7 @@ export const forkChat = (
   sourceChatId: number,
   fromMessageId: number,
   customTitle?: string
-): { chat_id: number; forked_messages: number } | null => {
+): { chat_id: number; forked_messages: number; anchor_timeline_index: number } | null => {
   // Verify the source chat belongs to the user.
   const sourceChat = db.prepare(`
     SELECT id, title, room_enabled, room_response_mode, room_auto_respond,
@@ -553,8 +553,8 @@ export const forkChat = (
   // authored by anyone (e.g. a former member of an emptied room) — the
   // endpoint above only lets effectively single-reader chats through.
   const anchor = db.prepare(
-    'SELECT id FROM chat_messages WHERE id = ? AND chat_id = ?'
-  ).get(fromMessageId, sourceChatId) as { id: number } | undefined;
+    'SELECT id, timeline_index FROM chat_messages WHERE id = ? AND chat_id = ?'
+  ).get(fromMessageId, sourceChatId) as { id: number; timeline_index: number } | undefined;
   if (!anchor) return null;
 
   // Resolve title.
@@ -662,7 +662,7 @@ export const forkChat = (
       SELECT id, role, content, images, audio, reasoning_content,
              tool_calls_json, token_count, reasoning_tokens,
              attachments, subagents_json, usage_json, prompt_id, prompt_name, model_name, provider_name,
-             agent_id, archived, created_at
+             agent_id, archived, timeline_index, created_at
       FROM chat_messages
       WHERE chat_id = ? AND id <= ?
       ORDER BY id ASC
@@ -686,6 +686,7 @@ export const forkChat = (
       provider_name: string | null;
       agent_id: number | null;
       archived: number;
+      timeline_index: number;
     }>;
 
     const insertStmt = db.prepare(`
@@ -694,9 +695,9 @@ export const forkChat = (
         telegram_chat_id, telegram_message_id,
         images, audio, reasoning_content, tool_calls_json,
         token_count, reasoning_tokens, attachments, subagents_json,
-        usage_json, prompt_id, prompt_name, model_name, provider_name, agent_id, archived, created_at
+        usage_json, prompt_id, prompt_name, model_name, provider_name, agent_id, archived, timeline_index, created_at
       )
-      VALUES (?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     for (const row of rows) {
@@ -743,6 +744,7 @@ export const forkChat = (
         row.provider_name,
         row.agent_id === null ? null : (agentIdMap.get(row.agent_id) ?? null),
         row.archived,          // preserve archived state
+        row.timeline_index,    // stable branch cursor for memory provenance
         row.created_at         // preserve original timestamps
       );
       if (row.images) {
@@ -764,7 +766,11 @@ export const forkChat = (
     db.prepare('UPDATE user_chats SET updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?')
       .run(newChatId, userId);
 
-    return { chat_id: newChatId, forked_messages: rows.length };
+    return {
+      chat_id: newChatId,
+      forked_messages: rows.length,
+      anchor_timeline_index: anchor.timeline_index,
+    };
   });
 
   return tx();
