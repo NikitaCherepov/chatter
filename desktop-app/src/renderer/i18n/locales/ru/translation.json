@@ -229,7 +229,30 @@
       "currentPassword": "Текущий пароль",
       "newPassword": "Новый пароль",
       "changeLogin": "Сменить логин",
-      "newLogin": "Новый логин"
+      "newLogin": "Новый логин",
+      "personas": {
+        "label": "Персона",
+        "help": "«Основное» сохраняет обычное имя и горячую память. Дополнительные персоны можно выбирать отдельно для каждого чата.",
+        "main": "Основное",
+        "accountName": "Имя аккаунта",
+        "accountNameValue": "Имя аккаунта: {{name}}",
+        "selectPlaceholder": "Выберите персону",
+        "mainBadge": "основное",
+        "personaBadge": "персона",
+        "otherSection": "Другие персоны",
+        "createTitle": "Новая персона",
+        "createDescription": "Добавить имя, описание и горячую память",
+        "namePlaceholder": "Имя персоны",
+        "descriptionPlaceholder": "Короткое описание",
+        "coreMemory": "Горячая память",
+        "allowCoreMemoryUpdate": "Автоматически обновлять горячую память",
+        "deleted": "Персона удалена; её чаты переключены на «Автоматически»",
+        "errors": {
+          "select": "Не удалось выбрать персону",
+          "nameRequired": "Введите имя персоны",
+          "delete": "Не удалось удалить персону"
+        }
+      }
     },
     "prompt": {
       "style": "Стиль общения",
@@ -463,6 +486,50 @@
     },
     "export": {
       "defaultTitle": "Чат"
+    },
+    "memory": {
+      "personaAutomatic": "Автоматически",
+      "personaGlobal": "Глобально: {{name}}",
+      "personaMain": "Основное",
+      "personaAccountName": "Имя аккаунта: {{name}}",
+      "personasLoadFailed": "Не удалось загрузить персоны",
+      "personaSelectFailed": "Не удалось выбрать персону для чата",
+      "globalSettings": {
+        "title": "Память",
+        "hint": "Общие векторные воспоминания доступны в чатах, где выбран режим «Общая» или «Обе».",
+        "spaceLabel": "Общая память",
+        "recordsTitle": "Воспоминания",
+        "empty": "Здесь пока пусто",
+        "creating": "Создание...",
+        "createSpaceAction": "Создать общую память",
+        "renameSpaceAction": "Переименовать память",
+        "deleteSpaceAction": "Удалить память",
+        "editRecordAction": "Редактировать воспоминание",
+        "deleteRecordAction": "Удалить воспоминание",
+        "dialogs": {
+          "createTitle": "Новая общая память",
+          "createText": "Введите название пространства памяти.",
+          "namePlaceholder": "Название памяти",
+          "renameTitle": "Переименовать память",
+          "renameText": "Введите новое название пространства памяти.",
+          "deleteSpaceTitle": "Удалить память?",
+          "deleteSpaceText": "Пространство «{{name}}» и все его воспоминания будут удалены без возможности восстановления.",
+          "editRecordTitle": "Редактировать воспоминание",
+          "editRecordText": "После сохранения текст будет векторизован заново. Ctrl+Enter — сохранить.",
+          "deleteRecordTitle": "Удалить воспоминание?",
+          "deleteRecordText": "Воспоминание и связанные с ним векторы будут удалены без возможности восстановления."
+        },
+        "errors": {
+          "loadSpaces": "Не удалось загрузить общую память",
+          "loadRecords": "Не удалось загрузить воспоминания",
+          "selectSpace": "Не удалось выбрать общую память",
+          "createSpace": "Не удалось создать общую память",
+          "renameSpace": "Не удалось переименовать память",
+          "deleteSpace": "Не удалось удалить память",
+          "updateRecord": "Не удалось изменить воспоминание",
+          "deleteRecord": "Не удалось удалить воспоминание"
+        }
+      }
     },
     "sidebar": {
       "chats": "Чаты",

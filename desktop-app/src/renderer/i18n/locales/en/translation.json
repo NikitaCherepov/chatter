@@ -229,7 +229,30 @@
       "currentPassword": "Current Password",
       "newPassword": "New Password",
       "changeLogin": "Change Login",
-      "newLogin": "New Login"
+      "newLogin": "New Login",
+      "personas": {
+        "label": "Persona",
+        "help": "Main keeps your regular account name and core memory. Additional personas can be selected separately for each chat.",
+        "main": "Main",
+        "accountName": "Account name",
+        "accountNameValue": "Account name: {{name}}",
+        "selectPlaceholder": "Select a persona",
+        "mainBadge": "main",
+        "personaBadge": "persona",
+        "otherSection": "Other personas",
+        "createTitle": "New persona",
+        "createDescription": "Add a name, description, and core memory",
+        "namePlaceholder": "Persona name",
+        "descriptionPlaceholder": "Short description",
+        "coreMemory": "Core memory",
+        "allowCoreMemoryUpdate": "Automatically update core memory",
+        "deleted": "Persona deleted; its chats were switched to Automatically",
+        "errors": {
+          "select": "Could not select persona",
+          "nameRequired": "Enter a persona name",
+          "delete": "Could not delete persona"
+        }
+      }
     },
     "connections": {
       "help": "Manage services that can sign in to and use this account.",
@@ -470,6 +493,48 @@
       "headerTitle": "Chat memory",
       "headerHint": "Settings apply instantly",
       "persona": "Persona",
+      "personaAutomatic": "Automatically",
+      "personaGlobal": "Global: {{name}}",
+      "personaMain": "Main",
+      "personaAccountName": "Account name: {{name}}",
+      "personasLoadFailed": "Could not load personas",
+      "personaSelectFailed": "Could not select a persona for this chat",
+      "globalSettings": {
+        "title": "Memory",
+        "hint": "Shared vector memories are available in chats using Shared only or Shared and this chat mode.",
+        "spaceLabel": "Shared memory",
+        "recordsTitle": "Memories",
+        "empty": "Nothing here yet",
+        "creating": "Creating...",
+        "createSpaceAction": "Create shared memory",
+        "renameSpaceAction": "Rename memory",
+        "deleteSpaceAction": "Delete memory",
+        "editRecordAction": "Edit memory",
+        "deleteRecordAction": "Delete memory",
+        "dialogs": {
+          "createTitle": "New shared memory",
+          "createText": "Enter a name for the memory space.",
+          "namePlaceholder": "Memory name",
+          "renameTitle": "Rename memory",
+          "renameText": "Enter a new name for the memory space.",
+          "deleteSpaceTitle": "Delete memory?",
+          "deleteSpaceText": "The space “{{name}}” and all its memories will be permanently deleted.",
+          "editRecordTitle": "Edit memory",
+          "editRecordText": "The text will be vectorized again after saving. Press Ctrl+Enter to save.",
+          "deleteRecordTitle": "Delete memory?",
+          "deleteRecordText": "The memory and its associated vectors will be permanently deleted."
+        },
+        "errors": {
+          "loadSpaces": "Could not load shared memory",
+          "loadRecords": "Could not load memories",
+          "selectSpace": "Could not select shared memory",
+          "createSpace": "Could not create shared memory",
+          "renameSpace": "Could not rename memory",
+          "deleteSpace": "Could not delete memory",
+          "updateRecord": "Could not update memory",
+          "deleteRecord": "Could not delete memory"
+        }
+      },
       "modeLabel": "Use memory",
       "mode": {
         "off": "Disabled",

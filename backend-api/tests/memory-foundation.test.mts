@@ -9,10 +9,13 @@ const {
   canAccessChat,
   archiveGeneralMemorySpace,
   createGeneralMemorySpace,
+  createMemoryRecord,
   createPersona,
   deletePersona,
   getChatMemorySettings,
   getPrimaryPersona,
+  listChatMemorySpacesForDeletion,
+  purgeCanonicalChatMemory,
   resolvePersonaForChat,
   resolveReadMemorySpaces,
   renameGeneralMemorySpace,
@@ -102,5 +105,34 @@ assert.deepEqual(rows, [
   { user_id: 101, chat_id: roomId },
   { user_id: 202, chat_id: roomId },
 ]);
+
+const ownerChatSettings = updateChatMemorySettings(101, roomId, {
+  memory_mode: 'chat',
+  write_target: 'chat',
+});
+assert.ok(ownerChatSettings.chat_space_id);
+createMemoryRecord({
+  id: 'owner-room-memory',
+  userId: 101,
+  spaceId: ownerChatSettings.chat_space_id!,
+  text: 'owner room memory',
+  source: 'automatic',
+  chunks: [{ id: 'owner-room-memory_chunk_0', text: 'owner room memory', index: 0 }],
+});
+createMemoryRecord({
+  id: 'member-room-memory',
+  userId: 202,
+  spaceId: memberChatSettings.chat_space_id!,
+  text: 'member room memory',
+  source: 'automatic',
+  chunks: [{ id: 'member-room-memory_chunk_0', text: 'member room memory', index: 0 }],
+});
+assert.equal(listChatMemorySpacesForDeletion(101, roomId).length, 2, 'owner deletion includes every room member chat space');
+assert.throws(() => listChatMemorySpacesForDeletion(303, roomId), /chat_not_found/);
+assert.equal(purgeCanonicalChatMemory(101, roomId).spaces_deleted, 2);
+assert.equal((db.prepare('SELECT COUNT(*) AS count FROM memory_spaces WHERE chat_id = ?').get(roomId) as { count: number }).count, 0);
+assert.equal((db.prepare('SELECT COUNT(*) AS count FROM chat_memory_settings WHERE chat_id = ?').get(roomId) as { count: number }).count, 0);
+assert.equal((db.prepare("SELECT COUNT(*) AS count FROM memory_records WHERE id IN ('owner-room-memory', 'member-room-memory')").get() as { count: number }).count, 0);
+assert.equal((db.prepare("SELECT COUNT(*) AS count FROM memory_chunks WHERE id IN ('owner-room-memory_chunk_0', 'member-room-memory_chunk_0')").get() as { count: number }).count, 0);
 
 console.log('memory foundation tests passed');

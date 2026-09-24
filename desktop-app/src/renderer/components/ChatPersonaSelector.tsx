@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import * as api from '../lib/api';
 import { Select } from './Select';
@@ -8,6 +9,7 @@ type Persona = { id: number; name: string; description: string; is_primary: numb
 type ChatMemorySettings = { persona_override_id: number | null };
 
 export function ChatPersonaSelector({ chatId, embedded = false }: { chatId: number; embedded?: boolean }) {
+  const { t } = useTranslation();
   const [personas, setPersonas] = useState<Persona[]>([]);
   const [overrideId, setOverrideId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
@@ -21,9 +23,9 @@ export function ChatPersonaSelector({ chatId, embedded = false }: { chatId: numb
       setPersonas(personaResult.personas);
       setOverrideId(settingsResult.settings.persona_override_id);
     } catch {
-      toast.error('Не удалось загрузить персоны');
+      toast.error(t('chat.memory.personasLoadFailed'));
     }
-  }, [chatId]);
+  }, [chatId, t]);
 
   useEffect(() => { void load(); }, [load]);
   useEffect(() => {
@@ -36,15 +38,21 @@ export function ChatPersonaSelector({ chatId, embedded = false }: { chatId: numb
   const options = useMemo(() => [
     {
       value: '',
-      label: 'Автоматически',
-      hint: activeGlobal ? `Глобально: ${activeGlobal.is_primary === 1 ? 'Основное' : activeGlobal.name}` : undefined,
+      label: t('chat.memory.personaAutomatic'),
+      hint: activeGlobal
+        ? t('chat.memory.personaGlobal', {
+            name: activeGlobal.is_primary === 1 ? t('chat.memory.personaMain') : activeGlobal.name,
+          })
+        : undefined,
     },
     ...personas.map(persona => ({
       value: String(persona.id),
-      label: persona.is_primary === 1 ? 'Основное' : persona.name,
-      hint: persona.is_primary === 1 ? `Имя аккаунта: ${persona.name}` : persona.description || undefined,
+      label: persona.is_primary === 1 ? t('chat.memory.personaMain') : persona.name,
+      hint: persona.is_primary === 1
+        ? t('chat.memory.personaAccountName', { name: persona.name })
+        : persona.description || undefined,
     })),
-  ], [personas, activeGlobal]);
+  ], [personas, activeGlobal, t]);
 
   const handleChange = async (value: string) => {
     const next = value ? Number(value) : null;
@@ -59,7 +67,7 @@ export function ChatPersonaSelector({ chatId, embedded = false }: { chatId: numb
       setOverrideId(result.settings.persona_override_id);
     } catch {
       setOverrideId(previous);
-      toast.error('Не удалось выбрать персону для чата');
+      toast.error(t('chat.memory.personaSelectFailed'));
     } finally {
       setSaving(false);
     }

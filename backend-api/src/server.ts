@@ -2486,13 +2486,26 @@ app.put('/api/v1/chats/:chatId/messages/:messageId', (req: AuthedRequest, res) =
   return res.json({ ok: true, token_count: result.token_count });
 });
 
-app.delete('/api/v1/chats/:chatId', (req: AuthedRequest, res) => {
+app.delete('/api/v1/chats/:chatId', async (req: AuthedRequest, res) => {
   const userId = accountIdFromRequest(req);
   const chatId = Number.parseInt(req.params.chatId, 10);
   if (!Number.isFinite(chatId) || chatId <= 0) return res.status(400).json({ error: 'bad_chat_id' });
-  const ok = deleteUserChat(userId, chatId);
-  if (!ok) return res.status(404).json({ error: 'chat_not_found' });
-  return res.json({ ok: true });
+  try {
+    await VectorMemoryService.deleteChatMemory(userId, chatId);
+    const ok = deleteUserChat(userId, chatId);
+    if (!ok) return res.status(404).json({ error: 'chat_not_found' });
+    return res.json({ ok: true });
+  } catch (error) {
+    if (error instanceof Error && error.message === 'chat_not_found') {
+      return res.status(404).json({ error: 'chat_not_found' });
+    }
+    console.error('[chat-delete] memory cleanup failed', {
+      user_id: userId,
+      chat_id: chatId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return res.status(500).json({ error: 'chat_memory_cleanup_failed' });
+  }
 });
 
 // ── Send message to the account's Telegram identity ──
@@ -7666,15 +7679,25 @@ setInterval(() => {
 // reader's chat panel (touchUserChat). A chat with an active generation run is
 // skipped; it will be reconsidered on the next tick.
 const TEMPORARY_CHAT_TTL_MS = 10 * 60 * 1000;
+let temporaryChatSweepRunning = false;
 setInterval(() => {
-  for (const row of listStaleTemporaryChats(TEMPORARY_CHAT_TTL_MS)) {
-    if (hasActiveChatRun(row.id)) continue;
+  if (temporaryChatSweepRunning) return;
+  temporaryChatSweepRunning = true;
+  void (async () => {
     try {
-      deleteUserChat(row.user_id, row.id);
-    } catch (err: any) {
-      console.error('[temporary-chats] TTL sweep failed:', err?.message || String(err));
+      for (const row of listStaleTemporaryChats(TEMPORARY_CHAT_TTL_MS)) {
+        if (hasActiveChatRun(row.id)) continue;
+        try {
+          await VectorMemoryService.deleteChatMemory(row.user_id, row.id);
+          deleteUserChat(row.user_id, row.id);
+        } catch (err: any) {
+          console.error('[temporary-chats] TTL sweep failed:', err?.message || String(err));
+        }
+      }
+    } finally {
+      temporaryChatSweepRunning = false;
     }
-  }
+  })();
 }, 60 * 1000).unref();
 
 // ── WS chat_send handler ────────────────────────────────────────────────────

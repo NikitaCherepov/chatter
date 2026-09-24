@@ -945,7 +945,7 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
         localStorage.setItem('chatter_user', JSON.stringify(updated));
       }
     } catch {
-      toast.error('Не удалось выбрать персону');
+      toast.error(t('settings.account.personas.errors.select'));
     }
   };
 
@@ -954,7 +954,7 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
     const isPrimary = selectedPersona?.is_primary === 1;
     const name = personaName.trim();
     if (!isPrimary && !name) {
-      toast.error('Введите имя персоны');
+      toast.error(t('settings.account.personas.errors.nameRequired'));
       return;
     }
     setCoreMemorySaving(true);
@@ -997,9 +997,9 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
       await api.apiFetch(`/api/v1/memory/personas/${selectedPersonaId}`, { method: 'DELETE' });
       await loadPersonas();
       window.dispatchEvent(new Event('chatter:personas-changed'));
-      toast.success('Персона удалена; её чаты переключены на «Автоматически»');
+      toast.success(t('settings.account.personas.deleted'));
     } catch {
-      toast.error('Не удалось удалить персону');
+      toast.error(t('settings.account.personas.errors.delete'));
     } finally {
       setPersonaDeleting(false);
     }
@@ -1289,7 +1289,7 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
                 <span className={s.planBadge}>{(user?.plan || 'free').toUpperCase()}</span>
               </div>
               <div className={s.fieldGroup}>
-                <label className={s.fieldLabel}>{selectedPersonaIsPrimary ? t('settings.account.name') : 'Имя аккаунта'}</label>
+                <label className={s.fieldLabel}>{selectedPersonaIsPrimary ? t('settings.account.name') : t('settings.account.personas.accountName')}</label>
                 <input
                   className={s.fieldInput}
                   type="text"
@@ -1309,28 +1309,30 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
               </div>
 
               <div className={s.fieldGroup}>
-                <label className={s.fieldLabel}>Персона</label>
+                <label className={s.fieldLabel}>{t('settings.account.personas.label')}</label>
                 <span className={s.fieldLabel} style={{ marginTop: '-4px', display: 'block' }}>
-                  «Основное» сохраняет обычное имя и горячую память. Дополнительные персоны можно выбирать отдельно для каждого чата.
+                  {t('settings.account.personas.help')}
                 </span>
                 <PromptSelector
                   options={personas.map(persona => ({
                     id: persona.id,
-                    name: persona.is_primary === 1 ? 'Основное' : persona.name,
-                    description: persona.is_primary === 1 ? `Имя аккаунта: ${persona.name}` : persona.description,
+                    name: persona.is_primary === 1 ? t('settings.account.personas.main') : persona.name,
+                    description: persona.is_primary === 1
+                      ? t('settings.account.personas.accountNameValue', { name: persona.name })
+                      : persona.description,
                     kind: persona.is_primary === 1 ? 'default' as const : 'custom' as const,
                   }))}
                   value={selectedPersonaId}
                   onChange={handleSelectPersona}
                   disabled={coreMemorySaving || personaDeleting}
-                  placeholder="Выберите персону"
+                  placeholder={t('settings.account.personas.selectPlaceholder')}
                   maxVisibleItems={5}
                   labels={{
-                    defaultBadge: 'основное',
-                    customBadge: 'персона',
-                    customSection: 'Другие персоны',
-                    createTitle: 'Новая персона',
-                    createDescription: 'Добавить имя, описание и горячую память',
+                    defaultBadge: t('settings.account.personas.mainBadge'),
+                    customBadge: t('settings.account.personas.personaBadge'),
+                    customSection: t('settings.account.personas.otherSection'),
+                    createTitle: t('settings.account.personas.createTitle'),
+                    createDescription: t('settings.account.personas.createDescription'),
                   }}
                 />
                 {!selectedPersonaIsPrimary && (
@@ -1339,19 +1341,19 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
                       className={s.fieldInput}
                       value={personaName}
                       onChange={(e) => setPersonaName(e.target.value.slice(0, 80))}
-                      placeholder="Имя персоны"
+                      placeholder={t('settings.account.personas.namePlaceholder')}
                       maxLength={80}
                     />
                     <input
                       className={s.fieldInput}
                       value={personaDescription}
                       onChange={(e) => setPersonaDescription(e.target.value.slice(0, 240))}
-                      placeholder="Короткое описание"
+                      placeholder={t('settings.account.personas.descriptionPlaceholder')}
                       maxLength={240}
                     />
                   </>
                 )}
-                <label className={s.fieldLabel}>Горячая память</label>
+                <label className={s.fieldLabel}>{t('settings.account.personas.coreMemory')}</label>
                 <textarea
                   className={s.textareaInput}
                   value={coreMemory}
@@ -1363,7 +1365,7 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
                 <Checkbox
                   checked={allowCoreMemoryUpdate}
                   onChange={setAllowCoreMemoryUpdate}
-                  label="Автоматически обновлять горячую память"
+                  label={t('settings.account.personas.allowCoreMemoryUpdate')}
                   disabled={coreMemorySaving}
                 />
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>

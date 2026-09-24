@@ -235,6 +235,36 @@ export const listMemorySpaces = (userId: number): MemorySpace[] => {
   `).all(accountId) as MemorySpace[];
 };
 
+export const listChatMemorySpacesForDeletion = (ownerUserId: number, chatId: number): MemorySpace[] => {
+  const accountId = canonicalUserId(ownerUserId);
+  const ownsChat = db.prepare('SELECT 1 FROM user_chats WHERE id = ? AND user_id = ?')
+    .get(chatId, accountId);
+  if (!ownsChat) throw new Error('chat_not_found');
+  return db.prepare(`
+    SELECT * FROM memory_spaces
+    WHERE chat_id = ? AND kind = 'chat'
+    ORDER BY user_id ASC, id ASC
+  `).all(chatId) as MemorySpace[];
+};
+
+export const purgeCanonicalChatMemory = (ownerUserId: number, chatId: number) => {
+  const spaces = listChatMemorySpacesForDeletion(ownerUserId, chatId);
+  const spaceIds = spaces.map(space => space.id);
+  return db.transaction(() => {
+    if (spaceIds.length > 0) {
+      const placeholders = spaceIds.map(() => '?').join(', ');
+      db.prepare(`DELETE FROM memory_chunks WHERE memory_space_id IN (${placeholders})`)
+        .run(...spaceIds);
+      db.prepare(`DELETE FROM memory_records WHERE memory_space_id IN (${placeholders})`)
+        .run(...spaceIds);
+      db.prepare(`DELETE FROM memory_spaces WHERE id IN (${placeholders}) AND chat_id = ?`)
+        .run(...spaceIds, chatId);
+    }
+    db.prepare('DELETE FROM chat_memory_settings WHERE chat_id = ?').run(chatId);
+    return { spaces_deleted: spaces.length };
+  })();
+};
+
 export const createGeneralMemorySpace = (userId: number, name: string): MemorySpace => {
   const accountId = canonicalUserId(userId);
   ensureMemoryDefaults(accountId);

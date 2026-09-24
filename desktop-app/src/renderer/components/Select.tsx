@@ -180,12 +180,12 @@ export function Select({
         disabled={disabled}
         type="button"
       >
-        {!value ? (
-          <span className={s.triggerPlaceholder}>{placeholder}</span>
-        ) : (
+        {selectedOption ? (
           <span className={s.triggerContent}>
             {selectedLabel}
           </span>
+        ) : (
+          <span className={s.triggerPlaceholder}>{resolvedPlaceholder}</span>
         )}
         <span className={`${s.triggerArrow} ${isOpen ? s.triggerArrowOpen : ''}`}>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

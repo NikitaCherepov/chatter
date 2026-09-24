@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import * as api from '../lib/api';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -14,6 +15,7 @@ type MemoryDialog =
   | { type: 'delete-record'; record: MemoryRecord };
 
 export function GlobalMemorySettings() {
+  const { t } = useTranslation();
   const [spaces, setSpaces] = useState<MemorySpace[]>([]);
   const [selectedId, setSelectedId] = useState('');
   const [records, setRecords] = useState<MemoryRecord[]>([]);
@@ -50,13 +52,13 @@ export function GlobalMemorySettings() {
   useEffect(() => {
     setLoading(true);
     void loadSpaces()
-      .catch(() => toast.error('Не удалось загрузить общую память'))
+      .catch(() => toast.error(t('chat.memory.globalSettings.errors.loadSpaces')))
       .finally(() => setLoading(false));
-  }, [loadSpaces]);
+  }, [loadSpaces, t]);
 
   useEffect(() => {
-    void loadRecords(selectedId).catch(() => toast.error('Не удалось загрузить воспоминания'));
-  }, [selectedId, loadRecords]);
+    void loadRecords(selectedId).catch(() => toast.error(t('chat.memory.globalSettings.errors.loadRecords')));
+  }, [selectedId, loadRecords, t]);
 
   const selectSpace = async (value: string) => {
     const previous = selectedId;
@@ -66,7 +68,7 @@ export function GlobalMemorySettings() {
       setSpaces(items => items.map(space => ({ ...space, is_default: String(space.id) === value ? 1 : 0 })));
     } catch {
       setSelectedId(previous);
-      toast.error('Не удалось выбрать общую память');
+      toast.error(t('chat.memory.globalSettings.errors.selectSpace'));
     }
   };
 
@@ -84,7 +86,7 @@ export function GlobalMemorySettings() {
       setCreateOpen(false);
       setNewSpaceName('');
     } catch {
-      toast.error('Не удалось создать общую память');
+      toast.error(t('chat.memory.globalSettings.errors.createSpace'));
     } finally {
       setCreating(false);
     }
@@ -101,7 +103,7 @@ export function GlobalMemorySettings() {
       await loadSpaces(dialog.space.id);
       setDialog(null);
     } catch {
-      toast.error('Не удалось переименовать память');
+      toast.error(t('chat.memory.globalSettings.errors.renameSpace'));
     } finally {
       setSaving(false);
     }
@@ -117,7 +119,7 @@ export function GlobalMemorySettings() {
       await loadSpaces(result.active_space.id);
       setDialog(null);
     } catch {
-      toast.error('Не удалось удалить память');
+      toast.error(t('chat.memory.globalSettings.errors.deleteSpace'));
     } finally {
       setSaving(false);
     }
@@ -134,7 +136,7 @@ export function GlobalMemorySettings() {
       setRecords(items => items.map(record => record.id === result.record.id ? result.record : record));
       setDialog(null);
     } catch {
-      toast.error('Не удалось изменить воспоминание');
+      toast.error(t('chat.memory.globalSettings.errors.updateRecord'));
     } finally {
       setSaving(false);
     }
@@ -148,7 +150,7 @@ export function GlobalMemorySettings() {
       setRecords(items => items.filter(record => record.id !== dialog.record.id));
       setDialog(null);
     } catch {
-      toast.error('Не удалось удалить воспоминание');
+      toast.error(t('chat.memory.globalSettings.errors.deleteRecord'));
     } finally {
       setSaving(false);
     }
@@ -156,10 +158,10 @@ export function GlobalMemorySettings() {
 
   return (
     <div className={s.panel}>
-      <div className={s.title}>Память</div>
-      <div className={s.hint}>Общие векторные воспоминания доступны в чатах, где выбран режим «Общая» или «Обе».</div>
+      <div className={s.title}>{t('chat.memory.globalSettings.title')}</div>
+      <div className={s.hint}>{t('chat.memory.globalSettings.hint')}</div>
       <div className={s.field}>
-        <label>Общая память</label>
+        <label>{t('chat.memory.globalSettings.spaceLabel')}</label>
         <div className={s.selectorRow}>
           <div className={s.selector}>
             <Select
@@ -176,7 +178,7 @@ export function GlobalMemorySettings() {
               setNewSpaceName('');
               setCreateOpen(true);
             }}
-            title="Создать общую память"
+            title={t('chat.memory.globalSettings.createSpaceAction')}
           >+</button>
           {selectedSpace && (
             <button
@@ -186,8 +188,8 @@ export function GlobalMemorySettings() {
                 setDraft(selectedSpace.name);
                 setDialog({ type: 'rename-space', space: selectedSpace });
               }}
-              title="Переименовать память"
-              aria-label="Переименовать память"
+              title={t('chat.memory.globalSettings.renameSpaceAction')}
+              aria-label={t('chat.memory.globalSettings.renameSpaceAction')}
             >
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
             </button>
@@ -197,17 +199,17 @@ export function GlobalMemorySettings() {
               type="button"
               className={`${s.iconButton} ${s.dangerButton}`}
               onClick={() => setDialog({ type: 'delete-space', space: selectedSpace })}
-              title="Удалить память"
-              aria-label="Удалить память"
+              title={t('chat.memory.globalSettings.deleteSpaceAction')}
+              aria-label={t('chat.memory.globalSettings.deleteSpaceAction')}
             >
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v5M14 11v5"/></svg>
             </button>
           )}
         </div>
       </div>
-      <div className={s.sectionTitle}>Воспоминания</div>
+      <div className={s.sectionTitle}>{t('chat.memory.globalSettings.recordsTitle')}</div>
       <div className={s.records}>
-        {!loading && records.length === 0 && <div className={s.empty}>Здесь пока пусто</div>}
+        {!loading && records.length === 0 && <div className={s.empty}>{t('chat.memory.globalSettings.empty')}</div>}
         {records.map(record => (
           <div key={record.id} className={s.record}>
             <div><strong>{record.source}</strong><p>{record.text}</p></div>
@@ -218,8 +220,8 @@ export function GlobalMemorySettings() {
                   setDraft(record.text);
                   setDialog({ type: 'edit-record', record });
                 }}
-                title="Редактировать воспоминание"
-                aria-label="Редактировать воспоминание"
+                title={t('chat.memory.globalSettings.editRecordAction')}
+                aria-label={t('chat.memory.globalSettings.editRecordAction')}
               >
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
               </button>
@@ -227,8 +229,8 @@ export function GlobalMemorySettings() {
                 type="button"
                 className={s.dangerButton}
                 onClick={() => setDialog({ type: 'delete-record', record })}
-                title="Удалить воспоминание"
-                aria-label="Удалить воспоминание"
+                title={t('chat.memory.globalSettings.deleteRecordAction')}
+                aria-label={t('chat.memory.globalSettings.deleteRecordAction')}
               >
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg>
               </button>
@@ -239,15 +241,15 @@ export function GlobalMemorySettings() {
       {createOpen && (
         <ConfirmDialog
           open
-          title="Новая общая память"
-          text="Введите название пространства памяти."
-          confirmLabel={creating ? 'Создание…' : 'Создать'}
+          title={t('chat.memory.globalSettings.dialogs.createTitle')}
+          text={t('chat.memory.globalSettings.dialogs.createText')}
+          confirmLabel={creating ? t('chat.memory.globalSettings.creating') : t('common.create')}
           confirmTone="primary"
           confirmFirst
           confirmDisabled={!newSpaceName.trim() || creating}
           input={{
             value: newSpaceName,
-            placeholder: 'Название памяти',
+            placeholder: t('chat.memory.globalSettings.dialogs.namePlaceholder'),
             maxLength: 100,
             onChange: setNewSpaceName,
           }}
@@ -260,9 +262,9 @@ export function GlobalMemorySettings() {
       {dialog?.type === 'rename-space' && (
         <ConfirmDialog
           open
-          title="Переименовать память"
-          text="Введите новое название пространства памяти."
-          confirmLabel={saving ? 'Сохранение…' : 'Сохранить'}
+          title={t('chat.memory.globalSettings.dialogs.renameTitle')}
+          text={t('chat.memory.globalSettings.dialogs.renameText')}
+          confirmLabel={saving ? t('common.saving') : t('common.save')}
           confirmTone="primary"
           confirmFirst
           confirmDisabled={!draft.trim() || saving}
@@ -274,9 +276,9 @@ export function GlobalMemorySettings() {
       {dialog?.type === 'delete-space' && (
         <ConfirmDialog
           open
-          title="Удалить память?"
-          text={`Пространство «${dialog.space.name}» и все его воспоминания будут удалены без возможности восстановления.`}
-          confirmLabel={saving ? 'Удаление…' : 'Удалить'}
+          title={t('chat.memory.globalSettings.dialogs.deleteSpaceTitle')}
+          text={t('chat.memory.globalSettings.dialogs.deleteSpaceText', { name: dialog.space.name })}
+          confirmLabel={saving ? t('common.deleting') : t('common.delete')}
           confirmDisabled={saving}
           onCancel={() => { if (!saving) setDialog(null); }}
           onConfirm={() => void deleteSpace()}
@@ -285,9 +287,9 @@ export function GlobalMemorySettings() {
       {dialog?.type === 'edit-record' && (
         <ConfirmDialog
           open
-          title="Редактировать воспоминание"
-          text="После сохранения текст будет векторизован заново. Ctrl+Enter — сохранить."
-          confirmLabel={saving ? 'Сохранение…' : 'Сохранить'}
+          title={t('chat.memory.globalSettings.dialogs.editRecordTitle')}
+          text={t('chat.memory.globalSettings.dialogs.editRecordText')}
+          confirmLabel={saving ? t('common.saving') : t('common.save')}
           confirmTone="primary"
           confirmFirst
           confirmDisabled={!draft.trim() || saving}
@@ -299,9 +301,9 @@ export function GlobalMemorySettings() {
       {dialog?.type === 'delete-record' && (
         <ConfirmDialog
           open
-          title="Удалить воспоминание?"
-          text="Воспоминание и связанные с ним векторы будут удалены без возможности восстановления."
-          confirmLabel={saving ? 'Удаление…' : 'Удалить'}
+          title={t('chat.memory.globalSettings.dialogs.deleteRecordTitle')}
+          text={t('chat.memory.globalSettings.dialogs.deleteRecordText')}
+          confirmLabel={saving ? t('common.deleting') : t('common.delete')}
           confirmDisabled={saving}
           onCancel={() => { if (!saving) setDialog(null); }}
           onConfirm={() => void deleteRecord()}

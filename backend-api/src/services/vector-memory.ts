@@ -17,8 +17,10 @@ import {
   getOwnedMemoryRecord,
   getRecordChunks,
   initializeForkedChatMemory,
+  listChatMemorySpacesForDeletion,
   listMemoryRecords,
   removeCanonicalMemoryRecord,
+  purgeCanonicalChatMemory,
   resolveReadMemorySpaces,
   resolveWriteMemorySpace,
   type MemorySpace,
@@ -192,6 +194,22 @@ const chunkText = (text: string, chunkSize = VECTOR_MEMORY_CHUNK_SIZE, overlap =
 };
 
 export class VectorMemoryService {
+  static async deleteChatMemory(ownerUserId: number, chatId: number) {
+    const accountId = resolveAccountId(Math.floor(ownerUserId));
+    const spaces = listChatMemorySpacesForDeletion(accountId, chatId);
+    for (const space of spaces) {
+      if (getVectorMemoryStorage() === 'qdrant') {
+        await deleteQdrantSpace(space.user_id, space.id);
+      } else {
+        await deletePineconeResource(() =>
+          getPineconeIndex().namespace(space.namespace_key).deleteAll()
+        );
+      }
+    }
+    const result = purgeCanonicalChatMemory(accountId, chatId);
+    return { ok: true, ...result };
+  }
+
   static async listRecords(userId: number, space: MemorySpace) {
     const accountId = resolveAccountId(Math.floor(userId));
     if (space.user_id !== accountId) throw new Error('memory_space_not_found');
