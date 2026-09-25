@@ -75,7 +75,7 @@ import { refreshCoefficientCache, setCoefficient, setModelProvider, getModelOver
 import { forgetModelTps } from './services/model-stats.js';
 import type { ProviderKind, PricingMode, ModelOverride } from './services/token-quota.js';
 import { sendTelegramMessage } from './services/telegram-send.js';
-import { getAllPrompts, getPromptById, createPrompt, updatePromptName, updatePromptDescription, updatePromptContent, setDefaultPrompt, deletePrompt, ensureDefaultPrompt, resolvePromptForUser as resolveStoredPromptForUser, getUserPrompts, getUserPromptById, createUserPrompt, updateUserPrompt as updateUserPromptRow, deleteUserPrompt as deleteUserPromptRow, toUserPromptSelectedId, parseUserPromptRowId, USER_PROMPT_OFFSET } from './services/prompts.js';
+import { getAllPrompts, getPromptById, createPrompt, updatePromptName, updatePromptDescription, updatePromptContent, setDefaultPrompt, deletePrompt, ensureDefaultPrompt, resolvePromptForUser as resolveStoredPromptForUser, getUserPrompts, getUserPromptById, createUserPrompt, updateUserPrompt as updateUserPromptRow, updateUserPromptImage, deleteUserPrompt as deleteUserPromptRow, toUserPromptSelectedId, parseUserPromptRowId, USER_PROMPT_OFFSET } from './services/prompts.js';
 import { upsertMailAccount, setActiveMailAccount, deleteMailAccount, clearUserMailSettings, deleteAllMailAccounts, getMailAccountsForUser, getMailAccountById, resolveMailAccountReference, normalizeMailProvider, encryptSecret, runEmailSend, verifyMailAccountConnection } from './services/mail.js';
 import type { MailProvider } from './services/mail.js';
 import { setBan, removeBan, getBanRecord } from './services/bans.js';
@@ -88,7 +88,7 @@ import {
 import { assignUserPlan, ensureUserMonthlyUsageWindow, getUserQuotaPeriod, type PlanDuration } from './services/monthly-usage.js';
 import { runMigrations } from './services/migrations.js';
 import { resolveImageFile, getUploadsDir } from './services/image-storage.js';
-import { pruneExpiredMediaAssets } from './services/media-assets.js';
+import { attachMediaAsset, deleteMediaAssetIfUnreferenced, detachImageUrlFromEntity, getMediaAssetByUrl, pruneExpiredMediaAssets, removeMediaReferencesForEntity, saveImageAsset } from './services/media-assets.js';
 import { canUserReadRegisteredImage } from './services/media-access.js';
 import { resolveAttachmentFile, MAX_RAW_FILE_SIZE as MAX_ATTACHMENT_BYTES } from './services/attachment-storage.js';
 import { materializeAssetInput } from './services/response-attachments.js';
@@ -3616,6 +3616,7 @@ app.get('/api/v1/prompts', (req: AuthedRequest, res) => {
       name: p.name,
       description: p.description,
       content: p.content,
+      image_url: p.image_url,
     })),
     selected_prompt_id: user?.selected_prompt_id ?? null,
     custom_prompt_content: user?.custom_prompt_content ?? null,
@@ -3702,6 +3703,80 @@ app.put('/api/v1/prompts/custom/:selectedId', (req: AuthedRequest, res) => {
   return res.json({ ok: true });
 });
 
+const MAX_PROMPT_IMAGE_BYTES = 10 * 1024 * 1024;
+
+app.put('/api/v1/prompts/custom/:selectedId/image', async (req: AuthedRequest, res) => {
+  const userId = req.authUserId!;
+  const selectedId = Number(req.params.selectedId);
+  if (!Number.isFinite(selectedId) || selectedId > -USER_PROMPT_OFFSET) {
+    return res.status(400).json({ error: 'bad_prompt_id' });
+  }
+  const rowId = parseUserPromptRowId(selectedId);
+  if (rowId === null) return res.status(400).json({ error: 'bad_prompt_id' });
+  const existing = getUserPromptById(userId, rowId);
+  if (!existing) return res.status(404).json({ error: 'prompt_not_found' });
+
+  const base64 = `${req.body?.base64 || ''}`.trim();
+  if (!base64) return res.status(400).json({ error: 'image_required' });
+  const imageBuffer = Buffer.from(base64, 'base64');
+  if (!imageBuffer.length) return res.status(400).json({ error: 'image_required' });
+  if (imageBuffer.length > MAX_PROMPT_IMAGE_BYTES) return res.status(413).json({ error: 'image_too_large' });
+
+  let savedAssetId: number | null = null;
+  let savedAssetUrl: string | null = null;
+  try {
+    const saved = await saveImageAsset({
+      userId,
+      data: imageBuffer,
+      retention: 'temporary',
+      kind: 'prompt_avatar',
+      transform: 'thumbnail',
+    });
+    savedAssetId = saved.id;
+    savedAssetUrl = saved.url;
+    attachMediaAsset({ assetId: saved.id, entityType: 'user_prompt', entityId: rowId, slot: 'avatar' });
+    updateUserPromptImage(userId, rowId, saved.url);
+
+    if (existing.image_url && existing.image_url !== saved.url) {
+      try {
+        const previous = getMediaAssetByUrl(existing.image_url);
+        detachImageUrlFromEntity({ url: existing.image_url, entityType: 'user_prompt', entityId: rowId });
+        if (previous) deleteMediaAssetIfUnreferenced(previous.id);
+      } catch (cleanupError) {
+        console.warn('[prompts/image] previous image cleanup failed:', formatSafeError(cleanupError));
+      }
+    }
+    return res.json({ ok: true, image_url: saved.url });
+  } catch (error) {
+    if (savedAssetUrl) {
+      detachImageUrlFromEntity({ url: savedAssetUrl, entityType: 'user_prompt', entityId: rowId });
+    }
+    if (savedAssetId !== null) deleteMediaAssetIfUnreferenced(savedAssetId);
+    console.error('[prompts/image] upload failed:', formatSafeError(error));
+    return res.status(400).json({ error: 'prompt_image_upload_failed' });
+  }
+});
+
+app.delete('/api/v1/prompts/custom/:selectedId/image', (req: AuthedRequest, res) => {
+  const userId = req.authUserId!;
+  const selectedId = Number(req.params.selectedId);
+  if (!Number.isFinite(selectedId) || selectedId > -USER_PROMPT_OFFSET) {
+    return res.status(400).json({ error: 'bad_prompt_id' });
+  }
+  const rowId = parseUserPromptRowId(selectedId);
+  if (rowId === null) return res.status(400).json({ error: 'bad_prompt_id' });
+  const existing = getUserPromptById(userId, rowId);
+  if (!existing) return res.status(404).json({ error: 'prompt_not_found' });
+
+  const previous = existing.image_url ? getMediaAssetByUrl(existing.image_url) : null;
+  updateUserPromptImage(userId, rowId, null);
+  if (existing.image_url) {
+    detachImageUrlFromEntity({ url: existing.image_url, entityType: 'user_prompt', entityId: rowId });
+  }
+  if (previous) deleteMediaAssetIfUnreferenced(previous.id);
+  return res.json({ ok: true });
+});
+
 // Delete a custom prompt
 app.delete('/api/v1/prompts/custom/:selectedId', (req: AuthedRequest, res) => {
   const userId = req.authUserId!;
@@ -3715,7 +3790,9 @@ app.delete('/api/v1/prompts/custom/:selectedId', (req: AuthedRequest, res) => {
   const existing = getUserPromptById(userId, rowId);
   if (!existing) return res.status(404).json({ error: 'prompt_not_found' });
 
+  const detachedAssetIds = removeMediaReferencesForEntity('user_prompt', rowId);
   deleteUserPromptRow(userId, rowId);
+  detachedAssetIds.forEach(deleteMediaAssetIfUnreferenced);
   // If deleted prompt was selected, reset to default
   const user = getUserById(userId);
   if (user?.selected_prompt_id === selectedId) {

@@ -13,6 +13,7 @@ import { getSpeechRecognitionLanguage, setSpeechRecognitionLanguage, type Speech
 import { getWakeWordEnabled, setWakeWordEnabled as setWakeWordEnabledStorage } from '../lib/wakeWordToggle';
 import { getRenderPerfLevel, setRenderPerfLevel, type RenderPerfLevel } from '../lib/renderPerf';
 import { getThemePreference, setThemePreference, type ThemePreference } from '../lib/theme';
+import { parsePromptSections, serializePromptSections, type PromptSectionKey, type PromptSections } from '../lib/promptSections';
 import { Select } from './Select';
 import type { SelectOption } from './Select';
 import {
@@ -174,6 +175,12 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
   const [customContent, setCustomContent] = useState('');
   const [promptName, setPromptName] = useState('');
   const [promptDesc, setPromptDesc] = useState('');
+  const [promptEditorMode, setPromptEditorMode] = useState<'usual' | 'advanced'>('usual');
+  const [promptSections, setPromptSections] = useState<PromptSections>(() => parsePromptSections(''));
+  const [promptImageUrl, setPromptImageUrl] = useState<string | null>(null);
+  const [pendingPromptImage, setPendingPromptImage] = useState<{ base64: string; mimeType: string; previewUrl: string } | null>(null);
+  const [promptImageRemoved, setPromptImageRemoved] = useState(false);
+  const promptImageInputRef = useRef<HTMLInputElement>(null);
   /** Plan-derived custom prompt limit; 20000 fallback until the server responds. */
   const [maxPromptLength, setMaxPromptLength] = useState(20000);
   const [promptsLoading, setPromptsLoading] = useState(false);
@@ -813,12 +820,20 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
         setPromptName(cp.name);
         setPromptDesc(cp.description);
         setCustomContent(cp.content);
+        setPromptSections(parsePromptSections(cp.content));
+        setPromptImageUrl(cp.image_url);
+        setPendingPromptImage(null);
+        setPromptImageRemoved(false);
       }
     } else if (selectedPromptId === CUSTOM_PROMPT_ID) {
       // New prompt: blank fields
       setPromptName('');
       setPromptDesc('');
       setCustomContent('');
+      setPromptSections(parsePromptSections(''));
+      setPromptImageUrl(null);
+      setPendingPromptImage(null);
+      setPromptImageRemoved(false);
     }
   }, [selectedPromptId, customPrompts]);
 
@@ -1023,6 +1038,55 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
     }
   };
 
+  const handlePromptEditorModeChange = (mode: 'usual' | 'advanced') => {
+    if (mode === 'advanced') setPromptSections(parsePromptSections(customContent));
+    setPromptEditorMode(mode);
+  };
+
+  const handlePromptSectionChange = (key: PromptSectionKey, value: string) => {
+    let next = { ...promptSections, [key]: value };
+    let serialized = serializePromptSections(next);
+    if (serialized.length > maxPromptLength) {
+      const overflow = serialized.length - maxPromptLength;
+      next = { ...next, [key]: value.slice(0, Math.max(0, value.length - overflow)) };
+      serialized = serializePromptSections(next);
+    }
+    setPromptSections(next);
+    setCustomContent(serialized);
+  };
+
+  const handlePromptImageSelect = (file: File | undefined) => {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      toast.error(t('settings.prompt.imageFormatError'));
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error(t('settings.prompt.imageSizeError'));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onerror = () => toast.error(t('settings.prompt.imageReadError'));
+    reader.onload = () => {
+      const previewUrl = String(reader.result || '');
+      const base64 = previewUrl.split(',')[1] || '';
+      if (!base64) {
+        toast.error(t('settings.prompt.imageReadError'));
+        return;
+      }
+      setPendingPromptImage({ base64, mimeType: file.type, previewUrl });
+      setPromptImageRemoved(false);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handlePromptImageRemove = () => {
+    setPendingPromptImage(null);
+    setPromptImageUrl(null);
+    setPromptImageRemoved(true);
+    if (promptImageInputRef.current) promptImageInputRef.current.value = '';
+  };
+
   const handleSaveCustomPrompt = async () => {
     const name = promptName.trim();
     if (!name) {
@@ -1035,38 +1099,64 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
     }
     setPromptSaving(true);
     try {
+      let savedPromptId: number;
       if (selectedPromptId !== null && selectedPromptId <= -1000) {
-        // Update existing
+        savedPromptId = selectedPromptId;
         await api.updateCustomPromptById(selectedPromptId, {
           name,
           description: promptDesc.trim(),
           content: customContent,
         });
-        // Update local state
-        setCustomPrompts(prev => prev.map(p =>
-          p.id === selectedPromptId
-            ? { ...p, name, description: promptDesc.trim(), content: customContent }
-            : p
-        ));
-        toast.success(t('settings.toasts.promptUpdated'));
       } else {
-        // Create new (selectedPromptId === -1 or null)
         const res = await api.createCustomPrompt({
           name,
           description: promptDesc.trim(),
           content: customContent,
         });
-        const newId = res.prompt_id;
-        // Add to local state + select it
-        setCustomPrompts(prev => [...prev, {
-          id: newId,
-          name,
-          description: promptDesc.trim(),
-          content: customContent,
-        }]);
-        setSelectedPromptId(newId);
-        toast.success(t('settings.toasts.promptCreated'));
+        savedPromptId = res.prompt_id;
       }
+
+      let savedImageUrl = promptImageUrl;
+      let imageSaveFailed = false;
+      try {
+        if (pendingPromptImage) {
+          const imageResult = await api.setCustomPromptImage(savedPromptId, {
+            base64: pendingPromptImage.base64,
+            mime_type: pendingPromptImage.mimeType,
+          });
+          savedImageUrl = imageResult.image_url;
+        } else if (promptImageRemoved) {
+          await api.deleteCustomPromptImage(savedPromptId);
+          savedImageUrl = null;
+        }
+      } catch {
+        imageSaveFailed = true;
+      }
+
+      const savedPrompt: api.CustomPromptInfo = {
+        id: savedPromptId,
+        name,
+        description: promptDesc.trim(),
+        content: customContent,
+        image_url: savedImageUrl,
+      };
+      setCustomPrompts(prev => {
+        const exists = prev.some(prompt => prompt.id === savedPromptId);
+        return exists
+          ? prev.map(prompt => prompt.id === savedPromptId ? savedPrompt : prompt)
+          : [...prev, savedPrompt];
+      });
+      setSelectedPromptId(savedPromptId);
+      setPromptImageUrl(savedImageUrl);
+      if (!imageSaveFailed) {
+        setPendingPromptImage(null);
+        setPromptImageRemoved(false);
+        if (promptImageInputRef.current) promptImageInputRef.current.value = '';
+      }
+      toast.success(selectedPromptId !== null && selectedPromptId <= -1000
+        ? t('settings.toasts.promptUpdated')
+        : t('settings.toasts.promptCreated'));
+      if (imageSaveFailed) toast.error(t('settings.prompt.imageSaveError'));
     } catch (err) {
       console.error('Failed to save custom prompt:', err);
       toast.error(t('settings.toasts.promptSaveFailed'));
@@ -1125,6 +1215,7 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
   const handleAiApply = () => {
     if (aiGenerated === null) return;
     setCustomContent(aiGenerated);
+    setPromptSections(parsePromptSections(aiGenerated));
     setAiGenerated(null);
     toast.success(t('settings.toasts.promptApplied'));
   };
@@ -1580,14 +1671,86 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
                         placeholder={t('settings.prompt.descriptionPlaceholder')}
                         maxLength={200}
                       />
-                      <textarea
-                        className={s.textareaInput}
-                        value={customContent}
-                        onChange={(e) => setCustomContent(e.target.value.slice(0, maxPromptLength))}
-                        placeholder={t('settings.prompt.textPlaceholder')}
-                        rows={6}
-                        maxLength={maxPromptLength}
-                      />
+                      <div className={s.promptImageEditor}>
+                        <div className={s.promptImagePreview}>
+                          {(pendingPromptImage?.previewUrl || promptImageUrl) ? (
+                            <img
+                              src={pendingPromptImage?.previewUrl || api.resolveImageUrl(promptImageUrl!, 320)}
+                              alt=""
+                            />
+                          ) : (
+                            <span>{t('settings.prompt.imageEmpty')}</span>
+                          )}
+                        </div>
+                        <div className={s.promptImageActions}>
+                          <span className={s.fieldLabel}>{t('settings.prompt.image')}</span>
+                          <span className={s.promptImageHelp}>{t('settings.prompt.imageHelp')}</span>
+                          <div className={s.promptImageButtons}>
+                            <button
+                              className={s.cancelBtn}
+                              type="button"
+                              onClick={() => promptImageInputRef.current?.click()}
+                            >
+                              {t('settings.prompt.imageChoose')}
+                            </button>
+                            {(pendingPromptImage || promptImageUrl) && (
+                              <button className={s.cancelBtn} type="button" onClick={handlePromptImageRemove}>
+                                {t('common.delete')}
+                              </button>
+                            )}
+                          </div>
+                          <input
+                            ref={promptImageInputRef}
+                            className={s.promptImageInput}
+                            type="file"
+                            accept="image/png,image/jpeg,image/webp,image/gif,image/avif"
+                            onChange={(event) => handlePromptImageSelect(event.target.files?.[0])}
+                          />
+                        </div>
+                      </div>
+
+                      <div className={s.promptEditorModes}>
+                        <button
+                          type="button"
+                          className={`${s.promptEditorMode} ${promptEditorMode === 'usual' ? s.promptEditorModeActive : ''}`}
+                          onClick={() => handlePromptEditorModeChange('usual')}
+                        >
+                          {t('settings.prompt.modeUsual')}
+                        </button>
+                        <button
+                          type="button"
+                          className={`${s.promptEditorMode} ${promptEditorMode === 'advanced' ? s.promptEditorModeActive : ''}`}
+                          onClick={() => handlePromptEditorModeChange('advanced')}
+                        >
+                          {t('settings.prompt.modeAdvanced')}
+                        </button>
+                      </div>
+
+                      {promptEditorMode === 'usual' ? (
+                        <textarea
+                          className={s.textareaInput}
+                          value={customContent}
+                          onChange={(e) => setCustomContent(e.target.value.slice(0, maxPromptLength))}
+                          placeholder={t('settings.prompt.textPlaceholder')}
+                          rows={8}
+                          maxLength={maxPromptLength}
+                        />
+                      ) : (
+                        <div className={s.promptAdvancedFields}>
+                          {(['description', 'personality', 'scenario', 'examples', 'other'] as const).map(key => (
+                            <label className={s.promptAdvancedField} key={key}>
+                              <span className={s.fieldLabel}>{t(`settings.prompt.sections.${key}`)}</span>
+                              <textarea
+                                className={s.textareaInput}
+                                value={promptSections[key]}
+                                onChange={(event) => handlePromptSectionChange(key, event.target.value)}
+                                placeholder={t(`settings.prompt.sectionPlaceholders.${key}`)}
+                                rows={key === 'examples' ? 5 : 3}
+                              />
+                            </label>
+                          ))}
+                        </div>
+                      )}
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
                         <div style={{ display: 'flex', gap: '8px' }}>
                           <button

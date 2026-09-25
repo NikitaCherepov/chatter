@@ -1796,6 +1796,7 @@ export type CustomPromptInfo = {
   name: string;
   description: string;
   content: string;
+  image_url: string | null;
 };
 
 export type PromptsResponse = {
@@ -1844,6 +1845,22 @@ export async function updateCustomPromptById(
 /** Delete a custom prompt (by selected_id). */
 export async function deleteCustomPrompt(selectedId: number): Promise<{ ok: boolean }> {
   return apiFetch(`/api/v1/prompts/custom/${selectedId}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function setCustomPromptImage(
+  selectedId: number,
+  image: { base64: string; mime_type: string },
+): Promise<{ ok: boolean; image_url: string }> {
+  return apiFetch(`/api/v1/prompts/custom/${selectedId}/image`, {
+    method: 'PUT',
+    body: JSON.stringify(image),
+  });
+}
+
+export async function deleteCustomPromptImage(selectedId: number): Promise<{ ok: boolean }> {
+  return apiFetch(`/api/v1/prompts/custom/${selectedId}/image`, {
     method: 'DELETE',
   });
 }

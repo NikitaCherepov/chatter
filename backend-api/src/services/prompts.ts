@@ -86,6 +86,7 @@ export type UserPromptRecord = {
   name: string;
   description: string;
   content: string;
+  image_url: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -177,6 +178,13 @@ export const updateUserPrompt = (userId: number, rowId: number, fields: { name?:
   params.push(rowId, userId);
   db.prepare(`UPDATE user_prompts SET ${sets.join(', ')} WHERE id = ? AND user_id = ?`).run(...params);
 };
+
+export const updateUserPromptImage = (userId: number, rowId: number, imageUrl: string | null) =>
+  db.prepare(`
+    UPDATE user_prompts
+    SET image_url = ?, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ? AND user_id = ?
+  `).run(imageUrl, rowId, userId);
 
 export const deleteUserPrompt = (userId: number, rowId: number) =>
   db.prepare('DELETE FROM user_prompts WHERE id = ? AND user_id = ?').run(rowId, userId);

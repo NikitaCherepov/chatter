@@ -24,6 +24,10 @@ export const canUserReadRegisteredImage = (userId: number, filename: string): bo
       return Boolean(db.prepare('SELECT 1 FROM newspaper_issues WHERE id = ? AND user_id = ?')
         .get(reference.entity_id, userId));
     }
+    if (reference.entity_type === 'user_prompt') {
+      return Boolean(db.prepare('SELECT 1 FROM user_prompts WHERE id = ? AND user_id = ?')
+        .get(reference.entity_id, userId));
+    }
     return false;
   });
 };
