@@ -9,7 +9,7 @@ import { calculateChargedTokens, checkQuota, chargeTokens, getModelOverride, get
 import { recordModelTps, setKnownModelStatsFilter } from './model-stats.js';
 import { registerMonitoredModelsProvider, isProviderMissingError, attemptRuntimeProviderSwitch } from './openrouter-monitor.js';
 import { getPlanLimits } from './plan-limits.js';
-import { resolvePromptForUser, AVATAR_PROMPT_HINT } from './prompts.js';
+import { resolvePromptForUser, getUserPromptImageBySelectedId, AVATAR_PROMPT_HINT } from './prompts.js';
 import { getChatAgentForResponse, hasMultipleActiveChatAgents, canReadChatMessages } from './chat-rooms.js';
 import { createNote, deleteNote, getNoteById, listNotes } from './notes.js';
 import { createTask, deletePendingTask, getPendingTaskCount, getUserTaskById, isOwnNonRoomChat, listTasks, MAX_PENDING_TASKS_PER_USER, updatePendingTask } from './tasks.js';
@@ -7379,6 +7379,7 @@ export const sendMessageThroughAi = async (
   let usedUniqueId: string | null = null;
   let responsePromptId: number | null = null;
   let responsePromptName = 'Chatter';
+  let responsePromptImageUrl: string | null = null;
   let responseAgentId: number | null = null;
   let diceRollValue: number | null = null;
   const usageCalls: TokenUsageCall[] = [];
@@ -7936,6 +7937,7 @@ export const sendMessageThroughAi = async (
     : '';
   responsePromptId = responseAgent?.source_prompt_id ?? resolvedPrompt?.id ?? null;
   responsePromptName = responseAgent?.name || resolvedPrompt?.name || (isGuestMode ? 'Guest' : 'Chatter');
+  responsePromptImageUrl = getUserPromptImageBySelectedId(userId, responsePromptId);
   const activePersona = isGuestMode ? null : resolvePersonaForChat(toolUser.id, chatId);
   const coreMemoryForPrompt = activePersona?.useCoreMemory ? activePersona.persona.core_memory : '';
   const pinnedHintForPrompt = isGuestMode || !currentModelSupportsTools ? '' : pinnedHint;
@@ -8836,6 +8838,7 @@ iterations.push(currentIteration);
     },
     prompt_id: responsePromptId,
     prompt_name: responsePromptName,
+    prompt_image_url: responsePromptImageUrl,
     agent_id: responseAgentId,
     model_name: responseModelName,
     provider_name: usedProvider || null,
@@ -8931,6 +8934,7 @@ iterations.push(currentIteration);
         },
         prompt_id: responsePromptId,
         prompt_name: responsePromptName,
+        prompt_image_url: responsePromptImageUrl,
         agent_id: responseAgentId,
         model_name: abortedModelName,
         provider_name: usedProvider || null,

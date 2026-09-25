@@ -241,6 +241,7 @@ export type MessageDto = {
   reasoning_tokens?: number;
   prompt_id?: number | null;
   prompt_name?: string | null;
+  prompt_image_url?: string | null;
   agent_id?: number | null;
   model_name?: string | null;
   provider_name?: string | null;
@@ -368,6 +369,7 @@ export type AiSendResult = {
   user_token_count?: number;
   prompt_id?: number | null;
   prompt_name?: string | null;
+  prompt_image_url?: string | null;
   agent_id?: number | null;
   model_name?: string | null;
   provider_name?: string | null;

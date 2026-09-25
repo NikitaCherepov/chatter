@@ -604,9 +604,23 @@ const MessageItem = React.memo(function MessageItem({
   const displayedTokenCount = exactAssistantTokens && exactAssistantTokens > 0
     ? exactAssistantTokens
     : msg.token_count;
+  const promptImageSrc = msg.role === 'assistant' && msg.prompt_image_url
+    ? resolveImageUrl(msg.prompt_image_url, 128)
+    : null;
 
   return (
     <div className={`${s.messageGroup} ${reasoningOpen || isToolCallsOpen || isSubagentsOpen ? s.messageGroupRaised : ''} ${msg.archived ? s.messageArchived : ''}`}>
+      <div className={s.messageLayout}>
+        {promptImageSrc && (
+          <img
+            className={s.promptAvatar}
+            src={promptImageSrc}
+            alt={msg.prompt_name || 'Chatter'}
+            loading="lazy"
+            draggable={false}
+          />
+        )}
+        <div className={s.messageColumn}>
       <div className={s.metaRow}>
         <div className={s.metaRowLeft}>
         <span>{msg.role === 'user' ? (authorName ?? t('chat.message.you')) : (msg.prompt_name || 'Chatter')} &bull; {formatMessageTime(msg.created_at, locale)}{msg.archived ? t('chat.message.archivedSuffix') : ''}</span>
@@ -1006,6 +1020,8 @@ const MessageItem = React.memo(function MessageItem({
             <circle cx="8" cy="13" r="1.5" />
           </svg>
         </button>
+      </div>
+        </div>
       </div>
     </div>
   );
@@ -2728,6 +2744,7 @@ export function ChatPage() {
             subagents: res.subagents ?? null,
             prompt_id: res.prompt_id ?? null,
             prompt_name: res.prompt_name ?? null,
+            prompt_image_url: res.prompt_image_url ?? null,
             agent_id: event.agent_id,
             model_name: res.model_name ?? null,
             provider_name: res.provider_name ?? null,

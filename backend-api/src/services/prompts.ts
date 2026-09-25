@@ -161,6 +161,13 @@ export const getUserPrompts = (userId: number): UserPromptRecord[] =>
 export const getUserPromptById = (userId: number, rowId: number): UserPromptRecord | undefined =>
   db.prepare('SELECT * FROM user_prompts WHERE id = ? AND user_id = ?').get(rowId, userId) as UserPromptRecord | undefined;
 
+export const getUserPromptImageBySelectedId = (userId: number, selectedPromptId: number | null): string | null => {
+  if (selectedPromptId === null) return null;
+  const rowId = parseUserPromptRowId(selectedPromptId);
+  if (rowId === null) return null;
+  return getUserPromptById(userId, rowId)?.image_url ?? null;
+};
+
 export const createUserPrompt = (userId: number, name: string, description: string, content: string) =>
   db.prepare(`
     INSERT INTO user_prompts (user_id, name, description, content)

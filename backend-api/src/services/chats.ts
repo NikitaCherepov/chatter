@@ -1155,13 +1155,15 @@ export const getChatMessages = (userId: number, chatId: number, limit = 20, offs
            cma.audio AS viewer_audio,
            m.telegram_chat_id, m.telegram_message_id, m.created_at, m.archived, m.token_count,
            m.reasoning_tokens, m.attachments, m.subagents_json, m.usage_json, m.prompt_id, m.prompt_name,
+           up.image_url AS prompt_image_url,
            m.model_name, m.provider_name, m.agent_id
     FROM chat_messages m
     LEFT JOIN chat_message_audio cma ON cma.message_id = m.id AND cma.user_id = ?
+    LEFT JOIN user_prompts up ON m.prompt_id <= -1000 AND up.id = (-m.prompt_id - 1000)
     WHERE ${multiUserRoom ? `m.user_id IN (${placeholders})` : 'm.user_id = ?'} AND m.chat_id = ?
     ORDER BY m.id DESC
     LIMIT ? OFFSET ?
-  `).all(userId, ...(multiUserRoom ? readerIds : [userId]), chatId, safeLimit, safeOffset) as Array<{ id: number; chat_id: number; user_id: number; role: ChatRole; content: string; reasoning_content: string | null; tool_calls_json: string | null; images: string | null; viewer_audio: string | null; telegram_chat_id: number | null; telegram_message_id: number | null; created_at: string; archived: number; token_count: number; reasoning_tokens: number; attachments: string | null; subagents_json: string | null; usage_json: string | null; prompt_id: number | null; prompt_name: string | null; model_name: string | null; provider_name: string | null; agent_id: number | null }>;
+  `).all(userId, ...(multiUserRoom ? readerIds : [userId]), chatId, safeLimit, safeOffset) as Array<{ id: number; chat_id: number; user_id: number; role: ChatRole; content: string; reasoning_content: string | null; tool_calls_json: string | null; images: string | null; viewer_audio: string | null; telegram_chat_id: number | null; telegram_message_id: number | null; created_at: string; archived: number; token_count: number; reasoning_tokens: number; attachments: string | null; subagents_json: string | null; usage_json: string | null; prompt_id: number | null; prompt_name: string | null; prompt_image_url: string | null; model_name: string | null; provider_name: string | null; agent_id: number | null }>;
 
   return rows.reverse().map(row => {
     let parsedImages: MessageImage[] | null = null;
@@ -1227,6 +1229,7 @@ export const getChatMessages = (userId: number, chatId: number, limit = 20, offs
       reasoning_tokens: row.reasoning_tokens ?? 0,
       prompt_id: row.prompt_id,
       prompt_name: row.prompt_name,
+      prompt_image_url: row.prompt_image_url,
       agent_id: row.agent_id,
       model_name: row.model_name,
       provider_name: row.provider_name,

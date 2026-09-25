@@ -1,6 +1,7 @@
 import { db } from '../db.js';
 import { canReadChatMessages } from './chat-rooms.js';
 import { getMediaAssetByFilename } from './media-assets.js';
+import { USER_PROMPT_OFFSET } from './prompts.js';
 
 /** Authorization for registered media. Returns null for a legacy unregistered file. */
 export const canUserReadRegisteredImage = (userId: number, filename: string): boolean | null => {
@@ -25,8 +26,17 @@ export const canUserReadRegisteredImage = (userId: number, filename: string): bo
         .get(reference.entity_id, userId));
     }
     if (reference.entity_type === 'user_prompt') {
-      return Boolean(db.prepare('SELECT 1 FROM user_prompts WHERE id = ? AND user_id = ?')
+      const ownsPrompt = Boolean(db.prepare('SELECT 1 FROM user_prompts WHERE id = ? AND user_id = ?')
         .get(reference.entity_id, userId));
+      if (ownsPrompt) return true;
+
+      const selectedPromptId = -(USER_PROMPT_OFFSET + reference.entity_id);
+      const chats = db.prepare(`
+        SELECT DISTINCT chat_id
+        FROM chat_messages
+        WHERE prompt_id = ? AND chat_id IS NOT NULL
+      `).all(selectedPromptId) as Array<{ chat_id: number }>;
+      return chats.some(({ chat_id }) => canReadChatMessages(userId, chat_id));
     }
     return false;
   });

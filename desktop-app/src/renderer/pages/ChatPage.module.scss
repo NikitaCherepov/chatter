@@ -1630,6 +1630,33 @@
   }
 }
 
+.messageLayout {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+}
+
+.messageColumn {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.promptAvatar {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  margin-top: 24px;
+  border: 1px solid var(--border-light);
+  border-radius: 10px;
+  background: var(--bg-bubble);
+  object-fit: cover;
+  user-select: none;
+}
+
 .metaRow {
   font-size: 12px;
   color: var(--text-muted);
