@@ -40,6 +40,7 @@ import { QuotaWidget } from './QuotaWidget';
 import { SubagentModelSettings } from './SubagentModelSettings/SubagentModelSettings';
 import { AboutSettings } from './AboutSettings/AboutSettings';
 import { GlobalMemorySettings } from './GlobalMemorySettings';
+import { PromptImageCropDialog } from './PromptImageCropDialog';
 import telegramIcon from '../assets/integrations/telegram.webp';
 import s from './SettingsModal.module.scss';
 
@@ -179,6 +180,7 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
   const [promptSections, setPromptSections] = useState<PromptSections>(() => parsePromptSections(''));
   const [promptImageUrl, setPromptImageUrl] = useState<string | null>(null);
   const [pendingPromptImage, setPendingPromptImage] = useState<{ base64: string; mimeType: string; previewUrl: string } | null>(null);
+  const [promptImageCropSource, setPromptImageCropSource] = useState<string | null>(null);
   const [promptImageRemoved, setPromptImageRemoved] = useState(false);
   const promptImageInputRef = useRef<HTMLInputElement>(null);
   /** Plan-derived custom prompt limit; 20000 fallback until the server responds. */
@@ -404,6 +406,7 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
 
   useEffect(() => {
     if (section !== 'account' || !personas.length) return;
+    if (selectedPersonaId === NEW_PERSONA_ID) return;
     if (selectedPersonaId === null || !personas.some(persona => persona.id === selectedPersonaId)) {
       const persona = personas.find(item => item.is_default === 1) || personas[0];
       personaDraftSourceRef.current = null;
@@ -1069,13 +1072,12 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
     reader.onerror = () => toast.error(t('settings.prompt.imageReadError'));
     reader.onload = () => {
       const previewUrl = String(reader.result || '');
-      const base64 = previewUrl.split(',')[1] || '';
-      if (!base64) {
+      if (!previewUrl.includes(',')) {
         toast.error(t('settings.prompt.imageReadError'));
         return;
       }
-      setPendingPromptImage({ base64, mimeType: file.type, previewUrl });
-      setPromptImageRemoved(false);
+      setPromptImageCropSource(previewUrl);
+      if (promptImageInputRef.current) promptImageInputRef.current.value = '';
     };
     reader.readAsDataURL(file);
   };
@@ -2686,6 +2688,17 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
           </motion.div>
         )}
       </AnimatePresence>
+      {promptImageCropSource && (
+        <PromptImageCropDialog
+          sourceUrl={promptImageCropSource}
+          onCancel={() => setPromptImageCropSource(null)}
+          onConfirm={image => {
+            setPendingPromptImage(image);
+            setPromptImageRemoved(false);
+            setPromptImageCropSource(null);
+          }}
+        />
+      )}
     </motion.div>
   );
 }

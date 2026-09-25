@@ -1,0 +1,134 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--overlay-bg);
+}
+
+.dialog {
+  width: 400px;
+  max-width: calc(100vw - 32px);
+  padding: 24px;
+  border-radius: 12px;
+  background: var(--bg-primary);
+  box-shadow: var(--shadow-modal);
+}
+
+.title {
+  color: var(--text-primary);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.help {
+  margin-top: 6px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.cropViewport {
+  position: relative;
+  width: 320px;
+  height: 320px;
+  margin: 18px auto 16px;
+  overflow: hidden;
+  border-radius: 12px;
+  background: var(--bg-input);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+
+  &:active {
+    cursor: grabbing;
+  }
+}
+
+.cropImage {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  max-width: none;
+  pointer-events: none;
+  user-select: none;
+}
+
+.cropFrame {
+  position: absolute;
+  inset: 0;
+  border: 2px solid var(--accent);
+  border-radius: 12px;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 18%);
+  pointer-events: none;
+}
+
+.zoomRow {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 12px;
+  color: var(--text-muted);
+  font-size: 12px;
+
+  input {
+    appearance: none;
+    height: 4px;
+    border-radius: 2px;
+    outline: none;
+    background: var(--border-medium);
+    cursor: pointer;
+
+    &::-webkit-slider-thumb {
+      appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--accent);
+      cursor: pointer;
+    }
+  }
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 22px;
+}
+
+.cancelButton,
+.confirmButton {
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.cancelButton {
+  border: 1px solid var(--border-input);
+  background: transparent;
+  color: var(--text-secondary);
+
+  &:hover {
+    background: var(--bg-modal-hover);
+  }
+}
+
+.confirmButton {
+  border: none;
+  background: var(--accent);
+  color: var(--accent-contrast);
+
+  &:hover:not(:disabled) {
+    opacity: 0.85;
+  }
+
+  &:disabled {
+    cursor: default;
+    opacity: 0.4;
+  }
+}

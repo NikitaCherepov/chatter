@@ -294,6 +294,10 @@
       "imageSizeError": "The image must be no larger than 10 MB",
       "imageReadError": "Could not read the image",
       "imageSaveError": "The prompt was saved, but the image could not be saved",
+      "imageCropTitle": "Choose the visible area",
+      "imageCropHelp": "Move the image inside the frame and adjust the zoom.",
+      "imageCropZoom": "Zoom",
+      "imageCropApply": "Apply",
       "sections": {
         "description": "Description",
         "personality": "Personality",

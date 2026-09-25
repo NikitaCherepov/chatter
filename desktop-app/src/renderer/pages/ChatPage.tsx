@@ -15,6 +15,7 @@ import {
 } from '@dnd-kit/core';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { ChatMessagesScroll, type ChatMessagesScrollHandle } from '../components/ChatMessagesScroll';
 import { useAuth } from '../lib/auth';
 import { useUnreadChats } from '../lib/useUnreadChats';
 import * as api from '../lib/api';
@@ -1298,7 +1299,6 @@ export function ChatPage() {
   const [renamingChatId, setRenamingChatId] = useState<number | null>(null);
   const [renamingTitle, setRenamingTitle] = useState('');
   const [deletingChatId, setDeletingChatId] = useState<number | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!demoFolderMenuId) return;
@@ -1376,7 +1376,7 @@ export function ChatPage() {
       .catch((error) => console.error('Failed to load room prompts:', error));
     return () => { cancelled = true; };
   }, [addParticipantKind, changingRoomParticipantPromptId, roomPrompts.length]);
-  const messagesScrollRef = useRef<HTMLDivElement>(null);
+  const messagesScrollRef = useRef<ChatMessagesScrollHandle>(null);
   const pendingPrependScrollRef = useRef<{ scrollHeight: number; scrollTop: number } | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1813,10 +1813,7 @@ export function ChatPage() {
 
   const loadOlderMessages = useCallback(async () => {
     if (!activeChatId || loadingOlderMessages || !hasMoreMessages) return;
-    const scroller = messagesScrollRef.current;
-    pendingPrependScrollRef.current = scroller
-      ? { scrollHeight: scroller.scrollHeight, scrollTop: scroller.scrollTop }
-      : null;
+    pendingPrependScrollRef.current = messagesScrollRef.current?.getMetrics() ?? null;
     setLoadingOlderMessages(true);
     try {
       const res = await api.getMessages(activeChatId, MESSAGE_PAGE_SIZE, messages.length);
@@ -3504,7 +3501,10 @@ export function ChatPage() {
     const pending = pendingPrependScrollRef.current;
     const scroller = messagesScrollRef.current;
     if (!pending || !scroller) return;
-    scroller.scrollTop = scroller.scrollHeight - pending.scrollHeight + pending.scrollTop;
+    const currentMetrics = scroller.getMetrics();
+    if (!currentMetrics) return;
+    const nextScrollTop = currentMetrics.scrollHeight - pending.scrollHeight + pending.scrollTop;
+    scroller.scrollTo(nextScrollTop, { immediate: true });
     pendingPrependScrollRef.current = null;
     prevMsgCountRef.current = messages.length;
   }, [messages.length]);
@@ -3512,7 +3512,7 @@ export function ChatPage() {
   useEffect(() => {
     if (pendingPrependScrollRef.current) return;
     if (messages.length > prevMsgCountRef.current) {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      messagesScrollRef.current?.scrollTo('end');
     }
     prevMsgCountRef.current = messages.length;
   }, [messages]);
@@ -5120,7 +5120,12 @@ export function ChatPage() {
                 </div>
               )}
             </div>
-            <div className={s.messages} ref={messagesScrollRef}>
+            <ChatMessagesScroll
+              ref={messagesScrollRef}
+              className={s.messages}
+              contentClassName={s.messagesContent}
+              resetKey={activeChatId}
+            >
               {loadingMessages && (
                 <div className={s.loadingRow}>{t('chat.messages.loading')}</div>
               )}
@@ -6659,8 +6664,7 @@ export function ChatPage() {
                 </div>
               ))}
 
-              <div ref={messagesEndRef} />
-            </div>
+            </ChatMessagesScroll>
 
             {/* Message context menu */}
             {msgMenuId !== null && (

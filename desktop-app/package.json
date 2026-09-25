@@ -37,6 +37,7 @@
     "highlight.js": "^11.11.1",
     "i18next": "^26.3.6",
     "leaflet": "^1.9.4",
+    "lenis": "^1.3.26",
     "mammoth": "^1.12.0",
     "marked": "^18.0.2",
     "onnxruntime-node": "^1.27.0",
