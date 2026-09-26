@@ -74,6 +74,7 @@ type ChatRoomRow = {
   id: number;
   user_id: number;
   room_enabled: number;
+  default_prompt_id: number | null;
 };
 
 type ChatMemberRow = {
@@ -89,7 +90,7 @@ type ChatMemberRow = {
 };
 
 const getOwnedChat = (userId: number, chatId: number) => db.prepare(`
-  SELECT id, user_id, room_enabled
+  SELECT id, user_id, room_enabled, default_prompt_id
   FROM user_chats
   WHERE id = ? AND user_id = ?
 `).get(chatId, userId) as ChatRoomRow | undefined;
@@ -101,7 +102,7 @@ export const getAccessibleChat = (userId: number, chatId: number): ChatRoomRow |
   const membership = db.prepare('SELECT chat_id FROM chat_members WHERE chat_id = ? AND user_id = ?')
     .get(chatId, userId) as { chat_id: number } | undefined;
   if (!membership) return undefined;
-  return db.prepare('SELECT id, user_id, room_enabled FROM user_chats WHERE id = ?')
+  return db.prepare('SELECT id, user_id, room_enabled, default_prompt_id FROM user_chats WHERE id = ?')
     .get(chatId) as ChatRoomRow | undefined;
 };
 
@@ -267,7 +268,7 @@ export const createChatRoom = (userId: number, chatId: number): ChatRoomDto => d
   if (!chat) throw new Error('chat_not_found');
   if (chat.room_enabled === 1) return toRoomDto(chat, getMember(chatId, userId));
 
-  const prompt = resolvePromptSnapshot(userId);
+  const prompt = resolvePromptSnapshot(userId, chat.default_prompt_id ?? undefined);
   const name = makeUniqueAgentName(chatId, normalizeAgentName(prompt.name, 'Chatter'));
   const order = Number((db.prepare(`
     SELECT COALESCE(MAX(sort_order), -1) + 1 AS next_order
@@ -540,8 +541,8 @@ export const getChatRoomInviteInfo = (token: string): { chat_id: number; title: 
 export const joinChatRoomByInvite = (userId: number, token: string): { chat_id: number; room: ChatRoomDto } => {
   const invite = getValidInvite(token);
   if (!invite) throw new Error('invite_not_found');
-  const chat = db.prepare('SELECT id, user_id, title, room_enabled FROM user_chats WHERE id = ?')
-    .get(invite.chat_id) as { id: number; user_id: number; title: string; room_enabled: number } | undefined;
+  const chat = db.prepare('SELECT id, user_id, title, room_enabled, default_prompt_id FROM user_chats WHERE id = ?')
+    .get(invite.chat_id) as (ChatRoomRow & { title: string }) | undefined;
   if (!chat) throw new Error('chat_not_found');
   if (chat.room_enabled !== 1) throw new Error('room_not_created');
 

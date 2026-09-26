@@ -168,6 +168,26 @@ export const getUserPromptImageBySelectedId = (userId: number, selectedPromptId:
   return getUserPromptById(userId, rowId)?.image_url ?? null;
 };
 
+export const resolvePromptSelectionForUser = (
+  user: { id?: number; selected_prompt_id: number | null; custom_prompt_content?: string | null },
+  selectedPromptId: number,
+): PromptRecord => {
+  if (selectedPromptId <= -USER_PROMPT_OFFSET) {
+    const rowId = parseUserPromptRowId(selectedPromptId);
+    const prompt = rowId !== null && user.id ? getUserPromptById(user.id, rowId) : undefined;
+    if (!prompt) throw new Error('prompt_not_found');
+    return { id: selectedPromptId, name: prompt.name, description: prompt.description, content: prompt.content, is_default: 0 };
+  }
+  if (selectedPromptId === CUSTOM_PROMPT_ID && user.custom_prompt_content?.trim()) {
+    return { id: CUSTOM_PROMPT_ID, name: 'Custom', description: 'User-defined prompt', content: user.custom_prompt_content.trim(), is_default: 0 };
+  }
+  if (selectedPromptId > 0) {
+    const prompt = getPromptById(selectedPromptId);
+    if (prompt) return prompt;
+  }
+  throw new Error('prompt_not_found');
+};
+
 export const createUserPrompt = (userId: number, name: string, description: string, content: string) =>
   db.prepare(`
     INSERT INTO user_prompts (user_id, name, description, content)
@@ -194,6 +214,8 @@ export const updateUserPromptImage = (userId: number, rowId: number, imageUrl: s
   `).run(imageUrl, rowId, userId);
 
 export const deleteUserPrompt = (userId: number, rowId: number) => {
+  db.prepare('UPDATE user_chats SET default_prompt_id = NULL WHERE user_id = ? AND default_prompt_id = ?')
+    .run(userId, toUserPromptSelectedId(rowId));
   db.prepare('DELETE FROM user_prompt_character_cards WHERE prompt_id = ?').run(rowId);
   return db.prepare('DELETE FROM user_prompts WHERE id = ? AND user_id = ?').run(rowId, userId);
 };
@@ -201,42 +223,9 @@ export const deleteUserPrompt = (userId: number, rowId: number) => {
 // ── Resolve prompt for user ────────────────────────────────────────────────
 
 export const resolvePromptForUser = (user: { id?: number; selected_prompt_id: number | null; custom_prompt_content?: string | null }): PromptRecord => {
-  // User personal prompt (id <= -1000)
-  if (user.selected_prompt_id !== null && user.selected_prompt_id <= -USER_PROMPT_OFFSET) {
-    const rowId = parseUserPromptRowId(user.selected_prompt_id);
-    if (rowId !== null && user.id) {
-      const up = getUserPromptById(user.id, rowId);
-      if (up) {
-        return {
-          id: user.selected_prompt_id,
-          name: up.name,
-          description: up.description,
-          content: up.content,
-          is_default: 0
-        } satisfies PromptRecord;
-      }
-    }
+  if (user.selected_prompt_id !== null) {
+    try { return resolvePromptSelectionForUser(user, user.selected_prompt_id); } catch { /* fall through to default */ }
   }
-
-  // Legacy custom prompt (-1)
-  if (user.selected_prompt_id === CUSTOM_PROMPT_ID) {
-    const custom = (user.custom_prompt_content || '').trim();
-    if (custom) {
-      return {
-        id: CUSTOM_PROMPT_ID,
-        name: 'Custom',
-        description: 'User-defined prompt',
-        content: custom,
-        is_default: 0
-      } satisfies PromptRecord;
-    }
-  }
-
-  if (user.selected_prompt_id && user.selected_prompt_id > 0) {
-    const selected = getPromptById(user.selected_prompt_id);
-    if (selected) return selected;
-  }
-
   const fallback = ensureDefaultPrompt();
   return fallback!;
 };

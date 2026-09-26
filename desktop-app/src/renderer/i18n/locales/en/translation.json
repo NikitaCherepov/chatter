@@ -549,6 +549,12 @@
       "personaAccountName": "Account name: {{name}}",
       "personasLoadFailed": "Could not load personas",
       "personaSelectFailed": "Could not select a persona for this chat",
+      "character": "Character",
+      "characterAutomatic": "Automatically",
+      "characterGlobal": "Global: {{name}}",
+      "characterDefault": "Default character",
+      "characterRoomManaged": "Characters in this room are managed as room bots.",
+      "characterSelectFailed": "Could not select a character for this chat",
       "globalSettings": {
         "title": "Memory",
         "hint": "Shared vector memories are available in chats using Shared only or Shared and this chat mode.",

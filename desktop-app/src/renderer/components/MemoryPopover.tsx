@@ -15,6 +15,7 @@ type MemorySettings = {
 };
 type MemoryRecord = { id: string; memory_space_id: number; text: string; source: string; updated_at: number };
 type RecordDialog = { type: 'edit' | 'delete'; record: MemoryRecord };
+type ChatPromptSettings = { prompt_id: number | null; room_enabled: boolean };
 
 export function MemoryPopover({ chatId }: { chatId: number }) {
   const { t } = useTranslation();
@@ -26,12 +27,20 @@ export function MemoryPopover({ chatId }: { chatId: number }) {
   const [dialog, setDialog] = useState<RecordDialog | null>(null);
   const [draft, setDraft] = useState('');
   const [saving, setSaving] = useState(false);
+  const [promptSettings, setPromptSettings] = useState<ChatPromptSettings | null>(null);
+  const [promptCatalog, setPromptCatalog] = useState<api.PromptsResponse | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const settingsResult = await api.apiFetch<{ settings: MemorySettings }>(`/api/v1/chats/${chatId}/memory-settings`);
+      const [settingsResult, chatPromptResult, promptsResult] = await Promise.all([
+        api.apiFetch<{ settings: MemorySettings }>(`/api/v1/chats/${chatId}/memory-settings`),
+        api.apiFetch<{ settings: ChatPromptSettings }>(`/api/v1/chats/${chatId}/prompt-settings`),
+        api.getPrompts(),
+      ]);
       setSettings(settingsResult.settings);
+      setPromptSettings(chatPromptResult.settings);
+      setPromptCatalog(promptsResult);
     } catch {
       toast.error(t('chat.memory.loadSettingsFailed'));
     } finally {
@@ -80,6 +89,44 @@ export function MemoryPopover({ chatId }: { chatId: number }) {
       toast.error(t('chat.memory.saveSettingsFailed'));
     }
   };
+
+  const selectChatPrompt = async (value: string) => {
+    if (!promptSettings || promptSettings.room_enabled) return;
+    const previous = promptSettings;
+    const promptId = value === 'automatic' ? null : Number(value);
+    setPromptSettings({ ...promptSettings, prompt_id: promptId });
+    try {
+      const result = await api.apiFetch<{ settings: ChatPromptSettings }>(`/api/v1/chats/${chatId}/prompt-settings`, {
+        method: 'PATCH',
+        body: JSON.stringify({ prompt_id: promptId }),
+      });
+      setPromptSettings(result.settings);
+    } catch {
+      setPromptSettings(previous);
+      toast.error(t('chat.memory.characterSelectFailed'));
+    }
+  };
+
+  const allPrompts = promptCatalog ? [
+    ...promptCatalog.prompts.map(prompt => ({ ...prompt, image_url: null as string | null })),
+    ...promptCatalog.custom_prompts,
+  ] : [];
+  const globalPromptId = promptCatalog?.selected_prompt_id
+    ?? promptCatalog?.prompts.find(prompt => prompt.is_default === 1)?.id
+    ?? null;
+  const effectivePromptId = promptSettings?.prompt_id ?? globalPromptId;
+  const effectivePrompt = allPrompts.find(prompt => prompt.id === effectivePromptId)
+    ?? allPrompts.find(prompt => prompt.id === globalPromptId)
+    ?? null;
+  const effectivePromptImage = effectivePrompt && 'image_url' in effectivePrompt ? effectivePrompt.image_url : null;
+  const promptOptions = [
+    {
+      value: 'automatic',
+      label: t('chat.memory.characterAutomatic'),
+      hint: effectivePrompt?.name ? t('chat.memory.characterGlobal', { name: effectivePrompt.name }) : undefined,
+    },
+    ...allPrompts.map(prompt => ({ value: String(prompt.id), label: prompt.name, hint: prompt.description || undefined })),
+  ];
 
   const updateRecord = async () => {
     if (dialog?.type !== 'edit' || !draft.trim() || saving) return;
@@ -132,6 +179,31 @@ export function MemoryPopover({ chatId }: { chatId: number }) {
           <div className={s.header}><strong>{t('chat.memory.headerTitle')}</strong><span>{loading ? t('common.loading') : t('chat.memory.headerHint')}</span></div>
           {settings && (
             <>
+              <div className={s.field}>{t('chat.memory.character')}
+                {promptSettings?.room_enabled ? (
+                  <div className={s.roomCharacterHint}>{t('chat.memory.characterRoomManaged')}</div>
+                ) : (
+                  <div className={s.characterRow}>
+                    <div className={s.characterAvatar}>
+                      {effectivePromptImage ? (
+                        <img src={api.resolveImageUrl(effectivePromptImage, 160)} alt="" />
+                      ) : (
+                        <span>{effectivePrompt?.name?.slice(0, 1).toUpperCase() || 'C'}</span>
+                      )}
+                    </div>
+                    <div className={s.characterSelect}>
+                      <Select
+                        value={promptSettings?.prompt_id === null ? 'automatic' : String(promptSettings?.prompt_id ?? 'automatic')}
+                        onChange={value => void selectChatPrompt(value)}
+                        options={promptOptions}
+                        searchable={promptOptions.length > 7}
+                        maxVisibleItems={6}
+                      />
+                      <span>{effectivePrompt?.name || t('chat.memory.characterDefault')}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
               <label className={s.field}>{t('chat.memory.persona')}
                 <ChatPersonaSelector chatId={chatId} embedded />
               </label>

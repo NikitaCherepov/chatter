@@ -544,6 +544,12 @@
       "personaAccountName": "Имя аккаунта: {{name}}",
       "personasLoadFailed": "Не удалось загрузить персоны",
       "personaSelectFailed": "Не удалось выбрать персону для чата",
+      "character": "Персонаж",
+      "characterAutomatic": "Автоматически",
+      "characterGlobal": "Глобально: {{name}}",
+      "characterDefault": "Стандартный персонаж",
+      "characterRoomManaged": "Персонажи этого чата настраиваются как боты комнаты.",
+      "characterSelectFailed": "Не удалось выбрать персонажа для этого чата",
       "globalSettings": {
         "title": "Память",
         "hint": "Общие векторные воспоминания доступны в чатах, где выбран режим «Общая» или «Обе».",

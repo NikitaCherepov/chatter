@@ -27,6 +27,7 @@
     "test:memory-foundation": "tsx tests/memory-foundation.test.mts",
     "test:memory-schema-migration": "tsx tests/memory-schema-migration.test.mts",
     "test:memory-fork": "tsx tests/memory-fork.test.mts",
+    "test:chat-prompt-binding": "tsx tests/chat-prompt-binding.test.mts",
     "test:vector-memory-migration": "tsx tests/vector-memory-migration.test.mts",
     "build": "node -e \"require('node:fs').rmSync('dist',{ recursive: true, force: true })\" && tsc -p tsconfig.json && node -e \"require('node:fs').cpSync('src/i18n/locales','dist/i18n/locales',{ recursive: true })\"",
     "start": "node dist/server.js"

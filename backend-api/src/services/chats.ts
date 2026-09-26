@@ -13,7 +13,7 @@ import {
 import type { ToolIteration } from './ai.js';
 import { countTokens, countMessageTokens, countToolCallTokens, countToolResultTokens } from './tokenizer.js';
 import { buildBaseSystemPromptForUser } from './system-prompt.js';
-import { resolvePromptForUser } from './prompts.js';
+import { resolvePromptForUser, resolvePromptSelectionForUser, type PromptRecord } from './prompts.js';
 import { getEnabledMacros } from './macros.js';
 import { listRoomReaderUserIds, canReadChatMessages } from './chat-rooms.js';
 import {
@@ -481,6 +481,42 @@ export const createUserChat = (userId: number, title: string) => {
   const chatId = Number(result.lastInsertRowid);
   db.prepare('UPDATE users SET active_chat_id = ? WHERE id = ?').run(chatId, userId);
   return chatId;
+};
+
+export type ChatPromptSettings = {
+  prompt_id: number | null;
+  room_enabled: boolean;
+};
+
+export const getChatPromptSettings = (userId: number, chatId: number): ChatPromptSettings => {
+  if (!canReadChatMessages(userId, chatId)) throw new Error('chat_not_found');
+  const chat = db.prepare('SELECT default_prompt_id, room_enabled FROM user_chats WHERE id = ?')
+    .get(chatId) as { default_prompt_id: number | null; room_enabled: number } | undefined;
+  if (!chat) throw new Error('chat_not_found');
+  return { prompt_id: chat.default_prompt_id, room_enabled: chat.room_enabled === 1 };
+};
+
+export const updateChatPromptSettings = (userId: number, chatId: number, promptId: number | null): ChatPromptSettings => {
+  const chat = db.prepare('SELECT user_id, room_enabled FROM user_chats WHERE id = ?').get(chatId) as { user_id: number; room_enabled: number } | undefined;
+  if (!chat || chat.user_id !== userId) throw new Error('chat_not_found');
+  if (chat.room_enabled === 1) throw new Error('room_prompt_managed_by_agents');
+  if (promptId !== null) {
+    const user = getUserById(userId);
+    if (!user) throw new Error('user_not_found');
+    resolvePromptSelectionForUser(user, promptId);
+  }
+  db.prepare('UPDATE user_chats SET default_prompt_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?')
+    .run(promptId, chatId, userId);
+  return { prompt_id: promptId, room_enabled: false };
+};
+
+export const resolvePromptForChat = (user: UserRecord, chatId: number): PromptRecord => {
+  const chat = db.prepare('SELECT default_prompt_id, room_enabled FROM user_chats WHERE id = ? AND user_id = ?')
+    .get(chatId, user.id) as { default_prompt_id: number | null; room_enabled: number } | undefined;
+  if (chat && chat.room_enabled !== 1 && chat.default_prompt_id !== null) {
+    try { return resolvePromptSelectionForUser(user, chat.default_prompt_id); } catch { /* deleted prompt: automatic fallback */ }
+  }
+  return resolvePromptForUser(user);
 };
 
 /**
@@ -2160,8 +2196,10 @@ export const updateUserCustomPrompt = (userId: number, content: string) => db
   .run(content, userId);
 
 export const resetUsersPromptIfDeleted = (promptId: number) => db
-  .prepare('UPDATE users SET selected_prompt_id = NULL WHERE selected_prompt_id = ?')
-  .run(promptId);
+  .transaction(() => {
+    db.prepare('UPDATE users SET selected_prompt_id = NULL WHERE selected_prompt_id = ?').run(promptId);
+    db.prepare('UPDATE user_chats SET default_prompt_id = NULL WHERE default_prompt_id = ? AND room_enabled = 0').run(promptId);
+  })();
 
 /**
  * Резолвит эффективный лимит контекста в токенах для пользователя.
