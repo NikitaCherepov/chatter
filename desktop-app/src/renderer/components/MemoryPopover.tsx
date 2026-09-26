@@ -199,7 +199,6 @@ export function MemoryPopover({ chatId }: { chatId: number }) {
                         searchable={promptOptions.length > 7}
                         maxVisibleItems={6}
                       />
-                      <span>{effectivePrompt?.name || t('chat.memory.characterDefault')}</span>
                     </div>
                   </div>
                 )}

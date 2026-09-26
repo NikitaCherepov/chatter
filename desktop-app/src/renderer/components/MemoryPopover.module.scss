@@ -90,16 +90,6 @@
 .characterSelect {
   min-width: 0;
   flex: 1;
-  display: grid;
-  gap: 4px;
-}
-.characterSelect > span {
-  overflow: hidden;
-  color: var(--text-hint);
-  font-size: 10px;
-  font-weight: 400;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .roomCharacterHint {
   padding: 10px 12px;
