@@ -298,6 +298,28 @@
       "imageCropHelp": "Move the image inside the frame and adjust the zoom.",
       "imageCropZoom": "Zoom",
       "imageCropApply": "Apply",
+      "characterCard": {
+        "button": "Import Character Card",
+        "help": "SillyTavern-compatible JSON or PNG",
+        "reading": "Reading...",
+        "previewTitle": "Character Card preview",
+        "sectionsFound": "{{count}} prompt sections",
+        "firstMessageSaved": "First message saved",
+        "alternateGreetings": "{{count}} alternate greetings saved",
+        "lorebookSaved": "Lorebook saved for later",
+        "assetsSaved": "{{count}} assets preserved",
+        "preservedNote": "Unsupported card data is preserved in the database and is not added to the prompt.",
+        "import": "Import",
+        "importing": "Importing...",
+        "imported": "Character Card imported",
+        "errors": {
+          "format": "Choose a Character Card JSON or PNG file",
+          "size": "The Character Card must be no larger than 12 MB",
+          "read": "Could not read the Character Card",
+          "invalid": "This file is not a valid Character Card",
+          "import": "Could not import the Character Card"
+        }
+      },
       "sections": {
         "description": "Description",
         "personality": "Personality",

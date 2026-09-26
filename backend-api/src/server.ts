@@ -89,6 +89,7 @@ import { assignUserPlan, ensureUserMonthlyUsageWindow, getUserQuotaPeriod, type 
 import { runMigrations } from './services/migrations.js';
 import { resolveImageFile, getUploadsDir } from './services/image-storage.js';
 import { attachMediaAsset, deleteMediaAssetIfUnreferenced, detachImageUrlFromEntity, getMediaAssetByUrl, pruneExpiredMediaAssets, removeMediaReferencesForEntity, saveImageAsset } from './services/media-assets.js';
+import { importCharacterCard, MAX_CHARACTER_CARD_BYTES, parseCharacterCard, toCharacterCardPreview } from './services/character-card-import.js';
 import { canUserReadRegisteredImage } from './services/media-access.js';
 import { resolveAttachmentFile, MAX_RAW_FILE_SIZE as MAX_ATTACHMENT_BYTES } from './services/attachment-storage.js';
 import { materializeAssetInput } from './services/response-attachments.js';
@@ -3645,6 +3646,47 @@ app.post('/api/v1/prompts/select', (req: AuthedRequest, res) => {
     updateUserPrompt(userId, promptId);
   }
   return res.json({ ok: true });
+});
+
+const parseCharacterCardRequest = (req: AuthedRequest) => {
+  const fileName = `${req.body?.file_name || ''}`.trim();
+  const mimeType = `${req.body?.mime_type || ''}`.trim();
+  const base64 = `${req.body?.base64 || ''}`.replace(/\s/g, '');
+  if (!fileName || !base64) throw new Error('character_card_file_required');
+  if (Math.floor(base64.length * 0.75) > MAX_CHARACTER_CARD_BYTES) throw new Error('character_card_file_too_large');
+  return parseCharacterCard({ fileName, mimeType, data: Buffer.from(base64, 'base64') });
+};
+
+const characterCardErrorStatus = (code: string) => code === 'character_card_file_too_large' ? 413 : 400;
+
+app.post('/api/v1/prompts/import/character-card/preview', (req: AuthedRequest, res) => {
+  try {
+    const card = parseCharacterCardRequest(req);
+    const limit = getMaxCustomPromptLength(getUserById(req.authUserId!)?.plan);
+    if (card.content.length > limit) return res.status(400).json({ error: 'content_too_long', limit });
+    return res.json({ preview: toCharacterCardPreview(card) });
+  } catch (error) {
+    const code = formatSafeError(error);
+    return res.status(characterCardErrorStatus(code)).json({ error: code });
+  }
+});
+
+app.post('/api/v1/prompts/import/character-card', async (req: AuthedRequest, res) => {
+  try {
+    const userId = req.authUserId!;
+    const card = parseCharacterCardRequest(req);
+    const limit = getMaxCustomPromptLength(getUserById(userId)?.plan);
+    if (card.content.length > limit) return res.status(400).json({ error: 'content_too_long', limit });
+    const imported = await importCharacterCard(userId, card);
+    return res.json({ ok: true, prompt: {
+      id: imported.promptId, name: card.name, description: card.description,
+      content: card.content, image_url: imported.imageUrl,
+    } });
+  } catch (error) {
+    const code = formatSafeError(error);
+    console.error('[prompts/character-card] import failed:', code);
+    return res.status(characterCardErrorStatus(code)).json({ error: code });
+  }
 });
 
 // Create a new custom prompt

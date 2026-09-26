@@ -77,6 +77,7 @@ assert.deepEqual(second.applied, [
   '0006_media_assets',
   '0007_backfill_media_assets',
   '0008_chat_message_media_cleanup',
+  '0009_character_card_imports',
 ]);
 
 const subscription = db.prepare(`

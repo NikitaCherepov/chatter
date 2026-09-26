@@ -1013,6 +1013,21 @@ try { db.exec('ALTER TABLE user_prompts ADD COLUMN image_url TEXT'); } catch { /
 
 db.exec("CREATE INDEX IF NOT EXISTS idx_user_prompts_user ON user_prompts(user_id)");
 
+db.exec(`
+  CREATE TABLE IF NOT EXISTS user_prompt_character_cards (
+    prompt_id INTEGER PRIMARY KEY,
+    source_format TEXT NOT NULL,
+    spec TEXT NOT NULL,
+    spec_version TEXT,
+    first_message TEXT NOT NULL DEFAULT '',
+    alternate_greetings_json TEXT NOT NULL DEFAULT '[]',
+    group_only_greetings_json TEXT NOT NULL DEFAULT '[]',
+    raw_json TEXT NOT NULL,
+    imported_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(prompt_id) REFERENCES user_prompts(id) ON DELETE CASCADE
+  )
+`);
+
 // ── Currency rates (CBR) ──────────────────────────────────────────────────────
 
 db.exec(`

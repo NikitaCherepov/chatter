@@ -275,6 +275,28 @@
       "imageCropHelp": "Перемещайте изображение внутри рамки и настройте масштаб.",
       "imageCropZoom": "Масштаб",
       "imageCropApply": "Применить",
+      "characterCard": {
+        "button": "Импортировать Character Card",
+        "help": "JSON или PNG, совместимый с SillyTavern",
+        "reading": "Чтение...",
+        "previewTitle": "Предпросмотр Character Card",
+        "sectionsFound": "Секций промпта: {{count}}",
+        "firstMessageSaved": "Первое сообщение сохранено",
+        "alternateGreetings": "Альтернативных приветствий сохранено: {{count}}",
+        "lorebookSaved": "Lorebook сохранён на будущее",
+        "assetsSaved": "Дополнительных ресурсов сохранено: {{count}}",
+        "preservedNote": "Неподдерживаемые пока данные карты сохранены в базе и не добавляются в промпт.",
+        "import": "Импортировать",
+        "importing": "Импорт...",
+        "imported": "Character Card импортирована",
+        "errors": {
+          "format": "Выберите Character Card в формате JSON или PNG",
+          "size": "Character Card должна быть не больше 12 МБ",
+          "read": "Не удалось прочитать Character Card",
+          "invalid": "Файл не является корректной Character Card",
+          "import": "Не удалось импортировать Character Card"
+        }
+      },
       "sections": {
         "description": "Описание",
         "personality": "Характер",

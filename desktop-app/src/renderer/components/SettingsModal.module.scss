@@ -456,6 +456,18 @@
   }
 }
 
+.promptImportRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+
+  span {
+    color: var(--text-hint);
+    font-size: 11px;
+    line-height: 1.35;
+  }
+}
+
 .promptImageEditor {
   display: flex;
   align-items: center;

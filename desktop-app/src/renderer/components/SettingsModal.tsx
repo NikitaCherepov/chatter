@@ -41,6 +41,7 @@ import { SubagentModelSettings } from './SubagentModelSettings/SubagentModelSett
 import { AboutSettings } from './AboutSettings/AboutSettings';
 import { GlobalMemorySettings } from './GlobalMemorySettings';
 import { PromptImageCropDialog } from './PromptImageCropDialog';
+import { CharacterCardImportDialog } from './CharacterCardImportDialog';
 import telegramIcon from '../assets/integrations/telegram.webp';
 import s from './SettingsModal.module.scss';
 
@@ -188,6 +189,14 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
   const [promptsLoading, setPromptsLoading] = useState(false);
   const [promptSaving, setPromptSaving] = useState(false);
   const [promptDeleting, setPromptDeleting] = useState(false);
+  const [characterCardReading, setCharacterCardReading] = useState(false);
+  const [characterCardImporting, setCharacterCardImporting] = useState(false);
+  const [characterCardDialog, setCharacterCardDialog] = useState<{
+    file: api.CharacterCardFile;
+    preview: api.CharacterCardPreview;
+    imageUrl: string | null;
+  } | null>(null);
+  const characterCardInputRef = useRef<HTMLInputElement>(null);
 
   // AI prompt generation
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
@@ -1089,6 +1098,66 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
     if (promptImageInputRef.current) promptImageInputRef.current.value = '';
   };
 
+  const handleCharacterCardSelect = (file: File | undefined) => {
+    if (!file) return;
+    const lowerName = file.name.toLowerCase();
+    if (!lowerName.endsWith('.json') && !lowerName.endsWith('.png')) {
+      toast.error(t('settings.prompt.characterCard.errors.format'));
+      return;
+    }
+    if (file.size > 12 * 1024 * 1024) {
+      toast.error(t('settings.prompt.characterCard.errors.size'));
+      return;
+    }
+    setCharacterCardReading(true);
+    const reader = new FileReader();
+    reader.onerror = () => {
+      setCharacterCardReading(false);
+      toast.error(t('settings.prompt.characterCard.errors.read'));
+    };
+    reader.onload = async () => {
+      try {
+        const dataUrl = String(reader.result || '');
+        const base64 = dataUrl.split(',', 2)[1] || '';
+        const payload = { file_name: file.name, mime_type: file.type, base64 };
+        const { preview } = await api.previewCharacterCard(payload);
+        setCharacterCardDialog({ file: payload, preview, imageUrl: lowerName.endsWith('.png') ? dataUrl : preview.avatar_data_url });
+      } catch (error) {
+        console.error('Failed to preview Character Card:', error);
+        toast.error(t('settings.prompt.characterCard.errors.invalid'));
+      } finally {
+        setCharacterCardReading(false);
+        if (characterCardInputRef.current) characterCardInputRef.current.value = '';
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleCharacterCardImport = async () => {
+    if (!characterCardDialog) return;
+    setCharacterCardImporting(true);
+    try {
+      const { prompt } = await api.importCharacterCard(characterCardDialog.file);
+      setCustomPrompts(previous => [...previous.filter(item => item.id !== prompt.id), prompt]);
+      setSelectedPromptId(prompt.id);
+      setPromptName(prompt.name);
+      setPromptDesc(prompt.description);
+      setCustomContent(prompt.content);
+      setPromptSections(parsePromptSections(prompt.content));
+      setPromptEditorMode('advanced');
+      setPromptImageUrl(prompt.image_url);
+      setPendingPromptImage(null);
+      setPromptImageRemoved(false);
+      setCharacterCardDialog(null);
+      toast.success(t('settings.prompt.characterCard.imported'));
+    } catch (error) {
+      console.error('Failed to import Character Card:', error);
+      toast.error(t('settings.prompt.characterCard.errors.import'));
+    } finally {
+      setCharacterCardImporting(false);
+    }
+  };
+
   const handleSaveCustomPrompt = async () => {
     const name = promptName.trim();
     if (!name) {
@@ -1652,6 +1721,24 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
                       disabled={promptSaving}
                       maxVisibleItems={5}
                     />
+                    <div className={s.promptImportRow}>
+                      <button
+                        type="button"
+                        className={s.cancelBtn}
+                        onClick={() => characterCardInputRef.current?.click()}
+                        disabled={characterCardReading || promptSaving}
+                      >
+                        {characterCardReading ? t('settings.prompt.characterCard.reading') : t('settings.prompt.characterCard.button')}
+                      </button>
+                      <span>{t('settings.prompt.characterCard.help')}</span>
+                      <input
+                        ref={characterCardInputRef}
+                        className={s.promptImageInput}
+                        type="file"
+                        accept=".json,.png,application/json,image/png"
+                        onChange={event => handleCharacterCardSelect(event.target.files?.[0])}
+                      />
+                    </div>
                   </div>
 
                   {(selectedPromptId === CUSTOM_PROMPT_ID || (selectedPromptId !== null && selectedPromptId <= -1000)) && (
@@ -2697,6 +2784,15 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
             setPromptImageRemoved(false);
             setPromptImageCropSource(null);
           }}
+        />
+      )}
+      {characterCardDialog && (
+        <CharacterCardImportDialog
+          preview={characterCardDialog.preview}
+          imageUrl={characterCardDialog.imageUrl}
+          importing={characterCardImporting}
+          onCancel={() => !characterCardImporting && setCharacterCardDialog(null)}
+          onImport={handleCharacterCardImport}
         />
       )}
     </motion.div>

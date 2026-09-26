@@ -292,6 +292,25 @@ const MIGRATIONS: Migration[] = [
       `);
     },
   },
+  {
+    name: '0009_character_card_imports',
+    run: () => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS user_prompt_character_cards (
+          prompt_id INTEGER PRIMARY KEY,
+          source_format TEXT NOT NULL,
+          spec TEXT NOT NULL,
+          spec_version TEXT,
+          first_message TEXT NOT NULL DEFAULT '',
+          alternate_greetings_json TEXT NOT NULL DEFAULT '[]',
+          group_only_greetings_json TEXT NOT NULL DEFAULT '[]',
+          raw_json TEXT NOT NULL,
+          imported_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY(prompt_id) REFERENCES user_prompts(id) ON DELETE CASCADE
+        )
+      `);
+    },
+  },
 ];
 
 /**

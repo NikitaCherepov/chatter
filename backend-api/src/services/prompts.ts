@@ -193,8 +193,10 @@ export const updateUserPromptImage = (userId: number, rowId: number, imageUrl: s
     WHERE id = ? AND user_id = ?
   `).run(imageUrl, rowId, userId);
 
-export const deleteUserPrompt = (userId: number, rowId: number) =>
-  db.prepare('DELETE FROM user_prompts WHERE id = ? AND user_id = ?').run(rowId, userId);
+export const deleteUserPrompt = (userId: number, rowId: number) => {
+  db.prepare('DELETE FROM user_prompt_character_cards WHERE prompt_id = ?').run(rowId);
+  return db.prepare('DELETE FROM user_prompts WHERE id = ? AND user_id = ?').run(rowId, userId);
+};
 
 // ── Resolve prompt for user ────────────────────────────────────────────────
 

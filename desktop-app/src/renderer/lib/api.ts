@@ -1800,6 +1800,34 @@ export type CustomPromptInfo = {
   image_url: string | null;
 };
 
+export type CharacterCardPreview = {
+  source_format: 'json' | 'png';
+  spec: 'v1' | 'v2' | 'v3';
+  spec_version: string | null;
+  name: string;
+  description: string;
+  content: string;
+  sections: { description: string; personality: string; scenario: string; examples: string; other: string };
+  has_avatar: boolean;
+  avatar_data_url: string | null;
+  first_message_present: boolean;
+  alternate_greetings_count: number;
+  group_greetings_count: number;
+  has_character_book: boolean;
+  asset_count: number;
+  warnings: string[];
+};
+
+export type CharacterCardFile = { file_name: string; mime_type: string; base64: string };
+
+export async function previewCharacterCard(file: CharacterCardFile): Promise<{ preview: CharacterCardPreview }> {
+  return apiFetch('/api/v1/prompts/import/character-card/preview', { method: 'POST', body: JSON.stringify(file) });
+}
+
+export async function importCharacterCard(file: CharacterCardFile): Promise<{ ok: boolean; prompt: CustomPromptInfo }> {
+  return apiFetch('/api/v1/prompts/import/character-card', { method: 'POST', body: JSON.stringify(file) });
+}
+
 export type PromptsResponse = {
   prompts: PromptInfo[];
   custom_prompts: CustomPromptInfo[];
