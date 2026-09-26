@@ -289,12 +289,15 @@
         "import": "Импортировать",
         "importing": "Импорт...",
         "imported": "Character Card импортирована",
+        "startChat": "Начать диалог",
+        "startingChat": "Создаём чат...",
         "errors": {
           "format": "Выберите Character Card в формате JSON или PNG",
           "size": "Character Card должна быть не больше 12 МБ",
           "read": "Не удалось прочитать Character Card",
           "invalid": "Файл не является корректной Character Card",
-          "import": "Не удалось импортировать Character Card"
+          "import": "Не удалось импортировать Character Card",
+          "startChat": "Не удалось начать диалог с этим персонажем"
         }
       },
       "sections": {

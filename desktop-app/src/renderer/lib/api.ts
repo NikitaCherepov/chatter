@@ -1798,6 +1798,7 @@ export type CustomPromptInfo = {
   description: string;
   content: string;
   image_url: string | null;
+  character_card?: { first_message_present: boolean } | null;
 };
 
 export type CharacterCardPreview = {
@@ -1826,6 +1827,10 @@ export async function previewCharacterCard(file: CharacterCardFile): Promise<{ p
 
 export async function importCharacterCard(file: CharacterCardFile): Promise<{ ok: boolean; prompt: CustomPromptInfo }> {
   return apiFetch('/api/v1/prompts/import/character-card', { method: 'POST', body: JSON.stringify(file) });
+}
+
+export async function startCharacterCardChat(promptId: number): Promise<{ chat_id: number; message_id: number | null; chat?: ChatInfo }> {
+  return apiFetch(`/api/v1/prompts/${promptId}/start-chat`, { method: 'POST' });
 }
 
 export type PromptsResponse = {

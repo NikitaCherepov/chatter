@@ -7405,6 +7405,10 @@ export function ChatPage() {
             key="settings-modal"
             onClose={() => setShowSettings(false)}
             onAccountChanged={loadChats}
+            onChatCreated={async (chatId) => {
+              await loadChats();
+              await selectChat(chatId);
+            }}
             onAuthInvalidated={() => {
               setShowSettings(false);
               logout();

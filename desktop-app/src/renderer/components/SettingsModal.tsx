@@ -48,6 +48,7 @@ import s from './SettingsModal.module.scss';
 type Props = {
   onClose: () => void;
   onAccountChanged?: () => void | Promise<void>;
+  onChatCreated?: (chatId: number) => void | Promise<void>;
   /** Called when the user changed their password or login and server tokens
    *  were revoked — the parent must force a sign-out and close the modal. */
   onAuthInvalidated?: () => void;
@@ -137,7 +138,7 @@ function clampZoomPct(pct: number): number {
   return Math.min(ZOOM_MAX_PCT, Math.max(ZOOM_MIN_PCT, snapped));
 }
 
-export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: Props) {
+export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuthInvalidated }: Props) {
   const { user, setUser } = useAuth();
   const { t, i18n } = useTranslation();
   const [section, setSection] = useState<Section>('account');
@@ -191,6 +192,7 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
   const [promptDeleting, setPromptDeleting] = useState(false);
   const [characterCardReading, setCharacterCardReading] = useState(false);
   const [characterCardImporting, setCharacterCardImporting] = useState(false);
+  const [characterChatStarting, setCharacterChatStarting] = useState(false);
   const [characterCardDialog, setCharacterCardDialog] = useState<{
     file: api.CharacterCardFile;
     preview: api.CharacterCardPreview;
@@ -1158,6 +1160,21 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
     }
   };
 
+  const handleStartCharacterChat = async () => {
+    if (selectedPromptId === null || selectedPromptId > -1000 || characterChatStarting) return;
+    setCharacterChatStarting(true);
+    try {
+      const result = await api.startCharacterCardChat(selectedPromptId);
+      await onChatCreated?.(result.chat_id);
+      onClose();
+    } catch (error) {
+      console.error('Failed to start Character Card chat:', error);
+      toast.error(t('settings.prompt.characterCard.errors.startChat'));
+    } finally {
+      setCharacterChatStarting(false);
+    }
+  };
+
   const handleSaveCustomPrompt = async () => {
     const name = promptName.trim();
     if (!name) {
@@ -1401,6 +1418,7 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
 
   const selectedPersona = personas.find(persona => persona.id === selectedPersonaId);
   const selectedPersonaIsPrimary = selectedPersona?.is_primary === 1;
+  const selectedCharacterCard = customPrompts.find(prompt => prompt.id === selectedPromptId)?.character_card;
 
   return (
     <motion.div
@@ -1849,6 +1867,18 @@ export function SettingsModal({ onClose, onAccountChanged, onAuthInvalidated }: 
                           >
                             {promptSaving ? t('common.saving') : (selectedPromptId === CUSTOM_PROMPT_ID ? t('common.create') : t('common.save'))}
                           </button>
+                          {selectedCharacterCard && (
+                            <button
+                              className={s.saveBtn}
+                              type="button"
+                              onClick={() => void handleStartCharacterChat()}
+                              disabled={promptSaving || characterChatStarting}
+                            >
+                              {characterChatStarting
+                                ? t('settings.prompt.characterCard.startingChat')
+                                : t('settings.prompt.characterCard.startChat')}
+                            </button>
+                          )}
                           {selectedPromptId !== null && selectedPromptId <= -1000 && (
                             <button
                               className={s.cancelBtn}

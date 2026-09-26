@@ -89,7 +89,7 @@ import { assignUserPlan, ensureUserMonthlyUsageWindow, getUserQuotaPeriod, type 
 import { runMigrations } from './services/migrations.js';
 import { resolveImageFile, getUploadsDir } from './services/image-storage.js';
 import { attachMediaAsset, deleteMediaAssetIfUnreferenced, detachImageUrlFromEntity, getMediaAssetByUrl, pruneExpiredMediaAssets, removeMediaReferencesForEntity, saveImageAsset } from './services/media-assets.js';
-import { importCharacterCard, MAX_CHARACTER_CARD_BYTES, parseCharacterCard, toCharacterCardPreview } from './services/character-card-import.js';
+import { importCharacterCard, listCharacterCardPromptSummaries, MAX_CHARACTER_CARD_BYTES, parseCharacterCard, startCharacterCardChat, toCharacterCardPreview } from './services/character-card-import.js';
 import { canUserReadRegisteredImage } from './services/media-access.js';
 import { resolveAttachmentFile, MAX_RAW_FILE_SIZE as MAX_ATTACHMENT_BYTES } from './services/attachment-storage.js';
 import { materializeAssetInput } from './services/response-attachments.js';
@@ -3633,6 +3633,7 @@ app.get('/api/v1/prompts', (req: AuthedRequest, res) => {
   const prompts = getAllPrompts();
   const user = getUserById(userId);
   const userPrompts = getUserPrompts(userId);
+  const characterCards = listCharacterCardPromptSummaries(userId);
   return res.json({
     prompts: prompts.map(p => ({ id: p.id, name: p.name, description: p.description, is_default: p.is_default })),
     custom_prompts: userPrompts.map(p => ({
@@ -3641,6 +3642,7 @@ app.get('/api/v1/prompts', (req: AuthedRequest, res) => {
       description: p.description,
       content: p.content,
       image_url: p.image_url,
+      character_card: characterCards.get(toUserPromptSelectedId(p.id)) ?? null,
     })),
     selected_prompt_id: user?.selected_prompt_id ?? null,
     custom_prompt_content: user?.custom_prompt_content ?? null,
@@ -3704,11 +3706,30 @@ app.post('/api/v1/prompts/import/character-card', async (req: AuthedRequest, res
     return res.json({ ok: true, prompt: {
       id: imported.promptId, name: card.name, description: card.description,
       content: card.content, image_url: imported.imageUrl,
+      character_card: { first_message_present: Boolean(card.first_message) },
     } });
   } catch (error) {
     const code = formatSafeError(error);
     console.error('[prompts/character-card] import failed:', code);
     return res.status(characterCardErrorStatus(code)).json({ error: code });
+  }
+});
+
+app.post('/api/v1/prompts/:promptId/start-chat', async (req: AuthedRequest, res) => {
+  const selectedPromptId = Number(req.params.promptId);
+  if (!Number.isSafeInteger(selectedPromptId)) return res.status(400).json({ error: 'bad_prompt_id' });
+  try {
+    const result = await startCharacterCardChat(req.authUserId!, selectedPromptId);
+    return res.status(201).json({
+      chat_id: result.chatId,
+      message_id: result.messageId,
+      chat: getUserChatListItem(req.authUserId!, result.chatId),
+    });
+  } catch (error) {
+    const code = formatSafeError(error);
+    if (code === 'character_card_not_found') return res.status(404).json({ error: code });
+    console.error('[prompts/character-card] start chat failed:', code);
+    return res.status(500).json({ error: 'character_card_chat_failed' });
   }
 });
 

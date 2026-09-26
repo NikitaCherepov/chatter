@@ -1,5 +1,7 @@
 import { db } from '../db.js';
-import { createUserPrompt, deleteUserPrompt, toUserPromptSelectedId } from './prompts.js';
+import { appendChatMessage, createUserChat, deleteUserChat, updateChatPromptSettings } from './chats.js';
+import { resolvePersonaForChat } from './memory-foundation.js';
+import { createUserPrompt, deleteUserPrompt, parseUserPromptRowId, toUserPromptSelectedId } from './prompts.js';
 import { attachMediaAsset, deleteMediaAssetIfUnreferenced, removeMediaReferencesForEntity, saveImageAsset } from './media-assets.js';
 
 const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
@@ -135,6 +137,58 @@ export const parseCharacterCard = (input: { fileName: string; mimeType?: string;
 export const toCharacterCardPreview = (card: ParsedCharacterCard): CharacterCardPreview => {
   const { raw_json: _raw, first_message: _first, alternate_greetings: _alternate, group_only_greetings: _group, avatar: _avatar, ...preview } = card;
   return preview;
+};
+
+export type CharacterCardPromptSummary = {
+  first_message_present: boolean;
+};
+
+export const listCharacterCardPromptSummaries = (userId: number): Map<number, CharacterCardPromptSummary> => {
+  const rows = db.prepare(`
+    SELECT card.prompt_id, card.first_message
+    FROM user_prompt_character_cards card
+    INNER JOIN user_prompts prompt ON prompt.id = card.prompt_id
+    WHERE prompt.user_id = ?
+  `).all(userId) as Array<{ prompt_id: number; first_message: string }>;
+  return new Map(rows.map(row => [
+    toUserPromptSelectedId(row.prompt_id),
+    { first_message_present: Boolean(row.first_message.trim()) },
+  ]));
+};
+
+const expandGreetingMacros = (text: string, characterName: string, userName: string): string => text
+  .replace(/{{\s*char\s*}}/gi, characterName)
+  .replace(/{{\s*user\s*}}/gi, userName);
+
+export const startCharacterCardChat = async (userId: number, selectedPromptId: number) => {
+  const promptRowId = parseUserPromptRowId(selectedPromptId);
+  if (promptRowId === null) throw new Error('character_card_not_found');
+  const card = db.prepare(`
+    SELECT prompt.name, card.first_message
+    FROM user_prompt_character_cards card
+    INNER JOIN user_prompts prompt ON prompt.id = card.prompt_id
+    WHERE card.prompt_id = ? AND prompt.user_id = ?
+  `).get(promptRowId, userId) as { name: string; first_message: string } | undefined;
+  if (!card) throw new Error('character_card_not_found');
+
+  const chatId = createUserChat(userId, card.name);
+  try {
+    updateChatPromptSettings(userId, chatId, selectedPromptId);
+    const firstMessage = card.first_message.trim();
+    let messageId: number | null = null;
+    if (firstMessage) {
+      const { persona } = resolvePersonaForChat(userId, chatId);
+      const content = expandGreetingMacros(firstMessage, card.name, persona.name);
+      messageId = await appendChatMessage(userId, chatId, 'assistant', content, null, null, null, null, null, null, null, {
+        promptId: selectedPromptId,
+        promptName: card.name,
+      });
+    }
+    return { chatId, messageId };
+  } catch (error) {
+    deleteUserChat(userId, chatId);
+    throw error;
+  }
 };
 
 export const importCharacterCard = async (userId: number, card: ParsedCharacterCard) => {

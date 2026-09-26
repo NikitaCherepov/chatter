@@ -312,12 +312,15 @@
         "import": "Import",
         "importing": "Importing...",
         "imported": "Character Card imported",
+        "startChat": "Start chat",
+        "startingChat": "Starting...",
         "errors": {
           "format": "Choose a Character Card JSON or PNG file",
           "size": "The Character Card must be no larger than 12 MB",
           "read": "Could not read the Character Card",
           "invalid": "This file is not a valid Character Card",
-          "import": "Could not import the Character Card"
+          "import": "Could not import the Character Card",
+          "startChat": "Could not start a chat with this character"
         }
       },
       "sections": {
