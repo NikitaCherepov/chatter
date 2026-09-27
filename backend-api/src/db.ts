@@ -592,6 +592,38 @@ ensureChatMessageColumn('subagents_json', 'ALTER TABLE chat_messages ADD COLUMN 
 // is preserved when a chat is forked, so memory provenance remains comparable
 // in branches of branches. Deleted messages intentionally leave gaps.
 ensureChatMessageColumn('timeline_index', 'ALTER TABLE chat_messages ADD COLUMN timeline_index INTEGER');
+ensureChatMessageColumn('active_variant_index', 'ALTER TABLE chat_messages ADD COLUMN active_variant_index INTEGER NOT NULL DEFAULT 0');
+db.exec(`
+  CREATE TABLE IF NOT EXISTS chat_message_variants (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    message_id INTEGER NOT NULL,
+    variant_index INTEGER NOT NULL,
+    content TEXT NOT NULL,
+    reasoning_content TEXT,
+    tool_calls_json TEXT,
+    images TEXT,
+    attachments TEXT,
+    subagents_json TEXT,
+    usage_json TEXT,
+    prompt_id INTEGER,
+    prompt_name TEXT,
+    model_name TEXT,
+    provider_name TEXT,
+    agent_id INTEGER,
+    token_count INTEGER NOT NULL DEFAULT 0,
+    reasoning_tokens INTEGER NOT NULL DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(message_id, variant_index),
+    FOREIGN KEY(message_id) REFERENCES chat_messages(id) ON DELETE CASCADE
+  );
+  CREATE INDEX IF NOT EXISTS idx_chat_message_variants_message
+    ON chat_message_variants(message_id, variant_index);
+  CREATE TRIGGER IF NOT EXISTS trg_chat_messages_delete_variants
+  AFTER DELETE ON chat_messages
+  BEGIN
+    DELETE FROM chat_message_variants WHERE message_id = OLD.id;
+  END;
+`);
 db.exec(`
   UPDATE chat_messages SET timeline_index = id WHERE timeline_index IS NULL;
   CREATE UNIQUE INDEX IF NOT EXISTS idx_chat_messages_chat_timeline

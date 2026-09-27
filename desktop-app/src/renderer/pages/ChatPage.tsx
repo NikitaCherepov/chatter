@@ -547,6 +547,8 @@ type MessageItemProps = {
   onCloseRegenHint: () => void;
   onSetRegenHintText: (value: string) => void;
   onRegenerateWithHint: (messageId: number, hint: string) => void;
+  onActivateVariant: (messageId: number, variantIndex: number) => void;
+  variantSwitching: boolean;
   onMsgKebabClick: (e: React.MouseEvent, messageId: number) => void;
   onSetEditingText: (value: string) => void;
   onSaveEdit: (messageId: number) => void;
@@ -586,6 +588,8 @@ const MessageItem = React.memo(function MessageItem({
   onCloseRegenHint,
   onSetRegenHintText,
   onRegenerateWithHint,
+  onActivateVariant,
+  variantSwitching,
   onMsgKebabClick,
   onSetEditingText,
   onSaveEdit,
@@ -1026,6 +1030,33 @@ const MessageItem = React.memo(function MessageItem({
           </svg>
         </button>
       </div>
+      {isLastAssistant && (msg.variant_count ?? 1) > 1 && (
+        <div className={s.messageVariants} aria-label={t('chat.message.variants')}>
+          <button
+            type="button"
+            className={s.messageVariantButton}
+            onClick={() => onActivateVariant(msg.id, (msg.variant_index ?? 0) - 1)}
+            disabled={variantSwitching || (msg.variant_index ?? 0) <= 0}
+            title={t('chat.message.previousVariant')}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <polyline points="15 18 9 12 15 6" />
+            </svg>
+          </button>
+          <span>{(msg.variant_index ?? 0) + 1} / {msg.variant_count}</span>
+          <button
+            type="button"
+            className={s.messageVariantButton}
+            onClick={() => onActivateVariant(msg.id, (msg.variant_index ?? 0) + 1)}
+            disabled={variantSwitching || (msg.variant_index ?? 0) >= (msg.variant_count ?? 1) - 1}
+            title={t('chat.message.nextVariant')}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <polyline points="9 18 15 12 9 6" />
+            </svg>
+          </button>
+        </div>
+      )}
         </div>
       </div>
     </div>
@@ -1145,6 +1176,8 @@ export function ChatPage() {
   // Optimistic temp user-message id per chat, replaced when the server acks
   // the persisted message via chat_user_message_saved.
   const pendingUserMessageIdByChatRef = useRef(new Map<number, number>());
+  // Original active response hidden only while its replacement streams.
+  const regeneratingMessageRef = useRef<{ chatId: number; message: api.Message } | null>(null);
   // Watchdog timers per chat: if the server never picks up a send (no ack /
   // start / queue events), roll the optimistic UI back so the composer does
   // not hang in `sending` forever.
@@ -1175,11 +1208,19 @@ export function ChatPage() {
       setShowTyping(false);
       setStreamingMsgId(null);
       setStreamingState('done');
+      const regeneration = regeneratingMessageRef.current;
+      if (regeneration?.chatId === chatId) {
+        setMessages((prev) => prev.some((message) => message.id === regeneration.message.id)
+          ? prev
+          : [...prev, regeneration.message]);
+        regeneratingMessageRef.current = null;
+      }
       toast.error(t('chat.connectionLostBeforeSend'));
     }, 25000));
   }, [clearSendWatchdog, t]);
   const { unreadByChat, incrementUnread, markAsRead, getUnread } = useUnreadChats();
   const [messages, setMessages] = useState<api.Message[]>([]);
+  const [switchingVariantId, setSwitchingVariantId] = useState<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -2644,6 +2685,10 @@ export function ChatPage() {
             : message));
           break;
         }
+        case 'room_message_variant_changed': {
+          setMessages((prev) => prev.map((message) => message.id === event.message.id ? event.message : message));
+          break;
+        }
         case 'chat_agent_start': {
           const stream = roomEventAgentMsgIds.current.get(event.chat_id);
           if (!stream) break;
@@ -2779,12 +2824,20 @@ export function ChatPage() {
             model_name: res.model_name ?? null,
             provider_name: res.provider_name ?? null,
             usage: res.message_usage ?? null,
+            variant_index: res.variant_index ?? 0,
+            variant_count: res.variant_count ?? 1,
             ...(typeof res.token_count === 'number' ? { token_count: res.token_count } : {}),
             ...(typeof res.reasoning_tokens === 'number' ? { reasoning_tokens: res.reasoning_tokens } : {}),
           };
-          setMessages((prev) => tempId !== undefined && prev.some((message) => message.id === tempId)
-            ? prev.map((message) => message.id === tempId ? finalMessage : message)
-            : [...prev, finalMessage]);
+          setMessages((prev) => {
+            const withoutTemp = tempId === undefined ? prev : prev.filter((message) => message.id !== tempId);
+            return withoutTemp.some((message) => message.id === finalMessage.id)
+              ? withoutTemp.map((message) => message.id === finalMessage.id ? finalMessage : message)
+              : [...withoutTemp, finalMessage];
+          });
+          if (regeneratingMessageRef.current?.message.id === finalMessage.id) {
+            regeneratingMessageRef.current = null;
+          }
           // Pixel-art media becomes readable only after the assistant message
           // has been persisted and the image is associated with this chat.
           if (res.display_state?.mode === 'media' && res.display_state.media_url) {
@@ -2804,6 +2857,13 @@ export function ChatPage() {
           roomEventAgentMsgIds.current.delete(event.chat_id);
           if (stream) {
             setMessages((prev) => prev.filter((message) => message.id !== stream.tempId));
+          }
+          const regeneration = regeneratingMessageRef.current;
+          if (regeneration?.chatId === event.chat_id) {
+            setMessages((prev) => prev.some((message) => message.id === regeneration.message.id)
+              ? prev
+              : [...prev, regeneration.message]);
+            regeneratingMessageRef.current = null;
           }
           if (roomEventAgentMsgIds.current.size === 0) {
             setSending(false);
@@ -3364,14 +3424,10 @@ export function ChatPage() {
     }
     if (!userText) return;
 
-    // Remove the assistant message optimistically
-    const snapshot = [...messages];
+    // Keep the persisted message as variant 0; remove only its active UI
+    // projection while the replacement streams in.
+    regeneratingMessageRef.current = { chatId: activeChatId, message: messages[idx] };
     setMessages(prev => prev.filter(m => m.id !== assistantMsgId));
-    try {
-      await api.deleteMessage(activeChatId, assistantMsgId);
-    } catch {
-      // If delete fails, still proceed — server may not have it
-    }
 
     setSending(true);
     setShowTyping(true);
@@ -3385,6 +3441,7 @@ export function ChatPage() {
         preferredModel,
         skip_user_history: true,
         regenerate_from_history: true,
+        regenerate_message_id: assistantMsgId,
         dice_mode: diceMode,
         agentId: responseAgentId,
       });
@@ -3392,6 +3449,9 @@ export function ChatPage() {
         clearSendWatchdog(activeChatId);
         setSending(false);
         setShowTyping(false);
+        const regeneration = regeneratingMessageRef.current;
+        if (regeneration) setMessages(prev => [...prev, regeneration.message]);
+        regeneratingMessageRef.current = null;
         toast.error(t('chat.connectionLostBeforeSend'));
       }
       return;
@@ -3404,12 +3464,16 @@ export function ChatPage() {
       preferredModel,
       skip_user_history: true,
       regenerate_from_history: true,
+      regenerate_message_id: assistantMsgId,
       dice_mode: diceMode,
     });
     if (!delivered) {
       clearSendWatchdog(activeChatId);
       setSending(false);
       setShowTyping(false);
+      const regeneration = regeneratingMessageRef.current;
+      if (regeneration) setMessages(prev => [...prev, regeneration.message]);
+      regeneratingMessageRef.current = null;
       toast.error(t('chat.connectionLostBeforeSend'));
     }
     return;
@@ -3431,13 +3495,8 @@ export function ChatPage() {
     }
     if (!userText) return;
 
-    const snapshot = [...messages];
+    regeneratingMessageRef.current = { chatId: activeChatId, message: messages[idx] };
     setMessages(prev => prev.filter(m => m.id !== assistantMsgId));
-    try {
-      await api.deleteMessage(activeChatId, assistantMsgId);
-    } catch {
-      // proceed anyway
-    }
 
     setSending(true);
     setShowTyping(true);
@@ -3452,6 +3511,7 @@ export function ChatPage() {
         regenerate_hint: hint.trim(),
         skip_user_history: true,
         regenerate_from_history: true,
+        regenerate_message_id: assistantMsgId,
         dice_mode: diceMode,
         agentId: responseAgentId,
       });
@@ -3459,6 +3519,9 @@ export function ChatPage() {
         clearSendWatchdog(activeChatId);
         setSending(false);
         setShowTyping(false);
+        const regeneration = regeneratingMessageRef.current;
+        if (regeneration) setMessages(prev => [...prev, regeneration.message]);
+        regeneratingMessageRef.current = null;
         toast.error(t('chat.connectionLostBeforeSend'));
       }
       return;
@@ -3472,16 +3535,39 @@ export function ChatPage() {
       regenerate_hint: hint.trim(),
       skip_user_history: true,
       regenerate_from_history: true,
+      regenerate_message_id: assistantMsgId,
       dice_mode: diceMode,
     });
     if (!delivered) {
       clearSendWatchdog(activeChatId);
       setSending(false);
       setShowTyping(false);
+      const regeneration = regeneratingMessageRef.current;
+      if (regeneration) setMessages(prev => [...prev, regeneration.message]);
+      regeneratingMessageRef.current = null;
       toast.error(t('chat.connectionLostBeforeSend'));
     }
     return;
   }, [activeChatId, sending, messages, preferredModel, handleIncomingDesktopAction, diceRollEnabled, startDiceRollAnimation, finishDiceRoll, diceMode, applyAvatarState, t, armSendWatchdog, clearSendWatchdog]);
+
+  const handleActivateVariant = useCallback(async (messageId: number, variantIndex: number) => {
+    if (!activeChatId || switchingVariantId !== null || variantIndex < 0) return;
+    setSwitchingVariantId(messageId);
+    try {
+      const { message } = await api.activateMessageVariant(activeChatId, messageId, variantIndex);
+      setMessages((prev) => prev.map((item) => item.id === messageId ? message : item));
+      if (ttsPlayingId === messageId) ttsStop();
+      setOpenReasoningId(null);
+      setOpenToolCallsId(null);
+      setOpenSubagentsId(null);
+      refreshContextTokens(activeChatId);
+    } catch (error) {
+      console.error('Failed to activate message variant:', error);
+      toast.error(t('chat.message.variantSwitchFailed'));
+    } finally {
+      setSwitchingVariantId(null);
+    }
+  }, [activeChatId, switchingVariantId, ttsPlayingId, refreshContextTokens, t]);
 
   const handleCopyMessage = (messageId: number) => {
     const msg = messages.find(m => m.id === messageId);
@@ -3712,7 +3798,7 @@ export function ChatPage() {
     return () => window.removeEventListener('chatter:open-tool', handler);
   }, []);
 
-  const lastAssistantId = messages.filter(m => m.role === 'assistant').pop()?.id ?? null;
+  const lastAssistantId = messages.at(-1)?.role === 'assistant' ? messages.at(-1)!.id : null;
   const formatTime = (timestamp: number) => formatMessageTime(timestamp, locale);
 
   // ── Search ──────────────────────────────────────────────────────────────
@@ -5210,6 +5296,8 @@ export function ChatPage() {
                   onCloseRegenHint={handleCloseRegenHint}
                   onSetRegenHintText={setRegenHintText}
                   onRegenerateWithHint={handleRegenerateWithHint}
+                  onActivateVariant={handleActivateVariant}
+                  variantSwitching={switchingVariantId === msg.id}
                   onMsgKebabClick={handleMsgKebabClick}
                   onSetEditingText={setEditingText}
                   onSaveEdit={handleSaveEdit}

@@ -80,6 +80,7 @@ assert.deepEqual(second.applied, [
   '0009_character_card_imports',
   '0010_persona_imports',
   '0011_sillytavern_chat_imports',
+  '0012_chat_message_variants',
 ]);
 
 const subscription = db.prepare(`

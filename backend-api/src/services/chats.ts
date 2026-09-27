@@ -698,7 +698,7 @@ export const forkChat = (
       SELECT id, role, content, images, audio, reasoning_content,
              tool_calls_json, token_count, reasoning_tokens,
              attachments, subagents_json, usage_json, prompt_id, prompt_name, model_name, provider_name,
-             agent_id, archived, timeline_index, created_at
+             agent_id, archived, timeline_index, active_variant_index, created_at
       FROM chat_messages
       WHERE chat_id = ? AND id <= ?
       ORDER BY id ASC
@@ -723,6 +723,7 @@ export const forkChat = (
       agent_id: number | null;
       archived: number;
       timeline_index: number;
+      active_variant_index: number;
     }>;
 
     const insertStmt = db.prepare(`
@@ -731,9 +732,9 @@ export const forkChat = (
         telegram_chat_id, telegram_message_id,
         images, audio, reasoning_content, tool_calls_json,
         token_count, reasoning_tokens, attachments, subagents_json,
-        usage_json, prompt_id, prompt_name, model_name, provider_name, agent_id, archived, timeline_index, created_at
+        usage_json, prompt_id, prompt_name, model_name, provider_name, agent_id, archived, timeline_index, active_variant_index, created_at
       )
-      VALUES (?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     for (const row of rows) {
@@ -781,8 +782,63 @@ export const forkChat = (
         row.agent_id === null ? null : (agentIdMap.get(row.agent_id) ?? null),
         row.archived,          // preserve archived state
         row.timeline_index,    // stable branch cursor for memory provenance
+        row.active_variant_index,
         row.created_at         // preserve original timestamps
       );
+      const copiedMessageId = Number(inserted.lastInsertRowid);
+      const variants = db.prepare(`
+        SELECT variant_index, content, reasoning_content, tool_calls_json, images,
+               attachments, subagents_json, usage_json, prompt_id, prompt_name,
+               model_name, provider_name, agent_id, token_count, reasoning_tokens, created_at
+        FROM chat_message_variants WHERE message_id = ? ORDER BY variant_index ASC
+      `).all(row.id) as any[];
+      const insertVariant = db.prepare(`
+        INSERT INTO chat_message_variants (
+          message_id, variant_index, content, reasoning_content, tool_calls_json,
+          images, attachments, subagents_json, usage_json, prompt_id, prompt_name,
+          model_name, provider_name, agent_id, token_count, reasoning_tokens, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      for (const variant of variants) {
+        let copiedVariantAttachments = variant.variant_index === row.active_variant_index
+          ? newAttachmentsJson
+          : variant.attachments;
+        if (variant.variant_index !== row.active_variant_index && variant.attachments) {
+          try {
+            const parsed = JSON.parse(variant.attachments) as MessageAttachment[];
+            if (Array.isArray(parsed)) {
+              const rewritten: MessageAttachment[] = [];
+              for (const attachment of parsed) {
+                const copied = copyAttachmentFile(attachment.filename);
+                if (!copied) continue;
+                rewritten.push({ ...attachment, filename: copied.filename, url: copied.url });
+              }
+              copiedVariantAttachments = rewritten.length > 0 ? JSON.stringify(rewritten) : null;
+            }
+          } catch { /* preserve malformed legacy JSON */ }
+        }
+        insertVariant.run(
+          copiedMessageId, variant.variant_index, variant.content, variant.reasoning_content,
+          variant.tool_calls_json, variant.images, copiedVariantAttachments, variant.subagents_json,
+          variant.usage_json, variant.prompt_id, variant.prompt_name, variant.model_name,
+          variant.provider_name,
+          variant.agent_id === null ? null : (agentIdMap.get(variant.agent_id) ?? null),
+          variant.token_count, variant.reasoning_tokens, variant.created_at,
+        );
+        if (variant.images) {
+          try {
+            const images = JSON.parse(variant.images) as MessageImage[];
+            if (Array.isArray(images)) {
+              attachImageUrlsToEntity({
+                userId,
+                urls: images.map(image => image?.url).filter((url): url is string => Boolean(url)),
+                entityType: 'chat_message',
+                entityId: copiedMessageId,
+              });
+            }
+          } catch { /* preserve malformed legacy JSON */ }
+        }
+      }
       if (row.images) {
         try {
           const images = JSON.parse(row.images) as MessageImage[];
@@ -791,7 +847,7 @@ export const forkChat = (
               userId,
               urls: images.map(image => image?.url).filter((url): url is string => Boolean(url)),
               entityType: 'chat_message',
-              entityId: Number(inserted.lastInsertRowid),
+              entityId: copiedMessageId,
             });
           }
         } catch { /* invalid legacy JSON: keep the copied value unchanged */ }
@@ -941,9 +997,19 @@ const cleanupMessageFiles = (userId: number, chatId: number, messageId?: number)
   const imageFilenames = new Set<string>();
   try {
     const query = messageId
-      ? 'SELECT images, attachments FROM chat_messages WHERE id = ? AND user_id = ? AND chat_id = ?'
-      : 'SELECT images, attachments FROM chat_messages WHERE user_id = ? AND chat_id = ?';
-    const params = messageId ? [messageId, userId, chatId] : [userId, chatId];
+      ? `SELECT images, attachments FROM chat_messages WHERE id = ? AND user_id = ? AND chat_id = ?
+         UNION ALL
+         SELECT v.images, v.attachments FROM chat_message_variants v
+         JOIN chat_messages m ON m.id = v.message_id
+         WHERE m.id = ? AND m.user_id = ? AND m.chat_id = ?`
+      : `SELECT images, attachments FROM chat_messages WHERE user_id = ? AND chat_id = ?
+         UNION ALL
+         SELECT v.images, v.attachments FROM chat_message_variants v
+         JOIN chat_messages m ON m.id = v.message_id
+         WHERE m.user_id = ? AND m.chat_id = ?`;
+    const params = messageId
+      ? [messageId, userId, chatId, messageId, userId, chatId]
+      : [userId, chatId, userId, chatId];
     const rows = db.prepare(query).all(...params) as Array<{ images: string | null; attachments: string | null }>;
 
     for (const row of rows) {
@@ -976,10 +1042,12 @@ const cleanupMessageFiles = (userId: number, chatId: number, messageId?: number)
 const isImageFilenameReferenced = (filename: string): boolean => {
   try {
     const rows = db.prepare(`
-      SELECT images
-      FROM chat_messages
+      SELECT images FROM chat_messages
       WHERE images IS NOT NULL AND images != '' AND images LIKE ?
-    `).all(`%${filename}%`) as Array<{ images: string }>;
+      UNION ALL
+      SELECT images FROM chat_message_variants
+      WHERE images IS NOT NULL AND images != '' AND images LIKE ?
+    `).all(`%${filename}%`, `%${filename}%`) as Array<{ images: string }>;
 
     return rows.some(row => {
       try {
@@ -1024,6 +1092,16 @@ export const editUserMessage = (
   db.prepare(
     'UPDATE chat_messages SET content = ?, token_count = ? WHERE id = ? AND user_id = ? AND chat_id = ?'
   ).run(newContent, tokenCount, messageId, userId, chatId);
+
+  if (row.role === 'assistant') {
+    db.prepare(`
+      UPDATE chat_message_variants
+      SET content = ?, token_count = ?
+      WHERE message_id = ? AND variant_index = (
+        SELECT active_variant_index FROM chat_messages WHERE id = ?
+      )
+    `).run(newContent, tokenCount, messageId, messageId);
+  }
 
   // FTS: триггеры покрывают только INSERT/DELETE, обновляем вручную
   db.prepare(
@@ -1192,14 +1270,15 @@ export const getChatMessages = (userId: number, chatId: number, limit = 20, offs
            m.telegram_chat_id, m.telegram_message_id, m.created_at, m.archived, m.token_count,
            m.reasoning_tokens, m.attachments, m.subagents_json, m.usage_json, m.prompt_id, m.prompt_name,
            up.image_url AS prompt_image_url,
-           m.model_name, m.provider_name, m.agent_id
+           m.model_name, m.provider_name, m.agent_id, m.active_variant_index,
+           (SELECT COUNT(*) FROM chat_message_variants v WHERE v.message_id = m.id) AS variant_count
     FROM chat_messages m
     LEFT JOIN chat_message_audio cma ON cma.message_id = m.id AND cma.user_id = ?
     LEFT JOIN user_prompts up ON m.prompt_id <= -1000 AND up.id = (-m.prompt_id - 1000)
     WHERE ${multiUserRoom ? `m.user_id IN (${placeholders})` : 'm.user_id = ?'} AND m.chat_id = ?
     ORDER BY m.id DESC
     LIMIT ? OFFSET ?
-  `).all(userId, ...(multiUserRoom ? readerIds : [userId]), chatId, safeLimit, safeOffset) as Array<{ id: number; chat_id: number; user_id: number; role: ChatRole; content: string; reasoning_content: string | null; tool_calls_json: string | null; images: string | null; viewer_audio: string | null; telegram_chat_id: number | null; telegram_message_id: number | null; created_at: string; archived: number; token_count: number; reasoning_tokens: number; attachments: string | null; subagents_json: string | null; usage_json: string | null; prompt_id: number | null; prompt_name: string | null; prompt_image_url: string | null; model_name: string | null; provider_name: string | null; agent_id: number | null }>;
+  `).all(userId, ...(multiUserRoom ? readerIds : [userId]), chatId, safeLimit, safeOffset) as Array<{ id: number; chat_id: number; user_id: number; role: ChatRole; content: string; reasoning_content: string | null; tool_calls_json: string | null; images: string | null; viewer_audio: string | null; telegram_chat_id: number | null; telegram_message_id: number | null; created_at: string; archived: number; token_count: number; reasoning_tokens: number; attachments: string | null; subagents_json: string | null; usage_json: string | null; prompt_id: number | null; prompt_name: string | null; prompt_image_url: string | null; model_name: string | null; provider_name: string | null; agent_id: number | null; active_variant_index: number; variant_count: number }>;
 
   return rows.reverse().map(row => {
     let parsedImages: MessageImage[] | null = null;
@@ -1269,6 +1348,8 @@ export const getChatMessages = (userId: number, chatId: number, limit = 20, offs
       agent_id: row.agent_id,
       model_name: row.model_name,
       provider_name: row.provider_name,
+      variant_index: row.active_variant_index ?? 0,
+      variant_count: Math.max(1, row.variant_count ?? 0),
       usage: (() => {
         if (!row.usage_json) return null;
         try {
@@ -1363,6 +1444,7 @@ export const appendChatMessage = async (
     modelName?: string | null;
     providerName?: string | null;
     agentId?: number | null;
+    regenerateMessageId?: number | null;
   }
 ) => {
   const imagesJson = images && images.length > 0 ? JSON.stringify(images) : null;
@@ -1481,6 +1563,72 @@ export const appendChatMessage = async (
     }
   }
 
+  const regenerateMessageId = role === 'assistant' && Number.isSafeInteger(metadata?.regenerateMessageId)
+    ? Number(metadata?.regenerateMessageId)
+    : null;
+
+  if (regenerateMessageId && regenerateMessageId > 0) {
+    const replaced = db.transaction(() => {
+      const current = db.prepare(`
+        SELECT * FROM chat_messages
+        WHERE id = ? AND user_id = ? AND chat_id = ? AND role = 'assistant'
+          AND id = (SELECT MAX(id) FROM chat_messages WHERE chat_id = ?)
+      `).get(regenerateMessageId, userId, chatId, chatId) as any;
+      if (!current) throw new Error('regenerate_message_not_found');
+
+      db.prepare(`
+        INSERT OR IGNORE INTO chat_message_variants (
+          message_id, variant_index, content, reasoning_content, tool_calls_json,
+          images, attachments, subagents_json, usage_json, prompt_id, prompt_name,
+          model_name, provider_name, agent_id, token_count, reasoning_tokens, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        current.id, current.active_variant_index ?? 0, current.content,
+        current.reasoning_content, current.tool_calls_json, current.images,
+        current.attachments, current.subagents_json, current.usage_json,
+        current.prompt_id, current.prompt_name, current.model_name,
+        current.provider_name, current.agent_id, current.token_count,
+        current.reasoning_tokens, current.created_at,
+      );
+
+      const next = db.prepare(`
+        SELECT COALESCE(MAX(variant_index), -1) + 1 AS next_index
+        FROM chat_message_variants WHERE message_id = ?
+      `).get(current.id) as { next_index: number };
+      db.prepare(`
+        INSERT INTO chat_message_variants (
+          message_id, variant_index, content, reasoning_content, tool_calls_json,
+          images, attachments, subagents_json, usage_json, prompt_id, prompt_name,
+          model_name, provider_name, agent_id, token_count, reasoning_tokens
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        current.id, next.next_index, content, reasoning, tcJson, imagesJson,
+        attachmentsJson, saj, usageJson, promptId, promptName, modelName,
+        providerName, agentId, tokenCount, reasoningTokens,
+      );
+      db.prepare(`
+        UPDATE chat_messages SET
+          content = ?, reasoning_content = ?, tool_calls_json = ?, images = ?,
+          attachments = ?, subagents_json = ?, usage_json = ?, prompt_id = ?,
+          prompt_name = ?, model_name = ?, provider_name = ?, agent_id = ?,
+          token_count = ?, reasoning_tokens = ?, active_variant_index = ?
+        WHERE id = ?
+      `).run(
+        content, reasoning, tcJson, imagesJson, attachmentsJson, saj, usageJson,
+        promptId, promptName, modelName, providerName, agentId, tokenCount,
+        reasoningTokens, next.next_index, current.id,
+      );
+      db.prepare('UPDATE messages_fts SET content = ? WHERE message_id = ?').run(content, current.id);
+      db.prepare('DELETE FROM chat_message_audio WHERE message_id = ?').run(current.id);
+      return current.id as number;
+    })();
+    if (images && images.length > 0) {
+      attachImageUrlsToEntity({ userId, urls: images.map(image => image.url), entityType: 'chat_message', entityId: replaced });
+    }
+    db.prepare('UPDATE user_chats SET updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND id = ?').run(userId, chatId);
+    return replaced;
+  }
+
   const inserted = db.prepare(`
     INSERT INTO chat_messages (
       user_id, role, content, chat_id, telegram_chat_id, telegram_message_id,
@@ -1494,6 +1642,19 @@ export const appendChatMessage = async (
     attachmentsJson, saj, usageJson, promptId, promptName, modelName, providerName, agentId
   );
   const messageId = Number(inserted.lastInsertRowid);
+  if (role === 'assistant') {
+    db.prepare(`
+      INSERT INTO chat_message_variants (
+        message_id, variant_index, content, reasoning_content, tool_calls_json,
+        images, attachments, subagents_json, usage_json, prompt_id, prompt_name,
+        model_name, provider_name, agent_id, token_count, reasoning_tokens
+      ) VALUES (?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      messageId, content, reasoning, tcJson, imagesJson, attachmentsJson, saj,
+      usageJson, promptId, promptName, modelName, providerName, agentId,
+      tokenCount, reasoningTokens,
+    );
+  }
   if (images && images.length > 0) {
     attachImageUrlsToEntity({
       userId,
@@ -1504,6 +1665,59 @@ export const appendChatMessage = async (
   }
   db.prepare('UPDATE user_chats SET updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND id = ?').run(userId, chatId);
   return messageId;
+};
+
+export const getMessageVariantState = (messageId: number): { variant_index: number; variant_count: number } => {
+  const row = db.prepare(`
+    SELECT m.active_variant_index AS variant_index,
+           (SELECT COUNT(*) FROM chat_message_variants v WHERE v.message_id = m.id) AS variant_count
+    FROM chat_messages m WHERE m.id = ?
+  `).get(messageId) as { variant_index: number; variant_count: number } | undefined;
+  return {
+    variant_index: row?.variant_index ?? 0,
+    variant_count: Math.max(1, row?.variant_count ?? 0),
+  };
+};
+
+export const activateChatMessageVariant = (
+  userId: number,
+  chatId: number,
+  messageId: number,
+  variantIndex: number,
+): { ok: boolean; error?: 'message_not_found' | 'variant_not_found' | 'not_latest_message' } => {
+  const readers = listRoomReaderUserIds(chatId);
+  if (!readers?.includes(userId)) return { ok: false, error: 'message_not_found' };
+  const message = db.prepare(`
+    SELECT id FROM chat_messages
+    WHERE id = ? AND chat_id = ? AND role = 'assistant'
+  `).get(messageId, chatId) as { id: number } | undefined;
+  if (!message) return { ok: false, error: 'message_not_found' };
+  const latest = db.prepare('SELECT MAX(id) AS id FROM chat_messages WHERE chat_id = ?')
+    .get(chatId) as { id: number | null };
+  if (latest.id !== messageId) return { ok: false, error: 'not_latest_message' };
+  const variant = db.prepare(`
+    SELECT * FROM chat_message_variants WHERE message_id = ? AND variant_index = ?
+  `).get(messageId, variantIndex) as any;
+  if (!variant) return { ok: false, error: 'variant_not_found' };
+
+  db.transaction(() => {
+    db.prepare(`
+      UPDATE chat_messages SET
+        content = ?, reasoning_content = ?, tool_calls_json = ?, images = ?,
+        attachments = ?, subagents_json = ?, usage_json = ?, prompt_id = ?,
+        prompt_name = ?, model_name = ?, provider_name = ?, agent_id = ?,
+        token_count = ?, reasoning_tokens = ?, active_variant_index = ?
+      WHERE id = ? AND chat_id = ?
+    `).run(
+      variant.content, variant.reasoning_content, variant.tool_calls_json, variant.images,
+      variant.attachments, variant.subagents_json, variant.usage_json, variant.prompt_id,
+      variant.prompt_name, variant.model_name, variant.provider_name, variant.agent_id,
+      variant.token_count, variant.reasoning_tokens, variant.variant_index, messageId, chatId,
+    );
+    db.prepare('UPDATE messages_fts SET content = ? WHERE message_id = ?').run(variant.content, messageId);
+    db.prepare('DELETE FROM chat_message_audio WHERE message_id = ?').run(messageId);
+  })();
+  return { ok: true };
 };
 
 export const bindChatMessageTelegramMeta = (

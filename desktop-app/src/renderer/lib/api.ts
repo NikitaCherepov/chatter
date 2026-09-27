@@ -430,6 +430,8 @@ export type Message = {
   attachments?: MessageAttachment[] | null;
   /** Полные trace ad-hoc субагентов (если были). */
   subagents?: SubagentTrace[] | null;
+  variant_index?: number;
+  variant_count?: number;
 };
 
 export type ChatInfo = {
@@ -965,6 +967,7 @@ export type RoomEvent =
   | { type: 'chat_agent_reasoning'; chat_id: number; agent_id: number | null; text: string }
   | { type: 'chat_agent_done'; chat_id: number; agent_id: number | null; owner_user_id: number; initiator_user_id: number; is_voice?: boolean; result: any }
   | { type: 'chat_agent_error'; chat_id: number; agent_id: number | null; error: string; message?: string }
+  | { type: 'room_message_variant_changed'; chat_id: number; message: Message; initiator_user_id: number }
   | { type: 'chat_intermediate'; chat_id: number; text: string }
   | { type: 'chat_tool_status'; chat_id: number; text: string }
   | { type: 'chat_desktop_action'; chat_id: number; action: string; target?: string; value?: any }
@@ -1243,6 +1246,7 @@ export function initWebSocket(callbacks?: WsCallbacks) {
         case 'room_members_updated':
         case 'room_message_deleted':
         case 'room_message_edited':
+        case 'room_message_variant_changed':
         case 'chat_queue_done':
           dispatchRoomEvent(msg);
           break;
@@ -1412,6 +1416,7 @@ export async function sendChatTrigger(payload: {
   regenerate_hint?: string;
   skip_user_history?: boolean;
   regenerate_from_history?: boolean;
+  regenerate_message_id?: number;
   dice_mode?: 'normal' | 'always_one' | 'always_twenty';
   agentId?: number;
   userOnly?: boolean;
@@ -1430,6 +1435,7 @@ export async function sendChatTrigger(payload: {
     if (payload.regenerate_hint) msg.regenerate_hint = payload.regenerate_hint;
     if (payload.skip_user_history) msg.skip_user_history = true;
     if (payload.regenerate_from_history) msg.regenerate_from_history = true;
+    if (payload.regenerate_message_id) msg.regenerate_message_id = payload.regenerate_message_id;
     if (payload.dice_mode) msg.dice_mode = payload.dice_mode;
     if (payload.agentId) msg.agent_id = payload.agentId;
     if (payload.userOnly) msg.user_only = true;
@@ -1476,6 +1482,7 @@ async function sendChatTriggerSSE(payload: {
   regenerate_hint?: string;
   skip_user_history?: boolean;
   regenerate_from_history?: boolean;
+  regenerate_message_id?: number;
   dice_mode?: 'normal' | 'always_one' | 'always_twenty';
   agentId?: number;
   userOnly?: boolean;
@@ -1498,6 +1505,7 @@ async function sendChatTriggerSSE(payload: {
     if (payload.regenerate_hint) body.regenerate_hint = payload.regenerate_hint;
     if (payload.skip_user_history) body.skip_user_history = true;
     if (payload.regenerate_from_history) body.regenerate_from_history = true;
+    if (payload.regenerate_message_id) body.regenerate_message_id = payload.regenerate_message_id;
     if (payload.dice_mode) body.dice_mode = payload.dice_mode;
     if (payload.agentId) body.agent_id = payload.agentId;
     if (payload.userOnly) body.user_only = true;
@@ -1859,6 +1867,16 @@ export type SillyTavernChatPreview = {
 
 export async function previewSillyTavernChats(files: SillyTavernChatFile[]): Promise<{ previews: SillyTavernChatPreview[] }> {
   return apiFetch('/api/v1/data/import/sillytavern/chats/preview', { method: 'POST', body: JSON.stringify({ files }) });
+}
+
+export async function activateMessageVariant(
+  chatId: number,
+  messageId: number,
+  variantIndex: number,
+): Promise<{ ok: boolean; message: Message }> {
+  return apiFetch(`/api/v1/chats/${chatId}/messages/${messageId}/variants/${variantIndex}/activate`, {
+    method: 'POST',
+  });
 }
 
 export async function importSillyTavernChats(files: SillyTavernChatFile[]): Promise<{

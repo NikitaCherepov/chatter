@@ -265,6 +265,10 @@ export type MessageDto = {
       is_final?: boolean;
     }>;
   }> | null;
+  /** Zero-based active response variant. */
+  variant_index?: number;
+  /** Number of saved variants for this message. */
+  variant_count?: number;
 };
 
 export type NoteDto = {
@@ -374,6 +378,8 @@ export type AiSendResult = {
   model_name?: string | null;
   provider_name?: string | null;
   message_usage?: MessageUsage | null;
+  variant_index?: number;
+  variant_count?: number;
   /** Результат броска d20 (1..20) в режиме Dice Roll Mode, иначе отсутствует. */
   dice_roll?: number;
 };

@@ -8,7 +8,7 @@ import dotenv from 'dotenv';
 import { WebSocketServer, WebSocket } from 'ws';
 import { wsClients, registerWsClient, unregisterWsClient, isDesktopOnline, sendIpcToDesktop, sendToDesktop, WS_HEARTBEAT_GRACE_MS, WS_HEARTBEAT_INTERVAL_MS, type WsClient } from './ws-clients.js';
 import { adminMiddleware, authMiddleware, issueAuthTokens, makePasswordHash, refreshAccessToken, validateTelegramInitData, verifyPassword, verifyToken, verifyTokenIgnoreExpiry, type AuthedRequest } from './auth.js';
-import { activateUserChat, bindChatMessageTelegramMeta, clearAllUserMessages, clearUserChatMessages, countUserChats, createPasswordAccount, createOrUpdateUserForApiRegistration, createUserChat, deleteUserHistoryByRole, deleteUserHistoryMessage, ensureActiveChat, forkChat, getPasswordAccountByLogin, getChatMessages, getChatMedia, getAllUserMedia, getRecentUserHistory, getUserById, getUserChatById, getUserChatListItem, listUserChats, promoteTemporaryChat, upsertUserFromTelegram, setUserTimezone, updateUserPrompt, selectUserCustomPrompt, updateUserCustomPrompt, resetUsersPromptIfDeleted, resetDailyMessageCounters, upsertTelegramUser, createPendingTelegramUser, updateUserStatus, updateUserRole, updateUserName, updateUserTelegramUsername, removeUser, getAllUsers, getUsersCount, getUsersPage, getPendingUsersCount, getPendingUsersPage, getBannedUsersCount, getBannedUsersPage, syncAllUsersPlanLimits, resetUserWeeklyUsage, resetAllUsersWeeklyUsage, updateUserWeeklyCostQuota, revokeUserAuthTokens, generateLinkCode, verifyLinkCode, getLinkCodeForUser, generatePasswordResetCode, verifyPasswordResetCode, signPasswordResetToken, verifyPasswordResetToken, adminApplyGeneratedPassword, renameUserChat, deleteUserChat, deleteUserMessage, editUserMessage, searchUserChats, updateChatMessageAudio, getChatContextTokens, resolveMaxContextTokens, updateUserMaxContextTokens, getChatAttachments, deleteMessageAttachment, deleteMessageImage, resolveAttachmentMaxTokens, updateUserAttachmentMaxTokens, setChatBotHidden, listChatFolders, createChatFolder, renameChatFolder, deleteChatFolder, moveUserChatToFolder, listChatFilterOptions, listStaleTemporaryChats, touchUserChat, getChatPromptSettings, updateChatPromptSettings } from './services/chats.js';
+import { activateChatMessageVariant, activateUserChat, bindChatMessageTelegramMeta, clearAllUserMessages, clearUserChatMessages, countUserChats, createPasswordAccount, createOrUpdateUserForApiRegistration, createUserChat, deleteUserHistoryByRole, deleteUserHistoryMessage, ensureActiveChat, forkChat, getPasswordAccountByLogin, getChatMessages, getChatMedia, getAllUserMedia, getRecentUserHistory, getUserById, getUserChatById, getUserChatListItem, listUserChats, promoteTemporaryChat, upsertUserFromTelegram, setUserTimezone, updateUserPrompt, selectUserCustomPrompt, updateUserCustomPrompt, resetUsersPromptIfDeleted, resetDailyMessageCounters, upsertTelegramUser, createPendingTelegramUser, updateUserStatus, updateUserRole, updateUserName, updateUserTelegramUsername, removeUser, getAllUsers, getUsersCount, getUsersPage, getPendingUsersCount, getPendingUsersPage, getBannedUsersCount, getBannedUsersPage, syncAllUsersPlanLimits, resetUserWeeklyUsage, resetAllUsersWeeklyUsage, updateUserWeeklyCostQuota, revokeUserAuthTokens, generateLinkCode, verifyLinkCode, getLinkCodeForUser, generatePasswordResetCode, verifyPasswordResetCode, signPasswordResetToken, verifyPasswordResetToken, adminApplyGeneratedPassword, renameUserChat, deleteUserChat, deleteUserMessage, editUserMessage, searchUserChats, updateChatMessageAudio, getChatContextTokens, resolveMaxContextTokens, updateUserMaxContextTokens, getChatAttachments, deleteMessageAttachment, deleteMessageImage, resolveAttachmentMaxTokens, updateUserAttachmentMaxTokens, setChatBotHidden, listChatFolders, createChatFolder, renameChatFolder, deleteChatFolder, moveUserChatToFolder, listChatFilterOptions, listStaleTemporaryChats, touchUserChat, getChatPromptSettings, updateChatPromptSettings } from './services/chats.js';
 import { createNote, countNotes, deleteNote, getNoteById, getNoteStats, getNoteStatsForUsers, listNotes, updateNoteContent } from './services/notes.js';
 import { createTask, deletePendingTask, getPendingTaskCount, getUserTaskById, isOwnNonRoomChat, listTaskTargetChats, listTasks, MAX_PENDING_TASKS_PER_USER, updatePendingTask } from './services/tasks.js';
 import { createDemoNewspaperIssue, createNewspaper, createNewspaperRun, deleteNewspaperIssue, ensureDefaultNewspaper, getNewspaperIssue, getNewspaperRun, listNewspaperIssues, listNewspaperRuns, listNewspapers, markInterruptedNewspaperRuns, updateNewspaper } from './services/newspapers.js';
@@ -2630,6 +2630,26 @@ app.delete('/api/v1/chats/:chatId', async (req: AuthedRequest, res) => {
   }
 });
 
+app.post('/api/v1/chats/:chatId/messages/:messageId/variants/:variantIndex/activate', (req: AuthedRequest, res) => {
+  const userId = accountIdFromRequest(req);
+  const chatId = Number.parseInt(req.params.chatId, 10);
+  const messageId = Number.parseInt(req.params.messageId, 10);
+  const variantIndex = Number.parseInt(req.params.variantIndex, 10);
+  if (!Number.isSafeInteger(chatId) || chatId <= 0) return res.status(400).json({ error: 'bad_chat_id' });
+  if (!Number.isSafeInteger(messageId) || messageId <= 0) return res.status(400).json({ error: 'bad_message_id' });
+  if (!Number.isSafeInteger(variantIndex) || variantIndex < 0) return res.status(400).json({ error: 'bad_variant_index' });
+  const result = activateChatMessageVariant(userId, chatId, messageId, variantIndex);
+  if (!result.ok) {
+    return res.status(result.error === 'not_latest_message' ? 409 : 404).json({ error: result.error });
+  }
+  const message = getChatMessages(userId, chatId, 100, 0).find(item => item.id === messageId);
+  if (!message) return res.status(404).json({ error: 'message_not_found' });
+  if (isRoomChat(chatId)) {
+    broadcastToChat(chatId, { type: 'room_message_variant_changed', chat_id: chatId, message, initiator_user_id: userId });
+  }
+  return res.json({ ok: true, message });
+});
+
 // ── Send message to the account's Telegram identity ──
 
 
@@ -2943,6 +2963,9 @@ app.post('/api/v1/chat/send', async (req: AuthedRequest, res) => {
       countAsUserMessage: req.body?.count_as_user_message !== false,
       regenerateHint: req.body?.regenerate_hint || undefined,
       regenerateFromHistory: Boolean(req.body?.regenerate_from_history),
+      regenerateMessageId: Number.isSafeInteger(Number(req.body?.regenerate_message_id))
+        ? Number(req.body.regenerate_message_id)
+        : undefined,
       skipUserHistory: Boolean(req.body?.skip_user_history),
       featureFlags: rawUserRecord ? parseFeatureFlags(rawUserRecord) : undefined,
       diceRollMode: Boolean(parseUiSettings(rawUserRecord ?? getUserById(userId)).dice_roll_enabled),
@@ -8155,6 +8178,9 @@ async function handleWsChatSend(client: WsClient, msg: any) {
       countAsUserMessage: msg.count_as_user_message !== false,
       regenerateHint: regenerate_hint || undefined,
       regenerateFromHistory: Boolean(regenerate_from_history),
+      regenerateMessageId: Number.isSafeInteger(Number(msg.regenerate_message_id))
+        ? Number(msg.regenerate_message_id)
+        : undefined,
       skipUserHistory: Boolean(msg.skip_user_history),
       featureFlags: rawUserRecord ? parseFeatureFlags(rawUserRecord) : undefined,
       diceRollMode: Boolean(parseUiSettings(rawUserRecord ?? getUserById(userId)).dice_roll_enabled),

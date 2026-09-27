@@ -18,6 +18,8 @@ type ParsedMessage = {
   reasoning: string | null;
   createdAt: string;
   name: string;
+  variants: string[];
+  activeVariantIndex: number;
 };
 
 type ParsedChat = {
@@ -120,18 +122,37 @@ const parseChat = (file: SillyTavernChatFile): ParsedChat => {
     if (row.is_system === true) systemMessages += 1;
     const extra = asObject(row.extra);
     const reasoning = typeof extra?.reasoning === 'string' && extra.reasoning.trim() ? extra.reasoning : null;
+    const swipeValues = row.is_user === true || !Array.isArray(row.swipes)
+      ? []
+      : row.swipes.filter((value): value is string => typeof value === 'string' && Boolean(value.trim()));
+    const variants = swipeValues.length > 0 ? [...swipeValues] : [mes];
+    let activeVariantIndex = variants.findIndex(value => value === mes);
+    const requestedSwipeIndex = Number(row.swipe_id);
+    if (
+      Number.isSafeInteger(requestedSwipeIndex)
+      && requestedSwipeIndex >= 0
+      && requestedSwipeIndex < variants.length
+      && variants[requestedSwipeIndex] === mes
+    ) {
+      activeVariantIndex = requestedSwipeIndex;
+    }
+    if (activeVariantIndex < 0) {
+      variants.push(mes);
+      activeVariantIndex = variants.length - 1;
+    }
     return [{
       role: row.is_user === true ? 'user' : 'assistant',
       content: mes,
       reasoning,
       createdAt: parseDate(row.send_date, baseMs + index * 1000),
       name: asString(row.name),
+      variants,
+      activeVariantIndex,
     }];
   });
   if (!messages.length) throw new Error('sillytavern_chat_no_messages');
   if (systemMessages) warnings.push('system_messages_as_assistant');
   if (skippedEmpty) warnings.push('empty_messages_skipped');
-  if (rows.some(row => Array.isArray(row.swipes) && row.swipes.length > 1)) warnings.push('alternate_swipes_preserved_only');
   if (rows.some(row => Boolean(asObject(row.extra)?.image) || Boolean(asObject(row.extra)?.file))) warnings.push('attachments_not_imported');
   return {
     fileName: file.file_name,
@@ -227,17 +248,40 @@ export const importSillyTavernChats = (userId: number, files: SillyTavernChatFil
       const insert = db.prepare(`
         INSERT INTO chat_messages (
           user_id, role, content, chat_id, reasoning_content, token_count, reasoning_tokens,
-          prompt_id, prompt_name, timeline_index, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          prompt_id, prompt_name, timeline_index, created_at, active_variant_index
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
       parsed.messages.forEach((message, index) => {
-        insert.run(
+        const inserted = insert.run(
           accountId, message.role, message.content, chatId, message.reasoning,
           countTokens(message.content), countTokens(message.reasoning || ''),
           message.role === 'assistant' ? prompt?.id ?? null : null,
           message.role === 'assistant' ? (message.name || prompt?.name || parsed.characterName || null) : null,
-          index + 1, message.createdAt,
+          index + 1, message.createdAt, message.role === 'assistant' ? message.activeVariantIndex : 0,
         );
+        if (message.role === 'assistant') {
+          const messageId = Number(inserted.lastInsertRowid);
+          const insertVariant = db.prepare(`
+            INSERT INTO chat_message_variants (
+              message_id, variant_index, content, reasoning_content,
+              prompt_id, prompt_name, token_count, reasoning_tokens, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `);
+          message.variants.forEach((content, variantIndex) => {
+            const isActive = variantIndex === message.activeVariantIndex;
+            insertVariant.run(
+              messageId,
+              variantIndex,
+              content,
+              isActive ? message.reasoning : null,
+              prompt?.id ?? null,
+              message.name || prompt?.name || parsed.characterName || null,
+              countTokens(content),
+              isActive ? countTokens(message.reasoning || '') : 0,
+              message.createdAt,
+            );
+          });
+        }
       });
       const firstDate = parsed.messages[0].createdAt;
       const lastDate = parsed.messages[parsed.messages.length - 1].createdAt;

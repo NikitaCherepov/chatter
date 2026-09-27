@@ -4,7 +4,7 @@ import nodeFetch from 'node-fetch';
 import { ProxyAgent } from 'proxy-agent';
 import { Readable } from 'node:stream';
 import type { AiSendResult, DesktopActionPayload, DisplayStatePayload, MapUpdatePayload, TaskNotifyMode, TaskRecurrenceType, TaskTargetMode, TaskType, UserPlan, UserRecord, MessageAttachment, MessageImage, MessageUsage, NormalizedTokenUsage, TokenUsageCall } from '../types.js';
-import { appendChatMessage, ensureActiveChat, getHistoryForAi, getMessageTokens, getUserById, getUserChatListItem, renameUserChat, resolveMaxContextTokens, resolveAttachmentMaxTokens, injectAttachments, setUserTimezone, trimUserHistoryByChat, isMultiUserRoomChat, getChatContextTokens, resolvePromptForChat } from './chats.js';
+import { appendChatMessage, ensureActiveChat, getHistoryForAi, getMessageTokens, getMessageVariantState, getUserById, getUserChatListItem, renameUserChat, resolveMaxContextTokens, resolveAttachmentMaxTokens, injectAttachments, setUserTimezone, trimUserHistoryByChat, isMultiUserRoomChat, getChatContextTokens, resolvePromptForChat } from './chats.js';
 import { calculateChargedTokens, checkQuota, chargeTokens, getModelOverride, getPricingSnapshot, calculateEstimatedCostUsd, isModelFree } from './token-quota.js';
 import { recordModelTps, setKnownModelStatsFilter } from './model-stats.js';
 import { registerMonitoredModelsProvider, isProviderMissingError, attemptRuntimeProviderSwitch } from './openrouter-monitor.js';
@@ -7085,6 +7085,7 @@ export const sendMessageThroughAi = async (
     } | null;
     regenerateHint?: string;
     regenerateFromHistory?: boolean;
+    regenerateMessageId?: number;
     reasoningLevel?: ReasoningLevel | null;
     autoRejectHitl?: boolean;
     isBackgroundTask?: boolean;
@@ -8759,6 +8760,7 @@ iterations.push(currentIteration);
           modelName: responseModelName,
           providerName: usedProvider || null,
           agentId: responseAgentId,
+          regenerateMessageId: options?.regenerateMessageId,
         }
       );
   notifyDesktopChatUpdated('assistant', assistantMessageId);
@@ -8843,6 +8845,7 @@ iterations.push(currentIteration);
     model_name: responseModelName,
     provider_name: usedProvider || null,
     message_usage: messageUsage,
+    ...((assistantMessageId > 0) ? getMessageVariantState(assistantMessageId) : {}),
     ...((assistantMessageId > 0) ? getMessageTokens(assistantMessageId) : {}),
     ...(userMessageId > 0 ? { user_token_count: getMessageTokens(userMessageId).token_count } : {}),
     ...(diceRollValue !== null ? { dice_roll: diceRollValue } : {})
@@ -8897,6 +8900,7 @@ iterations.push(currentIteration);
               modelName: abortedModelName,
               providerName: usedProvider || null,
               agentId: responseAgentId,
+              regenerateMessageId: options?.regenerateMessageId,
             }
           );
           notifyDesktopChatUpdated('assistant', abortedMessageId);
@@ -8940,6 +8944,7 @@ iterations.push(currentIteration);
         provider_name: usedProvider || null,
         message_usage: abortedMessageUsage,
         ...((abortedMessageId > 0) ? getMessageTokens(abortedMessageId) : {}),
+        ...((abortedMessageId > 0) ? getMessageVariantState(abortedMessageId) : {}),
         ...(userMessageId > 0 ? { user_token_count: getMessageTokens(userMessageId).token_count } : {}),
         ...(diceRollValue !== null ? { dice_roll: diceRollValue } : {})
       };

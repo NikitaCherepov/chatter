@@ -42,6 +42,7 @@ const rows = [
     send_date: '2026-09-20T12:00:02Z',
     extra: { reasoning: 'Answer briefly.' },
     swipes: ['Нет. Иногда искрит проводка.', 'Только по утрам.'],
+    swipe_id: 0,
   },
 ];
 const raw = `${rows.map(row => JSON.stringify(row)).join('\n')}\n`;
@@ -56,7 +57,7 @@ assert.equal(preview.matched_prompt_id, importedCharacter.promptId);
 assert.equal(preview.matched_prompt_name, 'Мира');
 assert.equal(preview.matched_persona_id, persona.id);
 assert.equal(preview.matched_persona_name, 'Тестовый пользователь');
-assert.ok(preview.warnings.includes('alternate_swipes_preserved_only'));
+assert.ok(!preview.warnings.includes('alternate_swipes_preserved_only'));
 assert.equal(preview.already_imported_chat_id, null);
 
 const [first] = importSillyTavernChats(92, [file]);
@@ -79,6 +80,15 @@ assert.equal(messages[1].reasoning_content, 'Answer briefly.');
 assert.equal(messages[1].prompt_id, importedCharacter.promptId);
 assert.equal(messages[1].prompt_name, 'Мира');
 assert.equal(messages[1].created_at, '2026-09-20 12:00:02');
+const importedVariants = db.prepare(`
+  SELECT variant_index, content FROM chat_message_variants
+  WHERE message_id = (SELECT id FROM chat_messages WHERE chat_id = ? AND role = 'assistant')
+  ORDER BY variant_index ASC
+`).all(first.chat_id) as Array<{ variant_index: number; content: string }>;
+assert.deepEqual(importedVariants, [
+  { variant_index: 0, content: 'Нет. Иногда искрит проводка.' },
+  { variant_index: 1, content: 'Только по утрам.' },
+]);
 
 const memorySettings = getChatMemorySettings(92, first.chat_id);
 assert.equal(memorySettings.persona_override_id, persona.id);
