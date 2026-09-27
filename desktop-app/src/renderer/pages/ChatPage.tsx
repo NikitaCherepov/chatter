@@ -1,7 +1,7 @@
 import React, { useEffect, useLayoutEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, animate as animateValue, motion } from 'framer-motion';
 import {
   DndContext,
   DragOverlay,
@@ -252,6 +252,46 @@ const reasoningPanelVariants = {
   hidden: { opacity: 0, y: -16 },
   visible: { opacity: 1, y: 0, transition: { duration: 0.2, ease: 'easeOut' as const } },
   exit: { opacity: 0, y: -16, transition: { duration: 0.15 } },
+};
+
+const splitTextUnits = (value: string): string[] => {
+  const Segmenter = (Intl as typeof Intl & {
+    Segmenter?: new (locale?: string | string[], options?: { granularity: 'grapheme' }) => {
+      segment: (input: string) => Iterable<{ segment: string }>;
+    };
+  }).Segmenter;
+
+  if (Segmenter) {
+    const segmenter = new Segmenter(undefined, { granularity: 'grapheme' });
+    return Array.from(segmenter.segment(value), ({ segment }) => segment);
+  }
+
+  return Array.from(value);
+};
+
+const interpolateVariantText = (from: string[], to: string[], progress: number): string => {
+  if (progress >= 1) return to.join('');
+
+  const overlapLength = Math.min(from.length, to.length);
+  const replacedLength = Math.floor(overlapLength * progress);
+  const sharedPart = [
+    ...to.slice(0, replacedLength),
+    ...from.slice(replacedLength, overlapLength),
+  ];
+
+  if (from.length > overlapLength) {
+    const remainingOldTailLength = Math.ceil((from.length - overlapLength) * (1 - progress));
+    return [
+      ...sharedPart,
+      ...from.slice(overlapLength, overlapLength + remainingOldTailLength),
+    ].join('');
+  }
+
+  const visibleNewTailLength = Math.floor((to.length - overlapLength) * progress);
+  return [
+    ...sharedPart,
+    ...to.slice(overlapLength, overlapLength + visibleNewTailLength),
+  ].join('');
 };
 
 const formatMessageTime = (ts: number, locale?: string) => {
@@ -616,6 +656,50 @@ const MessageItem = React.memo(function MessageItem({
     : msg.role === 'user' && isOwnUser && userPersonaImageUrl
       ? resolveImageUrl(userPersonaImageUrl, 128)
       : null;
+  const activeVariantIndex = msg.variant_index ?? 0;
+  const previousVariantIndexRef = useRef(activeVariantIndex);
+  const displayedVariantContentRef = useRef(msg.content);
+  const [displayedVariantContent, setDisplayedVariantContent] = useState(msg.content);
+  const [isVariantMorphing, setIsVariantMorphing] = useState(false);
+
+  useEffect(() => {
+    const variantChanged = previousVariantIndexRef.current !== activeVariantIndex;
+    previousVariantIndexRef.current = activeVariantIndex;
+
+    if (msg.role !== 'assistant' || !variantChanged) {
+      displayedVariantContentRef.current = msg.content;
+      setDisplayedVariantContent(msg.content);
+      setIsVariantMorphing(false);
+      return;
+    }
+
+    const fromText = displayedVariantContentRef.current;
+    const fromUnits = splitTextUnits(fromText);
+    const toUnits = splitTextUnits(msg.content);
+    const longestTextLength = Math.max(fromUnits.length, toUnits.length);
+    const duration = Math.min(0.65, Math.max(0.24, longestTextLength / 1200));
+    let lastRenderedText = fromText;
+
+    setIsVariantMorphing(true);
+    const animation = animateValue(0, 1, {
+      duration,
+      ease: 'linear',
+      onUpdate: (progress) => {
+        const nextText = interpolateVariantText(fromUnits, toUnits, progress);
+        if (nextText === lastRenderedText) return;
+        lastRenderedText = nextText;
+        displayedVariantContentRef.current = nextText;
+        setDisplayedVariantContent(nextText);
+      },
+      onComplete: () => {
+        displayedVariantContentRef.current = msg.content;
+        setDisplayedVariantContent(msg.content);
+        setIsVariantMorphing(false);
+      },
+    });
+
+    return () => animation.stop();
+  }, [activeVariantIndex, msg.content, msg.role]);
 
   return (
     <div className={`${s.messageGroup} ${reasoningOpen || isToolCallsOpen || isSubagentsOpen ? s.messageGroupRaised : ''} ${msg.archived ? s.messageArchived : ''}`}>
@@ -815,7 +899,11 @@ const MessageItem = React.memo(function MessageItem({
         </div>
       </div>
       <div className={s.bubbleWrap}>
-        <div className={msg.role === 'user' && isOwnUser ? s.bubbleUser : s.bubble}>
+        <motion.div
+          className={msg.role === 'user' && isOwnUser ? s.bubbleUser : s.bubble}
+          layout={isVariantMorphing ? 'size' : false}
+          transition={{ layout: { duration: 0.12, ease: 'easeOut' } }}
+        >
           {msg.images && msg.images.length > 0 && (
             <div className={s.messageImages}>
               {msg.images.map((img, i) => {
@@ -930,12 +1018,12 @@ const MessageItem = React.memo(function MessageItem({
                     <span className={s.dot} />
                   </div>
                 ) : (
-                  <div className={`${s.bubbleText} ${isStreamingContent ? s.bubbleTextStreaming : ''}`}><MarkdownRenderer content={msg.content} /></div>
+                  <div className={`${s.bubbleText} ${isStreamingContent ? s.bubbleTextStreaming : ''}`}><MarkdownRenderer content={displayedVariantContent} /></div>
                 )
               )
               : <div className={s.bubbleTextPlain}>{msg.content}</div>
           )}
-        </div>
+        </motion.div>
         <AnimatePresence>
           {hasReasoning && reasoningOpen && (
             <motion.div className={`${s.reasoningPanel} ${isStreamingReasoning || isStreamingContent ? s.bubbleTextStreaming : ''}`} variants={reasoningPanelVariants} initial="hidden" animate="visible" exit="exit">

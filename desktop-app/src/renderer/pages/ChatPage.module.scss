@@ -1860,12 +1860,13 @@
 .messageVariants {
   display: flex;
   align-items: center;
-  align-self: center;
+  align-self: flex-start;
   gap: 3px;
   min-height: 22px;
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1;
+  font-variant-numeric: tabular-nums;
 }
 
 .messageVariantButton {
@@ -1894,6 +1895,7 @@
 }
 
 .bubble {
+  position: relative;
   background-color: var(--bg-bubble);
   border: 1px solid var(--border-light);
   border-radius: 8px;
@@ -1901,6 +1903,7 @@
 }
 
 .bubbleUser {
+  position: relative;
   background-color: var(--bg-primary);
   border: 1px solid var(--border-medium);
   border-radius: 8px;
