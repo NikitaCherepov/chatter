@@ -94,6 +94,7 @@ import { resolveImageFile, getUploadsDir } from './services/image-storage.js';
 import { attachMediaAsset, deleteMediaAssetIfUnreferenced, detachImageUrlFromEntity, getMediaAssetByUrl, pruneExpiredMediaAssets, removeMediaReferencesForEntity, saveImageAsset } from './services/media-assets.js';
 import { importCharacterCard, listCharacterCardPromptSummaries, MAX_CHARACTER_CARD_BYTES, parseCharacterCard, startCharacterCardChat, toCharacterCardPreview } from './services/character-card-import.js';
 import { importSillyTavernPersonas, previewSillyTavernPersonas } from './services/persona-import.js';
+import { importSillyTavernChats, previewSillyTavernChats } from './services/sillytavern-chat-import.js';
 import { canUserReadRegisteredImage } from './services/media-access.js';
 import { resolveAttachmentFile, MAX_RAW_FILE_SIZE as MAX_ATTACHMENT_BYTES } from './services/attachment-storage.js';
 import { materializeAssetInput } from './services/response-attachments.js';
@@ -1502,6 +1503,26 @@ app.post('/api/v1/memory/personas/import/sillytavern', (req: AuthedRequest, res:
   } catch (error: any) {
     const code = error?.message || 'persona_import_failed';
     return res.status(code === 'persona_backup_too_large' ? 413 : 400).json({ error: code });
+  }
+});
+
+app.post('/api/v1/data/import/sillytavern/chats/preview', (req: AuthedRequest, res: any) => {
+  try {
+    return res.json({ previews: previewSillyTavernChats(accountIdFromRequest(req), req.body?.files) });
+  } catch (error: any) {
+    const code = error?.message || 'sillytavern_chats_preview_failed';
+    const status = code.includes('too_large') ? 413 : 400;
+    return res.status(status).json({ error: code });
+  }
+});
+
+app.post('/api/v1/data/import/sillytavern/chats', (req: AuthedRequest, res: any) => {
+  try {
+    return res.status(201).json({ results: importSillyTavernChats(accountIdFromRequest(req), req.body?.files) });
+  } catch (error: any) {
+    const code = error?.message || 'sillytavern_chats_import_failed';
+    const status = code.includes('too_large') ? 413 : 400;
+    return res.status(status).json({ error: code });
   }
 });
 

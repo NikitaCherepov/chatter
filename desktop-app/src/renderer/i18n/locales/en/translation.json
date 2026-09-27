@@ -173,6 +173,7 @@
       "memory": "Memory",
       "connections": "Linked accounts",
       "prompt": "Prompt",
+      "data": "Data",
       "voice": "Voice",
       "macros": "Macros",
       "pc": "PC control",
@@ -187,6 +188,63 @@
       "billing": "Billing",
       "app": "Application",
       "about": "About"
+    },
+    "data": {
+      "help": "Import data from other applications. Chatter backup and export will be added here later.",
+      "sillyTavern": {
+        "title": "Move from SillyTavern",
+        "help": "Import entities separately now. A full backup import will combine these steps later."
+      },
+      "character": {
+        "title": "Character Card",
+        "help": "Creates a Chatter character prompt from a SillyTavern-compatible JSON or PNG card.",
+        "button": "Import character",
+        "imported": "Imported: {{name}}"
+      },
+      "personas": {
+        "title": "Personas",
+        "help": "Imports names and descriptions from a SillyTavern persona backup. Avatar files are not included in this backup format.",
+        "button": "Import personas",
+        "imported": "Created: {{created}}, updated: {{updated}}"
+      },
+      "chats": {
+        "title": "Chats",
+        "help": "Imports one or several JSONL chats with messages, dates, reasoning, and available character and persona bindings.",
+        "button": "Import chats",
+        "previewTitle": "Import SillyTavern chats",
+        "previewSummary": "Chats: {{chats}} · messages: {{messages}}",
+        "messages": "Messages: {{count}}",
+        "character": "Character: {{name}}",
+        "user": "User: {{name}}",
+        "characterMatched": "Character found: {{name}}",
+        "characterNotMatched": "Character was not found; the chat will use automatic prompt selection",
+        "personaMatched": "Persona found: {{name}}",
+        "personaNotMatched": "Persona was not found; the chat will use Automatic",
+        "ready": "Ready",
+        "alreadyImported": "Already imported",
+        "confirm": "Import {{count}} chats",
+        "importing": "Importing...",
+        "success": "Chats imported: {{created}} new, {{existing}} already existed",
+        "importedResult": "Created: {{created}}, already existed: {{existing}}",
+        "warnings": {
+          "missing_metadata": "The metadata line is missing; messages can still be imported.",
+          "system_messages_as_assistant": "System messages will be preserved as assistant messages.",
+          "empty_messages_skipped": "Empty messages will be skipped.",
+          "alternate_swipes_preserved_only": "Alternative swipes are kept in the source data but are not displayed yet.",
+          "attachments_not_imported": "SillyTavern JSONL exports do not contain attachment files."
+        },
+        "errors": {
+          "format": "Select JSONL chat files",
+          "count": "You can import up to 20 chats at once",
+          "size": "Each chat file must be no larger than 16 MB",
+          "totalSize": "The selected chats must be no larger than 32 MB in total",
+          "invalid": "Could not read one or more SillyTavern chats",
+          "import": "Could not import chats"
+        }
+      },
+      "openCharacter": "Open character",
+      "openPersonas": "Open personas",
+      "openChat": "Open chat"
     },
     "browser": {
       "help": "Choose which AI browser actions require your approval. Manual browser actions are not affected.",

@@ -1840,6 +1840,33 @@ export type PersonaImportPreview = {
   warnings: string[];
 };
 
+export type SillyTavernChatFile = { file_name: string; base64: string };
+export type SillyTavernChatPreview = {
+  file_name: string;
+  title: string;
+  character_name: string;
+  user_name: string;
+  message_count: number;
+  user_message_count: number;
+  assistant_message_count: number;
+  matched_prompt_id: number | null;
+  matched_prompt_name: string | null;
+  matched_persona_id: number | null;
+  matched_persona_name: string | null;
+  already_imported_chat_id: number | null;
+  warnings: string[];
+};
+
+export async function previewSillyTavernChats(files: SillyTavernChatFile[]): Promise<{ previews: SillyTavernChatPreview[] }> {
+  return apiFetch('/api/v1/data/import/sillytavern/chats/preview', { method: 'POST', body: JSON.stringify({ files }) });
+}
+
+export async function importSillyTavernChats(files: SillyTavernChatFile[]): Promise<{
+  results: Array<{ file_name: string; chat_id: number; status: 'created' | 'existing'; message_count: number }>;
+}> {
+  return apiFetch('/api/v1/data/import/sillytavern/chats', { method: 'POST', body: JSON.stringify({ files }) });
+}
+
 export async function previewSillyTavernPersonas(file: CharacterCardFile): Promise<{ preview: PersonaImportPreview }> {
   return apiFetch('/api/v1/memory/personas/import/sillytavern/preview', { method: 'POST', body: JSON.stringify(file) });
 }

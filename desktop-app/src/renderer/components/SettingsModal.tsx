@@ -43,6 +43,7 @@ import { GlobalMemorySettings } from './GlobalMemorySettings';
 import { PromptImageCropDialog } from './PromptImageCropDialog';
 import { CharacterCardImportDialog } from './CharacterCardImportDialog';
 import { PersonaImportDialog } from './PersonaImportDialog';
+import { SillyTavernChatImportDialog } from './SillyTavernChatImportDialog';
 import telegramIcon from '../assets/integrations/telegram.webp';
 import s from './SettingsModal.module.scss';
 
@@ -55,7 +56,7 @@ type Props = {
   onAuthInvalidated?: () => void;
 };
 
-type Section = 'account' | 'memory' | 'connections' | 'prompt' | 'voice' | 'app' | 'limits' | 'billing' | 'macros' | 'pc' | 'browser' | 'servers' | 'runbooks' | 'sshkeys' | 'mail' | 'smart_home' | 'restrictions' | 'models' | 'about';
+type Section = 'account' | 'memory' | 'connections' | 'prompt' | 'data' | 'voice' | 'app' | 'limits' | 'billing' | 'macros' | 'pc' | 'browser' | 'servers' | 'runbooks' | 'sshkeys' | 'mail' | 'smart_home' | 'restrictions' | 'models' | 'about';
 
 const CUSTOM_PROMPT_ID = -1;
 const NEW_PERSONA_ID = -1;
@@ -109,6 +110,7 @@ const SECTIONS: { key: Section; labelKey: string }[] = [
   { key: 'memory', labelKey: 'settings.sections.memory' },
   { key: 'connections', labelKey: 'settings.sections.connections' },
   { key: 'prompt', labelKey: 'settings.sections.prompt' },
+  { key: 'data', labelKey: 'settings.sections.data' },
   { key: 'voice', labelKey: 'settings.sections.voice' },
   { key: 'macros', labelKey: 'settings.sections.macros' },
   { key: 'pc', labelKey: 'settings.sections.pc' },
@@ -201,6 +203,7 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
     imageUrl: string | null;
   } | null>(null);
   const characterCardInputRef = useRef<HTMLInputElement>(null);
+  const [lastImportedPrompt, setLastImportedPrompt] = useState<{ id: number; name: string } | null>(null);
 
   // AI prompt generation
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
@@ -320,6 +323,12 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
   const [personaImportReading, setPersonaImportReading] = useState(false);
   const [personaImporting, setPersonaImporting] = useState(false);
   const [personaImportDialog, setPersonaImportDialog] = useState<{ file: api.CharacterCardFile; preview: api.PersonaImportPreview } | null>(null);
+  const [lastPersonaImport, setLastPersonaImport] = useState<{ created: number; updated: number; activePersonaId: number | null } | null>(null);
+  const sillyTavernChatInputRef = useRef<HTMLInputElement>(null);
+  const [sillyTavernChatsReading, setSillyTavernChatsReading] = useState(false);
+  const [sillyTavernChatsImporting, setSillyTavernChatsImporting] = useState(false);
+  const [sillyTavernChatDialog, setSillyTavernChatDialog] = useState<{ files: api.SillyTavernChatFile[]; previews: api.SillyTavernChatPreview[] } | null>(null);
+  const [lastChatImport, setLastChatImport] = useState<Array<{ file_name: string; chat_id: number; status: 'created' | 'existing'; message_count: number }> | null>(null);
   const personaDraftSourceRef = useRef<number | null>(null);
   const personasQuery = useQuery({
     queryKey: ['memory-personas'],
@@ -1105,12 +1114,68 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
       const result = await api.importSillyTavernPersonas(personaImportDialog.file);
       await loadPersonas(result.active_persona_id ?? undefined);
       window.dispatchEvent(new Event('chatter:personas-changed'));
+      setLastPersonaImport({ created: result.created, updated: result.updated, activePersonaId: result.active_persona_id });
       setPersonaImportDialog(null);
       toast.success(t('settings.account.personas.import.success', { created: result.created, updated: result.updated }));
     } catch {
       toast.error(t('settings.account.personas.import.errors.import'));
     } finally {
       setPersonaImporting(false);
+    }
+  };
+
+  const handleSillyTavernChatSelect = async (fileList: FileList | null) => {
+    const files = Array.from(fileList || []);
+    if (!files.length) return;
+    if (files.length > 20) {
+      toast.error(t('settings.data.chats.errors.count'));
+      return;
+    }
+    if (files.some(file => !file.name.toLowerCase().endsWith('.jsonl'))) {
+      toast.error(t('settings.data.chats.errors.format'));
+      return;
+    }
+    if (files.some(file => file.size > 16 * 1024 * 1024)) {
+      toast.error(t('settings.data.chats.errors.size'));
+      return;
+    }
+    if (files.reduce((sum, file) => sum + file.size, 0) > 32 * 1024 * 1024) {
+      toast.error(t('settings.data.chats.errors.totalSize'));
+      return;
+    }
+    setSillyTavernChatsReading(true);
+    try {
+      const payload = await Promise.all(files.map(file => new Promise<api.SillyTavernChatFile>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = () => reject(new Error('read_failed'));
+        reader.onload = () => resolve({ file_name: file.name, base64: String(reader.result || '').split(',', 2)[1] || '' });
+        reader.readAsDataURL(file);
+      })));
+      const { previews } = await api.previewSillyTavernChats(payload);
+      setSillyTavernChatDialog({ files: payload, previews });
+    } catch {
+      toast.error(t('settings.data.chats.errors.invalid'));
+    } finally {
+      setSillyTavernChatsReading(false);
+      if (sillyTavernChatInputRef.current) sillyTavernChatInputRef.current.value = '';
+    }
+  };
+
+  const handleSillyTavernChatImport = async () => {
+    if (!sillyTavernChatDialog) return;
+    setSillyTavernChatsImporting(true);
+    try {
+      const { results } = await api.importSillyTavernChats(sillyTavernChatDialog.files);
+      setLastChatImport(results);
+      setSillyTavernChatDialog(null);
+      await onAccountChanged?.();
+      const created = results.filter(result => result.status === 'created').length;
+      const existing = results.length - created;
+      toast.success(t('settings.data.chats.success', { created, existing }));
+    } catch {
+      toast.error(t('settings.data.chats.errors.import'));
+    } finally {
+      setSillyTavernChatsImporting(false);
     }
   };
 
@@ -1245,6 +1310,7 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
       setPromptImageUrl(prompt.image_url);
       setPendingPromptImage(null);
       setPromptImageRemoved(false);
+      setLastImportedPrompt({ id: prompt.id, name: prompt.name });
       setCharacterCardDialog(null);
       toast.success(t('settings.prompt.characterCard.imported'));
     } catch (error) {
@@ -1610,18 +1676,6 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
                     createDescription: t('settings.account.personas.createDescription'),
                   }}
                 />
-                <div className={s.promptImageButtons}>
-                  <button className={s.cancelBtn} type="button" onClick={() => personaImportInputRef.current?.click()} disabled={personaImportReading || personaImporting}>
-                    {personaImportReading ? t('common.loading') : t('settings.account.personas.import.button')}
-                  </button>
-                  <input
-                    ref={personaImportInputRef}
-                    className={s.promptImageInput}
-                    type="file"
-                    accept="application/json,.json"
-                    onChange={event => handlePersonaImportSelect(event.target.files?.[0])}
-                  />
-                </div>
                 {!selectedPersonaIsPrimary && (
                   <>
                     <input
@@ -1880,24 +1934,6 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
                       disabled={promptSaving}
                       maxVisibleItems={5}
                     />
-                    <div className={s.promptImportRow}>
-                      <button
-                        type="button"
-                        className={s.cancelBtn}
-                        onClick={() => characterCardInputRef.current?.click()}
-                        disabled={characterCardReading || promptSaving}
-                      >
-                        {characterCardReading ? t('settings.prompt.characterCard.reading') : t('settings.prompt.characterCard.button')}
-                      </button>
-                      <span>{t('settings.prompt.characterCard.help')}</span>
-                      <input
-                        ref={characterCardInputRef}
-                        className={s.promptImageInput}
-                        type="file"
-                        accept=".json,.png,application/json,image/png"
-                        onChange={event => handleCharacterCardSelect(event.target.files?.[0])}
-                      />
-                    </div>
                   </div>
 
                   {(selectedPromptId === CUSTOM_PROMPT_ID || (selectedPromptId !== null && selectedPromptId <= -1000)) && (
@@ -2159,6 +2195,108 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
                   )}
                 </>
               )}
+            </div>
+          )}
+
+          {section === 'data' && (
+            <div className={s.panel}>
+              <div className={s.panelTitle}>{t('settings.sections.data')}</div>
+              <p className={s.connectionsHelp}>{t('settings.data.help')}</p>
+
+              <div className={s.voiceSectionTitle}>{t('settings.data.sillyTavern.title')}</div>
+              <p className={s.connectionsHelp}>{t('settings.data.sillyTavern.help')}</p>
+
+              <div className={s.dataImportGrid}>
+                <section className={s.dataImportCard}>
+                  <div>
+                    <h4>{t('settings.data.character.title')}</h4>
+                    <p>{t('settings.data.character.help')}</p>
+                  </div>
+                  <div className={s.dataImportActions}>
+                    <button className={s.cancelBtn} type="button" onClick={() => characterCardInputRef.current?.click()} disabled={characterCardReading || characterCardImporting}>
+                      {characterCardReading ? t('settings.prompt.characterCard.reading') : t('settings.data.character.button')}
+                    </button>
+                    <input
+                      ref={characterCardInputRef}
+                      className={s.promptImageInput}
+                      type="file"
+                      accept=".json,.png,application/json,image/png"
+                      onChange={event => handleCharacterCardSelect(event.target.files?.[0])}
+                    />
+                  </div>
+                  {lastImportedPrompt && (
+                    <div className={s.dataImportResult}>
+                      <span>{t('settings.data.character.imported', { name: lastImportedPrompt.name })}</span>
+                      <button className={s.cancelBtn} type="button" onClick={() => setSection('prompt')}>{t('settings.data.openCharacter')}</button>
+                    </div>
+                  )}
+                </section>
+
+                <section className={s.dataImportCard}>
+                  <div>
+                    <h4>{t('settings.data.personas.title')}</h4>
+                    <p>{t('settings.data.personas.help')}</p>
+                  </div>
+                  <div className={s.dataImportActions}>
+                    <button className={s.cancelBtn} type="button" onClick={() => personaImportInputRef.current?.click()} disabled={personaImportReading || personaImporting}>
+                      {personaImportReading ? t('common.loading') : t('settings.data.personas.button')}
+                    </button>
+                    <input
+                      ref={personaImportInputRef}
+                      className={s.promptImageInput}
+                      type="file"
+                      accept="application/json,.json"
+                      onChange={event => handlePersonaImportSelect(event.target.files?.[0])}
+                    />
+                  </div>
+                  {lastPersonaImport && (
+                    <div className={s.dataImportResult}>
+                      <span>{t('settings.data.personas.imported', { created: lastPersonaImport.created, updated: lastPersonaImport.updated })}</span>
+                      <button className={s.cancelBtn} type="button" onClick={() => setSection('account')}>{t('settings.data.openPersonas')}</button>
+                    </div>
+                  )}
+                </section>
+
+                <section className={s.dataImportCard}>
+                  <div>
+                    <h4>{t('settings.data.chats.title')}</h4>
+                    <p>{t('settings.data.chats.help')}</p>
+                  </div>
+                  <div className={s.dataImportActions}>
+                    <button className={s.cancelBtn} type="button" onClick={() => sillyTavernChatInputRef.current?.click()} disabled={sillyTavernChatsReading || sillyTavernChatsImporting}>
+                      {sillyTavernChatsReading ? t('common.loading') : t('settings.data.chats.button')}
+                    </button>
+                    <input
+                      ref={sillyTavernChatInputRef}
+                      className={s.promptImageInput}
+                      type="file"
+                      multiple
+                      accept=".jsonl,application/json"
+                      onChange={event => void handleSillyTavernChatSelect(event.target.files)}
+                    />
+                  </div>
+                  {lastChatImport && (
+                    <div className={s.dataImportResult}>
+                      <span>{t('settings.data.chats.importedResult', {
+                        created: lastChatImport.filter(result => result.status === 'created').length,
+                        existing: lastChatImport.filter(result => result.status === 'existing').length,
+                      })}</span>
+                      <button
+                        className={s.cancelBtn}
+                        type="button"
+                        onClick={async () => {
+                          const target = lastChatImport[lastChatImport.length - 1];
+                          if (!target) return;
+                          await onChatCreated?.(target.chat_id);
+                          onClose();
+                        }}
+                      >
+                        {t('settings.data.openChat')}
+                      </button>
+                    </div>
+                  )}
+                </section>
+              </div>
             </div>
           )}
 
@@ -2974,6 +3112,14 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
           importing={personaImporting}
           onCancel={() => !personaImporting && setPersonaImportDialog(null)}
           onImport={handlePersonaImport}
+        />
+      )}
+      {sillyTavernChatDialog && (
+        <SillyTavernChatImportDialog
+          previews={sillyTavernChatDialog.previews}
+          importing={sillyTavernChatsImporting}
+          onCancel={() => !sillyTavernChatsImporting && setSillyTavernChatDialog(null)}
+          onImport={handleSillyTavernChatImport}
         />
       )}
       {characterCardDialog && (

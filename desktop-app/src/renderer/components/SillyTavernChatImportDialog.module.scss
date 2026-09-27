@@ -1,0 +1,160 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 240;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--overlay-bg);
+}
+
+.dialog {
+  display: flex;
+  flex-direction: column;
+  width: min(720px, 94vw);
+  max-height: min(820px, 92vh);
+  overflow: hidden;
+  border: 1px solid var(--border-light);
+  border-radius: 12px;
+  background: var(--bg-primary);
+  box-shadow: var(--shadow-modal);
+  color: var(--text-body);
+}
+
+.header {
+  padding: 20px 22px;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.header h3 {
+  margin: 0 0 5px;
+  color: var(--text-primary);
+  font-size: 16px;
+}
+
+.header span {
+  color: var(--text-hint);
+  font-size: 12px;
+}
+
+.content {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+  padding: 16px 22px;
+}
+
+.chat {
+  padding: 12px 14px;
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  background: var(--bg-input);
+}
+
+.chatHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.chatHeader strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ready,
+.existing {
+  flex: 0 0 auto;
+  padding: 3px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+}
+
+.ready {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent);
+}
+
+.existing {
+  background: var(--bg-modal-hover);
+  color: var(--text-hint);
+}
+
+.meta,
+.matches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin-top: 8px;
+  font-size: 11px;
+}
+
+.meta {
+  color: var(--text-muted);
+}
+
+.matched {
+  color: var(--text-secondary);
+}
+
+.unmatched,
+.warning {
+  color: var(--text-hint);
+}
+
+.warning {
+  margin: 7px 0 0;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 16px 22px;
+  border-top: 1px solid var(--border-light);
+}
+
+.cancel,
+.primary {
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.cancel {
+  border: 1px solid var(--border-input);
+  background: none;
+  color: var(--text-secondary);
+}
+
+.cancel:hover {
+  background: var(--bg-modal-hover);
+}
+
+.primary {
+  border: none;
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.primary:hover {
+  opacity: 0.85;
+}
+
+.cancel:disabled,
+.primary:disabled {
+  cursor: default;
+  opacity: 0.45;
+}

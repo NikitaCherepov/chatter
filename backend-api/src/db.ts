@@ -1462,6 +1462,25 @@ db.exec(`
 // Text, chunks and ownership remain in the canonical memory tables above.
 db.exec('DROP TABLE IF EXISTS memory_vectors');
 
+db.exec(`
+  CREATE TABLE IF NOT EXISTS sillytavern_chat_imports (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    chat_id INTEGER NOT NULL UNIQUE,
+    source_file_name TEXT NOT NULL,
+    source_hash TEXT NOT NULL,
+    character_name TEXT NOT NULL DEFAULT '',
+    user_name TEXT NOT NULL DEFAULT '',
+    header_json TEXT NOT NULL DEFAULT '{}',
+    raw_jsonl TEXT NOT NULL,
+    imported_at INTEGER NOT NULL,
+    UNIQUE(user_id, source_hash),
+    FOREIGN KEY(chat_id) REFERENCES user_chats(id) ON DELETE CASCADE
+  );
+  CREATE INDEX IF NOT EXISTS idx_sillytavern_chat_imports_user
+    ON sillytavern_chat_imports(user_id, imported_at DESC);
+`);
+
 const ensureMemoryColumn = (table: string, column: string, sql: string) => {
   const columns = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
   if (!columns.some(item => item.name === column)) db.exec(sql);

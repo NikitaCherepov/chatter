@@ -329,6 +329,29 @@ const MIGRATIONS: Migration[] = [
       `);
     },
   },
+  {
+    name: '0011_sillytavern_chat_imports',
+    run: () => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS sillytavern_chat_imports (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id INTEGER NOT NULL,
+          chat_id INTEGER NOT NULL UNIQUE,
+          source_file_name TEXT NOT NULL,
+          source_hash TEXT NOT NULL,
+          character_name TEXT NOT NULL DEFAULT '',
+          user_name TEXT NOT NULL DEFAULT '',
+          header_json TEXT NOT NULL DEFAULT '{}',
+          raw_jsonl TEXT NOT NULL,
+          imported_at INTEGER NOT NULL,
+          UNIQUE(user_id, source_hash),
+          FOREIGN KEY(chat_id) REFERENCES user_chats(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_sillytavern_chat_imports_user
+          ON sillytavern_chat_imports(user_id, imported_at DESC);
+      `);
+    },
+  },
 ];
 
 /**
