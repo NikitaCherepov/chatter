@@ -1,5 +1,8 @@
 import { sendMessageThroughAi } from './ai.js';
 import type { AiSendResult } from '../types.js';
+import { getUserById, resolvePromptForChat } from './chats.js';
+import { getChatAgentForResponse } from './chat-rooms.js';
+import { getUserPromptImageBySelectedId } from './prompts.js';
 
 /**
  * Unified server-side chat runner.
@@ -100,6 +103,29 @@ const runSteps = async (
     const agentId = step.kind === 'agent' ? step.agentId : null;
     const agentName = step.kind === 'agent' ? step.agentName : 'Chatter';
     const reason = step.kind === 'agent' ? step.reason : 'auto';
+    let promptId: number | null = null;
+    let promptName = agentName;
+    let promptImageUrl: string | null = null;
+
+    try {
+      if (step.kind === 'agent') {
+        const agent = getChatAgentForResponse(step.initiatorUserId, chatId, step.agentId);
+        promptId = agent.source_prompt_id;
+        promptName = agent.name;
+        promptImageUrl = getUserPromptImageBySelectedId(step.ownerUserId, promptId);
+      } else {
+        const owner = getUserById(step.ownerUserId);
+        if (owner) {
+          const prompt = resolvePromptForChat(owner, chatId);
+          promptId = prompt.id;
+          promptName = prompt.name;
+          promptImageUrl = getUserPromptImageBySelectedId(step.ownerUserId, promptId);
+        }
+      }
+    } catch {
+      // Identity metadata is visual-only. Generation must still start if a
+      // prompt was concurrently changed or deleted.
+    }
 
     emit({
       type: 'chat_agent_start',
@@ -109,6 +135,9 @@ const runSteps = async (
       owner_user_id: step.ownerUserId,
       initiator_user_id: step.initiatorUserId,
       reason,
+      prompt_id: promptId,
+      prompt_name: promptName,
+      prompt_image_url: promptImageUrl,
     });
 
     try {

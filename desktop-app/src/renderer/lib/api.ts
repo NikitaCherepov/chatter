@@ -962,7 +962,7 @@ let wsTokenRefreshPromise: Promise<boolean> | null = null;
 
 export type RoomEvent =
   | { type: 'room_user_message'; chat_id: number; message_id: number | null; sender_user_id: number; text: string; images?: MessageImage[]; attachments?: MessageAttachment[] }
-  | { type: 'chat_agent_start'; chat_id: number; agent_id: number | null; agent_name: string; owner_user_id: number; reason: 'mention' | 'auto' | 'manual' }
+  | { type: 'chat_agent_start'; chat_id: number; agent_id: number | null; agent_name: string; owner_user_id: number; reason: 'mention' | 'auto' | 'manual'; prompt_id?: number | null; prompt_name?: string | null; prompt_image_url?: string | null }
   | { type: 'chat_agent_token'; chat_id: number; agent_id: number | null; text: string }
   | { type: 'chat_agent_reasoning'; chat_id: number; agent_id: number | null; text: string }
   | { type: 'chat_agent_done'; chat_id: number; agent_id: number | null; owner_user_id: number; initiator_user_id: number; is_voice?: boolean; result: any }
