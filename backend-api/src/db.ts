@@ -1369,6 +1369,10 @@ db.exec(`
     name TEXT NOT NULL,
     description TEXT NOT NULL DEFAULT '',
     core_memory TEXT NOT NULL DEFAULT '',
+    image_url TEXT,
+    import_source TEXT,
+    import_key TEXT,
+    import_raw_json TEXT,
     allow_core_memory_update INTEGER NOT NULL DEFAULT 1 CHECK (allow_core_memory_update IN (0, 1)),
     is_primary INTEGER NOT NULL DEFAULT 0 CHECK (is_primary IN (0, 1)),
     is_default INTEGER NOT NULL DEFAULT 0 CHECK (is_default IN (0, 1)),
@@ -1465,6 +1469,15 @@ const ensureMemoryColumn = (table: string, column: string, sql: string) => {
 ensureMemoryColumn('personas', 'description', "ALTER TABLE personas ADD COLUMN description TEXT NOT NULL DEFAULT ''");
 ensureMemoryColumn('personas', 'is_primary', 'ALTER TABLE personas ADD COLUMN is_primary INTEGER NOT NULL DEFAULT 0 CHECK (is_primary IN (0, 1))');
 ensureMemoryColumn('personas', 'allow_core_memory_update', 'ALTER TABLE personas ADD COLUMN allow_core_memory_update INTEGER NOT NULL DEFAULT 1 CHECK (allow_core_memory_update IN (0, 1))');
+ensureMemoryColumn('personas', 'image_url', 'ALTER TABLE personas ADD COLUMN image_url TEXT');
+ensureMemoryColumn('personas', 'import_source', 'ALTER TABLE personas ADD COLUMN import_source TEXT');
+ensureMemoryColumn('personas', 'import_key', 'ALTER TABLE personas ADD COLUMN import_key TEXT');
+ensureMemoryColumn('personas', 'import_raw_json', 'ALTER TABLE personas ADD COLUMN import_raw_json TEXT');
+db.exec(`
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_personas_import_key
+  ON personas(user_id, import_source, import_key)
+  WHERE import_source IS NOT NULL AND import_key IS NOT NULL
+`);
 ensureMemoryColumn('chat_memory_settings', 'persona_override_id', 'ALTER TABLE chat_memory_settings ADD COLUMN persona_override_id INTEGER');
 ensureMemoryColumn('memory_spaces', 'is_primary', 'ALTER TABLE memory_spaces ADD COLUMN is_primary INTEGER NOT NULL DEFAULT 0 CHECK (is_primary IN (0, 1))');
 ensureMemoryColumn('memory_records', 'origin_message_cursor', 'ALTER TABLE memory_records ADD COLUMN origin_message_cursor INTEGER');

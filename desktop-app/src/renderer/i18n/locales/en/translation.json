@@ -246,6 +246,37 @@
         "descriptionPlaceholder": "Short description",
         "coreMemory": "Core memory",
         "allowCoreMemoryUpdate": "Automatically update core memory",
+        "image": "Avatar",
+        "imageHelp": "Shown next to your messages when this persona is active. Up to 10 MB.",
+        "imageEmpty": "No avatar",
+        "imageSaveError": "Persona saved, but the avatar could not be saved",
+        "import": {
+          "button": "Import from SillyTavern",
+          "previewTitle": "Import personas",
+          "sourceLabel": "SillyTavern persona backup",
+          "found": "{{count}} personas found",
+          "newCount": "{{count}} new",
+          "updateCount": "{{count}} existing",
+          "defaultPersona": "Default: {{name}}",
+          "willCreate": "Create",
+          "willUpdate": "Update",
+          "more": "And {{count}} more",
+          "confirm": "Import",
+          "importing": "Importing...",
+          "success": "Personas imported: {{created}} created, {{updated}} updated",
+          "warnings": {
+            "avatars_not_in_backup": "SillyTavern persona backups do not contain avatar files. You can add avatars after import.",
+            "core_memory_truncated": "Some descriptions exceed the 800-character core-memory limit. Full source data is preserved for future migrations.",
+            "existing_personas_updated": "Previously imported personas with the same SillyTavern key will be updated."
+          },
+          "errors": {
+            "format": "Select a SillyTavern persona backup JSON file",
+            "size": "The backup must be no larger than 2 MB",
+            "read": "Could not read the backup",
+            "invalid": "This is not a valid SillyTavern persona backup",
+            "import": "Could not import personas"
+          }
+        },
         "deleted": "Persona deleted; its chats were switched to Automatically",
         "errors": {
           "select": "Could not select persona",

@@ -518,6 +518,7 @@ type MessageItemProps = {
   msg: api.Message;
   authorName?: string;
   isOwnUser: boolean;
+  userPersonaImageUrl?: string | null;
   isLastAssistant: boolean;
   /** False for foreign private agents: regeneration is rejected server-side
    *  and the optimistic UI would remove the message. */
@@ -558,6 +559,7 @@ const MessageItem = React.memo(function MessageItem({
   msg,
   authorName,
   isOwnUser,
+  userPersonaImageUrl,
   isLastAssistant,
   canRegenerate,
   isTtsPlaying,
@@ -607,7 +609,9 @@ const MessageItem = React.memo(function MessageItem({
     : msg.token_count;
   const promptImageSrc = msg.role === 'assistant' && msg.prompt_image_url
     ? resolveImageUrl(msg.prompt_image_url, 128)
-    : null;
+    : msg.role === 'user' && isOwnUser && userPersonaImageUrl
+      ? resolveImageUrl(userPersonaImageUrl, 128)
+      : null;
 
   return (
     <div className={`${s.messageGroup} ${reasoningOpen || isToolCallsOpen || isSubagentsOpen ? s.messageGroupRaised : ''} ${msg.archived ? s.messageArchived : ''}`}>
@@ -616,7 +620,7 @@ const MessageItem = React.memo(function MessageItem({
           <img
             className={s.promptAvatar}
             src={promptImageSrc}
-            alt={msg.prompt_name || 'Chatter'}
+            alt={msg.role === 'user' ? (authorName ?? t('chat.message.you')) : (msg.prompt_name || 'Chatter')}
             loading="lazy"
             draggable={false}
           />
@@ -1131,6 +1135,7 @@ export function ChatPage() {
 
   const [chats, setChats] = useState<api.ChatInfo[]>([]);
   const [activeChatId, setActiveChatId] = useState<number | null>(null);
+  const [effectivePersonaImageUrl, setEffectivePersonaImageUrl] = useState<string | null>(null);
   const activeChatIdRef = useRef<number | null>(activeChatId);
   activeChatIdRef.current = activeChatId;
 
@@ -1175,6 +1180,34 @@ export function ChatPage() {
   }, [clearSendWatchdog, t]);
   const { unreadByChat, incrementUnread, markAsRead, getUnread } = useUnreadChats();
   const [messages, setMessages] = useState<api.Message[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadPersona = async () => {
+      if (!activeChatId) {
+        setEffectivePersonaImageUrl(null);
+        return;
+      }
+      try {
+        const result = await api.apiFetch<{ persona: { image_url: string | null } }>(`/api/v1/chats/${activeChatId}/persona`);
+        if (!cancelled) setEffectivePersonaImageUrl(result.persona.image_url || null);
+      } catch {
+        if (!cancelled) setEffectivePersonaImageUrl(null);
+      }
+    };
+    void loadPersona();
+    const refresh = (event?: Event) => {
+      const changedChatId = (event as CustomEvent<{ chatId?: number }> | undefined)?.detail?.chatId;
+      if (changedChatId === undefined || changedChatId === activeChatId) void loadPersona();
+    };
+    window.addEventListener('chatter:personas-changed', refresh);
+    window.addEventListener('chatter:chat-persona-changed', refresh);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('chatter:personas-changed', refresh);
+      window.removeEventListener('chatter:chat-persona-changed', refresh);
+    };
+  }, [activeChatId]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const [showTyping, setShowTyping] = useState(false);
@@ -5146,6 +5179,7 @@ export function ChatPage() {
                     ? (roomMembers.find((member) => member.user_id === msg.user_id)?.name || `#${msg.user_id}`)
                     : undefined}
                   isOwnUser={msg.role !== 'user' || !msg.user_id || msg.user_id === user?.id}
+                  userPersonaImageUrl={effectivePersonaImageUrl}
                   isLastAssistant={msg.id === lastAssistantId}
                   canRegenerate={canRegenerateMessage(msg)}
                   isTtsPlaying={ttsPlayingId === msg.id}

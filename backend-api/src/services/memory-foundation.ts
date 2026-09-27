@@ -11,6 +11,10 @@ export type Persona = {
   name: string;
   description: string;
   core_memory: string;
+  image_url: string | null;
+  import_source: string | null;
+  import_key: string | null;
+  import_raw_json: string | null;
   allow_core_memory_update: number;
   is_primary: number;
   is_default: number;
@@ -136,6 +140,21 @@ export const listPersonas = (userId: number): Persona[] => {
   ensureMemoryDefaults(accountId);
   return db.prepare('SELECT * FROM personas WHERE user_id = ? ORDER BY is_primary DESC, is_default DESC, id ASC')
     .all(accountId) as Persona[];
+};
+
+export const getPersona = (userId: number, personaId: number): Persona | null => {
+  const accountId = canonicalUserId(userId);
+  return (db.prepare('SELECT * FROM personas WHERE id = ? AND user_id = ?')
+    .get(personaId, accountId) as Persona | undefined) || null;
+};
+
+export const updatePersonaImage = (userId: number, personaId: number, imageUrl: string | null): Persona => {
+  const accountId = canonicalUserId(userId);
+  const persona = getPersona(accountId, personaId);
+  if (!persona) throw new Error('persona_not_found');
+  db.prepare('UPDATE personas SET image_url = ?, updated_at = ? WHERE id = ? AND user_id = ?')
+    .run(imageUrl, getNowUnix(), personaId, accountId);
+  return getPersona(accountId, personaId)!;
 };
 
 export const createPersona = (

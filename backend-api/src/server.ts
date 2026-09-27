@@ -57,6 +57,7 @@ import {
   deletePersona,
   ensureMemoryDefaults,
   getChatMemorySettings,
+  getPersona,
   getPrimaryPersona,
   listMemorySpaces,
   listPersonas,
@@ -66,6 +67,8 @@ import {
   syncPrimaryPersonaName,
   updateChatMemorySettings,
   updatePersona,
+  updatePersonaImage,
+  resolvePersonaForChat,
   requireChatMemoryRecord,
   requireGeneralMemoryRecord,
   renameGeneralMemorySpace,
@@ -90,6 +93,7 @@ import { runMigrations } from './services/migrations.js';
 import { resolveImageFile, getUploadsDir } from './services/image-storage.js';
 import { attachMediaAsset, deleteMediaAssetIfUnreferenced, detachImageUrlFromEntity, getMediaAssetByUrl, pruneExpiredMediaAssets, removeMediaReferencesForEntity, saveImageAsset } from './services/media-assets.js';
 import { importCharacterCard, listCharacterCardPromptSummaries, MAX_CHARACTER_CARD_BYTES, parseCharacterCard, startCharacterCardChat, toCharacterCardPreview } from './services/character-card-import.js';
+import { importSillyTavernPersonas, previewSillyTavernPersonas } from './services/persona-import.js';
 import { canUserReadRegisteredImage } from './services/media-access.js';
 import { resolveAttachmentFile, MAX_RAW_FILE_SIZE as MAX_ATTACHMENT_BYTES } from './services/attachment-storage.js';
 import { materializeAssetInput } from './services/response-attachments.js';
@@ -1483,6 +1487,24 @@ app.get('/api/v1/memory/personas', (req: AuthedRequest, res: any) => {
   return res.json({ personas: listPersonas(accountIdFromRequest(req)) });
 });
 
+app.post('/api/v1/memory/personas/import/sillytavern/preview', (req: AuthedRequest, res: any) => {
+  try {
+    return res.json({ preview: previewSillyTavernPersonas(accountIdFromRequest(req), `${req.body?.base64 || ''}`) });
+  } catch (error: any) {
+    const code = error?.message || 'persona_import_preview_failed';
+    return res.status(code === 'persona_backup_too_large' ? 413 : 400).json({ error: code });
+  }
+});
+
+app.post('/api/v1/memory/personas/import/sillytavern', (req: AuthedRequest, res: any) => {
+  try {
+    return res.status(201).json(importSillyTavernPersonas(accountIdFromRequest(req), `${req.body?.base64 || ''}`));
+  } catch (error: any) {
+    const code = error?.message || 'persona_import_failed';
+    return res.status(code === 'persona_backup_too_large' ? 413 : 400).json({ error: code });
+  }
+});
+
 app.post('/api/v1/memory/personas', (req: AuthedRequest, res: any) => {
   try {
     const persona = createPersona(
@@ -1524,10 +1546,57 @@ app.post('/api/v1/memory/personas/:personaId/activate', (req: AuthedRequest, res
 
 app.delete('/api/v1/memory/personas/:personaId', (req: AuthedRequest, res: any) => {
   try {
-    return res.json({ active_persona: deletePersona(accountIdFromRequest(req), Number(req.params.personaId)) });
+    const accountId = accountIdFromRequest(req);
+    const personaId = Number(req.params.personaId);
+    const persona = getPersona(accountId, personaId);
+    const asset = persona?.image_url ? getMediaAssetByUrl(persona.image_url) : null;
+    const activePersona = deletePersona(accountId, personaId);
+    removeMediaReferencesForEntity('persona', personaId);
+    if (asset) deleteMediaAssetIfUnreferenced(asset.id);
+    return res.json({ active_persona: activePersona });
   } catch (error: any) {
     return res.status(400).json({ error: error?.message || 'persona_delete_failed' });
   }
+});
+
+const MAX_PERSONA_IMAGE_BYTES = 10 * 1024 * 1024;
+
+app.put('/api/v1/memory/personas/:personaId/image', async (req: AuthedRequest, res: any) => {
+  const accountId = accountIdFromRequest(req);
+  const personaId = Number(req.params.personaId);
+  const existing = getPersona(accountId, personaId);
+  if (!existing) return res.status(404).json({ error: 'persona_not_found' });
+  const imageBuffer = Buffer.from(`${req.body?.base64 || ''}`.trim(), 'base64');
+  if (!imageBuffer.length) return res.status(400).json({ error: 'image_required' });
+  if (imageBuffer.length > MAX_PERSONA_IMAGE_BYTES) return res.status(413).json({ error: 'image_too_large' });
+  let savedAssetId: number | null = null;
+  try {
+    const saved = await saveImageAsset({ userId: accountId, data: imageBuffer, retention: 'temporary', kind: 'persona_avatar', transform: 'thumbnail' });
+    savedAssetId = saved.id;
+    attachMediaAsset({ assetId: saved.id, entityType: 'persona', entityId: personaId, slot: 'avatar' });
+    updatePersonaImage(accountId, personaId, saved.url);
+    if (existing.image_url && existing.image_url !== saved.url) {
+      const previous = getMediaAssetByUrl(existing.image_url);
+      detachImageUrlFromEntity({ url: existing.image_url, entityType: 'persona', entityId: personaId });
+      if (previous) deleteMediaAssetIfUnreferenced(previous.id);
+    }
+    return res.json({ ok: true, image_url: saved.url });
+  } catch (error) {
+    if (savedAssetId !== null) deleteMediaAssetIfUnreferenced(savedAssetId);
+    return res.status(400).json({ error: 'persona_image_upload_failed' });
+  }
+});
+
+app.delete('/api/v1/memory/personas/:personaId/image', (req: AuthedRequest, res: any) => {
+  const accountId = accountIdFromRequest(req);
+  const personaId = Number(req.params.personaId);
+  const existing = getPersona(accountId, personaId);
+  if (!existing) return res.status(404).json({ error: 'persona_not_found' });
+  const previous = existing.image_url ? getMediaAssetByUrl(existing.image_url) : null;
+  updatePersonaImage(accountId, personaId, null);
+  removeMediaReferencesForEntity('persona', personaId);
+  if (previous) deleteMediaAssetIfUnreferenced(previous.id);
+  return res.json({ ok: true });
 });
 
 app.get('/api/v1/memory/spaces', (req: AuthedRequest, res: any) => {
@@ -1581,6 +1650,14 @@ app.delete('/api/v1/memory/spaces/:spaceId', async (req: AuthedRequest, res: any
 app.get('/api/v1/chats/:chatId/memory-settings', (req: AuthedRequest, res: any) => {
   try {
     return res.json({ settings: getChatMemorySettings(accountIdFromRequest(req), Number(req.params.chatId)) });
+  } catch (error: any) {
+    return res.status(404).json({ error: error?.message || 'chat_not_found' });
+  }
+});
+
+app.get('/api/v1/chats/:chatId/persona', (req: AuthedRequest, res: any) => {
+  try {
+    return res.json(resolvePersonaForChat(accountIdFromRequest(req), Number(req.params.chatId)));
   } catch (error: any) {
     return res.status(404).json({ error: error?.message || 'chat_not_found' });
   }

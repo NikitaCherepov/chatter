@@ -1821,6 +1821,41 @@ export type CharacterCardPreview = {
 
 export type CharacterCardFile = { file_name: string; mime_type: string; base64: string };
 
+export type PersonaImportEntry = {
+  key: string;
+  name: string;
+  description: string;
+  core_memory: string;
+  is_default: boolean;
+  exists: boolean;
+  truncated: boolean;
+};
+
+export type PersonaImportPreview = {
+  entries: PersonaImportEntry[];
+  count: number;
+  create_count: number;
+  update_count: number;
+  default_name: string | null;
+  warnings: string[];
+};
+
+export async function previewSillyTavernPersonas(file: CharacterCardFile): Promise<{ preview: PersonaImportPreview }> {
+  return apiFetch('/api/v1/memory/personas/import/sillytavern/preview', { method: 'POST', body: JSON.stringify(file) });
+}
+
+export async function importSillyTavernPersonas(file: CharacterCardFile): Promise<{ created: number; updated: number; active_persona_id: number | null }> {
+  return apiFetch('/api/v1/memory/personas/import/sillytavern', { method: 'POST', body: JSON.stringify(file) });
+}
+
+export async function setPersonaImage(personaId: number, image: { base64: string; mime_type: string }): Promise<{ ok: boolean; image_url: string }> {
+  return apiFetch(`/api/v1/memory/personas/${personaId}/image`, { method: 'PUT', body: JSON.stringify(image) });
+}
+
+export async function deletePersonaImage(personaId: number): Promise<{ ok: boolean }> {
+  return apiFetch(`/api/v1/memory/personas/${personaId}/image`, { method: 'DELETE' });
+}
+
 export async function previewCharacterCard(file: CharacterCardFile): Promise<{ preview: CharacterCardPreview }> {
   return apiFetch('/api/v1/prompts/import/character-card/preview', { method: 'POST', body: JSON.stringify(file) });
 }

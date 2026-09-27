@@ -38,6 +38,10 @@ export const canUserReadRegisteredImage = (userId: number, filename: string): bo
       `).all(selectedPromptId) as Array<{ chat_id: number }>;
       return chats.some(({ chat_id }) => canReadChatMessages(userId, chat_id));
     }
+    if (reference.entity_type === 'persona') {
+      return Boolean(db.prepare('SELECT 1 FROM personas WHERE id = ? AND user_id = ?')
+        .get(reference.entity_id, userId));
+    }
     return false;
   });
 };

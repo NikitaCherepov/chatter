@@ -65,6 +65,7 @@ export function ChatPersonaSelector({ chatId, embedded = false }: { chatId: numb
         body: JSON.stringify({ persona_override_id: next }),
       });
       setOverrideId(result.settings.persona_override_id);
+      window.dispatchEvent(new CustomEvent('chatter:chat-persona-changed', { detail: { chatId } }));
     } catch {
       setOverrideId(previous);
       toast.error(t('chat.memory.personaSelectFailed'));

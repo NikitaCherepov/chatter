@@ -42,6 +42,7 @@ import { AboutSettings } from './AboutSettings/AboutSettings';
 import { GlobalMemorySettings } from './GlobalMemorySettings';
 import { PromptImageCropDialog } from './PromptImageCropDialog';
 import { CharacterCardImportDialog } from './CharacterCardImportDialog';
+import { PersonaImportDialog } from './PersonaImportDialog';
 import telegramIcon from '../assets/integrations/telegram.webp';
 import s from './SettingsModal.module.scss';
 
@@ -64,6 +65,7 @@ type PersonaInfo = {
   name: string;
   description: string;
   core_memory: string;
+  image_url: string | null;
   allow_core_memory_update: number;
   is_primary: number;
   is_default: number;
@@ -309,6 +311,15 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
   const [personaDescription, setPersonaDescription] = useState('');
   const [allowCoreMemoryUpdate, setAllowCoreMemoryUpdate] = useState(true);
   const [personaDeleting, setPersonaDeleting] = useState(false);
+  const [personaImageUrl, setPersonaImageUrl] = useState<string | null>(null);
+  const [pendingPersonaImage, setPendingPersonaImage] = useState<{ base64: string; mimeType: string; previewUrl: string } | null>(null);
+  const [personaImageCropSource, setPersonaImageCropSource] = useState<string | null>(null);
+  const [personaImageRemoved, setPersonaImageRemoved] = useState(false);
+  const personaImageInputRef = useRef<HTMLInputElement>(null);
+  const personaImportInputRef = useRef<HTMLInputElement>(null);
+  const [personaImportReading, setPersonaImportReading] = useState(false);
+  const [personaImporting, setPersonaImporting] = useState(false);
+  const [personaImportDialog, setPersonaImportDialog] = useState<{ file: api.CharacterCardFile; preview: api.PersonaImportPreview } | null>(null);
   const personaDraftSourceRef = useRef<number | null>(null);
   const personasQuery = useQuery({
     queryKey: ['memory-personas'],
@@ -433,6 +444,9 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
       setPersonaDescription('');
       setCoreMemory('');
       setAllowCoreMemoryUpdate(true);
+      setPersonaImageUrl(null);
+      setPendingPersonaImage(null);
+      setPersonaImageRemoved(false);
       return;
     }
     const persona = personas.find(item => item.id === selectedPersonaId);
@@ -443,6 +457,9 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
     setPersonaDescription(persona.description || '');
     setCoreMemory(persona.core_memory || '');
     setAllowCoreMemoryUpdate(persona.allow_core_memory_update === 1);
+    setPersonaImageUrl(persona.image_url || null);
+    setPendingPersonaImage(null);
+    setPersonaImageRemoved(false);
   }, [selectedPersonaId, personas]);
 
   // Load feature flags when restrictions tab opens
@@ -988,6 +1005,8 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
     }
     setCoreMemorySaving(true);
     try {
+      const attemptedPersonaImage = pendingPersonaImage;
+      const attemptedPersonaImageRemoval = personaImageRemoved;
       let personaId = selectedPersonaId;
       if (personaId === NEW_PERSONA_ID || personaId === null) {
         const created = await api.apiFetch<{ persona: PersonaInfo }>('/api/v1/memory/personas', {
@@ -1003,8 +1022,21 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
             : { name, description: personaDescription.trim(), core_memory: coreMemory, allow_core_memory_update: allowCoreMemoryUpdate }),
         });
       }
+      let imageSaveFailed = false;
+      try {
+        if (pendingPersonaImage) {
+          const result = await api.setPersonaImage(personaId, { base64: pendingPersonaImage.base64, mime_type: pendingPersonaImage.mimeType });
+          setPersonaImageUrl(result.image_url);
+        } else if (personaImageRemoved) {
+          await api.deletePersonaImage(personaId);
+          setPersonaImageUrl(null);
+        }
+      } catch {
+        imageSaveFailed = true;
+      }
       await api.apiFetch(`/api/v1/memory/personas/${personaId}/activate`, { method: 'POST' });
       await loadPersonas(personaId);
+      personaDraftSourceRef.current = personaId;
       window.dispatchEvent(new Event('chatter:personas-changed'));
       if (isPrimary) {
         const updated = { ...user!, core_memory: coreMemory };
@@ -1012,10 +1044,73 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
         localStorage.setItem('chatter_user', JSON.stringify(updated));
       }
       toast.success(t('settings.toasts.memorySaved'));
+      if (imageSaveFailed) toast.error(t('settings.account.personas.imageSaveError'));
+      else {
+        setPendingPersonaImage(null);
+        setPersonaImageRemoved(false);
+      }
+      if (imageSaveFailed) {
+        setPendingPersonaImage(attemptedPersonaImage);
+        setPersonaImageRemoved(attemptedPersonaImageRemoval);
+      }
     } catch {
       toast.error(t('settings.toasts.memorySaveFailed'));
     } finally {
       setCoreMemorySaving(false);
+    }
+  };
+
+  const handlePersonaImageSelect = (file: File | undefined) => {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) return toast.error(t('settings.prompt.imageFormatError'));
+    if (file.size > 10 * 1024 * 1024) return toast.error(t('settings.prompt.imageSizeError'));
+    const reader = new FileReader();
+    reader.onerror = () => toast.error(t('settings.prompt.imageReadError'));
+    reader.onload = () => {
+      const previewUrl = String(reader.result || '');
+      if (!previewUrl.includes(',')) return toast.error(t('settings.prompt.imageReadError'));
+      setPersonaImageCropSource(previewUrl);
+      if (personaImageInputRef.current) personaImageInputRef.current.value = '';
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handlePersonaImportSelect = (file: File | undefined) => {
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith('.json')) return toast.error(t('settings.account.personas.import.errors.format'));
+    if (file.size > 2 * 1024 * 1024) return toast.error(t('settings.account.personas.import.errors.size'));
+    setPersonaImportReading(true);
+    const reader = new FileReader();
+    reader.onerror = () => { setPersonaImportReading(false); toast.error(t('settings.account.personas.import.errors.read')); };
+    reader.onload = async () => {
+      try {
+        const base64 = String(reader.result || '').split(',', 2)[1] || '';
+        const payload = { file_name: file.name, mime_type: file.type || 'application/json', base64 };
+        const { preview } = await api.previewSillyTavernPersonas(payload);
+        setPersonaImportDialog({ file: payload, preview });
+      } catch {
+        toast.error(t('settings.account.personas.import.errors.invalid'));
+      } finally {
+        setPersonaImportReading(false);
+        if (personaImportInputRef.current) personaImportInputRef.current.value = '';
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handlePersonaImport = async () => {
+    if (!personaImportDialog) return;
+    setPersonaImporting(true);
+    try {
+      const result = await api.importSillyTavernPersonas(personaImportDialog.file);
+      await loadPersonas(result.active_persona_id ?? undefined);
+      window.dispatchEvent(new Event('chatter:personas-changed'));
+      setPersonaImportDialog(null);
+      toast.success(t('settings.account.personas.import.success', { created: result.created, updated: result.updated }));
+    } catch {
+      toast.error(t('settings.account.personas.import.errors.import'));
+    } finally {
+      setPersonaImporting(false);
     }
   };
 
@@ -1515,6 +1610,18 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
                     createDescription: t('settings.account.personas.createDescription'),
                   }}
                 />
+                <div className={s.promptImageButtons}>
+                  <button className={s.cancelBtn} type="button" onClick={() => personaImportInputRef.current?.click()} disabled={personaImportReading || personaImporting}>
+                    {personaImportReading ? t('common.loading') : t('settings.account.personas.import.button')}
+                  </button>
+                  <input
+                    ref={personaImportInputRef}
+                    className={s.promptImageInput}
+                    type="file"
+                    accept="application/json,.json"
+                    onChange={event => handlePersonaImportSelect(event.target.files?.[0])}
+                  />
+                </div>
                 {!selectedPersonaIsPrimary && (
                   <>
                     <input
@@ -1533,6 +1640,40 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
                     />
                   </>
                 )}
+                <div className={s.promptImageEditor}>
+                  <div className={s.promptImagePreview}>
+                    {(pendingPersonaImage?.previewUrl || personaImageUrl) ? (
+                      <img src={pendingPersonaImage?.previewUrl || api.resolveImageUrl(personaImageUrl!, 320)} alt="" />
+                    ) : (
+                      <span>{t('settings.account.personas.imageEmpty')}</span>
+                    )}
+                  </div>
+                  <div className={s.promptImageActions}>
+                    <span className={s.fieldLabel}>{t('settings.account.personas.image')}</span>
+                    <span className={s.promptImageHelp}>{t('settings.account.personas.imageHelp')}</span>
+                    <div className={s.promptImageButtons}>
+                      <button className={s.cancelBtn} type="button" onClick={() => personaImageInputRef.current?.click()}>
+                        {t('settings.prompt.imageChoose')}
+                      </button>
+                      {(pendingPersonaImage || personaImageUrl) && (
+                        <button className={s.cancelBtn} type="button" onClick={() => {
+                          setPendingPersonaImage(null);
+                          setPersonaImageUrl(null);
+                          setPersonaImageRemoved(true);
+                        }}>
+                          {t('common.delete')}
+                        </button>
+                      )}
+                    </div>
+                    <input
+                      ref={personaImageInputRef}
+                      className={s.promptImageInput}
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp,image/gif,image/avif"
+                      onChange={event => handlePersonaImageSelect(event.target.files?.[0])}
+                    />
+                  </div>
+                </div>
                 <label className={s.fieldLabel}>{t('settings.account.personas.coreMemory')}</label>
                 <textarea
                   className={s.textareaInput}
@@ -2814,6 +2955,25 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
             setPromptImageRemoved(false);
             setPromptImageCropSource(null);
           }}
+        />
+      )}
+      {personaImageCropSource && (
+        <PromptImageCropDialog
+          sourceUrl={personaImageCropSource}
+          onCancel={() => setPersonaImageCropSource(null)}
+          onConfirm={image => {
+            setPendingPersonaImage(image);
+            setPersonaImageRemoved(false);
+            setPersonaImageCropSource(null);
+          }}
+        />
+      )}
+      {personaImportDialog && (
+        <PersonaImportDialog
+          preview={personaImportDialog.preview}
+          importing={personaImporting}
+          onCancel={() => !personaImporting && setPersonaImportDialog(null)}
+          onImport={handlePersonaImport}
         />
       )}
       {characterCardDialog && (

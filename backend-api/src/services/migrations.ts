@@ -311,6 +311,24 @@ const MIGRATIONS: Migration[] = [
       `);
     },
   },
+  {
+    name: '0010_persona_imports',
+    run: () => {
+      const columns = db.prepare('PRAGMA table_info(personas)').all() as Array<{ name: string }>;
+      const ensureColumn = (name: string, sql: string) => {
+        if (!columns.some(column => column.name === name)) db.exec(sql);
+      };
+      ensureColumn('image_url', 'ALTER TABLE personas ADD COLUMN image_url TEXT');
+      ensureColumn('import_source', 'ALTER TABLE personas ADD COLUMN import_source TEXT');
+      ensureColumn('import_key', 'ALTER TABLE personas ADD COLUMN import_key TEXT');
+      ensureColumn('import_raw_json', 'ALTER TABLE personas ADD COLUMN import_raw_json TEXT');
+      db.exec(`
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_personas_import_key
+        ON personas(user_id, import_source, import_key)
+        WHERE import_source IS NOT NULL AND import_key IS NOT NULL
+      `);
+    },
+  },
 ];
 
 /**
