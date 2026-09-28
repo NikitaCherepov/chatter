@@ -2136,6 +2136,38 @@ async function listOpenRouterImageModels(query) {
   return { ...payload, data };
 }
 
+async function getOpenRouterEmbeddingConfig(apiKeyIdRaw) {
+  const apiKeyId = Number(apiKeyIdRaw);
+  if (!Number.isInteger(apiKeyId) || apiKeyId <= 0) {
+    throw new Error('OpenRouter API key is required for embedding models');
+  }
+  const storedKey = await backendInternalRequest(`/internal/admin/api-keys/${encodeURIComponent(apiKeyId)}`);
+  const apiKey = `${storedKey?.key || ''}`.trim();
+  if (!apiKey) throw new Error('OpenRouter API key is required for embedding models');
+  return { apiKey, baseUrl: OPENROUTER_BASE_URL };
+}
+
+async function listOpenRouterEmbeddingModels(query, apiKeyId) {
+  const { apiKey, baseUrl } = await getOpenRouterEmbeddingConfig(apiKeyId);
+  const cacheKey = `embedding-models:${baseUrl}`;
+  let payload = openRouterCacheGet(cacheKey);
+  if (!payload) {
+    const response = await fetch(`${baseUrl}/embeddings/models`, {
+      headers: { Authorization: `Bearer ${apiKey}`, Accept: 'application/json' },
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!response.ok) throw new Error(`OpenRouter embedding models failed (HTTP ${response.status})`);
+    payload = await response.json();
+    openRouterCacheSet(cacheKey, payload);
+  }
+  const needle = `${query || ''}`.trim().toLowerCase();
+  const models = Array.isArray(payload?.data) ? payload.data : [];
+  const data = needle
+    ? models.filter((model) => `${model?.id || ''} ${model?.name || ''}`.toLowerCase().includes(needle))
+    : models;
+  return { ...payload, data };
+}
+
 async function getOpenRouterImageCapabilities(input) {
   const model = `${input.model || ''}`.trim();
   const modelParts = model.split('/');
@@ -2899,15 +2931,11 @@ async function handleRequest(req, res) {
   }
 
   if (req.method === 'GET' && pathname === '/api/openrouter/embedding-models') {
-    const query = `${url.searchParams.get('q') || ''}`.trim().toLowerCase();
+    const query = `${url.searchParams.get('q') || ''}`.trim();
+    const apiKeyId = url.searchParams.get('apiKeyId');
     if (!query || query.length < 2) return sendJson(res, 400, { error: 'query_too_short' });
     try {
-      const data = await openRouterFetch('/embeddings/models');
-      const models = Array.isArray(data?.data) ? data.data : [];
-      return sendJson(res, 200, {
-        ...data,
-        data: models.filter(model => `${model?.id || ''} ${model?.name || ''}`.toLowerCase().includes(query)),
-      });
+      return sendJson(res, 200, await listOpenRouterEmbeddingModels(query, apiKeyId));
     } catch (error) {
       return sendJson(res, 502, { error: error.message || 'openrouter_embedding_models_failed' });
     }

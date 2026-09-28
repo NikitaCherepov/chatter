@@ -205,17 +205,6 @@ export function PineconePage({ onBack }: {
               onChange={event => setDraft({ ...draft, baseUrl: event.target.value })}
             />
           </FormField>
-          <FormField label={t('integrations.pinecone.embedding.modelLabel')}>
-            {draft.provider === 'openrouter' ? (
-              <OpenRouterModelInput
-                value={draft.model}
-                catalog="embeddings"
-                onSelect={model => setDraft({ ...draft, model })}
-              />
-            ) : (
-              <Input value={draft.model} onChange={event => setDraft({ ...draft, model: event.target.value })} />
-            )}
-          </FormField>
           {showCreateKey ? (
             <div className={styles.createKeyPanel}>
               <FormField label={t('security.apiKeyName')}>
@@ -246,6 +235,18 @@ export function PineconePage({ onBack }: {
               />
             </FormField>
           )}
+          <FormField label={t('integrations.pinecone.embedding.modelLabel')}>
+            {draft.provider === 'openrouter' ? (
+              <OpenRouterModelInput
+                value={draft.model}
+                catalog="embeddings"
+                apiKeyId={draft.apiKeyId}
+                onSelect={model => setDraft({ ...draft, model })}
+              />
+            ) : (
+              <Input value={draft.model} onChange={event => setDraft({ ...draft, model: event.target.value })} />
+            )}
+          </FormField>
           <button
             type="button"
             className={styles.checkButton}
