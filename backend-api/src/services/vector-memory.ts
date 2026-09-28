@@ -3,7 +3,8 @@ import { Pinecone } from '@pinecone-database/pinecone';
 import { randomUUID } from 'node:crypto';
 import { db } from '../db.js';
 import { resolveAccountId } from './accounts.js';
-import { getVectorMemoryStorage } from './vector-memory-settings.js';
+import { getVectorMemoryRuntimeSettings, getVectorMemoryStorage } from './vector-memory-settings.js';
+import { beginVectorMemoryWrite, isVectorMemoryMigrationRunning } from './vector-memory-reembedding.js';
 import {
   deleteQdrantChunks,
   deleteQdrantSpace,
@@ -27,9 +28,6 @@ import {
   archiveGeneralMemorySpace,
 } from './memory-foundation.js';
 
-const TIMEWEB_EMBED_API_KEY = `${process.env.TIMEWEB_EMBED_API_KEY || ''}`.trim();
-const TIMEWEB_EMBED_BASE_URL = `${process.env.TIMEWEB_EMBED_BASE_URL || process.env.TIMEWEB_BASE_URL || 'https://api.timeweb.ai/v1'}`.trim();
-const TIMEWEB_EMBED_MODEL = `${process.env.TIMEWEB_EMBED_MODEL || process.env.VECTOR_EMBED_MODEL || 'text-embedding-3-small'}`.trim();
 const PINECONE_API_KEY = `${process.env.PINECONE_API_KEY || ''}`.trim();
 const PINECONE_INDEX_NAME = `${process.env.PINECONE_INDEX_NAME || 'bot-memory'}`.trim();
 const VECTOR_MEMORY_MAX_TEXT = Math.max(1, Number.parseInt(process.env.VECTOR_MEMORY_MAX_TEXT || '4000', 10) || 4000);
@@ -39,7 +37,7 @@ const VECTOR_MEMORY_CHUNK_SIZE = Math.max(100, Number.parseInt(process.env.VECTO
 const VECTOR_MEMORY_CHUNK_OVERLAP = Math.max(0, Number.parseInt(process.env.VECTOR_MEMORY_CHUNK_OVERLAP || '200', 10) || 200);
 const VECTOR_MEMORY_LOG_SUCCESS = `${process.env.VECTOR_MEMORY_LOG_SUCCESS || '0'}`.trim() === '1';
 
-let openaiClient: OpenAI | null = null;
+let openaiClient: { key: string; client: OpenAI } | null = null;
 let pineconeClient: Pinecone | null = null;
 
 type NamespaceMigration = {
@@ -109,17 +107,23 @@ const deletePineconeResource = async (operation: () => Promise<void>) => {
   }
 };
 
-const getOpenAIClient = () => {
-  if (!TIMEWEB_EMBED_API_KEY) {
-    throw new Error('TIMEWEB_EMBED_API_KEY is not configured');
+const getOpenAIClient = (settings = getVectorMemoryRuntimeSettings()) => {
+  if (!settings.apiKey) {
+    throw new Error('embedding_api_key_not_configured');
   }
-  if (!openaiClient) {
-    openaiClient = new OpenAI({
-      apiKey: TIMEWEB_EMBED_API_KEY,
-      baseURL: TIMEWEB_EMBED_BASE_URL
-    });
+  const key = `${settings.baseUrl}\n${settings.apiKey}`;
+  if (!openaiClient || openaiClient.key !== key) {
+    openaiClient = { key, client: new OpenAI({
+      apiKey: settings.apiKey,
+      baseURL: settings.baseUrl,
+    }) };
   }
-  return openaiClient;
+  return openaiClient.client;
+};
+
+const getEmbeddingModel = () => getVectorMemoryRuntimeSettings().model;
+const assertMemoryWritable = () => {
+  if (isVectorMemoryMigrationRunning()) throw new Error('vector_memory_migration_in_progress');
 };
 
 const getPineconeIndex = () => {
@@ -135,12 +139,15 @@ const getPineconeIndex = () => {
   return pineconeClient.index(PINECONE_INDEX_NAME);
 };
 
-const getEmbedding = async (text: string): Promise<number[]> => {
+const getEmbedding = async (
+  text: string,
+  settings = getVectorMemoryRuntimeSettings(),
+): Promise<number[]> => {
   const normalized = text.replace(/\n/g, ' ').trim();
   if (!normalized) throw new Error('text_required');
-  const openai = getOpenAIClient();
+  const openai = getOpenAIClient(settings);
   const response = await openai.embeddings.create({
-    model: TIMEWEB_EMBED_MODEL,
+    model: settings.model,
     input: normalized
   } as any);
   const embedding = response?.data?.[0]?.embedding;
@@ -195,6 +202,7 @@ const chunkText = (text: string, chunkSize = VECTOR_MEMORY_CHUNK_SIZE, overlap =
 
 export class VectorMemoryService {
   static async deleteChatMemory(ownerUserId: number, chatId: number) {
+    assertMemoryWritable();
     const accountId = resolveAccountId(Math.floor(ownerUserId));
     const spaces = listChatMemorySpacesForDeletion(accountId, chatId);
     for (const space of spaces) {
@@ -270,6 +278,7 @@ export class VectorMemoryService {
     chatId?: number,
     originMessageCursor?: number | null,
   ) {
+    assertMemoryWritable();
     try {
       const safeText = `${fullText || ''}`.trim();
       if (!safeText) throw new Error('text_required');
@@ -287,7 +296,7 @@ export class VectorMemoryService {
         return `[Контекст: ${safeSource}] ${chunk}`.replace(/\n/g, ' ').trim();
       });
       const embedResponse = await openai.embeddings.create({
-        model: TIMEWEB_EMBED_MODEL,
+        model: getEmbeddingModel(),
         input: inputForEmbeddings // <--- Отправляем обогащенные чанки
       } as any);
 
@@ -313,7 +322,7 @@ export class VectorMemoryService {
       });
 
       if (getVectorMemoryStorage() === 'qdrant') {
-        await upsertQdrantVectors(resolveAccountId(Math.floor(userId)), space, TIMEWEB_EMBED_MODEL, records);
+        await upsertQdrantVectors(resolveAccountId(Math.floor(userId)), space, getEmbeddingModel(), records);
       } else {
         await getPineconeIndex().namespace(namespace).upsert(records as any);
       }
@@ -390,6 +399,7 @@ export class VectorMemoryService {
     targetChatId: number,
     anchorTimelineIndex: number,
   ) {
+    assertMemoryWritable();
     const accountId = resolveAccountId(Math.floor(userId));
     const plan = initializeForkedChatMemory(
       accountId,
@@ -462,7 +472,7 @@ export class VectorMemoryService {
       if (getVectorMemoryStorage() === 'qdrant') {
         const vectorsByModel = new Map<string, typeof targetVectors>();
         for (const vector of targetVectors) {
-          const embeddingModel = `${(vector.metadata as Record<string, unknown>).embedding_model || TIMEWEB_EMBED_MODEL}`;
+          const embeddingModel = `${(vector.metadata as Record<string, unknown>).embedding_model || getEmbeddingModel()}`;
           const group = vectorsByModel.get(embeddingModel) || [];
           group.push(vector);
           vectorsByModel.set(embeddingModel, group);
@@ -517,16 +527,20 @@ export class VectorMemoryService {
       if (!spaces.length) {
         return { ok: true, namespace: '', top_k: safeTopK, matches: [], text: '' };
       }
-      const queryVector = await getEmbedding(safeQuery);
+      // Keep model and collection from one settings snapshot. A migration may
+      // finish while this request is embedding its query.
+      const runtimeSettings = getVectorMemoryRuntimeSettings();
+      const queryVector = await getEmbedding(safeQuery, runtimeSettings);
       const matchesById = new Map<string, any>();
 
       if (getVectorMemoryStorage() === 'qdrant') {
         const points = await queryQdrantVectors(
           resolveAccountId(Math.floor(userId)),
           spaces,
-          TIMEWEB_EMBED_MODEL,
+          runtimeSettings.model,
           queryVector,
           safeTopK,
+          runtimeSettings.activeCollection,
         );
         points.forEach(point => {
           const payload = point.payload as Record<string, unknown> | null | undefined;
@@ -607,6 +621,7 @@ export class VectorMemoryService {
   }
 
   static async deleteChunk(userId: number, chunkId: string, chatId?: number) {
+    assertMemoryWritable();
     try {
       const safeChunkId = `${chunkId || ''}`.trim();
       if (!safeChunkId) throw new Error('chunk_id_required');
@@ -717,6 +732,7 @@ export class VectorMemoryService {
   }
 
   static async deleteRecord(userId: number, recordId: string) {
+    assertMemoryWritable();
     const record = getOwnedMemoryRecord(userId, `${recordId || ''}`.trim());
     if (!record) throw new Error('memory_record_not_found');
     const accountId = resolveAccountId(Math.floor(userId));
@@ -736,6 +752,7 @@ export class VectorMemoryService {
   }
 
   static async deleteGeneralSpace(userId: number, space: MemorySpace) {
+    assertMemoryWritable();
     const accountId = resolveAccountId(Math.floor(userId));
     if (space.user_id !== accountId || space.kind !== 'general' || space.archived_at !== null) {
       throw new Error('memory_space_not_found');
@@ -751,6 +768,7 @@ export class VectorMemoryService {
   }
 
   static async updateRecord(userId: number, recordId: string, fullText: string, sourceTag?: string) {
+    assertMemoryWritable();
     const safeText = `${fullText || ''}`.trim();
     if (!safeText) throw new Error('text_required');
     if (safeText.length > VECTOR_MEMORY_MAX_TEXT) throw new Error(`text_too_long_max_${VECTOR_MEMORY_MAX_TEXT}`);
@@ -765,7 +783,7 @@ export class VectorMemoryService {
       : `${sourceTag || ''}`.trim().slice(0, 240) || 'manual';
     const chunks = chunkText(safeText, VECTOR_MEMORY_CHUNK_SIZE, VECTOR_MEMORY_CHUNK_OVERLAP);
     const input = chunks.map(chunk => `[Контекст: ${safeSource}] ${chunk}`.replace(/\n/g, ' ').trim());
-    const response = await getOpenAIClient().embeddings.create({ model: TIMEWEB_EMBED_MODEL, input } as any);
+    const response = await getOpenAIClient().embeddings.create({ model: getEmbeddingModel(), input } as any);
     const embeddings = Array.isArray(response?.data) ? response.data : [];
     if (embeddings.length !== chunks.length) throw new Error('embedding_empty');
     const oldChunks = getRecordChunks(accountId, record.id);
@@ -781,7 +799,7 @@ export class VectorMemoryService {
     if (vectors.some(vector => !vector.values.length)) throw new Error('embedding_empty');
     if (getVectorMemoryStorage() === 'qdrant') {
       await deleteQdrantChunks(accountId, space.id, oldChunks.map(chunk => chunk.id));
-      await upsertQdrantVectors(accountId, space, TIMEWEB_EMBED_MODEL, vectors);
+      await upsertQdrantVectors(accountId, space, getEmbeddingModel(), vectors);
     } else {
       if (oldChunks.length) {
         await deletePineconeResource(() =>
@@ -806,6 +824,7 @@ export class VectorMemoryService {
   }
 
   static async deleteAll(userId: number) {
+    assertMemoryWritable();
     try {
       const namespace = canonicalNamespace(userId);
       if (getVectorMemoryStorage() === 'qdrant') {
@@ -838,6 +857,31 @@ export class VectorMemoryService {
       throw error;
     }
   }
+}
+
+// Serialize public mutations against collection migration. Existing writes
+// finish on the active collection; a migration starts only when none remain,
+// and new writes are rejected until the verified atomic switch completes.
+for (const methodName of [
+  'deleteChatMemory',
+  'saveFactBatched',
+  'saveChunk',
+  'cloneChatMemoryForFork',
+  'deleteChunk',
+  'deleteRecord',
+  'deleteGeneralSpace',
+  'updateRecord',
+  'deleteAll',
+] as const) {
+  const original = VectorMemoryService[methodName] as (...args: any[]) => Promise<unknown>;
+  (VectorMemoryService as any)[methodName] = async function (...args: any[]) {
+    const release = beginVectorMemoryWrite();
+    try {
+      return await original.apply(this, args);
+    } finally {
+      release();
+    }
+  };
 }
 
 const migrateNamespace = async (migration: NamespaceMigration) => {

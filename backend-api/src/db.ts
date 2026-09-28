@@ -1472,6 +1472,21 @@ db.exec(`
     updated_at INTEGER NOT NULL
   );
 
+  CREATE TABLE IF NOT EXISTS vector_memory_collections (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    collection_name TEXT NOT NULL UNIQUE,
+    provider TEXT NOT NULL,
+    base_url TEXT NOT NULL,
+    model TEXT NOT NULL,
+    api_key_id INTEGER,
+    dimension INTEGER,
+    point_count INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL CHECK (status IN ('active', 'backup', 'migrating', 'failed')),
+    error TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  );
+
   CREATE UNIQUE INDEX IF NOT EXISTS idx_personas_one_default
     ON personas(user_id) WHERE is_default = 1;
   CREATE INDEX IF NOT EXISTS idx_personas_user
@@ -1488,6 +1503,8 @@ db.exec(`
     ON memory_records(user_id, memory_space_id, deleted_at, created_at DESC);
   CREATE INDEX IF NOT EXISTS idx_memory_chunks_record
     ON memory_chunks(user_id, memory_record_id, chunk_index);
+  CREATE INDEX IF NOT EXISTS idx_vector_memory_collections_status
+    ON vector_memory_collections(status, created_at DESC);
 `);
 
 // The short-lived SQLite vector backend was replaced by bundled Qdrant.

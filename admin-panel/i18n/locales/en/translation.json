@@ -256,7 +256,7 @@
     "items": {
       "pinecone": {
         "name": "Vector memory",
-        "description": "Qdrant or Pinecone",
+        "description": "Local Qdrant memory",
         "group": "Memory"
       },
       "web-search": {
@@ -286,7 +286,7 @@
       "placeholderExisting": "Leave empty to keep unchanged"
     },
     "pinecone": {
-      "pageDescription": "Chatter vector memory. Qdrant is local, Pinecone is optional cloud storage, and the embedding model turns text into vectors.",
+      "pageDescription": "Local Chatter vector memory in Qdrant and its embedding model.",
       "sectionTitle": "Pinecone",
       "sectionIntro": "Create an index in Pinecone and provide its name along with the API key.",
       "apiKeyLabel": "Pinecone API key",
@@ -311,10 +311,39 @@
       },
       "embedding": {
         "sectionTitle": "Embedding model",
-        "sectionIntro": "A separate OpenAI-compatible API that turns text into vectors for Pinecone.",
+        "sectionIntro": "Changing the model creates and verifies a new local collection. The current version remains available for rollback.",
+        "providerLabel": "Provider",
         "apiUrlLabel": "API URL",
         "modelLabel": "Model",
-        "apiKeyLabel": "Embedding provider API key"
+        "apiKeyLabel": "Embedding provider API key",
+        "migrateAction": "Re-embed and switch",
+        "migrating": "Migrating…",
+        "migrationComplete": "New collection is active. Vectors: {{count}}."
+      },
+      "collections": {
+        "title": "Memory versions",
+        "intro": "Only collections managed by Chatter are shown. Backups are never deleted automatically.",
+        "vectorCount": "{{count}} vectors",
+        "rollbackAction": "Switch back",
+        "rollbackComplete": "The selected backup is active.",
+        "deleteComplete": "Collection deleted.",
+        "status": {
+          "active": "Active",
+          "backup": "Backup",
+          "migrating": "Migrating",
+          "failed": "Failed"
+        }
+      },
+      "confirm": {
+        "migrateTitle": "Change embedding model?",
+        "migrateText": "All stored memory chunks will be embedded into a new local Qdrant collection. Searches keep using the current collection; memory writes pause until verification finishes.",
+        "migrateAction": "Migrate",
+        "activateTitle": "Switch to this backup?",
+        "activateText": "Current SQLite memories will be re-embedded with this backup's model into a fresh collection. The active collection will be kept as a backup.",
+        "activateAction": "Switch",
+        "deleteTitle": "Delete this collection?",
+        "deleteText": "Its vectors will be permanently removed from Qdrant. Canonical memory text in SQLite is not affected.",
+        "deleteAction": "Delete"
       }
     },
     "webSearch": {

@@ -49,8 +49,19 @@ import { saveParsedChatAttachment } from './services/chat-attachments.js';
 import { runVoiceTurn } from './services/voice.js';
 import { runPhotoAnalyzeTurn } from './services/photo.js';
 import { migratePendingAccountNamespaces, VectorMemoryService } from './services/vector-memory.js';
-import { getVectorMemorySettings, updateVectorMemorySettings } from './services/vector-memory-settings.js';
+import {
+  getVectorMemoryApiKeyUsage,
+  getVectorMemorySettings,
+  replaceVectorMemoryApiKeyReference,
+  updateVectorMemorySettings,
+} from './services/vector-memory-settings.js';
 import { migrateVectorMemoryToQdrant } from './services/vector-memory-migration.js';
+import {
+  activateExistingVectorMemoryCollection,
+  listVectorMemoryCollections,
+  migrateVectorMemoryEmbedding,
+  removeVectorMemoryCollection,
+} from './services/vector-memory-reembedding.js';
 import {
   createGeneralMemorySpace,
   createPersona,
@@ -5409,12 +5420,41 @@ app.get('/internal/admin/vector-memory/settings', internalAuth, (_req, res) => {
 
 app.put('/internal/admin/vector-memory/settings', internalAuth, (req, res) => {
   try {
-    if (getVectorMemorySettings().storage === 'pinecone' && req.body?.storage === 'qdrant') {
-      throw new Error('pinecone_to_qdrant_migration_required');
-    }
     return res.json(updateVectorMemorySettings(req.body));
   } catch (err: any) {
     return res.status(400).json({ error: err?.message || 'bad_vector_memory_settings' });
+  }
+});
+
+app.get('/internal/admin/vector-memory/collections', internalAuth, async (_req, res) => {
+  try {
+    return res.json(await listVectorMemoryCollections());
+  } catch (err: any) {
+    return res.status(400).json({ error: err?.message || 'vector_memory_collections_failed' });
+  }
+});
+
+app.post('/internal/admin/vector-memory/migrate-embedding', internalAuth, async (req, res) => {
+  try {
+    return res.json(await migrateVectorMemoryEmbedding(req.body || {}));
+  } catch (err: any) {
+    return res.status(400).json({ error: err?.message || 'vector_memory_embedding_migration_failed' });
+  }
+});
+
+app.post('/internal/admin/vector-memory/collections/:name/activate', internalAuth, async (req, res) => {
+  try {
+    return res.json(await activateExistingVectorMemoryCollection(`${req.params.name || ''}`));
+  } catch (err: any) {
+    return res.status(400).json({ error: err?.message || 'vector_memory_collection_activate_failed' });
+  }
+});
+
+app.delete('/internal/admin/vector-memory/collections/:name', internalAuth, async (req, res) => {
+  try {
+    return res.json(await removeVectorMemoryCollection(`${req.params.name || ''}`));
+  } catch (err: any) {
+    return res.status(400).json({ error: err?.message || 'vector_memory_collection_delete_failed' });
   }
 });
 
@@ -5861,7 +5901,11 @@ app.get('/internal/admin/api-keys/:id/used-by', internalAuth, async (req, res) =
     const models = db.prepare(
       'SELECT model_id FROM model_overrides WHERE selected_api_key_id = ?'
     ).all(keyId) as Array<{ model_id: string }>;
-    res.json({ models: [...models.map(m => m.model_id), ...getImageGenerationApiKeyUsage(keyId)] });
+    res.json({ models: [
+      ...models.map(m => m.model_id),
+      ...getImageGenerationApiKeyUsage(keyId),
+      ...getVectorMemoryApiKeyUsage(keyId),
+    ] });
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'internal_error' });
   }
@@ -5896,6 +5940,7 @@ app.delete('/internal/admin/api-keys/:id', internalAuth, async (req, res) => {
     // Atomic: reassign/nullify references and delete the key in a single tx
     const tx = db.transaction(() => {
       replaceImageGenerationApiKeyReference(keyId, replacementIdNum);
+      replaceVectorMemoryApiKeyReference(keyId, replacementIdNum);
       if (replacementIdNum === null) {
         db.prepare('UPDATE model_overrides SET selected_api_key_id = NULL WHERE selected_api_key_id = ?').run(keyId);
       } else {

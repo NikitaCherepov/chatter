@@ -194,6 +194,51 @@ button.card:hover {
   flex-direction: column;
   gap: var(--sp-3);
 }
+.collectionList {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.collectionCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  padding: var(--sp-3);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  background: var(--bg-input);
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+}
+.collectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+}
+.collectionHeader strong {
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: var(--fs-sm);
+  text-overflow: ellipsis;
+}
+.collectionStatus {
+  flex: 0 0 auto;
+  padding: 2px var(--sp-1);
+  border-radius: var(--radius-sm);
+  background: var(--bg-primary);
+  color: var(--text-muted);
+}
+.collectionStatus_active { color: var(--color-success); }
+.collectionStatus_migrating { color: var(--accent); }
+.collectionStatus_failed { color: var(--color-error); }
+.collectionActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin-top: var(--sp-2);
+}
 .inputWithAction {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

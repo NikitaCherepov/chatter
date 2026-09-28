@@ -256,7 +256,7 @@
     "items": {
       "pinecone": {
         "name": "Векторная память",
-        "description": "Qdrant или Pinecone",
+        "description": "Локальная память Qdrant",
         "group": "Память"
       },
       "web-search": {
@@ -286,7 +286,7 @@
       "placeholderExisting": "Оставь пустым, чтобы не менять"
     },
     "pinecone": {
-      "pageDescription": "Векторная память Chatter. Qdrant работает локально, Pinecone доступен как облачный вариант, а embedding-модель превращает текст в векторы.",
+      "pageDescription": "Локальная векторная память Chatter в Qdrant и её embedding-модель.",
       "sectionTitle": "Pinecone",
       "sectionIntro": "Создай индекс в Pinecone и укажи его имя вместе с API-ключом.",
       "apiKeyLabel": "Pinecone API-ключ",
@@ -311,10 +311,39 @@
       },
       "embedding": {
         "sectionTitle": "Embedding-модель",
-        "sectionIntro": "Отдельный OpenAI-совместимый API, который превращает текст в векторы для Pinecone.",
+        "sectionIntro": "При смене модели создаётся и проверяется новая локальная коллекция. Текущая версия остаётся для отката.",
+        "providerLabel": "Провайдер",
         "apiUrlLabel": "Адрес API",
         "modelLabel": "Модель",
-        "apiKeyLabel": "API-ключ embedding-провайдера"
+        "apiKeyLabel": "API-ключ embedding-провайдера",
+        "migrateAction": "Пересчитать и переключить",
+        "migrating": "Перенос…",
+        "migrationComplete": "Новая коллекция активна. Векторов: {{count}}."
+      },
+      "collections": {
+        "title": "Версии памяти",
+        "intro": "Показываются только коллекции Chatter. Резервные версии никогда не удаляются автоматически.",
+        "vectorCount": "Векторов: {{count}}",
+        "rollbackAction": "Переключиться обратно",
+        "rollbackComplete": "Выбранная резервная версия активна.",
+        "deleteComplete": "Коллекция удалена.",
+        "status": {
+          "active": "Активная",
+          "backup": "Резервная",
+          "migrating": "Перенос",
+          "failed": "Ошибка"
+        }
+      },
+      "confirm": {
+        "migrateTitle": "Сменить embedding-модель?",
+        "migrateText": "Все сохранённые фрагменты памяти будут заново векторизованы в новую локальную коллекцию Qdrant. Поиск продолжит работать со старой, а запись памяти приостановится до окончания проверки.",
+        "migrateAction": "Перенести",
+        "activateTitle": "Переключиться на эту резервную версию?",
+        "activateText": "Актуальные воспоминания из SQLite будут заново векторизованы моделью этой резервной версии в новую коллекцию. Текущая коллекция сохранится как резервная.",
+        "activateAction": "Переключить",
+        "deleteTitle": "Удалить эту коллекцию?",
+        "deleteText": "Её векторы будут безвозвратно удалены из Qdrant. Исходные тексты воспоминаний в SQLite останутся на месте.",
+        "deleteAction": "Удалить"
       }
     },
     "webSearch": {

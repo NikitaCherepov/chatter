@@ -11,6 +11,7 @@ export function IntegrationDetailPage({
   saveState,
   onBack,
   onSave,
+  showSave = true,
   children,
 }: {
   title: string;
@@ -19,6 +20,7 @@ export function IntegrationDetailPage({
   saveState: string;
   onBack: () => void;
   onSave: (event: FormEvent) => void;
+  showSave?: boolean;
   children: ReactNode;
 }) {
   const { t } = useTranslation();
@@ -34,7 +36,7 @@ export function IntegrationDetailPage({
         </div>
       </header>
       <div className={styles.detailCard}>{children}</div>
-      <ActionBar saving={saving} state={saveState} />
+      {showSave && <ActionBar saving={saving} state={saveState} />}
     </form>
   );
 }

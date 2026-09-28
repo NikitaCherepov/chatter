@@ -1,6 +1,5 @@
 import { Pinecone } from '@pinecone-database/pinecone';
 import { db, getNowUnix } from '../db.js';
-import { getVectorMemorySettings, updateVectorMemorySettings } from './vector-memory-settings.js';
 import { ensureMemoryDefaults, type MemorySpace } from './memory-foundation.js';
 import {
   assertQdrantReady,
@@ -74,7 +73,6 @@ export const migrateVectorMemoryToQdrant = async (
   source: VectorMigrationSource = pineconeSource(),
   target: VectorMigrationTarget = qdrantTarget(),
 ) => {
-  if (getVectorMemorySettings().storage !== 'pinecone') throw new Error('pinecone_is_not_active');
   await target.prepare();
   const users = db.prepare('SELECT id FROM users ORDER BY id').all() as Array<{ id: number }>;
   users.forEach(user => ensureMemoryDefaults(user.id));
@@ -191,7 +189,6 @@ export const migrateVectorMemoryToQdrant = async (
   if (copiedVectors !== sourceVectors) {
     throw new Error(`vector_migration_verification_failed:${sourceVectors}:${copiedVectors}`);
   }
-  updateVectorMemorySettings({ storage: 'qdrant' });
   return {
     ok: true,
     source: source.kind,

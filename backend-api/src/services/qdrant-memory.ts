@@ -1,10 +1,10 @@
 import { createHash } from 'node:crypto';
 import { QdrantClient } from '@qdrant/js-client-rest';
 import type { MemorySpace } from './memory-foundation.js';
+import { getVectorMemoryRuntimeSettings } from './vector-memory-settings.js';
 
 const QDRANT_URL = `${process.env.QDRANT_URL || 'http://127.0.0.1:6333'}`.trim();
 const QDRANT_API_KEY = `${process.env.QDRANT_API_KEY || ''}`.trim();
-export const QDRANT_COLLECTION = `${process.env.QDRANT_COLLECTION || 'chatter_memory'}`.trim();
 
 export type QdrantVectorInput = {
   id: string;
@@ -13,7 +13,9 @@ export type QdrantVectorInput = {
 };
 
 let client: QdrantClient | null = null;
-let knownDimension: number | null = null;
+const knownDimensions = new Map<string, number>();
+
+const activeCollection = () => getVectorMemoryRuntimeSettings().activeCollection;
 
 export const getQdrantClient = () => {
   if (!client) {
@@ -33,7 +35,7 @@ const vectorSizeFromCollection = (collection: unknown) => {
   return Number(vectors?.size || 0);
 };
 
-const ensurePayloadIndexes = async () => {
+const ensurePayloadIndexes = async (collectionName: string) => {
   const qdrant = getQdrantClient();
   const indexes: Array<[string, 'integer' | 'keyword']> = [
     ['user_id', 'integer'],
@@ -42,7 +44,7 @@ const ensurePayloadIndexes = async () => {
   ];
   for (const [field_name, field_schema] of indexes) {
     try {
-      await qdrant.createPayloadIndex(QDRANT_COLLECTION, { field_name, field_schema, wait: true });
+      await qdrant.createPayloadIndex(collectionName, { field_name, field_schema, wait: true });
     } catch (error) {
       if (!isAlreadyExists(error)) throw error;
     }
@@ -53,17 +55,18 @@ export const assertQdrantReady = async () => {
   await getQdrantClient().getCollections();
 };
 
-export const ensureQdrantCollection = async (dimension: number) => {
+export const ensureQdrantCollection = async (dimension: number, collectionName = activeCollection()) => {
   if (!Number.isSafeInteger(dimension) || dimension <= 0) throw new Error('invalid_vector_dimension');
-  if (knownDimension !== null) {
+  const knownDimension = knownDimensions.get(collectionName);
+  if (knownDimension !== undefined) {
     if (knownDimension !== dimension) throw new Error(`qdrant_dimension_mismatch:${knownDimension}:${dimension}`);
     return;
   }
   const qdrant = getQdrantClient();
-  const exists = await qdrant.collectionExists(QDRANT_COLLECTION);
+  const exists = await qdrant.collectionExists(collectionName);
   if (!exists.exists) {
     try {
-      await qdrant.createCollection(QDRANT_COLLECTION, {
+      await qdrant.createCollection(collectionName, {
         vectors: { size: dimension, distance: 'Cosine', on_disk: true },
         hnsw_config: { on_disk: true },
         on_disk_payload: true,
@@ -72,13 +75,30 @@ export const ensureQdrantCollection = async (dimension: number) => {
       if (!isAlreadyExists(error)) throw error;
     }
   }
-  const collection = await qdrant.getCollection(QDRANT_COLLECTION);
+  const collection = await qdrant.getCollection(collectionName);
   const actualDimension = vectorSizeFromCollection(collection);
   if (actualDimension !== dimension) {
     throw new Error(`qdrant_dimension_mismatch:${actualDimension}:${dimension}`);
   }
-  knownDimension = actualDimension;
-  await ensurePayloadIndexes();
+  knownDimensions.set(collectionName, actualDimension);
+  await ensurePayloadIndexes(collectionName);
+};
+
+export const getQdrantCollectionInfo = async (collectionName: string) => {
+  const exists = await getQdrantClient().collectionExists(collectionName);
+  if (!exists.exists) return null;
+  const collection = await getQdrantClient().getCollection(collectionName);
+  return {
+    dimension: vectorSizeFromCollection(collection),
+    pointCount: Number((collection as any)?.points_count || 0),
+  };
+};
+
+export const deleteQdrantCollection = async (collectionName: string) => {
+  const exists = await getQdrantClient().collectionExists(collectionName);
+  if (!exists.exists) return;
+  await getQdrantClient().deleteCollection(collectionName);
+  knownDimensions.delete(collectionName);
 };
 
 export const qdrantPointId = (userId: number, memorySpaceId: number, chunkId: string) => {
@@ -98,13 +118,14 @@ export const upsertQdrantVectors = async (
   space: Pick<MemorySpace, 'id'>,
   embeddingModel: string,
   vectors: QdrantVectorInput[],
+  collectionName = activeCollection(),
 ) => {
   if (!vectors.length) return [];
   const dimension = vectors[0].values.length;
   if (vectors.some(vector => !vector.values.length || vector.values.length !== dimension)) {
     throw new Error('vector_dimension_mismatch');
   }
-  await ensureQdrantCollection(dimension);
+  await ensureQdrantCollection(dimension, collectionName);
   const pointIds = vectors.map(vector => qdrantPointId(userId, space.id, vector.id));
   const points = vectors.map((vector, index) => ({
     id: pointIds[index],
@@ -119,7 +140,7 @@ export const upsertQdrantVectors = async (
     },
   }));
   for (let offset = 0; offset < points.length; offset += 100) {
-    await getQdrantClient().upsert(QDRANT_COLLECTION, {
+    await getQdrantClient().upsert(collectionName, {
       wait: true,
       points: points.slice(offset, offset + 100),
     });
@@ -127,11 +148,11 @@ export const upsertQdrantVectors = async (
   return pointIds;
 };
 
-export const verifyQdrantVectors = async (pointIds: string[]) => {
+export const verifyQdrantVectors = async (pointIds: string[], collectionName = activeCollection()) => {
   if (!pointIds.length) return true;
   const found = new Set<string>();
   for (let offset = 0; offset < pointIds.length; offset += 256) {
-    const points = await getQdrantClient().retrieve(QDRANT_COLLECTION, {
+    const points = await getQdrantClient().retrieve(collectionName, {
       ids: pointIds.slice(offset, offset + 256),
       with_payload: false,
       with_vector: false,
@@ -145,12 +166,13 @@ export const fetchQdrantVectors = async (
   userId: number,
   memorySpaceId: number,
   chunkIds: string[],
+  collectionName = activeCollection(),
 ): Promise<QdrantVectorInput[]> => {
   if (!chunkIds.length) return [];
   const byChunkId = new Map<string, QdrantVectorInput>();
   for (let offset = 0; offset < chunkIds.length; offset += 256) {
     const batch = chunkIds.slice(offset, offset + 256);
-    const points = await getQdrantClient().retrieve(QDRANT_COLLECTION, {
+    const points = await getQdrantClient().retrieve(collectionName, {
       ids: batch.map(chunkId => qdrantPointId(userId, memorySpaceId, chunkId)),
       with_payload: true,
       with_vector: true,
@@ -170,18 +192,18 @@ export const fetchQdrantVectors = async (
   });
 };
 
-export const deleteQdrantChunks = async (userId: number, memorySpaceId: number, chunkIds: string[]) => {
+export const deleteQdrantChunks = async (userId: number, memorySpaceId: number, chunkIds: string[], collectionName = activeCollection()) => {
   if (!chunkIds.length) return;
-  await getQdrantClient().delete(QDRANT_COLLECTION, {
+  await getQdrantClient().delete(collectionName, {
     wait: true,
     points: chunkIds.map(chunkId => qdrantPointId(userId, memorySpaceId, chunkId)),
   });
 };
 
-export const deleteQdrantSpace = async (userId: number, memorySpaceId: number) => {
-  const exists = await getQdrantClient().collectionExists(QDRANT_COLLECTION);
+export const deleteQdrantSpace = async (userId: number, memorySpaceId: number, collectionName = activeCollection()) => {
+  const exists = await getQdrantClient().collectionExists(collectionName);
   if (!exists.exists) return;
-  await getQdrantClient().delete(QDRANT_COLLECTION, {
+  await getQdrantClient().delete(collectionName, {
     wait: true,
     filter: {
       must: [
@@ -192,10 +214,10 @@ export const deleteQdrantSpace = async (userId: number, memorySpaceId: number) =
   });
 };
 
-export const deleteQdrantUser = async (userId: number) => {
-  const exists = await getQdrantClient().collectionExists(QDRANT_COLLECTION);
+export const deleteQdrantUser = async (userId: number, collectionName = activeCollection()) => {
+  const exists = await getQdrantClient().collectionExists(collectionName);
   if (!exists.exists) return;
-  await getQdrantClient().delete(QDRANT_COLLECTION, {
+  await getQdrantClient().delete(collectionName, {
     wait: true,
     filter: { must: [{ key: 'user_id', match: { value: Math.floor(userId) } }] },
   });
@@ -207,9 +229,10 @@ export const queryQdrantVectors = async (
   embeddingModel: string,
   queryVector: number[],
   limit: number,
+  collectionName = activeCollection(),
 ) => {
-  await ensureQdrantCollection(queryVector.length);
-  const result = await getQdrantClient().query(QDRANT_COLLECTION, {
+  await ensureQdrantCollection(queryVector.length, collectionName);
+  const result = await getQdrantClient().query(collectionName, {
     query: queryVector,
     limit,
     with_payload: true,

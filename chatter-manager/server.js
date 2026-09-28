@@ -39,6 +39,13 @@ const LEGACY_IMAGE_ENV_KEYS = [
   'IMAGE_GEN_QUALITY',
   'IMAGE_GEN_SUPPORTED_PARAMETERS',
 ];
+const LEGACY_VECTOR_MEMORY_ENV_KEYS = [
+  'TIMEWEB_EMBED_BASE_URL',
+  'TIMEWEB_EMBED_API_KEY',
+  'TIMEWEB_EMBED_MODEL',
+  'VECTOR_EMBED_MODEL',
+  'QDRANT_COLLECTION',
+];
 
 function openRouterCacheKey(url) {
   return `GET:${url}`;
@@ -561,6 +568,18 @@ function removeLegacyImageGenerationEnv() {
   if (changed) writeEnv(BACKEND_ENV_FILE, backendEnv);
 }
 
+function removeLegacyVectorMemoryEnv() {
+  const backendEnv = parseEnv(BACKEND_ENV_FILE);
+  let changed = false;
+  for (const key of LEGACY_VECTOR_MEMORY_ENV_KEYS) {
+    if (Object.prototype.hasOwnProperty.call(backendEnv, key)) {
+      delete backendEnv[key];
+      changed = true;
+    }
+  }
+  if (changed) writeEnv(BACKEND_ENV_FILE, backendEnv);
+}
+
 function mergeProviderModels(input, existing, label, { required = false } = {}) {
   if (!Array.isArray(input)) return existing;
   if (required && input.length === 0) throw new Error(`${label} requires at least one model`);
@@ -761,20 +780,8 @@ function saveSettings(input) {
     pineconeInput.indexName ?? backendEnv.PINECONE_INDEX_NAME ?? 'bot-memory',
     'Pinecone index name'
   );
-  backendEnv.TIMEWEB_EMBED_BASE_URL = normalizeUrl(
-    pineconeInput.embeddingBaseUrl ?? backendEnv.TIMEWEB_EMBED_BASE_URL ?? proModels[0]?.baseUrl,
-    'Embedding API URL',
-    { allowEmpty: false }
-  );
-  backendEnv.TIMEWEB_EMBED_API_KEY = mergeSecret(
-    pineconeInput.embeddingApiKey,
-    backendEnv.TIMEWEB_EMBED_API_KEY,
-    'Embedding API key'
-  );
-  backendEnv.TIMEWEB_EMBED_MODEL = validateEnvPart(
-    pineconeInput.embeddingModel ?? backendEnv.TIMEWEB_EMBED_MODEL ?? backendEnv.VECTOR_EMBED_MODEL ?? 'text-embedding-3-small',
-    'Embedding model'
-  );
+  // Embedding runtime settings live in the backend DB. Legacy env values are
+  // read once by the backend and removed after that migration is confirmed.
   backendEnv.TAVILY_API_BASE_URL = normalizeUrl(
     webSearchInput.baseUrl ?? backendEnv.TAVILY_API_BASE_URL ?? 'https://api.tavily.com',
     'Web Search API URL',
@@ -2417,6 +2424,19 @@ async function handleRequest(req, res) {
       // Keep the safe env-derived default while backend is temporarily unavailable.
     }
     try {
+      const vectorRuntime = await backendInternalRequest('/internal/admin/vector-memory/settings');
+      settings.pinecone = {
+        ...settings.pinecone,
+        embeddingBaseUrl: vectorRuntime.baseUrl || '',
+        embeddingApiKey: '',
+        hasEmbeddingApiKey: vectorRuntime.hasApiKey === true,
+        embeddingModel: vectorRuntime.model || '',
+      };
+      removeLegacyVectorMemoryEnv();
+    } catch {
+      // Keep the safe env-derived default while backend is temporarily unavailable.
+    }
+    try {
       const runtime = await backendInternalRequest('/internal/admin/web-search/runtime');
       settings.webSearch.enabled = runtime.enabled === true;
       settings.webSearch.searxngEnabled = runtime.searxngEnabled === true;
@@ -2878,6 +2898,21 @@ async function handleRequest(req, res) {
     }
   }
 
+  if (req.method === 'GET' && pathname === '/api/openrouter/embedding-models') {
+    const query = `${url.searchParams.get('q') || ''}`.trim().toLowerCase();
+    if (!query || query.length < 2) return sendJson(res, 400, { error: 'query_too_short' });
+    try {
+      const data = await openRouterFetch('/embeddings/models');
+      const models = Array.isArray(data?.data) ? data.data : [];
+      return sendJson(res, 200, {
+        ...data,
+        data: models.filter(model => `${model?.id || ''} ${model?.name || ''}`.toLowerCase().includes(query)),
+      });
+    } catch (error) {
+      return sendJson(res, 502, { error: error.message || 'openrouter_embedding_models_failed' });
+    }
+  }
+
   if (req.method === 'GET' && pathname === '/api/openrouter/image-models') {
     const query = `${url.searchParams.get('q') || ''}`.trim();
     if (!query || query.length < 2) return sendJson(res, 400, { error: 'query_too_short' });
@@ -2955,7 +2990,9 @@ async function handleRequest(req, res) {
   if (pathname === '/api/vector-memory/settings') {
     if (req.method === 'GET') {
       try {
-        return sendJson(res, 200, await backendInternalRequest('/internal/admin/vector-memory/settings'));
+        const runtime = await backendInternalRequest('/internal/admin/vector-memory/settings');
+        removeLegacyVectorMemoryEnv();
+        return sendJson(res, 200, runtime);
       } catch (error) {
         return sendJson(res, 502, { error: error.message || 'vector_memory_settings_failed' });
       }
@@ -2969,6 +3006,47 @@ async function handleRequest(req, res) {
       } catch (error) {
         return sendJson(res, 400, { error: error.message || 'vector_memory_settings_save_failed' });
       }
+    }
+  }
+
+  if (req.method === 'GET' && pathname === '/api/vector-memory/collections') {
+    try {
+      return sendJson(res, 200, await backendInternalRequest('/internal/admin/vector-memory/collections'));
+    } catch (error) {
+      return sendJson(res, 502, { error: error.message || 'vector_memory_collections_failed' });
+    }
+  }
+
+  if (req.method === 'POST' && pathname === '/api/vector-memory/migrate-embedding') {
+    const body = await readJson(req);
+    try {
+      return sendJson(res, 200, await backendInternalRequest('/internal/admin/vector-memory/migrate-embedding', {
+        method: 'POST', body: JSON.stringify(body), timeoutMs: 30 * 60 * 1000,
+      }));
+    } catch (error) {
+      return sendJson(res, 400, { error: error.message || 'vector_memory_embedding_migration_failed' });
+    }
+  }
+
+  const vectorCollectionMatch = pathname.match(/^\/api\/vector-memory\/collections\/([^/]+)$/);
+  if (vectorCollectionMatch) {
+    const name = encodeURIComponent(decodeURIComponent(vectorCollectionMatch[1]));
+    if (req.method === 'DELETE') {
+      try {
+        return sendJson(res, 200, await backendInternalRequest(`/internal/admin/vector-memory/collections/${name}`, { method: 'DELETE' }));
+      } catch (error) {
+        return sendJson(res, 400, { error: error.message || 'vector_memory_collection_delete_failed' });
+      }
+    }
+  }
+
+  const activateVectorCollectionMatch = pathname.match(/^\/api\/vector-memory\/collections\/([^/]+)\/activate$/);
+  if (req.method === 'POST' && activateVectorCollectionMatch) {
+    const name = encodeURIComponent(decodeURIComponent(activateVectorCollectionMatch[1]));
+    try {
+      return sendJson(res, 200, await backendInternalRequest(`/internal/admin/vector-memory/collections/${name}/activate`, { method: 'POST' }));
+    } catch (error) {
+      return sendJson(res, 400, { error: error.message || 'vector_memory_collection_activate_failed' });
     }
   }
 

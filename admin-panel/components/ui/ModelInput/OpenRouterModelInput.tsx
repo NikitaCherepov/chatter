@@ -13,6 +13,7 @@ import {
 
 type Props = {
   value: string;
+  catalog?: 'chat' | 'embeddings';
   onSelect: (
     modelId: string,
     prices: ModelPrices | null,
@@ -26,7 +27,7 @@ type Props = {
  * (/api/openrouter/models?q=...) and lets the user pick one. Shows modality
  * and context length hints under each option.
  */
-export function OpenRouterModelInput({ value, onSelect }: Props) {
+export function OpenRouterModelInput({ value, onSelect, catalog = 'chat' }: Props) {
   const { t } = useTranslation();
   const [options, setOptions] = useState<SelectOption[]>([]);
   // Cache full pricing objects by model id so we don't refetch on every select.
@@ -53,7 +54,7 @@ export function OpenRouterModelInput({ value, onSelect }: Props) {
           supported_parameters?: string[];
         };
         const data = await api<{ data?: ApiModel[] }>(
-          `/api/openrouter/models?q=${encodeURIComponent(trimmed)}`
+          `/api/openrouter/${catalog === 'embeddings' ? 'embedding-models' : 'models'}?q=${encodeURIComponent(trimmed)}`
         );
         const list = (data?.data || [])
           .map((m) => {
@@ -88,7 +89,7 @@ export function OpenRouterModelInput({ value, onSelect }: Props) {
         setOptions([]);
       }
     }, 400);
-  }, [t]);
+  }, [catalog, t]);
 
   const optionsWithCurrent = useMemo(() => {
     if (!value) return options;

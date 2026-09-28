@@ -3,17 +3,31 @@ import os from 'node:os';
 import path from 'node:path';
 
 process.env.API_DB_PATH = path.join(os.tmpdir(), `chatter-vector-migration-${process.pid}-${Date.now()}.sqlite`);
+process.env.ENCRYPTION_KEY = 'vector-memory-test-encryption-key';
+process.env.TIMEWEB_EMBED_BASE_URL = 'https://embeddings.example.test/v1';
+process.env.TIMEWEB_EMBED_API_KEY = 'legacy-embedding-secret';
+process.env.TIMEWEB_EMBED_MODEL = 'test/embedding-model';
+process.env.QDRANT_COLLECTION = 'test_memory_collection';
 
 const { db } = await import('../src/db.js');
 const { ensureMemoryDefaults } = await import('../src/services/memory-foundation.js');
 const { migrateVectorMemoryToQdrant } = await import('../src/services/vector-memory-migration.js');
-const { getVectorMemorySettings, updateVectorMemorySettings } = await import('../src/services/vector-memory-settings.js');
+const { getVectorMemoryApiKey, getVectorMemorySettings } = await import('../src/services/vector-memory-settings.js');
 
 assert.equal(
   db.prepare("SELECT COUNT(*) AS count FROM sqlite_master WHERE type = 'table' AND name = 'memory_vectors'").get().count,
   0,
   'obsolete SQLite vector table must not exist',
 );
+
+const seededSettings = getVectorMemorySettings();
+assert.equal(seededSettings.baseUrl, 'https://embeddings.example.test/v1');
+assert.equal(seededSettings.model, 'test/embedding-model');
+assert.equal(seededSettings.activeCollection, 'test_memory_collection');
+assert.ok(seededSettings.apiKeyId, 'legacy key is moved into the encrypted vault');
+assert.equal(getVectorMemoryApiKey(seededSettings.apiKeyId), 'legacy-embedding-secret');
+const storedKey = db.prepare('SELECT key_encrypted FROM api_keys WHERE id = ?').get(seededSettings.apiKeyId) as { key_encrypted: string };
+assert.equal(storedKey.key_encrypted.includes('legacy-embedding-secret'), false, 'plaintext key is not stored');
 
 db.prepare('INSERT INTO users (id, name, language) VALUES (?, ?, ?)').run(101, 'Migration user', 'en');
 ensureMemoryDefaults(101);
@@ -49,14 +63,13 @@ const result = await migrateVectorMemoryToQdrant(source, target);
 assert.equal(result.verified, true);
 assert.equal(result.source_vectors, 2);
 assert.equal(result.copied_vectors, 2);
-assert.equal(getVectorMemorySettings().storage, 'qdrant', 'storage switches only after verification');
+assert.equal(getVectorMemorySettings().storage, 'qdrant', 'runtime storage is local Qdrant');
 assert.equal(copied.size, 2);
 const record = db.prepare('SELECT text, source FROM memory_records WHERE id = ?').get('fact_old') as { text: string; source: string };
 assert.equal(record.source, 'legacy');
 assert.equal(record.text, 'Первая часть\n\nВторая часть');
 assert.equal((db.prepare('SELECT COUNT(*) AS count FROM memory_chunks WHERE memory_record_id = ?').get('fact_old') as { count: number }).count, 2);
 
-updateVectorMemorySettings({ storage: 'pinecone' });
 const invalidSource = {
   kind: 'invalid-test-pinecone',
   async *readNamespace(namespace: string) {
@@ -68,7 +81,7 @@ const invalidSource = {
   },
 };
 await assert.rejects(() => migrateVectorMemoryToQdrant(invalidSource, target), /vector_dimension_mismatch/);
-assert.equal(getVectorMemorySettings().storage, 'pinecone', 'failed migration must not switch storage');
+assert.equal(getVectorMemorySettings().storage, 'qdrant', 'failed legacy import must not change runtime storage');
 
 const unverifiableSource = {
   kind: 'unverifiable-test-pinecone',
@@ -83,6 +96,6 @@ const unverifiableTarget = {
   async verify() { return false; },
 };
 await assert.rejects(() => migrateVectorMemoryToQdrant(unverifiableSource, unverifiableTarget), /vector_migration_verification_failed/);
-assert.equal(getVectorMemorySettings().storage, 'pinecone', 'unverified target must not become active');
+assert.equal(getVectorMemorySettings().storage, 'qdrant', 'unverified legacy import must not change runtime storage');
 
 console.log('vector memory migration tests passed');
