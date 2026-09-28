@@ -193,7 +193,36 @@
       "help": "Import data from other applications. Chatter backup and export will be added here later.",
       "sillyTavern": {
         "title": "Move from SillyTavern",
-        "help": "Import entities separately now. A full backup import will combine these steps later."
+        "help": "Import the complete backup archive at once, or move individual data manually."
+      },
+      "backup": {
+        "title": "Full SillyTavern backup",
+        "help": "Imports characters, personas with avatars, and private chats from a SillyTavern data ZIP.",
+        "button": "Choose ZIP backup",
+        "reading": "Checking archive...",
+        "previewTitle": "Import SillyTavern backup",
+        "previewHelp": "Review the detected data before importing it.",
+        "newCount": "New: {{count}}",
+        "existingCount": "Already exists: {{count}}",
+        "updateCount": "Will be updated: {{count}}",
+        "avatarCount": "Avatars: {{count}}",
+        "confirm": "Import",
+        "importing": "Importing...",
+        "success": "Import complete: {{characters}} characters, {{personas}} personas, {{chats}} chats",
+        "importedResult": "Characters created: {{characters}}, personas processed: {{personas}}, chats created: {{chats}}",
+        "warnings": {
+          "group_chats_not_supported": "Group chats are not imported yet.",
+          "worlds_not_supported": "Lorebooks and World Info are not imported yet.",
+          "other_data_ignored": "Other settings, extensions, and service files in the archive do not change Chatter.",
+          "personas_not_found": "No personas were found in settings.json.",
+          "persona_avatar_errors": "Some persona avatars could not be imported."
+        },
+        "errors": {
+          "format": "Select a SillyTavern ZIP backup",
+          "size": "The archive must be no larger than 256 MB",
+          "invalid": "Could not read the SillyTavern backup",
+          "import": "Could not import the SillyTavern backup"
+        }
       },
       "character": {
         "title": "Character Card",

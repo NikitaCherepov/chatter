@@ -95,6 +95,11 @@ import { attachMediaAsset, deleteMediaAssetIfUnreferenced, detachImageUrlFromEnt
 import { importCharacterCard, listCharacterCardPromptSummaries, MAX_CHARACTER_CARD_BYTES, parseCharacterCard, startCharacterCardChat, toCharacterCardPreview } from './services/character-card-import.js';
 import { importSillyTavernPersonas, previewSillyTavernPersonas } from './services/persona-import.js';
 import { importSillyTavernChats, previewSillyTavernChats } from './services/sillytavern-chat-import.js';
+import {
+  importSillyTavernBackup,
+  MAX_SILLYTAVERN_BACKUP_BYTES,
+  previewSillyTavernBackup,
+} from './services/sillytavern-backup-import.js';
 import { canUserReadRegisteredImage } from './services/media-access.js';
 import { resolveAttachmentFile, MAX_RAW_FILE_SIZE as MAX_ATTACHMENT_BYTES } from './services/attachment-storage.js';
 import { materializeAssetInput } from './services/response-attachments.js';
@@ -1523,6 +1528,31 @@ app.post('/api/v1/data/import/sillytavern/chats', (req: AuthedRequest, res: any)
     const code = error?.message || 'sillytavern_chats_import_failed';
     const status = code.includes('too_large') ? 413 : 400;
     return res.status(status).json({ error: code });
+  }
+});
+
+const sillyTavernBackupBody = express.raw({
+  type: ['application/zip', 'application/octet-stream'],
+  limit: MAX_SILLYTAVERN_BACKUP_BYTES,
+});
+
+app.post('/api/v1/data/import/sillytavern/backup/preview', sillyTavernBackupBody, (req: AuthedRequest, res: any) => {
+  try {
+    if (!Buffer.isBuffer(req.body)) return res.status(400).json({ error: 'sillytavern_backup_required' });
+    return res.json({ preview: previewSillyTavernBackup(accountIdFromRequest(req), req.body) });
+  } catch (error: any) {
+    const code = error?.message || 'sillytavern_backup_preview_failed';
+    return res.status(code.includes('too_large') || code.includes('too_many') ? 413 : 400).json({ error: code });
+  }
+});
+
+app.post('/api/v1/data/import/sillytavern/backup', sillyTavernBackupBody, async (req: AuthedRequest, res: any) => {
+  try {
+    if (!Buffer.isBuffer(req.body)) return res.status(400).json({ error: 'sillytavern_backup_required' });
+    return res.status(201).json({ result: await importSillyTavernBackup(accountIdFromRequest(req), req.body) });
+  } catch (error: any) {
+    const code = error?.message || 'sillytavern_backup_import_failed';
+    return res.status(code.includes('too_large') || code.includes('too_many') ? 413 : 400).json({ error: code });
   }
 });
 

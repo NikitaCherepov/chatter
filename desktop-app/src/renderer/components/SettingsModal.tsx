@@ -44,6 +44,7 @@ import { PromptImageCropDialog } from './PromptImageCropDialog';
 import { CharacterCardImportDialog } from './CharacterCardImportDialog';
 import { PersonaImportDialog } from './PersonaImportDialog';
 import { SillyTavernChatImportDialog } from './SillyTavernChatImportDialog';
+import { SillyTavernBackupImportDialog } from './SillyTavernBackupImportDialog';
 import telegramIcon from '../assets/integrations/telegram.webp';
 import s from './SettingsModal.module.scss';
 
@@ -324,6 +325,14 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
   const [personaImporting, setPersonaImporting] = useState(false);
   const [personaImportDialog, setPersonaImportDialog] = useState<{ file: api.CharacterCardFile; preview: api.PersonaImportPreview } | null>(null);
   const [lastPersonaImport, setLastPersonaImport] = useState<{ created: number; updated: number; activePersonaId: number | null } | null>(null);
+  const sillyTavernBackupInputRef = useRef<HTMLInputElement>(null);
+  const [sillyTavernBackupReading, setSillyTavernBackupReading] = useState(false);
+  const [sillyTavernBackupImporting, setSillyTavernBackupImporting] = useState(false);
+  const [sillyTavernBackupDialog, setSillyTavernBackupDialog] = useState<{
+    file: File;
+    preview: api.SillyTavernBackupPreview;
+  } | null>(null);
+  const [lastBackupImport, setLastBackupImport] = useState<api.SillyTavernBackupImportResult | null>(null);
   const sillyTavernChatInputRef = useRef<HTMLInputElement>(null);
   const [sillyTavernChatsReading, setSillyTavernChatsReading] = useState(false);
   const [sillyTavernChatsImporting, setSillyTavernChatsImporting] = useState(false);
@@ -1121,6 +1130,54 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
       toast.error(t('settings.account.personas.import.errors.import'));
     } finally {
       setPersonaImporting(false);
+    }
+  };
+
+  const handleSillyTavernBackupSelect = async (file: File | undefined) => {
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith('.zip')) {
+      toast.error(t('settings.data.backup.errors.format'));
+      return;
+    }
+    if (file.size > 256 * 1024 * 1024) {
+      toast.error(t('settings.data.backup.errors.size'));
+      return;
+    }
+    setSillyTavernBackupReading(true);
+    try {
+      const { preview } = await api.previewSillyTavernBackup(file);
+      setSillyTavernBackupDialog({ file, preview });
+    } catch {
+      toast.error(t('settings.data.backup.errors.invalid'));
+    } finally {
+      setSillyTavernBackupReading(false);
+      if (sillyTavernBackupInputRef.current) sillyTavernBackupInputRef.current.value = '';
+    }
+  };
+
+  const handleSillyTavernBackupImport = async () => {
+    if (!sillyTavernBackupDialog) return;
+    setSillyTavernBackupImporting(true);
+    try {
+      const { result } = await api.importSillyTavernBackup(sillyTavernBackupDialog.file);
+      setLastBackupImport(result);
+      setSillyTavernBackupDialog(null);
+      await loadPersonas();
+      const promptData = await api.getPrompts();
+      setPrompts(promptData.prompts);
+      setCustomPrompts(promptData.custom_prompts || []);
+      setSelectedPromptId(promptData.selected_prompt_id ?? promptData.prompts.find(prompt => prompt.is_default === 1)?.id ?? null);
+      window.dispatchEvent(new Event('chatter:personas-changed'));
+      await onAccountChanged?.();
+      toast.success(t('settings.data.backup.success', {
+        characters: result.characters.created,
+        personas: result.personas.created + result.personas.updated,
+        chats: result.chats.created,
+      }));
+    } catch {
+      toast.error(t('settings.data.backup.errors.import'));
+    } finally {
+      setSillyTavernBackupImporting(false);
     }
   };
 
@@ -2209,6 +2266,39 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
               <div className={s.dataImportGrid}>
                 <section className={s.dataImportCard}>
                   <div>
+                    <h4>{t('settings.data.backup.title')}</h4>
+                    <p>{t('settings.data.backup.help')}</p>
+                  </div>
+                  <div className={s.dataImportActions}>
+                    <button
+                      className={s.cancelBtn}
+                      type="button"
+                      onClick={() => sillyTavernBackupInputRef.current?.click()}
+                      disabled={sillyTavernBackupReading || sillyTavernBackupImporting}
+                    >
+                      {sillyTavernBackupReading ? t('settings.data.backup.reading') : t('settings.data.backup.button')}
+                    </button>
+                    <input
+                      ref={sillyTavernBackupInputRef}
+                      className={s.promptImageInput}
+                      type="file"
+                      accept=".zip,application/zip"
+                      onChange={event => void handleSillyTavernBackupSelect(event.target.files?.[0])}
+                    />
+                  </div>
+                  {lastBackupImport && (
+                    <div className={s.dataImportResult}>
+                      <span>{t('settings.data.backup.importedResult', {
+                        characters: lastBackupImport.characters.created,
+                        personas: lastBackupImport.personas.created + lastBackupImport.personas.updated,
+                        chats: lastBackupImport.chats.created,
+                      })}</span>
+                    </div>
+                  )}
+                </section>
+
+                <section className={s.dataImportCard}>
+                  <div>
                     <h4>{t('settings.data.character.title')}</h4>
                     <p>{t('settings.data.character.help')}</p>
                   </div>
@@ -3112,6 +3202,14 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
           importing={personaImporting}
           onCancel={() => !personaImporting && setPersonaImportDialog(null)}
           onImport={handlePersonaImport}
+        />
+      )}
+      {sillyTavernBackupDialog && (
+        <SillyTavernBackupImportDialog
+          preview={sillyTavernBackupDialog.preview}
+          importing={sillyTavernBackupImporting}
+          onCancel={() => !sillyTavernBackupImporting && setSillyTavernBackupDialog(null)}
+          onImport={handleSillyTavernBackupImport}
         />
       )}
       {sillyTavernChatDialog && (

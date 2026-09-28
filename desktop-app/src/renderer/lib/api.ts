@@ -1865,6 +1865,37 @@ export type SillyTavernChatPreview = {
   warnings: string[];
 };
 
+export type SillyTavernBackupPreview = {
+  characters: { count: number; create_count: number; existing_count: number; names: string[] };
+  personas: { count: number; create_count: number; update_count: number; avatar_count: number };
+  chats: { count: number; create_count: number; existing_count: number; message_count: number };
+  ignored: { group_chats: number; worlds: number; other: number };
+  warnings: string[];
+};
+
+export type SillyTavernBackupImportResult = {
+  characters: { created: number; existing: number };
+  personas: { created: number; updated: number; avatars: number; avatar_errors: number };
+  chats: { created: number; existing: number; message_count: number; chat_ids: number[] };
+  warnings: string[];
+};
+
+export async function previewSillyTavernBackup(data: Blob): Promise<{ preview: SillyTavernBackupPreview }> {
+  return apiFetch('/api/v1/data/import/sillytavern/backup/preview', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/zip' },
+    body: data,
+  });
+}
+
+export async function importSillyTavernBackup(data: Blob): Promise<{ result: SillyTavernBackupImportResult }> {
+  return apiFetch('/api/v1/data/import/sillytavern/backup', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/zip' },
+    body: data,
+  });
+}
+
 export async function previewSillyTavernChats(files: SillyTavernChatFile[]): Promise<{ previews: SillyTavernChatPreview[] }> {
   return apiFetch('/api/v1/data/import/sillytavern/chats/preview', { method: 'POST', body: JSON.stringify({ files }) });
 }
