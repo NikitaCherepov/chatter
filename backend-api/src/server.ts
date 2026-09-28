@@ -51,7 +51,6 @@ import { runPhotoAnalyzeTurn } from './services/photo.js';
 import { migratePendingAccountNamespaces, VectorMemoryService } from './services/vector-memory.js';
 import {
   getVectorMemoryApiKeyUsage,
-  getVectorMemoryRuntimeSettings,
   getVectorMemorySettings,
   replaceVectorMemoryApiKeyReference,
   updateVectorMemorySettings,
@@ -5417,10 +5416,6 @@ app.put('/internal/admin/image-generation/settings', internalAuth, (req, res) =>
 
 app.get('/internal/admin/vector-memory/settings', internalAuth, (_req, res) => {
   return res.json(getVectorMemorySettings());
-});
-
-app.get('/internal/admin/vector-memory/runtime', internalAuth, (_req, res) => {
-  return res.json(getVectorMemoryRuntimeSettings());
 });
 
 app.put('/internal/admin/vector-memory/settings', internalAuth, (req, res) => {

@@ -2137,10 +2137,15 @@ async function listOpenRouterImageModels(query) {
 }
 
 async function getOpenRouterEmbeddingConfig() {
-  const runtime = await backendInternalRequest('/internal/admin/vector-memory/runtime');
-  const apiKey = `${runtime?.apiKey || ''}`.trim();
+  const settings = await backendInternalRequest('/internal/admin/vector-memory/settings');
+  const apiKeyId = Number(settings?.apiKeyId);
+  if (!Number.isInteger(apiKeyId) || apiKeyId <= 0) {
+    throw new Error('OpenRouter API key is required for embedding models');
+  }
+  const storedKey = await backendInternalRequest(`/internal/admin/api-keys/${encodeURIComponent(apiKeyId)}`);
+  const apiKey = `${storedKey?.key || ''}`.trim();
   if (!apiKey) throw new Error('OpenRouter API key is required for embedding models');
-  const baseUrl = (`${runtime?.baseUrl || ''}`.trim() || OPENROUTER_BASE_URL).replace(/\/+$/, '');
+  const baseUrl = (`${settings?.baseUrl || ''}`.trim() || OPENROUTER_BASE_URL).replace(/\/+$/, '');
   return { apiKey, baseUrl };
 }
 
