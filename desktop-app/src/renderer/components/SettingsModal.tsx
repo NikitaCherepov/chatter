@@ -2296,7 +2296,11 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
                     </div>
                   )}
                 </section>
+              </div>
 
+              <div className={s.macroFormDivider} />
+
+              <div className={s.dataImportGrid}>
                 <section className={s.dataImportCard}>
                   <div>
                     <h4>{t('settings.data.character.title')}</h4>
