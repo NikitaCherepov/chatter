@@ -345,8 +345,19 @@ export function PineconePage({ onBack }: {
           )}
           <FormField label={t('integrations.pinecone.embedding.priceLabel')}>
             <Input
+              type="number"
+              min="0"
+              step="any"
               value={draft.inputPricePerMillion ?? ''}
-              readOnly
+              readOnly={draft.provider === 'openrouter'}
+              onChange={event => {
+                if (draft.provider !== 'custom') return;
+                const value = event.target.value;
+                setDraft({
+                  ...draft,
+                  inputPricePerMillion: value === '' ? null : Number(value),
+                });
+              }}
               placeholder="—"
             />
           </FormField>
