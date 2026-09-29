@@ -78,6 +78,8 @@
     "saved": "saved",
     "notSet": "not set",
     "saving": "Applying…",
+    "save": "Save",
+    "savingChanges": "Saving…",
     "saveAndApply": "Save and apply",
     "error": "Error",
     "sectionReady": "Section ready",
@@ -87,6 +89,7 @@
     "coefficientLoadError": "Failed to load coefficients",
     "coefficientSaved": "Coefficient saved",
     "cancel": "Cancel",
+    "delete": "Delete",
     "on": "On",
     "off": "Off"
   },
@@ -319,7 +322,8 @@
         "apiKeyLabel": "Embedding provider API key",
         "migrateAction": "Re-embed and switch",
         "migrating": "Migrating…",
-        "migrationComplete": "New collection is active. Vectors: {{count}}."
+        "migrationComplete": "New collection is active. Vectors: {{count}}.",
+        "settingsSaved": "Embedding routing settings saved."
       },
       "collections": {
         "title": "Memory versions",

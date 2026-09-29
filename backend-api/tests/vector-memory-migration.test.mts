@@ -12,7 +12,11 @@ process.env.QDRANT_COLLECTION = 'test_memory_collection';
 const { db } = await import('../src/db.js');
 const { ensureMemoryDefaults } = await import('../src/services/memory-foundation.js');
 const { migrateVectorMemoryToQdrant } = await import('../src/services/vector-memory-migration.js');
-const { getVectorMemoryApiKey, getVectorMemorySettings } = await import('../src/services/vector-memory-settings.js');
+const {
+  getVectorMemoryApiKey,
+  getVectorMemorySettings,
+  updateVectorMemorySettings,
+} = await import('../src/services/vector-memory-settings.js');
 
 assert.equal(
   db.prepare("SELECT COUNT(*) AS count FROM sqlite_master WHERE type = 'table' AND name = 'memory_vectors'").get().count,
@@ -35,6 +39,38 @@ const collectionColumns = new Set(
 );
 assert.equal(collectionColumns.has('openrouter_provider_slug'), true);
 assert.equal(collectionColumns.has('input_price_per_million'), true);
+
+const routedSettings = updateVectorMemorySettings({
+  provider: 'openrouter',
+  baseUrl: 'https://openrouter.ai/api/v1',
+  openrouterProviderSlug: 'openai',
+  inputPricePerMillion: 0.02,
+  apiKeyId: seededSettings.apiKeyId,
+});
+assert.equal(routedSettings.model, seededSettings.model, 'saving routing must preserve the embedding model');
+assert.equal(routedSettings.provider, 'openrouter');
+assert.equal(routedSettings.openrouterProviderSlug, 'openai');
+assert.equal(routedSettings.inputPricePerMillion, 0.02);
+assert.throws(
+  () => updateVectorMemorySettings({ model: 'different/embedding-model' }),
+  /embedding_migration_required/,
+  'changing the embedding model still requires re-embedding',
+);
+const activeCollection = db.prepare(`
+  SELECT provider, base_url, model, openrouter_provider_slug, input_price_per_million
+  FROM vector_memory_collections WHERE collection_name = ?
+`).get(seededSettings.activeCollection) as {
+  provider: string;
+  base_url: string;
+  model: string;
+  openrouter_provider_slug: string | null;
+  input_price_per_million: number | null;
+};
+assert.equal(activeCollection.provider, 'openrouter');
+assert.equal(activeCollection.base_url, 'https://openrouter.ai/api/v1');
+assert.equal(activeCollection.model, seededSettings.model);
+assert.equal(activeCollection.openrouter_provider_slug, 'openai');
+assert.equal(activeCollection.input_price_per_million, 0.02);
 
 db.prepare('INSERT INTO users (id, name, language) VALUES (?, ?, ?)').run(101, 'Migration user', 'en');
 ensureMemoryDefaults(101);

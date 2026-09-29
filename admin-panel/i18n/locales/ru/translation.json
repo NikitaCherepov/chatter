@@ -78,6 +78,8 @@
     "saved": "сохранён",
     "notSet": "не задан",
     "saving": "Применяю…",
+    "save": "Сохранить",
+    "savingChanges": "Сохраняю…",
     "saveAndApply": "Сохранить и применить",
     "error": "Ошибка",
     "sectionReady": "Раздел подготовлен",
@@ -87,6 +89,7 @@
     "coefficientLoadError": "Не удалось загрузить коэффициенты",
     "coefficientSaved": "Коэффициент сохранён",
     "cancel": "Отмена",
+    "delete": "Удалить",
     "on": "Вкл",
     "off": "Выкл"
   },
@@ -319,7 +322,8 @@
         "apiKeyLabel": "API-ключ embedding-провайдера",
         "migrateAction": "Пересчитать и переключить",
         "migrating": "Перенос…",
-        "migrationComplete": "Новая коллекция активна. Векторов: {{count}}."
+        "migrationComplete": "Новая коллекция активна. Векторов: {{count}}.",
+        "settingsSaved": "Настройки маршрутизации embeddings сохранены."
       },
       "collections": {
         "title": "Версии памяти",

@@ -242,11 +242,7 @@ export const updateVectorMemorySettings = (patch: unknown): VectorMemoryPublicSe
   if (!next.baseUrl || !next.model || !next.apiKeyId) throw new Error('embedding_configuration_required');
   if (
     next.activeCollection !== current.activeCollection
-    || next.provider !== current.provider
-    || next.baseUrl !== current.baseUrl
     || next.model !== current.model
-    || next.openrouterProviderSlug !== current.openrouterProviderSlug
-    || next.inputPricePerMillion !== current.inputPricePerMillion
   ) {
     throw new Error('embedding_migration_required');
   }

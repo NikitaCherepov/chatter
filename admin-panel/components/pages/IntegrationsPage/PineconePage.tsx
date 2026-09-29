@@ -64,6 +64,7 @@ export function PineconePage({ onBack }: {
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
   const [pending, setPending] = useState<PendingAction | null>(null);
   const [busy, setBusy] = useState(false);
+  const [savingSettings, setSavingSettings] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [showCreateKey, setShowCreateKey] = useState(false);
@@ -93,14 +94,42 @@ export function PineconePage({ onBack }: {
     { value: '__create__', label: t('security.apiKeyCreateNew') },
   ], [apiKeys, t]);
 
-  const changed = Boolean(runtime && draft && (
+  const modelChanged = Boolean(runtime && draft && runtime.model !== draft.model);
+  const settingsChanged = Boolean(runtime && draft && (
     runtime.provider !== draft.provider
     || runtime.baseUrl !== draft.baseUrl
-    || runtime.model !== draft.model
     || runtime.openrouterProviderSlug !== draft.openrouterProviderSlug
     || runtime.inputPricePerMillion !== draft.inputPricePerMillion
     || runtime.apiKeyId !== draft.apiKeyId
   ));
+
+  const saveSettings = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!draft || modelChanged || !settingsChanged) return;
+    setBusy(true);
+    setSavingSettings(true);
+    setError('');
+    setMessage('');
+    try {
+      await api<RuntimeSettings>('/api/vector-memory/settings', {
+        method: 'PUT',
+        body: JSON.stringify({
+          provider: draft.provider,
+          baseUrl: draft.baseUrl,
+          openrouterProviderSlug: draft.openrouterProviderSlug,
+          inputPricePerMillion: draft.inputPricePerMillion,
+          apiKeyId: draft.apiKeyId,
+        }),
+      });
+      setMessage(t('integrations.pinecone.embedding.settingsSaved'));
+      await load();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    } finally {
+      setSavingSettings(false);
+      setBusy(false);
+    }
+  };
 
   const createKey = async () => {
     if (!newKeyName.trim() || !newKeyValue.trim()) return;
@@ -202,11 +231,13 @@ export function PineconePage({ onBack }: {
     <IntegrationDetailPage
       title={t('integrations.items.pinecone.name')}
       description={t('integrations.pinecone.pageDescription')}
-      saving={busy}
-      saveState=""
+      saving={savingSettings}
+      saveState={error ? `${t('common.error')}: ${error}` : message}
       onBack={onBack}
-      onSave={event => event.preventDefault()}
-      showSave={false}
+      onSave={saveSettings}
+      saveActionLabel={t('common.save')}
+      saveSavingLabel={t('common.savingChanges')}
+      saveDisabled={busy || modelChanged || !settingsChanged || !draft.baseUrl.trim() || !draft.model.trim() || !draft.apiKeyId}
     >
       <section className={styles.fieldSection}>
         <div className={styles.sectionTitle}>
@@ -319,16 +350,16 @@ export function PineconePage({ onBack }: {
               placeholder="—"
             />
           </FormField>
-          <button
-            type="button"
-            className={styles.checkButton}
-            disabled={busy || !changed || !draft.baseUrl.trim() || !draft.model.trim() || !draft.apiKeyId}
-            onClick={() => setPending({ type: 'migrate' })}
-          >
-            {t('integrations.pinecone.embedding.migrateAction')}
-          </button>
-          {message && <span className={styles.checkSuccess}>{message}</span>}
-          {error && <span className={styles.checkError}>{error}</span>}
+          {modelChanged && (
+            <button
+              type="button"
+              className={styles.checkButton}
+              disabled={busy || !draft.baseUrl.trim() || !draft.model.trim() || !draft.apiKeyId}
+              onClick={() => setPending({ type: 'migrate' })}
+            >
+              {t('integrations.pinecone.embedding.migrateAction')}
+            </button>
+          )}
         </div>
       </section>
 
