@@ -5,6 +5,8 @@ import { db } from '../db.js';
 import { resolveAccountId } from './accounts.js';
 import { getVectorMemoryRuntimeSettings, getVectorMemoryStorage } from './vector-memory-settings.js';
 import { beginVectorMemoryWrite, isVectorMemoryMigrationRunning } from './vector-memory-reembedding.js';
+import { chargeTokens } from './token-quota.js';
+import { countTokens } from './tokenizer.js';
 import {
   deleteQdrantChunks,
   deleteQdrantSpace,
@@ -122,16 +124,58 @@ const getOpenAIClient = (settings = getVectorMemoryRuntimeSettings()) => {
 };
 
 const getEmbeddingModel = () => getVectorMemoryRuntimeSettings().model;
-const createEmbeddings = (
+type EmbeddingChargeContext = {
+  userId: number;
+  chatId?: number | null;
+  route: 'memory:search' | 'memory:save' | 'memory:update';
+};
+
+const createEmbeddings = async (
   input: string | string[],
   settings = getVectorMemoryRuntimeSettings(),
-) => getOpenAIClient(settings).embeddings.create({
-  model: settings.model,
-  input,
-  ...(settings.openrouterProviderSlug
-    ? { provider: { only: [settings.openrouterProviderSlug], allow_fallbacks: false } }
-    : {}),
-} as any);
+  chargeContext?: EmbeddingChargeContext,
+) => {
+  const response = await getOpenAIClient(settings).embeddings.create({
+    model: settings.model,
+    input,
+    ...(settings.openrouterProviderSlug
+      ? { provider: { only: [settings.openrouterProviderSlug], allow_fallbacks: false } }
+      : {}),
+  } as any);
+  if (chargeContext) {
+    const fallbackTokens = (Array.isArray(input) ? input : [input])
+      .reduce((sum, item) => sum + countTokens(`${item || ''}`), 0);
+    const promptTokens = Math.max(0, Math.floor(Number(response?.usage?.prompt_tokens) || fallbackTokens));
+    const totalTokens = Math.max(promptTokens, Math.floor(Number(response?.usage?.total_tokens) || promptTokens));
+    const reportedCost = (response as any)?.usage?.cost;
+    const rawActualCost = reportedCost === null || reportedCost === undefined || reportedCost === ''
+      ? null
+      : Number(reportedCost);
+    chargeTokens({
+      userId: resolveAccountId(Math.floor(chargeContext.userId)),
+      chatId: chargeContext.chatId ?? null,
+      route: chargeContext.route,
+      modelId: settings.model,
+      modelName: settings.model,
+      providerName: settings.provider,
+      promptTokens,
+      completionTokens: 0,
+      cacheHitTokens: 0,
+      cacheMissTokens: promptTokens,
+      reasoningTokens: 0,
+      totalTokens,
+      upstreamProviderSlug: settings.openrouterProviderSlug,
+      actualCostUsd: rawActualCost !== null && Number.isFinite(rawActualCost) && rawActualCost >= 0
+        ? rawActualCost
+        : null,
+      pricingSource: 'vector-memory-settings',
+      inputPricePerMillion: settings.inputPricePerMillion,
+      outputPricePerMillion: null,
+      cacheReadPricePerMillion: null,
+    });
+  }
+  return response;
+};
 const assertMemoryWritable = () => {
   if (isVectorMemoryMigrationRunning()) throw new Error('vector_memory_migration_in_progress');
 };
@@ -152,10 +196,11 @@ const getPineconeIndex = () => {
 const getEmbedding = async (
   text: string,
   settings = getVectorMemoryRuntimeSettings(),
+  chargeContext?: EmbeddingChargeContext,
 ): Promise<number[]> => {
   const normalized = text.replace(/\n/g, ' ').trim();
   if (!normalized) throw new Error('text_required');
-  const response = await createEmbeddings(normalized, settings);
+  const response = await createEmbeddings(normalized, settings, chargeContext);
   const embedding = response?.data?.[0]?.embedding;
   if (!Array.isArray(embedding) || !embedding.length) {
     throw new Error('embedding_empty');
@@ -299,7 +344,12 @@ export class VectorMemoryService {
         // Приклеиваем тег к каждому чанку, чтобы каждый вектор "помнил" откуда он
         return `[Контекст: ${safeSource}] ${chunk}`.replace(/\n/g, ' ').trim();
       });
-      const embedResponse = await createEmbeddings(inputForEmbeddings);
+      const runtimeSettings = getVectorMemoryRuntimeSettings();
+      const embedResponse = await createEmbeddings(inputForEmbeddings, runtimeSettings, {
+        userId,
+        chatId: chatId ?? space.chat_id,
+        route: 'memory:save',
+      });
 
       const now = Math.floor(Date.now() / 1000);
       const baseId = `fact_${now}_${Math.random().toString(36).slice(2, 8)}`;
@@ -323,7 +373,7 @@ export class VectorMemoryService {
       });
 
       if (getVectorMemoryStorage() === 'qdrant') {
-        await upsertQdrantVectors(resolveAccountId(Math.floor(userId)), space, getEmbeddingModel(), records);
+        await upsertQdrantVectors(resolveAccountId(Math.floor(userId)), space, runtimeSettings.model, records);
       } else {
         await getPineconeIndex().namespace(namespace).upsert(records as any);
       }
@@ -531,7 +581,11 @@ export class VectorMemoryService {
       // Keep model and collection from one settings snapshot. A migration may
       // finish while this request is embedding its query.
       const runtimeSettings = getVectorMemoryRuntimeSettings();
-      const queryVector = await getEmbedding(safeQuery, runtimeSettings);
+      const queryVector = await getEmbedding(safeQuery, runtimeSettings, {
+        userId,
+        chatId: chatId ?? null,
+        route: 'memory:search',
+      });
       const matchesById = new Map<string, any>();
 
       if (getVectorMemoryStorage() === 'qdrant') {
@@ -784,7 +838,12 @@ export class VectorMemoryService {
       : `${sourceTag || ''}`.trim().slice(0, 240) || 'manual';
     const chunks = chunkText(safeText, VECTOR_MEMORY_CHUNK_SIZE, VECTOR_MEMORY_CHUNK_OVERLAP);
     const input = chunks.map(chunk => `[Контекст: ${safeSource}] ${chunk}`.replace(/\n/g, ' ').trim());
-    const response = await createEmbeddings(input);
+    const runtimeSettings = getVectorMemoryRuntimeSettings();
+    const response = await createEmbeddings(input, runtimeSettings, {
+      userId: accountId,
+      chatId: space.chat_id,
+      route: 'memory:update',
+    });
     const embeddings = Array.isArray(response?.data) ? response.data : [];
     if (embeddings.length !== chunks.length) throw new Error('embedding_empty');
     const oldChunks = getRecordChunks(accountId, record.id);
@@ -800,7 +859,7 @@ export class VectorMemoryService {
     if (vectors.some(vector => !vector.values.length)) throw new Error('embedding_empty');
     if (getVectorMemoryStorage() === 'qdrant') {
       await deleteQdrantChunks(accountId, space.id, oldChunks.map(chunk => chunk.id));
-      await upsertQdrantVectors(accountId, space, getEmbeddingModel(), vectors);
+      await upsertQdrantVectors(accountId, space, runtimeSettings.model, vectors);
     } else {
       if (oldChunks.length) {
         await deletePineconeResource(() =>

@@ -441,6 +441,10 @@ export type ChargeInput = {
   actualCostUsd?: number | null;
   /** Pricing source label for this charge. */
   pricingSource?: string | null;
+  /** Optional per-request prices. `undefined` uses the model override; `null` means unknown/free. */
+  inputPricePerMillion?: number | null;
+  outputPricePerMillion?: number | null;
+  cacheReadPricePerMillion?: number | null;
 };
 
 export type ChargeTokensResult = {
@@ -470,14 +474,23 @@ export const chargeTokens = (input: ChargeInput): ChargeTokensResult => {
     // Take pricing snapshot from model_overrides now (immutable for this record).
     const snapshot = getPricingSnapshot(input.modelId);
 
-    // Calculate estimated cost from token counts × stored prices.
+    const resolvePrice = (value: number | null | undefined, fallback: number | null) => {
+      if (value === undefined) return fallback;
+      return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
+    };
+    const inputPricePerMillion = resolvePrice(input.inputPricePerMillion, snapshot.input_price_per_million);
+    const outputPricePerMillion = resolvePrice(input.outputPricePerMillion, snapshot.output_price_per_million);
+    const cacheReadPricePerMillion = resolvePrice(input.cacheReadPricePerMillion, snapshot.cache_read_price_per_million);
+
+    // Calculate estimated cost from token counts × the request-specific price
+    // when supplied, otherwise from the stored model pricing snapshot.
     const estResult = calculateEstimatedCostUsd(
       Math.max(0, Math.floor(input.cacheMissTokens || 0)),
       Math.max(0, Math.floor(input.cacheHitTokens || 0)),
       Math.max(0, Math.floor(input.completionTokens || 0)),
-      snapshot.input_price_per_million,
-      snapshot.output_price_per_million,
-      snapshot.cache_read_price_per_million,
+      inputPricePerMillion,
+      outputPricePerMillion,
+      cacheReadPricePerMillion,
     );
 
     // Determine final pricing source label.
@@ -519,9 +532,9 @@ export const chargeTokens = (input: ChargeInput): ChargeTokensResult => {
       input.aborted ? 1 : 0,
       now,
       upstreamProviderSlug,
-      snapshot.input_price_per_million,
-      snapshot.output_price_per_million,
-      snapshot.cache_read_price_per_million,
+      inputPricePerMillion,
+      outputPricePerMillion,
+      cacheReadPricePerMillion,
       estResult.cost,
       actualCost,
       pricingSource

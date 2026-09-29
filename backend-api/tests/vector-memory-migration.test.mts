@@ -12,6 +12,7 @@ process.env.QDRANT_COLLECTION = 'test_memory_collection';
 const { db } = await import('../src/db.js');
 const { ensureMemoryDefaults } = await import('../src/services/memory-foundation.js');
 const { migrateVectorMemoryToQdrant } = await import('../src/services/vector-memory-migration.js');
+const { chargeTokens } = await import('../src/services/token-quota.js');
 const {
   getVectorMemoryApiKey,
   getVectorMemorySettings,
@@ -74,6 +75,39 @@ assert.equal(activeCollection.input_price_per_million, 0.02);
 
 db.prepare('INSERT INTO users (id, name, language) VALUES (?, ?, ?)').run(101, 'Migration user', 'en');
 ensureMemoryDefaults(101);
+
+const embeddingCharge = chargeTokens({
+  userId: 101,
+  route: 'memory:search',
+  modelId: routedSettings.model,
+  modelName: routedSettings.model,
+  providerName: routedSettings.provider,
+  promptTokens: 1_000,
+  completionTokens: 0,
+  cacheHitTokens: 0,
+  cacheMissTokens: 1_000,
+  reasoningTokens: 0,
+  totalTokens: 1_000,
+  upstreamProviderSlug: routedSettings.openrouterProviderSlug,
+  pricingSource: 'vector-memory-settings',
+  inputPricePerMillion: 2.5,
+  outputPricePerMillion: null,
+  cacheReadPricePerMillion: null,
+});
+assert.equal(embeddingCharge.costUsd, 0.0025);
+const embeddingUsage = db.prepare(`
+  SELECT route, input_price_per_million, estimated_cost_usd
+  FROM user_token_usage WHERE user_id = ? ORDER BY id DESC LIMIT 1
+`).get(101) as { route: string; input_price_per_million: number; estimated_cost_usd: number };
+assert.equal(embeddingUsage.route, 'memory:search');
+assert.equal(embeddingUsage.input_price_per_million, 2.5);
+assert.equal(embeddingUsage.estimated_cost_usd, 0.0025);
+const chargedUser = db.prepare('SELECT weekly_tokens_used, weekly_cost_used FROM users WHERE id = ?').get(101) as {
+  weekly_tokens_used: number;
+  weekly_cost_used: number;
+};
+assert.equal(chargedUser.weekly_tokens_used, 1_000);
+assert.equal(chargedUser.weekly_cost_used, 0.0025);
 
 const source = {
   kind: 'test-pinecone',
