@@ -23,11 +23,18 @@ assert.equal(
 const seededSettings = getVectorMemorySettings();
 assert.equal(seededSettings.baseUrl, 'https://embeddings.example.test/v1');
 assert.equal(seededSettings.model, 'test/embedding-model');
+assert.equal(seededSettings.openrouterProviderSlug, null);
+assert.equal(seededSettings.inputPricePerMillion, null);
 assert.equal(seededSettings.activeCollection, 'test_memory_collection');
 assert.ok(seededSettings.apiKeyId, 'legacy key is moved into the encrypted vault');
 assert.equal(getVectorMemoryApiKey(seededSettings.apiKeyId), 'legacy-embedding-secret');
 const storedKey = db.prepare('SELECT key_encrypted FROM api_keys WHERE id = ?').get(seededSettings.apiKeyId) as { key_encrypted: string };
 assert.equal(storedKey.key_encrypted.includes('legacy-embedding-secret'), false, 'plaintext key is not stored');
+const collectionColumns = new Set(
+  (db.prepare('PRAGMA table_info(vector_memory_collections)').all() as Array<{ name: string }>).map(column => column.name),
+);
+assert.equal(collectionColumns.has('openrouter_provider_slug'), true);
+assert.equal(collectionColumns.has('input_price_per_million'), true);
 
 db.prepare('INSERT INTO users (id, name, language) VALUES (?, ?, ?)').run(101, 'Migration user', 'en');
 ensureMemoryDefaults(101);

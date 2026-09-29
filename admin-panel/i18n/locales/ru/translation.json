@@ -315,6 +315,7 @@
         "providerLabel": "Провайдер",
         "apiUrlLabel": "Адрес API",
         "modelLabel": "Модель",
+        "priceLabel": "Цена входа, $ / 1 млн токенов",
         "apiKeyLabel": "API-ключ embedding-провайдера",
         "migrateAction": "Пересчитать и переключить",
         "migrating": "Перенос…",

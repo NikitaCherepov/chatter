@@ -285,7 +285,7 @@ type OrEndpoint = {
   supported_parameters?: string[];
 };
 
-type ModelEndpointsResult = {
+export type ModelEndpointsResult = {
   options: SelectOption[];
   /** Map of base slug → prices. */
   pricesBySlug: Map<string, ModelPrices | null>;
@@ -306,13 +306,13 @@ let _providerNames: Map<string, string> | null = null;
 let _providerNamesAt = 0;
 const PROVIDER_NAMES_TTL_MS = 30 * 60 * 1000;
 
-async function loadProviderNames(): Promise<Map<string, string>> {
+async function loadProviderNames(apiKeyId?: number | null): Promise<Map<string, string>> {
   if (_providerNames && Date.now() - _providerNamesAt < PROVIDER_NAMES_TTL_MS) {
     return _providerNames;
   }
   try {
     const data = await api<{ data?: Array<{ slug?: string; name?: string }> }>(
-      '/api/openrouter/providers',
+      `/api/openrouter/providers${apiKeyId ? `?apiKeyId=${encodeURIComponent(apiKeyId)}` : ''}`,
     );
     const map = new Map<string, string>();
     for (const item of data?.data || []) {
@@ -331,7 +331,7 @@ async function loadProviderNames(): Promise<Map<string, string>> {
  * Groups endpoints by base slug (tag.split('/')[0]) and resolves
  * display names via /api/openrouter/providers.
  */
-async function fetchModelEndpoints(modelId: string): Promise<ModelEndpointsResult | null> {
+export async function fetchModelEndpoints(modelId: string, apiKeyId?: number | null): Promise<ModelEndpointsResult | null> {
   const slashIdx = modelId.indexOf('/');
   if (slashIdx <= 0) return null;
   const author = encodeURIComponent(modelId.slice(0, slashIdx));
@@ -339,9 +339,9 @@ async function fetchModelEndpoints(modelId: string): Promise<ModelEndpointsResul
 
   const [endpointsResp, providers] = await Promise.all([
     api<{ data?: { endpoints?: OrEndpoint[] } }>(
-      `/api/openrouter/models/${author}/${slug}/endpoints`,
+      `/api/openrouter/models/${author}/${slug}/endpoints${apiKeyId ? `?apiKeyId=${encodeURIComponent(apiKeyId)}` : ''}`,
     ),
-    loadProviderNames(),
+    loadProviderNames(apiKeyId),
   ]);
 
   const endpoints = endpointsResp?.data?.endpoints || [];

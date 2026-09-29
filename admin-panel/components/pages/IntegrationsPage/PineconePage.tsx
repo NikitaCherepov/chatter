@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ApiKey, PineconeSettings } from '../../../lib/types';
 import { api } from '../../../lib/api';
@@ -9,6 +9,7 @@ import { Input } from '../../ui/Input/Input';
 import { Select, type SelectOption } from '../../ui/Select/Select';
 import { ConfirmModal } from '../../ui/ConfirmModal/ConfirmModal';
 import { OpenRouterModelInput } from '../../ui/ModelInput/OpenRouterModelInput';
+import { fetchModelEndpoints, type ModelEndpointsResult } from '../ModelsPage/ModelListEditor';
 import { SecretState } from '../../ui/SecretState/SecretState';
 import { IntegrationDetailPage } from './IntegrationDetailPage';
 import styles from './IntegrationsPage.module.css';
@@ -18,6 +19,8 @@ type RuntimeSettings = {
   provider: 'openrouter' | 'custom';
   baseUrl: string;
   model: string;
+  openrouterProviderSlug: string | null;
+  inputPricePerMillion: number | null;
   apiKeyId: number | null;
   activeCollection: string;
   hasApiKey: boolean;
@@ -28,6 +31,8 @@ type Collection = {
   provider: 'openrouter' | 'custom';
   baseUrl: string;
   model: string;
+  openrouterProviderSlug: string | null;
+  inputPricePerMillion: number | null;
   apiKeyId: number | null;
   dimension: number | null;
   pointCount: number;
@@ -64,6 +69,8 @@ export function PineconePage({ onBack }: {
   const [showCreateKey, setShowCreateKey] = useState(false);
   const [newKeyName, setNewKeyName] = useState('');
   const [newKeyValue, setNewKeyValue] = useState('');
+  const [openrouterProviderOptions, setOpenrouterProviderOptions] = useState<SelectOption[]>([]);
+  const endpointsRef = useRef<ModelEndpointsResult | null>(null);
 
   const load = useCallback(async () => {
     const [nextRuntime, nextCollections, nextKeys] = await Promise.all([
@@ -90,6 +97,8 @@ export function PineconePage({ onBack }: {
     runtime.provider !== draft.provider
     || runtime.baseUrl !== draft.baseUrl
     || runtime.model !== draft.model
+    || runtime.openrouterProviderSlug !== draft.openrouterProviderSlug
+    || runtime.inputPricePerMillion !== draft.inputPricePerMillion
     || runtime.apiKeyId !== draft.apiKeyId
   ));
 
@@ -128,6 +137,8 @@ export function PineconePage({ onBack }: {
             provider: draft.provider,
             baseUrl: draft.baseUrl,
             model: draft.model,
+            openrouterProviderSlug: draft.openrouterProviderSlug,
+            inputPricePerMillion: draft.inputPricePerMillion,
             apiKeyId: draft.apiKeyId,
           }),
         });
@@ -147,6 +158,26 @@ export function PineconePage({ onBack }: {
       setBusy(false);
     }
   };
+
+  useEffect(() => {
+    if (draft?.provider !== 'openrouter' || !draft.model.includes('/') || !draft.apiKeyId) {
+      endpointsRef.current = null;
+      setOpenrouterProviderOptions([]);
+      return;
+    }
+    let cancelled = false;
+    void fetchModelEndpoints(draft.model, draft.apiKeyId).then(result => {
+      if (!result || cancelled) return;
+      endpointsRef.current = result;
+      setOpenrouterProviderOptions([
+        { value: '', label: t('models.billing.autoRouting'), hint: 'auto-routing' },
+        ...result.options,
+      ]);
+    }).catch(() => {
+      if (!cancelled) setOpenrouterProviderOptions([]);
+    });
+    return () => { cancelled = true; };
+  }, [draft?.apiKeyId, draft?.model, draft?.provider, t]);
 
   if (!draft) {
     return (
@@ -190,6 +221,9 @@ export function PineconePage({ onBack }: {
                 ...draft,
                 provider: value as RuntimeSettings['provider'],
                 ...(value === 'openrouter' ? { baseUrl: OPENROUTER_URL } : {}),
+                ...(value === 'custom'
+                  ? { openrouterProviderSlug: null, inputPricePerMillion: null }
+                  : {}),
               })}
               options={[
                 { value: 'openrouter', label: 'OpenRouter' },
@@ -241,11 +275,49 @@ export function PineconePage({ onBack }: {
                 value={draft.model}
                 catalog="embeddings"
                 apiKeyId={draft.apiKeyId}
-                onSelect={model => setDraft({ ...draft, model })}
+                onSelect={(model, catalogPrices) => {
+                  setDraft({
+                    ...draft,
+                    model,
+                    openrouterProviderSlug: null,
+                    inputPricePerMillion: catalogPrices?.inputPricePerMillion ?? null,
+                  });
+                }}
               />
             ) : (
               <Input value={draft.model} onChange={event => setDraft({ ...draft, model: event.target.value })} />
             )}
+          </FormField>
+          {draft.provider === 'openrouter' && (
+            <FormField
+              label={t('models.billing.openrouterProvider')}
+              hint={t('models.billing.openrouterProviderHint')}
+            >
+              <Select
+                value={draft.openrouterProviderSlug || ''}
+                options={openrouterProviderOptions}
+                onChange={slug => {
+                  const price = slug
+                    ? endpointsRef.current?.pricesBySlug.get(slug)?.inputPricePerMillion ?? null
+                    : endpointsRef.current?.basePrices?.inputPricePerMillion ?? null;
+                  setDraft({
+                    ...draft,
+                    openrouterProviderSlug: slug || null,
+                    inputPricePerMillion: price,
+                  });
+                }}
+                searchable
+                placeholder={t('models.billing.autoRouting')}
+                valueFallbackLabel={draft.openrouterProviderSlug || undefined}
+              />
+            </FormField>
+          )}
+          <FormField label={t('integrations.pinecone.embedding.priceLabel')}>
+            <Input
+              value={draft.inputPricePerMillion ?? ''}
+              readOnly
+              placeholder="—"
+            />
           </FormField>
           <button
             type="button"
@@ -274,7 +346,13 @@ export function PineconePage({ onBack }: {
                   {t(`integrations.pinecone.collections.status.${collection.status}`)}
                 </span>
               </div>
-              <span>{collection.provider} · {collection.dimension || '—'}D · {t('integrations.pinecone.collections.vectorCount', { count: collection.pointCount })}</span>
+              <span>
+                {collection.provider}
+                {collection.openrouterProviderSlug ? ` / ${collection.openrouterProviderSlug}` : ''}
+                {' · '}{collection.dimension || '—'}D
+                {' · '}{t('integrations.pinecone.collections.vectorCount', { count: collection.pointCount })}
+                {collection.inputPricePerMillion !== null ? ` · $${collection.inputPricePerMillion}/1M` : ''}
+              </span>
               <small>{new Date(collection.createdAt).toLocaleString()}</small>
               {collection.error && <span className={styles.checkError}>{collection.error}</span>}
               {collection.status === 'backup' && (

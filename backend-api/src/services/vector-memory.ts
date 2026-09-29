@@ -122,6 +122,16 @@ const getOpenAIClient = (settings = getVectorMemoryRuntimeSettings()) => {
 };
 
 const getEmbeddingModel = () => getVectorMemoryRuntimeSettings().model;
+const createEmbeddings = (
+  input: string | string[],
+  settings = getVectorMemoryRuntimeSettings(),
+) => getOpenAIClient(settings).embeddings.create({
+  model: settings.model,
+  input,
+  ...(settings.openrouterProviderSlug
+    ? { provider: { only: [settings.openrouterProviderSlug], allow_fallbacks: false } }
+    : {}),
+} as any);
 const assertMemoryWritable = () => {
   if (isVectorMemoryMigrationRunning()) throw new Error('vector_memory_migration_in_progress');
 };
@@ -145,11 +155,7 @@ const getEmbedding = async (
 ): Promise<number[]> => {
   const normalized = text.replace(/\n/g, ' ').trim();
   if (!normalized) throw new Error('text_required');
-  const openai = getOpenAIClient(settings);
-  const response = await openai.embeddings.create({
-    model: settings.model,
-    input: normalized
-  } as any);
+  const response = await createEmbeddings(normalized, settings);
   const embedding = response?.data?.[0]?.embedding;
   if (!Array.isArray(embedding) || !embedding.length) {
     throw new Error('embedding_empty');
@@ -289,16 +295,11 @@ export class VectorMemoryService {
       const space = resolveWriteMemorySpace(userId, chatId);
       const namespace = space.namespace_key;
 
-      const openai = getOpenAIClient();
-
       const inputForEmbeddings = chunks.map(chunk => {
         // Приклеиваем тег к каждому чанку, чтобы каждый вектор "помнил" откуда он
         return `[Контекст: ${safeSource}] ${chunk}`.replace(/\n/g, ' ').trim();
       });
-      const embedResponse = await openai.embeddings.create({
-        model: getEmbeddingModel(),
-        input: inputForEmbeddings // <--- Отправляем обогащенные чанки
-      } as any);
+      const embedResponse = await createEmbeddings(inputForEmbeddings);
 
       const now = Math.floor(Date.now() / 1000);
       const baseId = `fact_${now}_${Math.random().toString(36).slice(2, 8)}`;
@@ -783,7 +784,7 @@ export class VectorMemoryService {
       : `${sourceTag || ''}`.trim().slice(0, 240) || 'manual';
     const chunks = chunkText(safeText, VECTOR_MEMORY_CHUNK_SIZE, VECTOR_MEMORY_CHUNK_OVERLAP);
     const input = chunks.map(chunk => `[Контекст: ${safeSource}] ${chunk}`.replace(/\n/g, ' ').trim());
-    const response = await getOpenAIClient().embeddings.create({ model: getEmbeddingModel(), input } as any);
+    const response = await createEmbeddings(input);
     const embeddings = Array.isArray(response?.data) ? response.data : [];
     if (embeddings.length !== chunks.length) throw new Error('embedding_empty');
     const oldChunks = getRecordChunks(accountId, record.id);

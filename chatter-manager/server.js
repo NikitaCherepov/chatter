@@ -2147,9 +2147,24 @@ async function getOpenRouterEmbeddingConfig(apiKeyIdRaw) {
   return { apiKey, baseUrl: OPENROUTER_BASE_URL };
 }
 
+async function openRouterAuthenticatedFetch(pathname, apiKeyId) {
+  const { apiKey, baseUrl } = await getOpenRouterEmbeddingConfig(apiKeyId);
+  const cacheKey = `authenticated:${apiKeyId}:${pathname}`;
+  const cached = openRouterCacheGet(cacheKey);
+  if (cached) return cached;
+  const response = await fetch(`${baseUrl}${pathname}`, {
+    headers: { Authorization: `Bearer ${apiKey}`, Accept: 'application/json' },
+    signal: AbortSignal.timeout(15000),
+  });
+  if (!response.ok) throw new Error(`OpenRouter API error (HTTP ${response.status})`);
+  const payload = await response.json();
+  openRouterCacheSet(cacheKey, payload);
+  return payload;
+}
+
 async function listOpenRouterEmbeddingModels(query, apiKeyId) {
   const { apiKey, baseUrl } = await getOpenRouterEmbeddingConfig(apiKeyId);
-  const cacheKey = `embedding-models:${baseUrl}`;
+  const cacheKey = `embedding-models:${apiKeyId}:${baseUrl}`;
   let payload = openRouterCacheGet(cacheKey);
   if (!payload) {
     const response = await fetch(`${baseUrl}/embeddings/models`, {
@@ -2911,7 +2926,10 @@ async function handleRequest(req, res) {
   // ── OpenRouter providers proxy ─────────────────────────────────────────
   if (req.method === 'GET' && pathname === '/api/openrouter/providers') {
     try {
-      const data = await openRouterFetch('/providers');
+      const apiKeyId = url.searchParams.get('apiKeyId');
+      const data = apiKeyId
+        ? await openRouterAuthenticatedFetch('/providers', apiKeyId)
+        : await openRouterFetch('/providers');
       return sendJson(res, 200, data);
     } catch (error) {
       return sendJson(res, 502, { error: error.message || 'openrouter_providers_failed' });
@@ -2958,7 +2976,11 @@ async function handleRequest(req, res) {
     const slug = encodeURIComponent(orEndpointsMatch[2]);
     if (!author || !slug) return sendJson(res, 400, { error: 'invalid_model_slug' });
     try {
-      const data = await openRouterFetch(`/models/${author}/${slug}/endpoints`);
+      const apiKeyId = url.searchParams.get('apiKeyId');
+      const endpoint = `/models/${author}/${slug}/endpoints`;
+      const data = apiKeyId
+        ? await openRouterAuthenticatedFetch(endpoint, apiKeyId)
+        : await openRouterFetch(endpoint);
       return sendJson(res, 200, data);
     } catch (error) {
       return sendJson(res, 502, { error: error.message || 'openrouter_endpoints_failed' });

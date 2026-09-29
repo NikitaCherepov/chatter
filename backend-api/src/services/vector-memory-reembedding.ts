@@ -18,6 +18,8 @@ type MigrationInput = {
   provider?: unknown;
   baseUrl?: unknown;
   model?: unknown;
+  openrouterProviderSlug?: unknown;
+  inputPricePerMillion?: unknown;
   apiKeyId?: unknown;
 };
 
@@ -26,6 +28,8 @@ type CollectionRow = {
   provider: VectorMemoryProvider;
   base_url: string;
   model: string;
+  openrouter_provider_slug: string | null;
+  input_price_per_million: number | null;
   api_key_id: number | null;
   dimension: number | null;
   point_count: number;
@@ -56,16 +60,33 @@ const parseCandidate = (input: MigrationInput) => {
   const provider: VectorMemoryProvider = input.provider === 'openrouter' ? 'openrouter' : 'custom';
   const baseUrl = `${input.baseUrl || ''}`.trim();
   const model = `${input.model || ''}`.trim();
+  const openrouterProviderSlug = provider === 'openrouter'
+    ? `${input.openrouterProviderSlug || ''}`.trim() || null
+    : null;
+  const rawPrice = input.inputPricePerMillion;
+  const inputPricePerMillion = rawPrice === null || rawPrice === undefined || rawPrice === ''
+    ? null
+    : Number(rawPrice);
   const apiKeyId = Number(input.apiKeyId);
   if (!baseUrl || !model) throw new Error('embedding_configuration_required');
+  if (openrouterProviderSlug && !/^[a-zA-Z0-9._:-]{1,120}$/.test(openrouterProviderSlug)) {
+    throw new Error('invalid_openrouter_provider_slug');
+  }
   if (!Number.isInteger(apiKeyId) || apiKeyId <= 0) throw new Error('api_key_required');
   const apiKey = getVectorMemoryApiKey(apiKeyId);
   if (!apiKey) throw new Error('api_key_not_found');
-  return { current, provider, baseUrl, model, apiKeyId, apiKey };
+  if (inputPricePerMillion !== null && (!Number.isFinite(inputPricePerMillion) || inputPricePerMillion < 0)) {
+    throw new Error('invalid_embedding_price');
+  }
+  return { current, provider, baseUrl, model, openrouterProviderSlug, inputPricePerMillion, apiKeyId, apiKey };
 };
 
-const embed = async (client: OpenAI, model: string, input: string[]) => {
-  const response = await client.embeddings.create({ model, input } as any);
+const embed = async (client: OpenAI, model: string, input: string[], providerSlug: string | null) => {
+  const response = await client.embeddings.create({
+    model,
+    input,
+    ...(providerSlug ? { provider: { only: [providerSlug], allow_fallbacks: false } } : {}),
+  } as any);
   const rows = Array.isArray(response.data) ? response.data : [];
   if (rows.length !== input.length) throw new Error('embedding_count_mismatch');
   const vectors = rows.map(row => Array.isArray(row.embedding) ? row.embedding.map(Number) : []);
@@ -88,7 +109,8 @@ export const beginVectorMemoryWrite = () => {
 
 export const listVectorMemoryCollections = async () => {
   const rows = db.prepare(`
-    SELECT collection_name, provider, base_url, model, api_key_id, dimension, point_count,
+    SELECT collection_name, provider, base_url, model, openrouter_provider_slug,
+           input_price_per_million, api_key_id, dimension, point_count,
            status, error, created_at, updated_at
     FROM vector_memory_collections
     ORDER BY CASE status WHEN 'active' THEN 0 WHEN 'migrating' THEN 1 WHEN 'backup' THEN 2 ELSE 3 END,
@@ -114,6 +136,8 @@ export const listVectorMemoryCollections = async () => {
     provider: row.provider,
     baseUrl: row.base_url,
     model: row.model,
+    openrouterProviderSlug: row.openrouter_provider_slug,
+    inputPricePerMillion: row.input_price_per_million,
     apiKeyId: row.api_key_id,
     dimension: row.dimension,
     pointCount: row.point_count,
@@ -134,11 +158,15 @@ export const migrateVectorMemoryEmbedding = async (input: MigrationInput) => {
   try {
     db.prepare(`
       INSERT INTO vector_memory_collections (
-        collection_name, provider, base_url, model, api_key_id, status, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, 'migrating', ?, ?)
-    `).run(collectionName, candidate.provider, candidate.baseUrl, candidate.model, candidate.apiKeyId, now, now);
+        collection_name, provider, base_url, model, openrouter_provider_slug,
+        input_price_per_million, api_key_id, status, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, 'migrating', ?, ?)
+    `).run(
+      collectionName, candidate.provider, candidate.baseUrl, candidate.model,
+      candidate.openrouterProviderSlug, candidate.inputPricePerMillion, candidate.apiKeyId, now, now,
+    );
     const client = new OpenAI({ apiKey: candidate.apiKey, baseURL: candidate.baseUrl });
-    const probe = await embed(client, candidate.model, ['Chatter vector memory dimension check']);
+    const probe = await embed(client, candidate.model, ['Chatter vector memory dimension check'], candidate.openrouterProviderSlug);
     const dimension = probe[0].length;
     await ensureQdrantCollection(dimension, collectionName);
 
@@ -163,7 +191,7 @@ export const migrateVectorMemoryEmbedding = async (input: MigrationInput) => {
 
     for (let offset = 0; offset < chunks.length; offset += 64) {
       const batch = chunks.slice(offset, offset + 64);
-      const vectors = await embed(client, candidate.model, batch.map(chunk => chunk.text));
+      const vectors = await embed(client, candidate.model, batch.map(chunk => chunk.text), candidate.openrouterProviderSlug);
       const bySpace = new Map<string, typeof batch>();
       batch.forEach(chunk => {
         const key = `${chunk.user_id}:${chunk.memory_space_id}`;
@@ -207,6 +235,8 @@ export const migrateVectorMemoryEmbedding = async (input: MigrationInput) => {
       provider: candidate.provider,
       baseUrl: candidate.baseUrl,
       model: candidate.model,
+      openrouterProviderSlug: candidate.openrouterProviderSlug,
+      inputPricePerMillion: candidate.inputPricePerMillion,
       apiKeyId: candidate.apiKeyId,
       activeCollection: collectionName,
     };
@@ -235,7 +265,8 @@ export const migrateVectorMemoryEmbedding = async (input: MigrationInput) => {
 export const activateExistingVectorMemoryCollection = async (collectionName: string) => {
   if (migrationRunning) throw new Error('vector_memory_migration_in_progress');
   const row = db.prepare(`
-    SELECT collection_name, provider, base_url, model, api_key_id, status
+    SELECT collection_name, provider, base_url, model, openrouter_provider_slug,
+           input_price_per_million, api_key_id, status
     FROM vector_memory_collections WHERE collection_name = ?
   `).get(collectionName) as CollectionRow | undefined;
   if (!row || row.status !== 'backup') throw new Error('vector_memory_backup_not_found');
@@ -247,6 +278,8 @@ export const activateExistingVectorMemoryCollection = async (collectionName: str
     provider: row.provider,
     baseUrl: row.base_url,
     model: row.model,
+    openrouterProviderSlug: row.openrouter_provider_slug,
+    inputPricePerMillion: row.input_price_per_million,
     apiKeyId: row.api_key_id,
   });
 };

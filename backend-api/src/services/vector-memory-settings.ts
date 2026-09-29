@@ -8,6 +8,8 @@ export type VectorMemorySettings = {
   provider: VectorMemoryProvider;
   baseUrl: string;
   model: string;
+  openrouterProviderSlug: string | null;
+  inputPricePerMillion: number | null;
   apiKeyId: number | null;
   activeCollection: string;
 };
@@ -95,6 +97,17 @@ const normalizeCollectionName = (value: unknown) => {
   return name;
 };
 
+const normalizeProviderSlug = (value: unknown): string | null => {
+  const slug = `${value || ''}`.trim();
+  return slug && /^[a-zA-Z0-9._:-]{1,120}$/.test(slug) ? slug : null;
+};
+
+const normalizePrice = (value: unknown): number | null => {
+  if (value === null || value === undefined || value === '') return null;
+  const price = Number(value);
+  return Number.isFinite(price) && price >= 0 ? price : null;
+};
+
 const seedFromEnv = (): VectorMemorySettings => {
   const baseUrl = `${process.env.TIMEWEB_EMBED_BASE_URL || process.env.TIMEWEB_BASE_URL || 'https://openrouter.ai/api/v1'}`.trim();
   const legacySecret = `${process.env.TIMEWEB_EMBED_API_KEY || ''}`.trim();
@@ -103,6 +116,8 @@ const seedFromEnv = (): VectorMemorySettings => {
     provider: /openrouter\.ai/i.test(baseUrl) ? 'openrouter' : 'custom',
     baseUrl,
     model: `${process.env.TIMEWEB_EMBED_MODEL || process.env.VECTOR_EMBED_MODEL || 'text-embedding-3-small'}`.trim(),
+    openrouterProviderSlug: null,
+    inputPricePerMillion: null,
     apiKeyId: legacySecret ? storeLegacySecret(legacySecret) : null,
     activeCollection: `${process.env.QDRANT_COLLECTION || DEFAULT_COLLECTION}`.trim() || DEFAULT_COLLECTION,
   };
@@ -116,6 +131,10 @@ const normalizeSettings = (value: unknown, fallback: VectorMemorySettings): Vect
     provider,
     baseUrl: `${source.baseUrl || fallback.baseUrl}`.trim(),
     model: `${source.model || fallback.model}`.trim(),
+    openrouterProviderSlug: provider === 'openrouter'
+      ? normalizeProviderSlug(source.openrouterProviderSlug)
+      : null,
+    inputPricePerMillion: normalizePrice(source.inputPricePerMillion),
     apiKeyId: normalizeId(source.apiKeyId) ?? fallback.apiKeyId,
     activeCollection: normalizeCollectionName(source.activeCollection || fallback.activeCollection),
   };
@@ -133,18 +152,23 @@ const ensureActiveRegistry = (settings: VectorMemorySettings) => {
   const now = Date.now();
   db.prepare(`
     INSERT INTO vector_memory_collections (
-      collection_name, provider, base_url, model, api_key_id, status, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, 'active', ?, ?)
+      collection_name, provider, base_url, model, openrouter_provider_slug,
+      input_price_per_million, api_key_id, status, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)
     ON CONFLICT(collection_name) DO UPDATE SET
       provider = excluded.provider,
       base_url = excluded.base_url,
       model = excluded.model,
+      openrouter_provider_slug = excluded.openrouter_provider_slug,
+      input_price_per_million = excluded.input_price_per_million,
       api_key_id = excluded.api_key_id,
       status = 'active',
       updated_at = excluded.updated_at
     WHERE vector_memory_collections.provider <> excluded.provider
        OR vector_memory_collections.base_url <> excluded.base_url
        OR vector_memory_collections.model <> excluded.model
+       OR vector_memory_collections.openrouter_provider_slug IS NOT excluded.openrouter_provider_slug
+       OR vector_memory_collections.input_price_per_million IS NOT excluded.input_price_per_million
        OR vector_memory_collections.api_key_id IS NOT excluded.api_key_id
        OR vector_memory_collections.status <> 'active'
   `).run(
@@ -152,6 +176,8 @@ const ensureActiveRegistry = (settings: VectorMemorySettings) => {
     settings.provider,
     settings.baseUrl,
     settings.model,
+    settings.openrouterProviderSlug,
+    settings.inputPricePerMillion,
     settings.apiKeyId,
     now,
     now,
@@ -179,6 +205,8 @@ const readSettings = (): VectorMemorySettings => {
         provider: 'custom' as const,
         baseUrl: 'https://openrouter.ai/api/v1',
         model: 'text-embedding-3-small',
+        openrouterProviderSlug: null,
+        inputPricePerMillion: null,
         apiKeyId: null,
         activeCollection: DEFAULT_COLLECTION,
       }
@@ -217,6 +245,8 @@ export const updateVectorMemorySettings = (patch: unknown): VectorMemoryPublicSe
     || next.provider !== current.provider
     || next.baseUrl !== current.baseUrl
     || next.model !== current.model
+    || next.openrouterProviderSlug !== current.openrouterProviderSlug
+    || next.inputPricePerMillion !== current.inputPricePerMillion
   ) {
     throw new Error('embedding_migration_required');
   }

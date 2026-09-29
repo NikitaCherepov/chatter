@@ -315,6 +315,7 @@
         "providerLabel": "Provider",
         "apiUrlLabel": "API URL",
         "modelLabel": "Model",
+        "priceLabel": "Input price, $ / 1M tokens",
         "apiKeyLabel": "Embedding provider API key",
         "migrateAction": "Re-embed and switch",
         "migrating": "Migrating…",

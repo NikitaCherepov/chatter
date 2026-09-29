@@ -1478,6 +1478,8 @@ db.exec(`
     provider TEXT NOT NULL,
     base_url TEXT NOT NULL,
     model TEXT NOT NULL,
+    openrouter_provider_slug TEXT,
+    input_price_per_million REAL,
     api_key_id INTEGER,
     dimension INTEGER,
     point_count INTEGER NOT NULL DEFAULT 0,
@@ -1510,6 +1512,16 @@ db.exec(`
 // The short-lived SQLite vector backend was replaced by bundled Qdrant.
 // Text, chunks and ownership remain in the canonical memory tables above.
 db.exec('DROP TABLE IF EXISTS memory_vectors');
+
+{
+  const columns = db.prepare('PRAGMA table_info(vector_memory_collections)').all() as Array<{ name: string }>;
+  if (!columns.some(column => column.name === 'openrouter_provider_slug')) {
+    db.exec('ALTER TABLE vector_memory_collections ADD COLUMN openrouter_provider_slug TEXT');
+  }
+  if (!columns.some(column => column.name === 'input_price_per_million')) {
+    db.exec('ALTER TABLE vector_memory_collections ADD COLUMN input_price_per_million REAL');
+  }
+}
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS sillytavern_chat_imports (
