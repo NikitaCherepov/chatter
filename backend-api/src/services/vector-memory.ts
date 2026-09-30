@@ -586,6 +586,7 @@ export class VectorMemoryService {
         chatId: chatId ?? null,
         route: 'memory:search',
       });
+      const candidateLimit = Math.min(VECTOR_MEMORY_TOP_K_MAX * 4, Math.max(safeTopK, safeTopK * 4));
       const matchesById = new Map<string, any>();
 
       if (getVectorMemoryStorage() === 'qdrant') {
@@ -594,7 +595,7 @@ export class VectorMemoryService {
           spaces,
           runtimeSettings.model,
           queryVector,
-          safeTopK,
+          candidateLimit,
           runtimeSettings.activeCollection,
         );
         points.forEach(point => {
@@ -608,6 +609,8 @@ export class VectorMemoryService {
               text: `${payload?.text || ''}`,
               source: `${payload?.source || ''}`,
               timestamp: Number(payload?.timestamp || 0),
+              record_id: `${payload?.record_id || ''}`,
+              chunk_index: Number(payload?.chunk_index || 0),
             },
           });
         });
@@ -617,7 +620,7 @@ export class VectorMemoryService {
         const results = await Promise.all(readableNamespaces.map(readableNamespace =>
           index.namespace(readableNamespace).query({
             vector: queryVector,
-            topK: safeTopK,
+            topK: candidateLimit,
             includeMetadata: true
           } as any)
         ));
@@ -632,17 +635,29 @@ export class VectorMemoryService {
           }
         }
       }
-      const items = [...matchesById.values()]
+      const distinctRecords = new Map<string, any>();
+      [...matchesById.values()]
         .sort((left, right) => Number(right?.score || 0) - Number(left?.score || 0))
+        .forEach(match => {
+          const chunkId = `${match?.id || ''}`;
+          const recordId = `${match?.metadata?.record_id || chunkId.match(/^(.*)_chunk_\d+$/)?.[1] || chunkId}`;
+          if (!recordId || distinctRecords.has(recordId)) return;
+          distinctRecords.set(recordId, { ...match, recordId });
+        });
+      const items = [...distinctRecords.values()]
         .slice(0, safeTopK)
         .map((match: any) => {
           const chunkId = `${match?.id || ''}`;
+          const source = `${match?.metadata?.source || ''}`;
+          const rawText = `${match?.metadata?.text || ''}`;
+          const sourcePrefix = `[Контекст: ${source}] `;
           return {
             id: chunkId,
             chunk_id: chunkId,
+            record_id: `${match.recordId || chunkId}`,
             score: Number(match?.score || 0),
-            text: `${match?.metadata?.text || ''}`,
-            source: `${match?.metadata?.source || ''}`,
+            text: rawText.startsWith(sourcePrefix) ? rawText.slice(sourcePrefix.length) : rawText,
+            source,
             timestamp: Number(match?.metadata?.timestamp || 0)
           };
         });

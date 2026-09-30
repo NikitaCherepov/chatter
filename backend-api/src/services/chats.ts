@@ -3155,67 +3155,85 @@ export const searchChatHistory = (
   userId: number,
   query: string,
   limit = 20,
+  chatId?: number | null,
 ): ChatMessageSearchHit[] => {
   const safeQuery = query.normalize('NFKC').replace(/[^\p{L}\p{N}\s]/gu, ' ').trim();
   if (safeQuery.length < 2) return [];
+  const safeChatId = Number.isSafeInteger(Number(chatId)) && Number(chatId) > 0
+    ? Math.floor(Number(chatId))
+    : null;
+  if (safeChatId !== null && !canReadChatMessages(userId, safeChatId)) return [];
 
   const safeLimit = Math.max(1, Math.min(50, Math.floor(limit)));
-  const ftsQuery = safeQuery
+  const terms = [...new Set(safeQuery
     .split(/\s+/)
-    .filter(Boolean)
-    .map(word => `"${word.replace(/"/g, '""')}"*`)
-    .join(' ');
+    .filter(Boolean))];
+  if (!terms.length) return [];
+  const escapedTerms = terms.map(word => `"${word.replace(/"/g, '""')}"*`);
 
-  // Filter bot-hidden chats before LIMIT so hidden hits cannot displace visible ones.
-  // FTS5 MATCH requires the bare virtual-table name on the left side.
-  const rawHits = db.prepare(`
+  // FTS rows belong to the message author, not necessarily the current reader.
+  // Author-based filtering would hide room history, so visibility is checked
+  // through the chat owner/member relation instead.
+  const searchStmt = db.prepare(`
     SELECT
       messages_fts.chat_id,
       messages_fts.message_id,
       snippet(messages_fts, 0, '<<', '>>', '...', 12) as snippet,
-      messages_fts.rank
+      messages_fts.rank,
+      chat_messages.role,
+      chat_messages.created_at,
+      COALESCE(NULLIF(member.title, ''), user_chats.title) AS chat_title
     FROM messages_fts
     JOIN user_chats
       ON user_chats.id = messages_fts.chat_id
-      AND user_chats.user_id = messages_fts.user_id
-    WHERE messages_fts.user_id = ?
+    JOIN chat_messages
+      ON chat_messages.id = messages_fts.message_id
+      AND chat_messages.chat_id = messages_fts.chat_id
+    LEFT JOIN chat_members member
+      ON member.chat_id = user_chats.id
+      AND member.user_id = ?
+    WHERE (user_chats.user_id = ? OR member.user_id IS NOT NULL)
       AND user_chats.bot_hidden = 0
+      AND (? IS NULL OR messages_fts.chat_id = ?)
       AND messages_fts MATCH ?
-    ORDER BY messages_fts.rank
+    ORDER BY messages_fts.rank, chat_messages.created_at DESC, messages_fts.message_id DESC
     LIMIT ?
-  `).all(userId, ftsQuery, safeLimit) as Array<{
+  `);
+  const runSearch = (ftsQuery: string) => searchStmt.all(
+    userId,
+    userId,
+    safeChatId,
+    safeChatId,
+    ftsQuery,
+    safeLimit,
+  ) as Array<{
     chat_id: number;
     message_id: number;
     snippet: string;
     rank: number;
+    role: string;
+    created_at: string;
+    chat_title: string;
   }>;
+
+  // Prefer precise all-terms matching. A natural-language query often contains
+  // one word that was phrased differently in history, so retry with any term
+  // only when the precise query found nothing.
+  let rawHits = runSearch(escapedTerms.join(' '));
+  if (!rawHits.length && escapedTerms.length > 1) {
+    rawHits = runSearch(escapedTerms.join(' OR '));
+  }
 
   if (rawHits.length === 0) return [];
 
-  const messageIds = rawHits.map(h => h.message_id);
-  const msgMetaRows = db.prepare(`SELECT id, role, created_at FROM chat_messages WHERE id IN (${messageIds.map(() => '?').join(',')})`)
-    .all(...messageIds) as Array<{ id: number; role: string; created_at: string }>;
-  const msgMeta = new Map(msgMetaRows.map(r => [r.id, r]));
-
-  // Cache chat titles to avoid repeated lookups.
-  const titleCache = new Map<number, string>();
-  const userLanguage = (db.prepare('SELECT language FROM users WHERE id = ?').get(userId) as { language: string | null } | undefined)?.language;
-
   return rawHits.map(hit => {
-    let title = titleCache.get(hit.chat_id);
-    if (title === undefined) {
-      const chat = db.prepare('SELECT title FROM user_chats WHERE id = ? AND user_id = ?').get(hit.chat_id, userId) as { title: string } | undefined;
-      title = chat?.title || formatAutomaticChatTitle(userLanguage, hit.chat_id);
-      titleCache.set(hit.chat_id, title);
-    }
-    const meta = msgMeta.get(hit.message_id);
     return {
       message_id: hit.message_id,
       chat_id: hit.chat_id,
-      chat_title: title,
-      role: (meta?.role ?? 'user') as ChatRole,
+      chat_title: hit.chat_title,
+      role: hit.role as ChatRole,
       snippet: hit.snippet,
-      created_at: meta ? toUnix(meta.created_at) : 0,
+      created_at: toUnix(hit.created_at),
       rank: hit.rank,
     };
   });

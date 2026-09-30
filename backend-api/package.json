@@ -8,6 +8,7 @@
     "dev": "tsx src/server.ts",
     "test:monitor": "tsx tests/openrouter-monitor.test.mts",
     "test:chat-member-title": "tsx tests/chat-member-title.test.mts",
+    "test:chat-history-search": "tsx tests/chat-history-search.test.mts",
     "test:ssh-command": "tsx tests/ssh-command.test.mts",
     "test:web-search": "tsx tests/web-search-fallback.test.mts",
     "test:web-reader": "tsx tests/web-reader-fallback.test.mts",
