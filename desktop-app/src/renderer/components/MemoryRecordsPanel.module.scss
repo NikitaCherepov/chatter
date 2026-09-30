@@ -1,0 +1,147 @@
+.search {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.searchInputWrap {
+  height: 38px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 11px;
+  border: 1px solid var(--border-input);
+  border-radius: 7px;
+  background: var(--bg-input);
+}
+.searchInputWrap:focus-within { border-color: var(--accent); }
+.searchInputWrap svg {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: var(--text-muted);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+.searchInputWrap input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 12px;
+}
+.searchInputWrap input::placeholder { color: var(--text-hint); }
+.searchControls { display: flex; align-items: center; gap: 8px; }
+.modeSwitch {
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid var(--border-light);
+  border-radius: 7px;
+  background: var(--bg-input);
+}
+.modeSwitch button,
+.searchButton {
+  height: 27px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+}
+.modeSwitch button { padding: 0 10px; }
+.modeSwitch button:hover { color: var(--text-body); }
+.modeSwitch .active { background: var(--bg-modal-hover); color: var(--text-primary); }
+.searchButton {
+  padding: 0 11px;
+  border: 1px solid var(--border-input);
+  background: var(--bg-input);
+  color: var(--text-primary);
+}
+.searchButton:hover:not(:disabled) { background: var(--bg-modal-hover); }
+.searchButton:disabled { opacity: 0.5; cursor: default; }
+.counter { margin-left: auto; color: var(--text-hint); font-size: 10px; }
+.records { display: grid; gap: 8px; }
+.compactRecords { max-height: 220px; overflow-y: auto; }
+.empty {
+  padding: 20px;
+  border: 1px dashed var(--border-light);
+  border-radius: 8px;
+  color: var(--text-hint);
+  text-align: center;
+  font-size: 12px;
+}
+.record {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 9px 8px 9px 11px;
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  background: var(--bg-input);
+}
+.recordBody {
+  position: relative;
+  min-width: 0;
+  flex: 1;
+  padding: 0 18px 0 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.recordBody:disabled { cursor: default; }
+.recordSource { display: block; color: var(--text-secondary); font-size: 10px; font-weight: 600; }
+.recordText {
+  display: block;
+  margin-top: 4px;
+  color: var(--text-primary);
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.compactRecords .recordText { font-size: 11px; line-height: 1.4; }
+.clamped { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
+.chevron {
+  position: absolute;
+  top: 1px;
+  right: 0;
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: var(--text-muted);
+  stroke-width: 1.8;
+  transition: transform 0.15s;
+}
+.chevronExpanded { transform: rotate(180deg); }
+.recordActions { display: flex; flex: 0 0 auto; gap: 3px; }
+.recordActions button {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.recordActions button:hover { color: var(--text-body); background: var(--bg-modal-hover); }
+.recordActions .dangerButton:hover { color: var(--color-error); }
+.recordActions svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.compactSearch .searchControls { flex-wrap: wrap; }

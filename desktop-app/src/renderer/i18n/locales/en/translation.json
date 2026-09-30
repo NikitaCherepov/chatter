@@ -680,6 +680,20 @@
       "characterDefault": "Default character",
       "characterRoomManaged": "Characters in this room are managed as room bots.",
       "characterSelectFailed": "Could not select a character for this chat",
+      "messageSearch": {
+        "label": "Message search",
+        "all": "All accessible chats",
+        "current": "Only this chat"
+      },
+      "search": {
+        "placeholder": "Search memories...",
+        "text": "Text",
+        "semantic": "By meaning",
+        "action": "Search",
+        "searching": "Searching...",
+        "noResults": "No memories found",
+        "failed": "Could not search memories"
+      },
       "globalSettings": {
         "title": "Memory",
         "hint": "Shared vector memories are available in chats using Shared only or Shared and this chat mode.",

@@ -3,11 +3,11 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import * as api from '../lib/api';
 import { ConfirmDialog } from './ConfirmDialog';
+import { MemoryRecordsPanel, type MemoryRecord } from './MemoryRecordsPanel';
 import { Select } from './Select';
 import s from './GlobalMemorySettings.module.scss';
 
 type MemorySpace = { id: number; name: string; kind: 'general' | 'chat'; is_default: number; is_primary: number };
-type MemoryRecord = { id: string; memory_space_id: number; text: string; source: string; updated_at: number };
 type MemoryDialog =
   | { type: 'rename-space'; space: MemorySpace }
   | { type: 'delete-space'; space: MemorySpace }
@@ -208,36 +208,19 @@ export function GlobalMemorySettings() {
         </div>
       </div>
       <div className={s.sectionTitle}>{t('chat.memory.globalSettings.recordsTitle')}</div>
-      <div className={s.records}>
-        {!loading && records.length === 0 && <div className={s.empty}>{t('chat.memory.globalSettings.empty')}</div>}
-        {records.map(record => (
-          <div key={record.id} className={s.record}>
-            <div><strong>{record.source}</strong><p>{record.text}</p></div>
-            <span className={s.recordActions}>
-              <button
-                type="button"
-                onClick={() => {
-                  setDraft(record.text);
-                  setDialog({ type: 'edit-record', record });
-                }}
-                title={t('chat.memory.globalSettings.editRecordAction')}
-                aria-label={t('chat.memory.globalSettings.editRecordAction')}
-              >
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
-              </button>
-              <button
-                type="button"
-                className={s.dangerButton}
-                onClick={() => setDialog({ type: 'delete-record', record })}
-                title={t('chat.memory.globalSettings.deleteRecordAction')}
-                aria-label={t('chat.memory.globalSettings.deleteRecordAction')}
-              >
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg>
-              </button>
-            </span>
-          </div>
-        ))}
-      </div>
+      {!loading && (
+        <MemoryRecordsPanel
+          records={records}
+          semanticEndpoint="/api/v1/memory/records/search"
+          semanticBody={{ space_id: Number(selectedId) }}
+          emptyLabel={t('chat.memory.globalSettings.empty')}
+          onEdit={record => {
+            setDraft(record.text);
+            setDialog({ type: 'edit-record', record });
+          }}
+          onDelete={record => setDialog({ type: 'delete-record', record })}
+        />
+      )}
       {createOpen && (
         <ConfirmDialog
           open

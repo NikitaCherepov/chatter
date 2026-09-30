@@ -1734,6 +1734,7 @@ app.patch('/api/v1/chats/:chatId/memory-settings', (req: AuthedRequest, res: any
         : {}),
       ...(typeof body.memory_mode === 'string' ? { memory_mode: body.memory_mode } : {}),
       ...(typeof body.write_target === 'string' ? { write_target: body.write_target } : {}),
+      ...(typeof body.message_search_scope === 'string' ? { message_search_scope: body.message_search_scope } : {}),
     });
     return res.json({ settings });
   } catch (error: any) {
@@ -1779,6 +1780,21 @@ app.get('/api/v1/memory/records', async (req: AuthedRequest, res: any) => {
   }
 });
 
+app.post('/api/v1/memory/records/search', async (req: AuthedRequest, res: any) => {
+  if (!BACKEND_VECTOR_MEMORY_API_ENABLED) return res.status(503).json({ error: 'backend_vector_memory_api_disabled' });
+  const query = `${req.body?.query || ''}`.trim();
+  const spaceId = Number(req.body?.space_id);
+  if (!query) return res.status(400).json({ error: 'query_required' });
+  if (query.length > 300) return res.status(422).json({ error: 'query_too_long_max_300' });
+  if (!Number.isSafeInteger(spaceId) || spaceId <= 0) return res.status(400).json({ error: 'memory_space_not_found' });
+  try {
+    return res.json(await VectorMemoryService.search(accountIdFromRequest(req), query, 20, undefined, spaceId));
+  } catch (error: any) {
+    const code = `${error?.message || 'vector_memory_search_failed'}`;
+    return res.status(code === 'memory_space_not_found' ? 404 : 500).json({ error: code });
+  }
+});
+
 app.get('/api/v1/chats/:chatId/memory-records', async (req: AuthedRequest, res: any) => {
   try {
     const accountId = accountIdFromRequest(req);
@@ -1790,6 +1806,24 @@ app.get('/api/v1/chats/:chatId/memory-records', async (req: AuthedRequest, res: 
     return res.json({ records: await VectorMemoryService.listRecords(accountId, space) });
   } catch (error: any) {
     return res.status(error?.message === 'chat_not_found' ? 404 : 400).json({ error: error?.message || 'memory_records_load_failed' });
+  }
+});
+
+app.post('/api/v1/chats/:chatId/memory-records/search', async (req: AuthedRequest, res: any) => {
+  if (!BACKEND_VECTOR_MEMORY_API_ENABLED) return res.status(503).json({ error: 'backend_vector_memory_api_disabled' });
+  const query = `${req.body?.query || ''}`.trim();
+  if (!query) return res.status(400).json({ error: 'query_required' });
+  if (query.length > 300) return res.status(422).json({ error: 'query_too_long_max_300' });
+  try {
+    const accountId = accountIdFromRequest(req);
+    const chatId = Number(req.params.chatId);
+    const settings = getChatMemorySettings(accountId, chatId);
+    if (!settings.chat_space_id) return res.json({ ok: true, groups: [], matches: [], text: '' });
+    return res.json(await VectorMemoryService.search(accountId, query, 20, chatId, settings.chat_space_id));
+  } catch (error: any) {
+    const code = `${error?.message || 'vector_memory_search_failed'}`;
+    const status = code === 'chat_not_found' || code === 'memory_space_not_found' ? 404 : 500;
+    return res.status(status).json({ error: code });
   }
 });
 

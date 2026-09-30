@@ -573,14 +573,29 @@ export class VectorMemoryService {
     return { copied_records: clones.length, copied_chunks: targetVectors.length };
   }
 
-  static async search(userId: number, query: string, topK = 3, chatId?: number) {
+  static async search(userId: number, query: string, topK = 3, chatId?: number, exactSpaceId?: number) {
     try {
       const safeQuery = `${query || ''}`.trim();
       if (!safeQuery) throw new Error('query_required');
       if (safeQuery.length > VECTOR_MEMORY_MAX_QUERY) throw new Error(`query_too_long_max_${VECTOR_MEMORY_MAX_QUERY}`);
 
       const safeTopK = Math.max(1, Math.min(VECTOR_MEMORY_TOP_K_MAX, Math.floor(Number(topK) || 3)));
-      const spaces = resolveReadMemorySpaces(userId, chatId);
+      let spaces = resolveReadMemorySpaces(userId, chatId);
+      if (exactSpaceId !== undefined) {
+        const accountId = resolveAccountId(Math.floor(userId));
+        if (chatId !== undefined) {
+          spaces = spaces.filter(space =>
+            space.id === exactSpaceId && space.kind === 'chat' && space.chat_id === chatId,
+          );
+        } else {
+          const space = db.prepare(`
+            SELECT * FROM memory_spaces
+            WHERE id = ? AND user_id = ? AND kind = 'general' AND archived_at IS NULL
+          `).get(exactSpaceId, accountId) as MemorySpace | undefined;
+          spaces = space ? [space] : [];
+        }
+        if (!spaces.length) throw new Error('memory_space_not_found');
+      }
       const namespace = spaces.map(space => space.namespace_key).join(',');
       if (!spaces.length) {
         return { ok: true, namespace: '', top_k: safeTopK, groups: [], matches: [], text: '' };

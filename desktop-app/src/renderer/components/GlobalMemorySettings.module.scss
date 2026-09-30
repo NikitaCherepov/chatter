@@ -68,8 +68,7 @@
   background: var(--bg-modal-hover);
   border-color: var(--border-medium);
 }
-.iconButton svg,
-.recordActions svg {
+.iconButton svg {
   width: 15px;
   height: 15px;
   fill: none;
@@ -83,67 +82,4 @@
 }
 .sectionTitle {
   margin-bottom: 9px;
-}
-.records {
-  display: grid;
-  gap: 8px;
-}
-.empty {
-  padding: 24px;
-  border: 1px dashed var(--border-light);
-  border-radius: 8px;
-  color: var(--text-hint);
-  text-align: center;
-  font-size: 12px;
-}
-.record {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 11px;
-  border: 1px solid var(--border-light);
-  border-radius: 8px;
-  background: var(--bg-input);
-}
-.record strong {
-  display: block;
-  color: var(--text-secondary);
-  font-size: 10px;
-}
-.record p {
-  margin: 4px 0 0;
-  color: var(--text-primary);
-  font-size: 12px;
-  line-height: 1.45;
-  white-space: pre-wrap;
-}
-.record > span {
-  display: flex;
-  gap: 3px;
-}
-.record > div {
-  min-width: 0;
-}
-.recordActions {
-  flex: 0 0 auto;
-}
-.recordActions button {
-  width: 28px;
-  height: 28px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-}
-.recordActions button:hover {
-  color: var(--text-body);
-  background: var(--bg-modal-hover);
-}
-.recordActions .dangerButton:hover {
-  color: var(--color-error);
 }

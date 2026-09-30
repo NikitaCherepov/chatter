@@ -32,6 +32,7 @@ assert.deepEqual(timelines.map(row => row.timeline_index), [1, 2, 3, 4]);
 const sourceSettings = updateChatMemorySettings(1, sourceChatId, {
   memory_mode: 'both',
   write_target: 'chat',
+  message_search_scope: 'current',
 });
 assert.ok(sourceSettings.chat_space_id);
 
@@ -68,6 +69,7 @@ assert.deepEqual(
   'fork includes manual memory and automatic memory before the anchor only',
 );
 assert.equal(getChatMemorySettings(1, firstFork.chat_id).general_space_id, sourceSettings.general_space_id);
+assert.equal(getChatMemorySettings(1, firstFork.chat_id).message_search_scope, 'current', 'fork inherits message search scope');
 assert.notEqual(getChatMemorySettings(1, firstFork.chat_id).chat_space_id, sourceSettings.chat_space_id);
 
 // Simulate the canonical rows written after the vector copy, then prove that a

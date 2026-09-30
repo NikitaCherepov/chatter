@@ -1,4 +1,5 @@
 import { searchChatHistory } from '../../chats.js';
+import { getChatMemorySettings } from '../../memory-foundation.js';
 import type { Tool } from '../types.js';
 
 export const searchChatHistoryTool: Tool = {
@@ -22,7 +23,10 @@ export const searchChatHistoryTool: Tool = {
     const query = typeof args.query === 'string' ? args.query.trim() : '';
     if (!query) return 'No results: empty search query.';
     const limit = Number.isFinite(Number(args.limit)) ? Number(args.limit) : 20;
-    const currentChatOnly = args.current_chat_only === true;
+    const userScope = context.chatId
+      ? getChatMemorySettings(context.userId, context.chatId).message_search_scope
+      : 'all';
+    const currentChatOnly = userScope === 'current' || args.current_chat_only === true;
     if (currentChatOnly && !context.chatId) return 'No results: there is no current chat to search.';
     const hits = searchChatHistory(context.userId, query, limit, currentChatOnly ? context.chatId : null);
     if (hits.length === 0) return `No messages found for "${query}".`;

@@ -6,6 +6,8 @@ process.env.API_DB_PATH = path.join(os.tmpdir(), `chatter-chat-history-search-${
 
 const { db } = await import('../src/db.js');
 const { searchChatHistory } = await import('../src/services/chats.js');
+const { updateChatMemorySettings } = await import('../src/services/memory-foundation.js');
+const { searchChatHistoryTool } = await import('../src/services/tools/chats/search-chat-history.js');
 
 for (const [id, name] of [[101, 'Owner'], [202, 'Member'], [303, 'Outsider']] as const) {
   db.prepare('INSERT INTO users (id, name, language) VALUES (?, ?, ?)').run(id, name, 'en');
@@ -50,5 +52,19 @@ assert.equal(searchChatHistory(202, 'telescope wording-that-does-not-exist', 20,
 
 const pineappleHits = searchChatHistory(202, 'pineapple', 20);
 assert.deepEqual(pineappleHits.map(hit => hit.chat_id), [privateChatId], 'bot-hidden chats stay excluded');
+
+updateChatMemorySettings(202, roomId, { message_search_scope: 'current' });
+const restrictedToolResult = await searchChatHistoryTool.handler(
+  { query: 'pineapple', current_chat_only: false },
+  { userId: 202, chatId: roomId, timezoneOffset: 0 },
+);
+assert.match(restrictedToolResult, /No messages found/, 'stored chat scope cannot be widened by tool arguments');
+
+updateChatMemorySettings(202, roomId, { message_search_scope: 'all' });
+const unrestrictedToolResult = await searchChatHistoryTool.handler(
+  { query: 'pineapple' },
+  { userId: 202, chatId: roomId, timezoneOffset: 0 },
+);
+assert.match(unrestrictedToolResult, new RegExp(`chat_id: ${privateChatId}`), 'all scope searches other accessible chats');
 
 console.log('chat history search tests passed');

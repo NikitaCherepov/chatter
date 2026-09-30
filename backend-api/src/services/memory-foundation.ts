@@ -4,6 +4,7 @@ import { resolveAccountId } from './accounts.js';
 
 export type MemoryMode = 'off' | 'general' | 'chat' | 'both';
 export type MemoryWriteTarget = 'general' | 'chat';
+export type MessageSearchScope = 'all' | 'current';
 
 export type Persona = {
   id: number;
@@ -47,6 +48,7 @@ export type ChatMemorySettings = {
   write_target: MemoryWriteTarget;
   use_core_memory: number;
   allow_core_memory_update: number;
+  message_search_scope: MessageSearchScope;
   created_at: number;
   updated_at: number;
 };
@@ -426,7 +428,7 @@ export const updateChatMemorySettings = (
   chatId: number,
   patch: Partial<Pick<ChatMemorySettings,
     'persona_override_id' | 'memory_mode' | 'write_target' |
-    'use_core_memory' | 'allow_core_memory_update'>>,
+    'use_core_memory' | 'allow_core_memory_update' | 'message_search_scope'>>,
 ): ChatMemorySettings => {
   const accountId = requireChatAccess(userId, chatId);
   const current = getChatMemorySettings(accountId, chatId);
@@ -459,14 +461,16 @@ export const updateChatMemorySettings = (
   const allowCoreMemoryUpdate = patch.allow_core_memory_update === undefined
     ? current.allow_core_memory_update
     : patch.allow_core_memory_update ? 1 : 0;
+  const messageSearchScope = patch.message_search_scope ?? current.message_search_scope;
+  if (!['all', 'current'].includes(messageSearchScope)) throw new Error('bad_message_search_scope');
   db.prepare(`
     UPDATE chat_memory_settings
     SET persona_override_id = ?, general_space_id = ?, chat_space_id = ?, memory_mode = ?,
-        write_target = ?, use_core_memory = ?, allow_core_memory_update = ?, updated_at = ?
+        write_target = ?, use_core_memory = ?, allow_core_memory_update = ?, message_search_scope = ?, updated_at = ?
     WHERE user_id = ? AND chat_id = ?
   `).run(
     personaOverrideId, generalSpaceId, chatSpaceId, memoryMode, writeTarget,
-    useCoreMemory, allowCoreMemoryUpdate, getNowUnix(), accountId, chatId,
+    useCoreMemory, allowCoreMemoryUpdate, messageSearchScope, getNowUnix(), accountId, chatId,
   );
   return getChatMemorySettings(accountId, chatId);
 };
@@ -599,8 +603,8 @@ export const initializeForkedChatMemory = (
     db.prepare(`
       INSERT INTO chat_memory_settings (
         user_id, chat_id, persona_id, persona_override_id, general_space_id, chat_space_id,
-        memory_mode, write_target, use_core_memory, allow_core_memory_update, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        memory_mode, write_target, use_core_memory, allow_core_memory_update, message_search_scope, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(user_id, chat_id) DO UPDATE SET
         persona_id = excluded.persona_id,
         persona_override_id = excluded.persona_override_id,
@@ -610,12 +614,13 @@ export const initializeForkedChatMemory = (
         write_target = excluded.write_target,
         use_core_memory = excluded.use_core_memory,
         allow_core_memory_update = excluded.allow_core_memory_update,
+        message_search_scope = excluded.message_search_scope,
         updated_at = excluded.updated_at
     `).run(
       accountId, targetChatId, sourceSettings.persona_id, sourceSettings.persona_override_id,
       sourceSettings.general_space_id, targetSpace?.id ?? null, sourceSettings.memory_mode,
       sourceSettings.write_target, sourceSettings.use_core_memory,
-      sourceSettings.allow_core_memory_update, now, now,
+      sourceSettings.allow_core_memory_update, sourceSettings.message_search_scope, now, now,
     );
 
     if (!sourceSpace || !targetSpace) {

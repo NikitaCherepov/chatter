@@ -1443,6 +1443,8 @@ db.exec(`
       CHECK (write_target IN ('general', 'chat')),
     use_core_memory INTEGER NOT NULL DEFAULT 1 CHECK (use_core_memory IN (0, 1)),
     allow_core_memory_update INTEGER NOT NULL DEFAULT 1 CHECK (allow_core_memory_update IN (0, 1)),
+    message_search_scope TEXT NOT NULL DEFAULT 'all'
+      CHECK (message_search_scope IN ('all', 'current')),
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL,
     PRIMARY KEY (user_id, chat_id)
@@ -1559,6 +1561,7 @@ db.exec(`
   WHERE import_source IS NOT NULL AND import_key IS NOT NULL
 `);
 ensureMemoryColumn('chat_memory_settings', 'persona_override_id', 'ALTER TABLE chat_memory_settings ADD COLUMN persona_override_id INTEGER');
+ensureMemoryColumn('chat_memory_settings', 'message_search_scope', "ALTER TABLE chat_memory_settings ADD COLUMN message_search_scope TEXT NOT NULL DEFAULT 'all'");
 ensureMemoryColumn('memory_spaces', 'is_primary', 'ALTER TABLE memory_spaces ADD COLUMN is_primary INTEGER NOT NULL DEFAULT 0 CHECK (is_primary IN (0, 1))');
 ensureMemoryColumn('memory_records', 'origin_message_cursor', 'ALTER TABLE memory_records ADD COLUMN origin_message_cursor INTEGER');
 db.exec(`

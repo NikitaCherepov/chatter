@@ -43,6 +43,15 @@ assert.throws(() => getChatMemorySettings(303, roomId), /chat_not_found/);
 
 const ownerSettings = getChatMemorySettings(101, roomId);
 const memberSettings = getChatMemorySettings(202, roomId);
+assert.equal(ownerSettings.message_search_scope, 'all', 'message search defaults to all accessible chats');
+assert.equal(memberSettings.message_search_scope, 'all', 'each room member receives independent search settings');
+updateChatMemorySettings(202, roomId, { message_search_scope: 'current' });
+assert.equal(getChatMemorySettings(202, roomId).message_search_scope, 'current');
+assert.equal(getChatMemorySettings(101, roomId).message_search_scope, 'all', 'member search scope does not affect the room owner');
+assert.throws(
+  () => updateChatMemorySettings(202, roomId, { message_search_scope: 'invalid' as 'all' }),
+  /bad_message_search_scope/,
+);
 assert.notEqual(ownerSettings.persona_id, memberSettings.persona_id, 'room members keep separate personas');
 assert.notEqual(ownerSettings.general_space_id, memberSettings.general_space_id, 'room members keep separate general memory');
 assert.equal(resolveReadMemorySpaces(101, roomId)[0]?.namespace_key, '101', 'existing Pinecone namespace remains the default');
@@ -142,6 +151,11 @@ assert.throws(
   () => VectorMemoryService.readRecord(202, 'owner-room-memory', roomId),
   /memory_record_not_found/,
   'room membership does not expose another user memory',
+);
+await assert.rejects(
+  () => VectorMemoryService.search(202, 'owner memory', 20, roomId, ownerChatSettings.chat_space_id!),
+  /memory_space_not_found/,
+  'semantic search requires the exact user AND chat memory space',
 );
 assert.throws(
   () => VectorMemoryService.readRecord(101, 'owner-room-memory'),

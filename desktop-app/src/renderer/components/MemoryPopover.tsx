@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import * as api from '../lib/api';
 import { ChatPersonaSelector } from './ChatPersonaSelector';
 import { ConfirmDialog } from './ConfirmDialog';
+import { MemoryRecordsPanel, type MemoryRecord } from './MemoryRecordsPanel';
 import { Select } from './Select';
 import s from './MemoryPopover.module.scss';
 
@@ -12,8 +13,8 @@ type MemorySettings = {
   chat_space_id: number | null;
   memory_mode: 'off' | 'general' | 'chat' | 'both';
   write_target: 'general' | 'chat';
+  message_search_scope: 'all' | 'current';
 };
-type MemoryRecord = { id: string; memory_space_id: number; text: string; source: string; updated_at: number };
 type RecordDialog = { type: 'edit' | 'delete'; record: MemoryRecord };
 type ChatPromptSettings = { prompt_id: number | null; room_enabled: boolean };
 
@@ -206,6 +207,16 @@ export function MemoryPopover({ chatId }: { chatId: number }) {
               <label className={s.field}>{t('chat.memory.persona')}
                 <ChatPersonaSelector chatId={chatId} embedded />
               </label>
+              <div className={s.field}>{t('chat.memory.messageSearch.label')}
+                <Select
+                  value={settings.message_search_scope}
+                  onChange={value => void patchSettings({ message_search_scope: value as MemorySettings['message_search_scope'] })}
+                  options={[
+                    { value: 'all', label: t('chat.memory.messageSearch.all') },
+                    { value: 'current', label: t('chat.memory.messageSearch.current') },
+                  ]}
+                />
+              </div>
               <div className={s.field}>{t('chat.memory.modeLabel')}
                 <Select
                   value={settings.memory_mode}
@@ -234,36 +245,17 @@ export function MemoryPopover({ chatId }: { chatId: number }) {
                 <>
                   <div className={s.divider} />
                   <div className={s.field}>{t('chat.memory.chatMemoryTitle')}</div>
-                  <div className={s.records}>
-                    {records.length === 0 && <div className={s.empty}>{t('chat.memory.empty')}</div>}
-                    {records.map(record => (
-                      <div key={record.id} className={s.record}>
-                        <div><strong>{record.source}</strong><p>{record.text}</p></div>
-                        <span className={s.recordActions}>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setDraft(record.text);
-                              setDialog({ type: 'edit', record });
-                            }}
-                            title={t('common.edit')}
-                            aria-label={t('common.edit')}
-                          >
-                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
-                          </button>
-                          <button
-                            type="button"
-                            className={s.dangerButton}
-                            onClick={() => setDialog({ type: 'delete', record })}
-                            title={t('common.delete')}
-                            aria-label={t('common.delete')}
-                          >
-                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg>
-                          </button>
-                        </span>
-                      </div>
-                    ))}
-                  </div>
+                  <MemoryRecordsPanel
+                    records={records}
+                    semanticEndpoint={`/api/v1/chats/${chatId}/memory-records/search`}
+                    compact
+                    emptyLabel={t('chat.memory.empty')}
+                    onEdit={record => {
+                      setDraft(record.text);
+                      setDialog({ type: 'edit', record });
+                    }}
+                    onDelete={record => setDialog({ type: 'delete', record })}
+                  />
                 </>
               )}
             </>
