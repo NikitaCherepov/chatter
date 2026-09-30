@@ -25,6 +25,7 @@ const {
   updatePersona,
   updateChatMemorySettings,
 } = await import('../src/services/memory-foundation.js');
+const { VectorMemoryService } = await import('../src/services/vector-memory.js');
 
 for (const [id, name] of [[101, 'Owner'], [202, 'Member'], [303, 'Outsider']] as const) {
   db.prepare('INSERT INTO users (id, name, language) VALUES (?, ?, ?)').run(id, name, 'en');
@@ -127,6 +128,26 @@ createMemoryRecord({
   source: 'automatic',
   chunks: [{ id: 'member-room-memory_chunk_0', text: 'member room memory', index: 0 }],
 });
+assert.equal(
+  VectorMemoryService.readRecord(101, 'owner-room-memory', roomId).text,
+  'owner room memory',
+  'owner can read their complete memory through the selected chat space',
+);
+assert.equal(
+  VectorMemoryService.readRecord(202, 'member-room-memory', roomId).text,
+  'member room memory',
+  'room member reads only their own complete memory',
+);
+assert.throws(
+  () => VectorMemoryService.readRecord(202, 'owner-room-memory', roomId),
+  /memory_record_not_found/,
+  'room membership does not expose another user memory',
+);
+assert.throws(
+  () => VectorMemoryService.readRecord(101, 'owner-room-memory'),
+  /memory_record_not_found/,
+  'chat memory is unavailable without the matching chat scope',
+);
 assert.equal(listChatMemorySpacesForDeletion(101, roomId).length, 2, 'owner deletion includes every room member chat space');
 assert.throws(() => listChatMemorySpacesForDeletion(303, roomId), /chat_not_found/);
 assert.equal(purgeCanonicalChatMemory(101, roomId).spaces_deleted, 2);

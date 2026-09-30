@@ -12,7 +12,7 @@ import {
   deleteQdrantSpace,
   deleteQdrantUser,
   fetchQdrantVectors,
-  queryQdrantVectors,
+  queryQdrantVectorGroups,
   upsertQdrantVectors,
 } from './qdrant-memory.js';
 import {
@@ -37,7 +37,15 @@ const VECTOR_MEMORY_MAX_QUERY = Math.max(1, Number.parseInt(process.env.VECTOR_M
 const VECTOR_MEMORY_TOP_K_MAX = Math.max(1, Number.parseInt(process.env.VECTOR_MEMORY_TOP_K_MAX || '20', 10) || 20);
 const VECTOR_MEMORY_CHUNK_SIZE = Math.max(100, Number.parseInt(process.env.VECTOR_MEMORY_CHUNK_SIZE || '1000', 10) || 1000);
 const VECTOR_MEMORY_CHUNK_OVERLAP = Math.max(0, Number.parseInt(process.env.VECTOR_MEMORY_CHUNK_OVERLAP || '200', 10) || 200);
+const VECTOR_MEMORY_GROUP_SIZE = 2;
 const VECTOR_MEMORY_LOG_SUCCESS = `${process.env.VECTOR_MEMORY_LOG_SUCCESS || '0'}`.trim() === '1';
+
+const memoryEmbeddingText = (source: string, text: string) => `[Context: ${source}] ${text}`;
+const stripMemoryContextPrefix = (source: string, text: string) => {
+  const prefixes = [`[Context: ${source}] `, `[Контекст: ${source}] `];
+  const prefix = prefixes.find(candidate => text.startsWith(candidate));
+  return prefix ? text.slice(prefix.length) : text;
+};
 
 let openaiClient: { key: string; client: OpenAI } | null = null;
 let pineconeClient: Pinecone | null = null;
@@ -293,11 +301,10 @@ export class VectorMemoryService {
             const recordId = id.match(/^(.*)_chunk_\d+$/)?.[1] || id;
             const source = `${metadata?.source || 'memory'}`;
             const rawText = `${metadata?.text || ''}`;
-            const prefix = `[Контекст: ${source}] `;
             const group = groups.get(recordId) || [];
             group.push({
               id,
-              text: rawText.startsWith(prefix) ? rawText.slice(prefix.length) : rawText,
+              text: stripMemoryContextPrefix(source, rawText),
               source,
               timestamp: Number(metadata?.timestamp) || 0,
               index: Number.isSafeInteger(Number(metadata?.chunk_index))
@@ -341,8 +348,8 @@ export class VectorMemoryService {
       const namespace = space.namespace_key;
 
       const inputForEmbeddings = chunks.map(chunk => {
-        // Приклеиваем тег к каждому чанку, чтобы каждый вектор "помнил" откуда он
-        return `[Контекст: ${safeSource}] ${chunk}`.replace(/\n/g, ' ').trim();
+        // Include the source in every chunk so the embedding keeps its context.
+        return memoryEmbeddingText(safeSource, chunk).replace(/\n/g, ' ').trim();
       });
       const runtimeSettings = getVectorMemoryRuntimeSettings();
       const embedResponse = await createEmbeddings(inputForEmbeddings, runtimeSettings, {
@@ -576,7 +583,7 @@ export class VectorMemoryService {
       const spaces = resolveReadMemorySpaces(userId, chatId);
       const namespace = spaces.map(space => space.namespace_key).join(',');
       if (!spaces.length) {
-        return { ok: true, namespace: '', top_k: safeTopK, matches: [], text: '' };
+        return { ok: true, namespace: '', top_k: safeTopK, groups: [], matches: [], text: '' };
       }
       // Keep model and collection from one settings snapshot. A migration may
       // finish while this request is embedding its query.
@@ -586,35 +593,58 @@ export class VectorMemoryService {
         chatId: chatId ?? null,
         route: 'memory:search',
       });
-      const candidateLimit = Math.min(VECTOR_MEMORY_TOP_K_MAX * 4, Math.max(safeTopK, safeTopK * 4));
-      const matchesById = new Map<string, any>();
+      let groupedMatches: Array<{
+        record_id: string;
+        score: number;
+        fragments: Array<{
+          id: string;
+          chunk_id: string;
+          score: number;
+          text: string;
+          source: string;
+          timestamp: number;
+          chunk_index: number;
+          total_chunks: number;
+        }>;
+      }> = [];
 
       if (getVectorMemoryStorage() === 'qdrant') {
-        const points = await queryQdrantVectors(
+        const groups = await queryQdrantVectorGroups(
           resolveAccountId(Math.floor(userId)),
           spaces,
           runtimeSettings.model,
           queryVector,
-          candidateLimit,
+          safeTopK,
+          VECTOR_MEMORY_GROUP_SIZE,
           runtimeSettings.activeCollection,
         );
-        points.forEach(point => {
-          const payload = point.payload as Record<string, unknown> | null | undefined;
-          const id = `${payload?.chunk_id || point.id || ''}`;
-          if (!id) return;
-          matchesById.set(id, {
-            id,
-            score: Number(point.score || 0),
-            metadata: {
-              text: `${payload?.text || ''}`,
-              source: `${payload?.source || ''}`,
+        groupedMatches = groups.map(group => {
+          const recordId = `${group.id || ''}`;
+          const fragments = group.hits.map(point => {
+            const payload = point.payload as Record<string, unknown> | null | undefined;
+            const chunkId = `${payload?.chunk_id || point.id || ''}`;
+            const source = `${payload?.source || ''}`;
+            const rawText = `${payload?.text || ''}`;
+            return {
+              id: chunkId,
+              chunk_id: chunkId,
+              score: Number(point.score || 0),
+              text: stripMemoryContextPrefix(source, rawText),
+              source,
               timestamp: Number(payload?.timestamp || 0),
-              record_id: `${payload?.record_id || ''}`,
               chunk_index: Number(payload?.chunk_index || 0),
-            },
-          });
-        });
+              total_chunks: Math.max(1, Number(payload?.total_chunks || 1)),
+            };
+          }).filter(fragment => fragment.chunk_id);
+          return {
+            record_id: recordId,
+            score: Number(fragments[0]?.score || 0),
+            fragments,
+          };
+        }).filter(group => group.record_id && group.fragments.length > 0);
       } else {
+        const candidateLimit = Math.min(VECTOR_MEMORY_TOP_K_MAX * 4, Math.max(safeTopK, safeTopK * 4));
+        const matchesById = new Map<string, any>();
         const index = getPineconeIndex();
         const readableNamespaces = [...new Set(spaces.flatMap(space => namespacesForSpace(userId, space)))];
         const results = await Promise.all(readableNamespaces.map(readableNamespace =>
@@ -634,42 +664,58 @@ export class VectorMemoryService {
             }
           }
         }
+        const records = new Map<string, any[]>();
+        [...matchesById.values()]
+          .sort((left, right) => Number(right?.score || 0) - Number(left?.score || 0))
+          .forEach(match => {
+            const chunkId = `${match?.id || ''}`;
+            const recordId = `${match?.metadata?.record_id || chunkId.match(/^(.*)_chunk_\d+$/)?.[1] || chunkId}`;
+            if (!recordId || !chunkId) return;
+            const group = records.get(recordId) || [];
+            group.push(match);
+            records.set(recordId, group);
+          });
+        groupedMatches = [...records.entries()]
+          .map(([recordId, group]) => ({ recordId, group }))
+          .sort((left, right) => Number(right.group[0]?.score || 0) - Number(left.group[0]?.score || 0))
+          .slice(0, safeTopK)
+          .map(({ recordId, group }) => ({
+            record_id: recordId,
+            score: Number(group[0]?.score || 0),
+            fragments: group.slice(0, VECTOR_MEMORY_GROUP_SIZE).map(match => {
+              const chunkId = `${match?.id || ''}`;
+              const source = `${match?.metadata?.source || ''}`;
+              const rawText = `${match?.metadata?.text || ''}`;
+              return {
+                id: chunkId,
+                chunk_id: chunkId,
+                score: Number(match?.score || 0),
+                text: stripMemoryContextPrefix(source, rawText),
+                source,
+                timestamp: Number(match?.metadata?.timestamp || 0),
+                chunk_index: Number(match?.metadata?.chunk_index || chunkId.match(/_chunk_(\d+)$/)?.[1] || 0),
+                total_chunks: Math.max(1, Number(match?.metadata?.total_chunks || 1)),
+              };
+            }),
+          }));
       }
-      const distinctRecords = new Map<string, any>();
-      [...matchesById.values()]
-        .sort((left, right) => Number(right?.score || 0) - Number(left?.score || 0))
-        .forEach(match => {
-          const chunkId = `${match?.id || ''}`;
-          const recordId = `${match?.metadata?.record_id || chunkId.match(/^(.*)_chunk_\d+$/)?.[1] || chunkId}`;
-          if (!recordId || distinctRecords.has(recordId)) return;
-          distinctRecords.set(recordId, { ...match, recordId });
-        });
-      const items = [...distinctRecords.values()]
-        .slice(0, safeTopK)
-        .map((match: any) => {
-          const chunkId = `${match?.id || ''}`;
-          const source = `${match?.metadata?.source || ''}`;
-          const rawText = `${match?.metadata?.text || ''}`;
-          const sourcePrefix = `[Контекст: ${source}] `;
-          return {
-            id: chunkId,
-            chunk_id: chunkId,
-            record_id: `${match.recordId || chunkId}`,
-            score: Number(match?.score || 0),
-            text: rawText.startsWith(sourcePrefix) ? rawText.slice(sourcePrefix.length) : rawText,
-            source,
-            timestamp: Number(match?.metadata?.timestamp || 0)
-          };
-        });
 
-      const joinedText = items
-        .map(item => `[Источник: ${item.source || 'unknown'}]\n${item.text}`)
+      const items = groupedMatches.flatMap(group => group.fragments.map(fragment => ({
+        ...fragment,
+        record_id: group.record_id,
+      })));
+
+      const joinedText = groupedMatches
+        .map(group => `[Воспоминание: ${group.record_id}]\n${group.fragments
+          .map(fragment => `[Источник: ${fragment.source || 'unknown'}]\n${fragment.text}`)
+          .join('\n\n')}`)
         .join('\n\n---\n\n');
 
       const out = {
         ok: true,
         namespace,
         top_k: safeTopK,
+        groups: groupedMatches,
         matches: items,
         text: joinedText
       };
@@ -678,6 +724,7 @@ export class VectorMemoryService {
         user_id: Math.floor(userId),
         namespace,
         top_k: safeTopK,
+        groups_count: groupedMatches.length,
         matches_count: items.length
       });
       return out;
@@ -801,6 +848,24 @@ export class VectorMemoryService {
     }
   }
 
+  static readRecord(userId: number, recordId: string, chatId?: number) {
+    const safeRecordId = `${recordId || ''}`.trim();
+    if (!safeRecordId) throw new Error('memory_id_required');
+    if (safeRecordId.length > 240) throw new Error('memory_id_too_long');
+    const record = getOwnedMemoryRecord(userId, safeRecordId);
+    const readableSpaceIds = new Set(resolveReadMemorySpaces(userId, chatId).map(space => space.id));
+    if (!record || !readableSpaceIds.has(record.memory_space_id)) {
+      throw new Error('memory_record_not_found');
+    }
+    return {
+      memory_id: record.id,
+      text: record.text,
+      source: record.source,
+      created_at: record.created_at,
+      updated_at: record.updated_at,
+    };
+  }
+
   static async deleteRecord(userId: number, recordId: string) {
     assertMemoryWritable();
     const record = getOwnedMemoryRecord(userId, `${recordId || ''}`.trim());
@@ -852,7 +917,7 @@ export class VectorMemoryService {
       ? record.source
       : `${sourceTag || ''}`.trim().slice(0, 240) || 'manual';
     const chunks = chunkText(safeText, VECTOR_MEMORY_CHUNK_SIZE, VECTOR_MEMORY_CHUNK_OVERLAP);
-    const input = chunks.map(chunk => `[Контекст: ${safeSource}] ${chunk}`.replace(/\n/g, ' ').trim());
+    const input = chunks.map(chunk => memoryEmbeddingText(safeSource, chunk).replace(/\n/g, ' ').trim());
     const runtimeSettings = getVectorMemoryRuntimeSettings();
     const response = await createEmbeddings(input, runtimeSettings, {
       userId: accountId,

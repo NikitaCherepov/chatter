@@ -65,8 +65,9 @@ const chunkIndexFor = (chunkId: string, metadata?: Record<string, unknown>) => {
   return Number(chunkId.match(/_chunk_(\d+)$/)?.[1] || 0);
 };
 const cleanChunkText = (text: string, source: string) => {
-  const prefix = `[Контекст: ${source}] `;
-  return text.startsWith(prefix) ? text.slice(prefix.length) : text;
+  const prefixes = [`[Context: ${source}] `, `[Контекст: ${source}] `];
+  const prefix = prefixes.find(candidate => text.startsWith(candidate));
+  return prefix ? text.slice(prefix.length) : text;
 };
 
 export const migrateVectorMemoryToQdrant = async (

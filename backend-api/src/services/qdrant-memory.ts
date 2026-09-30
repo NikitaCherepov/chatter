@@ -41,6 +41,7 @@ const ensurePayloadIndexes = async (collectionName: string) => {
     ['user_id', 'integer'],
     ['memory_space_id', 'integer'],
     ['embedding_model', 'keyword'],
+    ['record_id', 'keyword'],
   ];
   for (const [field_name, field_schema] of indexes) {
     try {
@@ -223,18 +224,21 @@ export const deleteQdrantUser = async (userId: number, collectionName = activeCo
   });
 };
 
-export const queryQdrantVectors = async (
+export const queryQdrantVectorGroups = async (
   userId: number,
   spaces: Array<Pick<MemorySpace, 'id'>>,
   embeddingModel: string,
   queryVector: number[],
   limit: number,
+  groupSize = 2,
   collectionName = activeCollection(),
 ) => {
   await ensureQdrantCollection(queryVector.length, collectionName);
-  const result = await getQdrantClient().query(collectionName, {
+  const result = await getQdrantClient().queryGroups(collectionName, {
     query: queryVector,
-    limit,
+    group_by: 'record_id',
+    group_size: Math.max(1, Math.floor(groupSize)),
+    limit: Math.max(1, Math.floor(limit)),
     with_payload: true,
     with_vector: false,
     filter: {
@@ -245,5 +249,5 @@ export const queryQdrantVectors = async (
       ],
     },
   });
-  return result.points;
+  return result.groups;
 };

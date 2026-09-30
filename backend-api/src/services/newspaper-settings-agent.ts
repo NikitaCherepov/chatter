@@ -6,6 +6,7 @@ import {
   readChatContextTool,
   searchChatHistoryTool,
   searchColdMemoryTool,
+  readMemoryTool,
 } from './tools/registry.js';
 
 export type NewspaperSettingsSuggestion = {
@@ -63,7 +64,7 @@ export const suggestNewspaperSettings = async (
       `Current source recommendations:\n${newspaper.source_recommendations || '(empty)'}`,
       `Current weather location:\n${newspaper.weather_location || '(empty)'}`,
     ].join('\n\n'),
-    tools: [listRecentChatsTool, searchChatHistoryTool, readChatContextTool, searchColdMemoryTool],
+    tools: [listRecentChatsTool, searchChatHistoryTool, readChatContextTool, searchColdMemoryTool, readMemoryTool],
     maxLoops: 16,
     maxTokens: 4_096,
   });

@@ -7906,6 +7906,7 @@ export const sendMessageThroughAi = async (
   if (flags?.disable_personal) {
     disabledToolSet.add('update_core_memory');
     disabledToolSet.add('search_cold_memory');
+    disabledToolSet.add('read_memory');
     disabledToolSet.add('save_to_cold_memory');
     disabledToolSet.add('delete_from_cold_memory');
     disabledToolSet.add('save_note');
