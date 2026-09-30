@@ -289,7 +289,7 @@
       "placeholderExisting": "Leave empty to keep unchanged"
     },
     "pinecone": {
-      "pageDescription": "Local Chatter vector memory in Qdrant and its embedding model.",
+      "pageDescription": "Local Chatter vector memory in Qdrant with embedding and ranking models.",
       "sectionTitle": "Pinecone",
       "sectionIntro": "Create an index in Pinecone and provide its name along with the API key.",
       "apiKeyLabel": "Pinecone API key",
@@ -323,7 +323,15 @@
         "migrateAction": "Re-embed and switch",
         "migrating": "Migrating…",
         "migrationComplete": "New collection is active. Vectors: {{count}}.",
-        "settingsSaved": "Embedding routing settings saved."
+        "settingsSaved": "Vector memory settings saved."
+      },
+      "reranking": {
+        "sectionTitle": "Ranking model",
+        "sectionIntro": "Reranks 20 vector candidates using their best matching fragments, then applies the relevance threshold.",
+        "enabledLabel": "Enable reranking for memory search",
+        "priceLabel": "Price, $ / search",
+        "thresholdLabel": "Minimum relevance score · 0–1",
+        "resultLimitLabel": "Memories returned · 1–20"
       },
       "collections": {
         "title": "Memory versions",

@@ -2183,6 +2183,20 @@ async function listOpenRouterEmbeddingModels(query, apiKeyId) {
   return { ...payload, data };
 }
 
+async function listOpenRouterRerankModels(query, apiKeyId) {
+  const payload = await openRouterAuthenticatedFetch('/models?output_modalities=rerank', apiKeyId);
+  const needle = `${query || ''}`.trim().toLowerCase();
+  const models = Array.isArray(payload?.data) ? payload.data : [];
+  const rerankModels = models.filter((model) =>
+    Array.isArray(model?.architecture?.output_modalities)
+    && model.architecture.output_modalities.includes('rerank')
+  );
+  const data = needle
+    ? rerankModels.filter((model) => `${model?.id || ''} ${model?.name || ''}`.toLowerCase().includes(needle))
+    : rerankModels;
+  return { ...payload, data };
+}
+
 async function getOpenRouterImageCapabilities(input) {
   const model = `${input.model || ''}`.trim();
   const modelParts = model.split('/');
@@ -2956,6 +2970,17 @@ async function handleRequest(req, res) {
       return sendJson(res, 200, await listOpenRouterEmbeddingModels(query, apiKeyId));
     } catch (error) {
       return sendJson(res, 502, { error: error.message || 'openrouter_embedding_models_failed' });
+    }
+  }
+
+  if (req.method === 'GET' && pathname === '/api/openrouter/rerank-models') {
+    const query = `${url.searchParams.get('q') || ''}`.trim();
+    const apiKeyId = url.searchParams.get('apiKeyId');
+    if (!query || query.length < 2) return sendJson(res, 400, { error: 'query_too_short' });
+    try {
+      return sendJson(res, 200, await listOpenRouterRerankModels(query, apiKeyId));
+    } catch (error) {
+      return sendJson(res, 502, { error: error.message || 'openrouter_rerank_models_failed' });
     }
   }
 

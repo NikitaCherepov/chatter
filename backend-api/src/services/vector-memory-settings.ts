@@ -3,6 +3,17 @@ import { db } from '../db.js';
 import { getEncryptionKey } from '../utils/encryption.js';
 
 export type VectorMemoryProvider = 'openrouter' | 'custom';
+export type VectorMemoryRerankingSettings = {
+  enabled: boolean;
+  provider: VectorMemoryProvider;
+  baseUrl: string;
+  model: string;
+  openrouterProviderSlug: string | null;
+  pricePerSearch: number | null;
+  apiKeyId: number | null;
+  minScore: number;
+  resultLimit: number;
+};
 export type VectorMemorySettings = {
   storage: 'qdrant';
   provider: VectorMemoryProvider;
@@ -12,9 +23,13 @@ export type VectorMemorySettings = {
   inputPricePerMillion: number | null;
   apiKeyId: number | null;
   activeCollection: string;
+  reranking: VectorMemoryRerankingSettings;
 };
 
-export type VectorMemoryPublicSettings = VectorMemorySettings & { hasApiKey: boolean };
+export type VectorMemoryPublicSettings = VectorMemorySettings & {
+  hasApiKey: boolean;
+  reranking: VectorMemoryRerankingSettings & { hasApiKey: boolean };
+};
 
 const SETTINGS_KEY = 'vector_memory_settings';
 const DEFAULT_COLLECTION = 'chatter_memory';
@@ -74,6 +89,7 @@ export const getVectorMemoryApiKey = (id: number | null) => readSecret(id);
 export const getVectorMemoryApiKeyUsage = (id: number): string[] => {
   const settings = readSettings();
   const usages = settings.apiKeyId === id ? ['Vector memory · active embedding model'] : [];
+  if (settings.reranking.apiKeyId === id) usages.push('Vector memory · ranking model');
   const backups = db.prepare(`
     SELECT model FROM vector_memory_collections
     WHERE api_key_id = ? AND status <> 'active'
@@ -84,8 +100,15 @@ export const getVectorMemoryApiKeyUsage = (id: number): string[] => {
 
 export const replaceVectorMemoryApiKeyReference = (currentId: number, replacementId: number | null) => {
   const settings = readSettings();
-  if (settings.apiKeyId === currentId) {
-    writeSettings({ ...settings, apiKeyId: replacementId });
+  if (settings.apiKeyId === currentId || settings.reranking.apiKeyId === currentId) {
+    writeSettings({
+      ...settings,
+      apiKeyId: settings.apiKeyId === currentId ? replacementId : settings.apiKeyId,
+      reranking: {
+        ...settings.reranking,
+        apiKeyId: settings.reranking.apiKeyId === currentId ? replacementId : settings.reranking.apiKeyId,
+      },
+    });
   }
   db.prepare('UPDATE vector_memory_collections SET api_key_id = ?, updated_at = ? WHERE api_key_id = ?')
     .run(replacementId, Date.now(), currentId);
@@ -108,6 +131,44 @@ const normalizePrice = (value: unknown): number | null => {
   return Number.isFinite(price) && price >= 0 ? price : null;
 };
 
+const normalizeReranking = (
+  value: unknown,
+  fallback?: VectorMemoryRerankingSettings,
+): VectorMemoryRerankingSettings => {
+  const source = value && typeof value === 'object' ? value as Record<string, unknown> : {};
+  const defaults: VectorMemoryRerankingSettings = fallback ?? {
+    enabled: false,
+    provider: 'openrouter',
+    baseUrl: 'https://openrouter.ai/api/v1',
+    model: '',
+    openrouterProviderSlug: null,
+    pricePerSearch: null,
+    apiKeyId: null,
+    minScore: 0.1,
+    resultLimit: 5,
+  };
+  const provider: VectorMemoryProvider = source.provider === 'custom' || source.provider === 'openrouter'
+    ? source.provider
+    : defaults.provider;
+  const minScore = Number(source.minScore);
+  const resultLimit = Math.floor(Number(source.resultLimit));
+  return {
+    enabled: source.enabled === undefined ? defaults.enabled : source.enabled === true,
+    provider,
+    baseUrl: `${source.baseUrl || defaults.baseUrl}`.trim(),
+    model: `${source.model ?? defaults.model}`.trim(),
+    openrouterProviderSlug: provider === 'openrouter'
+      ? normalizeProviderSlug(source.openrouterProviderSlug)
+      : null,
+    pricePerSearch: source.pricePerSearch === undefined
+      ? defaults.pricePerSearch
+      : normalizePrice(source.pricePerSearch),
+    apiKeyId: normalizeId(source.apiKeyId) ?? defaults.apiKeyId,
+    minScore: Number.isFinite(minScore) ? Math.max(0, Math.min(1, minScore)) : defaults.minScore,
+    resultLimit: Number.isFinite(resultLimit) ? Math.max(1, Math.min(20, resultLimit)) : defaults.resultLimit,
+  };
+};
+
 const seedFromEnv = (): VectorMemorySettings => {
   const baseUrl = `${process.env.TIMEWEB_EMBED_BASE_URL || process.env.TIMEWEB_BASE_URL || 'https://openrouter.ai/api/v1'}`.trim();
   const legacySecret = `${process.env.TIMEWEB_EMBED_API_KEY || ''}`.trim();
@@ -120,6 +181,7 @@ const seedFromEnv = (): VectorMemorySettings => {
     inputPricePerMillion: null,
     apiKeyId: legacySecret ? storeLegacySecret(legacySecret) : null,
     activeCollection: `${process.env.QDRANT_COLLECTION || DEFAULT_COLLECTION}`.trim() || DEFAULT_COLLECTION,
+    reranking: normalizeReranking(null),
   };
 };
 
@@ -137,6 +199,7 @@ const normalizeSettings = (value: unknown, fallback: VectorMemorySettings): Vect
     inputPricePerMillion: normalizePrice(source.inputPricePerMillion),
     apiKeyId: normalizeId(source.apiKeyId) ?? fallback.apiKeyId,
     activeCollection: normalizeCollectionName(source.activeCollection || fallback.activeCollection),
+    reranking: normalizeReranking(source.reranking, fallback.reranking),
   };
 };
 
@@ -209,6 +272,7 @@ const readSettings = (): VectorMemorySettings => {
         inputPricePerMillion: null,
         apiKeyId: null,
         activeCollection: DEFAULT_COLLECTION,
+        reranking: normalizeReranking(null),
       }
     : seedFromEnv();
   const normalized = normalizeSettings(parsed, fallback);
@@ -219,12 +283,26 @@ const readSettings = (): VectorMemorySettings => {
 
 export const getVectorMemorySettings = (): VectorMemoryPublicSettings => {
   const settings = readSettings();
-  return { ...settings, hasApiKey: Boolean(readSecret(settings.apiKeyId)) };
+  return {
+    ...settings,
+    hasApiKey: Boolean(readSecret(settings.apiKeyId)),
+    reranking: {
+      ...settings.reranking,
+      hasApiKey: Boolean(readSecret(settings.reranking.apiKeyId)),
+    },
+  };
 };
 
 export const getVectorMemoryRuntimeSettings = () => {
   const settings = readSettings();
-  return { ...settings, apiKey: readSecret(settings.apiKeyId) };
+  return {
+    ...settings,
+    apiKey: readSecret(settings.apiKeyId),
+    reranking: {
+      ...settings.reranking,
+      apiKey: readSecret(settings.reranking.apiKeyId),
+    },
+  };
 };
 
 // Keep the legacy union in the return type while older Pinecone branches are
@@ -234,10 +312,32 @@ export const getVectorMemoryStorage = (): 'qdrant' | 'pinecone' => 'qdrant';
 export const updateVectorMemorySettings = (patch: unknown): VectorMemoryPublicSettings => {
   const source = patch && typeof patch === 'object' ? patch as Record<string, unknown> : {};
   const current = readSettings();
+  const rerankingPatch = source.reranking && typeof source.reranking === 'object'
+    ? source.reranking as Record<string, unknown>
+    : {};
+  if ('minScore' in rerankingPatch) {
+    const minScore = Number(rerankingPatch.minScore);
+    if (!Number.isFinite(minScore) || minScore < 0 || minScore > 1) {
+      throw new Error('bad_reranking_min_score');
+    }
+  }
+  if ('resultLimit' in rerankingPatch) {
+    const resultLimit = Number(rerankingPatch.resultLimit);
+    if (!Number.isInteger(resultLimit) || resultLimit < 1 || resultLimit > 20) {
+      throw new Error('bad_reranking_result_limit');
+    }
+  }
   const next = normalizeSettings({
     ...current,
     ...source,
     apiKeyId: 'apiKeyId' in source ? requireApiKeyId(source.apiKeyId) : current.apiKeyId,
+    reranking: {
+      ...current.reranking,
+      ...rerankingPatch,
+      apiKeyId: 'apiKeyId' in rerankingPatch
+        ? requireApiKeyId(rerankingPatch.apiKeyId)
+        : current.reranking.apiKeyId,
+    },
   }, current);
   if (!next.baseUrl || !next.model || !next.apiKeyId) throw new Error('embedding_configuration_required');
   if (
@@ -245,6 +345,9 @@ export const updateVectorMemorySettings = (patch: unknown): VectorMemoryPublicSe
     || next.model !== current.model
   ) {
     throw new Error('embedding_migration_required');
+  }
+  if (next.reranking.enabled && (!next.reranking.baseUrl || !next.reranking.model || !next.reranking.apiKeyId)) {
+    throw new Error('reranking_configuration_required');
   }
   writeSettings(next);
   ensureActiveRegistry(next);

@@ -6,6 +6,7 @@ import type { ApiKey, PineconeSettings } from '../../../lib/types';
 import { api } from '../../../lib/api';
 import { FormField } from '../../ui/FormField/FormField';
 import { Input } from '../../ui/Input/Input';
+import { Checkbox } from '../../ui/Checkbox/Checkbox';
 import { Select, type SelectOption } from '../../ui/Select/Select';
 import { ConfirmModal } from '../../ui/ConfirmModal/ConfirmModal';
 import { OpenRouterModelInput } from '../../ui/ModelInput/OpenRouterModelInput';
@@ -24,6 +25,18 @@ type RuntimeSettings = {
   apiKeyId: number | null;
   activeCollection: string;
   hasApiKey: boolean;
+  reranking: {
+    enabled: boolean;
+    provider: 'openrouter' | 'custom';
+    baseUrl: string;
+    model: string;
+    openrouterProviderSlug: string | null;
+    pricePerSearch: number | null;
+    apiKeyId: number | null;
+    minScore: number;
+    resultLimit: number;
+    hasApiKey: boolean;
+  };
 };
 
 type Collection = {
@@ -67,11 +80,13 @@ export function PineconePage({ onBack }: {
   const [savingSettings, setSavingSettings] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
-  const [showCreateKey, setShowCreateKey] = useState(false);
+  const [createKeyTarget, setCreateKeyTarget] = useState<'embedding' | 'reranking' | null>(null);
   const [newKeyName, setNewKeyName] = useState('');
   const [newKeyValue, setNewKeyValue] = useState('');
   const [openrouterProviderOptions, setOpenrouterProviderOptions] = useState<SelectOption[]>([]);
+  const [rankingProviderOptions, setRankingProviderOptions] = useState<SelectOption[]>([]);
   const endpointsRef = useRef<ModelEndpointsResult | null>(null);
+  const rankingEndpointsRef = useRef<ModelEndpointsResult | null>(null);
 
   const load = useCallback(async () => {
     const [nextRuntime, nextCollections, nextKeys] = await Promise.all([
@@ -101,6 +116,7 @@ export function PineconePage({ onBack }: {
     || runtime.openrouterProviderSlug !== draft.openrouterProviderSlug
     || runtime.inputPricePerMillion !== draft.inputPricePerMillion
     || runtime.apiKeyId !== draft.apiKeyId
+    || JSON.stringify(runtime.reranking) !== JSON.stringify(draft.reranking)
   ));
 
   const saveSettings = async (event: FormEvent) => {
@@ -119,6 +135,7 @@ export function PineconePage({ onBack }: {
           openrouterProviderSlug: draft.openrouterProviderSlug,
           inputPricePerMillion: draft.inputPricePerMillion,
           apiKeyId: draft.apiKeyId,
+          reranking: draft.reranking,
         }),
       });
       setMessage(t('integrations.pinecone.embedding.settingsSaved'));
@@ -132,7 +149,7 @@ export function PineconePage({ onBack }: {
   };
 
   const createKey = async () => {
-    if (!newKeyName.trim() || !newKeyValue.trim()) return;
+    if (!createKeyTarget || !newKeyName.trim() || !newKeyValue.trim()) return;
     setBusy(true);
     setError('');
     try {
@@ -141,10 +158,15 @@ export function PineconePage({ onBack }: {
         body: JSON.stringify({ name: newKeyName.trim(), key: newKeyValue.trim() }),
       });
       setApiKeys(current => [...current.filter(key => key.id !== created.id), created]);
-      setDraft(current => current ? { ...current, apiKeyId: created.id, hasApiKey: true } : current);
+      setDraft(current => {
+        if (!current) return current;
+        return createKeyTarget === 'embedding'
+          ? { ...current, apiKeyId: created.id, hasApiKey: true }
+          : { ...current, reranking: { ...current.reranking, apiKeyId: created.id, hasApiKey: true } };
+      });
       setNewKeyName('');
       setNewKeyValue('');
-      setShowCreateKey(false);
+      setCreateKeyTarget(null);
       window.dispatchEvent(new Event('chatter:api-keys-changed'));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
@@ -208,6 +230,27 @@ export function PineconePage({ onBack }: {
     return () => { cancelled = true; };
   }, [draft?.apiKeyId, draft?.model, draft?.provider, t]);
 
+  useEffect(() => {
+    const ranking = draft?.reranking;
+    if (!ranking || ranking.provider !== 'openrouter' || !ranking.model.includes('/') || !ranking.apiKeyId) {
+      rankingEndpointsRef.current = null;
+      setRankingProviderOptions([]);
+      return;
+    }
+    let cancelled = false;
+    void fetchModelEndpoints(ranking.model, ranking.apiKeyId).then(result => {
+      if (!result || cancelled) return;
+      rankingEndpointsRef.current = result;
+      setRankingProviderOptions([
+        { value: '', label: t('models.billing.autoRouting'), hint: 'auto-routing' },
+        ...result.options,
+      ]);
+    }).catch(() => {
+      if (!cancelled) setRankingProviderOptions([]);
+    });
+    return () => { cancelled = true; };
+  }, [draft?.reranking.apiKeyId, draft?.reranking.model, draft?.reranking.provider, t]);
+
   if (!draft) {
     return (
       <IntegrationDetailPage
@@ -227,6 +270,53 @@ export function PineconePage({ onBack }: {
     );
   }
 
+  const renderApiKeySelector = (target: 'embedding' | 'reranking', apiKeyId: number | null) => {
+    if (createKeyTarget === target) {
+      return (
+        <div className={styles.createKeyPanel}>
+          <FormField label={t('security.apiKeyName')}>
+            <Input value={newKeyName} onChange={event => setNewKeyName(event.target.value)} autoFocus />
+          </FormField>
+          <FormField label={t('security.apiKeyValue')}>
+            <Input type="password" value={newKeyValue} onChange={event => setNewKeyValue(event.target.value)} />
+          </FormField>
+          <div className={styles.createKeyActions}>
+            <button type="button" disabled={busy || !newKeyName.trim() || !newKeyValue.trim()} onClick={() => void createKey()}>
+              {t('security.apiKeyCreate')}
+            </button>
+            <button type="button" className="buttonSecondary" disabled={busy} onClick={() => setCreateKeyTarget(null)}>
+              {t('common.cancel')}
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return (
+      <FormField label={t('security.apiKeySelect')} state={<SecretState configured={Boolean(apiKeyId)} />}>
+        <Select
+          value={apiKeyId ? `key:${apiKeyId}` : ''}
+          options={keyOptions}
+          onChange={value => {
+            if (value === '__create__') {
+              setNewKeyName('');
+              setNewKeyValue('');
+              setCreateKeyTarget(target);
+              return;
+            }
+            const nextId = value.startsWith('key:') ? Number(value.slice(4)) : null;
+            setDraft(current => {
+              if (!current) return current;
+              return target === 'embedding'
+                ? { ...current, apiKeyId: nextId }
+                : { ...current, reranking: { ...current.reranking, apiKeyId: nextId } };
+            });
+          }}
+          placeholder={t('security.apiKeySelectPlaceholder')}
+        />
+      </FormField>
+    );
+  };
+
   return (
     <IntegrationDetailPage
       title={t('integrations.items.pinecone.name')}
@@ -237,7 +327,8 @@ export function PineconePage({ onBack }: {
       onSave={saveSettings}
       saveActionLabel={t('common.save')}
       saveSavingLabel={t('common.savingChanges')}
-      saveDisabled={busy || modelChanged || !settingsChanged || !draft.baseUrl.trim() || !draft.model.trim() || !draft.apiKeyId}
+      saveDisabled={busy || modelChanged || !settingsChanged || !draft.baseUrl.trim() || !draft.model.trim() || !draft.apiKeyId
+        || (draft.reranking.enabled && (!draft.reranking.baseUrl.trim() || !draft.reranking.model.trim() || !draft.reranking.apiKeyId))}
     >
       <section className={styles.fieldSection}>
         <div className={styles.sectionTitle}>
@@ -270,36 +361,7 @@ export function PineconePage({ onBack }: {
               onChange={event => setDraft({ ...draft, baseUrl: event.target.value })}
             />
           </FormField>
-          {showCreateKey ? (
-            <div className={styles.createKeyPanel}>
-              <FormField label={t('security.apiKeyName')}>
-                <Input value={newKeyName} onChange={event => setNewKeyName(event.target.value)} autoFocus />
-              </FormField>
-              <FormField label={t('security.apiKeyValue')}>
-                <Input type="password" value={newKeyValue} onChange={event => setNewKeyValue(event.target.value)} />
-              </FormField>
-              <div className={styles.createKeyActions}>
-                <button type="button" disabled={busy || !newKeyName.trim() || !newKeyValue.trim()} onClick={() => void createKey()}>
-                  {t('security.apiKeyCreate')}
-                </button>
-                <button type="button" className="buttonSecondary" disabled={busy} onClick={() => setShowCreateKey(false)}>
-                  {t('common.cancel')}
-                </button>
-              </div>
-            </div>
-          ) : (
-            <FormField label={t('security.apiKeySelect')} state={<SecretState configured={Boolean(draft.apiKeyId)} />}>
-              <Select
-                value={draft.apiKeyId ? `key:${draft.apiKeyId}` : ''}
-                options={keyOptions}
-                onChange={value => {
-                  if (value === '__create__') setShowCreateKey(true);
-                  else setDraft({ ...draft, apiKeyId: value.startsWith('key:') ? Number(value.slice(4)) : null });
-                }}
-                placeholder={t('security.apiKeySelectPlaceholder')}
-              />
-            </FormField>
-          )}
+          {renderApiKeySelector('embedding', draft.apiKeyId)}
           <FormField label={t('integrations.pinecone.embedding.modelLabel')}>
             {draft.provider === 'openrouter' ? (
               <OpenRouterModelInput
@@ -370,6 +432,147 @@ export function PineconePage({ onBack }: {
             >
               {t('integrations.pinecone.embedding.migrateAction')}
             </button>
+          )}
+        </div>
+      </section>
+
+      <section className={styles.fieldSection}>
+        <div className={styles.sectionTitle}>
+          <h3>{t('integrations.pinecone.reranking.sectionTitle')}</h3>
+          <p>{t('integrations.pinecone.reranking.sectionIntro')}</p>
+        </div>
+        <div className={styles.fields}>
+          <Checkbox
+            checked={draft.reranking.enabled}
+            onChange={enabled => setDraft({ ...draft, reranking: { ...draft.reranking, enabled } })}
+            label={t('integrations.pinecone.reranking.enabledLabel')}
+          />
+          {draft.reranking.enabled && (
+            <>
+              <FormField label={t('integrations.pinecone.embedding.providerLabel')}>
+                <Select
+                  value={draft.reranking.provider}
+                  onChange={value => setDraft({
+                    ...draft,
+                    reranking: {
+                      ...draft.reranking,
+                      provider: value as RuntimeSettings['reranking']['provider'],
+                      ...(value === 'openrouter' ? { baseUrl: OPENROUTER_URL } : {}),
+                      ...(value === 'custom' ? { openrouterProviderSlug: null, pricePerSearch: null } : {}),
+                    },
+                  })}
+                  options={[
+                    { value: 'openrouter', label: 'OpenRouter' },
+                    { value: 'custom', label: t('models.billing.customProvider') },
+                  ]}
+                />
+              </FormField>
+              <FormField label={t('integrations.pinecone.embedding.apiUrlLabel')}>
+                <Input
+                  type="url"
+                  value={draft.reranking.baseUrl}
+                  readOnly={draft.reranking.provider === 'openrouter'}
+                  onChange={event => setDraft({ ...draft, reranking: { ...draft.reranking, baseUrl: event.target.value } })}
+                />
+              </FormField>
+              {renderApiKeySelector('reranking', draft.reranking.apiKeyId)}
+              <FormField label={t('integrations.pinecone.embedding.modelLabel')}>
+                {draft.reranking.provider === 'openrouter' ? (
+                  <OpenRouterModelInput
+                    value={draft.reranking.model}
+                    catalog="rerank"
+                    apiKeyId={draft.reranking.apiKeyId}
+                    onSelect={(model, catalogPrices) => setDraft({
+                      ...draft,
+                      reranking: {
+                        ...draft.reranking,
+                        model,
+                        openrouterProviderSlug: null,
+                        pricePerSearch: catalogPrices?.requestPrice ?? null,
+                      },
+                    })}
+                  />
+                ) : (
+                  <Input
+                    value={draft.reranking.model}
+                    onChange={event => setDraft({ ...draft, reranking: { ...draft.reranking, model: event.target.value } })}
+                  />
+                )}
+              </FormField>
+              {draft.reranking.provider === 'openrouter' && (
+                <FormField label={t('models.billing.openrouterProvider')} hint={t('models.billing.openrouterProviderHint')}>
+                  <Select
+                    value={draft.reranking.openrouterProviderSlug || ''}
+                    options={rankingProviderOptions}
+                    onChange={slug => {
+                      const price = slug
+                        ? rankingEndpointsRef.current?.pricesBySlug.get(slug)?.requestPrice ?? null
+                        : rankingEndpointsRef.current?.basePrices?.requestPrice ?? null;
+                      setDraft({
+                        ...draft,
+                        reranking: {
+                          ...draft.reranking,
+                          openrouterProviderSlug: slug || null,
+                          pricePerSearch: price,
+                        },
+                      });
+                    }}
+                    searchable
+                    placeholder={t('models.billing.autoRouting')}
+                    valueFallbackLabel={draft.reranking.openrouterProviderSlug || undefined}
+                  />
+                </FormField>
+              )}
+              <FormField label={t('integrations.pinecone.reranking.priceLabel')}>
+                <Input
+                  type="number"
+                  min="0"
+                  step="any"
+                  value={draft.reranking.pricePerSearch ?? ''}
+                  readOnly={draft.reranking.provider === 'openrouter'}
+                  onChange={event => {
+                    if (draft.reranking.provider !== 'custom') return;
+                    const value = event.target.value;
+                    setDraft({
+                      ...draft,
+                      reranking: {
+                        ...draft.reranking,
+                        pricePerSearch: value === '' ? null : Number(value),
+                      },
+                    });
+                  }}
+                  placeholder="—"
+                />
+              </FormField>
+              <div className={styles.twoColumns}>
+                <FormField label={t('integrations.pinecone.reranking.thresholdLabel')}>
+                  <Input
+                    type="number"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    value={draft.reranking.minScore}
+                    onChange={event => setDraft({
+                      ...draft,
+                      reranking: { ...draft.reranking, minScore: Number(event.target.value) },
+                    })}
+                  />
+                </FormField>
+                <FormField label={t('integrations.pinecone.reranking.resultLimitLabel')}>
+                  <Input
+                    type="number"
+                    min="1"
+                    max="20"
+                    step="1"
+                    value={draft.reranking.resultLimit}
+                    onChange={event => setDraft({
+                      ...draft,
+                      reranking: { ...draft.reranking, resultLimit: Number(event.target.value) },
+                    })}
+                  />
+                </FormField>
+              </div>
+            </>
           )}
         </div>
       </section>

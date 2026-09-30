@@ -289,7 +289,7 @@
       "placeholderExisting": "Оставь пустым, чтобы не менять"
     },
     "pinecone": {
-      "pageDescription": "Локальная векторная память Chatter в Qdrant и её embedding-модель.",
+      "pageDescription": "Локальная векторная память Chatter в Qdrant с embedding- и ranking-моделями.",
       "sectionTitle": "Pinecone",
       "sectionIntro": "Создай индекс в Pinecone и укажи его имя вместе с API-ключом.",
       "apiKeyLabel": "Pinecone API-ключ",
@@ -323,7 +323,15 @@
         "migrateAction": "Пересчитать и переключить",
         "migrating": "Перенос…",
         "migrationComplete": "Новая коллекция активна. Векторов: {{count}}.",
-        "settingsSaved": "Настройки маршрутизации embeddings сохранены."
+        "settingsSaved": "Настройки векторной памяти сохранены."
+      },
+      "reranking": {
+        "sectionTitle": "Ranking-модель",
+        "sectionIntro": "Повторно оценивает 20 векторных кандидатов по их лучшим фрагментам, затем применяет порог релевантности.",
+        "enabledLabel": "Использовать реранкинг при поиске по памяти",
+        "priceLabel": "Цена, $ / поиск",
+        "thresholdLabel": "Минимальная релевантность · 0–1",
+        "resultLimitLabel": "Количество воспоминаний · 1–20"
       },
       "collections": {
         "title": "Версии памяти",

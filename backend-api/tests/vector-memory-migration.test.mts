@@ -15,6 +15,8 @@ const { migrateVectorMemoryToQdrant } = await import('../src/services/vector-mem
 const { chargeTokens } = await import('../src/services/token-quota.js');
 const {
   getVectorMemoryApiKey,
+  getVectorMemoryApiKeyUsage,
+  getVectorMemoryRuntimeSettings,
   getVectorMemorySettings,
   updateVectorMemorySettings,
 } = await import('../src/services/vector-memory-settings.js');
@@ -31,6 +33,9 @@ assert.equal(seededSettings.model, 'test/embedding-model');
 assert.equal(seededSettings.openrouterProviderSlug, null);
 assert.equal(seededSettings.inputPricePerMillion, null);
 assert.equal(seededSettings.activeCollection, 'test_memory_collection');
+assert.equal(seededSettings.reranking.enabled, false, 'reranking stays opt-in for existing installations');
+assert.equal(seededSettings.reranking.minScore, 0.1);
+assert.equal(seededSettings.reranking.resultLimit, 5);
 assert.ok(seededSettings.apiKeyId, 'legacy key is moved into the encrypted vault');
 assert.equal(getVectorMemoryApiKey(seededSettings.apiKeyId), 'legacy-embedding-secret');
 const storedKey = db.prepare('SELECT key_encrypted FROM api_keys WHERE id = ?').get(seededSettings.apiKeyId) as { key_encrypted: string };
@@ -47,11 +52,38 @@ const routedSettings = updateVectorMemorySettings({
   openrouterProviderSlug: 'openai',
   inputPricePerMillion: 0.02,
   apiKeyId: seededSettings.apiKeyId,
+  reranking: {
+    enabled: true,
+    provider: 'custom',
+    baseUrl: 'https://ranking.example.test/v1',
+    model: 'test/ranking-model',
+    pricePerSearch: 0.004,
+    apiKeyId: seededSettings.apiKeyId,
+    minScore: 0.35,
+    resultLimit: 7,
+  },
 });
 assert.equal(routedSettings.model, seededSettings.model, 'saving routing must preserve the embedding model');
 assert.equal(routedSettings.provider, 'openrouter');
 assert.equal(routedSettings.openrouterProviderSlug, 'openai');
 assert.equal(routedSettings.inputPricePerMillion, 0.02);
+assert.equal(routedSettings.reranking.enabled, true);
+assert.equal(routedSettings.reranking.provider, 'custom');
+assert.equal(routedSettings.reranking.model, 'test/ranking-model');
+assert.equal(routedSettings.reranking.pricePerSearch, 0.004);
+assert.equal(routedSettings.reranking.minScore, 0.35);
+assert.equal(routedSettings.reranking.resultLimit, 7);
+assert.equal(routedSettings.reranking.hasApiKey, true);
+assert.equal(getVectorMemoryRuntimeSettings().reranking.apiKey, 'legacy-embedding-secret');
+assert.ok(getVectorMemoryApiKeyUsage(seededSettings.apiKeyId!).includes('Vector memory · ranking model'));
+assert.throws(
+  () => updateVectorMemorySettings({ reranking: { minScore: 1.1 } }),
+  /bad_reranking_min_score/,
+);
+assert.throws(
+  () => updateVectorMemorySettings({ reranking: { resultLimit: 0 } }),
+  /bad_reranking_result_limit/,
+);
 assert.throws(
   () => updateVectorMemorySettings({ model: 'different/embedding-model' }),
   /embedding_migration_required/,

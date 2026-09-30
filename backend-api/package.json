@@ -35,6 +35,7 @@
     "test:sillytavern-backup-import": "tsx tests/sillytavern-backup-import.test.mts",
     "test:message-variants": "tsx tests/message-variants.test.mts",
     "test:vector-memory-migration": "tsx tests/vector-memory-migration.test.mts",
+    "test:vector-memory-reranking": "tsx tests/vector-memory-reranking.test.mts",
     "build": "node -e \"require('node:fs').rmSync('dist',{ recursive: true, force: true })\" && tsc -p tsconfig.json && node -e \"require('node:fs').cpSync('src/i18n/locales','dist/i18n/locales',{ recursive: true })\"",
     "start": "node dist/server.js"
   },

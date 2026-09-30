@@ -428,8 +428,10 @@ export async function fetchModelEndpoints(modelId: string, apiKeyId?: number | n
   // Cheapest output price first (nulls last) — manual provider picking is
   // primarily price-driven.
   options.sort((a, b) => {
-    const outA = pricesBySlug.get(a.value)?.outputPricePerMillion;
-    const outB = pricesBySlug.get(b.value)?.outputPricePerMillion;
+    const pricesA = pricesBySlug.get(a.value);
+    const pricesB = pricesBySlug.get(b.value);
+    const outA = pricesA?.outputPricePerMillion ?? pricesA?.requestPrice;
+    const outB = pricesB?.outputPricePerMillion ?? pricesB?.requestPrice;
     if (outA == null && outB == null) return 0;
     if (outA == null) return 1;
     if (outB == null) return -1;

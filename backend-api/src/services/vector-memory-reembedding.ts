@@ -239,6 +239,17 @@ export const migrateVectorMemoryEmbedding = async (input: MigrationInput) => {
       inputPricePerMillion: candidate.inputPricePerMillion,
       apiKeyId: candidate.apiKeyId,
       activeCollection: collectionName,
+      reranking: {
+        enabled: candidate.current.reranking.enabled,
+        provider: candidate.current.reranking.provider,
+        baseUrl: candidate.current.reranking.baseUrl,
+        model: candidate.current.reranking.model,
+        openrouterProviderSlug: candidate.current.reranking.openrouterProviderSlug,
+        pricePerSearch: candidate.current.reranking.pricePerSearch,
+        apiKeyId: candidate.current.reranking.apiKeyId,
+        minScore: candidate.current.reranking.minScore,
+        resultLimit: candidate.current.reranking.resultLimit,
+      },
     };
     activateVectorMemoryCollection(next);
     db.prepare(`

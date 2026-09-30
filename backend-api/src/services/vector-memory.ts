@@ -138,6 +138,117 @@ type EmbeddingChargeContext = {
   route: 'memory:search' | 'memory:save' | 'memory:update';
 };
 
+export type MemorySearchGroup = {
+  record_id: string;
+  score: number;
+  vector_score?: number;
+  fragments: Array<{
+    id: string;
+    chunk_id: string;
+    score: number;
+    text: string;
+    source: string;
+    timestamp: number;
+    chunk_index: number;
+    total_chunks: number;
+  }>;
+};
+
+export const rerankMemoryGroups = async (
+  query: string,
+  groups: MemorySearchGroup[],
+  settings: ReturnType<typeof getVectorMemoryRuntimeSettings>,
+  userId: number,
+  chatId?: number,
+): Promise<MemorySearchGroup[]> => {
+  const ranking = settings.reranking;
+  if (!ranking.enabled || groups.length === 0) return groups;
+  if (!ranking.apiKey || !ranking.baseUrl || !ranking.model) throw new Error('reranking_configuration_required');
+
+  const documents = groups.map(group => group.fragments
+    .map(fragment => fragment.text.trim())
+    .filter(Boolean)
+    .join('\n\n'));
+  const response = await fetch(`${ranking.baseUrl.replace(/\/+$/, '')}/rerank`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${ranking.apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: ranking.model,
+      query,
+      documents,
+      top_n: Math.min(ranking.resultLimit, documents.length),
+      ...(ranking.openrouterProviderSlug
+        ? { provider: { only: [ranking.openrouterProviderSlug], allow_fallbacks: false } }
+        : {}),
+    }),
+    signal: AbortSignal.timeout(60_000),
+  });
+  const json = await response.json().catch(() => null) as any;
+  if (!response.ok) {
+    const detail = `${json?.error?.message || json?.error || json?.message || ''}`.slice(0, 500);
+    throw new Error(`reranking_failed_http_${response.status}${detail ? `: ${detail}` : ''}`);
+  }
+  const rawResults = Array.isArray(json) ? json : Array.isArray(json?.results) ? json.results : null;
+  if (!rawResults) throw new Error('reranking_invalid_response');
+
+  const usageTokens = Math.max(0, Math.floor(Number(json?.usage?.total_tokens) || 0));
+  const fallbackTokens = countTokens(`${query}\n${documents.join('\n')}`);
+  const totalTokens = usageTokens || fallbackTokens;
+  const searchUnits = Math.max(1, Number(json?.usage?.search_units) || 1);
+  const rawReportedCost = json?.usage?.cost;
+  const reportedCost = rawReportedCost === null || rawReportedCost === undefined || rawReportedCost === ''
+    ? null
+    : Number(rawReportedCost);
+  const actualCostUsd = reportedCost !== null && Number.isFinite(reportedCost) && reportedCost >= 0
+    ? reportedCost
+    : ranking.pricePerSearch !== null
+      ? ranking.pricePerSearch * searchUnits
+      : null;
+  chargeTokens({
+    userId: resolveAccountId(Math.floor(userId)),
+    chatId: chatId ?? null,
+    route: 'memory:rerank',
+    modelId: ranking.model,
+    modelName: ranking.model,
+    providerName: ranking.provider,
+    promptTokens: totalTokens,
+    completionTokens: 0,
+    cacheHitTokens: 0,
+    cacheMissTokens: totalTokens,
+    reasoningTokens: 0,
+    totalTokens,
+    upstreamProviderSlug: `${json?.provider || ranking.openrouterProviderSlug || ''}` || null,
+    actualCostUsd,
+    pricingSource: 'vector-memory-reranking-settings',
+    inputPricePerMillion: null,
+    outputPricePerMillion: null,
+    cacheReadPricePerMillion: null,
+  });
+
+  return rawResults
+    .map((entry: any) => ({
+      index: Number(entry?.index),
+      score: Number(entry?.score ?? entry?.relevance_score ?? entry?.relevanceScore ?? entry?.relevance),
+    }))
+    .filter((entry: { index: number; score: number }) =>
+      Number.isInteger(entry.index)
+      && entry.index >= 0
+      && entry.index < groups.length
+      && Number.isFinite(entry.score)
+      && entry.score >= ranking.minScore,
+    )
+    .sort((left: { score: number }, right: { score: number }) => right.score - left.score)
+    .slice(0, ranking.resultLimit)
+    .map((entry: { index: number; score: number }) => ({
+      ...groups[entry.index],
+      vector_score: groups[entry.index].score,
+      score: entry.score,
+    }));
+};
+
 const createEmbeddings = async (
   input: string | string[],
   settings = getVectorMemoryRuntimeSettings(),
@@ -603,25 +714,13 @@ export class VectorMemoryService {
       // Keep model and collection from one settings snapshot. A migration may
       // finish while this request is embedding its query.
       const runtimeSettings = getVectorMemoryRuntimeSettings();
+      const retrievalLimit = runtimeSettings.reranking.enabled ? 20 : safeTopK;
       const queryVector = await getEmbedding(safeQuery, runtimeSettings, {
         userId,
         chatId: chatId ?? null,
         route: 'memory:search',
       });
-      let groupedMatches: Array<{
-        record_id: string;
-        score: number;
-        fragments: Array<{
-          id: string;
-          chunk_id: string;
-          score: number;
-          text: string;
-          source: string;
-          timestamp: number;
-          chunk_index: number;
-          total_chunks: number;
-        }>;
-      }> = [];
+      let groupedMatches: MemorySearchGroup[] = [];
 
       if (getVectorMemoryStorage() === 'qdrant') {
         const groups = await queryQdrantVectorGroups(
@@ -629,7 +728,7 @@ export class VectorMemoryService {
           spaces,
           runtimeSettings.model,
           queryVector,
-          safeTopK,
+          retrievalLimit,
           VECTOR_MEMORY_GROUP_SIZE,
           runtimeSettings.activeCollection,
         );
@@ -658,7 +757,7 @@ export class VectorMemoryService {
           };
         }).filter(group => group.record_id && group.fragments.length > 0);
       } else {
-        const candidateLimit = Math.min(VECTOR_MEMORY_TOP_K_MAX * 4, Math.max(safeTopK, safeTopK * 4));
+        const candidateLimit = Math.min(VECTOR_MEMORY_TOP_K_MAX * 4, Math.max(retrievalLimit, retrievalLimit * 4));
         const matchesById = new Map<string, any>();
         const index = getPineconeIndex();
         const readableNamespaces = [...new Set(spaces.flatMap(space => namespacesForSpace(userId, space)))];
@@ -693,7 +792,7 @@ export class VectorMemoryService {
         groupedMatches = [...records.entries()]
           .map(([recordId, group]) => ({ recordId, group }))
           .sort((left, right) => Number(right.group[0]?.score || 0) - Number(left.group[0]?.score || 0))
-          .slice(0, safeTopK)
+          .slice(0, retrievalLimit)
           .map(({ recordId, group }) => ({
             record_id: recordId,
             score: Number(group[0]?.score || 0),
@@ -715,6 +814,14 @@ export class VectorMemoryService {
           }));
       }
 
+      groupedMatches = await rerankMemoryGroups(
+        safeQuery,
+        groupedMatches,
+        runtimeSettings,
+        userId,
+        chatId,
+      );
+
       const items = groupedMatches.flatMap(group => group.fragments.map(fragment => ({
         ...fragment,
         record_id: group.record_id,
@@ -729,7 +836,7 @@ export class VectorMemoryService {
       const out = {
         ok: true,
         namespace,
-        top_k: safeTopK,
+        top_k: runtimeSettings.reranking.enabled ? runtimeSettings.reranking.resultLimit : safeTopK,
         groups: groupedMatches,
         matches: items,
         text: joinedText
