@@ -1781,7 +1781,6 @@ app.get('/api/v1/memory/records', async (req: AuthedRequest, res: any) => {
 });
 
 app.post('/api/v1/memory/records/search', async (req: AuthedRequest, res: any) => {
-  if (!BACKEND_VECTOR_MEMORY_API_ENABLED) return res.status(503).json({ error: 'backend_vector_memory_api_disabled' });
   const query = `${req.body?.query || ''}`.trim();
   const spaceId = Number(req.body?.space_id);
   if (!query) return res.status(400).json({ error: 'query_required' });
@@ -1810,7 +1809,6 @@ app.get('/api/v1/chats/:chatId/memory-records', async (req: AuthedRequest, res: 
 });
 
 app.post('/api/v1/chats/:chatId/memory-records/search', async (req: AuthedRequest, res: any) => {
-  if (!BACKEND_VECTOR_MEMORY_API_ENABLED) return res.status(503).json({ error: 'backend_vector_memory_api_disabled' });
   const query = `${req.body?.query || ''}`.trim();
   if (!query) return res.status(400).json({ error: 'query_required' });
   if (query.length > 300) return res.status(422).json({ error: 'query_too_long_max_300' });
