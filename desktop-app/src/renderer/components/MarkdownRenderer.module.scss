@@ -264,3 +264,10 @@
   border-radius: 6px;
   margin: 0.5em 0;
 }
+.searchHighlight {
+  padding: 0 1px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--color-warning) 55%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-warning) 38%, transparent);
+  color: inherit;
+}

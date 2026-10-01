@@ -1658,23 +1658,12 @@
   }
 }
 
-.messageSearchTarget {
-  border-radius: 12px;
-  outline: 2px solid color-mix(in srgb, var(--accent-icon) 78%, transparent);
-  outline-offset: 6px;
-  animation: messageSearchTargetPulse 2.4s ease-out both;
-}
-
-@keyframes messageSearchTargetPulse {
-  0%, 35% {
-    outline-color: color-mix(in srgb, var(--accent-icon) 90%, transparent);
-    outline-offset: 3px;
-  }
-
-  100% {
-    outline-color: transparent;
-    outline-offset: 10px;
-  }
+.messageSearchMark {
+  padding: 0 1px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--color-warning) 55%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-warning) 38%, transparent);
+  color: inherit;
 }
 
 .messageLayout {

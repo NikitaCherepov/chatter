@@ -571,7 +571,7 @@ type MessageItemProps = {
   isRegenHintOpen: boolean;
   isEditing: boolean;
   isRegenerating: boolean;
-  isSearchTarget: boolean;
+  searchHighlightQuery: string;
   streamingState: 'idle' | 'reasoning' | 'content' | 'done';
   editingText: string;
   sending: boolean;
@@ -600,6 +600,19 @@ type MessageItemProps = {
   onDeleteImage: (messageId: number, url: string) => void;
 };
 
+const renderHighlightedPlainText = (content: string, query: string): React.ReactNode => {
+  const terms = [...new Set(
+    query.normalize('NFKC').replace(/[^\p{L}\p{N}\s]/gu, ' ').trim().split(/\s+/).filter(Boolean),
+  )].sort((left, right) => right.length - left.length);
+  if (!terms.length) return content;
+
+  const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const matcher = new RegExp(`(${terms.map(escapeRegExp).join('|')})`, 'giu');
+  return content.split(matcher).map((part, index) => index % 2 === 1
+    ? <mark key={`${index}-${part}`} className={s.messageSearchMark}>{part}</mark>
+    : part);
+};
+
 const MessageItem = React.memo(function MessageItem({
   msg,
   authorName,
@@ -614,7 +627,7 @@ const MessageItem = React.memo(function MessageItem({
   isRegenHintOpen,
   isEditing,
   isRegenerating,
-  isSearchTarget,
+  searchHighlightQuery,
   streamingState,
   editingText,
   sending,
@@ -733,7 +746,7 @@ const MessageItem = React.memo(function MessageItem({
 
   return (
     <div
-      className={`${s.messageGroup} ${reasoningOpen || isToolCallsOpen || isSubagentsOpen ? s.messageGroupRaised : ''} ${msg.archived ? s.messageArchived : ''} ${isSearchTarget ? s.messageSearchTarget : ''}`}
+      className={`${s.messageGroup} ${reasoningOpen || isToolCallsOpen || isSubagentsOpen ? s.messageGroupRaised : ''} ${msg.archived ? s.messageArchived : ''}`}
       data-message-id={msg.id}
     >
       <div className={s.messageLayout}>
@@ -1051,10 +1064,10 @@ const MessageItem = React.memo(function MessageItem({
                     <span className={s.dot} />
                   </div>
                 ) : (
-                  <div className={`${s.bubbleText} ${isStreamingContent ? s.bubbleTextStreaming : ''}`}><MarkdownRenderer content={displayedVariantContent} /></div>
+                  <div className={`${s.bubbleText} ${isStreamingContent ? s.bubbleTextStreaming : ''}`}><MarkdownRenderer content={displayedVariantContent} highlightQuery={searchHighlightQuery} /></div>
                 )
               )
-              : <div className={s.bubbleTextPlain}>{msg.content}</div>
+              : <div className={s.bubbleTextPlain}>{renderHighlightedPlainText(msg.content, searchHighlightQuery)}</div>
           )}
         </motion.div>
         <AnimatePresence>
@@ -1575,10 +1588,11 @@ export function ChatPage() {
     return () => { cancelled = true; };
   }, [addParticipantKind, changingRoomParticipantPromptId, roomPrompts.length]);
   const messagesScrollRef = useRef<ChatMessagesScrollHandle>(null);
-  const pendingMessageJumpRef = useRef<{ chatId: number; messageId: number } | null>(null);
+  const pendingMessageJumpRef = useRef<{ chatId: number; messageId: number; query?: string } | null>(null);
   const suppressNextMessageAutoScrollRef = useRef(false);
   const searchHighlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [highlightedMessageId, setHighlightedMessageId] = useState<number | null>(null);
+  const [highlightedMessageQuery, setHighlightedMessageQuery] = useState('');
   const [messageJumpVersion, setMessageJumpVersion] = useState(0);
   const pendingPrependScrollRef = useRef<{ scrollHeight: number; scrollTop: number } | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -2119,9 +2133,11 @@ export function ChatPage() {
     suppressNextMessageAutoScrollRef.current = true;
     pendingMessageJumpRef.current = null;
     setHighlightedMessageId(pendingJump.messageId);
+    setHighlightedMessageQuery(pendingJump.query ?? '');
     if (searchHighlightTimerRef.current) clearTimeout(searchHighlightTimerRef.current);
     searchHighlightTimerRef.current = setTimeout(() => {
       setHighlightedMessageId(current => current === pendingJump.messageId ? null : current);
+      setHighlightedMessageQuery('');
       searchHighlightTimerRef.current = null;
     }, 2400);
   }, [activeChatId, messageJumpVersion, visibleMessages]);
@@ -4053,6 +4069,7 @@ export function ChatPage() {
     setChatFindIndex(-1);
     setChatFindLoading(false);
     setHighlightedMessageId(null);
+    setHighlightedMessageQuery('');
   }, []);
 
   const openChatFind = useCallback(() => {
@@ -4070,6 +4087,7 @@ export function ChatPage() {
 
     pendingMessageJumpRef.current = { chatId, messageId };
     setHighlightedMessageId(null);
+    setHighlightedMessageQuery('');
 
     const currentMessages = messagesRef.current;
     const targetIndex = currentMessages.findIndex(message => message.id === messageId);
@@ -5116,6 +5134,7 @@ export function ChatPage() {
                     pendingMessageJumpRef.current = {
                       chatId: result.chat_id,
                       messageId: result.message_id,
+                      query: searchQuery.trim(),
                     };
                     setHighlightedMessageId(null);
                     if (result.chat_id === activeChatId) void loadMessages(result.chat_id);
@@ -5721,7 +5740,15 @@ export function ChatPage() {
                     && regeneratingMessageRef.current?.chatId === activeChatId
                     && regeneratingMessageRef.current.message.id === msg.id
                   )}
-                  isSearchTarget={highlightedMessageId === msg.id}
+                  searchHighlightQuery={
+                    chatFindOpen
+                    && chatFindIndex >= 0
+                    && chatFindResults[chatFindIndex]?.message_id === msg.id
+                      ? chatFindQuery
+                      : highlightedMessageId === msg.id
+                        ? highlightedMessageQuery
+                        : ''
+                  }
                   streamingState={msg.id === streamingMsgId ? streamingState : 'idle'}
                   editingText={editingText}
                   sending={sending}
