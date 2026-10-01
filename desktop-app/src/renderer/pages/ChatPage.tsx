@@ -242,6 +242,7 @@ const ALLOWED_FORMATS: string[] = (() => {
 })();
 
 const MESSAGE_PAGE_SIZE = 50;
+const MESSAGE_JUMP_PAGE_SIZE = 100;
 const CHAT_PAGE_SIZE = 25;
 /**
  * Minimum number of messages always shown, regardless of character budget.
@@ -570,6 +571,7 @@ type MessageItemProps = {
   isRegenHintOpen: boolean;
   isEditing: boolean;
   isRegenerating: boolean;
+  isSearchTarget: boolean;
   streamingState: 'idle' | 'reasoning' | 'content' | 'done';
   editingText: string;
   sending: boolean;
@@ -612,6 +614,7 @@ const MessageItem = React.memo(function MessageItem({
   isRegenHintOpen,
   isEditing,
   isRegenerating,
+  isSearchTarget,
   streamingState,
   editingText,
   sending,
@@ -729,7 +732,10 @@ const MessageItem = React.memo(function MessageItem({
   }, [activeVariantIndex, isRegenerating, msg.content, msg.role]);
 
   return (
-    <div className={`${s.messageGroup} ${reasoningOpen || isToolCallsOpen || isSubagentsOpen ? s.messageGroupRaised : ''} ${msg.archived ? s.messageArchived : ''}`}>
+    <div
+      className={`${s.messageGroup} ${reasoningOpen || isToolCallsOpen || isSubagentsOpen ? s.messageGroupRaised : ''} ${msg.archived ? s.messageArchived : ''} ${isSearchTarget ? s.messageSearchTarget : ''}`}
+      data-message-id={msg.id}
+    >
       <div className={s.messageLayout}>
         {promptImageSrc && (
           <img
@@ -1567,6 +1573,10 @@ export function ChatPage() {
     return () => { cancelled = true; };
   }, [addParticipantKind, changingRoomParticipantPromptId, roomPrompts.length]);
   const messagesScrollRef = useRef<ChatMessagesScrollHandle>(null);
+  const pendingMessageJumpRef = useRef<{ chatId: number; messageId: number } | null>(null);
+  const suppressNextMessageAutoScrollRef = useRef(false);
+  const searchHighlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [highlightedMessageId, setHighlightedMessageId] = useState<number | null>(null);
   const pendingPrependScrollRef = useRef<{ scrollHeight: number; scrollTop: number } | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1984,9 +1994,40 @@ export function ChatPage() {
     // Reset character budget — each chat starts with a fresh budget
     setCharBudget(getRenderPerfBudget());
     try {
-      const res = await api.getMessages(chatId, MESSAGE_PAGE_SIZE);
-      setMessages(res.messages);
-      setHasMoreMessages(res.messages.length === MESSAGE_PAGE_SIZE);
+      const pendingJump = pendingMessageJumpRef.current?.chatId === chatId
+        ? pendingMessageJumpRef.current
+        : null;
+      const pageSize = pendingJump ? MESSAGE_JUMP_PAGE_SIZE : MESSAGE_PAGE_SIZE;
+      let offset = 0;
+      let res = await api.getMessages(chatId, pageSize, offset);
+      let loadedMessages = res.messages;
+      let lastBatchSize = res.messages.length;
+
+      while (
+        pendingJump
+        && !loadedMessages.some(message => message.id === pendingJump.messageId)
+        && lastBatchSize === pageSize
+      ) {
+        offset += lastBatchSize;
+        res = await api.getMessages(chatId, pageSize, offset);
+        lastBatchSize = res.messages.length;
+        loadedMessages = [...res.messages, ...loadedMessages];
+      }
+
+      const targetIndex = pendingJump
+        ? loadedMessages.findIndex(message => message.id === pendingJump.messageId)
+        : -1;
+      if (pendingJump && targetIndex >= 0) {
+        const charsThroughTarget = loadedMessages
+          .slice(targetIndex)
+          .reduce((sum, message) => sum + (message.content?.length ?? 0), 0);
+        setCharBudget(Math.max(getRenderPerfBudget(), charsThroughTarget + getRenderPerfStep()));
+      } else if (pendingJump) {
+        pendingMessageJumpRef.current = null;
+      }
+
+      setMessages(loadedMessages);
+      setHasMoreMessages(lastBatchSize === pageSize);
       refreshContextTokens(chatId);
     } catch (err) {
       console.error('Failed to load messages:', err);
@@ -2057,6 +2098,22 @@ export function ChatPage() {
     }
     return displayMessages.slice(Math.max(0, cutIndex));
   }, [displayMessages, charBudget]);
+
+  useLayoutEffect(() => {
+    const pendingJump = pendingMessageJumpRef.current;
+    if (!pendingJump || pendingJump.chatId !== activeChatId) return;
+    if (!visibleMessages.some(message => message.id === pendingJump.messageId)) return;
+    if (!messagesScrollRef.current?.scrollToMessage(pendingJump.messageId)) return;
+
+    suppressNextMessageAutoScrollRef.current = true;
+    pendingMessageJumpRef.current = null;
+    setHighlightedMessageId(pendingJump.messageId);
+    if (searchHighlightTimerRef.current) clearTimeout(searchHighlightTimerRef.current);
+    searchHighlightTimerRef.current = setTimeout(() => {
+      setHighlightedMessageId(current => current === pendingJump.messageId ? null : current);
+      searchHighlightTimerRef.current = null;
+    }, 2400);
+  }, [activeChatId, visibleMessages]);
 
   /** How many messages are hidden (not rendered in DOM) beyond visibleMessages. */
   const hiddenMessagesCount = displayMessages.length - visibleMessages.length;
@@ -3791,6 +3848,11 @@ export function ChatPage() {
 
   useEffect(() => {
     if (pendingPrependScrollRef.current) return;
+    if (suppressNextMessageAutoScrollRef.current) {
+      suppressNextMessageAutoScrollRef.current = false;
+      prevMsgCountRef.current = messages.length;
+      return;
+    }
     if (messages.length > prevMsgCountRef.current) {
       messagesScrollRef.current?.scrollTo('end');
     }
@@ -3999,6 +4061,7 @@ export function ChatPage() {
   useEffect(() => {
     return () => {
       if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+      if (searchHighlightTimerRef.current) clearTimeout(searchHighlightTimerRef.current);
     };
   }, []);
 
@@ -4919,7 +4982,13 @@ export function ChatPage() {
                     setChats(prev => prev.some(chat => chat.id === result.chat_id)
                       ? prev
                       : [{ id: result.chat_id, title: result.chat_title, created_at: result.created_at, folder_id: result.folder_id ?? null }, ...prev]);
-                    selectChat(result.chat_id);
+                    pendingMessageJumpRef.current = {
+                      chatId: result.chat_id,
+                      messageId: result.message_id,
+                    };
+                    setHighlightedMessageId(null);
+                    if (result.chat_id === activeChatId) void loadMessages(result.chat_id);
+                    else void selectChat(result.chat_id);
                     handleSearchClear();
                   }}
                 >
@@ -5440,6 +5509,7 @@ export function ChatPage() {
                     && regeneratingMessageRef.current?.chatId === activeChatId
                     && regeneratingMessageRef.current.message.id === msg.id
                   )}
+                  isSearchTarget={highlightedMessageId === msg.id}
                   streamingState={msg.id === streamingMsgId ? streamingState : 'idle'}
                   editingText={editingText}
                   sending={sending}

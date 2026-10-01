@@ -2928,6 +2928,7 @@ export const adminApplyGeneratedPassword = (accountId: number, plainPassword: st
 
 export type SearchResult = {
   chat_id: number;
+  message_id: number;
   chat_title: string;
   folder_id: number | null;
   created_at: number;
@@ -2979,9 +2980,11 @@ export const searchUserChats = (userId: number, query: string, limit = 20): Sear
 
   // Step 2: for each chat, get snippet from the best matching message
   const snippetStmt = db.prepare(`
-    SELECT snippet(messages_fts, 0, '<<', '>>', '...', 10) as snippet
+    SELECT message_id, snippet(messages_fts, 0, '<<', '>>', '...', 10) as snippet
     FROM messages_fts
     WHERE user_id = ? AND chat_id = ? AND messages_fts MATCH ?
+      AND content NOT LIKE '[ACTIVE_VIEW]%'
+      AND content NOT LIKE '[NEWSPAPER CONTEXT%'
     ORDER BY rank
     LIMIT 1
   `);
@@ -3007,13 +3010,15 @@ export const searchUserChats = (userId: number, query: string, limit = 20): Sear
     const isOwner = chat.owner_user_id === userId;
     const effectiveTitle = isOwner ? chat.owner_title : chat.member_title || chat.owner_title;
     const effectiveFolderId = isOwner ? chat.owner_folder_id : chat.member_folder_id;
-    const snip = snippetStmt.get(userId, hit.chat_id, ftsQuery) as { snippet: string } | undefined;
+    const snip = snippetStmt.get(userId, hit.chat_id, ftsQuery) as { message_id: number; snippet: string } | undefined;
+    if (!snip?.message_id) continue;
     results.push({
       chat_id: hit.chat_id,
+      message_id: snip.message_id,
       chat_title: effectiveTitle || formatAutomaticChatTitle(userLanguage, hit.chat_id),
       folder_id: effectiveFolderId,
       created_at: toUnix(chat.created_at),
-      snippet: snip?.snippet || '',
+      snippet: snip.snippet || '',
       rank: hit.best_rank,
     });
   }

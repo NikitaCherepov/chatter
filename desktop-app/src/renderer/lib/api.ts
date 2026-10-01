@@ -684,6 +684,7 @@ export async function leaveRoom(chatId: number): Promise<{ ok: true }> {
 
 export type ChatSearchResult = {
   chat_id: number;
+  message_id: number;
   chat_title: string;
   folder_id: number | null;
   created_at: number;

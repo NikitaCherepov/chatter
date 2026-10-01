@@ -21,6 +21,7 @@ export type ChatMessagesScrollMetrics = {
 export type ChatMessagesScrollHandle = {
   getMetrics: () => ChatMessagesScrollMetrics | null;
   scrollTo: (target: number | 'end', options?: { immediate?: boolean }) => void;
+  scrollToMessage: (messageId: number, options?: { immediate?: boolean }) => boolean;
 };
 
 type Props = {
@@ -78,6 +79,30 @@ export const ChatMessagesScroll = forwardRef<ChatMessagesScrollHandle, Props>(fu
         top: target === 'end' ? wrapper.scrollHeight : target,
         behavior: options?.immediate ? 'auto' : 'smooth',
       });
+    },
+    scrollToMessage: (messageId, options) => {
+      const wrapper = wrapperRef.current;
+      const content = contentRef.current;
+      if (!wrapper || !content) return false;
+      const target = content.querySelector<HTMLElement>(`[data-message-id="${messageId}"]`);
+      if (!target) return false;
+      const wrapperRect = wrapper.getBoundingClientRect();
+      const targetRect = target.getBoundingClientRect();
+      const top = wrapper.scrollTop
+        + targetRect.top
+        - wrapperRect.top
+        - Math.max(0, (wrapper.clientHeight - targetRect.height) / 2);
+      const lenis = lenisRef.current;
+      if (lenis) {
+        lenis.resize();
+        lenis.scrollTo(top, options);
+      } else {
+        wrapper.scrollTo({
+          top,
+          behavior: options?.immediate ? 'auto' : 'smooth',
+        });
+      }
+      return true;
     },
   }), []);
 
