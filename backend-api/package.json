@@ -24,6 +24,7 @@
     "test:image-gen-settings": "tsx tests/image-generation-settings.test.mts",
     "test:image-gen-cloudflare": "tsx tests/image-generation-cloudflare.test.mts",
     "test:context-plan-clamp": "tsx tests/context-plan-clamp.test.mts",
+    "test:context-summary": "tsx tests/context-summary.test.mts",
     "test:account-merge": "tsx tests/account-merge-quota.test.mts",
     "test:memory-foundation": "tsx tests/memory-foundation.test.mts",
     "test:memory-schema-migration": "tsx tests/memory-schema-migration.test.mts",

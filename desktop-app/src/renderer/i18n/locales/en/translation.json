@@ -539,7 +539,7 @@
       "attachmentLimit": "Document limit",
       "diceMode": "Dice mode (d20)",
       "diceHelp": "Adds a d20 next to the message box. AI responses depend on your luck.",
-      "contextLimitHelp": "Older messages are archived when the context exceeds the limit. When exceeded, the context is collapsed to 50%. Plan maximum: {{max}}k tokens.",
+      "contextLimitHelp": "When the context exceeds the limit, Chatter summarizes the older part and keeps recent messages verbatim. Raw messages remain in the chat. Plan maximum: {{max}}k tokens.",
       "attachmentLimitHelp": "How many context tokens attached document contents may use. 0 = auto (90% of the context limit). Maximum: {{max}}k tokens."
     },
     "about": {
@@ -557,6 +557,7 @@
     },
     "toasts": {
       "saveSettingFailed": "Could not save the setting",
+      "contextLimitReduced": "The lower limit is saved. The conversation summary will be rebuilt on the next message.",
       "saveSubagentModelFailed": "Could not save the subagent model",
       "saveSubagentReasoningFailed": "Could not save the subagent reasoning level",
       "saveTokenLimitFailed": "Could not save the token limit",
@@ -826,6 +827,10 @@
       "prompt": "prompt",
       "cached": "cached"
     },
+    "contextSummary": {
+      "title": "Earlier conversation summary",
+      "meta": "{{count}} messages · {{model}}"
+    },
     "macro": {
       "title": "Macro suggestion",
       "save": "Save to settings"
@@ -1036,7 +1041,7 @@
       "imageSaveFailed": "Could not save the image",
       "imageDeleteFailed": "Could not delete the image",
       "modelChangeFailed": "Could not change the model",
-      "modelContextLimited": "Your context limit is {{selected}}k, but this model supports {{model}}k. Chatter will use {{model}}k.",
+      "modelContextLimited": "Your context limit is {{selected}}k, but this model supports {{model}}k. Chatter will use {{model}}k and rebuild the conversation summary on the next message.",
       "reasoningChangeFailed": "Could not change the reasoning level",
       "macroSaved": "Macro saved to settings",
       "macroSaveFailed": "Could not save the macro",

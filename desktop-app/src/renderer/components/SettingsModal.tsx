@@ -392,6 +392,7 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
   const [autoReasoningLevels, setAutoReasoningLevels] = useState<api.ReasoningLevel[]>([]);
   const [contextTokenLimit, setContextTokenLimitState] = useState<api.ContextTokenLimit | null>(null);
   const [contextTokenLimitSaving, setContextTokenLimitSaving] = useState(false);
+  const savedContextTokenLimitRef = useRef<number | null>(null);
   const [attachmentTokenLimit, setAttachmentTokenLimitState] = useState<api.AttachmentTokenLimit | null>(null);
   const [attachmentTokenLimitSaving, setAttachmentTokenLimitSaving] = useState(false);
 
@@ -542,7 +543,10 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
   useEffect(() => {
     if (section === 'limits') {
       api.getContextTokenLimit()
-        .then((res) => setContextTokenLimitState(res))
+        .then((res) => {
+          setContextTokenLimitState(res);
+          savedContextTokenLimitRef.current = res.max_context_tokens;
+        })
         .catch(() => {});
       api.getAttachmentTokenLimit()
         .then((res) => setAttachmentTokenLimitState(res))
@@ -761,6 +765,10 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
     try {
       const res = await api.setContextTokenLimit(commitValue);
       setContextTokenLimitState(res);
+      if (savedContextTokenLimitRef.current !== null && res.max_context_tokens < savedContextTokenLimitRef.current) {
+        toast.info(t('settings.toasts.contextLimitReduced'));
+      }
+      savedContextTokenLimitRef.current = res.max_context_tokens;
       // Refresh attachment limit too (hardCap depends on context tokens)
       api.getAttachmentTokenLimit().then(setAttachmentTokenLimitState).catch(() => {});
     } catch {

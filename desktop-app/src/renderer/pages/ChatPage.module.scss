@@ -1658,6 +1658,41 @@
   }
 }
 
+.contextSummaryCard {
+  width: min(85%, 920px);
+  align-self: flex-start;
+  border: 1px solid var(--border-light);
+  border-left: 3px solid var(--accent-icon);
+  border-radius: 8px;
+  background: var(--bg-bubble);
+  color: var(--text-primary);
+  padding: 12px 14px;
+}
+
+.contextSummaryHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin-bottom: 8px;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.contextSummaryMeta {
+  color: var(--text-muted);
+  font-weight: 400;
+  text-align: right;
+}
+
+.contextSummaryContent {
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
 .messageSearchMark {
   padding: 0 1px;
   border-radius: 2px;

@@ -30,6 +30,7 @@ import { formatAutomaticChatTitle } from '../i18n/index.js';
 import { getPlanLimits, getDefaultUserPlanLimits, loadPlanLimitsFromDb } from './plan-limits.js';
 import { withAttachmentMetadata } from './chat-attachments.js';
 import { applyUserPlanEntitlements, clampContextTokensOnPlanChange, ensureUserMonthlyUsageWindow, refreshCurrentQuotaLimits } from './monthly-usage.js';
+import { deleteContextSummary, deleteContextSummariesForChat, deleteContextSummariesForUser, getContextSummary, type ContextSummaryDto } from './context-summary.js';
 
 export const getRawUserById = (userId: number) => db
   .prepare('SELECT * FROM users WHERE id = ?')
@@ -893,6 +894,7 @@ export const deleteUserChat = (userId: number, chatId: number): boolean => {
   const exists = db.prepare('SELECT id FROM user_chats WHERE user_id = ? AND id = ?').get(userId, chatId) as { id: number } | undefined;
   if (!exists) return false;
   const imageFilenames = cleanupMessageFiles(userId, chatId);
+  deleteContextSummariesForChat(chatId);
   db.prepare('DELETE FROM chat_messages WHERE user_id = ? AND chat_id = ?').run(userId, chatId);
   cleanupUnreferencedImages(imageFilenames);
   db.prepare('DELETE FROM chat_agents WHERE chat_id = ?').run(chatId);
@@ -910,6 +912,7 @@ export const deleteUserChat = (userId: number, chatId: number): boolean => {
 export const clearUserChatMessages = (userId: number, chatId: number): boolean => {
   if (!getUserChatById(userId, chatId)) return false;
   const imageFilenames = cleanupMessageFiles(userId, chatId);
+  deleteContextSummary(userId, chatId);
   db.prepare('DELETE FROM chat_messages WHERE user_id = ? AND chat_id = ?').run(userId, chatId);
   cleanupUnreferencedImages(imageFilenames);
   db.prepare('UPDATE user_chats SET updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND id = ?').run(userId, chatId);
@@ -927,6 +930,7 @@ export const clearAllUserMessages = (userId: number) => {
     for (const filename of cleanupMessageFiles(userId, chat.id)) imageFilenames.add(filename);
   }
   const changes = db.prepare('DELETE FROM chat_messages WHERE user_id = ?').run(userId).changes;
+  deleteContextSummariesForUser(userId);
   cleanupUnreferencedImages(imageFilenames);
   return changes;
 };
@@ -985,6 +989,7 @@ export const deleteUserMessage = (userId: number, chatId: number, messageId: num
   const result = db.prepare(
     'DELETE FROM chat_messages WHERE id = ? AND user_id = ? AND chat_id = ?'
   ).run(messageId, userId, chatId);
+  if (result.changes > 0) deleteContextSummary(userId, chatId);
   if (result.changes > 0) cleanupUnreferencedImages(imageFilenames);
   return result.changes > 0;
 };
@@ -1092,6 +1097,7 @@ export const editUserMessage = (
   db.prepare(
     'UPDATE chat_messages SET content = ?, token_count = ? WHERE id = ? AND user_id = ? AND chat_id = ?'
   ).run(newContent, tokenCount, messageId, userId, chatId);
+  deleteContextSummary(userId, chatId);
 
   if (row.role === 'assistant') {
     db.prepare(`
@@ -3051,6 +3057,7 @@ export type ChatContextTokens = {
   latest_reasoning_tokens: number;
   latest_model_name: string | null;
   current_context_tokens: number;
+  context_summary: ContextSummaryDto | null;
 };
 
 /**
@@ -3136,6 +3143,7 @@ export const getChatContextTokens = (userId: number, chatId: number): ChatContex
     latest_model_name: latestAssistant?.model_name ?? null,
     current_context_tokens: getProviderContextEstimateForUsers(scopedUserIds, chatId)
       ?? (row.messages_tokens + system_prompt_tokens),
+    context_summary: scopedUserIds.length === 1 ? getContextSummary(userId, chatId) : null,
   };
 };
 

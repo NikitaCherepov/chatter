@@ -889,6 +889,18 @@ export type ChatContextTokens = {
   latest_reasoning_tokens: number;
   latest_model_name: string | null;
   current_context_tokens: number;
+  context_summary: ContextSummary | null;
+};
+
+export type ContextSummary = {
+  content: string;
+  through_timeline_index: number;
+  source_message_count: number;
+  token_count: number;
+  context_limit: number;
+  model_name: string | null;
+  provider_name: string | null;
+  updated_at: number;
 };
 
 export async function getChatContextTokens(chatId: number): Promise<ChatContextTokens> {

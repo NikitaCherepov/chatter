@@ -1653,6 +1653,7 @@ export function ChatPage() {
   const [openToolCallsId, setOpenToolCallsId] = useState<number | null>(null);
   const [openSubagentsId, setOpenSubagentsId] = useState<number | null>(null);
   const [contextTokens, setContextTokens] = useState<api.ChatContextTokens | null>(null);
+  const [contextSummary, setContextSummary] = useState<api.ContextSummary | null>(null);
 
   // Subscribe to TTS state
   useEffect(() => {
@@ -2009,6 +2010,7 @@ export function ChatPage() {
     try {
       const tokens = await api.getChatContextTokens(chatId);
       setContextTokens(tokens);
+      setContextSummary(tokens.context_summary ?? null);
     } catch (err) {
       console.error('Failed to load context tokens:', err);
     }
@@ -2016,6 +2018,7 @@ export function ChatPage() {
 
   const loadMessages = useCallback(async (chatId: number) => {
     setLoadingMessages(true);
+    setContextSummary(null);
     // Reset character budget — each chat starts with a fresh budget
     setCharBudget(getRenderPerfBudget());
     try {
@@ -5718,9 +5721,23 @@ export function ChatPage() {
                       : t('chat.messages.loadOlderFromServer', { count: MESSAGE_PAGE_SIZE })}
                 </button>
               )}
-              {visibleMessages.map((msg) => (
+              {visibleMessages.map((msg, index) => (
+                <React.Fragment key={msg.id}>
+                {contextSummary && !msg.archived && (index === 0 || visibleMessages[index - 1]?.archived) && (
+                  <section className={s.contextSummaryCard} aria-label={t('chat.contextSummary.title')}>
+                    <div className={s.contextSummaryHeader}>
+                      <span>{t('chat.contextSummary.title')}</span>
+                      <span className={s.contextSummaryMeta}>
+                        {t('chat.contextSummary.meta', {
+                          count: contextSummary.source_message_count,
+                          model: contextSummary.model_name || t('chat.model.automatic'),
+                        })}
+                      </span>
+                    </div>
+                    <div className={s.contextSummaryContent}>{contextSummary.content}</div>
+                  </section>
+                )}
                 <MessageItem
-                  key={msg.id}
                   msg={msg}
                   authorName={msg.role === 'user' && msg.user_id && msg.user_id !== user?.id
                     ? (roomMembers.find((member) => member.user_id === msg.user_id)?.name || `#${msg.user_id}`)
@@ -5780,6 +5797,7 @@ export function ChatPage() {
                   onDeleteAttachment={handleDeleteAttachment}
                   onDeleteImage={(messageId, url) => setImageDeleteTarget({ messageId, url })}
                 />
+                </React.Fragment>
               ))}
               {false && messages.map((msg) => (
                 <div key={msg.id} className={`${s.messageGroup} ${openReasoningId === msg.id ? s.messageGroupRaised : ''}`}>

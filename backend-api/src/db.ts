@@ -68,6 +68,25 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_chat_messages_user_id_id
   ON chat_messages(user_id, id);
 
+  CREATE TABLE IF NOT EXISTS chat_context_summaries (
+    chat_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    content TEXT NOT NULL,
+    source_hash TEXT NOT NULL,
+    through_timeline_index INTEGER NOT NULL,
+    source_message_count INTEGER NOT NULL DEFAULT 0,
+    token_count INTEGER NOT NULL DEFAULT 0,
+    context_limit INTEGER NOT NULL,
+    model_name TEXT,
+    provider_name TEXT,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (chat_id, user_id)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_chat_context_summaries_user
+  ON chat_context_summaries(user_id, chat_id);
+
   CREATE TABLE IF NOT EXISTS user_chats (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
