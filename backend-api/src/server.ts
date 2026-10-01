@@ -8,7 +8,7 @@ import dotenv from 'dotenv';
 import { WebSocketServer, WebSocket } from 'ws';
 import { wsClients, registerWsClient, unregisterWsClient, isDesktopOnline, sendIpcToDesktop, sendToDesktop, WS_HEARTBEAT_GRACE_MS, WS_HEARTBEAT_INTERVAL_MS, type WsClient } from './ws-clients.js';
 import { adminMiddleware, authMiddleware, issueAuthTokens, makePasswordHash, refreshAccessToken, validateTelegramInitData, verifyPassword, verifyToken, verifyTokenIgnoreExpiry, type AuthedRequest } from './auth.js';
-import { activateChatMessageVariant, activateUserChat, bindChatMessageTelegramMeta, clearAllUserMessages, clearUserChatMessages, countUserChats, createPasswordAccount, createOrUpdateUserForApiRegistration, createUserChat, deleteUserHistoryByRole, deleteUserHistoryMessage, ensureActiveChat, forkChat, getPasswordAccountByLogin, getChatMessages, getChatMedia, getAllUserMedia, getRecentUserHistory, getUserById, getUserChatById, getUserChatListItem, listUserChats, promoteTemporaryChat, upsertUserFromTelegram, setUserTimezone, updateUserPrompt, selectUserCustomPrompt, updateUserCustomPrompt, resetUsersPromptIfDeleted, resetDailyMessageCounters, upsertTelegramUser, createPendingTelegramUser, updateUserStatus, updateUserRole, updateUserName, updateUserTelegramUsername, removeUser, getAllUsers, getUsersCount, getUsersPage, getPendingUsersCount, getPendingUsersPage, getBannedUsersCount, getBannedUsersPage, syncAllUsersPlanLimits, resetUserWeeklyUsage, resetAllUsersWeeklyUsage, updateUserWeeklyCostQuota, revokeUserAuthTokens, generateLinkCode, verifyLinkCode, getLinkCodeForUser, generatePasswordResetCode, verifyPasswordResetCode, signPasswordResetToken, verifyPasswordResetToken, adminApplyGeneratedPassword, renameUserChat, deleteUserChat, deleteUserMessage, editUserMessage, searchUserChats, updateChatMessageAudio, getChatContextTokens, resolveMaxContextTokens, updateUserMaxContextTokens, getChatAttachments, deleteMessageAttachment, deleteMessageImage, resolveAttachmentMaxTokens, updateUserAttachmentMaxTokens, setChatBotHidden, listChatFolders, createChatFolder, renameChatFolder, deleteChatFolder, moveUserChatToFolder, listChatFilterOptions, listStaleTemporaryChats, touchUserChat, getChatPromptSettings, updateChatPromptSettings } from './services/chats.js';
+import { activateChatMessageVariant, activateUserChat, bindChatMessageTelegramMeta, clearAllUserMessages, clearUserChatMessages, countUserChats, createPasswordAccount, createOrUpdateUserForApiRegistration, createUserChat, deleteUserHistoryByRole, deleteUserHistoryMessage, ensureActiveChat, forkChat, getPasswordAccountByLogin, getChatMessages, getChatMedia, getAllUserMedia, getRecentUserHistory, getUserById, getUserChatById, getUserChatListItem, listUserChats, promoteTemporaryChat, upsertUserFromTelegram, setUserTimezone, updateUserPrompt, selectUserCustomPrompt, updateUserCustomPrompt, resetUsersPromptIfDeleted, resetDailyMessageCounters, upsertTelegramUser, createPendingTelegramUser, updateUserStatus, updateUserRole, updateUserName, updateUserTelegramUsername, removeUser, getAllUsers, getUsersCount, getUsersPage, getPendingUsersCount, getPendingUsersPage, getBannedUsersCount, getBannedUsersPage, syncAllUsersPlanLimits, resetUserWeeklyUsage, resetAllUsersWeeklyUsage, updateUserWeeklyCostQuota, revokeUserAuthTokens, generateLinkCode, verifyLinkCode, getLinkCodeForUser, generatePasswordResetCode, verifyPasswordResetCode, signPasswordResetToken, verifyPasswordResetToken, adminApplyGeneratedPassword, renameUserChat, deleteUserChat, deleteUserMessage, editUserMessage, searchUserChats, searchCurrentChatMessages, updateChatMessageAudio, getChatContextTokens, resolveMaxContextTokens, updateUserMaxContextTokens, getChatAttachments, deleteMessageAttachment, deleteMessageImage, resolveAttachmentMaxTokens, updateUserAttachmentMaxTokens, setChatBotHidden, listChatFolders, createChatFolder, renameChatFolder, deleteChatFolder, moveUserChatToFolder, listChatFilterOptions, listStaleTemporaryChats, touchUserChat, getChatPromptSettings, updateChatPromptSettings } from './services/chats.js';
 import { createNote, countNotes, deleteNote, getNoteById, getNoteStats, getNoteStatsForUsers, listNotes, updateNoteContent } from './services/notes.js';
 import { createTask, deletePendingTask, getPendingTaskCount, getUserTaskById, isOwnNonRoomChat, listTaskTargetChats, listTasks, MAX_PENDING_TASKS_PER_USER, updatePendingTask } from './services/tasks.js';
 import { createDemoNewspaperIssue, createNewspaper, createNewspaperRun, deleteNewspaperIssue, ensureDefaultNewspaper, getNewspaperIssue, getNewspaperRun, listNewspaperIssues, listNewspaperRuns, listNewspapers, markInterruptedNewspaperRuns, updateNewspaper } from './services/newspapers.js';
@@ -2089,6 +2089,18 @@ app.get('/api/v1/chats/search', (req: AuthedRequest, res) => {
 
   const results = searchUserChats(userId, query, limit);
   return res.json({ results });
+});
+
+app.get('/api/v1/chats/:id/messages/search', (req: AuthedRequest, res) => {
+  const userId = accountIdFromRequest(req);
+  const chatId = Number.parseInt(req.params.id, 10);
+  if (!Number.isSafeInteger(chatId) || chatId <= 0) return res.status(400).json({ error: 'bad_chat_id' });
+
+  const query = `${req.query.q || ''}`.trim();
+  const limit = Number.parseInt(`${req.query.limit || '500'}`, 10);
+  if (!query) return res.json({ results: [] });
+
+  return res.json({ results: searchCurrentChatMessages(userId, chatId, query, limit) });
 });
 
 app.post('/api/v1/chats', (req: AuthedRequest, res) => {

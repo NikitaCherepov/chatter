@@ -696,6 +696,20 @@ export async function searchChats(query: string, limit = 20): Promise<{ results:
   return apiFetch(`/api/v1/chats/search?q=${encodeURIComponent(query)}&limit=${limit}`);
 }
 
+export type CurrentChatMessageSearchResult = {
+  message_id: number;
+  snippet: string;
+  created_at: number;
+};
+
+export async function searchCurrentChatMessages(
+  chatId: number,
+  query: string,
+  limit = 500,
+): Promise<{ results: CurrentChatMessageSearchResult[] }> {
+  return apiFetch(`/api/v1/chats/${chatId}/messages/search?q=${encodeURIComponent(query)}&limit=${limit}`);
+}
+
 export async function createChat(title?: string): Promise<{ chat_id: number; chat?: ChatInfo }> {
   return apiFetch('/api/v1/chats', {
     method: 'POST',

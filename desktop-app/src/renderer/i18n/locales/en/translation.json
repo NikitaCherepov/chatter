@@ -593,6 +593,13 @@
     }
   },
   "chat": {
+    "find": {
+      "open": "Search in this chat",
+      "placeholder": "Search in this chat",
+      "previous": "Previous match",
+      "next": "Next match",
+      "close": "Close search"
+    },
     "message": {
       "you": "You",
       "archivedSuffix": " · archived",

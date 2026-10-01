@@ -57,7 +57,7 @@
 // ====== ROOM PROTOTYPE ======
 
 .roomTrigger {
-  margin-left: auto;
+  margin-left: 0;
   flex-shrink: 0;
   height: 36px;
   padding: 0 10px 0 8px;
@@ -70,6 +70,30 @@
   gap: 8px;
   cursor: pointer;
   white-space: nowrap;
+  transition: background-color 0.12s, border-color 0.12s, color 0.12s;
+
+  &:hover,
+  &Active {
+    background-color: var(--bg-primary);
+    border-color: var(--border-light);
+    color: var(--text-primary);
+  }
+}
+
+.chatFindTrigger {
+  margin-left: auto;
+  flex: 0 0 30px;
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
   transition: background-color 0.12s, border-color 0.12s, color 0.12s;
 
   &:hover,
@@ -1874,6 +1898,71 @@
 
 .bubbleWrap {
   position: relative;
+}
+
+.chatFindBar {
+  position: absolute;
+  top: 10px;
+  right: 14px;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  width: min(380px, calc(100% - 28px));
+  height: 40px;
+  padding: 4px 5px 4px 12px;
+  border: 1px solid var(--border-medium);
+  border-radius: 8px;
+  background: var(--bg-primary);
+  box-shadow: var(--shadow-modal);
+}
+
+.chatFindInput {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 13px;
+
+  &::placeholder {
+    color: var(--text-hint);
+  }
+}
+
+.chatFindCount {
+  min-width: 48px;
+  padding: 0 6px;
+  color: var(--text-muted);
+  font-size: 12px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.chatFindButton {
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: var(--bg-modal-hover);
+    color: var(--text-primary);
+  }
+
+  &:disabled {
+    opacity: 0.35;
+    cursor: default;
+  }
 }
 
 .messageVariants {

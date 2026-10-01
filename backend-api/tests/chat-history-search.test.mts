@@ -5,7 +5,7 @@ import path from 'node:path';
 process.env.API_DB_PATH = path.join(os.tmpdir(), `chatter-chat-history-search-${process.pid}-${Date.now()}.sqlite`);
 
 const { db } = await import('../src/db.js');
-const { searchChatHistory, searchUserChats } = await import('../src/services/chats.js');
+const { searchChatHistory, searchCurrentChatMessages, searchUserChats } = await import('../src/services/chats.js');
 const { updateChatMemorySettings } = await import('../src/services/memory-foundation.js');
 const { searchChatHistoryTool } = await import('../src/services/tools/chats/search-chat-history.js');
 
@@ -44,7 +44,13 @@ const privateMessageId = Number(insertMessage.run(
   privateChatId,
   '2026-09-21 12:00:00',
 ).lastInsertRowid);
-insertMessage.run(202, 'user', 'Hidden pineapple archive', hiddenChatId, '2026-09-22 12:00:00');
+const hiddenMessageId = Number(insertMessage.run(
+  202,
+  'user',
+  'Hidden pineapple archive',
+  hiddenChatId,
+  '2026-09-22 12:00:00',
+).lastInsertRowid);
 
 const roomHits = searchChatHistory(202, 'copper telescope', 20);
 assert.equal(roomHits.length, 1, 'room member finds messages written by another room participant');
@@ -62,6 +68,14 @@ assert.deepEqual(pineappleHits.map(hit => hit.chat_id), [privateChatId], 'bot-hi
 const desktopHits = searchUserChats(202, 'pineapple notebook', 20);
 assert.equal(desktopHits[0]?.chat_id, privateChatId);
 assert.equal(desktopHits[0]?.message_id, privateMessageId, 'desktop search identifies the exact message for navigation');
+
+const currentChatHits = searchCurrentChatMessages(202, hiddenChatId, 'pineapple', 500);
+assert.deepEqual(currentChatHits.map(hit => hit.message_id), [hiddenMessageId],
+  'Ctrl+F search includes the currently opened bot-hidden chat');
+assert.deepEqual(searchCurrentChatMessages(202, roomId, 'copper', 500).map(hit => hit.message_id), [roomMessageId],
+  'Ctrl+F search includes messages written by another room participant');
+assert.equal(searchCurrentChatMessages(303, hiddenChatId, 'pineapple', 500).length, 0,
+  'Ctrl+F search rejects users without chat access');
 
 updateChatMemorySettings(202, roomId, { message_search_scope: 'current' });
 const restrictedToolResult = await searchChatHistoryTool.handler(

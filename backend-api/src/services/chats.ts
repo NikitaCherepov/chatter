@@ -3151,6 +3151,65 @@ export type ChatMessageSearchHit = {
   rank: number;
 };
 
+export type CurrentChatMessageSearchHit = {
+  message_id: number;
+  snippet: string;
+  created_at: number;
+};
+
+/**
+ * Text search used by the desktop Ctrl+F panel. Unlike the bot tool search,
+ * this is intentionally scoped to one chat and includes bot-hidden chats.
+ */
+export const searchCurrentChatMessages = (
+  userId: number,
+  chatId: number,
+  query: string,
+  limit = 500,
+): CurrentChatMessageSearchHit[] => {
+  if (!Number.isSafeInteger(chatId) || chatId <= 0 || !canReadChatMessages(userId, chatId)) return [];
+
+  const safeQuery = query.normalize('NFKC').replace(/[^\p{L}\p{N}\s]/gu, ' ').trim();
+  if (!safeQuery) return [];
+
+  const terms = [...new Set(safeQuery.split(/\s+/).filter(Boolean))];
+  if (!terms.length) return [];
+
+  const ftsQuery = terms
+    .map(word => `"${word.replace(/"/g, '""')}"*`)
+    .join(' ');
+  const safeLimit = Number.isFinite(limit)
+    ? Math.max(1, Math.min(500, Math.floor(limit)))
+    : 500;
+
+  const rows = db.prepare(`
+    SELECT
+      messages_fts.message_id,
+      snippet(messages_fts, 0, '<<', '>>', '...', 12) AS snippet,
+      chat_messages.created_at
+    FROM messages_fts
+    JOIN chat_messages
+      ON chat_messages.id = messages_fts.message_id
+      AND chat_messages.chat_id = messages_fts.chat_id
+    WHERE messages_fts.chat_id = ?
+      AND messages_fts MATCH ?
+      AND messages_fts.content NOT LIKE '[ACTIVE_VIEW]%'
+      AND messages_fts.content NOT LIKE '[NEWSPAPER CONTEXT%'
+    ORDER BY chat_messages.created_at ASC, messages_fts.message_id ASC
+    LIMIT ?
+  `).all(chatId, ftsQuery, safeLimit) as Array<{
+    message_id: number;
+    snippet: string;
+    created_at: string;
+  }>;
+
+  return rows.map(row => ({
+    message_id: row.message_id,
+    snippet: row.snippet,
+    created_at: toUnix(row.created_at),
+  }));
+};
+
 /**
  * Search across all non-bot-hidden chats at message level.
  * Returns individual matching messages (not just chats) with FTS snippets.

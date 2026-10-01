@@ -1341,6 +1341,8 @@ export function ChatPage() {
   }, [clearSendWatchdog, t]);
   const { unreadByChat, incrementUnread, markAsRead, getUnread } = useUnreadChats();
   const [messages, setMessages] = useState<api.Message[]>([]);
+  const messagesRef = useRef<api.Message[]>(messages);
+  messagesRef.current = messages;
   const [switchingVariantId, setSwitchingVariantId] = useState<number | null>(null);
 
   useEffect(() => {
@@ -1577,12 +1579,21 @@ export function ChatPage() {
   const suppressNextMessageAutoScrollRef = useRef(false);
   const searchHighlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [highlightedMessageId, setHighlightedMessageId] = useState<number | null>(null);
+  const [messageJumpVersion, setMessageJumpVersion] = useState(0);
   const pendingPrependScrollRef = useRef<{ scrollHeight: number; scrollTop: number } | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<api.ChatSearchResult[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
+  const chatFindInputRef = useRef<HTMLInputElement>(null);
+  const chatFindDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const chatFindRequestRef = useRef(0);
+  const [chatFindOpen, setChatFindOpen] = useState(false);
+  const [chatFindQuery, setChatFindQuery] = useState('');
+  const [chatFindResults, setChatFindResults] = useState<api.CurrentChatMessageSearchResult[]>([]);
+  const [chatFindIndex, setChatFindIndex] = useState(-1);
+  const [chatFindLoading, setChatFindLoading] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [notificationsEnabled, setNotificationsEnabledState] = useState(true);
@@ -2113,7 +2124,7 @@ export function ChatPage() {
       setHighlightedMessageId(current => current === pendingJump.messageId ? null : current);
       searchHighlightTimerRef.current = null;
     }, 2400);
-  }, [activeChatId, visibleMessages]);
+  }, [activeChatId, messageJumpVersion, visibleMessages]);
 
   /** How many messages are hidden (not rendered in DOM) beyond visibleMessages. */
   const hiddenMessagesCount = displayMessages.length - visibleMessages.length;
@@ -4026,6 +4037,125 @@ export function ChatPage() {
 
   // ── Search ──────────────────────────────────────────────────────────────
 
+  const closeChatFind = useCallback(() => {
+    chatFindRequestRef.current += 1;
+    if (chatFindDebounceRef.current) {
+      clearTimeout(chatFindDebounceRef.current);
+      chatFindDebounceRef.current = null;
+    }
+    if (searchHighlightTimerRef.current) {
+      clearTimeout(searchHighlightTimerRef.current);
+      searchHighlightTimerRef.current = null;
+    }
+    setChatFindOpen(false);
+    setChatFindQuery('');
+    setChatFindResults([]);
+    setChatFindIndex(-1);
+    setChatFindLoading(false);
+    setHighlightedMessageId(null);
+  }, []);
+
+  const openChatFind = useCallback(() => {
+    if (activeChatIdRef.current === null) return;
+    setChatFindOpen(true);
+    requestAnimationFrame(() => {
+      chatFindInputRef.current?.focus();
+      chatFindInputRef.current?.select();
+    });
+  }, []);
+
+  const jumpToCurrentChatMessage = useCallback((messageId: number) => {
+    const chatId = activeChatIdRef.current;
+    if (chatId === null) return;
+
+    pendingMessageJumpRef.current = { chatId, messageId };
+    setHighlightedMessageId(null);
+
+    const currentMessages = messagesRef.current;
+    const targetIndex = currentMessages.findIndex(message => message.id === messageId);
+    if (targetIndex < 0) {
+      void loadMessages(chatId);
+      return;
+    }
+
+    const charsThroughTarget = currentMessages
+      .slice(targetIndex)
+      .reduce((sum, message) => sum + (message.content?.length ?? 0), 0);
+    setCharBudget(current => Math.max(current, charsThroughTarget + getRenderPerfStep()));
+    setMessageJumpVersion(current => current + 1);
+  }, [loadMessages]);
+
+  const navigateChatFind = useCallback((direction: 1 | -1) => {
+    if (!chatFindResults.length) return;
+    const nextIndex = chatFindIndex < 0
+      ? (direction === 1 ? 0 : chatFindResults.length - 1)
+      : (chatFindIndex + direction + chatFindResults.length) % chatFindResults.length;
+    setChatFindIndex(nextIndex);
+    jumpToCurrentChatMessage(chatFindResults[nextIndex].message_id);
+  }, [chatFindIndex, chatFindResults, jumpToCurrentChatMessage]);
+
+  useEffect(() => {
+    const handleFindShortcut = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'f') {
+        if (activeChatIdRef.current === null) return;
+        event.preventDefault();
+        event.stopPropagation();
+        openChatFind();
+        return;
+      }
+      if (event.key === 'Escape' && chatFindOpen) {
+        event.preventDefault();
+        closeChatFind();
+      }
+    };
+
+    window.addEventListener('keydown', handleFindShortcut, true);
+    return () => window.removeEventListener('keydown', handleFindShortcut, true);
+  }, [chatFindOpen, closeChatFind, openChatFind]);
+
+  useEffect(() => {
+    closeChatFind();
+  }, [activeChatId, closeChatFind]);
+
+  useEffect(() => {
+    if (chatFindDebounceRef.current) clearTimeout(chatFindDebounceRef.current);
+    const query = chatFindQuery.trim();
+    const chatId = activeChatId;
+    const requestId = ++chatFindRequestRef.current;
+
+    if (!chatFindOpen || chatId === null || !query) {
+      setChatFindResults([]);
+      setChatFindIndex(-1);
+      setChatFindLoading(false);
+      return;
+    }
+
+    setChatFindResults([]);
+    setChatFindIndex(-1);
+    setChatFindLoading(true);
+    chatFindDebounceRef.current = setTimeout(async () => {
+      try {
+        const response = await api.searchCurrentChatMessages(chatId, query);
+        if (requestId !== chatFindRequestRef.current || activeChatIdRef.current !== chatId) return;
+        setChatFindResults(response.results);
+        const firstResult = response.results[0];
+        setChatFindIndex(firstResult ? 0 : -1);
+        if (firstResult) jumpToCurrentChatMessage(firstResult.message_id);
+      } catch (error) {
+        if (requestId !== chatFindRequestRef.current) return;
+        console.error('Current chat search failed:', error);
+        setChatFindResults([]);
+        setChatFindIndex(-1);
+      } finally {
+        if (requestId === chatFindRequestRef.current) setChatFindLoading(false);
+      }
+    }, 250);
+
+    return () => {
+      if (chatFindDebounceRef.current) clearTimeout(chatFindDebounceRef.current);
+    };
+  }, [activeChatId, chatFindOpen, chatFindQuery, jumpToCurrentChatMessage]);
+
   const handleSearchChange = useCallback((value: string) => {
     setSearchQuery(value);
     if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
@@ -4061,6 +4191,7 @@ export function ChatPage() {
   useEffect(() => {
     return () => {
       if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+      if (chatFindDebounceRef.current) clearTimeout(chatFindDebounceRef.current);
       if (searchHighlightTimerRef.current) clearTimeout(searchHighlightTimerRef.current);
     };
   }, []);
@@ -5316,6 +5447,75 @@ export function ChatPage() {
           </div>
         ) : (
           <>
+            <AnimatePresence>
+              {chatFindOpen && (
+                <motion.div
+                  className={s.chatFindBar}
+                  initial={{ opacity: 0, y: -6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  transition={{ duration: 0.12 }}
+                >
+                  <input
+                    ref={chatFindInputRef}
+                    className={s.chatFindInput}
+                    value={chatFindQuery}
+                    onChange={event => setChatFindQuery(event.target.value)}
+                    onKeyDown={event => {
+                      if (event.key !== 'Enter') return;
+                      event.preventDefault();
+                      navigateChatFind(event.shiftKey ? -1 : 1);
+                    }}
+                    placeholder={t('chat.find.placeholder')}
+                    aria-label={t('chat.find.placeholder')}
+                    autoFocus
+                  />
+                  <span className={s.chatFindCount} aria-live="polite">
+                    {chatFindLoading
+                      ? '…'
+                      : chatFindQuery.trim()
+                        ? `${chatFindIndex >= 0 ? chatFindIndex + 1 : 0} / ${chatFindResults.length}`
+                        : ''}
+                  </span>
+                  <button
+                    type="button"
+                    className={s.chatFindButton}
+                    onClick={() => navigateChatFind(-1)}
+                    disabled={!chatFindResults.length}
+                    title={t('chat.find.previous')}
+                    aria-label={t('chat.find.previous')}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="18 15 12 9 6 15" />
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    className={s.chatFindButton}
+                    onClick={() => navigateChatFind(1)}
+                    disabled={!chatFindResults.length}
+                    title={t('chat.find.next')}
+                    aria-label={t('chat.find.next')}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="6 9 12 15 18 9" />
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    className={s.chatFindButton}
+                    onClick={closeChatFind}
+                    title={t('chat.find.close')}
+                    aria-label={t('chat.find.close')}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="18" y1="6" x2="6" y2="18" />
+                      <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
             <div className={s.chatTopBar}>
               <div className={s.modelSelector}>
                 {modelsCatalog.length > 0 && (
@@ -5402,6 +5602,18 @@ export function ChatPage() {
                 </div>
                 )}
               </div>
+              <button
+                type="button"
+                className={`${s.chatFindTrigger} ${chatFindOpen ? s.chatFindTriggerActive : ''}`}
+                onClick={openChatFind}
+                title={t('chat.find.open')}
+                aria-label={t('chat.find.open')}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <circle cx="11" cy="11" r="7" />
+                  <path d="m20 20-3.8-3.8" />
+                </svg>
+              </button>
               <button
                 type="button"
                 className={`${s.roomTrigger} ${roomOpen ? s.roomTriggerActive : ''} ${!roomCreated ? s.roomTriggerEmpty : ''}`}
