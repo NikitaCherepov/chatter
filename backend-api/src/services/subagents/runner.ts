@@ -199,7 +199,7 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
       manualModel,
       ctx.signal,
       reasoningLevel,
-      undefined,
+      ctx.modelSettings,
       (ctx.onStreamToken || ctx.onReasoningStream) ? {
         onToken: ctx.onStreamToken
           ? (text) => { void ctx.onStreamToken?.(text); }

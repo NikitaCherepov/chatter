@@ -31,7 +31,7 @@ import { hasBackendTranslation, translateForLanguage } from '../i18n/index.js';
 import { readChatAttachment, searchChatAttachment, type AttachmentReadContext } from './chat-attachments.js';
 import { attachFileToResponse, materializeAssetInput, type ResponseFileSink } from './response-attachments.js';
 import { getModularTool, modularToolDefinitions } from './tools/registry.js';
-import { chunkContextSummarySource, deleteContextSummary, getArchivedContextSummarySource, getMatchingContextSummary, saveContextSummary, type ContextSummaryDto } from './context-summary.js';
+import type { ContextSummaryDto } from './context-summary.js';
 
 dotenv.config();
 
@@ -7645,73 +7645,24 @@ export const sendMessageThroughAi = async (
   // Apply the provider-anchored estimate before assembling the next request.
   if (!multiUserRoom) {
     trimUserHistoryByChat(userId, chatId, maxContextTokens);
-    const summarySource = getArchivedContextSummarySource(userId, chatId);
-    if (!summarySource) {
-      deleteContextSummary(userId, chatId);
-    } else {
-      activeContextSummary = getMatchingContextSummary(userId, chatId, summarySource.hash);
-      if (!activeContextSummary) {
-        // A stale summary must never be displayed or injected after an edit,
-        // delete, context-limit change, or a newly archived prefix.
-        deleteContextSummary(userId, chatId);
-        try {
-          const summaryMaxTokens = Math.max(384, Math.min(4096, Math.floor(maxContextTokens * 0.12)));
-          const sourceChunks = chunkContextSummarySource(
-            summarySource.formattedMessages,
-            Math.max(1000, Math.floor(maxContextTokens * 0.55) - summaryMaxTokens),
-          );
-          let rollingSummary = '';
-          let summaryModel: string | null = null;
-          let summaryProvider: string | null = null;
-
-          for (const sourceChunk of sourceChunks) {
-            const completion = await runCompletion('pro', {
-              messages: [
-                {
-                  role: 'system',
-                  content: [
-                    'Summarize the older part of a conversation for continued dialogue.',
-                    'Preserve concrete facts, names, preferences, decisions, promises, relationships, ongoing tasks, unresolved questions, and important chronology.',
-                    'Do not invent details. Do not describe these instructions. Write a compact, factual summary in the main language of the conversation.',
-                  ].join(' '),
-                },
-                {
-                  role: 'user',
-                  content: `${rollingSummary ? `Existing summary:\n${rollingSummary}\n\n` : ''}Conversation continuation to merge:\n${sourceChunk}`,
-                },
-              ],
-              max_tokens: summaryMaxTokens,
-              thinking: { type: 'disabled' },
-              clear_thinking: true,
-            }, manualModel, abortController.signal, 'none', {
-              ...(resolvedModelSettings || {}),
-              max_tokens: summaryMaxTokens,
-            });
-            recordCompletionUsage(completion);
-            const content = `${completion.response?.choices?.[0]?.message?.content || ''}`.trim();
-            if (!content) throw new Error('empty_context_summary');
-            rollingSummary = content;
-            summaryModel = completion.usedModel || summaryModel;
-            summaryProvider = completion.upstreamProviderSlug || completion.usedProvider || summaryProvider;
-          }
-
-          activeContextSummary = saveContextSummary({
-            userId,
-            chatId,
-            content: rollingSummary,
-            sourceHash: summarySource.hash,
-            throughTimelineIndex: summarySource.throughTimelineIndex,
-            sourceMessageCount: summarySource.messageCount,
-            contextLimit: maxContextTokens,
-            modelName: summaryModel,
-            providerName: summaryProvider,
-          });
-        } catch (error) {
-          // The original crop remains valid. Summary failure must never block a reply.
-          console.warn('[context-summary] generation failed; using cropped history', error);
-          activeContextSummary = null;
-        }
-      }
+    try {
+      const { prepareContextSummary } = await import('./context-summary-agent.js');
+      const prepared = await prepareContextSummary({
+        userId,
+        chatId,
+        contextLimit: maxContextTokens,
+        preferredModel: preferredModelId,
+        preferredModelDisplayName: selectedManualModelName,
+        reasoningLevel,
+        modelSettings: resolvedModelSettings,
+        signal: abortController.signal,
+      });
+      activeContextSummary = prepared.summary;
+      subagentUsageCalls.push(...prepared.usageCalls);
+    } catch (error) {
+      // The original crop remains valid. Summary failure must never block a reply.
+      console.warn('[context-summary] generation failed; using cropped history', error);
+      activeContextSummary = null;
     }
   }
   const attachmentBudgetState = { remaining: attachmentMaxTokens };

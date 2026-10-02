@@ -28,6 +28,8 @@ export interface SubagentContext extends ToolContext {
   subagentMode?: SubagentMode;
   /** User's reasoning level preference for subagent completions. */
   subagentReasoningLevel?: string | null;
+  /** Optional provider/model parameters forwarded to every completion. */
+  modelSettings?: any;
   /** Optional streaming sink for assistant text. */
   onStreamToken?: (text: string) => Promise<void> | void;
   /** Optional streaming sink for reasoning text. */

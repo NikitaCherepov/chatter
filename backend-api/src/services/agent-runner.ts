@@ -25,6 +25,9 @@ export type RunAgentParams = {
   maxTokens?: number;
   preferredModel?: string | null;
   reasoningLevel?: ReasoningLevel | null;
+  modelSettings?: import('./ai.js').ModelSettings | null;
+  /** Caller will account for returned usage (used when the agent is part of a parent request). */
+  deferBilling?: boolean;
   timezoneOffset?: number;
   signal?: AbortSignal;
   onToolStatus?: (text: string) => Promise<void> | void;
@@ -130,7 +133,7 @@ export const runAgent = async (params: RunAgentParams): Promise<RunAgentResult> 
   const billingMode = getPlanLimits(user.plan).billing_mode;
   const onUsageCall = (agentName: string, usage: TokenUsageCall) => {
     usageCalls.push({ ...usage, agentName });
-    chargeAgentCall(params.userId, agentName, usage);
+    if (!params.deferBilling) chargeAgentCall(params.userId, agentName, usage);
   };
   const shouldStopForQuota = (latest: TokenUsageCall) => {
     if (user.is_admin === 1) return false;
@@ -162,6 +165,7 @@ export const runAgent = async (params: RunAgentParams): Promise<RunAgentResult> 
       subagentReasoningLevel: params.reasoningLevel !== undefined
         ? params.reasoningLevel
         : normalizeReasoningLevel(user.reasoning_level),
+      modelSettings: params.modelSettings ?? undefined,
       onStreamToken: params.onStreamToken,
       onReasoningStream: params.onReasoningStream,
       onUsageCall,
