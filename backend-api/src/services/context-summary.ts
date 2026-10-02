@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { db, toUnix } from '../db.js';
+import { listRoomReaderUserIds } from './chat-rooms.js';
 import { countTokens } from './tokenizer.js';
 
 export type ContextSummaryDto = {
@@ -38,6 +39,8 @@ type SourceRow = {
   attachments: string | null;
   images: string | null;
   tool_calls_json: string | null;
+  author_name?: string | null;
+  agent_name?: string | null;
 };
 
 const formatToolOutputs = (rawJson: string | null): string[] => {
@@ -98,7 +101,11 @@ const formatSourceRow = (row: SourceRow): string => {
   const suffix = additions.length > 0 ? `\n[${additions.join('; ')}]` : '';
   const toolOutputs = formatToolOutputs(row.tool_calls_json);
   const toolSuffix = toolOutputs.length > 0 ? `\n${toolOutputs.join('\n')}` : '';
-  return `[${row.timeline_index ?? row.id}] ${row.role.toUpperCase()}: ${row.content}${suffix}${toolSuffix}`;
+  const speaker = row.role === 'assistant'
+    ? (row.agent_name || row.author_name)
+    : row.author_name;
+  const roleLabel = speaker ? `${row.role.toUpperCase()} (${speaker})` : row.role.toUpperCase();
+  return `[${row.timeline_index ?? row.id}] ${roleLabel}: ${row.content}${suffix}${toolSuffix}`;
 };
 
 /** Archived rows are the exact prefix removed by provider-anchored trimming. */
@@ -119,6 +126,48 @@ export const getArchivedContextSummarySource = (userId: number, chatId: number):
     attachments: row.attachments,
     images: row.images,
     tool_calls_json: row.tool_calls_json,
+  }));
+  return {
+    hash: createHash('sha256').update(JSON.stringify(fingerprint)).digest('hex'),
+    throughTimelineIndex: rows[rows.length - 1].timeline_index ?? rows[rows.length - 1].id,
+    messageCount: rows.length,
+    formattedMessages: rows.map(formatSourceRow),
+  };
+};
+
+/** A stable room-wide slice used to extend one initiator's private summary. */
+export const getRoomContextSummarySource = (
+  userId: number,
+  chatId: number,
+  afterTimelineIndex: number,
+  throughTimelineIndex: number,
+): ContextSummarySource | null => {
+  const readerIds = listRoomReaderUserIds(chatId) ?? [];
+  if (!readerIds.includes(userId) || readerIds.length < 2) throw new Error('chat_not_found');
+  const placeholders = readerIds.map(() => '?').join(', ');
+  const rows = db.prepare(`
+    SELECT cm.id, cm.timeline_index, cm.role, cm.content, cm.attachments, cm.images,
+           cm.tool_calls_json, u.name AS author_name, ca.name AS agent_name
+    FROM chat_messages cm
+    LEFT JOIN users u ON u.id = cm.user_id
+    LEFT JOIN chat_agents ca ON ca.id = cm.agent_id
+    WHERE cm.chat_id = ? AND cm.user_id IN (${placeholders})
+      AND COALESCE(cm.timeline_index, cm.id) > ?
+      AND COALESCE(cm.timeline_index, cm.id) <= ?
+    ORDER BY COALESCE(cm.timeline_index, cm.id) ASC, cm.id ASC
+  `).all(chatId, ...readerIds, afterTimelineIndex, throughTimelineIndex) as SourceRow[];
+  if (rows.length === 0) return null;
+
+  const fingerprint = rows.map(row => ({
+    id: row.id,
+    timeline_index: row.timeline_index,
+    role: row.role,
+    content: row.content,
+    attachments: row.attachments,
+    images: row.images,
+    tool_calls_json: row.tool_calls_json,
+    author_name: row.author_name,
+    agent_name: row.agent_name,
   }));
   return {
     hash: createHash('sha256').update(JSON.stringify(fingerprint)).digest('hex'),

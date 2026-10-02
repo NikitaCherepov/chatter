@@ -1977,6 +1977,56 @@ function expandAssistantMessage(content: string, toolCallsJson: string | null): 
 export const isMultiUserRoomChat = (chatId: number): boolean =>
   (listRoomReaderUserIds(chatId)?.length ?? 0) > 1;
 
+export type RoomHistorySummaryPlan = {
+  snapshot_timeline_index: number;
+  summarize_through_timeline_index: number | null;
+};
+
+export const planRoomHistorySummary = (
+  userId: number,
+  chatId: number,
+  tokenBudget: number,
+  afterTimelineIndex = 0,
+  snapshotTimelineIndex?: number,
+): RoomHistorySummaryPlan => {
+  const readerIds = listRoomReaderUserIds(chatId) ?? [];
+  if (!readerIds.includes(userId) || readerIds.length < 2) throw new Error('chat_not_found');
+  const placeholders = readerIds.map(() => '?').join(', ');
+  const snapshot = snapshotTimelineIndex ?? Number((db.prepare(`
+    SELECT COALESCE(MAX(timeline_index), 0) AS value
+    FROM chat_messages
+    WHERE chat_id = ? AND user_id IN (${placeholders})
+  `).get(chatId, ...readerIds) as { value: number } | undefined)?.value || 0);
+  const rows = db.prepare(`
+    SELECT timeline_index, token_count, content
+    FROM chat_messages
+    WHERE chat_id = ? AND user_id IN (${placeholders})
+      AND COALESCE(timeline_index, id) > ?
+      AND COALESCE(timeline_index, id) <= ?
+    ORDER BY COALESCE(timeline_index, id) DESC, id DESC
+  `).all(chatId, ...readerIds, afterTimelineIndex, snapshot) as Array<{
+    timeline_index: number;
+    token_count: number | null;
+    content: string;
+  }>;
+
+  const budget = Math.max(256, Math.floor(tokenBudget));
+  let used = 0;
+  let keep = rows.length > 0 ? 1 : 0;
+  for (let index = 0; index < rows.length; index += 1) {
+    const cost = Math.max(0, rows[index].token_count ?? countTokens(rows[index].content || ''));
+    if (index > 0 && used + cost > budget) break;
+    used += cost;
+    keep = index + 1;
+  }
+  return {
+    snapshot_timeline_index: snapshot,
+    summarize_through_timeline_index: keep < rows.length
+      ? rows[keep].timeline_index
+      : null,
+  };
+};
+
 export const getHistoryForAi = (
   userId: number,
   chatId: number,
@@ -1987,6 +2037,8 @@ export const getHistoryForAi = (
   /** Virtual truncation budget (tokens) for multi-user rooms: keep newest
    *  messages while they fit, drop the rest. No DB archivation involved. */
   roomHistoryTokenBudget = 0,
+  roomHistoryAfterTimelineIndex = 0,
+  roomHistoryThroughTimelineIndex?: number,
 ): any[] => {
   const activeRoomAgents = responseAgentId !== null
     ? db.prepare(`
@@ -2004,16 +2056,24 @@ export const getHistoryForAi = (
   const multiUserRoom = readerIds.includes(userId) && readerIds.length > 1;
   const historyUserIds = multiUserRoom ? readerIds : [userId];
   const placeholders = historyUserIds.map(() => '?').join(', ');
+  const roomTimelineFilter = multiUserRoom
+    ? ' AND COALESCE(cm.timeline_index, cm.id) > ? AND COALESCE(cm.timeline_index, cm.id) <= ?'
+    : '';
   const rowsQuery = db.prepare(`
-    SELECT cm.id, cm.role, cm.content, cm.tool_calls_json, cm.attachments, cm.images,
+    SELECT cm.id, cm.timeline_index, cm.role, cm.content, cm.tool_calls_json, cm.attachments, cm.images,
            cm.agent_id, ca.name AS agent_name, u.name AS author_name, cm.token_count
     FROM chat_messages cm
     LEFT JOIN chat_agents ca ON ca.id = cm.agent_id
     LEFT JOIN users u ON u.id = cm.user_id
-    WHERE cm.user_id IN (${placeholders}) AND cm.chat_id = ? AND cm.archived = 0
-    ORDER BY cm.id DESC
+    WHERE cm.user_id IN (${placeholders}) AND cm.chat_id = ? AND cm.archived = 0${roomTimelineFilter}
+    ORDER BY ${multiUserRoom ? 'COALESCE(cm.timeline_index, cm.id)' : 'cm.id'} DESC, cm.id DESC
   `);
-  let rows = rowsQuery.all(...historyUserIds, chatId) as Array<{ id: number; role: ChatRole; content: string; tool_calls_json: string | null; attachments: string | null; images: string | null; agent_id: number | null; agent_name: string | null; author_name: string | null; token_count: number | null }>;
+  const roomThrough = roomHistoryThroughTimelineIndex ?? Number.MAX_SAFE_INTEGER;
+  let rows = rowsQuery.all(
+    ...historyUserIds,
+    chatId,
+    ...(multiUserRoom ? [roomHistoryAfterTimelineIndex, roomThrough] : []),
+  ) as Array<{ id: number; timeline_index: number | null; role: ChatRole; content: string; tool_calls_json: string | null; attachments: string | null; images: string | null; agent_id: number | null; agent_name: string | null; author_name: string | null; token_count: number | null }>;
 
   // Multi-user rooms: virtual truncation — walk from the newest message back,
   // keep messages while they fit into the budget. The newest message is always
@@ -3144,7 +3204,7 @@ export const getChatContextTokens = (userId: number, chatId: number): ChatContex
     latest_model_name: latestAssistant?.model_name ?? null,
     current_context_tokens: getProviderContextEstimateForUsers(scopedUserIds, chatId)
       ?? (row.messages_tokens + system_prompt_tokens),
-    context_summary: scopedUserIds.length === 1 ? getContextSummary(userId, chatId) : null,
+    context_summary: getContextSummary(userId, chatId),
   };
 };
 

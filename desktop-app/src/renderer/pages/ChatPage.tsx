@@ -2012,13 +2012,6 @@ export function ChatPage() {
       setContextTokens(tokens);
       const summary = tokens.context_summary ?? null;
       setContextSummary(summary);
-      if (summary) {
-        setMessages((current) => current.map((message) =>
-          typeof message.timeline_index === 'number'
-          && message.timeline_index <= summary.through_timeline_index
-            ? { ...message, archived: true }
-            : message));
-      }
     } catch (err) {
       console.error('Failed to load context tokens:', err);
     }

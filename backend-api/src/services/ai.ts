@@ -4,7 +4,7 @@ import nodeFetch from 'node-fetch';
 import { ProxyAgent } from 'proxy-agent';
 import { Readable } from 'node:stream';
 import type { AiSendResult, DesktopActionPayload, DisplayStatePayload, MapUpdatePayload, TaskNotifyMode, TaskRecurrenceType, TaskTargetMode, TaskType, UserPlan, UserRecord, MessageAttachment, MessageImage, MessageUsage, NormalizedTokenUsage, TokenUsageCall } from '../types.js';
-import { appendChatMessage, ensureActiveChat, getHistoryForAi, getMessageTokens, getMessageVariantState, getUserById, getUserChatListItem, renameUserChat, resolveMaxContextTokens, resolveAttachmentMaxTokens, injectAttachments, setUserTimezone, trimUserHistoryByChat, isMultiUserRoomChat, getChatContextTokens, resolvePromptForChat } from './chats.js';
+import { appendChatMessage, ensureActiveChat, getHistoryForAi, getMessageTokens, getMessageVariantState, getUserById, getUserChatListItem, renameUserChat, resolveMaxContextTokens, resolveAttachmentMaxTokens, injectAttachments, setUserTimezone, trimUserHistoryByChat, isMultiUserRoomChat, planRoomHistorySummary, getChatContextTokens, resolvePromptForChat } from './chats.js';
 import { calculateChargedTokens, checkQuota, chargeTokens, getModelOverride, getPricingSnapshot, calculateEstimatedCostUsd, isModelFree } from './token-quota.js';
 import { recordModelTps, setKnownModelStatsFilter } from './model-stats.js';
 import { registerMonitoredModelsProvider, isProviderMissingError, attemptRuntimeProviderSwitch } from './openrouter-monitor.js';
@@ -32,7 +32,7 @@ import { hasBackendTranslation, translateForLanguage } from '../i18n/index.js';
 import { readChatAttachment, searchChatAttachment, type AttachmentReadContext } from './chat-attachments.js';
 import { attachFileToResponse, materializeAssetInput, type ResponseFileSink } from './response-attachments.js';
 import { getModularTool, modularToolDefinitions } from './tools/registry.js';
-import type { ContextSummaryDto } from './context-summary.js';
+import { getContextSummary, type ContextSummaryDto } from './context-summary.js';
 
 dotenv.config();
 
@@ -7637,14 +7637,63 @@ export const sendMessageThroughAi = async (
   // user message creates a new sendMessageThroughAi call and resets it.
   const attachmentReadBudgetState = { remaining: attachmentMaxTokens };
   const attachmentCapacityState = { lastPromptTokens: undefined as number | undefined, unreflectedTokens: 0 };
-  // Multi-user rooms: no DB archivation (it is per-user and would truncate the
-  // shared room history for everyone). Instead the history builder truncates
-  // virtually at request time, using the generating user's context limit.
+  // Multi-user rooms never archive shared rows. Each initiator gets a private
+  // rolling summary while the live tail is selected from one stable snapshot.
   const multiUserRoom = isMultiUserRoomChat(chatId);
   const roomHistoryTokenBudget = multiUserRoom ? Math.floor(maxContextTokens * 0.5) : 0;
+  let effectiveRoomHistoryTokenBudget = roomHistoryTokenBudget;
+  let roomHistoryAfterTimelineIndex = 0;
+  let roomHistoryThroughTimelineIndex: number | undefined;
   let activeContextSummary: ContextSummaryDto | null = null;
   // Apply the provider-anchored estimate before assembling the next request.
-  if (!multiUserRoom) {
+  if (multiUserRoom) {
+    activeContextSummary = getContextSummary(toolUser.id, chatId);
+    try {
+      let previousBoundary = activeContextSummary?.through_timeline_index ?? 0;
+      while (true) {
+        const tailBudget = Math.max(
+          256,
+          roomHistoryTokenBudget - (activeContextSummary?.token_count ?? 0),
+        );
+        const plan = planRoomHistorySummary(
+          toolUser.id,
+          chatId,
+          tailBudget,
+          previousBoundary,
+          roomHistoryThroughTimelineIndex,
+        );
+        roomHistoryThroughTimelineIndex = plan.snapshot_timeline_index;
+        if (plan.summarize_through_timeline_index === null) break;
+
+        const { prepareRoomContextSummary } = await import('./context-summary-agent.js');
+        const prepared = await prepareRoomContextSummary({
+          storageUserId: toolUser.id,
+          billingUserId: userId,
+          chatId,
+          throughTimelineIndex: plan.summarize_through_timeline_index,
+          contextLimit: maxContextTokens,
+          preferredModel: preferredModelId,
+          preferredModelDisplayName: selectedManualModelName,
+          reasoningLevel,
+          modelSettings: resolvedModelSettings,
+          signal: abortController.signal,
+        });
+        activeContextSummary = prepared.summary;
+        subagentUsageCalls.push(...prepared.usageCalls);
+        const nextBoundary = activeContextSummary?.through_timeline_index ?? previousBoundary;
+        if (nextBoundary <= previousBoundary) break;
+        previousBoundary = nextBoundary;
+      }
+    } catch (error) {
+      // Keep any previously completed summary and fall back to a virtual tail.
+      console.warn('[context-summary] room generation failed; using available history', error);
+    }
+    roomHistoryAfterTimelineIndex = activeContextSummary?.through_timeline_index ?? 0;
+    effectiveRoomHistoryTokenBudget = Math.max(
+      256,
+      roomHistoryTokenBudget - (activeContextSummary?.token_count ?? 0),
+    );
+  } else {
     trimUserHistoryByChat(userId, chatId, maxContextTokens);
     try {
       const { prepareContextSummary } = await import('./context-summary-agent.js');
@@ -7683,7 +7732,9 @@ export const sendMessageThroughAi = async (
     currentModelSupportsVision,
     attachmentBudgetState,
     responseAgent?.id ?? null,
-    roomHistoryTokenBudget
+    effectiveRoomHistoryTokenBudget,
+    roomHistoryAfterTimelineIndex,
+    roomHistoryThroughTimelineIndex,
   );
   if (activeContextSummary) {
     history = [{
