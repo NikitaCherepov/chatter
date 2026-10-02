@@ -49,6 +49,7 @@ export type ChatMemorySettings = {
   use_core_memory: number;
   allow_core_memory_update: number;
   message_search_scope: MessageSearchScope;
+  roleplay_mode: number;
   created_at: number;
   updated_at: number;
 };
@@ -404,8 +405,8 @@ export const getChatMemorySettings = (userId: number, chatId: number): ChatMemor
     INSERT OR IGNORE INTO chat_memory_settings (
       user_id, chat_id, persona_id, persona_override_id, general_space_id, chat_space_id,
       memory_mode, write_target, use_core_memory, allow_core_memory_update,
-      created_at, updated_at
-    ) VALUES (?, ?, ?, NULL, ?, NULL, 'general', 'general', 1, 1, ?, ?)
+      message_search_scope, roleplay_mode, created_at, updated_at
+    ) VALUES (?, ?, ?, NULL, ?, NULL, 'general', 'general', 1, 1, 'all', 0, ?, ?)
   `).run(accountId, chatId, defaults.persona.id, defaults.space.id, now, now);
   let settings = db.prepare(`
     SELECT * FROM chat_memory_settings WHERE user_id = ? AND chat_id = ?
@@ -428,7 +429,7 @@ export const updateChatMemorySettings = (
   chatId: number,
   patch: Partial<Pick<ChatMemorySettings,
     'persona_override_id' | 'memory_mode' | 'write_target' |
-    'use_core_memory' | 'allow_core_memory_update' | 'message_search_scope'>>,
+    'use_core_memory' | 'allow_core_memory_update' | 'message_search_scope' | 'roleplay_mode'>>,
 ): ChatMemorySettings => {
   const accountId = requireChatAccess(userId, chatId);
   const current = getChatMemorySettings(accountId, chatId);
@@ -463,14 +464,17 @@ export const updateChatMemorySettings = (
     : patch.allow_core_memory_update ? 1 : 0;
   const messageSearchScope = patch.message_search_scope ?? current.message_search_scope;
   if (!['all', 'current'].includes(messageSearchScope)) throw new Error('bad_message_search_scope');
+  const roleplayMode = patch.roleplay_mode === undefined
+    ? current.roleplay_mode
+    : patch.roleplay_mode ? 1 : 0;
   db.prepare(`
     UPDATE chat_memory_settings
     SET persona_override_id = ?, general_space_id = ?, chat_space_id = ?, memory_mode = ?,
-        write_target = ?, use_core_memory = ?, allow_core_memory_update = ?, message_search_scope = ?, updated_at = ?
+        write_target = ?, use_core_memory = ?, allow_core_memory_update = ?, message_search_scope = ?, roleplay_mode = ?, updated_at = ?
     WHERE user_id = ? AND chat_id = ?
   `).run(
     personaOverrideId, generalSpaceId, chatSpaceId, memoryMode, writeTarget,
-    useCoreMemory, allowCoreMemoryUpdate, messageSearchScope, getNowUnix(), accountId, chatId,
+    useCoreMemory, allowCoreMemoryUpdate, messageSearchScope, roleplayMode, getNowUnix(), accountId, chatId,
   );
   return getChatMemorySettings(accountId, chatId);
 };
@@ -603,8 +607,8 @@ export const initializeForkedChatMemory = (
     db.prepare(`
       INSERT INTO chat_memory_settings (
         user_id, chat_id, persona_id, persona_override_id, general_space_id, chat_space_id,
-        memory_mode, write_target, use_core_memory, allow_core_memory_update, message_search_scope, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        memory_mode, write_target, use_core_memory, allow_core_memory_update, message_search_scope, roleplay_mode, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(user_id, chat_id) DO UPDATE SET
         persona_id = excluded.persona_id,
         persona_override_id = excluded.persona_override_id,
@@ -615,12 +619,13 @@ export const initializeForkedChatMemory = (
         use_core_memory = excluded.use_core_memory,
         allow_core_memory_update = excluded.allow_core_memory_update,
         message_search_scope = excluded.message_search_scope,
+        roleplay_mode = excluded.roleplay_mode,
         updated_at = excluded.updated_at
     `).run(
       accountId, targetChatId, sourceSettings.persona_id, sourceSettings.persona_override_id,
       sourceSettings.general_space_id, targetSpace?.id ?? null, sourceSettings.memory_mode,
       sourceSettings.write_target, sourceSettings.use_core_memory,
-      sourceSettings.allow_core_memory_update, sourceSettings.message_search_scope, now, now,
+      sourceSettings.allow_core_memory_update, sourceSettings.message_search_scope, sourceSettings.roleplay_mode, now, now,
     );
 
     if (!sourceSpace || !targetSpace) {

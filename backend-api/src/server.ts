@@ -1735,6 +1735,7 @@ app.patch('/api/v1/chats/:chatId/memory-settings', (req: AuthedRequest, res: any
       ...(typeof body.memory_mode === 'string' ? { memory_mode: body.memory_mode } : {}),
       ...(typeof body.write_target === 'string' ? { write_target: body.write_target } : {}),
       ...(typeof body.message_search_scope === 'string' ? { message_search_scope: body.message_search_scope } : {}),
+      ...('roleplay_mode' in body ? { roleplay_mode: body.roleplay_mode === true || body.roleplay_mode === 1 ? 1 : 0 } : {}),
     });
     return res.json({ settings });
   } catch (error: any) {
@@ -3069,6 +3070,7 @@ app.post('/api/v1/chat/send', async (req: AuthedRequest, res) => {
         type: 'chat_user_message_saved',
         chat_id: targetChatId,
         message_id: result.user_message_id ?? null,
+        ...(typeof result.user_message_timeline_index === 'number' ? { timeline_index: result.user_message_timeline_index } : {}),
         ...(result.user_message_images ? { images: result.user_message_images } : {}),
       });
       res.end();
@@ -3076,6 +3078,7 @@ app.post('/api/v1/chat/send', async (req: AuthedRequest, res) => {
         type: 'room_user_message',
         chat_id: targetChatId,
         message_id: result.user_message_id ?? null,
+        ...(typeof result.user_message_timeline_index === 'number' ? { timeline_index: result.user_message_timeline_index } : {}),
         sender_user_id: userId,
         text,
         ...(result.user_message_images ? { images: result.user_message_images } : {}),
@@ -8322,12 +8325,14 @@ async function handleWsChatSend(client: WsClient, msg: any) {
         type: 'chat_user_message_saved',
         chat_id: targetChatId,
         message_id: result.user_message_id ?? null,
+        ...(typeof result.user_message_timeline_index === 'number' ? { timeline_index: result.user_message_timeline_index } : {}),
         ...(result.user_message_images ? { images: result.user_message_images } : {}),
       });
       broadcastToChat(targetChatId, {
         type: 'room_user_message',
         chat_id: targetChatId,
         message_id: result.user_message_id ?? null,
+        ...(typeof result.user_message_timeline_index === 'number' ? { timeline_index: result.user_message_timeline_index } : {}),
         sender_user_id: userId,
         text,
         ...(result.user_message_images ? { images: result.user_message_images } : {}),

@@ -7,6 +7,7 @@ const dbPath = path.join(os.tmpdir(), `chatter-context-summary-${process.pid}-${
 process.env.API_DB_PATH = dbPath;
 
 const { db } = await import('../src/db.js');
+const { getChatMessages } = await import('../src/services/chats.js');
 const { countTokens } = await import('../src/services/tokenizer.js');
 const {
   chunkContextSummarySource,
@@ -26,6 +27,12 @@ const insert = db.prepare(`
 insert.run(chatId, 'user', 'My cat is called Pixel.', 1, 1, 7);
 insert.run(chatId, 'assistant', 'I will remember that.', 2, 1, 6);
 insert.run(chatId, 'user', 'This stays in the active tail.', 3, 0, 8);
+
+assert.deepEqual(
+  getChatMessages(91, chatId).map(message => message.timeline_index),
+  [1, 2, 3],
+  'message API exposes the stable timeline boundary used by the summary card',
+);
 
 const source = getArchivedContextSummarySource(91, chatId)!;
 assert.equal(source.messageCount, 2);

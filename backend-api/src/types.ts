@@ -226,6 +226,8 @@ export type MessageUsage = {
 export type MessageDto = {
   id: number;
   chat_id: number;
+  /** Stable position inside the chat timeline. */
+  timeline_index?: number;
   role: ChatRole;
   content: string;
   reasoning_content?: string | null;
@@ -335,6 +337,8 @@ export type AiSendResult = {
   chat_id: number;
   message_id: number;
   user_message_id?: number;
+  message_timeline_index?: number;
+  user_message_timeline_index?: number;
   user_message_images?: MessageImage[];
   model_fallback_notice?: string | null;
   preferred_model_reset?: boolean;

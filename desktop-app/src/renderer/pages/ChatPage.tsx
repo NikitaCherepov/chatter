@@ -2010,7 +2010,15 @@ export function ChatPage() {
     try {
       const tokens = await api.getChatContextTokens(chatId);
       setContextTokens(tokens);
-      setContextSummary(tokens.context_summary ?? null);
+      const summary = tokens.context_summary ?? null;
+      setContextSummary(summary);
+      if (summary) {
+        setMessages((current) => current.map((message) =>
+          typeof message.timeline_index === 'number'
+          && message.timeline_index <= summary.through_timeline_index
+            ? { ...message, archived: true }
+            : message));
+      }
     } catch (err) {
       console.error('Failed to load context tokens:', err);
     }
@@ -2126,6 +2134,14 @@ export function ChatPage() {
     }
     return displayMessages.slice(Math.max(0, cutIndex));
   }, [displayMessages, charBudget]);
+
+  const contextSummaryInsertMessageId = useMemo(() => {
+    if (!contextSummary || visibleMessages.length === 0) return null;
+    return visibleMessages.find((message) =>
+      typeof message.timeline_index === 'number'
+      && message.timeline_index > contextSummary.through_timeline_index)?.id
+      ?? visibleMessages[0].id;
+  }, [contextSummary, visibleMessages]);
 
   useLayoutEffect(() => {
     const pendingJump = pendingMessageJumpRef.current;
@@ -2871,6 +2887,7 @@ export function ChatPage() {
           if (event.sender_user_id === user?.id) return;
           setMessages((prev) => [...prev, {
             id: event.message_id ?? -(Date.now()),
+            ...(typeof event.timeline_index === 'number' ? { timeline_index: event.timeline_index } : {}),
             role: 'user',
             user_id: event.sender_user_id,
             content: event.text,
@@ -2887,7 +2904,7 @@ export function ChatPage() {
           const messageId = event.message_id ?? tempId;
           const images = event.images;
           setMessages((prev) => prev.map((message) => message.id === tempId
-            ? { ...message, id: messageId, ...(images ? { images } : {}) }
+            ? { ...message, id: messageId, ...(typeof event.timeline_index === 'number' ? { timeline_index: event.timeline_index } : {}), ...(images ? { images } : {}) }
             : message));
           break;
         }
@@ -3052,6 +3069,7 @@ export function ChatPage() {
           const responseImages = res.response_images ?? generatedImages;
           const finalMessage: api.Message = {
             id: res.message_id,
+            ...(typeof res.message_timeline_index === 'number' ? { timeline_index: res.message_timeline_index } : {}),
             role: 'assistant',
             user_id: event.owner_user_id,
             content: res.reply_text ?? '',
@@ -5721,9 +5739,9 @@ export function ChatPage() {
                       : t('chat.messages.loadOlderFromServer', { count: MESSAGE_PAGE_SIZE })}
                 </button>
               )}
-              {visibleMessages.map((msg, index) => (
+              {visibleMessages.map((msg) => (
                 <React.Fragment key={msg.id}>
-                {contextSummary && !msg.archived && (index === 0 || visibleMessages[index - 1]?.archived) && (
+                {contextSummary && msg.id === contextSummaryInsertMessageId && (
                   <section className={s.contextSummaryCard} aria-label={t('chat.contextSummary.title')}>
                     <div className={s.contextSummaryHeader}>
                       <span>{t('chat.contextSummary.title')}</span>

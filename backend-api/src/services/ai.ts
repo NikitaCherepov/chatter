@@ -18,7 +18,8 @@ import { runSmartHomeControl, type SmartHomeArgs, listSmartDevicesForAi } from '
 import { getMailAccountsForUser, resolveEmailAttachmentsForUser, runEmailAttachmentRead, runEmailCheck, runEmailRead } from './mail.js';
 import { runCoreMemoryMerge } from './memory.js';
 import { VectorMemoryService } from './vector-memory.js';
-import { resolvePersonaForChat } from './memory-foundation.js';
+import { getChatMemorySettings, resolvePersonaForChat } from './memory-foundation.js';
+import { applyRoleplayRestrictions, isRoleplayToolAllowed } from './chat-roleplay.js';
 import { wrapUntrustedContent } from './web-reader.js';
 import { sendIpcToDesktop, isDesktopOnline, sendToDesktop } from '../ws-clients.js';
 import { waitForNoPendingPcConfirmations } from './pc-command-confirmations.js';
@@ -7066,7 +7067,7 @@ export const sendMessageThroughAi = async (
     onToolStatus?: (text: string) => Promise<void> | void;
     onMapUpdate?: (data: MapUpdatePayload) => Promise<void> | void;
     onDiceRoll?: (roll: number) => Promise<void> | void;
-    onUserMessageSaved?: (data: { message_id: number; images?: Array<{ url: string; type: 'user_photo' }> }) => Promise<void> | void;
+    onUserMessageSaved?: (data: { message_id: number; timeline_index?: number; images?: Array<{ url: string; type: 'user_photo' }> }) => Promise<void> | void;
     /** Стрим токенов контента в реальном времени (уже оттроттлено в streamAndAssemble). */
     onStreamToken?: (text: string) => Promise<void> | void;
     /** Стрим reasoning-токенов в реальном времени. */
@@ -7762,6 +7763,7 @@ export const sendMessageThroughAi = async (
     if (options?.onUserMessageSaved) {
       await Promise.resolve(options.onUserMessageSaved({
         message_id: userMessageId,
+        ...(typeof userMessageCursor === 'number' ? { timeline_index: userMessageCursor } : {}),
         ...(userMessageImages ? { images: userMessageImages } : {}),
       })).catch((err: any) => {
         console.warn('[chat] failed to notify client that user message was saved:', err?.message || String(err));
@@ -7804,6 +7806,7 @@ export const sendMessageThroughAi = async (
       chat_id: chatId,
       message_id: 0,
       user_message_id: userMessageId,
+      ...(typeof userMessageCursor === 'number' ? { user_message_timeline_index: userMessageCursor } : {}),
       user_message_images: options?.userImages?.length ? options.userImages : undefined,
       usage: {
         tokens_used: 0,
@@ -7820,10 +7823,13 @@ export const sendMessageThroughAi = async (
     };
   }
 
-  const flags = options?.featureFlags;
+  // Tools execute under the initiating user's account in rooms, so the
+  // per-chat roleplay restriction must follow that same user + chat pair.
+  const roleplayMode = getChatMemorySettings(toolUser.id, chatId).roleplay_mode === 1;
+  const flags = applyRoleplayRestrictions(options?.featureFlags, roleplayMode);
   const avatarControlEnabled = !flags?.disable_avatar_control;
   const timezone = Number.isFinite(Number(user.timezone_offset)) ? Number(user.timezone_offset) : 5;
-  const dynamicContextToolHint = currentModelSupportsTools
+  const dynamicContextToolHint = currentModelSupportsTools && !roleplayMode
     ? `\n\n[DYNAMIC CONTEXT]\nCurrent user time is available via the get_user_time tool. Do not guess current date/time: call get_user_time when it matters for answering or scheduling.${avatarControlEnabled ? '\nCurrent pixel avatar state is available via the get_avatar_state tool. To change emotions, use set_display_state.' : ''}`
     : '';
   const avatarPromptHint = currentModelSupportsTools && avatarControlEnabled && options?.displayManifest ? AVATAR_PROMPT_HINT : '';
@@ -7969,7 +7975,7 @@ export const sendMessageThroughAi = async (
   responsePromptImageUrl = getUserPromptImageBySelectedId(userId, responsePromptId);
   const activePersona = isGuestMode ? null : resolvePersonaForChat(toolUser.id, chatId);
   const coreMemoryForPrompt = activePersona?.useCoreMemory ? activePersona.persona.core_memory : '';
-  const pinnedHintForPrompt = isGuestMode || !currentModelSupportsTools ? '' : pinnedHint;
+  const pinnedHintForPrompt = isGuestMode || roleplayMode || !currentModelSupportsTools ? '' : pinnedHint;
 
   // ── Dice Roll Mode (d20 roleplay) ──
   // Backend rolls the dice and immediately pushes the result to clients via onDiceRoll
@@ -8032,8 +8038,11 @@ export const sendMessageThroughAi = async (
   // tools. Applied AFTER the feature-flag filter, so a task can only narrow
   // the set, never bypass user-disabled tools. [] = run without tools.
   const allowedToolsFilter = options?.allowedTools != null ? new Set(options.allowedTools) : null;
-  const applyAllowedToolsFilter = (tools: any[]) =>
-    allowedToolsFilter ? tools.filter(t => allowedToolsFilter.has(t?.function?.name || '')) : tools;
+  const applyAllowedToolsFilter = (tools: any[]) => tools.filter((tool) => {
+    const toolName = tool?.function?.name || '';
+    return (!allowedToolsFilter || allowedToolsFilter.has(toolName))
+      && isRoleplayToolAllowed(toolName, roleplayMode);
+  });
 
   let executionTools: any[] = currentModelSupportsTools
     ? applyAllowedToolsFilter([
@@ -8138,7 +8147,7 @@ User request: "${text}"`;
     const allowedToolNames = cheapMap[routeLabel];
 
     if (allowedToolNames.length && !allowedToolNames.some(n => disabledToolSet.has(n))) {
-      executionTools = buildLiteExecutionTools(allowedToolNames);
+      executionTools = applyAllowedToolsFilter(buildLiteExecutionTools(allowedToolNames));
       executionHistory = [];
       executionSystemPrompt = LITE_ROUTER_INSTRUCTIONS;
       executionMode = 'lite';
@@ -8791,6 +8800,12 @@ iterations.push(currentIteration);
           regenerateMessageId: options?.regenerateMessageId,
         }
       );
+  const assistantMessageCursor = assistantMessageId > 0
+    ? (db.prepare(`
+        SELECT timeline_index FROM chat_messages
+        WHERE id = ? AND chat_id = ? AND user_id = ?
+      `).get(assistantMessageId, chatId, userId) as { timeline_index: number } | undefined)?.timeline_index
+    : undefined;
   notifyDesktopChatUpdated('assistant', assistantMessageId);
 
   const safeTokens = Math.max(0, Math.floor(aggregateUsage.total_tokens || totalTokens));
@@ -8844,6 +8859,8 @@ iterations.push(currentIteration);
     chat_id: chatId,
     message_id: assistantMessageId,
     user_message_id: userMessageId,
+    ...(typeof assistantMessageCursor === 'number' ? { message_timeline_index: assistantMessageCursor } : {}),
+    ...(typeof userMessageCursor === 'number' ? { user_message_timeline_index: userMessageCursor } : {}),
     user_message_images: options?.userImages?.length ? options.userImages : undefined,
     model_fallback_notice: modelFallbackNotice,
     preferred_model_reset: modelSelectionReset || undefined,

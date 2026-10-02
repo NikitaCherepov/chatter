@@ -693,6 +693,10 @@
         "all": "All accessible chats",
         "current": "Only this chat"
       },
+      "roleplayMode": {
+        "label": "Roleplay mode",
+        "hint": "Only long-term memory and chat search tools remain available in this chat."
+      },
       "search": {
         "placeholder": "Search memories...",
         "text": "Text",

@@ -406,6 +406,7 @@ export type SubagentTrace = {
 
 export type Message = {
   id: number;
+  timeline_index?: number;
   role: 'user' | 'assistant';
   /** Message's author */
   user_id?: number | null;
@@ -988,7 +989,7 @@ const MAX_RECONNECT_DELAY = 30000;
 let wsTokenRefreshPromise: Promise<boolean> | null = null;
 
 export type RoomEvent =
-  | { type: 'room_user_message'; chat_id: number; message_id: number | null; sender_user_id: number; text: string; images?: MessageImage[]; attachments?: MessageAttachment[] }
+  | { type: 'room_user_message'; chat_id: number; message_id: number | null; timeline_index?: number; sender_user_id: number; text: string; images?: MessageImage[]; attachments?: MessageAttachment[] }
   | { type: 'chat_agent_start'; chat_id: number; agent_id: number | null; agent_name: string; owner_user_id: number; reason: 'mention' | 'auto' | 'manual'; prompt_id?: number | null; prompt_name?: string | null; prompt_image_url?: string | null }
   | { type: 'chat_agent_token'; chat_id: number; agent_id: number | null; text: string }
   | { type: 'chat_agent_reasoning'; chat_id: number; agent_id: number | null; text: string }
@@ -1004,7 +1005,7 @@ export type RoomEvent =
   | { type: 'room_members_updated'; chat_id: number }
   | { type: 'room_message_deleted'; chat_id: number; message_id: number; initiator_user_id: number }
   | { type: 'room_message_edited'; chat_id: number; message_id: number; initiator_user_id: number; content: string }
-  | { type: 'chat_user_message_saved'; chat_id: number; message_id: number | null; images?: MessageImage[] }
+  | { type: 'chat_user_message_saved'; chat_id: number; message_id: number | null; timeline_index?: number; images?: MessageImage[] }
   | { type: 'chat_queue_done'; chat_id: number };
 
 type WsCallbacks = StreamCallbacks & {

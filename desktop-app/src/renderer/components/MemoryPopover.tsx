@@ -14,6 +14,7 @@ type MemorySettings = {
   memory_mode: 'off' | 'general' | 'chat' | 'both';
   write_target: 'general' | 'chat';
   message_search_scope: 'all' | 'current';
+  roleplay_mode: number;
 };
 type RecordDialog = { type: 'edit' | 'delete'; record: MemoryRecord };
 type ChatPromptSettings = { prompt_id: number | null; room_enabled: boolean };
@@ -207,6 +208,23 @@ export function MemoryPopover({ chatId }: { chatId: number }) {
               <label className={s.field}>{t('chat.memory.persona')}
                 <ChatPersonaSelector chatId={chatId} embedded />
               </label>
+              <div className={s.toggleRow}>
+                <div className={s.toggleText}>
+                  <strong>{t('chat.memory.roleplayMode.label')}</strong>
+                  <span>{t('chat.memory.roleplayMode.hint')}</span>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={settings.roleplay_mode === 1}
+                  aria-label={t('chat.memory.roleplayMode.label')}
+                  className={`${s.toggle} ${settings.roleplay_mode === 1 ? s.toggleActive : ''}`}
+                  disabled={loading}
+                  onClick={() => void patchSettings({ roleplay_mode: settings.roleplay_mode === 1 ? 0 : 1 })}
+                >
+                  <span />
+                </button>
+              </div>
               <div className={s.field}>{t('chat.memory.messageSearch.label')}
                 <Select
                   value={settings.message_search_scope}
