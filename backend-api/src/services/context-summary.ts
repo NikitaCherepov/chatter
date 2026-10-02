@@ -20,6 +20,16 @@ export type ContextSummarySource = {
   formattedMessages: string[];
 };
 
+export const enforceContextSummaryModelSettings = <T extends { max_tokens?: number | null }>(
+  settings: T | null,
+  maxTokens: number,
+): T & { max_tokens: number } => {
+  return {
+    ...((settings ?? {}) as T),
+    max_tokens: maxTokens,
+  };
+};
+
 type SourceRow = {
   id: number;
   timeline_index: number | null;
@@ -27,6 +37,47 @@ type SourceRow = {
   content: string;
   attachments: string | null;
   images: string | null;
+  tool_calls_json: string | null;
+};
+
+const formatToolOutputs = (rawJson: string | null): string[] => {
+  if (!rawJson) return [];
+  try {
+    const parsed = JSON.parse(rawJson) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    const outputs: string[] = [];
+    for (const item of parsed) {
+      if (!item || typeof item !== 'object') continue;
+      const value = item as Record<string, unknown>;
+      if (Array.isArray(value.results)) {
+        const calls = Array.isArray(value.tool_calls) ? value.tool_calls : [];
+        for (const result of value.results) {
+          if (!result || typeof result !== 'object') continue;
+          const resultValue = result as Record<string, unknown>;
+          const matchingCall = calls.find((call) => {
+            if (!call || typeof call !== 'object') return false;
+            const callValue = call as Record<string, unknown>;
+            return resultValue.id && callValue.id === resultValue.id;
+          }) as Record<string, unknown> | undefined;
+          const name = `${resultValue.name || matchingCall?.name || 'tool'}`;
+          const content = typeof resultValue.content === 'string'
+            ? resultValue.content
+            : resultValue.content == null ? '' : JSON.stringify(resultValue.content);
+          if (content.trim()) outputs.push(`[TOOL OUTPUT: ${name}]\n${content}\n[/TOOL OUTPUT]`);
+        }
+        continue;
+      }
+
+      // Legacy flat trace stores only a short result preview.
+      const preview = typeof value.result_preview === 'string' ? value.result_preview : '';
+      if (preview.trim()) {
+        outputs.push(`[TOOL OUTPUT: ${value.name || 'tool'}]\n${preview}\n[/TOOL OUTPUT]`);
+      }
+    }
+    return outputs;
+  } catch {
+    return [];
+  }
 };
 
 const formatSourceRow = (row: SourceRow): string => {
@@ -45,13 +96,15 @@ const formatSourceRow = (row: SourceRow): string => {
     } catch { /* Legacy malformed JSON is ignored. */ }
   }
   const suffix = additions.length > 0 ? `\n[${additions.join('; ')}]` : '';
-  return `[${row.timeline_index ?? row.id}] ${row.role.toUpperCase()}: ${row.content}${suffix}`;
+  const toolOutputs = formatToolOutputs(row.tool_calls_json);
+  const toolSuffix = toolOutputs.length > 0 ? `\n${toolOutputs.join('\n')}` : '';
+  return `[${row.timeline_index ?? row.id}] ${row.role.toUpperCase()}: ${row.content}${suffix}${toolSuffix}`;
 };
 
 /** Archived rows are the exact prefix removed by provider-anchored trimming. */
 export const getArchivedContextSummarySource = (userId: number, chatId: number): ContextSummarySource | null => {
   const rows = db.prepare(`
-    SELECT id, timeline_index, role, content, attachments, images
+    SELECT id, timeline_index, role, content, attachments, images, tool_calls_json
     FROM chat_messages
     WHERE user_id = ? AND chat_id = ? AND archived = 1
     ORDER BY COALESCE(timeline_index, id) ASC, id ASC
@@ -65,6 +118,7 @@ export const getArchivedContextSummarySource = (userId: number, chatId: number):
     content: row.content,
     attachments: row.attachments,
     images: row.images,
+    tool_calls_json: row.tool_calls_json,
   }));
   return {
     hash: createHash('sha256').update(JSON.stringify(fingerprint)).digest('hex'),

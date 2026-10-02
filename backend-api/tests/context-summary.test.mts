@@ -11,6 +11,7 @@ const { getChatMessages } = await import('../src/services/chats.js');
 const { countTokens } = await import('../src/services/tokenizer.js');
 const {
   chunkContextSummarySource,
+  enforceContextSummaryModelSettings,
   deleteContextSummary,
   getArchivedContextSummarySource,
   getContextSummary,
@@ -21,12 +22,17 @@ const {
 db.prepare("INSERT INTO users (id, name, status) VALUES (91, 'Summary owner', 'approved')").run();
 const chatId = Number(db.prepare("INSERT INTO user_chats (user_id, title) VALUES (91, 'Summary test')").run().lastInsertRowid);
 const insert = db.prepare(`
-  INSERT INTO chat_messages (user_id, chat_id, role, content, timeline_index, archived, token_count)
-  VALUES (91, ?, ?, ?, ?, ?, ?)
+  INSERT INTO chat_messages (user_id, chat_id, role, content, timeline_index, archived, token_count, tool_calls_json)
+  VALUES (91, ?, ?, ?, ?, ?, ?, ?)
 `);
-insert.run(chatId, 'user', 'My cat is called Pixel.', 1, 1, 7);
-insert.run(chatId, 'assistant', 'I will remember that.', 2, 1, 6);
-insert.run(chatId, 'user', 'This stays in the active tail.', 3, 0, 8);
+insert.run(chatId, 'user', 'My cat is called Pixel.', 1, 1, 7, null);
+insert.run(chatId, 'assistant', 'I will remember that.', 2, 1, 6, JSON.stringify([{
+  step: 1,
+  content: '',
+  tool_calls: [{ id: 'memory-search-1', name: 'search_cold_memory', arguments: { query: 'cat' } }],
+  results: [{ id: 'memory-search-1', name: 'search_cold_memory', content: 'Pixel prefers sleeping near the window.' }],
+}]));
+insert.run(chatId, 'user', 'This stays in the active tail.', 3, 0, 8, null);
 
 assert.deepEqual(
   getChatMessages(91, chatId).map(message => message.timeline_index),
@@ -38,6 +44,12 @@ const source = getArchivedContextSummarySource(91, chatId)!;
 assert.equal(source.messageCount, 2);
 assert.equal(source.throughTimelineIndex, 2);
 assert.match(source.formattedMessages[0], /Pixel/);
+assert.match(source.formattedMessages[1], /\[TOOL OUTPUT: search_cold_memory\]/);
+assert.match(source.formattedMessages[1], /sleeping near the window/);
+
+assert.equal(enforceContextSummaryModelSettings({ max_tokens: 9000 }, 1200).max_tokens, 1200);
+assert.equal(enforceContextSummaryModelSettings({ max_tokens: 700 }, 1200).max_tokens, 1200);
+assert.equal(enforceContextSummaryModelSettings(null, 1200).max_tokens, 1200);
 
 const saved = saveContextSummary({
   userId: 91,
