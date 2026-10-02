@@ -1,4 +1,6 @@
 import { sendMessageThroughAi } from './ai.js';
+import { transcribeAudio as transcribeViaIntegration } from './transcription.js';
+import { getTranscriptionRuntimeSettings } from './transcription-settings.js';
 
 type VoiceTurnOptions = {
   userTelegramChatId?: number | null;
@@ -132,11 +134,16 @@ export const runVoiceTurn = async (
   if (!audioBuffer.length) throw new Error('empty_audio');
   if (audioBuffer.length > getMaxAudioBytes()) throw new Error('audio_too_large');
 
-  const transcribedText = await transcribeAudio(
-    audioBuffer,
-    mimeType || 'audio/ogg',
-    options?.transcriptionLanguage
-  );
+  // Prefer the Transcription integration (OpenRouter / custom); legacy voice-api stays as fallback.
+  const useIntegration = getTranscriptionRuntimeSettings().enabled;
+  const transcribedText = useIntegration
+    ? (await transcribeViaIntegration({
+        userId,
+        audioBuffer,
+        language: options?.transcriptionLanguage,
+        mimeType: mimeType || 'audio/ogg',
+      })).text
+    : await transcribeAudio(audioBuffer, mimeType || 'audio/ogg', options?.transcriptionLanguage);
   if (!transcribedText) {
     return {
       recognized_text: '',
@@ -160,14 +167,16 @@ export const runVoiceTurn = async (
   let voiceMimeType: string | null = null;
   let voiceError: string | null = null;
 
-  try {
-    const voice = await synthesizeVoice(aiResult.final_reply_text || '');
-    if (voice?.buffer?.length) {
-      voiceAudioBase64 = voice.buffer.toString('base64');
-      voiceMimeType = voice.contentType || null;
+  if (!useIntegration) {
+    try {
+      const voice = await synthesizeVoice(aiResult.final_reply_text || '');
+      if (voice?.buffer?.length) {
+        voiceAudioBase64 = voice.buffer.toString('base64');
+        voiceMimeType = voice.contentType || null;
+      }
+    } catch (err: any) {
+      voiceError = `${err?.message || String(err)}`;
     }
-  } catch (err: any) {
-    voiceError = `${err?.message || String(err)}`;
   }
 
   return {

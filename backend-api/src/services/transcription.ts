@@ -106,10 +106,19 @@ export const getTranscriptionStatus = async (force = false): Promise<Transcripti
   }
 };
 
+const audioFileName = (mimeType: string): string => {
+  if (mimeType.includes('ogg')) return 'voice.ogg';
+  if (mimeType.includes('webm')) return 'voice.webm';
+  if (mimeType.includes('mpeg') || mimeType.includes('mp3')) return 'voice.mp3';
+  if (mimeType.includes('m4a') || mimeType.includes('mp4')) return 'voice.m4a';
+  return 'voice.wav';
+};
+
 export const transcribeAudio = async (input: {
   userId: number;
   audioBuffer: Buffer;
   language?: string | null;
+  mimeType?: string | null;
 }): Promise<{ text: string }> => {
   const settings = getTranscriptionRuntimeSettings();
   if (!settings.enabled || !settings.apiKey || !settings.model || !settings.baseUrl) {
@@ -127,10 +136,11 @@ export const transcribeAudio = async (input: {
   if (!quota.ok) throw new Error('quota_exceeded');
 
   const form = new FormData();
+  const mimeType = `${input.mimeType || 'audio/wav'}`;
   form.append(
     'file',
-    new Blob([new Uint8Array(input.audioBuffer)], { type: 'audio/wav' }),
-    'voice.wav',
+    new Blob([new Uint8Array(input.audioBuffer)], { type: mimeType }),
+    audioFileName(mimeType),
   );
   form.append('model', settings.model);
   const language = normalizeLanguage(input.language);

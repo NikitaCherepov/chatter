@@ -65,6 +65,9 @@ globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) =>
     `Bearer ${secret}`,
   );
   assert.ok(init?.body instanceof FormData);
+  const file = (init.body as FormData).get('file') as File;
+  assert.equal(file.name, 'voice.ogg');
+  assert.equal(file.type, 'audio/ogg');
   assert.equal((init.body as FormData).get('model'), 'test-transcriber');
   assert.equal((init.body as FormData).get('language'), 'ru');
   return new Response(
@@ -98,7 +101,12 @@ wav.writeUInt16LE(16, 34);
 wav.write('data', 36, 'ascii');
 wav.writeUInt32LE(32_000, 40);
 
-const result = await transcribeAudio({ userId: 501, audioBuffer: wav, language: 'ru-RU' });
+const result = await transcribeAudio({
+  userId: 501,
+  audioBuffer: wav,
+  language: 'ru-RU',
+  mimeType: 'audio/ogg',
+});
 assert.equal(result.text, 'Проверка распознавания');
 assert.equal(requests[1].url, 'https://voice.example/v1/audio/transcriptions');
 

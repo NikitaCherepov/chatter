@@ -843,7 +843,8 @@ app.post('/internal/messages/bind-telegram', internalAuth, (req, res) => {
 });
 
 app.post('/internal/voice/turn', internalAuth, async (req, res) => {
-  if (!BACKEND_VOICE_API_ENABLED) {
+  // Also allowed when the Transcription integration is enabled (no voice-api container needed).
+  if (!BACKEND_VOICE_API_ENABLED && !getTranscriptionSettings().enabled) {
     return res.status(503).json({ error: 'backend_voice_api_disabled' });
   }
 

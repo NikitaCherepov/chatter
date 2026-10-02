@@ -12,6 +12,9 @@ import { Toggle } from '../../ui/Toggle/Toggle';
 import grid from '../../ui/PageGrid/PageGrid.module.css';
 import styles from './ServicesPage.module.css';
 
+// Temporarily hidden: telegram voice recognition uses the Transcription integration now.
+const VOICE_SERVICE_HIDDEN = true;
+
 type Props = {
   settings: Settings;
   setSettings: Dispatch<SetStateAction<Settings>>;
@@ -109,6 +112,7 @@ export function ServicesPage({
           </FormField>
         </div>
       </Card>
+      {!VOICE_SERVICE_HIDDEN && (
       <Card
         title={t('services.voice.title')}
         description={t('services.voice.description')}
@@ -163,6 +167,7 @@ export function ServicesPage({
           )}
         </div>
       </Card>
+      )}
       <ActionBar saving={saving} state={saveState} />
     </form>
   );
