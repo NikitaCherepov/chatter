@@ -45,6 +45,7 @@ import { startWakeWordAudioStream, stopWakeWordAudioStream } from '../lib/wakeWo
 import { getWakeWordEnabled } from '../lib/wakeWordToggle';
 import { ttsSpeak, ttsStop, ttsSubscribe, playSfx } from '../lib/tts';
 import { getSpeechRecognitionLanguage } from '../lib/speechRecognition';
+import { transcribeRecordedAudio } from '../lib/transcription';
 import { getRenderPerfBudget, getRenderPerfStep } from '../lib/renderPerf';
 import { saveImageFile } from '../lib/saveImageFile';
 import {
@@ -3260,7 +3261,7 @@ export function ChatPage() {
 
         setIsTranscribing(true);
         try {
-          const text = await window.electronAPI.transcribeAudio(arrayBuffer, getSpeechRecognitionLanguage());
+          const text = await transcribeRecordedAudio(arrayBuffer, getSpeechRecognitionLanguage());
           if (text) setInput((prev) => prev ? `${prev} ${text}` : text);
         } catch (err) {
           console.error('[voice] Transcription failed:', err);
@@ -3971,7 +3972,7 @@ export function ChatPage() {
           setIsTranscribing(true);
           try {
             const arrayBuffer = await audioBlob.arrayBuffer();
-            const text = await window.electronAPI.transcribeAudio(arrayBuffer, getSpeechRecognitionLanguage());
+            const text = await transcribeRecordedAudio(arrayBuffer, getSpeechRecognitionLanguage());
             if (!text) return;
 
             // Send immediately if bot is idle, otherwise fall back to textarea

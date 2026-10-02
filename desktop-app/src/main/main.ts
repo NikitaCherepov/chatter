@@ -1716,6 +1716,29 @@ function createWindow() {
   });
 
   // ── IPC: transcribe-audio (voice → wav → whisper.exe → text) ──────────
+  ipcMain.handle('prepare-audio-wav', async (event, arrayBuffer: ArrayBuffer) => {
+    assertTrustedIpcSender(event);
+    const tempDir = os.tmpdir();
+    const nonce = `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    const inputPath = path.join(tempDir, `voice_cloud_input_${nonce}.webm`);
+    const outputPath = path.join(tempDir, `voice_cloud_output_${nonce}.wav`);
+    try {
+      fs.writeFileSync(inputPath, Buffer.from(arrayBuffer));
+      await new Promise<void>((resolve, reject) => {
+        ffmpeg(inputPath)
+          .outputOptions(['-ar 16000', '-ac 1', '-c:a pcm_s16le'])
+          .save(outputPath)
+          .on('end', resolve)
+          .on('error', reject);
+      });
+      const wav = fs.readFileSync(outputPath);
+      return wav.buffer.slice(wav.byteOffset, wav.byteOffset + wav.byteLength);
+    } finally {
+      try { fs.unlinkSync(inputPath); } catch { /* ignore */ }
+      try { fs.unlinkSync(outputPath); } catch { /* ignore */ }
+    }
+  });
+
   ipcMain.handle('transcribe-audio', async (event, arrayBuffer: ArrayBuffer, language: string = 'auto') => {
     assertTrustedIpcSender(event);
     const tempDir = os.tmpdir();

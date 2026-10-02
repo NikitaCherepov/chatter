@@ -446,6 +446,13 @@
     },
     "voice": {
       "recognitionTitle": "Распознавание голоса",
+      "recognitionSource": "Где распознавать",
+      "recognitionSourceHint": "Локальный Whisper использует этот компьютер. Серверный режим подходит для слабых ПК и доступен только после настройки администратором.",
+      "recognitionSourceLocal": "На этом компьютере",
+      "recognitionSourceLocalHint": "Локальный Whisper",
+      "recognitionSourceServer": "На сервере",
+      "recognitionSourceServerReady": "Доступно · {{model}}",
+      "recognitionSourceServerUnavailable": "Недоступно или не настроено",
       "recognitionLanguage": "Язык распознавания",
       "recognitionAuto": "Автоматическое определение",
       "recognitionHint": "Автоопределение удобно. Выберите конкретный язык для более быстрого и надёжного распознавания коротких фраз.",

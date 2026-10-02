@@ -281,6 +281,11 @@
         "name": "Генерация изображений",
         "description": "Создание изображений через внешний API",
         "group": "Медиа"
+      },
+      "transcription": {
+        "name": "Транскрибация голоса",
+        "description": "Серверное распознавание речи",
+        "group": "Медиа"
       }
     },
     "secretField": {
@@ -475,6 +480,22 @@
       "capabilityReferences": "референсы",
       "capabilitySupported": "поддерживаются",
       "capabilityNotClaimed": "не заявлены"
+    },
+    "transcription": {
+      "pageDescription": "Серверное распознавание речи для Chatter Desktop через OpenRouter или OpenAI-совместимый API.",
+      "sectionTitle": "Транскрибация",
+      "sectionIntro": "Desktop отправляет mono WAV 16 кГц. Ключ хранится на сервере в зашифрованном vault.",
+      "enabled": "Включить серверную транскрибацию",
+      "provider": "Провайдер",
+      "apiUrl": "Адрес API",
+      "model": "Модель транскрибации",
+      "audioPrice": "Цена аудио, $ / секунду",
+      "tokenPrice": "Цена входа, $ / 1 млн токенов",
+      "check": "Проверить доступность",
+      "checking": "Проверяем…",
+      "available": "Доступно · {{model}}",
+      "unavailable": "Недоступно · {{error}}",
+      "saved": "Настройки транскрибации сохранены."
     }
   },
   "services": {

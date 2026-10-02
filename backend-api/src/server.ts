@@ -47,6 +47,13 @@ import {
 import { getOpenRouterMonitoredModels } from './services/ai.js';
 import { saveParsedChatAttachment } from './services/chat-attachments.js';
 import { runVoiceTurn } from './services/voice.js';
+import { getTranscriptionStatus, transcribeAudio } from './services/transcription.js';
+import {
+  getTranscriptionApiKeyUsage,
+  getTranscriptionSettings,
+  replaceTranscriptionApiKeyReference,
+  updateTranscriptionSettings,
+} from './services/transcription-settings.js';
 import { runPhotoAnalyzeTurn } from './services/photo.js';
 import { migratePendingAccountNamespaces, VectorMemoryService } from './services/vector-memory.js';
 import {
@@ -1254,6 +1261,33 @@ app.get('/api/v1/audio/:filename', (req: AuthedRequest, res) => {
 });
 
 app.use('/api/v1', authMiddleware);
+
+app.get('/api/v1/transcription/status', async (_req: AuthedRequest, res) => {
+  try {
+    return res.json(await getTranscriptionStatus());
+  } catch (err: any) {
+    return res.status(503).json({ error: err?.message || 'transcription_status_failed' });
+  }
+});
+
+app.post('/api/v1/transcription', async (req: AuthedRequest, res) => {
+  try {
+    const audioBase64 = `${req.body?.audio_base64 || ''}`.trim();
+    if (!audioBase64) return res.status(400).json({ error: 'empty_audio' });
+    const result = await transcribeAudio({
+      userId: req.authUserId!,
+      audioBuffer: Buffer.from(audioBase64, 'base64'),
+      language: req.body?.language,
+    });
+    return res.json(result);
+  } catch (err: any) {
+    const error = `${err?.message || 'transcription_failed'}`;
+    const status = error === 'quota_exceeded' ? 429
+      : error === 'audio_too_large' ? 413
+        : error === 'transcription_not_configured' ? 503 : 502;
+    return res.status(status).json({ error });
+  }
+});
 
 // Return current authenticated user profile
 app.get('/api/v1/auth/me', (req: AuthedRequest, res) => {
@@ -5461,6 +5495,26 @@ app.put('/internal/admin/image-generation/settings', internalAuth, (req, res) =>
   }
 });
 
+app.get('/internal/admin/transcription/settings', internalAuth, (_req, res) => {
+  return res.json(getTranscriptionSettings());
+});
+
+app.put('/internal/admin/transcription/settings', internalAuth, (req, res) => {
+  try {
+    return res.json(updateTranscriptionSettings(req.body));
+  } catch (err: any) {
+    return res.status(400).json({ error: err?.message || 'bad_transcription_settings' });
+  }
+});
+
+app.get('/internal/admin/transcription/status', internalAuth, async (req, res) => {
+  try {
+    return res.json(await getTranscriptionStatus(req.query?.refresh === '1'));
+  } catch (err: any) {
+    return res.status(503).json({ error: err?.message || 'transcription_status_failed' });
+  }
+});
+
 app.get('/internal/admin/vector-memory/settings', internalAuth, (_req, res) => {
   return res.json(getVectorMemorySettings());
 });
@@ -5952,6 +6006,7 @@ app.get('/internal/admin/api-keys/:id/used-by', internalAuth, async (req, res) =
       ...models.map(m => m.model_id),
       ...getImageGenerationApiKeyUsage(keyId),
       ...getVectorMemoryApiKeyUsage(keyId),
+      ...getTranscriptionApiKeyUsage(keyId),
     ] });
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'internal_error' });
@@ -5988,6 +6043,7 @@ app.delete('/internal/admin/api-keys/:id', internalAuth, async (req, res) => {
     const tx = db.transaction(() => {
       replaceImageGenerationApiKeyReference(keyId, replacementIdNum);
       replaceVectorMemoryApiKeyReference(keyId, replacementIdNum);
+      replaceTranscriptionApiKeyReference(keyId, replacementIdNum);
       if (replacementIdNum === null) {
         db.prepare('UPDATE model_overrides SET selected_api_key_id = NULL WHERE selected_api_key_id = ?').run(keyId);
       } else {

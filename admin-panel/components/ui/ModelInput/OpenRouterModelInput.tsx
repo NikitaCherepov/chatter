@@ -13,7 +13,7 @@ import {
 
 type Props = {
   value: string;
-  catalog?: 'chat' | 'embeddings' | 'rerank';
+  catalog?: 'chat' | 'embeddings' | 'rerank' | 'transcription';
   apiKeyId?: number | null;
   onSelect: (
     modelId: string,
@@ -58,7 +58,9 @@ export function OpenRouterModelInput({ value, onSelect, catalog = 'chat', apiKey
         if (catalog !== 'chat' && apiKeyId) params.set('apiKeyId', String(apiKeyId));
         const modelEndpoint = catalog === 'embeddings'
           ? 'embedding-models'
-          : catalog === 'rerank' ? 'rerank-models' : 'models';
+          : catalog === 'rerank'
+            ? 'rerank-models'
+            : catalog === 'transcription' ? 'transcription-models' : 'models';
         const data = await api<{ data?: ApiModel[] }>(
           `/api/openrouter/${modelEndpoint}?${params.toString()}`
         );
@@ -80,6 +82,7 @@ export function OpenRouterModelInput({ value, onSelect, catalog = 'chat', apiKey
               label: m.name || m.id || '',
               hint: formatModelHint(m),
               badge:
+                catalog === 'chat' &&
                 Array.isArray(m.supported_parameters) &&
                 !m.supported_parameters.includes('tools')
                   ? {

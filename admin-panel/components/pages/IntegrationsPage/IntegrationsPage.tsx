@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type Dispatch, type FormEvent, type SetStateAction } from 'react';
+import { useEffect, useState, type Dispatch, type FormEvent, type SetStateAction } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { AdminSection } from '../../AdminShell/AdminShell';
 import type { Settings } from '../../../lib/types';
@@ -10,9 +10,11 @@ import { ImageGenerationPage } from './ImageGenerationPage';
 import { PineconePage } from './PineconePage';
 import { WebReaderPage } from './WebReaderPage';
 import { WebSearchPage } from './WebSearchPage';
+import { TranscriptionPage } from './TranscriptionPage';
+import { api } from '../../../lib/api';
 import styles from './IntegrationsPage.module.css';
 
-type IntegrationId = 'pinecone' | 'web-search' | 'web-reader' | 'cloud-tts' | 'image-generation';
+type IntegrationId = 'pinecone' | 'web-search' | 'web-reader' | 'cloud-tts' | 'image-generation' | 'transcription';
 
 const INTEGRATION_IDS: Array<{ id: IntegrationId; icon: string }> = [
   { id: 'pinecone', icon: 'Pi' },
@@ -20,6 +22,7 @@ const INTEGRATION_IDS: Array<{ id: IntegrationId; icon: string }> = [
   { id: 'web-reader', icon: 'WR' },
   { id: 'cloud-tts', icon: 'TT' },
   { id: 'image-generation', icon: 'IG' },
+  { id: 'transcription', icon: 'ST' },
 ];
 
 export function IntegrationsPage({
@@ -39,6 +42,13 @@ export function IntegrationsPage({
 }) {
   const { t } = useTranslation();
   const [selected, setSelected] = useState<IntegrationId | null>(null);
+  const [transcriptionConfigured, setTranscriptionConfigured] = useState(false);
+
+  useEffect(() => {
+    void api<{ enabled: boolean; hasApiKey: boolean }>('/api/transcription/settings')
+      .then(value => setTranscriptionConfigured(value.enabled && value.hasApiKey))
+      .catch(() => setTranscriptionConfigured(false));
+  }, [selected]);
 
   if (selected === 'pinecone') {
     return (
@@ -118,6 +128,10 @@ export function IntegrationsPage({
     );
   }
 
+  if (selected === 'transcription') {
+    return <TranscriptionPage onBack={() => setSelected(null)} />;
+  }
+
   const configured: Record<IntegrationId, boolean> = {
     pinecone: settings.pinecone.hasEmbeddingApiKey,
     'web-search': settings.webSearch.enabled,
@@ -129,6 +143,7 @@ export function IntegrationsPage({
         ? settings.imageGeneration.cloudflare.hasApiToken
         : settings.imageGeneration.openrouter.hasApiKey
     ),
+    transcription: transcriptionConfigured,
   };
 
   return (

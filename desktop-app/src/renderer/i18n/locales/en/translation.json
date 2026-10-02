@@ -469,6 +469,13 @@
     },
     "voice": {
       "recognitionTitle": "Voice recognition",
+      "recognitionSource": "Recognition processing",
+      "recognitionSourceHint": "Local Whisper uses this computer. Server processing is useful on weaker PCs and is available only when configured by the administrator.",
+      "recognitionSourceLocal": "On this computer",
+      "recognitionSourceLocalHint": "Local Whisper",
+      "recognitionSourceServer": "On the server",
+      "recognitionSourceServerReady": "Available · {{model}}",
+      "recognitionSourceServerUnavailable": "Unavailable or not configured",
       "recognitionLanguage": "Recognition language",
       "recognitionAuto": "Automatic detection",
       "recognitionHint": "Automatic detection is convenient. Choose a specific language for faster and more reliable recognition of short phrases.",

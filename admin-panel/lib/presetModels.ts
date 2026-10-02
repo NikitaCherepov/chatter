@@ -14,6 +14,7 @@ export type ModelPrices = {
   outputPricePerMillion: number | null;
   cacheReadPricePerMillion: number | null;
   requestPrice?: number | null;
+  audioPricePerSecond?: number | null;
 };
 
 export type PresetModel = {
@@ -86,6 +87,14 @@ export const formatPriceShort = (n: number | null): string => {
 export const formatPricesHint = (mp: ModelPrices | null): string => {
   if (!mp) return 'no pricing';
   if (
+    mp.audioPricePerSecond !== null
+    && mp.audioPricePerSecond !== undefined
+    && mp.inputPricePerMillion === null
+    && mp.outputPricePerMillion === null
+  ) {
+    return `$${formatPriceShort(mp.audioPricePerSecond)} per second`;
+  }
+  if (
     mp.requestPrice !== null
     && mp.requestPrice !== undefined
     && mp.inputPricePerMillion === null
@@ -111,11 +120,13 @@ export const minModelPrices = (list: ModelPrices[]): ModelPrices | null => {
   const output = list.reduce((a, b) => Math.min(a, b.outputPricePerMillion ?? Infinity), Infinity);
   const cache = list.reduce((a, b) => Math.min(a, b.cacheReadPricePerMillion ?? Infinity), Infinity);
   const request = list.reduce((a, b) => Math.min(a, b.requestPrice ?? Infinity), Infinity);
+  const audio = list.reduce((a, b) => Math.min(a, b.audioPricePerSecond ?? Infinity), Infinity);
   return {
     inputPricePerMillion: Number.isFinite(input) ? input : null,
     outputPricePerMillion: Number.isFinite(output) ? output : null,
     cacheReadPricePerMillion: Number.isFinite(cache) ? cache : null,
     requestPrice: Number.isFinite(request) ? request : null,
+    audioPricePerSecond: Number.isFinite(audio) ? audio : null,
   };
 };
 
@@ -128,11 +139,13 @@ export const maxModelPrices = (list: ModelPrices[]): ModelPrices | null => {
   const output = list.reduce((a, b) => Math.max(a, b.outputPricePerMillion ?? -Infinity), -Infinity);
   const cache = list.reduce((a, b) => Math.max(a, b.cacheReadPricePerMillion ?? -Infinity), -Infinity);
   const request = list.reduce((a, b) => Math.max(a, b.requestPrice ?? -Infinity), -Infinity);
+  const audio = list.reduce((a, b) => Math.max(a, b.audioPricePerSecond ?? -Infinity), -Infinity);
   return {
     inputPricePerMillion: Number.isFinite(input) ? input : null,
     outputPricePerMillion: Number.isFinite(output) ? output : null,
     cacheReadPricePerMillion: Number.isFinite(cache) ? cache : null,
     requestPrice: Number.isFinite(request) ? request : null,
+    audioPricePerSecond: Number.isFinite(audio) ? audio : null,
   };
 };
 
@@ -140,6 +153,18 @@ export const maxModelPrices = (list: ModelPrices[]): ModelPrices | null => {
  * Format price range as "in $min-max / out $min-max / cache $min-max per 1M".
  */
 export const formatPricesRangeHint = (min: ModelPrices, max: ModelPrices): string => {
+  if (
+    min.audioPricePerSecond !== null
+    && min.audioPricePerSecond !== undefined
+    && max.audioPricePerSecond !== null
+    && max.audioPricePerSecond !== undefined
+    && min.inputPricePerMillion === null
+    && min.outputPricePerMillion === null
+    && max.inputPricePerMillion === null
+    && max.outputPricePerMillion === null
+  ) {
+    return `$${formatPriceShort(min.audioPricePerSecond)}-$${formatPriceShort(max.audioPricePerSecond)} per second`;
+  }
   if (
     min.requestPrice !== null
     && min.requestPrice !== undefined

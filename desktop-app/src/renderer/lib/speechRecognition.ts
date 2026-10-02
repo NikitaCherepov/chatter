@@ -1,8 +1,10 @@
 import type { SupportedLanguage } from '../i18n';
 
 const STORAGE_KEY = 'chatter_speech_recognition_language';
+const SOURCE_STORAGE_KEY = 'chatter_speech_recognition_source';
 
 export type SpeechRecognitionLanguage = 'auto' | SupportedLanguage;
+export type SpeechRecognitionSource = 'local' | 'server';
 
 export function getSpeechRecognitionLanguage(): SpeechRecognitionLanguage {
   try {
@@ -18,4 +20,16 @@ export function getSpeechRecognitionLanguage(): SpeechRecognitionLanguage {
 
 export function setSpeechRecognitionLanguage(language: SpeechRecognitionLanguage): void {
   localStorage.setItem(STORAGE_KEY, language);
+}
+
+export function getSpeechRecognitionSource(): SpeechRecognitionSource {
+  try {
+    return localStorage.getItem(SOURCE_STORAGE_KEY) === 'server' ? 'server' : 'local';
+  } catch {
+    return 'local';
+  }
+}
+
+export function setSpeechRecognitionSource(source: SpeechRecognitionSource): void {
+  localStorage.setItem(SOURCE_STORAGE_KEY, source);
 }

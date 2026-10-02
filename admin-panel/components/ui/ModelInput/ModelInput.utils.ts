@@ -12,6 +12,7 @@ export type OpenRouterPricing = {
   completion?: string | null;
   input_cache_read?: string | null;
   request?: string | null;
+  audio?: string | null;
 };
 
 /**
@@ -38,12 +39,17 @@ export function pricingToModelPrices(
     ? null
     : Number(p.request);
   const requestPrice = Number.isFinite(request) && (request as number) >= 0 ? request : null;
-  if (input === null && output === null && cache === null && requestPrice === null) return null;
+  const audio = p.audio === null || p.audio === undefined || p.audio === ''
+    ? null
+    : Number(p.audio);
+  const audioPricePerSecond = Number.isFinite(audio) && (audio as number) >= 0 ? audio : null;
+  if (input === null && output === null && cache === null && requestPrice === null && audioPricePerSecond === null) return null;
   return {
     inputPricePerMillion: input,
     outputPricePerMillion: output,
     cacheReadPricePerMillion: cache,
     requestPrice,
+    audioPricePerSecond,
   };
 }
 

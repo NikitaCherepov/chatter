@@ -2842,6 +2842,26 @@ export async function fetchTtsProviders(): Promise<{ providers: RemoteTtsProvide
   return apiFetch('/api/v1/tts/providers');
 }
 
+export type TranscriptionStatus = {
+  enabled: boolean;
+  available: boolean;
+  provider: 'openrouter' | 'custom';
+  model: string;
+  checkedAt: number;
+  error: string | null;
+};
+
+export async function fetchTranscriptionStatus(): Promise<TranscriptionStatus> {
+  return apiFetch('/api/v1/transcription/status');
+}
+
+export async function transcribeAudioOnServer(audioBase64: string, language: string): Promise<{ text: string }> {
+  return apiFetch('/api/v1/transcription', {
+    method: 'POST',
+    body: JSON.stringify({ audio_base64: audioBase64, language }),
+  });
+}
+
 export async function fetchTtsVoicePreview(
   voiceId: string,
   language: string = 'ru',

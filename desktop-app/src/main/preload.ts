@@ -157,6 +157,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Voice transcription: send audio buffer → get text back
   transcribeAudio: (arrayBuffer: ArrayBuffer, language: string = 'auto') =>
     ipcRenderer.invoke('transcribe-audio', arrayBuffer, language),
+  prepareAudioWav: (arrayBuffer: ArrayBuffer) =>
+    ipcRenderer.invoke('prepare-audio-wav', arrayBuffer),
 
   // Wakeword: start/stop ONNX openWakeWord pipeline and stream PCM chunks
   startWakeWord: () =>

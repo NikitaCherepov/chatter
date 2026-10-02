@@ -281,6 +281,11 @@
         "name": "Image Generation",
         "description": "Generate images via external API",
         "group": "Media"
+      },
+      "transcription": {
+        "name": "Voice Transcription",
+        "description": "Server-side speech recognition",
+        "group": "Media"
       }
     },
     "secretField": {
@@ -475,6 +480,22 @@
       "capabilityReferences": "references",
       "capabilitySupported": "supported",
       "capabilityNotClaimed": "not claimed"
+    },
+    "transcription": {
+      "pageDescription": "Server-side speech recognition for Chatter Desktop via OpenRouter or an OpenAI-compatible API.",
+      "sectionTitle": "Transcription",
+      "sectionIntro": "Desktop sends a mono 16 kHz WAV file. The key stays encrypted on the server.",
+      "enabled": "Enable server transcription",
+      "provider": "Provider",
+      "apiUrl": "API URL",
+      "model": "Transcription model",
+      "audioPrice": "Audio price, $ / second",
+      "tokenPrice": "Input price, $ / 1M tokens",
+      "check": "Check availability",
+      "checking": "Checking…",
+      "available": "Available · {{model}}",
+      "unavailable": "Unavailable · {{error}}",
+      "saved": "Transcription settings saved."
     }
   },
   "services": {

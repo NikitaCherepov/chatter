@@ -9,7 +9,14 @@ import * as api from '../lib/api';
 import { PromptSelector } from './PromptSelector';
 import { getTtsModels, getTtsSettings, setTtsSettings, ttsPreview, ttsStopPreview, getVoicesForModel, fetchRemoteTtsProviders, fetchPiperVoiceList } from '../lib/tts';
 import type { TtsSettings } from '../lib/tts';
-import { getSpeechRecognitionLanguage, setSpeechRecognitionLanguage, type SpeechRecognitionLanguage } from '../lib/speechRecognition';
+import {
+  getSpeechRecognitionLanguage,
+  getSpeechRecognitionSource,
+  setSpeechRecognitionLanguage,
+  setSpeechRecognitionSource,
+  type SpeechRecognitionLanguage,
+  type SpeechRecognitionSource,
+} from '../lib/speechRecognition';
 import { getWakeWordEnabled, setWakeWordEnabled as setWakeWordEnabledStorage } from '../lib/wakeWordToggle';
 import { getRenderPerfLevel, setRenderPerfLevel, type RenderPerfLevel } from '../lib/renderPerf';
 import { getThemePreference, setThemePreference, type ThemePreference } from '../lib/theme';
@@ -229,12 +236,38 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
   const [recognitionLanguage, setRecognitionLanguage] = useState<SpeechRecognitionLanguage>(
     () => getSpeechRecognitionLanguage(),
   );
+  const [recognitionSource, setRecognitionSourceState] = useState<SpeechRecognitionSource>(
+    () => getSpeechRecognitionSource(),
+  );
   const [wakeWordEnabled, setWakeWordEnabled] = useState(() => getWakeWordEnabled());
 
   const recognitionLanguageOptions = useMemo<SelectOption[]>(() => [
     { value: 'auto', label: t('settings.voice.recognitionAuto') },
     ...SUPPORTED_LANGUAGES.map((language) => ({ value: language, label: getLanguageDisplayName(language) })),
   ], [i18n.language, t]);
+
+  const transcriptionStatusQuery = useQuery({
+    queryKey: ['transcription', 'status'],
+    queryFn: api.fetchTranscriptionStatus,
+    enabled: section === 'voice',
+    staleTime: 30_000,
+  });
+
+  const recognitionSourceOptions = useMemo<SelectOption[]>(() => [
+    {
+      value: 'local',
+      label: t('settings.voice.recognitionSourceLocal'),
+      hint: t('settings.voice.recognitionSourceLocalHint'),
+    },
+    {
+      value: 'server',
+      label: t('settings.voice.recognitionSourceServer'),
+      hint: transcriptionStatusQuery.data?.available
+        ? t('settings.voice.recognitionSourceServerReady', { model: transcriptionStatusQuery.data.model })
+        : t('settings.voice.recognitionSourceServerUnavailable'),
+      disabled: !transcriptionStatusQuery.data?.available,
+    },
+  ], [transcriptionStatusQuery.data, t]);
 
   const remoteProvidersQuery = useQuery({
     queryKey: ['tts', 'remote-providers'],
@@ -1617,6 +1650,12 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
     setSpeechRecognitionLanguage(nextLanguage);
   };
 
+  const handleRecognitionSourceChange = (source: string) => {
+    if (source !== 'local' && source !== 'server') return;
+    setRecognitionSourceState(source);
+    setSpeechRecognitionSource(source);
+  };
+
   const handleVolumeChange = (volume: number) => {
     const newSettings = { ...ttsSettings, volume };
     setTtsSettingsState(newSettings);
@@ -2407,6 +2446,16 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
               <div className={s.panelTitle}>{t('settings.sections.voice')}</div>
 
               <div className={s.voiceSectionTitle}>{t('settings.voice.recognitionTitle')}</div>
+              <div className={s.fieldGroup}>
+                <label className={s.fieldLabel}>{t('settings.voice.recognitionSource')}</label>
+                <Select
+                  options={recognitionSourceOptions}
+                  value={recognitionSource}
+                  onChange={handleRecognitionSourceChange}
+                  disabled={transcriptionStatusQuery.isPending}
+                />
+                <div className={s.voiceHint}>{t('settings.voice.recognitionSourceHint')}</div>
+              </div>
               <div className={s.fieldGroup}>
                 <label className={s.fieldLabel}>{t('settings.voice.recognitionLanguage')}</label>
                 <Select

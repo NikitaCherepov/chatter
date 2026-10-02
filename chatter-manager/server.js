@@ -2197,6 +2197,17 @@ async function listOpenRouterRerankModels(query, apiKeyId) {
   return { ...payload, data };
 }
 
+async function listOpenRouterTranscriptionModels(query, apiKeyId) {
+  const payload = await openRouterAuthenticatedFetch('/models?output_modalities=transcription', apiKeyId);
+  const needle = `${query || ''}`.trim().toLowerCase();
+  const models = Array.isArray(payload?.data) ? payload.data : [];
+  const data = needle
+    ? models.filter((model) =>
+        `${model?.id || ''} ${model?.name || ''} ${model?.description || ''}`.toLowerCase().includes(needle))
+    : models;
+  return { ...payload, data };
+}
+
 async function getOpenRouterImageCapabilities(input) {
   const model = `${input.model || ''}`.trim();
   const modelParts = model.split('/');
@@ -2984,6 +2995,17 @@ async function handleRequest(req, res) {
     }
   }
 
+  if (req.method === 'GET' && pathname === '/api/openrouter/transcription-models') {
+    const query = `${url.searchParams.get('q') || ''}`.trim();
+    const apiKeyId = url.searchParams.get('apiKeyId');
+    if (!query || query.length < 2) return sendJson(res, 400, { error: 'query_too_short' });
+    try {
+      return sendJson(res, 200, await listOpenRouterTranscriptionModels(query, apiKeyId));
+    } catch (error) {
+      return sendJson(res, 502, { error: error.message || 'openrouter_transcription_models_failed' });
+    }
+  }
+
   if (req.method === 'GET' && pathname === '/api/openrouter/image-models') {
     const query = `${url.searchParams.get('q') || ''}`.trim();
     if (!query || query.length < 2) return sendJson(res, 400, { error: 'query_too_short' });
@@ -3038,6 +3060,35 @@ async function handleRequest(req, res) {
       } catch (error) {
         return sendJson(res, 400, { error: error.message || 'image_generation_settings_save_failed' });
       }
+    }
+  }
+
+  if (pathname === '/api/transcription/settings') {
+    if (req.method === 'GET') {
+      try {
+        return sendJson(res, 200, await backendInternalRequest('/internal/admin/transcription/settings'));
+      } catch (error) {
+        return sendJson(res, 502, { error: error.message || 'transcription_settings_failed' });
+      }
+    }
+    if (req.method === 'PUT') {
+      const body = await readJson(req);
+      try {
+        return sendJson(res, 200, await backendInternalRequest('/internal/admin/transcription/settings', {
+          method: 'PUT',
+          body: JSON.stringify(body),
+        }));
+      } catch (error) {
+        return sendJson(res, 400, { error: error.message || 'transcription_settings_save_failed' });
+      }
+    }
+  }
+
+  if (req.method === 'GET' && pathname === '/api/transcription/status') {
+    try {
+      return sendJson(res, 200, await backendInternalRequest('/internal/admin/transcription/status?refresh=1'));
+    } catch (error) {
+      return sendJson(res, 502, { error: error.message || 'transcription_status_failed' });
     }
   }
 
