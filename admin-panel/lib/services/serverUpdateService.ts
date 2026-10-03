@@ -18,6 +18,14 @@ export type ServerUpdateInfo = {
   changelog: Record<string, string[]>;
   rebuiltFromSameCommit: boolean;
   checkedAt: string | null;
+  storage?: {
+    totalBytes: number;
+    availableBytes: number;
+    requiredBytes: number;
+    imageDownloadBytes: number;
+    backupWorkingBytes: number;
+    sufficient: boolean;
+  };
   operation: UpdateOperation;
 };
 

@@ -31,6 +31,28 @@
 .modal p { margin: 0; color: var(--text-muted); font-size: var(--fs-xs); }
 .notice { color: var(--color-warning) !important; }
 
+.storageSection {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--sp-1) var(--sp-4);
+  padding: var(--sp-3);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
+}
+
+.storageSection strong,
+.storageSection small,
+.storageSection b {
+  grid-column: 1 / -1;
+}
+
+.storageSection small { color: var(--text-hint); }
+.storageSection b { color: var(--color-error); }
+.storageError { border-color: var(--color-error); }
+
 .changelog {
   max-height: 220px;
   overflow: auto;

@@ -948,8 +948,10 @@ async function updateServiceSelection() {
 
   return { profiles: ['*'], services, images, releaseServices, externalServices };
 }
-let lastPullTime = 0;
 const PULL_COOLDOWN_MS = 5 * 60 * 1000;
+let serverUpdateSnapshotCache = null;
+const UPDATE_DISK_RESERVE_BYTES = 512 * 1024 * 1024;
+const UNKNOWN_IMAGE_ESTIMATE_BYTES = 512 * 1024 * 1024;
 
 const BUNDLED_PROJECT_DIR = '/app/release/project';
 const BUNDLED_COMPOSE_FILE = `${BUNDLED_PROJECT_DIR}/docker-compose.yml`;
@@ -1208,6 +1210,67 @@ async function inspectImage(reference) {
   };
 }
 
+function dockerArchitecture() {
+  if (os.arch() === 'x64') return 'amd64';
+  if (os.arch() === 'arm') return 'arm';
+  return os.arch();
+}
+
+async function inspectRemoteImage(reference) {
+  const output = await runDocker(['manifest', 'inspect', '--verbose', reference], 2 * 60 * 1000, 0);
+  const parsed = JSON.parse(output);
+  const entries = Array.isArray(parsed) ? parsed : [parsed];
+  const architecture = dockerArchitecture();
+  const selected = entries.find(entry => entry?.Descriptor?.platform?.architecture === architecture)
+    || entries.find(entry => !entry?.Descriptor?.platform?.architecture)
+    || entries[0];
+  const manifest = selected?.SchemaV2Manifest || selected?.OCIManifest || selected;
+  const layers = Array.isArray(manifest?.layers) ? manifest.layers : [];
+  const compressedSize = layers.reduce((sum, layer) => sum + Math.max(0, Number(layer?.size) || 0), 0);
+  const id = `${manifest?.config?.digest || selected?.Descriptor?.digest || ''}`;
+  if (!id) throw new Error(`remote_image_manifest_invalid:${reference}`);
+  const annotations = selected?.Descriptor?.annotations || manifest?.annotations || {};
+  return {
+    id,
+    revision: `${annotations['org.opencontainers.image.revision'] || ''}`,
+    changelog: decodeImageChangelog(annotations['io.chatter.server.changelog-base64']),
+    compressedSize,
+  };
+}
+
+function diskSpaceAt(targetPath) {
+  const disk = fs.statfsSync(targetPath);
+  return {
+    totalBytes: disk.blocks * disk.bsize,
+    availableBytes: disk.bavail * disk.bsize,
+  };
+}
+
+function buildUpdateStorageInfo(comparisons) {
+  const changed = comparisons.filter(item => item.changed);
+  const imageDownloadBytes = changed.reduce((sum, item) => {
+    const measured = Math.max(0, Number(item.latest?.compressedSize) || 0);
+    return sum + (measured || UNKNOWN_IMAGE_ESTIMATE_BYTES);
+  }, 0);
+  const databaseBytes = fs.existsSync(DATABASE_FILE) ? fs.statSync(DATABASE_FILE).size : 0;
+  // Docker temporarily keeps compressed downloads, unpacked layers, and old
+  // images. A 3x multiplier plus a fixed reserve deliberately overestimates.
+  const imageWorkingBytes = imageDownloadBytes * 3;
+  // sqlite .backup and the resulting archive coexist until tar completes.
+  const backupWorkingBytes = databaseBytes * 2 + 64 * 1024 * 1024;
+  const requiredBytes = changed.length
+    ? Math.ceil(imageWorkingBytes + backupWorkingBytes + UPDATE_DISK_RESERVE_BYTES)
+    : 0;
+  const disk = diskSpaceAt(CONFIG_DIR);
+  return {
+    ...disk,
+    requiredBytes,
+    imageDownloadBytes,
+    backupWorkingBytes,
+    sufficient: requiredBytes === 0 || disk.availableBytes >= requiredBytes,
+  };
+}
+
 function decodeImageChangelog(value) {
   if (!value) return {};
   try {
@@ -1252,6 +1315,12 @@ function shortImageHash(image) {
 }
 
 async function getServerUpdateInfoUnlocked({ pull = false, forcePull = false } = {}) {
+  const cacheKey = `${currentImagePrefix()}:${currentImageTag()}`;
+  const now = Date.now();
+  if (!forcePull && serverUpdateSnapshotCache?.key === cacheKey
+    && now - serverUpdateSnapshotCache.checkedAtMs < PULL_COOLDOWN_MS) {
+    return { ...serverUpdateSnapshotCache.value, operation: readUpdateState() };
+  }
   const result = {
     supported: serverUpdatesSupported(),
     imageTag: currentImageTag(),
@@ -1265,43 +1334,35 @@ async function getServerUpdateInfoUnlocked({ pull = false, forcePull = false } =
     operation: readUpdateState()
   };
   if (!result.supported) return result;
-  let selection;
-  if (pull) {
-    const now = Date.now();
-    if (forcePull || now - lastPullTime >= PULL_COOLDOWN_MS) {
-      // The selected channel may contain a different service set. Pull its
-      // manager first and install the compose bundled in that exact image;
-      // only then discover and pull the rest of the target services.
-      const targetManagerImage = `${currentImagePrefix()}-manager:${currentImageTag()}`;
-      await runDocker(['pull', targetManagerImage], 60 * 60 * 1000);
-      await syncBundledDeploymentFiles(targetManagerImage);
-      selection = await updateServiceSelection();
-      const profileArgs = selection.profiles.flatMap(profile => ['--profile', profile]);
-      await runDocker(composeArgs(...profileArgs, 'pull', ...selection.releaseServices), 60 * 60 * 1000);
-      lastPullTime = now;
-    }
-    result.checkedAt = new Date().toISOString();
-  }
-  if (!selection) selection = await updateServiceSelection();
+  const selection = await updateServiceSelection();
   const comparisons = await Promise.all(selection.releaseServices.map(async (service) => {
-    const [running, latest] = await Promise.all([
+    const reference = selection.images[service];
+    const [running, remote] = await Promise.all([
       inspectRunningService(service, selection.profiles),
-      inspectImage(selection.images[service])
+      inspectRemoteImage(reference),
     ]);
-    const changed = Boolean(running && latest.id && (
-      running.revision && latest.revision
-        ? running.revision !== latest.revision
-        : running.id !== latest.id
-    ));
+    let latest = remote;
+    // If this exact image was already downloaded, retain its labels so the
+    // changelog remains available without downloading anything during check.
+    try {
+      const local = await inspectImage(reference);
+      if (local.id === remote.id) latest = { ...remote, ...local, compressedSize: remote.compressedSize };
+    } catch { /* the remote image is not downloaded yet */ }
+    const changed = Boolean(running && latest.id && running.id !== latest.id);
     return { service, running, latest, changed };
   }));
   const manager = comparisons.find(item => item.service === 'chatter-manager');
-  result.installedHash = shortImageHash(manager?.running);
+  result.installedHash = manager?.latest?.revision
+    ? shortImageHash(manager?.running)
+    : shortImageHash({ id: manager?.running?.id || '', revision: '' });
   result.latestHash = shortImageHash(manager?.latest);
   result.changelog = manager?.latest?.changelog || {};
   result.changedServices = comparisons.filter(item => item.changed).map(item => item.service);
   result.available = result.changedServices.length > 0;
   result.rebuiltFromSameCommit = false;
+  result.storage = buildUpdateStorageInfo(comparisons);
+  if (pull) result.checkedAt = new Date().toISOString();
+  serverUpdateSnapshotCache = { key: cacheKey, checkedAtMs: now, value: { ...result, operation: undefined } };
   return result;
 }
 
@@ -1309,7 +1370,7 @@ function getServerUpdateInfo(options) {
   return runDeploymentExclusive(() => getServerUpdateInfoUnlocked(options));
 }
 
-async function launchServerUpdateHelper(targetHash, selection) {
+async function launchServerUpdateHelper(targetHash, selection, rollbackSelection, updatedDeploymentFiles) {
   const managerImage = selection.images['chatter-manager'] || await currentManagerImageReference();
   const profileArgs = shellProfileArgs(selection.profiles);
   const listContainersCommand = [
@@ -1338,41 +1399,77 @@ async function launchServerUpdateHelper(targetHash, selection) {
     'up', '-d', '--no-build', '--pull', 'never', '--force-recreate', '--remove-orphans', '--wait', '--wait-timeout', '180',
     ...selection.services
   ].join(' ');
+  const rollbackProfileArgs = shellProfileArgs(rollbackSelection.profiles);
+  const rollbackComposeCommand = [
+    'docker', 'compose', '--project-name', '"$COMPOSE_PROJECT_NAME"',
+    '--project-directory', '"$HOST_PROJECT_DIR"',
+    '--env-file', '"$HOST_CONFIG_DIR/compose.env"',
+    '-f', '"$HOST_PROJECT_DIR/docker-compose.yml"',
+    ...rollbackProfileArgs,
+    'up', '-d', '--no-build', '--pull', 'never', '--force-recreate', '--remove-orphans',
+    ...rollbackSelection.services,
+  ].join(' ');
+  const restoreDeploymentCommands = updatedDeploymentFiles
+    .map(relative => `restore_file ${JSON.stringify(relative)}`)
+    .join('\n');
   const script = `set -eu
-report_failure() {
-  code=$?
-  if [ "$code" -ne 0 ]; then
-    printf '{"status":"failed","targetHash":"%s","message":"server_restart_failed","updatedAt":"%s"}\n' "$TARGET_HASH" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$HOST_CONFIG_DIR/server-update.json"
-  fi
-}
-trap report_failure EXIT
-sleep 2
-OLD_IMAGE_IDS=""
-for CONTAINER_ID in $(${listContainersCommand}); do
-  IMAGE_ID="$(docker inspect --format '{{.Image}}' "$CONTAINER_ID")"
-  OLD_IMAGE_IDS="$OLD_IMAGE_IDS $IMAGE_ID"
-done
-${stopCommand}
-${composeCommand}
-# Remove only the previous images used by this Chatter installation. Docker
-# refuses to remove an image that is still used by any container, so shared or
-# unchanged images remain safe. Cleanup is best-effort, but every outcome is
-# logged to server-update.log in the config directory so failures are visible.
 LOG_FILE="$HOST_CONFIG_DIR/server-update.log"
 log() { printf '%s %s\\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >> "$LOG_FILE"; }
-log "update to $TARGET_HASH: cleaning up old images"
-for IMAGE_ID in $OLD_IMAGE_IDS; do
-  if docker image rm "$IMAGE_ID" >> "$LOG_FILE" 2>&1; then
-    log "removed old image $IMAGE_ID"
-  else
-    log "could not remove image $IMAGE_ID (still used by a container or shared)"
+restore_file() {
+  RELATIVE="$1"
+  PREVIOUS="$HOST_PROJECT_DIR/$RELATIVE.previous"
+  TARGET="$HOST_PROJECT_DIR/$RELATIVE"
+  if [ -f "$PREVIOUS" ]; then
+    if cp "$PREVIOUS" "$TARGET"; then
+      log "restored deployment file $RELATIVE"
+    else
+      log "could not restore deployment file $RELATIVE"
+    fi
   fi
+}
+OLD_IMAGES=""
+finish_update() {
+  CODE=$?
+  trap - EXIT
+  if [ "$CODE" -eq 0 ]; then
+    log "update to $TARGET_HASH: cleaning up old images"
+    for ITEM in $OLD_IMAGES; do
+      IMAGE_ID="\${ITEM%%|*}"
+      if docker image rm "$IMAGE_ID" >> "$LOG_FILE" 2>&1; then
+        log "removed old image $IMAGE_ID"
+      else
+        log "could not remove image $IMAGE_ID (still used by a container or shared)"
+      fi
+    done
+    docker image prune -f >> "$LOG_FILE" 2>&1 || log "docker image prune failed"
+    printf '{"status":"complete","targetHash":"%s","message":"server_update_complete","updatedAt":"%s"}\n' "$TARGET_HASH" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$HOST_CONFIG_DIR/server-update.json"
+  else
+    log "update to $TARGET_HASH failed; restoring previous image tags and services"
+    ${restoreDeploymentCommands}
+    for ITEM in $OLD_IMAGES; do
+      IMAGE_ID="\${ITEM%%|*}"
+      IMAGE_REF="\${ITEM#*|}"
+      docker image tag "$IMAGE_ID" "$IMAGE_REF" >> "$LOG_FILE" 2>&1 || log "could not restore tag $IMAGE_REF"
+    done
+    if ${rollbackComposeCommand}; then
+      log "previous services restored after failed update"
+    else
+      log "automatic service recovery failed"
+    fi
+    docker image prune -f >> "$LOG_FILE" 2>&1 || log "docker image prune failed after update failure"
+    printf '{"status":"failed","targetHash":"%s","message":"server_restart_failed","updatedAt":"%s"}\n' "$TARGET_HASH" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$HOST_CONFIG_DIR/server-update.json"
+  fi
+  exit "$CODE"
+}
+trap finish_update EXIT
+sleep 2
+for CONTAINER_ID in $(${listContainersCommand}); do
+  IMAGE_ID="$(docker inspect --format '{{.Image}}' "$CONTAINER_ID")"
+  IMAGE_REF="$(docker inspect --format '{{.Config.Image}}' "$CONTAINER_ID")"
+  OLD_IMAGES="$OLD_IMAGES $IMAGE_ID|$IMAGE_REF"
 done
-# Drop dangling layers left behind by docker pull replacing tags (e.g. the old
-# 'latest' image after switching to a branch tag). -f only affects untagged
-# images, so tagged images of other projects are safe.
-docker image prune -f >> "$LOG_FILE" 2>&1 || log "docker image prune failed"
-printf '{"status":"complete","targetHash":"%s","message":"server_update_complete","updatedAt":"%s"}\n' "$TARGET_HASH" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$HOST_CONFIG_DIR/server-update.json"`;
+${stopCommand}
+${composeCommand}`;
   await runDocker([
     'run', '--detach', '--rm', '--name', `chatter-server-updater-${Date.now()}`,
     '--entrypoint', '/bin/sh',
@@ -1381,7 +1478,7 @@ printf '{"status":"complete","targetHash":"%s","message":"server_update_complete
     '--env', `COMPOSE_PROJECT_NAME=${PROJECT_NAME}`,
     '--env', `TARGET_HASH=${targetHash}`,
     '--volume', '/var/run/docker.sock:/var/run/docker.sock',
-    '--volume', `${HOST_PROJECT_DIR}:${HOST_PROJECT_DIR}:ro`,
+    '--volume', `${HOST_PROJECT_DIR}:${HOST_PROJECT_DIR}`,
     '--volume', `${HOST_CONFIG_DIR}:${HOST_CONFIG_DIR}`,
     managerImage, '-c', script
   ], 60000);
@@ -1410,13 +1507,102 @@ async function ensureSelectedImagesAvailable(selection) {
   }
 }
 
-async function performServerUpdate(snapshot) {
-  const selection = await updateServiceSelection();
+function assertUpdateStorage(storage) {
+  const requiredBytes = Math.max(0, Number(storage?.requiredBytes) || 0);
+  const { availableBytes } = diskSpaceAt(CONFIG_DIR);
+  if (requiredBytes > 0 && availableBytes < requiredBytes) {
+    throw new Error(`insufficient_disk_space:${availableBytes}:${requiredBytes}`);
+  }
+}
+
+function assertBackupStorageAvailable() {
+  const databaseBytes = fs.existsSync(DATABASE_FILE) ? fs.statSync(DATABASE_FILE).size : 0;
+  const requiredBytes = databaseBytes * 2 + 64 * 1024 * 1024 + 256 * 1024 * 1024;
+  const { availableBytes } = diskSpaceAt(CONFIG_DIR);
+  if (availableBytes < requiredBytes) {
+    throw new Error(`insufficient_disk_space:${availableBytes}:${requiredBytes}`);
+  }
+}
+
+async function pullServerUpdateImages() {
+  const targetManagerImage = `${currentImagePrefix()}-manager:${currentImageTag()}`;
+  let updatedDeploymentFiles = [];
   try {
+    await runDocker(['pull', targetManagerImage], 60 * 60 * 1000);
+    updatedDeploymentFiles = await syncBundledDeploymentFiles(targetManagerImage);
+    const selection = await updateServiceSelection();
+    const profileArgs = selection.profiles.flatMap(profile => ['--profile', profile]);
+    await runDocker(composeArgs(...profileArgs, 'pull', ...selection.releaseServices), 60 * 60 * 1000);
+    serverUpdateSnapshotCache = null;
+    return { selection, updatedDeploymentFiles };
+  } catch (error) {
+    const normalized = error instanceof Error ? error : new Error(`${error}`);
+    normalized.updatedDeploymentFiles = updatedDeploymentFiles;
+    throw normalized;
+  }
+}
+
+function restoreDeploymentFiles(updatedDeploymentFiles) {
+  for (const relative of updatedDeploymentFiles) {
+    const target = path.join(HOST_PROJECT_DIR, relative);
+    const previous = `${target}.previous`;
+    if (fs.existsSync(previous)) fs.copyFileSync(previous, target);
+  }
+}
+
+async function captureRollbackImages(selection) {
+  const images = [];
+  for (const service of selection.releaseServices) {
+    const running = await inspectRunningService(service, selection.profiles);
+    const reference = selection.images[service];
+    if (running?.id && reference) images.push({ id: running.id, reference });
+  }
+  return images;
+}
+
+async function restoreImageTags(images) {
+  for (const image of images) {
+    await runDocker(['image', 'tag', image.id, image.reference], 30000);
+  }
+}
+
+async function restartStoppedDataServices(selection) {
+  const profileArgs = selection.profiles.flatMap(profile => ['--profile', profile]);
+  const dataServices = selection.services.filter(service => service !== 'chatter-manager' && service !== 'admin-panel');
+  if (!dataServices.length) return;
+  await runDocker(composeArgs(...profileArgs, 'start', ...dataServices), 3 * 60 * 1000);
+}
+
+async function pruneDockerImagesBestEffort() {
+  try {
+    await runDocker(['image', 'prune', '-f'], 5 * 60 * 1000, 0);
+  } catch (error) {
+    console.error('[manager:server-update] docker image prune failed', error);
+  }
+}
+
+async function performServerUpdate(snapshot) {
+  let selection = null;
+  let rollbackSelection = null;
+  let rollbackImages = [];
+  let updatedDeploymentFiles = [];
+  let dataServicesStopped = false;
+  try {
+    assertUpdateStorage(snapshot.storage);
+    selection = await updateServiceSelection();
+    rollbackSelection = selection;
+    rollbackImages = await captureRollbackImages(rollbackSelection);
+    // Downloads begin only after the administrator confirmed the preflight.
+    const pulled = await pullServerUpdateImages();
+    selection = pulled.selection;
+    updatedDeploymentFiles = pulled.updatedDeploymentFiles;
     // Never stop a working installation until every image required by the
     // target Compose file is present locally. This also covers a release that
     // introduces a previously unseen service.
     await ensureSelectedImagesAvailable(selection);
+    // Pulling may have consumed more space than the manifest estimate. Check
+    // the backup workspace again before interrupting any running service.
+    assertBackupStorageAvailable();
     writeUpdateState({ status: 'backup', targetHash: snapshot.latestHash, message: 'creating_backup' });
     // Stop the data services BEFORE taking the backup. The backend keeps
     // chatter.db open; running `sqlite3 .backup` against a live database on
@@ -1425,10 +1611,33 @@ async function performServerUpdate(snapshot) {
     // this update flow), and launchServerUpdateHelper recreates everything,
     // including the manager, from a detached container.
     await stopDataServicesForUpdate(selection);
+    dataServicesStopped = true;
     await createBackup({ includeUploads: false, source: 'automatic' });
+    await pruneAutomaticBackups(getBackupSchedule().retention);
     writeUpdateState({ status: 'restarting', targetHash: snapshot.latestHash, message: 'restarting_server_services' });
-    await launchServerUpdateHelper(snapshot.latestHash, selection);
+    await launchServerUpdateHelper(snapshot.latestHash, selection, rollbackSelection, updatedDeploymentFiles);
+    // The detached helper now owns both restart and rollback.
+    dataServicesStopped = false;
   } catch (error) {
+    if (Array.isArray(error?.updatedDeploymentFiles)) updatedDeploymentFiles = error.updatedDeploymentFiles;
+    try {
+      restoreDeploymentFiles(updatedDeploymentFiles);
+    } catch (restoreError) {
+      console.error('[manager:server-update] failed to restore deployment files', restoreError);
+    }
+    try {
+      await restoreImageTags(rollbackImages);
+    } catch (restoreError) {
+      console.error('[manager:server-update] failed to restore image tags', restoreError);
+    }
+    if (dataServicesStopped && rollbackSelection) {
+      try {
+        await restartStoppedDataServices(rollbackSelection);
+      } catch (restartError) {
+        console.error('[manager:server-update] failed to restart stopped services', restartError);
+      }
+    }
+    await pruneDockerImagesBestEffort();
     writeUpdateState({ status: 'failed', targetHash: snapshot.latestHash, message: error.message || 'server_update_failed' });
     throw error;
   }
@@ -1675,7 +1884,7 @@ function getBackupSchedule() {
   return {
     frequency: ['daily', 'weekly'].includes(stored.frequency) ? stored.frequency : 'off',
     includeUploads: stored.includeUploads === true,
-    retention: Math.min(30, Math.max(1, Number.parseInt(stored.retention, 10) || 7)),
+    retention: Math.min(100, Math.max(1, Number.parseInt(stored.retention, 10) || 7)),
     lastRunAt: typeof stored.lastRunAt === 'string' ? stored.lastRunAt : ''
   };
 }
@@ -1685,7 +1894,7 @@ function saveBackupSchedule(input) {
   const schedule = {
     frequency: ['daily', 'weekly'].includes(input.frequency) ? input.frequency : 'off',
     includeUploads: input.includeUploads === true,
-    retention: Math.min(30, Math.max(1, Number.parseInt(input.retention, 10) || 7)),
+    retention: Math.min(100, Math.max(1, Number.parseInt(input.retention, 10) || 7)),
     lastRunAt: current.lastRunAt
   };
   atomicWrite(BACKUP_SCHEDULE_FILE, `${JSON.stringify(schedule, null, 2)}\n`);
@@ -1693,7 +1902,11 @@ function saveBackupSchedule(input) {
 }
 
 async function pruneAutomaticBackups(retention) {
-  const automatic = (await listBackups()).filter((backup) => backup.source === 'automatic');
+  const automatic = [];
+  for (const backup of await listBackups()) {
+    const manifest = await readBackupManifest(path.join(BACKUPS_DIR, backup.name));
+    if (manifest?.source === 'automatic' && !backup.name.endsWith('-imported.tar.gz')) automatic.push(backup);
+  }
   for (const backup of automatic.slice(retention)) fs.rmSync(path.join(BACKUPS_DIR, backup.name), { force: true });
 }
 
@@ -2550,6 +2763,12 @@ async function handleRequest(req, res) {
       return sendJson(res, 502, { error: error.message || 'server_update_check_failed' });
     }
     if (!snapshot.available) return sendJson(res, 409, { error: 'server_is_already_current' });
+    const currentStorage = snapshot.storage
+      ? { ...snapshot.storage, ...diskSpaceAt(CONFIG_DIR) }
+      : null;
+    if (currentStorage && currentStorage.availableBytes < currentStorage.requiredBytes) {
+      return sendJson(res, 507, { error: 'insufficient_disk_space', storage: { ...currentStorage, sufficient: false } });
+    }
     writeUpdateState({ status: 'queued', targetHash: snapshot.latestHash, message: 'server_update_queued' });
     updatePromise = performServerUpdate(snapshot)
       .catch(error => console.error('[manager:server-update]', error))
@@ -2580,14 +2799,14 @@ async function handleRequest(req, res) {
         // the old tag makes a typo, deleted tag, or incomplete publication a
         // recoverable UI error instead of breaking every later Compose call.
         const targetManagerImage = `${currentImagePrefix()}-manager:${tag}`;
-        await runDocker(['pull', targetManagerImage], 60 * 60 * 1000);
+        await inspectRemoteImage(targetManagerImage);
         updateEnvFileValue(COMPOSE_ENV_FILE, 'CHATTER_IMAGE_TAG', tag);
         updateEnvFileValue(COMPOSE_RUNTIME_ENV_FILE, 'CHATTER_IMAGE_TAG', tag);
       });
     } catch (error) {
       return sendJson(res, 502, { error: error.message || 'target_update_channel_unavailable' });
     }
-    lastPullTime = 0; // the next refresh should pull the new channel right away
+    serverUpdateSnapshotCache = null;
     console.log(`[manager:server-update] image tag switched to '${tag}'`);
     return sendJson(res, 200, { ok: true, imageTag: tag });
   }

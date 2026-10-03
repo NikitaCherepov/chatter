@@ -171,6 +171,7 @@ export function UpdateStatusCard() {
           drainPhase={restart.phase}
           drain={restart.drain}
           applyError={restart.error}
+          storage={info.storage}
           onCancel={restart.cancel}
           onRetry={restart.retry}
           onSoftUpdate={restart.soft}

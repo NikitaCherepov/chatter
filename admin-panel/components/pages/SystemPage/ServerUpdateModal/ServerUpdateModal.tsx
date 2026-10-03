@@ -27,6 +27,7 @@ export function ServerUpdateModal({
   drainPhase,
   drain,
   applyError,
+  storage,
   onCancel,
   onRetry,
   onSoftUpdate,
@@ -41,6 +42,13 @@ export function ServerUpdateModal({
   drainPhase: DrainPhase;
   drain: DrainState | null;
   applyError: string;
+  storage?: {
+    availableBytes: number;
+    requiredBytes: number;
+    imageDownloadBytes: number;
+    backupWorkingBytes: number;
+    sufficient: boolean;
+  };
   onCancel: () => void;
   onRetry: () => void;
   onSoftUpdate: () => void;
@@ -63,6 +71,11 @@ export function ServerUpdateModal({
   const showProgress = !isConfiguration && (updating || terminal);
   const progressPercent = stageProgress[effectiveStatus] ?? 0;
   const failed = effectiveStatus === 'failed';
+  const formatBytes = (value: number) => {
+    if (!Number.isFinite(value) || value <= 0) return '0 MB';
+    const gib = value / (1024 ** 3);
+    return gib >= 1 ? `${gib.toFixed(1)} GB` : `${Math.ceil(value / (1024 ** 2))} MB`;
+  };
 
   const releaseNotes = useMemo(() => {
     const available = Object.keys(changelog);
@@ -169,6 +182,19 @@ export function ServerUpdateModal({
           </>
         )}
 
+        {!isConfiguration && drainPhase === 'idle' && storage && (
+          <div className={`${styles.storageSection} ${storage.sufficient ? '' : styles.storageError}`}>
+            <strong>{t('system.update.storage.title')}</strong>
+            <span>{t('system.update.storage.available', { size: formatBytes(storage.availableBytes) })}</span>
+            <span>{t('system.update.storage.required', { size: formatBytes(storage.requiredBytes) })}</span>
+            <small>{t('system.update.storage.estimate', {
+              images: formatBytes(storage.imageDownloadBytes),
+              backup: formatBytes(storage.backupWorkingBytes),
+            })}</small>
+            {!storage.sufficient && <b>{t('system.update.storage.insufficient')}</b>}
+          </div>
+        )}
+
         {/* ─── Apply error ─────────────────────────────────────────────── */}
         {applyError && (
           <p className={styles.notice}>{applyError}</p>
@@ -218,7 +244,7 @@ export function ServerUpdateModal({
                 type="button"
                 className="buttonSecondary"
                 onClick={onSoftUpdate}
-                disabled={drainPhase !== 'idle'}
+                disabled={drainPhase !== 'idle' || (!isConfiguration && storage?.sufficient === false)}
               >
                 {t(isConfiguration ? 'system.update.restart.softApply' : 'system.update.drain.softUpdate')}
               </button>
@@ -229,6 +255,7 @@ export function ServerUpdateModal({
               <button
                 type="button"
                 onClick={onForceUpdate}
+                disabled={!isConfiguration && storage?.sufficient === false}
               >
                 {t(isConfiguration ? 'system.update.restart.forceApply' : 'system.update.drain.forceNow')}
               </button>
