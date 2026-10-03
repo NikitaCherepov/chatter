@@ -88,7 +88,10 @@
     "coefficientSaved": "係数が保存されました",
     "cancel": "キャンセル",
     "on": "オン",
-    "off": "オフ"
+    "off": "オフ",
+    "save": "保存",
+    "savingChanges": "保存中…",
+    "delete": "削除"
   },
   "models": {
     "auto": {
@@ -294,6 +297,11 @@
         "name": "画像生成",
         "description": "外部API経由で画像を生成",
         "group": "メディア"
+      },
+      "transcription": {
+        "name": "音声文字起こし",
+        "description": "サーバー側の音声認識",
+        "group": "メディア"
       }
     },
     "secretField": {
@@ -312,7 +320,64 @@
         "sectionIntro": "Pinecone用にテキストをベクトルに変換する、OpenAI互換の別のAPIです。",
         "apiUrlLabel": "API URL",
         "modelLabel": "モデル",
-        "apiKeyLabel": "埋め込みプロバイダーAPIキー"
+        "apiKeyLabel": "埋め込みプロバイダーAPIキー",
+        "providerLabel": "プロバイダー",
+        "priceLabel": "入力価格、$ / 100万トークン",
+        "migrateAction": "再埋め込みして切り替え",
+        "migrating": "移行中…",
+        "migrationComplete": "新しいコレクションがアクティブです。ベクトル数: {{count}}。",
+        "settingsSaved": "ベクトルメモリの設定が保存されました。"
+      },
+      "storage": {
+        "title": "ベクターエンジン",
+        "intro": "この選択はベクター検索と新規書き込みを制御します。QdrantはChatterにバンドルされており、検証済みの移行後にのみアクティブになります。",
+        "label": "アクティブなベクターエンジン",
+        "pineconeHint": "リモートベクターインデックス",
+        "qdrantHint": "Chatterにバンドルされたローカルベクターインデックス",
+        "migrateAction": "移行して切り替え",
+        "switchAction": "ストレージを切り替え",
+        "migrateTitle": "メモリをQdrantに移行しますか？",
+        "switchTitle": "Pineconeに切り替えますか？",
+        "migrateText": "すべてのベクトルとメタデータは、埋め込みを再生成せずにPineconeからコピーされます。",
+        "backupText": "Pineconeはクリアされません。コピーされたすべてのベクトルが検証された後にのみQdrantがアクティブになります。",
+        "switchText": "Pineconeがアクティブになります。Qdrantデータは自動的に移行されません。",
+        "cancel": "キャンセル",
+        "migrating": "移行中…",
+        "switched": "ストレージを切り替えました。",
+        "result": "移行されたベクトル: {{vectors}}; メモリ: {{records}}。"
+      },
+      "reranking": {
+        "sectionTitle": "ランキングモデル",
+        "sectionIntro": "最適な一致フラグメントを使用して20のベクトル候補を再ランク付けし、関連性のしきい値を適用します。",
+        "enabledLabel": "メモリ検索の再ランキングを有効にする",
+        "priceLabel": "価格、$ / 検索",
+        "thresholdLabel": "最小関連性スコア · 0–1",
+        "resultLimitLabel": "返されるメモリ · 1–20"
+      },
+      "collections": {
+        "title": "メモリバージョン",
+        "intro": "Chatterが管理するコレクションのみが表示されます。バックアップが自動的に削除されることはありません。",
+        "vectorCount": "{{count}} ベクトル",
+        "rollbackAction": "戻す",
+        "rollbackComplete": "選択したバックアップが有効です。",
+        "deleteComplete": "コレクションが削除されました。",
+        "status": {
+          "active": "アクティブ",
+          "backup": "バックアップ",
+          "migrating": "移行中",
+          "failed": "失敗"
+        }
+      },
+      "confirm": {
+        "migrateTitle": "埋め込みモデルを変更しますか？",
+        "migrateText": "保存されているすべてのメモリチャンクは、新しいローカルQdrantコレクションに埋め込まれます。検索は現在のコレクションを引き続き使用します。メモリの書き込みは、検証が完了するまで一時停止されます。",
+        "migrateAction": "移行",
+        "activateTitle": "このバックアップに切り替えますか？",
+        "activateText": "現在のSQLiteメモリは、このバックアップのモデルで新しいコレクションに再埋め込みされます。アクティブなコレクションはバックアップとして保持されます。",
+        "activateAction": "切り替え",
+        "deleteTitle": "このコレクションを削除しますか？",
+        "deleteText": "そのベクトルはQdrantから完全に削除されます。SQLite内の正規メモリテキストは影響を受けません。",
+        "deleteAction": "削除"
       }
     },
     "webSearch": {
@@ -421,9 +486,33 @@
       "capabilitySupported": "対応",
       "capabilityNotClaimed": "未申請",
       "enabled": "画像生成が有効です",
-      "savingEnabled": "画像生成設定を保存中…"
+      "savingEnabled": "画像生成設定を保存中…",
+      "providerLabel": "プロバイダー",
+      "providerHint": "いつでも切り替え可能 — 両方のプロバイダーがキーを保持します",
+      "apiTokenLabel": "Cloudflare API トークン",
+      "accountIdLabel": "Cloudflare アカウント ID",
+      "accountIdHint": "Cloudflare ダッシュボード（Workers AI）で表示されます",
+      "customModelLabel": "カスタムモデル…",
+      "defaultLabel": "デフォルト",
+      "img2imgLabel": "画像から画像へ（参照）",
+      "img2imgHint": "ボットが参照画像を添付して編集できるようにします（モデルが対応している必要があります）"
     },
-    "statusDisabled": "無効"
+    "statusDisabled": "無効",
+    "transcription": {
+      "pageDescription": "OpenRouterまたはOpenAI互換APIを介したChatter Desktop用のサーバー側音声認識。",
+      "sectionTitle": "文字起こし",
+      "sectionIntro": "デスクトップはモノラル16kHzのWAVファイルを送信します。キーはサーバー上で暗号化されたままです。",
+      "enabled": "サーバー文字起こしを有効にする",
+      "provider": "プロバイダー",
+      "apiUrl": "API URL",
+      "model": "文字起こしモデル",
+      "pricePerMinute": "価格、$ / 音声1分",
+      "check": "利用可能性を確認",
+      "checking": "確認中…",
+      "available": "利用可能 · {{model}}",
+      "unavailable": "利用不可 · {{error}}",
+      "saved": "文字起こし設定が保存されました。"
+    }
   },
   "services": {
     "telegram": {

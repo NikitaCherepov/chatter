@@ -163,7 +163,8 @@
       "connections": "Contas vinculadas",
       "mail": "Email",
       "billing": "Faturamento",
-      "about": "Sobre"
+      "about": "Sobre",
+      "data": "Dados"
     },
     "browser": {
       "help": "Escolha quais ações do navegador realizadas pela IA exigem sua aprovação. As ações manuais não são afetadas.",
@@ -206,7 +207,61 @@
       "timezone": "Fuso horário",
       "timezoneHelp": "Usado para hora local, lembretes e tarefas agendadas.",
       "timezoneDevice": "Fuso horário atual neste dispositivo",
-      "timezoneNotConfigured": "Ainda não foi confirmado; o fuso horário do dispositivo é exibido."
+      "timezoneNotConfigured": "Ainda não foi confirmado; o fuso horário do dispositivo é exibido.",
+      "personas": {
+        "label": "Persona",
+        "help": "O principal mantém seu nome de conta regular e memória central. Personas adicionais podem ser selecionadas separadamente para cada chat.",
+        "main": "Principal",
+        "accountName": "Nome da conta",
+        "accountNameValue": "Nome da conta: {{name}}",
+        "selectPlaceholder": "Selecione uma persona",
+        "mainBadge": "principal",
+        "personaBadge": "persona",
+        "otherSection": "Outras personas",
+        "createTitle": "Nova persona",
+        "createDescription": "Adicione um nome, descrição e memória central",
+        "namePlaceholder": "Nome da persona",
+        "descriptionPlaceholder": "Descrição curta",
+        "coreMemory": "Memória central",
+        "allowCoreMemoryUpdate": "Atualizar automaticamente a memória central",
+        "image": "Avatar",
+        "imageHelp": "Exibido ao lado de suas mensagens quando esta persona está ativa. Até 10 MB.",
+        "imageEmpty": "Sem avatar",
+        "imageSaveError": "Persona salva, mas o avatar não pôde ser salvo",
+        "import": {
+          "button": "Importar do SillyTavern",
+          "previewTitle": "Importar personas",
+          "sourceLabel": "Backup de personas do SillyTavern",
+          "found": "{{count}} personas encontradas",
+          "newCount": "{{count}} novo",
+          "updateCount": "{{count}} existente",
+          "defaultPersona": "Padrão: {{name}}",
+          "willCreate": "Criar",
+          "willUpdate": "Atualizar",
+          "more": "E mais {{count}}",
+          "confirm": "Importar",
+          "importing": "Importando...",
+          "success": "Personas importadas: {{created}} criadas, {{updated}} atualizadas",
+          "warnings": {
+            "avatars_not_in_backup": "Os backups de personas do SillyTavern não contêm arquivos de avatar. Você pode adicionar avatares após a importação.",
+            "core_memory_truncated": "Algumas descrições excedem o limite de memória central de 800 caracteres. Os dados de origem completos são preservados para migrações futuras.",
+            "existing_personas_updated": "Personas importadas anteriormente com a mesma chave SillyTavern serão atualizadas."
+          },
+          "errors": {
+            "format": "Selecione um arquivo JSON de backup de persona do SillyTavern",
+            "size": "O backup não pode ser maior que 2 MB",
+            "read": "Não foi possível ler o backup",
+            "invalid": "Este não é um backup de persona válido do SillyTavern",
+            "import": "Não foi possível importar personas"
+          }
+        },
+        "deleted": "Persona excluída; seus chats foram alterados para Automático",
+        "errors": {
+          "select": "Não foi possível selecionar a persona",
+          "nameRequired": "Digite um nome para a persona",
+          "delete": "Não foi possível excluir a persona"
+        }
+      }
     },
     "prompt": {
       "style": "Estilo de comunicação",
@@ -225,7 +280,60 @@
       "detailAny": "Não importa",
       "generating": "Gerando...",
       "generate": "Gerar",
-      "preview": "Visualizar alterações"
+      "preview": "Visualizar alterações",
+      "modeUsual": "Comum",
+      "modeAdvanced": "Avançado",
+      "image": "Imagem",
+      "imageHelp": "Um avatar ou ilustração anexado a este prompt. Até 10 MB.",
+      "imageEmpty": "Nenhuma imagem",
+      "imageChoose": "Escolher imagem",
+      "imageFormatError": "Escolha um arquivo de imagem",
+      "imageSizeError": "A imagem deve ter no máximo 10 MB",
+      "imageReadError": "Não foi possível ler a imagem",
+      "imageSaveError": "O prompt foi salvo, mas a imagem não pôde ser salva",
+      "imageCropTitle": "Escolha a área visível",
+      "imageCropHelp": "Mova a imagem dentro do quadro e ajuste o zoom.",
+      "imageCropZoom": "Zoom",
+      "imageCropApply": "Aplicar",
+      "characterCard": {
+        "button": "Importar Cartão de Personagem",
+        "help": "JSON ou PNG compatível com SillyTavern",
+        "reading": "Lendo...",
+        "previewTitle": "Pré-visualização do Cartão de Personagem",
+        "sectionsFound": "{{count}} seções de prompt",
+        "firstMessageSaved": "Primeira mensagem salva",
+        "alternateGreetings": "{{count}} saudações alternativas salvas",
+        "lorebookSaved": "Lorebook salvo para depois",
+        "assetsSaved": "{{count}} recursos preservados",
+        "preservedNote": "Dados de cartão não suportados são preservados no banco de dados e não são adicionados ao prompt.",
+        "import": "Importar",
+        "importing": "Importando...",
+        "imported": "Cartão de personagem importado",
+        "startChat": "Iniciar chat",
+        "startingChat": "Iniciando...",
+        "errors": {
+          "format": "Escolha um arquivo JSON ou PNG de Character Card",
+          "size": "A Character Card deve ter no máximo 12 MB",
+          "read": "Não foi possível ler a Character Card",
+          "invalid": "Este arquivo não é uma Character Card válida",
+          "import": "Não foi possível importar a Character Card",
+          "startChat": "Não foi possível iniciar um chat com este personagem"
+        }
+      },
+      "sections": {
+        "description": "Descrição",
+        "personality": "Personalidade",
+        "scenario": "Cenário",
+        "examples": "Exemplos",
+        "other": "Outro"
+      },
+      "sectionPlaceholders": {
+        "description": "Quem é este personagem...",
+        "personality": "Traços e estilo de comunicação...",
+        "scenario": "Situação e contexto...",
+        "examples": "Exemplo de diálogo...",
+        "other": "Quaisquer instruções restantes..."
+      }
     },
     "voice": {
       "recognitionTitle": "Reconhecimento de voz",
@@ -239,7 +347,14 @@
       "voicePlaceholder": "Selecione a voz...",
       "preview": "Ouvir",
       "speechVolume": "Volume da voz",
-      "effectsVolume": "Volume dos sons"
+      "effectsVolume": "Volume dos sons",
+      "recognitionSource": "Processamento de reconhecimento",
+      "recognitionSourceHint": "O Whisper local usa este computador. O processamento no servidor é útil em PCs mais fracos e está disponível apenas quando configurado pelo administrador.",
+      "recognitionSourceLocal": "Neste computador",
+      "recognitionSourceLocalHint": "Whisper local",
+      "recognitionSourceServer": "No servidor",
+      "recognitionSourceServerReady": "Disponível · {{model}}",
+      "recognitionSourceServerUnavailable": "Indisponível ou não configurado"
     },
     "restrictions": {
       "help": "Gerencie as ferramentas de IA disponíveis. As alterações são aplicadas instantaneamente.",
@@ -336,7 +451,8 @@
       "badLogin": "Formato de login inválido",
       "loginRequired": "Informe a senha atual e o novo login",
       "timezoneSaved": "Fuso horário salvo",
-      "timezoneSaveFailed": "Não foi possível salvar o fuso horário"
+      "timezoneSaveFailed": "Não foi possível salvar o fuso horário",
+      "contextLimitReduced": "O limite inferior é salvo. O resumo da conversa será reconstruído na próxima mensagem."
     },
     "connections": {
       "help": "Gerencie serviços que podem fazer login e usar esta conta.",
@@ -373,6 +489,92 @@
       "upToDate": "Você está usando a versão mais recente",
       "updateCheckFailed": "Não foi possível verificar atualizações",
       "updateCheckUnavailable": "A verificação de atualizações não está disponível no modo de desenvolvimento"
+    },
+    "data": {
+      "help": "Importe dados de outros aplicativos. O backup e a exportação do Chatter serão adicionados aqui posteriormente.",
+      "sillyTavern": {
+        "title": "Mover do SillyTavern",
+        "help": "Importe o arquivo de backup completo de uma vez ou mova dados individuais manualmente."
+      },
+      "backup": {
+        "title": "Backup completo do SillyTavern",
+        "help": "Importa personagens, personas com avatares e conversas privadas de um ZIP de dados do SillyTavern. ",
+        "button": "Escolher backup ZIP",
+        "reading": "Verificando arquivo...",
+        "previewTitle": "Importar backup do SillyTavern",
+        "previewHelp": "Revise os dados detectados antes de importá-los.",
+        "newCount": "Novo: {{count}}",
+        "existingCount": "Já existe: {{count}}",
+        "updateCount": "Será atualizado: {{count}}",
+        "avatarCount": "Avatares: {{count}}",
+        "confirm": "Importar",
+        "importing": "Importando...",
+        "success": "Importação concluída: {{characters}} personagens, {{personas}} personas, {{chats}} conversas",
+        "importedResult": "Personagens criados: {{characters}}, personas processadas: {{personas}}, conversas criadas: {{chats}}",
+        "warnings": {
+          "group_chats_not_supported": "Conversas em grupo ainda não são importadas.",
+          "worlds_not_supported": "Livros de conhecimento e World Info ainda não são importados.",
+          "other_data_ignored": "Outras configurações, extensões e arquivos de serviço no arquivo não alteram o Chatter.",
+          "personas_not_found": "Nenhuma persona foi encontrada em settings.json.",
+          "persona_avatar_errors": "Alguns avatares de persona não puderam ser importados."
+        },
+        "errors": {
+          "format": "Selecione um backup ZIP do SillyTavern",
+          "size": "O arquivo deve ter no máximo 256 MB",
+          "invalid": "Não foi possível ler o backup do SillyTavern",
+          "import": "Não foi possível importar o backup do SillyTavern"
+        }
+      },
+      "character": {
+        "title": "Cartão de Personagem",
+        "help": "Cria um prompt de personagem Chatter a partir de um cartão JSON ou PNG compatível com SillyTavern.",
+        "button": "Importar personagem",
+        "imported": "Importado: {{name}}"
+      },
+      "personas": {
+        "title": "Personas",
+        "help": "Importa nomes e descrições de um backup de persona do SillyTavern. Arquivos de avatar não estão incluídos neste formato de backup.",
+        "button": "Importar personas",
+        "imported": "Criado: {{created}}, atualizado: {{updated}}"
+      },
+      "chats": {
+        "title": "Conversas",
+        "help": "Importa uma ou várias conversas JSONL com mensagens, datas, raciocínio e vínculos de personagem e persona disponíveis.",
+        "button": "Importar conversas",
+        "previewTitle": "Importar conversas do SillyTavern",
+        "previewSummary": "Conversas: {{chats}} · mensagens: {{messages}}",
+        "messages": "Mensagens: {{count}}",
+        "character": "Personagem: {{name}}",
+        "user": "Usuário: {{name}}",
+        "characterMatched": "Personagem encontrado: {{name}}",
+        "characterNotMatched": "Personagem não encontrado; o chat usará seleção automática de prompt",
+        "personaMatched": "Persona encontrada: {{name}}",
+        "personaNotMatched": "Persona não encontrada; o chat usará Automático",
+        "ready": "Pronto",
+        "alreadyImported": "Já importado",
+        "confirm": "Importar {{count}} chats",
+        "importing": "Importando...",
+        "success": "Chats importados: {{created}} novos, {{existing}} já existiam",
+        "importedResult": "Criados: {{created}}, já existiam: {{existing}}",
+        "warnings": {
+          "missing_metadata": "A linha de metadados está ausente; as mensagens ainda podem ser importadas.",
+          "system_messages_as_assistant": "As mensagens do sistema serão preservadas como mensagens do assistente.",
+          "empty_messages_skipped": "Mensagens vazias serão ignoradas.",
+          "alternate_swipes_preserved_only": "Swipes alternativos são mantidos nos dados de origem, mas ainda não são exibidos.",
+          "attachments_not_imported": "As exportações JSONL do SillyTavern não contêm arquivos de anexo."
+        },
+        "errors": {
+          "format": "Selecione arquivos de chat JSONL",
+          "count": "Você pode importar até 20 chats de uma vez",
+          "size": "Cada arquivo de chat deve ter no máximo 16 MB",
+          "totalSize": "Os chats selecionados devem ter no máximo 32 MB no total",
+          "invalid": "Não foi possível ler um ou mais chats do SillyTavern",
+          "import": "Não foi possível importar os chats"
+        }
+      },
+      "openCharacter": "Abrir personagem",
+      "openPersonas": "Abrir personas",
+      "openChat": "Abrir chat"
     }
   },
   "chat": {
@@ -419,7 +621,11 @@
       "branchNotAllowedInRoom": "Ramificações não estão disponíveis em salas compartilhadas ainda",
       "branchFailed": "Falha ao criar ramificação",
       "generationPerf": "Primeiro token: {{latency}}\nGeração: {{gen}}\nTotal: {{total}}\nVelocidade: {{tps}} tokens/s",
-      "firstTokenLatency": "Tempo até o primeiro token: {{latency}}"
+      "firstTokenLatency": "Tempo até o primeiro token: {{latency}}",
+      "variants": "Variantes de resposta",
+      "previousVariant": "Variante de resposta anterior",
+      "nextVariant": "Próxima variante de resposta",
+      "variantSwitchFailed": "Falha ao alternar a variante de resposta"
     },
     "reasoning": {
       "auto": "Auto",
@@ -764,6 +970,109 @@
       "open": "Abrir anexo",
       "loadFailed": "Não foi possível exibir este documento. Você ainda pode baixá-lo.",
       "unavailable": "A visualização não está disponível para este arquivo. Você ainda pode baixá-lo."
+    },
+    "find": {
+      "open": "Pesquisar neste chat",
+      "placeholder": "Pesquisar neste chat",
+      "previous": "Correspondência anterior",
+      "next": "Próxima correspondência",
+      "close": "Fechar pesquisa"
+    },
+    "memory": {
+      "trigger": "Memória",
+      "triggerTitle": "Memória do chat",
+      "headerTitle": "Memória do chat",
+      "headerHint": "As configurações são aplicadas instantaneamente",
+      "persona": "Persona",
+      "personaAutomatic": "Automaticamente",
+      "personaGlobal": "Global: {{name}}",
+      "personaMain": "Principal",
+      "personaAccountName": "Nome da conta: {{name}}",
+      "personasLoadFailed": "Não foi possível carregar as personas",
+      "personaSelectFailed": "Não foi possível selecionar uma persona para este chat",
+      "character": "Personagem",
+      "characterAutomatic": "Automaticamente",
+      "characterGlobal": "Global: {{name}}",
+      "characterDefault": "Personagem padrão",
+      "characterRoomManaged": "Os personagens nesta sala são gerenciados como bots da sala.",
+      "characterSelectFailed": "Não foi possível selecionar um personagem para este chat",
+      "messageSearch": {
+        "label": "Pesquisa de mensagens",
+        "all": "Todos os chats acessíveis",
+        "current": "Somente este chat"
+      },
+      "roleplayMode": {
+        "label": "Modo roleplay",
+        "hint": "Apenas memória de longo prazo e ferramentas de pesquisa de chat permanecem disponíveis neste chat."
+      },
+      "search": {
+        "placeholder": "Buscar memórias...",
+        "text": "Texto",
+        "semantic": "Por significado",
+        "action": "Buscar",
+        "searching": "Buscando...",
+        "noResults": "Nenhuma memória encontrada",
+        "failed": "Não foi possível pesquisar memórias"
+      },
+      "globalSettings": {
+        "title": "Memória",
+        "hint": "Memórias vetoriais compartilhadas estão disponíveis em conversas que usam apenas Compartilhado ou Compartilhado e este modo de conversa.",
+        "spaceLabel": "Memória compartilhada",
+        "recordsTitle": "Memórias",
+        "empty": "Nada aqui ainda",
+        "creating": "Criando...",
+        "createSpaceAction": "Criar memória compartilhada",
+        "renameSpaceAction": "Renomear memória",
+        "deleteSpaceAction": "Excluir memória",
+        "editRecordAction": "Editar memória",
+        "deleteRecordAction": "Excluir memória",
+        "dialogs": {
+          "createTitle": "Nova memória compartilhada",
+          "createText": "Digite um nome para o espaço de memória.",
+          "namePlaceholder": "Nome da memória",
+          "renameTitle": "Renomear memória",
+          "renameText": "Digite um novo nome para o espaço de memória.",
+          "deleteSpaceTitle": "Excluir memória?",
+          "deleteSpaceText": "O espaço “{{name}}” e todas as suas memórias serão excluídos permanentemente.",
+          "editRecordTitle": "Editar memória",
+          "editRecordText": "O texto será vetorizado novamente após salvar. Pressione Ctrl+Enter para salvar.",
+          "deleteRecordTitle": "Excluir memória?",
+          "deleteRecordText": "A memória e seus vetores associados serão excluídos permanentemente."
+        },
+        "errors": {
+          "loadSpaces": "Não foi possível carregar a memória compartilhada",
+          "loadRecords": "Não foi possível carregar as memórias",
+          "selectSpace": "Não foi possível selecionar a memória compartilhada",
+          "createSpace": "Não foi possível criar a memória compartilhada",
+          "renameSpace": "Não foi possível renomear a memória",
+          "deleteSpace": "Não foi possível excluir a memória",
+          "updateRecord": "Não foi possível atualizar a memória",
+          "deleteRecord": "Não foi possível excluir a memória"
+        }
+      },
+      "modeLabel": "Usar memória",
+      "mode": {
+        "off": "Desativado",
+        "general": "Somente compartilhado",
+        "chat": "Somente este chat",
+        "both": "Compartilhado e este chat"
+      },
+      "writeTargetLabel": "Salvar em",
+      "writeTarget": {
+        "general": "Memória compartilhada",
+        "chat": "Memória deste chat"
+      },
+      "chatMemoryTitle": "Memória deste chat",
+      "empty": "Nada aqui ainda",
+      "promptText": "Texto da memória",
+      "confirmDelete": "Excluir esta memória?",
+      "loadSettingsFailed": "Não foi possível carregar as configurações de memória",
+      "loadRecordsFailed": "Não foi possível carregar as memórias",
+      "saveSettingsFailed": "Não foi possível salvar as configurações de memória"
+    },
+    "contextSummary": {
+      "title": "Resumo da conversa anterior",
+      "meta": "{{count}} mensagens · {{model}}"
     }
   },
   "promptSelector": {

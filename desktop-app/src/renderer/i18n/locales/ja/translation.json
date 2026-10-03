@@ -163,7 +163,8 @@
       "connections": "リンクされたアカウント",
       "mail": "メール",
       "billing": "請求",
-      "about": "概要"
+      "about": "概要",
+      "data": "データ"
     },
     "browser": {
       "help": "AIによるブラウザ操作のうち、確認が必要なものを選択します。手動操作には影響しません。",
@@ -206,7 +207,61 @@
       "timezone": "タイムゾーン",
       "timezoneHelp": "現地時間、リマインダー、スケジュールされたタスクに使用されます。",
       "timezoneDevice": "このデバイスの現在のタイムゾーン",
-      "timezoneNotConfigured": "まだ確認されていません。デバイスのタイムゾーンが表示されています。"
+      "timezoneNotConfigured": "まだ確認されていません。デバイスのタイムゾーンが表示されています。",
+      "personas": {
+        "label": "ペルソナ",
+        "help": "メインは通常のアカウント名とコアメモリを保持します。追加のペルソナは各チャットで個別に選択できます。",
+        "main": "メイン",
+        "accountName": "アカウント名",
+        "accountNameValue": "アカウント名: {{name}}",
+        "selectPlaceholder": "ペルソナを選択",
+        "mainBadge": "メイン",
+        "personaBadge": "ペルソナ",
+        "otherSection": "他のペルソナ",
+        "createTitle": "新しいペルソナ",
+        "createDescription": "名前、説明、コアメモリを追加",
+        "namePlaceholder": "ペルソナ名",
+        "descriptionPlaceholder": "短い説明",
+        "coreMemory": "コアメモリ",
+        "allowCoreMemoryUpdate": "コアメモリを自動更新",
+        "image": "アバター",
+        "imageHelp": "このペルソナがアクティブなときにメッセージの横に表示されます。最大10 MB。",
+        "imageEmpty": "アバターなし",
+        "imageSaveError": "ペルソナは保存されましたが、アバターを保存できませんでした",
+        "import": {
+          "button": "SillyTavernからインポート",
+          "previewTitle": "ペルソナをインポート",
+          "sourceLabel": "SillyTavernペルソナバックアップ",
+          "found": "{{count}}件のペルソナが見つかりました",
+          "newCount": "{{count}} 件の新規",
+          "updateCount": "{{count}} 件の既存",
+          "defaultPersona": "デフォルト: {{name}}",
+          "willCreate": "作成",
+          "willUpdate": "更新",
+          "more": "他 {{count}} 件",
+          "confirm": "インポート",
+          "importing": "インポート中...",
+          "success": "ペルソナをインポートしました: {{created}} 件作成、{{updated}} 件更新",
+          "warnings": {
+            "avatars_not_in_backup": "SillyTavern のペルソナバックアップにはアバターファイルが含まれていません。インポート後にアバターを追加できます。",
+            "core_memory_truncated": "一部の説明が800文字のコアメモリ上限を超えています。完全なソースデータは将来の移行のために保持されます。",
+            "existing_personas_updated": "同じSillyTavernキーを持つ以前にインポートされたペルソナは更新されます。"
+          },
+          "errors": {
+            "format": "SillyTavernのペルソナバックアップJSONファイルを選択してください",
+            "size": "バックアップは2MB以下である必要があります",
+            "read": "バックアップを読み取れませんでした",
+            "invalid": "これは有効なSillyTavernペルソナバックアップではありません",
+            "import": "ペルソナをインポートできませんでした"
+          }
+        },
+        "deleted": "ペルソナが削除されました。そのチャットは自動に切り替えられました",
+        "errors": {
+          "select": "ペルソナを選択できませんでした",
+          "nameRequired": "ペルソナ名を入力してください",
+          "delete": "ペルソナを削除できませんでした"
+        }
+      }
     },
     "prompt": {
       "style": "会話スタイル",
@@ -225,7 +280,60 @@
       "detailAny": "任意",
       "generating": "生成中...",
       "generate": "生成",
-      "preview": "変更のプレビュー"
+      "preview": "変更のプレビュー",
+      "modeUsual": "通常",
+      "modeAdvanced": "詳細",
+      "image": "画像",
+      "imageHelp": "このプロンプトに添付されるアバターまたはイラスト。最大10 MB。",
+      "imageEmpty": "画像なし",
+      "imageChoose": "画像を選択",
+      "imageFormatError": "画像ファイルを選択してください",
+      "imageSizeError": "画像は10 MB以下である必要があります",
+      "imageReadError": "画像を読み取れませんでした",
+      "imageSaveError": "プロンプトは保存されましたが、画像を保存できませんでした",
+      "imageCropTitle": "表示領域を選択",
+      "imageCropHelp": "フレーム内で画像を移動し、ズームを調整します。",
+      "imageCropZoom": "ズーム",
+      "imageCropApply": "適用",
+      "characterCard": {
+        "button": "キャラクターカードをインポート",
+        "help": "SillyTavern互換のJSONまたはPNG",
+        "reading": "読み込み中...",
+        "previewTitle": "キャラクターカードのプレビュー",
+        "sectionsFound": "{{count}} 個のプロンプトセクション",
+        "firstMessageSaved": "最初のメッセージが保存されました",
+        "alternateGreetings": "{{count}} 件の代替挨拶が保存されました",
+        "lorebookSaved": "ロアブックは後で保存されました",
+        "assetsSaved": "{{count}} 件のアセットが保持されました",
+        "preservedNote": "サポートされていないカードデータはデータベースに保持され、プロンプトには追加されません。",
+        "import": "インポート",
+        "importing": "インポート中...",
+        "imported": "キャラクターカードをインポートしました",
+        "startChat": "チャットを開始",
+        "startingChat": "開始中...",
+        "errors": {
+          "format": "キャラクターカードのJSONまたはPNGファイルを選択してください",
+          "size": "キャラクターカードは12MB以下である必要があります",
+          "read": "キャラクターカードを読み込めませんでした",
+          "invalid": "このファイルは有効なキャラクターカードではありません",
+          "import": "キャラクターカードをインポートできませんでした",
+          "startChat": "このキャラクターとのチャットを開始できませんでした"
+        }
+      },
+      "sections": {
+        "description": "説明",
+        "personality": "性格",
+        "scenario": "シナリオ",
+        "examples": "例",
+        "other": "その他"
+      },
+      "sectionPlaceholders": {
+        "description": "このキャラクターの説明...",
+        "personality": "性格とコミュニケーションスタイル...",
+        "scenario": "状況とコンテキスト...",
+        "examples": "会話の例...",
+        "other": "その他の残りの指示..."
+      }
     },
     "voice": {
       "recognitionTitle": "音声認識",
@@ -239,7 +347,14 @@
       "voicePlaceholder": "音声を選択...",
       "preview": "試聴",
       "speechVolume": "音声の音量",
-      "effectsVolume": "効果音の音量"
+      "effectsVolume": "効果音の音量",
+      "recognitionSource": "認識処理",
+      "recognitionSourceHint": "ローカルWhisperはこのコンピューターを使用します。サーバー処理は性能の低いPCに便利で、管理者が設定した場合のみ利用可能です。",
+      "recognitionSourceLocal": "このコンピューター上",
+      "recognitionSourceLocalHint": "ローカルWhisper",
+      "recognitionSourceServer": "サーバー上",
+      "recognitionSourceServerReady": "利用可能 · {{model}}",
+      "recognitionSourceServerUnavailable": "利用不可または未設定"
     },
     "restrictions": {
       "help": "利用可能なAIツールの管理。変更は即座に適用されます。",
@@ -336,7 +451,8 @@
       "badLogin": "ログイン形式が無効です",
       "loginRequired": "現在のパスワードと新しいログインを入力してください",
       "timezoneSaved": "タイムゾーンが保存されました",
-      "timezoneSaveFailed": "タイムゾーンを保存できませんでした"
+      "timezoneSaveFailed": "タイムゾーンを保存できませんでした",
+      "contextLimitReduced": "下限が保存されました。会話の要約は次のメッセージで再構築されます。"
     },
     "connections": {
       "help": "このアカウントにサインインして使用できるサービスを管理します。",
@@ -373,6 +489,92 @@
       "upToDate": "最新バージョンを使用しています",
       "updateCheckFailed": "更新を確認できませんでした",
       "updateCheckUnavailable": "開発モードでは更新確認は利用できません"
+    },
+    "data": {
+      "help": "他のアプリケーションからデータをインポートします。Chatterのバックアップとエクスポートは後でここに追加されます。",
+      "sillyTavern": {
+        "title": "SillyTavernから移行",
+        "help": "完全なバックアップアーカイブを一度にインポートするか、個々のデータを手動で移動します。"
+      },
+      "backup": {
+        "title": "SillyTavernの完全バックアップ",
+        "help": "SillyTavernデータZIPからキャラクター、アバター付きのペルソナ、プライベートチャットをインポートします。",
+        "button": "ZIPバックアップを選択",
+        "reading": "アーカイブを確認中...",
+        "previewTitle": "SillyTavernバックアップをインポート",
+        "previewHelp": "インポートする前に検出されたデータを確認してください。",
+        "newCount": "新規: {{count}}",
+        "existingCount": "既存: {{count}}",
+        "updateCount": "更新予定: {{count}}",
+        "avatarCount": "アバター: {{count}}",
+        "confirm": "インポート",
+        "importing": "インポート中...",
+        "success": "インポート完了: {{characters}} キャラクター、{{personas}} ペルソナ、{{chats}} チャット",
+        "importedResult": "作成されたキャラクター: {{characters}}、処理されたペルソナ: {{personas}}、作成されたチャット: {{chats}}",
+        "warnings": {
+          "group_chats_not_supported": "グループチャットはまだインポートされていません。",
+          "worlds_not_supported": "ロアブックとワールド情報はまだインポートされていません。",
+          "other_data_ignored": "アーカイブ内のその他の設定、拡張機能、サービスファイルはChatterを変更しません。",
+          "personas_not_found": "settings.jsonにペルソナが見つかりませんでした。",
+          "persona_avatar_errors": "一部のペルソナアバターをインポートできませんでした。"
+        },
+        "errors": {
+          "format": "SillyTavern ZIPバックアップを選択してください",
+          "size": "アーカイブは256 MB以下である必要があります",
+          "invalid": "SillyTavernバックアップを読み取れませんでした",
+          "import": "SillyTavernバックアップをインポートできませんでした"
+        }
+      },
+      "character": {
+        "title": "キャラクターカード",
+        "help": "SillyTavern互換のJSONまたはPNGカードからChatterキャラクタープロンプトを作成します。",
+        "button": "キャラクターをインポート",
+        "imported": "インポートしました: {{name}}"
+      },
+      "personas": {
+        "title": "ペルソナ",
+        "help": "SillyTavernのペルソナバックアップから名前と説明をインポートします。アバターファイルはこのバックアップ形式には含まれません。",
+        "button": "ペルソナをインポート",
+        "imported": "作成: {{created}}、更新: {{updated}}"
+      },
+      "chats": {
+        "title": "チャット",
+        "help": "メッセージ、日付、推論、利用可能なキャラクターとペルソナのバインドを含む1つまたは複数のJSONLチャットをインポートします。",
+        "button": "チャットをインポート",
+        "previewTitle": "SillyTavernチャットをインポート",
+        "previewSummary": "チャット: {{chats}} · メッセージ: {{messages}}",
+        "messages": "メッセージ: {{count}}",
+        "character": "キャラクター: {{name}}",
+        "user": "ユーザー: {{name}}",
+        "characterMatched": "キャラクターが見つかりました: {{name}}",
+        "characterNotMatched": "キャラクターが見つかりませんでした。チャットは自動プロンプト選択を使用します",
+        "personaMatched": "ペルソナが見つかりました: {{name}}",
+        "personaNotMatched": "ペルソナが見つかりませんでした。チャットは自動を使用します",
+        "ready": "準備完了",
+        "alreadyImported": "インポート済み",
+        "confirm": "{{count}}件のチャットをインポート",
+        "importing": "インポート中...",
+        "success": "チャットをインポートしました: 新規 {{created}} 件、既存 {{existing}} 件",
+        "importedResult": "作成: {{created}} 件、既存: {{existing}} 件",
+        "warnings": {
+          "missing_metadata": "メタデータ行がありません。メッセージは引き続きインポートできます。",
+          "system_messages_as_assistant": "システムメッセージはアシスタントメッセージとして保持されます。",
+          "empty_messages_skipped": "空のメッセージはスキップされます。",
+          "alternate_swipes_preserved_only": "代替スワイプはソースデータに保持されていますが、まだ表示されません。",
+          "attachments_not_imported": "SillyTavern JSONLエクスポートには添付ファイルが含まれていません。"
+        },
+        "errors": {
+          "format": "JSONLチャットファイルを選択してください",
+          "count": "一度に最大20件のチャットをインポートできます",
+          "size": "各チャットファイルは16 MB以下である必要があります",
+          "totalSize": "選択したチャットは合計32 MB以下である必要があります",
+          "invalid": "1つ以上のSillyTavernチャットを読み取れませんでした",
+          "import": "チャットをインポートできませんでした"
+        }
+      },
+      "openCharacter": "キャラクターを開く",
+      "openPersonas": "ペルソナを開く",
+      "openChat": "チャットを開く"
     }
   },
   "chat": {
@@ -419,7 +621,11 @@
       "branchNotAllowedInRoom": "共有ルームではブランチはまだ利用できません",
       "branchFailed": "ブランチの作成に失敗しました",
       "generationPerf": "最初のトークン: {{latency}}\n生成: {{gen}}\n合計: {{total}}\n速度: {{tps}} トークン/秒",
-      "firstTokenLatency": "最初のトークンまでの時間: {{latency}}"
+      "firstTokenLatency": "最初のトークンまでの時間: {{latency}}",
+      "variants": "応答のバリエーション",
+      "previousVariant": "前の応答バリアント",
+      "nextVariant": "次の応答バリアント",
+      "variantSwitchFailed": "応答バリアントの切り替えに失敗しました"
     },
     "reasoning": {
       "auto": "自動",
@@ -764,6 +970,109 @@
       "open": "添付ファイルを開く",
       "loadFailed": "このドキュメントを表示できませんでした。ダウンロードは可能です。",
       "unavailable": "このファイルのプレビューは利用できません。ダウンロードは可能です。"
+    },
+    "find": {
+      "open": "このチャット内を検索",
+      "placeholder": "このチャット内を検索",
+      "previous": "前の一致",
+      "next": "次の一致",
+      "close": "検索を閉じる"
+    },
+    "memory": {
+      "trigger": "メモリ",
+      "triggerTitle": "チャットメモリ",
+      "headerTitle": "チャットメモリ",
+      "headerHint": "設定は即座に適用されます",
+      "persona": "ペルソナ",
+      "personaAutomatic": "自動",
+      "personaGlobal": "グローバル: {{name}}",
+      "personaMain": "メイン",
+      "personaAccountName": "アカウント名: {{name}}",
+      "personasLoadFailed": "ペルソナを読み込めませんでした",
+      "personaSelectFailed": "このチャットのペルソナを選択できませんでした",
+      "character": "キャラクター",
+      "characterAutomatic": "自動",
+      "characterGlobal": "グローバル: {{name}}",
+      "characterDefault": "デフォルトキャラクター",
+      "characterRoomManaged": "この部屋のキャラクターはルームボットとして管理されています。",
+      "characterSelectFailed": "このチャットのキャラクターを選択できませんでした",
+      "messageSearch": {
+        "label": "メッセージ検索",
+        "all": "アクセス可能なすべてのチャット",
+        "current": "このチャットのみ"
+      },
+      "roleplayMode": {
+        "label": "ロールプレイモード",
+        "hint": "このチャットでは、長期記憶とチャット検索ツールのみが利用可能です。"
+      },
+      "search": {
+        "placeholder": "メモリを検索...",
+        "text": "テキスト",
+        "semantic": "意味で",
+        "action": "検索",
+        "searching": "検索中...",
+        "noResults": "メモリが見つかりません",
+        "failed": "メモリを検索できませんでした"
+      },
+      "globalSettings": {
+        "title": "メモリ",
+        "hint": "共有ベクターメモリは、「共有のみ」または「共有とこのチャット」モードを使用するチャットで利用できます。",
+        "spaceLabel": "共有メモリ",
+        "recordsTitle": "メモリ",
+        "empty": "まだ何もありません",
+        "creating": "作成中...",
+        "createSpaceAction": "共有メモリを作成",
+        "renameSpaceAction": "メモリの名前を変更",
+        "deleteSpaceAction": "メモリを削除",
+        "editRecordAction": "メモリを編集",
+        "deleteRecordAction": "メモリを削除",
+        "dialogs": {
+          "createTitle": "新しい共有メモリ",
+          "createText": "メモリスペースの名前を入力してください。",
+          "namePlaceholder": "メモリ名",
+          "renameTitle": "メモリの名前を変更",
+          "renameText": "メモリスペースの新しい名前を入力してください。",
+          "deleteSpaceTitle": "メモリを削除しますか？",
+          "deleteSpaceText": "スペース「{{name}}」とそのすべてのメモリが完全に削除されます。",
+          "editRecordTitle": "メモリを編集",
+          "editRecordText": "保存後、テキストは再度ベクトル化されます。保存するにはCtrl+Enterを押してください。",
+          "deleteRecordTitle": "メモリを削除しますか？",
+          "deleteRecordText": "メモリと関連するベクトルは完全に削除されます。"
+        },
+        "errors": {
+          "loadSpaces": "共有メモリを読み込めませんでした",
+          "loadRecords": "メモリを読み込めませんでした",
+          "selectSpace": "共有メモリを選択できませんでした",
+          "createSpace": "共有メモリを作成できませんでした",
+          "renameSpace": "メモリの名前を変更できませんでした",
+          "deleteSpace": "メモリを削除できませんでした",
+          "updateRecord": "メモリを更新できませんでした",
+          "deleteRecord": "メモリを削除できませんでした"
+        }
+      },
+      "modeLabel": "メモリを使用",
+      "mode": {
+        "off": "無効",
+        "general": "共有のみ",
+        "chat": "このチャットのみ",
+        "both": "共有とこのチャット"
+      },
+      "writeTargetLabel": "保存先",
+      "writeTarget": {
+        "general": "共有メモリ",
+        "chat": "このチャットのメモリ"
+      },
+      "chatMemoryTitle": "このチャットのメモリ",
+      "empty": "まだ何もありません",
+      "promptText": "メモリテキスト",
+      "confirmDelete": "このメモリを削除しますか？",
+      "loadSettingsFailed": "メモリ設定を読み込めませんでした",
+      "loadRecordsFailed": "メモリを読み込めませんでした",
+      "saveSettingsFailed": "メモリ設定を保存できませんでした"
+    },
+    "contextSummary": {
+      "title": "以前の会話の要約",
+      "meta": "{{count}} 件のメッセージ · {{model}}"
     }
   },
   "promptSelector": {

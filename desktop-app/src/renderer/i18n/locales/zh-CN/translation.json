@@ -163,7 +163,8 @@
       "connections": "已关联账户",
       "mail": "电子邮件",
       "billing": "账单",
-      "about": "关于"
+      "about": "关于",
+      "data": "数据"
     },
     "browser": {
       "help": "选择哪些 AI 浏览器操作需要你的确认。手动操作不受影响。",
@@ -206,7 +207,61 @@
       "timezone": "时区",
       "timezoneHelp": "用于本地时间、提醒和计划任务。",
       "timezoneDevice": "此设备上的当前时区",
-      "timezoneNotConfigured": "尚未确认；显示设备时区。"
+      "timezoneNotConfigured": "尚未确认；显示设备时区。",
+      "personas": {
+        "label": "角色",
+        "help": "主账号保留您的常规账号名称和核心记忆。每个聊天可以单独选择其他角色。",
+        "main": "主账号",
+        "accountName": "账户名称",
+        "accountNameValue": "账户名称：{{name}}",
+        "selectPlaceholder": "选择角色",
+        "mainBadge": "主要",
+        "personaBadge": "角色",
+        "otherSection": "其他角色",
+        "createTitle": "新建角色",
+        "createDescription": "添加名称、描述和核心记忆",
+        "namePlaceholder": "角色名称",
+        "descriptionPlaceholder": "简短描述",
+        "coreMemory": "核心记忆",
+        "allowCoreMemoryUpdate": "自动更新核心记忆",
+        "image": "头像",
+        "imageHelp": "当此角色激活时，显示在您的消息旁边。最大10 MB。",
+        "imageEmpty": "无头像",
+        "imageSaveError": "角色已保存，但头像无法保存",
+        "import": {
+          "button": "从SillyTavern导入",
+          "previewTitle": "导入角色",
+          "sourceLabel": "SillyTavern角色备份",
+          "found": "找到{{count}}个角色",
+          "newCount": "{{count}} 个新",
+          "updateCount": "{{count}} 个现有",
+          "defaultPersona": "默认：{{name}}",
+          "willCreate": "创建",
+          "willUpdate": "更新",
+          "more": "还有 {{count}} 个",
+          "confirm": "导入",
+          "importing": "正在导入...",
+          "success": "已导入角色：创建 {{created}} 个，更新 {{updated}} 个",
+          "warnings": {
+            "avatars_not_in_backup": "SillyTavern 角色备份不包含头像文件。您可以在导入后添加头像。",
+            "core_memory_truncated": "某些描述超过了800字符的核心记忆限制。完整源数据将保留以供未来迁移使用。",
+            "existing_personas_updated": "之前导入的具有相同SillyTavern键的角色将被更新。"
+          },
+          "errors": {
+            "format": "请选择SillyTavern角色备份JSON文件",
+            "size": "备份文件不能大于2 MB",
+            "read": "无法读取备份文件",
+            "invalid": "这不是有效的SillyTavern角色备份",
+            "import": "无法导入角色"
+          }
+        },
+        "deleted": "角色已删除；其聊天已切换为自动",
+        "errors": {
+          "select": "无法选择角色",
+          "nameRequired": "请输入角色名称",
+          "delete": "无法删除角色"
+        }
+      }
     },
     "prompt": {
       "style": "沟通风格",
@@ -225,7 +280,60 @@
       "detailAny": "无所谓",
       "generating": "生成中...",
       "generate": "生成",
-      "preview": "预览更改"
+      "preview": "预览更改",
+      "modeUsual": "常规",
+      "modeAdvanced": "高级",
+      "image": "图片",
+      "imageHelp": "附加到此提示的头像或插图。最大 10 MB。",
+      "imageEmpty": "无图像",
+      "imageChoose": "选择图像",
+      "imageFormatError": "请选择图像文件",
+      "imageSizeError": "图像大小不能超过10 MB",
+      "imageReadError": "无法读取图像",
+      "imageSaveError": "提示已保存，但图片无法保存",
+      "imageCropTitle": "选择可见区域",
+      "imageCropHelp": "在框内移动图片并调整缩放。",
+      "imageCropZoom": "缩放",
+      "imageCropApply": "应用",
+      "characterCard": {
+        "button": "导入角色卡",
+        "help": "兼容SillyTavern的JSON或PNG",
+        "reading": "读取中...",
+        "previewTitle": "角色卡预览",
+        "sectionsFound": "{{count}} 个提示部分",
+        "firstMessageSaved": "首条消息已保存",
+        "alternateGreetings": "已保存{{count}}条备用问候语",
+        "lorebookSaved": "Lorebook已保存以备后用",
+        "assetsSaved": "已保留{{count}}个资源",
+        "preservedNote": "不支持的卡片数据已保存在数据库中，不会添加到提示中。",
+        "import": "导入",
+        "importing": "正在导入...",
+        "imported": "角色卡已导入",
+        "startChat": "开始聊天",
+        "startingChat": "正在开始...",
+        "errors": {
+          "format": "请选择角色卡 JSON 或 PNG 文件",
+          "size": "角色卡大小不能超过 12 MB",
+          "read": "无法读取角色卡",
+          "invalid": "此文件不是有效的角色卡",
+          "import": "无法导入角色卡",
+          "startChat": "无法与此角色开始聊天"
+        }
+      },
+      "sections": {
+        "description": "描述",
+        "personality": "个性",
+        "scenario": "场景",
+        "examples": "示例",
+        "other": "其他"
+      },
+      "sectionPlaceholders": {
+        "description": "这个角色是谁……",
+        "personality": "特质和沟通风格……",
+        "scenario": "情境和背景……",
+        "examples": "示例对话……",
+        "other": "任何剩余说明..."
+      }
     },
     "voice": {
       "recognitionTitle": "语音识别",
@@ -239,7 +347,14 @@
       "voicePlaceholder": "选择声音...",
       "preview": "试听",
       "speechVolume": "语音音量",
-      "effectsVolume": "音效音量"
+      "effectsVolume": "音效音量",
+      "recognitionSource": "识别处理",
+      "recognitionSourceHint": "本地Whisper使用此计算机。服务器处理适用于性能较弱的PC，且仅在管理员配置后可用。",
+      "recognitionSourceLocal": "在此计算机上",
+      "recognitionSourceLocalHint": "本地Whisper",
+      "recognitionSourceServer": "在服务器上",
+      "recognitionSourceServerReady": "可用 · {{model}}",
+      "recognitionSourceServerUnavailable": "不可用或未配置"
     },
     "restrictions": {
       "help": "管理可用的AI工具。更改立即生效。",
@@ -336,7 +451,8 @@
       "badLogin": "登录格式无效",
       "loginRequired": "请输入当前密码和新登录名",
       "timezoneSaved": "时区已保存",
-      "timezoneSaveFailed": "无法保存时区"
+      "timezoneSaveFailed": "无法保存时区",
+      "contextLimitReduced": "已保存下限。对话摘要将在下一条消息时重建。"
     },
     "connections": {
       "help": "管理可以登录并使用此账户的服务。",
@@ -373,6 +489,92 @@
       "upToDate": "您正在使用最新版本",
       "updateCheckFailed": "无法检查更新",
       "updateCheckUnavailable": "开发模式下无法检查更新"
+    },
+    "data": {
+      "help": "从其他应用程序导入数据。Chatter 备份和导出功能稍后将在此添加。",
+      "sillyTavern": {
+        "title": "从 SillyTavern 迁移",
+        "help": "一次性导入完整的备份存档，或手动迁移单个数据。"
+      },
+      "backup": {
+        "title": "完整的 SillyTavern 备份",
+        "help": "从SillyTavern数据ZIP导入角色、带头像的人设和私聊。",
+        "button": "选择ZIP备份",
+        "reading": "正在检查归档...",
+        "previewTitle": "导入SillyTavern备份",
+        "previewHelp": "导入前请查看检测到的数据。",
+        "newCount": "新增：{{count}}",
+        "existingCount": "已存在：{{count}}",
+        "updateCount": "将更新：{{count}}",
+        "avatarCount": "头像：{{count}}",
+        "confirm": "导入",
+        "importing": "正在导入...",
+        "success": "导入完成：{{characters}} 个角色，{{personas}} 个人设，{{chats}} 个聊天",
+        "importedResult": "已创建角色：{{characters}}，已处理人设：{{personas}}，已创建聊天：{{chats}}",
+        "warnings": {
+          "group_chats_not_supported": "暂不支持导入群聊。",
+          "worlds_not_supported": "暂不支持导入知识库和世界信息。",
+          "other_data_ignored": "存档中的其他设置、扩展和服务文件不会更改 Chatter。",
+          "personas_not_found": "在 settings.json 中未找到任何角色。",
+          "persona_avatar_errors": "部分角色头像无法导入。"
+        },
+        "errors": {
+          "format": "请选择 SillyTavern ZIP 备份",
+          "size": "存档大小不得超过 256 MB",
+          "invalid": "无法读取 SillyTavern 备份",
+          "import": "无法导入 SillyTavern 备份"
+        }
+      },
+      "character": {
+        "title": "角色卡",
+        "help": "从兼容 SillyTavern 的 JSON 或 PNG 卡片创建 Chatter 角色提示。",
+        "button": "导入角色",
+        "imported": "已导入：{{name}}"
+      },
+      "personas": {
+        "title": "角色设定",
+        "help": "从SillyTavern角色设定备份中导入名称和描述。此备份格式不包含头像文件。",
+        "button": "导入角色设定",
+        "imported": "已创建：{{created}}，已更新：{{updated}}"
+      },
+      "chats": {
+        "title": "聊天记录",
+        "help": "导入一个或多个包含消息、日期、推理以及可用角色和人格绑定的JSONL聊天记录。",
+        "button": "导入聊天记录",
+        "previewTitle": "导入SillyTavern聊天记录",
+        "previewSummary": "聊天记录：{{chats}} · 消息：{{messages}}",
+        "messages": "消息：{{count}}",
+        "character": "角色：{{name}}",
+        "user": "用户：{{name}}",
+        "characterMatched": "找到角色：{{name}}",
+        "characterNotMatched": "未找到角色；聊天将使用自动提示选择",
+        "personaMatched": "找到角色：{{name}}",
+        "personaNotMatched": "未找到角色；聊天将使用自动模式",
+        "ready": "就绪",
+        "alreadyImported": "已导入",
+        "confirm": "导入 {{count}} 个聊天",
+        "importing": "正在导入...",
+        "success": "已导入聊天：{{created}} 个新聊天，{{existing}} 个已存在",
+        "importedResult": "已创建：{{created}}，已存在：{{existing}}",
+        "warnings": {
+          "missing_metadata": "缺少元数据行；消息仍可导入。",
+          "system_messages_as_assistant": "系统消息将保留为助手消息。",
+          "empty_messages_skipped": "空消息将被跳过。",
+          "alternate_swipes_preserved_only": "备用滑动保留在源数据中，但尚未显示。",
+          "attachments_not_imported": "SillyTavern JSONL 导出不包含附件文件。"
+        },
+        "errors": {
+          "format": "选择 JSONL 聊天文件",
+          "count": "您一次最多可以导入 20 个聊天",
+          "size": "每个聊天文件不得超过16 MB",
+          "totalSize": "所选聊天文件总大小不得超过32 MB",
+          "invalid": "无法读取一个或多个SillyTavern聊天记录",
+          "import": "无法导入聊天记录"
+        }
+      },
+      "openCharacter": "打开角色",
+      "openPersonas": "打开角色",
+      "openChat": "打开聊天"
     }
   },
   "chat": {
@@ -419,7 +621,11 @@
       "branchNotAllowedInRoom": "共享房间中暂不支持分支",
       "branchFailed": "创建分支失败",
       "generationPerf": "首个令牌：{{latency}}\n生成：{{gen}}\n总计：{{total}}\n速度：{{tps}} 令牌/秒",
-      "firstTokenLatency": "首个令牌时间：{{latency}}"
+      "firstTokenLatency": "首个令牌时间：{{latency}}",
+      "variants": "回复变体",
+      "previousVariant": "上一个回复变体",
+      "nextVariant": "下一个回复变体",
+      "variantSwitchFailed": "切换回复变体失败"
     },
     "reasoning": {
       "auto": "自动",
@@ -764,6 +970,109 @@
       "open": "打开附件",
       "loadFailed": "无法显示此文档。您仍可下载它。",
       "unavailable": "此文件不支持预览。您仍可下载它。"
+    },
+    "find": {
+      "open": "在此聊天中搜索",
+      "placeholder": "在此聊天中搜索",
+      "previous": "上一个匹配项",
+      "next": "下一个匹配项",
+      "close": "关闭搜索"
+    },
+    "memory": {
+      "trigger": "记忆",
+      "triggerTitle": "聊天记忆",
+      "headerTitle": "聊天记忆",
+      "headerHint": "设置立即生效",
+      "persona": "角色",
+      "personaAutomatic": "自动",
+      "personaGlobal": "全局：{{name}}",
+      "personaMain": "主要",
+      "personaAccountName": "账户名：{{name}}",
+      "personasLoadFailed": "无法加载角色",
+      "personaSelectFailed": "无法为此聊天选择角色",
+      "character": "角色",
+      "characterAutomatic": "自动",
+      "characterGlobal": "全局：{{name}}",
+      "characterDefault": "默认角色",
+      "characterRoomManaged": "此房间中的角色作为房间机器人进行管理。",
+      "characterSelectFailed": "无法为此聊天选择角色",
+      "messageSearch": {
+        "label": "消息搜索",
+        "all": "所有可访问的聊天",
+        "current": "仅此聊天"
+      },
+      "roleplayMode": {
+        "label": "角色扮演模式",
+        "hint": "在此聊天中，仅长期记忆和聊天搜索工具保持可用。"
+      },
+      "search": {
+        "placeholder": "搜索记忆...",
+        "text": "文本",
+        "semantic": "按含义",
+        "action": "搜索",
+        "searching": "正在搜索...",
+        "noResults": "未找到记忆",
+        "failed": "无法搜索记忆"
+      },
+      "globalSettings": {
+        "title": "记忆",
+        "hint": "共享向量记忆可在使用“仅共享”或“共享及此聊天模式”的聊天中使用。",
+        "spaceLabel": "共享记忆",
+        "recordsTitle": "记忆",
+        "empty": "这里还没有内容",
+        "creating": "创建中...",
+        "createSpaceAction": "创建共享记忆",
+        "renameSpaceAction": "重命名记忆",
+        "deleteSpaceAction": "删除记忆",
+        "editRecordAction": "编辑记忆",
+        "deleteRecordAction": "删除记忆",
+        "dialogs": {
+          "createTitle": "新建共享记忆",
+          "createText": "为记忆空间输入名称。",
+          "namePlaceholder": "记忆名称",
+          "renameTitle": "重命名记忆",
+          "renameText": "为记忆空间输入新名称。",
+          "deleteSpaceTitle": "删除记忆？",
+          "deleteSpaceText": "空间“{{name}}”及其所有记忆将被永久删除。",
+          "editRecordTitle": "编辑记忆",
+          "editRecordText": "保存后文本将重新向量化。按Ctrl+Enter保存。",
+          "deleteRecordTitle": "删除记忆？",
+          "deleteRecordText": "该记忆及其关联的向量将被永久删除。"
+        },
+        "errors": {
+          "loadSpaces": "无法加载共享记忆",
+          "loadRecords": "无法加载记忆",
+          "selectSpace": "无法选择共享记忆",
+          "createSpace": "无法创建共享记忆",
+          "renameSpace": "无法重命名记忆",
+          "deleteSpace": "无法删除记忆",
+          "updateRecord": "无法更新记忆",
+          "deleteRecord": "无法删除记忆"
+        }
+      },
+      "modeLabel": "使用记忆",
+      "mode": {
+        "off": "已禁用",
+        "general": "仅共享",
+        "chat": "仅此聊天",
+        "both": "共享和此聊天"
+      },
+      "writeTargetLabel": "保存到",
+      "writeTarget": {
+        "general": "共享记忆",
+        "chat": "此聊天的记忆"
+      },
+      "chatMemoryTitle": "此聊天的记忆",
+      "empty": "这里还没有内容",
+      "promptText": "记忆文本",
+      "confirmDelete": "删除此记忆？",
+      "loadSettingsFailed": "无法加载记忆设置",
+      "loadRecordsFailed": "无法加载记忆",
+      "saveSettingsFailed": "无法保存记忆设置"
+    },
+    "contextSummary": {
+      "title": "更早的对话摘要",
+      "meta": "{{count}} 条消息 · {{model}}"
     }
   },
   "promptSelector": {

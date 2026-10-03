@@ -88,7 +88,10 @@
     "coefficientSaved": "Coeficiente salvo",
     "cancel": "Cancelar",
     "on": "Ativado",
-    "off": "Desligado"
+    "off": "Desligado",
+    "save": "Salvar",
+    "savingChanges": "Salvando…",
+    "delete": "Excluir"
   },
   "models": {
     "auto": {
@@ -294,6 +297,11 @@
         "name": "Geração de Imagens",
         "description": "Gerar imagens via API externa",
         "group": "Mídia"
+      },
+      "transcription": {
+        "name": "Transcrição de Voz",
+        "description": "Reconhecimento de fala no servidor",
+        "group": "Mídia"
       }
     },
     "secretField": {
@@ -312,7 +320,64 @@
         "sectionIntro": "Uma API separada compatível com OpenAI que converte texto em vetores para Pinecone.",
         "apiUrlLabel": "URL da API",
         "modelLabel": "Modelo",
-        "apiKeyLabel": "Chave da API do provedor de embedding"
+        "apiKeyLabel": "Chave da API do provedor de embedding",
+        "providerLabel": "Provedor",
+        "priceLabel": "Preço de entrada, $ / 1M tokens",
+        "migrateAction": "Re-incorporar e alterar",
+        "migrating": "Migrando…",
+        "migrationComplete": "Nova coleção ativa. Vetores: {{count}}.",
+        "settingsSaved": "Configurações de memória vetorial salvas."
+      },
+      "storage": {
+        "title": "Mecanismo de vetores",
+        "intro": "Esta seleção controla a pesquisa vetorial e novas gravações. O Qdrant é incluído com o Chatter e é ativado somente após uma migração verificada.",
+        "label": "Mecanismo de vetores ativo",
+        "pineconeHint": "Índice vetorial remoto",
+        "qdrantHint": "Índice vetorial local incluído com o Chatter",
+        "migrateAction": "Migrar e alternar",
+        "switchAction": "Alternar armazenamento",
+        "migrateTitle": "Migrar memória para Qdrant?",
+        "switchTitle": "Alternar para Pinecone?",
+        "migrateText": "Todos os vetores e metadados serão copiados do Pinecone sem regenerar embeddings.",
+        "backupText": "O Pinecone não será limpo. O Qdrant se torna ativo somente após cada vetor copiado ser verificado.",
+        "switchText": "O Pinecone se tornará ativo. Os dados do Qdrant não são migrados de volta automaticamente.",
+        "cancel": "Cancelar",
+        "migrating": "Migrando…",
+        "switched": "Armazenamento alterado.",
+        "result": "Vetores migrados: {{vectors}}; memórias: {{records}}."
+      },
+      "reranking": {
+        "sectionTitle": "Modelo de ranqueamento",
+        "sectionIntro": "Reordena 20 candidatos vetoriais usando seus melhores fragmentos correspondentes e, em seguida, aplica o limite de relevância.",
+        "enabledLabel": "Ativar reordenação para busca de memória",
+        "priceLabel": "Preço, $ / busca",
+        "thresholdLabel": "Pontuação mínima de relevância · 0–1",
+        "resultLimitLabel": "Memórias retornadas · 1–20"
+      },
+      "collections": {
+        "title": "Versões de memória",
+        "intro": "Apenas coleções gerenciadas pelo Chatter são exibidas. Backups nunca são excluídos automaticamente.",
+        "vectorCount": "{{count}} vetores",
+        "rollbackAction": "Voltar",
+        "rollbackComplete": "O backup selecionado está ativo.",
+        "deleteComplete": "Coleção excluída.",
+        "status": {
+          "active": "Ativo",
+          "backup": "Backup",
+          "migrating": "Migrando",
+          "failed": "Falhou"
+        }
+      },
+      "confirm": {
+        "migrateTitle": "Alterar modelo de incorporação?",
+        "migrateText": "Todos os blocos de memória armazenados serão incorporados em uma nova coleção local Qdrant. As buscas continuam usando a coleção atual; as gravações de memória pausam até que a verificação termine.",
+        "migrateAction": "Migrar",
+        "activateTitle": "Alternar para este backup?",
+        "activateText": "As memórias SQLite atuais serão reincorporadas com o modelo deste backup em uma nova coleção. A coleção ativa será mantida como backup.",
+        "activateAction": "Alternar",
+        "deleteTitle": "Excluir esta coleção?",
+        "deleteText": "Seus vetores serão removidos permanentemente do Qdrant. O texto de memória canônica no SQLite não é afetado.",
+        "deleteAction": "Excluir"
       }
     },
     "webSearch": {
@@ -421,9 +486,33 @@
       "capabilitySupported": "suportado",
       "capabilityNotClaimed": "não reivindicado",
       "enabled": "Geração de imagens ativada",
-      "savingEnabled": "Salvando configuração de geração de imagens…"
+      "savingEnabled": "Salvando configuração de geração de imagens…",
+      "providerLabel": "Provedor",
+      "providerHint": "Alterne a qualquer momento — ambos os provedores mantêm suas chaves",
+      "apiTokenLabel": "Token da API Cloudflare",
+      "accountIdLabel": "ID da conta Cloudflare",
+      "accountIdHint": "Visível no painel da Cloudflare (Workers AI)",
+      "customModelLabel": "Modelo personalizado…",
+      "defaultLabel": "Padrão",
+      "img2imgLabel": "Imagem para imagem (referências)",
+      "img2imgHint": "Permite que o bot anexe imagens de referência para edição (o modelo deve suportá-las)"
     },
-    "statusDisabled": "Desativado"
+    "statusDisabled": "Desativado",
+    "transcription": {
+      "pageDescription": "Reconhecimento de fala no servidor para o Chatter Desktop via OpenRouter ou uma API compatível com OpenAI.",
+      "sectionTitle": "Transcrição",
+      "sectionIntro": "O Desktop envia um arquivo WAV mono de 16 kHz. A chave permanece criptografada no servidor.",
+      "enabled": "Ativar transcrição do servidor",
+      "provider": "Provedor",
+      "apiUrl": "URL da API",
+      "model": "Modelo de transcrição",
+      "pricePerMinute": "Preço, $ / minuto de áudio",
+      "check": "Verificar disponibilidade",
+      "checking": "Verificando…",
+      "available": "Disponível · {{model}}",
+      "unavailable": "Indisponível · {{error}}",
+      "saved": "Configurações de transcrição salvas."
+    }
   },
   "services": {
     "telegram": {

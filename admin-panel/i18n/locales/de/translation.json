@@ -88,7 +88,10 @@
     "coefficientSaved": "Koeffizient gespeichert",
     "cancel": "Abbrechen",
     "on": "Ein",
-    "off": "Aus"
+    "off": "Aus",
+    "save": "Speichern",
+    "savingChanges": "Speichern…",
+    "delete": "Löschen"
   },
   "models": {
     "auto": {
@@ -294,6 +297,11 @@
         "name": "Bildgenerierung",
         "description": "Bilder über externe API generieren",
         "group": "Medien"
+      },
+      "transcription": {
+        "name": "Sprachtranskription",
+        "description": "Serverseitige Spracherkennung",
+        "group": "Medien"
       }
     },
     "secretField": {
@@ -312,7 +320,64 @@
         "sectionIntro": "Eine separate OpenAI-kompatible API, die Text in Vektoren für Pinecone umwandelt.",
         "apiUrlLabel": "API-URL",
         "modelLabel": "Modell",
-        "apiKeyLabel": "API-Schlüssel des Embedding-Anbieters"
+        "apiKeyLabel": "API-Schlüssel des Embedding-Anbieters",
+        "providerLabel": "Anbieter",
+        "priceLabel": "Eingabepreis, $ / 1M Tokens",
+        "migrateAction": "Neu einbetten und wechseln",
+        "migrating": "Migration…",
+        "migrationComplete": "Neue Sammlung ist aktiv. Vektoren: {{count}}.",
+        "settingsSaved": "Einstellungen für Vektorspeicher gespeichert."
+      },
+      "storage": {
+        "title": "Vektor-Engine",
+        "intro": "Diese Auswahl steuert die Vektorsuche und neue Schreibvorgänge. Qdrant ist in Chatter gebündelt und wird erst nach einer verifizierten Migration aktiviert.",
+        "label": "Aktive Vektor-Engine",
+        "pineconeHint": "Remote-Vektorindex",
+        "qdrantHint": "Lokaler Vektorindex, gebündelt mit Chatter",
+        "migrateAction": "Migrieren und wechseln",
+        "switchAction": "Speicher wechseln",
+        "migrateTitle": "Speicher zu Qdrant migrieren?",
+        "switchTitle": "Zu Pinecone wechseln?",
+        "migrateText": "Alle Vektoren und Metadaten werden von Pinecone kopiert, ohne Embeddings neu zu generieren.",
+        "backupText": "Pinecone wird nicht geleert. Qdrant wird erst aktiv, nachdem jeder kopierte Vektor verifiziert wurde.",
+        "switchText": "Pinecone wird aktiv. Qdrant-Daten werden nicht automatisch zurück migriert.",
+        "cancel": "Abbrechen",
+        "migrating": "Migration läuft…",
+        "switched": "Speicher gewechselt.",
+        "result": "Migrierte Vektoren: {{vectors}}; Erinnerungen: {{records}}."
+      },
+      "reranking": {
+        "sectionTitle": "Ranking-Modell",
+        "sectionIntro": "Bewertet 20 Vektorkandidaten anhand ihrer besten übereinstimmenden Fragmente neu und wendet dann den Relevanzschwellenwert an.",
+        "enabledLabel": "Reranking für die Speichersuche aktivieren",
+        "priceLabel": "Preis, $ / Suche",
+        "thresholdLabel": "Mindestrelevanzwert · 0–1",
+        "resultLimitLabel": "Zurückgegebene Erinnerungen · 1–20"
+      },
+      "collections": {
+        "title": "Speicherversionen",
+        "intro": "Nur von Chatter verwaltete Sammlungen werden angezeigt. Backups werden niemals automatisch gelöscht.",
+        "vectorCount": "{{count}} Vektoren",
+        "rollbackAction": "Zurückwechseln",
+        "rollbackComplete": "Das ausgewählte Backup ist aktiv.",
+        "deleteComplete": "Sammlung gelöscht.",
+        "status": {
+          "active": "Aktiv",
+          "backup": "Backup",
+          "migrating": "Migration läuft",
+          "failed": "Fehlgeschlagen"
+        }
+      },
+      "confirm": {
+        "migrateTitle": "Embedding-Modell ändern?",
+        "migrateText": "Alle gespeicherten Speicher-Chunks werden in eine neue lokale Qdrant-Sammlung eingebettet. Suchen verwenden weiterhin die aktuelle Sammlung; Speicherschreibvorgänge pausieren, bis die Überprüfung abgeschlossen ist.",
+        "migrateAction": "Migrieren",
+        "activateTitle": "Zu diesem Backup wechseln?",
+        "activateText": "Aktuelle SQLite-Speicher werden mit dem Modell dieses Backups in eine neue Sammlung neu eingebettet. Die aktive Sammlung wird als Backup beibehalten.",
+        "activateAction": "Wechseln",
+        "deleteTitle": "Diese Sammlung löschen?",
+        "deleteText": "Ihre Vektoren werden dauerhaft aus Qdrant entfernt. Der kanonische Speichertext in SQLite ist nicht betroffen.",
+        "deleteAction": "Löschen"
       }
     },
     "webSearch": {
@@ -421,9 +486,33 @@
       "capabilitySupported": "unterstützt",
       "capabilityNotClaimed": "nicht beansprucht",
       "enabled": "Bildgenerierung aktiviert",
-      "savingEnabled": "Bildgenerierungseinstellung wird gespeichert…"
+      "savingEnabled": "Bildgenerierungseinstellung wird gespeichert…",
+      "providerLabel": "Anbieter",
+      "providerHint": "Jederzeit wechseln – beide Anbieter behalten ihre Schlüssel",
+      "apiTokenLabel": "Cloudflare-API-Token",
+      "accountIdLabel": "Cloudflare-Konto-ID",
+      "accountIdHint": "Sichtbar im Cloudflare-Dashboard (Workers AI)",
+      "customModelLabel": "Benutzerdefiniertes Modell…",
+      "defaultLabel": "Standard",
+      "img2imgLabel": "Bild-zu-Bild (Referenzen) ",
+      "img2imgHint": "Ermöglicht dem Bot, Referenzbilder für die Bearbeitung anzuhängen (das Modell muss diese unterstützen)"
     },
-    "statusDisabled": "Deaktiviert"
+    "statusDisabled": "Deaktiviert",
+    "transcription": {
+      "pageDescription": "Serverseitige Spracherkennung für Chatter Desktop über OpenRouter oder eine OpenAI-kompatible API.",
+      "sectionTitle": "Transkription",
+      "sectionIntro": "Desktop sendet eine Mono-16-kHz-WAV-Datei. Der Schlüssel bleibt auf dem Server verschlüsselt.",
+      "enabled": "Server-Transkription aktivieren",
+      "provider": "Anbieter",
+      "apiUrl": "API-URL",
+      "model": "Transkriptionsmodell",
+      "pricePerMinute": "Preis, $ / Minute Audio",
+      "check": "Verfügbarkeit prüfen",
+      "checking": "Wird geprüft…",
+      "available": "Verfügbar · {{model}}",
+      "unavailable": "Nicht verfügbar · {{error}}",
+      "saved": "Transkriptionseinstellungen gespeichert."
+    }
   },
   "services": {
     "telegram": {

@@ -89,7 +89,10 @@
     "coefficientSaved": "Koeficient uložen",
     "cancel": "Zrušit",
     "on": "Zapnuto",
-    "off": "Vypnuto"
+    "off": "Vypnuto",
+    "save": "Uložit",
+    "savingChanges": "Ukládání…",
+    "delete": "Smazat"
   },
   "ui": {
     "search": "Hledat…",
@@ -280,6 +283,11 @@
         "name": "Generování obrázků",
         "description": "Generovat obrázky přes externí API",
         "group": "Média"
+      },
+      "transcription": {
+        "name": "Přepis hlasu",
+        "description": "Rozpoznávání řeči na straně serveru",
+        "group": "Média"
       }
     },
     "secretField": {
@@ -298,7 +306,64 @@
         "sectionIntro": "Samostatné API kompatibilní s OpenAI, které převádí text na vektory pro Pinecone.",
         "apiUrlLabel": "URL API",
         "modelLabel": "Model",
-        "apiKeyLabel": "API klíč poskytovatele embeddingu"
+        "apiKeyLabel": "API klíč poskytovatele embeddingu",
+        "providerLabel": "Poskytovatel",
+        "priceLabel": "Vstupní cena, $ / 1M tokenů",
+        "migrateAction": "Znovu vložit a přepnout",
+        "migrating": "Migrace…",
+        "migrationComplete": "Nová kolekce je aktivní. Vektory: {{count}}.",
+        "settingsSaved": "Nastavení vektorové paměti uloženo."
+      },
+      "storage": {
+        "title": "Vektorový engine",
+        "intro": "Tento výběr řídí vektorové vyhledávání a nové zápisy. Qdrant je součástí Chatteru a aktivuje se až po ověřené migraci.",
+        "label": "Aktivní vektorový engine",
+        "pineconeHint": "Vzdálený vektorový index",
+        "qdrantHint": "Místní vektorový index dodávaný s Chatter",
+        "migrateAction": "Migrovat a přepnout",
+        "switchAction": "Přepnout úložiště",
+        "migrateTitle": "Migrovat paměť do Qdrant?",
+        "switchTitle": "Přepnout na Pinecone?",
+        "migrateText": "Všechny vektory a metadata budou zkopírovány z Pinecone bez regenerace embeddingů.",
+        "backupText": "Pinecone nebude vymazán. Qdrant se stane aktivním až po ověření každého zkopírovaného vektoru.",
+        "switchText": "Pinecone se stane aktivním. Data Qdrant nejsou automaticky migrována zpět.",
+        "cancel": "Zrušit",
+        "migrating": "Migrace…",
+        "switched": "Úložiště přepnuto.",
+        "result": "Migrováno vektorů: {{vectors}}; vzpomínek: {{records}}."
+      },
+      "reranking": {
+        "sectionTitle": "Model hodnocení",
+        "sectionIntro": "Přehodnotí 20 vektorových kandidátů pomocí jejich nejlépe odpovídajících fragmentů a poté aplikuje práh relevance.",
+        "enabledLabel": "Povolit přeřazení pro vyhledávání v paměti",
+        "priceLabel": "Cena, $ / vyhledávání",
+        "thresholdLabel": "Minimální skóre relevance · 0–1",
+        "resultLimitLabel": "Vrácené vzpomínky · 1–20"
+      },
+      "collections": {
+        "title": "Verze paměti",
+        "intro": "Zobrazují se pouze kolekce spravované aplikací Chatter. Zálohy se nikdy automaticky nemažou.",
+        "vectorCount": "{{count}} vektorů",
+        "rollbackAction": "Přepnout zpět",
+        "rollbackComplete": "Vybraná záloha je aktivní.",
+        "deleteComplete": "Kolekce byla smazána.",
+        "status": {
+          "active": "Aktivní",
+          "backup": "Záloha",
+          "migrating": "Migrace",
+          "failed": "Selhalo"
+        }
+      },
+      "confirm": {
+        "migrateTitle": "Změnit model vložení?",
+        "migrateText": "Všechny uložené paměťové bloky budou vloženy do nové lokální kolekce Qdrant. Vyhledávání nadále používá aktuální kolekci; zápis paměti se pozastaví, dokud nebude ověření dokončeno.",
+        "migrateAction": "Migrovat",
+        "activateTitle": "Přepnout na tuto zálohu?",
+        "activateText": "Aktuální paměti SQLite budou znovu vloženy s modelem této zálohy do nové kolekce. Aktivní kolekce bude zachována jako záloha.",
+        "activateAction": "Přepnout",
+        "deleteTitle": "Smazat tuto kolekci?",
+        "deleteText": "Její vektory budou trvale odstraněny z Qdrant. Kanonický paměťový text v SQLite není ovlivněn.",
+        "deleteAction": "Smazat"
       }
     },
     "webSearch": {
@@ -407,9 +472,33 @@
       "capabilitySupported": "podporováno",
       "capabilityNotClaimed": "není deklarováno",
       "enabled": "Generování obrázků povoleno",
-      "savingEnabled": "Ukládání nastavení generování obrázků…"
+      "savingEnabled": "Ukládání nastavení generování obrázků…",
+      "providerLabel": "Poskytovatel",
+      "providerHint": "Přepněte kdykoli — oba poskytovatelé si uchovávají své klíče",
+      "apiTokenLabel": "Token API Cloudflare",
+      "accountIdLabel": "ID účtu Cloudflare",
+      "accountIdHint": "Viditelný v řídicím panelu Cloudflare (Workers AI)",
+      "customModelLabel": "Vlastní model…",
+      "defaultLabel": "Výchozí",
+      "img2imgLabel": "Obrázek na obrázek (reference)",
+      "img2imgHint": "Umožní botovi připojit referenční obrázky pro úpravy (model je musí podporovat)"
     },
-    "statusDisabled": "Zakázáno"
+    "statusDisabled": "Zakázáno",
+    "transcription": {
+      "pageDescription": "Serverová rozpoznávání řeči pro Chatter Desktop přes OpenRouter nebo API kompatibilní s OpenAI.",
+      "sectionTitle": "Přepis",
+      "sectionIntro": "Desktop odesílá mono 16 kHz WAV soubor. Klíč zůstává šifrovaný na serveru.",
+      "enabled": "Povolit přepis na serveru",
+      "provider": "Poskytovatel",
+      "apiUrl": "URL API",
+      "model": "Model přepisu",
+      "pricePerMinute": "Cena, $ / minuta zvuku",
+      "check": "Zkontrolovat dostupnost",
+      "checking": "Kontroluji…",
+      "available": "Dostupné · {{model}}",
+      "unavailable": "Nedostupné · {{error}}",
+      "saved": "Nastavení přepisu uloženo."
+    }
   },
   "services": {
     "telegram": {

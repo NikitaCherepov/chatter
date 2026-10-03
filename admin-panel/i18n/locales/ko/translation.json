@@ -88,7 +88,10 @@
     "coefficientSaved": "계수 저장됨",
     "cancel": "취소",
     "on": "켜짐",
-    "off": "끔"
+    "off": "끔",
+    "save": "저장",
+    "savingChanges": "저장 중…",
+    "delete": "삭제"
   },
   "models": {
     "auto": {
@@ -294,6 +297,11 @@
         "name": "이미지 생성",
         "description": "외부 API를 통해 이미지 생성",
         "group": "미디어"
+      },
+      "transcription": {
+        "name": "음성 전사",
+        "description": "서버 측 음성 인식",
+        "group": "미디어"
       }
     },
     "secretField": {
@@ -312,7 +320,64 @@
         "sectionIntro": "Pinecone을 위해 텍스트를 벡터로 변환하는 별도의 OpenAI 호환 API입니다.",
         "apiUrlLabel": "API URL",
         "modelLabel": "모델",
-        "apiKeyLabel": "임베딩 제공자 API 키"
+        "apiKeyLabel": "임베딩 제공자 API 키",
+        "providerLabel": "공급자",
+        "priceLabel": "입력 가격, $ / 1M 토큰",
+        "migrateAction": "재임베딩 및 전환",
+        "migrating": "마이그레이션 중…",
+        "migrationComplete": "새 컬렉션이 활성화되었습니다. 벡터: {{count}}개.",
+        "settingsSaved": "벡터 메모리 설정이 저장되었습니다."
+      },
+      "storage": {
+        "title": "벡터 엔진",
+        "intro": "이 선택은 벡터 검색 및 새 쓰기를 제어합니다. Qdrant는 Chatter에 번들로 제공되며 검증된 마이그레이션 후에만 활성화됩니다.",
+        "label": "활성 벡터 엔진",
+        "pineconeHint": "원격 벡터 인덱스",
+        "qdrantHint": "Chatter에 번들된 로컬 벡터 인덱스",
+        "migrateAction": "마이그레이션 및 전환",
+        "switchAction": "스토리지 전환",
+        "migrateTitle": "메모리를 Qdrant로 마이그레이션할까요?",
+        "switchTitle": "Pinecone으로 전환할까요?",
+        "migrateText": "모든 벡터와 메타데이터는 임베딩을 다시 생성하지 않고 Pinecone에서 복사됩니다.",
+        "backupText": "Pinecone은 지워지지 않습니다. Qdrant는 복사된 모든 벡터가 검증된 후에만 활성화됩니다.",
+        "switchText": "Pinecone이 활성화됩니다. Qdrant 데이터는 자동으로 다시 마이그레이션되지 않습니다.",
+        "cancel": "취소",
+        "migrating": "마이그레이션 중…",
+        "switched": "스토리지가 전환되었습니다.",
+        "result": "마이그레이션된 벡터: {{vectors}}; 메모리: {{records}}."
+      },
+      "reranking": {
+        "sectionTitle": "랭킹 모델",
+        "sectionIntro": "최적의 일치 조각을 사용하여 20개의 벡터 후보를 재랭킹한 후 관련성 임계값을 적용합니다.",
+        "enabledLabel": "메모리 검색에 재순위화 활성화",
+        "priceLabel": "가격, $ / 검색",
+        "thresholdLabel": "최소 관련성 점수 · 0–1",
+        "resultLimitLabel": "반환된 메모리 · 1–20"
+      },
+      "collections": {
+        "title": "메모리 버전",
+        "intro": "Chatter가 관리하는 컬렉션만 표시됩니다. 백업은 자동으로 삭제되지 않습니다.",
+        "vectorCount": "{{count}} 벡터",
+        "rollbackAction": "되돌리기",
+        "rollbackComplete": "선택한 백업이 활성화되었습니다.",
+        "deleteComplete": "컬렉션이 삭제되었습니다.",
+        "status": {
+          "active": "활성",
+          "backup": "백업",
+          "migrating": "마이그레이션 중",
+          "failed": "실패"
+        }
+      },
+      "confirm": {
+        "migrateTitle": "임베딩 모델을 변경하시겠습니까?",
+        "migrateText": "저장된 모든 메모리 청크는 새 로컬 Qdrant 컬렉션에 임베딩됩니다. 검색은 현재 컬렉션을 계속 사용하며, 검증이 완료될 때까지 메모리 쓰기가 일시 중지됩니다.",
+        "migrateAction": "마이그레이션",
+        "activateTitle": "이 백업으로 전환하시겠습니까?",
+        "activateText": "현재 SQLite 메모리는 이 백업의 모델로 새 컬렉션에 다시 임베딩됩니다. 활성 컬렉션은 백업으로 유지됩니다.",
+        "activateAction": "전환",
+        "deleteTitle": "이 컬렉션을 삭제하시겠습니까?",
+        "deleteText": "벡터는 Qdrant에서 영구적으로 제거됩니다. SQLite의 표준 메모리 텍스트는 영향을 받지 않습니다.",
+        "deleteAction": "삭제"
       }
     },
     "webSearch": {
@@ -421,9 +486,33 @@
       "capabilitySupported": "지원됨",
       "capabilityNotClaimed": "주장되지 않음",
       "enabled": "이미지 생성 활성화됨",
-      "savingEnabled": "이미지 생성 설정 저장 중…"
+      "savingEnabled": "이미지 생성 설정 저장 중…",
+      "providerLabel": "공급자",
+      "providerHint": "언제든지 전환하세요 — 두 공급자 모두 키를 유지합니다",
+      "apiTokenLabel": "Cloudflare API 토큰",
+      "accountIdLabel": "Cloudflare 계정 ID",
+      "accountIdHint": "Cloudflare 대시보드(Workers AI)에서 확인할 수 있습니다",
+      "customModelLabel": "사용자 지정 모델…",
+      "defaultLabel": "기본값",
+      "img2imgLabel": "이미지-이미지 (참조) ",
+      "img2imgHint": "봇이 편집을 위해 참조 이미지를 첨부할 수 있게 합니다 (모델이 이를 지원해야 함)"
     },
-    "statusDisabled": "비활성화됨"
+    "statusDisabled": "비활성화됨",
+    "transcription": {
+      "pageDescription": "OpenRouter 또는 OpenAI 호환 API를 통한 Chatter Desktop용 서버 측 음성 인식.",
+      "sectionTitle": "전사",
+      "sectionIntro": "데스크톱이 모노 16kHz WAV 파일을 보냅니다. 키는 서버에 암호화된 상태로 유지됩니다.",
+      "enabled": "서버 전사 활성화",
+      "provider": "제공자",
+      "apiUrl": "API URL",
+      "model": "전사 모델",
+      "pricePerMinute": "가격, $ / 오디오 분",
+      "check": "가용성 확인",
+      "checking": "확인 중…",
+      "available": "사용 가능 · {{model}}",
+      "unavailable": "사용 불가 · {{error}}",
+      "saved": "전사 설정이 저장되었습니다."
+    }
   },
   "services": {
     "telegram": {

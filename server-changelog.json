@@ -8,40 +8,88 @@
       "Added a reranker model to the vector memory integration"
     ],
     "cs": [
-      "Přidány noviny! Otevřete editor a AI agenti shromáždí materiál — pak si přečtěte výsledek stylizovaný podle Deus Ex, Mass Effect, Denního věštce z Harryho Pottera nebo New York Times. Automatické generování brzy přijde"
+      "Přidána migrace ze SillyTavern",
+      "Přepracován systém vektorové paměti",
+      "Přidáno lokální úložiště vektorové paměti a Qdrant",
+      "Dočasně odebráno hlasové API, nahrazeno novou integrací pro přepis hlasu",
+      "Přidán reranker model do integrace vektorové paměti"
     ],
     "de": [
-      "Zeitungen hinzugefügt! Öffnen Sie den Editor, und KI-Agenten sammeln das Material – lesen Sie dann das Ergebnis im Stil von Deus Ex, Mass Effect, dem Tagespropheten aus Harry Potter oder der New York Times. Automatische Generierung folgt bald"
+      "Migration von SillyTavern hinzugefügt",
+      "Vektor-Speichersystem überarbeitet",
+      "Lokale Vektor-Speicherung und Qdrant hinzugefügt",
+      "Sprach-API vorübergehend entfernt, durch neue Integration für Sprachtranskription ersetzt",
+      "Reranker-Modell zur Vektor-Speicher-Integration hinzugefügt"
     ],
     "es": [
-      "¡Periódicos añadidos! Abre el editor, y los agentes de IA recopilarán el material — luego lee el resultado con estilo de Deus Ex, Mass Effect, el Profeta Diario de Harry Potter o el New York Times. La generación automática llegará pronto"
+      "Se añadió la migración desde SillyTavern",
+      "Se rediseñó el sistema de memoria vectorial",
+      "Se añadió almacenamiento local de memoria vectorial y Qdrant",
+      "Se eliminó temporalmente la API de voz, reemplazada por una nueva integración para transcripción de voz",
+      "Se añadió un modelo de reordenamiento a la integración de memoria vectorial"
     ],
     "fr": [
-      "Journaux ajoutés ! Ouvrez l'éditeur, et les agents IA rassembleront le matériel — puis lisez le résultat stylisé d'après Deus Ex, Mass Effect, le Daily Prophet de Harry Potter, ou le New York Times. La génération automatique arrive bientôt"
+      "Ajout de la migration depuis SillyTavern",
+      "Refonte du système de mémoire vectorielle",
+      "Ajout du stockage local de mémoire vectorielle et de Qdrant",
+      "Suppression temporaire de l'API vocale, remplacée par une nouvelle intégration pour la transcription vocale",
+      "Ajout d'un modèle de reclassement à l'intégration de mémoire vectorielle"
     ],
     "it": [
-      "Aggiunti i giornali! Apri l'editor e gli agenti AI raccoglieranno il materiale — poi leggi il risultato in stile Deus Ex, Mass Effect, il Daily Prophet di Harry Potter o il New York Times. La generazione automatica arriverà presto"
+      "Aggiunta migrazione da SillyTavern",
+      "Rifatto il sistema di memoria vettoriale",
+      "Aggiunto storage locale della memoria vettoriale e Qdrant",
+      "Rimossa temporaneamente l'API vocale, sostituita con una nuova integrazione per la trascrizione vocale",
+      "Aggiunto un modello di ri-ranking all'integrazione della memoria vettoriale"
     ],
     "ja": [
-      "新聞を追加しました！エディターを開くと、AIエージェントが素材を集め、Deus Ex、Mass Effect、ハリー・ポッターのデイリー・プロフェット、またはニューヨーク・タイムズ風にスタイルされた結果を読むことができます。自動生成は近日公開予定です"
+      "SillyTavernからの移行を追加しました",
+      "ベクターメモリシステムを再設計しました",
+      "ローカルベクターメモリストレージとQdrantを追加しました",
+      "音声APIを一時的に削除し、音声文字起こしの新しい統合に置き換えました",
+      "ベクターメモリ統合にリランカーモデルを追加しました"
     ],
     "ko": [
-      "신문이 추가되었습니다! 편집기를 열면 AI 에이전트가 자료를 수집하고, Deus Ex, Mass Effect, 해리포터의 Daily Prophet, 또는 New York Times 스타일로 꾸며진 결과를 읽을 수 있습니다. 자동 생성이 곧 제공될 예정입니다."
+      "SillyTavern에서 마이그레이션 추가",
+      "벡터 메모리 시스템 재작업",
+      "로컬 벡터 메모리 저장소 및 Qdrant 추가",
+      "음성 API를 일시적으로 제거하고, 음성 전사를 위한 새 통합으로 대체",
+      "벡터 메모리 통합에 리랭커 모델 추가"
     ],
     "pl": [
-      "Dodano gazety! Otwórz edytor, a agenci AI zbiorą materiał — następnie przeczytaj wynik stylizowany na Deus Ex, Mass Effect, Proroka Codziennego z Harry'ego Pottera lub New York Times. Auto-generowanie wkrótce"
+      "Dodano migrację z SillyTavern",
+      "Przebudowano system pamięci wektorowej",
+      "Dodano lokalne przechowywanie pamięci wektorowej i Qdrant",
+      "Tymczasowo usunięto API głosowe, zastąpione nową integracją do transkrypcji głosu",
+      "Dodano model reranker do integracji pamięci wektorowej"
     ],
     "pt-BR": [
-      "Jornais adicionados! Abra o editor, e agentes de IA reunirão o material — depois leia o resultado estilizado como Deus Ex, Mass Effect, o Profeta Diário de Harry Potter ou o New York Times. A geração automática chegará em breve"
+      "Adicionada migração do SillyTavern",
+      "Sistema de memória vetorial reformulado",
+      "Adicionado armazenamento local de memória vetorial e Qdrant",
+      "API de voz temporariamente removida, substituída por uma nova integração para transcrição de voz",
+      "Adicionado um modelo de reclassificação à integração de memória vetorial"
     ],
     "ru": [
-      "Добавлены газеты! Откройте редактор, и ИИ-агенты соберут материал — затем читайте результат в стиле Deus Ex, Mass Effect, «Ежедневного пророка» из Гарри Поттера или New York Times. Автогенерация скоро появится"
+      "Добавлена миграция из SillyTavern",
+      "Переработана система векторной памяти",
+      "Добавлено локальное хранилище векторной памяти и Qdrant",
+      "Временно удален голосовой API, заменен новой интеграцией для транскрипции голоса",
+      "Добавлена модель реранкера в интеграцию векторной памяти"
     ],
     "tr": [
-      "Gazeteler eklendi! Editörü açın, AI ajanları materyali toplayacak — ardından Deus Ex, Mass Effect, Harry Potter'daki Günlük Kahin veya New York Times tarzında sonucu okuyun. Otomatik oluşturma yakında geliyor"
+      "SillyTavern'den geçiş eklendi",
+      "Vektör bellek sistemi yeniden düzenlendi",
+      "Yerel vektör bellek depolama ve Qdrant eklendi",
+      "Ses API'si geçici olarak kaldırıldı, ses transkripsiyonu için yeni bir entegrasyonla değiştirildi",
+      "Vektör bellek entegrasyonuna bir reranker modeli eklendi"
     ],
     "zh-CN": [
-      "新增报纸！打开编辑器，AI代理将收集素材——然后阅读以《杀出重围》、《质量效应》、《哈利·波特》中的《预言家日报》或《纽约时报》风格呈现的结果。自动生成即将推出"
+      "添加了从SillyTavern的迁移",
+      "重新设计了向量记忆系统",
+      "添加了本地向量记忆存储和Qdrant",
+      "暂时移除了语音API，替换为新的语音转录集成",
+      "在向量记忆集成中添加了重排序模型"
     ]
   }
 }

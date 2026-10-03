@@ -484,7 +484,8 @@
       "limits": "Limity",
       "app": "Aplikace",
       "billing": "Fakturace",
-      "about": "O aplikaci"
+      "about": "O aplikaci",
+      "data": "Data"
     },
     "browser": {
       "help": "Vyberte, které akce AI v prohlížeči vyžadují vaše potvrzení. Ruční akce nejsou ovlivněny.",
@@ -527,7 +528,61 @@
       "timezone": "Časové pásmo",
       "timezoneHelp": "Používá se pro místní čas, připomínky a naplánované úlohy.",
       "timezoneDevice": "Aktuální časové pásmo na tomto zařízení",
-      "timezoneNotConfigured": "Zatím nebylo potvrzeno; zobrazuje se časové pásmo zařízení."
+      "timezoneNotConfigured": "Zatím nebylo potvrzeno; zobrazuje se časové pásmo zařízení.",
+      "personas": {
+        "label": "Persona",
+        "help": "Hlavní uchovává vaše běžné uživatelské jméno a základní paměť. Další persony lze vybrat samostatně pro každý chat.",
+        "main": "Hlavní",
+        "accountName": "Název účtu",
+        "accountNameValue": "Název účtu: {{name}}",
+        "selectPlaceholder": "Vyberte osobu",
+        "mainBadge": "hlavní",
+        "personaBadge": "osoba",
+        "otherSection": "Další persony",
+        "createTitle": "Nová persona",
+        "createDescription": "Přidejte název, popis a základní paměť",
+        "namePlaceholder": "Název persony",
+        "descriptionPlaceholder": "Krátký popis",
+        "coreMemory": "Základní paměť",
+        "allowCoreMemoryUpdate": "Automaticky aktualizovat základní paměť",
+        "image": "Avatar",
+        "imageHelp": "Zobrazí se vedle vašich zpráv, když je tato persona aktivní. Maximálně 10 MB.",
+        "imageEmpty": "Žádný avatar",
+        "imageSaveError": "Persona uložena, ale avatara se nepodařilo uložit",
+        "import": {
+          "button": "Importovat ze SillyTavern",
+          "previewTitle": "Importovat persony",
+          "sourceLabel": "Záloha person ze SillyTavern",
+          "found": "Nalezeno {{count}} person",
+          "newCount": "{{count}} nových",
+          "updateCount": "{{count}} existujících",
+          "defaultPersona": "Výchozí: {{name}}",
+          "willCreate": "Vytvořit",
+          "willUpdate": "Aktualizovat",
+          "more": "A dalších {{count}}",
+          "confirm": "Importovat",
+          "importing": "Importuji...",
+          "success": "Persony importovány: {{created}} vytvořeno, {{updated}} aktualizováno",
+          "warnings": {
+            "avatars_not_in_backup": "Zálohy person SillyTavern neobsahují soubory avatarů. Avatary můžete přidat po importu.",
+            "core_memory_truncated": "Některé popisy překračují limit 800 znaků pro základní paměť. Plná zdrojová data jsou zachována pro budoucí migrace.",
+            "existing_personas_updated": "Dříve importované osoby se stejným klíčem SillyTavern budou aktualizovány."
+          },
+          "errors": {
+            "format": "Vyberte soubor JSON se zálohou osob SillyTavern",
+            "size": "Záloha nesmí být větší než 2 MB",
+            "read": "Zálohu se nepodařilo přečíst",
+            "invalid": "Toto není platná záloha osob SillyTavern",
+            "import": "Osoby nebylo možné importovat"
+          }
+        },
+        "deleted": "Osoba smazána; její chaty byly přepnuty na Automaticky",
+        "errors": {
+          "select": "Osobu nebylo možné vybrat",
+          "nameRequired": "Zadejte název osoby",
+          "delete": "Osobu se nepodařilo smazat"
+        }
+      }
     },
     "connections": {
       "help": "Spravujte služby, které se mohou přihlásit k tomuto účtu a používat jej.",
@@ -569,7 +624,60 @@
       "detailAny": "Nezáleží",
       "generating": "Generování...",
       "generate": "Generovat",
-      "preview": "Náhled změn"
+      "preview": "Náhled změn",
+      "modeUsual": "Obvyklý",
+      "modeAdvanced": "Pokročilý",
+      "image": "Obrázek",
+      "imageHelp": "Avatar nebo ilustrace připojená k tomuto promptu. Maximálně 10 MB.",
+      "imageEmpty": "Žádný obrázek",
+      "imageChoose": "Vyberte obrázek",
+      "imageFormatError": "Vyberte soubor obrázku",
+      "imageSizeError": "Obrázek nesmí být větší než 10 MB",
+      "imageReadError": "Obrázek se nepodařilo přečíst",
+      "imageSaveError": "Text byl uložen, ale obrázek se nepodařilo uložit",
+      "imageCropTitle": "Vyberte viditelnou oblast",
+      "imageCropHelp": "Přesuňte obrázek v rámečku a upravte přiblížení.",
+      "imageCropZoom": "Přiblížení",
+      "imageCropApply": "Použít",
+      "characterCard": {
+        "button": "Importovat kartu postavy",
+        "help": "JSON nebo PNG kompatibilní se SillyTavern",
+        "reading": "Čtení...",
+        "previewTitle": "Náhled karty postavy",
+        "sectionsFound": "{{count}} sekcí výzev",
+        "firstMessageSaved": "První zpráva uložena",
+        "alternateGreetings": "{{count}} alternativních pozdravů uloženo",
+        "lorebookSaved": "Lorebook uložen pro pozdější použití",
+        "assetsSaved": "{{count}} aktiv zachováno",
+        "preservedNote": "Nepodporovaná data karty jsou zachována v databázi a nejsou přidána do promptu.",
+        "import": "Importovat",
+        "importing": "Importování...",
+        "imported": "Karta postavy byla importována",
+        "startChat": "Zahájit chat",
+        "startingChat": "Spouštění...",
+        "errors": {
+          "format": "Vyberte soubor JSON nebo PNG s kartou postavy",
+          "size": "Karta postavy nesmí být větší než 12 MB",
+          "read": "Kartu postavy se nepodařilo přečíst",
+          "invalid": "Tento soubor není platnou kartou postavy",
+          "import": "Kartu postavy se nepodařilo importovat",
+          "startChat": "Nelze zahájit chat s touto postavou"
+        }
+      },
+      "sections": {
+        "description": "Popis",
+        "personality": "Osobnost",
+        "scenario": "Scénář",
+        "examples": "Příklady",
+        "other": "Ostatní"
+      },
+      "sectionPlaceholders": {
+        "description": "Kdo tato postava je...",
+        "personality": "Vlastnosti a styl komunikace...",
+        "scenario": "Situace a kontext...",
+        "examples": "Příklad dialogu...",
+        "other": "Jakékoli zbývající pokyny..."
+      }
     },
     "voice": {
       "recognitionTitle": "Rozpoznávání hlasu",
@@ -583,7 +691,14 @@
       "voicePlaceholder": "Vyberte hlas...",
       "preview": "Náhled",
       "speechVolume": "Hlasitost řeči",
-      "effectsVolume": "Hlasitost zvukových efektů"
+      "effectsVolume": "Hlasitost zvukových efektů",
+      "recognitionSource": "Zpracování rozpoznávání",
+      "recognitionSourceHint": "Místní Whisper používá tento počítač. Zpracování na serveru je užitečné na slabších počítačích a je k dispozici pouze tehdy, pokud je nakonfigurováno správcem.",
+      "recognitionSourceLocal": "Na tomto počítači",
+      "recognitionSourceLocalHint": "Místní Whisper",
+      "recognitionSourceServer": "Na serveru",
+      "recognitionSourceServerReady": "Dostupné · {{model}}",
+      "recognitionSourceServerUnavailable": "Nedostupné nebo není nakonfigurováno"
     },
     "restrictions": {
       "help": "Ovládejte, které nástroje AI jsou k dispozici. Změny se projeví okamžitě.",
@@ -680,7 +795,8 @@
       "badLogin": "Neplatný formát přihlašovacího jména",
       "loginRequired": "Zadejte aktuální heslo a nové přihlašovací jméno",
       "timezoneSaved": "Časové pásmo uloženo",
-      "timezoneSaveFailed": "Časové pásmo se nepodařilo uložit"
+      "timezoneSaveFailed": "Časové pásmo se nepodařilo uložit",
+      "contextLimitReduced": "Dolní limit je uložen. Shrnutí konverzace bude přestavěno při příští zprávě."
     },
     "about": {
       "version": "Verze {{version}}",
@@ -694,6 +810,92 @@
       "upToDate": "Používáte nejnovější verzi",
       "updateCheckFailed": "Nepodařilo se zkontrolovat aktualizace",
       "updateCheckUnavailable": "Kontrola aktualizací není v režimu vývoje dostupná"
+    },
+    "data": {
+      "help": "Importujte data z jiných aplikací. Záloha a export Chatteru budou přidány později.",
+      "sillyTavern": {
+        "title": "Přesun ze SillyTavern",
+        "help": "Importujte kompletní záložní archiv najednou, nebo přesuňte jednotlivá data ručně."
+      },
+      "backup": {
+        "title": "Úplná záloha SillyTavern",
+        "help": "Importuje postavy, persony s avatary a soukromé chaty ze ZIP souboru dat SillyTavern.",
+        "button": "Vybrat ZIP zálohu",
+        "reading": "Kontrola archivu...",
+        "previewTitle": "Importovat zálohu SillyTavern",
+        "previewHelp": "Zkontrolujte zjištěná data před jejich importem.",
+        "newCount": "Nové: {{count}}",
+        "existingCount": "Již existuje: {{count}}",
+        "updateCount": "Bude aktualizováno: {{count}}",
+        "avatarCount": "Avatary: {{count}}",
+        "confirm": "Importovat",
+        "importing": "Importuji...",
+        "success": "Import dokončen: {{characters}} postav, {{personas}} osob, {{chats}} chatů",
+        "importedResult": "Vytvořeno postav: {{characters}}, zpracováno osob: {{personas}}, vytvořeno chatů: {{chats}}",
+        "warnings": {
+          "group_chats_not_supported": "Skupinové chaty zatím nejsou importovány.",
+          "worlds_not_supported": "Lorebooky a World Info zatím nejsou importovány.",
+          "other_data_ignored": "Ostatní nastavení, rozšíření a servisní soubory v archivu nemění Chatter.",
+          "personas_not_found": "V souboru settings.json nebyly nalezeny žádné osoby.",
+          "persona_avatar_errors": "Některé avatary osob nebylo možné importovat."
+        },
+        "errors": {
+          "format": "Vyberte SillyTavern ZIP zálohu",
+          "size": "Archiv nesmí být větší než 256 MB",
+          "invalid": "Nelze přečíst zálohu SillyTavern",
+          "import": "Nelze importovat zálohu SillyTavern"
+        }
+      },
+      "character": {
+        "title": "Karta postavy",
+        "help": "Vytvoří prompt postavy Chatter ze souboru JSON nebo PNG karty kompatibilní se SillyTavern.",
+        "button": "Importovat postavu",
+        "imported": "Importováno: {{name}}"
+      },
+      "personas": {
+        "title": "Persony",
+        "help": "Importuje jména a popisy ze zálohy person SillyTavern. Soubory avatarů nejsou v tomto formátu zálohy zahrnuty.",
+        "button": "Importovat persony",
+        "imported": "Vytvořeno: {{created}}, aktualizováno: {{updated}}"
+      },
+      "chats": {
+        "title": "Chaty",
+        "help": "Importuje jeden nebo více JSONL chatů se zprávami, daty, uvažováním a dostupnými vazbami na postavy a persony.",
+        "button": "Importovat chaty",
+        "previewTitle": "Importovat chaty SillyTavern",
+        "previewSummary": "Chaty: {{chats}} · zprávy: {{messages}}",
+        "messages": "Zprávy: {{count}}",
+        "character": "Postava: {{name}}",
+        "user": "Uživatel: {{name}}",
+        "characterMatched": "Postava nalezena: {{name}}",
+        "characterNotMatched": "Postava nebyla nalezena; chat použije automatický výběr promptu",
+        "personaMatched": "Persona nalezena: {{name}}",
+        "personaNotMatched": "Persona nebyla nalezena; chat bude používat Automatické",
+        "ready": "Připraveno",
+        "alreadyImported": "Již importováno",
+        "confirm": "Importovat {{count}} chatů",
+        "importing": "Importuji...",
+        "success": "Chaty importovány: {{created}} nových, {{existing}} již existovalo",
+        "importedResult": "Vytvořeno: {{created}}, již existovalo: {{existing}}",
+        "warnings": {
+          "missing_metadata": "Chybí řádek s metadaty; zprávy lze přesto importovat.",
+          "system_messages_as_assistant": "Systémové zprávy budou zachovány jako zprávy asistenta.",
+          "empty_messages_skipped": "Prázdné zprávy budou přeskočeny.",
+          "alternate_swipes_preserved_only": "Alternativní swipes jsou zachovány ve zdrojových datech, ale zatím nejsou zobrazeny.",
+          "attachments_not_imported": "Exporty SillyTavern JSONL neobsahují soubory příloh."
+        },
+        "errors": {
+          "format": "Vyberte soubory JSONL chatu",
+          "count": "Můžete importovat až 20 chatů najednou",
+          "size": "Každý soubor chatu musí mít maximálně 16 MB",
+          "totalSize": "Vybrané chaty musí mít celkově maximálně 32 MB",
+          "invalid": "Nepodařilo se přečíst jeden nebo více chatů SillyTavern",
+          "import": "Nepodařilo se importovat chaty"
+        }
+      },
+      "openCharacter": "Otevřít postavu",
+      "openPersonas": "Otevřít persony",
+      "openChat": "Otevřít chat"
     }
   },
   "chat": {
@@ -740,7 +942,11 @@
       "branchNotAllowedInRoom": "Větve zatím nejsou k dispozici ve sdílených místnostech",
       "branchFailed": "Vytvoření větve se nezdařilo",
       "generationPerf": "První token: {{latency}}\nGenerování: {{gen}}\nCelkem: {{total}}\nRychlost: {{tps}} tokenů/s",
-      "firstTokenLatency": "Čas do prvního tokenu: {{latency}}"
+      "firstTokenLatency": "Čas do prvního tokenu: {{latency}}",
+      "variants": "Varianty odpovědí",
+      "previousVariant": "Předchozí varianta odpovědi",
+      "nextVariant": "Další varianta odpovědi",
+      "variantSwitchFailed": "Přepnutí varianty odpovědi se nezdařilo"
     },
     "reasoning": {
       "auto": "Automaticky",
@@ -1085,6 +1291,109 @@
       "open": "Otevřít přílohu",
       "loadFailed": "Tento dokument se nepodařilo zobrazit. Můžete si jej stále stáhnout.",
       "unavailable": "Náhled není pro tento soubor dostupný. Můžete si jej stále stáhnout."
+    },
+    "find": {
+      "open": "Hledat v tomto chatu",
+      "placeholder": "Hledat v tomto chatu",
+      "previous": "Předchozí shoda",
+      "next": "Další shoda",
+      "close": "Zavřít hledání"
+    },
+    "memory": {
+      "trigger": "Paměť",
+      "triggerTitle": "Paměť chatu",
+      "headerTitle": "Paměť chatu",
+      "headerHint": "Nastavení se projeví okamžitě",
+      "persona": "Osobnost",
+      "personaAutomatic": "Automaticky",
+      "personaGlobal": "Globální: {{name}}",
+      "personaMain": "Hlavní",
+      "personaAccountName": "Název účtu: {{name}}",
+      "personasLoadFailed": "Nelze načíst persony",
+      "personaSelectFailed": "Nelze vybrat personu pro tento chat",
+      "character": "Postava",
+      "characterAutomatic": "Automaticky",
+      "characterGlobal": "Globální: {{name}}",
+      "characterDefault": "Výchozí postava",
+      "characterRoomManaged": "Postavy v této místnosti jsou spravovány jako roboti místnosti.",
+      "characterSelectFailed": "Pro tento chat se nepodařilo vybrat postavu",
+      "messageSearch": {
+        "label": "Hledání zpráv",
+        "all": "Všechny dostupné chaty",
+        "current": "Pouze tento chat"
+      },
+      "roleplayMode": {
+        "label": "Režim roleplay",
+        "hint": "V tomto chatu zůstávají dostupné pouze nástroje pro dlouhodobou paměť a vyhledávání v chatu."
+      },
+      "search": {
+        "placeholder": "Hledat vzpomínky...",
+        "text": "Text",
+        "semantic": "Podle významu",
+        "action": "Hledat",
+        "searching": "Hledání...",
+        "noResults": "Nebyly nalezeny žádné vzpomínky",
+        "failed": "Vzpomínky se nepodařilo vyhledat"
+      },
+      "globalSettings": {
+        "title": "Paměť",
+        "hint": "Sdílené vektorové vzpomínky jsou k dispozici v chatech používajících režim Pouze sdílené nebo Sdílené a tento chat.",
+        "spaceLabel": "Sdílená paměť",
+        "recordsTitle": "Vzpomínky",
+        "empty": "Zatím zde nic není",
+        "creating": "Vytváření...",
+        "createSpaceAction": "Vytvořit sdílenou paměť",
+        "renameSpaceAction": "Přejmenovat paměť",
+        "deleteSpaceAction": "Smazat paměť",
+        "editRecordAction": "Upravit paměť",
+        "deleteRecordAction": "Smazat paměť",
+        "dialogs": {
+          "createTitle": "Nová sdílená paměť",
+          "createText": "Zadejte název paměťového prostoru.",
+          "namePlaceholder": "Název paměti",
+          "renameTitle": "Přejmenovat paměť",
+          "renameText": "Zadejte nový název pro paměťový prostor.",
+          "deleteSpaceTitle": "Smazat paměť?",
+          "deleteSpaceText": "Prostor „{{name}}“ a všechny jeho paměti budou trvale smazány.",
+          "editRecordTitle": "Upravit paměť",
+          "editRecordText": "Text bude po uložení znovu vektorizován. Pro uložení stiskněte Ctrl+Enter.",
+          "deleteRecordTitle": "Smazat paměť?",
+          "deleteRecordText": "Paměť a její přidružené vektory budou trvale smazány."
+        },
+        "errors": {
+          "loadSpaces": "Sdílenou paměť se nepodařilo načíst",
+          "loadRecords": "Nelze načíst vzpomínky",
+          "selectSpace": "Nelze vybrat sdílenou paměť",
+          "createSpace": "Nelze vytvořit sdílenou paměť",
+          "renameSpace": "Nelze přejmenovat paměť",
+          "deleteSpace": "Nelze smazat paměť",
+          "updateRecord": "Paměť se nepodařilo aktualizovat",
+          "deleteRecord": "Paměť se nepodařilo smazat"
+        }
+      },
+      "modeLabel": "Použít paměť",
+      "mode": {
+        "off": "Vypnuto",
+        "general": "Pouze sdílená",
+        "chat": "Pouze tento chat",
+        "both": "Sdílené a tento chat"
+      },
+      "writeTargetLabel": "Uložit do",
+      "writeTarget": {
+        "general": "Sdílená paměť",
+        "chat": "Paměť tohoto chatu"
+      },
+      "chatMemoryTitle": "Paměť tohoto chatu",
+      "empty": "Zatím zde nic není",
+      "promptText": "Text paměti",
+      "confirmDelete": "Smazat tuto paměť?",
+      "loadSettingsFailed": "Nepodařilo se načíst nastavení paměti",
+      "loadRecordsFailed": "Nelze načíst vzpomínky",
+      "saveSettingsFailed": "Nelze uložit nastavení paměti"
+    },
+    "contextSummary": {
+      "title": "Souhrn dřívější konverzace",
+      "meta": "{{count}} zpráv · {{model}}"
     }
   },
   "promptSelector": {

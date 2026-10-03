@@ -88,7 +88,10 @@
     "coefficientSaved": "Katsayı kaydedildi",
     "cancel": "İptal",
     "on": "Açık",
-    "off": "Kapalı"
+    "off": "Kapalı",
+    "save": "Kaydet",
+    "savingChanges": "Kaydediliyor…",
+    "delete": "Sil"
   },
   "ui": {
     "search": "Ara…",
@@ -279,6 +282,11 @@
         "name": "Görüntü Oluşturma",
         "description": "Harici API ile görüntü oluştur",
         "group": "Medya"
+      },
+      "transcription": {
+        "name": "Ses Transkripsiyonu",
+        "description": "Sunucu tarafı konuşma tanıma",
+        "group": "Medya"
       }
     },
     "secretField": {
@@ -297,7 +305,64 @@
         "sectionIntro": "Pinecone için metni vektörlere dönüştüren ayrı bir OpenAI uyumlu API.",
         "apiUrlLabel": "API URL'si",
         "modelLabel": "Model",
-        "apiKeyLabel": "Yerleştirme sağlayıcı API anahtarı"
+        "apiKeyLabel": "Yerleştirme sağlayıcı API anahtarı",
+        "providerLabel": "Sağlayıcı",
+        "priceLabel": "Giriş fiyatı, $ / 1M token",
+        "migrateAction": "Yeniden göm ve değiştir",
+        "migrating": "Taşınıyor…",
+        "migrationComplete": "Yeni koleksiyon aktif. Vektörler: {{count}}.",
+        "settingsSaved": "Vektör bellek ayarları kaydedildi."
+      },
+      "storage": {
+        "title": "Vektör motoru",
+        "intro": "Bu seçim vektör aramasını ve yeni yazımları kontrol eder. Qdrant, Chatter ile birlikte gelir ve yalnızca doğrulanmış bir geçişten sonra etkinleşir.",
+        "label": "Etkin vektör motoru",
+        "pineconeHint": "Uzak vektör dizini",
+        "qdrantHint": "Chatter ile birlikte gelen yerel vektör dizini",
+        "migrateAction": "Taşı ve değiştir",
+        "switchAction": "Depolamayı değiştir",
+        "migrateTitle": "Belleği Qdrant'a taşınsın mı?",
+        "switchTitle": "Pinecone'a geçilsin mi?",
+        "migrateText": "Tüm vektörler ve meta veriler, gömme işlemleri yeniden oluşturulmadan Pinecone'dan kopyalanacaktır.",
+        "backupText": "Pinecone temizlenmeyecektir. Qdrant yalnızca kopyalanan her vektör doğrulandıktan sonra etkin hale gelir.",
+        "switchText": "Pinecone etkin hale gelecektir. Qdrant verileri otomatik olarak geri taşınmaz.",
+        "cancel": "İptal",
+        "migrating": "Taşınıyor…",
+        "switched": "Depolama değiştirildi.",
+        "result": "Taşınan vektörler: {{vectors}}; anılar: {{records}}."
+      },
+      "reranking": {
+        "sectionTitle": "Sıralama modeli",
+        "sectionIntro": "En iyi eşleşen parçalarını kullanarak 20 vektör adayını yeniden sıralar, ardından ilgililik eşiğini uygular.",
+        "enabledLabel": "Bellek araması için yeniden sıralamayı etkinleştir",
+        "priceLabel": "Fiyat, $ / arama",
+        "thresholdLabel": "Minimum alaka puanı · 0–1",
+        "resultLimitLabel": "Döndürülen anılar · 1–20"
+      },
+      "collections": {
+        "title": "Bellek sürümleri",
+        "intro": "Yalnızca Chatter tarafından yönetilen koleksiyonlar gösterilir. Yedekler asla otomatik olarak silinmez.",
+        "vectorCount": "{{count}} vektör",
+        "rollbackAction": "Geri dön",
+        "rollbackComplete": "Seçilen yedek etkin.",
+        "deleteComplete": "Koleksiyon silindi.",
+        "status": {
+          "active": "Aktif",
+          "backup": "Yedek",
+          "migrating": "Taşınıyor",
+          "failed": "Başarısız"
+        }
+      },
+      "confirm": {
+        "migrateTitle": "Gömme modeli değiştirilsin mi?",
+        "migrateText": "Tüm saklanan bellek parçaları yeni bir yerel Qdrant koleksiyonuna gömülecek. Aramalar mevcut koleksiyonu kullanmaya devam eder; doğrulama tamamlanana kadar bellek yazmaları duraklatılır.",
+        "migrateAction": "Taşı",
+        "activateTitle": "Bu yedeğe geçilsin mi?",
+        "activateText": "Mevcut SQLite bellekleri, bu yedeğin modeliyle taze bir koleksiyona yeniden gömülecek. Etkin koleksiyon bir yedek olarak saklanacak.",
+        "activateAction": "Geç",
+        "deleteTitle": "Bu koleksiyon silinsin mi?",
+        "deleteText": "Vektörleri Qdrant'tan kalıcı olarak kaldırılacaktır. SQLite'daki kanonik bellek metni etkilenmez.",
+        "deleteAction": "Sil"
       }
     },
     "webSearch": {
@@ -406,9 +471,33 @@
       "capabilitySupported": "destekleniyor",
       "capabilityNotClaimed": "belirtilmemiş",
       "enabled": "Görüntü oluşturma etkinleştirildi",
-      "savingEnabled": "Görüntü oluşturma ayarı kaydediliyor…"
+      "savingEnabled": "Görüntü oluşturma ayarı kaydediliyor…",
+      "providerLabel": "Sağlayıcı",
+      "providerHint": "İstediğiniz zaman değiştirin — her iki sağlayıcı da anahtarlarını saklar",
+      "apiTokenLabel": "Cloudflare API belirteci",
+      "accountIdLabel": "Cloudflare Hesap Kimliği",
+      "accountIdHint": "Cloudflare panosunda görünür (Workers AI)",
+      "customModelLabel": "Özel model…",
+      "defaultLabel": "Varsayılan",
+      "img2imgLabel": "Görüntüden görüntüye (referanslar)",
+      "img2imgHint": "Botun düzenleme için referans görseller eklemesine izin verir (model bunları desteklemelidir)"
     },
-    "statusDisabled": "Devre dışı"
+    "statusDisabled": "Devre dışı",
+    "transcription": {
+      "pageDescription": "OpenRouter veya OpenAI uyumlu bir API aracılığıyla Chatter Desktop için sunucu tarafı konuşma tanıma.",
+      "sectionTitle": "Transkripsiyon",
+      "sectionIntro": "Masaüstü mono 16 kHz WAV dosyası gönderir. Anahtar sunucuda şifreli kalır.",
+      "enabled": "Sunucu transkripsiyonunu etkinleştir",
+      "provider": "Sağlayıcı",
+      "apiUrl": "API URL'si",
+      "model": "Transkripsiyon modeli",
+      "pricePerMinute": "Fiyat, $ / dakika ses",
+      "check": "Kullanılabilirliği kontrol et",
+      "checking": "Kontrol ediliyor…",
+      "available": "Kullanılabilir · {{model}}",
+      "unavailable": "Kullanılamıyor · {{error}}",
+      "saved": "Transkripsiyon ayarları kaydedildi."
+    }
   },
   "services": {
     "telegram": {

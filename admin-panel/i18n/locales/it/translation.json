@@ -88,7 +88,10 @@
     "coefficientSaved": "Coefficiente salvato",
     "cancel": "Annulla",
     "on": "Attivo",
-    "off": "Spento"
+    "off": "Spento",
+    "save": "Salva",
+    "savingChanges": "Salvataggio…",
+    "delete": "Elimina"
   },
   "models": {
     "auto": {
@@ -294,6 +297,11 @@
         "name": "Generazione di immagini",
         "description": "Genera immagini tramite API esterna",
         "group": "Media"
+      },
+      "transcription": {
+        "name": "Trascrizione vocale",
+        "description": "Riconoscimento vocale lato server",
+        "group": "Media"
       }
     },
     "secretField": {
@@ -312,7 +320,64 @@
         "sectionIntro": "Un'API separata compatibile con OpenAI che trasforma il testo in vettori per Pinecone.",
         "apiUrlLabel": "URL API",
         "modelLabel": "Modello",
-        "apiKeyLabel": "Chiave API del provider di embedding"
+        "apiKeyLabel": "Chiave API del provider di embedding",
+        "providerLabel": "Fornitore",
+        "priceLabel": "Prezzo di input, $ / 1M token",
+        "migrateAction": "Ri-embedda e cambia",
+        "migrating": "Migrazione…",
+        "migrationComplete": "La nuova raccolta è attiva. Vettori: {{count}}.",
+        "settingsSaved": "Impostazioni della memoria vettoriale salvate."
+      },
+      "storage": {
+        "title": "Motore vettoriale",
+        "intro": "Questa selezione controlla la ricerca vettoriale e le nuove scritture. Qdrant è incluso con Chatter e si attiva solo dopo una migrazione verificata.",
+        "label": "Motore vettoriale attivo",
+        "pineconeHint": "Indice vettoriale remoto",
+        "qdrantHint": "Indice vettoriale locale incluso con Chatter",
+        "migrateAction": "Migra e cambia",
+        "switchAction": "Cambia archiviazione",
+        "migrateTitle": "Migrare la memoria a Qdrant?",
+        "switchTitle": "Passare a Pinecone?",
+        "migrateText": "Tutti i vettori e i metadati verranno copiati da Pinecone senza rigenerare gli embedding.",
+        "backupText": "Pinecone non verrà cancellato. Qdrant diventa attivo solo dopo che ogni vettore copiato è stato verificato.",
+        "switchText": "Pinecone diventerà attivo. I dati di Qdrant non vengono migrati automaticamente indietro.",
+        "cancel": "Annulla",
+        "migrating": "Migrazione in corso…",
+        "switched": "Archiviazione cambiata.",
+        "result": "Vettori migrati: {{vectors}}; memorie: {{records}}."
+      },
+      "reranking": {
+        "sectionTitle": "Modello di ranking",
+        "sectionIntro": "Riordina 20 candidati vettoriali utilizzando i loro frammenti più pertinenti, quindi applica la soglia di rilevanza.",
+        "enabledLabel": "Abilita il riordinamento per la ricerca nella memoria",
+        "priceLabel": "Prezzo, $ / ricerca",
+        "thresholdLabel": "Punteggio di rilevanza minimo · 0–1",
+        "resultLimitLabel": "Memorie restituite · 1–20"
+      },
+      "collections": {
+        "title": "Versioni della memoria",
+        "intro": "Vengono mostrate solo le collezioni gestite da Chatter. I backup non vengono mai eliminati automaticamente.",
+        "vectorCount": "{{count}} vettori",
+        "rollbackAction": "Torna indietro",
+        "rollbackComplete": "Il backup selezionato è attivo.",
+        "deleteComplete": "Collezione eliminata.",
+        "status": {
+          "active": "Attivo",
+          "backup": "Backup",
+          "migrating": "Migrazione in corso",
+          "failed": "Non riuscito"
+        }
+      },
+      "confirm": {
+        "migrateTitle": "Cambiare il modello di embedding?",
+        "migrateText": "Tutti i blocchi di memoria memorizzati verranno incorporati in una nuova raccolta Qdrant locale. Le ricerche continuano a utilizzare la raccolta corrente; le scritture di memoria vengono sospese fino al termine della verifica.",
+        "migrateAction": "Migra",
+        "activateTitle": "Passare a questo backup?",
+        "activateText": "Le memorie SQLite correnti verranno reincorporate con il modello di questo backup in una nuova raccolta. La raccolta attiva verrà conservata come backup.",
+        "activateAction": "Passa",
+        "deleteTitle": "Eliminare questa raccolta?",
+        "deleteText": "I suoi vettori verranno rimossi definitivamente da Qdrant. Il testo di memoria canonico in SQLite non viene influenzato.",
+        "deleteAction": "Elimina"
       }
     },
     "webSearch": {
@@ -421,9 +486,33 @@
       "capabilitySupported": "supportato",
       "capabilityNotClaimed": "non rivendicato",
       "enabled": "Generazione immagini abilitata",
-      "savingEnabled": "Salvataggio impostazione generazione immagini…"
+      "savingEnabled": "Salvataggio impostazione generazione immagini…",
+      "providerLabel": "Fornitore",
+      "providerHint": "Cambia in qualsiasi momento — entrambi i fornitori conservano le loro chiavi",
+      "apiTokenLabel": "Token API Cloudflare",
+      "accountIdLabel": "ID account Cloudflare",
+      "accountIdHint": "Visibile nel dashboard Cloudflare (Workers AI)",
+      "customModelLabel": "Modello personalizzato…",
+      "defaultLabel": "Predefinito",
+      "img2imgLabel": "Da immagine a immagine (riferimenti) ",
+      "img2imgHint": "Consente al bot di allegare immagini di riferimento per la modifica (il modello deve supportarle)"
     },
-    "statusDisabled": "Disabilitato"
+    "statusDisabled": "Disabilitato",
+    "transcription": {
+      "pageDescription": "Riconoscimento vocale lato server per Chatter Desktop tramite OpenRouter o un'API compatibile con OpenAI.",
+      "sectionTitle": "Trascrizione",
+      "sectionIntro": "Il desktop invia un file WAV mono a 16 kHz. La chiave rimane crittografata sul server.",
+      "enabled": "Abilita trascrizione server",
+      "provider": "Fornitore",
+      "apiUrl": "URL API",
+      "model": "Modello di trascrizione",
+      "pricePerMinute": "Prezzo, $ / minuto di audio",
+      "check": "Verifica disponibilità",
+      "checking": "Verifica in corso…",
+      "available": "Disponibile · {{model}}",
+      "unavailable": "Non disponibile · {{error}}",
+      "saved": "Impostazioni di trascrizione salvate."
+    }
   },
   "services": {
     "telegram": {

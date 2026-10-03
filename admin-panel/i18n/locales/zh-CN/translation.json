@@ -88,7 +88,10 @@
     "coefficientSaved": "系数已保存",
     "cancel": "取消",
     "on": "开启",
-    "off": "关闭"
+    "off": "关闭",
+    "save": "保存",
+    "savingChanges": "正在保存…",
+    "delete": "删除"
   },
   "models": {
     "auto": {
@@ -294,6 +297,11 @@
         "name": "图像生成",
         "description": "通过外部API生成图像",
         "group": "媒体"
+      },
+      "transcription": {
+        "name": "语音转录",
+        "description": "服务器端语音识别",
+        "group": "媒体"
       }
     },
     "secretField": {
@@ -312,7 +320,64 @@
         "sectionIntro": "一个独立的 OpenAI 兼容 API，将文本转换为向量以供 Pinecone 使用。",
         "apiUrlLabel": "API URL",
         "modelLabel": "模型",
-        "apiKeyLabel": "嵌入提供者 API 密钥"
+        "apiKeyLabel": "嵌入提供者 API 密钥",
+        "providerLabel": "提供商",
+        "priceLabel": "输入价格，$ / 1M tokens",
+        "migrateAction": "重新嵌入并切换",
+        "migrating": "迁移中…",
+        "migrationComplete": "新集合已激活。向量数：{{count}}。",
+        "settingsSaved": "向量记忆设置已保存。"
+      },
+      "storage": {
+        "title": "向量引擎",
+        "intro": "此选择控制向量搜索和新写入。Qdrant 随 Chatter 捆绑，仅在验证迁移后激活。",
+        "label": "活动向量引擎",
+        "pineconeHint": "远程向量索引",
+        "qdrantHint": "与Chatter捆绑的本地向量索引",
+        "migrateAction": "迁移并切换",
+        "switchAction": "切换存储",
+        "migrateTitle": "将记忆迁移到Qdrant？",
+        "switchTitle": "切换到Pinecone？",
+        "migrateText": "所有向量和元数据将从Pinecone复制，无需重新生成嵌入。",
+        "backupText": "Pinecone不会被清空。只有在每个复制的向量都经过验证后，Qdrant才会变为活跃状态。",
+        "switchText": "Pinecone将变为活跃状态。Qdrant数据不会自动迁移回来。",
+        "cancel": "取消",
+        "migrating": "正在迁移…",
+        "switched": "存储已切换。",
+        "result": "已迁移向量：{{vectors}}；记忆：{{records}}。"
+      },
+      "reranking": {
+        "sectionTitle": "排序模型",
+        "sectionIntro": "使用最佳匹配片段对20个向量候选进行重新排序，然后应用相关性阈值。",
+        "enabledLabel": "为记忆搜索启用重排序",
+        "priceLabel": "价格，$ / 搜索",
+        "thresholdLabel": "最低相关度分数 · 0–1",
+        "resultLimitLabel": "返回的记忆 · 1–20"
+      },
+      "collections": {
+        "title": "记忆版本",
+        "intro": "仅显示由Chatter管理的集合。备份永远不会自动删除。",
+        "vectorCount": "{{count}}个向量",
+        "rollbackAction": "切换回来",
+        "rollbackComplete": "所选备份已激活。",
+        "deleteComplete": "集合已删除。",
+        "status": {
+          "active": "活跃",
+          "backup": "备份",
+          "migrating": "迁移中",
+          "failed": "失败"
+        }
+      },
+      "confirm": {
+        "migrateTitle": "更改嵌入模型？",
+        "migrateText": "所有存储的记忆块将被嵌入到新的本地 Qdrant 集合中。搜索继续使用当前集合；记忆写入将暂停，直到验证完成。",
+        "migrateAction": "迁移",
+        "activateTitle": "切换到该备份？",
+        "activateText": "当前的 SQLite 记忆将使用此备份的模型重新嵌入到新集合中。活动集合将保留为备份。",
+        "activateAction": "切换",
+        "deleteTitle": "删除此集合？",
+        "deleteText": "其向量将从Qdrant中永久移除。SQLite中的规范记忆文本不受影响。",
+        "deleteAction": "删除"
       }
     },
     "webSearch": {
@@ -421,9 +486,33 @@
       "capabilitySupported": "支持",
       "capabilityNotClaimed": "未声明",
       "enabled": "图像生成已启用",
-      "savingEnabled": "正在保存图像生成设置…"
+      "savingEnabled": "正在保存图像生成设置…",
+      "providerLabel": "提供商",
+      "providerHint": "随时切换 — 两个提供商都会保留其密钥",
+      "apiTokenLabel": "Cloudflare API 令牌",
+      "accountIdLabel": "Cloudflare 账户 ID",
+      "accountIdHint": "在 Cloudflare 仪表板中可见（Workers AI）",
+      "customModelLabel": "自定义模型…",
+      "defaultLabel": "默认",
+      "img2imgLabel": "图像到图像（参考）",
+      "img2imgHint": "允许机器人附加参考图像进行编辑（模型必须支持）"
     },
-    "statusDisabled": "已禁用"
+    "statusDisabled": "已禁用",
+    "transcription": {
+      "pageDescription": "通过OpenRouter或兼容OpenAI的API，为Chatter Desktop提供服务器端语音识别。",
+      "sectionTitle": "转录",
+      "sectionIntro": "桌面端发送单声道16 kHz WAV文件。密钥在服务器上保持加密。",
+      "enabled": "启用服务器转录",
+      "provider": "提供商",
+      "apiUrl": "API URL",
+      "model": "转录模型",
+      "pricePerMinute": "价格，$ / 分钟音频",
+      "check": "检查可用性",
+      "checking": "正在检查…",
+      "available": "可用 · {{model}}",
+      "unavailable": "不可用 · {{error}}",
+      "saved": "转录设置已保存。"
+    }
   },
   "services": {
     "telegram": {

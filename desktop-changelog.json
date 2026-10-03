@@ -8,40 +8,88 @@
       "Added cloud voice transcription (Settings → Voice)"
     ],
     "cs": [
-      "Přidány noviny! Otevřete editor a AI agenti shromáždí materiál — pak si přečtěte výsledek stylizovaný podle Deus Ex, Mass Effect, Denního věštce z Harryho Pottera nebo New York Times. Automatické generování brzy přijde"
+      "Přidána migrace ze SillyTavern",
+      "Každý chat lze nyní konfigurovat jednotlivě: který znak se používá, jeho osobnost, paměť a nastavení vyhledávání v chatu zapnuto/vypnuto. Také byl přidán přepínač režimu roleplay",
+      "Nyní můžete zobrazit uložené vzpomínky bota a vyhledávat v nich (včetně sémantického vyhledávání)",
+      "Vylepšena kvalita vyhledávání v paměti pomocí rerankeru",
+      "Přidán cloudový přepis hlasu (Nastavení → Hlas)"
     ],
     "de": [
-      "Zeitungen hinzugefügt! Öffnen Sie den Editor, und KI-Agenten sammeln das Material – lesen Sie dann das Ergebnis im Stil von Deus Ex, Mass Effect, dem Tagespropheten aus Harry Potter oder der New York Times. Automatische Generierung folgt in Kürze"
+      "Migration von SillyTavern hinzugefügt",
+      "Jeder Chat kann jetzt individuell konfiguriert werden: welcher Charakter verwendet wird, seine Persönlichkeit, Gedächtnis- und Chat-Such-Einstellungen an/aus. Außerdem wurde ein Rollenspielmodus-Umschalter hinzugefügt",
+      "Sie können jetzt die gespeicherten Erinnerungen des Bots anzeigen und durchsuchen (einschließlich semantischer Suche)",
+      "Verbesserte Speichersuchqualität mit einem Reranker",
+      "Cloud-Sprachtranskription hinzugefügt (Einstellungen → Sprache)"
     ],
     "es": [
-      "¡Periódicos añadidos! Abre el editor, y los agentes de IA recopilarán el material — luego lee el resultado con estilo de Deus Ex, Mass Effect, el Profeta Diario de Harry Potter o el New York Times. La generación automática llegará pronto"
+      "Se añadió migración desde SillyTavern",
+      "Cada chat ahora se puede configurar individualmente: qué personaje se usa, su personalidad, memoria y configuración de búsqueda de chat activada/desactivada. También se añadió un interruptor de modo de juego de roles",
+      "Ahora puedes ver los recuerdos guardados del bot y buscarlos (incluida la búsqueda semántica)",
+      "Se mejoró la calidad de búsqueda de memoria con un reranker",
+      "Se añadió transcripción de voz en la nube (Configuración → Voz)"
     ],
     "fr": [
-      "Journaux ajoutés ! Ouvrez l'éditeur, et les agents IA rassembleront le matériel — puis lisez le résultat stylisé d'après Deus Ex, Mass Effect, le Daily Prophet de Harry Potter, ou le New York Times. La génération automatique arrive bientôt"
+      "Ajout de la migration depuis SillyTavern",
+      "Chaque chat peut désormais être configuré individuellement : quel personnage est utilisé, sa personnalité, sa mémoire et les paramètres de recherche de chat activés/désactivés. Ajout également d'un mode jeu de rôle",
+      "Vous pouvez maintenant consulter les souvenirs enregistrés du bot et les rechercher (y compris la recherche sémantique)",
+      "Amélioration de la qualité de recherche de mémoire avec un reranker",
+      "Ajout de la transcription vocale cloud (Paramètres → Voix)"
     ],
     "it": [
-      "Aggiunti i giornali! Apri l'editor e gli agenti AI raccoglieranno il materiale — poi leggi il risultato in stile Deus Ex, Mass Effect, il Daily Prophet di Harry Potter o il New York Times. La generazione automatica arriverà presto"
+      "Aggiunta migrazione da SillyTavern",
+      "Ogni chat ora può essere configurata individualmente: quale personaggio viene usato, la sua personalità, la memoria e le impostazioni di ricerca chat attive/disattivate. Aggiunto anche un interruttore per la modalità roleplay",
+      "Ora puoi visualizzare i ricordi salvati del bot e cercarli (inclusa la ricerca semantica)",
+      "Migliorata la qualità della ricerca della memoria con un reranker",
+      "Aggiunta trascrizione vocale cloud (Impostazioni → Voce)"
     ],
     "ja": [
-      "新聞を追加しました！エディターを開くと、AIエージェントが素材を集め、Deus Ex、Mass Effect、ハリー・ポッターのデイリー・プロフェット、またはニューヨーク・タイムズ風の結果を読み取ります。自動生成は近日公開予定です"
+      "SillyTavernからの移行を追加しました",
+      "各チャットを個別に設定できるようになりました：使用するキャラクター、その性格、記憶、チャット検索設定のオン/オフ。また、ロールプレイモードの切り替えも追加しました",
+      "ボットの保存された記憶を表示し、検索できるようになりました（セマンティック検索を含む）",
+      "リランカーによる記憶検索の品質を向上しました",
+      "クラウド音声文字起こしを追加しました（設定 → 音声）"
     ],
     "ko": [
-      "신문이 추가되었습니다! 편집기를 열면 AI 에이전트가 자료를 수집하고, Deus Ex, Mass Effect, 해리포터의 Daily Prophet, 또는 New York Times 스타일로 결과를 읽을 수 있습니다. 자동 생성이 곧 제공됩니다."
+      "SillyTavern에서 마이그레이션 추가됨",
+      "이제 각 채팅을 개별적으로 구성할 수 있습니다: 사용할 캐릭터, 성격, 기억 및 채팅 검색 설정 켜기/끄기. 또한 롤플레이 모드 토글 추가됨",
+      "이제 봇의 저장된 기억을 보고 검색할 수 있습니다(의미 검색 포함)",
+      "리랭커로 기억 검색 품질 개선됨",
+      "클라우드 음성 전사 추가됨(설정 → 음성)"
     ],
     "pl": [
-      "Dodano gazety! Otwórz edytor, a agenci AI zbiorą materiał — następnie przeczytaj wynik w stylu Deus Ex, Mass Effect, Proroka Codziennego z Harry'ego Pottera lub New York Times. Automatyczne generowanie wkrótce"
+      "Dodano migrację z SillyTavern",
+      "Każdy czat można teraz skonfigurować indywidualnie: która postać jest używana, jej osobowość, pamięć oraz ustawienia wyszukiwania czatu włącz/wyłącz. Dodano także przełącznik trybu odgrywania ról",
+      "Możesz teraz przeglądać zapisane wspomnienia bota i wyszukiwać je (w tym wyszukiwanie semantyczne)",
+      "Poprawiono jakość wyszukiwania wspomnień dzięki rerankerowi",
+      "Dodano chmurową transkrypcję głosu (Ustawienia → Głos)"
     ],
     "pt-BR": [
-      "Jornais adicionados! Abra o editor, e agentes de IA reunirão o material — depois leia o resultado estilizado como Deus Ex, Mass Effect, o Profeta Diário de Harry Potter ou o New York Times. A geração automática chegará em breve"
+      "Adicionada migração do SillyTavern",
+      "Cada chat agora pode ser configurado individualmente: qual personagem é usado, sua personalidade, memória e configurações de pesquisa de chat ativadas/desativadas. Também foi adicionado um alternador de modo de roleplay",
+      "Agora você pode visualizar as memórias salvas do bot e pesquisá-las (incluindo pesquisa semântica)",
+      "Melhorada a qualidade da pesquisa de memória com um reranker",
+      "Adicionada transcrição de voz em nuvem (Configurações → Voz)"
     ],
     "ru": [
-      "Добавлены газеты! Откройте редактор, и ИИ-агенты соберут материал — затем читайте результат в стиле Deus Ex, Mass Effect, «Ежедневного пророка» из Гарри Поттера или New York Times. Автогенерация скоро появится"
+      "Добавлена миграция из SillyTavern",
+      "Теперь каждый чат можно настроить индивидуально: какой персонаж используется, его личность, память и настройки поиска по чату вкл/выкл. Также добавлен переключатель режима ролевой игры",
+      "Теперь вы можете просматривать сохраненные воспоминания бота и искать по ним (включая семантический поиск)",
+      "Улучшено качество поиска по памяти с помощью реранкера",
+      "Добавлено облачное распознавание речи (Настройки → Голос)"
     ],
     "tr": [
-      "Gazeteler eklendi! Editörü açın, AI ajanları materyali toplayacak — ardından Deus Ex, Mass Effect, Harry Potter'daki Günlük Kahin veya New York Times tarzında sonucu okuyun. Otomatik oluşturma yakında geliyor"
+      "SillyTavern'den geçiş eklendi",
+      "Her sohbet artık ayrı ayrı yapılandırılabilir: hangi karakterin kullanıldığı, kişiliği, hafızası ve sohbet arama ayarları açık/kapalı. Ayrıca bir rol yapma modu geçişi eklendi",
+      "Artık botun kayıtlı anılarını görüntüleyebilir ve arayabilirsiniz (anlamsal arama dahil)",
+      "Bir yeniden sıralayıcı ile hafıza arama kalitesi iyileştirildi",
+      "Bulut sesli transkripsiyon eklendi (Ayarlar → Ses)"
     ],
     "zh-CN": [
-      "新增报纸！打开编辑器，AI代理将收集素材——然后阅读以《杀出重围》、《质量效应》、《哈利·波特》中的《预言家日报》或《纽约时报》风格呈现的结果。自动生成即将推出"
+      "添加了从 SillyTavern 的迁移",
+      "现在可以单独配置每个聊天：使用哪个角色、其个性、记忆和聊天搜索设置开关。还添加了角色扮演模式切换",
+      "您现在可以查看机器人的已保存记忆并搜索它们（包括语义搜索）",
+      "通过重排序器改进了记忆搜索质量",
+      "添加了云端语音转录（设置 → 语音）"
     ]
   }
 }

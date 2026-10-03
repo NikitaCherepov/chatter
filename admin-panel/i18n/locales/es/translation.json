@@ -88,7 +88,10 @@
     "coefficientSaved": "Coeficiente guardado",
     "cancel": "Cancelar",
     "on": "Activado",
-    "off": "Desactivado"
+    "off": "Desactivado",
+    "save": "Guardar",
+    "savingChanges": "Guardando…",
+    "delete": "Eliminar"
   },
   "models": {
     "auto": {
@@ -294,6 +297,11 @@
         "name": "Generación de imágenes",
         "description": "Generar imágenes a través de API externa",
         "group": "Medios"
+      },
+      "transcription": {
+        "name": "Transcripción de voz",
+        "description": "Reconocimiento de voz del lado del servidor",
+        "group": "Medios"
       }
     },
     "secretField": {
@@ -312,7 +320,64 @@
         "sectionIntro": "Una API independiente compatible con OpenAI que convierte texto en vectores para Pinecone.",
         "apiUrlLabel": "URL de la API",
         "modelLabel": "Modelo",
-        "apiKeyLabel": "Clave de API del proveedor de embedding"
+        "apiKeyLabel": "Clave de API del proveedor de embedding",
+        "providerLabel": "Proveedor",
+        "priceLabel": "Precio de entrada, $ / 1M tokens",
+        "migrateAction": "Re-embed y cambiar",
+        "migrating": "Migrando…",
+        "migrationComplete": "La nueva colección está activa. Vectores: {{count}}.",
+        "settingsSaved": "Configuración de memoria vectorial guardada."
+      },
+      "storage": {
+        "title": "Motor vectorial",
+        "intro": "Esta selección controla la búsqueda vectorial y las nuevas escrituras. Qdrant está incluido con Chatter y se activa solo después de una migración verificada.",
+        "label": "Motor vectorial activo",
+        "pineconeHint": "Índice vectorial remoto",
+        "qdrantHint": "Índice vectorial local incluido con Chatter",
+        "migrateAction": "Migrar y cambiar",
+        "switchAction": "Cambiar almacenamiento",
+        "migrateTitle": "¿Migrar memoria a Qdrant?",
+        "switchTitle": "¿Cambiar a Pinecone?",
+        "migrateText": "Todos los vectores y metadatos se copiarán de Pinecone sin regenerar embeddings.",
+        "backupText": "Pinecone no se borrará. Qdrant se activa solo después de que cada vector copiado sea verificado.",
+        "switchText": "Pinecone se activará. Los datos de Qdrant no se migran de vuelta automáticamente.",
+        "cancel": "Cancelar",
+        "migrating": "Migrando…",
+        "switched": "Almacenamiento cambiado.",
+        "result": "Vectores migrados: {{vectors}}; recuerdos: {{records}}."
+      },
+      "reranking": {
+        "sectionTitle": "Modelo de clasificación",
+        "sectionIntro": "Reordena 20 candidatos vectoriales usando sus mejores fragmentos coincidentes y luego aplica el umbral de relevancia.",
+        "enabledLabel": "Habilitar reordenamiento para búsqueda de memoria",
+        "priceLabel": "Precio, $ / búsqueda",
+        "thresholdLabel": "Puntuación mínima de relevancia · 0–1",
+        "resultLimitLabel": "Memorias devueltas · 1–20"
+      },
+      "collections": {
+        "title": "Versiones de memoria",
+        "intro": "Solo se muestran las colecciones gestionadas por Chatter. Las copias de seguridad nunca se eliminan automáticamente.",
+        "vectorCount": "{{count}} vectores",
+        "rollbackAction": "Volver a cambiar",
+        "rollbackComplete": "La copia de seguridad seleccionada está activa.",
+        "deleteComplete": "Colección eliminada.",
+        "status": {
+          "active": "Activo",
+          "backup": "Copia de seguridad",
+          "migrating": "Migrando",
+          "failed": "Fallido"
+        }
+      },
+      "confirm": {
+        "migrateTitle": "¿Cambiar el modelo de incrustación?",
+        "migrateText": "Todos los fragmentos de memoria almacenados se incrustarán en una nueva colección local de Qdrant. Las búsquedas seguirán usando la colección actual; las escrituras de memoria se pausan hasta que finalice la verificación.",
+        "migrateAction": "Migrar",
+        "activateTitle": "¿Cambiar a esta copia de seguridad?",
+        "activateText": "Las memorias SQLite actuales se volverán a incrustar con el modelo de esta copia de seguridad en una nueva colección. La colección activa se conservará como copia de seguridad.",
+        "activateAction": "Cambiar",
+        "deleteTitle": "¿Eliminar esta colección?",
+        "deleteText": "Sus vectores se eliminarán permanentemente de Qdrant. El texto de memoria canónico en SQLite no se ve afectado.",
+        "deleteAction": "Eliminar"
       }
     },
     "webSearch": {
@@ -421,9 +486,33 @@
       "capabilitySupported": "compatible",
       "capabilityNotClaimed": "no reclamado",
       "enabled": "Generación de imágenes habilitada",
-      "savingEnabled": "Guardando configuración de generación de imágenes…"
+      "savingEnabled": "Guardando configuración de generación de imágenes…",
+      "providerLabel": "Proveedor",
+      "providerHint": "Cambie en cualquier momento: ambos proveedores conservan sus claves",
+      "apiTokenLabel": "Token de API de Cloudflare",
+      "accountIdLabel": "ID de cuenta de Cloudflare",
+      "accountIdHint": "Visible en el panel de Cloudflare (Workers AI)",
+      "customModelLabel": "Modelo personalizado…",
+      "defaultLabel": "Predeterminado",
+      "img2imgLabel": "Imagen a imagen (referencias)",
+      "img2imgHint": "Permite que el bot adjunte imágenes de referencia para edición (el modelo debe admitirlas)"
     },
-    "statusDisabled": "Deshabilitado"
+    "statusDisabled": "Deshabilitado",
+    "transcription": {
+      "pageDescription": "Reconocimiento de voz del lado del servidor para Chatter Desktop a través de OpenRouter o una API compatible con OpenAI.",
+      "sectionTitle": "Transcripción",
+      "sectionIntro": "El escritorio envía un archivo WAV mono de 16 kHz. La clave permanece cifrada en el servidor.",
+      "enabled": "Habilitar transcripción del servidor",
+      "provider": "Proveedor",
+      "apiUrl": "URL de la API",
+      "model": "Modelo de transcripción",
+      "pricePerMinute": "Precio, $ / minuto de audio",
+      "check": "Comprobar disponibilidad",
+      "checking": "Comprobando…",
+      "available": "Disponible · {{model}}",
+      "unavailable": "No disponible · {{error}}",
+      "saved": "Configuración de transcripción guardada."
+    }
   },
   "services": {
     "telegram": {
