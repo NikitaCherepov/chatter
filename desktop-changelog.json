@@ -1,7 +1,11 @@
 {
   "changes": {
     "en": [
-      "Added newspapers! Open the editor, and AI agents will gather the material — then read the result styled after Deus Ex, Mass Effect, the Daily Prophet from Harry Potter, or the New York Times. Auto-generation is coming soon"
+      "Added migration from SillyTavern",
+      "Each chat can now be configured individually: which character is used, their personality, memory and chat search settings on/off. Also added a roleplay mode toggle",
+      "You can now view the bot's saved memories and search them (including semantic search)",
+      "Improved memory search quality with a reranker",
+      "Added cloud voice transcription (Settings → Voice)"
     ],
     "cs": [
       "Přidány noviny! Otevřete editor a AI agenti shromáždí materiál — pak si přečtěte výsledek stylizovaný podle Deus Ex, Mass Effect, Denního věštce z Harryho Pottera nebo New York Times. Automatické generování brzy přijde"
