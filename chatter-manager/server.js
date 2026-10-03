@@ -950,7 +950,7 @@ async function updateServiceSelection() {
 }
 const PULL_COOLDOWN_MS = 5 * 60 * 1000;//test
 let serverUpdateSnapshotCache = null;
-const UPDATE_DISK_RESERVE_BYTES = 512 * 1024 * 1024;
+const UPDATE_DISK_RESERVE_BYTES = 64 * 1024 * 1024;
 const UNKNOWN_IMAGE_ESTIMATE_BYTES = 512 * 1024 * 1024;
 
 const BUNDLED_PROJECT_DIR = '/app/release/project';
@@ -1253,9 +1253,11 @@ function buildUpdateStorageInfo(comparisons) {
     return sum + (measured || UNKNOWN_IMAGE_ESTIMATE_BYTES);
   }, 0);
   const databaseBytes = fs.existsSync(DATABASE_FILE) ? fs.statSync(DATABASE_FILE).size : 0;
-  // Docker temporarily keeps compressed downloads, unpacked layers, and old
-  // images. A 3x multiplier plus a fixed reserve deliberately overestimates.
-  const imageWorkingBytes = imageDownloadBytes * 3;
+  // The manifest size is already a conservative upper bound here: it includes
+  // every compressed layer in each changed image even though Docker normally
+  // reuses most layers from the running release. Counting it several times
+  // blocks updates on small hosts without reflecting the actual pull delta.
+  const imageWorkingBytes = imageDownloadBytes;
   // sqlite .backup and the resulting archive coexist until tar completes.
   const backupWorkingBytes = databaseBytes * 2 + 64 * 1024 * 1024;
   const requiredBytes = changed.length

@@ -844,7 +844,7 @@
         "title": "Disk space before update",
         "available": "Available: {{size}}",
         "required": "Estimated required: {{size}}",
-        "estimate": "Images to download: {{images}} · backup workspace: {{backup}}. The estimate includes room for unpacking images and rollback.",
+        "estimate": "Changed images: {{images}} · backup workspace: {{backup}}. The estimate uses the full compressed image size even when Docker can reuse existing layers.",
         "insufficient": "Free some disk space before updating."
       },
       "channel": {
