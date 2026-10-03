@@ -948,7 +948,7 @@ async function updateServiceSelection() {
 
   return { profiles: ['*'], services, images, releaseServices, externalServices };
 }
-const PULL_COOLDOWN_MS = 5 * 60 * 1000;
+const PULL_COOLDOWN_MS = 5 * 60 * 1000;//test
 let serverUpdateSnapshotCache = null;
 const UPDATE_DISK_RESERVE_BYTES = 512 * 1024 * 1024;
 const UNKNOWN_IMAGE_ESTIMATE_BYTES = 512 * 1024 * 1024;
