@@ -12,7 +12,6 @@ export type OpenRouterPricing = {
   completion?: string | null;
   input_cache_read?: string | null;
   request?: string | null;
-  audio?: string | null;
 };
 
 /**
@@ -39,19 +38,26 @@ export function pricingToModelPrices(
     ? null
     : Number(p.request);
   const requestPrice = Number.isFinite(request) && (request as number) >= 0 ? request : null;
-  const audio = p.audio === null || p.audio === undefined || p.audio === ''
-    ? null
-    : Number(p.audio);
-  const audioPricePerSecond = Number.isFinite(audio) && (audio as number) >= 0 ? audio : null;
-  if (input === null && output === null && cache === null && requestPrice === null && audioPricePerSecond === null) return null;
+  if (input === null && output === null && cache === null && requestPrice === null) return null;
   return {
     inputPricePerMillion: input,
     outputPricePerMillion: output,
     cacheReadPricePerMillion: cache,
     requestPrice,
-    audioPricePerSecond,
   };
 }
+
+/**
+ * OpenRouter catalogs transcription models with a single `prompt` price in
+ * USD per minute of audio — used as-is, no per-token scaling.
+ */
+export const transcriptionPricePerMinute = (
+  p: OpenRouterPricing | null | undefined
+): number | null => {
+  if (!p) return null;
+  const n = Number(p.prompt);
+  return Number.isFinite(n) && n >= 0 ? n : null;
+};
 
 // ── User input parsing ───────────────────────────────────────────────────────
 

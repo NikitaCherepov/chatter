@@ -8,6 +8,7 @@ import { Select, type SelectOption } from '../Select/Select';
 import {
   formatModelHint,
   pricingToModelPrices,
+  transcriptionPricePerMinute,
   type OpenRouterPricing,
 } from './ModelInput.utils';
 
@@ -68,7 +69,17 @@ export function OpenRouterModelInput({ value, onSelect, catalog = 'chat', apiKey
           .map((m) => {
             // Stash pricing for instant use on select.
             if (m.id && m.pricing) {
-              pricingCacheRef.current.set(m.id, pricingToModelPrices(m.pricing));
+              pricingCacheRef.current.set(
+                m.id,
+                catalog === 'transcription'
+                  ? {
+                      inputPricePerMillion: null,
+                      outputPricePerMillion: null,
+                      cacheReadPricePerMillion: null,
+                      pricePerMinute: transcriptionPricePerMinute(m.pricing),
+                    }
+                  : pricingToModelPrices(m.pricing),
+              );
             }
             if (m.id && Array.isArray(m.supported_parameters)) {
               toolSupportCacheRef.current.set(

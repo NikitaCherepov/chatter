@@ -6,8 +6,8 @@ import type { ApiKey } from '../../../lib/types';
 import { api } from '../../../lib/api';
 import { FormField } from '../../ui/FormField/FormField';
 import { Input } from '../../ui/Input/Input';
-import { Checkbox } from '../../ui/Checkbox/Checkbox';
 import { Select, type SelectOption } from '../../ui/Select/Select';
+import { Toggle } from '../../ui/Toggle/Toggle';
 import { OpenRouterModelInput } from '../../ui/ModelInput/OpenRouterModelInput';
 import { SecretState } from '../../ui/SecretState/SecretState';
 import { IntegrationDetailPage } from './IntegrationDetailPage';
@@ -19,8 +19,7 @@ type Settings = {
   baseUrl: string;
   model: string;
   apiKeyId: number | null;
-  audioPricePerSecond: number | null;
-  inputPricePerMillion: number | null;
+  pricePerMinute: number | null;
   hasApiKey: boolean;
 };
 
@@ -42,6 +41,8 @@ export function TranscriptionPage({ onBack }: { onBack: () => void }) {
   const [status, setStatus] = useState<Status | null>(null);
   const [busy, setBusy] = useState(false);
   const [checking, setChecking] = useState(false);
+  const [toggleSaving, setToggleSaving] = useState(false);
+  const [toggleError, setToggleError] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [creatingKey, setCreatingKey] = useState(false);
@@ -80,9 +81,11 @@ export function TranscriptionPage({ onBack }: { onBack: () => void }) {
     setError('');
     setMessage('');
     try {
+      // enabled is owned by the toggle; a stale draft value must not override it.
+      const { enabled: _drop, ...rest } = draft;
       const next = await api<Settings>('/api/transcription/settings', {
         method: 'PUT',
-        body: JSON.stringify(draft),
+        body: JSON.stringify(rest),
       });
       setSaved(next);
       setDraft(next);
@@ -92,6 +95,29 @@ export function TranscriptionPage({ onBack }: { onBack: () => void }) {
       setError(reason instanceof Error ? reason.message : String(reason));
     } finally {
       setBusy(false);
+    }
+  };
+
+  const toggleEnabled = async (enabled: boolean) => {
+    if (!draft) return;
+    const previous = draft.enabled;
+    const applyEnabled = (value: boolean) => {
+      setDraft((current) => (current ? { ...current, enabled: value } : current));
+      setSaved((current) => (current ? { ...current, enabled: value } : current));
+    };
+    applyEnabled(enabled);
+    setToggleSaving(true);
+    setToggleError('');
+    try {
+      await api('/api/transcription/settings', {
+        method: 'PUT',
+        body: JSON.stringify({ enabled }),
+      });
+    } catch (reason) {
+      applyEnabled(previous);
+      setToggleError(reason instanceof Error ? reason.message : String(reason));
+    } finally {
+      setToggleSaving(false);
     }
   };
 
@@ -155,11 +181,15 @@ export function TranscriptionPage({ onBack }: { onBack: () => void }) {
         </div>
         {draft && (
           <div className={styles.fields}>
-            <Checkbox
+            <Toggle
               checked={draft.enabled}
-              onChange={(enabled) => setDraft({ ...draft, enabled })}
-              label={t('integrations.transcription.enabled')}
+              onChange={(enabled) => void toggleEnabled(enabled)}
+              label={toggleSaving
+                ? t('common.savingChanges')
+                : t('integrations.transcription.enabled')}
+              disabled={toggleSaving}
             />
+            {toggleError && <span className={styles.checkError}>{toggleError}</span>}
             <FormField label={t('integrations.transcription.provider')}>
               <Select
                 value={draft.provider}
@@ -167,13 +197,14 @@ export function TranscriptionPage({ onBack }: { onBack: () => void }) {
                   { value: 'openrouter', label: 'OpenRouter' },
                   { value: 'custom', label: t('models.billing.customProvider') },
                 ]}
-                onChange={(value) =>
+                onChange={(value) => {
+                  setStatus(null);
                   setDraft({
                     ...draft,
                     provider: value as Settings['provider'],
                     ...(value === 'openrouter' ? { baseUrl: OPENROUTER_URL } : {}),
-                  })
-                }
+                  });
+                }}
               />
             </FormField>
             <FormField label={t('integrations.transcription.apiUrl')}>
@@ -240,81 +271,70 @@ export function TranscriptionPage({ onBack }: { onBack: () => void }) {
                 />
               </FormField>
             )}
-            <FormField label={t('integrations.transcription.model')}>
-              {draft.provider === 'openrouter' ? (
-                <OpenRouterModelInput
-                  value={draft.model}
-                  catalog="transcription"
-                  apiKeyId={draft.apiKeyId}
-                  onSelect={(model, prices) =>
-                    setDraft({
-                      ...draft,
-                      model,
-                      audioPricePerSecond: prices?.audioPricePerSecond ?? null,
-                      inputPricePerMillion: prices?.inputPricePerMillion ?? null,
-                    })
-                  }
-                />
-              ) : (
-                <Input
-                  value={draft.model}
-                  onChange={(event) => setDraft({ ...draft, model: event.target.value })}
-                />
-              )}
-            </FormField>
-            <FormField label={t('integrations.transcription.audioPrice')}>
-              <Input
-                type="number"
-                min="0"
-                step="any"
-                value={draft.audioPricePerSecond ?? ''}
-                readOnly={draft.provider === 'openrouter'}
-                onChange={(event) =>
-                  setDraft({
-                    ...draft,
-                    audioPricePerSecond:
-                      event.target.value === '' ? null : Number(event.target.value),
-                  })
-                }
-                placeholder="—"
-              />
-            </FormField>
-            <FormField label={t('integrations.transcription.tokenPrice')}>
-              <Input
-                type="number"
-                min="0"
-                step="any"
-                value={draft.inputPricePerMillion ?? ''}
-                readOnly={draft.provider === 'openrouter'}
-                onChange={(event) =>
-                  setDraft({
-                    ...draft,
-                    inputPricePerMillion:
-                      event.target.value === '' ? null : Number(event.target.value),
-                  })
-                }
-                placeholder="—"
-              />
-            </FormField>
-            <button
-              type="button"
-              className={styles.checkButton}
-              disabled={checking || changed || !draft.enabled}
-              onClick={() => void check()}
+            <FormField
+              label={t('integrations.transcription.model')}
+              state={
+                status ? (
+                  <span className={status.available ? styles.checkSuccess : styles.checkError}>
+                    {status.available
+                      ? t('integrations.transcription.available', { model: status.model })
+                      : t('integrations.transcription.unavailable', {
+                          error: status.error || 'unknown',
+                        })}
+                  </span>
+                ) : undefined
+              }
             >
-              {checking
-                ? t('integrations.transcription.checking')
-                : t('integrations.transcription.check')}
-            </button>
-            {status && (
-              <span className={status.available ? styles.checkSuccess : styles.checkError}>
-                {status.available
-                  ? t('integrations.transcription.available', { model: status.model })
-                  : t('integrations.transcription.unavailable', {
-                      error: status.error || 'unknown',
-                    })}
-              </span>
-            )}
+              <div className={styles.inputWithAction}>
+                {draft.provider === 'openrouter' ? (
+                  <OpenRouterModelInput
+                    value={draft.model}
+                    catalog="transcription"
+                    apiKeyId={draft.apiKeyId}
+                    onSelect={(model, prices) => {
+                      setStatus(null);
+                      setDraft({
+                        ...draft,
+                        model,
+                        pricePerMinute: prices?.pricePerMinute ?? null,
+                      });
+                    }}
+                  />
+                ) : (
+                  <Input
+                    value={draft.model}
+                    onChange={(event) => setDraft({ ...draft, model: event.target.value })}
+                  />
+                )}
+                <button
+                  type="button"
+                  className={styles.checkButton}
+                  disabled={checking || changed || !draft.enabled}
+                  onClick={() => void check()}
+                >
+                  {checking
+                    ? t('integrations.transcription.checking')
+                    : t('integrations.transcription.check')}
+                </button>
+              </div>
+            </FormField>
+            <FormField label={t('integrations.transcription.pricePerMinute')}>
+              <Input
+                type="number"
+                min="0"
+                step="any"
+                value={draft.pricePerMinute ?? ''}
+                readOnly={draft.provider === 'openrouter'}
+                onChange={(event) =>
+                  setDraft({
+                    ...draft,
+                    pricePerMinute:
+                      event.target.value === '' ? null : Number(event.target.value),
+                  })
+                }
+                placeholder="—"
+              />
+            </FormField>
           </div>
         )}
       </section>

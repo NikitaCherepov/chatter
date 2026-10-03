@@ -189,8 +189,8 @@ export const transcribeAudio = async (input: {
       : Number(rawReportedCost);
   const duration = wavDurationSeconds(input.audioBuffer);
   const fallbackCost =
-    duration !== null && settings.audioPricePerSecond !== null
-      ? duration * settings.audioPricePerSecond
+    duration !== null && settings.pricePerMinute !== null
+      ? (duration / 60) * settings.pricePerMinute
       : null;
   chargeTokens({
     userId: input.userId,
@@ -212,7 +212,7 @@ export const transcribeAudio = async (input: {
       reportedCost !== null && Number.isFinite(reportedCost) && reportedCost >= 0
         ? 'provider_reported'
         : 'transcription_settings',
-    inputPricePerMillion: settings.inputPricePerMillion,
+    inputPricePerMillion: null,
     outputPricePerMillion: null,
     cacheReadPricePerMillion: null,
   });

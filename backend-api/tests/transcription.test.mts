@@ -42,8 +42,7 @@ const configured = updateTranscriptionSettings({
   baseUrl: 'https://voice.example/v1',
   model: 'test-transcriber',
   apiKeyId: keyId,
-  audioPricePerSecond: 0.0001,
-  inputPricePerMillion: 0.2,
+  pricePerMinute: 0.3,
 });
 assert.equal(configured.hasApiKey, true);
 assert.equal(configured.model, 'test-transcriber');
@@ -126,6 +125,19 @@ assert.deepEqual(usage, {
   actual_cost_usd: 0.0012,
   pricing_source: 'provider_reported',
 });
+
+// No provider-reported cost: falls back to pricePerMinute (WAV above is 1s).
+globalThis.fetch = (async () =>
+  new Response(JSON.stringify({ text: 'ещё раз', usage: { total_tokens: 3 } }), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  })) as typeof fetch;
+await transcribeAudio({ userId: 501, audioBuffer: wav, mimeType: 'audio/wav' });
+const fallbackUsage = db
+  .prepare('SELECT actual_cost_usd, pricing_source FROM user_token_usage WHERE user_id = 501 ORDER BY id DESC LIMIT 1')
+  .get() as any;
+assert.equal(fallbackUsage.actual_cost_usd, 0.005);
+assert.equal(fallbackUsage.pricing_source, 'transcription_settings');
 
 replaceTranscriptionApiKeyReference(keyId, null);
 assert.equal(getTranscriptionSettings().apiKeyId, null);

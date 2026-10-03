@@ -9,8 +9,8 @@ export type TranscriptionSettings = {
   baseUrl: string;
   model: string;
   apiKeyId: number | null;
-  audioPricePerSecond: number | null;
-  inputPricePerMillion: number | null;
+  /** USD per minute of audio (how OpenRouter lists transcription models). */
+  pricePerMinute: number | null;
 };
 
 export type TranscriptionPublicSettings = TranscriptionSettings & { hasApiKey: boolean };
@@ -23,8 +23,7 @@ const DEFAULTS: TranscriptionSettings = {
   baseUrl: 'https://openrouter.ai/api/v1',
   model: 'openai/whisper-large-v3-turbo',
   apiKeyId: null,
-  audioPricePerSecond: null,
-  inputPricePerMillion: null,
+  pricePerMinute: null,
 };
 
 const normalizeId = (value: unknown): number | null => {
@@ -74,8 +73,7 @@ const normalizeSettings = (value: unknown, fallback = DEFAULTS): TranscriptionSe
     baseUrl: `${source.baseUrl || fallback.baseUrl}`.trim().replace(/\/+$/, ''),
     model: `${source.model || fallback.model}`.trim(),
     apiKeyId: normalizeId(source.apiKeyId) ?? fallback.apiKeyId,
-    audioPricePerSecond: normalizePrice(source.audioPricePerSecond),
-    inputPricePerMillion: normalizePrice(source.inputPricePerMillion),
+    pricePerMinute: normalizePrice(source.pricePerMinute),
   };
 };
 
