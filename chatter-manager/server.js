@@ -1354,10 +1354,12 @@ async function getServerUpdateInfoUnlocked({ pull = false, forcePull = false } =
     return { service, running, latest, changed };
   }));
   const manager = comparisons.find(item => item.service === 'chatter-manager');
-  result.installedHash = manager?.latest?.revision
-    ? shortImageHash(manager?.running)
-    : shortImageHash({ id: manager?.running?.id || '', revision: '' });
-  result.latestHash = shortImageHash(manager?.latest);
+  // Keep the operation identity stable before and after pulling the image.
+  // Local image inspection may reveal a revision label that is unavailable in
+  // the remote manifest; using it here would change latestHash mid-update and
+  // make the admin panel treat the same operation as a new one.
+  result.installedHash = shortImageHash({ id: manager?.running?.id || '', revision: '' });
+  result.latestHash = shortImageHash({ id: manager?.latest?.id || '', revision: '' });
   result.changelog = manager?.latest?.changelog || {};
   result.changedServices = comparisons.filter(item => item.changed).map(item => item.service);
   result.available = result.changedServices.length > 0;

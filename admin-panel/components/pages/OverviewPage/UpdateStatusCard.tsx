@@ -22,16 +22,11 @@ export function UpdateStatusCard() {
   const [switching, setSwitching] = useState(false);
 
   const activeStatuses = useMemo(() => new Set(['queued', 'backup', 'restarting']), []);
-  const operationMatchesLatest = Boolean(
-    info?.operation.targetHash
-      && info.operation.targetHash === info.latestHash,
-  );
   const updating = Boolean(
     info
-      && operationMatchesLatest
       && activeStatuses.has(info.operation.status),
   );
-  const operationStatus = !info || !operationMatchesLatest
+  const operationStatus = !info
     ? 'idle'
     : info.operation.status === 'complete' && info.available
       ? 'idle'
