@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { serverUpdateService, type ServerUpdateInfo } from '../services/serverUpdateService';
 
-const activeStatuses = new Set(['queued', 'backup', 'restarting']);
+const activeStatuses = new Set(['queued', 'pulling', 'backup', 'restarting']);
 
 export function useServerUpdate() {
   const queryClient = useQueryClient();

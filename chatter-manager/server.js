@@ -894,7 +894,7 @@ function serverUpdatesSupported() {
 
 function readUpdateState() {
   const state = loadJson(UPDATE_STATE_FILE, { status: 'idle', targetHash: '', message: '', updatedAt: null });
-  const active = ['queued', 'backup', 'restarting'].includes(state.status);
+  const active = ['queued', 'pulling', 'backup', 'restarting'].includes(state.status);
   const updatedAt = Date.parse(state.updatedAt) || 0;
   if (active && Date.now() - updatedAt > 60 * 60 * 1000) {
     return { ...state, status: 'failed', message: 'server_update_timed_out' };
@@ -902,14 +902,24 @@ function readUpdateState() {
   return state;
 }
 
+function appendUpdateLog(message) {
+  try {
+    fs.mkdirSync(path.dirname(UPDATER_LOG_FILE), { recursive: true });
+    fs.appendFileSync(UPDATER_LOG_FILE, `${new Date().toISOString()} ${message}\n`);
+  } catch (error) {
+    console.error('[manager:server-update] could not write update log', error);
+  }
+}
+
 function writeUpdateState(patch) {
   const state = { ...readUpdateState(), ...patch, updatedAt: new Date().toISOString() };
   atomicWrite(UPDATE_STATE_FILE, `${JSON.stringify(state, null, 2)}\n`);
+  appendUpdateLog(`${state.status}: ${state.message || ''}`.trim());
   return state;
 }
 
 function serverUpdateInProgress() {
-  return Boolean(updatePromise) || ['queued', 'backup', 'restarting'].includes(readUpdateState().status);
+  return Boolean(updatePromise) || ['queued', 'pulling', 'backup', 'restarting'].includes(readUpdateState().status);
 }
 
 async function updateServiceSelection() {
@@ -1321,7 +1331,7 @@ async function getServerUpdateInfoUnlocked({ pull = false, forcePull = false } =
   const now = Date.now();
   if (!forcePull && serverUpdateSnapshotCache?.key === cacheKey
     && now - serverUpdateSnapshotCache.checkedAtMs < PULL_COOLDOWN_MS) {
-    return { ...serverUpdateSnapshotCache.value, operation: readUpdateState() };
+    return attachUpdateOperation(serverUpdateSnapshotCache.value);
   }
   const result = {
     supported: serverUpdatesSupported(),
@@ -1367,6 +1377,26 @@ async function getServerUpdateInfoUnlocked({ pull = false, forcePull = false } =
   result.storage = buildUpdateStorageInfo(comparisons);
   if (pull) result.checkedAt = new Date().toISOString();
   serverUpdateSnapshotCache = { key: cacheKey, checkedAtMs: now, value: { ...result, operation: undefined } };
+  return attachUpdateOperation(result);
+}
+
+function attachUpdateOperation(snapshot) {
+  const operation = readUpdateState();
+  const result = { ...snapshot, operation };
+  // The detached updater writes `complete` only after Compose successfully
+  // recreated and health-checked the selected services. A cached snapshot can
+  // still describe the containers from before that restart, so do not offer
+  // the exact same target as a fresh update again.
+  if (operation.status === 'complete'
+    && operation.targetHash
+    && operation.targetHash === result.latestHash) {
+    return {
+      ...result,
+      installedHash: result.latestHash,
+      available: false,
+      changedServices: [],
+    };
+  }
   return result;
 }
 
@@ -1402,6 +1432,14 @@ async function launchServerUpdateHelper(targetHash, selection, rollbackSelection
     ...profileArgs,
     'up', '-d', '--no-build', '--pull', 'never', '--force-recreate', '--remove-orphans', '--wait', '--wait-timeout', '180',
     ...selection.services
+  ].join(' ');
+  const managerContainerCommand = [
+    'docker', 'compose', '--project-name', '"$COMPOSE_PROJECT_NAME"',
+    '--project-directory', '"$HOST_PROJECT_DIR"',
+    '--env-file', '"$HOST_CONFIG_DIR/compose.env"',
+    '-f', '"$HOST_PROJECT_DIR/docker-compose.yml"',
+    ...profileArgs,
+    'ps', '-q', 'chatter-manager',
   ].join(' ');
   const rollbackProfileArgs = shellProfileArgs(rollbackSelection.profiles);
   const rollbackComposeCommand = [
@@ -1446,6 +1484,7 @@ finish_update() {
       fi
     done
     docker image prune -f >> "$LOG_FILE" 2>&1 || log "docker image prune failed"
+    log "update to $TARGET_HASH complete"
     printf '{"status":"complete","targetHash":"%s","message":"server_update_complete","updatedAt":"%s"}\n' "$TARGET_HASH" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$HOST_CONFIG_DIR/server-update.json"
   else
     log "update to $TARGET_HASH failed; restoring previous image tags and services"
@@ -1473,7 +1512,18 @@ for CONTAINER_ID in $(${listContainersCommand}); do
   OLD_IMAGES="$OLD_IMAGES $IMAGE_ID|$IMAGE_REF"
 done
 ${stopCommand}
-${composeCommand}`;
+${composeCommand}
+MANAGER_CONTAINER_ID="$(${managerContainerCommand})"
+if [ -z "$MANAGER_CONTAINER_ID" ]; then
+  log "updated chatter-manager container was not found"
+  exit 42
+fi
+MANAGER_IMAGE_ID="$(docker inspect --format '{{.Image}}' "$MANAGER_CONTAINER_ID")"
+MANAGER_IMAGE_HASH="\${MANAGER_IMAGE_ID#sha256:}"
+case "$MANAGER_IMAGE_HASH" in
+  "$TARGET_HASH"*) log "verified chatter-manager image $TARGET_HASH" ;;
+  *) log "chatter-manager image mismatch: expected $TARGET_HASH, got $MANAGER_IMAGE_HASH"; exit 43 ;;
+esac`;
   await runDocker([
     'run', '--detach', '--rm', '--name', `chatter-server-updater-${Date.now()}`,
     '--entrypoint', '/bin/sh',
@@ -1597,6 +1647,7 @@ async function performServerUpdate(snapshot) {
     rollbackSelection = selection;
     rollbackImages = await captureRollbackImages(rollbackSelection);
     // Downloads begin only after the administrator confirmed the preflight.
+    writeUpdateState({ status: 'pulling', targetHash: snapshot.latestHash, message: 'pulling_server_images' });
     const pulled = await pullServerUpdateImages();
     selection = pulled.selection;
     updatedDeploymentFiles = pulled.updatedDeploymentFiles;

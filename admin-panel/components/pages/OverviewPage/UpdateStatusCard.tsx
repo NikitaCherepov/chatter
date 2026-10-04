@@ -21,16 +21,12 @@ export function UpdateStatusCard() {
   const [tagEditing, setTagEditing] = useState(false);
   const [switching, setSwitching] = useState(false);
 
-  const activeStatuses = useMemo(() => new Set(['queued', 'backup', 'restarting']), []);
+  const activeStatuses = useMemo(() => new Set(['queued', 'pulling', 'backup', 'restarting']), []);
   const updating = Boolean(
     info
       && activeStatuses.has(info.operation.status),
   );
-  const operationStatus = !info
-    ? 'idle'
-    : info.operation.status === 'complete' && info.available
-      ? 'idle'
-      : info.operation.status;
+  const operationStatus = info?.operation.status || 'idle';
   const busy = checking || refreshing;
   const restart = useBackendRestartDrain({
     apply: applyUpdate,

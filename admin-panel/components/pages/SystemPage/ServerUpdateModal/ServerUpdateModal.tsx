@@ -59,12 +59,13 @@ export function ServerUpdateModal({
 
   const stageProgress: Record<string, number> = {
     queued: 10,
-    backup: 40,
-    restarting: 75,
+    pulling: 25,
+    backup: 55,
+    restarting: 80,
     complete: 100,
     failed: 100,
   };
-  const activeStatuses = new Set(['queued', 'backup', 'restarting', 'complete', 'failed']);
+  const activeStatuses = new Set(['queued', 'pulling', 'backup', 'restarting', 'complete', 'failed']);
   const effectiveStatus = operationStatus === 'idle' && updating ? 'queued' : operationStatus;
   const stageKey = effectiveStatus && activeStatuses.has(effectiveStatus) ? `system.update.stages.${effectiveStatus}` : null;
   const terminal = effectiveStatus === 'complete' || effectiveStatus === 'failed';
@@ -217,11 +218,7 @@ export function ServerUpdateModal({
 
         {/* ─── Action buttons ──────────────────────────────────────────── */}
         <div className={styles.actions}>
-          {drainPhase === 'applying' ? (
-            <button type="button" disabled>
-              {t(isConfiguration ? 'system.update.restart.applying' : 'system.update.changes.updating')}
-            </button>
-          ) : terminal ? (
+          {terminal ? (
             <>
               <button type="button" className="buttonSecondary" onClick={onCancel}>
                 {t('system.update.changes.cancel')}
@@ -232,6 +229,10 @@ export function ServerUpdateModal({
                 </button>
               )}
             </>
+          ) : drainPhase === 'applying' ? (
+            <button type="button" disabled>
+              {t(isConfiguration ? 'system.update.restart.applying' : 'system.update.changes.updating')}
+            </button>
           ) : (
             <>
               {/* Cancel: always available unless applying */}

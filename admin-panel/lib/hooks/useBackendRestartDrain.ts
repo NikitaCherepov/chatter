@@ -74,6 +74,9 @@ export function useBackendRestartDrain({ apply, closeOnSuccess = false, onError 
     try {
       await applyRef.current();
       preparedRef.current = false;
+      // The request only queues the update. Backend operation polling owns
+      // progress now, and a terminal failure must leave Retry usable.
+      applyingRef.current = false;
       if (closeOnSuccess) {
         setOpen(false);
         reset();

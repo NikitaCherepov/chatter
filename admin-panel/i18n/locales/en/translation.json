@@ -870,6 +870,7 @@
       },
       "stages": {
         "queued": "Update starting…",
+        "pulling": "Downloading and preparing server images…",
         "backup": "Creating database backup…",
         "restarting": "Restarting server services. The panel will briefly disconnect…",
         "complete": "Server updated.",

@@ -1,7 +1,7 @@
 import { api } from '../api';
 
 export type UpdateOperation = {
-  status: 'idle' | 'queued' | 'backup' | 'restarting' | 'complete' | 'failed';
+  status: 'idle' | 'queued' | 'pulling' | 'backup' | 'restarting' | 'complete' | 'failed';
   targetHash: string;
   message: string;
   updatedAt: string | null;
