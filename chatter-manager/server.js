@@ -891,6 +891,7 @@ function serverUpdatesSupported() {
     && HOST_PROJECT_DIR !== '/'
     && HOST_CONFIG_DIR !== '/';
 }
+//test
 
 function readUpdateState() {
   const state = loadJson(UPDATE_STATE_FILE, { status: 'idle', targetHash: '', message: '', updatedAt: null });
