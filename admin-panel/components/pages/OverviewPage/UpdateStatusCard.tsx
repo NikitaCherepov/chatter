@@ -22,11 +22,20 @@ export function UpdateStatusCard() {
   const [switching, setSwitching] = useState(false);
 
   const activeStatuses = useMemo(() => new Set(['queued', 'pulling', 'backup', 'restarting']), []);
+  const operationMatchesLatest = Boolean(
+    info?.operation.targetHash
+      && info.operation.targetHash === info.latestHash,
+  );
   const updating = Boolean(
     info
       && activeStatuses.has(info.operation.status),
   );
-  const operationStatus = info?.operation.status || 'idle';
+  // Persisted terminal state belongs to one exact image digest. Ignore it when
+  // a newer image appears, otherwise opening the confirmation modal for the
+  // new update immediately renders the previous update as complete.
+  const operationStatus = info && (updating || operationMatchesLatest)
+    ? info.operation.status
+    : 'idle';
   const busy = checking || refreshing;
   const restart = useBackendRestartDrain({
     apply: applyUpdate,

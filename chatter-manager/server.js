@@ -1383,22 +1383,25 @@ async function getServerUpdateInfoUnlocked({ pull = false, forcePull = false } =
 
 function attachUpdateOperation(snapshot) {
   const operation = readUpdateState();
-  const result = { ...snapshot, operation };
-  // The detached updater writes `complete` only after Compose successfully
-  // recreated and health-checked the selected services. A cached snapshot can
-  // still describe the containers from before that restart, so do not offer
-  // the exact same target as a fresh update again.
-  if (operation.status === 'complete'
-    && operation.targetHash
-    && operation.targetHash === result.latestHash) {
-    return {
-      ...result,
-      installedHash: result.latestHash,
-      available: false,
-      changedServices: [],
-    };
-  }
-  return result;
+  const operationMatchesLatest = Boolean(
+    operation.targetHash
+      && operation.targetHash === snapshot.latestHash
+  );
+  const terminal = operation.status === 'complete' || operation.status === 'failed';
+
+  // server-update.json survives container replacement. Its terminal state
+  // therefore belongs only to the exact image digest it was written for and
+  // must not make a later update look complete (or failed) before it starts.
+  // Active state remains visible even if a newer image is published while the
+  // current target is still being installed.
+  // Keep availability and installedHash based on actual Docker inspection;
+  // persisted operation state must never override the running container.
+  return {
+    ...snapshot,
+    operation: terminal && !operationMatchesLatest
+      ? { status: 'idle', targetHash: '', message: '', updatedAt: null }
+      : operation,
+  };
 }
 
 function getServerUpdateInfo(options) {
