@@ -1612,6 +1612,8 @@ function assertBackupStorageAvailable() {
   }
 }
 
+//test
+
 async function pullServerUpdateImages() {
   const targetManagerImage = `${currentImagePrefix()}-manager:${currentImageTag()}`;
   let updatedDeploymentFiles = [];
