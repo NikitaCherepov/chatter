@@ -1,10 +1,11 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQueryClient } from '@tanstack/react-query';
 import { useServerUpdate } from '../../../lib/hooks/useServerUpdate';
 import { serverUpdateService } from '../../../lib/services/serverUpdateService';
+import { activeUpdateStatuses, visibleUpdateStatus } from '../../../lib/services/serverUpdateState';
 import { useBackendRestartDrain } from '../../../lib/hooks/useBackendRestartDrain';
 import { ServerUpdateModal } from '../SystemPage/ServerUpdateModal/ServerUpdateModal';
 import styles from './OverviewPage.module.css';
@@ -21,21 +22,9 @@ export function UpdateStatusCard() {
   const [tagEditing, setTagEditing] = useState(false);
   const [switching, setSwitching] = useState(false);
 
-  const activeStatuses = useMemo(() => new Set(['queued', 'pulling', 'backup', 'restarting']), []);
-  const operationMatchesLatest = Boolean(
-    info?.operation.targetHash
-      && info.operation.targetHash === info.latestHash,
-  );
-  const updating = Boolean(
-    info
-      && activeStatuses.has(info.operation.status),
-  );
-  // Persisted terminal state belongs to one exact image digest. Ignore it when
-  // a newer image appears, otherwise opening the confirmation modal for the
-  // new update immediately renders the previous update as complete.
-  const operationStatus = info && (updating || operationMatchesLatest)
-    ? info.operation.status
-    : 'idle';
+  const [watchedOperationId, setWatchedOperationId] = useState<string | null>(null);
+  const updating = Boolean(info && activeUpdateStatuses.has(info.operation.status));
+  const operationStatus = visibleUpdateStatus(info?.operation, watchedOperationId);
   const busy = checking || refreshing;
   const restart = useBackendRestartDrain({
     apply: applyUpdate,
@@ -86,15 +75,12 @@ export function UpdateStatusCard() {
 
   async function applyUpdate() {
     setMessage(t('system.update.starting'));
-    await serverUpdateService.apply();
+    setWatchedOperationId('pending');
+    const accepted = await serverUpdateService.apply();
+    setWatchedOperationId(accepted.operation.operationId || null);
     queryClient.setQueryData(['server-update'], (current: typeof info) => current ? {
       ...current,
-      operation: {
-        status: 'queued' as const,
-        targetHash: current.latestHash,
-        message: 'server_update_queued',
-        updatedAt: new Date().toISOString(),
-      },
+      operation: accepted.operation,
     } : current);
     await queryClient.invalidateQueries({ queryKey: ['server-update'] });
   }
@@ -128,7 +114,7 @@ export function UpdateStatusCard() {
             {t('system.update.check')}
           </button>
           {info.available && (
-            <button type="button" disabled={busy || updateInProgress} onClick={() => void restart.show()}>
+            <button type="button" disabled={busy || updateInProgress} onClick={() => { setWatchedOperationId(null); void restart.show(); }}>
               {updateInProgress ? t('system.update.updating') : t('system.update.updateButton')}
             </button>
           )}

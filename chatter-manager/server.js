@@ -1208,17 +1208,32 @@ function scheduleComposeBootstrap(attempt = 1) {
   }, 15000).unref();
 }
 async function inspectImage(reference) {
-  const [idOutput, configOutput] = await Promise.all([
-    runDocker(['image', 'inspect', '--format', '{{json .Id}}', reference], 30000),
-    runDocker(['image', 'inspect', '--format', '{{json .Config}}', reference], 30000)
-  ]);
-  const id = JSON.parse(idOutput);
-  const config = JSON.parse(configOutput);
+  const output = await runDocker(['image', 'inspect', '--format', '{{json .}}', reference], 30000, 0);
+  const image = JSON.parse(output);
   return {
-    id: `${id || ''}`,
-    revision: `${config?.Labels?.['org.opencontainers.image.revision'] || ''}`,
-    changelog: decodeImageChangelog(config?.Labels?.['io.chatter.server.changelog-base64'])
+    id: `${image.Id || ''}`,
+    descriptor: image.Descriptor,
+    repoDigests: image.RepoDigests || [],
+    revision: `${image.Config?.Labels?.['org.opencontainers.image.revision'] || ''}`,
+    changelog: decodeImageChangelog(image.Config?.Labels?.['io.chatter.server.changelog-base64'])
   };
+}
+
+const imageContentIdCache = new Map();
+
+async function imageContentId(image, reference) {
+  // Classic Docker returns config.digest as .Id/.Image; containerd can return
+  // the OCI index/manifest digest instead. Preserve .id for Docker commands,
+  // but resolve descriptor IDs to config.digest before comparing versions.
+  const repoDigest = image.repoDigests?.find(value => value.endsWith(`@${image.id}`));
+  if (!image.descriptor && !repoDigest) return image.id;
+  const repository = reference.split('@')[0].replace(/:[^/:]+$/, '');
+  const immutableReference = repoDigest || `${repository}@${image.id}`;
+  if (imageContentIdCache.has(immutableReference)) return imageContentIdCache.get(immutableReference);
+  const remote = await inspectRemoteImage(immutableReference);
+  if (imageContentIdCache.size >= 128) imageContentIdCache.delete(imageContentIdCache.keys().next().value);
+  imageContentIdCache.set(immutableReference, remote.id);
+  return remote.id;
 }
 
 function dockerArchitecture() {
@@ -1232,13 +1247,14 @@ async function inspectRemoteImage(reference) {
   const parsed = JSON.parse(output);
   const entries = Array.isArray(parsed) ? parsed : [parsed];
   const architecture = dockerArchitecture();
-  const selected = entries.find(entry => entry?.Descriptor?.platform?.architecture === architecture)
-    || entries.find(entry => !entry?.Descriptor?.platform?.architecture)
-    || entries[0];
-  const manifest = selected?.SchemaV2Manifest || selected?.OCIManifest || selected;
+  const selected = entries.find(entry => entry?.Descriptor?.platform?.architecture === architecture
+    && entry.Descriptor.platform.os === 'linux')
+    || entries.find(entry => !entry?.Descriptor?.platform);
+  const manifest = [selected?.SchemaV2Manifest, selected?.OCIManifest, selected]
+    .find(value => value?.config?.digest);
   const layers = Array.isArray(manifest?.layers) ? manifest.layers : [];
   const compressedSize = layers.reduce((sum, layer) => sum + Math.max(0, Number(layer?.size) || 0), 0);
-  const id = `${manifest?.config?.digest || selected?.Descriptor?.digest || ''}`;
+  const id = `${manifest?.config?.digest || ''}`;
   if (!id) throw new Error(`remote_image_manifest_invalid:${reference}`);
   const annotations = selected?.Descriptor?.annotations || manifest?.annotations || {};
   return {
@@ -1314,8 +1330,19 @@ async function inspectRunningService(service, profiles) {
     'inspect', '--format', '{{json .}}', containerId.split(/\r?\n/)[0],
   ], 30000, 0);
   const container = JSON.parse(output);
+  let localImage;
+  try {
+    localImage = await inspectImage(container.Image);
+  } catch {
+    // Classic Docker may have removed the old image object; the container's
+    // immutable config ID and copied labels still identify that running image.
+  }
+  const contentId = localImage
+    ? await imageContentId(localImage, container.Config.Image)
+    : `${container?.Image || ''}`;
   return {
     id: `${container?.Image || ''}`,
+    contentId,
     revision: `${container?.Config?.Labels?.['org.opencontainers.image.revision'] || ''}`,
     changelog: decodeImageChangelog(container?.Config?.Labels?.['io.chatter.server.changelog-base64']),
   };
@@ -1330,7 +1357,11 @@ function shortImageHash(image) {
 async function getServerUpdateInfoUnlocked({ pull = false, forcePull = false } = {}) {
   const cacheKey = `${currentImagePrefix()}:${currentImageTag()}`;
   const now = Date.now();
+  const operation = readUpdateState();
+  const terminalChanged = ['complete', 'failed'].includes(operation.status)
+    && serverUpdateSnapshotCache?.operationUpdatedAt !== operation.updatedAt;
   if (!forcePull && serverUpdateSnapshotCache?.key === cacheKey
+    && !terminalChanged
     && now - serverUpdateSnapshotCache.checkedAtMs < PULL_COOLDOWN_MS) {
     return attachUpdateOperation(serverUpdateSnapshotCache.value);
   }
@@ -1359,9 +1390,11 @@ async function getServerUpdateInfoUnlocked({ pull = false, forcePull = false } =
     // changelog remains available without downloading anything during check.
     try {
       const local = await inspectImage(reference);
-      if (local.id === remote.id) latest = { ...remote, ...local, compressedSize: remote.compressedSize };
+      if (await imageContentId(local, reference) === remote.id) {
+        latest = { ...remote, revision: local.revision, changelog: local.changelog };
+      }
     } catch { /* the remote image is not downloaded yet */ }
-    const changed = Boolean(running && latest.id && running.id !== latest.id);
+    const changed = Boolean(running && latest.id && running.contentId !== latest.id);
     return { service, running, latest, changed };
   }));
   const manager = comparisons.find(item => item.service === 'chatter-manager');
@@ -1369,7 +1402,7 @@ async function getServerUpdateInfoUnlocked({ pull = false, forcePull = false } =
   // Local image inspection may reveal a revision label that is unavailable in
   // the remote manifest; using it here would change latestHash mid-update and
   // make the admin panel treat the same operation as a new one.
-  result.installedHash = shortImageHash({ id: manager?.running?.id || '', revision: '' });
+  result.installedHash = shortImageHash({ id: manager?.running?.contentId || '', revision: '' });
   result.latestHash = shortImageHash({ id: manager?.latest?.id || '', revision: '' });
   result.changelog = manager?.latest?.changelog || {};
   result.changedServices = comparisons.filter(item => item.changed).map(item => item.service);
@@ -1377,38 +1410,21 @@ async function getServerUpdateInfoUnlocked({ pull = false, forcePull = false } =
   result.rebuiltFromSameCommit = false;
   result.storage = buildUpdateStorageInfo(comparisons);
   if (pull) result.checkedAt = new Date().toISOString();
-  serverUpdateSnapshotCache = { key: cacheKey, checkedAtMs: now, value: { ...result, operation: undefined } };
+  serverUpdateSnapshotCache = { key: cacheKey, checkedAtMs: now, operationUpdatedAt: operation.updatedAt, value: { ...result, operation: undefined } };
   return attachUpdateOperation(result);
 }
 
 function attachUpdateOperation(snapshot) {
-  const operation = readUpdateState();
-  const operationMatchesLatest = Boolean(
-    operation.targetHash
-      && operation.targetHash === snapshot.latestHash
-  );
-  const terminal = operation.status === 'complete' || operation.status === 'failed';
-
-  // server-update.json survives container replacement. Its terminal state
-  // therefore belongs only to the exact image digest it was written for and
-  // must not make a later update look complete (or failed) before it starts.
-  // Active state remains visible even if a newer image is published while the
-  // current target is still being installed.
-  // Keep availability and installedHash based on actual Docker inspection;
-  // persisted operation state must never override the running container.
-  return {
-    ...snapshot,
-    operation: terminal && !operationMatchesLatest
-      ? { status: 'idle', targetHash: '', message: '', updatedAt: null }
-      : operation,
-  };
+  // Operation identity is independent of the registry's current tag. A new
+  // release must not erase the terminal result of an update being watched.
+  return { ...snapshot, operation: readUpdateState() };
 }
 
 function getServerUpdateInfo(options) {
   return runDeploymentExclusive(() => getServerUpdateInfoUnlocked(options));
 }
 
-async function launchServerUpdateHelper(targetHash, selection, rollbackSelection, updatedDeploymentFiles) {
+async function launchServerUpdateHelper(targetHash, selection, rollbackSelection, updatedDeploymentFiles, targetImageId, operationId) {
   const managerImage = selection.images['chatter-manager'] || await currentManagerImageReference();
   const profileArgs = shellProfileArgs(selection.profiles);
   const listContainersCommand = [
@@ -1460,6 +1476,8 @@ async function launchServerUpdateHelper(targetHash, selection, rollbackSelection
     .join('\n');
   const script = `set -eu
 LOG_FILE="$HOST_CONFIG_DIR/server-update.log"
+exec >> "$LOG_FILE" 2>&1
+STEP=inspect_previous_images
 log() { printf '%s %s\\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >> "$LOG_FILE"; }
 restore_file() {
   RELATIVE="$1"
@@ -1489,9 +1507,10 @@ finish_update() {
     done
     docker image prune -f >> "$LOG_FILE" 2>&1 || log "docker image prune failed"
     log "update to $TARGET_HASH complete"
-    printf '{"status":"complete","targetHash":"%s","message":"server_update_complete","updatedAt":"%s"}\n' "$TARGET_HASH" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$HOST_CONFIG_DIR/server-update.json"
+    printf '{"status":"complete","operationId":"%s","targetHash":"%s","message":"server_update_complete","updatedAt":"%s"}\n' "$OPERATION_ID" "$TARGET_HASH" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$HOST_CONFIG_DIR/server-update.json.tmp"
+    mv "$HOST_CONFIG_DIR/server-update.json.tmp" "$HOST_CONFIG_DIR/server-update.json"
   else
-    log "update to $TARGET_HASH failed; restoring previous image tags and services"
+    log "update to $TARGET_HASH failed at $STEP (exit $CODE); restoring previous image tags and services"
     ${restoreDeploymentCommands}
     for ITEM in $OLD_IMAGES; do
       IMAGE_ID="\${ITEM%%|*}"
@@ -1504,7 +1523,8 @@ finish_update() {
       log "automatic service recovery failed"
     fi
     docker image prune -f >> "$LOG_FILE" 2>&1 || log "docker image prune failed after update failure"
-    printf '{"status":"failed","targetHash":"%s","message":"server_restart_failed","updatedAt":"%s"}\n' "$TARGET_HASH" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$HOST_CONFIG_DIR/server-update.json"
+    printf '{"status":"failed","operationId":"%s","targetHash":"%s","message":"server_restart_failed:%s:%s","updatedAt":"%s"}\n' "$OPERATION_ID" "$TARGET_HASH" "$STEP" "$CODE" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$HOST_CONFIG_DIR/server-update.json.tmp"
+    mv "$HOST_CONFIG_DIR/server-update.json.tmp" "$HOST_CONFIG_DIR/server-update.json"
   fi
   exit "$CODE"
 }
@@ -1515,19 +1535,22 @@ for CONTAINER_ID in $(${listContainersCommand}); do
   IMAGE_REF="$(docker inspect --format '{{.Config.Image}}' "$CONTAINER_ID")"
   OLD_IMAGES="$OLD_IMAGES $IMAGE_ID|$IMAGE_REF"
 done
+STEP=stop_services
 ${stopCommand}
+STEP=start_services
 ${composeCommand}
+STEP=verify_manager_image
 MANAGER_CONTAINER_ID="$(${managerContainerCommand})"
 if [ -z "$MANAGER_CONTAINER_ID" ]; then
   log "updated chatter-manager container was not found"
   exit 42
 fi
 MANAGER_IMAGE_ID="$(docker inspect --format '{{.Image}}' "$MANAGER_CONTAINER_ID")"
-MANAGER_IMAGE_HASH="\${MANAGER_IMAGE_ID#sha256:}"
-case "$MANAGER_IMAGE_HASH" in
-  "$TARGET_HASH"*) log "verified chatter-manager image $TARGET_HASH" ;;
-  *) log "chatter-manager image mismatch: expected $TARGET_HASH, got $MANAGER_IMAGE_HASH"; exit 43 ;;
-esac`;
+if [ "$MANAGER_IMAGE_ID" != "$TARGET_IMAGE_ID" ]; then
+  log "chatter-manager image mismatch: expected $TARGET_IMAGE_ID, got $MANAGER_IMAGE_ID"
+  exit 43
+fi
+log "verified chatter-manager image $TARGET_IMAGE_ID (content $TARGET_HASH)"`;
   await runDocker([
     'run', '--detach', '--rm', '--name', `chatter-server-updater-${Date.now()}`,
     '--entrypoint', '/bin/sh',
@@ -1535,6 +1558,8 @@ esac`;
     '--env', `HOST_CONFIG_DIR=${HOST_CONFIG_DIR}`,
     '--env', `COMPOSE_PROJECT_NAME=${PROJECT_NAME}`,
     '--env', `TARGET_HASH=${targetHash}`,
+    '--env', `TARGET_IMAGE_ID=${targetImageId}`,
+    '--env', `OPERATION_ID=${operationId}`,
     '--volume', '/var/run/docker.sock:/var/run/docker.sock',
     '--volume', `${HOST_PROJECT_DIR}:${HOST_PROJECT_DIR}`,
     '--volume', `${HOST_CONFIG_DIR}:${HOST_CONFIG_DIR}`,
@@ -1639,7 +1664,7 @@ async function pruneDockerImagesBestEffort() {
   }
 }
 
-async function performServerUpdate(snapshot) {
+async function performServerUpdate(snapshot, operationId) {
   let selection = null;
   let rollbackSelection = null;
   let rollbackImages = [];
@@ -1668,7 +1693,7 @@ async function performServerUpdate(snapshot) {
     const pulledManagerReference = selection.images['chatter-manager'];
     if (!pulledManagerReference) throw new Error('manager_image_not_selected');
     const pulledManager = await inspectImage(pulledManagerReference);
-    targetHash = shortImageHash({ id: pulledManager.id, revision: '' });
+    targetHash = shortImageHash({ id: await imageContentId(pulledManager, pulledManagerReference), revision: '' });
     writeUpdateState({ status: 'pulling', targetHash, message: 'pulling_server_images' });
     // Pulling may have consumed more space than the manifest estimate. Check
     // the backup workspace again before interrupting any running service.
@@ -1685,7 +1710,7 @@ async function performServerUpdate(snapshot) {
     await createBackup({ includeUploads: false, source: 'automatic' });
     await pruneAutomaticBackups(getBackupSchedule().retention);
     writeUpdateState({ status: 'restarting', targetHash, message: 'restarting_server_services' });
-    await launchServerUpdateHelper(targetHash, selection, rollbackSelection, updatedDeploymentFiles);
+    await launchServerUpdateHelper(targetHash, selection, rollbackSelection, updatedDeploymentFiles, pulledManager.id, operationId);
     // The detached helper now owns both restart and rollback.
     dataServicesStopped = false;
   } catch (error) {
@@ -2839,11 +2864,14 @@ async function handleRequest(req, res) {
     if (currentStorage && currentStorage.availableBytes < currentStorage.requiredBytes) {
       return sendJson(res, 507, { error: 'insufficient_disk_space', storage: { ...currentStorage, sufficient: false } });
     }
-    writeUpdateState({ status: 'queued', targetHash: snapshot.latestHash, message: 'server_update_queued' });
-    updatePromise = performServerUpdate(snapshot)
+    // Recheck after the asynchronous preflight: another POST may have queued
+    // an update while this request was waiting for Docker inspection.
+    if (serverUpdateInProgress()) return sendJson(res, 409, { error: 'another_operation_is_in_progress' });
+    const operation = writeUpdateState({ status: 'queued', operationId: crypto.randomUUID(), targetHash: snapshot.latestHash, message: 'server_update_queued' });
+    updatePromise = performServerUpdate(snapshot, operation.operationId)
       .catch(error => console.error('[manager:server-update]', error))
       .finally(() => { updatePromise = null; });
-    return sendJson(res, 202, { ok: true, targetHash: snapshot.latestHash });
+    return sendJson(res, 202, { ok: true, targetHash: snapshot.latestHash, operation });
   }
 
   // Switch the update channel (image tag): `latest` for production, a branch

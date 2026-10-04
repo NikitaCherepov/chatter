@@ -1,6 +1,7 @@
 import { api } from '../api';
 
 export type UpdateOperation = {
+  operationId?: string;
   status: 'idle' | 'queued' | 'pulling' | 'backup' | 'restarting' | 'complete' | 'failed';
   targetHash: string;
   message: string;
@@ -42,7 +43,7 @@ export const serverUpdateService = {
   getStatus: () => api<ServerUpdateInfo>('/api/server-update'),
   refresh: () => api<ServerUpdateInfo>('/api/server-update?refresh=1'),
   forceRefresh: () => api<ServerUpdateInfo>('/api/server-update?refresh=1&force=1'),
-  apply: () => api('/api/server-update', { method: 'POST', body: '{}' }),
+  apply: () => api<{ ok: true; targetHash: string; operation: UpdateOperation }>('/api/server-update', { method: 'POST', body: '{}' }),
   // Switch the update channel (image tag). `latest` = production, a branch
   // tag (with `/` replaced by `-`) tracks that branch's images.
   setTag: (tag: string) => api<{ ok: true; imageTag: string }>('/api/server-update/tag', {
