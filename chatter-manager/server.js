@@ -1360,11 +1360,14 @@ async function getServerUpdateInfoUnlocked({ pull = false, forcePull = false } =
   const cacheKey = `${currentImagePrefix()}:${currentImageTag()}`;
   const now = Date.now();
   const operation = readUpdateState();
+  const operationActive = ['queued', 'pulling', 'backup', 'restarting'].includes(operation.status);
   const terminalChanged = ['complete', 'failed'].includes(operation.status)
     && serverUpdateSnapshotCache?.operationUpdatedAt !== operation.updatedAt;
+  // Active operation: serve the cached snapshot instantly — full inspection is
+  // slow and can outlast whole stages; the terminal transition re-inspects.
   if (!forcePull && serverUpdateSnapshotCache?.key === cacheKey
     && !terminalChanged
-    && now - serverUpdateSnapshotCache.checkedAtMs < PULL_COOLDOWN_MS) {
+    && (operationActive || now - serverUpdateSnapshotCache.checkedAtMs < PULL_COOLDOWN_MS)) {
     return attachUpdateOperation(serverUpdateSnapshotCache.value);
   }
   const result = {
@@ -1618,7 +1621,8 @@ async function pullServerUpdateImages() {
     const selection = await updateServiceSelection();
     const profileArgs = selection.profiles.flatMap(profile => ['--profile', profile]);
     await runDocker(composeArgs(...profileArgs, 'pull', ...selection.releaseServices), 60 * 60 * 1000);
-    serverUpdateSnapshotCache = null;
+    // Keep the cache: the running operation serves it instantly, and its
+    // terminal transition already invalidates it for the next idle check.
     return { selection, updatedDeploymentFiles };
   } catch (error) {
     const normalized = error instanceof Error ? error : new Error(`${error}`);

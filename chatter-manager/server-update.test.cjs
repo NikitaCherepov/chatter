@@ -103,6 +103,21 @@ test('terminal transition invalidates the old container snapshot without forging
   assert.equal(done.operation.status, 'complete');
 });
 
+test('active operation serves the cached snapshot instantly, with no Docker work', async () => {
+  const f = fixture();
+  f.ctx.serverUpdateSnapshotCache = {
+    key: `${REPO.replace('-manager', '')}:updater-fixing`,
+    checkedAtMs: 0, // cooldown long expired — must not trigger re-inspection mid-operation
+    operationUpdatedAt: 'before',
+    value: { supported: true, installedHash: 'old', latestHash: '82c6d212f822', available: true, changedServices: ['chatter-manager'], changelog: {}, rebuiltFromSameCommit: false, checkedAt: null },
+  };
+  f.setOperation({ status: 'pulling', operationId: 'attempt-a', targetHash: '82c6d212f822', updatedAt: 'now' });
+  const info = await f.ctx.getServerUpdateInfoUnlocked();
+  assert.equal(info.operation.status, 'pulling');
+  assert.equal(info.latestHash, '82c6d212f822');
+  assert.equal(f.calls.length, 0);
+});
+
 test('failed rollback remains available and the failure is not converted to idle', async () => {
   const f = fixture({ old: true });
   f.setOperation({ status: 'failed', operationId: 'attempt-a', targetHash: 'different-target', updatedAt: 'after' });
