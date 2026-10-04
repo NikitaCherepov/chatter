@@ -1219,6 +1219,8 @@ async function inspectImage(reference) {
   };
 }
 
+//test
+
 const imageContentIdCache = new Map();
 
 async function imageContentId(image, reference) {
