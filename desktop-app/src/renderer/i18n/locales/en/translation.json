@@ -206,16 +206,19 @@
         "existingCount": "Already exists: {{count}}",
         "updateCount": "Will be updated: {{count}}",
         "avatarCount": "Avatars: {{count}}",
+        "chatVectorsWarning": "Vectorized chat history was found in {{chats}} chat(s). Chatter will re-embed {{messages}} messages with the currently configured embedding model into each chat's local memory. This can take time and may incur provider charges; SillyTavern's incompatible raw vectors are not copied.",
         "confirm": "Import",
         "importing": "Importing...",
         "success": "Import complete: {{characters}} characters, {{personas}} personas, {{chats}} chats",
         "importedResult": "Characters created: {{characters}}, personas processed: {{personas}}, chats created: {{chats}}",
+        "chatMemoryImportedResult": "Chat memory: {{messages}} messages indexed across {{chats}} chats; errors: {{errors}}",
         "warnings": {
           "group_chats_not_supported": "Group chats are not imported yet.",
           "worlds_not_supported": "Lorebooks and World Info are not imported yet.",
           "other_data_ignored": "Other settings, extensions, and service files in the archive do not change Chatter.",
           "personas_not_found": "No personas were found in settings.json.",
-          "persona_avatar_errors": "Some persona avatars could not be imported."
+          "persona_avatar_errors": "Some persona avatars could not be imported.",
+          "chat_vector_import_errors": "Some vectorized chats could not be added to chat memory. The chats themselves were still imported."
         },
         "errors": {
           "format": "Select a SillyTavern ZIP backup",

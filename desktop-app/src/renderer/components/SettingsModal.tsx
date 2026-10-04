@@ -2340,6 +2340,13 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
                         personas: lastBackupImport.personas.created + lastBackupImport.personas.updated,
                         chats: lastBackupImport.chats.created,
                       })}</span>
+                      {lastBackupImport.chat_memory.detected > 0 && (
+                        <span>{t('settings.data.backup.chatMemoryImportedResult', {
+                          chats: lastBackupImport.chat_memory.indexed,
+                          messages: lastBackupImport.chat_memory.messages_indexed,
+                          errors: lastBackupImport.chat_memory.errors,
+                        })}</span>
+                      )}
                     </div>
                   )}
                 </section>

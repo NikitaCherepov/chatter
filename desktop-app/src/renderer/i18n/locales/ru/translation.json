@@ -206,16 +206,19 @@
         "existingCount": "Уже существуют: {{count}}",
         "updateCount": "Будут обновлены: {{count}}",
         "avatarCount": "Аватаров: {{count}}",
+        "chatVectorsWarning": "Векторизованная история найдена в чатах: {{chats}}. Chatter заново обработает {{messages}} сообщений текущей embedding-моделью и сохранит их в локальную память соответствующих чатов. Это может занять время и привести к расходам у провайдера; несовместимые готовые векторы SillyTavern не копируются.",
         "confirm": "Импортировать",
         "importing": "Импорт...",
         "success": "Импорт завершён: персонажей {{characters}}, персон {{personas}}, чатов {{chats}}",
         "importedResult": "Создано персонажей: {{characters}}, обработано персон: {{personas}}, создано чатов: {{chats}}",
+        "chatMemoryImportedResult": "Память чатов: проиндексировано сообщений {{messages}} в чатах {{chats}}; ошибок: {{errors}}",
         "warnings": {
           "group_chats_not_supported": "Групповые чаты пока не импортируются.",
           "worlds_not_supported": "Lorebook/World Info пока не импортируются.",
           "other_data_ignored": "Остальные настройки, расширения и служебные файлы архива не изменяют Chatter.",
           "personas_not_found": "В settings.json не найдены персоны для импорта.",
-          "persona_avatar_errors": "Некоторые аватары персон не удалось импортировать."
+          "persona_avatar_errors": "Некоторые аватары персон не удалось импортировать.",
+          "chat_vector_import_errors": "Некоторые векторизованные чаты не удалось добавить в память чата. Сами чаты при этом были импортированы."
         },
         "errors": {
           "format": "Выберите ZIP-бэкап SillyTavern",

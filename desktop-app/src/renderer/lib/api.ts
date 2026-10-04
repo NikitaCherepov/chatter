@@ -1897,6 +1897,7 @@ export type SillyTavernBackupPreview = {
   characters: { count: number; create_count: number; existing_count: number; names: string[] };
   personas: { count: number; create_count: number; update_count: number; avatar_count: number };
   chats: { count: number; create_count: number; existing_count: number; message_count: number };
+  chat_memory: { chat_count: number; message_count: number };
   ignored: { group_chats: number; worlds: number; other: number };
   warnings: string[];
 };
@@ -1905,6 +1906,7 @@ export type SillyTavernBackupImportResult = {
   characters: { created: number; existing: number };
   personas: { created: number; updated: number; avatars: number; avatar_errors: number };
   chats: { created: number; existing: number; message_count: number; chat_ids: number[] };
+  chat_memory: { detected: number; indexed: number; messages_indexed: number; messages_skipped: number; errors: number };
   warnings: string[];
 };
 

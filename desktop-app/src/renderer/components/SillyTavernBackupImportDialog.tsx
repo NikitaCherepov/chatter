@@ -54,6 +54,14 @@ export function SillyTavernBackupImportDialog({ preview, importing, onCancel, on
               <span>{t('settings.data.chats.messages', { count: preview.chats.message_count })}</span>
             </div>
           </article>
+          {preview.chat_memory.chat_count > 0 && (
+            <p className={s.warning}>
+              {t('settings.data.backup.chatVectorsWarning', {
+                chats: preview.chat_memory.chat_count,
+                messages: preview.chat_memory.message_count,
+              })}
+            </p>
+          )}
           {preview.warnings.map(warning => (
             <p className={s.warning} key={warning}>{t(`settings.data.backup.warnings.${warning}`)}</p>
           ))}

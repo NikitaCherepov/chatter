@@ -373,7 +373,7 @@ export const setDefaultGeneralMemorySpace = (userId: number, spaceId: number): M
   return db.prepare('SELECT * FROM memory_spaces WHERE id = ?').get(spaceId) as MemorySpace;
 };
 
-const ensureChatMemorySpace = (userId: number, chatId: number): MemorySpace => {
+export const ensureChatMemorySpace = (userId: number, chatId: number): MemorySpace => {
   const accountId = requireChatAccess(userId, chatId);
   let space = db.prepare(`
     SELECT * FROM memory_spaces

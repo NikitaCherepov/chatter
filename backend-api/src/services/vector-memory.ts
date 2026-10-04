@@ -17,6 +17,8 @@ import {
 } from './qdrant-memory.js';
 import {
   createMemoryRecord,
+  ensureChatMemorySpace,
+  getChatMemorySettings,
   getOwnedMemoryRecord,
   getRecordChunks,
   initializeForkedChatMemory,
@@ -26,6 +28,7 @@ import {
   purgeCanonicalChatMemory,
   resolveReadMemorySpaces,
   resolveWriteMemorySpace,
+  updateChatMemorySettings,
   type MemorySpace,
   archiveGeneralMemorySpace,
 } from './memory-foundation.js';
@@ -560,6 +563,134 @@ export class VectorMemoryService {
 
   static async saveChunk(userId: number, textChunk: string, sourceTag: string, chatId?: number) {
     return this.saveFactBatched(userId, textChunk, sourceTag, chatId);
+  }
+
+  static async importChatFacts(
+    userId: number,
+    chatId: number,
+    facts: Array<{
+      text: string;
+      source: string;
+      originMessageCursor: number;
+      createdAt?: number;
+    }>,
+  ) {
+    assertMemoryWritable();
+    const accountId = resolveAccountId(Math.floor(userId));
+    const initialSettings = getChatMemorySettings(accountId, chatId);
+    const space = ensureChatMemorySpace(accountId, chatId);
+    const existing = new Set((db.prepare(`
+      SELECT origin_message_cursor
+      FROM memory_records
+      WHERE user_id = ? AND memory_space_id = ? AND deleted_at IS NULL
+        AND source LIKE 'sillytavern-chat:%' AND origin_message_cursor IS NOT NULL
+    `).all(accountId, space.id) as Array<{ origin_message_cursor: number }>).map(row => row.origin_message_cursor));
+    const pending = facts
+      .map(fact => ({
+        text: `${fact.text || ''}`.trim(),
+        source: `${fact.source || ''}`.trim().slice(0, 220) || 'message',
+        originMessageCursor: Math.floor(Number(fact.originMessageCursor)),
+        createdAt: Math.floor(Number(fact.createdAt) || Date.now() / 1000),
+      }))
+      .filter(fact => fact.text && Number.isSafeInteger(fact.originMessageCursor) && fact.originMessageCursor > 0)
+      .filter(fact => !existing.has(fact.originMessageCursor));
+
+    if (!pending.length) {
+      return { ok: true, imported: 0, skipped: facts.length, chunks_saved: 0 };
+    }
+
+    const plans = pending.map(fact => {
+      const chunks = chunkText(fact.text, VECTOR_MEMORY_CHUNK_SIZE, VECTOR_MEMORY_CHUNK_OVERLAP);
+      const recordId = `fact_${randomUUID()}`;
+      const source = `sillytavern-chat:${fact.source}`;
+      return {
+        ...fact,
+        source,
+        recordId,
+        chunks,
+        embeddingTexts: chunks.map(chunk => memoryEmbeddingText(source, chunk).replace(/\n/g, ' ').trim()),
+      };
+    });
+    const flattened = plans.flatMap(plan => plan.embeddingTexts.map((text, chunkIndex) => ({ plan, text, chunkIndex })));
+    const runtimeSettings = getVectorMemoryRuntimeSettings();
+    const vectors: Array<{ id: string; values: number[]; metadata: Record<string, unknown> }> = [];
+    const EMBEDDING_BATCH_SIZE = 64;
+    for (let offset = 0; offset < flattened.length; offset += EMBEDDING_BATCH_SIZE) {
+      const batch = flattened.slice(offset, offset + EMBEDDING_BATCH_SIZE);
+      const response = await createEmbeddings(batch.map(item => item.text), runtimeSettings, {
+        userId: accountId,
+        chatId,
+        route: 'memory:save',
+      });
+      const embeddings = Array.isArray(response?.data) ? response.data : [];
+      if (embeddings.length !== batch.length) throw new Error('embedding_count_mismatch');
+      batch.forEach((item, index) => {
+        const values = Array.isArray(embeddings[index]?.embedding) ? embeddings[index].embedding : [];
+        if (!values.length) throw new Error('embedding_empty');
+        vectors.push({
+          id: `${item.plan.recordId}_chunk_${item.chunkIndex}`,
+          values,
+          metadata: {
+            text: item.text,
+            source: item.plan.source,
+            timestamp: item.plan.createdAt,
+            chunk_index: item.chunkIndex,
+            total_chunks: item.plan.chunks.length,
+          },
+        });
+      });
+    }
+
+    const writtenIds: string[] = [];
+    try {
+      const VECTOR_BATCH_SIZE = 100;
+      for (let offset = 0; offset < vectors.length; offset += VECTOR_BATCH_SIZE) {
+        const batch = vectors.slice(offset, offset + VECTOR_BATCH_SIZE);
+        if (getVectorMemoryStorage() === 'qdrant') {
+          await upsertQdrantVectors(accountId, space, runtimeSettings.model, batch);
+        } else {
+          await getPineconeIndex().namespace(space.namespace_key).upsert(batch as any);
+        }
+        writtenIds.push(...batch.map(vector => vector.id));
+      }
+      db.transaction(() => {
+        plans.forEach(plan => createMemoryRecord({
+          id: plan.recordId,
+          userId: accountId,
+          spaceId: space.id,
+          text: plan.text,
+          source: plan.source,
+          originMessageCursor: plan.originMessageCursor,
+          createdAt: plan.createdAt,
+          chunks: plan.chunks.map((chunk, chunkIndex) => ({
+            id: `${plan.recordId}_chunk_${chunkIndex}`,
+            text: plan.embeddingTexts[chunkIndex] || chunk,
+            index: chunkIndex,
+          })),
+        }));
+      })();
+    } catch (error) {
+      if (writtenIds.length) {
+        if (getVectorMemoryStorage() === 'qdrant') await deleteQdrantChunks(accountId, space.id, writtenIds);
+        else await deletePineconeResource(() => getPineconeIndex().namespace(space.namespace_key).deleteMany(writtenIds));
+      }
+      throw error;
+    }
+
+    const memoryMode = initialSettings.memory_mode === 'general'
+      ? 'both'
+      : initialSettings.memory_mode === 'off'
+        ? 'chat'
+        : initialSettings.memory_mode;
+    if (initialSettings.chat_space_id === null) {
+      updateChatMemorySettings(accountId, chatId, { memory_mode: memoryMode });
+    }
+    return {
+      ok: true,
+      imported: plans.length,
+      skipped: facts.length - plans.length,
+      chunks_saved: vectors.length,
+    };
   }
 
   static async cloneChatMemoryForFork(
@@ -1128,6 +1259,7 @@ for (const methodName of [
   'deleteChatMemory',
   'saveFactBatched',
   'saveChunk',
+  'importChatFacts',
   'cloneChatMemoryForFork',
   'deleteChunk',
   'deleteRecord',

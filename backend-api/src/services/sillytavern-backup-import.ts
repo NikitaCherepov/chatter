@@ -12,6 +12,7 @@ import {
 } from './media-assets.js';
 import { importSillyTavernPersonas, previewSillyTavernPersonas } from './persona-import.js';
 import { importSillyTavernChats, previewSillyTavernChats, type SillyTavernChatFile } from './sillytavern-chat-import.js';
+import { VectorMemoryService } from './vector-memory.js';
 
 export const MAX_SILLYTAVERN_BACKUP_BYTES = 256 * 1024 * 1024;
 const MAX_EXTRACTED_BYTES = 512 * 1024 * 1024;
@@ -24,6 +25,7 @@ type ParsedBackup = {
   chats: ArchiveFile[];
   settings: ArchiveFile | null;
   personaAvatars: ArchiveFile[];
+  vectorCollections: Set<string>;
   ignored: { group_chats: number; worlds: number; other: number };
   warnings: string[];
 };
@@ -32,6 +34,7 @@ export type SillyTavernBackupPreview = {
   characters: { count: number; create_count: number; existing_count: number; names: string[] };
   personas: { count: number; create_count: number; update_count: number; avatar_count: number };
   chats: { count: number; create_count: number; existing_count: number; message_count: number };
+  chat_memory: { chat_count: number; message_count: number };
   ignored: { group_chats: number; worlds: number; other: number };
   warnings: string[];
 };
@@ -40,6 +43,7 @@ export type SillyTavernBackupImportResult = {
   characters: { created: number; existing: number };
   personas: { created: number; updated: number; avatars: number; avatar_errors: number };
   chats: { created: number; existing: number; message_count: number; chat_ids: number[] };
+  chat_memory: { detected: number; indexed: number; messages_indexed: number; messages_skipped: number; errors: number };
   warnings: string[];
 };
 
@@ -56,7 +60,15 @@ const normalizeArchivePath = (value: string): string => {
 const pathParts = (name: string) => normalizeArchivePath(name).split('/');
 const segmentIndex = (parts: string[], segment: string) => parts.findIndex(part => part.toLowerCase() === segment);
 
-const classifyPath = (rawName: string): 'character' | 'chat' | 'settings' | 'persona_avatar' | 'group_chat' | 'world' | 'ignore' => {
+const vectorCollectionId = (rawName: string): string | null => {
+  const parts = pathParts(rawName);
+  const vectors = segmentIndex(parts, 'vectors');
+  const leaf = parts.at(-1)?.toLowerCase() || '';
+  if (vectors < 0 || vectors + 3 >= parts.length || leaf !== 'index.json') return null;
+  return parts[vectors + 2] || null;
+};
+
+const classifyPath = (rawName: string): 'character' | 'chat' | 'settings' | 'persona_avatar' | 'vector_index' | 'group_chat' | 'world' | 'ignore' => {
   const parts = pathParts(rawName);
   const leaf = parts.at(-1)?.toLowerCase() || '';
   if (!leaf || rawName.endsWith('/')) return 'ignore';
@@ -67,6 +79,7 @@ const classifyPath = (rawName: string): 'character' | 'chat' | 'settings' | 'per
   if (chats >= 0 && chats < parts.length - 2 && leaf.endsWith('.jsonl')) return 'chat';
   const avatars = segmentIndex(parts, 'user avatars');
   if (avatars >= 0 && avatars < parts.length - 1 && /\.(png|jpe?g|webp|gif|avif)$/i.test(leaf)) return 'persona_avatar';
+  if (vectorCollectionId(rawName)) return 'vector_index';
   if (segmentIndex(parts, 'group chats') >= 0) return 'group_chat';
   if (segmentIndex(parts, 'worlds') >= 0) return 'world';
   return 'ignore';
@@ -78,6 +91,7 @@ const parseArchive = (buffer: Buffer): ParsedBackup => {
   let entryCount = 0;
   let extractedBytes = 0;
   const ignored = { group_chats: 0, worlds: 0, other: 0 };
+  const vectorCollections = new Set<string>();
   let files: Record<string, Uint8Array>;
   try {
     files = unzipSync(new Uint8Array(buffer), {
@@ -87,6 +101,7 @@ const parseArchive = (buffer: Buffer): ParsedBackup => {
         const kind = classifyPath(file.name);
         if (kind === 'group_chat') ignored.group_chats += 1;
         else if (kind === 'world') ignored.worlds += 1;
+        else if (kind === 'vector_index') vectorCollections.add(vectorCollectionId(file.name)!.toLowerCase());
         else if (kind === 'ignore' && !file.name.endsWith('/')) ignored.other += 1;
         if (!['character', 'chat', 'settings', 'persona_avatar'].includes(kind)) return false;
         extractedBytes += Number(file.originalSize || 0);
@@ -98,7 +113,7 @@ const parseArchive = (buffer: Buffer): ParsedBackup => {
     if (`${error?.message || ''}`.startsWith('sillytavern_backup_')) throw error;
     throw new Error('sillytavern_backup_invalid_zip');
   }
-  const parsed: ParsedBackup = { characters: [], chats: [], settings: null, personaAvatars: [], ignored, warnings: [] };
+  const parsed: ParsedBackup = { characters: [], chats: [], settings: null, personaAvatars: [], vectorCollections, ignored, warnings: [] };
   Object.entries(files).forEach(([rawName, data]) => {
     const name = normalizeArchivePath(rawName);
     const file = { name, data: Buffer.from(data) };
@@ -133,6 +148,9 @@ const chatFiles = (parsed: ParsedBackup): SillyTavernChatFile[] => parsed.chats.
   file_name: file.name,
   base64: file.data.toString('base64'),
 }));
+
+const chatCollectionId = (fileName: string) => pathParts(fileName).at(-1)!.replace(/\.jsonl$/i, '').toLowerCase();
+const hasChatVectors = (parsed: ParsedBackup, fileName: string) => parsed.vectorCollections.has(chatCollectionId(fileName));
 
 const chatBatches = (files: SillyTavernChatFile[]): SillyTavernChatFile[][] => {
   const batches: SillyTavernChatFile[][] = [];
@@ -180,6 +198,9 @@ export const previewSillyTavernBackup = (userId: number, buffer: Buffer): SillyT
   const personas = payload ? previewSillyTavernPersonas(accountId, payload) : null;
   const avatars = avatarLookup(parsed);
   const chatPreviews = chatBatches(chatFiles(parsed)).flatMap(batch => previewSillyTavernChats(accountId, batch));
+  const vectorizedChatIndexes = parsed.chats
+    .map((file, index) => hasChatVectors(parsed, file.name) ? index : -1)
+    .filter(index => index >= 0);
   const warnings = [...parsed.warnings];
   if (parsed.settings && !payload) warnings.push('personas_not_found');
   return {
@@ -200,6 +221,10 @@ export const previewSillyTavernBackup = (userId: number, buffer: Buffer): SillyT
       create_count: chatPreviews.filter(chat => !chat.already_imported_chat_id).length,
       existing_count: chatPreviews.filter(chat => Boolean(chat.already_imported_chat_id)).length,
       message_count: chatPreviews.reduce((sum, chat) => sum + chat.message_count, 0),
+    },
+    chat_memory: {
+      chat_count: vectorizedChatIndexes.length,
+      message_count: vectorizedChatIndexes.reduce((sum, index) => sum + chatPreviews[index].message_count, 0),
     },
     ignored: parsed.ignored,
     warnings,
@@ -252,6 +277,7 @@ const importPersonaAvatars = async (
 export const importSillyTavernBackup = async (
   userId: number,
   buffer: Buffer,
+  options: { importChatMemory?: typeof VectorMemoryService.importChatFacts } = {},
 ): Promise<SillyTavernBackupImportResult> => {
   const accountId = resolveAccountId(userId);
   const parsed = parseArchive(buffer);
@@ -286,9 +312,47 @@ export const importSillyTavernBackup = async (
 
   const importedChats = chatBatches(chatFiles(parsed))
     .flatMap(batch => importSillyTavernChats(accountId, batch));
+  const importChatMemory = options.importChatMemory || VectorMemoryService.importChatFacts.bind(VectorMemoryService);
+  const chatMemory = { detected: 0, indexed: 0, messages_indexed: 0, messages_skipped: 0, errors: 0 };
+  for (let index = 0; index < parsed.chats.length; index += 1) {
+    if (!hasChatVectors(parsed, parsed.chats[index].name)) continue;
+    chatMemory.detected += 1;
+    const importedChat = importedChats[index];
+    try {
+      const rows = db.prepare(`
+        SELECT role, content, prompt_name, timeline_index, created_at
+        FROM chat_messages
+        WHERE user_id = ? AND chat_id = ? AND role IN ('user', 'assistant')
+        ORDER BY timeline_index ASC, id ASC
+      `).all(accountId, importedChat.chat_id) as Array<{
+        role: 'user' | 'assistant';
+        content: string;
+        prompt_name: string | null;
+        timeline_index: number;
+        created_at: number;
+      }>;
+      const result = await importChatMemory(accountId, importedChat.chat_id, rows.map(row => ({
+        text: row.content,
+        source: row.role === 'assistant' ? (row.prompt_name || 'character') : 'user',
+        originMessageCursor: row.timeline_index,
+        createdAt: row.created_at,
+      })));
+      chatMemory.indexed += 1;
+      chatMemory.messages_indexed += result.imported;
+      chatMemory.messages_skipped += result.skipped;
+    } catch (error) {
+      chatMemory.errors += 1;
+      console.error('[sillytavern-backup] Chat memory import failed', {
+        chat_id: importedChat.chat_id,
+        source_file: parsed.chats[index].name,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
   const warnings = [...parsed.warnings];
   if (parsed.settings && !payload) warnings.push('personas_not_found');
   if (personaAvatars.errors) warnings.push('persona_avatar_errors');
+  if (chatMemory.errors) warnings.push('chat_vector_import_errors');
   return {
     characters: { created: createdCharacters, existing: existingCharacters },
     personas: {
@@ -303,6 +367,7 @@ export const importSillyTavernBackup = async (
       message_count: importedChats.reduce((sum, chat) => sum + chat.message_count, 0),
       chat_ids: importedChats.map(chat => chat.chat_id),
     },
+    chat_memory: chatMemory,
     warnings,
   };
 };
