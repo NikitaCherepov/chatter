@@ -1645,6 +1645,7 @@ async function performServerUpdate(snapshot) {
   let rollbackImages = [];
   let updatedDeploymentFiles = [];
   let dataServicesStopped = false;
+  let targetHash = snapshot.latestHash;
   try {
     assertUpdateStorage(snapshot.storage);
     selection = await updateServiceSelection();
@@ -1659,10 +1660,20 @@ async function performServerUpdate(snapshot) {
     // target Compose file is present locally. This also covers a release that
     // introduces a previously unseen service.
     await ensureSelectedImagesAvailable(selection);
+    // Channel tags are mutable. A new build may be published after the
+    // preflight manifest check but before (or during) the confirmed pull. From
+    // this point on the operation must identify the immutable manager image
+    // that was actually downloaded and will be used by Compose, not the stale
+    // digest from the preflight snapshot.
+    const pulledManagerReference = selection.images['chatter-manager'];
+    if (!pulledManagerReference) throw new Error('manager_image_not_selected');
+    const pulledManager = await inspectImage(pulledManagerReference);
+    targetHash = shortImageHash({ id: pulledManager.id, revision: '' });
+    writeUpdateState({ status: 'pulling', targetHash, message: 'pulling_server_images' });
     // Pulling may have consumed more space than the manifest estimate. Check
     // the backup workspace again before interrupting any running service.
     assertBackupStorageAvailable();
-    writeUpdateState({ status: 'backup', targetHash: snapshot.latestHash, message: 'creating_backup' });
+    writeUpdateState({ status: 'backup', targetHash, message: 'creating_backup' });
     // Stop the data services BEFORE taking the backup. The backend keeps
     // chatter.db open; running `sqlite3 .backup` against a live database on
     // slow-I/O hosts aborts with "database is locked" while the backend is
@@ -1673,8 +1684,8 @@ async function performServerUpdate(snapshot) {
     dataServicesStopped = true;
     await createBackup({ includeUploads: false, source: 'automatic' });
     await pruneAutomaticBackups(getBackupSchedule().retention);
-    writeUpdateState({ status: 'restarting', targetHash: snapshot.latestHash, message: 'restarting_server_services' });
-    await launchServerUpdateHelper(snapshot.latestHash, selection, rollbackSelection, updatedDeploymentFiles);
+    writeUpdateState({ status: 'restarting', targetHash, message: 'restarting_server_services' });
+    await launchServerUpdateHelper(targetHash, selection, rollbackSelection, updatedDeploymentFiles);
     // The detached helper now owns both restart and rollback.
     dataServicesStopped = false;
   } catch (error) {
@@ -1697,7 +1708,7 @@ async function performServerUpdate(snapshot) {
       }
     }
     await pruneDockerImagesBestEffort();
-    writeUpdateState({ status: 'failed', targetHash: snapshot.latestHash, message: error.message || 'server_update_failed' });
+    writeUpdateState({ status: 'failed', targetHash, message: error.message || 'server_update_failed' });
     throw error;
   }
 }
