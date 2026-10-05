@@ -31,18 +31,48 @@
   outline: none;
 }
 .popover {
-  position: absolute;
+  position: fixed;
   z-index: 80;
-  top: calc(100% + 9px);
-  right: 0;
-  width: min(390px, calc(100vw - 32px));
-  max-height: min(680px, calc(100vh - 120px));
+  width: min(800px, calc(100vw - 32px));
+  box-sizing: border-box;
   overflow: visible;
   padding: 16px;
   border: 1px solid var(--border-light);
   border-radius: 12px;
   background: var(--bg-secondary);
   box-shadow: 0 18px 50px rgba(0, 0, 0, 0.28);
+}
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 20px;
+  min-height: 0;
+}
+.settingsColumn,
+.memoryColumn {
+  min-width: 0;
+}
+.settingsColumn:only-child {
+  grid-column: 1 / -1;
+}
+.memoryColumn {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding-left: 20px;
+  border-left: 1px solid var(--border-light);
+}
+.memoryColumn > :last-child {
+  max-height: min(480px, calc(100vh - 200px));
+  overflow-y: auto;
+}
+@media (max-width: 680px) {
+  .layout { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  .memoryColumn { padding-left: 0; border-left: 0; border-top: 1px solid var(--border-light); }
+  .popover { overflow-y: auto; }
+}
+@media (max-height: 660px) {
+  .popover { overflow-y: auto; }
 }
 .header {
   display: flex;

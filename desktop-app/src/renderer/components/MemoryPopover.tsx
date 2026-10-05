@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import * as api from '../lib/api';
@@ -23,6 +23,7 @@ export function MemoryPopover({ chatId }: { chatId: number }) {
   const { t } = useTranslation();
   const rootRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
+  const [popoverStyle, setPopoverStyle] = useState<React.CSSProperties>();
   const [loading, setLoading] = useState(false);
   const [settings, setSettings] = useState<MemorySettings | null>(null);
   const [records, setRecords] = useState<MemoryRecord[]>([]);
@@ -66,6 +67,29 @@ export function MemoryPopover({ chatId }: { chatId: number }) {
   useEffect(() => {
     if (open) void loadRecords();
   }, [open, settings?.chat_space_id, loadRecords]);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    const position = () => {
+      const anchor = rootRef.current?.getBoundingClientRect();
+      if (!anchor) return;
+      const width = Math.min(800, window.innerWidth - 32);
+      const top = anchor.bottom + 9;
+      setPopoverStyle({
+        left: Math.max(16, Math.min(anchor.right - width, window.innerWidth - width - 16)),
+        top,
+        width,
+        maxHeight: Math.max(0, window.innerHeight - top - 16),
+      });
+    };
+    position();
+    window.addEventListener('resize', position);
+    window.addEventListener('scroll', position, true);
+    return () => {
+      window.removeEventListener('resize', position);
+      window.removeEventListener('scroll', position, true);
+    };
+  }, [open]);
 
   useEffect(() => {
     const onPointerDown = (event: PointerEvent) => {
@@ -177,10 +201,11 @@ export function MemoryPopover({ chatId }: { chatId: number }) {
         <span>{t('chat.memory.trigger')}</span>
       </button>
       {open && (
-        <div className={s.popover}>
+        <div className={s.popover} style={popoverStyle}>
           <div className={s.header}><strong>{t('chat.memory.headerTitle')}</strong><span>{loading ? t('common.loading') : t('chat.memory.headerHint')}</span></div>
           {settings && (
-            <>
+            <div className={s.layout}>
+              <div className={s.settingsColumn}>
               <div className={s.field}>{t('chat.memory.character')}
                 {promptSettings?.room_enabled ? (
                   <div className={s.roomCharacterHint}>{t('chat.memory.characterRoomManaged')}</div>
@@ -259,9 +284,9 @@ export function MemoryPopover({ chatId }: { chatId: number }) {
                   />
                 </div>
               )}
+              </div>
               {(settings.memory_mode === 'chat' || settings.memory_mode === 'both') && (
-                <>
-                  <div className={s.divider} />
+                <div className={s.memoryColumn}>
                   <div className={s.field}>{t('chat.memory.chatMemoryTitle')}</div>
                   <MemoryRecordsPanel
                     records={records}
@@ -274,9 +299,9 @@ export function MemoryPopover({ chatId }: { chatId: number }) {
                     }}
                     onDelete={record => setDialog({ type: 'delete', record })}
                   />
-                </>
+                </div>
               )}
-            </>
+            </div>
           )}
           {dialog?.type === 'edit' && (
             <ConfirmDialog
