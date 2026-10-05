@@ -19,7 +19,6 @@ export type PersonaImportEntry = {
   core_memory: string;
   is_default: boolean;
   exists: boolean;
-  truncated: boolean;
 };
 
 export type PersonaImportPreview = {
@@ -74,10 +73,9 @@ const buildEntries = (userId: number, parsed: Backup): PersonaImportEntry[] => {
       key,
       name,
       description: title.trim().slice(0, 240),
-      core_memory: fullMemory.slice(0, 800),
+      core_memory: fullMemory,
       is_default: key === defaultKey,
       exists,
-      truncated: fullMemory.length > 800,
     }];
   });
 };
@@ -86,7 +84,6 @@ export const previewSillyTavernPersonas = (userId: number, base64: string): Pers
   const entries = buildEntries(userId, decodeBackup(base64));
   if (!entries.length) throw new Error('persona_backup_empty');
   const warnings = ['avatars_not_in_backup'];
-  if (entries.some(entry => entry.truncated)) warnings.push('core_memory_truncated');
   if (entries.some(entry => entry.exists)) warnings.push('existing_personas_updated');
   return {
     entries,

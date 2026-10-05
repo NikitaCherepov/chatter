@@ -4376,6 +4376,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     typeof parsed.new_fact === 'string' ? parsed.new_fact : '',
     Boolean(parsed.explicit_request),
     subagentExtra?.chatId,
+    user.language || 'en',
   );
 
   // ── Chat history search tools ───────────────────────────────────────────────

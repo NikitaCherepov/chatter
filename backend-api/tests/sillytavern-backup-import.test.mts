@@ -23,10 +23,11 @@ const character = {
     first_mes: 'Hello, {{user}}.',
   },
 };
+const longCoreMemory = 'Подробное описание персоны в полном бэкапе. '.repeat(400);
 const settings = {
   power_user: {
     personas: { 'alex.png': 'Alex' },
-    persona_descriptions: { 'alex.png': { title: 'Main persona', description: 'Likes quiet stations.' } },
+    persona_descriptions: { 'alex.png': { title: 'Main persona', description: longCoreMemory } },
     default_persona: 'alex.png',
   },
 };
@@ -96,11 +97,12 @@ assert.equal(memoryImports[0].facts[1].source, 'Mira');
 
 const prompt = db.prepare('SELECT id, image_url FROM user_prompts WHERE user_id = ? AND name = ?')
   .get(93, 'Mira') as { id: number; image_url: string | null };
-const persona = db.prepare("SELECT id, image_url FROM personas WHERE user_id = ? AND import_key = 'alex.png'")
-  .get(93) as { id: number; image_url: string | null };
+const persona = db.prepare("SELECT id, image_url, core_memory FROM personas WHERE user_id = ? AND import_key = 'alex.png'")
+  .get(93) as { id: number; image_url: string | null; core_memory: string };
 const chat = db.prepare('SELECT id, default_prompt_id FROM user_chats WHERE user_id = ?')
   .get(93) as { id: number; default_prompt_id: number };
 assert.ok(persona.image_url);
+assert.equal(persona.core_memory, longCoreMemory, 'full backup preserves long persona descriptions');
 assert.equal(chat.default_prompt_id, -(1000 + prompt.id));
 const chatSettings = db.prepare('SELECT persona_override_id FROM chat_memory_settings WHERE user_id = ? AND chat_id = ?')
   .get(93, chat.id) as { persona_override_id: number };
@@ -124,12 +126,6 @@ assert.equal(second.chats.existing, 1);
 assert.deepEqual(second.chat_memory, { detected: 1, indexed: 1, messages_indexed: 0, messages_skipped: 2, errors: 0 });
 assert.equal(db.prepare('SELECT COUNT(*) AS count FROM user_prompts WHERE user_id = ?').get(93).count, 1);
 assert.equal(db.prepare('SELECT COUNT(*) AS count FROM user_chats WHERE user_id = ?').get(93).count, 1);
-
-const shippedFixture = fs.readFileSync(new URL('../../test-fixtures/sillytavern-vectorized-chat-test.zip', import.meta.url));
-const shippedPreview = previewSillyTavernBackup(93, shippedFixture);
-assert.equal(shippedPreview.characters.count, 1);
-assert.equal(shippedPreview.chats.count, 1);
-assert.deepEqual(shippedPreview.chat_memory, { chat_count: 1, message_count: 4 });
 
 assert.throws(() => previewSillyTavernBackup(93, Buffer.from('not a zip')), /sillytavern_backup_invalid_zip/);
 

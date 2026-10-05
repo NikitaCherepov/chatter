@@ -116,7 +116,7 @@ export const ensureMemoryDefaults = (userId: number): { persona: Persona; space:
         const inserted = db.prepare(`
           INSERT INTO personas (user_id, name, description, core_memory, allow_core_memory_update, is_primary, is_default, created_at, updated_at)
           VALUES (?, ?, '', ?, 1, 1, 1, ?, ?)
-        `).run(user.id, `${user.name || 'User'}`.trim().slice(0, 80) || 'User', `${user.core_memory || ''}`.slice(0, 800), now, now);
+        `).run(user.id, `${user.name || 'User'}`.trim().slice(0, 80) || 'User', `${user.core_memory || ''}`, now, now);
         persona = db.prepare('SELECT * FROM personas WHERE id = ?').get(Number(inserted.lastInsertRowid)) as Persona;
       }
     }
@@ -175,7 +175,7 @@ export const createPersona = (
   const inserted = db.prepare(`
     INSERT INTO personas (user_id, name, description, core_memory, allow_core_memory_update, is_primary, is_default, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, 0, 0, ?, ?)
-  `).run(accountId, safeName, `${description || ''}`.trim().slice(0, 240), `${coreMemory || ''}`.slice(0, 800), allowCoreMemoryUpdate ? 1 : 0, now, now);
+  `).run(accountId, safeName, `${description || ''}`.trim().slice(0, 240), `${coreMemory || ''}`, allowCoreMemoryUpdate ? 1 : 0, now, now);
   return db.prepare('SELECT * FROM personas WHERE id = ?').get(Number(inserted.lastInsertRowid)) as Persona;
 };
 
@@ -194,7 +194,7 @@ export const updatePersona = (
   if (!name) throw new Error('persona_name_required');
   const coreMemory = patch.core_memory === undefined
     ? persona.core_memory
-    : `${patch.core_memory}`.slice(0, 800);
+    : `${patch.core_memory}`;
   const description = patch.description === undefined
     ? persona.description
     : `${patch.description}`.trim().slice(0, 240);
@@ -759,7 +759,7 @@ export const setPersonaCoreMemory = (userId: number, personaId: number, content:
   const persona = db.prepare('SELECT * FROM personas WHERE id = ? AND user_id = ?')
     .get(personaId, accountId) as Persona | undefined;
   if (!persona) throw new Error('persona_not_found');
-  const safeContent = `${content || ''}`.slice(0, 800);
+  const safeContent = `${content || ''}`;
   db.prepare('UPDATE personas SET core_memory = ?, updated_at = ? WHERE id = ? AND user_id = ?')
     .run(safeContent, getNowUnix(), personaId, accountId);
   if (persona.is_primary === 1) {

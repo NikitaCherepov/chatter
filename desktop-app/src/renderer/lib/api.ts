@@ -1864,7 +1864,6 @@ export type PersonaImportEntry = {
   core_memory: string;
   is_default: boolean;
   exists: boolean;
-  truncated: boolean;
 };
 
 export type PersonaImportPreview = {

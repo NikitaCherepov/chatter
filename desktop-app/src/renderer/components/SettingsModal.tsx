@@ -1836,10 +1836,9 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
                 <textarea
                   className={s.textareaInput}
                   value={coreMemory}
-                  onChange={(e) => setCoreMemory(e.target.value.slice(0, 800))}
+                  onChange={(e) => setCoreMemory(e.target.value)}
                   placeholder={t('settings.account.memoryPlaceholder')}
                   rows={5}
-                  maxLength={800}
                 />
                 <Checkbox
                   checked={allowCoreMemoryUpdate}
@@ -1862,8 +1861,8 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
                       </button>
                     )}
                   </div>
-                  <span style={{ fontSize: '11px', color: coreMemory.length > 700 ? '#e74c3c' : 'var(--text-hint)' }}>
-                    {coreMemory.length} / 800
+                  <span style={{ fontSize: '11px', color: 'var(--text-hint)' }}>
+                    {coreMemory.length}
                   </span>
                 </div>
               </div>

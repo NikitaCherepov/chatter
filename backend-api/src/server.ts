@@ -1530,7 +1530,7 @@ app.put('/api/v1/user/login', (req: AuthedRequest, res) => {
 // Update core memory
 app.put('/api/v1/account/core-memory', (req: AuthedRequest, res: any) => {
   const userId = accountIdFromRequest(req);
-  const content = typeof req.body?.content === 'string' ? req.body.content.slice(0, 800) : '';
+  const content = typeof req.body?.content === 'string' ? req.body.content : '';
   setPersonaCoreMemory(userId, getPrimaryPersona(userId).id, content);
   return res.json({ ok: true });
 });
