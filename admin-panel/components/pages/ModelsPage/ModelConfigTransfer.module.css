@@ -13,9 +13,14 @@
   display: block;
   font-size: var(--fs-sm);
 }
+.toolbar strong {
+  color: var(--text-primary);
+  font-weight: var(--fw-semibold);
+}
 .toolbar small {
   margin-top: var(--sp-1);
   color: var(--text-muted);
+  font-weight: var(--fw-normal);
 }
 .buttons {
   display: flex;
@@ -87,10 +92,16 @@
 }
 .keyRow {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: var(--sp-2);
   margin-bottom: var(--sp-2);
 }
+.keyValue { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; }
+.keyValue input { min-width: 0; flex: 1; }
+.keyValue button { flex-shrink: 0; font-size: var(--fs-sm); }
+.keyInfo { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-2); color: var(--text-muted); font-size: var(--fs-xs); margin-bottom: var(--sp-2); }
+.keyInfo code { flex-shrink: 0; }
+.keyInfo span { overflow-wrap: anywhere; min-width: 0; }
 .tableWrap {
   margin: var(--sp-4) 0;
 }
@@ -128,17 +139,8 @@
   margin-top: var(--sp-2);
   font-size: var(--fs-sm);
 }
-.check {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-2);
-  font-size: var(--fs-sm);
-}
-.check input {
-  width: auto;
-  min-height: auto;
-  flex-shrink: 0;
-}
+.modelHeading { margin-bottom: var(--sp-3); }
+.modelName { font-weight: var(--fw-semibold); }
 .roles {
   display: flex;
   flex-direction: column;

@@ -6,12 +6,19 @@ import { useTranslation } from 'react-i18next';
 import { api } from '../../../lib/api';
 import type { ApiKey, ProviderModelConfig, Settings } from '../../../lib/types';
 import { Select } from '../../ui/Select/Select';
+import { Checkbox } from '../../ui/Checkbox/Checkbox';
+import { FormField } from '../../ui/FormField/FormField';
 import styles from './ModelConfigTransfer.module.css';
 
 type Role = 'pro' | 'lite' | 'manual' | 'vision';
 type Row = ProviderModelConfig & { name?: string; roles: Role[]; keyRef?: string; enabled?: boolean; billing?: Record<string, unknown> };
 type Transfer = { format: 'chatter-models'; version: 1; models: Row[]; keys: { id: string; sourceId?: number; name: string; key?: string }[]; warnings: string[] };
 const roles: Role[] = ['pro', 'lite', 'manual', 'vision'];
+const keyFingerprint = (value: string) => value.length > 12 ? `${value.slice(0, 6)}…${value.slice(-4)}` : value.length >= 6 ? `••••…${value.slice(-2)}` : '••••';
+const connectionLabel = (model: Row) => {
+  try { return `${model.model} · ${new URL(model.baseUrl).hostname}`; }
+  catch { return model.model; }
+};
 
 export function ModelConfigTransfer({ onImported }: { onImported: (settings: Partial<Settings>) => void }) {
   const { t } = useTranslation();
@@ -19,12 +26,14 @@ export function ModelConfigTransfer({ onImported }: { onImported: (settings: Par
   const [data, setData] = useState<Transfer | null>(null);
   const [savedKeys, setSavedKeys] = useState<ApiKey[]>([]);
   const [includeKeys, setIncludeKeys] = useState(false);
+  const [visibleKeys, setVisibleKeys] = useState<Set<string>>(() => new Set());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
   const requestRef = useRef<AbortController | null>(null);
+  const pendingKeyFocus = useRef<string | null>(null);
   const close = () => { if (!busy) { setMode(null); setData(null); setError(''); } };
   useEffect(() => () => requestRef.current?.abort(), []);
   useEffect(() => {
@@ -44,6 +53,7 @@ export function ModelConfigTransfer({ onImported }: { onImported: (settings: Par
   }, [mode, busy]);
 
   const open = async (next: 'import' | 'export') => {
+    setVisibleKeys(new Set());
     setMode(next); setError(''); setData(null); setNotice('');
     if (next === 'import') {
       try { setSavedKeys(await api<ApiKey[]>('/api/api-keys')); }
@@ -54,7 +64,7 @@ export function ModelConfigTransfer({ onImported }: { onImported: (settings: Par
     if (busy) return;
     const zip = file.name.toLowerCase().endsWith('.zip');
     if (file.size > (zip ? 256 : 2) * 1024 * 1024) { setError(t('models.transfer.tooLarge')); return; }
-    setBusy(true); setError(''); setData(null);
+    setBusy(true); setError(''); setData(null); setVisibleKeys(new Set());
     requestRef.current = new AbortController();
     try {
       const result = await api<Transfer>('/api/model-config/preview', {
@@ -68,6 +78,13 @@ export function ModelConfigTransfer({ onImported }: { onImported: (settings: Par
   const patchRow = (index: number, patch: Partial<Row>) => setData(current => current && ({
     ...current, models: current.models.map((m, i) => i === index ? { ...m, ...patch } : m),
   }));
+  const createKey = (index: number) => {
+    const model = data?.models[index];
+    if (!model) return;
+    const id = `new-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    pendingKeyFocus.current = id;
+    setData(current => current && ({ ...current, keys: [...current.keys, { id, name: model.name || model.model, key: '' }], models: current.models.map((row, i) => i === index ? { ...row, keyRef: id, apiKeyId: null } : row) }));
+  };
   const selected = data?.models.filter(m => m.enabled) || [];
   const ready = selected.length > 0 && selected.every(m => m.baseUrl && m.model && m.roles.length &&
     (m.apiKeyId || (m.keyRef && data?.keys.some(k => k.id === m.keyRef && k.name.trim() && k.key?.trim()))));
@@ -111,7 +128,7 @@ export function ModelConfigTransfer({ onImported }: { onImported: (settings: Par
         <header><h2 id="model-transfer-title">{t(`models.transfer.${mode}`)}</h2><p>{t(mode === 'import' ? 'models.transfer.importHint' : 'models.transfer.exportHint')}</p></header>
         <div className={styles.body}>
           {mode === 'export' ? <>
-            <label className={styles.check}><input type="checkbox" checked={includeKeys} onChange={e => setIncludeKeys(e.target.checked)} />{t('models.transfer.includeKeys')}</label>
+            <Checkbox checked={includeKeys} onChange={setIncludeKeys} disabled={busy} label={t('models.transfer.includeKeys')} />
             {includeKeys && <p className={styles.warning}>{t('models.transfer.secretWarning')}</p>}
           </> : <>
             <label className={styles.dropzone} onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); if (e.dataTransfer.files[0]) void load(e.dataTransfer.files[0]); }}>
@@ -121,25 +138,39 @@ export function ModelConfigTransfer({ onImported }: { onImported: (settings: Par
             {data && <>
               {data.keys.length > 0 && <section><h3>{t('models.transfer.keys')}</h3><p>{t('models.transfer.keysHint')}</p>
                 {data.keys.map((key, i) => <div key={key.id} className={styles.keyRow}>
-                  <input aria-label={t('security.apiKeyName')} value={key.name} disabled={busy} onChange={e => setData(current => current && ({ ...current, keys: current.keys.map((k, j) => j === i ? { ...k, name: e.target.value } : k) }))} />
-                  <input type="password" autoComplete="new-password" aria-label={t('security.apiKeyValue')} value={key.key || ''} disabled={busy} placeholder={t('security.apiKeyValue')} onChange={e => setData(current => current && ({ ...current, keys: current.keys.map((k, j) => j === i ? { ...k, key: e.target.value } : k) }))} />
+                  <FormField label={t('security.apiKeyName')}>
+                    <input ref={node => { if (node && pendingKeyFocus.current === key.id) { pendingKeyFocus.current = null; node.focus({ preventScroll: true }); node.scrollIntoView({ block: 'center', behavior: 'smooth' }); } }} aria-label={t('security.apiKeyName')} value={key.name} disabled={busy} onChange={e => setData(current => current && ({ ...current, keys: current.keys.map((k, j) => j === i ? { ...k, name: e.target.value } : k) }))} />
+                  </FormField>
+                  <FormField label={t('security.apiKeyValue')}>
+                  <div className={styles.keyValue}>
+                    <input type={visibleKeys.has(key.id) ? 'text' : 'password'} autoComplete="new-password" spellCheck={false} aria-label={t('security.apiKeyValue')} value={key.key || ''} disabled={busy} placeholder={t('security.apiKeyValue')} onChange={e => setData(current => current && ({ ...current, keys: current.keys.map((k, j) => j === i ? { ...k, key: e.target.value } : k) }))} />
+                    <button type="button" className="buttonSecondary" disabled={busy || !key.key} aria-pressed={visibleKeys.has(key.id)} aria-label={t(visibleKeys.has(key.id) ? 'models.transfer.hideKeyLabel' : 'models.transfer.showKeyLabel', { name: key.name })} onClick={() => setVisibleKeys(current => {
+                      const next = new Set(current); if (next.has(key.id)) next.delete(key.id); else next.add(key.id); return next;
+                    })}>{t(visibleKeys.has(key.id) ? 'models.transfer.hideKey' : 'models.transfer.showKey')}</button>
+                  </div>
+                  </FormField>
+                  <div className={styles.keyInfo}>
+                    <code>{key.key ? keyFingerprint(key.key) : t('models.transfer.missingKey')}</code>
+                    <span>{t('models.transfer.linkedModels')}: {[...new Set(data.models.filter(m => m.keyRef === key.id).map(connectionLabel))].join(', ') || t('models.transfer.noLinkedModels')}</span>
+                  </div>
                 </div>)}
               </section>}
               <div className={styles.tableWrap}><table><thead><tr><th>{t('models.transfer.model')}</th><th>{t('models.transfer.key')}</th><th>{t('models.transfer.roles')}</th></tr></thead><tbody>
                 {data.models.map((m, i) => <tr key={`${m.id}-${i}`}>
-                  <td><label className={styles.check}><input type="checkbox" disabled={busy} checked={m.enabled} onChange={e => patchRow(i, { enabled: e.target.checked })} /><strong>{m.name || m.model}</strong></label>
-                    <small>{m.model}</small><input aria-label={t('models.providerFields.baseUrl')} value={m.baseUrl} disabled={busy || !m.enabled} placeholder="https://…/v1" onChange={e => patchRow(i, { baseUrl: e.target.value })} />
+                  <td><div className={styles.modelHeading}><Checkbox disabled={busy} checked={Boolean(m.enabled)} onChange={enabled => patchRow(i, { enabled })} label={<strong className={styles.modelName}>{m.name || m.model}</strong>} /></div>
+                    {m.name && m.name !== m.model && <small>{m.model}</small>}
+                    <FormField label={t('models.providerFields.baseUrl')}><input aria-label={t('models.providerFields.baseUrl')} value={m.baseUrl} disabled={busy || !m.enabled} placeholder="https://…/v1" onChange={e => patchRow(i, { baseUrl: e.target.value })} /></FormField>
                   </td>
                   <td><Select disabled={busy || !m.enabled} value={m.apiKeyId ? `saved:${m.apiKeyId}` : m.keyRef ? `import:${m.keyRef}` : ''}
                     placeholder={t('security.apiKeySelectPlaceholder')}
-                    options={[...savedKeys.map(k => ({ value: `saved:${k.id}`, label: k.name })), ...data.keys.map(k => ({ value: `import:${k.id}`, label: k.name }))]}
-                    onChange={value => value.startsWith('saved:') ? patchRow(i, { apiKeyId: Number(value.slice(6)), keyRef: undefined }) : patchRow(i, { apiKeyId: null, keyRef: value.slice(7) })} />
-                    <button type="button" className="buttonSecondary" disabled={busy || !m.enabled} onClick={() => {
-                      const id = `new-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-                      setData(current => current && ({ ...current, keys: [...current.keys, { id, name: m.name || m.model, key: '' }], models: current.models.map((row, j) => j === i ? { ...row, keyRef: id, apiKeyId: null } : row) }));
-                    }}>{t('security.apiKeyCreateNew')}</button>
+                    options={[...savedKeys.map(k => ({ value: `saved:${k.id}`, label: k.name, hint: k.key_prefix })), ...data.keys.map(k => ({ value: `import:${k.id}`, label: k.name, hint: k.key ? keyFingerprint(k.key) : t('models.transfer.missingKey') })), { value: '__create__', label: t('security.apiKeyCreateNew') }]}
+                    onChange={value => {
+                      if (value === '__create__') createKey(i);
+                      else if (value.startsWith('saved:')) patchRow(i, { apiKeyId: Number(value.slice(6)), keyRef: undefined });
+                      else patchRow(i, { apiKeyId: null, keyRef: value.slice(7) });
+                    }} />
                   </td>
-                  <td><div className={styles.roles}>{roles.map(role => <label key={role} className={styles.check}><input type="checkbox" disabled={busy || !m.enabled} checked={m.roles.includes(role)} onChange={e => patchRow(i, { roles: e.target.checked ? [...m.roles, role] : m.roles.filter(r => r !== role) })} />{role === 'manual' ? t('models.manual.title') : role.toUpperCase()}</label>)}</div></td>
+                  <td><div className={styles.roles}>{roles.map(role => <Checkbox key={role} disabled={busy || !m.enabled} checked={m.roles.includes(role)} onChange={checked => patchRow(i, { roles: checked ? [...m.roles, role] : m.roles.filter(r => r !== role) })} label={role === 'manual' ? t('models.manual.title') : role === 'vision' ? 'Vision' : role.toUpperCase()} />)}</div></td>
                 </tr>)}
               </tbody></table></div>
               <p>{t('models.transfer.noOverwrite')}</p>
