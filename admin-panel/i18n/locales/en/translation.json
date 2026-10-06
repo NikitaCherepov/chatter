@@ -118,6 +118,8 @@
       "missingKey": "Key not provided",
       "linkedModels": "Models",
       "noLinkedModels": "Not assigned",
+      "removeKeyLabel": "Remove key from import: {{name}}",
+      "removeKeyHint": "Removes the key from this import only. Saved keys are not deleted; linked models will need another key.",
       "keysHint": "Name the keys you want to use. Missing keys can be entered here or replaced with a saved key below.",
       "model": "Model / API URL",
       "key": "API key",

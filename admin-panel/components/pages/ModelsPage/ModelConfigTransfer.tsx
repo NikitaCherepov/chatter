@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { api } from '../../../lib/api';
@@ -9,6 +9,7 @@ import { Select } from '../../ui/Select/Select';
 import { Checkbox } from '../../ui/Checkbox/Checkbox';
 import { FormField } from '../../ui/FormField/FormField';
 import styles from './ModelConfigTransfer.module.css';
+import modelStyles from './ModelsPage.module.css';
 
 type Role = 'pro' | 'lite' | 'manual' | 'vision';
 type Row = ProviderModelConfig & { name?: string; roles: Role[]; keyRef?: string; enabled?: boolean; billing?: Record<string, unknown> };
@@ -85,6 +86,14 @@ export function ModelConfigTransfer({ onImported }: { onImported: (settings: Par
     pendingKeyFocus.current = id;
     setData(current => current && ({ ...current, keys: [...current.keys, { id, name: model.name || model.model, key: '' }], models: current.models.map((row, i) => i === index ? { ...row, keyRef: id, apiKeyId: null } : row) }));
   };
+  const removeKey = (id: string) => {
+    setData(current => current && ({ ...current,
+      keys: current.keys.filter(key => key.id !== id),
+      models: current.models.map(model => model.keyRef === id ? { ...model, keyRef: undefined, apiKeyId: null, apiKey: '', hasApiKey: false } : model),
+    }));
+    setVisibleKeys(current => { const next = new Set(current); next.delete(id); return next; });
+    if (pendingKeyFocus.current === id) pendingKeyFocus.current = null;
+  };
   const selected = data?.models.filter(m => m.enabled) || [];
   const ready = selected.length > 0 && selected.every(m => m.baseUrl && m.model && m.roles.length &&
     (m.apiKeyId || (m.keyRef && data?.keys.some(k => k.id === m.keyRef && k.name.trim() && k.key?.trim()))));
@@ -152,12 +161,16 @@ export function ModelConfigTransfer({ onImported }: { onImported: (settings: Par
                   <div className={styles.keyInfo}>
                     <code>{key.key ? keyFingerprint(key.key) : t('models.transfer.missingKey')}</code>
                     <span>{t('models.transfer.linkedModels')}: {[...new Set(data.models.filter(m => m.keyRef === key.id).map(connectionLabel))].join(', ') || t('models.transfer.noLinkedModels')}</span>
+                    <button type="button" className={`${modelStyles.dangerButton} ${styles.removeKey}`} disabled={busy} aria-label={t('models.transfer.removeKeyLabel', { name: key.name })} title={t('models.transfer.removeKeyHint')} onClick={() => removeKey(key.id)}>{t('common.delete')}</button>
                   </div>
                 </div>)}
               </section>}
               <div className={styles.tableWrap}><table><thead><tr><th>{t('models.transfer.model')}</th><th>{t('models.transfer.key')}</th><th>{t('models.transfer.roles')}</th></tr></thead><tbody>
-                {data.models.map((m, i) => <tr key={`${m.id}-${i}`}>
-                  <td><div className={styles.modelHeading}><Checkbox disabled={busy} checked={Boolean(m.enabled)} onChange={enabled => patchRow(i, { enabled })} label={<strong className={styles.modelName}>{m.name || m.model}</strong>} /></div>
+                {data.models.map((m, i) => <Fragment key={`${m.id}-${i}`}>
+                  <tr className={styles.modelHeadingRow}><td colSpan={3}>
+                    <Checkbox disabled={busy} checked={Boolean(m.enabled)} onChange={enabled => patchRow(i, { enabled })} label={<strong className={styles.modelName}>{m.name || m.model}</strong>} />
+                  </td></tr>
+                  <tr className={styles.modelFieldsRow}><td>
                     {m.name && m.name !== m.model && <small>{m.model}</small>}
                     <FormField label={t('models.providerFields.baseUrl')}><input aria-label={t('models.providerFields.baseUrl')} value={m.baseUrl} disabled={busy || !m.enabled} placeholder="https://…/v1" onChange={e => patchRow(i, { baseUrl: e.target.value })} /></FormField>
                   </td>
@@ -171,7 +184,8 @@ export function ModelConfigTransfer({ onImported }: { onImported: (settings: Par
                     }} />
                   </td>
                   <td><div className={styles.roles}>{roles.map(role => <Checkbox key={role} disabled={busy || !m.enabled} checked={m.roles.includes(role)} onChange={checked => patchRow(i, { roles: checked ? [...m.roles, role] : m.roles.filter(r => r !== role) })} label={role === 'manual' ? t('models.manual.title') : role === 'vision' ? 'Vision' : role.toUpperCase()} />)}</div></td>
-                </tr>)}
+                  </tr>
+                </Fragment>)}
               </tbody></table></div>
               <p>{t('models.transfer.noOverwrite')}</p>
               {data.warnings.map(w => <p key={w} className={styles.warning}>{t(`models.transfer.warnings.${w}`, { defaultValue: w })}</p>)}
