@@ -1215,7 +1215,7 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
       toast.success(t('settings.data.backup.success', {
         characters: result.characters.created,
         personas: result.personas.created + result.personas.updated,
-        chats: result.chats.created,
+        chats: result.chats.created + result.groups.created,
       }));
     } catch (error) {
       if (error instanceof Error && error.message === 'sillytavern_backup_import_cancelled') {
@@ -2360,6 +2360,8 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
                         })}</span>
                       )}
                       <span>{t('settings.data.backup.mediaResult', lastBackupImport.media)}</span>
+                      <span>{t('settings.data.backup.groupsResult', lastBackupImport.groups)}</span>
+                      {lastBackupImport.warnings.map(warning => <span key={warning}>{t('settings.data.backup.warnings.' + warning)}</span>)}
                     </div>
                   )}
                 </section>

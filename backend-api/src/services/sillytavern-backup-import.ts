@@ -15,6 +15,8 @@ import { importSillyTavernChats, previewSillyTavernChats } from './sillytavern-c
 import { VectorMemoryService } from './vector-memory.js';
 import { attachmentReferences, chatMediaRows, findArchiveAttachment, importChatAttachments } from './sillytavern-chat-media.js';
 import type { ArchiveEntry } from './sillytavern-archive-stream.js';
+import { planGroupHistories, previewGroupHistory, importGroupHistory, groupCardRoot, missingGroupCards, type GroupCard } from './sillytavern-group-import.js';
+import { toUserPromptSelectedId } from './prompts.js';
 
 export const MAX_SILLYTAVERN_BACKUP_BYTES = 256 * 1024 * 1024;
 const MAX_EXTRACTED_BYTES = 512 * 1024 * 1024;
@@ -25,6 +27,8 @@ type ArchiveFile = { name: string; data: Buffer };
 type ParsedBackup = {
   characters: ArchiveFile[];
   chats: ArchiveFile[];
+  groups: ArchiveFile[];
+  groupChats: ArchiveFile[];
   settings: ArchiveFile | null;
   personaAvatars: ArchiveFile[];
   media: ArchiveEntry[];
@@ -34,6 +38,7 @@ type ParsedBackup = {
 };
 
 export type SillyTavernBackupPreview = {
+  groups: { count: number; history_count: number; create_count: number; existing_count: number; missing_cards: number };
   characters: { count: number; create_count: number; existing_count: number; names: string[] };
   personas: { count: number; create_count: number; update_count: number; avatar_count: number };
   chats: { count: number; create_count: number; existing_count: number; message_count: number };
@@ -44,6 +49,7 @@ export type SillyTavernBackupPreview = {
 };
 
 export type SillyTavernBackupImportResult = {
+  groups: { created: number; existing: number };
   characters: { created: number; existing: number };
   personas: { created: number; updated: number; avatars: number; avatar_errors: number };
   chats: { created: number; existing: number; message_count: number; chat_ids: number[] };
@@ -73,7 +79,7 @@ const vectorCollectionId = (rawName: string): string | null => {
   return parts[vectors + 2] || null;
 };
 
-export const classifyBackupPath = (rawName: string): 'character' | 'chat' | 'settings' | 'persona_avatar' | 'media' | 'vector_index' | 'group_chat' | 'world' | 'ignore' => {
+export const classifyBackupPath = (rawName: string): 'character' | 'chat' | 'settings' | 'persona_avatar' | 'media' | 'vector_index' | 'group' | 'group_chat' | 'world' | 'ignore' => {
   const parts = pathParts(rawName);
   const leaf = parts.at(-1)?.toLowerCase() || '';
   if (!leaf || rawName.endsWith('/')) return 'ignore';
@@ -85,79 +91,59 @@ export const classifyBackupPath = (rawName: string): 'character' | 'chat' | 'set
   const avatars = segmentIndex(parts, 'user avatars');
   if (avatars >= 0 && avatars < parts.length - 1 && /\.(png|jpe?g|webp|gif|avif)$/i.test(leaf)) return 'persona_avatar';
   if (vectorCollectionId(rawName)) return 'vector_index';
-  if (segmentIndex(parts, 'group chats') >= 0) return 'group_chat';
+  if (segmentIndex(parts, 'groups') >= 0 && leaf.endsWith('.json')) return 'group';
+  if (segmentIndex(parts, 'group chats') >= 0 && leaf.endsWith('.jsonl')) return 'group_chat';
   if (segmentIndex(parts, 'worlds') >= 0) return 'world';
   if (segmentIndex(parts, 'images') >= 0 || segmentIndex(parts, 'files') >= 0) return 'media';
   return 'ignore';
 };
 const classifyPath = classifyBackupPath;
 
-const parseArchive = (buffer: Buffer | ArchiveEntry[]): ParsedBackup => {
-  if (Array.isArray(buffer)) {
-    const parsed: ParsedBackup = { characters: [], chats: [], settings: null, personaAvatars: [], media: [], vectorCollections: new Set(), ignored: { group_chats: 0, worlds: 0, other: 0 }, warnings: [] };
-    for (const file of buffer) {
-      const kind = classifyPath(file.name);
-      if (kind === 'character') parsed.characters.push(file);
-      else if (kind === 'chat') parsed.chats.push(file);
-      else if (kind === 'persona_avatar') parsed.personaAvatars.push(file);
-      else if (kind === 'media') parsed.media.push(file);
-      else if (kind === 'settings' && (!parsed.settings || file.name.split('/').length < parsed.settings.name.split('/').length)) parsed.settings = file;
-      else if (kind === 'vector_index') parsed.vectorCollections.add(vectorCollectionId(file.name)!.toLowerCase());
-      else if (kind === 'group_chat') parsed.ignored.group_chats++;
-      else if (kind === 'world') parsed.ignored.worlds++;
-      else if (kind === 'ignore' && !file.name.endsWith('/')) parsed.ignored.other++;
+const parseArchive = (input: Buffer | ArchiveEntry[]): ParsedBackup => {
+  let entries: ArchiveEntry[];
+  if (Array.isArray(input)) entries = input;
+  else {
+    if (!input.length) throw new Error('sillytavern_backup_required');
+    if (input.length > MAX_SILLYTAVERN_BACKUP_BYTES) throw new Error('sillytavern_backup_too_large');
+    const headers: Array<{ name: string; size: number }> = [];
+    let extracted = 0;
+    let files: Record<string, Uint8Array>;
+    try {
+      files = unzipSync(input, { filter(file) {
+        if (headers.length >= MAX_ARCHIVE_ENTRIES) throw new Error('sillytavern_backup_too_many_files');
+        const name = normalizeArchivePath(file.name) + (file.name.endsWith('/') ? '/' : '');
+        headers.push({ name, size: Number(file.originalSize || 0) });
+        const supported = ['character', 'chat', 'settings', 'persona_avatar', 'media', 'group', 'group_chat'].includes(classifyPath(name));
+        if (supported) extracted += Number(file.originalSize || 0);
+        if (extracted > MAX_EXTRACTED_BYTES) throw new Error('sillytavern_backup_extracted_too_large');
+        return supported;
+      } });
+    } catch (error: any) {
+      if (error?.message?.startsWith('sillytavern_backup_')) throw error;
+      throw new Error('sillytavern_backup_invalid_zip');
     }
-    if (parsed.ignored.group_chats) parsed.warnings.push('group_chats_not_supported');
-    if (parsed.ignored.worlds) parsed.warnings.push('worlds_not_supported');
-    if (parsed.ignored.other) parsed.warnings.push('other_data_ignored');
-    if (!parsed.characters.length && !parsed.chats.length && !parsed.settings) throw new Error('sillytavern_backup_no_supported_data');
-    return parsed;
+    const normalizedFiles = new Map(Object.entries(files).map(([name, data]) => [normalizeArchivePath(name), data]));
+    entries = headers.map(header => ({ ...header, data: Buffer.from(normalizedFiles.get(header.name) || []) }));
   }
-  if (!buffer.length) throw new Error('sillytavern_backup_required');
-  if (buffer.length > MAX_SILLYTAVERN_BACKUP_BYTES) throw new Error('sillytavern_backup_too_large');
-  let entryCount = 0;
-  let extractedBytes = 0;
-  const ignored = { group_chats: 0, worlds: 0, other: 0 };
-  const vectorCollections = new Set<string>();
-  let files: Record<string, Uint8Array>;
-  try {
-    files = unzipSync(new Uint8Array(buffer), {
-      filter(file) {
-        entryCount += 1;
-        if (entryCount > MAX_ARCHIVE_ENTRIES) throw new Error('sillytavern_backup_too_many_files');
-        const kind = classifyPath(file.name);
-        if (kind === 'group_chat') ignored.group_chats += 1;
-        else if (kind === 'world') ignored.worlds += 1;
-        else if (kind === 'vector_index') vectorCollections.add(vectorCollectionId(file.name)!.toLowerCase());
-        else if (kind === 'ignore' && !file.name.endsWith('/')) ignored.other += 1;
-        if (!['character', 'chat', 'settings', 'persona_avatar', 'media'].includes(kind)) return false;
-        extractedBytes += Number(file.originalSize || 0);
-        if (extractedBytes > MAX_EXTRACTED_BYTES) throw new Error('sillytavern_backup_extracted_too_large');
-        return true;
-      },
-    });
-  } catch (error: any) {
-    if (`${error?.message || ''}`.startsWith('sillytavern_backup_')) throw error;
-    throw new Error('sillytavern_backup_invalid_zip');
-  }
-  const parsed: ParsedBackup = { characters: [], chats: [], settings: null, personaAvatars: [], media: [], vectorCollections, ignored, warnings: [] };
-  Object.entries(files).forEach(([rawName, data]) => {
-    const name = normalizeArchivePath(rawName);
-    const file = { name, data: Buffer.from(data) };
-    const kind = classifyPath(name);
+  const parsed: ParsedBackup = { characters: [], chats: [], groups: [], groupChats: [], settings: null, personaAvatars: [], media: [], vectorCollections: new Set(), ignored: { group_chats: 0, worlds: 0, other: 0 }, warnings: [] };
+  for (const file of entries) {
+    const kind = classifyPath(file.name);
     if (kind === 'character') parsed.characters.push(file);
-    if (kind === 'chat') parsed.chats.push(file);
-    if (kind === 'persona_avatar') parsed.personaAvatars.push(file);
-    if (kind === 'media') parsed.media.push({ ...file, size: data.length });
-    if (kind === 'settings' && (!parsed.settings || name.split('/').length < parsed.settings.name.split('/').length)) parsed.settings = file;
-  });
-  if (ignored.group_chats) parsed.warnings.push('group_chats_not_supported');
-  if (ignored.worlds) parsed.warnings.push('worlds_not_supported');
-  if (ignored.other) parsed.warnings.push('other_data_ignored');
-  if (!parsed.characters.length && !parsed.chats.length && !parsed.settings) throw new Error('sillytavern_backup_no_supported_data');
+    else if (kind === 'chat') parsed.chats.push(file);
+    else if (kind === 'group') parsed.groups.push(file);
+    else if (kind === 'group_chat') parsed.groupChats.push(file);
+    else if (kind === 'persona_avatar') parsed.personaAvatars.push(file);
+    else if (kind === 'media') parsed.media.push(file);
+    else if (kind === 'settings' && (!parsed.settings || file.name.split('/').length < parsed.settings.name.split('/').length)) parsed.settings = file;
+    else if (kind === 'vector_index') parsed.vectorCollections.add(vectorCollectionId(file.name)!.toLowerCase());
+    else if (kind === 'world') parsed.ignored.worlds++;
+    else if (kind === 'ignore' && !file.name.endsWith('/')) parsed.ignored.other++;
+  }
+  if (parsed.ignored.worlds) parsed.warnings.push('worlds_not_supported');
+  if (parsed.ignored.other) parsed.warnings.push('other_data_ignored');
+  if (!parsed.characters.length && !parsed.chats.length && !parsed.groupChats.length && !parsed.settings) throw new Error('sillytavern_backup_no_supported_data');
   return parsed;
 };
-
 const personaPayload = (settings: ArchiveFile | null): string | null => {
   if (!settings) return null;
   let root: any;
@@ -206,9 +192,13 @@ export const previewSillyTavernBackup = (userId: number, buffer: Buffer | Archiv
   const personas = payload ? previewSillyTavernPersonas(accountId, payload) : null;
   const avatars = avatarLookup(parsed);
   const chatPreviews = parsed.chats.flatMap(file => previewSillyTavernChats(accountId, [{ file_name: file.name, base64: file.data.toString('base64') }]));
+  const groupTasks = planGroupHistories(parsed.groups, parsed.groupChats);
+  const groupPreviews = groupTasks.map(task => previewGroupHistory(accountId, task));
+  const cardKeys = parsed.characters.map(file => ({ root: groupCardRoot(file.name), key: file.name.slice(file.name.toLowerCase().lastIndexOf('/characters/') + 12) }));
+  const missingCards = groupTasks.filter(task => missingGroupCards(task, cardKeys)).length;
   const media = { images: 0, files: 0, missing: 0, bytes: 0 };
   const mediaSeen = new Set<string>();
-  for (const file of parsed.chats) {
+  for (const file of [...parsed.chats, ...parsed.groupChats]) {
     for (const row of chatMediaRows(file.data.toString('utf8'))) {
       for (const extra of [row.extra, ...(Array.isArray(row.swipe_info) ? row.swipe_info.map((swipe: any) => swipe?.extra) : [])]) {
         for (const ref of attachmentReferences(extra)) {
@@ -222,12 +212,17 @@ export const previewSillyTavernBackup = (userId: number, buffer: Buffer | Archiv
       }
     }
   }
-  const vectorizedChatIndexes = parsed.chats
+  const previewFiles = [...parsed.chats, ...groupTasks.map(task => task.file)];
+  const allPreviews = [...chatPreviews, ...groupPreviews];
+  const vectorizedChatIndexes = previewFiles
     .map((file, index) => hasChatVectors(parsed, file.name) ? index : -1)
     .filter(index => index >= 0);
   const warnings = [...parsed.warnings];
   if (parsed.settings && !payload) warnings.push('personas_not_found');
+  warnings.push(...new Set(groupTasks.flatMap(task => task.warnings)));
+  if (missingCards) warnings.push('group_character_missing');
   return {
+    groups: { count: parsed.groups.length, history_count: groupTasks.length, create_count: groupPreviews.filter(chat => !chat.already_imported_chat_id).length, existing_count: groupPreviews.filter(chat => chat.already_imported_chat_id).length, missing_cards: missingCards },
     characters: {
       count: cards.length,
       create_count: characterExisting.filter(value => !value).length,
@@ -248,7 +243,7 @@ export const previewSillyTavernBackup = (userId: number, buffer: Buffer | Archiv
     },
     chat_memory: {
       chat_count: vectorizedChatIndexes.length,
-      message_count: vectorizedChatIndexes.reduce((sum, index) => sum + chatPreviews[index].message_count, 0),
+      message_count: vectorizedChatIndexes.reduce((sum, index) => sum + allPreviews[index].message_count, 0),
     },
     ignored: parsed.ignored,
     media,
@@ -312,6 +307,7 @@ export const importSillyTavernBackup = async (
     .get(accountId) as { selected_prompt_id: number | null } | undefined)?.selected_prompt_id ?? null;
   let createdCharacters = 0;
   let existingCharacters = 0;
+  const groupCards: GroupCard[] = [];
   try {
     for (const file of parsed.characters) {
       options.onProgress?.('characters', createdCharacters + existingCharacters, parsed.characters.length);
@@ -322,6 +318,8 @@ export const importSillyTavernBackup = async (
         await importCharacterCard(accountId, card);
         createdCharacters += 1;
       }
+      const prompt = findExistingCharacter(accountId, card.raw_json)!;
+      groupCards.push({ root: groupCardRoot(file.name), key: file.name.slice(file.name.toLowerCase().lastIndexOf('/characters/') + 12), promptId: toUserPromptSelectedId(prompt.id), name: prompt.name });
     }
   } finally {
     db.prepare('UPDATE users SET selected_prompt_id = ? WHERE id = ?').run(previousSelection, accountId);
@@ -338,6 +336,7 @@ export const importSillyTavernBackup = async (
   const personaAvatars = await importPersonaAvatars(accountId, parsed, personaResult.personas);
 
   const importedChats: ReturnType<typeof importSillyTavernChats> = [];
+  const groupResults: ReturnType<typeof importGroupHistory>[] = [];
   const media = { images: 0, files: 0, missing: 0, errors: 0 };
   for (const file of parsed.chats) {
     options.onProgress?.('chats', importedChats.length, parsed.chats.length);
@@ -349,12 +348,23 @@ export const importSillyTavernBackup = async (
     await new Promise<void>(resolve => setImmediate(resolve));
   }
   const importChatMemory = options.importChatMemory || VectorMemoryService.importChatFacts.bind(VectorMemoryService);
+  const groupTasks = planGroupHistories(parsed.groups, parsed.groupChats);
+  for (const task of groupTasks) {
+    options.onProgress?.('groups', groupResults.length, groupTasks.length);
+    const imported = importGroupHistory(accountId, task, groupCards);
+    groupResults.push(imported);
+    const importedMedia = await importChatAttachments(accountId, imported.chat.chat_id, task.file.data.toString('utf8'), parsed.media, (done, total) => options.onProgress?.('media', done, total));
+    for (const key of ['images', 'files', 'missing', 'errors'] as const) media[key] += importedMedia[key];
+    await new Promise<void>(resolve => setImmediate(resolve));
+  }
+  const allFiles = [...parsed.chats, ...groupTasks.map(task => task.file)];
+  const allImportedChats = [...importedChats, ...groupResults.map(result => result.chat)];
   const chatMemory = { detected: 0, indexed: 0, messages_indexed: 0, messages_skipped: 0, errors: 0 };
-  for (let index = 0; index < parsed.chats.length; index += 1) {
-    options.onProgress?.('memory', index, parsed.chats.length);
-    if (!hasChatVectors(parsed, parsed.chats[index].name)) continue;
+  for (let index = 0; index < allFiles.length; index += 1) {
+    options.onProgress?.('memory', index, allFiles.length);
+    if (!hasChatVectors(parsed, allFiles[index].name)) continue;
     chatMemory.detected += 1;
-    const importedChat = importedChats[index];
+    const importedChat = allImportedChats[index];
     try {
       const rows = db.prepare(`
         SELECT role, content, prompt_name, timeline_index, created_at
@@ -381,7 +391,7 @@ export const importSillyTavernBackup = async (
       chatMemory.errors += 1;
       console.error('[sillytavern-backup] Chat memory import failed', {
         chat_id: importedChat.chat_id,
-        source_file: parsed.chats[index].name,
+        source_file: allFiles[index].name,
         error: error instanceof Error ? error.message : String(error),
       });
     }
@@ -392,7 +402,9 @@ export const importSillyTavernBackup = async (
   if (chatMemory.errors) warnings.push('chat_vector_import_errors');
   if (media.missing) warnings.push('media_missing');
   if (media.errors) warnings.push('media_import_errors');
+  warnings.push(...new Set(groupResults.flatMap(result => result.warnings)));
   return {
+    groups: { created: groupResults.filter(result => result.chat.status === 'created').length, existing: groupResults.filter(result => result.chat.status === 'existing').length },
     characters: { created: createdCharacters, existing: existingCharacters },
     personas: {
       created: personaResult.created,
@@ -404,7 +416,7 @@ export const importSillyTavernBackup = async (
       created: importedChats.filter(chat => chat.status === 'created').length,
       existing: importedChats.filter(chat => chat.status === 'existing').length,
       message_count: importedChats.reduce((sum, chat) => sum + chat.message_count, 0),
-      chat_ids: importedChats.map(chat => chat.chat_id),
+      chat_ids: allImportedChats.map(chat => chat.chat_id),
     },
     chat_memory: chatMemory,
     media,

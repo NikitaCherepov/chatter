@@ -12,7 +12,7 @@ type Props = {
 
 export function SillyTavernBackupImportDialog({ preview, importing, progress, onCancel, onImport }: Props) {
   const { t } = useTranslation();
-  const importable = preview.characters.count + preview.personas.count + preview.chats.count;
+  const importable = preview.characters.count + preview.personas.count + preview.chats.count + preview.groups.history_count;
   return (
     <div className={s.overlay} role="presentation" onMouseDown={event => !importing && event.target === event.currentTarget && onCancel()}>
       <div className={s.dialog} role="dialog" aria-modal="true" aria-labelledby="sillytavern-backup-import-title">
@@ -77,6 +77,16 @@ export function SillyTavernBackupImportDialog({ preview, importing, progress, on
                 messages: preview.chat_memory.message_count,
               })}
             </p>
+          )}
+          {preview.groups.history_count > 0 && (
+            <article className={s.chat}>
+              <strong>{t('settings.data.backup.groupsTitle')}</strong>
+              <p>{t('settings.data.backup.groupsCount', preview.groups)}</p>
+              <div className={s.meta}>
+                <span>{t('settings.data.backup.newCount', { count: preview.groups.create_count })}</span>
+                <span>{t('settings.data.backup.existingCount', { count: preview.groups.existing_count })}</span>
+              </div>
+            </article>
           )}
           {preview.warnings.map(warning => (
             <p className={s.warning} key={warning}>{t(`settings.data.backup.warnings.${warning}`)}</p>

@@ -1893,6 +1893,7 @@ export type SillyTavernChatPreview = {
 };
 
 export type SillyTavernBackupPreview = {
+  groups: { count: number; history_count: number; create_count: number; existing_count: number; missing_cards: number };
   characters: { count: number; create_count: number; existing_count: number; names: string[] };
   personas: { count: number; create_count: number; update_count: number; avatar_count: number };
   chats: { count: number; create_count: number; existing_count: number; message_count: number };
@@ -1904,6 +1905,7 @@ export type SillyTavernBackupPreview = {
 };
 
 export type SillyTavernBackupImportResult = {
+  groups: { created: number; existing: number };
   characters: { created: number; existing: number };
   personas: { created: number; updated: number; avatars: number; avatar_errors: number };
   chats: { created: number; existing: number; message_count: number; chat_ids: number[] };

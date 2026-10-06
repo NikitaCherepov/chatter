@@ -227,17 +227,22 @@ const validateBatch = (files: SillyTavernChatFile[]) => {
   if (decodedBytes > MAX_SILLYTAVERN_CHAT_TOTAL_BYTES) throw new Error('sillytavern_chats_total_too_large');
 };
 
-export const previewSillyTavernChats = (userId: number, files: SillyTavernChatFile[]): SillyTavernChatPreview[] => {
-  const accountId = resolveAccountId(userId);
-  validateBatch(files);
-  return files.map(file => previewParsed(accountId, parseChat(file)));
-};
-
-export const importSillyTavernChats = (userId: number, files: SillyTavernChatFile[]) => {
+export const previewSillyTavernChats = (userId: number, files: SillyTavernChatFile[], options: { sourceScope?: string } = {}): SillyTavernChatPreview[] => {
   const accountId = resolveAccountId(userId);
   validateBatch(files);
   return files.map(file => {
     const parsed = parseChat(file);
+    if (options.sourceScope) parsed.hash = createHash('sha256').update(options.sourceScope + '\0' + parsed.hash).digest('hex');
+    return previewParsed(accountId, parsed);
+  });
+};
+
+export const importSillyTavernChats = (userId: number, files: SillyTavernChatFile[], options: { sourceScope?: string } = {}) => {
+  const accountId = resolveAccountId(userId);
+  validateBatch(files);
+  return files.map(file => {
+    const parsed = parseChat(file);
+    if (options.sourceScope) parsed.hash = createHash('sha256').update(options.sourceScope + '\0' + parsed.hash).digest('hex');
     const preview = previewParsed(accountId, parsed);
     if (preview.already_imported_chat_id) {
       return { file_name: parsed.fileName, chat_id: preview.already_imported_chat_id, status: 'existing' as const, message_count: preview.message_count };

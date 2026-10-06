@@ -61,10 +61,10 @@ export async function uploadBackupSession(userId: number, input: Readable, conte
   const session: Session = { owner: userId, directory, entries: [], expires: Date.now() + TTL, status: 'running', stage: 'upload', done: 0, total: 0, required: 0 };
   sessions.set(id, session);
   try {
-    const entries = await extractBackupStream(input, directory, name => ['character', 'chat', 'settings', 'persona_avatar', 'media'].includes(classifyBackupPath(name)));
+    const entries = await extractBackupStream(input, directory, name => ['character', 'chat', 'settings', 'persona_avatar', 'media', 'group', 'group_chat'].includes(classifyBackupPath(name)));
     const preview = previewSillyTavernBackup(userId, entries);
     // Raw JSONL, parsed messages, variants and provenance all consume SQLite space.
-    const chatBytes = entries.filter(entry => classifyBackupPath(entry.name) === 'chat').reduce((n, entry) => n + entry.size, 0);
+    const chatBytes = entries.filter(entry => ['chat', 'group_chat', 'group'].includes(classifyBackupPath(entry.name))).reduce((n, entry) => n + entry.size, 0);
     const otherBytes = entries.filter(entry => ['character', 'settings', 'persona_avatar'].includes(classifyBackupPath(entry.name))).reduce((n, entry) => n + entry.size, 0);
     const required = chatBytes * 6 + otherBytes * 3 + preview.media.bytes * 2 + BACKUP_RESERVE;
     Object.assign(session, { entries, required, status: 'ready', stage: 'ready', expires: Date.now() + TTL });

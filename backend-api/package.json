@@ -36,6 +36,7 @@
     "test:sillytavern-chat-import": "tsx tests/sillytavern-chat-import.test.mts",
     "test:sillytavern-backup-import": "tsx tests/sillytavern-backup-import.test.mts",
     "test:sillytavern-stream-media": "tsx tests/sillytavern-stream-media.test.mts",
+    "test:sillytavern-group-import": "tsx tests/sillytavern-group-import.test.mts",
     "test:message-variants": "tsx tests/message-variants.test.mts",
     "test:vector-memory-migration": "tsx tests/vector-memory-migration.test.mts",
     "test:vector-memory-reranking": "tsx tests/vector-memory-reranking.test.mts",
