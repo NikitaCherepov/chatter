@@ -1,5 +1,6 @@
 ﻿import express from 'express';
 import path from 'path';
+import { uploadBackupSession, startBackupSession, backupSessionStatus, cancelBackupSession } from './services/sillytavern-backup-session.js';
 import fs from 'fs';
 import crypto from 'node:crypto';
 import { getEncryptionKey } from './utils/encryption.js';
@@ -113,11 +114,6 @@ import { attachMediaAsset, deleteMediaAssetIfUnreferenced, detachImageUrlFromEnt
 import { importCharacterCard, listCharacterCardPromptSummaries, MAX_CHARACTER_CARD_BYTES, parseCharacterCard, startCharacterCardChat, toCharacterCardPreview } from './services/character-card-import.js';
 import { importSillyTavernPersonas, previewSillyTavernPersonas } from './services/persona-import.js';
 import { importSillyTavernChats, previewSillyTavernChats } from './services/sillytavern-chat-import.js';
-import {
-  importSillyTavernBackup,
-  MAX_SILLYTAVERN_BACKUP_BYTES,
-  previewSillyTavernBackup,
-} from './services/sillytavern-backup-import.js';
 import { canUserReadRegisteredImage } from './services/media-access.js';
 import { resolveAttachmentFile, MAX_RAW_FILE_SIZE as MAX_ATTACHMENT_BYTES } from './services/attachment-storage.js';
 import { materializeAssetInput } from './services/response-attachments.js';
@@ -1577,29 +1573,31 @@ app.post('/api/v1/data/import/sillytavern/chats', (req: AuthedRequest, res: any)
   }
 });
 
-const sillyTavernBackupBody = express.raw({
-  type: ['application/zip', 'application/octet-stream'],
-  limit: MAX_SILLYTAVERN_BACKUP_BYTES,
-});
-
-app.post('/api/v1/data/import/sillytavern/backup/preview', sillyTavernBackupBody, (req: AuthedRequest, res: any) => {
+app.post('/api/v1/data/import/sillytavern/backup/preview', async (req: AuthedRequest, res: any) => {
   try {
-    if (!Buffer.isBuffer(req.body)) return res.status(400).json({ error: 'sillytavern_backup_required' });
-    return res.json({ preview: previewSillyTavernBackup(accountIdFromRequest(req), req.body) });
+    if (!req.is('application/zip') && !req.is('application/octet-stream')) return res.status(400).json({ error: 'sillytavern_backup_required' });
+    return res.json(await uploadBackupSession(accountIdFromRequest(req), req as unknown as import('node:stream').Readable, Number(req.headers['content-length']) || undefined));
   } catch (error: any) {
     const code = error?.message || 'sillytavern_backup_preview_failed';
-    return res.status(code.includes('too_large') || code.includes('too_many') ? 413 : 400).json({ error: code });
+    return res.status(code.includes('insufficient_space') ? 507 : code.includes('too_large') || code.includes('too_many') ? 413 : 400).json({ error: code });
   }
 });
 
-app.post('/api/v1/data/import/sillytavern/backup', sillyTavernBackupBody, async (req: AuthedRequest, res: any) => {
+app.post('/api/v1/data/import/sillytavern/backup', (req: AuthedRequest, res: any) => {
   try {
-    if (!Buffer.isBuffer(req.body)) return res.status(400).json({ error: 'sillytavern_backup_required' });
-    return res.status(201).json({ result: await importSillyTavernBackup(accountIdFromRequest(req), req.body) });
+    return res.status(202).json(startBackupSession(accountIdFromRequest(req), String(req.body?.import_id || '')));
   } catch (error: any) {
     const code = error?.message || 'sillytavern_backup_import_failed';
-    return res.status(code.includes('too_large') || code.includes('too_many') ? 413 : 400).json({ error: code });
+    return res.status(code.includes('insufficient_space') ? 507 : code.includes('too_large') || code.includes('too_many') ? 413 : 400).json({ error: code });
   }
+});
+app.get('/api/v1/data/import/sillytavern/backup/:importId', (req: AuthedRequest, res: any) => {
+  try { return res.json(backupSessionStatus(accountIdFromRequest(req), String(req.params.importId))); }
+  catch (error: any) { return res.status(404).json({ error: error.message }); }
+});
+app.delete('/api/v1/data/import/sillytavern/backup/:importId', (req: AuthedRequest, res: any) => {
+  try { cancelBackupSession(accountIdFromRequest(req), String(req.params.importId)); return res.json({ ok: true }); }
+  catch (error: any) { return res.status(409).json({ error: error.message }); }
 });
 
 app.post('/api/v1/memory/personas', (req: AuthedRequest, res: any) => {

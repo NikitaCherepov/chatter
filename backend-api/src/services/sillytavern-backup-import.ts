@@ -11,8 +11,10 @@ import {
   saveImageAsset,
 } from './media-assets.js';
 import { importSillyTavernPersonas, previewSillyTavernPersonas } from './persona-import.js';
-import { importSillyTavernChats, previewSillyTavernChats, type SillyTavernChatFile } from './sillytavern-chat-import.js';
+import { importSillyTavernChats, previewSillyTavernChats } from './sillytavern-chat-import.js';
 import { VectorMemoryService } from './vector-memory.js';
+import { attachmentReferences, chatMediaRows, findArchiveAttachment, importChatAttachments } from './sillytavern-chat-media.js';
+import type { ArchiveEntry } from './sillytavern-archive-stream.js';
 
 export const MAX_SILLYTAVERN_BACKUP_BYTES = 256 * 1024 * 1024;
 const MAX_EXTRACTED_BYTES = 512 * 1024 * 1024;
@@ -25,6 +27,7 @@ type ParsedBackup = {
   chats: ArchiveFile[];
   settings: ArchiveFile | null;
   personaAvatars: ArchiveFile[];
+  media: ArchiveEntry[];
   vectorCollections: Set<string>;
   ignored: { group_chats: number; worlds: number; other: number };
   warnings: string[];
@@ -35,6 +38,7 @@ export type SillyTavernBackupPreview = {
   personas: { count: number; create_count: number; update_count: number; avatar_count: number };
   chats: { count: number; create_count: number; existing_count: number; message_count: number };
   chat_memory: { chat_count: number; message_count: number };
+  media: { images: number; files: number; missing: number; bytes: number };
   ignored: { group_chats: number; worlds: number; other: number };
   warnings: string[];
 };
@@ -44,6 +48,7 @@ export type SillyTavernBackupImportResult = {
   personas: { created: number; updated: number; avatars: number; avatar_errors: number };
   chats: { created: number; existing: number; message_count: number; chat_ids: number[] };
   chat_memory: { detected: number; indexed: number; messages_indexed: number; messages_skipped: number; errors: number };
+  media: { images: number; files: number; missing: number; errors: number };
   warnings: string[];
 };
 
@@ -68,7 +73,7 @@ const vectorCollectionId = (rawName: string): string | null => {
   return parts[vectors + 2] || null;
 };
 
-const classifyPath = (rawName: string): 'character' | 'chat' | 'settings' | 'persona_avatar' | 'vector_index' | 'group_chat' | 'world' | 'ignore' => {
+export const classifyBackupPath = (rawName: string): 'character' | 'chat' | 'settings' | 'persona_avatar' | 'media' | 'vector_index' | 'group_chat' | 'world' | 'ignore' => {
   const parts = pathParts(rawName);
   const leaf = parts.at(-1)?.toLowerCase() || '';
   if (!leaf || rawName.endsWith('/')) return 'ignore';
@@ -82,10 +87,32 @@ const classifyPath = (rawName: string): 'character' | 'chat' | 'settings' | 'per
   if (vectorCollectionId(rawName)) return 'vector_index';
   if (segmentIndex(parts, 'group chats') >= 0) return 'group_chat';
   if (segmentIndex(parts, 'worlds') >= 0) return 'world';
+  if (segmentIndex(parts, 'images') >= 0 || segmentIndex(parts, 'files') >= 0) return 'media';
   return 'ignore';
 };
+const classifyPath = classifyBackupPath;
 
-const parseArchive = (buffer: Buffer): ParsedBackup => {
+const parseArchive = (buffer: Buffer | ArchiveEntry[]): ParsedBackup => {
+  if (Array.isArray(buffer)) {
+    const parsed: ParsedBackup = { characters: [], chats: [], settings: null, personaAvatars: [], media: [], vectorCollections: new Set(), ignored: { group_chats: 0, worlds: 0, other: 0 }, warnings: [] };
+    for (const file of buffer) {
+      const kind = classifyPath(file.name);
+      if (kind === 'character') parsed.characters.push(file);
+      else if (kind === 'chat') parsed.chats.push(file);
+      else if (kind === 'persona_avatar') parsed.personaAvatars.push(file);
+      else if (kind === 'media') parsed.media.push(file);
+      else if (kind === 'settings' && (!parsed.settings || file.name.split('/').length < parsed.settings.name.split('/').length)) parsed.settings = file;
+      else if (kind === 'vector_index') parsed.vectorCollections.add(vectorCollectionId(file.name)!.toLowerCase());
+      else if (kind === 'group_chat') parsed.ignored.group_chats++;
+      else if (kind === 'world') parsed.ignored.worlds++;
+      else if (kind === 'ignore' && !file.name.endsWith('/')) parsed.ignored.other++;
+    }
+    if (parsed.ignored.group_chats) parsed.warnings.push('group_chats_not_supported');
+    if (parsed.ignored.worlds) parsed.warnings.push('worlds_not_supported');
+    if (parsed.ignored.other) parsed.warnings.push('other_data_ignored');
+    if (!parsed.characters.length && !parsed.chats.length && !parsed.settings) throw new Error('sillytavern_backup_no_supported_data');
+    return parsed;
+  }
   if (!buffer.length) throw new Error('sillytavern_backup_required');
   if (buffer.length > MAX_SILLYTAVERN_BACKUP_BYTES) throw new Error('sillytavern_backup_too_large');
   let entryCount = 0;
@@ -103,7 +130,7 @@ const parseArchive = (buffer: Buffer): ParsedBackup => {
         else if (kind === 'world') ignored.worlds += 1;
         else if (kind === 'vector_index') vectorCollections.add(vectorCollectionId(file.name)!.toLowerCase());
         else if (kind === 'ignore' && !file.name.endsWith('/')) ignored.other += 1;
-        if (!['character', 'chat', 'settings', 'persona_avatar'].includes(kind)) return false;
+        if (!['character', 'chat', 'settings', 'persona_avatar', 'media'].includes(kind)) return false;
         extractedBytes += Number(file.originalSize || 0);
         if (extractedBytes > MAX_EXTRACTED_BYTES) throw new Error('sillytavern_backup_extracted_too_large');
         return true;
@@ -113,7 +140,7 @@ const parseArchive = (buffer: Buffer): ParsedBackup => {
     if (`${error?.message || ''}`.startsWith('sillytavern_backup_')) throw error;
     throw new Error('sillytavern_backup_invalid_zip');
   }
-  const parsed: ParsedBackup = { characters: [], chats: [], settings: null, personaAvatars: [], vectorCollections, ignored, warnings: [] };
+  const parsed: ParsedBackup = { characters: [], chats: [], settings: null, personaAvatars: [], media: [], vectorCollections, ignored, warnings: [] };
   Object.entries(files).forEach(([rawName, data]) => {
     const name = normalizeArchivePath(rawName);
     const file = { name, data: Buffer.from(data) };
@@ -121,6 +148,7 @@ const parseArchive = (buffer: Buffer): ParsedBackup => {
     if (kind === 'character') parsed.characters.push(file);
     if (kind === 'chat') parsed.chats.push(file);
     if (kind === 'persona_avatar') parsed.personaAvatars.push(file);
+    if (kind === 'media') parsed.media.push({ ...file, size: data.length });
     if (kind === 'settings' && (!parsed.settings || name.split('/').length < parsed.settings.name.split('/').length)) parsed.settings = file;
   });
   if (ignored.group_chats) parsed.warnings.push('group_chats_not_supported');
@@ -144,31 +172,8 @@ const personaPayload = (settings: ArchiveFile | null): string | null => {
   })).toString('base64');
 };
 
-const chatFiles = (parsed: ParsedBackup): SillyTavernChatFile[] => parsed.chats.map(file => ({
-  file_name: file.name,
-  base64: file.data.toString('base64'),
-}));
-
 const chatCollectionId = (fileName: string) => pathParts(fileName).at(-1)!.replace(/\.jsonl$/i, '').toLowerCase();
 const hasChatVectors = (parsed: ParsedBackup, fileName: string) => parsed.vectorCollections.has(chatCollectionId(fileName));
-
-const chatBatches = (files: SillyTavernChatFile[]): SillyTavernChatFile[][] => {
-  const batches: SillyTavernChatFile[][] = [];
-  let batch: SillyTavernChatFile[] = [];
-  let bytes = 0;
-  for (const file of files) {
-    const size = Buffer.from(file.base64, 'base64').length;
-    if (batch.length && (batch.length >= 20 || bytes + size > 32 * 1024 * 1024)) {
-      batches.push(batch);
-      batch = [];
-      bytes = 0;
-    }
-    batch.push(file);
-    bytes += size;
-  }
-  if (batch.length) batches.push(batch);
-  return batches;
-};
 
 const findExistingCharacter = (userId: number, rawJson: string) => db.prepare(`
   SELECT prompt.id, prompt.name
@@ -189,15 +194,34 @@ const avatarLookup = (parsed: ParsedBackup): Map<string, ArchiveFile> => {
   return result;
 };
 
-export const previewSillyTavernBackup = (userId: number, buffer: Buffer): SillyTavernBackupPreview => {
+export const previewSillyTavernBackup = (userId: number, buffer: Buffer | ArchiveEntry[]): SillyTavernBackupPreview => {
   const accountId = resolveAccountId(userId);
   const parsed = parseArchive(buffer);
-  const cards = parsed.characters.map(file => parseCharacterCard({ fileName: file.name, data: file.data }));
-  const characterExisting = cards.map(card => Boolean(findExistingCharacter(accountId, card.raw_json)));
+  const cards = parsed.characters.map(file => {
+    const card = parseCharacterCard({ fileName: file.name, data: file.data });
+    return { existing: Boolean(findExistingCharacter(accountId, card.raw_json)), name: toCharacterCardPreview(card).name };
+  });
+  const characterExisting = cards.map(card => card.existing);
   const payload = personaPayload(parsed.settings);
   const personas = payload ? previewSillyTavernPersonas(accountId, payload) : null;
   const avatars = avatarLookup(parsed);
-  const chatPreviews = chatBatches(chatFiles(parsed)).flatMap(batch => previewSillyTavernChats(accountId, batch));
+  const chatPreviews = parsed.chats.flatMap(file => previewSillyTavernChats(accountId, [{ file_name: file.name, base64: file.data.toString('base64') }]));
+  const media = { images: 0, files: 0, missing: 0, bytes: 0 };
+  const mediaSeen = new Set<string>();
+  for (const file of parsed.chats) {
+    for (const row of chatMediaRows(file.data.toString('utf8'))) {
+      for (const extra of [row.extra, ...(Array.isArray(row.swipe_info) ? row.swipe_info.map((swipe: any) => swipe?.extra) : [])]) {
+        for (const ref of attachmentReferences(extra)) {
+          const entry = findArchiveAttachment(parsed.media, ref.url);
+          if (!entry) { media.missing++; continue; }
+          media.bytes += entry.size;
+          if (mediaSeen.has(entry.name)) continue;
+          mediaSeen.add(entry.name);
+          if (ref.image) media.images++; else media.files++;
+        }
+      }
+    }
+  }
   const vectorizedChatIndexes = parsed.chats
     .map((file, index) => hasChatVectors(parsed, file.name) ? index : -1)
     .filter(index => index >= 0);
@@ -208,7 +232,7 @@ export const previewSillyTavernBackup = (userId: number, buffer: Buffer): SillyT
       count: cards.length,
       create_count: characterExisting.filter(value => !value).length,
       existing_count: characterExisting.filter(Boolean).length,
-      names: cards.map(card => toCharacterCardPreview(card).name),
+      names: cards.map(card => card.name),
     },
     personas: {
       count: personas?.count || 0,
@@ -227,6 +251,7 @@ export const previewSillyTavernBackup = (userId: number, buffer: Buffer): SillyT
       message_count: vectorizedChatIndexes.reduce((sum, index) => sum + chatPreviews[index].message_count, 0),
     },
     ignored: parsed.ignored,
+    media,
     warnings,
   };
 };
@@ -276,8 +301,8 @@ const importPersonaAvatars = async (
 
 export const importSillyTavernBackup = async (
   userId: number,
-  buffer: Buffer,
-  options: { importChatMemory?: typeof VectorMemoryService.importChatFacts } = {},
+  buffer: Buffer | ArchiveEntry[],
+  options: { importChatMemory?: typeof VectorMemoryService.importChatFacts; onProgress?: (stage: string, done: number, total: number) => void } = {},
 ): Promise<SillyTavernBackupImportResult> => {
   const accountId = resolveAccountId(userId);
   const parsed = parseArchive(buffer);
@@ -289,6 +314,7 @@ export const importSillyTavernBackup = async (
   let existingCharacters = 0;
   try {
     for (const file of parsed.characters) {
+      options.onProgress?.('characters', createdCharacters + existingCharacters, parsed.characters.length);
       const card = parseCharacterCard({ fileName: file.name, data: file.data });
       if (findExistingCharacter(accountId, card.raw_json)) {
         existingCharacters += 1;
@@ -307,14 +333,25 @@ export const importSillyTavernBackup = async (
     created: 0,
     updated: 0,
   };
+  options.onProgress?.('personas', 0, payload ? 1 : 0);
   if (payload) personaResult = importSillyTavernPersonas(accountId, payload);
   const personaAvatars = await importPersonaAvatars(accountId, parsed, personaResult.personas);
 
-  const importedChats = chatBatches(chatFiles(parsed))
-    .flatMap(batch => importSillyTavernChats(accountId, batch));
+  const importedChats: ReturnType<typeof importSillyTavernChats> = [];
+  const media = { images: 0, files: 0, missing: 0, errors: 0 };
+  for (const file of parsed.chats) {
+    options.onProgress?.('chats', importedChats.length, parsed.chats.length);
+    const raw = file.data;
+    const [chat] = importSillyTavernChats(accountId, [{ file_name: file.name, base64: raw.toString('base64') }]);
+    importedChats.push(chat);
+    const importedMedia = await importChatAttachments(accountId, chat.chat_id, raw.toString('utf8'), parsed.media, (done, total) => options.onProgress?.('media', done, total));
+    for (const key of ['images', 'files', 'missing', 'errors'] as const) media[key] += importedMedia[key];
+    await new Promise<void>(resolve => setImmediate(resolve));
+  }
   const importChatMemory = options.importChatMemory || VectorMemoryService.importChatFacts.bind(VectorMemoryService);
   const chatMemory = { detected: 0, indexed: 0, messages_indexed: 0, messages_skipped: 0, errors: 0 };
   for (let index = 0; index < parsed.chats.length; index += 1) {
+    options.onProgress?.('memory', index, parsed.chats.length);
     if (!hasChatVectors(parsed, parsed.chats[index].name)) continue;
     chatMemory.detected += 1;
     const importedChat = importedChats[index];
@@ -353,6 +390,8 @@ export const importSillyTavernBackup = async (
   if (parsed.settings && !payload) warnings.push('personas_not_found');
   if (personaAvatars.errors) warnings.push('persona_avatar_errors');
   if (chatMemory.errors) warnings.push('chat_vector_import_errors');
+  if (media.missing) warnings.push('media_missing');
+  if (media.errors) warnings.push('media_import_errors');
   return {
     characters: { created: createdCharacters, existing: existingCharacters },
     personas: {
@@ -368,6 +407,7 @@ export const importSillyTavernBackup = async (
       chat_ids: importedChats.map(chat => chat.chat_id),
     },
     chat_memory: chatMemory,
+    media,
     warnings,
   };
 };

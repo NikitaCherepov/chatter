@@ -362,9 +362,10 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
   const [sillyTavernBackupReading, setSillyTavernBackupReading] = useState(false);
   const [sillyTavernBackupImporting, setSillyTavernBackupImporting] = useState(false);
   const [sillyTavernBackupDialog, setSillyTavernBackupDialog] = useState<{
-    file: File;
+    importId: string;
     preview: api.SillyTavernBackupPreview;
   } | null>(null);
+  const [backupImportProgress, setBackupImportProgress] = useState<api.BackupImportProgress | null>(null);
   const [lastBackupImport, setLastBackupImport] = useState<api.SillyTavernBackupImportResult | null>(null);
   const sillyTavernChatInputRef = useRef<HTMLInputElement>(null);
   const [sillyTavernChatsReading, setSillyTavernChatsReading] = useState(false);
@@ -1186,10 +1187,11 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
     }
     setSillyTavernBackupReading(true);
     try {
-      const { preview } = await api.previewSillyTavernBackup(file);
-      setSillyTavernBackupDialog({ file, preview });
-    } catch {
-      toast.error(t('settings.data.backup.errors.invalid'));
+      const { preview, import_id } = await api.previewSillyTavernBackup(file);
+      setBackupImportProgress(null);
+      setSillyTavernBackupDialog({ importId: import_id, preview });
+    } catch (error) {
+      toast.error(t(error instanceof api.ApiError && error.status === 507 ? 'settings.data.backup.insufficientSpace' : 'settings.data.backup.errors.invalid'));
     } finally {
       setSillyTavernBackupReading(false);
       if (sillyTavernBackupInputRef.current) sillyTavernBackupInputRef.current.value = '';
@@ -1200,7 +1202,7 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
     if (!sillyTavernBackupDialog) return;
     setSillyTavernBackupImporting(true);
     try {
-      const { result } = await api.importSillyTavernBackup(sillyTavernBackupDialog.file);
+      const { result } = await api.importSillyTavernBackup(sillyTavernBackupDialog.importId, setBackupImportProgress);
       setLastBackupImport(result);
       setSillyTavernBackupDialog(null);
       await loadPersonas();
@@ -1215,8 +1217,19 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
         personas: result.personas.created + result.personas.updated,
         chats: result.chats.created,
       }));
-    } catch {
-      toast.error(t('settings.data.backup.errors.import'));
+    } catch (error) {
+      if (error instanceof Error && error.message === 'sillytavern_backup_import_cancelled') {
+        setSillyTavernBackupDialog(null);
+        await loadPersonas();
+        const promptData = await api.getPrompts();
+        setPrompts(promptData.prompts);
+        setCustomPrompts(promptData.custom_prompts || []);
+        window.dispatchEvent(new Event('chatter:personas-changed'));
+        await onAccountChanged?.();
+        toast.info(t('settings.data.backup.cancelled'));
+        return;
+      }
+      toast.error(t(error instanceof api.ApiError && error.status === 507 ? 'settings.data.backup.insufficientSpace' : 'settings.data.backup.errors.import'));
     } finally {
       setSillyTavernBackupImporting(false);
     }
@@ -2346,6 +2359,7 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
                           errors: lastBackupImport.chat_memory.errors,
                         })}</span>
                       )}
+                      <span>{t('settings.data.backup.mediaResult', lastBackupImport.media)}</span>
                     </div>
                   )}
                 </section>
@@ -3275,7 +3289,11 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
         <SillyTavernBackupImportDialog
           preview={sillyTavernBackupDialog.preview}
           importing={sillyTavernBackupImporting}
-          onCancel={() => !sillyTavernBackupImporting && setSillyTavernBackupDialog(null)}
+          progress={backupImportProgress}
+          onCancel={() => {
+            void api.cancelSillyTavernBackup(sillyTavernBackupDialog.importId).catch(() => toast.error(t('settings.data.backup.errors.import')));
+            if (!sillyTavernBackupImporting) setSillyTavernBackupDialog(null);
+          }}
           onImport={handleSillyTavernBackupImport}
         />
       )}

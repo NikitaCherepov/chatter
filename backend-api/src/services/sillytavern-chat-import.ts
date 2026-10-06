@@ -5,6 +5,7 @@ import { createUserChat } from './chats.js';
 import { getChatMemorySettings, updateChatMemorySettings } from './memory-foundation.js';
 import { toUserPromptSelectedId } from './prompts.js';
 import { countTokens } from './tokenizer.js';
+import { attachmentReferences } from './sillytavern-chat-media.js';
 
 export const MAX_SILLYTAVERN_CHAT_BYTES = 16 * 1024 * 1024;
 export const MAX_SILLYTAVERN_CHAT_FILES = 20;
@@ -115,7 +116,7 @@ const parseChat = (file: SillyTavernChatFile): ParsedChat => {
   let skippedEmpty = 0;
   const messages = rows.flatMap((row, index): ParsedMessage[] => {
     const mes = typeof row.mes === 'string' ? row.mes : '';
-    if (!mes.trim()) {
+    if (!mes.trim() && !attachmentReferences(row.extra).length) {
       skippedEmpty += 1;
       return [];
     }
@@ -153,7 +154,7 @@ const parseChat = (file: SillyTavernChatFile): ParsedChat => {
   if (!messages.length) throw new Error('sillytavern_chat_no_messages');
   if (systemMessages) warnings.push('system_messages_as_assistant');
   if (skippedEmpty) warnings.push('empty_messages_skipped');
-  if (rows.some(row => Boolean(asObject(row.extra)?.image) || Boolean(asObject(row.extra)?.file))) warnings.push('attachments_not_imported');
+  if (rows.some(row => attachmentReferences(row.extra).length || (Array.isArray(row.swipe_info) && row.swipe_info.some((swipe: any) => attachmentReferences(swipe?.extra).length)))) warnings.push('attachments_not_imported');
   return {
     fileName: file.file_name,
     raw,

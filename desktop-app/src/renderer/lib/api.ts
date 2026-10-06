@@ -1897,6 +1897,8 @@ export type SillyTavernBackupPreview = {
   personas: { count: number; create_count: number; update_count: number; avatar_count: number };
   chats: { count: number; create_count: number; existing_count: number; message_count: number };
   chat_memory: { chat_count: number; message_count: number };
+  media: { images: number; files: number; missing: number; bytes: number };
+  storage?: { available_bytes: number; required_bytes: number; sufficient: boolean };
   ignored: { group_chats: number; worlds: number; other: number };
   warnings: string[];
 };
@@ -1906,10 +1908,11 @@ export type SillyTavernBackupImportResult = {
   personas: { created: number; updated: number; avatars: number; avatar_errors: number };
   chats: { created: number; existing: number; message_count: number; chat_ids: number[] };
   chat_memory: { detected: number; indexed: number; messages_indexed: number; messages_skipped: number; errors: number };
+  media: { images: number; files: number; missing: number; errors: number };
   warnings: string[];
 };
 
-export async function previewSillyTavernBackup(data: Blob): Promise<{ preview: SillyTavernBackupPreview }> {
+export async function previewSillyTavernBackup(data: Blob): Promise<{ import_id: string; preview: SillyTavernBackupPreview }> {
   return apiFetch('/api/v1/data/import/sillytavern/backup/preview', {
     method: 'POST',
     headers: { 'Content-Type': 'application/zip' },
@@ -1917,12 +1920,27 @@ export async function previewSillyTavernBackup(data: Blob): Promise<{ preview: S
   });
 }
 
-export async function importSillyTavernBackup(data: Blob): Promise<{ result: SillyTavernBackupImportResult }> {
-  return apiFetch('/api/v1/data/import/sillytavern/backup', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/zip' },
-    body: data,
-  });
+export type BackupImportProgress = { status: 'ready' | 'running' | 'complete' | 'failed' | 'cancelled'; stage: string; done: number; total: number; result?: SillyTavernBackupImportResult; error?: string };
+export async function cancelSillyTavernBackup(importId: string) {
+  await apiFetch('/api/v1/data/import/sillytavern/backup/' + encodeURIComponent(importId), { method: 'DELETE' });
+}
+export async function importSillyTavernBackup(importId: string, onProgress?: (progress: BackupImportProgress) => void): Promise<{ result: SillyTavernBackupImportResult }> {
+  const url = '/api/v1/data/import/sillytavern/backup/' + encodeURIComponent(importId);
+  let progress = await apiFetch(url) as BackupImportProgress;
+  if (progress.status === 'ready') await apiFetch('/api/v1/data/import/sillytavern/backup', { method: 'POST', body: JSON.stringify({ import_id: importId }) });
+  let failures = 0;
+  while (true) {
+    try { progress = await apiFetch(url) as BackupImportProgress; failures = 0; }
+    catch (error) {
+      if (++failures >= 10) throw error;
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      continue;
+    }
+    onProgress?.(progress);
+    if (progress.status === 'complete' && progress.result) return { result: progress.result };
+    if (progress.status === 'failed' || progress.status === 'cancelled') throw new Error(progress.error || 'sillytavern_backup_import_failed');
+    await new Promise(resolve => setTimeout(resolve, 2000));
+  }
 }
 
 export async function previewSillyTavernChats(files: SillyTavernChatFile[]): Promise<{ previews: SillyTavernChatPreview[] }> {
