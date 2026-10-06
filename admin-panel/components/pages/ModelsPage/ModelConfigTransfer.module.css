@@ -47,6 +47,9 @@
   overflow: hidden;
   outline: none;
 }
+.compactDialog {
+  width: min(580px, 100%);
+}
 .dialog header,
 .dialog footer {
   padding: var(--sp-4);
@@ -87,8 +90,17 @@
   padding: var(--sp-5);
   border: 1px dashed var(--border-input);
   border-radius: var(--radius-md);
+  background: var(--bg-input);
   font-size: var(--fs-sm);
-  margin-bottom: var(--sp-4);
+  text-align: center;
+}
+.dropText {
+  color: var(--text-muted);
+  max-width: 360px;
+  line-height: 1.5;
+}
+.dropzone + section {
+  margin-top: var(--sp-4);
 }
 .keyRow {
   display: grid;
@@ -132,42 +144,28 @@
   margin-left: auto;
   flex-shrink: 0;
 }
-.tableWrap {
+.modelList {
   margin: var(--sp-4) 0;
 }
-.tableWrap table {
-  width: 100%;
-  table-layout: fixed;
-  border-collapse: collapse;
-  text-align: left;
-  font-size: var(--fs-sm);
-}
-.tableWrap th,
-.tableWrap td {
-  padding: var(--sp-3);
+.modelRow {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-4) 0;
   border-bottom: 1px solid var(--border-light);
-  vertical-align: top;
-}
-.tableWrap th {
-  color: var(--text-muted);
-  font-weight: normal;
-}
-.tableWrap td {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-.tableWrap td:first-child {
-  width: 40%;
-}
-.tableWrap small {
-  display: block;
-  color: var(--text-muted);
-  overflow-wrap: anywhere;
-  margin: var(--sp-2) 0;
-}
-.tableWrap button {
-  margin-top: var(--sp-2);
   font-size: var(--fs-sm);
+}
+.modelRow:first-child {
+  border-top: 1px solid var(--border-light);
+}
+.modelFields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: start;
+  gap: var(--sp-4);
+}
+.modelFields > * {
+  min-width: 0;
 }
 .modelHeading {
   display: flex;
@@ -181,20 +179,22 @@
   overflow-wrap: anywhere;
   min-width: 0;
 }
-.tableWrap .modelHeadingRow td {
-  width: auto;
-  border-bottom: 0;
-}
-.tableWrap .modelFieldsRow td {
-  padding-top: var(--sp-2);
-}
 .modelName {
   font-weight: var(--fw-semibold);
 }
+.roleRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--sp-2) var(--sp-4);
+}
+.roleLabel {
+  color: var(--text-muted);
+}
 .roles {
   display: flex;
-  flex-direction: column;
-  gap: var(--sp-2);
+  flex-wrap: wrap;
+  gap: var(--sp-3);
 }
 .body .warning {
   color: var(--color-warning, #a76a12);
@@ -217,34 +217,7 @@
   .overlay {
     padding: var(--sp-2);
   }
-  .tableWrap table,
-  .tableWrap tbody,
-  .tableWrap tr,
-  .tableWrap td {
-    display: block;
-    width: 100%;
-    min-width: 0;
-  }
-  .tableWrap thead {
-    display: none;
-  }
-  .tableWrap td {
-    border: 0;
-    padding: var(--sp-2) 0;
-  }
-  .tableWrap tr {
-    border-bottom: 1px solid var(--border-light);
-    padding-bottom: var(--sp-3);
-    margin-bottom: var(--sp-3);
-  }
-  .roles {
-    flex-direction: row;
-    flex-wrap: wrap;
-    gap: var(--sp-3);
-  }
-  .tableWrap .modelHeadingRow {
-    border-bottom: 0;
-    padding-bottom: 0;
-    margin-bottom: 0;
+  .modelFields {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

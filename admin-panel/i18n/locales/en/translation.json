@@ -109,6 +109,7 @@
       "includeKeys": "Include API keys",
       "secretWarning": "This file will contain unencrypted API keys. Keep it private.",
       "drop": "Drop a ZIP or JSON file here, or choose a file",
+      "chooseFile": "Choose file",
       "tooLarge": "File is too large. ZIP: up to 256 MB; JSON: up to 2 MB.",
       "keys": "Keys from the file",
       "showKey": "Show",

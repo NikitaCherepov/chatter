@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { api } from '../../../lib/api';
@@ -44,7 +44,7 @@ export function ModelConfigTransfer({ onImported }: { onImported: (settings: Par
     const keydown = (event: KeyboardEvent) => {
       if (event.key === 'Escape' && !busy) { setMode(null); setData(null); setError(''); }
       if (event.key !== 'Tab') return;
-      const nodes = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled), [tabindex="0"]') || []);
+      const nodes = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled):not([hidden]), select:not(:disabled), [tabindex="0"]') || []);
       const first = nodes[0]; const last = nodes[nodes.length - 1];
       if (event.shiftKey && (document.activeElement === first || document.activeElement === dialogRef.current)) { event.preventDefault(); last?.focus(); }
       else if (!event.shiftKey && (document.activeElement === last || document.activeElement === dialogRef.current)) { event.preventDefault(); first?.focus(); }
@@ -133,17 +133,18 @@ export function ModelConfigTransfer({ onImported }: { onImported: (settings: Par
     </div>
     {notice && <p role="status" className={styles.notice}>{notice}</p>}
     {mode && createPortal(<div className={styles.overlay} onMouseDown={e => { if (e.target === e.currentTarget) close(); }}>
-      <div className={styles.dialog} ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="model-transfer-title">
+      <div className={`${styles.dialog} ${!data ? styles.compactDialog : ''}`} ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="model-transfer-title">
         <header><h2 id="model-transfer-title">{t(`models.transfer.${mode}`)}</h2><p>{t(mode === 'import' ? 'models.transfer.importHint' : 'models.transfer.exportHint')}</p></header>
         <div className={styles.body}>
           {mode === 'export' ? <>
             <Checkbox checked={includeKeys} onChange={setIncludeKeys} disabled={busy} label={t('models.transfer.includeKeys')} />
             {includeKeys && <p className={styles.warning}>{t('models.transfer.secretWarning')}</p>}
           </> : <>
-            <label className={styles.dropzone} onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); if (e.dataTransfer.files[0]) void load(e.dataTransfer.files[0]); }}>
-              {busy ? t('common.saving') : t('models.transfer.drop')}
-              <input ref={fileRef} disabled={busy} type="file" accept=".zip,.json" onChange={e => { if (e.target.files?.[0]) void load(e.target.files[0]); e.target.value = ''; }} />
-            </label>
+            <div className={styles.dropzone} aria-busy={busy} onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); if (e.dataTransfer.files[0]) void load(e.dataTransfer.files[0]); }}>
+              <span className={styles.dropText}>{busy ? t('common.saving') : t('models.transfer.drop')}</span>
+              <button type="button" className="buttonSecondary" disabled={busy} onClick={() => fileRef.current?.click()}>{t('models.transfer.chooseFile')}</button>
+              <input ref={fileRef} hidden disabled={busy} type="file" accept=".zip,.json" onChange={e => { if (e.target.files?.[0]) void load(e.target.files[0]); e.target.value = ''; }} />
+            </div>
             {data && <>
               {data.keys.length > 0 && <section><h3>{t('models.transfer.keys')}</h3><p>{t('models.transfer.keysHint')}</p>
                 {data.keys.map((key, i) => <div key={key.id} className={styles.keyRow}>
@@ -165,18 +166,15 @@ export function ModelConfigTransfer({ onImported }: { onImported: (settings: Par
                   </div>
                 </div>)}
               </section>}
-              <div className={styles.tableWrap}><table><thead><tr><th>{t('models.transfer.model')}</th><th>{t('models.transfer.key')}</th><th>{t('models.transfer.roles')}</th></tr></thead><tbody>
-                {data.models.map((m, i) => <Fragment key={`${m.id}-${i}`}>
-                  <tr className={styles.modelHeadingRow}><td colSpan={3}>
+              <div className={styles.modelList}>
+                {data.models.map((m, i) => <section className={styles.modelRow} key={`${m.id}-${i}`}>
                     <div className={styles.modelHeading}>
                       <Checkbox disabled={busy} checked={Boolean(m.enabled)} onChange={enabled => patchRow(i, { enabled })} label={<strong className={styles.modelName}>{m.name || m.model}</strong>} />
                       {m.name && m.name !== m.model && <span className={styles.modelId}>{m.model}</span>}
                     </div>
-                  </td></tr>
-                  <tr className={styles.modelFieldsRow}><td>
+                  <div className={styles.modelFields}>
                     <FormField label={t('models.providerFields.baseUrl')}><input aria-label={t('models.providerFields.baseUrl')} value={m.baseUrl} disabled={busy || !m.enabled} placeholder="https://…/v1" onChange={e => patchRow(i, { baseUrl: e.target.value })} /></FormField>
-                  </td>
-                  <td><FormField label={t('models.transfer.key')}><Select disabled={busy || !m.enabled} value={m.apiKeyId ? `saved:${m.apiKeyId}` : m.keyRef ? `import:${m.keyRef}` : ''}
+                  <FormField label={t('models.transfer.key')}><Select disabled={busy || !m.enabled} value={m.apiKeyId ? `saved:${m.apiKeyId}` : m.keyRef ? `import:${m.keyRef}` : ''}
                     placeholder={t('security.apiKeySelectPlaceholder')}
                     options={[...savedKeys.map(k => ({ value: `saved:${k.id}`, label: k.name, hint: k.key_prefix })), ...data.keys.map(k => ({ value: `import:${k.id}`, label: k.name, hint: k.key ? keyFingerprint(k.key) : t('models.transfer.missingKey') })), { value: '__create__', label: t('security.apiKeyCreateNew') }]}
                     onChange={value => {
@@ -184,11 +182,13 @@ export function ModelConfigTransfer({ onImported }: { onImported: (settings: Par
                       else if (value.startsWith('saved:')) patchRow(i, { apiKeyId: Number(value.slice(6)), keyRef: undefined });
                       else patchRow(i, { apiKeyId: null, keyRef: value.slice(7) });
                     }} /></FormField>
-                  </td>
-                  <td><div className={styles.roles}>{roles.map(role => <Checkbox key={role} disabled={busy || !m.enabled} checked={m.roles.includes(role)} onChange={checked => patchRow(i, { roles: checked ? [...m.roles, role] : m.roles.filter(r => r !== role) })} label={role === 'manual' ? t('models.manual.title') : role === 'vision' ? 'Vision' : role.toUpperCase()} />)}</div></td>
-                  </tr>
-                </Fragment>)}
-              </tbody></table></div>
+                  </div>
+                  <div className={styles.roleRow}>
+                    <span className={styles.roleLabel}>{t('models.transfer.roles')}</span>
+                    <div className={styles.roles}>{roles.map(role => <Checkbox key={role} disabled={busy || !m.enabled} checked={m.roles.includes(role)} onChange={checked => patchRow(i, { roles: checked ? [...m.roles, role] : m.roles.filter(r => r !== role) })} label={role === 'manual' ? t('models.manual.title') : role === 'vision' ? 'Vision' : role.toUpperCase()} />)}</div>
+                  </div>
+                </section>)}
+              </div>
               <p>{t('models.transfer.noOverwrite')}</p>
               {data.warnings.map(w => <p key={w} className={styles.warning}>{t(`models.transfer.warnings.${w}`, { defaultValue: w })}</p>)}
             </>}
