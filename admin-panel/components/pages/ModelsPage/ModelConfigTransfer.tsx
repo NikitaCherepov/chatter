@@ -168,20 +168,22 @@ export function ModelConfigTransfer({ onImported }: { onImported: (settings: Par
               <div className={styles.tableWrap}><table><thead><tr><th>{t('models.transfer.model')}</th><th>{t('models.transfer.key')}</th><th>{t('models.transfer.roles')}</th></tr></thead><tbody>
                 {data.models.map((m, i) => <Fragment key={`${m.id}-${i}`}>
                   <tr className={styles.modelHeadingRow}><td colSpan={3}>
-                    <Checkbox disabled={busy} checked={Boolean(m.enabled)} onChange={enabled => patchRow(i, { enabled })} label={<strong className={styles.modelName}>{m.name || m.model}</strong>} />
+                    <div className={styles.modelHeading}>
+                      <Checkbox disabled={busy} checked={Boolean(m.enabled)} onChange={enabled => patchRow(i, { enabled })} label={<strong className={styles.modelName}>{m.name || m.model}</strong>} />
+                      {m.name && m.name !== m.model && <span className={styles.modelId}>{m.model}</span>}
+                    </div>
                   </td></tr>
                   <tr className={styles.modelFieldsRow}><td>
-                    {m.name && m.name !== m.model && <small>{m.model}</small>}
                     <FormField label={t('models.providerFields.baseUrl')}><input aria-label={t('models.providerFields.baseUrl')} value={m.baseUrl} disabled={busy || !m.enabled} placeholder="https://…/v1" onChange={e => patchRow(i, { baseUrl: e.target.value })} /></FormField>
                   </td>
-                  <td><Select disabled={busy || !m.enabled} value={m.apiKeyId ? `saved:${m.apiKeyId}` : m.keyRef ? `import:${m.keyRef}` : ''}
+                  <td><FormField label={t('models.transfer.key')}><Select disabled={busy || !m.enabled} value={m.apiKeyId ? `saved:${m.apiKeyId}` : m.keyRef ? `import:${m.keyRef}` : ''}
                     placeholder={t('security.apiKeySelectPlaceholder')}
                     options={[...savedKeys.map(k => ({ value: `saved:${k.id}`, label: k.name, hint: k.key_prefix })), ...data.keys.map(k => ({ value: `import:${k.id}`, label: k.name, hint: k.key ? keyFingerprint(k.key) : t('models.transfer.missingKey') })), { value: '__create__', label: t('security.apiKeyCreateNew') }]}
                     onChange={value => {
                       if (value === '__create__') createKey(i);
                       else if (value.startsWith('saved:')) patchRow(i, { apiKeyId: Number(value.slice(6)), keyRef: undefined });
                       else patchRow(i, { apiKeyId: null, keyRef: value.slice(7) });
-                    }} />
+                    }} /></FormField>
                   </td>
                   <td><div className={styles.roles}>{roles.map(role => <Checkbox key={role} disabled={busy || !m.enabled} checked={m.roles.includes(role)} onChange={checked => patchRow(i, { roles: checked ? [...m.roles, role] : m.roles.filter(r => r !== role) })} label={role === 'manual' ? t('models.manual.title') : role === 'vision' ? 'Vision' : role.toUpperCase()} />)}</div></td>
                   </tr>

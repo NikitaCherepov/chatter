@@ -169,6 +169,18 @@
   margin-top: var(--sp-2);
   font-size: var(--fs-sm);
 }
+.modelHeading {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--sp-2) var(--sp-3);
+}
+.modelId {
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
 .tableWrap .modelHeadingRow td {
   width: auto;
   border-bottom: 0;
