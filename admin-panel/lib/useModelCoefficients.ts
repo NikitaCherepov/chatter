@@ -29,6 +29,13 @@ export function useModelCoefficients() {
   const [state, setState] = useState('');
   const loadedOnceRef = useRef(false);
   const dirtyRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const reload = () => { void api<{ coefficients: CoefficientsMap; overrides?: OverridesMap }>('/api/model-coefficients')
+      .then(response => { setMap(response.coefficients); setOverrides(response.overrides || {}); })
+      .catch(() => setState(t('common.coefficientLoadError'))); };
+    window.addEventListener('chatter:model-settings-changed', reload);
+    return () => window.removeEventListener('chatter:model-settings-changed', reload);
+  }, [t]);
 
   useEffect(() => {
     if (loadedOnceRef.current) return;

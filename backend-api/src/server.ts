@@ -1,6 +1,9 @@
 ﻿import express from 'express';
 import path from 'path';
 import { uploadBackupSession, startBackupSession, backupSessionStatus, cancelBackupSession } from './services/sillytavern-backup-session.js';
+import { getModelSettings, publicModelSettings, updateModelSettings, allModels, replaceModelKeyReference } from './services/model-settings.js';
+import { exportModelConfig, parseModelArchive, parseModelConfig, importModelConfig } from './services/model-config-transfer.js';
+import { refreshConfiguredModels } from './services/ai.js';
 import fs from 'fs';
 import crypto from 'node:crypto';
 import { getEncryptionKey } from './utils/encryption.js';
@@ -5749,6 +5752,36 @@ app.post('/internal/admin/openrouter-monitor/test-notification', internalAuth, a
 
 // ─── Model overrides (coefficients + provider info) ─────────────────────────
 
+app.get('/internal/admin/model-settings', internalAuth, (_req, res) => res.json(publicModelSettings()));
+app.put('/internal/admin/model-settings', internalAuth, (req, res) => {
+  try {
+    updateModelSettings(req.body);
+    refreshConfiguredModels();
+    broadcastModelCatalogUpdated();
+    return res.json(publicModelSettings());
+  } catch (error: any) { return res.status(400).json({ error: error.message || 'invalid_model_settings' }); }
+});
+app.get('/internal/admin/model-config/export', internalAuth, (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  return res.json(exportModelConfig(req.query.includeKeys === 'true'));
+});
+app.post('/internal/admin/model-config/preview', internalAuth, async (req, res) => {
+  try {
+    res.setHeader('Cache-Control', 'no-store');
+    const result = req.is('application/zip') ? await parseModelArchive(req)
+      : parseModelConfig([{ name: 'config.json', data: Buffer.from(JSON.stringify(req.body)) }]);
+    return res.json(result);
+  } catch (error: any) { return res.status(400).json({ error: error.message || 'invalid_model_config' }); }
+});
+app.post('/internal/admin/model-config/import', internalAuth, (req, res) => {
+  try {
+    const result = importModelConfig(req.body);
+    refreshConfiguredModels();
+    broadcastModelCatalogUpdated();
+    return res.json({ ...result, settings: publicModelSettings() });
+  } catch (error: any) { return res.status(400).json({ error: error.message || 'invalid_model_config' }); }
+});
+
 app.get('/internal/admin/model-coefficients', internalAuth, (_req, res) => {
   const rows = db.prepare(`
     SELECT model_id, coefficient, updated_at,
@@ -6001,12 +6034,13 @@ app.get('/internal/admin/api-keys/:id/used-by', internalAuth, async (req, res) =
     const models = db.prepare(
       'SELECT model_id FROM model_overrides WHERE selected_api_key_id = ?'
     ).all(keyId) as Array<{ model_id: string }>;
-    res.json({ models: [
+    res.json({ models: [...new Set([
+      ...allModels(getModelSettings()).filter(m => m.apiKeyId === keyId && m.model).map(m => m.uniqueId),
       ...models.map(m => m.model_id),
       ...getImageGenerationApiKeyUsage(keyId),
       ...getVectorMemoryApiKeyUsage(keyId),
       ...getTranscriptionApiKeyUsage(keyId),
-    ] });
+    ])] });
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'internal_error' });
   }
@@ -6043,6 +6077,7 @@ app.delete('/internal/admin/api-keys/:id', internalAuth, async (req, res) => {
       replaceImageGenerationApiKeyReference(keyId, replacementIdNum);
       replaceVectorMemoryApiKeyReference(keyId, replacementIdNum);
       replaceTranscriptionApiKeyReference(keyId, replacementIdNum);
+      replaceModelKeyReference(keyId, replacementIdNum);
       if (replacementIdNum === null) {
         db.prepare('UPDATE model_overrides SET selected_api_key_id = NULL WHERE selected_api_key_id = ?').run(keyId);
       } else {
@@ -6051,6 +6086,7 @@ app.delete('/internal/admin/api-keys/:id', internalAuth, async (req, res) => {
       db.prepare('DELETE FROM api_keys WHERE id = ?').run(keyId);
     });
     tx();
+    refreshConfiguredModels();
     res.json({ ok: true });
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'internal_error' });

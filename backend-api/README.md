@@ -74,6 +74,40 @@ For Auto, `provider` is omitted entirely and OpenRouter chooses the endpoint its
 - `PUT /internal/admin/model-coefficients/:modelId` — backward-compatible: coefficient-only, or full provider/pricing update.
 - `GET/PUT /internal/admin/models/:modelId/billing` — read/write the provider + pricing override.
 
+## Model Configuration Storage and Transfer
+
+PRO, LITE, Vision and manual model connections are stored in the SQLite
+`system_settings` record `ai_model_settings_v1`. API secrets are referenced by
+their IDs in the existing encrypted `api_keys` vault; billing overrides continue
+to use the model's stable `uniqueId`.
+
+On the first backend start, legacy `TIMEWEB_*` model configuration and
+`MODELS_MANUAL` are migrated transactionally. Once the record exists, it is the
+source of truth, including deliberately empty model lists. Existing environment
+files are not rewritten or removed by this migration and remain available for
+rollback. Editing those old model variables no longer changes active models.
+Keep the original `ENCRYPTION_KEY` when restoring the database.
+
+Saving model connections updates runtime clients and the desktop model catalog
+without a container restart. Other service settings retain their existing
+save-and-apply workflow.
+
+Internal endpoints (all require internal authentication):
+
+- `GET/PUT /internal/admin/model-settings` — read/save model connections.
+- `GET /internal/admin/model-config/export?includeKeys=true|false` — export saved configuration.
+- `POST /internal/admin/model-config/preview` — inspect JSON or a SillyTavern ZIP without writing models or keys.
+- `POST /internal/admin/model-config/import` — transactionally save the confirmed selection.
+
+ZIP parsing reuses the existing streaming extractor and its path, size and
+disk-space checks. Temporary model archive files are removed after preview.
+Existing records are not overwritten; chains are appended and an occupied
+Vision slot is skipped. ID conflicts are remapped along with the model/key/billing
+references. Reimporting the same configuration does not duplicate entries.
+
+See the [Admin Panel README](../admin-panel/README.md#model-configuration-import-and-export)
+for supported input files, selection controls and export security notes.
+
 ## Backend Localization
 
 Tool status messages and automatic chat titles are translated once in `backend-api` and sent to Desktop and Telegram as ready-to-display text. Clients do not translate tool status keys themselves.

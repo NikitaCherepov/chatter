@@ -178,6 +178,20 @@ export default function Home() {
 
   async function save(event: FormEvent) {
     event.preventDefault();
+    if (section === 'models') {
+      setSaving(true);
+      setSaveState(t('common.saving'));
+      try {
+        const result = await api<Partial<Settings>>('/api/model-settings', { method: 'PUT', body: JSON.stringify({
+          proModels: settings.proModels, liteModels: settings.liteModels,
+          manualModels: settings.manualModels, visionModel: settings.visionModel,
+        }) });
+        setSettings(current => ({ ...current, ...result }));
+        setSaveState(t('common.settingsApplied'));
+      } catch (error) { setSaveState(`${t('common.error')}: ${error instanceof Error ? error.message : String(error)}`); }
+      finally { setSaving(false); }
+      return;
+    }
     pendingSettingsRef.current = { ...settings, telegramToken, voiceToken };
     await settingsRestart.show();
   }

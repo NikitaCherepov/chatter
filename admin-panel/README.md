@@ -191,7 +191,36 @@ docker compose --profile admin up -d --build backend admin-panel chatter-manager
 
 `PUT /api/settings` updates the private env files and reconciles the selected Compose profiles. Telegram and Notes are independent services. Existing secret values are retained when their form fields are left empty.
 
+Model connections are the exception: the Models page uses `PUT /api/model-settings`
+to save to the backend database and update runtime clients and the desktop model
+catalog without restarting containers. Its existing action bar is labelled
+**Save**; other service settings retain their save-and-apply workflow.
+
 Service operations are restricted to known Compose services. Never add an arbitrary command-execution endpoint to Manager: access to `/var/run/docker.sock` is effectively host-level access.
+
+## Model Configuration Import and Export
+
+The Models page provides Import and Export buttons. Import accepts SillyTavern
+user-data ZIP archives, Chat Completion preset JSON, and versioned Chatter model
+JSON exports. Text Completion profiles, sampling parameters, prompt templates
+and scripts are not translated. Connections without an OpenAI-compatible endpoint
+require manual configuration.
+
+Preview does not write models or keys. Before confirmation, choose the models,
+PRO/LITE/Vision/manual assignments, key names, and saved or new API keys.
+Confirmation saves and applies the selected connections in one SQLite transaction
+without restarting services. Existing records are not overwritten: chains are
+appended, an occupied Vision slot is skipped, and conflicting IDs are remapped
+with their references. Reimporting the same configuration does not duplicate entries.
+
+Export includes saved model connections, stable IDs, role order, billing metadata
+and key references. Unsaved editor changes are not exported. Raw API keys are
+included only after explicit selection and the warning in the export dialog.
+Exported proxy URLs can also contain credentials; treat configuration exports
+as private.
+
+See the [Backend README](../backend-api/README.md#model-configuration-storage-and-transfer)
+for storage, one-time migration from env, internal endpoints and restore requirements.
 
 ## Backups
 

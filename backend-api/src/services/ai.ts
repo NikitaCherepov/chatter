@@ -1,5 +1,6 @@
 ﻿import OpenAI from 'openai';
 import dotenv from 'dotenv';
+import { getModelSettings, modelApiKey, type ConfiguredModel } from './model-settings.js';
 import nodeFetch from 'node-fetch';
 import { ProxyAgent } from 'proxy-agent';
 import { Readable } from 'node:stream';
@@ -343,179 +344,12 @@ type SetTimezoneArgs = {
   country?: string;
 };
 
-const PRO_MODEL_CHAIN = parseModelChain(process.env.TIMEWEB_MODEL, ['gemini-3.1-flash-lite-preview']);
-const PRO_API_KEY = `${process.env.TIMEWEB_API_KEY || ''}`.trim();
-const PRO_CLIENT = PRO_API_KEY
-  ? createOpenAIClient(PRO_API_KEY, `${process.env.TIMEWEB_BASE_URL || ''}`, `${process.env.TIMEWEB_PROXY_URL || ''}`)
-  : null;
-
-const slugifyModelId = (value: string) => {
-  const slug = `${value || ''}`.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
-  return slug || 'model';
-};
-
-const parseProviderUniqueIds = (raw: string, count: number, prefix: string, fallbackModel: string): (string | null)[] => {
-  if (!raw) return new Array(count).fill(null);
-  const parts = raw.split(',').map(v => `${v || ''}`.trim());
-  const result: (string | null)[] = [];
-  for (let i = 0; i < count; i += 1) {
-    const explicit = parts[i];
-    result.push(explicit || `${prefix}-${slugifyModelId(fallbackModel)}-${i}`);
-  }
-  return result;
-};
-
-const parseProProviders = (): LiteProvider[] => {
-  const defaultBase = (process.env.TIMEWEB_BASE_URL || '').trim();
-  const defaultKey = (process.env.TIMEWEB_API_KEY || '').trim();
-  const defaultModels = PRO_MODEL_CHAIN;
-  const raw = (process.env.TIMEWEB_PRO_ENDPOINTS || '').trim();
-
-  if (!raw) {
-    if (!defaultBase || !defaultKey) return [];
-    return [{
-      name: 'pro-1',
-      baseURL: defaultBase,
-      client: PRO_CLIENT!,
-      modelChain: defaultModels,
-      uniqueIds: defaultModels.map((m, i) => `pro-${slugifyModelId(m)}-0-${i}`),
-    }];
-  }
-
-  const chunks = raw.split(';').map(v => v.trim()).filter(Boolean);
-  const providers: LiteProvider[] = [];
-  chunks.forEach((chunk, providerIdx) => {
-    const parts = chunk.split('|').map(v => `${v || ''}`.trim());
-    const base = parts[0] || defaultBase;
-    const key = parts[1] || defaultKey;
-    const models = parseModelChain(parts[2] || '', defaultModels);
-    if (!base || !key || !models.length) return;
-    const uniqueIds = parseProviderUniqueIds(parts[3] || '', models.length, 'pro', models[0] || 'model');
-    providers.push({
-      name: `pro-${providerIdx + 1}`,
-      baseURL: base,
-      client: createOpenAIClient(key, base, parts[4] || process.env.TIMEWEB_PROXY_URL || ''),
-      modelChain: models,
-      uniqueIds,
-    });
-  });
-  return providers;
-};
-
-const PRO_PROVIDERS = parseProProviders();
-
-const parseLiteProviders = (): LiteProvider[] => {
-  const defaultBase = (process.env.TIMEWEB_LITE_BASE_URL || process.env.TIMEWEB_BASE_URL || '').trim();
-  const defaultKey = (process.env.TIMEWEB_LITE_API_KEY || process.env.TIMEWEB_API_KEY || '').trim();
-  const defaultModels = parseModelChain(process.env.TIMEWEB_LITE_MODEL, ['gemini-2.5-flash-lite']);
-  const raw = (process.env.TIMEWEB_LITE_ENDPOINTS || '').trim();
-
-  if (!raw) {
-    if (!defaultBase || !defaultKey) return [];
-    return [{
-      name: 'lite-1',
-      baseURL: defaultBase,
-      client: createOpenAIClient(defaultKey, defaultBase, process.env.TIMEWEB_LITE_PROXY_URL || process.env.TIMEWEB_PROXY_URL || ''),
-      modelChain: defaultModels,
-      uniqueIds: defaultModels.map((m, i) => `lite-${slugifyModelId(m)}-0-${i}`),
-    }];
-  }
-
-  const chunks = raw.split(';').map(v => v.trim()).filter(Boolean);
-  const providers: LiteProvider[] = [];
-  chunks.forEach((chunk, providerIdx) => {
-    const parts = chunk.split('|').map(v => `${v || ''}`.trim());
-    const base = parts[0] || defaultBase;
-    const key = parts[1] || defaultKey;
-    const models = parseModelChain(parts[2] || '', defaultModels);
-    if (!base || !key || !models.length) return;
-    const uniqueIds = parseProviderUniqueIds(parts[3] || '', models.length, 'lite', models[0] || 'model');
-    providers.push({
-      name: `lite-${providerIdx + 1}`,
-      baseURL: base,
-      client: createOpenAIClient(key, base, parts[4] || process.env.TIMEWEB_LITE_PROXY_URL || process.env.TIMEWEB_PROXY_URL || ''),
-      modelChain: models,
-      uniqueIds,
-    });
-  });
-  return providers;
-};
-
-const LITE_PROVIDERS = parseLiteProviders();
-
-const parseVisionProviders = (): { pro: LiteProvider[]; lite: LiteProvider[] } => {
-  const proDefaultBase = (process.env.TIMEWEB_VISION_BASE_URL || process.env.TIMEWEB_BASE_URL || '').trim();
-  const proDefaultKey = (process.env.TIMEWEB_VISION_API_KEY || process.env.TIMEWEB_API_KEY || '').trim();
-  const proDefaultModels = parseModelChain(process.env.TIMEWEB_VISION_MODEL, [PRO_MODEL_CHAIN[0] || 'glm-4v']);
-  const visionUniqueId = (process.env.TIMEWEB_VISION_UNIQUE_ID || 'vision').trim();
-
-  const proProviders: LiteProvider[] = [];
-  if (proDefaultBase && proDefaultKey) {
-    proProviders.push({
-      name: 'vision-pro-1',
-      baseURL: proDefaultBase,
-      client: createOpenAIClient(proDefaultKey, proDefaultBase, process.env.TIMEWEB_VISION_PROXY_URL || process.env.TIMEWEB_PROXY_URL || ''),
-      modelChain: proDefaultModels,
-      uniqueIds: proDefaultModels.map((m, i) => i === 0 ? visionUniqueId : `vision-${slugifyModelId(m)}-${i}`),
-    });
-  }
-
-  const liteDefaultBase = (process.env.TIMEWEB_LITE_VISION_BASE_URL || process.env.TIMEWEB_LITE_BASE_URL || process.env.TIMEWEB_VISION_BASE_URL || process.env.TIMEWEB_BASE_URL || '').trim();
-  const liteDefaultKey = (process.env.TIMEWEB_LITE_VISION_API_KEY || process.env.TIMEWEB_LITE_API_KEY || process.env.TIMEWEB_VISION_API_KEY || process.env.TIMEWEB_API_KEY || '').trim();
-  const liteDefaultModels = parseModelChain(process.env.TIMEWEB_LITE_VISION_MODEL, [...proDefaultModels, parseModelChain(process.env.TIMEWEB_LITE_MODEL, ['gemini-2.5-flash-lite'])[0] || 'glm-4v']);
-
-  const liteProviders: LiteProvider[] = [];
-  if (liteDefaultBase && liteDefaultKey) {
-    liteProviders.push({
-      name: 'vision-lite-1',
-      baseURL: liteDefaultBase,
-      client: createOpenAIClient(liteDefaultKey, liteDefaultBase, process.env.TIMEWEB_LITE_VISION_PROXY_URL || process.env.TIMEWEB_LITE_PROXY_URL || process.env.TIMEWEB_VISION_PROXY_URL || process.env.TIMEWEB_PROXY_URL || ''),
-      modelChain: liteDefaultModels,
-      uniqueIds: liteDefaultModels.map((m, i) => i === 0 ? `${visionUniqueId}-lite` : `vision-lite-${slugifyModelId(m)}-${i}`),
-    });
-  }
-
-  return { pro: proProviders, lite: liteProviders };
-};
-
-const VISION_PROVIDERS = parseVisionProviders();
-
-// ── MODELS_MANUAL: manual model selection by user ──────────────────────────
-// Env format: base_url|api_key|api_model_name|display_name|description|unique_id|supports_vision|admin_only|proxy_url|supports_tools;...
-// supports_vision: optional, "1" or "0" (default "0")
-// admin_only: optional, "1" or "0" (default "0")
-// supports_tools: optional, "1" or "0" (default "1" for backward compatibility)
-const parseManualModelFlag = (value: unknown): boolean => {
-  const normalized = typeof value === 'string' ? value.trim().toLowerCase() : '';
-  return normalized === '1' || normalized === 'true';
-};
-
-const parseManualModels = (): ManualModelEntry[] => {
-  const raw = (process.env.MODELS_MANUAL || '').trim();
-  if (!raw) return [];
-  const chunks = raw.split(';').map(v => v.trim()).filter(Boolean);
-  const models: ManualModelEntry[] = [];
-  for (let i = 0; i < chunks.length; i += 1) {
-    const parts = chunks[i].split('|').map(v => `${v || ''}`.trim());
-    const [baseURL, apiKey, apiModelName, displayName, description, uniqueId, supportsVisionRaw, adminOnlyRaw, proxyUrl, supportsToolsRaw = '1'] = parts;
-    if (!baseURL || !apiKey || !apiModelName || !uniqueId) continue;
-    models.push({
-      id: uniqueId,
-      apiModelName,
-      name: displayName || apiModelName,
-      description: description || '',
-      client: createOpenAIClient(apiKey, baseURL, proxyUrl),
-      baseURL,
-      supportsVision: parseManualModelFlag(supportsVisionRaw),
-      supportsTools: parseManualModelFlag(supportsToolsRaw),
-      adminOnly: parseManualModelFlag(adminOnlyRaw),
-    });
-  }
-  return models;
-};
-
-const MANUAL_MODELS = parseManualModels();
-const MANUAL_MODELS_MAP = new Map(MANUAL_MODELS.map(m => [m.id, m]));
+const slugifyModelId = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'model';
+let PRO_PROVIDERS: LiteProvider[] = [];
+let LITE_PROVIDERS: LiteProvider[] = [];
+let VISION_PROVIDERS: { pro: LiteProvider[]; lite: LiteProvider[] } = { pro: [], lite: [] };
+let MANUAL_MODELS: ManualModelEntry[] = [];
+let MANUAL_MODELS_MAP = new Map<string, ManualModelEntry>();
 
 // ── OpenRouter provider monitoring registration ────────────────────────────
 // All Manual/Pro/Lite/Vision entries whose baseURL is OpenRouter are exposed
@@ -649,8 +483,37 @@ const DEBUG_AI_RAW_LITE_RESPONSE = process.env.DEBUG_AI_RAW_LITE_RESPONSE === '1
 const LITE_ROUTER_ENABLED = process.env.TIMEWEB_LITE_ROUTER_ENABLED !== '0';
 
 // ── Vision support flags for auto-routing models ──────────────────────────
-const PRO_MODEL_SUPPORTS_VISION = process.env.TIMEWEB_MODEL_SUPPORTS_VISION === '1' || process.env.TIMEWEB_MODEL_SUPPORTS_VISION?.toLowerCase() === 'true';
-const LITE_MODEL_SUPPORTS_VISION = process.env.TIMEWEB_LITE_MODEL_SUPPORTS_VISION === '1' || process.env.TIMEWEB_LITE_MODEL_SUPPORTS_VISION?.toLowerCase() === 'true';
+let PRO_MODEL_SUPPORTS_VISION = false;
+let LITE_MODEL_SUPPORTS_VISION = false;
+
+export function refreshConfiguredModels() {
+  const settings = getModelSettings();
+  const providers = (models: ConfiguredModel[], prefix: string): LiteProvider[] => models.filter(m => m.model && m.apiKeyId).map((m, i) => ({
+    name: `${prefix}-${i + 1}`, baseURL: m.baseUrl,
+    client: createOpenAIClient(modelApiKey(m.apiKeyId), m.baseUrl, m.proxyUrl || ''),
+    modelChain: [m.model], uniqueIds: [m.uniqueId],
+  }));
+  const pro = providers(settings.proModels, 'pro');
+  const lite = providers(settings.liteModels, 'lite');
+  const vision = settings.visionModel.model ? providers([settings.visionModel], 'vision-pro') : pro;
+  const manual: ManualModelEntry[] = settings.manualModels.filter(m => m.apiKeyId).map(m => ({
+    id: m.uniqueId, apiModelName: m.model, name: m.name || m.model, description: m.description || '',
+    client: createOpenAIClient(modelApiKey(m.apiKeyId), m.baseUrl, m.proxyUrl || ''), baseURL: m.baseUrl,
+    supportsVision: Boolean(m.supportsVision), supportsTools: m.supportsTools !== false, adminOnly: Boolean(m.adminOnly),
+  }));
+  PRO_PROVIDERS = pro;
+  LITE_PROVIDERS = lite;
+  VISION_PROVIDERS = { pro: vision, lite: settings.visionLiteModels?.length ? providers(settings.visionLiteModels, 'vision-lite') : vision };
+  MANUAL_MODELS = manual;
+  MANUAL_MODELS_MAP = new Map(manual.map(m => [m.id, m]));
+  PRO_MODEL_SUPPORTS_VISION = settings.proSupportsVision;
+  LITE_MODEL_SUPPORTS_VISION = settings.liteSupportsVision;
+  KNOWN_UNIQUE_IDS.clear();
+  for (const m of [...settings.proModels, ...settings.liteModels, ...settings.manualModels, settings.visionModel, ...(settings.visionLiteModels || [])]) {
+    if (m.model) KNOWN_UNIQUE_IDS.add(m.uniqueId);
+  }
+}
+refreshConfiguredModels();
 
 /**
  * Определяет, whether the current model supports native vision (приём изображений).
@@ -1529,7 +1392,6 @@ const getPrimaryAutoModelId = (mode: 'pro' | 'lite'): string | null => {
   const providers = mode === 'pro' ? PRO_PROVIDERS : LITE_PROVIDERS;
   const provider = providers[0];
   if (provider) return provider.uniqueIds[0] || provider.modelChain[0] || null;
-  if (mode === 'pro' && PRO_MODEL_CHAIN[0]) return `pro-${slugifyModelId(PRO_MODEL_CHAIN[0])}-0-0`;
   return null;
 };
 
@@ -3848,19 +3710,7 @@ export const runCompletion = async (mode: 'pro' | 'lite' | 'vision-pro' | 'visio
         failedProviders: res.failedProviders
       };
     }
-    if (!PRO_CLIENT) throw new Error('timeweb_api_key_not_configured');
-    const fallbackIds = PRO_MODEL_CHAIN.map((m, i) => `pro-${slugifyModelId(m)}-0-${i}`);
-    const res = await createCompletionWithModelFallback(PRO_CLIENT, PRO_MODEL_CHAIN, requestPayload, 'pro-main', '', signal, reasoningLevel, modelSettings, streamCallbacks, fallbackIds);
-    return {
-      response: res.response,
-      usedModel: res.modelUsed,
-      usedUniqueId: res.uniqueIdUsed,
-      usedProvider: 'pro-main',
-      baseURLUsed: process.env.TIMEWEB_BASE_URL || '',
-      upstreamProviderSlug: res.upstreamProviderSlug || null,
-      actualCostUsd: res.actualCostUsd || null,
-      failedModels: res.failedModels
-    };
+    throw new Error('pro_model_not_configured');
   }
   const res = await createCompletionWithLiteProviderFallback(requestPayload, signal, reasoningLevel, modelSettings, streamCallbacks);
   return {

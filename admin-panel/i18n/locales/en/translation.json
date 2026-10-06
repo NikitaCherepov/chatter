@@ -99,6 +99,32 @@
     "auto": "auto"
   },
   "models": {
+    "transfer": {
+      "title": "Import and export",
+      "subtitle": "Transfer saved model connections from Chatter or SillyTavern.",
+      "import": "Import models",
+      "export": "Export models",
+      "importHint": "Upload a SillyTavern ZIP backup, a JSON preset or a Chatter model configuration.",
+      "exportHint": "Exports the saved configuration, including model IDs, roles, prices and key references. Unsaved edits are not included.",
+      "includeKeys": "Include API keys",
+      "secretWarning": "This file will contain unencrypted API keys. Keep it private.",
+      "drop": "Drop a ZIP or JSON file here, or choose a file",
+      "tooLarge": "File is too large. ZIP: up to 256 MB; JSON: up to 2 MB.",
+      "keys": "Keys from the file",
+      "keysHint": "Name the keys you want to use. Missing keys can be entered here or replaced with a saved key below.",
+      "model": "Model / API URL",
+      "key": "API key",
+      "roles": "Use in",
+      "noOverwrite": "Existing models and keys are not overwritten. PRO/LITE models are appended. An occupied Vision slot is left unchanged. Import saves and applies the selected models without restarting services.",
+      "confirm": "Import and apply",
+      "download": "Download JSON",
+      "result": "Added: {{added}}. Already present or skipped: {{skipped}}.",
+      "warnings": {
+        "st_settings_not_transferred": "SillyTavern sampling settings, prompt templates and scripts are not transferred.",
+        "st_connection_needs_configuration": "Some connections need an OpenAI-compatible API URL. Native Anthropic endpoints are not compatible with this importer.",
+        "st_text_completion_not_supported": "Text Completion profiles are not imported. Use an OpenAI-compatible Chat Completions connection."
+      }
+    },
     "auto": {
       "subtitle": "PRO and LITE fallback chains"
     },

@@ -5,6 +5,7 @@ export type ProviderModelConfig = {
   model: string;
   apiKey: string;
   hasApiKey: boolean;
+  apiKeyId?: number | null;
   /** Stable id used to look up coefficient in model_overrides. Auto-generated server-side if empty. */
   uniqueId?: string;
   /** Whether this model accepts OpenAI-compatible tool definitions. */

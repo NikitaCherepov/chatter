@@ -580,92 +580,6 @@ function removeLegacyVectorMemoryEnv() {
   if (changed) writeEnv(BACKEND_ENV_FILE, backendEnv);
 }
 
-function mergeProviderModels(input, existing, label, { required = false } = {}) {
-  if (!Array.isArray(input)) return existing;
-  if (required && input.length === 0) throw new Error(`${label} requires at least one model`);
-  const existingKeys = new Map(existing.map(item => [item.id, item.apiKey]));
-  const existingProxies = new Map(existing.map(item => [item.id, item.proxyUrl || '']));
-  const existingUniqueIds = new Map(existing.map(item => [item.id, item.uniqueId || '']));
-  return input.map((item, index) => {
-    const id = `${item?.id || `${label}-${index}`}`;
-    const baseUrl = normalizeUrl(item?.baseUrl, `${label} provider URL`, { allowEmpty: false });
-    const model = validateEnvPart(item?.model, `${label} model`);
-    const apiKey = `${item?.apiKey || ''}`.trim() || existingKeys.get(id) || '';
-    if (!apiKey || /[|;\r\n\0]/.test(apiKey)) throw new Error(`${label} API key is required`);
-    const proxyUrl = normalizeProxyUrl(
-      item?.proxyUrl === undefined ? existingProxies.get(id) : item.proxyUrl,
-      `${label} proxy URL`
-    );
-    // uniqueId keys model overrides (prices / provider kind / API key) in the
-    // admin panel — preserve the client value, fall back to the stored one so
-    // a save never detaches existing overrides.
-    const uniqueId = `${item?.uniqueId || existingUniqueIds.get(id) || ''}`.trim();
-    if (/[|;\r\n\0]/.test(uniqueId)) throw new Error(`${label} quota id is invalid`);
-    return { id, baseUrl, apiKey, model, proxyUrl, uniqueId };
-  });
-}
-
-function mergeProviderModel(input, existing, label, { required = true } = {}) {
-  if (!input || typeof input !== 'object') return existing;
-  const baseUrlInput = `${input.baseUrl || ''}`.trim();
-  const modelInput = `${input.model || ''}`.trim();
-  if (!required && !baseUrlInput && !modelInput && !input.apiKey) return null;
-  const apiKey = `${input.apiKey || ''}`.trim() || existing.apiKey || '';
-  if (!apiKey || /[|;\r\n\0]/.test(apiKey)) throw new Error(`${label} API key is required`);
-  const uniqueId = `${input.uniqueId || existing.uniqueId || ''}`.trim();
-  if (/[|;\r\n\0]/.test(uniqueId)) throw new Error(`${label} quota id is invalid`);
-  return {
-    id: existing.id,
-    baseUrl: normalizeUrl(input.baseUrl, `${label} provider URL`, { allowEmpty: false }),
-    apiKey,
-    model: validateEnvPart(input.model, `${label} model`),
-    uniqueId,
-    proxyUrl: normalizeProxyUrl(
-      input.proxyUrl === undefined ? existing.proxyUrl : input.proxyUrl,
-      `${label} proxy URL`
-    )
-  };
-}
-
-function mergeManualModels(input, existing) {
-  if (!Array.isArray(input)) return existing;
-  const existingKeys = new Map(existing.map(item => [item.id, item.apiKey]));
-  const existingProxies = new Map(existing.map(item => [item.id, item.proxyUrl || '']));
-  const uniqueIds = new Set();
-  return input.map((item, index) => {
-    const id = `${item?.id || `manual-new-${index}`}`;
-    const uniqueId = validateEnvPart(item?.uniqueId, 'Manual model ID');
-    if (uniqueIds.has(uniqueId)) throw new Error('Manual model IDs must be unique');
-    uniqueIds.add(uniqueId);
-    const apiKey = `${item?.apiKey || ''}`.trim() || existingKeys.get(id) || '';
-    if (!apiKey || /[|;\r\n\0]/.test(apiKey)) throw new Error('Manual model API key is required');
-    return {
-      id,
-      baseUrl: normalizeUrl(item?.baseUrl, 'Manual model provider URL', { allowEmpty: false }),
-      apiKey,
-      model: validateEnvPart(item?.model, 'Manual model name'),
-      name: validateEnvPart(item?.name || item?.model, 'Manual display name'),
-      description: `${item?.description || ''}`.trim(),
-      uniqueId,
-      supportsVision: Boolean(item?.supportsVision),
-      supportsTools: item?.supportsTools === undefined ? true : Boolean(item.supportsTools),
-      adminOnly: Boolean(item?.adminOnly),
-      proxyUrl: normalizeProxyUrl(
-        item?.proxyUrl === undefined ? existingProxies.get(id) : item.proxyUrl,
-        'Manual model proxy URL'
-      )
-    };
-  });
-}
-
-const serializeProviderModels = models => models
-  .map(model => {
-    const uniqueId = `${model.uniqueId || ''}`.trim();
-    const proxyUrl = `${model.proxyUrl || ''}`.trim();
-    return [model.baseUrl, model.apiKey, model.model, uniqueId, proxyUrl].join('|');
-  })
-  .join(';');
-const serializeManualModels = models => models.map(model => [model.baseUrl, model.apiKey, model.model, model.name, model.description.replace(/[|;\r\n]/g, ' '), model.uniqueId, model.supportsVision ? '1' : '0', model.adminOnly ? '1' : '0', model.proxyUrl || '', model.supportsTools === false ? '0' : '1'].join('|')).join(';');
 
 function saveSettings(input) {
   const previous = loadSettings();
@@ -683,20 +597,7 @@ function saveSettings(input) {
   const legacyAiApiKey = `${input.aiApiKey || ''}`.trim() || backendEnv.TIMEWEB_API_KEY || '';
   const legacyAiBaseUrl = normalizeUrl(input.aiBaseUrl ?? previous.aiBaseUrl, 'AI base URL', { allowEmpty: false });
   const legacyAiModel = `${input.aiModel ?? previous.aiModel ?? ''}`.trim();
-  const proModels = mergeProviderModels(input.proModels, existingProviderModels.proModels, 'PRO', { required: true });
-  const liteModels = mergeProviderModels(
-    input.liteModels,
-    existingProviderModels.liteModels,
-    'LITE',
-    { required: true }
-  );
-  const visionModel = mergeProviderModel(
-    input.visionModel,
-    existingProviderModels.visionModel,
-    'Vision',
-    { required: false }
-  );
-  const manualModels = mergeManualModels(input.manualModels, existingManualModels);
+  const proModels = existingProviderModels.proModels;
   const pineconeInput = input.pinecone && typeof input.pinecone === 'object' ? input.pinecone : {};
   const webSearchInput = input.webSearch && typeof input.webSearch === 'object' ? input.webSearch : {};
   const webReaderInput = input.webReader && typeof input.webReader === 'object' ? input.webReader : {};
@@ -719,9 +620,6 @@ function saveSettings(input) {
     API_JWT_SECRET: backendEnv.API_JWT_SECRET || randomSecret(32),
     BACKEND_INTERNAL_TOKEN: internalToken,
     ENCRYPTION_KEY: backendEnv.ENCRYPTION_KEY || randomSecret(32),
-    TIMEWEB_API_KEY: proModels[0]?.apiKey || legacyAiApiKey,
-    TIMEWEB_BASE_URL: proModels[0]?.baseUrl || legacyAiBaseUrl,
-    TIMEWEB_PROXY_URL: proModels[0]?.proxyUrl || '',
     TELEGRAM_TOKEN: telegramToken,
     BACKEND_VOICE_API_ENABLED: voiceMode === 'off' ? '0' : '1',
     VOICE_TRANSCRIBE_URL: voiceMode === 'local' ? 'http://voice:3030/api/voice' : voiceMode === 'remote' ? voiceExternalUrl : '',
@@ -731,50 +629,7 @@ function saveSettings(input) {
   // overrides when switching between local and remote Voice installations.
   delete backendEnv.VOICE_TTS_URL;
   delete backendEnv.VOICE_SILERO_URL;
-  if (proModels.length) {
-    backendEnv.TIMEWEB_MODEL = proModels[0].model;
-    backendEnv.TIMEWEB_PRO_ENDPOINTS = serializeProviderModels(proModels);
-  } else {
-    delete backendEnv.TIMEWEB_MODEL;
-    delete backendEnv.TIMEWEB_PRO_ENDPOINTS;
-  }
-  if (liteModels.length) {
-    backendEnv.TIMEWEB_LITE_BASE_URL = liteModels[0].baseUrl;
-    backendEnv.TIMEWEB_LITE_API_KEY = liteModels[0].apiKey;
-    backendEnv.TIMEWEB_LITE_MODEL = liteModels[0].model;
-    backendEnv.TIMEWEB_LITE_PROXY_URL = liteModels[0].proxyUrl || '';
-    backendEnv.TIMEWEB_LITE_ENDPOINTS = serializeProviderModels(liteModels);
-  } else {
-    delete backendEnv.TIMEWEB_LITE_BASE_URL;
-    delete backendEnv.TIMEWEB_LITE_API_KEY;
-    delete backendEnv.TIMEWEB_LITE_MODEL;
-    delete backendEnv.TIMEWEB_LITE_PROXY_URL;
-    delete backendEnv.TIMEWEB_LITE_ENDPOINTS;
-  }
-  backendEnv.TIMEWEB_LITE_ROUTER_ENABLED = '1';
-  if (visionModel) {
-    backendEnv.TIMEWEB_VISION_BASE_URL = visionModel.baseUrl;
-    backendEnv.TIMEWEB_VISION_API_KEY = visionModel.apiKey;
-    backendEnv.TIMEWEB_VISION_MODEL = visionModel.model;
-    backendEnv.TIMEWEB_VISION_PROXY_URL = visionModel.proxyUrl || '';
-    if (visionModel.uniqueId) {
-      backendEnv.TIMEWEB_VISION_UNIQUE_ID = visionModel.uniqueId;
-    } else {
-      delete backendEnv.TIMEWEB_VISION_UNIQUE_ID;
-    }
-  } else {
-    delete backendEnv.TIMEWEB_VISION_BASE_URL;
-    delete backendEnv.TIMEWEB_VISION_API_KEY;
-    delete backendEnv.TIMEWEB_VISION_MODEL;
-    delete backendEnv.TIMEWEB_VISION_PROXY_URL;
-    delete backendEnv.TIMEWEB_VISION_UNIQUE_ID;
-  }
-  // These variables were briefly introduced for a Vision cascade, but the
-  // backend uses a single Vision PRO model.
-  delete backendEnv.TIMEWEB_VISION_ENDPOINTS;
-  delete backendEnv.TIMEWEB_LITE_VISION_ENDPOINTS;
-  if (manualModels.length) backendEnv.MODELS_MANUAL = serializeManualModels(manualModels);
-  else delete backendEnv.MODELS_MANUAL;
+  // Model env values remain untouched for rollback; active settings live in the backend DB.
   backendEnv.PINECONE_API_KEY = mergeSecret(pineconeInput.apiKey, backendEnv.PINECONE_API_KEY, 'Pinecone API key');
   backendEnv.PINECONE_INDEX_NAME = validateEnvPart(
     pineconeInput.indexName ?? backendEnv.PINECONE_INDEX_NAME ?? 'bot-memory',
@@ -2387,10 +2242,10 @@ function sendJson(res, status, data) {
   res.end(JSON.stringify(data));
 }
 
-function readJson(req) {
+function readJson(req, limit = MAX_BODY_BYTES) {
   return new Promise((resolve, reject) => {
     let body = '';
-    req.on('data', (chunk) => { body += chunk; if (Buffer.byteLength(body) > MAX_BODY_BYTES) { reject(new Error('Request body is too large')); req.destroy(); } });
+    req.on('data', (chunk) => { body += chunk; if (Buffer.byteLength(body) > limit) { reject(new Error('Request body is too large')); req.destroy(); } });
     req.on('end', () => { try { resolve(body ? JSON.parse(body) : {}); } catch { reject(new Error('Invalid JSON')); } });
     req.on('error', reject);
   });
@@ -2761,6 +2616,8 @@ async function handleRequest(req, res) {
   }
   if (req.method === 'GET' && pathname === '/api/settings') {
     const settings = publicSettings();
+    // Fail closed rather than present stale env models if the authoritative DB is unavailable.
+    Object.assign(settings, await backendInternalRequest('/internal/admin/model-settings'));
     try {
       const runtime = await backendInternalRequest('/internal/admin/image-generation/settings');
       removeLegacyImageGenerationEnv();
@@ -2841,6 +2698,28 @@ async function handleRequest(req, res) {
       // Keep safe runtime defaults while backend is temporarily unavailable.
     }
     return sendJson(res, 200, settings);
+  }
+  if (pathname === '/api/model-settings' && req.method === 'PUT') {
+    const body = await readJson(req, 2 * 1024 * 1024);
+    return sendJson(res, 200, await backendInternalRequest('/internal/admin/model-settings', { method: 'PUT', body: JSON.stringify(body) }));
+  }
+  if (pathname === '/api/model-config/export' && req.method === 'GET') {
+    res.setHeader('Cache-Control', 'no-store');
+    return sendJson(res, 200, await backendInternalRequest(`/internal/admin/model-config/export?includeKeys=${url.searchParams.get('includeKeys') === 'true'}`));
+  }
+  if (pathname === '/api/model-config/preview' && req.method === 'POST') {
+    res.setHeader('Cache-Control', 'no-store');
+    if (req.headers['content-type']?.split(';')[0] === 'application/zip') {
+      return sendJson(res, 200, await backendInternalRequest('/internal/admin/model-config/preview', {
+        method: 'POST', body: req, duplex: 'half', headers: { 'Content-Type': 'application/zip' }, timeoutMs: 120000,
+      }));
+    }
+    const body = await readJson(req, 2 * 1024 * 1024);
+    return sendJson(res, 200, await backendInternalRequest('/internal/admin/model-config/preview', { method: 'POST', body: JSON.stringify(body) }));
+  }
+  if (pathname === '/api/model-config/import' && req.method === 'POST') {
+    const body = await readJson(req, 2 * 1024 * 1024);
+    return sendJson(res, 200, await backendInternalRequest('/internal/admin/model-config/import', { method: 'POST', body: JSON.stringify(body), timeoutMs: 10000 }));
   }
   if (req.method === 'GET' && pathname === '/api/status') return sendJson(res, 200, { applying: Boolean(applyPromise), services: await getServiceStatus() });
   if (req.method === 'GET' && pathname === '/api/server-update') {
@@ -3638,7 +3517,8 @@ async function handleRequest(req, res) {
     if (applyPromise || serverUpdateInProgress()) return sendJson(res, 409, { error: 'configuration_is_being_applied' });
     let input;
     try {
-      input = await readJson(req);
+      input = await readJson(req, 2 * 1024 * 1024);
+      await backendInternalRequest('/internal/admin/model-settings', { method: 'PUT', body: JSON.stringify(input) });
       saveSettings(input);
     } catch (error) {
       return sendJson(res, 400, { error: error.message || 'invalid_settings' });

@@ -10,6 +10,7 @@ import { ModelListEditor, ProviderModelFields } from './ModelListEditor';
 import { OpenRouterMonitorPanel } from './OpenRouterMonitorPanel';
 import { AnimatedDetails } from './AnimatedDetails';
 import styles from './ModelsPage.module.css';
+import { ModelConfigTransfer } from './ModelConfigTransfer';
 
 type Props = {
   settings: Settings;
@@ -51,6 +52,7 @@ export function ModelsPage({ settings, setSettings, saving, saveState, onSave }:
 
   return (
     <form className={grid.stack} onSubmit={onSave} noValidate>
+      <ModelConfigTransfer onImported={result => setSettings(current => ({ ...current, ...result }))} />
       <AnimatedDetails
         className={styles.section}
         open={isSectionOpen('auto', true)}
@@ -155,7 +157,7 @@ export function ModelsPage({ settings, setSettings, saving, saveState, onSave }:
         <OpenRouterMonitorPanel />
       </AnimatedDetails>
 
-      <ActionBar saving={saving} state={saveState} />
+      <ActionBar saving={saving} state={saveState} actionLabel={t('common.save')} />
     </form>
   );
 }
