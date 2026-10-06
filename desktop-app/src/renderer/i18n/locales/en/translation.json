@@ -547,6 +547,9 @@
     "restrictions": {
       "help": "Control which AI tools are available. Changes apply immediately.",
       "memoryWrite": "Disable data writing",
+      "injectionProtection": "Prompt injection protection",
+      "injectionProtectionHint": "Recommended off for roleplay. Hover for details.",
+      "injectionProtectionHelp": "When disabled, the protection protocol and untrusted content markers are not sent to the model. Instructions in websites, emails and files may influence responses and tool calls. Access permissions and server restrictions remain enforced. Individual chats can override this setting.",
       "memoryWriteHelp": "AI cannot write to the archive (cold memory) or notes. Core memory and reading remain available.",
       "lite": "Restricted mode",
       "liteHelp": "Disables SSH, macros, sending email, and creating tasks. Smart home, maps, reading mail, and widgets remain available.",
@@ -734,9 +737,17 @@
       "defaultTitle": "Chat"
     },
     "memory": {
-      "trigger": "Memory",
-      "triggerTitle": "Chat memory",
-      "headerTitle": "Chat memory",
+      "trigger": "Chat settings",
+      "triggerTitle": "Chat settings",
+      "headerTitle": "Chat settings",
+      "injectionProtection": {
+        "label": "Prompt injection protection",
+        "automatic": "Automatic",
+        "enabled": "Enabled",
+        "disabled": "Disabled",
+        "hint": "Recommended off for roleplay.",
+        "help": "Automatic uses the global setting in Restrictions. When disabled, the protection protocol and untrusted content markers are not sent to the model. Instructions in websites, emails and files may influence the bot. Access permissions and server restrictions remain enforced. Changes affect subsequent responses, not an ongoing generation."
+      },
       "headerHint": "Settings apply instantly",
       "persona": "Persona",
       "personaAutomatic": "Automatically",

@@ -1772,6 +1772,7 @@ app.patch('/api/v1/chats/:chatId/memory-settings', (req: AuthedRequest, res: any
       ...(typeof body.write_target === 'string' ? { write_target: body.write_target } : {}),
       ...(typeof body.message_search_scope === 'string' ? { message_search_scope: body.message_search_scope } : {}),
       ...('roleplay_mode' in body ? { roleplay_mode: body.roleplay_mode === true || body.roleplay_mode === 1 ? 1 : 0 } : {}),
+      ...('prompt_injection_protection' in body ? { prompt_injection_protection: body.prompt_injection_protection } : {}),
     });
     return res.json({ settings });
   } catch (error: any) {
@@ -6376,7 +6377,7 @@ app.delete('/api/v1/user/model-settings/:modelId', (req: AuthedRequest, res) => 
 
 // ─── Feature flags (tool restrictions) ──────────────────────────────────────
 
-const VALID_FLAG_KEYS = ['disable_memory_write', 'disable_pc_control_lite', 'disable_pc_control_full', 'disable_pc_commands', 'disable_internet', 'disable_personal', 'disable_specialized_subagents', 'disable_adhoc_subagents', 'disable_avatar_control'] as const;
+const VALID_FLAG_KEYS = ['disable_memory_write', 'disable_pc_control_lite', 'disable_pc_control_full', 'disable_pc_commands', 'disable_internet', 'disable_personal', 'disable_specialized_subagents', 'disable_adhoc_subagents', 'disable_avatar_control', 'disable_prompt_injection_protection'] as const;
 
 app.get('/api/v1/user/feature-flags', (req: AuthedRequest, res: any) => {
   const userId = accountIdFromRequest(req);

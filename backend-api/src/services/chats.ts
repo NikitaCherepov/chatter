@@ -13,6 +13,7 @@ import {
 import type { ToolIteration } from './ai.js';
 import { countTokens, countMessageTokens, countToolCallTokens, countToolResultTokens } from './tokenizer.js';
 import { buildBaseSystemPromptForUser } from './system-prompt.js';
+import { getChatMemorySettings } from './memory-foundation.js';
 import { resolvePromptForUser, resolvePromptSelectionForUser, type PromptRecord } from './prompts.js';
 import { getEnabledMacros } from './macros.js';
 import { listRoomReaderUserIds, canReadChatMessages } from './chat-rooms.js';
@@ -2351,7 +2352,7 @@ export const trimUserHistoryByChat = (userId: number, chatId: number, maxContext
     const pinnedMacrosHint = pinnedMacros.length > 0
       ? `\n\n[ЗАКРЕПЛЁННЫЕ МАКРОСЫ]\nУ пользователя есть часто используемые макросы: ${pinnedMacros.map(m => `"${m.title}"`).join(', ')}. Если запрос пользователя явно совпадает с назначением одного из них — вызови list_my_macros чтобы посмотреть подробности, затем execute_macro для запуска.`
       : '';
-    const systemPrompt = buildBaseSystemPromptForUser(user, promptContent, coreMemory, pinnedMacrosHint, false);
+    const systemPrompt = buildBaseSystemPromptForUser(user, promptContent, coreMemory, pinnedMacrosHint, false, getChatMemorySettings(userId, chatId).prompt_injection_protection);
     systemPromptTokens = countMessageTokens('system', systemPrompt);
   }
 
@@ -3188,7 +3189,7 @@ export const getChatContextTokens = (userId: number, chatId: number): ChatContex
     const pinnedMacrosHint = pinnedMacros.length > 0
       ? `\n\n[ЗАКРЕПЛЁННЫЕ МАКРОСЫ]\nУ пользователя есть часто используемые макросы: ${pinnedMacros.map(m => `"${m.title}"`).join(', ')}. Если запрос пользователя явно совпадает с назначением одного из них — вызови list_my_macros чтобы посмотреть подробности, затем execute_macro для запуска.`
       : '';
-    const systemPrompt = buildBaseSystemPromptForUser(user, promptContent, coreMemory, pinnedMacrosHint, false);
+    const systemPrompt = buildBaseSystemPromptForUser(user, promptContent, coreMemory, pinnedMacrosHint, false, getChatMemorySettings(userId, chatId).prompt_injection_protection);
     system_prompt_tokens = countMessageTokens('system', systemPrompt);
   }
 

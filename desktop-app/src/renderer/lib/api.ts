@@ -2542,6 +2542,7 @@ export async function deleteModelSettings(modelId: string): Promise<{ ok: boolea
 // ---------- Feature flags (tool restrictions) ----------
 
 export type FeatureFlags = {
+  disable_prompt_injection_protection?: boolean;
   disable_memory_write: boolean;
   disable_pc_control_lite: boolean;
   disable_pc_control_full: boolean;

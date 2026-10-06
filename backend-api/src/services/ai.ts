@@ -22,6 +22,7 @@ import { VectorMemoryService } from './vector-memory.js';
 import { getChatMemorySettings, resolvePersonaForChat } from './memory-foundation.js';
 import { applyRoleplayRestrictions, isRoleplayToolAllowed } from './chat-roleplay.js';
 import { wrapUntrustedContent } from './web-reader.js';
+import { withPromptInjectionProtection, resolvePromptInjectionProtection, prepareProtectionMessages } from './prompt-injection-protection.js';
 import { sendIpcToDesktop, isDesktopOnline, sendToDesktop } from '../ws-clients.js';
 import { waitForNoPendingPcConfirmations } from './pc-command-confirmations.js';
 import { findTransitRoute, searchNearby } from './transit.js';
@@ -3634,6 +3635,7 @@ const formatTaskAllowedToolsText = (tools: string[] | null): string => {
   return tools.length <= 6 ? tools.join(', ') : `${tools.slice(0, 6).join(', ')} (+${tools.length - 6} more)`;
 };
 export const runCompletion = async (mode: 'pro' | 'lite' | 'vision-pro' | 'vision-lite', requestPayload: Record<string, unknown>, manualModel?: ManualModelEntry, signal?: AbortSignal, reasoningLevel?: ReasoningLevel | null, modelSettings?: ModelSettings | null, streamCallbacks?: StreamCallbacks): Promise<CompletionMeta & { manualFallback?: boolean }> => {
+  requestPayload = { ...requestPayload, messages: prepareProtectionMessages(requestPayload.messages) };
   // If the user selected a specific model — send directly, ignoring mode
   if (manualModel) {
     try {
@@ -6890,7 +6892,23 @@ const getToolUserMessage = (language: unknown, toolName: string, argsRaw: string
   const key = `toolStatus.${toolName}`;
   return hasBackendTranslation(key) ? translateForLanguage(language, key) : null;
 };
-export const sendMessageThroughAi = async (
+export const sendMessageThroughAi = (...args: Parameters<typeof sendMessageThroughAiInternal>): Promise<AiSendResult> => {
+  const [userId, , targetChatId, options] = args;
+  const owner = getUserById(userId);
+  if (!owner) return Promise.reject(new Error('user_not_found'));
+  if (owner.status !== 'approved' && owner.is_admin !== 1) return Promise.reject(new Error('user_not_approved'));
+  const initiator = options?.initiatorUserId !== undefined && options.initiatorUserId !== userId
+    ? getUserById(options.initiatorUserId) : null;
+  const account = initiator && initiator.status === 'approved' ? initiator : owner;
+  if (!account) return Promise.reject(new Error('user_not_found'));
+  const chatId = targetChatId && Number.isFinite(targetChatId) ? targetChatId : ensureActiveChat(userId);
+  const mode = getChatMemorySettings(account.id, chatId).prompt_injection_protection;
+  let disabledGlobally = false;
+  try { disabledGlobally = JSON.parse(account.feature_flags || '{}').disable_prompt_injection_protection === true; } catch { /* safe default */ }
+  return withPromptInjectionProtection(resolvePromptInjectionProtection(mode, disabledGlobally), () => sendMessageThroughAiInternal(...args));
+};
+
+const sendMessageThroughAiInternal = async (
   userId: number,
   inputText: string,
   targetChatId?: number,
@@ -6935,6 +6953,7 @@ export const sendMessageThroughAi = async (
       disable_specialized_subagents?: boolean;
       disable_adhoc_subagents?: boolean;
       disable_avatar_control?: boolean;
+      disable_prompt_injection_protection?: boolean;
     } | null;
     regenerateHint?: string;
     regenerateFromHistory?: boolean;

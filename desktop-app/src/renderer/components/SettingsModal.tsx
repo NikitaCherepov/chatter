@@ -34,6 +34,7 @@ import {
 } from '../i18n';
 import Slider from './Slider';
 import Checkbox from './Checkbox';
+import { Tooltip } from './Tooltip';
 import { MacroSettings } from './MacroSettings';
 import { ServerSettings } from './ServerSettings';
 import { RunbookSettings } from './RunbookSettings';
@@ -383,6 +384,7 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
 
   // Feature flags (restrictions)
   const [featureFlags, setFeatureFlagsState] = useState<api.FeatureFlags>({
+    disable_prompt_injection_protection: false,
     disable_memory_write: false,
     disable_pc_control_lite: false,
     disable_pc_control_full: false,
@@ -2614,6 +2616,24 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
                 <div className={s.promptLoading}>{t('common.loading')}</div>
               ) : (
                 <>
+                  <div className={s.fieldGroup}>
+                    <label className={s.macroToggleLabel}>
+                      <input
+                        type="checkbox"
+                        className={s.macroCheckbox}
+                        checked={!featureFlags.disable_prompt_injection_protection}
+                        onChange={() => handleToggleFlag('disable_prompt_injection_protection')}
+                        disabled={flagsSaving}
+                      />
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: 13 }}>{t('settings.restrictions.injectionProtection')}</div>
+                        <Tooltip content={t('settings.restrictions.injectionProtectionHelp')}>
+                          <span tabIndex={0} style={{ display: 'block', fontSize: 11, color: 'var(--text-hint)', marginTop: 2 }}>{t('settings.restrictions.injectionProtectionHint')}</span>
+                        </Tooltip>
+                      </div>
+                    </label>
+                  </div>
+
                   <div className={s.fieldGroup}>
                     <label className={s.macroToggleLabel}>
                       <input

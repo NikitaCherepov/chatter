@@ -8,6 +8,7 @@
  *  - callLiteAi (for the router prompt and auto-title)
  */
 import type { UserRecord } from '../types.js';
+import { isPromptInjectionProtectionEnabled, resolvePromptInjectionProtection, type PromptInjectionProtectionMode } from './prompt-injection-protection.js';
 import { COLD_MEMORY_PROMPT_HINT, LANGUAGE_HINT, SECURITY_PROTOCOL_HINT, UNTRUSTED_DATA_PROTOCOL_HINT } from './prompts.js';
 export const TOOL_USAGE_RULES = `\n\n[CRITICAL DIRECTIVE: TOOL EXECUTION]
 If the user asks you to perform an action on their PC (create a file, open a website, check a service) or call a tool, YOU MUST CALL THE APPROPRIATE TOOL (e.g., execute_pc_command or else).
@@ -18,9 +19,10 @@ export const buildSystemPrompt = (
   userName: string,
   coreMemory: string,
   includeToolHints = true,
+  injectionProtection = isPromptInjectionProtectionEnabled(),
 ) => {
   const toolHints = includeToolHints ? `${COLD_MEMORY_PROMPT_HINT}${TOOL_USAGE_RULES}` : '';
-  return `${prompt}\n\nUser name {{user}}: ${userName}\n\n[USER CORE MEMORY]\n${(coreMemory || '').trim() || 'Empty for now.'}${toolHints}${SECURITY_PROTOCOL_HINT}${UNTRUSTED_DATA_PROTOCOL_HINT}${LANGUAGE_HINT}`;
+  return `${prompt}\n\nUser name {{user}}: ${userName}\n\n[USER CORE MEMORY]\n${(coreMemory || '').trim() || 'Empty for now.'}${toolHints}${SECURITY_PROTOCOL_HINT}${injectionProtection ? UNTRUSTED_DATA_PROTOCOL_HINT : ''}${LANGUAGE_HINT}`;
 };
 
 export const buildTimeContext = (timezoneOffset: number) => {
@@ -47,9 +49,12 @@ export const buildBaseSystemPromptForUser = (
   promptContent: string,
   coreMemory: string | null,
   pinnedMacrosHint: string,
-  isGuestMode: boolean
+  isGuestMode: boolean,
+  protectionMode: PromptInjectionProtectionMode = 'automatic',
 ): string => {
   if (isGuestMode) return '';
   const userName = user.name || 'User';
-  return `${buildSystemPrompt(promptContent, userName, coreMemory || '')}${pinnedMacrosHint}`;
+  let disabledGlobally = false;
+  try { disabledGlobally = JSON.parse(user.feature_flags || '{}').disable_prompt_injection_protection === true; } catch { /* safe default */ }
+  return `${buildSystemPrompt(promptContent, userName, coreMemory || '', true, resolvePromptInjectionProtection(protectionMode, disabledGlobally))}${pinnedMacrosHint}`;
 };

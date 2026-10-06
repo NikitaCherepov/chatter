@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { isPromptInjectionProtectionEnabled } from './prompt-injection-protection.js';
 import { sendIpcToDesktop } from '../ws-clients.js';
 import {
   getWebReaderRuntimeSettings,
@@ -46,6 +47,7 @@ const isUnsafeLocalUrl = (value: string): boolean => {
 
 /** Escapes closing tags inside content to prevent break-out from untrusted data wrappers. */
 export const wrapUntrustedContent = (content: string): string => {
+  if (!isPromptInjectionProtectionEnabled()) return content;
   const sanitized = content.replace(
     /<\s*\/\s*untrusted_web_content\s*>/gi,
     '&lt;/untrusted_web_content&gt;',

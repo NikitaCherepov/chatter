@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { db, getNowUnix } from '../db.js';
 import { resolveAccountId } from './accounts.js';
+import type { PromptInjectionProtectionMode } from './prompt-injection-protection.js';
 
 export type MemoryMode = 'off' | 'general' | 'chat' | 'both';
 export type MemoryWriteTarget = 'general' | 'chat';
@@ -50,6 +51,7 @@ export type ChatMemorySettings = {
   allow_core_memory_update: number;
   message_search_scope: MessageSearchScope;
   roleplay_mode: number;
+  prompt_injection_protection: PromptInjectionProtectionMode;
   created_at: number;
   updated_at: number;
 };
@@ -429,7 +431,7 @@ export const updateChatMemorySettings = (
   chatId: number,
   patch: Partial<Pick<ChatMemorySettings,
     'persona_override_id' | 'memory_mode' | 'write_target' |
-    'use_core_memory' | 'allow_core_memory_update' | 'message_search_scope' | 'roleplay_mode'>>,
+    'use_core_memory' | 'allow_core_memory_update' | 'message_search_scope' | 'roleplay_mode' | 'prompt_injection_protection'>>,
 ): ChatMemorySettings => {
   const accountId = requireChatAccess(userId, chatId);
   const current = getChatMemorySettings(accountId, chatId);
@@ -467,14 +469,16 @@ export const updateChatMemorySettings = (
   const roleplayMode = patch.roleplay_mode === undefined
     ? current.roleplay_mode
     : patch.roleplay_mode ? 1 : 0;
+  const protection = patch.prompt_injection_protection ?? current.prompt_injection_protection;
+  if (!['automatic', 'enabled', 'disabled'].includes(protection)) throw new Error('bad_prompt_injection_protection');
   db.prepare(`
     UPDATE chat_memory_settings
     SET persona_override_id = ?, general_space_id = ?, chat_space_id = ?, memory_mode = ?,
-        write_target = ?, use_core_memory = ?, allow_core_memory_update = ?, message_search_scope = ?, roleplay_mode = ?, updated_at = ?
+        write_target = ?, use_core_memory = ?, allow_core_memory_update = ?, message_search_scope = ?, roleplay_mode = ?, prompt_injection_protection = ?, updated_at = ?
     WHERE user_id = ? AND chat_id = ?
   `).run(
     personaOverrideId, generalSpaceId, chatSpaceId, memoryMode, writeTarget,
-    useCoreMemory, allowCoreMemoryUpdate, messageSearchScope, roleplayMode, getNowUnix(), accountId, chatId,
+    useCoreMemory, allowCoreMemoryUpdate, messageSearchScope, roleplayMode, protection, getNowUnix(), accountId, chatId,
   );
   return getChatMemorySettings(accountId, chatId);
 };
@@ -607,8 +611,8 @@ export const initializeForkedChatMemory = (
     db.prepare(`
       INSERT INTO chat_memory_settings (
         user_id, chat_id, persona_id, persona_override_id, general_space_id, chat_space_id,
-        memory_mode, write_target, use_core_memory, allow_core_memory_update, message_search_scope, roleplay_mode, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        memory_mode, write_target, use_core_memory, allow_core_memory_update, message_search_scope, roleplay_mode, prompt_injection_protection, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(user_id, chat_id) DO UPDATE SET
         persona_id = excluded.persona_id,
         persona_override_id = excluded.persona_override_id,
@@ -620,12 +624,13 @@ export const initializeForkedChatMemory = (
         allow_core_memory_update = excluded.allow_core_memory_update,
         message_search_scope = excluded.message_search_scope,
         roleplay_mode = excluded.roleplay_mode,
+        prompt_injection_protection = excluded.prompt_injection_protection,
         updated_at = excluded.updated_at
     `).run(
       accountId, targetChatId, sourceSettings.persona_id, sourceSettings.persona_override_id,
       sourceSettings.general_space_id, targetSpace?.id ?? null, sourceSettings.memory_mode,
       sourceSettings.write_target, sourceSettings.use_core_memory,
-      sourceSettings.allow_core_memory_update, sourceSettings.message_search_scope, sourceSettings.roleplay_mode, now, now,
+      sourceSettings.allow_core_memory_update, sourceSettings.message_search_scope, sourceSettings.roleplay_mode, sourceSettings.prompt_injection_protection, now, now,
     );
 
     if (!sourceSpace || !targetSpace) {

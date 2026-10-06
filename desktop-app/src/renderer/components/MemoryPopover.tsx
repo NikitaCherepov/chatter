@@ -6,6 +6,7 @@ import { ChatPersonaSelector } from './ChatPersonaSelector';
 import { ConfirmDialog } from './ConfirmDialog';
 import { MemoryRecordsPanel, type MemoryRecord } from './MemoryRecordsPanel';
 import { Select } from './Select';
+import { Tooltip } from './Tooltip';
 import s from './MemoryPopover.module.scss';
 
 type MemorySettings = {
@@ -15,6 +16,7 @@ type MemorySettings = {
   write_target: 'general' | 'chat';
   message_search_scope: 'all' | 'current';
   roleplay_mode: number;
+  prompt_injection_protection: 'automatic' | 'enabled' | 'disabled';
 };
 type RecordDialog = { type: 'edit' | 'delete'; record: MemoryRecord };
 type ChatPromptSettings = { prompt_id: number | null; room_enabled: boolean };
@@ -249,6 +251,20 @@ export function MemoryPopover({ chatId }: { chatId: number }) {
                 >
                   <span />
                 </button>
+              </div>
+              <div className={s.field}>{t('chat.memory.injectionProtection.label')}
+                <Select
+                  value={settings.prompt_injection_protection || 'automatic'}
+                  onChange={value => void patchSettings({ prompt_injection_protection: value as MemorySettings['prompt_injection_protection'] })}
+                  options={[
+                    { value: 'automatic', label: t('chat.memory.injectionProtection.automatic') },
+                    { value: 'enabled', label: t('chat.memory.injectionProtection.enabled') },
+                    { value: 'disabled', label: t('chat.memory.injectionProtection.disabled') },
+                  ]}
+                />
+                <Tooltip content={t('chat.memory.injectionProtection.help')}>
+                  <span className={s.fieldHint} tabIndex={0}>{t('chat.memory.injectionProtection.hint')}</span>
+                </Tooltip>
               </div>
               <div className={s.field}>{t('chat.memory.messageSearch.label')}
                 <Select

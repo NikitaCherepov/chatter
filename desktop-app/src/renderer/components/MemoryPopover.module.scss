@@ -94,6 +94,13 @@
   font-size: 11px;
   font-weight: 600;
 }
+.fieldHint {
+  color: var(--text-hint);
+  font-size: 10px;
+  font-weight: 400;
+  line-height: 1.4;
+  cursor: help;
+}
 .characterRow {
   display: flex;
   align-items: center;

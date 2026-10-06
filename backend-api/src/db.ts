@@ -1583,6 +1583,7 @@ db.exec(`
 ensureMemoryColumn('chat_memory_settings', 'persona_override_id', 'ALTER TABLE chat_memory_settings ADD COLUMN persona_override_id INTEGER');
 ensureMemoryColumn('chat_memory_settings', 'message_search_scope', "ALTER TABLE chat_memory_settings ADD COLUMN message_search_scope TEXT NOT NULL DEFAULT 'all'");
 ensureMemoryColumn('chat_memory_settings', 'roleplay_mode', 'ALTER TABLE chat_memory_settings ADD COLUMN roleplay_mode INTEGER NOT NULL DEFAULT 0 CHECK (roleplay_mode IN (0, 1))');
+ensureMemoryColumn('chat_memory_settings', 'prompt_injection_protection', "ALTER TABLE chat_memory_settings ADD COLUMN prompt_injection_protection TEXT NOT NULL DEFAULT 'automatic' CHECK (prompt_injection_protection IN ('automatic', 'enabled', 'disabled'))");
 ensureMemoryColumn('memory_spaces', 'is_primary', 'ALTER TABLE memory_spaces ADD COLUMN is_primary INTEGER NOT NULL DEFAULT 0 CHECK (is_primary IN (0, 1))');
 ensureMemoryColumn('memory_records', 'origin_message_cursor', 'ALTER TABLE memory_records ADD COLUMN origin_message_cursor INTEGER');
 db.exec(`
