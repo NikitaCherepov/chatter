@@ -740,6 +740,12 @@
       "trigger": "Chat settings",
       "triggerTitle": "Chat settings",
       "headerTitle": "Chat settings",
+      "automaticMemory": {
+        "label": "Automatic memory",
+        "hint": "Retrieve relevant memories before each reply.",
+        "inactive": "Inactive while memory use is disabled.",
+        "help": "Before replying, message text is sent to the configured embedding provider. Search uses the selected memory scope and the reranker, if enabled: retrieved fragments are sent to its provider. Requests are billed like regular searches; in rooms, the replying bot owner pays. Results are passed without additional truncation and are not saved to chat history. If search fails or takes more than 10 seconds, the reply proceeds without memory. Automatic memory is not used in guest mode."
+      },
       "injectionProtection": {
         "label": "Prompt injection protection",
         "automatic": "Automatic",

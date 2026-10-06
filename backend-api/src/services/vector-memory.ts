@@ -36,7 +36,7 @@ import {
 const PINECONE_API_KEY = `${process.env.PINECONE_API_KEY || ''}`.trim();
 const PINECONE_INDEX_NAME = `${process.env.PINECONE_INDEX_NAME || 'bot-memory'}`.trim();
 const VECTOR_MEMORY_MAX_TEXT = Math.max(1, Number.parseInt(process.env.VECTOR_MEMORY_MAX_TEXT || '4000', 10) || 4000);
-const VECTOR_MEMORY_MAX_QUERY = Math.max(1, Number.parseInt(process.env.VECTOR_MEMORY_MAX_QUERY || '1000', 10) || 1000);
+export const VECTOR_MEMORY_MAX_QUERY = Math.max(1, Number.parseInt(process.env.VECTOR_MEMORY_MAX_QUERY || '1000', 10) || 1000);
 const VECTOR_MEMORY_TOP_K_MAX = Math.max(1, Number.parseInt(process.env.VECTOR_MEMORY_TOP_K_MAX || '20', 10) || 20);
 const VECTOR_MEMORY_CHUNK_SIZE = Math.max(100, Number.parseInt(process.env.VECTOR_MEMORY_CHUNK_SIZE || '1000', 10) || 1000);
 const VECTOR_MEMORY_CHUNK_OVERLAP = Math.max(0, Number.parseInt(process.env.VECTOR_MEMORY_CHUNK_OVERLAP || '200', 10) || 200);
@@ -163,6 +163,7 @@ export const rerankMemoryGroups = async (
   settings: ReturnType<typeof getVectorMemoryRuntimeSettings>,
   userId: number,
   chatId?: number,
+  signal?: AbortSignal,
 ): Promise<MemorySearchGroup[]> => {
   const ranking = settings.reranking;
   if (!ranking.enabled || groups.length === 0) return groups;
@@ -187,7 +188,7 @@ export const rerankMemoryGroups = async (
         ? { provider: { only: [ranking.openrouterProviderSlug], allow_fallbacks: false } }
         : {}),
     }),
-    signal: AbortSignal.timeout(60_000),
+    signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(60_000)]) : AbortSignal.timeout(60_000),
   });
   const json = await response.json().catch(() => null) as any;
   if (!response.ok) {
@@ -256,6 +257,7 @@ const createEmbeddings = async (
   input: string | string[],
   settings = getVectorMemoryRuntimeSettings(),
   chargeContext?: EmbeddingChargeContext,
+  signal?: AbortSignal,
 ) => {
   const response = await getOpenAIClient(settings).embeddings.create({
     model: settings.model,
@@ -263,7 +265,7 @@ const createEmbeddings = async (
     ...(settings.openrouterProviderSlug
       ? { provider: { only: [settings.openrouterProviderSlug], allow_fallbacks: false } }
       : {}),
-  } as any);
+  } as any, { signal });
   if (chargeContext) {
     const fallbackTokens = (Array.isArray(input) ? input : [input])
       .reduce((sum, item) => sum + countTokens(`${item || ''}`), 0);
@@ -319,10 +321,11 @@ const getEmbedding = async (
   text: string,
   settings = getVectorMemoryRuntimeSettings(),
   chargeContext?: EmbeddingChargeContext,
+  signal?: AbortSignal,
 ): Promise<number[]> => {
   const normalized = text.replace(/\n/g, ' ').trim();
   if (!normalized) throw new Error('text_required');
-  const response = await createEmbeddings(normalized, settings, chargeContext);
+  const response = await createEmbeddings(normalized, settings, chargeContext, signal);
   const embedding = response?.data?.[0]?.embedding;
   if (!Array.isArray(embedding) || !embedding.length) {
     throw new Error('embedding_empty');
@@ -815,7 +818,7 @@ export class VectorMemoryService {
     return { copied_records: clones.length, copied_chunks: targetVectors.length };
   }
 
-  static async search(userId: number, query: string, topK = 3, chatId?: number, exactSpaceId?: number) {
+  static async search(userId: number, query: string, topK = 3, chatId?: number, exactSpaceId?: number, options?: { billingUserId?: number; signal?: AbortSignal }) {
     try {
       const safeQuery = `${query || ''}`.trim();
       if (!safeQuery) throw new Error('query_required');
@@ -846,11 +849,12 @@ export class VectorMemoryService {
       // finish while this request is embedding its query.
       const runtimeSettings = getVectorMemoryRuntimeSettings();
       const retrievalLimit = runtimeSettings.reranking.enabled ? 20 : safeTopK;
+      options?.signal?.throwIfAborted();
       const queryVector = await getEmbedding(safeQuery, runtimeSettings, {
-        userId,
+        userId: options?.billingUserId ?? userId,
         chatId: chatId ?? null,
         route: 'memory:search',
-      });
+      }, options?.signal);
       let groupedMatches: MemorySearchGroup[] = [];
 
       if (getVectorMemoryStorage() === 'qdrant') {
@@ -945,12 +949,14 @@ export class VectorMemoryService {
           }));
       }
 
+      options?.signal?.throwIfAborted();
       groupedMatches = await rerankMemoryGroups(
         safeQuery,
         groupedMatches,
         runtimeSettings,
-        userId,
+        options?.billingUserId ?? userId,
         chatId,
+        options?.signal,
       );
 
       const items = groupedMatches.flatMap(group => group.fragments.map(fragment => ({

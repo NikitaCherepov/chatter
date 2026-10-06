@@ -1773,6 +1773,7 @@ app.patch('/api/v1/chats/:chatId/memory-settings', (req: AuthedRequest, res: any
       ...(typeof body.message_search_scope === 'string' ? { message_search_scope: body.message_search_scope } : {}),
       ...('roleplay_mode' in body ? { roleplay_mode: body.roleplay_mode === true || body.roleplay_mode === 1 ? 1 : 0 } : {}),
       ...('prompt_injection_protection' in body ? { prompt_injection_protection: body.prompt_injection_protection } : {}),
+      ...('automatic_memory' in body ? { automatic_memory: body.automatic_memory === true || body.automatic_memory === 1 ? 1 : 0 } : {}),
     });
     return res.json({ settings });
   } catch (error: any) {

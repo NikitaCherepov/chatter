@@ -19,6 +19,7 @@ import { runSmartHomeControl, type SmartHomeArgs, listSmartDevicesForAi } from '
 import { getMailAccountsForUser, resolveEmailAttachmentsForUser, runEmailAttachmentRead, runEmailCheck, runEmailRead } from './mail.js';
 import { runCoreMemoryMerge } from './memory.js';
 import { VectorMemoryService } from './vector-memory.js';
+import { AUTOMATIC_MEMORY_HINT, retrieveAutomaticMemory } from './automatic-memory.js';
 import { getChatMemorySettings, resolvePersonaForChat } from './memory-foundation.js';
 import { applyRoleplayRestrictions, isRoleplayToolAllowed } from './chat-roleplay.js';
 import { wrapUntrustedContent } from './web-reader.js';
@@ -7746,7 +7747,8 @@ const sendMessageThroughAiInternal = async (
 
   // Tools execute under the initiating user's account in rooms, so the
   // per-chat roleplay restriction must follow that same user + chat pair.
-  const roleplayMode = getChatMemorySettings(toolUser.id, chatId).roleplay_mode === 1;
+  const chatMemorySettings = getChatMemorySettings(toolUser.id, chatId);
+  const roleplayMode = chatMemorySettings.roleplay_mode === 1;
   const flags = applyRoleplayRestrictions(options?.featureFlags, roleplayMode);
   const avatarControlEnabled = !flags?.disable_avatar_control;
   const timezone = Number.isFinite(Number(user.timezone_offset)) ? Number(user.timezone_offset) : 5;
@@ -8076,6 +8078,10 @@ User request: "${text}"`;
   }
 }
 
+  const automaticMemoryEnabled = chatMemorySettings.automatic_memory === 1
+    && chatMemorySettings.memory_mode !== 'off' && !isGuestMode;
+  if (automaticMemoryEnabled) executionSystemPrompt += AUTOMATIC_MEMORY_HINT;
+
   // userMessageContent: images are inserted as image_url ONLY if the model natively supports vision.
   // URL markers are added ALWAYS (for both vision and non-vision models)
   // so the model can pass URLs to generate_image / describe_image.
@@ -8135,6 +8141,19 @@ User request: "${text}"`;
     ...executionHistory,
     { role: 'user', content: userMessageContent }
   ];
+  if (automaticMemoryEnabled) {
+    const archive = await retrieveAutomaticMemory({
+      userId: toolUser.id, billingUserId: user.id, chatId,
+      query: regenerateUserMessage?.content || text,
+      signal: abortController.signal,
+    });
+    abortController.signal.throwIfAborted();
+    if (archive) {
+      const current = currentMessages[currentMessages.length - 1];
+      current.content = typeof current.content === 'string' ? `${current.content}\n\n${archive}`
+        : [...current.content, { type: 'text', text: `\n\n${archive}` }];
+    }
+  }
 
   let loop = 0;
   const effectiveMaxLoops = options?.isVoice ? MAX_TOOL_LOOPS_VOICE : MAX_TOOL_LOOPS;

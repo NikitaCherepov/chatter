@@ -17,6 +17,7 @@ type MemorySettings = {
   message_search_scope: 'all' | 'current';
   roleplay_mode: number;
   prompt_injection_protection: 'automatic' | 'enabled' | 'disabled';
+  automatic_memory: number;
 };
 type RecordDialog = { type: 'edit' | 'delete'; record: MemoryRecord };
 type ChatPromptSettings = { prompt_id: number | null; room_enabled: boolean };
@@ -287,6 +288,21 @@ export function MemoryPopover({ chatId }: { chatId: number }) {
                     { value: 'both', label: t('chat.memory.mode.both') },
                   ]}
                 />
+              </div>
+              <div className={s.toggleRow}>
+                <div className={s.toggleText}>
+                  <strong>{t('chat.memory.automaticMemory.label')}</strong>
+                  <Tooltip content={t('chat.memory.automaticMemory.help')}>
+                    <span tabIndex={0}>{t(settings.memory_mode === 'off' ? 'chat.memory.automaticMemory.inactive' : 'chat.memory.automaticMemory.hint')}</span>
+                  </Tooltip>
+                </div>
+                <button type="button" role="switch"
+                  aria-checked={settings.automatic_memory === 1}
+                  aria-label={t('chat.memory.automaticMemory.label')}
+                  className={`${s.toggle} ${settings.automatic_memory === 1 ? s.toggleActive : ''}`}
+                  disabled={loading}
+                  onClick={() => void patchSettings({ automatic_memory: settings.automatic_memory === 1 ? 0 : 1 })}
+                ><span /></button>
               </div>
               {settings.memory_mode === 'both' && (
                 <div className={s.field}>{t('chat.memory.writeTargetLabel')}

@@ -80,6 +80,46 @@ try {
   await ai.sendMessageThroughAi(101, 'Test', chatId, { ...sendOptions, initiatorUserId: 202 });
   assert.equal(requests.at(-1).messages[0].content.includes('[UNTRUSTED DATA PROTOCOL]'), false, 'room uses initiator protection, not bot owner');
   assert.equal(getChatMemorySettings(101, chatId).prompt_injection_protection, 'enabled');
+  const { VectorMemoryService } = await import('../src/services/vector-memory.js');
+  const originalSearch = VectorMemoryService.search;
+  const autoCalls: any[][] = [];
+  try {
+    VectorMemoryService.search = (async (...args: any[]) => {
+      autoCalls.push(args);
+      return { groups: [{ record_id: 'runtime-memory', score: 0.9, fragments: [{ id: 'chunk', chunk_id: 'runtime-memory_chunk_0', score: 0.9,
+        text: 'The meeting point is the north observatory.', source: 'test', timestamp: 1, chunk_index: 0, total_chunks: 1 }] }] };
+    }) as any;
+    await ai.sendMessageThroughAi(101, 'Test auto off', chatId, sendOptions);
+    assert.equal(autoCalls.length, 0);
+    updateChatMemorySettings(101, chatId, { automatic_memory: 1 });
+    await ai.sendMessageThroughAi(101, 'Find the meeting point', chatId, sendOptions);
+    assert.equal(autoCalls.length, 1);
+    assert.ok(requests.at(-1).messages.at(-1).content.includes('north observatory'));
+    assert.ok(requests.at(-1).messages.at(-1).content.includes('<untrusted_web_content>'));
+    db.prepare("INSERT INTO chat_messages (user_id, chat_id, role, content, timeline_index) VALUES (101, ?, 'user', 'Earlier question', 1)").run(chatId);
+    await ai.sendMessageThroughAi(101, 'Current question', chatId, { ...sendOptions, skipHistory: false, skipUserHistory: false });
+    assert.ok(requests.at(-1).messages.at(-1).content.includes('north observatory'));
+    const persistedUser = db.prepare("SELECT content FROM chat_messages WHERE chat_id = ? AND role = 'user' ORDER BY id DESC LIMIT 1").get(chatId) as any;
+    assert.equal(persistedUser.content, 'Current question', 'retrieved context never changes saved user text');
+    updateChatMemorySettings(202, chatId, { automatic_memory: 1 });
+    await ai.sendMessageThroughAi(101, 'Find my meeting point', chatId, { ...sendOptions, initiatorUserId: 202 });
+    assert.equal(autoCalls.at(-1)[0], 202);
+    assert.equal(autoCalls.at(-1)[5].billingUserId, 101);
+    assert.ok(requests.at(-1).messages.at(-1).content.includes('north observatory'));
+    assert.ok(!requests.at(-1).messages.at(-1).content.includes('<untrusted_web_content>'));
+    updateChatMemorySettings(101, chatId, { memory_mode: 'off' });
+    const callCount = autoCalls.length;
+    await ai.sendMessageThroughAi(101, 'No memory', chatId, sendOptions);
+    assert.equal(autoCalls.length, callCount);
+    updateChatMemorySettings(101, chatId, { memory_mode: 'general' });
+    await ai.sendMessageThroughAi(101, 'Guest request', chatId, { ...sendOptions, featureFlags: { disable_personal: true } });
+    assert.equal(autoCalls.length, callCount);
+    VectorMemoryService.search = (async () => { throw new Error('test search failure'); }) as any;
+    await ai.sendMessageThroughAi(101, 'Search failed', chatId, sendOptions);
+    assert.ok(!requests.at(-1).messages.at(-1).content.includes('[ARCHIVED MEMORY CONTEXT]'));
+    const stored = db.prepare("SELECT content FROM chat_messages WHERE chat_id = ?").all(chatId) as any[];
+    assert.ok(stored.every(row => !row.content.includes('[ARCHIVED MEMORY CONTEXT]')));
+  } finally { VectorMemoryService.search = originalSearch; }
   config.updateModelSettings({ proModels: [] });
   ai.refreshConfiguredModels();
   await assert.rejects(() => ai.runCompletion('pro', payload), /pro_model_not_configured/);

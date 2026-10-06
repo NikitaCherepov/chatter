@@ -35,6 +35,7 @@ const sourceSettings = updateChatMemorySettings(1, sourceChatId, {
   message_search_scope: 'current',
   roleplay_mode: 1,
   prompt_injection_protection: 'disabled',
+  automatic_memory: 1,
 });
 assert.ok(sourceSettings.chat_space_id);
 
@@ -74,6 +75,7 @@ assert.equal(getChatMemorySettings(1, firstFork.chat_id).general_space_id, sourc
 assert.equal(getChatMemorySettings(1, firstFork.chat_id).message_search_scope, 'current', 'fork inherits message search scope');
 assert.equal(getChatMemorySettings(1, firstFork.chat_id).roleplay_mode, 1, 'fork inherits roleplay mode');
 assert.equal(getChatMemorySettings(1, firstFork.chat_id).prompt_injection_protection, 'disabled', 'fork inherits protection mode');
+assert.equal(getChatMemorySettings(1, firstFork.chat_id).automatic_memory, 1, 'fork inherits automatic memory');
 assert.notEqual(getChatMemorySettings(1, firstFork.chat_id).chat_space_id, sourceSettings.chat_space_id);
 
 // Simulate the canonical rows written after the vector copy, then prove that a
