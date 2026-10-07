@@ -206,6 +206,7 @@
   "settings": {
     "title": "Settings",
     "sections": {
+      "admin": "Admin",
       "browser": "Browser",
       "account": "Account",
       "memory": "Memory",

@@ -206,6 +206,7 @@
   "settings": {
     "title": "Настройки",
     "sections": {
+      "admin": "Админ",
       "browser": "Браузер",
       "account": "Аккаунт",
       "memory": "Память",

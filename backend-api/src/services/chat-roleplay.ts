@@ -11,6 +11,7 @@ export type ToolRestrictionFlags = {
 };
 
 const ROLEPLAY_ALLOWED_TOOL_NAMES = new Set([
+  'save_to_cold_memory',
   'search_cold_memory',
   'read_memory',
   'search_chat_history',
@@ -26,7 +27,6 @@ export const applyRoleplayRestrictions = (
   enabled: boolean,
 ): ToolRestrictionFlags | null | undefined => enabled ? {
   ...(flags ?? {}),
-  disable_memory_write: true,
   disable_pc_control_lite: true,
   disable_pc_control_full: true,
   disable_pc_commands: true,

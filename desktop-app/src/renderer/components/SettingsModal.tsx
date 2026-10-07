@@ -66,7 +66,7 @@ type Props = {
   onAuthInvalidated?: () => void;
 };
 
-type Section = 'account' | 'memory' | 'connections' | 'prompt' | 'data' | 'voice' | 'app' | 'limits' | 'billing' | 'macros' | 'pc' | 'browser' | 'servers' | 'runbooks' | 'sshkeys' | 'mail' | 'smart_home' | 'restrictions' | 'models' | 'about';
+type Section = 'account' | 'memory' | 'connections' | 'prompt' | 'data' | 'voice' | 'app' | 'admin' | 'limits' | 'billing' | 'macros' | 'pc' | 'browser' | 'servers' | 'runbooks' | 'sshkeys' | 'mail' | 'smart_home' | 'restrictions' | 'models' | 'about';
 
 const CUSTOM_PROMPT_ID = -1;
 const NEW_PERSONA_ID = -1;
@@ -135,6 +135,7 @@ const SECTIONS: { key: Section; labelKey: string }[] = [
   { key: 'limits', labelKey: 'settings.sections.limits' },
   { key: 'billing', labelKey: 'settings.sections.billing' },
   { key: 'app', labelKey: 'settings.sections.app' },
+  { key: 'admin', labelKey: 'settings.sections.admin' },
   { key: 'about', labelKey: 'settings.sections.about' },
 ];
 
@@ -154,6 +155,7 @@ function clampZoomPct(pct: number): number {
 
 export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuthInvalidated }: Props) {
   const { user, setUser } = useAuth();
+  const isAdmin = user?.is_admin === 1 || user?.role === 'admin';
   const { t, i18n } = useTranslation();
   const [section, setSection] = useState<Section>('account');
 
@@ -1731,7 +1733,7 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
         <div className={s.body}>
           {/* Left menu */}
           <div className={s.menu}>
-            {SECTIONS.map((sec) => (
+            {SECTIONS.filter(sec => sec.key !== 'admin' || isAdmin).map((sec) => (
               <button
                 key={sec.key}
                 className={`${s.menuItem} ${sec.key === section ? s.menuItemActive : ''}`}
@@ -3058,7 +3060,13 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
                   {t('settings.app.diceHelp')}
                 </div>
               </div>
-              {(user?.is_admin === 1 || user?.role === 'admin') && <ChatGptSettings />}
+            </div>
+          )}
+
+          {section === 'admin' && isAdmin && (
+            <div className={s.panel}>
+              <div className={s.panelTitle}>{t('settings.sections.admin')}</div>
+              <ChatGptSettings />
             </div>
           )}
 

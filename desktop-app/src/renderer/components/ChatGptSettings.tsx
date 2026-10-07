@@ -25,15 +25,19 @@ export function ChatGptSettings() {
     } finally { setBusy(false); }
   };
   return <>
-    <div className={s.voiceDivider} />
-    <div className={s.voiceSectionTitle}>{t('chatgpt.title')}</div>
+    <div className={s.panelTitle}>{t('chatgpt.title')}</div>
+    <div className={s.connectionsHelp}>{t('chatgpt.desktopHelp')}</div>
     <div className={s.fieldGroup}>
-      <span className={s.voiceHint}>{t('chatgpt.desktopHelp')}</span>
-      <button type="button" className={s.cancelBtn} disabled={busy} onClick={() => void connect()}>{busy ? t('chatgpt.waiting') : t('chatgpt.signIn')}</button>
-      {connections.map(connection => <div key={connection.id} className={s.voiceRow}>
-        <span className={s.fieldLabel}>{connection.name}{connection.email !== connection.name ? ' · ' + connection.email : ''}</span>
-        <button type="button" className={s.cancelBtn} disabled={busy} onClick={() => void connect(connection.id)}>{t('chatgpt.reconnect')}</button>
+      {connections.map(connection => <div key={connection.id} className={s.macroCard}>
+        <div className={s.macroHeader} style={{ flexWrap: 'wrap' }}>
+          <div style={{ minWidth: 0, flex: '1 1 180px', overflowWrap: 'anywhere' }}>
+            <div style={{ fontWeight: 600, fontSize: 13 }}>{connection.name || connection.email}</div>
+            {connection.email !== connection.name && <div className={s.fieldLabel} style={{ marginTop: 4 }}>{connection.email}</div>}
+          </div>
+          <button type="button" className={s.cancelBtn} disabled={busy} onClick={() => void connect(connection.id)}>{t('chatgpt.reconnect')}</button>
+        </div>
       </div>)}
+      <button type="button" className={s.saveBtn} style={{ alignSelf: 'flex-start' }} disabled={busy} onClick={() => void connect()}>{busy ? t('chatgpt.waiting') : t('chatgpt.signIn')}</button>
     </div>
   </>;
 }
