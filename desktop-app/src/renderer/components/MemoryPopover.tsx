@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import * as api from '../lib/api';
+import { useInvalidateMemory } from '../lib/memory-queries';
 import { ChatPersonaSelector } from './ChatPersonaSelector';
 import { ConfirmDialog } from './ConfirmDialog';
 import { MemoryRecordsPanel, type MemoryRecord } from './MemoryRecordsPanel';
@@ -32,7 +33,7 @@ export function MemoryPopover({ chatId }: { chatId: number }) {
   const [popoverStyle, setPopoverStyle] = useState<React.CSSProperties>();
   const [loading, setLoading] = useState(false);
   const [settings, setSettings] = useState<MemorySettings | null>(null);
-  const [records, setRecords] = useState<MemoryRecord[]>([]);
+  const invalidateMemory = useInvalidateMemory();
   const [dialog, setDialog] = useState<RecordDialog | null>(null);
   const [draft, setDraft] = useState('');
   const [saving, setSaving] = useState(false);
@@ -58,22 +59,11 @@ export function MemoryPopover({ chatId }: { chatId: number }) {
     }
   }, [chatId, t]);
 
-  const loadRecords = useCallback(async () => {
-    try {
-      const result = await api.apiFetch<{ records: MemoryRecord[] }>(`/api/v1/chats/${chatId}/memory-records`);
-      setRecords(result.records);
-    } catch {
-      toast.error(t('chat.memory.loadRecordsFailed'));
-    }
-  }, [chatId, t]);
 
   useEffect(() => {
     if (open) void load();
   }, [open, load]);
 
-  useEffect(() => {
-    if (open) void loadRecords();
-  }, [open, settings?.chat_space_id, loadRecords]);
 
   useLayoutEffect(() => {
     if (!open) return;
@@ -169,7 +159,7 @@ export function MemoryPopover({ chatId }: { chatId: number }) {
         `/api/v1/chats/${chatId}/memory-records/${encodeURIComponent(dialog.record.id)}`,
         { method: 'PATCH', body: JSON.stringify({ text: draft.trim() }) },
       );
-      setRecords(items => items.map(record => record.id === result.record.id ? result.record : record));
+      await invalidateMemory();
       setDialog(null);
     } catch {
       toast.error(t('advanced.common.saveFailed'));
@@ -183,7 +173,7 @@ export function MemoryPopover({ chatId }: { chatId: number }) {
     setSaving(true);
     try {
       await api.apiFetch(`/api/v1/chats/${chatId}/memory-records/${encodeURIComponent(dialog.record.id)}`, { method: 'DELETE' });
-      setRecords(items => items.filter(record => record.id !== dialog.record.id));
+      await invalidateMemory();
       setDialog(null);
     } catch {
       toast.error(t('advanced.common.deleteFailed'));
@@ -333,9 +323,9 @@ export function MemoryPopover({ chatId }: { chatId: number }) {
                 <div className={s.memoryColumn}>
                   <div className={s.field}>{t('chat.memory.chatMemoryTitle')}</div>
                   <MemoryRecordsPanel
-                    records={records}
+                    key={chatId}
                     semanticEndpoint={`/api/v1/chats/${chatId}/memory-records/search`}
-                    vectorEndpoint={`/api/v1/chats/${chatId}/memory-records?include_vectors=1`}
+                    recordsEndpoint={`/api/v1/chats/${chatId}/memory-records`}
                     compact
                     emptyLabel={t('chat.memory.empty')}
                     onEdit={record => {

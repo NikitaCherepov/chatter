@@ -3,6 +3,7 @@ import { Pinecone } from '@pinecone-database/pinecone';
 import { randomUUID } from 'node:crypto';
 import { db } from '../db.js';
 import { averageMemoryVectors } from './memory-map-vectors.js';
+import { getMemoryRecordPage, parseMemoryPage } from './memory-record-pages.js';
 import { resolveAccountId } from './accounts.js';
 import { getVectorMemoryRuntimeSettings, getVectorMemoryStorage } from './vector-memory-settings.js';
 import { beginVectorMemoryWrite, isVectorMemoryMigrationRunning } from './vector-memory-reembedding.js';
@@ -484,6 +485,15 @@ export class VectorMemoryService {
       }
     }
     return averageMemoryVectors(chunks);
+  }
+
+  static async listRecordPage(userId: number, space: MemorySpace, query: Record<string, unknown>) {
+    const options = parseMemoryPage(query);
+    return getMemoryRecordPage(userId, space, options);
+  }
+
+  static searchRecords(userId: number, spaceId: number, ids: string[]) {
+    return ids.map(id => getOwnedMemoryRecord(userId, id)).filter(record => record && record.memory_space_id === spaceId);
   }
 
   static async saveFactBatched(

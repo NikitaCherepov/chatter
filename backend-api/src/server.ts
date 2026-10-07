@@ -1841,8 +1841,8 @@ app.get('/api/v1/memory/records', async (req: AuthedRequest, res: any) => {
     const targetId = spaceId ?? spaces.find(item => item.kind === 'general' && item.is_default === 1)?.id;
     const space = spaces.find(item => item.kind === 'general' && item.id === targetId);
     if (!space) throw new Error('memory_space_not_found');
-    const records = await VectorMemoryService.listRecords(accountId, space);
-    return res.json({ records, ...(req.query.include_vectors === '1' ? { vectors: await VectorMemoryService.listMapVectors(accountId, space, records.map(record => record.id)) } : {}) });
+    const page = await VectorMemoryService.listRecordPage(accountId, space, req.query);
+    return res.json({ ...page, ...(req.query.include_vectors === '1' ? { vectors: await VectorMemoryService.listMapVectors(accountId, space, page.records.map(record => record.id)) } : {}) });
   } catch (error: any) {
     return res.status(400).json({ error: error?.message || 'memory_records_load_failed' });
   }
@@ -1855,7 +1855,9 @@ app.post('/api/v1/memory/records/search', async (req: AuthedRequest, res: any) =
   if (query.length > 300) return res.status(422).json({ error: 'query_too_long_max_300' });
   if (!Number.isSafeInteger(spaceId) || spaceId <= 0) return res.status(400).json({ error: 'memory_space_not_found' });
   try {
-    return res.json(await VectorMemoryService.search(accountIdFromRequest(req), query, 20, undefined, spaceId));
+    const accountId = accountIdFromRequest(req);
+    const result = await VectorMemoryService.search(accountId, query, 20, undefined, spaceId);
+    return res.json({ ...result, records: VectorMemoryService.searchRecords(accountId, spaceId, result.groups.map(group => group.record_id)) });
   } catch (error: any) {
     const code = `${error?.message || 'vector_memory_search_failed'}`;
     return res.status(code === 'memory_space_not_found' ? 404 : 500).json({ error: code });
@@ -1867,11 +1869,11 @@ app.get('/api/v1/chats/:chatId/memory-records', async (req: AuthedRequest, res: 
     const accountId = accountIdFromRequest(req);
     const chatId = Number(req.params.chatId);
     const settings = getChatMemorySettings(accountId, chatId);
-    if (!settings.chat_space_id) return res.json({ records: [] });
+    if (!settings.chat_space_id) return res.json({ records: [], total: 0, nextOffset: null });
     const space = listMemorySpaces(accountId).find(item => item.kind === 'chat' && item.id === settings.chat_space_id && item.chat_id === chatId);
-    if (!space) return res.json({ records: [] });
-    const records = await VectorMemoryService.listRecords(accountId, space);
-    return res.json({ records, ...(req.query.include_vectors === '1' ? { vectors: await VectorMemoryService.listMapVectors(accountId, space, records.map(record => record.id)) } : {}) });
+    if (!space) return res.json({ records: [], total: 0, nextOffset: null });
+    const page = await VectorMemoryService.listRecordPage(accountId, space, req.query);
+    return res.json({ ...page, ...(req.query.include_vectors === '1' ? { vectors: await VectorMemoryService.listMapVectors(accountId, space, page.records.map(record => record.id)) } : {}) });
   } catch (error: any) {
     return res.status(error?.message === 'chat_not_found' ? 404 : 400).json({ error: error?.message || 'memory_records_load_failed' });
   }
@@ -1886,7 +1888,8 @@ app.post('/api/v1/chats/:chatId/memory-records/search', async (req: AuthedReques
     const chatId = Number(req.params.chatId);
     const settings = getChatMemorySettings(accountId, chatId);
     if (!settings.chat_space_id) return res.json({ ok: true, groups: [], matches: [], text: '' });
-    return res.json(await VectorMemoryService.search(accountId, query, 20, chatId, settings.chat_space_id));
+    const result = await VectorMemoryService.search(accountId, query, 20, chatId, settings.chat_space_id);
+    return res.json({ ...result, records: VectorMemoryService.searchRecords(accountId, settings.chat_space_id, result.groups.map(group => group.record_id)) });
   } catch (error: any) {
     const code = `${error?.message || 'vector_memory_search_failed'}`;
     const status = code === 'chat_not_found' || code === 'memory_space_not_found' ? 404 : 500;

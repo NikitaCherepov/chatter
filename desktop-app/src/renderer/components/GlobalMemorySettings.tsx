@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import * as api from '../lib/api';
+import { useInvalidateMemory } from '../lib/memory-queries';
 import { ConfirmDialog } from './ConfirmDialog';
 import { MemoryRecordsPanel, type MemoryRecord } from './MemoryRecordsPanel';
 import { Select } from './Select';
@@ -21,7 +22,7 @@ export function GlobalMemorySettings() {
   const { t } = useTranslation();
   const [spaces, setSpaces] = useState<MemorySpace[]>([]);
   const [selectedId, setSelectedId] = useState('');
-  const [records, setRecords] = useState<MemoryRecord[]>([]);
+  const invalidateMemory = useInvalidateMemory();
   const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
   const [newSpaceName, setNewSpaceName] = useState('');
@@ -62,11 +63,6 @@ export function GlobalMemorySettings() {
     setSelectedId(selected ? String(selected.id) : '');
   }, []);
 
-  const loadRecords = useCallback(async (spaceId: string) => {
-    if (!spaceId) return setRecords([]);
-    const result = await api.apiFetch<{ records: MemoryRecord[] }>(`/api/v1/memory/records?space_id=${encodeURIComponent(spaceId)}`);
-    setRecords(result.records);
-  }, []);
 
   useEffect(() => {
     setLoading(true);
@@ -75,9 +71,6 @@ export function GlobalMemorySettings() {
       .finally(() => setLoading(false));
   }, [loadSpaces, t]);
 
-  useEffect(() => {
-    void loadRecords(selectedId).catch(() => toast.error(t('chat.memory.globalSettings.errors.loadRecords')));
-  }, [selectedId, loadRecords, t]);
 
   const selectSpace = async (value: string) => {
     const previous = selectedId;
@@ -102,6 +95,7 @@ export function GlobalMemorySettings() {
       });
       await api.apiFetch(`/api/v1/memory/spaces/${result.space.id}/activate`, { method: 'POST' });
       await loadSpaces(result.space.id);
+      await invalidateMemory();
       setCreateOpen(false);
       setNewSpaceName('');
     } catch {
@@ -136,6 +130,7 @@ export function GlobalMemorySettings() {
         method: 'DELETE',
       });
       await loadSpaces(result.active_space.id);
+      await invalidateMemory();
       setDialog(null);
     } catch {
       toast.error(t('chat.memory.globalSettings.errors.deleteSpace'));
@@ -152,7 +147,7 @@ export function GlobalMemorySettings() {
         method: 'PATCH',
         body: JSON.stringify({ text: draft.trim() }),
       });
-      setRecords(items => items.map(record => record.id === result.record.id ? result.record : record));
+      await invalidateMemory();
       setDialog(null);
     } catch {
       toast.error(t('chat.memory.globalSettings.errors.updateRecord'));
@@ -166,7 +161,7 @@ export function GlobalMemorySettings() {
     setSaving(true);
     try {
       await api.apiFetch(`/api/v1/memory/records/${encodeURIComponent(dialog.record.id)}`, { method: 'DELETE' });
-      setRecords(items => items.filter(record => record.id !== dialog.record.id));
+      await invalidateMemory();
       setDialog(null);
     } catch {
       toast.error(t('chat.memory.globalSettings.errors.deleteRecord'));
@@ -251,9 +246,9 @@ export function GlobalMemorySettings() {
       <div className={s.sectionTitle}>{t('chat.memory.globalSettings.recordsTitle')}</div>
       {!loading && (
         <MemoryRecordsPanel
-          records={records}
+          key={selectedId}
           semanticEndpoint="/api/v1/memory/records/search"
-          vectorEndpoint={`/api/v1/memory/records?space_id=${encodeURIComponent(selectedId)}&include_vectors=1`}
+          recordsEndpoint={`/api/v1/memory/records?space_id=${encodeURIComponent(selectedId)}`}
           semanticBody={{ space_id: Number(selectedId) }}
           emptyLabel={t('chat.memory.globalSettings.empty')}
           onEdit={record => {

@@ -19,6 +19,7 @@ process.env.QDRANT_URL = `http://127.0.0.1:${(mock.address() as any).port}`;
 const { db } = await import('../src/db.js');
 try {
   const { createGeneralMemorySpace, createMemoryRecord } = await import('../src/services/memory-foundation.js');
+  const { parseMemoryPage } = await import('../src/services/memory-record-pages.js');
   const { VectorMemoryService } = await import('../src/services/vector-memory.js');
   for (const id of [8001, 8002]) db.prepare('INSERT INTO users (id, name) VALUES (?, ?)').run(id, `User ${id}`);
   const space = createGeneralMemorySpace(8001, 'Map test');
@@ -37,6 +38,22 @@ try {
   assert.equal(requests.length, 1, 'foreign-account access fails before Qdrant');
   assert.deepEqual(await VectorMemoryService.listMapVectors(8001, space, []), []);
   assert.equal(requests.length, 1, 'empty maps make no vector request');
+  const other = createGeneralMemorySpace(8001, 'Other');
+  createMemoryRecord({ id: 'other-record', userId: 8001, spaceId: other.id, text: 'Other space', source: 'test', chunks: [] });
+  for (let i = 0; i < 205; i++) createMemoryRecord({ id: `paged-${String(i).padStart(3, '0')}`, userId: 8001, spaceId: space.id, text: i === 3 ? 'МАЯК вдали' : `Memory ${i}`, source: 'test', chunks: [] });
+  const first = await VectorMemoryService.listRecordPage(8001, space, { limit: '100', offset: '0' });
+  const second = await VectorMemoryService.listRecordPage(8001, space, { limit: '100', offset: '100' });
+  const last = await VectorMemoryService.listRecordPage(8001, space, { limit: '100', offset: '200' });
+  assert.equal(first.total, 206); assert.equal(first.records.length, 100); assert.equal(second.records.length, 100);
+  assert.equal(last.records.length, 6); assert.equal(last.nextOffset, null);
+  assert.equal(new Set([...first.records, ...second.records, ...last.records].map(record => record.id)).size, 206);
+  const found = await VectorMemoryService.listRecordPage(8001, space, { query: 'маяк' });
+  assert.equal(found.total, 1, 'Unicode text search covers every page');
+  assert.equal(found.records[0].id, 'paged-003');
+  assert.deepEqual(VectorMemoryService.searchRecords(8001, space.id, ['other-record', 'paged-003']).map(record => record!.id), ['paged-003'], 'semantic result hydration stays in exact space');
+  assert.deepEqual(VectorMemoryService.searchRecords(8002, space.id, ['paged-003']), []);
+  await assert.rejects(() => VectorMemoryService.listRecordPage(8002, space, {}), /memory_space_not_found/);
+  for (const query of [{ limit: 0 }, { limit: 501 }, { offset: -1 }, { limit: 'abc' }, { query: 'x'.repeat(301) }]) assert.throws(() => parseMemoryPage(query), /bad_memory_pagination/);
   console.log('memory map data retrieval, lazy loading and account isolation tests passed');
 } finally {
   db.close();
