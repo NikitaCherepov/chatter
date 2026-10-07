@@ -549,7 +549,8 @@ export function ProviderModelFields({
       setSelectedApiKeyId(`key:${model.apiKeyId || override?.selectedApiKeyId}`);
     }
   }, [model.apiKeyId, override?.selectedApiKeyId]);
-  const providerKind: ProviderKind = override?.providerKind || resolveProviderKind(model.baseUrl);
+  const isChatGpt = model.auth === 'chatgpt';
+  const providerKind: ProviderKind = isChatGpt ? 'custom' : override?.providerKind || resolveProviderKind(model.baseUrl);
 
   const providerKindOpts: SelectOption[] = [
     { value: 'chatgpt', label: t('chatgpt.title') },
@@ -825,9 +826,13 @@ export function ProviderModelFields({
     override?.pricingSource === 'openrouter_endpoint';
   const isPricingFromPreset = override?.pricingSource === 'preset';
 
-  if (model.auth === 'chatgpt') return <ChatGptModelFields model={model} onChange={onChange} providerOptions={providerKindOpts} onProviderChange={handleProviderKindChange} />;
   return (
     <div className={styles.fields}>
+      {isChatGpt ? (
+        <div style={{ gridColumn: '1 / -1' }}>
+          <ChatGptModelFields model={model} onChange={onChange} providerOptions={providerKindOpts} onProviderChange={handleProviderKindChange} />
+        </div>
+      ) : <>
       {/* Row 1: provider selector + model name */}
       <div className={styles.twoColumns}>
         <FormField label={t('models.providerFields.providerKind') || 'Provider'}>
@@ -902,6 +907,8 @@ export function ProviderModelFields({
           }`}
         />
       </FormField>
+
+      </>}
 
       <FormField
         label={t('models.providerFields.contextLength')}
@@ -1088,7 +1095,7 @@ export function ProviderModelFields({
           </div>
 
           <div className={styles.pricingMetaRow}>
-            {(isPricingFromOpenRouter || isPricingFromPreset) && (
+            {!isChatGpt && (isPricingFromOpenRouter || isPricingFromPreset) && (
               <small style={{ color: 'var(--color-muted)' }}>
                 {t('models.billing.pricingSource') || 'Source'}: {override?.pricingSource}
               </small>
@@ -1110,7 +1117,7 @@ export function ProviderModelFields({
       )}
 
       {/* API key: select from saved keys or create new */}
-      {(() => {
+      {!isChatGpt && (() => {
         const selectOptions: SelectOption[] = [
           ...apiKeys.map((k) => ({
             value: `key:${k.id}`,

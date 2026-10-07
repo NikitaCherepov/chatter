@@ -138,6 +138,12 @@ try {
   const saved = modelsService.updateModelSettings({ ...current, manualModels: [model] });
   assert.equal(saved.manualModels[0].adminOnly, true);
   assert.equal(saved.manualModels[0].apiKeyId, null);
+  const quota = await import('../src/services/token-quota.js');
+  quota.setModelProvider('test-oauth', { providerKind: 'custom', pricingMode: 'manual', pricingSource: 'manual', inputPricePerMillion: 2.5, outputPricePerMillion: 10, cacheReadPricePerMillion: 0.25 });
+  const pricing = quota.getModelOverride('test-oauth');
+  assert.equal(pricing.pricing_mode, 'manual');
+  assert.equal(pricing.cache_read_price_per_million, 0.25);
+  assert.equal(quota.calculateEstimatedCostUsd(1_000_000, 1_000_000, 1_000_000, pricing.input_price_per_million, pricing.output_price_per_million, pricing.cache_read_price_per_million).cost, 12.75);
   service.renameChatGptConnection(connection.id, 'Shared test', true);
   assert.equal(service.listChatGptConnections()[0].shared, true);
   await adapter.chatGptCompletion(connection.id, payload);
