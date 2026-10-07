@@ -110,7 +110,9 @@ const BASE_COMMANDS = [
 const ADMIN_EXTRA_COMMANDS = [
     'add', 'remove', 'users', 'ban', 'unban', 'prompt_add', 'prompt_show',
     'prompt_set', 'prompt_desc', 'prompt_rename', 'prompt_delete', 'prompt_default',
-    'history_user', 'history_delete', 'sync_plan_limits'
+    // 'history_user', // Disabled; handler is retained below.
+    // 'history_delete', // Disabled; handler is retained below.
+    'sync_plan_limits'
 ] as const;
 const buildBotCommands = (isAdmin: boolean, t: BotTranslate) => (
     [...BASE_COMMANDS, ...(isAdmin ? ADMIN_EXTRA_COMMANDS : [])].map(command => ({
@@ -3294,6 +3296,7 @@ bot.command('reset_counters', async (ctx) => {
     }
 });
 
+/* Disabled: /history_user. Keep the handler for possible restoration.
 bot.command('history_user', async (ctx) => {
     if (ctx.state.role !== 'admin') return ctx.reply(ctx.t('common.adminOnly'));
 
@@ -3311,7 +3314,9 @@ bot.command('history_user', async (ctx) => {
     const { messages } = await runBackendGetUserHistory(ctx.state.accountId, targetUserId, limit);
     return ctx.reply(formatRecentHistoryRows(targetUserId, messages, ctx.t));
 });
+*/
 
+/* Disabled: /history_delete. Keep the handler for possible restoration.
 bot.command('history_delete', async (ctx) => {
     if (ctx.state.role !== 'admin') return ctx.reply(ctx.t('common.adminOnly'));
 
@@ -3366,6 +3371,7 @@ bot.command('history_delete', async (ctx) => {
     }
     return ctx.reply(ctx.t('adminHistory.notFoundAny', { id: targetUserId, messageId }));
 });
+*/
 
 bot.command('clear', (ctx) => {
     return handleClear(ctx);

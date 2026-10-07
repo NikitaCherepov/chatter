@@ -38,6 +38,7 @@ export function MemoryPopover({ chatId }: { chatId: number }) {
   const [saving, setSaving] = useState(false);
   const [promptSettings, setPromptSettings] = useState<ChatPromptSettings | null>(null);
   const [promptCatalog, setPromptCatalog] = useState<api.PromptsResponse | null>(null);
+  const showChatMemory = settings?.memory_mode === 'chat' || settings?.memory_mode === 'both';
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -79,7 +80,7 @@ export function MemoryPopover({ chatId }: { chatId: number }) {
     const position = () => {
       const anchor = rootRef.current?.getBoundingClientRect();
       if (!anchor) return;
-      const width = Math.min(800, window.innerWidth - 32);
+      const width = Math.max(0, Math.min(showChatMemory ? 800 : 400, window.innerWidth - 32));
       const top = anchor.bottom + 9;
       setPopoverStyle({
         left: Math.max(16, Math.min(anchor.right - width, window.innerWidth - width - 16)),
@@ -95,7 +96,7 @@ export function MemoryPopover({ chatId }: { chatId: number }) {
       window.removeEventListener('resize', position);
       window.removeEventListener('scroll', position, true);
     };
-  }, [open]);
+  }, [open, showChatMemory]);
 
   useEffect(() => {
     const onPointerDown = (event: PointerEvent) => {
@@ -207,7 +208,7 @@ export function MemoryPopover({ chatId }: { chatId: number }) {
         <span>{t('chat.memory.trigger')}</span>
       </button>
       {open && (
-        <div className={s.popover} style={popoverStyle}>
+        <div className={`${s.popover} ${showChatMemory ? '' : s.popoverCompact}`} style={popoverStyle}>
           <div className={s.header}><strong>{t('chat.memory.headerTitle')}</strong><span>{loading ? t('common.loading') : t('chat.memory.headerHint')}</span></div>
           {settings && (
             <div className={s.layout}>
@@ -328,7 +329,7 @@ export function MemoryPopover({ chatId }: { chatId: number }) {
                 </div>
               )}
               </div>
-              {(settings.memory_mode === 'chat' || settings.memory_mode === 'both') && (
+              {showChatMemory && (
                 <div className={s.memoryColumn}>
                   <div className={s.field}>{t('chat.memory.chatMemoryTitle')}</div>
                   <MemoryRecordsPanel

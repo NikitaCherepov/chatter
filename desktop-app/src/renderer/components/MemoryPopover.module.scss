@@ -42,6 +42,9 @@
   background: var(--bg-secondary);
   box-shadow: 0 18px 50px rgba(0, 0, 0, 0.28);
 }
+.popoverCompact {
+  width: min(400px, calc(100vw - 32px));
+}
 .layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
