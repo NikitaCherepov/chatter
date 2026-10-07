@@ -8,6 +8,7 @@ import { Select } from './Select';
 import Checkbox from './Checkbox';
 import { Tooltip } from './Tooltip';
 import s from './GlobalMemorySettings.module.scss';
+import settingsStyles from './SettingsModal.module.scss';
 
 type MemorySpace = { id: number; name: string; kind: 'general' | 'chat'; is_default: number; is_primary: number };
 type MemoryDialog =
@@ -175,18 +176,11 @@ export function GlobalMemorySettings() {
   };
 
   return (
-    <div className={s.panel}>
-      <div className={s.title}>{t('chat.memory.globalSettings.title')}</div>
-      <div className={s.hint}>{t('chat.memory.globalSettings.hint')}</div>
+    <div className={settingsStyles.panel}>
+      <div className={settingsStyles.panelTitle}>{t('chat.memory.globalSettings.title')}</div>
       {preferences && <>
-        <div className={s.field}>
-          <Checkbox checked={preferences.automatic_memory} disabled={preferencesSaving}
-            onChange={value => void patchPreferences({ automatic_memory: value })} label={t('chat.memory.automaticMemory.label')} />
-          <Tooltip content={t('chat.memory.automaticMemory.help')}>
-            <span tabIndex={0} className={s.hint}>{t('chat.memory.preferences.defaultsHint')}</span>
-          </Tooltip>
-        </div>
-        <div className={s.field}>{t('chat.memory.preferences.limitLabel')}
+        <div className={settingsStyles.fieldGroup}>
+          <label className={settingsStyles.fieldLabel}>{t('chat.memory.preferences.limitLabel')}</label>
           <Select value={preferences.result_limit === null ? 'automatic' : String(preferences.result_limit)} disabled={preferencesSaving}
             onChange={value => void patchPreferences({ result_limit: value === 'automatic' ? null : Number(value) })}
             options={[
@@ -194,10 +188,19 @@ export function GlobalMemorySettings() {
               ...Array.from({ length: 20 }, (_, i) => ({ value: String(i + 1), label: String(i + 1) })),
             ]} />
           <Tooltip content={t('chat.memory.preferences.limitHelp')}>
-            <span tabIndex={0} className={s.hint}>{t('chat.memory.preferences.limitHint')}</span>
+            <span tabIndex={0} style={{ fontSize: 11, color: 'var(--text-hint)', marginTop: 2 }}>{t('chat.memory.preferences.limitHint')}</span>
           </Tooltip>
         </div>
+        <div className={settingsStyles.fieldGroup}>
+          <Checkbox checked={preferences.automatic_memory} disabled={preferencesSaving}
+            onChange={value => void patchPreferences({ automatic_memory: value })} label={t('chat.memory.automaticMemory.label')} />
+          <Tooltip content={t('chat.memory.automaticMemory.help')}>
+            <span tabIndex={0} style={{ fontSize: 11, color: 'var(--text-hint)', marginTop: 2 }}>{t('chat.memory.preferences.defaultsHint')}</span>
+          </Tooltip>
+        </div>
+        <div className={settingsStyles.voiceDivider} role="separator" />
       </>}
+      <div className={s.hint}>{t('chat.memory.globalSettings.hint')}</div>
       <div className={s.field}>
         <label>{t('chat.memory.globalSettings.spaceLabel')}</label>
         <div className={s.selectorRow}>

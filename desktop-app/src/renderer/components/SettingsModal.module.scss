@@ -651,6 +651,7 @@
 
 .voiceDivider {
   height: 1px;
+  flex-shrink: 0;
   margin: 2px 0 16px;
   background: var(--border-light);
 }
