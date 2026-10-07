@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { connectChatGptOnDesktop } from '../src/main/chatgpt-auth';
+import { createRequire } from 'node:module';
+const { connectChatGptOnDesktop } = createRequire(import.meta.url)('../src/main/chatgpt-auth.ts');
 const realFetch = globalThis.fetch;
 let callback = '';
 let beginBody: any;

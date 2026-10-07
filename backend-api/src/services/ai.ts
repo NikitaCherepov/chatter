@@ -1,7 +1,7 @@
 ﻿import OpenAI from 'openai';
 import dotenv from 'dotenv';
 import { getModelSettings, modelApiKey, type ConfiguredModel } from './model-settings.js';
-import { createChatGptClient, chatGptConnectionForClient, chatGptCompletion } from './chatgpt-responses.js';
+import { createChatGptClient, chatGptConnectionForClient, chatGptCompletion, CHATGPT_REASONING_LEVELS } from './chatgpt-responses.js';
 import { getChatGptConnection, withChatGptActor } from './chatgpt-connections.js';
 import nodeFetch from 'node-fetch';
 import { ProxyAgent } from 'proxy-agent';
@@ -422,8 +422,8 @@ export const getModelsCatalog = (isAdmin = false) => MANUAL_MODELS
   id: m.id,
   name: m.name,
   description: m.description,
-  reasoning_levels: getReasoningLevelsForBaseURL(m.baseURL),
-  supported_params: [...getProviderSupportedParams(m.baseURL)],
+  reasoning_levels: chatGptConnectionForClient(m.client) ? [...CHATGPT_REASONING_LEVELS] : getReasoningLevelsForBaseURL(m.baseURL),
+  supported_params: chatGptConnectionForClient(m.client) ? [] : [...getProviderSupportedParams(m.baseURL)],
   supports_vision: m.supportsVision,
   supports_tools: m.supportsTools,
   is_free: isModelFree(m.id),
@@ -1212,6 +1212,10 @@ const createCompletionWithModelFallback = async (
         }
         // If streamCallbacks exist — stream и собираем, иначе обычный запрос
         const chatGptConnectionId = chatGptConnectionForClient(client);
+        if (chatGptConnectionId && reasoningLevel && reasoningLevel !== 'auto') {
+          // LITE and a previously saved "none" setting use the lowest supported effort, not an invalid API value.
+          (providerRequestBody as any).reasoning = { effort: reasoningLevel === 'none' || reasoningLevel === 'minimal' ? 'low' : reasoningLevel };
+        }
         const response = chatGptConnectionId
           ? await chatGptCompletion(chatGptConnectionId, { ...providerRequestBody, model }, signal, streamCallbacks)
           : streamCallbacks

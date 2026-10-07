@@ -13,6 +13,13 @@ const { db } = await import('../src/db.js');
 const service = await import('../src/services/chatgpt-connections.js');
 const adapter = await import('../src/services/chatgpt-responses.js');
 const modelsService = await import('../src/services/model-settings.js');
+const intervals: ReturnType<typeof setInterval>[] = [];
+const realSetInterval = globalThis.setInterval;
+globalThis.setInterval = ((...args: any[]) => {
+  const timer = (realSetInterval as any)(...args); intervals.push(timer); return timer;
+}) as typeof setInterval;
+const ai = await import('../src/services/ai.js');
+globalThis.setInterval = realSetInterval;
 const originalFetch = globalThis.fetch;
 const { publicKey, privateKey } = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 });
 const jwk = { ...publicKey.export({ format: 'jwk' }), kid: 'test-key', use: 'sig' };
@@ -21,6 +28,7 @@ let tokenSubject = 'account-one';
 let refreshes = 0;
 let streamFailure = false;
 let noComplete = false;
+let customEvents: any[] | null = null;
 let requestBody: any;
 let revokeFails = false;
 const sign = (clientId: string, invalidNonce = false) => {
@@ -59,9 +67,9 @@ globalThis.fetch = (async (url: any, options: any = {}) => {
     requestBody = JSON.parse(options.body);
     const output = [{ type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'OK' }] },
       { type: 'function_call', call_id: 'call-one', namespace: 'chatter', name: 'search_cold_memory', arguments: '{"query":"fact"}' }];
-    const events = streamFailure ? [{ type: 'response.failed', response: { error: { code: 'subscription_sharing_usage_limit_exceeded' } } }]
+    const events = customEvents || (streamFailure ? [{ type: 'response.failed', response: { error: { code: 'subscription_sharing_usage_limit_exceeded' } } }]
       : [{ type: 'response.output_text.delta', delta: 'OK' }, ...(noComplete ? [] : [{ type: 'response.completed', response: { id: 'response-one', status: 'completed', output,
-        usage: { input_tokens: 10, output_tokens: 4, total_tokens: 14, input_tokens_details: { cached_tokens: 3 }, output_tokens_details: { reasoning_tokens: 2 } } } }])];
+        usage: { input_tokens: 10, output_tokens: 4, total_tokens: 14, input_tokens_details: { cached_tokens: 3 }, output_tokens_details: { reasoning_tokens: 2 } } } }])]);
     const bytes = new TextEncoder().encode(events.map(event => 'event: ' + event.type + '\r\ndata: ' + JSON.stringify(event) + '\r\n\r\n').join(''));
     return new Response(new ReadableStream({ start(controller) { for (let i = 0; i < bytes.length; i += 7) controller.enqueue(bytes.slice(i, i + 7)); controller.close(); } }), { headers: { 'Content-Type': 'text/event-stream' } });
   }
@@ -134,6 +142,74 @@ try {
   assert.equal(service.listChatGptConnections()[0].shared, true);
   await adapter.chatGptCompletion(connection.id, payload);
   assert.equal(modelsService.updateModelSettings({ ...saved, proModels: [model] }).proModels[0].auth, 'chatgpt');
+  ai.refreshConfiguredModels();
+  const completion = await ai.runCompletion('pro', { messages: [{ role: 'system', content: 'Runtime instructions' }, { role: 'user', content: 'Runtime question' }] });
+  assert.equal(completion.usedUniqueId, 'test-oauth');
+  assert.equal(completion.response.choices[0].message.content, 'OK');
+  assert.equal(requestBody.input[0].role, 'developer');
+  assert.equal(requestBody.model, 'visible-model');
+  assert.deepEqual(ai.getModelsCatalog(true)[0].reasoning_levels, ['low', 'medium', 'high', 'xhigh']);
+  assert.deepEqual(ai.getModelsCatalog(true)[0].supported_params, []);
+  await ai.runCompletion('pro', { messages: [{ role: 'user', content: 'Reasoning test' }] }, undefined, undefined, 'high');
+  assert.deepEqual(requestBody.reasoning, { effort: 'high', summary: 'auto' });
+  await ai.runCompletion('pro', { messages: [{ role: 'user', content: 'Auto test' }] }, undefined, undefined, 'auto');
+  assert.equal(requestBody.reasoning.effort, undefined);
+  const terminal = { type: 'response.completed', response: { id: 'streamed-response', status: 'completed', output: [], usage: { input_tokens: 10, output_tokens: 5, total_tokens: 15 } } };
+  customEvents = [
+    { type: 'response.output_text.delta', output_index: 0, content_index: 0, delta: 'Hello ' },
+    { type: 'response.output_text.delta', output_index: 0, content_index: 0, delta: 'from stream!' }, terminal,
+  ];
+  let streamedFinal = '';
+  const streamedCompletion = await ai.runCompletion('pro', { messages: [{ role: 'user', content: 'Hello' }] }, undefined, undefined, 'medium', undefined, { onToken: text => { streamedFinal += text; } });
+  assert.equal(streamedFinal, 'Hello from stream!');
+  assert.equal(streamedCompletion.response.choices[0].message.content, streamedFinal);
+  assert.equal(streamedCompletion.response.usage.total_tokens, 15);
+  db.prepare("UPDATE users SET status = 'approved', is_admin = 1 WHERE id = 101").run();
+  const chatId = Number(db.prepare("INSERT INTO user_chats (user_id, title) VALUES (101, 'ChatGPT stream test')").run().lastInsertRowid);
+  await ai.sendMessageThroughAi(101, 'Hello', chatId, { preferredModel: 'test-oauth', forcePro: true, skipUserHistory: true, countAsUserMessage: false, reasoningLevel: 'high' });
+  const persisted = db.prepare("SELECT content FROM chat_messages WHERE chat_id = ? AND role = 'assistant' ORDER BY id DESC LIMIT 1").get(chatId) as any;
+  assert.equal(persisted.content, 'Hello from stream!', 'completed streamed text must be saved, not replaced by the generic fallback');
+  assert.equal(requestBody.reasoning.effort, 'high');
+  customEvents = [
+    { type: 'response.reasoning_summary_text.delta', output_index: 0, delta: 'Summary' },
+    { type: 'response.output_text.delta', output_index: 1, delta: 'Final text' },
+    { type: 'response.output_item.done', output_index: 1, item: { type: 'message', role: 'assistant', content: [] } }, terminal,
+  ];
+  const summaryResult = await adapter.chatGptCompletion(connection.id, payload);
+  assert.equal(summaryResult.choices[0].message.content, 'Final text');
+  assert.equal(summaryResult.choices[0].message.reasoning_content, 'Summary');
+  customEvents = [
+    { type: 'response.output_item.added', output_index: 0, item: { type: 'function_call', call_id: 'streamed-call', namespace: 'chatter', name: 'search_cold_memory', arguments: '' } },
+    { type: 'response.function_call_arguments.delta', output_index: 0, delta: '{"query":' },
+    { type: 'response.function_call_arguments.delta', output_index: 0, delta: '"fact"}' }, terminal,
+  ];
+  const streamedTool = await adapter.chatGptCompletion(connection.id, payload);
+  assert.equal(streamedTool.choices[0].message.tool_calls[0].function.arguments, '{"query":"fact"}');
+  assert.equal(streamedTool.choices[0].finish_reason, 'tool_calls');
+  customEvents = [
+    { type: 'response.output_text.delta', output_index: 0, delta: 'Hello' },
+    { ...terminal, response: { ...terminal.response, output: [{ type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'Hello' }] }] } },
+  ];
+  assert.equal((await adapter.chatGptCompletion(connection.id, payload)).choices[0].message.content, 'Hello', 'terminal snapshots must not duplicate accumulated text');
+  customEvents = [{ type: 'response.output_item.done', output_index: 0, item: { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'Item done text' }] } }, terminal];
+  assert.equal((await adapter.chatGptCompletion(connection.id, payload)).choices[0].message.content, 'Item done text');
+  customEvents = [{ type: 'response.refusal.delta', delta: 'Cannot help.' }, terminal];
+  assert.equal((await adapter.chatGptCompletion(connection.id, payload)).choices[0].message.content, 'Cannot help.');
+  customEvents = [{ type: 'response.output_text.delta', delta: 'Not a successful answer' }, { type: 'response.failed', response: { error: { code: 'subscription_sharing_usage_limit_exceeded' } } }];
+  await assert.rejects(adapter.chatGptCompletion(connection.id, payload), /chatgpt_plan_limit_reached/);
+  customEvents = [{ type: 'response.output_text.delta', delta: 'Truncated' }];
+  await assert.rejects(adapter.chatGptCompletion(connection.id, payload), /chatgpt_incomplete_response/);
+  customEvents = [terminal];
+  await assert.rejects(adapter.chatGptCompletion(connection.id, payload), /chatgpt_empty_response/);
+  customEvents = null;
+  const transfer = await import('../src/services/model-config-transfer.js');
+  const exported = transfer.exportModelConfig(true);
+  assert.ok(exported.models.some(item => item.auth === 'chatgpt'));
+  assert.ok(!JSON.stringify(exported).includes('fake-refreshed-access'));
+  assert.ok(!JSON.stringify(exported).includes('fake-rotated-refresh'));
+  const imported = transfer.parseModelConfig([{ name: 'models.json', data: Buffer.from(JSON.stringify(exported)) }]);
+  assert.ok(imported.warnings.includes('chatgpt_reconnect_required'));
+  assert.ok(imported.models.every(item => item.auth !== 'chatgpt'));
   const reconnect = service.beginChatGptAuthorization(101, 'http://127.0.0.1:1455/auth/callback', connection.id);
   const reauthorize = new URL(reconnect.authorizeUrl);
   assert.equal(reauthorize.searchParams.get('client_id'), 'oaiapp_test');
@@ -151,6 +227,7 @@ try {
   assert.equal(service.listChatGptConnections().length, 0);
   console.log('ChatGPT OAuth and Responses tests passed');
 } finally {
+  for (const timer of intervals) clearInterval(timer);
   globalThis.fetch = originalFetch;
   db.close();
   fs.rmSync(dir, { recursive: true, force: true });
