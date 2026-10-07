@@ -1,4 +1,6 @@
 import { getUserById } from './chats.js';
+import { withModelActor, currentModelActor } from './model-access.js';
+import { withChatGptActor } from './chatgpt-connections.js';
 import { ensureUtilityAiQuota, resolveManualModel, type ReasoningLevel } from './ai.js';
 import { getPlanLimits } from './plan-limits.js';
 import { calculateChargedTokens, chargeTokens, checkQuota } from './token-quota.js';
@@ -118,7 +120,12 @@ const chargeAgentCall = (userId: number, agentName: string, call: TokenUsageCall
  * Runs one independent agent with an explicit prompt and explicit tool set.
  * It does not create a chat, load chat history, or inherit Chatter's tool list.
  */
-export const runAgent = async (params: RunAgentParams): Promise<RunAgentResult> => {
+export const runAgent = (params: RunAgentParams): Promise<RunAgentResult> => {
+  const user = getUserById(params.userId);
+  const actor = currentModelActor() ?? { userId: params.userId, isAdmin: user?.is_admin === 1 || user?.role === 'admin' };
+  return withModelActor(actor, () => withChatGptActor(actor.isAdmin, () => runAgentInternal(params)));
+};
+const runAgentInternal = async (params: RunAgentParams): Promise<RunAgentResult> => {
   const user = getUserById(params.userId);
   if (!user) throw new Error('user_not_found');
   const preferredModelId = params.preferredModel !== undefined

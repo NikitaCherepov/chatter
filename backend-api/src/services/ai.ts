@@ -3,6 +3,7 @@ import dotenv from 'dotenv';
 import { getModelSettings, modelApiKey, type ConfiguredModel } from './model-settings.js';
 import { createChatGptClient, chatGptConnectionForClient, chatGptCompletion, CHATGPT_REASONING_LEVELS } from './chatgpt-responses.js';
 import { getChatGptConnection, withChatGptActor } from './chatgpt-connections.js';
+import { withModelActor, currentModelActor, canUseModel, assertModelAccess, registerModelAccessClient } from './model-access.js';
 import nodeFetch from 'node-fetch';
 import { ProxyAgent } from 'proxy-agent';
 import { Readable } from 'node:stream';
@@ -416,8 +417,8 @@ const resolveConfiguredModelContextLimit = (uniqueIds: Array<string | null | und
   return limits.length ? Math.min(...limits) : null;
 };
 
-export const getModelsCatalog = (isAdmin = false) => MANUAL_MODELS
-  .filter(m => isAdmin || !m.adminOnly)
+export const getModelsCatalog = (isAdmin = false, userId?: number) => MANUAL_MODELS
+  .filter(m => canUseModel(m.id, { userId: userId ?? currentModelActor()?.userId, isAdmin }, m.client))
   .map(m => ({
   id: m.id,
   name: m.name,
@@ -435,9 +436,9 @@ export const getModelsCatalog = (isAdmin = false) => MANUAL_MODELS
   context_length: getModelOverride(m.id)?.context_length ?? null,
 }));
 
-export const resolveManualModel = (modelId: string, isAdmin = false): ManualModelEntry | undefined => {
+export const resolveManualModel = (modelId: string, isAdmin = false, userId?: number): ManualModelEntry | undefined => {
   const model = MANUAL_MODELS_MAP.get(modelId);
-  if (!model || (model.adminOnly && !isAdmin)) return undefined;
+  if (!model || !canUseModel(model.id, userId !== undefined ? { userId, isAdmin } : currentModelActor() ?? { isAdmin }, model.client)) return undefined;
   return model;
 };
 
@@ -496,11 +497,15 @@ export function refreshConfiguredModels() {
     if (m.auth !== 'chatgpt') return Boolean(m.apiKeyId);
     try { return Boolean(m.chatGptConnectionId && getChatGptConnection(m.chatGptConnectionId)); } catch { return false; }
   };
-  const configuredClient = (m: ConfiguredModel) => m.auth === 'chatgpt' ? createChatGptClient(m.chatGptConnectionId!) : createOpenAIClient(modelApiKey(m.apiKeyId), m.baseUrl, m.proxyUrl || '');
+  const configuredClient = (m: ConfiguredModel, route: string) => {
+    const client = m.auth === 'chatgpt' ? createChatGptClient(m.chatGptConnectionId!) : createOpenAIClient(modelApiKey(m.apiKeyId), m.baseUrl, m.proxyUrl || '');
+    registerModelAccessClient(client, m.id, route);
+    return client;
+  };
   const settings = getModelSettings();
   const providers = (models: ConfiguredModel[], prefix: string): LiteProvider[] => models.filter(m => m.model && usable(m)).map((m, i) => ({
     name: `${prefix}-${i + 1}`, baseURL: m.baseUrl,
-    client: configuredClient(m),
+    client: configuredClient(m, prefix),
     modelChain: [m.model], uniqueIds: [m.uniqueId],
   }));
   const pro = providers(settings.proModels, 'pro');
@@ -508,7 +513,7 @@ export function refreshConfiguredModels() {
   const vision = settings.visionModel.model ? providers([settings.visionModel], 'vision-pro') : pro;
   const manual: ManualModelEntry[] = settings.manualModels.filter(usable).map(m => ({
     id: m.uniqueId, apiModelName: m.model, name: m.name || m.model, description: m.description || '',
-    client: configuredClient(m), baseURL: m.baseUrl,
+    client: configuredClient(m, 'manual'), baseURL: m.baseUrl,
     supportsVision: Boolean(m.supportsVision), supportsTools: m.supportsTools !== false, adminOnly: Boolean(m.adminOnly) || (m.auth === 'chatgpt' && !getChatGptConnection(m.chatGptConnectionId!).shared),
   }));
   PRO_PROVIDERS = pro;
@@ -1186,6 +1191,7 @@ const createCompletionWithModelFallback = async (
   for (let modelIndex = 0; modelIndex < modelChain.length; modelIndex += 1) {
     const model = modelChain[modelIndex];
     const currentUniqueId = uniqueIds[modelIndex] || null;
+    if (!canUseModel(currentUniqueId, undefined, client)) { lastError = new Error('model_access_denied'); failedModels.push(model); continue; }
     const override = currentUniqueId ? getModelOverride(currentUniqueId) : null;
     let openRouterSlug = override?.openrouter_provider_slug ?? null;
     // Guard so auto-switch retries a live request at most once per model.
@@ -1303,6 +1309,7 @@ const createCompletionWithProProviderFallback = async (requestBody: Record<strin
   const failedModels: string[] = [];
 
   for (const provider of PRO_PROVIDERS) {
+    if (provider.uniqueIds.length && provider.uniqueIds.every(id => !canUseModel(id, undefined, provider.client))) continue;
     try {
       console.warn('[ai] trying pro provider', {
         provider: provider.name,
@@ -1353,6 +1360,7 @@ const createCompletionWithLiteProviderFallback = async (requestBody: Record<stri
   const failedModels: string[] = [];
 
   for (const provider of LITE_PROVIDERS) {
+    if (provider.uniqueIds.length && provider.uniqueIds.every(id => !canUseModel(id, undefined, provider.client))) continue;
     try {
       console.warn('[ai] trying lite provider', {
         provider: provider.name,
@@ -1482,7 +1490,12 @@ export const chargeUtilityAiCompletion = (
  * Lightweight AI call — single-turn, no tools and no streaming.
  * When accounting is supplied, checks and charges the user's common quota.
  */
-export const callLiteAi = async (
+export const callLiteAi = (...args: Parameters<typeof callLiteAiInternal>): Promise<string> => {
+  const user = args[2]?.accounting ? getUserById(args[2].accounting.userId) : null;
+  const actor = currentModelActor() ?? { userId: user?.id, isAdmin: user?.is_admin === 1 || user?.role === 'admin' };
+  return withModelActor(actor, () => withChatGptActor(actor.isAdmin, () => callLiteAiInternal(...args)));
+};
+const callLiteAiInternal = async (
   systemPrompt: string,
   userPrompt: string,
   options?: { max_tokens?: number; temperature?: number; accounting?: UtilityAiAccounting },
@@ -3654,6 +3667,7 @@ export const runCompletion = async (mode: 'pro' | 'lite' | 'vision-pro' | 'visio
   requestPayload = { ...requestPayload, messages: prepareProtectionMessages(requestPayload.messages) };
   // If the user selected a specific model — send directly, ignoring mode
   if (manualModel) {
+    assertModelAccess(manualModel.id, manualModel.client);
     try {
       const completion = await createCompletionWithModelFallback(manualModel.client, [manualModel.apiModelName], requestPayload, 'manual', manualModel.baseURL, signal, reasoningLevel, modelSettings, streamCallbacks, [manualModel.id]);
       return {
@@ -3688,6 +3702,7 @@ export const runCompletion = async (mode: 'pro' | 'lite' | 'vision-pro' | 'visio
     for (const provider of providers) {
       try {
         // Vision-запросы не стримим (анализ фото — не диалог)
+        if (provider.uniqueIds.length && provider.uniqueIds.every(id => !canUseModel(id, undefined, provider.client))) continue;
         const completion = await createCompletionWithModelFallback(provider.client, provider.modelChain, requestPayload, provider.name, provider.baseURL, signal, reasoningLevel, undefined, undefined, provider.uniqueIds);
         if (completion.failedModels.length) {
           failedModels.push(...completion.failedModels.map(m => `${provider.name}:${m}`));
@@ -6921,7 +6936,7 @@ export const sendMessageThroughAi = (...args: Parameters<typeof sendMessageThrou
   const mode = getChatMemorySettings(account.id, chatId).prompt_injection_protection;
   let disabledGlobally = false;
   try { disabledGlobally = JSON.parse(account.feature_flags || '{}').disable_prompt_injection_protection === true; } catch { /* safe default */ }
-  return withChatGptActor(account.is_admin === 1 || account.role === 'admin', () => withPromptInjectionProtection(resolvePromptInjectionProtection(mode, disabledGlobally), () => sendMessageThroughAiInternal(...args)));
+  return withModelActor({ userId: account.id, isAdmin: account.is_admin === 1 || account.role === 'admin' }, () => withChatGptActor(account.is_admin === 1 || account.role === 'admin', () => withPromptInjectionProtection(resolvePromptInjectionProtection(mode, disabledGlobally), () => sendMessageThroughAiInternal(...args))));
 };
 
 const sendMessageThroughAiInternal = async (
@@ -7047,6 +7062,7 @@ const sendMessageThroughAiInternal = async (
 
   // Резолв preferred model: из options (явный запрос) или из профиля юзера
   const isAdmin = user.is_admin === 1;
+  if (preferredModelId && MANUAL_MODELS_MAP.has(preferredModelId)) assertModelAccess(preferredModelId, MANUAL_MODELS_MAP.get(preferredModelId)!.client);
   let manualModel = preferredModelId ? resolveManualModel(preferredModelId, isAdmin) : undefined;
   let modelSelectionReset = false;
   if (preferredModelId && !manualModel) {
@@ -7065,6 +7081,7 @@ const sendMessageThroughAiInternal = async (
   // disable them (OpenRouter capability is detected by the admin panel).
   const currentModelSupportsTools = manualModel?.supportsTools !== false;
   const subagentModelId = user.subagent_mode && user.subagent_mode !== 'auto' ? user.subagent_mode : null;
+  if (subagentModelId && MANUAL_MODELS_MAP.has(subagentModelId)) assertModelAccess(subagentModelId, MANUAL_MODELS_MAP.get(subagentModelId)!.client);
   const subagentManualModel = subagentModelId ? resolveManualModel(subagentModelId, isAdmin) : undefined;
   if (subagentModelId && !subagentManualModel) {
     modelSelectionReset = true;

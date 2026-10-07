@@ -2708,6 +2708,9 @@ async function handleRequest(req, res) {
       method: req.method, ...(body ? { body: JSON.stringify(body) } : {}),
     }));
   }
+  if (pathname === '/api/model-access-users' && req.method === 'GET') {
+    return sendJson(res, 200, await backendInternalRequest('/internal/admin/model-access-users'));
+  }
   if (pathname === '/api/model-settings' && req.method === 'PUT') {
     const body = await readJson(req, 2 * 1024 * 1024);
     return sendJson(res, 200, await backendInternalRequest('/internal/admin/model-settings', { method: 'PUT', body: JSON.stringify(body) }));

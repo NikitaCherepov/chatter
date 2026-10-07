@@ -6,6 +6,7 @@ import { listChatGptConnections, beginChatGptAuthorization, completeChatGptAutho
 import { chatGptCompletion } from './services/chatgpt-responses.js';
 import { exportModelConfig, parseModelArchive, parseModelConfig, importModelConfig } from './services/model-config-transfer.js';
 import { refreshConfiguredModels } from './services/ai.js';
+import { withModelActor } from './services/model-access.js';
 import fs from 'fs';
 import crypto from 'node:crypto';
 import { getEncryptionKey } from './utils/encryption.js';
@@ -749,7 +750,7 @@ app.post('/internal/ai/admin-outreach', internalAuth, async (req, res) => {
 app.get('/internal/models', internalAuth, (req, res) => {
   const userId = resolveInternalAccountId(req.query?.user_id);
   const user = Number.isFinite(userId) && userId > 0 ? getUserById(userId) : undefined;
-  const catalog = getModelsCatalog(user?.is_admin === 1);
+  const catalog = getModelsCatalog(user?.is_admin === 1 || user?.role === 'admin', user?.id);
   return res.json({ models: catalog });
 });
 
@@ -758,7 +759,7 @@ app.get('/internal/users/:id/preferred-model', internalAuth, (req, res) => {
   if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'bad_user_id' });
   const user = getUserById(userId);
   if (!user) return res.status(404).json({ error: 'user_not_found' });
-  const catalog = getModelsCatalog(user.is_admin === 1);
+  const catalog = getModelsCatalog(user.is_admin === 1 || user.role === 'admin', user.id);
   return res.json({ models: catalog, preferred_model: user.preferred_model || null });
 });
 
@@ -770,7 +771,7 @@ app.put('/internal/users/:id/preferred-model', internalAuth, (req, res) => {
   const modelId = req.body?.model_id ?? null;
   if (modelId !== null && typeof modelId !== 'string') return res.status(400).json({ error: 'bad_model_id' });
   if (modelId !== null) {
-    const catalog = getModelsCatalog(user.is_admin === 1);
+    const catalog = getModelsCatalog(user.is_admin === 1 || user.role === 'admin', user.id);
     if (!catalog.some(m => m.id === modelId)) return res.status(400).json({ error: 'model_not_found' });
   }
   db.prepare('UPDATE users SET preferred_model = ? WHERE id = ?').run(modelId, userId);
@@ -1264,6 +1265,11 @@ app.get('/api/v1/audio/:filename', (req: AuthedRequest, res) => {
 });
 
 app.use('/api/v1', authMiddleware);
+app.use('/api/v1', (req: AuthedRequest, _res, next) => {
+  const user = getUserById(resolveAccountId(req.authUserId!));
+  const isAdmin = user?.is_admin === 1 || user?.role === 'admin';
+  return withModelActor({ userId: user?.id, isAdmin }, () => withChatGptActor(isAdmin, next));
+});
 
 app.get('/api/v1/transcription/status', async (_req: AuthedRequest, res) => {
   try {
@@ -4199,7 +4205,7 @@ app.post('/api/v1/prompts/generate', async (req: AuthedRequest, res) => {
   try {
     const requestedModelId = typeof req.body?.preferred_model === 'string' ? req.body.preferred_model.trim() : '';
     const preferredModelId = requestedModelId || user?.preferred_model || null;
-    const manualModel = preferredModelId ? resolveManualModel(preferredModelId, user?.is_admin === 1) : undefined;
+    const manualModel = preferredModelId ? resolveManualModel(preferredModelId, user?.is_admin === 1 || user?.role === 'admin', user?.id) : undefined;
     console.log('[prompts/generate] model selection', {
       authUserId: req.authUserId,
       accountId: userId,
@@ -5792,6 +5798,9 @@ app.get('/api/v1/admin/chatgpt/connections', chatGptAdmin, chatGptAction(() => (
 app.post('/api/v1/admin/chatgpt/begin', chatGptAdmin, chatGptAction(req => beginChatGptAuthorization(accountIdFromRequest(req), req.body?.redirectUri, req.body?.connectionId)));
 app.post('/api/v1/admin/chatgpt/complete', chatGptAdmin, chatGptAction(req => completeChatGptAuthorization(accountIdFromRequest(req), req.body)));
 app.get('/internal/admin/chatgpt/connections', internalAuth, chatGptAction(() => ({ connections: listChatGptConnections() })));
+app.get('/internal/admin/model-access-users', internalAuth, (_req, res) => {
+  return res.json({ users: db.prepare('SELECT id, name, role, is_admin FROM users ORDER BY name, id').all() });
+});
 app.patch('/internal/admin/chatgpt/connections/:id', internalAuth, chatGptAction(req => { const connections = renameChatGptConnection(Number(req.params.id), req.body?.name, req.body?.shared); refreshConfiguredModels(); broadcastModelCatalogUpdated(); return { connections }; }));
 app.delete('/internal/admin/chatgpt/connections/:id', internalAuth, chatGptAction(async req => { const value = await disconnectChatGptConnection(Number(req.params.id)); refreshConfiguredModels(); broadcastModelCatalogUpdated(); return value; }));
 app.get('/internal/admin/chatgpt/connections/:id/models', internalAuth, chatGptAction(async req => ({ models: await listChatGptModels(Number(req.params.id)) })));
@@ -6222,7 +6231,7 @@ app.get('/internal/admin/users/:id/usage', internalAuth, (req, res) => {
 app.get('/api/v1/models', (req: AuthedRequest, res) => {
   const userId = accountIdFromRequest(req);
   const user = getUserById(userId);
-  const catalog = getModelsCatalog(user?.is_admin === 1);
+  const catalog = getModelsCatalog(user?.is_admin === 1 || user?.role === 'admin', user?.id);
   const availableIds = new Set(catalog.map(model => model.id));
   let modelSelectionReset = false;
   let preferredModel = user?.preferred_model || null;
@@ -6261,7 +6270,7 @@ app.put('/api/v1/user/preferred-model', (req: AuthedRequest, res) => {
   // Валидация: если не null, модель должна быть в каталоге
   if (modelId !== null) {
     const user = getUserById(userId);
-    const catalog = getModelsCatalog(user?.is_admin === 1);
+    const catalog = getModelsCatalog(user?.is_admin === 1 || user?.role === 'admin', user?.id);
     if (!catalog.some(m => m.id === modelId)) {
       return res.status(400).json({ error: 'model_not_found' });
     }
@@ -6286,7 +6295,7 @@ app.put('/api/v1/user/subagent-model', (req: AuthedRequest, res: any) => {
   }
   if (modelId !== null) {
     const user = getUserById(userId);
-    const catalog = getModelsCatalog(user?.is_admin === 1);
+    const catalog = getModelsCatalog(user?.is_admin === 1 || user?.role === 'admin', user?.id);
     if (!catalog.some(m => m.id === modelId)) {
       return res.status(400).json({ error: 'model_not_found' });
     }

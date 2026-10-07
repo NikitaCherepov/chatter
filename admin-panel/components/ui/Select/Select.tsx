@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useMemo, type ReactNode } from 'react';
 import styles from './Select.module.css';
+import { Checkbox } from '../Checkbox/Checkbox';
 
 /** Limited set of badge colors — each comes from a CSS variable. */
 export type BadgeColor = 'success' | 'error' | 'info' | 'warning';
@@ -45,6 +46,8 @@ type Props = {
   onSearchChange?: (search: string) => void;
   /** Optional label to show for the current value when it is not in `options`. */
   valueFallbackLabel?: string;
+  selectedValues?: string[];
+  onSelectionChange?: (values: string[]) => void;
 };
 
 /**
@@ -71,6 +74,8 @@ export function Select({
   'aria-label': ariaLabel,
   onSearchChange,
   valueFallbackLabel,
+  selectedValues,
+  onSelectionChange,
 }: Props) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -92,7 +97,9 @@ export function Select({
     return options.find((o) => o.value === value) ?? null;
   }, [value, options]);
 
-  const selectedLabel = selectedOption
+  const selectedLabel = selectedValues
+    ? selectedValues.map(value => options.find(option => option.value === value)?.label || value).join(', ')
+    : selectedOption
     ? selectedOption.label
     : (valueFallbackLabel ?? (value ? value : placeholder ?? ''));
 
@@ -151,7 +158,7 @@ export function Select({
         type="button"
         aria-label={ariaLabel}
       >
-        {!value ? (
+        {!(selectedValues ? selectedValues.length : value) ? (
           <span className={styles.triggerPlaceholder}>{placeholder}</span>
         ) : (
           <span className={styles.triggerContent}>{selectedLabel}</span>
@@ -187,7 +194,12 @@ export function Select({
             </div>
           )}
           <div className={styles.list} style={{ maxHeight: `${maxVisibleItems * 44}px` }}>
-            {filtered.map((opt) => (
+            {filtered.map((opt) => selectedValues && onSelectionChange ? (
+              <div key={opt.value} className={`${styles.option} ${selectedValues.includes(opt.value) ? styles.optionActive : ''}`}>
+                <Checkbox checked={selectedValues.includes(opt.value)} disabled={opt.disabled} label={<>{opt.label}{opt.hint && <span className={styles.optionHint}> · {opt.hint}</span>}</>}
+                  onChange={checked => onSelectionChange(checked ? [...selectedValues, opt.value] : selectedValues.filter(value => value !== opt.value))} />
+              </div>
+            ) : (
               <button
                 key={opt.value}
                 className={`${styles.option} ${opt.value === value ? styles.optionActive : ''} ${opt.disabled ? styles.optionDisabled : ''}`}

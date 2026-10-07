@@ -35,6 +35,7 @@ import { AnimatedDetails } from './AnimatedDetails';
 import { DragGrip, ModelOverlaySummary, SortableModelsDnd } from './SortableModels';
 import styles from './ModelsPage.module.css';
 import { ChatGptModelFields } from './ChatGptModelFields';
+import { ModelAccessFields } from './ModelAccessFields';
 
 type CoefficientManager = {
   get?: (uniqueId: string | undefined | null) => number | undefined;
@@ -1116,6 +1117,7 @@ export function ProviderModelFields({
         </>
       )}
 
+      <ModelAccessFields model={model} onChange={onChange} />
       {/* API key: select from saved keys or create new */}
       {!isChatGpt && (() => {
         const selectOptions: SelectOption[] = [

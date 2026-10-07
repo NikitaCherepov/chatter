@@ -220,11 +220,6 @@ export function ManualModelListEditor({
                         label={t('models.manual.textOnly')}
                       />
                     )}
-                    <Toggle
-                      checked={model.adminOnly}
-                      onChange={(adminOnly) => update(index, { adminOnly })}
-                      label={t('models.manual.adminOnly')}
-                    />
                   </div>
                   <div className={styles.modelActions}>
                     <button

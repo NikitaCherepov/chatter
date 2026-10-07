@@ -1,4 +1,7 @@
 export type ProviderModelConfig = {
+  accessMode?: 'all' | 'admins' | 'selected';
+  allowedUserIds?: number[];
+  adminOnly?: boolean;
   auth?: 'api_key' | 'chatgpt';
   chatGptConnectionId?: number | null;
   id: string;

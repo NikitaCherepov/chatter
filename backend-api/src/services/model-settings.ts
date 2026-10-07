@@ -4,6 +4,7 @@ import { getEncryptionKey } from '../utils/encryption.js';
 import { getChatGptConnection } from './chatgpt-connections.js';
 
 export type ConfiguredModel = {
+  accessMode?: 'all' | 'admins' | 'selected'; allowedUserIds?: number[];
   auth?: 'api_key' | 'chatgpt'; chatGptConnectionId?: number | null;
   id: string; uniqueId: string; baseUrl: string; model: string; proxyUrl?: string;
   apiKeyId: number | null; apiKey?: string; hasApiKey?: boolean;
@@ -139,6 +140,12 @@ export function updateModelSettings(input: any): ModelSettings {
       if (!uniqueId || uniqueId.length > 200 || /[|;\r\n\0]/.test(uniqueId) || ids.has(uniqueId)) throw new Error('invalid_model_id');
       ids.add(uniqueId);
       const before = old.find(m => m.id === id);
+      const accessMode = item.accessMode === 'all' && item.adminOnly ? 'admins' : item.accessMode || (item.adminOnly ? 'admins' : 'all');
+      if (!['all', 'admins', 'selected'].includes(accessMode)) throw new Error('invalid_model_access_mode');
+      const rawUsers = item.allowedUserIds ?? [];
+      if (!Array.isArray(rawUsers) || rawUsers.length > 10000 || rawUsers.some((value: unknown) => !Number.isSafeInteger(value) || Number(value) <= 0)) throw new Error('invalid_model_allowed_users');
+      const allowedUserIds = [...new Set<number>(rawUsers)];
+      const access = { accessMode, allowedUserIds, adminOnly: accessMode === 'admins' };
       const baseUrl = String(item.baseUrl || '').trim();
       const model = String(item.model || '').trim();
       if (!baseUrl && !model && kind === 'vision') return emptyVision();
@@ -151,14 +158,15 @@ export function updateModelSettings(input: any): ModelSettings {
         const connection = getChatGptConnection(connectionId);
         if (!connection.shared && kind !== 'manual') throw new Error('chatgpt_enable_shared_access_for_auto_models');
         return { id, uniqueId, baseUrl: 'https://api.openai.com/v1', model, apiKeyId: null, auth: 'chatgpt' as const, chatGptConnectionId: connectionId,
-          name: String(item.name || model), description: String(item.description || ''), supportsVision: Boolean(item.supportsVision), supportsTools: item.supportsTools !== false, adminOnly: !connection.shared || Boolean(item.adminOnly) };
+          name: String(item.name || model), description: String(item.description || ''), supportsVision: Boolean(item.supportsVision), supportsTools: item.supportsTools !== false, ...access,
+          accessMode: !connection.shared && accessMode === 'all' ? 'admins' : accessMode, adminOnly: !connection.shared || accessMode === 'admins' };
       }
       if (item.apiKey?.trim()) apiKeyId = importModelKey(item.name || model, item.apiKey);
       if (!Number.isSafeInteger(apiKeyId) || !modelApiKey(apiKeyId)) throw new Error('api_key_required');
       const proxyUrl = String(item.proxyUrl || '');
       if (proxyUrl) { const proxy = new URL(proxyUrl); if (!['http:', 'https:', 'socks:', 'socks5:', 'socks4:', 'socks5h:'].includes(proxy.protocol)) throw new Error('invalid_proxy'); }
       return { id, uniqueId, baseUrl, model, apiKeyId, proxyUrl, name: String(item.name || model), description: String(item.description || ''),
-        supportsVision: Boolean(item.supportsVision), supportsTools: item.supportsTools !== false, adminOnly: Boolean(item.adminOnly) };
+        supportsVision: Boolean(item.supportsVision), supportsTools: item.supportsTools !== false, ...access };
     });
   };
   return db.transaction(() => {

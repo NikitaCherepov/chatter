@@ -137,6 +137,7 @@
     "auto": "auto"
   },
   "models": {
+    "access": {"label":"Model access","all":"Everyone","admins":"Administrators only","selected":"Selected users","users":"Allowed users","hint":"No users selected means no access. Administrators must also be selected.","admin":"Administrator","choose":"Select users","search":"Search by name or ID…","empty":"No users found","failed":"Could not load users"},
     "transfer": {
       "title": "Import and export",
       "subtitle": "Transfer saved model connections from Chatter or SillyTavern.",
