@@ -3,13 +3,54 @@
   gap: 8px;
   margin-bottom: 12px;
 }
-.viewToolbar { display: flex; justify-content: flex-end; margin-bottom: 10px; }
-.mapPanel { display: grid; gap: 10px; min-width: 0; }
-.mapToolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: var(--text-muted); font-size: 11px; }
-.mapToolbar > span:first-child { margin-right: auto; }
-.mapCanvas { height: clamp(260px, 42vh, 440px); min-width: 0; overflow: hidden; border: 1px solid var(--border-light); border-radius: 8px; background: #0c1420; }
-.compactMap { height: clamp(200px, 30vh, 280px); }
-.mapHint { color: var(--text-muted); font-size: 11px; line-height: 1.5; }
+.viewToolbar {
+  display: flex;
+  justify-content: flex-start;
+  margin-bottom: 10px;
+}
+.mapPanel {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+.mapToolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.mapToolbar > span:first-child {
+  margin-right: auto;
+}
+.mapLimit {
+  width: 160px;
+  max-width: 100%;
+}
+.mapLimit button {
+  min-height: 40px;
+  font-size: 14px;
+}
+.mapLimit > div > button {
+  padding: 10px 36px 10px 14px;
+}
+.mapCanvas {
+  height: clamp(260px, 42vh, 440px);
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  background: #0c1420;
+}
+.compactMap {
+  height: clamp(200px, 30vh, 280px);
+}
+.mapHint {
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
 .searchInputWrap {
   height: 38px;
   display: flex;
@@ -20,7 +61,9 @@
   border-radius: 7px;
   background: var(--bg-input);
 }
-.searchInputWrap:focus-within { border-color: var(--accent); }
+.searchInputWrap:focus-within {
+  border-color: var(--accent);
+}
 .searchInputWrap svg {
   width: 15px;
   height: 15px;
@@ -40,8 +83,14 @@
   font: inherit;
   font-size: 12px;
 }
-.searchInputWrap input::placeholder { color: var(--text-hint); }
-.searchControls { display: flex; align-items: center; gap: 8px; }
+.searchInputWrap input::placeholder {
+  color: var(--text-hint);
+}
+.searchControls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 .modeSwitch {
   display: inline-flex;
   padding: 2px;
@@ -51,29 +100,52 @@
 }
 .modeSwitch button,
 .searchButton {
-  height: 27px;
+  min-height: 36px;
   border: 0;
   border-radius: 5px;
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
   font: inherit;
-  font-size: 11px;
+  font-size: 13px;
 }
-.modeSwitch button { padding: 0 10px; }
-.modeSwitch button:hover { color: var(--text-body); }
-.modeSwitch .active { background: var(--bg-modal-hover); color: var(--text-primary); }
+.modeSwitch button {
+  padding: 0 14px;
+}
+.modeSwitch button:hover {
+  color: var(--text-body);
+}
+.modeSwitch .active {
+  background: var(--bg-modal-hover);
+  color: var(--text-primary);
+}
 .searchButton {
-  padding: 0 11px;
+  min-height: 40px;
+  padding: 8px 16px;
   border: 1px solid var(--border-input);
   background: var(--bg-input);
   color: var(--text-primary);
 }
-.searchButton:hover:not(:disabled) { background: var(--bg-modal-hover); }
-.searchButton:disabled { opacity: 0.5; cursor: default; }
-.counter { margin-left: auto; color: var(--text-hint); font-size: 10px; }
-.records { display: grid; gap: 8px; }
-.compactRecords { max-height: 220px; overflow-y: auto; }
+.searchButton:hover:not(:disabled) {
+  background: var(--bg-modal-hover);
+}
+.searchButton:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.counter {
+  margin-left: auto;
+  color: var(--text-hint);
+  font-size: 10px;
+}
+.records {
+  display: grid;
+  gap: 8px;
+}
+.compactRecords {
+  max-height: 220px;
+  overflow-y: auto;
+}
 .empty {
   padding: 20px;
   border: 1px dashed var(--border-light);
@@ -102,8 +174,15 @@
   cursor: pointer;
   text-align: left;
 }
-.recordBody:disabled { cursor: default; }
-.recordSource { display: block; color: var(--text-secondary); font-size: 10px; font-weight: 600; }
+.recordBody:disabled {
+  cursor: default;
+}
+.recordSource {
+  display: block;
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 600;
+}
 .recordText {
   display: block;
   margin-top: 4px;
@@ -113,8 +192,16 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-.compactRecords .recordText { font-size: 11px; line-height: 1.4; }
-.clamped { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
+.compactRecords .recordText {
+  font-size: 11px;
+  line-height: 1.4;
+}
+.clamped {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
 .chevron {
   position: absolute;
   top: 1px;
@@ -126,8 +213,14 @@
   stroke-width: 1.8;
   transition: transform 0.15s;
 }
-.chevronExpanded { transform: rotate(180deg); }
-.recordActions { display: flex; flex: 0 0 auto; gap: 3px; }
+.chevronExpanded {
+  transform: rotate(180deg);
+}
+.recordActions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 3px;
+}
 .recordActions button {
   width: 28px;
   height: 28px;
@@ -140,8 +233,13 @@
   color: var(--text-muted);
   cursor: pointer;
 }
-.recordActions button:hover { color: var(--text-body); background: var(--bg-modal-hover); }
-.recordActions .dangerButton:hover { color: var(--color-error); }
+.recordActions button:hover {
+  color: var(--text-body);
+  background: var(--bg-modal-hover);
+}
+.recordActions .dangerButton:hover {
+  color: var(--color-error);
+}
 .recordActions svg {
   width: 15px;
   height: 15px;
@@ -151,4 +249,6 @@
   stroke-linecap: round;
   stroke-linejoin: round;
 }
-.compactSearch .searchControls { flex-wrap: wrap; }
+.compactSearch .searchControls {
+  flex-wrap: wrap;
+}

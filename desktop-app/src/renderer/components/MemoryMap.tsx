@@ -117,7 +117,7 @@ export default function MemoryMap({ active, endpoint, matches, textQuery, compac
   return <div className={s.mapPanel}>
     <div className={s.mapToolbar}>
       <span>{t('memoryMap.total', { count: countQuery.data?.total ?? 0 })}</span>
-      <div style={{ width: 130, maxWidth: '100%' }}>
+      <div className={s.mapLimit}>
         <Select value={limit} onChange={setLimit} options={[100, 500, 1000, 2000, 5000].map(value => ({ value: String(value), label: t('memoryMap.limit', { count: value }) }))} />
       </div>
       <button type="button" className={s.searchButton} disabled={countQuery.isPending || countQuery.isError || !countQuery.data?.total || building} onClick={() => setConfirm(true)}>{t('memoryMap.build')}</button>
