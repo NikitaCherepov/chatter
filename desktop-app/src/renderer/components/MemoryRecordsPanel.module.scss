@@ -3,6 +3,13 @@
   gap: 8px;
   margin-bottom: 12px;
 }
+.viewToolbar { display: flex; justify-content: flex-end; margin-bottom: 10px; }
+.mapPanel { display: grid; gap: 10px; min-width: 0; }
+.mapToolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: var(--text-muted); font-size: 11px; }
+.mapToolbar > span:first-child { margin-right: auto; }
+.mapCanvas { height: clamp(260px, 42vh, 440px); min-width: 0; overflow: hidden; border: 1px solid var(--border-light); border-radius: 8px; background: #0c1420; }
+.compactMap { height: clamp(200px, 30vh, 280px); }
+.mapHint { color: var(--text-muted); font-size: 11px; line-height: 1.5; }
 .searchInputWrap {
   height: 38px;
   display: flex;

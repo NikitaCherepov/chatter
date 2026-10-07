@@ -1841,7 +1841,8 @@ app.get('/api/v1/memory/records', async (req: AuthedRequest, res: any) => {
     const targetId = spaceId ?? spaces.find(item => item.kind === 'general' && item.is_default === 1)?.id;
     const space = spaces.find(item => item.kind === 'general' && item.id === targetId);
     if (!space) throw new Error('memory_space_not_found');
-    return res.json({ records: await VectorMemoryService.listRecords(accountId, space) });
+    const records = await VectorMemoryService.listRecords(accountId, space);
+    return res.json({ records, ...(req.query.include_vectors === '1' ? { vectors: await VectorMemoryService.listMapVectors(accountId, space, records.map(record => record.id)) } : {}) });
   } catch (error: any) {
     return res.status(400).json({ error: error?.message || 'memory_records_load_failed' });
   }
@@ -1869,7 +1870,8 @@ app.get('/api/v1/chats/:chatId/memory-records', async (req: AuthedRequest, res: 
     if (!settings.chat_space_id) return res.json({ records: [] });
     const space = listMemorySpaces(accountId).find(item => item.kind === 'chat' && item.id === settings.chat_space_id && item.chat_id === chatId);
     if (!space) return res.json({ records: [] });
-    return res.json({ records: await VectorMemoryService.listRecords(accountId, space) });
+    const records = await VectorMemoryService.listRecords(accountId, space);
+    return res.json({ records, ...(req.query.include_vectors === '1' ? { vectors: await VectorMemoryService.listMapVectors(accountId, space, records.map(record => record.id)) } : {}) });
   } catch (error: any) {
     return res.status(error?.message === 'chat_not_found' ? 404 : 400).json({ error: error?.message || 'memory_records_load_failed' });
   }

@@ -2,6 +2,7 @@ import OpenAI from 'openai';
 import { Pinecone } from '@pinecone-database/pinecone';
 import { randomUUID } from 'node:crypto';
 import { db } from '../db.js';
+import { averageMemoryVectors } from './memory-map-vectors.js';
 import { resolveAccountId } from './accounts.js';
 import { getVectorMemoryRuntimeSettings, getVectorMemoryStorage } from './vector-memory-settings.js';
 import { beginVectorMemoryWrite, isVectorMemoryMigrationRunning } from './vector-memory-reembedding.js';
@@ -446,6 +447,43 @@ export class VectorMemoryService {
         created_at: timestamp, updated_at: timestamp, deleted_at: null,
       };
     }).sort((left, right) => right.created_at - left.created_at);
+  }
+
+  static async listMapVectors(userId: number, space: MemorySpace, recordIds: string[]) {
+    const accountId = resolveAccountId(Math.floor(userId));
+    if (space.user_id !== accountId) throw new Error('memory_space_not_found');
+    const allowed = new Set(recordIds);
+    const chunks: Array<{ record_id: string; values: number[]; embedding_model: string }> = [];
+    if (getVectorMemoryStorage() === 'qdrant') {
+      const ids = recordIds.flatMap(id => getRecordChunks(accountId, id)
+        .filter(chunk => chunk.memory_space_id === space.id).map(chunk => chunk.id));
+      const vectors = await fetchQdrantVectors(accountId, space.id, ids);
+      for (const vector of vectors) {
+        const recordId = `${vector.metadata?.record_id || vector.id.match(/^(.*)_chunk_\d+$/)?.[1] || vector.id}`;
+        if (allowed.has(recordId)) chunks.push({ record_id: recordId, values: vector.values, embedding_model: `${vector.metadata?.embedding_model || 'legacy'}` });
+      }
+    } else {
+      const seen = new Set<string>();
+      for (const namespace of [...new Set(namespacesForSpace(accountId, space))]) {
+        const scoped = getPineconeIndex().namespace(namespace);
+        let paginationToken: string | undefined;
+        do {
+          const page = await scoped.listPaginated({ limit: 100, ...(paginationToken ? { paginationToken } : {}) });
+          const ids = (page.vectors || []).map(item => `${item.id || ''}`).filter(id => allowed.has(id.match(/^(.*)_chunk_\d+$/)?.[1] || id));
+          if (ids.length) {
+            const fetched = await scoped.fetch(ids);
+            for (const id of ids) {
+              const vector = fetched.records?.[id];
+              if (!vector?.values?.length || seen.has(id)) continue;
+              seen.add(id);
+              chunks.push({ record_id: id.match(/^(.*)_chunk_\d+$/)?.[1] || id, values: vector.values, embedding_model: `${vector.metadata?.embedding_model || 'legacy'}` });
+            }
+          }
+          paginationToken = page.pagination?.next || undefined;
+        } while (paginationToken);
+      }
+    }
+    return averageMemoryVectors(chunks);
   }
 
   static async saveFactBatched(

@@ -253,6 +253,7 @@ export function GlobalMemorySettings() {
         <MemoryRecordsPanel
           records={records}
           semanticEndpoint="/api/v1/memory/records/search"
+          vectorEndpoint={`/api/v1/memory/records?space_id=${encodeURIComponent(selectedId)}&include_vectors=1`}
           semanticBody={{ space_id: Number(selectedId) }}
           emptyLabel={t('chat.memory.globalSettings.empty')}
           onEdit={record => {

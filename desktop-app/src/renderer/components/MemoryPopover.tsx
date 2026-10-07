@@ -335,6 +335,7 @@ export function MemoryPopover({ chatId }: { chatId: number }) {
                   <MemoryRecordsPanel
                     records={records}
                     semanticEndpoint={`/api/v1/chats/${chatId}/memory-records/search`}
+                    vectorEndpoint={`/api/v1/chats/${chatId}/memory-records?include_vectors=1`}
                     compact
                     emptyLabel={t('chat.memory.empty')}
                     onEdit={record => {

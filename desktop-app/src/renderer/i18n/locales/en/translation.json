@@ -1,4 +1,20 @@
 {
+  "memoryMap": {
+    "found": "Found: {{count}}",
+    "refresh": "Refresh",
+    "view": "Memory view",
+    "list": "List",
+    "map": "3D",
+    "count": "On map: {{shown}} of {{total}} loaded memories",
+    "reset": "Reset view",
+    "loading": "Preparing memory map…",
+    "failed": "Could not load the map. The memory list is still available.",
+    "retry": "Retry",
+    "webgl": "3D is unavailable on this device. Use the list instead.",
+    "noVectors": "No stored vectors found for the loaded memories.",
+    "help": "Drag to rotate, scroll to zoom, click a point to open a memory. Colors represent sources; search highlights results. This is an approximate PCA projection, not exact search distances.",
+    "separateSpaces": "Different embedding models appear in separate clouds; distances between them cannot be compared."
+  },
   "chatgpt": {
     "access": "Access",
     "sharedLabel": "Allow other users to use this connection",

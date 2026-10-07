@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import * as api from '../lib/api';
 import s from './MemoryRecordsPanel.module.scss';
+const MemoryMap = lazy(() => import('./MemoryMap'));
 
 export type MemoryRecord = {
   id: string;
@@ -17,6 +18,7 @@ type SemanticResult = { groups?: Array<{ record_id: string }> };
 export function MemoryRecordsPanel({
   records,
   semanticEndpoint,
+  vectorEndpoint,
   semanticBody,
   compact = false,
   emptyLabel,
@@ -25,6 +27,7 @@ export function MemoryRecordsPanel({
 }: {
   records: MemoryRecord[];
   semanticEndpoint: string;
+  vectorEndpoint: string;
   semanticBody?: Record<string, unknown>;
   compact?: boolean;
   emptyLabel: string;
@@ -36,8 +39,16 @@ export function MemoryRecordsPanel({
   const [mode, setMode] = useState<'text' | 'semantic'>('text');
   const [semanticIds, setSemanticIds] = useState<string[] | null>(null);
   const [searching, setSearching] = useState(false);
+  const [view, setView] = useState<'list' | 'map'>('list');
+  const [mapOpened, setMapOpened] = useState(false);
+  const searchVersion = useRef(0);
 
-  useEffect(() => setSemanticIds(null), [semanticEndpoint, JSON.stringify(semanticBody)]);
+  useEffect(() => {
+    searchVersion.current++;
+    setSemanticIds(null);
+    setSearching(false);
+    return () => { searchVersion.current++; };
+  }, [semanticEndpoint, JSON.stringify(semanticBody), query, mode]);
 
   const visibleRecords = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase();
@@ -54,21 +65,28 @@ export function MemoryRecordsPanel({
     const normalized = query.trim();
     if (!normalized || searching) return;
     setSearching(true);
+    const version = ++searchVersion.current;
     try {
       const result = await api.apiFetch<SemanticResult>(semanticEndpoint, {
         method: 'POST',
         body: JSON.stringify({ ...semanticBody, query: normalized }),
       });
-      setSemanticIds((result.groups || []).map(group => group.record_id));
+      if (version === searchVersion.current) setSemanticIds((result.groups || []).map(group => group.record_id));
     } catch {
-      toast.error(t('chat.memory.search.failed'));
+      if (version === searchVersion.current) toast.error(t('chat.memory.search.failed'));
     } finally {
-      setSearching(false);
+      if (version === searchVersion.current) setSearching(false);
     }
   };
 
   return (
     <>
+      <div className={s.viewToolbar}>
+        <div className={s.modeSwitch} aria-label={t('memoryMap.view')}>
+          <button type="button" aria-pressed={view === 'list'} className={view === 'list' ? s.active : ''} onClick={() => setView('list')}>{t('memoryMap.list')}</button>
+          <button type="button" aria-pressed={view === 'map'} className={view === 'map' ? s.active : ''} onClick={() => { setMapOpened(true); setView('map'); }}>{t('memoryMap.map')}</button>
+        </div>
+      </div>
       <div className={`${s.search} ${compact ? s.compactSearch : ''}`}>
         <div className={s.searchInputWrap}>
           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
@@ -106,17 +124,22 @@ export function MemoryRecordsPanel({
           <span className={s.counter}>{query.length}/300</span>
         </div>
       </div>
-      <div className={`${s.records} ${compact ? s.compactRecords : ''}`}>
+      {mapOpened && <Suspense fallback={view === 'map' ? <div className={s.empty}>{t('memoryMap.loading')}</div> : null}>
+        <MemoryMap active={view === 'map'} endpoint={vectorEndpoint} records={records}
+          matches={query.trim() && (mode === 'text' || semanticIds !== null) ? new Set(visibleRecords.map(record => record.id)) : null}
+          compact={compact} onEdit={onEdit} onDelete={onDelete} />
+      </Suspense>}
+      {view === 'list' && <div className={`${s.records} ${compact ? s.compactRecords : ''}`}>
         {visibleRecords.length === 0 && <div className={s.empty}>{query.trim() ? t('chat.memory.search.noResults') : emptyLabel}</div>}
         {visibleRecords.map(record => (
           <MemoryRecordCard key={record.id} record={record} compact={compact} onEdit={onEdit} onDelete={onDelete} />
         ))}
-      </div>
+      </div>}
     </>
   );
 }
 
-function MemoryRecordCard({
+export function MemoryRecordCard({
   record,
   compact,
   onEdit,
