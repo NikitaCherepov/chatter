@@ -792,7 +792,7 @@
     "rejectWithCommentCancelled": "Zamítnutí s komentářem zrušeno. Výše uvedená tlačítka pro potvrzení zůstávají aktivní.",
     "rejectedWithComment": "❌ Zamítnuto s komentářem.",
     "rejectFailedExpiredOrProcessed": "⚠️ Akci nelze zamítnout (potvrzení mohlo vypršet nebo již bylo zpracováno).",
-    "voiceTooLarge": "⚠️ Hlasová zpráva je příliš velká ({{value}}). Maximum: 10 MB.",
+    "voiceTooLarge": "⚠️ Hlasová zpráva je příliš velká ({{value}}). Maximum: 30 MB.",
     "transcribingAudioToText": "🎙 Přepisuji audio na text...",
     "voiceNotRecognized": "🗣 Nerozuměl jsem.",
     "voiceRecognized": "🗣 Rozpoznáno:\n{{text}}",

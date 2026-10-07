@@ -14,7 +14,7 @@ const parsePositiveInteger = (value: string | undefined, fallback: number) => {
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback;
 };
 
-const getMaxAudioBytes = () => parsePositiveInteger(process.env.VOICE_MAX_AUDIO_MB, 10) * 1024 * 1024;
+const getMaxAudioBytes = () => parsePositiveInteger(process.env.VOICE_MAX_AUDIO_MB, 30) * 1024 * 1024;
 
 const normalizeWhisperLanguage = (value: unknown) => {
   const normalized = `${value || ''}`.trim().toLowerCase().replace(/_/g, '-');

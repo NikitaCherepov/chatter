@@ -792,7 +792,7 @@
     "rejectWithCommentCancelled": "Yorumla reddetme iptal edildi. Yukarıdaki onay düğmeleri hâlâ etkin.",
     "rejectedWithComment": "❌ Yorumla reddedildi.",
     "rejectFailedExpiredOrProcessed": "⚠️ İşlem reddedilemedi (onay süresi dolmuş veya zaten işlenmiş olabilir).",
-    "voiceTooLarge": "⚠️ Ses mesajı çok büyük ({{value}}). Maksimum: 10 MB.",
+    "voiceTooLarge": "⚠️ Ses mesajı çok büyük ({{value}}). Maksimum: 30 MB.",
     "transcribingAudioToText": "🎙 Ses metne dönüştürülüyor...",
     "voiceNotRecognized": "🗣 Hiçbir şey anlayamadım.",
     "voiceRecognized": "🗣 Tanınan:\n{{text}}",

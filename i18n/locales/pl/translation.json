@@ -761,7 +761,7 @@
     "rejectWithCommentCancelled": "Odrzucenie z komentarzem anulowane. Przyciski potwierdzenia powyżej pozostają aktywne.",
     "rejectedWithComment": "❌ Odrzucono z komentarzem.",
     "rejectFailedExpiredOrProcessed": "⚠️ Nie można odrzucić akcji (potwierdzenie mogło wygasnąć lub zostać już przetworzone).",
-    "voiceTooLarge": "⚠️ Wiadomość głosowa jest zbyt duża ({{value}}). Maksymalny rozmiar: 10 MB.",
+    "voiceTooLarge": "⚠️ Wiadomość głosowa jest zbyt duża ({{value}}). Maksymalny rozmiar: 30 MB.",
     "transcribingAudioToText": "🎙 Transkrypcja audio na tekst...",
     "voiceNotRecognized": "🗣 Nie udało mi się nic odczytać.",
     "voiceRecognized": "🗣 Rozpoznano:\n{{text}}",

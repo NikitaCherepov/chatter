@@ -761,7 +761,7 @@
     "rejectWithCommentCancelled": "Rejeição com comentário cancelada. Os botões de confirmação acima permanecem ativos.",
     "rejectedWithComment": "❌ Rejeitado com comentário.",
     "rejectFailedExpiredOrProcessed": "⚠️ Não foi possível rejeitar a ação (a confirmação pode ter expirado ou já foi processada).",
-    "voiceTooLarge": "⚠️ A mensagem de voz é muito grande ({{value}}). Máximo: 10 MB.",
+    "voiceTooLarge": "⚠️ A mensagem de voz é muito grande ({{value}}). Máximo: 30 MB.",
     "transcribingAudioToText": "🎙 Transcrevendo áudio para texto...",
     "voiceNotRecognized": "🗣 Não consegui entender nada.",
     "voiceRecognized": "🗣 Reconhecido:\n{{text}}",

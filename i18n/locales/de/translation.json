@@ -761,7 +761,7 @@
     "rejectWithCommentCancelled": "Ablehnung mit Kommentar abgebrochen. Die Bestätigungsschaltflächen oben bleiben aktiv.",
     "rejectedWithComment": "❌ Mit Kommentar abgelehnt.",
     "rejectFailedExpiredOrProcessed": "⚠️ Aktion konnte nicht abgelehnt werden (die Bestätigung ist möglicherweise abgelaufen oder wurde bereits verarbeitet).",
-    "voiceTooLarge": "⚠️ Die Sprachnachricht ist zu groß ({{value}}). Maximum: 10 MB.",
+    "voiceTooLarge": "⚠️ Die Sprachnachricht ist zu groß ({{value}}). Maximum: 30 MB.",
     "transcribingAudioToText": "🎙 Audio wird in Text umgewandelt...",
     "voiceNotRecognized": "🗣 Ich konnte nichts erkennen.",
     "voiceRecognized": "🗣 Erkannt:\n{{text}}",

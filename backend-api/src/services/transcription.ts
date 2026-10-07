@@ -3,7 +3,7 @@ import { getPlanLimits } from './plan-limits.js';
 import { chargeTokens, checkQuota } from './token-quota.js';
 import { getTranscriptionRuntimeSettings } from './transcription-settings.js';
 
-const MAX_AUDIO_BYTES = 25 * 1024 * 1024;
+const MAX_AUDIO_BYTES = 30 * 1024 * 1024;
 let statusCache: { key: string; expiresAt: number; value: TranscriptionStatus } | null = null;
 
 export type TranscriptionStatus = {

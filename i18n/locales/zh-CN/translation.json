@@ -761,7 +761,7 @@
     "rejectWithCommentCancelled": "已取消带评论的拒绝。上方的确认按钮仍然有效。",
     "rejectedWithComment": "❌ 已拒绝并附评论。",
     "rejectFailedExpiredOrProcessed": "⚠️ 无法拒绝该操作（确认可能已过期或已被处理）。",
-    "voiceTooLarge": "⚠️ 语音消息过大（{{value}}）。最大：10 MB。",
+    "voiceTooLarge": "⚠️ 语音消息过大（{{value}}）。最大：30 MB。",
     "transcribingAudioToText": "🎙 正在将音频转录为文本...",
     "voiceNotRecognized": "🗣 我无法识别任何内容。",
     "voiceRecognized": "🗣 识别结果：\n{{text}}",

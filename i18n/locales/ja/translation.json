@@ -761,7 +761,7 @@
     "rejectWithCommentCancelled": "コメント付き拒否がキャンセルされました。上記の確認ボタンは引き続き有効です。",
     "rejectedWithComment": "❌ コメント付きで拒否されました。",
     "rejectFailedExpiredOrProcessed": "⚠️ アクションを拒否できませんでした（確認の有効期限が切れたか、すでに処理された可能性があります）。",
-    "voiceTooLarge": "⚠️ 音声メッセージが大きすぎます（{{value}}）。最大: 10 MB。",
+    "voiceTooLarge": "⚠️ 音声メッセージが大きすぎます（{{value}}）。最大: 30 MB。",
     "transcribingAudioToText": "🎙 音声をテキストに変換中...",
     "voiceNotRecognized": "🗣 聞き取れませんでした。",
     "voiceRecognized": "🗣 認識結果:\n{{text}}",

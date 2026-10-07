@@ -811,7 +811,7 @@
     "rejectWithCommentCancelled": "Отклонение с комментарием отменено. Кнопки подтверждения выше остаются активными.",
     "rejectedWithComment": "❌ Отклонено с комментарием.",
     "rejectFailedExpiredOrProcessed": "⚠️ Не удалось отклонить (возможно, подтверждение уже истекло или было обработано).",
-    "voiceTooLarge": "⚠️ Голосовое слишком большое ({{value}}). Максимум — 10 МБ.",
+    "voiceTooLarge": "⚠️ Голосовое слишком большое ({{value}}). Максимум — 30 МБ.",
     "transcribingAudioToText": "🎙 Перевариваю аудио в текст...",
     "voiceNotRecognized": "🗣 Ничего не расслышал.",
     "voiceRecognized": "🗣 Распознано:\n{{text}}",

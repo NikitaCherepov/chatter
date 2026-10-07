@@ -761,7 +761,7 @@
     "rejectWithCommentCancelled": "댓글과 함께 거부가 취소되었습니다. 위의 확인 버튼은 계속 활성 상태입니다.",
     "rejectedWithComment": "❌ 댓글과 함께 거부되었습니다.",
     "rejectFailedExpiredOrProcessed": "⚠️ 작업을 거부할 수 없습니다(확인이 만료되었거나 이미 처리되었을 수 있음).",
-    "voiceTooLarge": "⚠️ 음성 메시지가 너무 큽니다 ({{value}}). 최대: 10MB.",
+    "voiceTooLarge": "⚠️ 음성 메시지가 너무 큽니다 ({{value}}). 최대: 30MB.",
     "transcribingAudioToText": "🎙 오디오를 텍스트로 변환 중...",
     "voiceNotRecognized": "🗣 아무것도 알아들을 수 없었습니다.",
     "voiceRecognized": "🗣 인식됨:\n{{text}}",
