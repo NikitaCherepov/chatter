@@ -366,6 +366,12 @@
         "migrationComplete": "New collection is active. Vectors: {{count}}.",
         "settingsSaved": "Vector memory settings saved."
       },
+      "retrieval": {
+        "sectionTitle": "Memory search results",
+        "sectionIntro": "Shared default for searches with or without reranking.",
+        "limitLabel": "Maximum memories per search",
+        "limitHint": "1–20 distinct memories. Reranking evaluates up to 20 candidates. Users can override the bot's result count in their personal and chat settings."
+      },
       "reranking": {
         "sectionTitle": "Ranking model",
         "sectionIntro": "Reranks 20 vector candidates using their best matching fragments, then applies the relevance threshold.",

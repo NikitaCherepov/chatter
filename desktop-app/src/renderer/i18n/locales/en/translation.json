@@ -740,6 +740,14 @@
       "trigger": "Chat settings",
       "triggerTitle": "Chat settings",
       "headerTitle": "Chat settings",
+      "preferences": {
+        "defaultsHint": "Default for your chats. Individual chats can override it.",
+        "limitLabel": "Maximum memories per search",
+        "adminDefault": "Default — {{count}} (server)",
+        "chatDefault": "Automatic — {{count}}",
+        "limitHint": "For automatic memory and the bot's memory search tool.",
+        "limitHelp": "Counts distinct memories, not fragments. Chat settings override personal defaults, which override the server default. Reranking evaluates up to 20 candidates and filters results below the threshold. The bot can request fewer. More memories increase context and costs. Card searches in the interface do not use personal overrides."
+      },
       "automaticMemory": {
         "label": "Automatic memory",
         "hint": "Retrieve relevant memories before each reply.",

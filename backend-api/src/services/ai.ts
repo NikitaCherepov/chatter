@@ -20,6 +20,7 @@ import { getMailAccountsForUser, resolveEmailAttachmentsForUser, runEmailAttachm
 import { runCoreMemoryMerge } from './memory.js';
 import { VectorMemoryService } from './vector-memory.js';
 import { AUTOMATIC_MEMORY_HINT, retrieveAutomaticMemory } from './automatic-memory.js';
+import { resolveMemoryPreferences } from './memory-preferences.js';
 import { getChatMemorySettings, resolvePersonaForChat } from './memory-foundation.js';
 import { applyRoleplayRestrictions, isRoleplayToolAllowed } from './chat-roleplay.js';
 import { wrapUntrustedContent } from './web-reader.js';
@@ -8078,7 +8079,8 @@ User request: "${text}"`;
   }
 }
 
-  const automaticMemoryEnabled = chatMemorySettings.automatic_memory === 1
+  const memoryPreferences = resolveMemoryPreferences(toolUser.id, chatId);
+  const automaticMemoryEnabled = memoryPreferences.automaticMemory
     && chatMemorySettings.memory_mode !== 'off' && !isGuestMode;
   if (automaticMemoryEnabled) executionSystemPrompt += AUTOMATIC_MEMORY_HINT;
 
@@ -8144,6 +8146,7 @@ User request: "${text}"`;
   if (automaticMemoryEnabled) {
     const archive = await retrieveAutomaticMemory({
       userId: toolUser.id, billingUserId: user.id, chatId,
+      resultLimit: memoryPreferences.resultLimit,
       query: regenerateUserMessage?.content || text,
       signal: abortController.signal,
     });

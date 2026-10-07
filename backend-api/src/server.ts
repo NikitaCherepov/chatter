@@ -60,6 +60,7 @@ import {
 } from './services/transcription-settings.js';
 import { runPhotoAnalyzeTurn } from './services/photo.js';
 import { migratePendingAccountNamespaces, VectorMemoryService } from './services/vector-memory.js';
+import { getMemoryPreferences, updateMemoryPreferences, resolveMemoryPreferences } from './services/memory-preferences.js';
 import {
   getVectorMemoryApiKeyUsage,
   getVectorMemorySettings,
@@ -1745,9 +1746,26 @@ app.delete('/api/v1/memory/spaces/:spaceId', async (req: AuthedRequest, res: any
   }
 });
 
+app.get('/api/v1/user/memory-preferences', (req: AuthedRequest, res: any) => {
+  try { return res.json({ preferences: getMemoryPreferences(accountIdFromRequest(req)) }); }
+  catch (error: any) { return res.status(404).json({ error: error?.message || 'user_not_found' }); }
+});
+app.patch('/api/v1/user/memory-preferences', (req: AuthedRequest, res: any) => {
+  try {
+    const body = req.body || {};
+    return res.json({ preferences: updateMemoryPreferences(accountIdFromRequest(req), {
+      ...('automatic_memory' in body ? { automatic_memory: body.automatic_memory } : {}),
+      ...('result_limit' in body ? { result_limit: body.result_limit } : {}),
+    }) });
+  } catch (error: any) { return res.status(400).json({ error: error?.message || 'bad_memory_preferences' }); }
+});
+
+const publicChatMemorySettings = (userId: number, chatId: number) => ({
+  ...getChatMemorySettings(userId, chatId), effective: resolveMemoryPreferences(userId, chatId),
+});
 app.get('/api/v1/chats/:chatId/memory-settings', (req: AuthedRequest, res: any) => {
   try {
-    return res.json({ settings: getChatMemorySettings(accountIdFromRequest(req), Number(req.params.chatId)) });
+    return res.json({ settings: publicChatMemorySettings(accountIdFromRequest(req), Number(req.params.chatId)) });
   } catch (error: any) {
     return res.status(404).json({ error: error?.message || 'chat_not_found' });
   }
@@ -1774,8 +1792,10 @@ app.patch('/api/v1/chats/:chatId/memory-settings', (req: AuthedRequest, res: any
       ...('roleplay_mode' in body ? { roleplay_mode: body.roleplay_mode === true || body.roleplay_mode === 1 ? 1 : 0 } : {}),
       ...('prompt_injection_protection' in body ? { prompt_injection_protection: body.prompt_injection_protection } : {}),
       ...('automatic_memory' in body ? { automatic_memory: body.automatic_memory === true || body.automatic_memory === 1 ? 1 : 0 } : {}),
+      ...('automatic_memory_mode' in body ? { automatic_memory_mode: body.automatic_memory_mode } : {}),
+      ...('memory_result_limit' in body ? { memory_result_limit: body.memory_result_limit } : {}),
     });
-    return res.json({ settings });
+    return res.json({ settings: { ...settings, effective: resolveMemoryPreferences(accountIdFromRequest(req), Number(req.params.chatId)) } });
   } catch (error: any) {
     return res.status(error?.message === 'chat_not_found' ? 404 : 400).json({ error: error?.message || 'memory_settings_update_failed' });
   }
@@ -1990,7 +2010,7 @@ app.post('/api/v1/vector-memory/search', async (req: AuthedRequest, res) => {
   const topK = Number(req.body?.top_k);
 
   try {
-    const found = await VectorMemoryService.search(userId, query, Number.isFinite(topK) ? topK : 3);
+    const found = await VectorMemoryService.search(userId, query, Number.isFinite(topK) ? topK : undefined);
     return res.json(found);
   } catch (err: any) {
     const code = `${err?.message || 'vector_memory_search_failed'}`;

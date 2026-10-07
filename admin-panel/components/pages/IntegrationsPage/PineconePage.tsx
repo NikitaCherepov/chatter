@@ -438,6 +438,19 @@ export function PineconePage({ onBack }: {
 
       <section className={styles.fieldSection}>
         <div className={styles.sectionTitle}>
+          <h3>{t('integrations.pinecone.retrieval.sectionTitle')}</h3>
+          <p>{t('integrations.pinecone.retrieval.sectionIntro')}</p>
+        </div>
+        <div className={styles.fields}>
+          <FormField label={t('integrations.pinecone.retrieval.limitLabel')} hint={t('integrations.pinecone.retrieval.limitHint')}>
+            <Input type="number" min="1" max="20" step="1" value={draft.reranking.resultLimit}
+              onChange={event => setDraft({ ...draft, reranking: { ...draft.reranking, resultLimit: Number(event.target.value) } })} />
+          </FormField>
+        </div>
+      </section>
+
+      <section className={styles.fieldSection}>
+        <div className={styles.sectionTitle}>
           <h3>{t('integrations.pinecone.reranking.sectionTitle')}</h3>
           <p>{t('integrations.pinecone.reranking.sectionIntro')}</p>
         </div>
@@ -555,19 +568,6 @@ export function PineconePage({ onBack }: {
                     onChange={event => setDraft({
                       ...draft,
                       reranking: { ...draft.reranking, minScore: Number(event.target.value) },
-                    })}
-                  />
-                </FormField>
-                <FormField label={t('integrations.pinecone.reranking.resultLimitLabel')}>
-                  <Input
-                    type="number"
-                    min="1"
-                    max="20"
-                    step="1"
-                    value={draft.reranking.resultLimit}
-                    onChange={event => setDraft({
-                      ...draft,
-                      reranking: { ...draft.reranking, resultLimit: Number(event.target.value) },
                     })}
                   />
                 </FormField>

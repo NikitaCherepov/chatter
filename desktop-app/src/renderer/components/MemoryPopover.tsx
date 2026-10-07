@@ -18,6 +18,9 @@ type MemorySettings = {
   roleplay_mode: number;
   prompt_injection_protection: 'automatic' | 'enabled' | 'disabled';
   automatic_memory: number;
+  automatic_memory_mode: 'automatic' | 'enabled' | 'disabled';
+  memory_result_limit: number | null;
+  effective?: { automaticMemory: boolean; resultLimit: number; inheritedResultLimit: number; inheritedAutomaticMemory: boolean };
 };
 type RecordDialog = { type: 'edit' | 'delete'; record: MemoryRecord };
 type ChatPromptSettings = { prompt_id: number | null; room_enabled: boolean };
@@ -289,20 +292,28 @@ export function MemoryPopover({ chatId }: { chatId: number }) {
                   ]}
                 />
               </div>
-              <div className={s.toggleRow}>
-                <div className={s.toggleText}>
-                  <strong>{t('chat.memory.automaticMemory.label')}</strong>
-                  <Tooltip content={t('chat.memory.automaticMemory.help')}>
-                    <span tabIndex={0}>{t(settings.memory_mode === 'off' ? 'chat.memory.automaticMemory.inactive' : 'chat.memory.automaticMemory.hint')}</span>
-                  </Tooltip>
-                </div>
-                <button type="button" role="switch"
-                  aria-checked={settings.automatic_memory === 1}
-                  aria-label={t('chat.memory.automaticMemory.label')}
-                  className={`${s.toggle} ${settings.automatic_memory === 1 ? s.toggleActive : ''}`}
-                  disabled={loading}
-                  onClick={() => void patchSettings({ automatic_memory: settings.automatic_memory === 1 ? 0 : 1 })}
-                ><span /></button>
+              <div className={s.field}>{t('chat.memory.automaticMemory.label')}
+                <Select value={settings.automatic_memory_mode || (settings.automatic_memory === 1 ? 'enabled' : 'automatic')}
+                  onChange={value => void patchSettings({ automatic_memory_mode: value as MemorySettings['automatic_memory_mode'] })}
+                  options={[
+                    { value: 'automatic', label: t('chat.memory.injectionProtection.automatic'), hint: settings.effective ? t(settings.effective.inheritedAutomaticMemory ? 'chat.memory.injectionProtection.enabled' : 'chat.memory.injectionProtection.disabled') : undefined },
+                    { value: 'enabled', label: t('chat.memory.injectionProtection.enabled') },
+                    { value: 'disabled', label: t('chat.memory.injectionProtection.disabled') },
+                  ]} />
+                <Tooltip content={t('chat.memory.automaticMemory.help')}>
+                  <span tabIndex={0} className={s.fieldHint}>{t(settings.memory_mode === 'off' ? 'chat.memory.automaticMemory.inactive' : 'chat.memory.automaticMemory.hint')}</span>
+                </Tooltip>
+              </div>
+              <div className={s.field}>{t('chat.memory.preferences.limitLabel')}
+                <Select value={settings.memory_result_limit == null ? 'automatic' : String(settings.memory_result_limit)}
+                  onChange={value => void patchSettings({ memory_result_limit: value === 'automatic' ? null : Number(value) })}
+                  options={[
+                    { value: 'automatic', label: t('chat.memory.preferences.chatDefault', { count: settings.effective?.inheritedResultLimit ?? '—' }) },
+                    ...Array.from({ length: 20 }, (_, i) => ({ value: String(i + 1), label: String(i + 1) })),
+                  ]} />
+                <Tooltip content={t('chat.memory.preferences.limitHelp')}>
+                  <span tabIndex={0} className={s.fieldHint}>{t('chat.memory.preferences.limitHint')}</span>
+                </Tooltip>
               </div>
               {settings.memory_mode === 'both' && (
                 <div className={s.field}>{t('chat.memory.writeTargetLabel')}

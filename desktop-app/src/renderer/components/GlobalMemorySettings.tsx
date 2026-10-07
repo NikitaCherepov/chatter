@@ -5,6 +5,8 @@ import * as api from '../lib/api';
 import { ConfirmDialog } from './ConfirmDialog';
 import { MemoryRecordsPanel, type MemoryRecord } from './MemoryRecordsPanel';
 import { Select } from './Select';
+import Checkbox from './Checkbox';
+import { Tooltip } from './Tooltip';
 import s from './GlobalMemorySettings.module.scss';
 
 type MemorySpace = { id: number; name: string; kind: 'general' | 'chat'; is_default: number; is_primary: number };
@@ -26,6 +28,22 @@ export function GlobalMemorySettings() {
   const [dialog, setDialog] = useState<MemoryDialog | null>(null);
   const [draft, setDraft] = useState('');
   const [saving, setSaving] = useState(false);
+  const [preferences, setPreferences] = useState<api.MemoryPreferences | null>(null);
+  const [preferencesSaving, setPreferencesSaving] = useState(false);
+  useEffect(() => {
+    void api.apiFetch<{ preferences: api.MemoryPreferences }>('/api/v1/user/memory-preferences')
+      .then(result => setPreferences(result.preferences))
+      .catch(() => toast.error(t('chat.memory.loadSettingsFailed')));
+  }, [t]);
+  const patchPreferences = async (patch: Partial<Pick<api.MemoryPreferences, 'automatic_memory' | 'result_limit'>>) => {
+    if (!preferences || preferencesSaving) return;
+    setPreferencesSaving(true);
+    try {
+      const result = await api.apiFetch<{ preferences: api.MemoryPreferences }>('/api/v1/user/memory-preferences', { method: 'PATCH', body: JSON.stringify(patch) });
+      setPreferences(result.preferences);
+    } catch { toast.error(t('chat.memory.saveSettingsFailed')); }
+    finally { setPreferencesSaving(false); }
+  };
 
   const generalSpaces = useMemo(() => spaces.filter(space => space.kind === 'general'), [spaces]);
   const selectedSpace = useMemo(
@@ -160,6 +178,26 @@ export function GlobalMemorySettings() {
     <div className={s.panel}>
       <div className={s.title}>{t('chat.memory.globalSettings.title')}</div>
       <div className={s.hint}>{t('chat.memory.globalSettings.hint')}</div>
+      {preferences && <>
+        <div className={s.field}>
+          <Checkbox checked={preferences.automatic_memory} disabled={preferencesSaving}
+            onChange={value => void patchPreferences({ automatic_memory: value })} label={t('chat.memory.automaticMemory.label')} />
+          <Tooltip content={t('chat.memory.automaticMemory.help')}>
+            <span tabIndex={0} className={s.hint}>{t('chat.memory.preferences.defaultsHint')}</span>
+          </Tooltip>
+        </div>
+        <div className={s.field}>{t('chat.memory.preferences.limitLabel')}
+          <Select value={preferences.result_limit === null ? 'automatic' : String(preferences.result_limit)} disabled={preferencesSaving}
+            onChange={value => void patchPreferences({ result_limit: value === 'automatic' ? null : Number(value) })}
+            options={[
+              { value: 'automatic', label: t('chat.memory.preferences.adminDefault', { count: preferences.admin_result_limit }) },
+              ...Array.from({ length: 20 }, (_, i) => ({ value: String(i + 1), label: String(i + 1) })),
+            ]} />
+          <Tooltip content={t('chat.memory.preferences.limitHelp')}>
+            <span tabIndex={0} className={s.hint}>{t('chat.memory.preferences.limitHint')}</span>
+          </Tooltip>
+        </div>
+      </>}
       <div className={s.field}>
         <label>{t('chat.memory.globalSettings.spaceLabel')}</label>
         <div className={s.selectorRow}>

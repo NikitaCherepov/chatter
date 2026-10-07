@@ -47,11 +47,26 @@ legacy.exec(`
   );
   INSERT INTO memory_records (id, user_id, memory_space_id, text, source, created_at, updated_at)
   VALUES ('legacy-memory', 77, 1, 'legacy', 'automatic', 1, 1);
+  CREATE TABLE chat_memory_settings (
+    user_id INTEGER NOT NULL, chat_id INTEGER NOT NULL, persona_id INTEGER NOT NULL,
+    persona_override_id INTEGER, general_space_id INTEGER NOT NULL, chat_space_id INTEGER,
+    memory_mode TEXT NOT NULL DEFAULT 'general', write_target TEXT NOT NULL DEFAULT 'general',
+    use_core_memory INTEGER NOT NULL DEFAULT 1, allow_core_memory_update INTEGER NOT NULL DEFAULT 1,
+    message_search_scope TEXT NOT NULL DEFAULT 'all', roleplay_mode INTEGER NOT NULL DEFAULT 0,
+    automatic_memory INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, PRIMARY KEY (user_id, chat_id)
+  );
+  INSERT INTO chat_memory_settings (user_id, chat_id, persona_id, general_space_id, automatic_memory, created_at, updated_at)
+    VALUES (77, 9, 1, 1, 1, 1, 1), (77, 10, 1, 1, 0, 1, 1);
 `);
 legacy.close();
 
 process.env.API_DB_PATH = databasePath;
 const { db } = await import('../src/db.js');
+assert.deepEqual(db.prepare('SELECT automatic_memory_mode, memory_result_limit FROM chat_memory_settings ORDER BY chat_id').all(), [
+  { automatic_memory_mode: 'enabled', memory_result_limit: null },
+  { automatic_memory_mode: 'disabled', memory_result_limit: null },
+], 'migration preserves legacy explicit on/off without imposing a personal count');
 
 const columns = db.prepare('PRAGMA table_info(memory_spaces)').all() as Array<{ name: string }>;
 assert.equal(columns.some(column => column.name === 'is_primary'), true, 'migration adds is_primary');

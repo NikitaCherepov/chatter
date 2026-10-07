@@ -93,6 +93,10 @@ try {
   assert.equal(body.top_n, 2);
   assert.deepEqual(body.provider, { only: ['ranking-provider'], allow_fallbacks: false });
 
+  const personalRanked = await rerankMemoryGroups('what matters?', groups, settings, 707, undefined, undefined, 1);
+  assert.equal(personalRanked.length, 1, 'personal count limits output even if provider returns more');
+  assert.equal(JSON.parse(String(request?.init.body)).top_n, 1);
+
   const usage = db.prepare(`
     SELECT route, model_id, total_tokens, estimated_cost_usd, actual_cost_usd
     FROM user_token_usage WHERE user_id = ? ORDER BY id DESC LIMIT 1

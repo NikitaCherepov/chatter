@@ -293,6 +293,9 @@ export const getVectorMemorySettings = (): VectorMemoryPublicSettings => {
   };
 };
 
+// One shared output count, using the existing storage key for compatibility.
+export const getMemoryDefaultResultLimit = () => readSettings().reranking.resultLimit;
+
 export const getVectorMemoryRuntimeSettings = () => {
   const settings = readSettings();
   return {

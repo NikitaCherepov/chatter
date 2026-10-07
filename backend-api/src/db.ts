@@ -1585,6 +1585,15 @@ ensureMemoryColumn('chat_memory_settings', 'message_search_scope', "ALTER TABLE 
 ensureMemoryColumn('chat_memory_settings', 'roleplay_mode', 'ALTER TABLE chat_memory_settings ADD COLUMN roleplay_mode INTEGER NOT NULL DEFAULT 0 CHECK (roleplay_mode IN (0, 1))');
 ensureMemoryColumn('chat_memory_settings', 'prompt_injection_protection', "ALTER TABLE chat_memory_settings ADD COLUMN prompt_injection_protection TEXT NOT NULL DEFAULT 'automatic' CHECK (prompt_injection_protection IN ('automatic', 'enabled', 'disabled'))");
 ensureMemoryColumn('chat_memory_settings', 'automatic_memory', 'ALTER TABLE chat_memory_settings ADD COLUMN automatic_memory INTEGER NOT NULL DEFAULT 0 CHECK (automatic_memory IN (0, 1))');
+const hadAutomaticMemoryMode = (db.prepare('PRAGMA table_info(chat_memory_settings)').all() as { name: string }[]).some(column => column.name === 'automatic_memory_mode');
+ensureMemoryColumn('chat_memory_settings', 'automatic_memory_mode', "ALTER TABLE chat_memory_settings ADD COLUMN automatic_memory_mode TEXT NOT NULL DEFAULT 'automatic' CHECK (automatic_memory_mode IN ('automatic', 'enabled', 'disabled'))");
+if (!hadAutomaticMemoryMode) db.exec("UPDATE chat_memory_settings SET automatic_memory_mode = CASE WHEN automatic_memory = 1 THEN 'enabled' ELSE 'disabled' END");
+ensureMemoryColumn('chat_memory_settings', 'memory_result_limit', 'ALTER TABLE chat_memory_settings ADD COLUMN memory_result_limit INTEGER CHECK (memory_result_limit BETWEEN 1 AND 20)');
+db.exec(`CREATE TABLE IF NOT EXISTS user_memory_preferences (
+  user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  automatic_memory INTEGER NOT NULL DEFAULT 0 CHECK (automatic_memory IN (0, 1)),
+  result_limit INTEGER CHECK (result_limit BETWEEN 1 AND 20)
+)`);
 ensureMemoryColumn('memory_spaces', 'is_primary', 'ALTER TABLE memory_spaces ADD COLUMN is_primary INTEGER NOT NULL DEFAULT 0 CHECK (is_primary IN (0, 1))');
 ensureMemoryColumn('memory_records', 'origin_message_cursor', 'ALTER TABLE memory_records ADD COLUMN origin_message_cursor INTEGER');
 db.exec(`

@@ -1,5 +1,6 @@
 import { VectorMemoryService } from '../../vector-memory.js';
 import type { Tool } from '../types.js';
+import { resolveMemoryPreferences } from '../../memory-preferences.js';
 
 export const searchColdMemoryTool: Tool = {
   definition: {
@@ -11,7 +12,7 @@ export const searchColdMemoryTool: Tool = {
         type: 'object',
         properties: {
           query: { type: 'string', description: 'Semantic search query.' },
-          top_k: { type: 'number', description: 'Number of distinct memories to return (1-8, typically 5).' },
+          top_k: { type: 'number', description: 'Optional number of distinct memories (1-20). Omit to use the user/chat setting; an explicit value can only reduce that limit.' },
         },
         required: ['query'],
       },
@@ -21,10 +22,11 @@ export const searchColdMemoryTool: Tool = {
     const query = typeof args.query === 'string' ? args.query.trim() : '';
     if (!query) return 'No results: empty memory query.';
     const topK = Number.isFinite(Number(args.top_k))
-      ? Math.max(1, Math.min(8, Math.floor(Number(args.top_k))))
-      : 5;
+      ? Math.max(1, Math.min(20, Math.floor(Number(args.top_k))))
+      : undefined;
     try {
-      const result = await VectorMemoryService.search(context.userId, query, topK, context.chatId);
+      const preferences = resolveMemoryPreferences(context.userId, context.chatId);
+      const result = await VectorMemoryService.search(context.userId, query, topK, context.chatId, undefined, { resultLimit: preferences.resultLimit });
       if (!result.matches.length) return `No results found in memory for query "${query}".`;
       const matches = result.groups
         .map(group => {

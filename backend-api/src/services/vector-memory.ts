@@ -164,8 +164,10 @@ export const rerankMemoryGroups = async (
   userId: number,
   chatId?: number,
   signal?: AbortSignal,
+  outputLimit?: number,
 ): Promise<MemorySearchGroup[]> => {
   const ranking = settings.reranking;
+  const resultLimit = outputLimit ?? ranking.resultLimit;
   if (!ranking.enabled || groups.length === 0) return groups;
   if (!ranking.apiKey || !ranking.baseUrl || !ranking.model) throw new Error('reranking_configuration_required');
 
@@ -183,7 +185,7 @@ export const rerankMemoryGroups = async (
       model: ranking.model,
       query,
       documents,
-      top_n: Math.min(ranking.resultLimit, documents.length),
+      top_n: Math.min(resultLimit, documents.length),
       ...(ranking.openrouterProviderSlug
         ? { provider: { only: [ranking.openrouterProviderSlug], allow_fallbacks: false } }
         : {}),
@@ -245,7 +247,7 @@ export const rerankMemoryGroups = async (
       && entry.score >= ranking.minScore,
     )
     .sort((left: { score: number }, right: { score: number }) => right.score - left.score)
-    .slice(0, ranking.resultLimit)
+    .slice(0, resultLimit)
     .map((entry: { index: number; score: number }) => ({
       ...groups[entry.index],
       vector_score: groups[entry.index].score,
@@ -818,13 +820,15 @@ export class VectorMemoryService {
     return { copied_records: clones.length, copied_chunks: targetVectors.length };
   }
 
-  static async search(userId: number, query: string, topK = 3, chatId?: number, exactSpaceId?: number, options?: { billingUserId?: number; signal?: AbortSignal }) {
+  static async search(userId: number, query: string, topK?: number, chatId?: number, exactSpaceId?: number, options?: { billingUserId?: number; signal?: AbortSignal; resultLimit?: number }) {
     try {
       const safeQuery = `${query || ''}`.trim();
       if (!safeQuery) throw new Error('query_required');
       if (safeQuery.length > VECTOR_MEMORY_MAX_QUERY) throw new Error(`query_too_long_max_${VECTOR_MEMORY_MAX_QUERY}`);
 
-      const safeTopK = Math.max(1, Math.min(VECTOR_MEMORY_TOP_K_MAX, Math.floor(Number(topK) || 3)));
+      const runtimeSettings = getVectorMemoryRuntimeSettings();
+      const outputLimit = Math.max(1, Math.min(20, Math.floor(options?.resultLimit ?? runtimeSettings.reranking.resultLimit)));
+      const safeTopK = Math.max(1, Math.min(VECTOR_MEMORY_TOP_K_MAX, outputLimit, Math.floor(Number(topK) || outputLimit)));
       let spaces = resolveReadMemorySpaces(userId, chatId);
       if (exactSpaceId !== undefined) {
         const accountId = resolveAccountId(Math.floor(userId));
@@ -847,7 +851,6 @@ export class VectorMemoryService {
       }
       // Keep model and collection from one settings snapshot. A migration may
       // finish while this request is embedding its query.
-      const runtimeSettings = getVectorMemoryRuntimeSettings();
       const retrievalLimit = runtimeSettings.reranking.enabled ? 20 : safeTopK;
       options?.signal?.throwIfAborted();
       const queryVector = await getEmbedding(safeQuery, runtimeSettings, {
@@ -957,6 +960,7 @@ export class VectorMemoryService {
         options?.billingUserId ?? userId,
         chatId,
         options?.signal,
+        safeTopK,
       );
 
       const items = groupedMatches.flatMap(group => group.fragments.map(fragment => ({
@@ -973,7 +977,7 @@ export class VectorMemoryService {
       const out = {
         ok: true,
         namespace,
-        top_k: runtimeSettings.reranking.enabled ? runtimeSettings.reranking.resultLimit : safeTopK,
+        top_k: safeTopK,
         groups: groupedMatches,
         matches: items,
         text: joinedText

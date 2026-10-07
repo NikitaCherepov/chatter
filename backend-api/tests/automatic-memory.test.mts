@@ -27,9 +27,10 @@ try {
   assert.ok(formatAutomaticMemory(groups).includes('<untrusted_web_content>'));
 
   VectorMemoryService.search = (async (...args: any[]) => { calls.push(args); return { groups }; }) as any;
-  const input = { userId: 202, billingUserId: 101, chatId: 9, query: 'Question', signal: new AbortController().signal };
+  const input = { userId: 202, billingUserId: 101, chatId: 9, query: 'Question', resultLimit: 5, signal: new AbortController().signal };
   assert.ok((await retrieveAutomaticMemory(input)).includes('north observatory'));
-  assert.deepEqual(calls[0].slice(0, 5), [202, 'Question', 5, 9, undefined]);
+  assert.deepEqual(calls[0].slice(0, 5), [202, 'Question', undefined, 9, undefined]);
+  assert.equal(calls[0][5].resultLimit, 5);
   assert.equal(calls[0][5].billingUserId, 101);
   assert.ok(calls[0][5].signal instanceof AbortSignal);
   const previousCalls = calls.length;

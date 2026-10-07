@@ -2558,6 +2558,13 @@ export async function getFeatureFlags(): Promise<{ flags: FeatureFlags }> {
   return apiFetch('/api/v1/user/feature-flags');
 }
 
+export type MemoryPreferences = {
+  automatic_memory: boolean;
+  result_limit: number | null;
+  admin_result_limit: number;
+  effective_result_limit: number;
+};
+
 export async function setFeatureFlags(flags: Partial<FeatureFlags>): Promise<{ ok: boolean; flags: FeatureFlags }> {
   return apiFetch('/api/v1/user/feature-flags', {
     method: 'PUT',
