@@ -34,6 +34,7 @@ import { usePersistentOpenState } from '../../../lib/usePersistentOpenState';
 import { AnimatedDetails } from './AnimatedDetails';
 import { DragGrip, ModelOverlaySummary, SortableModelsDnd } from './SortableModels';
 import styles from './ModelsPage.module.css';
+import { ChatGptModelFields } from './ChatGptModelFields';
 
 type CoefficientManager = {
   get?: (uniqueId: string | undefined | null) => number | undefined;
@@ -551,6 +552,7 @@ export function ProviderModelFields({
   const providerKind: ProviderKind = override?.providerKind || resolveProviderKind(model.baseUrl);
 
   const providerKindOpts: SelectOption[] = [
+    { value: 'chatgpt', label: t('chatgpt.title') },
     { value: 'openrouter', label: 'OpenRouter' },
     { value: 'deepseek', label: 'DeepSeek' },
     { value: 'xiaomi', label: 'Xiaomi' },
@@ -748,6 +750,11 @@ export function ProviderModelFields({
   };
 
   const handleProviderKindChange = (kind: string) => {
+    if (kind === 'chatgpt') {
+      onChange({ auth: 'chatgpt', chatGptConnectionId: null, apiKeyId: null, apiKey: '', hasApiKey: false, baseUrl: 'https://api.openai.com/v1', proxyUrl: '' });
+      return;
+    }
+    onChange({ auth: 'api_key', chatGptConnectionId: null });
     const k = (kind || undefined) as ProviderKind | undefined;
     if (k && k !== 'custom' && PROVIDER_URLS[k]) onChange({ baseUrl: PROVIDER_URLS[k] });
     const id = model.uniqueId?.trim();
@@ -818,6 +825,7 @@ export function ProviderModelFields({
     override?.pricingSource === 'openrouter_endpoint';
   const isPricingFromPreset = override?.pricingSource === 'preset';
 
+  if (model.auth === 'chatgpt') return <ChatGptModelFields model={model} onChange={onChange} providerOptions={providerKindOpts} onProviderChange={handleProviderKindChange} />;
   return (
     <div className={styles.fields}>
       {/* Row 1: provider selector + model name */}

@@ -9,6 +9,7 @@ import util from 'util';
 import ffmpeg from 'fluent-ffmpeg';
 import ffmpegStatic from 'ffmpeg-static';
 import { WakeWordOnnxService } from './wakeword';
+import { connectChatGptOnDesktop } from './chatgpt-auth';
 import { ChatterBrowser, type BrowserControlPayload, type BrowserSearchPayload, type GoogleAiPayload } from './browser';
 import { BrowserPreviewSession, type BrowserPreviewPayload, type BrowserPreviewSource } from './browser-preview';
 import {
@@ -2995,6 +2996,19 @@ ipcMain.handle('security:authorize-server', async (event, rawServer: unknown, ra
   return { apiBase, reloadRequired };
 });
 
+let chatGptSignInRunning = false;
+ipcMain.handle('chatgpt:connect', async (event, input: { apiBase: string; accessToken: string; serverKey: string; connectionId?: number }) => {
+  assertTrustedIpcSender(event);
+  const target = normalizeServerUrl(input?.apiBase);
+  const url = new URL(target.apiBase);
+  if (target.origin !== trustedServerOrigin || (url.protocol !== 'https:' && !['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname))) throw new Error('chatgpt_secure_trusted_server_required');
+  if (typeof input.accessToken !== 'string' || !input.accessToken || input.accessToken.length > 16_384 || typeof input.serverKey !== 'string' || input.serverKey.length > 16_384) throw new Error('chatgpt_server_auth_required');
+  if (input.connectionId !== undefined && (!Number.isSafeInteger(input.connectionId) || input.connectionId < 1)) throw new Error('chatgpt_bad_connection_id');
+  if (chatGptSignInRunning) throw new Error('chatgpt_authorization_in_progress');
+  chatGptSignInRunning = true;
+  try { return await connectChatGptOnDesktop({ ...input, apiBase: target.apiBase }, url => shell.openExternal(url)); }
+  finally { chatGptSignInRunning = false; }
+});
 ipcMain.handle('security:clear-server', (event) => {
   assertTrustedIpcSender(event);
   trustedServerOrigin = null;

@@ -1,8 +1,10 @@
 import crypto from 'node:crypto';
 import { db } from '../db.js';
 import { getEncryptionKey } from '../utils/encryption.js';
+import { getChatGptConnection } from './chatgpt-connections.js';
 
 export type ConfiguredModel = {
+  auth?: 'api_key' | 'chatgpt'; chatGptConnectionId?: number | null;
   id: string; uniqueId: string; baseUrl: string; model: string; proxyUrl?: string;
   apiKeyId: number | null; apiKey?: string; hasApiKey?: boolean;
   name?: string; description?: string; supportsVision?: boolean; supportsTools?: boolean; adminOnly?: boolean;
@@ -115,8 +117,9 @@ export function getModelSettings(): ModelSettings {
 }
 export function publicModelSettings() {
   const settings = getModelSettings();
-  const redact = (m: ConfiguredModel) => ({ ...m, apiKey: '', hasApiKey: Boolean(m.apiKeyId) });
-  return { ...settings, hasAiApiKey: settings.proModels.some(m => Boolean(m.apiKeyId)),
+  const hasCredentials = (m: ConfiguredModel) => { if (m.auth !== 'chatgpt') return Boolean(m.apiKeyId); try { return Boolean(m.chatGptConnectionId && getChatGptConnection(m.chatGptConnectionId)); } catch { return false; } };
+  const redact = (m: ConfiguredModel) => ({ ...m, apiKey: '', hasApiKey: hasCredentials(m) });
+  return { ...settings, hasAiApiKey: settings.proModels.some(hasCredentials),
     aiBaseUrl: settings.proModels[0]?.baseUrl || 'https://openrouter.ai/api/v1', aiModel: settings.proModels.map(m => m.model).join(','),
     proModels: settings.proModels.map(redact), liteModels: settings.liteModels.map(redact),
     manualModels: settings.manualModels.map(redact), visionModel: redact(settings.visionModel), visionLiteModels: settings.visionLiteModels?.map(redact) };
@@ -142,6 +145,14 @@ export function updateModelSettings(input: any): ModelSettings {
       const url = new URL(baseUrl);
       if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password || !model || model.length > 300 || /[|;\r\n\0]/.test(model)) throw new Error('invalid_model');
       let apiKeyId = item.apiKeyId === undefined ? before?.apiKeyId || null : item.apiKeyId;
+      if (item.auth === 'chatgpt') {
+        const connectionId = Number(item.chatGptConnectionId);
+        if (!Number.isSafeInteger(connectionId) || connectionId < 1) throw new Error('chatgpt_connection_required');
+        const connection = getChatGptConnection(connectionId);
+        if (!connection.shared && kind !== 'manual') throw new Error('chatgpt_enable_shared_access_for_auto_models');
+        return { id, uniqueId, baseUrl: 'https://api.openai.com/v1', model, apiKeyId: null, auth: 'chatgpt' as const, chatGptConnectionId: connectionId,
+          name: String(item.name || model), description: String(item.description || ''), supportsVision: Boolean(item.supportsVision), supportsTools: item.supportsTools !== false, adminOnly: !connection.shared || Boolean(item.adminOnly) };
+      }
       if (item.apiKey?.trim()) apiKeyId = importModelKey(item.name || model, item.apiKey);
       if (!Number.isSafeInteger(apiKeyId) || !modelApiKey(apiKeyId)) throw new Error('api_key_required');
       const proxyUrl = String(item.proxyUrl || '');

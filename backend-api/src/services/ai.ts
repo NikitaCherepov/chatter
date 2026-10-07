@@ -1,6 +1,8 @@
 ﻿import OpenAI from 'openai';
 import dotenv from 'dotenv';
 import { getModelSettings, modelApiKey, type ConfiguredModel } from './model-settings.js';
+import { createChatGptClient, chatGptConnectionForClient, chatGptCompletion } from './chatgpt-responses.js';
+import { getChatGptConnection, withChatGptActor } from './chatgpt-connections.js';
 import nodeFetch from 'node-fetch';
 import { ProxyAgent } from 'proxy-agent';
 import { Readable } from 'node:stream';
@@ -490,19 +492,24 @@ let PRO_MODEL_SUPPORTS_VISION = false;
 let LITE_MODEL_SUPPORTS_VISION = false;
 
 export function refreshConfiguredModels() {
+  const usable = (m: ConfiguredModel) => {
+    if (m.auth !== 'chatgpt') return Boolean(m.apiKeyId);
+    try { return Boolean(m.chatGptConnectionId && getChatGptConnection(m.chatGptConnectionId)); } catch { return false; }
+  };
+  const configuredClient = (m: ConfiguredModel) => m.auth === 'chatgpt' ? createChatGptClient(m.chatGptConnectionId!) : createOpenAIClient(modelApiKey(m.apiKeyId), m.baseUrl, m.proxyUrl || '');
   const settings = getModelSettings();
-  const providers = (models: ConfiguredModel[], prefix: string): LiteProvider[] => models.filter(m => m.model && m.apiKeyId).map((m, i) => ({
+  const providers = (models: ConfiguredModel[], prefix: string): LiteProvider[] => models.filter(m => m.model && usable(m)).map((m, i) => ({
     name: `${prefix}-${i + 1}`, baseURL: m.baseUrl,
-    client: createOpenAIClient(modelApiKey(m.apiKeyId), m.baseUrl, m.proxyUrl || ''),
+    client: configuredClient(m),
     modelChain: [m.model], uniqueIds: [m.uniqueId],
   }));
   const pro = providers(settings.proModels, 'pro');
   const lite = providers(settings.liteModels, 'lite');
   const vision = settings.visionModel.model ? providers([settings.visionModel], 'vision-pro') : pro;
-  const manual: ManualModelEntry[] = settings.manualModels.filter(m => m.apiKeyId).map(m => ({
+  const manual: ManualModelEntry[] = settings.manualModels.filter(usable).map(m => ({
     id: m.uniqueId, apiModelName: m.model, name: m.name || m.model, description: m.description || '',
-    client: createOpenAIClient(modelApiKey(m.apiKeyId), m.baseUrl, m.proxyUrl || ''), baseURL: m.baseUrl,
-    supportsVision: Boolean(m.supportsVision), supportsTools: m.supportsTools !== false, adminOnly: Boolean(m.adminOnly),
+    client: configuredClient(m), baseURL: m.baseUrl,
+    supportsVision: Boolean(m.supportsVision), supportsTools: m.supportsTools !== false, adminOnly: Boolean(m.adminOnly) || (m.auth === 'chatgpt' && !getChatGptConnection(m.chatGptConnectionId!).shared),
   }));
   PRO_PROVIDERS = pro;
   LITE_PROVIDERS = lite;
@@ -1204,7 +1211,10 @@ const createCompletionWithModelFallback = async (
           });
         }
         // If streamCallbacks exist — stream и собираем, иначе обычный запрос
-        const response = streamCallbacks
+        const chatGptConnectionId = chatGptConnectionForClient(client);
+        const response = chatGptConnectionId
+          ? await chatGptCompletion(chatGptConnectionId, { ...providerRequestBody, model }, signal, streamCallbacks)
+          : streamCallbacks
           ? await streamAndAssemble(client, providerRequestBody, model, streamCallbacks, signal)
           : await (() => {
               // Same child-signal trick as in streamAndAssemble: the OpenAI SDK
@@ -6907,7 +6917,7 @@ export const sendMessageThroughAi = (...args: Parameters<typeof sendMessageThrou
   const mode = getChatMemorySettings(account.id, chatId).prompt_injection_protection;
   let disabledGlobally = false;
   try { disabledGlobally = JSON.parse(account.feature_flags || '{}').disable_prompt_injection_protection === true; } catch { /* safe default */ }
-  return withPromptInjectionProtection(resolvePromptInjectionProtection(mode, disabledGlobally), () => sendMessageThroughAiInternal(...args));
+  return withChatGptActor(account.is_admin === 1 || account.role === 'admin', () => withPromptInjectionProtection(resolvePromptInjectionProtection(mode, disabledGlobally), () => sendMessageThroughAiInternal(...args)));
 };
 
 const sendMessageThroughAiInternal = async (

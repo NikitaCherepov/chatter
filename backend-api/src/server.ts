@@ -2,6 +2,8 @@
 import path from 'path';
 import { uploadBackupSession, startBackupSession, backupSessionStatus, cancelBackupSession } from './services/sillytavern-backup-session.js';
 import { getModelSettings, publicModelSettings, updateModelSettings, allModels, replaceModelKeyReference } from './services/model-settings.js';
+import { listChatGptConnections, beginChatGptAuthorization, completeChatGptAuthorization, renameChatGptConnection, disconnectChatGptConnection, listChatGptModels, withChatGptActor } from './services/chatgpt-connections.js';
+import { chatGptCompletion } from './services/chatgpt-responses.js';
 import { exportModelConfig, parseModelArchive, parseModelConfig, importModelConfig } from './services/model-config-transfer.js';
 import { refreshConfiguredModels } from './services/ai.js';
 import fs from 'fs';
@@ -5775,6 +5777,31 @@ app.post('/internal/admin/openrouter-monitor/test-notification', internalAuth, a
 // ─── Model overrides (coefficients + provider info) ─────────────────────────
 
 app.get('/internal/admin/model-settings', internalAuth, (_req, res) => res.json(publicModelSettings()));
+const chatGptAdmin = (req: AuthedRequest, res: any, next: any) => {
+  const id = accountIdFromRequest(req);
+  const actor = db.prepare('SELECT is_admin, role, status FROM users WHERE id = ?').get(id) as any;
+  if (!actor || (actor.is_admin !== 1 && actor.role !== 'admin')) return res.status(403).json({ error: 'admin_required' });
+  res.setHeader('Cache-Control', 'no-store');
+  next();
+};
+const chatGptAction = (handler: (req: any) => any) => async (req: any, res: any) => {
+  try { res.setHeader('Cache-Control', 'no-store'); return res.json(await handler(req)); }
+  catch (error: any) { return res.status(400).json({ error: error?.message?.startsWith('chatgpt_') || error?.message === 'bad_chatgpt_callback' ? error.message : 'chatgpt_request_failed' }); }
+};
+app.get('/api/v1/admin/chatgpt/connections', chatGptAdmin, chatGptAction(() => ({ connections: listChatGptConnections() })));
+app.post('/api/v1/admin/chatgpt/begin', chatGptAdmin, chatGptAction(req => beginChatGptAuthorization(accountIdFromRequest(req), req.body?.redirectUri, req.body?.connectionId)));
+app.post('/api/v1/admin/chatgpt/complete', chatGptAdmin, chatGptAction(req => completeChatGptAuthorization(accountIdFromRequest(req), req.body)));
+app.get('/internal/admin/chatgpt/connections', internalAuth, chatGptAction(() => ({ connections: listChatGptConnections() })));
+app.patch('/internal/admin/chatgpt/connections/:id', internalAuth, chatGptAction(req => { const connections = renameChatGptConnection(Number(req.params.id), req.body?.name, req.body?.shared); refreshConfiguredModels(); broadcastModelCatalogUpdated(); return { connections }; }));
+app.delete('/internal/admin/chatgpt/connections/:id', internalAuth, chatGptAction(async req => { const value = await disconnectChatGptConnection(Number(req.params.id)); refreshConfiguredModels(); broadcastModelCatalogUpdated(); return value; }));
+app.get('/internal/admin/chatgpt/connections/:id/models', internalAuth, chatGptAction(async req => ({ models: await listChatGptModels(Number(req.params.id)) })));
+app.post('/internal/admin/chatgpt/connections/:id/test', internalAuth, chatGptAction(async req => {
+  const id = Number(req.params.id);
+  const models = await listChatGptModels(id);
+  if (!models.some((model: any) => model.slug === req.body?.model)) throw new Error('chatgpt_model_not_available');
+  const result = await withChatGptActor(true, () => chatGptCompletion(id, { model: req.body.model, messages: [{ role: 'user', content: 'Reply exactly: OK.' }] }));
+  return { text: result.choices[0].message.content };
+}));
 app.put('/internal/admin/model-settings', internalAuth, (req, res) => {
   try {
     updateModelSettings(req.body);

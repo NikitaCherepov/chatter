@@ -2699,6 +2699,15 @@ async function handleRequest(req, res) {
     }
     return sendJson(res, 200, settings);
   }
+  const chatGptConnectionMatch = pathname.match(/^\/api\/chatgpt\/connections(?:\/(\d+)(?:\/(models|test))?)?$/);
+  if (chatGptConnectionMatch && ['GET', 'PATCH', 'DELETE', 'POST'].includes(req.method)) {
+    const id = chatGptConnectionMatch[1];
+    const tail = id ? '/' + id + (chatGptConnectionMatch[2] ? '/' + chatGptConnectionMatch[2] : '') : '';
+    const body = req.method === 'PATCH' || req.method === 'POST' ? await readJson(req) : undefined;
+    return sendJson(res, 200, await backendInternalRequest('/internal/admin/chatgpt/connections' + tail, {
+      method: req.method, ...(body ? { body: JSON.stringify(body) } : {}),
+    }));
+  }
   if (pathname === '/api/model-settings' && req.method === 'PUT') {
     const body = await readJson(req, 2 * 1024 * 1024);
     return sendJson(res, 200, await backendInternalRequest('/internal/admin/model-settings', { method: 'PUT', body: JSON.stringify(body) }));

@@ -11,12 +11,14 @@ import { PineconePage } from './PineconePage';
 import { WebReaderPage } from './WebReaderPage';
 import { WebSearchPage } from './WebSearchPage';
 import { TranscriptionPage } from './TranscriptionPage';
+import { ChatGptPage } from './ChatGptPage';
 import { api } from '../../../lib/api';
 import styles from './IntegrationsPage.module.css';
 
-type IntegrationId = 'pinecone' | 'web-search' | 'web-reader' | 'cloud-tts' | 'image-generation' | 'transcription';
+type IntegrationId = 'pinecone' | 'web-search' | 'web-reader' | 'cloud-tts' | 'image-generation' | 'transcription' | 'chatgpt';
 
 const INTEGRATION_IDS: Array<{ id: IntegrationId; icon: string }> = [
+  { id: 'chatgpt', icon: 'GPT' },
   { id: 'pinecone', icon: 'Pi' },
   { id: 'web-search', icon: 'WS' },
   { id: 'web-reader', icon: 'WR' },
@@ -43,8 +45,10 @@ export function IntegrationsPage({
   const { t } = useTranslation();
   const [selected, setSelected] = useState<IntegrationId | null>(null);
   const [transcriptionConfigured, setTranscriptionConfigured] = useState(false);
+  const [chatGptConfigured, setChatGptConfigured] = useState(false);
 
   useEffect(() => {
+    void api<{ connections: unknown[] }>('/api/chatgpt/connections').then(value => setChatGptConfigured(value.connections.length > 0)).catch(() => setChatGptConfigured(false));
     void api<{ enabled: boolean; hasApiKey: boolean }>('/api/transcription/settings')
       .then(value => setTranscriptionConfigured(value.enabled && value.hasApiKey))
       .catch(() => setTranscriptionConfigured(false));
@@ -132,7 +136,9 @@ export function IntegrationsPage({
     return <TranscriptionPage onBack={() => setSelected(null)} />;
   }
 
+  if (selected === 'chatgpt') return <ChatGptPage onBack={() => setSelected(null)} />;
   const configured: Record<IntegrationId, boolean> = {
+    chatgpt: chatGptConfigured,
     pinecone: settings.pinecone.hasEmbeddingApiKey,
     'web-search': settings.webSearch.enabled,
     'web-reader': settings.webReader.enabled
@@ -173,8 +179,8 @@ export function IntegrationsPage({
           >
             <span className={styles.icon}>{item.icon}</span>
             <span className={styles.info}>
-              <small>{t(`integrations.items.${item.id}.group`)}</small>
-              <strong>{t(`integrations.items.${item.id}.name`)}</strong>
+              <small>{item.id === 'chatgpt' ? 'OpenAI' : t(`integrations.items.${item.id}.group`)}</small>
+              <strong>{item.id === 'chatgpt' ? t('chatgpt.title') : t(`integrations.items.${item.id}.name`)}</strong>
               <em>
                 {(item.id === 'image-generation' && !settings.imageGeneration.enabled)
                   || (item.id === 'web-search' && !settings.webSearch.enabled)
@@ -182,7 +188,7 @@ export function IntegrationsPage({
                   ? t('integrations.statusDisabled')
                   : configured[item.id]
                     ? t('integrations.statusConfigured')
-                    : t(`integrations.items.${item.id}.description`)}
+                    : item.id === 'chatgpt' ? t('chatgpt.firstSignIn') : t(`integrations.items.${item.id}.description`)}
               </em>
             </span>
             <Icon name="arrow" />

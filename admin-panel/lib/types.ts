@@ -1,4 +1,6 @@
 export type ProviderModelConfig = {
+  auth?: 'api_key' | 'chatgpt';
+  chatGptConnectionId?: number | null;
   id: string;
   baseUrl: string;
   proxyUrl?: string;

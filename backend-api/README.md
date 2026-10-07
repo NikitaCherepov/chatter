@@ -4,6 +4,18 @@
 
 Backend for web/bot clients with JWT API (`/api/v1/*`) and internal API (`/internal/*`).
 
+## ChatGPT plan connection (Sign in with ChatGPT)
+
+- First sign-in happens on the administrator's PC: Chatter Desktop → Settings → Application → ChatGPT subscription. The desktop accepts an HTTP loopback callback; remote Chatter connections require HTTPS.
+- The desktop forwards the authorization code to the selected trusted backend. The backend validates state, PKCE and the signed ID token, then stores access/refresh/ID tokens in authenticated encrypted SQLite records. Tokens are never returned to the renderer or admin panel.
+- Each server persists its own host ID. Issued client IDs are retained per account registration, refreshes are serialized, and credentials rotate atomically. A restart during sign-in requires a fresh attempt.
+- Admin Panel → Integrations → ChatGPT manages names, model discovery, a short explicit test request, shared-access consent and session revocation. Private connections are usable only by admins; enable shared access before assigning PRO/LITE or shared Vision.
+- Models use `auth: "chatgpt"` and `chatGptConnectionId`, not an API-key vault entry. The existing runner uses the public Responses API with `store:false`, `stream:true`, typed tool history and namespaced local tools.
+- This preview route does not accept temperature, top_p or max_tokens/max_output_tokens. Account model lists are fetched rather than hardcoded. OAuth models in a model-config import are skipped with a warning; authorize and attach them explicitly on the destination server. OAuth tokens are never included in model-config exports.
+- Tests: `tsx backend-api/tests/chatgpt.test.mts`. These tests use signed mock identities and mocked HTTP; an actual ChatGPT account sign-in still needs a manual end-to-end test.
+
+Official contracts: [Sign-in](https://developers.openai.com/siwc/token-sharing-open-source/sign-in), [Models and inference](https://developers.openai.com/siwc/token-sharing-open-source/models-and-inference), [Preview limitations](https://developers.openai.com/siwc/token-sharing-open-source/preview-limitations).
+
 ## Quick Start
 
 ```bash

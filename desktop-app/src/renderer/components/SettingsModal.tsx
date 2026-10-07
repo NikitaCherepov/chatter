@@ -48,6 +48,7 @@ import { QuotaWidget } from './QuotaWidget';
 import { SubagentModelSettings } from './SubagentModelSettings/SubagentModelSettings';
 import { AboutSettings } from './AboutSettings/AboutSettings';
 import { GlobalMemorySettings } from './GlobalMemorySettings';
+import { ChatGptSettings } from './ChatGptSettings';
 import { PromptImageCropDialog } from './PromptImageCropDialog';
 import { CharacterCardImportDialog } from './CharacterCardImportDialog';
 import { PersonaImportDialog } from './PersonaImportDialog';
@@ -3057,6 +3058,7 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
                   {t('settings.app.diceHelp')}
                 </div>
               </div>
+              {(user?.is_admin === 1 || user?.role === 'admin') && <ChatGptSettings />}
             </div>
           )}
 

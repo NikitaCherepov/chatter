@@ -2,6 +2,12 @@
 
 Next.js control panel for a self-hosted Chatter server. The panel is intentionally a UI-only service: it never receives the Docker socket, reads host files, or executes system commands directly. All privileged operations go through the authenticated [`chatter-manager`](../chatter-manager/README.md).
 
+## ChatGPT subscription
+
+Integrations → ChatGPT explains the required first sign-in on the administrator's PC (Chatter Desktop → Settings → Application). The panel manages connection names, explicit shared-access consent, model discovery, a short test request, and disconnecting. OAuth credentials stay encrypted on the backend; the panel never receives them. Add models through the ChatGPT subscription provider on the Models screen. Private connections support admin-only manual models; PRO/LITE and shared Vision require shared access.
+
+See the [Backend contract and limitations](../backend-api/README.md#chatgpt-plan-connection-sign-in-with-chatgpt). Model-config import does not transfer OAuth sessions and warns when skipping subscription models.
+
 ## Architecture
 
 ```text

@@ -3,6 +3,7 @@ export {};
 declare global {
   interface Window {
     electronAPI: {
+      connectChatGpt: (input: { apiBase: string; accessToken: string; serverKey: string; connectionId?: number }) => Promise<{ id: number; name: string; email: string }>;
       platform: string;
       apiBaseUrl: string;
       appVersion: string;

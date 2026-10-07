@@ -53,7 +53,8 @@ export function parseModelConfig(files: { name: string; data: Buffer }[]): Trans
     if (data.format !== 'chatter-models' || data.version !== 1 || !Array.isArray(data.models) || !Array.isArray(data.keys) || data.models.length > 800 || data.keys.length > 500) throw new Error('invalid_model_config');
     if (data.models.some((m: any) => !m || typeof m.model !== 'string' || typeof m.baseUrl !== 'string' || !Array.isArray(m.roles) || m.roles.some((r: any) => !['pro', 'lite', 'manual', 'vision'].includes(r))) ||
       data.keys.some((k: any) => !k || typeof k.id !== 'string' || typeof k.name !== 'string' || (k.key !== undefined && typeof k.key !== 'string'))) throw new Error('invalid_model_config');
-    return { ...data, warnings: [] };
+    const hasChatGpt = data.models.some((model: any) => model.auth === 'chatgpt');
+    return { ...data, models: data.models.filter((model: any) => model.auth !== 'chatgpt'), warnings: hasChatGpt ? ['chatgpt_reconnect_required'] : [] };
   }
   const settings = files.filter(f => /(^|\/)settings\.json$/i.test(f.name));
   if (settings.length > 1) throw new Error('model_config_multiple_users');

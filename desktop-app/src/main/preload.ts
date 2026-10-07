@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
 contextBridge.exposeInMainWorld('electronAPI', {
+  connectChatGpt: (input: { apiBase: string; accessToken: string; serverKey: string; connectionId?: number }) => ipcRenderer.invoke('chatgpt:connect', input),
   platform: process.platform,
   appVersion: ipcRenderer.sendSync('get-app-version'),
 
