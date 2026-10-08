@@ -1,11 +1,14 @@
 {
   "changes": {
     "en": [
-      "Added migration from SillyTavern",
-      "Reworked the vector memory system",
-      "Added local vector memory storage and Qdrant",
-      "Temporarily removed the voice API, replaced with a new integration for voice transcription",
-      "Added a reranker model to the vector memory integration"
+      "Added a ChatGPT provider via subscription: connection management and model selection in the admin panel",
+      "Added import of model configurations from Chatter and SillyTavern, and export with API keys",
+      "Model configurations moved from env to the database — saving models no longer requires a backend restart",
+      "Added rotation of the JWT, internal token, and encryption key with data re-encryption, backup and recovery",
+      "Memories can now be searched automatically before the model responds",
+      "Added per-user and per-chat auto-memory settings, memory count limits",
+      "Improved SillyTavern import: message attachments, character avatars, and group stories converted into rooms",
+      "Fixed update detection, server update progress, and cold memory writes in roleplay mode"
     ],
     "cs": [
       "Přidána migrace ze SillyTavern",

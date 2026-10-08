@@ -1,11 +1,17 @@
 {
   "changes": {
     "en": [
-      "Added migration from SillyTavern",
-      "Each chat can now be configured individually: which character is used, their personality, memory and chat search settings on/off. Also added a roleplay mode toggle",
-      "You can now view the bot's saved memories and search them (including semantic search)",
-      "Improved memory search quality with a reranker",
-      "Added cloud voice transcription (Settings → Voice)"
+      "Admins can now authorize their ChatGPT subscription right from the desktop app (browser sign-in)",
+      "Added 3D visualization of vector memory with search result highlighting, selectable load volume, and view controls",
+      "Added auto-memory and max memory count settings — global and per chat",
+      "Added prompt injection protection control: Auto / On / Off per chat",
+      "Added warnings about unconfigured vector memory in settings and during import",
+      "The memory window has been merged into chat settings; fixed layout and reduced width without the memory block",
+      "Added memory list pagination and caching of the list and the 3D map",
+      "Reworked the SillyTavern import preview: compact summary, room info, attachments, and warnings",
+      "Added progress display and cancellation for backup imports",
+      "Removed the hot memory length limit from the settings UI",
+      "Improved chat search and search in chat"
     ],
     "cs": [
       "Přidána migrace ze SillyTavern",
