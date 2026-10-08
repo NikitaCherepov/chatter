@@ -293,6 +293,16 @@ export const getVectorMemorySettings = (): VectorMemoryPublicSettings => {
   };
 };
 
+// Configuration readiness only: no provider requests and no secret exposure.
+export const isVectorMemoryConfigured = (): boolean => {
+  try {
+    const settings = readSettings();
+    return Boolean(settings.baseUrl.trim() && settings.model.trim() && readSecret(settings.apiKeyId)?.trim());
+  } catch {
+    return false;
+  }
+};
+
 // One shared output count, using the existing storage key for compatibility.
 export const getMemoryDefaultResultLimit = () => readSettings().reranking.resultLimit;
 

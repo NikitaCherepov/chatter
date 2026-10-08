@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+import { MemorySetupNotice } from './MemorySetupNotice';
 import type { SillyTavernBackupPreview, BackupImportProgress } from '../lib/api';
 import s from './SillyTavernChatImportDialog.module.scss';
 import b from './SillyTavernBackupImportDialog.module.scss';
@@ -44,6 +45,7 @@ export function SillyTavernBackupImportDialog({ preview, importing, progress, on
           <span>{t('settings.data.backup.previewHelp')}</span>
         </div>
         <div className={[s.content, b.content].join(' ')}>
+          <MemorySetupNotice importing relevant={preview.chat_memory.chat_count > 0} />
           <div className={b.tableWrap}>
             <table className={b.summary} aria-label={t('settings.data.backup.summary.title')}>
               <thead><tr>

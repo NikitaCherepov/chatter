@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { MemorySetupNotice } from './MemorySetupNotice';
 import { toast } from 'sonner';
 import * as api from '../lib/api';
 import { useInvalidateMemory } from '../lib/memory-queries';
@@ -200,6 +201,7 @@ export function MemoryPopover({ chatId }: { chatId: number }) {
       {open && (
         <div className={`${s.popover} ${showChatMemory ? '' : s.popoverCompact}`} style={popoverStyle}>
           <div className={s.header}><strong>{t('chat.memory.headerTitle')}</strong><span>{loading ? t('common.loading') : t('chat.memory.headerHint')}</span></div>
+          <MemorySetupNotice />
           {settings && (
             <div className={s.layout}>
               <div className={s.settingsColumn}>

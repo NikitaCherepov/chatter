@@ -1,0 +1,14 @@
+.notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+  min-width: 0;
+  border: 1px solid color-mix(in srgb, var(--color-warning) 35%, var(--border-light));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--color-warning) 6%, var(--bg-input));
+}
+.icon { width: 18px; height: 18px; flex: 0 0 18px; color: var(--color-warning); margin-top: 1px; }
+.title { font-size: 13px; font-weight: 600; color: var(--text-primary); line-height: 1.4; }
+.text { margin: 5px 0 0; font-size: 12px; line-height: 1.5; color: var(--text-muted); overflow-wrap: anywhere; }

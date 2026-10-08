@@ -1,4 +1,9 @@
 {
+  "memorySetupNotice": {
+    "title": "Vector memory is not configured",
+    "settingsHelp": "Semantic search, automatic memory and saving new memories are unavailable. An administrator needs to configure an embedding model in the admin panel. Saved records remain available in the list.",
+    "importHelp": "Chats and other data will be imported, but memories from vectorized chats will not be added yet. After configuring an embedding model, import the same archive again."
+  },
   "memoryMap": {
     "limit": "Up to {{count}}",
     "pages": "Memory pages",

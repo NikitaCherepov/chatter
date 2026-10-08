@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { MemorySetupNotice } from './MemorySetupNotice';
 import { toast } from 'sonner';
 import * as api from '../lib/api';
 import { useInvalidateMemory } from '../lib/memory-queries';
@@ -173,6 +174,7 @@ export function GlobalMemorySettings() {
   return (
     <div className={settingsStyles.panel}>
       <div className={settingsStyles.panelTitle}>{t('chat.memory.globalSettings.title')}</div>
+      <MemorySetupNotice />
       {preferences && <>
         <div className={settingsStyles.fieldGroup}>
           <label className={settingsStyles.fieldLabel}>{t('chat.memory.preferences.limitLabel')}</label>

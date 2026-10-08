@@ -67,6 +67,7 @@ import { getMemoryPreferences, updateMemoryPreferences, resolveMemoryPreferences
 import {
   getVectorMemoryApiKeyUsage,
   getVectorMemorySettings,
+  isVectorMemoryConfigured,
   replaceVectorMemoryApiKeyReference,
   updateVectorMemorySettings,
 } from './services/vector-memory-settings.js';
@@ -1766,6 +1767,11 @@ app.patch('/api/v1/user/memory-preferences', (req: AuthedRequest, res: any) => {
       ...('result_limit' in body ? { result_limit: body.result_limit } : {}),
     }) });
   } catch (error: any) { return res.status(400).json({ error: error?.message || 'bad_memory_preferences' }); }
+});
+
+app.get('/api/v1/memory/status', (_req: AuthedRequest, res: any) => {
+  res.setHeader('Cache-Control', 'no-store');
+  return res.json({ configured: isVectorMemoryConfigured() });
 });
 
 const publicChatMemorySettings = (userId: number, chatId: number) => ({
