@@ -8,6 +8,17 @@ Integrations → ChatGPT explains the required first sign-in on the administrato
 
 See the [Backend contract and limitations](../backend-api/README.md#chatgpt-plan-connection-sign-in-with-chatgpt). Model-config import does not transfer OAuth sessions and warns when skipping subscription models.
 
+## Server secrets
+
+Security → Server secrets rotates JWT signing, internal-service authentication,
+and encryption keys. Each action requires the current admin password and warns
+about downtime. The UI shows progress, the private pre-rotation backup, and a
+recovery action when necessary; secret values never reach the browser.
+Rebuild backend, manager and admin-panel together. See the manager's
+[rotation/recovery contract](../chatter-manager/README.md#server-secret-rotation)
+before testing. Test on a disposable/local installation first: user tokens are
+actually revoked by JWT rotation.
+
 ## Architecture
 
 ```text

@@ -12,6 +12,7 @@ function fixture(authenticated = true) {
   const config = { proModels: [{ id: 'db-model', model: 'from-db', apiKey: '', hasApiKey: true }], hasAiApiKey: true };
   const ctx = vm.createContext({ URL, console: { warn() {}, error() {} },
     requireSession: () => authenticated, sameOrigin: () => true,
+    secretRotation: { blocked: () => false },
     sendJson: (response, status, body) => { response.status = status; response.body = body; },
     publicSettings: () => ({ proModels: [{ model: 'stale-env' }], pinecone: {}, webSearch: { engines: {} }, webReader: {} }),
     readJson: async () => ({ proModels: config.proModels }),

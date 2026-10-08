@@ -8,6 +8,7 @@ import type { ApiKey } from '../../../lib/types';
 import { DeleteKeyModal } from './DeleteKeyModal';
 import grid from '../../ui/PageGrid/PageGrid.module.css';
 import styles from './SecurityPage.module.css';
+import { SecretRotation } from './SecretRotation';
 
 type Props = {
   username: string;
@@ -126,6 +127,8 @@ export function SecurityPage({
           </div>
         </Card>
       </form>
+
+      <SecretRotation />
 
       <Card
         title={t('security.apiKeys')}

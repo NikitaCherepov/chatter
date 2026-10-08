@@ -7,6 +7,8 @@ const https = require('node:https');
 const os = require('node:os');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
+const { createSecretRotation } = require('./secret-rotation');
+const { containerEnvironment, assertSecretEnvironment } = require('./secret-config');
 
 const PORT = Number.parseInt(process.env.ADMIN_INTERNAL_PORT || '8080', 10);
 const CONFIG_DIR = path.resolve(process.env.CHATTER_CONFIG_DIR || '/config');
@@ -111,7 +113,7 @@ function readEnvFileValue(filePath, key) {
 function updateEnvFileValue(filePath, key, value) {
   let content = '';
   try { content = fs.readFileSync(filePath, 'utf8'); } catch { /* new file */ }
-  const pattern = new RegExp(`^${key}=.*$`, 'm');
+  const pattern = new RegExp(`^${key}=.*$`, 'gm');
   const line = `${key}=${value}`;
   const updated = pattern.test(content)
     ? content.replace(pattern, line)
@@ -154,6 +156,7 @@ let restorePromise = null;
 let updatePromise = null;
 let activeLogStreams = 0;
 let deploymentLock = Promise.resolve();
+let activeApiRequests = 0;
 
 function runDeploymentExclusive(operation) {
   const result = deploymentLock.then(operation, operation);
@@ -700,7 +703,7 @@ const composeArgs = (...args) => [
   ...args
 ];
 
-function runDocker(args, timeoutMs = 20 * 60 * 1000, maxOutputChars = 20_000) {
+function runDocker(args, timeoutMs = 20 * 60 * 1000, maxOutputChars = 20_000, input = null) {
   return new Promise((resolve, reject) => {
     const child = spawn(DOCKER_BIN, args, {
       cwd: PROJECT_DIR,
@@ -715,7 +718,7 @@ function runDocker(args, timeoutMs = 20 * 60 * 1000, maxOutputChars = 20_000) {
         TELEGRAM_ENV_FILE,
         VOICE_ENV_FILE,
       },
-      stdio: ['ignore', 'pipe', 'pipe']
+      stdio: [input === null ? 'ignore' : 'pipe', 'pipe', 'pipe']
     });
     let stdout = '';
     let stderr = '';
@@ -726,6 +729,10 @@ function runDocker(args, timeoutMs = 20 * 60 * 1000, maxOutputChars = 20_000) {
     };
     child.stdout.on('data', (chunk) => { stdout = append(stdout, chunk); });
     child.stderr.on('data', (chunk) => { stderr = append(stderr, chunk); });
+    if (input !== null) {
+      child.stdin.on('error', () => {});
+      child.stdin.end(input);
+    }
     const timer = setTimeout(() => { child.kill('SIGTERM'); reject(new Error('Docker operation timed out')); }, timeoutMs);
     child.on('error', (error) => { clearTimeout(timer); reject(error); });
     child.on('close', (code) => {
@@ -775,7 +782,7 @@ function writeUpdateState(patch) {
 }
 
 function serverUpdateInProgress() {
-  return Boolean(updatePromise) || ['queued', 'pulling', 'backup', 'restarting'].includes(readUpdateState().status);
+  return secretRotation.blocked() || Boolean(updatePromise) || ['queued', 'pulling', 'backup', 'restarting'].includes(readUpdateState().status);
 }
 
 async function updateServiceSelection() {
@@ -1047,6 +1054,7 @@ async function reconcileNewComposeServicesUnlocked() {
 }
 
 function reconcileNewComposeServices() {
+  if (secretRotation.blocked()) return Promise.resolve(false);
   return runDeploymentExclusive(reconcileNewComposeServicesUnlocked);
 }
 
@@ -1826,8 +1834,10 @@ async function createBackup({ includeUploads = false, includeConfiguration = fal
       tarArgs[0] = '-chzf';
       tarArgs.push('uploads');
     }
+    fs.writeFileSync(tempArchive, '', { mode: 0o600 });
     await runProcess('tar', tarArgs, 60 * 60 * 1000);
     fs.renameSync(tempArchive, destination);
+    fs.chmodSync(destination, 0o600);
     return (await listBackups()).find((backup) => backup.name === name);
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
@@ -1984,6 +1994,95 @@ async function importBackup(uploadPath, originalName) {
 async function stopDataServices() {
   await runDocker(composeArgs('--profile', 'telegram', '--profile', 'notes', 'stop', 'telegram-bot', 'webapp-notes', 'backend'), 3 * 60 * 1000);
 }
+
+// Docker orchestration stays here; durable rotation/recovery lives in its own module.
+async function runningSecretEnvironment(service) {
+  const id = await runDocker(composeArgs('--profile', '*', 'ps', '--status', 'running', '-q', service), 30000);
+  if (!id) {
+    if (service === 'backend') throw new Error('backend_not_running');
+    return null;
+  }
+  if (id.split(/\r?\n/).length !== 1) throw new Error('running_secret_config_mismatch');
+  // Never log .Config.Env: it contains secrets. Only equality is exposed.
+  return containerEnvironment(JSON.parse(await runDocker(['inspect', '--format', '{{json .Config.Env}}', id], 30000, 0)));
+}
+function validateRotationEncryption() {
+  const env = parseEnv(BACKEND_ENV_FILE);
+  return runDocker(composeArgs('run', '--rm', '--no-deps', '-T', '--user', '0', '--entrypoint', 'node', 'backend', '/app/scripts/rotate-encryption.cjs'), 10 * 60 * 1000, 20000,
+    JSON.stringify({ file: '/data/chatter.db', oldKey: env.ENCRYPTION_KEY, newKey: env.ENCRYPTION_KEY,
+      overrides: { DEVOPS_ENCRYPTION_KEY: env.DEVOPS_ENCRYPTION_KEY, MAP_PINS_ENCRYPTION_KEY: env.MAP_PINS_ENCRYPTION_KEY }, verifyOnly: true })).then(JSON.parse);
+}
+let rotationDrainOwned = false;
+const secretRotation = createSecretRotation({
+  configDir: CONFIG_DIR, dataDir: DATA_DIR, atomicWrite, parseEnv,
+  updateEnv: updateEnvFileValue,
+  exclusive: runDeploymentExclusive,
+  preflight: async (kind) => {
+    rotationDrainOwned = false;
+    // Let already-authorized admin requests finish before taking env snapshots.
+    const deadline = Date.now() + 10000;
+    while (activeApiRequests > 0) {
+      if (Date.now() > deadline) throw new Error('admin_requests_busy');
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    const backend = parseEnv(BACKEND_ENV_FILE);
+    assertSecretEnvironment(backend, await runningSecretEnvironment('backend'));
+    const config = JSON.parse(await runDocker(composeArgs('--profile', '*', 'config', '--format', 'json'), 30000, 0));
+    for (const name of ['API_JWT_SECRET', 'BACKEND_INTERNAL_TOKEN', 'ENCRYPTION_KEY', 'DEVOPS_ENCRYPTION_KEY', 'MAP_PINS_ENCRYPTION_KEY']) {
+      if (`${config.services?.backend?.environment?.[name] || ''}` !== `${backend[name] || ''}`) throw new Error('backend_secret_env_override');
+    }
+    const telegram = parseEnv(TELEGRAM_ENV_FILE);
+    for (const service of ['telegram-bot', 'webapp-notes']) {
+      if (config.services?.[service] && `${config.services[service].environment?.BACKEND_INTERNAL_TOKEN || ''}` !== `${telegram.BACKEND_INTERNAL_TOKEN || ''}`) throw new Error('internal_token_env_override');
+      const running = await runningSecretEnvironment(service);
+      if (running) assertSecretEnvironment(telegram, running, ['BACKEND_INTERNAL_TOKEN']);
+    }
+    if (config.services?.backend?.command && JSON.stringify(config.services.backend.command) !== JSON.stringify(['node', 'scripts/start.cjs'])) throw new Error('backend_start_command_override');
+    const size = fs.statSync(DATABASE_FILE).size + (fs.existsSync(DATABASE_FILE + '-wal') ? fs.statSync(DATABASE_FILE + '-wal').size : 0);
+    for (const directory of [DATA_DIR, CONFIG_DIR, BACKUPS_DIR]) {
+      if (diskSpaceAt(directory).availableBytes < size * 3 + 64 * 1024 * 1024) throw new Error('not_enough_space_for_secret_rotation');
+    }
+    const probe = JSON.parse(await runDocker(composeArgs('run', '--rm', '--no-deps', '-T', '--entrypoint', 'node', 'backend', '/app/scripts/rotate-encryption.cjs', '--probe'), 60000));
+    if (probe.version !== 1) throw new Error('backend_rotation_helper_missing');
+    await validateRotationEncryption();
+    // Use the existing generation drain, without silently aborting user replies.
+    const drain = await backendInternalRequest('/internal/admin/update/prepare');
+    if (drain.preparing || drain.activeUsers > 0) throw new Error('active_generations_try_later');
+    rotationDrainOwned = true;
+    await backendInternalRequest('/internal/admin/update/prepare', { method: 'POST', body: JSON.stringify({ action: 'prepare' }) });
+    const prepared = await backendInternalRequest('/internal/admin/update/prepare');
+    if (prepared.activeUsers > 0) {
+      await backendInternalRequest('/internal/admin/update/prepare', { method: 'POST', body: JSON.stringify({ action: 'cancel' }) });
+      rotationDrainOwned = false;
+      throw new Error('active_generations_try_later');
+    }
+  },
+  cancelPrepare: async () => {
+    if (!rotationDrainOwned) return;
+    await backendInternalRequest('/internal/admin/update/prepare', { method: 'POST', body: JSON.stringify({ action: 'cancel' }) });
+    rotationDrainOwned = false;
+  },
+  services: async () => {
+    const running = await runDocker(composeArgs('--profile', '*', 'ps', '--status', 'running', '--services'), 30000);
+    return running.split(/\r?\n/).filter(service => ['backend', 'telegram-bot', 'webapp-notes'].includes(service));
+  },
+  stop: async (services) => {
+    await runDocker(composeArgs('--profile', '*', 'stop', '--timeout', '60', ...services), 3 * 60 * 1000);
+    const running = await runDocker(composeArgs('--profile', '*', 'ps', '--status', 'running', '--services'), 30000);
+    if (running.split(/\r?\n/).some(service => services.includes(service))) throw new Error('data_services_not_stopped');
+  },
+  restart: services => runDocker(composeArgs('--profile', '*', 'up', '-d', '--no-build', '--no-deps', '--pull', 'never', '--force-recreate', '--wait', '--wait-timeout', '120', ...services), 4 * 60 * 1000),
+  check: async () => { await backendInternalRequest('/internal/admin/model-settings', { timeoutMs: 15000 }); },
+  validate: validateRotationEncryption,
+  snapshot: destination => runProcess('sqlite3', [DATABASE_FILE, `.backup '${destination.replace(/'/g, "''")}'`]),
+  backup: () => createBackup({ includeConfiguration: true }),
+  transform: (file, oldKey, newKey, backend, verifyOnly = false) => {
+    const containerFile = '/data/' + path.basename(file);
+    const overrides = { DEVOPS_ENCRYPTION_KEY: backend.DEVOPS_ENCRYPTION_KEY, MAP_PINS_ENCRYPTION_KEY: backend.MAP_PINS_ENCRYPTION_KEY };
+    return runDocker(composeArgs('run', '--rm', '--no-deps', '-T', '--user', '0', '--entrypoint', 'node', 'backend', '/app/scripts/rotate-encryption.cjs'), 10 * 60 * 1000, 20000,
+      JSON.stringify({ file: containerFile, oldKey, newKey, overrides, verifyOnly })).then(JSON.parse);
+  },
+});
 
 function setOwnershipRecursive(targetPath, uid, gid) {
   const stat = fs.lstatSync(targetPath);
@@ -2609,6 +2708,27 @@ async function handleRequest(req, res) {
     return sendJson(res, session ? 200 : 401, session ? { authenticated: true, username: authConfig.username } : { authenticated: false });
   }
   if (!pathname.startsWith('/api/') || !requireSession(req, res)) return;
+  if (req.method === 'GET' && pathname === '/api/security/rotation') return sendJson(res, 200, secretRotation.status());
+  if (req.method === 'POST' && ['/api/security/rotation', '/api/security/rotation/recover'].includes(pathname)) {
+    const body = await readJson(req);
+    if (!loginAllowed(clientIp(req))) return sendJson(res, 429, { error: 'too_many_attempts' });
+    if (!verifyPassword(`${body.currentPassword || ''}`, authConfig)) {
+      recordFailedLogin(clientIp(req));
+      return sendJson(res, 403, { error: 'current_password_invalid' });
+    }
+    if (pathname.endsWith('/recover')) {
+      if (secretRotation.status().status !== 'recovery_required') return sendJson(res, 409, { error: 'recovery_not_required' });
+      void secretRotation.recover().catch(() => {});
+      return sendJson(res, 202, { ok: true });
+    }
+    if (!['jwt', 'internal', 'encryption'].includes(body.kind)) return sendJson(res, 400, { error: 'invalid_rotation_kind' });
+    if (body.confirm !== true) return sendJson(res, 400, { error: 'rotation_confirmation_required' });
+    if (serverUpdateInProgress() || applyPromise || backupPromise || restorePromise) return sendJson(res, 409, { error: 'another_operation_is_in_progress' });
+    return sendJson(res, 202, secretRotation.start(body.kind));
+  }
+  // Reads can also migrate legacy configuration; block all normal admin API
+  // requests while env files and the DB are being switched.
+  if (secretRotation.blocked()) return sendJson(res, 503, { error: 'secret_rotation_in_progress' });
   if (req.method === 'GET' && pathname === '/api/logs/stream') {
     const service = `${url.searchParams.get('service') || 'all'}`;
     const tail = Math.min(1000, Math.max(50, Number.parseInt(url.searchParams.get('tail') || '200', 10) || 200));
@@ -3572,11 +3692,15 @@ async function handleRequest(req, res) {
   return sendJson(res, 404, { error: 'not_found' });
 }
 
-const requestHandler = (req, res) => Promise.resolve(handleRequest(req, res)).catch((error) => {
+const requestHandler = (req, res) => {
+  const track = req.url.startsWith('/api/') && !req.url.startsWith('/api/security/rotation');
+  if (track) activeApiRequests++;
+  return Promise.resolve(handleRequest(req, res)).catch((error) => {
   console.error('[manager]', error);
   if (!res.headersSent) sendJson(res, 500, { error: error.message || 'internal_error' });
   else res.end();
-});
+  }).finally(() => { if (track) activeApiRequests--; });
+};
 
 let server;
 if (process.env.ADMIN_TLS === '1') {
@@ -3591,6 +3715,8 @@ server.requestTimeout = 60 * 60 * 1000;
 
 server.listen(PORT, '0.0.0.0', () => console.log(`Chatter Manager is listening on ${process.env.ADMIN_TLS === '1' ? 'https' : 'http'}://0.0.0.0:${PORT}`));
 scheduleComposeBootstrap();
+// Never reconcile/start data services ahead of interrupted rotation recovery.
+void secretRotation.recover().catch(() => { console.error('[manager] secret rotation recovery requires attention'); });
 
 setTimeout(() => { void runScheduledBackupIfDue(); }, 10000).unref();
 setInterval(() => { void runScheduledBackupIfDue(); }, 5 * 60 * 1000).unref();

@@ -5,6 +5,8 @@ RUN apk add --no-cache docker-cli docker-cli-compose sqlite
 WORKDIR /app
 
 COPY chatter-manager/server.js ./server.js
+COPY chatter-manager/secret-rotation.js ./secret-rotation.js
+COPY chatter-manager/secret-config.js ./secret-config.js
 COPY docker-compose.yml ./release/project/docker-compose.yml
 COPY deploy ./release/project/deploy
 

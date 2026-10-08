@@ -16,6 +16,66 @@ never placed in the container environment.
 The Docker socket gives this service host-level privileges. Keep the manager
 small, authenticated and behind TLS. Never add arbitrary shell-command routes.
 
+## Server secret rotation
+
+Security → Server secrets provides three password-confirmed operations:
+`API_JWT_SECRET`, `BACKEND_INTERNAL_TOKEN`, and `ENCRYPTION_KEY`. Values are
+generated server-side and never returned to the browser. Rebuild **backend,
+manager and admin-panel** together before testing; old backend images do not
+contain the offline migration helper/startup gate and fail preflight.
+
+The manager checks free space, environment overrides, **actual container secrets**
+(not merely `compose config`), and read-only decryption of stored credentials before
+stopping anything. A mismatch fails without importing or replacing secrets.
+It drains new generations
+(an active generation causes a refusal), then stops the running backend,
+Telegram and Notes services. It creates a database/configuration backup before
+changing anything. Only previously running services are recreated, without
+pulling images. JWT rotation invalidates user access/refresh tokens, not admin
+panel sessions. Internal-token rotation updates both backend.env and telegram.env.
+
+Encryption rotation uses a staged database and one SQLite transaction. It covers
+the API vault, mail passwords/OAuth tokens, ChatGPT credentials, smart-home tokens,
+DevOps passwords/SSH keys, and map coordinates. IDs and other data are unchanged.
+Existing independent DevOps/map keys remain unchanged; shared-key fallback data
+is re-encrypted. Corrupt ciphertext aborts the operation. Keys travel to the
+offline helper over stdin, never command-line arguments or logs.
+
+A fsynced journal plus `/data/.secret-rotation-maintenance` protect interrupted
+operations. Before the durable commit, recovery restores matching old DB/env;
+after commit it retries service startup without restoring old data. The backend
+Docker startup wrapper waits while the marker exists. Admin mutations/bootstrap
+and scheduled backups are blocked while recovery is pending. Recovery is tried
+on manager startup and can be retried from the panel with the admin password.
+
+Backups contain **plaintext configuration secrets** and use private permissions.
+Keep them private; old database-only backups need their original encryption key.
+Protected `.secret-rotation-<id>` recovery snapshots are retained in the config
+directory as well. Do not manually change env files, restart services with custom
+commands that bypass the startup gate, or delete a recovery marker mid-operation.
+A corrupt/missing journal requires operator recovery from a matching DB/config
+backup with all data services stopped; the manager does not guess the right key.
+Rotating encryption does not revoke leaked provider API keys or OAuth credentials.
+
+For a local checkout running the manager, point host Compose at the same config
+directory. For the default `.chatter` directory, put these path overrides in the
+root `.env` (preserve its other values):
+
+```dotenv
+BACKEND_ENV_FILE=./.chatter/backend.env
+TELEGRAM_ENV_FILE=./.chatter/telegram.env
+```
+
+Do not copy a newly generated encryption key over an existing database's key.
+Align with the key that actually decrypts that database. The installer already
+sets corresponding paths in its `compose.env` on standard server deployments.
+
+Tests (synthetic data only):
+
+```sh
+node --test backend-api/tests/encryption-rotation.test.cjs chatter-manager/secret-rotation.test.cjs chatter-manager/secret-rotation-api.test.cjs
+```
+
 ## Sessions
 
 Successful logins create a random session token stored in the `chatter_admin_session`
@@ -82,6 +142,3 @@ Implementation notes:
 - The cache (`openRouterCache`, 30 min TTL) is keyed by `GET:<pathname>` and lives in process memory; it is not shared with other services.
 - `/api/models/:modelId/billing` is forwarded to backend-api via `backendInternalRequest()` with the manager's internal bearer token, exactly like other admin routes.
 - `:modelId` in the billing route is URL-decoded before forwarding, because ids can contain `:` and other characters that need percent-encoding.
-
-
-

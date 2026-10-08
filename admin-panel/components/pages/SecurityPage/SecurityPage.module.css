@@ -86,3 +86,27 @@
   color: var(--text-muted);
   font-size: var(--fs-xs);
 }
+.rotationRows {
+  display: flex;
+  flex-direction: column;
+}
+.rotationRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  padding: var(--sp-3) 0;
+}
+.rotationRow + .rotationRow {
+  border-top: 1px solid var(--border-light);
+}
+.rotationRow p {
+  margin: var(--sp-1) 0 0;
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+}
+.rotationRow button { flex-shrink: 0; }
+@media (max-width: 640px) {
+  .rotationRow { align-items: flex-start; flex-direction: column; }
+}

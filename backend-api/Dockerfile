@@ -30,6 +30,7 @@ RUN npm ci --omit=dev \
     && npm cache clean --force
 
 COPY --from=build /app/dist ./dist
+COPY scripts ./scripts
 
 # TypeScript does not copy Markdown system prompts into dist.
 COPY --from=build /app/src/services/subagents/prompts ./dist/services/subagents/prompts
@@ -41,4 +42,4 @@ USER node
 
 EXPOSE 3050
 
-CMD ["node", "dist/server.js"]
+CMD ["node", "scripts/start.cjs"]
