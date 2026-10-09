@@ -9,6 +9,9 @@ const {
   getUserChatListItem,
   listUserChats,
   renameUserChat,
+  createChatFolder,
+  listChatFolders,
+  moveUserChatToFolder,
 } = await import('../src/services/chats.js');
 const { joinChatRoomByInvite } = await import('../src/services/chat-rooms.js');
 
@@ -52,4 +55,33 @@ const storedMemberTitle = db.prepare('SELECT title FROM chat_members WHERE chat_
 assert.equal(storedOwnerTitle.title, 'Renamed by owner');
 assert.equal(storedMemberTitle.title, 'My personal room');
 
-console.log('chat member title tests passed');
+// Owner folder placement must not split or overwrite the member's counters.
+const ownerFolderA = createChatFolder(101, 'Owner A');
+const ownerFolderB = createChatFolder(101, 'Owner B');
+const memberFolder = createChatFolder(202, 'Member folder');
+const roomIds = [chatId];
+for (const [index, folder] of [ownerFolderA, ownerFolderB].entries()) {
+  const id = Number(db.prepare('INSERT INTO user_chats (user_id, title, room_enabled, folder_id) VALUES (?, ?, 1, ?)')
+    .run(101, `Room ${index}`, folder.id).lastInsertRowid);
+  const token = `folder-count-test-${index}`;
+  db.prepare('INSERT INTO chat_invites (token, chat_id, created_by, created_at, expires_at) VALUES (?, ?, ?, ?, ?)')
+    .run(token, id, 101, 1, 4_102_444_800);
+  joinChatRoomByInvite(202, token);
+  roomIds.push(id);
+}
+assert.equal(listChatFolders(202).unfiled_count, 3);
+assert.equal(listChatFolders(202).total_count, 3);
+assert.equal(listChatFolders(101).unfiled_count, 1);
+assert.equal(listChatFolders(101).folders.find(folder => folder.id === ownerFolderA.id)?.chat_count, 1);
+assert.equal(listChatFolders(101).folders.find(folder => folder.id === ownerFolderB.id)?.chat_count, 1);
+assert.equal(listChatFolders(303).total_count, 1, 'unjoined rooms must not be counted');
+assert.equal(moveUserChatToFolder(202, roomIds[1], memberFolder.id), true);
+const memberCounts = listChatFolders(202);
+assert.equal(memberCounts.unfiled_count, 2);
+assert.equal(memberCounts.folders.find(folder => folder.id === memberFolder.id)?.chat_count, 1);
+assert.equal(memberCounts.total_count, 3);
+assert.equal(memberCounts.unfiled_count, listUserChats(202, 100, 0, { folderId: null }).length);
+assert.equal(listChatFolders(202, { folderId: memberFolder.id }).total_count, 1);
+assert.equal(listChatFolders(101).folders.find(folder => folder.id === ownerFolderA.id)?.chat_count, 1, 'member moves do not change owner counts');
+db.close();
+console.log('chat member title and folder count tests passed');

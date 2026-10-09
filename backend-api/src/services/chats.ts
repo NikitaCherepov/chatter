@@ -382,7 +382,8 @@ export const listChatFolders = (userId: number, filters: ChatListFilters = {}): 
     END AS folder_id, COUNT(*) AS count
     FROM user_chats uc
     WHERE ${where}
-    GROUP BY folder_id
+    -- Use the computed placement, not SQLite's same-named uc.folder_id column.
+    GROUP BY 1
   `).all(userId, userId, ...params) as Array<{ folder_id: number | null; count: number }>;
   const counts = new Map<number | null, number>(countRows.map((row) => [row.folder_id, Number(row.count) || 0]));
   const rows = db.prepare(`
