@@ -1,6 +1,6 @@
 {
   "name": "chatter-desktop",
-  "version": "1.9.28",
+  "version": "1.9.29",
   "license": "AGPL-3.0-only",
   "private": true,
   "main": "dist/main/main.js",
@@ -126,6 +126,8 @@
       ]
     },
     "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
       "artifactName": "${productName}-Setup-${version}.${ext}"
     },
     "publish": [

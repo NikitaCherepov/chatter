@@ -1,8 +1,7 @@
 {
   "changes": {
     "en": [
-      "Fixed the design",
-      "Added a right-click context menu"
+      "Added a custom installation folder selection during setup"
     ],
     "cs": [
       "Opraven design",
