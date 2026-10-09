@@ -2,6 +2,7 @@ import type { Tool } from './types.js';
 import { readChatContextTool } from './chats/read-chat-context.js';
 import { searchChatHistoryTool } from './chats/search-chat-history.js';
 import { generateImageTool } from './images/generate-image.js';
+import { describeImageTool } from './images/describe-image.js';
 import { searchColdMemoryTool } from './memory/search-cold-memory.js';
 import { readMemoryTool } from './memory/read-memory.js';
 import { readWebpageTool } from './web/read-webpage.js';
@@ -12,6 +13,7 @@ export {
   readChatContextTool,
   searchChatHistoryTool,
   generateImageTool,
+  describeImageTool,
   searchColdMemoryTool,
   readMemoryTool,
   readWebpageTool,
@@ -26,6 +28,7 @@ export const toolRegistry: Readonly<Record<string, Tool>> = {
   search_chat_history: searchChatHistoryTool,
   read_chat_context: readChatContextTool,
   generate_image: generateImageTool,
+  describe_image: describeImageTool,
   newspapers_list: newspapersListTool,
   newspaper_issue_contents: newspaperIssueContentsTool,
   read_newspaper_item: readNewspaperItemTool,

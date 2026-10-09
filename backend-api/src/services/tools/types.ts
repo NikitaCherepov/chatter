@@ -27,6 +27,13 @@ export interface ToolContext {
    * not flooded with megabytes of base64. Consumed by the response pipeline.
    */
   generatedImages?: Array<{ image_base64: string; image_url?: string; prompt_used: string }>;
+  userImages?: Array<{ base64: string; mimeType: string }>;
+  currentModelSupportsVision?: boolean;
+  directImageSink?: { items: Array<{ base64: string; mimeType: string; question: string; localUrl?: string }> };
+  /** Request-scoped vision completion with the existing usage tracking. */
+  runVisionCompletion?: (request: Record<string, unknown>) => Promise<{
+    response?: { choices?: Array<{ message?: { content?: string | null } }> };
+  }>;
 }
 
 export interface Tool<TContext extends ToolContext = ToolContext> {

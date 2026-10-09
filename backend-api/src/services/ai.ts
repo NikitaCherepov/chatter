@@ -39,6 +39,7 @@ import { hasBackendTranslation, translateForLanguage } from '../i18n/index.js';
 import { readChatAttachment, searchChatAttachment, type AttachmentReadContext } from './chat-attachments.js';
 import { attachFileToResponse, materializeAssetInput, type ResponseFileSink } from './response-attachments.js';
 import { getModularTool, modularToolDefinitions } from './tools/registry.js';
+import { buildDescribeImageTool } from './tools/images/describe-image.js';
 import { getContextSummary, type ContextSummaryDto } from './context-summary.js';
 
 dotenv.config();
@@ -1937,7 +1938,8 @@ const waitForHitlConfirmation = async <T>(userId: number, promise: Promise<T>): 
 };
 
 export const toolDefinitions = [
-  ...modularToolDefinitions,
+  // describe_image is added below with the active model's direct-view capability.
+  ...modularToolDefinitions.filter(tool => tool.function.name !== 'describe_image'),
   {
     type: 'function',
     function: {
@@ -3014,39 +3016,8 @@ If the camera is not found — return an error.`,
 };
 
 
-/** Build describe_image tool — sends image(s) to vision model for analysis */
-export const buildDescribeImageTool = (supportsDirectView = false) => {
-  const properties: Record<string, unknown> = {
-    question: {
-      type: 'string',
-      description: 'Specific task or question (e.g.: "Describe the image", "Read the text").'
-    },
-    image_url: {
-      type: 'string',
-      description: 'REQUIRED. Exact public URL or stored relative /api/v1/images/... URL of the image to analyze.'
-    },
-  };
-  if (supportsDirectView) {
-    properties.mode = {
-      type: 'string',
-      enum: ['description', 'direct'],
-      default: 'description',
-      description: 'description returns a text analysis from a vision helper. direct loads the pixels into your own next turn so you can inspect them yourself.',
-    };
-  }
-  return {
-    type: 'function' as const,
-    function: {
-      name: 'describe_image',
-      description: 'Analyzes the specified image using a vision model. Supports web image URLs, user photos, and images from chat history.',
-      parameters: {
-        type: 'object',
-        properties,
-        required: ['question', 'image_url']
-      }
-    }
-  };
-};
+export { buildDescribeImageTool } from './tools/images/describe-image.js';
+
 
 /** Build list_monitors tool — lists available displays without taking screenshots */
 const buildListMonitorsTool = () => {
@@ -3780,19 +3751,6 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
   const billingUser = billingUserId !== undefined && billingUserId !== user.id
     ? (getUserById(billingUserId) ?? user)
     : user;
-  const modularTool = getModularTool(toolName);
-  if (modularTool) {
-    return modularTool.handler(parsed, {
-      userId: user.id,
-      user,
-      billingUser,
-      chatId: subagentExtra?.chatId,
-      originMessageCursor: subagentExtra?.originMessageCursor,
-      timezoneOffset,
-      signal,
-      generatedImages,
-    });
-  }
   const runTrackedVisionCompletion = async (requestPayload: Record<string, unknown>) => {
     const completion = await runCompletion('vision-pro', requestPayload, undefined, signal);
     const normalized = normalizeTokenUsage(completion.response?.usage);
@@ -3808,6 +3766,23 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     }
     return completion;
   };
+  const modularTool = getModularTool(toolName);
+  if (modularTool) {
+    return modularTool.handler(parsed, {
+      userId: user.id,
+      user,
+      billingUser,
+      chatId: subagentExtra?.chatId,
+      originMessageCursor: subagentExtra?.originMessageCursor,
+      timezoneOffset,
+      signal,
+      generatedImages,
+      userImages,
+      currentModelSupportsVision: subagentExtra?.currentModelSupportsVision,
+      directImageSink: subagentExtra?.directImageSink,
+      runVisionCompletion: runTrackedVisionCompletion,
+    });
+  }
 
   if (toolName === 'get_user_time') {
     return JSON.stringify(getUserTimePayload(timezoneOffset), null, 2);
@@ -4911,93 +4886,6 @@ If the task is a description, return a detailed text response.`
   }
 
 
-  // ── Describe user-attached image(s) via vision model ──────────────────────
-
-  if (toolName === 'describe_image') {
-    const question: string = typeof parsed.question === 'string' ? parsed.question.trim() : '';
-    const imageUrl: string | undefined = typeof parsed.image_url === 'string' ? parsed.image_url.trim() || undefined : undefined;
-
-    if (!question) return JSON.stringify({ status: 'error', message: 'question is required — specify what you need to know about the image.' });
-
-    try {
-      // Collect images to analyze.
-      // Priority: 1) explicit image_url param 2) current request userImages 3) load from disk by URL
-      type ImgData = { base64: string; mimeType: string };
-      let imagesToAnalyze: ImgData[] = [];
-
-      let localUrl: string | undefined;
-      if (imageUrl) {
-        const materialized = await materializeAssetInput(user.id, { url: imageUrl, retention: 'temporary' });
-        if (materialized.kind !== 'image') {
-          return JSON.stringify({ status: 'error', message: 'The supplied reference is not an image.' });
-        }
-        localUrl = materialized.localUrl;
-        imagesToAnalyze = [{ base64: materialized.buffer.toString('base64'), mimeType: materialized.mimeType }];
-      } else if (userImages && userImages.length > 0) {
-        // From current request
-        imagesToAnalyze = userImages;
-      }
-
-      if (imagesToAnalyze.length === 0) {
-        return JSON.stringify({ status: 'error', message: 'Image is unavailable. It may have been deleted or not yet saved.' });
-      }
-      imagesToAnalyze = await Promise.all(imagesToAnalyze.map(async image => {
-        if (image.mimeType !== 'image/gif') return image;
-        const sharp = (await import('sharp')).default;
-        const firstFrame = await sharp(Buffer.from(image.base64, 'base64'), { failOn: 'none' })
-          .webp({ quality: 85 })
-          .toBuffer();
-        return { base64: firstFrame.toString('base64'), mimeType: 'image/webp' };
-      }));
-
-      if (parsed.mode === 'direct') {
-        if (!subagentExtra?.currentModelSupportsVision || !subagentExtra.directImageSink) {
-          return JSON.stringify({ status: 'error', message: 'Direct image viewing is unavailable for this model. Use description mode.' });
-        }
-        for (const image of imagesToAnalyze) {
-          subagentExtra.directImageSink.items.push({ ...image, question, localUrl });
-        }
-        return JSON.stringify({
-          status: 'loaded_for_direct_view',
-          images_loaded: imagesToAnalyze.length,
-          image_url: localUrl ?? imageUrl ?? null,
-        });
-      }
-
-      const visionMessages = [
-        {
-          role: 'system',
-          content: `You are a vision analyst. Analyze the user's image(s) and complete the requested task.
-Respond in the user's language. Be detailed and precise.`
-        },
-        {
-          role: 'user',
-          content: [
-            { type: 'text', text: question },
-            ...imagesToAnalyze.map(img => ({
-              type: 'image_url',
-              image_url: { url: `data:${img.mimeType};base64,${img.base64}` }
-            }))
-          ]
-        }
-      ];
-
-      const visionResp = await runTrackedVisionCompletion({
-        messages: visionMessages,
-        max_tokens: 2000,
-      });
-
-      const visionText = visionResp.response?.choices?.[0]?.message?.content || '';
-
-      return JSON.stringify({
-        status: 'success',
-        images_analyzed: imagesToAnalyze.length,
-        vision_result: visionText,
-      });
-    } catch (err: any) {
-      return JSON.stringify({ status: 'error', message: `Image analysis error: ${err?.message || String(err)}` });
-    }
-  }
 
 
 
