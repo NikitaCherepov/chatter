@@ -1,43 +1,56 @@
 {
   "changes": {
     "en": [
-      "Slightly improved the design on small screens"
+      "Fixed the design",
+      "Added a right-click context menu"
     ],
     "cs": [
-      "Mírně vylepšený design na malých obrazovkách"
+      "Opraven design",
+      "Přidáno kontextové menu po kliknutí pravým tlačítkem"
     ],
     "de": [
-      "Das Design für kleine Bildschirme leicht verbessert"
+      "Das Design korrigiert",
+      "Ein Rechtsklick-Kontextmenü hinzugefügt"
     ],
     "es": [
-      "Se ha mejorado ligeramente el diseño en pantallas pequeñas"
+      "Se corrigió el diseño",
+      "Se añadió un menú contextual al hacer clic derecho"
     ],
     "fr": [
-      "Légère amélioration du design sur les petits écrans"
+      "Correction du design",
+      "Ajout d'un menu contextuel au clic droit"
     ],
     "it": [
-      "Leggero miglioramento del design su schermi piccoli"
+      "Corretto il design",
+      "Aggiunto un menu contestuale con clic destro"
     ],
     "ja": [
-      "小さい画面でのデザインを少し改善しました"
+      "デザインを修正しました",
+      "右クリックのコンテキストメニューを追加しました"
     ],
     "ko": [
-      "작은 화면에서 디자인을 약간 개선했습니다"
+      "디자인 수정",
+      "오른쪽 클릭 컨텍스트 메뉴 추가"
     ],
     "pl": [
-      "Nieznacznie ulepszono wygląd na małych ekranach"
+      "Poprawiono wygląd",
+      "Dodano menu kontekstowe po kliknięciu prawym przyciskiem myszy"
     ],
     "pt-BR": [
-      "Pequena melhoria no design em telas pequenas"
+      "Corrigido o design",
+      "Adicionado um menu de contexto com o botão direito"
     ],
     "ru": [
-      "Немного улучшен дизайн на маленьких экранах"
+      "Исправлен дизайн",
+      "Добавлено контекстное меню по правому клику"
     ],
     "tr": [
-      "Küçük ekranlardaki tasarım biraz iyileştirildi"
+      "Tasarım düzeltildi",
+      "Sağ tık bağlam menüsü eklendi"
     ],
     "zh-CN": [
-      "略微改进了小屏幕上的设计"
+      "修复了设计",
+      "添加了右键上下文菜单"
     ]
   }
 }

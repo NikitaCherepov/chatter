@@ -352,7 +352,12 @@
     "selectPlaceholder": "Wybierz...",
     "unknown": "Nieznane",
     "user": "Użytkownik",
-    "inDevelopment": "W trakcie rozwoju"
+    "inDevelopment": "W trakcie rozwoju",
+    "undo": "Cofnij",
+    "redo": "Ponów",
+    "cut": "Wytnij",
+    "paste": "Wklej",
+    "selectAll": "Zaznacz wszystko"
   },
   "auth": {
     "subtitle": {

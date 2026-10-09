@@ -31,7 +31,12 @@
     "selectPlaceholder": "请选择...",
     "unknown": "未知",
     "user": "用户",
-    "inDevelopment": "开发中"
+    "inDevelopment": "开发中",
+    "undo": "撤销",
+    "redo": "重做",
+    "cut": "剪切",
+    "paste": "粘贴",
+    "selectAll": "全选"
   },
   "auth": {
     "subtitle": {

@@ -352,7 +352,12 @@
     "selectPlaceholder": "Seç...",
     "unknown": "Bilinmiyor",
     "user": "Kullanıcı",
-    "inDevelopment": "Geliştirme aşamasında"
+    "inDevelopment": "Geliştirme aşamasında",
+    "undo": "Geri al",
+    "redo": "Yinele",
+    "cut": "Kes",
+    "paste": "Yapıştır",
+    "selectAll": "Tümünü seç"
   },
   "auth": {
     "connection": {

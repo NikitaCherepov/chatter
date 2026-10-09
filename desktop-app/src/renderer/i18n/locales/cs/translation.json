@@ -352,7 +352,12 @@
     "selectPlaceholder": "Vybrat...",
     "unknown": "Neznámý",
     "user": "Uživatel",
-    "inDevelopment": "Ve vývoji"
+    "inDevelopment": "Ve vývoji",
+    "undo": "Zpět",
+    "redo": "Znovu",
+    "cut": "Vyjmout",
+    "paste": "Vložit",
+    "selectAll": "Vybrat vše"
   },
   "auth": {
     "connection": {

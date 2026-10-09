@@ -31,7 +31,12 @@
     "selectPlaceholder": "Seleccione...",
     "unknown": "Desconocido",
     "user": "Usuario",
-    "inDevelopment": "En desarrollo"
+    "inDevelopment": "En desarrollo",
+    "undo": "Deshacer",
+    "redo": "Rehacer",
+    "cut": "Cortar",
+    "paste": "Pegar",
+    "selectAll": "Seleccionar todo"
   },
   "auth": {
     "subtitle": {

@@ -31,7 +31,12 @@
     "selectPlaceholder": "選択...",
     "unknown": "不明",
     "user": "ユーザー",
-    "inDevelopment": "開発中"
+    "inDevelopment": "開発中",
+    "undo": "元に戻す",
+    "redo": "やり直す",
+    "cut": "切り取り",
+    "paste": "貼り付け",
+    "selectAll": "すべて選択"
   },
   "auth": {
     "subtitle": {
