@@ -485,7 +485,8 @@
       "app": "Uygulama",
       "billing": "Faturalandırma",
       "about": "Hakkında",
-      "data": "Veri"
+      "data": "Veri",
+      "admin": "Yönetici"
     },
     "browser": {
       "help": "Yapay zekânın hangi tarayıcı işlemleri için onayınızı isteyeceğini seçin. Manuel işlemler etkilenmez.",
@@ -721,7 +722,10 @@
       "noAvatarControl": "Avatar kontrolünü devre dışı bırak",
       "noAvatarControlHelp": "AI piksel avatarı göremez veya kontrol edemez. Avatar araçları ve ilgili istem talimatları kaldırılır.",
       "noWakeWord": "Uyandırma kelimesini devre dışı bırak",
-      "noWakeWordHelp": "Uyandırma kelimelerini (Alexa, Hey Jarvis, Hey Mycroft, Hey Rhasspy) dinlemeyi durdur. Mikrofon akışı kapatılacak."
+      "noWakeWordHelp": "Uyandırma kelimelerini (Alexa, Hey Jarvis, Hey Mycroft, Hey Rhasspy) dinlemeyi durdur. Mikrofon akışı kapatılacak.",
+      "injectionProtection": "İstem enjeksiyonu koruması",
+      "injectionProtectionHint": "Rol yapma için kapalı önerilir. Ayrıntılar için üzerine gelin.",
+      "injectionProtectionHelp": "Devre dışı bırakıldığında, koruma protokolü ve güvenilmeyen içerik işaretleri modele gönderilmez. Web sitelerindeki, e-postalardaki ve dosyalardaki talimatlar yanıtları ve araç çağrılarını etkileyebilir. Erişim izinleri ve sunucu kısıtlamaları uygulanmaya devam eder. Tek tek sohbetler bu ayarı geçersiz kılabilir."
     },
     "models": {
       "title": "Model ayarları",
@@ -837,14 +841,70 @@
           "worlds_not_supported": "Lorebook'lar ve Dünya Bilgisi henüz içe aktarılmıyor.",
           "other_data_ignored": "Arşivdeki diğer ayarlar, uzantılar ve servis dosyaları Chatter'ı değiştirmez.",
           "personas_not_found": "settings.json içinde hiçbir persona bulunamadı.",
-          "persona_avatar_errors": "Bazı persona avatarları içe aktarılamadı."
+          "persona_avatar_errors": "Bazı persona avatarları içe aktarılamadı.",
+          "media_missing": "Arşivde başvurulan bazı ekler bulunamadı. Harici URL'ler indirilmez.",
+          "media_import_errors": "Bazı ekler içe aktarılamadı. Mesajların kendisi korundu.",
+          "group_behavior_changed": "Her grup geçmişi, size ait ayrı bir oda haline gelir. Karakterler ayrı botlara dönüşür. İçe aktarma sonrası otomatik yanıtlar kapalıdır; SillyTavern etkinleştirme stratejileri, sessize alınan üye ayarları ve katılım kartı istemleri yeniden oluşturulmaz.",
+          "group_metadata_missing": "Bazı grup geçmişlerinin eşleşen bir grup tanımı yok. Mesajları odalarda korunur, ancak katılımcı listesi geri yüklenemez.",
+          "group_character_missing": "Bazı karakterlerin eşleşen bir kartı yok. Mesajları korunur, ancak botları geri yüklenemez.",
+          "chat_vector_import_errors": "Bazı vektörleştirilmiş sohbetler sohbet belleğine eklenemedi. Sohbetlerin kendileri yine de içe aktarıldı."
         },
         "errors": {
           "format": "Bir SillyTavern ZIP yedeği seçin",
           "size": "Arşiv 256 MB'tan büyük olmamalıdır",
           "invalid": "SillyTavern yedeği okunamadı",
           "import": "SillyTavern yedeği içe aktarılamadı"
-        }
+        },
+        "diskSpace": "Sunucu disk alanı",
+        "summary": {
+          "title": "Yedek içeriği",
+          "data": "Veri",
+          "total": "Toplam",
+          "details": "Değişiklikler",
+          "characters": "Karakterler",
+          "chatTypes": "Özel: {{personal}} · Odalar: {{rooms}}",
+          "roomsHelp": "Odalardaki otomatik yanıtlar kapalı.",
+          "spaceEnough": "Yeterli alan",
+          "spaceLow": "Yeterli alan yok",
+          "required": "Gerekli ≈ {{size}}",
+          "available": "Kullanılabilir {{size}}",
+          "spaceRatio": "Gerekli {{required}}, kullanılabilir {{available}}",
+          "diskHint": "Bir güvenlik payı içerir. Arşiv zaten hazırlandı.",
+          "warnings": "Lütfen dikkat",
+          "more": "İçe aktarma ayrıntıları",
+          "cancelNote": "İptal, zaten içe aktarılan verileri korur. Yeniden içe aktarma sohbetleri çoğaltmaz.",
+          "groupNote": "Her grup geçmişi botlarla ayrı bir oda haline gelir. ST yanıt stratejileri, sessize alınan üye ayarları ve katılan kart istemleri aktarılmaz.",
+          "vectorNote": "ST vektörleri kopyalanmaz; mesajlar gömme modeliniz tarafından işlenir.",
+          "memoryWarning": "Bellek: {{messages}} mesaj yeniden dizinlenecek. Sağlayıcı ücretleri uygulanabilir.",
+          "missingMedia": "Kullanılamayan ekler: {{count}}. Mesajlar korunur; harici URL'ler indirilmez."
+        },
+        "diskEstimate": "Kullanılabilir: {{available}} MB · Tahmini gereken: {{required}} MB",
+        "diskHelp": "Arşiv zaten diskte hazırlandı. Bu tahmin; mesajlar, varyantlar ve ekler için ek depolama alanını, güvenlik payı dahil kapsar.",
+        "insufficientSpace": "Sunucuda yeterli boş disk alanı yok. Biraz yer açıp arşivi yeniden seçin.",
+        "mediaTitle": "Mesaj ekleri",
+        "groupsTitle": "Grup sohbetleri → Chatter odaları",
+        "groupsCount": "Gruplar: {{count}} · Geçmişler / odalar: {{history_count}}",
+        "groupsResult": "Oluşturulan odalar: {{created}}, zaten içe aktarılanlar: {{existing}}",
+        "cancelHelp": "İptal, sonraki işleme sınırında durur. Zaten içe aktarılan veriler korunur; aynı arşivi tekrar içe aktarmak sohbetleri çoğaltmadan eksik ekleri tamamlar.",
+        "cancelled": "İçe aktarma iptal edildi. Zaten içe aktarılan veriler korundu.",
+        "mediaCount": "Görseller: {{images}} · Dosyalar: {{files}}",
+        "mediaMissing": "Arşivde başvurulan bazı ekler eksik veya desteklenmeyen harici yollar kullanıyor ({{count}}). Mesajlar yine de içe aktarılacak.",
+        "mediaResult": "İçe aktarılan ekler: {{images}} görsel, {{files}} dosya; eksik: {{missing}}, hata: {{errors}}",
+        "progress": {
+          "groups": "Grup geçmişleri: {{done}} / {{total}}",
+          "personas": "Personalar ve avatarlar",
+          "media": "Ekler: mesaj {{done}} / {{total}}",
+          "cancelling": "Geçerli öğeden sonra iptal ediliyor...",
+          "cancelled": "İçe aktarma iptal edildi",
+          "characters": "Karakterler: {{done}} / {{total}}",
+          "chats": "Sohbetler ve ekler: {{done}} / {{total}}",
+          "memory": "Sohbet belleği: {{done}} / {{total}}",
+          "ready": "İçe aktarmaya hazır",
+          "complete": "İçe aktarma tamamlandı",
+          "failed": "İçe aktarma başarısız"
+        },
+        "chatVectorsWarning": "{{chats}} sohbette vektörleştirilmiş sohbet geçmişi bulundu. Chatter, {{messages}} mesajı yapılandırılmış gömme modeliyle her sohbetin yerel belleğine yeniden gömecek. Bu işlem zaman alabilir ve sağlayıcı ücretlerine yol açabilir; SillyTavern'in uyumsuz ham vektörleri kopyalanmaz.",
+        "chatMemoryImportedResult": "Sohbet belleği: {{chats}} sohbette {{messages}} mesaj dizinlendi; hatalar: {{errors}}"
       },
       "character": {
         "title": "Karakter Kartı",
@@ -1389,7 +1449,29 @@
       "confirmDelete": "Bu hafıza silinsin mi?",
       "loadSettingsFailed": "Hafıza ayarları yüklenemedi",
       "loadRecordsFailed": "Anılar yüklenemedi",
-      "saveSettingsFailed": "Anı ayarları kaydedilemedi"
+      "saveSettingsFailed": "Anı ayarları kaydedilemedi",
+      "preferences": {
+        "defaultsHint": "Sohbetleriniz için varsayılan. Tek tek sohbetler bunu geçersiz kılabilir.",
+        "limitLabel": "Arama başına maksimum anı",
+        "adminDefault": "Varsayılan — {{count}}",
+        "chatDefault": "Otomatik — {{count}}",
+        "limitHint": "Otomatik anı ve botun anı arama aracı için.",
+        "limitHelp": "Parçaları değil, farklı anıları sayar. Sohbet ayarları kişisel varsayılanları, kişisel varsayılanlar da sunucu varsayılanını geçersiz kılar. Yeniden sıralama 20 adaya kadar değerlendirir ve eşiğin altındaki sonuçları filtreler. Bot daha azını isteyebilir. Daha fazla anı, bağlamı ve maliyetleri artırır. Arayüzdeki kart aramaları kişisel geçersiz kılmaları kullanmaz."
+      },
+      "automaticMemory": {
+        "label": "Otomatik bellek",
+        "hint": "Her yanıttan önce ilgili anıları getir.",
+        "inactive": "Bellek kullanımı devre dışıyken etkin değil.",
+        "help": "Yanıtlamadan önce mesaj metni yapılandırılmış gömme sağlayıcısına gönderilir. Arama, seçili bellek kapsamını ve etkinse yeniden sıralayıcıyı kullanır: getirilen parçalar sağlayıcısına gönderilir. İstekler normal aramalar gibi ücretlendirilir; odalarda yanıtlayan botun sahibi öder. Sonuçlar ek kırpma yapılmadan iletilir ve sohbet geçmişine kaydedilmez. Arama başarısız olursa veya 10 saniyeden uzun sürerse yanıt bellek olmadan devam eder. Otomatik bellek, misafir modunda kullanılmaz."
+      },
+      "injectionProtection": {
+        "label": "İstem enjeksiyonu koruması",
+        "automatic": "Otomatik",
+        "enabled": "Etkin",
+        "disabled": "Devre dışı",
+        "hint": "Rol yapma için kapalı önerilir.",
+        "help": "Otomatik, Kısıtlamalar bölümündeki genel ayarı kullanır. Devre dışı bırakıldığında, koruma protokolü ve güvenilmeyen içerik işaretleri modele gönderilmez. Web sitelerindeki, e-postalardaki ve dosyalardaki talimatlar botu etkileyebilir. Erişim izinleri ve sunucu kısıtlamaları yürürlükte kalır. Değişiklikler devam eden bir üretimi değil, sonraki yanıtları etkiler."
+      }
     },
     "contextSummary": {
       "title": "Önceki konuşma özeti",
@@ -1730,6 +1812,72 @@
         "title": "## Ayrıntılar",
         "body": "### 1. Yanıt modları\n\nOdaların iki modu vardır:\n\n- **Tur** — botlar belirlenen sırayla yanıt verir.\n- **Manuel** — herhangi bir anda hangi botun yanıt vereceğini siz seçersiniz.\n\n### 2. Otomatik yanıtlar\n\n\"Hemen yanıtla\" seçeneği, botun her yeni mesaja tepki vermesini sağlar:\n\n- mesajlarınız;\n- diğer katılımcıların mesajları (bot paylaşılıyorsa).\n\n### 3. Diğer katılımcılar için bot erişimi\n\nBir botun diğer oda üyelerine yanıt vermesini sağlamak için onu paylaşılan yapın:\n\n1. Botun üzerine gelin.\n2. Üç nokta düğmesine tıklayın.\n3. \"Üyelerle paylaş\" seçeneğini seçin.\n\nNot: botu kullanmak **sizin** kotalarınızı tüketir ve **sizin** seçtiğiniz modeli kullanır.\n\n### 4. Veri güvenliği\n\nBaşka bir kullanıcı botunuzdan bir eylem gerçekleştirmesini isterse (örneğin:\n\n- bilgisayarda bir komut çalıştırmak;\n- e-postayı kontrol etmek;\n- bir arşivde arama yapmak),\n\nbu, **kendi** ortamını kullanır:\n\n- kendi bilgisayarı;\n- kendi e-postası;\n- kendi arşivleri.\n\nBotunuzu kullanıyor olsa bile.\n\nBu, güvenlik için yapılır.\n\nAynı zamanda, botun sıcak belleği onlar için erişilebilir kalır.\n\n### 5. Bot belleği ve sahibin gizliliği\n\nPaylaşılan bir bot kullanıldığında, sahibin kısa süreli belleğine erişimi olmaya devam eder: örneğin, ad, yaş, yakın kişiler ve iş yeri. Bot bu bilgileri sohbette kullanabilir veya bahsedebilir. Böyle bir botu yalnızca güvendiğiniz kişilerin olduğu odalara ekleyin.\n\nSahibin arşivleri, e-postası, dosyaları, bilgisayarı ve diğer kişisel entegrasyonları katılımcılarla paylaşılmaz."
       }
+    }
+  },
+  "memorySetupNotice": {
+    "title": "Vektör belleği yapılandırılmadı",
+    "settingsHelp": "Anlamsal arama, otomatik bellek ve yeni anıları kaydetme kullanılamıyor. Bir yöneticinin yönetim panelinde bir gömme modeli yapılandırması gerekiyor. Kaydedilen kayıtlar listede kullanılabilir durumda kalır.",
+    "importHelp": "Sohbetler ve diğer veriler içe aktarılacak, ancak vektörleştirilmiş sohbetlerden gelen anılar henüz eklenmeyecek. Bir gömme modeli yapılandırdıktan sonra aynı arşivi tekrar içe aktarın."
+  },
+  "memoryMap": {
+    "limit": "En fazla {{count}}",
+    "pages": "Bellek sayfaları",
+    "listCount": "{{total}} kayıttan {{shown}} tanesi yüklendi",
+    "more": "Daha fazla yükle",
+    "total": "Toplam anı: {{count}}",
+    "build": "Harita oluştur",
+    "warning": "{{total}} anının en son {{count}} tanesi yüklenecek. Vektörlerin indirilmesi ve projeksiyonun hesaplanması zaman alabilir ve bellek kullanımını önemli ölçüde artırabilir. Maksimum: 5.000; iptal edebilirsiniz.",
+    "found": "Bulundu: {{count}}",
+    "refresh": "Yenile",
+    "view": "Bellek görünümü",
+    "list": "Liste",
+    "map": "3D",
+    "count": "Haritada: {{total}} anıdan {{shown}} tanesi",
+    "reset": "Görünümü sıfırla",
+    "loading": "Anı haritası hazırlanıyor…",
+    "failed": "Harita yüklenemedi. Anı listesi hâlâ kullanılabilir.",
+    "retry": "Yeniden dene",
+    "webgl": "Bu cihazda 3D kullanılamıyor. Bunun yerine listeyi kullanın.",
+    "noVectors": "Yüklenen anılar için kayıtlı vektör bulunamadı.",
+    "help": "Döndürmek için sürükleyin, yakınlaştırmak için kaydırın, bir anıyı açmak için bir noktaya tıklayın. Renkler kaynakları temsil eder; arama sonuçları vurgular. Bu yaklaşık bir PCA projeksiyonudur, tam arama mesafeleri değildir.",
+    "separateSpaces": "Farklı gömme modelleri ayrı bulutlarda görünür; aralarındaki mesafeler karşılaştırılamaz."
+  },
+  "chatgpt": {
+    "access": "Erişim",
+    "sharedLabel": "Diğer kullanıcıların bu bağlantıyı kullanmasına izin ver",
+    "sharedHelp": "İstekleri de plan kotanızı kullanır. Paylaşılan PRO/LITE ve Vision modelleri için gereklidir.",
+    "privateModels": "Bu bağlantı yalnızca yöneticiler içindir. Manuel bir model ekleyin; PRO/LITE ve Vision için önce entegrasyonda paylaşılan erişimi etkinleştirin.",
+    "requestLimitations": "Bu abonelik yolu şu anda temperature, top_p veya max_tokens çıktı sınırını desteklemez. Normal API faturalandırması değildir. OAuth bağlantıları her sunucuda ayrı ayrı yetkilendirilmelidir.",
+    "title": "ChatGPT aboneliği",
+    "adminHelp": "İstekler için planını kullanmak üzere bir ChatGPT hesabı bağlayın.",
+    "desktopHelp": "Yalnızca yöneticiler. Bu bilgisayardaki tarayıcıda oturum açın; bağlantı sunucunuzda kaydedilir. Uzak sunucular HTTPS gerektirir.",
+    "firstSignIn": "Önce bilgisayarınızda oturum açın",
+    "adminSteps": "Bilgisayarınızda Chatter'ı açın → Ayarlar → Uygulama → ChatGPT aboneliği → ChatGPT ile devam et. Ardından bu listeyi yenileyin. Oturum açma normal kullanıcılar için kullanılamaz.",
+    "signIn": "ChatGPT ile devam et",
+    "waiting": "Tarayıcıda oturum açılması bekleniyor…",
+    "reconnect": "Yeniden bağlan",
+    "connected": "ChatGPT sunucuya bağlandı",
+    "failed": "ChatGPT isteği başarısız oldu.",
+    "serverRequired": "Önce Chatter sunucunuza bağlanın ve yönetici olarak oturum açın.",
+    "refresh": "Bağlantıları yenile",
+    "empty": "Henüz bağlantı yok.",
+    "planEnabled": "ChatGPT plan kullanımı etkin",
+    "planDisabled": "ChatGPT plan kullanımı devre dışı",
+    "name": "Bağlantı adı",
+    "saveName": "Adı kaydet",
+    "loadModels": "Kullanılabilir modelleri yükle",
+    "model": "Model",
+    "testHelp": "Test, OpenAI'ye kısa bir istek gönderir ve ChatGPT planı kotanızı kullanır.",
+    "test": "Test isteği",
+    "disconnect": "Bağlantıyı kes",
+    "disconnectHelp": "OAuth oturumu sonlandırılsın ve sunucu kimlik bilgileri kaldırılsın mı? Bu bağlantıyı kullanan modeller çalışmayı durduracak.",
+    "errors": {
+      "chatgpt_secure_trusted_server_required": "Seçilen sunucuyu HTTPS (veya yerel bir sunucu) ile kullanın.",
+      "chatgpt_authorization_timeout": "Oturum açma zaman aşımına uğradı. Lütfen tekrar deneyin.",
+      "chatgpt_authorization_declined": "Erişim reddedildi. Lütfen tekrar deneyin.",
+      "chatgpt_plan_usage_not_enabled": "Uygulamanın ChatGPT planınızı kullanmasına izin verin.",
+      "chatgpt_reauthorization_required": "ChatGPT ile tekrar oturum açın.",
+      "chatgpt_authorization_in_progress": "Oturum açma tarayıcıda zaten açık."
     }
   }
 }

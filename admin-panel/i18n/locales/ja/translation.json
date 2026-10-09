@@ -240,6 +240,56 @@
       "colProvider": "プロバイダー",
       "colStatus": "ステータス",
       "colLastCheck": "最終確認"
+    },
+    "access": {
+      "label": "モデルアクセス",
+      "all": "全員",
+      "admins": "管理者のみ",
+      "selected": "選択したユーザー",
+      "users": "許可されたユーザー",
+      "hint": "ユーザーが選択されていない場合はアクセスできません。管理者も選択する必要があります。",
+      "admin": "管理者",
+      "choose": "ユーザーを選択",
+      "search": "名前またはIDで検索…",
+      "empty": "ユーザーが見つかりません",
+      "failed": "ユーザーを読み込めませんでした"
+    },
+    "transfer": {
+      "title": "インポートとエクスポート",
+      "subtitle": "Chatter または SillyTavern から保存済みのモデル接続を転送します。",
+      "import": "モデルをインポート",
+      "export": "モデルをエクスポート",
+      "importHint": "SillyTavern の ZIP バックアップ、JSON プリセット、または Chatter のモデル設定をアップロードしてください。",
+      "exportHint": "保存済みの設定（モデルID、ロール、価格、キー参照を含む）をエクスポートします。未保存の編集内容は含まれません。",
+      "includeKeys": "APIキーを含める",
+      "secretWarning": "このファイルには暗号化されていないAPIキーが含まれます。非公開で保管してください。",
+      "drop": "ここにZIPまたはJSONファイルをドロップするか、ファイルを選択してください",
+      "chooseFile": "ファイルを選択",
+      "tooLarge": "ファイルが大きすぎます。ZIP: 最大256 MB、JSON: 最大2 MB。",
+      "keys": "ファイル内のキー",
+      "showKey": "表示",
+      "hideKey": "非表示",
+      "showKeyLabel": "キーを表示: {{name}}",
+      "hideKeyLabel": "キーを非表示: {{name}}",
+      "missingKey": "キーが指定されていません",
+      "linkedModels": "モデル",
+      "noLinkedModels": "未割り当て",
+      "removeKeyLabel": "インポートからキーを削除: {{name}}",
+      "removeKeyHint": "このインポートからのみキーを削除します。保存済みのキーは削除されません。リンクされたモデルには別のキーが必要になります。",
+      "keysHint": "使用するキーに名前を付けてください。不足しているキーはここに入力するか、以下の保存済みキーで置き換えられます。",
+      "model": "モデル / API URL",
+      "key": "APIキー",
+      "roles": "使用先",
+      "noOverwrite": "既存のモデルとキーは上書きされません。PRO/LITEモデルは追加されます。使用中のVisionスロットは変更されません。インポートすると、サービスを再起動せずに選択したモデルが保存・適用されます。",
+      "confirm": "インポートして適用",
+      "download": "JSONをダウンロード",
+      "result": "追加: {{added}}。既存またはスキップ: {{skipped}}。",
+      "warnings": {
+        "chatgpt_reconnect_required": "ChatGPT OAuthモデルはスキップされました。まずこのサーバーでプランを認証してから、そのモデルを追加してください。OAuthトークンはモデル設定とともに転送されません。",
+        "st_settings_not_transferred": "SillyTavernのサンプリング設定、プロンプトテンプレート、スクリプトは転送されません。",
+        "st_connection_needs_configuration": "一部の接続にはOpenAI互換のAPI URLが必要です。ネイティブのAnthropicエンドポイントはこのインポーターと互換性がありません。",
+        "st_text_completion_not_supported": "Text Completionプロファイルはインポートされません。OpenAI互換のChat Completions接続を使用してください。"
+      }
     }
   },
   "integrations": {
@@ -378,6 +428,12 @@
         "deleteTitle": "このコレクションを削除しますか？",
         "deleteText": "そのベクトルはQdrantから完全に削除されます。SQLite内の正規メモリテキストは影響を受けません。",
         "deleteAction": "削除"
+      },
+      "retrieval": {
+        "sectionTitle": "メモリ検索結果",
+        "sectionIntro": "リランキングあり/なしの検索に共通のデフォルト設定です。",
+        "limitLabel": "検索あたりの最大メモリ数",
+        "limitHint": "1～20件の異なるメモリ。再ランキングは最大20件の候補を評価します。ユーザーは個人設定とチャット設定でボットの結果件数を上書きできます。"
       }
     },
     "webSearch": {
@@ -866,7 +922,8 @@
         "backup": "データベースのバックアップを作成中…",
         "restarting": "サーバーサービスを再起動中。パネルが一時的に切断されます…",
         "complete": "サーバーが更新されました。",
-        "failed": "更新に失敗しました。"
+        "failed": "更新に失敗しました。",
+        "pulling": "サーバーイメージをダウンロードして準備しています…"
       },
       "drain": {
         "waiting": "{{count}}人のユーザーが作業中です。{{seconds}}秒待機中…",
@@ -895,6 +952,13 @@
         "softApply": "最大15秒待って続行",
         "forceApply": "今すぐ続行",
         "applying": "処理中…"
+      },
+      "storage": {
+        "title": "更新前のディスク容量",
+        "available": "利用可能: {{size}}",
+        "required": "推定必要容量: {{size}}",
+        "estimate": "変更されたイメージ: {{images}} · バックアップワークスペース: {{backup}}。Docker が既存のレイヤーを再利用できる場合でも、見積もりには完全な圧縮イメージサイズが使用されます。",
+        "insufficient": "更新する前にディスク容量を空けてください。"
       }
     },
     "error": "エラー: {{message}}",
@@ -1081,7 +1145,72 @@
     "apiKeyDeleteNullify": "置き換えずに削除",
     "apiKeyDeleteSelectReplacement": "モデル用の新しいキー",
     "apiKeyDeleteConfirm": "削除",
-    "apiKeyNotUsed": "このキーはどのモデルでも使用されていません。削除しても問題ありません。"
+    "apiKeyNotUsed": "このキーはどのモデルでも使用されていません。削除しても問題ありません。",
+    "rotation": {
+      "title": "サーバーシークレット",
+      "description": "新しいシークレットを安全に生成します。現在の管理者パスワードで確認してください。",
+      "change": "ローテーション",
+      "recover": "リカバリを再開",
+      "recoveryHint": "リカバリに対応が必要です。他の操作はブロックされています。リカバリを再試行してください。シークレットを手動で置き換えないでください。",
+      "manualRecoveryHint": "リカバリジャーナルが見つからないか破損しています。データサービスを停止した状態で、一致するデータベース/設定のバックアップを復元してください。manager の README を参照してください。キーを手動で置き換えないでください。",
+      "downtime": "バックエンド、Telegram、Notes が一時的に停止します。現在の設定を含むバックアップが先に作成されます。新しいシークレットはサーバー上で生成されます。",
+      "backup": "ローテーション前のバックアップ",
+      "backupWarning": "古いシークレットが含まれています。非公開で保管してください。古いデータベースのバックアップには、対応する暗号化キーが必要です。そのキーは削除しないでください。",
+      "passwordInvalid": "現在のパスワードが正しくありません。",
+      "requestFailed": "操作を開始できませんでした。再試行する前にステータスを確認してください。",
+      "statusUnavailable": "ローテーションのステータスを読み取れません。コントロールは利用できません。",
+      "fieldCount": "再暗号化されたフィールド: {{count}}",
+      "rolledBack": "以前の設定を復元しました。再試行する前に、ディスク容量、バックエンドイメージ、暗号化されたレコードを確認してください。",
+      "preflightFailed": "ローテーションは開始されませんでした。ディスク容量、アクティブな世代、バックエンドイメージを確認してください。シークレットは変更されていません。",
+      "status": {
+        "queued": "待機中",
+        "running": "進行中",
+        "complete": "完了",
+        "failed": "失敗",
+        "recovery_required": "復旧が必要"
+      },
+      "reason": {
+        "running_secret_config_mismatch": "実行中のコンテナはマネージャーとは異なるシークレットを使用しています。envファイルとComposeの起動設定を一致させてください。ローテーションは開始されていません。",
+        "active_generations_try_later": "アクティブな返信を待ち、有効な場合は更新の準備をキャンセルしてください。",
+        "not_enough_space_for_secret_rotation": "バックアップと作業用データベースのコピーに十分な空き容量がありません。",
+        "backend_secret_env_override": "バックエンドのシークレットが Compose で上書きされています。backend.env の値を使用してください。",
+        "internal_token_env_override": "依存サービスの内部トークンが Compose で上書きされています。",
+        "backend_start_command_override": "カスタムのバックエンド起動コマンドがリカバリ保護をバイパスします。",
+        "backend_rotation_helper_missing": "バックエンドを再ビルドしてください。イメージに現在のローテーションヘルパーが含まれていません。",
+        "backend_not_running": "バックエンドが実行されていません。",
+        "secret_not_configured": "現在のシークレットが設定されていません。",
+        "encrypted_record_unreadable": "暗号化されたレコードを古いキーで読み取れません。ローテーションはキャンセルされました。",
+        "storage_write_failed": "データを書き込めませんでした。空き容量と権限を確認してください。",
+        "admin_requests_busy": "他の管理者リクエストがまだ実行中です。しばらくしてから再試行してください。",
+        "operation_failed": "操作を完了できませんでした。コンテナの状態を確認し、現在のイメージを再ビルドしてください。"
+      },
+      "phase": {
+        "queued": "待機中",
+        "preflight": "確認中",
+        "stopping": "サービスを停止中",
+        "backup": "バックアップを作成中",
+        "reencrypting": "再暗号化中",
+        "publishing": "データベースを切り替え中",
+        "committed": "サービスを起動中",
+        "rolling_back": "復元中",
+        "rolled_back": "サービスを起動中"
+      },
+      "jwt": {
+        "title": "ユーザーセッション署名キー",
+        "description": "アクセストークンとリフレッシュトークンが無効になります。管理パネルのセッションは有効なままです。",
+        "confirm": "すべてのユーザーが再度サインインする必要があります。アカウント、パスワード、チャットは保持されます。"
+      },
+      "internal": {
+        "title": "内部サービストークン",
+        "description": "バックエンド、マネージャー、Telegram、Notes が共通で使用するトークンを更新します。",
+        "confirm": "内部トークンは両方の環境ファイルで置き換えられ、依存する実行中のサービスは再作成されます。"
+      },
+      "encryption": {
+        "title": "暗号化キー",
+        "description": "保存されたAPIキー、OAuth認証情報、統合シークレットを再暗号化します。",
+        "confirm": "暗号化されたデータは検証済みのデータベースコピー上で移行されます。IDと参照は保持されます。独立したDevOps/マップキーが設定されている場合、それらは変更されません。"
+      }
+    }
   },
   "ui": {
     "search": "検索…",
@@ -1134,5 +1263,43 @@
     "defaultSet": "デフォルトのプロンプトを変更しました",
     "emptyList": "まだプロンプトがありません。",
     "defaultBadge": "デフォルト"
+  },
+  "chatgpt": {
+    "access": "アクセス",
+    "sharedLabel": "他のユーザーにこの接続の使用を許可する",
+    "sharedHelp": "他のユーザーのリクエストもあなたのプランの利用枠を消費します。共有のPRO/LITEおよびVisionモデルには必須です。",
+    "privateModels": "この接続は管理者専用です。手動でモデルを追加してください。PRO/LITEおよびVisionを利用するには、先に連携で共有アクセスを有効にしてください。",
+    "requestLimitations": "このサブスクリプション経由では、現在temperature、top_p、max_tokensの出力上限はサポートされていません。通常のAPI課金ではありません。OAuth接続は各サーバーで個別に認証する必要があります。",
+    "title": "ChatGPTサブスクリプション",
+    "adminHelp": "ChatGPTアカウントを接続して、そのプランをリクエストに使用します。",
+    "desktopHelp": "管理者専用。このPCのブラウザでサインインしてください。接続はサーバーに保存されます。リモートサーバーにはHTTPSが必要です。",
+    "firstSignIn": "先にPCでサインインしてください",
+    "adminSteps": "PCでChatterを開く → 設定 → アプリケーション → ChatGPTサブスクリプション → Continue with ChatGPT。その後、このリストを更新してください。一般ユーザーはサインインできません。",
+    "signIn": "ChatGPT で続行",
+    "waiting": "ブラウザでのサインインを待機中…",
+    "reconnect": "再接続",
+    "connected": "ChatGPT がサーバーに接続されました",
+    "failed": "ChatGPT リクエストに失敗しました。",
+    "serverRequired": "先にChatterサーバーに接続し、管理者としてサインインしてください。",
+    "refresh": "接続を更新",
+    "empty": "接続はまだありません。",
+    "planEnabled": "ChatGPTプランの使用が有効になっています",
+    "planDisabled": "ChatGPTプランの使用が無効になっています",
+    "name": "接続名",
+    "saveName": "名前を保存",
+    "loadModels": "利用可能なモデルを読み込む",
+    "model": "モデル",
+    "testHelp": "テストでは OpenAI に短いリクエストを送信し、ChatGPT プランの利用枠を消費します。",
+    "test": "テストリクエスト",
+    "disconnect": "接続解除",
+    "disconnectHelp": "OAuthセッションを終了し、サーバー認証情報を削除しますか？この接続を使用しているモデルは動作しなくなります。",
+    "errors": {
+      "chatgpt_secure_trusted_server_required": "選択したサーバーをHTTPS（またはローカルサーバー）で使用してください。",
+      "chatgpt_authorization_timeout": "サインインがタイムアウトしました。もう一度お試しください。",
+      "chatgpt_authorization_declined": "アクセスが拒否されました。もう一度お試しください。",
+      "chatgpt_plan_usage_not_enabled": "アプリでChatGPTプランを使用できるようにしてください。",
+      "chatgpt_reauthorization_required": "ChatGPTで再度サインインしてください。",
+      "chatgpt_authorization_in_progress": "ブラウザで既にサインインが開いています。"
+    }
   }
 }

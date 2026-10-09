@@ -164,7 +164,8 @@
       "mail": "电子邮件",
       "billing": "账单",
       "about": "关于",
-      "data": "数据"
+      "data": "数据",
+      "admin": "管理员"
     },
     "browser": {
       "help": "选择哪些 AI 浏览器操作需要你的确认。手动操作不受影响。",
@@ -377,7 +378,10 @@
       "noAvatarControl": "禁用头像控制",
       "noAvatarControlHelp": "AI 无法查看或控制像素头像。与头像相关的工具和提示词指令将被移除。",
       "noWakeWord": "禁用唤醒词",
-      "noWakeWordHelp": "停止监听唤醒词（Alexa、Hey Jarvis、Hey Mycroft、Hey Rhasspy）。麦克风流将被关闭。"
+      "noWakeWordHelp": "停止监听唤醒词（Alexa、Hey Jarvis、Hey Mycroft、Hey Rhasspy）。麦克风流将被关闭。",
+      "injectionProtection": "提示注入防护",
+      "injectionProtectionHint": "角色扮演时建议关闭。悬停查看详情。",
+      "injectionProtectionHelp": "禁用后，防护协议和不受信任内容标记不会发送给模型。网站、电子邮件和文件中的指令可能会影响回复和工具调用。访问权限和服务器限制仍然生效。单个聊天可以覆盖此设置。"
     },
     "models": {
       "title": "模型设置",
@@ -516,14 +520,70 @@
           "worlds_not_supported": "暂不支持导入知识库和世界信息。",
           "other_data_ignored": "存档中的其他设置、扩展和服务文件不会更改 Chatter。",
           "personas_not_found": "在 settings.json 中未找到任何角色。",
-          "persona_avatar_errors": "部分角色头像无法导入。"
+          "persona_avatar_errors": "部分角色头像无法导入。",
+          "media_missing": "归档中未找到部分引用的附件。外部 URL 不会被下载。",
+          "media_import_errors": "部分附件无法导入。消息本身已保留。",
+          "group_behavior_changed": "每个群组历史记录都会成为归你所有的独立房间。角色会成为独立的机器人。导入后自动回复处于关闭状态；SillyTavern 的激活策略、静音成员设置和已加入卡片提示不会被复现。",
+          "group_metadata_missing": "部分群组历史记录没有匹配的群组定义。它们的消息会保留在房间中，但参与者名单无法恢复。",
+          "group_character_missing": "部分角色没有匹配的卡片。它们的消息会保留，但对应的机器人无法恢复。",
+          "chat_vector_import_errors": "部分向量化聊天无法添加到聊天记忆。聊天本身仍已导入。"
         },
         "errors": {
           "format": "请选择 SillyTavern ZIP 备份",
           "size": "存档大小不得超过 256 MB",
           "invalid": "无法读取 SillyTavern 备份",
           "import": "无法导入 SillyTavern 备份"
-        }
+        },
+        "diskSpace": "服务器磁盘空间",
+        "summary": {
+          "title": "备份内容",
+          "data": "数据",
+          "total": "总计",
+          "details": "变更",
+          "characters": "字符",
+          "chatTypes": "私聊：{{personal}} · 房间：{{rooms}}",
+          "roomsHelp": "房间中的自动回复已关闭。",
+          "spaceEnough": "空间充足",
+          "spaceLow": "空间不足",
+          "required": "所需空间约 {{size}}",
+          "available": "可用 {{size}}",
+          "spaceRatio": "需要 {{required}}，可用 {{available}}",
+          "diskHint": "包含安全预留空间。归档已准备就绪。",
+          "warnings": "请注意",
+          "more": "导入详情",
+          "cancelNote": "取消会保留已导入的数据。重新导入不会重复聊天记录。",
+          "groupNote": "每个群组历史记录会变成一个独立的房间，并包含机器人。ST 回复策略、静音成员设置和加入卡片提示不会被转移。",
+          "vectorNote": "ST 向量不会被复制；消息将由你的嵌入模型处理。",
+          "memoryWarning": "记忆：{{messages}} 条消息将被重新索引。可能会产生提供商费用。",
+          "missingMedia": "不可用的附件：{{count}}。消息会保留；外部 URL 不会被下载。"
+        },
+        "diskEstimate": "可用：{{available}} MB · 预计需要：{{required}} MB",
+        "diskHelp": "归档文件已暂存到磁盘。此估算涵盖消息、变体和附件的额外存储空间，并包含安全预留。",
+        "insufficientSpace": "服务器磁盘空间不足。请释放一些空间，然后重新选择归档文件。",
+        "mediaTitle": "消息附件",
+        "groupsTitle": "群聊 → Chatter 房间",
+        "groupsCount": "群组：{{count}} · 历史记录 / 房间：{{history_count}}",
+        "groupsResult": "已创建房间：{{created}}，已导入：{{existing}}",
+        "cancelHelp": "取消操作将在下一个处理边界停止。已导入的数据会保留；再次导入同一归档文件将恢复缺失的附件，而不会重复创建聊天。",
+        "cancelled": "导入已取消。已导入的数据已保留。",
+        "mediaCount": "图片：{{images}} · 文件：{{files}}",
+        "mediaMissing": "归档中缺少部分引用的附件，或使用了不受支持的外部路径（{{count}}）。消息仍将被导入。",
+        "mediaResult": "已导入附件：{{images}} 张图片，{{files}} 个文件；缺失：{{missing}}，错误：{{errors}}",
+        "progress": {
+          "groups": "群组历史记录：{{done}} / {{total}}",
+          "personas": "角色与头像",
+          "media": "附件：消息 {{done}} / {{total}}",
+          "cancelling": "当前项目完成后取消...",
+          "cancelled": "导入已取消",
+          "characters": "角色：{{done}} / {{total}}",
+          "chats": "聊天和附件：{{done}} / {{total}}",
+          "memory": "聊天记忆：{{done}} / {{total}}",
+          "ready": "准备导入",
+          "complete": "导入完成",
+          "failed": "导入失败"
+        },
+        "chatVectorsWarning": "在 {{chats}} 个聊天中发现了向量化的聊天记录。Chatter 将使用当前配置的嵌入模型将 {{messages}} 条消息重新嵌入到每个聊天的本地记忆中。这可能需要一些时间，并可能产生提供商费用；SillyTavern 的不兼容原始向量不会被复制。",
+        "chatMemoryImportedResult": "聊天记忆：已在 {{chats}} 个聊天中索引 {{messages}} 条消息；错误：{{errors}}"
       },
       "character": {
         "title": "角色卡",
@@ -1068,7 +1128,29 @@
       "confirmDelete": "删除此记忆？",
       "loadSettingsFailed": "无法加载记忆设置",
       "loadRecordsFailed": "无法加载记忆",
-      "saveSettingsFailed": "无法保存记忆设置"
+      "saveSettingsFailed": "无法保存记忆设置",
+      "preferences": {
+        "defaultsHint": "您聊天的默认设置。单个聊天可以覆盖它。",
+        "limitLabel": "每次搜索的最大记忆数",
+        "adminDefault": "默认 — {{count}}",
+        "chatDefault": "自动 — {{count}}",
+        "limitHint": "用于自动记忆和机器人的记忆搜索工具。",
+        "limitHelp": "统计的是不同记忆的数量，而非片段。聊天设置会覆盖个人默认值，个人默认值会覆盖服务器默认值。重排序最多评估 20 个候选项，并过滤掉低于阈值的结果。机器人可以请求更少的数量。记忆越多，上下文和成本就越高。界面中的卡片搜索不使用个人覆盖设置。"
+      },
+      "automaticMemory": {
+        "label": "自动记忆",
+        "hint": "在每次回复前检索相关记忆。",
+        "inactive": "记忆使用被禁用时处于非活动状态。",
+        "help": "在回复前，消息文本会发送到配置的嵌入提供方。搜索使用选定的记忆范围和重排序器（如果启用）：检索到的片段会发送到其提供方。请求按常规搜索计费；在房间中，由回复的机器人所有者付费。结果会原样传递，不会额外截断，也不会保存到聊天历史记录。如果搜索失败或耗时超过 10 秒，回复将在无记忆的情况下继续。访客模式下不使用自动记忆。"
+      },
+      "injectionProtection": {
+        "label": "提示注入防护",
+        "automatic": "自动",
+        "enabled": "已启用",
+        "disabled": "已禁用",
+        "hint": "建议在角色扮演时关闭。",
+        "help": "自动使用“限制”中的全局设置。禁用后，保护协议和不可信内容标记不会发送给模型。网站、电子邮件和文件中的指令可能会影响机器人。访问权限和服务器限制仍然有效。更改会影响后续回复，而不会影响正在进行的生成。"
+      }
     },
     "contextSummary": {
       "title": "更早的对话摘要",
@@ -1721,6 +1803,72 @@
         "title": "## 详情",
         "body": "### 1. 响应模式\n\n房间有两种模式：\n\n- **轮流** — 机器人按设定顺序响应。\n- **手动** — 您可以选择任意时刻由哪个机器人响应。\n\n### 2. 自动响应\n\n“立即响应”选项使机器人对每条新消息做出反应：\n\n- 您的消息；\n- 其他参与者的消息（如果机器人是共享的）。\n\n### 3. 其他参与者对机器人的访问权限\n\n要让机器人响应其他房间成员，请将其设为共享：\n\n1. 将鼠标悬停在机器人上。\n2. 点击三点按钮。\n3. 选择“与成员共享”。\n\n注意：使用该机器人将消耗**您的**配额并使用**您**选择的模型。\n\n### 4. 数据安全\n\n如果其他用户要求您的机器人执行操作（例如：\n\n- 在计算机上运行命令；\n- 检查电子邮件；\n- 搜索档案），\n\n它将使用**他们自己的**环境：\n\n- 他们的计算机；\n- 他们的电子邮件；\n- 他们的档案。\n\n即使他们使用的是您的机器人。\n\n这是出于安全考虑。\n\n同时，机器人的热记忆仍然对他们可访问。\n\n### 5. 机器人记忆与所有者隐私\n\n使用共享机器人时，它仍然可以访问所有者的短期记忆：例如，姓名、年龄、亲近的人和职场。机器人可能会在对话中使用或提及这些信息。请仅将此类机器人添加到您信任的人所在的房间。\n\n所有者的档案、电子邮件、文件、计算机和其他个人集成不会与参与者共享。"
       }
+    }
+  },
+  "memorySetupNotice": {
+    "title": "向量记忆未配置",
+    "settingsHelp": "语义搜索、自动记忆和保存新记忆均不可用。管理员需要在管理面板中配置嵌入模型。已保存的记录仍可在列表中查看。",
+    "importHelp": "聊天记录和其他数据将被导入，但来自向量化聊天的记忆暂时不会添加。配置嵌入模型后，请重新导入同一归档文件。"
+  },
+  "memoryMap": {
+    "limit": "最多 {{count}}",
+    "pages": "记忆页面",
+    "listCount": "已加载 {{shown}}/{{total}}",
+    "more": "加载更多",
+    "total": "记忆总数：{{count}}",
+    "build": "构建图谱",
+    "warning": "将加载最新的 {{count}}/{{total}} 条记忆。下载向量并计算投影可能需要一些时间，且会显著增加内存占用。最多 5,000 条；你可以取消。",
+    "found": "已找到：{{count}}",
+    "refresh": "刷新",
+    "view": "内存视图",
+    "list": "列表",
+    "map": "3D",
+    "count": "地图上：{{total}} 条回忆中的 {{shown}} 条",
+    "reset": "重置视图",
+    "loading": "正在准备回忆地图…",
+    "failed": "无法加载地图。回忆列表仍可使用。",
+    "retry": "重试",
+    "webgl": "此设备不支持3D。请改用列表。",
+    "noVectors": "未找到已加载记忆的存储向量。",
+    "help": "拖动旋转，滚动缩放，点击点以打开记忆。颜色代表来源；搜索会高亮结果。这是近似的PCA投影，并非精确的搜索距离。",
+    "separateSpaces": "不同的嵌入模型会出现在不同的云中；它们之间的距离无法比较。"
+  },
+  "chatgpt": {
+    "access": "访问",
+    "sharedLabel": "允许其他用户使用此连接",
+    "sharedHelp": "他们的请求也会使用你的套餐额度。共享 PRO/LITE 和 Vision 模型时必需。",
+    "privateModels": "此连接仅供管理员使用。请手动添加模型；如需使用 PRO/LITE 和 Vision，请先在集成中启用共享访问。",
+    "requestLimitations": "此订阅路由目前不支持 temperature、top_p 或 max_tokens 输出限制。它并非普通 API 计费。OAuth 连接必须在每台服务器上单独授权。",
+    "title": "ChatGPT 订阅",
+    "adminHelp": "连接 ChatGPT 账户以使用其套餐处理请求。",
+    "desktopHelp": "仅限管理员。在此电脑的浏览器中登录；连接将保存在您的服务器上。远程服务器需要 HTTPS。",
+    "firstSignIn": "请先在您的电脑上登录",
+    "adminSteps": "在您的电脑上打开 Chatter → 设置 → 应用 → ChatGPT 订阅 → 使用 ChatGPT 继续。然后刷新此列表。普通用户无法登录。",
+    "signIn": "使用 ChatGPT 继续",
+    "waiting": "正在等待浏览器登录…",
+    "reconnect": "重新连接",
+    "connected": "ChatGPT 已连接到服务器",
+    "failed": "ChatGPT 请求失败。",
+    "serverRequired": "请先连接到您的 Chatter 服务器并以管理员身份登录。",
+    "refresh": "刷新连接",
+    "empty": "暂无连接。",
+    "planEnabled": "ChatGPT 套餐用量已启用",
+    "planDisabled": "ChatGPT 套餐用量已禁用",
+    "name": "连接名称",
+    "saveName": "保存名称",
+    "loadModels": "加载可用模型",
+    "model": "模型",
+    "testHelp": "测试会向 OpenAI 发送一个简短请求，并消耗你的 ChatGPT 套餐额度。",
+    "test": "测试请求",
+    "disconnect": "断开连接",
+    "disconnectHelp": "结束 OAuth 会话并移除服务器凭据？使用此连接的模型将停止工作。",
+    "errors": {
+      "chatgpt_secure_trusted_server_required": "请对所选服务器使用 HTTPS（或本地服务器）。",
+      "chatgpt_authorization_timeout": "登录超时。请重试。",
+      "chatgpt_authorization_declined": "访问被拒绝。请重试。",
+      "chatgpt_plan_usage_not_enabled": "允许该应用使用你的 ChatGPT 套餐。",
+      "chatgpt_reauthorization_required": "请重新使用 ChatGPT 登录。",
+      "chatgpt_authorization_in_progress": "登录页面已在浏览器中打开。"
     }
   }
 }

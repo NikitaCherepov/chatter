@@ -485,7 +485,8 @@
       "mail": "이메일",
       "billing": "결제",
       "about": "정보",
-      "data": "데이터"
+      "data": "데이터",
+      "admin": "관리자"
     },
     "browser": {
       "help": "AI 브라우저 작업 중 승인이 필요한 항목을 선택하세요. 수동 작업에는 영향을 주지 않습니다.",
@@ -698,7 +699,10 @@
       "noAvatarControl": "아바타 제어 비활성화",
       "noAvatarControlHelp": "AI가 픽셀 아바타를 보거나 제어할 수 없습니다. 아바타 도구와 관련 프롬프트 지침이 제거됩니다.",
       "noWakeWord": "웨이크 워드 비활성화",
-      "noWakeWordHelp": "웨이크 워드(Alexa, Hey Jarvis, Hey Mycroft, Hey Rhasspy) 수신을 중지합니다. 마이크 스트림이 꺼집니다."
+      "noWakeWordHelp": "웨이크 워드(Alexa, Hey Jarvis, Hey Mycroft, Hey Rhasspy) 수신을 중지합니다. 마이크 스트림이 꺼집니다.",
+      "injectionProtection": "프롬프트 인젝션 보호",
+      "injectionProtectionHint": "역할극에는 끄는 것을 권장합니다. 자세히 보려면 마우스를 올리세요.",
+      "injectionProtectionHelp": "비활성화하면 보호 프로토콜과 신뢰할 수 없는 콘텐츠 표시가 모델에 전송되지 않습니다. 웹사이트, 이메일, 파일의 지침이 응답과 도구 호출에 영향을 줄 수 있습니다. 접근 권한과 서버 제한은 계속 적용됩니다. 개별 채팅에서 이 설정을 재정의할 수 있습니다."
     },
     "models": {
       "title": "모델 설정",
@@ -837,14 +841,70 @@
           "worlds_not_supported": "로어북과 월드 정보는 아직 가져올 수 없습니다.",
           "other_data_ignored": "아카이브의 다른 설정, 확장 프로그램 및 서비스 파일은 Chatter를 변경하지 않습니다.",
           "personas_not_found": "settings.json에서 페르소나를 찾을 수 없습니다.",
-          "persona_avatar_errors": "일부 페르소나 아바타를 가져올 수 없습니다."
+          "persona_avatar_errors": "일부 페르소나 아바타를 가져올 수 없습니다.",
+          "media_missing": "아카이브에서 일부 참조된 첨부 파일을 찾을 수 없습니다. 외부 URL은 다운로드되지 않습니다.",
+          "media_import_errors": "일부 첨부 파일을 가져올 수 없습니다. 메시지 자체는 보존되었습니다.",
+          "group_behavior_changed": "각 그룹 기록은 사용자가 소유한 별도의 방이 됩니다. 캐릭터는 별도의 봇이 됩니다. 가져온 후 자동 응답은 꺼져 있습니다. SillyTavern 활성화 전략, 음소거된 멤버 설정 및 참여 카드 프롬프트는 재현되지 않습니다.",
+          "group_metadata_missing": "일부 그룹 기록에 일치하는 그룹 정의가 없습니다. 해당 메시지는 방에 보존되지만 참여자 명단은 복원할 수 없습니다.",
+          "group_character_missing": "일부 캐릭터에 일치하는 카드가 없습니다. 해당 메시지는 유지되지만 봇은 복원할 수 없습니다.",
+          "chat_vector_import_errors": "일부 벡터화된 채팅을 채팅 메모리에 추가할 수 없습니다. 채팅 자체는 그대로 가져왔습니다."
         },
         "errors": {
           "format": "SillyTavern ZIP 백업을 선택하세요",
           "size": "아카이브는 256MB를 초과할 수 없습니다.",
           "invalid": "SillyTavern 백업을 읽을 수 없습니다.",
           "import": "SillyTavern 백업을 가져올 수 없습니다."
-        }
+        },
+        "diskSpace": "서버 디스크 공간",
+        "summary": {
+          "title": "백업 내용",
+          "data": "데이터",
+          "total": "합계",
+          "details": "변경 사항",
+          "characters": "문자",
+          "chatTypes": "개인: {{personal}} · 룸: {{rooms}}",
+          "roomsHelp": "룸의 자동 응답이 꺼져 있습니다.",
+          "spaceEnough": "공간 충분",
+          "spaceLow": "공간 부족",
+          "required": "필요 ≈ {{size}}",
+          "available": "사용 가능 {{size}}",
+          "spaceRatio": "필요 {{required}}, 사용 가능 {{available}}",
+          "diskHint": "안전 예비 공간이 포함되어 있습니다. 보관 파일은 이미 준비되었습니다.",
+          "warnings": "참고하세요",
+          "more": "가져오기 세부 정보",
+          "cancelNote": "취소해도 이미 가져온 데이터는 유지됩니다. 다시 가져와도 채팅이 중복되지 않습니다.",
+          "groupNote": "각 그룹 기록은 봇이 있는 별도의 방이 됩니다. ST 답장 전략, 음소거된 멤버 설정 및 참여 카드 프롬프트는 전송되지 않습니다.",
+          "vectorNote": "ST 벡터는 복사되지 않으며, 메시지는 임베딩 모델로 처리됩니다.",
+          "memoryWarning": "메모리: {{messages}}개의 메시지가 다시 인덱싱됩니다. 제공업체 요금이 부과될 수 있습니다.",
+          "missingMedia": "사용할 수 없는 첨부 파일: {{count}}개. 메시지는 유지되며 외부 URL은 다운로드되지 않습니다."
+        },
+        "diskEstimate": "사용 가능: {{available}} MB · 예상 필요 용량: {{required}} MB",
+        "diskHelp": "보관 파일은 이미 디스크에 준비되어 있습니다. 이 예상치는 메시지, 변형 및 첨부 파일을 위한 추가 저장 공간과 안전 여유분을 포함합니다.",
+        "insufficientSpace": "서버의 여유 디스크 공간이 부족합니다. 공간을 확보한 후 보관 파일을 다시 선택하세요.",
+        "mediaTitle": "메시지 첨부 파일",
+        "groupsTitle": "그룹 채팅 → Chatter 룸",
+        "groupsCount": "그룹: {{count}} · 기록 / 대화방: {{history_count}}",
+        "groupsResult": "생성된 대화방: {{created}}, 이미 가져옴: {{existing}}",
+        "cancelHelp": "취소하면 다음 처리 지점에서 중단됩니다. 이미 가져온 데이터는 유지되며, 같은 아카이브를 다시 가져오면 채팅이 중복되지 않고 누락된 첨부 파일만 이어서 가져옵니다.",
+        "cancelled": "가져오기가 취소되었습니다. 이미 가져온 데이터는 유지되었습니다.",
+        "mediaCount": "이미지: {{images}} · 파일: {{files}}",
+        "mediaMissing": "아카이브에서 참조된 첨부 파일 일부가 누락되었거나 지원되지 않는 외부 경로를 사용합니다 ({{count}}). 메시지는 계속 가져옵니다.",
+        "mediaResult": "가져온 첨부 파일: 이미지 {{images}}개, 파일 {{files}}개; 누락: {{missing}}개, 오류: {{errors}}개",
+        "progress": {
+          "groups": "그룹 기록: {{done}} / {{total}}",
+          "personas": "페르소나 및 아바타",
+          "media": "첨부 파일: 메시지 {{done}} / {{total}}",
+          "cancelling": "현재 항목 완료 후 취소 중...",
+          "cancelled": "가져오기 취소됨",
+          "characters": "캐릭터: {{done}} / {{total}}",
+          "chats": "채팅 및 첨부파일: {{done}} / {{total}}",
+          "memory": "채팅 메모리: {{done}} / {{total}}",
+          "ready": "가져올 준비 완료",
+          "complete": "가져오기 완료",
+          "failed": "가져오기 실패"
+        },
+        "chatVectorsWarning": "{{chats}}개의 채팅에서 벡터화된 채팅 기록이 발견되었습니다. Chatter는 현재 구성된 임베딩 모델을 사용하여 {{messages}}개의 메시지를 각 채팅의 로컬 메모리에 다시 임베딩합니다. 이 작업은 시간이 걸릴 수 있으며 제공업체 요금이 발생할 수 있습니다. SillyTavern의 호환되지 않는 원시 벡터는 복사되지 않습니다.",
+        "chatMemoryImportedResult": "채팅 메모리: {{chats}}개의 채팅에 걸쳐 {{messages}}개의 메시지가 인덱싱되었습니다. 오류: {{errors}}"
       },
       "character": {
         "title": "캐릭터 카드",
@@ -1389,7 +1449,29 @@
       "confirmDelete": "이 메모리를 삭제하시겠습니까?",
       "loadSettingsFailed": "메모리 설정을 불러올 수 없습니다",
       "loadRecordsFailed": "메모리를 불러올 수 없습니다",
-      "saveSettingsFailed": "메모리 설정을 저장할 수 없습니다"
+      "saveSettingsFailed": "메모리 설정을 저장할 수 없습니다",
+      "preferences": {
+        "defaultsHint": "채팅의 기본값입니다. 개별 채팅에서 재정의할 수 있습니다.",
+        "limitLabel": "검색당 최대 메모리 수",
+        "adminDefault": "기본값 — {{count}}",
+        "chatDefault": "자동 — {{count}}",
+        "limitHint": "자동 메모리 및 봇의 메모리 검색 도구에 적용됩니다.",
+        "limitHelp": "조각이 아닌 개별 메모리를 계산합니다. 채팅 설정이 개인 기본값보다 우선하며, 개인 기본값이 서버 기본값보다 우선합니다. 재순위화는 최대 20개의 후보를 평가하고 임계값 미만의 결과를 필터링합니다. 봇은 더 적은 수를 요청할 수 있습니다. 메모리가 많을수록 컨텍스트와 비용이 증가합니다. 인터페이스의 카드 검색은 개인 재정의를 사용하지 않습니다."
+      },
+      "automaticMemory": {
+        "label": "자동 메모리",
+        "hint": "각 답변 전에 관련 메모리를 검색합니다.",
+        "inactive": "메모리 사용이 비활성화된 동안 비활성 상태입니다.",
+        "help": "답변하기 전에 메시지 텍스트가 구성된 임베딩 제공자로 전송됩니다. 검색은 선택된 메모리 범위와 (활성화된 경우) 리랭커를 사용합니다. 검색된 조각은 해당 제공자로 전송됩니다. 요청은 일반 검색과 동일하게 청구되며, 대화방에서는 답변하는 봇 소유자가 비용을 지불합니다. 결과는 추가적인 잘림 없이 전달되며 채팅 기록에 저장되지 않습니다. 검색이 실패하거나 10초 이상 걸리면 답변은 메모리 없이 진행됩니다. 자동 메모리는 게스트 모드에서 사용되지 않습니다."
+      },
+      "injectionProtection": {
+        "label": "프롬프트 인젝션 보호",
+        "automatic": "자동",
+        "enabled": "사용",
+        "disabled": "사용 안 함",
+        "hint": "롤플레이에서는 끄는 것을 권장합니다.",
+        "help": "자동은 제한 설정의 전역 설정을 사용합니다. 사용 안 함으로 설정하면 보호 프로토콜과 신뢰할 수 없는 콘텐츠 표시가 모델에 전송되지 않습니다. 웹사이트, 이메일, 파일의 지침이 봇에 영향을 줄 수 있습니다. 접근 권한과 서버 제한은 계속 적용됩니다. 변경 사항은 진행 중인 생성이 아닌 이후 응답에 적용됩니다."
+      }
     },
     "contextSummary": {
       "title": "이전 대화 요약",
@@ -1730,6 +1812,72 @@
         "title": "## 세부 사항",
         "body": "### 1. 응답 모드\n\n방에는 두 가지 모드가 있습니다:\n\n- **라운드** — 봇이 정해진 순서로 응답합니다.\n- **수동** — 특정 순간에 응답할 봇을 선택합니다.\n\n### 2. 자동 응답\n\n\"즉시 응답\" 옵션을 사용하면 봇이 모든 새 메시지에 반응합니다:\n\n- 사용자의 메시지;\n- 다른 참가자의 메시지(봇이 공유된 경우).\n\n### 3. 다른 참가자를 위한 봇 접근\n\n봇이 다른 방 구성원에게 응답하도록 하려면 공유로 설정하세요:\n\n1. 봇 위에 마우스를 올립니다.\n2. 점 3개 버튼을 클릭합니다.\n3. \"구성원과 공유\"를 선택합니다.\n\n참고: 봇을 사용하면 **사용자의** 할당량이 소모되고 **사용자가 선택한** 모델이 사용됩니다.\n\n### 4. 데이터 보안\n\n다른 사용자가 봇에게 작업을 요청하는 경우(예:\n\n- 컴퓨터에서 명령 실행;\n- 이메일 확인;\n- 아카이브 검색),\n\n봇은 **자신의** 환경을 사용합니다:\n\n- 자신의 컴퓨터;\n- 자신의 이메일;\n- 자신의 아카이브.\n\n사용자의 봇을 사용하더라도 그렇습니다.\n\n보안을 위해 이렇게 합니다.\n\n동시에 봇의 핫 메모리는 그들에게 계속 접근 가능합니다.\n\n### 5. 봇 메모리 및 소유자 개인정보\n\n공유 봇을 사용할 때도 소유자의 단기 기억에 접근할 수 있습니다: 예를 들어, 이름, 나이, 가까운 사람, 직장. 봇은 대화에서 이 정보를 사용하거나 언급할 수 있습니다. 신뢰하는 사람과만 방에 이러한 봇을 추가하세요.\n\n소유자의 아카이브, 이메일, 파일, 컴퓨터 및 기타 개인 통합은 참가자와 공유되지 않습니다."
       }
+    }
+  },
+  "memorySetupNotice": {
+    "title": "벡터 메모리가 구성되지 않았습니다",
+    "settingsHelp": "시맨틱 검색, 자동 메모리 및 새 메모리 저장을 사용할 수 없습니다. 관리자가 관리자 패널에서 임베딩 모델을 구성해야 합니다. 저장된 레코드는 목록에서 계속 사용할 수 있습니다.",
+    "importHelp": "채팅 및 기타 데이터는 가져오지만, 벡터화된 채팅의 메모리는 아직 추가되지 않습니다. 임베딩 모델을 구성한 후 동일한 아카이브를 다시 가져오세요."
+  },
+  "memoryMap": {
+    "limit": "최대 {{count}}",
+    "pages": "메모리 페이지",
+    "listCount": "{{total}}개 중 {{shown}}개 로드됨",
+    "more": "더 불러오기",
+    "total": "총 메모리: {{count}}개",
+    "build": "맵 생성",
+    "warning": "{{total}}개 중 최신 {{count}}개의 메모리를 불러옵니다. 벡터를 다운로드하고 투영을 계산하는 데 시간이 걸릴 수 있으며 메모리 사용량이 크게 증가할 수 있습니다. 최대: 5,000개이며 취소할 수 있습니다.",
+    "found": "발견: {{count}}",
+    "refresh": "새로 고침",
+    "view": "메모리 보기",
+    "list": "목록",
+    "map": "3D",
+    "count": "지도에 표시: 추억 {{total}}개 중 {{shown}}개",
+    "reset": "보기 초기화",
+    "loading": "추억 지도를 준비하는 중…",
+    "failed": "지도를 불러오지 못했습니다. 추억 목록은 계속 사용할 수 있습니다.",
+    "retry": "다시 시도",
+    "webgl": "이 기기에서는 3D를 사용할 수 없습니다. 대신 목록을 사용하세요.",
+    "noVectors": "불러온 메모리에 대해 저장된 벡터를 찾을 수 없습니다.",
+    "help": "드래그하여 회전하고, 스크롤하여 확대/축소하고, 점을 클릭하여 메모리를 여세요. 색상은 소스를 나타내며, 검색은 결과를 강조 표시합니다. 이는 대략적인 PCA 투영이며 정확한 검색 거리가 아닙니다.",
+    "separateSpaces": "서로 다른 임베딩 모델은 별도의 클러스터로 나타나며, 이들 간의 거리는 비교할 수 없습니다."
+  },
+  "chatgpt": {
+    "access": "액세스",
+    "sharedLabel": "다른 사용자가 이 연결을 사용하도록 허용",
+    "sharedHelp": "다른 사용자의 요청도 회원님의 플랜 사용량을 소모합니다. 공유 PRO/LITE 및 Vision 모델에 필요합니다.",
+    "privateModels": "이 연결은 관리자 전용입니다. 수동 모델을 추가하세요. PRO/LITE 및 Vision을 사용하려면 먼저 통합에서 공유 액세스를 활성화하세요.",
+    "requestLimitations": "이 구독 경로는 현재 temperature, top_p 또는 max_tokens 출력 제한을 지원하지 않습니다. 일반 API 과금이 아닙니다. OAuth 연결은 각 서버에서 별도로 승인해야 합니다.",
+    "title": "ChatGPT 구독",
+    "adminHelp": "ChatGPT 계정을 연결하여 해당 플랜으로 요청을 처리하세요.",
+    "desktopHelp": "관리자 전용입니다. 이 PC의 브라우저에서 로그인하세요. 연결은 서버에 저장됩니다. 원격 서버는 HTTPS가 필요합니다.",
+    "firstSignIn": "먼저 PC에서 로그인하세요",
+    "adminSteps": "PC에서 Chatter 열기 → 설정 → 애플리케이션 → ChatGPT 구독 → ChatGPT로 계속하기. 그런 다음 이 목록을 새로 고치세요. 일반 사용자는 로그인할 수 없습니다.",
+    "signIn": "ChatGPT로 계속하기",
+    "waiting": "브라우저 로그인 대기 중…",
+    "reconnect": "다시 연결",
+    "connected": "ChatGPT가 서버에 연결되었습니다",
+    "failed": "ChatGPT 요청에 실패했습니다.",
+    "serverRequired": "먼저 Chatter 서버에 연결하고 관리자로 로그인하세요.",
+    "refresh": "연결 새로 고침",
+    "empty": "아직 연결이 없습니다.",
+    "planEnabled": "ChatGPT 플랜 사용이 활성화되었습니다",
+    "planDisabled": "ChatGPT 플랜 사용이 비활성화되었습니다",
+    "name": "연결 이름",
+    "saveName": "이름 저장",
+    "loadModels": "사용 가능한 모델 불러오기",
+    "model": "모델",
+    "testHelp": "테스트는 OpenAI에 짧은 요청을 보내며 ChatGPT 요금제 할당량을 사용합니다.",
+    "test": "테스트 요청",
+    "disconnect": "연결 해제",
+    "disconnectHelp": "OAuth 세션을 종료하고 서버 자격 증명을 제거할까요? 이 연결을 사용하는 모델이 작동을 중지합니다.",
+    "errors": {
+      "chatgpt_secure_trusted_server_required": "선택한 서버를 HTTPS(또는 로컬 서버)와 함께 사용하세요.",
+      "chatgpt_authorization_timeout": "로그인 시간이 초과되었습니다. 다시 시도하세요.",
+      "chatgpt_authorization_declined": "액세스가 거부되었습니다. 다시 시도하세요.",
+      "chatgpt_plan_usage_not_enabled": "앱에서 ChatGPT 요금제를 사용하도록 허용하세요.",
+      "chatgpt_reauthorization_required": "ChatGPT로 다시 로그인하세요.",
+      "chatgpt_authorization_in_progress": "브라우저에서 이미 로그인 창이 열려 있습니다."
     }
   }
 }

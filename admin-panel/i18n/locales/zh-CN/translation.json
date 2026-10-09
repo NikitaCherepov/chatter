@@ -240,6 +240,56 @@
       "colProvider": "提供商",
       "colStatus": "状态",
       "colLastCheck": "上次检查"
+    },
+    "access": {
+      "label": "模型访问权限",
+      "all": "所有人",
+      "admins": "仅管理员",
+      "selected": "选定的用户",
+      "users": "允许的用户",
+      "hint": "未选择用户即表示无访问权限。管理员也必须被选中。",
+      "admin": "管理员",
+      "choose": "选择用户",
+      "search": "按名称或 ID 搜索…",
+      "empty": "未找到用户",
+      "failed": "无法加载用户"
+    },
+    "transfer": {
+      "title": "导入和导出",
+      "subtitle": "从 Chatter 或 SillyTavern 传输已保存的模型连接。",
+      "import": "导入模型",
+      "export": "导出模型",
+      "importHint": "上传 SillyTavern ZIP 备份、JSON 预设或 Chatter 模型配置。",
+      "exportHint": "导出已保存的配置，包括模型 ID、角色、价格和密钥引用。未保存的编辑内容不会包含在内。",
+      "includeKeys": "包含 API 密钥",
+      "secretWarning": "此文件将包含未加密的 API 密钥。请妥善保管。",
+      "drop": "将 ZIP 或 JSON 文件拖放到此处，或选择文件",
+      "chooseFile": "选择文件",
+      "tooLarge": "文件过大。ZIP：最大 256 MB；JSON：最大 2 MB。",
+      "keys": "文件中的密钥",
+      "showKey": "显示",
+      "hideKey": "隐藏",
+      "showKeyLabel": "显示密钥：{{name}}",
+      "hideKeyLabel": "隐藏密钥：{{name}}",
+      "missingKey": "未提供密钥",
+      "linkedModels": "模型",
+      "noLinkedModels": "未分配",
+      "removeKeyLabel": "从导入中移除密钥：{{name}}",
+      "removeKeyHint": "仅从本次导入中移除该密钥。已保存的密钥不会被删除；关联的模型将需要另一个密钥。",
+      "keysHint": "为要使用的密钥命名。缺失的密钥可在此处输入，或在下方用已保存的密钥替换。",
+      "model": "模型 / API URL",
+      "key": "API 密钥",
+      "roles": "用于",
+      "noOverwrite": "现有模型和密钥不会被覆盖。PRO/LITE 模型会追加。已占用的 Vision 槽位保持不变。导入会保存并应用所选模型，无需重启服务。",
+      "confirm": "导入并应用",
+      "download": "下载 JSON",
+      "result": "已添加：{{added}}。已存在或已跳过：{{skipped}}。",
+      "warnings": {
+        "chatgpt_reconnect_required": "ChatGPT OAuth 模型已跳过：请先在此服务器上授权该方案，然后添加其模型。OAuth 令牌不会随模型配置一起传输。",
+        "st_settings_not_transferred": "SillyTavern 的采样设置、提示模板和脚本不会被转移。",
+        "st_connection_needs_configuration": "部分连接需要 OpenAI 兼容的 API URL。原生 Anthropic 端点与此导入器不兼容。",
+        "st_text_completion_not_supported": "不会导入文本补全配置文件。请使用 OpenAI 兼容的聊天补全连接。"
+      }
     }
   },
   "integrations": {
@@ -378,6 +428,12 @@
         "deleteTitle": "删除此集合？",
         "deleteText": "其向量将从Qdrant中永久移除。SQLite中的规范记忆文本不受影响。",
         "deleteAction": "删除"
+      },
+      "retrieval": {
+        "sectionTitle": "记忆搜索结果",
+        "sectionIntro": "用于带或不带重排序的搜索的共享默认值。",
+        "limitLabel": "每次搜索的最大记忆数",
+        "limitHint": "1–20 条不同的记忆。重排序最多评估 20 个候选项。用户可以在个人设置和聊天设置中覆盖机器人的结果数量。"
       }
     },
     "webSearch": {
@@ -866,7 +922,8 @@
         "backup": "正在创建数据库备份…",
         "restarting": "正在重启服务器服务。面板将短暂断开连接…",
         "complete": "服务器已更新。",
-        "failed": "更新失败。"
+        "failed": "更新失败。",
+        "pulling": "正在下载并准备服务器镜像…"
       },
       "drain": {
         "waiting": "{{count}} 位用户仍在工作。等待 {{seconds}} 秒…",
@@ -895,6 +952,13 @@
         "softApply": "等待最多15秒后继续",
         "forceApply": "立即继续",
         "applying": "工作中…"
+      },
+      "storage": {
+        "title": "更新前的磁盘空间",
+        "available": "可用：{{size}}",
+        "required": "预计需要：{{size}}",
+        "estimate": "已更改的镜像：{{images}} · 备份工作区：{{backup}}。即使 Docker 可以复用现有层，估算仍使用完整的压缩镜像大小。",
+        "insufficient": "更新前请释放一些磁盘空间。"
       }
     },
     "error": "错误：{{message}}",
@@ -1081,7 +1145,72 @@
     "apiKeyDeleteNullify": "删除且不替换",
     "apiKeyDeleteSelectReplacement": "为模型选择新密钥",
     "apiKeyDeleteConfirm": "删除",
-    "apiKeyNotUsed": "此密钥未被任何模型使用，可以安全删除。"
+    "apiKeyNotUsed": "此密钥未被任何模型使用，可以安全删除。",
+    "rotation": {
+      "title": "服务器密钥",
+      "description": "安全地生成新密钥。请使用当前管理员密码确认。",
+      "change": "轮换",
+      "recover": "恢复恢复",
+      "recoveryHint": "恢复需要处理。其他操作已被阻止。请重试恢复；不要手动替换密钥。",
+      "manualRecoveryHint": "恢复日志缺失或损坏。请在数据服务停止的情况下，恢复匹配的数据库/配置备份。请参阅管理器 README；不要手动替换密钥。",
+      "downtime": "后端、Telegram 和 Notes 将短暂停止。系统会先创建包含当前配置的备份。新密钥将在服务器上生成。",
+      "backup": "轮换前备份",
+      "backupWarning": "包含旧密钥。请私下保存。较旧的数据库备份需要其匹配的加密密钥；请勿删除该密钥。",
+      "passwordInvalid": "当前密码不正确。",
+      "requestFailed": "无法启动操作。重试前请检查其状态。",
+      "statusUnavailable": "无法读取轮换状态。控件不可用。",
+      "fieldCount": "已重新加密的字段：{{count}}",
+      "rolledBack": "已恢复之前的配置。请检查磁盘空间、后端镜像和加密记录，然后重试。",
+      "preflightFailed": "轮换未启动。请检查磁盘空间、活动代次和后端镜像。未更改任何密钥。",
+      "status": {
+        "queued": "已排队",
+        "running": "进行中",
+        "complete": "完成",
+        "failed": "失败",
+        "recovery_required": "需要恢复"
+      },
+      "reason": {
+        "running_secret_config_mismatch": "运行中的容器使用的密钥与管理器不同。请对齐环境文件和 Compose 启动配置；轮换尚未开始。",
+        "active_generations_try_later": "请等待活跃回复完成，并在启用时取消更新准备。",
+        "not_enough_space_for_secret_rotation": "备份数据库副本和工作数据库副本的空间不足。",
+        "backend_secret_env_override": "后端密钥在 Compose 中被覆盖。请使用 backend.env 中的值。",
+        "internal_token_env_override": "依赖服务的内部令牌在 Compose 中被覆盖。",
+        "backend_start_command_override": "自定义后端启动命令绕过了恢复保护。",
+        "backend_rotation_helper_missing": "请重新构建后端：该镜像缺少当前的轮换辅助程序。",
+        "backend_not_running": "后端未运行。",
+        "secret_not_configured": "当前密钥未配置。",
+        "encrypted_record_unreadable": "无法使用旧密钥读取加密记录。轮换已取消。",
+        "storage_write_failed": "无法写入数据。请检查可用空间和权限。",
+        "admin_requests_busy": "其他管理请求仍在运行。请稍后重试。",
+        "operation_failed": "无法完成操作。请检查容器状态并重新构建当前镜像。"
+      },
+      "phase": {
+        "queued": "已排队",
+        "preflight": "检查中",
+        "stopping": "正在停止服务",
+        "backup": "正在创建备份",
+        "reencrypting": "重新加密中",
+        "publishing": "切换数据库",
+        "committed": "正在启动服务",
+        "rolling_back": "正在恢复",
+        "rolled_back": "正在启动服务"
+      },
+      "jwt": {
+        "title": "用户会话签名密钥",
+        "description": "使访问令牌和刷新令牌失效。管理员面板会话保持有效。",
+        "confirm": "所有用户都需要重新登录。账户、密码和聊天记录将保留。"
+      },
+      "internal": {
+        "title": "内部服务令牌",
+        "description": "同时更新后端、管理器、Telegram 和 Notes 使用的令牌。",
+        "confirm": "内部令牌将在两个环境文件中被替换，正在运行的依赖服务将被重新创建。"
+      },
+      "encryption": {
+        "title": "加密密钥",
+        "description": "重新加密已保存的 API 密钥、OAuth 凭据和集成密钥。",
+        "confirm": "加密数据将在经过验证的数据库副本上进行迁移。ID 和引用将保持不变。如果配置了独立的 DevOps/地图密钥，这些密钥将保持不变。"
+      }
+    }
   },
   "ui": {
     "search": "搜索…",
@@ -1134,5 +1263,43 @@
     "defaultSet": "默认提示已更改",
     "emptyList": "暂无提示。",
     "defaultBadge": "默认"
+  },
+  "chatgpt": {
+    "access": "访问权限",
+    "sharedLabel": "允许其他用户使用此连接",
+    "sharedHelp": "他们的请求也会使用你的套餐额度。共享 PRO/LITE 和 Vision 模型时必须启用。",
+    "privateModels": "此连接仅供管理员使用。请手动添加模型；如需使用 PRO/LITE 和 Vision，请先在集成中启用共享访问。",
+    "requestLimitations": "此订阅路由目前不支持 temperature、top_p 或 max_tokens 输出限制。它并非普通的 API 计费。OAuth 连接必须在每台服务器上单独授权。",
+    "title": "ChatGPT 订阅",
+    "adminHelp": "连接 ChatGPT 账户以使用其套餐处理请求。",
+    "desktopHelp": "仅限管理员。在此电脑的浏览器中登录；连接将保存在您的服务器上。远程服务器需要 HTTPS。",
+    "firstSignIn": "请先在您的电脑上登录",
+    "adminSteps": "在您的电脑上打开 Chatter → 设置 → 应用 → ChatGPT 订阅 → 使用 ChatGPT 继续。然后刷新此列表。普通用户无法登录。",
+    "signIn": "使用 ChatGPT 继续",
+    "waiting": "正在等待浏览器登录…",
+    "reconnect": "重新连接",
+    "connected": "ChatGPT 已连接到服务器",
+    "failed": "ChatGPT 请求失败。",
+    "serverRequired": "请先连接到您的 Chatter 服务器并以管理员身份登录。",
+    "refresh": "刷新连接",
+    "empty": "暂无连接。",
+    "planEnabled": "ChatGPT 套餐用量已启用",
+    "planDisabled": "ChatGPT 套餐用量已禁用",
+    "name": "连接名称",
+    "saveName": "保存名称",
+    "loadModels": "加载可用模型",
+    "model": "模型",
+    "testHelp": "测试会向 OpenAI 发送一个简短请求，并消耗你的 ChatGPT 套餐额度。",
+    "test": "测试请求",
+    "disconnect": "断开连接",
+    "disconnectHelp": "结束 OAuth 会话并移除服务器凭据？使用此连接的模型将停止工作。",
+    "errors": {
+      "chatgpt_secure_trusted_server_required": "请对所选服务器使用 HTTPS（或本地服务器）。",
+      "chatgpt_authorization_timeout": "登录超时。请重试。",
+      "chatgpt_authorization_declined": "访问被拒绝。请重试。",
+      "chatgpt_plan_usage_not_enabled": "允许该应用使用你的 ChatGPT 套餐。",
+      "chatgpt_reauthorization_required": "请重新使用 ChatGPT 登录。",
+      "chatgpt_authorization_in_progress": "登录已在浏览器中打开。"
+    }
   }
 }

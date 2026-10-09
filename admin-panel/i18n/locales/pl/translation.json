@@ -240,6 +240,56 @@
       "colProvider": "Dostawca",
       "colStatus": "Status",
       "colLastCheck": "Ostatnio sprawdzono"
+    },
+    "access": {
+      "label": "Dostęp do modeli",
+      "all": "Wszyscy",
+      "admins": "Tylko administratorzy",
+      "selected": "Wybrani użytkownicy",
+      "users": "Dozwoleni użytkownicy",
+      "hint": "Brak wybranych użytkowników oznacza brak dostępu. Administratorzy również muszą zostać wybrani.",
+      "admin": "Administrator",
+      "choose": "Wybierz użytkowników",
+      "search": "Szukaj według nazwy lub identyfikatora…",
+      "empty": "Nie znaleziono użytkowników",
+      "failed": "Nie udało się załadować użytkowników"
+    },
+    "transfer": {
+      "title": "Import i eksport",
+      "subtitle": "Przenieś zapisane połączenia modeli z Chatter lub SillyTavern.",
+      "import": "Importuj modele",
+      "export": "Eksportuj modele",
+      "importHint": "Prześlij kopię zapasową ZIP z SillyTavern, preset JSON lub konfigurację modelu Chatter.",
+      "exportHint": "Eksportuje zapisaną konfigurację, w tym identyfikatory modeli, role, ceny i odwołania do kluczy. Niezapisane zmiany nie są uwzględniane.",
+      "includeKeys": "Uwzględnij klucze API",
+      "secretWarning": "Ten plik będzie zawierać niezaszyfrowane klucze API. Zachowaj go w poufności.",
+      "drop": "Upuść plik ZIP lub JSON tutaj albo wybierz plik",
+      "chooseFile": "Wybierz plik",
+      "tooLarge": "Plik jest zbyt duży. ZIP: do 256 MB; JSON: do 2 MB.",
+      "keys": "Klucze z pliku",
+      "showKey": "Pokaż",
+      "hideKey": "Ukryj",
+      "showKeyLabel": "Pokaż klucz: {{name}}",
+      "hideKeyLabel": "Ukryj klucz: {{name}}",
+      "missingKey": "Nie podano klucza",
+      "linkedModels": "Modele",
+      "noLinkedModels": "Nieprzypisane",
+      "removeKeyLabel": "Usuń klucz z importu: {{name}}",
+      "removeKeyHint": "Usuwa klucz tylko z tego importu. Zapisane klucze nie są usuwane; powiązane modele będą wymagać innego klucza.",
+      "keysHint": "Nazwij klucze, których chcesz użyć. Brakujące klucze możesz wpisać tutaj lub zastąpić zapisanym kluczem poniżej.",
+      "model": "Model / adres URL API",
+      "key": "Klucz API",
+      "roles": "Użyj w",
+      "noOverwrite": "Istniejące modele i klucze nie są nadpisywane. Modele PRO/LITE są dodawane. Zajęte miejsce Vision pozostaje bez zmian. Import zapisuje i stosuje wybrane modele bez restartowania usług.",
+      "confirm": "Importuj i zastosuj",
+      "download": "Pobierz JSON",
+      "result": "Dodano: {{added}}. Już obecne lub pominięte: {{skipped}}.",
+      "warnings": {
+        "chatgpt_reconnect_required": "Modele ChatGPT OAuth zostały pominięte: najpierw autoryzuj plan na tym serwerze, a następnie dodaj jego modele. Tokeny OAuth nie są przenoszone wraz z konfiguracją modeli.",
+        "st_settings_not_transferred": "Ustawienia próbkowania SillyTavern, szablony promptów i skrypty nie są przenoszone.",
+        "st_connection_needs_configuration": "Niektóre połączenia wymagają adresu URL API zgodnego z OpenAI. Natywne punkty końcowe Anthropic nie są zgodne z tym importerem.",
+        "st_text_completion_not_supported": "Profile Text Completion nie są importowane. Użyj połączenia Chat Completions zgodnego z OpenAI."
+      }
     }
   },
   "integrations": {
@@ -378,6 +428,12 @@
         "deleteTitle": "Usunąć tę kolekcję?",
         "deleteText": "Jej wektory zostaną trwale usunięte z Qdrant. Kanoniczny tekst pamięci w SQLite nie zostanie naruszony.",
         "deleteAction": "Usuń"
+      },
+      "retrieval": {
+        "sectionTitle": "Wyniki wyszukiwania w pamięci",
+        "sectionIntro": "Wspólne ustawienie domyślne dla wyszukiwań z ponownym rankingiem lub bez niego.",
+        "limitLabel": "Maksymalna liczba wspomnień na wyszukiwanie",
+        "limitHint": "1–20 różnych wspomnień. Ponowne rankingowanie ocenia do 20 kandydatów. Użytkownicy mogą zastąpić liczbę wyników bota w swoich ustawieniach osobistych i czatu."
       }
     },
     "webSearch": {
@@ -866,7 +922,8 @@
         "backup": "Tworzenie kopii zapasowej bazy danych…",
         "restarting": "Ponowne uruchamianie usług serwera. Panel na chwilę się rozłączy…",
         "complete": "Serwer zaktualizowany.",
-        "failed": "Aktualizacja nie powiodła się."
+        "failed": "Aktualizacja nie powiodła się.",
+        "pulling": "Pobieranie i przygotowywanie obrazów serwera…"
       },
       "drain": {
         "waiting": "{{count}} użytkownik(ów) wciąż pracuje. Czekam {{seconds}}s…",
@@ -895,6 +952,13 @@
         "softApply": "Poczekaj do 15 s i kontynuuj",
         "forceApply": "Kontynuuj teraz",
         "applying": "Pracuję…"
+      },
+      "storage": {
+        "title": "Miejsce na dysku przed aktualizacją",
+        "available": "Dostępne: {{size}}",
+        "required": "Szacowane wymagane: {{size}}",
+        "estimate": "Zmienione obrazy: {{images}} · obszar roboczy kopii zapasowej: {{backup}}. Szacowanie uwzględnia pełny rozmiar skompresowanego obrazu, nawet gdy Docker może ponownie wykorzystać istniejące warstwy.",
+        "insufficient": "Zwolnij miejsce na dysku przed aktualizacją."
       }
     },
     "error": "Błąd: {{message}}",
@@ -1081,7 +1145,72 @@
     "apiKeyDeleteNullify": "Usuń bez zastępowania",
     "apiKeyDeleteSelectReplacement": "Nowy klucz dla modeli",
     "apiKeyDeleteConfirm": "Usuń",
-    "apiKeyNotUsed": "Ten klucz nie jest używany przez żaden model. Można bezpiecznie usunąć."
+    "apiKeyNotUsed": "Ten klucz nie jest używany przez żaden model. Można bezpiecznie usunąć.",
+    "rotation": {
+      "title": "Sekrety serwera",
+      "description": "Bezpiecznie wygeneruj nowe sekrety. Potwierdź swoim aktualnym hasłem administratora.",
+      "change": "Obróć",
+      "recover": "Wznów odzyskiwanie",
+      "recoveryHint": "Odzyskiwanie wymaga uwagi. Inne operacje są zablokowane. Ponów odzyskiwanie; nie zastępuj sekretów ręcznie.",
+      "manualRecoveryHint": "Dziennik odzyskiwania jest brakujący lub uszkodzony. Przywróć pasującą kopię zapasową bazy danych/konfiguracji przy zatrzymanych usługach danych. Zobacz README menedżera; nie zastępuj klucza ręcznie.",
+      "downtime": "Backend, Telegram i Notatki zostaną na chwilę zatrzymane. Najpierw tworzona jest kopia zapasowa zawierająca bieżącą konfigurację. Nowe sekrety są generowane na serwerze.",
+      "backup": "Kopia zapasowa przed rotacją",
+      "backupWarning": "Zawiera stare sekrety. Przechowuj prywatnie. Starsze kopie zapasowe bazy danych wymagają pasującego klucza szyfrowania; nie usuwaj tego klucza.",
+      "passwordInvalid": "Nieprawidłowe bieżące hasło.",
+      "requestFailed": "Nie udało się rozpocząć operacji. Sprawdź jej stan przed ponowną próbą.",
+      "statusUnavailable": "Nie można odczytać stanu rotacji. Elementy sterujące są niedostępne.",
+      "fieldCount": "Ponownie zaszyfrowane pola: {{count}}",
+      "rolledBack": "Przywrócono poprzednią konfigurację. Przed ponowną próbą sprawdź miejsce na dysku, obraz backendu i zaszyfrowane rekordy.",
+      "preflightFailed": "Rotacja nie została rozpoczęta. Sprawdź miejsce na dysku, aktywne generacje i obraz backendu. Żadne sekrety nie zostały zmienione.",
+      "status": {
+        "queued": "W kolejce",
+        "running": "W toku",
+        "complete": "Zakończono",
+        "failed": "Niepowodzenie",
+        "recovery_required": "Wymagane odzyskiwanie"
+      },
+      "reason": {
+        "running_secret_config_mismatch": "Działający kontener używa innych sekretów niż menedżer. Ujednolić pliki env i uruchamianie Compose; rotacja nie została rozpoczęta.",
+        "active_generations_try_later": "Poczekaj na aktywne odpowiedzi i anuluj przygotowanie aktualizacji, jeśli jest włączone.",
+        "not_enough_space_for_secret_rotation": "Za mało miejsca na kopie zapasowe i robocze kopie bazy danych.",
+        "backend_secret_env_override": "Sekret backendu jest nadpisany w Compose. Użyj wartości z backend.env.",
+        "internal_token_env_override": "Token wewnętrzny usługi zależnej jest nadpisany w Compose.",
+        "backend_start_command_override": "Niestandardowa komenda startowa backendu omija ochronę odzyskiwania.",
+        "backend_rotation_helper_missing": "Przebuduj backend: obraz nie zawiera aktualnego pomocnika rotacji.",
+        "backend_not_running": "Backend nie jest uruchomiony.",
+        "secret_not_configured": "Bieżący sekret nie jest skonfigurowany.",
+        "encrypted_record_unreadable": "Nie można odczytać zaszyfrowanego rekordu przy użyciu starego klucza. Rotacja została anulowana.",
+        "storage_write_failed": "Nie udało się zapisać danych. Sprawdź wolne miejsce i uprawnienia.",
+        "admin_requests_busy": "Inne żądania administracyjne są wciąż przetwarzane. Spróbuj ponownie później.",
+        "operation_failed": "Nie udało się ukończyć operacji. Sprawdź stan kontenera i przebuduj bieżące obrazy."
+      },
+      "phase": {
+        "queued": "W kolejce",
+        "preflight": "Sprawdzanie",
+        "stopping": "Zatrzymywanie usług",
+        "backup": "Tworzenie kopii zapasowej",
+        "reencrypting": "Ponowne szyfrowanie",
+        "publishing": "Przełączanie bazy danych",
+        "committed": "Uruchamianie usług",
+        "rolling_back": "Przywracanie",
+        "rolled_back": "Uruchamianie usług"
+      },
+      "jwt": {
+        "title": "Klucz podpisywania sesji użytkownika",
+        "description": "Unieważnia tokeny dostępu i odświeżania. Sesje panelu administratora pozostają ważne.",
+        "confirm": "Wszyscy użytkownicy będą musieli zalogować się ponownie. Konta, hasła i czaty zostaną zachowane."
+      },
+      "internal": {
+        "title": "Token usługi wewnętrznej",
+        "description": "Aktualizuje token używany wspólnie przez backend, menedżera, Telegram i Notatki.",
+        "confirm": "Token wewnętrzny zostanie zastąpiony w obu plikach środowiskowych, a działające usługi zależne zostaną odtworzone."
+      },
+      "encryption": {
+        "title": "Klucz szyfrowania",
+        "description": "Ponownie szyfruje zapisane klucze API, dane uwierzytelniające OAuth i sekrety integracji.",
+        "confirm": "Zaszyfrowane dane zostaną zmigrowane na zweryfikowanej kopii bazy danych. Identyfikatory i odwołania są zachowane. Niezależne klucze DevOps/map, jeśli skonfigurowane, pozostają bez zmian."
+      }
+    }
   },
   "ui": {
     "search": "Szukaj…",
@@ -1134,5 +1263,43 @@
     "defaultSet": "Domyślny prompt zmieniony",
     "emptyList": "Brak promptów.",
     "defaultBadge": "domyślny"
+  },
+  "chatgpt": {
+    "access": "Dostęp",
+    "sharedLabel": "Zezwól innym użytkownikom na korzystanie z tego połączenia",
+    "sharedHelp": "Ich żądania również korzystają z limitu Twojego planu. Wymagane dla współdzielonych modeli PRO/LITE i Vision.",
+    "privateModels": "To połączenie jest tylko dla administratorów. Dodaj model ręcznie; najpierw włącz dostęp współdzielony w integracji dla PRO/LITE i Vision.",
+    "requestLimitations": "Ta trasa subskrypcji nie obsługuje obecnie temperatury, top_p ani limitu wyjściowego max_tokens. To nie jest zwykłe rozliczanie API. Połączenia OAuth muszą być autoryzowane osobno na każdym serwerze.",
+    "title": "Subskrypcja ChatGPT",
+    "adminHelp": "Połącz konto ChatGPT, aby używać jego planu do obsługi żądań.",
+    "desktopHelp": "Tylko dla administratorów. Zaloguj się w przeglądarce na tym komputerze; połączenie zostanie zapisane na Twoim serwerze. Zdalne serwery wymagają HTTPS.",
+    "firstSignIn": "Najpierw zaloguj się na swoim komputerze",
+    "adminSteps": "Otwórz Chatter na swoim komputerze → Ustawienia → Aplikacja → Subskrypcja ChatGPT → Kontynuuj z ChatGPT. Następnie odśwież tę listę. Logowanie jest niedostępne dla zwykłych użytkowników.",
+    "signIn": "Kontynuuj z ChatGPT",
+    "waiting": "Oczekiwanie na logowanie w przeglądarce…",
+    "reconnect": "Połącz ponownie",
+    "connected": "ChatGPT połączony z serwerem",
+    "failed": "Żądanie ChatGPT nie powiodło się.",
+    "serverRequired": "Najpierw połącz się ze swoim serwerem Chatter i zaloguj się jako administrator.",
+    "refresh": "Odśwież połączenia",
+    "empty": "Brak połączeń.",
+    "planEnabled": "Wykorzystanie planu ChatGPT jest włączone",
+    "planDisabled": "Wykorzystanie planu ChatGPT jest wyłączone",
+    "name": "Nazwa połączenia",
+    "saveName": "Zapisz nazwę",
+    "loadModels": "Wczytaj dostępne modele",
+    "model": "Model",
+    "testHelp": "Test wysyła krótkie żądanie do OpenAI i wykorzystuje limit Twojego planu ChatGPT.",
+    "test": "Testowe żądanie",
+    "disconnect": "Rozłącz",
+    "disconnectHelp": "Zakończyć sesję OAuth i usunąć dane uwierzytelniające serwera? Modele korzystające z tego połączenia przestaną działać.",
+    "errors": {
+      "chatgpt_secure_trusted_server_required": "Użyj wybranego serwera z HTTPS (lub serwera lokalnego).",
+      "chatgpt_authorization_timeout": "Przekroczono limit czasu logowania. Spróbuj ponownie.",
+      "chatgpt_authorization_declined": "Odmowa dostępu. Spróbuj ponownie.",
+      "chatgpt_plan_usage_not_enabled": "Zezwól aplikacji na korzystanie z Twojego planu ChatGPT.",
+      "chatgpt_reauthorization_required": "Zaloguj się ponownie przez ChatGPT.",
+      "chatgpt_authorization_in_progress": "Logowanie jest już otwarte w przeglądarce."
+    }
   }
 }

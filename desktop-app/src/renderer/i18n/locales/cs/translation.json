@@ -485,7 +485,8 @@
       "app": "Aplikace",
       "billing": "Fakturace",
       "about": "O aplikaci",
-      "data": "Data"
+      "data": "Data",
+      "admin": "Správa"
     },
     "browser": {
       "help": "Vyberte, které akce AI v prohlížeči vyžadují vaše potvrzení. Ruční akce nejsou ovlivněny.",
@@ -721,7 +722,10 @@
       "noAvatarControl": "Zakázat ovládání avatara",
       "noAvatarControlHelp": "AI nemůže pixelového avatara vidět ani ovládat. Nástroje a pokyny související s avatarem budou odstraněny.",
       "noWakeWord": "Zakázat budící slovo",
-      "noWakeWordHelp": "Zastavit poslech budících slov (Alexa, Hey Jarvis, Hey Mycroft, Hey Rhasspy). Mikrofonní proud bude vypnut."
+      "noWakeWordHelp": "Zastavit poslech budících slov (Alexa, Hey Jarvis, Hey Mycroft, Hey Rhasspy). Mikrofonní proud bude vypnut.",
+      "injectionProtection": "Ochrana proti prompt injection",
+      "injectionProtectionHint": "Pro hraní rolí doporučujeme vypnout. Podrobnosti zobrazíte najetím myší.",
+      "injectionProtectionHelp": "Pokud je vypnuta, ochranný protokol a značky nedůvěryhodného obsahu se modelu neposílají. Pokyny na webech, v e-mailech a souborech mohou ovlivnit odpovědi a volání nástrojů. Přístupová oprávnění a omezení serveru zůstávají v platnosti. Jednotlivé chaty mohou toto nastavení přepsat."
     },
     "models": {
       "title": "Nastavení modelů",
@@ -837,14 +841,70 @@
           "worlds_not_supported": "Lorebooky a World Info zatím nejsou importovány.",
           "other_data_ignored": "Ostatní nastavení, rozšíření a servisní soubory v archivu nemění Chatter.",
           "personas_not_found": "V souboru settings.json nebyly nalezeny žádné osoby.",
-          "persona_avatar_errors": "Některé avatary osob nebylo možné importovat."
+          "persona_avatar_errors": "Některé avatary osob nebylo možné importovat.",
+          "media_missing": "Některé odkazované přílohy nebyly v archivu nalezeny. Externí URL adresy se nestahují.",
+          "media_import_errors": "Některé přílohy nebylo možné importovat. Samotné zprávy byly zachovány.",
+          "group_behavior_changed": "Historie každé skupiny se změní na samostatnou místnost, kterou vlastníte vy. Postavy se změní na samostatné boty. Automatické odpovědi jsou po importu vypnuté; strategie aktivace SillyTavern, nastavení ztlumených členů a výzvy připojených karet se nepřenášejí.",
+          "group_metadata_missing": "Některé historie skupin nemají odpovídající definici skupiny. Jejich zprávy jsou zachovány v místnostech, ale seznam účastníků nelze obnovit.",
+          "group_character_missing": "Některé postavy nemají odpovídající kartu. Jejich zprávy jsou zachovány, ale jejich boty nelze obnovit.",
+          "chat_vector_import_errors": "Některé vektorizované chaty nebylo možné přidat do paměti chatu. Chaty samotné byly přesto importovány."
         },
         "errors": {
           "format": "Vyberte SillyTavern ZIP zálohu",
           "size": "Archiv nesmí být větší než 256 MB",
           "invalid": "Nelze přečíst zálohu SillyTavern",
           "import": "Nelze importovat zálohu SillyTavern"
-        }
+        },
+        "diskSpace": "Místo na disku serveru",
+        "summary": {
+          "title": "Obsah zálohy",
+          "data": "Data",
+          "total": "Celkem",
+          "details": "Změny",
+          "characters": "Znaky",
+          "chatTypes": "Soukromé: {{personal}} · Místnosti: {{rooms}}",
+          "roomsHelp": "Automatické odpovědi v místnostech jsou vypnuté.",
+          "spaceEnough": "Dostatek místa",
+          "spaceLow": "Nedostatek místa",
+          "required": "Vyžadováno ≈ {{size}}",
+          "available": "K dispozici {{size}}",
+          "spaceRatio": "Požadováno {{required}}, k dispozici {{available}}",
+          "diskHint": "Zahrnuje bezpečnostní rezervu. Archiv je již připraven.",
+          "warnings": "Upozornění",
+          "more": "Podrobnosti importu",
+          "cancelNote": "Zrušení zachová již importovaná data. Opětovný import nezdvojí konverzace.",
+          "groupNote": "Historie každé skupiny se stane samostatnou místností s boty. Strategie odpovědí ST, nastavení ztlumených členů a výzvy připojených karet se nepřenášejí.",
+          "vectorNote": "Vektory ST se nekopírují; zprávy zpracovává váš model pro vkládání.",
+          "memoryWarning": "Paměť: {{messages}} zpráv bude znovu indexováno. Mohou být účtovány poplatky poskytovatele.",
+          "missingMedia": "Nedostupné přílohy: {{count}}. Zprávy jsou zachovány; externí adresy URL se nestahují."
+        },
+        "diskEstimate": "K dispozici: {{available}} MB · Odhadovaná potřeba: {{required}} MB",
+        "diskHelp": "Archiv je již připraven na disku. Tento odhad zahrnuje dodatečné úložiště pro zprávy, varianty a přílohy včetně bezpečnostní rezervy.",
+        "insufficientSpace": "Na serveru není dostatek volného místa na disku. Uvolněte místo a znovu vyberte archiv.",
+        "mediaTitle": "Přílohy zpráv",
+        "groupsTitle": "Skupinové chaty → Chatter místnosti",
+        "groupsCount": "Skupiny: {{count}} · Historie / místnosti: {{history_count}}",
+        "groupsResult": "Vytvořené místnosti: {{created}}, již importováno: {{existing}}",
+        "cancelHelp": "Zrušení se zastaví na další hranici zpracování. Již importovaná data zůstanou zachována; opětovný import stejného archivu obnoví chybějící přílohy bez duplikování chatů.",
+        "cancelled": "Import zrušen. Již importovaná data byla zachována.",
+        "mediaCount": "Obrázky: {{images}} · Soubory: {{files}}",
+        "mediaMissing": "Některé odkazované přílohy v archivu chybí nebo používají nepodporované externí cesty ({{count}}). Zprávy budou přesto importovány.",
+        "mediaResult": "Importované přílohy: {{images}} obrázků, {{files}} souborů; chybějící: {{missing}}, chyby: {{errors}}",
+        "progress": {
+          "groups": "Historie skupin: {{done}} / {{total}}",
+          "personas": "Persony a avatary",
+          "media": "Přílohy: zpráva {{done}} / {{total}}",
+          "cancelling": "Ruší se po dokončení aktuální položky...",
+          "cancelled": "Import zrušen",
+          "characters": "Postavy: {{done}} / {{total}}",
+          "chats": "Chaty a přílohy: {{done}} / {{total}}",
+          "memory": "Paměť chatu: {{done}} / {{total}}",
+          "ready": "Připraveno k importu",
+          "complete": "Import dokončen",
+          "failed": "Import se nezdařil"
+        },
+        "chatVectorsWarning": "V historii chatu {{chats}} byl nalezen vektorizovaný obsah. Chatter znovu vloží {{messages}} zpráv pomocí aktuálně nastaveného modelu embeddingu do lokální paměti každého chatu. Může to nějakou dobu trvat a může vzniknout poplatek poskytovatele; nekompatibilní surové vektory SillyTavern se nekopírují.",
+        "chatMemoryImportedResult": "Paměť chatu: {{messages}} zpráv indexováno v {{chats}} chatech; chyby: {{errors}}"
       },
       "character": {
         "title": "Karta postavy",
@@ -1389,7 +1449,29 @@
       "confirmDelete": "Smazat tuto paměť?",
       "loadSettingsFailed": "Nepodařilo se načíst nastavení paměti",
       "loadRecordsFailed": "Nelze načíst vzpomínky",
-      "saveSettingsFailed": "Nelze uložit nastavení paměti"
+      "saveSettingsFailed": "Nelze uložit nastavení paměti",
+      "preferences": {
+        "defaultsHint": "Výchozí hodnota pro vaše chaty. Jednotlivé chaty ji mohou přepsat.",
+        "limitLabel": "Maximální počet vzpomínek na vyhledávání",
+        "adminDefault": "Výchozí — {{count}}",
+        "chatDefault": "Automaticky — {{count}}",
+        "limitHint": "Pro automatickou paměť a nástroj vyhledávání v paměti bota.",
+        "limitHelp": "Počítá jednotlivé vzpomínky, nikoli fragmenty. Nastavení chatu přepisuje osobní výchozí hodnoty, které přepisují výchozí hodnotu serveru. Přeřazování vyhodnocuje až 20 kandidátů a filtruje výsledky pod prahem. Bot může požádat o méně. Více vzpomínek zvyšuje kontext a náklady. Vyhledávání v kartách v rozhraní nepoužívá osobní přepisy."
+      },
+      "automaticMemory": {
+        "label": "Automatická paměť",
+        "hint": "Před každou odpovědí načte relevantní vzpomínky.",
+        "inactive": "Neaktivní, dokud je používání paměti zakázáno.",
+        "help": "Před odpovědí se text zprávy odešle nakonfigurovanému poskytovateli embeddingů. Vyhledávání používá zvolený rozsah paměti a reranker, pokud je povolen: načtené fragmenty se odesílají jeho poskytovateli. Požadavky se účtují jako běžná vyhledávání; v místnostech platí majitel odpovídajícího bota. Výsledky se předávají bez dalšího zkracování a neukládají se do historie chatu. Pokud vyhledávání selže nebo trvá déle než 10 sekund, odpověď pokračuje bez paměti. Automatická paměť se v režimu hosta nepoužívá."
+      },
+      "injectionProtection": {
+        "label": "Ochrana proti prompt injection",
+        "automatic": "Automaticky",
+        "enabled": "Zapnuto",
+        "disabled": "Vypnuto",
+        "hint": "Pro hraní rolí doporučujeme vypnout.",
+        "help": "Automaticky používá globální nastavení v Omezeních. Je-li vypnuto, ochranný protokol a značky nedůvěryhodného obsahu se modelu neposílají. Pokyny na webech, v e-mailech a souborech mohou bota ovlivnit. Přístupová oprávnění a omezení serveru zůstávají v platnosti. Změny ovlivní následující odpovědi, nikoli probíhající generování."
+      }
     },
     "contextSummary": {
       "title": "Souhrn dřívější konverzace",
@@ -1730,6 +1812,72 @@
         "title": "## Podrobnosti",
         "body": "### 1. Režimy odpovědí\n\nMístnosti mají dva režimy:\n\n- **Kolo** – boti odpovídají v nastaveném pořadí.\n- **Ručně** – vy si vyberete, který bot odpoví v daném okamžiku.\n\n### 2. Automatické odpovědi\n\nMožnost \"Odpovědět okamžitě\" způsobí, že bot reaguje na každou novou zprávu:\n\n- vaše zprávy;\n- zprávy od ostatních účastníků (pokud je bot sdílený).\n\n### 3. Přístup bota pro ostatní účastníky\n\nChcete-li, aby bot odpovídal ostatním členům místnosti, zpřístupněte ho:\n\n1. Najeďte na bota.\n2. Klikněte na tlačítko se třemi tečkami.\n3. Vyberte \"Sdílet s členy\".\n\nPoznámka: používání bota spotřebuje **vaše** kvóty a použije **vámi** vybraný model.\n\n### 4. Zabezpečení dat\n\nPokud jiný uživatel požádá vašeho bota o provedení akce (například:\n\n- spustit příkaz na počítači;\n- zkontrolovat e-mail;\n- prohledat archiv),\n\npoužije **vlastní** prostředí:\n\n- jejich počítač;\n- jejich e-mail;\n- jejich archivy.\n\nI když používají vašeho bota.\n\nTo je provedeno z bezpečnostních důvodů.\n\nZároveň zůstává botova krátkodobá paměť pro ně přístupná.\n\n### 5. Paměť bota a soukromí vlastníka\n\nPři používání sdíleného bota má stále přístup ke krátkodobé paměti vlastníka: například jméno, věk, blízké osoby a pracoviště. Bot může tyto informace použít nebo zmínit v konverzaci. Přidávejte takového bota do místností pouze s lidmi, kterým důvěřujete.\n\nArchivy, e-mail, soubory, počítač a další osobní integrace vlastníka nejsou sdíleny s účastníky."
       }
+    }
+  },
+  "memorySetupNotice": {
+    "title": "Vektorová paměť není nakonfigurována",
+    "settingsHelp": "Sémantické vyhledávání, automatická paměť a ukládání nových vzpomínek nejsou k dispozici. Správce musí v administračním panelu nakonfigurovat model pro vkládání. Uložené záznamy zůstávají v seznamu dostupné.",
+    "importHelp": "Chaty a další data budou importována, ale vzpomínky z vektorizovaných chatů zatím nebudou přidány. Po nakonfigurování modelu pro vkládání importujte stejný archiv znovu."
+  },
+  "memoryMap": {
+    "limit": "Až {{count}}",
+    "pages": "Stránky paměti",
+    "listCount": "Načteno {{shown}} z {{total}}",
+    "more": "Načíst další",
+    "total": "Celkem vzpomínek: {{count}}",
+    "build": "Vytvořit mapu",
+    "warning": "Bude načteno posledních {{count}} z {{total}} vzpomínek. Stahování vektorů a výpočet projekce může trvat dlouho a výrazně zvýšit spotřebu paměti. Maximum: 5 000; můžete zrušit.",
+    "found": "Nalezeno: {{count}}",
+    "refresh": "Obnovit",
+    "view": "Zobrazení paměti",
+    "list": "Seznam",
+    "map": "3D",
+    "count": "Na mapě: {{shown}} z {{total}} vzpomínek",
+    "reset": "Obnovit zobrazení",
+    "loading": "Připravuje se mapa vzpomínek…",
+    "failed": "Mapu se nepodařilo načíst. Seznam vzpomínek je stále k dispozici.",
+    "retry": "Zkusit znovu",
+    "webgl": "3D není na tomto zařízení dostupné. Použijte místo toho seznam.",
+    "noVectors": "Pro načtené vzpomínky nebyly nalezeny žádné uložené vektory.",
+    "help": "Tažením otáčejte, kolečkem přibližujte, kliknutím na bod otevřete vzpomínku. Barvy představují zdroje; hledání zvýrazňuje výsledky. Jde o přibližnou projekci PCA, nikoli o přesné vzdálenosti vyhledávání.",
+    "separateSpaces": "Různé modely vkládání se zobrazují v oddělených shlucích; vzdálenosti mezi nimi nelze porovnávat."
+  },
+  "chatgpt": {
+    "access": "Přístup",
+    "sharedLabel": "Povolit ostatním uživatelům používat toto připojení",
+    "sharedHelp": "Jejich požadavky také využívají váš limit tarifu. Vyžadováno pro sdílené modely PRO/LITE a Vision.",
+    "privateModels": "Toto připojení je pouze pro administrátory. Přidejte ruční model; nejprve v integraci povolte sdílený přístup pro PRO/LITE a Vision.",
+    "requestLimitations": "Tato cesta předplatného momentálně nepodporuje temperature, top_p ani limit výstupu max_tokens. Nejde o běžné účtování API. Připojení OAuth musí být autorizována samostatně na každém serveru.",
+    "title": "Předplatné ChatGPT",
+    "adminHelp": "Připojte účet ChatGPT a používejte jeho tarif pro požadavky.",
+    "desktopHelp": "Pouze pro administrátory. Přihlaste se v prohlížeči na tomto počítači; připojení se uloží na vašem serveru. Vzdálené servery vyžadují HTTPS.",
+    "firstSignIn": "Nejprve se přihlaste na svém počítači",
+    "adminSteps": "Otevřete Chatter na svém počítači → Nastavení → Aplikace → Předplatné ChatGPT → Pokračovat s ChatGPT. Poté obnovte tento seznam. Přihlášení není pro běžné uživatele dostupné.",
+    "signIn": "Pokračovat s ChatGPT",
+    "waiting": "Čekání na přihlášení v prohlížeči…",
+    "reconnect": "Znovu připojit",
+    "connected": "ChatGPT připojen k serveru",
+    "failed": "Požadavek ChatGPT selhal.",
+    "serverRequired": "Nejprve se připojte ke svému serveru Chatter a přihlaste se jako správce.",
+    "refresh": "Obnovit připojení",
+    "empty": "Zatím žádná připojení.",
+    "planEnabled": "Využití plánu ChatGPT je povoleno",
+    "planDisabled": "Využití plánu ChatGPT je zakázáno",
+    "name": "Název připojení",
+    "saveName": "Uložit název",
+    "loadModels": "Načíst dostupné modely",
+    "model": "Model",
+    "testHelp": "Test odešle krátký požadavek do OpenAI a využije váš limit v rámci plánu ChatGPT.",
+    "test": "Testovací požadavek",
+    "disconnect": "Odpojit",
+    "disconnectHelp": "Ukončit relaci OAuth a odebrat přihlašovací údaje serveru? Modely používající toto připojení přestanou fungovat.",
+    "errors": {
+      "chatgpt_secure_trusted_server_required": "Použijte vybraný server s HTTPS (nebo místní server).",
+      "chatgpt_authorization_timeout": "Přihlášení vypršelo. Zkuste to prosím znovu.",
+      "chatgpt_authorization_declined": "Přístup byl zamítnut. Zkuste to prosím znovu.",
+      "chatgpt_plan_usage_not_enabled": "Povolte aplikaci používat vaše předplatné ChatGPT.",
+      "chatgpt_reauthorization_required": "Přihlaste se znovu pomocí ChatGPT.",
+      "chatgpt_authorization_in_progress": "Přihlášení už je otevřené v prohlížeči."
     }
   }
 }

@@ -246,6 +246,56 @@
       "colProvider": "Poskytovatel",
       "colStatus": "Stav",
       "colLastCheck": "Naposledy zkontrolováno"
+    },
+    "access": {
+      "label": "Přístup k modelům",
+      "all": "Všichni",
+      "admins": "Pouze administrátoři",
+      "selected": "Vybraní uživatelé",
+      "users": "Povolení uživatelé",
+      "hint": "Pokud nejsou vybráni žádní uživatelé, není přístup povolen. Administrátoři musí být také vybráni.",
+      "admin": "Správce",
+      "choose": "Vybrat uživatele",
+      "search": "Hledat podle jména nebo ID…",
+      "empty": "Nenalezeni žádní uživatelé",
+      "failed": "Nepodařilo se načíst uživatele"
+    },
+    "transfer": {
+      "title": "Import a export",
+      "subtitle": "Přeneste uložená připojení modelů z Chatteru nebo SillyTavernu.",
+      "import": "Importovat modely",
+      "export": "Exportovat modely",
+      "importHint": "Nahrajte záložní ZIP soubor ze SillyTavernu, JSON předvolbu nebo konfiguraci modelu z Chatteru.",
+      "exportHint": "Exportuje uloženou konfiguraci včetně ID modelů, rolí, cen a odkazů na klíče. Neuložené úpravy nejsou zahrnuty.",
+      "includeKeys": "Zahrnout API klíče",
+      "secretWarning": "Tento soubor bude obsahovat nešifrované API klíče. Uchovejte jej v soukromí.",
+      "drop": "Přetáhněte sem soubor ZIP nebo JSON, nebo vyberte soubor",
+      "chooseFile": "Vybrat soubor",
+      "tooLarge": "Soubor je příliš velký. ZIP: až 256 MB; JSON: až 2 MB.",
+      "keys": "Klíče ze souboru",
+      "showKey": "Zobrazit",
+      "hideKey": "Skrýt",
+      "showKeyLabel": "Zobrazit klíč: {{name}}",
+      "hideKeyLabel": "Skrýt klíč: {{name}}",
+      "missingKey": "Klíč nebyl zadán",
+      "linkedModels": "Modely",
+      "noLinkedModels": "Nepřiřazeno",
+      "removeKeyLabel": "Odebrat klíč z importu: {{name}}",
+      "removeKeyHint": "Odebere klíč pouze z tohoto importu. Uložené klíče se neodstraní; propojené modely budou potřebovat jiný klíč.",
+      "keysHint": "Pojmenujte klíče, které chcete použít. Chybějící klíče můžete zadat zde nebo je nahradit uloženým klíčem níže.",
+      "model": "Model / URL API",
+      "key": "Klíč API",
+      "roles": "Použít v",
+      "noOverwrite": "Stávající modely a klíče se nepřepisují. Modely PRO/LITE se přidají. Obsazený slot Vision zůstane nezměněn. Import uloží a použije vybrané modely bez restartování služeb.",
+      "confirm": "Importovat a použít",
+      "download": "Stáhnout JSON",
+      "result": "Přidáno: {{added}}. Již existující nebo přeskočeno: {{skipped}}.",
+      "warnings": {
+        "chatgpt_reconnect_required": "Modely ChatGPT OAuth byly přeskočeny: nejprve na tomto serveru autorizujte tarif a poté přidejte jeho modely. Tokeny OAuth se s konfigurací modelů nepřenášejí.",
+        "st_settings_not_transferred": "Nastavení vzorkování SillyTavern, šablony výzev a skripty se nepřenášejí.",
+        "st_connection_needs_configuration": "Některá připojení vyžadují API URL kompatibilní s OpenAI. Nativní koncové body Anthropic nejsou s tímto importérem kompatibilní.",
+        "st_text_completion_not_supported": "Profily Text Completion se neimportují. Použijte připojení Chat Completions kompatibilní s OpenAI."
+      }
     }
   },
   "integrations": {
@@ -364,6 +414,12 @@
         "deleteTitle": "Smazat tuto kolekci?",
         "deleteText": "Její vektory budou trvale odstraněny z Qdrant. Kanonický paměťový text v SQLite není ovlivněn.",
         "deleteAction": "Smazat"
+      },
+      "retrieval": {
+        "sectionTitle": "Výsledky vyhledávání v paměti",
+        "sectionIntro": "Sdílené výchozí nastavení pro vyhledávání s přeřazením i bez něj.",
+        "limitLabel": "Maximální počet vzpomínek na vyhledávání",
+        "limitHint": "1–20 různých vzpomínek. Přeřazení vyhodnocuje až 20 kandidátů. Uživatelé mohou přepsat počet výsledků bota ve svém osobním nastavení a nastavení chatu."
       }
     },
     "webSearch": {
@@ -859,7 +915,8 @@
         "backup": "Vytváření zálohy databáze…",
         "restarting": "Restartování serverových služeb. Panel se na krátkou dobu odpojí…",
         "complete": "Server aktualizován.",
-        "failed": "Aktualizace selhala."
+        "failed": "Aktualizace selhala.",
+        "pulling": "Stahování a příprava serverových obrazů…"
       },
       "drain": {
         "waiting": "{{count}} uživatel(é) stále pracují. Čekání {{seconds}}s…",
@@ -888,6 +945,13 @@
         "softApply": "Počkat až 15 s a pokračovat",
         "forceApply": "Pokračovat nyní",
         "applying": "Pracuji…"
+      },
+      "storage": {
+        "title": "Místo na disku před aktualizací",
+        "available": "K dispozici: {{size}}",
+        "required": "Odhadovaná potřeba: {{size}}",
+        "estimate": "Změněné obrazy: {{images}} · záložní pracovní prostor: {{backup}}. Odhad používá plnou velikost komprimovaného obrazu, i když Docker může znovu použít existující vrstvy.",
+        "insufficient": "Před aktualizací uvolněte místo na disku."
       }
     },
     "error": "Chyba: {{message}}"
@@ -1067,7 +1131,72 @@
     "apiKeyDeleteNullify": "Smazat bez náhrady",
     "apiKeyDeleteSelectReplacement": "Nový klíč pro modely",
     "apiKeyDeleteConfirm": "Smazat",
-    "apiKeyNotUsed": "Tento klíč není používán žádným modelem. Lze bezpečně smazat."
+    "apiKeyNotUsed": "Tento klíč není používán žádným modelem. Lze bezpečně smazat.",
+    "rotation": {
+      "title": "Tajné klíče serveru",
+      "description": "Bezpečně vygenerujte nové tajné klíče. Potvrďte svým aktuálním heslem správce.",
+      "change": "Otočit",
+      "recover": "Obnovit obnovu",
+      "recoveryHint": "Obnova vyžaduje pozornost. Ostatní operace jsou zablokovány. Zkuste obnovu znovu; nenahrazujte tajné klíče ručně.",
+      "manualRecoveryHint": "Žurnál obnovy chybí nebo je poškozen. Obnovte odpovídající zálohu databáze/konfigurace se zastavenými datovými službami. Viz README správce; nenahrazujte klíč ručně.",
+      "downtime": "Backend, Telegram a Notes se krátce zastaví. Nejprve se vytvoří záloha obsahující aktuální konfiguraci. Nové tajné klíče se vygenerují na serveru.",
+      "backup": "Záloha před rotací",
+      "backupWarning": "Obsahuje staré klíče. Uchovávejte v soukromí. Starší zálohy databáze vyžadují odpovídající šifrovací klíč; tento klíč neodstraňujte.",
+      "passwordInvalid": "Nesprávné aktuální heslo.",
+      "requestFailed": "Operaci se nepodařilo spustit. Před dalším pokusem zkontrolujte její stav.",
+      "statusUnavailable": "Nelze načíst stav rotace. Ovládací prvky nejsou k dispozici.",
+      "fieldCount": "Znovu zašifrovaná pole: {{count}}",
+      "rolledBack": "Předchozí konfigurace byla obnovena. Před dalším pokusem zkontrolujte místo na disku, image backendu a zašifrované záznamy.",
+      "preflightFailed": "Rotace nezačala. Zkontrolujte místo na disku, aktivní generace a image backendu. Žádná tajemství nebyla změněna.",
+      "status": {
+        "queued": "Ve frontě",
+        "running": "Probíhá",
+        "complete": "Dokončeno",
+        "failed": "Selhalo",
+        "recovery_required": "Vyžadováno obnovení"
+      },
+      "reason": {
+        "running_secret_config_mismatch": "Spuštěný kontejner používá jiná tajemství než správce. Sjednoťte soubory env a spuštění Compose; rotace nebyla zahájena.",
+        "active_generations_try_later": "Počkejte na aktivní odpovědi a případně zrušte přípravu aktualizace.",
+        "not_enough_space_for_secret_rotation": "Nedostatek místa pro záložní a pracovní kopie databáze.",
+        "backend_secret_env_override": "Tajný klíč backendu je přepsán v Compose. Použijte hodnotu z backend.env.",
+        "internal_token_env_override": "Interní token závislé služby je přepsán v Compose.",
+        "backend_start_command_override": "Vlastní příkaz pro spuštění backendu obchází ochranu obnovy.",
+        "backend_rotation_helper_missing": "Znovu sestavte backend: image neobsahuje aktuální pomocný nástroj pro rotaci.",
+        "backend_not_running": "Backend neběží.",
+        "secret_not_configured": "Současný tajný klíč není nakonfigurován.",
+        "encrypted_record_unreadable": "Šifrovaný záznam nelze přečíst pomocí starého klíče. Rotace byla zrušena.",
+        "storage_write_failed": "Data se nepodařilo zapsat. Zkontrolujte volné místo a oprávnění.",
+        "admin_requests_busy": "Stále probíhají další požadavky správce. Zkuste to později.",
+        "operation_failed": "Operaci nebylo možné dokončit. Zkontrolujte stav kontejneru a znovu sestavte aktuální image."
+      },
+      "phase": {
+        "queued": "Ve frontě",
+        "preflight": "Kontrola",
+        "stopping": "Zastavování služeb",
+        "backup": "Vytváření zálohy",
+        "reencrypting": "Opětovné šifrování",
+        "publishing": "Přepínání databáze",
+        "committed": "Spouštění služeb",
+        "rolling_back": "Obnovování",
+        "rolled_back": "Spouštění služeb"
+      },
+      "jwt": {
+        "title": "Podpisový klíč uživatelských relací",
+        "description": "Zneplatní přístupové a obnovovací tokeny. Relace v administračním panelu zůstanou platné.",
+        "confirm": "Všichni uživatelé se budou muset znovu přihlásit. Účty, hesla a chaty zůstanou zachovány."
+      },
+      "internal": {
+        "title": "Token interních služeb",
+        "description": "Aktualizuje token používaný společně backendem, managerem, Telegramem a Notes.",
+        "confirm": "Interní token bude nahrazen v obou souborech prostředí a běžící závislé služby budou znovu vytvořeny."
+      },
+      "encryption": {
+        "title": "Šifrovací klíč",
+        "description": "Znovu zašifruje uložené klíče API, přihlašovací údaje OAuth a integrační tajné klíče.",
+        "confirm": "Šifrovaná data budou migrována na ověřené kopii databáze. ID a reference jsou zachovány. Nezávislé klíče DevOps/map, pokud jsou nakonfigurovány, zůstávají nezměněny."
+      }
+    }
   },
   "settings": {
     "languageTitle": "Jazyk rozhraní",
@@ -1115,5 +1244,43 @@
     "defaultSet": "Výchozí výzva změněna",
     "emptyList": "Zatím žádné výzvy.",
     "defaultBadge": "výchozí"
+  },
+  "chatgpt": {
+    "access": "Přístup",
+    "sharedLabel": "Povolit ostatním uživatelům používat toto připojení",
+    "sharedHelp": "Jejich požadavky také čerpají z vašeho limitu tarifu. Vyžadováno pro sdílené modely PRO/LITE a Vision.",
+    "privateModels": "Toto připojení je pouze pro administrátory. Přidejte ruční model; nejprve v integraci povolte sdílený přístup pro PRO/LITE a Vision.",
+    "requestLimitations": "Tato cesta předplatného momentálně nepodporuje temperature, top_p ani limit výstupu max_tokens. Nejde o běžné účtování API. OAuth připojení musí být autorizována samostatně na každém serveru.",
+    "title": "Předplatné ChatGPT",
+    "adminHelp": "Připojte účet ChatGPT a používejte jeho tarif pro požadavky.",
+    "desktopHelp": "Pouze pro administrátory. Přihlaste se v prohlížeči na tomto počítači; připojení se uloží na vašem serveru. Vzdálené servery vyžadují HTTPS.",
+    "firstSignIn": "Nejprve se přihlaste na svém počítači",
+    "adminSteps": "Otevřete Chatter na svém počítači → Nastavení → Aplikace → Předplatné ChatGPT → Pokračovat přes ChatGPT. Poté tento seznam obnovte. Přihlášení není pro běžné uživatele dostupné.",
+    "signIn": "Pokračovat přes ChatGPT",
+    "waiting": "Čekání na přihlášení v prohlížeči…",
+    "reconnect": "Znovu připojit",
+    "connected": "ChatGPT je připojen k serveru",
+    "failed": "Požadavek ChatGPT se nezdařil.",
+    "serverRequired": "Nejprve se připojte ke svému serveru Chatter a přihlaste se jako správce.",
+    "refresh": "Obnovit připojení",
+    "empty": "Zatím žádná připojení.",
+    "planEnabled": "Využití plánu ChatGPT je povoleno",
+    "planDisabled": "Využití plánu ChatGPT je zakázáno",
+    "name": "Název připojení",
+    "saveName": "Uložit název",
+    "loadModels": "Načíst dostupné modely",
+    "model": "Model",
+    "testHelp": "Test odešle krátký požadavek do OpenAI a využije limit vašeho plánu ChatGPT.",
+    "test": "Testovací požadavek",
+    "disconnect": "Odpojit",
+    "disconnectHelp": "Ukončit relaci OAuth a odebrat přihlašovací údaje serveru? Modely používající toto připojení přestanou fungovat.",
+    "errors": {
+      "chatgpt_secure_trusted_server_required": "Použijte vybraný server s HTTPS (nebo místní server).",
+      "chatgpt_authorization_timeout": "Přihlášení vypršelo. Zkuste to prosím znovu.",
+      "chatgpt_authorization_declined": "Přístup byl zamítnut. Zkuste to prosím znovu.",
+      "chatgpt_plan_usage_not_enabled": "Povolte aplikaci používat váš tarif ChatGPT.",
+      "chatgpt_reauthorization_required": "Přihlaste se znovu pomocí ChatGPT.",
+      "chatgpt_authorization_in_progress": "Přihlášení je již otevřeno v prohlížeči."
+    }
   }
 }

@@ -164,7 +164,8 @@
       "mail": "Correo electrónico",
       "billing": "Facturación",
       "about": "Acerca de",
-      "data": "Datos"
+      "data": "Datos",
+      "admin": "Administración"
     },
     "browser": {
       "help": "Elige qué acciones del navegador realizadas por la IA requieren tu aprobación. Las acciones manuales no se ven afectadas.",
@@ -377,7 +378,10 @@
       "noAvatarControl": "Desactivar control del avatar",
       "noAvatarControlHelp": "La IA no puede ver ni controlar el avatar de píxeles. Se eliminan las herramientas y las instrucciones relacionadas con el avatar.",
       "noWakeWord": "Desactivar palabra de activación",
-      "noWakeWordHelp": "Dejar de escuchar palabras de activación (Alexa, Hey Jarvis, Hey Mycroft, Hey Rhasspy). El flujo del micrófono se apagará."
+      "noWakeWordHelp": "Dejar de escuchar palabras de activación (Alexa, Hey Jarvis, Hey Mycroft, Hey Rhasspy). El flujo del micrófono se apagará.",
+      "injectionProtection": "Protección contra inyección de prompts",
+      "injectionProtectionHint": "Se recomienda desactivarla para el roleplay. Pasa el cursor para ver los detalles.",
+      "injectionProtectionHelp": "Cuando está desactivada, el protocolo de protección y los marcadores de contenido no confiable no se envían al modelo. Las instrucciones en sitios web, correos electrónicos y archivos pueden influir en las respuestas y en las llamadas a herramientas. Los permisos de acceso y las restricciones del servidor siguen aplicándose. Los chats individuales pueden anular esta configuración."
     },
     "models": {
       "title": "Configuración de modelos",
@@ -516,14 +520,70 @@
           "worlds_not_supported": "Los libros de lore y la información del mundo aún no se importan.",
           "other_data_ignored": "Otras configuraciones, extensiones y archivos de servicio en el archivo no cambian Chatter.",
           "personas_not_found": "No se encontraron personas en settings.json.",
-          "persona_avatar_errors": "Algunos avatares de personas no pudieron importarse."
+          "persona_avatar_errors": "Algunos avatares de personas no pudieron importarse.",
+          "media_missing": "No se encontraron algunos archivos adjuntos referenciados en el archivo. Las URL externas no se descargan.",
+          "media_import_errors": "No se pudieron importar algunos archivos adjuntos. Los mensajes en sí se conservaron.",
+          "group_behavior_changed": "Cada historial de grupo se convierte en una sala separada de tu propiedad. Los personajes se convierten en bots separados. Las respuestas automáticas están desactivadas tras la importación; las estrategias de activación de SillyTavern, la configuración de miembros silenciados y los prompts de tarjetas unidas no se reproducen.",
+          "group_metadata_missing": "Algunos historiales de grupo no tienen una definición de grupo correspondiente. Sus mensajes se conservan en salas, pero no se puede restaurar la lista de participantes.",
+          "group_character_missing": "Algunos personajes no tienen una tarjeta correspondiente. Sus mensajes se conservan, pero sus bots no se pueden restaurar.",
+          "chat_vector_import_errors": "Algunos chats vectorizados no se pudieron añadir a la memoria del chat. Los chats en sí se importaron de todos modos."
         },
         "errors": {
           "format": "Seleccione una copia de seguridad ZIP de SillyTavern",
           "size": "El archivo no debe superar los 256 MB",
           "invalid": "No se pudo leer la copia de seguridad de SillyTavern",
           "import": "No se pudo importar la copia de seguridad de SillyTavern"
-        }
+        },
+        "diskSpace": "Espacio en disco del servidor",
+        "summary": {
+          "title": "Contenido de la copia de seguridad",
+          "data": "Datos",
+          "total": "Total",
+          "details": "Cambios",
+          "characters": "Caracteres",
+          "chatTypes": "Privados: {{personal}} · Salas: {{rooms}}",
+          "roomsHelp": "Las respuestas automáticas en salas están desactivadas.",
+          "spaceEnough": "Espacio suficiente",
+          "spaceLow": "Espacio insuficiente",
+          "required": "Requerido ≈ {{size}}",
+          "available": "Disponible {{size}}",
+          "spaceRatio": "Requerido {{required}}, disponible {{available}}",
+          "diskHint": "Incluye una reserva de seguridad. El archivo ya está preparado.",
+          "warnings": "Ten en cuenta",
+          "more": "Importar detalles",
+          "cancelNote": "La cancelación conserva los datos ya importados. Volver a importar no duplica los chats.",
+          "groupNote": "El historial de cada grupo se convierte en una sala independiente con bots. Las estrategias de respuesta de ST, la configuración de miembros silenciados y los avisos de tarjetas unidas no se transfieren.",
+          "vectorNote": "Los vectores de ST no se copian; los mensajes se procesan con tu modelo de embeddings.",
+          "memoryWarning": "Memoria: se reindexarán {{messages}} mensajes. Pueden aplicarse cargos del proveedor.",
+          "missingMedia": "Adjuntos no disponibles: {{count}}. Los mensajes se conservan; las URL externas no se descargan."
+        },
+        "diskEstimate": "Disponible: {{available}} MB · Estimado necesario: {{required}} MB",
+        "diskHelp": "El archivo ya está preparado en el disco. Esta estimación cubre el almacenamiento adicional para mensajes, variantes y archivos adjuntos, incluida una reserva de seguridad.",
+        "insufficientSpace": "No hay suficiente espacio libre en el disco del servidor. Libera algo de espacio y vuelve a seleccionar el archivo.",
+        "mediaTitle": "Archivos adjuntos de mensajes",
+        "groupsTitle": "Chats de grupo → Salas de Chatter",
+        "groupsCount": "Grupos: {{count}} · Historiales / salas: {{history_count}}",
+        "groupsResult": "Salas creadas: {{created}}, ya importadas: {{existing}}",
+        "cancelHelp": "La cancelación se detiene en el siguiente límite de procesamiento. Los datos ya importados se conservan; volver a importar el mismo archivo reanuda los archivos adjuntos faltantes sin duplicar los chats.",
+        "cancelled": "Importación cancelada. Los datos ya importados se conservaron.",
+        "mediaCount": "Imágenes: {{images}} · Archivos: {{files}}",
+        "mediaMissing": "Faltan algunos archivos adjuntos referenciados en el archivo o usan rutas externas no compatibles ({{count}}). Los mensajes se importarán de todos modos.",
+        "mediaResult": "Archivos adjuntos importados: {{images}} imágenes, {{files}} archivos; faltantes: {{missing}}, errores: {{errors}}",
+        "progress": {
+          "groups": "Historiales de grupos: {{done}} / {{total}}",
+          "personas": "Personas y avatares",
+          "media": "Archivos adjuntos: mensaje {{done}} / {{total}}",
+          "cancelling": "Cancelando después del elemento actual...",
+          "cancelled": "Importación cancelada",
+          "characters": "Personajes: {{done}} / {{total}}",
+          "chats": "Chats y archivos adjuntos: {{done}} / {{total}}",
+          "memory": "Memoria del chat: {{done}} / {{total}}",
+          "ready": "Listo para importar",
+          "complete": "Importación completada",
+          "failed": "Error al importar"
+        },
+        "chatVectorsWarning": "Se encontró historial de chat vectorizado en {{chats}} chat(s). Chatter volverá a incrustar {{messages}} mensajes con el modelo de incrustación configurado actualmente en la memoria local de cada chat. Esto puede tardar y generar cargos del proveedor; los vectores sin procesar incompatibles de SillyTavern no se copian.",
+        "chatMemoryImportedResult": "Memoria de chat: {{messages}} mensajes indexados en {{chats}} chats; errores: {{errors}}"
       },
       "character": {
         "title": "Tarjeta de personaje",
@@ -1068,7 +1128,29 @@
       "confirmDelete": "¿Eliminar esta memoria?",
       "loadSettingsFailed": "No se pudieron cargar los ajustes de memoria",
       "loadRecordsFailed": "No se pudieron cargar los recuerdos",
-      "saveSettingsFailed": "No se pudieron guardar los ajustes de memoria"
+      "saveSettingsFailed": "No se pudieron guardar los ajustes de memoria",
+      "preferences": {
+        "defaultsHint": "Predeterminado para tus chats. Los chats individuales pueden anularlo.",
+        "limitLabel": "Máximo de recuerdos por búsqueda",
+        "adminDefault": "Predeterminado — {{count}}",
+        "chatDefault": "Automático — {{count}}",
+        "limitHint": "Para la memoria automática y la herramienta de búsqueda de memoria del bot.",
+        "limitHelp": "Cuenta recuerdos distintos, no fragmentos. La configuración del chat anula los valores personales predeterminados, que a su vez anulan el valor predeterminado del servidor. La reclasificación evalúa hasta 20 candidatos y filtra los resultados por debajo del umbral. El bot puede solicitar menos. Más recuerdos aumentan el contexto y los costos. Las búsquedas de tarjetas en la interfaz no usan anulaciones personales."
+      },
+      "automaticMemory": {
+        "label": "Memoria automática",
+        "hint": "Recupera memorias relevantes antes de cada respuesta.",
+        "inactive": "Inactiva mientras el uso de memoria está deshabilitado.",
+        "help": "Antes de responder, el texto del mensaje se envía al proveedor de embeddings configurado. La búsqueda usa el alcance de memoria seleccionado y el reranker, si está habilitado: los fragmentos recuperados se envían a su proveedor. Las solicitudes se facturan como búsquedas normales; en salas, paga el propietario del bot que responde. Los resultados se pasan sin truncamiento adicional y no se guardan en el historial del chat. Si la búsqueda falla o tarda más de 10 segundos, la respuesta continúa sin memoria. La memoria automática no se usa en modo invitado."
+      },
+      "injectionProtection": {
+        "label": "Protección contra inyección de prompts",
+        "automatic": "Automático",
+        "enabled": "Activado",
+        "disabled": "Desactivado",
+        "hint": "Se recomienda desactivarlo para el roleplay.",
+        "help": "Automático usa la configuración global en Restricciones. Cuando está desactivado, el protocolo de protección y los marcadores de contenido no confiable no se envían al modelo. Las instrucciones en sitios web, correos electrónicos y archivos pueden influir en el bot. Los permisos de acceso y las restricciones del servidor siguen aplicándose. Los cambios afectan a las respuestas posteriores, no a una generación en curso."
+      }
     },
     "contextSummary": {
       "title": "Resumen de la conversación anterior",
@@ -1721,6 +1803,72 @@
         "title": "## Detalles",
         "body": "### 1. Modos de respuesta\n\nLas salas tienen dos modos:\n\n- **Ronda** — los bots responden en un orden establecido.\n- **Manual** — tú eliges qué bot responde en cada momento.\n\n### 2. Respuestas automáticas\n\nLa opción \"Responder inmediatamente\" hace que el bot reaccione a cada mensaje nuevo:\n\n- tus mensajes;\n- mensajes de otros participantes (si el bot es compartido).\n\n### 3. Acceso del bot para otros participantes\n\nPara permitir que un bot responda a otros miembros de la sala, hazlo compartido:\n\n1. Pasa el cursor sobre el bot.\n2. Haz clic en el botón de tres puntos.\n3. Selecciona \"Compartir con miembros\".\n\nNota: usar el bot consumirá **tus** cuotas y usará **tu** modelo seleccionado.\n\n### 4. Seguridad de los datos\n\nSi otro usuario le pide a tu bot que realice una acción (por ejemplo:\n\n- ejecutar un comando en una computadora;\n- revisar el correo electrónico;\n- buscar en un archivo),\n\nusará **su propio** entorno:\n\n- su computadora;\n- su correo electrónico;\n- sus archivos.\n\nAunque estén usando tu bot.\n\nEsto se hace por seguridad.\n\nAl mismo tiempo, la memoria activa del bot sigue siendo accesible para ellos.\n\n### 5. Memoria del bot y privacidad del propietario\n\nAl usar un bot compartido, este aún tiene acceso a la memoria a corto plazo del propietario: por ejemplo, nombre, edad, personas cercanas y lugar de trabajo. El bot puede usar o mencionar esta información en la conversación. Solo añade este tipo de bot a salas con personas de confianza.\n\nLos archivos, el correo electrónico, los archivos, la computadora y otras integraciones personales del propietario no se comparten con los participantes."
       }
+    }
+  },
+  "memorySetupNotice": {
+    "title": "La memoria vectorial no está configurada",
+    "settingsHelp": "La búsqueda semántica, la memoria automática y el guardado de nuevas memorias no están disponibles. Un administrador debe configurar un modelo de embedding en el panel de administración. Los registros guardados siguen disponibles en la lista.",
+    "importHelp": "Los chats y otros datos se importarán, pero las memorias de los chats vectorizados aún no se añadirán. Después de configurar un modelo de embedding, importa el mismo archivo de nuevo."
+  },
+  "memoryMap": {
+    "limit": "Hasta {{count}}",
+    "pages": "Páginas de memoria",
+    "listCount": "Cargados {{shown}} de {{total}}",
+    "more": "Cargar más",
+    "total": "Total de recuerdos: {{count}}",
+    "build": "Generar mapa",
+    "warning": "Se cargarán los últimos {{count}} de {{total}} recuerdos. Descargar los vectores y calcular la proyección puede tardar y aumentar significativamente el uso de memoria. Máximo: 5.000; puedes cancelar.",
+    "found": "Encontrado: {{count}}",
+    "refresh": "Actualizar",
+    "view": "Vista de memoria",
+    "list": "Lista",
+    "map": "3D",
+    "count": "En el mapa: {{shown}} de {{total}} recuerdos",
+    "reset": "Restablecer vista",
+    "loading": "Preparando el mapa de recuerdos…",
+    "failed": "No se pudo cargar el mapa. La lista de recuerdos sigue disponible.",
+    "retry": "Reintentar",
+    "webgl": "3D no está disponible en este dispositivo. Usa la lista en su lugar.",
+    "noVectors": "No se encontraron vectores almacenados para los recuerdos cargados.",
+    "help": "Arrastra para rotar, desplázate para hacer zoom, haz clic en un punto para abrir un recuerdo. Los colores representan fuentes; la búsqueda resalta los resultados. Esta es una proyección PCA aproximada, no distancias de búsqueda exactas.",
+    "separateSpaces": "Los diferentes modelos de embedding aparecen en nubes separadas; las distancias entre ellos no se pueden comparar."
+  },
+  "chatgpt": {
+    "access": "Acceso",
+    "sharedLabel": "Permitir que otros usuarios usen esta conexión",
+    "sharedHelp": "Sus solicitudes también consumen el límite de tu plan. Obligatorio para los modelos PRO/LITE y Vision compartidos.",
+    "privateModels": "Esta conexión es solo para administradores. Añade un modelo manual; habilita primero el acceso compartido en la integración para PRO/LITE y Vision.",
+    "requestLimitations": "Esta ruta de suscripción no admite actualmente temperature, top_p ni el límite de salida max_tokens. No es la facturación habitual de la API. Las conexiones OAuth deben autorizarse por separado en cada servidor.",
+    "title": "Suscripción de ChatGPT",
+    "adminHelp": "Conecta una cuenta de ChatGPT para usar su plan en las solicitudes.",
+    "desktopHelp": "Solo administradores. Inicia sesión en el navegador de este PC; la conexión se guardará en tu servidor. Los servidores remotos requieren HTTPS.",
+    "firstSignIn": "Inicia sesión primero en tu PC",
+    "adminSteps": "Abre Chatter en tu PC → Configuración → Aplicación → Suscripción de ChatGPT → Continuar con ChatGPT. Luego actualiza esta lista. El inicio de sesión no está disponible para usuarios normales.",
+    "signIn": "Continuar con ChatGPT",
+    "waiting": "Esperando el inicio de sesión en el navegador…",
+    "reconnect": "Reconectar",
+    "connected": "ChatGPT conectado al servidor",
+    "failed": "La solicitud de ChatGPT falló.",
+    "serverRequired": "Conéctate a tu servidor Chatter e inicia sesión como administrador primero.",
+    "refresh": "Actualizar conexiones",
+    "empty": "Aún no hay conexiones.",
+    "planEnabled": "El uso del plan de ChatGPT está habilitado",
+    "planDisabled": "El uso del plan de ChatGPT está deshabilitado",
+    "name": "Nombre de la conexión",
+    "saveName": "Guardar nombre",
+    "loadModels": "Cargar modelos disponibles",
+    "model": "Modelo",
+    "testHelp": "La prueba envía una solicitud breve a OpenAI y usa tu cuota del plan de ChatGPT.",
+    "test": "Solicitud de prueba",
+    "disconnect": "Desconectar",
+    "disconnectHelp": "¿Finalizar la sesión de OAuth y eliminar las credenciales del servidor? Los modelos que usan esta conexión dejarán de funcionar.",
+    "errors": {
+      "chatgpt_secure_trusted_server_required": "Usa el servidor seleccionado con HTTPS (o un servidor local).",
+      "chatgpt_authorization_timeout": "Se agotó el tiempo de inicio de sesión. Inténtalo de nuevo.",
+      "chatgpt_authorization_declined": "Se denegó el acceso. Inténtalo de nuevo.",
+      "chatgpt_plan_usage_not_enabled": "Permite que la aplicación use tu plan de ChatGPT.",
+      "chatgpt_reauthorization_required": "Inicia sesión de nuevo con ChatGPT.",
+      "chatgpt_authorization_in_progress": "El inicio de sesión ya está abierto en el navegador."
     }
   }
 }

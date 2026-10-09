@@ -485,7 +485,8 @@
       "mail": "Poczta",
       "billing": "Rozliczenia",
       "about": "O aplikacji",
-      "data": "Dane"
+      "data": "Dane",
+      "admin": "Administrator"
     },
     "browser": {
       "help": "Wybierz, które działania AI w przeglądarce wymagają Twojego potwierdzenia. Działania ręczne pozostają bez zmian.",
@@ -698,7 +699,10 @@
       "noAvatarControl": "Wyłącz sterowanie awatarem",
       "noAvatarControlHelp": "AI nie może widzieć ani sterować pikselowym awatarem. Narzędzia i instrukcje dotyczące awatara zostają usunięte.",
       "noWakeWord": "Wyłącz słowo budzące",
-      "noWakeWordHelp": "Zatrzymaj nasłuchiwanie słów budzących (Alexa, Hey Jarvis, Hey Mycroft, Hey Rhasspy). Strumień mikrofonu zostanie wyłączony."
+      "noWakeWordHelp": "Zatrzymaj nasłuchiwanie słów budzących (Alexa, Hey Jarvis, Hey Mycroft, Hey Rhasspy). Strumień mikrofonu zostanie wyłączony.",
+      "injectionProtection": "Ochrona przed wstrzykiwaniem poleceń",
+      "injectionProtectionHint": "Zalecane wyłączenie w trybie odgrywania ról. Najedź, aby zobaczyć szczegóły.",
+      "injectionProtectionHelp": "Gdy wyłączone, protokół ochrony i znaczniki niezaufanej treści nie są wysyłane do modelu. Polecenia zawarte w stronach internetowych, e-mailach i plikach mogą wpływać na odpowiedzi i wywołania narzędzi. Uprawnienia dostępu i ograniczenia serwera pozostają egzekwowane. Poszczególne czaty mogą zastąpić to ustawienie."
     },
     "models": {
       "title": "Ustawienia modeli",
@@ -837,14 +841,70 @@
           "worlds_not_supported": "Księgi wiedzy i informacje o świecie nie są jeszcze importowane.",
           "other_data_ignored": "Inne ustawienia, rozszerzenia i pliki usług w archiwum nie zmieniają Chatter.",
           "personas_not_found": "Nie znaleziono person w settings.json.",
-          "persona_avatar_errors": "Niektóre awatary person nie mogły zostać zaimportowane."
+          "persona_avatar_errors": "Niektóre awatary person nie mogły zostać zaimportowane.",
+          "media_missing": "Niektóre przywoływane załączniki nie zostały znalezione w archiwum. Zewnętrzne adresy URL nie są pobierane.",
+          "media_import_errors": "Niektórych załączników nie udało się zaimportować. Same wiadomości zostały zachowane.",
+          "group_behavior_changed": "Historia każdej grupy staje się osobnym pokojem należącym do Ciebie. Postacie stają się osobnymi botami. Po imporcie automatyczne odpowiedzi są wyłączone; strategie aktywacji SillyTavern, ustawienia wyciszonych członków i podpowiedzi dołączonych kart nie są odtwarzane.",
+          "group_metadata_missing": "Niektóre historie grup nie mają pasującej definicji grupy. Ich wiadomości są zachowane w pokojach, ale listy uczestników nie można przywrócić.",
+          "group_character_missing": "Niektóre postacie nie mają pasującej karty. Ich wiadomości są zachowane, ale ich botów nie można przywrócić.",
+          "chat_vector_import_errors": "Niektóre zwektoryzowane czaty nie mogły zostać dodane do pamięci czatu. Same czaty zostały jednak zaimportowane."
         },
         "errors": {
           "format": "Wybierz kopię zapasową SillyTavern ZIP",
           "size": "Archiwum nie może być większe niż 256 MB",
           "invalid": "Nie można odczytać kopii zapasowej SillyTavern",
           "import": "Nie można zaimportować kopii zapasowej SillyTavern"
-        }
+        },
+        "diskSpace": "Miejsce na dysku serwera",
+        "summary": {
+          "title": "Zawartość kopii zapasowej",
+          "data": "Dane",
+          "total": "Razem",
+          "details": "Zmiany",
+          "characters": "Znaki",
+          "chatTypes": "Prywatne: {{personal}} · Pokoje: {{rooms}}",
+          "roomsHelp": "Automatyczne odpowiedzi w pokojach są wyłączone.",
+          "spaceEnough": "Wystarczająco miejsca",
+          "spaceLow": "Za mało miejsca",
+          "required": "Wymagane ≈ {{size}}",
+          "available": "Dostępne {{size}}",
+          "spaceRatio": "Wymagane {{required}}, dostępne {{available}}",
+          "diskHint": "Zawiera rezerwę bezpieczeństwa. Archiwum jest już przygotowane.",
+          "warnings": "Uwaga",
+          "more": "Szczegóły importu",
+          "cancelNote": "Anulowanie zachowuje już zaimportowane dane. Ponowny import nie duplikuje czatów.",
+          "groupNote": "Historia każdej grupy staje się osobnym pokojem z botami. Strategie odpowiedzi ST, ustawienia wyciszonych członków i monity o dołączeniu do karty nie są przenoszone.",
+          "vectorNote": "Wektory ST nie są kopiowane; wiadomości są przetwarzane przez twój model osadzania.",
+          "memoryWarning": "Pamięć: {{messages}} wiadomości zostanie ponownie zindeksowanych. Mogą obowiązywać opłaty dostawcy.",
+          "missingMedia": "Niedostępne załączniki: {{count}}. Wiadomości są zachowywane; zewnętrzne adresy URL nie są pobierane."
+        },
+        "diskEstimate": "Dostępne: {{available}} MB · Szacowane zapotrzebowanie: {{required}} MB",
+        "diskHelp": "Archiwum jest już przygotowane na dysku. To szacowanie obejmuje dodatkowe miejsce na wiadomości, warianty i załączniki, wraz z rezerwą bezpieczeństwa.",
+        "insufficientSpace": "Za mało wolnego miejsca na dysku serwera. Zwolnij miejsce i ponownie wybierz archiwum.",
+        "mediaTitle": "Załączniki wiadomości",
+        "groupsTitle": "Czaty grupowe → Pokoje Chatter",
+        "groupsCount": "Grupy: {{count}} · Historie / pokoje: {{history_count}}",
+        "groupsResult": "Utworzone pokoje: {{created}}, już zaimportowane: {{existing}}",
+        "cancelHelp": "Anulowanie zatrzymuje się na następnej granicy przetwarzania. Już zaimportowane dane zostają zachowane; ponowny import tego samego archiwum uzupełnia brakujące załączniki bez duplikowania czatów.",
+        "cancelled": "Import anulowany. Już zaimportowane dane zostały zachowane.",
+        "mediaCount": "Obrazy: {{images}} · Pliki: {{files}}",
+        "mediaMissing": "Niektórych załączników, do których istnieją odwołania, brakuje w archiwum lub używają nieobsługiwanych ścieżek zewnętrznych ({{count}}). Wiadomości nadal zostaną zaimportowane.",
+        "mediaResult": "Zaimportowane załączniki: {{images}} obrazów, {{files}} plików; brakujące: {{missing}}, błędy: {{errors}}",
+        "progress": {
+          "groups": "Historie grup: {{done}} / {{total}}",
+          "personas": "Persony i awatary",
+          "media": "Załączniki: wiadomość {{done}} / {{total}}",
+          "cancelling": "Anulowanie po bieżącym elemencie...",
+          "cancelled": "Import anulowany",
+          "characters": "Postacie: {{done}} / {{total}}",
+          "chats": "Czaty i załączniki: {{done}} / {{total}}",
+          "memory": "Pamięć czatu: {{done}} / {{total}}",
+          "ready": "Gotowe do importu",
+          "complete": "Import zakończony",
+          "failed": "Import nie powiódł się"
+        },
+        "chatVectorsWarning": "Znaleziono zwektoryzowaną historię czatu w {{chats}} czacie/czatach. Chatter ponownie osadzi {{messages}} wiadomości przy użyciu aktualnie skonfigurowanego modelu osadzania w lokalnej pamięci każdego czatu. Może to zająć trochę czasu i wiązać się z opłatami u dostawcy; niekompatybilne surowe wektory SillyTavern nie są kopiowane.",
+        "chatMemoryImportedResult": "Pamięć czatu: zaindeksowano {{messages}} wiadomości w {{chats}} czatach; błędy: {{errors}}"
       },
       "character": {
         "title": "Karta postaci",
@@ -1389,7 +1449,29 @@
       "confirmDelete": "Usunąć tę pamięć?",
       "loadSettingsFailed": "Nie udało się wczytać ustawień pamięci",
       "loadRecordsFailed": "Nie można wczytać wspomnień",
-      "saveSettingsFailed": "Nie można zapisać ustawień pamięci"
+      "saveSettingsFailed": "Nie można zapisać ustawień pamięci",
+      "preferences": {
+        "defaultsHint": "Domyślne dla Twoich czatów. Poszczególne czaty mogą to zastąpić.",
+        "limitLabel": "Maksymalna liczba wspomnień na wyszukiwanie",
+        "adminDefault": "Domyślne — {{count}}",
+        "chatDefault": "Automatyczne — {{count}}",
+        "limitHint": "Dla automatycznej pamięci i narzędzia wyszukiwania wspomnień bota.",
+        "limitHelp": "Liczy odrębne wspomnienia, a nie fragmenty. Ustawienia czatu zastępują ustawienia osobiste, które zastępują ustawienie domyślne serwera. Ponowne rankingowanie ocenia do 20 kandydatów i odfiltrowuje wyniki poniżej progu. Bot może zażądać mniejszej liczby. Więcej wspomnień zwiększa kontekst i koszty. Wyszukiwania kart w interfejsie nie korzystają z ustawień osobistych."
+      },
+      "automaticMemory": {
+        "label": "Pamięć automatyczna",
+        "hint": "Pobieraj istotne wspomnienia przed każdą odpowiedzią.",
+        "inactive": "Nieaktywne, gdy korzystanie z pamięci jest wyłączone.",
+        "help": "Przed odpowiedzią tekst wiadomości jest wysyłany do skonfigurowanego dostawcy embeddingów. Wyszukiwanie korzysta z wybranego zakresu pamięci oraz rerankera, jeśli jest włączony: pobrane fragmenty są wysyłane do jego dostawcy. Żądania są rozliczane jak zwykłe wyszukiwania; w pokojach płaci właściciel bota odpowiadającego. Wyniki są przekazywane bez dodatkowego obcinania i nie są zapisywane w historii czatu. Jeśli wyszukiwanie się nie powiedzie lub potrwa dłużej niż 10 sekund, odpowiedź zostanie udzielona bez pamięci. Pamięć automatyczna nie jest używana w trybie gościa."
+      },
+      "injectionProtection": {
+        "label": "Ochrona przed wstrzyknięciem promptów",
+        "automatic": "Automatycznie",
+        "enabled": "Włączone",
+        "disabled": "Wyłączone",
+        "hint": "Zalecane wyłączenie w trybie odgrywania ról.",
+        "help": "Opcja Automatycznie korzysta z ustawienia globalnego w sekcji Ograniczenia. Po wyłączeniu protokół ochrony i znaczniki niezaufanej treści nie są wysyłane do modelu. Instrukcje zawarte w witrynach, e-mailach i plikach mogą wpływać na bota. Uprawnienia dostępu i ograniczenia serwera pozostają egzekwowane. Zmiany wpływają na kolejne odpowiedzi, a nie na trwające generowanie."
+      }
     },
     "contextSummary": {
       "title": "Podsumowanie wcześniejszej rozmowy",
@@ -1730,6 +1812,72 @@
         "title": "## Szczegóły",
         "body": "### 1. Tryby odpowiedzi\n\nPokoje mają dwa tryby:\n\n- **Rundowy** — boty odpowiadają w ustalonej kolejności.\n- **Ręczny** — wybierasz, który bot odpowiada w danym momencie.\n\n### 2. Automatyczne odpowiedzi\n\nOpcja \"Odpowiadaj natychmiast\" sprawia, że bot reaguje na każdą nową wiadomość:\n\n- Twoje wiadomości;\n- wiadomości od innych uczestników (jeśli bot jest udostępniony).\n\n### 3. Dostęp bota dla innych uczestników\n\nAby bot mógł odpowiadać innym członkom pokoju, udostępnij go:\n\n1. Najedź kursorem na bota.\n2. Kliknij przycisk z trzema kropkami.\n3. Wybierz \"Udostępnij członkom\".\n\nUwaga: korzystanie z bota będzie zużywać **Twoje** limity i używać **Twojego** wybranego modelu.\n\n### 4. Bezpieczeństwo danych\n\nJeśli inny użytkownik poprosi Twojego bota o wykonanie akcji (na przykład:\n\n- uruchomienie polecenia na komputerze;\n- sprawdzenie poczty e-mail;\n- przeszukanie archiwum),\n\nbot użyje **własnego** środowiska tego użytkownika:\n\n- jego komputera;\n- jego poczty e-mail;\n- jego archiwów.\n\nNawet jeśli korzysta z Twojego bota.\n\nMa to na celu zapewnienie bezpieczeństwa.\n\nJednocześnie pamięć krótkotrwała bota pozostaje dla nich dostępna.\n\n### 5. Pamięć bota i prywatność właściciela\n\nPodczas korzystania z udostępnionego bota ma on nadal dostęp do pamięci krótkotrwałej właściciela: na przykład imienia, wieku, bliskich osób i miejsca pracy. Bot może wykorzystać lub wspomnieć te informacje w rozmowie. Dodawaj takiego bota do pokoi tylko z osobami, którym ufasz.\n\nArchiwa, poczta e-mail, pliki, komputer i inne osobiste integracje właściciela nie są udostępniane uczestnikom."
       }
+    }
+  },
+  "memorySetupNotice": {
+    "title": "Pamięć wektorowa nie jest skonfigurowana",
+    "settingsHelp": "Wyszukiwanie semantyczne, automatyczna pamięć i zapisywanie nowych wspomnień są niedostępne. Administrator musi skonfigurować model osadzania w panelu administracyjnym. Zapisane rekordy pozostają dostępne na liście.",
+    "importHelp": "Czaty i inne dane zostaną zaimportowane, ale wspomnienia z zwektoryzowanych czatów nie zostaną jeszcze dodane. Po skonfigurowaniu modelu osadzania zaimportuj ponownie to samo archiwum."
+  },
+  "memoryMap": {
+    "limit": "Do {{count}}",
+    "pages": "Strony pamięci",
+    "listCount": "Załadowano {{shown}} z {{total}}",
+    "more": "Załaduj więcej",
+    "total": "Łączna liczba wspomnień: {{count}}",
+    "build": "Zbuduj mapę",
+    "warning": "Zostanie załadowanych najnowszych {{count}} z {{total}} wspomnień. Pobieranie wektorów i obliczanie projekcji może zająć czas i znacznie zwiększyć użycie pamięci. Maksimum: 5000; możesz anulować.",
+    "found": "Znaleziono: {{count}}",
+    "refresh": "Odśwież",
+    "view": "Widok pamięci",
+    "list": "Lista",
+    "map": "3D",
+    "count": "Na mapie: {{shown}} z {{total}} wspomnień",
+    "reset": "Resetuj widok",
+    "loading": "Przygotowywanie mapy wspomnień…",
+    "failed": "Nie udało się załadować mapy. Lista wspomnień jest nadal dostępna.",
+    "retry": "Ponów",
+    "webgl": "3D jest niedostępne na tym urządzeniu. Skorzystaj z listy.",
+    "noVectors": "Nie znaleziono zapisanych wektorów dla wczytanych wspomnień.",
+    "help": "Przeciągnij, aby obrócić, przewiń, aby powiększyć, kliknij punkt, aby otworzyć wspomnienie. Kolory oznaczają źródła; wyszukiwanie podświetla wyniki. To przybliżona projekcja PCA, a nie dokładne odległości wyszukiwania.",
+    "separateSpaces": "Różne modele osadzania pojawiają się w osobnych chmurach; odległości między nimi nie mogą być porównywane."
+  },
+  "chatgpt": {
+    "access": "Dostęp",
+    "sharedLabel": "Zezwól innym użytkownikom na korzystanie z tego połączenia",
+    "sharedHelp": "Ich żądania również korzystają z limitu Twojego planu. Wymagane dla współdzielonych modeli PRO/LITE i Vision.",
+    "privateModels": "To połączenie jest tylko dla administratorów. Dodaj model ręcznie; najpierw włącz dostęp współdzielony w integracji dla PRO/LITE i Vision.",
+    "requestLimitations": "Ta trasa subskrypcji nie obsługuje obecnie temperatury, top_p ani limitu wyjściowego max_tokens. To nie jest zwykłe rozliczanie API. Połączenia OAuth muszą być autoryzowane osobno na każdym serwerze.",
+    "title": "Subskrypcja ChatGPT",
+    "adminHelp": "Połącz konto ChatGPT, aby używać jego planu do obsługi żądań.",
+    "desktopHelp": "Tylko administratorzy. Zaloguj się w przeglądarce na tym komputerze; połączenie zostanie zapisane na Twoim serwerze. Zdalne serwery wymagają HTTPS.",
+    "firstSignIn": "Najpierw zaloguj się na swoim komputerze",
+    "adminSteps": "Otwórz Chatter na swoim komputerze → Ustawienia → Aplikacja → Subskrypcja ChatGPT → Kontynuuj z ChatGPT. Następnie odśwież tę listę. Logowanie jest niedostępne dla zwykłych użytkowników.",
+    "signIn": "Kontynuuj z ChatGPT",
+    "waiting": "Oczekiwanie na logowanie w przeglądarce…",
+    "reconnect": "Połącz ponownie",
+    "connected": "ChatGPT połączony z serwerem",
+    "failed": "Żądanie ChatGPT nie powiodło się.",
+    "serverRequired": "Najpierw połącz się ze swoim serwerem Chatter i zaloguj się jako administrator.",
+    "refresh": "Odśwież połączenia",
+    "empty": "Brak połączeń.",
+    "planEnabled": "Wykorzystanie planu ChatGPT jest włączone",
+    "planDisabled": "Wykorzystanie planu ChatGPT jest wyłączone",
+    "name": "Nazwa połączenia",
+    "saveName": "Zapisz nazwę",
+    "loadModels": "Wczytaj dostępne modele",
+    "model": "Model",
+    "testHelp": "Test wysyła krótkie żądanie do OpenAI i wykorzystuje limit Twojego planu ChatGPT.",
+    "test": "Wyślij żądanie testowe",
+    "disconnect": "Rozłącz",
+    "disconnectHelp": "Zakończyć sesję OAuth i usunąć dane logowania serwera? Modele korzystające z tego połączenia przestaną działać.",
+    "errors": {
+      "chatgpt_secure_trusted_server_required": "Użyj wybranego serwera z HTTPS (lub serwera lokalnego).",
+      "chatgpt_authorization_timeout": "Logowanie przekroczyło limit czasu. Spróbuj ponownie.",
+      "chatgpt_authorization_declined": "Odmówiono dostępu. Spróbuj ponownie.",
+      "chatgpt_plan_usage_not_enabled": "Zezwól aplikacji na korzystanie z Twojego planu ChatGPT.",
+      "chatgpt_reauthorization_required": "Zaloguj się ponownie przez ChatGPT.",
+      "chatgpt_authorization_in_progress": "Logowanie jest już otwarte w przeglądarce."
     }
   }
 }

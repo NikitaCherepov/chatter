@@ -11,88 +11,124 @@
       "Fixed update detection, server update progress, and cold memory writes in roleplay mode"
     ],
     "cs": [
-      "Přidána migrace ze SillyTavern",
-      "Přepracován systém vektorové paměti",
-      "Přidáno lokální úložiště vektorové paměti a Qdrant",
-      "Dočasně odebráno hlasové API, nahrazeno novou integrací pro přepis hlasu",
-      "Přidán reranker model do integrace vektorové paměti"
+      "Přidán poskytovatel ChatGPT přes předplatné: správa připojení a výběr modelu v administračním panelu",
+      "Přidán import konfigurací modelů z Chatter a SillyTavern a export s API klíči",
+      "Konfigurace modelů přesunuty z env do databáze — ukládání modelů již nevyžaduje restart backendu",
+      "Přidána rotace JWT, interního tokenu a šifrovacího klíče s rešifrováním dat, zálohou a obnovou",
+      "Vzpomínky lze nyní automaticky prohledávat před odpovědí modelu",
+      "Přidána nastavení automatické paměti pro jednotlivé uživatele a chaty, limity počtu pamětí",
+      "Vylepšený import ze SillyTavern: přílohy zpráv, avatary postav a skupinové příběhy převedeny do místností",
+      "Opravena detekce aktualizací, průběh aktualizace serveru a zápisy do studené paměti v režimu hraní rolí"
     ],
     "de": [
-      "Migration von SillyTavern hinzugefügt",
-      "Vektor-Speichersystem überarbeitet",
-      "Lokale Vektor-Speicherung und Qdrant hinzugefügt",
-      "Sprach-API vorübergehend entfernt, durch neue Integration für Sprachtranskription ersetzt",
-      "Reranker-Modell zur Vektor-Speicher-Integration hinzugefügt"
+      "ChatGPT-Provider per Abonnement hinzugefügt: Verbindungsverwaltung und Modellauswahl im Admin-Panel",
+      "Import von Modellkonfigurationen aus Chatter und SillyTavern sowie Export mit API-Schlüsseln hinzugefügt",
+      "Modellkonfigurationen von env in die Datenbank verschoben — zum Speichern von Modellen ist kein Backend-Neustart mehr erforderlich",
+      "Rotation des JWT, des internen Tokens und des Verschlüsselungsschlüssels mit Daten-Neuverschlüsselung, Backup und Wiederherstellung hinzugefügt",
+      "Erinnerungen können jetzt automatisch durchsucht werden, bevor das Modell antwortet",
+      "Benutzer- und chatbezogene Auto-Memory-Einstellungen sowie Limits für die Memory-Anzahl hinzugefügt",
+      "SillyTavern-Import verbessert: Nachrichtenanhänge, Charakter-Avatare und Gruppenstories werden in Räume umgewandelt",
+      "Update-Erkennung, Server-Update-Fortschritt und Cold-Memory-Schreibvorgänge im Rollenspielmodus behoben"
     ],
     "es": [
-      "Se añadió la migración desde SillyTavern",
-      "Se rediseñó el sistema de memoria vectorial",
-      "Se añadió almacenamiento local de memoria vectorial y Qdrant",
-      "Se eliminó temporalmente la API de voz, reemplazada por una nueva integración para transcripción de voz",
-      "Se añadió un modelo de reordenamiento a la integración de memoria vectorial"
+      "Se añadió un proveedor de ChatGPT mediante suscripción: gestión de conexiones y selección de modelos en el panel de administración",
+      "Se añadió la importación de configuraciones de modelos desde Chatter y SillyTavern, y la exportación con claves de API",
+      "Las configuraciones de modelos se movieron de env a la base de datos: guardar modelos ya no requiere reiniciar el backend",
+      "Se añadió la rotación del JWT, el token interno y la clave de cifrado con recifrado de datos, copia de seguridad y recuperación",
+      "Ahora los recuerdos se pueden buscar automáticamente antes de que el modelo responda",
+      "Se añadieron ajustes de memoria automática por usuario y por chat, y límites de recuento de memoria",
+      "Se mejoró la importación de SillyTavern: los archivos adjuntos de mensajes, los avatares de personajes y las historias de grupo se convierten en salas",
+      "Se corrigieron la detección de actualizaciones, el progreso de actualización del servidor y las escrituras de memoria en frío en el modo de rol"
     ],
     "fr": [
-      "Ajout de la migration depuis SillyTavern",
-      "Refonte du système de mémoire vectorielle",
-      "Ajout du stockage local de mémoire vectorielle et de Qdrant",
-      "Suppression temporaire de l'API vocale, remplacée par une nouvelle intégration pour la transcription vocale",
-      "Ajout d'un modèle de reclassement à l'intégration de mémoire vectorielle"
+      "Ajout d'un fournisseur ChatGPT via abonnement : gestion de la connexion et sélection du modèle dans le panneau d'administration",
+      "Ajout de l'importation des configurations de modèles depuis Chatter et SillyTavern, et exportation avec les clés API",
+      "Les configurations de modèles sont passées des variables d'environnement à la base de données — l'enregistrement des modèles ne nécessite plus de redémarrer le backend",
+      "Ajout de la rotation du JWT, du jeton interne et de la clé de chiffrement avec re-chiffrement des données, sauvegarde et récupération",
+      "Les souvenirs peuvent désormais être recherchés automatiquement avant que le modèle ne réponde",
+      "Ajout de paramètres de mémoire automatique par utilisateur et par conversation, ainsi que de limites du nombre de mémoires",
+      "Amélioration de l'importation SillyTavern : les pièces jointes des messages, les avatars des personnages et les histoires de groupe sont convertis en salons",
+      "Correction de la détection des mises à jour, de la progression des mises à jour du serveur et des écritures en mémoire froide en mode jeu de rôle"
     ],
     "it": [
-      "Aggiunta migrazione da SillyTavern",
-      "Rifatto il sistema di memoria vettoriale",
-      "Aggiunto storage locale della memoria vettoriale e Qdrant",
-      "Rimossa temporaneamente l'API vocale, sostituita con una nuova integrazione per la trascrizione vocale",
-      "Aggiunto un modello di ri-ranking all'integrazione della memoria vettoriale"
+      "Aggiunto un provider ChatGPT tramite abbonamento: gestione della connessione e selezione del modello nel pannello di amministrazione",
+      "Aggiunta l'importazione delle configurazioni dei modelli da Chatter e SillyTavern, e l'esportazione con le chiavi API",
+      "Le configurazioni dei modelli sono state spostate dalle variabili d'ambiente al database — il salvataggio dei modelli non richiede più il riavvio del backend",
+      "Aggiunta la rotazione del JWT, del token interno e della chiave di crittografia con ri-crittografia dei dati, backup e ripristino",
+      "Ora i ricordi possono essere cercati automaticamente prima che il modello risponda",
+      "Aggiunte impostazioni di memoria automatica per utente e per chat, limiti al numero di memorie",
+      "Migliorato l'importazione di SillyTavern: allegati dei messaggi, avatar dei personaggi e storie di gruppo convertiti in stanze",
+      "Corretti il rilevamento degli aggiornamenti, l'avanzamento dell'aggiornamento del server e le scritture di memoria a freddo in modalità roleplay"
     ],
     "ja": [
-      "SillyTavernからの移行を追加しました",
-      "ベクターメモリシステムを再設計しました",
-      "ローカルベクターメモリストレージとQdrantを追加しました",
-      "音声APIを一時的に削除し、音声文字起こしの新しい統合に置き換えました",
-      "ベクターメモリ統合にリランカーモデルを追加しました"
+      "サブスクリプション経由のChatGPTプロバイダーを追加：管理パネルでの接続管理とモデル選択",
+      "ChatterとSillyTavernからのモデル設定のインポート、およびAPIキー付きのエクスポートを追加",
+      "モデル設定をenvからデータベースに移動 — モデルの保存にバックエンドの再起動が不要に",
+      "JWT、内部トークン、暗号化キーのローテーションを追加（データの再暗号化、バックアップ、復元を含む）",
+      "モデルが応答する前にメモリを自動検索できるようになりました",
+      "ユーザーごとおよびチャットごとの自動メモリ設定、メモリ数の上限を追加",
+      "SillyTavernのインポートを改善：メッセージ添付ファイル、キャラクターアバター、グループストーリーをルームに変換",
+      "ロールプレイモードでの更新検出、サーバー更新の進行状況、コールドメモリ書き込みを修正"
     ],
     "ko": [
-      "SillyTavern에서 마이그레이션 추가",
-      "벡터 메모리 시스템 재작업",
-      "로컬 벡터 메모리 저장소 및 Qdrant 추가",
-      "음성 API를 일시적으로 제거하고, 음성 전사를 위한 새 통합으로 대체",
-      "벡터 메모리 통합에 리랭커 모델 추가"
+      "구독을 통한 ChatGPT 제공자 추가: 관리자 패널에서 연결 관리 및 모델 선택",
+      "Chatter 및 SillyTavern에서 모델 구성 가져오기, API 키와 함께 내보내기 추가",
+      "모델 구성이 env에서 데이터베이스로 이동 — 모델 저장 시 백엔드 재시작이 더 이상 필요하지 않음",
+      "JWT, 내부 토큰, 암호화 키의 교체와 데이터 재암호화, 백업 및 복구 추가",
+      "이제 모델이 응답하기 전에 메모리를 자동으로 검색할 수 있음",
+      "사용자별 및 채팅별 자동 메모리 설정, 메모리 개수 제한 추가",
+      "SillyTavern 가져오기 개선: 메시지 첨부 파일, 캐릭터 아바타, 그룹 스토리를 룸으로 변환",
+      "롤플레이 모드에서 업데이트 감지, 서버 업데이트 진행 상황, 콜드 메모리 쓰기 수정"
     ],
     "pl": [
-      "Dodano migrację z SillyTavern",
-      "Przebudowano system pamięci wektorowej",
-      "Dodano lokalne przechowywanie pamięci wektorowej i Qdrant",
-      "Tymczasowo usunięto API głosowe, zastąpione nową integracją do transkrypcji głosu",
-      "Dodano model reranker do integracji pamięci wektorowej"
+      "Dodano dostawcę ChatGPT przez subskrypcję: zarządzanie połączeniami i wybór modelu w panelu administracyjnym",
+      "Dodano import konfiguracji modeli z Chatter i SillyTavern oraz eksport z kluczami API",
+      "Konfiguracje modeli przeniesiono ze zmiennych środowiskowych do bazy danych — zapisywanie modeli nie wymaga już ponownego uruchomienia backendu",
+      "Dodano rotację klucza JWT, tokenu wewnętrznego i klucza szyfrowania wraz z ponownym szyfrowaniem danych, tworzeniem kopii zapasowych i odzyskiwaniem",
+      "Wspomnienia można teraz wyszukiwać automatycznie, zanim model odpowie",
+      "Dodano ustawienia automatycznej pamięci dla użytkownika i czatu oraz limity liczby wspomnień",
+      "Ulepszono import z SillyTavern: załączniki wiadomości, awatary postaci i historie grupowe konwertowane na pokoje",
+      "Naprawiono wykrywanie aktualizacji, postęp aktualizacji serwera i zapisy zimnej pamięci w trybie odgrywania ról"
     ],
     "pt-BR": [
-      "Adicionada migração do SillyTavern",
-      "Sistema de memória vetorial reformulado",
-      "Adicionado armazenamento local de memória vetorial e Qdrant",
-      "API de voz temporariamente removida, substituída por uma nova integração para transcrição de voz",
-      "Adicionado um modelo de reclassificação à integração de memória vetorial"
+      "Adicionado um provedor ChatGPT via assinatura: gerenciamento de conexão e seleção de modelo no painel de administração",
+      "Adicionada a importação de configurações de modelo do Chatter e SillyTavern, e exportação com chaves de API",
+      "Configurações de modelo movidas de env para o banco de dados — salvar modelos não exige mais reiniciar o backend",
+      "Adicionada a rotação do JWT, token interno e chave de criptografia com recriptografia de dados, backup e recuperação",
+      "As memórias agora podem ser pesquisadas automaticamente antes de o modelo responder",
+      "Adicionadas configurações de memória automática por usuário e por chat, limites de contagem de memória",
+      "Importação do SillyTavern aprimorada: anexos de mensagens, avatares de personagens e histórias em grupo convertidos em salas",
+      "Corrigida a detecção de atualizações, o progresso de atualização do servidor e as gravações de memória fria no modo roleplay"
     ],
     "ru": [
-      "Добавлена миграция из SillyTavern",
-      "Переработана система векторной памяти",
-      "Добавлено локальное хранилище векторной памяти и Qdrant",
-      "Временно удален голосовой API, заменен новой интеграцией для транскрипции голоса",
-      "Добавлена модель реранкера в интеграцию векторной памяти"
+      "Добавлен провайдер ChatGPT по подписке: управление подключением и выбор модели в панели администратора",
+      "Добавлен импорт конфигураций моделей из Chatter и SillyTavern, а также экспорт с API-ключами",
+      "Конфигурации моделей перенесены из env в базу данных — сохранение моделей больше не требует перезапуска бэкенда",
+      "Добавлена ротация JWT, внутреннего токена и ключа шифрования с повторным шифрованием данных, резервным копированием и восстановлением",
+      "Теперь память можно искать автоматически до ответа модели",
+      "Добавлены настройки авто-памяти для каждого пользователя и чата, ограничения количества воспоминаний",
+      "Улучшен импорт SillyTavern: вложения сообщений, аватары персонажей и групповые истории преобразуются в комнаты",
+      "Исправлено обнаружение обновлений, прогресс обновления сервера и запись холодной памяти в режиме ролевой игры"
     ],
     "tr": [
-      "SillyTavern'den geçiş eklendi",
-      "Vektör bellek sistemi yeniden düzenlendi",
-      "Yerel vektör bellek depolama ve Qdrant eklendi",
-      "Ses API'si geçici olarak kaldırıldı, ses transkripsiyonu için yeni bir entegrasyonla değiştirildi",
-      "Vektör bellek entegrasyonuna bir reranker modeli eklendi"
+      "Abonelik üzerinden bir ChatGPT sağlayıcısı eklendi: yönetim panelinde bağlantı yönetimi ve model seçimi",
+      "Chatter ve SillyTavern'den model yapılandırmalarının içe aktarılması ve API anahtarlarıyla dışa aktarılması eklendi",
+      "Model yapılandırmaları env'den veritabanına taşındı — modelleri kaydetmek artık arka uç yeniden başlatması gerektirmiyor",
+      "JWT, dahili token ve şifreleme anahtarının veri yeniden şifreleme, yedekleme ve kurtarma ile rotasyonu eklendi",
+      "Anılar artık model yanıt vermeden önce otomatik olarak aranabilir",
+      "Kullanıcı başına ve sohbet başına otomatik bellek ayarları, bellek sayısı sınırları eklendi",
+      "SillyTavern içe aktarımı iyileştirildi: mesaj ekleri, karakter avatarları ve grup hikayeleri odalara dönüştürüldü",
+      "Güncelleme algılama, sunucu güncelleme ilerlemesi ve rol yapma modunda soğuk bellek yazmaları düzeltildi"
     ],
     "zh-CN": [
-      "添加了从SillyTavern的迁移",
-      "重新设计了向量记忆系统",
-      "添加了本地向量记忆存储和Qdrant",
-      "暂时移除了语音API，替换为新的语音转录集成",
-      "在向量记忆集成中添加了重排序模型"
+      "通过订阅添加了 ChatGPT 提供商：管理面板中的连接管理和模型选择",
+      "添加了从 Chatter 和 SillyTavern 导入模型配置，以及使用 API 密钥导出",
+      "模型配置从环境变量移至数据库——保存模型不再需要重启后端",
+      "添加了 JWT、内部令牌和加密密钥的轮换，支持数据重新加密、备份和恢复",
+      "现在可以在模型响应前自动搜索记忆",
+      "新增按用户和按聊天的自动记忆设置、记忆数量限制",
+      "改进 SillyTavern 导入：消息附件、角色头像和群组故事转换为房间",
+      "修复更新检测、服务器更新进度以及角色扮演模式下的冷记忆写入"
     ]
   }
 }

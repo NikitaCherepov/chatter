@@ -245,6 +245,56 @@
       "colProvider": "Sağlayıcı",
       "colStatus": "Durum",
       "colLastCheck": "Son kontrol"
+    },
+    "access": {
+      "label": "Model erişimi",
+      "all": "Herkes",
+      "admins": "Yalnızca yöneticiler",
+      "selected": "Seçili kullanıcılar",
+      "users": "İzin verilen kullanıcılar",
+      "hint": "Kullanıcı seçilmemesi erişim olmadığı anlamına gelir. Yöneticiler de seçilmelidir.",
+      "admin": "Yönetici",
+      "choose": "Kullanıcıları seç",
+      "search": "Ada veya kimliğe göre ara…",
+      "empty": "Kullanıcı bulunamadı",
+      "failed": "Kullanıcılar yüklenemedi"
+    },
+    "transfer": {
+      "title": "İçe ve dışa aktar",
+      "subtitle": "Kaydedilmiş model bağlantılarını Chatter veya SillyTavern'den aktarın.",
+      "import": "Modelleri içe aktar",
+      "export": "Modelleri dışa aktar",
+      "importHint": "Bir SillyTavern ZIP yedeği, JSON ön ayarı veya Chatter model yapılandırması yükleyin.",
+      "exportHint": "Kaydedilen yapılandırmayı; model kimlikleri, roller, fiyatlar ve anahtar referansları dahil olmak üzere dışa aktarır. Kaydedilmemiş düzenlemeler dahil edilmez.",
+      "includeKeys": "API anahtarlarını dahil et",
+      "secretWarning": "Bu dosya şifrelenmemiş API anahtarları içerecek. Gizli tutun.",
+      "drop": "Buraya bir ZIP veya JSON dosyası bırakın ya da dosya seçin",
+      "chooseFile": "Dosya seç",
+      "tooLarge": "Dosya çok büyük. ZIP: en fazla 256 MB; JSON: en fazla 2 MB.",
+      "keys": "Dosyadaki anahtarlar",
+      "showKey": "Göster",
+      "hideKey": "Gizle",
+      "showKeyLabel": "Anahtarı göster: {{name}}",
+      "hideKeyLabel": "Anahtarı gizle: {{name}}",
+      "missingKey": "Anahtar sağlanmadı",
+      "linkedModels": "Modeller",
+      "noLinkedModels": "Atanmadı",
+      "removeKeyLabel": "Anahtarı içe aktarmadan kaldır: {{name}}",
+      "removeKeyHint": "Anahtarı yalnızca bu içe aktarmadan kaldırır. Kaydedilen anahtarlar silinmez; bağlı modeller başka bir anahtar gerektirir.",
+      "keysHint": "Kullanmak istediğiniz anahtarları adlandırın. Eksik anahtarlar buraya girilebilir veya aşağıdaki kayıtlı bir anahtarla değiştirilebilir.",
+      "model": "Model / API URL'si",
+      "key": "API anahtarı",
+      "roles": "Şurada kullan",
+      "noOverwrite": "Mevcut modeller ve anahtarlar üzerine yazılmaz. PRO/LITE modelleri eklenir. Dolu bir Vision yuvası değiştirilmez. İçe aktarma, hizmetleri yeniden başlatmadan seçili modelleri kaydeder ve uygular.",
+      "confirm": "İçe aktar ve uygula",
+      "download": "JSON indir",
+      "result": "Eklendi: {{added}}. Zaten mevcut veya atlandı: {{skipped}}.",
+      "warnings": {
+        "chatgpt_reconnect_required": "ChatGPT OAuth modelleri atlandı: önce bu sunucuda planı yetkilendirin, ardından modellerini ekleyin. OAuth belirteçleri model yapılandırmasıyla birlikte aktarılmaz.",
+        "st_settings_not_transferred": "SillyTavern örnekleme ayarları, istem şablonları ve betikler aktarılmaz.",
+        "st_connection_needs_configuration": "Bazı bağlantılar OpenAI uyumlu bir API URL'si gerektirir. Yerel Anthropic uç noktaları bu içe aktarıcıyla uyumlu değildir.",
+        "st_text_completion_not_supported": "Metin Tamamlama profilleri içe aktarılmaz. OpenAI uyumlu bir Sohbet Tamamlamaları bağlantısı kullanın."
+      }
     }
   },
   "integrations": {
@@ -363,6 +413,12 @@
         "deleteTitle": "Bu koleksiyon silinsin mi?",
         "deleteText": "Vektörleri Qdrant'tan kalıcı olarak kaldırılacaktır. SQLite'daki kanonik bellek metni etkilenmez.",
         "deleteAction": "Sil"
+      },
+      "retrieval": {
+        "sectionTitle": "Bellek arama sonuçları",
+        "sectionIntro": "Yeniden sıralamalı veya yeniden sıralamasız aramalar için paylaşılan varsayılan.",
+        "limitLabel": "Arama başına maksimum anı",
+        "limitHint": "1–20 farklı anı. Yeniden sıralama 20 adaya kadar değerlendirir. Kullanıcılar kişisel ve sohbet ayarlarında botun sonuç sayısını geçersiz kılabilir."
       }
     },
     "webSearch": {
@@ -858,7 +914,8 @@
         "backup": "Veritabanı yedeklemesi oluşturuluyor…",
         "restarting": "Sunucu hizmetleri yeniden başlatılıyor. Panel kısa süreliğine bağlantıyı kesecek…",
         "complete": "Sunucu güncellendi.",
-        "failed": "Güncelleme başarısız oldu."
+        "failed": "Güncelleme başarısız oldu.",
+        "pulling": "Sunucu imajları indiriliyor ve hazırlanıyor…"
       },
       "drain": {
         "waiting": "{{count}} kullanıcı hâlâ çalışıyor. {{seconds}}s bekleniyor…",
@@ -887,6 +944,13 @@
         "softApply": "15 saniyeye kadar bekleyip devam et",
         "forceApply": "Şimdi devam et",
         "applying": "Çalışılıyor…"
+      },
+      "storage": {
+        "title": "Güncelleme öncesi disk alanı",
+        "available": "Kullanılabilir: {{size}}",
+        "required": "Tahmini gereken: {{size}}",
+        "estimate": "Değişen imajlar: {{images}} · yedek çalışma alanı: {{backup}}. Docker mevcut katmanları yeniden kullanabildiğinde bile tahmin, tam sıkıştırılmış imaj boyutunu kullanır.",
+        "insufficient": "Güncellemeden önce disk alanı boşaltın."
       }
     },
     "error": "Hata: {{message}}"
@@ -1066,7 +1130,72 @@
     "apiKeyDeleteNullify": "Değiştirmeden sil",
     "apiKeyDeleteSelectReplacement": "Modeller için yeni anahtar",
     "apiKeyDeleteConfirm": "Sil",
-    "apiKeyNotUsed": "Bu anahtar hiçbir model tarafından kullanılmıyor. Silmek güvenli."
+    "apiKeyNotUsed": "Bu anahtar hiçbir model tarafından kullanılmıyor. Silmek güvenli.",
+    "rotation": {
+      "title": "Sunucu sırları",
+      "description": "Yeni sırları güvenle oluşturun. Mevcut yönetici parolanızla onaylayın.",
+      "change": "Döndür",
+      "recover": "Kurtarmayı sürdür",
+      "recoveryHint": "Kurtarma işlem gerektiriyor. Diğer işlemler engellendi. Kurtarmayı yeniden deneyin; gizli anahtarları elle değiştirmeyin.",
+      "manualRecoveryHint": "Kurtarma günlüğü eksik veya bozuk. Veri hizmetleri durdurulmuşken eşleşen bir veritabanı/yapılandırma yedeğini geri yükleyin. Yönetici README dosyasına bakın; anahtarı elle değiştirmeyin.",
+      "downtime": "Arka uç, Telegram ve Notlar kısa süreliğine duracak. Önce mevcut yapılandırmayı içeren bir yedek oluşturulur. Yeni gizli anahtarlar sunucuda üretilir.",
+      "backup": "Döndürmeden önce yedekle",
+      "backupWarning": "Eski gizli anahtarları içerir. Özel olarak saklayın. Eski veritabanı yedekleri, eşleşen şifreleme anahtarını gerektirir; o anahtarı silmeyin.",
+      "passwordInvalid": "Mevcut parola yanlış.",
+      "requestFailed": "İşlem başlatılamadı. Yeniden denemeden önce durumunu kontrol edin.",
+      "statusUnavailable": "Döndürme durumu okunamıyor. Kontroller kullanılamıyor.",
+      "fieldCount": "Yeniden şifrelenen alanlar: {{count}}",
+      "rolledBack": "Önceki yapılandırma geri yüklendi. Tekrar denemeden önce disk alanını, arka uç imajını ve şifrelenmiş kayıtları kontrol edin.",
+      "preflightFailed": "Rotasyon başlamadı. Disk alanını, etkin nesilleri ve arka uç imajını kontrol edin. Hiçbir gizli anahtar değiştirilmedi.",
+      "status": {
+        "queued": "Sırada",
+        "running": "Devam ediyor",
+        "complete": "Tamamlandı",
+        "failed": "Başarısız",
+        "recovery_required": "Kurtarma gerekli"
+      },
+      "reason": {
+        "running_secret_config_mismatch": "Çalışan kapsayıcı, yöneticiden farklı gizli anahtarlar kullanıyor. Ortam dosyalarını ve Compose başlatmasını hizalayın; rotasyon başlatılmadı.",
+        "active_generations_try_later": "Etkin yanıtları bekleyin ve etkinse güncelleme hazırlığını iptal edin.",
+        "not_enough_space_for_secret_rotation": "Yedek ve çalışma veritabanı kopyaları için yeterli alan yok.",
+        "backend_secret_env_override": "Compose'da bir arka uç gizli anahtarı geçersiz kılınmış. backend.env dosyasındaki değeri kullanın.",
+        "internal_token_env_override": "Bağımlı bir hizmetin dahili belirteci Compose'da geçersiz kılınmış.",
+        "backend_start_command_override": "Özel bir arka uç başlatma komutu, kurtarma korumasını atlıyor.",
+        "backend_rotation_helper_missing": "Arka ucu yeniden derleyin: imajda güncel rotasyon yardımcısı yok.",
+        "backend_not_running": "Arka uç çalışmıyor.",
+        "secret_not_configured": "Geçerli gizli anahtar yapılandırılmamış.",
+        "encrypted_record_unreadable": "Şifrelenmiş bir kayıt eski anahtarla okunamıyor. Rotasyon iptal edildi.",
+        "storage_write_failed": "Veriler yazılamadı. Boş alanı ve izinleri kontrol edin.",
+        "admin_requests_busy": "Diğer yönetici istekleri hâlâ çalışıyor. Daha sonra tekrar deneyin.",
+        "operation_failed": "İşlem tamamlanamadı. Kapsayıcı durumunu kontrol edin ve geçerli imajları yeniden oluşturun."
+      },
+      "phase": {
+        "queued": "Sırada",
+        "preflight": "Kontrol ediliyor",
+        "stopping": "Hizmetler durduruluyor",
+        "backup": "Yedek oluşturuluyor",
+        "reencrypting": "Yeniden şifreleniyor",
+        "publishing": "Veritabanı değiştiriliyor",
+        "committed": "Hizmetler başlatılıyor",
+        "rolling_back": "Geri yükleniyor",
+        "rolled_back": "Hizmetler başlatılıyor"
+      },
+      "jwt": {
+        "title": "Kullanıcı oturumu imzalama anahtarı",
+        "description": "Erişim ve yenileme belirteçlerini geçersiz kılar. Yönetici paneli oturumları geçerli kalır.",
+        "confirm": "Tüm kullanıcıların yeniden oturum açması gerekecek. Hesaplar, parolalar ve sohbetler korunur."
+      },
+      "internal": {
+        "title": "Dahili hizmet belirteci",
+        "description": "Backend, yönetici, Telegram ve Notes tarafından birlikte kullanılan belirteci günceller.",
+        "confirm": "Dahili token her iki ortam dosyasında da değiştirilecek ve bağımlı çalışan servisler yeniden oluşturulacaktır."
+      },
+      "encryption": {
+        "title": "Şifreleme anahtarı",
+        "description": "Kaydedilmiş API anahtarlarını, OAuth kimlik bilgilerini ve entegrasyon sırlarını yeniden şifreler.",
+        "confirm": "Şifrelenmiş veriler doğrulanmış bir veritabanı kopyası üzerinde taşınacaktır. Kimlikler ve referanslar korunur. Yapılandırılmışsa bağımsız DevOps/harita anahtarları değişmeden kalır."
+      }
+    }
   },
   "settings": {
     "languageTitle": "Arayüz dili",
@@ -1114,5 +1243,43 @@
     "defaultSet": "Varsayılan istem değiştirildi",
     "emptyList": "Henüz istem yok.",
     "defaultBadge": "varsayılan"
+  },
+  "chatgpt": {
+    "access": "Erişim",
+    "sharedLabel": "Diğer kullanıcıların bu bağlantıyı kullanmasına izin ver",
+    "sharedHelp": "İstekleri de plan kotanızı kullanır. Paylaşılan PRO/LITE ve Vision modelleri için gereklidir.",
+    "privateModels": "Bu bağlantı yalnızca yöneticiler içindir. Manuel bir model ekleyin; PRO/LITE ve Vision için önce entegrasyonda paylaşılan erişimi etkinleştirin.",
+    "requestLimitations": "Bu abonelik yolu şu anda temperature, top_p veya max_tokens çıktı sınırını desteklemez. Normal API faturalandırması değildir. OAuth bağlantıları her sunucuda ayrı ayrı yetkilendirilmelidir.",
+    "title": "ChatGPT aboneliği",
+    "adminHelp": "İstekler için planını kullanmak üzere bir ChatGPT hesabı bağlayın.",
+    "desktopHelp": "Yalnızca yöneticiler. Bu bilgisayardaki tarayıcıdan oturum açın; bağlantı sunucunuzda kaydedilir. Uzak sunucular HTTPS gerektirir.",
+    "firstSignIn": "Önce bilgisayarınızda oturum açın",
+    "adminSteps": "Bilgisayarınızda Chatter'ı açın → Ayarlar → Uygulama → ChatGPT aboneliği → ChatGPT ile devam et. Ardından bu listeyi yenileyin. Oturum açma normal kullanıcılar için kullanılamaz.",
+    "signIn": "ChatGPT ile devam et",
+    "waiting": "Tarayıcıda oturum açılması bekleniyor…",
+    "reconnect": "Yeniden bağlan",
+    "connected": "ChatGPT sunucuya bağlandı",
+    "failed": "ChatGPT isteği başarısız oldu.",
+    "serverRequired": "Önce Chatter sunucunuza bağlanın ve yönetici olarak oturum açın.",
+    "refresh": "Bağlantıları yenile",
+    "empty": "Henüz bağlantı yok.",
+    "planEnabled": "ChatGPT planı kullanımı etkin",
+    "planDisabled": "ChatGPT planı kullanımı devre dışı",
+    "name": "Bağlantı adı",
+    "saveName": "Adı kaydet",
+    "loadModels": "Kullanılabilir modelleri yükle",
+    "model": "Model",
+    "testHelp": "Test, OpenAI'ye kısa bir istek gönderir ve ChatGPT planı kotanızı kullanır.",
+    "test": "Test isteği",
+    "disconnect": "Bağlantıyı kes",
+    "disconnectHelp": "OAuth oturumu sonlandırılsın ve sunucu kimlik bilgileri kaldırılsın mı? Bu bağlantıyı kullanan modeller çalışmayı durduracak.",
+    "errors": {
+      "chatgpt_secure_trusted_server_required": "Seçilen sunucuyu HTTPS (veya yerel bir sunucu) ile kullanın.",
+      "chatgpt_authorization_timeout": "Oturum açma zaman aşımına uğradı. Lütfen tekrar deneyin.",
+      "chatgpt_authorization_declined": "Erişim reddedildi. Lütfen tekrar deneyin.",
+      "chatgpt_plan_usage_not_enabled": "Uygulamanın ChatGPT planınızı kullanmasına izin verin.",
+      "chatgpt_reauthorization_required": "ChatGPT ile tekrar oturum açın.",
+      "chatgpt_authorization_in_progress": "Oturum açma tarayıcıda zaten açık."
+    }
   }
 }
