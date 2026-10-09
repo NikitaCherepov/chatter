@@ -14,9 +14,9 @@
       "Přidán poskytovatel ChatGPT přes předplatné: správa připojení a výběr modelu v administračním panelu",
       "Přidán import konfigurací modelů z Chatter a SillyTavern a export s API klíči",
       "Konfigurace modelů přesunuty z env do databáze — ukládání modelů již nevyžaduje restart backendu",
-      "Přidána rotace JWT, interního tokenu a šifrovacího klíče s rešifrováním dat, zálohou a obnovou",
+      "Přidána rotace JWT, interního tokenu a šifrovacího klíče s re-šifrováním dat, zálohou a obnovou",
       "Vzpomínky lze nyní automaticky prohledávat před odpovědí modelu",
-      "Přidána nastavení automatické paměti pro jednotlivé uživatele a chaty, limity počtu pamětí",
+      "Přidána automatická paměťová nastavení pro jednotlivé uživatele a chaty, limity počtu pamětí",
       "Vylepšený import ze SillyTavern: přílohy zpráv, avatary postav a skupinové příběhy převedeny do místností",
       "Opravena detekce aktualizací, průběh aktualizace serveru a zápisy do studené paměti v režimu hraní rolí"
     ],

@@ -4,52 +4,40 @@
       "Added a custom installation folder selection during setup"
     ],
     "cs": [
-      "Opraven design",
-      "Přidáno kontextové menu po kliknutí pravým tlačítkem"
+      "Přidána možnost volby vlastní instalační složky během instalace"
     ],
     "de": [
-      "Das Design korrigiert",
-      "Ein Rechtsklick-Kontextmenü hinzugefügt"
+      "Benutzerdefinierte Auswahl des Installationsordners während der Einrichtung hinzugefügt"
     ],
     "es": [
-      "Se corrigió el diseño",
-      "Se añadió un menú contextual al hacer clic derecho"
+      "Se añadió la selección de una carpeta de instalación personalizada durante la configuración"
     ],
     "fr": [
-      "Correction du design",
-      "Ajout d'un menu contextuel au clic droit"
+      "Ajout d'une sélection de dossier d'installation personnalisé lors de la configuration"
     ],
     "it": [
-      "Corretto il design",
-      "Aggiunto un menu contestuale con clic destro"
+      "Aggiunta la selezione di una cartella di installazione personalizzata durante la configurazione"
     ],
     "ja": [
-      "デザインを修正しました",
-      "右クリックのコンテキストメニューを追加しました"
+      "セットアップ時にカスタムインストールフォルダの選択を追加しました"
     ],
     "ko": [
-      "디자인 수정",
-      "오른쪽 클릭 컨텍스트 메뉴 추가"
+      "설치 중 사용자 지정 설치 폴더 선택 기능을 추가했습니다"
     ],
     "pl": [
-      "Poprawiono wygląd",
-      "Dodano menu kontekstowe po kliknięciu prawym przyciskiem myszy"
+      "Dodano wybór niestandardowego folderu instalacji podczas konfiguracji"
     ],
     "pt-BR": [
-      "Corrigido o design",
-      "Adicionado um menu de contexto com o botão direito"
+      "Adicionada a seleção de pasta de instalação personalizada durante a configuração"
     ],
     "ru": [
-      "Исправлен дизайн",
-      "Добавлено контекстное меню по правому клику"
+      "Добавлена возможность выбора пользовательской папки установки во время настройки"
     ],
     "tr": [
-      "Tasarım düzeltildi",
-      "Sağ tık bağlam menüsü eklendi"
+      "Kurulum sırasında özel kurulum klasörü seçimi eklendi"
     ],
     "zh-CN": [
-      "修复了设计",
-      "添加了右键上下文菜单"
+      "在安装过程中添加了自定义安装文件夹选择"
     ]
   }
 }
