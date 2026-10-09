@@ -1,173 +1,43 @@
 {
   "changes": {
     "en": [
-      "Admins can now authorize their ChatGPT subscription right from the desktop app (browser sign-in)",
-      "Added 3D visualization of vector memory with search result highlighting, selectable load volume, and view controls",
-      "Added auto-memory and max memory count settings — global and per chat",
-      "Added prompt injection protection control: Auto / On / Off per chat",
-      "Added warnings about unconfigured vector memory in settings and during import",
-      "The memory window has been merged into chat settings; fixed layout and reduced width without the memory block",
-      "Added memory list pagination and caching of the list and the 3D map",
-      "Reworked the SillyTavern import preview: compact summary, room info, attachments, and warnings",
-      "Added progress display and cancellation for backup imports",
-      "Removed the hot memory length limit from the settings UI",
-      "Improved chat search and search in chat"
+      "Slightly improved the design on small screens"
     ],
     "cs": [
-      "Správci nyní mohou autorizovat své předplatné ChatGPT přímo z desktopové aplikace (přihlášení přes prohlížeč)",
-      "Přidána 3D vizualizace vektorové paměti se zvýrazněním výsledků hledání, volitelným objemem načtení a ovládáním zobrazení",
-      "Přidána nastavení automatické paměti a maximálního počtu paměti — globálně i pro jednotlivé chaty",
-      "Přidána kontrola ochrany proti prompt injection: Auto / Zapnuto / Vypnuto pro jednotlivé chaty",
-      "Přidána upozornění na nenakonfigurovanou vektorovou paměť v nastavení a během importu",
-      "Okno paměti bylo sloučeno do nastavení chatu; opraveno rozvržení a zmenšena šířka bez bloku paměti",
-      "Přidáno stránkování seznamu paměti a ukládání seznamu a 3D mapy do mezipaměti",
-      "Přepracován náhled importu SillyTavern: kompaktní souhrn, informace o místnosti, přílohy a upozornění",
-      "Přidáno zobrazení průběhu a možnost zrušení pro importy záloh",
-      "Odebrán limit délky horké paměti z uživatelského rozhraní nastavení",
-      "Vylepšené vyhledávání v chatu a vyhledávání v chatu"
+      "Mírně vylepšený design na malých obrazovkách"
     ],
     "de": [
-      "Admins können ihr ChatGPT-Abonnement jetzt direkt in der Desktop-App autorisieren (Browser-Anmeldung)",
-      "3D-Visualisierung des Vektorspeichers mit Hervorhebung der Suchergebnisse, auswählbarem Ladevolumen und Ansichtssteuerung hinzugefügt",
-      "Einstellungen für automatischen Speicher und maximale Speicheranzahl hinzugefügt – global und pro Chat",
-      "Steuerung des Prompt-Injection-Schutzes hinzugefügt: Auto / Ein / Aus pro Chat",
-      "Warnungen zu nicht konfiguriertem Vektorspeicher in den Einstellungen und beim Import hinzugefügt",
-      "Das Speicherfenster wurde in die Chat-Einstellungen integriert; Layout korrigiert und Breite ohne den Speicherblock reduziert",
-      "Seitennummerierung der Speicherliste sowie Caching der Liste und der 3D-Karte hinzugefügt",
-      "SillyTavern-Importvorschau überarbeitet: kompakte Zusammenfassung, Rauminformationen, Anhänge und Warnungen",
-      "Fortschrittsanzeige und Abbruchmöglichkeit für Backup-Importe hinzugefügt",
-      "Das Längenlimit für den Hot-Speicher aus der Einstellungsoberfläche entfernt",
-      "Verbesserte Chat-Suche und Suche im Chat"
+      "Das Design für kleine Bildschirme leicht verbessert"
     ],
     "es": [
-      "Los administradores ahora pueden autorizar su suscripción de ChatGPT directamente desde la aplicación de escritorio (inicio de sesión en el navegador)",
-      "Se agregó visualización 3D de la memoria vectorial con resaltado de resultados de búsqueda, volumen de carga seleccionable y controles de vista",
-      "Se agregaron ajustes de memoria automática y recuento máximo de memoria — globales y por chat",
-      "Se agregó control de protección contra inyección de prompts: Automático / Activado / Desactivado por chat",
-      "Se agregaron advertencias sobre la memoria vectorial no configurada en los ajustes y durante la importación",
-      "La ventana de memoria se ha fusionado con la configuración del chat; diseño corregido y ancho reducido sin el bloque de memoria",
-      "Se ha añadido paginación a la lista de memoria y caché para la lista y el mapa 3D",
-      "Se ha reelaborado la vista previa de importación de SillyTavern: resumen compacto, información de la sala, archivos adjuntos y advertencias",
-      "Se ha añadido visualización del progreso y cancelación para las importaciones de copias de seguridad",
-      "Se ha eliminado el límite de longitud de la memoria activa de la interfaz de configuración",
-      "Búsqueda de chats mejorada y búsqueda dentro del chat"
+      "Se ha mejorado ligeramente el diseño en pantallas pequeñas"
     ],
     "fr": [
-      "Les administrateurs peuvent désormais autoriser leur abonnement ChatGPT directement depuis l'application de bureau (connexion via navigateur)",
-      "Ajout d'une visualisation 3D de la mémoire vectorielle avec mise en évidence des résultats de recherche, volume de chargement sélectionnable et commandes d'affichage",
-      "Ajout des paramètres de mémoire automatique et de nombre maximal de mémoires — globaux et par conversation",
-      "Ajout d'un contrôle de protection contre l'injection de prompt : Auto / Activé / Désactivé par conversation",
-      "Ajout d'avertissements concernant la mémoire vectorielle non configurée dans les paramètres et lors de l'importation",
-      "La fenêtre de mémoire a été fusionnée dans les paramètres de chat ; mise en page corrigée et largeur réduite sans le bloc de mémoire",
-      "Ajout de la pagination de la liste de mémoire et de la mise en cache de la liste et de la carte 3D",
-      "Refonte de l'aperçu d'importation SillyTavern : résumé compact, informations sur le salon, pièces jointes et avertissements",
-      "Ajout de l'affichage de la progression et de l'annulation pour les importations de sauvegarde",
-      "Suppression de la limite de longueur de la mémoire à chaud dans l'interface des paramètres",
-      "Recherche de chat et recherche dans le chat améliorées"
+      "Légère amélioration du design sur les petits écrans"
     ],
     "it": [
-      "Gli amministratori ora possono autorizzare il proprio abbonamento ChatGPT direttamente dall'app desktop (accesso tramite browser)",
-      "Aggiunta la visualizzazione 3D della memoria vettoriale con evidenziazione dei risultati di ricerca, volume di caricamento selezionabile e controlli di visualizzazione",
-      "Aggiunte le impostazioni di memoria automatica e numero massimo di memorie — globali e per chat",
-      "Aggiunto il controllo di protezione dall'iniezione di prompt: Auto / On / Off per chat",
-      "Aggiunti avvisi sulla memoria vettoriale non configurata nelle impostazioni e durante l'importazione",
-      "La finestra della memoria è stata integrata nelle impostazioni della chat; layout corretto e larghezza ridotta senza il blocco memoria",
-      "Aggiunta la paginazione dell'elenco della memoria e la cache dell'elenco e della mappa 3D",
-      "Rielaborata l'anteprima di importazione di SillyTavern: riepilogo compatto, informazioni sulla stanza, allegati e avvisi",
-      "Aggiunta la visualizzazione del progresso e l'annullamento per le importazioni di backup",
-      "Rimosso il limite di lunghezza della memoria hot dall'interfaccia delle impostazioni",
-      "Ricerca chat migliorata e ricerca nella chat"
+      "Leggero miglioramento del design su schermi piccoli"
     ],
     "ja": [
-      "管理者はデスクトップアプリから直接ChatGPTサブスクリプションを認証できるようになりました（ブラウザサインイン）",
-      "検索結果のハイライト、選択可能なロードボリューム、ビューコントロールを備えたベクターメモリの3D可視化を追加",
-      "自動メモリと最大メモリ数の設定を追加 — グローバルおよびチャットごと",
-      "プロンプトインジェクション保護の制御を追加：チャットごとに自動／オン／オフ",
-      "設定およびインポート時に未設定のベクターメモリに関する警告を追加",
-      "メモリウィンドウをチャット設定に統合しました。メモリブロックなしでレイアウトを修正し、幅を縮小しました",
-      "メモリリストのページネーションと、リストおよび3Dマップのキャッシュを追加しました",
-      "SillyTavernインポートプレビューを刷新しました：コンパクトな概要、ルーム情報、添付ファイル、警告",
-      "バックアップインポートの進捗表示とキャンセルを追加しました",
-      "設定UIからホットメモリの長さ制限を削除しました",
-      "チャット検索とチャット内検索を改善"
+      "小さい画面でのデザインを少し改善しました"
     ],
     "ko": [
-      "이제 관리자가 데스크톱 앱에서 바로 ChatGPT 구독을 인증할 수 있습니다(브라우저 로그인)",
-      "검색 결과 강조, 선택 가능한 로드 볼륨, 보기 컨트롤을 포함한 벡터 메모리 3D 시각화 추가",
-      "자동 메모리 및 최대 메모리 개수 설정 추가 — 전역 및 채팅별",
-      "프롬프트 인젝션 보호 제어 추가: 채팅별 자동 / 켜기 / 끄기",
-      "설정 및 가져오기 중 구성되지 않은 벡터 메모리에 대한 경고 추가",
-      "메모리 창이 채팅 설정에 통합되었습니다. 메모리 블록 없이 레이아웃을 수정하고 너비를 줄였습니다",
-      "메모리 목록 페이지네이션과 목록 및 3D 맵 캐싱을 추가했습니다",
-      "SillyTavern 가져오기 미리보기를 개편했습니다: 간략한 요약, 룸 정보, 첨부 파일, 경고",
-      "백업 가져오기에 진행률 표시와 취소 기능을 추가했습니다",
-      "설정 UI에서 핫 메모리 길이 제한을 제거했습니다",
-      "채팅 검색 및 채팅 내 검색 개선"
+      "작은 화면에서 디자인을 약간 개선했습니다"
     ],
     "pl": [
-      "Administratorzy mogą teraz autoryzować swoją subskrypcję ChatGPT bezpośrednio z aplikacji desktopowej (logowanie w przeglądarce)",
-      "Dodano wizualizację 3D pamięci wektorowej z podświetlaniem wyników wyszukiwania, wybieralnym wolumenem ładowania i elementami sterującymi widokiem",
-      "Dodano ustawienia automatycznej pamięci i maksymalnej liczby wspomnień — globalne i dla poszczególnych czatów",
-      "Dodano kontrolę ochrony przed wstrzykiwaniem promptów: Auto / Wł. / Wył. dla poszczególnych czatów",
-      "Dodano ostrzeżenia o nieskonfigurowanej pamięci wektorowej w ustawieniach i podczas importu",
-      "Okno pamięci zostało scalone z ustawieniami czatu; naprawiono układ i zmniejszono szerokość bez bloku pamięci",
-      "Dodano paginację listy pamięci oraz buforowanie listy i mapy 3D",
-      "Przeprojektowano podgląd importu SillyTavern: kompaktowe podsumowanie, informacje o pokoju, załączniki i ostrzeżenia",
-      "Dodano wyświetlanie postępu i anulowanie importów kopii zapasowych",
-      "Usunięto limit długości pamięci gorącej z interfejsu ustawień",
-      "Ulepszone wyszukiwanie czatów i wyszukiwanie w czacie"
+      "Nieznacznie ulepszono wygląd na małych ekranach"
     ],
     "pt-BR": [
-      "Os administradores agora podem autorizar sua assinatura do ChatGPT diretamente no aplicativo para desktop (login pelo navegador)",
-      "Adicionada visualização 3D da memória vetorial com destaque dos resultados de busca, volume de carregamento selecionável e controles de visualização",
-      "Adicionadas configurações de memória automática e contagem máxima de memória — global e por chat",
-      "Adicionado controle de proteção contra injeção de prompt: Automático / Ativado / Desativado por chat",
-      "Adicionados avisos sobre memória vetorial não configurada nas configurações e durante a importação",
-      "A janela de memória foi mesclada nas configurações do chat; layout corrigido e largura reduzida sem o bloco de memória",
-      "Adicionada paginação da lista de memórias e cache da lista e do mapa 3D",
-      "Pré-visualização de importação do SillyTavern reformulada: resumo compacto, informações da sala, anexos e avisos",
-      "Adicionada exibição de progresso e cancelamento para importações de backup",
-      "Removido o limite de comprimento da memória quente da interface de configurações",
-      "Pesquisa de chat e pesquisa no chat aprimoradas"
+      "Pequena melhoria no design em telas pequenas"
     ],
     "ru": [
-      "Администраторы теперь могут авторизовать свою подписку ChatGPT прямо из десктопного приложения (вход через браузер)",
-      "Добавлена 3D-визуализация векторной памяти с подсветкой результатов поиска, выбираемым объёмом загрузки и элементами управления просмотром",
-      "Добавлены настройки авто-памяти и максимального количества воспоминаний — глобальные и для каждого чата",
-      "Добавлен элемент управления защитой от промпт-инъекций: Авто / Вкл / Выкл для каждого чата",
-      "Добавлены предупреждения о ненастроенной векторной памяти в настройках и при импорте",
-      "Окно памяти объединено с настройками чата; исправлена вёрстка и уменьшена ширина без блока памяти",
-      "Добавлена постраничная навигация по списку памяти и кэширование списка и 3D-карты",
-      "Переработан предпросмотр импорта SillyTavern: компактная сводка, информация о комнате, вложения и предупреждения",
-      "Добавлено отображение прогресса и возможность отмены для импорта резервных копий",
-      "Удалено ограничение длины горячей памяти из интерфейса настроек",
-      "Улучшен поиск чатов и поиск в чате"
+      "Немного улучшен дизайн на маленьких экранах"
     ],
     "tr": [
-      "Yöneticiler artık ChatGPT aboneliklerini doğrudan masaüstü uygulamasından yetkilendirebilir (tarayıcıdan oturum açma)",
-      "Arama sonucu vurgulama, seçilebilir yükleme hacmi ve görünüm kontrolleri ile vektör belleğinin 3D görselleştirmesi eklendi",
-      "Otomatik bellek ve maksimum bellek sayısı ayarları eklendi — genel ve sohbet başına",
-      "İstem enjeksiyonu koruması kontrolü eklendi: Sohbet başına Otomatik / Açık / Kapalı",
-      "Ayarlarda ve içe aktarma sırasında yapılandırılmamış vektör belleği hakkında uyarılar eklendi",
-      "Bellek penceresi sohbet ayarlarıyla birleştirildi; bellek bloğu olmadan düzen sabitlendi ve genişlik azaltıldı",
-      "Bellek listesine sayfalama ve listenin ve 3D haritanın önbelleğe alınması eklendi",
-      "SillyTavern içe aktarma önizlemesi yenilendi: kompakt özet, oda bilgisi, ekler ve uyarılar",
-      "Yedek içe aktarmaları için ilerleme göstergesi ve iptal eklendi",
-      "Sıcak bellek uzunluk sınırı ayarlar arayüzünden kaldırıldı",
-      "Sohbet araması ve sohbet içinde arama iyileştirildi"
+      "Küçük ekranlardaki tasarım biraz iyileştirildi"
     ],
     "zh-CN": [
-      "管理员现在可以直接在桌面应用中授权其 ChatGPT 订阅（浏览器登录）",
-      "新增向量记忆的 3D 可视化，支持搜索结果高亮、可选加载量和视图控制",
-      "新增自动记忆和最大记忆数设置——全局和每个聊天",
-      "新增提示注入防护控制：每个聊天可设为自动 / 开启 / 关闭",
-      "在设置中和导入期间新增关于未配置向量记忆的警告",
-      "记忆窗口已合并到聊天设置中；修复了布局，并在没有记忆块的情况下减小了宽度",
-      "新增记忆列表分页，以及对列表和 3D 地图的缓存",
-      "重做了 SillyTavern 导入预览：紧凑摘要、房间信息、附件和警告",
-      "新增备份导入的进度显示和取消功能",
-      "从设置界面中移除了热记忆长度限制",
-      "改进的聊天搜索和聊天内搜索"
+      "略微改进了小屏幕上的设计"
     ]
   }
 }
