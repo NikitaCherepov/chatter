@@ -8,6 +8,16 @@
   flex-direction: column;
   border-left: 1px solid var(--border-light);
   overflow: hidden;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.panelCompact {
+  .panelHeader { padding: 24px 0 16px; justify-content: center; }
+  .headerLeft { display: none; }
+  .toolList { overflow-y: auto; min-height: 0; }
+  .toolItem { padding: 8px 0; justify-content: center; }
+  .toolInfo, .toolItem > svg { display: none; }
 }
 
 // ====== HEADER ======

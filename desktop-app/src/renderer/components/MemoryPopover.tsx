@@ -27,7 +27,7 @@ type MemorySettings = {
 type RecordDialog = { type: 'edit' | 'delete'; record: MemoryRecord };
 type ChatPromptSettings = { prompt_id: number | null; room_enabled: boolean };
 
-export function MemoryPopover({ chatId }: { chatId: number }) {
+export function MemoryPopover({ chatId, compactTrigger = false }: { chatId: number; compactTrigger?: boolean }) {
   const { t } = useTranslation();
   const rootRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
@@ -81,13 +81,17 @@ export function MemoryPopover({ chatId }: { chatId: number }) {
       });
     };
     position();
+    const observer = new ResizeObserver(position);
+    const toolbar = rootRef.current?.parentElement?.parentElement;
+    if (toolbar) observer.observe(toolbar);
     window.addEventListener('resize', position);
     window.addEventListener('scroll', position, true);
     return () => {
+      observer.disconnect();
       window.removeEventListener('resize', position);
       window.removeEventListener('scroll', position, true);
     };
-  }, [open, showChatMemory]);
+  }, [open, showChatMemory, compactTrigger]);
 
   useEffect(() => {
     const onPointerDown = (event: PointerEvent) => {
@@ -190,13 +194,14 @@ export function MemoryPopover({ chatId }: { chatId: number }) {
         className={`${s.trigger} ${open ? s.triggerActive : ''}`}
         onClick={() => setOpen(value => !value)}
         title={t('chat.memory.triggerTitle')}
+        aria-label={t('chat.memory.trigger')}
         aria-expanded={open}
       >
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <path d="M9.5 4A3.5 3.5 0 0 0 6 7.5v.7A3 3 0 0 0 4 11v1a3 3 0 0 0 2 2.8v.7A3.5 3.5 0 0 0 9.5 19H12V4Z" />
           <path d="M14.5 4A3.5 3.5 0 0 1 18 7.5v.7A3 3 0 0 1 20 11v1a3 3 0 0 1-2 2.8v.7a3.5 3.5 0 0 1-3.5 3.5H12" />
         </svg>
-        <span>{t('chat.memory.trigger')}</span>
+        {!compactTrigger && <span>{t('chat.memory.trigger')}</span>}
       </button>
       {open && (
         <div className={`${s.popover} ${showChatMemory ? '' : s.popoverCompact}`} style={popoverStyle}>

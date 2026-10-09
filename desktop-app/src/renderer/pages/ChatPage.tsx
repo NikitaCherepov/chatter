@@ -1205,6 +1205,21 @@ export function ChatPage() {
   const navigate = useNavigate();
   const showTokens = user?.ui_settings?.show_tokens !== false;
   const diceRollEnabled = Boolean(user?.ui_settings?.dice_roll_enabled);
+  const chatMainRef = useRef<HTMLElement>(null);
+  const [compactTopBar, setCompactTopBar] = useState(false);
+  const [compactComposer, setCompactComposer] = useState(false);
+  useLayoutEffect(() => {
+    const main = chatMainRef.current;
+    if (!main) return;
+    const update = () => {
+      setCompactTopBar(main.clientWidth < 850);
+      setCompactComposer(main.clientWidth < 640);
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(main);
+    return () => observer.disconnect();
+  }, []);
 
   // ── Token-streaming infrastructure ──
   // Глобальный буфер для стрим-токенов. Переиспользуется между обычной отправкой,
@@ -5471,7 +5486,7 @@ export function ChatPage() {
       </motion.aside>
 
       {/* MAIN */}
-      <main className={s.main}>
+      <main className={s.main} ref={chatMainRef}>
         {!activeChatId ? (
           <div className={s.emptyState}>
             <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon-placeholder)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -5550,7 +5565,7 @@ export function ChatPage() {
                 </motion.div>
               )}
             </AnimatePresence>
-            <div className={s.chatTopBar}>
+            <div className={`${s.chatTopBar} ${compactTopBar ? s.chatTopBarCompact : ''}`}>
               <div className={s.modelSelector}>
                 {modelsCatalog.length > 0 && (
                   <>
@@ -5616,6 +5631,7 @@ export function ChatPage() {
                     </div>
                   </>
                 )}
+              </div>
                 {availableLevels.length > 1 && (
                 <div className={s.reasoningControl}>
                   <Slider
@@ -5635,7 +5651,7 @@ export function ChatPage() {
                   />
                 </div>
                 )}
-              </div>
+              <div className={s.chatTopActions}>
               <button
                 type="button"
                 className={`${s.chatFindTrigger} ${chatFindOpen ? s.chatFindTriggerActive : ''}`}
@@ -5681,7 +5697,7 @@ export function ChatPage() {
                   </>
                 )}
               </button>
-              <MemoryPopover chatId={activeChatId} />
+              <MemoryPopover chatId={activeChatId} compactTrigger={compactTopBar} />
               {showTokens && contextTokens && (
                 <div
                   className={s.contextTokensCompact}
@@ -5706,14 +5722,15 @@ export function ChatPage() {
                   </span>
                   <span className={s.contextTokensLabel}> tk</span>
                   {contextTokens.latest_total_tokens > 0 && (
-                    <>
+                    <span className={s.contextCacheTokens}>
                       <span className={s.contextTokensSep}>&bull;</span>
                       <span className={s.contextTokensPromptValue}>{contextTokens.latest_cache_hit_tokens.toLocaleString(locale)}</span>
                       <span className={s.contextTokensLabel}> {t('chat.context.cached')}</span>
-                    </>
+                    </span>
                   )}
                 </div>
               )}
+              </div>
             </div>
             <ChatMessagesScroll
               ref={messagesScrollRef}
@@ -7473,7 +7490,7 @@ export function ChatPage() {
               </div>
             )}
 
-            <div className={s.inputArea}>
+            <div className={`${s.inputArea} ${compactComposer ? s.inputAreaCompact : ''}`}>
               <QuotaWidget variant="compact" />
               {/* Dice Roll Mode: круглый кубик d20 слева от иконки файлов */}
               {diceRollEnabled && (

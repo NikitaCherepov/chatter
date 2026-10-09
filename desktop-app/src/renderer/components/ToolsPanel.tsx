@@ -183,6 +183,14 @@ const CONTENT_LIMITS: Record<string, number> = {
 export function ToolsPanel({ plan, isAdmin, activeChatId, onImageClick, onChatSelect }: Props) {
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(() => getToolsPanelState().isOpen);
+  const [narrowWindow, setNarrowWindow] = useState(() => window.matchMedia('(max-width: 1100px)').matches);
+  useEffect(() => {
+    const query = window.matchMedia('(max-width: 1100px)');
+    const update = () => setNarrowWindow(query.matches);
+    update();
+    query.addEventListener('change', update);
+    return () => query.removeEventListener('change', update);
+  }, []);
   const [openTools, setOpenTools] = useState<ToolId[]>(() => getToolsPanelState().openTools);
   // Per-tool layout states
   const [toolLayouts, setToolLayouts] = useState<Record<string, ToolLayoutState>>({});
@@ -234,9 +242,10 @@ export function ToolsPanel({ plan, isAdmin, activeChatId, onImageClick, onChatSe
   const sidebarToolId = openTools.find(id => (toolLayouts[id]?.mode ?? 'sidebar') === 'sidebar') ?? null;
   const sidebarTool = tools.find(t => t.id === sidebarToolId);
 
-  // Sidebar panel width: expanded when open (regardless of whether a tool is active)
+  const compactMenu = narrowWindow && !sidebarToolId;
+  // Only the menu becomes an icon rail; active tools keep their full interface.
   const panelWidth = isOpen
-    ? (sidebarToolId === 'browser' || sidebarToolId === 'youtube-music' || sidebarToolId === 'json-extractor' || sidebarToolId === 'newspapers' ? 420 : 260)
+    ? (compactMenu ? 65 : sidebarToolId === 'browser' || sidebarToolId === 'youtube-music' || sidebarToolId === 'json-extractor' || sidebarToolId === 'newspapers' ? 420 : 260)
     : 65;
 
   const handleToggle = () => {
@@ -314,7 +323,7 @@ export function ToolsPanel({ plan, isAdmin, activeChatId, onImageClick, onChatSe
     >
       {/* Sidebar (always rendered) */}
       <motion.aside
-        className={s.panel}
+        className={`${s.panel} ${compactMenu ? s.panelCompact : ''}`}
         animate={{ width: panelWidth }}
         transition={{ duration: 0.2, ease: 'easeInOut' }}
       >
@@ -407,6 +416,8 @@ export function ToolsPanel({ plan, isAdmin, activeChatId, onImageClick, onChatSe
                     key={tool.id}
                     className={s.toolItem}
                     onClick={() => handleSelectTool(tool.id)}
+                    title={tool.title}
+                    aria-label={tool.title}
                   >
                     <div className={s.toolIcon}>{tool.icon}</div>
                     <div className={s.toolInfo}>
