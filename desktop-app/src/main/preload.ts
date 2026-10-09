@@ -1,6 +1,13 @@
 import { contextBridge, ipcRenderer } from 'electron';
+import type { TextMenuAction, TextMenuItem } from './text-context-menu';
 
 contextBridge.exposeInMainWorld('electronAPI', {
+  onTextContextMenu: (callback: (menu: { x: number; y: number; items: TextMenuItem[] }) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, menu: { x: number; y: number; items: TextMenuItem[] }) => callback(menu);
+    ipcRenderer.on('text-menu:open', listener);
+    return () => ipcRenderer.removeListener('text-menu:open', listener);
+  },
+  textContextMenuAction: (action: TextMenuAction) => ipcRenderer.invoke('text-menu:action', action),
   connectChatGpt: (input: { apiBase: string; accessToken: string; serverKey: string; connectionId?: number }) => ipcRenderer.invoke('chatgpt:connect', input),
   platform: process.platform,
   appVersion: ipcRenderer.sendSync('get-app-version'),

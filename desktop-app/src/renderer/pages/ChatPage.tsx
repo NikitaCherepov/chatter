@@ -5566,6 +5566,7 @@ export function ChatPage() {
               )}
             </AnimatePresence>
             <div className={`${s.chatTopBar} ${compactTopBar ? s.chatTopBarCompact : ''}`}>
+              <div className={s.modelControls}>
               <div className={s.modelSelector}>
                 {modelsCatalog.length > 0 && (
                   <>
@@ -5651,6 +5652,7 @@ export function ChatPage() {
                   />
                 </div>
                 )}
+              </div>
               <div className={s.chatTopActions}>
               <button
                 type="button"

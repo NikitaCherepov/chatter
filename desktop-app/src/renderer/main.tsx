@@ -6,6 +6,7 @@ import { ToolWindowApp } from './ToolWindowApp';
 import { initializeI18n } from './i18n';
 import { initializeTheme } from './lib/theme';
 import { QueryProvider } from './lib/QueryProvider';
+import { TextContextMenu } from './components/TextContextMenu';
 
 async function bootstrap() {
   initializeTheme();
@@ -18,6 +19,7 @@ async function bootstrap() {
     root.render(
       <QueryProvider>
         {isToolWindow ? <ToolWindowApp /> : <App />}
+        <TextContextMenu />
       </QueryProvider>,
     );
   }

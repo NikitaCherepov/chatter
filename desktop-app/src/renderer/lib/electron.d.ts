@@ -3,6 +3,8 @@ export {};
 declare global {
   interface Window {
     electronAPI: {
+      onTextContextMenu: (callback: (menu: { x: number; y: number; items: { action: 'undo' | 'redo' | 'cut' | 'copy' | 'paste' | 'selectAll'; enabled: boolean; separator?: boolean }[] }) => void) => () => void;
+      textContextMenuAction: (action: 'undo' | 'redo' | 'cut' | 'copy' | 'paste' | 'selectAll') => Promise<void>;
       connectChatGpt: (input: { apiBase: string; accessToken: string; serverKey: string; connectionId?: number }) => Promise<{ id: number; name: string; email: string }>;
       platform: string;
       apiBaseUrl: string;

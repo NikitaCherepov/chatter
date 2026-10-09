@@ -10,6 +10,7 @@ import ffmpeg from 'fluent-ffmpeg';
 import ffmpegStatic from 'ffmpeg-static';
 import { WakeWordOnnxService } from './wakeword';
 import { connectChatGptOnDesktop } from './chatgpt-auth';
+import { getTextMenuItems, type TextMenuAction } from './text-context-menu';
 import { ChatterBrowser, type BrowserControlPayload, type BrowserSearchPayload, type GoogleAiPayload } from './browser';
 import { BrowserPreviewSession, type BrowserPreviewPayload, type BrowserPreviewSource } from './browser-preview';
 import {
@@ -1076,6 +1077,37 @@ function assertTrustedIpcSender(event: Electron.IpcMainInvokeEvent): void {
   console.warn('[ipc] rejected untrusted sender', { url: event.senderFrame?.url || 'unknown' });
   throw new Error('untrusted_ipc_sender');
 }
+
+const textMenuActions = new WeakMap<Electron.WebContents, Set<TextMenuAction>>();
+app.on('web-contents-created', (_event, contents) => {
+  contents.on('context-menu', (event, params) => {
+    const belongsToApp = contents === mainWindow?.webContents
+      || [...detachedToolWindows.values()].some(window => !window.isDestroyed() && window.webContents === contents);
+    if (!belongsToApp || !isTrustedRendererUrl(contents.getURL())) return;
+    const items = getTextMenuItems(params);
+    textMenuActions.delete(contents);
+    if (!items.length) return;
+    event.preventDefault();
+    textMenuActions.set(contents, new Set(items.filter(item => item.enabled).map(item => item.action)));
+    const zoom = contents.getZoomFactor();
+    contents.send('text-menu:open', { x: params.x / zoom, y: params.y / zoom, items });
+  });
+});
+
+ipcMain.handle('text-menu:action', (event, action: TextMenuAction) => {
+  assertTrustedIpcSender(event);
+  const allowed = textMenuActions.get(event.sender);
+  textMenuActions.delete(event.sender);
+  if (!allowed?.has(action) || event.sender.isDestroyed()) return;
+  switch (action) {
+    case 'undo': event.sender.undo(); break;
+    case 'redo': event.sender.redo(); break;
+    case 'cut': event.sender.cut(); break;
+    case 'copy': event.sender.copy(); break;
+    case 'paste': event.sender.paste(); break;
+    case 'selectAll': event.sender.selectAll(); break;
+  }
+});
 
 // Register sync IPC handlers before createWindow (preload calls these at load time)
 ipcMain.on('get-app-version', (event) => {

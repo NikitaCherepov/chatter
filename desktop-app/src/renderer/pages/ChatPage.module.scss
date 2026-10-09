@@ -1521,12 +1521,19 @@
 
 .chatTopBar {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   gap: 14px;
   padding: 8px 10%;
   border-bottom: 1px solid var(--border-light);
   flex-shrink: 0;
+}
+
+.modelControls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
 }
 
 .modelSelector {
@@ -1535,7 +1542,6 @@
   gap: 8px;
   flex-wrap: wrap;
   min-width: 0;
-  flex: 1 1 230px;
 }
 
 .modelLabel {
@@ -1545,12 +1551,10 @@
 }
 
 .modelSelectWrap {
-  width: 220px;
+  width: 255px;
   min-width: 0;
-  flex: 1 1 150px;
-  max-width: 280px;
-  // Expanded menus retain a readable width independently of the trigger.
-  & > div > div { min-width: min(280px, calc(100vw - 32px)); }
+  flex: 0 1 255px;
+  max-width: 255px;
   & > div > button > span:first-child {
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1561,27 +1565,41 @@
 
 .chatTopActions {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
-  gap: 10px;
+  gap: 14px;
   margin-left: auto;
   min-width: 0;
   .chatFindTrigger { margin-left: 0; }
 }
 
 .chatTopBarCompact {
+  flex-wrap: wrap;
   padding: 8px 16px;
   gap: 8px 12px;
   .modelLabel { display: none; }
-  .modelSelector { flex-basis: 150px; }
+  .modelControls { display: contents; }
+  .modelSelector { flex: 1 1 150px; width: auto; }
+  .modelSelectWrap {
+    flex: 1 1 150px;
+    // Only compressed triggers need an independently sized dropdown.
+    & > div > div { min-width: min(280px, calc(100vw - 32px)); }
+  }
   .reasoningControl {
     order: 1;
     flex: 1 0 100%;
     margin-left: 0;
-    & > div { width: min(100%, 320px); }
+    & > div {
+      width: min(100%, 320px);
+      min-width: 0;
+      & > div {
+        flex: 1;
+        min-width: 0;
+        & > input { width: 0; }
+      }
+    }
   }
-  .chatTopActions { gap: 8px; }
+  .chatTopActions { gap: 8px; flex-wrap: wrap; }
   .roomTriggerText, .contextCacheTokens { display: none; }
   .roomAvatar:nth-child(n + 4) { display: none; }
 }
@@ -1599,6 +1617,7 @@
   align-items: center;
   gap: 6px;
   margin-left: 12px;
+  min-width: 0;
 }
 
 .reasoningSlider {
