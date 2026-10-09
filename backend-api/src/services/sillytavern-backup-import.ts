@@ -99,6 +99,20 @@ export const classifyBackupPath = (rawName: string): 'character' | 'chat' | 'set
 };
 const classifyPath = classifyBackupPath;
 
+// The folder uses the card filename (not necessarily the character's display name).
+const personalChatOptions = (fileName: string, cards: Array<{ root: string; key: string; name: string; promptId: number | null }>) => {
+  const parts = pathParts(fileName);
+  const index = segmentIndex(parts, 'chats');
+  if (index < 0 || index + 2 >= parts.length) return {};
+  const root = parts.slice(0, index).join('/') + (index > 0 ? '/' : '');
+  const key = parts.slice(index + 1, -1).join('/');
+  const matches = cards.filter(card => card.root === root && card.key.replace(/\.(png|json)$/i, '') === key);
+  if (!matches.length) return {};
+  return { character: matches.length === 1
+    ? { name: matches[0].name, promptId: matches[0].promptId }
+    : { name: '', promptId: null } };
+};
+
 const parseArchive = (input: Buffer | ArchiveEntry[]): ParsedBackup => {
   let entries: ArchiveEntry[];
   if (Array.isArray(input)) entries = input;
@@ -185,13 +199,17 @@ export const previewSillyTavernBackup = (userId: number, buffer: Buffer | Archiv
   const parsed = parseArchive(buffer);
   const cards = parsed.characters.map(file => {
     const card = parseCharacterCard({ fileName: file.name, data: file.data });
-    return { existing: Boolean(findExistingCharacter(accountId, card.raw_json)), name: toCharacterCardPreview(card).name };
+    const existing = findExistingCharacter(accountId, card.raw_json);
+    const parts = pathParts(file.name);
+    return { existing: Boolean(existing), name: toCharacterCardPreview(card).name,
+      root: groupCardRoot(file.name), key: parts.slice(segmentIndex(parts, 'characters') + 1).join('/'),
+      promptId: existing ? toUserPromptSelectedId(existing.id) : null };
   });
   const characterExisting = cards.map(card => card.existing);
   const payload = personaPayload(parsed.settings);
   const personas = payload ? previewSillyTavernPersonas(accountId, payload) : null;
   const avatars = avatarLookup(parsed);
-  const chatPreviews = parsed.chats.flatMap(file => previewSillyTavernChats(accountId, [{ file_name: file.name, base64: file.data.toString('base64') }]));
+  const chatPreviews = parsed.chats.flatMap(file => previewSillyTavernChats(accountId, [{ file_name: file.name, base64: file.data.toString('base64') }], personalChatOptions(file.name, cards)));
   const groupTasks = planGroupHistories(parsed.groups, parsed.groupChats);
   const groupPreviews = groupTasks.map(task => previewGroupHistory(accountId, task));
   const cardKeys = parsed.characters.map(file => ({ root: groupCardRoot(file.name), key: file.name.slice(file.name.toLowerCase().lastIndexOf('/characters/') + 12) }));
@@ -341,7 +359,7 @@ export const importSillyTavernBackup = async (
   for (const file of parsed.chats) {
     options.onProgress?.('chats', importedChats.length, parsed.chats.length);
     const raw = file.data;
-    const [chat] = importSillyTavernChats(accountId, [{ file_name: file.name, base64: raw.toString('base64') }]);
+    const [chat] = importSillyTavernChats(accountId, [{ file_name: file.name, base64: raw.toString('base64') }], personalChatOptions(file.name, groupCards));
     importedChats.push(chat);
     const importedMedia = await importChatAttachments(accountId, chat.chat_id, raw.toString('utf8'), parsed.media, (done, total) => options.onProgress?.('media', done, total));
     for (const key of ['images', 'files', 'missing', 'errors'] as const) media[key] += importedMedia[key];

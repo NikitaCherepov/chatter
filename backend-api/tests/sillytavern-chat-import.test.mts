@@ -108,6 +108,26 @@ assert.equal(db.prepare('SELECT COUNT(*) AS count FROM user_chats WHERE user_id 
 const invalid = { file_name: 'broken.jsonl', base64: Buffer.from('{"mes":"ok","is_user":true}\nnot-json').toString('base64') };
 assert.throws(() => previewSillyTavernChats(92, [invalid]), /sillytavern_chat_invalid_line:2/);
 
+const currentRows = [
+  { chat_metadata: {}, user_name: 'unused', character_name: 'unused' },
+  { name: 'Тестовый пользователь', is_user: true, mes: 'Current format' },
+  { name: 'Мира', is_user: false, mes: 'Current response' },
+];
+const currentFile = { file_name: 'current.jsonl', base64: Buffer.from(currentRows.map(row => JSON.stringify(row)).join('\n')).toString('base64') };
+const [currentPreview] = previewSillyTavernChats(92, [currentFile]);
+assert.equal(currentPreview.character_name, 'Мира');
+assert.equal(currentPreview.user_name, 'Тестовый пользователь');
+assert.equal(currentPreview.matched_prompt_id, importedCharacter.promptId);
+assert.equal(currentPreview.matched_persona_id, persona.id);
+const [currentImport] = importSillyTavernChats(92, [currentFile]);
+assert.equal(db.prepare('SELECT default_prompt_id FROM user_chats WHERE id = ?').get(currentImport.chat_id).default_prompt_id, importedCharacter.promptId);
+assert.equal(getChatMemorySettings(92, currentImport.chat_id).persona_override_id, persona.id);
+assert.equal(JSON.parse(db.prepare('SELECT header_json FROM sillytavern_chat_imports WHERE chat_id = ?').get(currentImport.chat_id).header_json).character_name, 'unused');
+const ambiguousFile = { ...currentFile, base64: Buffer.from([...currentRows, { name: 'Another speaker', is_user: false, mes: 'Another response' }].map(row => JSON.stringify(row)).join('\n')).toString('base64') };
+assert.equal(previewSillyTavernChats(92, [ambiguousFile])[0].matched_prompt_id, null);
+await importCharacterCard(92, parseCharacterCard({ fileName: 'other-mira.json', data: Buffer.from(JSON.stringify({ spec: 'chara_card_v2', data: { name: 'Мира', description: 'Different character with the same name' } })) }));
+assert.equal(previewSillyTavernChats(92, [currentFile])[0].matched_prompt_id, null, 'duplicate names must not pick an arbitrary card');
+
 db.close();
 for (const suffix of ['', '-wal', '-shm']) {
   try { fs.unlinkSync(`${dbPath}${suffix}`); } catch { /* already absent */ }

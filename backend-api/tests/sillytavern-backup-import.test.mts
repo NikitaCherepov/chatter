@@ -129,6 +129,25 @@ assert.equal(db.prepare('SELECT COUNT(*) AS count FROM user_chats WHERE user_id 
 
 assert.throws(() => previewSillyTavernBackup(93, Buffer.from('not a zip')), /sillytavern_backup_invalid_zip/);
 
+// Real current header and a filename that differs from the display name.
+const modernRows = [
+  { chat_metadata: {}, user_name: 'unused', character_name: 'unused' },
+  { name: 'Alex', is_user: true, mes: 'A new history' },
+  { name: 'Renamed speaker', is_user: false, mes: 'Filename identifies the card' },
+];
+const modernArchive = Buffer.from(zipSync({
+  'characters/card-file.json': strToU8(JSON.stringify(character)),
+  'characters/other-file.json': strToU8(JSON.stringify({ ...character, data: { ...character.data, description: 'A different Mira with the same display name.' } })),
+  'chats/card-file/current.jsonl': strToU8(modernRows.map(row => JSON.stringify(row)).join('\n')),
+}));
+const modern = await importSillyTavernBackup(93, modernArchive);
+assert.equal(modern.chats.created, 1);
+const modernChatId = modern.chats.chat_ids[0];
+assert.equal(db.prepare('SELECT default_prompt_id FROM user_chats WHERE id = ?').get(modernChatId).default_prompt_id, -(1000 + prompt.id));
+assert.equal(db.prepare("SELECT prompt_id FROM chat_messages WHERE chat_id = ? AND role = 'assistant'").get(modernChatId).prompt_id, -(1000 + prompt.id));
+assert.equal(db.prepare('SELECT persona_override_id FROM chat_memory_settings WHERE chat_id = ?').get(modernChatId).persona_override_id, persona.id);
+assert.equal((await importSillyTavernBackup(93, modernArchive)).chats.existing, 1);
+
 db.close();
 fs.rmSync(tempDir, { recursive: true, force: true });
 console.log('SillyTavern backup import tests passed');

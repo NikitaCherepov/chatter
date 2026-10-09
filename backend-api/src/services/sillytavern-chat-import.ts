@@ -52,6 +52,10 @@ export type SillyTavernChatPreview = {
 };
 
 export type SillyTavernChatFile = { file_name: string; base64: string };
+export type SillyTavernChatOptions = {
+  sourceScope?: string;
+  character?: { name: string; promptId: number | null };
+};
 
 const asObject = (value: unknown): JsonObject | null => value && typeof value === 'object' && !Array.isArray(value) ? value as JsonObject : null;
 const asString = (value: unknown): string => typeof value === 'string' ? value.trim() : '';
@@ -106,8 +110,18 @@ const parseChat = (file: SillyTavernChatFile): ParsedChat => {
   const hasHeader = !('mes' in first) && ('chat_metadata' in first || 'character_name' in first || 'user_name' in first);
   const header = hasHeader ? first : {};
   const rows = hasHeader ? parsedLines.slice(1) : parsedLines;
-  const characterName = asString(header.character_name);
-  const userName = asString(header.user_name);
+  // Current SillyTavern writes "unused" in both header name fields.
+  const meaningfulName = (value: unknown) => {
+    const name = asString(value);
+    return name.toLowerCase() === 'unused' ? '' : name;
+  };
+  const uniqueSpeaker = (isUser: boolean) => {
+    const names = [...new Set(rows.filter(row => row.is_user === isUser && row.is_system !== true)
+      .map(row => meaningfulName(row.name)).filter(Boolean))];
+    return names.length === 1 ? names[0] : '';
+  };
+  const characterName = meaningfulName(header.character_name) || uniqueSpeaker(false);
+  const userName = meaningfulName(header.user_name) || uniqueSpeaker(true);
   const baseDate = parseDate(header.create_date, Date.now());
   const baseMs = Date.parse(`${baseDate.replace(' ', 'T')}Z`);
   const warnings: string[] = [];
@@ -170,14 +184,15 @@ const parseChat = (file: SillyTavernChatFile): ParsedChat => {
 
 const findPrompt = (userId: number, characterName: string) => {
   if (!characterName) return null;
-  const row = db.prepare(`
+  const rows = db.prepare(`
     SELECT prompt.id, prompt.name
     FROM user_prompts prompt
     LEFT JOIN user_prompt_character_cards card ON card.prompt_id = prompt.id
     WHERE prompt.user_id = ? AND prompt.name = ? COLLATE NOCASE
     ORDER BY (card.prompt_id IS NOT NULL) DESC, prompt.id DESC
-    LIMIT 1
-  `).get(userId, characterName) as { id: number; name: string } | undefined;
+    LIMIT 2
+  `).all(userId, characterName) as Array<{ id: number; name: string }>;
+  const row = rows.length === 1 ? rows[0] : undefined;
   return row ? { id: toUserPromptSelectedId(row.id), name: row.name } : null;
 };
 
@@ -190,12 +205,16 @@ const findPersona = (userId: number, parsed: ParsedChat) => {
     if (byKey) return byKey;
   }
   if (!parsed.userName) return null;
-  return (db.prepare('SELECT id, name FROM personas WHERE user_id = ? AND name = ? COLLATE NOCASE ORDER BY is_primary DESC, id ASC LIMIT 1')
-    .get(userId, parsed.userName) as { id: number; name: string } | undefined) || null;
+  const candidates = db.prepare('SELECT id, name FROM personas WHERE user_id = ? AND name = ? COLLATE NOCASE LIMIT 2')
+    .all(userId, parsed.userName) as Array<{ id: number; name: string }>;
+  return candidates.length === 1 ? candidates[0] : null;
 };
 
-const previewParsed = (userId: number, parsed: ParsedChat): SillyTavernChatPreview => {
-  const prompt = findPrompt(userId, parsed.characterName);
+const previewParsed = (userId: number, parsed: ParsedChat, options: SillyTavernChatOptions): SillyTavernChatPreview => {
+  if (options.character) parsed.characterName = options.character.name;
+  const prompt = options.character
+    ? (options.character.promptId === null ? null : { id: options.character.promptId, name: options.character.name })
+    : findPrompt(userId, parsed.characterName);
   const persona = findPersona(userId, parsed);
   const existing = db.prepare('SELECT chat_id FROM sillytavern_chat_imports WHERE user_id = ? AND source_hash = ?')
     .get(userId, parsed.hash) as { chat_id: number } | undefined;
@@ -227,28 +246,29 @@ const validateBatch = (files: SillyTavernChatFile[]) => {
   if (decodedBytes > MAX_SILLYTAVERN_CHAT_TOTAL_BYTES) throw new Error('sillytavern_chats_total_too_large');
 };
 
-export const previewSillyTavernChats = (userId: number, files: SillyTavernChatFile[], options: { sourceScope?: string } = {}): SillyTavernChatPreview[] => {
+export const previewSillyTavernChats = (userId: number, files: SillyTavernChatFile[], options: SillyTavernChatOptions = {}): SillyTavernChatPreview[] => {
   const accountId = resolveAccountId(userId);
   validateBatch(files);
   return files.map(file => {
     const parsed = parseChat(file);
     if (options.sourceScope) parsed.hash = createHash('sha256').update(options.sourceScope + '\0' + parsed.hash).digest('hex');
-    return previewParsed(accountId, parsed);
+    return previewParsed(accountId, parsed, options);
   });
 };
 
-export const importSillyTavernChats = (userId: number, files: SillyTavernChatFile[], options: { sourceScope?: string } = {}) => {
+export const importSillyTavernChats = (userId: number, files: SillyTavernChatFile[], options: SillyTavernChatOptions = {}) => {
   const accountId = resolveAccountId(userId);
   validateBatch(files);
   return files.map(file => {
     const parsed = parseChat(file);
     if (options.sourceScope) parsed.hash = createHash('sha256').update(options.sourceScope + '\0' + parsed.hash).digest('hex');
-    const preview = previewParsed(accountId, parsed);
+    const preview = previewParsed(accountId, parsed, options);
     if (preview.already_imported_chat_id) {
       return { file_name: parsed.fileName, chat_id: preview.already_imported_chat_id, status: 'existing' as const, message_count: preview.message_count };
     }
     return db.transaction(() => {
-      const prompt = findPrompt(accountId, parsed.characterName);
+      const prompt = preview.matched_prompt_id === null ? null
+        : { id: preview.matched_prompt_id, name: preview.matched_prompt_name! };
       const persona = findPersona(accountId, parsed);
       const chatId = createUserChat(accountId, parsed.title);
       const insert = db.prepare(`
