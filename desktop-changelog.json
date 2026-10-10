@@ -1,43 +1,43 @@
 {
   "changes": {
     "en": [
-      "Added a custom installation folder selection during setup"
+      "Fixed saving of the app zoom level"
     ],
     "cs": [
-      "Přidána možnost volby vlastní instalační složky během instalace"
+      "Opraveno ukládání úrovně přiblížení aplikace"
     ],
     "de": [
-      "Benutzerdefinierte Auswahl des Installationsordners während der Einrichtung hinzugefügt"
+      "Speichern der App-Zoomstufe korrigiert"
     ],
     "es": [
-      "Se añadió la selección de una carpeta de instalación personalizada durante la configuración"
+      "Se corrigió el guardado del nivel de zoom de la aplicación"
     ],
     "fr": [
-      "Ajout d'une sélection de dossier d'installation personnalisé lors de la configuration"
+      "Correction de l'enregistrement du niveau de zoom de l'application"
     ],
     "it": [
-      "Aggiunta la selezione di una cartella di installazione personalizzata durante la configurazione"
+      "Corretta la memorizzazione del livello di zoom dell'app"
     ],
     "ja": [
-      "セットアップ時にカスタムインストールフォルダの選択を追加しました"
+      "アプリのズームレベルの保存を修正"
     ],
     "ko": [
-      "설치 중 사용자 지정 설치 폴더 선택 기능을 추가했습니다"
+      "앱 확대/축소 수준 저장 문제를 수정했습니다"
     ],
     "pl": [
-      "Dodano wybór niestandardowego folderu instalacji podczas konfiguracji"
+      "Naprawiono zapisywanie poziomu powiększenia aplikacji"
     ],
     "pt-BR": [
-      "Adicionada a seleção de pasta de instalação personalizada durante a configuração"
+      "Correção no salvamento do nível de zoom do aplicativo"
     ],
     "ru": [
-      "Добавлена возможность выбора пользовательской папки установки во время настройки"
+      "Исправлено сохранение масштабирования приложения"
     ],
     "tr": [
-      "Kurulum sırasında özel kurulum klasörü seçimi eklendi"
+      "Uygulama yakınlaştırma düzeyinin kaydedilmesi düzeltildi"
     ],
     "zh-CN": [
-      "在安装过程中添加了自定义安装文件夹选择"
+      "修复了应用缩放级别的保存问题"
     ]
   }
 }
