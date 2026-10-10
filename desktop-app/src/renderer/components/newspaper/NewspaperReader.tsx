@@ -90,15 +90,13 @@ type Props = {
   closeLabel: string;
 };
 
-const styleOptions: NewspaperStyleOption[] = [
-  { value: 'wizarding', label: 'Волшебный таблоид', hint: 'Сенсации, пергамент и огромные заголовки' },
-  { value: 'broadsheet', label: 'Большая газета', hint: 'Строгая многоколоночная первая полоса' },
-  { value: 'deusEx', label: 'Deus Ex', hint: 'Picus: чёрный интерфейс и золото' },
-  { value: 'massEffect', label: 'Mass Effect', hint: 'ANN: циан, оранжевый и HUD' },
-];
-
 export function NewspaperReader({ issue, sourceIssueId, style, pageNumber, pageCount, canGoPrevious, canGoNext, onPrevious, onNext, onClose, onStyleChange, previousLabel, nextLabel, closeLabel }: Props) {
   const { t } = useTranslation();
+  const styleOptions: NewspaperStyleOption[] = (['wizarding', 'broadsheet', 'deusEx', 'massEffect'] as const).map(value => ({
+    value,
+    label: t(`tools.newspapers.reader.styles.${value}.label`),
+    hint: t(`tools.newspapers.reader.styles.${value}.hint`),
+  }));
   const viewportRef = useRef<HTMLDivElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
   const pageRef = useRef<HTMLDivElement>(null);
@@ -581,10 +579,10 @@ export function NewspaperReader({ issue, sourceIssueId, style, pageNumber, pageC
         chatRunSeenRef.current = true;
         setChatBusy(false);
         setChatStreaming('');
-        toast.error(event.message || 'Ответ не получен');
+        toast.error(event.message || t('tools.newspapers.reader.noResponse'));
       }
     });
-  }, [readerChatId]);
+  }, [readerChatId, t]);
 
   useEffect(() => () => {
     if (chatWatchdogRef.current) clearTimeout(chatWatchdogRef.current);
@@ -627,14 +625,14 @@ export function NewspaperReader({ issue, sourceIssueId, style, pageNumber, pageC
     chatWatchdogRef.current = setTimeout(() => {
       if (chatRunSeenRef.current) return;
       setChatBusy(false);
-      toast.error('Ответ не получен — попробуйте ещё раз');
+      toast.error(t('tools.newspapers.reader.retryResponse'));
     }, 45_000);
     try {
       const sent = await sendChatTrigger({ text, chatId: readerChatId, newspaperContext });
       if (!sent) {
         chatRunSeenRef.current = true;
         setChatBusy(false);
-        toast.error('Не удалось отправить сообщение');
+        toast.error(t('tools.newspapers.reader.sendFailed'));
       }
     } catch (error) {
       chatRunSeenRef.current = true;
@@ -651,7 +649,7 @@ export function NewspaperReader({ issue, sourceIssueId, style, pageNumber, pageC
       setChatMenuOpen(false);
     } catch (error) {
       console.error('Failed to clear the newspaper chat:', error);
-      toast.error('Не удалось очистить чат');
+      toast.error(t('tools.newspapers.reader.clearFailed'));
     }
   };
 
@@ -660,15 +658,15 @@ export function NewspaperReader({ issue, sourceIssueId, style, pageNumber, pageC
   const keepReaderChat = async () => {
     if (chatBusy || readerChatId === null || !issue) return;
     try {
-      await keepNewspaperChat(`Газета — ${issue.document.title}`);
+      await keepNewspaperChat(t('tools.newspapers.reader.chatTitle', { title: issue.document.title }));
       setChatMenuOpen(false);
       setChatOpen(false);
       setReaderChatId(null);
       setChatMessages([]);
-      toast.success('Чат вынесен в общий список');
+      toast.success(t('tools.newspapers.reader.chatKept'));
     } catch (error) {
       console.error('Failed to keep the newspaper chat:', error);
-      toast.error('Не удалось вынести чат');
+      toast.error(t('tools.newspapers.reader.keepFailed'));
     }
   };
 
@@ -755,7 +753,7 @@ export function NewspaperReader({ issue, sourceIssueId, style, pageNumber, pageC
       className={s.readerHandle}
       data-style={style}
       data-reader-controls
-      aria-label="Настройки выпуска"
+      aria-label={t('tools.newspapers.reader.settings')}
       aria-expanded="false"
       aria-controls="newspaper-reader-controls"
       initial={{ opacity: 0, x: 44 }}
@@ -764,7 +762,7 @@ export function NewspaperReader({ issue, sourceIssueId, style, pageNumber, pageC
       exit={{ opacity: 0, x: 52 }}
       transition={{ duration: .18, ease: 'easeOut' }}
       onClick={() => setControlsOpen(true)}
-    ><span className={s.readerHandleGlyph}>{style === 'deusEx' ? 'SYS' : style === 'massEffect' ? 'MENU' : style === 'wizarding' ? 'МЕНЮ' : 'EDIT'}</span></motion.button> : <motion.aside
+    ><span className={s.readerHandleGlyph}>{style === 'deusEx' ? 'SYS' : style === 'massEffect' ? 'MENU' : style === 'wizarding' ? t('tools.newspapers.reader.menu') : 'EDIT'}</span></motion.button> : <motion.aside
       key="reader-panel"
       id="newspaper-reader-controls"
       className={s.readerPanel}
@@ -775,9 +773,9 @@ export function NewspaperReader({ issue, sourceIssueId, style, pageNumber, pageC
       exit={{ opacity: 0, x: 280 }}
       transition={{ duration: .24, ease: [0.22, 1, 0.36, 1] }}
     >
-      <header className={s.readerPanelHeader}><div><span>ISSUE CONTROL</span><strong>Выпуск №{issue.issue_number}</strong></div><small>{pageNumber} / {pageCount}</small></header>
-      <div className={s.readerControlGroup}><span>Стиль</span><NewspaperStyleSelect options={styleOptions} value={style} onChange={onStyleChange}/></div>
-      <div className={s.readerControlGroup}><span>Масштаб</span><div className={s.readerZoomRow}><button type="button" onClick={()=>applyZoom(zoom-ZOOM_STEP)} disabled={zoom<=ZOOM_MIN}>−</button><strong>{zoom}%</strong><button type="button" onClick={()=>applyZoom(zoom+ZOOM_STEP)} disabled={zoom>=ZOOM_MAX}>+</button></div></div>
+      <header className={s.readerPanelHeader}><div><span>{t('tools.newspapers.reader.issueControl')}</span><strong>{t('tools.newspapers.issueNumber', { number: issue.issue_number })}</strong></div><small>{pageNumber} / {pageCount}</small></header>
+      <div className={s.readerControlGroup}><span>{t('tools.newspapers.reader.style')}</span><NewspaperStyleSelect options={styleOptions} value={style} onChange={onStyleChange}/></div>
+      <div className={s.readerControlGroup}><span>{t('tools.newspapers.reader.zoom')}</span><div className={s.readerZoomRow}><button type="button" onClick={()=>applyZoom(zoom-ZOOM_STEP)} disabled={zoom<=ZOOM_MIN}>−</button><strong>{zoom}%</strong><button type="button" onClick={()=>applyZoom(zoom+ZOOM_STEP)} disabled={zoom>=ZOOM_MAX}>+</button></div></div>
       <div className={s.readerPanelActions}><button type="button" className={s.readerClose} onClick={() => setControlsOpen(false)}>{closeLabel}</button></div>
     </motion.aside>}</AnimatePresence>
     <AnimatePresence initial={false}>
@@ -795,7 +793,7 @@ export function NewspaperReader({ issue, sourceIssueId, style, pageNumber, pageC
         exit={{ opacity: 0, x: 46 }}
         transition={{ duration: .18, ease: 'easeOut' }}
         onClick={() => { if (material) void focusMaterial(null); else navigatePage('previous'); }}
-      ><span className={s.readerPageTabContent}><b>‹</b><small>{material ? (style === 'deusEx' ? 'ISSUE' : style === 'massEffect' ? 'FEED' : 'В выпуск') : (style === 'deusEx' ? 'PREV' : style === 'massEffect' ? 'BACK' : 'Назад')}</small></span></motion.button>}
+      ><span className={s.readerPageTabContent}><b>‹</b><small>{material ? (style === 'deusEx' ? 'ISSUE' : style === 'massEffect' ? 'FEED' : t('tools.newspapers.backToIssue')) : (style === 'deusEx' ? 'PREV' : style === 'massEffect' ? 'BACK' : t('tools.newspapers.reader.previous'))}</small></span></motion.button>}
       {!material && canGoNext && <motion.button
         key="reader-next"
         type="button"
@@ -810,14 +808,14 @@ export function NewspaperReader({ issue, sourceIssueId, style, pageNumber, pageC
         exit={{ opacity: 0, x: -46 }}
         transition={{ duration: .18, ease: 'easeOut' }}
         onClick={() => navigatePage('next')}
-      ><span className={s.readerPageTabContent}><b>›</b><small>{style === 'deusEx' ? 'NEXT' : style === 'massEffect' ? 'FWD' : 'Вперёд'}</small></span></motion.button>}
+      ><span className={s.readerPageTabContent}><b>›</b><small>{style === 'deusEx' ? 'NEXT' : style === 'massEffect' ? 'FWD' : t('tools.newspapers.reader.next')}</small></span></motion.button>}
     </AnimatePresence>
     <AnimatePresence initial={false} mode="wait">{!chatOpen ? <motion.button
       key="reader-chat-handle"
       type="button"
       className={s.readerChatHandle}
       data-style={style}
-      aria-label="Открыть разговор с аналитиком"
+      aria-label={t('tools.newspapers.reader.openDiscussion')}
       aria-expanded="false"
       initial={{ opacity: 0, x: 44 }}
       animate={{ opacity: 1, x: 0 }}
@@ -825,7 +823,7 @@ export function NewspaperReader({ issue, sourceIssueId, style, pageNumber, pageC
       exit={{ opacity: 0, x: 52 }}
       transition={{ duration: .18, ease: 'easeOut' }}
       onClick={() => setChatOpen(true)}
-    ><span>{style === 'deusEx' ? 'ANALYST' : style === 'massEffect' ? 'ASK EDI' : 'ОБСУДИТЬ'}</span></motion.button> : <motion.aside
+    ><span>{style === 'deusEx' ? 'ANALYST' : style === 'massEffect' ? 'ASK EDI' : t('tools.newspapers.reader.discuss')}</span></motion.button> : <motion.aside
       key="reader-chat-panel"
       className={s.readerChatPanel}
       data-style={style}
@@ -834,7 +832,7 @@ export function NewspaperReader({ issue, sourceIssueId, style, pageNumber, pageC
       exit={{ opacity: 0, x: 350 }}
       transition={{ duration: .24, ease: [0.22, 1, 0.36, 1] }}
     >
-      <header><div><span>{style === 'deusEx' ? 'PICUS // ANALYST' : style === 'massEffect' ? 'ANN // ASSIST' : 'Разговор с редакцией'}</span><strong>{material?.title || issue.document.title}</strong></div><button type="button" className={s.readerChatClose} onClick={() => setChatOpen(false)}>Закрыть</button></header>
+      <header><div><span>{style === 'deusEx' ? 'PICUS // ANALYST' : style === 'massEffect' ? 'ANN // ASSIST' : t('tools.newspapers.reader.discussion')}</span><strong>{material?.title || issue.document.title}</strong></div><button type="button" className={s.readerChatClose} onClick={() => setChatOpen(false)}>{t('common.close')}</button></header>
       <div className={s.readerChatMessages}>{chatMessages.map(message => <div key={message.id} data-role={message.role}>{message.role === 'assistant' ? <MarkdownRenderer content={message.text} className={s.readerMarkdown}/> : message.text}</div>)}{chatBusy && <div data-role="assistant" data-streaming={chatStreaming ? undefined : 'pending'}><MarkdownRenderer content={chatStreaming || '…'} className={s.readerMarkdown}/></div>}</div>
       <div className={s.readerChatComposer}>
         <div className={s.readerChatMenuWrap} data-reader-chat-menu>
@@ -847,13 +845,13 @@ export function NewspaperReader({ issue, sourceIssueId, style, pageNumber, pageC
             exit={{ opacity: 0, y: 8 }}
             transition={{ duration: .16, ease: 'easeOut' }}
           >
-            <button type="button" role="menuitem" disabled={chatBusy} onClick={() => void clearReaderChat()}>Очистить</button>
-            <button type="button" role="menuitem" disabled={chatBusy} onClick={() => void keepReaderChat()}>Вынести в чаты</button>
+            <button type="button" role="menuitem" disabled={chatBusy} onClick={() => void clearReaderChat()}>{t('common.clear')}</button>
+            <button type="button" role="menuitem" disabled={chatBusy} onClick={() => void keepReaderChat()}>{t('tools.newspapers.reader.keepChat')}</button>
           </motion.div>}</AnimatePresence>
           <button
             type="button"
             className={s.readerChatMenuToggle}
-            aria-label="Действия с чатом"
+            aria-label={t('tools.newspapers.reader.chatActions')}
             aria-haspopup="menu"
             aria-expanded={chatMenuOpen}
             data-open={chatMenuOpen ? 'true' : undefined}
@@ -861,10 +859,10 @@ export function NewspaperReader({ issue, sourceIssueId, style, pageNumber, pageC
             onClick={() => setChatMenuOpen(open => !open)}
           >⋯</button>
         </div>
-        <form onSubmit={event => { event.preventDefault(); void sendReaderMessage(); }}><textarea value={chatDraft} onChange={event => setChatDraft(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void sendReaderMessage(); } }} placeholder={material ? 'Спросить об этом материале…' : 'Спросить об этом выпуске…'} rows={3} disabled={readerChatId === null}/><button type="submit" disabled={!chatDraft.trim() || chatBusy || readerChatId === null}>Отправить</button></form>
+        <form onSubmit={event => { event.preventDefault(); void sendReaderMessage(); }}><textarea value={chatDraft} onChange={event => setChatDraft(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void sendReaderMessage(); } }} placeholder={material ? t('tools.newspapers.reader.askMaterial') : t('tools.newspapers.reader.askIssue')} rows={3} disabled={readerChatId === null}/><button type="submit" disabled={!chatDraft.trim() || chatBusy || readerChatId === null}>{t('common.send')}</button></form>
       </div>
     </motion.aside>}</AnimatePresence>
-    {SHOW_READER_CHROME && <header className={s.toolbar}><div className={s.issueMeta}><strong>Выпуск №{issue.issue_number}</strong><span>{pageNumber} / {pageCount}</span></div><div className={s.styleSelect}><Select options={styleOptions} value={style} onChange={value=>onStyleChange(value as NewspaperVisualStyle)} maxVisibleItems={4}/></div><div className={s.toolbarActions}><div className={s.zoomControls}><button type="button" onClick={()=>applyZoom(zoom-ZOOM_STEP)} disabled={zoom<=ZOOM_MIN} aria-label="Уменьшить масштаб">−</button><button type="button" className={s.zoomValue} onClick={fitToWindow} title="Вписать газету в окно">{zoom}%</button><button type="button" onClick={()=>applyZoom(zoom+ZOOM_STEP)} disabled={zoom>=ZOOM_MAX} aria-label="Увеличить масштаб">+</button></div><nav className={s.navigation}><button type="button" onClick={onPrevious} disabled={!canGoPrevious} aria-label={previousLabel}>‹</button><button type="button" onClick={onNext} disabled={!canGoNext} aria-label={nextLabel}>›</button><button type="button" onClick={onClose} aria-label={closeLabel}>×</button></nav></div></header>}
+    {SHOW_READER_CHROME && <header className={s.toolbar}><div className={s.issueMeta}><strong>{t('tools.newspapers.issueNumber', { number: issue.issue_number })}</strong><span>{pageNumber} / {pageCount}</span></div><div className={s.styleSelect}><Select options={styleOptions} value={style} onChange={value=>onStyleChange(value as NewspaperVisualStyle)} maxVisibleItems={4}/></div><div className={s.toolbarActions}><div className={s.zoomControls}><button type="button" onClick={()=>applyZoom(zoom-ZOOM_STEP)} disabled={zoom<=ZOOM_MIN} aria-label={t('tools.newspapers.reader.zoomOut')}>−</button><button type="button" className={s.zoomValue} onClick={fitToWindow} title={t('tools.newspapers.reader.fitToWindow')}>{zoom}%</button><button type="button" onClick={()=>applyZoom(zoom+ZOOM_STEP)} disabled={zoom>=ZOOM_MAX} aria-label={t('tools.newspapers.reader.zoomIn')}>+</button></div><nav className={s.navigation}><button type="button" onClick={onPrevious} disabled={!canGoPrevious} aria-label={previousLabel}>‹</button><button type="button" onClick={onNext} disabled={!canGoNext} aria-label={nextLabel}>›</button><button type="button" onClick={onClose} aria-label={closeLabel}>×</button></nav></div></header>}
     <div className={`${s.viewport} ${dragging ? s.viewportDragging : ''}`} data-style={style} ref={viewportRef} onPointerDown={startDragging} onPointerMove={moveDragging} onPointerUp={stopDragging} onPointerCancel={stopDragging} onDragStart={event=>event.preventDefault()}>
       <motion.div ref={pageRef} className={s.zoomLayer} style={{zoom:zoom/100} as React.CSSProperties} key={`${issue.id}-${style}-${material ? `${material.kind}-${material.id}` : 'issue'}`} initial={false}><NewspaperImageViewerProvider onOpen={(src, title) => setViewerImage({ src, title })}><NewspaperMaterialProvider onOpen={nextMaterial => focusMaterial(nextMaterial)}>{material ? <NewspaperMaterialRenderer material={material} issue={issue} style={style}/> : <TemplateRenderer issue={issue} style={style}/>}</NewspaperMaterialProvider></NewspaperImageViewerProvider></motion.div>
       <MassEffectPageTransition transition={massEffectTransition} zoom={zoom} onComplete={() => setMassEffectTransition(null)}/>

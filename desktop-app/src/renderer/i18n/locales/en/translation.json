@@ -1270,6 +1270,50 @@
       "collapse": "Collapse"
     },
     "newspapers": {
+      "reader": {
+        "settings": "Edition settings",
+        "menu": "MENU",
+        "issueControl": "ISSUE CONTROL",
+        "style": "Style",
+        "zoom": "Zoom",
+        "previous": "Back",
+        "next": "Next",
+        "openDiscussion": "Open a discussion with the analyst",
+        "discuss": "DISCUSS",
+        "discussion": "Talk to the editors",
+        "keepChat": "Move to chats",
+        "chatActions": "Chat actions",
+        "askMaterial": "Ask about this article…",
+        "askIssue": "Ask about this edition…",
+        "zoomOut": "Zoom out",
+        "zoomIn": "Zoom in",
+        "fitToWindow": "Fit newspaper to window",
+        "noResponse": "No response received",
+        "retryResponse": "No response received — please try again",
+        "sendFailed": "Could not send the message",
+        "clearFailed": "Could not clear the chat",
+        "chatTitle": "Newspaper — {{title}}",
+        "chatKept": "Chat moved to the main list",
+        "keepFailed": "Could not move the chat",
+        "styles": {
+          "wizarding": {
+            "label": "Wizarding tabloid",
+            "hint": "Sensations, parchment, and huge headlines"
+          },
+          "broadsheet": {
+            "label": "Broadsheet",
+            "hint": "A classic multi-column front page"
+          },
+          "deusEx": {
+            "label": "Deus Ex",
+            "hint": "Picus: a black interface and gold"
+          },
+          "massEffect": {
+            "label": "Mass Effect",
+            "hint": "ANN: cyan, orange, and HUD"
+          }
+        }
+      },
       "title": "Your newspapers",
       "subtitle": "A personal edition from the editor and researchers",
       "configure": "Configure",

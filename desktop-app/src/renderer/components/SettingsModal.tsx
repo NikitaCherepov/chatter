@@ -2853,7 +2853,8 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
                   {modelsCatalog.map((model) => {
                     const settings = modelSettingsMap[model.id] || {};
                     const isSaving = modelsSavingId === model.id;
-                    const supported = new Set(model.supported_params || []);
+                    // Missing capabilities on older servers are unknown; [] explicitly means none.
+                    const supported = model.supported_params == null ? null : new Set(model.supported_params);
                     return (
                       <div key={model.id} style={{ border: '1px solid var(--border-light)', borderRadius: 8, padding: 12 }}>
                         <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 8 }}>
@@ -2871,7 +2872,7 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
                               { key: 'repetition_penalty', label: 'Repetition penalty', min: 1.0, max: 2.0,   step: 0.05 },
                               { key: 'max_tokens',         label: 'Max tokens',         min: 1,   max: 65536, step: 1 },
                             ] as const
-                          ).filter((param) => supported.size === 0 || supported.has(param.key)).map((param) => {
+                          ).filter((param) => supported === null || supported.has(param.key)).map((param) => {
                             const currentVal = settings[param.key as keyof api.ModelSettings] ?? null;
                             const useDefault = currentVal === null;
                             return (
