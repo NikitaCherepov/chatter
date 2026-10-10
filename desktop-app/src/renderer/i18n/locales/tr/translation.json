@@ -1748,7 +1748,51 @@
         "stopResearcher": "Araştırmacı durdurulamadı",
         "export": "Gazete verileri dışa aktarılamadı"
       },
-      "backToIssue": "Sayıya geri dön"
+      "backToIssue": "Sayıya geri dön",
+      "reader": {
+        "settings": "Sürüm ayarları",
+        "menu": "MENÜ",
+        "issueControl": "SAYI KONTROLÜ",
+        "style": "Stil",
+        "zoom": "Yakınlaştır",
+        "previous": "Geri",
+        "next": "İleri",
+        "openDiscussion": "Analist ile bir tartışma başlat",
+        "discuss": "TARTIŞ",
+        "discussion": "Editörlerle konuşun",
+        "keepChat": "Sohbetlere taşı",
+        "chatActions": "Sohbet eylemleri",
+        "askMaterial": "Bu makale hakkında sor…",
+        "askIssue": "Bu sayı hakkında sor…",
+        "zoomOut": "Uzaklaştır",
+        "zoomIn": "Yakınlaştır",
+        "fitToWindow": "Gazeteyi pencereye sığdır",
+        "noResponse": "Yanıt alınamadı",
+        "retryResponse": "Yanıt alınamadı — lütfen tekrar deneyin",
+        "sendFailed": "Mesaj gönderilemedi",
+        "clearFailed": "Sohbet temizlenemedi",
+        "chatTitle": "Gazete — {{title}}",
+        "chatKept": "Sohbet ana listeye taşındı",
+        "keepFailed": "Sohbet taşınamadı",
+        "styles": {
+          "wizarding": {
+            "label": "Büyücülük magazin gazetesi",
+            "hint": "Hisler, parşömen ve dev manşetler"
+          },
+          "broadsheet": {
+            "label": "Broadsheet",
+            "hint": "Klasik çok sütunlu bir ön sayfa"
+          },
+          "deusEx": {
+            "label": "Deus Ex",
+            "hint": "Picus: siyah bir arayüz ve altın"
+          },
+          "massEffect": {
+            "label": "Mass Effect",
+            "hint": "ANN: camgöbeği, turuncu ve HUD"
+          }
+        }
+      }
     }
   },
   "tts": {

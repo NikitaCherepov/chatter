@@ -1748,7 +1748,51 @@
         "stopResearcher": "Impossibile fermare il ricercatore",
         "export": "Impossibile esportare i dati del giornale"
       },
-      "backToIssue": "Torna al numero"
+      "backToIssue": "Torna al numero",
+      "reader": {
+        "settings": "Impostazioni edizione",
+        "menu": "MENU",
+        "issueControl": "CONTROLLO EDIZIONE",
+        "style": "Stile",
+        "zoom": "Zoom",
+        "previous": "Indietro",
+        "next": "Avanti",
+        "openDiscussion": "Apri una discussione con l'analista",
+        "discuss": "DISCUTI",
+        "discussion": "Parla con i redattori",
+        "keepChat": "Sposta nelle chat",
+        "chatActions": "Azioni chat",
+        "askMaterial": "Chiedi informazioni su questo articolo…",
+        "askIssue": "Chiedi informazioni su questa edizione…",
+        "zoomOut": "Riduci zoom",
+        "zoomIn": "Ingrandisci",
+        "fitToWindow": "Adatta il giornale alla finestra",
+        "noResponse": "Nessuna risposta ricevuta",
+        "retryResponse": "Nessuna risposta ricevuta — riprova",
+        "sendFailed": "Impossibile inviare il messaggio",
+        "clearFailed": "Impossibile cancellare la chat",
+        "chatTitle": "Giornale — {{title}}",
+        "chatKept": "Chat spostata nell'elenco principale",
+        "keepFailed": "Impossibile spostare la chat",
+        "styles": {
+          "wizarding": {
+            "label": "Tabloid magico",
+            "hint": "Sensazioni, pergamena e titoli enormi"
+          },
+          "broadsheet": {
+            "label": "Broadsheet",
+            "hint": "Una classica prima pagina a più colonne"
+          },
+          "deusEx": {
+            "label": "Deus Ex",
+            "hint": "Picus: un'interfaccia nera e oro"
+          },
+          "massEffect": {
+            "label": "Mass Effect",
+            "hint": "ANN: ciano, arancione e HUD"
+          }
+        }
+      }
     }
   },
   "tts": {

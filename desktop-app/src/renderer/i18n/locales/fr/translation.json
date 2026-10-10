@@ -1427,7 +1427,51 @@
         "stopResearcher": "Impossible d'arrêter le chercheur",
         "export": "Impossible d'exporter les données du journal"
       },
-      "backToIssue": "Retour au numéro"
+      "backToIssue": "Retour au numéro",
+      "reader": {
+        "settings": "Paramètres de l'édition",
+        "menu": "MENU",
+        "issueControl": "CONTRÔLE DES NUMÉROS",
+        "style": "Style",
+        "zoom": "Zoom",
+        "previous": "Précédent",
+        "next": "Suivant",
+        "openDiscussion": "Ouvrir une discussion avec l'analyste",
+        "discuss": "DISCUTER",
+        "discussion": "Parler aux éditeurs",
+        "keepChat": "Déplacer vers les chats",
+        "chatActions": "Actions de chat",
+        "askMaterial": "Poser une question sur cet article…",
+        "askIssue": "Poser une question sur cette édition…",
+        "zoomOut": "Zoom arrière",
+        "zoomIn": "Zoom avant",
+        "fitToWindow": "Adapter le journal à la fenêtre",
+        "noResponse": "Aucune réponse reçue",
+        "retryResponse": "Aucune réponse reçue — veuillez réessayer",
+        "sendFailed": "Impossible d'envoyer le message",
+        "clearFailed": "Impossible d'effacer la discussion",
+        "chatTitle": "Journal — {{title}}",
+        "chatKept": "Discussion déplacée vers la liste principale",
+        "keepFailed": "Impossible de déplacer la discussion",
+        "styles": {
+          "wizarding": {
+            "label": "Tabloïd de sorcellerie",
+            "hint": "Sensations, parchemin et gros titres"
+          },
+          "broadsheet": {
+            "label": "Grand format",
+            "hint": "Une première page classique à plusieurs colonnes"
+          },
+          "deusEx": {
+            "label": "Deus Ex",
+            "hint": "Picus : une interface noire et or"
+          },
+          "massEffect": {
+            "label": "Mass Effect",
+            "hint": "ANN : cyan, orange et HUD"
+          }
+        }
+      }
     }
   },
   "advanced": {

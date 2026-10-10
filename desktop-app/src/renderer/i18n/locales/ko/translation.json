@@ -1748,7 +1748,51 @@
         "stopResearcher": "연구자를 중지할 수 없습니다",
         "export": "신문 데이터를 내보낼 수 없습니다"
       },
-      "backToIssue": "이슈로 돌아가기"
+      "backToIssue": "이슈로 돌아가기",
+      "reader": {
+        "settings": "에디션 설정",
+        "menu": "메뉴",
+        "issueControl": "호 제어",
+        "style": "스타일",
+        "zoom": "확대/축소",
+        "previous": "뒤로",
+        "next": "다음",
+        "openDiscussion": "분석가와 토론 열기",
+        "discuss": "토론",
+        "discussion": "편집자와 대화하기",
+        "keepChat": "채팅으로 이동",
+        "chatActions": "채팅 작업",
+        "askMaterial": "이 기사에 대해 질문…",
+        "askIssue": "이 에디션에 대해 질문…",
+        "zoomOut": "축소",
+        "zoomIn": "확대",
+        "fitToWindow": "신문을 창에 맞추기",
+        "noResponse": "응답을 받지 못했습니다",
+        "retryResponse": "응답을 받지 못했습니다 — 다시 시도해 주세요",
+        "sendFailed": "메시지를 보낼 수 없습니다",
+        "clearFailed": "채팅을 지우지 못했습니다",
+        "chatTitle": "신문 — {{title}}",
+        "chatKept": "채팅이 기본 목록으로 이동되었습니다",
+        "keepFailed": "채팅을 이동하지 못했습니다",
+        "styles": {
+          "wizarding": {
+            "label": "마법사 타블로이드",
+            "hint": "감각, 양피지, 거대한 헤드라인"
+          },
+          "broadsheet": {
+            "label": "브로드시트",
+            "hint": "클래식한 다단 첫 페이지"
+          },
+          "deusEx": {
+            "label": "데우스 엑스",
+            "hint": "Picus: 검은 인터페이스와 금색"
+          },
+          "massEffect": {
+            "label": "매스 이펙트",
+            "hint": "ANN: 청록색, 주황색 및 HUD"
+          }
+        }
+      }
     }
   },
   "tts": {

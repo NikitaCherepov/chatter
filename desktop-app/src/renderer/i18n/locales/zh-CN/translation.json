@@ -1427,7 +1427,51 @@
         "stopResearcher": "无法停止研究员",
         "export": "无法导出报纸数据"
       },
-      "backToIssue": "返回期刊"
+      "backToIssue": "返回期刊",
+      "reader": {
+        "settings": "版本设置",
+        "menu": "菜单",
+        "issueControl": "期号控制",
+        "style": "样式",
+        "zoom": "缩放",
+        "previous": "上一步",
+        "next": "下一步",
+        "openDiscussion": "与分析师展开讨论",
+        "discuss": "讨论",
+        "discussion": "与编辑交流",
+        "keepChat": "移至聊天",
+        "chatActions": "聊天操作",
+        "askMaterial": "询问关于此文章…",
+        "askIssue": "询问关于此期…",
+        "zoomOut": "缩小",
+        "zoomIn": "放大",
+        "fitToWindow": "使报纸适应窗口",
+        "noResponse": "未收到响应",
+        "retryResponse": "未收到响应——请重试",
+        "sendFailed": "无法发送消息",
+        "clearFailed": "无法清空聊天",
+        "chatTitle": "报纸 — {{title}}",
+        "chatKept": "聊天已移至主列表",
+        "keepFailed": "无法移动聊天",
+        "styles": {
+          "wizarding": {
+            "label": "魔法小报",
+            "hint": "感官、羊皮纸和巨大标题"
+          },
+          "broadsheet": {
+            "label": "大报",
+            "hint": "经典的多栏头版"
+          },
+          "deusEx": {
+            "label": "杀出重围",
+            "hint": "Picus：黑色界面与金色"
+          },
+          "massEffect": {
+            "label": "质量效应",
+            "hint": "ANN：青色、橙色和 HUD"
+          }
+        }
+      }
     }
   },
   "advanced": {

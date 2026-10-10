@@ -1427,7 +1427,51 @@
         "stopResearcher": "Não foi possível parar o pesquisador",
         "export": "Não foi possível exportar os dados do jornal"
       },
-      "backToIssue": "Voltar para a edição"
+      "backToIssue": "Voltar para a edição",
+      "reader": {
+        "settings": "Configurações da edição",
+        "menu": "MENU",
+        "issueControl": "CONTROLE DE EDIÇÃO",
+        "style": "Estilo",
+        "zoom": "Zoom",
+        "previous": "Voltar",
+        "next": "Avançar",
+        "openDiscussion": "Abrir uma discussão com o analista",
+        "discuss": "DISCUTIR",
+        "discussion": "Fale com os editores",
+        "keepChat": "Mover para conversas",
+        "chatActions": "Ações da conversa",
+        "askMaterial": "Perguntar sobre este artigo…",
+        "askIssue": "Perguntar sobre esta edição…",
+        "zoomOut": "Reduzir zoom",
+        "zoomIn": "Ampliar",
+        "fitToWindow": "Ajustar jornal à janela",
+        "noResponse": "Nenhuma resposta recebida",
+        "retryResponse": "Nenhuma resposta recebida — tente novamente",
+        "sendFailed": "Não foi possível enviar a mensagem",
+        "clearFailed": "Não foi possível limpar o chat",
+        "chatTitle": "Jornal — {{title}}",
+        "chatKept": "Chat movido para a lista principal",
+        "keepFailed": "Não foi possível mover o chat",
+        "styles": {
+          "wizarding": {
+            "label": "Tabloide de bruxaria",
+            "hint": "Sensações, pergaminho e manchetes enormes"
+          },
+          "broadsheet": {
+            "label": "Broadsheet",
+            "hint": "Uma clássica primeira página com várias colunas"
+          },
+          "deusEx": {
+            "label": "Deus Ex",
+            "hint": "Picus: uma interface preta e dourada"
+          },
+          "massEffect": {
+            "label": "Mass Effect",
+            "hint": "ANN: ciano, laranja e HUD"
+          }
+        }
+      }
     }
   },
   "advanced": {

@@ -1427,7 +1427,51 @@
         "stopResearcher": "Der Forscher konnte nicht beendet werden",
         "export": "Die Zeitungsdaten konnten nicht exportiert werden"
       },
-      "backToIssue": "Zurück zur Ausgabe"
+      "backToIssue": "Zurück zur Ausgabe",
+      "reader": {
+        "settings": "Ausgabe-Einstellungen",
+        "menu": "MENÜ",
+        "issueControl": "AUSGABEN-STEUERUNG",
+        "style": "Stil",
+        "zoom": "Zoom",
+        "previous": "Zurück",
+        "next": "Weiter",
+        "openDiscussion": "Eine Diskussion mit dem Analysten eröffnen",
+        "discuss": "DISKUTIEREN",
+        "discussion": "Mit den Redakteuren sprechen",
+        "keepChat": "Zu Chats verschieben",
+        "chatActions": "Chat-Aktionen",
+        "askMaterial": "Frage zu diesem Artikel…",
+        "askIssue": "Frage zu dieser Ausgabe…",
+        "zoomOut": "Verkleinern",
+        "zoomIn": "Vergrößern",
+        "fitToWindow": "Zeitung an Fenster anpassen",
+        "noResponse": "Keine Antwort erhalten",
+        "retryResponse": "Keine Antwort erhalten – bitte erneut versuchen",
+        "sendFailed": "Die Nachricht konnte nicht gesendet werden",
+        "clearFailed": "Der Chat konnte nicht geleert werden",
+        "chatTitle": "Zeitung — {{title}}",
+        "chatKept": "Chat in die Hauptliste verschoben",
+        "keepFailed": "Der Chat konnte nicht verschoben werden",
+        "styles": {
+          "wizarding": {
+            "label": "Zauberer-Boulevardblatt",
+            "hint": "Sensationen, Pergament und riesige Schlagzeilen"
+          },
+          "broadsheet": {
+            "label": "Broadsheet",
+            "hint": "Eine klassische mehrspaltige Titelseite"
+          },
+          "deusEx": {
+            "label": "Deus Ex",
+            "hint": "Picus: eine schwarze Oberfläche und Gold"
+          },
+          "massEffect": {
+            "label": "Mass Effect",
+            "hint": "ANN: Cyan, Orange und HUD"
+          }
+        }
+      }
     }
   },
   "advanced": {

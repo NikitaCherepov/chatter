@@ -1748,7 +1748,51 @@
         "stopResearcher": "Nie można zatrzymać badacza",
         "export": "Nie można wyeksportować danych gazety"
       },
-      "backToIssue": "Wróć do wydania"
+      "backToIssue": "Wróć do wydania",
+      "reader": {
+        "settings": "Ustawienia wydania",
+        "menu": "MENU",
+        "issueControl": "STEROWANIE WYDANIEM",
+        "style": "Styl",
+        "zoom": "Powiększenie",
+        "previous": "Wstecz",
+        "next": "Dalej",
+        "openDiscussion": "Otwórz dyskusję z analitykiem",
+        "discuss": "DYSKUTUJ",
+        "discussion": "Porozmawiaj z redaktorami",
+        "keepChat": "Przenieś do czatów",
+        "chatActions": "Działania czatu",
+        "askMaterial": "Zapytaj o ten artykuł…",
+        "askIssue": "Zapytaj o to wydanie…",
+        "zoomOut": "Pomniejsz",
+        "zoomIn": "Powiększ",
+        "fitToWindow": "Dopasuj gazetę do okna",
+        "noResponse": "Nie otrzymano odpowiedzi",
+        "retryResponse": "Nie otrzymano odpowiedzi — spróbuj ponownie",
+        "sendFailed": "Nie udało się wysłać wiadomości",
+        "clearFailed": "Nie udało się wyczyścić czatu",
+        "chatTitle": "Gazeta — {{title}}",
+        "chatKept": "Czat przeniesiono do głównej listy",
+        "keepFailed": "Nie udało się przenieść czatu",
+        "styles": {
+          "wizarding": {
+            "label": "Tabloid czarodziejski",
+            "hint": "Sensacje, pergamin i wielkie nagłówki"
+          },
+          "broadsheet": {
+            "label": "Broadsheet",
+            "hint": "Klasyczna wielokolumnowa pierwsza strona"
+          },
+          "deusEx": {
+            "label": "Deus Ex",
+            "hint": "Picus: czarny interfejs i złoto"
+          },
+          "massEffect": {
+            "label": "Mass Effect",
+            "hint": "ANN: cyjan, pomarańcz i HUD"
+          }
+        }
+      }
     }
   },
   "tts": {

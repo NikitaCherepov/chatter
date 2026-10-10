@@ -1748,7 +1748,51 @@
         "stopResearcher": "Výzkumníka se nepodařilo zastavit",
         "export": "Nelze exportovat data novin"
       },
-      "backToIssue": "Zpět na vydání"
+      "backToIssue": "Zpět na vydání",
+      "reader": {
+        "settings": "Nastavení vydání",
+        "menu": "MENU",
+        "issueControl": "OVLÁDÁNÍ VYDÁNÍ",
+        "style": "Styl",
+        "zoom": "Přiblížení",
+        "previous": "Zpět",
+        "next": "Další",
+        "openDiscussion": "Otevřít diskusi s analytikem",
+        "discuss": "DISKUTOVAT",
+        "discussion": "Promluvte si s editory",
+        "keepChat": "Přesunout do chatů",
+        "chatActions": "Akce chatu",
+        "askMaterial": "Zeptat se na tento článek…",
+        "askIssue": "Zeptat se na toto vydání…",
+        "zoomOut": "Oddálit",
+        "zoomIn": "Přiblížit",
+        "fitToWindow": "Přizpůsobit noviny oknu",
+        "noResponse": "Nebyla přijata žádná odpověď",
+        "retryResponse": "Nebyla přijata žádná odpověď – zkuste to prosím znovu",
+        "sendFailed": "Zprávu se nepodařilo odeslat",
+        "clearFailed": "Chat se nepodařilo vymazat",
+        "chatTitle": "Noviny — {{title}}",
+        "chatKept": "Chat byl přesunut do hlavního seznamu",
+        "keepFailed": "Chat se nepodařilo přesunout",
+        "styles": {
+          "wizarding": {
+            "label": "Kouzelnický bulvár",
+            "hint": "Vjemy, pergamen a obrovské titulky"
+          },
+          "broadsheet": {
+            "label": "Broadsheet",
+            "hint": "Klasická vícesloupcová titulní stránka"
+          },
+          "deusEx": {
+            "label": "Deus Ex",
+            "hint": "Picus: černé rozhraní a zlato"
+          },
+          "massEffect": {
+            "label": "Mass Effect",
+            "hint": "ANN: azurová, oranžová a HUD"
+          }
+        }
+      }
     }
   },
   "tts": {

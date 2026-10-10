@@ -1,43 +1,56 @@
 {
   "changes": {
     "en": [
-      "Fixed saving of the app zoom level"
+      "Fixed localization in newspapers",
+      "Fixed models that don't support parameter tuning (temperature and others) incorrectly showing as configurable"
     ],
     "cs": [
-      "Opraveno ukládání úrovně přiblížení aplikace"
+      "Opravena lokalizace v novinách",
+      "Opraveno nesprávné zobrazování modelů, které nepodporují ladění parametrů (teplota a další), jako konfigurovatelných"
     ],
     "de": [
-      "Speichern der App-Zoomstufe korrigiert"
+      "Lokalisierung in Zeitungen korrigiert",
+      "Modelle, die keine Parameteranpassung (Temperatur und andere) unterstützen, wurden fälschlicherweise als konfigurierbar angezeigt – dies wurde korrigiert"
     ],
     "es": [
-      "Se corrigió el guardado del nivel de zoom de la aplicación"
+      "Se corrigió la localización en los periódicos",
+      "Se corrigió que los modelos que no admiten ajuste de parámetros (temperatura y otros) aparecieran incorrectamente como configurables"
     ],
     "fr": [
-      "Correction de l'enregistrement du niveau de zoom de l'application"
+      "Correction de la localisation dans les journaux",
+      "Correction des modèles ne prenant pas en charge le réglage des paramètres (température et autres) qui s'affichaient à tort comme configurables"
     ],
     "it": [
-      "Corretta la memorizzazione del livello di zoom dell'app"
+      "Corretta la localizzazione nei giornali",
+      "Corretti i modelli che non supportano la regolazione dei parametri (temperatura e altri) che venivano mostrati erroneamente come configurabili"
     ],
     "ja": [
-      "アプリのズームレベルの保存を修正"
+      "新聞のローカライズを修正",
+      "パラメータ調整（temperature など）に対応していないモデルが設定可能と誤表示される問題を修正"
     ],
     "ko": [
-      "앱 확대/축소 수준 저장 문제를 수정했습니다"
+      "신문의 현지화 문제를 수정했습니다",
+      "매개변수 조정(온도 및 기타)을 지원하지 않는 모델이 구성 가능한 것으로 잘못 표시되는 문제를 수정했습니다"
     ],
     "pl": [
-      "Naprawiono zapisywanie poziomu powiększenia aplikacji"
+      "Naprawiono lokalizację w gazetach",
+      "Naprawiono modele, które nie obsługują dostrajania parametrów (temperatury i innych), nieprawidłowo wyświetlane jako konfigurowalne"
     ],
     "pt-BR": [
-      "Correção no salvamento do nível de zoom do aplicativo"
+      "Correção de localização em jornais",
+      "Correção de modelos que não suportam ajuste de parâmetros (temperatura e outros) aparecendo incorretamente como configuráveis"
     ],
     "ru": [
-      "Исправлено сохранение масштабирования приложения"
+      "Исправлена локализация в газетах",
+      "Исправлено некорректное отображение моделей, не поддерживающих настройку параметров (температура и другие), как настраиваемых"
     ],
     "tr": [
-      "Uygulama yakınlaştırma düzeyinin kaydedilmesi düzeltildi"
+      "Gazetelerdeki yerelleştirme düzeltildi",
+      "Parametre ayarlamayı (sıcaklık ve diğerleri) desteklemeyen modellerin yanlış şekilde yapılandırılabilir olarak gösterilmesi düzeltildi"
     ],
     "zh-CN": [
-      "修复了应用缩放级别的保存问题"
+      "修复了报纸中的本地化问题",
+      "修复了不支持参数调优（温度及其他参数）的模型错误显示为可配置的问题"
     ]
   }
 }

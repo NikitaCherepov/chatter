@@ -1427,7 +1427,51 @@
         "stopResearcher": "リサーチャーを停止できませんでした",
         "export": "新聞データをエクスポートできませんでした"
       },
-      "backToIssue": "号に戻る"
+      "backToIssue": "号に戻る",
+      "reader": {
+        "settings": "エディション設定",
+        "menu": "メニュー",
+        "issueControl": "号の操作",
+        "style": "スタイル",
+        "zoom": "ズーム",
+        "previous": "戻る",
+        "next": "次へ",
+        "openDiscussion": "アナリストとのディスカッションを開く",
+        "discuss": "ディスカッション",
+        "discussion": "編集者と話す",
+        "keepChat": "チャットに移動",
+        "chatActions": "チャット操作",
+        "askMaterial": "この記事について質問…",
+        "askIssue": "この号について質問…",
+        "zoomOut": "ズームアウト",
+        "zoomIn": "拡大",
+        "fitToWindow": "新聞をウィンドウに合わせる",
+        "noResponse": "応答がありません",
+        "retryResponse": "応答がありません — もう一度お試しください",
+        "sendFailed": "メッセージを送信できませんでした",
+        "clearFailed": "チャットをクリアできませんでした",
+        "chatTitle": "新聞 — {{title}}",
+        "chatKept": "チャットをメインリストに移動しました",
+        "keepFailed": "チャットを移動できませんでした",
+        "styles": {
+          "wizarding": {
+            "label": "魔法界のタブロイド",
+            "hint": "感覚、羊皮紙、巨大な見出し"
+          },
+          "broadsheet": {
+            "label": "ブロードシート",
+            "hint": "古典的なマルチカラムの一面"
+          },
+          "deusEx": {
+            "label": "Deus Ex",
+            "hint": "Picus: 黒いインターフェースと金色"
+          },
+          "massEffect": {
+            "label": "Mass Effect",
+            "hint": "ANN: シアン、オレンジ、HUD"
+          }
+        }
+      }
     }
   },
   "advanced": {

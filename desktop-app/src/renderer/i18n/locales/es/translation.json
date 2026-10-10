@@ -1427,7 +1427,51 @@
         "stopResearcher": "No se pudo detener al investigador",
         "export": "No se pudo exportar los datos del periódico"
       },
-      "backToIssue": "Volver al número"
+      "backToIssue": "Volver al número",
+      "reader": {
+        "settings": "Configuración de la edición",
+        "menu": "MENÚ",
+        "issueControl": "CONTROL DE EDICIÓN",
+        "style": "Estilo",
+        "zoom": "Zoom",
+        "previous": "Atrás",
+        "next": "Siguiente",
+        "openDiscussion": "Abrir una conversación con el analista",
+        "discuss": "DEBATIR",
+        "discussion": "Habla con los editores",
+        "keepChat": "Mover a chats",
+        "chatActions": "Acciones del chat",
+        "askMaterial": "Preguntar sobre este artículo…",
+        "askIssue": "Preguntar sobre esta edición…",
+        "zoomOut": "Alejar",
+        "zoomIn": "Acercar",
+        "fitToWindow": "Ajustar el periódico a la ventana",
+        "noResponse": "No se recibió respuesta",
+        "retryResponse": "No se recibió respuesta; inténtalo de nuevo",
+        "sendFailed": "No se pudo enviar el mensaje",
+        "clearFailed": "No se pudo borrar el chat",
+        "chatTitle": "Periódico — {{title}}",
+        "chatKept": "Chat movido a la lista principal",
+        "keepFailed": "No se pudo mover el chat",
+        "styles": {
+          "wizarding": {
+            "label": "Tabloide mágico",
+            "hint": "Sensaciones, pergamino y titulares enormes"
+          },
+          "broadsheet": {
+            "label": "Broadsheet",
+            "hint": "Una clásica portada a varias columnas"
+          },
+          "deusEx": {
+            "label": "Deus Ex",
+            "hint": "Picus: una interfaz negra y dorada"
+          },
+          "massEffect": {
+            "label": "Mass Effect",
+            "hint": "ANN: cian, naranja y HUD"
+          }
+        }
+      }
     }
   },
   "advanced": {
