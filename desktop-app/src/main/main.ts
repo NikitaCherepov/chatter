@@ -11,6 +11,7 @@ import ffmpegStatic from 'ffmpeg-static';
 import { WakeWordOnnxService } from './wakeword';
 import { connectChatGptOnDesktop } from './chatgpt-auth';
 import { getTextMenuItems, type TextMenuAction } from './text-context-menu';
+import { isValidZoomLevel, readZoomLevel, saveZoomLevel } from './zoom-settings';
 import { ChatterBrowser, type BrowserControlPayload, type BrowserSearchPayload, type GoogleAiPayload } from './browser';
 import { BrowserPreviewSession, type BrowserPreviewPayload, type BrowserPreviewSource } from './browser-preview';
 import {
@@ -1205,6 +1206,7 @@ ipcMain.handle('notifications:dismiss', (event, id: unknown) => {
 function createWindow() {
   const isDev = !app.isPackaged;
   const rendererEntryPath = getRendererEntryPath();
+  let savedZoomLevel = readZoomLevel(app.getPath('userData'));
 
   const openExternalHttpUrl = (rawUrl: string) => {
     try {
@@ -1238,6 +1240,7 @@ function createWindow() {
       nodeIntegration: false,
       // Chatter must keep receiving agent events while minimized or hidden in the tray.
       backgroundThrottling: false,
+      ...(savedZoomLevel !== null ? { zoomFactor: Math.pow(1.2, savedZoomLevel) } : {}),
     },
   });
 
@@ -1258,6 +1261,22 @@ function createWindow() {
     if (isTrustedRendererUrl(url)) return;
     event.preventDefault();
     openExternalHttpUrl(url);
+  });
+
+  const zoomContents = mainWindow.webContents;
+  zoomContents.on('did-finish-load', () => {
+    // Read again so a reload never restores a stale value from window creation.
+    savedZoomLevel = readZoomLevel(app.getPath('userData'));
+    if (savedZoomLevel !== null) {
+      zoomContents.setZoomLevel(savedZoomLevel);
+    } else {
+      // Preserve Chromium's existing preference on the first upgraded launch.
+      const currentLevel = zoomContents.getZoomLevel();
+      if (isValidZoomLevel(currentLevel)) {
+        try { saveZoomLevel(app.getPath('userData'), currentLevel); }
+        catch (error) { console.error('[zoom] failed to save settings:', error); }
+      }
+    }
   });
 
   if (isDev) {
@@ -1739,6 +1758,8 @@ function createWindow() {
   ipcMain.handle('set-zoom-level', (event, level: number) => {
     assertTrustedIpcSender(event);
     if (!mainWindow) return;
+    if (!isValidZoomLevel(level)) throw new Error('invalid_zoom_level');
+    saveZoomLevel(app.getPath('userData'), level);
     mainWindow.webContents.setZoomLevel(level);
   });
 
