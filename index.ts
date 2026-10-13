@@ -7256,7 +7256,25 @@ const processUserVoiceThroughAi = async (ctx: any) => {
             return;
         }
 
-        await ctx.telegram.editMessageText(chatId, processingMsg.message_id, undefined, ctx.t('generated.voiceRecognized', { text: text }));
+        try {
+            let firstChunk = true;
+            await sendLongMessage({
+                reply: async (chunk: string) => {
+                    if (firstChunk) {
+                        firstChunk = false;
+                        try {
+                            return await ctx.telegram.editMessageText(chatId, processingMsg.message_id, undefined, chunk);
+                        } catch (editError) {
+                            console.warn('Failed to update the transcription message:', formatSafeError(editError));
+                        }
+                    }
+                    return ctx.reply(chunk);
+                }
+            }, ctx.t('generated.voiceRecognized', { text }));
+        } catch (transcriptDeliveryError) {
+            // The backend reply is already ready; transcript delivery must not block it.
+            console.warn('Failed to send the transcription to Telegram:', formatSafeError(transcriptDeliveryError));
+        }
 
         if (Array.isArray(backend?.tool_user_messages) && backend.tool_user_messages.length) {
             for (const message of backend.tool_user_messages) {
