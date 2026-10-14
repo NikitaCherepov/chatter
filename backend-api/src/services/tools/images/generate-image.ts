@@ -14,7 +14,7 @@ export const generateImageTool: Tool = {
     type: 'function',
     function: {
       name: 'generate_image',
-      description: 'Generate an image from a text description. Call ONLY if the user directly asks to "draw", "create an image", "generate a picture", etc. If the user writes in a non-English language — translate the prompt to English for better quality, but respond to the user in their language. STRICTLY FORBIDDEN to write JSON with action/actioninput/dalle in the response text — use ONLY the tool call. Supports image-to-image: if the user attached a photo and asks to edit/modify it — include image_url.',
+      description: 'Generate an image from a text description. Call ONLY if the user directly asks to "draw", "create an image", "generate a picture", etc. If the user writes in a non-English language — translate the prompt to English for better quality, but respond to the user in their language. STRICTLY FORBIDDEN to write JSON with action/actioninput/dalle in the response text — use ONLY the tool call. Supports image-to-image: if the user attached a photo and asks to edit/modify it — include image_url. DO NOT use attach_file_to_response for the generated image: it is automatically attached to the response.',
       parameters: {
         type: 'object',
         properties: {
