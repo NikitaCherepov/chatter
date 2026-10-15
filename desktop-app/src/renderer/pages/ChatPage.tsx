@@ -19,6 +19,7 @@ import { ChatMessagesScroll, type ChatMessagesScrollHandle } from '../components
 import { useAuth } from '../lib/auth';
 import { useUnreadChats } from '../lib/useUnreadChats';
 import * as api from '../lib/api';
+import { promoteChatInFolder } from '../lib/chat-list-order';
 import { generateDocxBlob, generateChatDocxBlob } from '../lib/markdownToDocx';
 import { MarkdownRenderer } from '../components/MarkdownRenderer';
 import { EmailBodyPreview } from '../components/EmailBodyPreview';
@@ -1315,6 +1316,11 @@ export function ChatPage() {
   });
 
   const [chats, setChats] = useState<api.ChatInfo[]>([]);
+  const chatsRef = useRef(chats);
+  chatsRef.current = chats;
+  const promoteChat = useCallback((chatId: number) => {
+    setChats(current => promoteChatInFolder(current, chatId));
+  }, []);
   const [activeChatId, setActiveChatId] = useState<number | null>(null);
   const [effectivePersonaImageUrl, setEffectivePersonaImageUrl] = useState<string | null>(null);
   const activeChatIdRef = useRef<number | null>(activeChatId);
@@ -1996,9 +2002,11 @@ export function ChatPage() {
           chatId: data.chat_id,
         });
       }
-      // If new chat was created — refresh sidebar
-      if (data.is_new_chat) {
-        loadChats();
+      if (data.chat_id && chatsRef.current.some(chat => chat.id === data.chat_id)) {
+        promoteChat(data.chat_id);
+      } else if (data.chat_id || data.is_new_chat) {
+        // A task can target a chat outside the pages loaded in this client.
+        void loadChats();
       }
 
       if (data.chat_id && data.chat_id === activeChatId) {
@@ -2009,18 +2017,24 @@ export function ChatPage() {
         incrementUnread(data.chat_id);
       }
     });
-  }, [activeChatId, chats, loadChats, showNativeNotification, t]);
+  }, [activeChatId, loadChats, showNativeNotification, t, promoteChat]);
 
   // External clients write into the same backend chat. Refresh the open
   // conversation when their user message and final answer are persisted.
   useEffect(() => api.onChatUpdated((data) => {
-    void loadChats();
+    // Known chats need only a local reorder, not a sidebar reset + refetch.
+    if (chatsRef.current.some(chat => chat.id === data.chat_id)) {
+      promoteChat(data.chat_id);
+    } else {
+      // Preserve discovery of new/external chats not loaded in this client yet.
+      void loadChats();
+    }
     if (data.chat_id === activeChatId) {
       void loadMessages(data.chat_id);
     } else if (data.phase === 'assistant') {
       incrementUnread(data.chat_id);
     }
-  }), [activeChatId, loadChats]);
+  }), [activeChatId, loadChats, promoteChat]);
 
   const refreshContextTokens = useCallback(async (chatId: number) => {
     try {
@@ -2823,6 +2837,14 @@ export function ChatPage() {
       // unread badges, no native notifications, no stream bookkeeping. The
       // reader consumes its events through api.subscribeRoomEvents().
       if (api.isNewspaperChat(event.chat_id)) return;
+      // Run before the active-chat guard: messages in background rooms count too.
+      if (
+        event.type === 'chat_user_message_saved'
+        || event.type === 'room_user_message'
+        || (event.type === 'chat_agent_done' && event.result?.message_id)
+      ) {
+        promoteChat(event.chat_id);
+      }
       // Keep bookkeeping for in-flight room streams even when this chat is not
       // open, so switching back mid-generation can resume the stream.
       // Any server event for this chat proves the trigger was picked up —
@@ -3158,7 +3180,7 @@ export function ChatPage() {
         }
       }
     });
-  }, [user?.id, notifyAssistantResponse, refreshContextTokens, t, clearSendWatchdog, applyAvatarState]);
+  }, [user?.id, notifyAssistantResponse, refreshContextTokens, t, clearSendWatchdog, applyAvatarState, promoteChat]);
 
   const handleSend = useCallback(async () => {
     const text = input.trim();

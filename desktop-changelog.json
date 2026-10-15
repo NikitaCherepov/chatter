@@ -1,56 +1,43 @@
 {
   "changes": {
     "en": [
-      "Fixed localization in newspapers",
-      "Fixed models that don't support parameter tuning (temperature and others) incorrectly showing as configurable"
+      "Fixed chat list not immediately moving a chat to the top when you message it"
     ],
     "cs": [
-      "Opravena lokalizace v novinách",
-      "Opraveno nesprávné zobrazování modelů, které nepodporují ladění parametrů (teplota a další), jako konfigurovatelných"
+      "Opraveno: seznam chatů okamžitě nepřesouval chat nahoru, když jste mu poslali zprávu"
     ],
     "de": [
-      "Lokalisierung in Zeitungen korrigiert",
-      "Modelle, die keine Parameteranpassung (Temperatur und andere) unterstützen, wurden fälschlicherweise als konfigurierbar angezeigt – dies wurde korrigiert"
+      "Behoben: Chat-Liste verschob einen Chat nicht sofort nach oben, wenn du ihm eine Nachricht gesendet hast"
     ],
     "es": [
-      "Se corrigió la localización en los periódicos",
-      "Se corrigió que los modelos que no admiten ajuste de parámetros (temperatura y otros) aparecieran incorrectamente como configurables"
+      "Se corrigió que la lista de chats no moviera inmediatamente un chat al principio al enviarle un mensaje"
     ],
     "fr": [
-      "Correction de la localisation dans les journaux",
-      "Correction des modèles ne prenant pas en charge le réglage des paramètres (température et autres) qui s'affichaient à tort comme configurables"
+      "Correction : la liste des discussions ne remontait pas immédiatement une discussion en haut lors de l'envoi d'un message"
     ],
     "it": [
-      "Corretta la localizzazione nei giornali",
-      "Corretti i modelli che non supportano la regolazione dei parametri (temperatura e altri) che venivano mostrati erroneamente come configurabili"
+      "Risolto il problema per cui la lista delle chat non spostava immediatamente una chat in cima quando le inviavi un messaggio"
     ],
     "ja": [
-      "新聞のローカライズを修正",
-      "パラメータ調整（temperature など）に対応していないモデルが設定可能と誤表示される問題を修正"
+      "メッセージ送信時にチャットがすぐにリストの先頭に移動しない問題を修正"
     ],
     "ko": [
-      "신문의 현지화 문제를 수정했습니다",
-      "매개변수 조정(온도 및 기타)을 지원하지 않는 모델이 구성 가능한 것으로 잘못 표시되는 문제를 수정했습니다"
+      "메시지를 보냈을 때 채팅 목록에서 해당 채팅이 즉시 맨 위로 이동하지 않던 문제를 수정했습니다"
     ],
     "pl": [
-      "Naprawiono lokalizację w gazetach",
-      "Naprawiono modele, które nie obsługują dostrajania parametrów (temperatury i innych), nieprawidłowo wyświetlane jako konfigurowalne"
+      "Naprawiono: lista czatów nie przenosiła od razu czatu na górę po wysłaniu wiadomości"
     ],
     "pt-BR": [
-      "Correção de localização em jornais",
-      "Correção de modelos que não suportam ajuste de parâmetros (temperatura e outros) aparecendo incorretamente como configuráveis"
+      "Corrigido o problema em que a lista de conversas não movia imediatamente uma conversa para o topo ao enviar uma mensagem"
     ],
     "ru": [
-      "Исправлена локализация в газетах",
-      "Исправлено некорректное отображение моделей, не поддерживающих настройку параметров (температура и другие), как настраиваемых"
+      "Исправлено: список чатов не перемещал чат наверх сразу после отправки сообщения"
     ],
     "tr": [
-      "Gazetelerdeki yerelleştirme düzeltildi",
-      "Parametre ayarlamayı (sıcaklık ve diğerleri) desteklemeyen modellerin yanlış şekilde yapılandırılabilir olarak gösterilmesi düzeltildi"
+      "Bir sohbete mesaj gönderdiğinizde sohbet listesinin sohbeti hemen en üste taşımaması düzeltildi"
     ],
     "zh-CN": [
-      "修复了报纸中的本地化问题",
-      "修复了不支持参数调优（温度及其他参数）的模型错误显示为可配置的问题"
+      "修复了发送消息后聊天列表未立即将该聊天移至顶部的问题"
     ]
   }
 }
