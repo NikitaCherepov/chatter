@@ -6,6 +6,7 @@ import rehypeHighlight from 'rehype-highlight';
 import { remarkMessageAccents } from '../lib/remark-message-accents';
 import { prepareMessageAccents } from '../lib/message-accents';
 import { isMessageImageUrl, remarkMessageImages } from '../lib/remark-message-images';
+import { remarkMessageLayouts } from '../lib/remark-message-layouts';
 import { resolveImageUrl } from '../lib/api';
 import s from './MarkdownRenderer.module.scss';
 
@@ -121,7 +122,7 @@ export function MarkdownRenderer({ content, className, highlightQuery = '', onIm
     <ImageClickContext.Provider value={onImageClick}>
     <div className={className ? `${s.md} ${className}` : s.md}>
       <ReactMarkdown
-        remarkPlugins={[remarkGfm, remarkMessageAccents, remarkMessageImages]}
+        remarkPlugins={[remarkGfm, remarkMessageLayouts, remarkMessageAccents, remarkMessageImages]}
         rehypePlugins={[rehypeHighlight, [rehypeSearchHighlights, { query: highlightQuery }]]}
         components={{
           img: MarkdownImage,

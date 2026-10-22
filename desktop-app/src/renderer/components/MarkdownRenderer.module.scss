@@ -330,6 +330,37 @@
 }
 
 // --- Images ---
+// Declarative containers: only validated properties from remark-message-layouts.
+.md [data-message-layout] {
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+  margin: .75em 0;
+  overflow-wrap: anywhere;
+  gap: var(--layout-gap, 12px);
+
+  > * { min-width: 0; max-width: 100%; }
+  > :first-child { margin-top: 0; }
+  > :last-child { margin-bottom: 0; }
+}
+
+.md [data-message-layout='grid'] {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, max(160px, calc((100% - (var(--layout-columns) - 1) * var(--layout-gap)) / var(--layout-columns)))), 1fr));
+  > * { margin-top: 0; margin-bottom: 0; }
+}
+
+.md [data-message-layout='flex'] {
+  display: flex;
+  > * { margin-top: 0; margin-bottom: 0; }
+}
+
+.md [data-message-layout='box'] {
+  display: flex;
+  flex-direction: column;
+  > * { margin-top: 0; margin-bottom: 0; }
+}
+
 .imageLink {
   display: block;
   width: fit-content;

@@ -1218,3 +1218,45 @@ and captions without desktop layouts. The database still stores original Markdow
 Ordinary inline images fit within 640 × 360 CSS pixels without cropping. Side
 images keep their full proportions and are at most 240px tall. Galleries stop
 growing at 960px wide; all layouts still shrink to fit their message container.
+
+## Declarative message containers (experimental)
+
+The Markdown renderer also accepts `grid`, `flex`, and `box` tags, each on its
+own line (not inside a quote/list/code block). These are a small allowlisted
+grammar, not raw HTML or JSX. Markdown between them works normally, including
+multiple paragraphs, accents, tables, and images. Each direct child is an item;
+wrap related content in a box:
+
+```markdown
+<grid columns="2" gap="3">
+<box border radius="lg" padding="3">
+**First card**
+
+An ordinary paragraph, with [an accent](style:info).
+</box>
+<box border radius="lg" padding="3">
+<flex justify="between" gap="2">
+**Second card**
+
+[Ready](style:badge-success)
+</flex>
+
+Another paragraph.
+</box>
+</grid>
+```
+
+Common attributes: `gap` and `padding` from `"0"` to `"6"` in 4px steps;
+`radius="none|sm|md|lg|xl"`; bare `border`; `align="start|center|end|stretch"`;
+`background="surface|muted|info|success|warning|error|#RRGGBB"`.
+Grid accepts `columns="1"` through `"4"` and collapses to fewer columns when
+space is limited. Flex accepts `direction="row|column"`, `wrap="yes|no"`,
+and `justify="start|center|end|between"`. Empty boxes can be self-closing.
+Use quoted literals, no expressions. Unknown attributes reject the tag;
+arbitrary styles, event handlers and executable code are never interpreted.
+Nesting is limited to eight layout containers; unfinished streamed containers
+temporarily extend to the end of their Markdown parent. Telegram strips the
+layout delimiters while retaining Markdown content; code samples stay literal.
+Original messages are stored unchanged. No new dependencies or cross-project
+imports are introduced: grammar/fallback uses the existing synced accents module,
+while the DOM layout transformer and CSS remain desktop-only.

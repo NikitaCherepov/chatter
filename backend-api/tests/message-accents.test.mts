@@ -20,7 +20,15 @@ assert.equal(formatForTelegram(code), code);
 assert.ok(markdownToTelegramRichHtml(code).includes('[example](style:info)'));
 assert.ok(buildSystemPrompt('Character', 'Persona', '', false, false).endsWith(MESSAGE_FORMATTING_HINT));
 assert.match(MESSAGE_FORMATTING_HINT, /sparingly/);
-assert.match(MESSAGE_FORMATTING_HINT, /No HTML, CSS, scripts/);
+assert.match(MESSAGE_FORMATTING_HINT, /No arbitrary HTML, CSS, scripts/);
+for (const tag of ['grid', 'flex', 'box']) assert.ok(MESSAGE_FORMATTING_HINT.includes(`<${tag}>`));
+const card = '<grid columns="2">\n<box border>\n**CPU**\n\n[Normal](style:success)\n</box>\n</grid>';
+const cardPlain = formatForTelegram(card);
+const cardHtml = markdownToTelegramRichHtml(card);
+assert.ok(cardPlain.includes('*CPU*') && cardPlain.includes('Normal'));
+assert.ok(cardHtml.includes('<b>CPU</b>') && cardHtml.includes('Normal'));
+for (const output of [cardPlain, cardHtml]) assert.ok(!/<\/?(?:grid|flex|box)\b/.test(output));
+assert.ok(markdownToTelegramRichHtml('```md\n<box>\nExample\n</box>\n```').includes('&lt;box&gt;'));
 for (const layout of ['side', 'gallery']) {
   assert.ok(MESSAGE_FORMATTING_HINT.includes(`layout:${layout}`));
   const image = `![A cat](https://example.com/cat.jpg "layout:${layout}")`;

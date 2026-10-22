@@ -8,6 +8,42 @@ export const MESSAGE_ACCENT_STYLES = [
 export type MessageAccentStyle = typeof MESSAGE_ACCENT_STYLES[number];
 const styles = new Set<string>(MESSAGE_ACCENT_STYLES);
 
+export type MessageLayoutTag = {
+  name: 'grid' | 'flex' | 'box';
+  closing: boolean;
+  selfClosing: boolean;
+  attributes: Record<string, string>;
+};
+
+/** A small declarative grammar, not HTML/JSX. Unknown attributes reject the tag. */
+export function parseMessageLayoutTag(source: string): MessageLayoutTag | null {
+  if (source.length > 400) return null;
+  const tag = /^<(\/?)(grid|flex|box)\b([^<>]*?)(\/?)>$/.exec(source.trim());
+  if (!tag || (tag[1] && (tag[3].trim() || tag[4]))) return null;
+  const name = tag[2] as MessageLayoutTag['name'];
+  const attributes: Record<string, string> = {};
+  let rest = tag[3];
+  while (rest.trim()) {
+    const attr = /^\s+([a-z]+)(?:\s*=\s*(?:"([^"<>]*)"|'([^'<>]*)'))?/.exec(rest);
+    if (!attr || Object.prototype.hasOwnProperty.call(attributes, attr[1])) return null;
+    const key = attr[1], value = attr[2] ?? attr[3] ?? '';
+    const valid = key === 'border' ? value === ''
+      : key === 'columns' ? name === 'grid' && /^[1-4]$/.test(value)
+      : key === 'gap' || key === 'padding' ? /^[0-6]$/.test(value)
+      : key === 'radius' ? /^(none|sm|md|lg|xl)$/.test(value)
+      : key === 'background' ? /^(surface|muted|info|success|warning|error|#[0-9a-fA-F]{6})$/.test(value)
+      : key === 'direction' ? name === 'flex' && /^(row|column)$/.test(value)
+      : key === 'wrap' ? name === 'flex' && /^(yes|no)$/.test(value)
+      : key === 'align' ? /^(start|center|end|stretch)$/.test(value)
+      : key === 'justify' ? name === 'flex' && /^(start|center|end|between)$/.test(value)
+      : false;
+    if (!valid) return null;
+    attributes[key] = value;
+    rest = rest.slice(attr[0].length);
+  }
+  return { name, closing: !!tag[1], selfClosing: !!tag[4], attributes };
+}
+
 export function getMessageAccentStyle(url: string): MessageAccentStyle | null {
   const style = url.startsWith('style:') ? url.slice(6) : '';
   return styles.has(style) ? style as MessageAccentStyle : null;
@@ -24,7 +60,8 @@ export function prepareMessageAccents(source: string): string {
 }
 
 function transformMessageAccents(source: string, stripComplete: boolean): string {
-  if (!source.includes('](style') && !(stripComplete && source.includes('layout:'))) return source;
+  if (!source.includes('](style') && !(stripComplete && source.includes('layout:'))
+    && !/<\/?(?:grid|flex|box)\b/.test(source)) return source;
   let result = '';
   let index = 0;
   while (index < source.length) {
@@ -37,6 +74,13 @@ function transformMessageAccents(source: string, stripComplete: boolean): string
         const stop = closing ? end.lastIndex : source.length;
         result += source.slice(index, stop);
         index = stop;
+        continue;
+      }
+      // Standalone tags get blank lines so Markdown inside containers stays Markdown.
+      const layoutLine = /^ {0,3}(<\/?(?:grid|flex|box)\b[^\r\n]*>)[ \t]*(?:\r?\n|$)/.exec(source.slice(index));
+      if (layoutLine && parseMessageLayoutTag(layoutLine[1])) {
+        result += stripComplete ? '\n' : `\n\n${layoutLine[1]}\n\n`;
+        index += layoutLine[0].length;
         continue;
       }
     }
