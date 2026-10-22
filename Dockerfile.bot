@@ -5,7 +5,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 
-COPY tsconfig.json index.ts ./
+COPY tsconfig.json index.ts message-accents.ts ./
 COPY i18n ./i18n
 RUN npm run build
 

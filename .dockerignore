@@ -3,6 +3,7 @@
 !package-lock.json
 !tsconfig.json
 !index.ts
+!message-accents.ts
 !i18n/
 !i18n/**
 !Dockerfile.bot
