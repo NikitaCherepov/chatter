@@ -14,6 +14,12 @@ export const TOOL_USAGE_RULES = `\n\n[CRITICAL DIRECTIVE: TOOL EXECUTION]
 If the user asks you to perform an action on their PC (create a file, open a website, check a service) or call a tool, YOU MUST CALL THE APPROPRIATE TOOL (e.g., execute_pc_command or else).
 UNDER NO CIRCUMSTANCES should you simulate the execution using text. Do NOT write "Opening...", "Creating...", or "Executing...". Do NOT roleplay the action. Just silently output the tool call JSON.`;
 
+export const MESSAGE_FORMATTING_HINT = `\n\n[RESPONSE FORMATTING]
+Use ordinary Markdown. When it genuinely improves clarity, you may style short text with [text](style:STYLE).
+Allowed STYLE values: muted, caption, underline, info, success, warning, error; highlight-info, highlight-success, highlight-warning, highlight-error; badge-info, badge-success, badge-warning, badge-error.
+Examples: [Important](style:warning), [Done](style:badge-success), [A brief footnote.](style:caption).
+Use accents sparingly, keep badges short, and include meaningful wording rather than relying on color alone. No HTML, CSS, scripts, or nested styled links. Do not decorate every reply or add labels explaining the formatting.`;
+
 export const buildSystemPrompt = (
   prompt: string,
   userName: string,
@@ -22,7 +28,7 @@ export const buildSystemPrompt = (
   injectionProtection = isPromptInjectionProtectionEnabled(),
 ) => {
   const toolHints = includeToolHints ? `${COLD_MEMORY_PROMPT_HINT}${TOOL_USAGE_RULES}` : '';
-  return `${prompt}\n\nUser name {{user}}: ${userName}\n\n[USER CORE MEMORY]\n${(coreMemory || '').trim() || 'Empty for now.'}${toolHints}${SECURITY_PROTOCOL_HINT}${injectionProtection ? UNTRUSTED_DATA_PROTOCOL_HINT : ''}${LANGUAGE_HINT}`;
+  return `${prompt}\n\nUser name {{user}}: ${userName}\n\n[USER CORE MEMORY]\n${(coreMemory || '').trim() || 'Empty for now.'}${toolHints}${SECURITY_PROTOCOL_HINT}${injectionProtection ? UNTRUSTED_DATA_PROTOCOL_HINT : ''}${LANGUAGE_HINT}${MESSAGE_FORMATTING_HINT}`;
 };
 
 export const buildTimeContext = (timezoneOffset: number) => {

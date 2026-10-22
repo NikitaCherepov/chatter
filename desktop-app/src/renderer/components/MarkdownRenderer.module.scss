@@ -1,5 +1,76 @@
 @import 'highlight.js/styles/github.css';
 
+// Model-authored text accents use theme colors, never arbitrary model CSS.
+.md {
+  --message-warning: #85530a;
+}
+
+:global(:root[data-theme='dark']) .md {
+  --message-warning: var(--color-warning);
+}
+
+.md [data-message-accent] {
+  --message-tone: var(--text-body);
+  overflow-wrap: anywhere;
+}
+
+@each $tone in info, success, warning, error {
+  .md [data-message-accent='#{$tone}'],
+  .md [data-message-accent='highlight-#{$tone}'],
+  .md [data-message-accent='badge-#{$tone}'] {
+    @if $tone == warning {
+      --message-tone: var(--message-warning);
+    } @else {
+      --message-tone: var(--color-#{$tone});
+    }
+  }
+
+  .md [data-message-accent='#{$tone}'] {
+    color: var(--message-tone);
+  }
+}
+
+.md [data-message-accent='muted'],
+.md [data-message-accent='caption'] {
+  color: var(--text-muted);
+}
+
+.md [data-message-accent='caption'] {
+  font-size: .85em;
+}
+
+.md [data-message-accent='underline'] {
+  text-decoration: underline;
+  text-underline-offset: .15em;
+}
+
+.md [data-message-accent] :is(strong, em, code) {
+  color: inherit;
+}
+
+.md [data-message-accent^='highlight-'] {
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--message-tone) 20%, transparent);
+  border-radius: 4px;
+  padding: .08em .25em;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+.md [data-message-accent^='badge-'] {
+  display: inline;
+  color: var(--message-tone);
+  background: color-mix(in srgb, var(--message-tone) 12%, var(--bg-primary));
+  border: 1px solid color-mix(in srgb, var(--message-tone) 30%, transparent);
+  border-radius: 999px;
+  padding: .12em .55em;
+  font-size: .85em;
+  font-weight: 600;
+  line-height: 1.9;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
 // ====== Markdown container ======
 
 .md {

@@ -1150,3 +1150,37 @@ Multi-slide announcements shown to users who haven't seen them yet. The first an
 - Slide transitions: framer-motion `AnimatePresence` with horizontal slide
 - Style: same size as SettingsModal (70vw × 75vh), all styles from `global.scss` variables
 - Footer: absolute step indicator centered, nav buttons space-between (Back left, Next/Done right)
+
+## Message text accents
+
+Ordinary Markdown remains unchanged. A remark plugin recognizes a small allowlist
+of Markdown link destinations and renders their labels as non-interactive spans:
+
+```markdown
+[Secondary text](style:muted)
+[A short caption.](style:caption)
+[Underlined text](style:underline)
+[Information](style:info)
+[Success](style:success)
+[Warning](style:warning)
+[Error](style:error)
+[Highlighted words](style:highlight-warning)
+[Done](style:badge-success)
+```
+
+Both `highlight-` and `badge-` support `info`, `success`, `warning`, and `error`.
+Labels can contain ordinary inline Markdown such as bold and italic. Do not nest
+styled links. Use short badges; use captions as separate paragraphs when needed.
+These destinations do not execute actions or open links. Unknown destinations do
+not receive styles. Raw HTML and arbitrary CSS are not enabled.
+
+Colors follow the current light/dark theme. Telegram receives the label as normal
+Markdown, with its wording preserved. Code examples remain literal.
+
+The shared grammar/fallback lives in `shared/message-accents.ts`. After editing,
+run `node scripts/sync-message-accents.mjs` and commit its three local copies.
+Use `node scripts/sync-message-accents.mjs --check` to verify them. Copies keep
+the independently packaged bot, backend and desktop builds self-contained.
+
+The model instruction is `MESSAGE_FORMATTING_HINT` in `system-prompt.ts`.
+No existing character prompts or stored messages are rewritten.

@@ -3,6 +3,8 @@ import { useTranslation } from 'react-i18next';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
+import { remarkMessageAccents } from '../lib/remark-message-accents';
+import { prepareMessageAccents } from '../lib/message-accents';
 import s from './MarkdownRenderer.module.scss';
 
 type MarkdownRendererProps = {
@@ -72,7 +74,7 @@ export function MarkdownRenderer({ content, className, highlightQuery = '' }: Ma
   return (
     <div className={className ? `${s.md} ${className}` : s.md}>
       <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
+        remarkPlugins={[remarkGfm, remarkMessageAccents]}
         rehypePlugins={[rehypeHighlight, [rehypeSearchHighlights, { query: highlightQuery }]]}
         components={{
           // --- Code blocks ---
@@ -196,7 +198,7 @@ export function MarkdownRenderer({ content, className, highlightQuery = '' }: Ma
           },
         }}
       >
-        {content}
+        {prepareMessageAccents(content)}
       </ReactMarkdown>
     </div>
   );

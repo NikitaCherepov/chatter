@@ -4,6 +4,7 @@ import * as dotenv from 'dotenv';
 import crypto from 'crypto';
 import axios from 'axios';
 import { marked, Renderer } from 'marked';
+import { stripMessageAccents } from './message-accents.js';
 import {
     createBotTranslator,
     DEFAULT_LANGUAGE,
@@ -462,6 +463,7 @@ const sendLongMessage = async (ctx: any, text: string, extra?: Record<string, un
 };
 
 const safeReply = async (ctx: any, text: string) => {
+    text = stripMessageAccents(text);
     const tgFormattedText = text
         // 1. Бывает, что ИИ генерит заголовок сразу с жирным шрифтом (### **Текст**) — чистим двойное форматирование
         .replace(/^#+\s+\*\*(.*?)\*\*/gm, '🔹 *$1*')
@@ -5781,7 +5783,7 @@ function createTelegramRichMarkdownRenderer(): Renderer {
 }
 
 function markdownToTelegramRichHtml(text: string): string {
-    const markdown = text.trim();
+    const markdown = stripMessageAccents(text).trim();
     if (!markdown) return '';
 
     try {
@@ -6111,7 +6113,7 @@ class RichStreamSession {
         // (splitTextForFinal — локальная копия splitTextForTelegram).
         // Каждый кусок конвертируется в Rich HTML отдельно и отправляется
         // как самостоятельное persisted-сообщение.
-        const rawChunks = splitTextForFinal(this.textBuf, STREAM_FINAL_TEXT_LIMIT);
+        const rawChunks = splitTextForFinal(stripMessageAccents(this.textBuf), STREAM_FINAL_TEXT_LIMIT);
         if (STREAM_DEBUG_LOG) {
             console.log(`[tg][rich-stream] finalize: textBuf len=${this.textBuf.length}, chunks=${rawChunks.length}`);
         }

@@ -7,6 +7,7 @@
  */
 
 import { marked, Renderer } from 'marked';
+import { stripMessageAccents } from './message-accents.js';
 
 const TELEGRAM_TOKEN = `${process.env.TELEGRAM_TOKEN || ''}`.trim();
 const TG_USE_RICH_MESSAGES =
@@ -101,7 +102,7 @@ const createTelegramRichMarkdownRenderer = (): Renderer => {
 };
 
 export const markdownToTelegramRichHtml = (text: string): string => {
-  const markdown = text.trim();
+  const markdown = stripMessageAccents(text).trim();
   if (!markdown) return '';
 
   try {
@@ -156,7 +157,7 @@ export const splitTextForTelegram = (text: string, maxLen = 4000): string[] => {
 
 /** Format Markdown to Telegram-compatible (same logic as safeReply in index.ts). */
 export const formatForTelegram = (text: string): string => {
-  return text
+  return stripMessageAccents(text)
     // ### **Текст** → 🔹 *Текст*
     .replace(/^#+\s+\*\*(.*?)\*\*/gm, '🔹 *$1*')
     // ### Текст → 🔹 *Текст*
@@ -181,7 +182,8 @@ export const sendTelegramMessage = async (
     return;
   }
 
-  const source = typeof text === 'string' ? text : String(text ?? '');
+  // Strip before splitting, so an accent link cannot straddle Telegram chunks.
+  const source = stripMessageAccents(typeof text === 'string' ? text : String(text ?? ''));
   if (!source.trim()) return;
 
   const preferRich = options.preferRich ?? TG_USE_RICH_MESSAGES;
