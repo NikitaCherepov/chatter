@@ -138,7 +138,15 @@ export const listStaleTemporaryChats = (idleMs: number): Array<{ id: number; use
 };
 
 export const touchUserChat = (userId: number, chatId: number) => {
-  db.prepare('UPDATE user_chats SET updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND id = ?').run(userId, chatId);
+  // Rooms have one shared chat row owned by their creator, not by each author.
+  db.prepare(`
+    UPDATE user_chats SET updated_at = CURRENT_TIMESTAMP
+    WHERE id = ? AND (
+      user_id = ? OR EXISTS (
+        SELECT 1 FROM chat_members cm WHERE cm.chat_id = user_chats.id AND cm.user_id = ?
+      )
+    )
+  `).run(chatId, userId, userId);
 };
 
 /** Turn a temporary chat into a normal listed chat: out of the TTL sweep,
@@ -1634,7 +1642,7 @@ export const appendChatMessage = async (
     if (images && images.length > 0) {
       attachImageUrlsToEntity({ userId, urls: images.map(image => image.url), entityType: 'chat_message', entityId: replaced });
     }
-    db.prepare('UPDATE user_chats SET updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND id = ?').run(userId, chatId);
+    touchUserChat(userId, chatId);
     return replaced;
   }
 
@@ -1672,7 +1680,7 @@ export const appendChatMessage = async (
       entityId: messageId,
     });
   }
-  db.prepare('UPDATE user_chats SET updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND id = ?').run(userId, chatId);
+  touchUserChat(userId, chatId);
   return messageId;
 };
 
