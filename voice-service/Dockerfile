@@ -38,8 +38,11 @@ RUN apt-get update \
 
 COPY requirements.txt /tmp/requirements.txt
 
+# Upgrade Debian's bundled pip before resolving PyTorch dependency metadata.
 # Install the CPU-only PyTorch wheel so the image does not pull CUDA libraries.
-RUN pip install --no-cache-dir \
+RUN python -m pip install --no-cache-dir --upgrade pip \
+        --index-url https://pypi.org/simple \
+    && python -m pip install --no-cache-dir \
         --index-url https://download.pytorch.org/whl/cpu \
         "torch==2.5.1+cpu" \
     && pip install --no-cache-dir -r /tmp/requirements.txt \
