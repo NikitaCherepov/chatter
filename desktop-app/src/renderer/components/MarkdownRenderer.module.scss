@@ -330,6 +330,49 @@
 }
 
 // --- Images ---
+.imageLink {
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  border: 0;
+  border-radius: 12px;
+  overflow: hidden;
+  text-decoration: none;
+  cursor: pointer;
+
+  img {
+    transition: transform 220ms ease-out;
+    transform-origin: center;
+  }
+
+  @media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+    &:hover img { transform: scale(1.035); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    img { transition: none; }
+  }
+}
+
+.imageError {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  box-sizing: border-box;
+  min-height: 100px;
+  max-width: 100%;
+  padding: 12px;
+  border: 1px dashed var(--border-light);
+  border-radius: 12px;
+  background: var(--bg-bubble);
+  color: var(--text-muted);
+  font-size: .9em;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
 .md [data-message-images] {
   margin: 1em 0;
   min-width: 0;
@@ -341,12 +384,13 @@
   align-items: flex-start;
   gap: 16px;
 
-  > figure { flex: 1 1 160px; max-width: 220px; }
+  > figure { flex: 0 1 auto; width: fit-content; max-width: min(100%, 220px); }
   > [data-message-image-body] { flex: 3 1 240px; min-width: 0; }
 }
 
 .md [data-message-images='gallery'] {
   display: grid;
+  max-width: 960px;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, max(160px, calc((100% - 28px) / 3))), 1fr));
   gap: 14px;
 }
@@ -355,7 +399,6 @@
   margin: 0;
   min-width: 0;
 
-  a { display: block; border: 0; }
   img {
     display: block;
     width: 100%;
@@ -378,10 +421,25 @@
   object-fit: cover;
 }
 
+.md [data-message-images='gallery'] .imageLink {
+  width: 100%;
+}
+
+.md [data-message-images='side'] img {
+  width: auto;
+  max-height: 240px;
+  object-fit: contain;
+}
+
 .md img {
-  max-width: 100%;
-  border-radius: 6px;
-  margin: 0.5em 0;
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: min(100%, 640px);
+  max-height: 360px;
+  object-fit: contain;
+  border-radius: 12px;
+  margin: 0;
 }
 .searchHighlight {
   padding: 0 1px;

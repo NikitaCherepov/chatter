@@ -1,4 +1,7 @@
 {
+  "messageImages": {
+    "loadFailed": "Could not load this image"
+  },
   "memorySetupNotice": {
     "title": "Vector memory is not configured",
     "settingsHelp": "Semantic search, automatic memory and saving new memories are unavailable. An administrator needs to configure an embedding model in the admin panel. Saved records remain available in the list.",

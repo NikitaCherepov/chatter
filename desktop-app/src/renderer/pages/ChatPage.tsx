@@ -1066,7 +1066,7 @@ const MessageItem = React.memo(function MessageItem({
                     <span className={s.dot} />
                   </div>
                 ) : (
-                  <div className={`${s.bubbleText} ${isStreamingContent ? s.bubbleTextStreaming : ''}`}><MarkdownRenderer content={displayedVariantContent} highlightQuery={searchHighlightQuery} /></div>
+                  <div className={`${s.bubbleText} ${isStreamingContent ? s.bubbleTextStreaming : ''}`}><MarkdownRenderer content={displayedVariantContent} highlightQuery={searchHighlightQuery} onImageClick={onSetViewerImageSrc} /></div>
                 )
               )
               : <div className={s.bubbleTextPlain}>{renderHighlightedPlainText(msg.content, searchHighlightQuery)}</div>
@@ -1075,7 +1075,7 @@ const MessageItem = React.memo(function MessageItem({
         <AnimatePresence>
           {hasReasoning && reasoningOpen && (
             <motion.div className={`${s.reasoningPanel} ${isStreamingReasoning || isStreamingContent ? s.bubbleTextStreaming : ''}`} variants={reasoningPanelVariants} initial="hidden" animate="visible" exit="exit">
-              <MarkdownRenderer content={msg.reasoning_content || ''} />
+              <MarkdownRenderer content={msg.reasoning_content || ''} onImageClick={onSetViewerImageSrc} />
             </motion.div>
           )}
           {hasToolCalls && isToolCallsOpen && (
@@ -1637,6 +1637,11 @@ export function ChatPage() {
   const [viewerAttachment, setViewerAttachment] = useState<api.MessageAttachment | null>(null);
   const [viewerImageMsgId, setViewerImageMsgId] = useState<number | null>(null);
   const [viewerImageUrl, setViewerImageUrl] = useState<string | null>(null);
+  const openMarkdownImage = useCallback((src: string) => {
+    setViewerImageSrc(src);
+    setViewerImageMsgId(null);
+    setViewerImageUrl(null);
+  }, []);
   const [imageDeleteTarget, setImageDeleteTarget] = useState<{ messageId: number; url: string } | null>(null);
   const [deletingImage, setDeletingImage] = useState(false);
   const [ttsPlayingId, setTtsPlayingId] = useState<number | null>(null);
@@ -6087,7 +6092,7 @@ export function ChatPage() {
                         </div>
                       )}
                       {msg.role === 'assistant'
-                        ? <div className={`${s.bubbleText} ${msg.id === streamingMsgId && streamingState === 'content' ? s.bubbleTextStreaming : ''}`}><MarkdownRenderer content={msg.content} /></div>
+                        ? <div className={`${s.bubbleText} ${msg.id === streamingMsgId && streamingState === 'content' ? s.bubbleTextStreaming : ''}`}><MarkdownRenderer content={msg.content} onImageClick={openMarkdownImage} /></div>
                         : <div className={s.bubbleTextPlain}>{msg.content}</div>
                       }
                     </div>
@@ -6100,7 +6105,7 @@ export function ChatPage() {
                           animate="visible"
                           exit="exit"
                         >
-                          <MarkdownRenderer content={msg.reasoning_content} />
+                          <MarkdownRenderer content={msg.reasoning_content} onImageClick={openMarkdownImage} />
                         </motion.div>
                       )}
                       {msg.role === 'assistant' && msg.tool_calls && msg.tool_calls.length > 0 && openToolCallsId === msg.id && (

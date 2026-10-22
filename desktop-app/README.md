@@ -1214,3 +1214,7 @@ URL helper; external images do not receive server credentials and use no-referre
 Only HTTP(S) and root-relative image URLs are accepted. Alt text/captions are text,
 not HTML. Remote images are loaded lazily. Telegram retains standard image links
 and captions without desktop layouts. The database still stores original Markdown.
+
+Ordinary inline images fit within 640 × 360 CSS pixels without cropping. Side
+images keep their full proportions and are at most 240px tall. Galleries stop
+growing at 960px wide; all layouts still shrink to fit their message container.

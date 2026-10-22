@@ -1,6 +1,6 @@
-import React, { useCallback, useRef } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import ReactMarkdown from 'react-markdown';
+import ReactMarkdown, { type ExtraProps } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import { remarkMessageAccents } from '../lib/remark-message-accents';
@@ -15,7 +15,51 @@ type MarkdownRendererProps = {
   className?: string;
   /** Terms highlighted in rendered prose. Code blocks stay untouched. */
   highlightQuery?: string;
+  /** Open images in the host's existing viewer instead of an external browser. */
+  onImageClick?: (src: string) => void;
 };
+
+const ImageClickContext = createContext<((src: string) => void) | undefined>(undefined);
+
+// Stable component types keep pending images mounted across streaming renders.
+function MarkdownImage({ src, alt, title }: React.ComponentProps<'img'>) {
+  const { t } = useTranslation();
+  const resolved = src && isMessageImageUrl(src) ? resolveImageUrl(src) : null;
+  const [failed, setFailed] = useState(false);
+  useEffect(() => { setFailed(false); }, [resolved]);
+  if (!resolved) return <span>{alt}</span>;
+  if (failed) return <span className={s.imageError} role="img" aria-label={alt || t('messageImages.loadFailed')}>
+    <span aria-hidden="true">▧</span>
+    <span>{t('messageImages.loadFailed')}</span>
+    {alt && <span>{alt}</span>}
+  </span>;
+  return <img src={resolved} alt={alt || ''}
+    title={title?.startsWith('layout:') ? undefined : title}
+    loading="lazy" decoding="async" referrerPolicy="no-referrer"
+    onError={() => setFailed(true)} />;
+}
+
+function MarkdownLink({ href, children, node }: React.ComponentProps<'a'> & ExtraProps) {
+  const onImageClick = useContext(ImageClickContext);
+  const imageNode = node?.children.find(child => child.type === 'element' && child.tagName === 'img');
+  const imageLink = !!imageNode;
+  const imageSrc = imageNode?.type === 'element' && typeof imageNode.properties.src === 'string'
+    ? imageNode.properties.src : '';
+  const localImage = imageLink && href?.startsWith('/') && isMessageImageUrl(href);
+  return <a className={imageLink ? s.imageLink : s.link} href={localImage ? resolveImageUrl(href!) : href}
+    onClick={event => {
+      if (!onImageClick || !isMessageImageUrl(imageSrc) || event.button !== 0
+        || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      event.preventDefault();
+      event.stopPropagation();
+      onImageClick(resolveImageUrl(imageSrc));
+    }}
+    target="_blank" rel="noopener noreferrer" title={href}>{children}</a>;
+}
+
+function MarkdownParagraph({ children }: React.ComponentProps<'p'>) {
+  return <p className={s.paragraph}>{children}</p>;
+}
 
 type HastNode = {
   type?: string;
@@ -63,7 +107,7 @@ const rehypeSearchHighlights = (options: { query?: string } = {}) => (tree: Hast
   visit(tree);
 };
 
-export function MarkdownRenderer({ content, className, highlightQuery = '' }: MarkdownRendererProps) {
+export function MarkdownRenderer({ content, className, highlightQuery = '', onImageClick }: MarkdownRendererProps) {
   const { t } = useTranslation();
   const codeRefs = useRef<Map<string, HTMLElement>>(new Map());
 
@@ -74,17 +118,13 @@ export function MarkdownRenderer({ content, className, highlightQuery = '' }: Ma
   }, []);
 
   return (
+    <ImageClickContext.Provider value={onImageClick}>
     <div className={className ? `${s.md} ${className}` : s.md}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkMessageAccents, remarkMessageImages]}
         rehypePlugins={[rehypeHighlight, [rehypeSearchHighlights, { query: highlightQuery }]]}
         components={{
-          img({ src, alt, title }) {
-            if (!src || !isMessageImageUrl(src)) return <span>{alt}</span>;
-            return <img src={resolveImageUrl(src)} alt={alt || ''}
-              title={title?.startsWith('layout:') ? undefined : title}
-              loading="lazy" decoding="async" referrerPolicy="no-referrer" />;
-          },
+          img: MarkdownImage,
           // --- Code blocks ---
           code({ className, children, ...props }) {
             const match = /language-(\w+)/.exec(className || '');
@@ -131,21 +171,7 @@ export function MarkdownRenderer({ content, className, highlightQuery = '' }: Ma
           },
 
           // --- Links ---
-          a({ href, children, node }) {
-            return (
-              <a
-                className={s.link}
-                href={href?.startsWith('/') && isMessageImageUrl(href)
-                  && node?.children.some(child => child.type === 'element' && child.tagName === 'img')
-                  ? resolveImageUrl(href) : href}
-                target="_blank"
-                rel="noopener noreferrer"
-                title={href}
-              >
-                {children}
-              </a>
-            );
-          },
+          a: MarkdownLink,
 
           // --- Tables ---
           table({ children }) {
@@ -157,9 +183,7 @@ export function MarkdownRenderer({ content, className, highlightQuery = '' }: Ma
           },
 
           // --- Paragraphs ---
-          p({ children }) {
-            return <p className={s.paragraph}>{children}</p>;
-          },
+          p: MarkdownParagraph,
 
           // --- Lists ---
           ul({ children }) {
@@ -211,5 +235,6 @@ export function MarkdownRenderer({ content, className, highlightQuery = '' }: Ma
         {prepareMessageAccents(content)}
       </ReactMarkdown>
     </div>
+    </ImageClickContext.Provider>
   );
 }

@@ -2998,6 +2998,9 @@ function setupContentSecurityPolicy(): void {
       "'self'",
       'data:',
       'blob:',
+      // Markdown messages may include external HTTPS images. This does not
+      // grant remote scripts, frames, media or fetch requests any new access.
+      'https:',
       ...serverCspSources().filter((source) => source.startsWith('http')),
       'https://*.basemaps.cartocdn.com',
       'https://server.arcgisonline.com',

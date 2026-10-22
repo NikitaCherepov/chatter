@@ -833,7 +833,7 @@ export function NewspaperReader({ issue, sourceIssueId, style, pageNumber, pageC
       transition={{ duration: .24, ease: [0.22, 1, 0.36, 1] }}
     >
       <header><div><span>{style === 'deusEx' ? 'PICUS // ANALYST' : style === 'massEffect' ? 'ANN // ASSIST' : t('tools.newspapers.reader.discussion')}</span><strong>{material?.title || issue.document.title}</strong></div><button type="button" className={s.readerChatClose} onClick={() => setChatOpen(false)}>{t('common.close')}</button></header>
-      <div className={s.readerChatMessages}>{chatMessages.map(message => <div key={message.id} data-role={message.role}>{message.role === 'assistant' ? <MarkdownRenderer content={message.text} className={s.readerMarkdown}/> : message.text}</div>)}{chatBusy && <div data-role="assistant" data-streaming={chatStreaming ? undefined : 'pending'}><MarkdownRenderer content={chatStreaming || '…'} className={s.readerMarkdown}/></div>}</div>
+      <div className={s.readerChatMessages}>{chatMessages.map(message => <div key={message.id} data-role={message.role}>{message.role === 'assistant' ? <MarkdownRenderer content={message.text} className={s.readerMarkdown} onImageClick={src => setViewerImage({ src })}/> : message.text}</div>)}{chatBusy && <div data-role="assistant" data-streaming={chatStreaming ? undefined : 'pending'}><MarkdownRenderer content={chatStreaming || '…'} className={s.readerMarkdown} onImageClick={src => setViewerImage({ src })}/></div>}</div>
       <div className={s.readerChatComposer}>
         <div className={s.readerChatMenuWrap} data-reader-chat-menu>
           <AnimatePresence initial={false}>{chatMenuOpen && <motion.div

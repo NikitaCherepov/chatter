@@ -28,6 +28,13 @@ assert.equal((render(`${gallery}\n\nOther text.\n\n${gallery}`).match(/data-mess
 assert.match(render(`> ${gallery.replaceAll('\n', '\n> ')}`), /<blockquote>\s*<div data-message-images="gallery"/);
 assert.ok(!render('Text ![One](https://example.com/1.jpg "layout:gallery")').includes('data-message-images='));
 assert.ok(!render('![Plain](https://example.com/a.jpg "An ordinary title")').includes('data-message-images='));
+const plainImage = render('![Plain](https://example.com/a.jpg "An ordinary title")');
+assert.match(plainImage, /<a href="https:\/\/example.com\/a.jpg"><img/);
+assert.match(plainImage, /title="An ordinary title"/);
+assert.equal((render('[![Plain](https://example.com/a.jpg)](https://example.com/article)').match(/<a /g) ?? []).length, 1, 'never nest links');
+assert.match(render('[**![Plain](https://example.com/a.jpg)**](https://example.com/article)'), /href="https:\/\/example.com\/article"/);
+assert.equal((render('[**![Plain](https://example.com/a.jpg)**](https://example.com/article)').match(/<a /g) ?? []).length, 1);
+assert.match(render('![Local](/api/v1/images/1)'), /<a href="\/api\/v1\/images\/1"><img/);
 assert.ok(!render('![Unknown](https://example.com/a.jpg "layout:carousel")').includes('data-message-images='));
 for (const url of ['javascript:alert(1)', 'data:image/svg+xml,test', 'file:///etc/passwd', '//evil.test/a', '/\\evil.test/a', 'https://good.test/\nbad', 'relative.jpg']) {
   assert.equal(isMessageImageUrl(url), false, url);

@@ -43,8 +43,9 @@ function galleryImages(node: Node): Node[] | null {
 /** Layout uses ordinary Markdown image titles, not HTML or executable model code. */
 export function remarkMessageImages() {
   return (tree: Node) => {
-    const visit = (parent: Node) => {
+    const visit = (parent: Node, insideLink = false) => {
       if (!parent.children) return;
+      const inLink = insideLink || parent.type === 'link' || parent.type === 'linkReference';
       const result: Node[] = [];
       for (let index = 0; index < parent.children.length; index++) {
         const node = parent.children[index];
@@ -77,7 +78,11 @@ export function remarkMessageImages() {
           result.push(block('div', parts, { 'data-message-images': 'side' }));
           continue;
         }
-        visit(node);
+        if (!inLink && node.type === 'image' && isMessageImageUrl(node.url ?? '')) {
+          result.push({ type: 'link', url: node.url, children: [node] });
+          continue;
+        }
+        visit(node, inLink);
         result.push(node);
       }
       parent.children = result;
