@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="450" viewBox="0 0 600 450" role="img" aria-labelledby="title desc">
+  <title id="title">Cat and piano</title>
+  <desc id="desc">A small geometric cat above a piano keyboard, made for Chatter's image layout demo.</desc>
+  <rect width="600" height="450" rx="24" fill="#263d4a"/>
+  <circle cx="300" cy="190" r="90" fill="#b2aa92"/>
+  <path d="M220 150L220 60L280 110M320 110L380 60L380 160" fill="#b2aa92"/>
+  <path d="M260 190H280M320 190H340M290 225L300 235L310 225" stroke="#263d4a" stroke-width="10" fill="none"/>
+  <rect x="60" y="330" width="480" height="70" fill="#dfcfad"/>
+  <path d="M100 330V400M160 330V400M220 330V400M280 330V400M340 330V400M400 330V400M460 330V400M520 330V400" stroke="#263d4a" stroke-width="5"/>
+</svg>

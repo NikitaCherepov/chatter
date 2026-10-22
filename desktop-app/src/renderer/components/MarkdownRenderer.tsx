@@ -5,6 +5,8 @@ import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import { remarkMessageAccents } from '../lib/remark-message-accents';
 import { prepareMessageAccents } from '../lib/message-accents';
+import { isMessageImageUrl, remarkMessageImages } from '../lib/remark-message-images';
+import { resolveImageUrl } from '../lib/api';
 import s from './MarkdownRenderer.module.scss';
 
 type MarkdownRendererProps = {
@@ -74,9 +76,15 @@ export function MarkdownRenderer({ content, className, highlightQuery = '' }: Ma
   return (
     <div className={className ? `${s.md} ${className}` : s.md}>
       <ReactMarkdown
-        remarkPlugins={[remarkGfm, remarkMessageAccents]}
+        remarkPlugins={[remarkGfm, remarkMessageAccents, remarkMessageImages]}
         rehypePlugins={[rehypeHighlight, [rehypeSearchHighlights, { query: highlightQuery }]]}
         components={{
+          img({ src, alt, title }) {
+            if (!src || !isMessageImageUrl(src)) return <span>{alt}</span>;
+            return <img src={resolveImageUrl(src)} alt={alt || ''}
+              title={title?.startsWith('layout:') ? undefined : title}
+              loading="lazy" decoding="async" referrerPolicy="no-referrer" />;
+          },
           // --- Code blocks ---
           code({ className, children, ...props }) {
             const match = /language-(\w+)/.exec(className || '');
@@ -123,11 +131,13 @@ export function MarkdownRenderer({ content, className, highlightQuery = '' }: Ma
           },
 
           // --- Links ---
-          a({ href, children }) {
+          a({ href, children, node }) {
             return (
               <a
                 className={s.link}
-                href={href}
+                href={href?.startsWith('/') && isMessageImageUrl(href)
+                  && node?.children.some(child => child.type === 'element' && child.tagName === 'img')
+                  ? resolveImageUrl(href) : href}
                 target="_blank"
                 rel="noopener noreferrer"
                 title={href}

@@ -45,4 +45,16 @@ for (let end = 0; end <= streaming.length; end++) assert.doesNotThrow(() => rend
 assert.equal(prepareMessageAccents('Answer: [An important **detail**](style:highlight-w'), 'Answer: An important **detail**');
 assert.ok(!render('[Hello](style:badge-suc').includes('style:'));
 assert.equal(prepareMessageAccents('[Hello](style:info)'), '[Hello](style:info)');
+for (const layout of ['side', 'gallery']) {
+  for (const title of [`"layout:${layout}"`, `'layout:${layout}'`, `(layout:${layout})`]) {
+    const source = `![A cat](https://example.com/cat.jpg ${title})`;
+    assert.equal(stripMessageAccents(source), '![A cat](https://example.com/cat.jpg)');
+    assert.equal(prepareMessageAccents(source), source);
+    assert.equal(stripMessageAccents(`\`${source}\``), `\`${source}\``);
+    assert.equal(stripMessageAccents(`\`\`\`md\n${source}\n\`\`\``), `\`\`\`md\n${source}\n\`\`\``);
+  }
+}
+assert.equal(stripMessageAccents('![Cat](https://example.com/a_(1).jpg "layout:side")'), '![Cat](https://example.com/a_(1).jpg)');
+assert.equal(stripMessageAccents('![A \\] cat](</uploads/cat.jpg> "layout:gallery")'), '![A \\] cat](</uploads/cat.jpg>)');
+assert.equal(stripMessageAccents('![Cat](https://example.com/a.jpg "Ordinary title")'), '![Cat](https://example.com/a.jpg "Ordinary title")');
 console.log('message accents: styles, Markdown, fallback, security and stream prefixes passed');

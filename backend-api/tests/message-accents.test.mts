@@ -21,4 +21,13 @@ assert.ok(markdownToTelegramRichHtml(code).includes('[example](style:info)'));
 assert.ok(buildSystemPrompt('Character', 'Persona', '', false, false).endsWith(MESSAGE_FORMATTING_HINT));
 assert.match(MESSAGE_FORMATTING_HINT, /sparingly/);
 assert.match(MESSAGE_FORMATTING_HINT, /No HTML, CSS, scripts/);
+for (const layout of ['side', 'gallery']) {
+  assert.ok(MESSAGE_FORMATTING_HINT.includes(`layout:${layout}`));
+  const image = `![A cat](https://example.com/cat.jpg "layout:${layout}")`;
+  assert.equal(formatForTelegram(image), '![A cat](https://example.com/cat.jpg)');
+  const html = markdownToTelegramRichHtml(image);
+  assert.ok(html.includes('href="https://example.com/cat.jpg"'));
+  assert.ok(html.includes('A cat'));
+  assert.ok(!html.includes('layout:'));
+}
 console.log('message accents: system instruction and Telegram conversions passed');

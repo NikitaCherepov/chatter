@@ -13,7 +13,7 @@ export function getMessageAccentStyle(url: string): MessageAccentStyle | null {
   return styles.has(style) ? style as MessageAccentStyle : null;
 }
 
-/** Plain Markdown fallback. Never change examples inside fenced/inline code. */
+/** Plain Markdown fallback, including image layout titles. Code stays literal. */
 export function stripMessageAccents(source: string): string {
   return transformMessageAccents(source, true);
 }
@@ -24,7 +24,7 @@ export function prepareMessageAccents(source: string): string {
 }
 
 function transformMessageAccents(source: string, stripComplete: boolean): string {
-  if (!source.includes('](style')) return source;
+  if (!source.includes('](style') && !(stripComplete && source.includes('layout:'))) return source;
   let result = '';
   let index = 0;
   while (index < source.length) {
@@ -57,6 +57,14 @@ function transformMessageAccents(source: string, stripComplete: boolean): string
       if (stop) {
         result += source.slice(index, stop);
         index = stop;
+        continue;
+      }
+    }
+    if (stripComplete && source.startsWith('![', index)) {
+      const image = /^(!\[(?:\\.|[^\]\\\r\n])*\]\((?:<[^<>\r\n]+>|[^\s\r\n]+?))[ \t]+(?:"layout:(?:side|gallery)"|'layout:(?:side|gallery)'|\(layout:(?:side|gallery)\))[ \t]*\)/.exec(source.slice(index));
+      if (image) {
+        result += `${image[1]})`;
+        index += image[0].length;
         continue;
       }
     }

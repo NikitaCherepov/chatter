@@ -18,7 +18,10 @@ export const MESSAGE_FORMATTING_HINT = `\n\n[RESPONSE FORMATTING]
 Use ordinary Markdown. When it genuinely improves clarity, you may style short text with [text](style:STYLE).
 Allowed STYLE values: muted, caption, underline, info, success, warning, error; highlight-info, highlight-success, highlight-warning, highlight-error; badge-info, badge-success, badge-warning, badge-error.
 Examples: [Important](style:warning), [Done](style:badge-success), [A brief footnote.](style:caption).
-Use accents sparingly, keep badges short, and include meaningful wording rather than relying on color alone. No HTML, CSS, scripts, or nested styled links. Do not decorate every reply or add labels explaining the formatting.`;
+Use accents sparingly, keep badges short, and include meaningful wording rather than relying on color alone. No HTML, CSS, scripts, or nested styled links. Do not decorate every reply or add labels explaining the formatting.
+For images, use only real image URLs from the user or tools (including /uploads/... assets); never invent URLs or generate/search for images just to decorate a reply.
+Image beside text: ![Short alt text](URL "layout:side") followed by **Title** and description in the same paragraph (a single newline is fine).
+Gallery: put ![Caption](URL "layout:gallery") images on consecutive lines in their own paragraph; each alt text becomes its caption. Only these two layouts are supported; no carousel. Normal Markdown images remain available.`;
 
 export const buildSystemPrompt = (
   prompt: string,

@@ -1184,3 +1184,33 @@ the independently packaged bot, backend and desktop builds self-contained.
 
 The model instruction is `MESSAGE_FORMATTING_HINT` in `system-prompt.ts`.
 No existing character prompts or stored messages are rewritten.
+
+## Message image layouts
+
+Use ordinary Markdown image titles to opt into a layout. No HTML, custom CSS,
+new dependencies or server-side media copies are needed.
+
+Picture beside prose (one paragraph; a single newline is allowed):
+
+```markdown
+![A cat at a piano](https://example.com/cat.jpg "layout:side")
+**Cat and piano** — Description beside the picture, with ordinary **Markdown**.
+```
+
+Gallery with captions, up to three responsive columns:
+
+```markdown
+![Brutalism](https://example.com/building.jpg "layout:gallery")
+![Art Nouveau](https://example.com/door.jpg "layout:gallery")
+![Cyberpunk](https://example.com/street.jpg "layout:gallery")
+```
+
+Adjacent gallery-only paragraphs are combined too. Side images may also have
+a blank line before their one description paragraph. Other paragraphs, code,
+tables and unmarked images retain their normal behaviour. A side layout wraps
+vertically in narrow containers. Gallery thumbnails are cropped to 4:3; clicking
+opens the original. Server-relative image assets use the existing authentication
+URL helper; external images do not receive server credentials and use no-referrer.
+Only HTTP(S) and root-relative image URLs are accepted. Alt text/captions are text,
+not HTML. Remote images are loaded lazily. Telegram retains standard image links
+and captions without desktop layouts. The database still stores original Markdown.
