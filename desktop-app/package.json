@@ -7,8 +7,9 @@
   "scripts": {
     "dev": "concurrently \"npm run dev:vite\" \"npm run dev:electron\"",
     "dev:vite": "vite",
-    "dev:electron": "node scripts/ensure-dev-cookie-encryption.cjs && tsc -p tsconfig.main.json && electron .",
-    "build": "tsc -p tsconfig.main.json && vite build",
+    "dev:electron": "npm run build:interactive && node scripts/ensure-dev-cookie-encryption.cjs && tsc -p tsconfig.main.json && electron .",
+    "build:interactive": "vite build --config vite.interactive.config.ts",
+    "build": "tsc -p tsconfig.main.json && vite build && npm run build:interactive",
     "build:win": "npm run build && electron-builder --win",
     "build:mac": "npm run build && electron-builder --mac",
     "build:linux": "npm run build && electron-builder --linux",

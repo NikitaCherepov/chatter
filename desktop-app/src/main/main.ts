@@ -1,4 +1,4 @@
-import { app, BrowserWindow, desktopCapturer, dialog, ipcMain, Menu, Notification, screen, session, shell, Tray, type OpenDialogOptions } from 'electron';
+import { app, BrowserWindow, desktopCapturer, dialog, ipcMain, Menu, Notification, protocol, screen, session, shell, Tray, type OpenDialogOptions } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import dotenv from 'dotenv';
 import * as path from 'path';
@@ -14,6 +14,9 @@ import { getTextMenuItems, type TextMenuAction } from './text-context-menu';
 import { isValidZoomLevel, readZoomLevel, saveZoomLevel } from './zoom-settings';
 import { ChatterBrowser, type BrowserControlPayload, type BrowserSearchPayload, type GoogleAiPayload } from './browser';
 import { BrowserPreviewSession, type BrowserPreviewPayload, type BrowserPreviewSource } from './browser-preview';
+import { InteractivePreviews } from './interactive-preview';
+import { INTERACTIVE_SCHEME } from './interactive-document';
+import type { InteractivePlacement } from './interactive-types';
 import {
   BackgroundActivityRegistry,
   type ActiveBackgroundActivityPreview,
@@ -21,6 +24,21 @@ import {
 } from './background-activity-registry';
 
 const execFileAsync = util.promisify(execFile);
+protocol.registerSchemesAsPrivileged([{ scheme: INTERACTIVE_SCHEME, privileges: { standard: true, secure: true } }]);
+const interactivePreviews = new InteractivePreviews();
+
+ipcMain.handle('interactive-preview:create', (event, input: unknown) => {
+  assertTrustedIpcSender(event);
+  return interactivePreviews.create(event.sender, input);
+});
+ipcMain.handle('interactive-preview:place', (event, placement: InteractivePlacement) => {
+  assertTrustedIpcSender(event);
+  interactivePreviews.place(event.sender, placement);
+});
+ipcMain.handle('interactive-preview:stop', (event, id: string) => {
+  assertTrustedIpcSender(event);
+  interactivePreviews.stop(event.sender, id);
+});
 
 function asarUnpackedPath(filePath: string) {
   return app.isPackaged ? filePath.replace('app.asar', 'app.asar.unpacked') : filePath;
@@ -3197,6 +3215,7 @@ if (!hasSingleInstanceLock) {
 
   app.on('before-quit', () => {
     isQuitting = true;
+    interactivePreviews.destroy();
     for (const job of activeVideoConversions.values()) {
       job.cancel();
     }

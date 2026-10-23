@@ -1,4 +1,12 @@
 {
+  "interactivePreview": {
+    "preview": "Preview", "code": "Code", "stop": "Stop", "restart": "Restart",
+    "isolated": "Isolated preview · no network or app access",
+    "waiting": "Waiting for the code block to finish…", "loading": "Starting preview…",
+    "stopped": "Preview stopped. Restart to run it again.",
+    "desktopOnly": "Interactive previews require the updated desktop app.",
+    "error": "Could not run preview. Check the code or restart; external packages and network access are unavailable."
+  },
   "messageImages": {
     "loadFailed": "Could not load this image"
   },

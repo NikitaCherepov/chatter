@@ -1260,3 +1260,51 @@ layout delimiters while retaining Markdown content; code samples stay literal.
 Original messages are stored unchanged. No new dependencies or cross-project
 imports are introduced: grammar/fallback uses the existing synced accents module,
 while the DOM layout transformer and CSS remain desktop-only.
+
+## Isolated React/HTML previews (experimental)
+
+A completed fenced `interactive` block automatically displays a React UI.
+`jsx`, `tsx` and `html` fences remain code until **Preview** is pressed. A manual
+approval applies only to that exact source. **Code** and **Copy** remain available;
+switching to code hides the preview without resetting state. **Stop** destroys it;
+**Restart** starts a fresh instance. Incomplete fences never run.
+
+````markdown
+```interactive
+export default function Counter() {
+  const [count, setCount] = React.useState(0);
+  return <button onClick={() => setCount(count + 1)}>Count: {count}</button>;
+}
+```
+````
+
+Use standard JSX/TSX, native HTML elements, inline styles and SVG. React is
+provided to the component; imports from `react` work too. Export a default
+component (a named `App` is also accepted). External packages, CDN resources,
+network assets and app APIs are unavailable. HTML previews execute self-contained
+HTML/CSS/JS. Existing Markdown `grid/flex/box` directives are unchanged and are
+not React components. Telegram keeps fenced code as escaped code, without execution.
+
+Implementation: `MarkdownCode` + `remark-interactive-code` feed `InteractivePreviews`.
+Each preview is a separate sandboxed Electron `WebContentsView` in an in-memory,
+offline session, with no preload or Node integration. A dedicated protocol serves
+only its in-memory document; CSP sandbox uses an opaque origin, denies network,
+frames, workers, media, forms and objects. Permissions, downloads, navigation and
+new windows are denied. No messages/actions from generated code are accepted.
+The trusted renderer can only create, position and destroy previews through
+sender-validated IPC. The main chat CSP is not relaxed. Compilation/evaluation
+occurs exclusively in the preview renderer, never in the chat/main process.
+
+The compiler and React are bundled locally by `npm run build:interactive`, included
+in desktop build/dev scripts and packaged under `dist/interactive`. No backend,
+Docker or runtime dependency installs are involved. Source is limited to 100,000
+characters; at most four previews are retained (hidden ones can be stopped to
+make room). A main-process watchdog terminates blocked preview renderers.
+State is ephemeral, not saved or sent to the model. This is defense in depth,
+not a claim that arbitrary code is risk-free: CPU/memory abuse and engine
+vulnerabilities remain reasons to keep Electron current and the feature experimental.
+
+Checks: `pnpm exec tsx desktop-app/tests/interactive-code.test.mts` from repository
+root; after building runtime/main, run `electron tests/interactive-preview.electron.cjs`
+from `desktop-app` with `ELECTRON_RUN_AS_NODE` unset. That test uses a hidden,
+account-free window and checks execution, offline isolation and hang recovery.

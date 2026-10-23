@@ -1,8 +1,13 @@
+import type { InteractiveInput, InteractivePlacement, InteractiveStatus } from '../../main/interactive-types';
 export {};
 
 declare global {
   interface Window {
     electronAPI: {
+      interactiveCreate: (input: InteractiveInput) => Promise<string>;
+      interactivePlace: (placement: InteractivePlacement) => Promise<void>;
+      interactiveStop: (id: string) => Promise<void>;
+      onInteractiveStatus: (callback: (status: InteractiveStatus) => void) => () => void;
       onTextContextMenu: (callback: (menu: { x: number; y: number; items: { action: 'undo' | 'redo' | 'cut' | 'copy' | 'paste' | 'selectAll'; enabled: boolean; separator?: boolean }[] }) => void) => () => void;
       textContextMenuAction: (action: 'undo' | 'redo' | 'cut' | 'copy' | 'paste' | 'selectAll') => Promise<void>;
       connectChatGpt: (input: { apiBase: string; accessToken: string; serverKey: string; connectionId?: number }) => Promise<{ id: number; name: string; email: string }>;

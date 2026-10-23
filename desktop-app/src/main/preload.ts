@@ -1,7 +1,16 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { TextMenuAction, TextMenuItem } from './text-context-menu';
+import type { InteractiveInput, InteractivePlacement, InteractiveStatus } from './interactive-types';
 
 contextBridge.exposeInMainWorld('electronAPI', {
+  interactiveCreate: (input: InteractiveInput) => ipcRenderer.invoke('interactive-preview:create', input),
+  interactivePlace: (placement: InteractivePlacement) => ipcRenderer.invoke('interactive-preview:place', placement),
+  interactiveStop: (id: string) => ipcRenderer.invoke('interactive-preview:stop', id),
+  onInteractiveStatus: (callback: (status: InteractiveStatus) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, status: InteractiveStatus) => callback(status);
+    ipcRenderer.on('interactive-preview:status', listener);
+    return () => ipcRenderer.removeListener('interactive-preview:status', listener);
+  },
   onTextContextMenu: (callback: (menu: { x: number; y: number; items: TextMenuItem[] }) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, menu: { x: number; y: number; items: TextMenuItem[] }) => callback(menu);
     ipcRenderer.on('text-menu:open', listener);

@@ -39,3 +39,8 @@ for (const layout of ['side', 'gallery']) {
   assert.ok(!html.includes('layout:'));
 }
 console.log('message accents: system instruction and Telegram conversions passed');
+const interactive = '```interactive\nexport default function App(){return <button>Click</button>}\n```';
+const interactiveTelegram = markdownToTelegramRichHtml(interactive);
+assert.ok(interactiveTelegram.includes('&lt;button&gt;Click&lt;/button&gt;'));
+assert.ok(!interactiveTelegram.includes('<button>'));
+assert.ok(MESSAGE_FORMATTING_HINT.includes('fenced code block with language interactive'));

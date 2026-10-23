@@ -1,0 +1,30 @@
+import assert from 'node:assert/strict';
+import React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import ReactMarkdown from 'react-markdown';
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
+const { remarkInteractiveCode, isClosedPreviewFence } = require('../src/renderer/lib/remark-interactive-code.ts');
+const { INTERACTIVE_CSP, interactiveDocument, validateInteractiveInput } = require('../src/main/interactive-document.ts');
+const render = (children: string) => renderToStaticMarkup(React.createElement(ReactMarkdown, { remarkPlugins: [remarkInteractiveCode], children }));
+const source = 'export default function App(){return <button>Hello</button>}';
+for (const language of ['interactive','jsx','tsx','html']) {
+  const fence = '```' + language + '\n' + source + '\n```';
+  assert.ok(isClosedPreviewFence(fence));
+  assert.match(render(fence), /data-preview-closed="yes"/);
+  assert.match(render(fence.slice(0,-1)), /data-preview-closed="no"/);
+  for (let end=0;end<fence.length;end++) assert.doesNotThrow(()=>render(fence.slice(0,end)));
+}
+assert.ok(!isClosedPreviewFence('```interactive\nconst s="```";'));
+assert.ok(!isClosedPreviewFence('````interactive\ncode\n```'));
+assert.ok(isClosedPreviewFence('~~~interactive\ncode\n~~~'));
+assert.ok(!render('`interactive`').includes('data-preview-'));
+assert.ok(!render('```javascript\nalert(1)\n```').includes('data-preview-'));
+const input = { language:'interactive',source:'</script><script>bad()</script>',dark:true,errorLabel:'Error' };
+const doc = interactiveDocument(input,'/* trusted bundle */');
+assert.ok(doc.includes('\\u003c/script>'));
+assert.ok(!doc.includes('<script>bad()'));
+assert.ok(INTERACTIVE_CSP.includes("connect-src 'none'") && INTERACTIVE_CSP.includes("frame-src 'none'"));
+assert.throws(()=>validateInteractiveInput({...input,source:'x'.repeat(100001)}));
+assert.throws(()=>validateInteractiveInput({...input,language:'javascript'}));
+console.log('interactive code: completed fences only, literal code, bounded inputs and safe payload encoding passed');

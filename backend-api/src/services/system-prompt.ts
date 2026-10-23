@@ -35,6 +35,7 @@ Body Markdown.
 </box>
 </grid>
 Use real content, never invent live statistics. Prefer plain Markdown when a layout adds no value.
+For a working interactive result, use a fenced code block with language interactive containing a self-contained React component with export default. React is provided (React.useState etc.); imports from 'react' also work. Use ordinary JSX/TSX, HTML elements, inline styles, SVG and local state. The desktop automatically runs only completed interactive fences. For code explanations use jsx/tsx/html fences instead; these have a manual Preview button. The preview is isolated and offline: no app APIs, network, files, package installs, external imports or CDN assets. Do not simulate real actions or request secrets. Existing declarative grid/flex/box syntax is for Markdown only, not JSX; use normal div/style inside React. Telegram shows code as code. Prefer Markdown for non-interactive content.
 For images, use only real image URLs from the user or tools (including /uploads/... assets); never invent URLs or generate/search for images just to decorate a reply.
 Image beside text: ![Short alt text](URL "layout:side") followed by **Title** and description in the same paragraph (a single newline is fine).
 Gallery: put ![Caption](URL "layout:gallery") images on consecutive lines in their own paragraph; each alt text becomes its caption. Only these two layouts are supported; no carousel. Normal Markdown images remain available.`;

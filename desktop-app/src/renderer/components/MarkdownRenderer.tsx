@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import ReactMarkdown, { type ExtraProps } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -7,6 +7,8 @@ import { remarkMessageAccents } from '../lib/remark-message-accents';
 import { prepareMessageAccents } from '../lib/message-accents';
 import { isMessageImageUrl, remarkMessageImages } from '../lib/remark-message-images';
 import { remarkMessageLayouts } from '../lib/remark-message-layouts';
+import { remarkInteractiveCode } from '../lib/remark-interactive-code';
+import { MarkdownCode } from './MarkdownCode';
 import { resolveImageUrl } from '../lib/api';
 import s from './MarkdownRenderer.module.scss';
 
@@ -109,62 +111,16 @@ const rehypeSearchHighlights = (options: { query?: string } = {}) => (tree: Hast
 };
 
 export function MarkdownRenderer({ content, className, highlightQuery = '', onImageClick }: MarkdownRendererProps) {
-  const { t } = useTranslation();
-  const codeRefs = useRef<Map<string, HTMLElement>>(new Map());
-
-  const handleCopy = useCallback((codeEl: HTMLElement | undefined) => {
-    if (!codeEl) return;
-    const text = codeEl.textContent || '';
-    navigator.clipboard.writeText(text).catch(() => {});
-  }, []);
-
   return (
     <ImageClickContext.Provider value={onImageClick}>
     <div className={className ? `${s.md} ${className}` : s.md}>
       <ReactMarkdown
-        remarkPlugins={[remarkGfm, remarkMessageLayouts, remarkMessageAccents, remarkMessageImages]}
-        rehypePlugins={[rehypeHighlight, [rehypeSearchHighlights, { query: highlightQuery }]]}
-        components={{
+        remarkPlugins={[remarkGfm, remarkMessageLayouts, remarkMessageAccents, remarkMessageImages, remarkInteractiveCode]}
+        rehypePlugins={[[rehypeHighlight, { ignoreMissing: true }], [rehypeSearchHighlights, { query: highlightQuery }]]}
+        components={useMemo(() => ({
           img: MarkdownImage,
           // --- Code blocks ---
-          code({ className, children, ...props }) {
-            const match = /language-(\w+)/.exec(className || '');
-            const isInline = !match;
-
-            if (isInline) {
-              return (
-                <code className={s.inlineCode} {...props}>
-                  {children}
-                </code>
-              );
-            }
-
-            const lang = match[1];
-            const codeId = `code-${lang}-${String(children).slice(0, 20)}`;
-
-            return (
-              <div className={s.codeBlockWrapper}>
-                <div className={s.codeBlockHeader}>
-                  <span className={s.codeLang}>{lang}</span>
-                  <button
-                    className={s.copyBtn}
-                    onClick={() => handleCopy(codeRefs.current.get(codeId))}
-                  >
-                    {t('common.copy')}
-                  </button>
-                </div>
-                <code
-                  ref={(el) => {
-                    if (el) codeRefs.current.set(codeId, el);
-                  }}
-                  className={className}
-                  {...props}
-                >
-                  {children}
-                </code>
-              </div>
-            );
-          },
+          code: MarkdownCode,
 
           // --- Pre tag: render children directly (code block wrapper is handled above) ---
           pre({ children }) {
@@ -231,7 +187,7 @@ export function MarkdownRenderer({ content, className, highlightQuery = '', onIm
           mark({ children }) {
             return <mark className={s.searchHighlight}>{children}</mark>;
           },
-        }}
+        }), [])}
       >
         {prepareMessageAccents(content)}
       </ReactMarkdown>
