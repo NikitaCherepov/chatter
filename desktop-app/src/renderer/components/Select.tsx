@@ -195,7 +195,7 @@ export function Select({
       </button>
 
       {isOpen && (
-        <div className={s.dropdown}>
+        <div className={s.dropdown} data-native-overlay>
           {searchable && (
             <div className={s.searchWrap}>
               <input

@@ -1300,7 +1300,21 @@ in desktop build/dev scripts and packaged under `dist/interactive`. No backend,
 Docker or runtime dependency installs are involved. Source is limited to 100,000
 characters; at most four previews are retained (hidden ones can be stopped to
 make room). A main-process watchdog terminates blocked preview renderers.
-State is ephemeral, not saved or sent to the model. This is defense in depth,
+State is ephemeral, not saved or sent to the model.
+
+Inline preview height is controlled only by CSS: 75% of the available window
+height, bounded between 160px and 800px. No content-height polling or resize
+feedback loop is used. The native viewport owns genuine overflow; its wrapper
+does not add a second scrollbar. The document has no implicit body padding, so
+an authored `100vh` layout is not enlarged by extra wrapper spacing. **Expand**
+repositions the same running view in a modal; returning to chat preserves state.
+Native views cannot participate in DOM CSS z-index. Overlapping foreground
+select menus, popovers, context menus and tooltips temporarily hide the native
+surface (not the running UI); closing the overlay reveals the same instance.
+Mark custom foreground panels with `data-native-overlay`; standard menu/listbox/
+tooltip roles are recognized too. Non-overlapping panels do not hide previews.
+
+This is defense in depth,
 not a claim that arbitrary code is risk-free: CPU/memory abuse and engine
 vulnerabilities remain reasons to keep Electron current and the feature experimental.
 

@@ -9,6 +9,7 @@ type Entry = {
   id: string; host: BrowserWindow; owner: WebContents; clip: View; view: WebContentsView;
   visible: boolean; timer?: ReturnType<typeof setInterval>; deadline?: ReturnType<typeof setTimeout>;
   isolated: Session;
+  expanded?: boolean;
   cleanup: () => void;
 };
 
@@ -67,6 +68,12 @@ export class InteractivePreviews {
     contents.on('will-frame-navigate', event => event.preventDefault());
     contents.on('will-redirect', event => event.preventDefault());
     contents.on('will-attach-webview', event => event.preventDefault());
+    contents.on('before-input-event', (event, input) => {
+      if (entry.expanded && input.type === 'keyDown' && input.key === 'Escape') {
+        event.preventDefault();
+        this.emit(entry, 'ready', { escape: true });
+      }
+    });
     contents.on('unresponsive', () => this.remove(id, 'failed', true));
     contents.on('render-process-gone', () => this.remove(id, 'failed'));
     contents.once('did-finish-load', () => {
@@ -96,6 +103,7 @@ export class InteractivePreviews {
     const factor = owner.getZoomFactor();
     const [hostWidth, hostHeight] = entry.host.getContentSize();
     const b = payload.bounds, c = payload.clip;
+    entry.expanded = payload.expanded === true;
     const x = Math.max(0, Math.round(c.x * factor)), y = Math.max(0, Math.round(c.y * factor));
     const width = Math.max(0, Math.min(Math.round(c.width * factor), hostWidth - x));
     const height = Math.max(0, Math.min(Math.round(c.height * factor), hostHeight - y));
@@ -105,7 +113,7 @@ export class InteractivePreviews {
     entry.clip.setBounds({ x, y, width, height });
     entry.view.setBounds({ x: Math.round(b.x * factor) - x, y: Math.round(b.y * factor) - y,
       width: Math.max(1, Math.min(5000, Math.round(b.width * factor))),
-      height: Math.max(1, Math.min(1600, Math.round(b.height * factor))) });
+      height: Math.max(1, Math.min(8192, Math.round(b.height * factor))) });
     entry.view.webContents.setZoomFactor(factor);
   }
 
@@ -115,8 +123,8 @@ export class InteractivePreviews {
 
   destroy(): void { for (const id of [...this.entries.keys()]) this.remove(id); }
 
-  private emit(entry: Entry, phase: InteractiveStatus['phase']): void {
-    if (!entry.owner.isDestroyed()) entry.owner.send('interactive-preview:status', { id: entry.id, phase } satisfies InteractiveStatus);
+  private emit(entry: Entry, phase: InteractiveStatus['phase'], detail: Pick<InteractiveStatus, 'escape'> = {}): void {
+    if (!entry.owner.isDestroyed()) entry.owner.send('interactive-preview:status', { id: entry.id, phase, ...detail } satisfies InteractiveStatus);
   }
 
   private remove(id: string, phase?: InteractiveStatus['phase'], crash = false): void {

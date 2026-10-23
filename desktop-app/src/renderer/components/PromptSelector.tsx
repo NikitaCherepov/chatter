@@ -104,7 +104,7 @@ export function PromptSelector({ options, value, onChange, disabled = false, pla
       </button>
 
       {isOpen && (
-        <div className={s.dropdown}>
+        <div className={s.dropdown} data-native-overlay>
           <div className={s.searchWrap}>
             <input
               ref={searchRef}

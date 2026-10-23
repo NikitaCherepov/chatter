@@ -58,6 +58,7 @@ export const Tooltip: React.FC<TooltipProps> = ({
         </RadixTooltip.Trigger>
         <RadixTooltip.Portal>
           <RadixTooltip.Content
+            data-native-overlay
             className={`${s.content} ${arrowAtPointer ? s.pointerArrow : ''}`}
             ref={setContentRef}
             side={side}

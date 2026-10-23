@@ -2,6 +2,7 @@ import type { InteractiveInput } from './interactive-types';
 
 export const INTERACTIVE_SCHEME = 'chatter-interactive';
 export const MAX_INTERACTIVE_SOURCE = 100_000;
+
 export const INTERACTIVE_CSP = [
   "sandbox allow-scripts",
   "default-src 'none'", "script-src 'unsafe-inline' 'unsafe-eval'", "style-src 'unsafe-inline'",
@@ -44,7 +45,7 @@ export function validateInteractiveInput(value: unknown): InteractiveInput {
 export function interactiveDocument(input: InteractiveInput, runtime: string): string {
   const background = input.dark ? '#151f2c' : '#ffffff';
   const foreground = input.dark ? '#e4edf9' : '#0f1d30';
-  const head = `<!doctype html><html><head><meta charset="utf-8"><meta name="referrer" content="no-referrer"><script>${lockdown}</script><style>:root{color-scheme:${input.dark ? 'dark' : 'light'}}body{margin:0;padding:16px;box-sizing:border-box;background:${background};color:${foreground};font:14px/1.5 system-ui,sans-serif;overflow-wrap:anywhere}*{box-sizing:border-box}button,input,select,textarea{font:inherit}img,svg,canvas{max-width:100%}pre{white-space:pre-wrap}</style></head><body>`;
+  const head = `<!doctype html><html><head><meta charset="utf-8"><meta name="referrer" content="no-referrer"><script>${lockdown}</script><style>:root{color-scheme:${input.dark ? 'dark' : 'light'}}html{height:100%;margin:0;padding:0;overflow:auto}body{margin:0;padding:0;min-height:100%;display:flow-root;box-sizing:border-box;background:${background};color:${foreground};font:14px/1.5 system-ui,sans-serif;overflow-wrap:anywhere}*{box-sizing:border-box}button,input,select,textarea{font:inherit}img,svg,canvas{max-width:100%}pre{white-space:pre-wrap}</style></head><body>`;
   if (input.language === 'html') return `${head}${input.source}</body></html>`;
   const payload = JSON.stringify({ source: input.source, errorLabel: input.errorLabel })
     .replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');

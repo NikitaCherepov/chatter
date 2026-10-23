@@ -1,5 +1,6 @@
 {
   "interactivePreview": {
+    "expand": "Expand", "collapse": "Back to chat", "title": "Interactive preview",
     "preview": "Preview", "code": "Code", "stop": "Stop", "restart": "Restart",
     "isolated": "Isolated preview · no network or app access",
     "waiting": "Waiting for the code block to finish…", "loading": "Starting preview…",

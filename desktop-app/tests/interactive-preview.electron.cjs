@@ -42,8 +42,32 @@ app.whenReady().then(async () => {
   manager.place(host.webContents, { id: preview.id, visible: true, bounds: { x: 10, y: 50, width: 400, height: 360 }, clip: { x: 10, y: 120, width: 400, height: 150 } });
   assert.deepEqual(host.contentView.children[0].getBounds(), { x: 10, y: 120, width: 400, height: 150 });
   assert.equal(host.contentView.children[0].children[0].getBounds().y, -70);
+  const processId = preview.contents.getOSProcessId();
+  manager.place(host.webContents, { id: preview.id, visible: true, expanded: true,
+    bounds: { x: 20, y: 70, width: 900, height: 600 }, clip: { x: 20, y: 70, width: 900, height: 600 } });
+  assert.equal(preview.contents.getOSProcessId(), processId);
+  assert.equal(await preview.contents.executeJavaScript('document.querySelector("button").textContent'), 'Count: 1');
+  manager.place(host.webContents, { id: preview.id, visible: true, expanded: false,
+    bounds: { x: 10, y: 50, width: 400, height: 360 }, clip: { x: 10, y: 50, width: 400, height: 360 } });
+  assert.equal(await preview.contents.executeJavaScript('document.querySelector("button").textContent'), 'Count: 1');
   assert.equal(await preview.contents.executeJavaScript('(()=>{try{localStorage.setItem("private-test","one");return false}catch{return true}})()'), true);
   assert.equal(await preview.contents.executeJavaScript(`(()=>{const frame=document.createElement('iframe');document.body.append(frame);try{return typeof frame.contentWindow.RTCPeerConnection === 'undefined'}catch{return true}})()`), true, 'child realms must not recover blocked APIs');
+  manager.stop(host.webContents, preview.id);
+  preview = await create('html', '<div style="min-height:100vh;padding:24px;display:flex;align-items:center"><button>Fits</button></div>');
+  for (const zoom of [1, 1.2]) {
+    host.webContents.setZoomFactor(zoom);
+    for (const height of [200, 360, 640]) {
+      manager.place(host.webContents, { id: preview.id, visible: true,
+        bounds: { x: 10, y: 50, width: 400, height }, clip: { x: 10, y: 50, width: 400, height } });
+      await sleep(80);
+      const metrics = await preview.contents.executeJavaScript('({scroll:document.documentElement.scrollHeight,client:document.documentElement.clientHeight,gutter:innerWidth-document.documentElement.clientWidth})');
+      assert.equal(metrics.scroll, metrics.client, JSON.stringify({zoom,height,metrics}));
+      assert.equal(metrics.gutter, 0, 'a fitting 100vh layout must not reserve a scrollbar gutter');
+    }
+  }
+  host.webContents.setZoomFactor(1);
+  await preview.contents.executeJavaScript('document.querySelector("div").style.height="1200px"');
+  assert.equal(await preview.contents.executeJavaScript('document.documentElement.scrollHeight>document.documentElement.clientHeight'), true, 'genuine overflow remains scrollable');
   manager.stop(host.webContents, preview.id);
   preview = await create('tsx', 'import {useState} from "react"; export default function App(){const [n]=useState<number>(7);return <p>TSX {n}</p>}');
   assert.equal(await preview.contents.executeJavaScript('document.querySelector("p")?.textContent'), 'TSX 7');

@@ -204,7 +204,7 @@ export function MemoryPopover({ chatId, compactTrigger = false }: { chatId: numb
         {!compactTrigger && <span>{t('chat.memory.trigger')}</span>}
       </button>
       {open && (
-        <div className={`${s.popover} ${showChatMemory ? '' : s.popoverCompact}`} style={popoverStyle}>
+        <div className={`${s.popover} ${showChatMemory ? '' : s.popoverCompact}`} style={popoverStyle} data-native-overlay>
           <div className={s.header}><strong>{t('chat.memory.headerTitle')}</strong><span>{loading ? t('common.loading') : t('chat.memory.headerHint')}</span></div>
           <MemorySetupNotice />
           {settings && (
