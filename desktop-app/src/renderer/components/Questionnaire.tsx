@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useId, useRef, useState } from 'react';
+import React, { createContext, useContext, useEffect, useId, useRef, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
 import { extractQuestionnaires, formatQuestionnaireAnswer, parseQuestionnaireSource, questionnaireSchema, validateQuestionnaireAnswers, type Questionnaire, type QuestionnaireAnswer, type QuestionnaireAnswers, type QuestionnaireResponse, type QuestionnaireSubmission } from '../lib/message-questionnaires';
@@ -53,6 +53,7 @@ function QuestionnaireForm({ form, schema, storageKey, context, submitted }: {
   const [transitioning, setTransitioning] = useState(false);
   const reduceMotion = useReducedMotion();
   const [step, setStep] = useState(() => {
+    if (submitted) return form.questions.length;
     try {
       const saved = JSON.parse(localStorage.getItem(storageKey) || 'null');
       return saved?.schema === schema && Number.isInteger(saved.step) ? Math.max(0, Math.min(form.questions.length - 1, saved.step)) : 0;
@@ -60,8 +61,20 @@ function QuestionnaireForm({ form, schema, storageKey, context, submitted }: {
   });
   const legendRef = useRef<HTMLLegendElement>(null);
   const focusAfterTransition = useRef(false);
+  const isSubmitted = !!submitted;
+  const wasSubmitted = useRef(isSubmitted);
+  useEffect(() => {
+    if (isSubmitted !== wasSubmitted.current) {
+      wasSubmitted.current = isSubmitted;
+      focusAfterTransition.current = true;
+      setTransitioning(true);
+      setStep(isSubmitted ? form.questions.length : form.questions.length - 1);
+    }
+  }, [isSubmitted, form.questions.length]);
+  const completed = isSubmitted && step === form.questions.length;
+  const progress = Math.min(step + 1, form.questions.length);
   const values = submitted?.answers ?? answers;
-  const q = form.questions[step];
+  const q = form.questions[Math.min(step, form.questions.length - 1)];
   const currentValue = values[q.id];
   const other = currentValue && typeof currentValue === 'object' && !Array.isArray(currentValue) ? currentValue : null;
   const selected = other?.selected ?? (Array.isArray(currentValue) ? currentValue : []);
@@ -111,10 +124,10 @@ function QuestionnaireForm({ form, schema, storageKey, context, submitted }: {
       setError(t(code === 'questionnaire_stale' ? 'questionnaire.stale' : code === 'questionnaire_already_submitted' ? 'questionnaire.alreadySubmitted' : 'questionnaire.sendFailed'));
     } finally { setBusy(false); }
   }}>
-    <div className={s.header}><h3>{form.title}</h3><span className={s.counter} role="status" aria-label={t('questionnaire.progress', { current: step + 1, total: form.questions.length })}>{step + 1}/{form.questions.length}</span></div>
+    <div className={s.header}><h3>{form.title}</h3><span className={s.counter} role="status" aria-label={t('questionnaire.progress', { current: progress, total: form.questions.length })}>{progress}/{form.questions.length}</span></div>
     <fieldset className={s.body} disabled={controlsDisabled}>
       <AnimatePresence initial={false} mode="wait">
-      <motion.fieldset key={q.id} className={s.question}
+      <motion.fieldset key={completed ? 'completion' : `question:${q.id}`} className={s.question}
         variants={{ hidden: { opacity: 0, y: reduceMotion ? 0 : 8 }, visible: { opacity: 1, y: 0 }, exit: { opacity: 0, y: reduceMotion ? 0 : -6 } }}
         initial="hidden" animate="visible" exit="exit" transition={{ duration: reduceMotion ? 0 : .14, ease: 'easeOut' }}
         onAnimationComplete={definition => {
@@ -125,7 +138,11 @@ function QuestionnaireForm({ form, schema, storageKey, context, submitted }: {
             requestAnimationFrame(() => legendRef.current?.focus());
           }
         }}>
-        <legend ref={legendRef} tabIndex={-1}>{step + 1}. {q.label}{q.required ? ' *' : ''}</legend>
+        <legend ref={legendRef} tabIndex={-1}>{completed ? t('questionnaire.completedTitle') : `${step + 1}. ${q.label}${q.required ? ' *' : ''}`}</legend>
+        {completed ? <div className={s.completion} role="status">
+          <svg aria-hidden="true" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="12" cy="12" r="10" /><path d="m7 12 3 3 7-7" /></svg>
+          <p>{t('questionnaire.completedDescription')}</p>
+        </div> : <>
         <div className={s.questionContent}>
         {q.image && <div className={s.questionImage}><MessageImage src={q.image.url} alt={q.image.alt} /></div>}
         <div className={s.questionFields}>
@@ -149,12 +166,13 @@ function QuestionnaireForm({ form, schema, storageKey, context, submitted }: {
           : <input type="text" aria-label={q.label} maxLength={1000} required={q.required} value={typeof values[q.id] === 'string' ? values[q.id] as string : ''} onChange={e => update(q.id, e.target.value)} />}
         </div>
         </div>
+        </>}
       </motion.fieldset>
       </AnimatePresence>
     </fieldset>
     <div className={s.navigation}>
       <button type="button" disabled={step === 0 || busy || transitioning || context.disabled} onClick={() => goTo(step - 1)}>{t('questionnaire.back')}</button>
-      {step < form.questions.length - 1
+      {step < form.questions.length - 1 + (isSubmitted ? 1 : 0)
         ? <button key="next" type="button" disabled={busy || transitioning || context.disabled} onClick={event => { event.preventDefault(); if (validateCurrent()) goTo(step + 1); }}>{t('questionnaire.next')}</button>
         : <button key="submit" type="submit" disabled={busy || transitioning || !!submitted || context.disabled}>{t(submitted ? 'questionnaire.submitted' : busy ? 'questionnaire.sending' : 'questionnaire.submit')}</button>}
     </div>

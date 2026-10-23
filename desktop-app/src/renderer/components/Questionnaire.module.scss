@@ -38,6 +38,9 @@
 }
 
 .questionContent { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
+.completion { min-height: 180px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; text-align: center; }
+.completion svg { color: var(--color-success, #22c55e); flex-shrink: 0; }
+.completion p { margin: 0; max-width: 420px; color: var(--text-muted); }
 .questionFields { flex: 1 1 220px; min-width: 0; }
 .questionImage {
   flex: 0 1 auto;
