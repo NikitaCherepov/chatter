@@ -4,6 +4,7 @@ import { getChatMessages, getUserById, resolvePromptForChat } from './chats.js';
 import { canAccessChat, getPersona, getChatMemorySettings, normalizeUserInstructions, resolvePersonaForChat, updatePersona, updateChatMemorySettings } from './memory-foundation.js';
 import { parseQuestionnaireSource, validateQuestionnaireAnswers, questionnaireAnswerText, type Questionnaire, type QuestionnaireAnswers } from './message-questionnaires.js';
 import { runPreferenceAgent, type PreferenceAgentOptions } from './player-instructions-agent.js';
+import { resolvePromptForUser } from './prompts.js';
 
 export type InstructionTarget = { scope: 'persona' | 'chat'; target_id: number };
 export type PlayerSurvey = InstructionTarget & { id: string; questionnaire: Questionnaire; answers: QuestionnaireAnswers | null; draft: string | null; applied_text: string | null; created_at: number; include_history: boolean; personalize: boolean; model_id: string | null };
@@ -58,7 +59,7 @@ export function listPlayerSurveys(userId: number, target: InstructionTarget): Pl
   return (db.prepare('SELECT * FROM player_instruction_surveys WHERE user_id = ? AND scope = ? AND target_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 50').all(userId, target.scope, target.target_id) as SurveyRow[]).map(dto);
 }
 
-export function surveyInput(userId: number, target: InstructionTarget, options: { chat_id?: number; include_history?: boolean; current_text?: string; brief?: string }) {
+export function surveyInput(userId: number, target: InstructionTarget, options: { chat_id?: number; include_history?: boolean; include_prompt?: boolean; current_text?: string; brief?: string }) {
   const current = getPlayerInstructions(userId, target);
   const user = getUserById(userId);
   if (!user) throw new Error('user_not_found');
@@ -67,7 +68,9 @@ export function surveyInput(userId: number, target: InstructionTarget, options: 
   if (chatId !== null && (!validId(chatId) || !canAccessChat(userId, chatId))) throw new Error('chat_not_found');
   if (options.include_history && !chatId) throw new Error('survey_chat_required');
   const persona = target.scope === 'persona' ? getPersona(userId, target.target_id)! : resolvePersonaForChat(userId, chatId).persona;
-  const prompt = chatId === null ? null : resolvePromptForChat(user, chatId);
+  if (options.include_prompt !== undefined && typeof options.include_prompt !== 'boolean') throw new Error('bad_survey_request');
+  const includePrompt = options.include_prompt ?? target.scope === 'chat';
+  const prompt = !includePrompt ? null : chatId === null ? resolvePromptForUser(user) : resolvePromptForChat(user, chatId);
   const history: Array<{ role: string; content: string }> = [];
   // No reasoning, attachments, core memory, tools, or other chats. Newest readable text only.
   if (options.include_history && chatId) {

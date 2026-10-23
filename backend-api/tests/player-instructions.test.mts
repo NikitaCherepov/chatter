@@ -47,6 +47,18 @@ try {
   assert.equal(generalInput.chatId, null, 'general settings must not inherit the active chat');
   assert.equal('character' in generalInput.input, false, 'general settings must not inherit a chat character');
   assert.deepEqual(generalInput.input.history, []);
+  const { createUserPrompt, toUserPromptSelectedId } = await import('../src/services/prompts.js');
+  const globalId = toUserPromptSelectedId(Number(createUserPrompt(81,'Global assistant','Global','Global selected prompt').lastInsertRowid));
+  const localId = toUserPromptSelectedId(Number(createUserPrompt(81,'Chat assistant','Local','Chat-specific prompt').lastInsertRowid));
+  db.prepare('UPDATE users SET selected_prompt_id=? WHERE id=81').run(globalId);
+  chats.updateChatPromptSettings(81,chatId,localId);
+  const generalWithPrompt = prefs.surveyInput(81,personaTarget,{include_prompt:true});
+  assert.equal(generalWithPrompt.input.character?.content,'Global selected prompt');
+  assert.equal(generalWithPrompt.chatId,null);
+  assert.deepEqual(generalWithPrompt.input.history,[]);
+  assert.equal(prefs.surveyInput(81,target,{include_prompt:true}).input.character?.content,'Chat-specific prompt');
+  assert.equal('character' in prefs.surveyInput(81,target,{include_prompt:false}).input,false);
+  await assert.rejects(()=>prefs.createPlayerSurvey(81,{...personaTarget,include_prompt:'yes'}),/bad_survey_request/);
   assert.throws(() => prefs.surveyInput(81, personaTarget, { include_history: true }), /bad_survey_request/);
   assert.throws(() => prefs.surveyInput(81, personaTarget, { chat_id: chatId }), /bad_survey_request/);
   const form = { id:'preferences', title:'Story preferences', questions:[{id:'pace',type:'single',label:'Pacing?',required:true,options:['Slow','Fast']},{id:'notes',type:'text',label:'Anything else?'}] };

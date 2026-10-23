@@ -95,10 +95,13 @@ function DiagramCanvas({ diagram, layout, large }: { diagram: DiagramData; layou
   useEffect(() => {
     const node = viewport.current;
     if (!node) return;
-    const observer = new ResizeObserver(() => setSize({ width: node.clientWidth, height: node.clientHeight }));
+    const observer = new ResizeObserver(() => setSize(previous => {
+      const width = node.clientWidth, height = large ? node.clientHeight : 0;
+      return previous.width === width && previous.height === height ? previous : { width, height };
+    }));
     observer.observe(node); return () => observer.disconnect();
-  }, []);
-  const fit = Math.min(1, size.width / layout.width, size.height / layout.height);
+  }, [large]);
+  const fit = Math.min(1, size.width / layout.width, large ? size.height / layout.height : 1);
   const zoom = manualZoom ?? fit;
   const colors = { blue: '#3b82f6', green: '#10b981', purple: '#a78bfa', orange: '#f59e0b', red: '#f87171', cyan: '#06b6d4', neutral: '#94a3b8' };
   return <div className={`${s.canvas} ${large ? s.large : ''}`}>
@@ -109,7 +112,7 @@ function DiagramCanvas({ diagram, layout, large }: { diagram: DiagramData; layou
       <button type="button" onClick={() => { setManualZoom(null); viewport.current?.scrollTo(0, 0); }}>{t('diagram.fit')}</button>
     </div>
     <div className={s.viewport} ref={viewport} tabIndex={0} aria-label={t('diagram.navigation')}
-      onPointerDown={event => { if (event.button !== 0) return; const node = event.currentTarget; drag.current = { x: event.clientX, y: event.clientY, left: node.scrollLeft, top: node.scrollTop }; node.setPointerCapture(event.pointerId); }}
+      onPointerDown={event => { if (event.button !== 0 || (!large && event.pointerType !== 'mouse')) return; const node = event.currentTarget; drag.current = { x: event.clientX, y: event.clientY, left: node.scrollLeft, top: node.scrollTop }; node.setPointerCapture(event.pointerId); }}
       onPointerMove={event => { const state = drag.current; if (state) { event.currentTarget.scrollLeft = state.left - event.clientX + state.x; event.currentTarget.scrollTop = state.top - event.clientY + state.y; } }}
       onPointerUp={() => { drag.current = null; }} onPointerCancel={() => { drag.current = null; }} onLostPointerCapture={() => { drag.current = null; }}>
       <svg role="img" aria-label={diagram.title || t(`diagram.${diagram.type}`)} width={Math.max(1, layout.width * zoom)} height={Math.max(1, layout.height * zoom)} viewBox={`0 0 ${layout.width} ${layout.height}`}>
