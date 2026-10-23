@@ -38,12 +38,14 @@ export function QuestionnaireBlock({ source, closed, fallback }: { source: strin
   if (!extractQuestionnaires(context.content).some(f => questionnaireSchema(f) === schema)) return <>{fallback}</>;
   const key = `chatter:questionnaire:${context.scope}:${context.messageId}:${context.variantIndex}:${form.id}`;
   const submitted = context.responses.find(r => r.source_message_id === context.messageId && r.source_variant_index === context.variantIndex && r.form_id === form.id && r.schema === schema);
-  return <QuestionnaireForm key={`${key}:${schema}`} form={form} schema={schema} storageKey={key} context={context} submitted={submitted} />;
+  return <QuestionnaireCard key={`${key}:${schema}`} form={form} storageKey={key} disabled={context.disabled} submitted={submitted?.answers}
+    onSubmit={answers => context.onSubmit({ source_message_id: context.messageId, source_variant_index: context.variantIndex, form_id: form.id, schema, answers })} />;
 }
 
-function QuestionnaireForm({ form, schema, storageKey, context, submitted }: {
-  form: Questionnaire; schema: string; storageKey: string; context: QuestionnaireContextValue; submitted?: QuestionnaireResponse;
+export function QuestionnaireCard({ form, storageKey, disabled = false, submitted, onSubmit }: {
+  form: Questionnaire; storageKey: string; disabled?: boolean; submitted?: QuestionnaireAnswers; onSubmit: (answers: QuestionnaireAnswers) => Promise<void>;
 }) {
+  const schema = questionnaireSchema(form);
   const { t } = useTranslation();
   const id = useId();
   const [answers, setAnswers] = useState<QuestionnaireAnswers>(() => loadQuestionnaireDraft(storageKey, schema));
@@ -73,12 +75,12 @@ function QuestionnaireForm({ form, schema, storageKey, context, submitted }: {
   }, [isSubmitted, form.questions.length]);
   const completed = isSubmitted && step === form.questions.length;
   const progress = Math.min(step + 1, form.questions.length);
-  const values = submitted?.answers ?? answers;
+  const values = submitted ?? answers;
   const q = form.questions[Math.min(step, form.questions.length - 1)];
   const currentValue = values[q.id];
   const other = currentValue && typeof currentValue === 'object' && !Array.isArray(currentValue) ? currentValue : null;
   const selected = other?.selected ?? (Array.isArray(currentValue) ? currentValue : []);
-  const controlsDisabled = busy || transitioning || !!submitted || context.disabled;
+  const controlsDisabled = busy || transitioning || !!submitted || disabled;
   const persist = (next: QuestionnaireAnswers, nextStep: number) => {
     if (submitted) return;
     try { localStorage.setItem(storageKey, JSON.stringify({ schema, answers: next, step: nextStep })); setUnsaved(false); }
@@ -102,7 +104,7 @@ function QuestionnaireForm({ form, schema, storageKey, context, submitted }: {
   };
   return <form className={s.form} aria-label={form.title} aria-busy={busy || transitioning} noValidate onSubmit={async event => {
     event.preventDefault();
-    if (busy || transitioning || submitted || context.disabled) return;
+    if (busy || transitioning || submitted || disabled) return;
     if (!validateCurrent()) return;
     if (step < form.questions.length - 1) { goTo(step + 1); return; }
     let validated: QuestionnaireAnswers;
@@ -116,7 +118,7 @@ function QuestionnaireForm({ form, schema, storageKey, context, submitted }: {
     }
     setBusy(true); setError('');
     try {
-      await context.onSubmit({ source_message_id: context.messageId, source_variant_index: context.variantIndex, form_id: form.id, schema, answers: validated });
+      await onSubmit(validated);
       // Only an actual persisted user-message acknowledgement completes submission.
       try { localStorage.removeItem(storageKey); } catch { /* draft cleanup is best effort */ }
     } catch (e) {
@@ -171,10 +173,10 @@ function QuestionnaireForm({ form, schema, storageKey, context, submitted }: {
       </AnimatePresence>
     </fieldset>
     <div className={s.navigation}>
-      <button type="button" disabled={step === 0 || busy || transitioning || context.disabled} onClick={() => goTo(step - 1)}>{t('questionnaire.back')}</button>
+      <button type="button" disabled={step === 0 || busy || transitioning || disabled} onClick={() => goTo(step - 1)}>{t('questionnaire.back')}</button>
       {step < form.questions.length - 1 + (isSubmitted ? 1 : 0)
-        ? <button key="next" type="button" disabled={busy || transitioning || context.disabled} onClick={event => { event.preventDefault(); if (validateCurrent()) goTo(step + 1); }}>{t('questionnaire.next')}</button>
-        : <button key="submit" type="submit" disabled={busy || transitioning || !!submitted || context.disabled}>{t(submitted ? 'questionnaire.submitted' : busy ? 'questionnaire.sending' : 'questionnaire.submit')}</button>}
+        ? <button key="next" type="button" disabled={busy || transitioning || disabled} onClick={event => { event.preventDefault(); if (validateCurrent()) goTo(step + 1); }}>{t('questionnaire.next')}</button>
+        : <button key="submit" type="submit" disabled={busy || transitioning || !!submitted || disabled}>{t(submitted ? 'questionnaire.submitted' : busy ? 'questionnaire.sending' : 'questionnaire.submit')}</button>}
     </div>
     {error && <p role="alert">{error}</p>}
     {unsaved && <p role="status">{t('questionnaire.unsaved')}</p>}

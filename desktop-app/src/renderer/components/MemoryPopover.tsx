@@ -1,10 +1,12 @@
-import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { MemorySetupNotice } from './MemorySetupNotice';
 import { toast } from 'sonner';
 import * as api from '../lib/api';
 import { useInvalidateMemory } from '../lib/memory-queries';
 import { ChatPersonaSelector } from './ChatPersonaSelector';
+import { PlayerInstructionsEditor } from './PlayerInstructionsEditor';
 import { ConfirmDialog } from './ConfirmDialog';
 import { MemoryRecordsPanel, type MemoryRecord } from './MemoryRecordsPanel';
 import { Select } from './Select';
@@ -27,17 +29,19 @@ type MemorySettings = {
 type RecordDialog = { type: 'edit' | 'delete'; record: MemoryRecord };
 type ChatPromptSettings = { prompt_id: number | null; room_enabled: boolean };
 
-export function MemoryPopover({ chatId, compactTrigger = false }: { chatId: number; compactTrigger?: boolean }) {
+export function MemoryPopover({ chatId, compactTrigger = false, preferredModel }: { chatId: number; compactTrigger?: boolean; preferredModel?: string | null }) {
   const { t } = useTranslation();
-  const rootRef = useRef<HTMLDivElement>(null);
+  const modalRef = useRef<HTMLDivElement>(null);
+  const titleId = useId();
   const [open, setOpen] = useState(false);
-  const [popoverStyle, setPopoverStyle] = useState<React.CSSProperties>();
   const [loading, setLoading] = useState(false);
   const [settings, setSettings] = useState<MemorySettings | null>(null);
   const invalidateMemory = useInvalidateMemory();
   const [dialog, setDialog] = useState<RecordDialog | null>(null);
   const [draft, setDraft] = useState('');
   const [saving, setSaving] = useState(false);
+  const recordDialogState = useRef({ dialog, saving });
+  recordDialogState.current = { dialog, saving };
   const [promptSettings, setPromptSettings] = useState<ChatPromptSettings | null>(null);
   const [promptCatalog, setPromptCatalog] = useState<api.PromptsResponse | null>(null);
   const showChatMemory = settings?.memory_mode === 'chat' || settings?.memory_mode === 'both';
@@ -66,40 +70,37 @@ export function MemoryPopover({ chatId, compactTrigger = false }: { chatId: numb
   }, [open, load]);
 
 
-  useLayoutEffect(() => {
-    if (!open) return;
-    const position = () => {
-      const anchor = rootRef.current?.getBoundingClientRect();
-      if (!anchor) return;
-      const width = Math.max(0, Math.min(showChatMemory ? 800 : 400, window.innerWidth - 32));
-      const top = anchor.bottom + 9;
-      setPopoverStyle({
-        left: Math.max(16, Math.min(anchor.right - width, window.innerWidth - width - 16)),
-        top,
-        width,
-        maxHeight: Math.max(0, window.innerHeight - top - 16),
-      });
-    };
-    position();
-    const observer = new ResizeObserver(position);
-    const toolbar = rootRef.current?.parentElement?.parentElement;
-    if (toolbar) observer.observe(toolbar);
-    window.addEventListener('resize', position);
-    window.addEventListener('scroll', position, true);
-    return () => {
-      observer.disconnect();
-      window.removeEventListener('resize', position);
-      window.removeEventListener('scroll', position, true);
-    };
-  }, [open, showChatMemory, compactTrigger]);
-
   useEffect(() => {
-    const onPointerDown = (event: PointerEvent) => {
-      if (rootRef.current && !rootRef.current.contains(event.target as Node)) setOpen(false);
+    if (!open) return;
+    const previous = document.activeElement as HTMLElement | null;
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    modalRef.current?.focus();
+    const keyDown = (event: KeyboardEvent) => {
+      // Portaled child dialogs own their keyboard handling and focus.
+      if (event.defaultPrevented || !modalRef.current?.contains(document.activeElement)) return;
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        if (recordDialogState.current.dialog) { if (!recordDialogState.current.saving) setDialog(null); }
+        else setOpen(false);
+      }
+      if (event.key === 'Tab') {
+        const nodes = Array.from(modalRef.current.querySelectorAll<HTMLElement>('button:not(:disabled),textarea:not(:disabled),input:not(:disabled),select:not(:disabled),[tabindex="0"]')).filter(node => node.getClientRects().length);
+        const first = nodes[0], last = nodes[nodes.length - 1];
+        if (!first) { event.preventDefault(); return; }
+        if (event.shiftKey && (document.activeElement === first || document.activeElement === modalRef.current)) { event.preventDefault(); last.focus(); }
+        else if (!event.shiftKey && (document.activeElement === last || document.activeElement === modalRef.current)) { event.preventDefault(); first.focus(); }
+      }
     };
-    document.addEventListener('pointerdown', onPointerDown);
-    return () => document.removeEventListener('pointerdown', onPointerDown);
-  }, []);
+    document.addEventListener('keydown', keyDown);
+    return () => {
+      document.body.style.overflow = overflow;
+      document.removeEventListener('keydown', keyDown);
+      if (previous?.isConnected) previous.focus();
+    };
+  }, [open]);
+
+  useEffect(() => { setOpen(false); setDialog(null); }, [chatId]);
 
   const patchSettings = async (patch: Partial<MemorySettings>) => {
     if (!settings) return;
@@ -188,7 +189,7 @@ export function MemoryPopover({ chatId, compactTrigger = false }: { chatId: numb
   };
 
   return (
-    <div className={s.root} ref={rootRef}>
+    <div className={s.root}>
       <button
         type="button"
         className={`${s.trigger} ${open ? s.triggerActive : ''}`}
@@ -196,6 +197,7 @@ export function MemoryPopover({ chatId, compactTrigger = false }: { chatId: numb
         title={t('chat.memory.triggerTitle')}
         aria-label={t('chat.memory.trigger')}
         aria-expanded={open}
+        aria-haspopup="dialog"
       >
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <path d="M9.5 4A3.5 3.5 0 0 0 6 7.5v.7A3 3 0 0 0 4 11v1a3 3 0 0 0 2 2.8v.7A3.5 3.5 0 0 0 9.5 19H12V4Z" />
@@ -203,9 +205,11 @@ export function MemoryPopover({ chatId, compactTrigger = false }: { chatId: numb
         </svg>
         {!compactTrigger && <span>{t('chat.memory.trigger')}</span>}
       </button>
-      {open && (
-        <div className={`${s.popover} ${showChatMemory ? '' : s.popoverCompact}`} style={popoverStyle} data-native-overlay>
-          <div className={s.header}><strong>{t('chat.memory.headerTitle')}</strong><span>{loading ? t('common.loading') : t('chat.memory.headerHint')}</span></div>
+      {open && createPortal(
+        <div className={s.overlay} data-native-overlay onMouseDown={event => { if (event.target === event.currentTarget && !dialog) setOpen(false); }}>
+        <div className={`${s.popover} ${showChatMemory ? '' : s.popoverCompact}`} ref={modalRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}>
+          <div className={s.header}><strong id={titleId}>{t('chat.memory.headerTitle')}</strong><span>{loading ? t('common.loading') : t('chat.memory.headerHint')}</span><button type="button" className={s.close} aria-label={t('common.close')} onClick={() => setOpen(false)}>×</button></div>
+          <div className={s.body}>
           <MemorySetupNotice />
           {settings && (
             <div className={s.layout}>
@@ -237,6 +241,7 @@ export function MemoryPopover({ chatId, compactTrigger = false }: { chatId: numb
               <label className={s.field}>{t('chat.memory.persona')}
                 <ChatPersonaSelector chatId={chatId} embedded />
               </label>
+              <PlayerInstructionsEditor key={chatId} scope="chat" targetId={chatId} modelId={preferredModel} />
               <div className={s.toggleRow}>
                 <div className={s.toggleText}>
                   <strong>{t('chat.memory.roleplayMode.label')}</strong>
@@ -334,6 +339,7 @@ export function MemoryPopover({ chatId, compactTrigger = false }: { chatId: numb
                     semanticEndpoint={`/api/v1/chats/${chatId}/memory-records/search`}
                     recordsEndpoint={`/api/v1/chats/${chatId}/memory-records`}
                     compact
+                    constrainList={false}
                     emptyLabel={t('chat.memory.empty')}
                     onEdit={record => {
                       setDraft(record.text);
@@ -345,6 +351,7 @@ export function MemoryPopover({ chatId, compactTrigger = false }: { chatId: numb
               )}
             </div>
           )}
+          </div>
           {dialog?.type === 'edit' && (
             <ConfirmDialog
               open
@@ -376,6 +383,7 @@ export function MemoryPopover({ chatId, compactTrigger = false }: { chatId: numb
             />
           )}
         </div>
+        </div>, document.body
       )}
     </div>
   );

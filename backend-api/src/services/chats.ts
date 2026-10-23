@@ -14,7 +14,13 @@ import {
 import type { ToolIteration } from './ai.js';
 import { countTokens, countMessageTokens, countToolCallTokens, countToolResultTokens } from './tokenizer.js';
 import { buildBaseSystemPromptForUser } from './system-prompt.js';
-import { getChatMemorySettings } from './memory-foundation.js';
+import { getChatMemorySettings, resolvePersonaForChat } from './memory-foundation.js';
+import { buildPlayerInstructions } from './player-instructions-prompt.js';
+
+const playerInstructionsForPrompt = (userId: number, chatId: number) => {
+  const settings = getChatMemorySettings(userId, chatId);
+  return settings.use_user_instructions === 1 ? buildPlayerInstructions(resolvePersonaForChat(userId, chatId).persona.user_instructions || '', settings.user_instructions || '') : '';
+};
 import { resolvePromptForUser, resolvePromptSelectionForUser, type PromptRecord } from './prompts.js';
 import { getEnabledMacros } from './macros.js';
 import { listRoomReaderUserIds, canReadChatMessages } from './chat-rooms.js';
@@ -874,6 +880,14 @@ export const forkChat = (
       }
     }
 
+    // Player instructions must survive a fork even when vector-memory cloning is unavailable.
+    const sourceInstructions = db.prepare('SELECT user_instructions, use_user_instructions, persona_override_id FROM chat_memory_settings WHERE user_id = ? AND chat_id = ?')
+      .get(userId, sourceChatId) as { user_instructions: string; use_user_instructions: number; persona_override_id: number | null } | undefined;
+    if (sourceInstructions) {
+      getChatMemorySettings(userId, newChatId);
+      db.prepare('UPDATE chat_memory_settings SET user_instructions = ?, use_user_instructions = ?, persona_override_id = ? WHERE user_id = ? AND chat_id = ?')
+        .run(sourceInstructions.user_instructions, sourceInstructions.use_user_instructions, sourceInstructions.persona_override_id, userId, newChatId);
+    }
     // 3. Bump the new chat's updated_at.
     db.prepare('UPDATE user_chats SET updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?')
       .run(newChatId, userId);
@@ -2404,7 +2418,7 @@ export const trimUserHistoryByChat = (userId: number, chatId: number, maxContext
       ? `\n\n[ЗАКРЕПЛЁННЫЕ МАКРОСЫ]\nУ пользователя есть часто используемые макросы: ${pinnedMacros.map(m => `"${m.title}"`).join(', ')}. Если запрос пользователя явно совпадает с назначением одного из них — вызови list_my_macros чтобы посмотреть подробности, затем execute_macro для запуска.`
       : '';
     const systemPrompt = buildBaseSystemPromptForUser(user, promptContent, coreMemory, pinnedMacrosHint, false, getChatMemorySettings(userId, chatId).prompt_injection_protection);
-    systemPromptTokens = countMessageTokens('system', systemPrompt);
+    systemPromptTokens = countMessageTokens('system', systemPrompt + playerInstructionsForPrompt(userId, chatId));
   }
 
   // 3. Сумма токенов всех неархивных сообщений.
@@ -3241,7 +3255,7 @@ export const getChatContextTokens = (userId: number, chatId: number): ChatContex
       ? `\n\n[ЗАКРЕПЛЁННЫЕ МАКРОСЫ]\nУ пользователя есть часто используемые макросы: ${pinnedMacros.map(m => `"${m.title}"`).join(', ')}. Если запрос пользователя явно совпадает с назначением одного из них — вызови list_my_macros чтобы посмотреть подробности, затем execute_macro для запуска.`
       : '';
     const systemPrompt = buildBaseSystemPromptForUser(user, promptContent, coreMemory, pinnedMacrosHint, false, getChatMemorySettings(userId, chatId).prompt_injection_protection);
-    system_prompt_tokens = countMessageTokens('system', systemPrompt);
+    system_prompt_tokens = countMessageTokens('system', systemPrompt + playerInstructionsForPrompt(userId, chatId));
   }
 
   return {

@@ -5764,7 +5764,7 @@ export function ChatPage() {
                   </>
                 )}
               </button>
-              <MemoryPopover chatId={activeChatId} compactTrigger={compactTopBar} />
+              <MemoryPopover chatId={activeChatId} compactTrigger={compactTopBar} preferredModel={preferredModel} />
               {showTokens && contextTokens && (
                 <div
                   className={s.contextTokensCompact}

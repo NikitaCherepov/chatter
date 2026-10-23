@@ -6,8 +6,13 @@ import type { PromptInjectionProtectionMode } from './prompt-injection-protectio
 export type MemoryMode = 'off' | 'general' | 'chat' | 'both';
 export type MemoryWriteTarget = 'general' | 'chat';
 export type MessageSearchScope = 'all' | 'current';
+export const normalizeUserInstructions = (value: unknown): string => {
+  if (typeof value !== 'string' || value.length > 12000) throw new Error('bad_user_instructions');
+  return value.trim();
+};
 
 export type Persona = {
+  user_instructions: string;
   id: number;
   user_id: number;
   name: string;
@@ -39,6 +44,8 @@ export type MemorySpace = {
 };
 
 export type ChatMemorySettings = {
+  user_instructions: string;
+  use_user_instructions: number;
   user_id: number;
   chat_id: number;
   persona_id: number;
@@ -171,23 +178,26 @@ export const createPersona = (
   description = '',
   coreMemory = '',
   allowCoreMemoryUpdate = true,
+  userInstructions = '',
 ): Persona => {
   const accountId = canonicalUserId(userId);
   ensureMemoryDefaults(accountId);
   const safeName = `${name || ''}`.trim().replace(/\s+/g, ' ').slice(0, 80);
   if (!safeName) throw new Error('persona_name_required');
+  const safeInstructions = normalizeUserInstructions(userInstructions);
   const now = getNowUnix();
   const inserted = db.prepare(`
-    INSERT INTO personas (user_id, name, description, core_memory, allow_core_memory_update, is_primary, is_default, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, 0, 0, ?, ?)
-  `).run(accountId, safeName, `${description || ''}`.trim().slice(0, 240), `${coreMemory || ''}`, allowCoreMemoryUpdate ? 1 : 0, now, now);
-  return db.prepare('SELECT * FROM personas WHERE id = ?').get(Number(inserted.lastInsertRowid)) as Persona;
+    INSERT INTO personas (user_id, name, description, core_memory, allow_core_memory_update, is_primary, is_default, created_at, updated_at, user_instructions)
+    VALUES (?, ?, ?, ?, ?, 0, 0, ?, ?, ?)
+  `).run(accountId, safeName, `${description || ''}`.trim().slice(0, 240), `${coreMemory || ''}`, allowCoreMemoryUpdate ? 1 : 0, now, now, safeInstructions);
+  const personaId = Number(inserted.lastInsertRowid);
+  return db.prepare('SELECT * FROM personas WHERE id = ?').get(personaId) as Persona;
 };
 
 export const updatePersona = (
   userId: number,
   personaId: number,
-  patch: { name?: string; description?: string; core_memory?: string; allow_core_memory_update?: number },
+  patch: { name?: string; description?: string; core_memory?: string; allow_core_memory_update?: number; user_instructions?: string },
 ): Persona => {
   const accountId = canonicalUserId(userId);
   const persona = db.prepare('SELECT * FROM personas WHERE id = ? AND user_id = ?')
@@ -207,9 +217,9 @@ export const updatePersona = (
     ? persona.allow_core_memory_update
     : patch.allow_core_memory_update ? 1 : 0;
   db.prepare(`
-    UPDATE personas SET name = ?, description = ?, core_memory = ?, allow_core_memory_update = ?, updated_at = ?
+    UPDATE personas SET name = ?, description = ?, core_memory = ?, allow_core_memory_update = ?, user_instructions = ?, updated_at = ?
     WHERE id = ? AND user_id = ?
-  `).run(name, description, coreMemory, allowCoreMemoryUpdate, getNowUnix(), personaId, accountId);
+  `).run(name, description, coreMemory, allowCoreMemoryUpdate, patch.user_instructions === undefined ? persona.user_instructions : normalizeUserInstructions(patch.user_instructions), getNowUnix(), personaId, accountId);
   if (persona.is_primary === 1) {
     db.prepare('UPDATE users SET core_memory = ? WHERE id = ?').run(coreMemory, accountId);
   }
@@ -433,7 +443,7 @@ export const updateChatMemorySettings = (
   userId: number,
   chatId: number,
   patch: Partial<Pick<ChatMemorySettings,
-    'persona_override_id' | 'memory_mode' | 'write_target' |
+    'persona_override_id' | 'memory_mode' | 'write_target' | 'user_instructions' | 'use_user_instructions' |
     'use_core_memory' | 'allow_core_memory_update' | 'message_search_scope' | 'roleplay_mode' | 'prompt_injection_protection' | 'automatic_memory' | 'automatic_memory_mode' | 'memory_result_limit'>>,
 ): ChatMemorySettings => {
   const accountId = requireChatAccess(userId, chatId);
@@ -483,11 +493,14 @@ export const updateChatMemorySettings = (
   db.prepare(`
     UPDATE chat_memory_settings
     SET persona_override_id = ?, general_space_id = ?, chat_space_id = ?, memory_mode = ?,
-        write_target = ?, use_core_memory = ?, allow_core_memory_update = ?, message_search_scope = ?, roleplay_mode = ?, prompt_injection_protection = ?, automatic_memory = ?, automatic_memory_mode = ?, memory_result_limit = ?, updated_at = ?
+        write_target = ?, use_core_memory = ?, allow_core_memory_update = ?, message_search_scope = ?, roleplay_mode = ?, prompt_injection_protection = ?, automatic_memory = ?, automatic_memory_mode = ?, memory_result_limit = ?, user_instructions = ?, use_user_instructions = ?, updated_at = ?
     WHERE user_id = ? AND chat_id = ?
   `).run(
     personaOverrideId, generalSpaceId, chatSpaceId, memoryMode, writeTarget,
-    useCoreMemory, allowCoreMemoryUpdate, messageSearchScope, roleplayMode, protection, automaticMemory, automaticMode, memoryLimit, getNowUnix(), accountId, chatId,
+    useCoreMemory, allowCoreMemoryUpdate, messageSearchScope, roleplayMode, protection, automaticMemory, automaticMode, memoryLimit,
+    patch.user_instructions === undefined ? current.user_instructions : normalizeUserInstructions(patch.user_instructions),
+    patch.use_user_instructions === undefined ? current.use_user_instructions : patch.use_user_instructions ? 1 : 0,
+    getNowUnix(), accountId, chatId,
   );
   return getChatMemorySettings(accountId, chatId);
 };
@@ -645,6 +658,8 @@ export const initializeForkedChatMemory = (
       sourceSettings.allow_core_memory_update, sourceSettings.message_search_scope, sourceSettings.roleplay_mode, sourceSettings.prompt_injection_protection, sourceSettings.automatic_memory, sourceSettings.automatic_memory_mode, sourceSettings.memory_result_limit, now, now,
     );
 
+    db.prepare('UPDATE chat_memory_settings SET user_instructions = ?, use_user_instructions = ? WHERE user_id = ? AND chat_id = ?')
+      .run(sourceSettings.user_instructions || '', sourceSettings.use_user_instructions ?? 1, accountId, targetChatId);
     if (!sourceSpace || !targetSpace) {
       return { sourceSpace: sourceSpace ?? null, targetSpace, records: [] };
     }

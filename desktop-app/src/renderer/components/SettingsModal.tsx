@@ -52,6 +52,7 @@ import { ChatGptSettings } from './ChatGptSettings';
 import { PromptImageCropDialog } from './PromptImageCropDialog';
 import { CharacterCardImportDialog } from './CharacterCardImportDialog';
 import { PersonaImportDialog } from './PersonaImportDialog';
+import { PlayerInstructionsEditor } from './PlayerInstructionsEditor';
 import { SillyTavernChatImportDialog } from './SillyTavernChatImportDialog';
 import { SillyTavernBackupImportDialog } from './SillyTavernBackupImportDialog';
 import telegramIcon from '../assets/integrations/telegram.webp';
@@ -1883,6 +1884,9 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
                     {coreMemory.length}
                   </span>
                 </div>
+                {selectedPersonaId !== null && selectedPersonaId > 0
+                  ? <PlayerInstructionsEditor key={selectedPersonaId} scope="persona" targetId={selectedPersonaId} />
+                  : <small>{t('playerInstructions.createPersonaFirst')}</small>}
               </div>
 
                             <div className={s.fieldGroup}>

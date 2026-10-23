@@ -11,10 +11,10 @@ export type MemoryRecord = { id: string; memory_space_id: number; text: string; 
 type SemanticResult = { groups?: Array<{ record_id: string }>; records?: MemoryRecord[] };
 
 export function MemoryRecordsPanel({
-  recordsEndpoint, semanticEndpoint, semanticBody, compact = false, emptyLabel, onEdit, onDelete,
+  recordsEndpoint, semanticEndpoint, semanticBody, compact = false, constrainList = compact, emptyLabel, onEdit, onDelete,
 }: {
   recordsEndpoint: string; semanticEndpoint: string; semanticBody?: Record<string, unknown>;
-  compact?: boolean; emptyLabel: string;
+  compact?: boolean; constrainList?: boolean; emptyLabel: string;
   onEdit: (record: MemoryRecord) => void; onDelete: (record: MemoryRecord) => void;
 }) {
   const { t } = useTranslation();
@@ -100,7 +100,7 @@ export function MemoryRecordsPanel({
           matches={semanticIds} textQuery={mode === 'text' ? query.trim() : ''}
           compact={compact} onEdit={onEdit} onDelete={onDelete} />
       </Suspense>}
-      {view === 'list' && <div className={`${s.records} ${compact ? s.compactRecords : ''}`}>
+      {view === 'list' && <div className={`${s.records} ${constrainList ? s.compactRecords : ''}`}>
         {(pages.isFetching || searching) && <div className={s.mapHint}>{t('memoryMap.loading')}</div>}
         {visibleRecords.length === 0 && !pages.isFetching && !searching && <div className={s.empty}>{query.trim() ? t('chat.memory.search.noResults') : emptyLabel}</div>}
         {visibleRecords.map(record => (

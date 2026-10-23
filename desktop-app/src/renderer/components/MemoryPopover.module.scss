@@ -30,20 +30,39 @@
   border-color: var(--accent);
   outline: none;
 }
-.popover {
+.overlay {
   position: fixed;
-  z-index: 80;
-  width: min(800px, calc(100vw - 32px));
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.6);
   box-sizing: border-box;
-  overflow: visible;
-  padding: 16px;
+}
+.popover {
+  position: relative;
+  width: min(880px, 100%);
+  max-height: min(820px, 100%);
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  overflow: hidden;
   border: 1px solid var(--border-light);
   border-radius: 12px;
   background: var(--bg-secondary);
   box-shadow: 0 18px 50px rgba(0, 0, 0, 0.28);
 }
 .popoverCompact {
-  width: min(400px, calc(100vw - 32px));
+  width: min(560px, 100%);
+}
+.body {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0 20px 20px;
+  scrollbar-gutter: stable;
 }
 .layout {
   display: grid;
@@ -65,30 +84,37 @@
   padding-left: 20px;
   border-left: 1px solid var(--border-light);
 }
-.memoryColumn > :last-child {
-  max-height: min(480px, calc(100vh - 200px));
-  overflow-y: auto;
-}
 @media (max-width: 680px) {
   .layout { grid-template-columns: minmax(0, 1fr); gap: 10px; }
   .memoryColumn { padding-left: 0; border-left: 0; border-top: 1px solid var(--border-light); }
-  .popover { overflow-y: auto; }
-}
-@media (max-height: 660px) {
-  .popover { overflow-y: auto; }
+  .overlay { padding: 12px; }
 }
 .header {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 14px;
+  flex: 0 0 auto;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-light);
   color: var(--text-primary);
 }
 .header span {
+  margin-left: auto;
   color: var(--text-hint);
   font-size: 10px;
 }
+.close {
+  flex: 0 0 32px;
+  height: 32px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 24px;
+  cursor: pointer;
+}
+.close:hover { background: var(--bg-input); color: var(--text-primary); }
 .field {
   display: grid;
   gap: 6px;

@@ -1576,6 +1576,24 @@ ensureMemoryColumn('personas', 'image_url', 'ALTER TABLE personas ADD COLUMN ima
 ensureMemoryColumn('personas', 'import_source', 'ALTER TABLE personas ADD COLUMN import_source TEXT');
 ensureMemoryColumn('personas', 'import_key', 'ALTER TABLE personas ADD COLUMN import_key TEXT');
 ensureMemoryColumn('personas', 'import_raw_json', 'ALTER TABLE personas ADD COLUMN import_raw_json TEXT');
+ensureMemoryColumn('personas', 'user_instructions', "ALTER TABLE personas ADD COLUMN user_instructions TEXT NOT NULL DEFAULT ''");
+ensureMemoryColumn('chat_memory_settings', 'user_instructions', "ALTER TABLE chat_memory_settings ADD COLUMN user_instructions TEXT NOT NULL DEFAULT ''");
+ensureMemoryColumn('chat_memory_settings', 'use_user_instructions', 'ALTER TABLE chat_memory_settings ADD COLUMN use_user_instructions INTEGER NOT NULL DEFAULT 1');
+db.exec(`CREATE TABLE IF NOT EXISTS player_instruction_surveys (
+  id TEXT PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  scope TEXT NOT NULL CHECK(scope IN ('persona','chat')), target_id INTEGER NOT NULL,
+  chat_id INTEGER, model_id TEXT, brief TEXT NOT NULL DEFAULT '', include_history INTEGER NOT NULL DEFAULT 0,
+  base_instructions TEXT NOT NULL, input_json TEXT NOT NULL, questionnaire_json TEXT NOT NULL,
+  answers_json TEXT, draft TEXT, applied_text TEXT, created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_player_instruction_surveys_target ON player_instruction_surveys(user_id,scope,target_id,created_at DESC);`);
+db.exec(`CREATE TRIGGER IF NOT EXISTS player_surveys_persona_deleted AFTER DELETE ON personas BEGIN
+  DELETE FROM player_instruction_surveys WHERE scope='persona' AND target_id=OLD.id AND user_id=OLD.user_id;
+END;
+CREATE TRIGGER IF NOT EXISTS player_surveys_chat_deleted AFTER DELETE ON user_chats BEGIN
+  DELETE FROM player_instruction_surveys WHERE scope='chat' AND target_id=OLD.id;
+  UPDATE player_instruction_surveys SET chat_id=NULL WHERE chat_id=OLD.id;
+END;`);
 db.exec(`
   CREATE UNIQUE INDEX IF NOT EXISTS idx_personas_import_key
   ON personas(user_id, import_source, import_key)

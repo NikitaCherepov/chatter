@@ -157,6 +157,7 @@ import { associateServerAccessKeyUser, createServerAccessKey, getLastServerAcces
 import { addChatAgent, canReadChatMessages, createChatRoom, createChatRoomInvite, deleteChatRoom, getChatAgentForResponse, getChatRoom, getChatRoomInviteInfo, joinChatRoomByInvite, leaveChatRoom, listChatReaderUserIds, listChatRoomInvites, removeChatAgent, removeChatRoomMember, revokeChatRoomInvite, reorderChatAgents, reorderChatMembers, updateChatAgent, updateChatRoomSettings } from './services/chat-rooms.js';
 import { runChatSteps, hasActiveChatRun } from './services/chat-runner.js';
 import { questionnaireAnswerText } from './services/message-questionnaires.js';
+import { registerPlayerInstructionRoutes } from './services/player-instructions-routes.js';
 import { isRoomChat, runRoomAgents, runRoomResponseQueue, stopRoomQueue, hasActiveRoomRun } from './services/room-runner.js';
 
 /** Fire-and-forget WS broadcast to every chat reader (owner for single, owner+members for rooms). */
@@ -1548,6 +1549,7 @@ app.put('/api/v1/account/core-memory', (req: AuthedRequest, res: any) => {
 app.get('/api/v1/memory/personas', (req: AuthedRequest, res: any) => {
   return res.json({ personas: listPersonas(accountIdFromRequest(req)) });
 });
+registerPlayerInstructionRoutes(app, req => accountIdFromRequest(req));
 
 app.post('/api/v1/memory/personas/import/sillytavern/preview', (req: AuthedRequest, res: any) => {
   try {
@@ -1622,6 +1624,7 @@ app.post('/api/v1/memory/personas', (req: AuthedRequest, res: any) => {
       `${req.body?.description || ''}`,
       `${req.body?.core_memory || ''}`,
       req.body?.allow_core_memory_update !== false,
+      req.body?.user_instructions ?? '',
     );
     return res.status(201).json({ persona });
   } catch (error: any) {
@@ -1635,6 +1638,7 @@ app.patch('/api/v1/memory/personas/:personaId', (req: AuthedRequest, res: any) =
       ...(typeof req.body?.name === 'string' ? { name: req.body.name } : {}),
       ...(typeof req.body?.description === 'string' ? { description: req.body.description } : {}),
       ...(typeof req.body?.core_memory === 'string' ? { core_memory: req.body.core_memory } : {}),
+      ...('user_instructions' in (req.body || {}) ? { user_instructions: req.body.user_instructions } : {}),
       ...(typeof req.body?.allow_core_memory_update === 'boolean'
         ? { allow_core_memory_update: req.body.allow_core_memory_update ? 1 : 0 }
         : {}),
@@ -1805,6 +1809,8 @@ app.patch('/api/v1/chats/:chatId/memory-settings', (req: AuthedRequest, res: any
       ...(typeof body.write_target === 'string' ? { write_target: body.write_target } : {}),
       ...(typeof body.message_search_scope === 'string' ? { message_search_scope: body.message_search_scope } : {}),
       ...('roleplay_mode' in body ? { roleplay_mode: body.roleplay_mode === true || body.roleplay_mode === 1 ? 1 : 0 } : {}),
+      ...('user_instructions' in body ? { user_instructions: body.user_instructions } : {}),
+      ...('use_user_instructions' in body ? { use_user_instructions: body.use_user_instructions === true || body.use_user_instructions === 1 ? 1 : 0 } : {}),
       ...('prompt_injection_protection' in body ? { prompt_injection_protection: body.prompt_injection_protection } : {}),
       ...('automatic_memory' in body ? { automatic_memory: body.automatic_memory === true || body.automatic_memory === 1 ? 1 : 0 } : {}),
       ...('automatic_memory_mode' in body ? { automatic_memory_mode: body.automatic_memory_mode } : {}),

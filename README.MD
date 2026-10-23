@@ -263,7 +263,15 @@ Decided to translate the project into your language? It's quick and easy:
 
 ## Important
 
-### Declarative questionnaires
+### User instructions and preference questionnaires
+
+Personas have a separate **General instructions** field in account settings. Chat settings provide **Instructions for this chat** and a switch controlling whether both layers are included in replies. These preferences are independent of character descriptions and persona memory; guest mode does not inject them. Save buttons for instructions are independent of the other persona fields. Existing personas/imports default to empty instructions, and re-importing a SillyTavern persona preserves instructions already entered in Chatter.
+
+Both editors offer **Take a questionnaire**. An optional brief and an off-by-default conversation checkbox control a separate call to the selected model. The existing questionnaire card is reused inside the modal. After answering, the model proposes editable instructions; only **Apply instructions** replaces the note. Questions, answers and the draft are private to the user/target and can be reviewed or deleted, optionally restoring the previous instructions. Concurrent edits cause a conflict instead of a silent overwrite. Utility calls use the normal model access rules/quota and never add messages or execute tools in the chat. Opt-in history includes bounded recent text from the current readable chat only, without reasoning/attachment contents; that history is not stored again in the questionnaire record.
+
+Regression tests: `pnpm exec tsx backend-api/tests/player-instructions.test.mts` and `pnpm exec tsx backend-api/tests/persona-import.test.mts`.
+
+### Declarative questionnaire format
 
 Any question can optionally include an illustration: `"image":{"url":"https://example.org/photo.jpg","alt":"A meaningful description"}`. Use real URLs supplied by the user or tools, or server-relative assets such as `/uploads/...`; never invent image links. Illustrations are size-limited and open in the existing image viewer. Their URL/description are part of the immutable question snapshot; Telegram shows the link. Like ordinary external chat images, they load directly from the source and are not newly downloaded or cached on the server.
 

@@ -1,0 +1,11 @@
+import { apiFetch } from './api';
+import type { Questionnaire, QuestionnaireAnswers } from './message-questionnaires';
+export type InstructionTarget = { scope: 'persona' | 'chat'; target_id: number };
+export type PlayerSurvey = InstructionTarget & { id: string; questionnaire: Questionnaire; answers: QuestionnaireAnswers | null; draft: string | null; applied_text: string | null; created_at: number; include_history: boolean; model_id: string | null };
+export type PlayerInstructions = { text: string; enabled: boolean; surveys: PlayerSurvey[] };
+export const getPlayerInstructions = (target: InstructionTarget) => apiFetch<PlayerInstructions>(`/api/v1/player-instructions?scope=${target.scope}&target_id=${target.target_id}`);
+export const savePlayerInstructions = (target: InstructionTarget, text: string, enabled: boolean, expected: string) => apiFetch<{ text: string; enabled: boolean }>('/api/v1/player-instructions', { method: 'PATCH', body: JSON.stringify({ ...target, text, enabled, expected }) });
+export const createPlayerSurvey = (target: InstructionTarget, brief: string, include_history: boolean, current_text: string, model_id?: string | null) => apiFetch<{ survey: PlayerSurvey }>('/api/v1/player-instructions/surveys', { method: 'POST', body: JSON.stringify({ ...target, brief, include_history, current_text, ...(model_id === undefined ? {} : { model_id }) }) });
+export const answerPlayerSurvey = (id: string, answers: QuestionnaireAnswers) => apiFetch<{ survey: PlayerSurvey }>(`/api/v1/player-instructions/surveys/${id}/answers`, { method: 'POST', body: JSON.stringify({ answers }) });
+export const applyPlayerSurvey = (id: string, text: string) => apiFetch<{ text: string; enabled: boolean }>(`/api/v1/player-instructions/surveys/${id}/apply`, { method: 'POST', body: JSON.stringify({ text }) });
+export const deletePlayerSurvey = (id: string, remove_applied: boolean) => apiFetch<{ text: string; enabled: boolean }>(`/api/v1/player-instructions/surveys/${id}`, { method: 'DELETE', body: JSON.stringify({ remove_applied }) });
