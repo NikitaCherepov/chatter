@@ -13,7 +13,7 @@ export function remarkInteractiveCode() {
   return (tree: Node, file: { value: unknown }) => {
     const source = String(file.value);
     const visit = (node: Node) => {
-      if (node.type === 'code' && ['interactive', 'jsx', 'tsx', 'html', 'questionnaire'].includes(node.lang ?? '')) {
+      if (node.type === 'code' && ['interactive', 'jsx', 'tsx', 'html', 'questionnaire', 'diagram'].includes(node.lang ?? '')) {
         const start = node.position?.start.offset, end = node.position?.end.offset;
         const closed = start !== undefined && end !== undefined && isClosedPreviewFence(source.slice(start, end));
         node.data = { ...node.data, hProperties: { ...node.data?.hProperties,

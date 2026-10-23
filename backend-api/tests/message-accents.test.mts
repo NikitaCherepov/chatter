@@ -20,6 +20,7 @@ assert.equal(formatForTelegram(code), code);
 assert.ok(markdownToTelegramRichHtml(code).includes('[example](style:info)'));
 assert.ok(buildSystemPrompt('Character', 'Persona', '', false, false).endsWith(MESSAGE_FORMATTING_HINT));
 assert.match(MESSAGE_FORMATTING_HINT, /sparingly/);
+assert.doesNotMatch(MESSAGE_FORMATTING_HINT, /\b(?:telegram|desktop)\b/i, 'formatting instructions must describe the output contract, not platform presentation details');
 assert.match(MESSAGE_FORMATTING_HINT, /No arbitrary HTML, CSS, scripts/);
 for (const tag of ['grid', 'flex', 'box']) assert.ok(MESSAGE_FORMATTING_HINT.includes(`<${tag}>`));
 const card = '<grid columns="2">\n<box border>\n**CPU**\n\n[Normal](style:success)\n</box>\n</grid>';

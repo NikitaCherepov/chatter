@@ -44,6 +44,48 @@ export function parseMessageLayoutTag(source: string): MessageLayoutTag | null {
   return { name, closing: !!tag[1], selfClosing: !!tag[4], attributes };
 }
 
+export type DiagramNode = { id: string; title: string; subtitle?: string; color: 'blue' | 'green' | 'purple' | 'orange' | 'red' | 'cyan' | 'neutral'; shape: 'action' | 'decision' | 'terminal' };
+export type MessageDiagram = { type: 'architecture' | 'flowchart'; direction: 'down' | 'right'; title?: string; caption?: string; nodes: DiagramNode[]; edges: Array<{ from: string; to: string; label?: string }> };
+
+/** A diagram is data only: never forward model properties to SVG or the layout engine. */
+export function parseMessageDiagram(source: string): MessageDiagram {
+  const fail = (): never => { throw new Error('diagram_invalid'); };
+  const object = (v: unknown, keys: string[]): Record<string, unknown> => {
+    if (!v || typeof v !== 'object' || Array.isArray(v) || Object.keys(v).some(k => !keys.includes(k))) return fail();
+    return v as Record<string, unknown>;
+  };
+  const string = (v: unknown, max: number): string => typeof v === 'string' && !!v.trim() && v.length <= max ? v.trim() : fail();
+  const id = (v: unknown) => { const s = string(v, 64); return /^[a-zA-Z0-9_-]+$/.test(s) ? s : fail(); };
+  if (source.length > 50_000) return fail();
+  const raw = object(JSON.parse(source), ['type', 'direction', 'title', 'caption', 'nodes', 'edges']);
+  const type = raw.type ?? 'flowchart', direction = raw.direction ?? 'down';
+  if ((type !== 'flowchart' && type !== 'architecture') || (direction !== 'down' && direction !== 'right')) return fail();
+  if (!Array.isArray(raw.nodes) || !raw.nodes.length || raw.nodes.length > 40 || !Array.isArray(raw.edges) || raw.edges.length > 80) return fail();
+  const ids = new Set<string>();
+  const nodes = raw.nodes.map((value): DiagramNode => {
+    const n = object(value, ['id', 'title', 'subtitle', 'color', 'shape']);
+    const nodeId = id(n.id);
+    if (ids.has(nodeId)) return fail();
+    ids.add(nodeId);
+    const color = n.color ?? 'blue', shape = n.shape ?? 'action';
+    if (!['blue', 'green', 'purple', 'orange', 'red', 'cyan', 'neutral'].includes(color as string) || !['action', 'decision', 'terminal'].includes(shape as string)) return fail();
+    return { id: nodeId, title: string(n.title, 80), ...(n.subtitle === undefined ? {} : { subtitle: string(n.subtitle, 120) }), color: color as DiagramNode['color'], shape: shape as DiagramNode['shape'] };
+  });
+  const edges = raw.edges.map(value => {
+    const e = object(value, ['from', 'to', 'label']);
+    const from = id(e.from), to = id(e.to);
+    if (!ids.has(from) || !ids.has(to)) return fail();
+    return { from, to, ...(e.label === undefined ? {} : { label: string(e.label, 60) }) };
+  });
+  return { type, direction, ...(raw.title === undefined ? {} : { title: string(raw.title, 200) }), ...(raw.caption === undefined ? {} : { caption: string(raw.caption, 500) }), nodes, edges };
+}
+
+export function diagramToText(diagram: MessageDiagram): string {
+  const nodes = new Map(diagram.nodes.map(n => [n.id, n]));
+  return [diagram.title, ...diagram.nodes.map(n => `${n.title}${n.subtitle ? ' — ' + n.subtitle : ''}`),
+    ...diagram.edges.map(e => `${nodes.get(e.from)!.title} → ${nodes.get(e.to)!.title}${e.label ? ' (' + e.label + ')' : ''}`), diagram.caption].filter(Boolean).join('\n');
+}
+
 export function getMessageAccentStyle(url: string): MessageAccentStyle | null {
   const style = url.startsWith('style:') ? url.slice(6) : '';
   return styles.has(style) ? style as MessageAccentStyle : null;
@@ -60,7 +102,7 @@ export function prepareMessageAccents(source: string): string {
 }
 
 function transformMessageAccents(source: string, stripComplete: boolean): string {
-  if (!source.includes('](style') && !(stripComplete && (source.includes('layout:') || source.includes('questionnaire')))
+  if (!source.includes('](style') && !(stripComplete && (source.includes('layout:') || source.includes('questionnaire') || source.includes('diagram')))
     && !/<\/?(?:grid|flex|box)\b/.test(source)) return source;
   let result = '';
   let index = 0;
@@ -73,6 +115,10 @@ function transformMessageAccents(source: string, stripComplete: boolean): string
         const closing = end.exec(source);
         const stop = closing ? end.lastIndex : source.length;
         let literal = source.slice(index, stop);
+        if (stripComplete && closing && /^ {0,3}(?:`{3,}|~{3,})diagram[ \t]*\r?\n/.test(fence[0])) {
+          try { literal = diagramToText(parseMessageDiagram(source.slice(index + fence[0].length, closing.index))) + '\n'; }
+          catch { /* Invalid diagrams remain literal code. */ }
+        }
         // Telegram/plain fallback only. No new bot runtime dependency or executable markup.
         if (stripComplete && closing && /^ {0,3}(?:`{3,}|~{3,})questionnaire[ \t]*\r?\n/.test(fence[0])) {
           try {

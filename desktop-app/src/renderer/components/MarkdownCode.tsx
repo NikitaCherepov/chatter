@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import type { InteractiveLanguage } from '../../main/interactive-types';
 import { InteractivePreview } from './InteractivePreview';
 import { QuestionnaireBlock } from './Questionnaire';
+import { MessageDiagram } from './MessageDiagram';
 import s from './MarkdownRenderer.module.scss';
 
 function text(node: { value?: string; children?: unknown[] }): string {
@@ -15,7 +16,7 @@ export function MarkdownCode({ className, children, node, ...props }: React.Comp
   const { t } = useTranslation();
   const lang = /language-([\w-]+)/.exec(className ?? '')?.[1];
   const properties = node?.properties ?? {};
-  const previewLanguage = (lang === 'questionnaire' ? undefined : properties['data-preview-language']) as InteractiveLanguage | undefined;
+  const previewLanguage = (lang === 'questionnaire' || lang === 'diagram' ? undefined : properties['data-preview-language']) as InteractiveLanguage | undefined;
   const source = typeof properties['data-preview-source'] === 'string' ? properties['data-preview-source'] : text(node ?? {});
   const closed = properties['data-preview-closed'] === 'yes';
   const automatic = previewLanguage === 'interactive';
@@ -24,6 +25,7 @@ export function MarkdownCode({ className, children, node, ...props }: React.Comp
   const sourceKey = `${previewLanguage}\u0000${source}`;
   const opened = automatic || approvedSource === sourceKey;
   useEffect(() => { setShowPreview(automatic); }, [automatic, sourceKey]);
+  if (lang === 'diagram') return <MessageDiagram source={source} closed={closed} />;
   if (lang === 'questionnaire') return <QuestionnaireBlock source={source} closed={closed}
     fallback={<div className={s.codeBlockWrapper}><code className={className}>{children}</code></div>} />;
   if (!lang) return <code className={s.inlineCode}>{children}</code>;

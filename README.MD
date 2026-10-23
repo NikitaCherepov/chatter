@@ -271,6 +271,18 @@ Both editors offer **Take a questionnaire**. An optional brief and an off-by-def
 
 Regression tests: `pnpm exec tsx backend-api/tests/player-instructions.test.mts` and `pnpm exec tsx backend-api/tests/persona-import.test.mts`.
 
+### Declarative diagrams
+
+Completed `diagram` JSON fences render as native SVG diagrams, not executable interactive previews. Both `architecture` and `flowchart` types support automatic layout, node subtitles/colors, action/decision/terminal shapes, labeled arrows, branches and cycles. Positions and routes are computed locally with [ELK](https://github.com/kieler/elkjs) in a lazy, time-limited Web Worker; no external layout service or relaxed CSP is used.
+
+````markdown
+```diagram
+{"type":"flowchart","direction":"down","title":"Release check","nodes":[{"id":"check","title":"Does it work?","shape":"decision"},{"id":"release","title":"Release","shape":"terminal","color":"green"},{"id":"fix","title":"Fix","color":"orange"}],"edges":[{"from":"check","to":"release","label":"Yes"},{"from":"check","to":"fix","label":"No"},{"from":"fix","to":"check"}]}
+```
+````
+
+Direction is `down` or `right`; colors are `blue`, `green`, `purple`, `orange`, `red`, `cyan`, `neutral`. Limits: 1–40 nodes, up to 80 edges, unique ASCII IDs up to 64 characters, node titles up to 80, subtitles up to 120 and edge labels up to 60. Unknown properties and missing edge endpoints are rejected. Labels are plain text, never HTML. Optional `title` and `caption` are supported. The desktop includes source/copy, zoom, drag/scroll and a larger keyboard-accessible dialog; Telegram gets a readable list of blocks and connections. Invalid input stays available as source, and incomplete streamed fences wait until closed. Run `pnpm exec tsx desktop-app/tests/message-diagrams.test.mts` for schema, layout and text fallback regressions.
+
 ### Declarative questionnaire format
 
 Any question can optionally include an illustration: `"image":{"url":"https://example.org/photo.jpg","alt":"A meaningful description"}`. Use real URLs supplied by the user or tools, or server-relative assets such as `/uploads/...`; never invent image links. Illustrations are size-limited and open in the existing image viewer. Their URL/description are part of the immutable question snapshot; Telegram shows the link. Like ordinary external chat images, they load directly from the source and are not newly downloaded or cached on the server.
