@@ -1579,6 +1579,7 @@ ensureMemoryColumn('personas', 'import_raw_json', 'ALTER TABLE personas ADD COLU
 ensureMemoryColumn('personas', 'user_instructions', "ALTER TABLE personas ADD COLUMN user_instructions TEXT NOT NULL DEFAULT ''");
 ensureMemoryColumn('chat_memory_settings', 'user_instructions', "ALTER TABLE chat_memory_settings ADD COLUMN user_instructions TEXT NOT NULL DEFAULT ''");
 ensureMemoryColumn('chat_memory_settings', 'use_user_instructions', 'ALTER TABLE chat_memory_settings ADD COLUMN use_user_instructions INTEGER NOT NULL DEFAULT 1');
+ensureMemoryColumn('chat_memory_settings', 'user_instructions_mode', "ALTER TABLE chat_memory_settings ADD COLUMN user_instructions_mode TEXT NOT NULL DEFAULT 'both'");
 db.exec(`CREATE TABLE IF NOT EXISTS player_instruction_surveys (
   id TEXT PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   scope TEXT NOT NULL CHECK(scope IN ('persona','chat')), target_id INTEGER NOT NULL,

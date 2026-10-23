@@ -1,25 +1,139 @@
-.editor, .modal {
+.editor,
+.modal {
   color: var(--text-primary);
   min-width: 0;
   font-size: 13px;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  small { color: var(--text-muted); line-height: 1.5; }
-  button { font: inherit; border: 1px solid var(--border-color, #334155); background: var(--bg-modal-hover, #23354a); color: inherit; border-radius: 8px; padding: 8px 12px; cursor: pointer; }
-  button:disabled { opacity: .55; cursor: default; }
-  textarea { display: block; box-sizing: border-box; width: 100%; resize: vertical; font: inherit; line-height: 1.5; color: inherit; background: var(--bg-input, #172331); border: 1px solid var(--border-color, #334155); border-radius: 8px; padding: 10px; }
-  label > span { white-space: normal; }
-  p { margin: 0; }
+  small {
+    color: var(--text-hint);
+    line-height: 1.4;
+    font-size: 11px;
+  }
+  textarea {
+    display: block;
+    box-sizing: border-box;
+    width: 100%;
+    resize: vertical;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 400;
+    line-height: 1.5;
+    color: var(--text-body);
+    background: var(--bg-input);
+    border: 1px solid var(--border-input);
+    border-radius: 6px;
+    padding: 8px 12px;
+    outline: none;
+    transition: border-color 0.1s;
+  }
+  textarea:focus {
+    border-color: var(--accent);
+  }
+  label > span {
+    white-space: normal;
+  }
+  p {
+    margin: 0;
+  }
 }
-.editor { border-top: 1px solid var(--border-color, #334155); padding-top: 16px; margin-top: 12px; }
-.label { display: flex; flex-direction: column; gap: 8px; }
-.actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.overlay { position: fixed; inset: 0; z-index: 1500; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(0,0,0,.65); }
-.modal { box-sizing: border-box; width: min(760px, 100%); max-height: calc(100dvh - 40px); overflow-y: auto; background: var(--bg-modal, #141f2c); border: 1px solid var(--border-color, #334155); border-radius: 16px; padding: 20px; box-shadow: 0 20px 80px #0008; }
-.modal header { display: flex; justify-content: space-between; gap: 16px; align-items: center; }
-.modal h3, .modal h4 { margin: 0; }
-.history { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--border-color, #334155); padding-top: 16px; }
-.history button { text-align: left; }
-.deletePanel { display: flex; flex-direction: column; gap: 12px; padding: 12px; border: 1px solid var(--color-error, #ef4444); border-radius: 8px; }
-@media (max-width: 480px) { .overlay { padding: 8px; } .modal { padding: 12px; max-height: calc(100dvh - 16px); } }
+.editor {
+  border-top: 1px solid var(--border-light);
+  padding-top: 12px;
+  margin-top: 12px;
+  font-size: 11px;
+  gap: 8px;
+}
+.editor small {
+  font-size: 10px;
+}
+.label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+}
+.editor .label {
+  font-size: 11px;
+  font-weight: 600;
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  box-sizing: border-box;
+  background: var(--overlay-bg, rgba(0, 0, 0, 0.65));
+}
+.modal {
+  box-sizing: border-box;
+  width: min(760px, 100%);
+  max-height: calc(100dvh - 40px);
+  overflow-y: auto;
+  background: var(--bg-modal, #141f2c);
+  border: 1px solid var(--border-color, #334155);
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 20px 80px #0008;
+}
+.modal header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+}
+.modal h3,
+.modal h4 {
+  margin: 0;
+}
+.modal h3 {
+  font-size: 16px;
+  font-weight: 600;
+}
+.modal h4 {
+  font-size: 13px;
+  font-weight: 600;
+}
+.history {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-top: 1px solid var(--border-color, #334155);
+  padding-top: 16px;
+}
+.historyButton {
+  width: 100%;
+  min-width: 0;
+  text-align: left;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.deletePanel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--color-error, #ef4444);
+  border-radius: 8px;
+}
+@media (max-width: 480px) {
+  .overlay {
+    padding: 8px;
+  }
+  .modal {
+    padding: 12px;
+    max-height: calc(100dvh - 16px);
+  }
+}

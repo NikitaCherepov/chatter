@@ -1811,6 +1811,7 @@ app.patch('/api/v1/chats/:chatId/memory-settings', (req: AuthedRequest, res: any
       ...('roleplay_mode' in body ? { roleplay_mode: body.roleplay_mode === true || body.roleplay_mode === 1 ? 1 : 0 } : {}),
       ...('user_instructions' in body ? { user_instructions: body.user_instructions } : {}),
       ...('use_user_instructions' in body ? { use_user_instructions: body.use_user_instructions === true || body.use_user_instructions === 1 ? 1 : 0 } : {}),
+      ...('user_instructions_mode' in body ? { user_instructions_mode: body.user_instructions_mode } : {}),
       ...('prompt_injection_protection' in body ? { prompt_injection_protection: body.prompt_injection_protection } : {}),
       ...('automatic_memory' in body ? { automatic_memory: body.automatic_memory === true || body.automatic_memory === 1 ? 1 : 0 } : {}),
       ...('automatic_memory_mode' in body ? { automatic_memory_mode: body.automatic_memory_mode } : {}),

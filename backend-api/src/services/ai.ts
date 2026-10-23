@@ -7851,7 +7851,7 @@ const sendMessageThroughAiInternal = async (
   }
 
   const playerInstructions = !isGuestMode && chatMemorySettings.use_user_instructions === 1
-    ? buildPlayerInstructions(activePersona?.persona.user_instructions || '', chatMemorySettings.user_instructions || '') : '';
+    ? buildPlayerInstructions(activePersona?.persona.user_instructions || '', chatMemorySettings.user_instructions || '', chatMemorySettings.user_instructions_mode) : '';
   const proSystemPrompt = `${voicePromptHint}${buildSystemPrompt(`${roomIdentityPrompt}${promptContent}`, activePersona?.persona.name || toolUser.name || 'User', coreMemoryForPrompt, currentModelSupportsTools)}${playerInstructions}${pinnedHintForPrompt}${dynamicContextToolHint}${avatarPromptHint}`;
 
   // executionMode больше не переключается на vision-pro/lite при наличии фото.

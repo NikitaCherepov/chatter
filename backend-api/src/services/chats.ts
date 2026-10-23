@@ -19,7 +19,7 @@ import { buildPlayerInstructions } from './player-instructions-prompt.js';
 
 const playerInstructionsForPrompt = (userId: number, chatId: number) => {
   const settings = getChatMemorySettings(userId, chatId);
-  return settings.use_user_instructions === 1 ? buildPlayerInstructions(resolvePersonaForChat(userId, chatId).persona.user_instructions || '', settings.user_instructions || '') : '';
+  return settings.use_user_instructions === 1 ? buildPlayerInstructions(resolvePersonaForChat(userId, chatId).persona.user_instructions || '', settings.user_instructions || '', settings.user_instructions_mode) : '';
 };
 import { resolvePromptForUser, resolvePromptSelectionForUser, type PromptRecord } from './prompts.js';
 import { getEnabledMacros } from './macros.js';
@@ -881,12 +881,12 @@ export const forkChat = (
     }
 
     // Player instructions must survive a fork even when vector-memory cloning is unavailable.
-    const sourceInstructions = db.prepare('SELECT user_instructions, use_user_instructions, persona_override_id FROM chat_memory_settings WHERE user_id = ? AND chat_id = ?')
-      .get(userId, sourceChatId) as { user_instructions: string; use_user_instructions: number; persona_override_id: number | null } | undefined;
+    const sourceInstructions = db.prepare('SELECT user_instructions, use_user_instructions, user_instructions_mode, persona_override_id FROM chat_memory_settings WHERE user_id = ? AND chat_id = ?')
+      .get(userId, sourceChatId) as { user_instructions: string; use_user_instructions: number; user_instructions_mode: string; persona_override_id: number | null } | undefined;
     if (sourceInstructions) {
       getChatMemorySettings(userId, newChatId);
-      db.prepare('UPDATE chat_memory_settings SET user_instructions = ?, use_user_instructions = ?, persona_override_id = ? WHERE user_id = ? AND chat_id = ?')
-        .run(sourceInstructions.user_instructions, sourceInstructions.use_user_instructions, sourceInstructions.persona_override_id, userId, newChatId);
+      db.prepare('UPDATE chat_memory_settings SET user_instructions = ?, use_user_instructions = ?, user_instructions_mode = ?, persona_override_id = ? WHERE user_id = ? AND chat_id = ?')
+        .run(sourceInstructions.user_instructions, sourceInstructions.use_user_instructions, sourceInstructions.user_instructions_mode, sourceInstructions.persona_override_id, userId, newChatId);
     }
     // 3. Bump the new chat's updated_at.
     db.prepare('UPDATE user_chats SET updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?')

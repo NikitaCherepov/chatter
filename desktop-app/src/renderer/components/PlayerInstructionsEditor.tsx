@@ -7,14 +7,17 @@ import { useAuth } from '../lib/auth';
 import type { QuestionnaireAnswers } from '../lib/message-questionnaires';
 import { QuestionnaireCard } from './Questionnaire';
 import Checkbox from './Checkbox';
+import { Select } from './Select';
+import { AnimatePresence, motion } from 'framer-motion';
 import s from './PlayerInstructionsEditor.module.scss';
+import settingsStyles from './SettingsModal.module.scss';
 
 export function PlayerInstructionsEditor({ scope, targetId, modelId }: { scope: 'persona' | 'chat'; targetId: number; modelId?: string | null }) {
   const { t } = useTranslation();
   const target = { scope, target_id: targetId };
   const [data, setData] = useState<prefs.PlayerInstructions | null>(null);
   const [text, setText] = useState('');
-  const [enabled, setEnabled] = useState(true);
+  const [mode, setMode] = useState<prefs.InstructionsMode>('both');
   const [saving, setSaving] = useState(false);
   const [open, setOpen] = useState(false);
   const [error, setError] = useState('');
@@ -22,11 +25,11 @@ export function PlayerInstructionsEditor({ scope, targetId, modelId }: { scope: 
   useEffect(() => {
     let active = true;
     setData(null); setOpen(false); setError('');
-    void prefs.getPlayerInstructions(target).then(result => { if (active) { setData(result); setText(result.text); setEnabled(result.enabled); } }, () => { if (active) setError(t('playerInstructions.loadFailed')); });
+    void prefs.getPlayerInstructions(target).then(result => { if (active) { setData(result); setText(result.text); setMode(result.mode ?? (result.enabled ? 'both' : 'off')); } }, () => { if (active) setError(t('playerInstructions.loadFailed')); });
     return () => { active = false; };
   }, [scope, targetId, t]);
-  const applied = (result: { text: string; enabled: boolean }) => {
-    setText(result.text); setEnabled(result.enabled); setData(prev => prev ? { ...prev, ...result } : null); setSaved(true);
+  const applied = (result: prefs.InstructionState) => {
+    setText(result.text); setMode(result.mode ?? (result.enabled ? 'both' : 'off')); setData(prev => prev ? { ...prev, ...result } : null); setSaved(true);
   };
   return <section className={s.editor}>
     <label className={s.label}>
@@ -35,34 +38,37 @@ export function PlayerInstructionsEditor({ scope, targetId, modelId }: { scope: 
         placeholder={t('playerInstructions.placeholder')} onChange={e => { setText(e.target.value); setSaved(false); }} />
     </label>
     <small>{t(scope === 'persona' ? 'playerInstructions.generalHelp' : 'playerInstructions.chatHelp')}</small>
-    {scope === 'chat' && <Checkbox checked={enabled} disabled={!data || saving} label={t('playerInstructions.enabled')} onChange={value => { setEnabled(value); setSaved(false); }} />}
+    {scope === 'chat' && <div className={s.label}>
+      <span>{t('playerInstructions.modeLabel')}</span>
+      <Select value={mode} disabled={!data || saving} onChange={value => { setMode(value as prefs.InstructionsMode); setSaved(false); }} options={(['both','persona','chat','off'] as const).map(value => ({value,label:t(`playerInstructions.mode${value}`)}))} />
+    </div>}
     <div className={s.actions}>
-      <button type="button" disabled={!data || saving} onClick={async () => {
+      <button className={settingsStyles.saveBtn} type="button" disabled={!data || saving} onClick={async () => {
         if (!data) return;
         setSaving(true); setError('');
-        try { applied(await prefs.savePlayerInstructions(target, text, enabled, data.text)); }
+        try { applied(await prefs.savePlayerInstructions(target, text, mode, data.text)); }
         catch (e) { setError(t(e instanceof Error && e.message.includes('instructions_changed') ? 'playerInstructions.changed' : 'playerInstructions.saveFailed')); }
         finally { setSaving(false); }
       }}>{t(saving ? 'common.saving' : 'common.save')}</button>
-      <button type="button" disabled={!data || saving} onClick={() => setOpen(true)}>{t('playerInstructions.takeSurvey')}</button>
+      <button className={settingsStyles.saveBtn} type="button" disabled={!data || saving} onClick={() => setOpen(true)}>{t('playerInstructions.takeSurvey')}</button>
       {saved && <span role="status">{t('playerInstructions.saved')}</span>}
     </div>
-    {error && <><p role="alert">{error}</p><button type="button" disabled={saving} onClick={async () => {
-      try { const result = await prefs.getPlayerInstructions(target); setData(result); setText(result.text); setEnabled(result.enabled); setError(''); setSaved(false); }
+    {error && <><p role="alert">{error}</p><button className={settingsStyles.cancelBtn} type="button" disabled={saving} onClick={async () => {
+      try { const result = await prefs.getPlayerInstructions(target); setData(result); setText(result.text); setMode(result.mode ?? (result.enabled ? 'both' : 'off')); setError(''); setSaved(false); }
       catch { setError(t('playerInstructions.loadFailed')); }
     }}>{t('playerInstructions.reload')}</button></>}
-    {open && data && <PlayerSurveyModal key={`${scope}:${targetId}`} target={target} modelId={modelId} currentText={text} onApplied={applied} onClose={() => {
+    <AnimatePresence>{open && data && <PlayerSurveyModal key={`${scope}:${targetId}`} target={target} modelId={modelId} currentText={text} onApplied={applied} onClose={() => {
       setOpen(false);
       void prefs.getPlayerInstructions(target).then(result => {
         setData(prev => prev ? { ...prev, surveys: result.surveys } : result);
         if (result.text !== data.text) setError(t('playerInstructions.changed'));
       }).catch(() => {});
-    }} />}
+    }} />}</AnimatePresence>
   </section>;
 }
 
 function PlayerSurveyModal({ target, modelId, currentText, onApplied, onClose }: {
-  target: prefs.InstructionTarget; modelId?: string | null; currentText: string; onApplied: (result: { text: string; enabled: boolean }) => void; onClose: () => void;
+  target: prefs.InstructionTarget; modelId?: string | null; currentText: string; onApplied: (result: prefs.InstructionState) => void; onClose: () => void;
 }) {
   const { t } = useTranslation();
   const { user } = useAuth();
@@ -71,6 +77,8 @@ function PlayerSurveyModal({ target, modelId, currentText, onApplied, onClose }:
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
   const [brief, setBrief] = useState('');
+  const [questionCount, setQuestionCount] = useState('10');
+  const validQuestionCount = questionCount.trim() !== '' && Number.isInteger(Number(questionCount)) && Number(questionCount) >= 1 && Number(questionCount) <= 100;
   const [includeHistory, setIncludeHistory] = useState(false);
   const [includePrompt, setIncludePrompt] = useState(target.scope === 'chat');
   const [personalize, setPersonalize] = useState(false);
@@ -120,13 +128,17 @@ function PlayerSurveyModal({ target, modelId, currentText, onApplied, onClose }:
       throw e;
     } finally { setBusy(false); }
   };
-  return createPortal(<div className={s.overlay} data-native-overlay onMouseDown={event => { event.stopPropagation(); if (event.target === event.currentTarget) onClose(); }} onPointerDown={event => event.stopPropagation()}>
-    <div className={s.modal} ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby={titleId}>
-      <header><h3 id={titleId}>{t(target.scope === 'persona' ? 'playerInstructions.surveyGeneral' : 'playerInstructions.surveyChat')}</h3><button type="button" aria-label={t('common.close')} onClick={onClose}>×</button></header>
+  return createPortal(<motion.div className={s.overlay} initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} transition={{duration:.15}} data-native-overlay onMouseDown={event => { event.stopPropagation(); if (event.target === event.currentTarget) onClose(); }} onPointerDown={event => event.stopPropagation()}>
+    <motion.div className={s.modal} initial={{opacity:0,y:16}} animate={{opacity:1,y:0}} exit={{opacity:0,y:16}} transition={{duration:.2,ease:'easeOut'}} ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby={titleId}>
+      <header><h3 id={titleId}>{t(target.scope === 'persona' ? 'playerInstructions.surveyGeneral' : 'playerInstructions.surveyChat')}</h3><button className={settingsStyles.cancelBtn} type="button" aria-label={t('common.close')} onClick={onClose}>×</button></header>
       <small>{t('playerInstructions.surveyHelp')}</small>
       {error && <p role="alert">{error}</p>}
       {!selected ? <>
         <label className={s.label}>{t('playerInstructions.brief')}<textarea rows={3} maxLength={2000} value={brief} disabled={busy} onChange={e => setBrief(e.target.value)} placeholder={t('playerInstructions.briefPlaceholder')} /></label>
+        <label className={s.label}>{t('playerInstructions.questionCount')}
+          <input className={settingsStyles.fieldInput} type="number" min={1} max={100} step={1} value={questionCount} disabled={busy} aria-invalid={!validQuestionCount} onChange={e => setQuestionCount(e.target.value)} />
+        </label>
+        <small>{t('playerInstructions.questionCountHelp')}</small>
         <Checkbox checked={includePrompt} disabled={busy} onChange={setIncludePrompt} label={t('playerInstructions.includePrompt')} />
         <small>{t(target.scope === 'chat' ? 'playerInstructions.promptChatHelp' : 'playerInstructions.promptGeneralHelp')}</small>
         {target.scope === 'chat' && <>
@@ -135,31 +147,38 @@ function PlayerSurveyModal({ target, modelId, currentText, onApplied, onClose }:
         </>}
         <Checkbox checked={personalize} disabled={busy} onChange={setPersonalize} label={t('playerInstructions.personalize')} />
         <small>{t('playerInstructions.personalizeHelp')}</small>
-        <button type="button" disabled={busy} onClick={async () => {
+        <button className={settingsStyles.saveBtn} type="button" disabled={busy || !validQuestionCount} onClick={async () => {
           setBusy(true); setError('');
-          try { const result = await prefs.createPlayerSurvey(target, brief, includeHistory, currentText, modelId, personalize, includePrompt); select(result.survey); await refresh(); }
+          try { const result = await prefs.createPlayerSurvey(target, brief, includeHistory, currentText, modelId, personalize, includePrompt, Number(questionCount)); select(result.survey); await refresh(); }
           catch (e) { setError(generationError(e)); }
           finally { setBusy(false); }
         }}>{t(busy ? 'playerInstructions.generating' : 'playerInstructions.generate')}</button>
-        {!!surveys.length && <section className={s.history}><h4>{t('playerInstructions.history')}</h4>{surveys.map(survey => <button key={survey.id} type="button" disabled={busy} onClick={() => select(survey)}>{survey.questionnaire.title} · {new Date(survey.created_at * 1000).toLocaleDateString()} {survey.applied_text !== null ? '✓' : ''}</button>)}</section>}
+        {!!surveys.length && <section className={s.history}><h4>{t('playerInstructions.history')}</h4>{surveys.map(survey => <button className={`${settingsStyles.cancelBtn} ${s.historyButton}`} key={survey.id} type="button" disabled={busy} onClick={() => select(survey)}>{survey.questionnaire.title} · {new Date(survey.created_at * 1000).toLocaleDateString()} {survey.applied_text !== null ? '✓' : ''}</button>)}</section>}
       </> : <>
-        <div className={s.actions}><button type="button" disabled={busy} onClick={() => select(null)}>{t('playerInstructions.allSurveys')}</button>
-          <button type="button" disabled={busy} onClick={() => setReview(value => !value)}>{t(review ? 'playerInstructions.draft' : 'playerInstructions.review')}</button>
-          <button type="button" disabled={busy} onClick={() => setDeleting(value => !value)}>{t('common.delete')}</button></div>
+        <div className={s.actions}><button className={settingsStyles.cancelBtn} type="button" disabled={busy} onClick={() => select(null)}>{t('playerInstructions.allSurveys')}</button>
+          <button className={settingsStyles.cancelBtn} type="button" disabled={busy} onClick={() => setReview(value => !value)}>{t(review ? 'playerInstructions.draft' : 'playerInstructions.review')}</button>
+          <button className={settingsStyles.cancelBtn} type="button" disabled={busy} onClick={() => setDeleting(value => !value)}>{t('common.delete')}</button></div>
         {deleting && <section className={s.deletePanel}>
           <p>{t('playerInstructions.deleteHelp')}</p>
           {selected.applied_text !== null && <Checkbox checked={removeApplied} onChange={setRemoveApplied} label={t('playerInstructions.restorePrevious')} />}
-          <div className={s.actions}><button type="button" disabled={busy} onClick={async () => {
+          <div className={s.actions}><button className={settingsStyles.cancelBtn} type="button" disabled={busy} onClick={async () => {
             setBusy(true); setError('');
             try { const result = await prefs.deletePlayerSurvey(selected.id, removeApplied); if (removeApplied) onApplied(result); select(null); await refresh(); }
             catch (e) { setError(t(e instanceof Error && e.message.includes('instructions_changed') ? 'playerInstructions.changed' : 'playerInstructions.saveFailed')); }
             finally { setBusy(false); }
-          }}>{t('common.delete')}</button><button type="button" disabled={busy} onClick={() => setDeleting(false)}>{t('common.cancel')}</button></div>
+          }}>{t('common.delete')}</button><button className={settingsStyles.cancelBtn} type="button" disabled={busy} onClick={() => setDeleting(false)}>{t('common.cancel')}</button></div>
         </section>}
         {selected.draft !== null && !review ? <>
           <label className={s.label}>{t('playerInstructions.draft')}<textarea rows={10} maxLength={12000} value={draft} disabled={busy} onChange={e => setDraft(e.target.value)} /></label>
           <small>{t('playerInstructions.applyHelp')}</small>
-          <button type="button" disabled={busy} onClick={async () => {
+          <button className={settingsStyles.cancelBtn} type="button" disabled={busy} onClick={async () => {
+            setBusy(true); setError('');
+            try { const result = await prefs.regeneratePlayerSurvey(selected.id); select(result.survey); await refresh(); }
+            catch (e) { setError(generationError(e)); }
+            finally { setBusy(false); }
+          }}>{t('playerInstructions.regenerate')}</button>
+          <small>{t('playerInstructions.regenerateHelp')}</small>
+          <button className={settingsStyles.saveBtn} type="button" disabled={busy} onClick={async () => {
             setBusy(true); setError('');
             try { const result = await prefs.applyPlayerSurvey(selected.id, draft); onApplied(result); setSelected({ ...selected, applied_text: result.text }); await refresh(); }
             catch (e) { setError(t(e instanceof Error && e.message.includes('instructions_changed') ? 'playerInstructions.changed' : 'playerInstructions.saveFailed')); }
@@ -168,10 +187,10 @@ function PlayerSurveyModal({ target, modelId, currentText, onApplied, onClose }:
           {selected.applied_text === draft.trim() && <p role="status">{t('playerInstructions.applied')}</p>}
         </> : <>
           <QuestionnaireCard key={selected.id} form={selected.questionnaire} storageKey={`chatter:player-survey:${JSON.stringify([API_BASE, user?.id, selected.id])}`} disabled={busy} submitted={selected.answers || undefined} onSubmit={completeAnswers} />
-          {selected.answers && selected.draft === null && <button type="button" disabled={busy} onClick={() => void completeAnswers(selected.answers!).catch(() => {})}>{t(busy ? 'playerInstructions.generating' : 'playerInstructions.retryDraft')}</button>}
+          {selected.answers && selected.draft === null && <button className={settingsStyles.cancelBtn} type="button" disabled={busy} onClick={() => void completeAnswers(selected.answers!).catch(() => {})}>{t(busy ? 'playerInstructions.generating' : 'playerInstructions.retryDraft')}</button>}
         </>}
       </>}
       {busy && <p role="status">{t('playerInstructions.generating')}</p>}
-    </div>
-  </div>, document.body);
+    </motion.div>
+  </motion.div>, document.body);
 }

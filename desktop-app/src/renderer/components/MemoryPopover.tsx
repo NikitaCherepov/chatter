@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { AnimatePresence, motion } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
 import { MemorySetupNotice } from './MemorySetupNotice';
 import { toast } from 'sonner';
@@ -205,9 +206,9 @@ export function MemoryPopover({ chatId, compactTrigger = false, preferredModel }
         </svg>
         {!compactTrigger && <span>{t('chat.memory.trigger')}</span>}
       </button>
-      {open && createPortal(
-        <div className={s.overlay} data-native-overlay onMouseDown={event => { if (event.target === event.currentTarget && !dialog) setOpen(false); }}>
-        <div className={`${s.popover} ${showChatMemory ? '' : s.popoverCompact}`} ref={modalRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}>
+      {createPortal(<AnimatePresence>{open && (
+        <motion.div key="chat-settings" className={s.overlay} initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} transition={{duration:.15}} data-native-overlay onMouseDown={event => { if (event.target === event.currentTarget && !dialog) setOpen(false); }}>
+        <motion.div className={`${s.popover} ${showChatMemory ? '' : s.popoverCompact}`} initial={{opacity:0,y:16}} animate={{opacity:1,y:0}} exit={{opacity:0,y:16}} transition={{duration:.2,ease:'easeOut'}} ref={modalRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}>
           <div className={s.header}><strong id={titleId}>{t('chat.memory.headerTitle')}</strong><span>{loading ? t('common.loading') : t('chat.memory.headerHint')}</span><button type="button" className={s.close} aria-label={t('common.close')} onClick={() => setOpen(false)}>×</button></div>
           <div className={s.body}>
           <MemorySetupNotice />
@@ -382,9 +383,9 @@ export function MemoryPopover({ chatId, compactTrigger = false, preferredModel }
               onConfirm={() => void deleteRecord()}
             />
           )}
-        </div>
-        </div>, document.body
-      )}
+        </motion.div>
+        </motion.div>
+      )}</AnimatePresence>, document.body)}
     </div>
   );
 }

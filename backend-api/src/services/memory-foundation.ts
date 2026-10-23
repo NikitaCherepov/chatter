@@ -46,6 +46,7 @@ export type MemorySpace = {
 export type ChatMemorySettings = {
   user_instructions: string;
   use_user_instructions: number;
+  user_instructions_mode: 'both' | 'persona' | 'chat' | 'off';
   user_id: number;
   chat_id: number;
   persona_id: number;
@@ -443,11 +444,14 @@ export const updateChatMemorySettings = (
   userId: number,
   chatId: number,
   patch: Partial<Pick<ChatMemorySettings,
-    'persona_override_id' | 'memory_mode' | 'write_target' | 'user_instructions' | 'use_user_instructions' |
+    'persona_override_id' | 'memory_mode' | 'write_target' | 'user_instructions' | 'use_user_instructions' | 'user_instructions_mode' |
     'use_core_memory' | 'allow_core_memory_update' | 'message_search_scope' | 'roleplay_mode' | 'prompt_injection_protection' | 'automatic_memory' | 'automatic_memory_mode' | 'memory_result_limit'>>,
 ): ChatMemorySettings => {
   const accountId = requireChatAccess(userId, chatId);
   const current = getChatMemorySettings(accountId, chatId);
+  const instructionMode = patch.user_instructions_mode ?? (patch.use_user_instructions === undefined
+    ? current.user_instructions_mode : patch.use_user_instructions ? (current.user_instructions_mode === 'off' ? 'both' : current.user_instructions_mode) : 'off');
+  if (!['both', 'persona', 'chat', 'off'].includes(instructionMode)) throw new Error('bad_instruction_target');
   const personaOverrideId = patch.persona_override_id === undefined
     ? current.persona_override_id
     : patch.persona_override_id;
@@ -493,13 +497,14 @@ export const updateChatMemorySettings = (
   db.prepare(`
     UPDATE chat_memory_settings
     SET persona_override_id = ?, general_space_id = ?, chat_space_id = ?, memory_mode = ?,
-        write_target = ?, use_core_memory = ?, allow_core_memory_update = ?, message_search_scope = ?, roleplay_mode = ?, prompt_injection_protection = ?, automatic_memory = ?, automatic_memory_mode = ?, memory_result_limit = ?, user_instructions = ?, use_user_instructions = ?, updated_at = ?
+        write_target = ?, use_core_memory = ?, allow_core_memory_update = ?, message_search_scope = ?, roleplay_mode = ?, prompt_injection_protection = ?, automatic_memory = ?, automatic_memory_mode = ?, memory_result_limit = ?, user_instructions = ?, use_user_instructions = ?, user_instructions_mode = ?, updated_at = ?
     WHERE user_id = ? AND chat_id = ?
   `).run(
     personaOverrideId, generalSpaceId, chatSpaceId, memoryMode, writeTarget,
     useCoreMemory, allowCoreMemoryUpdate, messageSearchScope, roleplayMode, protection, automaticMemory, automaticMode, memoryLimit,
     patch.user_instructions === undefined ? current.user_instructions : normalizeUserInstructions(patch.user_instructions),
-    patch.use_user_instructions === undefined ? current.use_user_instructions : patch.use_user_instructions ? 1 : 0,
+    patch.user_instructions_mode !== undefined ? (instructionMode === 'off' ? 0 : 1) : patch.use_user_instructions === undefined ? current.use_user_instructions : patch.use_user_instructions ? 1 : 0,
+    instructionMode,
     getNowUnix(), accountId, chatId,
   );
   return getChatMemorySettings(accountId, chatId);
@@ -658,8 +663,8 @@ export const initializeForkedChatMemory = (
       sourceSettings.allow_core_memory_update, sourceSettings.message_search_scope, sourceSettings.roleplay_mode, sourceSettings.prompt_injection_protection, sourceSettings.automatic_memory, sourceSettings.automatic_memory_mode, sourceSettings.memory_result_limit, now, now,
     );
 
-    db.prepare('UPDATE chat_memory_settings SET user_instructions = ?, use_user_instructions = ? WHERE user_id = ? AND chat_id = ?')
-      .run(sourceSettings.user_instructions || '', sourceSettings.use_user_instructions ?? 1, accountId, targetChatId);
+    db.prepare('UPDATE chat_memory_settings SET user_instructions = ?, use_user_instructions = ?, user_instructions_mode = ? WHERE user_id = ? AND chat_id = ?')
+      .run(sourceSettings.user_instructions || '', sourceSettings.use_user_instructions ?? 1, sourceSettings.user_instructions_mode, accountId, targetChatId);
     if (!sourceSpace || !targetSpace) {
       return { sourceSpace: sourceSpace ?? null, targetSpace, records: [] };
     }
