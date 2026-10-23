@@ -1,4 +1,5 @@
 {
+  "questionnaire": {"waiting":"Waiting for the questionnaire to finish…","invalid":"Complete required questions and check your answers.","stale":"This questionnaire has changed. Reopen the current response variant.","alreadySubmitted":"These answers were already submitted. Refresh the chat.","sendFailed":"Could not confirm submission. Your draft is kept; check the chat before retrying.","unsaved":"Local draft could not be saved on this device.","localDraft":"Draft stays on this device. Answers are sent only when you click Submit.","submitted":"Answers submitted","sending":"Sending…","submit":"Submit answers","result":"Questionnaire answers: {{title}}"},
   "interactivePreview": {
     "expand": "Expand", "collapse": "Back to chat", "title": "Interactive preview",
     "preview": "Preview", "code": "Code", "stop": "Stop", "restart": "Restart",

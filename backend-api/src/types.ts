@@ -224,6 +224,7 @@ export type MessageUsage = {
 };
 
 export type MessageDto = {
+  questionnaire_response?: import('./services/message-questionnaires.js').QuestionnaireResponse | null;
   id: number;
   chat_id: number;
   /** Stable position inside the chat timeline. */
@@ -340,6 +341,7 @@ export type AiSendResult = {
   message_timeline_index?: number;
   user_message_timeline_index?: number;
   user_message_images?: MessageImage[];
+  user_questionnaire_response?: import('./services/message-questionnaires.js').QuestionnaireResponse;
   model_fallback_notice?: string | null;
   preferred_model_reset?: boolean;
   tool_user_messages?: string[];

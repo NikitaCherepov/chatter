@@ -263,6 +263,22 @@ Decided to translate the project into your language? It's quick and easy:
 
 ## Important
 
+### Declarative questionnaires
+
+The desktop renders a completed `questionnaire` JSON fence as a native form, including inside Markdown grid/flex/box layouts:
+
+````markdown
+```questionnaire
+{"id":"preferences","title":"Your preferences","questions":[{"id":"format","type":"single","label":"Which format?","required":true,"options":["Brief","Detailed"]},{"id":"topics","type":"multiple","label":"Topics","options":["Design","Code"]},{"id":"notes","type":"textarea","label":"Anything else?"}]}
+```
+````
+
+Question types: `single`, `multiple`, `text`, `textarea`; 1–100 questions, up to 32 options per question, up to 4 forms per response. IDs must be unique ASCII letters/digits/underscore/hyphen, up to 64 characters. Labels are literal text, not executable markup. This collects answers, not secure exam scores.
+
+Drafts are local to the device and scoped by server, account, chat, message, response variant and form schema. Submit explicitly sends an ordinary user message with an immutable structured question/answer snapshot. The server validates ownership/membership, the currently active source variant, exact normalized schema, answers and duplicate submissions again in the same transaction as the insert. Regeneration does not transfer drafts to the new variant; switching back restores them. Submitted snapshots survive source edits and chat forks; deleting the submitted user message also removes that submission record. Telegram gets readable questions and accepts ordinary text replies, not native form buttons.
+
+The pure schema is maintained in `shared/message-questionnaires.ts`. Run `node scripts/sync-message-questionnaires.mjs` after changes (`--check` verifies packaged copies). No runtime cross-project imports, new packages or Docker changes are required. Run `pnpm exec tsx backend-api/tests/message-questionnaires.test.mts` for schema, snapshot, variant, duplicate and branch regressions.
+
  - The service may contain bugs I haven't found yet. If you find one — submit it to Issues, we'll figure it out. The bugs I already know about are in the fix backlog. I'm working on the project alone, so help is welcome!
  - Future plans include refactoring both the desktop-app and the backend-api.
  - When using Chatter as a CLI for work, issues may still occur (e.g. it might confuse a string and not check types, leaving an error). I'm working on improving this.

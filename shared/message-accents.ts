@@ -60,7 +60,7 @@ export function prepareMessageAccents(source: string): string {
 }
 
 function transformMessageAccents(source: string, stripComplete: boolean): string {
-  if (!source.includes('](style') && !(stripComplete && source.includes('layout:'))
+  if (!source.includes('](style') && !(stripComplete && (source.includes('layout:') || source.includes('questionnaire')))
     && !/<\/?(?:grid|flex|box)\b/.test(source)) return source;
   let result = '';
   let index = 0;
@@ -72,7 +72,20 @@ function transformMessageAccents(source: string, stripComplete: boolean): string
         end.lastIndex = index + fence[0].length;
         const closing = end.exec(source);
         const stop = closing ? end.lastIndex : source.length;
-        result += source.slice(index, stop);
+        let literal = source.slice(index, stop);
+        // Telegram/plain fallback only. No new bot runtime dependency or executable markup.
+        if (stripComplete && closing && /^ {0,3}(?:`{3,}|~{3,})questionnaire[ \t]*\r?\n/.test(fence[0])) {
+          try {
+            const form = JSON.parse(source.slice(index + fence[0].length, closing.index));
+            if (typeof form.title === 'string' && Array.isArray(form.questions) && form.questions.length <= 100
+              && form.questions.every((q: any) => typeof q?.label === 'string' && ['single', 'multiple', 'text', 'textarea'].includes(q.type)
+                && (q.options === undefined || (Array.isArray(q.options) && q.options.length <= 32 && q.options.every((v: any) => typeof v === 'string'))))) {
+              literal = form.title + '\n\n' + form.questions.map((q: any, n: number) => `${n + 1}. ${q.label}${q.required ? ' *' : ''}`
+                + (q.options?.length ? '\n' + q.options.map((o: string) => `- ${o}`).join('\n') : '')).join('\n\n') + '\n';
+            }
+          } catch { /* Invalid JSON stays literal code. */ }
+        }
+        result += literal;
         index = stop;
         continue;
       }

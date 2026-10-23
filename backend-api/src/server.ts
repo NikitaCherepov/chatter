@@ -156,6 +156,7 @@ import { translateForLanguage } from './i18n/index.js';
 import { associateServerAccessKeyUser, createServerAccessKey, getLastServerAccessKeyForUser, isServerAccessKeyGateEnabled, listServerAccessKeys, revokeServerAccessKey, validateServerAccessKey } from './services/server-access-keys.js';
 import { addChatAgent, canReadChatMessages, createChatRoom, createChatRoomInvite, deleteChatRoom, getChatAgentForResponse, getChatRoom, getChatRoomInviteInfo, joinChatRoomByInvite, leaveChatRoom, listChatReaderUserIds, listChatRoomInvites, removeChatAgent, removeChatRoomMember, revokeChatRoomInvite, reorderChatAgents, reorderChatMembers, updateChatAgent, updateChatRoomSettings } from './services/chat-rooms.js';
 import { runChatSteps, hasActiveChatRun } from './services/chat-runner.js';
+import { questionnaireAnswerText } from './services/message-questionnaires.js';
 import { isRoomChat, runRoomAgents, runRoomResponseQueue, stopRoomQueue, hasActiveRoomRun } from './services/room-runner.js';
 
 /** Fire-and-forget WS broadcast to every chat reader (owner for single, owner+members for rooms). */
@@ -3130,6 +3131,7 @@ app.post('/api/v1/chat/send', async (req: AuthedRequest, res) => {
         ? Number(req.body.regenerate_message_id)
         : undefined,
       skipUserHistory: Boolean(req.body?.skip_user_history),
+      questionnaireSubmission: req.body?.questionnaire_submission,
       featureFlags: rawUserRecord ? parseFeatureFlags(rawUserRecord) : undefined,
       diceRollMode: Boolean(parseUiSettings(rawUserRecord ?? getUserById(userId)).dice_roll_enabled),
       ...(() => { const fv = resolveDiceForceValue(req.body?.dice_mode); return fv !== undefined ? { diceRollForceValue: fv } : {}; })(),
@@ -3144,7 +3146,9 @@ app.post('/api/v1/chat/send', async (req: AuthedRequest, res) => {
         isDesktop: true,
       });
       writeEvent({
+        // Use server-normalized labels/answers for room readers as well.
         type: 'chat_user_message_saved',
+        questionnaire_response: result.user_questionnaire_response,
         chat_id: targetChatId,
         message_id: result.user_message_id ?? null,
         ...(typeof result.user_message_timeline_index === 'number' ? { timeline_index: result.user_message_timeline_index } : {}),
@@ -3153,18 +3157,19 @@ app.post('/api/v1/chat/send', async (req: AuthedRequest, res) => {
       res.end();
       broadcastToChat(targetChatId, {
         type: 'room_user_message',
+        questionnaire_response: result.user_questionnaire_response,
         chat_id: targetChatId,
         message_id: result.user_message_id ?? null,
         ...(typeof result.user_message_timeline_index === 'number' ? { timeline_index: result.user_message_timeline_index } : {}),
         sender_user_id: userId,
-        text,
+        text: result.user_questionnaire_response ? questionnaireAnswerText(result.user_questionnaire_response.questionnaire, result.user_questionnaire_response.answers) : text,
         ...(result.user_message_images ? { images: result.user_message_images } : {}),
         ...(savedUserAttachments ? { attachments: savedUserAttachments } : {}),
       });
       void runRoomResponseQueue(
         targetChatId,
         userId,
-        text,
+        result.user_questionnaire_response ? questionnaireAnswerText(result.user_questionnaire_response.questionnaire, result.user_questionnaire_response.answers) : text,
         (payload) => broadcastToChat(targetChatId, payload),
         { isVoice },
       );
@@ -8464,6 +8469,7 @@ async function handleWsChatSend(client: WsClient, msg: any) {
         ? Number(msg.regenerate_message_id)
         : undefined,
       skipUserHistory: Boolean(msg.skip_user_history),
+      questionnaireSubmission: msg.questionnaire_submission,
       featureFlags: rawUserRecord ? parseFeatureFlags(rawUserRecord) : undefined,
       diceRollMode: Boolean(parseUiSettings(rawUserRecord ?? getUserById(userId)).dice_roll_enabled),
       ...(() => { const fv = resolveDiceForceValue(msg.dice_mode); return fv !== undefined ? { diceRollForceValue: fv } : {}; })(),
@@ -8483,6 +8489,7 @@ async function handleWsChatSend(client: WsClient, msg: any) {
       // bubble); other members get room_user_message below.
       sendWsJson({
         type: 'chat_user_message_saved',
+        questionnaire_response: result.user_questionnaire_response,
         chat_id: targetChatId,
         message_id: result.user_message_id ?? null,
         ...(typeof result.user_message_timeline_index === 'number' ? { timeline_index: result.user_message_timeline_index } : {}),
@@ -8490,18 +8497,19 @@ async function handleWsChatSend(client: WsClient, msg: any) {
       });
       broadcastToChat(targetChatId, {
         type: 'room_user_message',
+        questionnaire_response: result.user_questionnaire_response,
         chat_id: targetChatId,
         message_id: result.user_message_id ?? null,
         ...(typeof result.user_message_timeline_index === 'number' ? { timeline_index: result.user_message_timeline_index } : {}),
         sender_user_id: userId,
-        text,
+        text: result.user_questionnaire_response ? questionnaireAnswerText(result.user_questionnaire_response.questionnaire, result.user_questionnaire_response.answers) : text,
         ...(result.user_message_images ? { images: result.user_message_images } : {}),
         ...(savedUserAttachments ? { attachments: savedUserAttachments } : {}),
       });
       void runRoomResponseQueue(
         targetChatId,
         userId,
-        text,
+        result.user_questionnaire_response ? questionnaireAnswerText(result.user_questionnaire_response.questionnaire, result.user_questionnaire_response.answers) : text,
         (payload) => broadcastToChat(targetChatId, payload),
         { isVoice: Boolean(is_voice) },
       );

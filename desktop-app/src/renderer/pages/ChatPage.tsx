@@ -22,6 +22,8 @@ import * as api from '../lib/api';
 import { promoteChatInFolder } from '../lib/chat-list-order';
 import { generateDocxBlob, generateChatDocxBlob } from '../lib/markdownToDocx';
 import { MarkdownRenderer } from '../components/MarkdownRenderer';
+import { QuestionnaireResult, type QuestionnaireContextValue } from '../components/Questionnaire';
+import { questionnaireAnswerText, type QuestionnaireSubmission } from '../lib/message-questionnaires';
 import { EmailBodyPreview } from '../components/EmailBodyPreview';
 import { AttachModal, prepareAttachmentFiles } from '../components/AttachModal';
 import { RoomInvitesModal } from '../components/RoomInvitesModal';
@@ -558,6 +560,7 @@ const DocxAttachmentPreview = ({ src, cacheKey, loadingLabel, errorLabel }: Docx
 };
 
 type MessageItemProps = {
+  questionnaire?: QuestionnaireContextValue;
   msg: api.Message;
   authorName?: string;
   isOwnUser: boolean;
@@ -616,6 +619,7 @@ const renderHighlightedPlainText = (content: string, query: string): React.React
 };
 
 const MessageItem = React.memo(function MessageItem({
+  questionnaire,
   msg,
   authorName,
   isOwnUser,
@@ -1066,10 +1070,11 @@ const MessageItem = React.memo(function MessageItem({
                     <span className={s.dot} />
                   </div>
                 ) : (
-                  <div className={`${s.bubbleText} ${isStreamingContent ? s.bubbleTextStreaming : ''}`}><MarkdownRenderer content={displayedVariantContent} highlightQuery={searchHighlightQuery} onImageClick={onSetViewerImageSrc} /></div>
+                  <div className={`${s.bubbleText} ${isStreamingContent ? s.bubbleTextStreaming : ''}`}><MarkdownRenderer content={displayedVariantContent} highlightQuery={searchHighlightQuery} onImageClick={onSetViewerImageSrc} questionnaire={questionnaire} /></div>
                 )
               )
-              : <div className={s.bubbleTextPlain}>{renderHighlightedPlainText(msg.content, searchHighlightQuery)}</div>
+              : msg.questionnaire_response ? <QuestionnaireResult response={msg.questionnaire_response} />
+                : <div className={s.bubbleTextPlain}>{renderHighlightedPlainText(msg.content, searchHighlightQuery)}</div>
           )}
         </motion.div>
         <AnimatePresence>
@@ -2930,6 +2935,7 @@ export function ChatPage() {
             created_at: Math.floor(Date.now() / 1000),
             ...(event.images ? { images: event.images } : {}),
             ...(event.attachments ? { attachments: event.attachments } : {}),
+            ...(event.questionnaire_response ? { questionnaire_response: event.questionnaire_response } : {}),
           }]);
           break;
         }
@@ -2940,7 +2946,7 @@ export function ChatPage() {
           const messageId = event.message_id ?? tempId;
           const images = event.images;
           setMessages((prev) => prev.map((message) => message.id === tempId
-            ? { ...message, id: messageId, ...(typeof event.timeline_index === 'number' ? { timeline_index: event.timeline_index } : {}), ...(images ? { images } : {}) }
+            ? { ...message, id: messageId, ...(typeof event.timeline_index === 'number' ? { timeline_index: event.timeline_index } : {}), ...(images ? { images } : {}), ...(event.questionnaire_response ? { questionnaire_response: event.questionnaire_response } : {}) }
             : message));
           break;
         }
@@ -3275,6 +3281,38 @@ export function ChatPage() {
     return;
 
   }, [input, sending, activeChatId, attachedImages, attachedDocuments, attachedImageBytes, maxImageBytes, maxImageCount, preferredModel, handleIncomingDesktopAction, diceRollEnabled, startDiceRollAnimation, finishDiceRoll, diceStatus, diceMode, applyAvatarState, t, roomCreated, armSendWatchdog, clearSendWatchdog]);
+
+  const handleQuestionnaireSubmit = useCallback(async (submission: QuestionnaireSubmission) => {
+    if (!activeChatId || sending) throw new Error('chat_busy');
+    const chatId = activeChatId;
+    const form = JSON.parse(submission.schema);
+    const response = { ...submission, questionnaire: form };
+    const tempId = -Date.now();
+    const text = questionnaireAnswerText(form, submission.answers);
+    setMessages(prev => [...prev, { id: tempId, role: 'user', user_id: user?.id, content: text,
+      created_at: Math.floor(Date.now() / 1000), questionnaire_response: response }]);
+    pendingUserMessageIdByChatRef.current.set(chatId, tempId);
+    setSending(true); setShowTyping(true); setTypingIdentity(null);
+    armSendWatchdog(chatId);
+    try {
+      await api.sendQuestionnaireTrigger({ text, chatId, questionnaire_submission: submission,
+        displayManifest: getAvatarManifest(), currentDisplayState: currentAvatarStateRef.current,
+        preferredModel, userOnly: roomCreated });
+    } catch (error) {
+      // On lost acknowledgement, reconcile with persisted history before allowing a retry.
+      const saved = await api.getMessages(chatId, 100, 0).catch(() => null);
+      const persisted = saved?.messages.find(m => m.user_id === user?.id && m.questionnaire_response?.source_message_id === submission.source_message_id
+        && m.questionnaire_response.source_variant_index === submission.source_variant_index && m.questionnaire_response.form_id === submission.form_id && m.questionnaire_response.schema === submission.schema);
+      pendingUserMessageIdByChatRef.current.delete(chatId);
+      clearSendWatchdog(chatId);
+      if (activeChatIdRef.current === chatId) {
+        setMessages(prev => persisted ? prev.some(m => m.id === persisted.id) ? prev.filter(m => m.id !== tempId)
+          : prev.map(m => m.id === tempId ? persisted : m) : prev.filter(m => m.id !== tempId));
+        setSending(false); setShowTyping(false);
+      }
+      if (!persisted) throw error;
+    }
+  }, [activeChatId, sending, user?.id, preferredModel, roomCreated, armSendWatchdog, clearSendWatchdog]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
@@ -5797,6 +5835,13 @@ export function ChatPage() {
                 )}
                 <MessageItem
                   msg={msg}
+                  questionnaire={msg.role === 'assistant' ? {
+                    scope: JSON.stringify([api.API_BASE, user?.id, activeChatId]),
+                    messageId: msg.id, variantIndex: msg.variant_index ?? 0, content: msg.content,
+                    disabled: sending || switchingVariantId !== null || msg.id <= 0,
+                    responses: messages.filter(m => m.id > 0 && m.role === 'user' && m.user_id === user?.id && m.questionnaire_response).map(m => m.questionnaire_response!),
+                    onSubmit: handleQuestionnaireSubmit,
+                  } : undefined}
                   authorName={msg.role === 'user' && msg.user_id && msg.user_id !== user?.id
                     ? (roomMembers.find((member) => member.user_id === msg.user_id)?.name || `#${msg.user_id}`)
                     : undefined}
@@ -7397,7 +7442,7 @@ export function ChatPage() {
                   {t('chat.message.createBranch')}
                 </button>
                 )}
-                {canEditMenuMessage && (
+                {canEditMenuMessage && !messages.find(m => m.id === msgMenuId)?.questionnaire_response && (
                   <button className={s.contextMenuItem} onClick={() => handleStartEdit(msgMenuId)}>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />

@@ -7,6 +7,8 @@ import { withModelActor, currentModelActor, canUseModel, assertModelAccess, regi
 import nodeFetch from 'node-fetch';
 import { ProxyAgent } from 'proxy-agent';
 import { Readable } from 'node:stream';
+import { resolveQuestionnaireSubmission } from './chats.js';
+import { questionnaireAnswerText, type QuestionnaireSubmission, type QuestionnaireResponse } from './message-questionnaires.js';
 import type { AiSendResult, DesktopActionPayload, DisplayStatePayload, MapUpdatePayload, TaskNotifyMode, TaskRecurrenceType, TaskTargetMode, TaskType, UserPlan, UserRecord, MessageAttachment, MessageImage, MessageUsage, NormalizedTokenUsage, TokenUsageCall } from '../types.js';
 import { appendChatMessage, ensureActiveChat, getHistoryForAi, getMessageTokens, getMessageVariantState, getUserById, getUserChatListItem, renameUserChat, resolveMaxContextTokens, resolveAttachmentMaxTokens, injectAttachments, setUserTimezone, trimUserHistoryByChat, isMultiUserRoomChat, planRoomHistorySummary, getChatContextTokens, resolvePromptForChat } from './chats.js';
 import { calculateChargedTokens, checkQuota, chargeTokens, getModelOverride, getPricingSnapshot, calculateEstimatedCostUsd, isModelFree } from './token-quota.js';
@@ -6837,6 +6839,7 @@ const sendMessageThroughAiInternal = async (
     skipHistory?: boolean;
     skipUserHistory?: boolean;
     persistUserText?: string;
+    questionnaireSubmission?: QuestionnaireSubmission;
     userTelegramChatId?: number | null;
     userTelegramMessageId?: number | null;
     assistantTelegramChatId?: number | null;
@@ -6855,7 +6858,7 @@ const sendMessageThroughAiInternal = async (
     onToolStatus?: (text: string) => Promise<void> | void;
     onMapUpdate?: (data: MapUpdatePayload) => Promise<void> | void;
     onDiceRoll?: (roll: number) => Promise<void> | void;
-    onUserMessageSaved?: (data: { message_id: number; timeline_index?: number; images?: Array<{ url: string; type: 'user_photo' }> }) => Promise<void> | void;
+    onUserMessageSaved?: (data: { message_id: number; timeline_index?: number; images?: Array<{ url: string; type: 'user_photo' }>; questionnaire_response?: QuestionnaireResponse }) => Promise<void> | void;
     /** Стрим токенов контента в реальном времени (уже оттроттлено в streamAndAssemble). */
     onStreamToken?: (text: string) => Promise<void> | void;
     /** Стрим reasoning-токенов в реальном времени. */
@@ -6938,6 +6941,12 @@ const sendMessageThroughAiInternal = async (
   const hasAttachments = Boolean(options?.userAttachments?.length);
   const requestedRegenerateFromHistory = Boolean(options?.regenerateFromHistory);
   let text = (inputText || '').trim();
+  let questionnaireResponse: QuestionnaireResponse | undefined;
+  if (options?.questionnaireSubmission) {
+    if (!targetChatId || options.skipHistory || options.skipUserHistory || options.regenerateFromHistory || options.regenerateMessageId || options.agentId) throw new Error('questionnaire_invalid');
+    questionnaireResponse = resolveQuestionnaireSubmission(userId, targetChatId, options.questionnaireSubmission);
+    text = questionnaireAnswerText(questionnaireResponse.questionnaire, questionnaireResponse.answers);
+  }
   if (!text && !hasImages && !hasAttachments) throw new Error('empty_text');
   // Фото форсирует PRO-маршрут (минуя LITE-роутер), но не переключает модель на vision-pro/lite.
   // Если основная модель поддерживает vision — фото пойдёт напрямую. Если нет — будет доступен tool describe_image.
@@ -6946,7 +6955,7 @@ const sendMessageThroughAiInternal = async (
     text = text.replace(/^!{3,}/, '').trim();
     if (!text) throw new Error('empty_text');
   }
-  const userTextForHistory = options?.persistUserText?.trim() || text;
+  const userTextForHistory = questionnaireResponse ? text : options?.persistUserText?.trim() || text;
 
   // Резолв preferred model: из options (явный запрос) или из профиля юзера
   const isAdmin = user.is_admin === 1;
@@ -7597,7 +7606,7 @@ const sendMessageThroughAiInternal = async (
       : null;
     const userMessageImages = options?.userImages?.length ? options.userImages : null;
     const userMessageAttachments = options?.userAttachments?.length ? options.userAttachments : null;
-    userMessageId = await appendChatMessage(userId, chatId, 'user', userTextForHistory, userTelegramChatId, userTelegramMessageId, userMessageImages, null, null, userMessageAttachments);
+    userMessageId = await appendChatMessage(userId, chatId, 'user', userTextForHistory, userTelegramChatId, userTelegramMessageId, userMessageImages, null, null, userMessageAttachments, null, { questionnaireSubmission: options?.questionnaireSubmission });
     userMessageCursor = (db.prepare(`
       SELECT timeline_index FROM chat_messages
       WHERE id = ? AND chat_id = ? AND user_id = ?
@@ -7605,6 +7614,7 @@ const sendMessageThroughAiInternal = async (
     if (options?.onUserMessageSaved) {
       await Promise.resolve(options.onUserMessageSaved({
         message_id: userMessageId,
+        ...(questionnaireResponse ? { questionnaire_response: questionnaireResponse } : {}),
         ...(typeof userMessageCursor === 'number' ? { timeline_index: userMessageCursor } : {}),
         ...(userMessageImages ? { images: userMessageImages } : {}),
       })).catch((err: any) => {
@@ -7650,6 +7660,7 @@ const sendMessageThroughAiInternal = async (
       user_message_id: userMessageId,
       ...(typeof userMessageCursor === 'number' ? { user_message_timeline_index: userMessageCursor } : {}),
       user_message_images: options?.userImages?.length ? options.userImages : undefined,
+      user_questionnaire_response: questionnaireResponse,
       usage: {
         tokens_used: 0,
         used_model: null,

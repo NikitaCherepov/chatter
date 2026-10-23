@@ -9,10 +9,12 @@ import { isMessageImageUrl, remarkMessageImages } from '../lib/remark-message-im
 import { remarkMessageLayouts } from '../lib/remark-message-layouts';
 import { remarkInteractiveCode } from '../lib/remark-interactive-code';
 import { MarkdownCode } from './MarkdownCode';
+import { QuestionnaireContext, type QuestionnaireContextValue } from './Questionnaire';
 import { resolveImageUrl } from '../lib/api';
 import s from './MarkdownRenderer.module.scss';
 
 type MarkdownRendererProps = {
+  questionnaire?: QuestionnaireContextValue;
   content: string;
   /** Scoping class appended after .md for embedder re-theming. */
   className?: string;
@@ -110,8 +112,9 @@ const rehypeSearchHighlights = (options: { query?: string } = {}) => (tree: Hast
   visit(tree);
 };
 
-export function MarkdownRenderer({ content, className, highlightQuery = '', onImageClick }: MarkdownRendererProps) {
+export function MarkdownRenderer({ content, className, highlightQuery = '', onImageClick, questionnaire }: MarkdownRendererProps) {
   return (
+    <QuestionnaireContext.Provider value={questionnaire}>
     <ImageClickContext.Provider value={onImageClick}>
     <div className={className ? `${s.md} ${className}` : s.md}>
       <ReactMarkdown
@@ -193,5 +196,6 @@ export function MarkdownRenderer({ content, className, highlightQuery = '', onIm
       </ReactMarkdown>
     </div>
     </ImageClickContext.Provider>
+    </QuestionnaireContext.Provider>
   );
 }

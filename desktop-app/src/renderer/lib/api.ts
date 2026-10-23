@@ -405,6 +405,7 @@ export type SubagentTrace = {
 };
 
 export type Message = {
+  questionnaire_response?: import('./message-questionnaires').QuestionnaireResponse | null;
   id: number;
   timeline_index?: number;
   role: 'user' | 'assistant';
@@ -989,7 +990,7 @@ const MAX_RECONNECT_DELAY = 30000;
 let wsTokenRefreshPromise: Promise<boolean> | null = null;
 
 export type RoomEvent =
-  | { type: 'room_user_message'; chat_id: number; message_id: number | null; timeline_index?: number; sender_user_id: number; text: string; images?: MessageImage[]; attachments?: MessageAttachment[] }
+  | { type: 'room_user_message'; chat_id: number; message_id: number | null; timeline_index?: number; sender_user_id: number; text: string; images?: MessageImage[]; attachments?: MessageAttachment[]; questionnaire_response?: import('./message-questionnaires').QuestionnaireResponse }
   | { type: 'chat_agent_start'; chat_id: number; agent_id: number | null; agent_name: string; owner_user_id: number; reason: 'mention' | 'auto' | 'manual'; prompt_id?: number | null; prompt_name?: string | null; prompt_image_url?: string | null }
   | { type: 'chat_agent_token'; chat_id: number; agent_id: number | null; text: string }
   | { type: 'chat_agent_reasoning'; chat_id: number; agent_id: number | null; text: string }
@@ -1005,7 +1006,7 @@ export type RoomEvent =
   | { type: 'room_members_updated'; chat_id: number }
   | { type: 'room_message_deleted'; chat_id: number; message_id: number; initiator_user_id: number }
   | { type: 'room_message_edited'; chat_id: number; message_id: number; initiator_user_id: number; content: string }
-  | { type: 'chat_user_message_saved'; chat_id: number; message_id: number | null; timeline_index?: number; images?: MessageImage[] }
+  | { type: 'chat_user_message_saved'; chat_id: number; message_id: number | null; timeline_index?: number; images?: MessageImage[]; questionnaire_response?: import('./message-questionnaires').QuestionnaireResponse }
   | { type: 'chat_queue_done'; chat_id: number };
 
 type WsCallbacks = StreamCallbacks & {
@@ -1433,6 +1434,7 @@ export function isWsConnected(): boolean {
  * Resolves to false when the trigger could not be delivered at all
  * (WS send failed and the SSE fallback failed to open). */
 export async function sendChatTrigger(payload: {
+  questionnaire_submission?: import('./message-questionnaires').QuestionnaireSubmission;
   text: string;
   chatId?: number;
   images?: ChatSendImage[];
@@ -1453,6 +1455,7 @@ export async function sendChatTrigger(payload: {
 }) {
   if (ws && ws.readyState === WebSocket.OPEN) {
     const msg: Record<string, unknown> = { type: 'chat_send', text: payload.text };
+    if (payload.questionnaire_submission) msg.questionnaire_submission = payload.questionnaire_submission;
     if (payload.chatId) msg.chat_id = payload.chatId;
     if (payload.images?.length) msg.images = payload.images;
     if (payload.documents?.length) msg.documents = payload.documents;
@@ -1484,6 +1487,23 @@ export async function sendChatTrigger(payload: {
 }
 
 // ── Stop chat generation ──
+/** Resolve on persistence, not merely on successful transport delivery. */
+export function sendQuestionnaireTrigger(payload: Parameters<typeof sendChatTrigger>[0] & { chatId: number; questionnaire_submission: import('./message-questionnaires').QuestionnaireSubmission }): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const submission = payload.questionnaire_submission;
+    const finish = (error?: Error) => { clearTimeout(timer); unsubscribe(); error ? reject(error) : resolve(); };
+    const unsubscribe = subscribeRoomEvents(event => {
+      if (event.chat_id !== payload.chatId) return;
+      if (event.type === 'chat_user_message_saved' && event.message_id && event.questionnaire_response) {
+        const r = event.questionnaire_response;
+        if (r.source_message_id === submission.source_message_id && r.source_variant_index === submission.source_variant_index && r.form_id === submission.form_id && r.schema === submission.schema) finish();
+      } else if (event.type === 'chat_agent_error') finish(new Error(event.error));
+    });
+    const timer = setTimeout(() => finish(new Error('questionnaire_ack_timeout')), 60_000);
+    void sendChatTrigger(payload).then(delivered => { if (!delivered) finish(new Error('connection_lost')); }, error => finish(error instanceof Error ? error : new Error('connection_lost')));
+  });
+}
+
 
 /** Stop the currently running chat run (single or room). */
 export function stopRoomStream(chatId: number) {
@@ -1499,6 +1519,7 @@ export function stopRoomStream(chatId: number) {
 // ── SSE fallback (kept for when WS is not connected) ──
 
 async function sendChatTriggerSSE(payload: {
+  questionnaire_submission?: import('./message-questionnaires').QuestionnaireSubmission;
   text: string;
   chatId?: number;
   images?: ChatSendImage[];
@@ -1523,6 +1544,7 @@ async function sendChatTriggerSSE(payload: {
     if (tokens?.access_token) headers['Authorization'] = `Bearer ${tokens.access_token}`;
 
     const body: Record<string, unknown> = { text: payload.text, is_desktop: true };
+    if (payload.questionnaire_submission) body.questionnaire_submission = payload.questionnaire_submission;
     if (payload.chatId) body.chat_id = payload.chatId;
     if (payload.images?.length) body.images = payload.images;
     if (payload.documents?.length) body.documents = payload.documents;

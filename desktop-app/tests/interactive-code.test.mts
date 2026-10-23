@@ -8,7 +8,7 @@ const { remarkInteractiveCode, isClosedPreviewFence } = require('../src/renderer
 const { INTERACTIVE_CSP, interactiveDocument, validateInteractiveInput } = require('../src/main/interactive-document.ts');
 const render = (children: string) => renderToStaticMarkup(React.createElement(ReactMarkdown, { remarkPlugins: [remarkInteractiveCode], children }));
 const source = 'export default function App(){return <button>Hello</button>}';
-for (const language of ['interactive','jsx','tsx','html']) {
+for (const language of ['interactive','jsx','tsx','html','questionnaire']) {
   const fence = '```' + language + '\n' + source + '\n```';
   assert.ok(isClosedPreviewFence(fence));
   assert.match(render(fence), /data-preview-closed="yes"/);

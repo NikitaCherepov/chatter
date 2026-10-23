@@ -612,6 +612,7 @@ ensureChatMessageColumn('subagents_json', 'ALTER TABLE chat_messages ADD COLUMN 
 // in branches of branches. Deleted messages intentionally leave gaps.
 ensureChatMessageColumn('timeline_index', 'ALTER TABLE chat_messages ADD COLUMN timeline_index INTEGER');
 ensureChatMessageColumn('active_variant_index', 'ALTER TABLE chat_messages ADD COLUMN active_variant_index INTEGER NOT NULL DEFAULT 0');
+ensureChatMessageColumn('questionnaire_response', 'ALTER TABLE chat_messages ADD COLUMN questionnaire_response TEXT');
 db.exec(`
   CREATE TABLE IF NOT EXISTS chat_message_variants (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

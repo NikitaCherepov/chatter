@@ -1,0 +1,22 @@
+.form, .result {
+  margin: 12px 0;
+  padding: 16px;
+  border: 1px solid var(--border-color, #334155);
+  border-radius: 12px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--text-primary);
+  h3 { margin: 0 0 16px; }
+  fieldset { border: 0; padding: 0; min-width: 0; margin: 0; }
+  .question { margin-bottom: 20px; }
+  legend { font-weight: 600; padding: 0; margin-bottom: 8px; }
+  .option { display: flex; align-items: baseline; gap: 10px; margin: 8px 0; cursor: pointer; }
+  input[type='radio'], input[type='checkbox'] { accent-color: var(--accent-color, #60a5fa); flex-shrink: 0; }
+  input[type='text'], textarea { box-sizing: border-box; width: 100%; resize: vertical; border: 1px solid var(--border-color, #334155); border-radius: 8px; padding: 10px; background: var(--bg-input, #172331); color: inherit; font: inherit; }
+  button { padding: 9px 16px; border-radius: 8px; border: 1px solid var(--border-color, #334155); background: var(--bg-modal-hover, #23354a); color: inherit; cursor: pointer; font: inherit; }
+  button:disabled { opacity: .6; cursor: default; }
+  small { display: block; margin-top: 10px; color: var(--text-muted); }
+  summary { cursor: pointer; }
+  dt { font-weight: 600; margin-top: 12px; }
+  dd { margin: 4px 0 0; white-space: pre-wrap; }
+}

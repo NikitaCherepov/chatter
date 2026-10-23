@@ -1,5 +1,6 @@
 ﻿import fs from 'node:fs';
 import path from 'node:path';
+import { extractQuestionnaires, questionnaireSchema, validateQuestionnaireAnswers, questionnaireAnswerText, type QuestionnaireSubmission, type QuestionnaireResponse } from './message-questionnaires.js';
 import { db, toUnix } from '../db.js';
 import type { ChatDto, MessageDto, MessageImage, MessageAudio, MessageAttachment, ChatRole, UserRecord, MessageUsage } from '../types.js';
 import { copyAttachmentFile, deleteAttachmentFile } from './attachment-storage.js';
@@ -748,6 +749,7 @@ export const forkChat = (
       VALUES (?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
+    const questionnaireMessageIds = new Map<number, number>();
     for (const row of rows) {
       // Rewrite attachments JSON: copy each file on disk, drop missing ones.
       let newAttachmentsJson: string | null = row.attachments;
@@ -797,6 +799,13 @@ export const forkChat = (
         row.created_at         // preserve original timestamps
       );
       const copiedMessageId = Number(inserted.lastInsertRowid);
+      questionnaireMessageIds.set(row.id, copiedMessageId);
+      const responseRow = db.prepare('SELECT questionnaire_response FROM chat_messages WHERE id = ?').get(row.id) as { questionnaire_response: string | null };
+      if (responseRow.questionnaire_response) {
+        const response = JSON.parse(responseRow.questionnaire_response) as QuestionnaireResponse;
+        response.source_message_id = questionnaireMessageIds.get(response.source_message_id) ?? response.source_message_id;
+        db.prepare('UPDATE chat_messages SET questionnaire_response = ? WHERE id = ?').run(JSON.stringify(response), copiedMessageId);
+      }
       const variants = db.prepare(`
         SELECT variant_index, content, reasoning_content, tool_calls_json, images,
                attachments, subagents_json, usage_json, prompt_id, prompt_name,
@@ -1096,6 +1105,8 @@ export const editUserMessage = (
   messageId: number,
   newContent: string
 ): { ok: boolean; token_count?: number } => {
+  // Submitted answers are immutable; do not let displayed text diverge from the snapshot.
+  if ((db.prepare('SELECT questionnaire_response FROM chat_messages WHERE id = ? AND user_id = ? AND chat_id = ?').get(messageId, userId, chatId) as { questionnaire_response?: string } | undefined)?.questionnaire_response) return { ok: false };
   const row = db.prepare(
     'SELECT role FROM chat_messages WHERE id = ? AND user_id = ? AND chat_id = ?'
   ).get(messageId, userId, chatId) as { role: ChatRole } | undefined;
@@ -1281,7 +1292,7 @@ export const getChatMessages = (userId: number, chatId: number, limit = 20, offs
   const multiUserRoom = readerIds.length > 1;
   const placeholders = readerIds.map(() => '?').join(', ');
   const rows = db.prepare(`
-    SELECT m.id, m.chat_id, m.timeline_index, m.user_id, m.role, m.content, m.reasoning_content, m.tool_calls_json, m.images,
+    SELECT m.id, m.chat_id, m.timeline_index, m.user_id, m.role, m.content, m.reasoning_content, m.tool_calls_json, m.images, m.questionnaire_response,
            cma.audio AS viewer_audio,
            m.telegram_chat_id, m.telegram_message_id, m.created_at, m.archived, m.token_count,
            m.reasoning_tokens, m.attachments, m.subagents_json, m.usage_json, m.prompt_id, m.prompt_name,
@@ -1348,6 +1359,9 @@ export const getChatMessages = (userId: number, chatId: number, limit = 20, offs
       user_id: row.user_id,
       role: row.role,
       content: row.content,
+      questionnaire_response: (() => {
+        try { return JSON.parse((row as typeof row & { questionnaire_response: string | null }).questionnaire_response || 'null'); } catch { return null; }
+      })(),
       reasoning_content: row.reasoning_content,
       tool_calls: parsedToolCalls,
       images: parsedImages,
@@ -1383,6 +1397,26 @@ export const getChatMessages = (userId: number, chatId: number, limit = 20, offs
     };
   });
 };
+
+/** Resolve against the current source variant; repeat inside the insertion transaction. */
+export function resolveQuestionnaireSubmission(userId: number, chatId: number, value: unknown): QuestionnaireResponse {
+  const s = value as QuestionnaireSubmission | null;
+  if (!s || !Number.isSafeInteger(s.source_message_id) || s.source_message_id <= 0 || !Number.isSafeInteger(s.source_variant_index) || s.source_variant_index < 0 || typeof s.schema !== 'string' || s.schema.length > 100_000) throw new Error('questionnaire_invalid');
+  if (!listRoomReaderUserIds(chatId)?.includes(userId)) throw new Error('questionnaire_not_found');
+  const source = db.prepare("SELECT content, active_variant_index FROM chat_messages WHERE id = ? AND chat_id = ? AND role = 'assistant'")
+    .get(s.source_message_id, chatId) as { content: string; active_variant_index: number } | undefined;
+  if (!source) throw new Error('questionnaire_not_found');
+  const form = extractQuestionnaires(source.content).find(f => f.id === s.form_id);
+  if (source.active_variant_index !== s.source_variant_index || !form || questionnaireSchema(form) !== s.schema) throw new Error('questionnaire_stale');
+  const duplicate = db.prepare(`SELECT 1 FROM chat_messages WHERE user_id = ? AND chat_id = ? AND questionnaire_response IS NOT NULL
+    AND json_extract(questionnaire_response, '$.source_message_id') = ?
+    AND json_extract(questionnaire_response, '$.source_variant_index') = ?
+    AND json_extract(questionnaire_response, '$.form_id') = ?
+    AND json_extract(questionnaire_response, '$.schema') = ? LIMIT 1`).get(userId, chatId, s.source_message_id, s.source_variant_index, form.id, s.schema);
+  if (duplicate) throw new Error('questionnaire_already_submitted');
+  return { source_message_id: s.source_message_id, source_variant_index: s.source_variant_index, form_id: form.id,
+    schema: questionnaireSchema(form), questionnaire: form, answers: validateQuestionnaireAnswers(form, s.answers) };
+}
 
 /** Build a metadata-only manifest. File content is available through tools. */
 export const injectAttachments = (
@@ -1462,9 +1496,11 @@ export const appendChatMessage = async (
     providerName?: string | null;
     agentId?: number | null;
     regenerateMessageId?: number | null;
+    questionnaireSubmission?: QuestionnaireSubmission;
   }
 ) => {
   const imagesJson = images && images.length > 0 ? JSON.stringify(images) : null;
+  if (metadata?.questionnaireSubmission && role !== 'user') throw new Error('questionnaire_invalid');
   const attachmentsJson = attachments && attachments.length > 0 ? JSON.stringify(attachments) : null;
   const reasoning = role === 'assistant' && reasoningContent?.trim() ? reasoningContent.trim() : null;
   const tcJson = role === 'assistant' && toolCallsJson?.trim() ? toolCallsJson.trim() : null;
@@ -1646,19 +1682,25 @@ export const appendChatMessage = async (
     return replaced;
   }
 
-  const inserted = db.prepare(`
-    INSERT INTO chat_messages (
-      user_id, role, content, chat_id, telegram_chat_id, telegram_message_id,
-      images, reasoning_content, tool_calls_json, token_count, reasoning_tokens,
-      attachments, subagents_json, usage_json, prompt_id, prompt_name, model_name, provider_name, agent_id
-    )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
-    userId, role, content, chatId, telegramChatId, telegramMessageId,
-    imagesJson, reasoning, tcJson, tokenCount, reasoningTokens,
-    attachmentsJson, saj, usageJson, promptId, promptName, modelName, providerName, agentId
-  );
-  const messageId = Number(inserted.lastInsertRowid);
+  const messageId = db.transaction(() => {
+    const response = metadata?.questionnaireSubmission ? resolveQuestionnaireSubmission(userId, chatId, metadata.questionnaireSubmission) : null;
+    if (response && content !== questionnaireAnswerText(response.questionnaire, response.answers)) throw new Error('questionnaire_invalid');
+    const inserted = db.prepare(`
+      INSERT INTO chat_messages (
+        user_id, role, content, chat_id, telegram_chat_id, telegram_message_id,
+        images, reasoning_content, tool_calls_json, token_count, reasoning_tokens,
+        attachments, subagents_json, usage_json, prompt_id, prompt_name, model_name, provider_name, agent_id
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      userId, role, content, chatId, telegramChatId, telegramMessageId,
+      imagesJson, reasoning, tcJson, tokenCount, reasoningTokens,
+      attachmentsJson, saj, usageJson, promptId, promptName, modelName, providerName, agentId
+    );
+    const insertedId = Number(inserted.lastInsertRowid);
+    if (response) db.prepare('UPDATE chat_messages SET questionnaire_response = ? WHERE id = ?').run(JSON.stringify(response), insertedId);
+    return insertedId;
+  })();
   if (role === 'assistant') {
     db.prepare(`
       INSERT INTO chat_message_variants (
