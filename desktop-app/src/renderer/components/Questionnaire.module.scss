@@ -7,11 +7,17 @@
   overflow-wrap: anywhere;
   color: var(--text-primary);
   h3 { margin: 0 0 16px; }
+  .header { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
+  .header h3 { margin: 0; }
+  .counter { flex-shrink: 0; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+  .navigation { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
   fieldset { border: 0; padding: 0; min-width: 0; margin: 0; }
   .question { margin-bottom: 20px; }
   legend { font-weight: 600; padding: 0; margin-bottom: 8px; }
-  .option { display: flex; align-items: baseline; gap: 10px; margin: 8px 0; cursor: pointer; }
-  input[type='radio'], input[type='checkbox'] { accent-color: var(--accent-color, #60a5fa); flex-shrink: 0; }
+  .choices { display: flex; flex-wrap: wrap; gap: 12px 24px; }
+  .option { flex: 1 1 200px; min-width: 0; max-width: 100%; align-items: flex-start; gap: 8px; }
+  .option span { font: inherit; white-space: normal; overflow-wrap: anywhere; }
+  .otherText { margin-top: 16px; }
   input[type='text'], textarea { box-sizing: border-box; width: 100%; resize: vertical; border: 1px solid var(--border-color, #334155); border-radius: 8px; padding: 10px; background: var(--bg-input, #172331); color: inherit; font: inherit; }
   button { padding: 9px 16px; border-radius: 8px; border: 1px solid var(--border-color, #334155); background: var(--bg-modal-hover, #23354a); color: inherit; cursor: pointer; font: inherit; }
   button:disabled { opacity: .6; cursor: default; }
@@ -20,3 +26,25 @@
   dt { font-weight: 600; margin-top: 12px; }
   dd { margin: 4px 0 0; white-space: pre-wrap; }
 }
+
+.form {
+  box-sizing: border-box;
+  min-height: 360px;
+  display: flex;
+  flex-direction: column;
+
+  .body { flex: 1; }
+  .header, .navigation, > small { flex-shrink: 0; }
+}
+
+.questionContent { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
+.questionFields { flex: 1 1 220px; min-width: 0; }
+.questionImage {
+  flex: 0 1 auto;
+  max-width: min(240px, 100%);
+  margin-bottom: 8px;
+  a { display: inline-block; max-width: 100%; overflow: hidden; border-radius: 10px; }
+  img { display: block; width: auto; height: auto; max-width: 100%; max-height: 180px; object-fit: contain; margin: 0; border-radius: 10px; transition: transform 220ms ease; }
+  a:hover img { transform: scale(1.035); }
+}
+@media (prefers-reduced-motion: reduce) { .questionImage img { transition: none; } }

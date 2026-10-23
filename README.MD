@@ -265,6 +265,8 @@ Decided to translate the project into your language? It's quick and easy:
 
 ### Declarative questionnaires
 
+Any question can optionally include an illustration: `"image":{"url":"https://example.org/photo.jpg","alt":"A meaningful description"}`. Use real URLs supplied by the user or tools, or server-relative assets such as `/uploads/...`; never invent image links. Illustrations are size-limited and open in the existing image viewer. Their URL/description are part of the immutable question snapshot; Telegram shows the link. Like ordinary external chat images, they load directly from the source and are not newly downloaded or cached on the server.
+
 The desktop renders a completed `questionnaire` JSON fence as a native form, including inside Markdown grid/flex/box layouts:
 
 ````markdown
@@ -273,7 +275,7 @@ The desktop renders a completed `questionnaire` JSON fence as a native form, inc
 ```
 ````
 
-Question types: `single`, `multiple`, `text`, `textarea`; 1–100 questions, up to 32 options per question, up to 4 forms per response. IDs must be unique ASCII letters/digits/underscore/hyphen, up to 64 characters. Labels are literal text, not executable markup. This collects answers, not secure exam scores.
+Question types: `single`, `multiple`, `text`, `textarea`; 1–100 questions, up to 32 options per question, up to 4 forms per response. Each form is a one-question card with Back/Next navigation and a current/total counter; question labels must not include numbers because numbering is automatic. Choice questions may optionally set `"allowOther":true` for an Other choice with a text field (up to 1000 characters). Regular choices do not require this field; selecting Other requires nonempty text. Multiple-choice Other answers can accompany regular choices. IDs must be unique ASCII letters/digits/underscore/hyphen, up to 64 characters. Labels are literal text, not executable markup. This collects answers, not secure exam scores.
 
 Drafts are local to the device and scoped by server, account, chat, message, response variant and form schema. Submit explicitly sends an ordinary user message with an immutable structured question/answer snapshot. The server validates ownership/membership, the currently active source variant, exact normalized schema, answers and duplicate submissions again in the same transaction as the insert. Regeneration does not transfer drafts to the new variant; switching back restores them. Submitted snapshots survive source edits and chat forks; deleting the submitted user message also removes that submission record. Telegram gets readable questions and accepts ordinary text replies, not native form buttons.
 

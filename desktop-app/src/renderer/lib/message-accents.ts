@@ -81,7 +81,9 @@ function transformMessageAccents(source: string, stripComplete: boolean): string
               && form.questions.every((q: any) => typeof q?.label === 'string' && ['single', 'multiple', 'text', 'textarea'].includes(q.type)
                 && (q.options === undefined || (Array.isArray(q.options) && q.options.length <= 32 && q.options.every((v: any) => typeof v === 'string'))))) {
               literal = form.title + '\n\n' + form.questions.map((q: any, n: number) => `${n + 1}. ${q.label}${q.required ? ' *' : ''}`
-                + (q.options?.length ? '\n' + q.options.map((o: string) => `- ${o}`).join('\n') : '')).join('\n\n') + '\n';
+                + (typeof q.image?.url === 'string' && q.image.url.length <= 2048 && /^(?:https?:\/\/|\/(?!\/))/.test(q.image.url) && !/[\s\\\u0000-\u001f\u007f]/u.test(q.image.url) ? '\nImage: ' + q.image.url : '')
+                + (q.options?.length ? '\n' + q.options.map((o: string) => `- ${o}`).join('\n') : '')
+                + (q.allowOther === true && (q.type === 'single' || q.type === 'multiple') ? '\n- Other (free text)' : '')).join('\n\n') + '\n';
             }
           } catch { /* Invalid JSON stays literal code. */ }
         }

@@ -1,5 +1,4 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import { useTranslation } from 'react-i18next';
+import React, { useContext, useMemo } from 'react';
 import ReactMarkdown, { type ExtraProps } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
@@ -9,6 +8,7 @@ import { isMessageImageUrl, remarkMessageImages } from '../lib/remark-message-im
 import { remarkMessageLayouts } from '../lib/remark-message-layouts';
 import { remarkInteractiveCode } from '../lib/remark-interactive-code';
 import { MarkdownCode } from './MarkdownCode';
+import { ImageClickContext, MarkdownImage } from './MessageImage';
 import { QuestionnaireContext, type QuestionnaireContextValue } from './Questionnaire';
 import { resolveImageUrl } from '../lib/api';
 import s from './MarkdownRenderer.module.scss';
@@ -23,26 +23,6 @@ type MarkdownRendererProps = {
   /** Open images in the host's existing viewer instead of an external browser. */
   onImageClick?: (src: string) => void;
 };
-
-const ImageClickContext = createContext<((src: string) => void) | undefined>(undefined);
-
-// Stable component types keep pending images mounted across streaming renders.
-function MarkdownImage({ src, alt, title }: React.ComponentProps<'img'>) {
-  const { t } = useTranslation();
-  const resolved = src && isMessageImageUrl(src) ? resolveImageUrl(src) : null;
-  const [failed, setFailed] = useState(false);
-  useEffect(() => { setFailed(false); }, [resolved]);
-  if (!resolved) return <span>{alt}</span>;
-  if (failed) return <span className={s.imageError} role="img" aria-label={alt || t('messageImages.loadFailed')}>
-    <span aria-hidden="true">▧</span>
-    <span>{t('messageImages.loadFailed')}</span>
-    {alt && <span>{alt}</span>}
-  </span>;
-  return <img src={resolved} alt={alt || ''}
-    title={title?.startsWith('layout:') ? undefined : title}
-    loading="lazy" decoding="async" referrerPolicy="no-referrer"
-    onError={() => setFailed(true)} />;
-}
 
 function MarkdownLink({ href, children, node }: React.ComponentProps<'a'> & ExtraProps) {
   const onImageClick = useContext(ImageClickContext);

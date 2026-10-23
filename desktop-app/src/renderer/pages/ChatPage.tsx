@@ -1073,7 +1073,7 @@ const MessageItem = React.memo(function MessageItem({
                   <div className={`${s.bubbleText} ${isStreamingContent ? s.bubbleTextStreaming : ''}`}><MarkdownRenderer content={displayedVariantContent} highlightQuery={searchHighlightQuery} onImageClick={onSetViewerImageSrc} questionnaire={questionnaire} /></div>
                 )
               )
-              : msg.questionnaire_response ? <QuestionnaireResult response={msg.questionnaire_response} />
+              : msg.questionnaire_response ? <QuestionnaireResult response={msg.questionnaire_response} onImageClick={onSetViewerImageSrc} />
                 : <div className={s.bubbleTextPlain}>{renderHighlightedPlainText(msg.content, searchHighlightQuery)}</div>
           )}
         </motion.div>

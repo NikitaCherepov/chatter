@@ -1,7 +1,8 @@
 // Canonical, dependency-free schema. Synced into independently packaged apps.
-export type Question = { id: string; label: string; type: 'single' | 'multiple' | 'text' | 'textarea'; required: boolean; options?: string[] };
+export type Question = { id: string; label: string; type: 'single' | 'multiple' | 'text' | 'textarea'; required: boolean; options?: string[]; allowOther?: true; image?: { url: string; alt: string } };
 export type Questionnaire = { id: string; title: string; questions: Question[] };
-export type QuestionnaireAnswers = Record<string, string | string[]>;
+export type QuestionnaireAnswer = string | string[] | { other: string; selected?: string[] };
+export type QuestionnaireAnswers = Record<string, QuestionnaireAnswer>;
 export type QuestionnaireSubmission = { source_message_id: number; source_variant_index: number; form_id: string; schema: string; answers: QuestionnaireAnswers };
 export type QuestionnaireResponse = QuestionnaireSubmission & { questionnaire: Questionnaire };
 
@@ -9,6 +10,14 @@ const fail = (): never => { throw new Error('questionnaire_invalid'); };
 const record = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 const label = (v: unknown, max: number): string => typeof v === 'string' && v.trim() && v.length <= max ? v.trim() : fail();
 const identifier = (v: unknown): string => typeof v === 'string' && /^[a-zA-Z0-9_-]{1,64}$/.test(v) ? v : fail();
+
+/** Match chat image URL policy; parsing never downloads or proxies the image. */
+export function isQuestionnaireImageUrl(url: string): boolean {
+  if (!url || url.length > 2048 || /[\s\\\u0000-\u001f\u007f]/u.test(url)) return false;
+  if (url.startsWith('/')) return !url.startsWith('//');
+  try { const parsed = new URL(url); return (parsed.protocol === 'https:' || parsed.protocol === 'http:') && !!parsed.hostname; }
+  catch { return false; }
+}
 
 export function parseQuestionnaire(value: unknown): Questionnaire {
   if (!record(value) || !Array.isArray(value.questions) || !value.questions.length || value.questions.length > 100) return fail();
@@ -21,11 +30,17 @@ export function parseQuestionnaire(value: unknown): Questionnaire {
     const type = raw.type;
     if (type !== 'single' && type !== 'multiple' && type !== 'text' && type !== 'textarea') return fail();
     if (raw.required !== undefined && typeof raw.required !== 'boolean') return fail();
+    if (raw.allowOther !== undefined && typeof raw.allowOther !== 'boolean') return fail();
     const q: Question = { id, label: label(raw.label, 500), type, required: raw.required === true };
+    if (raw.image !== undefined) {
+      if (!record(raw.image) || typeof raw.image.url !== 'string' || !isQuestionnaireImageUrl(raw.image.url)) return fail();
+      q.image = { url: raw.image.url, alt: raw.image.alt === undefined ? q.label : label(raw.image.alt, 500) };
+    }
     if (type === 'single' || type === 'multiple') {
       if (!Array.isArray(raw.options) || !raw.options.length || raw.options.length > 32) return fail();
       q.options = raw.options.map(o => label(o, 200));
       if (new Set(q.options).size !== q.options.length) return fail();
+      if (raw.allowOther === true) q.allowOther = true;
     }
     return q;
   });
@@ -64,7 +79,17 @@ export function validateQuestionnaireAnswers(form: Questionnaire, value: unknown
   let total = 0;
   for (const q of form.questions) {
     const raw = Object.prototype.hasOwnProperty.call(value, q.id) ? value[q.id] : undefined;
-    if (q.type === 'multiple') {
+    if (record(raw)) {
+      if (!q.allowOther || (q.type !== 'single' && q.type !== 'multiple') || Object.keys(raw).some(k => k !== 'other' && k !== 'selected')) return fail();
+      const other = label(raw.other, 1000);
+      if (q.type === 'single') {
+        if (raw.selected !== undefined) return fail();
+        answers[q.id] = { other };
+      } else {
+        if (!Array.isArray(raw.selected) || raw.selected.some(v => typeof v !== 'string' || !q.options!.includes(v)) || new Set(raw.selected).size !== raw.selected.length) return fail();
+        answers[q.id] = { other, selected: q.options!.filter(o => (raw.selected as string[]).includes(o)) };
+      }
+    } else if (q.type === 'multiple') {
       if (raw !== undefined && (!Array.isArray(raw) || raw.some(v => typeof v !== 'string' || !q.options!.includes(v)) || new Set(raw).size !== raw.length)) return fail();
       const selected = (raw ?? []) as string[];
       if (q.required && !selected.length) return fail();
@@ -83,7 +108,12 @@ export function validateQuestionnaireAnswers(form: Questionnaire, value: unknown
 
 export function questionnaireAnswerText(form: Questionnaire, answers: QuestionnaireAnswers): string {
   return `Ответы на опрос «${form.title}»\n\n` + form.questions.map((q, i) => {
-    const value = answers[q.id];
-    return `${i + 1}. ${q.label}\n${Array.isArray(value) ? value.join(', ') || '—' : value || '—'}`;
+    return `${i + 1}. ${q.label}\n${q.image ? `Image: ${q.image.url} (${q.image.alt})\n` : ''}${formatQuestionnaireAnswer(answers[q.id])}`;
   }).join('\n\n');
+}
+
+export function formatQuestionnaireAnswer(value: QuestionnaireAnswer | undefined): string {
+  if (typeof value === 'string') return value || '—';
+  if (Array.isArray(value)) return value.join(', ') || '—';
+  return value ? [...(value.selected ?? []), value.other].join(', ') : '—';
 }

@@ -13,9 +13,12 @@ type Props = {
   /** Icon element rendered inside the trigger button */
   icon?: React.ReactNode;
   className?: string;
+  layout?: 'dropdown' | 'inline';
+  disabled?: boolean;
+  name?: string;
 };
 
-export function RadioGroup({ options, value, onChange, icon, className }: Props) {
+export function RadioGroup({ options, value, onChange, icon, className, layout = 'dropdown', disabled, name }: Props) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -26,11 +29,22 @@ export function RadioGroup({ options, value, onChange, icon, className }: Props)
   }, []);
 
   useEffect(() => {
-    if (open) {
+    if (open && layout === 'dropdown') {
       document.addEventListener('mousedown', handleClickOutside);
       return () => document.removeEventListener('mousedown', handleClickOutside);
     }
-  }, [open, handleClickOutside]);
+  }, [open, handleClickOutside, layout]);
+
+  if (layout === 'inline') return <div className={`${s.inline} ${className || ''}`}>
+    {options.map(opt => <label key={opt.value} className={s.option}>
+      <span aria-hidden="true" className={`${s.radio} ${opt.value === value ? s.radioChecked : ''}`}>
+        {opt.value === value && <span className={s.radioDot} />}
+      </span>
+      <span className={s.optionLabel}>{opt.label}</span>
+      <input type="radio" name={name} value={opt.value} className={s.hiddenInput}
+        checked={opt.value === value} disabled={disabled} onChange={() => onChange(opt.value)} />
+    </label>)}
+  </div>;
 
   return (
     <div ref={containerRef} className={`${s.root} ${className || ''}`}>
@@ -38,6 +52,7 @@ export function RadioGroup({ options, value, onChange, icon, className }: Props)
         className={`${s.trigger} ${open ? s.triggerActive : ''}`}
         onClick={() => setOpen(prev => !prev)}
         type="button"
+        disabled={disabled}
       >
         {icon || (
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -58,6 +73,8 @@ export function RadioGroup({ options, value, onChange, icon, className }: Props)
               <span className={s.optionLabel}>{opt.label}</span>
               <input
                 type="radio"
+                name={name}
+                disabled={disabled}
                 className={s.hiddenInput}
                 checked={opt.value === value}
                 onChange={() => {

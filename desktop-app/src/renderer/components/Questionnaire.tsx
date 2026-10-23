@@ -1,7 +1,11 @@
-import React, { createContext, useContext, useId, useState } from 'react';
+import React, { createContext, useContext, useId, useRef, useState } from 'react';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
-import { extractQuestionnaires, parseQuestionnaireSource, questionnaireSchema, validateQuestionnaireAnswers, type Questionnaire, type QuestionnaireAnswers, type QuestionnaireResponse, type QuestionnaireSubmission } from '../lib/message-questionnaires';
+import { extractQuestionnaires, formatQuestionnaireAnswer, parseQuestionnaireSource, questionnaireSchema, validateQuestionnaireAnswers, type Questionnaire, type QuestionnaireAnswer, type QuestionnaireAnswers, type QuestionnaireResponse, type QuestionnaireSubmission } from '../lib/message-questionnaires';
 import s from './Questionnaire.module.scss';
+import Checkbox from './Checkbox';
+import { RadioGroup } from './RadioGroup';
+import { MessageImage } from './MessageImage';
 
 export type QuestionnaireContextValue = {
   scope: string;
@@ -46,19 +50,57 @@ function QuestionnaireForm({ form, schema, storageKey, context, submitted }: {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [unsaved, setUnsaved] = useState(false);
+  const [transitioning, setTransitioning] = useState(false);
+  const reduceMotion = useReducedMotion();
+  const [step, setStep] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(storageKey) || 'null');
+      return saved?.schema === schema && Number.isInteger(saved.step) ? Math.max(0, Math.min(form.questions.length - 1, saved.step)) : 0;
+    } catch { return 0; }
+  });
+  const legendRef = useRef<HTMLLegendElement>(null);
+  const focusAfterTransition = useRef(false);
   const values = submitted?.answers ?? answers;
-  const update = (questionId: string, value: string | string[]) => {
-    const next = { ...answers, [questionId]: value };
-    setAnswers(next); setError('');
-    try { localStorage.setItem(storageKey, JSON.stringify({ schema, answers: next })); setUnsaved(false); }
+  const q = form.questions[step];
+  const currentValue = values[q.id];
+  const other = currentValue && typeof currentValue === 'object' && !Array.isArray(currentValue) ? currentValue : null;
+  const selected = other?.selected ?? (Array.isArray(currentValue) ? currentValue : []);
+  const controlsDisabled = busy || transitioning || !!submitted || context.disabled;
+  const persist = (next: QuestionnaireAnswers, nextStep: number) => {
+    if (submitted) return;
+    try { localStorage.setItem(storageKey, JSON.stringify({ schema, answers: next, step: nextStep })); setUnsaved(false); }
     catch { setUnsaved(true); }
   };
-  return <form className={s.form} aria-label={form.title} onSubmit={async event => {
+  const update = (questionId: string, value: QuestionnaireAnswer) => {
+    const next = { ...answers, [questionId]: value };
+    setAnswers(next); setError('');
+    persist(next, step);
+  };
+  const goTo = (nextStep: number) => {
+    if (nextStep === step) return;
+    focusAfterTransition.current = true;
+    setTransitioning(true);
+    setStep(nextStep); setError(''); persist(answers, nextStep);
+  };
+  const validateCurrent = () => {
+    if (submitted) return true;
+    try { validateQuestionnaireAnswers({ ...form, questions: [q] }, Object.prototype.hasOwnProperty.call(answers, q.id) ? { [q.id]: answers[q.id] } : {}); return true; }
+    catch { setError(t('questionnaire.invalid')); return false; }
+  };
+  return <form className={s.form} aria-label={form.title} aria-busy={busy || transitioning} noValidate onSubmit={async event => {
     event.preventDefault();
-    if (busy || submitted || context.disabled) return;
+    if (busy || transitioning || submitted || context.disabled) return;
+    if (!validateCurrent()) return;
+    if (step < form.questions.length - 1) { goTo(step + 1); return; }
     let validated: QuestionnaireAnswers;
     try { validated = validateQuestionnaireAnswers(form, answers); }
-    catch { setError(t('questionnaire.invalid')); return; }
+    catch {
+      const invalidStep = form.questions.findIndex(question => {
+        try { validateQuestionnaireAnswers({ ...form, questions: [question] }, Object.prototype.hasOwnProperty.call(answers, question.id) ? { [question.id]: answers[question.id] } : {}); return false; } catch { return true; }
+      });
+      if (invalidStep >= 0) goTo(invalidStep);
+      setError(t('questionnaire.invalid')); return;
+    }
     setBusy(true); setError('');
     try {
       await context.onSubmit({ source_message_id: context.messageId, source_variant_index: context.variantIndex, form_id: form.id, schema, answers: validated });
@@ -69,33 +111,63 @@ function QuestionnaireForm({ form, schema, storageKey, context, submitted }: {
       setError(t(code === 'questionnaire_stale' ? 'questionnaire.stale' : code === 'questionnaire_already_submitted' ? 'questionnaire.alreadySubmitted' : 'questionnaire.sendFailed'));
     } finally { setBusy(false); }
   }}>
-    <h3>{form.title}</h3>
-    <fieldset disabled={busy || !!submitted || context.disabled}>
-      {form.questions.map((q, index) => <fieldset key={q.id} className={s.question}>
-        <legend>{index + 1}. {q.label}{q.required ? ' *' : ''}</legend>
-        {q.type === 'single' || q.type === 'multiple' ? q.options!.map(option => <label key={option} className={s.option}>
-          <input type={q.type === 'single' ? 'radio' : 'checkbox'} name={`${id}-${q.id}`} value={option}
-            checked={q.type === 'single' ? values[q.id] === option : Array.isArray(values[q.id]) && (values[q.id] as string[]).includes(option)}
-            onChange={e => update(q.id, q.type === 'single' ? option : e.target.checked
-              ? [...(Array.isArray(answers[q.id]) ? answers[q.id] as string[] : []), option]
-              : (Array.isArray(answers[q.id]) ? answers[q.id] as string[] : []).filter(v => v !== option))} />
-          <span>{option}</span>
-        </label>) : q.type === 'textarea'
+    <div className={s.header}><h3>{form.title}</h3><span className={s.counter} role="status" aria-label={t('questionnaire.progress', { current: step + 1, total: form.questions.length })}>{step + 1}/{form.questions.length}</span></div>
+    <fieldset className={s.body} disabled={controlsDisabled}>
+      <AnimatePresence initial={false} mode="wait">
+      <motion.fieldset key={q.id} className={s.question}
+        variants={{ hidden: { opacity: 0, y: reduceMotion ? 0 : 8 }, visible: { opacity: 1, y: 0 }, exit: { opacity: 0, y: reduceMotion ? 0 : -6 } }}
+        initial="hidden" animate="visible" exit="exit" transition={{ duration: reduceMotion ? 0 : .14, ease: 'easeOut' }}
+        onAnimationComplete={definition => {
+          if (definition !== 'visible') return;
+          setTransitioning(false);
+          if (focusAfterTransition.current) {
+            focusAfterTransition.current = false;
+            requestAnimationFrame(() => legendRef.current?.focus());
+          }
+        }}>
+        <legend ref={legendRef} tabIndex={-1}>{step + 1}. {q.label}{q.required ? ' *' : ''}</legend>
+        <div className={s.questionContent}>
+        {q.image && <div className={s.questionImage}><MessageImage src={q.image.url} alt={q.image.alt} /></div>}
+        <div className={s.questionFields}>
+        {q.type === 'single' || q.type === 'multiple' ? <>
+          {q.type === 'single' ? <RadioGroup key={q.id} layout="inline" className={s.choices} name={`${id}-${q.id}`} disabled={controlsDisabled}
+            options={[...q.options!.map((option, index) => ({ value: `option:${index}`, label: option })), ...(q.allowOther ? [{ value: 'other', label: t('questionnaire.other') }] : [])]}
+            value={other ? 'other' : typeof currentValue === 'string' && q.options!.includes(currentValue) ? `option:${q.options!.indexOf(currentValue)}` : ''}
+            onChange={value => update(q.id, value === 'other' ? { other: '' } : q.options![Number(value.slice(7))])} />
+            : <div className={s.choices}>{q.options!.map(option => <Checkbox key={option} className={s.option} label={option}
+              checked={selected.includes(option)} disabled={controlsDisabled} onChange={checked => {
+                const next = checked ? [...selected, option] : selected.filter(v => v !== option);
+                update(q.id, other ? { other: other.other, selected: next } : next);
+              }} />)}
+              {q.allowOther && <Checkbox className={s.option} label={t('questionnaire.other')} checked={!!other} disabled={controlsDisabled}
+                onChange={checked => update(q.id, checked ? { other: '', selected } : selected)} />}
+            </div>}
+          {q.allowOther && other && <input className={s.otherText} type="text" aria-label={t('questionnaire.otherText')} placeholder={t('questionnaire.otherText')} maxLength={1000}
+              value={other.other} onChange={e => update(q.id, q.type === 'single' ? { other: e.target.value } : { other: e.target.value, selected })} />}
+        </> : q.type === 'textarea'
           ? <textarea aria-label={q.label} rows={3} maxLength={4000} required={q.required} value={typeof values[q.id] === 'string' ? values[q.id] as string : ''} onChange={e => update(q.id, e.target.value)} />
           : <input type="text" aria-label={q.label} maxLength={1000} required={q.required} value={typeof values[q.id] === 'string' ? values[q.id] as string : ''} onChange={e => update(q.id, e.target.value)} />}
-      </fieldset>)}
-      <button type="submit">{t(submitted ? 'questionnaire.submitted' : busy ? 'questionnaire.sending' : 'questionnaire.submit')}</button>
+        </div>
+        </div>
+      </motion.fieldset>
+      </AnimatePresence>
     </fieldset>
+    <div className={s.navigation}>
+      <button type="button" disabled={step === 0 || busy || transitioning || context.disabled} onClick={() => goTo(step - 1)}>{t('questionnaire.back')}</button>
+      {step < form.questions.length - 1
+        ? <button key="next" type="button" disabled={busy || transitioning || context.disabled} onClick={event => { event.preventDefault(); if (validateCurrent()) goTo(step + 1); }}>{t('questionnaire.next')}</button>
+        : <button key="submit" type="submit" disabled={busy || transitioning || !!submitted || context.disabled}>{t(submitted ? 'questionnaire.submitted' : busy ? 'questionnaire.sending' : 'questionnaire.submit')}</button>}
+    </div>
     {error && <p role="alert">{error}</p>}
     {unsaved && <p role="status">{t('questionnaire.unsaved')}</p>}
     {!submitted && <small>{t('questionnaire.localDraft')}</small>}
   </form>;
 }
 
-export function QuestionnaireResult({ response }: { response: QuestionnaireResponse }) {
+export function QuestionnaireResult({ response, onImageClick }: { response: QuestionnaireResponse; onImageClick?: (src: string) => void }) {
   const { t } = useTranslation();
   return <details className={s.result}><summary>{t('questionnaire.result', { title: response.questionnaire.title })}</summary>
     <dl>{response.questionnaire.questions.map(q => <React.Fragment key={q.id}><dt>{q.label}</dt>
-      <dd>{Array.isArray(response.answers[q.id]) ? (response.answers[q.id] as string[]).join(', ') || '—' : response.answers[q.id] || '—'}</dd></React.Fragment>)}</dl>
+      <dd>{q.image && <div className={s.questionImage}><MessageImage src={q.image.url} alt={q.image.alt} onImageClick={onImageClick} /></div>}{formatQuestionnaireAnswer(response.answers[q.id])}</dd></React.Fragment>)}</dl>
   </details>;
 }

@@ -5,11 +5,12 @@ type Props = {
   onChange: (checked: boolean) => void;
   label?: string;
   disabled?: boolean;
+  className?: string;
 };
 
-export default function Checkbox({ checked, onChange, label, disabled }: Props) {
+export default function Checkbox({ checked, onChange, label, disabled, className }: Props) {
   return (
-    <label className={s.wrap}>
+    <label className={`${s.wrap} ${className || ''}`}>
       <input
         type="checkbox"
         className={s.checkbox}

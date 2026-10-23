@@ -117,3 +117,29 @@ $ctrl-size: 30px;
   height: 0;
   pointer-events: none;
 }
+
+// Inline mode reuses the map control's radio indicator without its popup.
+.inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+
+  .option {
+    position: relative;
+    flex: 1 1 200px;
+    min-width: 0;
+    max-width: 100%;
+    padding: 0;
+    margin: 0;
+    border: 0;
+    align-items: flex-start;
+  }
+
+  .optionLabel { font: inherit; color: var(--text-primary); white-space: normal; overflow-wrap: anywhere; }
+  .radio { margin-top: 2px; }
+  .radioChecked { border-color: var(--accent, #1a73e8); }
+  .radioDot { background-color: var(--accent, #1a73e8); }
+  .hiddenInput { width: 18px; height: 18px; margin: 0; pointer-events: auto; }
+  .option:focus-within .radio { outline: 2px solid var(--accent, #1a73e8); outline-offset: 3px; }
+  .option:has(input:disabled) { cursor: default; opacity: .65; }
+}
