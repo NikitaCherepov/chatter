@@ -35,7 +35,7 @@ import { waitForNoPendingPcConfirmations } from './pc-command-confirmations.js';
 import { findTransitRoute, searchNearby } from './transit.js';
 import { getCurrencyRates, formatRateForAi } from './currency.js';
 import { db } from '../db.js';
-import { countTokens, countMessageTokens } from './tokenizer.js';
+import { countTokens } from './tokenizer.js';
 import { listSubagentNames, buildSubagentListDescription, getSubagent } from './subagents/registry.js';
 import { hasBackendTranslation, translateForLanguage } from '../i18n/index.js';
 import { readChatAttachment, searchChatAttachment, type AttachmentReadContext } from './chat-attachments.js';
@@ -1532,30 +1532,6 @@ const callLiteAiInternal = async (
 import { buildSystemPrompt } from './system-prompt.js';
 import { buildPlayerInstructions } from './player-instructions-prompt.js';
 
-/** Private questionnaire utility: chosen chat model, normal access/quota, no tools or chat writes. */
-export async function callPlayerInstructionsAi(userId: number, modelId: string | null, system: string, input: string): Promise<string> {
-  const user = getUserById(userId);
-  if (!user || (user.status !== 'approved' && user.is_admin !== 1)) throw new Error('user_not_approved');
-  const isAdmin = user.is_admin === 1 || user.role === 'admin';
-  return withModelActor({ userId, isAdmin }, () => withChatGptActor(isAdmin, async () => {
-    const manual = modelId ? resolveManualModel(modelId, isAdmin, userId) : undefined;
-    if (modelId && !manual) throw new Error('model_not_available');
-    ensureUtilityAiQuota(userId, modelId, 'pro');
-    const contextLimit = resolveMaxContextTokens(user, resolveConfiguredModelContextLimit([modelId]));
-    const outputBudget = Math.min(8192, Math.floor(contextLimit / 3));
-    if (countMessageTokens('system', system) + countMessageTokens('user', input) + outputBudget > contextLimit) throw new Error('survey_context_too_large');
-    const payload = { messages: [{ role: 'system', content: system }, { role: 'user', content: input }], max_tokens: outputBudget };
-    const signal = AbortSignal.timeout(120000);
-    // A specifically chosen model must not silently become a different model.
-    const completion = manual
-      ? await createCompletionWithModelFallback(manual.client, [manual.apiModelName], payload, 'manual', manual.baseURL, signal, user.reasoning_level as ReasoningLevel, undefined, undefined, [manual.id])
-      : await runCompletion('pro', payload, undefined, signal, user.reasoning_level as ReasoningLevel);
-    chargeUtilityAiCompletion({ userId, route: 'utility:player-instructions', preferredModelId: modelId }, completion);
-    const text = completion.response?.choices?.[0]?.message?.content;
-    if (typeof text !== 'string' || !text.trim() || text.length > 100000) throw new Error('empty_survey_response');
-    return text.trim();
-  }));
-}
 
 const isLitePlan = (plan: UserPlan) => plan === 'free' || plan === 'standart';
 const toRubFromTokens = (tokens: number) => Math.max(0, tokens) * RUB_PER_TOKEN;

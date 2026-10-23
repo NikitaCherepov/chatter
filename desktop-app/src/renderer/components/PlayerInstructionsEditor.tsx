@@ -72,6 +72,7 @@ function PlayerSurveyModal({ target, modelId, currentText, onApplied, onClose }:
   onCloseRef.current = onClose;
   const [brief, setBrief] = useState('');
   const [includeHistory, setIncludeHistory] = useState(false);
+  const [personalize, setPersonalize] = useState(false);
   const [surveys, setSurveys] = useState<prefs.PlayerSurvey[]>([]);
   const [selected, setSelected] = useState<prefs.PlayerSurvey | null>(null);
   const [draft, setDraft] = useState('');
@@ -125,11 +126,15 @@ function PlayerSurveyModal({ target, modelId, currentText, onApplied, onClose }:
       {error && <p role="alert">{error}</p>}
       {!selected ? <>
         <label className={s.label}>{t('playerInstructions.brief')}<textarea rows={3} maxLength={2000} value={brief} disabled={busy} onChange={e => setBrief(e.target.value)} placeholder={t('playerInstructions.briefPlaceholder')} /></label>
-        <Checkbox checked={includeHistory} disabled={busy} onChange={setIncludeHistory} label={t('playerInstructions.includeHistory')} />
-        <small>{t('playerInstructions.historyHelp')}</small>
+        {target.scope === 'chat' && <>
+          <Checkbox checked={includeHistory} disabled={busy} onChange={setIncludeHistory} label={t('playerInstructions.includeHistory')} />
+          <small>{t('playerInstructions.historyHelp')}</small>
+        </>}
+        <Checkbox checked={personalize} disabled={busy} onChange={setPersonalize} label={t('playerInstructions.personalize')} />
+        <small>{t('playerInstructions.personalizeHelp')}</small>
         <button type="button" disabled={busy} onClick={async () => {
           setBusy(true); setError('');
-          try { const result = await prefs.createPlayerSurvey(target, brief, includeHistory, currentText, modelId); select(result.survey); await refresh(); }
+          try { const result = await prefs.createPlayerSurvey(target, brief, includeHistory, currentText, modelId, personalize); select(result.survey); await refresh(); }
           catch (e) { setError(generationError(e)); }
           finally { setBusy(false); }
         }}>{t(busy ? 'playerInstructions.generating' : 'playerInstructions.generate')}</button>
