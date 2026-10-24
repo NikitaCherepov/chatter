@@ -324,6 +324,11 @@
   color: var(--text-body);
 }
 
+.tableWrapper th:not(:last-child),
+.tableWrapper td:not(:last-child) {
+  border-inline-end: 1px solid var(--border-light);
+}
+
 .tableWrapper tr:last-child td {
   border-bottom: none;
 }

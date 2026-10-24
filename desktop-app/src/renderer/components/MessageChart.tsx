@@ -54,7 +54,7 @@ function Chart({ chart, source }: { chart: ChartData; source: string }) {
     <div className={s.plot}>
       <ResponsiveContainer width="100%" height="100%" minWidth={0}>
         {polar ? <PieChart accessibilityLayer>
-          <Pie data={slices} dataKey="value" nameKey="name" innerRadius={chart.type === 'donut' ? '52%' : 0} outerRadius="80%" isAnimationActive={false} stroke="var(--bg-bubble, #101923)" />
+          <Pie data={slices} dataKey="value" nameKey="name" innerRadius={chart.type === 'donut' ? '52%' : 0} outerRadius="80%" isAnimationActive={false} stroke="var(--bg-bubble, #101923)" activeShape={{ stroke: 'var(--text-primary, #e2e8f0)', strokeWidth: 2 }} />
           <Tooltip contentStyle={{ background: 'var(--bg-primary, #101923)', border: '1px solid var(--border-light, #334155)', borderRadius: 8, color: 'var(--text-primary, #e2e8f0)', whiteSpace: 'normal', overflowWrap: 'anywhere', maxWidth: 280 }} formatter={value => valueText(Number(value))} />
         </PieChart> : <ComposedChart data={rows} accessibilityLayer margin={{ top: 12, right: 16, bottom: 8, left: 0 }} stackOffset="sign">
           <CartesianGrid stroke="var(--border-light, #334155)" strokeDasharray="3 5" vertical={false} />

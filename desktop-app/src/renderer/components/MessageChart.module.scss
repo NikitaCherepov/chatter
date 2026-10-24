@@ -1,4 +1,22 @@
 .picture { min-width: 0; padding: 12px 8px; font-family: system-ui, sans-serif; font-size: 12px; }
+.plot :global(.recharts-wrapper):focus:not(:focus-visible),
+.plot :global(.recharts-surface):focus:not(:focus-visible) {
+  outline: none;
+}
+// Internal SVG groups otherwise draw rectangular focus bounds around data.
+// Keyboard navigation keeps its indicator on the chart surface itself.
+.plot :global(.recharts-surface) :focus {
+  outline: none;
+}
+.plot :global(.recharts-pie-sector) {
+  // SVG focus outlines follow the bounding box, not the shape of the slice.
+  &:focus, path:focus { outline: none; }
+  &:focus > path, &:focus-within > path {
+    stroke: var(--text-primary, #e2e8f0);
+    stroke-width: 2;
+    stroke-linejoin: round;
+  }
+}
 .plot { width: 100%; height: clamp(240px, 36vw, 380px); min-width: 0; :global(.recharts-wrapper) { font-family: inherit; } }
 .axis { margin: 4px 12px; color: var(--text-muted, #94a3b8); white-space: pre-wrap; overflow-wrap: anywhere; }
 .legend { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 16px; padding: 12px; button { display: inline-flex; align-items: center; gap: 7px; border: 0; background: none; color: var(--text-primary, #e2e8f0); font: inherit; cursor: pointer; text-align: left; overflow-wrap: anywhere; max-width: 100%; &[aria-pressed='false'] { opacity: .45; text-decoration: line-through; } span { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; } } }
