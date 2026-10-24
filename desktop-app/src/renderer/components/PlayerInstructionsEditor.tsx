@@ -90,6 +90,8 @@ function PlayerSurveyModal({ target, modelId, currentText, onApplied, onClose }:
   const [error, setError] = useState('');
   const [deleting, setDeleting] = useState(false);
   const [removeApplied, setRemoveApplied] = useState(false);
+  const [followUpOpen, setFollowUpOpen] = useState(false);
+  const [followUpBrief, setFollowUpBrief] = useState('');
   const generationError = (error: unknown) => {
     const code = error instanceof Error ? error.message : '';
     return t(code.includes('quota_exceeded') ? 'playerInstructions.quotaError'
@@ -97,7 +99,7 @@ function PlayerSurveyModal({ target, modelId, currentText, onApplied, onClose }:
       : code.includes('model_not_available') ? 'playerInstructions.modelError'
       : code.includes('survey_busy') ? 'playerInstructions.busyError' : 'playerInstructions.generationFailed');
   };
-  const select = (survey: prefs.PlayerSurvey | null) => { setSelected(survey); setDraft(survey?.draft || ''); setReview(false); setError(''); setDeleting(false); setRemoveApplied(false); };
+  const select = (survey: prefs.PlayerSurvey | null) => { setSelected(survey); setDraft(survey?.draft || ''); setReview(false); setError(''); setDeleting(false); setRemoveApplied(false); setFollowUpOpen(false); setFollowUpBrief(''); };
   const refresh = async () => { const result = await prefs.getPlayerInstructions(target); setSurveys(result.surveys); return result; };
   useEffect(() => { let active = true; void prefs.getPlayerInstructions(target).then(result => { if (active) setSurveys(result.surveys); }, () => { if (active) setError(t('playerInstructions.loadFailed')); }); return () => { active = false; }; }, [target.scope, target.target_id, t]);
   useEffect(() => {
@@ -188,6 +190,23 @@ function PlayerSurveyModal({ target, modelId, currentText, onApplied, onClose }:
         </> : <>
           <QuestionnaireCard key={selected.id} form={selected.questionnaire} storageKey={`chatter:player-survey:${JSON.stringify([API_BASE, user?.id, selected.id])}`} disabled={busy} submitted={selected.answers || undefined} onSubmit={completeAnswers} />
           {selected.answers && selected.draft === null && <button className={settingsStyles.cancelBtn} type="button" disabled={busy} onClick={() => void completeAnswers(selected.answers!).catch(() => {})}>{t(busy ? 'playerInstructions.generating' : 'playerInstructions.retryDraft')}</button>}
+        </>}
+        {selected.answers && <>
+          {!followUpOpen ? <button className={settingsStyles.saveBtn} type="button" disabled={busy} onClick={() => setFollowUpOpen(true)}>{t('playerInstructions.followUp')}</button> : <>
+          <label className={s.label}>{t('playerInstructions.followUpBrief')}
+            <textarea rows={3} maxLength={2000} value={followUpBrief} disabled={busy} autoFocus onChange={e => setFollowUpBrief(e.target.value)} placeholder={t('playerInstructions.followUpBriefPlaceholder')} />
+          </label>
+          <div className={s.actions}>
+          <button className={settingsStyles.saveBtn} type="button" disabled={busy} onClick={async () => {
+            setBusy(true); setError('');
+            try { const result = await prefs.followUpPlayerSurvey(selected.id, followUpBrief); select(result.survey); await refresh(); }
+            catch (e) { setError(generationError(e)); }
+            finally { setBusy(false); }
+          }}>{t('playerInstructions.startFollowUp')}</button>
+          <button className={settingsStyles.cancelBtn} type="button" disabled={busy} onClick={() => setFollowUpOpen(false)}>{t('common.cancel')}</button>
+          </div>
+          </>}
+          <small>{t('playerInstructions.followUpHelp')}</small>
         </>}
       </>}
       {busy && <p role="status">{t('playerInstructions.generating')}</p>}

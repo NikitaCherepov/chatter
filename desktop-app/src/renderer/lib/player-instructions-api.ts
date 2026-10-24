@@ -61,6 +61,8 @@ export const regeneratePlayerSurvey = (id: string) =>
   apiFetch<{ survey: PlayerSurvey }>(`/api/v1/player-instructions/surveys/${id}/regenerate`, {
     method: 'POST',
   });
+export const followUpPlayerSurvey = (id: string, brief = '') =>
+  apiFetch<{ survey: PlayerSurvey }>(`/api/v1/player-instructions/surveys/${id}/follow-up`, { method: 'POST', body: JSON.stringify({ brief }) });
 export const applyPlayerSurvey = (id: string, text: string) =>
   apiFetch<InstructionState>(`/api/v1/player-instructions/surveys/${id}/apply`, {
     method: 'POST',

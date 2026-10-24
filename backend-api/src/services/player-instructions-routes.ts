@@ -7,6 +7,7 @@ import {
   createPlayerSurvey,
   answerPlayerSurvey,
   regeneratePlayerSurvey,
+  followUpPlayerSurvey,
   applyPlayerSurvey,
   deletePlayerSurvey,
 } from './player-instructions.js';
@@ -95,6 +96,10 @@ export function registerPlayerInstructionRoutes(
     handle(async (req) => ({
       survey: await regeneratePlayerSurvey(accountId(req), String(req.params.id)),
     })),
+  );
+  app.post(
+    '/api/v1/player-instructions/surveys/:id/follow-up',
+    handle(async (req) => ({ survey: await followUpPlayerSurvey(accountId(req), String(req.params.id), undefined, req.body?.brief) })),
   );
   app.post(
     '/api/v1/player-instructions/surveys/:id/apply',
