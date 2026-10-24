@@ -1,0 +1,7 @@
+.picture { min-width: 0; padding: 12px 8px; font-family: system-ui, sans-serif; font-size: 12px; }
+.plot { width: 100%; height: clamp(240px, 36vw, 380px); min-width: 0; :global(.recharts-wrapper) { font-family: inherit; } }
+.axis { margin: 4px 12px; color: var(--text-muted, #94a3b8); white-space: pre-wrap; overflow-wrap: anywhere; }
+.legend { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 16px; padding: 12px; button { display: inline-flex; align-items: center; gap: 7px; border: 0; background: none; color: var(--text-primary, #e2e8f0); font: inherit; cursor: pointer; text-align: left; overflow-wrap: anywhere; max-width: 100%; &[aria-pressed='false'] { opacity: .45; text-decoration: line-through; } span { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; } } }
+.table { overflow: auto; max-height: 480px; padding: 12px; table { border-collapse: collapse; width: 100%; font-size: 12px; } th, td { border-bottom: 1px solid var(--border-light, #334155); padding: 8px 12px; text-align: left; min-width: 80px; overflow-wrap: anywhere; max-width: 240px; } td { font-variant-numeric: tabular-nums; } caption { text-align: left; padding: 8px; } }
+.modalContent { overflow: auto; min-height: 0; flex: 1; }
+.large .plot { height: clamp(280px, 55dvh, 700px); }

@@ -86,6 +86,61 @@ export function diagramToText(diagram: MessageDiagram): string {
     ...diagram.edges.map(e => `${nodes.get(e.from)!.title} → ${nodes.get(e.to)!.title}${e.label ? ' (' + e.label + ')' : ''}`), diagram.caption].filter(Boolean).join('\n');
 }
 
+export const CHART_COLORS = ['blue', 'green', 'purple', 'orange', 'red', 'cyan', 'neutral', 'pink'] as const;
+export type ChartColor = typeof CHART_COLORS[number];
+export type MessageChart = {
+  type: 'line' | 'bar' | 'area' | 'pie' | 'donut'; title?: string; caption?: string;
+  xLabel?: string; yLabel?: string; unit?: string; stacked: boolean;
+  labels: string[]; series: Array<{ name: string; color: ChartColor; values: Array<number | null> }>;
+};
+
+/** Only bounded data. Never pass arbitrary model options or property names to Recharts. */
+export function parseMessageChart(source: string): MessageChart {
+  const fail = (): never => { throw new Error('chart_invalid'); };
+  const object = (v: unknown, keys: string[]): Record<string, unknown> => {
+    if (!v || typeof v !== 'object' || Array.isArray(v) || Object.keys(v).some(k => !keys.includes(k))) return fail();
+    return v as Record<string, unknown>;
+  };
+  const string = (v: unknown, max: number): string => typeof v === 'string' && !!v.trim() && v.length <= max ? v.trim() : fail();
+  if (source.length > 200_000) return fail();
+  const raw = object(JSON.parse(source), ['type', 'title', 'caption', 'xLabel', 'yLabel', 'unit', 'stacked', 'labels', 'series']);
+  const type = raw.type ?? 'line';
+  if (!['line', 'bar', 'area', 'pie', 'donut'].includes(type as string)) return fail();
+  const polar = type === 'pie' || type === 'donut';
+  if (raw.stacked !== undefined && typeof raw.stacked !== 'boolean') return fail();
+  const stacked = raw.stacked === true;
+  if (stacked && type !== 'bar' && type !== 'area') return fail();
+  if (!Array.isArray(raw.labels) || !raw.labels.length || raw.labels.length > (polar ? 32 : 500)) return fail();
+  const labels = raw.labels.map(v => string(v, 100));
+  if (new Set(labels).size !== labels.length) return fail();
+  if (!Array.isArray(raw.series) || !raw.series.length || raw.series.length > (polar ? 1 : 8)) return fail();
+  const names = new Set<string>();
+  const series = raw.series.map((value, i) => {
+    const item = object(value, ['name', 'color', 'values']);
+    const name = string(item.name, 80), color = item.color ?? CHART_COLORS[i];
+    if (names.has(name) || !CHART_COLORS.includes(color as ChartColor)) return fail();
+    names.add(name);
+    if (!Array.isArray(item.values) || item.values.length !== labels.length) return fail();
+    const values = item.values.map(v => {
+      if (v === null && !polar) return null;
+      return typeof v === 'number' && Number.isFinite(v) && Math.abs(v) <= 1e15 && (!polar || v >= 0) ? v : fail();
+    });
+    if (!values.some(v => v !== null && (!polar || v > 0))) return fail();
+    return { name, color: color as ChartColor, values };
+  });
+  return { type: type as MessageChart['type'], stacked, labels, series,
+    ...(raw.title === undefined ? {} : { title: string(raw.title, 200) }),
+    ...(raw.caption === undefined ? {} : { caption: string(raw.caption, 500) }),
+    ...(raw.xLabel === undefined ? {} : { xLabel: string(raw.xLabel, 80) }),
+    ...(raw.yLabel === undefined ? {} : { yLabel: string(raw.yLabel, 80) }),
+    ...(raw.unit === undefined ? {} : { unit: string(raw.unit, 20) }) };
+}
+
+export function chartToText(chart: MessageChart): string {
+  return [chart.title, [chart.xLabel, chart.yLabel].filter(Boolean).join(' / '),
+    ...chart.labels.map((label, i) => `${label}: ${chart.series.map(s => `${s.name}: ${s.values[i] === null ? '—' : s.values[i]}${s.values[i] !== null && chart.unit ? ' ' + chart.unit : ''}`).join('; ')}`), chart.caption].filter(Boolean).join('\n');
+}
+
 export function getMessageAccentStyle(url: string): MessageAccentStyle | null {
   const style = url.startsWith('style:') ? url.slice(6) : '';
   return styles.has(style) ? style as MessageAccentStyle : null;
@@ -102,7 +157,7 @@ export function prepareMessageAccents(source: string): string {
 }
 
 function transformMessageAccents(source: string, stripComplete: boolean): string {
-  if (!source.includes('](style') && !(stripComplete && (source.includes('layout:') || source.includes('questionnaire') || source.includes('diagram')))
+  if (!source.includes('](style') && !(stripComplete && (source.includes('layout:') || source.includes('questionnaire') || source.includes('diagram') || source.includes('chart')))
     && !/<\/?(?:grid|flex|box)\b/.test(source)) return source;
   let result = '';
   let index = 0;
@@ -118,6 +173,10 @@ function transformMessageAccents(source: string, stripComplete: boolean): string
         if (stripComplete && closing && /^ {0,3}(?:`{3,}|~{3,})diagram[ \t]*\r?\n/.test(fence[0])) {
           try { literal = diagramToText(parseMessageDiagram(source.slice(index + fence[0].length, closing.index))) + '\n'; }
           catch { /* Invalid diagrams remain literal code. */ }
+        }
+        if (stripComplete && closing && /^ {0,3}(?:`{3,}|~{3,})chart[ \t]*\r?\n/.test(fence[0])) {
+          try { literal = chartToText(parseMessageChart(source.slice(index + fence[0].length, closing.index))) + '\n'; }
+          catch { /* Invalid charts remain literal code. */ }
         }
         // Telegram/plain fallback only. No new bot runtime dependency or executable markup.
         if (stripComplete && closing && /^ {0,3}(?:`{3,}|~{3,})questionnaire[ \t]*\r?\n/.test(fence[0])) {

@@ -273,6 +273,18 @@ Both editors offer **Take a questionnaire**, using the existing `runAgent` runne
 
 Regression tests: `pnpm exec tsx backend-api/tests/player-instructions.test.mts`, `pnpm exec tsx backend-api/tests/player-instructions-follow-up.test.mts` and `pnpm exec tsx backend-api/tests/persona-import.test.mts`.
 
+### Declarative charts
+
+Completed `chart` fences render validated data as native charts, without executing model code:
+
+~~~chart
+{"type":"line","title":"Weekly sales","unit":"items","labels":["Mon","Tue","Wed"],"series":[{"name":"Store A","color":"blue","values":[12,18,15]},{"name":"Store B","color":"green","values":[9,14,17]}]}
+~~~
+
+Types: `line`, `bar`, `area`, `pie`, `donut`. Optional plain-text `title`, `caption`, `xLabel`, `yLabel`, `unit`; `stacked: true` is supported for bars/areas. Colors: blue, green, purple, orange, red, cyan, neutral, pink. Every series has a unique name and an equally long values array; null denotes a gap, not zero. Limits: 500 unique labels, 8 series, finite numbers up to ±1e15, 200 KB source (characters). Pie/donut: one series, up to 32 categories, nonnegative non-null values with a positive total; automatic slice colors. Unknown properties and executable options are rejected.
+
+[Recharts](https://github.com/recharts/recharts) is lazy-loaded only for chart blocks. Charts use responsive bounded heights, theme colors, hover values, keyboard navigation, toggleable legends, source/copy, a data table, and an expanded accessible dialog. Animations are disabled; line/area segments are straight. Completed valid blocks have a readable text fallback; incomplete or invalid blocks do not render data. No external network or application access is provided by the chart schema. Tests: `pnpm exec tsx desktop-app/tests/message-charts.test.mts`.
+
 ### Declarative diagrams
 
 Completed `diagram` JSON fences render as native SVG diagrams, not executable interactive previews. Both `architecture` and `flowchart` types support automatic layout, node subtitles/colors, action/decision/terminal shapes, labeled arrows, branches and cycles. Positions and routes are computed locally with [ELK](https://github.com/kieler/elkjs) in a lazy, time-limited Web Worker; no external layout service or relaxed CSP is used.

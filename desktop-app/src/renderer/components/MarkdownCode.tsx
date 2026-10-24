@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { lazy, Suspense, useEffect, useState } from 'react';
 import type { ExtraProps } from 'react-markdown';
 import { useTranslation } from 'react-i18next';
 import type { InteractiveLanguage } from '../../main/interactive-types';
@@ -6,6 +6,7 @@ import { InteractivePreview } from './InteractivePreview';
 import { QuestionnaireBlock } from './Questionnaire';
 import { MessageDiagram } from './MessageDiagram';
 import s from './MarkdownRenderer.module.scss';
+const MessageChart = lazy(() => import('./MessageChart'));
 
 function text(node: { value?: string; children?: unknown[] }): string {
   return node.value ?? node.children?.map(child => text(child as Parameters<typeof text>[0])).join('') ?? '';
@@ -16,7 +17,7 @@ export function MarkdownCode({ className, children, node, ...props }: React.Comp
   const { t } = useTranslation();
   const lang = /language-([\w-]+)/.exec(className ?? '')?.[1];
   const properties = node?.properties ?? {};
-  const previewLanguage = (lang === 'questionnaire' || lang === 'diagram' ? undefined : properties['data-preview-language']) as InteractiveLanguage | undefined;
+  const previewLanguage = (lang === 'questionnaire' || lang === 'diagram' || lang === 'chart' ? undefined : properties['data-preview-language']) as InteractiveLanguage | undefined;
   const source = typeof properties['data-preview-source'] === 'string' ? properties['data-preview-source'] : text(node ?? {});
   const closed = properties['data-preview-closed'] === 'yes';
   const automatic = previewLanguage === 'interactive';
@@ -25,6 +26,7 @@ export function MarkdownCode({ className, children, node, ...props }: React.Comp
   const sourceKey = `${previewLanguage}\u0000${source}`;
   const opened = automatic || approvedSource === sourceKey;
   useEffect(() => { setShowPreview(automatic); }, [automatic, sourceKey]);
+  if (lang === 'chart') return <Suspense fallback={<p role="status">{t('chart.waiting')}</p>}><MessageChart source={source} closed={closed} /></Suspense>;
   if (lang === 'diagram') return <MessageDiagram source={source} closed={closed} />;
   if (lang === 'questionnaire') return <QuestionnaireBlock source={source} closed={closed}
     fallback={<div className={s.codeBlockWrapper}><code className={className}>{children}</code></div>} />;
