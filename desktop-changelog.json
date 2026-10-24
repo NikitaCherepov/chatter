@@ -1,43 +1,43 @@
 {
   "changes": {
     "en": [
-      "Fixed chat list not immediately moving a chat to the top when you message it"
+      "Added experimental rich rendering of messages: inline images, graphics, text selection and more"
     ],
     "cs": [
-      "Opraveno: seznam chatů okamžitě nepřesouval chat nahoru, když jste mu poslali zprávu"
+      "Přidáno experimentální bohaté vykreslování zpráv: vložené obrázky, grafika, výběr textu a další"
     ],
     "de": [
-      "Behoben: Chat-Liste verschob einen Chat nicht sofort nach oben, wenn du ihm eine Nachricht gesendet hast"
+      "Experimentelle Rich-Darstellung von Nachrichten hinzugefügt: Inline-Bilder, Grafiken, Textauswahl und mehr"
     ],
     "es": [
-      "Se corrigió que la lista de chats no moviera inmediatamente un chat al principio al enviarle un mensaje"
+      "Se añadió la representación enriquecida experimental de mensajes: imágenes en línea, gráficos, selección de texto y más"
     ],
     "fr": [
-      "Correction : la liste des discussions ne remontait pas immédiatement une discussion en haut lors de l'envoi d'un message"
+      "Ajout du rendu riche expérimental des messages : images intégrées, graphiques, sélection de texte et plus encore"
     ],
     "it": [
-      "Risolto il problema per cui la lista delle chat non spostava immediatamente una chat in cima quando le inviavi un messaggio"
+      "Aggiunto il rendering avanzato sperimentale dei messaggi: immagini inline, grafica, selezione del testo e altro ancora"
     ],
     "ja": [
-      "メッセージ送信時にチャットがすぐにリストの先頭に移動しない問題を修正"
+      "メッセージの実験的なリッチレンダリングを追加しました：インライン画像、グラフィック、テキスト選択など"
     ],
     "ko": [
-      "메시지를 보냈을 때 채팅 목록에서 해당 채팅이 즉시 맨 위로 이동하지 않던 문제를 수정했습니다"
+      "실험적인 메시지 리치 렌더링 추가: 인라인 이미지, 그래픽, 텍스트 선택 등"
     ],
     "pl": [
-      "Naprawiono: lista czatów nie przenosiła od razu czatu na górę po wysłaniu wiadomości"
+      "Dodano eksperymentalne bogate renderowanie wiadomości: obrazy w treści, grafiki, zaznaczanie tekstu i więcej"
     ],
     "pt-BR": [
-      "Corrigido o problema em que a lista de conversas não movia imediatamente uma conversa para o topo ao enviar uma mensagem"
+      "Adicionada renderização rica experimental de mensagens: imagens em linha, gráficos, seleção de texto e mais"
     ],
     "ru": [
-      "Исправлено: список чатов не перемещал чат наверх сразу после отправки сообщения"
+      "Добавлено экспериментальное расширенное отображение сообщений: встроенные изображения, графика, выделение текста и другое"
     ],
     "tr": [
-      "Bir sohbete mesaj gönderdiğinizde sohbet listesinin sohbeti hemen en üste taşımaması düzeltildi"
+      "Deneysel zengin mesaj görüntüleme eklendi: satır içi görseller, grafikler, metin seçimi ve daha fazlası"
     ],
     "zh-CN": [
-      "修复了发送消息后聊天列表未立即将该聊天移至顶部的问题"
+      "新增实验性富文本消息渲染：内联图片、图形、文本选择等"
     ]
   }
 }
