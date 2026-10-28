@@ -19,6 +19,7 @@ import { ChatMessagesScroll, type ChatMessagesScrollHandle } from '../components
 import { useAuth } from '../lib/auth';
 import { useUnreadChats } from '../lib/useUnreadChats';
 import * as api from '../lib/api';
+import { RoomStreamBuffer } from '../lib/room-stream-buffer';
 import { promoteChatInFolder } from '../lib/chat-list-order';
 import { generateDocxBlob, generateChatDocxBlob } from '../lib/markdownToDocx';
 import { MarkdownRenderer } from '../components/MarkdownRenderer';
@@ -1334,6 +1335,8 @@ export function ChatPage() {
   // Chats with a server-side room queue currently running (used to keep the
   // composer blocked when switching away and back).
   const roomStreamChatIdsRef = useRef(new Set<number>());
+  const roomStreamBuffersRef = useRef(new Map<number, RoomStreamBuffer>());
+  const roomStreamRevisionRef = useRef(new Map<number, number>());
   // Optimistic temp user-message id per chat, replaced when the server acks
   // the persisted message via chat_user_message_saved.
   const pendingUserMessageIdByChatRef = useRef(new Map<number, number>());
@@ -1964,11 +1967,35 @@ export function ChatPage() {
 
   useEffect(() => { void loadChats(); }, [loadChats]);
 
+  const restoreRoomStream = (chatId: number) => {
+    if (activeChatIdRef.current !== chatId) return;
+    const snapshot = roomStreamBuffersRef.current.get(chatId)?.read();
+    if (!snapshot) return;
+    const existing = roomEventAgentMsgIds.current.get(chatId);
+    const tempId = existing?.streamId === snapshot.stream_id ? existing.tempId : -(Date.now() + 1);
+    roomEventAgentMsgIds.current.set(chatId, {
+      agentId: snapshot.agent_id, tempId, created: true, streamId: snapshot.stream_id,
+      promptId: snapshot.prompt_id ?? null, promptName: snapshot.prompt_name || 'Chatter', promptImageUrl: snapshot.prompt_image_url ?? null,
+    });
+    roomStreamChatIdsRef.current.add(chatId);
+    setSending(true);
+    setStreamingMsgId(tempId);
+    setStreamingState(snapshot.content ? 'content' : snapshot.reasoning_content ? 'reasoning' : 'idle');
+    setShowTyping(!snapshot.content && !snapshot.reasoning_content);
+    setTypingIdentity({ name: snapshot.prompt_name || 'Chatter', imageUrl: snapshot.prompt_image_url ?? null });
+    if (!snapshot.content && !snapshot.reasoning_content) return;
+    setMessages(previous => {
+      const messages = previous.filter(message => message.id !== tempId && message.id !== snapshot.regenerate_message_id);
+      return [...messages, { id: tempId, role: 'assistant', content: snapshot.content, reasoning_content: snapshot.reasoning_content || null,
+        created_at: snapshot.created_at, agent_id: snapshot.agent_id, prompt_id: snapshot.prompt_id ?? null,
+        prompt_name: snapshot.prompt_name ?? null, prompt_image_url: snapshot.prompt_image_url ?? null }];
+    });
+  };
+
   useEffect(() => {
     if (activeChatId) {
       prevMsgCountRef.current = 0;
       markAsRead(activeChatId);
-      loadMessages(activeChatId);
     }
     // Switching chats must not keep the previous chat's generation state
     // (otherwise a running room queue leaves `sending` stuck in the new chat).
@@ -1979,25 +2006,52 @@ export function ChatPage() {
     } else {
       setSending(false);
     }
-    // Late-joiner resync: if a run is active server-side but we missed its
-    // chat_agent_start (e.g. the app was closed), block the composer so the
-    // stop button shows. No-op when we already know about the stream.
-    if (activeChatId !== null && !roomStreamChatIdsRef.current.has(activeChatId)) {
-      void api.getRoomRunStatus(activeChatId)
-        .then((active) => {
-          if (active && activeChatIdRef.current === activeChatId && !roomStreamChatIdsRef.current.has(activeChatId)) {
-            roomStreamChatIdsRef.current.add(activeChatId);
-            setSending(true);
-          }
-        })
-        .catch(() => { /* non-fatal: the run may have just ended */ });
-    }
+    // Reload persisted history, then restore the current response from status.
     setShowTyping(false);
     setTypingIdentity(null);
     setStreamingState('idle');
     setStreamingMsgId(null);
     // NOTE: do not clear roomEventAgentMsgIds here — it tracks in-flight
     // server-side streams across chat switches (cleared on chat_queue_done).
+    let request = 0, disposed = false;
+    const sync = async () => {
+      if (activeChatId === null) return;
+      const chatId = activeChatId, currentRequest = ++request;
+      const valid = () => !disposed && currentRequest === request && activeChatIdRef.current === chatId;
+      const beforeLoad = roomStreamRevisionRef.current.get(chatId) ?? 0;
+      await loadMessages(chatId, valid);
+      if (!valid()) return;
+      restoreRoomStream(chatId);
+      const beforeStatus = roomStreamRevisionRef.current.get(chatId) ?? 0;
+      try {
+        const status = await api.getRoomStreamStatus(chatId);
+        if (!valid()) return;
+        const changed = beforeStatus !== (roomStreamRevisionRef.current.get(chatId) ?? 0);
+        const cached = roomStreamBuffersRef.current.get(chatId);
+        if (status.stream && (!changed || cached?.streamId === status.stream.stream_id)) {
+          const buffer = cached?.streamId === status.stream.stream_id ? cached : new RoomStreamBuffer(status.stream.stream_id);
+          buffer.restore(status.stream);
+          roomStreamBuffersRef.current.set(chatId, buffer);
+          restoreRoomStream(chatId);
+        } else if (!changed) {
+          setSending(status.active);
+          if (!status.active) {
+            roomStreamBuffersRef.current.delete(chatId);
+            roomEventAgentMsgIds.current.delete(chatId);
+            roomStreamChatIdsRef.current.delete(chatId);
+            setShowTyping(false); setTypingIdentity(null); setStreamingState('idle'); setStreamingMsgId(null);
+            // A done event may have arrived while history was being fetched.
+            if (beforeLoad !== beforeStatus || cached) {
+              await loadMessages(chatId, valid);
+              if (valid()) restoreRoomStream(chatId);
+            }
+          }
+        }
+      } catch { /* Existing live events keep working if status is unavailable. */ }
+    };
+    void sync();
+    const unsubscribe = api.onWebSocketConnect(() => { void sync(); });
+    return () => { disposed = true; unsubscribe(); };
   }, [activeChatId]);
 
   // Register global handler for scheduler task_result events
@@ -2057,7 +2111,7 @@ export function ChatPage() {
     }
   }, []);
 
-  const loadMessages = useCallback(async (chatId: number) => {
+  const loadMessages = useCallback(async (chatId: number, isCurrent: () => boolean = () => true) => {
     setLoadingMessages(true);
     setContextSummary(null);
     // Reset character budget — each chat starts with a fresh budget
@@ -2095,13 +2149,14 @@ export function ChatPage() {
         pendingMessageJumpRef.current = null;
       }
 
+      if (!isCurrent() || activeChatIdRef.current !== chatId) return;
       setMessages(loadedMessages);
       setHasMoreMessages(lastBatchSize === pageSize);
       refreshContextTokens(chatId);
     } catch (err) {
       console.error('Failed to load messages:', err);
     } finally {
-      setLoadingMessages(false);
+      if (isCurrent() && activeChatIdRef.current === chatId) setLoadingMessages(false);
     }
   }, [refreshContextTokens]);
 
@@ -2834,6 +2889,7 @@ export function ChatPage() {
   // generated by the backend into the open chat, for senders and other room
   // members alike.
   const roomEventAgentMsgIds = useRef(new Map<number, {
+    streamId?: string;
     agentId: number | null;
     tempId: number;
     created: boolean;
@@ -2860,8 +2916,31 @@ export function ChatPage() {
       // Any server event for this chat proves the trigger was picked up —
       // disarm the send watchdog.
       clearSendWatchdog(event.chat_id);
+      if (event.type === 'chat_agent_start' && event.stream_id
+        && roomStreamBuffersRef.current.get(event.chat_id)?.streamId === event.stream_id
+        && (roomStreamBuffersRef.current.get(event.chat_id)?.read()?.sequence ?? 0) > 0) return;
+      if (event.type.startsWith('chat_agent_') || event.type === 'chat_intermediate' || event.type === 'chat_tool_status' || event.type === 'chat_queue_done') {
+        roomStreamRevisionRef.current.set(event.chat_id, (roomStreamRevisionRef.current.get(event.chat_id) ?? 0) + 1);
+      }
+      if (event.stream_id && event.type === 'chat_agent_start') {
+        const buffer = new RoomStreamBuffer(event.stream_id);
+        buffer.restore({ stream_id: event.stream_id, sequence: 0, content: '', reasoning_content: '',
+          agent_id: event.agent_id, prompt_id: event.prompt_id, prompt_name: event.prompt_name,
+          prompt_image_url: event.prompt_image_url, created_at: event.created_at ?? Math.floor(Date.now() / 1000), regenerate_message_id: event.regenerate_message_id });
+        roomStreamBuffersRef.current.set(event.chat_id, buffer);
+      } else if (event.stream_id && ['chat_agent_token', 'chat_agent_reasoning', 'chat_intermediate', 'chat_tool_status'].includes(event.type)) {
+        let buffer = roomStreamBuffersRef.current.get(event.chat_id);
+        if (!buffer || buffer.streamId !== event.stream_id) {
+          buffer = new RoomStreamBuffer(event.stream_id);
+          roomStreamBuffersRef.current.set(event.chat_id, buffer);
+        }
+        buffer.push(event);
+      } else if (event.type === 'chat_agent_done' || event.type === 'chat_agent_error' || event.type === 'chat_queue_done') {
+        roomStreamBuffersRef.current.delete(event.chat_id);
+      }
       if (event.type === 'chat_agent_start') {
         roomEventAgentMsgIds.current.set(event.chat_id, {
+          streamId: event.stream_id,
           agentId: event.agent_id,
           tempId: -(Date.now() + 1),
           created: false,
@@ -2914,6 +2993,7 @@ export function ChatPage() {
         }
         return;
       }
+      const accumulatedStream = roomStreamBuffersRef.current.get(event.chat_id)?.read();
       switch (event.type) {
         case 'room_members_updated': {
           // Someone joined or left — refresh the room (members + shared agents).
@@ -3002,7 +3082,7 @@ export function ChatPage() {
               prompt_image_url: stream.promptImageUrl,
             }];
             return base.map((message) => message.id === stream.tempId
-              ? { ...message, content: message.content + event.text }
+              ? { ...message, content: accumulatedStream?.content ?? message.content + event.text }
               : message);
           });
           break;
@@ -3030,7 +3110,7 @@ export function ChatPage() {
               prompt_image_url: stream.promptImageUrl,
             }];
             return base.map((message) => message.id === stream.tempId
-              ? { ...message, reasoning_content: `${message.reasoning_content || ''}${event.text}` }
+              ? { ...message, reasoning_content: accumulatedStream?.reasoning_content ?? `${message.reasoning_content || ''}${event.text}` }
               : message);
           });
           break;
@@ -3059,7 +3139,7 @@ export function ChatPage() {
               prompt_image_url: stream.promptImageUrl,
             }];
             return base.map((message) => message.id === stream.tempId
-              ? { ...message, content: message.content ? `${message.content}\n\n${text}` : text }
+              ? { ...message, content: accumulatedStream?.content ?? (message.content ? `${message.content}\n\n${text}` : text) }
               : message);
           });
           break;

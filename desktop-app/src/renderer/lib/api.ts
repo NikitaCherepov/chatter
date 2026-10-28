@@ -619,6 +619,10 @@ export async function getRoomRunStatus(chatId: number): Promise<boolean> {
   return Boolean((res as any)?.active);
 }
 
+export async function getRoomStreamStatus(chatId: number): Promise<{ active: boolean; stream: import('./room-stream-buffer').RoomStreamSnapshot | null }> {
+  return apiFetch(`/api/v1/chats/${chatId}/room/status`);
+}
+
 // ── Room invites ───────────────────────────────────────────────────────────
 
 export type RoomInvite = {
@@ -989,7 +993,7 @@ let reconnectDelay = 1000;
 const MAX_RECONNECT_DELAY = 30000;
 let wsTokenRefreshPromise: Promise<boolean> | null = null;
 
-export type RoomEvent =
+export type RoomEvent = { stream_id?: string; sequence?: number; content?: string; reasoning_content?: string; created_at?: number; regenerate_message_id?: number | null } & (
   | { type: 'room_user_message'; chat_id: number; message_id: number | null; timeline_index?: number; sender_user_id: number; text: string; images?: MessageImage[]; attachments?: MessageAttachment[]; questionnaire_response?: import('./message-questionnaires').QuestionnaireResponse }
   | { type: 'chat_agent_start'; chat_id: number; agent_id: number | null; agent_name: string; owner_user_id: number; reason: 'mention' | 'auto' | 'manual'; prompt_id?: number | null; prompt_name?: string | null; prompt_image_url?: string | null }
   | { type: 'chat_agent_token'; chat_id: number; agent_id: number | null; text: string }
@@ -1007,7 +1011,7 @@ export type RoomEvent =
   | { type: 'room_message_deleted'; chat_id: number; message_id: number; initiator_user_id: number }
   | { type: 'room_message_edited'; chat_id: number; message_id: number; initiator_user_id: number; content: string }
   | { type: 'chat_user_message_saved'; chat_id: number; message_id: number | null; timeline_index?: number; images?: MessageImage[]; questionnaire_response?: import('./message-questionnaires').QuestionnaireResponse }
-  | { type: 'chat_queue_done'; chat_id: number };
+  | { type: 'chat_queue_done'; chat_id: number });
 
 type WsCallbacks = StreamCallbacks & {
   onConnect?: () => void;

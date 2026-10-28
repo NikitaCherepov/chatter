@@ -155,10 +155,10 @@ import { normalizeSupportedLanguage, SUPPORTED_LANGUAGES } from './i18n/language
 import { translateForLanguage } from './i18n/index.js';
 import { associateServerAccessKeyUser, createServerAccessKey, getLastServerAccessKeyForUser, isServerAccessKeyGateEnabled, listServerAccessKeys, revokeServerAccessKey, validateServerAccessKey } from './services/server-access-keys.js';
 import { addChatAgent, canReadChatMessages, createChatRoom, createChatRoomInvite, deleteChatRoom, getChatAgentForResponse, getChatRoom, getChatRoomInviteInfo, joinChatRoomByInvite, leaveChatRoom, listChatReaderUserIds, listChatRoomInvites, removeChatAgent, removeChatRoomMember, revokeChatRoomInvite, reorderChatAgents, reorderChatMembers, updateChatAgent, updateChatRoomSettings } from './services/chat-rooms.js';
-import { runChatSteps, hasActiveChatRun } from './services/chat-runner.js';
+import { runChatSteps, hasActiveChatRun, getChatRunStatus } from './services/chat-runner.js';
 import { questionnaireAnswerText } from './services/message-questionnaires.js';
 import { registerPlayerInstructionRoutes } from './services/player-instructions-routes.js';
-import { isRoomChat, runRoomAgents, runRoomResponseQueue, stopRoomQueue, hasActiveRoomRun } from './services/room-runner.js';
+import { isRoomChat, runRoomAgents, runRoomResponseQueue, stopRoomQueue } from './services/room-runner.js';
 
 /** Fire-and-forget WS broadcast to every chat reader (owner for single, owner+members for rooms). */
 const broadcastToChat = (chatId: number, payload: Record<string, unknown>) => {
@@ -2486,7 +2486,7 @@ app.get('/api/v1/chats/:id/room/status', (req: AuthedRequest, res) => {
   const chatId = Number.parseInt(req.params.id, 10);
   if (!Number.isSafeInteger(chatId) || chatId <= 0) return res.status(400).json({ error: 'bad_chat_id' });
   if (!canReadChatMessages(userId, chatId)) return res.status(404).json({ error: 'chat_not_found' });
-  return res.json({ active: hasActiveRoomRun(chatId) });
+  return res.set('Cache-Control', 'no-store').json(getChatRunStatus(chatId));
 });
 
 app.post('/api/v1/chats/:id/fork', async (req: AuthedRequest, res) => {

@@ -3,6 +3,7 @@ import type { AiSendResult } from '../types.js';
 import { getUserById, resolvePromptForChat } from './chats.js';
 import { getChatAgentForResponse } from './chat-rooms.js';
 import { getUserPromptImageBySelectedId } from './prompts.js';
+import { ChatStreamBuffer } from './chat-stream-buffer.js';
 
 /**
  * Unified server-side chat runner.
@@ -59,6 +60,7 @@ type ChatRunState = {
   activeController: AbortController | null;
   draining: boolean;
   emit: ChatRunEmitter | null;
+  stream?: ChatStreamBuffer;
 };
 
 const chatStates = new Map<number, ChatRunState>();
@@ -94,7 +96,7 @@ export const stopChatRun = (chatId: number): boolean => {
 const runSteps = async (
   chatId: number,
   steps: ChatRunStep[],
-  emit: ChatRunEmitter,
+  deliver: ChatRunEmitter,
   signal: AbortSignal,
 ): Promise<void> => {
   for (const step of steps) {
@@ -127,7 +129,7 @@ const runSteps = async (
       // prompt was concurrently changed or deleted.
     }
 
-    emit({
+    const start = {
       type: 'chat_agent_start',
       chat_id: chatId,
       agent_id: agentId,
@@ -138,7 +140,17 @@ const runSteps = async (
       prompt_id: promptId,
       prompt_name: promptName,
       prompt_image_url: promptImageUrl,
-    });
+      regenerate_message_id: step.options?.regenerateMessageId ?? null,
+    };
+    const buffer = new ChatStreamBuffer(start);
+    const state = getChatState(chatId);
+    state.stream = buffer;
+    const emit: ChatRunEmitter = payload => {
+      const event = buffer.event(payload);
+      if ((payload.type === 'chat_agent_done' || payload.type === 'chat_agent_error') && state.stream === buffer) state.stream = undefined;
+      deliver(event);
+    };
+    deliver(buffer.snapshot());
 
     try {
       // Agent steps: step.options may override agent defaults, but user-owned
@@ -275,3 +287,8 @@ export const hasActiveChatRun = (chatId: number): boolean => {
   const state = chatStates.get(chatId);
   return Boolean(state && (state.activeController !== null || state.queue.length > 0 || state.draining));
 };
+
+export const getChatRunStatus = (chatId: number) => ({
+  active: hasActiveChatRun(chatId),
+  stream: chatStates.get(chatId)?.stream?.snapshot() ?? null,
+});

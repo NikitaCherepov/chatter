@@ -1,0 +1,62 @@
+import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
+const { RoomStreamBuffer } = require('../src/renderer/lib/room-stream-buffer.ts');
+const { ChatStreamBuffer } = require('../../backend-api/src/services/chat-stream-buffer.ts');
+const start = {
+  type: 'chat_agent_start',
+  chat_id: 12,
+  agent_id: null,
+  prompt_name: 'Assistant',
+  regenerate_message_id: 45,
+};
+const server = new ChatStreamBuffer(start);
+const initial = server.snapshot();
+const first = server.event({ type: 'chat_agent_token', text: 'Hello' });
+const reasoning = server.event({ type: 'chat_agent_reasoning', text: 'Think' });
+const snap = server.snapshot();
+const last = server.event({ type: 'chat_agent_token', text: ' world' });
+const client = new RoomStreamBuffer(initial.stream_id);
+client.restore(initial);
+client.push(first);
+client.push(reasoning);
+assert.equal(client.read().content, 'Hello');
+// Token arrives while the HTTP snapshot is in flight.
+client.push(last);
+client.restore(snap);
+client.push(last);
+assert.equal(client.read().content, 'Hello world');
+assert.equal(client.read().reasoning_content, 'Think');
+assert.equal(client.read().regenerate_message_id, 45);
+// Joined after start: queue later tokens and replay only those absent from status.
+const late = new RoomStreamBuffer(initial.stream_id);
+late.push(last);
+late.push(first);
+late.restore(snap);
+assert.equal(late.read().content, 'Hello world');
+// Out-of-order and repeated delivery, including a reasoning gap.
+const outOfOrder = new RoomStreamBuffer(initial.stream_id);
+outOfOrder.restore(initial);
+outOfOrder.push(last);
+outOfOrder.push(first);
+assert.equal(outOfOrder.read().content, 'Hello');
+outOfOrder.push(reasoning);
+outOfOrder.push(last);
+assert.equal(outOfOrder.read().content, 'Hello world');
+outOfOrder.restore(initial);
+assert.equal(outOfOrder.read().sequence, 3);
+const tool = server.event({ type: 'chat_tool_status', text: 'Reading' });
+const intermediate = server.event({ type: 'chat_intermediate', text: 'Read result' });
+client.push(tool);
+client.push(intermediate);
+assert.equal(client.read().content, 'Hello world\n\n_Reading_\n\nRead result');
+const other = new ChatStreamBuffer({ ...start, chat_id: 13 });
+assert.notEqual(other.snapshot().stream_id, initial.stream_id);
+client.push(other.event({ type: 'chat_agent_token', text: 'Foreign' }));
+client.restore(other.snapshot());
+assert.equal(client.read().content, server.snapshot().content);
+assert.equal(snap.content, 'Hello', 'snapshots must not mutate after new tokens');
+assert.equal(server.event({ type: 'chat_agent_done' }).stream_id, initial.stream_id);
+console.log(
+  'PASS: background accumulation, late join, HTTP/event races, duplicate/out-of-order tokens, reasoning, tools, regeneration and chat isolation',
+);
