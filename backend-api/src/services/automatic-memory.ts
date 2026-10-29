@@ -20,7 +20,7 @@ export const formatAutomaticMemory = (groups: MemorySearchGroup[]): string => {
 };
 
 export const retrieveAutomaticMemory = async (input: {
-  userId: number; billingUserId: number; chatId: number; query: unknown; signal: AbortSignal; resultLimit?: number;
+  userId: number; billingUserId: number; chatId?: number; query: unknown; signal: AbortSignal; resultLimit?: number;
 }): Promise<string> => {
   const query = extractMemoryQuery(input.query);
   if (!query || input.signal.aborted) return '';

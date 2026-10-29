@@ -1549,7 +1549,7 @@
       "testRunFailed": "Run failed",
       "testRoomRedirect": "Redirected from room",
       "testNewChat": "New chat created",
-      "testSilent": "The task produced nothing to report (empty answer).",
+      "testSilent": "The task completed without a user notification.",
       "testFailed": "Failed to run the test"
     }
   },

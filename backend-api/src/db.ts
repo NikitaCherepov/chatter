@@ -165,6 +165,24 @@ db.exec(`
     status TEXT NOT NULL DEFAULT 'pending'
   );
 
+  CREATE TABLE IF NOT EXISTS task_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    task_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    started_at INTEGER NOT NULL,
+    finished_at INTEGER,
+    is_test INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'running',
+    notify_user INTEGER,
+    result_text TEXT NOT NULL DEFAULT '',
+    trace_json TEXT,
+    usage_json TEXT,
+    chat_id INTEGER,
+    delivered INTEGER NOT NULL DEFAULT 0,
+    error TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_task_runs_task ON task_runs(task_id, started_at);
+
   CREATE TABLE IF NOT EXISTS notes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,

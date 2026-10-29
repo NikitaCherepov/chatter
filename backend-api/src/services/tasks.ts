@@ -3,6 +3,20 @@ import type { TaskDto, TaskNotifyMode, TaskRecurrenceType, TaskStatus, TaskTarge
 
 export const MAX_PENDING_TASKS_PER_USER = 10;
 
+export const startTaskRun = (taskId: number, userId: number, isTest: boolean): number => Number(db.prepare(
+  'INSERT INTO task_runs (task_id, user_id, started_at, is_test) VALUES (?, ?, ?, ?)'
+).run(taskId, userId, Math.floor(Date.now() / 1000), isTest ? 1 : 0).lastInsertRowid);
+
+export const completeTaskRun = (id: number, result: {
+  ok: boolean; notifyUser: boolean | null; resultText: string; chatId: number | null; delivered: boolean; error: string | null;
+  trace?: unknown; usage?: unknown;
+}) => db.prepare(`UPDATE task_runs SET finished_at = ?, status = ?, notify_user = ?, result_text = ?,
+  trace_json = ?, usage_json = ?, chat_id = ?, delivered = ?, error = ? WHERE id = ?`).run(
+  Math.floor(Date.now() / 1000), result.ok ? 'done' : 'error', result.notifyUser === null ? null : Number(result.notifyUser),
+  result.resultText, result.trace ? JSON.stringify(result.trace) : null, result.usage ? JSON.stringify(result.usage) : null,
+  result.chatId, Number(result.delivered), result.error, id,
+);
+
 const TASK_COLUMNS = `
   t.id, t.execute_at, t.task_type, t.payload, t.status,
   t.recurrence_type, t.recurrence_weekday, t.timezone_offset,

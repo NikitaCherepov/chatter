@@ -331,6 +331,8 @@ export type GeneratedImage = {
 };
 
 export type AiSendResult = {
+  task_result?: import('./services/task-completion.js').TaskCompletion;
+  task_trace?: unknown[];
   reply_text: string;
   /** Final assistant text only, excluding intermediate tool-call narration. */
   final_reply_text?: string;

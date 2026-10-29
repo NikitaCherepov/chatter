@@ -1,5 +1,6 @@
 ﻿import OpenAI from 'openai';
 import dotenv from 'dotenv';
+import { finishTaskTool, parseTaskCompletion, type TaskCompletion } from './task-completion.js';
 import { randomUUID } from 'node:crypto';
 import { getModelSettings, modelApiKey, type ConfiguredModel } from './model-settings.js';
 import { createChatGptClient, chatGptConnectionForClient, chatGptCompletion, CHATGPT_REASONING_LEVELS } from './chatgpt-responses.js';
@@ -1885,7 +1886,7 @@ const formatTasksList = (tasks: ReturnType<typeof listTasks>, timezoneOffset: nu
   return tasks.map((t) => {
     const when = formatUnixForTimezone(t.execute_at, t.timezone_offset ?? timezoneOffset);
     const notifyText = t.notify_mode == null
-      ? 'AI decides (empty answer = no notification)'
+      ? 'AI decides explicitly via finish_task.notify_user'
       : t.notify_mode === 'on_error' ? 'only on errors' : t.notify_mode;
     const toolsLine = t.task_type === 'ai_instruction'
       ? `\nTools: ${formatTaskAllowedToolsText(t.allowed_tools)}`
@@ -2128,7 +2129,7 @@ export const toolDefinitions = [
           target_chat_id: { anyOf: [{ type: 'number' }, { type: 'string', enum: ['current_chat'] }], description: 'Target chat for target_mode=chat ONLY: a chat ID of the user\'s own personal chat, or the literal string "current_chat" (default) - substituted with the active chat ID right away. Must be null/omitted for new_chat. Shared rooms and other users\' chats are forbidden (the tool will return an error).' },
           recurrence_type: { type: 'string', enum: ['once', 'daily', 'weekly'], description: 'Schedule type: once - one time, daily - every day, weekly - every week.' },
           recurrence_weekday: { type: 'number', description: 'Day of week for weekly: 1=Monday ... 7=Sunday.' },
-          notify_mode: { type: 'string', enum: ['always', 'never', 'on_error'], description: 'Notification mode. Default (omit): message/smart_home report every run; for ai_instruction the AI decides — an empty answer means no notification, so put any "only write if..." conditions directly into the instruction text. always - report every run. never - never report. on_error - report only when the run fails.' },
+          notify_mode: { type: 'string', enum: ['always', 'never', 'on_error'], description: 'Notification mode. Default (omit): message/smart_home report every run; ai_instruction explicitly decides whether there is a result to report, according to conditions in the instruction. always - deliver reportable results. never - never report. on_error - report only when the run fails.' },
           allowed_tools: { anyOf: [{ type: 'array', items: { type: 'string' } }, { type: 'null' }], description: 'ai_instruction ONLY: restrict which tools the background run may use. Array of tool names (a subset of your own tools), [] = run without any tools, null/omitted = all available tools. Unknown names are dropped; the confirmation lists the effective set.' }
         },
         required: ['task_type', 'payload']
@@ -6873,8 +6874,8 @@ export const sendMessageThroughAi = (...args: Parameters<typeof sendMessageThrou
     ? getUserById(options.initiatorUserId) : null;
   const account = initiator && initiator.status === 'approved' ? initiator : owner;
   if (!account) return Promise.reject(new Error('user_not_found'));
-  const chatId = targetChatId && Number.isFinite(targetChatId) ? targetChatId : ensureActiveChat(userId);
-  const mode = getChatMemorySettings(account.id, chatId).prompt_injection_protection;
+  const chatId = targetChatId && Number.isFinite(targetChatId) ? targetChatId : options?.scheduledTask ? 0 : ensureActiveChat(userId);
+  const mode = chatId ? getChatMemorySettings(account.id, chatId).prompt_injection_protection : 'automatic';
   let disabledGlobally = false;
   try { disabledGlobally = JSON.parse(account.feature_flags || '{}').disable_prompt_injection_protection === true; } catch { /* safe default */ }
   return withModelActor({ userId: account.id, isAdmin: account.is_admin === 1 || account.role === 'admin' }, () => withChatGptActor(account.is_admin === 1 || account.role === 'admin', () => withPromptInjectionProtection(resolvePromptInjectionProtection(mode, disabledGlobally), () => sendMessageThroughAiInternal(...args))));
@@ -6934,6 +6935,8 @@ const sendMessageThroughAiInternal = async (
     reasoningLevel?: ReasoningLevel | null;
     autoRejectHitl?: boolean;
     isBackgroundTask?: boolean;
+    /** Internal scheduled execution: read-only chat context and explicit finish_task. */
+    scheduledTask?: boolean;
     /** Tool whitelist for background (scheduled ai_instruction) runs:
      *  null/undefined = no restriction, [] = no tools. Intersected with the
      *  user's feature flags — can only narrow, never widen. */
@@ -7065,7 +7068,7 @@ const sendMessageThroughAiInternal = async (
   // Generations are scoped per user+chat: a send in chat B must NOT abort an
   // active stream in chat A (multi-chat / room parallelism).
   const currentGenerationKey = generationKey(userId, targetChatId);
-  const previousController = activeGenerations.get(currentGenerationKey);
+  const previousController = options?.isBackgroundTask ? undefined : activeGenerations.get(currentGenerationKey);
   if (previousController && !previousController.signal.aborted) {
     if (activeHitlWaits.has(userId)) {
       const waitingChatId = targetChatId && Number.isFinite(targetChatId) ? targetChatId : ensureActiveChat(userId);
@@ -7456,7 +7459,8 @@ const sendMessageThroughAiInternal = async (
   }> = [];
 
   try {
-  chatId = targetChatId && Number.isFinite(targetChatId) ? targetChatId : ensureActiveChat(userId);
+  if (options?.scheduledTask && (!options.isBackgroundTask || !options.skipHistory)) throw new Error('invalid_task_execution');
+  chatId = targetChatId && Number.isFinite(targetChatId) ? targetChatId : options?.scheduledTask ? 0 : ensureActiveChat(userId);
   // Writes are restricted to the chat owner and room members — otherwise a
   // logged-in user could send into someone else's chat_id.
   if (targetChatId && Number.isFinite(targetChatId) && !canReadChatMessages(userId, chatId)) {
@@ -7544,7 +7548,7 @@ const sendMessageThroughAiInternal = async (
       256,
       roomHistoryTokenBudget - (activeContextSummary?.token_count ?? 0),
     );
-  } else {
+  } else if (chatId) {
     trimUserHistoryByChat(userId, chatId, maxContextTokens);
     try {
       const { prepareContextSummary } = await import('./context-summary-agent.js');
@@ -7730,7 +7734,9 @@ const sendMessageThroughAiInternal = async (
 
   // Tools execute under the initiating user's account in rooms, so the
   // per-chat roleplay restriction must follow that same user + chat pair.
-  const chatMemorySettings = getChatMemorySettings(toolUser.id, chatId);
+  const chatMemorySettings = chatId ? getChatMemorySettings(toolUser.id, chatId) : {
+    roleplay_mode: 0, use_user_instructions: 1, user_instructions: '', user_instructions_mode: 'both' as const, memory_mode: 'general' as const,
+  };
   const roleplayMode = chatMemorySettings.roleplay_mode === 1;
   const flags = applyRoleplayRestrictions(options?.featureFlags, roleplayMode);
   const avatarControlEnabled = !flags?.disable_avatar_control;
@@ -7964,6 +7970,12 @@ const sendMessageThroughAiInternal = async (
       ].filter(t => !disabledToolSet.has(t?.function?.name || '')) as any[])
     : [];
 
+  if (options?.scheduledTask) {
+    if (!currentModelSupportsTools) throw new Error('task_model_requires_tools');
+    executionTools.push(finishTaskTool);
+  }
+  let taskCompletion: TaskCompletion | undefined;
+  let taskFinishReminders = 0;
   let executionHistory = history;
   let executionSystemPrompt = proSystemPrompt;
 //LEGACY
@@ -8063,7 +8075,7 @@ User request: "${text}"`;
   }
 }
 
-  const memoryPreferences = resolveMemoryPreferences(toolUser.id, chatId);
+  const memoryPreferences = resolveMemoryPreferences(toolUser.id, chatId || undefined);
   const automaticMemoryEnabled = memoryPreferences.automaticMemory
     && chatMemorySettings.memory_mode !== 'off' && !isGuestMode;
   if (automaticMemoryEnabled) executionSystemPrompt += AUTOMATIC_MEMORY_HINT;
@@ -8129,7 +8141,7 @@ User request: "${text}"`;
   ];
   if (automaticMemoryEnabled) {
     const archive = await retrieveAutomaticMemory({
-      userId: toolUser.id, billingUserId: user.id, chatId,
+      userId: toolUser.id, billingUserId: user.id, chatId: chatId || undefined,
       resultLimit: memoryPreferences.resultLimit,
       query: regenerateUserMessage?.content || text,
       signal: abortController.signal,
@@ -8163,6 +8175,7 @@ User request: "${text}"`;
       && !!latestUsage
       && shouldStopForQuota(latestUsage);
     if (finalizeForQuota) {
+      if (options?.scheduledTask) throw new Error('task_quota_exhausted');
       quotaFinalizationIssued = true;
       currentMessages.push({
         role: 'system',
@@ -8174,7 +8187,9 @@ User request: "${text}"`;
     if (!finalizeForQuota && loop === effectiveMaxLoops - 1) {
       currentMessages.push({
         role: 'system',
-        content: `Warning: one tool call remaining. After that the limit will be exhausted. Call the last tool if needed, then MUST formulate the final answer to the user, summarizing the results of all calls.`
+        content: options?.scheduledTask
+          ? 'The tool limit is nearly exhausted. Complete the scheduled run by calling finish_task alone now.'
+          : `Warning: one tool call remaining. After that the limit will be exhausted. Call the last tool if needed, then MUST formulate the final answer to the user, summarizing the results of all calls.`
       });
     }
     const completionPayload: Record<string, unknown> = {
@@ -8313,6 +8328,14 @@ User request: "${text}"`;
     };
 
     if (!message.tool_calls?.length) {
+      if (options?.scheduledTask && !taskCompletion) {
+        currentIteration.is_final = true;
+        iterations.push(currentIteration);
+        finalAnswer = '';
+        if (++taskFinishReminders > 2) throw new Error('task_finish_required');
+        currentMessages.push({ role: 'user', content: 'Finish this run by calling finish_task alone with notify_user and message. Ordinary text or an empty answer does not complete the task.' });
+        continue;
+      }
       await withAbort(waitForNoPendingPcConfirmations(userId), abortController.signal);
       const finishReason = response?.choices?.[0]?.finish_reason;
 
@@ -8364,7 +8387,11 @@ const runOneToolCall = async (toolCall: any, emitStatus = true): Promise<Execute
   let toolContent = '';
   const directImageSink: { items: Array<{ base64: string; mimeType: string; question: string; localUrl?: string }> } = { items: [] };
   try {
-    if (disabledToolSet.has(toolName)) {
+    if (options?.scheduledTask && toolName === 'finish_task') {
+      if (message.tool_calls.length !== 1) throw new Error('finish_task_must_be_called_alone');
+      taskCompletion = parseTaskCompletion(toolCall.function?.arguments);
+      toolContent = 'Scheduled run completed.';
+    } else if (disabledToolSet.has(toolName)) {
       toolContent = `Tool "${toolName}" is disabled by current restriction settings.`;
     } else {
     toolContent = await withAbort(
@@ -8381,7 +8408,7 @@ const runOneToolCall = async (toolCall: any, emitStatus = true): Promise<Execute
         options?.activeMacros,
         abortController.signal,
         {
-          chatId,
+          chatId: chatId || undefined,
           originMessageCursor: userMessageCursor,
           manualModel: subagentManualModel,
           subagentMode,
@@ -8405,6 +8432,7 @@ const runOneToolCall = async (toolCall: any, emitStatus = true): Promise<Execute
               && t.function.name !== 'spawn_subagent'
               && t.function.name !== 'invoke_subagent'
               && t.function.name !== 'attach_file_to_response'
+              && t.function.name !== 'finish_task'
           ).map((t: any) => t?.function?.name === 'describe_image' ? buildDescribeImageTool(false) : t),
           attachmentReadContext: {
             chatId,
@@ -8420,7 +8448,7 @@ const runOneToolCall = async (toolCall: any, emitStatus = true): Promise<Execute
             },
             capacityState: attachmentCapacityState,
           },
-          ...(!options?.skipHistory ? { responseFileSink } : {}),
+    ...(!options?.skipHistory || options?.scheduledTask ? { responseFileSink } : {}),
           currentModelSupportsVision,
           directImageSink,
         },
@@ -8617,12 +8645,18 @@ if (abortController.signal.aborted) {
 // Iteration fully completed (all tool_calls processed, not interrupted, not escalated) —
 // фиксируем её в trace.
 iterations.push(currentIteration);
+if (taskCompletion) {
+  finalAnswer = taskCompletion.message;
+  answer = taskCompletion.message;
+  break;
+}
   }
 
   // ── Tool loops exhausted — force a final answer ───────────────────────
   // If we exited the while loop without break, the model still wants to call tools.
   // Inject a message telling it to answer now, then do one final completion.
-  if (loop >= effectiveMaxLoops && !finalAnswer) {
+  if (options?.scheduledTask && !taskCompletion) throw new Error('task_finish_required');
+  if (loop >= effectiveMaxLoops && !finalAnswer && !options?.scheduledTask) {
     currentMessages.push({
       role: 'system',
       content: 'Tool call limit exhausted. Do NOT call any more tools. Formulate the final answer to the user right now based on available data.'
@@ -8747,7 +8781,7 @@ iterations.push(currentIteration);
   }
   // Quota charge (weekly_tokens_used + user_token_usage) is handled in finally via chargeFromUsageCalls.
 
-  if (!multiUserRoom) {
+  if (!multiUserRoom && chatId) {
     trimUserHistoryByChat(userId, chatId, maxContextTokens);
   }
 
@@ -8780,6 +8814,7 @@ iterations.push(currentIteration);
     : '';
   return {
     reply_text: applyAborted ? (fullDbHistory || answer) : answer,
+    ...(options?.scheduledTask ? { task_result: taskCompletion, task_trace: iterations } : {}),
     final_reply_text: finalReplyText,
     ...(applyAborted ? { aborted: true } : {}),
     reasoning_content: reasoningContent,

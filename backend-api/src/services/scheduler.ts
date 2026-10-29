@@ -1,7 +1,8 @@
-import type { TaskDto, TaskRecurrenceType } from '../types.js';
+import type { AiSendResult, TaskDto, TaskRecurrenceType } from '../types.js';
 import { getUserById, ensureActiveChat, createChat, appendChatMessage } from './chats.js';
 import { runSmartHomeControl, type SmartHomeArgs } from './smart-home.js';
-import { getDueTasks, updateTaskNextExecution, updateTaskStatus, updateTaskTargetChat } from './tasks.js';
+import { getDueTasks, updateTaskNextExecution, updateTaskStatus, updateTaskTargetChat, startTaskRun, completeTaskRun, isOwnNonRoomChat } from './tasks.js';
+import { parseTaskCompletion } from './task-completion.js';
 import { sendMessageThroughAi } from './ai.js';
 import { db } from '../db.js';
 import { fetchAndSaveCurrencyRates } from './currency.js';
@@ -159,36 +160,35 @@ const extractInstructionText = (payload: string): string => {
   return raw;
 };
 
+/** Resolve execution context without creating or redirecting a delivery chat. */
+const taskContextChat = (task: TaskDto & { user_id: number }): number | undefined => {
+  if (task.target_mode !== 'chat') return undefined;
+  const active = db.prepare('SELECT active_chat_id FROM users WHERE id = ?').get(task.user_id) as { active_chat_id: number | null } | undefined;
+  const candidate = task.target_chat_id ?? active?.active_chat_id;
+  return candidate && isOwnNonRoomChat(task.user_id, candidate) ? candidate : undefined;
+};
+
 const runScheduledAiInstructionTask = async (
   task: TaskDto & { user_id: number },
-  chatId: number,
-  isNewChat: boolean
-): Promise<{ reply_text: string; chat_id: number; is_new_chat: boolean }> => {
+): Promise<AiSendResult> => {
   const instruction = extractInstructionText(task.payload);
   const language = getUserById(task.user_id)?.language;
   if (!instruction) throw new Error(translateForLanguage(language, 'tasks.emptyInstruction'));
+  const aiTask = `[SCHEDULED TASK]: Execute this user's scheduled instruction, using tools if needed.
+Finish by calling finish_task exactly once and alone, after all other tools have completed.
+Use notify_user=false and message="" when the instruction's conditions require silence.
+Use notify_user=true and a non-empty message in the user's language when there is something to report.
+Intermediate text is internal execution history and is never delivered. Do not finish with ordinary text or an empty response.
 
-  const aiTask = `[SCHEDULED TASK]: A scheduled task has fired for this user according to their own instruction.
-Execute the instruction using tools if needed.
-If, per the instruction's own conditions, there is nothing to report to the user — return a completely EMPTY answer (no text at all): an empty answer means the user will not be notified.
-Answer in the user's language.
-
-User's instruction: "${instruction}"`;
-
-  const result = await sendMessageThroughAi(task.user_id, aiTask, chatId, {
-    forcePro: true,
-    countAsUserMessage: false,
-    persistUserText: translateForLanguage(language, 'tasks.aiInstructionRun', { text: instruction }),
-    autoRejectHitl: true,
-    isBackgroundTask: true,
+User's instruction: ${JSON.stringify(instruction)}`;
+  const result = await sendMessageThroughAi(task.user_id, aiTask, taskContextChat(task), {
+    forcePro: true, countAsUserMessage: false, skipHistory: true,
+    autoRejectHitl: true, isBackgroundTask: true, scheduledTask: true,
     allowedTools: task.allowed_tools ?? null,
   });
-
-  return {
-    reply_text: (result.reply_text || '').trim(),
-    chat_id: result.chat_id || chatId,
-    is_new_chat: isNewChat,
-  };
+  if (result.aborted) throw new Error('task_aborted');
+  result.task_result = parseTaskCompletion(result.task_result);
+  return result;
 };
 
 // Smart home reports failures as error strings, not exceptions.
@@ -239,93 +239,81 @@ export const runScheduledTask = async (
   { advanceSchedule = true }: { advanceSchedule?: boolean } = {},
 ): Promise<TaskRunSummary> => {
   const tag = advanceSchedule ? 'backend-scheduler' : 'backend-scheduler-test';
+  const runId = startTaskRun(task.id, task.user_id, !advanceSchedule);
   let resolvedChatId: number | null = null;
   let resolvedIsNewChat = false;
   let roomRedirect = false;
-  try {
-    const language = getUserById(task.user_id)?.language;
-    // Resolve the destination chat first. A target that turned out to be a
-    // room at run time is redirected into a fresh personal chat.
-    const titleText = task.task_type === 'ai_instruction'
-      ? extractInstructionText(task.payload)
-      : task.payload;
-    const target = resolveTaskChat(task, titleText);
+  let notifyUser: boolean | null = null;
+  let aiResult: AiSendResult | undefined;
+  let successMessage = '';
+  const resolveDelivery = async () => {
+    const target = resolveTaskChat(task, task.task_type === 'ai_instruction' ? extractInstructionText(task.payload) : task.payload);
     resolvedChatId = target.chatId;
     resolvedIsNewChat = target.isNewChat;
     roomRedirect = target.roomRedirect;
-
-    // Safety net fired: warn the user in the new chat that the previous
-    // chat turned out to be a room. Desktop push is unconditional; the
-    // task's redirect_notify only controls duplication to external
-    // messengers (Telegram).
     if (target.roomRedirect) {
-      const warnText = translateForLanguage(language, 'tasks.roomRedirected', { id: task.id });
-      await appendChatMessage(task.user_id, resolvedChatId, 'assistant', warnText);
-      deliverTaskResult(task.user_id, warnText, resolvedChatId, true, { telegram: task.redirect_notify });
+      const warnText = translateForLanguage(getUserById(task.user_id)?.language, 'tasks.roomRedirected', { id: task.id });
+      await appendChatMessage(task.user_id, target.chatId, 'assistant', warnText);
+      deliverTaskResult(task.user_id, warnText, target.chatId, true, { telegram: task.redirect_notify });
+    }
+    return target.chatId;
+  };
+  try {
+    const language = getUserById(task.user_id)?.language;
+    if (task.task_type === 'ai_instruction') {
+      aiResult = await runScheduledAiInstructionTask(task);
+      notifyUser = aiResult.task_result!.notify_user;
+      successMessage = aiResult.task_result!.message;
+    } else {
+      // Ordinary reminders and smart-home tasks retain their existing history.
+      await resolveDelivery();
+      notifyUser = true;
+      if (task.task_type === 'message') {
+        successMessage = translateForLanguage(language, 'tasks.reminder', { text: task.payload });
+      } else if (task.task_type === 'smart_home') {
+        const result = await runSmartHomeControl(task.user_id, JSON.parse(task.payload) as SmartHomeArgs);
+        if (SMART_HOME_ERROR_RE.test(result)) throw new Error(result);
+        successMessage = translateForLanguage(language, 'tasks.smartHomeDone', { result });
+      }
+      await appendChatMessage(task.user_id, resolvedChatId!, 'assistant', successMessage);
     }
 
-    let successMessage = '';
-
-    if (task.task_type === 'message') {
-      successMessage = translateForLanguage(language, 'tasks.reminder', { text: task.payload });
-      await appendChatMessage(task.user_id, resolvedChatId, 'assistant', successMessage);
-    } else if (task.task_type === 'smart_home') {
-      const smartHomeArgs = JSON.parse(task.payload) as SmartHomeArgs;
-      const result = await runSmartHomeControl(task.user_id, smartHomeArgs);
-      if (SMART_HOME_ERROR_RE.test(result)) throw new Error(result);
-      successMessage = translateForLanguage(language, 'tasks.smartHomeDone', { result });
-      await appendChatMessage(task.user_id, resolvedChatId, 'assistant', successMessage);
-    } else if (task.task_type === 'ai_instruction') {
-      const result = await runScheduledAiInstructionTask(task, resolvedChatId, resolvedIsNewChat);
-      successMessage = result.reply_text
-        ? translateForLanguage(language, 'tasks.aiInstructionDone', { text: result.reply_text })
-        : '';
-      resolvedChatId = result.chat_id;
-      resolvedIsNewChat = result.is_new_chat;
-    }
-
-    // 'always' and NULL (ai_instruction: the model decides — empty answer = silence)
-    // deliver every non-empty result; 'on_error' and 'never' stay silent on success.
     let delivered = false;
-    if (successMessage && (task.notify_mode === null || task.notify_mode === 'always')) {
-      deliverTaskResult(task.user_id, successMessage, resolvedChatId, resolvedIsNewChat);
+    if (notifyUser && successMessage && (task.notify_mode === null || task.notify_mode === 'always')) {
+      if (aiResult) {
+        const chatId = await resolveDelivery();
+        const instruction = extractInstructionText(task.payload);
+        await appendChatMessage(task.user_id, chatId, 'user', translateForLanguage(language, 'tasks.aiInstructionRun', { text: instruction }));
+        const images = aiResult.response_images ?? aiResult.generated_images?.filter(image => image.image_url).map(image => ({ url: image.image_url!, type: 'generated' as const }));
+        await appendChatMessage(task.user_id, chatId, 'assistant', successMessage, null, null, images, aiResult.reasoning_content, null,
+          aiResult.response_attachments, null, { usage: aiResult.message_usage, modelName: aiResult.model_name, providerName: aiResult.provider_name });
+      }
+      deliverTaskResult(task.user_id, successMessage, resolvedChatId!, resolvedIsNewChat);
       delivered = true;
     }
-
     if (advanceSchedule) finishTaskRun(task, true);
-    return {
-      ok: true,
-      chatId: resolvedChatId,
-      chatTitle: chatTitleById(resolvedChatId),
-      isNewChat: resolvedIsNewChat,
-      roomRedirect,
-      resultText: successMessage,
-      delivered,
-      error: null,
-    };
+    const summary = { ok: true, chatId: resolvedChatId, chatTitle: chatTitleById(resolvedChatId), isNewChat: resolvedIsNewChat,
+      roomRedirect, resultText: successMessage, delivered, error: null };
+    completeTaskRun(runId, { ...summary, notifyUser, trace: aiResult?.task_trace, usage: aiResult?.message_usage });
+    return summary;
   } catch (err) {
     console.error(`[${tag}] task #${task.id} failed:`, err);
     const detail = err instanceof Error ? err.message : String(err);
+    let errorDelivered = false;
     if (task.notify_mode === 'on_error') {
-      const chatId = resolvedChatId ?? ensureActiveChat(task.user_id);
-      deliverTaskResult(
-        task.user_id,
-        translateForLanguage(getUserById(task.user_id)?.language, 'tasks.failed', { id: task.id, error: detail }),
-        chatId,
-        resolvedIsNewChat,
-      );
+      try {
+        const chatId = resolvedChatId ?? await resolveDelivery();
+        const errorText = translateForLanguage(getUserById(task.user_id)?.language, 'tasks.failed', { id: task.id, error: detail });
+        await appendChatMessage(task.user_id, chatId, 'assistant', errorText);
+        deliverTaskResult(task.user_id, errorText, chatId, resolvedIsNewChat);
+        errorDelivered = true;
+      } catch (deliveryError) { console.error(`[${tag}] error delivery failed for task #${task.id}`, deliveryError); }
     }
     if (advanceSchedule) finishTaskRun(task, false);
-    return {
-      ok: false,
-      chatId: resolvedChatId,
-      chatTitle: chatTitleById(resolvedChatId),
-      isNewChat: resolvedIsNewChat,
-      roomRedirect,
-      resultText: '',
-      delivered: false,
-      error: detail,
-    };
+    const summary = { ok: false, chatId: resolvedChatId, chatTitle: chatTitleById(resolvedChatId), isNewChat: resolvedIsNewChat,
+      roomRedirect, resultText: '', delivered: errorDelivered, error: detail };
+    completeTaskRun(runId, { ...summary, notifyUser, trace: aiResult?.task_trace, usage: aiResult?.message_usage });
+    return summary;
   }
 };
 
