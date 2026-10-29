@@ -20,8 +20,16 @@ export function ModelApiPage() {
   const [editingId,setEditingId]=useState<number|null>(null), [editModels,setEditModels]=useState<Model[]>([]), [editSelected,setEditSelected]=useState<string[]>([]);
   const [editLoading,setEditLoading]=useState(false), [editSaving,setEditSaving]=useState(false), [editError,setEditError]=useState('');
   const [editLoaded,setEditLoaded]=useState(false);
+  const [catalogs,setCatalogs]=useState<Record<number,Model[]>>({});
   const editingKey=keys.find(key=>key.id===editingId);
-  const load=useCallback(async()=>{const result=await api<{keys:Key[]}>('/api/model-api/keys');setKeys(result.keys);},[]);
+  const load=useCallback(async()=>{
+    const result=await api<{keys:Key[]}>('/api/model-api/keys');setKeys(result.keys);
+    const entries=await Promise.all([...new Set(result.keys.map(key=>key.owner_user_id))].map(async id=>{
+      try{const catalog=await api<{models:Model[]}>(`/api/model-api/models?owner_user_id=${id}`);return [id,catalog.models] as const;}
+      catch{return [id,[]] as const;}
+    }));
+    setCatalogs(Object.fromEntries(entries));
+  },[]);
   useEffect(()=>{
     const direct=Boolean(window.location.port&&window.location.port!=='443');
     setBase(direct?`${window.location.protocol}//${window.location.hostname}:3050/v1`:`${window.location.origin}/backend/v1`);
@@ -64,6 +72,12 @@ export function ModelApiPage() {
     catch{setMessage(t('modelApi.failed'));}finally{setPending(false);}
   }
   async function copy(value:string){try{await navigator.clipboard.writeText(value);setMessage(t('modelApi.copied'));}catch{setMessage(t('modelApi.copyFailed'));}}
+  function modelList(ids:string[],catalog:Model[]){
+    return <ul className={s.modelList}>{ids.map(id=>{
+      const model=catalog.find(model=>model.id===id);
+      return <li key={id} className={s.modelEntry}><div><strong>{model?.name||t('modelApi.unknownModel')}</strong><code className={s.model}>{id}</code></div><button type="button" className={`buttonSecondary ${s.copyId}`} aria-label={t('modelApi.copyModelId',{name:model?.name||id})} onClick={()=>void copy(id)}>{t('modelApi.copyId')}</button></li>;
+    })}</ul>;
+  }
   async function confirmRevoke(){
     if(!revoke||pending)return;setPending(true);
     try{await api(`/api/model-api/keys/${revoke.id}`,{method:'DELETE'});setSecret('');setRevoke(null);setEditingId(null);setMessage(t('modelApi.revoked'));await load();}
@@ -84,6 +98,7 @@ export function ModelApiPage() {
         <label>{t('modelApi.owner')}<Select value={owner} onChange={setOwner} options={users.map(user=>({value:String(user.id),label:`${user.name||user.id} · #${user.id}`}))} placeholder={t('modelApi.chooseOwner')} searchable disabled={pending} aria-label={t('modelApi.owner')} /></label>
         <label className={s.wide}>{t('modelApi.models')}<Select value="" onChange={()=>{}} selectedValues={selected} onSelectionChange={setSelected} options={models.map(model=>({value:model.id,label:model.name,hint:model.id}))} placeholder={t(loadingModels?'modelApi.loading':'modelApi.chooseModels')} searchable disabled={!owner||loadingModels||pending} aria-label={t('modelApi.models')} /></label>
         <p className={s.help}>{t('modelApi.ownerHelp')}</p>
+        {selected.length>0&&<div className={s.wide}>{modelList(selected,models)}</div>}
         <button type="submit" disabled={pending||!name.trim()||!selected.length||!owner}>{t(pending?'modelApi.working':'modelApi.create')}</button>
       </form>
       {secret&&<div className={s.secret} role="status"><strong>{t('modelApi.oneTime')}</strong><div className={s.copy}><input aria-label={t('modelApi.secret')} value={secret} readOnly autoComplete="off" spellCheck={false}/><button type="button" onClick={()=>void copy(secret)}>{t('modelApi.copy')}</button><button type="button" className="buttonSecondary" onClick={()=>setSecret('')}>{t('modelApi.hide')}</button></div></div>}
@@ -97,7 +112,7 @@ export function ModelApiPage() {
       <button type="button" className="buttonSecondary" onClick={()=>void load().catch(()=>setMessage(t('modelApi.failed')))}>{t('modelApi.refresh')}</button>
       <div className={s.table}><table><thead><tr>{['key','models','requests','tokens','month','total','lastUsed','actions'].map(label=><th key={label}>{t(`modelApi.${label}`)}</th>)}</tr></thead><tbody>{keys.map(key=><Fragment key={key.id}><tr className={!key.revoked_at?s.keyRow:undefined} onClick={event=>{if(!(event.target as HTMLElement).closest('button,a,input,label'))toggleSettings(key);}}>
         <td>{key.revoked_at?<strong>{key.name}</strong>:<button type="button" className={s.keyButton} onClick={()=>toggleSettings(key)} aria-expanded={editingId===key.id} aria-controls={`model-api-settings-${key.id}`} disabled={editSaving}>{key.name}</button>}<small>{key.key_prefix}</small><small>{key.owner_name||`#${key.owner_user_id}`}</small>{key.revoked_at&&<small>{t('modelApi.revoked')}</small>}</td>
-        <td>{key.models.map(id=><code className={s.model} key={id}>{id}</code>)}</td>
+        <td>{modelList(key.models,catalogs[key.owner_user_id]||[])}</td>
         <td>{number(key.request_count)}</td><td>{number(key.total_tokens)}</td><td>{money(key.month_cost_usd)}</td><td>{money(key.cost_usd)}{key.unknown_cost_count>0&&<small>{t('modelApi.unknown',{count:key.unknown_cost_count})}</small>}</td>
         <td>{formatDateTime(key.last_used_at,i18n.language)}</td><td>{!key.revoked_at&&<button type="button" className="buttonSecondary" disabled={editSaving} onClick={()=>setRevoke(key)}>{t('modelApi.revoke')}</button>}</td>
       </tr>{editingId===key.id&&!key.revoked_at&&<tr><td colSpan={8} className={s.settingsCell}><div id={`model-api-settings-${key.id}`} className={s.settings} role="region" aria-label={t('modelApi.settingsTitle',{name:key.name})}>
@@ -106,6 +121,7 @@ export function ModelApiPage() {
           ...editModels.map(model=>({value:model.id,label:model.name,hint:model.id})),
           ...key.models.filter(id=>!editModels.some(model=>model.id===id)).map(id=>({value:id,label:id,hint:t('modelApi.unavailable'),disabled:!editSelected.includes(id)})),
         ]} placeholder={t(editLoading?'modelApi.loading':'modelApi.chooseModels')} searchable disabled={editLoading||editSaving||!editLoaded} aria-label={t('modelApi.editModels')} />
+        {editLoaded&&editSelected.length>0&&modelList(editSelected,editModels)}
         {editError&&<p role="alert">{editError}</p>}
         <div className={s.editActions}><button type="button" disabled={editLoading||editSaving||!editLoaded||editSelected.some(id=>!editModels.some(model=>model.id===id))} onClick={()=>void saveModels()}>{t(editSaving?'modelApi.working':'modelApi.saveModels')}</button><button type="button" className="buttonSecondary" disabled={editSaving} onClick={()=>setEditingId(null)}>{t('modelApi.cancel')}</button></div>
       </div></td></tr>}</Fragment>)}</tbody></table>{!keys.length&&<p className={s.help}>{t('modelApi.empty')}</p>}</div>
