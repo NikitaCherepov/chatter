@@ -44,7 +44,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   browserSetBounds: (bounds: { x: number; y: number; width: number; height: number }) =>
     ipcRenderer.invoke('browser:set-bounds', bounds),
   browserControl: (payload: {
-    action: 'open' | 'read' | 'back' | 'forward' | 'reload' | 'scroll' | 'click' | 'fill' | 'press_key' | 'check_site_permission' | 'grant_site_permission' | 'resolve_download' | 'youtube_music';
+    action: 'open' | 'read' | 'back' | 'forward' | 'reload' | 'scroll' | 'click' | 'fill' | 'press_key' | 'screenshot' | 'click_coordinates' | 'check_site_permission' | 'grant_site_permission' | 'resolve_download' | 'youtube_music';
+    snapshot_id?: string;
+    x?: number;
+    y?: number;
     url?: string;
     ref?: string;
     text?: string;
@@ -116,7 +119,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   youtubeMusicSetBounds: (bounds: { x: number; y: number; width: number; height: number }) =>
     ipcRenderer.invoke('youtube-music:set-bounds', bounds),
   youtubeMusicControl: (payload: {
-    action: 'open' | 'read' | 'back' | 'forward' | 'reload' | 'scroll' | 'click' | 'fill' | 'press_key' | 'check_site_permission' | 'grant_site_permission' | 'resolve_download' | 'youtube_music';
+    action: 'open' | 'read' | 'back' | 'forward' | 'reload' | 'scroll' | 'click' | 'fill' | 'press_key' | 'screenshot' | 'click_coordinates' | 'check_site_permission' | 'grant_site_permission' | 'resolve_download' | 'youtube_music';
     url?: string;
     music_action?: 'search_and_play' | 'play' | 'pause' | 'toggle_play_pause' | 'next' | 'previous' | 'set_volume' | 'mute' | 'unmute' | 'get_state' | 'show';
     query?: string;
@@ -137,7 +140,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('browser:download-resolved', handler);
     return () => ipcRenderer.removeListener('browser:download-resolved', handler);
   },
-  openToolWindow: (payload: { toolId: string; title: string; activeChatId?: number | null }) =>
+  openToolWindow: (payload: { toolId: string; title: string; activeChatId?: number | null; maximize?: boolean }) =>
     ipcRenderer.invoke('tool-window:open', payload),
   dockToolWindow: (toolId: string) =>
     ipcRenderer.invoke('tool-window:dock', { toolId }),

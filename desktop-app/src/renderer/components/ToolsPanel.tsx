@@ -214,8 +214,9 @@ export function ToolsPanel({ plan, isAdmin, activeChatId, onImageClick, onChatSe
       unsubs.push(unsub);
       // Initialize if not yet tracked
       setToolLayouts(prev => {
-        if (prev[toolId]) return prev;
-        return { ...prev, [toolId]: getToolLayout(toolId) };
+        const layout = getToolLayout(toolId);
+        if (prev[toolId] === layout) return prev;
+        return { ...prev, [toolId]: layout };
       });
     }
     return () => { unsubs.forEach(fn => fn()); };

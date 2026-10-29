@@ -175,10 +175,9 @@ const runScheduledAiInstructionTask = async (
   const language = getUserById(task.user_id)?.language;
   if (!instruction) throw new Error(translateForLanguage(language, 'tasks.emptyInstruction'));
   const aiTask = `[SCHEDULED TASK]: Execute this user's scheduled instruction, using tools if needed.
-Finish by calling finish_task exactly once and alone, after all other tools have completed.
-Use notify_user=false and message="" when the instruction's conditions require silence.
-Use notify_user=true and a non-empty message in the user's language when there is something to report.
-Intermediate text is internal execution history and is never delivered. Do not finish with ordinary text or an empty response.
+When the work is complete, call finish_task on its own to provide the delivery decision.
+If there is an update that meets the user's conditions, set notify_user=true and put it in message, in the user's language.
+Otherwise set notify_user=false and message="". Progress text and tool results stay in the internal execution history.
 
 User's instruction: ${JSON.stringify(instruction)}`;
   const result = await sendMessageThroughAi(task.user_id, aiTask, taskContextChat(task), {

@@ -53,6 +53,15 @@ try {
   mode = 'empty-whitelist'; turn = 0; result = await run([]);
   assert.deepEqual(result.task_result, { notify_user: false, message: '' });
   assert.deepEqual(received.at(-1).tools.map((tool: any) => tool.function.name), ['finish_task'], 'run control stays available with no business tools');
+  turn = 0; await run(['browser_control']);
+  const helperBrowser = received.at(-1).tools.find((tool: any) => tool.function.name === 'browser_control');
+  assert.ok('question' in helperBrowser.function.parameters.properties, 'text models receive the helper question parameter');
+  settings.updateModelSettings({ manualModels: [{ ...model, supportsVision: true }] }); ai.refreshConfiguredModels();
+  turn = 0; await run(['browser_control']);
+  const directBrowser = received.at(-1).tools.find((tool: any) => tool.function.name === 'browser_control');
+  assert.ok(!('question' in directBrowser.function.parameters.properties), 'vision tool schema omits question in the real provider request');
+  assert.ok(!('image_mode' in directBrowser.function.parameters.properties), 'vision defaults to direct pixels without a mode selector');
+  assert.ok(directBrowser.function.description.includes('PNG pixels directly'));
   const requestCount = received.length;
   settings.updateModelSettings({ manualModels: [{ ...model, supportsTools: false }] }); ai.refreshConfiguredModels();
   await assert.rejects(() => run([]), /task_model_requires_tools/);

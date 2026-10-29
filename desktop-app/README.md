@@ -381,8 +381,11 @@ The ToolsPanel contains a real Chromium page rendered by Electron's `WebContents
 - Every file download is intercepted and waits for an approval card. Unapproved temporary downloads expire after five minutes.
 
 **Model control:**
+- `desktop_action` can open a tool with `value.layout`: `sidebar`, `fullscreen`, `floating`, or `external`; `value.maximize: true` maximizes an external window. Omitting the layout preserves the current one.
 - `browser_control` supports `open`, `read`, `back`, `forward`, `reload`, `scroll`, `click`, and `fill` through renderer → main-process IPC.
 - Reads return structured visible text and interactive elements with temporary refs. `viewport`, `delta`, and `full` modes avoid repeatedly sending the whole document.
+- When structured interaction fails, `browser_control(action="screenshot")` captures the full visible browser viewport as PNG. Vision-capable current models receive the pixels directly through the existing image channel, and their tool schema has no `question` parameter. Other models receive a `question` parameter for the configured vision helper's analysis.
+- `click_coordinates` accepts that `snapshot_id` and normalized `x`/`y` in 0..1. It uses the existing click confirmations and site permissions. Snapshots are single-use and become stale after navigation, scrolling, resizing, DOM changes, or five minutes. Coordinate targets inside iframes are currently rejected; use element refs there.
 - Main-frame and iframe content is parsed in isolated JavaScript worlds. Cross-origin OOPIF frames use their own CDP session; isolation ensures that the parser does not affect page state.
 - Clicks use the latest element ref and verify that the target and origin have not changed. Input is performed through trusted input events.
 

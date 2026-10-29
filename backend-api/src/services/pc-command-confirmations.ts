@@ -32,12 +32,15 @@ type WebcamCapturePayload = {
 type BrowserActionPayload = {
   ipcType: 'browser_control';
   ipcPayload: {
-    action: 'open' | 'click' | 'fill' | 'press_key' | 'resolve_download';
+    action: 'open' | 'click' | 'click_coordinates' | 'fill' | 'press_key' | 'resolve_download';
     url?: string;
     ref?: string;
     text?: string;
     key?: 'Enter' | 'Space';
     expected_origin?: string;
+    snapshot_id?: string;
+    x?: number;
+    y?: number;
     download_id?: string;
     approved?: boolean;
     destination?: 'prompt' | 'downloads';

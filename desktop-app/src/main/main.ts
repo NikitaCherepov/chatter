@@ -1654,6 +1654,7 @@ function createWindow() {
     toolId?: string;
     title?: string;
     activeChatId?: number | null;
+    maximize?: boolean;
   }) => {
     assertTrustedIpcSender(event);
     const toolId = `${payload?.toolId || ''}`.trim();
@@ -1661,6 +1662,7 @@ function createWindow() {
 
     const existing = detachedToolWindows.get(toolId);
     if (existing && !existing.isDestroyed()) {
+      if (payload.maximize === true) existing.maximize();
       if (existing.isMinimized()) existing.restore();
       existing.show();
       existing.focus();
@@ -1697,7 +1699,7 @@ function createWindow() {
       navigationEvent.preventDefault();
       openExternalHttpUrl(url);
     });
-    toolWindow.once('ready-to-show', () => toolWindow.show());
+    toolWindow.once('ready-to-show', () => { if (payload.maximize === true) toolWindow.maximize(); toolWindow.show(); });
     toolWindow.on('close', () => {
       if (toolId === 'browser' && mainWindow && !mainWindow.isDestroyed()) {
         chatterBrowser?.moveToHost(mainWindow);
@@ -1724,11 +1726,11 @@ function createWindow() {
     return { opened: true };
   });
 
-  ipcMain.handle('tool-window:dock', (event, payload: { toolId?: string }) => {
+  ipcMain.handle('tool-window:dock', async (event, payload: { toolId?: string }) => {
     assertTrustedIpcSender(event);
     const toolId = `${payload?.toolId || ''}`.trim();
     const toolWindow = detachedToolWindows.get(toolId);
-    if (toolWindow && !toolWindow.isDestroyed()) toolWindow.close();
+    if (toolWindow && !toolWindow.isDestroyed()) await new Promise<void>(resolve => { toolWindow.once('closed', () => resolve()); toolWindow.close(); });
     return { docked: true };
   });
 

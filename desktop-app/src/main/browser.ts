@@ -1,5 +1,6 @@
 import { app, BrowserWindow, dialog, WebContentsView, type DownloadItem, type Rectangle, type WebContents, type WebFrameMain } from 'electron';
 import path from 'node:path';
+import { BrowserVisualSession } from './browser-visual';
 import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, statfsSync, unlinkSync } from 'node:fs';
 import { copyFile, rename, unlink } from 'node:fs/promises';
@@ -15,7 +16,10 @@ export type BrowserState = {
 };
 
 export type BrowserControlPayload = {
-  action: 'open' | 'read' | 'back' | 'forward' | 'reload' | 'scroll' | 'click' | 'fill' | 'press_key' | 'check_site_permission' | 'grant_site_permission' | 'resolve_download' | 'youtube_music';
+  action: 'open' | 'read' | 'back' | 'forward' | 'reload' | 'scroll' | 'click' | 'fill' | 'press_key' | 'screenshot' | 'click_coordinates' | 'check_site_permission' | 'grant_site_permission' | 'resolve_download' | 'youtube_music';
+  snapshot_id?: string;
+  x?: number;
+  y?: number;
   url?: string;
   ref?: string;
   text?: string;
@@ -356,6 +360,7 @@ export class ChatterBrowser {
   private cursorPos: Point = { x: 0, y: 0 };
   /** Active cancellation token for the in-flight pointer sequence (if any). */
   private clickToken: CancellationToken | null = null;
+  private visualSession?: BrowserVisualSession;
   private readonly homeUrl: string;
   private readonly stateChannel: string;
   private readonly onStateChange?: (state: BrowserState) => void;
@@ -674,6 +679,22 @@ export class ChatterBrowser {
     const action = payload?.action;
     const contents = this.view.webContents;
     if (contents.isDestroyed()) throw new Error('browser_unavailable');
+    const visual = this.visualSession ??= new BrowserVisualSession(contents, code => this.executeInBrowserWorld(code));
+    if (action === 'screenshot') {
+      if (this.interactionInProgress) throw new Error('browser_interaction_in_progress');
+      return visual.capture();
+    }
+    if (action === 'click_coordinates') {
+      if (this.interactionInProgress) throw new Error('browser_interaction_in_progress');
+      if (payload.expected_origin && this.normalizeHttpOrigin(payload.expected_origin) !== this.getCurrentHttpOrigin()) throw new Error('browser_origin_changed');
+      this.interactionInProgress = true;
+      const token = this.clickToken = { cancelled: false };
+      try {
+        this.cursorPos = await visual.click(`${payload.snapshot_id || ''}`, Number(payload.x), Number(payload.y), this.cursorPos, token);
+        this.clearSnapshot();
+        return { status: 'success', action, ...this.getState() };
+      } finally { this.interactionInProgress = false; if (this.clickToken === token) this.clickToken = null; }
+    }
 
     if (action === 'check_site_permission') {
       const permissionAction = payload.permission_action;
@@ -682,6 +703,10 @@ export class ChatterBrowser {
       }
       const origin = this.getCurrentHttpOrigin();
       let target: BrowserElement | undefined;
+      if (payload.snapshot_id) {
+        const visualTarget = await visual.target(payload.snapshot_id, Number(payload.x), Number(payload.y));
+        return { allowed: Boolean(origin && this.getPermissionOrigins(permissionAction).has(origin)), origin, target: visualTarget.target };
+      }
       if (payload.ref) {
         try {
           target = this.getSnapshotElement(payload.ref);

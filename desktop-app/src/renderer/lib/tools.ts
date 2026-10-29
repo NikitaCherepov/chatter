@@ -303,7 +303,7 @@ export function getNotebookDraftState() {
 
 // ── Handle incoming desktop_action from bot ───────────────────────────────
 
-export function handleDesktopAction(action: { action: string; target?: string; value?: { title?: string; content?: string } }) {
+export function handleDesktopAction(action: { action: string; target?: string; value?: { title?: string; content?: string; layout?: LayoutMode; maximize?: boolean } }) {
   const a = action.action;
 
   if (a === 'toggle_panel') {
@@ -314,6 +314,23 @@ export function handleDesktopAction(action: { action: string; target?: string; v
   if (a === 'open_widget') {
     const toolId = action.target === 'notebook' ? 'notebook' : action.target;
     if (!toolId) return;
+    const requestedLayout = action.value?.layout;
+    if (requestedLayout && ['sidebar', 'fullscreen', 'floating', 'external'].includes(requestedLayout)) {
+      void (async () => {
+        if (getToolLayout(toolId).mode === 'external' && requestedLayout !== 'external') await window.electronAPI.dockToolWindow(toolId);
+        setToolLayout(toolId, { mode: requestedLayout });
+        if (requestedLayout === 'external') {
+          setToolsPanelState({ openTools: [toolId, ...getToolsPanelState().openTools.filter(id => id !== toolId)], isOpen: false });
+          await window.electronAPI.openToolWindow({ toolId, title: toolId, maximize: action.value?.maximize === true });
+        } else {
+          openToolInLastLayout(toolId);
+        }
+      })().catch(error => {
+        console.error('[tools] failed to apply requested layout', error);
+        setToolLayout(toolId, { mode: 'sidebar' }); openTool(toolId);
+      });
+      return;
+    }
     const panelState = getToolsPanelState();
     const existingLayout = getToolLayout(toolId);
     if (panelState.openTools.includes(toolId) && existingLayout.mode === 'external') {
@@ -323,17 +340,16 @@ export function handleDesktopAction(action: { action: string; target?: string; v
       return;
     }
     if (toolId === 'browser') {
-      setToolLayout('browser', { mode: 'sidebar' });
-      openTool(toolId);
-      setToolsPanelState({ isOpen: true });
+      openToolInLastLayout(toolId);
       return;
     }
-    openTool(toolId);
+    openToolInLastLayout(toolId);
     return;
   }
 
   if (a === 'close_widget') {
     if (action.target) {
+      if (getToolLayout(action.target).mode === 'external') void window.electronAPI.dockToolWindow(action.target);
       closeTool(action.target);
     }
     return;

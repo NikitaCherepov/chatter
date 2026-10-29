@@ -1,0 +1,24 @@
+import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
+const { inspectBrowserScreenshot } = createRequire(import.meta.url)('../src/services/browser-screenshot.ts');
+const png = Buffer.from([137,80,78,71,13,10,26,10]).toString('base64');
+const raw = { snapshot_id: 'shot-1', mime_type: 'image/png', screenshot_base64: png, width: 800, height: 600, coordinate_space: 'normalized_viewport' };
+let calls = 0;
+const runVision = async (request: any) => {
+  calls++; assert.equal(request.messages[1].content[1].image_url.url, 'data:image/png;base64,' + png);
+  return { response: { choices: [{ message: { content: '{"x":0.5,"y":0.25}' } }] } };
+};
+const sink = { items: [] as any[] };
+let result = await inspectBrowserScreenshot(raw, { supportsVision: true, sink, runVision });
+assert.equal(result.status, 'loaded_for_direct_view'); assert.equal(calls, 0);
+assert.equal(sink.items[0].base64, png); assert.ok(sink.items[0].question.includes('shot-1'));
+assert.ok(!sink.items[0].question.includes('undefined'));
+assert.ok(!('screenshot_base64' in result), 'do not echo pixels into textual tool results');
+result = await inspectBrowserScreenshot(raw, { question: 'Find play', supportsVision: false, runVision });
+assert.equal(result.vision_result, '{"x":0.5,"y":0.25}'); assert.equal(calls, 1);
+await inspectBrowserScreenshot(raw, { question: 'Find play', imageMode: 'description', supportsVision: true, sink, runVision });
+assert.equal(calls, 2, 'explicit helper mode remains available');
+await assert.rejects(() => inspectBrowserScreenshot(raw, { question: 'Find play', imageMode: 'direct', supportsVision: false, runVision }), /direct_browser_view_unavailable/);
+await assert.rejects(() => inspectBrowserScreenshot(raw, { supportsVision: false, runVision }), /browser_screenshot_question_required/);
+await assert.rejects(() => inspectBrowserScreenshot({ ...raw, screenshot_base64: 'bad' }, { question: 'Find play', supportsVision: true, sink, runVision }), /invalid_browser_screenshot/);
+console.log('PASS: direct current-model pixels with zero helper calls, helper fallback, explicit modes, no base64 in result and invalid PNG rejection');

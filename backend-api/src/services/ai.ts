@@ -1,5 +1,6 @@
 ﻿import OpenAI from 'openai';
 import dotenv from 'dotenv';
+import { inspectBrowserScreenshot } from './browser-screenshot.js';
 import { finishTaskTool, parseTaskCompletion, type TaskCompletion } from './task-completion.js';
 import { randomUUID } from 'node:crypto';
 import { getModelSettings, modelApiKey, type ConfiguredModel } from './model-settings.js';
@@ -2116,7 +2117,7 @@ export const toolDefinitions = [
     type: 'function',
     function: {
       name: 'schedule_task',
-      description: 'Creates a timed task (one-time or recurring): reminders, delayed smart home commands, AI instruction execution. For timing prefer local_time (HH:MM) or delay_seconds, do not calculate Unix timestamps manually.',
+      description: 'Schedules a one-time or recurring reminder, smart home command, or AI task. Prefer local_time (HH:MM) or delay_seconds for timing. Describe the task and any conditions for notifying the user in ordinary language; completion and delivery are handled separately.',
       parameters: {
         type: 'object',
         properties: {
@@ -2124,12 +2125,12 @@ export const toolDefinitions = [
           delay_seconds: { type: 'number', description: 'Delay in seconds from now, e.g. 60.' },
           execute_at: { type: 'number', description: 'Legacy field: Unix timestamp in seconds. Use only if local_time/delay_seconds are not suitable.' },
           task_type: { type: 'string', enum: ['message', 'smart_home', 'ai_instruction'], description: 'message - reminder, smart_home - smart home command, ai_instruction - schedule AI instruction execution (web search, email check, data analysis, etc. — AI will call the needed tools itself).' },
-          payload: { type: 'string', description: 'For message: reminder text. For smart_home: JSON string with device_id and action (on, off, set_color, set_brightness, or Zigbee set_property with property and value). For ai_instruction: instruction text that the AI will execute on schedule.' },
-          target_mode: { type: 'string', enum: ['chat', 'new_chat'], description: 'Where the task result is delivered. chat (default) - the chat set in target_chat_id (a chat ID, or the literal "current_chat" = the user\'s active personal chat at creation time). new_chat - a fresh personal chat is created on every run.' },
+          payload: { type: 'string', description: 'For message: reminder text. For smart_home: JSON string with device_id and action (on, off, set_color, set_brightness, or Zigbee set_property with property and value). For ai_instruction: a concise, self-contained instruction describing what to do and when the user wants an update, e.g. "Check for new messages from Alex; notify me only if there are any." No empty-answer rules, output format, or completion-tool instructions are needed in the task text.' },
+          target_mode: { type: 'string', enum: ['chat', 'new_chat'], description: 'Where to deliver the result. chat (default) uses target_chat_id; "current_chat" selects the active personal chat at creation time. new_chat delivers into a fresh personal chat. Silent AI runs do not create a chat.' },
           target_chat_id: { anyOf: [{ type: 'number' }, { type: 'string', enum: ['current_chat'] }], description: 'Target chat for target_mode=chat ONLY: a chat ID of the user\'s own personal chat, or the literal string "current_chat" (default) - substituted with the active chat ID right away. Must be null/omitted for new_chat. Shared rooms and other users\' chats are forbidden (the tool will return an error).' },
           recurrence_type: { type: 'string', enum: ['once', 'daily', 'weekly'], description: 'Schedule type: once - one time, daily - every day, weekly - every week.' },
           recurrence_weekday: { type: 'number', description: 'Day of week for weekly: 1=Monday ... 7=Sunday.' },
-          notify_mode: { type: 'string', enum: ['always', 'never', 'on_error'], description: 'Notification mode. Default (omit): message/smart_home report every run; ai_instruction explicitly decides whether there is a result to report, according to conditions in the instruction. always - deliver reportable results. never - never report. on_error - report only when the run fails.' },
+          notify_mode: { type: 'string', enum: ['always', 'never', 'on_error'], description: 'Default (omit): reminders and smart home tasks report each run; AI tasks follow the notification conditions in payload. always delivers reportable results; never suppresses notifications; on_error reports failed runs only. Put conditions such as "only if new messages arrive" in payload.' },
           allowed_tools: { anyOf: [{ type: 'array', items: { type: 'string' } }, { type: 'null' }], description: 'ai_instruction ONLY: restrict which tools the background run may use. Array of tool names (a subset of your own tools), [] = run without any tools, null/omitted = all available tools. Unknown names are dropped; the confirmation lists the effective set.' }
         },
         required: ['task_type', 'payload']
@@ -2556,7 +2557,8 @@ Use when:
 - Need to close a specific widget — action=close_widget, target=notebook
 - Need to open tasks — action=open_widget, target=tasks
 - Need to show the embedded browser — action=open_widget, target=browser
-- Need to show YouTube Music — action=open_widget, target=youtube-music`,
+- Need to show YouTube Music — action=open_widget, target=youtube-music
+For open_widget, value.layout selects sidebar, fullscreen (whole Chatter workspace), floating, or external (a separate native window). value.maximize=true maximizes an external window. Omit layout to preserve the current layout.`,
       parameters: {
         type: 'object',
         properties: {
@@ -2575,9 +2577,11 @@ Use when:
             properties: {
               title: { type: 'string', description: 'Title (for notebook)' },
               content: { type: 'string', description: 'Content text (for notebook)' },
-              note_id: { type: 'number', description: 'Entry ID to open (used with action=open_note).' }
+              note_id: { type: 'number', description: 'Entry ID to open (used with action=open_note).' },
+              layout: { type: 'string', enum: ['sidebar', 'fullscreen', 'floating', 'external'], description: 'Window layout for action=open_widget.' },
+              maximize: { type: 'boolean', description: 'Maximize the separate window; only for layout=external.' }
             },
-            description: 'Data to send to the widget. Used with action=set_widget_data or action=open_note.'
+            description: 'Widget data, or layout/maximize for action=open_widget.'
           }
         },
         required: ['action']
@@ -2587,7 +2591,7 @@ Use when:
 };
 
 /** Control and read the isolated browser running in the user's Desktop app. */
-const buildBrowserControlTool = () => ({
+const buildBrowserControlTool = (supportsDirectView = false) => ({
   type: 'function' as const,
   function: {
     name: 'browser_control',
@@ -2605,15 +2609,19 @@ Workflow for interaction:
 
 Depending on the user's Browser settings, open, click, fill, and press_key may require a separate explicit confirmation; call the action normally and the backend will request it when configured. read/back/forward/reload/scroll do not submit data. If an action starts a file download, it is paused until the user approves or rejects it; wait for that result before continuing. If the page shows a CAPTCHA, challenge, rate-limit warning, or access block, stop browser actions and tell the user. Values of ordinary text fields and drafts may be returned by read. Password fields cannot be read or filled by you.
 
-If browser reading, scrolling, or interaction fails, do not call list_monitors or capture_screen. Tell the user; ask them to scroll manually or send a screenshot themselves if needed.`,
+If structured reading or interaction fails on a page the user asked you to use, ${supportsDirectView ? 'call screenshot without a question: you receive the PNG pixels directly and inspect them according to the current task.' : 'call screenshot with a specific question for the vision helper.'} Use click_coordinates with snapshot_id and normalized x/y from that screenshot, then read or take a fresh screenshot to check the result. Screenshots expire after navigation, scrolling, resizing, page changes or a click. Do not use whole-monitor capture as a browser fallback.`,
     parameters: {
       type: 'object',
       properties: {
         action: {
           type: 'string',
-          enum: ['open', 'read', 'back', 'forward', 'reload', 'scroll', 'click', 'fill', 'press_key'],
+          enum: ['open', 'read', 'back', 'forward', 'reload', 'scroll', 'click', 'fill', 'press_key', 'screenshot', 'click_coordinates'],
           description: 'Browser action.'
         },
+        snapshot_id: { type: 'string', description: 'Exact screenshot ID returned by action=screenshot, required for click_coordinates.' },
+        x: { type: 'number', minimum: 0, maximum: 1, description: 'Normalized horizontal coordinate in the full screenshot.' },
+        y: { type: 'number', minimum: 0, maximum: 1, description: 'Normalized vertical coordinate in the full screenshot.' },
+        ...(!supportsDirectView ? { question: { type: 'string', description: 'Required for screenshot: what the vision helper should inspect or locate.' } } : {}),
         url: { type: 'string', description: 'URL or search query for action=open.' },
         ref: { type: 'string', description: 'Temporary element ref from the latest read result. Required for click/fill.' },
         text: { type: 'string', description: 'Text to enter for action=fill. Never use for passwords or authentication codes.' },
@@ -6293,7 +6301,7 @@ If the task is a description, return a detailed text response.`
 
   if (toolName === 'browser_control') {
     const action = typeof parsed.action === 'string' ? parsed.action.trim().toLowerCase() : '';
-    const allowedActions = new Set(['open', 'read', 'back', 'forward', 'reload', 'scroll', 'click', 'fill', 'press_key']);
+    const allowedActions = new Set(['open', 'read', 'back', 'forward', 'reload', 'scroll', 'click', 'fill', 'press_key', 'screenshot', 'click_coordinates']);
     if (!allowedActions.has(action)) {
       return JSON.stringify({ status: 'error', message: 'Unknown browser action.' });
     }
@@ -6311,6 +6319,12 @@ If the task is a description, return a detailed text response.`
       ? Math.max(1, Math.min(5000, Math.round(parsed.amount)))
       : 700;
 
+    if (action === 'click_coordinates' && (typeof parsed.snapshot_id !== 'string' || !parsed.snapshot_id || typeof parsed.x !== 'number' || typeof parsed.y !== 'number' || !Number.isFinite(parsed.x) || !Number.isFinite(parsed.y) || parsed.x < 0 || parsed.x > 1 || parsed.y < 0 || parsed.y > 1)) {
+      return JSON.stringify({ status: 'error', message: 'click_coordinates requires snapshot_id and normalized x/y in 0..1.' });
+    }
+    const directScreenshot = subagentExtra?.currentModelSupportsVision === true && parsed.image_mode !== 'description';
+    if (action === 'screenshot' && !directScreenshot && (typeof parsed.question !== 'string' || !parsed.question.trim())) return JSON.stringify({ status: 'error', message: 'question is required for the screenshot vision helper.' });
+    if (action === 'screenshot' && parsed.image_mode !== undefined && !['direct', 'description'].includes(parsed.image_mode)) return JSON.stringify({ status: 'error', message: 'Invalid image_mode.' });
     if (action === 'open' && !url) {
       return JSON.stringify({ status: 'error', message: 'url is required for open.' });
     }
@@ -6332,7 +6346,16 @@ If the task is a description, return a detailed text response.`
       target: 'browser',
     });
 
+    if (action === 'screenshot') {
+      try {
+        const screenshot = await sendIpcToDesktop(user.id, 'browser_control', { action: 'screenshot' }, 30000, signal);
+        const result = await inspectBrowserScreenshot(screenshot, { question: typeof parsed.question === 'string' ? parsed.question.trim() : undefined, imageMode: parsed.image_mode,
+          supportsVision: subagentExtra?.currentModelSupportsVision === true, sink: subagentExtra?.directImageSink, runVision: runTrackedVisionCompletion });
+        return wrapUntrustedContent(JSON.stringify(result));
+      } catch (error: any) { return JSON.stringify({ status: 'error', message: error?.message || String(error) }); }
+    }
     const ipcPayload: Record<string, unknown> = { action };
+    if (action === 'click_coordinates') Object.assign(ipcPayload, { snapshot_id: parsed.snapshot_id, x: parsed.x, y: parsed.y });
     if (url) ipcPayload.url = url;
     if (ref) ipcPayload.ref = ref;
     if (text !== undefined) ipcPayload.text = text;
@@ -6352,7 +6375,7 @@ If the task is a description, return a detailed text response.`
     } catch { /* use confirmation defaults */ }
     let confirmationRequired = action === 'open'
       ? browserConfirmationSettings.browser_confirm_open !== false
-      : action === 'click' || action === 'press_key'
+      : action === 'click' || action === 'click_coordinates' || action === 'press_key'
         ? browserConfirmationSettings.browser_confirm_click !== false
         : action === 'fill'
           ? browserConfirmationSettings.browser_confirm_fill !== false
@@ -6368,12 +6391,13 @@ If the task is a description, return a detailed text response.`
       placeholder?: string;
       sensitive?: boolean;
     } | undefined;
-    if (confirmationRequired && (action === 'click' || action === 'fill' || action === 'press_key')) {
+    if (confirmationRequired && (action === 'click' || action === 'click_coordinates' || action === 'fill' || action === 'press_key')) {
       try {
         const permission = await sendIpcToDesktop(user.id, 'browser_control', {
           action: 'check_site_permission',
-          permission_action: action === 'press_key' ? 'click' : action,
+          permission_action: action === 'press_key' || action === 'click_coordinates' ? 'click' : action,
           ref,
+          ...(action === 'click_coordinates' ? { snapshot_id: parsed.snapshot_id, x: parsed.x, y: parsed.y } : {}),
         }, 15000, signal) as { allowed?: boolean; origin?: string | null; target?: typeof siteTarget };
         if (typeof permission?.origin === 'string' && permission.origin) {
           siteOrigin = permission.origin;
@@ -6382,6 +6406,7 @@ If the task is a description, return a detailed text response.`
         if (permission?.target && typeof permission.target === 'object') siteTarget = permission.target;
         if (permission?.allowed === true && siteOrigin) confirmationRequired = false;
       } catch (error: any) {
+        if (action === 'click_coordinates') return JSON.stringify({ status: 'error', message: error?.message || String(error) });
         console.warn('[browser_control] failed to check session site permission:', error?.message || String(error));
       }
     }
@@ -6422,7 +6447,8 @@ If the task is a description, return a detailed text response.`
         payload: {
           ipcType: 'browser_control',
           ipcPayload: {
-            action: action as 'open' | 'click' | 'fill' | 'press_key',
+            action: action as 'open' | 'click' | 'click_coordinates' | 'fill' | 'press_key',
+            ...(action === 'click_coordinates' ? { snapshot_id: parsed.snapshot_id, x: parsed.x, y: parsed.y } : {}),
             ...(url ? { url } : {}),
             ...(ref ? { ref } : {}),
             ...(text !== undefined ? { text } : {}),
@@ -6447,14 +6473,14 @@ If the task is a description, return a detailed text response.`
       action: 'browser_action_confirmation',
       value: {
         confirmation_id: confirmationId,
-        action_type: action,
+        action_type: action === 'click_coordinates' ? 'click' : action,
         description: typeof parsed.description === 'string' && parsed.description.trim()
           ? parsed.description.trim()
           : action === 'open'
             ? url
             : action === 'press_key'
               ? `Press ${key}`
-              : ref,
+              : action === 'click_coordinates' ? `Click browser coordinates (${parsed.x}, ${parsed.y})` : ref,
         ...(url ? { url } : {}),
         ...(text !== undefined ? { text } : {}),
         ...(key ? { key } : {}),
@@ -6545,6 +6571,11 @@ If the task is a description, return a detailed text response.`
 
     if (!action) return JSON.stringify({ status: 'error', message: 'action is required' });
 
+    if (action === 'open_widget') {
+      if (!['notebook', 'tasks', 'browser', 'youtube-music'].includes(target || '')) return JSON.stringify({ status: 'error', message: 'Unknown widget.' });
+      if (value?.layout !== undefined && !['sidebar', 'fullscreen', 'floating', 'external'].includes(value.layout)) return JSON.stringify({ status: 'error', message: 'Invalid widget layout.' });
+      if (value?.maximize !== undefined && (typeof value.maximize !== 'boolean' || value.layout !== 'external')) return JSON.stringify({ status: 'error', message: 'maximize requires layout=external.' });
+    }
     const payload: DesktopActionPayload = { action: action as DesktopActionPayload['action'] };
     if (target) payload.target = target;
     if (value) payload.value = value;
@@ -7916,8 +7947,9 @@ const sendMessageThroughAiInternal = async (
   const subagentTool = options?.isDesktop ? buildInvokeSubagentTool() : null;
   // Tools that work from the server (SSH, maps, DevOps DB, PC command via WS) — available to ALL clients
   const serverOnlyTools = [
-    ...serverOnlyToolBuilders.filter(build => build !== buildDescribeImageTool).map(build => build()),
+    ...serverOnlyToolBuilders.filter(build => build !== buildDescribeImageTool && build !== buildBrowserControlTool).map(build => build()),
     buildDescribeImageTool(currentModelSupportsVision),
+    buildBrowserControlTool(currentModelSupportsVision),
   ];
   // UI actions can originate from any client (Telegram, future messengers, Desktop).
   // Expose them whenever the request itself comes from Desktop or Desktop is online.
@@ -8433,7 +8465,8 @@ const runOneToolCall = async (toolCall: any, emitStatus = true): Promise<Execute
               && t.function.name !== 'invoke_subagent'
               && t.function.name !== 'attach_file_to_response'
               && t.function.name !== 'finish_task'
-          ).map((t: any) => t?.function?.name === 'describe_image' ? buildDescribeImageTool(false) : t),
+          ).map((t: any) => t?.function?.name === 'describe_image' ? buildDescribeImageTool(false)
+            : t?.function?.name === 'browser_control' ? buildBrowserControlTool(false) : t),
           attachmentReadContext: {
             chatId,
             maxContextTokens,

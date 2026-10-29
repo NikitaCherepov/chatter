@@ -58,7 +58,7 @@ declare global {
       onYouTubeMusicState: (callback: (payload: BrowserState) => void) => () => void;
       onBrowserDownloadRequested: (callback: (payload: BrowserDownloadRequest) => void) => () => void;
       onBrowserDownloadResolved: (callback: (payload: { download_id: string; status: string; file_path?: string }) => void) => () => void;
-      openToolWindow: (payload: { toolId: string; title: string; activeChatId?: number | null }) => Promise<{ opened: boolean }>;
+      openToolWindow: (payload: { toolId: string; title: string; activeChatId?: number | null; maximize?: boolean }) => Promise<{ opened: boolean }>;
       dockToolWindow: (toolId: string) => Promise<{ docked: boolean }>;
       updateToolWindowContext: (payload: { toolId: string; activeChatId?: number | null }) => Promise<{ updated: boolean }>;
       onToolWindowContext: (callback: (payload: { activeChatId?: number | null }) => void) => () => void;
@@ -155,7 +155,10 @@ type BrowserState = {
 };
 
 type BrowserControlPayload = {
-  action: 'open' | 'read' | 'back' | 'forward' | 'reload' | 'scroll' | 'click' | 'fill' | 'press_key' | 'check_site_permission' | 'grant_site_permission' | 'resolve_download' | 'youtube_music';
+  action: 'open' | 'read' | 'back' | 'forward' | 'reload' | 'scroll' | 'click' | 'fill' | 'press_key' | 'screenshot' | 'click_coordinates' | 'check_site_permission' | 'grant_site_permission' | 'resolve_download' | 'youtube_music';
+  snapshot_id?: string;
+  x?: number;
+  y?: number;
   url?: string;
   ref?: string;
   text?: string;
