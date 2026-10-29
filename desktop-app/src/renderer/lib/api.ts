@@ -756,7 +756,7 @@ export async function deleteChat(chatId: number): Promise<{ ok: boolean }> {
   return apiFetch(`/api/v1/chats/${chatId}`, { method: 'DELETE' });
 }
 
-export async function getMessages(chatId: number, limit = 50, offset = 0): Promise<{ messages: Message[] }> {
+export async function getMessages(chatId: number, limit = 50, offset = 0): Promise<{ messages: Message[]; variants?: Message[] }> {
   return apiFetch(`/api/v1/chats/${chatId}/messages?limit=${limit}&offset=${offset}`);
 }
 
@@ -1457,6 +1457,7 @@ export async function sendChatTrigger(payload: {
   countAsUserMessage?: boolean;
   newspaperContext?: NewspaperChatContext;
 }) {
+  if (payload.chatId) await pendingVariantActivations.get(variantActivationKey(payload.chatId));
   if (ws && ws.readyState === WebSocket.OPEN) {
     const msg: Record<string, unknown> = { type: 'chat_send', text: payload.text };
     if (payload.questionnaire_submission) msg.questionnaire_submission = payload.questionnaire_submission;
@@ -1975,14 +1976,19 @@ export async function previewSillyTavernChats(files: SillyTavernChatFile[]): Pro
   return apiFetch('/api/v1/data/import/sillytavern/chats/preview', { method: 'POST', body: JSON.stringify({ files }) });
 }
 
+const pendingVariantActivations = new Map<string, Promise<unknown>>();
+const variantActivationKey = (chatId: number) => `${API_BASE}:${chatId}`;
+
 export async function activateMessageVariant(
   chatId: number,
   messageId: number,
   variantIndex: number,
-): Promise<{ ok: boolean; message: Message }> {
-  return apiFetch(`/api/v1/chats/${chatId}/messages/${messageId}/variants/${variantIndex}/activate`, {
-    method: 'POST',
-  });
+): Promise<{ ok: boolean; message?: Message }> {
+  const key = variantActivationKey(chatId);
+  const request = apiFetch<{ ok: boolean; message?: Message }>(`/api/v1/chats/${chatId}/messages/${messageId}/variants/${variantIndex}/activate?return_message=0`, { method: 'POST' });
+  pendingVariantActivations.set(key, request);
+  try { return await request; }
+  finally { if (pendingVariantActivations.get(key) === request) pendingVariantActivations.delete(key); }
 }
 
 export async function importSillyTavernChats(files: SillyTavernChatFile[]): Promise<{

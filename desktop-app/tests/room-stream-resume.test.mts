@@ -9,7 +9,7 @@ const { ChatStreamBuffer } = require('../../backend-api/src/services/chat-stream
 // Exercise the actual page effect/handler with controllable HTTP timing, no model calls.
 const page = fs.readFileSync(new URL('../src/renderer/pages/ChatPage.tsx', import.meta.url),'utf8').replace(/\r\n/g,'\n');
 const restoreStart = page.indexOf('  const restoreRoomStream =');
-const effectEnd = page.indexOf('  }, [activeChatId]);',restoreStart) + '  }, [activeChatId]);'.length;
+const effectEnd = page.indexOf('  }, [activeChatId, messageCache]);',restoreStart) + '  }, [activeChatId, messageCache]);'.length;
 const handlerMarker = page.indexOf('return api.onRoomEvent((event) =>');
 const handlerStart = page.lastIndexOf('  useEffect(() => {',handlerMarker);
 const handlerEnd = page.indexOf('\n\n  const handleSend',handlerStart);
@@ -20,6 +20,7 @@ let cleanups:Array<()=>void> = [], onEvent:any, onConnect:any, state:any, saved:
 const no = () => {};
 const context:any = {
   RoomStreamBuffer, activeChatId:1, activeChatIdRef:ref(1), user:{id:1},
+  messageCache:{receiveVariants:no, changed:no, accept:no}, variantSwitchBusyRef:ref(false),
   roomStreamBuffersRef:ref(new Map()), roomStreamRevisionRef:ref(new Map()), roomStreamChatIdsRef:ref(new Set()),
   roomEventAgentMsgIds:ref(new Map()), pendingUserMessageIdByChatRef:ref(new Map()), regeneratingMessageRef:ref(null),prevMsgCountRef:ref(0),
   notifyAssistantResponse:no,refreshContextTokens:no,t:(s:string)=>s,clearSendWatchdog:no,applyAvatarState:no,promoteChat:no,markAsRead:no,incrementUnread:no,

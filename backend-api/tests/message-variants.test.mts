@@ -15,6 +15,7 @@ const {
   forkChat,
   getChatMessages,
   getHistoryForAi,
+  getChatMessageVariants,
   getMessageVariantState,
 } = await import('../src/services/chats.js');
 
@@ -96,6 +97,18 @@ await appendChatMessage(81, regenChat, 'assistant', 'Plain replacement', null, n
 assert.deepEqual(regenerationHistory(toolResponse), expected, 'plain replacement is also excluded');
 assert.deepEqual(activateChatMessageVariant(81, regenChat, toolResponse, 0), { ok: true });
 assert.deepEqual(regenerationHistory(toolResponse), expected, 'switching back to a tool variant remains safe');
+
+const variants = getChatMessageVariants(81, regenChat, toolResponse);
+assert.equal(variants.length, 2);
+assert.deepEqual(variants.map(message => message.variant_index), [0, 1]);
+assert.deepEqual(variants.map(message => message.content), ['Old final', 'Plain replacement']);
+assert.ok(variants.every(message => message.id === toolResponse && message.variant_count === 2 && message.audio === null));
+assert.equal(variants[0].tool_calls?.[0].result_preview, 'Old result');
+assert.equal(getMessageVariantState(toolResponse).variant_index, 0, 'loading variants never activates one');
+assert.deepEqual(getChatMessageVariants(999, regenChat, toolResponse), [], 'unauthorized readers cannot preload variants');
+assert.deepEqual(getChatMessageVariants(81, chatId, toolResponse), [], 'variants stay scoped to their chat');
+await appendChatMessage(81, regenChat, 'user', 'Next question');
+assert.deepEqual(getChatMessageVariants(81, regenChat, toolResponse), [], 'only the current final message preloads variants');
 
 db.close();
 for (const suffix of ['', '-wal', '-shm']) {

@@ -224,6 +224,7 @@ export type MessageUsage = {
 };
 
 export type MessageDto = {
+  user_id?: number;
   questionnaire_response?: import('./services/message-questionnaires.js').QuestionnaireResponse | null;
   id: number;
   chat_id: number;

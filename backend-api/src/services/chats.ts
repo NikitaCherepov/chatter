@@ -1321,7 +1321,10 @@ export const getChatMessages = (userId: number, chatId: number, limit = 20, offs
     LIMIT ? OFFSET ?
   `).all(userId, ...(multiUserRoom ? readerIds : [userId]), chatId, safeLimit, safeOffset) as Array<{ id: number; chat_id: number; timeline_index: number; user_id: number; role: ChatRole; content: string; reasoning_content: string | null; tool_calls_json: string | null; images: string | null; viewer_audio: string | null; telegram_chat_id: number | null; telegram_message_id: number | null; created_at: string; archived: number; token_count: number; reasoning_tokens: number; attachments: string | null; subagents_json: string | null; usage_json: string | null; prompt_id: number | null; prompt_name: string | null; prompt_image_url: string | null; model_name: string | null; provider_name: string | null; agent_id: number | null; active_variant_index: number; variant_count: number }>;
 
-  return rows.reverse().map(row => {
+  return rows.reverse().map(messageRowToDto);
+};
+
+const messageRowToDto = (row: any): MessageDto => {
     let parsedImages: MessageImage[] | null = null;
     if (row.images) {
       try { parsedImages = JSON.parse(row.images); } catch { parsedImages = null; }
@@ -1409,7 +1412,22 @@ export const getChatMessages = (userId: number, chatId: number, limit = 20, offs
         try { const arr = JSON.parse(row.subagents_json); return Array.isArray(arr) ? arr : null; } catch { return null; }
       })()
     };
-  });
+};
+
+/** Saved variants of the latest message, with the same access and DTO as history. */
+export const getChatMessageVariants = (userId: number, chatId: number, messageId: number): MessageDto[] => {
+  if (!listRoomReaderUserIds(chatId)?.includes(userId)) return [];
+  const current = db.prepare(`SELECT * FROM chat_messages WHERE id = ? AND chat_id = ? AND role = 'assistant'
+    AND id = (SELECT MAX(id) FROM chat_messages WHERE chat_id = ?)`).get(messageId, chatId, chatId) as any;
+  if (!current) return [];
+  const variants = db.prepare(`SELECT v.*, up.image_url AS prompt_image_url
+    FROM chat_message_variants v
+    LEFT JOIN user_prompts up ON v.prompt_id <= -1000 AND up.id = (-v.prompt_id - 1000)
+    WHERE v.message_id = ? ORDER BY v.variant_index`).all(messageId) as any[];
+  return variants.map(variant => messageRowToDto({ ...current, ...variant,
+    id: current.id, active_variant_index: variant.variant_index, variant_count: variants.length,
+    viewer_audio: null,
+  }));
 };
 
 /** Resolve against the current source variant; repeat inside the insertion transaction. */

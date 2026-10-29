@@ -1,4 +1,6 @@
 import React, { useEffect, useLayoutEffect, useRef, useState, useCallback, useMemo } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { ChatMessageCache } from '../lib/chat-message-cache';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { AnimatePresence, animate as animateValue, motion } from 'framer-motion';
@@ -1387,6 +1389,10 @@ export function ChatPage() {
   const messagesRef = useRef<api.Message[]>(messages);
   messagesRef.current = messages;
   const [switchingVariantId, setSwitchingVariantId] = useState<number | null>(null);
+  const queryClient = useQueryClient();
+  const messageCache = useMemo(() => new ChatMessageCache(queryClient, [api.API_BASE, user?.id ?? null]), [queryClient, api.API_BASE, user?.id]);
+  const messagesChatIdRef = useRef<number | null>(null);
+  const variantSwitchBusyRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -1967,6 +1973,14 @@ export function ChatPage() {
 
   useEffect(() => { void loadChats(); }, [loadChats]);
 
+  useEffect(() => { messagesChatIdRef.current = null; }, [messageCache]);
+
+  useEffect(() => {
+    if (activeChatId !== null && messagesChatIdRef.current === activeChatId && !sending) {
+      messageCache.remember(activeChatId, messages, hasMoreMessages);
+    }
+  }, [activeChatId, messages, hasMoreMessages, sending, messageCache]);
+
   const restoreRoomStream = (chatId: number) => {
     if (activeChatIdRef.current !== chatId) return;
     const snapshot = roomStreamBuffersRef.current.get(chatId)?.read();
@@ -2052,7 +2066,7 @@ export function ChatPage() {
     void sync();
     const unsubscribe = api.onWebSocketConnect(() => { void sync(); });
     return () => { disposed = true; unsubscribe(); };
-  }, [activeChatId]);
+  }, [activeChatId, messageCache]);
 
   // Register global handler for scheduler task_result events
   useEffect(() => {
@@ -2112,7 +2126,14 @@ export function ChatPage() {
   }, []);
 
   const loadMessages = useCallback(async (chatId: number, isCurrent: () => boolean = () => true) => {
-    setLoadingMessages(true);
+    const cached = messageCache.read(chatId);
+    if (isCurrent() && activeChatIdRef.current === chatId && messagesChatIdRef.current !== chatId) {
+      messagesChatIdRef.current = chatId;
+      setMessages(cached ? messageCache.project(chatId, cached.messages) : []);
+      setHasMoreMessages(cached?.hasMore ?? false);
+    }
+    const revision = messageCache.revision(chatId);
+    setLoadingMessages(!cached);
     setContextSummary(null);
     // Reset character budget — each chat starts with a fresh budget
     setCharBudget(getRenderPerfBudget());
@@ -2124,6 +2145,7 @@ export function ChatPage() {
       let offset = 0;
       let res = await api.getMessages(chatId, pageSize, offset);
       let loadedMessages = res.messages;
+      const variants = res.variants ?? [];
       let lastBatchSize = res.messages.length;
 
       while (
@@ -2149,7 +2171,12 @@ export function ChatPage() {
         pendingMessageJumpRef.current = null;
       }
 
+      if (revision !== messageCache.revision(chatId)) return;
+      messageCache.receiveVariants(chatId, variants);
+      loadedMessages = messageCache.project(chatId, loadedMessages);
+      messageCache.remember(chatId, loadedMessages, lastBatchSize === pageSize);
       if (!isCurrent() || activeChatIdRef.current !== chatId) return;
+      messagesChatIdRef.current = chatId;
       setMessages(loadedMessages);
       setHasMoreMessages(lastBatchSize === pageSize);
       refreshContextTokens(chatId);
@@ -2158,7 +2185,7 @@ export function ChatPage() {
     } finally {
       if (isCurrent() && activeChatIdRef.current === chatId) setLoadingMessages(false);
     }
-  }, [refreshContextTokens]);
+  }, [refreshContextTokens, messageCache]);
 
   useEffect(() => api.onBackendRestored(() => {
     void loadChats();
@@ -2169,10 +2196,12 @@ export function ChatPage() {
 
   const loadOlderMessages = useCallback(async () => {
     if (!activeChatId || loadingOlderMessages || !hasMoreMessages) return;
+    const chatId = activeChatId;
     pendingPrependScrollRef.current = messagesScrollRef.current?.getMetrics() ?? null;
     setLoadingOlderMessages(true);
     try {
-      const res = await api.getMessages(activeChatId, MESSAGE_PAGE_SIZE, messages.length);
+      const res = await api.getMessages(chatId, MESSAGE_PAGE_SIZE, messages.length);
+      if (activeChatIdRef.current !== chatId) return;
       setHasMoreMessages(res.messages.length === MESSAGE_PAGE_SIZE);
       if (res.messages.length > 0) {
         // Increase budget by the total length of the loaded batch + step,
@@ -2980,6 +3009,17 @@ export function ChatPage() {
         ttsSpeak(event.result.message_id, event.result.final_reply_text);
       }
 
+      if (['room_user_message', 'chat_user_message_saved', 'room_message_edited', 'room_message_deleted'].includes(event.type)) {
+        messageCache.changed(event.chat_id);
+      }
+      if (event.type === 'room_message_variant_changed') {
+        // Our own acknowledgement must not replace an optimistic selection.
+        if (!(variantSwitchBusyRef.current && event.initiator_user_id === user?.id)) messageCache.accept(event.chat_id, event.message);
+      }
+      if (event.type === 'chat_agent_done') {
+        messageCache.receiveVariants(event.chat_id, event.result?.message_variants ?? []);
+        messageCache.changed(event.chat_id);
+      }
       if (event.chat_id !== activeChatIdRef.current) {
         // Background run finished in another chat: light the unread badge
         // (same as scheduled tasks) and push a native notification with the
@@ -3043,6 +3083,7 @@ export function ChatPage() {
           break;
         }
         case 'room_message_variant_changed': {
+          if (variantSwitchBusyRef.current && event.initiator_user_id === user?.id) break;
           setMessages((prev) => prev.map((message) => message.id === event.message.id ? event.message : message));
           break;
         }
@@ -3213,6 +3254,7 @@ export function ChatPage() {
             ...(typeof res.token_count === 'number' ? { token_count: res.token_count } : {}),
             ...(typeof res.reasoning_tokens === 'number' ? { reasoning_tokens: res.reasoning_tokens } : {}),
           };
+          messageCache.accept(event.chat_id, finalMessage);
           setMessages((prev) => {
             const withoutTemp = tempId === undefined ? prev : prev.filter((message) => message.id !== tempId);
             return withoutTemp.some((message) => message.id === finalMessage.id)
@@ -3271,7 +3313,7 @@ export function ChatPage() {
         }
       }
     });
-  }, [user?.id, notifyAssistantResponse, refreshContextTokens, t, clearSendWatchdog, applyAvatarState, promoteChat]);
+  }, [user?.id, notifyAssistantResponse, refreshContextTokens, t, clearSendWatchdog, applyAvatarState, promoteChat, messageCache]);
 
   const handleSend = useCallback(async () => {
     const text = input.trim();
@@ -3971,23 +4013,44 @@ export function ChatPage() {
   }, [activeChatId, sending, messages, preferredModel, handleIncomingDesktopAction, diceRollEnabled, startDiceRollAnimation, finishDiceRoll, diceMode, applyAvatarState, t, armSendWatchdog, clearSendWatchdog]);
 
   const handleActivateVariant = useCallback(async (messageId: number, variantIndex: number) => {
-    if (!activeChatId || switchingVariantId !== null || variantIndex < 0) return;
+    if (!activeChatId || variantSwitchBusyRef.current || sending || variantIndex < 0) return;
+    const chatId = activeChatId;
+    const previous = messagesRef.current.find(message => message.id === messageId);
+    if (!previous || previous.variant_index === variantIndex) return;
+    variantSwitchBusyRef.current = true;
     setSwitchingVariantId(messageId);
+    let selection: ReturnType<ChatMessageCache['begin']> = null;
     try {
-      const { message } = await api.activateMessageVariant(activeChatId, messageId, variantIndex);
-      setMessages((prev) => prev.map((item) => item.id === messageId ? message : item));
+      selection = messageCache.begin(chatId, previous, variantIndex);
+      if (!selection) {
+        // Compatibility with a backend that did not preload variants yet.
+        const result = await api.getMessages(chatId);
+        messageCache.receiveVariants(chatId, result.variants ?? []);
+        selection = messageCache.begin(chatId, previous, variantIndex);
+      }
+      if (selection && activeChatIdRef.current === chatId) {
+        setMessages(prev => prev.map(item => item.id === messageId ? selection!.next : item));
+      }
       if (ttsPlayingId === messageId) ttsStop();
-      setOpenReasoningId(null);
-      setOpenToolCallsId(null);
-      setOpenSubagentsId(null);
-      refreshContextTokens(activeChatId);
+      setOpenReasoningId(null); setOpenToolCallsId(null); setOpenSubagentsId(null);
+      const { message } = await api.activateMessageVariant(chatId, messageId, variantIndex);
+      if (!selection && !message) {
+        await loadMessages(chatId, () => activeChatIdRef.current === chatId);
+      } else {
+        const confirmed = selection ? messageCache.finish(selection, true, message) : message;
+        if (confirmed && activeChatIdRef.current === chatId) setMessages(prev => prev.map(item => item.id === messageId ? confirmed : item));
+      }
+      if (activeChatIdRef.current === chatId) refreshContextTokens(chatId);
     } catch (error) {
+      const restored = selection ? messageCache.finish(selection, false) : undefined;
+      if (restored && activeChatIdRef.current === chatId) setMessages(prev => prev.map(item => item.id === messageId ? restored : item));
       console.error('Failed to activate message variant:', error);
       toast.error(t('chat.message.variantSwitchFailed'));
     } finally {
+      variantSwitchBusyRef.current = false;
       setSwitchingVariantId(null);
     }
-  }, [activeChatId, switchingVariantId, ttsPlayingId, refreshContextTokens, t]);
+  }, [activeChatId, sending, ttsPlayingId, refreshContextTokens, t, messageCache, loadMessages]);
 
   const handleCopyMessage = (messageId: number) => {
     const msg = messages.find(m => m.id === messageId);

@@ -11,7 +11,7 @@ import { Readable } from 'node:stream';
 import { resolveQuestionnaireSubmission } from './chats.js';
 import { questionnaireAnswerText, type QuestionnaireSubmission, type QuestionnaireResponse } from './message-questionnaires.js';
 import type { AiSendResult, DesktopActionPayload, DisplayStatePayload, MapUpdatePayload, TaskNotifyMode, TaskRecurrenceType, TaskTargetMode, TaskType, UserPlan, UserRecord, MessageAttachment, MessageImage, MessageUsage, NormalizedTokenUsage, TokenUsageCall } from '../types.js';
-import { appendChatMessage, ensureActiveChat, getHistoryForAi, getMessageTokens, getMessageVariantState, getUserById, getUserChatListItem, renameUserChat, resolveMaxContextTokens, resolveAttachmentMaxTokens, injectAttachments, setUserTimezone, trimUserHistoryByChat, isMultiUserRoomChat, planRoomHistorySummary, getChatContextTokens, resolvePromptForChat } from './chats.js';
+import { getChatMessageVariants, appendChatMessage, ensureActiveChat, getHistoryForAi, getMessageTokens, getMessageVariantState, getUserById, getUserChatListItem, renameUserChat, resolveMaxContextTokens, resolveAttachmentMaxTokens, injectAttachments, setUserTimezone, trimUserHistoryByChat, isMultiUserRoomChat, planRoomHistorySummary, getChatContextTokens, resolvePromptForChat } from './chats.js';
 import { calculateChargedTokens, checkQuota, chargeTokens, getModelOverride, getPricingSnapshot, calculateEstimatedCostUsd, isModelFree } from './token-quota.js';
 import { recordModelTps, setKnownModelStatsFilter } from './model-stats.js';
 import { registerMonitoredModelsProvider, isProviderMissingError, attemptRuntimeProviderSwitch } from './openrouter-monitor.js';
@@ -8817,7 +8817,7 @@ iterations.push(currentIteration);
     model_name: responseModelName,
     provider_name: usedProvider || null,
     message_usage: messageUsage,
-    ...((assistantMessageId > 0) ? getMessageVariantState(assistantMessageId) : {}),
+    ...((assistantMessageId > 0) ? { ...getMessageVariantState(assistantMessageId), message_variants: getChatMessageVariants(userId, chatId, assistantMessageId) } : {}),
     ...((assistantMessageId > 0) ? getMessageTokens(assistantMessageId) : {}),
     ...(userMessageId > 0 ? { user_token_count: getMessageTokens(userMessageId).token_count } : {}),
     ...(diceRollValue !== null ? { dice_roll: diceRollValue } : {})
@@ -8916,7 +8916,7 @@ iterations.push(currentIteration);
         provider_name: usedProvider || null,
         message_usage: abortedMessageUsage,
         ...((abortedMessageId > 0) ? getMessageTokens(abortedMessageId) : {}),
-        ...((abortedMessageId > 0) ? getMessageVariantState(abortedMessageId) : {}),
+        ...((abortedMessageId > 0) ? { ...getMessageVariantState(abortedMessageId), message_variants: getChatMessageVariants(userId, chatId, abortedMessageId) } : {}),
         ...(userMessageId > 0 ? { user_token_count: getMessageTokens(userMessageId).token_count } : {}),
         ...(diceRollValue !== null ? { dice_roll: diceRollValue } : {})
       };
