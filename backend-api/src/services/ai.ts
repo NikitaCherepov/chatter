@@ -2609,16 +2609,18 @@ Workflow for interaction:
 
 Depending on the user's Browser settings, open, click, fill, and press_key may require a separate explicit confirmation; call the action normally and the backend will request it when configured. read/back/forward/reload/scroll do not submit data. If an action starts a file download, it is paused until the user approves or rejects it; wait for that result before continuing. If the page shows a CAPTCHA, challenge, rate-limit warning, or access block, stop browser actions and tell the user. Values of ordinary text fields and drafts may be returned by read. Password fields cannot be read or filled by you.
 
-If structured reading or interaction fails on a page the user asked you to use, ${supportsDirectView ? 'call screenshot without a question: you receive the PNG pixels directly and inspect them according to the current task.' : 'call screenshot with a specific question for the vision helper.'} Use click_coordinates with snapshot_id and normalized x/y from that screenshot, then read or take a fresh screenshot to check the result. Screenshots expire after navigation, scrolling, resizing, zoom changes, five minutes or a click. Coordinate clicks press the requested point without checking an HTML element. Do not use whole-monitor capture as a browser fallback.`,
+If structured reading or interaction fails on a page the user asked you to use, ${supportsDirectView ? 'call screenshot without a question: you receive the PNG pixels directly and inspect them according to the current task.' : 'call screenshot with a specific question for the vision helper.'} Use click_coordinates with snapshot_id and normalized x/y from that screenshot, then read or take a fresh screenshot to check the result. Screenshots expire after navigation, scrolling, resizing, zoom changes, five minutes or a click. Coordinate clicks press the requested point without checking an HTML element. For several clicks from one screenshot, use click_coordinates_batch with points: [{x,y}, ...] (1-20). It requests confirmation once, clicks in order, and stops if the document, URL, scroll, viewport size or zoom changes, on cancellation or error. The result contains completed, total and a reason when stopped. DOM updates do not stop the batch. The screenshot is consumed by the entire batch; inspect the result before continuing. Do not use whole-monitor capture as a browser fallback.`,
     parameters: {
       type: 'object',
       properties: {
         action: {
           type: 'string',
-          enum: ['open', 'read', 'back', 'forward', 'reload', 'scroll', 'click', 'fill', 'press_key', 'screenshot', 'click_coordinates'],
+          enum: ['open', 'read', 'back', 'forward', 'reload', 'scroll', 'click', 'fill', 'press_key', 'screenshot', 'click_coordinates', 'click_coordinates_batch'],
           description: 'Browser action.'
         },
-        snapshot_id: { type: 'string', description: 'Exact screenshot ID returned by action=screenshot, required for click_coordinates.' },
+        snapshot_id: { type: 'string', description: 'Exact screenshot ID returned by action=screenshot, required for click_coordinates and click_coordinates_batch.' },
+        points: { type: 'array', minItems: 1, maxItems: 20, description: 'Ordered normalized points for click_coordinates_batch.',
+          items: { type: 'object', properties: { x: { type: 'number', minimum: 0, maximum: 1 }, y: { type: 'number', minimum: 0, maximum: 1 } }, required: ['x', 'y'], additionalProperties: false } },
         x: { type: 'number', minimum: 0, maximum: 1, description: 'Normalized horizontal coordinate in the full screenshot.' },
         y: { type: 'number', minimum: 0, maximum: 1, description: 'Normalized vertical coordinate in the full screenshot.' },
         ...(!supportsDirectView ? { question: { type: 'string', description: 'Required for screenshot: what the vision helper should inspect or locate.' } } : {}),
@@ -6301,7 +6303,7 @@ If the task is a description, return a detailed text response.`
 
   if (toolName === 'browser_control') {
     const action = typeof parsed.action === 'string' ? parsed.action.trim().toLowerCase() : '';
-    const allowedActions = new Set(['open', 'read', 'back', 'forward', 'reload', 'scroll', 'click', 'fill', 'press_key', 'screenshot', 'click_coordinates']);
+    const allowedActions = new Set(['open', 'read', 'back', 'forward', 'reload', 'scroll', 'click', 'fill', 'press_key', 'screenshot', 'click_coordinates', 'click_coordinates_batch']);
     if (!allowedActions.has(action)) {
       return JSON.stringify({ status: 'error', message: 'Unknown browser action.' });
     }
@@ -6322,6 +6324,14 @@ If the task is a description, return a detailed text response.`
     if (action === 'click_coordinates' && (typeof parsed.snapshot_id !== 'string' || !parsed.snapshot_id || typeof parsed.x !== 'number' || typeof parsed.y !== 'number' || !Number.isFinite(parsed.x) || !Number.isFinite(parsed.y) || parsed.x < 0 || parsed.x > 1 || parsed.y < 0 || parsed.y > 1)) {
       return JSON.stringify({ status: 'error', message: 'click_coordinates requires snapshot_id and normalized x/y in 0..1.' });
     }
+    const isBatch = action === 'click_coordinates_batch';
+    const isCoordinateClick = action === 'click_coordinates' || isBatch;
+    if (isBatch && (typeof parsed.snapshot_id !== 'string' || !parsed.snapshot_id || !Array.isArray(parsed.points) || parsed.points.length < 1 || parsed.points.length > 20 ||
+      parsed.points.some((p: any) => !p || typeof p.x !== 'number' || typeof p.y !== 'number' || !Number.isFinite(p.x) || !Number.isFinite(p.y) || p.x < 0 || p.x > 1 || p.y < 0 || p.y > 1))) {
+      return JSON.stringify({ status: 'error', message: 'click_coordinates_batch requires snapshot_id and 1-20 normalized points in 0..1.' });
+    }
+    const coordinatePayload = isBatch ? { snapshot_id: parsed.snapshot_id, points: parsed.points.map((p: any) => ({ x: p.x, y: p.y })) }
+      : { snapshot_id: parsed.snapshot_id, x: parsed.x, y: parsed.y };
     const directScreenshot = subagentExtra?.currentModelSupportsVision === true && parsed.image_mode !== 'description';
     if (action === 'screenshot' && !directScreenshot && (typeof parsed.question !== 'string' || !parsed.question.trim())) return JSON.stringify({ status: 'error', message: 'question is required for the screenshot vision helper.' });
     if (action === 'screenshot' && parsed.image_mode !== undefined && !['direct', 'description'].includes(parsed.image_mode)) return JSON.stringify({ status: 'error', message: 'Invalid image_mode.' });
@@ -6355,7 +6365,7 @@ If the task is a description, return a detailed text response.`
       } catch (error: any) { return JSON.stringify({ status: 'error', message: error?.message || String(error) }); }
     }
     const ipcPayload: Record<string, unknown> = { action };
-    if (action === 'click_coordinates') Object.assign(ipcPayload, { snapshot_id: parsed.snapshot_id, x: parsed.x, y: parsed.y });
+    if (isCoordinateClick) Object.assign(ipcPayload, coordinatePayload);
     if (url) ipcPayload.url = url;
     if (ref) ipcPayload.ref = ref;
     if (text !== undefined) ipcPayload.text = text;
@@ -6375,7 +6385,7 @@ If the task is a description, return a detailed text response.`
     } catch { /* use confirmation defaults */ }
     let confirmationRequired = action === 'open'
       ? browserConfirmationSettings.browser_confirm_open !== false
-      : action === 'click' || action === 'click_coordinates' || action === 'press_key'
+      : action === 'click' || isCoordinateClick || action === 'press_key'
         ? browserConfirmationSettings.browser_confirm_click !== false
         : action === 'fill'
           ? browserConfirmationSettings.browser_confirm_fill !== false
@@ -6391,13 +6401,13 @@ If the task is a description, return a detailed text response.`
       placeholder?: string;
       sensitive?: boolean;
     } | undefined;
-    if (confirmationRequired && (action === 'click' || action === 'click_coordinates' || action === 'fill' || action === 'press_key')) {
+    if (confirmationRequired && (action === 'click' || isCoordinateClick || action === 'fill' || action === 'press_key')) {
       try {
         const permission = await sendIpcToDesktop(user.id, 'browser_control', {
           action: 'check_site_permission',
-          permission_action: action === 'press_key' || action === 'click_coordinates' ? 'click' : action,
+          permission_action: action === 'press_key' || isCoordinateClick ? 'click' : action,
           ref,
-          ...(action === 'click_coordinates' ? { snapshot_id: parsed.snapshot_id, x: parsed.x, y: parsed.y } : {}),
+          ...(isCoordinateClick ? coordinatePayload : {}),
         }, 15000, signal) as { allowed?: boolean; origin?: string | null; target?: typeof siteTarget };
         if (typeof permission?.origin === 'string' && permission.origin) {
           siteOrigin = permission.origin;
@@ -6406,7 +6416,7 @@ If the task is a description, return a detailed text response.`
         if (permission?.target && typeof permission.target === 'object') siteTarget = permission.target;
         if (permission?.allowed === true && siteOrigin) confirmationRequired = false;
       } catch (error: any) {
-        if (action === 'click_coordinates') return JSON.stringify({ status: 'error', message: error?.message || String(error) });
+        if (isCoordinateClick) return JSON.stringify({ status: 'error', message: error?.message || String(error) });
         console.warn('[browser_control] failed to check session site permission:', error?.message || String(error));
       }
     }
@@ -6415,7 +6425,7 @@ If the task is a description, return a detailed text response.`
     // use the user's per-account confirmation preferences (safe default: confirm).
     if (!confirmationRequired) {
       try {
-        const ipcResult = await sendIpcToDesktop(user.id, 'browser_control', ipcPayload, 30000, signal);
+        const ipcResult = await sendIpcToDesktop(user.id, 'browser_control', ipcPayload, isBatch ? 60000 : 30000, signal);
         const result = ipcResult;
         return wrapUntrustedContent(JSON.stringify({
           status: 'success',
@@ -6443,12 +6453,12 @@ If the task is a description, return a detailed text response.`
             ? `Fill browser element ${ref}`
             : action === 'press_key'
               ? `Press ${key} in browser`
-              : `Click browser element ${ref}`,
+              : isCoordinateClick ? (isBatch ? `Click ${parsed.points.length} browser points in order` : `Click browser coordinates (${parsed.x}, ${parsed.y})`) : `Click browser element ${ref}`,
         payload: {
           ipcType: 'browser_control',
           ipcPayload: {
-            action: action as 'open' | 'click' | 'click_coordinates' | 'fill' | 'press_key',
-            ...(action === 'click_coordinates' ? { snapshot_id: parsed.snapshot_id, x: parsed.x, y: parsed.y } : {}),
+            action: action as 'open' | 'click' | 'click_coordinates' | 'click_coordinates_batch' | 'fill' | 'press_key',
+            ...(isCoordinateClick ? coordinatePayload : {}),
             ...(url ? { url } : {}),
             ...(ref ? { ref } : {}),
             ...(text !== undefined ? { text } : {}),
@@ -6473,14 +6483,14 @@ If the task is a description, return a detailed text response.`
       action: 'browser_action_confirmation',
       value: {
         confirmation_id: confirmationId,
-        action_type: action === 'click_coordinates' ? 'click' : action,
+        action_type: isCoordinateClick ? 'click' : action,
         description: typeof parsed.description === 'string' && parsed.description.trim()
           ? parsed.description.trim()
           : action === 'open'
             ? url
             : action === 'press_key'
               ? `Press ${key}`
-              : action === 'click_coordinates' ? `Click browser coordinates (${parsed.x}, ${parsed.y})` : ref,
+              : isCoordinateClick ? (isBatch ? `Click ${parsed.points.length} browser points in order` : `Click browser coordinates (${parsed.x}, ${parsed.y})`) : ref,
         ...(url ? { url } : {}),
         ...(text !== undefined ? { text } : {}),
         ...(key ? { key } : {}),

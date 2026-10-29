@@ -7520,8 +7520,8 @@ const cancelRejectedBrowserDownload = (pending: PendingPcCommandConfirmation) =>
 const getBrowserSessionPermissionGrant = (pending: PendingPcCommandConfirmation) => {
   if (pending.kind !== 'browser_action' || pending.payload.ipcType !== 'browser_control') return null;
   const { action, expected_origin: origin } = pending.payload.ipcPayload;
-  if ((action !== 'click' && action !== 'click_coordinates' && action !== 'fill' && action !== 'press_key') || typeof origin !== 'string' || !origin) return null;
-  return { action: action === 'press_key' || action === 'click_coordinates' ? 'click' as const : action, origin };
+  if ((action !== 'click' && action !== 'click_coordinates' && action !== 'click_coordinates_batch' && action !== 'fill' && action !== 'press_key') || typeof origin !== 'string' || !origin) return null;
+  return { action: action === 'press_key' || action === 'click_coordinates' || action === 'click_coordinates_batch' ? 'click' as const : action, origin };
 };
 
 app.post('/api/v1/pc-commands/approve', async (req: AuthedRequest, res: any) => {

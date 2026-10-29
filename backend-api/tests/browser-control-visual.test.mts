@@ -17,6 +17,8 @@ const user = getUserById(81)!;
 const png = Buffer.from([137,80,78,71,13,10,26,10]).toString('base64');
 const messages: any[] = [], client: any = { accountId: 81, connectionId: 'test', lastPongAt: Date.now(), lastMessageAt: Date.now(), pendingIpc: new Map() };
 let siteAllowed = true, approval = false, approvalSeen = false;
+let batchMode = false, batchStopped = false, approvalCount = 0;
+const points = [{ x: .5, y: .4 }, { x: .7, y: .6 }];
 client.ws = { readyState: 1, send: (text: string) => {
   const packet = JSON.parse(text); messages.push(packet);
   if (packet.type === 'execute_ipc') queueMicrotask(() => {
@@ -24,18 +26,18 @@ client.ws = { readyState: 1, send: (text: string) => {
     const payload = packet.payload;
     if (payload.action === 'screenshot') pending.resolve({ snapshot_id: 'shot', mime_type: 'image/png', screenshot_base64: png, width: 800, height: 600 });
     else if (payload.action === 'check_site_permission') {
-      assert.equal(payload.permission_action, 'click'); assert.equal(payload.snapshot_id, 'shot'); assert.equal(payload.x, .5);
+      assert.equal(payload.permission_action, 'click'); assert.equal(payload.snapshot_id, 'shot'); if (batchMode) assert.deepEqual(payload.points, points); else assert.equal(payload.x, .5);
       pending.resolve({ allowed: siteAllowed, origin: 'https://example.test' });
-    } else { assert.equal(payload.action, 'click_coordinates'); assert.equal(payload.expected_origin, 'https://example.test'); pending.resolve({ action: 'click_coordinates' }); }
+    } else { assert.equal(payload.action, batchMode ? 'click_coordinates_batch' : 'click_coordinates'); assert.equal(payload.expected_origin, 'https://example.test'); pending.resolve(batchMode ? { action: payload.action, status: batchStopped ? 'stopped' : 'success', completed: batchStopped ? 1 : 2, total: 2, ...(batchStopped ? { reason: 'browser_screenshot_stale' } : {}) } : { action: 'click_coordinates' }); }
   });
   if (approval && packet.action === 'browser_action_confirmation') queueMicrotask(() => {
     const pending = confirmations.getPendingPcConfirmation(packet.value.confirmation_id)!;
     assert.equal(pending.payload.ipcType, 'browser_control');
     assert.equal((pending.payload as any).ipcPayload.snapshot_id, 'shot');
-    assert.equal((pending.payload as any).ipcPayload.x, .5);
-    assert.equal((pending.payload as any).ipcPayload.action, 'click_coordinates');
+    if (batchMode) assert.deepEqual((pending.payload as any).ipcPayload.points, points); else assert.equal((pending.payload as any).ipcPayload.x, .5);
+    assert.equal((pending.payload as any).ipcPayload.action, batchMode ? 'click_coordinates_batch' : 'click_coordinates');
     assert.equal(packet.value.action_type, 'click'); assert.equal(packet.value.target_element, undefined);
-    approvalSeen = true; confirmations.deletePendingPcConfirmation(packet.value.confirmation_id); pending.resolve({ action: 'click_coordinates' });
+    approvalCount++; approvalSeen = true; confirmations.deletePendingPcConfirmation(packet.value.confirmation_id); pending.resolve(batchMode ? { action: 'click_coordinates_batch', status: 'stopped', completed: 1, total: 2, reason: 'browser_screenshot_stale' } : { action: 'click_coordinates' });
   });
 } };
 ws.registerWsClient(client);
@@ -54,6 +56,24 @@ try {
   approval = true; result = await run({ action: 'click_coordinates', snapshot_id: 'shot', x: .5, y: .4 });
   assert.ok(approvalSeen); assert.ok(result.includes('success'));
   result = await run({ action: 'click_coordinates', snapshot_id: 'shot', x: 9, y: .4 }); assert.ok(result.includes('error'));
+
+  batchMode = true; approval = false; siteAllowed = true;
+  const batchArgs = { action: 'click_coordinates_batch', snapshot_id: 'shot', points };
+  result = await run(batchArgs); assert.ok(result.includes('"completed":2')); assert.ok(result.includes('"total":2'));
+  batchStopped = true;
+  result = await run(batchArgs); assert.ok(result.includes('"status":"stopped"')); assert.ok(result.includes('"completed":1')); assert.ok(result.includes('browser_screenshot_stale'));
+  siteAllowed = false; approval = true;
+  const approvalsBefore = approvalCount;
+  result = await run(batchArgs); assert.equal(approvalCount, approvalsBefore + 1, 'one confirmation for the whole batch');
+  assert.ok(result.includes('"status":"stopped"')); assert.ok(result.includes('"completed":1'));
+  const sentBefore = messages.length;
+  for (const invalid of [[],[null],[{x:2,y:0}],[{x:'0.5',y:.4}],Array(21).fill(points[0])]) {
+    assert.ok((await run({ ...batchArgs, points: invalid })).includes('"status":"error"'));
+  }
+  assert.equal(messages.length, sentBefore, 'invalid batches never reach IPC or confirmation');
+  const countBefore = approvalCount;
+  assert.ok((await run(batchArgs, true)).includes('rejected'));
+  assert.equal(approvalCount, countBefore, 'auto rejection cannot approve a batch');
   const open = (value: any) => ai.runTool(user, 0, 'desktop_action', JSON.stringify({ action: 'open_widget', target: 'browser', value }), async () => { throw new Error('unexpected model'); }, undefined, undefined, actionSink);
   await open({ layout: 'external', maximize: true }); assert.equal(actionSink.value.value.maximize, true);
   assert.ok((await open({ layout: 'invalid' })).includes('error'));

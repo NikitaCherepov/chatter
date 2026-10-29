@@ -70,7 +70,58 @@ let win,server;
  run=await prepare('null');await win.loadURL(wc.getURL());
  await assert.rejects(()=>visual.coordinates(run.shot.snapshot_id,run.p.x,run.p.y),/browser_screenshot_stale/);
  await assert.rejects(()=>visual.coordinates('anything',2,.5),/browser_coordinates_out_of_range/);
- console.log('PASS: real Electron exact-point clicks despite DOM updates, hover, moved elements and overlays; zoom conversion, single-use and stale document/viewport checks');
+
+ // Batch: DOM-only updates are allowed; each point shares the original snapshot.
+ await wc.executeJavaScript('document.querySelector("button").onmouseenter=null;window.batchHits=[];document.addEventListener("click",e=>{window.batchHits.push([e.clientX,e.clientY]);document.body.dataset.batch=String(window.batchHits.length)})');
+ let batchShot=await visual.capture();
+ const points=[{x:.2,y:.1},{x:.5,y:.1},{x:.8,y:.1}];
+ let batch=await visual.clickBatch(batchShot.snapshot_id,points,{x:0,y:0},{cancelled:false});
+ assert.equal(batch.status,'success');assert.equal(batch.completed,3);
+ let hits=await wc.executeJavaScript('window.batchHits');
+ assert.equal(hits.length,3);
+ hits.forEach((hit,i)=>{assert.ok(Math.abs(hit[0]-points[i].x*batchShot.viewport_width)<=1);assert.ok(Math.abs(hit[1]-points[i].y*batchShot.viewport_height)<=1)});
+ await assert.rejects(()=>visual.coordinates(batchShot.snapshot_id,.2,.1),/browser_screenshot_stale/);
+ // Invalid later points must not cause partial execution.
+ batchShot=await visual.capture();
+ batch=await visual.clickBatch(batchShot.snapshot_id,[points[0],{x:2,y:.1}],{x:0,y:0},{cancelled:false});
+ assert.equal(batch.status,'stopped');assert.equal(batch.completed,0);
+ assert.equal((await wc.executeJavaScript('window.batchHits')).length,3);
+ // Any viewport/document change after the first click stops the remaining queue.
+ for(const change of ['scroll','scroll_return','resize','zoom','navigation','document']){
+   await wc.executeJavaScript('scrollTo(0,0)');wc.setZoomFactor(1);
+   await new Promise(r=>setTimeout(r,50));
+   await wc.executeJavaScript('window.batchHits=[]');
+   const listener=async()=>{if(change==='scroll')await wc.executeJavaScript('scrollTo(0,100)');
+     if(change==='scroll_return')await wc.executeJavaScript('scrollTo(0,100);setTimeout(()=>scrollTo(0,0),50)');
+     if(change==='resize')win.setSize(950,700);
+     if(change==='zoom')wc.setZoomFactor(1.25);
+     if(change==='document')await win.loadURL(wc.getURL()+'?reload');
+     if(change==='navigation')await wc.executeJavaScript('history.pushState({},"","?changed")');};
+   // A page event triggers the host-side viewport change, as a real UI click could.
+   await wc.executeJavaScript('document.addEventListener("click",()=>console.log("batch-first-click"),{once:true})');
+   const onConsole=(_event,_level,message)=>{if(message==='batch-first-click')void listener()};
+   wc.on('console-message',onConsole);
+   batchShot=await visual.capture();
+   batch=await visual.clickBatch(batchShot.snapshot_id,points,{x:0,y:0},{cancelled:false});
+   wc.removeListener('console-message',onConsole);
+   assert.equal(batch.status,'stopped',change);assert.equal(batch.completed,1,change);
+   assert.equal(batch.reason,'browser_screenshot_stale',change);
+   if(change!=='document')assert.equal((await wc.executeJavaScript('window.batchHits')).length,1,change+' must not execute remaining points');
+   else await wc.executeJavaScript('window.batchHits=[];document.addEventListener("click",e=>window.batchHits.push([e.clientX,e.clientY]))');
+ }
+ // Cancellation stops after the completed click and consumes the screenshot.
+ wc.setZoomFactor(1);await wc.executeJavaScript('window.batchHits=[]');
+ const token={cancelled:false};
+ await wc.executeJavaScript('document.addEventListener("click",()=>console.log("cancel-batch"),{once:true})');
+ const cancel=(_event,_level,message)=>{if(message==='cancel-batch')token.cancelled=true};
+ wc.on('console-message',cancel);
+ batchShot=await visual.capture();
+ batch=await visual.clickBatch(batchShot.snapshot_id,points,{x:0,y:0},token);
+ wc.removeListener('console-message',cancel);
+ assert.equal(batch.status,'stopped');assert.equal(batch.completed,1);assert.equal(batch.reason,'click_cancelled');
+ assert.equal(await execute('document.getElementById("__cb-c").style.opacity'),'0');
+ console.log('PASS: native single and batch clicks, visible cursor, exact order, DOM changes, full validation, cancellation and stop on navigation/scroll/resize/zoom');
+
 
 })().catch(e=>{console.error(e);process.exitCode=1}).finally(async()=>{if(win&&!win.isDestroyed())win.destroy();if(server){server.closeAllConnections();await new Promise(r=>server.close(r))}app.exit(process.exitCode||0)});
 `);
@@ -80,7 +131,7 @@ try {
   let output = '';
   child.stdout.on('data', data => { output += data; }); child.stderr.on('data', data => { output += data; });
   const code = await new Promise<number | null>((resolve, reject) => {
-    const timer = setTimeout(() => { child.kill(); reject(new Error('Electron hover test timed out')); }, 45_000);
+    const timer = setTimeout(() => { child.kill(); reject(new Error('Electron hover test timed out')); }, 90_000);
     child.on('error', error => { clearTimeout(timer); reject(error); });
     child.on('exit', value => { clearTimeout(timer); resolve(value); });
   });

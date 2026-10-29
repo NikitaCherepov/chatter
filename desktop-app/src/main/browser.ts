@@ -17,8 +17,9 @@ export type BrowserState = {
 };
 
 export type BrowserControlPayload = {
-  action: 'open' | 'read' | 'back' | 'forward' | 'reload' | 'scroll' | 'click' | 'fill' | 'press_key' | 'screenshot' | 'click_coordinates' | 'check_site_permission' | 'grant_site_permission' | 'resolve_download' | 'youtube_music';
+  action: 'open' | 'read' | 'back' | 'forward' | 'reload' | 'scroll' | 'click' | 'fill' | 'press_key' | 'screenshot' | 'click_coordinates' | 'click_coordinates_batch' | 'check_site_permission' | 'grant_site_permission' | 'resolve_download' | 'youtube_music';
   snapshot_id?: string;
+  points?: { x: number; y: number }[];
   x?: number;
   y?: number;
   url?: string;
@@ -438,6 +439,7 @@ export class ChatterBrowser {
     });
     contents.on('did-start-loading', () => this.emitState());
     contents.on('did-start-navigation', (_event, _url, isInPlace, isMainFrame) => {
+      if (isMainFrame) this.visualSession?.clear();
       if (isMainFrame && !isInPlace) this.setMainDocumentReady(false);
     });
     contents.on('dom-ready', () => this.setMainDocumentReady(true));
@@ -446,11 +448,13 @@ export class ChatterBrowser {
       this.emitState();
     });
     contents.on('did-navigate', () => {
+      this.visualSession?.clear();
       this.abortInteraction();
       this.clearSnapshot();
       this.emitState();
     });
     contents.on('did-navigate-in-page', () => {
+      this.visualSession?.clear();
       this.clearSnapshot();
       this.emitState();
     });
@@ -685,12 +689,18 @@ export class ChatterBrowser {
       if (this.interactionInProgress) throw new Error('browser_interaction_in_progress');
       return visual.capture();
     }
-    if (action === 'click_coordinates') {
+    if (action === 'click_coordinates' || action === 'click_coordinates_batch') {
       if (this.interactionInProgress) throw new Error('browser_interaction_in_progress');
       if (payload.expected_origin && this.normalizeHttpOrigin(payload.expected_origin) !== this.getCurrentHttpOrigin()) throw new Error('browser_origin_changed');
       this.interactionInProgress = true;
       const token = this.clickToken = { cancelled: false };
       try {
+        if (action === 'click_coordinates_batch') {
+          const { cursor, ...result } = await visual.clickBatch(payload.snapshot_id || '', payload.points!, this.cursorPos, token);
+          this.cursorPos = cursor;
+          this.clearSnapshot();
+          return { ...result, action, ...this.getState() };
+        }
         this.cursorPos = await visual.click(`${payload.snapshot_id || ''}`, Number(payload.x), Number(payload.y), this.cursorPos, token);
         this.clearSnapshot();
         return { status: 'success', action, ...this.getState() };
@@ -705,7 +715,8 @@ export class ChatterBrowser {
       const origin = this.getCurrentHttpOrigin();
       let target: BrowserElement | undefined;
       if (payload.snapshot_id) {
-        await visual.coordinates(payload.snapshot_id, Number(payload.x), Number(payload.y));
+        if (payload.points !== undefined) await visual.validateBatch(payload.snapshot_id, payload.points);
+        else await visual.coordinates(payload.snapshot_id, Number(payload.x), Number(payload.y));
         return { allowed: Boolean(origin && this.getPermissionOrigins(permissionAction).has(origin)), origin };
       }
       if (payload.ref) {

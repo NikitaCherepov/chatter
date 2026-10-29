@@ -44,8 +44,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   browserSetBounds: (bounds: { x: number; y: number; width: number; height: number }) =>
     ipcRenderer.invoke('browser:set-bounds', bounds),
   browserControl: (payload: {
-    action: 'open' | 'read' | 'back' | 'forward' | 'reload' | 'scroll' | 'click' | 'fill' | 'press_key' | 'screenshot' | 'click_coordinates' | 'check_site_permission' | 'grant_site_permission' | 'resolve_download' | 'youtube_music';
+    action: 'open' | 'read' | 'back' | 'forward' | 'reload' | 'scroll' | 'click' | 'fill' | 'press_key' | 'screenshot' | 'click_coordinates' | 'click_coordinates_batch' | 'check_site_permission' | 'grant_site_permission' | 'resolve_download' | 'youtube_music';
     snapshot_id?: string;
+    points?: { x: number; y: number }[];
     x?: number;
     y?: number;
     url?: string;
