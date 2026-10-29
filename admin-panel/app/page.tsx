@@ -16,6 +16,7 @@ import { BackupsPage } from '../components/pages/BackupsPage/BackupsPage';
 import { UserDetailPage } from '../components/pages/UserDetailPage/UserDetailPage';
 import { UsersPage } from '../components/pages/UsersPage/UsersPage';
 import { AccessKeysPage } from '../components/pages/AccessKeysPage/AccessKeysPage';
+import { ModelApiPage } from '../components/pages/ModelApiPage/ModelApiPage';
 import { PlanLimitsPage } from '../components/pages/PlanLimitsPage/PlanLimitsPage';
 import { SettingsPage } from '../components/pages/SettingsPage/SettingsPage';
 import { PromptsPage } from '../components/pages/PromptsPage/PromptsPage';
@@ -28,6 +29,7 @@ const ADMIN_SECTIONS: ReadonlySet<AdminSection> = new Set([
   'overview',
   'users',
   'accessKeys',
+  'modelApi',
   'models',
   'prompts',
   'limits',
@@ -289,6 +291,7 @@ export default function Home() {
       {section === 'users' && selectedUserId && <UserDetailPage userId={selectedUserId} onBack={closeUser} />}
       {section === 'users' && !selectedUserId && <UsersPage onSelectUser={openUser} />}
       {section === 'accessKeys' && <AccessKeysPage />}
+      {section === 'modelApi' && <ModelApiPage />}
       {section === 'limits' && <PlanLimitsPage />}
       {section === 'system' && <SystemPage />}
       {section === 'backups' && <BackupsPage />}

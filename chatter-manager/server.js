@@ -2828,6 +2828,16 @@ async function handleRequest(req, res) {
       method: req.method, ...(body ? { body: JSON.stringify(body) } : {}),
     }));
   }
+  const modelApiMatch = pathname.match(/^\/api\/model-api\/(keys|models)(?:\/(\d+))?$/);
+  if (modelApiMatch && ['GET','POST','DELETE'].includes(req.method)) {
+    res.setHeader('Cache-Control', 'no-store');
+    const tail = modelApiMatch[2] ? '/' + modelApiMatch[2] : '';
+    const query = modelApiMatch[1] === 'models' ? '?owner_user_id=' + encodeURIComponent(url.searchParams.get('owner_user_id') || '') : '';
+    const body = req.method === 'POST' ? await readJson(req) : undefined;
+    return sendJson(res, req.method === 'POST' ? 201 : 200, await backendInternalRequest('/internal/admin/model-api/' + modelApiMatch[1] + tail + query, {
+      method:req.method, ...(body ? {body:JSON.stringify(body)} : {}),
+    }));
+  }
   if (pathname === '/api/model-access-users' && req.method === 'GET') {
     return sendJson(res, 200, await backendInternalRequest('/internal/admin/model-access-users'));
   }

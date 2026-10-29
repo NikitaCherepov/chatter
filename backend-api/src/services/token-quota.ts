@@ -418,6 +418,8 @@ export const checkQuota = (userId: number, isAdmin: boolean, billingMode: Billin
 };
 
 export type ChargeInput = {
+  modelApiKeyId?: number | null;
+  apiRequestId?: string | null;
   userId: number;
   chatId?: number | null;
   messageId?: number | null;
@@ -512,8 +514,8 @@ export const chargeTokens = (input: ChargeInput): ChargeTokensResult => {
         reasoning_tokens, total_tokens, charged_tokens, aborted, created_at,
         upstream_provider_slug,
         input_price_per_million, output_price_per_million, cache_read_price_per_million,
-        estimated_cost_usd, actual_cost_usd, pricing_source
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        estimated_cost_usd, actual_cost_usd, pricing_source, model_api_key_id, api_request_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       input.userId,
       input.chatId ?? null,
@@ -537,7 +539,9 @@ export const chargeTokens = (input: ChargeInput): ChargeTokensResult => {
       cacheReadPricePerMillion,
       estResult.cost,
       actualCost,
-      pricingSource
+      pricingSource,
+      input.modelApiKeyId ?? null,
+      input.apiRequestId ?? null
     );
 
     // Free models (is_free=1) do not consume weekly quota nor cost budget.

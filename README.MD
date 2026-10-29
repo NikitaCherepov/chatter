@@ -273,6 +273,21 @@ Both editors offer **Take a questionnaire**, using the existing `runAgent` runne
 
 Regression tests: `pnpm exec tsx backend-api/tests/player-instructions.test.mts`, `pnpm exec tsx backend-api/tests/player-instructions-follow-up.test.mts` and `pnpm exec tsx backend-api/tests/persona-import.test.mts`.
 
+### External model API
+
+The admin panel's **API access** tab issues separate `chatter_api_...` keys. Choose an account and an explicit allowlist of its manual model IDs, then copy the key once and the public backend base URL ending in `/v1`. Keys are stored as SHA-256 hashes; they never authenticate chat, desktop, manager or administration endpoints. Revocation denies new calls and cancels in-flight calls. Account bans, model access restrictions and existing account quotas still apply. New models are not automatically granted to old keys.
+
+- `GET /v1/models` and `GET /v1/models/:id`: models currently available to the key.
+- `POST /v1/chat/completions`: OpenAI-compatible JSON or SSE, including caller messages, tools and tool-call deltas. Pass `Authorization: Bearer YOUR_API_KEY`. Use the Chatter model ID, not the upstream model name.
+- Requests reuse configured clients, the provider request adapter and ChatGPT bridge. There is no automatic fallback to a different model, Chatter system prompt, memory, chat history, agent loop, or server-side execution of caller tools.
+- Each call is linked to the existing `user_token_usage` ledger. The tab shows request/token counts and combined actual-or-estimated USD totals, both all-time and for the UTC calendar month. Missing usage/prices are shown as unknown, not free. Subscription estimates are not actual subscription charges. There is no separate monthly key budget yet.
+- Only the existing ChatGPT bridge's parameter subset is supported for subscription connections; unsupported controls return an explicit error. This endpoint is Chat Completions, not native Responses or Anthropic compatibility.
+- Limits: 16 MB request JSON, at most 8 choices, 8 concurrent requests per key / 64 total, 10-minute request timeout. SSE heartbeats keep idle streams alive. Disconnects abort upstream requests. Interrupted streams may not supply final usage; this is recorded as unknown instead of inventing a charge. API request records contain IDs/status/usage linkage, not caller messages or secrets.
+
+Expose the existing backend `/v1` routes through your HTTPS reverse proxy; the admin tab's suggested URL is editable and does not open a firewall or change deployment routing. Do not send real bearer keys over public plain HTTP. Management uses the existing authenticated manager proxy `/api/model-api/*` to internal backend routes.
+
+Tests: `pnpm exec tsx backend-api/tests/model-api.test.mts` (local fake provider, no paid model calls), `pnpm exec tsx backend-api/tests/chatgpt.test.mts`. Protocol: [Chat Completions](https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create), [SSE events](https://developers.openai.com/api/reference/resources/chat/subresources/completions/streaming-events).
+
 ### Declarative charts
 
 Completed `chart` fences render validated data as native charts, without executing model code:

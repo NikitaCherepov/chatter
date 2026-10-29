@@ -264,7 +264,10 @@ const queueUserMessengerNotification = (
   });
 };
 
+import { createModelApiRouter, abortModelApiKeyRequests } from './model-api.js';
+import { createModelApiKey, listModelApiKeys, modelsForApiOwner, revokeModelApiKey } from './services/model-api-keys.js';
 const app = express();
+app.use('/v1', createModelApiRouter());
 const PORT = Number.parseInt(process.env.BACKEND_API_PORT || '3050', 10) || 3050;
 const BACKEND_INTERNAL_TOKEN = `${process.env.BACKEND_INTERNAL_TOKEN || ''}`.trim();
 
@@ -4993,6 +4996,18 @@ app.get('/internal/admin/users-overview', internalAuth, (_req, res) => {
     total,
     limited: total > users.length,
   });
+});
+
+app.get('/internal/admin/model-api/keys', internalAuth, (_req,res)=>res.set('Cache-Control','no-store').json({keys:listModelApiKeys()}));
+app.get('/internal/admin/model-api/models', internalAuth, (req,res)=>res.set('Cache-Control','no-store').json({models:modelsForApiOwner(Number(req.query.owner_user_id))}));
+app.post('/internal/admin/model-api/keys', internalAuth, (req,res)=>{
+  try {res.set('Cache-Control','no-store').status(201).json(createModelApiKey(req.body));}
+  catch(error: any){res.status(400).json({error:['invalid_owner','invalid_name','invalid_models','model_not_available'].includes(error?.message)?error.message:'key_creation_failed'});}
+});
+app.delete('/internal/admin/model-api/keys/:id', internalAuth, (req,res)=>{
+  const id=Number(req.params.id);
+  if(!Number.isSafeInteger(id)||id<=0)return res.status(400).json({error:'bad_key_id'});
+  revokeModelApiKey(id);abortModelApiKeyRequests(id);return res.json({ok:true});
 });
 
 app.get('/internal/admin/server-access-keys', internalAuth, (_req, res) => {

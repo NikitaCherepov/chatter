@@ -1,0 +1,96 @@
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  max-width: var(--content-max);
+}
+.form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sp-3);
+  align-items: end;
+}
+.form > label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+.wide,
+.help {
+  grid-column: 1/-1;
+}
+.help {
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+  line-height: 1.6;
+}
+.form > button {
+  justify-self: start;
+}
+.copy {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+  font-size: var(--fs-xs);
+}
+.copy input {
+  min-width: 140px;
+  flex: 1;
+  font-family: monospace;
+}
+.secret {
+  margin-top: var(--sp-3);
+  padding: var(--sp-3);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius);
+}
+.secret strong {
+  display: block;
+  margin-bottom: var(--sp-2);
+}
+.code {
+  padding: var(--sp-3);
+  overflow: auto;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius);
+  font-size: var(--fs-xs);
+}
+.table {
+  overflow: auto;
+  margin-top: var(--sp-3);
+}
+.table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-xs);
+}
+.table th,
+.table td {
+  padding: var(--sp-3);
+  border-bottom: 1px solid var(--border-light);
+  text-align: left;
+  vertical-align: top;
+}
+.table th {
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.table small {
+  display: block;
+  color: var(--text-hint);
+  margin-top: 4px;
+}
+.model {
+  display: block;
+  overflow-wrap: anywhere;
+  max-width: 240px;
+  margin-bottom: 4px;
+}
+@media (max-width: 700px) {
+  .form {
+    grid-template-columns: 1fr;
+  }
+}

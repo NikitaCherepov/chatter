@@ -149,6 +149,22 @@ try {
   await adapter.chatGptCompletion(connection.id, payload);
   assert.equal(modelsService.updateModelSettings({ ...saved, proModels: [model] }).proModels[0].auth, 'chatgpt');
   ai.refreshConfiguredModels();
+  // External API reuses this bridge but does not inject main-chat instructions.
+  const externalChunks: any[] = [], externalUsage: any[] = [];
+  const externalAccess = await import('../src/services/model-access.js');
+  const external = await externalAccess.withModelActor({userId:101,isAdmin:true},()=>service.withChatGptActor(true,()=>ai.createModelApiCompletion(
+    'test-oauth',{messages:[{role:'user',content:'External caller'}],stream:true},new AbortController().signal,
+    chunk=>externalChunks.push(chunk),usage=>externalUsage.push(usage),
+  )));
+  assert.equal(external.model,'test-oauth');
+  assert.ok(externalChunks.some(chunk=>chunk.choices[0]?.delta.tool_calls?.length));
+  assert.ok(externalChunks.every(chunk=>chunk.model==='test-oauth'));
+  assert.equal(new Set(externalChunks.map(chunk=>chunk.id)).size,1);
+  assert.equal(externalUsage[0].total_tokens,14);
+  assert.equal(requestBody.input[0].content,'External caller');
+  await assert.rejects(externalAccess.withModelActor({userId:101,isAdmin:true},()=>service.withChatGptActor(true,()=>ai.createModelApiCompletion(
+    'test-oauth',{messages:[{role:'user',content:'External'}],temperature:1},new AbortController().signal,()=>{},()=>{},
+  ))),/chatgpt_unsupported_parameter/);
   const completion = await ai.runCompletion('pro', { messages: [{ role: 'system', content: 'Runtime instructions' }, { role: 'user', content: 'Runtime question' }] });
   assert.equal(completion.usedUniqueId, 'test-oauth');
   assert.equal(completion.response.choices[0].message.content, 'OK');

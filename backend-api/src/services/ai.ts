@@ -1,5 +1,6 @@
 ﻿import OpenAI from 'openai';
 import dotenv from 'dotenv';
+import { randomUUID } from 'node:crypto';
 import { getModelSettings, modelApiKey, type ConfiguredModel } from './model-settings.js';
 import { createChatGptClient, chatGptConnectionForClient, chatGptCompletion, CHATGPT_REASONING_LEVELS } from './chatgpt-responses.js';
 import { getChatGptConnection, withChatGptActor } from './chatgpt-connections.js';
@@ -1175,6 +1176,54 @@ const streamAndAssemble = async (
     cleanupSdkSignal();
   }
 };
+
+/** Stateless external API: same configured clients/adapter, no chat prompts, tools or fallback. */
+export async function createModelApiCompletion(modelId: string, payload: Record<string, any>, signal: AbortSignal,
+  onChunk: (chunk: any) => void, onUsage: (usage: any, provider?: string | null) => void) {
+  const actor = currentModelActor();
+  const model = resolveManualModel(modelId, actor?.isAdmin ?? false, actor?.userId);
+  if (!model) throw new Error('model_not_available');
+  assertModelAccess(model.id, model.client);
+  const override = getModelOverride(model.id);
+  const level = payload.reasoning_effort ?? payload.reasoning?.effort;
+  const request = adaptRequestBodyForProvider({ ...payload, model: model.apiModelName }, model.baseURL, model.apiModelName, level, undefined, override?.openrouter_provider_slug);
+  const connection = chatGptConnectionForClient(model.client);
+  if (connection) {
+    // The existing Responses bridge supports a narrower parameter set. Never silently drop controls.
+    const supported = new Set(['model','messages','tools','stream','stream_options','reasoning','reasoning_effort']);
+    if (Object.keys(payload).some(key => !supported.has(key))) throw new Error('chatgpt_unsupported_parameter');
+    if (level && level !== 'auto' && !CHATGPT_REASONING_LEVELS.includes(level)) throw new Error('chatgpt_unsupported_parameter');
+    const id = `chatcmpl-${randomUUID()}`, created = Math.floor(Date.now()/1000);
+    const emit = (delta: any, finish_reason: string | null = null) => onChunk({ id, object: 'chat.completion.chunk', created, model: modelId, choices: [{ index: 0, delta, finish_reason, logprobs: null }] });
+    let began = false;
+    const begin = () => { if (!began) { began = true; emit({ role: 'assistant', content: '' }); } };
+    const response = await chatGptCompletion(connection, request, signal, payload.stream ? {
+      onToken: text => { begin(); emit({ content: text }); },
+      onReasoningToken: text => { begin(); emit({ reasoning_content: text }); },
+    } : undefined);
+    onUsage(response.usage);
+    if (payload.stream) {
+      begin();
+      const message = response.choices[0].message;
+      if (message.tool_calls?.length) emit({ tool_calls: message.tool_calls.map((call: any, index: number) => ({ index, ...call })) });
+      emit({}, response.choices[0].finish_reason);
+      onChunk({ id, object:'chat.completion.chunk', created, model:modelId, choices:[], usage:response.usage });
+    }
+    return { ...response, id, object:'chat.completion',created,model:modelId };
+  }
+  if (payload.stream) {
+    const stream = await model.client.chat.completions.create({ ...request, stream:true, stream_options:{ ...payload.stream_options, include_usage:true } } as any, { signal });
+    for await (const chunk of stream as any) {
+      signal.throwIfAborted();
+      if (chunk.usage) onUsage(chunk.usage, chunk.provider);
+      onChunk({ ...chunk, model:modelId });
+    }
+    return null;
+  }
+  const response = await model.client.chat.completions.create({ ...request, stream:false } as any, { signal });
+  if ((response as any).usage) onUsage((response as any).usage, (response as any).provider);
+  return { ...response, model:modelId };
+}
 
 const createCompletionWithModelFallback = async (
   client: OpenAI,

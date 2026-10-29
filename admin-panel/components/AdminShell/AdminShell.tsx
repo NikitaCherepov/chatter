@@ -10,6 +10,7 @@ export type AdminSection =
   | 'overview'
   | 'users'
   | 'accessKeys'
+  | 'modelApi'
   | 'models'
   | 'prompts'
   | 'limits'
@@ -47,6 +48,7 @@ export function AdminShell({
     { id: 'overview', label: t('nav.overview'), icon: 'overview' },
     { id: 'users', label: t('nav.users'), icon: 'users' },
     { id: 'accessKeys', label: t('nav.accessKeys'), icon: 'security' },
+    { id: 'modelApi', label: t('modelApi.nav'), icon: 'integrations' },
     { id: 'models', label: t('nav.models'), icon: 'models' },
     { id: 'prompts', label: t('nav.prompts'), icon: 'prompts' },
     { id: 'limits', label: t('nav.limits'), icon: 'limits' },
@@ -66,6 +68,7 @@ export function AdminShell({
     overview: [t('nav.overviewTitle'), t('nav.overviewDesc')],
     users: [t('nav.usersTitle'), t('nav.usersDesc')],
     accessKeys: [t('nav.accessKeysTitle'), t('nav.accessKeysDesc')],
+    modelApi: [t('modelApi.title'), t('modelApi.description')],
     models: [t('nav.modelsTitle'), t('nav.modelsDesc')],
     prompts: [t('nav.promptsTitle'), t('nav.promptsDesc')],
     limits: [t('nav.limitsTitle'), t('nav.limitsDesc')],

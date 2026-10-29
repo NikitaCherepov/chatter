@@ -1659,6 +1659,33 @@ ensureUtoColumn('cache_read_price_per_million', 'ALTER TABLE user_token_usage AD
 ensureUtoColumn('estimated_cost_usd', 'ALTER TABLE user_token_usage ADD COLUMN estimated_cost_usd REAL');
 ensureUtoColumn('actual_cost_usd', 'ALTER TABLE user_token_usage ADD COLUMN actual_cost_usd REAL');
 ensureUtoColumn('pricing_source', 'ALTER TABLE user_token_usage ADD COLUMN pricing_source TEXT');
+ensureUtoColumn('model_api_key_id', 'ALTER TABLE user_token_usage ADD COLUMN model_api_key_id INTEGER');
+ensureUtoColumn('api_request_id', 'ALTER TABLE user_token_usage ADD COLUMN api_request_id TEXT');
+db.exec(`
+  CREATE TABLE IF NOT EXISTS model_api_keys (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    owner_user_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    key_hash TEXT NOT NULL UNIQUE,
+    key_prefix TEXT NOT NULL,
+    allowed_models_json TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_used_at TEXT,
+    revoked_at TEXT
+  );
+  CREATE TABLE IF NOT EXISTS model_api_requests (
+    id TEXT PRIMARY KEY,
+    key_id INTEGER NOT NULL,
+    model_id TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    completed_at INTEGER,
+    status TEXT NOT NULL DEFAULT 'running',
+    usage_received INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE INDEX IF NOT EXISTS idx_model_api_requests_key_date ON model_api_requests(key_id, created_at);
+  CREATE INDEX IF NOT EXISTS idx_utu_model_api_key ON user_token_usage(model_api_key_id, created_at);
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_utu_api_request ON user_token_usage(api_request_id) WHERE api_request_id IS NOT NULL;
+`);
 
 // ── Drop legacy columns from upgraded databases ───────────────────────────
 // SQLite ≥ 3.35 supports ALTER TABLE DROP COLUMN. Wrapped in try/catch: if the
