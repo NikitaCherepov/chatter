@@ -1977,9 +1977,9 @@ export function ChatPage() {
 
   useEffect(() => {
     if (activeChatId !== null && messagesChatIdRef.current === activeChatId && !sending) {
-      messageCache.remember(activeChatId, messages, hasMoreMessages);
+      messageCache.remember(activeChatId, messages, hasMoreMessages, charBudget);
     }
-  }, [activeChatId, messages, hasMoreMessages, sending, messageCache]);
+  }, [activeChatId, messages, hasMoreMessages, charBudget, sending, messageCache]);
 
   const restoreRoomStream = (chatId: number) => {
     if (activeChatIdRef.current !== chatId) return;
@@ -1998,6 +1998,7 @@ export function ChatPage() {
     setShowTyping(!snapshot.content && !snapshot.reasoning_content);
     setTypingIdentity({ name: snapshot.prompt_name || 'Chatter', imageUrl: snapshot.prompt_image_url ?? null });
     if (!snapshot.content && !snapshot.reasoning_content) return;
+    suppressNextMessageAutoScrollRef.current = true;
     setMessages(previous => {
       const messages = previous.filter(message => message.id !== tempId && message.id !== snapshot.regenerate_message_id);
       return [...messages, { id: tempId, role: 'assistant', content: snapshot.content, reasoning_content: snapshot.reasoning_content || null,
@@ -2129,6 +2130,7 @@ export function ChatPage() {
     const cached = messageCache.read(chatId);
     if (isCurrent() && activeChatIdRef.current === chatId && messagesChatIdRef.current !== chatId) {
       messagesChatIdRef.current = chatId;
+      suppressNextMessageAutoScrollRef.current = true;
       setMessages(cached ? messageCache.project(chatId, cached.messages) : []);
       setHasMoreMessages(cached?.hasMore ?? false);
     }
@@ -2136,7 +2138,7 @@ export function ChatPage() {
     setLoadingMessages(!cached);
     setContextSummary(null);
     // Reset character budget — each chat starts with a fresh budget
-    setCharBudget(getRenderPerfBudget());
+    setCharBudget(cached?.renderBudget ?? getRenderPerfBudget());
     try {
       const pendingJump = pendingMessageJumpRef.current?.chatId === chatId
         ? pendingMessageJumpRef.current
@@ -2149,8 +2151,9 @@ export function ChatPage() {
       let lastBatchSize = res.messages.length;
 
       while (
-        pendingJump
-        && !loadedMessages.some(message => message.id === pendingJump.messageId)
+        (pendingJump
+          ? !loadedMessages.some(message => message.id === pendingJump.messageId)
+          : loadedMessages.length < (cached?.messages.length ?? 0))
         && lastBatchSize === pageSize
       ) {
         offset += lastBatchSize;
@@ -2177,6 +2180,7 @@ export function ChatPage() {
       messageCache.remember(chatId, loadedMessages, lastBatchSize === pageSize);
       if (!isCurrent() || activeChatIdRef.current !== chatId) return;
       messagesChatIdRef.current = chatId;
+      suppressNextMessageAutoScrollRef.current = true;
       setMessages(loadedMessages);
       setHasMoreMessages(lastBatchSize === pageSize);
       refreshContextTokens(chatId);
@@ -5947,6 +5951,8 @@ export function ChatPage() {
               className={s.messages}
               contentClassName={s.messagesContent}
               resetKey={activeChatId}
+              positionScope={`${api.API_BASE}:${user?.id ?? ''}`}
+              ready={activeChatId !== null && messagesChatIdRef.current === activeChatId && !loadingMessages}
             >
               {loadingMessages && (
                 <div className={s.loadingRow}>{t('chat.messages.loading')}</div>

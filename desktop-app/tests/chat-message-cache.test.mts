@@ -75,6 +75,7 @@ assert.ok(loadStart > 0 && loadEnd > loadStart);
 const loadCode = ts.transpileModule(page.slice(loadStart, loadEnd).replace('const loadMessages =', 'globalThis.loadMessages ='), { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
 context.activeChatIdRef.current = 10;
 context.messagesChatIdRef = { current: 11 };
+context.suppressNextMessageAutoScrollRef = { current: false };
 context.pendingMessageJumpRef = { current: null };
 context.setLoadingMessages = no; context.setContextSummary = no; context.setCharBudget = no; context.setHasMoreMessages = no;
 context.getRenderPerfBudget = () => 10000; context.getRenderPerfStep = () => 1000;

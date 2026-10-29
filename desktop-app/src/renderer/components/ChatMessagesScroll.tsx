@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef, type ReactNode } from 'react';
+import { forwardRef, useEffect, useLayoutEffect, useImperativeHandle, useRef, type ReactNode } from 'react';
 import Lenis, { type LenisOptions } from 'lenis';
 import 'lenis/dist/lenis.css';
 
@@ -28,6 +28,8 @@ type Props = {
   className: string;
   contentClassName: string;
   resetKey: number | null;
+  positionScope?: string;
+  ready?: boolean;
   children: ReactNode;
 };
 
@@ -35,11 +37,42 @@ export const ChatMessagesScroll = forwardRef<ChatMessagesScrollHandle, Props>(fu
   className,
   contentClassName,
   resetKey,
+  positionScope = '',
+  ready = true,
   children,
 }, ref) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const lenisRef = useRef<Lenis | null>(null);
+  const positionsRef = useRef(new Map<string, { top: number; bottom: boolean }>());
+  const restoredKeyRef = useRef<string | null>(null);
+  const positionKey = resetKey === null ? null : `${positionScope}:${resetKey}`;
+
+  useLayoutEffect(() => {
+    const wrapper = wrapperRef.current;
+    if (restoredKeyRef.current !== positionKey) restoredKeyRef.current = null;
+    if (!wrapper || !ready || positionKey === null || restoredKeyRef.current === positionKey) return;
+    restoredKeyRef.current = positionKey;
+    const saved = positionsRef.current.get(positionKey);
+    wrapper.scrollTo({ top: !saved || saved.bottom ? wrapper.scrollHeight : saved.top, behavior: 'instant' });
+    positionsRef.current.set(positionKey, saved ?? { top: wrapper.scrollTop, bottom: true });
+    if (positionsRef.current.size > 100) positionsRef.current.delete(positionsRef.current.keys().next().value!);
+  }, [positionKey, ready, children]);
+
+  // Images and background history refreshes can change height after restoration.
+  // Keep a chat that was left at the bottom pinned there without animating.
+  useLayoutEffect(() => {
+    const content = contentRef.current;
+    if (!content || !ready || positionKey === null) return;
+    const observer = new ResizeObserver(() => {
+      const wrapper = wrapperRef.current;
+      if (wrapper && restoredKeyRef.current === positionKey && positionsRef.current.get(positionKey)?.bottom) {
+        wrapper.scrollTo({ top: wrapper.scrollHeight, behavior: 'instant' });
+      }
+    });
+    observer.observe(content);
+    return () => observer.disconnect();
+  }, [positionKey, ready]);
 
   useEffect(() => {
     if (!CHAT_MESSAGES_LENIS_ENABLED) return;
@@ -107,7 +140,11 @@ export const ChatMessagesScroll = forwardRef<ChatMessagesScrollHandle, Props>(fu
   }), []);
 
   return (
-    <div className={className} ref={wrapperRef}>
+    <div className={className} ref={wrapperRef} onScroll={() => {
+      const wrapper = wrapperRef.current;
+      if (!wrapper || !ready || positionKey === null || restoredKeyRef.current !== positionKey) return;
+      positionsRef.current.set(positionKey, { top: wrapper.scrollTop, bottom: wrapper.scrollHeight - wrapper.clientHeight - wrapper.scrollTop <= 4 });
+    }}>
       <div className={contentClassName} ref={contentRef}>
         {children}
       </div>

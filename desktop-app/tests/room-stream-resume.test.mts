@@ -21,6 +21,7 @@ const no = () => {};
 const context:any = {
   RoomStreamBuffer, activeChatId:1, activeChatIdRef:ref(1), user:{id:1},
   messageCache:{receiveVariants:no, changed:no, accept:no}, variantSwitchBusyRef:ref(false),
+  suppressNextMessageAutoScrollRef:ref(false),
   roomStreamBuffersRef:ref(new Map()), roomStreamRevisionRef:ref(new Map()), roomStreamChatIdsRef:ref(new Set()),
   roomEventAgentMsgIds:ref(new Map()), pendingUserMessageIdByChatRef:ref(new Map()), regeneratingMessageRef:ref(null),prevMsgCountRef:ref(0),
   notifyAssistantResponse:no,refreshContextTokens:no,t:(s:string)=>s,clearSendWatchdog:no,applyAvatarState:no,promoteChat:no,markAsRead:no,incrementUnread:no,

@@ -1,7 +1,7 @@
 import type { QueryClient } from '@tanstack/react-query';
 import type { Message } from './api';
 
-type Snapshot = { messages: Message[]; hasMore: boolean };
+type Snapshot = { messages: Message[]; hasMore: boolean; renderBudget?: number };
 type Selection = { chatId: number; previous: Message; next: Message };
 
 /** RAM-only, scoped to the backend and signed-in account. Stream buffers stay separate. */
@@ -14,9 +14,9 @@ export class ChatMessageCache {
   read(chatId: number) { return this.client.getQueryData<Snapshot>(this.key(chatId)); }
   revision(chatId: number) { return this.revisions.get(chatId) ?? 0; }
   changed(chatId: number) { this.revisions.set(chatId, this.revision(chatId) + 1); }
-  remember(chatId: number, messages: Message[], hasMore = this.read(chatId)?.hasMore ?? false) {
+  remember(chatId: number, messages: Message[], hasMore = this.read(chatId)?.hasMore ?? false, renderBudget = this.read(chatId)?.renderBudget) {
     this.client.setQueryDefaults(this.key(chatId), { gcTime: 10 * 60_000 });
-    this.client.setQueryData(this.key(chatId), { messages: messages.filter(message => message.id > 0), hasMore });
+    this.client.setQueryData(this.key(chatId), { messages: messages.filter(message => message.id > 0), hasMore, renderBudget });
     for (const message of messages) if (message.id > 0 && message.role === 'assistant') this.rememberVariant(chatId, message);
   }
   private rememberVariant(chatId: number, message: Message) {
