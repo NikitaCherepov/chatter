@@ -53,27 +53,39 @@ const mapTaskRow = (row: any): TaskDto => ({
   target_chat_title: row.target_chat_title == null ? null : String(row.target_chat_title),
 });
 
-export const listTasks = (userId: number, limit = 50, status: 'pending' | 'done' | 'error' | 'all' = 'pending'): TaskDto[] => {
-  const safeLimit = Math.max(1, Math.min(100, Math.floor(limit)));
+export const listTasks = (userId: number, limit = 50, status: 'pending' | 'done' | 'error' | 'all' = 'pending', offset = 0): TaskDto[] => {
+  const safeLimit = Number.isFinite(limit) ? Math.max(1, Math.min(100, Math.floor(limit))) : 50;
+  const safeOffset = Number.isFinite(offset) ? Math.max(0, Math.floor(offset)) : 0;
+  const direction = status === 'pending' ? 'ASC' : 'DESC';
   const rows = status === 'all'
     ? db.prepare(`
       SELECT ${TASK_COLUMNS}
       FROM tasks t
       LEFT JOIN user_chats uc ON t.target_mode = 'chat' AND uc.id = t.target_chat_id
       WHERE t.user_id = ?
-      ORDER BY t.execute_at ASC, t.id ASC
-      LIMIT ?
-    `).all(userId, safeLimit)
+      ORDER BY t.execute_at ${direction}, t.id ${direction}
+      LIMIT ? OFFSET ?
+    `).all(userId, safeLimit, safeOffset)
     : db.prepare(`
       SELECT ${TASK_COLUMNS}
       FROM tasks t
       LEFT JOIN user_chats uc ON t.target_mode = 'chat' AND uc.id = t.target_chat_id
       WHERE t.user_id = ? AND t.status = ?
-      ORDER BY t.execute_at ASC, t.id ASC
-      LIMIT ?
-    `).all(userId, status, safeLimit);
+      ORDER BY t.execute_at ${direction}, t.id ${direction}
+      LIMIT ? OFFSET ?
+    `).all(userId, status, safeLimit, safeOffset);
 
   return (rows as any[]).map(mapTaskRow);
+};
+
+export const listTaskPage = (userId: number, limit = 50, status: 'pending' | 'done' | 'error' | 'all' = 'pending', offset = 0) => {
+  const safeOffset = Number.isFinite(offset) ? Math.max(0, Math.floor(offset)) : 0;
+  const tasks = listTasks(userId, limit, status, safeOffset);
+  const total = Number((status === 'all'
+    ? db.prepare('SELECT COUNT(*) AS total FROM tasks WHERE user_id = ?').get(userId)
+    : db.prepare('SELECT COUNT(*) AS total FROM tasks WHERE user_id = ? AND status = ?').get(userId, status) as any)?.total ?? 0);
+  const hasMore = safeOffset + tasks.length < total;
+  return { tasks, total, has_more: hasMore, next_offset: hasMore ? safeOffset + tasks.length : null };
 };
 
 export const createTask = (

@@ -1550,6 +1550,7 @@
       "testRoomRedirect": "Redirected from room",
       "testNewChat": "New chat created",
       "testSilent": "The task completed without a user notification.",
+      "loadMore": "Load more",
       "testFailed": "Failed to run the test"
     }
   },

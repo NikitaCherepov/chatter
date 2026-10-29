@@ -2172,10 +2172,11 @@ export type TaskDto = {
   allowed_tools?: string[] | null;
 };
 
-export async function listTasks(limit = 50, status: 'pending' | 'done' | 'error' | 'all' = 'pending'): Promise<{ tasks: TaskDto[] }> {
+export async function listTasks(limit = 50, status: 'pending' | 'done' | 'error' | 'all' = 'pending', offset = 0): Promise<{ tasks: TaskDto[]; total?: number; has_more?: boolean; next_offset?: number | null }> {
   const params = new URLSearchParams();
   params.set('limit', String(limit));
   params.set('status', status);
+  params.set('offset', String(offset));
   return apiFetch(`/api/v1/tasks?${params.toString()}`);
 }
 

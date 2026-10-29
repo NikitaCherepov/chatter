@@ -1,5 +1,6 @@
 ﻿import express from 'express';
 import path from 'path';
+import { listTaskPage } from './services/tasks.js';
 import { uploadBackupSession, startBackupSession, backupSessionStatus, cancelBackupSession } from './services/sillytavern-backup-session.js';
 import { getModelSettings, publicModelSettings, updateModelSettings, allModels, replaceModelKeyReference } from './services/model-settings.js';
 import { listChatGptConnections, beginChatGptAuthorization, completeChatGptAuthorization, renameChatGptConnection, disconnectChatGptConnection, listChatGptModels, withChatGptActor } from './services/chatgpt-connections.js';
@@ -3583,8 +3584,9 @@ app.get('/api/v1/tasks', (req: AuthedRequest, res) => {
   const statusRaw = `${req.query.status || 'pending'}` as 'pending' | 'done' | 'error' | 'all';
   const status = ['pending', 'done', 'error', 'all'].includes(statusRaw) ? statusRaw : 'pending';
   const limit = Number.parseInt(`${req.query.limit || '50'}`, 10);
-  const tasks = listTasks(userId, limit, status);
-  res.json({ tasks });
+  const offset = Number.parseInt(`${req.query.offset || '0'}`, 10);
+  res.set('Cache-Control', 'no-store');
+  res.json(listTaskPage(userId, limit, status, offset));
 });
 
 app.get('/api/v1/tasks/options', (req: AuthedRequest, res) => {

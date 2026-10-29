@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AnimatePresence, motion } from 'framer-motion';
 import { toast } from 'sonner';
@@ -75,6 +75,13 @@ export function TasksTool() {
   const [testResult, setTestResult] = useState<api.TaskTestResult | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('pending');
   const [selectedTask, setSelectedTask] = useState<api.TaskDto | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const nextOffsetRef = useRef(0);
+  const requestVersionRef = useRef(0);
+  const pendingPageRef = useRef<number | null>(null);
+  const statusFilterRef = useRef(statusFilter);
+  statusFilterRef.current = statusFilter;
 
   const [payload, setPayload] = useState('');
   const [executeAt, setExecuteAt] = useState('');
@@ -124,17 +131,27 @@ export function TasksTool() {
     return query ? options.tools.filter(tool => tool.toLowerCase().includes(query)) : options.tools;
   }, [options.tools, toolQuery]);
 
-  const loadTasks = async (status: StatusFilter) => {
-    setLoading(true);
+  const loadTasks = async (status: StatusFilter, append = false) => {
+    if (status !== statusFilterRef.current || (append && pendingPageRef.current !== null)) return;
+    const version = append ? requestVersionRef.current : ++requestVersionRef.current;
+    const offset = append ? nextOffsetRef.current : 0;
+    pendingPageRef.current = version;
+    if (append) setLoadingMore(true);
+    else { setLoading(true); setLoadingMore(false); setTasks([]); setHasMore(false); }
+    const current = () => version === requestVersionRef.current && status === statusFilterRef.current;
     try {
-      const res = await api.listTasks(50, status);
-      setTasks(res.tasks ?? []);
+      const res = await api.listTasks(50, status, offset);
+      if (!current()) return;
+      const batch = res.tasks ?? [];
+      setTasks(previous => append ? [...previous, ...batch.filter(task => !previous.some(item => item.id === task.id))] : batch);
+      nextOffsetRef.current = res.next_offset ?? offset + batch.length;
+      setHasMore(res.has_more ?? batch.length === 50);
     } catch (err) {
+      if (!current()) return;
       console.error('Failed to load tasks:', err);
-      setTasks([]);
       toast.error(t('tools.tasks.loadFailed'));
     } finally {
-      setLoading(false);
+      if (current()) { pendingPageRef.current = null; setLoading(false); setLoadingMore(false); }
     }
   };
 
@@ -156,6 +173,7 @@ export function TasksTool() {
   };
 
   useEffect(() => { void loadTasks(statusFilter); }, [statusFilter]);
+  useEffect(() => () => { requestVersionRef.current++; }, []);
   useEffect(() => { void loadOptions(); }, []);
 
   const backToList = () => {
@@ -383,6 +401,9 @@ export function TasksTool() {
                   </div>
                 </button>
               ))}
+              {!loading && hasMore && <button type="button" className={s.loadMore} disabled={loadingMore} onClick={() => void loadTasks(statusFilter, true)}>
+                {t(loadingMore ? 'common.loading' : 'tools.tasks.loadMore')}
+              </button>}
             </div>
           </motion.div>
         ) : selectedTask ? (
