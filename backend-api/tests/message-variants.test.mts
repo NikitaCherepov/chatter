@@ -14,6 +14,7 @@ const {
   editUserMessage,
   forkChat,
   getChatMessages,
+  getHistoryForAi,
   getMessageVariantState,
 } = await import('../src/services/chats.js');
 
@@ -70,6 +71,31 @@ assert.deepEqual(
   { ok: false, error: 'not_latest_message' },
   'old messages cannot change the active timeline without branching',
 );
+
+// Regeneration excludes the entire stored response, including all tool steps.
+const regenChat = createUserChat(81, 'Regeneration context');
+await appendChatMessage(81, regenChat, 'user', 'Earlier question');
+await appendChatMessage(81, regenChat, 'assistant', 'Earlier answer');
+await appendChatMessage(81, regenChat, 'user', 'Current question');
+const toolResponse = await appendChatMessage(81, regenChat, 'assistant', 'Old final', null, null, null, null, JSON.stringify([
+  { step: 0, content: 'Old intermediate', tool_calls: [{ id: 'old-call', name: 'search', arguments: { q: 'old query' } }], results: [{ id: 'old-call', name: 'search', content: 'Old result' }] },
+  { step: 1, content: 'Old final' },
+]));
+const expected = [
+  { role: 'user', content: 'Earlier question' },
+  { role: 'assistant', content: 'Earlier answer' },
+  { role: 'user', content: 'Current question' },
+];
+const regenerationHistory = (messageId?: number) => getHistoryForAi(81, regenChat, 0, false, undefined, null, 0, 0, undefined, { messageId });
+assert.deepEqual(regenerationHistory(toolResponse), expected);
+assert.deepEqual(regenerationHistory(), expected, 'legacy regeneration also drops complete tool iterations');
+assert.ok(getHistoryForAi(81, regenChat).some(message => message.role === 'tool'), 'ordinary context keeps tools');
+assert.equal(getChatMessages(81, regenChat, 20, 0).find(message => message.id === toolResponse)!.content, 'Old final', 'context filtering does not erase the saved answer');
+assert.throws(() => regenerationHistory(assistantId), /regenerate_message_not_found/, 'a foreign target must not expose the current answer');
+await appendChatMessage(81, regenChat, 'assistant', 'Plain replacement', null, null, null, null, null, null, null, { regenerateMessageId: toolResponse });
+assert.deepEqual(regenerationHistory(toolResponse), expected, 'plain replacement is also excluded');
+assert.deepEqual(activateChatMessageVariant(81, regenChat, toolResponse, 0), { ok: true });
+assert.deepEqual(regenerationHistory(toolResponse), expected, 'switching back to a tool variant remains safe');
 
 db.close();
 for (const suffix of ['', '-wal', '-shm']) {

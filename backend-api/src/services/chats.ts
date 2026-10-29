@@ -2105,6 +2105,7 @@ export const getHistoryForAi = (
   roomHistoryTokenBudget = 0,
   roomHistoryAfterTimelineIndex = 0,
   roomHistoryThroughTimelineIndex?: number,
+  regeneration?: { messageId?: number },
 ): any[] => {
   const activeRoomAgents = responseAgentId !== null
     ? db.prepare(`
@@ -2140,6 +2141,19 @@ export const getHistoryForAi = (
     chatId,
     ...(multiUserRoom ? [roomHistoryAfterTimelineIndex, roomThrough] : []),
   ) as Array<{ id: number; timeline_index: number | null; role: ChatRole; content: string; tool_calls_json: string | null; attachments: string | null; images: string | null; agent_id: number | null; agent_name: string | null; author_name: string | null; token_count: number | null }>;
+
+  // Remove the complete stored response before expanding its tool iterations.
+  // Filtering expanded API messages by role leaves tool results and earlier
+  // assistant iterations behind. Never change the persisted response here.
+  if (regeneration) {
+    if (regeneration.messageId !== undefined) {
+      const targetIndex = rows.findIndex(row => row.id === regeneration.messageId && row.role === 'assistant');
+      if (targetIndex < 0) throw new Error('regenerate_message_not_found');
+      rows = rows.slice(targetIndex + 1);
+    } else {
+      while (rows[0]?.role === 'assistant') rows.shift();
+    }
+  }
 
   // Multi-user rooms: virtual truncation — walk from the newest message back,
   // keep messages while they fit into the budget. The newest message is always

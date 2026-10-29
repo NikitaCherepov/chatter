@@ -7586,6 +7586,7 @@ const sendMessageThroughAiInternal = async (
     effectiveRoomHistoryTokenBudget,
     roomHistoryAfterTimelineIndex,
     roomHistoryThroughTimelineIndex,
+    requestedRegenerateFromHistory ? { messageId: options?.regenerateMessageId } : undefined,
   );
   if (activeContextSummary) {
     history = [{
