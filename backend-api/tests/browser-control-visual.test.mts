@@ -25,7 +25,7 @@ client.ws = { readyState: 1, send: (text: string) => {
     if (payload.action === 'screenshot') pending.resolve({ snapshot_id: 'shot', mime_type: 'image/png', screenshot_base64: png, width: 800, height: 600 });
     else if (payload.action === 'check_site_permission') {
       assert.equal(payload.permission_action, 'click'); assert.equal(payload.snapshot_id, 'shot'); assert.equal(payload.x, .5);
-      pending.resolve({ allowed: siteAllowed, origin: 'https://example.test', target: { tag: 'button', text: 'Play' } });
+      pending.resolve({ allowed: siteAllowed, origin: 'https://example.test' });
     } else { assert.equal(payload.action, 'click_coordinates'); assert.equal(payload.expected_origin, 'https://example.test'); pending.resolve({ action: 'click_coordinates' }); }
   });
   if (approval && packet.action === 'browser_action_confirmation') queueMicrotask(() => {
@@ -34,7 +34,7 @@ client.ws = { readyState: 1, send: (text: string) => {
     assert.equal((pending.payload as any).ipcPayload.snapshot_id, 'shot');
     assert.equal((pending.payload as any).ipcPayload.x, .5);
     assert.equal((pending.payload as any).ipcPayload.action, 'click_coordinates');
-    assert.equal(packet.value.action_type, 'click'); assert.equal(packet.value.target_element.tag, 'button');
+    assert.equal(packet.value.action_type, 'click'); assert.equal(packet.value.target_element, undefined);
     approvalSeen = true; confirmations.deletePendingPcConfirmation(packet.value.confirmation_id); pending.resolve({ action: 'click_coordinates' });
   });
 } };

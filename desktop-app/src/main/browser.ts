@@ -1,5 +1,6 @@
 import { app, BrowserWindow, dialog, WebContentsView, type DownloadItem, type Rectangle, type WebContents, type WebFrameMain } from 'electron';
 import path from 'node:path';
+import { showBrowserCursor, hideBrowserCursor } from './browser-cursor';
 import { BrowserVisualSession } from './browser-visual';
 import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, statfsSync, unlinkSync } from 'node:fs';
@@ -704,8 +705,8 @@ export class ChatterBrowser {
       const origin = this.getCurrentHttpOrigin();
       let target: BrowserElement | undefined;
       if (payload.snapshot_id) {
-        const visualTarget = await visual.target(payload.snapshot_id, Number(payload.x), Number(payload.y));
-        return { allowed: Boolean(origin && this.getPermissionOrigins(permissionAction).has(origin)), origin, target: visualTarget.target };
+        await visual.coordinates(payload.snapshot_id, Number(payload.x), Number(payload.y));
+        return { allowed: Boolean(origin && this.getPermissionOrigins(permissionAction).has(origin)), origin };
       }
       if (payload.ref) {
         try {
@@ -3486,44 +3487,7 @@ export class ChatterBrowser {
     };
     const trajectory = generateTrajectory(this.cursorPos, target);
 
-    // -- Phase 3: show visual cursor overlay --
-    const showCursorScript = `(() => {
-      let cursor = document.getElementById('__cb-c');
-      if (!cursor) {
-        cursor = document.createElement('div');
-        cursor.id = '__cb-c';
-        Object.assign(cursor.style, {
-          position: 'fixed', width: '14px', height: '14px', borderRadius: '50%',
-          background: 'rgba(34, 105, 225, 0.92)', border: '2px solid white',
-          boxShadow: '0 2px 9px rgba(0,0,0,.4)', pointerEvents: 'none',
-          zIndex: '2147483647', left: '0', top: '0', transform: 'translate(-50%, -50%)',
-          opacity: '0', transition: 'opacity 120ms ease'
-        });
-        document.documentElement.appendChild(cursor);
-      }
-      cursor.style.left = ${this.cursorPos.x} + 'px';
-      cursor.style.top = ${this.cursorPos.y} + 'px';
-      cursor.style.opacity = '1';
-      return true;
-    })()`;
-    await this.executeInBrowserWorld(showCursorScript).catch(() => {});
-
-    // Animate the DOM cursor along the same trajectory (best-effort, visual only).
-    const visualAnimation = this.executeInBrowserWorld(`(() => {
-      const cursor = document.getElementById('__cb-c');
-      if (!cursor) return false;
-      const points = ${JSON.stringify(trajectory)};
-      let i = 0;
-      const step = () => {
-        if (i >= points.length) return;
-        cursor.style.left = points[i].x + 'px';
-        cursor.style.top = points[i].y + 'px';
-        i++;
-        if (i < points.length) requestAnimationFrame(step);
-      };
-      requestAnimationFrame(step);
-      return true;
-    })()`).catch(() => {});
+    await showBrowserCursor(code => this.executeInBrowserWorld(code), this.cursorPos, trajectory, contents.getZoomFactor());
 
     // -- Phase 4: stream native sendInputEvent via cursor-input module --
     this.clickToken = { cancelled: false };
@@ -3621,14 +3585,7 @@ export class ChatterBrowser {
         delete globalThis.__cb_soo;
         return true;
       })()`).catch(() => {});
-      await this.executeInBrowserWorld(`(() => {
-        const cursor = document.getElementById('__cb-c');
-        if (cursor) cursor.style.opacity = '0';
-        globalThis.__cb_cp = { x: ${target.x}, y: ${target.y} };
-        return true;
-      })()`).catch(() => {});
-
-      await visualAnimation;
+      await hideBrowserCursor(code => this.executeInBrowserWorld(code), target);
 
       const resultElement = actualChecked === undefined ? expected : { ...expected, checked: actualChecked };
       this.snapshotElements.set(ref, resultElement);
@@ -3651,11 +3608,7 @@ export class ChatterBrowser {
         delete globalThis.__cb_soo;
         return true;
       })()`).catch(() => {});
-      await this.executeInBrowserWorld(`(() => {
-        const cursor = document.getElementById('__cb-c');
-        if (cursor) cursor.style.opacity = '0';
-        return true;
-      })()`).catch(() => {});
+      await hideBrowserCursor(code => this.executeInBrowserWorld(code));
       throw error;
     } finally {
       await frameInputSession?.dispose();
