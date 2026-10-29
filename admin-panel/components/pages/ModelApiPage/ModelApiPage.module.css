@@ -89,6 +89,43 @@
   max-width: 240px;
   margin-bottom: 4px;
 }
+.keyRow {
+  cursor: pointer;
+}
+.keyRow:hover {
+  background: var(--bg-secondary);
+}
+.keyButton {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-primary);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+}
+.keyButton:hover {
+  text-decoration: underline;
+}
+.keyButton:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+.table .settingsCell {
+  padding: 0;
+}
+.settings {
+  padding: var(--sp-3);
+  background: var(--bg-secondary);
+  min-width: 260px;
+}
+.editActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin-top: var(--sp-3);
+}
 @media (max-width: 700px) {
   .form {
     grid-template-columns: 1fr;

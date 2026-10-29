@@ -16,14 +16,29 @@ export function modelsForApiOwner(id: number) {
   const owner = modelApiOwner(id);
   return owner ? getModelsCatalog(owner.is_admin === 1 || owner.role === 'admin', owner.id) : [];
 }
+function validateAllowedModels(ownerId: number, raw: unknown, allowEmpty = false) {
+  if (!Array.isArray(raw) || (!allowEmpty && !raw.length) || raw.length > 500 || raw.some(m => typeof m !== 'string')) throw new Error('invalid_models');
+  const models = [...new Set(raw as string[])];
+  const available = new Set(modelsForApiOwner(ownerId).map(m => m.id));
+  if (models.some(m => !available.has(m))) throw new Error('model_not_available');
+  return models;
+}
+export function updateModelApiKeyModels(id: number, input: unknown) {
+  if (!Number.isSafeInteger(id) || id <= 0) throw new Error('bad_key_id');
+  if (!input || typeof input !== 'object' || Array.isArray(input) || Object.keys(input).some(key => key !== 'models')) throw new Error('invalid_models');
+  const key = db.prepare('SELECT owner_user_id, revoked_at FROM model_api_keys WHERE id=?').get(id) as KeyRow | undefined;
+  if (!key) throw new Error('key_not_found');
+  if (key.revoked_at) throw new Error('key_revoked');
+  const models = validateAllowedModels(key.owner_user_id, (input as {models?: unknown}).models, true);
+  const result = db.prepare('UPDATE model_api_keys SET allowed_models_json=? WHERE id=? AND revoked_at IS NULL').run(JSON.stringify(models), id);
+  if (!result.changes) throw new Error('key_revoked');
+  return { id, models };
+}
 export function createModelApiKey(input: { name?: unknown; owner_user_id?: unknown; models?: unknown }) {
   const ownerId = Number(input.owner_user_id), name = typeof input.name === 'string' ? input.name.trim() : '';
   if (!Number.isSafeInteger(ownerId) || ownerId <= 0 || !modelApiOwner(ownerId)) throw new Error('invalid_owner');
   if (!name || name.length > 100) throw new Error('invalid_name');
-  if (!Array.isArray(input.models) || !input.models.length || input.models.length > 500 || input.models.some(m => typeof m !== 'string')) throw new Error('invalid_models');
-  const models = [...new Set(input.models as string[])];
-  const available = new Set(modelsForApiOwner(ownerId).map(m => m.id));
-  if (models.some(m => !available.has(m))) throw new Error('model_not_available');
+  const models = validateAllowedModels(ownerId, input.models);
   const secret = 'chatter_api_' + crypto.randomBytes(32).toString('base64url');
   const result = db.prepare('INSERT INTO model_api_keys (owner_user_id,name,key_hash,key_prefix,allowed_models_json) VALUES (?,?,?,?,?)')
     .run(ownerId,name,hash(secret),secret.slice(0,19)+'…',JSON.stringify(models));
@@ -37,7 +52,10 @@ export function validateModelApiKey(raw: unknown) {
   if (!owner) return null;
   return { ...key, owner, models: JSON.parse(key.allowed_models_json) as string[] };
 }
-export const isModelApiKeyActive = (id: number) => Boolean(db.prepare('SELECT 1 FROM model_api_keys WHERE id=? AND revoked_at IS NULL').get(id));
+export const isModelApiKeyActive = (id: number, modelId?: string) => {
+  const row = db.prepare('SELECT allowed_models_json FROM model_api_keys WHERE id=? AND revoked_at IS NULL').get(id) as {allowed_models_json: string} | undefined;
+  return Boolean(row && (modelId === undefined || JSON.parse(row.allowed_models_json).includes(modelId)));
+};
 export const touchModelApiKey = (id: number) => db.prepare('UPDATE model_api_keys SET last_used_at=CURRENT_TIMESTAMP WHERE id=?').run(id);
 export const revokeModelApiKey = (id: number) => db.prepare('UPDATE model_api_keys SET revoked_at=COALESCE(revoked_at,CURRENT_TIMESTAMP) WHERE id=?').run(id);
 export function listModelApiKeys() {

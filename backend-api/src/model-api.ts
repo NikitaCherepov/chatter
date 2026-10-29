@@ -6,7 +6,10 @@ import { chargeTokens } from './services/token-quota.js';
 import { beginModelApiRequest, finishModelApiRequest, isModelApiKeyActive, modelsForApiOwner, touchModelApiKey, validateModelApiKey } from './services/model-api-keys.js';
 
 const active = new Map<number, Set<AbortController>>();
-export function abortModelApiKeyRequests(id: number) { for (const controller of active.get(id) ?? []) controller.abort(); }
+const activeModels = new WeakMap<AbortController, string>();
+export function abortModelApiKeyRequests(id: number, allowedModels?: string[]) {
+  for (const controller of active.get(id) ?? []) if (!allowedModels || !allowedModels.includes(activeModels.get(controller) ?? '')) controller.abort();
+}
 const apiError = (res: any, status: number, code: string, message: string, param: string | null = null) => res.status(status).json({ error: { message, type: status === 401 ? 'authentication_error' : status === 429 ? 'rate_limit_error' : status >= 500 ? 'server_error' : 'invalid_request_error', param, code } });
 export function validateModelApiBody(body: any): string | null {
   if (!body || typeof body !== 'object' || Array.isArray(body)) return 'body';
@@ -51,7 +54,7 @@ export function createModelApiRouter() {
     const total = [...active.values()].reduce((sum,set)=>sum+set.size,0);
     if ((active.get(key.id)?.size ?? 0)>=8 || total>=64) return void apiError(res,429,'too_many_requests','Too many simultaneous requests.');
     const controller = new AbortController(), running=active.get(key.id) ?? new Set<AbortController>();
-    running.add(controller); active.set(key.id,running);
+    running.add(controller); active.set(key.id,running); activeModels.set(controller,model.id);
     let id: string;
     try { id = beginModelApiRequest(key.id,model.id); }
     catch { running.delete(controller); if(!running.size)active.delete(key.id); return void apiError(res,503,'service_unavailable','Request accounting is unavailable.'); }
@@ -65,7 +68,7 @@ export function createModelApiRouter() {
     const disconnected=()=>{if(!res.writableEnded)controller.abort();};
     req.on('aborted',disconnected);res.on('close',disconnected);
     const sendChunk=(chunk: any)=>{
-      if (!isModelApiKeyActive(key.id)) controller.abort();
+      if (!isModelApiKeyActive(key.id,model.id)) controller.abort();
       controller.signal.throwIfAborted();
       if (res.writableLength>8*1024*1024) {controller.abort();controller.signal.throwIfAborted();}
       if (chunk.usage && !req.body.stream_options?.include_usage && !chunk.choices?.length) return;
@@ -80,7 +83,7 @@ export function createModelApiRouter() {
         touchModelApiKey(key.id);
         const result = await createModelApiCompletion(model.id,req.body,controller.signal,sendChunk,(raw,upstream)=>{usage=raw;provider=typeof upstream==='string'?upstream:null;});
         controller.signal.throwIfAborted();
-        if(!isModelApiKeyActive(key.id)) {controller.abort();controller.signal.throwIfAborted();}
+        if(!isModelApiKeyActive(key.id,model.id)) {controller.abort();controller.signal.throwIfAborted();}
         status='completed';
         if(req.body.stream){ if(!res.headersSent)sendChunk({id:'chatcmpl-'+id,object:'chat.completion.chunk',created:Math.floor(Date.now()/1000),model:model.id,choices:[]});res.end('data: [DONE]\n\n'); }
         else res.json(result);

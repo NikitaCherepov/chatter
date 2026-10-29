@@ -2829,11 +2829,11 @@ async function handleRequest(req, res) {
     }));
   }
   const modelApiMatch = pathname.match(/^\/api\/model-api\/(keys|models)(?:\/(\d+))?$/);
-  if (modelApiMatch && ['GET','POST','DELETE'].includes(req.method)) {
+  if (modelApiMatch && ['GET','POST','PATCH','DELETE'].includes(req.method)) {
     res.setHeader('Cache-Control', 'no-store');
     const tail = modelApiMatch[2] ? '/' + modelApiMatch[2] : '';
     const query = modelApiMatch[1] === 'models' ? '?owner_user_id=' + encodeURIComponent(url.searchParams.get('owner_user_id') || '') : '';
-    const body = req.method === 'POST' ? await readJson(req) : undefined;
+    const body = req.method === 'POST' || req.method === 'PATCH' ? await readJson(req) : undefined;
     return sendJson(res, req.method === 'POST' ? 201 : 200, await backendInternalRequest('/internal/admin/model-api/' + modelApiMatch[1] + tail + query, {
       method:req.method, ...(body ? {body:JSON.stringify(body)} : {}),
     }));
