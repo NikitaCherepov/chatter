@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useContext, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import s from './RejectWithComment.module.scss';
+import { ConfirmationCardContext } from './ConfirmationCard';
 
 type RejectWithCommentProps = {
   className?: string;
@@ -13,6 +14,17 @@ export function RejectWithComment({ className, onReject, disabled = false }: Rej
   const [open, setOpen] = useState(false);
   const [comment, setComment] = useState('');
   const [sending, setSending] = useState(false);
+  const card = useContext(ConfirmationCardContext);
+  const rejectRef = useRef(onReject);
+  rejectRef.current = onReject;
+  useEffect(() => card?.registerReject(text => rejectRef.current(text)));
+  if (card) return <>
+    <button type="button" className={className} disabled={disabled || card.busy}
+      onClick={() => { void card.run(() => rejectRef.current('')).catch(() => {}); }}>{t('review.reject')}</button>
+    <button type="button" className={className} disabled={disabled || card.busy}
+      onClick={() => card.requestComment(text => rejectRef.current(text))}>{t('review.rejectWithComment')}</button>
+  </>;
+
 
   if (!open) {
     return (

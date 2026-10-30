@@ -29,12 +29,13 @@ DOMPurify.addHook('afterSanitizeAttributes', (node) => {
 
 type EmailBodyPreviewProps = {
   body: string;
+  maxHeight?: number;
 };
 
 const IFRAME_MIN_HEIGHT = 60;
 const IFRAME_MAX_HEIGHT = 600;
 
-export function EmailBodyPreview({ body }: EmailBodyPreviewProps) {
+export function EmailBodyPreview({ body, maxHeight = IFRAME_MAX_HEIGHT }: EmailBodyPreviewProps) {
   const trimmed = `${body || ''}`.trim();
   const isHtml = EMAIL_HTML_BLOCK_TAG_RE.test(trimmed);
 
@@ -69,7 +70,7 @@ export function EmailBodyPreview({ body }: EmailBodyPreviewProps) {
         if (!doc?.body) return;
         const next = Math.max(
           IFRAME_MIN_HEIGHT,
-          Math.min(IFRAME_MAX_HEIGHT, doc.body.scrollHeight + 4),
+          Math.min(maxHeight, doc.body.scrollHeight + 4),
         );
         setHeight(prev => (Math.abs(prev - next) > 4 ? next : prev));
       } catch { /* cross-origin access blocked — keep fallback height */ }
@@ -92,7 +93,7 @@ export function EmailBodyPreview({ body }: EmailBodyPreviewProps) {
       iframe.removeEventListener('load', handleLoad);
       observer?.disconnect();
     };
-  }, [srcDoc, isHtml]);
+  }, [srcDoc, isHtml, maxHeight]);
 
   if (!isHtml) {
     return <MarkdownRenderer content={body} />;

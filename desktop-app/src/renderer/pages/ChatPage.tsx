@@ -33,6 +33,8 @@ import { EmailBodyPreview } from '../components/EmailBodyPreview';
 import { AttachModal, prepareAttachmentFiles } from '../components/AttachModal';
 import { RoomInvitesModal } from '../components/RoomInvitesModal';
 import { RejectWithComment } from '../components/RejectWithComment';
+import { ConfirmationCard, ConfirmationQueue, ConfirmationCommentInput, ConfirmationEmailBody } from '../components/ConfirmationCard';
+import { useConfirmationComposer } from '../lib/useConfirmationComposer';
 import { FileEditDiff } from '../components/FileEditDiff/FileEditDiff';
 import type { ImageItem, DocumentItem } from '../components/AttachModal';
 import { Select } from '../components/Select';
@@ -1672,6 +1674,10 @@ export function ChatPage() {
   const [messageJumpVersion, setMessageJumpVersion] = useState(0);
   const pendingPrependScrollRef = useRef<{ scrollHeight: number; scrollTop: number } | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const confirmationComposer = useConfirmationComposer(activeChatId);
+  const confirmationArrivalRef = useRef(new Map<string, number>());
+  useEffect(() => { if (confirmationComposer.comment && !document.querySelector('[data-confirmation-expanded]')) textareaRef.current?.focus(); }, [confirmationComposer.comment?.id]);
+
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<api.ChatSearchResult[]>([]);
@@ -2508,6 +2514,11 @@ export function ChatPage() {
   }, [activeChatId, notificationActions, showNativeNotification, t]);
 
   const handleIncomingDesktopAction = useCallback((action: api.DesktopActionPayload) => {
+    const incomingConfirmationId = (action.value as { confirmation_id?: string } | undefined)?.confirmation_id;
+    if (incomingConfirmationId && (action.action.endsWith('_confirmation') || action.action === 'suggest_server_creds_update')
+      && !confirmationArrivalRef.current.has(incomingConfirmationId)) {
+      confirmationArrivalRef.current.set(incomingConfirmationId, confirmationArrivalRef.current.size);
+    }
     if (action.action === 'confirmation_resolved' && action.value) {
       const val = action.value as { confirmation_id?: string };
       const confirmationId = val.confirmation_id;
@@ -3514,7 +3525,8 @@ export function ChatPage() {
   }, [expectedTypingIdentity, activeChatId, sending, user?.id, preferredModel, roomCreated, armSendWatchdog, clearSendWatchdog, promoteChat, loadChats]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
+    if (confirmationComposer.comment && e.key === 'Escape') { e.preventDefault(); confirmationComposer.cancel(); return; }
+    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); if (confirmationComposer.comment) void confirmationComposer.submit(); else void handleSend(); }
   };
 
   // Keep handleSend in ref so wake word callback can call the latest version
@@ -4206,7 +4218,7 @@ export function ChatPage() {
       textareaRef.current.style.height = 'auto';
       textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 120) + 'px';
     }
-  }, [input]);
+  }, [input, confirmationComposer.comment?.text, confirmationComposer.comment?.id]);
 
   // ── PixelAvatar: system reactions + IPC bridge ────────────────────────────
 
@@ -5236,6 +5248,755 @@ export function ChatPage() {
     const agent = roomCharacters.find((a) => a.id === msg.agent_id);
     return !agent || agent.owner_user_id === user?.id || agent.access === 'shared';
   };
+
+  const confirmationCards = [
+...devopsConfirmations.map((conf, confIdx) => (
+                <ConfirmationCard key={conf.confirmation_id} id={conf.confirmation_id} title={t('chat.confirm.commandTitle')} summary={conf.command} icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="2" y="2" width="20" height="20" rx="2" ry="2" />
+                      <path d="M7 15h0M12 15h0M17 15h0" />
+                    </svg>}
+ actions={<><button
+                      className={s.suggestMacroSaveBtn}
+                      disabled={submittingConfirmationIds.has(conf.confirmation_id)}
+                      onClick={async () => {
+                        const body: Record<string, unknown> = {
+                          confirmation_id: conf.confirmation_id,
+                          approved: true,
+                        };
+                        if (conf.needs_sudo_password) {
+                          if (!conf.sudo_password?.trim()) {
+                            toast.error(t('chat.toasts.enterSudoPassword'));
+                            return;
+                          }
+                          body.sudo_password = conf.sudo_password;
+                          body.save_sudo_password = conf.save_sudo_password === true;
+                        }
+                        if (conf.needs_new_password) {
+                          if (!conf.new_password?.trim()) {
+                            toast.error(t('chat.toasts.enterNewPassword'));
+                            return;
+                          }
+                          body.new_password = conf.new_password;
+                        }
+                        if (!beginConfirmationSubmission(conf.confirmation_id)) return;
+                        try {
+                          await api.apiFetch('/api/v1/devops/approve', {
+                            method: 'POST',
+                            body: JSON.stringify(body),
+                          });
+                          toast.success(t('chat.toasts.commandApproved'));
+                          setDevopsConfirmations(prev => prev.filter(c => c.confirmation_id !== conf.confirmation_id));
+                        } catch {
+                          toast.error(t('chat.toasts.commandApprovalFailed'));
+                        } finally {
+                          finishConfirmationSubmission(conf.confirmation_id);
+                        }
+                      }}
+                    >
+                      {t('chat.confirm.allow')}
+                    </button>
+<RejectWithComment
+                      className={s.suggestMacroDismissBtn}
+                      disabled={submittingConfirmationIds.has(conf.confirmation_id)}
+                      onReject={async (comment) => {
+                        if (!beginConfirmationSubmission(conf.confirmation_id)) return;
+                        try {
+                          await api.apiFetch('/api/v1/devops/approve', {
+                            method: 'POST',
+                            body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: false, rejection_comment: comment }),
+                          });
+                          setDevopsConfirmations(prev => prev.filter(c => c.confirmation_id !== conf.confirmation_id));
+                        } catch {
+                          toast.error(t('chat.toasts.commandApprovalFailed'));
+                        } finally {
+                          finishConfirmationSubmission(conf.confirmation_id);
+                        }
+                      }}
+                    /></>} extraActions={<><button
+                      className={s.suggestMacroSaveBtn}
+                      disabled={submittingConfirmationIds.has(conf.confirmation_id)}
+                      style={{ background: 'var(--bg-modal-hover)', color: 'var(--text-primary)', border: '1px solid var(--border-input)' }}
+                      onClick={async () => {
+                        if (conf.needs_sudo_password && !conf.sudo_password?.trim()) {
+                          toast.error(t('chat.toasts.enterSudoPassword'));
+                          return;
+                        }
+                        if (conf.needs_new_password && !conf.new_password?.trim()) {
+                          toast.error(t('chat.toasts.enterNewPassword'));
+                          return;
+                        }
+                        if (!beginConfirmationSubmission(conf.confirmation_id)) return;
+                        try {
+                          // Create auto-approve policy for this exact command
+                          const escapedCmd = conf.command.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                          await api.apiFetch(`/api/v1/devops/servers/${conf.server_id}/policies`, {
+                            method: 'POST',
+                            body: JSON.stringify({ pattern: `^${escapedCmd}$`, auto_approve: true }),
+                          });
+                          // Also approve current command
+                          const body: Record<string, unknown> = { confirmation_id: conf.confirmation_id, approved: true };
+                          if (conf.needs_sudo_password) {
+                            body.sudo_password = conf.sudo_password;
+                            body.save_sudo_password = conf.save_sudo_password === true;
+                          }
+                          if (conf.needs_new_password) {
+                            body.new_password = conf.new_password;
+                          }
+                          await api.apiFetch('/api/v1/devops/approve', {
+                            method: 'POST',
+                            body: JSON.stringify(body),
+                          });
+                          toast.success(t('chat.toasts.commandAlwaysApproved'));
+                          setDevopsConfirmations(prev => prev.filter(c => c.confirmation_id !== conf.confirmation_id));
+                        } catch {
+                          toast.error(t('chat.toasts.policySaveFailed'));
+                        } finally {
+                          finishConfirmationSubmission(conf.confirmation_id);
+                        }
+                      }}
+                    >
+                      {t('chat.confirm.alwaysAllow')}
+                    </button></>} reviewAction={<><button
+                      className={s.suggestMacroSaveBtn}
+                      disabled={conf._reviewing || submittingConfirmationIds.has(conf.confirmation_id)}
+                      style={{ background: 'var(--bg-modal-hover)', color: 'var(--text-primary)', border: '1px solid var(--border-input)', opacity: conf._reviewing || submittingConfirmationIds.has(conf.confirmation_id) ? 0.6 : 1, minWidth: '80px' }}
+                      onClick={async () => {
+                        setDevopsConfirmations(prev => prev.map((c, i) => i === confIdx ? { ...c, _reviewing: true } : c));
+                        try {
+                          const res = await api.apiFetch<{ verdict: string }>('/api/v1/devops/runbooks/review-commands', {
+                            method: 'POST',
+                            body: JSON.stringify({ commands: [conf.command] }),
+                          });
+                          setDevopsConfirmations(prev => prev.map((c, i) => i === confIdx ? { ...c, _reviewing: false, _verdict: res.verdict } : c));
+                        } catch (err) {
+                          toast.error(api.getApiErrorMessage(err, t('chat.toasts.commandReviewFailed')));
+                          setDevopsConfirmations(prev => prev.map((c, i) => i === confIdx ? { ...c, _reviewing: false } : c));
+                        }
+                      }}
+                    >
+                      {conf._reviewing ? t('chat.confirm.reviewing') : t('chat.confirm.review')}
+                    </button></>}><div className={s.suggestMacroName}>{conf.server_name}</div><div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '6px' }}>{conf.host}</div><div className={s.suggestMacroCommands}>
+                    <code className={s.suggestMacroCmd}>{conf.command}</code>
+                  </div>{conf.needs_new_password && (
+                    <div style={{ marginTop: '8px', marginBottom: conf.needs_sudo_password ? '0' : '8px' }}>
+                      <input
+                        type="password"
+                        placeholder={t('chat.confirm.newPassword')}
+                        disabled={submittingConfirmationIds.has(conf.confirmation_id)}
+                        value={conf.new_password || ''}
+                        onChange={(e) => setDevopsConfirmations(prev => prev.map((c, i) => i === confIdx ? { ...c, new_password: e.target.value } : c))}
+                        style={{ fontSize: '12px', padding: '6px 10px', borderRadius: '6px', border: '1px solid var(--border-input)', background: 'var(--bg-primary)', color: 'var(--text-primary)', outline: 'none', width: '100%' }}
+                      />
+                    </div>
+                  )}{conf.needs_sudo_password && (
+                    <div style={{ marginTop: '8px', marginBottom: '8px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      <>
+                          <input
+                            type="password"
+                            placeholder={t('chat.confirm.sudoPassword')}
+                            disabled={submittingConfirmationIds.has(conf.confirmation_id)}
+                            value={conf.sudo_password || ''}
+                            onChange={(e) => setDevopsConfirmations(prev => prev.map((c, i) => i === confIdx ? { ...c, sudo_password: e.target.value } : c))}
+                            style={{ fontSize: '12px', padding: '6px 10px', borderRadius: '6px', border: '1px solid var(--border-input)', background: 'var(--bg-primary)', color: 'var(--text-primary)', outline: 'none' }}
+                          />
+                          <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: 'var(--text-muted)', cursor: 'pointer', marginBottom: '6px' }}>
+                            <input
+                              className={s.devopsCheckbox}
+                              type="checkbox"
+                              disabled={submittingConfirmationIds.has(conf.confirmation_id)}
+                              checked={conf.save_sudo_password || false}
+                              onChange={(e) => setDevopsConfirmations(prev => prev.map((c, i) => i === confIdx ? { ...c, save_sudo_password: e.target.checked } : c))}
+                            />
+                            {t('chat.confirm.saveSudoPassword')}
+                          </label>
+                      </>
+                    </div>
+                  )}{conf._verdict && (
+                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', padding: '8px', background: 'var(--bg-modal-hover)', borderRadius: '6px', marginTop: '6px' }}><MarkdownRenderer content={conf._verdict} /></div>
+                  )}</ConfirmationCard>
+              )),
+...browserActionConfirmations.map((conf) => (
+                <ConfirmationCard key={conf.confirmation_id} id={conf.confirmation_id} title={t('chat.browser.confirmTitle')} summary={conf.description} icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="9" />
+                      <path d="M3 12h18" />
+                      <path d="M12 3a15 15 0 0 1 0 18" />
+                      <path d="M12 3a15 15 0 0 0 0 18" />
+                    </svg>}
+ actions={<><button
+                      className={s.suggestMacroSaveBtn}
+                      disabled={submittingConfirmationIds.has(conf.confirmation_id)}
+                      onClick={async () => {
+                        if (!beginConfirmationSubmission(conf.confirmation_id)) return;
+                        try {
+                          await api.apiFetch('/api/v1/pc-commands/approve', {
+                            method: 'POST',
+                            body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: true }),
+                          });
+                          toast.success(t('chat.browser.executed'));
+                          setBrowserActionConfirmations(prev => prev.filter(c => c.confirmation_id !== conf.confirmation_id));
+                        } catch (error) {
+                          toast.error(t('chat.browser.failed'));
+                          if (error instanceof api.ApiError && (error.status === 404 || error.status === 500)) {
+                            setBrowserActionConfirmations(prev => prev.filter(c => c.confirmation_id !== conf.confirmation_id));
+                          }
+                        } finally {
+                          finishConfirmationSubmission(conf.confirmation_id);
+                        }
+                      }}
+                    >
+                      {t('chat.confirm.allow')}
+                    </button>
+<RejectWithComment
+                      className={s.suggestMacroDismissBtn}
+                      disabled={submittingConfirmationIds.has(conf.confirmation_id)}
+                      onReject={async (comment) => {
+                        if (!beginConfirmationSubmission(conf.confirmation_id)) return;
+                        try {
+                          await api.apiFetch('/api/v1/pc-commands/approve', {
+                            method: 'POST',
+                            body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: false, rejection_comment: comment }),
+                          });
+                          setBrowserActionConfirmations(prev => prev.filter(c => c.confirmation_id !== conf.confirmation_id));
+                        } catch (error) {
+                          toast.error(t('chat.browser.failed'));
+                          if (error instanceof api.ApiError && (error.status === 404 || error.status === 500)) {
+                            setBrowserActionConfirmations(prev => prev.filter(c => c.confirmation_id !== conf.confirmation_id));
+                          }
+                        } finally {
+                          finishConfirmationSubmission(conf.confirmation_id);
+                        }
+                      }}
+                    /></>} extraActions={<>{conf.origin && conf.action_type !== 'open' && (
+                      <button
+                        className={s.suggestMacroSaveBtn}
+                        style={{ background: 'var(--bg-modal-hover)', color: 'var(--text-primary)', border: '1px solid var(--border-input)' }}
+                        title={t('chat.browser.allowSiteSessionHint', { site: conf.origin })}
+                        disabled={submittingConfirmationIds.has(conf.confirmation_id)}
+                        onClick={async () => {
+                          if (!beginConfirmationSubmission(conf.confirmation_id)) return;
+                          try {
+                            await api.apiFetch('/api/v1/pc-commands/approve', {
+                              method: 'POST',
+                              body: JSON.stringify({
+                                confirmation_id: conf.confirmation_id,
+                                approved: true,
+                                allow_browser_site_session: true,
+                              }),
+                            });
+                            toast.success(t('chat.browser.siteAllowedSession', { site: conf.origin }));
+                            setBrowserActionConfirmations(prev => prev.filter(c => c.confirmation_id !== conf.confirmation_id));
+                          } catch (error) {
+                            toast.error(t('chat.browser.failed'));
+                            if (error instanceof api.ApiError && (error.status === 404 || error.status === 500)) {
+                              setBrowserActionConfirmations(prev => prev.filter(c => c.confirmation_id !== conf.confirmation_id));
+                            }
+                          } finally {
+                            finishConfirmationSubmission(conf.confirmation_id);
+                          }
+                        }}
+                      >
+                        {t('chat.browser.allowSiteSession')}
+                      </button>
+                    )}</>} ><div className={s.suggestMacroCommands}>
+                    <code className={s.suggestMacroCmd}>
+                      {conf.action_type === 'open'
+                        ? t('chat.browser.open', { target: conf.url || conf.description })
+                        : conf.action_type === 'fill'
+                          ? t('chat.browser.fill', { target: conf.description })
+                          : conf.action_type === 'press_key'
+                            ? conf.description
+                          : t('chat.browser.click', { target: conf.description })}
+                    </code>
+                  </div>{conf.target_element && conf.action_type !== 'open' && (
+                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', padding: '8px', background: 'var(--bg-modal-hover)', borderRadius: '6px', marginTop: '6px' }}>
+                      <div>
+                        {t('chat.browser.actualTarget')}: &lt;{conf.target_element.tag || 'element'}{conf.target_element.inputType ? ` type="${conf.target_element.inputType}"` : ''}{conf.target_element.role ? ` role="${conf.target_element.role}"` : ''}&gt;
+                      </div>
+                      {conf.target_element.href && (
+                        <div style={{ marginTop: '4px', overflowWrap: 'anywhere' }}>{conf.target_element.href}</div>
+                      )}
+                    </div>
+                  )}{conf.text && (
+                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', padding: '8px', background: 'var(--bg-modal-hover)', borderRadius: '6px', marginTop: '6px', whiteSpace: 'pre-wrap' }}>
+                      {conf.text}
+                    </div>
+                  )}{conf.origin && conf.action_type !== 'open' && (
+                    <div style={{ fontSize: '11px', color: 'var(--text-hint)', marginTop: '6px' }}>
+                      {t('chat.browser.currentSite', { site: conf.origin })}
+                    </div>
+                  )}</ConfirmationCard>
+              )),
+...browserDownloadConfirmations.map((conf) => {
+                const submitDownloadDecision = async (approved: boolean, comment = '') => {
+                  if (!beginConfirmationSubmission(conf.confirmation_id)) return;
+                  try {
+                    const response = await api.apiFetch<any>('/api/v1/pc-commands/approve', {
+                      method: 'POST',
+                      body: JSON.stringify({
+                        confirmation_id: conf.confirmation_id,
+                        approved,
+                        rejection_comment: comment,
+                      }),
+                    });
+                    const decisionResult = response?.result;
+                    setBrowserDownloadConfirmations(prev => prev.filter(c => c.confirmation_id !== conf.confirmation_id));
+                    if (approved && decisionResult?.status === 'started') toast.success(t('chat.browserDownload.started'));
+                  } catch (error) {
+                    if (!(error instanceof api.ApiError) || (error.status !== 404 && error.status !== 500)) {
+                      toast.error(t('chat.browserDownload.failed'));
+                    }
+                    setBrowserDownloadConfirmations(prev => prev.filter(c => c.confirmation_id !== conf.confirmation_id));
+                  } finally {
+                    finishConfirmationSubmission(conf.confirmation_id);
+                  }
+                };
+                return (
+                  <ConfirmationCard key={conf.confirmation_id} id={conf.confirmation_id} title={t('chat.browserDownload.confirmTitle')} summary={conf.filename} icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12 3v12" />
+                        <path d="m7 10 5 5 5-5" />
+                        <path d="M5 21h14" />
+                      </svg>}
+ actions={<><button
+                        className={s.suggestMacroSaveBtn}
+                        disabled={submittingConfirmationIds.has(conf.confirmation_id)}
+                        onClick={() => submitDownloadDecision(true)}
+                      >
+                        {t('chat.browserDownload.download')}
+                      </button>
+<RejectWithComment className={s.suggestMacroDismissBtn} disabled={submittingConfirmationIds.has(conf.confirmation_id)} onReject={comment => submitDownloadDecision(false, comment)} /></>}  ><div className={s.suggestMacroCommands}>
+                      <code className={s.suggestMacroCmd}>{conf.filename}</code>
+                    </div><div style={{ fontSize: '12px', color: 'var(--text-muted)', padding: '8px', background: 'var(--bg-modal-hover)', borderRadius: '6px', marginTop: '6px' }}>
+                      {conf.total_bytes && conf.total_bytes > 0 && (
+                        <div>{t('chat.browserDownload.size', { size: conf.total_bytes < 1024 * 1024 ? `${(conf.total_bytes / 1024).toFixed(1)} KB` : `${(conf.total_bytes / (1024 * 1024)).toFixed(1)} MB` })}</div>
+                      )}
+                      {conf.mime_type && <div>{t('chat.browserDownload.type', { type: conf.mime_type })}</div>}
+                      {conf.url && <div style={{ marginTop: '4px', overflowWrap: 'anywhere' }}>{conf.url}</div>}
+                    </div></ConfirmationCard>
+                );
+              }),
+...pcCommandConfirmations.map((conf, confIdx) => (
+                <ConfirmationCard key={conf.confirmation_id} id={conf.confirmation_id} title={t('chat.confirm.pcCommand')} summary={conf.command} icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+                      <line x1="8" y1="21" x2="16" y2="21" />
+                      <line x1="12" y1="17" x2="12" y2="21" />
+                    </svg>}
+ actions={<><button
+                      className={s.suggestMacroSaveBtn}
+                      disabled={submittingConfirmationIds.has(conf.confirmation_id)}
+                      onClick={async () => {
+                        if (!beginConfirmationSubmission(conf.confirmation_id)) return;
+                        try {
+                          await api.apiFetch('/api/v1/pc-commands/approve', {
+                            method: 'POST',
+                            body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: true }),
+                          });
+                          toast.success(t('chat.toasts.commandExecuted'));
+                          setPcCommandConfirmations(prev => prev.filter(c => c.confirmation_id !== conf.confirmation_id));
+                        } catch {
+                          toast.error(t('chat.toasts.commandExecutionFailed'));
+                        } finally {
+                          finishConfirmationSubmission(conf.confirmation_id);
+                        }
+                      }}
+                    >
+                      {t('chat.confirm.allow')}
+                    </button>
+<RejectWithComment
+                      className={s.suggestMacroDismissBtn}
+                      disabled={submittingConfirmationIds.has(conf.confirmation_id)}
+                      onReject={async (comment) => {
+                        if (!beginConfirmationSubmission(conf.confirmation_id)) return;
+                        try {
+                          await api.apiFetch('/api/v1/pc-commands/approve', {
+                            method: 'POST',
+                            body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: false, rejection_comment: comment }),
+                          });
+                          setPcCommandConfirmations(prev => prev.filter(c => c.confirmation_id !== conf.confirmation_id));
+                        } catch {
+                          toast.error(t('chat.toasts.commandExecutionFailed'));
+                        } finally {
+                          finishConfirmationSubmission(conf.confirmation_id);
+                        }
+                      }}
+                    /></>} extraActions={<><button
+                      className={s.suggestMacroSaveBtn}
+                      disabled={submittingConfirmationIds.has(conf.confirmation_id)}
+                      style={{ background: 'var(--bg-modal-hover)', color: 'var(--text-primary)', border: '1px solid var(--border-input)' }}
+                      onClick={async () => {
+                        if (!beginConfirmationSubmission(conf.confirmation_id)) return;
+                        try {
+                          // Create auto-approve policy for this exact command
+                          const escapedCmd = conf.command.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                          await api.apiFetch('/api/v1/pc-commands/policies', {
+                            method: 'POST',
+                            body: JSON.stringify({ pattern: `^${escapedCmd}$` }),
+                          });
+                          // Also approve current command
+                          await api.apiFetch('/api/v1/pc-commands/approve', {
+                            method: 'POST',
+                            body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: true }),
+                          });
+                          toast.success(t('chat.toasts.commandAlwaysApproved'));
+                          setPcCommandConfirmations(prev => prev.filter(c => c.confirmation_id !== conf.confirmation_id));
+                        } catch {
+                          toast.error(t('chat.toasts.policySaveFailed'));
+                        } finally {
+                          finishConfirmationSubmission(conf.confirmation_id);
+                        }
+                      }}
+                    >
+                      {t('chat.confirm.alwaysAllow')}
+                    </button></>} reviewAction={<><button
+                      className={s.suggestMacroSaveBtn}
+                      disabled={conf._reviewing || submittingConfirmationIds.has(conf.confirmation_id)}
+                      style={{ background: 'var(--bg-modal-hover)', color: 'var(--text-primary)', border: '1px solid var(--border-input)', opacity: conf._reviewing || submittingConfirmationIds.has(conf.confirmation_id) ? 0.6 : 1, minWidth: '80px' }}
+                      onClick={async () => {
+                        setPcCommandConfirmations(prev => prev.map((c, i) => i === confIdx ? { ...c, _reviewing: true } : c));
+                        try {
+                          const res = await api.apiFetch<{ verdict: string }>('/api/v1/devops/runbooks/review-commands', {
+                            method: 'POST',
+                            body: JSON.stringify({ commands: [conf.command] }),
+                          });
+                          setPcCommandConfirmations(prev => prev.map((c, i) => i === confIdx ? { ...c, _reviewing: false, _verdict: res.verdict } : c));
+                        } catch (err) {
+                          toast.error(api.getApiErrorMessage(err, t('chat.toasts.commandReviewFailed')));
+                          setPcCommandConfirmations(prev => prev.map((c, i) => i === confIdx ? { ...c, _reviewing: false } : c));
+                        }
+                      }}
+                    >
+                      {conf._reviewing ? t('chat.confirm.reviewing') : t('chat.confirm.review')}
+                    </button></>}><div className={s.suggestMacroCommands}>
+                    <code className={s.suggestMacroCmd}>{conf.command}</code>
+                  </div>{conf._verdict && (
+                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', padding: '8px', background: 'var(--bg-modal-hover)', borderRadius: '6px', marginTop: '6px' }}><MarkdownRenderer content={conf._verdict} /></div>
+                  )}</ConfirmationCard>
+              )),
+...fileActionConfirmations.map((conf, confIdx) => (
+                <ConfirmationCard key={conf.confirmation_id} id={conf.confirmation_id} title={conf.action_type === 'write' ? t('chat.file.writingTitle', { append: conf.mode === 'append' ? t('chat.file.appendMarker') : '' }) : t('chat.file.reading')} icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                      <polyline points="14 2 14 8 20 8"/>
+                    </svg>}
+ actions={<><button
+                      className={s.suggestMacroSaveBtn}
+                      onClick={async () => {
+                        try {
+                          await api.apiFetch('/api/v1/pc-commands/approve', {
+                            method: 'POST',
+                            body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: true }),
+                          });
+                          toast.success(conf.action_type === 'write' ? t('chat.toasts.fileWritten') : t('chat.toasts.fileRead'));
+                          setFileActionConfirmations(prev => prev.filter(c => c.confirmation_id !== conf.confirmation_id));
+                        } catch {
+                          toast.error(t('chat.toasts.commandExecutionFailed'));
+                        }
+                      }}
+                    >
+                      {conf.action_type === 'write' ? t('chat.file.write') : t('chat.file.read')}
+                    </button>
+<RejectWithComment
+                      className={s.suggestMacroDismissBtn}
+                      onReject={async (comment) => {
+                        try {
+                          await api.apiFetch('/api/v1/pc-commands/approve', {
+                            method: 'POST',
+                            body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: false, rejection_comment: comment }),
+                          });
+                        } catch (error) { toast.error(t('chat.approvals.failed')); throw error; }
+                        setFileActionConfirmations(prev => prev.filter(c => c.confirmation_id !== conf.confirmation_id));
+                      }}
+                    /></>} extraActions={<>{conf.action_type === 'write' && (
+                      <button
+                        className={s.suggestMacroSaveBtn}
+                        style={{ background: 'var(--bg-modal-hover)', color: 'var(--text-primary)', border: '1px solid var(--border-input)' }}
+                        title={t('chat.file.allowFolderSessionHint')}
+                        onClick={async () => {
+                          try {
+                            const selection = await window.electronAPI.grantSessionWriteFolder(conf.file_path);
+                            if (selection.canceled || !selection.folder) return;
+                            await api.apiFetch('/api/v1/pc-commands/approve', {
+                              method: 'POST',
+                              body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: true }),
+                            });
+                            autoApprovedFileIdsRef.current.add(conf.confirmation_id);
+                            toast.success(t('chat.toasts.folderAllowedSession', { folder: selection.folder }));
+                            setFileActionConfirmations(prev => prev.filter(c => c.confirmation_id !== conf.confirmation_id));
+                          } catch {
+                            toast.error(t('chat.toasts.commandExecutionFailed'));
+                          }
+                        }}
+                      >
+                        {t('chat.file.allowFolderSession')}
+                      </button>
+                    )}</>} ><div className={s.suggestMacroCommands}>
+                    <code className={s.suggestMacroCmd}>{conf.file_path}</code>
+                  </div>{conf.action_type === 'write' && conf.size_bytes !== undefined && (
+                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                      {t('chat.file.sizeValue', { size: (conf.size_bytes / 1024).toFixed(1) })}
+                      {conf.mode === 'append' ? t('chat.file.appendMode') : t('chat.file.overwriteMode')}
+                    </div>
+                  )}{conf.action_type === 'read' && conf.start_line !== undefined && (
+                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                      {t('chat.file.lineRange', { start: conf.start_line, end: conf.start_line + (conf.max_lines || 500) - 1 })}
+                    </div>
+                  )}{conf.content_preview && (
+                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', padding: '8px', background: 'var(--bg-modal-hover)', borderRadius: '6px', marginTop: '6px', maxHeight: '200px', overflow: 'auto' }}>
+                      <pre style={{ whiteSpace: 'pre-wrap', margin: 0, fontFamily: 'inherit' }}>{conf.content_preview.slice(0, 1500)}</pre>
+                    </div>
+                  )}</ConfirmationCard>
+              )),
+...editFileLinesConfirmations.map((conf, confIdx) => (
+                <ConfirmationCard key={conf.confirmation_id} id={conf.confirmation_id} title={t('chat.file.editingLines', { start: conf.start_line, end: conf.end_line })} icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 20h9"/>
+                      <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+                    </svg>}
+ actions={<><button
+                      className={s.suggestMacroSaveBtn}
+                      onClick={async () => {
+                        try {
+                          await api.apiFetch('/api/v1/pc-commands/approve', {
+                            method: 'POST',
+                            body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: true }),
+                          });
+                          toast.success(t('chat.toasts.linesReplaced'));
+                          setEditFileLinesConfirmations(prev => prev.filter(c => c.confirmation_id !== conf.confirmation_id));
+                        } catch {
+                          toast.error(t('chat.toasts.commandExecutionFailed'));
+                        }
+                      }}
+                    >
+                      {t('common.apply')}
+                    </button>
+<RejectWithComment
+                      className={s.suggestMacroDismissBtn}
+                      onReject={async (comment) => {
+                        try {
+                          await api.apiFetch('/api/v1/pc-commands/approve', {
+                            method: 'POST',
+                            body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: false, rejection_comment: comment }),
+                          });
+                        } catch (error) { toast.error(t('chat.approvals.failed')); throw error; }
+                        setEditFileLinesConfirmations(prev => prev.filter(c => c.confirmation_id !== conf.confirmation_id));
+                      }}
+                    /></>} extraActions={<><button
+                      className={s.suggestMacroSaveBtn}
+                      style={{ background: 'var(--bg-modal-hover)', color: 'var(--text-primary)', border: '1px solid var(--border-input)' }}
+                      title={t('chat.file.allowFolderSessionHint')}
+                      onClick={async () => {
+                        try {
+                          const selection = await window.electronAPI.grantSessionWriteFolder(conf.file_path);
+                          if (selection.canceled || !selection.folder) return;
+                          await api.apiFetch('/api/v1/pc-commands/approve', {
+                            method: 'POST',
+                            body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: true }),
+                          });
+                          autoApprovedFileIdsRef.current.add(conf.confirmation_id);
+                          toast.success(t('chat.toasts.folderAllowedSession', { folder: selection.folder }));
+                          setEditFileLinesConfirmations(prev => prev.filter(c => c.confirmation_id !== conf.confirmation_id));
+                        } catch {
+                          toast.error(t('chat.toasts.commandExecutionFailed'));
+                        }
+                      }}
+                    >
+                      {t('chat.file.allowFolderSession')}
+                    </button></>} ><div className={s.suggestMacroCommands}>
+                    <code className={s.suggestMacroCmd}>{conf.file_path}</code>
+                  </div><FileEditDiff
+                    oldContent={conf.old_content_preview || ''}
+                    newContent={conf.new_content_preview || ''}
+                  /></ConfirmationCard>
+              )),
+...webcamCaptureConfirmations.map((conf, confIdx) => (
+                <ConfirmationCard key={conf.confirmation_id} id={conf.confirmation_id} title={t('chat.webcam.title')} summary={conf.camera_name} icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                      <circle cx="12" cy="13" r="4"/>
+                    </svg>}
+ actions={<><button
+                      className={s.suggestMacroSaveBtn}
+                      onClick={async () => {
+                        try {
+                          await api.apiFetch('/api/v1/pc-commands/approve', {
+                            method: 'POST',
+                            body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: true }),
+                          });
+                          toast.success(t('chat.toasts.photoCaptured'));
+                          setWebcamCaptureConfirmations(prev => prev.filter(c => c.confirmation_id !== conf.confirmation_id));
+                        } catch {
+                          toast.error(t('chat.toasts.captureFailed'));
+                        }
+                      }}
+                    >
+                      {t('chat.confirm.allow')}
+                    </button>
+<RejectWithComment
+                      className={s.suggestMacroDismissBtn}
+                      onReject={async (comment) => {
+                        try {
+                          await api.apiFetch('/api/v1/pc-commands/approve', {
+                            method: 'POST',
+                            body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: false, rejection_comment: comment }),
+                          });
+                        } catch (error) { toast.error(t('chat.approvals.failed')); throw error; }
+                        setWebcamCaptureConfirmations(prev => prev.filter(c => c.confirmation_id !== conf.confirmation_id));
+                      }}
+                    /></>}  ><div className={s.suggestMacroCommands}>
+                    <code className={s.suggestMacroCmd}>{t('chat.webcam.cameraValue', { camera: conf.camera_name })}</code>
+                  </div><div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                    {t('chat.webcam.taskValue', { task: conf.purpose })}
+                  </div></ConfirmationCard>
+              )),
+...emailConfirmations.map((conf, confIdx) => (
+                <ConfirmationCard key={conf.confirmation_id} id={conf.confirmation_id} title={t('chat.email.title')} summary={conf.subject} icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="2" y="4" width="20" height="16" rx="2" ry="2" />
+                      <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+                    </svg>} expandable
+ actions={<><button
+                      className={s.suggestMacroSaveBtn}
+                      onClick={async () => {
+                        try {
+                          await api.apiFetch('/api/v1/email/approve', {
+                            method: 'POST',
+                            body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: true }),
+                          });
+                          toast.success(t('chat.toasts.emailSent'));
+                          setEmailConfirmations(prev => prev.filter(c => c.confirmation_id !== conf.confirmation_id));
+                        } catch {
+                          toast.error(t('chat.toasts.emailSendFailed'));
+                        }
+                      }}
+                    >
+                      {t('common.send')}
+                    </button>
+<RejectWithComment
+                      className={s.suggestMacroDismissBtn}
+                      onReject={async (comment) => {
+                        try {
+                          await api.apiFetch('/api/v1/email/approve', {
+                            method: 'POST',
+                            body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: false, rejection_comment: comment }),
+                          });
+                        } catch (error) { toast.error(t('chat.approvals.failed')); throw error; }
+                        setEmailConfirmations(prev => prev.filter(c => c.confirmation_id !== conf.confirmation_id));
+                      }}
+                    /></>}  >{conf.from && (
+                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '2px' }}>
+                      {t('chat.email.from')} <span style={{ color: 'var(--text-primary)' }}>{conf.from}</span>
+                    </div>
+                  )}<div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '2px' }}>
+                    {t('chat.email.to')} <span style={{ color: 'var(--text-primary)' }}>{conf.to}</span>
+                  </div><div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '6px' }}>
+                    {t('chat.email.subject')} <span style={{ color: 'var(--text-primary)' }}>{conf.subject}</span>
+                  </div>{conf.attachments.length > 0 && (
+                    <div style={{ marginBottom: '8px' }}>
+                      <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px' }}>
+                        {t('chat.email.attachments')}
+                      </div>
+                      {conf.attachments.map(attachment => (
+                        <button
+                          key={attachment.url}
+                          type="button"
+                          title={t('chat.attachmentPreview.open')}
+                          onClick={() => handleOpenEmailAttachment(attachment)}
+                          style={{
+                            display: 'flex',
+                            width: '100%',
+                            justifyContent: 'space-between',
+                            gap: '8px',
+                            padding: '6px 8px',
+                            marginBottom: '4px',
+                            border: '1px solid var(--border-color)',
+                            borderRadius: '6px',
+                            background: 'var(--bg-modal-hover)',
+                            color: 'var(--text-primary)',
+                            cursor: 'pointer',
+                            textAlign: 'left',
+                          }}
+                        >
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{attachment.name}</span>
+                          <span style={{ flexShrink: 0, color: 'var(--text-muted)' }}>
+                            {attachment.size_bytes >= 1024 * 1024
+                              ? `${(attachment.size_bytes / (1024 * 1024)).toFixed(1)} MB`
+                              : `${Math.max(1, Math.ceil(attachment.size_bytes / 1024))} KB`}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}<ConfirmationEmailBody body={conf.body} /></ConfirmationCard>
+              )),
+...pendingCredsUpdates.map((upd, updIdx) => (
+                <ConfirmationCard key={upd.confirmation_id || 'credentials-' + upd.server_id} id={upd.confirmation_id || 'credentials-' + upd.server_id} title={t('chat.credentials.title')} summary={upd.server_name} icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                    </svg>}
+ actions={<><button
+                      className={s.suggestMacroSaveBtn}
+                      onClick={async () => {
+                        try {
+                          if (upd.confirmation_id) {
+                            await api.apiFetch('/api/v1/devops/approve', {
+                              method: 'POST',
+                              body: JSON.stringify({ confirmation_id: upd.confirmation_id, approved: true }),
+                            });
+                          } else {
+                            const body: Record<string, unknown> = {
+                              username: upd.new_username,
+                              use_ssh_key_for_login: upd.use_ssh_key,
+                            };
+                            if (upd.remove_password) body.password = '';
+                            await api.apiFetch(`/api/v1/devops/servers/${upd.server_id}`, {
+                              method: 'PUT',
+                              body: JSON.stringify(body),
+                            });
+                          }
+                          toast.success(`Учётные данные для "${upd.server_name}" обновлены`);
+                          setPendingCredsUpdates(prev => prev.filter(c => (c.confirmation_id || 'credentials-' + c.server_id) !== (upd.confirmation_id || 'credentials-' + upd.server_id)));
+                        } catch (err: any) {
+                          toast.error(err?.body?.error || t('chat.toasts.credentialsUpdateFailed'));
+                        }
+                      }}
+                    >
+                      {t('common.apply')}
+                    </button>
+<RejectWithComment
+                      className={s.suggestMacroDismissBtn}
+                      onReject={async (comment) => {
+                        if (upd.confirmation_id) {
+                          try {
+                            await api.apiFetch('/api/v1/devops/approve', {
+                              method: 'POST',
+                              body: JSON.stringify({ confirmation_id: upd.confirmation_id, approved: false, rejection_comment: comment }),
+                            });
+                          } catch (error) { toast.error(t('chat.approvals.failed')); throw error; }
+                        }
+                        setPendingCredsUpdates(prev => prev.filter(c => (c.confirmation_id || 'credentials-' + c.server_id) !== (upd.confirmation_id || 'credentials-' + upd.server_id)));
+                      }}
+                    /></>}  ><div className={s.suggestMacroName}>{upd.server_name}</div><div style={{ fontSize: '12px', color: 'var(--text-body)', marginTop: '6px', lineHeight: '1.5' }}>
+                    <div>{upd.reason}</div>
+                    <div style={{ marginTop: '6px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{t('chat.credentials.user')}</span>
+                        <code style={{ fontSize: '11px', color: 'var(--danger, #e53935)', textDecoration: 'line-through' }}>{upd.current_username}</code>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round"><line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" /></svg>
+                        <code style={{ fontSize: '11px', color: 'var(--accent)' }}>{upd.new_username}</code>
+                      </div>
+                      {upd.use_ssh_key && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{t('chat.credentials.authentication')}</span>
+                          <span style={{ fontSize: '11px', color: 'var(--accent)' }}>{t('chat.credentials.sshKey')}</span>
+                        </div>
+                      )}
+                      {upd.remove_password && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{t('chat.credentials.password')}</span>
+                          <span style={{ fontSize: '11px', color: 'var(--danger, #e53935)' }}>{t('chat.credentials.willBeRemoved')}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div></ConfirmationCard>
+              ))
+];
+  const pendingConfirmationIds = confirmationCards.map(card => card.props.id).join('\n');
+  useEffect(() => {
+    if (confirmationComposer.comment && !pendingConfirmationIds.split('\n').includes(confirmationComposer.comment.id)) confirmationComposer.cancel();
+  }, [pendingConfirmationIds, confirmationComposer.comment?.id, confirmationComposer.busy]);
 
   return (
     <div className={s.layout}>
@@ -6580,903 +7341,31 @@ export function ChatPage() {
                 </div>
               ))}
 
-              {/* DevOps Confirmation cards */}
-              {devopsConfirmations.map((conf, confIdx) => (
-                <div key={confIdx} className={s.suggestMacroCard}>
-                  <div className={s.suggestMacroHeader}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <rect x="2" y="2" width="20" height="20" rx="2" ry="2" />
-                      <path d="M7 15h0M12 15h0M17 15h0" />
-                    </svg>
-                    <span className={s.suggestMacroTitle}>{t('chat.confirm.commandTitle')}</span>
-                    <button
-                      className={s.suggestMacroClose}
-                      disabled={submittingConfirmationIds.has(conf.confirmation_id)}
-                      onClick={() => setDevopsConfirmations(prev => prev.filter((_, i) => i !== confIdx))}
-                    >
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                        <line x1="18" y1="6" x2="6" y2="18" />
-                        <line x1="6" y1="6" x2="18" y2="18" />
-                      </svg>
-                    </button>
-                  </div>
-                  <div className={s.suggestMacroName}>{conf.server_name}</div>
-                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '6px' }}>{conf.host}</div>
-                  <div className={s.suggestMacroCommands}>
-                    <code className={s.suggestMacroCmd}>{conf.command}</code>
-                  </div>
-                  {conf.needs_new_password && (
-                    <div style={{ marginTop: '8px', marginBottom: conf.needs_sudo_password ? '0' : '8px' }}>
-                      <input
-                        type="password"
-                        placeholder={t('chat.confirm.newPassword')}
-                        disabled={submittingConfirmationIds.has(conf.confirmation_id)}
-                        value={conf.new_password || ''}
-                        onChange={(e) => setDevopsConfirmations(prev => prev.map((c, i) => i === confIdx ? { ...c, new_password: e.target.value } : c))}
-                        style={{ fontSize: '12px', padding: '6px 10px', borderRadius: '6px', border: '1px solid var(--border-input)', background: 'var(--bg-primary)', color: 'var(--text-primary)', outline: 'none', width: '100%' }}
-                      />
-                    </div>
-                  )}
-                  {conf.needs_sudo_password && (
-                    <div style={{ marginTop: '8px', marginBottom: '8px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                      <>
-                          <input
-                            type="password"
-                            placeholder={t('chat.confirm.sudoPassword')}
-                            disabled={submittingConfirmationIds.has(conf.confirmation_id)}
-                            value={conf.sudo_password || ''}
-                            onChange={(e) => setDevopsConfirmations(prev => prev.map((c, i) => i === confIdx ? { ...c, sudo_password: e.target.value } : c))}
-                            style={{ fontSize: '12px', padding: '6px 10px', borderRadius: '6px', border: '1px solid var(--border-input)', background: 'var(--bg-primary)', color: 'var(--text-primary)', outline: 'none' }}
-                          />
-                          <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: 'var(--text-muted)', cursor: 'pointer', marginBottom: '6px' }}>
-                            <input
-                              className={s.devopsCheckbox}
-                              type="checkbox"
-                              disabled={submittingConfirmationIds.has(conf.confirmation_id)}
-                              checked={conf.save_sudo_password || false}
-                              onChange={(e) => setDevopsConfirmations(prev => prev.map((c, i) => i === confIdx ? { ...c, save_sudo_password: e.target.checked } : c))}
-                            />
-                            {t('chat.confirm.saveSudoPassword')}
-                          </label>
-                      </>
-                    </div>
-                  )}
-                  {conf._verdict && (
-                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', padding: '8px', background: 'var(--bg-modal-hover)', borderRadius: '6px', marginTop: '6px' }}><MarkdownRenderer content={conf._verdict} /></div>
-                  )}
-                  {submittingConfirmationIds.has(conf.confirmation_id) && (
-                    <div role="status" style={{ fontSize: '12px', color: 'var(--text-muted)', padding: '8px', background: 'var(--bg-modal-hover)', borderRadius: '6px', marginTop: '6px' }}>
-                      {t('chat.confirm.executing')}
-                    </div>
-                  )}
-                  <div className={s.suggestMacroActions}>
-                    <button
-                      className={s.suggestMacroSaveBtn}
-                      disabled={submittingConfirmationIds.has(conf.confirmation_id)}
-                      onClick={async () => {
-                        const body: Record<string, unknown> = {
-                          confirmation_id: conf.confirmation_id,
-                          approved: true,
-                        };
-                        if (conf.needs_sudo_password) {
-                          if (!conf.sudo_password?.trim()) {
-                            toast.error(t('chat.toasts.enterSudoPassword'));
-                            return;
-                          }
-                          body.sudo_password = conf.sudo_password;
-                          body.save_sudo_password = conf.save_sudo_password === true;
-                        }
-                        if (conf.needs_new_password) {
-                          if (!conf.new_password?.trim()) {
-                            toast.error(t('chat.toasts.enterNewPassword'));
-                            return;
-                          }
-                          body.new_password = conf.new_password;
-                        }
-                        if (!beginConfirmationSubmission(conf.confirmation_id)) return;
-                        try {
-                          await api.apiFetch('/api/v1/devops/approve', {
-                            method: 'POST',
-                            body: JSON.stringify(body),
-                          });
-                          toast.success(t('chat.toasts.commandApproved'));
-                          setDevopsConfirmations(prev => prev.filter(c => c.confirmation_id !== conf.confirmation_id));
-                        } catch {
-                          toast.error(t('chat.toasts.commandApprovalFailed'));
-                        } finally {
-                          finishConfirmationSubmission(conf.confirmation_id);
-                        }
-                      }}
-                    >
-                      {t('chat.confirm.allow')}
-                    </button>
-                    <button
-                      className={s.suggestMacroSaveBtn}
-                      disabled={submittingConfirmationIds.has(conf.confirmation_id)}
-                      style={{ background: 'var(--bg-modal-hover)', color: 'var(--text-primary)', border: '1px solid var(--border-input)' }}
-                      onClick={async () => {
-                        if (conf.needs_sudo_password && !conf.sudo_password?.trim()) {
-                          toast.error(t('chat.toasts.enterSudoPassword'));
-                          return;
-                        }
-                        if (conf.needs_new_password && !conf.new_password?.trim()) {
-                          toast.error(t('chat.toasts.enterNewPassword'));
-                          return;
-                        }
-                        if (!beginConfirmationSubmission(conf.confirmation_id)) return;
-                        try {
-                          // Create auto-approve policy for this exact command
-                          const escapedCmd = conf.command.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                          await api.apiFetch(`/api/v1/devops/servers/${conf.server_id}/policies`, {
-                            method: 'POST',
-                            body: JSON.stringify({ pattern: `^${escapedCmd}$`, auto_approve: true }),
-                          });
-                          // Also approve current command
-                          const body: Record<string, unknown> = { confirmation_id: conf.confirmation_id, approved: true };
-                          if (conf.needs_sudo_password) {
-                            body.sudo_password = conf.sudo_password;
-                            body.save_sudo_password = conf.save_sudo_password === true;
-                          }
-                          if (conf.needs_new_password) {
-                            body.new_password = conf.new_password;
-                          }
-                          await api.apiFetch('/api/v1/devops/approve', {
-                            method: 'POST',
-                            body: JSON.stringify(body),
-                          });
-                          toast.success(t('chat.toasts.commandAlwaysApproved'));
-                          setDevopsConfirmations(prev => prev.filter(c => c.confirmation_id !== conf.confirmation_id));
-                        } catch {
-                          toast.error(t('chat.toasts.policySaveFailed'));
-                        } finally {
-                          finishConfirmationSubmission(conf.confirmation_id);
-                        }
-                      }}
-                    >
-                      {t('chat.confirm.alwaysAllow')}
-                    </button>
-                    <button
-                      className={s.suggestMacroSaveBtn}
-                      disabled={conf._reviewing || submittingConfirmationIds.has(conf.confirmation_id)}
-                      style={{ background: 'var(--bg-modal-hover)', color: 'var(--text-primary)', border: '1px solid var(--border-input)', opacity: conf._reviewing || submittingConfirmationIds.has(conf.confirmation_id) ? 0.6 : 1, minWidth: '80px' }}
-                      onClick={async () => {
-                        setDevopsConfirmations(prev => prev.map((c, i) => i === confIdx ? { ...c, _reviewing: true } : c));
-                        try {
-                          const res = await api.apiFetch<{ verdict: string }>('/api/v1/devops/runbooks/review-commands', {
-                            method: 'POST',
-                            body: JSON.stringify({ commands: [conf.command] }),
-                          });
-                          setDevopsConfirmations(prev => prev.map((c, i) => i === confIdx ? { ...c, _reviewing: false, _verdict: res.verdict } : c));
-                        } catch (err) {
-                          toast.error(api.getApiErrorMessage(err, t('chat.toasts.commandReviewFailed')));
-                          setDevopsConfirmations(prev => prev.map((c, i) => i === confIdx ? { ...c, _reviewing: false } : c));
-                        }
-                      }}
-                    >
-                      {conf._reviewing ? t('chat.confirm.reviewing') : t('chat.confirm.review')}
-                    </button>
-                    <RejectWithComment
-                      className={s.suggestMacroDismissBtn}
-                      disabled={submittingConfirmationIds.has(conf.confirmation_id)}
-                      onReject={async (comment) => {
-                        if (!beginConfirmationSubmission(conf.confirmation_id)) return;
-                        try {
-                          await api.apiFetch('/api/v1/devops/approve', {
-                            method: 'POST',
-                            body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: false, rejection_comment: comment }),
-                          });
-                          setDevopsConfirmations(prev => prev.filter(c => c.confirmation_id !== conf.confirmation_id));
-                        } catch {
-                          toast.error(t('chat.toasts.commandApprovalFailed'));
-                        } finally {
-                          finishConfirmationSubmission(conf.confirmation_id);
-                        }
-                      }}
-                    />
-                  </div>
-                </div>
-              ))}
-
-              {/* Browser action confirmation cards */}
-              {browserActionConfirmations.map((conf) => (
-                <div key={`browser-${conf.confirmation_id}`} className={s.suggestMacroCard}>
-                  <div className={s.suggestMacroHeader}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <circle cx="12" cy="12" r="9" />
-                      <path d="M3 12h18" />
-                      <path d="M12 3a15 15 0 0 1 0 18" />
-                      <path d="M12 3a15 15 0 0 0 0 18" />
-                    </svg>
-                    <span className={s.suggestMacroTitle}>{t('chat.browser.confirmTitle')}</span>
-                    <button
-                      className={s.suggestMacroClose}
-                      disabled={submittingConfirmationIds.has(conf.confirmation_id)}
-                      onClick={() => {
-                        if (!beginConfirmationSubmission(conf.confirmation_id)) return;
-                        setBrowserActionConfirmations(prev => prev.filter(c => c.confirmation_id !== conf.confirmation_id));
-                        void api.apiFetch('/api/v1/pc-commands/approve', {
-                          method: 'POST',
-                          body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: false }),
-                        }).catch((error) => {
-                          if (!(error instanceof api.ApiError) || error.status !== 404) {
-                            toast.error(t('chat.browser.failed'));
-                          }
-                        }).finally(() => finishConfirmationSubmission(conf.confirmation_id));
-                      }}
-                    >
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                        <line x1="18" y1="6" x2="6" y2="18" />
-                        <line x1="6" y1="6" x2="18" y2="18" />
-                      </svg>
-                    </button>
-                  </div>
-                  <div className={s.suggestMacroCommands}>
-                    <code className={s.suggestMacroCmd}>
-                      {conf.action_type === 'open'
-                        ? t('chat.browser.open', { target: conf.url || conf.description })
-                        : conf.action_type === 'fill'
-                          ? t('chat.browser.fill', { target: conf.description })
-                          : conf.action_type === 'press_key'
-                            ? conf.description
-                          : t('chat.browser.click', { target: conf.description })}
-                    </code>
-                  </div>
-                  {conf.target_element && conf.action_type !== 'open' && (
-                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', padding: '8px', background: 'var(--bg-modal-hover)', borderRadius: '6px', marginTop: '6px' }}>
-                      <div>
-                        {t('chat.browser.actualTarget')}: &lt;{conf.target_element.tag || 'element'}{conf.target_element.inputType ? ` type="${conf.target_element.inputType}"` : ''}{conf.target_element.role ? ` role="${conf.target_element.role}"` : ''}&gt;
-                      </div>
-                      {conf.target_element.href && (
-                        <div style={{ marginTop: '4px', overflowWrap: 'anywhere' }}>{conf.target_element.href}</div>
-                      )}
-                    </div>
-                  )}
-                  {conf.text && (
-                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', padding: '8px', background: 'var(--bg-modal-hover)', borderRadius: '6px', marginTop: '6px', whiteSpace: 'pre-wrap' }}>
-                      {conf.text}
-                    </div>
-                  )}
-                  {conf.origin && conf.action_type !== 'open' && (
-                    <div style={{ fontSize: '11px', color: 'var(--text-hint)', marginTop: '6px' }}>
-                      {t('chat.browser.currentSite', { site: conf.origin })}
-                    </div>
-                  )}
-                  {submittingConfirmationIds.has(conf.confirmation_id) && (
-                    <div role="status" style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '6px' }}>
-                      {t('chat.confirm.executing')}
-                    </div>
-                  )}
-                  <div className={s.suggestMacroActions}>
-                    <button
-                      className={s.suggestMacroSaveBtn}
-                      disabled={submittingConfirmationIds.has(conf.confirmation_id)}
-                      onClick={async () => {
-                        if (!beginConfirmationSubmission(conf.confirmation_id)) return;
-                        try {
-                          await api.apiFetch('/api/v1/pc-commands/approve', {
-                            method: 'POST',
-                            body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: true }),
-                          });
-                          toast.success(t('chat.browser.executed'));
-                          setBrowserActionConfirmations(prev => prev.filter(c => c.confirmation_id !== conf.confirmation_id));
-                        } catch (error) {
-                          toast.error(t('chat.browser.failed'));
-                          if (error instanceof api.ApiError && (error.status === 404 || error.status === 500)) {
-                            setBrowserActionConfirmations(prev => prev.filter(c => c.confirmation_id !== conf.confirmation_id));
-                          }
-                        } finally {
-                          finishConfirmationSubmission(conf.confirmation_id);
-                        }
-                      }}
-                    >
-                      {t('chat.confirm.allow')}
-                    </button>
-                    {conf.origin && conf.action_type !== 'open' && (
-                      <button
-                        className={s.suggestMacroSaveBtn}
-                        style={{ background: 'var(--bg-modal-hover)', color: 'var(--text-primary)', border: '1px solid var(--border-input)' }}
-                        title={t('chat.browser.allowSiteSessionHint', { site: conf.origin })}
-                        disabled={submittingConfirmationIds.has(conf.confirmation_id)}
-                        onClick={async () => {
-                          if (!beginConfirmationSubmission(conf.confirmation_id)) return;
-                          try {
-                            await api.apiFetch('/api/v1/pc-commands/approve', {
-                              method: 'POST',
-                              body: JSON.stringify({
-                                confirmation_id: conf.confirmation_id,
-                                approved: true,
-                                allow_browser_site_session: true,
-                              }),
-                            });
-                            toast.success(t('chat.browser.siteAllowedSession', { site: conf.origin }));
-                            setBrowserActionConfirmations(prev => prev.filter(c => c.confirmation_id !== conf.confirmation_id));
-                          } catch (error) {
-                            toast.error(t('chat.browser.failed'));
-                            if (error instanceof api.ApiError && (error.status === 404 || error.status === 500)) {
-                              setBrowserActionConfirmations(prev => prev.filter(c => c.confirmation_id !== conf.confirmation_id));
-                            }
-                          } finally {
-                            finishConfirmationSubmission(conf.confirmation_id);
-                          }
-                        }}
-                      >
-                        {t('chat.browser.allowSiteSession')}
-                      </button>
-                    )}
-                    <RejectWithComment
-                      className={s.suggestMacroDismissBtn}
-                      disabled={submittingConfirmationIds.has(conf.confirmation_id)}
-                      onReject={async (comment) => {
-                        if (!beginConfirmationSubmission(conf.confirmation_id)) return;
-                        try {
-                          await api.apiFetch('/api/v1/pc-commands/approve', {
-                            method: 'POST',
-                            body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: false, rejection_comment: comment }),
-                          });
-                          setBrowserActionConfirmations(prev => prev.filter(c => c.confirmation_id !== conf.confirmation_id));
-                        } catch (error) {
-                          toast.error(t('chat.browser.failed'));
-                          if (error instanceof api.ApiError && (error.status === 404 || error.status === 500)) {
-                            setBrowserActionConfirmations(prev => prev.filter(c => c.confirmation_id !== conf.confirmation_id));
-                          }
-                        } finally {
-                          finishConfirmationSubmission(conf.confirmation_id);
-                        }
-                      }}
-                    />
-                  </div>
-                </div>
-              ))}
-
-              {/* Embedded browser download confirmation cards */}
-              {browserDownloadConfirmations.map((conf) => {
-                const submitDownloadDecision = async (approved: boolean) => {
-                  if (!beginConfirmationSubmission(conf.confirmation_id)) return;
-                  try {
-                    const response = await api.apiFetch<any>('/api/v1/pc-commands/approve', {
-                      method: 'POST',
-                      body: JSON.stringify({
-                        confirmation_id: conf.confirmation_id,
-                        approved,
-                      }),
-                    });
-                    const decisionResult = response?.result;
-                    setBrowserDownloadConfirmations(prev => prev.filter(c => c.confirmation_id !== conf.confirmation_id));
-                    if (approved && decisionResult?.status === 'started') toast.success(t('chat.browserDownload.started'));
-                  } catch (error) {
-                    if (!(error instanceof api.ApiError) || (error.status !== 404 && error.status !== 500)) {
-                      toast.error(t('chat.browserDownload.failed'));
-                    }
-                    setBrowserDownloadConfirmations(prev => prev.filter(c => c.confirmation_id !== conf.confirmation_id));
-                  } finally {
-                    finishConfirmationSubmission(conf.confirmation_id);
-                  }
-                };
-                return (
-                  <div key={`browser-download-${conf.confirmation_id}`} className={s.suggestMacroCard}>
-                    <div className={s.suggestMacroHeader}>
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M12 3v12" />
-                        <path d="m7 10 5 5 5-5" />
-                        <path d="M5 21h14" />
-                      </svg>
-                      <span className={s.suggestMacroTitle}>{t('chat.browserDownload.confirmTitle')}</span>
-                      <button
-                        className={s.suggestMacroClose}
-                        disabled={submittingConfirmationIds.has(conf.confirmation_id)}
-                        onClick={() => void submitDownloadDecision(false)}
-                      >
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                          <line x1="18" y1="6" x2="6" y2="18" />
-                          <line x1="6" y1="6" x2="18" y2="18" />
-                        </svg>
-                      </button>
-                    </div>
-                    <div className={s.suggestMacroCommands}>
-                      <code className={s.suggestMacroCmd}>{conf.filename}</code>
-                    </div>
-                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', padding: '8px', background: 'var(--bg-modal-hover)', borderRadius: '6px', marginTop: '6px' }}>
-                      {conf.total_bytes && conf.total_bytes > 0 && (
-                        <div>{t('chat.browserDownload.size', { size: conf.total_bytes < 1024 * 1024 ? `${(conf.total_bytes / 1024).toFixed(1)} KB` : `${(conf.total_bytes / (1024 * 1024)).toFixed(1)} MB` })}</div>
-                      )}
-                      {conf.mime_type && <div>{t('chat.browserDownload.type', { type: conf.mime_type })}</div>}
-                      {conf.url && <div style={{ marginTop: '4px', overflowWrap: 'anywhere' }}>{conf.url}</div>}
-                    </div>
-                    {submittingConfirmationIds.has(conf.confirmation_id) && (
-                      <div role="status" style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '6px' }}>
-                        {t('chat.confirm.executing')}
-                      </div>
-                    )}
-                    <div className={s.suggestMacroActions}>
-                      <button
-                        className={s.suggestMacroSaveBtn}
-                        disabled={submittingConfirmationIds.has(conf.confirmation_id)}
-                        onClick={() => void submitDownloadDecision(true)}
-                      >
-                        {t('chat.browserDownload.download')}
-                      </button>
-                      <button
-                        className={s.suggestMacroDismissBtn}
-                        disabled={submittingConfirmationIds.has(conf.confirmation_id)}
-                        onClick={() => void submitDownloadDecision(false)}
-                      >
-                        {t('chat.browserDownload.cancel')}
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-
-              {/* PC Command Confirmation cards */}
-              {pcCommandConfirmations.map((conf, confIdx) => (
-                <div key={`pc-${confIdx}`} className={s.suggestMacroCard}>
-                  <div className={s.suggestMacroHeader}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
-                      <line x1="8" y1="21" x2="16" y2="21" />
-                      <line x1="12" y1="17" x2="12" y2="21" />
-                    </svg>
-                    <span className={s.suggestMacroTitle}>{t('chat.confirm.pcCommand')}</span>
-                    <button
-                      className={s.suggestMacroClose}
-                      disabled={submittingConfirmationIds.has(conf.confirmation_id)}
-                      onClick={() => setPcCommandConfirmations(prev => prev.filter((_, i) => i !== confIdx))}
-                    >
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                        <line x1="18" y1="6" x2="6" y2="18" />
-                        <line x1="6" y1="6" x2="18" y2="18" />
-                      </svg>
-                    </button>
-                  </div>
-                  <div className={s.suggestMacroCommands}>
-                    <code className={s.suggestMacroCmd}>{conf.command}</code>
-                  </div>
-                  {conf._verdict && (
-                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', padding: '8px', background: 'var(--bg-modal-hover)', borderRadius: '6px', marginTop: '6px' }}><MarkdownRenderer content={conf._verdict} /></div>
-                  )}
-                  {submittingConfirmationIds.has(conf.confirmation_id) && (
-                    <div role="status" style={{ fontSize: '12px', color: 'var(--text-muted)', padding: '8px', background: 'var(--bg-modal-hover)', borderRadius: '6px', marginTop: '6px' }}>
-                      {t('chat.confirm.executing')}
-                    </div>
-                  )}
-                  <div className={s.suggestMacroActions}>
-                    <button
-                      className={s.suggestMacroSaveBtn}
-                      disabled={submittingConfirmationIds.has(conf.confirmation_id)}
-                      onClick={async () => {
-                        if (!beginConfirmationSubmission(conf.confirmation_id)) return;
-                        try {
-                          await api.apiFetch('/api/v1/pc-commands/approve', {
-                            method: 'POST',
-                            body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: true }),
-                          });
-                          toast.success(t('chat.toasts.commandExecuted'));
-                          setPcCommandConfirmations(prev => prev.filter(c => c.confirmation_id !== conf.confirmation_id));
-                        } catch {
-                          toast.error(t('chat.toasts.commandExecutionFailed'));
-                        } finally {
-                          finishConfirmationSubmission(conf.confirmation_id);
-                        }
-                      }}
-                    >
-                      {t('chat.confirm.allow')}
-                    </button>
-                    <button
-                      className={s.suggestMacroSaveBtn}
-                      disabled={submittingConfirmationIds.has(conf.confirmation_id)}
-                      style={{ background: 'var(--bg-modal-hover)', color: 'var(--text-primary)', border: '1px solid var(--border-input)' }}
-                      onClick={async () => {
-                        if (!beginConfirmationSubmission(conf.confirmation_id)) return;
-                        try {
-                          // Create auto-approve policy for this exact command
-                          const escapedCmd = conf.command.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                          await api.apiFetch('/api/v1/pc-commands/policies', {
-                            method: 'POST',
-                            body: JSON.stringify({ pattern: `^${escapedCmd}$` }),
-                          });
-                          // Also approve current command
-                          await api.apiFetch('/api/v1/pc-commands/approve', {
-                            method: 'POST',
-                            body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: true }),
-                          });
-                          toast.success(t('chat.toasts.commandAlwaysApproved'));
-                          setPcCommandConfirmations(prev => prev.filter(c => c.confirmation_id !== conf.confirmation_id));
-                        } catch {
-                          toast.error(t('chat.toasts.policySaveFailed'));
-                        } finally {
-                          finishConfirmationSubmission(conf.confirmation_id);
-                        }
-                      }}
-                    >
-                      {t('chat.confirm.alwaysAllow')}
-                    </button>
-                    <button
-                      className={s.suggestMacroSaveBtn}
-                      disabled={conf._reviewing || submittingConfirmationIds.has(conf.confirmation_id)}
-                      style={{ background: 'var(--bg-modal-hover)', color: 'var(--text-primary)', border: '1px solid var(--border-input)', opacity: conf._reviewing || submittingConfirmationIds.has(conf.confirmation_id) ? 0.6 : 1, minWidth: '80px' }}
-                      onClick={async () => {
-                        setPcCommandConfirmations(prev => prev.map((c, i) => i === confIdx ? { ...c, _reviewing: true } : c));
-                        try {
-                          const res = await api.apiFetch<{ verdict: string }>('/api/v1/devops/runbooks/review-commands', {
-                            method: 'POST',
-                            body: JSON.stringify({ commands: [conf.command] }),
-                          });
-                          setPcCommandConfirmations(prev => prev.map((c, i) => i === confIdx ? { ...c, _reviewing: false, _verdict: res.verdict } : c));
-                        } catch (err) {
-                          toast.error(api.getApiErrorMessage(err, t('chat.toasts.commandReviewFailed')));
-                          setPcCommandConfirmations(prev => prev.map((c, i) => i === confIdx ? { ...c, _reviewing: false } : c));
-                        }
-                      }}
-                    >
-                      {conf._reviewing ? t('chat.confirm.reviewing') : t('chat.confirm.review')}
-                    </button>
-                    <RejectWithComment
-                      className={s.suggestMacroDismissBtn}
-                      disabled={submittingConfirmationIds.has(conf.confirmation_id)}
-                      onReject={async (comment) => {
-                        if (!beginConfirmationSubmission(conf.confirmation_id)) return;
-                        try {
-                          await api.apiFetch('/api/v1/pc-commands/approve', {
-                            method: 'POST',
-                            body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: false, rejection_comment: comment }),
-                          });
-                          setPcCommandConfirmations(prev => prev.filter(c => c.confirmation_id !== conf.confirmation_id));
-                        } catch {
-                          toast.error(t('chat.toasts.commandExecutionFailed'));
-                        } finally {
-                          finishConfirmationSubmission(conf.confirmation_id);
-                        }
-                      }}
-                    />
-                  </div>
-                </div>
-              ))}
-
-              {/* File Action Confirmation cards */}
-              {fileActionConfirmations.map((conf, confIdx) => (
-                <div key={`file-${confIdx}`} className={s.suggestMacroCard}>
-                  <div className={s.suggestMacroHeader}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                      <polyline points="14 2 14 8 20 8"/>
-                    </svg>
-                    <span className={s.suggestMacroTitle}>
-                      {conf.action_type === 'write' ? t('chat.file.writingTitle', { append: conf.mode === 'append' ? t('chat.file.appendMarker') : '' }) : t('chat.file.reading')}
-                    </span>
-                    <button
-                      className={s.suggestMacroClose}
-                      onClick={() => setFileActionConfirmations(prev => prev.filter((_, i) => i !== confIdx))}
-                    >
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                        <line x1="18" y1="6" x2="6" y2="18" />
-                        <line x1="6" y1="6" x2="18" y2="18" />
-                      </svg>
-                    </button>
-                  </div>
-                  <div className={s.suggestMacroCommands}>
-                    <code className={s.suggestMacroCmd}>{conf.file_path}</code>
-                  </div>
-                  {conf.action_type === 'write' && conf.size_bytes !== undefined && (
-                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
-                      {t('chat.file.sizeValue', { size: (conf.size_bytes / 1024).toFixed(1) })}
-                      {conf.mode === 'append' ? t('chat.file.appendMode') : t('chat.file.overwriteMode')}
-                    </div>
-                  )}
-                  {conf.action_type === 'read' && conf.start_line !== undefined && (
-                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
-                      {t('chat.file.lineRange', { start: conf.start_line, end: conf.start_line + (conf.max_lines || 500) - 1 })}
-                    </div>
-                  )}
-                  {conf.content_preview && (
-                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', padding: '8px', background: 'var(--bg-modal-hover)', borderRadius: '6px', marginTop: '6px', maxHeight: '200px', overflow: 'auto' }}>
-                      <pre style={{ whiteSpace: 'pre-wrap', margin: 0, fontFamily: 'inherit' }}>{conf.content_preview.slice(0, 1500)}</pre>
-                    </div>
-                  )}
-                  <div className={s.suggestMacroActions}>
-                    <button
-                      className={s.suggestMacroSaveBtn}
-                      onClick={async () => {
-                        try {
-                          await api.apiFetch('/api/v1/pc-commands/approve', {
-                            method: 'POST',
-                            body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: true }),
-                          });
-                          toast.success(conf.action_type === 'write' ? t('chat.toasts.fileWritten') : t('chat.toasts.fileRead'));
-                          setFileActionConfirmations(prev => prev.filter((_, i) => i !== confIdx));
-                        } catch {
-                          toast.error(t('chat.toasts.commandExecutionFailed'));
-                        }
-                      }}
-                    >
-                      {conf.action_type === 'write' ? t('chat.file.write') : t('chat.file.read')}
-                    </button>
-                    {conf.action_type === 'write' && (
-                      <button
-                        className={s.suggestMacroSaveBtn}
-                        style={{ background: 'var(--bg-modal-hover)', color: 'var(--text-primary)', border: '1px solid var(--border-input)' }}
-                        title={t('chat.file.allowFolderSessionHint')}
-                        onClick={async () => {
-                          try {
-                            const selection = await window.electronAPI.grantSessionWriteFolder(conf.file_path);
-                            if (selection.canceled || !selection.folder) return;
-                            await api.apiFetch('/api/v1/pc-commands/approve', {
-                              method: 'POST',
-                              body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: true }),
-                            });
-                            autoApprovedFileIdsRef.current.add(conf.confirmation_id);
-                            toast.success(t('chat.toasts.folderAllowedSession', { folder: selection.folder }));
-                            setFileActionConfirmations(prev => prev.filter((_, i) => i !== confIdx));
-                          } catch {
-                            toast.error(t('chat.toasts.commandExecutionFailed'));
-                          }
-                        }}
-                      >
-                        {t('chat.file.allowFolderSession')}
-                      </button>
-                    )}
-                    <RejectWithComment
-                      className={s.suggestMacroDismissBtn}
-                      onReject={async (comment) => {
-                        try {
-                          await api.apiFetch('/api/v1/pc-commands/approve', {
-                            method: 'POST',
-                            body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: false, rejection_comment: comment }),
-                          });
-                        } catch {}
-                        setFileActionConfirmations(prev => prev.filter((_, i) => i !== confIdx));
-                      }}
-                    />
-                  </div>
-                </div>
-              ))}
-
-              {/* Edit File Lines Confirmation cards */}
-              {editFileLinesConfirmations.map((conf, confIdx) => (
-                <div key={`edit-${confIdx}`} className={s.suggestMacroCard}>
-                  <div className={s.suggestMacroHeader}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M12 20h9"/>
-                      <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
-                    </svg>
-                    <span className={s.suggestMacroTitle}>
-                      {t('chat.file.editingLines', { start: conf.start_line, end: conf.end_line })}
-                    </span>
-                    <button
-                      className={s.suggestMacroClose}
-                      onClick={() => setEditFileLinesConfirmations(prev => prev.filter((_, i) => i !== confIdx))}
-                    >
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                        <line x1="18" y1="6" x2="6" y2="18" />
-                        <line x1="6" y1="6" x2="18" y2="18" />
-                      </svg>
-                    </button>
-                  </div>
-                  <div className={s.suggestMacroCommands}>
-                    <code className={s.suggestMacroCmd}>{conf.file_path}</code>
-                  </div>
-                  <FileEditDiff
-                    oldContent={conf.old_content_preview || ''}
-                    newContent={conf.new_content_preview || ''}
-                  />
-                  <div className={s.suggestMacroActions}>
-                    <button
-                      className={s.suggestMacroSaveBtn}
-                      onClick={async () => {
-                        try {
-                          await api.apiFetch('/api/v1/pc-commands/approve', {
-                            method: 'POST',
-                            body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: true }),
-                          });
-                          toast.success(t('chat.toasts.linesReplaced'));
-                          setEditFileLinesConfirmations(prev => prev.filter((_, i) => i !== confIdx));
-                        } catch {
-                          toast.error(t('chat.toasts.commandExecutionFailed'));
-                        }
-                      }}
-                    >
-                      {t('common.apply')}
-                    </button>
-                    <button
-                      className={s.suggestMacroSaveBtn}
-                      style={{ background: 'var(--bg-modal-hover)', color: 'var(--text-primary)', border: '1px solid var(--border-input)' }}
-                      title={t('chat.file.allowFolderSessionHint')}
-                      onClick={async () => {
-                        try {
-                          const selection = await window.electronAPI.grantSessionWriteFolder(conf.file_path);
-                          if (selection.canceled || !selection.folder) return;
-                          await api.apiFetch('/api/v1/pc-commands/approve', {
-                            method: 'POST',
-                            body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: true }),
-                          });
-                          autoApprovedFileIdsRef.current.add(conf.confirmation_id);
-                          toast.success(t('chat.toasts.folderAllowedSession', { folder: selection.folder }));
-                          setEditFileLinesConfirmations(prev => prev.filter((_, i) => i !== confIdx));
-                        } catch {
-                          toast.error(t('chat.toasts.commandExecutionFailed'));
-                        }
-                      }}
-                    >
-                      {t('chat.file.allowFolderSession')}
-                    </button>
-                    <RejectWithComment
-                      className={s.suggestMacroDismissBtn}
-                      onReject={async (comment) => {
-                        try {
-                          await api.apiFetch('/api/v1/pc-commands/approve', {
-                            method: 'POST',
-                            body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: false, rejection_comment: comment }),
-                          });
-                        } catch {}
-                        setEditFileLinesConfirmations(prev => prev.filter((_, i) => i !== confIdx));
-                      }}
-                    />
-                  </div>
-                </div>
-              ))}
 
 
-              {/* Webcam Capture Confirmation cards */}
-              {webcamCaptureConfirmations.map((conf, confIdx) => (
-                <div key={`webcam-${confIdx}`} className={s.suggestMacroCard}>
-                  <div className={s.suggestMacroHeader}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
-                      <circle cx="12" cy="13" r="4"/>
-                    </svg>
-                    <span className={s.suggestMacroTitle}>{t('chat.webcam.title')}</span>
-                    <button
-                      className={s.suggestMacroClose}
-                      onClick={() => setWebcamCaptureConfirmations(prev => prev.filter((_, i) => i !== confIdx))}
-                    >
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                        <line x1="18" y1="6" x2="6" y2="18" />
-                        <line x1="6" y1="6" x2="18" y2="18" />
-                      </svg>
-                    </button>
-                  </div>
-                  <div className={s.suggestMacroCommands}>
-                    <code className={s.suggestMacroCmd}>{t('chat.webcam.cameraValue', { camera: conf.camera_name })}</code>
-                  </div>
-                  <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
-                    {t('chat.webcam.taskValue', { task: conf.purpose })}
-                  </div>
-                  <div className={s.suggestMacroActions}>
-                    <button
-                      className={s.suggestMacroSaveBtn}
-                      onClick={async () => {
-                        try {
-                          await api.apiFetch('/api/v1/pc-commands/approve', {
-                            method: 'POST',
-                            body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: true }),
-                          });
-                          toast.success(t('chat.toasts.photoCaptured'));
-                          setWebcamCaptureConfirmations(prev => prev.filter((_, i) => i !== confIdx));
-                        } catch {
-                          toast.error(t('chat.toasts.captureFailed'));
-                        }
-                      }}
-                    >
-                      {t('chat.confirm.allow')}
-                    </button>
-                    <RejectWithComment
-                      className={s.suggestMacroDismissBtn}
-                      onReject={async (comment) => {
-                        try {
-                          await api.apiFetch('/api/v1/pc-commands/approve', {
-                            method: 'POST',
-                            body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: false, rejection_comment: comment }),
-                          });
-                        } catch {}
-                        setWebcamCaptureConfirmations(prev => prev.filter((_, i) => i !== confIdx));
-                      }}
-                    />
-                  </div>
-                </div>
-              ))}
 
 
-              {/* Email Confirmation cards */}
-              {emailConfirmations.map((conf, confIdx) => (
-                <div key={`email-${confIdx}`} className={s.suggestMacroCard}>
-                  <div className={s.suggestMacroHeader}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <rect x="2" y="4" width="20" height="16" rx="2" ry="2" />
-                      <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
-                    </svg>
-                    <span className={s.suggestMacroTitle}>{t('chat.email.title')}</span>
-                    <button
-                      className={s.suggestMacroClose}
-                      onClick={() => setEmailConfirmations(prev => prev.filter((_, i) => i !== confIdx))}
-                    >
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                        <line x1="18" y1="6" x2="6" y2="18" />
-                        <line x1="6" y1="6" x2="18" y2="18" />
-                      </svg>
-                    </button>
-                  </div>
-                  {conf.from && (
-                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '2px' }}>
-                      {t('chat.email.from')} <span style={{ color: 'var(--text-primary)' }}>{conf.from}</span>
-                    </div>
-                  )}
-                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '2px' }}>
-                    {t('chat.email.to')} <span style={{ color: 'var(--text-primary)' }}>{conf.to}</span>
-                  </div>
-                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '6px' }}>
-                    {t('chat.email.subject')} <span style={{ color: 'var(--text-primary)' }}>{conf.subject}</span>
-                  </div>
-                  {conf.attachments.length > 0 && (
-                    <div style={{ marginBottom: '8px' }}>
-                      <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px' }}>
-                        {t('chat.email.attachments')}
-                      </div>
-                      {conf.attachments.map(attachment => (
-                        <button
-                          key={attachment.url}
-                          type="button"
-                          title={t('chat.attachmentPreview.open')}
-                          onClick={() => handleOpenEmailAttachment(attachment)}
-                          style={{
-                            display: 'flex',
-                            width: '100%',
-                            justifyContent: 'space-between',
-                            gap: '8px',
-                            padding: '6px 8px',
-                            marginBottom: '4px',
-                            border: '1px solid var(--border-color)',
-                            borderRadius: '6px',
-                            background: 'var(--bg-modal-hover)',
-                            color: 'var(--text-primary)',
-                            cursor: 'pointer',
-                            textAlign: 'left',
-                          }}
-                        >
-                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{attachment.name}</span>
-                          <span style={{ flexShrink: 0, color: 'var(--text-muted)' }}>
-                            {attachment.size_bytes >= 1024 * 1024
-                              ? `${(attachment.size_bytes / (1024 * 1024)).toFixed(1)} MB`
-                              : `${Math.max(1, Math.ceil(attachment.size_bytes / 1024))} KB`}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  <div style={{ fontSize: '12px', padding: '8px', background: 'var(--bg-modal-hover)', borderRadius: '6px', maxHeight: '200px', overflowY: 'auto' }}>
-                    <EmailBodyPreview body={conf.body} />
-                  </div>
-                  <div className={s.suggestMacroActions} style={{ marginTop: 10 }}>
-                    <button
-                      className={s.suggestMacroSaveBtn}
-                      onClick={async () => {
-                        try {
-                          await api.apiFetch('/api/v1/email/approve', {
-                            method: 'POST',
-                            body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: true }),
-                          });
-                          toast.success(t('chat.toasts.emailSent'));
-                          setEmailConfirmations(prev => prev.filter((_, i) => i !== confIdx));
-                        } catch {
-                          toast.error(t('chat.toasts.emailSendFailed'));
-                        }
-                      }}
-                    >
-                      {t('common.send')}
-                    </button>
-                    <RejectWithComment
-                      className={s.suggestMacroDismissBtn}
-                      onReject={async (comment) => {
-                        try {
-                          await api.apiFetch('/api/v1/email/approve', {
-                            method: 'POST',
-                            body: JSON.stringify({ confirmation_id: conf.confirmation_id, approved: false, rejection_comment: comment }),
-                          });
-                        } catch {}
-                        setEmailConfirmations(prev => prev.filter((_, i) => i !== confIdx));
-                      }}
-                    />
-                  </div>
-                </div>
-              ))}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
               {/* Suggest DevOps Runbook cards */}
               {pendingRunbooks.map((rb, rbIdx) => (
@@ -7559,95 +7448,8 @@ export function ChatPage() {
                 </div>
               ))}
 
-              {/* Suggest Server Creds Update cards */}
-              {pendingCredsUpdates.map((upd, updIdx) => (
-                <div key={`creds-${updIdx}`} className={s.suggestMacroCard}>
-                  <div className={s.suggestMacroHeader}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                    </svg>
-                    <span className={s.suggestMacroTitle}>{t('chat.credentials.title')}</span>
-                    <button
-                      className={s.suggestMacroClose}
-                      onClick={() => setPendingCredsUpdates(prev => prev.filter((_, i) => i !== updIdx))}
-                    >
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                        <line x1="18" y1="6" x2="6" y2="18" />
-                        <line x1="6" y1="6" x2="18" y2="18" />
-                      </svg>
-                    </button>
-                  </div>
-                  <div className={s.suggestMacroName}>{upd.server_name}</div>
-                  <div style={{ fontSize: '12px', color: 'var(--text-body)', marginTop: '6px', lineHeight: '1.5' }}>
-                    <div>{upd.reason}</div>
-                    <div style={{ marginTop: '6px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{t('chat.credentials.user')}</span>
-                        <code style={{ fontSize: '11px', color: 'var(--danger, #e53935)', textDecoration: 'line-through' }}>{upd.current_username}</code>
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round"><line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" /></svg>
-                        <code style={{ fontSize: '11px', color: 'var(--accent)' }}>{upd.new_username}</code>
-                      </div>
-                      {upd.use_ssh_key && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{t('chat.credentials.authentication')}</span>
-                          <span style={{ fontSize: '11px', color: 'var(--accent)' }}>{t('chat.credentials.sshKey')}</span>
-                        </div>
-                      )}
-                      {upd.remove_password && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{t('chat.credentials.password')}</span>
-                          <span style={{ fontSize: '11px', color: 'var(--danger, #e53935)' }}>{t('chat.credentials.willBeRemoved')}</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  <div className={s.suggestMacroActions}>
-                    <button
-                      className={s.suggestMacroSaveBtn}
-                      onClick={async () => {
-                        try {
-                          if (upd.confirmation_id) {
-                            await api.apiFetch('/api/v1/devops/approve', {
-                              method: 'POST',
-                              body: JSON.stringify({ confirmation_id: upd.confirmation_id, approved: true }),
-                            });
-                          } else {
-                            const body: Record<string, unknown> = {
-                              username: upd.new_username,
-                              use_ssh_key_for_login: upd.use_ssh_key,
-                            };
-                            if (upd.remove_password) body.password = '';
-                            await api.apiFetch(`/api/v1/devops/servers/${upd.server_id}`, {
-                              method: 'PUT',
-                              body: JSON.stringify(body),
-                            });
-                          }
-                          toast.success(`Учётные данные для "${upd.server_name}" обновлены`);
-                          setPendingCredsUpdates(prev => prev.filter((_, i) => i !== updIdx));
-                        } catch (err: any) {
-                          toast.error(err?.body?.error || t('chat.toasts.credentialsUpdateFailed'));
-                        }
-                      }}
-                    >
-                      {t('common.apply')}
-                    </button>
-                    <RejectWithComment
-                      className={s.suggestMacroDismissBtn}
-                      onReject={async (comment) => {
-                        if (upd.confirmation_id) {
-                          try {
-                            await api.apiFetch('/api/v1/devops/approve', {
-                              method: 'POST',
-                              body: JSON.stringify({ confirmation_id: upd.confirmation_id, approved: false, rejection_comment: comment }),
-                            });
-                          } catch {}
-                        }
-                        setPendingCredsUpdates(prev => prev.filter((_, i) => i !== updIdx));
-                      }}
-                    />
-                  </div>
-                </div>
-              ))}
+
+
 
             </ChatMessagesScroll>
 
@@ -7819,6 +7621,9 @@ export function ChatPage() {
             )}
 
             <div className={`${s.composerWrap} ${compactComposer ? s.composerWrapCompact : ''}`}>
+            <div className={confirmationCards.length ? s.composerWithConfirmations : undefined}>
+            <ConfirmationQueue items={confirmationCards} order={confirmationArrivalRef.current} composer={confirmationComposer} />
+            <ConfirmationCommentInput composer={confirmationComposer} />
             <div className={s.inputArea}>
               {/* Dice Roll Mode: круглый кубик d20 слева от иконки файлов */}
               {diceRollEnabled && (
@@ -7877,12 +7682,12 @@ export function ChatPage() {
               <div
                 className={s.composerInputSlot}
                 onDragEnter={(event) => {
-                  if (!Array.from(event.dataTransfer.types).includes('Files') || sending) return;
+                  if (!Array.from(event.dataTransfer.types).includes('Files') || sending || confirmationComposer.comment) return;
                   event.preventDefault();
                   setDraggingFiles(true);
                 }}
                 onDragOver={(event) => {
-                  if (!Array.from(event.dataTransfer.types).includes('Files') || sending) return;
+                  if (!Array.from(event.dataTransfer.types).includes('Files') || sending || confirmationComposer.comment) return;
                   event.preventDefault();
                   event.dataTransfer.dropEffect = 'copy';
                   setDraggingFiles(true);
@@ -7897,19 +7702,19 @@ export function ChatPage() {
                   event.preventDefault();
                   event.stopPropagation();
                   setDraggingFiles(false);
-                  void handleDroppedFiles(event.dataTransfer.files);
+                  if (!confirmationComposer.comment) void handleDroppedFiles(event.dataTransfer.files);
                 }}
               >
                 <textarea
                   ref={textareaRef}
                   className={s.textarea}
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
+                  value={confirmationComposer.comment ? confirmationComposer.comment.text : input}
+                  onChange={(e) => confirmationComposer.comment ? confirmationComposer.change(e.target.value) : setInput(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  onPaste={handlePaste}
-                  placeholder={t('chat.composer.placeholder')}
+                  onPaste={confirmationComposer.comment ? undefined : handlePaste}
+                  placeholder={confirmationComposer.comment ? t('review.commentPlaceholder') : t('chat.composer.placeholder')}
                   rows={1}
-                  disabled={sending}
+                  disabled={confirmationComposer.comment ? confirmationComposer.busy : sending && confirmationCards.length === 0}
                 />
                 {draggingFiles && !sending && (
                   <div className={s.composerDropTarget}>
@@ -7922,7 +7727,7 @@ export function ChatPage() {
                 )}
               </div>
 
-              {sending ? (
+              {sending && !confirmationComposer.comment ? (
                 <svg
                   className={s.sendIcon}
                   onClick={() => {
@@ -7934,8 +7739,8 @@ export function ChatPage() {
                 </svg>
               ) : (
               <svg
-                className={!input.trim() && attachedImages.length === 0 && attachedDocuments.length === 0 ? s.sendIconDisabled : s.sendIcon}
-                onClick={() => { if (input.trim() || attachedImages.length > 0 || attachedDocuments.length > 0) handleSend(); }}
+                className={confirmationComposer.comment ? (!confirmationComposer.comment.text.trim() || confirmationComposer.busy ? s.sendIconDisabled : s.sendIcon) : (!input.trim() && attachedImages.length === 0 && attachedDocuments.length === 0 ? s.sendIconDisabled : s.sendIcon)}
+                onClick={() => { if (confirmationComposer.comment) void confirmationComposer.submit(); else if (input.trim() || attachedImages.length > 0 || attachedDocuments.length > 0) void handleSend(); }}
                 viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon-light)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
               >
                 <line x1="22" y1="2" x2="11" y2="13" />
@@ -7945,7 +7750,7 @@ export function ChatPage() {
 
               <svg
                 className={isTranscribing ? s.micIconTranscribing : isRecording ? s.micIconRecording : s.micIcon}
-                onClick={isTranscribing ? undefined : toggleRecording}
+                onClick={isTranscribing || confirmationComposer.comment ? undefined : toggleRecording}
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke={isRecording ? '#e53935' : isTranscribing ? 'var(--accent)' : 'var(--accent-icon-light)'}
@@ -7958,6 +7763,7 @@ export function ChatPage() {
                 <line x1="12" y1="19" x2="12" y2="23" />
                 <line x1="8" y1="23" x2="16" y2="23" />
               </svg>
+            </div>
             </div>
             <div className={s.composerFootnote}>
               <span>{t('chat.composer.keyboardHint', { defaultValue: 'Enter to send · Shift + Enter for a new line' })}</span>

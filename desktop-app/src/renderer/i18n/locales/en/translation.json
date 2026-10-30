@@ -752,6 +752,14 @@
     }
   },
   "chat": {
+    "approvals": {
+      "queue": "Awaiting approval: {{count}}",
+      "commentFor": "Rejection comment: {{title}}",
+      "rejectAndSend": "Reject and send",
+      "permissions": "Permission options",
+      "expandEmail": "Expand email",
+      "failed": "Could not submit the decision"
+    },
     "find": {
       "open": "Search in this chat",
       "placeholder": "Search in this chat",
