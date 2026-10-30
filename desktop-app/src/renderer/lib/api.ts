@@ -414,6 +414,8 @@ export type Message = {
   content: string;
   reasoning_content?: string | null;
   tool_calls?: ToolCall[] | null;
+  /** Transient current activity; never persisted as answer text. */
+  tool_status?: string | null;
   images?: MessageImage[] | null;
   audio?: MessageAudio | null;
   created_at: number;

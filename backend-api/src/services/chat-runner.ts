@@ -169,6 +169,7 @@ const runSteps = async (
       } else {
         stepOptions = { ...(step.options ?? {}) };
       }
+      let separateNextContent = false;
       const result: AiSendResult = await sendMessageThroughAi(
         step.ownerUserId,
         step.kind === 'agent' ? (step.prompt ?? AGENT_ROOM_CONTINUE_PROMPT) : step.prompt,
@@ -178,18 +179,24 @@ const runSteps = async (
           isDesktop: true,
           externalAbortSignal: signal,
           onStreamToken: async (text) => {
-            emit({ type: 'chat_agent_token', chat_id: chatId, agent_id: agentId, text });
+            if (!text) return;
+            const delta = separateNextContent ? `\n\n${text}` : text;
+            separateNextContent = false;
+            emit({ type: 'chat_agent_token', chat_id: chatId, agent_id: agentId, text: delta });
           },
           onReasoningStream: async (text) => {
             emit({ type: 'chat_agent_reasoning', chat_id: chatId, agent_id: agentId, text });
           },
+          onToolStatus: async (text) => {
+            emit({ type: 'chat_tool_status', chat_id: chatId, text });
+          },
           ...(step.kind === 'default'
             ? {
-                onIntermediateMessage: async (text) => {
-                  emit({ type: 'chat_intermediate', chat_id: chatId, text });
-                },
-                onToolStatus: async (text) => {
-                  emit({ type: 'chat_tool_status', chat_id: chatId, text });
+                onIntermediateMessage: async (text, content) => {
+                  // The step may already have arrived as token deltas. Commit
+                  // the canonical accumulated text rather than appending it again.
+                  emit({ type: 'chat_intermediate', chat_id: chatId, text, content });
+                  separateNextContent = Boolean(content);
                 },
                 onDesktopAction: async (action) => {
                   emit({ type: 'chat_desktop_action', chat_id: chatId, ...action });

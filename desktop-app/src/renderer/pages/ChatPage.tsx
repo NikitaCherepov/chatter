@@ -43,6 +43,7 @@ import { SettingsModal } from '../components/SettingsModal';
 import { Tooltip } from '../components/Tooltip';
 import { dispatchAvatarState, getAvatarManifest } from '../components/PixelAvatar';
 import { MessageAvatar } from '../components/MessageAvatar';
+import { ToolActivity } from '../components/ToolActivity';
 import type { SetDisplayStatePayload } from '../components/PixelAvatar';
 import { ToolsPanel } from '../components/ToolsPanel';
 import { ImageViewerModal } from '../components/ImageViewerModal';
@@ -678,7 +679,6 @@ const MessageItem = React.memo(function MessageItem({
   const locale = i18n.resolvedLanguage || i18n.language;
   const reasoningOpen = isReasoningOpen;
   const hasReasoning = msg.role === 'assistant' && Boolean(msg.reasoning_content?.trim());
-  const hasToolCalls = msg.role === 'assistant' && Boolean(msg.tool_calls?.length);
   const hasSubagents = msg.role === 'assistant' && Boolean(msg.subagents?.length);
   const isStreamingReasoning = streamingState === 'reasoning';
   const isStreamingContent = streamingState === 'content';
@@ -949,51 +949,12 @@ const MessageItem = React.memo(function MessageItem({
         ) : null}
         </div>
       </div>
-      {hasToolCalls && (
-        <div className={s.actionsCard}>
-        {hasToolCalls && (
-          <button
-            className={s.actionsSummary}
-            aria-expanded={isToolCallsOpen}
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggleToolCalls(msg.id);
-            }}
-            title={isToolCallsOpen ? t('chat.message.hideTools') : t('chat.message.showTools')}
-          >
-            <span>{t('chat.message.actionsSummary', { count: msg.tool_calls!.length, defaultValue: 'Actions · {{count}}' })}</span>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <polyline points="6 9 12 15 18 9" />
-            </svg>
-          </button>
-        )}
-          <AnimatePresence initial={false}>
-          {hasToolCalls && isToolCallsOpen && (
-            <motion.div className={s.actionsBody} variants={reasoningPanelVariants} initial="hidden" animate="visible" exit="exit">
-              <div className={s.toolCallList}>
-                {msg.tool_calls!.map((tc, i) => {
-                  const args = formatToolValue(tc.arguments);
-                  const result = formatToolValue(tc.result_preview);
-                  return (
-                    <details key={tc.id || i} className={s.toolCallItem}>
-                      <summary className={s.toolCallName}>{tc.name}</summary>
-                      <div className={s.toolCallLabel}>{t('chat.message.arguments')}</div>
-                      <pre className={s.toolCallArgs}>{args || '{}'}</pre>
-                      {result && (
-                        <>
-                          <div className={s.toolCallLabel}>{t('chat.message.result')}</div>
-                          <pre className={s.toolCallArgs}>{result}</pre>
-                        </>
-                      )}
-                    </details>
-                  );
-                })}
-              </div>
-            </motion.div>
-          )}
-          </AnimatePresence>
-        </div>
-      )}
+      {msg.role === 'assistant' && <ToolActivity
+        calls={msg.tool_calls}
+        current={msg.tool_status}
+        expanded={isToolCallsOpen}
+        onToggle={() => onToggleToolCalls(msg.id)}
+      />}
       <div className={s.bubbleWrap}>
         <motion.div
           className={msg.role === 'user' && isOwnUser ? s.bubbleUser : s.bubble}
@@ -1107,7 +1068,7 @@ const MessageItem = React.memo(function MessageItem({
           ) : (
             msg.role === 'assistant'
               ? (
-                (isStreamingReasoning || isRegenerating) && !displayedVariantContent ? (
+                (isStreamingReasoning || isRegenerating) && !displayedVariantContent && !msg.tool_status ? (
                   <div className={`${s.typingDots} ${isStreamingReasoning ? s.typingDotsStreaming : ''}`}>
                     <span className={s.dot} />
                     <span className={s.dot} />
@@ -2056,13 +2017,13 @@ export function ChatPage() {
     setSending(true);
     setStreamingMsgId(tempId);
     setStreamingState(snapshot.content ? 'content' : snapshot.reasoning_content ? 'reasoning' : 'idle');
-    setShowTyping(!snapshot.content && !snapshot.reasoning_content);
+    setShowTyping(!snapshot.content && !snapshot.reasoning_content && !snapshot.tool_status);
     setTypingIdentity({ name: snapshot.prompt_name || 'Chatter', imageUrl: snapshot.prompt_image_url ?? null });
-    if (!snapshot.content && !snapshot.reasoning_content) return;
+    if (!snapshot.content && !snapshot.reasoning_content && !snapshot.tool_status) return;
     suppressNextMessageAutoScrollRef.current = true;
     setMessages(previous => {
       const messages = previous.filter(message => message.id !== tempId && message.id !== snapshot.regenerate_message_id);
-      return [...messages, { id: tempId, role: 'assistant', content: snapshot.content, reasoning_content: snapshot.reasoning_content || null,
+      return [...messages, { id: tempId, role: 'assistant', content: snapshot.content, reasoning_content: snapshot.reasoning_content || null, tool_status: snapshot.tool_status,
         created_at: snapshot.created_at, agent_id: snapshot.agent_id, prompt_id: snapshot.prompt_id ?? null,
         prompt_name: snapshot.prompt_name ?? null, prompt_image_url: snapshot.prompt_image_url ?? null }];
     });
@@ -3188,7 +3149,7 @@ export function ChatPage() {
               prompt_image_url: stream.promptImageUrl,
             }];
             return base.map((message) => message.id === stream.tempId
-              ? { ...message, content: accumulatedStream?.content ?? message.content + event.text }
+              ? { ...message, tool_status: null, content: accumulatedStream?.content ?? message.content + event.text }
               : message);
           });
           break;
@@ -3216,7 +3177,7 @@ export function ChatPage() {
               prompt_image_url: stream.promptImageUrl,
             }];
             return base.map((message) => message.id === stream.tempId
-              ? { ...message, reasoning_content: accumulatedStream?.reasoning_content ?? `${message.reasoning_content || ''}${event.text}` }
+              ? { ...message, tool_status: null, reasoning_content: accumulatedStream?.reasoning_content ?? `${message.reasoning_content || ''}${event.text}` }
               : message);
           });
           break;
@@ -3227,7 +3188,8 @@ export function ChatPage() {
           if (!stream) break;
           setShowTyping(false);
           setTypingIdentity(null);
-          const text = event.type === 'chat_tool_status' ? `_${event.text}_` : event.text;
+          const isToolStatus = event.type === 'chat_tool_status';
+          const text = event.text;
           setMessages((prev) => {
             const regeneration = regeneratingMessageRef.current;
             const current = regeneration?.chatId === event.chat_id
@@ -3245,7 +3207,8 @@ export function ChatPage() {
               prompt_image_url: stream.promptImageUrl,
             }];
             return base.map((message) => message.id === stream.tempId
-              ? { ...message, content: accumulatedStream?.content ?? (message.content ? `${message.content}\n\n${text}` : text) }
+              ? { ...message, tool_status: isToolStatus ? text : null,
+                  content: isToolStatus ? message.content : accumulatedStream?.content ?? event.content ?? (message.content ? `${message.content}\n\n${text}` : text) }
               : message);
           });
           break;

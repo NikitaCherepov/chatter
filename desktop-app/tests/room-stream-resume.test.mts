@@ -64,5 +64,31 @@ let resolveLoad:any;load=()=>new Promise(resolve=>{resolveLoad=resolve;});mount(
 saved=[{id:88,role:'assistant',content:'Persisted'}];emit(lateServer.event({type:'chat_agent_done',owner_user_id:1,result:{message_id:88,reply_text:'Persisted'}}));emit({type:'chat_queue_done'});
 load=async()=>saved.slice();status=async()=>({active:false,stream:null});resolveLoad([]);await tick();
 assert.equal(state.messages.length,1);assert.equal(state.messages[0].id,88);assert.equal(state.sending,false);
+// Current tool status is separate, replaces previous status, and survives chat switching.
+const activityServer = new ChatStreamBuffer(start);
+emit(activityServer.snapshot());
+emit(activityServer.event({type:'chat_tool_status',text:'Searching'}));
+const activityMessage = () => state.messages.find((m:any) => m.id === state.streamId);
+assert.equal(activityMessage().tool_status,'Searching');
+assert.equal(activityMessage().content,'');
+assert.equal(state.typing,false,'activity replaces the initial typing indicator');
+emit(activityServer.event({type:'chat_tool_status',text:'Reading page'}));
+assert.equal(activityMessage().tool_status,'Reading page');
+mount(2);await tick();status=async()=>({active:true,stream:activityServer.snapshot()});
+mount(1);await tick();
+assert.equal(activityMessage().tool_status,'Reading page');
+assert.equal(activityMessage().content,'');
+emit(activityServer.event({type:'chat_agent_reasoning',text:'Reviewing results'}));
+assert.equal(activityMessage().tool_status,null,'model reasoning ends the active tool display');
+emit(activityServer.event({type:'chat_agent_token',text:'Answer'}));
+assert.equal(activityMessage().content,'Answer');
+// The full intermediate event confirms the step already streamed into the bubble.
+emit(activityServer.event({type:'chat_intermediate',text:'Answer',content:'Answer'}));
+assert.equal(activityMessage().content,'Answer','intermediate confirmation must not append token text twice');
+emit(activityServer.event({type:'chat_agent_token',text:'\n\nNext step'}));
+emit(activityServer.event({type:'chat_intermediate',text:'Next step',content:'Answer\n\nNext step'}));
+assert.equal(activityMessage().content,'Answer\n\nNext step');
+mount(2);await tick();status=async()=>({active:true,stream:activityServer.snapshot()});
+mount(1);await tick();assert.equal(activityMessage().content,'Answer\n\nNext step');
 for(const cleanup of cleanups)cleanup();
 console.log('PASS: actual ChatPage switching, background text, racing status/tokens, completion during status/history, late join, reconnect and regeneration');

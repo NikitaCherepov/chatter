@@ -6946,7 +6946,7 @@ const sendMessageThroughAiInternal = async (
     images?: Array<{ base64: string; mimeType: string }>;
     userImages?: Array<{ url: string; type: 'user_photo' }> | null;
     userAttachments?: MessageAttachment[] | null;
-    onIntermediateMessage?: (text: string) => Promise<void> | void;
+    onIntermediateMessage?: (text: string, accumulatedContent: string) => Promise<void> | void;
     onStateChange?: (state: DisplayStatePayload) => Promise<void> | void;
     onToolStatus?: (text: string) => Promise<void> | void;
     onMapUpdate?: (data: MapUpdatePayload) => Promise<void> | void;
@@ -8341,7 +8341,7 @@ User request: "${text}"`;
         // Модель вызывает тулз + написала текст (промежуточное сообщение)
         if (safeOnIntermediateMessage) {
           // Если есть обработчик — отправляем юзеру прямо сейчас
-          await safeOnIntermediateMessage(stepContent);
+          await safeOnIntermediateMessage(stepContent, fullDbHistory);
         }
         // Коллбэка нет — текст останется в fullDbHistory для финальной отправки
       } else {

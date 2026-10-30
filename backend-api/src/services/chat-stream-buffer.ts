@@ -10,17 +10,19 @@ export class ChatStreamBuffer {
       sequence: 0,
       content: '',
       reasoning_content: '',
+      tool_status: null,
       created_at: Math.floor(Date.now() / 1000),
     };
   }
   event(payload: Record<string, unknown>): Record<string, unknown> {
     const text = typeof payload.text === 'string' ? payload.text : '';
-    if (payload.type === 'chat_agent_token') this.data.content = String(this.data.content) + text;
-    else if (payload.type === 'chat_agent_reasoning')
-      this.data.reasoning_content = String(this.data.reasoning_content) + text;
-    else if (payload.type === 'chat_intermediate' || payload.type === 'chat_tool_status') {
-      const formatted = payload.type === 'chat_tool_status' ? `_${text}_` : text;
-      this.data.content = this.data.content ? `${this.data.content}\n\n${formatted}` : formatted;
+    if (payload.type === 'chat_tool_status') this.data.tool_status = text;
+    else if (['chat_agent_token', 'chat_agent_reasoning', 'chat_intermediate'].includes(String(payload.type))) {
+      this.data.tool_status = null;
+      if (payload.type === 'chat_agent_token') this.data.content = String(this.data.content) + text;
+      else if (payload.type === 'chat_agent_reasoning') this.data.reasoning_content = String(this.data.reasoning_content) + text;
+      else this.data.content = typeof payload.content === 'string' ? payload.content
+        : this.data.content ? `${this.data.content}\n\n${text}` : text;
     } else return { ...payload, stream_id: this.data.stream_id };
     this.data.sequence = Number(this.data.sequence) + 1;
     return { ...payload, stream_id: this.data.stream_id, sequence: this.data.sequence };

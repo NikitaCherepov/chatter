@@ -48,8 +48,15 @@ assert.equal(outOfOrder.read().sequence, 3);
 const tool = server.event({ type: 'chat_tool_status', text: 'Reading' });
 const intermediate = server.event({ type: 'chat_intermediate', text: 'Read result' });
 client.push(tool);
+assert.equal(client.read().tool_status, 'Reading');
+assert.equal(client.read().content, 'Hello world', 'current activity must not become answer text');
+assert.equal(server.snapshot().content, 'Hello world\n\nRead result');
+const waiting = new RoomStreamBuffer(initial.stream_id);
+waiting.restore({ ...client.read() });
+assert.equal(waiting.read().tool_status, 'Reading', 'activity survives a stream snapshot');
 client.push(intermediate);
-assert.equal(client.read().content, 'Hello world\n\n_Reading_\n\nRead result');
+assert.equal(client.read().tool_status, null);
+assert.equal(client.read().content, 'Hello world\n\nRead result');
 const other = new ChatStreamBuffer({ ...start, chat_id: 13 });
 assert.notEqual(other.snapshot().stream_id, initial.stream_id);
 client.push(other.event({ type: 'chat_agent_token', text: 'Foreign' }));
@@ -57,6 +64,29 @@ client.restore(other.snapshot());
 assert.equal(client.read().content, server.snapshot().content);
 assert.equal(snap.content, 'Hello', 'snapshots must not mutate after new tokens');
 assert.equal(server.event({ type: 'chat_agent_done' }).stream_id, initial.stream_id);
+// A completed tool-call preface confirms token text; it is not a new paragraph.
+const commitServer = new ChatStreamBuffer(start);
+const commitClient = new RoomStreamBuffer(commitServer.snapshot().stream_id);
+commitClient.restore(commitServer.snapshot());
+const send = (event:any) => commitClient.push(commitServer.event(event));
+send({type:'chat_agent_token', text:'Before '});
+send({type:'chat_agent_token', text:'the tool.'});
+send({type:'chat_intermediate', text:'Before the tool.', content:'Before the tool.'});
+assert.equal(commitServer.snapshot().content,'Before the tool.');
+assert.equal(commitClient.read().content,'Before the tool.');
+send({type:'chat_tool_status', text:'Working'});
+send({type:'chat_agent_token', text:'\n\nAfter the tool.'});
+send({type:'chat_intermediate', text:'After the tool.', content:'Before the tool.\n\nAfter the tool.'});
+assert.equal(commitClient.read().content,'Before the tool.\n\nAfter the tool.');
+// Real repeated wording in another step must remain: no substring deduplication.
+send({type:'chat_intermediate', text:'After the tool.', content:'Before the tool.\n\nAfter the tool.\n\nAfter the tool.'});
+assert.equal(commitClient.read().content,commitServer.snapshot().content);
+assert.equal(commitClient.read().content.split('After the tool.').length,3);
+// A non-streaming step is still delivered, and late joins see the canonical text.
+send({type:'chat_intermediate',text:'Non-streamed',content:'Canonical non-streamed answer'});
+const commitLate = new RoomStreamBuffer(commitServer.snapshot().stream_id);
+commitLate.restore(commitServer.snapshot());
+assert.equal(commitLate.read().content,'Canonical non-streamed answer');
 console.log(
   'PASS: background accumulation, late join, HTTP/event races, duplicate/out-of-order tokens, reasoning, tools, regeneration and chat isolation',
 );
