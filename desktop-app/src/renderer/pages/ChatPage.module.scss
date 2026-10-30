@@ -3330,3 +3330,45 @@
 
 .messageIdentity { display: inline-flex; align-items: baseline; flex-wrap: wrap; gap: 8px; }
 .assistantName { color: var(--text-body); font-size: 13px; font-weight: 600; }
+
+.answerToolbar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 26px;
+  color: var(--text-muted);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .15s ease;
+  .metaRowRight { margin-left: auto; min-width: 0; }
+  .regenHintPopup { top: auto; bottom: calc(100% + 6px); left: 0; right: auto; max-width: 100%; }
+  .messageUsageDetails summary { max-width: 100%; }
+}
+.messageGroup:hover .answerToolbar,
+.messageGroup:focus-within .answerToolbar,
+.answerToolbarVisible,
+.answerToolbar:has(details[open]) { opacity: 1; pointer-events: auto; }
+@media (hover: none), (pointer: coarse) { .answerToolbar { opacity: 1; pointer-events: auto; } }
+@media (prefers-reduced-motion: reduce) { .answerToolbar { transition: none; } }
+
+.regenHintActive { position: relative; z-index: 21; color: var(--text-body); background: var(--bg-modal-hover); }
+.answerModelStats { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 11px; color: var(--text-muted);
+  .messageUsageMeta { margin-left: 0; padding-top: 0; }
+  .tokenBadge { padding: 0; background: transparent; color: var(--text-hint); }
+}
+.answerModelName { overflow-wrap: anywhere; }
+.answerModelStats {
+  justify-content: flex-end;
+  gap: 6px;
+  .messageUsageMeta { gap: 6px; }
+  .answerModelName + .messageUsageMeta:not(:empty)::before,
+  .messageUsageMeta > .tokenBadge + .tokenBadge::before {
+    content: '·';
+    display: inline-block;
+    margin-right: 6px;
+    color: var(--text-hint);
+  }
+  .answerModelName + .messageUsageMeta:not(:empty)::before { margin-right: 0; }
+}

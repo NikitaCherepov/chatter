@@ -606,6 +606,7 @@ type MessageItemProps = {
   onToggleToolCalls: (messageId: number) => void;
   onToggleSubagents: (messageId: number) => void;
   onRegenerate: (messageId: number) => void;
+  onCopyMessage: (messageId: number) => void;
   onOpenRegenHint: (messageId: number) => void;
   onCloseRegenHint: () => void;
   onSetRegenHintText: (value: string) => void;
@@ -667,6 +668,7 @@ const MessageItem = React.memo(function MessageItem({
   onToggleToolCalls,
   onToggleSubagents,
   onRegenerate,
+  onCopyMessage,
   onOpenRegenHint,
   onCloseRegenHint,
   onSetRegenHintText,
@@ -768,29 +770,8 @@ const MessageItem = React.memo(function MessageItem({
     return () => animation.stop();
   }, [activeVariantIndex, isRegenerating, msg.content, msg.role]);
 
-  const workContent = splitWorkContent(displayedVariantContent, msg.intermediate_messages);
-
-  return (
-    <div
-      className={`${s.messageGroup} ${msg.role === 'user' && isOwnUser ? s.messageGroupUser : msg.role === 'assistant' ? s.messageGroupAssistant : ''} ${reasoningOpen || isToolCallsOpen || isSubagentsOpen ? s.messageGroupRaised : ''} ${msg.archived ? s.messageArchived : ''}`}
-      data-message-id={msg.id}
-    >
-      <div className={s.messageLayout}>
-        <MessageAvatar
-          visible={msg.role === 'assistant' || Boolean(promptImageSrc)}
-          imageUrl={promptImageSrc}
-          pixelated={!promptImageSrc}
-          live={msg.role === 'assistant' && isLiveAvatar}
-          thinking={msg.role === 'assistant' && isLiveAvatar && sending && !promptImageSrc}
-          chatId={chatId}
-          state={avatarState}
-          alt={msg.role === 'user' ? (authorName ?? t('chat.message.you')) : (msg.prompt_name || 'Chatter')}
-        />
-        <div className={s.messageColumn}>
-      <div className={s.metaRow}>
-        <div className={s.metaRowLeft}>
-        <span className={s.messageIdentity}><span className={msg.role === 'assistant' ? s.assistantName : undefined}>{msg.role === 'user' ? (authorName ?? t('chat.message.you')) : (msg.prompt_name || 'Chatter')}</span>{msg.role === 'user' && <span aria-hidden="true">&bull;</span>}<time dateTime={new Date(msg.created_at * 1000).toISOString()} title={fullMessageDate(msg.created_at, locale)}>{messageClock(msg.created_at, locale)}</time>{msg.archived ? t('chat.message.archivedSuffix') : ''}</span>
-        <button
+  const speakAction = (
+<button
           className={`${s.playBtn} ${isTtsPlaying ? s.playBtnPlaying : ''}`}
           onClick={(e) => {
             e.stopPropagation();
@@ -811,22 +792,9 @@ const MessageItem = React.memo(function MessageItem({
             </svg>
           )}
         </button>
-        {hasSubagents && (
-          <button
-            className={`${s.reasoningToggle} ${isSubagentsOpen ? s.reasoningToggleOpen : ''}`}
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggleSubagents(msg.id);
-            }}
-            title={isSubagentsOpen ? t('chat.message.hideSubagents') : t('chat.message.showSubagents')}
-          >
-            <span>{msg.subagents!.length} {msg.subagents!.length === 1 ? t('chat.message.subagent_one') : msg.subagents!.length < 5 ? t('chat.message.subagent_few') : t('chat.message.subagent_many')}</span>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <polyline points="6 9 12 15 18 9" />
-            </svg>
-          </button>
-        )}
-        {isLastAssistant && canRegenerate && (
+  );
+  const regenerateActions = (<>
+{isLastAssistant && canRegenerate && (
           <>
             <button className={s.playBtn} onClick={(e) => { e.stopPropagation(); onRegenerate(msg.id); }} title={t('chat.message.regenerate')} disabled={sending}>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -834,7 +802,7 @@ const MessageItem = React.memo(function MessageItem({
                 <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
               </svg>
             </button>
-            {isRegenHintOpen ? (
+            {isRegenHintOpen && (
               <>
                 <div className={s.regenHintOverlay} onClick={onCloseRegenHint} />
                 <div className={s.regenHintPopup}>
@@ -861,10 +829,11 @@ const MessageItem = React.memo(function MessageItem({
                   </button>
                 </div>
               </>
-            ) : (
+            )}
               <button
-                className={s.playBtn}
-                onClick={(e) => { e.stopPropagation(); onOpenRegenHint(msg.id); }}
+                className={`${s.playBtn} ${isRegenHintOpen ? s.regenHintActive : ''}`}
+                aria-expanded={isRegenHintOpen}
+                onClick={(e) => { e.stopPropagation(); if (isRegenHintOpen) onCloseRegenHint(); else onOpenRegenHint(msg.id); }}
                 title={t('chat.message.regenerateWithHint')}
                 disabled={sending}
               >
@@ -872,15 +841,11 @@ const MessageItem = React.memo(function MessageItem({
                   <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
                 </svg>
               </button>
-            )}
           </>
         )}
-        </div>
-        <div className={s.metaRowRight}>
-        {(msg.role === 'assistant' && msg.model_name) || (showTokens && typeof displayedTokenCount === 'number' && displayedTokenCount > 0) || (showTokens && (msg.usage?.perf?.tokens_per_second ?? 0) > 0) ? (
-          <details className={s.messageUsageDetails}>
-            <summary title={msg.provider_name || undefined}>{msg.role === 'assistant' && msg.model_name ? msg.model_name : `${displayedTokenCount} tk`}</summary>
-          <span className={s.messageUsageMeta}>
+  </>);
+  const usageStats = (
+<span className={s.messageUsageMeta}>
             {showTokens && typeof displayedTokenCount === 'number' && displayedTokenCount > 0 && (
               <span
                 className={s.tokenBadge}
@@ -921,9 +886,60 @@ const MessageItem = React.memo(function MessageItem({
               </>
             )}
           </span>
-          </details>
-        ) : null}
+  );
+  const usageDetails = (
+    <div className={s.metaRowRight}>
+      {(msg.model_name || (showTokens && ((displayedTokenCount ?? 0) > 0 || (msg.usage?.perf?.tokens_per_second ?? 0) > 0))) && (
+        msg.role === 'assistant' ? <div className={s.answerModelStats} title={msg.provider_name || undefined}>
+          {msg.model_name && <span className={s.answerModelName}>{msg.model_name}</span>}
+          {usageStats}
+        </div> : <details className={s.messageUsageDetails}>
+          <summary>{displayedTokenCount} tk</summary>
+          {usageStats}
+        </details>
+      )}
+    </div>
+  );
+  const workContent = splitWorkContent(displayedVariantContent, msg.intermediate_messages);
+
+  return (
+    <div
+      className={`${s.messageGroup} ${msg.role === 'user' && isOwnUser ? s.messageGroupUser : msg.role === 'assistant' ? s.messageGroupAssistant : ''} ${reasoningOpen || isToolCallsOpen || isSubagentsOpen || isRegenHintOpen ? s.messageGroupRaised : ''} ${msg.archived ? s.messageArchived : ''}`}
+      data-message-id={msg.id}
+    >
+      <div className={s.messageLayout}>
+        <MessageAvatar
+          visible={msg.role === 'assistant' || Boolean(promptImageSrc)}
+          imageUrl={promptImageSrc}
+          pixelated={!promptImageSrc}
+          live={msg.role === 'assistant' && isLiveAvatar}
+          thinking={msg.role === 'assistant' && isLiveAvatar && sending && !promptImageSrc}
+          chatId={chatId}
+          state={avatarState}
+          alt={msg.role === 'user' ? (authorName ?? t('chat.message.you')) : (msg.prompt_name || 'Chatter')}
+        />
+        <div className={s.messageColumn}>
+      <div className={s.metaRow}>
+        <div className={s.metaRowLeft}>
+        <span className={s.messageIdentity}><span className={msg.role === 'assistant' ? s.assistantName : undefined}>{msg.role === 'user' ? (authorName ?? t('chat.message.you')) : (msg.prompt_name || 'Chatter')}</span>{msg.role === 'user' && <span aria-hidden="true">&bull;</span>}<time dateTime={new Date(msg.created_at * 1000).toISOString()} title={fullMessageDate(msg.created_at, locale)}>{messageClock(msg.created_at, locale)}</time>{msg.archived ? t('chat.message.archivedSuffix') : ''}</span>
+        {msg.role === 'user' && speakAction}
+        {hasSubagents && (
+          <button
+            className={`${s.reasoningToggle} ${isSubagentsOpen ? s.reasoningToggleOpen : ''}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleSubagents(msg.id);
+            }}
+            title={isSubagentsOpen ? t('chat.message.hideSubagents') : t('chat.message.showSubagents')}
+          >
+            <span>{msg.subagents!.length} {msg.subagents!.length === 1 ? t('chat.message.subagent_one') : msg.subagents!.length < 5 ? t('chat.message.subagent_few') : t('chat.message.subagent_many')}</span>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
+        )}
         </div>
+        {msg.role === 'user' && usageDetails}
       </div>
       {(hasReasoning || isStreamingReasoning) && <ReasoningDisclosure
         content={msg.reasoning_content || ''}
@@ -1136,6 +1152,21 @@ const MessageItem = React.memo(function MessageItem({
           </svg>
         </button>
       </div>
+      {msg.role === 'assistant' && <div
+        className={`${s.answerToolbar} ${isLastAssistant || isRegenHintOpen || isTtsPlaying ? s.answerToolbarVisible : ''}`}
+        data-answer-toolbar
+      >
+        {!isGenerating && !isRegenerating && msg.id > 0 && <>
+          <button type="button" className={s.playBtn} onClick={() => onCopyMessage(msg.id)} title={t('common.copy')}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+            </svg>
+          </button>
+          {speakAction}
+          {regenerateActions}
+          {usageDetails}
+        </>}
+      </div>}
       {isLastAssistant && !isRegenerating && (msg.variant_count ?? 1) > 1 && (
         <div className={s.messageVariants} aria-label={t('chat.message.variants')}>
           <button
@@ -6084,6 +6115,7 @@ export function ChatPage() {
                   onToggleToolCalls={handleToggleToolCalls}
                   onToggleSubagents={handleToggleSubagents}
                   onRegenerate={handleRegenerate}
+                  onCopyMessage={handleCopyMessage}
                   onOpenRegenHint={handleOpenRegenHint}
                   onCloseRegenHint={handleCloseRegenHint}
                   onSetRegenHintText={setRegenHintText}
