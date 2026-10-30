@@ -1,3 +1,4 @@
+import { getIntermediateMessages } from './intermediate-messages.js';
 import { countActivityDays } from './chat-activity-counts.js';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -1359,10 +1360,12 @@ const messageRowToDto = (row: any): MessageDto => {
     if (row.viewer_audio) {
       try { parsedAudio = JSON.parse(row.viewer_audio); } catch { parsedAudio = null; }
     }
+    let intermediateMessages: string[] = [];
     let parsedToolCalls: Array<{ id?: string; name: string; arguments: any; result_preview?: string }> | null = null;
     if (row.tool_calls_json) {
       try {
         const raw = JSON.parse(row.tool_calls_json);
+        intermediateMessages = getIntermediateMessages(raw);
         // Поддержка двух форматов:
         //   - Старый (плоский): [{ id, name, arguments, result_preview }, ...]
         //   - Новый (trace):     [{ step, content, tool_calls, results, is_final? }, ...]
@@ -1402,6 +1405,7 @@ const messageRowToDto = (row: any): MessageDto => {
       })(),
       reasoning_content: row.reasoning_content,
       tool_calls: parsedToolCalls,
+      intermediate_messages: intermediateMessages,
       images: parsedImages,
       attachments: parsedAttachments,
       audio: parsedAudio,

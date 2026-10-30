@@ -74,6 +74,7 @@ send({type:'chat_agent_token', text:'the tool.'});
 send({type:'chat_intermediate', text:'Before the tool.', content:'Before the tool.'});
 assert.equal(commitServer.snapshot().content,'Before the tool.');
 assert.equal(commitClient.read().content,'Before the tool.');
+assert.deepEqual(commitClient.read().intermediate_messages,['Before the tool.']);
 send({type:'chat_tool_status', text:'Working'});
 send({type:'chat_agent_token', text:'\n\nAfter the tool.'});
 send({type:'chat_intermediate', text:'After the tool.', content:'Before the tool.\n\nAfter the tool.'});
@@ -87,6 +88,8 @@ send({type:'chat_intermediate',text:'Non-streamed',content:'Canonical non-stream
 const commitLate = new RoomStreamBuffer(commitServer.snapshot().stream_id);
 commitLate.restore(commitServer.snapshot());
 assert.equal(commitLate.read().content,'Canonical non-streamed answer');
+assert.deepEqual(commitLate.read().intermediate_messages,commitClient.read().intermediate_messages);
+assert.deepEqual(initial.intermediate_messages,[], 'old snapshots must remain immutable');
 console.log(
   'PASS: background accumulation, late join, HTTP/event races, duplicate/out-of-order tokens, reasoning, tools, regeneration and chat isolation',
 );

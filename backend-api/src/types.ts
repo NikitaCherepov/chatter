@@ -233,6 +233,7 @@ export type MessageDto = {
   role: ChatRole;
   content: string;
   reasoning_content?: string | null;
+  intermediate_messages?: string[];
   tool_calls?: Array<{ id?: string; name: string; arguments: any; result_preview?: string }> | null;
   images?: MessageImage[] | null;
   audio?: MessageAudio | null;
@@ -338,6 +339,7 @@ export type AiSendResult = {
   final_reply_text?: string;
   user_only?: boolean;
   reasoning_content?: string | null;
+  intermediate_messages?: string[];
   chat_id: number;
   message_id: number;
   user_message_id?: number;

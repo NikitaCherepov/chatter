@@ -1,0 +1,13 @@
+.workLog { margin: 4px 0 8px; min-width: 0; color: var(--text-muted); font-size: 12px; }
+.workLog summary {
+  display: inline-flex; align-items: center; gap: 6px; padding: 4px 0; cursor: pointer; list-style: none;
+  &::-webkit-details-marker { display: none; }
+  &:hover { color: var(--text-body); }
+  svg { flex-shrink: 0; transition: transform .15s; }
+}
+.workLog details[open] > summary svg { transform: rotate(90deg); }
+.count { color: var(--text-hint); }
+.entries { display: flex; flex-direction: column; gap: 12px; margin: 6px 0 8px 5px; padding-left: 13px; border-left: 1px solid var(--border-light); }
+.entry, .latest { min-width: 0; overflow-wrap: anywhere; }
+.latest { padding: 4px 0 2px; }
+@media (prefers-reduced-motion: reduce) { .workLog summary svg { transition: none; } }

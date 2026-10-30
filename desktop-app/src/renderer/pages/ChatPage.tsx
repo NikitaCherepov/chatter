@@ -44,6 +44,8 @@ import { Tooltip } from '../components/Tooltip';
 import { dispatchAvatarState, getAvatarManifest } from '../components/PixelAvatar';
 import { MessageAvatar } from '../components/MessageAvatar';
 import { ToolActivity } from '../components/ToolActivity';
+import { WorkLog } from '../components/WorkLog';
+import { splitWorkContent } from '../lib/work-log-content';
 import type { SetDisplayStatePayload } from '../components/PixelAvatar';
 import { ToolsPanel } from '../components/ToolsPanel';
 import { ImageViewerModal } from '../components/ImageViewerModal';
@@ -583,6 +585,7 @@ type MessageItemProps = {
   isTtsPlaying: boolean;
   isReasoningOpen: boolean;
   isToolCallsOpen: boolean;
+  isGenerating: boolean;
   isSubagentsOpen: boolean;
   isRegenHintOpen: boolean;
   isEditing: boolean;
@@ -643,6 +646,7 @@ const MessageItem = React.memo(function MessageItem({
   isTtsPlaying,
   isReasoningOpen,
   isToolCallsOpen,
+  isGenerating,
   isSubagentsOpen,
   isRegenHintOpen,
   isEditing,
@@ -762,6 +766,8 @@ const MessageItem = React.memo(function MessageItem({
 
     return () => animation.stop();
   }, [activeVariantIndex, isRegenerating, msg.content, msg.role]);
+
+  const workContent = splitWorkContent(displayedVariantContent, msg.intermediate_messages);
 
   return (
     <div
@@ -949,6 +955,12 @@ const MessageItem = React.memo(function MessageItem({
         ) : null}
         </div>
       </div>
+      {msg.role === 'assistant' && <WorkLog
+        key={`${msg.id}:${activeVariantIndex}`}
+        messages={workContent.messages}
+        generating={isGenerating}
+        onImageClick={onSetViewerImageSrc}
+      />}
       {msg.role === 'assistant' && <ToolActivity
         calls={msg.tool_calls}
         current={msg.tool_status}
@@ -1075,7 +1087,7 @@ const MessageItem = React.memo(function MessageItem({
                     <span className={s.dot} />
                   </div>
                 ) : (
-                  <div className={`${s.bubbleText} ${isStreamingContent ? s.bubbleTextStreaming : ''}`}><MarkdownRenderer content={displayedVariantContent} highlightQuery={searchHighlightQuery} onImageClick={onSetViewerImageSrc} questionnaire={questionnaire} /></div>
+                  <div className={`${s.bubbleText} ${isStreamingContent ? s.bubbleTextStreaming : ''}`}><MarkdownRenderer content={workContent.answer} highlightQuery={searchHighlightQuery} onImageClick={onSetViewerImageSrc} questionnaire={questionnaire} /></div>
                 )
               )
               : msg.questionnaire_response ? <QuestionnaireResult response={msg.questionnaire_response} onImageClick={onSetViewerImageSrc} />
@@ -2023,7 +2035,7 @@ export function ChatPage() {
     suppressNextMessageAutoScrollRef.current = true;
     setMessages(previous => {
       const messages = previous.filter(message => message.id !== tempId && message.id !== snapshot.regenerate_message_id);
-      return [...messages, { id: tempId, role: 'assistant', content: snapshot.content, reasoning_content: snapshot.reasoning_content || null, tool_status: snapshot.tool_status,
+      return [...messages, { id: tempId, role: 'assistant', content: snapshot.content, reasoning_content: snapshot.reasoning_content || null, tool_status: snapshot.tool_status, intermediate_messages: snapshot.intermediate_messages,
         created_at: snapshot.created_at, agent_id: snapshot.agent_id, prompt_id: snapshot.prompt_id ?? null,
         prompt_name: snapshot.prompt_name ?? null, prompt_image_url: snapshot.prompt_image_url ?? null }];
     });
@@ -3149,7 +3161,7 @@ export function ChatPage() {
               prompt_image_url: stream.promptImageUrl,
             }];
             return base.map((message) => message.id === stream.tempId
-              ? { ...message, tool_status: null, content: accumulatedStream?.content ?? message.content + event.text }
+              ? { ...message, tool_status: null, intermediate_messages: accumulatedStream?.intermediate_messages ?? message.intermediate_messages, content: accumulatedStream?.content ?? message.content + event.text }
               : message);
           });
           break;
@@ -3177,7 +3189,7 @@ export function ChatPage() {
               prompt_image_url: stream.promptImageUrl,
             }];
             return base.map((message) => message.id === stream.tempId
-              ? { ...message, tool_status: null, reasoning_content: accumulatedStream?.reasoning_content ?? `${message.reasoning_content || ''}${event.text}` }
+              ? { ...message, tool_status: null, intermediate_messages: accumulatedStream?.intermediate_messages ?? message.intermediate_messages, reasoning_content: accumulatedStream?.reasoning_content ?? `${message.reasoning_content || ''}${event.text}` }
               : message);
           });
           break;
@@ -3208,6 +3220,7 @@ export function ChatPage() {
             }];
             return base.map((message) => message.id === stream.tempId
               ? { ...message, tool_status: isToolStatus ? text : null,
+                  intermediate_messages: accumulatedStream?.intermediate_messages ?? (isToolStatus ? message.intermediate_messages : [...(message.intermediate_messages ?? []), text.trim()]),
                   content: isToolStatus ? message.content : accumulatedStream?.content ?? event.content ?? (message.content ? `${message.content}\n\n${text}` : text) }
               : message);
           });
@@ -3267,6 +3280,7 @@ export function ChatPage() {
             created_at: Math.floor(Date.now() / 1000),
             reasoning_content: res.reasoning_content ?? null,
             tool_calls: res.tool_calls ?? null,
+            intermediate_messages: res.intermediate_messages ?? [],
             images: responseImages,
             attachments: res.response_attachments ?? undefined,
             subagents: res.subagents ?? null,
@@ -6056,6 +6070,7 @@ export function ChatPage() {
                   isTtsPlaying={ttsPlayingId === msg.id}
                   isReasoningOpen={openReasoningId === msg.id}
                   isToolCallsOpen={openToolCallsId === msg.id}
+                  isGenerating={msg.id === streamingMsgId && sending}
                   isSubagentsOpen={openSubagentsId === msg.id}
                   isRegenHintOpen={regenHintMsgId === msg.id}
                   isEditing={editingMsgId === msg.id}

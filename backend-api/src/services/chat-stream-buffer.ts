@@ -11,6 +11,7 @@ export class ChatStreamBuffer {
       content: '',
       reasoning_content: '',
       tool_status: null,
+      intermediate_messages: [],
       created_at: Math.floor(Date.now() / 1000),
     };
   }
@@ -21,8 +22,11 @@ export class ChatStreamBuffer {
       this.data.tool_status = null;
       if (payload.type === 'chat_agent_token') this.data.content = String(this.data.content) + text;
       else if (payload.type === 'chat_agent_reasoning') this.data.reasoning_content = String(this.data.reasoning_content) + text;
-      else this.data.content = typeof payload.content === 'string' ? payload.content
-        : this.data.content ? `${this.data.content}\n\n${text}` : text;
+      else {
+        this.data.content = typeof payload.content === 'string' ? payload.content
+          : this.data.content ? `${this.data.content}\n\n${text}` : text;
+        if (text.trim()) this.data.intermediate_messages = [...this.data.intermediate_messages as string[], text.trim()];
+      }
     } else return { ...payload, stream_id: this.data.stream_id };
     this.data.sequence = Number(this.data.sequence) + 1;
     return { ...payload, stream_id: this.data.stream_id, sequence: this.data.sequence };

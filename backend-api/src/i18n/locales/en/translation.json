@@ -41,13 +41,15 @@
     "priceSwitchDisabled": "Automatic provider switching is not configured. Provider was not changed."
   },
   "toolStatus": {
+    "searchQuery": "Searching for “{{query}}”",
+    "readingPage": "Reading {{url}}",
     "search_web": "Searching the web...",
     "google_ai": "Talking to Google AI...",
     "list_mail_accounts": "📧 Checking connected email accounts...",
     "check_emails": "📧 Checking email...",
     "read_email_content": "📧 Reading email...",
     "send_email": "📧 Preparing an email for confirmation...",
-    "read_webpage": "Opening page and extracting text...",
+    "read_webpage": "Reading page…",
     "get_smart_devices": "🏠 Getting device list...",
     "control_smart_home": "🏠 Running smart home command...",
     "generate_image": "Generating image...",

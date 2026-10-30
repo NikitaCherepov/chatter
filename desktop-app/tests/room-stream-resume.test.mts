@@ -90,5 +90,6 @@ emit(activityServer.event({type:'chat_intermediate',text:'Next step',content:'An
 assert.equal(activityMessage().content,'Answer\n\nNext step');
 mount(2);await tick();status=async()=>({active:true,stream:activityServer.snapshot()});
 mount(1);await tick();assert.equal(activityMessage().content,'Answer\n\nNext step');
+assert.equal(activityMessage().intermediate_messages.join('|'),'Answer|Next step');
 for(const cleanup of cleanups)cleanup();
 console.log('PASS: actual ChatPage switching, background text, racing status/tokens, completion during status/history, late join, reconnect and regeneration');

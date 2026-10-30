@@ -416,6 +416,7 @@ export type Message = {
   tool_calls?: ToolCall[] | null;
   /** Transient current activity; never persisted as answer text. */
   tool_status?: string | null;
+  intermediate_messages?: string[];
   images?: MessageImage[] | null;
   audio?: MessageAudio | null;
   created_at: number;

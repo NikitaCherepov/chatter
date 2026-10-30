@@ -37,6 +37,8 @@ import { sendIpcToDesktop, isDesktopOnline, sendToDesktop } from '../ws-clients.
 import { waitForNoPendingPcConfirmations } from './pc-command-confirmations.js';
 import { findTransitRoute, searchNearby } from './transit.js';
 import { getCurrencyRates, formatRateForAi } from './currency.js';
+import { getIntermediateMessages } from './intermediate-messages.js';
+import { getWebToolStatus } from './web-tool-status.js';
 import { db } from '../db.js';
 import { countTokens } from './tokenizer.js';
 import { listSubagentNames, buildSubagentListDescription, getSubagent } from './subagents/registry.js';
@@ -6814,6 +6816,8 @@ If the task is a description, return a detailed text response.`
 };
 
 const getToolUserMessage = (language: unknown, toolName: string, argsRaw: string) => {
+  const webStatus = getWebToolStatus(toolName, argsRaw);
+  if (webStatus) return translateForLanguage(language, webStatus.key, webStatus.values);
   if (toolName === 'random_roll') {
     try {
       const parsed = JSON.parse(argsRaw || '{}');
@@ -8857,6 +8861,7 @@ if (taskCompletion) {
     : '';
   return {
     reply_text: applyAborted ? (fullDbHistory || answer) : answer,
+    intermediate_messages: getIntermediateMessages(iterations),
     ...(options?.scheduledTask ? { task_result: taskCompletion, task_trace: iterations } : {}),
     final_reply_text: finalReplyText,
     ...(applyAborted ? { aborted: true } : {}),
@@ -8965,6 +8970,7 @@ if (taskCompletion) {
 
       return {
         reply_text: abortedAnswer,
+        intermediate_messages: getIntermediateMessages(iterations),
         reasoning_content: abortedReasoning,
         chat_id: chatId,
         message_id: abortedMessageId,

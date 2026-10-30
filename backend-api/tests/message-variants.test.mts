@@ -110,6 +110,20 @@ assert.deepEqual(getChatMessageVariants(81, chatId, toolResponse), [], 'variants
 await appendChatMessage(81, regenChat, 'user', 'Next question');
 assert.deepEqual(getChatMessageVariants(81, regenChat, toolResponse), [], 'only the current final message preloads variants');
 
+// Work-log metadata comes from each saved variant's trace without changing content.
+const logChat = createUserChat(81, 'Work log');
+const logTrace = JSON.stringify([
+  {step:1,content:'Searching.',tool_calls:[{id:'search-1',name:'search_web',arguments:{}}],results:[]},
+  {step:2,content:'Final answer.',tool_calls:[],results:[],is_final:true},
+]);
+const logId = await appendChatMessage(81, logChat, 'assistant', 'Searching.\n\nFinal answer.', null, null, null, null, logTrace);
+const loadedLog = getChatMessages(81, logChat, 20, 0).find(item=>item.id===logId)!;
+assert.deepEqual(loadedLog.intermediate_messages,['Searching.']);
+assert.equal(loadedLog.content,'Searching.\n\nFinal answer.','AI context and stored content remain intact');
+await appendChatMessage(81, logChat, 'assistant', 'Plain alternative', null, null, null, null, null, null, null, {regenerateMessageId:logId});
+const logVariants = getChatMessageVariants(81, logChat, logId);
+assert.deepEqual(logVariants[0].intermediate_messages,['Searching.']);
+assert.deepEqual(logVariants[1].intermediate_messages,[],'work logs stay isolated between regenerated variants');
 db.close();
 for (const suffix of ['', '-wal', '-shm']) {
   try { fs.unlinkSync(`${dbPath}${suffix}`); } catch { /* already absent */ }

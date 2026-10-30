@@ -1,5 +1,5 @@
 export type RoomStreamSnapshot = {
-  stream_id: string; sequence: number; content: string; reasoning_content: string; tool_status?: string | null;
+  stream_id: string; sequence: number; content: string; reasoning_content: string; tool_status?: string | null; intermediate_messages?: string[];
   agent_id: number | null; prompt_id?: number | null; prompt_name?: string | null;
   prompt_image_url?: string | null; created_at: number; regenerate_message_id?: number | null;
 };
@@ -32,8 +32,11 @@ export class RoomStreamBuffer {
         next.tool_status = null;
         if (event.type === 'chat_agent_token') next.content += text;
         else if (event.type === 'chat_agent_reasoning') next.reasoning_content += text;
-        else next.content = typeof event.content === 'string' ? event.content
-          : next.content ? `${next.content}\n\n${text}` : text;
+        else {
+          next.content = typeof event.content === 'string' ? event.content
+            : next.content ? `${next.content}\n\n${text}` : text;
+          if (text.trim()) next.intermediate_messages = [...(next.intermediate_messages ?? []), text.trim()];
+        }
       }
       this.value = next;
     }

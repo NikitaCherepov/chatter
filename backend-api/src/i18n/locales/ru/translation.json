@@ -41,13 +41,15 @@
     "priceSwitchDisabled": "Стратегия автоматического переключения не выбрана. Провайдер не изменён."
   },
   "toolStatus": {
+    "searchQuery": "Ищу «{{query}}»",
+    "readingPage": "Читаю {{url}}",
     "search_web": "Поиск в интернете...",
     "google_ai": "Общение с Google AI...",
     "list_mail_accounts": "📧 Проверяю подключённые почтовые ящики...",
     "check_emails": "📧 Проверяю почту...",
     "read_email_content": "📧 Читаю письмо...",
     "send_email": "📧 Предлагаю отправить письмо...",
-    "read_webpage": "Открытие страницы и извлечение текста...",
+    "read_webpage": "Читаю страницу…",
     "get_smart_devices": "🏠 Получение списка устройств...",
     "control_smart_home": "🏠 Выполнение команды умного дома...",
     "generate_image": "Генерация изображения...",

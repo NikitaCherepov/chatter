@@ -187,17 +187,15 @@ const runSteps = async (
           onReasoningStream: async (text) => {
             emit({ type: 'chat_agent_reasoning', chat_id: chatId, agent_id: agentId, text });
           },
+          onIntermediateMessage: async (text, content) => {
+            emit({ type: 'chat_intermediate', chat_id: chatId, text, content });
+            separateNextContent = Boolean(content);
+          },
           onToolStatus: async (text) => {
             emit({ type: 'chat_tool_status', chat_id: chatId, text });
           },
           ...(step.kind === 'default'
             ? {
-                onIntermediateMessage: async (text, content) => {
-                  // The step may already have arrived as token deltas. Commit
-                  // the canonical accumulated text rather than appending it again.
-                  emit({ type: 'chat_intermediate', chat_id: chatId, text, content });
-                  separateNextContent = Boolean(content);
-                },
                 onDesktopAction: async (action) => {
                   emit({ type: 'chat_desktop_action', chat_id: chatId, ...action });
                 },
