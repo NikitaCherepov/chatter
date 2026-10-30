@@ -753,6 +753,7 @@
   },
   "chat": {
     "approvals": {
+      "expandDiff": "Expand changes",
       "queue": "Awaiting approval: {{count}}",
       "commentFor": "Rejection comment: {{title}}",
       "rejectAndSend": "Reject and send",

@@ -753,6 +753,7 @@
   },
   "chat": {
     "approvals": {
+      "expandDiff": "Развернуть изменения",
       "queue": "Ожидают подтверждения: {{count}}",
       "commentFor": "Комментарий к отказу: {{title}}",
       "rejectAndSend": "Отклонить и отправить",

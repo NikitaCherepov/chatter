@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { AnimatedDetails } from './AnimatedDisclosure';
 import { EmailBodyPreview } from './EmailBodyPreview';
+import { FileEditDiff } from './FileEditDiff/FileEditDiff';
 import s from './ConfirmationCard.module.scss';
 
 export type ConfirmationComment = {
@@ -44,11 +45,11 @@ export function ConfirmationCommentInput({ composer, modal = false }: { composer
 
 type CardProps = {
   id: string; title: string; summary?: string; icon?: ReactNode; children: ReactNode;
-  actions: ReactNode; extraActions?: ReactNode; reviewAction?: ReactNode; expandable?: boolean;
+  actions: ReactNode; extraActions?: ReactNode; reviewAction?: ReactNode; expandable?: boolean; expandLabel?: string; fullScreen?: boolean;
   queueControl?: ReactNode; onBusyChange?: (busy: boolean) => void;
 };
 
-export function ConfirmationCard({ id, title, icon, children, actions, extraActions, reviewAction, expandable, queueControl, onBusyChange }: CardProps) {
+export function ConfirmationCard({ id, title, icon, children, actions, extraActions, reviewAction, expandable, expandLabel, fullScreen, queueControl, onBusyChange }: CardProps) {
   const { t } = useTranslation();
   const composer = useContext(ComposerContext);
   const [expanded, setExpanded] = useState(false);
@@ -105,7 +106,7 @@ export function ConfirmationCard({ id, title, icon, children, actions, extraActi
         <div className={s.title} id={titleId}>{icon}<span>{title}</span></div>
         <div className={s.headerActions}>{!expanded && queueControl}
           {expandable && <button ref={expandRef} type="button" className={s.iconButton} onClick={() => setExpanded(value => !value)}
-            aria-label={expanded ? t('common.close') : t('chat.approvals.expandEmail')} title={expanded ? t('common.close') : t('chat.approvals.expandEmail')}>
+            aria-label={expanded ? t('common.close') : (expandLabel || t('chat.approvals.expandEmail'))} title={expanded ? t('common.close') : (expandLabel || t('chat.approvals.expandEmail'))}>
             {expanded ? '✕' : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><path d="M8 3H3v5M16 3h5v5M3 16v5h5M21 16v5h-5" /></svg>}
           </button>}
         </div>
@@ -121,9 +122,14 @@ export function ConfirmationCard({ id, title, icon, children, actions, extraActi
       </div>
     </section>
   </ConfirmationCardContext.Provider>;
-  return expanded ? createPortal(<div className={s.overlay} onClick={() => setExpanded(false)}>
+  return expanded ? createPortal(<div className={`${s.overlay} ${fullScreen ? s.fullScreen : ''}`} onClick={() => setExpanded(false)}>
     <div ref={panelRef} className={s.dialog} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onClick={e => e.stopPropagation()}>{card}</div>
   </div>, document.body) : card;
+}
+
+export function ConfirmationFileDiff({ oldContent, newContent }: { oldContent: string; newContent: string }) {
+  const expanded = useContext(ConfirmationCardContext)?.expanded;
+  return <FileEditDiff oldContent={oldContent} newContent={newContent} expanded={expanded} />;
 }
 
 export function ConfirmationEmailBody({ body }: { body: string }) {

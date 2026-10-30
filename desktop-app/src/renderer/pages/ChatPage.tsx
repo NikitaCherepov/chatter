@@ -33,7 +33,7 @@ import { EmailBodyPreview } from '../components/EmailBodyPreview';
 import { AttachModal, prepareAttachmentFiles } from '../components/AttachModal';
 import { RoomInvitesModal } from '../components/RoomInvitesModal';
 import { RejectWithComment } from '../components/RejectWithComment';
-import { ConfirmationCard, ConfirmationQueue, ConfirmationCommentInput, ConfirmationEmailBody } from '../components/ConfirmationCard';
+import { ConfirmationCard, ConfirmationQueue, ConfirmationCommentInput, ConfirmationEmailBody, ConfirmationFileDiff } from '../components/ConfirmationCard';
 import { useConfirmationComposer } from '../lib/useConfirmationComposer';
 import { FileEditDiff } from '../components/FileEditDiff/FileEditDiff';
 import type { ImageItem, DocumentItem } from '../components/AttachModal';
@@ -5745,7 +5745,7 @@ export function ChatPage() {
                   )}</ConfirmationCard>
               )),
 ...editFileLinesConfirmations.map((conf, confIdx) => (
-                <ConfirmationCard key={conf.confirmation_id} id={conf.confirmation_id} title={t('chat.file.editingLines', { start: conf.start_line, end: conf.end_line })} icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <ConfirmationCard key={conf.confirmation_id} id={conf.confirmation_id} title={t('chat.file.editingLines', { start: conf.start_line, end: conf.end_line })} expandable expandLabel={t('chat.approvals.expandDiff')} summary={conf.file_path} icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M12 20h9"/>
                       <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
                     </svg>}
@@ -5800,7 +5800,7 @@ export function ChatPage() {
                       {t('chat.file.allowFolderSession')}
                     </button></>} ><div className={s.suggestMacroCommands}>
                     <code className={s.suggestMacroCmd}>{conf.file_path}</code>
-                  </div><FileEditDiff
+                  </div><ConfirmationFileDiff
                     oldContent={conf.old_content_preview || ''}
                     newContent={conf.new_content_preview || ''}
                   /></ConfirmationCard>

@@ -5,16 +5,17 @@ import s from './FileEditDiff.module.scss';
 type FileEditDiffProps = {
   oldContent: string;
   newContent: string;
+  expanded?: boolean;
 };
 
-export function FileEditDiff({ oldContent, newContent }: FileEditDiffProps) {
+export function FileEditDiff({ oldContent, newContent, expanded = false }: FileEditDiffProps) {
   const parts = useMemo(
     () => diffLines(oldContent, newContent),
     [oldContent, newContent],
   );
 
   return (
-    <div className={s.diff}>
+    <div className={`${s.diff} ${expanded ? s.expanded : ''}`}>
       {parts.flatMap((part, partIndex) => {
         const lines = part.value.split('\n');
         if (lines[lines.length - 1] === '') lines.pop();
