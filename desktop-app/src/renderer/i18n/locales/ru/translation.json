@@ -82,7 +82,7 @@
     }
   },
   "quota": {
-    "caption": "Использовано квоты: {{percent}}%",
+    "caption": "Квота",
     "title": "Использование квоты",
     "resetsAt": "Сброс:",
     "monthly": {
@@ -941,6 +941,7 @@
       "saveSettingsFailed": "Не удалось сохранить настройки памяти"
     },
     "sidebar": {
+      "dateGroups": {"today": "Сегодня", "yesterday": "Вчера", "thisWeek": "На этой неделе", "thisMonth": "В этом месяце", "older": "Раньше"},
       "chats": "Чаты",
       "expand": "Развернуть",
       "collapse": "Свернуть",

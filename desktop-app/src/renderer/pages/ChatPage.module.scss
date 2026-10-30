@@ -3294,3 +3294,16 @@
   .reasoningControl { margin: 0; padding-top: 14px; border-top: 1px solid var(--border-light); }
 }
 .chatTopBar { position: relative; z-index: 40; }
+
+.chatDateHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 16px 16px 4px;
+  color: var(--text-hint);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}

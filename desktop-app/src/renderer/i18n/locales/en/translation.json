@@ -82,7 +82,7 @@
     }
   },
   "quota": {
-    "caption": "Quota used: {{percent}}%",
+    "caption": "Quota",
     "title": "Quota Usage",
     "resetsAt": "Resets:",
     "monthly": {
@@ -941,6 +941,7 @@
       "saveSettingsFailed": "Could not save memory settings"
     },
     "sidebar": {
+      "dateGroups": {"today": "Today", "yesterday": "Yesterday", "thisWeek": "This week", "thisMonth": "This month", "older": "Earlier"},
       "chats": "Chats",
       "expand": "Expand",
       "collapse": "Collapse",

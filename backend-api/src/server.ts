@@ -1,4 +1,4 @@
-﻿import express from 'express';
+import express from 'express';
 import path from 'path';
 import { listTaskPage } from './services/tasks.js';
 import { uploadBackupSession, startBackupSession, backupSessionStatus, cancelBackupSession } from './services/sillytavern-backup-session.js';
@@ -16,7 +16,7 @@ import dotenv from 'dotenv';
 import { WebSocketServer, WebSocket } from 'ws';
 import { wsClients, registerWsClient, unregisterWsClient, isDesktopOnline, sendIpcToDesktop, sendToDesktop, WS_HEARTBEAT_GRACE_MS, WS_HEARTBEAT_INTERVAL_MS, type WsClient } from './ws-clients.js';
 import { adminMiddleware, authMiddleware, issueAuthTokens, makePasswordHash, refreshAccessToken, validateTelegramInitData, verifyPassword, verifyToken, verifyTokenIgnoreExpiry, type AuthedRequest } from './auth.js';
-import { getChatMessageVariants, activateChatMessageVariant, activateUserChat, bindChatMessageTelegramMeta, clearAllUserMessages, clearUserChatMessages, countUserChats, createPasswordAccount, createOrUpdateUserForApiRegistration, createUserChat, deleteUserHistoryByRole, deleteUserHistoryMessage, ensureActiveChat, forkChat, getPasswordAccountByLogin, getChatMessages, getChatMedia, getAllUserMedia, getRecentUserHistory, getUserById, getUserChatById, getUserChatListItem, listUserChats, promoteTemporaryChat, upsertUserFromTelegram, setUserTimezone, updateUserPrompt, selectUserCustomPrompt, updateUserCustomPrompt, resetUsersPromptIfDeleted, resetDailyMessageCounters, upsertTelegramUser, createPendingTelegramUser, updateUserStatus, updateUserRole, updateUserName, updateUserTelegramUsername, removeUser, getAllUsers, getUsersCount, getUsersPage, getPendingUsersCount, getPendingUsersPage, getBannedUsersCount, getBannedUsersPage, syncAllUsersPlanLimits, resetUserWeeklyUsage, resetAllUsersWeeklyUsage, updateUserWeeklyCostQuota, revokeUserAuthTokens, generateLinkCode, verifyLinkCode, getLinkCodeForUser, generatePasswordResetCode, verifyPasswordResetCode, signPasswordResetToken, verifyPasswordResetToken, adminApplyGeneratedPassword, renameUserChat, deleteUserChat, deleteUserMessage, editUserMessage, searchUserChats, searchCurrentChatMessages, updateChatMessageAudio, getChatContextTokens, resolveMaxContextTokens, updateUserMaxContextTokens, getChatAttachments, deleteMessageAttachment, deleteMessageImage, resolveAttachmentMaxTokens, updateUserAttachmentMaxTokens, setChatBotHidden, listChatFolders, createChatFolder, renameChatFolder, deleteChatFolder, moveUserChatToFolder, listChatFilterOptions, listStaleTemporaryChats, touchUserChat, getChatPromptSettings, updateChatPromptSettings } from './services/chats.js';
+import { getUnfiledActivityCounts, getChatMessageVariants, activateChatMessageVariant, activateUserChat, bindChatMessageTelegramMeta, clearAllUserMessages, clearUserChatMessages, countUserChats, createPasswordAccount, createOrUpdateUserForApiRegistration, createUserChat, deleteUserHistoryByRole, deleteUserHistoryMessage, ensureActiveChat, forkChat, getPasswordAccountByLogin, getChatMessages, getChatMedia, getAllUserMedia, getRecentUserHistory, getUserById, getUserChatById, getUserChatListItem, listUserChats, promoteTemporaryChat, upsertUserFromTelegram, setUserTimezone, updateUserPrompt, selectUserCustomPrompt, updateUserCustomPrompt, resetUsersPromptIfDeleted, resetDailyMessageCounters, upsertTelegramUser, createPendingTelegramUser, updateUserStatus, updateUserRole, updateUserName, updateUserTelegramUsername, removeUser, getAllUsers, getUsersCount, getUsersPage, getPendingUsersCount, getPendingUsersPage, getBannedUsersCount, getBannedUsersPage, syncAllUsersPlanLimits, resetUserWeeklyUsage, resetAllUsersWeeklyUsage, updateUserWeeklyCostQuota, revokeUserAuthTokens, generateLinkCode, verifyLinkCode, getLinkCodeForUser, generatePasswordResetCode, verifyPasswordResetCode, signPasswordResetToken, verifyPasswordResetToken, adminApplyGeneratedPassword, renameUserChat, deleteUserChat, deleteUserMessage, editUserMessage, searchUserChats, searchCurrentChatMessages, updateChatMessageAudio, getChatContextTokens, resolveMaxContextTokens, updateUserMaxContextTokens, getChatAttachments, deleteMessageAttachment, deleteMessageImage, resolveAttachmentMaxTokens, updateUserAttachmentMaxTokens, setChatBotHidden, listChatFolders, createChatFolder, renameChatFolder, deleteChatFolder, moveUserChatToFolder, listChatFilterOptions, listStaleTemporaryChats, touchUserChat, getChatPromptSettings, updateChatPromptSettings } from './services/chats.js';
 import { createNote, countNotes, deleteNote, getNoteById, getNoteStats, getNoteStatsForUsers, listNotes, updateNoteContent } from './services/notes.js';
 import { createTask, deletePendingTask, getPendingTaskCount, getUserTaskById, isOwnNonRoomChat, listTaskTargetChats, listTasks, MAX_PENDING_TASKS_PER_USER, updatePendingTask } from './services/tasks.js';
 import { createDemoNewspaperIssue, createNewspaper, createNewspaperRun, deleteNewspaperIssue, ensureDefaultNewspaper, getNewspaperIssue, getNewspaperRun, listNewspaperIssues, listNewspaperRuns, listNewspapers, markInterruptedNewspaperRuns, updateNewspaper } from './services/newspapers.js';
@@ -2136,13 +2136,20 @@ app.get('/api/v1/chat-folders', (req: AuthedRequest, res) => {
     return res.status(400).json({ error: 'bad_prompt_id' });
   }
   const modelName = `${req.query.model || ''}`.trim();
+  const timeZone = typeof req.query.time_zone === 'string' ? req.query.time_zone : 'UTC';
+  try { new Intl.DateTimeFormat('en', { timeZone }); }
+  catch { return res.status(400).json({ error: 'bad_time_zone' }); }
   const activeChatId = ensureActiveChat(userId);
+  const activityDays = getUnfiledActivityCounts(userId, {
+    promptId, modelName: modelName || undefined,
+    hasFiles: req.query.has_files === '1', hasImages: req.query.has_images === '1',
+  }, timeZone);
   return res.json({ ...listChatFolders(userId, {
     promptId,
     modelName: modelName || undefined,
     hasFiles: req.query.has_files === '1',
     hasImages: req.query.has_images === '1',
-  }), active_chat_id: activeChatId, active_chat: getUserChatListItem(userId, activeChatId) || null });
+  }), unfiled_activity_days: activityDays, active_chat_id: activeChatId, active_chat: getUserChatListItem(userId, activeChatId) || null });
 });
 
 app.post('/api/v1/chat-folders', (req: AuthedRequest, res) => {

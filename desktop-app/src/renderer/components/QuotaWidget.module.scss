@@ -182,3 +182,15 @@
   color: var(--accent-icon);
   pointer-events: none;
 }
+
+.caption { display: inline-flex; align-items: center; gap: 8px; }
+.captionTrack {
+  display: block;
+  width: 72px;
+  height: 3px;
+  border-radius: 3px;
+  background: var(--border-light);
+  overflow: hidden;
+  flex-shrink: 0;
+  > span { display: block; height: 100%; background: var(--accent-icon); border-radius: inherit; }
+}

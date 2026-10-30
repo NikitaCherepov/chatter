@@ -441,6 +441,7 @@ export type ChatInfo = {
   title: string;
   folder_id: number | null;
   created_at: number;
+  updated_at?: number;
   bot_hidden?: boolean;
   /** false = not yours room */
   is_owner?: boolean;
@@ -478,8 +479,9 @@ export async function getChatFilterOptions(): Promise<{ prompts: Array<{ id: num
   return apiFetch('/api/v1/chat-filter-options');
 }
 
-export async function getChatFolders(filters: ChatListFilters = {}): Promise<{ folders: ChatFolder[]; unfiled_count: number; total_count: number; active_chat_id: number | null; active_chat: ChatInfo | null }> {
+export async function getChatFolders(filters: ChatListFilters = {}): Promise<{ unfiled_activity_days?: Record<string, number>; folders: ChatFolder[]; unfiled_count: number; total_count: number; active_chat_id: number | null; active_chat: ChatInfo | null }> {
   const params = new URLSearchParams();
+  params.set('time_zone', Intl.DateTimeFormat().resolvedOptions().timeZone);
   if (filters.promptId !== undefined) params.set('prompt_id', `${filters.promptId}`);
   if (filters.model) params.set('model', filters.model);
   if (filters.hasFiles) params.set('has_files', '1');

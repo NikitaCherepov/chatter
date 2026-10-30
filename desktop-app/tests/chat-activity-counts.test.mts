@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
+const { activityGroupCounts, moveActivityCount } = createRequire(import.meta.url)('../src/renderer/lib/chat-date-groups.ts');
+const now = new Date(2026,9,30,12);
+const original={'2026-08-10':1744,'2026-10-30':2};
+const moved=moveActivityCount(original,'2026-08-10','2026-10-30');
+assert.deepEqual(activityGroupCounts(moved,now),{'today':3,'month:2026-08':1743});
+assert.equal(moveActivityCount(moved,'2026-10-30','2026-10-30'),moved,'duplicate confirmed event does not count again');
+assert.deepEqual(moveActivityCount(moved,'2026-10-30','2026-08-10'),original,'failed send rolls back');
+assert.deepEqual(original,{'2026-08-10':1744,'2026-10-30':2},'do not mutate baseline');
+assert.deepEqual(activityGroupCounts({'2026-10-29':4},new Date(2026,9,30,12)),{'yesterday':4});
+assert.deepEqual(activityGroupCounts({'2026-10-29':4},new Date(2026,9,31,12)),{'thisWeek':4},'regroup unchanged daily counts at midnight');
+console.log('optimistic activity counts tests passed');

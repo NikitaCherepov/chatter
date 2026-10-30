@@ -23,6 +23,7 @@ import { useUnreadChats } from '../lib/useUnreadChats';
 import * as api from '../lib/api';
 import { RoomStreamBuffer } from '../lib/room-stream-buffer';
 import { promoteChatInFolder } from '../lib/chat-list-order';
+import { groupChatsByActivity, activityDay, moveActivityCount, activityGroupCounts } from '../lib/chat-date-groups';
 import { generateDocxBlob, generateChatDocxBlob } from '../lib/markdownToDocx';
 import { MarkdownRenderer } from '../components/MarkdownRenderer';
 import { QuestionnaireResult, type QuestionnaireContextValue } from '../components/Questionnaire';
@@ -1334,8 +1335,28 @@ export function ChatPage() {
   const [chats, setChats] = useState<api.ChatInfo[]>([]);
   const chatsRef = useRef(chats);
   chatsRef.current = chats;
-  const promoteChat = useCallback((chatId: number) => {
-    setChats(current => promoteChatInFolder(current, chatId));
+  const [activityDays, setActivityDays] = useState<Record<string, number> | undefined>();
+  const activityRevisionRef = useRef(0);
+  const pendingActivityRef = useRef(new Map<number, api.ChatInfo>());
+  const [activityRefresh, setActivityRefresh] = useState(0);
+  const promoteChat = useCallback((chatId: number, confirmed = true) => {
+    const now = Math.floor(Date.now() / 1000);
+    const chat = chatsRef.current.find(item => item.id === chatId);
+    if (!chat) return;
+    if (confirmed) {
+      pendingActivityRef.current.delete(chatId);
+      setActivityRefresh(value => value + 1);
+    } else if (!pendingActivityRef.current.has(chatId)) pendingActivityRef.current.set(chatId, chat);
+    activityRevisionRef.current++;
+    if (chat.folder_id === null) {
+      const from = activityDay(chat.updated_at || chat.created_at);
+      const to = activityDay(now);
+      setActivityDays(current => current ? moveActivityCount(current, from, to) : current);
+    }
+    const next = promoteChatInFolder(chatsRef.current.map(item => item.id === chatId
+      ? { ...item, updated_at: Math.max(item.updated_at || 0, now) } : item), chatId);
+    chatsRef.current = next;
+    setChats(next);
   }, []);
   const [activeChatId, setActiveChatId] = useState<number | null>(null);
   const [effectivePersonaImageUrl, setEffectivePersonaImageUrl] = useState<string | null>(null);
@@ -1868,10 +1889,12 @@ export function ChatPage() {
   const loadChats = useCallback(async () => {
     const generation = ++chatListGenerationRef.current;
     setLoadingChats(true);
+    setActivityDays(undefined);
     try {
       const filters = getCurrentChatFilters();
+      const activityRevision = activityRevisionRef.current;
       const [folderRes, filterOptions] = await Promise.all([
-        api.getChatFolders(filters).catch(() => ({ folders: [] as api.ChatFolder[], unfiled_count: 0, total_count: 0, active_chat_id: null, active_chat: null })),
+        api.getChatFolders(filters).catch(() => ({ folders: [] as api.ChatFolder[], unfiled_count: 0, total_count: 0, active_chat_id: null, active_chat: null, unfiled_activity_days: undefined as Record<string, number> | undefined })),
         api.getChatFilterOptions().catch(() => ({ prompts: [] as Array<{ id: number; name: string }>, models: [] as string[] })),
       ]);
       if (generation !== chatListGenerationRef.current) return;
@@ -1886,6 +1909,8 @@ export function ChatPage() {
       setUnfiledChatCount(Number.isFinite(folderRes.unfiled_count)
         ? folderRes.unfiled_count
         : 0);
+      if (activityRevision === activityRevisionRef.current && pendingActivityRef.current.size === 0)
+        setActivityDays(folderRes.unfiled_activity_days);
       setChatFilterOptions(filterOptions);
       const nextPaging = {} as Record<ChatSectionKey, ChatSectionPaging>;
       for (const folder of folderRes.folders) {
@@ -1950,8 +1975,13 @@ export function ChatPage() {
   }, [getCurrentChatFilters, searchQuery, updateSectionPaging]);
 
   const refreshChatListMetadata = useCallback(async () => {
+    const generation = chatListGenerationRef.current;
     try {
+      const activityRevision = activityRevisionRef.current;
       const folderRes = await api.getChatFolders(getCurrentChatFilters());
+      if (generation !== chatListGenerationRef.current) return;
+      if (activityRevision === activityRevisionRef.current && pendingActivityRef.current.size === 0)
+        setActivityDays(folderRes.unfiled_activity_days);
       setChatFolders(folderRes.folders.map((folder) => ({
         ...folder,
         chat_count: Number.isFinite(folder.chat_count) ? folder.chat_count : 0,
@@ -1980,6 +2010,9 @@ export function ChatPage() {
   }, [getCurrentChatFilters, updateSectionPaging]);
 
   useEffect(() => { void loadChats(); }, [loadChats]);
+  useEffect(() => {
+    if (activityRefresh > 0) void refreshChatListMetadata();
+  }, [activityRefresh, refreshChatListMetadata]);
 
   useEffect(() => { messagesChatIdRef.current = null; }, [messageCache]);
 
@@ -3292,6 +3325,7 @@ export function ChatPage() {
           break;
         }
         case 'chat_agent_error': {
+          if (pendingActivityRef.current.delete(event.chat_id)) void loadChats();
           const stream = roomEventAgentMsgIds.current.get(event.chat_id);
           roomEventAgentMsgIds.current.delete(event.chat_id);
           if (stream) {
@@ -3382,6 +3416,7 @@ export function ChatPage() {
     };
 
     setMessages((prev) => [...prev, tempUserMsg]);
+    if (activeChatId) promoteChat(activeChatId, false);
 
     // Unified trigger: rooms persist user_only; single chat runs a default step.
     // Streaming is handled entirely by the onRoomEvent handler.
@@ -3401,6 +3436,15 @@ export function ChatPage() {
         userOnly: roomCreated,
       });
       if (!delivered) {
+        const previous = pendingActivityRef.current.get(activeChatId);
+        pendingActivityRef.current.delete(activeChatId);
+        if (previous) {
+          activityRevisionRef.current++;
+          const now = Math.floor(Date.now() / 1000);
+          if (previous.folder_id === null) setActivityDays(current => current
+            ? moveActivityCount(current, activityDay(now), activityDay(previous.updated_at || previous.created_at)) : current);
+          void loadChats();
+        }
         // The trigger never reached the server — roll the optimistic UI back.
         clearSendWatchdog(activeChatId);
         pendingUserMessageIdByChatRef.current.delete(activeChatId);
@@ -3446,7 +3490,7 @@ export function ChatPage() {
       }
       if (!persisted) throw error;
     }
-  }, [activeChatId, sending, user?.id, preferredModel, roomCreated, armSendWatchdog, clearSendWatchdog]);
+  }, [activeChatId, sending, user?.id, preferredModel, roomCreated, armSendWatchdog, clearSendWatchdog, promoteChat, loadChats]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
@@ -4641,7 +4685,7 @@ export function ChatPage() {
         </div>
         </div>
         {renamingChatId !== chat.id && (
-          <div className={s.chatItemTime}>{formatTime(chat.created_at)}</div>
+          <div className={s.chatItemTime}>{formatTime(chat.updated_at || chat.created_at)}</div>
         )}
       </div>}
     </DemoDraggableChat>
@@ -4652,6 +4696,13 @@ export function ChatPage() {
     chats: chats.filter((chat) => chat.folder_id === folder.id),
   }));
   const demoUnfiledChats = chats.filter((chat) => chat.folder_id === null);
+  const [chatGroupingNow, setChatGroupingNow] = useState(() => new Date());
+  useEffect(() => {
+    const timer = window.setInterval(() => setChatGroupingNow(new Date()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
+  const unfiledDateGroups = groupChatsByActivity(demoUnfiledChats, chatGroupingNow);
+  const dateGroupCounts = activityDays ? activityGroupCounts(activityDays, chatGroupingNow) : undefined;
   const demoDraggingChat = chats.find((chat) => chat.id === demoDraggingChatId) ?? null;
 
   const toggleDemoFolder = (folderId: number) => {
@@ -4751,6 +4802,7 @@ export function ChatPage() {
     setContextMenuChatId(null);
     try {
       await api.moveChatToFolder(chatId, folderId);
+      void refreshChatListMetadata();
     } catch (error) {
       console.error('Failed to move chat to folder:', error);
       updateSectionPaging(previousPaging);
@@ -5492,11 +5544,16 @@ export function ChatPage() {
             })}
             <DemoDroppableFolder folderId="unfiled">
               <div className={s.demoUnfiledDropZone}>
-              <div className={s.demoUnfiledHeader}>
-                <span>{t('chat.sidebar.folders.unfiled')}</span>
-                <span>{unfiledChatCount}</span>
-              </div>
-              {demoUnfiledChats.map((chat) => renderSidebarChat(chat))}
+              {unfiledDateGroups.map(group => (
+                <React.Fragment key={group.key}>
+                  <div className={s.chatDateHeading}><span>{group.month
+                    ? group.month.toLocaleDateString(locale, { month: 'long', ...(group.month.getFullYear() !== chatGroupingNow.getFullYear() ? { year: 'numeric' as const } : {}) })
+                    : t(`chat.sidebar.dateGroups.${group.key}`)}</span>
+                    {dateGroupCounts && <span>{dateGroupCounts[group.key] ?? 0}</span>}
+                  </div>
+                  {group.chats.map(chat => renderSidebarChat(chat))}
+                </React.Fragment>
+              ))}
               {demoUnfiledChats.length === 0 && unfiledChatCount === 0 && <div className={s.demoEmptyUnfiled}>{t('chat.sidebar.folders.dropChat')}</div>}
               {sectionPaging.unfiled?.loading && <div className={s.emptyChats}>{t('common.loading')}</div>}
               <ChatSectionSentinel

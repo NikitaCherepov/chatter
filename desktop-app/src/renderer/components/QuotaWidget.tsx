@@ -104,8 +104,13 @@ export function QuotaWidget({ variant = 'full', className }: Props) {
   // ── Compact: small circle with percentage for the chat toolbar ──
   if (variant === 'caption') {
     if (activeQuota <= 0) return null;
-    return <span className={className} title={`${t('quota.resetsAt')} ${formatDate(quota.resets_at)}`}>
-      {t('quota.caption', { percent, defaultValue: 'Quota used: {{percent}}%' })}
+    return <span className={`${s.caption} ${className || ''}`} title={`${t('quota.resetsAt')} ${formatDate(quota.resets_at)}`}>
+      <span>{t('quota.caption', { defaultValue: 'Quota' })}</span>
+      <span className={s.captionTrack} role="progressbar" aria-label={t('quota.title')}
+        aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.max(0, Math.min(100, percent))}>
+        <span style={{ width: `${Math.max(0, Math.min(100, percent))}%` }} />
+      </span>
+      <span>{percent}%</span>
     </span>;
   }
 

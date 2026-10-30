@@ -1,4 +1,5 @@
-﻿import fs from 'node:fs';
+import { countActivityDays } from './chat-activity-counts.js';
+import fs from 'node:fs';
 import path from 'node:path';
 import { extractQuestionnaires, questionnaireSchema, validateQuestionnaireAnswers, questionnaireAnswerText, type QuestionnaireSubmission, type QuestionnaireResponse } from './message-questionnaires.js';
 import { db, toUnix } from '../db.js';
@@ -380,6 +381,15 @@ export type ChatFolderDto = {
   created_at: number;
   updated_at: number;
   chat_count: number;
+};
+
+export const getUnfiledActivityCounts = (userId: number, filters: ChatListFilters, timeZone: string): Record<string, number> => {
+  const { where, params } = buildUserChatFilter(userId, { ...filters, folderId: null });
+  const rows = db.prepare(`
+    SELECT CAST(strftime('%s', COALESCE(uc.updated_at, uc.created_at)) AS INTEGER) AS timestamp, COUNT(*) AS count
+    FROM user_chats uc WHERE ${where} GROUP BY timestamp
+  `).all(...params) as Array<{ timestamp: number; count: number }>;
+  return countActivityDays(rows, timeZone);
 };
 
 export const listChatFolders = (userId: number, filters: ChatListFilters = {}): {
