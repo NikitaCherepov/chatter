@@ -44,6 +44,7 @@ import { Tooltip } from '../components/Tooltip';
 import { dispatchAvatarState, getAvatarManifest } from '../components/PixelAvatar';
 import { MessageAvatar } from '../components/MessageAvatar';
 import { WorkLog } from '../components/WorkLog';
+import { startsMessageDay, messageClock, messageDate, fullMessageDate } from '../lib/message-dates';
 import { splitWorkContent } from '../lib/work-log-content';
 import type { SetDisplayStatePayload } from '../components/PixelAvatar';
 import { ToolsPanel } from '../components/ToolsPanel';
@@ -787,7 +788,7 @@ const MessageItem = React.memo(function MessageItem({
         <div className={s.messageColumn}>
       <div className={s.metaRow}>
         <div className={s.metaRowLeft}>
-        <span>{msg.role === 'user' ? (authorName ?? t('chat.message.you')) : (msg.prompt_name || 'Chatter')} &bull; {formatMessageTime(msg.created_at, locale)}{msg.archived ? t('chat.message.archivedSuffix') : ''}</span>
+        <span className={s.messageIdentity}><span className={msg.role === 'assistant' ? s.assistantName : undefined}>{msg.role === 'user' ? (authorName ?? t('chat.message.you')) : (msg.prompt_name || 'Chatter')}</span>{msg.role === 'user' && <span aria-hidden="true">&bull;</span>}<time dateTime={new Date(msg.created_at * 1000).toISOString()} title={fullMessageDate(msg.created_at, locale)}>{messageClock(msg.created_at, locale)}</time>{msg.archived ? t('chat.message.archivedSuffix') : ''}</span>
         <button
           className={`${s.playBtn} ${isTtsPlaying ? s.playBtnPlaying : ''}`}
           onClick={(e) => {
@@ -6031,8 +6032,13 @@ export function ChatPage() {
                       : t('chat.messages.loadOlderFromServer', { count: MESSAGE_PAGE_SIZE })}
                 </button>
               )}
-              {visibleMessages.map((msg) => (
+              {visibleMessages.map((msg, index) => (
                 <React.Fragment key={msg.id}>
+                {startsMessageDay(msg.created_at, visibleMessages[index - 1]?.created_at) && (
+                  <div className={s.messageDay} role="separator" aria-label={messageDate(msg.created_at, locale)}>
+                    <time dateTime={new Date(msg.created_at * 1000).toISOString()} title={fullMessageDate(msg.created_at, locale)}>{messageDate(msg.created_at, locale)}</time>
+                  </div>
+                )}
                 {contextSummary && msg.id === contextSummaryInsertMessageId && (
                   <section className={s.contextSummaryCard} aria-label={t('chat.contextSummary.title')}>
                     <div className={s.contextSummaryHeader}>
@@ -6431,7 +6437,7 @@ export function ChatPage() {
                       alt={typingIdentity?.name || 'Chatter'}
                     />
                     <div className={s.messageColumn}>
-                      <div className={s.metaRow}>{typingIdentity?.name || 'Chatter'} &bull; {streamingState === 'reasoning' ? t('chat.message.reasoning') : t('chat.message.typing')}</div>
+                      <div className={s.metaRow}><span className={s.messageIdentity}><span className={s.assistantName}>{typingIdentity?.name || 'Chatter'}</span><span>{streamingState === 'reasoning' ? t('chat.message.reasoning') : t('chat.message.typing')}</span></span></div>
                       <div className={s.bubble}>
                         <div className={`${s.typingDots} ${streamingState === 'reasoning' ? s.typingDotsStreaming : ''}`}>
                           <span className={s.dot} />

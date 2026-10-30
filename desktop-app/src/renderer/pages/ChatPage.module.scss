@@ -3315,3 +3315,18 @@
   opacity: .55;
   cursor: default;
 }
+
+.messageDay {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  color: var(--text-hint);
+  font-size: 11px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  &::before, &::after { content: ''; flex: 1; height: 1px; background: var(--border-light); }
+  time { flex-shrink: 0; }
+}
+
+.messageIdentity { display: inline-flex; align-items: baseline; flex-wrap: wrap; gap: 8px; }
+.assistantName { color: var(--text-body); font-size: 13px; font-weight: 600; }
