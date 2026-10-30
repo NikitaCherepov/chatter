@@ -1,0 +1,46 @@
+.root { position: relative; display: flex; flex-shrink: 0; }
+.trigger {
+  display: grid;
+  place-items: center;
+  position: relative;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent-icon-light);
+  cursor: pointer;
+  &:hover, &[aria-expanded='true'] { color: var(--text-primary); }
+  &:focus-visible { outline: 2px solid var(--accent-icon); outline-offset: 4px; border-radius: 3px; }
+}
+.panel {
+  position: absolute;
+  bottom: calc(100% + 14px);
+  left: -36px;
+  z-index: 60;
+  width: min(340px, calc(100vw - 64px));
+  padding: 12px;
+  border: 1px solid var(--border-light);
+  border-radius: 12px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-card);
+  font-size: 13px;
+}
+.heading { display: flex; align-items: center; justify-content: space-between; padding: 2px 4px 10px; font-weight: 600; span { color: var(--text-muted); font-weight: 400; } }
+.empty { margin: 0; padding: 12px 4px; color: var(--text-muted); line-height: 1.5; }
+.list { display: flex; flex-direction: column; gap: 4px; max-height: min(360px, 50vh); overflow-y: auto; }
+.row { display: flex; align-items: center; border-radius: 8px; &:hover { background: var(--bg-modal-hover); } }
+.activity, .stop {
+  border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer;
+  &:focus-visible { outline: 2px solid var(--accent-icon); outline-offset: -2px; border-radius: 8px; }
+}
+.activity { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 8px 4px; text-align: left; }
+.thumbnail { width: 42px; height: 36px; flex-shrink: 0; overflow: hidden; display: grid; place-items: center; border: 1px solid var(--border-light); border-radius: 6px; color: var(--text-muted); img { width: 100%; height: 100%; object-fit: cover; } }
+.meta { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 4px; }
+.title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.status { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-muted); i { width: 5px; height: 5px; border-radius: 50%; background: currentColor; } }
+.working { color: var(--accent-icon); }
+.challenge { color: var(--text-warning, #c88a36); }
+.idle { color: var(--text-muted); }
+.stop { flex-shrink: 0; width: 28px; height: 28px; color: var(--text-muted); &:hover { color: var(--text-primary); } &:disabled { opacity: .4; cursor: wait; } }

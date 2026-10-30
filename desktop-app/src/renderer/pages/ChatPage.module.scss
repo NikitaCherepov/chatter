@@ -2625,7 +2625,7 @@
 .micIconTranscribing {
   composes: micIcon;
   cursor: default;
-  animation: mic-spin 1.5s linear infinite;
+  animation: mic-pulse 1.5s ease-in-out infinite;
 }
 
 @keyframes mic-pulse {
@@ -2633,9 +2633,8 @@
   50% { opacity: 0.3; }
 }
 
-@keyframes mic-spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+@media (prefers-reduced-motion: reduce) {
+  .micIconRecording, .micIconTranscribing { animation: none; }
 }
 
 // ====== MESSAGE IMAGES ======
@@ -3302,19 +3301,7 @@
 
 
 
-.activityManagerPreview {
-  display: grid;
-  place-items: center;
-  width: 24px;
-  height: 24px;
-  flex-shrink: 0;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--accent-icon-light);
-  opacity: .55;
-  cursor: default;
-}
+
 
 .messageDay {
   display: flex;

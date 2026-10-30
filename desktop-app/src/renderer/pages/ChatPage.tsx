@@ -43,6 +43,7 @@ import { SettingsModal } from '../components/SettingsModal';
 import { Tooltip } from '../components/Tooltip';
 import { dispatchAvatarState, getAvatarManifest } from '../components/PixelAvatar';
 import { MessageAvatar } from '../components/MessageAvatar';
+import { BackgroundActivityManager } from '../components/BackgroundActivityManager';
 import { WorkLog } from '../components/WorkLog';
 import { ReasoningDisclosure } from '../components/ReasoningDisclosure';
 import { startsMessageDay, messageClock, messageDate, fullMessageDate } from '../lib/message-dates';
@@ -7851,14 +7852,7 @@ export function ChatPage() {
                 </svg>
               )}
 
-              <button type="button" className={s.activityManagerPreview} disabled
-                aria-label={t('chat.composer.activityManager', { defaultValue: 'Activity manager' })}
-                title={t('chat.composer.activityManager', { defaultValue: 'Activity manager' })}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <rect x="3" y="3" width="18" height="18" rx="3" />
-                  <path d="M8 8h.01M8 12h.01M8 16h.01M12 8h5M12 12h5M12 16h5" />
-                </svg>
-              </button>
+              <BackgroundActivityManager chatId={activeChatId} />
               <div
                 className={s.composerInputSlot}
                 onDragEnter={(event) => {

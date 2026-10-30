@@ -1134,6 +1134,14 @@
       "alwaysTwentyTitle": "Mode: always 20 (critical success). Click to change.",
       "normalTitle": "d20 dice mode. Click to change mode."
     },
+    "activityManager": {
+      "empty": "Background activities for this chat will appear here.",
+      "working": "Working",
+      "idle": "Idle",
+      "challenge": "Needs attention",
+      "stop": "Stop: {{title}}",
+      "actionFailed": "Could not complete the action"
+    },
     "composer": {
       "activityManager": "Activity manager",
       "keyboardHint": "Enter to send · Shift + Enter for a new line",

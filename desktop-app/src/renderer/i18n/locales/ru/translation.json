@@ -1149,6 +1149,14 @@
       "alwaysTwentyTitle": "Режим: всегда 20 (крит. успех). Клик для смены.",
       "normalTitle": "Режим кубика d20. Клик для смены режима."
     },
+    "activityManager": {
+      "empty": "Здесь появятся фоновые задачи этого чата.",
+      "working": "Выполняется",
+      "idle": "Ожидает",
+      "challenge": "Нужна проверка",
+      "stop": "Остановить: {{title}}",
+      "actionFailed": "Не удалось выполнить действие"
+    },
     "composer": {
       "activityManager": "Диспетчер задач",
       "keyboardHint": "Enter — отправить · Shift + Enter — новая строка",
