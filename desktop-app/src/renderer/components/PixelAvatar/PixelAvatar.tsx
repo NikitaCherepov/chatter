@@ -1,3 +1,4 @@
+import { AvatarImage } from '../AvatarImage';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { getBaseFace, getReaction, type BaseMood, type ReactionKey } from './faces';
@@ -8,6 +9,9 @@ import { openToolInLastLayout } from '../../lib/tools';
 import s from './PixelAvatar.module.scss';
 
 // ── Blink config ────────────────────────────────────────────────────────────
+
+// Temporarily disabled; keep the preview and activity-dock implementation for later.
+const AVATAR_PREVIEWS_ENABLED = false;
 
 const BLINK_INTERVAL_MIN_MS = 3000;
 const BLINK_INTERVAL_MAX_MS = 6000;
@@ -48,6 +52,9 @@ type BackgroundActivityView = {
 };
 
 type PixelAvatarProps = {
+  thinking?: boolean;
+  pixelated?: boolean;
+  alt?: string;
   initialState?: SetDisplayStatePayload | null;
   fallbackImageUrl?: string | null;
   variant?: 'default' | 'message';
@@ -61,7 +68,7 @@ const sessionStatusLabel = (status: BackgroundActivityView['status']) => {
   return 'Ожидает';
 };
 
-export function PixelAvatar({ chatId = null, dockAlign = 'end', fallbackImageUrl = null, variant = 'default', initialState = null }: PixelAvatarProps) {
+export function PixelAvatar({ chatId = null, dockAlign = 'end', fallbackImageUrl = null, variant = 'default', initialState = null, thinking = false, pixelated = true, alt = '' }: PixelAvatarProps) {
   const initialStateRef = useRef(initialState);
   const [activityPreview, setActivityPreview] = useState<{ active: boolean; activityId?: string; image?: string }>({ active: false });
   const [backgroundActivities, setBackgroundActivities] = useState<BackgroundActivityView[]>([]);
@@ -219,6 +226,7 @@ export function PixelAvatar({ chatId = null, dockAlign = 'end', fallbackImageUrl
   }, [applyState]);
 
   useEffect(() => {
+    if (!AVATAR_PREVIEWS_ENABLED) return;
     const unsubscribe = window.electronAPI?.onBackgroundActivityPreview?.((payload) => {
       setActivityPreview((current) => {
         return {
@@ -236,6 +244,7 @@ export function PixelAvatar({ chatId = null, dockAlign = 'end', fallbackImageUrl
     setSessionDockOpen(false);
     setSessionDockExpanded(false);
 
+    if (!AVATAR_PREVIEWS_ENABLED) return;
     const applySnapshot = (snapshot: { activeChatId: number | null; activities: BackgroundActivityView[] }) => {
       if (snapshot.activeChatId === chatId) setBackgroundActivities(snapshot.activities);
     };
@@ -281,8 +290,9 @@ export function PixelAvatar({ chatId = null, dockAlign = 'end', fallbackImageUrl
   // ── Determine what to render (priority: media > loop > reaction queue > base + blink) ─
 
   const renderSrc = mediaUrl
-    ?? loopReaction
+    ?? (fallbackImageUrl && loopReaction === getReaction('think').src ? null : loopReaction)
     ?? activeReaction?.src
+    ?? (thinking && !fallbackImageUrl ? getReaction('think').src : null)
     ?? fallbackImageUrl
     ?? getBaseFace(baseMood, blinking);
 
@@ -290,11 +300,11 @@ export function PixelAvatar({ chatId = null, dockAlign = 'end', fallbackImageUrl
     <div
       className={`${s.container} ${dockAlign === 'start' ? s.dockStart : ''} ${variant === 'message' ? s.messageSize : ''}`}
       data-live-avatar
-      onMouseEnter={showSessionDock}
-      onMouseLeave={scheduleSessionDockClose}
+      onMouseEnter={AVATAR_PREVIEWS_ENABLED ? showSessionDock : undefined}
+      onMouseLeave={AVATAR_PREVIEWS_ENABLED ? scheduleSessionDockClose : undefined}
     >
-      <div className={`${s.avatarFrame} ${activityPreview.active ? s.browserPreviewActive : ''}`}>
-        {activityPreview.active ? (
+      <div className={`${s.avatarFrame} ${AVATAR_PREVIEWS_ENABLED && activityPreview.active ? s.browserPreviewActive : ''}`}>
+        {AVATAR_PREVIEWS_ENABLED && activityPreview.active ? (
           <>
             {activityPreview.image
               ? <img className={s.browserPreview} src={activityPreview.image} alt="" draggable={false} />
@@ -302,17 +312,16 @@ export function PixelAvatar({ chatId = null, dockAlign = 'end', fallbackImageUrl
             <span className={s.browserPreviewIndicator} />
           </>
         ) : (
-          <img
+          <AvatarImage
             key={renderSrc === fallbackImageUrl ? 'prompt' : blinking ? `blink-${blinkKey}` : 'base'}
-            className={`${s.face} ${renderSrc === fallbackImageUrl ? s.promptImage : ''}`}
             src={renderSrc}
-            alt=""
-            draggable={false}
+            alt={alt}
+            pixelated={pixelated}
           />
         )}
       </div>
       <AnimatePresence>
-      {sessionDockOpen && backgroundActivities.length > 0 && (
+      {AVATAR_PREVIEWS_ENABLED && sessionDockOpen && backgroundActivities.length > 0 && (
         <motion.div
           className={s.sessionDock}
           initial={{ width: 64, opacity: 0, y: 16, scale: 0.96 }}

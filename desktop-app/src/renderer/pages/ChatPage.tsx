@@ -40,7 +40,8 @@ import Slider from '../components/Slider';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import { SettingsModal } from '../components/SettingsModal';
 import { Tooltip } from '../components/Tooltip';
-import { PixelAvatar, dispatchAvatarState, startAvatarLoop, stopAvatarLoop, getAvatarManifest, getBaseFace } from '../components/PixelAvatar';
+import { dispatchAvatarState, getAvatarManifest } from '../components/PixelAvatar';
+import { MessageAvatar } from '../components/MessageAvatar';
 import type { SetDisplayStatePayload } from '../components/PixelAvatar';
 import { ToolsPanel } from '../components/ToolsPanel';
 import { ImageViewerModal } from '../components/ImageViewerModal';
@@ -767,19 +768,16 @@ const MessageItem = React.memo(function MessageItem({
       data-message-id={msg.id}
     >
       <div className={s.messageLayout}>
-        {msg.role === 'assistant' && isLiveAvatar ? (
-          <div className={s.liveMessageAvatar}>
-            <PixelAvatar chatId={chatId} initialState={avatarState} fallbackImageUrl={promptImageSrc} variant="message" dockAlign="start" />
-          </div>
-        ) : (promptImageSrc || msg.role === 'assistant') && (
-          <img
-            className={`${s.promptAvatar} ${!promptImageSrc && msg.role === 'assistant' ? s.pixelFallbackAvatar : ''}`}
-            src={promptImageSrc || getBaseFace('idle', false)}
-            alt={msg.role === 'user' ? (authorName ?? t('chat.message.you')) : (msg.prompt_name || 'Chatter')}
-            loading="lazy"
-            draggable={false}
-          />
-        )}
+        <MessageAvatar
+          visible={msg.role === 'assistant' || Boolean(promptImageSrc)}
+          imageUrl={promptImageSrc}
+          pixelated={!promptImageSrc}
+          live={msg.role === 'assistant' && isLiveAvatar}
+          thinking={msg.role === 'assistant' && isLiveAvatar && sending && !promptImageSrc}
+          chatId={chatId}
+          state={avatarState}
+          alt={msg.role === 'user' ? (authorName ?? t('chat.message.you')) : (msg.prompt_name || 'Chatter')}
+        />
         <div className={s.messageColumn}>
       <div className={s.metaRow}>
         <div className={s.metaRowLeft}>
@@ -4199,17 +4197,6 @@ export function ChatPage() {
 
   // ── PixelAvatar: system reactions + IPC bridge ────────────────────────────
 
-  // Start looping "think" reaction while AI is generating, stop when response arrives
-  useEffect(() => {
-    if (sending) {
-      currentAvatarStateRef.current = { ...(currentAvatarStateRef.current || {}), loop_reaction: 'think' };
-      startAvatarLoop('think');
-    } else {
-      currentAvatarStateRef.current = { ...(currentAvatarStateRef.current || {}), loop_reaction: undefined };
-      stopAvatarLoop();
-    }
-  }, [sending]);
-
   // Listen for avatar state from Electron main process (IPC)
   useEffect(() => {
     const unsub = window.electronAPI?.onAvatarState?.((payload) => {
@@ -6440,21 +6427,18 @@ export function ChatPage() {
                 </div>
               ))}
               {showTyping && (
-                <div className={s.messageGroup}>
+                <div className={`${s.messageGroup} ${s.messageGroupAssistant}`}>
                   <div className={s.messageLayout}>
-                    {liveAvatarMessageId === null ? (
-                      <div className={s.liveMessageAvatar}>
-                        <PixelAvatar chatId={activeChatId} initialState={currentAvatarStateRef.current} fallbackImageUrl={typingIdentity?.imageUrl ? resolveImageUrl(typingIdentity.imageUrl, 128) : null} variant="message" dockAlign="start" />
-                      </div>
-                    ) : typingIdentity?.imageUrl ? (
-                      <img
-                        className={s.promptAvatar}
-                        src={resolveImageUrl(typingIdentity.imageUrl, 128)}
-                        alt={typingIdentity.name}
-                        loading="lazy"
-                        draggable={false}
-                      />
-                    ) : null}
+                    <MessageAvatar
+                      visible={typingIdentity !== null}
+                      imageUrl={typingIdentity?.imageUrl ? resolveImageUrl(typingIdentity.imageUrl, 128) : null}
+                      pixelated={!typingIdentity?.imageUrl}
+                      live={liveAvatarMessageId === null}
+                      thinking={sending && !typingIdentity?.imageUrl}
+                      chatId={activeChatId}
+                      state={currentAvatarStateRef.current}
+                      alt={typingIdentity?.name || 'Chatter'}
+                    />
                     <div className={s.messageColumn}>
                       <div className={s.metaRow}>{typingIdentity?.name || 'Chatter'} &bull; {streamingState === 'reasoning' ? t('chat.message.reasoning') : t('chat.message.typing')}</div>
                       <div className={s.bubble}>
