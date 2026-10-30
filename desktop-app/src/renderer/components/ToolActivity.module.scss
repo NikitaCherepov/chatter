@@ -15,7 +15,7 @@
 .failed > summary { color: var(--color-error); }
 .failed .status { color: inherit; font-weight: 600; }
 .chevron { flex-shrink: 0; color: var(--text-hint); transition: transform .15s; }
-.action[open] > summary .chevron, .internal[open] > summary .chevron { transform: rotate(90deg); }
+.action[data-expanded='true'] > summary .chevron, .internal[data-expanded='true'] > summary .chevron { transform: rotate(90deg); }
 .detail { max-width: 100%; padding: 10px 2px; color: var(--text-muted); }
 .detail pre { margin: 4px 0 10px; white-space: pre-wrap; overflow-wrap: anywhere; font-family: monospace; font-size: 12px; }
 .rawName { color: var(--text-secondary); margin-bottom: 8px; overflow-wrap: anywhere; }

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import type { ToolCall } from '../lib/api';
 import { describeToolCall, groupToolActivities, toolValue, type ActivityKind, type ToolActivity as Activity } from '../lib/tool-activity';
 import s from './ToolActivity.module.scss';
+import { AnimatedCollapse, AnimatedDetails } from './AnimatedDisclosure';
 
 const paths: Record<ActivityKind, ReactNode> = {
   search: <><circle cx="10.5" cy="10.5" r="6.5" /><path d="m16 16 5 5" /></>,
@@ -28,8 +29,7 @@ function ActionRow({ row }: { row: Activity }) {
   const { t } = useTranslation();
   const label = t(`toolActivity.names.${row.call.name}`, { defaultValue: row.call.name });
   const failed = row.status === 'error';
-  return <details className={`${s.action} ${failed ? s.failed : row.confirmed ? s.confirmed : ''}`}>
-    <summary>
+  return <AnimatedDetails className={`${s.action} ${failed ? s.failed : row.confirmed ? s.confirmed : ''}`} summary={<>
       <Icon kind={row.kind} />
       <span className={s.label}>{failed ? t('toolActivity.failed', { action: label }) : label}</span>
       {row.target && <span className={s.target} title={row.target}>{row.target}</span>}
@@ -37,7 +37,7 @@ function ActionRow({ row }: { row: Activity }) {
         {row.call.running ? <span className={s.spinner} /> : row.status === 'returned' ? '✓' : failed ? '!' : '·'}
       </span>
       <Chevron />
-    </summary>
+    </>}>
     <div className={s.detail}>
       <div className={s.rawName}>{row.call.name}</div>
       <div className={s.detailLabel}>{t('chat.message.arguments')}</div>
@@ -45,7 +45,7 @@ function ActionRow({ row }: { row: Activity }) {
       <div className={s.detailLabel}>{t('chat.message.result')}</div>
       <pre>{toolValue(row.call.result_preview) || t('toolActivity.noResult')}</pre>
     </div>
-  </details>;
+  </AnimatedDetails>;
 }
 
 export function ToolActivity({ calls = [], current, expanded, onToggle }: {
@@ -61,11 +61,10 @@ export function ToolActivity({ calls = [], current, expanded, onToggle }: {
       <button type="button" className={s.more} aria-expanded={expanded} onClick={onToggle}>
         <Chevron />{expanded ? t('toolActivity.collapse') : t('toolActivity.more', { count: more.length })}
       </button>
-      {expanded && more.map((row, i) => <ActionRow key={row.call.id || `more-${i}`} row={row} />)}
+      <AnimatedCollapse open={expanded}>{more.map((row, i) => <ActionRow key={row.call.id || `more-${i}`} row={row} />)}</AnimatedCollapse>
     </>}
-    {internal.length > 0 && <details className={s.internal}>
-      <summary><Chevron />{t('toolActivity.internal', { count: internal.length })}</summary>
+    {internal.length > 0 && <AnimatedDetails className={s.internal} summary={<><Chevron />{t('toolActivity.internal', { count: internal.length })}</>}>
       <div className={s.internalBody}>{internal.map((row, i) => <ActionRow key={row.call.id || `internal-${i}`} row={row} />)}</div>
-    </details>}
+    </AnimatedDetails>}
   </div>;
 }

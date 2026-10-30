@@ -140,7 +140,15 @@ export const ChatMessagesScroll = forwardRef<ChatMessagesScrollHandle, Props>(fu
   }), []);
 
   return (
-    <div className={className} ref={wrapperRef} onScroll={() => {
+    <div className={className} ref={wrapperRef} style={{ overflowAnchor: 'none' }} onClickCapture={(event) => {
+      // A deliberate disclosure click means reading in place, not following the bottom.
+      // Run before the toggle changes layout and before ResizeObserver sees its animation.
+      const target = event.target;
+      if (!(target instanceof Element) || !target.closest('summary, button[aria-expanded]')) return;
+      const wrapper = wrapperRef.current;
+      if (!wrapper || positionKey === null || restoredKeyRef.current !== positionKey) return;
+      positionsRef.current.set(positionKey, { top: wrapper.scrollTop, bottom: false });
+    }} onScroll={() => {
       const wrapper = wrapperRef.current;
       if (!wrapper || !ready || positionKey === null || restoredKeyRef.current !== positionKey) return;
       positionsRef.current.set(positionKey, { top: wrapper.scrollTop, bottom: wrapper.scrollHeight - wrapper.clientHeight - wrapper.scrollTop <= 4 });

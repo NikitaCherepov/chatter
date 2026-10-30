@@ -44,6 +44,7 @@ import { Tooltip } from '../components/Tooltip';
 import { dispatchAvatarState, getAvatarManifest } from '../components/PixelAvatar';
 import { MessageAvatar } from '../components/MessageAvatar';
 import { WorkLog } from '../components/WorkLog';
+import { ReasoningDisclosure } from '../components/ReasoningDisclosure';
 import { startsMessageDay, messageClock, messageDate, fullMessageDate } from '../lib/message-dates';
 import { splitWorkContent } from '../lib/work-log-content';
 import type { SetDisplayStatePayload } from '../components/PixelAvatar';
@@ -810,37 +811,6 @@ const MessageItem = React.memo(function MessageItem({
             </svg>
           )}
         </button>
-        {hasReasoning && (
-          isStreamingReasoning ? (
-            <button
-              className={`${s.reasoningToggle} ${s.reasoningToggleStreaming} ${reasoningOpen ? s.reasoningToggleOpen : ''}`}
-              onClick={(e) => {
-                e.stopPropagation();
-                onToggleReasoning(msg.id);
-              }}
-              title={reasoningOpen ? t('chat.message.hideReasoning') : t('chat.message.showReasoning')}
-            >
-              <span className={s.streamingLabel}>{t('chat.message.reasoning')}</span>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <polyline points="6 9 12 15 18 9" />
-              </svg>
-            </button>
-          ) : (
-          <button
-            className={`${s.reasoningToggle} ${reasoningOpen ? s.reasoningToggleOpen : ''}`}
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggleReasoning(msg.id);
-            }}
-            title={reasoningOpen ? t('chat.message.hideReasoning') : t('chat.message.showReasoning')}
-          >
-            <span>{t('chat.message.reasoningLabel')}{showTokens && typeof msg.reasoning_tokens === 'number' && msg.reasoning_tokens > 0 ? ` · ${msg.reasoning_tokens} tk` : ''}</span>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <polyline points="6 9 12 15 18 9" />
-            </svg>
-          </button>
-          )
-        )}
         {hasSubagents && (
           <button
             className={`${s.reasoningToggle} ${isSubagentsOpen ? s.reasoningToggleOpen : ''}`}
@@ -955,6 +925,14 @@ const MessageItem = React.memo(function MessageItem({
         ) : null}
         </div>
       </div>
+      {(hasReasoning || isStreamingReasoning) && <ReasoningDisclosure
+        content={msg.reasoning_content || ''}
+        streaming={isStreamingReasoning}
+        open={reasoningOpen}
+        onToggle={() => onToggleReasoning(msg.id)}
+        tokens={showTokens ? msg.reasoning_tokens : undefined}
+        onImageClick={onSetViewerImageSrc}
+      />}
       {msg.role === 'assistant' && <WorkLog
         key={`${msg.id}:${activeVariantIndex}`}
         messages={workContent.messages}
@@ -1093,11 +1071,6 @@ const MessageItem = React.memo(function MessageItem({
           )}
         </motion.div>
         <AnimatePresence>
-          {hasReasoning && reasoningOpen && (
-            <motion.div className={`${s.reasoningPanel} ${isStreamingReasoning || isStreamingContent ? s.bubbleTextStreaming : ''}`} variants={reasoningPanelVariants} initial="hidden" animate="visible" exit="exit">
-              <MarkdownRenderer content={msg.reasoning_content || ''} onImageClick={onSetViewerImageSrc} />
-            </motion.div>
-          )}
           {hasSubagents && isSubagentsOpen && (
             <motion.div className={s.reasoningPanel} variants={reasoningPanelVariants} initial="hidden" animate="visible" exit="exit">
               <div className={s.toolCallList}>

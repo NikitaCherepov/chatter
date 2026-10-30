@@ -1,0 +1,11 @@
+.reasoning { display: flex; flex-direction: column; min-width: 0; color: var(--text-muted); font-size: 12px; }
+.toggle { display: flex; align-items: center; gap: 6px; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; text-align: left;
+  &:hover { color: var(--text-body); }
+  svg { flex-shrink: 0; transition: transform .15s; }
+}
+.open { transform: rotate(90deg); }
+.tokens { color: var(--text-hint); }
+.content { margin: 6px 0 4px 5px; padding-left: 13px; border-left: 1px solid var(--border-light); overflow-wrap: anywhere; }
+.spinner { display: inline-block; width: 12px; height: 12px; flex-shrink: 0; border: 1.5px solid var(--border-light); border-top-color: var(--accent-icon); border-radius: 50%; animation: thinking 1.2s linear infinite; }
+@keyframes thinking { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation: none; } .toggle svg { transition: none; } }
