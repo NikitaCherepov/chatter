@@ -685,6 +685,19 @@ const MessageItem = React.memo(function MessageItem({
 }: MessageItemProps) {
   const { t, i18n } = useTranslation();
   const locale = i18n.resolvedLanguage || i18n.language;
+  const messageGroupRef = useRef<HTMLDivElement>(null);
+  const messageWidthRef = useRef<number>();
+
+  useLayoutEffect(() => {
+    const element = messageGroupRef.current;
+    if (!element || msg.role !== 'user' || !isOwnUser || isEditing) return;
+    const rememberWidth = () => { messageWidthRef.current = element.getBoundingClientRect().width; };
+    rememberWidth();
+    const observer = new ResizeObserver(rememberWidth);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [msg.id, msg.role, isOwnUser, isEditing]);
+
   const reasoningOpen = isReasoningOpen;
   const hasReasoning = msg.role === 'assistant' && Boolean(msg.reasoning_content?.trim());
   const hasSubagents = msg.role === 'assistant' && Boolean(msg.subagents?.length);
@@ -907,6 +920,8 @@ const MessageItem = React.memo(function MessageItem({
   return (
     <div
       className={`${s.messageGroup} ${msg.role === 'user' && isOwnUser ? s.messageGroupUser : msg.role === 'assistant' ? s.messageGroupAssistant : ''} ${reasoningOpen || isToolCallsOpen || isSubagentsOpen || isRegenHintOpen ? s.messageGroupRaised : ''} ${msg.archived ? s.messageArchived : ''}`}
+      ref={messageGroupRef}
+      style={msg.role === 'user' && isOwnUser && isEditing ? { width: messageWidthRef.current } : undefined}
       data-message-id={msg.id}
     >
       <div className={s.messageLayout}>
@@ -923,8 +938,7 @@ const MessageItem = React.memo(function MessageItem({
         <div className={s.messageColumn}>
       <div className={s.metaRow}>
         <div className={s.metaRowLeft}>
-        <span className={s.messageIdentity}><span className={msg.role === 'assistant' ? s.assistantName : undefined}>{msg.role === 'user' ? (authorName ?? t('chat.message.you')) : (msg.prompt_name || 'Chatter')}</span>{msg.role === 'user' && <span aria-hidden="true">&bull;</span>}<time dateTime={new Date(msg.created_at * 1000).toISOString()} title={fullMessageDate(msg.created_at, locale)}>{messageClock(msg.created_at, locale)}</time>{msg.archived ? t('chat.message.archivedSuffix') : ''}</span>
-        {msg.role === 'user' && speakAction}
+        <span className={s.messageIdentity}><span className={s.assistantName}>{msg.role === 'user' ? (authorName ?? t('chat.message.you')) : (msg.prompt_name || 'Chatter')}</span><time dateTime={new Date(msg.created_at * 1000).toISOString()} title={fullMessageDate(msg.created_at, locale)}>{messageClock(msg.created_at, locale)}</time>{msg.archived ? t('chat.message.archivedSuffix') : ''}</span>
         {hasSubagents && (
           <button
             className={`${s.reasoningToggle} ${isSubagentsOpen ? s.reasoningToggleOpen : ''}`}
@@ -941,7 +955,13 @@ const MessageItem = React.memo(function MessageItem({
           </button>
         )}
         </div>
-        {msg.role === 'user' && usageDetails}
+        <button className={s.msgKebabBtn} onClick={(e) => onMsgKebabClick(e, msg.id)} title={t('common.actions')}>
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+            <circle cx="8" cy="3" r="1.5" />
+            <circle cx="8" cy="8" r="1.5" />
+            <circle cx="8" cy="13" r="1.5" />
+          </svg>
+        </button>
       </div>
       {(hasReasoning || isStreamingReasoning) && <ReasoningDisclosure
         content={msg.reasoning_content || ''}
@@ -1146,15 +1166,9 @@ const MessageItem = React.memo(function MessageItem({
             </motion.div>
           )}
         </AnimatePresence>
-        <button className={s.msgKebabBtn} onClick={(e) => onMsgKebabClick(e, msg.id)} title={t('common.actions')}>
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-            <circle cx="8" cy="3" r="1.5" />
-            <circle cx="8" cy="8" r="1.5" />
-            <circle cx="8" cy="13" r="1.5" />
-          </svg>
-        </button>
+
       </div>
-      {msg.role === 'assistant' && <div
+      {(msg.role === 'assistant' || msg.role === 'user') && !isEditing && <div
         className={`${s.answerToolbar} ${isLastAssistant || isRegenHintOpen || isTtsPlaying ? s.answerToolbarVisible : ''}`}
         data-answer-toolbar
       >
@@ -1165,8 +1179,8 @@ const MessageItem = React.memo(function MessageItem({
             </svg>
           </button>
           {speakAction}
-          {regenerateActions}
-          {usageDetails}
+          {msg.role === 'assistant' && regenerateActions}
+          {msg.role === 'assistant' && usageDetails}
         </>}
       </div>}
       {isLastAssistant && !isRegenerating && (msg.variant_count ?? 1) > 1 && (
