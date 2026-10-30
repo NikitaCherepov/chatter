@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
-const { splitWorkContent } = require('../src/renderer/lib/work-log-content.ts');
+const { splitWorkContent, messageSpeechText } = require('../src/renderer/lib/work-log-content.ts');
 const { getIntermediateMessages, getWorkLog } = require('../../backend-api/src/services/intermediate-messages.ts');
 const steps = [
   {step:1,content:'I will search.',tool_calls:[{name:'search_web'}]},
@@ -34,3 +34,8 @@ assert.equal(timeline[2].call.result_preview,'B result');
 assert.equal(timeline[4].call.result_preview,'Error: unavailable');
 assert.deepEqual(getWorkLog([{name:'flat_legacy_tool'}]),[],'flat history must not invent message/tool interleaving');
 console.log('PASS: unified message/tool order, repeated tool names, result IDs, errors and legacy history');
+
+assert.equal(messageSpeechText({role:'assistant',content:full,intermediate_messages:messages}),'Here is the answer.');
+assert.equal(messageSpeechText({role:'assistant',content:'Only intermediate',intermediate_messages:['Only intermediate']}),'');
+assert.equal(messageSpeechText({role:'user',content:full,intermediate_messages:messages}),full);
+console.log('PASS: manual speech uses only final assistant text and preserves user messages');

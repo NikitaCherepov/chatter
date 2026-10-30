@@ -293,7 +293,7 @@ async function cartesiaSpeak(
     let audioBuffer: ArrayBuffer;
     let generatedAudio: MessageAudio | null = null;
 
-    if (existingAudio?.url) {
+    if (existingAudio?.url && (!existingAudio.source_text || existingAudio.source_text === text)) {
       // Audio already generated — just download and play
       audioBuffer = await fetchAudioBuffer(existingAudio.url);
     } else {
@@ -302,7 +302,7 @@ async function cartesiaSpeak(
       const result = await generateTts(text, settings.voiceId, language, messageId);
       if (ticket !== generationTicket) return;
 
-      generatedAudio = { url: result.audio_url, tts_type: result.tts_type, voice_id: result.voice_id };
+      generatedAudio = { url: result.audio_url, tts_type: result.tts_type, voice_id: result.voice_id, source_text: text };
       onAudioGenerated?.(messageId, generatedAudio);
 
       audioBuffer = await fetchAudioBuffer(result.audio_url);

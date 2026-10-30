@@ -180,6 +180,7 @@ export type MessageAttachment = {
 };
 
 export type MessageAudio = {
+  source_text?: string;
   url: string;
   tts_type: string;
   voice_id: string;

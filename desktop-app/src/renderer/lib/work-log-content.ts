@@ -9,3 +9,9 @@ export function splitWorkContent(content: string, intermediate: string[] | null 
   if (content.startsWith(prefix) && /^\s*$/.test(content.slice(prefix.length))) return { answer: '', messages };
   return { answer: content, messages: [] as string[] };
 }
+
+export function messageSpeechText(message: {role:string;content:string;intermediate_messages?:string[]}) {
+  return message.role === 'assistant'
+    ? splitWorkContent(message.content, message.intermediate_messages).answer
+    : message.content;
+}

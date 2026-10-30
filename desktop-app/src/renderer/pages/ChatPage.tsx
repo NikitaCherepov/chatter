@@ -46,7 +46,7 @@ import { MessageAvatar } from '../components/MessageAvatar';
 import { WorkLog } from '../components/WorkLog';
 import { ReasoningDisclosure } from '../components/ReasoningDisclosure';
 import { startsMessageDay, messageClock, messageDate, fullMessageDate } from '../lib/message-dates';
-import { splitWorkContent } from '../lib/work-log-content';
+import { splitWorkContent, messageSpeechText } from '../lib/work-log-content';
 import type { SetDisplayStatePayload } from '../components/PixelAvatar';
 import { ToolsPanel } from '../components/ToolsPanel';
 import { ImageViewerModal } from '../components/ImageViewerModal';
@@ -775,7 +775,8 @@ const MessageItem = React.memo(function MessageItem({
           className={`${s.playBtn} ${isTtsPlaying ? s.playBtnPlaying : ''}`}
           onClick={(e) => {
             e.stopPropagation();
-            ttsSpeak(msg.id, msg.content, msg.audio, (id, audio) => {
+            ttsSpeak(msg.id, messageSpeechText(msg),
+              messageSpeechText(msg) !== msg.content && !msg.audio?.source_text ? null : msg.audio, (id, audio) => {
               onSetMessages(prev => prev.map(m => m.id === id ? { ...m, audio } : m));
             });
           }}
@@ -6139,7 +6140,8 @@ export function ChatPage() {
                       className={`${s.playBtn} ${ttsPlayingId === msg.id ? s.playBtnPlaying : ''}`}
                       onClick={(e) => {
                         e.stopPropagation();
-                        ttsSpeak(msg.id, msg.content, msg.audio, (id, audio) => {
+                        ttsSpeak(msg.id, messageSpeechText(msg),
+              messageSpeechText(msg) !== msg.content && !msg.audio?.source_text ? null : msg.audio, (id, audio) => {
                           setMessages(prev => prev.map(m => m.id === id ? { ...m, audio } : m));
                         });
                       }}

@@ -3325,6 +3325,7 @@ app.post('/api/v1/tts/generate', async (req: AuthedRequest, res) => {
         url: saved.url,
         tts_type: 'cartesia',
         voice_id: voiceId,
+        source_text: text,
       });
     }
 
