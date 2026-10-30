@@ -1049,7 +1049,8 @@
       "reasoning": "Рассуждение",
       "prompt": "промпт",
       "providerTooltip": "Последний запрос провайдера\nВвод: {{input}} тк\nПопадание в кэш: {{cacheHit}} тк\nПромах кэша: {{cacheMiss}} тк\nВывод: {{output}} тк\nРассуждение: {{reasoning}} тк\nМодель: {{model}}",
-      "cached": "в кэше"
+      "cached": "в кэше",
+      "cache": "Кэш"
     },
     "contextSummary": {
       "title": "Сводка предыдущего контекста",

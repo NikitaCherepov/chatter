@@ -1011,7 +1011,8 @@
       "providerTooltip": "Latest provider request\nInput: {{input}} tk\nCache hit: {{cacheHit}} tk\nCache miss: {{cacheMiss}} tk\nOutput: {{output}} tk\nReasoning: {{reasoning}} tk\nModel: {{model}}",
       "reasoning": "Reasoning",
       "prompt": "prompt",
-      "cached": "cached"
+      "cached": "cached",
+      "cache": "Cache"
     },
     "contextSummary": {
       "title": "Earlier conversation summary",

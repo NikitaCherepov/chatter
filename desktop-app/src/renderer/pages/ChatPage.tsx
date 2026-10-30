@@ -1734,6 +1734,10 @@ export function ChatPage() {
   const [openToolCallsId, setOpenToolCallsId] = useState<number | null>(null);
   const [openSubagentsId, setOpenSubagentsId] = useState<number | null>(null);
   const [contextTokens, setContextTokens] = useState<api.ChatContextTokens | null>(null);
+  const cachePercent = contextTokens && contextTokens.latest_prompt_tokens > 0
+    ? Math.max(0, Math.min(100, Math.round(contextTokens.latest_cache_hit_tokens / contextTokens.latest_prompt_tokens * 100)))
+    : null;
+
   const [contextSummary, setContextSummary] = useState<api.ContextSummary | null>(null);
 
   // Subscribe to TTS state
@@ -6021,11 +6025,14 @@ export function ChatPage() {
                     {contextTokens.current_context_tokens.toLocaleString(locale)}
                   </span>
                   <span className={s.contextTokensLabel}> tk</span>
-                  {contextTokens.latest_total_tokens > 0 && (
+                  {cachePercent !== null && (
                     <span className={s.contextCacheTokens}>
-                      <span className={s.contextTokensSep}>&bull;</span>
-                      <span className={s.contextTokensPromptValue}>{contextTokens.latest_cache_hit_tokens.toLocaleString(locale)}</span>
-                      <span className={s.contextTokensLabel}> {t('chat.context.cached')}</span>
+                      <span>{t('chat.context.cache')}</span>
+                      <span className={s.contextCacheTrack} role="progressbar" aria-label={t('chat.context.cache')}
+                        aria-valuemin={0} aria-valuemax={100} aria-valuenow={cachePercent}>
+                        <span style={{ width: `${cachePercent}%` }} />
+                      </span>
+                      <span className={s.contextCachePercent}>{cachePercent}%</span>
                     </span>
                   )}
                 </div>

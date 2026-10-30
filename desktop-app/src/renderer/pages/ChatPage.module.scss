@@ -1609,7 +1609,8 @@
 .contextCacheTokens {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
+  &::before { content: '·'; margin: 0 2px; color: var(--text-hint); }
 }
 
 .reasoningControl {
@@ -2421,12 +2422,18 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 12px;
+  min-height: 30px;
+  padding: 5px 10px;
+  border: 1px solid var(--border-light);
+  border-radius: 9px;
+  background: var(--bg-input);
+  font-size: 11px;
   color: var(--text-muted);
   white-space: nowrap;
   user-select: none;
   cursor: help;
   flex-shrink: 0;
+  .contextTokensValue { color: inherit; font-weight: 400; }
 }
 
 .contextTokensValue,
@@ -3361,3 +3368,16 @@
   }
   .answerModelName + .messageUsageMeta:not(:empty)::before { margin-right: 0; }
 }
+
+
+.contextCacheTrack {
+  display: block;
+  width: 44px;
+  height: 3px;
+  flex-shrink: 0;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--border-light);
+  > span { display: block; height: 100%; border-radius: inherit; background: var(--accent-icon); }
+}
+.contextCachePercent { font-variant-numeric: tabular-nums; }
