@@ -21,7 +21,7 @@
 .rawName { color: var(--text-secondary); margin-bottom: 8px; overflow-wrap: anywhere; }
 .detailLabel { font-weight: 500; }
 .current { display: flex; gap: 8px; align-items: center; padding: 5px 0; font-size: 12px; color: var(--text-secondary); min-width: 0; overflow-wrap: anywhere; }
-.spinner { width: 14px; height: 14px; flex-shrink: 0; border: 1.5px solid var(--border-light); border-top-color: var(--accent-icon); border-radius: 50%; animation: working 1.2s linear infinite; }
+.spinner { display: inline-block; vertical-align: middle; width: 14px; height: 14px; flex-shrink: 0; border: 1.5px solid var(--border-light); border-top-color: var(--accent-icon); border-radius: 50%; animation: working 1.2s linear infinite; }
 .more, .internal > summary {
   display: flex; align-items: center; gap: 6px; padding: 4px 0; border: 0; background: transparent;
   color: var(--text-muted); font: inherit; font-size: 12px; cursor: pointer; list-style: none;

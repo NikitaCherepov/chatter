@@ -383,7 +383,7 @@ export type MessageUsage = {
 
 export type WorkLogStep = { type: 'message' | 'activity'; text: string } | { type: 'tool'; call: ToolCall };
 
-export type ToolCall = { id?: string; name: string; arguments: any; result_preview?: string };
+export type ToolCall = { running?: boolean; id?: string; name: string; arguments: any; result_preview?: string };
 
 /** Полный trace ad-hoc субагента — для UI-блока «Сабагенты». */
 export type SubagentIteration = {
@@ -1010,7 +1010,7 @@ export type RoomEvent = { stream_id?: string; sequence?: number; content?: strin
   | { type: 'chat_agent_error'; chat_id: number; agent_id: number | null; error: string; message?: string }
   | { type: 'room_message_variant_changed'; chat_id: number; message: Message; initiator_user_id: number }
   | { type: 'chat_intermediate'; chat_id: number; text: string }
-  | { type: 'chat_tool_status'; chat_id: number; text: string }
+  | { type: 'chat_tool_status'; chat_id: number; text: string; call?: ToolCall }
   | { type: 'chat_desktop_action'; chat_id: number; action: string; target?: string; value?: any }
   | { type: 'chat_display_state'; chat_id: number; [key: string]: any }
   | { type: 'chat_map_update'; chat_id: number; [key: string]: any }

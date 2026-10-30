@@ -961,6 +961,7 @@ const MessageItem = React.memo(function MessageItem({
         calls={msg.tool_calls}
         current={msg.tool_status}
         generating={isGenerating}
+        draft={isGenerating ? workContent.answer : undefined}
         onImageClick={onSetViewerImageSrc}
       />}
       <div className={s.bubbleWrap}>
@@ -1083,7 +1084,7 @@ const MessageItem = React.memo(function MessageItem({
                     <span className={s.dot} />
                   </div>
                 ) : (
-                  <div className={`${s.bubbleText} ${isStreamingContent ? s.bubbleTextStreaming : ''}`}><MarkdownRenderer content={workContent.answer} highlightQuery={searchHighlightQuery} onImageClick={onSetViewerImageSrc} questionnaire={questionnaire} /></div>
+                  <div className={`${s.bubbleText} ${isStreamingContent ? s.bubbleTextStreaming : ''}`}><MarkdownRenderer content={isGenerating ? '' : workContent.answer} highlightQuery={searchHighlightQuery} onImageClick={onSetViewerImageSrc} questionnaire={questionnaire} /></div>
                 )
               )
               : msg.questionnaire_response ? <QuestionnaireResult response={msg.questionnaire_response} onImageClick={onSetViewerImageSrc} />
@@ -2025,9 +2026,9 @@ export function ChatPage() {
     setSending(true);
     setStreamingMsgId(tempId);
     setStreamingState(snapshot.content ? 'content' : snapshot.reasoning_content ? 'reasoning' : 'idle');
-    setShowTyping(!snapshot.content && !snapshot.reasoning_content && !snapshot.tool_status);
+    setShowTyping(!snapshot.content && !snapshot.reasoning_content && !snapshot.tool_status && !snapshot.work_log?.length);
     setTypingIdentity({ name: snapshot.prompt_name || 'Chatter', imageUrl: snapshot.prompt_image_url ?? null });
-    if (!snapshot.content && !snapshot.reasoning_content && !snapshot.tool_status) return;
+    if (!snapshot.content && !snapshot.reasoning_content && !snapshot.tool_status && !snapshot.work_log?.length) return;
     suppressNextMessageAutoScrollRef.current = true;
     setMessages(previous => {
       const messages = previous.filter(message => message.id !== tempId && message.id !== snapshot.regenerate_message_id);

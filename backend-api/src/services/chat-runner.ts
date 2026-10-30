@@ -191,6 +191,9 @@ const runSteps = async (
             emit({ type: 'chat_intermediate', chat_id: chatId, text, content });
             separateNextContent = Boolean(content);
           },
+          onToolCall: async (call) => {
+            emit({ type: 'chat_tool_status', chat_id: chatId, text: '', call });
+          },
           onToolStatus: async (text) => {
             emit({ type: 'chat_tool_status', chat_id: chatId, text });
           },

@@ -6952,6 +6952,7 @@ const sendMessageThroughAiInternal = async (
     userAttachments?: MessageAttachment[] | null;
     onIntermediateMessage?: (text: string, accumulatedContent: string) => Promise<void> | void;
     onStateChange?: (state: DisplayStatePayload) => Promise<void> | void;
+    onToolCall?: (call: { id: string; name: string; arguments: any; result_preview?: string; running: boolean }) => Promise<void> | void;
     onToolStatus?: (text: string) => Promise<void> | void;
     onMapUpdate?: (data: MapUpdatePayload) => Promise<void> | void;
     onDiceRoll?: (roll: number) => Promise<void> | void;
@@ -7268,6 +7269,8 @@ const sendMessageThroughAiInternal = async (
   const safeOnIntermediateMessage = safeUiCallback(options?.onIntermediateMessage, 'onIntermediateMessage');
   const safeOnStateChange = safeUiCallback(options?.onStateChange, 'onStateChange');
   const safeOnToolStatus = safeUiCallback(options?.onToolStatus, 'onToolStatus');
+  const safeOnToolCall = safeUiCallback(options?.onToolCall, 'onToolCall');
+  let liveToolSequence = 0;
   const safeOnMapUpdate = safeUiCallback(options?.onMapUpdate, 'onMapUpdate');
   const safeOnDiceRoll = safeUiCallback(options?.onDiceRoll, 'onDiceRoll');
   // onDesktopAction is also used for HITL notifications. It's safe to wrap:
@@ -8423,11 +8426,14 @@ const runOneToolCall = async (toolCall: any, emitStatus = true): Promise<Execute
   throwIfAborted(abortController.signal);
 
   const toolName = `${toolCall.function?.name || ''}`;
+  const liveCall = { id: toolCall.id || `live-${++liveToolSequence}`, name: toolName,
+    arguments: toolCall.function?.arguments || '{}', running: true };
+  if (safeOnToolCall) await safeOnToolCall(liveCall);
 
   const toolUserMessage = getToolUserMessage(user.language, toolName, toolCall.function?.arguments || '{}');
   if (emitStatus && toolUserMessage) {
     toolUserMessages.push(toolUserMessage);
-    if (safeOnToolStatus) await safeOnToolStatus(toolUserMessage);
+    if (!safeOnToolCall && safeOnToolStatus) await safeOnToolStatus(toolUserMessage);
   }
 
   let toolContent = '';
@@ -8528,6 +8534,7 @@ const runOneToolCall = async (toolCall: any, emitStatus = true): Promise<Execute
     toolContent = `Tool error ${toolName}: ${err?.message || String(err)}`;
   }
 
+  if (safeOnToolCall) await safeOnToolCall({ ...liveCall, running: false, result_preview: formatToolResultPreview(toolContent) });
   return { toolCall, toolName, toolContent, directImages: directImageSink.items };
 };
 
@@ -8573,7 +8580,7 @@ const runSpawnBatch = async (batch: any[]) => {
     const toolUserMessage = getToolUserMessage(user.language, 'spawn_subagent', toolCall.function?.arguments || '{}');
     if (toolUserMessage) {
       toolUserMessages.push(toolUserMessage);
-      if (safeOnToolStatus) await safeOnToolStatus(toolUserMessage);
+      if (!safeOnToolCall && safeOnToolStatus) await safeOnToolStatus(toolUserMessage);
     }
   }
 

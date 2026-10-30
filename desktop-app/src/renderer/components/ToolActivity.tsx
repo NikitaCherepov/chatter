@@ -33,8 +33,8 @@ function ActionRow({ row }: { row: Activity }) {
       <Icon kind={row.kind} />
       <span className={s.label}>{failed ? t('toolActivity.failed', { action: label }) : label}</span>
       {row.target && <span className={s.target} title={row.target}>{row.target}</span>}
-      <span className={s.status} title={t(`toolActivity.${row.status}`)}>
-        {row.status === 'returned' ? '✓' : failed ? '!' : '·'}
+      <span className={s.status} title={row.call.running ? undefined : t(`toolActivity.${row.status}`)}>
+        {row.call.running ? <span className={s.spinner} /> : row.status === 'returned' ? '✓' : failed ? '!' : '·'}
       </span>
       <Chevron />
     </summary>

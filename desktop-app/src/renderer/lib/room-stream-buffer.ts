@@ -3,7 +3,7 @@ export type RoomStreamSnapshot = {
   agent_id: number | null; prompt_id?: number | null; prompt_name?: string | null;
   prompt_image_url?: string | null; created_at: number; regenerate_message_id?: number | null;
 };
-type Delta = { stream_id?: string; sequence?: number; type: string; text?: string; content?: string };
+type Delta = { stream_id?: string; sequence?: number; type: string; text?: string; content?: string; call?: import('./api').ToolCall };
 
 /** Events newer than an HTTP snapshot are replayed once, in server order. */
 export class RoomStreamBuffer {
@@ -29,7 +29,14 @@ export class RoomStreamBuffer {
       const next = { ...this.value, sequence }, text = event.text ?? '';
       if (event.type === 'chat_tool_status') {
         next.tool_status = text;
-        if (text.trim()) next.work_log = [...(next.work_log ?? []), {type:'activity',text}];
+        const steps = next.work_log ?? [];
+        if (event.call?.id && event.call.name) {
+          const index = steps.findIndex(step => step.type === 'tool' && step.call.id === event.call!.id);
+          const entry = {type:'tool' as const,call:event.call};
+          next.work_log = index < 0 ? [...steps,entry] : steps.map((step,i)=>i===index?entry:step);
+        } else if (text.trim() && !steps.some(step=>step.type==='tool'&&step.call.running)) {
+          next.work_log = [...steps, {type:'activity',text}];
+        }
       }
       else {
         next.tool_status = null;

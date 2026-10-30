@@ -91,5 +91,17 @@ assert.equal(activityMessage().content,'Answer\n\nNext step');
 mount(2);await tick();status=async()=>({active:true,stream:activityServer.snapshot()});
 mount(1);await tick();assert.equal(activityMessage().content,'Answer\n\nNext step');
 assert.equal(activityMessage().intermediate_messages.join('|'),'Answer|Next step');
+// A tool can run before any text exists; it must survive switching away and back.
+const onlyToolServer = new ChatStreamBuffer(start);
+emit(onlyToolServer.snapshot());
+emit(onlyToolServer.event({type:'chat_tool_status',text:'',call:{id:'pending-only',name:'get_user_time',arguments:{},running:true}}));
+assert.equal(activityMessage().work_log[0].call.running,true);
+mount(2);await tick();status=async()=>({active:true,stream:onlyToolServer.snapshot()});
+mount(1);await tick();
+assert.equal(activityMessage().work_log[0].call.running,true);
+assert.equal(state.typing,false);
+emit(onlyToolServer.event({type:'chat_tool_status',text:'',call:{id:'pending-only',name:'get_user_time',arguments:{},running:false,result_preview:'Time'}}));
+assert.equal(activityMessage().work_log.length,1);
+assert.equal(activityMessage().work_log[0].call.running,false);
 for(const cleanup of cleanups)cleanup();
 console.log('PASS: actual ChatPage switching, background text, racing status/tokens, completion during status/history, late join, reconnect and regeneration');

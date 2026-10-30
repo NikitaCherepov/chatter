@@ -93,6 +93,23 @@ assert.deepEqual(commitLate.read().work_log,commitClient.read().work_log);
 assert.equal(commitClient.read().work_log[0].type,'message');
 assert.equal(commitClient.read().work_log[1].type,'activity');
 assert.deepEqual(initial.intermediate_messages,[], 'old snapshots must remain immutable');
+const liveServer = new ChatStreamBuffer(start);
+const liveClient = new RoomStreamBuffer(liveServer.snapshot().stream_id);
+liveClient.restore(liveServer.snapshot());
+const pendingCall = {id:'live-1',name:'search_web',arguments:{query:'Tomsk'},running:true};
+const startedCall = liveServer.event({type:'chat_tool_status',text:'',call:pendingCall});
+liveClient.push(startedCall);
+const pendingSnapshot = liveServer.snapshot();
+assert.equal(liveClient.read().work_log[0].call.running,true);
+const finishedCall = liveServer.event({type:'chat_tool_status',text:'',call:{...pendingCall,running:false,result_preview:'Results'}});
+liveClient.push(finishedCall);liveClient.push(finishedCall);
+assert.equal(liveClient.read().work_log.length,1,'completion updates the original tool row');
+assert.equal(liveClient.read().work_log[0].call.result_preview,'Results');
+assert.equal(pendingSnapshot.work_log[0].call.running,true,'completion cannot mutate older snapshots');
+assert.deepEqual(liveClient.read().work_log,liveServer.snapshot().work_log);
+const pendingLate = new RoomStreamBuffer(liveServer.snapshot().stream_id);
+pendingLate.restore(pendingSnapshot);pendingLate.push(finishedCall);
+assert.equal(pendingLate.read().work_log[0].call.running,false);
 console.log(
   'PASS: background accumulation, late join, HTTP/event races, duplicate/out-of-order tokens, reasoning, tools, regeneration and chat isolation',
 );

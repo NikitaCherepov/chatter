@@ -20,7 +20,15 @@ export class ChatStreamBuffer {
     const text = typeof payload.text === 'string' ? payload.text : '';
     if (payload.type === 'chat_tool_status') {
       this.data.tool_status = text;
-      if (text.trim()) this.data.work_log = [...this.data.work_log as unknown[], {type:'activity',text}];
+      const steps = this.data.work_log as any[];
+      const call = payload.call as {id?:string;name?:string;running?:boolean} | undefined;
+      if (call?.id && call.name) {
+        const index = steps.findIndex(step => step.type === 'tool' && step.call.id === call.id);
+        this.data.work_log = index < 0 ? [...steps,{type:'tool',call}]
+          : steps.map((step,i) => i === index ? {type:'tool',call} : step);
+      } else if (text.trim() && !steps.some(step => step.type === 'tool' && step.call.running)) {
+        this.data.work_log = [...steps, {type:'activity',text}];
+      }
     }
     else if (['chat_agent_token', 'chat_agent_reasoning', 'chat_intermediate'].includes(String(payload.type))) {
       this.data.tool_status = null;
