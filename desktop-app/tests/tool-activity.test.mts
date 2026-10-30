@@ -3,9 +3,9 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const { describeToolCall, groupToolActivities } = require('../src/renderer/lib/tool-activity.ts');
 const note = describeToolCall({ name: 'save_note', arguments: '{"title":"Weekend"}', result_preview: 'Note saved: #12' });
-assert.equal(note.label, 'noteSaved');
+assert.equal(note.confirmed, true);
 assert.equal(note.target, 'Weekend');
-assert.equal(describeToolCall({name:'save_note',arguments:{},result_preview:'Pending approval'}).label,'saveNote');
+assert.equal(describeToolCall({name:'save_note',arguments:{},result_preview:'Pending approval'}).confirmed,false);
 assert.equal(describeToolCall({name:'custom_tool',arguments:'bad json'}).status,'unknown');
 for (const result of ['Tool error x: failed','Error: bad title','{"ok":false}', '{"error":"denied"}', '{"success":false,"data":', 'Tool "x" is disabled by current restriction settings.']) {
   assert.equal(describeToolCall({ name:'custom_tool', arguments:{}, result_preview:result }).status,'error',result);

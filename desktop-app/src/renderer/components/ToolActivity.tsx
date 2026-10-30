@@ -22,9 +22,9 @@ function Chevron() {
 }
 function ActionRow({ row }: { row: Activity }) {
   const { t } = useTranslation();
-  const label = t(`toolActivity.labels.${row.label}`, { defaultValue: row.label });
+  const label = t(`toolActivity.names.${row.call.name}`, { defaultValue: row.call.name });
   const failed = row.status === 'error';
-  return <details className={`${s.action} ${failed ? s.failed : row.label === 'noteSaved' ? s.confirmed : ''}`}>
+  return <details className={`${s.action} ${failed ? s.failed : row.confirmed ? s.confirmed : ''}`}>
     <summary>
       <Icon kind={row.kind} />
       <span className={s.label}>{failed ? t('toolActivity.failed', { action: label }) : label}</span>

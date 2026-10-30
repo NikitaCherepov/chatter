@@ -1,4 +1,5 @@
 {
+  "toolActivity": {"labels": {"readPage": "Lecture de la page"}, "names": {"read_webpage": "Lecture de la page", "web_reader": "Lecture de la page"}},
   "common": {
     "loading": "Chargement...",
     "pleaseWait": "Veuillez patienter...",

@@ -1,4 +1,5 @@
 {
+  "toolActivity": {"labels": {"readPage": "读取网页"}, "names": {"read_webpage": "读取网页", "web_reader": "读取网页"}},
   "common": {
     "loading": "加载中...",
     "pleaseWait": "请稍候...",

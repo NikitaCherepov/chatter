@@ -1,4 +1,5 @@
 {
+  "toolActivity": {"labels": {"readPage": "Lettura della pagina"}, "names": {"read_webpage": "Lettura della pagina", "web_reader": "Lettura della pagina"}},
   "advanced": {
     "smart": {
       "authorizeUrl": "https://oauth.yandex.ru/authorize?response_type=token&client_id=YOUR_CLIENT_ID",
