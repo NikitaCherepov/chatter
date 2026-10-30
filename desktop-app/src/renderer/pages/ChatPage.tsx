@@ -40,7 +40,7 @@ import Slider from '../components/Slider';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import { SettingsModal } from '../components/SettingsModal';
 import { Tooltip } from '../components/Tooltip';
-import { PixelAvatar, dispatchAvatarState, startAvatarLoop, stopAvatarLoop, getAvatarManifest } from '../components/PixelAvatar';
+import { PixelAvatar, dispatchAvatarState, startAvatarLoop, stopAvatarLoop, getAvatarManifest, getBaseFace } from '../components/PixelAvatar';
 import type { SetDisplayStatePayload } from '../components/PixelAvatar';
 import { ToolsPanel } from '../components/ToolsPanel';
 import { ImageViewerModal } from '../components/ImageViewerModal';
@@ -571,6 +571,9 @@ type MessageItemProps = {
   isOwnUser: boolean;
   userPersonaImageUrl?: string | null;
   isLastAssistant: boolean;
+  isLiveAvatar: boolean;
+  avatarState: SetDisplayStatePayload | null;
+  chatId: number | null;
   /** False for foreign private agents: regeneration is rejected server-side
    *  and the optimistic UI would remove the message. */
   canRegenerate: boolean;
@@ -630,6 +633,9 @@ const MessageItem = React.memo(function MessageItem({
   isOwnUser,
   userPersonaImageUrl,
   isLastAssistant,
+  isLiveAvatar,
+  avatarState,
+  chatId,
   canRegenerate,
   isTtsPlaying,
   isReasoningOpen,
@@ -761,10 +767,14 @@ const MessageItem = React.memo(function MessageItem({
       data-message-id={msg.id}
     >
       <div className={s.messageLayout}>
-        {promptImageSrc && (
+        {msg.role === 'assistant' && isLiveAvatar ? (
+          <div className={s.liveMessageAvatar}>
+            <PixelAvatar chatId={chatId} initialState={avatarState} fallbackImageUrl={promptImageSrc} variant="message" dockAlign="start" />
+          </div>
+        ) : (promptImageSrc || msg.role === 'assistant') && (
           <img
-            className={s.promptAvatar}
-            src={promptImageSrc}
+            className={`${s.promptAvatar} ${!promptImageSrc && msg.role === 'assistant' ? s.pixelFallbackAvatar : ''}`}
+            src={promptImageSrc || getBaseFace('idle', false)}
             alt={msg.role === 'user' ? (authorName ?? t('chat.message.you')) : (msg.prompt_name || 'Chatter')}
             loading="lazy"
             draggable={false}
@@ -4343,6 +4353,7 @@ export function ChatPage() {
   }, []);
 
   const lastAssistantId = messages.at(-1)?.role === 'assistant' ? messages.at(-1)!.id : null;
+  const liveAvatarMessageId = [...messages].reverse().find(message => message.role === 'assistant')?.id ?? null;
   const formatTime = (timestamp: number) => formatMessageTime(timestamp, locale);
 
   // ── Search ──────────────────────────────────────────────────────────────
@@ -6074,6 +6085,9 @@ export function ChatPage() {
                   isOwnUser={msg.role !== 'user' || !msg.user_id || msg.user_id === user?.id}
                   userPersonaImageUrl={effectivePersonaImageUrl}
                   isLastAssistant={msg.id === lastAssistantId}
+                  isLiveAvatar={msg.id === liveAvatarMessageId}
+                  avatarState={currentAvatarStateRef.current}
+                  chatId={activeChatId}
                   canRegenerate={canRegenerateMessage(msg)}
                   isTtsPlaying={ttsPlayingId === msg.id}
                   isReasoningOpen={openReasoningId === msg.id}
@@ -6428,7 +6442,11 @@ export function ChatPage() {
               {showTyping && (
                 <div className={s.messageGroup}>
                   <div className={s.messageLayout}>
-                    {typingIdentity?.imageUrl && (
+                    {liveAvatarMessageId === null ? (
+                      <div className={s.liveMessageAvatar}>
+                        <PixelAvatar chatId={activeChatId} initialState={currentAvatarStateRef.current} fallbackImageUrl={typingIdentity?.imageUrl ? resolveImageUrl(typingIdentity.imageUrl, 128) : null} variant="message" dockAlign="start" />
+                      </div>
+                    ) : typingIdentity?.imageUrl ? (
                       <img
                         className={s.promptAvatar}
                         src={resolveImageUrl(typingIdentity.imageUrl, 128)}
@@ -6436,7 +6454,7 @@ export function ChatPage() {
                         loading="lazy"
                         draggable={false}
                       />
-                    )}
+                    ) : null}
                     <div className={s.messageColumn}>
                       <div className={s.metaRow}>{typingIdentity?.name || 'Chatter'} &bull; {streamingState === 'reasoning' ? t('chat.message.reasoning') : t('chat.message.typing')}</div>
                       <div className={s.bubble}>
@@ -7792,7 +7810,6 @@ export function ChatPage() {
 
             <div className={`${s.composerWrap} ${compactComposer ? s.composerWrapCompact : ''}`}>
             <div className={s.inputArea}>
-              <PixelAvatar chatId={activeChatId} />
               {/* Dice Roll Mode: круглый кубик d20 слева от иконки файлов */}
               {diceRollEnabled && (
                 <div
@@ -7846,6 +7863,14 @@ export function ChatPage() {
                 </svg>
               )}
 
+              <button type="button" className={s.activityManagerPreview} disabled
+                aria-label={t('chat.composer.activityManager', { defaultValue: 'Activity manager' })}
+                title={t('chat.composer.activityManager', { defaultValue: 'Activity manager' })}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <rect x="3" y="3" width="18" height="18" rx="3" />
+                  <path d="M8 8h.01M8 12h.01M8 16h.01M12 8h5M12 12h5M12 16h5" />
+                </svg>
+              </button>
               <div
                 className={s.composerInputSlot}
                 onDragEnter={(event) => {

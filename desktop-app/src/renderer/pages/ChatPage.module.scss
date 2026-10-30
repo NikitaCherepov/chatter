@@ -1676,7 +1676,7 @@
 .messages {
   flex: 1;
   overflow-y: auto;
-  padding: 32px 10%;
+  padding: 32px 10% 32px max(10%, 66px);
 }
 
 .messagesContent {
@@ -2395,6 +2395,7 @@
 }
 
 .inputArea {
+  position: relative;
   border: 1px solid var(--border-input);
   border-radius: 16px;
   background: var(--bg-input);
@@ -2409,7 +2410,7 @@
   &:focus-within { border-color: var(--accent-icon); }
   & > :not(.composerInputSlot) { margin-bottom: 0; }
   .composerInputSlot { order: -1; flex: 1 0 100%; }
-  .textarea { padding: 4px 0 8px; border: 0; background: transparent; min-height: 52px; }
+  .textarea { padding: 2px 0 4px; border: 0; background: transparent; min-height: 32px; }
   .sendIcon, .sendIconDisabled {
     order: 2;
     margin-left: 0;
@@ -3306,4 +3307,36 @@
   font-weight: 500;
   letter-spacing: .04em;
   text-transform: uppercase;
+}
+
+
+
+.liveMessageAvatar {
+  position: absolute;
+  top: 24px;
+  left: -50px;
+  width: 40px;
+  height: 40px;
+  z-index: 31;
+}
+.activityManagerPreview {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent-icon-light);
+  opacity: .55;
+  cursor: default;
+}
+
+.pixelFallbackAvatar {
+  image-rendering: pixelated;
+  object-fit: contain;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
 }

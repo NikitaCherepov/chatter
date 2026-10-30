@@ -48,6 +48,10 @@ type BackgroundActivityView = {
 };
 
 type PixelAvatarProps = {
+  initialState?: SetDisplayStatePayload | null;
+  fallbackImageUrl?: string | null;
+  variant?: 'default' | 'message';
+  dockAlign?: 'start' | 'end';
   chatId?: number | null;
 };
 
@@ -57,7 +61,8 @@ const sessionStatusLabel = (status: BackgroundActivityView['status']) => {
   return 'Ожидает';
 };
 
-export function PixelAvatar({ chatId = null }: PixelAvatarProps) {
+export function PixelAvatar({ chatId = null, dockAlign = 'end', fallbackImageUrl = null, variant = 'default', initialState = null }: PixelAvatarProps) {
+  const initialStateRef = useRef(initialState);
   const [activityPreview, setActivityPreview] = useState<{ active: boolean; activityId?: string; image?: string }>({ active: false });
   const [backgroundActivities, setBackgroundActivities] = useState<BackgroundActivityView[]>([]);
   const [sessionDockOpen, setSessionDockOpen] = useState(false);
@@ -193,6 +198,15 @@ export function PixelAvatar({ chatId = null }: PixelAvatarProps) {
     }
   }, []);
 
+  // Restore persistent state when the live avatar moves to a new response.
+  // Temporary reaction queues must not replay in each new message.
+  useEffect(() => {
+    if (initialStateRef.current) {
+      const { reactions: _reactions, ...persistent } = initialStateRef.current;
+      applyState(persistent);
+    }
+  }, [applyState]);
+
   // ── Listen for custom events (IPC bridge / app code) ────────────────────
 
   useEffect(() => {
@@ -269,11 +283,13 @@ export function PixelAvatar({ chatId = null }: PixelAvatarProps) {
   const renderSrc = mediaUrl
     ?? loopReaction
     ?? activeReaction?.src
+    ?? fallbackImageUrl
     ?? getBaseFace(baseMood, blinking);
 
   return (
     <div
-      className={s.container}
+      className={`${s.container} ${dockAlign === 'start' ? s.dockStart : ''} ${variant === 'message' ? s.messageSize : ''}`}
+      data-live-avatar
       onMouseEnter={showSessionDock}
       onMouseLeave={scheduleSessionDockClose}
     >
@@ -287,8 +303,8 @@ export function PixelAvatar({ chatId = null }: PixelAvatarProps) {
           </>
         ) : (
           <img
-            key={blinking ? `blink-${blinkKey}` : 'base'}
-            className={s.face}
+            key={renderSrc === fallbackImageUrl ? 'prompt' : blinking ? `blink-${blinkKey}` : 'base'}
+            className={`${s.face} ${renderSrc === fallbackImageUrl ? s.promptImage : ''}`}
             src={renderSrc}
             alt=""
             draggable={false}

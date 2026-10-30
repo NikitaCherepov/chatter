@@ -270,3 +270,22 @@
   font-size: 13px;
   line-height: 1;
 }
+
+.dockStart {
+  .sessionDock {
+    left: 0;
+    right: auto;
+    justify-content: flex-start;
+    transform-origin: left bottom;
+    &::after { left: 0; right: auto; }
+  }
+  .sessionRow { flex-direction: row-reverse; }
+  .sessionInfoCard { margin-right: 0; margin-left: 6px; }
+}
+
+.messageSize {
+  width: 40px;
+  height: 40px;
+  .avatarFrame { width: 40px; height: 40px; }
+}
+.promptImage { object-fit: cover; image-rendering: auto; }

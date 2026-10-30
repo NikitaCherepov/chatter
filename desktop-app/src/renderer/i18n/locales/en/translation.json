@@ -1132,6 +1132,7 @@
       "normalTitle": "d20 dice mode. Click to change mode."
     },
     "composer": {
+      "activityManager": "Activity manager",
       "keyboardHint": "Enter to send · Shift + Enter for a new line",
       "placeholder": "Enter a message..."
     },

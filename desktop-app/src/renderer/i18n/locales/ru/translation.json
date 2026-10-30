@@ -1147,6 +1147,7 @@
       "normalTitle": "Режим кубика d20. Клик для смены режима."
     },
     "composer": {
+      "activityManager": "Диспетчер задач",
       "keyboardHint": "Enter — отправить · Shift + Enter — новая строка",
       "placeholder": "Введите сообщение..."
     },
