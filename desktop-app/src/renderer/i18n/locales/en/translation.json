@@ -82,6 +82,7 @@
     }
   },
   "quota": {
+    "caption": "Quota used: {{percent}}%",
     "title": "Quota Usage",
     "resetsAt": "Resets:",
     "monthly": {
@@ -756,6 +757,7 @@
       "close": "Close search"
     },
     "message": {
+      "actionsSummary": "Actions · {{count}}",
       "you": "You",
       "archivedSuffix": " · archived",
       "stopSpeaking": "Stop",
@@ -1129,6 +1131,7 @@
       "normalTitle": "d20 dice mode. Click to change mode."
     },
     "composer": {
+      "keyboardHint": "Enter to send · Shift + Enter for a new line",
       "placeholder": "Enter a message..."
     },
     "room": {

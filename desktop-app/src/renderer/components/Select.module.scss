@@ -240,3 +240,10 @@
   color: var(--text-muted);
   letter-spacing: -0.5px;
 }
+
+.inline > .dropdown {
+  position: static;
+  border: 0;
+  box-shadow: none;
+  background: transparent;
+}

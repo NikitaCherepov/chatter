@@ -45,6 +45,7 @@ import { ToolsPanel } from '../components/ToolsPanel';
 import { ImageViewerModal } from '../components/ImageViewerModal';
 import { QuotaWidget } from '../components/QuotaWidget';
 import { MemoryPopover } from '../components/MemoryPopover';
+import { ModelSettingsPopover } from '../components/ModelSettingsPopover';
 import { openTool, handleDesktopAction, dispatchMapData, emitSuggestMacro, setToolsPanelState } from '../lib/tools';
 import { createSpeechRecorder } from '../lib/speechRecorder';
 import { startWakeWordAudioStream, stopWakeWordAudioStream } from '../lib/wakeWordAudio';
@@ -755,7 +756,7 @@ const MessageItem = React.memo(function MessageItem({
 
   return (
     <div
-      className={`${s.messageGroup} ${reasoningOpen || isToolCallsOpen || isSubagentsOpen ? s.messageGroupRaised : ''} ${msg.archived ? s.messageArchived : ''}`}
+      className={`${s.messageGroup} ${msg.role === 'user' && isOwnUser ? s.messageGroupUser : msg.role === 'assistant' ? s.messageGroupAssistant : ''} ${reasoningOpen || isToolCallsOpen || isSubagentsOpen ? s.messageGroupRaised : ''} ${msg.archived ? s.messageArchived : ''}`}
       data-message-id={msg.id}
     >
       <div className={s.messageLayout}>
@@ -824,21 +825,6 @@ const MessageItem = React.memo(function MessageItem({
           </button>
           )
         )}
-        {hasToolCalls && (
-          <button
-            className={`${s.reasoningToggle} ${isToolCallsOpen ? s.reasoningToggleOpen : ''}`}
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggleToolCalls(msg.id);
-            }}
-            title={isToolCallsOpen ? t('chat.message.hideTools') : t('chat.message.showTools')}
-          >
-            <span>{msg.tool_calls!.length} {msg.tool_calls!.length === 1 ? t('chat.message.tool_one') : msg.tool_calls!.length < 5 ? t('chat.message.tool_few') : t('chat.message.tool_many')}</span>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <polyline points="6 9 12 15 18 9" />
-            </svg>
-          </button>
-        )}
         {hasSubagents && (
           <button
             className={`${s.reasoningToggle} ${isSubagentsOpen ? s.reasoningToggleOpen : ''}`}
@@ -906,10 +892,9 @@ const MessageItem = React.memo(function MessageItem({
         </div>
         <div className={s.metaRowRight}>
         {(msg.role === 'assistant' && msg.model_name) || (showTokens && typeof displayedTokenCount === 'number' && displayedTokenCount > 0) || (showTokens && (msg.usage?.perf?.tokens_per_second ?? 0) > 0) ? (
+          <details className={s.messageUsageDetails}>
+            <summary title={msg.provider_name || undefined}>{msg.role === 'assistant' && msg.model_name ? msg.model_name : `${displayedTokenCount} tk`}</summary>
           <span className={s.messageUsageMeta}>
-            {msg.role === 'assistant' && msg.model_name && (
-              <span className={s.modelBadge} title={msg.provider_name || undefined}>{msg.model_name}</span>
-            )}
             {showTokens && typeof displayedTokenCount === 'number' && displayedTokenCount > 0 && (
               <span
                 className={s.tokenBadge}
@@ -950,9 +935,55 @@ const MessageItem = React.memo(function MessageItem({
               </>
             )}
           </span>
+          </details>
         ) : null}
         </div>
       </div>
+      {hasToolCalls && (
+        <div className={s.actionsCard}>
+        {hasToolCalls && (
+          <button
+            className={s.actionsSummary}
+            aria-expanded={isToolCallsOpen}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleToolCalls(msg.id);
+            }}
+            title={isToolCallsOpen ? t('chat.message.hideTools') : t('chat.message.showTools')}
+          >
+            <span>{t('chat.message.actionsSummary', { count: msg.tool_calls!.length, defaultValue: 'Actions · {{count}}' })}</span>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
+        )}
+          <AnimatePresence initial={false}>
+          {hasToolCalls && isToolCallsOpen && (
+            <motion.div className={s.actionsBody} variants={reasoningPanelVariants} initial="hidden" animate="visible" exit="exit">
+              <div className={s.toolCallList}>
+                {msg.tool_calls!.map((tc, i) => {
+                  const args = formatToolValue(tc.arguments);
+                  const result = formatToolValue(tc.result_preview);
+                  return (
+                    <details key={tc.id || i} className={s.toolCallItem}>
+                      <summary className={s.toolCallName}>{tc.name}</summary>
+                      <div className={s.toolCallLabel}>{t('chat.message.arguments')}</div>
+                      <pre className={s.toolCallArgs}>{args || '{}'}</pre>
+                      {result && (
+                        <>
+                          <div className={s.toolCallLabel}>{t('chat.message.result')}</div>
+                          <pre className={s.toolCallArgs}>{result}</pre>
+                        </>
+                      )}
+                    </details>
+                  );
+                })}
+              </div>
+            </motion.div>
+          )}
+          </AnimatePresence>
+        </div>
+      )}
       <div className={s.bubbleWrap}>
         <motion.div
           className={msg.role === 'user' && isOwnUser ? s.bubbleUser : s.bubble}
@@ -1084,29 +1115,6 @@ const MessageItem = React.memo(function MessageItem({
           {hasReasoning && reasoningOpen && (
             <motion.div className={`${s.reasoningPanel} ${isStreamingReasoning || isStreamingContent ? s.bubbleTextStreaming : ''}`} variants={reasoningPanelVariants} initial="hidden" animate="visible" exit="exit">
               <MarkdownRenderer content={msg.reasoning_content || ''} onImageClick={onSetViewerImageSrc} />
-            </motion.div>
-          )}
-          {hasToolCalls && isToolCallsOpen && (
-            <motion.div className={s.reasoningPanel} variants={reasoningPanelVariants} initial="hidden" animate="visible" exit="exit">
-              <div className={s.toolCallList}>
-                {msg.tool_calls!.map((tc, i) => {
-                  const args = formatToolValue(tc.arguments);
-                  const result = formatToolValue(tc.result_preview);
-                  return (
-                    <div key={tc.id || i} className={s.toolCallItem}>
-                      <div className={s.toolCallName}>{tc.name}</div>
-                      <div className={s.toolCallLabel}>{t('chat.message.arguments')}</div>
-                      <pre className={s.toolCallArgs}>{args || '{}'}</pre>
-                      {result && (
-                        <>
-                          <div className={s.toolCallLabel}>{t('chat.message.result')}</div>
-                          <pre className={s.toolCallArgs}>{result}</pre>
-                        </>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
             </motion.div>
           )}
           {hasSubagents && isSubagentsOpen && (
@@ -5220,14 +5228,19 @@ export function ChatPage() {
             >
               <FolderAddIcon />
             </button>
-            <button className={s.newChatBtn} onClick={handleCreateChat} title={t('chat.sidebar.newChat')}>
+
+          </motion.div>
+        </div>
+
+        {!sidebarCollapsed && (
+            <button className={s.sidebarNewChat} onClick={handleCreateChat} title={t('chat.sidebar.newChat')}>
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                 <line x1="7" y1="1" x2="7" y2="13" />
                 <line x1="1" y1="7" x2="13" y2="7" />
               </svg>
+              <span>{t('chat.sidebar.newChat')}</span>
             </button>
-          </motion.div>
-        </div>
+        )}
 
         {/* Search input */}
         <motion.div
@@ -5778,13 +5791,18 @@ export function ChatPage() {
               )}
             </AnimatePresence>
             <div className={`${s.chatTopBar} ${compactTopBar ? s.chatTopBarCompact : ''}`}>
+                <h1 className={s.chatTitle} title={chats.find(chat => chat.id === activeChatId)?.title}>
+                  {chats.find(chat => chat.id === activeChatId)?.title || t('chat.sidebar.chats')}
+                </h1>
+              <ModelSettingsPopover key={activeChatId} className={s.modelSettings}
+                label={modelsCatalog.find(model => model.id === preferredModel)?.name || t('chat.reasoning.auto')}>
               <div className={s.modelControls}>
               <div className={s.modelSelector}>
                 {modelsCatalog.length > 0 && (
                   <>
                     <label className={s.modelLabel}>{t('chat.model.label')}</label>
                     <div className={s.modelSelectWrap}>
-                      <Select
+                      <Select inline maxVisibleItems={5}
                         options={[
                           { value: '', label: t('chat.reasoning.auto'), hint: t('chat.model.automatic'), badge: (user?.plan === 'pro' ? autoSupportsVision.pro : autoSupportsVision.lite) ? { text: 'Vision', color: 'success' as const } : undefined },
                           ...modelsCatalog.map(m => {
@@ -5865,6 +5883,7 @@ export function ChatPage() {
                 </div>
                 )}
               </div>
+              </ModelSettingsPopover>
               <div className={s.chatTopActions}>
               <button
                 type="button"
@@ -5891,7 +5910,8 @@ export function ChatPage() {
               >
                 {!roomCreated ? (
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-                    <path d="M12 5v14M5 12h14" />
+                    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
+                    <circle cx="9" cy="7" r="4" />
                   </svg>
                 ) : (
                   <>
@@ -5911,7 +5931,7 @@ export function ChatPage() {
                   </>
                 )}
               </button>
-              <MemoryPopover chatId={activeChatId} compactTrigger={compactTopBar} preferredModel={preferredModel} />
+              <MemoryPopover chatId={activeChatId} compactTrigger preferredModel={preferredModel} />
               {showTokens && contextTokens && (
                 <div
                   className={s.contextTokensCompact}
@@ -7713,8 +7733,9 @@ export function ChatPage() {
               </div>
             )}
 
-            <div className={`${s.inputArea} ${compactComposer ? s.inputAreaCompact : ''}`}>
-              <QuotaWidget variant="compact" />
+            <div className={`${s.composerWrap} ${compactComposer ? s.composerWrapCompact : ''}`}>
+            <div className={s.inputArea}>
+              <PixelAvatar chatId={activeChatId} />
               {/* Dice Roll Mode: круглый кубик d20 слева от иконки файлов */}
               {diceRollEnabled && (
                 <div
@@ -7852,8 +7873,11 @@ export function ChatPage() {
                 <line x1="12" y1="19" x2="12" y2="23" />
                 <line x1="8" y1="23" x2="16" y2="23" />
               </svg>
-
-              <PixelAvatar chatId={activeChatId} />
+            </div>
+            <div className={s.composerFootnote}>
+              <span>{t('chat.composer.keyboardHint', { defaultValue: 'Enter to send · Shift + Enter for a new line' })}</span>
+              <QuotaWidget variant="caption" />
+            </div>
             </div>
           </>
         )}

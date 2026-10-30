@@ -82,6 +82,7 @@
     }
   },
   "quota": {
+    "caption": "Использовано квоты: {{percent}}%",
     "title": "Использование квоты",
     "resetsAt": "Сброс:",
     "monthly": {
@@ -756,6 +757,7 @@
       "close": "Закрыть поиск"
     },
     "message": {
+      "actionsSummary": "Действия · {{count}}",
       "you": "Вы",
       "archivedSuffix": " · архив",
       "stopSpeaking": "Остановить",
@@ -1144,6 +1146,7 @@
       "normalTitle": "Режим кубика d20. Клик для смены режима."
     },
     "composer": {
+      "keyboardHint": "Enter — отправить · Shift + Enter — новая строка",
       "placeholder": "Введите сообщение..."
     },
     "room": {

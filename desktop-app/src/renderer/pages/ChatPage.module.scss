@@ -43,7 +43,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 24px 16px 16px;
+  padding: 20px 16px 12px;
 }
 
 .sidebarTitleGroup {
@@ -1168,7 +1168,8 @@
   padding: 12px 16px;
   padding-right: 42px;
   cursor: pointer;
-  border-bottom: 1px solid var(--border-light);
+  margin: 3px 10px;
+  border-radius: 8px;
   transition: background-color 0.1s;
 
   &:hover {
@@ -1177,7 +1178,7 @@
 
   &Active {
     background-color: var(--bg-primary);
-    box-shadow: inset 3px 0 0 var(--accent);
+    box-shadow: none;
 
     &:hover {
       background-color: var(--bg-primary);
@@ -1520,12 +1521,33 @@
 // ====== TOP BAR (model selector) ======
 
 .chatTopBar {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(100px, 220px) auto;
   align-items: center;
-  gap: 14px;
-  padding: 8px 10%;
+  gap: 16px;
+  padding: 18px 6%;
   border-bottom: 1px solid var(--border-light);
   flex-shrink: 0;
+}
+
+.chatTitle {
+  grid-column: 1;
+  grid-row: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--text-primary);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.modelSettings {
+  grid-column: 2;
+  grid-row: 1;
+  min-width: 0;
 }
 
 .modelControls {
@@ -1564,6 +1586,8 @@
 }
 
 .chatTopActions {
+  grid-column: 3;
+  grid-row: 1;
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -1574,34 +1598,12 @@
 }
 
 .chatTopBarCompact {
-  flex-wrap: wrap;
-  padding: 8px 16px;
-  gap: 8px 12px;
-  .modelLabel { display: none; }
-  .modelControls { display: contents; }
-  .modelSelector { flex: 1 1 150px; width: auto; }
-  .modelSelectWrap {
-    flex: 1 1 150px;
-    // Only compressed triggers need an independently sized dropdown.
-    & > div > div { min-width: min(280px, calc(100vw - 32px)); }
-  }
-  .reasoningControl {
-    order: 1;
-    flex: 1 0 100%;
-    margin-left: 0;
-    & > div {
-      width: min(100%, 320px);
-      min-width: 0;
-      & > div {
-        flex: 1;
-        min-width: 0;
-        & > input { width: 0; }
-      }
-    }
-  }
-  .chatTopActions { gap: 8px; flex-wrap: wrap; }
-  .roomTriggerText, .contextCacheTokens { display: none; }
-  .roomAvatar:nth-child(n + 4) { display: none; }
+  padding: 12px 16px;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) minmax(100px, 180px) auto;
+  .chatTopActions { gap: 2px; margin-left: 0; }
+  .roomTriggerText, .contextTokensCompact { display: none; }
+  .roomAvatar:nth-child(n + 3) { display: none; }
 }
 
 .contextCacheTokens {
@@ -1718,7 +1720,8 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-  max-width: 85%;
+  width: 100%;
+  max-width: 100%;
   position: relative;
 
   &:hover .msgKebabBtn {
@@ -2392,30 +2395,33 @@
 }
 
 .inputArea {
-  border-top: 1px solid var(--border-light);
-  padding: 20px 10%;
-  display: flex;
-  align-items: flex-end;
-  gap: 16px;
-}
-
-.inputAreaCompact {
+  border: 1px solid var(--border-input);
+  border-radius: 16px;
+  background: var(--bg-input);
+  margin: 0;
   padding: 12px 16px;
+  display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 10px 14px;
+  gap: 10px 16px;
+  flex-shrink: 0;
 
+  &:focus-within { border-color: var(--accent-icon); }
   & > :not(.composerInputSlot) { margin-bottom: 0; }
-
-  .composerInputSlot {
-    order: -1;
-    flex: 1 0 100%;
-    width: 100%;
+  .composerInputSlot { order: -1; flex: 1 0 100%; }
+  .textarea { padding: 4px 0 8px; border: 0; background: transparent; min-height: 52px; }
+  .sendIcon, .sendIconDisabled {
+    order: 2;
+    margin-left: 0;
+    width: 38px;
+    height: 38px;
+    padding: 9px;
+    border-radius: 12px;
+    background: var(--accent);
+    stroke: var(--accent-contrast);
   }
-
-  .textarea { min-width: 0; }
-  .sendIcon, .sendIconDisabled { margin-left: auto; }
-  .micIcon, .micIconRecording, .micIconTranscribing { margin-left: 0; }
+  .sendIcon[stroke='none'] { stroke: none; fill: var(--accent-contrast); }
+  .micIcon, .micIconRecording, .micIconTranscribing { order: 1; margin-left: auto; }
 }
 
 .contextTokensCompact {
@@ -3173,3 +3179,118 @@
   cursor: pointer;
   flex-shrink: 0;
 }
+
+
+// Focus layout: keep the model controls in the header and the conversation readable.
+.messageGroupUser {
+  align-self: flex-end;
+  width: fit-content;
+  max-width: 88%;
+  .bubbleUser { border-color: transparent; border-radius: 16px 16px 4px 16px; }
+}
+
+.messageGroupAssistant {
+  .bubble { background: transparent; border-color: transparent; padding: 8px 0; }
+}
+
+.messageUsageDetails {
+  max-width: 100%;
+  font-size: 11px;
+  color: var(--text-muted);
+  summary { cursor: pointer; overflow-wrap: anywhere; }
+  .messageUsageMeta { display: flex; flex-wrap: wrap; padding-top: 6px; }
+}
+
+.sidebarNewChat {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 16px 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  &:hover { background: var(--bg-modal-hover); }
+}
+
+.searchInput { background: transparent; border-color: transparent; }
+.searchInput:focus { border-color: var(--accent-icon); }
+.demoFolder { border-bottom: 0; }
+.demoFolderHeader { width: calc(100% - 20px); margin: 2px 10px; border-radius: 8px; padding-left: 6px; padding-right: 6px; }
+.chatItemActive .chatItemTitle { font-weight: 600; }
+.sidebarCollapsed .chatItem { margin-left: 0; margin-right: 0; }
+
+.chatTopActions {
+  gap: 6px;
+  .chatFindTrigger, .roomTriggerEmpty, > div > button {
+    width: 34px;
+    height: 34px;
+    flex-basis: 34px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    background: transparent;
+    justify-content: center;
+    &:hover, &:focus-visible { background: var(--bg-modal-hover); border-color: var(--border-light); }
+  }
+  .contextTokensCompact { margin-left: 8px; }
+}
+
+.actionsCard {
+  margin: 4px 0 12px;
+  border: 1px solid var(--border-light);
+  border-radius: 9px;
+  background: var(--bg-bubble);
+  overflow: hidden;
+}
+.actionsSummary {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  svg { order: -1; transform: rotate(-90deg); transition: transform .15s; }
+  &[aria-expanded='true'] svg { transform: rotate(0); }
+  &:hover { background: var(--bg-modal-hover); }
+}
+.actionsBody {
+  padding: 0 14px 12px;
+  max-height: min(420px, 50vh);
+  overflow: auto;
+  font-size: 12px;
+  .toolCallItem { padding-top: 10px; border-top: 1px solid var(--border-light); }
+  summary { cursor: pointer; padding-bottom: 4px; overflow-wrap: anywhere; }
+}
+.composerWrap { margin: 12px 10% 16px; flex-shrink: 0; min-width: 0; }
+.composerWrapCompact { margin: 10px 16px 12px; }
+.composerFootnote {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin: 8px 4px 0;
+  color: var(--text-hint);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.modelSettings {
+  .modelControls { display: flex; flex-direction: column; align-items: stretch; gap: 16px; }
+  .modelLabel { display: none; }
+  .modelSelector { display: block; width: 100%; }
+  .modelSelectWrap { width: 100%; max-width: none; }
+  .reasoningControl { margin: 0; padding-top: 14px; border-top: 1px solid var(--border-light); }
+}
+.chatTopBar { position: relative; z-index: 40; }

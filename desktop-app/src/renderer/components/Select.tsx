@@ -44,6 +44,7 @@ type Props = {
   disabled?: boolean;
   searchable?: boolean;
   maxVisibleItems?: number;
+  inline?: boolean;
 };
 
 export function Select({
@@ -54,6 +55,7 @@ export function Select({
   disabled = false,
   searchable = false,
   maxVisibleItems = 8,
+  inline = false,
 }: Props) {
   const { t } = useTranslation();
   const resolvedPlaceholder = placeholder ?? t('common.selectPlaceholder');
@@ -173,8 +175,8 @@ export function Select({
   };
 
   return (
-    <div className={s.root} ref={rootRef}>
-      <button
+    <div className={`${s.root} ${inline ? s.inline : ''}`} ref={rootRef}>
+      {!inline && <button
         className={s.trigger}
         onClick={() => { if (!disabled) setIsOpen((v) => !v); }}
         disabled={disabled}
@@ -192,10 +194,10 @@ export function Select({
             <polyline points="6 9 12 15 18 9" />
           </svg>
         </span>
-      </button>
+      </button>}
 
-      {isOpen && (
-        <div className={s.dropdown} data-native-overlay>
+      {(inline || isOpen) && (
+        <div className={s.dropdown} data-native-overlay={!inline || undefined}>
           {searchable && (
             <div className={s.searchWrap}>
               <input

@@ -53,7 +53,7 @@ function Donut({ percent, size, stroke: strokeProp }: { percent: number; size: n
 
 type Props = {
   /** 'full' = detailed card for Account settings; 'compact' = small indicator for toolbar */
-  variant?: 'full' | 'compact';
+  variant?: 'full' | 'compact' | 'caption';
   className?: string;
 };
 
@@ -102,6 +102,13 @@ export function QuotaWidget({ variant = 'full', className }: Props) {
   //   : `${formatTokens(quota.tokens.used)} / ${formatTokens(quota.tokens.quota)}`;
 
   // ── Compact: small circle with percentage for the chat toolbar ──
+  if (variant === 'caption') {
+    if (activeQuota <= 0) return null;
+    return <span className={className} title={`${t('quota.resetsAt')} ${formatDate(quota.resets_at)}`}>
+      {t('quota.caption', { percent, defaultValue: 'Quota used: {{percent}}%' })}
+    </span>;
+  }
+
   if (variant === 'compact') {
     if (activeQuota <= 0) return null;
     return (
