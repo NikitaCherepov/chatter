@@ -6,6 +6,8 @@ import { MemorySetupNotice } from './MemorySetupNotice';
 import { toast } from 'sonner';
 import * as api from '../lib/api';
 import { useInvalidateMemory } from '../lib/memory-queries';
+import { useQueryClient } from '@tanstack/react-query';
+import { useChatPromptKey, type ChatPromptSettings } from '../lib/chat-prompt-queries';
 import { ChatPersonaSelector } from './ChatPersonaSelector';
 import { PlayerInstructionsEditor } from './PlayerInstructionsEditor';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -28,7 +30,6 @@ type MemorySettings = {
   effective?: { automaticMemory: boolean; resultLimit: number; inheritedResultLimit: number; inheritedAutomaticMemory: boolean };
 };
 type RecordDialog = { type: 'edit' | 'delete'; record: MemoryRecord };
-type ChatPromptSettings = { prompt_id: number | null; room_enabled: boolean };
 
 export function MemoryPopover({ chatId, compactTrigger = false, preferredModel }: { chatId: number; compactTrigger?: boolean; preferredModel?: string | null }) {
   const { t } = useTranslation();
@@ -38,6 +39,8 @@ export function MemoryPopover({ chatId, compactTrigger = false, preferredModel }
   const [loading, setLoading] = useState(false);
   const [settings, setSettings] = useState<MemorySettings | null>(null);
   const invalidateMemory = useInvalidateMemory();
+  const queryClient = useQueryClient();
+  const chatPromptKey = useChatPromptKey(chatId);
   const [dialog, setDialog] = useState<RecordDialog | null>(null);
   const [draft, setDraft] = useState('');
   const [saving, setSaving] = useState(false);
@@ -57,13 +60,14 @@ export function MemoryPopover({ chatId, compactTrigger = false, preferredModel }
       ]);
       setSettings(settingsResult.settings);
       setPromptSettings(chatPromptResult.settings);
+      queryClient.setQueryData(chatPromptKey, chatPromptResult);
       setPromptCatalog(promptsResult);
     } catch {
       toast.error(t('chat.memory.loadSettingsFailed'));
     } finally {
       setLoading(false);
     }
-  }, [chatId, t]);
+  }, [chatId, t, queryClient, chatPromptKey[1], chatPromptKey[2]]);
 
 
   useEffect(() => {
@@ -131,6 +135,7 @@ export function MemoryPopover({ chatId, compactTrigger = false, preferredModel }
         body: JSON.stringify({ prompt_id: promptId }),
       });
       setPromptSettings(result.settings);
+      queryClient.setQueryData(chatPromptKey, result);
     } catch {
       setPromptSettings(previous);
       toast.error(t('chat.memory.characterSelectFailed'));

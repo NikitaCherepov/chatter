@@ -22,7 +22,7 @@ const playerInstructionsForPrompt = (userId: number, chatId: number) => {
   const settings = getChatMemorySettings(userId, chatId);
   return settings.use_user_instructions === 1 ? buildPlayerInstructions(resolvePersonaForChat(userId, chatId).persona.user_instructions || '', settings.user_instructions || '', settings.user_instructions_mode) : '';
 };
-import { resolvePromptForUser, resolvePromptSelectionForUser, type PromptRecord } from './prompts.js';
+import { getUserPromptImageBySelectedId, resolvePromptForUser, resolvePromptSelectionForUser, type PromptRecord } from './prompts.js';
 import { getEnabledMacros } from './macros.js';
 import { listRoomReaderUserIds, canReadChatMessages } from './chat-rooms.js';
 import {
@@ -514,14 +514,25 @@ export const createUserChat = (userId: number, title: string) => {
 export type ChatPromptSettings = {
   prompt_id: number | null;
   room_enabled: boolean;
+  effective_prompt: { id: number; name: string; image_url: string | null } | null;
 };
 
 export const getChatPromptSettings = (userId: number, chatId: number): ChatPromptSettings => {
   if (!canReadChatMessages(userId, chatId)) throw new Error('chat_not_found');
-  const chat = db.prepare('SELECT default_prompt_id, room_enabled FROM user_chats WHERE id = ?')
-    .get(chatId) as { default_prompt_id: number | null; room_enabled: number } | undefined;
+  const chat = db.prepare('SELECT user_id, default_prompt_id, room_enabled FROM user_chats WHERE id = ?')
+    .get(chatId) as { user_id: number; default_prompt_id: number | null; room_enabled: number } | undefined;
   if (!chat) throw new Error('chat_not_found');
-  return { prompt_id: chat.default_prompt_id, room_enabled: chat.room_enabled === 1 };
+  // Use the same resolver as generation, including deleted-prompt fallback.
+  const owner = chat.room_enabled !== 1 ? getUserById(chat.user_id) : null;
+  const prompt = owner ? resolvePromptForChat(owner, chatId) : null;
+  return {
+    prompt_id: chat.default_prompt_id,
+    room_enabled: chat.room_enabled === 1,
+    effective_prompt: prompt ? {
+      id: prompt.id, name: prompt.name,
+      image_url: getUserPromptImageBySelectedId(chat.user_id, prompt.id),
+    } : null,
+  };
 };
 
 export const updateChatPromptSettings = (userId: number, chatId: number, promptId: number | null): ChatPromptSettings => {
@@ -535,7 +546,7 @@ export const updateChatPromptSettings = (userId: number, chatId: number, promptI
   }
   db.prepare('UPDATE user_chats SET default_prompt_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?')
     .run(promptId, chatId, userId);
-  return { prompt_id: promptId, room_enabled: false };
+  return getChatPromptSettings(userId, chatId);
 };
 
 export const resolvePromptForChat = (user: UserRecord, chatId: number): PromptRecord => {

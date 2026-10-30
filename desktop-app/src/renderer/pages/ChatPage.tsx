@@ -1,6 +1,7 @@
 import React, { useEffect, useLayoutEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { ChatMessageCache } from '../lib/chat-message-cache';
+import { useChatPromptKey, useChatPromptSettings } from '../lib/chat-prompt-queries';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { AnimatePresence, animate as animateValue, motion } from 'framer-motion';
@@ -1427,6 +1428,17 @@ export function ChatPage() {
   messagesRef.current = messages;
   const [switchingVariantId, setSwitchingVariantId] = useState<number | null>(null);
   const queryClient = useQueryClient();
+  const chatPromptKey = useChatPromptKey(activeChatId);
+  const { data: cachedPromptSettings } = useChatPromptSettings(activeChatId);
+  const expectedPrompt = !cachedPromptSettings?.settings.room_enabled
+    ? cachedPromptSettings?.settings.effective_prompt : null;
+  const expectedTypingIdentity = useMemo(() => expectedPrompt
+    ? { name: expectedPrompt.name, imageUrl: expectedPrompt.image_url } : null, [expectedPrompt]);
+  useEffect(() => {
+    if (!expectedPrompt?.image_url) return;
+    const image = new Image();
+    image.src = api.resolveAuthenticatedAssetUrl(expectedPrompt.image_url, { width: 128 });
+  }, [expectedPrompt?.image_url]);
   const messageCache = useMemo(() => new ChatMessageCache(queryClient, [api.API_BASE, user?.id ?? null]), [queryClient, api.API_BASE, user?.id]);
   const messagesChatIdRef = useRef<number | null>(null);
   const variantSwitchBusyRef = useRef(false);
@@ -3380,7 +3392,7 @@ export function ChatPage() {
 
     setInput('');
     setSending(true);
-    setTypingIdentity(null);
+    setTypingIdentity(roomCreated ? null : expectedTypingIdentity);
     setShowTyping(true);
 
     // Dice Roll Mode: запускаем анимацию сразу при отправке
@@ -3466,7 +3478,7 @@ export function ChatPage() {
     }
     return;
 
-  }, [input, sending, activeChatId, attachedImages, attachedDocuments, attachedImageBytes, maxImageBytes, maxImageCount, preferredModel, handleIncomingDesktopAction, diceRollEnabled, startDiceRollAnimation, finishDiceRoll, diceStatus, diceMode, applyAvatarState, t, roomCreated, armSendWatchdog, clearSendWatchdog]);
+  }, [expectedTypingIdentity, input, sending, activeChatId, attachedImages, attachedDocuments, attachedImageBytes, maxImageBytes, maxImageCount, preferredModel, handleIncomingDesktopAction, diceRollEnabled, startDiceRollAnimation, finishDiceRoll, diceStatus, diceMode, applyAvatarState, t, roomCreated, armSendWatchdog, clearSendWatchdog]);
 
   const handleQuestionnaireSubmit = useCallback(async (submission: QuestionnaireSubmission) => {
     if (!activeChatId || sending) throw new Error('chat_busy');
@@ -3478,7 +3490,7 @@ export function ChatPage() {
     setMessages(prev => [...prev, { id: tempId, role: 'user', user_id: user?.id, content: text,
       created_at: Math.floor(Date.now() / 1000), questionnaire_response: response }]);
     pendingUserMessageIdByChatRef.current.set(chatId, tempId);
-    setSending(true); setShowTyping(true); setTypingIdentity(null);
+    setSending(true); setShowTyping(true); setTypingIdentity(roomCreated ? null : expectedTypingIdentity);
     armSendWatchdog(chatId);
     try {
       await api.sendQuestionnaireTrigger({ text, chatId, questionnaire_submission: submission,
@@ -3498,7 +3510,7 @@ export function ChatPage() {
       }
       if (!persisted) throw error;
     }
-  }, [activeChatId, sending, user?.id, preferredModel, roomCreated, armSendWatchdog, clearSendWatchdog, promoteChat, loadChats]);
+  }, [expectedTypingIdentity, activeChatId, sending, user?.id, preferredModel, roomCreated, armSendWatchdog, clearSendWatchdog, promoteChat, loadChats]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
@@ -4991,6 +5003,7 @@ export function ChatPage() {
     setRoomSaving(true);
     try {
       const { room } = await api.createChatRoom(chatId);
+      void queryClient.invalidateQueries({ queryKey: chatPromptKey });
       if (activeChatIdRef.current === chatId) applyRoom(room);
     } catch (error) {
       console.error('Failed to create chat room:', error);
@@ -5010,6 +5023,7 @@ export function ChatPage() {
     setRoomSaving(true);
     try {
       const { room } = await api.deleteChatRoom(chatId);
+      void queryClient.invalidateQueries({ queryKey: chatPromptKey });
       if (activeChatIdRef.current === chatId) {
         applyRoom(room);
         setRoomOpen(false);
@@ -8373,7 +8387,10 @@ export function ChatPage() {
         {showSettings && (
           <SettingsModal
             key="settings-modal"
-            onClose={() => setShowSettings(false)}
+            onClose={() => {
+              setShowSettings(false);
+              void queryClient.invalidateQueries({ queryKey: chatPromptKey.slice(0, 3) });
+            }}
             onAccountChanged={loadChats}
             onChatCreated={async (chatId) => {
               await loadChats();
