@@ -6,7 +6,6 @@
 .content { padding: 0 16px; max-height: min(340px, 40vh); overflow: auto; overflow-wrap: anywhere; }
 .footer { padding: 12px 16px; display: flex; flex-direction: column; gap: 10px; }
 .actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
-.review { display: flex; gap: 8px; }
 .permissions { color: var(--text-muted); font-size: 12px; summary { cursor: pointer; } .actions { padding-top: 10px; } }
 .status { font-size: 12px; color: var(--text-muted); }
 .iconButton { display: grid; place-items: center; width: 28px; height: 28px; flex-shrink: 0; padding: 0; background: transparent; border: 0; border-radius: 6px; color: var(--text-muted); cursor: pointer; &:hover { color: var(--text-primary); background: var(--bg-modal-hover); } }

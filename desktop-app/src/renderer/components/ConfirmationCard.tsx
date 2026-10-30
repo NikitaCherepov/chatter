@@ -112,8 +112,7 @@ export function ConfirmationCard({ id, title, icon, children, actions, extraActi
       </div>
       <div className={s.content}>{children}</div>
       <div className={s.footer}>
-        {reviewAction && <div className={s.review}>{bindActions(reviewAction)}</div>}
-        <div className={s.actions}>{bindActions(actions)}</div>
+        <div className={s.actions}>{bindActions(actions)}{bindActions(reviewAction)}</div>
         {extraActions && <AnimatedDetails summary={t('chat.approvals.permissions')} className={s.permissions} locked={busy}>
           <div className={s.actions}>{bindActions(extraActions)}</div>
         </AnimatedDetails>}
