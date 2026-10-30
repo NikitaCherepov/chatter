@@ -1,13 +1,19 @@
 .workLog { margin: 4px 0 8px; min-width: 0; color: var(--text-muted); font-size: 12px; }
-.workLog summary {
+.workLog > details > summary {
   display: inline-flex; align-items: center; gap: 6px; padding: 4px 0; cursor: pointer; list-style: none;
   &::-webkit-details-marker { display: none; }
   &:hover { color: var(--text-body); }
   svg { flex-shrink: 0; transition: transform .15s; }
 }
-.workLog details[open] > summary svg { transform: rotate(90deg); }
+.workLog > details[open] > summary svg { transform: rotate(90deg); }
 .count { color: var(--text-hint); }
 .entries { display: flex; flex-direction: column; gap: 12px; margin: 6px 0 8px 5px; padding-left: 13px; border-left: 1px solid var(--border-light); }
 .entry, .latest { min-width: 0; overflow-wrap: anywhere; }
 .latest { padding: 4px 0 2px; }
 @media (prefers-reduced-motion: reduce) { .workLog summary svg { transition: none; } }
+
+.error { color: var(--color-error); }
+.status { display: flex; align-items: center; gap: 8px; overflow-wrap: anywhere; }
+.spinner { width: 14px; height: 14px; flex-shrink: 0; border: 1.5px solid var(--border-light); border-top-color: var(--accent-icon); border-radius: 50%; animation: work-log-spin 1.2s linear infinite; }
+@keyframes work-log-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }

@@ -124,6 +124,8 @@ await appendChatMessage(81, logChat, 'assistant', 'Plain alternative', null, nul
 const logVariants = getChatMessageVariants(81, logChat, logId);
 assert.deepEqual(logVariants[0].intermediate_messages,['Searching.']);
 assert.deepEqual(logVariants[1].intermediate_messages,[],'work logs stay isolated between regenerated variants');
+assert.deepEqual(logVariants[0].work_log?.map(step=>step.type),['message','tool']);
+assert.deepEqual(logVariants[1].work_log,[], 'ordered steps stay isolated between variants');
 db.close();
 for (const suffix of ['', '-wal', '-shm']) {
   try { fs.unlinkSync(`${dbPath}${suffix}`); } catch { /* already absent */ }

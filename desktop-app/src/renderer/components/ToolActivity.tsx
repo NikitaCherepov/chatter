@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ToolCall } from '../lib/api';
-import { groupToolActivities, toolValue, type ActivityKind, type ToolActivity as Activity } from '../lib/tool-activity';
+import { describeToolCall, groupToolActivities, toolValue, type ActivityKind, type ToolActivity as Activity } from '../lib/tool-activity';
 import s from './ToolActivity.module.scss';
 
 const paths: Record<ActivityKind, ReactNode> = {
@@ -20,6 +20,10 @@ function Icon({ kind }: { kind: ActivityKind }) {
 function Chevron() {
   return <svg className={s.chevron} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><path d="m9 5 7 7-7 7" /></svg>;
 }
+export function ToolActivityCall({ call }: { call: ToolCall }) {
+  return <ActionRow row={describeToolCall(call)} />;
+}
+
 function ActionRow({ row }: { row: Activity }) {
   const { t } = useTranslation();
   const label = t(`toolActivity.names.${row.call.name}`, { defaultValue: row.call.name });

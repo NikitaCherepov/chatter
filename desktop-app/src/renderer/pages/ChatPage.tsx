@@ -43,7 +43,6 @@ import { SettingsModal } from '../components/SettingsModal';
 import { Tooltip } from '../components/Tooltip';
 import { dispatchAvatarState, getAvatarManifest } from '../components/PixelAvatar';
 import { MessageAvatar } from '../components/MessageAvatar';
-import { ToolActivity } from '../components/ToolActivity';
 import { WorkLog } from '../components/WorkLog';
 import { splitWorkContent } from '../lib/work-log-content';
 import type { SetDisplayStatePayload } from '../components/PixelAvatar';
@@ -958,14 +957,11 @@ const MessageItem = React.memo(function MessageItem({
       {msg.role === 'assistant' && <WorkLog
         key={`${msg.id}:${activeVariantIndex}`}
         messages={workContent.messages}
-        generating={isGenerating}
-        onImageClick={onSetViewerImageSrc}
-      />}
-      {msg.role === 'assistant' && <ToolActivity
+        entries={msg.work_log}
         calls={msg.tool_calls}
         current={msg.tool_status}
-        expanded={isToolCallsOpen}
-        onToggle={() => onToggleToolCalls(msg.id)}
+        generating={isGenerating}
+        onImageClick={onSetViewerImageSrc}
       />}
       <div className={s.bubbleWrap}>
         <motion.div
@@ -2035,7 +2031,7 @@ export function ChatPage() {
     suppressNextMessageAutoScrollRef.current = true;
     setMessages(previous => {
       const messages = previous.filter(message => message.id !== tempId && message.id !== snapshot.regenerate_message_id);
-      return [...messages, { id: tempId, role: 'assistant', content: snapshot.content, reasoning_content: snapshot.reasoning_content || null, tool_status: snapshot.tool_status, intermediate_messages: snapshot.intermediate_messages,
+      return [...messages, { id: tempId, role: 'assistant', content: snapshot.content, reasoning_content: snapshot.reasoning_content || null, tool_status: snapshot.tool_status, intermediate_messages: snapshot.intermediate_messages, work_log: snapshot.work_log,
         created_at: snapshot.created_at, agent_id: snapshot.agent_id, prompt_id: snapshot.prompt_id ?? null,
         prompt_name: snapshot.prompt_name ?? null, prompt_image_url: snapshot.prompt_image_url ?? null }];
     });
@@ -3161,7 +3157,7 @@ export function ChatPage() {
               prompt_image_url: stream.promptImageUrl,
             }];
             return base.map((message) => message.id === stream.tempId
-              ? { ...message, tool_status: null, intermediate_messages: accumulatedStream?.intermediate_messages ?? message.intermediate_messages, content: accumulatedStream?.content ?? message.content + event.text }
+              ? { ...message, tool_status: null, intermediate_messages: accumulatedStream?.intermediate_messages ?? message.intermediate_messages, work_log: accumulatedStream?.work_log ?? message.work_log, content: accumulatedStream?.content ?? message.content + event.text }
               : message);
           });
           break;
@@ -3189,7 +3185,7 @@ export function ChatPage() {
               prompt_image_url: stream.promptImageUrl,
             }];
             return base.map((message) => message.id === stream.tempId
-              ? { ...message, tool_status: null, intermediate_messages: accumulatedStream?.intermediate_messages ?? message.intermediate_messages, reasoning_content: accumulatedStream?.reasoning_content ?? `${message.reasoning_content || ''}${event.text}` }
+              ? { ...message, tool_status: null, intermediate_messages: accumulatedStream?.intermediate_messages ?? message.intermediate_messages, work_log: accumulatedStream?.work_log ?? message.work_log, reasoning_content: accumulatedStream?.reasoning_content ?? `${message.reasoning_content || ''}${event.text}` }
               : message);
           });
           break;
@@ -3220,6 +3216,7 @@ export function ChatPage() {
             }];
             return base.map((message) => message.id === stream.tempId
               ? { ...message, tool_status: isToolStatus ? text : null,
+                  work_log: accumulatedStream?.work_log ?? [...(message.work_log ?? []), {type:isToolStatus ? 'activity' as const : 'message' as const,text}],
                   intermediate_messages: accumulatedStream?.intermediate_messages ?? (isToolStatus ? message.intermediate_messages : [...(message.intermediate_messages ?? []), text.trim()]),
                   content: isToolStatus ? message.content : accumulatedStream?.content ?? event.content ?? (message.content ? `${message.content}\n\n${text}` : text) }
               : message);
@@ -3281,6 +3278,7 @@ export function ChatPage() {
             reasoning_content: res.reasoning_content ?? null,
             tool_calls: res.tool_calls ?? null,
             intermediate_messages: res.intermediate_messages ?? [],
+            work_log: res.work_log,
             images: responseImages,
             attachments: res.response_attachments ?? undefined,
             subagents: res.subagents ?? null,

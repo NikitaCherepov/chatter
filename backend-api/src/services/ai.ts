@@ -37,7 +37,7 @@ import { sendIpcToDesktop, isDesktopOnline, sendToDesktop } from '../ws-clients.
 import { waitForNoPendingPcConfirmations } from './pc-command-confirmations.js';
 import { findTransitRoute, searchNearby } from './transit.js';
 import { getCurrencyRates, formatRateForAi } from './currency.js';
-import { getIntermediateMessages } from './intermediate-messages.js';
+import { getIntermediateMessages, getWorkLog } from './intermediate-messages.js';
 import { getWebToolStatus } from './web-tool-status.js';
 import { db } from '../db.js';
 import { countTokens } from './tokenizer.js';
@@ -8862,6 +8862,7 @@ if (taskCompletion) {
   return {
     reply_text: applyAborted ? (fullDbHistory || answer) : answer,
     intermediate_messages: getIntermediateMessages(iterations),
+    work_log: getWorkLog(iterations),
     ...(options?.scheduledTask ? { task_result: taskCompletion, task_trace: iterations } : {}),
     final_reply_text: finalReplyText,
     ...(applyAborted ? { aborted: true } : {}),
@@ -8971,6 +8972,7 @@ if (taskCompletion) {
       return {
         reply_text: abortedAnswer,
         intermediate_messages: getIntermediateMessages(iterations),
+    work_log: getWorkLog(iterations),
         reasoning_content: abortedReasoning,
         chat_id: chatId,
         message_id: abortedMessageId,

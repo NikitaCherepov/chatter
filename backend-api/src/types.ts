@@ -234,6 +234,7 @@ export type MessageDto = {
   content: string;
   reasoning_content?: string | null;
   intermediate_messages?: string[];
+  work_log?: import('./services/intermediate-messages.js').WorkLogEntry[];
   tool_calls?: Array<{ id?: string; name: string; arguments: any; result_preview?: string }> | null;
   images?: MessageImage[] | null;
   audio?: MessageAudio | null;
@@ -340,6 +341,7 @@ export type AiSendResult = {
   user_only?: boolean;
   reasoning_content?: string | null;
   intermediate_messages?: string[];
+  work_log?: import('./services/intermediate-messages.js').WorkLogEntry[];
   chat_id: number;
   message_id: number;
   user_message_id?: number;

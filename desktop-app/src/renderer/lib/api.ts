@@ -381,6 +381,8 @@ export type MessageUsage = {
   };
 };
 
+export type WorkLogStep = { type: 'message' | 'activity'; text: string } | { type: 'tool'; call: ToolCall };
+
 export type ToolCall = { id?: string; name: string; arguments: any; result_preview?: string };
 
 /** Полный trace ad-hoc субагента — для UI-блока «Сабагенты». */
@@ -417,6 +419,7 @@ export type Message = {
   /** Transient current activity; never persisted as answer text. */
   tool_status?: string | null;
   intermediate_messages?: string[];
+  work_log?: WorkLogStep[];
   images?: MessageImage[] | null;
   audio?: MessageAudio | null;
   created_at: number;

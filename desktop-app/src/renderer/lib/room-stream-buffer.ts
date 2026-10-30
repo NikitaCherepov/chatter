@@ -1,5 +1,5 @@
 export type RoomStreamSnapshot = {
-  stream_id: string; sequence: number; content: string; reasoning_content: string; tool_status?: string | null; intermediate_messages?: string[];
+  stream_id: string; sequence: number; content: string; reasoning_content: string; tool_status?: string | null; intermediate_messages?: string[]; work_log?: import('./api').WorkLogStep[];
   agent_id: number | null; prompt_id?: number | null; prompt_name?: string | null;
   prompt_image_url?: string | null; created_at: number; regenerate_message_id?: number | null;
 };
@@ -27,7 +27,10 @@ export class RoomStreamBuffer {
       const sequence = this.value.sequence + 1, event = this.pending.get(sequence)!;
       this.pending.delete(sequence);
       const next = { ...this.value, sequence }, text = event.text ?? '';
-      if (event.type === 'chat_tool_status') next.tool_status = text;
+      if (event.type === 'chat_tool_status') {
+        next.tool_status = text;
+        if (text.trim()) next.work_log = [...(next.work_log ?? []), {type:'activity',text}];
+      }
       else {
         next.tool_status = null;
         if (event.type === 'chat_agent_token') next.content += text;
@@ -35,7 +38,10 @@ export class RoomStreamBuffer {
         else {
           next.content = typeof event.content === 'string' ? event.content
             : next.content ? `${next.content}\n\n${text}` : text;
-          if (text.trim()) next.intermediate_messages = [...(next.intermediate_messages ?? []), text.trim()];
+          if (text.trim()) {
+            next.intermediate_messages = [...(next.intermediate_messages ?? []), text.trim()];
+            next.work_log = [...(next.work_log ?? []), {type:'message',text:text.trim()}];
+          }
         }
       }
       this.value = next;
