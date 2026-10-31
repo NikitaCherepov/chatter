@@ -8,6 +8,8 @@ import { isMessageImageUrl, remarkMessageImages } from '../lib/remark-message-im
 import { remarkMessageLayouts } from '../lib/remark-message-layouts';
 import { remarkInteractiveCode } from '../lib/remark-interactive-code';
 import { MarkdownCode } from './MarkdownCode';
+import { MarkdownSearchContext } from './MarkdownSearchContext';
+import { rehypeSearchHighlights } from '../lib/markdown-search';
 import { ImageClickContext, MarkdownImage } from './MessageImage';
 import { QuestionnaireContext, type QuestionnaireContextValue } from './Questionnaire';
 import { resolveImageUrl } from '../lib/api';
@@ -18,7 +20,7 @@ type MarkdownRendererProps = {
   content: string;
   /** Scoping class appended after .md for embedder re-theming. */
   className?: string;
-  /** Terms highlighted in rendered prose. Code blocks stay untouched. */
+  /** Terms highlighted in prose and code, including formatted blocks. */
   highlightQuery?: string;
   /** Open images in the host's existing viewer instead of an external browser. */
   onImageClick?: (src: string) => void;
@@ -46,54 +48,9 @@ function MarkdownParagraph({ children }: React.ComponentProps<'p'>) {
   return <p className={s.paragraph}>{children}</p>;
 }
 
-type HastNode = {
-  type?: string;
-  tagName?: string;
-  value?: string;
-  properties?: Record<string, unknown>;
-  children?: HastNode[];
-};
-
-const getHighlightTerms = (query: string): string[] => [...new Set(
-  query.normalize('NFKC').replace(/[^\p{L}\p{N}\s]/gu, ' ').trim().split(/\s+/).filter(Boolean),
-)].sort((left, right) => right.length - left.length);
-
-const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-const rehypeSearchHighlights = (options: { query?: string } = {}) => (tree: HastNode) => {
-  const terms = getHighlightTerms(options.query ?? '');
-  if (!terms.length) return;
-  const matcher = new RegExp(`(${terms.map(escapeRegExp).join('|')})`, 'giu');
-
-  const visit = (node: HastNode, insideCode = false) => {
-    if (!node.children?.length) return;
-    const skipChildren = insideCode || node.tagName === 'code' || node.tagName === 'pre';
-    const nextChildren: HastNode[] = [];
-
-    for (const child of node.children) {
-      if (!skipChildren && child.type === 'text' && child.value) {
-        const parts = child.value.split(matcher);
-        for (let index = 0; index < parts.length; index += 1) {
-          const part = parts[index];
-          if (!part) continue;
-          nextChildren.push(index % 2 === 1
-            ? { type: 'element', tagName: 'mark', properties: {}, children: [{ type: 'text', value: part }] }
-            : { type: 'text', value: part });
-        }
-        continue;
-      }
-      visit(child, skipChildren);
-      nextChildren.push(child);
-    }
-
-    node.children = nextChildren;
-  };
-
-  visit(tree);
-};
-
 export function MarkdownRenderer({ content, className, highlightQuery = '', onImageClick, questionnaire }: MarkdownRendererProps) {
   return (
+    <MarkdownSearchContext.Provider value={highlightQuery}>
     <QuestionnaireContext.Provider value={questionnaire}>
     <ImageClickContext.Provider value={onImageClick}>
     <div className={className ? `${s.md} ${className}` : s.md}>
@@ -177,5 +134,6 @@ export function MarkdownRenderer({ content, className, highlightQuery = '', onIm
     </div>
     </ImageClickContext.Provider>
     </QuestionnaireContext.Provider>
+    </MarkdownSearchContext.Provider>
   );
 }

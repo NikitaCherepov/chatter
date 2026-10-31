@@ -1,4 +1,38 @@
-@import 'highlight.js/styles/github.css';
+// Scoped to message content; the same palette covers formatted and streamed code.
+.md {
+  --code-keyword: #a626a4;
+  --code-string: #116329;
+  --code-number: #0550ae;
+  --code-comment: #57606a;
+  --code-function: #6639ba;
+  --code-type: #953800;
+  --code-name: #0550ae;
+  --code-meta: #6e5300;
+  :global(.hljs) { color: var(--text-body); background: transparent; }
+  :global(.hljs-keyword), :global(.hljs-selector-tag), :global(.hljs-literal), :global(.hljs-operator) { color: var(--code-keyword); }
+  :global(.hljs-string), :global(.hljs-regexp), :global(.hljs-template-tag), :global(.hljs-addition) { color: var(--code-string); }
+  :global(.hljs-number), :global(.hljs-attr), :global(.hljs-symbol), :global(.hljs-bullet) { color: var(--code-number); }
+  :global(.hljs-comment), :global(.hljs-doctag), :global(.hljs-quote) { color: var(--code-comment); }
+  :global(.hljs-title), :global(.hljs-title.function_), :global(.hljs-title.class_), :global(.hljs-section) { color: var(--code-function); }
+  :global(.hljs-type), :global(.hljs-built_in), :global(.hljs-variable), :global(.hljs-template-variable) { color: var(--code-type); }
+  :global(.hljs-tag), :global(.hljs-name), :global(.hljs-selector-id), :global(.hljs-selector-class), :global(.hljs-property), :global(.hljs-attribute) { color: var(--code-name); }
+  :global(.hljs-params), :global(.hljs-subst), :global(.hljs-punctuation) { color: var(--text-body); }
+  :global(.hljs-meta) { color: var(--code-meta); }
+  :global(.hljs-deletion) { color: var(--danger, #b42318); }
+  :global(.hljs-emphasis) { font-style: italic; }
+  :global(.hljs-strong) { font-weight: 600; }
+}
+:global([data-theme='dark']) .md {
+  --code-keyword: #c5a5e8;
+  --code-string: #c3d59d;
+  --code-number: #e7b78e;
+  --code-comment: #94a3b5;
+  --code-function: #e6d19b;
+  --code-type: #9ed6ce;
+  --code-name: #9dc4e4;
+  --code-meta: #b8b8df;
+  :global(.hljs-deletion) { color: #f0a8a8; }
+}
 
 // Model-authored text accents use theme colors, never arbitrary model CSS.
 .md {
@@ -164,13 +198,16 @@
   margin: 0;
   padding: 14px 16px;
   overflow-x: auto;
+  white-space: pre;
+  tab-size: 2;
   background: transparent !important;
 }
 
 .codeBlockWrapper code {
   font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
   font-size: 13px;
-  line-height: 1.5;
+  line-height: 1.6;
+  color: var(--text-body);
   background: transparent !important;
 }
 
@@ -483,7 +520,7 @@
 .searchHighlight {
   padding: 0 1px;
   border-radius: 2px;
-  background: color-mix(in srgb, var(--color-warning) 55%, transparent);
+  background: color-mix(in srgb, var(--color-warning) 28%, var(--bg-primary));
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-warning) 38%, transparent);
-  color: inherit;
+  color: var(--text-body);
 }

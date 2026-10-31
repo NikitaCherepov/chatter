@@ -1,0 +1,41 @@
+import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
+const { formatCode, normalizeCodeLanguage, canFormatCode, currentFormattedCode, highlightCode } = require('../src/renderer/lib/markdown-code-format.ts');
+const { remarkInteractiveCode } = require('../src/renderer/lib/remark-interactive-code.ts');
+const { rehypeSearchHighlights } = require('../src/renderer/lib/markdown-search.ts');
+
+for (const language of ['js','javascript','ts','typescript','json','css','html','yaml','md','vue']) {
+ const source = '```'+language+'\nconst x={a:1}\n```';
+ const node:any = {type:'code',lang:language,value:'const x={a:1}',position:{start:{offset:0},end:{offset:source.length}}};
+ remarkInteractiveCode()({type:'root',children:[node]},{value:source});
+ assert.equal(node.data.hProperties['data-code-closed'],'yes',language);
+ if(!['html'].includes(language))assert.equal(node.data.hProperties['data-preview-language'],undefined,'formatting must not authorize previews');
+}
+assert.equal(normalizeCodeLanguage('JS'),'javascript');
+assert.equal(normalizeCodeLanguage('typescript'),'typescript');
+assert.equal(canFormatCode('__proto__'),false);
+assert.equal(canFormatCode('python'),false);
+assert.equal(await formatCode('x=1','python'),null);
+assert.equal(await formatCode('x'.repeat(100001),'js'),null);
+for(const language of ['js','javascript','JS','mjs','cjs'])assert.equal(await formatCode('const value={answer:42}',language),'const value = { answer: 42 };\n');
+assert.match(await formatCode('const count:number=2','typescript'),/count: number = 2/);
+assert.match(await formatCode('{"a":1,"b":[2,3]}','json'),/"a": 1/);
+assert.match(await formatCode('body{color:red}','css'),/color: red;/);
+assert.match(await formatCode('<div><span>Hello</span></div>','html'),/Hello/);
+assert.match(await formatCode('<template><div>{{foo+bar}}</div></template><script setup lang="ts">const n:number=1</script><style>.x{color:red}</style>','vue'),/const n: number = 1/);
+assert.equal(await formatCode('const broken = {','jsx'),null);
+assert.equal(await formatCode('const broken = {','jsx'),null,'cached failures stay failures');
+const first={source:'old',language:'jsx',text:'OLD',html:'OLD'};
+assert.equal(currentFormattedCode(first,'new','jsx',true),null,'never show or copy old code while new formatting is pending or fails');
+assert.equal(currentFormattedCode(first,'old','html',true),null);
+assert.equal(currentFormattedCode(first,'old','jsx',false),null,'reopened streaming fence uses raw text');
+assert.equal(currentFormattedCode(first,'old','jsx',true),first);
+const tree:any={type:'root',children:[{type:'element',tagName:'code',children:[{type:'element',tagName:'span',properties:{className:['hljs-keyword']},children:[{type:'text',value:'const'}]},{type:'text',value:' value=42'}]}]};
+rehypeSearchHighlights({query:'const 42'})(tree);
+assert.equal(tree.children[0].children[0].children[0].tagName,'mark');
+assert.equal(tree.children[0].children[2].tagName,'mark');
+const html=await highlightCode('const value = "<script>alert(1)</script>";','js');
+assert.ok(html.includes('&lt;script&gt;'));
+assert.ok(!html.includes('<script>'));
+console.log('PASS: language aliases, closed fences, formatters, embedded Vue, invalid/large input, stale-state rejection, search and HTML escaping');

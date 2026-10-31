@@ -47,6 +47,7 @@
     "marked": "^18.0.2",
     "onnxruntime-node": "^1.27.0",
     "pdfjs-dist": "4.10.38",
+    "prettier": "^3.9.10",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-i18next": "^17.0.9",

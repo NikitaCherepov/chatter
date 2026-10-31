@@ -13,11 +13,14 @@ export function remarkInteractiveCode() {
   return (tree: Node, file: { value: unknown }) => {
     const source = String(file.value);
     const visit = (node: Node) => {
-      if (node.type === 'code' && ['interactive', 'jsx', 'tsx', 'html', 'questionnaire', 'diagram', 'chart'].includes(node.lang ?? '')) {
+      if (node.type === 'code') {
         const start = node.position?.start.offset, end = node.position?.end.offset;
         const closed = start !== undefined && end !== undefined && isClosedPreviewFence(source.slice(start, end));
+        const preview = ['interactive', 'jsx', 'tsx', 'html', 'questionnaire', 'diagram', 'chart'].includes(node.lang ?? '');
         node.data = { ...node.data, hProperties: { ...node.data?.hProperties,
-          'data-preview-source': node.value ?? '', 'data-preview-language': node.lang, 'data-preview-closed': closed ? 'yes' : 'no' } };
+          'data-code-block': 'yes', 'data-code-source': node.value ?? '', 'data-code-closed': closed ? 'yes' : 'no',
+          ...(preview ? { 'data-preview-source': node.value ?? '', 'data-preview-language': node.lang, 'data-preview-closed': closed ? 'yes' : 'no' } : {}),
+        } };
       }
       node.children?.forEach(visit);
     };
