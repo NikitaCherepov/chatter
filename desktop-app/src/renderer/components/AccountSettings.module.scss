@@ -1,0 +1,356 @@
+.accountPanel {
+  gap: 0;
+}
+.intro {
+  margin: -6px 0 24px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.headingRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+.heading {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.help {
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.6;
+}
+.personaGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr));
+  gap: 8px;
+  margin: 0;
+}
+.personaCard {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--border-light);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-secondary);
+  text-align: left;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    background-color 0.15s;
+  &:hover:not(:disabled) {
+    background: var(--bg-input);
+  }
+  &:focus-visible {
+    outline: 2px solid var(--accent-icon);
+    outline-offset: 2px;
+  }
+  &:disabled {
+    opacity: 0.55;
+    cursor: default;
+  }
+}
+.personaSelected {
+  background: var(--bg-input);
+  border-color: var(--accent-icon);
+}
+.cardAvatar {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  border-radius: 9px;
+  overflow: hidden;
+  background: var(--bg-secondary);
+  color: var(--accent-icon);
+  font-size: 16px;
+  font-weight: 600;
+}
+.cardText {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  strong {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-size: 12px;
+    color: var(--text-primary);
+  }
+  small {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+    color: var(--text-muted);
+    font-size: 10px;
+    line-height: 1.4;
+  }
+}
+.defaultCheck {
+  flex-shrink: 0;
+  margin-left: auto;
+  color: var(--accent-icon);
+}
+.personaPicker {
+  margin-bottom: 24px;
+}
+.pickerActions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 8px;
+  .textAction {
+    min-height: 28px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .textAction:last-child {
+    margin-left: auto;
+  }
+  .textAction[aria-pressed='true'] {
+    color: var(--text-primary);
+    font-weight: 600;
+  }
+  .textAction:focus-visible {
+    outline: 2px solid var(--accent-icon);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+}
+.addIcon {
+  font-size: 18px;
+  line-height: 1;
+  font-weight: 400;
+}
+.personaEditor {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 20px;
+  border: 1px solid var(--border-light);
+  border-radius: 12px;
+}
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 7px;
+  background: var(--bg-secondary);
+  border-radius: 5px;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+.identity {
+  display: flex;
+  align-items: flex-start;
+  gap: 18px;
+}
+.avatarColumn {
+  flex: 0 0 80px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+.avatarButton {
+  position: relative;
+  width: 80px;
+  height: 80px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid var(--border-light);
+  border-radius: 14px;
+  background: var(--bg-input);
+  color: var(--accent-icon);
+  font: inherit;
+  font-size: 28px;
+  cursor: pointer;
+  &:focus-visible {
+    outline: 2px solid var(--accent-icon);
+    outline-offset: 2px;
+  }
+}
+.camera {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: grid;
+  place-items: center;
+  height: 23px;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  opacity: 0.95;
+}
+.identityFields {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.textAction {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  &:hover {
+    color: var(--text-primary);
+  }
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+}
+.memoryHeading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-content: space-between;
+}
+.charCount {
+  color: var(--text-hint);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.editorActions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.dirty {
+  color: var(--text-muted);
+  font-size: 11px;
+  margin-left: auto;
+}
+.instructions {
+  padding: 0;
+}
+.preferences {
+  margin-top: 24px;
+  padding-top: 22px;
+  border-top: 1px solid var(--border-light);
+}
+.accountDetails {
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border-light);
+  summary {
+    list-style: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 1.5;
+    &::-webkit-details-marker {
+      display: none;
+    }
+    &::before {
+      content: '›';
+      display: inline-block;
+      font-size: 17px;
+      transition: transform 0.15s;
+    }
+  }
+  &[open] > summary::before {
+    transform: rotate(90deg);
+  }
+}
+.accountValue {
+  margin-left: auto;
+  max-width: 55%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.detailsBody {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 14px;
+}
+.security {
+  margin-top: 18px;
+  .accountDetails {
+    margin-top: 8px;
+    padding: 0;
+    border: 0;
+  }
+}
+@media (max-width: 760px) {
+  .identity {
+    gap: 12px;
+  }
+  .personaEditor {
+    padding: 14px;
+  }
+  .avatarColumn {
+    flex-basis: 64px;
+  }
+  .avatarButton {
+    width: 64px;
+    height: 64px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .personaCard {
+    transition: none;
+  }
+  .accountDetails summary::before {
+    transition: none;
+  }
+}
+
+.personaFooter {
+  display: flex;
+  justify-content: flex-end;
+}
+.deletePersona {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 0;
+  color: var(--color-error);
+
+  &:hover {
+    color: var(--color-error);
+    text-decoration: underline;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+}

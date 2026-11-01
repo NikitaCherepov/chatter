@@ -92,7 +92,6 @@ import {
   setActivePersona,
   setDefaultGeneralMemorySpace,
   setPersonaCoreMemory,
-  syncPrimaryPersonaName,
   updateChatMemorySettings,
   updatePersona,
   updatePersonaImage,
@@ -1341,7 +1340,6 @@ app.put('/api/v1/user/name', (req: AuthedRequest, res) => {
   const userId = resolveAccountId(req.authUserId!);
   const result = db.prepare('UPDATE users SET name = ? WHERE id = ?').run(name, userId);
   if (result.changes === 0) return res.status(404).json({ error: 'user_not_found' });
-  syncPrimaryPersonaName(userId, name);
   return res.json({ ok: true, name });
 });
 
@@ -5260,7 +5258,6 @@ app.put('/internal/users/:id/name', internalAuth, (req, res) => {
   if (!user) return res.status(404).json({ error: 'user_not_found' });
 
   updateUserName(userId, name);
-  syncPrimaryPersonaName(userId, name);
   return res.json({ ok: true, name });
 });
 
@@ -5502,7 +5499,6 @@ app.put('/api/v1/admin/users/:id/name', adminMiddleware, (req: AuthedRequest, re
   if (!user) return res.status(404).json({ error: 'user_not_found' });
 
   updateUserName(userId, name);
-  syncPrimaryPersonaName(userId, name);
   return res.json({ ok: true, name });
 });
 

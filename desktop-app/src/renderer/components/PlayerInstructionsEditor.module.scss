@@ -137,3 +137,15 @@
     max-height: calc(100dvh - 16px);
   }
 }
+
+// Account persona form: use the same label, help and spacing as core memory.
+.editor.settingsEditor {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  gap: 12px;
+  .label { gap: 7px; color: var(--text-muted); font-size: 12px; font-weight: 500; }
+  .label strong { font-weight: 500; }
+  small { color: var(--text-muted); font-size: 11px; line-height: 1.6; font-weight: 400; }
+  textarea { min-height: 100px; }
+}

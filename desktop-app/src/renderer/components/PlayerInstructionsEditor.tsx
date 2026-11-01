@@ -12,7 +12,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import s from './PlayerInstructionsEditor.module.scss';
 import settingsStyles from './SettingsModal.module.scss';
 
-export function PlayerInstructionsEditor({ scope, targetId, modelId }: { scope: 'persona' | 'chat'; targetId: number; modelId?: string | null }) {
+export function PlayerInstructionsEditor({ scope, targetId, modelId, onDirtyChange, appearance = 'default' }: { scope: 'persona' | 'chat'; targetId: number; modelId?: string | null; onDirtyChange?: (dirty: boolean) => void; appearance?: 'default' | 'settings' }) {
   const { t } = useTranslation();
   const target = { scope, target_id: targetId };
   const [data, setData] = useState<prefs.PlayerInstructions | null>(null);
@@ -28,16 +28,20 @@ export function PlayerInstructionsEditor({ scope, targetId, modelId }: { scope: 
     void prefs.getPlayerInstructions(target).then(result => { if (active) { setData(result); setText(result.text); setMode(result.mode ?? (result.enabled ? 'both' : 'off')); } }, () => { if (active) setError(t('playerInstructions.loadFailed')); });
     return () => { active = false; };
   }, [scope, targetId, t]);
+  useEffect(() => {
+    onDirtyChange?.(Boolean(data && (text !== data.text || mode !== (data.mode ?? (data.enabled ? 'both' : 'off')))));
+  }, [text, mode, data, onDirtyChange]);
   const applied = (result: prefs.InstructionState) => {
     setText(result.text); setMode(result.mode ?? (result.enabled ? 'both' : 'off')); setData(prev => prev ? { ...prev, ...result } : null); setSaved(true);
   };
-  return <section className={s.editor}>
+  return <section className={`${s.editor} ${appearance === 'settings' ? s.settingsEditor : ''}`}>
     <label className={s.label}>
       <strong>{t(scope === 'persona' ? 'playerInstructions.general' : 'playerInstructions.chat')}</strong>
-      <textarea aria-label={t(scope === 'persona' ? 'playerInstructions.general' : 'playerInstructions.chat')} rows={4} maxLength={12000} value={text} disabled={!data || saving}
+      {appearance === 'settings' && <small>{t(scope === 'persona' ? 'playerInstructions.generalHelp' : 'playerInstructions.chatHelp')}</small>}
+      <textarea aria-label={t(scope === 'persona' ? 'playerInstructions.general' : 'playerInstructions.chat')} rows={appearance === 'settings' ? 5 : 4} maxLength={12000} value={text} disabled={!data || saving}
         placeholder={t('playerInstructions.placeholder')} onChange={e => { setText(e.target.value); setSaved(false); }} />
     </label>
-    <small>{t(scope === 'persona' ? 'playerInstructions.generalHelp' : 'playerInstructions.chatHelp')}</small>
+    {appearance !== 'settings' && <small>{t(scope === 'persona' ? 'playerInstructions.generalHelp' : 'playerInstructions.chatHelp')}</small>}
     {scope === 'chat' && <div className={s.label}>
       <span>{t('playerInstructions.modeLabel')}</span>
       <Select value={mode} disabled={!data || saving} onChange={value => { setMode(value as prefs.InstructionsMode); setSaved(false); }} options={(['both','persona','chat','off'] as const).map(value => ({value,label:t(`playerInstructions.mode${value}`)}))} />

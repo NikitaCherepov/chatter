@@ -34,14 +34,21 @@ export function useSettingsSearchTarget(section: SettingsSection) {
     function find() {
       if (!root || done) return;
       const title = normalizeSettingsSearch(result.title);
-      const elements = Array.from(root.querySelectorAll<HTMLElement>('label, span, div, p, h2, h3, h4'));
+      const elements = Array.from(
+        root.querySelectorAll<HTMLElement>('label, span, div, p, h2, h3, h4, summary')
+      );
       const target = elements.find(
         (el) =>
-          el.getClientRects().length &&
           normalizeSettingsSearch(el.textContent ?? '') === title &&
           !Array.from(el.children).some((child) => normalizeSettingsSearch(child.textContent ?? '') === title)
       );
       if (!target) return;
+      let ancestor: HTMLElement | null = target;
+      while (ancestor && ancestor !== root) {
+        if (ancestor instanceof HTMLDetailsElement) ancestor.open = true;
+        ancestor = ancestor.parentElement;
+      }
+      if (!target.getClientRects().length) return;
       done = true;
       setUnavailable(false);
       observer.disconnect();

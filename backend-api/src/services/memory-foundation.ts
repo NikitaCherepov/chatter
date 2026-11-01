@@ -204,7 +204,7 @@ export const updatePersona = (
   const persona = db.prepare('SELECT * FROM personas WHERE id = ? AND user_id = ?')
     .get(personaId, accountId) as Persona | undefined;
   if (!persona) throw new Error('persona_not_found');
-  const name = persona.is_primary === 1 || patch.name === undefined
+  const name = patch.name === undefined
     ? persona.name
     : `${patch.name}`.trim().replace(/\s+/g, ' ').slice(0, 80);
   if (!name) throw new Error('persona_name_required');
@@ -243,24 +243,34 @@ export const setActivePersona = (userId: number, personaId: number): Persona => 
 
 export const deletePersona = (userId: number, personaId: number) => {
   const accountId = canonicalUserId(userId);
-  const persona = db.prepare('SELECT * FROM personas WHERE id = ? AND user_id = ?')
-    .get(personaId, accountId) as Persona | undefined;
-  if (!persona) throw new Error('persona_not_found');
-  if (persona.is_primary === 1) throw new Error('primary_persona_cannot_be_deleted');
-  db.transaction(() => {
+  return db.transaction(() => {
+    const persona = db.prepare('SELECT * FROM personas WHERE id = ? AND user_id = ?')
+      .get(personaId, accountId) as Persona | undefined;
+    if (!persona) throw new Error('persona_not_found');
+    const remaining = db.prepare('SELECT COUNT(*) AS count FROM personas WHERE user_id = ?')
+      .get(accountId) as { count: number };
+    if (remaining.count <= 1) throw new Error('last_persona_cannot_be_deleted');
+
+    const now = getNowUnix();
     db.prepare('UPDATE chat_memory_settings SET persona_override_id = NULL, updated_at = ? WHERE user_id = ? AND persona_override_id = ?')
-      .run(getNowUnix(), accountId, personaId);
+      .run(now, accountId, personaId);
     db.prepare('DELETE FROM personas WHERE id = ? AND user_id = ?').run(personaId, accountId);
-    if (persona.is_default === 1) {
-      const replacement = db.prepare('SELECT * FROM personas WHERE user_id = ? ORDER BY id ASC LIMIT 1')
-        .get(accountId) as Persona | undefined;
-      if (replacement) {
-        db.prepare('UPDATE personas SET is_default = 1, updated_at = ? WHERE id = ?').run(getNowUnix(), replacement.id);
-        db.prepare('UPDATE users SET core_memory = ? WHERE id = ?').run(replacement.core_memory, accountId);
-      }
+    const replacement = db.prepare('SELECT * FROM personas WHERE user_id = ? ORDER BY is_default DESC, is_primary DESC, id ASC LIMIT 1')
+      .get(accountId) as Persona;
+    if (persona.is_default === 1 || replacement.is_default !== 1) {
+      db.prepare('UPDATE personas SET is_default = 1, updated_at = ? WHERE id = ? AND user_id = ?')
+        .run(now, replacement.id, accountId);
     }
+    // Preserve the legacy core-memory pointer internally; it no longer restricts deletion.
+    if (persona.is_primary === 1) {
+      db.prepare('UPDATE personas SET is_primary = 1, updated_at = ? WHERE id = ? AND user_id = ?')
+        .run(now, replacement.id, accountId);
+    }
+    if (persona.is_default === 1 || persona.is_primary === 1) {
+      db.prepare('UPDATE users SET core_memory = ? WHERE id = ?').run(replacement.core_memory, accountId);
+    }
+    return ensureMemoryDefaults(accountId).persona;
   })();
-  return ensureMemoryDefaults(accountId).persona;
 };
 
 export const listMemorySpaces = (userId: number): MemorySpace[] => {
@@ -809,14 +819,4 @@ export const getPrimaryPersona = (userId: number) => {
   ensureMemoryDefaults(accountId);
   return db.prepare('SELECT * FROM personas WHERE user_id = ? AND is_primary = 1 LIMIT 1')
     .get(accountId) as Persona;
-};
-
-export const syncPrimaryPersonaName = (userId: number, name: string) => {
-  const accountId = canonicalUserId(userId);
-  const primary = getPrimaryPersona(accountId);
-  const safeName = `${name || ''}`.trim().replace(/\s+/g, ' ').slice(0, 80);
-  if (!safeName) throw new Error('persona_name_required');
-  db.prepare('UPDATE personas SET name = ?, updated_at = ? WHERE id = ? AND user_id = ? AND is_primary = 1')
-    .run(safeName, getNowUnix(), primary.id, accountId);
-  return db.prepare('SELECT * FROM personas WHERE id = ?').get(primary.id) as Persona;
 };

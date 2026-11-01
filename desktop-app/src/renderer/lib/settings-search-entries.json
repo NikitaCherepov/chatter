@@ -1,20 +1,7 @@
 [
   {
     "section": "account",
-    "key": "settings.account.name"
-  },
-  {
-    "section": "account",
     "key": "settings.account.personas.accountName"
-  },
-  {
-    "section": "account",
-    "key": "settings.account.personas.label"
-  },
-  {
-    "section": "account",
-    "key": "settings.account.personas.image",
-    "relatedKeys": ["settings.account.personas.imageHelp"]
   },
   {
     "section": "account",
@@ -441,5 +428,17 @@
   {
     "section": "models",
     "key": "settings.app.reasoning"
+  },
+  {
+    "section": "account",
+    "key": "settings.account.redesign.chatName"
+  },
+  {
+    "section": "account",
+    "key": "settings.account.redesign.description"
+  },
+  {
+    "section": "account",
+    "key": "settings.account.redesign.personas"
   }
 ]

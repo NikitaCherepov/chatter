@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
 import { diffLines } from 'diff';
@@ -57,6 +57,10 @@ import { SillyTavernChatImportDialog } from './SillyTavernChatImportDialog';
 import { SillyTavernBackupImportDialog } from './SillyTavernBackupImportDialog';
 import telegramIcon from '../assets/integrations/telegram.webp';
 import s from './SettingsModal.module.scss';
+import a from './AccountSettings.module.scss';
+import { AccountPersonaCards } from './AccountPersonaCards';
+import { AvatarImage } from './AvatarImage';
+import { ConfirmDialog } from './ConfirmDialog';
 import { SettingsNavigation } from './SettingsNavigation';
 import type { SettingsSection as Section } from '../lib/settings-navigation';
 import { useSettingsSearchTarget } from '../lib/useSettingsSearchTarget';
@@ -135,6 +139,7 @@ function clampZoomPct(pct: number): number {
 
 export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuthInvalidated }: Props) {
   const { user, setUser } = useAuth();
+  const queryClient = useQueryClient();
   const isAdmin = user?.is_admin === 1 || user?.role === 'admin';
   const { t, i18n } = useTranslation();
   const [section, setSection] = useState<Section>('account');
@@ -333,6 +338,11 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
   const [personaDescription, setPersonaDescription] = useState('');
   const [allowCoreMemoryUpdate, setAllowCoreMemoryUpdate] = useState(true);
   const [personaDeleting, setPersonaDeleting] = useState(false);
+  const [personaActivating, setPersonaActivating] = useState(false);
+  const activatePersonaRef = useRef(false);
+  const [pendingPersonaId, setPendingPersonaId] = useState<number | null>(null);
+  const [confirmDeletePersona, setConfirmDeletePersona] = useState(false);
+  const [personaInstructionsDirty, setPersonaInstructionsDirty] = useState(false);
   const [personaImageUrl, setPersonaImageUrl] = useState<string | null>(null);
   const [pendingPersonaImage, setPendingPersonaImage] = useState<{ base64: string; mimeType: string; previewUrl: string } | null>(null);
   const [personaImageCropSource, setPersonaImageCropSource] = useState<string | null>(null);
@@ -364,7 +374,8 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
     enabled: section === 'account',
     staleTime: 30_000,
   });
-  const personas = personasQuery.data?.personas ?? [];
+  // IDs follow creation order; activation must not rearrange the cards.
+  const personas = useMemo(() => [...(personasQuery.data?.personas ?? [])].sort((left, right) => left.id - right.id), [personasQuery.data]);
 
   // Feature flags (restrictions)
   const [featureFlags, setFeatureFlagsState] = useState<api.FeatureFlags>({
@@ -920,8 +931,6 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
     setSaving(true);
     try {
       await api.setUserName(trimmed);
-      await loadPersonas(selectedPersonaId ?? undefined);
-      window.dispatchEvent(new Event('chatter:personas-changed'));
       const updated = { ...user!, name: trimmed };
       setUser(updated);
       localStorage.setItem('chatter_user', JSON.stringify(updated));
@@ -1022,30 +1031,55 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
     }
   };
 
-  const handleSelectPersona = async (personaId: number) => {
+  const selectPersonaForEditing = (personaId: number) => {
+    setPersonaInstructionsDirty(false);
     personaDraftSourceRef.current = null;
     setSelectedPersonaId(personaId);
-    if (personaId === NEW_PERSONA_ID) return;
+  };
+
+  const choosePersona = async (personaId: number, openEditor = true) => {
+    if (personaId === NEW_PERSONA_ID) { selectPersonaForEditing(personaId); return; }
+    if (activatePersonaRef.current) return;
+    activatePersonaRef.current = true;
+    setPersonaActivating(true);
+    await queryClient.cancelQueries({ queryKey: ['memory-personas'] });
+    const previous = queryClient.getQueryData<{ personas: PersonaInfo[] }>(['memory-personas']);
+    const previousEditorId = selectedPersonaId;
+    queryClient.setQueryData<{ personas: PersonaInfo[] }>(['memory-personas'], current => current && ({
+      ...current,
+      personas: current.personas.map(persona => ({ ...persona, is_default: persona.id === personaId ? 1 : 0 })),
+    }));
+    // Keep unsaved fields when retrying activation of the currently edited persona.
+    if (openEditor && personaId !== selectedPersonaId) selectPersonaForEditing(personaId);
     try {
       await api.apiFetch(`/api/v1/memory/personas/${personaId}/activate`, { method: 'POST' });
-      await personasQuery.refetch();
       window.dispatchEvent(new Event('chatter:personas-changed'));
-      const persona = personas.find(item => item.id === personaId);
-      if (persona?.is_primary === 1 && user) {
-        const updated = { ...user, core_memory: persona.core_memory };
-        setUser(updated);
-        localStorage.setItem('chatter_user', JSON.stringify(updated));
-      }
+      void personasQuery.refetch();
+      toast.success(t('settings.account.redesign.defaultSaved'));
     } catch {
+      if (previous) queryClient.setQueryData(['memory-personas'], previous);
+      if (openEditor && personaId !== previousEditorId && previousEditorId !== null) selectPersonaForEditing(previousEditorId);
       toast.error(t('settings.account.personas.errors.select'));
+    } finally {
+      activatePersonaRef.current = false;
+      setPersonaActivating(false);
     }
+  };
+
+  const handleSelectPersona = (personaId: number) => {
+    if (personaBusy || activatePersonaRef.current) return;
+    if (personaId === selectedPersonaId && (personaId === NEW_PERSONA_ID || selectedPersona?.is_default === 1)) return;
+    if (personaId !== selectedPersonaId && (personaDirty || personaInstructionsDirty)) {
+      setPendingPersonaId(personaId); return;
+    }
+    void choosePersona(personaId);
   };
 
   const handleSaveCoreMemory = async () => {
     const selectedPersona = personas.find(persona => persona.id === selectedPersonaId);
     const isPrimary = selectedPersona?.is_primary === 1;
-    const name = personaName.trim();
-    if (!isPrimary && !name) {
+    const name = personaName.trim().replace(/\s+/g, ' ');
+    if (!name) {
       toast.error(t('settings.account.personas.errors.nameRequired'));
       return;
     }
@@ -1054,6 +1088,7 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
       const attemptedPersonaImage = pendingPersonaImage;
       const attemptedPersonaImageRemoval = personaImageRemoved;
       let personaId = selectedPersonaId;
+      const isCreating = personaId === NEW_PERSONA_ID || personaId === null;
       if (personaId === NEW_PERSONA_ID || personaId === null) {
         const created = await api.apiFetch<{ persona: PersonaInfo }>('/api/v1/memory/personas', {
           method: 'POST',
@@ -1063,9 +1098,7 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
       } else {
         await api.apiFetch(`/api/v1/memory/personas/${personaId}`, {
           method: 'PATCH',
-          body: JSON.stringify(isPrimary
-            ? { core_memory: coreMemory, allow_core_memory_update: allowCoreMemoryUpdate }
-            : { name, description: personaDescription.trim(), core_memory: coreMemory, allow_core_memory_update: allowCoreMemoryUpdate }),
+          body: JSON.stringify({ name, description: personaDescription.trim(), core_memory: coreMemory, allow_core_memory_update: allowCoreMemoryUpdate }),
         });
       }
       let imageSaveFailed = false;
@@ -1080,7 +1113,8 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
       } catch {
         imageSaveFailed = true;
       }
-      await api.apiFetch(`/api/v1/memory/personas/${personaId}/activate`, { method: 'POST' });
+      setPersonaName(name);
+      setPersonaDescription(personaDescription.trim());
       await loadPersonas(personaId);
       personaDraftSourceRef.current = personaId;
       window.dispatchEvent(new Event('chatter:personas-changed'));
@@ -1089,7 +1123,8 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
         setUser(updated);
         localStorage.setItem('chatter_user', JSON.stringify(updated));
       }
-      toast.success(t('settings.toasts.memorySaved'));
+      if (isCreating) await choosePersona(personaId, false);
+      toast.success(t('settings.account.redesign.saved'));
       if (imageSaveFailed) toast.error(t('settings.account.personas.imageSaveError'));
       else {
         setPendingPersonaImage(null);
@@ -1681,7 +1716,15 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
   };
 
   const selectedPersona = personas.find(persona => persona.id === selectedPersonaId);
-  const selectedPersonaIsPrimary = selectedPersona?.is_primary === 1;
+  const personaBusy = coreMemorySaving || personaDeleting || personaActivating;
+  const personaDirty = selectedPersonaId === NEW_PERSONA_ID
+    ? Boolean(personaName || personaDescription || coreMemory || pendingPersonaImage || !allowCoreMemoryUpdate)
+    : Boolean(selectedPersona && (
+      personaName !== selectedPersona.name || personaDescription !== (selectedPersona.description || '') ||
+      coreMemory !== (selectedPersona.core_memory || '') ||
+      allowCoreMemoryUpdate !== (selectedPersona.allow_core_memory_update === 1) ||
+      pendingPersonaImage || personaImageRemoved
+    ));
   const selectedCharacterCard = customPrompts.find(prompt => prompt.id === selectedPromptId)?.character_card;
 
   return (
@@ -1721,226 +1764,112 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
             <div className={s.settingsPanelHost} ref={panelRef}>
           {/* Right panel */}
           {section === 'account' && (
-            <div className={s.panel}>
+            <div className={`${s.panel} ${a.accountPanel}`}>
               <div className={s.panelTitle}>
                 {t('settings.sections.account')}
                 <span className={s.planBadge}>{(user?.plan || 'free').toUpperCase()}</span>
               </div>
-              <div className={s.fieldGroup}>
-                <label className={s.fieldLabel}>{selectedPersonaIsPrimary ? t('settings.account.name') : t('settings.account.personas.accountName')}</label>
-                <input
-                  className={s.fieldInput}
-                  type="text"
-                  value={nameValue}
-                  onChange={(e) => setNameValue(e.target.value)}
-                  onKeyDown={handleNameKeyDown}
-                  placeholder={t('settings.account.namePlaceholder')}
-                  autoFocus
-                />
-                <button
-                  className={s.saveBtn}
-                  onClick={handleSaveName}
-                  disabled={saving || !nameValue.trim()}
-                >
-                  {saving ? t('common.saving') : t('common.save')}
-                </button>
+              <p className={a.intro}>{t('settings.account.redesign.intro')}</p>
+              <div className={a.headingRow}>
+                <h3 className={a.heading}>{t('settings.account.redesign.personas')}</h3>
+                <span className={a.help}>{t('settings.account.redesign.selectHelp')}</span>
               </div>
+              <AccountPersonaCards personas={personas} selectedId={selectedPersonaId} disabled={personaBusy}
+                loading={personasQuery.isLoading} onSelect={handleSelectPersona} />
+              {personasQuery.isError && <p className={a.help} role="alert">{t('settings.account.personas.errors.select')} <button className={a.textAction} onClick={() => void personasQuery.refetch()}>{t('playerInstructions.reload')}</button></p>}
 
-              <div className={s.fieldGroup}>
-                <label className={s.fieldLabel}>{t('settings.account.personas.label')}</label>
-                <span className={s.fieldLabel} style={{ marginTop: '-4px', display: 'block' }}>
-                  {t('settings.account.personas.help')}
-                </span>
-                <PromptSelector
-                  options={personas.map(persona => ({
-                    id: persona.id,
-                    name: persona.is_primary === 1 ? t('settings.account.personas.main') : persona.name,
-                    description: persona.is_primary === 1
-                      ? t('settings.account.personas.accountNameValue', { name: persona.name })
-                      : persona.description,
-                    kind: persona.is_primary === 1 ? 'default' as const : 'custom' as const,
-                  }))}
-                  value={selectedPersonaId}
-                  onChange={handleSelectPersona}
-                  disabled={coreMemorySaving || personaDeleting}
-                  placeholder={t('settings.account.personas.selectPlaceholder')}
-                  maxVisibleItems={5}
-                  labels={{
-                    defaultBadge: t('settings.account.personas.mainBadge'),
-                    customBadge: t('settings.account.personas.personaBadge'),
-                    customSection: t('settings.account.personas.otherSection'),
-                    createTitle: t('settings.account.personas.createTitle'),
-                    createDescription: t('settings.account.personas.createDescription'),
-                  }}
-                />
-                {!selectedPersonaIsPrimary && (
-                  <>
-                    <input
-                      className={s.fieldInput}
-                      value={personaName}
-                      onChange={(e) => setPersonaName(e.target.value.slice(0, 80))}
-                      placeholder={t('settings.account.personas.namePlaceholder')}
-                      maxLength={80}
-                    />
-                    <input
-                      className={s.fieldInput}
-                      value={personaDescription}
-                      onChange={(e) => setPersonaDescription(e.target.value.slice(0, 240))}
-                      placeholder={t('settings.account.personas.descriptionPlaceholder')}
-                      maxLength={240}
-                    />
-                  </>
-                )}
-                <div className={s.promptImageEditor}>
-                  <div className={s.promptImagePreview}>
-                    {(pendingPersonaImage?.previewUrl || personaImageUrl) ? (
-                      <img src={pendingPersonaImage?.previewUrl || api.resolveImageUrl(personaImageUrl!, 320)} alt="" />
-                    ) : (
-                      <span>{t('settings.account.personas.imageEmpty')}</span>
-                    )}
+              {selectedPersonaId !== null && <section className={a.personaEditor} aria-label={t('settings.account.redesign.editPersona')}>
+                <div className={a.headingRow}>
+                  <h3 className={a.heading}>{selectedPersonaId === NEW_PERSONA_ID ? t('settings.account.redesign.newPersona') : t('settings.account.redesign.editPersona')}</h3>
+                </div>
+                <div className={a.identity}>
+                  <div className={a.avatarColumn}>
+                    <button type="button" className={a.avatarButton} disabled={personaBusy} onClick={() => personaImageInputRef.current?.click()} aria-label={t('settings.prompt.imageChoose')} title={t('settings.prompt.imageChoose')}>
+                      {(pendingPersonaImage?.previewUrl || personaImageUrl)
+                        ? <AvatarImage src={pendingPersonaImage?.previewUrl || api.resolveImageUrl(personaImageUrl!, 320)} />
+                        : <span aria-hidden="true">{personaName.trim().slice(0, 1).toLocaleUpperCase() || '+'}</span>}
+                      <span className={a.camera} aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M3 7h5l2-3h4l2 3h5v14H3z"/><circle cx="12" cy="13" r="4"/></svg></span>
+                    </button>
+                    {(pendingPersonaImage || personaImageUrl) && <button type="button" className={a.textAction} disabled={personaBusy} onClick={() => {
+                      setPendingPersonaImage(null); setPersonaImageUrl(null); setPersonaImageRemoved(true);
+                    }}>{t('common.delete')}</button>}
+                    <input ref={personaImageInputRef} className={s.promptImageInput} type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/avif" onChange={event => { handlePersonaImageSelect(event.target.files?.[0]); event.target.value = ''; }} />
                   </div>
-                  <div className={s.promptImageActions}>
-                    <span className={s.fieldLabel}>{t('settings.account.personas.image')}</span>
-                    <span className={s.promptImageHelp}>{t('settings.account.personas.imageHelp')}</span>
-                    <div className={s.promptImageButtons}>
-                      <button className={s.cancelBtn} type="button" onClick={() => personaImageInputRef.current?.click()}>
-                        {t('settings.prompt.imageChoose')}
-                      </button>
-                      {(pendingPersonaImage || personaImageUrl) && (
-                        <button className={s.cancelBtn} type="button" onClick={() => {
-                          setPendingPersonaImage(null);
-                          setPersonaImageUrl(null);
-                          setPersonaImageRemoved(true);
-                        }}>
-                          {t('common.delete')}
-                        </button>
-                      )}
+                  <div className={a.identityFields}>
+                    <div className={a.field}>
+                      <label className={s.fieldLabel} htmlFor="persona-display-name">{t('settings.account.redesign.chatName')}</label>
+                      <input id="persona-display-name" className={s.fieldInput} value={personaName} onChange={event => setPersonaName(event.target.value.slice(0, 80))} maxLength={80} placeholder={t('settings.account.personas.namePlaceholder')} disabled={personaBusy} />
                     </div>
-                    <input
-                      ref={personaImageInputRef}
-                      className={s.promptImageInput}
-                      type="file"
-                      accept="image/png,image/jpeg,image/webp,image/gif,image/avif"
-                      onChange={event => handlePersonaImageSelect(event.target.files?.[0])}
-                    />
+                    <div className={a.field}>
+                      <label className={s.fieldLabel} htmlFor="persona-description">{t('settings.account.redesign.description')}</label>
+                      <input id="persona-description" className={s.fieldInput} value={personaDescription} onChange={event => setPersonaDescription(event.target.value.slice(0, 240))} maxLength={240} placeholder={t('settings.account.personas.descriptionPlaceholder')} disabled={personaBusy} />
+                    </div>
                   </div>
                 </div>
-                <label className={s.fieldLabel}>{t('settings.account.personas.coreMemory')}</label>
-                <textarea
-                  className={s.textareaInput}
-                  value={coreMemory}
-                  onChange={(e) => setCoreMemory(e.target.value)}
-                  placeholder={t('settings.account.memoryPlaceholder')}
-                  rows={5}
-                />
-                <Checkbox
-                  checked={allowCoreMemoryUpdate}
-                  onChange={setAllowCoreMemoryUpdate}
-                  label={t('settings.account.personas.allowCoreMemoryUpdate')}
-                  disabled={coreMemorySaving}
-                />
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <button
-                      className={s.saveBtn}
-                      onClick={handleSaveCoreMemory}
-                      disabled={coreMemorySaving || (!selectedPersonaIsPrimary && !personaName.trim())}
-                    >
-                      {coreMemorySaving ? t('common.saving') : (selectedPersonaId === NEW_PERSONA_ID ? t('common.create') : t('common.save'))}
-                    </button>
-                    {selectedPersonaId !== null && selectedPersonaId !== NEW_PERSONA_ID && !selectedPersonaIsPrimary && (
-                      <button className={s.cancelBtn} onClick={handleDeletePersona} disabled={personaDeleting} style={{ color: 'var(--color-error)' }}>
+                <span className={a.help}>{t('settings.account.redesign.identityHelp')}</span>
+                <div className={a.field}>
+                  <div className={a.memoryHeading}>
+                    <label className={s.fieldLabel} htmlFor="persona-core-memory">{t('settings.account.personas.coreMemory')}</label>
+                    <span className={a.charCount}>{coreMemory.length.toLocaleString(i18n.language)}</span>
+                  </div>
+                  <span className={a.help}>{t('settings.account.redesign.memoryHelp')}</span>
+                  <textarea id="persona-core-memory" className={s.textareaInput} value={coreMemory} onChange={event => setCoreMemory(event.target.value)} placeholder={t('settings.account.memoryPlaceholder')} rows={5} disabled={personaBusy} />
+                  <Checkbox checked={allowCoreMemoryUpdate} onChange={setAllowCoreMemoryUpdate} label={t('settings.account.personas.allowCoreMemoryUpdate')} disabled={personaBusy} />
+                </div>
+                <div className={a.editorActions}>
+                  <button className={s.saveBtn} onClick={handleSaveCoreMemory} disabled={personaBusy || !personaName.trim() || (selectedPersonaId !== NEW_PERSONA_ID && !personaDirty)}>
+                    {coreMemorySaving ? t('common.saving') : selectedPersonaId === NEW_PERSONA_ID ? t('common.create') : t('common.save')}
+                  </button>
+                  {(personaDirty || personaInstructionsDirty) && <span className={a.dirty}>{t('settings.account.redesign.unsaved')}</span>}
+                </div>
+                <div className={a.instructions}>
+                  {selectedPersonaId > 0 ? <PlayerInstructionsEditor key={selectedPersonaId} scope="persona" targetId={selectedPersonaId} onDirtyChange={setPersonaInstructionsDirty} appearance="settings" /> : <small className={a.help}>{t('playerInstructions.createPersonaFirst')}</small>}
+                </div>
+                  <div className={a.personaFooter}>
+                    {selectedPersonaId > 0 && personas.length > 2 && <span>
+                      <button className={`${a.textAction} ${a.deletePersona}`} type="button" onClick={() => setConfirmDeletePersona(true)} disabled={personaBusy}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7" /></svg>
                         {personaDeleting ? t('common.deleting') : t('common.delete')}
                       </button>
-                    )}
+                    </span>}
                   </div>
-                  <span style={{ fontSize: '11px', color: 'var(--text-hint)' }}>
-                    {coreMemory.length}
-                  </span>
+              </section>}
+
+              <section className={a.preferences}>
+                <div className={s.fieldGroup}>
+                  <label className={s.fieldLabel}>{t('settings.account.timezone')}</label>
+                  <span className={a.help}>{t('settings.account.timezoneHelp')}{!user?.timezone_confirmed ? ` ${t('settings.account.timezoneNotConfigured')}` : ''}</span>
+                  <Select options={timezoneOptions} value={timezoneValue} onChange={setTimezoneValue} searchable maxVisibleItems={7} />
+                  <button className={s.saveBtn} onClick={handleSaveTimezone} disabled={timezoneSaving || !timezoneValue}>{timezoneSaving ? t('common.saving') : t('common.save')}</button>
                 </div>
-                {selectedPersonaId !== null && selectedPersonaId > 0
-                  ? <PlayerInstructionsEditor key={selectedPersonaId} scope="persona" targetId={selectedPersonaId} />
-                  : <small>{t('playerInstructions.createPersonaFirst')}</small>}
-              </div>
-
-                            <div className={s.fieldGroup}>
-                <label className={s.fieldLabel}>{t('settings.account.timezone')}</label>
-                <span className={s.fieldLabel} style={{ marginTop: '-4px', display: 'block' }}>
-                  {t('settings.account.timezoneHelp')}
-                  {!user?.timezone_confirmed ? ` ${t('settings.account.timezoneNotConfigured')}` : ''}
-                </span>
-                <Select
-                  options={timezoneOptions}
-                  value={timezoneValue}
-                  onChange={setTimezoneValue}
-                  searchable
-                  maxVisibleItems={7}
-                />
-                <button
-                  className={s.saveBtn}
-                  onClick={handleSaveTimezone}
-                  disabled={timezoneSaving || !timezoneValue}
-                >
-                  {timezoneSaving ? t('common.saving') : t('common.save')}
-                </button>
-              </div>
-
-              <div className={s.macroFormDivider} />
-
-              <div className={s.fieldGroup}>
-                <label className={s.fieldLabel}>{t('settings.account.changePassword')}</label>
-                <input
-                  className={s.fieldInput}
-                  type="password"
-                  value={pwdCurrent}
-                  onChange={(e) => setPwdCurrent(e.target.value)}
-                  placeholder={t('settings.account.currentPassword')}
-                  autoComplete="current-password"
-                />
-                <input
-                  className={s.fieldInput}
-                  type="password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder={t('settings.account.newPassword')}
-                  minLength={8}
-                  autoComplete="new-password"
-                />
-                <button
-                  className={s.saveBtn}
-                  onClick={handleChangePassword}
-                  disabled={passwordSaving || !pwdCurrent || newPassword.length < 8}
-                >
-                  {passwordSaving ? t('common.saving') : t('settings.account.changePassword')}
-                </button>
-              </div>
-
-              <div className={s.fieldGroup}>
-                <label className={s.fieldLabel}>{t('settings.account.changeLogin')}</label>
-                <input
-                  className={s.fieldInput}
-                  type="text"
-                  value={newLogin}
-                  onChange={(e) => setNewLogin(e.target.value)}
-                  placeholder={t('settings.account.newLogin')}
-                  autoComplete="username"
-                />
-                <input
-                  className={s.fieldInput}
-                  type="password"
-                  value={loginCurrent}
-                  onChange={(e) => setLoginCurrent(e.target.value)}
-                  placeholder={t('settings.account.currentPassword')}
-                  autoComplete="current-password"
-                />
-                <button
-                  className={s.saveBtn}
-                  onClick={handleChangeLogin}
-                  disabled={loginSaving || !loginCurrent || !newLogin.trim()}
-                >
-                  {loginSaving ? t('common.saving') : t('settings.account.changeLogin')}
-                </button>
-              </div>
+              </section>
+              <details className={a.accountDetails}>
+                <summary><span>{t('settings.account.personas.accountName')}</span><span className={a.accountValue}>{user?.name}</span></summary>
+                <div className={a.detailsBody}>
+                  <span className={a.help}>{t('settings.account.redesign.accountNameHelp')}</span>
+                  <label className={s.fieldLabel} htmlFor="account-display-name">{t('settings.account.personas.accountName')}</label>
+                  <input id="account-display-name" className={s.fieldInput} type="text" value={nameValue} onChange={event => setNameValue(event.target.value)} onKeyDown={handleNameKeyDown} placeholder={t('settings.account.namePlaceholder')} disabled={saving} />
+                  <button className={s.saveBtn} onClick={handleSaveName} disabled={saving || !nameValue.trim() || nameValue.trim() === user?.name}>{saving ? t('common.saving') : t('common.save')}</button>
+                </div>
+              </details>
+              <section className={a.security}>
+                <details className={a.accountDetails}>
+                  <summary>{t('settings.account.changePassword')}</summary>
+                  <div className={a.detailsBody}>
+                    <input className={s.fieldInput} type="password" value={pwdCurrent} onChange={event => setPwdCurrent(event.target.value)} placeholder={t('settings.account.currentPassword')} aria-label={t('settings.account.currentPassword')} autoComplete="current-password" disabled={passwordSaving} />
+                    <input className={s.fieldInput} type="password" value={newPassword} onChange={event => setNewPassword(event.target.value)} placeholder={t('settings.account.newPassword')} aria-label={t('settings.account.newPassword')} minLength={8} autoComplete="new-password" disabled={passwordSaving} />
+                    <button className={s.saveBtn} onClick={handleChangePassword} disabled={passwordSaving || !pwdCurrent || newPassword.length < 8}>{passwordSaving ? t('common.saving') : t('settings.account.changePassword')}</button>
+                  </div>
+                </details>
+                <details className={a.accountDetails}>
+                  <summary>{t('settings.account.changeLogin')}</summary>
+                  <div className={a.detailsBody}>
+                    <input className={s.fieldInput} type="text" value={newLogin} onChange={event => setNewLogin(event.target.value)} placeholder={t('settings.account.newLogin')} aria-label={t('settings.account.newLogin')} autoComplete="username" disabled={loginSaving} />
+                    <input className={s.fieldInput} type="password" value={loginCurrent} onChange={event => setLoginCurrent(event.target.value)} placeholder={t('settings.account.currentPassword')} aria-label={t('settings.account.currentPassword')} autoComplete="current-password" disabled={loginSaving} />
+                    <button className={s.saveBtn} onClick={handleChangeLogin} disabled={loginSaving || !loginCurrent || !newLogin.trim()}>{loginSaving ? t('common.saving') : t('settings.account.changeLogin')}</button>
+                  </div>
+                </details>
+              </section>
             </div>
           )}
 
@@ -3183,6 +3112,15 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
       </motion.div>
 
       <AnimatePresence>
+        {pendingPersonaId !== null && <ConfirmDialog open title={t('settings.account.redesign.discardTitle')}
+          text={t('settings.account.redesign.discardHelp')} confirmLabel={t('settings.account.redesign.discard')}
+          onCancel={() => setPendingPersonaId(null)} onConfirm={() => {
+            void choosePersona(pendingPersonaId); setPendingPersonaId(null);
+          }} />}
+        {confirmDeletePersona && <ConfirmDialog open title={t('settings.account.redesign.deleteTitle')}
+          text={t('settings.account.redesign.deleteHelp', { name: selectedPersona?.name })}
+          confirmDisabled={personaBusy} onCancel={() => !personaBusy && setConfirmDeletePersona(false)}
+          onConfirm={() => { setConfirmDeletePersona(false); void handleDeletePersona(); }} />}
         {showTelegramLinkModal && (
           <LinkTelegramModal
             key="settings-telegram-link"

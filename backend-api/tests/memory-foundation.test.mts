@@ -7,6 +7,7 @@ process.env.API_DB_PATH = path.join(os.tmpdir(), `chatter-memory-foundation-${pr
 const { db } = await import('../src/db.js');
 const {
   canAccessChat,
+  ensureMemoryDefaults,
   archiveGeneralMemorySpace,
   createGeneralMemorySpace,
   createMemoryRecord,
@@ -21,7 +22,6 @@ const {
   renameGeneralMemorySpace,
   setActivePersona,
   setDefaultGeneralMemorySpace,
-  syncPrimaryPersonaName,
   updatePersona,
   updateChatMemorySettings,
 } = await import('../src/services/memory-foundation.js');
@@ -63,9 +63,13 @@ assert.equal(resolveReadMemorySpaces(101, roomId)[0]?.namespace_key, '101', 'exi
 const workPersona = createPersona(202, 'Work member', 'Рабочий профиль', 'Пишет TypeScript');
 const primaryPersona = getPrimaryPersona(202);
 assert.equal(primaryPersona.name, 'Member', 'main persona starts with account name');
-assert.throws(() => deletePersona(202, primaryPersona.id), /primary_persona_cannot_be_deleted/);
-syncPrimaryPersonaName(202, 'Renamed member');
-assert.equal(getPrimaryPersona(202).name, 'Renamed member', 'account rename updates only Main');
+updatePersona(202, primaryPersona.id, { name: 'Chat identity' });
+assert.equal(getPrimaryPersona(202).name, 'Chat identity', 'primary persona name is editable');
+assert.equal((db.prepare('SELECT name FROM users WHERE id = ?').get(202) as { name: string }).name, 'Member', 'persona rename does not rename the account');
+db.prepare('UPDATE users SET name = ? WHERE id = ?').run('Renamed account', 202);
+assert.equal(getPrimaryPersona(202).name, 'Chat identity', 'account rename preserves the persona name');
+assert.throws(() => updatePersona(101, primaryPersona.id, { name: 'Stolen identity' }), /persona_not_found/);
+assert.throws(() => updatePersona(202, primaryPersona.id, { name: '  ' }), /persona_name_required/);
 assert.equal((db.prepare('SELECT name FROM personas WHERE id = ?').get(workPersona.id) as { name: string }).name, 'Work member', 'custom persona name remains independent');
 setActivePersona(202, workPersona.id);
 assert.equal(resolvePersonaForChat(202, roomId).persona.id, workPersona.id, 'automatic chat follows global persona');
@@ -173,5 +177,23 @@ assert.equal((db.prepare('SELECT COUNT(*) AS count FROM memory_spaces WHERE chat
 assert.equal((db.prepare('SELECT COUNT(*) AS count FROM chat_memory_settings WHERE chat_id = ?').get(roomId) as { count: number }).count, 0);
 assert.equal((db.prepare("SELECT COUNT(*) AS count FROM memory_records WHERE id IN ('owner-room-memory', 'member-room-memory')").get() as { count: number }).count, 0);
 assert.equal((db.prepare("SELECT COUNT(*) AS count FROM memory_chunks WHERE id IN ('owner-room-memory_chunk_0', 'member-room-memory_chunk_0')").get() as { count: number }).count, 0);
+
+// Any persona may be deleted, but the final one and other accounts remain protected.
+db.prepare('INSERT INTO users (id, name, language) VALUES (?, ?, ?)').run(404, 'Deletion test', 'en');
+const original404 = getPrimaryPersona(404);
+const active404 = createPersona(404, 'Chosen default', '', 'Default memory');
+const other404 = createPersona(404, 'Remaining persona', '', 'Remaining memory');
+setActivePersona(404, active404.id);
+deletePersona(404, original404.id);
+assert.equal(getPrimaryPersona(404).id, active404.id, 'deleting the legacy primary keeps the memory pointer valid');
+assert.equal(ensureMemoryDefaults(404).persona.id, active404.id, 'deleting another persona preserves the current default');
+assert.equal((db.prepare('SELECT core_memory FROM users WHERE id = ?').get(404) as { core_memory: string }).core_memory, 'Default memory');
+deletePersona(404, active404.id);
+assert.equal(ensureMemoryDefaults(404).persona.id, other404.id, 'deleting the default selects a remaining persona');
+assert.equal(getPrimaryPersona(404).id, other404.id);
+assert.throws(() => deletePersona(404, other404.id), /last_persona_cannot_be_deleted/);
+assert.equal((db.prepare('SELECT COUNT(*) AS count FROM personas WHERE user_id = ?').get(404) as { count: number }).count, 1);
+assert.equal(ensureMemoryDefaults(404).persona.id, other404.id, 'rejected deletion preserves the last persona');
+assert.throws(() => deletePersona(101, other404.id), /persona_not_found/);
 
 console.log('memory foundation tests passed');
