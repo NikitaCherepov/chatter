@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';
+import React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
+const { Icon } = require('../src/renderer/components/Icon.tsx');
+const render = (name?: string) => renderToStaticMarkup(React.createElement(Icon, { name }));
+const fallback = render('agent');
+assert.equal(render(), fallback);
+assert.equal(render('unknown-future-icon'), fallback);
+assert.equal(render('toString'), fallback);
+assert.equal(render('__proto__'), fallback);
+assert.equal(render('<svg onload=alert(1)>'), fallback);
+for (const name of ['search', 'file', 'code', 'terminal', 'globe', 'book', 'calendar']) assert.notEqual(render(name), fallback);
+console.log('Catalog icons: named icons and safe fallback for missing, unknown and prototype names passed.');

@@ -63,6 +63,7 @@ import s from './SettingsModal.module.scss';
 import a from './AccountSettings.module.scss';
 import { AccountPersonaCards } from './AccountPersonaCards';
 import { AvatarImage } from './AvatarImage';
+import { Icon } from './Icon';
 import { ConfirmDialog } from './ConfirmDialog';
 import { SettingsNavigation } from './SettingsNavigation';
 import type { SettingsSection as Section } from '../lib/settings-navigation';
@@ -401,7 +402,7 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
   const [modelSettingsMap, setModelSettingsMap] = useState<api.ModelSettingsMap>({});
   const [modelsLoading, setModelsLoading] = useState(false);
   const [modelsSavingId, setModelsSavingId] = useState<string | null>(null);
-  const agentCatalogQuery = useQuery({ queryKey: ['subagent-catalog'], queryFn: api.getSubagentCatalog, enabled: section === 'agents', staleTime: 60_000, retry: 1 });
+  const agentCatalogQuery = useQuery({ queryKey: ['subagent-catalog', api.API_BASE, user?.id, i18n.resolvedLanguage || i18n.language], queryFn: () => api.getSubagentCatalog(i18n.resolvedLanguage || i18n.language), enabled: Boolean(user), staleTime: 60_000, retry: 1 });
 
   // UI settings (app tab)
   const [uiSettings, setUiSettingsState] = useState<api.UiSettings>({ show_tokens: true });
@@ -1770,7 +1771,8 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
         </div>
 
         <div className={s.body}>
-          <SettingsNavigation section={section} isAdmin={isAdmin} onSelect={(next, result) => {
+          <SettingsNavigation section={section} isAdmin={isAdmin}
+            searchEntries={agentCatalogQuery.data?.agents.map(agent => ({ section: 'agents' as const, key: `subagent:${agent.id}`, label: agent.name, relatedText: [agent.description] }))} onSelect={(next, result) => {
             setSection(next);
             selectTarget(result);
           }} />
@@ -2758,9 +2760,9 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
               {agentCatalogQuery.isSuccess && <div className={agentsStyles.list}>
                 {agentCatalogQuery.data.agents.length === 0 && <p className={agentsStyles.hint}>{t('settings.agents.empty')}</p>}
                 {agentCatalogQuery.data.agents.map(agent => <article className={agentsStyles.agent} key={agent.id}>
-                  <span className={agentsStyles.icon} aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d={agent.id === 'file_converter' ? 'M7 3h8l4 4v14H5V3h2 M14 3v5h5 M8 13h8m-3-3 3 3-3 3' : 'M20 11a8 8 0 1 1-16 0 8 8 0 0 1 16 0 M17 17l5 5 M8 11h6 M11 8v6'} /></svg></span>
-                  <div><h4>{t(`settings.agents.catalog.${agent.id}.name`, { defaultValue: agent.id.replace(/_/g, ' ') })}</h4>
-                    <p>{t(`settings.agents.catalog.${agent.id}.description`, { defaultValue: agent.description })}</p></div>
+                  <span className={agentsStyles.icon}><Icon name={agent.icon} /></span>
+                  <div><h4>{agent.name}</h4>
+                    <p>{agent.description}</p></div>
                 </article>)}
               </div>}
             </div>

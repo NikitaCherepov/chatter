@@ -713,17 +713,7 @@
       "specialistsHelp": "Built-in helpers with a specific task. Chatter calls them while working.",
       "loadFailed": "Could not load agent settings.",
       "catalogFailed": "Could not load the agent catalog.",
-      "empty": "No specialized agents are registered on this server yet.",
-      "catalog": {
-        "news_researcher": {
-          "name": "News researcher",
-          "description": "Researches a newspaper topic by searching and reading sources, then prepares a concise brief."
-        },
-        "file_converter": {
-          "name": "Video converter",
-          "description": "Converts local videos through the desktop app. Other file types are not supported yet."
-        }
-      }
+      "empty": "No specialized agents are registered on this server yet."
     },
     "models": {
       "search": "Find a model",

@@ -45,6 +45,11 @@ backendI18n.init({
 
 export const hasBackendTranslation = (key: string) => backendI18n.exists(key, { lng: 'en' });
 
+export const hasBackendTextTranslation = (key: string) => {
+  const value = backendI18n.getResource('en', 'translation', key);
+  return typeof value === 'string' && value.trim().length > 0;
+};
+
 export const translateForLanguage = (
   language: unknown,
   key: string,

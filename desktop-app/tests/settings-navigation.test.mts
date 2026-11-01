@@ -48,6 +48,10 @@ assert.equal(
 );
 assert.equal(find('settings.app.zoom', en).length, 0, 'do not search untranslated key paths');
 assert.equal(find('PRIVATE_USER_NAME', en).length, 0, 'no user values in index');
+const catalogEntries = [{ section: 'agents', key: 'subagent:custom_id', label: 'Server helper', relatedText: ['Converts unusual formats'] }];
+assert.equal(searchSettings('unusual', catalogEntries, translate(en), false)[0]?.title, 'Server helper');
+assert.equal(searchSettings('custom_id', catalogEntries, translate(en), false).length, 0, 'do not search technical catalog IDs');
+
 assert(find('пароль').some((e: any) => e.key === 'settings.account.changePassword'));
 for (const field of fields) {
   assert.notEqual(translate(en)(field.key), field.key, field.key);

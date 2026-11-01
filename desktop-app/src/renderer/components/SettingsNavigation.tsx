@@ -58,10 +58,11 @@ function SectionIcon({ section }: { section: SettingsSection }) {
 type Props = {
   section: SettingsSection;
   isAdmin: boolean;
+  searchEntries?: SettingsSearchEntry[];
   onSelect: (section: SettingsSection, result?: SettingsSearchResult) => void;
 };
 
-export function SettingsNavigation({ section, isAdmin, onSelect }: Props) {
+export function SettingsNavigation({ section, isAdmin, searchEntries, onSelect }: Props) {
   const { t, i18n } = useTranslation();
   const [query, setQuery] = useState('');
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
@@ -75,11 +76,11 @@ export function SettingsNavigation({ section, isAdmin, onSelect }: Props) {
     }));
     return searchSettings(
       query,
-      [...sections, ...(fieldEntries as SettingsSearchEntry[])],
+      [...sections, ...(fieldEntries as SettingsSearchEntry[]), ...(searchEntries ?? [])],
       (key) => t(key),
       isAdmin
     );
-  }, [query, isAdmin, t, i18n.resolvedLanguage]);
+  }, [query, isAdmin, t, i18n.resolvedLanguage, searchEntries]);
   useEffect(() => setSelectedKey(null), [query]);
   useEffect(() => {
     if (searching) return;

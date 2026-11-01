@@ -443,7 +443,6 @@
   },
   {
     "section": "agents",
-    "key": "settings.agents.specialists",
-    "relatedKeys": ["settings.agents.catalog.news_researcher.name", "settings.agents.catalog.news_researcher.description", "settings.agents.catalog.file_converter.name", "settings.agents.catalog.file_converter.description"]
+    "key": "settings.agents.specialists"
   }
 ]

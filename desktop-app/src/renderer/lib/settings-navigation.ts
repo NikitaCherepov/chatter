@@ -38,7 +38,7 @@ export function settingsSectionKey(section: SettingsSection): string {
   return `settings.sections.${section === 'smart_home' ? 'smartHome' : section}`;
 }
 
-export type SettingsSearchEntry = { section: SettingsSection; key: string; relatedKeys?: string[] };
+export type SettingsSearchEntry = { section: SettingsSection; key: string; relatedKeys?: string[]; label?: string; relatedText?: string[] };
 export type SettingsSearchResult = SettingsSearchEntry & { title: string; sectionTitle: string };
 
 export function normalizeSettingsSearch(text: string): string {
@@ -63,12 +63,12 @@ export function searchSettings(
   const results: (SettingsSearchResult & { score: number })[] = [];
   for (const entry of entries) {
     if (entry.section === 'admin' && !isAdmin) continue;
-    const title = translate(entry.key);
+    const title = entry.label ?? translate(entry.key);
     if (!title || title === entry.key) continue;
     const sectionTitle = translate(settingsSectionKey(entry.section));
     const heading = normalizeSettingsSearch(title);
     const corpus = normalizeSettingsSearch(
-      [title, sectionTitle, ...(entry.relatedKeys ?? []).map(translate)].join(' ')
+      [title, sectionTitle, ...(entry.relatedKeys ?? []).map(translate), ...(entry.relatedText ?? [])].join(' ')
     );
     if (!tokens.every((token) => corpus.includes(token))) continue;
     const score =

@@ -2506,9 +2506,9 @@ export async function setPreferredModel(modelId: string | null): Promise<{ ok: b
   });
 }
 
-export type SubagentCatalogEntry = { id: string; description: string };
-export async function getSubagentCatalog(): Promise<{ agents: SubagentCatalogEntry[] }> {
-  return apiFetch('/api/v1/subagents/catalog');
+export type SubagentCatalogEntry = { id: string; name: string; description: string; icon: string };
+export async function getSubagentCatalog(language?: string): Promise<{ agents: SubagentCatalogEntry[] }> {
+  return apiFetch(`/api/v1/subagents/catalog${language ? `?language=${encodeURIComponent(language)}` : ''}`);
 }
 
 export async function getSubagentModel(): Promise<{ subagent_model: string | null }> {

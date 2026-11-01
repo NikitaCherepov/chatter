@@ -130,6 +130,14 @@
   },
 
   "subagents": {
+    "news_researcher": {
+      "name": "News researcher",
+      "description": "Researches a newspaper topic by searching and reading sources, then prepares a concise brief."
+    },
+    "file_converter": {
+      "name": "Video converter",
+      "description": "Converts local videos through the desktop app. Other file types are not supported yet."
+    },
     "toolStatus": {
       "list_directory": "[{{agent}}] Reading directory...",
       "convert_video": "[{{agent}}] Converting video...",
