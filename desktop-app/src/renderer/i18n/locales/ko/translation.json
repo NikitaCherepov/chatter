@@ -470,6 +470,20 @@
     }
   },
   "settings": {
+    "navigation": {
+      "search": "설정 검색",
+      "clear": "검색 지우기",
+      "results": "검색 결과: {{count}}",
+      "noResults": "설정을 찾을 수 없습니다. 다른 단어를 입력해 보세요.",
+      "hiddenField": "섹션을 열었습니다. 일부 필드는 편집기를 열거나 항목을 추가하면 표시됩니다.",
+      "groups": {
+        "profile": "프로필",
+        "ai": "AI 대화",
+        "automation": "자동화",
+        "access": "데이터 및 접근",
+        "application": "앱"
+      }
+    },
     "title": "설정",
     "sections": {
       "browser": "브라우저",

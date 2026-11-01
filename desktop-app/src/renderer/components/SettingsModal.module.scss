@@ -12,9 +12,9 @@
   background-color: var(--bg-primary);
   border-radius: 12px;
   box-shadow: var(--shadow-modal);
-  width: 70vw;
+  width: 82vw;
   min-width: 480px;
-  max-width: 900px;
+  max-width: 1020px;
   height: 75vh;
   min-height: 360px;
   max-height: 800px;
@@ -1140,4 +1140,34 @@
     align-items: stretch;
     flex-direction: column;
   }
+}
+
+// Settings navigation is independently scrollable; existing forms keep their own scrolling.
+.settingsContent {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.settingsPanelHost {
+  flex: 1;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  > * { min-width: 0; }
+}
+.searchNotice {
+  flex-shrink: 0;
+  padding: 10px 24px;
+  border-bottom: 1px solid var(--border-light);
+  background: var(--bg-secondary);
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+@media (max-width: 680px) {
+  .modal { width: calc(100vw - 24px); min-width: 0; height: calc(100dvh - 24px); min-height: 0; }
+  .settingsPanelHost > .panel { padding: 18px 16px; }
 }

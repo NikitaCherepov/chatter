@@ -470,6 +470,20 @@
     }
   },
   "settings": {
+    "navigation": {
+      "search": "Ayar ara",
+      "clear": "Aramayı temizle",
+      "results": "Sonuçlar: {{count}}",
+      "noResults": "Ayar bulunamadı. Başka bir kelime deneyin.",
+      "hiddenField": "Bölüm açıldı. Bazı alanlar düzenleyici açıldığında veya bir öğe eklendiğinde görünür.",
+      "groups": {
+        "profile": "Profil",
+        "ai": "Yapay zekâ sohbetleri",
+        "automation": "Otomasyon",
+        "access": "Veri ve erişim",
+        "application": "Uygulama"
+      }
+    },
     "title": "Ayarlar",
     "sections": {
       "browser": "Tarayıcı",

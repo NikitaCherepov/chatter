@@ -149,6 +149,20 @@
     }
   },
   "settings": {
+    "navigation": {
+      "search": "Rechercher un réglage",
+      "clear": "Effacer la recherche",
+      "results": "Résultats : {{count}}",
+      "noResults": "Aucun réglage trouvé. Essayez un autre mot.",
+      "hiddenField": "Section ouverte. Certains champs apparaissent dans un éditeur ou lors de l’ajout d’un élément.",
+      "groups": {
+        "profile": "Profil",
+        "ai": "Conversations avec l’IA",
+        "automation": "Automatisation",
+        "access": "Données et accès",
+        "application": "Application"
+      }
+    },
     "title": "Paramètres",
     "sections": {
       "browser": "Navigateur",

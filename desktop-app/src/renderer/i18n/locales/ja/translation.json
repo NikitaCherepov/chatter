@@ -149,6 +149,20 @@
     }
   },
   "settings": {
+    "navigation": {
+      "search": "設定を検索",
+      "clear": "検索をクリア",
+      "results": "検索結果：{{count}}件",
+      "noResults": "設定が見つかりません。別の単語で検索してください。",
+      "hiddenField": "セクションを開きました。一部の項目は編集画面を開くか項目を追加すると表示されます。",
+      "groups": {
+        "profile": "プロフィール",
+        "ai": "AIとの会話",
+        "automation": "自動化",
+        "access": "データとアクセス",
+        "application": "アプリ"
+      }
+    },
     "title": "設定",
     "sections": {
       "browser": "ブラウザ",

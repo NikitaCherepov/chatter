@@ -470,6 +470,20 @@
     }
   },
   "settings": {
+    "navigation": {
+      "search": "Znajdź ustawienie",
+      "clear": "Wyczyść wyszukiwanie",
+      "results": "Wyniki: {{count}}",
+      "noResults": "Nie znaleziono ustawień. Spróbuj innego słowa.",
+      "hiddenField": "Sekcja otwarta. Niektóre pola pojawiają się po otwarciu edytora lub dodaniu elementu.",
+      "groups": {
+        "profile": "Profil",
+        "ai": "Rozmowy z AI",
+        "automation": "Automatyzacja",
+        "access": "Dane i dostęp",
+        "application": "Aplikacja"
+      }
+    },
     "title": "Ustawienia",
     "sections": {
       "browser": "Przeglądarka",

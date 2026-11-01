@@ -257,6 +257,20 @@
     }
   },
   "settings": {
+    "navigation": {
+      "search": "Find a setting",
+      "clear": "Clear search",
+      "results": "Results: {{count}}",
+      "noResults": "No settings found. Try another word.",
+      "hiddenField": "Section opened. Some fields appear after opening an editor or adding an item.",
+      "groups": {
+        "profile": "Profile",
+        "ai": "AI conversations",
+        "automation": "Automation",
+        "access": "Data and access",
+        "application": "Application"
+      }
+    },
     "title": "Settings",
     "sections": {
       "admin": "Admin",

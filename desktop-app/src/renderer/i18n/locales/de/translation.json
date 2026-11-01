@@ -149,6 +149,20 @@
     }
   },
   "settings": {
+    "navigation": {
+      "search": "Einstellung suchen",
+      "clear": "Suche löschen",
+      "results": "Ergebnisse: {{count}}",
+      "noResults": "Keine Einstellungen gefunden. Versuchen Sie ein anderes Wort.",
+      "hiddenField": "Abschnitt geöffnet. Einige Felder erscheinen erst beim Bearbeiten oder Hinzufügen eines Eintrags.",
+      "groups": {
+        "profile": "Profil",
+        "ai": "KI-Gespräche",
+        "automation": "Automatisierung",
+        "access": "Daten und Zugriff",
+        "application": "Anwendung"
+      }
+    },
     "title": "Einstellungen",
     "sections": {
       "browser": "Browser",

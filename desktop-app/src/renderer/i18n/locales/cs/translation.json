@@ -470,6 +470,20 @@
     }
   },
   "settings": {
+    "navigation": {
+      "search": "Najít nastavení",
+      "clear": "Vymazat hledání",
+      "results": "Výsledky: {{count}}",
+      "noResults": "Žádné nastavení nenalezeno. Zkuste jiné slovo.",
+      "hiddenField": "Sekce otevřena. Některá pole se zobrazí po otevření editoru nebo přidání položky.",
+      "groups": {
+        "profile": "Profil",
+        "ai": "Konverzace s AI",
+        "automation": "Automatizace",
+        "access": "Data a přístup",
+        "application": "Aplikace"
+      }
+    },
     "title": "Nastavení",
     "sections": {
       "browser": "Prohlížeč",

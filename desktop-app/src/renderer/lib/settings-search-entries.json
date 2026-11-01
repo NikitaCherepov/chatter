@@ -1,0 +1,445 @@
+[
+  {
+    "section": "account",
+    "key": "settings.account.name"
+  },
+  {
+    "section": "account",
+    "key": "settings.account.personas.accountName"
+  },
+  {
+    "section": "account",
+    "key": "settings.account.personas.label"
+  },
+  {
+    "section": "account",
+    "key": "settings.account.personas.image",
+    "relatedKeys": ["settings.account.personas.imageHelp"]
+  },
+  {
+    "section": "account",
+    "key": "settings.account.personas.coreMemory"
+  },
+  {
+    "section": "account",
+    "key": "settings.account.personas.allowCoreMemoryUpdate"
+  },
+  {
+    "section": "account",
+    "key": "settings.account.timezone",
+    "relatedKeys": ["settings.account.timezoneHelp"]
+  },
+  {
+    "section": "account",
+    "key": "quota.title"
+  },
+  {
+    "section": "account",
+    "key": "settings.account.changePassword"
+  },
+  {
+    "section": "account",
+    "key": "settings.account.changeLogin"
+  },
+  {
+    "section": "prompt",
+    "key": "settings.prompt.style"
+  },
+  {
+    "section": "prompt",
+    "key": "settings.prompt.new"
+  },
+  {
+    "section": "prompt",
+    "key": "settings.prompt.edit"
+  },
+  {
+    "section": "prompt",
+    "key": "settings.prompt.image",
+    "relatedKeys": ["settings.prompt.imageHelp"]
+  },
+  {
+    "section": "prompt",
+    "key": "settings.prompt.detail"
+  },
+  {
+    "section": "data",
+    "key": "settings.data.sillyTavern.title"
+  },
+  {
+    "section": "voice",
+    "key": "settings.voice.recognitionTitle"
+  },
+  {
+    "section": "voice",
+    "key": "settings.voice.recognitionSource",
+    "relatedKeys": [
+      "settings.voice.recognitionSourceHint",
+      "settings.voice.recognitionSourceLocal",
+      "settings.voice.recognitionSourceLocalHint",
+      "settings.voice.recognitionSourceServer"
+    ]
+  },
+  {
+    "section": "voice",
+    "key": "settings.voice.recognitionLanguage"
+  },
+  {
+    "section": "voice",
+    "key": "settings.voice.synthesisTitle"
+  },
+  {
+    "section": "voice",
+    "key": "settings.voice.model"
+  },
+  {
+    "section": "voice",
+    "key": "settings.sections.voice"
+  },
+  {
+    "section": "voice",
+    "key": "settings.voice.speechVolume"
+  },
+  {
+    "section": "voice",
+    "key": "settings.voice.effectsVolume"
+  },
+  {
+    "section": "models",
+    "key": "settings.reasoning.autoLower"
+  },
+  {
+    "section": "app",
+    "key": "settings.app.interfaceLanguage"
+  },
+  {
+    "section": "app",
+    "key": "settings.app.theme",
+    "relatedKeys": ["settings.app.themeSystem", "settings.app.themeLight", "settings.app.themeDark"]
+  },
+  {
+    "section": "app",
+    "key": "settings.app.zoom"
+  },
+  {
+    "section": "app",
+    "key": "settings.app.renderPerf",
+    "relatedKeys": [
+      "settings.app.renderPerfHelp",
+      "settings.app.renderPerfLow",
+      "settings.app.renderPerfMedium",
+      "settings.app.renderPerfHigh",
+      "settings.app.renderPerfUltra"
+    ]
+  },
+  {
+    "section": "app",
+    "key": "settings.app.desktopBrowserTitle"
+  },
+  {
+    "section": "app",
+    "key": "settings.app.desktopBrowserConcurrency",
+    "relatedKeys": ["settings.app.desktopBrowserConcurrencyHelp"]
+  },
+  {
+    "section": "app",
+    "key": "settings.app.desktopSearch",
+    "relatedKeys": ["settings.app.desktopSearchHelp"]
+  },
+  {
+    "section": "app",
+    "key": "settings.app.desktopReader",
+    "relatedKeys": ["settings.app.desktopReaderHelp"]
+  },
+  {
+    "section": "app",
+    "key": "settings.app.showTokens"
+  },
+  {
+    "section": "app",
+    "key": "settings.app.diceMode"
+  },
+  {
+    "section": "memory",
+    "key": "chat.memory.preferences.limitLabel"
+  },
+  {
+    "section": "memory",
+    "key": "chat.memory.automaticMemory.label"
+  },
+  {
+    "section": "memory",
+    "key": "chat.memory.globalSettings.spaceLabel"
+  },
+  {
+    "section": "macros",
+    "key": "advanced.macros.enabled"
+  },
+  {
+    "section": "macros",
+    "key": "advanced.macros.pinned"
+  },
+  {
+    "section": "macros",
+    "key": "advanced.macros.executionMode"
+  },
+  {
+    "section": "pc",
+    "key": "advanced.pc.scanFilesystem"
+  },
+  {
+    "section": "pc",
+    "key": "advanced.pc.allowedCommands"
+  },
+  {
+    "section": "browser",
+    "key": "settings.browser.confirmationsTitle"
+  },
+  {
+    "section": "servers",
+    "key": "advanced.server.host"
+  },
+  {
+    "section": "servers",
+    "key": "advanced.server.port"
+  },
+  {
+    "section": "servers",
+    "key": "advanced.server.user"
+  },
+  {
+    "section": "servers",
+    "key": "advanced.server.password"
+  },
+  {
+    "section": "servers",
+    "key": "advanced.server.sudoPassword"
+  },
+  {
+    "section": "servers",
+    "key": "advanced.server.defaultKey"
+  },
+  {
+    "section": "servers",
+    "key": "advanced.server.useKeyLogin"
+  },
+  {
+    "section": "servers",
+    "key": "advanced.server.autoApprove"
+  },
+  {
+    "section": "servers",
+    "key": "advanced.server.addedServers"
+  },
+  {
+    "section": "runbooks",
+    "key": "advanced.runbook.markdownText"
+  },
+  {
+    "section": "runbooks",
+    "key": "advanced.runbook.saved"
+  },
+  {
+    "section": "sshkeys",
+    "key": "advanced.ssh.publicKey"
+  },
+  {
+    "section": "sshkeys",
+    "key": "advanced.ssh.privateKey"
+  },
+  {
+    "section": "sshkeys",
+    "key": "advanced.ssh.found"
+  },
+  {
+    "section": "sshkeys",
+    "key": "advanced.ssh.savedKeys"
+  },
+  {
+    "section": "mail",
+    "key": "advanced.mail.description"
+  },
+  {
+    "section": "mail",
+    "key": "advanced.mail.connectedAccounts"
+  },
+  {
+    "section": "mail",
+    "key": "advanced.mail.provider"
+  },
+  {
+    "section": "mail",
+    "key": "advanced.mail.label"
+  },
+  {
+    "section": "mail",
+    "key": "advanced.mail.email"
+  },
+  {
+    "section": "mail",
+    "key": "advanced.mail.login"
+  },
+  {
+    "section": "mail",
+    "key": "advanced.mail.imapHost"
+  },
+  {
+    "section": "mail",
+    "key": "advanced.mail.port"
+  },
+  {
+    "section": "mail",
+    "key": "advanced.mail.secureConnection"
+  },
+  {
+    "section": "mail",
+    "key": "advanced.mail.smtpHost"
+  },
+  {
+    "section": "mail",
+    "key": "advanced.mail.appPassword"
+  },
+  {
+    "section": "smart_home",
+    "key": "advanced.smart.zigbee.title"
+  },
+  {
+    "section": "restrictions",
+    "key": "settings.restrictions.injectionProtection",
+    "relatedKeys": [
+      "settings.restrictions.injectionProtectionHelp",
+      "settings.restrictions.injectionProtectionHint"
+    ]
+  },
+  {
+    "section": "restrictions",
+    "key": "settings.restrictions.memoryWrite",
+    "relatedKeys": ["settings.restrictions.memoryWriteHelp"]
+  },
+  {
+    "section": "restrictions",
+    "key": "settings.restrictions.lite",
+    "relatedKeys": ["settings.restrictions.liteHelp"]
+  },
+  {
+    "section": "restrictions",
+    "key": "settings.restrictions.noPcCommands",
+    "relatedKeys": ["settings.restrictions.noPcCommandsHelp"]
+  },
+  {
+    "section": "restrictions",
+    "key": "settings.restrictions.full",
+    "relatedKeys": ["settings.restrictions.fullHelp"]
+  },
+  {
+    "section": "restrictions",
+    "key": "settings.restrictions.noInternet",
+    "relatedKeys": ["settings.restrictions.noInternetHelp"]
+  },
+  {
+    "section": "restrictions",
+    "key": "settings.restrictions.guest",
+    "relatedKeys": ["settings.restrictions.guestHelp"]
+  },
+  {
+    "section": "restrictions",
+    "key": "settings.restrictions.noSpecializedSubagents",
+    "relatedKeys": ["settings.restrictions.noSpecializedSubagentsHelp"]
+  },
+  {
+    "section": "restrictions",
+    "key": "settings.restrictions.noAdhocSubagents",
+    "relatedKeys": ["settings.restrictions.noAdhocSubagentsHelp"]
+  },
+  {
+    "section": "restrictions",
+    "key": "settings.restrictions.noAvatarControl",
+    "relatedKeys": ["settings.restrictions.noAvatarControlHelp"]
+  },
+  {
+    "section": "restrictions",
+    "key": "settings.restrictions.noWakeWord",
+    "relatedKeys": ["settings.restrictions.noWakeWordHelp"]
+  },
+  {
+    "section": "browser",
+    "key": "settings.browser.open",
+    "relatedKeys": ["settings.browser.openHelp"]
+  },
+  {
+    "section": "browser",
+    "key": "settings.browser.click",
+    "relatedKeys": ["settings.browser.clickHelp"]
+  },
+  {
+    "section": "browser",
+    "key": "settings.browser.fill",
+    "relatedKeys": ["settings.browser.fillHelp"]
+  },
+  {
+    "section": "pc",
+    "key": "advanced.pc.readWithoutConfirmation"
+  },
+  {
+    "section": "pc",
+    "key": "advanced.pc.autoApproveAll"
+  },
+  {
+    "section": "limits",
+    "key": "settings.app.contextLimit",
+    "relatedKeys": ["settings.app.contextLimitHelp"]
+  },
+  {
+    "section": "limits",
+    "key": "settings.app.attachmentLimit",
+    "relatedKeys": ["settings.app.attachmentLimitHelp"]
+  },
+  {
+    "section": "admin",
+    "key": "chatgpt.title"
+  },
+  {
+    "section": "data",
+    "key": "settings.data.backup.title"
+  },
+  {
+    "section": "data",
+    "key": "settings.data.character.title"
+  },
+  {
+    "section": "data",
+    "key": "settings.data.personas.title"
+  },
+  {
+    "section": "data",
+    "key": "settings.data.chats.title"
+  },
+  {
+    "section": "account",
+    "key": "playerInstructions.general"
+  },
+  {
+    "section": "account",
+    "key": "playerInstructions.modeLabel"
+  },
+  {
+    "section": "account",
+    "key": "playerInstructions.takeSurvey"
+  },
+  {
+    "section": "smart_home",
+    "key": "advanced.smart.oauthToken"
+  },
+  {
+    "section": "smart_home",
+    "key": "advanced.smart.deviceSync"
+  },
+  {
+    "section": "models",
+    "key": "settings.app.subagentModel"
+  },
+  {
+    "section": "models",
+    "key": "settings.app.reasoning"
+  }
+]

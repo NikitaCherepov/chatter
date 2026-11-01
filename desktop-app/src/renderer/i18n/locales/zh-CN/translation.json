@@ -149,6 +149,20 @@
     }
   },
   "settings": {
+    "navigation": {
+      "search": "查找设置",
+      "clear": "清除搜索",
+      "results": "找到 {{count}} 项",
+      "noResults": "未找到设置，请尝试其他关键词。",
+      "hiddenField": "已打开分区。部分字段在打开编辑器或添加项目后显示。",
+      "groups": {
+        "profile": "个人资料",
+        "ai": "AI 对话",
+        "automation": "自动化",
+        "access": "数据与访问",
+        "application": "应用"
+      }
+    },
     "title": "设置",
     "sections": {
       "browser": "浏览器",

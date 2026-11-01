@@ -149,6 +149,20 @@
     }
   },
   "settings": {
+    "navigation": {
+      "search": "Buscar configuração",
+      "clear": "Limpar busca",
+      "results": "Resultados: {{count}}",
+      "noResults": "Nenhuma configuração encontrada. Tente outra palavra.",
+      "hiddenField": "Seção aberta. Alguns campos aparecem ao abrir um editor ou adicionar um item.",
+      "groups": {
+        "profile": "Perfil",
+        "ai": "Conversas com IA",
+        "automation": "Automação",
+        "access": "Dados e acesso",
+        "application": "Aplicativo"
+      }
+    },
     "title": "Configurações",
     "sections": {
       "browser": "Navegador",

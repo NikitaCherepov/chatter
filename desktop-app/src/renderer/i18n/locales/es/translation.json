@@ -149,6 +149,20 @@
     }
   },
   "settings": {
+    "navigation": {
+      "search": "Buscar un ajuste",
+      "clear": "Borrar búsqueda",
+      "results": "Resultados: {{count}}",
+      "noResults": "No se encontraron ajustes. Prueba otra palabra.",
+      "hiddenField": "Sección abierta. Algunos campos aparecen al abrir un editor o añadir un elemento.",
+      "groups": {
+        "profile": "Perfil",
+        "ai": "Conversaciones con IA",
+        "automation": "Automatización",
+        "access": "Datos y acceso",
+        "application": "Aplicación"
+      }
+    },
     "title": "Ajustes",
     "sections": {
       "browser": "Navegador",

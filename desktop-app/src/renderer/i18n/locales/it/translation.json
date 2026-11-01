@@ -470,6 +470,20 @@
     }
   },
   "settings": {
+    "navigation": {
+      "search": "Cerca un’impostazione",
+      "clear": "Cancella ricerca",
+      "results": "Risultati: {{count}}",
+      "noResults": "Nessuna impostazione trovata. Prova un’altra parola.",
+      "hiddenField": "Sezione aperta. Alcuni campi appaiono aprendo un editor o aggiungendo un elemento.",
+      "groups": {
+        "profile": "Profilo",
+        "ai": "Conversazioni con IA",
+        "automation": "Automazione",
+        "access": "Dati e accesso",
+        "application": "Applicazione"
+      }
+    },
     "title": "Impostazioni",
     "sections": {
       "browser": "Browser",

@@ -57,6 +57,9 @@ import { SillyTavernChatImportDialog } from './SillyTavernChatImportDialog';
 import { SillyTavernBackupImportDialog } from './SillyTavernBackupImportDialog';
 import telegramIcon from '../assets/integrations/telegram.webp';
 import s from './SettingsModal.module.scss';
+import { SettingsNavigation } from './SettingsNavigation';
+import type { SettingsSection as Section } from '../lib/settings-navigation';
+import { useSettingsSearchTarget } from '../lib/useSettingsSearchTarget';
 
 type Props = {
   onClose: () => void;
@@ -67,7 +70,6 @@ type Props = {
   onAuthInvalidated?: () => void;
 };
 
-type Section = 'account' | 'memory' | 'connections' | 'prompt' | 'data' | 'voice' | 'app' | 'admin' | 'limits' | 'billing' | 'macros' | 'pc' | 'browser' | 'servers' | 'runbooks' | 'sshkeys' | 'mail' | 'smart_home' | 'restrictions' | 'models' | 'about';
 
 const CUSTOM_PROMPT_ID = -1;
 const NEW_PERSONA_ID = -1;
@@ -116,29 +118,6 @@ const modalVariants = {
   exit: { opacity: 0, y: 16, transition: { duration: 0.15 } },
 };
 
-const SECTIONS: { key: Section; labelKey: string }[] = [
-  { key: 'account', labelKey: 'settings.sections.account' },
-  { key: 'memory', labelKey: 'settings.sections.memory' },
-  { key: 'connections', labelKey: 'settings.sections.connections' },
-  { key: 'prompt', labelKey: 'settings.sections.prompt' },
-  { key: 'data', labelKey: 'settings.sections.data' },
-  { key: 'voice', labelKey: 'settings.sections.voice' },
-  { key: 'macros', labelKey: 'settings.sections.macros' },
-  { key: 'pc', labelKey: 'settings.sections.pc' },
-  { key: 'browser', labelKey: 'settings.sections.browser' },
-  { key: 'servers', labelKey: 'settings.sections.servers' },
-  { key: 'runbooks', labelKey: 'settings.sections.runbooks' },
-  { key: 'sshkeys', labelKey: 'settings.sections.sshkeys' },
-  { key: 'mail', labelKey: 'settings.sections.mail' },
-  { key: 'smart_home', labelKey: 'settings.sections.smartHome' },
-  { key: 'restrictions', labelKey: 'settings.sections.restrictions' },
-  { key: 'models', labelKey: 'settings.sections.models' },
-  { key: 'limits', labelKey: 'settings.sections.limits' },
-  { key: 'billing', labelKey: 'settings.sections.billing' },
-  { key: 'app', labelKey: 'settings.sections.app' },
-  { key: 'admin', labelKey: 'settings.sections.admin' },
-  { key: 'about', labelKey: 'settings.sections.about' },
-];
 
 // Electron uses logarithmic zoom: zoomFactor = 1.2^level
 function zoomLevelToPercent(level: number): number {
@@ -159,6 +138,7 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
   const isAdmin = user?.is_admin === 1 || user?.role === 'admin';
   const { t, i18n } = useTranslation();
   const [section, setSection] = useState<Section>('account');
+  const { panelRef, selectTarget, unavailable } = useSettingsSearchTarget(section);
 
   // Account
   const [nameValue, setNameValue] = useState('');
@@ -1723,7 +1703,7 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
         <div className={s.header}>
           <span className={s.title}>{t('settings.title')}</span>
           <span className={s.versionLabel}>v{(window as any).electronAPI?.appVersion || ''}</span>
-          <button className={s.closeBtn} onClick={onClose}>
+          <button className={s.closeBtn} onClick={onClose} aria-label={t('common.close')}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2" strokeLinecap="round">
               <line x1="18" y1="6" x2="6" y2="18" />
               <line x1="6" y1="6" x2="18" y2="18" />
@@ -1732,19 +1712,13 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
         </div>
 
         <div className={s.body}>
-          {/* Left menu */}
-          <div className={s.menu}>
-            {SECTIONS.filter(sec => sec.key !== 'admin' || isAdmin).map((sec) => (
-              <button
-                key={sec.key}
-                className={`${s.menuItem} ${sec.key === section ? s.menuItemActive : ''}`}
-                onClick={() => setSection(sec.key)}
-              >
-                {t(sec.labelKey)}
-              </button>
-            ))}
-          </div>
-
+          <SettingsNavigation section={section} isAdmin={isAdmin} onSelect={(next, result) => {
+            setSection(next);
+            selectTarget(result);
+          }} />
+          <div className={s.settingsContent}>
+            {unavailable && <div className={s.searchNotice} role="status">{t('settings.navigation.hiddenField')}</div>}
+            <div className={s.settingsPanelHost} ref={panelRef}>
           {/* Right panel */}
           {section === 'account' && (
             <div className={s.panel}>
@@ -3203,6 +3177,8 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
               )}
             </div>
           )}
+            </div>
+          </div>
         </div>
       </motion.div>
 
