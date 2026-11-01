@@ -290,6 +290,7 @@
       "mail": "Email",
       "smartHome": "Smart home",
       "restrictions": "Restrictions",
+      "agents": "Agents",
       "models": "Models",
       "limits": "Limits",
       "billing": "Billing",
@@ -706,7 +707,32 @@
       "noWakeWord": "Disable wake word",
       "noWakeWordHelp": "Stop listening for wake words (Alexa, Hey Jarvis, Hey Mycroft, Hey Rhasspy). The microphone stream will be turned off."
     },
+    "agents": {
+      "help": "Settings for helpers that Chatter delegates individual tasks to.",
+      "specialists": "Specialized agents",
+      "specialistsHelp": "Built-in helpers with a specific task. Chatter calls them while working.",
+      "loadFailed": "Could not load agent settings.",
+      "catalogFailed": "Could not load the agent catalog.",
+      "empty": "No specialized agents are registered on this server yet.",
+      "catalog": {
+        "news_researcher": {
+          "name": "News researcher",
+          "description": "Researches a newspaper topic by searching and reading sources, then prepares a concise brief."
+        },
+        "file_converter": {
+          "name": "Video converter",
+          "description": "Converts local videos through the desktop app. Other file types are not supported yet."
+        }
+      }
+    },
     "models": {
+      "search": "Find a model",
+      "noResults": "No models found.",
+      "defaults": "Default settings",
+      "changed_one": "{{count}} parameter changed",
+      "changed_other": "{{count}} parameters changed",
+      "reset": "Reset to defaults",
+      "noParameters": "No generation parameters are available for this model.",
       "title": "Model settings",
       "help": "Generation settings for each model. “Auto” uses the server default.",
       "empty": "No custom models. Add models through MODELS_MANUAL on the server."
@@ -736,7 +762,7 @@
       "subagentModel": "Subagent model:",
       "automaticSelection": "Automatic selection",
       "reasoning": "Reasoning:",
-      "subagentHelp": "Use a separate model and reasoning level for subagents. The model does not select a mode in tool calls.",
+      "subagentHelp": "Model and reasoning level for delegated tasks.",
       "contextLimit": "Chat context limit",
       "attachmentLimit": "Document limit",
       "diceMode": "Dice mode (d20)",

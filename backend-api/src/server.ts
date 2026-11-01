@@ -26,6 +26,7 @@ import { suggestNewspaperSettings } from './services/newspaper-settings-agent.js
 import { listMapPins, getMapPinById, createMapPin, updateMapPin, deleteMapPin } from './services/map-pins.js';
 import { sendMessageThroughAi, generateAdminOutreach, callLiteAi, ensureUtilityAiQuota, chargeUtilityAiCompletion, getModelsCatalog, getAutoReasoningLevels, getAutoVisionSupport, abortChatGeneration, abortUserGenerations, beginActiveHitlWait, endActiveHitlWait, getUpdateState, setUpdatePrepare, forceAbortActiveGenerations, clearUpdatePrepare, resolveManualModel } from './services/ai.js';
 import { initSubagentRunner } from './services/subagents/runner.js';
+import { listSubagentCatalog } from './services/subagents/registry.js';
 import { runCompletion, runTool, throwIfAborted, withAbort, toolDefinitions, normalizeTokenUsage, getTaskAllowedToolNames, buildDescribeImageTool } from './services/ai.js';
 import { listMacros, getMacroById, getEnabledMacros, createMacro, updateMacro, deleteMacro } from './services/macros.js';
 import { listServers, getServerById, createServer, updateServer, deleteServer, listPolicies, createPolicy, deletePolicy, isAutoApproved, serverHasSudoPassword, listRunbooks, getRunbookById, createRunbook, updateRunbook, deleteRunbook, attachRunbookToServer, listSshKeys, createSshKey, deleteSshKey, buildInstallKeyScript, getSshPublicKey, listPublicRunbooks, getPublicRunbookById, createPublicRunbook, updatePublicRunbook, deletePublicRunbook } from './services/devops.js';
@@ -6339,6 +6340,8 @@ app.put('/api/v1/user/preferred-model', (req: AuthedRequest, res) => {
 });
 
 // ─── Subagent preferred model ───────────────────────────────────────────────
+
+app.get('/api/v1/subagents/catalog', (_req: AuthedRequest, res) => res.json({ agents: listSubagentCatalog() }));
 
 app.get('/api/v1/user/subagent-model', (req: AuthedRequest, res) => {
   const userId = accountIdFromRequest(req);

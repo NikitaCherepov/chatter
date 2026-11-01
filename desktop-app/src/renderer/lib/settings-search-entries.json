@@ -422,11 +422,11 @@
     "key": "advanced.smart.deviceSync"
   },
   {
-    "section": "models",
+    "section": "agents",
     "key": "settings.app.subagentModel"
   },
   {
-    "section": "models",
+    "section": "agents",
     "key": "settings.app.reasoning"
   },
   {
@@ -440,5 +440,10 @@
   {
     "section": "personas",
     "key": "settings.account.redesign.personas"
+  },
+  {
+    "section": "agents",
+    "key": "settings.agents.specialists",
+    "relatedKeys": ["settings.agents.catalog.news_researcher.name", "settings.agents.catalog.news_researcher.description", "settings.agents.catalog.file_converter.name", "settings.agents.catalog.file_converter.description"]
   }
 ]

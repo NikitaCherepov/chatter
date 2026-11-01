@@ -94,6 +94,11 @@ export function getSubagent(name: string): RegisteredSubagent {
   };
 }
 
+/** Public catalog metadata only; do not load or expose prompts and tool configuration. */
+export function listSubagentCatalog(): Array<{ id: string; description: string }> {
+  return Object.values(REGISTRY).map(config => ({ id: config.name, description: config.description }));
+}
+
 /** List all registered subagent names. */
 export function listSubagentNames(): string[] {
   return Object.keys(REGISTRY);

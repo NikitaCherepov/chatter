@@ -47,6 +47,8 @@ import { LinkTelegramModal } from './LinkTelegramModal';
 import { QuotaWidget } from './QuotaWidget';
 import limitsStyles from './SettingsLimits.module.scss';
 import { SubagentModelSettings } from './SubagentModelSettings/SubagentModelSettings';
+import { ModelGenerationSettings } from './ModelGenerationSettings';
+import agentsStyles from './AgentsSettings.module.scss';
 import { AboutSettings } from './AboutSettings/AboutSettings';
 import { GlobalMemorySettings } from './GlobalMemorySettings';
 import { ChatGptSettings } from './ChatGptSettings';
@@ -399,6 +401,7 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
   const [modelSettingsMap, setModelSettingsMap] = useState<api.ModelSettingsMap>({});
   const [modelsLoading, setModelsLoading] = useState(false);
   const [modelsSavingId, setModelsSavingId] = useState<string | null>(null);
+  const agentCatalogQuery = useQuery({ queryKey: ['subagent-catalog'], queryFn: api.getSubagentCatalog, enabled: section === 'agents', staleTime: 60_000, retry: 1 });
 
   // UI settings (app tab)
   const [uiSettings, setUiSettingsState] = useState<api.UiSettings>({ show_tokens: true });
@@ -532,11 +535,28 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
         api.getModels().catch(() => null),
         api.getModelSettings().catch(() => null),
       ]).then(([catRes, setRes]) => {
-        if (catRes) setModelsCatalog(catRes.models);
+        if (catRes) { setModelsCatalog(catRes.models); setAutoReasoningLevels(catRes.auto_reasoning_levels ?? []); }
         if (setRes) setModelSettingsMap(setRes.model_settings);
       }).finally(() => setModelsLoading(false));
     }
   }, [section]);
+
+  useEffect(() => {
+    if (section !== 'agents') return;
+    let active = true;
+    setModelsLoading(true);
+    Promise.all([api.getModels(), api.getSubagentModel(), api.getSubagentReasoningLevel()])
+      .then(([catalog, model, reasoning]) => {
+        if (!active) return;
+        setModelsCatalog(catalog.models);
+        setAutoReasoningLevels(catalog.auto_reasoning_levels ?? []);
+        setSubagentModelState(model.subagent_model);
+        setSubagentReasoningLevelState(reasoning.reasoning_level);
+      })
+      .catch(() => { if (active) toast.error(t('settings.agents.loadFailed')); })
+      .finally(() => { if (active) setModelsLoading(false); });
+    return () => { active = false; };
+  }, [section, t]);
 
   // Load UI settings when app tab opens
   useEffect(() => {
@@ -549,12 +569,6 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
           setModelsCatalog(res.models);
           if (res.auto_reasoning_levels) setAutoReasoningLevels(res.auto_reasoning_levels);
         })
-        .catch(() => {});
-      api.getSubagentModel()
-        .then((res) => setSubagentModelState(res.subagent_model))
-        .catch(() => {});
-      api.getSubagentReasoningLevel()
-        .then((res) => setSubagentReasoningLevelState(res.reasoning_level))
         .catch(() => {});
       window.electronAPI.getDesktopBrowserSettings()
         .then(setDesktopBrowserSettingsState)
@@ -2720,13 +2734,11 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
             </div>
           )}
 
-          {section === 'models' && (
+          {section === 'agents' && (
             <div className={s.panel}>
-              <div className={s.panelTitle}>{t('settings.models.title')}</div>
-              <span className={s.fieldLabel} style={{ display: 'block', marginBottom: 12, marginTop: -4 }}>
-                {t('settings.models.help')}
-              </span>
-
+              <div className={s.panelTitle}>{t('settings.sections.agents')}</div>
+              <p className={agentsStyles.intro}>{t('settings.agents.help')}</p>
+              {modelsLoading ? <div className={s.promptLoading}>{t('common.loading')}</div> : <>
               <SubagentModelSettings
                 models={modelsCatalog}
                 model={subagentModel}
@@ -2738,81 +2750,35 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
                 onReasoningChange={setSubagentReasoningLevelState}
                 onReasoningCommit={handleSubagentReasoningCommit}
               />
+              </>}
+              <h3 className={agentsStyles.heading}>{t('settings.agents.specialists')}</h3>
+              <p className={agentsStyles.hint}>{t('settings.agents.specialistsHelp')}</p>
+              {agentCatalogQuery.isLoading && <p className={agentsStyles.hint} role="status">{t('common.loading')}</p>}
+              {agentCatalogQuery.isError && <div role="alert"><p className={agentsStyles.hint}>{t('settings.agents.catalogFailed')}</p><button className={s.cancelBtn} onClick={() => void agentCatalogQuery.refetch()}>{t('memoryMap.retry')}</button></div>}
+              {agentCatalogQuery.isSuccess && <div className={agentsStyles.list}>
+                {agentCatalogQuery.data.agents.length === 0 && <p className={agentsStyles.hint}>{t('settings.agents.empty')}</p>}
+                {agentCatalogQuery.data.agents.map(agent => <article className={agentsStyles.agent} key={agent.id}>
+                  <span className={agentsStyles.icon} aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d={agent.id === 'file_converter' ? 'M7 3h8l4 4v14H5V3h2 M14 3v5h5 M8 13h8m-3-3 3 3-3 3' : 'M20 11a8 8 0 1 1-16 0 8 8 0 0 1 16 0 M17 17l5 5 M8 11h6 M11 8v6'} /></svg></span>
+                  <div><h4>{t(`settings.agents.catalog.${agent.id}.name`, { defaultValue: agent.id.replace(/_/g, ' ') })}</h4>
+                    <p>{t(`settings.agents.catalog.${agent.id}.description`, { defaultValue: agent.description })}</p></div>
+                </article>)}
+              </div>}
+            </div>
+          )}
 
-              {modelsLoading ? (
-                <div className={s.promptLoading}>{t('common.loading')}</div>
-              ) : modelsCatalog.length === 0 ? (
-                <div className={s.fieldLabel}>{t('settings.models.empty')}</div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                  {modelsCatalog.map((model) => {
-                    const settings = modelSettingsMap[model.id] || {};
-                    const isSaving = modelsSavingId === model.id;
-                    // Missing capabilities on older servers are unknown; [] explicitly means none.
-                    const supported = model.supported_params == null ? null : new Set(model.supported_params);
-                    return (
-                      <div key={model.id} style={{ border: '1px solid var(--border-light)', borderRadius: 8, padding: 12 }}>
-                        <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 8 }}>
-                          {model.name}
-                          {isSaving && <span style={{ marginLeft: 8, fontSize: 11, color: 'var(--text-hint)' }}>{t('common.savingLower')}</span>}
-                        </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                          {(
-                            [
-                              { key: 'temperature',        label: 'Temperature',        min: 0.0, max: 2.0,   step: 0.05 },
-                              { key: 'top_p',              label: 'Top P',              min: 0.0, max: 1.0,   step: 0.05 },
-                              { key: 'top_k',              label: 'Top K',              min: 1,   max: 100,   step: 1 },
-                              { key: 'frequency_penalty',  label: 'Frequency penalty',  min: -2.0, max: 2.0,  step: 0.05 },
-                              { key: 'presence_penalty',   label: 'Presence penalty',   min: -2.0, max: 2.0,  step: 0.05 },
-                              { key: 'repetition_penalty', label: 'Repetition penalty', min: 1.0, max: 2.0,   step: 0.05 },
-                              { key: 'max_tokens',         label: 'Max tokens',         min: 1,   max: 65536, step: 1 },
-                            ] as const
-                          ).filter((param) => supported === null || supported.has(param.key)).map((param) => {
-                            const currentVal = settings[param.key as keyof api.ModelSettings] ?? null;
-                            const useDefault = currentVal === null;
-                            return (
-                              <div key={param.key} className={s.modelParamRow}>
-                                <Checkbox
-                                  checked={useDefault}
-                                  label={t('settings.reasoning.autoLower')}
-                                  onChange={(checked) => {
-                                    const updated = { ...settings };
-                                    if (checked) {
-                                      delete (updated as any)[param.key];
-                                    } else {
-                                      (updated as any)[param.key] = param.min;
-                                    }
-                                    setModelSettingsMap(prev => ({ ...prev, [model.id]: updated }));
-                                    handleSaveModelSettings(model.id, updated);
-                                  }}
-                                />
-                                <Slider
-                                  mode="numeric"
-                                  label={param.label}
-                                  min={param.min}
-                                  max={param.max}
-                                  step={param.step}
-                                  value={currentVal}
-                                  disabled={useDefault}
-                                  formatValue={(v) => param.step < 1 ? v.toFixed(2) : String(v)}
-                                  onChange={(v) => {
-                                    const updated = { ...settings, [param.key]: v };
-                                    setModelSettingsMap(prev => ({ ...prev, [model.id]: updated }));
-                                  }}
-                                  onCommit={() => {
-                                    const finalSettings = modelSettingsMap[model.id] || {};
-                                    handleSaveModelSettings(model.id, finalSettings);
-                                  }}
-                                />
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+          {section === 'models' && (
+            <div className={s.panel}>
+              <div className={s.panelTitle}>{t('settings.models.title')}</div>
+              <p className={agentsStyles.intro}>{t('settings.models.help')}</p>
+              <ModelGenerationSettings models={modelsCatalog} settings={modelSettingsMap} loading={modelsLoading} savingId={modelsSavingId}
+                onDraftChange={(id, settings) => setModelSettingsMap(previous => ({ ...previous, [id]: settings }))}
+                onSave={(id, settings) => void handleSaveModelSettings(id, settings)}
+                onReset={async id => {
+                  setModelsSavingId(id);
+                  try { const result = await api.deleteModelSettings(id); setModelSettingsMap(result.model_settings); }
+                  catch { toast.error(t('settings.toasts.saveModelSettingsFailed')); }
+                  finally { setModelsSavingId(null); }
+                }} />
             </div>
           )}
 

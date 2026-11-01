@@ -19,7 +19,7 @@ const entries = [
   ...fields,
 ];
 const find = (q: string, lang: any = ru, admin = false) => searchSettings(q, entries, translate(lang), admin);
-assert.equal(new Set(SETTINGS_GROUPS.flatMap((g: any) => g.sections)).size, 22);
+assert.equal(new Set(SETTINGS_GROUPS.flatMap((g: any) => g.sections)).size, 23);
 assert(SETTINGS_GROUPS.find((g: any) => g.id === 'profile').sections.includes('limits'));
 assert(SETTINGS_GROUPS.find((g: any) => g.id === 'ai').sections.includes('restrictions'));
 assert(!SETTINGS_GROUPS.find((g: any) => g.id === 'access').sections.includes('restrictions'));
@@ -27,6 +27,7 @@ assert.deepEqual(SETTINGS_GROUPS.find((g: any) => g.id === 'profile').sections.s
 assert.equal(find('горячая память').find((item: any) => item.key === 'settings.account.personas.coreMemory')?.section, 'personas');
 assert.equal(find('name in chat', en).find((item: any) => item.key === 'settings.account.redesign.chatName')?.section, 'personas');
 assert.equal(find('пароль').find((item: any) => item.key === 'settings.account.changePassword')?.section, 'account');
+assert.equal(find('модель субагентов').find((item: any) => item.key === 'settings.app.subagentModel')?.section, 'agents');
 assert.equal(find('квоты').find((item: any) => item.key === 'quota.title')?.section, 'limits');
 
 assert.equal(find('масштаб')[0].key, 'settings.app.zoom');

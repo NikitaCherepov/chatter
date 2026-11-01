@@ -16,6 +16,7 @@ const ICONS: Record<SettingsSection, string> = {
   personas: 'M16 21v-2a5 5 0 0 0-10 0v2 M11 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8 M19 8a3 3 0 0 1 0 6 M22 21v-2a5 5 0 0 0-3-4.6',
   memory: 'M5 3h14v18l-7-4-7 4z',
   connections: 'M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-2 2 M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l2-2',
+  agents: 'M8 8h8v8H8z M12 3v5 M3 12h5 M16 12h5 M12 16v5 M10 3h4 M3 10v4 M21 10v4 M10 21h4',
   models: 'M7 7h10v10H7z M9 1v3m6-3v3M9 20v3m6-3v3M1 9h3m-3 6h3M20 9h3m-3 6h3 M10 10h4v4h-4z',
   prompt: 'M4 3h16v13H9l-5 5z',
   voice: 'M9 3a3 3 0 0 1 6 0v9a3 3 0 0 1-6 0z M5 10v2a7 7 0 0 0 14 0v-2 M12 19v4m-4 0h8',

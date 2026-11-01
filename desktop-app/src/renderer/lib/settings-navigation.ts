@@ -19,12 +19,13 @@ export type SettingsSection =
   | 'mail'
   | 'smart_home'
   | 'restrictions'
+  | 'agents'
   | 'models'
   | 'about';
 
 export const SETTINGS_GROUPS: { id: string; sections: SettingsSection[] }[] = [
   { id: 'profile', sections: ['account', 'personas', 'memory', 'connections', 'limits'] },
-  { id: 'ai', sections: ['models', 'prompt', 'voice', 'restrictions'] },
+  { id: 'ai', sections: ['models', 'agents', 'prompt', 'voice', 'restrictions'] },
   {
     id: 'automation',
     sections: ['macros', 'runbooks', 'pc', 'browser', 'servers', 'sshkeys', 'mail', 'smart_home'],
