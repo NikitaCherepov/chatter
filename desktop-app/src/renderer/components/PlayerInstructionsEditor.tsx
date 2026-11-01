@@ -28,9 +28,10 @@ export function PlayerInstructionsEditor({ scope, targetId, modelId, onDirtyChan
     void prefs.getPlayerInstructions(target).then(result => { if (active) { setData(result); setText(result.text); setMode(result.mode ?? (result.enabled ? 'both' : 'off')); } }, () => { if (active) setError(t('playerInstructions.loadFailed')); });
     return () => { active = false; };
   }, [scope, targetId, t]);
+  const dirty = Boolean(data && (text !== data.text || mode !== (data.mode ?? (data.enabled ? 'both' : 'off'))));
   useEffect(() => {
-    onDirtyChange?.(Boolean(data && (text !== data.text || mode !== (data.mode ?? (data.enabled ? 'both' : 'off')))));
-  }, [text, mode, data, onDirtyChange]);
+    onDirtyChange?.(dirty);
+  }, [dirty, onDirtyChange]);
   const applied = (result: prefs.InstructionState) => {
     setText(result.text); setMode(result.mode ?? (result.enabled ? 'both' : 'off')); setData(prev => prev ? { ...prev, ...result } : null); setSaved(true);
   };
@@ -47,8 +48,8 @@ export function PlayerInstructionsEditor({ scope, targetId, modelId, onDirtyChan
       <Select value={mode} disabled={!data || saving} onChange={value => { setMode(value as prefs.InstructionsMode); setSaved(false); }} options={(['both','persona','chat','off'] as const).map(value => ({value,label:t(`playerInstructions.mode${value}`)}))} />
     </div>}
     <div className={s.actions}>
-      <button className={settingsStyles.saveBtn} type="button" disabled={!data || saving} onClick={async () => {
-        if (!data) return;
+      <button className={settingsStyles.saveBtn} type="button" disabled={!data || saving || !dirty} onClick={async () => {
+        if (!data || saving || !dirty) return;
         setSaving(true); setError('');
         try { applied(await prefs.savePlayerInstructions(target, text, mode, data.text)); }
         catch (e) { setError(t(e instanceof Error && e.message.includes('instructions_changed') ? 'playerInstructions.changed' : 'playerInstructions.saveFailed')); }

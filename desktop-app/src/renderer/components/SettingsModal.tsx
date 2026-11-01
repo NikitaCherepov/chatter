@@ -1812,9 +1812,7 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
               {personasQuery.isError && <p className={a.help} role="alert">{t('settings.account.personas.errors.select')} <button className={a.textAction} onClick={() => void personasQuery.refetch()}>{t('playerInstructions.reload')}</button></p>}
 
               {selectedPersonaId !== null && <section className={a.personaEditor} aria-label={t('settings.account.redesign.editPersona')}>
-                <div className={a.headingRow}>
-                  <h3 className={a.heading}>{selectedPersonaId === NEW_PERSONA_ID ? t('settings.account.redesign.newPersona') : t('settings.account.redesign.editPersona')}</h3>
-                </div>
+                {selectedPersonaId === NEW_PERSONA_ID && <h3 className={a.heading}>{t('settings.account.redesign.newPersona')}</h3>}
                 <div className={a.identity}>
                   <div className={a.avatarColumn}>
                     <button type="button" className={a.avatarButton} disabled={personaBusy} onClick={() => personaImageInputRef.current?.click()} aria-label={t('settings.prompt.imageChoose')} title={t('settings.prompt.imageChoose')}>
@@ -1842,7 +1840,7 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
                 <span className={a.help}>{t('settings.account.redesign.identityHelp')}</span>
                 <div className={a.field}>
                   <div className={a.memoryHeading}>
-                    <label className={s.fieldLabel} htmlFor="persona-core-memory">{t('settings.account.personas.coreMemory')}</label>
+                    <label className={a.sectionLabel} htmlFor="persona-core-memory">{t('settings.account.personas.coreMemory')}</label>
                     <span className={a.charCount}>{coreMemory.length.toLocaleString(i18n.language)}</span>
                   </div>
                   <span className={a.help}>{t('settings.account.redesign.memoryHelp')}</span>
@@ -1858,14 +1856,12 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
                 <div className={a.instructions}>
                   {selectedPersonaId > 0 ? <PlayerInstructionsEditor key={selectedPersonaId} scope="persona" targetId={selectedPersonaId} onDirtyChange={setPersonaInstructionsDirty} appearance="settings" /> : <small className={a.help}>{t('playerInstructions.createPersonaFirst')}</small>}
                 </div>
-                  <div className={a.personaFooter}>
-                    {selectedPersonaId > 0 && personas.length > 2 && <span>
-                      <button className={`${a.textAction} ${a.deletePersona}`} type="button" onClick={() => setConfirmDeletePersona(true)} disabled={personaBusy}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7" /></svg>
-                        {personaDeleting ? t('common.deleting') : t('common.delete')}
-                      </button>
-                    </span>}
-                  </div>
+                {selectedPersonaId > 0 && personas.length > 2 && <div className={a.personaFooter}>
+                  <button className={`${a.textAction} ${a.deletePersona}`} type="button" onClick={() => setConfirmDeletePersona(true)} disabled={personaBusy}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7" /></svg>
+                    {personaDeleting ? t('common.deleting') : t('common.delete')}
+                  </button>
+                </div>}
               </section>}
 
             </div>

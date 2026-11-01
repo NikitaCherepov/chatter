@@ -142,10 +142,7 @@
 .personaEditor {
   display: flex;
   flex-direction: column;
-  gap: 18px;
-  padding: 20px;
-  border: 1px solid var(--border-light);
-  border-radius: 12px;
+  gap: 20px;
 }
 .badge {
   display: inline-flex;
@@ -160,7 +157,7 @@
 }
 .identity {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 18px;
 }
 .avatarColumn {
@@ -204,9 +201,9 @@
 .identityFields {
   flex: 1;
   min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
 }
 .field {
   display: flex;
@@ -228,6 +225,11 @@
     opacity: 0.5;
     cursor: default;
   }
+}
+.sectionLabel {
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
 }
 .memoryHeading {
   display: flex;
@@ -283,8 +285,9 @@
   .identity {
     gap: 12px;
   }
-  .personaEditor {
-    padding: 14px;
+  .identityFields {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
   }
   .avatarColumn {
     flex-basis: 64px;
