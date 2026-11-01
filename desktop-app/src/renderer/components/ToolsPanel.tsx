@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { toast } from 'sonner';
 import { DndContext, type DragEndEvent } from '@dnd-kit/core';
 import { restrictToWindowEdges } from '@dnd-kit/modifiers';
@@ -182,6 +182,7 @@ const CONTENT_LIMITS: Record<string, number> = {
 
 export function ToolsPanel({ plan, isAdmin, activeChatId, onImageClick, onChatSelect }: Props) {
   const { t } = useTranslation();
+  const reduceMotion = useReducedMotion();
   const [isOpen, setIsOpen] = useState(() => getToolsPanelState().isOpen);
   const [narrowWindow, setNarrowWindow] = useState(() => window.matchMedia('(max-width: 1100px)').matches);
   useEffect(() => {
@@ -324,9 +325,9 @@ export function ToolsPanel({ plan, isAdmin, activeChatId, onImageClick, onChatSe
     >
       {/* Sidebar (always rendered) */}
       <motion.aside
-        className={`${s.panel} ${compactMenu ? s.panelCompact : ''}`}
+        className={`${s.panel} ${compactMenu ? s.panelCompact : ''} ${!isOpen ? s.panelCollapsed : ''}`}
         animate={{ width: panelWidth }}
-        transition={{ duration: 0.2, ease: 'easeInOut' }}
+        transition={{ duration: reduceMotion ? 0 : 0.2, ease: 'easeInOut' }}
       >
         {/* Header */}
         <div className={s.panelHeader}>
@@ -377,19 +378,51 @@ export function ToolsPanel({ plan, isAdmin, activeChatId, onImageClick, onChatSe
             )}
           </div>
 
-          <button className={s.toolsIconBtn} onClick={handleToggle} title={isOpen ? t('tools.panel.collapse') : t('tools.panel.tools')}>
+          <button className={s.toolsIconBtn} onClick={handleToggle} aria-expanded={isOpen} aria-label={isOpen ? t('tools.panel.collapse') : t('tools.panel.tools')} title={isOpen ? t('tools.panel.collapse') : t('tools.panel.tools')}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
             </svg>
           </button>
         </div>
 
-        {/* Body */}
+        <AnimatePresence initial={false}>
+          {!isOpen && (
+          <motion.nav
+            key="collapsed-tool-rail"
+            className={s.toolRail}
+            aria-label={t('tools.panel.tools')}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1, transition: { duration: reduceMotion ? 0 : 0.14, delay: reduceMotion ? 0 : 0.1 } }}
+            exit={{ opacity: 0, transition: { duration: reduceMotion ? 0 : 0.08 } }}
+          >
+            {tools.map((tool) => (
+              <button
+                key={tool.id}
+                type="button"
+                className={s.railButton}
+                aria-current={isOpen && tool.id === sidebarToolId ? 'true' : undefined}
+                onClick={() => handleSelectTool(tool.id)}
+                title={tool.title}
+                aria-label={tool.title}
+              >
+                {tool.icon}
+              </button>
+            ))}
+          </motion.nav>
+          )}
+        </AnimatePresence>
+
+        {/* Body — keep mounted so collapsing preserves the tool's state. */}
         <motion.div
           className={s.panelBody}
-          animate={{ opacity: isOpen ? 1 : 0 }}
-          transition={{ duration: 0.15 }}
-          style={{ pointerEvents: isOpen ? 'auto' : 'none' }}
+          initial={false}
+          animate={isOpen ? { opacity: 1, visibility: 'visible' } : { opacity: 0, transitionEnd: { visibility: 'hidden' } }}
+          transition={{ duration: reduceMotion ? 0 : 0.12, delay: isOpen && !reduceMotion ? 0.08 : 0 }}
+          aria-hidden={!isOpen}
+          style={{
+            pointerEvents: isOpen ? 'auto' : 'none',
+            width: compactMenu ? 65 : ['browser', 'youtube-music', 'json-extractor', 'newspapers'].includes(sidebarToolId ?? '') ? 420 : 260,
+          }}
         >
           <AnimatePresence mode="wait">
             {sidebarToolId && sidebarTool ? (

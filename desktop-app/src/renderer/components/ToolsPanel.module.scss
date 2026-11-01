@@ -26,7 +26,10 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 24px 16px 16px;
+  padding: 24px 65px 16px 16px;
+  height: 68px;
+  box-sizing: border-box;
+  flex-shrink: 0;
 }
 
 .headerLeft {
@@ -70,6 +73,9 @@
 }
 
 .toolsIconBtn {
+  position: absolute;
+  right: 18px;
+  top: 24px;
   width: 28px;
   height: 28px;
   border-radius: 6px;
@@ -194,4 +200,65 @@
   flex-direction: column;
   min-height: 0;
   overflow: hidden;
+}
+
+// Quick access while collapsed. Only the header toggle stays fixed in both states.
+.panelCollapsed {
+  .panelHeader {
+    padding: 24px 0 16px;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .headerLeft { display: none; }
+}
+
+.toolRail {
+  position: absolute;
+  top: 68px;
+  bottom: 0;
+  right: 0;
+  width: 64px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 0 16px;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.railButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s;
+
+  &:hover {
+    background: var(--bg-input);
+    color: var(--text-primary);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--accent-icon);
+    outline-offset: -2px;
+    background: var(--bg-input);
+    color: var(--text-primary);
+  }
+}
+
+.railButton[aria-current='true'] {
+  background: var(--bg-input);
+  color: var(--text-primary);
 }
