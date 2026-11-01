@@ -742,7 +742,8 @@
       "diceMode": "Dice mode (d20)",
       "diceHelp": "Adds a d20 next to the message box. AI responses depend on your luck.",
       "contextLimitHelp": "When the context exceeds the limit, Chatter summarizes the older part and keeps recent messages verbatim. Raw messages remain in the chat. Plan maximum: {{max}}k tokens.",
-      "attachmentLimitHelp": "How many context tokens attached document contents may use. 0 = auto (90% of the context limit). Maximum: {{max}}k tokens."
+      "attachmentAuto": "Auto · 90% of context",
+      "attachmentLimitHelp": "How many context tokens attached document contents may use. Auto uses up to 90% of the context limit. Maximum: {{max}}k tokens."
     },
     "about": {
       "version": "Version {{version}}",

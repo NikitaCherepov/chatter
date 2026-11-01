@@ -9,53 +9,23 @@
 .full {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 28px;
 }
 
-.donutBlock {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  min-width: 120px;
+.quotaSummary { display: flex; flex-direction: column; gap: 9px; }
+.quotaHeading {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
+  color: var(--text-primary); font-size: 13px; font-weight: 600;
+  strong { font-size: 15px; font-variant-numeric: tabular-nums; }
 }
-
-.donutWrap {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.quotaTrack {
+  height: 6px; border-radius: 4px; overflow: hidden; background: var(--border-light);
+  > span { display: block; height: 100%; border-radius: inherit; background: var(--accent-icon); transition: width 0.3s ease; }
 }
-
-.donutPercent {
-  position: absolute;
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--accent-icon);
-}
-
-// .donutCaption {
-//   display: flex;
-//   flex-direction: column;
-//   align-items: center;
-//   gap: 2px;
-//
-//   strong {
-//     color: var(--text-primary);
-//     font-size: 13px;
-//     font-weight: 600;
-//   }
-//
-//   small {
-//     color: var(--text-hint);
-//     font-size: 11px;
-//   }
-// }
-
 .resetInfo {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 6px;
 }
 
@@ -76,20 +46,20 @@
 .monthly {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding-top: 4px;
+  gap: 14px;
 }
 
 .monthlyHeader {
   display: flex;
   align-items: baseline;
+  flex-wrap: wrap;
   justify-content: space-between;
   gap: 8px;
 }
 
 .monthlyTitle {
-  color: var(--text-muted);
-  font-size: 12px;
+  color: var(--text-primary);
+  font-size: 13px;
   font-weight: 600;
 }
 
@@ -140,7 +110,8 @@
 .monthlyNote {
   color: var(--text-hint);
   font-size: 11px;
-  line-height: 1.4;
+  line-height: 1.6;
+  margin-top: -6px;
 }
 
 .monthlyActions {
@@ -193,4 +164,8 @@
   overflow: hidden;
   flex-shrink: 0;
   > span { display: block; height: 100%; background: var(--accent-icon); border-radius: inherit; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .quotaTrack > span, .monthlyBarFill { transition: none; }
 }

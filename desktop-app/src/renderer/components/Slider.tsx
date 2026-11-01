@@ -5,6 +5,7 @@ import s from './Slider.module.scss';
 type CommonProps = {
   label: string;
   disabled?: boolean;
+  layout?: 'inline' | 'standalone';
 };
 
 type NumericSliderProps = CommonProps & {
@@ -44,7 +45,7 @@ export default function Slider(props: SliderProps) {
         <label className={s.label}>{label}</label>
         <div className={s.slider}>
           <input
-            type="range"
+            aria-label={label || undefined} type="range"
             className={s.input}
             min={0}
             max={values.length - 1}
@@ -71,11 +72,11 @@ export default function Slider(props: SliderProps) {
   const { min, max, step, value, onChange, label, disabled, formatValue } = props;
 
   return (
-    <div className={s.row}>
-      <label className={s.label}>{label}</label>
+    <div className={props.layout === 'standalone' ? s.standalone : s.row}>
+      {props.layout !== 'standalone' && <label className={s.label}>{label}</label>}
       <div className={s.slider}>
         <input
-          type="range"
+          aria-label={label || undefined} type="range"
           className={s.input}
           min={min}
           max={max}
@@ -91,9 +92,9 @@ export default function Slider(props: SliderProps) {
             if (e.key === 'Enter' || e.key === ' ') handleCommit();
           }}
         />
-        <span className={s.value}>
+        {props.layout !== 'standalone' && <span className={s.value}>
           {value === null ? t('settings.reasoning.autoLower') : (formatValue ? formatValue(value) : String(value))}
-        </span>
+        </span>}
       </div>
     </div>
   );

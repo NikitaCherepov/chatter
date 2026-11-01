@@ -75,3 +75,10 @@
   text-align: left;
   white-space: nowrap;
 }
+
+.standalone {
+  width: 100%;
+  min-width: 0;
+  padding: 6px 0;
+  .input { width: 100%; margin: 0; }
+}

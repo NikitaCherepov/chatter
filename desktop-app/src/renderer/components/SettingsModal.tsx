@@ -45,6 +45,7 @@ import { PCSettings } from './PCSettings';
 import { BrowserSettings } from './BrowserSettings';
 import { LinkTelegramModal } from './LinkTelegramModal';
 import { QuotaWidget } from './QuotaWidget';
+import limitsStyles from './SettingsLimits.module.scss';
 import { SubagentModelSettings } from './SubagentModelSettings/SubagentModelSettings';
 import { AboutSettings } from './AboutSettings/AboutSettings';
 import { GlobalMemorySettings } from './GlobalMemorySettings';
@@ -2973,131 +2974,73 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
           )}
 
           {section === 'limits' && (
-            <div className={s.panel}>
+            <div className={`${s.panel} ${limitsStyles.panel}`}>
               <div className={s.panelTitle}>{t('settings.sections.limits')}</div>
+              <QuotaWidget variant="full" />
 
-              <div className={s.fieldGroup}>
-                <label className={s.fieldLabel}>{t('quota.title')}</label>
-                <QuotaWidget variant="full" />
-              </div>
-
-              <div className={s.macroFormDivider} />
-
-              {/* Context Token Limit */}
-              {contextTokenLimit && (
-                <div className={s.fieldGroup}>
-                  <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 8 }}>
-                    {t('settings.app.contextLimit')}
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <Slider
-                      mode="numeric"
-                      label=""
-                      min={Math.min(...TOKEN_STEPS.filter(s => s <= contextTokenLimit.max_context_tokens_limit), 5000)}
-                      max={contextTokenLimit.max_context_tokens_limit}
-                      step={1000}
-                      value={contextTokenLimit.max_context_tokens}
-                      onChange={(v) => {
-                        if (v !== null) handleContextTokenLimitChange(v);
-                      }}
-                      onCommit={handleContextTokenLimitCommit}
-                      disabled={contextTokenLimitSaving}
-                      formatValue={(v) => v >= 1000 ? `${Math.round(v / 1000)}k` : String(v)}
-                    />
-                    <input
-                      type="number"
-                      min={1000}
-                      max={contextTokenLimit.max_context_tokens_limit}
-                      step={1000}
-                      value={contextTokenLimit.max_context_tokens}
-                      disabled={contextTokenLimitSaving}
-                      onChange={(e) => {
-                        const v = Number(e.target.value);
-                        if (Number.isFinite(v) && v >= 1000) handleContextTokenLimitChange(v);
-                      }}
-                      onBlur={() => handleContextTokenLimitCommit()}
-                      onKeyDown={(e) => { if (e.key === 'Enter') handleContextTokenLimitCommit(); }}
-                      style={{
-                        width: 90, padding: '4px 8px', fontSize: 12,
-                        background: 'var(--bg-input)', border: '1px solid var(--border-medium)',
-                        borderRadius: 6, color: 'var(--text-primary)', outline: 'none',
-                      }}
-                    />
-                  </div>
-                  <div style={{ fontSize: 11, color: 'var(--text-hint)', marginTop: 4 }}>
-                    {t('settings.app.contextLimitHelp', { max: (contextTokenLimit.max_context_tokens_limit / 1000).toFixed(0) })}
-                  </div>
-                  <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
-                    {TOKEN_STEPS
-                      .filter(step => step <= contextTokenLimit.max_context_tokens_limit)
-                      .map(step => (
-                        <button
-                          key={step}
-                          onClick={() => {
-                            handleContextTokenLimitChange(step);
-                            handleContextTokenLimitCommit(step);
-                          }}
-                          disabled={contextTokenLimitSaving}
-                          style={{
-                            padding: '3px 10px', fontSize: 11, cursor: 'pointer',
-                            borderRadius: 6, border: '1px solid var(--border-medium)',
-                            background: contextTokenLimit.max_context_tokens === step ? 'var(--accent)' : 'var(--bg-input)',
-                            color: contextTokenLimit.max_context_tokens === step ? '#fff' : 'var(--text-body)',
-                          }}
-                        >
-                          {step >= 1000 ? `${step / 1000}k` : step}
-                        </button>
-                      ))}
-                  </div>
+              {contextTokenLimit && <section className={limitsStyles.limitSection}>
+                <div className={limitsStyles.heading}>
+                  <label htmlFor="context-token-limit">{t('settings.app.contextLimit')}</label>
+                  <input id="context-token-limit" className={`${s.fieldInput} ${limitsStyles.numberInput}`}
+                    type="number" min={1000} max={contextTokenLimit.max_context_tokens_limit} step={1000}
+                    value={contextTokenLimit.max_context_tokens} disabled={contextTokenLimitSaving}
+                    onChange={event => {
+                      const value = Number(event.target.value);
+                      if (Number.isFinite(value) && value >= 1000) handleContextTokenLimitChange(value);
+                    }}
+                    onBlur={() => handleContextTokenLimitCommit()}
+                    onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.blur(); } }} />
                 </div>
-              )}
-
-              {/* Attachment Token Limit */}
-              {attachmentTokenLimit && (
-                <div className={s.fieldGroup}>
-                  <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 8 }}>
-                    {t('settings.app.attachmentLimit')}
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <Slider
-                      mode="numeric"
-                      label=""
-                      min={0}
-                      max={attachmentTokenLimit.attachment_max_tokens_limit}
-                      step={1000}
-                      value={attachmentTokenLimit.attachment_max_tokens}
-                      onChange={(v) => {
-                        if (v !== null) handleAttachmentTokenLimitChange(v);
-                      }}
-                      onCommit={handleAttachmentTokenLimitCommit}
-                      disabled={attachmentTokenLimitSaving}
-                      formatValue={(v) => v === 0 ? t('settings.reasoning.auto') : v >= 1000 ? `${Math.round(v / 1000)}k` : String(v)}
-                    />
-                    <input
-                      type="number"
-                      min={0}
-                      max={attachmentTokenLimit.attachment_max_tokens_limit}
-                      step={1000}
-                      value={attachmentTokenLimit.attachment_max_tokens}
-                      disabled={attachmentTokenLimitSaving}
-                      onChange={(e) => {
-                        const v = Number(e.target.value);
-                        if (Number.isFinite(v) && v >= 0) handleAttachmentTokenLimitChange(v);
-                      }}
-                      onBlur={() => handleAttachmentTokenLimitCommit()}
-                      onKeyDown={(e) => { if (e.key === 'Enter') handleAttachmentTokenLimitCommit(); }}
-                      style={{
-                        width: 90, padding: '4px 8px', fontSize: 12,
-                        background: 'var(--bg-input)', border: '1px solid var(--border-medium)',
-                        borderRadius: 6, color: 'var(--text-primary)', outline: 'none',
-                      }}
-                    />
-                  </div>
-                  <div style={{ fontSize: 11, color: 'var(--text-hint)', marginTop: 4 }}>
-                    {t('settings.app.attachmentLimitHelp', { max: (attachmentTokenLimit.attachment_max_tokens_limit / 1000).toFixed(0) })}
-                  </div>
+                <Slider mode="numeric" layout="standalone" label={t('settings.app.contextLimit')}
+                  min={Math.min(...TOKEN_STEPS.filter(step => step <= contextTokenLimit.max_context_tokens_limit), 5000)}
+                  max={contextTokenLimit.max_context_tokens_limit} step={1000} value={contextTokenLimit.max_context_tokens}
+                  onChange={value => { if (value !== null) handleContextTokenLimitChange(value); }}
+                  onCommit={handleContextTokenLimitCommit} disabled={contextTokenLimitSaving} />
+                <p className={limitsStyles.help}>{t('settings.app.contextLimitHelp', { max: (contextTokenLimit.max_context_tokens_limit / 1000).toFixed(0) })}</p>
+                <div className={limitsStyles.presets}>
+                  {TOKEN_STEPS.filter(step => step <= contextTokenLimit.max_context_tokens_limit).map(step => (
+                    <button type="button" key={step} className={`${s.cancelBtn} ${limitsStyles.preset}`}
+                      aria-pressed={contextTokenLimit.max_context_tokens === step} disabled={contextTokenLimitSaving}
+                      onClick={() => { handleContextTokenLimitChange(step); void handleContextTokenLimitCommit(step); }}>
+                      {step / 1000}k
+                    </button>
+                  ))}
                 </div>
-              )}
+              </section>}
+
+              {attachmentTokenLimit && <section className={limitsStyles.limitSection}>
+                <div className={limitsStyles.heading}>
+                  <div className={limitsStyles.titleGroup}>
+                    <label htmlFor="attachment-token-limit">{t('settings.app.attachmentLimit')}</label>
+                    {attachmentTokenLimit.attachment_max_tokens === 0 && <span className={limitsStyles.autoCaption}>{t('settings.app.attachmentAuto')}</span>}
+                  </div>
+                  <input id="attachment-token-limit" className={`${s.fieldInput} ${limitsStyles.numberInput}`}
+                    type="number" min={0} max={attachmentTokenLimit.attachment_max_tokens_limit} step={1000}
+                    value={attachmentTokenLimit.attachment_max_tokens === 0 ? '' : attachmentTokenLimit.attachment_max_tokens}
+                    placeholder={t('settings.reasoning.auto')} disabled={attachmentTokenLimitSaving}
+                    onChange={event => {
+                      const value = Number(event.target.value);
+                      if (Number.isFinite(value) && value >= 0) handleAttachmentTokenLimitChange(value);
+                    }}
+                    onBlur={() => handleAttachmentTokenLimitCommit()}
+                    onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.blur(); } }} />
+                </div>
+                <Slider mode="numeric" layout="standalone" label={t('settings.app.attachmentLimit')}
+                  min={0} max={attachmentTokenLimit.attachment_max_tokens_limit} step={1000}
+                  value={attachmentTokenLimit.attachment_max_tokens}
+                  onChange={value => { if (value !== null) handleAttachmentTokenLimitChange(value); }}
+                  onCommit={handleAttachmentTokenLimitCommit} disabled={attachmentTokenLimitSaving} />
+                <p className={limitsStyles.help}>{t('settings.app.attachmentLimitHelp', { max: (attachmentTokenLimit.attachment_max_tokens_limit / 1000).toFixed(0) })}</p>
+                <div className={limitsStyles.presets}>
+                  {[0, ...TOKEN_STEPS.filter(step => step <= attachmentTokenLimit.attachment_max_tokens_limit)].map(step => (
+                    <button type="button" key={step} className={`${s.cancelBtn} ${limitsStyles.preset}`}
+                      aria-pressed={attachmentTokenLimit.attachment_max_tokens === step} disabled={attachmentTokenLimitSaving}
+                      onClick={() => { handleAttachmentTokenLimitChange(step); void handleAttachmentTokenLimitCommit(step); }}>
+                      {step === 0 ? t('settings.reasoning.auto') : `${step / 1000}k`}
+                    </button>
+                  ))}
+                </div>
+              </section>}
             </div>
           )}
             </div>

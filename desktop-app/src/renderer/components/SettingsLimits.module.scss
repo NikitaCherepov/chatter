@@ -1,0 +1,31 @@
+.panel { gap: 0; }
+.limitSection {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 32px;
+  min-width: 0;
+}
+.heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  label { color: var(--text-primary); font-size: 13px; font-weight: 600; }
+}
+.titleGroup { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.autoCaption { color: var(--text-muted); font-size: 11px; line-height: 1.5; }
+.heading .numberInput { flex: 0 0 128px; width: 128px; min-width: 0; padding: 7px 10px; font-size: 12px; font-variant-numeric: tabular-nums; }
+.help { margin: 0; color: var(--text-hint); font-size: 11px; line-height: 1.6; }
+.presets { display: flex; flex-wrap: wrap; gap: 6px; }
+.presets .preset {
+  padding: 5px 10px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  &[aria-pressed='true'] { background: var(--accent); color: var(--accent-contrast); border-color: var(--accent); }
+  &:disabled { opacity: 0.5; cursor: default; }
+}
+@media (max-width: 600px) {
+  .heading { align-items: flex-start; flex-wrap: wrap; gap: 10px; }
+  .heading .numberInput { flex-basis: 112px; width: 112px; margin-left: auto; }
+}

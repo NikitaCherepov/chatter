@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { Fragment, useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import * as api from '../lib/api';
 import s from './QuotaWidget.module.scss';
@@ -52,7 +52,7 @@ function Donut({ percent, size, stroke: strokeProp }: { percent: number; size: n
 }
 
 type Props = {
-  /** 'full' = detailed card for Account settings; 'compact' = small indicator for toolbar */
+  /** 'full' = detailed usage for Limits settings; 'compact' = small indicator for toolbar */
   variant?: 'full' | 'compact' | 'caption';
   className?: string;
 };
@@ -127,26 +127,24 @@ export function QuotaWidget({ variant = 'full', className }: Props) {
     );
   }
 
-  // ── Full: detailed card for Account settings — donut + monthly limits ──
+  // Full: quota progress and monthly limits.
   return (
     <div className={`${s.full} ${className || ''}`}>
       {activeQuota > 0 && (
-        <>
-          <div className={s.donutBlock}>
-            <div className={s.donutWrap}>
-              <Donut percent={percent} size={96} />
-              <span className={s.donutPercent}>{percent}%</span>
-            </div>
-            {/* <div className={s.donutCaption}>
-              <strong>{usedLabel}</strong>
-              <small>{isBudget ? t('quota.weeklyCost') : t('quota.tokens')}</small>
-            </div> */}
+        <section className={s.quotaSummary}>
+          <div className={s.quotaHeading}>
+            <span>{t('quota.caption')}</span>
+            <strong>{percent}%</strong>
+          </div>
+          <div className={s.quotaTrack} role="progressbar" aria-label={t('quota.title')}
+            aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.max(0, Math.min(100, percent))}>
+            <span style={{ width: `${Math.max(0, Math.min(100, percent))}%` }} />
           </div>
           <div className={s.resetInfo}>
             <span className={s.resetLabel}>{t('quota.resetsAt')}</span>
             <span className={s.resetValue}>{formatDate(quota.resets_at)}</span>
           </div>
-        </>
+        </section>
       )}
 
       {hasMonthly && monthly && (
@@ -159,19 +157,21 @@ export function QuotaWidget({ variant = 'full', className }: Props) {
           </div>
 
           {monthlyRows.map(row => (
-            <div key={row.key} className={s.monthlyRow}>
+            <Fragment key={row.key}>
+            <div className={s.monthlyRow}>
               <span className={s.monthlyLabel}>{t(`quota.monthly.${row.key}`)}</span>
               <span className={s.monthlyValue}>{row.entry.used} / {row.entry.limit}</span>
-              <div className={s.monthlyBar}>
+              <div className={s.monthlyBar} role="progressbar" aria-label={t(`quota.monthly.${row.key}`)}
+                aria-valuemin={0} aria-valuemax={Math.max(1, row.entry.limit)} aria-valuenow={Math.min(Math.max(0, row.entry.used), Math.max(1, row.entry.limit))}>
                 <div
                   className={s.monthlyBarFill}
                   style={{ width: `${row.entry.limit > 0 ? Math.min(100, Math.round((row.entry.used / row.entry.limit) * 100)) : 0}%` }}
                 />
               </div>
             </div>
+            {row.key === 'webReader' && <div className={s.monthlyNote}>{t('quota.monthly.desktopNote')}</div>}
+            </Fragment>
           ))}
-
-          <div className={s.monthlyNote}>{t('quota.monthly.desktopNote')}</div>
 
           <div className={s.monthlyActions}>
             <button
