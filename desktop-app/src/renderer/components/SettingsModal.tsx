@@ -6,7 +6,8 @@ import { diffLines } from 'diff';
 import { toast } from 'sonner';
 import { useAuth } from '../lib/auth';
 import * as api from '../lib/api';
-import { PromptSelector } from './PromptSelector';
+import { PromptCatalog, PromptSelection } from './PromptCatalog';
+import promptStyles from './PromptCatalog.module.scss';
 import { getTtsModels, getTtsSettings, setTtsSettings, ttsPreview, ttsStopPreview, getVoicesForModel, fetchRemoteTtsProviders, fetchPiperVoiceList } from '../lib/tts';
 import type { TtsSettings } from '../lib/tts';
 import {
@@ -181,6 +182,8 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
   const [prompts, setPrompts] = useState<api.PromptInfo[]>([]);
   const [customPrompts, setCustomPrompts] = useState<api.CustomPromptInfo[]>([]);
   const [selectedPromptId, setSelectedPromptId] = useState<number | null>(null);
+  const [pendingPromptSelection, setPendingPromptSelection] = useState<number | null>(null);
+  const promptSelectionRef = useRef(false);
   const [customContent, setCustomContent] = useState('');
   const [promptName, setPromptName] = useState('');
   const [promptDesc, setPromptDesc] = useState('');
@@ -1343,21 +1346,35 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
   };
 
   const handleSelectPrompt = async (promptId: number) => {
+    if (promptSelectionRef.current || promptSaving || promptDeleting || aiGenerating) return;
+    if (promptId === selectedPromptId) return;
+    const previous = selectedPromptId;
+    promptSelectionRef.current = true;
     setSelectedPromptId(promptId);
+    setAiGenerated(null);
+    setAiPanelOpen(false);
     setPromptSaving(true);
     try {
       await api.selectPrompt(promptId);
-      if (promptId === CUSTOM_PROMPT_ID) {
-        // "New prompt" — don't show success, user hasn't saved anything yet
-      } else {
-        toast.success(t('settings.toasts.promptSelected'));
-      }
+      if (promptId !== CUSTOM_PROMPT_ID) toast.success(t('settings.toasts.promptSelected'));
     } catch (err) {
+      setSelectedPromptId(previous);
       console.error('Failed to select prompt:', err);
       toast.error(t('settings.toasts.promptSelectFailed'));
     } finally {
+      promptSelectionRef.current = false;
       setPromptSaving(false);
     }
+  };
+
+  const requestPromptSelection = (promptId: number) => {
+    if (promptId === selectedPromptId || promptSaving || promptDeleting || aiGenerating || promptSelectionRef.current) return;
+    const original = customPrompts.find(prompt => prompt.id === selectedPromptId);
+    const editing = selectedPromptId === CUSTOM_PROMPT_ID || Boolean(original);
+    const dirty = editing && (promptName !== (original?.name || '') || promptDesc !== (original?.description || '')
+      || customContent !== (original?.content || '') || Boolean(pendingPromptImage) || promptImageRemoved);
+    if (dirty || aiGenerated !== null) setPendingPromptSelection(promptId);
+    else void handleSelectPrompt(promptId);
   };
 
   const handlePromptEditorModeChange = (mode: 'usual' | 'advanced') => {
@@ -1947,27 +1964,27 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
           )}
 
           {section === 'prompt' && (
-            <div className={s.panel}>
+            <div className={`${s.panel} ${promptStyles.panel}`}>
               <div className={s.panelTitle}>{t('settings.sections.prompt')}</div>
+              <p className={agentsStyles.intro}>{t('settings.prompt.catalog.help')}</p>
 
               {promptsLoading ? (
                 <div className={s.promptLoading}>{t('common.loading')}</div>
               ) : (
-                <>
-                  <div className={s.fieldGroup}>
-                    <label className={s.fieldLabel}>{t('settings.prompt.style')}</label>
-                    <PromptSelector
-                      options={[
-                        ...prompts.map(p => ({ id: p.id, name: p.name, description: p.description, kind: 'default' as const })),
-                        ...customPrompts.map(p => ({ id: p.id, name: p.name, description: p.description, kind: 'custom' as const })),
-                      ]}
-                      value={selectedPromptId}
-                      onChange={handleSelectPrompt}
-                      disabled={promptSaving}
-                      maxVisibleItems={5}
-                    />
-                  </div>
+                <div className={promptStyles.workspace}>
+                  <PromptCatalog
+                    options={[
+                      ...prompts.map(prompt => ({ ...prompt, kind: 'default' as const })),
+                      ...customPrompts.map(prompt => ({ ...prompt, kind: 'custom' as const })),
+                    ]}
+                    value={selectedPromptId} onChange={requestPromptSelection}
+                    disabled={promptSaving || promptDeleting || aiGenerating} />
 
+                  <div className={promptStyles.detail}>
+                  <PromptSelection options={[
+                    ...prompts.map(prompt => ({ ...prompt, kind: 'default' as const })),
+                    ...customPrompts.map(prompt => ({ ...prompt, kind: 'custom' as const })),
+                  ]} value={selectedPromptId} />
                   {(selectedPromptId === CUSTOM_PROMPT_ID || (selectedPromptId !== null && selectedPromptId <= -1000)) && (
                     <div className={s.fieldGroup}>
                       <label className={s.fieldLabel}>
@@ -2067,8 +2084,8 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
                           ))}
                         </div>
                       )}
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
-                        <div style={{ display: 'flex', gap: '8px' }}>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
                           <button
                             className={s.saveBtn}
                             onClick={handleSaveCustomPrompt}
@@ -2225,7 +2242,8 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
                       </div>
                     </div>
                   )}
-                </>
+                  </div>
+                </div>
               )}
             </div>
           )}
@@ -3017,6 +3035,11 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
       </motion.div>
 
       <AnimatePresence>
+        {pendingPromptSelection !== null && <ConfirmDialog open title={t('settings.prompt.catalog.discardTitle')}
+          text={t('settings.prompt.catalog.discardHelp')} confirmLabel={t('settings.prompt.catalog.discard')}
+          onCancel={() => setPendingPromptSelection(null)} onConfirm={() => {
+            void handleSelectPrompt(pendingPromptSelection); setPendingPromptSelection(null);
+          }} />}
         {pendingPersonaId !== null && <ConfirmDialog open title={t('settings.account.redesign.discardTitle')}
           text={t('settings.account.redesign.discardHelp')} confirmLabel={t('settings.account.redesign.discard')}
           onCancel={() => setPendingPersonaId(null)} onConfirm={() => {

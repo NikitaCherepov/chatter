@@ -279,7 +279,7 @@
       "personas": "Personas",
       "memory": "Memory",
       "connections": "Linked accounts",
-      "prompt": "Prompt",
+      "prompt": "Prompts",
       "data": "Data",
       "voice": "Voice",
       "macros": "Macros",
@@ -589,6 +589,17 @@
       "passwordRequired": "A password login is required before Telegram can be unlinked"
     },
     "prompt": {
+      "catalog": {
+        "help": "The bot’s character and communication style.",
+        "search": "Find a prompt",
+        "create": "Create prompt",
+        "builtIn": "Built-in",
+        "draft": "Draft",
+        "newHelp": "Set the new bot’s name, description and character in the editor.",
+        "discardTitle": "Unsaved changes",
+        "discardHelp": "Switch prompts? Unsaved edits and the AI-generated suggestion will be discarded.",
+        "discard": "Switch prompt"
+      },
       "style": "Conversation style",
       "new": "New prompt",
       "edit": "Edit prompt",
