@@ -13,6 +13,7 @@ import s from './SettingsNavigation.module.scss';
 
 const ICONS: Record<SettingsSection, string> = {
   account: 'M20 21v-2a7 7 0 0 0-14 0v2 M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8',
+  personas: 'M16 21v-2a5 5 0 0 0-10 0v2 M11 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8 M19 8a3 3 0 0 1 0 6 M22 21v-2a5 5 0 0 0-3-4.6',
   memory: 'M5 3h14v18l-7-4-7 4z',
   connections: 'M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-2 2 M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l2-2',
   models: 'M7 7h10v10H7z M9 1v3m6-3v3M9 20v3m6-3v3M1 9h3m-3 6h3M20 9h3m-3 6h3 M10 10h4v4h-4z',

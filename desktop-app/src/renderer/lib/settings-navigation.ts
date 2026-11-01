@@ -1,5 +1,6 @@
 export type SettingsSection =
   | 'account'
+  | 'personas'
   | 'memory'
   | 'connections'
   | 'prompt'
@@ -22,7 +23,7 @@ export type SettingsSection =
   | 'about';
 
 export const SETTINGS_GROUPS: { id: string; sections: SettingsSection[] }[] = [
-  { id: 'profile', sections: ['account', 'memory', 'connections', 'limits'] },
+  { id: 'profile', sections: ['account', 'personas', 'memory', 'connections', 'limits'] },
   { id: 'ai', sections: ['models', 'prompt', 'voice', 'restrictions'] },
   {
     id: 'automation',

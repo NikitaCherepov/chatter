@@ -371,7 +371,7 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
   const personasQuery = useQuery({
     queryKey: ['memory-personas'],
     queryFn: () => api.apiFetch<{ personas: PersonaInfo[] }>('/api/v1/memory/personas'),
-    enabled: section === 'account',
+    enabled: section === 'personas',
     staleTime: 30_000,
   });
   // IDs follow creation order; activation must not rearrange the cards.
@@ -450,7 +450,7 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
 
   // Refresh core memory from server when account tab opens
   useEffect(() => {
-    if (section === 'account') {
+    if (section === 'account' || section === 'personas') {
       api.apiFetch('/api/v1/auth/me')
         .then((res: any) => {
           if (user) {
@@ -477,7 +477,7 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
   }, [personasQuery.refetch]);
 
   useEffect(() => {
-    if (section !== 'account' || !personas.length) return;
+    if (section !== 'personas' || !personas.length) return;
     if (selectedPersonaId === NEW_PERSONA_ID) return;
     if (selectedPersonaId === null || !personas.some(persona => persona.id === selectedPersonaId)) {
       const persona = personas.find(item => item.is_default === 1) || personas[0];
@@ -1769,9 +1769,42 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
                 {t('settings.sections.account')}
                 <span className={s.planBadge}>{(user?.plan || 'free').toUpperCase()}</span>
               </div>
+              <section className={a.accountFields}>
+                  <label className={s.fieldLabel} htmlFor="account-display-name">{t('settings.account.personas.accountName')}</label>
+                  <input id="account-display-name" className={s.fieldInput} type="text" value={nameValue} onChange={event => setNameValue(event.target.value)} onKeyDown={handleNameKeyDown} placeholder={t('settings.account.namePlaceholder')} disabled={saving} />
+                  <span className={a.help}>{t('settings.account.redesign.accountNameHelp')}</span>
+                  <button className={s.saveBtn} onClick={handleSaveName} disabled={saving || !nameValue.trim() || nameValue.trim() === user?.name}>{saving ? t('common.saving') : t('common.save')}</button>
+              </section>
+              <section className={a.preferences}>
+                <div className={s.fieldGroup}>
+                  <label className={s.fieldLabel}>{t('settings.account.timezone')}</label>
+                  <span className={a.help}>{t('settings.account.timezoneHelp')}{!user?.timezone_confirmed ? ` ${t('settings.account.timezoneNotConfigured')}` : ''}</span>
+                  <Select options={timezoneOptions} value={timezoneValue} onChange={setTimezoneValue} searchable maxVisibleItems={7} />
+                  <button className={s.saveBtn} onClick={handleSaveTimezone} disabled={timezoneSaving || !timezoneValue}>{timezoneSaving ? t('common.saving') : t('common.save')}</button>
+                </div>
+              </section>
+              <section className={a.security}>
+                <section className={a.accountFields}>
+                  <h3 className={a.heading}>{t('settings.account.changePassword')}</h3>
+                    <input className={s.fieldInput} type="password" value={pwdCurrent} onChange={event => setPwdCurrent(event.target.value)} placeholder={t('settings.account.currentPassword')} aria-label={t('settings.account.currentPassword')} autoComplete="current-password" disabled={passwordSaving} />
+                    <input className={s.fieldInput} type="password" value={newPassword} onChange={event => setNewPassword(event.target.value)} placeholder={t('settings.account.newPassword')} aria-label={t('settings.account.newPassword')} minLength={8} autoComplete="new-password" disabled={passwordSaving} />
+                    <button className={s.saveBtn} onClick={handleChangePassword} disabled={passwordSaving || !pwdCurrent || newPassword.length < 8}>{passwordSaving ? t('common.saving') : t('settings.account.changePassword')}</button>
+                </section>
+                <section className={a.accountFields}>
+                  <h3 className={a.heading}>{t('settings.account.changeLogin')}</h3>
+                    <input className={s.fieldInput} type="text" value={newLogin} onChange={event => setNewLogin(event.target.value)} placeholder={t('settings.account.newLogin')} aria-label={t('settings.account.newLogin')} autoComplete="username" disabled={loginSaving} />
+                    <input className={s.fieldInput} type="password" value={loginCurrent} onChange={event => setLoginCurrent(event.target.value)} placeholder={t('settings.account.currentPassword')} aria-label={t('settings.account.currentPassword')} autoComplete="current-password" disabled={loginSaving} />
+                    <button className={s.saveBtn} onClick={handleChangeLogin} disabled={loginSaving || !loginCurrent || !newLogin.trim()}>{loginSaving ? t('common.saving') : t('settings.account.changeLogin')}</button>
+                </section>
+              </section>
+            </div>
+          )}
+
+          {section === 'personas' && (
+            <div className={`${s.panel} ${a.accountPanel}`}>
+              <div className={s.panelTitle}>{t('settings.sections.personas')}</div>
               <p className={a.intro}>{t('settings.account.redesign.intro')}</p>
               <div className={a.headingRow}>
-                <h3 className={a.heading}>{t('settings.account.redesign.personas')}</h3>
                 <span className={a.help}>{t('settings.account.redesign.selectHelp')}</span>
               </div>
               <AccountPersonaCards personas={personas} selectedId={selectedPersonaId} disabled={personaBusy}
@@ -1835,41 +1868,6 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
                   </div>
               </section>}
 
-              <section className={a.preferences}>
-                <div className={s.fieldGroup}>
-                  <label className={s.fieldLabel}>{t('settings.account.timezone')}</label>
-                  <span className={a.help}>{t('settings.account.timezoneHelp')}{!user?.timezone_confirmed ? ` ${t('settings.account.timezoneNotConfigured')}` : ''}</span>
-                  <Select options={timezoneOptions} value={timezoneValue} onChange={setTimezoneValue} searchable maxVisibleItems={7} />
-                  <button className={s.saveBtn} onClick={handleSaveTimezone} disabled={timezoneSaving || !timezoneValue}>{timezoneSaving ? t('common.saving') : t('common.save')}</button>
-                </div>
-              </section>
-              <details className={a.accountDetails}>
-                <summary><span>{t('settings.account.personas.accountName')}</span><span className={a.accountValue}>{user?.name}</span></summary>
-                <div className={a.detailsBody}>
-                  <span className={a.help}>{t('settings.account.redesign.accountNameHelp')}</span>
-                  <label className={s.fieldLabel} htmlFor="account-display-name">{t('settings.account.personas.accountName')}</label>
-                  <input id="account-display-name" className={s.fieldInput} type="text" value={nameValue} onChange={event => setNameValue(event.target.value)} onKeyDown={handleNameKeyDown} placeholder={t('settings.account.namePlaceholder')} disabled={saving} />
-                  <button className={s.saveBtn} onClick={handleSaveName} disabled={saving || !nameValue.trim() || nameValue.trim() === user?.name}>{saving ? t('common.saving') : t('common.save')}</button>
-                </div>
-              </details>
-              <section className={a.security}>
-                <details className={a.accountDetails}>
-                  <summary>{t('settings.account.changePassword')}</summary>
-                  <div className={a.detailsBody}>
-                    <input className={s.fieldInput} type="password" value={pwdCurrent} onChange={event => setPwdCurrent(event.target.value)} placeholder={t('settings.account.currentPassword')} aria-label={t('settings.account.currentPassword')} autoComplete="current-password" disabled={passwordSaving} />
-                    <input className={s.fieldInput} type="password" value={newPassword} onChange={event => setNewPassword(event.target.value)} placeholder={t('settings.account.newPassword')} aria-label={t('settings.account.newPassword')} minLength={8} autoComplete="new-password" disabled={passwordSaving} />
-                    <button className={s.saveBtn} onClick={handleChangePassword} disabled={passwordSaving || !pwdCurrent || newPassword.length < 8}>{passwordSaving ? t('common.saving') : t('settings.account.changePassword')}</button>
-                  </div>
-                </details>
-                <details className={a.accountDetails}>
-                  <summary>{t('settings.account.changeLogin')}</summary>
-                  <div className={a.detailsBody}>
-                    <input className={s.fieldInput} type="text" value={newLogin} onChange={event => setNewLogin(event.target.value)} placeholder={t('settings.account.newLogin')} aria-label={t('settings.account.newLogin')} autoComplete="username" disabled={loginSaving} />
-                    <input className={s.fieldInput} type="password" value={loginCurrent} onChange={event => setLoginCurrent(event.target.value)} placeholder={t('settings.account.currentPassword')} aria-label={t('settings.account.currentPassword')} autoComplete="current-password" disabled={loginSaving} />
-                    <button className={s.saveBtn} onClick={handleChangeLogin} disabled={loginSaving || !loginCurrent || !newLogin.trim()}>{loginSaving ? t('common.saving') : t('settings.account.changeLogin')}</button>
-                  </div>
-                </details>
-              </section>
             </div>
           )}
 

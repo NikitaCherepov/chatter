@@ -4,11 +4,11 @@
     "key": "settings.account.personas.accountName"
   },
   {
-    "section": "account",
+    "section": "personas",
     "key": "settings.account.personas.coreMemory"
   },
   {
-    "section": "account",
+    "section": "personas",
     "key": "settings.account.personas.allowCoreMemoryUpdate"
   },
   {
@@ -402,15 +402,15 @@
     "key": "settings.data.chats.title"
   },
   {
-    "section": "account",
+    "section": "personas",
     "key": "playerInstructions.general"
   },
   {
-    "section": "account",
+    "section": "personas",
     "key": "playerInstructions.modeLabel"
   },
   {
-    "section": "account",
+    "section": "personas",
     "key": "playerInstructions.takeSurvey"
   },
   {
@@ -430,15 +430,15 @@
     "key": "settings.app.reasoning"
   },
   {
-    "section": "account",
+    "section": "personas",
     "key": "settings.account.redesign.chatName"
   },
   {
-    "section": "account",
+    "section": "personas",
     "key": "settings.account.redesign.description"
   },
   {
-    "section": "account",
+    "section": "personas",
     "key": "settings.account.redesign.personas"
   }
 ]
