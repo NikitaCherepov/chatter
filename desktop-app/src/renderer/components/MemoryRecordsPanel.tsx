@@ -5,32 +5,32 @@ import { toast } from 'sonner';
 import * as api from '../lib/api';
 import { memoryPageUrl, useMemoryKey, type MemoryPage } from '../lib/memory-queries';
 import s from './MemoryRecordsPanel.module.scss';
+import settingsStyles from './SettingsModal.module.scss';
 const MemoryMap = lazy(() => import('./MemoryMap'));
 
 export type MemoryRecord = { id: string; memory_space_id: number; text: string; source: string; updated_at: number };
 type SemanticResult = { groups?: Array<{ record_id: string }>; records?: MemoryRecord[] };
 
 export function MemoryRecordsPanel({
-  recordsEndpoint, semanticEndpoint, semanticBody, compact = false, constrainList = compact, emptyLabel, onEdit, onDelete,
+  recordsEndpoint, semanticEndpoint, semanticBody, compact = false, constrainList = compact, appearance = 'default', emptyLabel, onEdit, onDelete,
 }: {
   recordsEndpoint: string; semanticEndpoint: string; semanticBody?: Record<string, unknown>;
-  compact?: boolean; constrainList?: boolean; emptyLabel: string;
+  compact?: boolean; constrainList?: boolean; appearance?: 'default' | 'settings'; emptyLabel: string;
   onEdit: (record: MemoryRecord) => void; onDelete: (record: MemoryRecord) => void;
 }) {
   const { t } = useTranslation();
   const [query, setQuery] = useState('');
-  const [debounced, setDebounced] = useState('');
+  const [textQuery, setTextQuery] = useState('');
   const [mode, setMode] = useState<'text' | 'semantic'>('text');
   const [submitted, setSubmitted] = useState('');
   const [view, setView] = useState<'list' | 'map'>('list');
   const [mapOpened, setMapOpened] = useState(false);
   const [page, setPage] = useState(0);
   const key = useMemoryKey(recordsEndpoint);
-  useEffect(() => { const timer = setTimeout(() => setDebounced(query.trim()), 250); return () => clearTimeout(timer); }, [query]);
-  useEffect(() => setPage(0), [debounced, mode, recordsEndpoint]);
+  useEffect(() => setPage(0), [textQuery, mode, recordsEndpoint]);
   const pages = useQuery({
-    queryKey: [...key, 'records', mode === 'text' ? debounced : '', page],
-    queryFn: ({ signal }) => api.apiFetch<MemoryPage>(memoryPageUrl(recordsEndpoint, { limit: 50, offset: page * 50, query: mode === 'text' ? debounced : '' }), { signal }),
+    queryKey: [...key, 'records', mode === 'text' ? textQuery : '', page],
+    queryFn: ({ signal }) => api.apiFetch<MemoryPage>(memoryPageUrl(recordsEndpoint, { limit: 50, offset: page * 50, query: mode === 'text' ? textQuery : '' }), { signal }),
     enabled: Boolean(recordsEndpoint) && view === 'list' && !(mode === 'semantic' && submitted),
     staleTime: 60_000, gcTime: 300_000,
   });
@@ -47,64 +47,75 @@ export function MemoryRecordsPanel({
   const pageCount = Math.ceil((pages.data?.total ?? 0) / 50);
   useEffect(() => { if (pages.data && !pages.isFetching) setPage(value => Math.min(value, Math.max(0, pageCount - 1))); }, [pages.data, pages.isFetching, pageCount]);
   const pageNumbers = [...new Set([0, pageCount - 1, page - 2, page - 1, page, page + 1, page + 2])].filter(value => value >= 0 && value < pageCount).sort((a, b) => a - b);
-  const searching = semantic.isFetching;
+  const searching = mode === 'semantic' ? semantic.isFetching : pages.isFetching;
   const runSemanticSearch = () => { if (query.trim()) { if (submitted === query.trim()) void semantic.refetch(); else setSubmitted(query.trim()); } };
+  const runSearch = () => {
+    if (searching) return;
+    if (mode === 'semantic') {
+      if (query.trim()) runSemanticSearch();
+      else setSubmitted('');
+    } else {
+      const next = query.trim();
+      if (textQuery === next && page === 0) void pages.refetch();
+      else { setPage(0); setTextQuery(next); }
+    }
+  };
   const semanticIds = mode === 'semantic' && submitted && semantic.data ? new Set((semantic.data.groups ?? []).map(group => group.record_id)) : null;
   return (
-    <>
+    <div className={`${s.panelContents} ${appearance === 'settings' ? s.settingsPanel : ''}`}>
+      <div className={`${s.search} ${compact ? s.compactSearch : ''}`}>
+        <div className={s.searchTop}>
+        <div className={s.searchInputWrap}>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <input
+            type="search"
+            aria-label={t('chat.memory.search.placeholder')}
+            value={query}
+            maxLength={300}
+            placeholder={t('chat.memory.search.placeholder')}
+            onChange={event => {
+              setQuery(event.target.value);
+            }}
+            onKeyDown={event => {
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                runSearch();
+              }
+            }}
+          />
+        </div>
       <div className={s.viewToolbar}>
         <div className={s.modeSwitch} aria-label={t('memoryMap.view')}>
           <button type="button" aria-pressed={view === 'list'} className={view === 'list' ? s.active : ''} onClick={() => setView('list')}>{t('memoryMap.list')}</button>
           <button type="button" aria-pressed={view === 'map'} className={view === 'map' ? s.active : ''} onClick={() => { setMapOpened(true); setView('map'); }}>{t('memoryMap.map')}</button>
         </div>
       </div>
-      <div className={`${s.search} ${compact ? s.compactSearch : ''}`}>
-        <div className={s.searchInputWrap}>
-          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-          <input
-            type="search"
-            value={query}
-            maxLength={300}
-            placeholder={t('chat.memory.search.placeholder')}
-            onChange={event => {
-              setQuery(event.target.value);
-              setSubmitted('');
-            }}
-            onKeyDown={event => {
-              if (event.key === 'Enter' && mode === 'semantic') {
-                event.preventDefault();
-                void runSemanticSearch();
-              }
-            }}
-          />
         </div>
         <div className={s.searchControls}>
           <div className={s.modeSwitch}>
-            <button type="button" className={mode === 'text' ? s.active : ''} onClick={() => (setMode('text'), setSubmitted(''))}>
+            <button type="button" aria-pressed={mode === 'text'} className={mode === 'text' ? s.active : ''} onClick={() => (setMode('text'), setSubmitted(''))}>
               {t('chat.memory.search.text')}
             </button>
-            <button type="button" className={mode === 'semantic' ? s.active : ''} onClick={() => (setMode('semantic'), setSubmitted(''))}>
+            <button type="button" aria-pressed={mode === 'semantic'} className={mode === 'semantic' ? s.active : ''} onClick={() => (setMode('semantic'), setSubmitted(''))}>
               {t('chat.memory.search.semantic')}
             </button>
           </div>
-          {mode === 'semantic' && (
-            <button type="button" className={s.searchButton} disabled={!query.trim() || searching} onClick={() => void runSemanticSearch()}>
-              {searching ? t('chat.memory.search.searching') : t('chat.memory.search.action')}
-            </button>
-          )}
-          <span className={s.counter}>{query.length}/300</span>
+          <button type="button" className={`${settingsStyles.saveBtn} ${s.findButton}`} disabled={searching || (!query.trim() && !(mode === 'text' ? textQuery : submitted))} onClick={runSearch}>
+            {searching ? t('chat.memory.search.searching') : t('chat.memory.search.action')}
+          </button>
+          {query.length > 0 && <span className={s.counter}>{query.length}/300</span>}
         </div>
       </div>
       {mapOpened && <Suspense fallback={view === 'map' ? <div className={s.empty}>{t('memoryMap.loading')}</div> : null}>
         <MemoryMap active={view === 'map'} endpoint={recordsEndpoint}
-          matches={semanticIds} textQuery={mode === 'text' ? query.trim() : ''}
+          matches={semanticIds} textQuery={mode === 'text' ? textQuery : ''}
           compact={compact} onEdit={onEdit} onDelete={onDelete} />
       </Suspense>}
       {view === 'list' && <div className={`${s.records} ${constrainList ? s.compactRecords : ''}`}>
         {(pages.isFetching || searching) && <div className={s.mapHint}>{t('memoryMap.loading')}</div>}
-        {visibleRecords.length === 0 && !pages.isFetching && !searching && <div className={s.empty}>{query.trim() ? t('chat.memory.search.noResults') : emptyLabel}</div>}
+        {visibleRecords.length === 0 && !pages.isFetching && !searching && <div className={s.empty}>{(mode === 'text' ? textQuery : submitted) ? t('chat.memory.search.noResults') : emptyLabel}</div>}
         {visibleRecords.map(record => (
-          <MemoryRecordCard key={record.id} record={record} compact={compact} onEdit={onEdit} onDelete={onDelete} />
+          <MemoryRecordCard key={record.id} record={record} compact={compact} appearance={appearance} onEdit={onEdit} onDelete={onDelete} />
         ))}
       </div>}
       {view === 'list' && !(mode === 'semantic' && submitted) && <div className={s.mapToolbar}>
@@ -117,26 +128,32 @@ export function MemoryRecordsPanel({
         </nav>}
         {pages.isError && <button className={s.searchButton} onClick={() => void pages.refetch()}>{t('memoryMap.retry')}</button>}
       </div>}
-    </>
+    </div>
   );
 }
 
 export function MemoryRecordCard({
   record,
   compact,
+  appearance = 'default',
   onEdit,
   onDelete,
 }: {
   record: MemoryRecord;
   compact: boolean;
+  appearance?: 'default' | 'settings';
   onEdit: (record: MemoryRecord) => void;
   onDelete: (record: MemoryRecord) => void;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const sourceDate = /^\[(\d{4}-\d{2}-\d{2})\]\s*/.exec(record.source);
+  const title = appearance === 'settings' && sourceDate ? record.source.slice(sourceDate[0].length) || record.source : record.source;
+  const date = sourceDate ? new Date(`${sourceDate[1]}T00:00:00`) : new Date(record.updated_at * 1000);
+  const hasDate = !Number.isNaN(date.getTime()) && (Boolean(sourceDate) || record.updated_at > 0);
   const [expanded, setExpanded] = useState(false);
   const expandable = record.text.length > (compact ? 130 : 220) || record.text.split('\n').length > 3;
   return (
-    <article className={s.record}>
+    <article className={`${s.record} ${appearance === 'settings' ? s.plainRecord : ''}`}>
       <button
         type="button"
         className={s.recordBody}
@@ -144,11 +161,12 @@ export function MemoryRecordCard({
         aria-expanded={expandable ? expanded : undefined}
         onClick={() => expandable && setExpanded(value => !value)}
       >
-        <span className={s.recordSource}>{record.source}</span>
+        <span className={s.recordSource}>{title}</span>
         <span className={`${s.recordText} ${!expanded && expandable ? s.clamped : ''}`}>{record.text}</span>
         {expandable && (
           <svg className={`${s.chevron} ${expanded ? s.chevronExpanded : ''}`} viewBox="0 0 24 24" aria-hidden="true"><path d="m8 10 4 4 4-4"/></svg>
         )}
+        {appearance === 'settings' && hasDate && <time className={s.recordDate} dateTime={sourceDate?.[1] || date.toISOString()} title={date.toLocaleString(i18n.language)}>{date.toLocaleDateString(i18n.language, { day: 'numeric', month: 'short', year: 'numeric' })}</time>}
       </button>
       <span className={s.recordActions}>
         <button type="button" onClick={() => onEdit(record)} title={t('common.edit')} aria-label={t('common.edit')}>

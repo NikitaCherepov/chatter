@@ -1,3 +1,8 @@
+.panelContents { display: contents; }
+.settingsPanel { display: block; min-width: 0; }
+.searchTop { display: flex; align-items: center; gap: 10px; }
+.searchTop .searchInputWrap { flex: 1; min-width: 0; }
+.searchTop .viewToolbar { margin: 0; flex-shrink: 0; }
 .search {
   display: grid;
   gap: 8px;
@@ -251,4 +256,41 @@
 }
 .compactSearch .searchControls {
   flex-wrap: wrap;
+}
+
+.settingsPanel {
+  .modeSwitch button { min-height: 30px; padding: 0 10px; font-size: 11px; }
+  .searchControls .findButton {
+    height: 30px;
+    padding-block: 0;
+    align-self: center;
+    line-height: inherit;
+  }
+  .searchControls .modeSwitch { border-color: transparent; background: transparent; }
+  .records { gap: 0; }
+  .mapToolbar { margin-top: 12px; }
+}
+.plainRecord {
+  padding: 14px 0;
+  border: 0;
+  border-bottom: 1px solid var(--border-light);
+  border-radius: 0;
+  background: transparent;
+  .recordSource { color: var(--text-body); font-size: 12px; font-weight: 600; line-height: 1.5; overflow-wrap: anywhere; }
+  .recordText { color: var(--text-secondary); line-height: 1.6; }
+  .recordActions { opacity: 0; transition: opacity 0.15s; }
+  &:hover .recordActions, &:focus-within .recordActions { opacity: 1; }
+  .recordBody:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 3px; }
+}
+.recordDate { display: block; margin-top: 7px; color: var(--text-hint); font-size: 10px; }
+@media (hover: none) {
+  .plainRecord .recordActions { opacity: 1; }
+}
+@media (max-width: 600px) {
+  .searchTop { flex-wrap: wrap; }
+  .searchTop .searchInputWrap { flex-basis: 100%; }
+  .searchControls { flex-wrap: wrap; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .plainRecord .recordActions { transition: none; }
 }

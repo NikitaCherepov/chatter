@@ -888,7 +888,7 @@
       "headerTitle": "Chat settings",
       "preferences": {
         "defaultsHint": "Default for your chats. Individual chats can override it.",
-        "limitLabel": "Maximum memories per search",
+        "limitLabel": "Memories to find per search",
         "adminDefault": "Default — {{count}}",
         "chatDefault": "Automatic — {{count}}",
         "limitHint": "For automatic memory and the bot's memory search tool.",
@@ -941,8 +941,9 @@
         "failed": "Could not search memories"
       },
       "globalSettings": {
+        "preferencesTitle": "Memory settings",
         "title": "Memory",
-        "hint": "Shared vector memories are available in chats using Shared only or Shared and this chat mode.",
+        "hint": "These memories are available in chats using General or Both memory modes.",
         "spaceLabel": "Shared memory",
         "recordsTitle": "Memories",
         "empty": "Nothing here yet",

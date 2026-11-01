@@ -18,7 +18,7 @@
 .field {
   display: grid;
   gap: 7px;
-  margin-bottom: 22px;
+  margin-bottom: 8px;
 }
 .field label,
 .sectionTitle {
@@ -82,4 +82,33 @@
 }
 .sectionTitle {
   margin-bottom: 9px;
+}
+
+.preferences {
+  margin-top: 24px;
+  color: var(--text-muted);
+  font-size: 12px;
+
+  summary {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 0;
+    list-style: none;
+    cursor: pointer;
+    font-weight: 500;
+    &::-webkit-details-marker { display: none; }
+    &::before { content: '›'; font-size: 17px; transition: transform 0.15s; }
+    &:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+  }
+  &[open] > summary::before { transform: rotate(90deg); }
+}
+.preferencesBody {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 12px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .preferences summary::before { transition: none; }
 }
