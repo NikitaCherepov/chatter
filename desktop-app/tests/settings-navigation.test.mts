@@ -20,6 +20,11 @@ const entries = [
 ];
 const find = (q: string, lang: any = ru, admin = false) => searchSettings(q, entries, translate(lang), admin);
 assert.equal(new Set(SETTINGS_GROUPS.flatMap((g: any) => g.sections)).size, 21);
+assert(SETTINGS_GROUPS.find((g: any) => g.id === 'profile').sections.includes('limits'));
+assert(SETTINGS_GROUPS.find((g: any) => g.id === 'ai').sections.includes('restrictions'));
+assert(!SETTINGS_GROUPS.find((g: any) => g.id === 'access').sections.includes('restrictions'));
+assert.equal(find('квоты').find((item: any) => item.key === 'quota.title')?.section, 'limits');
+
 assert.equal(find('масштаб')[0].key, 'settings.app.zoom');
 assert.equal(find('scale', en)[0].key, 'settings.app.zoom');
 assert.equal(find('Whisper', en)[0].key, 'settings.voice.recognitionSource');

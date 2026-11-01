@@ -30,7 +30,7 @@
     "relatedKeys": ["settings.account.timezoneHelp"]
   },
   {
-    "section": "account",
+    "section": "limits",
     "key": "quota.title"
   },
   {

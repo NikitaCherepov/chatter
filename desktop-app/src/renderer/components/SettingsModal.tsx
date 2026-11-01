@@ -1888,13 +1888,6 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
               <div className={s.macroFormDivider} />
 
               <div className={s.fieldGroup}>
-                <label className={s.fieldLabel}>{t('quota.title')}</label>
-                <QuotaWidget variant="full" />
-              </div>
-
-              <div className={s.macroFormDivider} />
-
-              <div className={s.fieldGroup}>
                 <label className={s.fieldLabel}>{t('settings.account.changePassword')}</label>
                 <input
                   className={s.fieldInput}
@@ -3059,6 +3052,13 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
           {section === 'limits' && (
             <div className={s.panel}>
               <div className={s.panelTitle}>{t('settings.sections.limits')}</div>
+
+              <div className={s.fieldGroup}>
+                <label className={s.fieldLabel}>{t('quota.title')}</label>
+                <QuotaWidget variant="full" />
+              </div>
+
+              <div className={s.macroFormDivider} />
 
               {/* Context Token Limit */}
               {contextTokenLimit && (
