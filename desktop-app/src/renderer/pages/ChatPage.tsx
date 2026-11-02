@@ -59,7 +59,7 @@ import { ModelSettingsPopover } from '../components/ModelSettingsPopover';
 import { openTool, handleDesktopAction, dispatchMapData, emitSuggestMacro, setToolsPanelState } from '../lib/tools';
 import { createSpeechRecorder } from '../lib/speechRecorder';
 import { startWakeWordAudioStream, stopWakeWordAudioStream } from '../lib/wakeWordAudio';
-import { getWakeWordEnabled } from '../lib/wakeWordToggle';
+import { getWakeWordConfig, getWakeWordEnabled } from '../lib/wakeWordToggle';
 import { ttsSpeak, ttsStop, ttsSubscribe, playSfx } from '../lib/tts';
 import { getSpeechRecognitionLanguage } from '../lib/speechRecognition';
 import { transcribeRecordedAudio } from '../lib/transcription';
@@ -4244,6 +4244,15 @@ export function ChatPage() {
     return () => window.removeEventListener('chatter:wakeword-toggle', handler);
   }, []);
 
+  useEffect(() => {
+    const handler = (event: Event) => {
+      void window.electronAPI.configureWakeWord((event as CustomEvent<ReturnType<typeof getWakeWordConfig>>).detail)
+        .catch(error => { console.error('[wakeword] configuration failed:', error); toast.error(t('chat.toasts.wakeWordFailed')); });
+    };
+    window.addEventListener('chatter:wakeword-config', handler);
+    return () => window.removeEventListener('chatter:wakeword-config', handler);
+  }, [t]);
+
   // Detection callback — set up once while ChatPage is mounted
   useEffect(() => {
     const unsubscribe = window.electronAPI.onWakeWordDetected(async (payload) => {
@@ -4333,7 +4342,7 @@ export function ChatPage() {
     if (wakeWordEnabled) {
       void (async () => {
         try {
-          const result = await window.electronAPI.startWakeWord();
+          const result = await window.electronAPI.startWakeWord(getWakeWordConfig());
           if (!result.ok) {
             console.error('[wakeword] failed to start:', result.error);
             toast.error(t('chat.toasts.wakeWordFailed'));

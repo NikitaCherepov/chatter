@@ -69,7 +69,8 @@ declare global {
       getZoomLevel: () => Promise<number>;
       transcribeAudio: (arrayBuffer: ArrayBuffer, language?: string) => Promise<string>;
       prepareAudioWav: (arrayBuffer: ArrayBuffer) => Promise<ArrayBuffer>;
-      startWakeWord: () => Promise<{ ok: boolean; alreadyRunning?: boolean; error?: string }>;
+      configureWakeWord: (config: import('../../main/wakeword-config').WakeWordConfig) => Promise<{ ok: boolean }>;
+      startWakeWord: (config?: import('../../main/wakeword-config').WakeWordConfig) => Promise<{ ok: boolean; alreadyRunning?: boolean; error?: string }>;
       stopWakeWord: () => Promise<{ ok: boolean; alreadyStopped?: boolean }>;
       sendWakeWordAudioChunk: (buffer: ArrayBuffer) => void;
       onWakeWordDetected: (callback: (payload: unknown) => void) => () => void;

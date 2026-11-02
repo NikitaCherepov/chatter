@@ -672,6 +672,18 @@
       "preview": "Preview changes"
     },
     "voice": {
+      "activation": {
+        "title": "Voice activation",
+        "enabled": "Respond to a wake word",
+        "help": "Runs locally on this computer. Turning it off stops microphone listening for activation.",
+        "options": "Voice activation settings",
+        "names": "Names and greetings",
+        "phrases": "Additional phrases",
+        "sensitivity": "Sensitivity",
+        "strict": "Fewer false activations",
+        "sensitive": "Easier to activate",
+        "sensitivityHelp": "Higher sensitivity picks up wake words more easily, but may cause more false activations. 50% is the previous setting."
+      },
       "recognitionTitle": "Voice recognition",
       "recognitionSource": "Recognition processing",
       "recognitionSourceHint": "Local Whisper uses this computer. Server processing is useful on weaker PCs and is available only when configured by the administrator.",
@@ -1984,7 +1996,7 @@
       },
       "features": {
         "title": "## Privacy & Ecosystem",
-        "body": "You have full control over AI tools and integration with your environment:\n\n- **Restrictions** — at any time you can cut off the bot's internet access, block PC command execution, disable subagent creation, or enable Guest Mode for a clean-slate conversation.\n- **Smart Home** — connect Yandex Smart Home or local devices via Zigbee2MQTT. The assistant can control lights, outlets and climate.\n- **Voice control** — the assistant is ready to listen. Say 'Alexa', 'Hey Jarvis', 'Hey Mycroft', or 'Hey Rhasspy'. You can choose the assistant's voice in the Voice tab or disable wake-word listening in **Settings → Restrictions**."
+        "body": "You have full control over AI tools and integration with your environment:\n\n- **Restrictions** — at any time you can cut off the bot's internet access, block PC command execution, disable subagent creation, or enable Guest Mode for a clean-slate conversation.\n- **Smart Home** — connect Yandex Smart Home or local devices via Zigbee2MQTT. The assistant can control lights, outlets and climate.\n- **Voice control** — the assistant is ready to listen. Say 'Alexa', 'Hey Jarvis', 'Hey Mycroft', or 'Hey Rhasspy'. You can choose the assistant's voice in the Voice tab or disable wake-word listening in **Settings → Voice**."
       },
       "experimental": {
         "title": "## Experimental Features",

@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as ort from 'onnxruntime-node';
+import { normalizeWakeWordConfig, selectWakeWord, type WakeWordConfig } from './wakeword-config';
 
 type WakeWordPayload = {
   type: 'wakeword';
@@ -51,7 +52,6 @@ type LoadedWakeWordModel = WakeWordModelConfig & {
 };
 
 type WakeWordOptions = {
-  threshold: number;
   debounceMs: number;
   vadThreshold: number;
   modelsDir: string;
@@ -102,6 +102,9 @@ export class WakeWordOnnxService {
   private vadSession: ort.InferenceSession | null = null;
   private models: LoadedWakeWordModel[] = [];
   private active = false;
+  private config: WakeWordConfig = normalizeWakeWordConfig(null);
+
+  configure(value: unknown) { this.config = normalizeWakeWordConfig(value); }
   private initPromise: Promise<void> | null = null;
   private processingChain: Promise<void> = Promise.resolve();
 
@@ -227,15 +230,11 @@ export class WakeWordOnnxService {
     this.updatePredictionBuffers(predictions);
     await this.applyVad(inputChunk, predictions);
 
-    const detected = Object.entries(predictions).reduce<{ name: string; score: number } | null>((best, [name, score]) => {
-      if (!best || score > best.score) return { name, score };
-      return best;
-    }, null);
+    const detected = selectWakeWord(predictions, this.config);
 
     const now = Date.now();
     if (
       detected
-      && detected.score >= this.options.threshold
       && now - this.lastDetectionAt >= this.options.debounceMs
     ) {
       this.lastDetectionAt = now;

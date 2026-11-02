@@ -182,8 +182,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('prepare-audio-wav', arrayBuffer),
 
   // Wakeword: start/stop ONNX openWakeWord pipeline and stream PCM chunks
-  startWakeWord: () =>
-    ipcRenderer.invoke('wakeword:start'),
+  startWakeWord: (config?: import('./wakeword-config').WakeWordConfig) =>
+    ipcRenderer.invoke('wakeword:start', config),
+
+  configureWakeWord: (config: import('./wakeword-config').WakeWordConfig) =>
+    ipcRenderer.invoke('wakeword:configure', config),
 
   stopWakeWord: () =>
     ipcRenderer.invoke('wakeword:stop'),

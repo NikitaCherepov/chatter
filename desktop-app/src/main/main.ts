@@ -173,7 +173,6 @@ let wakewordService: WakeWordOnnxService | null = null;
 function getWakewordService() {
   if (!wakewordService) {
     wakewordService = new WakeWordOnnxService({
-      threshold: 0.55,
       debounceMs: 2000,
       vadThreshold: 0.45,
       modelsDir: getWakewordModelsDir(),
@@ -1879,14 +1878,21 @@ function createWindow() {
   });
 
   // ── IPC: wakeword start/stop ─────────────────────────────────────────────
-  ipcMain.handle('wakeword:start', async (event) => {
+  ipcMain.handle('wakeword:start', async (event, config: unknown) => {
     assertTrustedIpcSender(event);
     try {
+      getWakewordService().configure(config);
       return await getWakewordService().start();
     } catch (error) {
       console.error('[wakeword] failed to start ONNX listener:', error);
       return { ok: false, error: error instanceof Error ? error.message : String(error) };
     }
+  });
+
+  ipcMain.handle('wakeword:configure', (event, config: unknown) => {
+    assertTrustedIpcSender(event);
+    getWakewordService().configure(config);
+    return { ok: true };
   });
 
   ipcMain.handle('wakeword:stop', (event) => {

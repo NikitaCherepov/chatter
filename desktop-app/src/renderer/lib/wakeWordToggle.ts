@@ -1,3 +1,4 @@
+import { normalizeWakeWordConfig, type WakeWordConfig } from '../../main/wakeword-config';
 const STORAGE_KEY = 'chatter_wake_word_enabled';
 
 export function getWakeWordEnabled(): boolean {
@@ -23,4 +24,15 @@ export function setWakeWordEnabled(enabled: boolean): void {
       new CustomEvent('chatter:wakeword-toggle', { detail: { enabled } }),
     );
   }
+}
+
+const CONFIG_KEY = 'chatter_wake_word_config';
+export function getWakeWordConfig(): WakeWordConfig {
+  try { return normalizeWakeWordConfig(JSON.parse(localStorage.getItem(CONFIG_KEY) || 'null')); }
+  catch { return normalizeWakeWordConfig(null); }
+}
+export function setWakeWordConfig(value: WakeWordConfig): void {
+  const config = normalizeWakeWordConfig(value);
+  try { localStorage.setItem(CONFIG_KEY, JSON.stringify(config)); } catch { /* Apply in this session. */ }
+  window.dispatchEvent(new CustomEvent('chatter:wakeword-config', { detail: config }));
 }

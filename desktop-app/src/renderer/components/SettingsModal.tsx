@@ -18,7 +18,8 @@ import {
   type SpeechRecognitionLanguage,
   type SpeechRecognitionSource,
 } from '../lib/speechRecognition';
-import { getWakeWordEnabled, setWakeWordEnabled as setWakeWordEnabledStorage } from '../lib/wakeWordToggle';
+import { WakeWordSettings } from './WakeWordSettings';
+import voiceStyles from './VoiceSettings.module.scss';
 import { getRenderPerfLevel, setRenderPerfLevel, type RenderPerfLevel } from '../lib/renderPerf';
 import { getThemePreference, setThemePreference, type ThemePreference } from '../lib/theme';
 import { parsePromptSections, serializePromptSections, type PromptSectionKey, type PromptSections } from '../lib/promptSections';
@@ -236,7 +237,6 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
   const [recognitionSource, setRecognitionSourceState] = useState<SpeechRecognitionSource>(
     () => getSpeechRecognitionSource(),
   );
-  const [wakeWordEnabled, setWakeWordEnabled] = useState(() => getWakeWordEnabled());
 
   const recognitionLanguageOptions = useMemo<SelectOption[]>(() => [
     { value: 'auto', label: t('settings.voice.recognitionAuto') },
@@ -2401,7 +2401,10 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
             <div className={s.panel}>
               <div className={s.panelTitle}>{t('settings.sections.voice')}</div>
 
-              <div className={s.voiceSectionTitle}>{t('settings.voice.recognitionTitle')}</div>
+              <WakeWordSettings />
+              <section className={voiceStyles.block}>
+              <h3>{t('settings.voice.recognitionTitle')}</h3>
+              <div className={voiceStyles.grid}>
               <div className={s.fieldGroup}>
                 <label className={s.fieldLabel}>{t('settings.voice.recognitionSource')}</label>
                 <Select
@@ -2425,8 +2428,11 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
                 <div className={s.voiceHint}>{t('settings.voice.recognitionHint')}</div>
               </div>
 
-              <div className={s.voiceDivider} />
-              <div className={s.voiceSectionTitle}>{t('settings.voice.synthesisTitle')}</div>
+              </div>
+              </section>
+              <section className={voiceStyles.block}>
+              <h3>{t('settings.voice.synthesisTitle')}</h3>
+              <div className={voiceStyles.grid}>
 
               <div className={s.fieldGroup}>
                 <label className={s.fieldLabel}>{t('settings.voice.model')}</label>
@@ -2476,6 +2482,7 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
                 <div className={s.volumeRow}>
                   <input
                     type="range"
+                    aria-label={t('settings.voice.speechVolume')}
                     className={s.volumeSlider}
                     min={0}
                     max={1}
@@ -2492,6 +2499,7 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
                 <div className={s.volumeRow}>
                   <input
                     type="range"
+                    aria-label={t('settings.voice.effectsVolume')}
                     className={s.volumeSlider}
                     min={0}
                     max={1}
@@ -2502,6 +2510,8 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
                   <span className={s.volumeValue}>{Math.round(ttsSettings.sfxVolume * 100)}%</span>
                 </div>
               </div>
+              </div>
+              </section>
             </div>
           )}
 
@@ -2728,27 +2738,6 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
                     </label>
                   </div>
 
-                  <div className={s.fieldGroup}>
-                    <label className={s.macroToggleLabel}>
-                      <input
-                        type="checkbox"
-                        className={s.macroCheckbox}
-                        checked={!wakeWordEnabled}
-                        onChange={() => {
-                          const next = !wakeWordEnabled;
-                          setWakeWordEnabled(next);
-                          setWakeWordEnabledStorage(next);
-                        }}
-                        disabled={flagsSaving}
-                      />
-                      <div>
-                        <div style={{ fontWeight: 600, fontSize: 13 }}>{t('settings.restrictions.noWakeWord')}</div>
-                        <div style={{ fontSize: 11, color: 'var(--text-hint)', marginTop: 2 }}>
-                          {t('settings.restrictions.noWakeWordHelp')}
-                        </div>
-                      </div>
-                    </label>
-                  </div>
                 </>
               )}
             </div>
