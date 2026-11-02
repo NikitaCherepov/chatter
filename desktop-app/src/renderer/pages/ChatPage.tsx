@@ -1514,6 +1514,10 @@ export function ChatPage() {
   const [contextMenuChatId, setContextMenuChatId] = useState<number | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
+  const speechRecorderRef = useRef<ReturnType<typeof createSpeechRecorder> | null>(null);
+  const wakeVoiceSessionRef = useRef(0);
+  const voiceBusyRef = useRef({ isRecording, isTranscribing, sending });
+  voiceBusyRef.current = { isRecording, isTranscribing, sending };
   // ── Dice Roll Mode (d20) ──
   const [diceRolling, setDiceRolling] = useState(false);
   const [diceValue, setDiceValue] = useState<number | null>(null);
@@ -3578,6 +3582,15 @@ export function ChatPage() {
   }, []);
 
   const toggleRecording = useCallback(() => {
+    if (speechRecorderRef.current) {
+      wakeVoiceSessionRef.current += 1;
+      isVoiceInputRef.current = false;
+      speechRecorderRef.current.stop();
+      speechRecorderRef.current = null;
+      setIsRecording(false);
+      setIsTranscribing(false);
+      return;
+    }
     if (isRecording) {
       stopRecording();
     } else {
@@ -4231,7 +4244,6 @@ export function ChatPage() {
   }, [applyAvatarState]);
 
   // ── Wake word: stream mic chunks to ONNX listener, react to detections ──
-  const speechRecorderRef = useRef<ReturnType<typeof createSpeechRecorder> | null>(null);
   const [wakeWordEnabled, setWakeWordEnabled] = useState(() => getWakeWordEnabled());
 
   // Listen for external toggles (SettingsModal Voice tab)
@@ -4253,83 +4265,71 @@ export function ChatPage() {
     return () => window.removeEventListener('chatter:wakeword-config', handler);
   }, [t]);
 
-  // Detection callback — set up once while ChatPage is mounted
+  // Detection callback — use current busy state, and invalidate late results on cancellation.
   useEffect(() => {
-    const unsubscribe = window.electronAPI.onWakeWordDetected(async (payload) => {
-      console.log('[wakeword] detected:', payload);
-
-      // Don't start if already busy
-      if (isRecording || isTranscribing || sending) return;
-      if (speechRecorderRef.current?.isActive()) return;
-
-      // Play notification sound — recording is starting
-      playSfx('Voice Recording Sound.mp3');
-
-      // Create a fresh speech recorder for this session
+    const unsubscribe = window.electronAPI.onWakeWordDetected(async () => {
+      const busy = voiceBusyRef.current;
+      if (busy.isRecording || busy.isTranscribing || busy.sending || speechRecorderRef.current) return;
+      const session = ++wakeVoiceSessionRef.current;
+      const isCurrent = () => wakeVoiceSessionRef.current === session;
+      void playSfx('Voice Recording Sound.mp3');
       const recorder = createSpeechRecorder({
         silenceDelayMs: 900,
         harkThreshold: -55,
-
-        onSpeechStart: () => {
-          setIsRecording(true);
-          console.log('[speech] speaking started');
-        },
-
-        onSpeechEnd: async (audioBlob) => {
+        onSpeechStart: () => { if (isCurrent()) setIsRecording(true); },
+        onSpeechEnd: async audioBlob => {
+          if (!isCurrent()) return;
           setIsRecording(false);
-          console.log('[speech] speaking ended, transcribing...');
-
           setIsTranscribing(true);
           try {
             const arrayBuffer = await audioBlob.arrayBuffer();
+            if (!isCurrent()) return;
             const text = await transcribeRecordedAudio(arrayBuffer, getSpeechRecognitionLanguage());
-            if (!text) return;
-
-            // Send immediately if bot is idle, otherwise fall back to textarea
-            if (!sending) {
+            if (!isCurrent() || !text) return;
+            if (!voiceBusyRef.current.sending) {
               isVoiceInputRef.current = true;
               setInput(text);
               setTimeout(() => {
+                if (!isCurrent()) return;
                 void playSfx('voice_end.mp3');
                 handleSendRef.current();
               }, 0);
             } else {
-              setInput((prev) => prev ? `${prev} ${text}` : text);
+              setInput(prev => prev ? `${prev} ${text}` : text);
             }
-          } catch (err) {
-            console.error('[speech] Transcription failed:', err);
-            toast.error(t('chat.toasts.speechRecognitionFailed'));
+          } catch (error) {
+            if (isCurrent()) {
+              console.error('[speech] Transcription failed:', error);
+              toast.error(t('chat.toasts.speechRecognitionFailed'));
+            }
           } finally {
-            setIsTranscribing(false);
+            recorder.stop();
+            if (isCurrent()) {
+              setIsTranscribing(false);
+              speechRecorderRef.current = null;
+            }
           }
-
-          // Stop recorder and clean up
-          recorder.stop();
-          speechRecorderRef.current = null;
         },
-
         onNoSpeech: () => {
-          console.log('[speech] no speech detected, cancelling');
-          setIsRecording(false);
           recorder.stop();
-          speechRecorderRef.current = null;
+          if (isCurrent()) { setIsRecording(false); speechRecorderRef.current = null; }
         },
-
-        onError: (error) => {
-          console.error('[speech] Recorder error:', error);
-          toast.error(t('chat.toasts.voiceRecordingFailed'));
+        onError: error => {
           recorder.stop();
-          speechRecorderRef.current = null;
-          setIsRecording(false);
+          if (isCurrent()) {
+            console.error('[speech] Recorder error:', error);
+            toast.error(t('chat.toasts.voiceRecordingFailed'));
+            speechRecorderRef.current = null;
+            setIsRecording(false);
+          }
         },
       });
-
       speechRecorderRef.current = recorder;
       await recorder.start();
     });
-
     return () => {
       unsubscribe();
+      wakeVoiceSessionRef.current += 1;
       speechRecorderRef.current?.stop();
       speechRecorderRef.current = null;
     };
@@ -7759,7 +7759,7 @@ export function ChatPage() {
 
               <svg
                 className={isTranscribing ? s.micIconTranscribing : isRecording ? s.micIconRecording : s.micIcon}
-                onClick={isTranscribing || confirmationComposer.comment ? undefined : toggleRecording}
+                onClick={confirmationComposer.comment || (isTranscribing && !speechRecorderRef.current) ? undefined : toggleRecording}
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke={isRecording ? '#e53935' : isTranscribing ? 'var(--accent)' : 'var(--accent-icon-light)'}

@@ -710,12 +710,12 @@
       "menu": "Pixel avatar",
       "show": "Show avatar",
       "control": "Bot controls the avatar",
-      "hiddenHint": "The avatar is hidden. Restore it here or in restriction settings.",
+      "hiddenHint": "The bot’s initial is shown instead of the pixel avatar. Restore the face here or in restriction settings.",
       "menuHint": "These settings apply to your account. Prompt pictures remain visible."
     },
     "restrictions": {
       "hidePixelAvatar": "Hide pixel avatar",
-      "hidePixelAvatarHelp": "Hides the face on messages without a picture. The bot receives no avatar tools or instructions. Custom prompt pictures remain visible.",
+      "hidePixelAvatarHelp": "Replaces the face with the bot’s initial. The bot receives no avatar tools or instructions. Custom prompt pictures remain visible.",
       "layout": {
         "agents": "Agents",
         "avatar": "Avatar",

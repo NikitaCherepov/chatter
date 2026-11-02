@@ -35,12 +35,12 @@ export function AvatarPreferencesMenu({ children, className, flags, saving, setF
     { key: 'control', checked: !hidden && !flags.disable_avatar_control, disabled: saving || hidden, label: 'control', short: 'controlShort', change: () => setFlag('disable_avatar_control', !flags.disable_avatar_control) },
   ];
   return <>
-    {!hidden && <button ref={trigger} type="button" className={`${className} ${s.trigger}`} data-message-avatar
+    <button ref={trigger} type="button" className={`${className} ${s.trigger}`} data-message-avatar
       aria-label={t('settings.avatar.menu')} aria-haspopup="dialog" aria-expanded={open} aria-controls={open ? id : undefined}
       onClick={event => { const box = event.currentTarget.getBoundingClientRect();
         setAnchor({ left: Math.max(8, box.left + box.width / 2 - 17), top: Math.max(46, Math.min(box.top, window.innerHeight - box.height - 46)), height: box.height, labelsLeft: box.left > window.innerWidth - 240 });
         setOpen(value => !value);
-      }}>{children}</button>}
+      }}>{children}</button>
     {createPortal(<AnimatePresence>{open && <div ref={panel} id={id} role="dialog" aria-label={t('settings.avatar.menu')} aria-describedby={`${id}-hint`}
       className={`${s.orbit} ${anchor.labelsLeft ? s.labelsLeft : ''}`} style={{ left: anchor.left, top: anchor.top, height: anchor.height }} onClick={event => event.stopPropagation()}>
       {controls.map((control, index) => <motion.button key={control.key} type="button" role="switch"

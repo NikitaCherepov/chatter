@@ -15,7 +15,7 @@ export function MessageAvatar({ visible = true, imageUrl = null, pixelated = fal
   if (preferences.loading) return null;
   const controlled = !preferences.loadFailed && !preferences.flags.hide_pixel_avatar && !preferences.flags.disable_avatar_control;
   return <AvatarPreferencesMenu className={s.avatar} flags={preferences.flags} saving={preferences.saving || preferences.loadFailed} setFlag={preferences.setFlag}>
-    {live ? <PixelAvatar chatId={chatId} initialState={controlled ? state : null} controlEnabled={controlled}
+    {preferences.flags.hide_pixel_avatar ? <span className={s.initial} aria-hidden="true">{Array.from(alt.trim() || 'Chatter')[0].toLocaleUpperCase()}</span> : live ? <PixelAvatar chatId={chatId} initialState={controlled ? state : null} controlEnabled={controlled}
       pixelated={pixelated} thinking={thinking} alt={alt} variant="message" dockAlign="start" />
       : <AvatarImage src={getBaseFace('idle', false)} alt={alt} pixelated={pixelated} />}
   </AvatarPreferencesMenu>;

@@ -93,6 +93,7 @@ export function createSpeechRecorder(
     };
 
     mediaRecorder.onstop = async () => {
+      if (!active) return;
       // No speech detected — skip transcription, notify caller
       if (!hadSpeech) {
         chunks = [];
@@ -129,6 +130,13 @@ export function createSpeechRecorder(
           autoGainControl: true,
         },
       });
+
+      // Permission may resolve after the caller has cancelled this session.
+      if (!active) {
+        stream.getTracks().forEach(track => track.stop());
+        stream = null;
+        return;
+      }
 
       // Start MediaRecorder IMMEDIATELY — no waiting for hark.
       // Wake word already confirmed the user is speaking.
@@ -172,6 +180,7 @@ export function createSpeechRecorder(
         onVolumeChange?.(volume, threshold);
       });
     } catch (error) {
+      if (!active) return;
       active = false;
       onError?.(error);
     }
