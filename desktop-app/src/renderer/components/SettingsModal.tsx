@@ -36,7 +36,7 @@ import {
 } from '../i18n';
 import Slider from './Slider';
 import Checkbox from './Checkbox';
-import { Tooltip } from './Tooltip';
+import { RestrictionsSettings } from './RestrictionsSettings';
 import { MacroSettings } from './MacroSettings';
 import { ServerSettings } from './ServerSettings';
 import { RunbookSettings } from './RunbookSettings';
@@ -397,7 +397,9 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
     disable_adhoc_subagents: false,
     disable_avatar_control: false,
   });
-  const [flagsLoading, setFlagsLoading] = useState(false);
+  const [flagsLoading, setFlagsLoading] = useState(true);
+  const [flagsLoadFailed, setFlagsLoadFailed] = useState(false);
+  const [flagsReload, setFlagsReload] = useState(0);
   const [flagsSaving, setFlagsSaving] = useState(false);
 
   // Models (per-model generation settings)
@@ -520,16 +522,18 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
     setPersonaImageRemoved(false);
   }, [selectedPersonaId, personas]);
 
-  // Load feature flags when restrictions tab opens
+  // Load restrictions before exposing editable controls.
   useEffect(() => {
-    if (section === 'restrictions') {
-      setFlagsLoading(true);
-      api.getFeatureFlags()
-        .then((res) => setFeatureFlagsState(res.flags))
-        .catch(() => {})
-        .finally(() => setFlagsLoading(false));
-    }
-  }, [section]);
+    if (section !== 'restrictions') return;
+    let cancelled = false;
+    setFlagsLoading(true);
+    setFlagsLoadFailed(false);
+    api.getFeatureFlags()
+      .then(res => { if (!cancelled) setFeatureFlagsState(res.flags); })
+      .catch(() => { if (!cancelled) setFlagsLoadFailed(true); })
+      .finally(() => { if (!cancelled) setFlagsLoading(false); });
+    return () => { cancelled = true; };
+  }, [section, flagsReload]);
 
   // Load models catalog + per-model settings when models tab opens
   useEffect(() => {
@@ -866,6 +870,7 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
   };
 
   const handleToggleFlag = async (key: keyof api.FeatureFlags) => {
+    if (flagsSaving || flagsLoading || flagsLoadFailed) return;
     const newFlags = { ...featureFlags, [key]: !featureFlags[key] };
     setFeatureFlagsState(newFlags);
     setFlagsSaving(true);
@@ -2548,199 +2553,8 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
           )}
 
           {section === 'restrictions' && (
-            <div className={s.panel}>
-              <div className={s.panelTitle}>{t('settings.sections.restrictions')}</div>
-              <span className={s.fieldLabel} style={{ display: 'block', marginBottom: 12, marginTop: -4 }}>
-                {t('settings.restrictions.help')}
-              </span>
-
-              {flagsLoading ? (
-                <div className={s.promptLoading}>{t('common.loading')}</div>
-              ) : (
-                <>
-                  <div className={s.fieldGroup}>
-                    <label className={s.macroToggleLabel}>
-                      <input
-                        type="checkbox"
-                        className={s.macroCheckbox}
-                        checked={!featureFlags.disable_prompt_injection_protection}
-                        onChange={() => handleToggleFlag('disable_prompt_injection_protection')}
-                        disabled={flagsSaving}
-                      />
-                      <div>
-                        <div style={{ fontWeight: 600, fontSize: 13 }}>{t('settings.restrictions.injectionProtection')}</div>
-                        <Tooltip content={t('settings.restrictions.injectionProtectionHelp')}>
-                          <span tabIndex={0} style={{ display: 'block', fontSize: 11, color: 'var(--text-hint)', marginTop: 2 }}>{t('settings.restrictions.injectionProtectionHint')}</span>
-                        </Tooltip>
-                      </div>
-                    </label>
-                  </div>
-
-                  <div className={s.fieldGroup}>
-                    <label className={s.macroToggleLabel}>
-                      <input
-                        type="checkbox"
-                        className={s.macroCheckbox}
-                        checked={featureFlags.disable_memory_write}
-                        onChange={() => handleToggleFlag('disable_memory_write')}
-                        disabled={flagsSaving}
-                      />
-                      <div>
-                        <div style={{ fontWeight: 600, fontSize: 13 }}>{t('settings.restrictions.memoryWrite')}</div>
-                        <div style={{ fontSize: 11, color: 'var(--text-hint)', marginTop: 2 }}>
-                          {t('settings.restrictions.memoryWriteHelp')}
-                        </div>
-                      </div>
-                    </label>
-                  </div>
-
-                  <div className={s.fieldGroup}>
-                    <label className={s.macroToggleLabel}>
-                      <input
-                        type="checkbox"
-                        className={s.macroCheckbox}
-                        checked={featureFlags.disable_pc_control_lite}
-                        onChange={() => handleToggleFlag('disable_pc_control_lite')}
-                        disabled={flagsSaving}
-                      />
-                      <div>
-                        <div style={{ fontWeight: 600, fontSize: 13 }}>{t('settings.restrictions.lite')}</div>
-                        <div style={{ fontSize: 11, color: 'var(--text-hint)', marginTop: 2 }}>
-                          {t('settings.restrictions.liteHelp')}
-                        </div>
-                      </div>
-                    </label>
-                  </div>
-
-                  <div className={s.fieldGroup}>
-                    <label className={s.macroToggleLabel}>
-                      <input
-                        type="checkbox"
-                        className={s.macroCheckbox}
-                        checked={featureFlags.disable_pc_commands}
-                        onChange={() => handleToggleFlag('disable_pc_commands')}
-                        disabled={flagsSaving}
-                      />
-                      <div>
-                        <div style={{ fontWeight: 600, fontSize: 13 }}>{t('settings.restrictions.noPcCommands')}</div>
-                        <div style={{ fontSize: 11, color: 'var(--text-hint)', marginTop: 2 }}>
-                          {t('settings.restrictions.noPcCommandsHelp')}
-                        </div>
-                      </div>
-                    </label>
-                  </div>
-
-                  <div className={s.fieldGroup}>
-                    <label className={s.macroToggleLabel}>
-                      <input
-                        type="checkbox"
-                        className={s.macroCheckbox}
-                        checked={featureFlags.disable_pc_control_full}
-                        onChange={() => handleToggleFlag('disable_pc_control_full')}
-                        disabled={flagsSaving}
-                      />
-                      <div>
-                        <div style={{ fontWeight: 600, fontSize: 13 }}>{t('settings.restrictions.full')}</div>
-                        <div style={{ fontSize: 11, color: 'var(--text-hint)', marginTop: 2 }}>
-                          {t('settings.restrictions.fullHelp')}
-                        </div>
-                      </div>
-                    </label>
-                  </div>
-
-                  <div className={s.fieldGroup}>
-                    <label className={s.macroToggleLabel}>
-                      <input
-                        type="checkbox"
-                        className={s.macroCheckbox}
-                        checked={featureFlags.disable_internet}
-                        onChange={() => handleToggleFlag('disable_internet')}
-                        disabled={flagsSaving}
-                      />
-                      <div>
-                        <div style={{ fontWeight: 600, fontSize: 13 }}>{t('settings.restrictions.noInternet')}</div>
-                        <div style={{ fontSize: 11, color: 'var(--text-hint)', marginTop: 2 }}>
-                          {t('settings.restrictions.noInternetHelp')}
-                        </div>
-                      </div>
-                    </label>
-                  </div>
-
-                  <div className={s.fieldGroup}>
-                    <label className={s.macroToggleLabel}>
-                      <input
-                        type="checkbox"
-                        className={s.macroCheckbox}
-                        checked={featureFlags.disable_personal}
-                        onChange={() => handleToggleFlag('disable_personal')}
-                        disabled={flagsSaving}
-                      />
-                      <div>
-                        <div style={{ fontWeight: 600, fontSize: 13 }}>{t('settings.restrictions.guest')}</div>
-                        <div style={{ fontSize: 11, color: 'var(--text-hint)', marginTop: 2 }}>
-                          {t('settings.restrictions.guestHelp')}
-                        </div>
-                      </div>
-                    </label>
-                  </div>
-
-                  <div className={s.fieldGroup}>
-                    <label className={s.macroToggleLabel}>
-                      <input
-                        type="checkbox"
-                        className={s.macroCheckbox}
-                        checked={featureFlags.disable_specialized_subagents}
-                        onChange={() => handleToggleFlag('disable_specialized_subagents')}
-                        disabled={flagsSaving}
-                      />
-                      <div>
-                        <div style={{ fontWeight: 600, fontSize: 13 }}>{t('settings.restrictions.noSpecializedSubagents')}</div>
-                        <div style={{ fontSize: 11, color: 'var(--text-hint)', marginTop: 2 }}>
-                          {t('settings.restrictions.noSpecializedSubagentsHelp')}
-                        </div>
-                      </div>
-                    </label>
-                  </div>
-
-                  <div className={s.fieldGroup}>
-                    <label className={s.macroToggleLabel}>
-                      <input
-                        type="checkbox"
-                        className={s.macroCheckbox}
-                        checked={featureFlags.disable_adhoc_subagents}
-                        onChange={() => handleToggleFlag('disable_adhoc_subagents')}
-                        disabled={flagsSaving}
-                      />
-                      <div>
-                        <div style={{ fontWeight: 600, fontSize: 13 }}>{t('settings.restrictions.noAdhocSubagents')}</div>
-                        <div style={{ fontSize: 11, color: 'var(--text-hint)', marginTop: 2 }}>
-                          {t('settings.restrictions.noAdhocSubagentsHelp')}
-                        </div>
-                      </div>
-                    </label>
-                  </div>
-
-                  <div className={s.fieldGroup}>
-                    <label className={s.macroToggleLabel}>
-                      <input
-                        type="checkbox"
-                        className={s.macroCheckbox}
-                        checked={featureFlags.disable_avatar_control}
-                        onChange={() => handleToggleFlag('disable_avatar_control')}
-                        disabled={flagsSaving}
-                      />
-                      <div>
-                        <div style={{ fontWeight: 600, fontSize: 13 }}>{t('settings.restrictions.noAvatarControl')}</div>
-                        <div style={{ fontSize: 11, color: 'var(--text-hint)', marginTop: 2 }}>
-                          {t('settings.restrictions.noAvatarControlHelp')}
-                        </div>
-                      </div>
-                    </label>
-                  </div>
-
-                </>
-              )}
-            </div>
+            <RestrictionsSettings flags={featureFlags} loading={flagsLoading} saving={flagsSaving}
+              loadFailed={flagsLoadFailed} onRetry={() => setFlagsReload(value => value + 1)} onToggle={handleToggleFlag} />
           )}
 
           {section === 'agents' && (

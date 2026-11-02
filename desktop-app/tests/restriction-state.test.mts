@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
+const { restrictionOverride } = require('../src/renderer/lib/restrictionState.ts');
+const flags = {disable_pc_control_full:true,disable_personal:true,disable_pc_control_lite:false,disable_pc_commands:false,disable_memory_write:false};
+assert.equal(restrictionOverride('disable_pc_commands',flags),'full');
+assert.equal(restrictionOverride('disable_pc_control_lite',flags),'full');
+assert.equal(restrictionOverride('disable_memory_write',flags),'guest');
+for(const key of ['disable_internet','disable_specialized_subagents','disable_adhoc_subagents','disable_avatar_control','disable_prompt_injection_protection','disable_personal'])assert.equal(restrictionOverride(key,flags),null);
+assert.equal(restrictionOverride('disable_pc_commands',{...flags,disable_pc_control_full:false}),null);
+assert.equal(restrictionOverride('disable_memory_write',{...flags,disable_personal:false}),null);
+assert.equal(flags.disable_pc_commands,false);
+assert.equal(flags.disable_memory_write,false);
+console.log('Restrictions: effective inherited states and unchanged underlying choices passed.');

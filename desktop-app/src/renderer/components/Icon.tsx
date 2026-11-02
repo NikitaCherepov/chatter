@@ -1,6 +1,12 @@
 import React from 'react';
 
 const PATHS = {
+  shield: 'M12 3l8 3v6c0 5-8 9-8 9s-8-4-8-9V6z M8 12l3 3 5-6',
+  user: 'M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0 M4 21v-2a8 8 0 0 1 16 0v2',
+  database: 'M20 5c0 2-4 3-8 3S4 7 4 5s4-3 8-3 8 1 8 3z M4 5v14c0 2 4 3 8 3s8-1 8-3V5 M4 12c0 2 4 3 8 3s8-1 8-3',
+  monitor: 'M3 3h18v13H3z M8 21h8 M12 16v5',
+  lock: 'M5 10h14v11H5z M8 10V6a4 4 0 0 1 8 0v4 M12 14v3',
+  avatar: 'M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2 M7 8v2 M17 8v2 M8 15c2 2 6 2 8 0',
   agent: 'M8 8h8v8H8z M12 3v5 M3 12h5 M16 12h5 M12 16v5 M10 3h4 M3 10v4 M21 10v4 M10 21h4',
   search: 'M20 11a8 8 0 1 1-16 0 8 8 0 0 1 16 0 M17 17l5 5',
   file: 'M7 3h8l4 4v14H5V3h2 M14 3v5h5 M8 13h8m-3-3 3 3-3 3',
