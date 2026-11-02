@@ -13,6 +13,8 @@ const PATHS = {
   code: 'm8 6-6 6 6 6 M16 6l6 6-6 6 M14 3l-4 18',
   terminal: 'M3 4h18v16H3z M7 8l4 4-4 4 M13 16h4',
   globe: 'M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0 M3 12h18 M12 3a18 18 0 0 1 0 18 18 18 0 0 1 0-18',
+  pointer: 'm4 3 7 18 3-7 7-3L4 3z M14 14l6 6',
+  text: 'M4 5h16 M12 5v14 M8 19h8 M4 5v3 M20 5v3',
   book: 'M12 5c-3-2-6-2-10-1v16c4-1 7-1 10 1 3-2 6-2 10-1V4c-4-1-7-1-10 1z M12 5v16',
   calendar: 'M3 5h18v16H3z M7 2v6 M17 2v6 M3 11h18',
 } as const;

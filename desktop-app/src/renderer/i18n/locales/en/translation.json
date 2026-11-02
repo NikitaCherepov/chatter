@@ -440,14 +440,14 @@
       "openChat": "Open chat"
     },
     "browser": {
-      "help": "Choose which AI browser actions require your approval. Manual browser actions are not affected.",
-      "confirmationsTitle": "Action confirmations",
+      "help": "Choose which browser actions AI can perform without confirmation. Actions switched off require your approval. Manual browser use is unaffected.",
+      "confirmationsTitle": "Action permissions",
       "open": "Opening an address",
-      "openHelp": "Ask before the AI opens a URL or search query.",
+      "openHelp": "Allow opening addresses and search queries without confirmation.",
       "click": "Clicking page elements",
-      "clickHelp": "Ask before the AI clicks links, buttons, or other page elements.",
+      "clickHelp": "Allow clicking links, buttons and other page elements without confirmation.",
       "fill": "Entering text",
-      "fillHelp": "Ask before the AI enters text into a page field.",
+      "fillHelp": "Allow entering text into page fields without confirmation.",
       "sensitiveFieldsNote": "Passwords can only be entered manually — the model cannot access them."
     },
     "language": {
