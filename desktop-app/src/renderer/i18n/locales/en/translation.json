@@ -705,6 +705,8 @@
       "effectsVolume": "Sound effects volume"
     },
     "avatar": {
+      "showShort": "Show avatar",
+      "controlShort": "Bot control",
       "menu": "Pixel avatar",
       "show": "Show avatar",
       "control": "Bot controls the avatar",
