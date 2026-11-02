@@ -174,11 +174,11 @@
   },
   {
     "section": "pc",
-    "key": "advanced.pc.scanFilesystem"
+    "key": "advanced.pc.layout.browse"
   },
   {
     "section": "pc",
-    "key": "advanced.pc.allowedCommands"
+    "key": "advanced.pc.layout.exceptions"
   },
   {
     "section": "browser",
@@ -373,11 +373,11 @@
   },
   {
     "section": "pc",
-    "key": "advanced.pc.readWithoutConfirmation"
+    "key": "advanced.pc.layout.read"
   },
   {
     "section": "pc",
-    "key": "advanced.pc.autoApproveAll"
+    "key": "advanced.pc.layout.auto"
   },
   {
     "section": "limits",

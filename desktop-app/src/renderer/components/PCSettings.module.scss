@@ -1,0 +1,25 @@
+.exceptions { min-width: 0; }
+.heading { display: flex; align-items: center; gap: 8px;
+  h3 { color: var(--text-primary); font-size: 12px; font-weight: 500; margin: 0; }
+  > span { color: var(--text-hint); font-size: 11px; }
+}
+.hint { font-size: 11px; line-height: 1.6; color: var(--text-muted); margin: 7px 0 12px; }
+.notice { background: var(--bg-input); border-radius: 8px; padding: 10px 12px; color: var(--text-secondary); font-size: 11px; line-height: 1.6; }
+.empty { margin: 14px 0; color: var(--text-hint); font-size: 11px; line-height: 1.6; }
+.list { list-style: none; padding: 0; margin: 12px 0; min-width: 0;
+  li { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border-light); color: var(--text-muted); }
+  svg { flex-shrink: 0; }
+  code { flex: 1; min-width: 0; overflow-wrap: anywhere; color: var(--text-secondary); font-size: 11px; }
+}
+.form { border: 0; padding: 0; margin: 14px 0 0; min-width: 0;
+  &:disabled { opacity: .6; }
+  form { display: flex; align-items: center; gap: 8px; }
+  input { flex: 1; min-width: 0; }
+}
+.modes { display: flex; gap: 4px; margin-bottom: 10px;
+  button { border: 0; border-radius: 6px; background: transparent; padding: 6px 9px; color: var(--text-muted); font: inherit; font-size: 11px; cursor: pointer;
+    &[aria-pressed='true'] { background: var(--bg-input); color: var(--text-primary); }
+    &:disabled { cursor: default; }
+  }
+}
+@media (max-width: 600px) { .form form { flex-wrap: wrap; } .form input { flex-basis: 100%; } }
