@@ -1,3 +1,4 @@
+import { RUNBOOK_COMMAND_TOOLS_ENABLED } from '../lib/runbook-ui';
 import React, { useEffect, useLayoutEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { ChatMessageCache } from '../lib/chat-message-cache';
@@ -7396,14 +7397,15 @@ export function ChatPage() {
                     </button>
                   </div>
                   <div className={s.suggestMacroName}>{rb.title}</div>
-                  {rb.commands.length > 0 && (
+                  <div className={s.suggestRunbookContent}><MarkdownRenderer content={rb.content} /></div>
+                  {RUNBOOK_COMMAND_TOOLS_ENABLED && rb.commands.length > 0 && (
                     <div className={s.suggestMacroCommands}>
                       {rb.commands.map((cmd: string, i: number) => (
                         <code key={i} className={s.suggestMacroCmd}>{cmd}</code>
                       ))}
                     </div>
                   )}
-                  {rb._verdict && (
+                  {RUNBOOK_COMMAND_TOOLS_ENABLED && rb._verdict && (
                     <div style={{ fontSize: '12px', color: 'var(--text-muted)', padding: '8px', background: 'var(--bg-modal-hover)', borderRadius: '6px', marginTop: '6px' }}><MarkdownRenderer content={rb._verdict} /></div>
                   )}
                   <div className={s.suggestMacroActions}>
@@ -7428,7 +7430,7 @@ export function ChatPage() {
                     >
                       {t('common.save')}
                     </button>
-                    <button
+                    {RUNBOOK_COMMAND_TOOLS_ENABLED && <button
                       className={s.suggestMacroSaveBtn}
                       style={{ background: 'var(--bg-modal-hover)', color: 'var(--text-primary)', border: '1px solid var(--border-input)', opacity: rb._reviewing ? 0.6 : 1 }}
                       onClick={async () => {
@@ -7446,7 +7448,7 @@ export function ChatPage() {
                       }}
                     >
                       {rb._reviewing ? t('chat.confirm.reviewing') : t('chat.confirm.review')}
-                    </button>
+                    </button>}
                     <button
                       className={s.suggestMacroDismissBtn}
                       onClick={() => setPendingRunbooks(prev => prev.filter((_, i) => i !== rbIdx))}

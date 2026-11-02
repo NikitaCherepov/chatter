@@ -226,7 +226,8 @@
   },
   {
     "section": "runbooks",
-    "key": "advanced.runbook.saved"
+    "key": "advanced.runbook.library.list",
+    "relatedKeys": ["advanced.runbook.library.intro", "advanced.runbook.library.howTo", "advanced.runbook.library.howToBody"]
   },
   {
     "section": "sshkeys",

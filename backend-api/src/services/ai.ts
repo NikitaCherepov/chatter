@@ -3179,7 +3179,7 @@ const buildListRunbooksTool = () => {
     type: 'function' as const,
     function: {
       name: 'list_devops_runbooks',
-      description: `Shows the user's saved runbook list. A runbook is a step-by-step guide for typical DevOps tasks. Use before performing complex operations to check if there's a ready-made guide.`,
+      description: `Lists the user's saved instructions (runbooks). These are reusable step-by-step workflows for any task, such as preparing reports, working with files, using applications or maintaining servers. Use to find an existing guide when the user refers to a saved instruction or a repeatable procedure.`,
       parameters: {
         type: 'object',
         properties: {},
@@ -3194,7 +3194,7 @@ const buildReadRunbookTool = () => {
     type: 'function' as const,
     function: {
       name: 'read_devops_runbook',
-      description: `Reads the contents of a specific runbook. Returns a step-by-step guide in Markdown. Follow the guide step by step, calling execute_ssh_command for each step.`,
+      description: `Reads a saved instruction by ID and returns its step-by-step workflow in Markdown. Follow the relevant steps using tools appropriate to the task. Instructions can involve text, files, applications, browsing or servers; SSH is only relevant to steps that actually require it. Reading an instruction does not execute its steps or grant additional permissions.`,
       parameters: {
         type: 'object',
         properties: {
@@ -3214,7 +3214,7 @@ const buildSuggestRunbookTool = () => {
     type: 'function' as const,
     function: {
       name: 'suggest_devops_runbook',
-      description: `Suggests that the user save a DevOps runbook. Use when you've composed an action plan on the server — a sequence of commands for a typical task. The user can save it and link it to a server.`,
+      description: `Suggests saving a reusable instruction (runbook) after composing a useful step-by-step workflow. It can describe any repeatable task, not just server operations. Include the steps, conditions and expected result in the Markdown content. The user decides whether to save it.`,
       parameters: {
         type: 'object',
         properties: {
@@ -3229,7 +3229,7 @@ const buildSuggestRunbookTool = () => {
           commands: {
             type: 'array',
             items: { type: 'string' },
-            description: 'Array of shell commands from the runbook.'
+            description: 'Shell commands, if the workflow contains any. Use an empty array for instructions without shell commands.'
           }
         },
         required: ['title', 'content', 'commands']

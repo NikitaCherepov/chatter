@@ -1,3 +1,4 @@
+import { RUNBOOK_COMMAND_TOOLS_ENABLED } from '../lib/runbook-ui';
 import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect } from 'react';
 import { toast } from 'sonner';
@@ -497,7 +498,7 @@ export function ServerSettings() {
                 </div>
               )}
               {/* Attach runbook */}
-              {runbooks.length > 0 && (
+              {RUNBOOK_COMMAND_TOOLS_ENABLED && runbooks.length > 0 && (
                 <div style={{ marginTop: '8px', borderTop: '1px solid var(--border-light)', paddingTop: '8px' }}>
                   <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{t('advanced.server.linkRunbook')}</div>
                   <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>

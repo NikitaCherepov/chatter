@@ -3391,3 +3391,12 @@
   .inputArea { border: 0; border-top: 1px solid var(--border-light); border-radius: 0; }
   .suggestMacroActions { flex-wrap: wrap; }
 }
+
+.suggestRunbookContent {
+  max-height: 240px;
+  overflow-y: auto;
+  margin: 8px 0;
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
