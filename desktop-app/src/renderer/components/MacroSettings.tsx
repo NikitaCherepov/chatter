@@ -1,458 +1,188 @@
 import { useTranslation } from 'react-i18next';
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { toast } from 'sonner';
 import * as api from '../lib/api';
+import { normalizeSettingsSearch } from '../lib/settings-navigation';
 import { Select } from './Select';
-import type { SelectOption } from './Select';
-import s from './SettingsModal.module.scss';
+import { Icon } from './Icon';
+import { ConfirmDialog } from './ConfirmDialog';
+import { MarkdownRenderer } from './MarkdownRenderer';
+import shared from './SettingsModal.module.scss';
+import toggle from './MemoryPopover.module.scss';
+import s from './MacroSettings.module.scss';
 
-// ─── Types ───────────────────────────────────────────────────────────────────
-
-export type Macro = {
-  id: number;
-  title: string;
-  description: string;
-  commands: string[];
-  enabled: boolean;
-  pinned: boolean;
-  return_output: boolean;
-};
-
-// ─── Component ───────────────────────────────────────────────────────────────
-
-type Props = {
-  /** Called when macros change, so parent can pick them up */
-  onChange?: (macros: Macro[]) => void;
-};
-
+export type Macro = { id: number; title: string; description: string; commands: string[]; enabled: boolean; pinned: boolean; return_output: boolean };
+type Draft = Omit<Macro, 'id'>;
+const emptyDraft = (): Draft => ({ title: '', description: '', commands: [''], enabled: true, pinned: false, return_output: false });
+type Props = { onChange?: (macros: Macro[]) => void };
 export function MacroSettings({ onChange }: Props) {
   const { t } = useTranslation();
+  const detailRef = useRef<HTMLDivElement>(null);
   const [macros, setMacros] = useState<Macro[]>([]);
   const [loading, setLoading] = useState(true);
-
-  // Editing state — null = not editing, number = macro id being edited
-  const [editingId, setEditingId] = useState<number | null>(null);
-
-  // New macro form state
-  const [formTitle, setFormTitle] = useState('');
-  const [formDescription, setFormDescription] = useState('');
-  const [formCommands, setFormCommands] = useState<string[]>(['']);
-  const [formEnabled, setFormEnabled] = useState(true);
-  const [formPinned, setFormPinned] = useState(false);
-  const [formReturnOutput, setFormReturnOutput] = useState(false);
-
-  // Execution mode select options
-  const execModeOptions: SelectOption[] = [
-    { value: 'execute', label: t('advanced.macros.execution'), hint: t('advanced.macros.fireAndForget') },
-    { value: 'output', label: t('advanced.macros.withOutput'), hint: t('advanced.macros.outputHint') },
-  ];
-
-  // AI request states
-  const [explaining, setExplaining] = useState<number | null>(null);
-  const [explainResult, setExplainResult] = useState<string | null>(null);
-  const [describing, setDescribing] = useState<number | null>(null);
-
-  // Execution state
-  const [executing, setExecuting] = useState<number | null>(null);
-
-  // ── Load macros from server ──
-
-  const fetchMacros = useCallback(async () => {
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [query, setQuery] = useState('');
+  const [filter, setFilter] = useState<'all' | 'pinned' | 'disabled'>('all');
+  const [view, setView] = useState<'read' | 'edit' | 'new'>('read');
+  const [draft, setDraft] = useState<Draft>(emptyDraft);
+  const [baseDraft, setBaseDraft] = useState<Draft>(emptyDraft);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [pending, setPending] = useState<(() => void) | null>(null);
+  const [deleting, setDeleting] = useState<Macro | null>(null);
+  const [explanation, setExplanation] = useState<{ id: number; text: string } | null>(null);
+  const [output, setOutput] = useState<{ id: number; text: string } | null>(null);
+  const selected = macros.find(macro => macro.id === selectedId);
+  useEffect(() => { if (detailRef.current) detailRef.current.scrollTop = 0; }, [selectedId, view]);
+  const editing = view !== 'read';
+  const dirty = editing && JSON.stringify(draft) !== JSON.stringify(baseDraft);
+  const commands = draft.commands.map(command => command.trim()).filter(Boolean);
+  const commit = (next: Macro[]) => { setMacros(next); onChange?.(next); };
+  const load = useCallback(async () => {
+    setLoading(true); setLoadFailed(false);
     try {
-      const res = await api.apiFetch<{ macros: Macro[] }>('/api/v1/macros');
-      setMacros(res.macros);
-      onChange?.(res.macros);
-    } catch (err) {
-      console.error('[macros] failed to load:', err);
-    } finally {
-      setLoading(false);
-    }
+      const result = await api.apiFetch<{ macros: Macro[] }>('/api/v1/macros');
+      setMacros(result.macros); onChange?.(result.macros);
+      setSelectedId(current => result.macros.some(macro => macro.id === current) ? current : result.macros[0]?.id ?? null);
+    } catch { setLoadFailed(true); }
+    finally { setLoading(false); }
   }, [onChange]);
-
-  useEffect(() => { fetchMacros(); }, [fetchMacros]);
-
-
-  // ── Form helpers ──
-
-  const resetForm = () => {
-    setFormTitle('');
-    setFormDescription('');
-    setFormCommands(['']);
-    setFormEnabled(true);
-    setFormPinned(false);
-    setFormReturnOutput(false);
-    setEditingId(null);
-  };
-
-  const startEdit = (macro: Macro) => {
-    setEditingId(macro.id);
-    setFormTitle(macro.title);
-    setFormDescription(macro.description);
-    setFormCommands(macro.commands.length > 0 ? [...macro.commands] : ['']);
-    setFormEnabled(macro.enabled);
-    setFormPinned(macro.pinned);
-    setFormReturnOutput(macro.return_output);
-  };
-
-  const addCommandField = () => {
-    setFormCommands([...formCommands, '']);
-  };
-
-  const removeCommandField = (index: number) => {
-    setFormCommands(formCommands.filter((_, i) => i !== index));
-  };
-
-  const updateCommandField = (index: number, value: string) => {
-    const next = [...formCommands];
-    next[index] = value;
-    setFormCommands(next);
-  };
-
-  // ── Save (create / update) ──
-
-  const handleSave = async () => {
-    const commands = formCommands.map(c => c.trim()).filter(Boolean);
-    if (commands.length === 0) {
-      toast.error(t('advanced.macros.addCommandWarning'));
-      return;
-    }
-
-    const title = formTitle.trim() || `Макрос #${macros.length + 1}`;
-
+  useEffect(() => { void load(); }, [load]);
+  const visible = useMemo(() => {
+    const tokens = normalizeSettingsSearch(query).split(' ').filter(Boolean);
+    return macros.filter(macro => (filter === 'all' || (filter === 'pinned' ? macro.pinned : !macro.enabled))
+      && tokens.every(token => normalizeSettingsSearch(`${macro.title} ${macro.description} ${macro.commands.join(' ')}`).includes(token)))
+      .sort((a, b) => Number(b.pinned) - Number(a.pinned) || a.id - b.id);
+  }, [macros, query, filter]);
+  const request = (action: () => void) => { if (busy) return; if (dirty) setPending(() => action); else action(); };
+  const newMacro = () => request(() => { const value = emptyDraft(); setDraft(value); setBaseDraft(value); setView('new'); });
+  const select = (id: number) => request(() => { setSelectedId(id); setView('read'); });
+  const edit = () => { if (!selected) return; const { id: _id, ...value } = selected; setDraft({ ...value, commands: [...value.commands] }); setBaseDraft(value); setView('edit'); };
+  const save = async () => {
+    if (busy || !dirty || !commands.length) return;
+    setBusy('save');
+    const value = { ...draft, title: draft.title.trim() || t('advanced.macros.catalog.defaultName', { number: macros.length + 1 }), description: draft.description.trim(), commands };
     try {
-      if (editingId) {
-        await api.apiFetch('/api/v1/macros/' + editingId, {
-          method: 'PUT',
-          body: JSON.stringify({ title, description: formDescription.trim(), commands, enabled: formEnabled, pinned: formPinned, return_output: formReturnOutput }),
-        });
-        toast.success(t('advanced.macros.updated'));
+      if (view === 'edit' && selected) {
+        await api.apiFetch(`/api/v1/macros/${selected.id}`, { method: 'PUT', body: JSON.stringify(value) });
+        commit(macros.map(macro => macro.id === selected.id ? { ...value, id: selected.id } : macro));
+        if (JSON.stringify(selected.commands) !== JSON.stringify(value.commands)) setExplanation(null);
       } else {
-        await api.apiFetch('/api/v1/macros', {
-          method: 'POST',
-          body: JSON.stringify({ title, description: formDescription.trim(), commands, enabled: formEnabled, pinned: formPinned, return_output: formReturnOutput }),
-        });
-        toast.success(t('advanced.macros.created'));
+        const result = await api.apiFetch<{ id: number }>('/api/v1/macros', { method: 'POST', body: JSON.stringify(value) });
+        commit([...macros, { ...value, id: result.id }]); setSelectedId(result.id); setQuery(''); setFilter('all');
       }
-      resetForm();
-      fetchMacros();
-    } catch (err) {
-      toast.error(t('advanced.macros.saveFailed'));
-      console.error(err);
-    }
+      setView('read'); toast.success(t(view === 'new' ? 'advanced.macros.created' : 'advanced.macros.updated'));
+    } catch (error) { toast.error(api.getApiErrorMessage(error, t('advanced.macros.saveFailed'))); }
+    finally { setBusy(null); }
   };
-
-  // ── Delete ──
-
-  const handleDelete = async (id: number) => {
+  const patch = async (key: 'enabled' | 'pinned') => {
+    if (!selected || busy) return;
+    const previous = macros;
+    const value = !selected[key];
+    commit(macros.map(macro => macro.id === selected.id ? { ...macro, [key]: value } : macro)); setBusy('patch');
+    try { await api.apiFetch(`/api/v1/macros/${selected.id}`, { method: 'PUT', body: JSON.stringify({ [key]: value }) }); }
+    catch { commit(previous); toast.error(t('advanced.common.error')); }
+    finally { setBusy(null); }
+  };
+  const remove = async () => {
+    if (!deleting || busy) return;
+    setBusy('delete');
     try {
-      await api.apiFetch('/api/v1/macros/' + id, { method: 'DELETE' });
-      if (editingId === id) resetForm();
-      fetchMacros();
-    } catch (err) {
-      toast.error(t('advanced.common.deleteFailed'));
-      console.error(err);
-    }
+      await api.apiFetch(`/api/v1/macros/${deleting.id}`, { method: 'DELETE' });
+      const next = macros.filter(macro => macro.id !== deleting.id); commit(next);
+      setSelectedId(next[0]?.id ?? null); setView('read'); setDeleting(null);
+    } catch { toast.error(t('advanced.common.deleteFailed')); }
+    finally { setBusy(null); }
   };
-
-  // ── Toggle enabled ──
-
-  const handleToggle = async (id: number) => {
-    const macro = macros.find(m => m.id === id);
-    if (!macro) return;
+  const explain = async () => {
+    if (!selected || busy) return;
+    setBusy('explain');
     try {
-      await api.apiFetch('/api/v1/macros/' + id, {
-        method: 'PUT',
-        body: JSON.stringify({ enabled: !macro.enabled }),
-      });
-      fetchMacros();
-    } catch (err) {
-      toast.error(t('advanced.common.error'));
-      console.error(err);
-    }
+      const result = await api.apiFetch<{ explanation: string }>('/api/v1/macro/explain', { method: 'POST', body: JSON.stringify({ commands: selected.commands }) });
+      setExplanation({ id: selected.id, text: result.explanation });
+    } catch (error) { toast.error(api.getApiErrorMessage(error, t('advanced.macros.explainFailed'))); }
+    finally { setBusy(null); }
   };
-
-  // ── AI: Explain ──
-
-  const handleExplain = async (macro: Macro) => {
-    setExplaining(macro.id);
-    setExplainResult(null);
+  const describe = async () => {
+    if (!commands.length || busy) return;
+    setBusy('describe');
     try {
-      const res = await api.apiFetch<{ explanation: string }>('/api/v1/macro/explain', {
-        method: 'POST',
-        body: JSON.stringify({ commands: macro.commands }),
-      });
-      setExplainResult(res.explanation);
-    } catch (err) {
-      toast.error(api.getApiErrorMessage(err, t('advanced.macros.explainFailed')));
-      console.error(err);
-    } finally {
-      setExplaining(null);
-    }
+      const result = await api.apiFetch<{ title: string; description: string }>('/api/v1/macro/describe', { method: 'POST', body: JSON.stringify({ commands, current_title: draft.title, current_description: draft.description }) });
+      setDraft(value => ({ ...value, title: result.title || value.title, description: result.description || value.description }));
+      toast.success(t('advanced.macros.catalog.suggestionReady'));
+    } catch (error) { toast.error(api.getApiErrorMessage(error, t('advanced.macros.descriptionFailed'))); }
+    finally { setBusy(null); }
   };
-
-  // ── AI: Describe ──
-
-  const handleDescribe = async (macro: Macro) => {
-    setDescribing(macro.id);
+  const execute = async () => {
+    if (!selected || busy) return;
+    if (!window.electronAPI?.executeCommands) { toast.error(t('advanced.macros.executionUnavailable')); return; }
+    setBusy('execute');
     try {
-      const res = await api.apiFetch<{ title: string; description: string }>('/api/v1/macro/describe', {
-        method: 'POST',
-        body: JSON.stringify({ commands: macro.commands, current_title: macro.title, current_description: macro.description }),
-      });
-      // Update on server
-      await api.apiFetch('/api/v1/macros/' + macro.id, {
-        method: 'PUT',
-        body: JSON.stringify({ title: res.title || macro.title, description: res.description || macro.description }),
-      });
-      fetchMacros();
-      toast.success(t('advanced.macros.descriptionUpdated'));
-    } catch (err) {
-      toast.error(api.getApiErrorMessage(err, t('advanced.macros.descriptionFailed')));
-      console.error(err);
-    } finally {
-      setDescribing(null);
-    }
+      const result = await window.electronAPI.executeCommands(selected.commands);
+      setOutput({ id: selected.id, text: result }); toast.success(t('advanced.macros.executed'));
+    } catch (error) { toast.error(api.getApiErrorMessage(error, t('advanced.macros.executionFailed'))); }
+    finally { setBusy(null); }
   };
-
-  // ── Execute now (via IPC) ──
-
-  const handleExecute = async (macro: Macro) => {
-    if (!window.electronAPI?.executeCommands) {
-      toast.error(t('advanced.macros.executionUnavailable'));
-      return;
-    }
-    setExecuting(macro.id);
-    try {
-      const result = await window.electronAPI.executeCommands(macro.commands);
-      toast.success(t('advanced.macros.executed'));
-      console.log('[macro] execution result:', result);
-    } catch (err: any) {
-      toast.error(`Ошибка: ${err?.message || t('advanced.macros.executionFailed')}`);
-    } finally {
-      setExecuting(null);
-    }
+  const switchRow = (key: 'enabled' | 'pinned', label: string, hint: string) => {
+    const checked = editing ? draft[key] : Boolean(selected?.[key]);
+    return <div className={s.option} key={key}><div><span>{label}</span><p>{hint}</p></div>
+      <button type="button" role="switch" aria-label={label} aria-checked={checked} disabled={Boolean(busy)}
+        className={`${toggle.toggle} ${checked ? toggle.toggleActive : ''}`}
+        onClick={() => editing ? setDraft(value => ({ ...value, [key]: !value[key] })) : void patch(key)}><span /></button>
+    </div>;
   };
-
-  // ── Render ──
-
-  if (loading) {
-    return <div className={s.panel}><div className={s.panelTitle}>{t('settings.sections.macros')}</div><div style={{ color: 'var(--text-hint)', fontSize: 13 }}>{t('common.loading')}</div></div>;
-  }
-
-  return (
-    <div className={s.panel}>
-      <div className={s.panelTitle}>{t('settings.sections.macros')}</div>
-
-      {/* Macros list */}
-      {macros.length === 0 && !editingId && (
-        <div style={{ color: 'var(--text-hint)', fontSize: 13, marginBottom: 16 }}>
-          {t('advanced.macros.empty')}
+  return <div className={`${shared.panel} ${s.panel}`}>
+    <div className={shared.panelTitle}>{t('settings.sections.macros')}</div>
+    <p className={s.intro}>{t('advanced.macros.catalog.help')}</p>
+    {loading ? <div role="status">{t('common.loading')}</div> : loadFailed ? <div className={s.empty}><p>{t('advanced.macros.catalog.loadFailed')}</p><button type="button" className={shared.cancelBtn} onClick={() => void load()}>{t('advanced.macros.catalog.retry')}</button></div> :
+    <div className={s.workspace}>
+      <aside className={s.catalog} aria-label={t('advanced.macros.catalog.list')}>
+        <input type="search" className={shared.fieldInput} placeholder={t('advanced.macros.catalog.search')} aria-label={t('advanced.macros.catalog.search')} value={query} onChange={event => setQuery(event.target.value)} />
+        <button type="button" className={shared.saveBtn} disabled={Boolean(busy)} onClick={newMacro}>+ {t('advanced.macros.create')}</button>
+        <div className={s.filters}>{(['all', 'pinned', 'disabled'] as const).map(value => <button type="button" key={value} aria-pressed={filter === value} onClick={() => setFilter(value)}>{t(`advanced.macros.catalog.${value}`)}</button>)}</div>
+        <div className={s.list}>
+          {visible.map(macro => <button type="button" key={macro.id} disabled={Boolean(busy)} aria-pressed={selectedId === macro.id && view !== 'new'} onClick={() => select(macro.id)} className={`${s.item} ${selectedId === macro.id && view !== 'new' ? s.active : ''}`}>
+            <Icon name="terminal" size={17} /><span><strong>{macro.title}</strong>{macro.description && <small>{macro.description}</small>}<span className={s.meta}>{t('advanced.macros.catalog.commandCount', { count: macro.commands.length })}{macro.pinned && ` · ${t('advanced.macros.catalog.pinnedState')}`}{!macro.enabled && ` · ${t('advanced.macros.catalog.disabledState')}`}</span></span>
+          </button>)}
+          {!visible.length && <p className={s.empty}>{t('common.nothingFound')}</p>}
         </div>
-      )}
-
-      {macros.map((macro) => (
-        <div key={macro.id} className={s.macroCard}>
-          <div className={s.macroHeader}>
-            <label className={s.macroToggleLabel}>
-              <input
-                type="checkbox"
-                checked={macro.enabled}
-                onChange={() => handleToggle(macro.id)}
-                className={s.macroCheckbox}
-              />
-              <span className={s.macroTitle}>{macro.title}</span>
-            </label>
-            <div className={s.macroActions}>
-              <button
-                className={s.macroActionBtn}
-                onClick={() => startEdit(macro)}
-                title={t('common.edit')}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                </svg>
-              </button>
-              <button
-                className={s.macroActionBtn}
-                onClick={() => handleExecute(macro)}
-                disabled={executing === macro.id}
-                title={t('advanced.macros.runNow')}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polygon points="5 3 19 12 5 21 5 3" />
-                </svg>
-              </button>
-              <button
-                className={s.macroActionBtn}
-                onClick={() => handleExplain(macro)}
-                disabled={explaining === macro.id}
-                title={t('advanced.macros.askAi')}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="10" />
-                  <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
-                  <line x1="12" y1="17" x2="12.01" y2="17" />
-                </svg>
-              </button>
-              <button
-                className={s.macroActionBtn}
-                onClick={() => handleDescribe(macro)}
-                disabled={describing === macro.id}
-                title={t('advanced.macros.improveDescription')}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-                </svg>
-              </button>
-              <button
-                className={`${s.macroActionBtn} ${s.macroActionBtnDanger}`}
-                onClick={() => handleDelete(macro.id)}
-                title={t('common.delete')}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="3 6 5 6 21 6" />
-                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                </svg>
-              </button>
+        <span className={s.count}>{visible.length} / {macros.length}</span>
+      </aside>
+      <div className={s.detail} ref={detailRef}>
+        {editing ? <>
+          <h3 className={s.title}>{t(view === 'new' ? 'advanced.macros.create' : 'advanced.macros.catalog.edit')}</h3>
+          <fieldset className={s.editor} disabled={Boolean(busy)}>
+            <label className={shared.fieldGroup}><span className={shared.fieldLabel}>{t('advanced.common.name')}</span><input className={shared.fieldInput} value={draft.title} onChange={event => setDraft({ ...draft, title: event.target.value })} placeholder={t('advanced.macros.namePlaceholder')} /></label>
+            <label className={shared.fieldGroup}><span className={shared.fieldLabel}>{t('advanced.common.description')}</span><textarea className={shared.textareaInput} rows={2} value={draft.description} onChange={event => setDraft({ ...draft, description: event.target.value })} placeholder={t('advanced.macros.descriptionPlaceholder')} /></label>
+            <div className={s.subhead}><span>{t('advanced.common.commands')}</span><span className={s.meta}>{t('advanced.macros.catalog.sequence')}</span></div>
+            {draft.commands.map((command, index) => <div className={s.commandEdit} key={index}><span>{index + 1}</span><textarea className={shared.textareaInput} rows={2} aria-label={t('advanced.common.commandNumber', { number: index + 1 })} value={command} placeholder={t('advanced.common.commandNumberPlaceholder', { number: index + 1 })} onChange={event => setDraft({ ...draft, commands: draft.commands.map((value, i) => i === index ? event.target.value : value) })} /><button type="button" className={shared.removeCmdBtn} disabled={draft.commands.length === 1} title={t('advanced.common.deleteCommand')} aria-label={t('advanced.common.deleteCommand')} onClick={() => setDraft({ ...draft, commands: draft.commands.filter((_, i) => i !== index) })}>×</button></div>)}
+            <button type="button" className={shared.addCmdBtn} onClick={() => setDraft({ ...draft, commands: [...draft.commands, ''] })}>{t('advanced.common.addCommand')}</button>
+            <div className={s.options}>
+              {switchRow('enabled', t('advanced.macros.catalog.available'), t('advanced.macros.catalog.availableHelp'))}
+              {switchRow('pinned', t('advanced.macros.catalog.pinnedLabel'), t('advanced.macros.catalog.pinnedHelp'))}
+              <label className={shared.fieldGroup}><span className={shared.fieldLabel}>{t('advanced.macros.executionMode')}</span><Select value={draft.return_output ? 'output' : 'execute'} onChange={value => setDraft({ ...draft, return_output: value === 'output' })} options={[{ value: 'execute', label: t('advanced.macros.execution'), hint: t('advanced.macros.fireAndForget') }, { value: 'output', label: t('advanced.macros.withOutput'), hint: t('advanced.macros.outputHint') }]} /></label>
             </div>
+            <button type="button" className={shared.cancelBtn} disabled={!commands.length} onClick={() => void describe()}>{busy === 'describe' ? t('common.loading') : t('advanced.macros.improveDescription')}</button>
+          </fieldset>
+          <div className={s.actions}><button type="button" className={shared.saveBtn} disabled={Boolean(busy) || !dirty || !commands.length} onClick={() => void save()}>{busy === 'save' ? t('common.saving') : t(view === 'new' ? 'advanced.macros.create' : 'advanced.common.saveChanges')}</button><button type="button" className={shared.cancelBtn} disabled={Boolean(busy)} onClick={() => request(() => setView('read'))}>{t('common.cancel')}</button></div>
+        </> : selected ? <>
+          <h3 className={s.title}>{selected.title}</h3>
+          {selected.description && <p className={s.description}>{selected.description}</p>}
+          <div className={s.actions}><button type="button" className={shared.saveBtn} disabled={Boolean(busy)} onClick={() => void execute()}>{busy === 'execute' ? t('advanced.macros.catalog.running') : t('advanced.macros.runNow')}</button><button type="button" className={shared.cancelBtn} disabled={Boolean(busy)} onClick={edit}>{t('common.edit')}</button></div>
+          <div className={s.options}>
+            {switchRow('enabled', t('advanced.macros.catalog.available'), t('advanced.macros.catalog.availableHelp'))}
+            {switchRow('pinned', t('advanced.macros.catalog.pinnedLabel'), t('advanced.macros.catalog.pinnedHelp'))}
           </div>
-
-          {macro.description && (
-            <div className={s.macroDescription}>{macro.description}</div>
-          )}
-
-          <div className={s.macroCommands}>
-            {macro.commands.map((cmd, i) => (
-              <code key={i} className={s.macroCmd}>{cmd}</code>
-            ))}
-            {macro.return_output && (
-              <span className={s.macroModeBadge} title={t('advanced.macros.aiSeesOutput')}>
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="4 17 10 11 4 5" />
-                  <line x1="12" y1="19" x2="20" y2="19" />
-                </svg>
-                {t('advanced.macros.output')}
-              </span>
-            )}
-          </div>
-        </div>
-      ))}
-
-      {/* AI explain modal */}
-      {explainResult !== null && (
-        <div className={s.explainOverlay} onClick={() => setExplainResult(null)}>
-          <div className={s.explainBox} onClick={(e) => e.stopPropagation()}>
-            <div className={s.explainTitle}>{t('advanced.macros.aiExplanation')}</div>
-            <div className={s.explainText}>{explainResult}</div>
-            <button className={s.saveBtn} onClick={() => setExplainResult(null)}>
-              {t('common.close')}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Create / Edit form */}
-      <div className={s.macroFormDivider} />
-
-      <div className={s.fieldGroup}>
-        <label className={s.fieldLabel}>{t('advanced.common.name')}</label>
-        <input
-          className={s.fieldInput}
-          type="text"
-          value={formTitle}
-          onChange={(e) => setFormTitle(e.target.value)}
-          placeholder={t('advanced.macros.namePlaceholder')}
-        />
+          <div className={s.subhead}><span>{t('advanced.common.commands')}</span><span className={s.meta}>{t('advanced.macros.executionMode')}: {t(selected.return_output ? 'advanced.macros.withOutput' : 'advanced.macros.execution')}</span></div>
+          <ol className={s.commands}>{selected.commands.map((command, index) => <li key={index}><span>{index + 1}</span><pre>{command}</pre></li>)}</ol>
+          <button type="button" className={shared.cancelBtn} disabled={Boolean(busy)} onClick={() => void explain()}>{busy === 'explain' ? t('common.loading') : t('advanced.macros.askAi')}</button>
+          {explanation?.id === selected.id && <section className={s.result}><h4>{t('advanced.macros.aiExplanation')}</h4><MarkdownRenderer content={explanation.text} /></section>}
+          {output?.id === selected.id && <section className={s.result}><h4>{t('advanced.macros.catalog.lastOutput')}</h4><pre>{output.text || t('advanced.macros.catalog.noOutput')}</pre></section>}
+          <div className={s.delete}><button type="button" disabled={Boolean(busy)} onClick={() => setDeleting(selected)}>{t('common.delete')}</button></div>
+        </> : <div className={s.emptyDetail}><Icon name="terminal" size={28} /><h3>{t('advanced.macros.catalog.emptyTitle')}</h3><p>{t('advanced.macros.catalog.emptyHelp')}</p></div>}
       </div>
-
-      <div className={s.fieldGroup}>
-        <label className={s.fieldLabel}>{t('advanced.common.description')}</label>
-        <input
-          className={s.fieldInput}
-          type="text"
-          value={formDescription}
-          onChange={(e) => setFormDescription(e.target.value)}
-          placeholder={t('advanced.macros.descriptionPlaceholder')}
-        />
-      </div>
-
-      <div className={s.fieldGroup}>
-        <label className={s.fieldLabel}>{t('advanced.common.commands')}</label>
-        {formCommands.map((cmd, i) => (
-          <div key={i} className={s.commandRow}>
-            <input
-              className={s.fieldInput}
-              type="text"
-              value={cmd}
-              onChange={(e) => updateCommandField(i, e.target.value)}
-              placeholder={t('advanced.common.commandNumberPlaceholder', { number: i + 1 })}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && i === formCommands.length - 1) {
-                  e.preventDefault();
-                  addCommandField();
-                }
-              }}
-            />
-            {formCommands.length > 1 && (
-              <button
-                className={s.removeCmdBtn}
-                onClick={() => removeCommandField(i)}
-                title={t('advanced.common.deleteCommand')}
-              >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                  <line x1="18" y1="6" x2="6" y2="18" />
-                  <line x1="6" y1="6" x2="18" y2="18" />
-                </svg>
-              </button>
-            )}
-          </div>
-        ))}
-        <button className={s.addCmdBtn} onClick={addCommandField}>
-          {t('advanced.common.addCommand')}
-        </button>
-      </div>
-
-      <div className={s.fieldGroup}>
-        <label className={s.macroToggleLabel}>
-          <input
-            type="checkbox"
-            checked={formEnabled}
-            onChange={(e) => setFormEnabled(e.target.checked)}
-            className={s.macroCheckbox}
-          />
-          <span className={s.fieldLabel}>{t('advanced.macros.enabled')}</span>
-        </label>
-        <label className={s.macroToggleLabel}>
-          <input
-            type="checkbox"
-            checked={formPinned}
-            onChange={(e) => setFormPinned(e.target.checked)}
-            className={s.macroCheckbox}
-          />
-          <span className={s.fieldLabel}>{t('advanced.macros.pinned')}</span>
-        </label>
-      </div>
-
-      <div className={s.fieldGroup}>
-        <label className={s.fieldLabel}>{t('advanced.macros.executionMode')}</label>
-        <Select
-          options={execModeOptions}
-          value={formReturnOutput ? 'output' : 'execute'}
-          onChange={(val) => setFormReturnOutput(val === 'output')}
-        />
-      </div>
-
-      <div className={s.macroFormButtons}>
-        <button className={s.saveBtn} onClick={handleSave}>
-          {editingId ? t('advanced.common.saveChanges') : t('advanced.macros.create')}
-        </button>
-        {editingId && (
-          <button className={s.cancelBtn} onClick={resetForm}>
-            {t('common.cancel')}
-          </button>
-        )}
-      </div>
-    </div>
-  );
+    </div>}
+    {pending && <ConfirmDialog open title={t('advanced.macros.catalog.discardTitle')} text={t('advanced.macros.catalog.discardHelp')} confirmLabel={t('advanced.macros.catalog.discard')} confirmTone="primary" onCancel={() => setPending(null)} onConfirm={() => { const action = pending; setPending(null); action(); }} />}
+    {deleting && <ConfirmDialog open title={t('advanced.macros.catalog.deleteTitle', { name: deleting.title })} text={t('advanced.macros.catalog.deleteHelp')} confirmDisabled={Boolean(busy)} onCancel={() => { if (!busy) setDeleting(null); }} onConfirm={() => void remove()} />}
+  </div>;
 }

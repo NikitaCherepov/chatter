@@ -160,11 +160,13 @@
   },
   {
     "section": "macros",
-    "key": "advanced.macros.enabled"
+    "key": "advanced.macros.catalog.available",
+    "relatedKeys": ["advanced.macros.catalog.availableHelp"]
   },
   {
     "section": "macros",
-    "key": "advanced.macros.pinned"
+    "key": "advanced.macros.catalog.pinnedLabel",
+    "relatedKeys": ["advanced.macros.catalog.pinnedHelp"]
   },
   {
     "section": "macros",
