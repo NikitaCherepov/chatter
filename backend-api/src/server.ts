@@ -6500,7 +6500,7 @@ app.delete('/api/v1/user/model-settings/:modelId', (req: AuthedRequest, res) => 
 
 // ─── Feature flags (tool restrictions) ──────────────────────────────────────
 
-const VALID_FLAG_KEYS = ['disable_memory_write', 'disable_pc_control_lite', 'disable_pc_control_full', 'disable_pc_commands', 'disable_internet', 'disable_personal', 'disable_specialized_subagents', 'disable_adhoc_subagents', 'disable_avatar_control', 'disable_prompt_injection_protection'] as const;
+const VALID_FLAG_KEYS = ['disable_memory_write', 'disable_pc_control_lite', 'disable_pc_control_full', 'disable_pc_commands', 'disable_internet', 'disable_personal', 'disable_specialized_subagents', 'disable_adhoc_subagents', 'disable_avatar_control', 'hide_pixel_avatar', 'disable_prompt_injection_protection'] as const;
 
 app.get('/api/v1/user/feature-flags', (req: AuthedRequest, res: any) => {
   const userId = accountIdFromRequest(req);

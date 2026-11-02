@@ -20,10 +20,13 @@ const groups: { title: string; rows: Restriction[] }[] = [
     { key: 'disable_pc_commands', text: 'noPcCommands', icon: 'monitor' },
     { key: 'disable_internet', text: 'noInternet', icon: 'globe' },
   ] },
-  { title: 'helpers', rows: [
+  { title: 'agents', rows: [
     { key: 'disable_specialized_subagents', text: 'noSpecializedSubagents', icon: 'agent' },
     { key: 'disable_adhoc_subagents', text: 'noAdhocSubagents', icon: 'code' },
-    { key: 'disable_avatar_control', text: 'noAvatarControl', icon: 'avatar' },
+  ] },
+  { title: 'avatar', rows: [
+    { key: 'hide_pixel_avatar', text: 'hidePixelAvatar', icon: 'avatar' },
+    { key: 'disable_avatar_control', text: 'noAvatarControl', icon: 'agent' },
   ] },
   { title: 'security', rows: [
     { key: 'disable_prompt_injection_protection', text: 'injectionProtection', icon: 'shield', protection: true },
@@ -52,7 +55,7 @@ export function RestrictionsSettings({ flags, loading, saving, loadFailed, onRet
             <div className={s.text}>
               <span id={labelId} className={s.label}>{t(`settings.restrictions.${row.text}`)}</span>
               <p id={hintId}>{t(`settings.restrictions.${row.text}${row.protection ? 'Hint' : 'Help'}`)}</p>
-              {inherited && <span className={s.inherited}>{t(`settings.restrictions.layout.${inherited === 'full' ? 'inheritedFull' : 'inheritedGuest'}`)}</span>}
+              {inherited && <span className={s.inherited}>{t(`settings.restrictions.layout.${inherited === 'full' ? 'inheritedFull' : inherited === 'avatar' ? 'inheritedAvatar' : 'inheritedGuest'}`)}</span>}
               {row.protection && <Tooltip content={t('settings.restrictions.injectionProtectionHelp')}><button type="button" className={s.details}>{t('settings.restrictions.layout.details')}</button></Tooltip>}
             </div>
             <button type="button" role="switch" aria-checked={checked} aria-labelledby={labelId} aria-describedby={hintId}

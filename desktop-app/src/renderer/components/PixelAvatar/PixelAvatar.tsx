@@ -52,6 +52,7 @@ type BackgroundActivityView = {
 };
 
 type PixelAvatarProps = {
+  controlEnabled?: boolean;
   thinking?: boolean;
   pixelated?: boolean;
   alt?: string;
@@ -68,7 +69,7 @@ const sessionStatusLabel = (status: BackgroundActivityView['status']) => {
   return 'Ожидает';
 };
 
-export function PixelAvatar({ chatId = null, dockAlign = 'end', fallbackImageUrl = null, variant = 'default', initialState = null, thinking = false, pixelated = true, alt = '' }: PixelAvatarProps) {
+export function PixelAvatar({ chatId = null, dockAlign = 'end', fallbackImageUrl = null, variant = 'default', initialState = null, thinking = false, pixelated = true, alt = '', controlEnabled = true }: PixelAvatarProps) {
   const initialStateRef = useRef(initialState);
   const [activityPreview, setActivityPreview] = useState<{ active: boolean; activityId?: string; image?: string }>({ active: false });
   const [backgroundActivities, setBackgroundActivities] = useState<BackgroundActivityView[]>([]);
@@ -173,6 +174,7 @@ export function PixelAvatar({ chatId = null, dockAlign = 'end', fallbackImageUrl
   // ── External control: apply a SetDisplayState payload ────────────────────
 
   const applyState = useCallback((payload: SetDisplayStatePayload) => {
+    if (!controlEnabled) return;
     // Stop loop if requested
     if (payload.clear_loop) {
       setLoopReaction(null);
@@ -203,7 +205,12 @@ export function PixelAvatar({ chatId = null, dockAlign = 'end', fallbackImageUrl
     if (payload.reactions && payload.reactions.length > 0) {
       setReactionQueue((prev) => [...prev, ...payload.reactions!]);
     }
-  }, []);
+  }, [controlEnabled]);
+
+  useEffect(() => {
+    if (controlEnabled) return;
+    setMediaUrl(null); setLoopReaction(null); setReactionQueue([]); setActiveReaction(null); setBaseMood('idle');
+  }, [controlEnabled]);
 
   // Restore persistent state when the live avatar moves to a new response.
   // Temporary reaction queues must not replay in each new message.
@@ -289,7 +296,7 @@ export function PixelAvatar({ chatId = null, dockAlign = 'end', fallbackImageUrl
 
   // ── Determine what to render (priority: media > loop > reaction queue > base + blink) ─
 
-  const renderSrc = mediaUrl
+  const renderSrc = !controlEnabled ? (thinking ? getReaction('think').src : getBaseFace('idle', blinking)) : mediaUrl
     ?? (fallbackImageUrl && loopReaction === getReaction('think').src ? null : loopReaction)
     ?? activeReaction?.src
     ?? (thinking && !fallbackImageUrl ? getReaction('think').src : null)

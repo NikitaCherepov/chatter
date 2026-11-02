@@ -12,3 +12,6 @@ assert.equal(restrictionOverride('disable_memory_write',{...flags,disable_person
 assert.equal(flags.disable_pc_commands,false);
 assert.equal(flags.disable_memory_write,false);
 console.log('Restrictions: effective inherited states and unchanged underlying choices passed.');
+
+assert.equal(restrictionOverride('disable_avatar_control',{...flags,hide_pixel_avatar:true}),'avatar');
+assert.equal(restrictionOverride('disable_avatar_control',{...flags,hide_pixel_avatar:false}),null);

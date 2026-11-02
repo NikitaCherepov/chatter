@@ -344,6 +344,11 @@
     "relatedKeys": ["settings.restrictions.noAvatarControlHelp"]
   },
   {
+    "section": "restrictions",
+    "key": "settings.restrictions.hidePixelAvatar",
+    "relatedKeys": ["settings.restrictions.hidePixelAvatarHelp"]
+  },
+  {
     "section": "voice",
     "key": "settings.voice.activation.enabled",
     "relatedKeys": ["settings.voice.activation.title", "settings.voice.activation.help", "settings.voice.activation.names", "settings.voice.activation.phrases", "settings.voice.activation.sensitivity", "settings.voice.activation.sensitivityHelp"]

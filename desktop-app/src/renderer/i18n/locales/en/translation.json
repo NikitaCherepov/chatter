@@ -704,8 +704,20 @@
       "speechVolume": "Speech volume",
       "effectsVolume": "Sound effects volume"
     },
+    "avatar": {
+      "menu": "Pixel avatar",
+      "show": "Show avatar",
+      "control": "Bot controls the avatar",
+      "hiddenHint": "The avatar is hidden. Restore it here or in restriction settings.",
+      "menuHint": "These settings apply to your account. Prompt pictures remain visible."
+    },
     "restrictions": {
+      "hidePixelAvatar": "Hide pixel avatar",
+      "hidePixelAvatarHelp": "Hides the face on messages without a picture. The bot receives no avatar tools or instructions. Custom prompt pictures remain visible.",
       "layout": {
+        "agents": "Agents",
+        "avatar": "Avatar",
+        "inheritedAvatar": "Control is unavailable while the pixel avatar is hidden",
         "privacy": "Personal data",
         "access": "Computer and network",
         "helpers": "Agents and avatar",

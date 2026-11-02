@@ -8,6 +8,7 @@ export type ToolRestrictionFlags = {
   disable_specialized_subagents?: boolean;
   disable_adhoc_subagents?: boolean;
   disable_avatar_control?: boolean;
+  hide_pixel_avatar?: boolean;
 };
 
 const ROLEPLAY_ALLOWED_TOOL_NAMES = new Set([

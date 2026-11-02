@@ -1,3 +1,4 @@
+import { useFeatureFlags } from '../lib/useFeatureFlags';
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -384,23 +385,8 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
   // IDs follow creation order; activation must not rearrange the cards.
   const personas = useMemo(() => [...(personasQuery.data?.personas ?? [])].sort((left, right) => left.id - right.id), [personasQuery.data]);
 
-  // Feature flags (restrictions)
-  const [featureFlags, setFeatureFlagsState] = useState<api.FeatureFlags>({
-    disable_prompt_injection_protection: false,
-    disable_memory_write: false,
-    disable_pc_control_lite: false,
-    disable_pc_control_full: false,
-    disable_pc_commands: false,
-    disable_internet: false,
-    disable_personal: false,
-    disable_specialized_subagents: false,
-    disable_adhoc_subagents: false,
-    disable_avatar_control: false,
-  });
-  const [flagsLoading, setFlagsLoading] = useState(true);
-  const [flagsLoadFailed, setFlagsLoadFailed] = useState(false);
-  const [flagsReload, setFlagsReload] = useState(0);
-  const [flagsSaving, setFlagsSaving] = useState(false);
+  const { flags: featureFlags, loading: flagsLoading, saving: flagsSaving, loadFailed: flagsLoadFailed,
+    setFlag, retry: retryFlags } = useFeatureFlags(section === 'restrictions');
 
   // Models (per-model generation settings)
   const [modelsCatalog, setModelsCatalog] = useState<api.ModelCatalogEntry[]>([]);
@@ -521,19 +507,6 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
     setPendingPersonaImage(null);
     setPersonaImageRemoved(false);
   }, [selectedPersonaId, personas]);
-
-  // Load restrictions before exposing editable controls.
-  useEffect(() => {
-    if (section !== 'restrictions') return;
-    let cancelled = false;
-    setFlagsLoading(true);
-    setFlagsLoadFailed(false);
-    api.getFeatureFlags()
-      .then(res => { if (!cancelled) setFeatureFlagsState(res.flags); })
-      .catch(() => { if (!cancelled) setFlagsLoadFailed(true); })
-      .finally(() => { if (!cancelled) setFlagsLoading(false); });
-    return () => { cancelled = true; };
-  }, [section, flagsReload]);
 
   // Load models catalog + per-model settings when models tab opens
   useEffect(() => {
@@ -869,21 +842,7 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
     }
   };
 
-  const handleToggleFlag = async (key: keyof api.FeatureFlags) => {
-    if (flagsSaving || flagsLoading || flagsLoadFailed) return;
-    const newFlags = { ...featureFlags, [key]: !featureFlags[key] };
-    setFeatureFlagsState(newFlags);
-    setFlagsSaving(true);
-    try {
-      const res = await api.setFeatureFlags(newFlags);
-      setFeatureFlagsState(res.flags);
-    } catch {
-      setFeatureFlagsState(featureFlags); // rollback
-      toast.error(t('settings.toasts.saveSettingsFailed'));
-    } finally {
-      setFlagsSaving(false);
-    }
-  };
+  const handleToggleFlag = (key: keyof api.FeatureFlags) => setFlag(key, !featureFlags[key]);
 
   // Load zoom level on modal open
   useEffect(() => {
@@ -2554,7 +2513,7 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
 
           {section === 'restrictions' && (
             <RestrictionsSettings flags={featureFlags} loading={flagsLoading} saving={flagsSaving}
-              loadFailed={flagsLoadFailed} onRetry={() => setFlagsReload(value => value + 1)} onToggle={handleToggleFlag} />
+              loadFailed={flagsLoadFailed} onRetry={retryFlags} onToggle={handleToggleFlag} />
           )}
 
           {section === 'agents' && (
