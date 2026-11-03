@@ -1,533 +1,214 @@
 import { RUNBOOK_COMMAND_TOOLS_ENABLED } from '../lib/runbook-ui';
 import { useTranslation } from 'react-i18next';
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback, useId } from 'react';
 import { toast } from 'sonner';
 import * as api from '../lib/api';
-import s from './SettingsModal.module.scss';
+import { normalizeSettingsSearch } from '../lib/settings-navigation';
+import { Icon } from './Icon';
 import { Select } from './Select';
-import type { SelectOption } from './Select';
 import { ConfirmDialog } from './ConfirmDialog';
+import shared from './SettingsModal.module.scss';
+import catalog from './MacroSettings.module.scss';
+import rows from './RestrictionsSettings.module.scss';
+import toggle from './MemoryPopover.module.scss';
+import s from './ServerSettings.module.scss';
 
-type Server = {
-  id: number;
-  name: string;
-  host: string;
-  port: number;
-  username: string;
-  has_password: boolean;
-  has_sudo_password: boolean;
-  default_ssh_key_id: number | null;
-  use_ssh_key_for_login: boolean;
-  auto_approve_all: boolean;
-  created_at: number;
-  updated_at: number;
-};
-
-type SshKey = {
-  id: number;
-  name: string;
-  public_key: string;
-  has_private_key: boolean;
-};
-
-type Policy = {
-  id: number;
-  server_id: number;
-  pattern: string;
-  auto_approve: boolean;
-  created_at: number;
-};
-
-type Runbook = {
-  id: number;
-  title: string;
-  commands: string[];
-};
+type Server = { id: number; name: string; host: string; port: number; username: string; has_password: boolean; has_sudo_password: boolean; default_ssh_key_id: number | null; use_ssh_key_for_login: boolean; auto_approve_all: boolean; created_at: number; updated_at: number };
+type SshKey = { id: number; name: string; public_key: string; has_private_key: boolean };
+type Policy = { id: number; server_id: number; pattern: string; auto_approve: boolean; created_at: number };
+type Runbook = { id: number; title: string; commands: string[] };
+type Draft = { name: string; host: string; port: string; username: string; password: string; sudoPassword: string; keyId: number | null; keyLogin: boolean; autoApprove: boolean; clearSudo: boolean };
+const emptyDraft = (): Draft => ({ name: '', host: '', port: '22', username: 'root', password: '', sudoPassword: '', keyId: null, keyLogin: false, autoApprove: false, clearSudo: false });
+const draftFor = (server: Server): Draft => ({ ...emptyDraft(), name: server.name, host: server.host, port: String(server.port), username: server.username, keyId: server.default_ssh_key_id, keyLogin: server.use_ssh_key_for_login, autoApprove: server.auto_approve_all });
+const payloadFor = (draft: Draft) => ({
+  name: draft.name.trim(), host: draft.host.trim(), port: Number(draft.port), username: draft.username.trim(),
+  default_ssh_key_id: draft.keyId, use_ssh_key_for_login: draft.keyLogin, auto_approve_all: draft.autoApprove,
+  ...(draft.password ? { password: draft.password } : {}),
+  ...(draft.clearSudo ? { sudo_password: '' } : draft.sudoPassword ? { sudo_password: draft.sudoPassword } : {}),
+});
+const base = '/api/v1/devops/servers';
 
 export function ServerSettings() {
   const { t } = useTranslation();
+  const copy = (key: string) => t(`advanced.server.layout.${key}`);
+  const id = useId();
   const [servers, setServers] = useState<Server[]>([]);
-  const [policies, setPolicies] = useState<Record<number, Policy[]>>({});
-  const [runbooks, setRunbooks] = useState<Runbook[]>([]);
   const [sshKeys, setSshKeys] = useState<SshKey[]>([]);
+  const [keysFailed, setKeysFailed] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [editingHasSudoPassword, setEditingHasSudoPassword] = useState(false);
-  const [testing, setTesting] = useState<number | null>(null);
-
-  // Form
-  const [formName, setFormName] = useState('');
-  const [formHost, setFormHost] = useState('');
-  const [formPort, setFormPort] = useState(22);
-  const [formUsername, setFormUsername] = useState('root');
-  const [formPassword, setFormPassword] = useState('');
-  const [formSudoPassword, setFormSudoPassword] = useState('');
-  const [formDefaultKey, setFormDefaultKey] = useState<number | null>(null);
-  const [formUseSshKeyForLogin, setFormUseSshKeyForLogin] = useState(false);
-  const [formAutoApproveAll, setFormAutoApproveAll] = useState(false);
-  const [formSaving, setFormSaving] = useState(false);
-
-  const resetForm = () => {
-    setEditingId(null);
-    setFormName('');
-    setFormHost('');
-    setFormPort(22);
-    setFormUsername('root');
-    setFormPassword('');
-    setFormSudoPassword('');
-    setEditingHasSudoPassword(false);
-    setFormDefaultKey(null);
-    setFormUseSshKeyForLogin(false);
-    setFormAutoApproveAll(false);
-  };
-
-  const startEdit = (server: Server) => {
-    setEditingId(server.id);
-    setFormName(server.name);
-    setFormHost(server.host);
-    setFormPort(server.port);
-    setFormUsername(server.username);
-    setFormPassword('');
-    setFormSudoPassword('');
-    setEditingHasSudoPassword(server.has_sudo_password);
-    setFormDefaultKey(server.default_ssh_key_id);
-    setFormUseSshKeyForLogin(server.use_ssh_key_for_login);
-    setFormAutoApproveAll(server.auto_approve_all);
-  };
-
-  const loadServers = async () => {
+  const [failed, setFailed] = useState(false);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [query, setQuery] = useState('');
+  const [view, setView] = useState<'read' | 'edit' | 'new'>('read');
+  const [draft, setDraft] = useState<Draft>(emptyDraft);
+  const [original, setOriginal] = useState<Draft>(emptyDraft);
+  const [busy, setBusy] = useState(false);
+  const [pending, setPending] = useState<(() => void) | null>(null);
+  const [confirm, setConfirm] = useState<'delete' | 'auto' | null>(null);
+  const [testResult, setTestResult] = useState<{ id: number; ok: boolean; message: string } | null>(null);
+  const [policies, setPolicies] = useState<Policy[]>([]);
+  const [policiesLoading, setPoliciesLoading] = useState(false);
+  const [policiesFailed, setPoliciesFailed] = useState(false);
+  const [policyRevision, setPolicyRevision] = useState(0);
+  const [runbooks, setRunbooks] = useState<Runbook[]>([]);
+  const detailRef = useRef<HTMLDivElement>(null);
+  const inFlight = useRef(false);
+  const selected = servers.find(server => server.id === selectedId) ?? servers[0];
+  const editing = view !== 'read';
+  const dirty = editing && JSON.stringify(draft) !== JSON.stringify(original);
+  const setField = <K extends keyof Draft>(key: K, value: Draft[K]) => setDraft(current => ({ ...current, [key]: value }));
+  const load = useCallback(async () => {
+    setLoading(true); setFailed(false);
     try {
-      const res = await api.apiFetch<{ servers: Server[] }>('/api/v1/devops/servers');
-      setServers(res.servers);
-      // Load policies for each server
-      const policyMap: Record<number, Policy[]> = {};
-      for (const server of res.servers) {
-        try {
-          const pRes = await api.apiFetch<{ policies: Policy[] }>(`/api/v1/devops/servers/${server.id}/policies`);
-          policyMap[server.id] = pRes.policies;
-        } catch { policyMap[server.id] = []; }
-      }
-      setPolicies(policyMap);
-      // Load available runbooks
-      try {
-        const rRes = await api.apiFetch<{ runbooks: Runbook[] }>('/api/v1/devops/runbooks');
-        setRunbooks(rRes.runbooks);
-      } catch {}
-      // Load available SSH keys
-      try {
-        const kRes = await api.apiFetch<{ keys: SshKey[] }>('/api/v1/devops/ssh-keys');
-        setSshKeys(kRes.keys);
-      } catch {}
-    } catch (err) {
-      console.error('Failed to load servers:', err);
-    } finally {
-      setLoading(false);
-    }
+      const result = await api.apiFetch<{ servers: Server[] }>(base);
+      setServers(result.servers);
+    } catch { setFailed(true); }
+    finally { setLoading(false); }
+  }, []);
+  const loadKeys = useCallback(async () => {
+    try { const result = await api.apiFetch<{ keys: SshKey[] }>('/api/v1/devops/ssh-keys'); setSshKeys(result.keys); setKeysFailed(false); }
+    catch { setKeysFailed(true); }
+  }, []);
+  useEffect(() => { void load(); void loadKeys();
+    if (RUNBOOK_COMMAND_TOOLS_ENABLED) void api.apiFetch<{ runbooks: Runbook[] }>('/api/v1/devops/runbooks').then(result => setRunbooks(result.runbooks)).catch(() => {});
+  }, [load, loadKeys]);
+  useEffect(() => {
+    if (!selected) return;
+    let cancelled = false;
+    setPoliciesLoading(true); setPoliciesFailed(false); setPolicies([]);
+    api.apiFetch<{ policies: Policy[] }>(`${base}/${selected.id}/policies`)
+      .then(result => { if (!cancelled) setPolicies(result.policies); })
+      .catch(() => { if (!cancelled) setPoliciesFailed(true); })
+      .finally(() => { if (!cancelled) setPoliciesLoading(false); });
+    return () => { cancelled = true; };
+  }, [selected?.id, policyRevision]);
+  useEffect(() => { if (detailRef.current) detailRef.current.scrollTop = 0; }, [selected?.id, view]);
+  const mutate = async (action: () => Promise<void>) => {
+    if (inFlight.current) return;
+    inFlight.current = true; setBusy(true);
+    try { await action(); }
+    catch (error) { toast.error(api.getApiErrorMessage(error, t('advanced.common.saveFailed'))); }
+    finally { inFlight.current = false; setBusy(false); }
   };
-
-  useEffect(() => { loadServers(); }, []);
-
-  const handleSave = async () => {
-    const trimmedName = formName.trim();
-    const trimmedHost = formHost.trim();
-    const trimmedUsername = formUsername.trim();
-
-    if (!trimmedName || !trimmedHost || !trimmedUsername) {
-      toast.error(t('advanced.server.fillRequired'));
-      return;
-    }
-
-    if (formUseSshKeyForLogin && !formDefaultKey) {
-      toast.error(t('advanced.server.selectKey'));
-      return;
-    }
-
-    setFormSaving(true);
+  const request = (action: () => void) => { if (inFlight.current) return; if (dirty) setPending(() => action); else action(); };
+  const create = () => request(() => { const next = emptyDraft(); setDraft(next); setOriginal(next); setView('new'); });
+  const edit = () => { if (!selected || busy) return; const next = draftFor(selected); setDraft(next); setOriginal(next); setView('edit'); };
+  const save = () => {
+    if (!dirty || !draft.name.trim() || !draft.host.trim() || !draft.username.trim()) return;
+    const port = Number(draft.port);
+    if (!Number.isInteger(port) || port < 1 || port > 65535) { toast.error(copy('invalidPort')); return; }
+    if (draft.keyLogin && !draft.keyId) { toast.error(t('advanced.server.selectKey')); return; }
+    if (view === 'new' && !draft.password && !draft.keyId) { toast.error(t('advanced.server.credentialsRequired')); return; }
+    void mutate(async () => {
+      const value = payloadFor(draft);
+      const now = Math.floor(Date.now() / 1000);
+      const existing = view === 'edit' ? selected : undefined;
+      const result = await api.apiFetch<{ id?: number }>(existing ? `${base}/${existing.id}` : base, { method: existing ? 'PUT' : 'POST', body: JSON.stringify(value) });
+      const server: Server = { id: existing ? existing.id : result.id!, name: value.name, host: value.host, port, username: value.username,
+        default_ssh_key_id: draft.keyId, use_ssh_key_for_login: draft.keyLogin, auto_approve_all: draft.autoApprove,
+        has_password: Boolean(draft.password || existing?.has_password), has_sudo_password: draft.clearSudo ? false : Boolean(draft.sudoPassword || existing?.has_sudo_password),
+        created_at: existing?.created_at ?? now, updated_at: now };
+      setServers(current => existing ? current.map(item => item.id === server.id ? server : item) : [...current, server]);
+      setSelectedId(server.id); setQuery(''); setView('read'); setDraft(emptyDraft()); setOriginal(emptyDraft()); setTestResult(null);
+      toast.success(t(existing ? 'advanced.server.updated' : 'advanced.server.added'));
+    });
+  };
+  const remove = () => { if (!selected) return; void mutate(async () => {
+    await api.apiFetch(`${base}/${selected.id}`, { method: 'DELETE' });
+    setServers(current => current.filter(server => server.id !== selected.id)); setSelectedId(null); setConfirm(null);
+    toast.success(t('advanced.server.deleted'));
+  }); };
+  const test = () => { if (!selected) return; void mutate(async () => {
+    setTestResult(null);
     try {
-      if (editingId !== null) {
-        const updates: Record<string, unknown> = {
-          name: trimmedName,
-          host: trimmedHost,
-          port: formPort,
-          username: trimmedUsername,
-        };
-        if (formPassword) updates.password = formPassword;
-        if (formSudoPassword) updates.sudo_password = formSudoPassword;
-        updates.default_ssh_key_id = formDefaultKey;
-        updates.use_ssh_key_for_login = formUseSshKeyForLogin;
-        updates.auto_approve_all = formAutoApproveAll;
-
-        await api.apiFetch(`/api/v1/devops/servers/${editingId}`, {
-          method: 'PUT',
-          body: JSON.stringify(updates),
-        });
-        toast.success(t('advanced.server.updated'));
-      } else {
-        if (!formPassword && !formDefaultKey) {
-          toast.error(t('advanced.server.credentialsRequired'));
-          setFormSaving(false);
-          return;
-        }
-        await api.apiFetch('/api/v1/devops/servers', {
-          method: 'POST',
-          body: JSON.stringify({
-            name: trimmedName,
-            host: trimmedHost,
-            port: formPort,
-            username: trimmedUsername,
-            password: formPassword || undefined,
-            sudo_password: formSudoPassword || undefined,
-            default_ssh_key_id: formDefaultKey,
-            use_ssh_key_for_login: formUseSshKeyForLogin,
-            auto_approve_all: formAutoApproveAll,
-          }),
-        });
-        toast.success(t('advanced.server.added'));
-      }
-      resetForm();
-      loadServers();
-    } catch (err: any) {
-      toast.error(err?.body?.error || t('advanced.common.saveFailed'));
-    } finally {
-      setFormSaving(false);
-    }
-  };
-
-  const handleDeletePolicy = async (serverId: number, policyId: number) => {
-    try {
-      await api.apiFetch(`/api/v1/devops/policies/${policyId}`, { method: 'DELETE' });
-      setPolicies(prev => ({
-        ...prev,
-        [serverId]: (prev[serverId] || []).filter(p => p.id !== policyId),
-      }));
-      toast.success(t('advanced.server.policyDeleted'));
-    } catch {
-      toast.error(t('advanced.server.policyDeleteFailed'));
-    }
-  };
-
-  const handleAttachRunbook = async (serverId: number, runbookId: number) => {
-    try {
-      const res = await api.apiFetch<{ ok: boolean; created: number }>(`/api/v1/devops/servers/${serverId}/attach-runbook`, {
-        method: 'POST',
-        body: JSON.stringify({ runbook_id: runbookId }),
-      });
-      toast.success(`Привязано: ${res.created} новых политик`);
-      // Reload policies for this server
-      try {
-        const pRes = await api.apiFetch<{ policies: Policy[] }>(`/api/v1/devops/servers/${serverId}/policies`);
-        setPolicies(prev => ({ ...prev, [serverId]: pRes.policies }));
-      } catch {}
-    } catch {
-      toast.error(t('advanced.server.runbookLinkFailed'));
-    }
-  };
-
-  const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
-
-  const handleDelete = async (id: number) => {
-    setDeleteConfirmId(null);
-    try {
-      await api.apiFetch(`/api/v1/devops/servers/${id}`, { method: 'DELETE' });
-      toast.success(t('advanced.server.deleted'));
-      if (editingId === id) resetForm();
-      loadServers();
-    } catch {
-      toast.error(t('advanced.common.deleteFailed'));
-    }
-  };
-
-  const handleTest = async (id: number) => {
-    setTesting(id);
-    try {
-      const res = await api.apiFetch<{ ok: boolean; error?: string }>(`/api/v1/devops/servers/${id}/test`, {
-        method: 'POST',
-      });
-      if (res.ok) {
-        toast.success(t('advanced.server.connectionSuccessful'));
-      } else {
-        toast.error(`Ошибка: ${res.error || t('advanced.server.unknown')}`);
-      }
-    } catch (err: any) {
-      toast.error(err?.body?.details || t('advanced.server.connectionFailed'));
-    } finally {
-      setTesting(null);
-    }
-  };
-
-  if (loading) return <div className={s.panel}><div className={s.promptLoading}>{t('common.loading')}</div></div>;
-
-  return (
-    <div className={s.panel}>
-      <div className={s.panelTitle}>{t('settings.sections.servers')}</div>
-
-      {/* Form */}
-      <div className={s.fieldGroup}>
-        <label className={s.fieldLabel}>{t('advanced.common.name')}</label>
-        <input
-          className={s.fieldInput}
-          type="text"
-          value={formName}
-          onChange={(e) => setFormName(e.target.value)}
-          placeholder={t('advanced.server.namePlaceholder')}
-        />
-      </div>
-
-      <div className={s.fieldGroup}>
-        <label className={s.fieldLabel}>{t('advanced.server.host')}</label>
-        <input
-          className={s.fieldInput}
-          type="text"
-          value={formHost}
-          onChange={(e) => setFormHost(e.target.value)}
-          placeholder="192.168.1.100"
-        />
-      </div>
-
-      <div className={s.fieldGroup}>
-        <label className={s.fieldLabel}>{t('advanced.server.port')}</label>
-        <input
-          className={s.fieldInput}
-          type="number"
-          value={formPort}
-          onChange={(e) => setFormPort(Number(e.target.value))}
-          min={1}
-          max={65535}
-        />
-      </div>
-
-      <div className={s.fieldGroup}>
-        <label className={s.fieldLabel}>{t('advanced.server.user')}</label>
-        <input
-          className={s.fieldInput}
-          type="text"
-          value={formUsername}
-          onChange={(e) => setFormUsername(e.target.value)}
-          placeholder="root"
-        />
-      </div>
-
-      <div className={s.fieldGroup}>
-        <label className={s.fieldLabel}>{t('advanced.server.password')} {editingId !== null ? t('advanced.server.leaveBlank') : ''}</label>
-        <input
-          className={s.fieldInput}
-          type="password"
-          value={formPassword}
-          onChange={(e) => setFormPassword(e.target.value)}
-          placeholder="••••••••"
-        />
-      </div>
-
-      <div className={s.fieldGroup}>
-        <label className={s.fieldLabel}>{t('advanced.server.sudoPassword')} {editingId !== null ? t('advanced.server.leaveBlank') : t('advanced.common.optional')}</label>
-        <input
-          className={s.fieldInput}
-          type="password"
-          value={formSudoPassword}
-          onChange={(e) => setFormSudoPassword(e.target.value)}
-          placeholder={t('advanced.server.sudoPlaceholder')}
-        />
-        {editingId !== null && editingHasSudoPassword && (
-          <button
-            className={s.cancelBtn}
-            style={{ alignSelf: 'flex-start', padding: '6px 10px', fontSize: '12px' }}
-            type="button"
-            onClick={async () => {
-              try {
-                await api.apiFetch(`/api/v1/devops/servers/${editingId}`, {
-                  method: 'PUT',
-                  body: JSON.stringify({ sudo_password: '' }),
-                });
-                setEditingHasSudoPassword(false);
-                setFormSudoPassword('');
-                toast.success(t('advanced.server.sudoCleared'));
-                loadServers();
-              } catch (err: any) {
-                toast.error(err?.body?.error || t('advanced.server.sudoClearFailed'));
-              }
-            }}
-          >
-            {t('advanced.server.clearSudo')}
-          </button>
-        )}
-      </div>
-
-      <div className={s.fieldGroup}>
-        <label className={s.fieldLabel}>{t('advanced.server.defaultKey')}</label>
-        {sshKeys.length > 0 ? (
-          <Select
-            options={[
-              { value: '', label: t('advanced.common.notSelected') },
-              ...sshKeys.map((key) => ({
-                value: String(key.id),
-                label: key.name,
-                hint: key.has_private_key ? t('advanced.ssh.fullPair') : t('advanced.ssh.publicOnly'),
-              })),
-            ]}
-            value={formDefaultKey != null ? String(formDefaultKey) : ''}
-            onChange={(v) => {
-              setFormDefaultKey(v ? Number(v) : null);
-              if (!v) setFormUseSshKeyForLogin(false);
-            }}
-            placeholder={t('advanced.common.notSelected')}
-          />
-        ) : (
-          <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-            {t('advanced.server.addKeysFirst')}
-          </div>
-        )}
-      </div>
-
-      <div className={s.fieldGroup}>
-        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: 'var(--text-primary)', cursor: 'pointer' }}>
-          <input
-            className={s.macroCheckbox}
-            type="checkbox"
-            checked={formUseSshKeyForLogin}
-            onChange={(e) => setFormUseSshKeyForLogin(e.target.checked)}
-            disabled={!formDefaultKey}
-          />
-          {t('advanced.server.useKeyLogin')}
-        </label>
-        <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
-          {t('advanced.server.useKeyHelp')}
-        </div>
-      </div>
-
-      <div className={s.fieldGroup}>
-        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: 'var(--text-primary)', cursor: 'pointer' }}>
-          <input
-            className={s.macroCheckbox}
-            type="checkbox"
-            checked={formAutoApproveAll}
-            onChange={(e) => setFormAutoApproveAll(e.target.checked)}
-          />
-          {t('advanced.server.autoApprove')}
-        </label>
-        <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
-          {t('advanced.server.dangerousBlocked')}
-        </div>
-      </div>
-
-      <div style={{ display: 'flex', gap: '8px' }}>
-        <button
-          className={s.saveBtn}
-          onClick={handleSave}
-          disabled={formSaving}
-        >
-          {formSaving ? t('common.saving') : editingId ? t('advanced.common.update') : t('advanced.common.add')}
-        </button>
-        {editingId !== null && (
-          <button className={s.cancelBtn} onClick={resetForm}>
-            {t('common.cancel')}
-          </button>
-        )}
-      </div>
-
-      {/* Server list */}
-      {servers.length > 0 && (
-        <div style={{ marginTop: '16px' }}>
-          <div className={s.fieldLabel} style={{ marginBottom: '8px' }}>{t('advanced.server.addedServers')}</div>
-          {servers.map((server) => (
-            <div key={server.id} className={s.macroCard}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 500, fontSize: '13px' }}>{server.name}</div>
-                <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
-                  {server.username}@{server.host}:{server.port}
-                  {server.has_password && t('advanced.server.passwordSuffix')}
-                  {server.default_ssh_key_id && t('advanced.server.keySuffix')}
-                  {server.use_ssh_key_for_login && t('advanced.server.sshLoginSuffix')}
-                  {server.has_sudo_password && ' · sudo'}
-                </div>
-              </div>
-              <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
-                <button
-                  className={s.macroActionBtn}
-                  onClick={() => handleTest(server.id)}
-                  disabled={testing === server.id}
-                  title={t('advanced.server.testConnection')}
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-                    <polyline points="22 4 12 14.01 9 11.01" />
-                  </svg>
-                </button>
-                <button
-                  className={s.macroActionBtn}
-                  onClick={() => startEdit(server)}
-                  title={t('common.edit')}
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                  </svg>
-                </button>
-                <button
-                  className={`${s.macroActionBtn} ${s.macroActionBtnDanger}`}
-                  onClick={() => setDeleteConfirmId(server.id)}
-                  title={t('common.delete')}
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="3 6 5 6 21 6" />
-                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                  </svg>
-                </button>
-              </div>
-              {/* Policies */}
-              {policies[server.id] && policies[server.id].length > 0 && (
-                <div style={{ marginTop: '8px', borderTop: '1px solid var(--border-light)', paddingTop: '8px' }}>
-                  <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{t('advanced.server.autoAllowed')}</div>
-                  {policies[server.id].map((policy) => (
-                    <div key={policy.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '3px' }}>
-                      <code style={{ fontSize: '10px', color: 'var(--accent)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {policy.pattern}
-                      </code>
-                      <button
-                        className={`${s.macroActionBtn} ${s.macroActionBtnDanger}`}
-                        style={{ width: '20px', height: '20px' }}
-                        onClick={() => handleDeletePolicy(server.id, policy.id)}
-                        title={t('advanced.server.deletePolicy')}
-                      >
-                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                          <line x1="18" y1="6" x2="6" y2="18" />
-                          <line x1="6" y1="6" x2="18" y2="18" />
-                        </svg>
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {/* Attach runbook */}
-              {RUNBOOK_COMMAND_TOOLS_ENABLED && runbooks.length > 0 && (
-                <div style={{ marginTop: '8px', borderTop: '1px solid var(--border-light)', paddingTop: '8px' }}>
-                  <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{t('advanced.server.linkRunbook')}</div>
-                  <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                    {runbooks.map((rb) => (
-                      <button
-                        key={rb.id}
-                        className={s.cancelBtn}
-                        style={{ fontSize: '10px', padding: '3px 8px' }}
-                        onClick={() => handleAttachRunbook(server.id, rb.id)}
-                        title={t('advanced.server.commandsTitle', { count: rb.commands.length, preview: rb.commands.slice(0, 3).join(', ') })}
-                      >
-                        {rb.title}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
+      const result = await api.apiFetch<{ ok: boolean; error?: string }>(`${base}/${selected.id}/test`, { method: 'POST' });
+      setTestResult({ id: selected.id, ok: result.ok, message: result.ok ? t('advanced.server.connectionSuccessful') : result.error || t('advanced.server.connectionFailed') });
+    } catch (error) { setTestResult({ id: selected.id, ok: false, message: api.getApiErrorMessage(error, t('advanced.server.connectionFailed')) }); }
+  }); };
+  const deletePolicy = (policy: Policy) => void mutate(async () => {
+    await api.apiFetch(`/api/v1/devops/policies/${policy.id}`, { method: 'DELETE' });
+    setPolicies(current => current.filter(item => item.id !== policy.id)); toast.success(t('advanced.server.policyDeleted'));
+  });
+  const attachRunbook = (runbookId: number) => { if (!selected) return; void mutate(async () => {
+    await api.apiFetch(`${base}/${selected.id}/attach-runbook`, { method: 'POST', body: JSON.stringify({ runbook_id: runbookId }) });
+    setPolicyRevision(value => value + 1);
+  }); };
+  const visible = servers.filter(server => normalizeSettingsSearch(`${server.name} ${server.host} ${server.username}`).includes(normalizeSettingsSearch(query)));
+  const switchRow = (key: 'keyLogin' | 'autoApprove', icon: string, title: string, hint: string, disabled = false) => <div className={rows.row}>
+    <span className={rows.icon}><Icon name={icon} size={18} /></span><div className={rows.text}><span className={rows.label} id={`${id}-${key}`}>{title}</span><p id={`${id}-${key}-hint`}>{hint}</p></div>
+    <button type="button" role="switch" disabled={busy || disabled} aria-checked={draft[key]} aria-labelledby={`${id}-${key}`} aria-describedby={`${id}-${key}-hint`}
+      onClick={() => key === 'autoApprove' && !draft.autoApprove ? setConfirm('auto') : setField(key, !draft[key])}
+      className={`${toggle.toggle} ${draft[key] ? toggle.toggleActive : ''}`}><span /></button>
+  </div>;
+  return <div className={`${shared.panel} ${s.panel}`}>
+    <div className={shared.panelTitle}>{t('settings.sections.servers')}</div><p className={s.intro}>{copy('intro')}</p>
+    {loading ? <div role="status">{t('common.loading')}</div> : failed ? <div role="alert"><p>{copy('loadFailed')}</p><button type="button" className={shared.cancelBtn} onClick={() => void load()}>{copy('retry')}</button></div> :
+    <div className={s.workspace}>
+      <aside className={s.catalog} aria-label={t('advanced.server.addedServers')}>
+        <input type="search" className={shared.fieldInput} value={query} onChange={event => setQuery(event.target.value)} placeholder={copy('search')} aria-label={copy('search')} />
+        <button type="button" className={shared.saveBtn} disabled={busy} onClick={create}>+ {copy('add')}</button>
+        <div className={s.list}>{visible.map(server => <button type="button" key={server.id} className={`${catalog.item} ${selected?.id === server.id && view !== 'new' ? catalog.active : ''}`} aria-pressed={selected?.id === server.id && view !== 'new'} disabled={busy}
+          onClick={() => request(() => { setSelectedId(server.id); setView('read'); })}>
+          <Icon name="server" size={17} /><span><strong title={server.name}>{server.name}</strong><span className={`${catalog.meta} ${s.address}`} title={`${server.username}@${server.host}:${server.port}`}>{server.username}@{server.host}:{server.port}</span></span>
+        </button>)}{!visible.length && <p className={catalog.empty}>{query ? t('common.nothingFound') : copy('emptyList')}</p>}</div>
+        <span className={catalog.count}>{visible.length} / {servers.length}</span>
+      </aside>
+      <div className={s.detail} ref={detailRef}>
+        {editing ? <>
+          <h3 className={catalog.title}>{copy(view === 'new' ? 'add' : 'edit')}</h3>
+          <fieldset className={s.form} disabled={busy}>
+            <h4 className={s.sectionTitle}>{copy('connection')}</h4>
+            <label className={shared.fieldGroup}><span className={shared.fieldLabel}>{t('advanced.common.name')}</span><input className={shared.fieldInput} value={draft.name} onChange={event => setField('name', event.target.value)} placeholder={t('advanced.server.namePlaceholder')} /></label>
+            <div className={s.hostRow}>
+              <label className={shared.fieldGroup}><span className={shared.fieldLabel}>{t('advanced.server.host')}</span><input className={shared.fieldInput} value={draft.host} onChange={event => setField('host', event.target.value)} placeholder="example.com" /></label>
+              <label className={shared.fieldGroup}><span className={shared.fieldLabel}>{t('advanced.server.port')}</span><input type="number" min={1} max={65535} className={shared.fieldInput} value={draft.port} onChange={event => setField('port', event.target.value)} /></label>
             </div>
-          ))}
-        </div>
-      )}
-
-      <ConfirmDialog
-        open={deleteConfirmId !== null}
-        title={t('advanced.server.deleteTitle')}
-        text={t('advanced.server.deleteMessage')}
-        onCancel={() => setDeleteConfirmId(null)}
-        onConfirm={() => handleDelete(deleteConfirmId!)}
-      />
-    </div>
-  );
+            <label className={shared.fieldGroup}><span className={shared.fieldLabel}>{t('advanced.server.user')}</span><input className={shared.fieldInput} value={draft.username} onChange={event => setField('username', event.target.value)} autoComplete="off" /></label>
+            <h4 className={s.sectionTitle}>{copy('authentication')}</h4>
+            <label className={shared.fieldGroup}><span className={shared.fieldLabel}>{t('advanced.server.password')}</span><input type="password" autoComplete="new-password" className={shared.fieldInput} value={draft.password} onChange={event => setField('password', event.target.value)} placeholder={view === 'edit' && selected?.has_password ? copy('keepPassword') : copy('passwordPlaceholder')} /></label>
+            <p className={s.hint}>{copy(view === 'edit' ? 'keepSecrets' : 'credentialsHelp')}</p>
+            <div className={shared.fieldGroup}><span className={shared.fieldLabel}>{t('advanced.server.defaultKey')}</span>
+              <Select disabled={busy || keysFailed} value={draft.keyId === null ? '' : String(draft.keyId)} options={[
+                { value: '', label: t('advanced.common.notSelected') },
+                ...sshKeys.map(key => ({ value: String(key.id), label: key.name, hint: t(key.has_private_key ? 'advanced.ssh.fullPair' : 'advanced.ssh.publicOnly') })),
+                ...(draft.keyId && !sshKeys.some(key => key.id === draft.keyId) ? [{ value: String(draft.keyId), label: copy('savedKey') }] : []),
+              ]} onChange={value => setDraft(current => ({ ...current, keyId: value ? Number(value) : null, keyLogin: value ? current.keyLogin : false }))} />
+              {!keysFailed && !sshKeys.length && <p className={s.hint}>{t('advanced.server.addKeysFirst')}</p>}
+              {keysFailed && <div role="alert"><p className={s.hint}>{copy('keysFailed')}</p><button type="button" className={shared.cancelBtn} onClick={() => void loadKeys()}>{copy('retry')}</button></div>}
+            </div>
+            {switchRow('keyLogin', 'key', t('advanced.server.useKeyLogin'), copy('keyHelp'), !draft.keyId)}
+            <label className={shared.fieldGroup}><span className={shared.fieldLabel}>{t('advanced.server.sudoPassword')} {t('advanced.common.optional')}</span><input type="password" autoComplete="new-password" disabled={busy || draft.clearSudo} className={shared.fieldInput} value={draft.sudoPassword} onChange={event => setField('sudoPassword', event.target.value)} placeholder={view === 'edit' && selected?.has_sudo_password ? copy('keepPassword') : t('advanced.server.sudoPlaceholder')} /></label>
+            {view === 'edit' && selected?.has_sudo_password && <button type="button" className={s.textButton} onClick={() => setDraft(current => ({ ...current, clearSudo: !current.clearSudo, sudoPassword: '' }))}>{draft.clearSudo ? copy('undoClear') : copy('clearSudo')}</button>}
+            {draft.clearSudo && <p className={s.hint}>{copy('clearOnSave')}</p>}
+            <h4 className={s.sectionTitle}>{copy('permissions')}</h4>
+            {switchRow('autoApprove', 'terminal', t('advanced.server.autoApprove'), t('advanced.server.dangerousBlocked'))}
+          </fieldset>
+          <div className={catalog.actions}><button type="button" className={shared.saveBtn} disabled={busy || !dirty || !draft.name.trim() || !draft.host.trim() || !draft.username.trim()} onClick={save}>{busy ? t('common.saving') : t('common.save')}</button><button type="button" className={shared.cancelBtn} disabled={busy} onClick={() => request(() => { setView('read'); setDraft(emptyDraft()); setOriginal(emptyDraft()); })}>{t('common.cancel')}</button></div>
+        </> : selected ? <>
+          <div className={s.serverHeading}><span className={s.serverIcon}><Icon name="server" size={24} /></span><div><h3 className={catalog.title}>{selected.name}</h3><p className={s.connectionAddress}>{selected.username}@{selected.host}:{selected.port}</p></div></div>
+          <div className={catalog.actions}><button type="button" className={shared.saveBtn} disabled={busy} onClick={test}>{busy ? copy('working') : t('advanced.server.testConnection')}</button><button type="button" className={shared.cancelBtn} disabled={busy} onClick={edit}>{t('common.edit')}</button></div>
+          <p className={s.hint}>{copy('testHelp')}</p>
+          {testResult?.id === selected.id && <p role="status" className={`${s.testResult} ${testResult.ok ? s.success : ''}`}>{testResult.message}</p>}
+          <h4 className={s.sectionTitle}>{copy('connection')}</h4>
+          <dl className={s.facts}>
+            <div><dt>{t('advanced.server.host')}</dt><dd>{selected.host}</dd></div>
+            <div><dt>{t('advanced.server.port')}</dt><dd>{selected.port}</dd></div>
+            <div><dt>{t('advanced.server.user')}</dt><dd>{selected.username}</dd></div>
+            <div><dt>{copy('loginMethod')}</dt><dd>{copy(selected.use_ssh_key_for_login ? 'sshLogin' : 'passwordLogin')}</dd></div>
+            <div><dt>{t('advanced.server.defaultKey')}</dt><dd>{selected.default_ssh_key_id ? sshKeys.find(key => key.id === selected.default_ssh_key_id)?.name || copy('savedKey') : t('advanced.common.notSelected')}</dd></div>
+            <div><dt>{copy('sudo')}</dt><dd>{copy(selected.has_sudo_password ? 'configured' : 'notConfigured')}</dd></div>
+          </dl>
+          <h4 className={s.sectionTitle}>{copy('permissions')}</h4><p className={s.permission}><Icon name="shield" size={17} />{copy(selected.auto_approve_all ? 'automatic' : 'ask')}</p>
+          <h4 className={s.sectionTitle}>{t('advanced.pc.layout.exceptions')}</h4>
+          <p className={s.hint}>{copy('policiesHelp')}</p>
+          {selected.auto_approve_all && <p className={s.hint}>{copy('allApproved')}</p>}
+          {policiesLoading ? <p className={s.hint} role="status">{t('common.loading')}</p> : policiesFailed ? <div role="alert"><p className={s.hint}>{copy('policiesFailed')}</p><button type="button" className={shared.cancelBtn} onClick={() => setPolicyRevision(value => value + 1)}>{copy('retry')}</button></div> : policies.length ? <ul className={s.policyList}>{policies.map(policy => <li key={policy.id}><code>{policy.pattern}</code><button type="button" className={shared.removeCmdBtn} disabled={busy} title={t('advanced.server.deletePolicy')} aria-label={`${t('advanced.server.deletePolicy')}: ${policy.pattern}`} onClick={() => deletePolicy(policy)}>×</button></li>)}</ul> : <p className={s.hint}>{copy('noPolicies')}</p>}
+          {RUNBOOK_COMMAND_TOOLS_ENABLED && runbooks.length > 0 && <section><h4 className={s.sectionTitle}>{t('advanced.server.linkRunbook')}</h4><div className={catalog.actions}>{runbooks.map(runbook => <button type="button" className={shared.cancelBtn} key={runbook.id} disabled={busy} onClick={() => attachRunbook(runbook.id)}>{runbook.title}</button>)}</div></section>}
+          <div className={s.deleteArea}><button type="button" disabled={busy} onClick={() => setConfirm('delete')}>{t('common.delete')}</button></div>
+        </> : <div className={s.empty}><Icon name="server" size={30} /><h3>{copy('emptyTitle')}</h3><p>{copy('emptyHelp')}</p><button type="button" className={shared.saveBtn} onClick={create}>+ {copy('add')}</button></div>}
+      </div>
+    </div>}
+    {pending && <ConfirmDialog open title={copy('discardTitle')} text={copy('discardHelp')} confirmLabel={copy('discard')} confirmTone="primary" onCancel={() => setPending(null)} onConfirm={() => { const action = pending; setPending(null); action(); }} />}
+    {confirm && <ConfirmDialog open title={confirm === 'delete' ? t('advanced.server.deleteTitle') : copy('autoTitle')} text={confirm === 'delete' ? t('advanced.server.deleteMessage') : copy('autoHelp')} confirmLabel={confirm === 'delete' ? t('common.delete') : copy('enable')} confirmTone={confirm === 'delete' ? 'danger' : 'primary'} confirmDisabled={busy} onCancel={() => { if (!busy) setConfirm(null); }} onConfirm={() => { if (confirm === 'delete') remove(); else { setField('autoApprove', true); setConfirm(null); } }} />}
+  </div>;
 }
