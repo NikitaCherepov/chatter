@@ -2802,6 +2802,10 @@ export function ChatPage() {
     if (action.action === 'suggest_chat_link' && action.value) {
       const val = action.value as { chat_id?: number; title?: string };
       if (val.chat_id && val.title) {
+        const id = `chat-link-${val.chat_id}`;
+        if (!confirmationArrivalRef.current.has(id)) {
+          confirmationArrivalRef.current.set(id, confirmationArrivalRef.current.size);
+        }
         setPendingChatLinks(prev => {
           if (prev.some(c => c.chat_id === val.chat_id)) return prev;
           return [...prev, { chat_id: val.chat_id!, title: val.title! }];
@@ -5260,6 +5264,31 @@ export function ChatPage() {
   };
 
   const confirmationCards = [
+    ...pendingChatLinks.map(link => {
+      const id = `chat-link-${link.chat_id}`;
+      const dismiss = () => setPendingChatLinks(previous => previous.filter(item => item.chat_id !== link.chat_id));
+      return (
+        <ConfirmationCard
+          key={id}
+          id={id}
+          title={t('chat.chatLink.title')}
+          summary={link.title}
+          icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+          </svg>}
+          actions={<>
+            <button type="button" className={s.suggestMacroSaveBtn} onClick={() => {
+              setActiveChatId(link.chat_id);
+              void api.activateChat(link.chat_id).catch(() => {});
+              dismiss();
+            }}>{t('chat.chatLink.open')}</button>
+            <button type="button" className={s.suggestMacroDismissBtn} onClick={dismiss}>{t('common.reject')}</button>
+          </>}
+        >
+          <div className={s.suggestMacroName}>{link.title}</div>
+        </ConfirmationCard>
+      );
+    }),
 ...devopsConfirmations.map((conf, confIdx) => (
                 <ConfirmationCard key={conf.confirmation_id} id={conf.confirmation_id} title={t('chat.confirm.commandTitle')} summary={conf.command} icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <rect x="2" y="2" width="20" height="20" rx="2" ry="2" />
@@ -7311,45 +7340,7 @@ export function ChatPage() {
                 </div>
               ))}
 
-              {/* Suggest Chat Link cards */}
-              {pendingChatLinks.map((link, linkIdx) => (
-                <div key={`chat-link-${linkIdx}`} className={s.suggestMacroCard}>
-                  <div className={s.suggestMacroHeader}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                    </svg>
-                    <span className={s.suggestMacroTitle}>{t('chat.chatLink.title')}</span>
-                    <button
-                      className={s.suggestMacroClose}
-                      onClick={() => setPendingChatLinks(prev => prev.filter((_, i) => i !== linkIdx))}
-                    >
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                        <line x1="18" y1="6" x2="6" y2="18" />
-                        <line x1="6" y1="6" x2="18" y2="18" />
-                      </svg>
-                    </button>
-                  </div>
-                  <div className={s.suggestMacroName}>{link.title}</div>
-                  <div className={s.suggestMacroActions}>
-                    <button
-                      className={s.suggestMacroSaveBtn}
-                      onClick={() => {
-                        setActiveChatId(link.chat_id);
-                        api.activateChat(link.chat_id).catch(() => {});
-                        setPendingChatLinks(prev => prev.filter((_, i) => i !== linkIdx));
-                      }}
-                    >
-                      {t('chat.chatLink.open')}
-                    </button>
-                    <button
-                      className={s.suggestMacroDismissBtn}
-                      onClick={() => setPendingChatLinks(prev => prev.filter((_, i) => i !== linkIdx))}
-                    >
-                      {t('common.reject')}
-                    </button>
-                  </div>
-                </div>
-              ))}
+
 
 
 
