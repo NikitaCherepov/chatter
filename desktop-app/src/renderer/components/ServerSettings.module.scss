@@ -16,9 +16,6 @@
   > .sectionTitle:first-child { margin-top: 18px; }
   &:disabled { opacity: .7; }
 }
-.hostRow { display: grid; grid-template-columns: minmax(0, 1fr) 90px; gap: 12px; min-width: 0;
-  > label { min-width: 0; }
-}
 .hint { color: var(--text-muted); font-size: 11px; line-height: 1.6; margin: 6px 0 12px; }
 .facts { margin: 0;
   > div { display: grid; grid-template-columns: minmax(90px, .8fr) minmax(0, 1fr); gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border-light); font-size: 11px; line-height: 1.6; }
@@ -47,3 +44,16 @@
   .list { flex: none; max-height: 180px; }
   .detail { overflow: visible; }
 }
+.editFooter {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+  padding: 12px 0 4px;
+  border-top: 1px solid var(--border-light);
+  background: var(--bg-primary);
+}
+.facts input { width: 100%; min-width: 0; }
+.facts > div { align-items: center; }

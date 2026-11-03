@@ -82,7 +82,7 @@ export function ServerSettings() {
       .finally(() => { if (!cancelled) setPoliciesLoading(false); });
     return () => { cancelled = true; };
   }, [selected?.id, policyRevision]);
-  useEffect(() => { if (detailRef.current) detailRef.current.scrollTop = 0; }, [selected?.id, view]);
+  useEffect(() => { if (detailRef.current) detailRef.current.scrollTop = 0; }, [selected?.id, view === 'new']);
   const mutate = async (action: () => Promise<void>) => {
     if (inFlight.current) return;
     inFlight.current = true; setBusy(true);
@@ -154,17 +154,22 @@ export function ServerSettings() {
         <span className={catalog.count}>{visible.length} / {servers.length}</span>
       </aside>
       <div className={s.detail} ref={detailRef}>
-        {editing ? <>
-          <h3 className={catalog.title}>{copy(view === 'new' ? 'add' : 'edit')}</h3>
-          <fieldset className={s.form} disabled={busy}>
-            <h4 className={s.sectionTitle}>{copy('connection')}</h4>
-            <label className={shared.fieldGroup}><span className={shared.fieldLabel}>{t('advanced.common.name')}</span><input className={shared.fieldInput} value={draft.name} onChange={event => setField('name', event.target.value)} placeholder={t('advanced.server.namePlaceholder')} /></label>
-            <div className={s.hostRow}>
-              <label className={shared.fieldGroup}><span className={shared.fieldLabel}>{t('advanced.server.host')}</span><input className={shared.fieldInput} value={draft.host} onChange={event => setField('host', event.target.value)} placeholder="example.com" /></label>
-              <label className={shared.fieldGroup}><span className={shared.fieldLabel}>{t('advanced.server.port')}</span><input type="number" min={1} max={65535} className={shared.fieldInput} value={draft.port} onChange={event => setField('port', event.target.value)} /></label>
-            </div>
-            <label className={shared.fieldGroup}><span className={shared.fieldLabel}>{t('advanced.server.user')}</span><input className={shared.fieldInput} value={draft.username} onChange={event => setField('username', event.target.value)} autoComplete="off" /></label>
-            <h4 className={s.sectionTitle}>{copy('authentication')}</h4>
+        {editing || selected ? <>
+          <div className={s.serverHeading}><span className={s.serverIcon}><Icon name="server" size={24} /></span><div><h3 className={catalog.title}>{view === 'new' ? copy('add') : selected?.name}</h3>{view !== 'new' && selected && <p className={s.connectionAddress}>{selected.username}@{selected.host}:{selected.port}</p>}</div></div>
+          {view !== 'new' && selected && <>
+            <div className={catalog.actions}><button type="button" className={shared.saveBtn} disabled={busy} onClick={test}>{busy ? copy('working') : t('advanced.server.testConnection')}</button>{!editing && <button type="button" className={shared.cancelBtn} disabled={busy} onClick={edit}>{t('common.edit')}</button>}</div>
+            <p className={s.hint}>{copy('testHelp')}</p>
+            {testResult?.id === selected.id && <p role="status" className={`${s.testResult} ${testResult.ok ? s.success : ''}`}>{testResult.message}</p>}
+          </>}
+          <h4 className={s.sectionTitle}>{copy('connection')}</h4>
+          <dl className={s.facts}>
+            {editing && <div><dt><label htmlFor={editing ? `${id}-name` : undefined}>{t('advanced.common.name')}</label></dt><dd>{<input id={`${id}-name`} disabled={busy} className={shared.fieldInput} value={draft.name} onChange={event => setField('name', event.target.value)} placeholder={t('advanced.server.namePlaceholder')} />}</dd></div>}
+              <div><dt><label htmlFor={editing ? `${id}-host` : undefined}>{t('advanced.server.host')}</label></dt><dd>{editing ? <input id={`${id}-host`} disabled={busy} className={shared.fieldInput} value={draft.host} onChange={event => setField('host', event.target.value)} placeholder="example.com" /> : selected?.host}</dd></div>
+              <div><dt><label htmlFor={editing ? `${id}-port` : undefined}>{t('advanced.server.port')}</label></dt><dd>{editing ? <input id={`${id}-port`} disabled={busy} type="number" min={1} max={65535} className={shared.fieldInput} value={draft.port} onChange={event => setField('port', event.target.value)} /> : selected?.port}</dd></div>
+              <div><dt><label htmlFor={editing ? `${id}-username` : undefined}>{t('advanced.server.user')}</label></dt><dd>{editing ? <input id={`${id}-username`} disabled={busy} className={shared.fieldInput} value={draft.username} onChange={event => setField('username', event.target.value)} autoComplete="off" /> : selected?.username}</dd></div>
+          </dl>
+          <h4 className={s.sectionTitle}>{copy('authentication')}</h4>
+          {editing ? <fieldset className={s.form} disabled={busy}>
             <label className={shared.fieldGroup}><span className={shared.fieldLabel}>{t('advanced.server.password')}</span><input type="password" autoComplete="new-password" className={shared.fieldInput} value={draft.password} onChange={event => setField('password', event.target.value)} placeholder={view === 'edit' && selected?.has_password ? copy('keepPassword') : copy('passwordPlaceholder')} /></label>
             <p className={s.hint}>{copy(view === 'edit' ? 'keepSecrets' : 'credentialsHelp')}</p>
             <div className={shared.fieldGroup}><span className={shared.fieldLabel}>{t('advanced.server.defaultKey')}</span>
@@ -180,31 +185,22 @@ export function ServerSettings() {
             <label className={shared.fieldGroup}><span className={shared.fieldLabel}>{t('advanced.server.sudoPassword')} {t('advanced.common.optional')}</span><input type="password" autoComplete="new-password" disabled={busy || draft.clearSudo} className={shared.fieldInput} value={draft.sudoPassword} onChange={event => setField('sudoPassword', event.target.value)} placeholder={view === 'edit' && selected?.has_sudo_password ? copy('keepPassword') : t('advanced.server.sudoPlaceholder')} /></label>
             {view === 'edit' && selected?.has_sudo_password && <button type="button" className={s.textButton} onClick={() => setDraft(current => ({ ...current, clearSudo: !current.clearSudo, sudoPassword: '' }))}>{draft.clearSudo ? copy('undoClear') : copy('clearSudo')}</button>}
             {draft.clearSudo && <p className={s.hint}>{copy('clearOnSave')}</p>}
-            <h4 className={s.sectionTitle}>{copy('permissions')}</h4>
-            {switchRow('autoApprove', 'terminal', t('advanced.server.autoApprove'), t('advanced.server.dangerousBlocked'))}
-          </fieldset>
-          <div className={catalog.actions}><button type="button" className={shared.saveBtn} disabled={busy || !dirty || !draft.name.trim() || !draft.host.trim() || !draft.username.trim()} onClick={save}>{busy ? t('common.saving') : t('common.save')}</button><button type="button" className={shared.cancelBtn} disabled={busy} onClick={() => request(() => { setView('read'); setDraft(emptyDraft()); setOriginal(emptyDraft()); })}>{t('common.cancel')}</button></div>
-        </> : selected ? <>
-          <div className={s.serverHeading}><span className={s.serverIcon}><Icon name="server" size={24} /></span><div><h3 className={catalog.title}>{selected.name}</h3><p className={s.connectionAddress}>{selected.username}@{selected.host}:{selected.port}</p></div></div>
-          <div className={catalog.actions}><button type="button" className={shared.saveBtn} disabled={busy} onClick={test}>{busy ? copy('working') : t('advanced.server.testConnection')}</button><button type="button" className={shared.cancelBtn} disabled={busy} onClick={edit}>{t('common.edit')}</button></div>
-          <p className={s.hint}>{copy('testHelp')}</p>
-          {testResult?.id === selected.id && <p role="status" className={`${s.testResult} ${testResult.ok ? s.success : ''}`}>{testResult.message}</p>}
-          <h4 className={s.sectionTitle}>{copy('connection')}</h4>
-          <dl className={s.facts}>
-            <div><dt>{t('advanced.server.host')}</dt><dd>{selected.host}</dd></div>
-            <div><dt>{t('advanced.server.port')}</dt><dd>{selected.port}</dd></div>
-            <div><dt>{t('advanced.server.user')}</dt><dd>{selected.username}</dd></div>
+          </fieldset> : selected && <dl className={s.facts}>
             <div><dt>{copy('loginMethod')}</dt><dd>{copy(selected.use_ssh_key_for_login ? 'sshLogin' : 'passwordLogin')}</dd></div>
             <div><dt>{t('advanced.server.defaultKey')}</dt><dd>{selected.default_ssh_key_id ? sshKeys.find(key => key.id === selected.default_ssh_key_id)?.name || copy('savedKey') : t('advanced.common.notSelected')}</dd></div>
             <div><dt>{copy('sudo')}</dt><dd>{copy(selected.has_sudo_password ? 'configured' : 'notConfigured')}</dd></div>
-          </dl>
-          <h4 className={s.sectionTitle}>{copy('permissions')}</h4><p className={s.permission}><Icon name="shield" size={17} />{copy(selected.auto_approve_all ? 'automatic' : 'ask')}</p>
+          </dl>}
+          <h4 className={s.sectionTitle}>{copy('permissions')}</h4>
+          {editing ? switchRow('autoApprove', 'terminal', t('advanced.server.autoApprove'), t('advanced.server.dangerousBlocked')) : selected && <p className={s.permission}><Icon name="shield" size={17} />{copy(selected.auto_approve_all ? 'automatic' : 'ask')}</p>}
+          {view !== 'new' && selected && <>
           <h4 className={s.sectionTitle}>{t('advanced.pc.layout.exceptions')}</h4>
           <p className={s.hint}>{copy('policiesHelp')}</p>
           {selected.auto_approve_all && <p className={s.hint}>{copy('allApproved')}</p>}
           {policiesLoading ? <p className={s.hint} role="status">{t('common.loading')}</p> : policiesFailed ? <div role="alert"><p className={s.hint}>{copy('policiesFailed')}</p><button type="button" className={shared.cancelBtn} onClick={() => setPolicyRevision(value => value + 1)}>{copy('retry')}</button></div> : policies.length ? <ul className={s.policyList}>{policies.map(policy => <li key={policy.id}><code>{policy.pattern}</code><button type="button" className={shared.removeCmdBtn} disabled={busy} title={t('advanced.server.deletePolicy')} aria-label={`${t('advanced.server.deletePolicy')}: ${policy.pattern}`} onClick={() => deletePolicy(policy)}>×</button></li>)}</ul> : <p className={s.hint}>{copy('noPolicies')}</p>}
           {RUNBOOK_COMMAND_TOOLS_ENABLED && runbooks.length > 0 && <section><h4 className={s.sectionTitle}>{t('advanced.server.linkRunbook')}</h4><div className={catalog.actions}>{runbooks.map(runbook => <button type="button" className={shared.cancelBtn} key={runbook.id} disabled={busy} onClick={() => attachRunbook(runbook.id)}>{runbook.title}</button>)}</div></section>}
-          <div className={s.deleteArea}><button type="button" disabled={busy} onClick={() => setConfirm('delete')}>{t('common.delete')}</button></div>
+          {!editing && <div className={s.deleteArea}><button type="button" disabled={busy} onClick={() => setConfirm('delete')}>{t('common.delete')}</button></div>}
+          </>}
+          {editing && <div className={s.editFooter}><button type="button" className={shared.saveBtn} disabled={busy || !dirty || !draft.name.trim() || !draft.host.trim() || !draft.username.trim()} onClick={save}>{busy ? t('common.saving') : t('common.save')}</button><button type="button" className={shared.cancelBtn} disabled={busy} onClick={() => request(() => { setView('read'); setDraft(emptyDraft()); setOriginal(emptyDraft()); })}>{t('common.cancel')}</button></div>}
         </> : <div className={s.empty}><Icon name="server" size={30} /><h3>{copy('emptyTitle')}</h3><p>{copy('emptyHelp')}</p><button type="button" className={shared.saveBtn} onClick={create}>+ {copy('add')}</button></div>}
       </div>
     </div>}
