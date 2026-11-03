@@ -121,21 +121,21 @@
     ]
   },
   {
-    "section": "browser",
+    "section": "limits",
     "key": "settings.app.layout.webTitle"
   },
   {
-    "section": "browser",
+    "section": "limits",
     "key": "settings.app.layout.desktopBrowserConcurrency",
     "relatedKeys": ["settings.app.layout.desktopBrowserConcurrencyHelp"]
   },
   {
-    "section": "browser",
+    "section": "limits",
     "key": "settings.app.layout.desktopSearch",
     "relatedKeys": ["settings.app.layout.desktopSearchHelp"]
   },
   {
-    "section": "browser",
+    "section": "limits",
     "key": "settings.app.layout.desktopReader",
     "relatedKeys": ["settings.app.layout.desktopReaderHelp"]
   },

@@ -93,7 +93,7 @@
       "webSearch": "Web searches",
       "webReader": "Web page reads",
       "imageGen": "Image generations",
-      "desktopNote": "Search and page reading through the browser on your PC do not count toward these limits. Keep Chatter running and enable the corresponding option in Browser settings.",
+      "desktopNote": "Search and page reading through background Chromium on your PC do not count toward the monthly quota.",
       "buy": "Buy more generations",
       "buyHint": "Buying extra generations is coming soon"
     }
@@ -783,8 +783,8 @@
         "history": "Visible chat history",
         "renderHelp": "Low shows fewer older messages at first. You can reveal the rest. This setting applies when you open a chat.",
         "tokensHelp": "Shows token usage in the chat.",
-        "webTitle": "Web search and page reading",
-        "webQuotaHelp": "While Chatter is running, enabled search and page reading tasks use the browser on this PC and do not count toward your plan limits.",
+        "webTitle": "Search and page reading on this PC",
+        "webQuotaHelp": "While Chatter is running, search and page reading through background Chromium do not count toward your monthly quota. Enable the options you want below. You can stop background tasks in Chatter’s task manager.",
         "desktopBrowserConcurrency": "Concurrent tasks",
         "desktopBrowserConcurrencyHelp": "How many searches and page reads can run at once. A CAPTCHA window takes up a slot until it is closed.",
         "desktopSearch": "Search using the browser on this PC",

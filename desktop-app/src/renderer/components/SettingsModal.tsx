@@ -544,7 +544,7 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
   }, [section, t]);
 
   useEffect(() => {
-    if (section !== 'browser' || !window.electronAPI?.getDesktopBrowserSettings) return;
+    if (section !== 'limits' || !window.electronAPI?.getDesktopBrowserSettings) return;
     let active = true;
     window.electronAPI.getDesktopBrowserSettings().then(settings => {
       if (!active) return;
@@ -2504,43 +2504,7 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
           )}
 
           {section === 'browser' && (
-            <BrowserSettings>
-              {desktopBrowserSettingsReady && (
-                <section className={`${settingsRows.group} ${appLayout.webTools}`}>
-                  <h3>{t('settings.app.layout.webTitle')}</h3>
-                  <p className={appLayout.webQuotaHelp}>{t('settings.app.layout.webQuotaHelp')}</p>
-                  <div className={s.fieldGroup}>
-                    <label className={s.fieldLabel}>{t('settings.app.layout.desktopBrowserConcurrency')}</label>
-                    <Select
-                      options={desktopBrowserConcurrencyOptions}
-                      value={String(desktopBrowserSettings.concurrency)}
-                      onChange={value => void saveDesktopBrowserSettings({ ...desktopBrowserSettings, concurrency: Number(value) })}
-                      disabled={desktopBrowserSettingsSaving}
-                    />
-                    <p className={appLayout.hint}>{t('settings.app.layout.desktopBrowserConcurrencyHelp')}</p>
-                  </div>
-                  {([
-                    { key: 'searchEnabled', label: 'desktopSearch', icon: 'search' },
-                    { key: 'readerEnabled', label: 'desktopReader', icon: 'file' },
-                  ] as const).map(({ key, label, icon }) => (
-                    <div className={settingsRows.row} key={key}>
-                      <span className={settingsRows.icon}><Icon name={icon} size={18} /></span>
-                      <div className={settingsRows.text}>
-                        <span className={settingsRows.label} id={`browser-tool-${key}`}>{t(`settings.app.layout.${label}`)}</span>
-                        <p id={`browser-tool-${key}-hint`}>{t(`settings.app.layout.${label}Help`)}</p>
-                      </div>
-                      <button type="button" role="switch" aria-checked={desktopBrowserSettings[key]}
-                        aria-labelledby={`browser-tool-${key}`} aria-describedby={`browser-tool-${key}-hint`}
-                        className={`${switchStyles.toggle} ${desktopBrowserSettings[key] ? switchStyles.toggleActive : ''}`}
-                        disabled={desktopBrowserSettingsSaving}
-                        onClick={() => void saveDesktopBrowserSettings({ ...desktopBrowserSettings, [key]: !desktopBrowserSettings[key] })}>
-                        <span />
-                      </button>
-                    </div>
-                  ))}
-                </section>
-              )}
-            </BrowserSettings>
+            <BrowserSettings />
           )}
 
           {section === 'servers' && (
@@ -2744,7 +2708,42 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
           {section === 'limits' && (
             <div className={`${s.panel} ${limitsStyles.panel}`}>
               <div className={s.panelTitle}>{t('settings.sections.limits')}</div>
-              <QuotaWidget variant="full" />
+              <QuotaWidget variant="full" hideDesktopNote={desktopBrowserSettingsReady} />
+                {desktopBrowserSettingsReady && (
+                  <section className={`${settingsRows.group} ${limitsStyles.webTools}`}>
+                    <h3>{t('settings.app.layout.webTitle')}</h3>
+                    <p className={appLayout.webQuotaHelp}>{t('settings.app.layout.webQuotaHelp')}</p>
+                    <div className={`${s.fieldGroup} ${limitsStyles.webConcurrency}`}>
+                      <label className={s.fieldLabel}>{t('settings.app.layout.desktopBrowserConcurrency')}</label>
+                      <Select
+                        options={desktopBrowserConcurrencyOptions}
+                        value={String(desktopBrowserSettings.concurrency)}
+                        onChange={value => void saveDesktopBrowserSettings({ ...desktopBrowserSettings, concurrency: Number(value) })}
+                        disabled={desktopBrowserSettingsSaving}
+                      />
+                      <p className={appLayout.hint}>{t('settings.app.layout.desktopBrowserConcurrencyHelp')}</p>
+                    </div>
+                    {([
+                      { key: 'searchEnabled', label: 'desktopSearch', icon: 'search' },
+                      { key: 'readerEnabled', label: 'desktopReader', icon: 'file' },
+                    ] as const).map(({ key, label, icon }) => (
+                      <div className={settingsRows.row} key={key}>
+                        <span className={settingsRows.icon}><Icon name={icon} size={18} /></span>
+                        <div className={settingsRows.text}>
+                          <span className={settingsRows.label} id={`browser-tool-${key}`}>{t(`settings.app.layout.${label}`)}</span>
+                          <p id={`browser-tool-${key}-hint`}>{t(`settings.app.layout.${label}Help`)}</p>
+                        </div>
+                        <button type="button" role="switch" aria-checked={desktopBrowserSettings[key]}
+                          aria-labelledby={`browser-tool-${key}`} aria-describedby={`browser-tool-${key}-hint`}
+                          className={`${switchStyles.toggle} ${desktopBrowserSettings[key] ? switchStyles.toggleActive : ''}`}
+                          disabled={desktopBrowserSettingsSaving}
+                          onClick={() => void saveDesktopBrowserSettings({ ...desktopBrowserSettings, [key]: !desktopBrowserSettings[key] })}>
+                          <span />
+                        </button>
+                      </div>
+                    ))}
+                  </section>
+                )}
 
               {contextTokenLimit && <section className={limitsStyles.limitSection}>
                 <div className={limitsStyles.heading}>

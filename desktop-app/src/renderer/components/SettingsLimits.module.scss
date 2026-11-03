@@ -1,4 +1,7 @@
 .panel { gap: 0; }
+.panel .webTools { margin: 24px 0 0; }
+.webTools .webConcurrency { margin-bottom: 0; }
+.webTools + .limitSection { margin-top: 20px; }
 .limitSection {
   display: flex;
   flex-direction: column;

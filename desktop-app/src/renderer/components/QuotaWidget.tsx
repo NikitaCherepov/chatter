@@ -53,11 +53,12 @@ function Donut({ percent, size, stroke: strokeProp }: { percent: number; size: n
 
 type Props = {
   /** 'full' = detailed usage for Limits settings; 'compact' = small indicator for toolbar */
+  hideDesktopNote?: boolean;
   variant?: 'full' | 'compact' | 'caption';
   className?: string;
 };
 
-export function QuotaWidget({ variant = 'full', className }: Props) {
+export function QuotaWidget({ variant = 'full', className, hideDesktopNote = false }: Props) {
   const { t } = useTranslation();
   const [quota, setQuota] = useState<api.QuotaInfo | null>(null);
 
@@ -169,7 +170,7 @@ export function QuotaWidget({ variant = 'full', className }: Props) {
                 />
               </div>
             </div>
-            {row.key === 'webReader' && <div className={s.monthlyNote}>{t('quota.monthly.desktopNote')}</div>}
+            {row.key === 'webReader' && !hideDesktopNote && <div className={s.monthlyNote}>{t('quota.monthly.desktopNote')}</div>}
             </Fragment>
           ))}
 
