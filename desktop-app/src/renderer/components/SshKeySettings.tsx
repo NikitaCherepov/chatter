@@ -4,6 +4,8 @@ import React, { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import * as api from '../lib/api';
 import s from './SettingsModal.module.scss';
+import layout from './SmartHomeSettings.module.scss';
+import { Icon } from './Icon';
 import { ConfirmDialog } from './ConfirmDialog';
 
 type SshKey = {
@@ -163,30 +165,33 @@ export function SshKeySettings() {
 
       {/* Key list */}
       {keys.length > 0 && (
-        <div style={{ marginTop: '16px' }}>
-          <div className={s.fieldLabel} style={{ marginBottom: '8px' }}>{t('advanced.ssh.savedKeys')}</div>
+        <div className={layout.group} style={{ marginTop: 16 }}>
+          <h3>{t('advanced.ssh.savedKeys')}</h3>
           {keys.map((key) => (
-            <div key={key.id} className={s.macroCard}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 500, fontSize: '13px' }}>
-                  {key.name}
-                  <span style={{ color: 'var(--text-muted)', marginLeft: '8px', fontSize: '11px' }}>{t(key.has_private_key ? 'advanced.ssh.keyPairLabel' : 'advanced.ssh.publicOnlyLabel')}</span>
+            <div key={key.id} className={layout.connection}>
+              <div className={layout.connectionHeader}>
+                <span className={layout.icon}><Icon name="key" size={18} /></span>
+                <div className={layout.info}>
+                  <div style={{ fontWeight: 500, fontSize: '13px' }}>
+                    {key.name}
+                    <span style={{ color: 'var(--text-muted)', marginLeft: '8px', fontSize: '11px' }}>{t(key.has_private_key ? 'advanced.ssh.keyPairLabel' : 'advanced.ssh.publicOnlyLabel')}</span>
+                  </div>
+                  <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '2px', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {key.public_key.substring(0, 60)}...
+                  </div>
                 </div>
-                <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '2px', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {key.public_key.substring(0, 60)}...
+                <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
+                  <button
+                    className={`${s.macroActionBtn} ${s.macroActionBtnDanger}`}
+                    onClick={() => setDeleteConfirmId(key.id)}
+                    title={t('common.delete')}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="3 6 5 6 21 6" />
+                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                    </svg>
+                  </button>
                 </div>
-              </div>
-              <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
-                <button
-                  className={`${s.macroActionBtn} ${s.macroActionBtnDanger}`}
-                  onClick={() => setDeleteConfirmId(key.id)}
-                  title={t('common.delete')}
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="3 6 5 6 21 6" />
-                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                  </svg>
-                </button>
               </div>
             </div>
           ))}
@@ -204,57 +209,60 @@ export function SshKeySettings() {
             exit={{ opacity: 0, height: 0 }}
             style={{ overflow: 'hidden', flexShrink: 0 }}
           >
-            <div className={s.macroFormDivider} />
-            <div className={s.fieldGroup}>
-              <label className={s.fieldLabel}>{t('advanced.common.name')}</label>
-              <input
-                className={s.fieldInput}
-                type="text"
-                autoFocus
-                value={formName}
-                onChange={(e) => setFormName(e.target.value)}
-                placeholder={t('advanced.ssh.namePlaceholder')}
-              />
-            </div>
+            <div className={layout.connection}>
+              <div className={layout.configuration} style={{ borderTop: 0 }}>
+                <div className={s.fieldGroup}>
+                  <label className={s.fieldLabel}>{t('advanced.common.name')}</label>
+                  <input
+                    className={s.fieldInput}
+                    type="text"
+                    autoFocus
+                    value={formName}
+                    onChange={(e) => setFormName(e.target.value)}
+                    placeholder={t('advanced.ssh.namePlaceholder')}
+                  />
+                </div>
 
-            <div className={s.fieldGroup}>
-              <label className={s.fieldLabel}>{t('advanced.ssh.publicKey')}</label>
-              <textarea
-                className={s.textareaInput}
-                value={formPublicKey}
-                onChange={(e) => setFormPublicKey(e.target.value)}
-                placeholder="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5... user@host"
-                rows={3}
-                style={{ minHeight: '60px', fontFamily: 'monospace', fontSize: '11px' }}
-              />
-            </div>
+                <div className={s.fieldGroup}>
+                  <label className={s.fieldLabel}>{t('advanced.ssh.publicKey')}</label>
+                  <textarea
+                    className={s.textareaInput}
+                    value={formPublicKey}
+                    onChange={(e) => setFormPublicKey(e.target.value)}
+                    placeholder="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5... user@host"
+                    rows={3}
+                    style={{ minHeight: '60px', fontFamily: 'monospace', fontSize: '11px' }}
+                  />
+                </div>
 
-            <div className={s.fieldGroup}>
-              <label className={s.fieldLabel}>{t('advanced.ssh.privateKey')}</label>
-              <textarea
-                className={s.textareaInput}
-                value={formPrivateKey}
-                onChange={(e) => setFormPrivateKey(e.target.value)}
-                placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"
-                rows={3}
-                style={{ minHeight: '60px', fontFamily: 'monospace', fontSize: '11px' }}
-              />
-            </div>
+                <div className={s.fieldGroup}>
+                  <label className={s.fieldLabel}>{t('advanced.ssh.privateKey')}</label>
+                  <textarea
+                    className={s.textareaInput}
+                    value={formPrivateKey}
+                    onChange={(e) => setFormPrivateKey(e.target.value)}
+                    placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"
+                    rows={3}
+                    style={{ minHeight: '60px', fontFamily: 'monospace', fontSize: '11px' }}
+                  />
+                </div>
 
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <button
-                className={s.saveBtn}
-                onClick={handleSave}
-                disabled={formSaving}
-              >
-                {formSaving ? t('common.saving') : t('advanced.common.add')}
-              </button>
-              <button type="button" className={s.cancelBtn} disabled={formSaving} onClick={() => {
-                setFormName('');
-                setFormPublicKey('');
-                setFormPrivateKey('');
-                setShowForm(false);
-              }}>{t('common.cancel')}</button>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    className={s.saveBtn}
+                    onClick={handleSave}
+                    disabled={formSaving}
+                  >
+                    {formSaving ? t('common.saving') : t('advanced.common.add')}
+                  </button>
+                  <button type="button" className={s.cancelBtn} disabled={formSaving} onClick={() => {
+                    setFormName('');
+                    setFormPublicKey('');
+                    setFormPrivateKey('');
+                    setShowForm(false);
+                  }}>{t('common.cancel')}</button>
+                </div>
+              </div>
             </div>
           </motion.section>
         )}
@@ -262,26 +270,29 @@ export function SshKeySettings() {
 
       {/* Detected keys */}
       {showImport && detectedKeys.length > 0 && (
-        <div style={{ marginTop: '12px' }}>
-          <div className={s.fieldLabel} style={{ marginBottom: '8px' }}>{t('advanced.ssh.found')}</div>
+        <div className={layout.group}>
+          <h3>{t('advanced.ssh.found')}</h3>
           {detectedKeys.map((key) => (
-            <div key={key.filename} className={s.macroCard}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 500, fontSize: '13px' }}>
-                  {key.filename}
-                  {key.publicKey && key.privateKey && <span style={{ color: 'var(--accent)', marginLeft: '6px', fontSize: '10px' }}>{t('advanced.ssh.pair')}</span>}
+            <div key={key.filename} className={layout.connection}>
+              <div className={layout.connectionHeader}>
+                <span className={layout.icon}><Icon name="key" size={18} /></span>
+                <div className={layout.info}>
+                  <div style={{ fontWeight: 500, fontSize: '13px' }}>
+                    {key.filename}
+                    {key.publicKey && key.privateKey && <span style={{ color: 'var(--accent)', marginLeft: '6px', fontSize: '10px' }}>{t('advanced.ssh.pair')}</span>}
+                  </div>
+                  <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                    {key.publicKey ? 'pub + ' : ''}{key.privateKey ? 'private' : ''}
+                  </div>
                 </div>
-                <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '2px' }}>
-                  {key.publicKey ? 'pub + ' : ''}{key.privateKey ? 'private' : ''}
-                </div>
+                <button
+                  className={s.saveBtn}
+                  style={{ fontSize: '11px', padding: '4px 10px' }}
+                  onClick={() => handleImportKey(key)}
+                >
+                  {t('common.save')}
+                </button>
               </div>
-              <button
-                className={s.saveBtn}
-                style={{ fontSize: '11px', padding: '4px 10px' }}
-                onClick={() => handleImportKey(key)}
-              >
-                {t('common.save')}
-              </button>
             </div>
           ))}
         </div>
