@@ -1,3 +1,6 @@
+import { AnimatedCollapse } from './AnimatedDisclosure';
+import { Icon } from './Icon';
+import layout from './SmartHomeSettings.module.scss';
 import { useTranslation } from 'react-i18next';
 import { useState, useEffect, useCallback } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -10,6 +13,8 @@ import s from './SettingsModal.module.scss';
 export function SmartHomeSettings() {
   const { t, i18n } = useTranslation();
   const [settings, setSettings] = useState<SmartHomeSettingsDto[]>([]);
+  const [providerOpen, setProviderOpen] = useState<'zigbee' | 'yandex' | null>(null);
+  const [deviceOpen, setDeviceOpen] = useState<string | null>(null);
   const [devices, setDevices] = useState<SmartDeviceDto[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -135,25 +140,68 @@ export function SmartHomeSettings() {
   const zigbeeSettings = settings.find(x => x.provider === 'zigbee') || null;
   const hasYandexToken = !!yandexSettings?.has_token;
   const hasZigbeeBroker = !!zigbeeSettings?.has_token;
-  const hasAnyDevices = devices.length > 0;
-  const yandexDevices = devices.filter(d => d.provider === 'yandex');
-  const zigbeeDevices = devices.filter(d => d.provider === 'zigbee');
-
-  const syncBadge = (provider: string) => {
-    const s = settings.find(x => x.provider === provider);
-    if (!s?.synced_at) return null;
-    return (
-      <span style={{ fontSize: '10px', color: 'var(--text-muted)', marginLeft: '8px' }}>
-        {new Date(s.synced_at * 1000).toLocaleString(i18n.resolvedLanguage || i18n.language, { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' })}
-      </span>
-    );
-  };
+  const copy = (key: string) => t(`advanced.smart.layout.${key}`);
+  const connections = [
+    { id: 'yandex' as const, label: 'Yandex', configured: hasYandexToken, syncedAt: yandexSettings?.synced_at },
+    { id: 'zigbee' as const, label: 'Zigbee2MQTT', configured: hasZigbeeBroker, syncedAt: zigbeeSettings?.synced_at },
+  ];
 
   return (
     <div className={s.panel}>
-      <div className={s.panelTitle}>{t('advanced.smart.title')}</div>
-
-      {/* ════════════ Zigbee ════════════ */}
+      <div className={s.panelTitle}>{copy('title')}</div>
+      <section className={layout.group}>
+        <h3>{t('advanced.smart.devicesCount', { count: devices.length })}</h3>
+        {!devices.length && <p className={layout.meta}>{hasYandexToken || hasZigbeeBroker ? t('advanced.smart.notSynced') : copy('empty')}</p>}
+        {devices.map(device => {
+          const id = `${device.provider}:${device.id}`;
+          const expanded = deviceOpen === id;
+          return <div className={layout.device} key={id}>
+            <button type="button" className={layout.deviceButton} aria-expanded={expanded} onClick={() => setDeviceOpen(expanded ? null : id)}>
+              <span className={layout.icon}><Icon name="monitor" size={17} /></span>
+              <span className={layout.info}>
+                <strong>{device.name}</strong>
+                <span className={layout.meta}>{[device.room_name, connections.find(item => item.id === device.provider)?.label ?? device.provider, device.is_group && t('advanced.smart.group')].filter(Boolean).join(' · ')}</span>
+              </span>
+              <svg className={layout.chevron} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
+                <path d="m9 5 7 7-7 7" />
+              </svg>
+            </button>
+            <AnimatedCollapse open={expanded}>
+              <div className={layout.capabilities}>
+                {device.type && <code>{device.type.replace('devices.types.', '')}</code>}
+                {[...new Set(device.capabilities)].map(capability => <code key={capability}>{capability}</code>)}
+                {!device.type && !device.capabilities.length && <span className={layout.meta}>{copy('noDetails')}</span>}
+              </div>
+            </AnimatedCollapse>
+          </div>;
+        })}
+      </section>
+      <section className={layout.group}>
+        <h3>{copy('connections')}</h3>
+        {connections.map(connection => {
+          const expanded = providerOpen === connection.id;
+          return <div className={layout.connection} key={connection.id}>
+            <div className={layout.connectionHeader}>
+              <span className={layout.icon}><Icon name="globe" size={17} /></span>
+              <div className={layout.info}>
+                <strong>{connection.label}</strong>
+                <span className={layout.meta}>{copy(connection.configured ? 'configured' : 'notConfigured')}</span>
+                {connection.syncedAt ? <span className={layout.meta}>{t('advanced.smart.lastSyncWithDate', {
+                  date: new Date(connection.syncedAt * 1000).toLocaleString(i18n.resolvedLanguage || i18n.language),
+                })}</span> : null}
+              </div>
+              <div className={layout.actions}>
+                {connection.configured && <button type="button" className={s.cancelBtn} disabled={!!syncingProvider} onClick={() => handleSync(connection.id)}>
+                  {t(syncingProvider === connection.id ? 'advanced.smart.syncing' : 'advanced.smart.sync')}
+                </button>}
+                <button type="button" className={s.cancelBtn} aria-expanded={expanded} onClick={() => setProviderOpen(expanded ? null : connection.id)}>
+                  {copy(expanded ? 'collapse' : 'configure')}
+                </button>
+              </div>
+            </div>
+            <AnimatedCollapse open={expanded}>
+              <div className={layout.configuration}>
+                {connection.id === 'zigbee' ? <>
       <div className={s.fieldGroup}>
         <label className={s.fieldLabel} style={{ fontWeight: 600 }}>
           {t('advanced.smart.zigbee.title')}
@@ -173,24 +221,14 @@ export function SmartHomeSettings() {
         </div>
         <div style={{ display: 'flex', gap: '6px', marginTop: '8px' }}>
           <button className={s.saveBtn} onClick={handleSaveBroker} disabled={savingBroker || !brokerInput.trim()}>
-            {savingBroker ? t('common.saving') : t('advanced.smart.saveToken')}
+            {savingBroker ? t('common.saving') : t('advanced.smart.layout.saveBroker')}
           </button>
           {hasZigbeeBroker && (
-            <button className={s.cancelBtn} style={{ color: '#e74c3c' }} onClick={() => setConfirmDeleteZigbee(true)}>
+            <button className={s.cancelBtn} style={{ color: 'var(--color-error)' }} onClick={() => setConfirmDeleteZigbee(true)}>
               {t('common.delete')}
             </button>
           )}
-          {hasZigbeeBroker && (
-            <button className={s.saveBtn} onClick={() => handleSync('zigbee')} disabled={!!syncingProvider}>
-              {syncingProvider === 'zigbee' ? t('advanced.smart.syncing') : t('advanced.smart.sync')}
-            </button>
-          )}
         </div>
-        {zigbeeSettings?.synced_at && (
-          <div className={s.fieldLabel} style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '6px' }}>
-            {t('advanced.smart.lastSyncWithDate', { date: new Date(zigbeeSettings.synced_at * 1000).toLocaleString(i18n.resolvedLanguage || i18n.language) })}
-          </div>
-        )}
       </div>
 
       {/* ── Zigbee Guide ── */}
@@ -255,8 +293,7 @@ export function SmartHomeSettings() {
         </AnimatePresence>
       </div>
 
-      {/* ════════════ Yandex ════════════ */}
-      <div style={{ height: '1px', background: 'var(--border-light, #ccc)', margin: '16px 0', flexShrink: 0 }} />
+                </> : <>
       <div className={s.fieldGroup}>
         <label className={s.fieldLabel} style={{ fontWeight: 600 }}>
           Yandex
@@ -285,21 +322,11 @@ export function SmartHomeSettings() {
             {savingToken ? t('common.saving') : t('advanced.smart.saveToken')}
           </button>
           {hasYandexToken && (
-            <button className={s.cancelBtn} style={{ color: '#e74c3c' }} onClick={() => setConfirmDeleteYandex(true)}>
+            <button className={s.cancelBtn} style={{ color: 'var(--color-error)' }} onClick={() => setConfirmDeleteYandex(true)}>
               {t('common.delete')}
             </button>
           )}
-          {hasYandexToken && (
-            <button className={s.saveBtn} onClick={() => handleSync('yandex')} disabled={!!syncingProvider}>
-              {syncingProvider === 'yandex' ? t('advanced.smart.syncing') : t('advanced.smart.sync')}
-            </button>
-          )}
         </div>
-        {yandexSettings?.synced_at && (
-          <div className={s.fieldLabel} style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '6px' }}>
-            {t('advanced.smart.lastSyncWithDate', { date: new Date(yandexSettings.synced_at * 1000).toLocaleString(i18n.resolvedLanguage || i18n.language) })}
-          </div>
-        )}
       </div>
 
       {/* ── Yandex Guide ── */}
@@ -367,95 +394,12 @@ export function SmartHomeSettings() {
         </AnimatePresence>
       </div>
 
-      {/* ════════════ Devices ════════════ */}
-      <div style={{ height: '1px', background: 'var(--border-light, #ccc)', margin: '16px 0', flexShrink: 0 }} />
-      {hasAnyDevices && (
-        <>
-          <div className={s.fieldGroup}>
-            <div className={s.fieldLabel} style={{ marginBottom: '8px', fontWeight: 600 }}>
-              {t('advanced.smart.devicesCount', { count: devices.length })}
-            </div>
-
-            {zigbeeDevices.length > 0 && (
-              <>
-                <div className={s.fieldLabel} style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '6px', fontWeight: 600 }}>
-                  Zigbee {syncBadge('zigbee')}
-                </div>
-                {zigbeeDevices.map(d => (
-                  <div key={d.id} className={s.macroCard}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span style={{ fontWeight: 500, fontSize: '13px' }}>{d.name}</span>
-                        {d.is_group && (
-                          <span style={{ fontSize: '10px', padding: '1px 6px', borderRadius: '3px', background: 'var(--border-light)', color: 'var(--text-muted)' }}>
-                            {t('advanced.smart.group')}
-                          </span>
-                        )}
-                      </div>
-                      <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
-                        {d.type || ''}
-                      </div>
-                      {d.capabilities.length > 0 && (
-                        <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginTop: '6px' }}>
-                          {d.capabilities.map(c => (
-                            <code key={c} style={{ fontSize: '10px', color: 'var(--accent)', padding: '1px 6px', borderRadius: '3px', background: 'var(--bg-elevated)' }}>
-                              {c}
-                            </code>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </>
-            )}
-
-            {yandexDevices.length > 0 && (
-              <>
-                <div className={s.fieldLabel} style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '6px', marginTop: zigbeeDevices.length > 0 ? '10px' : '0', fontWeight: 600 }}>
-                  Yandex {syncBadge('yandex')}
-                </div>
-                {yandexDevices.map(d => (
-                  <div key={d.id} className={s.macroCard}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span style={{ fontWeight: 500, fontSize: '13px' }}>{d.name}</span>
-                        {d.is_group && (
-                          <span style={{ fontSize: '10px', padding: '1px 6px', borderRadius: '3px', background: 'var(--border-light)', color: 'var(--text-muted)' }}>
-                            {t('advanced.smart.group')}
-                          </span>
-                        )}
-                      </div>
-                      <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
-                        {d.room_name ? `📍 ${d.room_name}` : ''}
-                        {d.room_name && d.type ? ' · ' : ''}
-                        {d.type ? d.type.replace('devices.types.', '') : ''}
-                      </div>
-                      {d.capabilities.length > 0 && (
-                        <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginTop: '6px' }}>
-                          {d.capabilities.map(c => (
-                            <code key={c} style={{ fontSize: '10px', color: 'var(--accent)', padding: '1px 6px', borderRadius: '3px', background: 'var(--bg-elevated)' }}>
-                              {c}
-                            </code>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </>
-            )}
-          </div>
-        </>
-      )}
-
-      {!hasAnyDevices && (hasYandexToken || hasZigbeeBroker) && !syncingProvider && (
-        <div className={s.fieldGroup}>
-          <div className={s.fieldLabel} style={{ color: 'var(--text-muted)', textAlign: 'center' }}>
-            {t('advanced.smart.notSynced')}
-          </div>
-        </div>
-      )}
+                </>}
+              </div>
+            </AnimatedCollapse>
+          </div>;
+        })}
+      </section>
 
       {confirmDeleteYandex && (
         <ConfirmDialog open={true} title={t('advanced.smart.deleteTitle')} text={t('advanced.smart.deleteMessage')}

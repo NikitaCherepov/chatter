@@ -2070,6 +2070,17 @@
       "limitSaveFailed": "Could not save the email search limit"
     },
     "smart": {
+      "layout": {
+        "title": "Smart home",
+        "connections": "Connections",
+        "configured": "Configured",
+        "notConfigured": "Not configured",
+        "configure": "Configure",
+        "collapse": "Collapse",
+        "saveBroker": "Save broker address",
+        "empty": "Connect Yandex or Zigbee2MQTT to see your devices.",
+        "noDetails": "No additional details."
+      },
       "loadFailed": "Could not load smart home settings",
       "enterToken": "Enter a token",
       "tokenSaved": "Token saved",
