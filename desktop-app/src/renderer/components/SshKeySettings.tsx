@@ -1,3 +1,4 @@
+import { AnimatePresence, motion } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect } from 'react';
 import { toast } from 'sonner';
@@ -194,59 +195,70 @@ export function SshKeySettings() {
 
       {!keys.length && <p className={s.fieldLabel}>{t('advanced.ssh.emptyKeys')}</p>}
 
-      {showForm && <section style={{ marginTop: '16px' }} aria-label={t('advanced.ssh.addKey')}>
-      <div className={s.fieldGroup}>
-        <label className={s.fieldLabel}>{t('advanced.common.name')}</label>
-        <input
-          className={s.fieldInput}
-          type="text"
-          autoFocus
-          value={formName}
-          onChange={(e) => setFormName(e.target.value)}
-          placeholder={t('advanced.ssh.namePlaceholder')}
-        />
-      </div>
+      <AnimatePresence initial={false}>
+        {showForm && (
+          <motion.section
+            aria-label={t('advanced.ssh.addKey')}
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            style={{ overflow: 'hidden', flexShrink: 0 }}
+          >
+            <div className={s.macroFormDivider} />
+            <div className={s.fieldGroup}>
+              <label className={s.fieldLabel}>{t('advanced.common.name')}</label>
+              <input
+                className={s.fieldInput}
+                type="text"
+                autoFocus
+                value={formName}
+                onChange={(e) => setFormName(e.target.value)}
+                placeholder={t('advanced.ssh.namePlaceholder')}
+              />
+            </div>
 
-      <div className={s.fieldGroup}>
-        <label className={s.fieldLabel}>{t('advanced.ssh.publicKey')}</label>
-        <textarea
-          className={s.textareaInput}
-          value={formPublicKey}
-          onChange={(e) => setFormPublicKey(e.target.value)}
-          placeholder="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5... user@host"
-          rows={3}
-          style={{ minHeight: '60px', fontFamily: 'monospace', fontSize: '11px' }}
-        />
-      </div>
+            <div className={s.fieldGroup}>
+              <label className={s.fieldLabel}>{t('advanced.ssh.publicKey')}</label>
+              <textarea
+                className={s.textareaInput}
+                value={formPublicKey}
+                onChange={(e) => setFormPublicKey(e.target.value)}
+                placeholder="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5... user@host"
+                rows={3}
+                style={{ minHeight: '60px', fontFamily: 'monospace', fontSize: '11px' }}
+              />
+            </div>
 
-      <div className={s.fieldGroup}>
-        <label className={s.fieldLabel}>{t('advanced.ssh.privateKey')}</label>
-        <textarea
-          className={s.textareaInput}
-          value={formPrivateKey}
-          onChange={(e) => setFormPrivateKey(e.target.value)}
-          placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"
-          rows={3}
-          style={{ minHeight: '60px', fontFamily: 'monospace', fontSize: '11px' }}
-        />
-      </div>
+            <div className={s.fieldGroup}>
+              <label className={s.fieldLabel}>{t('advanced.ssh.privateKey')}</label>
+              <textarea
+                className={s.textareaInput}
+                value={formPrivateKey}
+                onChange={(e) => setFormPrivateKey(e.target.value)}
+                placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"
+                rows={3}
+                style={{ minHeight: '60px', fontFamily: 'monospace', fontSize: '11px' }}
+              />
+            </div>
 
-      <div style={{ display: 'flex', gap: '8px' }}>
-        <button
-          className={s.saveBtn}
-          onClick={handleSave}
-          disabled={formSaving}
-        >
-          {formSaving ? t('common.saving') : t('advanced.common.add')}
-        </button>
-        <button type="button" className={s.cancelBtn} disabled={formSaving} onClick={() => {
-          setFormName('');
-          setFormPublicKey('');
-          setFormPrivateKey('');
-          setShowForm(false);
-        }}>{t('common.cancel')}</button>
-      </div>
-      </section>}
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                className={s.saveBtn}
+                onClick={handleSave}
+                disabled={formSaving}
+              >
+                {formSaving ? t('common.saving') : t('advanced.common.add')}
+              </button>
+              <button type="button" className={s.cancelBtn} disabled={formSaving} onClick={() => {
+                setFormName('');
+                setFormPublicKey('');
+                setFormPrivateKey('');
+                setShowForm(false);
+              }}>{t('common.cancel')}</button>
+            </div>
+          </motion.section>
+        )}
+      </AnimatePresence>
 
       {/* Detected keys */}
       {showImport && detectedKeys.length > 0 && (
