@@ -384,7 +384,7 @@ export type MessageUsage = {
 
 export type WorkLogStep = { type: 'message' | 'activity'; text: string } | { type: 'tool'; call: ToolCall };
 
-export type ToolCall = { running?: boolean; id?: string; name: string; arguments: any; result_preview?: string };
+export type ToolCall = { agent_tools?: ToolCall[]; running?: boolean; id?: string; name: string; arguments: any; result_preview?: string };
 
 /** Полный trace ad-hoc субагента — для UI-блока «Сабагенты». */
 export type SubagentIteration = {

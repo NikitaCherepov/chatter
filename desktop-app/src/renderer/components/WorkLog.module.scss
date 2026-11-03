@@ -17,3 +17,22 @@
 .spinner { width: 14px; height: 14px; flex-shrink: 0; border: 1.5px solid var(--border-light); border-top-color: var(--accent-icon); border-radius: 50%; animation: work-log-spin 1.2s linear infinite; }
 @keyframes work-log-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
+
+.agent { border: 1px solid var(--border-light); border-radius: 8px; padding: 8px 10px; }
+.agent > details > summary {
+  display: flex; gap: 8px; align-items: center; cursor: pointer; list-style: none;
+  &::-webkit-details-marker { display: none; }
+  strong { color: var(--text-primary); overflow-wrap: anywhere; }
+  .count { margin-left: auto; text-align: right; }
+}
+.agent > details[data-expanded='true'] > summary svg { transform: rotate(90deg); }
+.agentSteps { display: grid; gap: 6px; }
+.agentSteps:empty { display: none; }
+.agentPrompt { white-space: pre-wrap; overflow-wrap: anywhere; }
+
+.agentRow { display: flex; align-items: flex-start; flex-wrap: wrap; gap: 8px; }
+.agent { max-width: 100%; background: var(--bg-input); }
+.agent:has(> details[data-expanded='true']) { width: 100%; box-sizing: border-box; }
+.agentCurrent { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.agent .count { display: inline-flex; align-items: center; }
+.agent > details[data-expanded='true'] > summary svg:nth-child(2) { transform: none; }

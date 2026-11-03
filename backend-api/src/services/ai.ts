@@ -3809,7 +3809,9 @@ const getTaskByUserAndId = (userId: number, taskId: number) => db.prepare(`
   WHERE user_id = ? AND id = ?
 `).get(userId, taskId) as { id: number; status: string } | undefined;
 
-export const runTool = async (user: UserRecord, timezoneOffset: number, toolName: string, argsRaw: string, aiCall: (requestPayload: Record<string, unknown>) => Promise<CompletionMeta>, generatedImages?: Array<{ image_base64: string; image_url?: string; prompt_used: string }>, displayStateSink?: { value: DisplayStatePayload | null }, desktopActionSink?: { value: DesktopActionPayload | null }, mapUpdateSink?: { value: MapUpdatePayload | null }, activeMacros?: Array<{ id: number; title: string; description?: string; commands: string[]; pinned?: boolean; return_output?: boolean }>, signal?: AbortSignal, subagentExtra?: { chatId?: number; originMessageCursor?: number; manualModel?: any; subagentMode?: 'auto' | 'manual'; subagentReasoningLevel?: ReasoningLevel | null; onToolStatus?: (text: string) => Promise<void> | void; onDesktopAction?: (action: any) => Promise<void> | void; displayManifest?: { moods?: string[]; reactions?: string[] } | null; currentDisplayState?: DisplayStatePayload | null; avatarControlEnabled?: boolean; onSubagentTrace?: (trace: any) => void; onSubagentUsageCall?: (agentName: string, usage: TokenUsageCall) => void; onVisionUsageCall?: (usage: TokenUsageCall) => void; shouldStopForQuota?: (usage: TokenUsageCall) => boolean; availableToolDefs?: any[]; attachmentReadContext?: AttachmentReadContext; responseFileSink?: ResponseFileSink; currentModelSupportsVision?: boolean; directImageSink?: { items: Array<{ base64: string; mimeType: string; question: string; localUrl?: string }> } }, autoRejectHitl?: boolean, userImages?: Array<{ base64: string; mimeType: string }>, billingUserId?: number) => {
+type AgentToolActivity = { id: string; name: string; arguments: string; running: boolean; result_preview?: string };
+
+export const runTool = async (user: UserRecord, timezoneOffset: number, toolName: string, argsRaw: string, aiCall: (requestPayload: Record<string, unknown>) => Promise<CompletionMeta>, generatedImages?: Array<{ image_base64: string; image_url?: string; prompt_used: string }>, displayStateSink?: { value: DisplayStatePayload | null }, desktopActionSink?: { value: DesktopActionPayload | null }, mapUpdateSink?: { value: MapUpdatePayload | null }, activeMacros?: Array<{ id: number; title: string; description?: string; commands: string[]; pinned?: boolean; return_output?: boolean }>, signal?: AbortSignal, subagentExtra?: { onToolActivity?: (call: AgentToolActivity) => Promise<void> | void; chatId?: number; originMessageCursor?: number; manualModel?: any; subagentMode?: 'auto' | 'manual'; subagentReasoningLevel?: ReasoningLevel | null; onToolStatus?: (text: string) => Promise<void> | void; onDesktopAction?: (action: any) => Promise<void> | void; displayManifest?: { moods?: string[]; reactions?: string[] } | null; currentDisplayState?: DisplayStatePayload | null; avatarControlEnabled?: boolean; onSubagentTrace?: (trace: any) => void; onSubagentUsageCall?: (agentName: string, usage: TokenUsageCall) => void; onVisionUsageCall?: (usage: TokenUsageCall) => void; shouldStopForQuota?: (usage: TokenUsageCall) => boolean; availableToolDefs?: any[]; attachmentReadContext?: AttachmentReadContext; responseFileSink?: ResponseFileSink; currentModelSupportsVision?: boolean; directImageSink?: { items: Array<{ base64: string; mimeType: string; question: string; localUrl?: string }> } }, autoRejectHitl?: boolean, userImages?: Array<{ base64: string; mimeType: string }>, billingUserId?: number) => {
   throwIfAborted(signal);
   const parsed = JSON.parse(argsRaw || '{}');
   // Room runs: `user` is the INITIATOR (data privacy: their servers, desktop,
@@ -6642,7 +6644,8 @@ If the task is a description, return a detailed text response.`
           signal,
           desktopActionSink: desktopActionSink || undefined,
           onDesktopAction: subagentExtra?.onDesktopAction,
-          onToolStatus: subagentExtra?.onToolStatus,
+          onToolActivity: subagentExtra?.onToolActivity,
+          onToolStatus: subagentExtra?.onToolActivity ? undefined : subagentExtra?.onToolStatus,
           manualModel: subagentExtra?.manualModel,
           subagentMode: subagentExtra?.subagentMode,
           subagentReasoningLevel: subagentExtra?.subagentReasoningLevel,
@@ -6747,7 +6750,8 @@ If the task is a description, return a detailed text response.`
           signal,
           desktopActionSink: desktopActionSink || undefined,
           onDesktopAction: subagentExtra?.onDesktopAction,
-          onToolStatus: subagentExtra?.onToolStatus,
+          onToolActivity: subagentExtra?.onToolActivity,
+          onToolStatus: subagentExtra?.onToolActivity ? undefined : subagentExtra?.onToolStatus,
           manualModel: subagentExtra?.manualModel,
           subagentMode: subagentExtra?.subagentMode,
           subagentReasoningLevel: subagentExtra?.subagentReasoningLevel,
@@ -6953,7 +6957,7 @@ const sendMessageThroughAiInternal = async (
     userAttachments?: MessageAttachment[] | null;
     onIntermediateMessage?: (text: string, accumulatedContent: string) => Promise<void> | void;
     onStateChange?: (state: DisplayStatePayload) => Promise<void> | void;
-    onToolCall?: (call: { id: string; name: string; arguments: any; result_preview?: string; running: boolean }) => Promise<void> | void;
+    onToolCall?: (call: { id: string; name: string; arguments: any; result_preview?: string; running: boolean; agent_tools?: AgentToolActivity[] }) => Promise<void> | void;
     onToolStatus?: (text: string) => Promise<void> | void;
     onMapUpdate?: (data: MapUpdatePayload) => Promise<void> | void;
     onDiceRoll?: (roll: number) => Promise<void> | void;
@@ -8419,6 +8423,7 @@ const runOneToolCall = async (toolCall: any, emitStatus = true): Promise<Execute
   const toolName = `${toolCall.function?.name || ''}`;
   const liveCall = { id: toolCall.id || `live-${++liveToolSequence}`, name: toolName,
     arguments: toolCall.function?.arguments || '{}', running: true };
+  const agentTools = new Map<string, AgentToolActivity>();
   if (safeOnToolCall) await safeOnToolCall(liveCall);
 
   const toolUserMessage = getToolUserMessage(user.language, toolName, toolCall.function?.arguments || '{}');
@@ -8456,6 +8461,10 @@ const runOneToolCall = async (toolCall: any, emitStatus = true): Promise<Execute
           manualModel: subagentManualModel,
           subagentMode,
           subagentReasoningLevel,
+          onToolActivity: safeOnToolCall ? async (call) => {
+            agentTools.set(call.id, call);
+            await safeOnToolCall({ ...liveCall, agent_tools: [...agentTools.values()] });
+          } : undefined,
           onToolStatus: safeOnToolStatus,
           onDesktopAction: safeOnDesktopAction,
           onSubagentUsageCall: (agentName: string, usage: TokenUsageCall) => {
@@ -8525,7 +8534,7 @@ const runOneToolCall = async (toolCall: any, emitStatus = true): Promise<Execute
     toolContent = `Tool error ${toolName}: ${err?.message || String(err)}`;
   }
 
-  if (safeOnToolCall) await safeOnToolCall({ ...liveCall, running: false, result_preview: formatToolResultPreview(toolContent) });
+  if (safeOnToolCall) await safeOnToolCall({ ...liveCall, running: false, agent_tools: agentTools.size ? [...agentTools.values()] : undefined, result_preview: formatToolResultPreview(toolContent) });
   return { toolCall, toolName, toolContent, directImages: directImageSink.items };
 };
 

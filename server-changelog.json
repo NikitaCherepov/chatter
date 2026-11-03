@@ -1,43 +1,56 @@
 {
   "changes": {
     "en": [
-      "Added experimental rich rendering of messages: inline images, graphics, text selection and more"
+      "Reworked various things for the desktop app",
+      "Added a Gateway: your Chatter server can now act as a provider — create an API key and use all available models from any other app, like your own OpenRouter"
     ],
     "cs": [
-      "Přidáno experimentální bohaté vykreslování zpráv: vložené obrázky, grafika, výběr textu a další"
+      "Přepracováno různé věci pro desktopovou aplikaci",
+      "Přidán Gateway: váš server Chatter může nyní fungovat jako poskytovatel — vytvořte API klíč a používejte všechny dostupné modely z jakékoli jiné aplikace, jako váš vlastní OpenRouter"
     ],
     "de": [
-      "Experimentelle Rich-Darstellung von Nachrichten hinzugefügt: Inline-Bilder, Grafiken, Textauswahl und mehr"
+      "Verschiedene Dinge für die Desktop-App überarbeitet",
+      "Gateway hinzugefügt: Dein Chatter-Server kann jetzt als Provider fungieren — erstelle einen API-Schlüssel und nutze alle verfügbaren Modelle aus jeder anderen App, wie dein eigener OpenRouter"
     ],
     "es": [
-      "Se añadió la representación enriquecida experimental de mensajes: imágenes en línea, gráficos, selección de texto y más"
+      "Se han rediseñado varios elementos de la aplicación de escritorio",
+      "Se ha añadido un Gateway: tu servidor de Chatter puede actuar ahora como proveedor — crea una clave de API y usa todos los modelos disponibles desde cualquier otra aplicación, como tu propio OpenRouter"
     ],
     "fr": [
-      "Ajout du rendu riche expérimental des messages : images intégrées, graphiques, sélection de texte et plus encore"
+      "Refonte de divers éléments pour l'application de bureau",
+      "Passerelle ajoutée : votre serveur Chatter peut désormais agir en tant que fournisseur — créez une clé API et utilisez tous les modèles disponibles depuis n'importe quelle autre application, comme votre propre OpenRouter"
     ],
     "it": [
-      "Aggiunto il rendering avanzato sperimentale dei messaggi: immagini inline, grafica, selezione del testo e altro ancora"
+      "Rielaborate diverse funzionalità per l'app desktop",
+      "Aggiunto un Gateway: il tuo server Chatter può ora fungere da provider — crea una chiave API e usa tutti i modelli disponibili da qualsiasi altra app, come il tuo OpenRouter personale"
     ],
     "ja": [
-      "メッセージの実験的なリッチレンダリングを追加しました：インライン画像、グラフィック、テキスト選択など"
+      "デスクトップアプリの各種機能を見直しました",
+      "Gatewayを追加しました：Chatterサーバーがプロバイダーとして動作するようになりました。APIキーを作成して、他のアプリからすべての利用可能なモデルを使用できます。まるで自分のOpenRouterのように"
     ],
     "ko": [
-      "실험적인 메시지 리치 렌더링 추가: 인라인 이미지, 그래픽, 텍스트 선택 등"
+      "데스크톱 앱 관련 다양한 항목을 개선했습니다",
+      "게이트웨이 추가: Chatter 서버가 이제 프로바이더로 작동할 수 있습니다 — API 키를 생성하여 OpenRouter처럼 다른 앱에서 모든 사용 가능한 모델을 사용할 수 있습니다"
     ],
     "pl": [
-      "Dodano eksperymentalne bogate renderowanie wiadomości: obrazy w treści, grafiki, zaznaczanie tekstu i więcej"
+      "Przebudowano różne elementy aplikacji desktopowej",
+      "Dodano Gateway: serwer Chatter może teraz działać jako dostawca — utwórz klucz API i używaj wszystkich dostępnych modeli z dowolnej innej aplikacji, jak własny OpenRouter"
     ],
     "pt-BR": [
-      "Adicionada renderização avançada experimental de mensagens: imagens em linha, gráficos, seleção de texto e mais"
+      "Refiz diversos aspectos do aplicativo desktop",
+      "Adicionado um Gateway: seu servidor Chatter agora pode atuar como provedor — crie uma chave de API e use todos os modelos disponíveis em qualquer outro app, como seu próprio OpenRouter"
     ],
     "ru": [
-      "Добавлено экспериментальное расширенное отображение сообщений: встроенные изображения, графика, выделение текста и другое"
+      "Переработаны различные элементы для десктопного приложения",
+      "Добавлен Gateway: ваш сервер Chatter теперь может работать как провайдер — создайте API-ключ и используйте все доступные модели из любого другого приложения, как свой собственный OpenRouter"
     ],
     "tr": [
-      "Deneysel zengin mesaj görüntüleme eklendi: satır içi görseller, grafikler, metin seçimi ve daha fazlası"
+      "Masaüstü uygulaması için çeşitli iyileştirmeler yapıldı",
+      "Gateway eklendi: Chatter sunucunuz artık bir sağlayıcı olarak çalışabilir — bir API anahtarı oluşturun ve tüm kullanılabilir modelleri başka herhangi bir uygulamadan kullanın, tıpkı kendi OpenRouter'ınız gibi"
     ],
     "zh-CN": [
-      "新增实验性富文本消息渲染：内联图片、图形、文本选择等"
+      "对桌面应用进行了多项改进",
+      "新增网关功能：你的 Chatter 服务器现在可以作为提供商——创建 API 密钥，即可在任何其他应用中使用所有可用模型，就像你自己的 OpenRouter 一样"
     ]
   }
 }
