@@ -36,6 +36,7 @@ export function MemoryPopover({ chatId, compactTrigger = false, preferredModel }
   const modalRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
   const [open, setOpen] = useState(false);
+  const [section, setSection] = useState<'settings' | 'memory'>('settings');
   const [loading, setLoading] = useState(false);
   const [settings, setSettings] = useState<MemorySettings | null>(null);
   const invalidateMemory = useInvalidateMemory();
@@ -49,6 +50,9 @@ export function MemoryPopover({ chatId, compactTrigger = false, preferredModel }
   const [promptSettings, setPromptSettings] = useState<ChatPromptSettings | null>(null);
   const [promptCatalog, setPromptCatalog] = useState<api.PromptsResponse | null>(null);
   const showChatMemory = settings?.memory_mode === 'chat' || settings?.memory_mode === 'both';
+  const memorySelected = showChatMemory && section === 'memory';
+  const bodyRef = useRef<HTMLDivElement>(null);
+  useEffect(() => { if (bodyRef.current) bodyRef.current.scrollTop = 0; }, [memorySelected]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -199,7 +203,7 @@ export function MemoryPopover({ chatId, compactTrigger = false, preferredModel }
       <button
         type="button"
         className={`${s.trigger} ${open ? s.triggerActive : ''}`}
-        onClick={() => setOpen(value => !value)}
+        onClick={() => { if (!open) setSection('settings'); setOpen(!open); }}
         title={t('chat.memory.triggerTitle')}
         aria-label={t('chat.memory.trigger')}
         aria-expanded={open}
@@ -213,13 +217,23 @@ export function MemoryPopover({ chatId, compactTrigger = false, preferredModel }
       </button>
       {createPortal(<AnimatePresence>{open && (
         <motion.div key="chat-settings" className={s.overlay} initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} transition={{duration:.15}} data-native-overlay onMouseDown={event => { if (event.target === event.currentTarget && !dialog) setOpen(false); }}>
-        <motion.div className={`${s.popover} ${showChatMemory ? '' : s.popoverCompact}`} initial={{opacity:0,y:16}} animate={{opacity:1,y:0}} exit={{opacity:0,y:16}} transition={{duration:.2,ease:'easeOut'}} ref={modalRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}>
+        <motion.div className={s.popover} initial={{opacity:0,y:16}} animate={{opacity:1,y:0}} exit={{opacity:0,y:16}} transition={{duration:.2,ease:'easeOut'}} ref={modalRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}>
           <div className={s.header}><strong id={titleId}>{t('chat.memory.headerTitle')}</strong><span>{loading ? t('common.loading') : t('chat.memory.headerHint')}</span><button type="button" className={s.close} aria-label={t('common.close')} onClick={() => setOpen(false)}>×</button></div>
-          <div className={s.body}>
+          {showChatMemory && (
+            <div className={s.sections} role="group" aria-labelledby={titleId}>
+              <button type="button" aria-pressed={!memorySelected} onClick={() => setSection('settings')}>
+                {t('chat.memory.headerTitle')}
+              </button>
+              <button type="button" aria-pressed={memorySelected} onClick={() => setSection('memory')}>
+                {t('chat.memory.chatMemoryTitle')}
+              </button>
+            </div>
+          )}
+          <div key={chatId} ref={bodyRef} className={s.body}>
           <MemorySetupNotice />
           {settings && (
-            <div className={s.layout}>
-              <div className={s.settingsColumn}>
+            <div>
+              <div hidden={memorySelected}>
               <div className={s.field}>{t('chat.memory.character')}
                 {promptSettings?.room_enabled ? (
                   <div className={s.roomCharacterHint}>{t('chat.memory.characterRoomManaged')}</div>
@@ -247,7 +261,7 @@ export function MemoryPopover({ chatId, compactTrigger = false, preferredModel }
               <label className={s.field}>{t('chat.memory.persona')}
                 <ChatPersonaSelector chatId={chatId} embedded />
               </label>
-              <PlayerInstructionsEditor key={chatId} scope="chat" targetId={chatId} modelId={preferredModel} />
+              <PlayerInstructionsEditor key={chatId} scope="chat" targetId={chatId} modelId={preferredModel} appearance="settings" />
               <div className={s.toggleRow}>
                 <div className={s.toggleText}>
                   <strong>{t('chat.memory.roleplayMode.label')}</strong>
@@ -338,13 +352,12 @@ export function MemoryPopover({ chatId, compactTrigger = false, preferredModel }
               )}
               </div>
               {showChatMemory && (
-                <div className={s.memoryColumn}>
-                  <div className={s.field}>{t('chat.memory.chatMemoryTitle')}</div>
+                <div hidden={!memorySelected}>
                   <MemoryRecordsPanel
                     key={chatId}
                     semanticEndpoint={`/api/v1/chats/${chatId}/memory-records/search`}
                     recordsEndpoint={`/api/v1/chats/${chatId}/memory-records`}
-                    compact
+                    appearance="settings"
                     constrainList={false}
                     emptyLabel={t('chat.memory.empty')}
                     onEdit={record => {
