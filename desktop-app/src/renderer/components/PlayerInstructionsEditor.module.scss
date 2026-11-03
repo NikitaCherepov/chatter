@@ -82,17 +82,24 @@
   width: min(760px, 100%);
   max-height: calc(100dvh - 40px);
   overflow-y: auto;
-  background: var(--bg-modal, #141f2c);
-  border: 1px solid var(--border-color, #334155);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-light);
   border-radius: 16px;
   padding: 20px;
-  box-shadow: 0 20px 80px #0008;
+  box-shadow: var(--shadow-modal);
 }
-.modal header {
+.modal > header {
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-light);
   display: flex;
   justify-content: space-between;
   gap: 16px;
   align-items: center;
+}
+.closeButton {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  font-size: 18px;
 }
 .modal h3,
 .modal h4 {
@@ -110,7 +117,7 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  border-top: 1px solid var(--border-color, #334155);
+  border-top: 1px solid var(--border-light);
   padding-top: 16px;
 }
 .historyButton {
@@ -119,6 +126,7 @@
   text-align: left;
   white-space: normal;
   overflow-wrap: anywhere;
+  &:hover:not(:disabled) { background-color: var(--bg-modal-hover); }
 }
 .deletePanel {
   display: flex;

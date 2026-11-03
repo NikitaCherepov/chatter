@@ -102,7 +102,7 @@
   {
     "section": "app",
     "key": "settings.app.theme",
-    "relatedKeys": ["settings.app.themeSystem", "settings.app.themeLight", "settings.app.themeDark"]
+    "relatedKeys": ["settings.app.themeSystem", "settings.app.themeLight", "settings.app.themeDark", "settings.app.themeSchedule", "settings.app.themeLightFrom", "settings.app.themeDarkFrom"]
   },
   {
     "section": "app",

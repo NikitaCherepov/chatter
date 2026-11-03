@@ -41,6 +41,7 @@ type Props = {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
+  ariaLabel?: string;
   disabled?: boolean;
   searchable?: boolean;
   maxVisibleItems?: number;
@@ -52,6 +53,7 @@ export function Select({
   value,
   onChange,
   placeholder,
+  ariaLabel,
   disabled = false,
   searchable = false,
   maxVisibleItems = 8,
@@ -177,6 +179,7 @@ export function Select({
   return (
     <div className={`${s.root} ${inline ? s.inline : ''}`} ref={rootRef}>
       {!inline && <button
+        aria-label={ariaLabel}
         className={s.trigger}
         onClick={() => { if (!disabled) setIsOpen((v) => !v); }}
         disabled={disabled}

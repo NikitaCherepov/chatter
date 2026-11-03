@@ -137,7 +137,7 @@ function PlayerSurveyModal({ target, modelId, currentText, onApplied, onClose }:
   };
   return createPortal(<motion.div className={s.overlay} initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} transition={{duration:.15}} data-native-overlay onMouseDown={event => { event.stopPropagation(); if (event.target === event.currentTarget) onClose(); }} onPointerDown={event => event.stopPropagation()}>
     <motion.div className={s.modal} initial={{opacity:0,y:16}} animate={{opacity:1,y:0}} exit={{opacity:0,y:16}} transition={{duration:.2,ease:'easeOut'}} ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby={titleId}>
-      <header><h3 id={titleId}>{t(target.scope === 'persona' ? 'playerInstructions.surveyGeneral' : 'playerInstructions.surveyChat')}</h3><button className={settingsStyles.cancelBtn} type="button" aria-label={t('common.close')} onClick={onClose}>×</button></header>
+      <header><h3 id={titleId}>{t(target.scope === 'persona' ? 'playerInstructions.surveyGeneral' : 'playerInstructions.surveyChat')}</h3><button className={`${settingsStyles.closeBtn} ${s.closeButton}`} type="button" aria-label={t('common.close')} onClick={onClose}>×</button></header>
       <small>{t('playerInstructions.surveyHelp')}</small>
       {error && <p role="alert">{error}</p>}
       {!selected ? <>

@@ -25,9 +25,10 @@ import {
 import { WakeWordSettings } from './WakeWordSettings';
 import voiceStyles from './VoiceSettings.module.scss';
 import { getRenderPerfLevel, setRenderPerfLevel, type RenderPerfLevel } from '../lib/renderPerf';
-import { getThemePreference, setThemePreference, type ThemePreference } from '../lib/theme';
+import { getThemePreference, getThemeSchedule, setThemePreference, setThemeSchedule, type ThemePreference } from '../lib/theme';
 import { parsePromptSections, serializePromptSections, type PromptSectionKey, type PromptSections } from '../lib/promptSections';
 import { Select } from './Select';
+import { TimePicker } from './TimePicker';
 import type { SelectOption } from './Select';
 import {
   getDetectedSystemLanguage,
@@ -408,6 +409,7 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
     () => getLanguagePreference(),
   );
   const [renderPerf, setRenderPerfState] = useState<RenderPerfLevel>(() => getRenderPerfLevel());
+  const [themeSchedule, setThemeScheduleState] = useState(getThemeSchedule);
   const [themePreference, setThemePreferenceState] = useState<ThemePreference>(() => getThemePreference());
   const languageOptions = useMemo<SelectOption[]>(() => {
     const currentSystemLanguage = getLanguageDisplayName(getDetectedSystemLanguage());
@@ -629,10 +631,11 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
     { value: 'system', label: t('settings.app.themeSystem') },
     { value: 'light', label: t('settings.app.themeLight') },
     { value: 'dark', label: t('settings.app.themeDark') },
+    { value: 'schedule', label: t('settings.app.themeSchedule') },
   ], [t]);
 
   const handleThemeChange = (value: string) => {
-    if (value !== 'system' && value !== 'light' && value !== 'dark') return;
+    if (value !== 'system' && value !== 'light' && value !== 'dark' && value !== 'schedule') return;
     setThemePreferenceState(value);
     setThemePreference(value);
   };
@@ -2614,6 +2617,29 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
                       </button>
                     ))}
                   </div>
+                  {themePreference === 'schedule' && (
+                    <>
+                      <div className={appLayout.themeHours}>
+                        {(['light', 'dark'] as const).map(mode => {
+                          const label = t(mode === 'light' ? 'settings.app.themeLightFrom' : 'settings.app.themeDarkFrom');
+                          return (
+                            <div key={mode} className={appLayout.themeTime} role="group" aria-label={label}>
+                              <span className={s.fieldLabel}>{label}</span>
+                              <TimePicker value={themeSchedule[mode]}
+                                hourLabel={t('settings.app.themeHour')}
+                                minuteLabel={t('settings.app.themeMinute')}
+                                onChange={value => {
+                                  const next = { ...themeSchedule, [mode]: value };
+                                  setThemeScheduleState(next);
+                                  setThemeSchedule(next);
+                                }} />
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <p className={appLayout.hint}>{t('settings.app.themeScheduleHelp')}</p>
+                    </>
+                  )}
                 </div>
 
                 <div className={s.fieldGroup}>
