@@ -1814,6 +1814,10 @@
       "patternPlaceholder": "Regex pattern (for example ^dir$ or ^ipconfig)"
     },
     "ssh": {
+      "addKey": "Add key",
+      "keyPairLabel": "Public and private",
+      "publicOnlyLabel": "Public only",
+      "emptyKeys": "No saved keys yet.",
       "fillRequired": "Enter a name and public key",
       "added": "SSH key added",
       "deleted": "SSH key deleted",

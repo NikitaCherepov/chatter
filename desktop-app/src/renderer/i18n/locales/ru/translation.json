@@ -1846,6 +1846,10 @@
       "patternPlaceholder": "Regex-паттерн (например ^dir$ или ^ipconfig)"
     },
     "ssh": {
+      "addKey": "Добавить ключ",
+      "keyPairLabel": "Публичный и приватный",
+      "publicOnlyLabel": "Только публичный",
+      "emptyKeys": "Сохранённых ключей пока нет.",
       "fillRequired": "Заполните название и публичный ключ",
       "added": "SSH-ключ добавлен",
       "deleted": "SSH-ключ удалён",

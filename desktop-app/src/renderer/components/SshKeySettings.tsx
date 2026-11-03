@@ -18,6 +18,7 @@ export function SshKeySettings() {
   const { t } = useTranslation();
   const [keys, setKeys] = useState<SshKey[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
   const [formName, setFormName] = useState('');
   const [formPublicKey, setFormPublicKey] = useState('');
   const [formPrivateKey, setFormPrivateKey] = useState('');
@@ -40,6 +41,7 @@ export function SshKeySettings() {
     setFormName('');
     setFormPublicKey('');
     setFormPrivateKey('');
+    setShowForm(false);
   };
 
   const handleSave = async () => {
@@ -143,12 +145,62 @@ export function SshKeySettings() {
         {t('advanced.ssh.help')}
       </div>
 
-      {/* Form */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+        <button type="button" className={s.saveBtn} aria-expanded={showForm} disabled={showForm || formSaving} onClick={() => setShowForm(true)}>
+          {t('advanced.ssh.addKey')}
+        </button>
+        {typeof window.electronAPI?.readSshKeys === 'function' && (
+          <button
+            className={s.cancelBtn}
+            onClick={handleDetectKeys}
+            disabled={importing}
+          >
+            {importing ? t('common.searchPlaceholder') : t('advanced.ssh.import')}
+          </button>
+        )}
+      </div>
+
+      {/* Key list */}
+      {keys.length > 0 && (
+        <div style={{ marginTop: '16px' }}>
+          <div className={s.fieldLabel} style={{ marginBottom: '8px' }}>{t('advanced.ssh.savedKeys')}</div>
+          {keys.map((key) => (
+            <div key={key.id} className={s.macroCard}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 500, fontSize: '13px' }}>
+                  {key.name}
+                  <span style={{ color: 'var(--text-muted)', marginLeft: '8px', fontSize: '11px' }}>{t(key.has_private_key ? 'advanced.ssh.keyPairLabel' : 'advanced.ssh.publicOnlyLabel')}</span>
+                </div>
+                <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '2px', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {key.public_key.substring(0, 60)}...
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
+                <button
+                  className={`${s.macroActionBtn} ${s.macroActionBtnDanger}`}
+                  onClick={() => setDeleteConfirmId(key.id)}
+                  title={t('common.delete')}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="3 6 5 6 21 6" />
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {!keys.length && <p className={s.fieldLabel}>{t('advanced.ssh.emptyKeys')}</p>}
+
+      {showForm && <section style={{ marginTop: '16px' }} aria-label={t('advanced.ssh.addKey')}>
       <div className={s.fieldGroup}>
         <label className={s.fieldLabel}>{t('advanced.common.name')}</label>
         <input
           className={s.fieldInput}
           type="text"
+          autoFocus
           value={formName}
           onChange={(e) => setFormName(e.target.value)}
           placeholder={t('advanced.ssh.namePlaceholder')}
@@ -187,16 +239,14 @@ export function SshKeySettings() {
         >
           {formSaving ? t('common.saving') : t('advanced.common.add')}
         </button>
-        {typeof window.electronAPI?.readSshKeys === 'function' && (
-          <button
-            className={s.cancelBtn}
-            onClick={handleDetectKeys}
-            disabled={importing}
-          >
-            {importing ? t('common.searchPlaceholder') : t('advanced.ssh.import')}
-          </button>
-        )}
+        <button type="button" className={s.cancelBtn} disabled={formSaving} onClick={() => {
+          setFormName('');
+          setFormPublicKey('');
+          setFormPrivateKey('');
+          setShowForm(false);
+        }}>{t('common.cancel')}</button>
       </div>
+      </section>}
 
       {/* Detected keys */}
       {showImport && detectedKeys.length > 0 && (
@@ -220,38 +270,6 @@ export function SshKeySettings() {
               >
                 {t('common.save')}
               </button>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Key list */}
-      {keys.length > 0 && (
-        <div style={{ marginTop: '16px' }}>
-          <div className={s.fieldLabel} style={{ marginBottom: '8px' }}>{t('advanced.ssh.savedKeys')}</div>
-          {keys.map((key) => (
-            <div key={key.id} className={s.macroCard}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 500, fontSize: '13px' }}>
-                  {key.name}
-                  {key.has_private_key && <span style={{ color: 'var(--accent)', marginLeft: '6px', fontSize: '10px' }}>{t('advanced.ssh.pair')}</span>}
-                </div>
-                <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '2px', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {key.public_key.substring(0, 60)}...
-                </div>
-              </div>
-              <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
-                <button
-                  className={`${s.macroActionBtn} ${s.macroActionBtnDanger}`}
-                  onClick={() => setDeleteConfirmId(key.id)}
-                  title={t('common.delete')}
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="3 6 5 6 21 6" />
-                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                  </svg>
-                </button>
-              </div>
             </div>
           ))}
         </div>
