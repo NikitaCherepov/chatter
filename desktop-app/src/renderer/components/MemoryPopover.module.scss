@@ -251,3 +251,23 @@
   margin: 14px 0;
   background: var(--border-light);
 }
+
+.identityGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr));
+  gap: 10px;
+  margin: 4px 0 18px;
+}
+.identityGrid .identityCard {
+  min-width: 0;
+  margin: 0;
+  padding: 10px 12px;
+  align-content: start;
+  border: 1px solid var(--border-light);
+  border-radius: 9px;
+}
+.behaviorGroup {
+  margin-top: 16px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border-light);
+}

@@ -42,6 +42,7 @@ type Props = {
   onChange: (value: string) => void;
   placeholder?: string;
   ariaLabel?: string;
+  displayLabel?: string;
   disabled?: boolean;
   searchable?: boolean;
   maxVisibleItems?: number;
@@ -54,6 +55,7 @@ export function Select({
   onChange,
   placeholder,
   ariaLabel,
+  displayLabel,
   disabled = false,
   searchable = false,
   maxVisibleItems = 8,
@@ -187,7 +189,7 @@ export function Select({
       >
         {selectedOption ? (
           <span className={s.triggerContent}>
-            {selectedLabel}
+            {displayLabel ?? selectedLabel}
           </span>
         ) : (
           <span className={s.triggerPlaceholder}>{resolvedPlaceholder}</span>

@@ -153,6 +153,7 @@ export function MemoryPopover({ chatId, compactTrigger = false, preferredModel }
   const globalPromptId = promptCatalog?.selected_prompt_id
     ?? promptCatalog?.prompts.find(prompt => prompt.is_default === 1)?.id
     ?? null;
+  const globalPrompt = allPrompts.find(prompt => prompt.id === globalPromptId);
   const effectivePromptId = promptSettings?.prompt_id ?? globalPromptId;
   const effectivePrompt = allPrompts.find(prompt => prompt.id === effectivePromptId)
     ?? allPrompts.find(prompt => prompt.id === globalPromptId)
@@ -162,7 +163,7 @@ export function MemoryPopover({ chatId, compactTrigger = false, preferredModel }
     {
       value: 'automatic',
       label: t('chat.memory.characterAutomatic'),
-      hint: effectivePrompt?.name ? t('chat.memory.characterGlobal', { name: effectivePrompt.name }) : undefined,
+      hint: globalPrompt?.name ? t('chat.memory.characterGlobal', { name: globalPrompt.name }) : undefined,
     },
     ...allPrompts.map(prompt => ({ value: String(prompt.id), label: prompt.name, hint: prompt.description || undefined })),
   ];
@@ -234,74 +235,82 @@ export function MemoryPopover({ chatId, compactTrigger = false, preferredModel }
           {settings && (
             <div>
               <div hidden={memorySelected}>
-              <div className={s.field}>{t('chat.memory.character')}
-                {promptSettings?.room_enabled ? (
-                  <div className={s.roomCharacterHint}>{t('chat.memory.characterRoomManaged')}</div>
-                ) : (
-                  <div className={s.characterRow}>
-                    <div className={s.characterAvatar}>
-                      {effectivePromptImage ? (
-                        <img src={api.resolveImageUrl(effectivePromptImage, 160)} alt="" />
-                      ) : (
-                        <span>{effectivePrompt?.name?.slice(0, 1).toUpperCase() || 'C'}</span>
-                      )}
+              <div className={s.identityGrid}>
+                <div className={`${s.field} ${s.identityCard}`}>{t('chat.memory.character')}
+                  {promptSettings?.room_enabled ? (
+                    <div className={s.roomCharacterHint}>{t('chat.memory.characterRoomManaged')}</div>
+                  ) : (
+                    <div className={s.characterRow}>
+                      <div className={s.characterAvatar}>
+                        {effectivePromptImage ? (
+                          <img src={api.resolveImageUrl(effectivePromptImage, 160)} alt="" />
+                        ) : (
+                          <span>{effectivePrompt?.name?.slice(0, 1).toUpperCase() || 'C'}</span>
+                        )}
+                      </div>
+                      <div className={s.characterSelect}>
+                        <Select
+                          value={promptSettings?.prompt_id === null ? 'automatic' : String(promptSettings?.prompt_id ?? 'automatic')}
+                          onChange={value => void selectChatPrompt(value)}
+                          options={promptOptions}
+                          searchable
+                          ariaLabel={t('chat.memory.character')}
+                          displayLabel={promptSettings?.prompt_id == null && effectivePrompt?.name
+                            ? `${t('chat.memory.characterAutomatic')} · ${effectivePrompt.name}`
+                            : undefined}
+                          maxVisibleItems={6}
+                        />
+                      </div>
                     </div>
-                    <div className={s.characterSelect}>
-                      <Select
-                        value={promptSettings?.prompt_id === null ? 'automatic' : String(promptSettings?.prompt_id ?? 'automatic')}
-                        onChange={value => void selectChatPrompt(value)}
-                        options={promptOptions}
-                        searchable={promptOptions.length > 7}
-                        maxVisibleItems={6}
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-              <label className={s.field}>{t('chat.memory.persona')}
-                <ChatPersonaSelector chatId={chatId} embedded />
-              </label>
-              <PlayerInstructionsEditor key={chatId} scope="chat" targetId={chatId} modelId={preferredModel} appearance="settings" />
-              <div className={s.toggleRow}>
-                <div className={s.toggleText}>
-                  <strong>{t('chat.memory.roleplayMode.label')}</strong>
-                  <span>{t('chat.memory.roleplayMode.hint')}</span>
+                  )}
                 </div>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={settings.roleplay_mode === 1}
-                  aria-label={t('chat.memory.roleplayMode.label')}
-                  className={`${s.toggle} ${settings.roleplay_mode === 1 ? s.toggleActive : ''}`}
-                  disabled={loading}
-                  onClick={() => void patchSettings({ roleplay_mode: settings.roleplay_mode === 1 ? 0 : 1 })}
-                >
-                  <span />
-                </button>
+                <div className={`${s.field} ${s.identityCard}`}>{t('chat.memory.persona')}
+                  <ChatPersonaSelector chatId={chatId} embedded />
+                </div>
               </div>
-              <div className={s.field}>{t('chat.memory.injectionProtection.label')}
-                <Select
-                  value={settings.prompt_injection_protection || 'automatic'}
-                  onChange={value => void patchSettings({ prompt_injection_protection: value as MemorySettings['prompt_injection_protection'] })}
-                  options={[
-                    { value: 'automatic', label: t('chat.memory.injectionProtection.automatic') },
-                    { value: 'enabled', label: t('chat.memory.injectionProtection.enabled') },
-                    { value: 'disabled', label: t('chat.memory.injectionProtection.disabled') },
-                  ]}
-                />
-                <Tooltip content={t('chat.memory.injectionProtection.help')}>
-                  <span className={s.fieldHint} tabIndex={0}>{t('chat.memory.injectionProtection.hint')}</span>
-                </Tooltip>
-              </div>
-              <div className={s.field}>{t('chat.memory.messageSearch.label')}
-                <Select
-                  value={settings.message_search_scope}
-                  onChange={value => void patchSettings({ message_search_scope: value as MemorySettings['message_search_scope'] })}
-                  options={[
-                    { value: 'all', label: t('chat.memory.messageSearch.all') },
-                    { value: 'current', label: t('chat.memory.messageSearch.current') },
-                  ]}
-                />
+              <PlayerInstructionsEditor key={chatId} scope="chat" targetId={chatId} modelId={preferredModel} appearance="settings" />
+              <div className={s.behaviorGroup}>
+                <div className={s.toggleRow}>
+                  <div className={s.toggleText}>
+                    <strong>{t('chat.memory.roleplayMode.label')}</strong>
+                    <span>{t('chat.memory.roleplayMode.hint')}</span>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={settings.roleplay_mode === 1}
+                    aria-label={t('chat.memory.roleplayMode.label')}
+                    className={`${s.toggle} ${settings.roleplay_mode === 1 ? s.toggleActive : ''}`}
+                    disabled={loading}
+                    onClick={() => void patchSettings({ roleplay_mode: settings.roleplay_mode === 1 ? 0 : 1 })}
+                  >
+                    <span />
+                  </button>
+                </div>
+                <div className={s.field}>{t('chat.memory.injectionProtection.label')}
+                  <Select
+                    value={settings.prompt_injection_protection || 'automatic'}
+                    onChange={value => void patchSettings({ prompt_injection_protection: value as MemorySettings['prompt_injection_protection'] })}
+                    options={[
+                      { value: 'automatic', label: t('chat.memory.injectionProtection.automatic') },
+                      { value: 'enabled', label: t('chat.memory.injectionProtection.enabled') },
+                      { value: 'disabled', label: t('chat.memory.injectionProtection.disabled') },
+                    ]}
+                  />
+                  <Tooltip content={t('chat.memory.injectionProtection.help')}>
+                    <span className={s.fieldHint} tabIndex={0}>{t('chat.memory.injectionProtection.hint')}</span>
+                  </Tooltip>
+                </div>
+                <div className={s.field}>{t('chat.memory.messageSearch.label')}
+                  <Select
+                    value={settings.message_search_scope}
+                    onChange={value => void patchSettings({ message_search_scope: value as MemorySettings['message_search_scope'] })}
+                    options={[
+                      { value: 'all', label: t('chat.memory.messageSearch.all') },
+                      { value: 'current', label: t('chat.memory.messageSearch.current') },
+                    ]}
+                  />
+                </div>
               </div>
               <div className={s.field}>{t('chat.memory.modeLabel')}
                 <Select

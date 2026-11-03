@@ -4,8 +4,9 @@ import { toast } from 'sonner';
 import * as api from '../lib/api';
 import { Select } from './Select';
 import s from './ChatPersonaSelector.module.scss';
+import card from './MemoryPopover.module.scss';
 
-type Persona = { id: number; name: string; description: string; is_primary: number; is_default: number };
+type Persona = { id: number; name: string; description: string; image_url?: string | null; is_primary: number; is_default: number };
 type ChatMemorySettings = { persona_override_id: number | null };
 
 export function ChatPersonaSelector({ chatId, embedded = false }: { chatId: number; embedded?: boolean }) {
@@ -35,6 +36,7 @@ export function ChatPersonaSelector({ chatId, embedded = false }: { chatId: numb
   }, [load]);
 
   const activeGlobal = personas.find(persona => persona.is_default === 1);
+  const effectivePersona = overrideId === null ? activeGlobal : personas.find(persona => persona.id === overrideId);
   const options = useMemo(() => [
     {
       value: '',
@@ -77,8 +79,17 @@ export function ChatPersonaSelector({ chatId, embedded = false }: { chatId: numb
   return (
     <div className={`${s.root} ${embedded ? s.embedded : ''}`}>
       {!embedded && <span className={s.label}>Персона:</span>}
+      {embedded && (
+        <div className={card.characterAvatar} aria-hidden="true">
+          {effectivePersona?.image_url
+            ? <img src={api.resolveImageUrl(effectivePersona.image_url, 160)} alt="" />
+            : <span>{effectivePersona?.name.slice(0, 1).toUpperCase() || '—'}</span>}
+        </div>
+      )}
       <div className={s.select}>
-        <Select options={options} value={overrideId === null ? '' : String(overrideId)} onChange={handleChange} disabled={saving} maxVisibleItems={6} />
+        <Select searchable={embedded} ariaLabel={embedded ? t('chat.memory.persona') : undefined}
+          displayLabel={embedded && overrideId === null && effectivePersona?.name ? `${t('chat.memory.personaAutomatic')} · ${effectivePersona.name}` : undefined}
+          options={options} value={overrideId === null ? '' : String(overrideId)} onChange={handleChange} disabled={saving} maxVisibleItems={6} />
       </div>
     </div>
   );
