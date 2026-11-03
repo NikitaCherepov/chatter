@@ -118,6 +118,7 @@ const backendRestoredListeners = new Set<() => void>();
 let backendRecoveryTimer: ReturnType<typeof setTimeout> | null = null;
 let backendRecoveryAttempt = 0;
 let backendRecoveryActive = false;
+let backendOutageConfirmed = false;
 let backendHealthCheckInFlight = false;
 let backendOnlineListenerRegistered = false;
 
@@ -166,8 +167,10 @@ async function checkBackendHealth() {
     backendRecoveryActive = false;
     backendRecoveryAttempt = 0;
     console.info('[recovery] backend is available again');
-    notifyBackendRestored();
+    if (backendOutageConfirmed) notifyBackendRestored();
+    backendOutageConfirmed = false;
   } catch {
+    backendOutageConfirmed = true;
     backendRecoveryAttempt += 1;
   } finally {
     clearTimeout(timeout);
@@ -176,7 +179,8 @@ async function checkBackendHealth() {
   }
 }
 
-function startBackendRecovery() {
+function startBackendRecovery(confirmed = false) {
+  backendOutageConfirmed ||= confirmed;
   if (!backendOnlineListenerRegistered) {
     window.addEventListener('online', () => {
       if (!backendRecoveryActive || backendHealthCheckInFlight) return;
@@ -198,7 +202,7 @@ async function fetchWithRecovery(input: RequestInfo | URL, init?: RequestInit): 
     if (isRecoverableHttpStatus(response.status)) startBackendRecovery();
     return response;
   } catch (error) {
-    startBackendRecovery();
+    if (!init?.signal?.aborted) startBackendRecovery(true);
     throw error;
   }
 }

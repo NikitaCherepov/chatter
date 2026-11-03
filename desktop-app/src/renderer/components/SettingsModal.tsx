@@ -1,3 +1,4 @@
+import { useSettingsQueries } from '../lib/useSettingsQueries';
 import appLayout from './AppSettings.module.scss';
 import settingsRows from './RestrictionsSettings.module.scss';
 import switchStyles from './MemoryPopover.module.scss';
@@ -397,7 +398,7 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
   const [modelSettingsMap, setModelSettingsMap] = useState<api.ModelSettingsMap>({});
   const [modelsLoading, setModelsLoading] = useState(false);
   const [modelsSavingId, setModelsSavingId] = useState<string | null>(null);
-  const agentCatalogQuery = useQuery({ queryKey: ['subagent-catalog', api.API_BASE, user?.id, i18n.resolvedLanguage || i18n.language], queryFn: () => api.getSubagentCatalog(i18n.resolvedLanguage || i18n.language), enabled: Boolean(user), staleTime: 60_000, retry: 1 });
+  const agentCatalogQuery = useQuery({ queryKey: ['subagent-catalog', api.API_BASE, user?.id, i18n.resolvedLanguage || i18n.language], queryFn: () => api.getSubagentCatalog(i18n.resolvedLanguage || i18n.language), enabled: section === 'agents' && Boolean(user), staleTime: 60_000, retry: 1 });
 
   // UI settings (app tab)
   const [uiSettings, setUiSettingsState] = useState<api.UiSettings>({ show_tokens: true });
@@ -463,7 +464,7 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
         })
         .catch(() => {});
     }
-  }, [section]);
+  }, [user?.id]);
 
   const loadPersonas = useCallback(async (preferredId?: number) => {
     const refreshed = await personasQuery.refetch();
@@ -514,86 +515,42 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
     setPersonaImageRemoved(false);
   }, [selectedPersonaId, personas]);
 
-  // Load models catalog + per-model settings when models tab opens
-  useEffect(() => {
-    if (section === 'models') {
-      setModelsLoading(true);
-      Promise.all([
-        api.getModels().catch(() => null),
-        api.getModelSettings().catch(() => null),
-      ]).then(([catRes, setRes]) => {
-        if (catRes) { setModelsCatalog(catRes.models); setAutoReasoningLevels(catRes.auto_reasoning_levels ?? []); }
-        if (setRes) setModelSettingsMap(setRes.model_settings);
-      }).finally(() => setModelsLoading(false));
-    }
-  }, [section]);
+  const reads = useSettingsQueries(user?.id, section);
+  const invalidateSettingsRead = (key: keyof typeof reads) => {
+    void queryClient.invalidateQueries({ queryKey: ['settings', api.API_BASE, user?.id, key] });
+  };
 
   useEffect(() => {
-    if (section !== 'agents') return;
-    let active = true;
-    setModelsLoading(true);
-    Promise.all([api.getModels(), api.getSubagentModel(), api.getSubagentReasoningLevel()])
-      .then(([catalog, model, reasoning]) => {
-        if (!active) return;
-        setModelsCatalog(catalog.models);
-        setAutoReasoningLevels(catalog.auto_reasoning_levels ?? []);
-        setSubagentModelState(model.subagent_model);
-        setSubagentReasoningLevelState(reasoning.reasoning_level);
-      })
-      .catch(() => { if (active) toast.error(t('settings.agents.loadFailed')); })
-      .finally(() => { if (active) setModelsLoading(false); });
-    return () => { active = false; };
-  }, [section, t]);
-
+    if (!reads.models.data) return;
+    setModelsCatalog(reads.models.data.models);
+    setAutoReasoningLevels(reads.models.data.auto_reasoning_levels ?? []);
+  }, [reads.models.data]);
   useEffect(() => {
-    if (section !== 'limits' || !window.electronAPI?.getDesktopBrowserSettings) return;
-    let active = true;
-    window.electronAPI.getDesktopBrowserSettings().then(settings => {
-      if (!active) return;
-      setDesktopBrowserSettingsState(settings);
+    setModelsLoading(section === 'models'
+      ? reads.models.isLoading || reads.modelSettings.isLoading
+      : section === 'agents' && (reads.models.isLoading || reads.agentModel.isLoading || reads.agentReasoning.isLoading));
+  }, [section, reads.models.isLoading, reads.modelSettings.isLoading, reads.agentModel.isLoading, reads.agentReasoning.isLoading]);
+  useEffect(() => { if (reads.modelSettings.data) setModelSettingsMap(reads.modelSettings.data.model_settings); }, [reads.modelSettings.data]);
+  useEffect(() => { if (reads.agentModel.data) setSubagentModelState(reads.agentModel.data.subagent_model); }, [reads.agentModel.data]);
+  useEffect(() => { if (reads.agentReasoning.data) setSubagentReasoningLevelState(reads.agentReasoning.data.reasoning_level); }, [reads.agentReasoning.data]);
+  useEffect(() => { if (reads.ui.data) setUiSettingsState(reads.ui.data.settings); }, [reads.ui.data]);
+  useEffect(() => {
+    if (reads.desktopBrowser.data) {
+      setDesktopBrowserSettingsState(reads.desktopBrowser.data);
       setDesktopBrowserSettingsReady(true);
-    }).catch(() => {});
-    return () => { active = false; };
-  }, [section]);
-
-  // Load UI settings when app tab opens
-  useEffect(() => {
-    if (section === 'app') {
-      api.getUiSettings()
-        .then((res) => setUiSettingsState(res.settings))
-        .catch(() => {});
-      api.getModels()
-        .then((res) => {
-          setModelsCatalog(res.models);
-          if (res.auto_reasoning_levels) setAutoReasoningLevels(res.auto_reasoning_levels);
-        })
-        .catch(() => {});
     }
-  }, [section]);
-
+  }, [reads.desktopBrowser.data]);
   useEffect(() => {
-    if (section !== 'connections') return;
-    setLinkStatusLoading(true);
-    api.getLinkStatus()
-      .then(setLinkStatus)
-      .catch(() => setLinkStatus(null))
-      .finally(() => setLinkStatusLoading(false));
-  }, [section]);
-
-  // Load context/document limits when the limits tab opens
+    setLinkStatus(reads.link.data ?? null);
+    setLinkStatusLoading(reads.link.isLoading);
+  }, [reads.link.data, reads.link.isLoading]);
   useEffect(() => {
-    if (section === 'limits') {
-      api.getContextTokenLimit()
-        .then((res) => {
-          setContextTokenLimitState(res);
-          savedContextTokenLimitRef.current = res.max_context_tokens;
-        })
-        .catch(() => {});
-      api.getAttachmentTokenLimit()
-        .then((res) => setAttachmentTokenLimitState(res))
-        .catch(() => {});
+    if (reads.context.data) {
+      setContextTokenLimitState(reads.context.data);
+      savedContextTokenLimitRef.current = reads.context.data.max_context_tokens;
     }
-  }, [section]);
+  }, [reads.context.data]);
+  useEffect(() => { if (reads.attachment.data) setAttachmentTokenLimitState(reads.attachment.data); }, [reads.attachment.data]);
 
   const handleLanguagePreferenceChange = async (value: string) => {
     if (!isLanguagePreference(value)) return;
@@ -658,6 +615,7 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
     setDesktopBrowserSettingsSaving(true);
     try {
       setDesktopBrowserSettingsState(await window.electronAPI.setDesktopBrowserSettings(next));
+      invalidateSettingsRead('desktopBrowser');
     } catch {
       setDesktopBrowserSettingsState(previous);
       toast.error(t('settings.toasts.saveSettingFailed'));
@@ -676,6 +634,7 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
       setUser(freshUser);
       localStorage.setItem('chatter_user', JSON.stringify(freshUser));
       setLinkStatus(status);
+      invalidateSettingsRead('link');
       api.reconnectWebSocket();
       await onAccountChanged?.();
       toast.success(t('settings.connections.linked'));
@@ -688,6 +647,7 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
     setUnlinkingTelegram(true);
     try {
       const res = await api.unlinkTelegram(unlinkDataOwner);
+      invalidateSettingsRead('link');
       setUser(res.user);
       localStorage.setItem('chatter_user', JSON.stringify(res.user));
       setLinkStatus({ linked: false });
@@ -714,6 +674,7 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
     setUiSettingsSaving(true);
     try {
       const res = await api.setUiSettings({ show_tokens: newValue });
+      invalidateSettingsRead('ui');
       setUiSettingsState(res.settings);
       // Обновляем user в AuthProvider чтобы ChatPage сразу перерисовался
       if (user) {
@@ -734,6 +695,7 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
     setUiSettingsSaving(true);
     try {
       const res = await api.setUiSettings({ dice_roll_enabled: newValue });
+      invalidateSettingsRead('ui');
       setUiSettingsState(res.settings);
       if (user) {
         setUser({ ...user, ui_settings: res.settings });
@@ -753,6 +715,7 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
     setSubagentModelSaving(true);
     try {
       const res = await api.setSubagentModel(modelId);
+      invalidateSettingsRead('agentModel');
       setSubagentModelState(res.subagent_model);
       if (user) {
         setUser({ ...user, subagent_model: res.subagent_model });
@@ -779,6 +742,7 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
     setSubagentReasoningSaving(true);
     try {
       const res = await api.setSubagentReasoningLevel(level);
+      invalidateSettingsRead('agentReasoning');
       setSubagentReasoningLevelState(res.reasoning_level);
       if (user) {
         setUser({ ...user, subagent_reasoning_level: res.reasoning_level });
@@ -806,13 +770,14 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
     setContextTokenLimitSaving(true);
     try {
       const res = await api.setContextTokenLimit(commitValue);
+      invalidateSettingsRead('context');
       setContextTokenLimitState(res);
       if (savedContextTokenLimitRef.current !== null && res.max_context_tokens < savedContextTokenLimitRef.current) {
         toast.info(t('settings.toasts.contextLimitReduced'));
       }
       savedContextTokenLimitRef.current = res.max_context_tokens;
       // Refresh attachment limit too (hardCap depends on context tokens)
-      api.getAttachmentTokenLimit().then(setAttachmentTokenLimitState).catch(() => {});
+      invalidateSettingsRead('attachment');
     } catch {
       setContextTokenLimitState(prev);
       toast.error(t('settings.toasts.saveTokenLimitFailed'));
@@ -835,6 +800,7 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
     setAttachmentTokenLimitSaving(true);
     try {
       const res = await api.setAttachmentTokenLimit(commitValue);
+      invalidateSettingsRead('attachment');
       setAttachmentTokenLimitState(res);
     } catch {
       setAttachmentTokenLimitState(prev);
@@ -849,6 +815,7 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
     setModelsSavingId(modelId);
     try {
       const res = await api.setModelSettings(modelId, settings);
+      invalidateSettingsRead('modelSettings');
       setModelSettingsMap(res.model_settings);
     } catch {
       toast.error(t('settings.toasts.saveModelSettingsFailed'));
@@ -868,35 +835,20 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
     });
   }, []);
 
-  // Load prompts on modal open
+  const promptsInitialized = useRef(false);
   useEffect(() => {
-    let cancelled = false;
-    const load = async () => {
-      setPromptsLoading(true);
-      try {
-        const res = await api.getPrompts();
-        if (cancelled) return;
-        setPrompts(res.prompts);
-        setCustomPrompts(res.custom_prompts || []);
-        if (res.selected_prompt_id !== null) {
-          setSelectedPromptId(res.selected_prompt_id);
-        } else {
-          const def = res.prompts.find(p => p.is_default === 1);
-          setSelectedPromptId(def ? def.id : null);
-        }
-        setCustomContent(res.custom_prompt_content || '');
-        if (Number.isFinite(res.max_custom_prompt_length) && (res.max_custom_prompt_length as number) >= 0) {
-          setMaxPromptLength(res.max_custom_prompt_length as number);
-        }
-      } catch (err) {
-        console.error('Failed to load prompts:', err);
-      } finally {
-        if (!cancelled) setPromptsLoading(false);
-      }
-    };
-    load();
-    return () => { cancelled = true; };
-  }, []);
+    setPromptsLoading(reads.prompts.isLoading);
+    const res = reads.prompts.data;
+    if (!res || promptsInitialized.current) return;
+    promptsInitialized.current = true;
+    setPrompts(res.prompts);
+    setCustomPrompts(res.custom_prompts || []);
+    setSelectedPromptId(res.selected_prompt_id ?? res.prompts.find(p => p.is_default === 1)?.id ?? null);
+    setCustomContent(res.custom_prompt_content || '');
+    if (typeof res.max_custom_prompt_length === 'number' && res.max_custom_prompt_length >= 0) {
+      setMaxPromptLength(res.max_custom_prompt_length);
+    }
+  }, [reads.prompts.data, reads.prompts.isLoading]);
 
   // Sync name/desc/content fields when selectedPromptId changes
   useEffect(() => {
@@ -1222,13 +1174,14 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
     setSillyTavernBackupImporting(true);
     try {
       const { result } = await api.importSillyTavernBackup(sillyTavernBackupDialog.importId, setBackupImportProgress);
+      invalidateSettingsRead('prompts');
       setLastBackupImport(result);
       setSillyTavernBackupDialog(null);
       await loadPersonas();
-      const promptData = await api.getPrompts();
-      setPrompts(promptData.prompts);
-      setCustomPrompts(promptData.custom_prompts || []);
-      setSelectedPromptId(promptData.selected_prompt_id ?? promptData.prompts.find(prompt => prompt.is_default === 1)?.id ?? null);
+      const { data: promptData } = await reads.prompts.refetch({ throwOnError: true });
+      if (promptData) setPrompts(promptData.prompts);
+      setCustomPrompts(promptData?.custom_prompts || []);
+      setSelectedPromptId(promptData?.selected_prompt_id ?? promptData?.prompts.find(prompt => prompt.is_default === 1)?.id ?? null);
       window.dispatchEvent(new Event('chatter:personas-changed'));
       await onAccountChanged?.();
       toast.success(t('settings.data.backup.success', {
@@ -1240,9 +1193,9 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
       if (error instanceof Error && error.message === 'sillytavern_backup_import_cancelled') {
         setSillyTavernBackupDialog(null);
         await loadPersonas();
-        const promptData = await api.getPrompts();
-        setPrompts(promptData.prompts);
-        setCustomPrompts(promptData.custom_prompts || []);
+        const { data: promptData } = await reads.prompts.refetch({ throwOnError: true });
+        if (promptData) setPrompts(promptData.prompts);
+        setCustomPrompts(promptData?.custom_prompts || []);
         window.dispatchEvent(new Event('chatter:personas-changed'));
         await onAccountChanged?.();
         toast.info(t('settings.data.backup.cancelled'));
@@ -1335,6 +1288,7 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
     setPromptSaving(true);
     try {
       await api.selectPrompt(promptId);
+      invalidateSettingsRead('prompts');
       if (promptId !== CUSTOM_PROMPT_ID) toast.success(t('settings.toasts.promptSelected'));
     } catch (err) {
       setSelectedPromptId(previous);
@@ -1444,6 +1398,7 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
     setCharacterCardImporting(true);
     try {
       const { prompt } = await api.importCharacterCard(characterCardDialog.file);
+      invalidateSettingsRead('prompts');
       setCustomPrompts(previous => [...previous.filter(item => item.id !== prompt.id), prompt]);
       setSelectedPromptId(prompt.id);
       setPromptName(prompt.name);
@@ -1526,6 +1481,7 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
         imageSaveFailed = true;
       }
 
+      invalidateSettingsRead('prompts');
       const savedPrompt: api.CustomPromptInfo = {
         id: savedPromptId,
         name,
@@ -1563,6 +1519,7 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
     setPromptDeleting(true);
     try {
       await api.deleteCustomPrompt(selectedPromptId);
+      invalidateSettingsRead('prompts');
       const deletedId = selectedPromptId;
       setCustomPrompts(prev => prev.filter(p => p.id !== deletedId));
       // Reset to default
@@ -2106,7 +2063,7 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
                         <button
                           onClick={() => {
                             if (!aiPanelOpen) {
-                              api.getModels().then(res => setAiPreferredModel(res.preferred_model)).catch(() => {});
+                              void reads.models.refetch().then(({ data }) => { if (data) setAiPreferredModel(data.preferred_model); });
                             }
                             setAiPanelOpen(v => !v);
                           }}
@@ -2576,7 +2533,7 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
                 onSave={(id, settings) => void handleSaveModelSettings(id, settings)}
                 onReset={async id => {
                   setModelsSavingId(id);
-                  try { const result = await api.deleteModelSettings(id); setModelSettingsMap(result.model_settings); }
+                  try { const result = await api.deleteModelSettings(id); setModelSettingsMap(result.model_settings); invalidateSettingsRead('modelSettings'); }
                   catch { toast.error(t('settings.toasts.saveModelSettingsFailed')); }
                   finally { setModelsSavingId(null); }
                 }} />
