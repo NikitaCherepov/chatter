@@ -1,0 +1,40 @@
+.themes {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  button {
+    min-width: 0;
+    display: grid;
+    gap: 7px;
+    padding: 8px;
+    border: 1px solid var(--border-light);
+    border-radius: 8px;
+    background: var(--bg-primary);
+    color: var(--text-secondary);
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+    overflow-wrap: anywhere;
+    &[aria-pressed='true'] { border-color: var(--accent); background: var(--bg-input); color: var(--text-primary); }
+    &:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  }
+}
+.preview {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 5px;
+  height: 34px;
+  padding: 0 8px;
+  border: 1px solid var(--border-light);
+  border-radius: 5px;
+  background: #eef2f7;
+  i { width: 65%; height: 4px; border-radius: 3px; background: #7891ae; }
+  i + i { width: 42%; align-self: flex-end; }
+  &[data-mode='dark'] { background: #1b2636; }
+  &[data-mode='system'] { background: linear-gradient(90deg, #eef2f7 50%, #1b2636 50%); }
+}
+
+.webTools { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border-light); }
+.webQuotaHelp { margin: 8px 0 14px; color: var(--text-muted); font-size: 12px; line-height: 1.5; }
+.hint { margin: 2px 0 0; font-size: 11px; line-height: 1.5; color: var(--text-muted); }

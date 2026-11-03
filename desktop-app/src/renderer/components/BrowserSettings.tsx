@@ -1,4 +1,4 @@
-import { useEffect, useState, useId } from 'react';
+import { useEffect, useState, useId, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import * as api from '../lib/api';
@@ -27,7 +27,7 @@ const normalizeSettings = (settings: api.UiSettings): BrowserConfirmationSetting
   browser_confirm_fill: settings.browser_confirm_fill !== false,
 });
 
-export function BrowserSettings() {
+export function BrowserSettings({ children }: { children?: ReactNode }) {
   const { t } = useTranslation();
   const id = useId();
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
@@ -122,6 +122,7 @@ export function BrowserSettings() {
           </div>
         </>
       )}
+      {children}
     </div>
   );
 }

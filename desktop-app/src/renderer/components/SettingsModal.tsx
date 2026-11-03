@@ -1,3 +1,6 @@
+import appLayout from './AppSettings.module.scss';
+import settingsRows from './RestrictionsSettings.module.scss';
+import switchStyles from './MemoryPopover.module.scss';
 import { useFeatureFlags } from '../lib/useFeatureFlags';
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -399,6 +402,7 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
   const [uiSettings, setUiSettingsState] = useState<api.UiSettings>({ show_tokens: true });
   const [uiSettingsSaving, setUiSettingsSaving] = useState(false);
   const [desktopBrowserSettings, setDesktopBrowserSettingsState] = useState({ concurrency: 2, searchEnabled: true, readerEnabled: true });
+  const [desktopBrowserSettingsReady, setDesktopBrowserSettingsReady] = useState(false);
   const [desktopBrowserSettingsSaving, setDesktopBrowserSettingsSaving] = useState(false);
   const [languagePreference, setLanguagePreferenceState] = useState<LanguagePreference>(
     () => getLanguagePreference(),
@@ -539,6 +543,17 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
     return () => { active = false; };
   }, [section, t]);
 
+  useEffect(() => {
+    if (section !== 'browser' || !window.electronAPI?.getDesktopBrowserSettings) return;
+    let active = true;
+    window.electronAPI.getDesktopBrowserSettings().then(settings => {
+      if (!active) return;
+      setDesktopBrowserSettingsState(settings);
+      setDesktopBrowserSettingsReady(true);
+    }).catch(() => {});
+    return () => { active = false; };
+  }, [section]);
+
   // Load UI settings when app tab opens
   useEffect(() => {
     if (section === 'app') {
@@ -550,9 +565,6 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
           setModelsCatalog(res.models);
           if (res.auto_reasoning_levels) setAutoReasoningLevels(res.auto_reasoning_levels);
         })
-        .catch(() => {});
-      window.electronAPI.getDesktopBrowserSettings()
-        .then(setDesktopBrowserSettingsState)
         .catch(() => {});
     }
   }, [section]);
@@ -2492,7 +2504,43 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
           )}
 
           {section === 'browser' && (
-            <BrowserSettings />
+            <BrowserSettings>
+              {desktopBrowserSettingsReady && (
+                <section className={`${settingsRows.group} ${appLayout.webTools}`}>
+                  <h3>{t('settings.app.layout.webTitle')}</h3>
+                  <p className={appLayout.webQuotaHelp}>{t('settings.app.layout.webQuotaHelp')}</p>
+                  <div className={s.fieldGroup}>
+                    <label className={s.fieldLabel}>{t('settings.app.layout.desktopBrowserConcurrency')}</label>
+                    <Select
+                      options={desktopBrowserConcurrencyOptions}
+                      value={String(desktopBrowserSettings.concurrency)}
+                      onChange={value => void saveDesktopBrowserSettings({ ...desktopBrowserSettings, concurrency: Number(value) })}
+                      disabled={desktopBrowserSettingsSaving}
+                    />
+                    <p className={appLayout.hint}>{t('settings.app.layout.desktopBrowserConcurrencyHelp')}</p>
+                  </div>
+                  {([
+                    { key: 'searchEnabled', label: 'desktopSearch', icon: 'search' },
+                    { key: 'readerEnabled', label: 'desktopReader', icon: 'file' },
+                  ] as const).map(({ key, label, icon }) => (
+                    <div className={settingsRows.row} key={key}>
+                      <span className={settingsRows.icon}><Icon name={icon} size={18} /></span>
+                      <div className={settingsRows.text}>
+                        <span className={settingsRows.label} id={`browser-tool-${key}`}>{t(`settings.app.layout.${label}`)}</span>
+                        <p id={`browser-tool-${key}-hint`}>{t(`settings.app.layout.${label}Help`)}</p>
+                      </div>
+                      <button type="button" role="switch" aria-checked={desktopBrowserSettings[key]}
+                        aria-labelledby={`browser-tool-${key}`} aria-describedby={`browser-tool-${key}-hint`}
+                        className={`${switchStyles.toggle} ${desktopBrowserSettings[key] ? switchStyles.toggleActive : ''}`}
+                        disabled={desktopBrowserSettingsSaving}
+                        onClick={() => void saveDesktopBrowserSettings({ ...desktopBrowserSettings, [key]: !desktopBrowserSettings[key] })}>
+                        <span />
+                      </button>
+                    </div>
+                  ))}
+                </section>
+              )}
+            </BrowserSettings>
           )}
 
           {section === 'servers' && (
@@ -2578,136 +2626,104 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
           {section === 'app' && (
             <div className={s.panel}>
               <div className={s.panelTitle}>{t('settings.sections.app')}</div>
+              <section className={settingsRows.group}>
+                <h3>{t('settings.app.layout.appearance')}</h3>
 
-              <div className={s.fieldGroup}>
-                <label className={s.fieldLabel}>{t('settings.app.interfaceLanguage')}</label>
-                <Select
-                  options={languageOptions}
-                  value={languagePreference}
-                  onChange={handleLanguagePreferenceChange}
-                  placeholder={t('settings.language.system')}
-                />
-              </div>
-
-              <div className={s.fieldGroup}>
-                <label className={s.fieldLabel}>{t('settings.app.theme')}</label>
-                <Select
-                  options={themeOptions}
-                  value={themePreference}
-                  onChange={handleThemeChange}
-                />
-              </div>
-
-              <div className={s.fieldGroup}>
-                <label className={s.fieldLabel}>{t('settings.app.zoom')}</label>
-                <div className={s.zoomControl}>
-                  <button
-                    className={s.zoomBtn}
-                    onClick={() => handleZoomChange(-ZOOM_STEP_PCT)}
-                    disabled={zoomPct <= ZOOM_MIN_PCT}
-                    type="button"
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                      <line x1="5" y1="12" x2="19" y2="12" />
-                    </svg>
-                  </button>
-                  <input
-                    className={s.zoomInput}
-                    type="text"
-                    value={zoomEditing ? zoomInputValue : `${zoomPct}%`}
-                    onFocus={() => { setZoomEditing(true); setZoomInputValue(String(zoomPct)); }}
-                    onChange={(e) => setZoomInputValue(e.target.value)}
-                    onBlur={handleZoomInputBlur}
-                    onKeyDown={handleZoomInputKeyDown}
+                <div className={s.fieldGroup}>
+                  <label className={s.fieldLabel}>{t('settings.app.interfaceLanguage')}</label>
+                  <Select
+                    options={languageOptions}
+                    value={languagePreference}
+                    onChange={handleLanguagePreferenceChange}
+                    placeholder={t('settings.language.system')}
                   />
-                  <button
-                    className={s.zoomBtn}
-                    onClick={() => handleZoomChange(ZOOM_STEP_PCT)}
-                    disabled={zoomPct >= ZOOM_MAX_PCT}
-                    type="button"
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                      <line x1="12" y1="5" x2="12" y2="19" />
-                      <line x1="5" y1="12" x2="19" y2="12" />
-                    </svg>
-                  </button>
                 </div>
-              </div>
 
-              <div className={s.fieldGroup}>
-                <label className={s.fieldLabel}>{t('settings.app.renderPerf')}</label>
-                <Select
-                  options={renderPerfOptions}
-                  value={renderPerf}
-                  onChange={handleRenderPerfChange}
-                />
-                <div style={{ fontSize: 11, color: 'var(--text-hint)', marginTop: 2 }}>
-                  {t('settings.app.renderPerfHelp')}
+                <div className={s.fieldGroup}>
+                  <label className={s.fieldLabel}>{t('settings.app.theme')}</label>
+                  <div className={appLayout.themes} role="group" aria-label={t('settings.app.theme')}>
+                    {themeOptions.map(option => (
+                      <button type="button" key={option.value} aria-pressed={themePreference === option.value}
+                        onClick={() => handleThemeChange(option.value)}>
+                        <span className={appLayout.preview} data-mode={option.value} aria-hidden="true"><i /><i /></span>
+                        <span>{option.label}</span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
 
-              <div className={s.voiceDivider} />
-              <div className={s.voiceSectionTitle}>{t('settings.app.desktopBrowserTitle')}</div>
-
-              <div className={s.fieldGroup}>
-                <label className={s.fieldLabel}>{t('settings.app.desktopBrowserConcurrency')}</label>
-                <Select
-                  options={desktopBrowserConcurrencyOptions}
-                  value={String(desktopBrowserSettings.concurrency)}
-                  onChange={(value) => void saveDesktopBrowserSettings({ ...desktopBrowserSettings, concurrency: Number(value) })}
-                  disabled={desktopBrowserSettingsSaving}
-                />
-                <div style={{ fontSize: 11, color: 'var(--text-hint)', marginTop: 2 }}>
-                  {t('settings.app.desktopBrowserConcurrencyHelp')}
+                <div className={s.fieldGroup}>
+                  <label className={s.fieldLabel}>{t('settings.app.zoom')}</label>
+                  <div className={s.zoomControl}>
+                    <button
+                      className={s.zoomBtn}
+                      onClick={() => handleZoomChange(-ZOOM_STEP_PCT)}
+                      disabled={zoomPct <= ZOOM_MIN_PCT}
+                      type="button"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                        <line x1="5" y1="12" x2="19" y2="12" />
+                      </svg>
+                    </button>
+                    <input
+                      className={s.zoomInput}
+                      type="text"
+                      value={zoomEditing ? zoomInputValue : `${zoomPct}%`}
+                      onFocus={() => { setZoomEditing(true); setZoomInputValue(String(zoomPct)); }}
+                      onChange={(e) => setZoomInputValue(e.target.value)}
+                      onBlur={handleZoomInputBlur}
+                      onKeyDown={handleZoomInputKeyDown}
+                    />
+                    <button
+                      className={s.zoomBtn}
+                      onClick={() => handleZoomChange(ZOOM_STEP_PCT)}
+                      disabled={zoomPct >= ZOOM_MAX_PCT}
+                      type="button"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                        <line x1="12" y1="5" x2="12" y2="19" />
+                        <line x1="5" y1="12" x2="19" y2="12" />
+                      </svg>
+                    </button>
+                  </div>
                 </div>
-              </div>
 
-              <div className={s.fieldGroup}>
-                <Checkbox
-                  checked={desktopBrowserSettings.searchEnabled}
-                  onChange={(checked) => void saveDesktopBrowserSettings({ ...desktopBrowserSettings, searchEnabled: checked })}
-                  label={t('settings.app.desktopSearch')}
-                  disabled={desktopBrowserSettingsSaving}
-                />
-                <div style={{ fontSize: 11, color: 'var(--text-hint)', marginTop: 2 }}>
-                  {t('settings.app.desktopSearchHelp')}
+              </section>
+              <section className={settingsRows.group}>
+                <h3>{t('settings.app.layout.chat')}</h3>
+                <div className={s.fieldGroup}>
+                  <label className={s.fieldLabel}>{t('settings.app.layout.history')}</label>
+                  <Select
+                    options={renderPerfOptions}
+                    value={renderPerf}
+                    onChange={handleRenderPerfChange}
+                  />
+                  <div style={{ fontSize: 11, color: 'var(--text-hint)', marginTop: 2 }}>
+                    {t('settings.app.layout.renderHelp')}
+                  </div>
                 </div>
-              </div>
 
-              <div className={s.fieldGroup}>
-                <Checkbox
-                  checked={desktopBrowserSettings.readerEnabled}
-                  onChange={(checked) => void saveDesktopBrowserSettings({ ...desktopBrowserSettings, readerEnabled: checked })}
-                  label={t('settings.app.desktopReader')}
-                  disabled={desktopBrowserSettingsSaving}
-                />
-                <div style={{ fontSize: 11, color: 'var(--text-hint)', marginTop: 2 }}>
-                  {t('settings.app.desktopReaderHelp')}
+
+                <div className={settingsRows.row}>
+                  <div className={settingsRows.text}>
+                    <span id="app-showTokens" className={settingsRows.label}>{t('settings.app.showTokens')}</span>
+                    <p>{t('settings.app.layout.tokensHelp')}</p>
+                  </div>
+                  <button type="button" role="switch" aria-labelledby="app-showTokens" aria-checked={uiSettings.show_tokens !== false}
+                    className={`${switchStyles.toggle} ${uiSettings.show_tokens !== false ? switchStyles.toggleActive : ''}`}
+                    disabled={uiSettingsSaving} onClick={handleToggleShowTokens}><span /></button>
                 </div>
-              </div>
 
-              <div className={s.voiceDivider} />
-
-              <div className={s.fieldGroup}>
-                <Checkbox
-                  checked={uiSettings.show_tokens !== false}
-                  onChange={handleToggleShowTokens}
-                  label={t('settings.app.showTokens')}
-                  disabled={uiSettingsSaving}
-                />
-              </div>
-
-              <div className={s.fieldGroup}>
-                <Checkbox
-                  checked={Boolean(uiSettings.dice_roll_enabled)}
-                  onChange={handleToggleDiceRoll}
-                  label={t('settings.app.diceMode')}
-                  disabled={uiSettingsSaving}
-                />
-                <div style={{ fontSize: 11, color: 'var(--text-hint)', marginTop: 2 }}>
-                  {t('settings.app.diceHelp')}
+                <div className={settingsRows.row}>
+                  <div className={settingsRows.text}>
+                    <span id="app-diceMode" className={settingsRows.label}>{t('settings.app.diceMode')}</span>
+                    <p>{t('settings.app.diceHelp')}</p>
+                  </div>
+                  <button type="button" role="switch" aria-labelledby="app-diceMode" aria-checked={Boolean(uiSettings.dice_roll_enabled)}
+                    className={`${switchStyles.toggle} ${Boolean(uiSettings.dice_roll_enabled) ? switchStyles.toggleActive : ''}`}
+                    disabled={uiSettingsSaving} onClick={handleToggleDiceRoll}><span /></button>
                 </div>
-              </div>
+              </section>
             </div>
           )}
 

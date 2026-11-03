@@ -93,7 +93,7 @@
       "webSearch": "Web searches",
       "webReader": "Web page reads",
       "imageGen": "Image generations",
-      "desktopNote": "Search and page reads consume this limit only while the app is offline",
+      "desktopNote": "Search and page reading through the browser on your PC do not count toward these limits. Keep Chatter running and enable the corresponding option in Browser settings.",
       "buy": "Buy more generations",
       "buyHint": "Buying extra generations is coming soon"
     }
@@ -777,6 +777,21 @@
       "empty": "No custom models. Add models through MODELS_MANUAL on the server."
     },
     "app": {
+      "layout": {
+        "appearance": "Appearance",
+        "chat": "Chat",
+        "history": "Visible chat history",
+        "renderHelp": "Low shows fewer older messages at first. You can reveal the rest. This setting applies when you open a chat.",
+        "tokensHelp": "Shows token usage in the chat.",
+        "webTitle": "Web search and page reading",
+        "webQuotaHelp": "While Chatter is running, enabled search and page reading tasks use the browser on this PC and do not count toward your plan limits.",
+        "desktopBrowserConcurrency": "Concurrent tasks",
+        "desktopBrowserConcurrencyHelp": "How many searches and page reads can run at once. A CAPTCHA window takes up a slot until it is closed.",
+        "desktopSearch": "Search using the browser on this PC",
+        "desktopSearchHelp": "Uses the browser on this computer when desktop browsing is selected for search.",
+        "desktopReader": "Read pages using the browser on this PC",
+        "desktopReaderHelp": "Allows reading pages with the browser on this computer. When off, another configured reader may be used."
+      },
       "interfaceLanguage": "Interface language",
       "theme": "Theme",
       "themeSystem": "System",
@@ -784,9 +799,9 @@
       "themeDark": "Dark",
       "zoom": "Interface scale",
       "renderPerf": "Chat rendering performance",
-      "renderPerfLow": "Low (weak PCs)",
-      "renderPerfMedium": "Medium (recommended)",
-      "renderPerfHigh": "High (powerful PCs)",
+      "renderPerfLow": "Low",
+      "renderPerfMedium": "Medium",
+      "renderPerfHigh": "High",
       "renderPerfUltra": "Ultra",
       "renderPerfHelp": "How many characters to render in the chat list before hiding older messages. Lower = faster scrolling.",
       "renderPerfSaved": "Render performance saved. Will apply to the next opened chat.",

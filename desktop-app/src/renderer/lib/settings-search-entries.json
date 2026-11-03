@@ -110,9 +110,10 @@
   },
   {
     "section": "app",
-    "key": "settings.app.renderPerf",
+    "key": "settings.app.layout.history",
     "relatedKeys": [
-      "settings.app.renderPerfHelp",
+      "settings.app.layout.renderHelp",
+      "settings.app.renderPerf",
       "settings.app.renderPerfLow",
       "settings.app.renderPerfMedium",
       "settings.app.renderPerfHigh",
@@ -120,23 +121,23 @@
     ]
   },
   {
-    "section": "app",
-    "key": "settings.app.desktopBrowserTitle"
+    "section": "browser",
+    "key": "settings.app.layout.webTitle"
   },
   {
-    "section": "app",
-    "key": "settings.app.desktopBrowserConcurrency",
-    "relatedKeys": ["settings.app.desktopBrowserConcurrencyHelp"]
+    "section": "browser",
+    "key": "settings.app.layout.desktopBrowserConcurrency",
+    "relatedKeys": ["settings.app.layout.desktopBrowserConcurrencyHelp"]
   },
   {
-    "section": "app",
-    "key": "settings.app.desktopSearch",
-    "relatedKeys": ["settings.app.desktopSearchHelp"]
+    "section": "browser",
+    "key": "settings.app.layout.desktopSearch",
+    "relatedKeys": ["settings.app.layout.desktopSearchHelp"]
   },
   {
-    "section": "app",
-    "key": "settings.app.desktopReader",
-    "relatedKeys": ["settings.app.desktopReaderHelp"]
+    "section": "browser",
+    "key": "settings.app.layout.desktopReader",
+    "relatedKeys": ["settings.app.layout.desktopReaderHelp"]
   },
   {
     "section": "app",

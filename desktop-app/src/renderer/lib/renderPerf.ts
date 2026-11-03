@@ -1,14 +1,14 @@
 /**
  * Chat message list render performance.
  * Defines the character budget for lazy rendering.
- * Stored in localStorage, defaults to "medium".
+ * Stored in localStorage, defaults to "low".
  */
 
 export type RenderPerfLevel = 'low' | 'medium' | 'high' | 'ultra';
 
 const STORAGE_KEY = 'chatter_render_perf';
 
-const DEFAULT: RenderPerfLevel = 'medium';
+const DEFAULT: RenderPerfLevel = 'low';
 
 /** Character budget for each level. */
 const PERF_BUDGETS: Record<RenderPerfLevel, number> = {
