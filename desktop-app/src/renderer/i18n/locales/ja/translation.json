@@ -1,5 +1,127 @@
 {
-  "toolActivity": {"labels": {"readPage": "ページの読み取り"}, "names": {"read_webpage": "ページの読み取り", "web_reader": "ページの読み取り"}},
+  "toolActivity": {
+    "labels": {
+      "readPage": "ページの読み取り",
+      "search": "ウェブ検索",
+      "saveNote": "ノートを保存",
+      "noteSaved": "ノートが保存されました",
+      "listNotes": "ノートを探す",
+      "readNote": "ノートを閲覧",
+      "deleteNote": "ノートを削除",
+      "readFile": "ファイルを読み込む",
+      "writeFile": "ファイルを書き込む",
+      "editFile": "ファイルを編集する",
+      "searchFiles": "ファイルを検索する",
+      "listFiles": "ファイルを閲覧する",
+      "command": "PCコマンド",
+      "ssh": "サーバーコマンド",
+      "macro": "マクロの実行",
+      "browser": "ブラウザ操作",
+      "desktop": "アプリ操作",
+      "task": "タスクを作成",
+      "image": "画像を作成",
+      "agent": "エージェントの作業",
+      "avatar": "アバターの状態"
+    },
+    "names": {
+      "read_webpage": "ページの読み取り",
+      "web_reader": "ページの読み取り",
+      "add_blocks": "ブロックを追加",
+      "attach_file_to_response": "ファイルを添付",
+      "browser_control": "ブラウザ操作",
+      "capture_screen": "スクリーンキャプチャ",
+      "capture_webcam": "カメラキャプチャ",
+      "change_server_user_password": "サーバーパスワードの変更",
+      "check_emails": "メールチェック",
+      "control_smart_home": "スマートホーム操作",
+      "convert_video": "ビデオ変換",
+      "create_pixel_image": "ピクセルアートを作成",
+      "create_server_user": "サーバーユーザーを作成",
+      "delete_from_cold_memory": "メモリから削除",
+      "delete_my_task": "タスクを削除",
+      "delete_note": "ノートを削除",
+      "describe_image": "画像分析",
+      "desktop_action": "アプリアクション",
+      "edit_file_lines": "ファイルを編集",
+      "escalate_to_pro": "高度なモデルに切り替え",
+      "execute_macro": "マクロを実行",
+      "execute_pc_command": "PCコマンド",
+      "execute_ssh_command": "サーバーコマンド",
+      "execute_visual_click": "画面クリック",
+      "explore_fs": "ファイルブラウズ",
+      "finalize_issue": "課題を完了する",
+      "find_transit_route": "ルートを検索する",
+      "finish_task": "タスクを完了する",
+      "generate_image": "画像を生成する",
+      "get_avatar_state": "アバターの状態",
+      "get_exchange_rates": "為替レート",
+      "get_file_info": "ファイル情報",
+      "get_map_pins": "マップのピン",
+      "get_my_tasks": "タスクリスト",
+      "get_smart_devices": "スマートホームデバイス",
+      "get_user_time": "現在の時刻",
+      "google_ai": "Google AI クエリ",
+      "install_ssh_public_key": "SSHキーのインストール",
+      "invoke_subagent": "エージェントの呼び出し",
+      "list_devops_runbooks": "サーバーランブック",
+      "list_devops_servers": "サーバーリスト",
+      "list_directory": "ディレクトリの内容",
+      "list_mail_accounts": "メールアカウント",
+      "list_monitors": "モニターリスト",
+      "list_my_macros": "マクロリスト",
+      "list_my_notes": "ノートリスト",
+      "list_recent_chats": "最近のチャット",
+      "map_control": "マップ制御",
+      "newspaper_issue_contents": "号次内容",
+      "newspapers_list": "新聞リスト",
+      "random_roll": "ダイスロール",
+      "read_attachment_file": "添付ファイルを読み込む",
+      "read_chat_context": "チャットコンテキストを読み込む",
+      "read_devops_runbook": "サーバーランブックを読み込む",
+      "read_email_attachment": "メールの添付ファイルを読み込む",
+      "read_email_content": "メールを読み込む",
+      "read_file": "ファイルを読み込む",
+      "read_memory": "メモリを読み取る",
+      "read_newspaper_item": "記事を読む",
+      "read_note": "ノートを読む",
+      "save_note": "ノートを保存する",
+      "save_to_cold_memory": "メモリに保存",
+      "schedule_task": "タスクをスケジュール",
+      "search_attachment_file": "添付ファイルを検索",
+      "search_chat_history": "チャット履歴を検索",
+      "search_cold_memory": "メモリを検索",
+      "search_file_keywords": "ファイルを検索",
+      "search_nearby": "付近の場所を探す",
+      "search_web": "Web検索",
+      "send_email": "メールを送信",
+      "set_display_state": "アバターを更新",
+      "set_user_timezone": "タイムゾーンを設定",
+      "spawn_subagent": "エージェントを開始",
+      "suggest_chat_link": "チャットリンク",
+      "suggest_devops_runbook": "サーバーランブックを提案",
+      "suggest_macro": "マクロを提案",
+      "suggest_server_creds_update": "サーバーアクセスの更新",
+      "update_core_memory": "コアメモリを更新",
+      "update_my_task": "タスクを更新",
+      "write_file": "ファイルの書き込み",
+      "youtube_music_control": "音楽制御",
+      "web_search": "Web検索",
+      "image_gen": "画像を生成",
+      "create_task": "タスクをスケジュール",
+      "set_avatar_mood": "アバターを更新",
+      "set_avatar_emotion": "アバターを更新"
+    },
+    "failed": "{{action}} — エラー",
+    "returned": "呼びが完了、ツールのレスポンスを受信しました",
+    "unknown": "結果が保存されません",
+    "error": "ツールエラー",
+    "noResult": "この呼び出しの結果は利用できません。",
+    "collapse": "アクションを折り畳める",
+    "more": "{{count}} 件のアクション",
+    "internal": "内部アクション · {{count}}",
+    "more_one": "あと{{count}}のアクション",
+    "more_other": "{{count}} 件のアクション"
+  },
   "common": {
     "loading": "読み込み中...",
     "pleaseWait": "しばらくお待ちください...",
@@ -185,7 +307,9 @@
       "billing": "請求",
       "about": "概要",
       "data": "データ",
-      "admin": "管理者"
+      "admin": "管理者",
+      "personas": "ペルソナ",
+      "agents": "エージェント"
     },
     "browser": {
       "help": "AIによるブラウザ操作のうち、確認が必要なものを選択します。手動操作には影響しません。",
@@ -282,6 +406,35 @@
           "nameRequired": "ペルソナ名を入力してください",
           "delete": "ペルソナを削除できませんでした"
         }
+      },
+      "redesign": {
+        "showMore_one": "あと{{count}}件のペルソナを表示",
+        "showMore_other": "ペルソナをさらに{{count}}件表示",
+        "showLess": "表示を少なくする",
+        "intro": "ペルソナは、名前、アイデンティティ、および会話の設定です。アカウント詳細は個別に管理されます。",
+        "personas": "ペルソナ",
+        "selectHelp": "個別のペルソナ選択を行わずにチャットで使用されます",
+        "default": "選択済み",
+        "persona": "ペルソナ",
+        "addPersona": "ペルソナを追加",
+        "newPersona": "新しいペルソナ",
+        "editPersona": "ペルソナ設定",
+        "makeDefault": "デフォルトとして使用する",
+        "defaultSaved": "ペルソナが選択されました",
+        "chatName": "チャットでの表示名",
+        "description": "ペルソナの説明",
+        "identityHelp": "この名前とアバターは、このペルソナを使用したメッセージに表示されます。アカウント名は変更されません。",
+        "memoryHelp": "Chatterが会話で使用するこのペルソナに関する事実",
+        "unsaved": "保存されていない変更",
+        "primary": "プライ",
+        "primaryHelp": "オリジナルのアカウントペルソナです。編集可能ですが、削除はできません。",
+        "accountNameHelp": "サーバー管理者に表示されます。ペルソナの名前や設定には影響しません。",
+        "discardTitle": "ペルソナを切り替えますか？",
+        "discardHelp": "現在のペルソナの保存されていない変更は失われます。",
+        "discard": "保存せずに切り替える",
+        "deleteTitle": "ペルソナを削除しますか？",
+        "deleteHelp": "ペルソナ「{{name}}」は削除されます。",
+        "saved": "ペルソナが保存されました"
       }
     },
     "prompt": {
@@ -354,6 +507,17 @@
         "scenario": "状況とコンテキスト...",
         "examples": "会話の例...",
         "other": "その他の残りの指示..."
+      },
+      "catalog": {
+        "help": "ボットのキャラクターとコミュニケーションスタイル。",
+        "search": "プロンプトを検索",
+        "create": "プロンプトを作成",
+        "builtIn": "組み込み済み",
+        "draft": "下書き",
+        "newHelp": "エディターで新しいボットの名前、説明、キャラクターを設定します。",
+        "discardTitle": "保存されていない変更",
+        "discardHelp": "プロンプトを切り替えますか？保存されていない編集内容とAI生成の提案は破棄されます。",
+        "discard": "プロンプトを切り替える"
       }
     },
     "voice": {
@@ -375,7 +539,19 @@
       "recognitionSourceLocalHint": "ローカルWhisper",
       "recognitionSourceServer": "サーバー上",
       "recognitionSourceServerReady": "利用可能 · {{model}}",
-      "recognitionSourceServerUnavailable": "利用不可または未設定"
+      "recognitionSourceServerUnavailable": "利用不可または未設定",
+      "activation": {
+        "title": "音声起動",
+        "enabled": "ウェイクワードに反応する",
+        "help": "このコンピュータ上でローカルで実行されます。オフにすると、起動検知のためのマイクのリスニングが停止します。",
+        "options": "音声起動設定",
+        "names": "名前と挨拶",
+        "phrases": "追加のフレーズ",
+        "sensitivity": "感度",
+        "strict": "誤作動を減らす",
+        "sensitive": "反応しやすくする",
+        "sensitivityHelp": "感度を上げるとウェイクワードを検知しやすくなりますが、誤作動が増える可能性があります。50%は以前設定値です。"
+      }
     },
     "restrictions": {
       "help": "データやツールへのアクセスを制限します。変更はすぐに保存されます。",
@@ -401,12 +577,35 @@
       "noWakeWordHelp": "ウェイクワード（Alexa、Hey Jarvis、Hey Mycroft、Hey Rhasspy）のリスニングを停止します。マイクストリームがオフになります。",
       "injectionProtection": "プロンプトインジェクション保護",
       "injectionProtectionHint": "あなたの指示と、ウェブサイト・メール・ファイル内の指示を区別するのに役立ちます。",
-      "injectionProtectionHelp": "無効にすると、保護プロトコルと信頼できないコンテンツのマーカーがモデルに送信されません。ウェブサイト、メール、ファイル内の指示が応答やツール呼び出しに影響を与える可能性があります。アクセス権限とサーバー制限は引き続き適用されます。個別のチャットでこの設定を上書きできます。"
+      "injectionProtectionHelp": "無効にすると、保護プロトコルと信頼できないコンテンツのマーカーがモデルに送信されません。ウェブサイト、メール、ファイル内の指示が応答やツール呼び出しに影響を与える可能性があります。アクセス権限とサーバー制限は引き続き適用されます。個別のチャットでこの設定を上書きできます。",
+      "hidePixelAvatar": "ピクセルアバターを隠す",
+      "hidePixelAvatarHelp": "顔をボットのイニシャルに置き換えます。ボットにはアバター用ツールや指示が与えられません。カスタムプロンプトの画像は引き続き表示されます。",
+      "layout": {
+        "agents": "エージェント",
+        "avatar": "アバター",
+        "inheritedAvatar": "ピクセルアバターが非表示になっている間、操作はできません",
+        "privacy": "個人データ",
+        "access": "コンピュータとネットワーク",
+        "helpers": "エージェントとアバター",
+        "security": "保護",
+        "inheritedFull": "デスクトップツールのブロックにより既に適用されています",
+        "inheritedGuest": "ゲストモードにより既に適用されています",
+        "details": "この保護について",
+        "loadFailed": "制限を読み込めませんでした。再試行して現在の設定を確認してください。",
+        "retry": "読み込みを再試行"
+      }
     },
     "models": {
       "title": "モデル設定",
       "help": "各モデルの生成パラメータ。「自動」はサーバーのデフォルトを使用します。",
-      "empty": "カスタムモデルがありません。サーバーのMODELS_MANUALでモデルを追加してください。"
+      "empty": "カスタムモデルがありません。サーバーのMODELS_MANUALでモデルを追加してください。",
+      "search": "モデルを検索",
+      "noResults": "モデルが見つかりませんでした。",
+      "defaults": "デフォルト設定",
+      "changed_one": "{{count}}のパラメータが変更されました",
+      "changed_other": "{{count}}のパラメータが変更されました",
+      "reset": "デフォルトにリセット",
+      "noParameters": "このモデルでは利用可能な生成パラメータはありません。"
     },
     "app": {
       "interfaceLanguage": "インターフェース言語",
@@ -439,7 +638,29 @@
       "desktopSearch": "ウェブ検索にデスクトップブラウザを使用",
       "desktopSearchHelp": "そのプロバイダーが選択されている場合、search_webがローカルデスクトップブラウザを使用できるようにします。",
       "desktopReader": "ページ解析にデスクトップブラウザを使用",
-      "desktopReaderHelp": "read_webpageがローカルのデスクトップブラウザでページを解析できるようにします。無効にすると、バックエンドは別の設定済みリーダーを使用する場合があります。"
+      "desktopReaderHelp": "read_webpageがローカルのデスクトップブラウザでページを解析できるようにします。無効にすると、バックエンドは別の設定済みリーダーを使用する場合があります。",
+      "layout": {
+        "appearance": "外観",
+        "chat": "チャット",
+        "history": "表示されるチャット履歴",
+        "renderHelp": "低に設定すると、最初に表示される古いメッセージの数がなくなります。残りは展開できます。この設定はチャットを開くときに適用されます。",
+        "tokensHelp": "チャット内のトークン使用量を表示します。",
+        "webTitle": "このPC での検索とページの読み取り",
+        "webQuotaHelp": "Chatterの実行中、バックグラウンドのChromiumによる検索とページ読み込みは月間クォータにカウントされません。以下から必要なオプションを有効にします。Chatterのタスクマネージャーでバックグラウンドタスクを停止できます。",
+        "desktopBrowserConcurrency": "同時実行タスク数",
+        "desktopBrowserConcurrencyHelp": "同時に実行できる検索とページ読み込みの数です。CAPTCHAウィンドウは閉じられるまでスロットを占有します。",
+        "desktopSearch": "このPCのブラウザを使用して検索",
+        "desktopSearchHelp": "検索にデスクトップブラウジングが選択されている場合、このコンピューターのブラウザを使用します。",
+        "desktopReader": "このPCのブラウザを使用してしてページを読み込む",
+        "desktopReaderHelp": "このコンピューターのブラウザでページを読み取れるようにします。オフの場合、設定済みの他のリーダーが使用される場合があります。"
+      },
+      "themeHour": "時",
+      "themeMinute": "分",
+      "themeSchedule": "スケジュール済み",
+      "themeLightFrom": "からのライトモード",
+      "themeDarkFrom": "からのダークモード",
+      "themeScheduleHelp": "コンピュータのローカルタイムを使用します。両方の時間が一致する場合、ダークモードは一日中オン維持されます。",
+      "attachmentAuto": "自動 · コンテキストの90%"
     },
     "toasts": {
       "saveSettingFailed": "設定の保存に失敗しました",
@@ -654,7 +875,25 @@
       },
       "openCharacter": "キャラクターを開く",
       "openPersonas": "ペルソナを開く",
-      "openChat": "チャットを開く"
+      "openChat": "チャットを開く",
+      "individualImports": "個別のアイテムをインポートする"
+    },
+    "avatar": {
+      "showShort": "アバターを表示",
+      "controlShort": "ボット制御",
+      "menu": "ピクセルアバター",
+      "show": "アバターを表示",
+      "control": "ボットがアバターを操作します",
+      "hiddenHint": "ピクセルアバターの代わりにボットのイニシャルが表示されます。ここ、または制限設定で顔の表示を復元できます。",
+      "menuHint": "これらの設定はあなたのアカウントに適用されます。プロンプトの画像は引き続き表示されます。"
+    },
+    "agents": {
+      "help": "Chatterが個別のタスクを委任するヘルパーの設定です。",
+      "specialists": "専門的なエージェント",
+      "specialistsHelp": "特定のタスクを持つ組み込みのヘルパーです。Chatterは作業中にこれらを呼び出します。",
+      "loadFailed": "エージェントの設定を読み込めでした。",
+      "catalogFailed": "エージェントカタログを読み込めませんでした。",
+      "empty": "このサーバーには、まだ専門的なエージェントが登録されていません。"
     }
   },
   "chat": {
@@ -710,7 +949,8 @@
       "followUpBrief": "他に明確にしたいことはありますか？任意",
       "followUpBriefPlaceholder": "例：会話スタイルについてさらに質問する。空白のままにすると、モデルがトピックを選択します。",
       "startFollowUp": "追加の質問を作成",
-      "followUpHelp": "以前の質問、回答、保存されたコンテキストを使用してギャップを探る新しいラウンドです。以前のアンケートはリストに残り、最終的な指示はすべてのラウンドを考慮します。モデルのクォータを消費します。"
+      "followUpHelp": "以前の質問、回答、保存されたコンテキストを使用してギャップを探る新しいラウンドです。以前のアンケートはリストに残り、最終的な指示はすべてのラウンドを考慮します。モデルのクォータを消費します。",
+      "actionsSummary": "アクション · {{count}}"
     },
     "reasoning": {
       "auto": "自動",
@@ -763,7 +1003,14 @@
         "moveTo": "フォルダーに移動"
       },
       "notificationsOn": "通知オン",
-      "notificationsOff": "通知オフ"
+      "notificationsOff": "通知オフ",
+      "dateGroups": {
+        "today": "今日",
+        "yesterday": "昨日",
+        "thisWeek": "今週",
+        "thisMonth": "今月",
+        "older": "以前"
+      }
     },
     "empty": {
       "selectOrCreate": "チャットを選択するか、新しく作成してください"
@@ -808,7 +1055,8 @@
       "reasoning": "推論",
       "prompt": "プロンプト",
       "providerTooltip": "最新のプロバイダーリクエスト\n入力: {{input}} tk\nキャッシュヒット: {{cacheHit}} tk\nキャッシュミス: {{cacheMiss}} tk\n出力: {{output}} tk\n推論: {{reasoning}} tk\nモデル: {{model}}",
-      "cached": "キャッシュ済み"
+      "cached": "キャッシュ済み",
+      "cache": "キャッシュ"
     },
     "macro": {
       "title": "マクロの提案",
@@ -888,7 +1136,9 @@
       "normalTitle": "d20ダイスモード。クリックでモード変更。"
     },
     "composer": {
-      "placeholder": "メッセージを入力..."
+      "placeholder": "メッセージを入力...",
+      "activityManager": "アクティビティマネージャー",
+      "keyboardHint": "Enterで送信 · Shift + Enterで改行"
     },
     "deleteChat": {
       "title": "チャットを削除しますか？",
@@ -1133,7 +1383,8 @@
           "deleteSpace": "メモリを削除できませんでした",
           "updateRecord": "メモリを更新できませんでした",
           "deleteRecord": "メモリを削除できませんでした"
-        }
+        },
+        "preferencesTitle": "メモリ設定"
       },
       "modeLabel": "メモリを使用",
       "mode": {
@@ -1180,6 +1431,23 @@
     "contextSummary": {
       "title": "以前の会話の要約",
       "meta": "{{count}} 件のメッセージ · {{model}}"
+    },
+    "approvals": {
+      "expandDiff": "変更を展開",
+      "queue": "承認待ち: {{count}}",
+      "commentFor": "拒否理由コメント: {{title}}",
+      "rejectAndSend": "拒否して送信",
+      "permissions": "権限オプション",
+      "expandEmail": "メールを展開",
+      "failed": "決定を送信できません"
+    },
+    "activityManager": {
+      "empty": "このチャットのバックグラウンドアクティビティがここに表示されます。",
+      "working": "作業中",
+      "idle": "離席中",
+      "challenge": "対応が必要",
+      "stop": "停止: {{title}}",
+      "actionFailed": "アクションを完了できませんでした"
     }
   },
   "promptSelector": {
@@ -1323,7 +1591,8 @@
       "testRoomRedirect": "ルームからリダイレクトされました",
       "testNewChat": "新しいチャットが作成されました",
       "testSilent": "タスクは報告する内容を生成しませんでした（空の回答）。",
-      "testFailed": "テストの実行に失敗しました"
+      "testFailed": "テストの実行に失敗しました",
+      "loadMore": "さらに読み"
     },
     "browser": {
       "title": "ブラウザ",
@@ -1522,7 +1791,39 @@
       "enabled": "有効",
       "pinned": "固定（AIは常に名前を表示）",
       "executionMode": "実行モード",
-      "create": "マクロを作成"
+      "create": "マクロを作成",
+      "catalog": {
+        "pinnedLabel": "ボットに固定",
+        "pinnedState": "固定済み",
+        "disabledState": "無効",
+        "help": "日常的なアクション用の保存済みコマンド。マクロを選択して、コマンドの確認、編集、実行がえます",
+        "search": "マクロを検索",
+        "list": "マクロリスト",
+        "all": "すべて",
+        "pinned": "固定済み",
+        "disabled": "無効",
+        "defaultName": "マクロ #{{number}}",
+        "edit": "マクロを編集",
+        "commandCount_one": "{{count}} コマンド",
+        "commandCount_other": "{{count}} 個のコマンド",
+        "sequence": "実行順序",
+        "available": "ボットが利用可能",
+        "availableHelp": "ボットはこのマクロを検索して実行できます。このスイッチの状態に関わらず、手動で実行することも可能です。",
+        "pinnedHelp": "こののアクションを見つけやすくするために、その名前がボットのコンテキストに常に含まれます。\"",
+        "suggestionReady": "名前と説明が下書きに追加されました。内容を確認し、保存してください。",
+        "running": "実行中…",
+        "lastOutput": "前回の実行結果",
+        "noOutput": "コマンドはテキスト出力なしで完了しました。",
+        "emptyTitle": "ここにマクロが表示されます",
+        "emptyHelp": "頻繁に行う操作用のマクロを作成します。",
+        "loadFailed": "マクロの読み込みに失敗しました。",
+        "retry": "再試行",
+        "discardTitle": "変更を保存せずに破棄しますか？",
+        "discardHelp": "このマクロへの編集内容が失われます。",
+        "discard": "変更を破棄する",
+        "deleteTitle": "「{{name}}」を削除しますか？",
+        "deleteHelp": "このマクロはリストから削除されます。"
+      }
     },
     "common": {
       "deleteFailed": "削除に失敗しました",
@@ -1551,7 +1852,39 @@
       "autoApproveHelp": "AIは許可を求めずにコンピュータ上で任意のコマンドを実行できます。",
       "allowedCommands": "許可されたコマンド（自動承認）",
       "patternsHelp": "AIが確認なしで実行できるコマンドの正規表現パターン",
-      "patternPlaceholder": "正規表現パターン（例 ^dir$ または ^ipconfig）"
+      "patternPlaceholder": "正規表現パターン（例 ^dir$ または ^ipconfig）",
+      "layout": {
+        "confirmAutoTitle": "確認なしで実行を有効にしますか？",
+        "confirmAutoHelp": "AIが確認せずにPC上でコマンドを実行できるようになります。これにはファイルの変更や削除を含むコマンドも含まれます。",
+        "confirmAutoEnable": "有効にする",
+        "intro": "このコンピュータでChatterができることと、確認を求めるタイミングを選択します。変更は即座に反映されます。",
+        "files": "ファイルとフォルダ",
+        "browse": "ファイルとフォルダをブラウ",
+        "browseHelp": "AIにフォルダのリスト作成とファイルシステム内の移動を許可します。この設定により、ファイルの内容へのアクセス権限は付与されません。",
+        "read": "確認なしでファイルを読み込む",
+        "readHelp": "AIが確認をなしにファイルの内容を読み取ることを許可します。ファイルの書き込みには引き続き確認が必要です。",
+        "execution": "コマンドの実行",
+        "auto": "すべてのコマンドを確認なしで実行する",
+        "autoHelp": "PCコマンドの承認リクエストをスキップします。これはデータの変更や削除を行うコマンドにも適用されますが、組み込みのコマンドブロックは引き続き適用されます。",
+        "exceptions": "確認なしで実行するコマンド",
+        "exceptionsHelp": "ここ、または「常に許可」を通じて追加されたルールです。一致するコマンドは実行確認がスキップされますが、それ以外のコマンドは引き続き確認が求められます。",
+        "allApproved": "すべてのPCコマンドはすでに自動的に承認されています。これらのルールは保持され、設定がオフになったときに適用されます。",
+        "empty": "例外が設定されていません。自動的に承認したいコマンドを追加してください。",
+        "matchMode": "コマンドの一致モード",
+        "exact": "完全一致コマンド",
+        "regex": "正規表現",
+        "command": "コマンド",
+        "pattern": "正規表現",
+        "commandPlaceholder": "例: git status",
+        "regexPlaceholder": "例: ^git status$",
+        "exactHelp": "引数や大文字・小文字を含め、コマンド全体が完全に一致する必要があります。エスケープされたアンカー付きの正規表現として保存されます。",
+        "regexHelp": "高度設定: コマンドのどこかに一致すると確認がスキップされます。コマンド全体に一致させるには ^ と $ を使用してください。保存されたルールは正規表現として表示されます。",
+        "invalidRegex": "正規表現が無効です。パターンを確認してください。",
+        "duplicate": "このルールは既に存在します。",
+        "saveFailed": "変更を保存できませんでした。もう一度お試しください。",
+        "loadFailed": "PC権限を読み込めなでした。",
+        "retry": "再試行"
+      }
     },
     "ssh": {
       "fillRequired": "名前と公開鍵を入力してください",
@@ -1573,7 +1906,11 @@
       "deleteTitle": "SSHキーを削除しますか？",
       "deleteMessage": "このキーは削除されます。いずれかのサーバーのデフォルトキーとして選択されている場合、リンクはリセットされます。",
       "fullPair": "完全なペア",
-      "publicOnly": "公開鍵のみ"
+      "publicOnly": "公開鍵のみ",
+      "addKey": "キーを追加",
+      "keyPairLabel": "公開鍵と秘密鍵",
+      "publicOnlyLabel": "公開鍵のみ",
+      "emptyKeys": "保存されたキーがありません。"
     },
     "server": {
       "fillRequired": "名前、ホスト、ユーザーを入力してください",
@@ -1615,7 +1952,52 @@
       "deleteMessage": "サーバーのすべてのポリシーと設定が削除されます。",
       "commandsTitle": "コマンド: {{count}} — {{preview}}",
       "sudoCleared": "sudoパスワードが削除されました",
-      "sudoClearFailed": "sudoパスワードの削除に失敗しました"
+      "sudoClearFailed": "sudoパスワードの削除に失敗しました",
+      "layout": {
+        "keyHelp": "選択したキーを使用してサインインします。オフにしても、キーはサーバーへのインストールに使用可能なまま維持されます。",
+        "clearSudo": "sudoパスワードを削除",
+        "intro": "Chatterがサーバーの操作に使用するSSH接続です。",
+        "add": "サーバーを追加",
+        "edit": "サーバーを編集",
+        "search": "サーバーを検索",
+        "emptyList": "サーバーが追加されていません。",
+        "emptyTitle": "サーバーを一括管理",
+        "emptyHelp": "SSH接続を追加します。その後、Chatterにこのサーバーで作業を行うよう依頼できるようになります",
+        "connection": "接続",
+        "authentication": "認証",
+        "permissions": "コマンド権限",
+        "loginMethod": "サイン方法",
+        "sshLogin": "SSH鍵",
+        "passwordLogin": "パスワード",
+        "sudo": "Sudoパスワード",
+        "configured": "保存済み",
+        "notConfigured": "未保存",
+        "keepPassword": "保存されたパスワードを維持する",
+        "passwordPlaceholder": "接続パスワード",
+        "keepSecrets": "パスワードフィールドを空のまますると、保存された値が維持されます。",
+        "credentialsHelp": "パスワードを入力するか、秘密鍵を含むSSHキーを選択してサインインします。",
+        "savedKey": "保存されたSSHキー",
+        "clearOnSave": "変更を保存すると、保存されたsudoパスワードが削除されます。",
+        "undoClear": "sudoパスワードを維持する",
+        "working": "確認中…",
+        "testHelp": "保存されたSSH接続を確認します。保存されていない編集内容は反映されません。",
+        "automatic": "コマンドが確認なしで実行されます。",
+        "ask": "保存されたルールを除き、コマンドの実行には確認が必要です。",
+        "policiesHelp": "「常に許可」で保存されたルールにより、条件に合致するコマンドの確認がスキップされます。パターンは正規表現です。",
+        "noPolicies": "このサーバーにはコマンドの除外設定はありません。",
+        "allApproved": "すべてのコマンドに対して自動承認が有効になっています。個別のルールは、無効にしたときに備えて保持されます。",
+        "keysFailed": "SSHキーを読み込めでした。保存されていたキーは維持されています。",
+        "policiesFailed": "コマンドルールを読み込めませんでした。",
+        "loadFailed": "サーバーを読み込めませんでした。",
+        "retry": "再試行",
+        "invalidPort": "1から65535の整数のポートを入力してください。",
+        "discardTitle": "保存されていない変更を破棄しますか？",
+        "discardHelp": "この接続への編集内容が失われます。",
+        "discard": "変更を破棄",
+        "autoTitle": "確認なしで実行を有効にしますか？",
+        "autoHelp": "AIがこのサーバー上で、確認なしでコマンドを実行できるようになります。これには、ファイルの変更や削除を含むコマンドも含まれます。",
+        "enable": "有効にする"
+      }
     },
     "runbook": {
       "enterText": "手順テキストを入力してください",
@@ -1658,7 +2040,42 @@
       "commandCount_few": "{{count}} コマンド",
       "commandCount_many": "{{count}} コマンド",
       "commandCount_other": "{{count}} コマンド",
-      "commandCount": "{{count}} コマンド"
+      "commandCount": "{{count}} コマンド",
+      "library": {
+        "intro": "レポートの作成からアプリの設定まで、ボット用に保存されたワークフローです。プロセスを一度記述するだけで、チャット内で再利用できます。",
+        "howTo": "使い方の説明",
+        "howToBody": "ステップ、条件、期待される結果を保存します。ボットはタスク実行中に指示を検索し、読み取って実行することができます。保存しても実行はされません。これらはボットのパーソナリティ設定とは独立したワークフローを記述です。",
+        "example": "例えば、「週次レポート」を保存し、チャットで「『週次レポート』の指示に従ってレポートを作成して」と依頼します。",
+        "list": "指示ライブラリ",
+        "search": "命令を検索",
+        "create": "命令を作成",
+        "edit": "命令を編集",
+        "loadFailed": "命令を読み込めませんでした。",
+        "retry": "再試行",
+        "loading": "手順を読み込み中…",
+        "emptyMine": "手順はまだありません。",
+        "emptyPublic": "公開手順はまだありません。",
+        "emptyTitle": "よく使うワークフローを保存しましょう",
+        "emptyHelp": "ステップごとの手順を作成するか、公開ライブラリから保存してください。",
+        "titlePlaceholder": "例: 週次レポート",
+        "contentPlaceholder": "この手順はどのようなときに使用しますか？\n\n1. どのような情報を収集しますか？\n2. 何を実行し、何を確認しますか？\n3. 結果はどのようになるべきですか？",
+        "write": "記述",
+        "preview": "プレビュー",
+        "previewEmpty": "テキストを追加すると、手順をプレビューできます。",
+        "editorHelp": "手順、重要な条件、期待される結果を説明してください。見出し、リスト、その他の Markdown 形式をサポートしています。",
+        "editingPublic": "公開手順を編集しています。このサーバーのすべてのユーザーがあなたの変更内容を閲覧できます。",
+        "publicSource": "公開手順",
+        "updated": "更新済み",
+        "publicHelp": "この手順をライブラリに保存すると、ボットが見つけられるようになります。コピーは元の手順とは別に編集できます。",
+        "discardTitle": "変更を破棄しますか？",
+        "discardHelp": "この手順への編集内容は失われます。",
+        "discard": "変更を破棄",
+        "publishTitle": "この手順を公開しますか？",
+        "publishHelp": "公開コピーが作成されます。そのテキストはこのサーバー上のすべてのユーザーが閲覧できるようになります。事前に個人情報やシークレットが含まれていないか確認してください。",
+        "deleteTitle": "手順を削除しますか？",
+        "deleteHelp": "この手順はライブラリから削除されます。",
+        "deletePublicHelp": "公開手順はすべてのユーザーから削除されます。以前に保存した個人用コピーは残ります。"
+      }
     },
     "smart": {
       "loadFailed": "スマートホーム設定の読み込みに失敗しました",
@@ -1738,6 +2155,17 @@
         "step5": "ステップ5。",
         "step5Text": "同期をクリックします。Zigbee2MQTTからペアリングされたデバイスが以下のリストに表示されます。",
         "note": "注：MQTTブローカーはChatterバックエンドを実行しているサーバーから到達可能である必要があります。ブローカーが認証を必要とする場合は、URLに含めてください：mqtt://user:password@host:port"
+      },
+      "layout": {
+        "title": "スマートホーム",
+        "connections": "接続",
+        "configured": "設定済み",
+        "notConfigured": "未設定",
+        "configure": "設定",
+        "collapse": "折りたたむ",
+        "saveBroker": "ブローカーアドレスを保存",
+        "empty": "デバイスを表示するには、Yandex または Zigbee2MQTT に接続してください。",
+        "noDetails": "追加の詳細はありません。"
       }
     },
     "mail": {
@@ -1824,7 +2252,8 @@
       "desktopNote": "検索とページ閲覧はアプリ停止中のみこのリミットを消費します",
       "buy": "生成を追加購入",
       "buyHint": "追加生成の購入は近日公開予定"
-    }
+    },
+    "caption": "クォータ"
   },
   "forcePassword": {
     "title": "パスワード変更",
@@ -2062,5 +2491,15 @@
   },
   "messageImages": {
     "loadFailed": "この画像を読み込めませんでした"
+  },
+  "reasoningDisclosure": {
+    "thinking": "思考中…"
+  },
+  "workLog": {
+    "title": "ワークログ",
+    "actions_one": "{{count}}件のアクション",
+    "actions_other": "{{count}}件のアクション",
+    "errors_one": "{{count}}のエラー",
+    "errors_other": "{{count}}件のエラー"
   }
 }

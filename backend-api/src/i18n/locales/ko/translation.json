@@ -57,7 +57,9 @@
     "list_mail_accounts": "📧 연결된 이메일 계정 확인 중...",
     "check_emails": "📧 이메일 확인 중...",
     "read_email_content": "📧 이메일 읽는 중...",
-    "send_email": "📧 확인 이메일 준비 중..."
+    "send_email": "📧 확인 이메일 준비 중...",
+    "searchQuery": "“{{query}}” 검색 중",
+    "readingPage": "{{url}} 읽는 중"
   },
   "moderationNotifications": {
     "approved": "✅ 액세스가 승인되었습니다. 봇에 메시지를 보낼 수 있습니다.",
@@ -71,6 +73,14 @@
       "convert_video": "[{{agent}}] 비디오 변환 중...",
       "list_devops_servers": "[{{agent}}] 서버 목록 가져오는 중...",
       "runningTool": "[{{agent}}] {{tool}} 실행 중..."
+    },
+    "news_researcher": {
+      "name": "뉴스 리서치 전문가",
+      "description": "소스를 검색하고 읽어 신문 주제를 조사한 후, 간결한 요약 보고서를 작성합니다."
+    },
+    "file_converter": {
+      "name": "동영상 변환기",
+      "description": "데스크톱 앱을 통해 로컬 비디오를 변환합니다. 다른 파일 형식은 아직 지원되지 않습니다."
     }
   },
   "chat": {

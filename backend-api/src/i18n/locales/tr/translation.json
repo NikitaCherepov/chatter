@@ -63,7 +63,9 @@
     "desktopOpeningNote": "Not defteri girişi açılıyor...",
     "desktopReadingWidgetState": "Widget durumu okunuyor...",
     "desktopOpeningToolsPanel": "Araç paneli açılıyor...",
-    "desktopAction": "İşlem yapılıyor..."
+    "desktopAction": "İşlem yapılıyor...",
+    "searchQuery": "“{{query}}” aranıyor",
+    "readingPage": "{{{{url}} okunuyor"
   },
   "moderationNotifications": {
     "approved": "✅ Erişim onaylandı. Bot'a mesaj gönderebilirsiniz.",
@@ -77,6 +79,14 @@
       "convert_video": "[{{agent}}] Video dönüştürülüyor...",
       "list_devops_servers": "[{{agent}}] Sunucu listesi alınıyor...",
       "runningTool": "[{{agent}}] {{tool}} çalıştırılıyor..."
+    },
+    "news_researcher": {
+      "name": "Haber araştırmacısı",
+      "description": "Kaynakları arayıp okuyarak bir gazete konusunu araştırır ve ardından kısa bir özet hazırlar."
+    },
+    "file_converter": {
+      "name": "Video dönüştürücü",
+      "description": "Masaüstü uygulaması üzerinden yerel videoları dönüştürür. Diğer dosya türleri henüz desteklenmiyor."
     }
   },
   "confirmations": {

@@ -1,5 +1,127 @@
 {
-  "toolActivity": {"labels": {"readPage": "Sayfa okuma"}, "names": {"read_webpage": "Sayfa okuma", "web_reader": "Sayfa okuma"}},
+  "toolActivity": {
+    "labels": {
+      "readPage": "Sayfa okuma",
+      "search": "Web araması",
+      "saveNote": "Notu kaydet",
+      "noteSaved": "Not kaydedildi",
+      "listNotes": "Notları bul",
+      "readNote": "Notu oku",
+      "deleteNote": "Notu sil",
+      "readFile": "Dosya oku",
+      "writeFile": "Dosya yaz",
+      "editFile": "Dosyayı düzenle",
+      "searchFiles": "Dosyalarda ara",
+      "listFiles": "Dosyalara göz at",
+      "command": "Bilgisayar komutu",
+      "ssh": "Sunucu komutu",
+      "macro": "Makro çalıştır",
+      "browser": "Tarayıcı işlemi",
+      "desktop": "Uygulama işlemi",
+      "task": "Görev oluştur",
+      "image": "Görüntü oluştur",
+      "agent": "Agent çalışması",
+      "avatar": "Avatar durumu"
+    },
+    "names": {
+      "read_webpage": "Sayfa okuma",
+      "web_reader": "Sayfa okuma",
+      "add_blocks": "Blok ekle",
+      "attach_file_to_response": "Dosya ekle",
+      "browser_control": "Tarayıcı kontrolü",
+      "capture_screen": "Ekran görüntüsü",
+      "capture_webcam": "Kamera yakalama",
+      "change_server_user_password": "Sunucu şifresini değiştir",
+      "check_emails": "E-postaları kontrol et",
+      "control_smart_home": "Akıllı ev kontrolü",
+      "convert_video": "Video dönüştürme",
+      "create_pixel_image": "Pixel sanatı oluştur",
+      "create_server_user": "Sunucu kullanıcısı oluştur",
+      "delete_from_cold_memory": "Hafızadan sil",
+      "delete_my_task": "Görevi sil",
+      "delete_note": "Notu sil",
+      "describe_image": "Görüntü analizi",
+      "desktop_action": "Uygulama eylemi",
+      "edit_file_lines": "Dosayı düzenle",
+      "escalate_to_pro": "Gelimiş modele geç",
+      "execute_macro": "Makroyu çalıştır",
+      "execute_pc_command": "Bilgisayar komutu",
+      "execute_ssh_command": "Sunucu komutu",
+      "execute_visual_click": "Ekran tıklaması",
+      "explore_fs": "Dosyalara göz at",
+      "finalize_issue": "Sorunu tamamla",
+      "find_transit_route": "Güzergah bul",
+      "finish_task": "Görevi tamamla",
+      "generate_image": "Görsel oluşturun",
+      "get_avatar_state": "Avatar durumu",
+      "get_exchange_rates": "Döviz kurları",
+      "get_file_info": "Dosya bilgileri",
+      "get_map_pins": "Harita i ownleri",
+      "get_my_tasks": "Görev listesi",
+      "get_smart_devices": "Akıllı ev cihazları",
+      "get_user_time": "Mevcut saat",
+      "google_ai": "Google AI sorgusu",
+      "install_ssh_public_key": "SSH anahtarını yükle",
+      "invoke_subagent": "Agentı çağır",
+      "list_devops_runbooks": "Sunucu çalışma defberleri",
+      "list_devops_servers": "Sunucu listesi",
+      "list_directory": "Dizin içeriği",
+      "list_mail_accounts": "E-posta hesapları",
+      "list_monitors": "İzlemeleyici listesi",
+      "list_my_macros": "Makro listesi",
+      "list_my_notes": "Not listesi",
+      "list_recent_chats": "Son sohbetler",
+      "map_control": "Harita kontrolü",
+      "newspaper_issue_contents": "Sayı içindekiler",
+      "newspapers_list": "Gazete listesi",
+      "random_roll": "Zar atma",
+      "read_attachment_file": "Eki oku",
+      "read_chat_context": "Sohbet bağlamını oku",
+      "read_devops_runbook": "Sunucu kullanımavuzunu oku",
+      "read_email_attachment": "E-posta ekini oku",
+      "read_email_content": "E-postayı oku",
+      "read_file": "Dosyayı oku",
+      "read_memory": "Belleği oku",
+      "read_newspaper_item": "Makaleyi oku",
+      "read_note": "Notu oku",
+      "save_note": "Notu kaydet",
+      "save_to_cold_memory": "Hafızaya kaydet",
+      "schedule_task": "Göörevi zamanla",
+      "search_attachment_file": "Ekiyi ara",
+      "search_chat_history": "Sohbet geçmişinde ara",
+      "search_cold_memory": "Hafızada ara",
+      "search_file_keywords": "Dosya ara",
+      "search_nearby": "Yakındaki yerleri bul",
+      "search_web": "Web araması",
+      "send_email": "E-posta gönder",
+      "set_display_state": "Avatarı güncelle güncelle",
+      "set_user_timezone": "Saat dilimini ayarla",
+      "spawn_subagent": "Ajanı başlat",
+      "suggest_chat_link": "Sohbet bağlantısı",
+      "suggest_devops_runbook": "Sunucu işlem kitabı öner",
+      "suggest_macro": "Makro öner",
+      "suggest_server_creds_update": "Sunucu erişimini güncelle",
+      "update_core_memory": "Çekirdek belleğini güncelle",
+      "update_my_task": "Görevi güncelle",
+      "write_file": "Dosyayı yaz",
+      "youtube_music_control": "Müzik kontrolü",
+      "web_search": "Web araması",
+      "image_gen": "Görsel oluştur",
+      "create_task": "Görev planla",
+      "set_avatar_mood": "Avatarı güncelle",
+      "set_avatar_emotion": "Avatarı güncelle"
+    },
+    "failed": "{{action}} — hata",
+    "returned": "Çağrı tamamlandı, araç yanıtı alındı",
+    "unknown": "Sonuç kaydedilmedi",
+    "error": "Araç hatası",
+    "noResult": "Bu çağrının sonucu alınamadı.",
+    "collapse": "Eşlemleri daralt",
+    "more": "{{count}} daha işlem",
+    "internal": "Dahili eylemler · {{count}}",
+    "more_one": "{{count}} fazla işlem",
+    "more_other": "{{count}} daha eylem"
+  },
   "advanced": {
     "smart": {
       "authorizeUrl": "https://oauth.yandex.ru/authorize?response_type=token&client_id=YOUR_CLIENT_ID",
@@ -79,6 +201,17 @@
         "step5": "Adım 5.",
         "step5Text": "Senkronize Et'e tıklayın. Zigbee2MQTT'den eşleştirilen cihazlar aşağıdaki listede görünecektir.",
         "note": "Not: MQTT broker, Chatter arka uç sunucusundan erişilebilir olmalıdır. Broker kimlik doğrulaması gerektiriyorsa, URL'ye ekleyin: mqtt://kullanıcı:şifre@host:port"
+      },
+      "layout": {
+        "title": "Akıllı ev",
+        "connections": "Bağlantılar",
+        "configured": "Yapılandırıldı",
+        "notConfigured": "Yapılandırılmamış",
+        "configure": "Yapılandır",
+        "collapse": "Küçült",
+        "saveBroker": "Aracı adresini kaydet",
+        "empty": "Cihazlarınızı görmek için Yandex veya Zigbee2MQTT'yi bağlayın.",
+        "noDetails": "Ek detay yok."
       }
     },
     "macros": {
@@ -108,7 +241,39 @@
       "enabled": "Etkin",
       "pinned": "Sabitlendi (AI adı her zaman görür)",
       "executionMode": "Yürütme modu",
-      "create": "Makro oluştur"
+      "create": "Makro oluştur",
+      "catalog": {
+        "pinnedLabel": "Bot için sabitle",
+        "pinnedState": "Sabitlendi",
+        "disabledState": "Devre Dışı",
+        "help": "Günlük işlemler için kaydedilmiş komutlar. Komutları incelemek, düzenlemek veya çalıştırmak için bir makro seçin.",
+        "search": "Makro bulun",
+        "list": "Makro listesi",
+        "all": "Tümü",
+        "pinned": "Sabitlenmiş",
+        "disabled": "Devre Dışı",
+        "defaultName": "Makro #{{number}}",
+        "edit": "Makrosu düzenle",
+        "commandCount_one": "{{count}} komut",
+        "commandCount_other": "{{count}} komut",
+        "sequence": "Çalışırma sırası",
+        "available": "Bot için mevcut",
+        "availableHelp": "Bot bu makroyu bulabilir ve çalıştırabilir. Bu anahtardan bağımsız olarak manuel olarak çalıştırabilirsiniz.",
+        "pinnedHelp": "İşlemin bulunmasını kolaylaştırmak için adı her zaman botun bağlamına dahil edilir.",
+        "suggestionReady": "İsim ve açıklama taslağa eklendi. Uygunsa kaydedin.",
+        "running": "Çalışıyor…",
+        "lastOutput": "Son çalıştırma çıktısı",
+        "noOutput": "Komutlar metin çıkt olmadan tamamlandı.",
+        "emptyTitle": "Makrolarınız burada görünecek",
+        "emptyHelp": "Sık sık tekradığınız işlemler için bir makro oluşturun.",
+        "loadFailed": "Makrolar yüklenemedi.",
+        "retry": "Yeniden yüklemeyi",
+        "discardTitle": "Değişiklikler kaydedilmeden bıraklsın mı?",
+        "discardHelp": "Bu makro üzerinde yapılan değişiklikler silinecek.",
+        "discard": "Değişiklikleri at",
+        "deleteTitle": "“{{name}}” silinsin mi?",
+        "deleteHelp": "Makro listenizden kaldırıl."
+      }
     },
     "common": {
       "deleteFailed": "Silme başarısız",
@@ -137,7 +302,39 @@
       "autoApproveHelp": "AI, sormadan bilgisayarınızda herhangi bir komutu çalıştırabilir",
       "allowedCommands": "İzin verilen komutlar (otomatik onay)",
       "patternsHelp": "AI'nin onay gerektirmeden çalıştırabileceği komutlar için regex kalıpları",
-      "patternPlaceholder": "Regex kalıbı (örneğin ^dir$ veya ^ipconfig)"
+      "patternPlaceholder": "Regex kalıbı (örneğin ^dir$ veya ^ipconfig)",
+      "layout": {
+        "confirmAutoTitle": "Onay almadan çalıştırmayı etkinleştir?",
+        "confirmAutoHelp": "AI, dosyaları değiştiren veya silen komutlar dahil olmak üzere bilgisayarınızda sormadan komut çalıştırabilir.",
+        "confirmAutoEnable": "Etkinleştir",
+        "intro": "Chatter'ın bu bilgisayarda ne yapabileceğini ve ne zaman onay isteyeceğini seçin. Değişiklikler hemen uygulanır.",
+        "files": "Dosyalar ve klasörler",
+        "browse": "Dosya ve klasörlere göz at",
+        "browseHelp": "AI'nın klasörleri listelemesine ve dosya sisteminde gezinmesine izin verin. Bu ayar dosya içeriklerine erişim sağlamaz.",
+        "read": "Dosyaları onay almadan oku",
+        "readHelp": "AI'nın dosya içeriğini sormadan okumasına izin ver. Dosya yazma hala onay gerektirir.",
+        "execution": "Komut yürütme",
+        "auto": "Tüm komutları onay almadan çalıştır",
+        "autoHelp": "PC komutları için onay isteklerini atla. Bu durum, verileri değiştiren veya silen komutlar için de geçerlidir; yerleşik komut blokları geçerli olmaya devam eder.",
+        "exceptions": "Onay almayan komutlar",
+        "exceptionsHelp": "Buraya veya \"Her zaman izin ver\" aracılığıyla eklenen kurallar. Eşleşen komutlar onayı geçer; diğer komutlar onay sormaya devam eder.",
+        "allApproved": "Tüm PC komutları zaten otomatik olarak onaylandı. Bu kurallar saklanır ve bu ayar kapatıldığında uygulanır.",
+        "empty": "Henüz istisna yok. Otomatik olarak onaylamak istediğiniz bir komutu ekleyin.",
+        "matchMode": "Komut eşleştirme",
+        "exact": "Tam komut",
+        "regex": "Düzenli ifade",
+        "command": "Komut",
+        "pattern": "Düzenli ifade",
+        "commandPlaceholder": "Örneğin: git status",
+        "regexPlaceholder": "Örneğin: ^git status$",
+        "exactHelp": "Argümanlar ve büyük/küçük harf dahil dahil olmak üzere tüm komut eşleşmelidir. Kaçış karakterlerine sahip ve sabitlenmiş bir düzenli ifade olarak saklanır.",
+        "regexHelp": "Gelişmiş: komutun herhangi bir yerindeki eşleşme onayı atlar. Tüm komutu eşleştirmek için ^ ve $ işaretlerini kullanın. Kaydedilen kurallar düzenli ifadeler olarak görüntülenir.",
+        "invalidRegex": "Geçersiz düzenli ifade. Deseni kontrol edin.",
+        "duplicate": "Bu kural zaten mevcut.",
+        "saveFailed": "Değişiklik kaydedilemedi. Lütfen tekrar deneyin.",
+        "loadFailed": "PC izinleri yüklenemedi.",
+        "retry": "Tekrar dene"
+      }
     },
     "ssh": {
       "fillRequired": "Bir ad ve genel anahtar girin",
@@ -159,7 +356,11 @@
       "deleteTitle": "SSH anahtarı silinsin mi?",
       "deleteMessage": "Bu anahtar silinecek. Herhangi bir sunucu için varsayılan anahtar olarak seçilmişse, bu referans temizlenecektir.",
       "fullPair": "tam çift",
-      "publicOnly": "yalnızca genel"
+      "publicOnly": "yalnızca genel",
+      "addKey": "Anahtar ekle",
+      "keyPairLabel": "Açık ve özel",
+      "publicOnlyLabel": "Sadece açık",
+      "emptyKeys": "Henüz kaydedilmiş anahtar yok."
     },
     "server": {
       "fillRequired": "Bir ad, sunucu ve kullanıcı girin",
@@ -201,7 +402,52 @@
       "deleteMessage": "Tüm sunucu politikaları ve ayarları silinecek.",
       "commandsTitle": "Komutlar: {{count}} — {{preview}}",
       "sudoCleared": "Sudo şifresi temizlendi",
-      "sudoClearFailed": "Sudo şifresi temizlenemedi"
+      "sudoClearFailed": "Sudo şifresi temizlenemedi",
+      "layout": {
+        "keyHelp": "Giriş yapmak için seçilen anahtarı kullanın. Kapalı olduğunda anahtar sunucuya kurulum için kullanılmaya devam eder.",
+        "clearSudo": "sudo şifresini kaldır",
+        "intro": "Chatter'ın sunucularınızla çalışmak için kullanacağı SSH bağlantıları.",
+        "add": "Sunucu ekle",
+        "edit": "Sunucuyu düzenle",
+        "search": "Sunucu ara",
+        "emptyList": "Henüz sunucu eklenmedi.",
+        "emptyTitle": "Sunucularınız tek bir yerde",
+        "emptyHelp": "Bir SSH bağlantısı ekleyin. Ardından Chatter'ın bu sunucuyla çalışmasını isteyebilirsiniz.",
+        "connection": "Bağlantı",
+        "authentication": "Kimlikrulama",
+        "permissions": "Komut izinleri",
+        "loginMethod": "Giriş yöntemi",
+        "sshLogin": "SSH anahtarı",
+        "passwordLogin": "Şifre",
+        "sudo": "Sudo şifresi",
+        "configured": "Kaydedildi",
+        "notConfigured": "Kaydedilmemiş",
+        "keepPassword": "Kaydedilen şifreyi koru",
+        "passwordPlaceholder": "Bağlantı şifresi",
+        "keepSecrets": "Kaydedilen değerleri korumak için şifre alanlarını boş bırakın.",
+        "credentialsHelp": "Giriş yapmak için bir şifre girin veya özel kısmı olan bir SSH anahtarı seçin.",
+        "savedKey": "Kaydedilen SSH anahtarı",
+        "clearOnSave": "Değişiklikleri kaydettide kaydedilen sudo şifresi kaldırılacaktır.",
+        "undoClear": "Sudo şifresini koru",
+        "working": "Kontrol ediliyor…",
+        "testHelp": "Kaydedilen SSH bağlantısını kontrol eder. Kaydedilmemiş değişiklikler kullanılmaz.",
+        "automatic": "Komutlar onay almadan çalıştırılır.",
+        "ask": "Kaydedilmiş kurallar hariç komutlar onay gerektirir.",
+        "policiesHelp": "“Her zaman izin ver” üzerinden kaydedilen kurallar. Eşleşen komutlar onayı atlar. Kalenler düzenli ifadelerdir.",
+        "noPolicies": "Bu sunucu için hiç komut istisnası bulunmuyor.",
+        "allApproved": "Tüm komutlar için otomatik onay açık. Bireysel kurallar kapattığınızda kullanıl üzere saklanır.",
+        "keysFailed": "SSH anahtarları yüklenemedi. Kaydedilen anahtar korundu.",
+        "policiesFailed": "Komut kuralları yüklenemedi.",
+        "loadFailed": "Sunucular yüklenemedi.",
+        "retry": "Tekrar dene",
+        "invalidPort": "1 ile 65535 arasında tam sayı bir port numarası girin.",
+        "discardTitle": "Kaydedilmemiş değişiklikler atılsın mı?",
+        "discardHelp": "Bu bağlantıdaki düzenlemeleriniz kaybedilecek.",
+        "discard": "Değişiklikleri at",
+        "autoTitle": "Onay almadan çalıştırmayı etkinleştirin mi?",
+        "autoHelp": "Yapay zeka, dosyaları değiştiren veya silen komutlar dahil olmak üzere bu sunucuda sormadan komut çalıştırabilir.",
+        "enable": "Etkinleştir"
+      }
     },
     "browserDownload": {
       "confirmTitle": "Dosya indirilsin mi?",
@@ -253,7 +499,42 @@
       "commandCount_other": "{{count}} komut",
       "commandCount": "{{count}} komut",
       "commandCount_few": "{{count}} komut",
-      "commandCount_many": "{{count}} komut"
+      "commandCount_many": "{{count}} komut",
+      "library": {
+        "intro": "Rapor hazırlamaktan bir uygulama yapılandırmaya kadar bot için kaydedilmiş iş akışları. Bir süreci bir kez tanımlayın ve sohbetlerinizde tekrar kullanın.",
+        "howTo": "Kullanım kılavuzu",
+        "howToBody": "Adımları, koşulları ve beklenen sonucu kaydedin. Bot, bir görev sırasında takip etmek için talimatlarınızı bulabilir ve okuyabilir. Kaydetmek hiçbir şeyi çalıştırmaz. Bunlar, botun kişilik ayarlarından ayrı bir iş akışını tanımlar.",
+        "example": "Örneğin, \"Haftalık rapor\"u kaydedin, ardından sohbette \"Haftalık rapor talimatlarımı takip ederek bir rapor hazırla.\" deyin.",
+        "list": "Talimat kütüphanesi",
+        "search": "Bir talimat bulun",
+        "create": "Talimat oluştur",
+        "edit": "Talimatı düzenle",
+        "loadFailed": "Yönergeler yüklenemedi.",
+        "retry": "Tekrar dene",
+        "loading": "Talimatlar yükleniyor…",
+        "emptyMine": "Henüz hiç talimatınız yok.",
+        "emptyPublic": "Henüz halka açık talimat bulunmuyor.",
+        "emptyTitle": "Tekrar kullandığınız bir iş akışını kaydedin",
+        "emptyHelp": "Adım adım bir talimat oluşturun veya halka açık kütüphaneden bir tanesini kaydedin.",
+        "titlePlaceholder": "Örneğin, Haftalık rapor",
+        "contentPlaceholder": "Bu talimat ne zaman kullanılmalıdır?\n\n1. Hangi bilgiler toplanmalı?\n2. Neler yapılmalı ve ne kontrol edilmeli?\n3. Sonuç nasıl görünmeli?",
+        "write": "Yaz",
+        "preview": "Önizleme",
+        "previewEmpty": "Talimatınızı önizlemek için metin ekleyin.",
+        "editorHelp": "Adımları, önemli koşulları ve beklenen sonucu tanımlayın. Başlıklar, listeler ve diğer Markdown formatlamaları desteklenir.",
+        "editingPublic": "Genel bir talimatı düzenliyorsunuz. Bu sunucudaki tüm kullanıcılar değişikliklerinizi görecek.",
+        "publicSource": "Genel talimat",
+        "updated": "Güncellendi",
+        "publicHelp": "Botun bulabilmesi için buimatı kütüphanenize kaydedin. Kopyanızı orijinalinden bağımsız olarak düzenleyebilirsiniz.",
+        "discardTitle": "Değişiklikler atulsun mu?",
+        "discardHelp": "Komuttaki düzenlemeleriniz kaybedilecek.",
+        "discard": "Değişiklikleri at",
+        "publishTitle": "Bu talimatı yayımlayın mı?",
+        "publishHelp": "Herkese açık bir kopya oluşturulacak. Metin bu sunucudaki tüm kullanıcılar tarafından erişilebilir olacaktır. Lütfen önce kişisel bilgiler veya gizli veriler için kontrol edin.",
+        "deleteTitle": "Talimatı silinsin mi?",
+        "deleteHelp": "Bu talimat kütüphanenizden kaldırılacak.",
+        "deletePublicHelp": "Halka açık talimat tüm kullanıcılar için kaldırılacak. Daha önce kaydedilmiş kişisel kopyalar kalacaktır."
+      }
     },
     "mail": {
       "title": "E-posta hesapları",
@@ -506,7 +787,9 @@
       "billing": "Faturalandırma",
       "about": "Hakkında",
       "data": "Veri",
-      "admin": "Yönetici"
+      "admin": "Yönetici",
+      "personas": "Kişiler",
+      "agents": "Ajanlar"
     },
     "browser": {
       "help": "Yapay zekânın hangi tarayıcı işlemleri için onayınızı isteyeceğini seçin. Manuel işlemler etkilenmez.",
@@ -603,6 +886,35 @@
           "nameRequired": "Bir persona adı girin",
           "delete": "Kişi silinemedi"
         }
+      },
+      "redesign": {
+        "showMore_one": "{{count}} daha fazla kişi göster",
+        "showMore_other": "{{count}} fazla kişi daha göster",
+        "showLess": "Daha az göster",
+        "intro": "Kişilik adınız, kimliğiniz ve sohbet tercihlerinizdir. Hesap detayları ayrı olarak yönetilir.",
+        "personas": "Kişiler",
+        "selectHelp": "Ayrı bir kişilik seçimi yapılmayan sohbetlerde kullanılır.",
+        "default": "Seçildi",
+        "persona": "Persona",
+        "addPersona": "Persona ekle",
+        "newPersona": "Yeni persona",
+        "editPersona": "Persona ayarları",
+        "makeDefault": "Varsayılan olarak kullan",
+        "defaultSaved": "Persona seçildi",
+        "chatName": "Sohbetteki isim",
+        "description": "Persona açıklaması",
+        "identityHelp": "Bu isim ve avatar, bu personayı kullanılan mesajlarda görünür. Hesap adınız değişmeden kalır.",
+        "memoryHelp": "Chatter'ın konuşmalarda kullandığı bu kişiye ait gerçekler.",
+        "unsaved": "Kaydedilmemiş değişiklikler",
+        "primary": "Birincil",
+        "primaryHelp": "Asıl hesap kişiliği. Düzenlenebilir ancak silinemez.",
+        "accountNameHelp": "Sunucu yöneticisi tarafından görülür. Kişilerinizin adlarını veya ayarlarını değiştirmez.",
+        "discardTitle": "Kişiliği değiştir mi?",
+        "discardHelp": "Mevcut kişide kaydedilmemiş değişiklikler kaybedilecek.",
+        "discard": "Kaydetmeden değiştir",
+        "deleteTitle": "Kişiyi silin mi?",
+        "deleteHelp": "{{name}}” kişisi silinecek.",
+        "saved": "Persona kaydedildi"
       }
     },
     "connections": {
@@ -698,6 +1010,17 @@
         "scenario": "Durum ve bağlam...",
         "examples": "Örnek diyalog...",
         "other": "Kalan talimatlar..."
+      },
+      "catalog": {
+        "help": "Botun karakteri ve iletişim tarzı.",
+        "search": "İstem bul",
+        "create": "İstem oluştur",
+        "builtIn": "Yerleşik",
+        "draft": "Taslak",
+        "newHelp": "Yeni botun adını, açıklamasını ve karakterini düzenleyicide ayarlayın.",
+        "discardTitle": "Kaydedilmemiş değişiklikler",
+        "discardHelp": "İstem değiştirilsin mi? Kaydedilmemiş değişiklikler ve yapay zeka tarafından oluşturulan öneri atıl.",
+        "discard": "İstemi değiştir"
       }
     },
     "voice": {
@@ -719,7 +1042,19 @@
       "recognitionSourceLocalHint": "Yerel Whisper",
       "recognitionSourceServer": "Sunucuda",
       "recognitionSourceServerReady": "Kullanılabilir · {{model}}",
-      "recognitionSourceServerUnavailable": "Kullanılamıyor veya yapılandırılmamış"
+      "recognitionSourceServerUnavailable": "Kullanılamıyor veya yapılandırılmamış",
+      "activation": {
+        "title": "Sesli aktivasyon",
+        "enabled": "Uyandırma kelimesine yanıt ver",
+        "help": "Bu bilgisayarda yerel olarak çalışır. Kapatmak mikrofonun aktivasyon için dinlemesini durdurur.",
+        "options": "Sesli aktivasyon ayarları",
+        "names": "İsimler ve selamlamalar",
+        "phrases": "Ek ifadeler",
+        "sensitivity": "Hassasiyet",
+        "strict": "Daha az yanlış etkinleşme",
+        "sensitive": "Daha kolay etkinleşme",
+        "sensitivityHelp": "Yüksek hassasiyet uyandırma kelimelerini daha kolay algılar ancak daha fazla yanlış etkinleşmeye neden olabilir. %50 bir önceki ayardır."
+      }
     },
     "restrictions": {
       "help": "Verilerinize ve araçlarınıza erişimi sınırlayın. Değişiklikler anında kaydedilir.",
@@ -745,12 +1080,35 @@
       "noWakeWordHelp": "Uyandırma kelimelerini (Alexa, Hey Jarvis, Hey Mycroft, Hey Rhasspy) dinlemeyi durdur. Mikrofon akışı kapatılacak.",
       "injectionProtection": "İstem enjeksiyonu koruması",
       "injectionProtectionHint": "Sizin talimatlarınızı web siteleri, e-postalar ve dosyalardaki talimatlardan ayırt etmeye yardımcı olur.",
-      "injectionProtectionHelp": "Devre dışı bırakıldığında, koruma protokolü ve güvenilmeyen içerik işaretleri modele gönderilmez. Web sitelerindeki, e-postalardaki ve dosyalardaki talimatlar yanıtları ve araç çağrılarını etkileyebilir. Erişim izinleri ve sunucu kısıtlamaları uygulanmaya devam eder. Tek tek sohbetler bu ayarı geçersiz kılabilir."
+      "injectionProtectionHelp": "Devre dışı bırakıldığında, koruma protokolü ve güvenilmeyen içerik işaretleri modele gönderilmez. Web sitelerindeki, e-postalardaki ve dosyalardaki talimatlar yanıtları ve araç çağrılarını etkileyebilir. Erişim izinleri ve sunucu kısıtlamaları uygulanmaya devam eder. Tek tek sohbetler bu ayarı geçersiz kılabilir.",
+      "hidePixelAvatar": "Piksel avatarı gizle",
+      "hidePixelAvatarHelp": "Yüzü botun baş harfiyle değiştirir. Bot hiçbir avatar aracı veya talimat almaz. Özel komut görselleri görünmeye devam eder.",
+      "layout": {
+        "agents": "Ajanlar",
+        "avatar": "Avatar",
+        "inheritedAvatar": "Piksel avatar gizliyken kontrol yapılamaz",
+        "privacy": "Kişisel veriler",
+        "access": "Bilgisayar ve ağ",
+        "helpers": "Ajanlar ve avatar",
+        "security": "Koruma",
+        "inheritedFull": "Masaüstü araçları engellemesi tarafından zaten uygulanıyor",
+        "inheritedGuest": "Misafir modu tarafından zaten uygulanıyor",
+        "details": "Bu koruma hakkında",
+        "loadFailed": "Kısıtlamalar yüklenemedi. Mevcut ayarlarınızı görmek için tekrar deneyin.",
+        "retry": "Yeniden dene"
+      }
     },
     "models": {
       "title": "Model ayarları",
       "help": "Her model için oluşturma ayarları. \"Otomatik\" sunucu varsayılanını kullanır.",
-      "empty": "Özel model yok. Sunucuda MODELS_MANUAL aracılığıyla model ekleyin."
+      "empty": "Özel model yok. Sunucuda MODELS_MANUAL aracılığıyla model ekleyin.",
+      "search": "Bir model bulun",
+      "noResults": "Model bulunamadı.",
+      "defaults": "Varsayılan ayarlar",
+      "changed_one": "{{count}} parametre değiştirildi",
+      "changed_other": "{{count}} parametre değiştirildi",
+      "reset": "Varsayılanlara sıfırla",
+      "noParameters": "Bu model için mevcut bir üretim parametresi bulunmuyor."
     },
     "app": {
       "interfaceLanguage": "Arayüz dili",
@@ -783,7 +1141,29 @@
       "desktopSearch": "Web araması için masaüstü tarayıcıyı kullan",
       "desktopSearchHelp": "Bu sağlayıcı seçildiğinde search_web'in yerel masaüstü tarayıcıyı kullanmasına izin ver.",
       "desktopReader": "Sayfa ayrıştırma için masaüstü tarayıcıyı kullan",
-      "desktopReaderHelp": "read_webpage'in sayfaları yerel masaüstü tarayıcısında ayrıştırmasına izin ver. Devre dışı bırakıldığında, arka uç başka bir yapılandırılmış okuyucu kullanabilir."
+      "desktopReaderHelp": "read_webpage'in sayfaları yerel masaüstü tarayıcısında ayrıştırmasına izin ver. Devre dışı bırakıldığında, arka uç başka bir yapılandırılmış okuyucu kullanabilir.",
+      "layout": {
+        "appearance": "Görünüm",
+        "chat": "Sohbet",
+        "history": "Görüünür sohbet geçmişi",
+        "renderHelp": "Düşük başta daha az eski mesaj gösterir. Kalanını gösterebilirsiniz. Bu ayar bir sohbet açıldığında geçerlidir.",
+        "tokensHelp": "Sohette token kullanımını gösterir.",
+        "webTitle": "Bu bilgisayarda arama ve sayfa okuma",
+        "webQuotaHelp": "Chatter çalışırken arka plandaki Chromium üzerinden yapılan aramalar ve sayfa okumaları aylık kotanıza dahil edilmez. Aşağı istediğiniz seçenekleri etkinleştirin. Chatter görev yöneticisinden arka plan görevlerini durdurabilirsiniz.",
+        "desktopBrowserConcurrency": "Eş zamanlı görevler",
+        "desktopBrowserConcurrencyHelp": "Aynı anda kaç arama ve sayfa okuma çalışabileceği. Bir CAPTCHA penceresi kapatılana kadar bir slot kaplar.",
+        "desktopSearch": "Bu PC'deki tarayıcıyı kullanarak arama yap",
+        "desktopSearchHelp": "Arama için masaüstü göz gez atma seçildiğinde bu bilgisayardaki tarayıcı kullanılır.",
+        "desktopReader": "Sayfaları bu PC'deki tarayıcıyı kullanarak oku",
+        "desktopReaderHelp": "Sayfaların bu bilgisayardaki tarayıcı aracılığıyla okunmasına olanak tanır. Kapalı olduğunda başka bir yapılandırılmış okuyucu kullanılabilir."
+      },
+      "themeHour": "Saat",
+      "themeMinute": "Dakika",
+      "themeSchedule": "Zamanlanmış",
+      "themeLightFrom": "Işıktan",
+      "themeDarkFrom": "Karanktan",
+      "themeScheduleHelp": "Bilgisayarınızın yerel saatini kullanır. Her iki saat de aynıysa karanlık mod gün boyu açık kalır.",
+      "attachmentAuto": "Otomatik · Bağlamın %90'ı"
     },
     "toasts": {
       "saveSettingFailed": "Ayar kaydedilemedi",
@@ -975,7 +1355,25 @@
       },
       "openCharacter": "Karakteri aç",
       "openPersonas": "Kişileri aç",
-      "openChat": "Sohbeti aç"
+      "openChat": "Sohbeti aç",
+      "individualImports": "Bireysel öğeleri aktar"
+    },
+    "avatar": {
+      "showShort": "Avatarı göster",
+      "controlShort": "Bot kontrolü",
+      "menu": "Pixel avatar",
+      "show": "Avatarı göster",
+      "control": "Bot avatarı kontrol eder",
+      "hiddenHint": "Piksel avatar yerine botun baş harfi gösterilir. Yüzü bur buradan veya kısıtlama ayarlarından geri yükleyin.",
+      "menuHint": "Bu ayarlar hesabınız için geçerlidir. Komut görselleri görünmeye devam eder."
+    },
+    "agents": {
+      "help": "Chatter'ın bireysel görevleri devrettiği yardımcılar için ayarlar.",
+      "specialists": "Uzman ajanlar",
+      "specialistsHelp": "Belirli bir görevi olan yerleşik yardımcılar. Chatter çalışırken onları çağırır.",
+      "loadFailed": "Ajan ayarları yüklenemedi.",
+      "catalogFailed": "Ajan kataloğu yüklenmedi.",
+      "empty": "Bu sunucuda henüz uzmanlaşmış bir ajan bulunmuyor."
     }
   },
   "chat": {
@@ -1031,7 +1429,8 @@
       "followUpBrief": "Başka neyi netleştirmek istersiniz? İsteğe bağlı",
       "followUpBriefPlaceholder": "Örneğin: diyalog tarzı hakkında daha fazla soru. Konuları modelin seçmesine izin vermek için boş bırakın.",
       "startFollowUp": "Ek sorular oluştur",
-      "followUpHelp": "Önceki sorular, yanıtlar ve kayıtlı bağlamı kullanarak boşlukları araştıran yeni bir tur. Önceki anket listede kalır; nihai talimatlar tüm turları dikkate alır. Model kotanızı kullanır."
+      "followUpHelp": "Önceki sorular, yanıtlar ve kayıtlı bağlamı kullanarak boşlukları araştıran yeni bir tur. Önceki anket listede kalır; nihai talimatlar tüm turları dikkate alır. Model kotanızı kullanır.",
+      "actionsSummary": "Elemler · {{count}}"
     },
     "reasoning": {
       "auto": "Otomatik",
@@ -1084,7 +1483,14 @@
         "moveTo": "Klasöre taşı"
       },
       "notificationsOn": "Bildirimler açık",
-      "notificationsOff": "Bildirimler kapalı"
+      "notificationsOff": "Bildirimler kapalı",
+      "dateGroups": {
+        "today": "Bugün",
+        "yesterday": "Dün",
+        "thisWeek": "Bu hafta",
+        "thisMonth": "Bu ay",
+        "older": "Daha eski"
+      }
     },
     "empty": {
       "selectOrCreate": "Bir sohbet seçin veya yeni bir tane oluşturun"
@@ -1129,7 +1535,8 @@
       "providerTooltip": "Son sağlayıcı isteği\nGiriş: {{input}} tk\nÖnbellek isabeti: {{cacheHit}} tk\nÖnbellek ıskası: {{cacheMiss}} tk\nÇıkış: {{output}} tk\nAkıl yürütme: {{reasoning}} tk\nModel: {{model}}",
       "reasoning": "Akıl yürütme",
       "prompt": "prompt",
-      "cached": "önbellekte"
+      "cached": "önbellekte",
+      "cache": "Önbellek"
     },
     "macro": {
       "title": "Makro önerisi",
@@ -1200,7 +1607,9 @@
       "normalTitle": "d20 zar modu. Modu değiştirmek için tıklayın."
     },
     "composer": {
-      "placeholder": "Bir mesaj yazın..."
+      "placeholder": "Bir mesaj yazın...",
+      "activityManager": "Etaliyet yöneticisi",
+      "keyboardHint": "Göndermek için Enter'a basın · Shift + Enter yeni satır"
     },
     "deleteChat": {
       "title": "Sohbet silinsin mi?",
@@ -1454,7 +1863,8 @@
           "deleteSpace": "Anı silinemedi",
           "updateRecord": "Bellek güncellenemedi",
           "deleteRecord": "Bellek silinemedi"
-        }
+        },
+        "preferencesTitle": "Hafıza ayarları"
       },
       "modeLabel": "Belleği kullan",
       "mode": {
@@ -1501,6 +1911,23 @@
     "contextSummary": {
       "title": "Önceki konuşma özeti",
       "meta": "{{count}} mesaj · {{model}}"
+    },
+    "approvals": {
+      "expandDiff": "Değişiklikleri genişlet",
+      "queue": "Onay bekliyor: {{count}}",
+      "commentFor": "Reddetme yorumu: {{title}}",
+      "rejectAndSend": "Reddet ve gönder",
+      "permissions": "İzin seçenekleri",
+      "expandEmail": "E-postayı genişlet",
+      "failed": "Karar gönderilemedi"
+    },
+    "activityManager": {
+      "empty": "Bu sohbetin arka plan etkinlikleri burada görünecektir.",
+      "working": "Çalışıyor",
+      "idle": "Boşta",
+      "challenge": "İlgi gerekiyor",
+      "stop": "Durdur: {{title}}",
+      "actionFailed": "İşlem tamamlanamadadı"
     }
   },
   "promptSelector": {
@@ -1644,7 +2071,8 @@
       "testRoomRedirect": "Odadan yönlendirildi",
       "testNewChat": "Yeni sohbet oluşturuldu",
       "testSilent": "Görev raporlanacak bir şey üretmedi (boş yanıt).",
-      "testFailed": "Test çalıştırılamadı"
+      "testFailed": "Test çalıştırılamadı",
+      "loadMore": "Daha fazla yükle"
     },
     "browser": {
       "title": "Tarayıcı",
@@ -1833,7 +2261,8 @@
       "desktopNote": "Arama ve sayfa okuma bu limiti yalnızca uygulama kapalıyken harcar",
       "buy": "Daha fazla oluşturma satın al",
       "buyHint": "Ek oluşturma satın alma yakında gelecek"
-    }
+    },
+    "caption": "Kota"
   },
   "forcePassword": {
     "title": "Şifre Değiştir",
@@ -2071,5 +2500,15 @@
   },
   "messageImages": {
     "loadFailed": "Bu görsel yüklenemedi"
+  },
+  "reasoningDisclosure": {
+    "thinking": "Düşünülüyor…"
+  },
+  "workLog": {
+    "title": "Çalışma günlüğü",
+    "actions_one": "{{count}} işlem",
+    "actions_other": "{{count}} işlem",
+    "errors_one": "{{count}} hata",
+    "errors_other": "{{count}} hata"
   }
 }

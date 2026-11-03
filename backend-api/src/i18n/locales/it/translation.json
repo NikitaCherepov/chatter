@@ -57,7 +57,9 @@
     "list_mail_accounts": "📧 Controllo degli account email collegati...",
     "check_emails": "📧 Controllo della posta elettronica...",
     "read_email_content": "📧 Lettura del contenuto dell'email...",
-    "send_email": "📧 Preparazione di un'email per la conferma..."
+    "send_email": "📧 Preparazione di un'email per la conferma...",
+    "searchQuery": " \"Ricerca di “{{query}}”",
+    "readingPage": "Lettura di {{url}}"
   },
   "moderationNotifications": {
     "approved": "✅ Accesso approvato. Puoi scrivere al bot.",
@@ -71,6 +73,14 @@
       "convert_video": "[{{agent}}] Conversione video...",
       "list_devops_servers": "[{{agent}}] Recupero elenco server...",
       "runningTool": "[{{agent}}] Esecuzione {{tool}}..."
+    },
+    "news_researcher": {
+      "name": "Ricercatore di notizie",
+      "description": "Ricerca un argomento di cronaca cercando e leggendo le fonti, poi prepara un riepilogo conciso."
+    },
+    "file_converter": {
+      "name": "Convertitore video",
+      "description": "Converte i video locali tramite l'app desktop. Altri tipi di file non sono ancora supportati."
     }
   },
   "chat": {

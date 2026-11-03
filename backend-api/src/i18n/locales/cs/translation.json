@@ -63,7 +63,9 @@
     "desktopOpeningNote": "Otevírání záznamu v notebooku...",
     "desktopReadingWidgetState": "Čtení stavu widgetu...",
     "desktopOpeningToolsPanel": "Otevírání panelu nástrojů...",
-    "desktopAction": "Provádění akce..."
+    "desktopAction": "Provádění akce...",
+    "searchQuery": "Hledám „{{query}}“",
+    "readingPage": "Načítám stránku {{url}}"
   },
   "moderationNotifications": {
     "approved": "✅ Přístup schválen. Můžete botovi posílat zprávy.",
@@ -77,6 +79,14 @@
       "convert_video": "[{{agent}}] Převádění videa...",
       "list_devops_servers": "[{{agent}}] Získávání seznamu serverů...",
       "runningTool": "[{{agent}}] Spouštění {{tool}}..."
+    },
+    "news_researcher": {
+      "name": "Zpravodajný analytik",
+      "description": "Prozkoumá novinové téma pomocí hledání a čtení zdrojů a následně připraví stručné shrnutí."
+    },
+    "file_converter": {
+      "name": "Konvertor videa",
+      "description": "Převádí lokální videa pomocí desktopové aplikace. Ostatní typy souborů nejsou ještě podporovány."
     }
   },
   "confirmations": {

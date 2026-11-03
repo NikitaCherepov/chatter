@@ -57,7 +57,9 @@
     "list_mail_accounts": "📧 Sprawdzanie połączonych kont e-mail...",
     "check_emails": "📧 Sprawdzanie poczty e-mail...",
     "read_email_content": "📧 Odczytywanie treści e-maila...",
-    "send_email": "📧 Przygotowywanie e-maila do potwierdzenia..."
+    "send_email": "📧 Przygotowywanie e-maila do potwierdzenia...",
+    "searchQuery": "Szukanie „{{query}}”",
+    "readingPage": "Czytanie {{url}}"
   },
   "moderationNotifications": {
     "approved": "✅ Dostęp zatwierdzony. Możesz wysłać wiadomość do bota.",
@@ -71,6 +73,14 @@
       "convert_video": "[{{agent}}] Konwersja wideo...",
       "list_devops_servers": "[{{agent}}] Pobieranie listy serwerów...",
       "runningTool": "[{{agent}}] Uruchamianie {{tool}}..."
+    },
+    "news_researcher": {
+      "name": "Analityalityk wiadomości",
+      "description": "Bada temat prasowy poprzez wyszukiwanie i czytanie źródeł, a następnie przygotowuje zwięzłe podsumowanie."
+    },
+    "file_converter": {
+      "name": "Konwerter wideo",
+      "description": "Konwertuje lokalne wideo za pośrednictwem aplikacji pulpowej. Inne typy plików nie są jeszcze obsługiwane."
     }
   },
   "chat": {

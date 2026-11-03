@@ -57,7 +57,9 @@
     "list_mail_accounts": "📧 Überprüfe verbundene E-Mail-Konten...",
     "check_emails": "📧 Überprüfe E-Mails...",
     "read_email_content": "📧 Lese E-Mail-Inhalt...",
-    "send_email": "📧 Bereite eine E-Mail zur Bestätigung vor..."
+    "send_email": "📧 Bereite eine E-Mail zur Bestätigung vor...",
+    "searchQuery": "Suche nach „{{query}}“",
+    "readingPage": "Liest {{url}}"
   },
   "moderationNotifications": {
     "approved": "✅ Zugriff genehmigt. Sie können dem Bot eine Nachricht senden.",
@@ -71,6 +73,14 @@
       "convert_video": "[{{agent}}] Video wird konvertiert...",
       "list_devops_servers": "[{{agent}}] Serverliste wird abgerufen...",
       "runningTool": "[{{agent}}] {{tool}} wird ausgeführt..."
+    },
+    "news_researcher": {
+      "name": "News-Rechercher",
+      "description": "Recherchiert ein Zeitungsthema durch Suche und Lesen von Quellen und erstellt dann einen prägnanten Brief."
+    },
+    "file_converter": {
+      "name": "Videokonvertierer",
+      "description": "Konvertiert lokale Videos über die Desktop-App. Andere Dateitypen werden noch nicht unterstützt."
     }
   },
   "chat": {

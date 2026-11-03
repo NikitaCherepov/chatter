@@ -1,5 +1,127 @@
 {
-  "toolActivity": {"labels": {"readPage": "Lettura della pagina"}, "names": {"read_webpage": "Lettura della pagina", "web_reader": "Lettura della pagina"}},
+  "toolActivity": {
+    "labels": {
+      "readPage": "Lettura della pagina",
+      "search": "Ricerca sul web",
+      "saveNote": "Salva nota",
+      "noteSaved": "Nota salvata",
+      "listNotes": "Trova note",
+      "readNote": "Leggi nota",
+      "deleteNote": "Elimina nota",
+      "readFile": "Leggi file",
+      "writeFile": "Scrivi file",
+      "editFile": "Modifica file",
+      "searchFiles": "Cerca file",
+      "listFiles": "Sfoglia file",
+      "command": "Comando computer",
+      "ssh": "Comando server",
+      "macro": "Esegui macro",
+      "browser": "Azione browser",
+      "desktop": "Azione app",
+      "task": "Crea task",
+      "image": "Crea immagine",
+      "agent": "Lavoro dell'agente",
+      "avatar": "Stato avatar"
+    },
+    "names": {
+      "read_webpage": "Lettura della pagina",
+      "web_reader": "Lettura della pagina",
+      "add_blocks": "Aggiungi blocchi",
+      "attach_file_to_response": "Allega file",
+      "browser_control": "Controllo browser",
+      "capture_screen": "Cattura schermo",
+      "capture_webcam": "Cattura webcam",
+      "change_server_user_password": "Cambia password del server",
+      "check_emails": "Controlla email",
+      "control_smart_home": "Controllo smart home",
+      "convert_video": "Conversione video",
+      "create_pixel_image": "Crea pixel art",
+      "create_server_user": "Crea utente server",
+      "delete_from_cold_memory": "Elimina dalla memoria",
+      "delete_my_task": "Elimina compito",
+      "delete_note": "Elimina nota",
+      "describe_image": "Analisi dell'immagine",
+      "desktop_action": "Azione dell'app",
+      "edit_file_lines": "Modifica file",
+      "escalate_to_pro": "Passa al modello avanzato",
+      "execute_macro": "Esegui macro",
+      "execute_pc_command": "Comando computer",
+      "execute_ssh_command": "Comando server",
+      "execute_visual_click": "Click sullo schermo",
+      "explore_fs": "Sfoglia file",
+      "finalize_issue": "Concludi problema",
+      "find_transit_route": "Trova percorso",
+      "finish_task": "Completa task",
+      "generate_image": "Crea immagine",
+      "get_avatar_state": "Stato avatar",
+      "get_exchange_rates": "Tassi di cambio",
+      "get_file_info": "Informazioni sul file",
+      "get_map_pins": "Punti sulla mappa",
+      "get_my_tasks": "Elenco attività",
+      "get_smart_devices": "Dispositivi casa smart",
+      "get_user_time": "Ora attuale",
+      "google_ai": "Query a Google AI",
+      "install_ssh_public_key": "Installa chiave pubblica SSH",
+      "invoke_subagent": "Chiama agente",
+      "list_devops_runbooks": "Runbook server",
+      "list_devops_servers": "Elenco server",
+      "list_directory": "Contenuto cartella",
+      "list_mail_accounts": "Account email",
+      "list_monitors": "Elenco monitor",
+      "list_my_macros": "Elenco macro",
+      "list_my_notes": "Elenco note",
+      "list_recent_chats": "Chat recenti",
+      "map_control": "Controllo mappa",
+      "newspaper_issue_contents": "Contenuto del numero",
+      "newspapers_list": "Elenco gioriani",
+      "random_roll": "Lancio del dado",
+      "read_attachment_file": "Leggi allegato",
+      "read_chat_context": "Leggi contesto della chat",
+      "read_devops_runbook": "Leggi runbook del server",
+      "read_email_attachment": "Leggi allegato dell'email",
+      "read_email_content": "Leggi email",
+      "read_file": "Leggi file",
+      "read_memory": "Leggi memoria",
+      "read_newspaper_item": "Leggi articolo",
+      "read_note": "Leggi nota",
+      "save_note": "Salva nota",
+      "save_to_cold_memory": "Salva nella memoria",
+      "schedule_task": "Programma attività",
+      "search_attachment_file": "Cerca allegato",
+      "search_chat_history": "Cerca nella cronologia chat",
+      "search_cold_memory": "Cerca nella memoria",
+      "search_file_keywords": "Cerca file",
+      "search_nearby": "Trova luoghi vicinanze",
+      "search_web": "Ricerca sul web",
+      "send_email": "Invia email",
+      "set_display_state": "Aggiorna avatar",
+      "set_user_timezone": "Imposta fuso orario",
+      "spawn_subagent": "Avvia agente",
+      "suggest_chat_link": "Link alla chat",
+      "suggest_devops_runbook": "Suggerisci runbook del server",
+      "suggest_macro": "Suggerisci macro",
+      "suggest_server_creds_update": "Aggiorna accesso al server",
+      "update_core_memory": "Aggiorna memoria principale",
+      "update_my_task": "Aggiorna task",
+      "write_file": "Scrivi file",
+      "youtube_music_control": "Controllo musica",
+      "web_search": "Ricerca sul web",
+      "image_gen": "Crea immagine",
+      "create_task": "Programma attività",
+      "set_avatar_mood": "Aggiorna avatar",
+      "set_avatar_emotion": "Aggiorna avatar"
+    },
+    "failed": "{{action}} — errore",
+    "returned": "Chiamata completata, risposta dello strumento rice ricevuta",
+    "unknown": "Risultato non salvato",
+    "error": "Errore dello strumento",
+    "noResult": "Il risultato di questa chiamata non è disponibile.",
+    "collapse": "Comprimi azioni",
+    "more": "{{count}} altre azioni",
+    "internal": "Azioni interne · {{count}}",
+    "more_one": "{{count}} altre azioni",
+    "more_other": "{{count}} altre azioni"
+  },
   "advanced": {
     "smart": {
       "authorizeUrl": "https://oauth.yandex.ru/authorize?response_type=token&client_id=YOUR_CLIENT_ID",
@@ -79,6 +201,17 @@
         "step5": "Passaggio 5.",
         "step5Text": "Clicca Sincronizza. I dispositivi accoppiati da Zigbee2MQTT appariranno nell'elenco sottostante.",
         "note": "Nota: il broker MQTT deve essere raggiungibile dal server che esegue Chatter backend. Se il broker richiede autenticazione, includila nell'URL: mqtt://utente:password@host:porta"
+      },
+      "layout": {
+        "title": "Casa intelligente",
+        "connections": "Connessioni",
+        "configured": "Configurato",
+        "notConfigured": "Non configurato",
+        "configure": "Configura",
+        "collapse": "Compri",
+        "saveBroker": "Salva indirizzo broker",
+        "empty": "Connetti Yandex o Zigbee2MQTT per vedere i tuoi dispositivi.",
+        "noDetails": "Nessun dettaglio aggiuntivo."
       }
     },
     "macros": {
@@ -108,7 +241,39 @@
       "enabled": "Abilitato",
       "pinned": "Fissato (AI vede sempre il nome)",
       "executionMode": "Modalità di esecuzione",
-      "create": "Crea macro"
+      "create": "Crea macro",
+      "catalog": {
+        "pinnedLabel": "Fissa per il bot",
+        "pinnedState": "Fissato",
+        "disabledState": "Disabilitato",
+        "help": "Comandi salvati per le azioni quotidiane. Seleziona una macro per ispezionarne i comandi, modificarla o eseguirla.",
+        "search": "Trova una macro",
+        "list": "Elenco macro",
+        "all": "Tutto",
+        "pinned": "Fissato",
+        "disabled": "Disattivato",
+        "defaultName": "Macro #{{number}}",
+        "edit": "Modifica macro",
+        "commandCount_one": "{{count}} comando",
+        "commandCount_other": "{{count}} comandi",
+        "sequence": "Ordine di esecuzione",
+        "available": "Disponibile per il bot",
+        "availableHelp": "Il bot può trovare ed avseguire questa macro. Puoi eseguirla manualmente a prescindere da questo interruttore.",
+        "pinnedHelp": "Il nome è sempre incluso nel contesto del bot per facilitare il reperimento dell'azione.",
+        "suggestionReady": "Nome e descrizione aggiunti alla bozza. Salvali se sono appropriati.",
+        "running": "Esecuzione…",
+        "lastOutput": "Ultimo output dell'esecuzione",
+        "noOutput": "Comandi completati senza output diuale.",
+        "emptyTitle": "I tuoi macro appariranno qui",
+        "emptyHelp": "Crea una macro per le azioni che ripeti più spesso.",
+        "loadFailed": "Im possibile caricare le macro.",
+        "retry": "Riprova il caricamento",
+        "discardTitle": "Scarta le modifiche non salvatate?",
+        "discardHelp": "Le modifiche a questa macro andranno persese.",
+        "discard": "Scarta le modifiche",
+        "deleteTitle": "Eliminare «{{name}}»?",
+        "deleteHelp": "La macro verrà rimossa dal tuo elenco."
+      }
     },
     "common": {
       "deleteFailed": "Eliminazione fallita",
@@ -137,7 +302,39 @@
       "autoApproveHelp": "L'IA potrà eseguire qualsiasi comando sul tuo computer senza chiedere autorizzazione",
       "allowedCommands": "Comandi consentiti (auto-approve)",
       "patternsHelp": "Pattern regex di comandi che l'IA può eseguire senza conferma",
-      "patternPlaceholder": "Pattern regex (es. ^dir$ o ^ipconfig)"
+      "patternPlaceholder": "Pattern regex (es. ^dir$ o ^ipconfig)",
+      "layout": {
+        "confirmAutoTitle": "Abilitare l'esecuzione senza conferma?",
+        "confirmAutoHelp": "L'IA sarà in grado di eseguire comandi sul tuo PC senza chiedere permesso, inclusi comandi che modificano o eliminano file.",
+        "confirmAutoEnable": "Abilita",
+        "intro": "Scegli cosa può fare Chatter su questo computer e quando deve chiedere conferma. Le modifiche vengono applicate immediatamente.",
+        "files": "File e cartelle",
+        "browse": "Sfoglia file e cartelle",
+        "browseHelp": "Consenti all'IA di elencare le cartelle e navigare nel file-system. Questa impostazione non concede l'accesso al contenuto dei file.",
+        "read": "Leggi i file senza conferma",
+        "readHelp": "Consenti all'IA di leggere il contenuto dei file senza chiedere. La scrittura dei file richiede comunque la conferma.",
+        "execution": "Esecuzione dei comandi",
+        "auto": "Esegui tutti i comandi senza conferma",
+        "autoHelp": "Salta le richieste di approvazione per i comandi PC. Questo si applica anche ai comandi che modificano o eliminano dati; i blocchi di comando integrati rimangono applicati.",
+        "exceptions": "Comandi senza conferma",
+        "exceptionsHelp": "Le regole aggiunte qui o tramite \"Sempre consenti\" saltano la conferma dei comandi corrispondenti; altri comandi continuano a chiederla.",
+        "allApproved": "Tutti i comandi PC sono già approvati automaticamente. Queste regole vengono conservate e verranno applicate quando questa impostazione verrà disattivata.",
+        "empty": "Nessuna eccezione. Aggiungi un comando che desideri approvare automaticamente.",
+        "matchMode": "Modalità di corrispondenza comandi",
+        "exact": "Comando esatto",
+        "regex": "Espressione regolare",
+        "command": "Comando",
+        "pattern": "Espressione regolare",
+        "commandPlaceholder": "Ad esempio: git status",
+        "regexPlaceholder": "Ad esempio: ^git status$",
+        "exactHelp": "L'intero comando deve corrispondere, inclusi argomenti e maiuscole/minuscole. Viene salvato come un'espressione regolare ancorata e formattata.",
+        "regexHelp": "Avanato: una corrispondenza ovunque nel comando salta la conferma. Usa ^ e $ per far corrispondere l'intero comando. Le regole salvate vengono visualizzate come espressioni regolari.",
+        "invalidRegex": "Espressione regolare non valida. Controlla il pattern.",
+        "duplicate": "Questa regola esiste già.",
+        "saveFailed": "Impossibile salvare la modifica. Riprova.",
+        "loadFailed": "Impossibile caricare i permessi del PC.",
+        "retry": "Riprova"
+      }
     },
     "ssh": {
       "fillRequired": "Inserisci nome e chiave pubblica",
@@ -159,7 +356,11 @@
       "deleteTitle": "Eliminare la chiave SSH?",
       "deleteMessage": "Questa chiave verrà eliminata. Se è selezionata come chiave predefinita per un server, il collegamento verrà reimpostato.",
       "fullPair": "coppia completa",
-      "publicOnly": "solo pubblica"
+      "publicOnly": "solo pubblica",
+      "addKey": "Aggiungi chiave",
+      "keyPairLabel": "Pubblica e privata",
+      "publicOnlyLabel": "Solo pubblico",
+      "emptyKeys": "Nessuna chiave salvata ancora."
     },
     "server": {
       "fillRequired": "Inserisci nome, host e utente",
@@ -201,7 +402,52 @@
       "deleteMessage": "Tutte le policy e le impostazioni del server verranno eliminate.",
       "commandsTitle": "Comandi: {{count}} — {{preview}}",
       "sudoCleared": "Password sudo rimossa",
-      "sudoClearFailed": "Impossibile rimuovere la password sudo"
+      "sudoClearFailed": "Impossibile rimuovere la password sudo",
+      "layout": {
+        "keyHelp": "Utilizza la chiave selezionata per accedere. Quando disattivata, la chiave rimane disponibile per l'installazione sul server.",
+        "clearSudo": "Rimuovi password di sudo",
+        "intro": "Connessioni SSH che Chatter può utilizzare per lavorare con i tuoi server.",
+        "add": "Aggiungi server",
+        "edit": "Modifica server",
+        "search": "Trova un server",
+        "emptyList": "Nessun server ancora aggiunto.",
+        "emptyTitle": "I tuoi server in un'unica posto",
+        "emptyHelp": "Aggiungi una connessione SSH. Potrai chiedere a Chatter di lavorare con questo server.",
+        "connection": "Connessione",
+        "authentication": "Autenticazione",
+        "permissions": "Permessi dei comandi",
+        "loginMethod": "Metodo di accesso",
+        "sshLogin": "Chiave SSH",
+        "passwordLogin": "Password",
+        "sudo": "Password sudo",
+        "configured": "Salvato",
+        "notConfigured": "Non salvato",
+        "keepPassword": "Mantieni la password salvata",
+        "passwordPlaceholder": "Password di connessione",
+        "keepSecrets": "Lascia i campi della password vuoti per mantenere i valori salvati.",
+        "credentialsHelp": "Inserisci una password o seleziona una chiave SSH con parte privata per accedere.",
+        "savedKey": "Chiave SSH salvata",
+        "clearOnSave": "La password sudo salvata verrà rimosa al salvataggio delle modifiche.",
+        "undoClear": "Mantieni la password sudo",
+        "working": "Controllo in…",
+        "testHelp": "Controlla la connessione SSH salvata. Le modifiche non salvate non vengono utilizzate.",
+        "automatic": "I comandi vengono eseguiti senza conferma.",
+        "ask": "I comandi richiedono conferma, tranne per le regole salvate.",
+        "policiesHelp": "Le regole salvate tramite \"Consenti sempre\" saltano la conferma per i comandi corrispondenti. I modelli sono espressioni regolari.",
+        "noPolicies": "Nessuna ecce ai comandi per questo server.",
+        "allApproved": "L'approvazione automatica è abilitata per tutti i comandi. Le regole singole vengono conservate per in caso di disattivazione.",
+        "keysFailed": "Imposs caricare le chiavi SSH. La chiave salvata è stata mantenuta.",
+        "policiesFailed": "Impossibile caricare le regole del comando.",
+        "loadFailed": "Impossibile caricare i server.",
+        "retry": "Riprova",
+        "invalidPort": "Inserisci una porta numero intera tra 1 e 65535.",
+        "discardTitle": "Scartare le modifiche non salvate?",
+        "discardHelp": "Le modifiche a questa connessione andranno persese.",
+        "discard": "Scarta modifiche",
+        "autoTitle": "Abilita l'esecuzione senza conferma?",
+        "autoHelp": "L'IA potrà eseguire comandi su questo server senza chiedere il permesso, inclusi comandi che modificano o eliminano file.",
+        "enable": "Abilita"
+      }
     },
     "browserDownload": {
       "confirmTitle": "Scaricare il file?",
@@ -253,7 +499,42 @@
       "commandCount_few": "{{count}} comandi",
       "commandCount_many": "{{count}} comandi",
       "commandCount_other": "{{count}} comandi",
-      "commandCount": "{{count}} comandi"
+      "commandCount": "{{count}} comandi",
+      "library": {
+        "intro": "Workflow salvati per il bot, dalla preparazione di un report alla configurazione di un'app. Descrivi un processo una volta e riutilizzalo nelle tue chat.",
+        "howTo": "Istruzioni sull'utilizzo",
+        "howToBody": "Salva passaggi, condizioni e il risultato atteso. Il bot può trovare e leggere le tue istruzioni per seguirle durante un compito. Il salvataggio non avvia nulla. Questi descrivono un workflow separato dalle impostazioni di personalità del bot.",
+        "example": "Ad esempio, salva 'Report settimanale', poi chiedi in chat: 'Prepara un report seguendo le mie istruzioni del Report settimanale'.",
+        "list": "Libreria istruzioni",
+        "search": "Trova un'istruzione",
+        "create": "Crea iststruzione",
+        "edit": "Modifica iststruzione",
+        "loadFailed": "Impossibile caricare le istruzioni.",
+        "retry": "Riprova",
+        "loading": "Caricamento istruzioni...",
+        "emptyMine": "Non hai ancora istruzioni.",
+        "emptyPublic": "Non sono presenti istruzioni pubbliche.",
+        "emptyTitle": "Salva un workflow che riutil spesso",
+        "emptyHelp": "Crea un'istruzione passo dopo passo o salvane una dalla biblioteca pubblica.",
+        "titlePlaceholder": "Ad esempio, Report settimanale",
+        "contentPlaceholder": "Quando dovrebbe essere usata questa istruzione?\n\n1. Quali informazioni bisogna raccogliere?\n2. Cosa bisogna fare e controllare?\n3. Come dovrebbe apparire il risultato?",
+        "write": "Scrivi",
+        "preview": "Anteprima",
+        "previewEmpty": "Aggiungi testo per anteprimizzare l'istruzione.",
+        "editorHelp": "Descrivi i passaggi, le condizioni importanti e il risultato atteso. Sono supportati titoli, elenchi e altre formattazioni Markdown.",
+        "editingPublic": "Stai modificando un'istruzione pubblica. Tutti gli utenti di questo server vedranno le tue modifiche.",
+        "publicSource": "Istruzione pubblica",
+        "updated": "Aggiornato",
+        "publicHelp": "Salva questa istruzione nella tua libreria affinché il bot possa trovarla. Puoi modificare la tua copia indipemente dall'originale.",
+        "discardTitle": "Scarta le modifiche?",
+        "discardHelp": "Le modifiche a questa istruzione andranno persese.",
+        "discard": "Scarta le modifiche",
+        "publishTitle": "Pubblicare questa istruzione?",
+        "publishHelp": "Verr creata una copia pubblica. Il testo sarà disponibile a tutti gli utenti di questo server. Controlla che non vi siano informazioni personali o segreti.",
+        "deleteTitle": "Eliminare l'istruzione?",
+        "deleteHelp": "Questa istruzione verrà rimossa dalla tua libreria.",
+        "deletePublicHelp": "L'istruzione pubblica verrà rimossa per tutti gli utenti. Le copie personali salvate in precedenza rimarranno."
+      }
     },
     "mail": {
       "title": "Account email",
@@ -506,7 +787,9 @@
       "billing": "Fatturazione",
       "about": "Informazioni",
       "data": "Dati",
-      "admin": "Amministratore"
+      "admin": "Amministratore",
+      "personas": "Personas",
+      "agents": "Agenti"
     },
     "browser": {
       "help": "Scegli quali azioni del browser eseguite dall’IA richiedono la tua approvazione. Le azioni manuali non vengono modificate.",
@@ -603,6 +886,35 @@
           "nameRequired": "Inserisci un nome per la persona",
           "delete": "Impossibile eliminare la persona"
         }
+      },
+      "redesign": {
+        "showMore_one": "Mostra altri {{count}} persona",
+        "showMore_other": "Mostra altri {{count}} persona",
+        "showLess": "Mostra meno",
+        "intro": "Un persona rappresenta il tuo nome, la tua identità e le tue preferenze di conversazione. I dettagli dell'account vengono gestiti separatamente.",
+        "personas": "Persona",
+        "selectHelp": "Utilizzato nelle chat senza una selezione separata della persona.",
+        "default": "Selezionato",
+        "persona": "Persona",
+        "addPersona": "Aggiungi persona",
+        "newPersona": "Nuova persona",
+        "editPersona": "Impostazioni persona",
+        "makeDefault": "Usa come predefinito",
+        "defaultSaved": "Persona selezionata",
+        "chatName": "Nome in chat",
+        "description": "Descrizione della persona",
+        "identityHelp": "Questo nome e questo avatar appaiono nei messaggi utilizzando questa persona. Il nome del tuo account rimane invariato.",
+        "memoryHelp": "Fatti su questo persona che Chatter utilizza nelle conversazioni.",
+        "unsaved": "Modifiche non salvate",
+        "primary": "Primario",
+        "primaryHelp": "Il persona originale dell'account. Può essere modificato ma non eliminato.",
+        "accountNameHelp": "Visibile all'amministratore del server. Non modifica i nomi o le impostazioni dei tuoi persona.",
+        "discardTitle": "Cambiare persona?",
+        "discardHelp": "Le modifiche non salvate alla persona attuale andanno persese.",
+        "discard": "Passa senza salvare",
+        "deleteTitle": "Eliminare la persona?",
+        "deleteHelp": "La persona “{{name}}” verrà eliminata.",
+        "saved": "Persona salvata"
       }
     },
     "prompt": {
@@ -675,6 +987,17 @@
         "scenario": "Situazione e contesto...",
         "examples": "Esempio di dialogo...",
         "other": "Eventuali istruzioni rimanenti..."
+      },
+      "catalog": {
+        "help": "Il carattere e lo stile di comunicazione del bot.",
+        "search": "Trova un prompt",
+        "create": "Crea prompt",
+        "builtIn": "Predefinito",
+        "draft": "Bozza",
+        "newHelp": "Imposta il nome, la descrizione e il carattere del nuovo bot nell'editor.",
+        "discardTitle": "Modifiche non salv",
+        "discardHelp": "Passare al prompt? Le modifiche non salvate e il suggerimento generato dall'IA verranno eliminati.",
+        "discard": "Passa al prompt"
       }
     },
     "voice": {
@@ -696,7 +1019,19 @@
       "recognitionSourceLocalHint": "Whisper locale",
       "recognitionSourceServer": "Sul server",
       "recognitionSourceServerReady": "Disponibile · {{model}}",
-      "recognitionSourceServerUnavailable": "Non disponibile o non configurato"
+      "recognitionSourceServerUnavailable": "Non disponibile o non configurato",
+      "activation": {
+        "title": "Attivazione vocale",
+        "enabled": "Rispondi a una parola di attiv",
+        "help": "Funziona localmente su questo computer. Disattivandolo interrompi l'ascolto del microfono per l'attivazione.",
+        "options": "Impostazioni attivazione vocale",
+        "names": "Nomi e saluti",
+        "phrases": "Frasi aggiuntive",
+        "sensitivity": "Sensibilità",
+        "strict": "Meno attivazioni involontarie",
+        "sensitive": "Più facile da attivare",
+        "sensitivityHelp": "Una sensibilità maggiore rileva più facilmente le parole di attivazione, ma potrebbe causare più attivazioni errate. Il 50% è l'impostazione precedente."
+      }
     },
     "restrictions": {
       "help": "Limita l’accesso ai tuoi dati e strumenti. Le modifiche vengono salvate subito.",
@@ -722,12 +1057,35 @@
       "noWakeWordHelp": "Interrompi l'ascolto delle parole di attivazione (Alexa, Hey Jarvis, Hey Mycroft, Hey Rhasspy). Il flusso del microfono verrà disattivato.",
       "injectionProtection": "Protezione dall'iniezione di prompt",
       "injectionProtectionHint": "Aiuta a distinguere le tue istruzioni da quelle contenute in siti web, e-mail e file.",
-      "injectionProtectionHelp": "Se disattivato, il protocollo di protezione e i marcatori di contenuto non attendibile non vengono inviati al modello. Le istruzioni presenti in siti web, email e file possono influenzare le risposte e le chiamate agli strumenti. I permessi di accesso e le restrizioni del server restano applicati. Le singole chat possono sovrascrivere questa impostazione."
+      "injectionProtectionHelp": "Se disattivato, il protocollo di protezione e i marcatori di contenuto non attendibile non vengono inviati al modello. Le istruzioni presenti in siti web, email e file possono influenzare le risposte e le chiamate agli strumenti. I permessi di accesso e le restrizioni del server restano applicati. Le singole chat possono sovrascrivere questa impostazione.",
+      "hidePixelAvatar": "Nascondi l'avatar pixel",
+      "hidePixelAvatarHelp": "Sostituisce il volto con l'iniziale del bot. Il bot non riceve strumenti o istruzioni per l'avatar. Le immagini dei prompt personalizzate rimangono visibili.",
+      "layout": {
+        "agents": "Agent",
+        "avatar": "Avatar",
+        "inheritedAvatar": "Il controllo non è disponibile quando l'avatar a pixel è nascosto",
+        "privacy": "Dati personali",
+        "access": "Computer e rete",
+        "helpers": "Agenti e avatar",
+        "security": "Protezione",
+        "inheritedFull": "Già imposta dal blocco degli strumenti desktop",
+        "inheritedGuest": "Già imposta dalla Modalità Ospite",
+        "details": "Informazioni su questa protezione",
+        "loadFailed": "Impossibile caricare le restrizioni. Riprova per visualizzare le impostazioni attuali.",
+        "retry": "Riprova il caricamento"
+      }
     },
     "models": {
       "title": "Impostazioni modelli",
       "help": "Parametri di generazione per ogni modello. \"Auto\" per usare il default del server.",
-      "empty": "Nessun modello personalizzato. Aggiungi modelli tramite MODELS_MANUAL sul server."
+      "empty": "Nessun modello personalizzato. Aggiungi modelli tramite MODELS_MANUAL sul server.",
+      "search": "Trova un modello",
+      "noResults": "Nessun modello trovato.",
+      "defaults": "Impostazioni predefinite",
+      "changed_one": "{{count}} parametro modificato",
+      "changed_other": "{{count}} parametri modificati",
+      "reset": "Ripristina alle impostazioni predefinite",
+      "noParameters": "Nessun parametro di generazione disponibile per questo modello."
     },
     "app": {
       "interfaceLanguage": "Lingua dell'interfaccia",
@@ -760,7 +1118,29 @@
       "desktopSearch": "Usa il browser desktop per la ricerca web",
       "desktopSearchHelp": "Consenti a search_web di usare il browser desktop locale quando quel provider è selezionato.",
       "desktopReader": "Usa il browser desktop per l'analisi delle pagine",
-      "desktopReaderHelp": "Consenti a read_webpage di analizzare le pagine nel browser desktop locale. Se disattivato, il backend può utilizzare un altro lettore configurato."
+      "desktopReaderHelp": "Consenti a read_webpage di analizzare le pagine nel browser desktop locale. Se disattivato, il backend può utilizzare un altro lettore configurato.",
+      "layout": {
+        "appearance": "Aspetto",
+        "chat": "Chat",
+        "history": "Cronologia chat visibile",
+        "renderHelp": "L'impostazione 'Low' mostra meno messaggi vecchi all'inizio. Puoi visualizzare il resto. Questa impostazione si applica quando apri una chat.",
+        "tokensHelp": "Mostra l'utilizzo dei token nella chat.",
+        "webTitle": "Ricerca e lettura pagine su questo PC",
+        "webQuotaHelp": "Mentre Chatter è in esecuzione, le ricerche e la lettura delle pagine tramite Chromium in background non vengono conteggiate nel limite della quota mensile. Attiva le opzioni desiderate qui sotto. Puoi arrestare le attività in background nel task manager di Chatter.",
+        "desktopBrowserConcurrency": "Attività concorrenti",
+        "desktopBrowserConcurrencyHelp": "Quante ricerche e letture di pagine possono essereite contemporaneamente. Una finestra CAPTCHA occupa un posto finché non viene chiusa.",
+        "desktopSearch": "Cerca utilizzando il browser su questo PC",
+        "desktopSearchHelp": "Utilizza il browser del computer quando viene selezionata la navigazione desktop per la ricerca.",
+        "desktopReader": "Leggi le pagine utilizzando il browser su questo PC",
+        "desktopReaderHelp": "Consente la lettura delle pagine con il browser di questo computer. Se disattivata,ovrebbe potrebbe essere utilizzato un altro lettore configurato."
+      },
+      "themeHour": "Ore",
+      "themeMinute": "Minuti",
+      "themeSchedule": "Programmato",
+      "themeLightFrom": "Luce da",
+      "themeDarkFrom": "Scuro da",
+      "themeScheduleHelp": "Utilizza l'orario locale del computer. Se entrambi gli orari coincidono, la modalità scura rimane attiva tutto il giorno.",
+      "attachmentAuto": "Auto · 90% del contesto"
     },
     "toasts": {
       "saveSettingFailed": "Impossibile salvare l'impostazione",
@@ -975,7 +1355,25 @@
       },
       "openCharacter": "Apri personaggio",
       "openPersonas": "Apri personas",
-      "openChat": "Apri chat"
+      "openChat": "Apri chat",
+      "individualImports": "Importa singoli elementi"
+    },
+    "avatar": {
+      "showShort": "Mostra avatar",
+      "controlShort": "Controllo bot",
+      "menu": "Avatar pixel",
+      "show": "Mostra avatar",
+      "control": "Il bot controlla l'avatar",
+      "hiddenHint": "Viene mostrata l'iniziale del bot invece dell'avatar pixel. Ripristina il volto qui o nelle impostazioni di restrizione.",
+      "menuHint": "Queste impostazioni si applicano al tuo account. Le immagini dei prompt rimangono visibili."
+    },
+    "agents": {
+      "help": "Impostazioni per gli assist a cui Chatter delega singoli task.",
+      "specialists": "Agenti specializzati",
+      "specialistsHelp": "Assist integrati con compiti specifici. Chatter li chiama durante il lavoro.",
+      "loadFailed": "Impossibile caricare le impostazioni dell'agente.",
+      "catalogFailed": "Impossibile caricare il catalogo degli agent.",
+      "empty": "Non sono ancora registrati agent specializzati su questo server."
     }
   },
   "chat": {
@@ -1031,7 +1429,8 @@
       "followUpBrief": "Cos'altro vorresti chiarire? Facoltativo",
       "followUpBriefPlaceholder": "Ad esempio: altre domande sullo stile del dialogo. Lascia vuoto per consentire al modello di scegliere gli argomenti.",
       "startFollowUp": "Crea domande aggiuntive",
-      "followUpHelp": "Un nuovo ciclo che esplora le lacune utilizzando domande, risposte e contesto salvato precedenti. Il questionario precedente rimane nell'elenco; le istruzioni finali considerano tutti i cicli. Utilizza la quota del tuo modello."
+      "followUpHelp": "Un nuovo ciclo che esplora le lacune utilizzando domande, risposte e contesto salvato precedenti. Il questionario precedente rimane nell'elenco; le istruzioni finali considerano tutti i cicli. Utilizza la quota del tuo modello.",
+      "actionsSummary": "Azioni · {{count}}"
     },
     "reasoning": {
       "auto": "Auto",
@@ -1084,7 +1483,14 @@
         "moveTo": "Sposta nella cartella"
       },
       "notificationsOn": "Notifiche attive",
-      "notificationsOff": "Notifiche disattivate"
+      "notificationsOff": "Notifiche disattivate",
+      "dateGroups": {
+        "today": "Oggi",
+        "yesterday": "Ieri",
+        "thisWeek": "Questa settimana",
+        "thisMonth": "Questo mese",
+        "older": "Precedenti"
+      }
     },
     "empty": {
       "selectOrCreate": "Seleziona una chat o creane una nuova"
@@ -1129,7 +1535,8 @@
       "reasoning": "Ragionamento",
       "prompt": "prompt",
       "providerTooltip": "Ultima richiesta al provider\nInput: {{input}} tk\nCache hit: {{cacheHit}} tk\nCache miss: {{cacheMiss}} tk\nOutput: {{output}} tk\nRagionamento: {{reasoning}} tk\nModello: {{model}}",
-      "cached": "in cache"
+      "cached": "in cache",
+      "cache": "Cache"
     },
     "macro": {
       "title": "Proposta di macro",
@@ -1200,7 +1607,9 @@
       "normalTitle": "Modalità dado d20. Clicca per cambiare modalità."
     },
     "composer": {
-      "placeholder": "Inserisci un messaggio..."
+      "placeholder": "Inserisci un messaggio...",
+      "activityManager": "Gestore attività",
+      "keyboardHint": "Invio per inviare · Shift + Invio per una nuova riga"
     },
     "deleteChat": {
       "title": "Eliminare la chat?",
@@ -1454,7 +1863,8 @@
           "deleteSpace": "Impossibile eliminare la memoria",
           "updateRecord": "Impossibile aggiornare la memoria",
           "deleteRecord": "Impossibile eliminare la memoria"
-        }
+        },
+        "preferencesTitle": "Impostazioni di memoria"
       },
       "modeLabel": "Usa memoria",
       "mode": {
@@ -1501,6 +1911,23 @@
     "contextSummary": {
       "title": "Riepilogo della conversazione precedente",
       "meta": "{{count}} messaggi · {{model}}"
+    },
+    "approvals": {
+      "expandDiff": "Espandi modifiche",
+      "queue": "In attesa di approvazione: {{count}}",
+      "commentFor": "Commento di rifiuto: {{title}}",
+      "rejectAndSend": "Rifiuta e invia",
+      "permissions": "Opzioni di permessi",
+      "expandEmail": "Espandi email",
+      "failed": "Impossibile inviare la decisione"
+    },
+    "activityManager": {
+      "empty": "Le attività in background per questa chat appariranno qui.",
+      "working": "In attività",
+      "idle": "Inattivo",
+      "challenge": "Richiede attenzione",
+      "stop": "Ferma: {{title}}",
+      "actionFailed": "Impossibile completare l'azione"
     }
   },
   "promptSelector": {
@@ -1644,7 +2071,8 @@
       "testRoomRedirect": "Reindirizzato dalla stanza",
       "testNewChat": "Nuova chat creata",
       "testSilent": "L'attività non ha prodotto nulla da segnalare (risposta vuota).",
-      "testFailed": "Impossibile eseguire il test"
+      "testFailed": "Impossibile eseguire il test",
+      "loadMore": "Carica altri"
     },
     "browser": {
       "title": "Browser",
@@ -1833,7 +2261,8 @@
       "desktopNote": "Ricerca e lettura pagine consumano questo limite solo quando l'app è spenta",
       "buy": "Acquista altre generazioni",
       "buyHint": "L'acquisto di generazioni extra arriverà presto"
-    }
+    },
+    "caption": "Quota"
   },
   "forcePassword": {
     "title": "Cambia password",
@@ -2071,5 +2500,15 @@
   },
   "messageImages": {
     "loadFailed": "Impossibile caricare questa immagine"
+  },
+  "reasoningDisclosure": {
+    "thinking": "Pensando…"
+  },
+  "workLog": {
+    "title": "Registro del lavoro",
+    "actions_one": "{{count}} azione",
+    "actions_other": "{{count}} azioni",
+    "errors_one": "{{count}} errore",
+    "errors_other": "{{count}} errori"
   }
 }

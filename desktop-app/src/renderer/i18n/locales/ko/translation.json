@@ -1,5 +1,127 @@
 {
-  "toolActivity": {"labels": {"readPage": "페이지 읽기"}, "names": {"read_webpage": "페이지 읽기", "web_reader": "페이지 읽기"}},
+  "toolActivity": {
+    "labels": {
+      "readPage": "페이지 읽기",
+      "search": "웹 검색",
+      "saveNote": "노트 저장",
+      "noteSaved": "노트 저장됨",
+      "listNotes": "노트 찾기",
+      "readNote": "노트 읽기",
+      "deleteNote": "노트 삭제",
+      "readFile": "파일 읽기",
+      "writeFile": "파일 쓰기",
+      "editFile": "파일 편집",
+      "searchFiles": "파일 검색",
+      "listFiles": "파일 둘러보기",
+      "command": "컴퓨터 명령",
+      "ssh": "서버 명령",
+      "macro": "매크로 실행",
+      "browser": "브라우저 작업",
+      "desktop": "앱 작업",
+      "task": "작업 생성",
+      "image": "이미지 생성",
+      "agent": "에이전트 작업",
+      "avatar": "아바타 상태"
+    },
+    "names": {
+      "read_webpage": "페이지 읽기",
+      "web_reader": "페이지 읽기",
+      "add_blocks": "블록 추가",
+      "attach_file_to_response": "파일 첨부",
+      "browser_control": "브라우저 제어",
+      "capture_screen": "화면 캡처",
+      "capture_webcam": "카메라 캡처",
+      "change_server_user_password": "서버 비밀번호 변경",
+      "check_emails": "이메일 확인",
+      "control_smart_home": "스마트 홈 제어",
+      "convert_video": "동영상 변환",
+      "create_pixel_image": "픽셀 아트 만들기",
+      "create_server_user": "서버 사용자 만들기",
+      "delete_from_cold_memory": "메모리에서 삭제",
+      "delete_my_task": "작업 삭제",
+      "delete_note": "노트 삭제",
+      "describe_image": "이미지 분석",
+      "desktop_action": "앱 작업",
+      "edit_file_lines": "파일 편집",
+      "escalate_to_pro": "고급 모델로 전환",
+      "execute_macro": "매크로 실행",
+      "execute_pc_command": "컴퓨터 명령",
+      "execute_ssh_command": "서버 명령",
+      "execute_visual_click": "화면 클릭",
+      "explore_fs": "파일 탐색",
+      "finalize_issue": "이슈 마무리",
+      "find_transit_route": "경로 찾기",
+      "finish_task": "작업 완료",
+      "generate_image": "이미지 생성",
+      "get_avatar_state": "아바타 상태",
+      "get_exchange_rates": "환율",
+      "get_file_info": "파일 정보",
+      "get_map_pins": "지도 핀",
+      "get_my_tasks": "작업 목록",
+      "get_smart_devices": "스마트 홈 기기",
+      "get_user_time": "현재 시간",
+      "google_ai": "Google AI 쿼리",
+      "install_ssh_public_key": "SSH 키 설치",
+      "invoke_subagent": "에이전트 호출",
+      "list_devops_runbooks": "서버 런북",
+      "list_devops_servers": "서버 목록",
+      "list_directory": "디렉터리 내용",
+      "list_mail_accounts": "이메일 계정",
+      "list_monitors": "모니터 목록",
+      "list_my_macros": "매크로 목록",
+      "list_my_notes": "노트 목록",
+      "list_recent_chats": "최근 채팅",
+      "map_control": "지도 컨트롤",
+      "newspaper_issue_contents": "호 내용",
+      "newspapers_list": "신문 목록",
+      "random_roll": "주사위 굴리기",
+      "read_attachment_file": "첨부 파일 읽기",
+      "read_chat_context": "채팅 컨텍스트 읽기",
+      "read_devops_runbook": "서버 런북 읽기",
+      "read_email_attachment": "이메일 첨부 파일 읽기",
+      "read_email_content": "이메일 읽기",
+      "read_file": "파일 읽기",
+      "read_memory": "메모리 읽기",
+      "read_newspaper_item": "기사 읽기",
+      "read_note": "노트 읽기",
+      "save_note": "노트 저장",
+      "save_to_cold_memory": "메모리에 저장",
+      "schedule_task": "작업 예약",
+      "search_attachment_file": "첨부파일 검색",
+      "search_chat_history": "채팅 기록 검색",
+      "search_cold_memory": "메모리 검색",
+      "search_file_keywords": "파일 검색",
+      "search_nearby": "주변 장소 찾기",
+      "search_web": "웹 검색",
+      "send_email": "이메일 보내기",
+      "set_display_state": "아바타 업데이트",
+      "set_user_timezone": "시간대 설정",
+      "spawn_subagent": "에이전트 시작",
+      "suggest_chat_link": "채팅 링크",
+      "suggest_devops_runbook": "서버 런북 제안",
+      "suggest_macro": "매크로 제안",
+      "suggest_server_creds_update": "서버 액세스 업데이트",
+      "update_core_memory": "핵심 메모리 업데이트",
+      "update_my_task": "작업 업데이트",
+      "write_file": "파일 쓰기",
+      "youtube_music_control": "음악 제어",
+      "web_search": "웹 검색",
+      "image_gen": "이미지 생성",
+      "create_task": "작업 예약",
+      "set_avatar_mood": "아바타 업데이트",
+      "set_avatar_emotion": "아바타 업데이트"
+    },
+    "failed": "{{action}} — 오류",
+    "returned": "호출 완료, 도구 응답 수신",
+    "unknown": "결과가 저장되지 않음",
+    "error": "도구 오류",
+    "noResult": "이 호출의 결과를 사용할 수 없습니다.",
+    "collapse": "작업 접기",
+    "more": "작업 {{count}}개 더 보기",
+    "internal": "내부 작업 · {{count}}",
+    "more_one": "작업 {{count}}개 더",
+    "more_other": "{{count}}개 추가 작업"
+  },
   "advanced": {
     "smart": {
       "authorizeUrl": "https://oauth.yandex.ru/authorize?response_type=token&client_id=YOUR_CLIENT_ID",
@@ -79,6 +201,17 @@
         "step5": "5단계.",
         "step5Text": "동기화를 클릭하세요. Zigbee2MQTT에서 페어링된 기기가 아래 목록에 나타납니다.",
         "note": "참고: MQTT 브로커는 Chatter 백엔드를 실행하는 서버에서 접근 가능해야 합니다. 브로커에 인증이 필요한 경우 URL에 포함하세요: mqtt://user:password@host:port"
+      },
+      "layout": {
+        "title": "스마트 홈",
+        "connections": "연결",
+        "configured": "구성됨",
+        "notConfigured": "구성되지 않음",
+        "configure": "구성",
+        "collapse": "접기",
+        "saveBroker": "브로커 주소 저장",
+        "empty": "기기를 확인하려면 Yandex 또는 Zigbee2MQTT를 연결하세요.",
+        "noDetails": "추가 세부 정보가 없습니다."
       }
     },
     "macros": {
@@ -108,7 +241,39 @@
       "enabled": "활성화됨",
       "pinned": "고정됨 (AI가 항상 이름을 봄)",
       "executionMode": "실행 모드",
-      "create": "매크로 생성"
+      "create": "매크로 생성",
+      "catalog": {
+        "pinnedLabel": "봇에 고정",
+        "pinnedState": "고정됨",
+        "disabledState": "비활성화됨",
+        "help": "일상 작업을 위한 저장된 명령입니다. 매크로를 선택해 명령을 확인, 편집하거나 실행하세요.",
+        "search": "매크로 찾기",
+        "list": "매크로 목록",
+        "all": "전체",
+        "pinned": "고정됨",
+        "disabled": "비활성화됨",
+        "defaultName": "매크로 #{{number}}",
+        "edit": "매크로 편집",
+        "commandCount_one": "명령 {{count}}개",
+        "commandCount_other": "{{count}}개 명령",
+        "sequence": "실행 순서",
+        "available": "봇에서 사용 가능",
+        "availableHelp": "봇이 이 매크로를 찾아 실행할 수 있습니다. 이 스위치와 관계없이 수동으로 실행할 수 있습니다.",
+        "pinnedHelp": "작업을 더 쉽게 찾을 수 있도록 해당 이름이 항상 봇의 컨텍스트에 포함됩니다.",
+        "suggestionReady": "초안에 이름과 설명을 추가했습니다. 적합하면 저장하세요.",
+        "running": "실행 중…",
+        "lastOutput": "마지막 실행 출력",
+        "noOutput": "명령이 텍스트 출력 없이 완료되었습니다.",
+        "emptyTitle": "매크로가 여기에 표시됩니다",
+        "emptyHelp": "자주 반복하는 작업을 위한 매크로를 만드세요.",
+        "loadFailed": "매크로를 불러오지 못했습니다.",
+        "retry": "다시 불러오기",
+        "discardTitle": "변경 사항을 저장하지 않고 나갈까요?",
+        "discardHelp": "이 매크로의 편집 내용이 손실됩니다.",
+        "discard": "변경 사항 버리기",
+        "deleteTitle": "“{{name}}”을(를) 삭제할까요?",
+        "deleteHelp": "매크로가 목록에서 제거됩니다."
+      }
     },
     "common": {
       "deleteFailed": "삭제 실패",
@@ -137,7 +302,39 @@
       "autoApproveHelp": "AI가 권한 요청 없이 컴퓨터에서 모든 명령을 실행할 수 있습니다.",
       "allowedCommands": "허용된 명령어 (자동 승인)",
       "patternsHelp": "AI가 확인 없이 실행할 수 있는 명령어의 Regex 패턴",
-      "patternPlaceholder": "Regex 패턴 (예: ^dir$ 또는 ^ipconfig)"
+      "patternPlaceholder": "Regex 패턴 (예: ^dir$ 또는 ^ipconfig)",
+      "layout": {
+        "confirmAutoTitle": "확인 없이 실행하도록 설정할까요?",
+        "confirmAutoHelp": "AI가 파일을 수정하거나 삭제하는 명령을 포함하여, 확인 없이 PC에서 명령을 실행할 수 있게 됩니다.",
+        "confirmAutoEnable": "활성화",
+        "intro": "이 컴퓨터에서 Chatter가 수행할 수 있는 작업과 확인을 요청해야 하는 시점을 선택하세요. 변경 사항은 즉시 적용됩니다.",
+        "files": "파일 및 폴더",
+        "browse": "파일 및 폴더 찾아보기",
+        "browseHelp": "AI가 폴더를 나열하고 파일 시스템을 탐색하도록 허용합니다. 이 설정은 파일 내용에 대한 액세스 권한을 부여하지 않습니다.",
+        "read": "확인 없이 파일 읽기",
+        "readHelp": "AI가 묻지 않고 파일 내용을 읽도록 허용합니다. 파일 쓰기는 여전히 확인이 필요합니다.",
+        "execution": "명령 실행",
+        "auto": "확인 없이 모든 명령 실행",
+        "autoHelp": "PC 명령에 대한 승인 요청을 건너뜁니다. 데이터를 변경하거나 삭제하는 명령에도 적용됩니다. 기본 제공 명령 차단은 계속 적용됩니다.",
+        "exceptions": "확인 없이 실행되는 명령",
+        "exceptionsHelp": "여기에서 추가하거나 “항상 허용”을 통해 추가한 규칙입니다. 일치하는 명령은 확인을 건너뛰고, 다른 명령은 계속 확인을 요청합니다.",
+        "allApproved": "모든 PC 명령이 이미 자동으로 승인되어 있습니다. 이 규칙은 유지되며 해당 설정을 끄면 적용됩니다.",
+        "empty": "아직 예외가 없습니다. 자동으로 승인할 명령을 추가하세요.",
+        "matchMode": "명령 일치",
+        "exact": "정확한 명령",
+        "regex": "정규식",
+        "command": "명령",
+        "pattern": "정규식",
+        "commandPlaceholder": "예: git status",
+        "regexPlaceholder": "예: ^git status$",
+        "exactHelp": "인수와 대소문자를 포함해 전체 명령이 일치해야 합니다. 이스케이프된 앵커 정규식으로 저장됩니다.",
+        "regexHelp": "고급: 명령 어디에서든 일치하면 확인을 건너뜁니다. 전체 명령과 일치시키려면 ^와 $를 사용하세요. 저장된 규칙은 정규식으로 표시됩니다.",
+        "invalidRegex": "잘못된 정규식입니다. 패턴을 확인하세요.",
+        "duplicate": "이 규칙은 이미 존재합니다.",
+        "saveFailed": "변경 사항을 저장할 수 없습니다. 다시 시도해 주세요.",
+        "loadFailed": "PC 권한을 불러올 수 없습니다.",
+        "retry": "다시 시도"
+      }
     },
     "ssh": {
       "fillRequired": "이름과 공개 키를 입력하세요",
@@ -159,7 +356,11 @@
       "deleteTitle": "SSH 키를 삭제하시겠습니까?",
       "deleteMessage": "이 키가 삭제됩니다. 어떤 서버의 기본 키로 선택된 경우 연결이 해제됩니다.",
       "fullPair": "전체 쌍",
-      "publicOnly": "공개 키만"
+      "publicOnly": "공개 키만",
+      "addKey": "키 추가",
+      "keyPairLabel": "공개 키 및 개인 키",
+      "publicOnlyLabel": "공개 키만",
+      "emptyKeys": "아직 저장된 키가 없습니다."
     },
     "server": {
       "fillRequired": "이름, 호스트 및 사용자를 입력하세요",
@@ -201,7 +402,52 @@
       "deleteMessage": "모든 서버 정책과 설정이 삭제됩니다.",
       "commandsTitle": "명령: {{count}} — {{preview}}",
       "sudoCleared": "sudo 비밀번호가 삭제되었습니다",
-      "sudoClearFailed": "sudo 비밀번호를 삭제하지 못했습니다"
+      "sudoClearFailed": "sudo 비밀번호를 삭제하지 못했습니다",
+      "layout": {
+        "keyHelp": "선택한 키로 로그인합니다. 이 옵션을 끄면 해당 키는 서버에 설치하는 데 계속 사용할 수 있습니다.",
+        "clearSudo": "sudo 비밀번호 제거",
+        "intro": "Chatter가 서버 작업에 사용할 수 있는 SSH 연결입니다.",
+        "add": "서버 추가",
+        "edit": "서버 편집",
+        "search": "서버 찾기",
+        "emptyList": "아직 추가된 서버가 없습니다.",
+        "emptyTitle": "서버를 한곳에서 관리하세요",
+        "emptyHelp": "SSH 연결을 추가하세요. 그러면 Chatter에서 이 서버로 작업할 수 있습니다.",
+        "connection": "연결",
+        "authentication": "인증",
+        "permissions": "명령 권한",
+        "loginMethod": "로그인 방법",
+        "sshLogin": "SSH 키",
+        "passwordLogin": "비밀번호",
+        "sudo": "Sudo 비밀번호",
+        "configured": "저장됨",
+        "notConfigured": "저장되지 않음",
+        "keepPassword": "저장된 비밀번호 유지",
+        "passwordPlaceholder": "연결 비밀번호",
+        "keepSecrets": "저장된 값을 유지하려면 비밀번호 필드를 비워 두세요.",
+        "credentialsHelp": "로그인하려면 비밀번호를 입력하거나 개인 키 부분이 포함된 SSH 키를 선택하세요.",
+        "savedKey": "저장된 SSH 키",
+        "clearOnSave": "변경 사항을 저장하면 저장된 sudo 비밀번호가 제거됩니다.",
+        "undoClear": "sudo 비밀번호 유지",
+        "working": "확인 중…",
+        "testHelp": "저장된 SSH 연결을 확인합니다. 저장하지 않은 편집 내용은 사용되지 않습니다.",
+        "automatic": "명령이 확인 없이 실행됩니다.",
+        "ask": "저장된 규칙을 제외하면 명령에 확인이 필요합니다.",
+        "policiesHelp": "“항상 허용”으로 저장된 규칙입니다. 일치하는 명령은 확인을 건너뜁니다. 패턴은 정규식입니다.",
+        "noPolicies": "이 서버에 대한 명령 예외가 없습니다.",
+        "allApproved": "모든 명령에 자동 승인이 사용 설정되어 있습니다. 개별 규칙은 이 기능을 끌 때 사용할 수 있도록 유지됩니다.",
+        "keysFailed": "SSH 키를 불러오지 못했습니다. 저장된 키는 유지되었습니다.",
+        "policiesFailed": "명령 규칙을 불러오지 못했습니다.",
+        "loadFailed": "서버를 불러오지 못했습니다.",
+        "retry": "다시 시도",
+        "invalidPort": "1에서 65535 사이의 정수 포트를 입력하세요.",
+        "discardTitle": "저장하지 않은 변경 사항을 폐기할까요?",
+        "discardHelp": "이 연결에 대한 변경 내용이 손실됩니다.",
+        "discard": "변경 사항 버리기",
+        "autoTitle": "확인 없이 실행을 활성화하시겠습니까?",
+        "autoHelp": "AI가 이 서버에서 묻지 않고 명령을 실행할 수 있으며, 파일을 수정하거나 삭제하는 명령도 포함됩니다.",
+        "enable": "활성화"
+      }
     },
     "browserDownload": {
       "confirmTitle": "파일을 다운로드할까요?",
@@ -253,7 +499,42 @@
       "commandCount_few": "{{count}}개 명령",
       "commandCount_many": "{{count}}개 명령",
       "commandCount_other": "{{count}}개 명령",
-      "commandCount": "{{count}}개 명령"
+      "commandCount": "{{count}}개 명령",
+      "library": {
+        "intro": "보고서 준비부터 앱 구성까지, 봇을 위한 저장된 워크플로입니다. 프로세스를 한 번 설명하고 채팅에서 재사용하세요.",
+        "howTo": "지침 사용 방법",
+        "howToBody": "단계, 조건, 예상 결과를 저장하세요. 봇은 작업 중 지침을 찾아 읽고 따를 수 있습니다. 저장해도 아무것도 실행되지 않습니다. 이 지침은 워크플로를 설명하는 것으로, 봇의 성격 설정과는 별개입니다.",
+        "example": "예를 들어 “주간 보고서”를 저장한 다음 채팅에서 이렇게 요청하세요: “내 주간 보고서 지침에 따라 보고서를 준비해 줘.”",
+        "list": "지침 라이브러리",
+        "search": "지침 찾기",
+        "create": "지침 만들기",
+        "edit": "지침 편집",
+        "loadFailed": "지침을 불러올 수 없습니다.",
+        "retry": "다시 시도",
+        "loading": "지침 불러오는 중…",
+        "emptyMine": "아직 지침이 없습니다.",
+        "emptyPublic": "아직 공개 지침이 없습니다.",
+        "emptyTitle": "자주 쓰는 워크플로 저장하기",
+        "emptyHelp": "단계별 지침을 만들거나 공개 라이브러리에서 하나를 저장하세요.",
+        "titlePlaceholder": "예: 주간 보고서",
+        "contentPlaceholder": "이 지침은 언제 사용해야 하나요?\n\n1. 어떤 정보를 수집해야 하나요?\n2. 무엇을 수행하고 확인해야 하나요?\n3. 결과는 어떤 모습이어야 하나요?",
+        "write": "작성",
+        "preview": "미리 보기",
+        "previewEmpty": "지침을 미리 보려면 텍스트를 추가하세요.",
+        "editorHelp": "단계, 중요한 조건 및 예상 결과를 설명하세요. 제목, 목록 및 기타 Markdown 서식이 지원됩니다.",
+        "editingPublic": "공개 지침을 편집하고 있습니다. 이 서버의 모든 사용자에게 변경 사항이 표시됩니다.",
+        "publicSource": "공개 지침",
+        "updated": "업데이트됨",
+        "publicHelp": "봇이 찾을 수 있도록 이 지침을 내 라이브러리에 저장하세요. 원본과 별도로 사본을 편집할 수 있습니다.",
+        "discardTitle": "변경 사항을 버리시겠습니까?",
+        "discardHelp": "이 지침에 대한 편집 내용이 손실됩니다.",
+        "discard": "변경 사항 버리기",
+        "publishTitle": "이 지침을 게시하시겠습니까?",
+        "publishHelp": "공개 사본이 생성됩니다. 해당 텍스트는 이 서버의 모든 사용자가 볼 수 있습니다. 먼저 개인 정보나 비밀이 포함되어 있는지 확인하세요.",
+        "deleteTitle": "지침을 삭제할까요?",
+        "deleteHelp": "이 지침은 라이브러리에서 제거됩니다.",
+        "deletePublicHelp": "공개 지침은 모든 사용자에게서 제거됩니다. 이전에 저장한 개인 사본은 유지됩니다."
+      }
     },
     "mail": {
       "title": "이메일 계정",
@@ -506,7 +787,9 @@
       "billing": "결제",
       "about": "정보",
       "data": "데이터",
-      "admin": "관리자"
+      "admin": "관리자",
+      "personas": "페르소나",
+      "agents": "에이전트"
     },
     "browser": {
       "help": "AI 브라우저 작업 중 승인이 필요한 항목을 선택하세요. 수동 작업에는 영향을 주지 않습니다.",
@@ -603,6 +886,35 @@
           "nameRequired": "페르소나 이름을 입력하세요.",
           "delete": "페르소나를 삭제할 수 없습니다"
         }
+      },
+      "redesign": {
+        "showMore_one": "페르소나 {{count}}개 더 보기",
+        "showMore_other": "페르소나 {{count}}개 더 보기",
+        "showLess": "접기",
+        "intro": "페르소나는 이름, 정체성 및 대화 환경설정을 의미합니다. 계정 세부정보는 별도로 관리됩니다.",
+        "personas": "페르소나",
+        "selectHelp": "별도로 페르소나를 선택하지 않은 채팅에서 사용됩니다.",
+        "default": "선택됨",
+        "persona": "페르소나",
+        "addPersona": "페르소나 추가",
+        "newPersona": "새 페르소나",
+        "editPersona": "페르소나 설정",
+        "makeDefault": "기본으로 사용",
+        "defaultSaved": "페르소나 선택됨",
+        "chatName": "채팅 이름",
+        "description": "페르소나 설명",
+        "identityHelp": "이 이름과 아바타는 이 페르소나를 사용하는 메시지에 표시됩니다. 계정 이름은 변경되지 않습니다.",
+        "memoryHelp": "Chatter가 대화에서 사용하는 이 페르소나에 관한 정보입니다.",
+        "unsaved": "저장되지 않은 변경 사항",
+        "primary": "기본",
+        "primaryHelp": "원래 계정 페르소나입니다. 편집할 수 있지만 삭제할 수는 없습니다.",
+        "accountNameHelp": "서버 관리자에게 표시됩니다. 페르소나의 이름이나 설정은 변경되지 않습니다.",
+        "discardTitle": "페르소나를 전환할까요?",
+        "discardHelp": "현재 페르소나의 저장되지 않은 변경 사항은 사라집니다.",
+        "discard": "저장하지 않고 전환",
+        "deleteTitle": "페르소나를 삭제할까요?",
+        "deleteHelp": "“{{name}}” 페르소나가 삭제됩니다.",
+        "saved": "페르소나 저장됨"
       }
     },
     "prompt": {
@@ -675,6 +987,17 @@
         "scenario": "상황 및 맥락...",
         "examples": "대화 예시...",
         "other": "기타 남은 지침..."
+      },
+      "catalog": {
+        "help": "봇의 성격과 의사소통 스타일입니다.",
+        "search": "프롬프트 찾기",
+        "create": "프롬프트 만들기",
+        "builtIn": "기본 제공",
+        "draft": "초안",
+        "newHelp": "편집기에서 새 봇의 이름, 설명 및 캐릭터를 설정하세요.",
+        "discardTitle": "저장되지 않은 변경 사항",
+        "discardHelp": "프롬프트를 전환하시겠습니까? 저장되지 않은 편집 내용과 AI가 생성한 제안이 삭제됩니다.",
+        "discard": "프롬프트 전환"
       }
     },
     "voice": {
@@ -696,7 +1019,19 @@
       "recognitionSourceLocalHint": "로컬 Whisper",
       "recognitionSourceServer": "서버에서",
       "recognitionSourceServerReady": "사용 가능 · {{model}}",
-      "recognitionSourceServerUnavailable": "사용할 수 없거나 구성되지 않음"
+      "recognitionSourceServerUnavailable": "사용할 수 없거나 구성되지 않음",
+      "activation": {
+        "title": "음성 활성화",
+        "enabled": "웨이크 워드에 응답",
+        "help": "이 컴퓨터에서 로컬로 실행됩니다. 끄면 활성화를 위한 마이크 수신이 중지됩니다.",
+        "options": "음성 활성화 설정",
+        "names": "이름 및 인사말",
+        "phrases": "추가 문구",
+        "sensitivity": "감도",
+        "strict": "잘못된 활성화 감소",
+        "sensitive": "더 쉽게 활성화",
+        "sensitivityHelp": "감도가 높을수록 호출어를 더 쉽게 인식하지만 잘못된 활성화가 늘어날 수 있습니다. 50%가 이전 설정입니다."
+      }
     },
     "restrictions": {
       "help": "데이터와 도구에 대한 접근을 제한합니다. 변경 사항은 즉시 저장됩니다.",
@@ -722,12 +1057,35 @@
       "noWakeWordHelp": "웨이크 워드(Alexa, Hey Jarvis, Hey Mycroft, Hey Rhasspy) 수신을 중지합니다. 마이크 스트림이 꺼집니다.",
       "injectionProtection": "프롬프트 인젝션 보호",
       "injectionProtectionHint": "웹사이트, 이메일, 파일 안의 지시와 사용자의 지시를 구분하는 데 도움이 됩니다.",
-      "injectionProtectionHelp": "비활성화하면 보호 프로토콜과 신뢰할 수 없는 콘텐츠 표시가 모델에 전송되지 않습니다. 웹사이트, 이메일, 파일의 지침이 응답과 도구 호출에 영향을 줄 수 있습니다. 접근 권한과 서버 제한은 계속 적용됩니다. 개별 채팅에서 이 설정을 재정의할 수 있습니다."
+      "injectionProtectionHelp": "비활성화하면 보호 프로토콜과 신뢰할 수 없는 콘텐츠 표시가 모델에 전송되지 않습니다. 웹사이트, 이메일, 파일의 지침이 응답과 도구 호출에 영향을 줄 수 있습니다. 접근 권한과 서버 제한은 계속 적용됩니다. 개별 채팅에서 이 설정을 재정의할 수 있습니다.",
+      "hidePixelAvatar": "픽셀 아바타 숨기기",
+      "hidePixelAvatarHelp": "얼굴을 봇의 이니셜로 대체합니다. 봇은 아바타 도구나 지침을 받지 않습니다. 사용자 지정 프롬프트 이미지는 계속 표시됩니다.",
+      "layout": {
+        "agents": "에이전트",
+        "avatar": "아바타",
+        "inheritedAvatar": "픽셀 아바타가 숨겨져 있는 동안에는 컨트롤을 사용할 수 없습니다",
+        "privacy": "개인 데이터",
+        "access": "컴퓨터 및 네트워크",
+        "helpers": "에이전트 및 아바타",
+        "security": "보호",
+        "inheritedFull": "데스크톱 도구 차단으로 이미 적용됨",
+        "inheritedGuest": "게스트 모드로 이미 적용됨",
+        "details": "이 보호 정보",
+        "loadFailed": "제한을 불러올 수 없습니다. 현재 설정을 확인하려면 다시 시도하세요.",
+        "retry": "다시 로드"
+      }
     },
     "models": {
       "title": "모델 설정",
       "help": "각 모델의 생성 매개변수입니다. '자동'은 서버 기본값을 사용합니다.",
-      "empty": "사용자 정의 모델이 없습니다. 서버의 MODELS_MANUAL을 통해 모델을 추가하세요."
+      "empty": "사용자 정의 모델이 없습니다. 서버의 MODELS_MANUAL을 통해 모델을 추가하세요.",
+      "search": "모델 찾기",
+      "noResults": "모델을 찾을 수 없습니다.",
+      "defaults": "기본 설정",
+      "changed_one": "{{count}}개 매개변수 변경됨",
+      "changed_other": "{{count}}개 매개변수 변경됨",
+      "reset": "기본값으로 재설정",
+      "noParameters": "이 모델에 사용할 수 있는 생성 매개변수가 없습니다."
     },
     "app": {
       "interfaceLanguage": "인터페이스 언어",
@@ -760,7 +1118,29 @@
       "desktopSearch": "웹 검색에 데스크톱 브라우저 사용",
       "desktopSearchHelp": "해당 공급자가 선택된 경우 search_web이 로컬 데스크톱 브라우저를 사용하도록 허용합니다.",
       "desktopReader": "데스크톱 브라우저를 사용하여 페이지 구문 분석",
-      "desktopReaderHelp": "read_webpage가 로컬 데스크톱 브라우저에서 페이지를 구문 분석하도록 허용합니다. 비활성화하면 백엔드가 다른 구성된 리더를 사용할 수 있습니다."
+      "desktopReaderHelp": "read_webpage가 로컬 데스크톱 브라우저에서 페이지를 구문 분석하도록 허용합니다. 비활성화하면 백엔드가 다른 구성된 리더를 사용할 수 있습니다.",
+      "layout": {
+        "appearance": "모양",
+        "chat": "채팅",
+        "history": "채팅 기록 표시",
+        "renderHelp": "낮음은 처음에 오래된 메시지를 더 적게 표시합니다. 나머지는 펼쳐서 볼 수 있습니다. 이 설정은 채팅을 열 때 적용됩니다.",
+        "tokensHelp": "채팅에서 토큰 사용량을 표시합니다.",
+        "webTitle": "이 PC에서 검색 및 페이지 읽기",
+        "webQuotaHelp": "Chatter가 실행 중일 때 백그라운드 Chromium을 통한 검색 및 페이지 읽기는 월별 할당량에 포함되지 않습니다. 아래에서 원하는 옵션을 활성화하세요. Chatter의 작업 관리자에서 백그라운드 작업을 중지할 수 있습니다.",
+        "desktopBrowserConcurrency": "동시 작업",
+        "desktopBrowserConcurrencyHelp": "동시에 실행할 수 있는 검색 및 페이지 읽기 수입니다. CAPTCHA 창은 닫힐 때까지 슬롯 하나를 차지합니다.",
+        "desktopSearch": "이 PC의 브라우저를 사용하여 검색",
+        "desktopSearchHelp": "검색에 데스크톱 브라우징이 선택된 경우 이 컴퓨터의 브라우저를 사용합니다.",
+        "desktopReader": "이 PC의 브라우저로 페이지 읽기",
+        "desktopReaderHelp": "이 컴퓨터의 브라우저로 페이지를 읽을 수 있습니다. 끄면 구성된 다른 리더가 사용될 수 있습니다."
+      },
+      "themeHour": "시간",
+      "themeMinute": "분",
+      "themeSchedule": "예약됨",
+      "themeLightFrom": "라이트 모드 시작",
+      "themeDarkFrom": "다크 모드 시작",
+      "themeScheduleHelp": "컴퓨터의 현지 시간을 사용합니다. 두 시간이 같으면 다크 모드가 하루 종일 유지됩니다.",
+      "attachmentAuto": "자동 · 컨텍스트의 90%"
     },
     "toasts": {
       "saveSettingFailed": "설정을 저장하지 못했습니다",
@@ -975,7 +1355,25 @@
       },
       "openCharacter": "캐릭터 열기",
       "openPersonas": "페르소나 열기",
-      "openChat": "채팅 열기"
+      "openChat": "채팅 열기",
+      "individualImports": "개별 항목 가져오기"
+    },
+    "avatar": {
+      "showShort": "아바타 표시",
+      "controlShort": "봇 제어",
+      "menu": "픽셀 아바타",
+      "show": "아바타 표시",
+      "control": "봇이 아바타를 제어합니다",
+      "hiddenHint": "픽셀 아바타 대신 봇의 이니셜이 표시됩니다. 여기 또는 제한 설정에서 얼굴을 복원하세요.",
+      "menuHint": "이 설정은 내 계정에 적용됩니다. 프롬프트 이미지는 계속 표시됩니다."
+    },
+    "agents": {
+      "help": "Chatter가 개별 작업을 위임하는 도우미에 대한 설정입니다.",
+      "specialists": "전문 에이전트",
+      "specialistsHelp": "특정 작업을 수행하는 내장 도우미입니다. Chatter가 작업 중에 호출합니다.",
+      "loadFailed": "에이전트 설정을 불러오지 못했습니다.",
+      "catalogFailed": "에이전트 카탈로그를 불러올 수 없습니다.",
+      "empty": "이 서버에 아직 등록된 전문 에이전트가 없습니다."
     }
   },
   "chat": {
@@ -1031,7 +1429,8 @@
       "followUpBrief": "그 밖에 무엇을 더 명확히 하고 싶으신가요? 선택 사항",
       "followUpBriefPlaceholder": "예: 대화 스타일에 대한 추가 질문. 비워 두면 모델이 주제를 선택합니다.",
       "startFollowUp": "추가 질문 만들기",
-      "followUpHelp": "이전 질문, 답변 및 저장된 컨텍스트를 사용하여 격차를 탐구하는 새 라운드입니다. 이전 설문지는 목록에 그대로 유지되며, 최종 지침은 모든 라운드를 고려합니다. 모델 할당량을 사용합니다."
+      "followUpHelp": "이전 질문, 답변 및 저장된 컨텍스트를 사용하여 격차를 탐구하는 새 라운드입니다. 이전 설문지는 목록에 그대로 유지되며, 최종 지침은 모든 라운드를 고려합니다. 모델 할당량을 사용합니다.",
+      "actionsSummary": "작업 · {{count}}"
     },
     "reasoning": {
       "auto": "자동",
@@ -1084,7 +1483,14 @@
         "moveTo": "폴더로 이동"
       },
       "notificationsOn": "알림 켜짐",
-      "notificationsOff": "알림 꺼짐"
+      "notificationsOff": "알림 꺼짐",
+      "dateGroups": {
+        "today": "오늘",
+        "yesterday": "어제",
+        "thisWeek": "이번 주",
+        "thisMonth": "이번 달",
+        "older": "이전"
+      }
     },
     "empty": {
       "selectOrCreate": "채팅을 선택하거나 새로 만드세요"
@@ -1129,7 +1535,8 @@
       "reasoning": "추론",
       "prompt": "프롬프트",
       "providerTooltip": "최근 공급자 요청\n입력: {{input}} tk\n캐시 적중: {{cacheHit}} tk\n캐시 미스: {{cacheMiss}} tk\n출력: {{output}} tk\n추론: {{reasoning}} tk\n모델: {{model}}",
-      "cached": "캐시됨"
+      "cached": "캐시됨",
+      "cache": "캐시"
     },
     "macro": {
       "title": "매크로 제안",
@@ -1200,7 +1607,9 @@
       "normalTitle": "d20 주사위 모드. 클릭하여 모드 변경."
     },
     "composer": {
-      "placeholder": "메시지를 입력하세요..."
+      "placeholder": "메시지를 입력하세요...",
+      "activityManager": "활동 관리자",
+      "keyboardHint": "Enter로 전송 · Shift + Enter로 줄 바꿈"
     },
     "deleteChat": {
       "title": "채팅을 삭제할까요?",
@@ -1454,7 +1863,8 @@
           "deleteSpace": "메모리를 삭제할 수 없습니다",
           "updateRecord": "메모리를 업데이트할 수 없습니다",
           "deleteRecord": "메모리를 삭제할 수 없습니다"
-        }
+        },
+        "preferencesTitle": "메모리 설정"
       },
       "modeLabel": "메모리 사용",
       "mode": {
@@ -1501,6 +1911,23 @@
     "contextSummary": {
       "title": "이전 대화 요약",
       "meta": "{{count}}개의 메시지 · {{model}}"
+    },
+    "approvals": {
+      "expandDiff": "변경 사항 펼치기",
+      "queue": "승인 대기 중: {{count}}",
+      "commentFor": "거부 사유: {{title}}",
+      "rejectAndSend": "거부 및 보내기",
+      "permissions": "권한 옵션",
+      "expandEmail": "이메일 펼치기",
+      "failed": "결정을 제출할 수 없습니다"
+    },
+    "activityManager": {
+      "empty": "이 채팅의 백그라운드 활동이 여기에 표시됩니다.",
+      "working": "작업 중",
+      "idle": "대기 중",
+      "challenge": "주의 필요",
+      "stop": "중지: {{title}}",
+      "actionFailed": "작업을 완료할 수 없습니다"
     }
   },
   "promptSelector": {
@@ -1644,7 +2071,8 @@
       "testRoomRedirect": "방에서 리디렉션됨",
       "testNewChat": "새 채팅이 생성됨",
       "testSilent": "작업이 보고할 내용을 생성하지 않았습니다(빈 답변).",
-      "testFailed": "테스트 실행에 실패했습니다."
+      "testFailed": "테스트 실행에 실패했습니다.",
+      "loadMore": "더 보기"
     },
     "browser": {
       "title": "브라우저",
@@ -1833,7 +2261,8 @@
       "desktopNote": "검색과 페이지 읽기는 앱이 꺼져 있을 때만 이 한도를 사용합니다",
       "buy": "생성 추가 구매",
       "buyHint": "추가 생성 구매는 곧 제공됩니다"
-    }
+    },
+    "caption": "할당량"
   },
   "forcePassword": {
     "title": "비밀번호 변경",
@@ -2071,5 +2500,15 @@
   },
   "messageImages": {
     "loadFailed": "이 이미지를 불러올 수 없습니다"
+  },
+  "reasoningDisclosure": {
+    "thinking": "생각 중…"
+  },
+  "workLog": {
+    "title": "작업 로그",
+    "actions_one": "{{count}}개 작업",
+    "actions_other": "{{count}}개 작업",
+    "errors_one": "{{count}}개 오류",
+    "errors_other": "{{count}}개 오류"
   }
 }

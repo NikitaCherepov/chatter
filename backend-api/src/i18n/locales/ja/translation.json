@@ -57,7 +57,9 @@
     "list_mail_accounts": "📧 接続されたメールアカウントを確認中...",
     "check_emails": "📧 メールを確認中...",
     "read_email_content": "📧 メールを読込中...",
-    "send_email": "📧 確認用メールを準備中..."
+    "send_email": "📧 確認用メールを準備中...",
+    "searchQuery": "「{{query}}」を検索中",
+    "readingPage": "{{url}}を読み込み中"
   },
   "moderationNotifications": {
     "approved": "✅ アクセスが承認されました。ボットにメッセージを送信できます。",
@@ -71,6 +73,14 @@
       "convert_video": "[{{agent}}] 動画を変換中...",
       "list_devops_servers": "[{{agent}}] サーバーリストを取得中...",
       "runningTool": "[{{agent}}] {{tool}}を実行中..."
+    },
+    "news_researcher": {
+      "name": "ニュースリサーチャー",
+      "description": "ソースを検索・読み取りことでニュースのトピックを調査し、簡潔なブリーフを作成します。"
+    },
+    "file_converter": {
+      "name": "ビデオコンバーター",
+      "description": "デスクトップアプリを通じてローカルビデオを変換します。他のファイル形式はまだサポートされていません。\""
     }
   },
   "chat": {

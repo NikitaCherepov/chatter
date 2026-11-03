@@ -1,5 +1,127 @@
 {
-  "toolActivity": {"labels": {"readPage": "Odczytywanie strony"}, "names": {"read_webpage": "Odczytywanie strony", "web_reader": "Odczytywanie strony"}},
+  "toolActivity": {
+    "labels": {
+      "readPage": "Odczytywanie strony",
+      "search": "Wyszukiwanie w sieci",
+      "saveNote": "Zapisz notatkę",
+      "noteSaved": "Notatka zapisana",
+      "listNotes": "Znajdź notatki",
+      "readNote": "Przeczytaj notatkę",
+      "deleteNote": "Usuń notatkę",
+      "readFile": "Odczytaj plik",
+      "writeFile": "Zapisz plik",
+      "editFile": "Edytuj plik",
+      "searchFiles": "Przeszukaj pliki",
+      "listFiles": "Przeglądaj pliki",
+      "command": "Polecenie komputera",
+      "ssh": "Polecenie serwera",
+      "macro": "Uruchom makro",
+      "browser": "Akcja przeglądarki",
+      "desktop": "Akcja aplikacji",
+      "task": "Utwórz zadanie",
+      "image": "Utwórz obraz",
+      "agent": "Praca agenta",
+      "avatar": "Stan awatara"
+    },
+    "names": {
+      "read_webpage": "Odczytywanie strony",
+      "web_reader": "Odczytywanie strony",
+      "add_blocks": "Dodaj bloki",
+      "attach_file_to_response": "Załącz plik",
+      "browser_control": "Sterowanie przeglądarką",
+      "capture_screen": "Przechwytywanie ekranu",
+      "capture_webcam": "Przechwytywanie z kamery",
+      "change_server_user_password": "Zmiana hasła serwera",
+      "check_emails": "Sprawdzanie poczty",
+      "control_smart_home": "Sterowanie inteligentnym domem",
+      "convert_video": "Konwersja wideo",
+      "create_pixel_image": "Tworzenie grafiki pikselowej",
+      "create_server_user": "Tworzenie użytkownika serwera",
+      "delete_from_cold_memory": "Usuwanie z pamięci",
+      "delete_my_task": "Usuwanie zadania",
+      "delete_note": "Usuwanie notatki",
+      "describe_image": "Analiza obrazu",
+      "desktop_action": "Akcja aplikacji",
+      "edit_file_lines": "Edycja pliku",
+      "escalate_to_pro": "Przełącz na model zaawansowany",
+      "execute_macro": "Uruchom makro",
+      "execute_pc_command": "Polecenie na komputerze",
+      "execute_ssh_command": "Polecenie na serwerze",
+      "execute_visual_click": "Kliknięcie na ekranie",
+      "explore_fs": "Przeglądanie plików",
+      "finalize_issue": "Finalizacja zgłoszenia",
+      "find_transit_route": "Znajdź trasę",
+      "finish_task": "Ukończ zadanie",
+      "generate_image": "Utwórz obraz",
+      "get_avatar_state": "Stan awatara",
+      "get_exchange_rates": "Kursy walut",
+      "get_file_info": "Informacje o pliku",
+      "get_map_pins": "Pinezki na mapie",
+      "get_my_tasks": "Lista zadań",
+      "get_smart_devices": "Urządzenia inteligentnego domu",
+      "get_user_time": "Aktualna godzina",
+      "google_ai": "Zapytanie do Google AI",
+      "install_ssh_public_key": "Zainstaluj klucz SSH",
+      "invoke_subagent": "Wywołaj agenta",
+      "list_devops_runbooks": "Runbooki serwerów",
+      "list_devops_servers": "Lista serwerów",
+      "list_directory": "Zawartość katalogu",
+      "list_mail_accounts": "Konta e-mail",
+      "list_monitors": "Lista monitorów",
+      "list_my_macros": "Lista makr",
+      "list_my_notes": "Lista notatek",
+      "list_recent_chats": "Ostatnie czaty",
+      "map_control": "Sterowanie mapą",
+      "newspaper_issue_contents": "Zawartość wydania",
+      "newspapers_list": "Lista gazet",
+      "random_roll": "Rzut kością",
+      "read_attachment_file": "Odczytaj załącznik",
+      "read_chat_context": "Odczytaj kontekst czatu",
+      "read_devops_runbook": "Odczytaj runbook serwera",
+      "read_email_attachment": "Odczytaj załącznik e-mail",
+      "read_email_content": "Odczytaj e-mail",
+      "read_file": "Odczytaj plik",
+      "read_memory": "Odczytaj pamięć",
+      "read_newspaper_item": "Odczytaj artykuł",
+      "read_note": "Odczytaj notatkę",
+      "save_note": "Zapisz notatkę",
+      "save_to_cold_memory": "Zapisz w pamięci",
+      "schedule_task": "Zaplanuj zadanie",
+      "search_attachment_file": "Przeszukaj załącznik",
+      "search_chat_history": "Przeszukaj historię czatu",
+      "search_cold_memory": "Przeszukaj pamięć",
+      "search_file_keywords": "Wyszukaj plik",
+      "search_nearby": "Znajdź pobliskie miejsca",
+      "search_web": "Wyszukiwanie w internecie",
+      "send_email": "Wyślij e-mail",
+      "set_display_state": "Zaktualizuj awatar",
+      "set_user_timezone": "Ustaw strefę czasową",
+      "spawn_subagent": "Uruchom agenta",
+      "suggest_chat_link": "Link do czatu",
+      "suggest_devops_runbook": "Zaproponuj runbook serwera",
+      "suggest_macro": "Zaproponuj makro",
+      "suggest_server_creds_update": "Zaktualizuj dostęp do serwera",
+      "update_core_memory": "Zaktualizuj pamięć główną",
+      "update_my_task": "Zaktualizuj zadanie",
+      "write_file": "Zapisz plik",
+      "youtube_music_control": "Sterowanie muzyką",
+      "web_search": "Wyszukiwanie w sieci",
+      "image_gen": "Utwórz obraz",
+      "create_task": "Zaplanuj zadanie",
+      "set_avatar_mood": "Zaktualizuj awatar",
+      "set_avatar_emotion": "Zaktualizuj awatar"
+    },
+    "failed": "{{action}} — błąd",
+    "returned": "Wywołanie zakończone, otrzymano odpowiedź narzędzia",
+    "unknown": "Wynik nie został zapisany",
+    "error": "Błąd narzędzia",
+    "noResult": "Wynik tego wywołania jest niedostępny.",
+    "collapse": "Zwiń akcje",
+    "more": "Więcej akcji ({{count}})",
+    "internal": "Akcje wewnętrzne · {{count}}",
+    "more_one": "{{count}} więcej akcji",
+    "more_other": "{{count}} więcej działań"
+  },
   "advanced": {
     "smart": {
       "authorizeUrl": "https://oauth.yandex.ru/authorize?response_type=token&client_id=YOUR_CLIENT_ID",
@@ -79,6 +201,17 @@
         "step5": "Krok 5.",
         "step5Text": "Kliknij Synchronizuj. Sparowane urządzenia z Zigbee2MQTT pojawią się na poniższej liście.",
         "note": "Uwaga: broker MQTT musi być osiągalny z serwera uruchamiającego backend Chatter. Jeśli broker wymaga uwierzytelnienia, dołącz je do adresu URL: mqtt://user:password@host:port"
+      },
+      "layout": {
+        "title": "Inteligentny dom",
+        "connections": "Połączenia",
+        "configured": "Skonfigurowano",
+        "notConfigured": "Nie skonfigurowano",
+        "configure": "Konfiguruj",
+        "collapse": "Zwiń",
+        "saveBroker": "Zapisz adres brokera",
+        "empty": "Połącz Yandex lub Zigbee2MQTT, aby zobaczyć swoje urządzenia.",
+        "noDetails": "Brak dodatkowych szczegółów."
       }
     },
     "macros": {
@@ -108,7 +241,39 @@
       "enabled": "Włączone",
       "pinned": "Przypięte (AI zawsze widzi nazwę)",
       "executionMode": "Tryb wykonania",
-      "create": "Utwórz makro"
+      "create": "Utwórz makro",
+      "catalog": {
+        "pinnedLabel": "Przypnij dla bota",
+        "pinnedState": "Przypięte",
+        "disabledState": "Wyłączone",
+        "help": "Zapisane polecenia do codziennych czynności. Wybierz makro, aby sprawdzić jego polecenia, edytować je lub uruchomić.",
+        "search": "Znajdź makro",
+        "list": "Lista makr",
+        "all": "Wszystkie",
+        "pinned": "Przypięte",
+        "disabled": "Wyłączone",
+        "defaultName": "Makro #{{number}}",
+        "edit": "Edytuj makro",
+        "commandCount_one": "{{count}} polecenie",
+        "commandCount_other": "{{count}} komend",
+        "sequence": "Kolejność wykonywania",
+        "available": "Dostępne dla bota",
+        "availableHelp": "Bot może znaleźć i uruchomić to makro. Możesz uruchomić je ręcznie niezależnie od tego przełącznika.",
+        "pinnedHelp": "Jego nazwa jest zawsze uwzględniana w kontekście bota, aby ułatwić znalezienie tej akcji.",
+        "suggestionReady": "Nazwa i opis zostały dodane do wersji roboczej. Zapisz je, jeśli pasują.",
+        "running": "Uruchamianie…",
+        "lastOutput": "Dane wyjściowe ostatniego uruchomienia",
+        "noOutput": "Polecenia zostały wykonane bez tekstowych danych wyjściowych.",
+        "emptyTitle": "Twoje makra pojawią się tutaj",
+        "emptyHelp": "Utwórz makro dla czynności, które często powtarzasz.",
+        "loadFailed": "Nie udało się wczytać makr.",
+        "retry": "Ponów wczytywanie",
+        "discardTitle": "Pozostawić zmiany niezapisane?",
+        "discardHelp": "Twoje zmiany w tym makrze zostaną utracone.",
+        "discard": "Odrzuć zmiany",
+        "deleteTitle": "Usunąć „{{name}}”?",
+        "deleteHelp": "Makro zostanie usunięte z Twojej listy."
+      }
     },
     "common": {
       "deleteFailed": "Błąd usuwania",
@@ -137,7 +302,39 @@
       "autoApproveHelp": "AI będzie mogło wykonywać dowolne polecenia na Twoim komputerze bez pytania o pozwolenie",
       "allowedCommands": "Dozwolone polecenia (auto-approve)",
       "patternsHelp": "Wzorce regex poleceń, które AI może wykonać bez potwierdzenia",
-      "patternPlaceholder": "Wzorzec regex (np. ^dir$ lub ^ipconfig)"
+      "patternPlaceholder": "Wzorzec regex (np. ^dir$ lub ^ipconfig)",
+      "layout": {
+        "confirmAutoTitle": "Włączyć wykonywanie bez potwierdzenia?",
+        "confirmAutoHelp": "AI będzie mogło uruchamiać polecenia na Twoim komputerze bez pytania, w tym polecenia modyfikujące lub usuwające pliki.",
+        "confirmAutoEnable": "Włącz",
+        "intro": "Wybierz, co Chatter może robić na tym komputerze i kiedy ma prosić o potwierdzenie. Zmiany są stosowane natychmiast.",
+        "files": "Pliki i foldery",
+        "browse": "Przeglądaj pliki i foldery",
+        "browseHelp": "Zezwalaj AI na wyświetlanie listy folderów i poruszanie się po systemie plików. To ustawienie nie przyznaje dostępu do zawartości plików.",
+        "read": "Odczytuj pliki bez potwierdzenia",
+        "readHelp": "Pozwól AI odczytywać zawartość plików bez pytania. Zapisywanie plików nadal wymaga potwierdzenia.",
+        "execution": "Wykonywanie poleceń",
+        "auto": "Uruchamiaj wszystkie polecenia bez potwierdzenia",
+        "autoHelp": "Pomijaj prośby o zatwierdzenie poleceń na komputerze. Dotyczy to również poleceń, które zmieniają lub usuwają dane; wbudowane blokady poleceń nadal obowiązują.",
+        "exceptions": "Polecenia bez potwierdzenia",
+        "exceptionsHelp": "Dodane tutaj reguły lub reguły z opcji „Zawsze zezwalaj”. Pasujące polecenia pomijają potwierdzenie; inne polecenia nadal wymagają potwierdzenia.",
+        "allApproved": "Wszystkie polecenia komputera są już zatwierdzane automatycznie. Te reguły są zachowywane i będą stosowane po wyłączeniu tego ustawienia.",
+        "empty": "Brak wyjątków. Dodaj polecenie, które chcesz zatwierdzać automatycznie.",
+        "matchMode": "Dopasowywanie poleceń",
+        "exact": "Dokładne polecenie",
+        "regex": "Wyrażenie regularne",
+        "command": "Polecenie",
+        "pattern": "Wyrażenie regularne",
+        "commandPlaceholder": "Na przykład: git status",
+        "regexPlaceholder": "Na przykład: ^git status$",
+        "exactHelp": "Całe polecenie musi pasować, w tym argumenty i wielkość liter. Jest przechowywane jako zakotwiczone wyrażenie regularne z eskejpowanymi znakami.",
+        "regexHelp": "Zaawansowane: dopasowanie w dowolnym miejscu polecenia pomija potwierdzenie. Użyj ^ i $, aby dopasować całe polecenie. Zapisane reguły są wyświetlane jako wyrażenia regularne.",
+        "invalidRegex": "Nieprawidłowe wyrażenie regularne. Sprawdź wzorzec.",
+        "duplicate": "Ta reguła już istnieje.",
+        "saveFailed": "Nie udało się zapisać zmiany. Spróbuj ponownie.",
+        "loadFailed": "Nie udało się wczytać uprawnień komputera.",
+        "retry": "Spróbuj ponownie"
+      }
     },
     "ssh": {
       "fillRequired": "Wypełnij nazwę i klucz publiczny",
@@ -159,7 +356,11 @@
       "deleteTitle": "Usunąć klucz SSH?",
       "deleteMessage": "Ten klucz zostanie usunięty. Jeśli jest wybrany jako klucz domyślny dla jakiegoś serwera, połączenie zostanie zerwane.",
       "fullPair": "pełna para",
-      "publicOnly": "tylko publiczny"
+      "publicOnly": "tylko publiczny",
+      "addKey": "Dodaj klucz",
+      "keyPairLabel": "Publiczny i prywatny",
+      "publicOnlyLabel": "Tylko publiczny",
+      "emptyKeys": "Brak zapisanych kluczy."
     },
     "server": {
       "fillRequired": "Wypełnij nazwę, host i użytkownika",
@@ -201,7 +402,52 @@
       "deleteMessage": "Wszystkie polityki i ustawienia serwera zostaną usunięte.",
       "commandsTitle": "Komendy: {{count}} — {{preview}}",
       "sudoCleared": "Hasło sudo usunięte",
-      "sudoClearFailed": "Nie udało się usunąć hasła sudo"
+      "sudoClearFailed": "Nie udało się usunąć hasła sudo",
+      "layout": {
+        "keyHelp": "Użyj wybranego klucza do logowania. Po wyłączeniu tej opcji klucz pozostanie dostępny do instalacji na serwerze.",
+        "clearSudo": "Usuń hasło sudo",
+        "intro": "Połączenia SSH, których Chatter może używać do pracy z serwerami.",
+        "add": "Dodaj serwer",
+        "edit": "Edytuj serwer",
+        "search": "Znajdź serwer",
+        "emptyList": "Nie dodano jeszcze żadnych serwerów.",
+        "emptyTitle": "Twoje serwery w jednym miejscu",
+        "emptyHelp": "Dodaj połączenie SSH. Następnie możesz poprosić Chatter o pracę z tym serwerem.",
+        "connection": "Połączenie",
+        "authentication": "Uwierzytelnianie",
+        "permissions": "Uprawnienia do poleceń",
+        "loginMethod": "Metoda logowania",
+        "sshLogin": "Klucz SSH",
+        "passwordLogin": "Hasło",
+        "sudo": "Hasło sudo",
+        "configured": "Zapisano",
+        "notConfigured": "Nie zapisano",
+        "keepPassword": "Zachowaj zapisane hasło",
+        "passwordPlaceholder": "Hasło połączenia",
+        "keepSecrets": "Pozostaw pola hasła puste, aby zachować zapisane wartości.",
+        "credentialsHelp": "Wprowadź hasło lub wybierz klucz SSH wraz z jego częścią prywatną, aby się zalogować.",
+        "savedKey": "Zapisany klucz SSH",
+        "clearOnSave": "Zapisane hasło sudo zostanie usunięte po zapisaniu zmian.",
+        "undoClear": "Zachowaj hasło sudo",
+        "working": "Sprawdzanie…",
+        "testHelp": "Sprawdza zapisane połączenie SSH. Niezapisane zmiany nie są uwzględniane.",
+        "automatic": "Polecenia są wykonywane bez potwierdzenia.",
+        "ask": "Polecenia wymagają potwierdzenia, z wyjątkiem zapisanych reguł.",
+        "policiesHelp": "Reguły zapisane za pomocą opcji „Zawsze zezwalaj”. Pasujące polecenia pomijają potwierdzenie. Wzorce to wyrażenia regularne.",
+        "noPolicies": "Brak wyjątków dla poleceń na tym serwerze.",
+        "allApproved": "Automatyczne zatwierdzanie jest włączone dla wszystkich poleceń. Poszczególne reguły są zachowywane na wypadek wyłączenia tej opcji.",
+        "keysFailed": "Nie udało się załadować kluczy SSH. Zapisany klucz został zachowany.",
+        "policiesFailed": "Nie udało się załadować reguł poleceń.",
+        "loadFailed": "Nie udało się załadować serwerów.",
+        "retry": "Spróbuj ponownie",
+        "invalidPort": "Wprowadź całkowity numer portu z zakresu od 1 do 65535.",
+        "discardTitle": "Odrzucić niezapisane zmiany?",
+        "discardHelp": "Twoje zmiany w tym połączeniu zostaną utracone.",
+        "discard": "Odrzuć zmiany",
+        "autoTitle": "Włączyć wykonywanie bez potwierdzenia?",
+        "autoHelp": "AI będzie mogło uruchamiać polecenia na tym serwerze bez pytania, w tym polecenia modyfikujące lub usuwające pliki.",
+        "enable": "Włącz"
+      }
     },
     "browserDownload": {
       "confirmTitle": "Pobrać plik?",
@@ -253,7 +499,42 @@
       "commandCount_few": "{{count}} polecenia",
       "commandCount_many": "{{count}} poleceń",
       "commandCount_other": "{{count}} polecenia",
-      "commandCount": "{{count}} poleceń"
+      "commandCount": "{{count}} poleceń",
+      "library": {
+        "intro": "Zapisane przepływy pracy dla bota — od przygotowania raportu po konfigurację aplikacji. Opisz proces raz i używaj go ponownie w rozmowach.",
+        "howTo": "Jak korzystać z instrukcji",
+        "howToBody": "Zapisz kroki, warunki i oczekiwany wynik. Bot może znaleźć i odczytać Twoje instrukcje, aby postępować zgodnie z nimi podczas wykonywania zadania. Zapisanie niczego nie uruchamia. Opisują one przepływ pracy, niezależnie od ustawień osobowości bota.",
+        "example": "Na przykład zapisz „Raport tygodniowy”, a następnie zapytaj na czacie: „Przygotuj raport zgodnie z moimi instrukcjami »Raport tygodniowy«”.",
+        "list": "Biblioteka instrukcji",
+        "search": "Znajdź instrukcję",
+        "create": "Utwórz instrukcję",
+        "edit": "Edytuj instrukcję",
+        "loadFailed": "Nie udało się załadować instrukcji.",
+        "retry": "Ponów",
+        "loading": "Ładowanie instrukcji…",
+        "emptyMine": "Nie masz jeszcze żadnych instrukcji.",
+        "emptyPublic": "Nie ma jeszcze żadnych publicznych instrukcji.",
+        "emptyTitle": "Zapisz przepływ pracy do ponownego użycia",
+        "emptyHelp": "Utwórz instrukcję krok po kroku lub zapisz jedną z biblioteki publicznej.",
+        "titlePlaceholder": "Na przykład, raport tygodniowy",
+        "contentPlaceholder": "Kiedy należy używać tej instrukcji?\n\n1. Jakie informacje należy zebrać?\n2. Co należy zrobić i sprawdzić?\n3. Jak powinien wyglądać wynik?",
+        "write": "Zapisz",
+        "preview": "Podgląd",
+        "previewEmpty": "Dodaj tekst, aby wyświetlić podgląd instrukcji.",
+        "editorHelp": "Opisz kroki, ważne warunki i oczekiwany wynik. Obsługiwane są nagłówki, listy i inne formatowanie Markdown.",
+        "editingPublic": "Edytujesz publiczną instrukcję. Wszyscy użytkownicy tego serwera zobaczą Twoje zmiany.",
+        "publicSource": "Publiczna instrukcja",
+        "updated": "Zaktualizowano",
+        "publicHelp": "Zapisz tę instrukcję w swojej bibliotece, aby bot mógł ją znaleźć. Możesz edytować swoją kopię niezależnie od oryginału.",
+        "discardTitle": "Odrzucić zmiany?",
+        "discardHelp": "Twoje zmiany w tej instrukcji zostaną utracone.",
+        "discard": "Odrzuć zmiany",
+        "publishTitle": "Opublikować tę instrukcję?",
+        "publishHelp": "Zostanie utworzona publiczna kopia. Jej tekst będzie dostępny dla wszystkich użytkowników tego serwera. Najpierw sprawdź ją pod kątem informacji osobistych lub sekretów.",
+        "deleteTitle": "Usunąć instrukcję?",
+        "deleteHelp": "Ta instrukcja zostanie usunięta z Twojej biblioteki.",
+        "deletePublicHelp": "Publiczna instrukcja zostanie usunięta dla wszystkich użytkowników. Wcześniej zapisane osobiste kopie pozostaną."
+      }
     },
     "mail": {
       "title": "Konta pocztowe",
@@ -506,7 +787,9 @@
       "billing": "Rozliczenia",
       "about": "O aplikacji",
       "data": "Dane",
-      "admin": "Administrator"
+      "admin": "Administrator",
+      "personas": "Persony",
+      "agents": "Agenci"
     },
     "browser": {
       "help": "Wybierz, które działania AI w przeglądarce wymagają Twojego potwierdzenia. Działania ręczne pozostają bez zmian.",
@@ -603,6 +886,35 @@
           "nameRequired": "Wprowadź nazwę persony",
           "delete": "Nie można usunąć persony"
         }
+      },
+      "redesign": {
+        "showMore_one": "Pokaż jeszcze {{count}} personę",
+        "showMore_other": "Pokaż jeszcze {{count}} person",
+        "showLess": "Pokaż mniej",
+        "intro": "Persona to Twoja nazwa, tożsamość i preferencje rozmów. Dane konta są zarządzane osobno.",
+        "personas": "Persony",
+        "selectHelp": "Używana w czatach bez osobnego wyboru persony.",
+        "default": "Wybrano",
+        "persona": "Persona",
+        "addPersona": "Dodaj personę",
+        "newPersona": "Nowa persona",
+        "editPersona": "Ustawienia persony",
+        "makeDefault": "Ustaw jako domyślną",
+        "defaultSaved": "Wybrano personę",
+        "chatName": "Nazwa na czacie",
+        "description": "Opis persony",
+        "identityHelp": "Ta nazwa i awatar pojawiają się w wiadomościach używających tej persony. Nazwa Twojego konta pozostaje bez zmian.",
+        "memoryHelp": "Fakty o tej personie, które Chatter wykorzystuje w rozmowach.",
+        "unsaved": "Niezapisane zmiany",
+        "primary": "Główna",
+        "primaryHelp": "Oryginalna persona konta. Można ją edytować, ale nie można jej usunąć.",
+        "accountNameHelp": "Widoczna dla administratora serwera. Nie zmienia nazw ani ustawień Twoich person.",
+        "discardTitle": "Przełączyć personę?",
+        "discardHelp": "Niezapisane zmiany w bieżącej personie zostaną utracone.",
+        "discard": "Przełącz bez zapisywania",
+        "deleteTitle": "Usunąć personę?",
+        "deleteHelp": "Persona „{{name}}” zostanie usunięta.",
+        "saved": "Persona zapisana"
       }
     },
     "prompt": {
@@ -675,6 +987,17 @@
         "scenario": "Sytuacja i kontekst...",
         "examples": "Przykładowy dialog...",
         "other": "Wszelkie pozostałe instrukcje..."
+      },
+      "catalog": {
+        "help": "Charakter i styl komunikacji bota.",
+        "search": "Znajdź prompt",
+        "create": "Utwórz prompt",
+        "builtIn": "Wbudowany",
+        "draft": "Szkic",
+        "newHelp": "Ustaw nazwę, opis i charakter nowego bota w edytorze.",
+        "discardTitle": "Niezapisane zmiany",
+        "discardHelp": "Przełączyć prompty? Niezapisane zmiany i sugestia wygenerowana przez AI zostaną odrzucone.",
+        "discard": "Przełącz prompt"
       }
     },
     "voice": {
@@ -696,7 +1019,19 @@
       "recognitionSourceLocalHint": "Lokalny Whisper",
       "recognitionSourceServer": "Na serwerze",
       "recognitionSourceServerReady": "Dostępne · {{model}}",
-      "recognitionSourceServerUnavailable": "Niedostępne lub nieskonfigurowane"
+      "recognitionSourceServerUnavailable": "Niedostępne lub nieskonfigurowane",
+      "activation": {
+        "title": "Aktywacja głosem",
+        "enabled": "Reaguj na słowo aktywacyjne",
+        "help": "Działa lokalnie na tym komputerze. Wyłączenie tej opcji zatrzymuje nasłuchiwanie mikrofonu w celu aktywacji.",
+        "options": "Ustawienia aktywacji głosem",
+        "names": "Nazwy i powitania",
+        "phrases": "Dodatkowe frazy",
+        "sensitivity": "Czułość",
+        "strict": "Mniej fałszywych aktywacji",
+        "sensitive": "Łatwiejsza aktywacja",
+        "sensitivityHelp": "Wyższa czułość łatwiej wykrywa słowa aktywujące, ale może powodować więcej fałszywych aktywacji. 50% to poprzednie ustawienie."
+      }
     },
     "restrictions": {
       "help": "Ogranicz dostęp do swoich danych i narzędzi. Zmiany są zapisywane natychmiast.",
@@ -722,12 +1057,35 @@
       "noWakeWordHelp": "Zatrzymaj nasłuchiwanie słów budzących (Alexa, Hey Jarvis, Hey Mycroft, Hey Rhasspy). Strumień mikrofonu zostanie wyłączony.",
       "injectionProtection": "Ochrona przed wstrzykiwaniem poleceń",
       "injectionProtectionHint": "Pomaga odróżnić Twoje polecenia od instrukcji zawartych na stronach, w e-mailach i plikach.",
-      "injectionProtectionHelp": "Gdy wyłączone, protokół ochrony i znaczniki niezaufanej treści nie są wysyłane do modelu. Polecenia zawarte w stronach internetowych, e-mailach i plikach mogą wpływać na odpowiedzi i wywołania narzędzi. Uprawnienia dostępu i ograniczenia serwera pozostają egzekwowane. Poszczególne czaty mogą zastąpić to ustawienie."
+      "injectionProtectionHelp": "Gdy wyłączone, protokół ochrony i znaczniki niezaufanej treści nie są wysyłane do modelu. Polecenia zawarte w stronach internetowych, e-mailach i plikach mogą wpływać na odpowiedzi i wywołania narzędzi. Uprawnienia dostępu i ograniczenia serwera pozostają egzekwowane. Poszczególne czaty mogą zastąpić to ustawienie.",
+      "hidePixelAvatar": "Ukryj awatar pikselowy",
+      "hidePixelAvatarHelp": "Zastępuje twarz inicjałem bota. Bot nie otrzymuje narzędzi ani instrukcji dotyczących awatara. Niestandardowe obrazy w prompcie pozostają widoczne.",
+      "layout": {
+        "agents": "Agenci",
+        "avatar": "Awatar",
+        "inheritedAvatar": "Kontrolka jest niedostępna, gdy awatar pikselowy jest ukryty",
+        "privacy": "Dane osobowe",
+        "access": "Komputer i sieć",
+        "helpers": "Agenci i awatar",
+        "security": "Ochrona",
+        "inheritedFull": "Już wymuszane przez blokadę narzędzi pulpitu",
+        "inheritedGuest": "Już wymuszane przez tryb gościa",
+        "details": "Informacje o tej ochronie",
+        "loadFailed": "Nie można wczytać ograniczeń. Ponów próbę, aby zobaczyć bieżące ustawienia.",
+        "retry": "Ponów ładowanie"
+      }
     },
     "models": {
       "title": "Ustawienia modeli",
       "help": "Parametry generowania dla każdego modelu. „Auto” – użyj domyślnych ustawień serwera.",
-      "empty": "Brak niestandardowych modeli. Dodaj modele przez MODELS_MANUAL na serwerze."
+      "empty": "Brak niestandardowych modeli. Dodaj modele przez MODELS_MANUAL na serwerze.",
+      "search": "Znajdź model",
+      "noResults": "Nie znaleziono modeli.",
+      "defaults": "Ustawienia domyślne",
+      "changed_one": "Zmieniono {{count}} parametr",
+      "changed_other": "Zmieniono {{count}} parametrów",
+      "reset": "Przywróć wartości domyślne",
+      "noParameters": "Brak parametrów generowania dla tego modelu."
     },
     "app": {
       "interfaceLanguage": "Język interfejsu",
@@ -760,7 +1118,29 @@
       "desktopSearch": "Użyj przeglądarki komputerowej do wyszukiwania w sieci",
       "desktopSearchHelp": "Zezwól search_web na korzystanie z lokalnej przeglądarki komputerowej, gdy ten dostawca jest wybrany.",
       "desktopReader": "Użyj przeglądarki desktopowej do parsowania stron",
-      "desktopReaderHelp": "Zezwól read_webpage na parsowanie stron w lokalnej przeglądarce desktopowej. Gdy wyłączone, backend może użyć innego skonfigurowanego czytnika."
+      "desktopReaderHelp": "Zezwól read_webpage na parsowanie stron w lokalnej przeglądarce desktopowej. Gdy wyłączone, backend może użyć innego skonfigurowanego czytnika.",
+      "layout": {
+        "appearance": "Wygląd",
+        "chat": "Czat",
+        "history": "Widoczna historia czatu",
+        "renderHelp": "Niski poziom powoduje, że początkowo widać mniej starszych wiadomości. Pozostałe możesz pokazać. To ustawienie dotyczy otwierania czatu.",
+        "tokensHelp": "Pokazuje użycie tokenów w czacie.",
+        "webTitle": "Wyszukiwanie i czytanie stron na tym komputerze",
+        "webQuotaHelp": "Gdy Chatter działa, wyszukiwanie i czytanie stron przy użyciu Chromium działającego w tle nie są wliczane do miesięcznego limitu. Włącz poniżej żądane opcje. Zadania w tle możesz zatrzymać w menedżerze zadań Chatter.",
+        "desktopBrowserConcurrency": "Zadania równoległe",
+        "desktopBrowserConcurrencyHelp": "Ile wyszukiwań i odczytów stron może działać jednocześnie. Okno CAPTCHA zajmuje jedno miejsce do momentu zamknięcia.",
+        "desktopSearch": "Wyszukuj przy użyciu przeglądarki na tym komputerze",
+        "desktopSearchHelp": "Używa przeglądarki na tym komputerze, gdy dla wyszukiwania wybrano przeglądanie na komputerze.",
+        "desktopReader": "Czytaj strony za pomocą przeglądarki na tym komputerze",
+        "desktopReaderHelp": "Umożliwia czytanie stron za pomocą przeglądarki na tym komputerze. Po wyłączeniu może być używana inna skonfigurowana czytnik."
+      },
+      "themeHour": "Godziny",
+      "themeMinute": "Minuty",
+      "themeSchedule": "Zaplanowane",
+      "themeLightFrom": "Jasny od",
+      "themeDarkFrom": "Ciemny od",
+      "themeScheduleHelp": "Używa lokalnego czasu komputera. Jeśli obie godziny są takie same, tryb ciemny pozostaje włączony przez cały dzień.",
+      "attachmentAuto": "Auto · 90% kontekstu"
     },
     "toasts": {
       "saveSettingFailed": "Nie udało się zapisać ustawienia",
@@ -975,7 +1355,25 @@
       },
       "openCharacter": "Otwórz postać",
       "openPersonas": "Otwórz persony",
-      "openChat": "Otwórz czat"
+      "openChat": "Otwórz czat",
+      "individualImports": "Importuj pojedyncze elementy"
+    },
+    "avatar": {
+      "showShort": "Pokaż awatar",
+      "controlShort": "Sterowanie botem",
+      "menu": "Awatar pikselowy",
+      "show": "Pokaż awatar",
+      "control": "Bot steruje awatarem",
+      "hiddenHint": "Zamiast awatara pikselowego wyświetlany jest inicjał bota. Przywróć twarz tutaj lub w ustawieniach ograniczeń.",
+      "menuHint": "Te ustawienia dotyczą Twojego konta. Obrazy w prompcie pozostają widoczne."
+    },
+    "agents": {
+      "help": "Ustawienia pomocników, którym Chatter zleca poszczególne zadania.",
+      "specialists": "Wyspecjalizowani agenci",
+      "specialistsHelp": "Wbudowani pomocnicy realizujący określone zadania. Chatter wywołuje ich podczas pracy.",
+      "loadFailed": "Nie udało się wczytać ustawień agentów.",
+      "catalogFailed": "Nie udało się wczytać katalogu agentów.",
+      "empty": "Na tym serwerze nie zarejestrowano jeszcze żadnych wyspecjalizowanych agentów."
     }
   },
   "chat": {
@@ -1031,7 +1429,8 @@
       "followUpBrief": "Co jeszcze chcesz doprecyzować? Opcjonalne",
       "followUpBriefPlaceholder": "Na przykład: więcej pytań o styl dialogu. Pozostaw puste, aby model sam wybrał tematy.",
       "startFollowUp": "Utwórz dodatkowe pytania",
-      "followUpHelp": "Nowa runda analizująca luki na podstawie poprzednich pytań, odpowiedzi i zapisanego kontekstu. Poprzedni kwestionariusz pozostaje na liście; końcowe instrukcje uwzględniają wszystkie rundy. Wykorzystuje limit Twojego modelu."
+      "followUpHelp": "Nowa runda analizująca luki na podstawie poprzednich pytań, odpowiedzi i zapisanego kontekstu. Poprzedni kwestionariusz pozostaje na liście; końcowe instrukcje uwzględniają wszystkie rundy. Wykorzystuje limit Twojego modelu.",
+      "actionsSummary": "Działania · {{count}}"
     },
     "reasoning": {
       "auto": "Auto",
@@ -1084,7 +1483,14 @@
         "moveTo": "Przenieś do folderu"
       },
       "notificationsOn": "Powiadomienia włączone",
-      "notificationsOff": "Powiadomienia wyłączone"
+      "notificationsOff": "Powiadomienia wyłączone",
+      "dateGroups": {
+        "today": "Dziś",
+        "yesterday": "Wczoraj",
+        "thisWeek": "W tym tygodniu",
+        "thisMonth": "W tym miesiącu",
+        "older": "Starsze"
+      }
     },
     "empty": {
       "selectOrCreate": "Wybierz czat lub utwórz nowy"
@@ -1129,7 +1535,8 @@
       "reasoning": "Rozumowanie",
       "prompt": "prompt",
       "providerTooltip": "Najnowsze żądanie dostawcy\nWejście: {{input}} tk\nTrafienie pamięci podręcznej: {{cacheHit}} tk\nPominięcie pamięci podręcznej: {{cacheMiss}} tk\nWyjście: {{output}} tk\nRozumowanie: {{reasoning}} tk\nModel: {{model}}",
-      "cached": "z pamięci podręcznej"
+      "cached": "z pamięci podręcznej",
+      "cache": "Pamięć podręczna"
     },
     "macro": {
       "title": "Propozycja makra",
@@ -1200,7 +1607,9 @@
       "normalTitle": "Tryb kostki k20. Kliknij, aby zmienić tryb."
     },
     "composer": {
-      "placeholder": "Wpisz wiadomość..."
+      "placeholder": "Wpisz wiadomość...",
+      "activityManager": "Menedżer aktywności",
+      "keyboardHint": "Enter, aby wysłać · Shift + Enter, aby przejść do nowej linii"
     },
     "deleteChat": {
       "title": "Usunąć czat?",
@@ -1454,7 +1863,8 @@
           "deleteSpace": "Nie można usunąć pamięci",
           "updateRecord": "Nie można zaktualizować pamięci",
           "deleteRecord": "Nie można usunąć pamięci"
-        }
+        },
+        "preferencesTitle": "Ustawienia pamięci"
       },
       "modeLabel": "Użyj pamięci",
       "mode": {
@@ -1501,6 +1911,23 @@
     "contextSummary": {
       "title": "Podsumowanie wcześniejszej rozmowy",
       "meta": "{{count}} wiadomości · {{model}}"
+    },
+    "approvals": {
+      "expandDiff": "Rozwiń zmiany",
+      "queue": "Oczekuje na zatwierdzenie: {{count}}",
+      "commentFor": "Komentarz do odrzucenia: {{title}}",
+      "rejectAndSend": "Odrzuć i wyślij",
+      "permissions": "Opcje uprawnień",
+      "expandEmail": "Rozwiń wiadomość e-mail",
+      "failed": "Nie udało się przesłać decyzji"
+    },
+    "activityManager": {
+      "empty": "Aktywności w tle tego czatu pojawią się tutaj.",
+      "working": "Pracuje",
+      "idle": "Bezczynny",
+      "challenge": "Wymaga uwagi",
+      "stop": "Zatrzymaj: {{title}}",
+      "actionFailed": "Nie udało się wykonać czynności"
     }
   },
   "promptSelector": {
@@ -1644,7 +2071,8 @@
       "testRoomRedirect": "Przekierowano z pokoju",
       "testNewChat": "Utworzono nowy czat",
       "testSilent": "Zadanie nie wygenerowało nic do zgłoszenia (pusta odpowiedź).",
-      "testFailed": "Nie udało się uruchomić testu"
+      "testFailed": "Nie udało się uruchomić testu",
+      "loadMore": "Wczytaj więcej"
     },
     "browser": {
       "title": "Przeglądarka",
@@ -1833,7 +2261,8 @@
       "desktopNote": "Wyszukiwanie i czytanie stron zużywa ten limit tylko gdy aplikacja jest wyłączona",
       "buy": "Kup więcej generacji",
       "buyHint": "Zakup dodatkowych generacji wkrótce"
-    }
+    },
+    "caption": "Limit"
   },
   "forcePassword": {
     "title": "Zmień hasło",
@@ -2071,5 +2500,15 @@
   },
   "messageImages": {
     "loadFailed": "Nie udało się załadować tego obrazu"
+  },
+  "reasoningDisclosure": {
+    "thinking": "Myślenie…"
+  },
+  "workLog": {
+    "title": "Dziennik pracy",
+    "actions_one": "{{count}} akcja",
+    "actions_other": "{{count}} akcji",
+    "errors_one": "{{count}} błąd",
+    "errors_other": "{{count}} błędów"
   }
 }

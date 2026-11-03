@@ -1,5 +1,127 @@
 {
-  "toolActivity": {"labels": {"readPage": "Čtení stránky"}, "names": {"read_webpage": "Čtení stránky", "web_reader": "Čtení stránky"}},
+  "toolActivity": {
+    "labels": {
+      "readPage": "Čtení stránky",
+      "search": "Web vyhledávání",
+      "saveNote": "Uložit poznámku",
+      "noteSaved": "Poznámka uložena",
+      "listNotes": "Najít poznámky",
+      "readNote": "Přeístíst poznámku",
+      "deleteNote": "Smazat poznámku",
+      "readFile": "Čteníst soubor",
+      "writeFile": "Zapsat soubor",
+      "editFile": "Upravit soubor",
+      "searchFiles": "Prohledávat souborych",
+      "listFiles": "Prohlíjet soubory",
+      "command": "Pořítačový příkaz",
+      "ssh": "Příkaz serveru (SSH)",
+      "macro": "Spustit makro",
+      "browser": "Akce v prohlížeči",
+      "desktop": "Akce aplikace",
+      "task": "Vytvořit úkol",
+      "image": "Vytvořit obrázek",
+      "agent": "Práce agenta",
+      "avatar": "Stav avataru"
+    },
+    "names": {
+      "read_webpage": "Čtení stránky",
+      "web_reader": "Čtení stránky",
+      "add_blocks": " \"Přidat bloky",
+      "attach_file_to_response": " \"Příložit soubor",
+      "browser_control": " \"Ovládání prohlížeče",
+      "capture_screen": "Sazazení obrazovky",
+      "capture_webcam": "Sazaz kamery",
+      "change_server_user_password": "Změna hesla uživatele",
+      "check_emails": "Kontrola e-mailů",
+      "control_smart_home": "Domí chytrého domu",
+      "convert_video": "Konverze videa",
+      "create_pixel_image": "Vytvořit pixel art",
+      "create_server_user": "Vytvořit serverového uživate",
+      "delete_from_cold_memory": "Smazat z paměti",
+      "delete_my_task": "Smazat úkol",
+      "delete_note": "Smazat poznámku",
+      "describe_image": "Analýza obrázku",
+      "desktop_action": "Akce aplikace",
+      "edit_file_lines": "Upravit soubor",
+      "escalate_to_pro": "Přeejít na pokročilý model",
+      "execute_macro": "Spustit makro",
+      "execute_pc_command": "Příkaz pro počítač",
+      "execute_ssh_command": "Příkaz pro server",
+      "execute_visual_click": "Kliknutí na obrazovku",
+      "explore_fs": "Procházení sou souborů",
+      "finalize_issue": "Dokončit problém",
+      "find_transit_route": "Najít trasu",
+      "finish_task": "Dokončit úkol",
+      "generate_image": "Vytvořit obrázek",
+      "get_avatar_state": "Stav avataru",
+      "get_exchange_rates": "Kurzové měny",
+      "get_file_info": "Informace o souboru",
+      "get_map_pins": "Špičkyky na mapě",
+      "get_my_tasks": "Seznam úkolů",
+      "get_smart_devices": "Chytré domácí zařízení",
+      "get_user_time": "Aktuální čas",
+      "google_ai": "Dotaz Google AI",
+      "install_ssh_public_key": "Instace veřejného SSH klíče",
+      "invoke_subagent": "Spuvolnit agenta",
+      "list_devops_runbooks": "Serverové runbooky",
+      "list_devops_servers": "Seznam serverů",
+      "list_directory": "Obsah složky",
+      "list_mail_accounts": "E-mail účty",
+      "list_monitors": "Seznam monitorů",
+      "list_my_macros": "Seznam mých makr",
+      "list_my_notes": "Seznam poznámek",
+      "list_recent_chats": "Nedávné konverzace",
+      "map_control": "Mapa ovládání",
+      "newspaper_issue_contents": "Obsah čísla",
+      "newspapers_list": "Seznam novin",
+      "random_roll": "Hod kostky",
+      "read_attachment_file": "Přečíst přílohu",
+      "read_chat_context": "Přečíst kontext chatuu",
+      "read_devops_runbook": "Přečíst serverový runebec",
+      "read_email_attachment": "Přečíst přílohu v e-mailu",
+      "read_email_content": "Přečíst e-mail",
+      "read_file": "Čístíst soubor",
+      "read_memory": "Čístíst paměť",
+      "read_newspaper_item": "Čístíst článek",
+      "read_note": "Čístíst poznámku",
+      "save_note": "Uložit poznámku",
+      "save_to_cold_memory": "Uložit do paměti",
+      "schedule_task": "Naplánovat úkolu",
+      "search_attachment_file": "Prohledávat přílohu",
+      "search_chat_history": "Prohledávat historii komunikatovů",
+      "search_cold_memory": "Prohledávat paměť",
+      "search_file_keywords": "Vyhledávat soubor",
+      "search_nearby": "Najít v blízkelná místa",
+      "search_web": "Vyhledávání na webuu",
+      "send_email": "Odesílat e-mail",
+      "set_display_state": "Aktualizovat avatar",
+      "set_user_timezone": "Nastavit časové pásmo",
+      "spawn_subagent": "Spustit agenta",
+      "suggest_chat_link": "Odkaz na chat",
+      "suggest_devops_runbook": "Navrhnout server runbook",
+      "suggest_macro": "Navrhnout makro",
+      "suggest_server_creds_update": "Aktualovat přístup k serveru",
+      "update_core_memory": "Aktualovat základní paměť",
+      "update_my_task": "Aktualovat úkol",
+      "write_file": "Zapsat soubor",
+      "youtube_music_control": "Ovládání hudby",
+      "web_search": "Hledání na webu",
+      "image_gen": "Vytvořit obrázek",
+      "create_task": "Plánovat úkolu",
+      "set_avatar_mood": "Aktualizovat avatar",
+      "set_avatar_emotion": "Aktualizovat avatar"
+    },
+    "failed": "{{action}} — chyba chyba",
+    "returned": "Volhání bylo dokončeno, obdržena odpověď nástroje",
+    "unknown": "Výsledek nebyl uložen",
+    "error": "Chyba nástroje",
+    "noResult": "Výsledek tohoto volání není dostupný.",
+    "collapse": "Sbalit akce",
+    "more": "{{count}} dalšíchších akcí",
+    "internal": "Vnitřní akce · {{count}}",
+    "more_one": "{{count}} dalších akcí",
+    "more_other": "{{count}} dalších akcí"
+  },
   "advanced": {
     "smart": {
       "authorizeUrl": "https://oauth.yandex.ru/authorize?response_type=token&client_id=YOUR_CLIENT_ID",
@@ -79,6 +201,17 @@
         "step5": "Krok 5.",
         "step5Text": "Klikněte na Synchronizovat. Spárovaná zařízení z Zigbee2MQTT se zobrazí v seznamu níže.",
         "note": "Poznámka: MQTT broker musí být dosažitelný ze serveru, na kterém běží Chatter backend. Pokud broker vyžaduje autentizaci, uveďte ji v URL: mqtt://user:password@host:port"
+      },
+      "layout": {
+        "title": "Chtrý domov",
+        "connections": "Propojení",
+        "configured": "Konfigurováno",
+        "notConfigured": "Není konfigurován",
+        "configure": "Nastfigurovat",
+        "collapse": "Sbalitit",
+        "saveBroker": "Uložit adresu brókara",
+        "empty": "Propojte Yandex nebo Zigbee2MQTT, abyste viděli svá zařízení.",
+        "noDetails": "Žádné doplné detaily."
       }
     },
     "macros": {
@@ -108,7 +241,39 @@
       "enabled": "Povoleno",
       "pinned": "Připnuto (AI vždy vidí název)",
       "executionMode": "Režim spuštění",
-      "create": "Vytvořit makro"
+      "create": "Vytvořit makro",
+      "catalog": {
+        "pinnedLabel": "Připnoutout pro bota",
+        "pinnedState": "Připnuté",
+        "disabledState": "Vypnuto",
+        "help": "Uložené příkazy pro běžní akce. Vyberte makro, abyste si prohlihl jeho příkazy, upravili je nebo spustili.",
+        "search": "Najít makro",
+        "list": "Seznam makr",
+        "all": "Všechny",
+        "pinned": "Připnuté",
+        "disabled": "Vypnuté",
+        "defaultName": "Makro #{{number}}",
+        "edit": "Upravit makro",
+        "commandCount_one": "{{count}} příkaz",
+        "commandCount_other": "{{count}} příkazů",
+        "sequence": "Pořadí provedení",
+        "available": "Dostupné pro bota",
+        "availableHelp": "Tímto makro dokáže bot najít a spustit. Spustit jej můžete spustit ručně i bez ohledu na tento přepínač.",
+        "pinnedHelp": "Jeho název je vždy zahrnuten v kontextu bota, aby se akce lépe nacházela.",
+        "suggestionReady": "Název a popis byly přidány do návrhu. Pokud se vám vyhovují, uklložte je.",
+        "running": "Spouštění…",
+        "lastOutput": "Výstup z posledního běhu",
+        "noOutput": "Příkazy byly dokončeny bez textového výstu.",
+        "emptyTitle": "Zde se zobrazí vaše makra",
+        "emptyHelp": "Vytvořit makro pro akce, které často opakujete.",
+        "loadFailed": "Nedařilo nahrát makra.",
+        "retry": "Zkusit znovu znovu",
+        "discardTitle": "Nechat změny neuloložené?",
+        "discardHelp": "Změny v tomto tomto makru budou ztraceny.",
+        "discard": "Odebratit změny",
+        "deleteTitle": "Smazat „{{name}}“?",
+        "deleteHelp": "Makro bude ze vašeho seznamu odstráno."
+      }
     },
     "common": {
       "deleteFailed": "Smazání se nezdařilo",
@@ -137,7 +302,39 @@
       "autoApproveHelp": "AI může spouštět libovolný příkaz na vašem počítači bez dotazování",
       "allowedCommands": "Povolené příkazy (automatické schválení)",
       "patternsHelp": "Regex vzory pro příkazy, které AI může spustit bez potvrzení",
-      "patternPlaceholder": "Regex vzor (např. ^dir$ nebo ^ipconfig)"
+      "patternPlaceholder": "Regex vzor (např. ^dir$ nebo ^ipconfig)",
+      "layout": {
+        "confirmAutoTitle": "Povolit běh bez potvrzení?",
+        "confirmAutoHelp": "AI bude moci spouštět příkazy na PC bez dotazu, včetně příkazů, které modifikují nebo odmazují soubory.",
+        "confirmAutoEnable": "Zapnout",
+        "intro": "Vyberte, co může Chatter na tomto počítači dělat a kdy se má pt na potvrzení. Změny se projevn okamžitě.",
+        "files": "Soubory a složky",
+        "browse": "Prohledávat soubory a složky",
+        "browseHelp": "Povolit AI vyiscuvat složky a pohybovat v souborovém systému. Toto nastavení neuděluje přístup k obsahu souborů.",
+        "read": "Číst souborů bez potvrzení",
+        "readHelp": "Povolit AI číst obsahu souborů bez dotazu. Zaps souborů stále vyžaduje potvrzení.",
+        "execution": "Argument příkazů",
+        "auto": "Spouštět všechny příkazy bez potvrzení",
+        "autoHelp": "Vynehnout schvalování příkazů PC. Platí to také na příkazy měníící nebo mazající data; vestavěné bloky příkazů stále platí.",
+        "exceptions": "Příkaz bez potvrzení",
+        "exceptionsHelp": "Pravidla zde přidaná nebo pomocí funkce „Vždy povolit“. Odpovídající příkazy obejnejí potvrzení; ostatní příkazy se stále budou.",
+        "allApproved": "Všechny PC příkazy již automaticky schvány. Tyto pravidla jsou zachována a použijí se, pokud je toto nastavení vypn.",
+        "empty": "Zatím nejsou žádné výjimky. Přidejte příkaz, který chcete automaticky schválit.",
+        "matchMode": "Způsob párovování příkazů",
+        "exact": "Přesný příkaz",
+        "regex": "Výjulový výraz",
+        "command": "Příkaz",
+        "pattern": "Výjulový výraz",
+        "commandPlaceholder": "Například: git status",
+        "regexPlaceholder": "Například: ^git status$",
+        "exactHelp": "Celý příkaz se musí shodovat, včetně argumentů a velik písmen. Pravidlo je uloženo jako escapovaný sázkotvný regulární výraz.",
+        "regexHelp": "Pokročilé: shledání kdekoli v příkazu vynech potvrzení. Pro shodání celého příkaz použijte ^ a $. Uložená pravidla jsou zobraena jako regulární výrazy.",
+        "invalidRegex": "Neplatný regulární výraz. Zkontrolujte vzor.",
+        "duplicate": "Tato pravidlo již existuje.",
+        "saveFailed": "Změnu se nezelo uloit. Zkuste to to znovu.",
+        "loadFailed": "Nelzelo nahríst oprávnění PC.",
+        "retry": "Zkusit to znovu"
+      }
     },
     "ssh": {
       "fillRequired": "Zadejte název a veřejný klíč",
@@ -159,7 +356,11 @@
       "deleteTitle": "Smazat SSH klíč?",
       "deleteMessage": "Tento klíč bude smazán. Pokud je vybrán jako výchozí klíč pro nějaký server, tento odkaz bude vymazán.",
       "fullPair": "celý pár",
-      "publicOnly": "pouze veřejný"
+      "publicOnly": "pouze veřejný",
+      "addKey": "Přidat klíč",
+      "keyPairLabel": "Veřejný a soukromý",
+      "publicOnlyLabel": "Pouze veřejné",
+      "emptyKeys": "Zatím nejsou uklazena klíče."
     },
     "server": {
       "fillRequired": "Zadejte název, hostitele a uživatele",
@@ -201,7 +402,52 @@
       "deleteMessage": "Všechny politiky a nastavení serveru budou smazány.",
       "commandsTitle": "Příkazy: {{count}} — {{preview}}",
       "sudoCleared": "Sudo heslo vymazáno",
-      "sudoClearFailed": "Nepodařilo se vymazat sudo heslo"
+      "sudoClearFailed": "Nepodařilo se vymazat sudo heslo",
+      "layout": {
+        "keyHelp": "Pro přihlášení použijte vybraný klíč. Pokud jej vypnete, klíč zůstane dostupný pro instalaci na serveru.",
+        "clearSudo": "Smazat heslo sudo",
+        "intro": "SSH připojení, která kterých může Chatter pracovat s vašimi servery.",
+        "add": "Přidat server",
+        "edit": "Upravit server",
+        "search": "Najít server",
+        "emptyList": "Zatímů nebyyl žádný server přidán.",
+        "emptyTitle": "Vaše servery na jednom místě",
+        "emptyHelp": "Přideat SSH připojení. Nás můžete nechat Chatter pracovat s tímto serverem.",
+        "connection": "Připojení",
+        "authentication": "Účinek",
+        "permissions": "Oprávnění příkazů",
+        "loginMethod": "Metoda přihlášení",
+        "sshLogin": "SSH klíč",
+        "passwordLogin": "Heslo",
+        "sudo": "Heslo sudo",
+        "configured": "Uloženo",
+        "notConfigured": "Není uloženo",
+        "keepPassword": "Ponechat uloojené heslo",
+        "passwordPlaceholder": "Heslo připojení",
+        "keepSecrets": "Pole pro hesla nechte prázdná, abyste zachovali uložené hodnoty.",
+        "credentialsHelp": "Pro přihlášení zadejte heslo nebo zvolte SSH klíč s jeho soukromnou částí.",
+        "savedKey": "Uložený SSH klíč",
+        "clearOnSave": "Uložené heslo sudo bude odstraneno při uklení změn.",
+        "undoClear": "Pamatovat heslo sudo",
+        "working": "Kontroluje se…",
+        "testHelp": "Testuje uložené SSH připojení. Neuložené úpravy se nepívají.",
+        "automatic": "Příkazy spouští bez potvrzení.",
+        "ask": "Příkazy vyžadují potvrzení, kromě ulozených pravidel.",
+        "policiesHelp": "Pravidla ulozená pomocíou funkcí „Vždy povolit“. Odpovídající příkazy ignorují potvrzení. Vzorce jsou regulární výrazy.",
+        "noPolicies": "Pro tento server nejsou definována žádná výjimky příkazů.",
+        "allApproved": "Pro všechny příkazy je povoleno automatické schování. Individuální pravidla zůstanou zachována pro případ, kdy tuto funkci vypnete.",
+        "keysFailed": "Nelze nahrát SSH klíče. Uložený klíč byl v systému zachován.",
+        "policiesFailed": "Nelzelo nahríst pravidla příkazů.",
+        "loadFailed": "Nelzelo nahríst serovery.",
+        "retry": "Zkusit znovu",
+        "invalidPort": "Zadejte celé číslo portu od 1 do 65535.",
+        "discardTitle": "Omazat neuloložené změny?",
+        "discardHelp": "Změny v tomto připojení budou být ztraceny.",
+        "discard": "Odehodit změny",
+        "autoTitle": "Povolit spuštění bez potvrzení?",
+        "autoHelp": "AI bude moci spouštět příkazy na serveru bez dotazu, včetně těch modifikujících nebo mazících soubory.",
+        "enable": "Povolit"
+      }
     },
     "browserDownload": {
       "confirmTitle": "Stáhnout soubor?",
@@ -253,7 +499,42 @@
       "commandCount_other": "{{count}} příkazů",
       "commandCount": "{{count}} příkazů",
       "commandCount_few": "{{count}} příkazy",
-      "commandCount_many": "{{count}} příkazů"
+      "commandCount_many": "{{count}} příkazů",
+      "library": {
+        "intro": "Uložené pracovní postupy pro bota, od přípravy reportu až po konfiguraci aplikace. Proces popišete jednou a v chatech jej opakně využijete.",
+        "howTo": "Jak používat návody",
+        "howToBody": "Uložte si kroky, podmínky a očekávaný výsledek. Bot si vaše návody najde, přečte a během úkolu v nich postupuje. Uložení nic nespouští. Tyto popisují pracovní postup oddělený od nastavení osobnosti bota.",
+        "example": "Například si uložte „Týdenní reportu“ a pak v chatu se zejtejte: „Příravrav report podle mých návodů pro Týdenní reportu.\"",
+        "list": "Knihizovna návodů",
+        "search": "Najít návod",
+        "create": "Vytvořit návod",
+        "edit": "Upravit návod",
+        "loadFailed": "Nemožlo nahríst návody.",
+        "retry": "Zkusit znovu",
+        "loading": "Nahrávání instrukcí…",
+        "emptyMine": "Ještě nemáte žád instrukce.",
+        "emptyPublic": "Veřejné instrukce zatím nejsou.",
+        "emptyTitle": "Uložte si opakovaný pracovní postup",
+        "emptyHelp": "Vytvořte instrukci krok za krokem nebo si uložte z veřejné knihovny.",
+        "titlePlaceholder": "Například: Týdenní zpráva",
+        "contentPlaceholder": "Kdy by měl tento návod použít?\n\n1. Jaké informace je třeba získat?\n2. Co se má udělat a zkontroat?\n3. Jak by měl mít výsledek?",
+        "write": "Napsat",
+        "preview": "Náhle nádu",
+        "previewEmpty": "Pro zobrazení návodu přidejte text.",
+        "editorHelp": "Popište kroky, důležité podmínky a očekávan výsledek. Podržovány jsou nadpisy, seznamy a formátování Markdown.",
+        "editingPublic": "Editujete veřejný pokaz. Všechny uživatelé na tomto serveru vaše změny vidí.",
+        "publicSource": "Veřejný pokaz",
+        "updated": "Aktualizováno",
+        "publicHelp": "Tento pokaz uložte do knihovny, aby ho mohl bot najít. Kopii můžete upravovat nezále na originálu.",
+        "discardTitle": "Odpazit změny?",
+        "discardHelp": "Změměny v této instrukci budou ztraceny.",
+        "discard": "Odpazit změny",
+        "publishTitle": "Publikovat tuto instrukci?",
+        "publishHelp": "Vytvoří se veřejná kopie. Bude dostupná všim uživatelům na tomto serveru. Nejdříve ji zkontrolujte na obsah osobních údajů nebo tajemnic.",
+        "deleteTitle": "Smazat návaz?",
+        "deleteHelp": "Tento návaz bude odstraněn z vaší knihovny.",
+        "deletePublicHelp": "Veřejný návaz bude odstraněn pro všechny uživatele. Dříve uložené osobní kopie zůstanou zachovány."
+      }
     },
     "mail": {
       "title": "E-mailové účty",
@@ -506,7 +787,9 @@
       "billing": "Fakturace",
       "about": "O aplikaci",
       "data": "Data",
-      "admin": "Správa"
+      "admin": "Správa",
+      "personas": "Personýy",
+      "agents": "Agenti"
     },
     "browser": {
       "help": "Vyberte, které akce AI v prohlížeči vyžadují vaše potvrzení. Ruční akce nejsou ovlivněny.",
@@ -603,6 +886,35 @@
           "nameRequired": "Zadejte název osoby",
           "delete": "Osobu se nepodařilo smazat"
         }
+      },
+      "redesign": {
+        "showMore_one": "Zobrazit dalších {{count}} personý",
+        "showMore_other": "Zobrazit dalších {{count}} osobností",
+        "showLess": "Zobrazit méně",
+        "intro": "Persona je vaše jméno, identita a preference pro konverzaci. Detaily účtu jsou spravovány samostatně.",
+        "personas": "Osoby",
+        "selectHelp": "Využívá se v chatech bez samostatného výběru osoby.",
+        "default": "Vybráno",
+        "persona": "Persona",
+        "addPersona": "Přidat personu",
+        "newPersona": "Nová persona",
+        "editPersona": "Nastavení persony",
+        "makeDefault": "Použít jako výchozí",
+        "defaultSaved": "Vybráno",
+        "chatName": "Jméno v chatu",
+        "description": "Popis persony",
+        "identityHelp": "Toto jméno a avatar se zobrazí ve zprávách používajících tuto personu. Jméno vašeho účtu zůstane nezměněné.",
+        "memoryHelp": "Fakty o této osobnosti, kterých Chatter používá v konverzacích.",
+        "unsaved": "Neulololožené změny",
+        "primary": "Hlavní",
+        "primaryHelp": "Původní osobnost účtu. Lze ji upravit, ale nelze-ji smazat.",
+        "accountNameHelp": "Je viditelné pro administrátora serveru. Změní ani názvy ani nastavení vašich osobností.",
+        "discardTitle": "Přepnout jiný profil?",
+        "discardHelp": "Neuloložené změny aktuálního profilu budou ztraceny.",
+        "discard": "Přepnoutout bez uložení",
+        "deleteTitle": "Smazat profil?",
+        "deleteHelp": "Profil „{{name}}“ bude smazán.",
+        "saved": "Persona je uložena"
       }
     },
     "connections": {
@@ -698,6 +1010,17 @@
         "scenario": "Situace a kontext...",
         "examples": "Příklad dialogu...",
         "other": "Jakékoli zbývající pokyny..."
+      },
+      "catalog": {
+        "help": "Postava a komunikaikační styl bota.",
+        "search": "Najít prompt",
+        "create": "Vytvořit prompt",
+        "builtIn": "Výravěné",
+        "draft": "Návrh",
+        "newHelp": "V editoru nastavte jméno, popis a charakter nového bota.",
+        "discardTitle": "Neulololožené změny",
+        "discardHelp": "Přepnout na prompt? Neulololožené změny a návrh vygenerovanýý AI budou smazány.",
+        "discard": "Přepnout na prompt"
       }
     },
     "voice": {
@@ -719,7 +1042,19 @@
       "recognitionSourceLocalHint": "Místní Whisper",
       "recognitionSourceServer": "Na serveru",
       "recognitionSourceServerReady": "Dostupné · {{model}}",
-      "recognitionSourceServerUnavailable": "Nedostupné nebo není nakonfigurováno"
+      "recognitionSourceServerUnavailable": "Nedostupné nebo není nakonfigurováno",
+      "activation": {
+        "title": "Hlasová aktivace",
+        "enabled": "Odpovídat na volací slovo",
+        "help": "Spoušťí se lokálně na tomto počítači. Vypnutí zastaví nasávání mikrofonu aktivace",
+        "options": "Nastavení hlasové aktivace",
+        "names": "Jména a pozdravy",
+        "phrases": "Doplňovací fráze",
+        "sensitivity": "Citlivost",
+        "strict": "Méně falešných aktivací",
+        "sensitive": "Snazší aktivace",
+        "sensitivityHelp": "Vyšší citlivost lépe detekuje volací slova, ale může způsobovat více falešných aktivací. 50 % je předchochozí nastavení."
+      }
     },
     "restrictions": {
       "help": "Omezte přístup ke svým datům a nástrojům. Změny se ukládají okamžitě.",
@@ -745,12 +1080,35 @@
       "noWakeWordHelp": "Zastavit poslech budících slov (Alexa, Hey Jarvis, Hey Mycroft, Hey Rhasspy). Mikrofonní proud bude vypnut.",
       "injectionProtection": "Ochrana proti prompt injection",
       "injectionProtectionHint": "Pomáhá odlišit vaše pokyny od pokynů na webech, v e-mailech a souborech.",
-      "injectionProtectionHelp": "Pokud je vypnuta, ochranný protokol a značky nedůvěryhodného obsahu se modelu neposílají. Pokyny na webech, v e-mailech a souborech mohou ovlivnit odpovědi a volání nástrojů. Přístupová oprávnění a omezení serveru zůstávají v platnosti. Jednotlivé chaty mohou toto nastavení přepsat."
+      "injectionProtectionHelp": "Pokud je vypnuta, ochranný protokol a značky nedůvěryhodného obsahu se modelu neposílají. Pokyny na webech, v e-mailech a souborech mohou ovlivnit odpovědi a volání nástrojů. Přístupová oprávnění a omezení serveru zůstávají v platnosti. Jednotlivé chaty mohou toto nastavení přepsat.",
+      "hidePixelAvatar": "Skrýt pixelový avatar",
+      "hidePixelAvatarHelp": "Nahradí obječ inicilem bota. Bot nedostává žádné nástroje ani instrukce pro avatar. Vlastní obrázky promptů zůstanou viditelné.",
+      "layout": {
+        "agents": "Agenti",
+        "avatar": "Avatar",
+        "inheritedAvatar": "Kontírola není dostupná, dokud je pixelový avatar skrytý",
+        "privacy": "Osobní údaje",
+        "access": "Počíč a síť",
+        "helpers": "Agenti a avatar",
+        "security": "Ochrana",
+        "inheritedFull": "Již je vynuceno blokováním desktop nástů",
+        "inheritedGuest": "Již je vynuceno režím hosta",
+        "details": "O této ochraně",
+        "loadFailed": "Nedař se načístat omezení. Zkuste to znovu, aby zjistili aktuální nastavení.",
+        "retry": "Zkusit znovu načíst"
+      }
     },
     "models": {
       "title": "Nastavení modelů",
       "help": "Nastavení generování pro každý model. „Auto“ používá výchozí nastavení serveru.",
-      "empty": "Žádné vlastní modely. Přidejte modely pomocí MODELS_MANUAL na serveru."
+      "empty": "Žádné vlastní modely. Přidejte modely pomocí MODELS_MANUAL na serveru.",
+      "search": "Najít model",
+      "noResults": "Nebylyzeny žádné modely.",
+      "defaults": "Výchozí nastavení",
+      "changed_one": "{{count}} parametr byl změněn",
+      "changed_other": "{{count}} parametrů bylo změněno",
+      "reset": "Resetovat na výchozíí nastavení",
+      "noParameters": "Pro tento model nejsou nejsou k dispozici parametry generování."
     },
     "app": {
       "interfaceLanguage": "Jazyk rozhraní",
@@ -783,7 +1141,29 @@
       "desktopSearch": "Použít desktopový prohlížeč pro webové vyhledávání",
       "desktopSearchHelp": "Povolit search_web použití místního desktopového prohlížeče, když je tento poskytovatel vybrán.",
       "desktopReader": "Použít desktopový prohlížeč pro analýzu stránek",
-      "desktopReaderHelp": "Umožnit read_webpage analyzovat stránky v místním desktopovém prohlížeči. Pokud je zakázáno, backend může použít jiný nakonfigurovaný čtečku."
+      "desktopReaderHelp": "Umožnit read_webpage analyzovat stránky v místním desktopovém prohlížeči. Pokud je zakázáno, backend může použít jiný nakonfigurovaný čtečku.",
+      "layout": {
+        "appearance": "Vzhled",
+        "chat": "Chat",
+        "history": "Zobrazitelná historie chatu",
+        "renderHelp": "Nízká navednost zobrazí mén starších zpráv původ. Zbytek lze zobrazit. Toto nastavení platí při otevření chatu.",
+        "tokensHelp": "Zazuje použití tokenů v chatu.",
+        "webTitle": "Vyhledávání a čtení stránek na tomto PC",
+        "webQuotaHelp": "Když běží Chatter, vyhledávání a čtení stránek v pozadí pomocí Chromium nespoítávají do vaše měsíčního limitu. Níže aktivujte zvolené možnosti. Pozadíové úkoly můžete zastavit ve správci úkolů Chatter.",
+        "desktopBrowserConcurrency": "Souběžné úkoly",
+        "desktopBrowserConcurrencyHelp": "Kolik vyhledávání a čtení stránek může běžet najednou. Okno CAPTCHA zabírá místo, dokudji není zavřeno.",
+        "desktopSearch": "Hledat pomocí prohlížeče na tomto PC",
+        "desktopSearchHelp": "Při výběru vyhledávání desktopového prohlížení se použije prohlížeč na tomto počítači.",
+        "desktopReader": "Čístíst stránky v prohlížeči na tomto PC",
+        "desktopReaderHelp": "Umožňuje čtení stránek v prohlížeči na tomto počítači. Pokud je vypnuto, může být použit jiný konfigurovaný čtenec."
+      },
+      "themeHour": "Hodiny",
+      "themeMinute": "Minuty",
+      "themeSchedule": "Plánované",
+      "themeLightFrom": "Světlá od",
+      "themeDarkFrom": "Tmavý od",
+      "themeScheduleHelp": "Používá lokální čas vaše počítače. Pokud se oba č shodí, tmný režim zůst celý den.",
+      "attachmentAuto": "Auto · 90 % kontextu"
     },
     "toasts": {
       "saveSettingFailed": "Nepodařilo se uložit nastavení",
@@ -975,7 +1355,25 @@
       },
       "openCharacter": "Otevřít postavu",
       "openPersonas": "Otevřít persony",
-      "openChat": "Otevřít chat"
+      "openChat": "Otevřít chat",
+      "individualImports": "Importovat jednotlivé položky"
+    },
+    "avatar": {
+      "showShort": "Zobrazit avatar",
+      "controlShort": "Ovládídání bota",
+      "menu": "Pixelový avatar",
+      "show": "Zobrazit avatar",
+      "control": "Bot ovládá avatar",
+      "hiddenHint": "Místo pixelového avataru je zobrazován iniciál bota. Obječ si obnovte zde nebo v nastavení omezení.",
+      "menuHint": "Tato nastavení se vztahují k vašemu účtu. Obrazky promptů zůstanou viditelné."
+    },
+    "agents": {
+      "help": "Nastavení pro pomococníky, na kterých Chatter deleguje jednotlivé úkoly.",
+      "specialists": "Specializovaní agenti",
+      "specialistsHelp": "V内置ní agentí pomocníci s konkrétním úkolem. Chatter je volá během své práce.",
+      "loadFailed": "Nelzeze načíst nastavení agentů.",
+      "catalogFailed": "Nepodařilo nahrát katalog agentů.",
+      "empty": "Na tomto serveru ještě nejsou registhani žádní specializovaní agenti."
     }
   },
   "chat": {
@@ -1031,7 +1429,8 @@
       "followUpBrief": "Co dalšího byste chtěli upřesnit? Nepovinné",
       "followUpBriefPlaceholder": "Například: další otázky k stylu dialogu. Ponechte prázdné, aby model zvolil témata.",
       "startFollowUp": "Vytvořit doplňující otázky",
-      "followUpHelp": "Nové kolo zkoumající mezery pomocí předchozích otázek, odpovědí a uloženého kontextu. Předchozí dotazník zůstává v seznamu; konečné pokyny zohledňují všechna kola. Využívá váš modelový limit."
+      "followUpHelp": "Nové kolo zkoumající mezery pomocí předchozích otázek, odpovědí a uloženého kontextu. Předchozí dotazník zůstává v seznamu; konečné pokyny zohledňují všechna kola. Využívá váš modelový limit.",
+      "actionsSummary": "Akce · {{count}}"
     },
     "reasoning": {
       "auto": "Automaticky",
@@ -1084,7 +1483,14 @@
         "moveTo": "Přesunout do složky"
       },
       "notificationsOn": "Upozornění zapnuta",
-      "notificationsOff": "Upozornění vypnuta"
+      "notificationsOff": "Upozornění vypnuta",
+      "dateGroups": {
+        "today": "Dnes",
+        "yesterday": "Včera",
+        "thisWeek": "Tento týden",
+        "thisMonth": "Tento měsíc",
+        "older": "Dříve"
+      }
     },
     "empty": {
       "selectOrCreate": "Vyberte chat nebo vytvořte nový"
@@ -1129,7 +1535,8 @@
       "providerTooltip": "Poslední požadavek poskytovatele\nVstup: {{input}} tk\nZásah cache: {{cacheHit}} tk\nMiss cache: {{cacheMiss}} tk\nVýstup: {{output}} tk\nUvažování: {{reasoning}} tk\nModel: {{model}}",
       "reasoning": "Uvažování",
       "prompt": "prompt",
-      "cached": "v mezipaměti"
+      "cached": "v mezipaměti",
+      "cache": "Mezipam"
     },
     "macro": {
       "title": "Návrh makra",
@@ -1200,7 +1607,9 @@
       "normalTitle": "Režim kostky d20. Kliknutím změníte režim."
     },
     "composer": {
-      "placeholder": "Napište zprávu..."
+      "placeholder": "Napište zprávu...",
+      "activityManager": "Správce aktivit",
+      "keyboardHint": "Stiskn Enter pro odeslat · Shift + Enter pro nový řádek"
     },
     "deleteChat": {
       "title": "Smazat chat?",
@@ -1454,7 +1863,8 @@
           "deleteSpace": "Nelze smazat paměť",
           "updateRecord": "Paměť se nepodařilo aktualizovat",
           "deleteRecord": "Paměť se nepodařilo smazat"
-        }
+        },
+        "preferencesTitle": "Nastavení paměti"
       },
       "modeLabel": "Použít paměť",
       "mode": {
@@ -1501,6 +1911,23 @@
     "contextSummary": {
       "title": "Souhrn dřívější konverzace",
       "meta": "{{count}} zpráv · {{model}}"
+    },
+    "approvals": {
+      "expandDiff": "Rozbalit změny",
+      "queue": "Čeká na schválení: {{count}}",
+      "commentFor": "Komentář k zamítnutí: {{title}}",
+      "rejectAndSend": "Zamítnout a odeslat",
+      "permissions": "O možnosti oprávnění",
+      "expandEmail": "Rozbalit e-mail",
+      "failed": "Nelzeze možné odeslat rozhodnutí"
+    },
+    "activityManager": {
+      "empty": "Zadíí aktivity pro tento chatát budou zobrazeny zde.",
+      "working": "Pracuje",
+      "idle": "Nečaktivý",
+      "challenge": "Vyžaduje pozornost",
+      "stop": "Zastavit: {{title}}",
+      "actionFailed": "Nedazelo se provést akcici"
     }
   },
   "promptSelector": {
@@ -1644,7 +2071,8 @@
       "testRoomRedirect": "Přesměrováno z místnosti",
       "testNewChat": "Vytvořen nový chat",
       "testSilent": "Úloha nevygenerovala žádnou zprávu (prázdná odpověď).",
-      "testFailed": "Spuštění testu se nezdařilo"
+      "testFailed": "Spuštění testu se nezdařilo",
+      "loadMore": "Načíst více"
     },
     "browser": {
       "title": "Prohlížeč",
@@ -1833,7 +2261,8 @@
       "desktopNote": "Vyhledávání a čtení stránek tento limit čerpají, jen když je aplikace vypnutá",
       "buy": "Koupit další generace",
       "buyHint": "Nákup dalších generací brzy přibude"
-    }
+    },
+    "caption": "Kvota"
   },
   "forcePassword": {
     "title": "Změnit heslo",
@@ -2071,5 +2500,15 @@
   },
   "messageImages": {
     "loadFailed": "Tento obrázek se nepodařilo načíst"
+  },
+  "reasoningDisclosure": {
+    "thinking": "Přemýšlíí…"
+  },
+  "workLog": {
+    "title": "Denník práce",
+    "actions_one": "{{count}} akce",
+    "actions_other": "{{count}} akcí",
+    "errors_one": "{{count}} chybaba",
+    "errors_other": "{{count}} chybou"
   }
 }

@@ -1,5 +1,127 @@
 {
-  "toolActivity": {"labels": {"readPage": "读取网页"}, "names": {"read_webpage": "读取网页", "web_reader": "读取网页"}},
+  "toolActivity": {
+    "labels": {
+      "readPage": "读取网页",
+      "search": "网络搜索",
+      "saveNote": "保存笔记",
+      "noteSaved": "笔记已保存",
+      "listNotes": "查找笔记",
+      "readNote": "阅读笔记",
+      "deleteNote": "删除笔记",
+      "readFile": "读取文件",
+      "writeFile": "写入文件",
+      "editFile": "编辑文件",
+      "searchFiles": "搜索文件",
+      "listFiles": "浏览文件",
+      "command": "计算机命令",
+      "ssh": "服务器命令",
+      "macro": "运行宏",
+      "browser": "浏览器操作",
+      "desktop": "应用操作",
+      "task": "创建任务",
+      "image": "创建图片",
+      "agent": "代理工作",
+      "avatar": "化 状态"
+    },
+    "names": {
+      "read_webpage": "读取网页",
+      "web_reader": "读取网页",
+      "add_blocks": "添加模块",
+      "attach_file_to_response": "附件文件",
+      "browser_control": "浏览器控制",
+      "capture_screen": "屏幕截图",
+      "capture_webcam": "摄像头拍摄",
+      "change_server_user_password": "更改服务器密码",
+      "check_emails": "检查邮件",
+      "control_smart_home": "智能家居控制",
+      "convert_video": "视频转换",
+      "create_pixel_image": "创建像素画",
+      "create_server_user": "创建服务器用户",
+      "delete_from_cold_memory": "从内存中删除",
+      "delete_my_task": "删除任务",
+      "delete_note": "删除笔记",
+      "describe_image": "图像分析",
+      "desktop_action": "应用操作",
+      "edit_file_lines": "编辑文件",
+      "escalate_to_pro": "切换到高级模型",
+      "execute_macro": "运行宏",
+      "execute_pc_command": "电脑命令",
+      "execute_ssh_command": "服务器命令",
+      "execute_visual_click": "屏幕点击",
+      "explore_fs": "浏览文件",
+      "finalize_issue": "完成问题",
+      "find_transit_route": "查找路线",
+      "finish_task": "完成任务",
+      "generate_image": "创建图像",
+      "get_avatar_state": "头像状态",
+      "get_exchange_rates": "汇率",
+      "get_file_info": "文件信息",
+      "get_map_pins": "地图图点",
+      "get_my_tasks": "任务列表",
+      "get_smart_devices": "智能家居设备",
+      "get_user_time": "当前时间",
+      "google_ai": "Google AI 查询",
+      "install_ssh_public_key": "安装 SSH密钥",
+      "invoke_subagent": "调用代理",
+      "list_devops_runbooks": "服务器运行手册",
+      "list_devops_servers": "服务器列表",
+      "list_directory": "目录内容",
+      "list_mail_accounts": "邮箱账户",
+      "list_monitors": "监控列表",
+      "list_my_macros": "宏列表",
+      "list_my_notes": "笔记列表",
+      "list_recent_chats": "最近聊天",
+      "map_control": "地图控制",
+      "newspaper_issue_contents": "期刊内容",
+      "newspapers_list": "报纸列表",
+      "random_roll": "掷骰子",
+      "read_attachment_file": "读取附件",
+      "read_chat_context": "读取聊天上下文",
+      "read_devops_runbook": "读取服务器运维手册",
+      "read_email_attachment": "读取邮件附件",
+      "read_email_content": "读取邮件",
+      "read_file": "读取文件",
+      "read_memory": "读取内存",
+      "read_newspaper_item": "阅读文章",
+      "read_note": "阅读笔记",
+      "save_note": "保存笔记",
+      "save_to_cold_memory": "保存到记忆",
+      "schedule_task": "调度任务",
+      "search_attachment_file": "搜索附件",
+      "search_chat_history": "搜索聊天历史",
+      "search_cold_memory": "搜索记忆",
+      "search_file_keywords": "搜索文件",
+      "search_nearby": "查找附近地点",
+      "search_web": "网络搜索",
+      "send_email": "发送电子邮件",
+      "set_display_state": "更新头像",
+      "set_user_timezone": "设置时区",
+      "spawn_subagent": "启动代理",
+      "suggest_chat_link": "聊天链接",
+      "suggest_devops_runbook": "建议服务器运维手册",
+      "suggest_macro": "建议宏",
+      "suggest_server_creds_update": "更新服务器访问权限",
+      "update_core_memory": "更新核心内存",
+      "update_my_task": "更新任务",
+      "write_file": "写入文件",
+      "youtube_music_control": "音乐控制",
+      "web_search": "网络搜索",
+      "image_gen": "生成图片",
+      "create_task": "安排任务",
+      "set_avatar_mood": "更新头像心情",
+      "set_avatar_emotion": "更新头像表情"
+    },
+    "failed": "{{action}} — 错误",
+    "returned": "调用完成，已收到工具响应",
+    "unknown": "结果未保存",
+    "error": "工具错误",
+    "noResult": "此调用结果不可用。",
+    "collapse": "折叠操作",
+    "more": "{{count}} 个更多操作",
+    "internal": "内部操作 · {{count}}",
+    "more_one": "{{count}} 个更多操作",
+    "more_other": "{{count}} 更多操作"
+  },
   "common": {
     "loading": "加载中...",
     "pleaseWait": "请稍候...",
@@ -185,7 +307,9 @@
       "billing": "账单",
       "about": "关于",
       "data": "数据",
-      "admin": "管理员"
+      "admin": "管理员",
+      "personas": "角色",
+      "agents": "代理"
     },
     "browser": {
       "help": "选择哪些 AI 浏览器操作需要你的确认。手动操作不受影响。",
@@ -282,6 +406,35 @@
           "nameRequired": "请输入角色名称",
           "delete": "无法删除角色"
         }
+      },
+      "redesign": {
+        "showMore_one": "显示更多 {{count}} 个角色",
+        "showMore_other": "显示更多 {{count}} 个角色",
+        "showLess": "收起",
+        "intro": "角色代表了您的名称、身份和对话偏好。账户详情另行管理。",
+        "personas": "角色",
+        "selectHelp": "用于无需单独选择角色的聊天中",
+        "default": "已选择",
+        "persona": "角色设",
+        "addPersona": "添加角色设",
+        "newPersona": "新角色设",
+        "editPersona": "角色设置",
+        "makeDefault": "设为默认",
+        "defaultSaved": "已选择角色",
+        "chatName": "聊天昵称",
+        "description": "角色描述",
+        "identityHelp": "此名称和头像将显示在使用该角色的消息中。您的账户名称保持不变。",
+        "memoryHelp": "Chatter 在对话中使用关于此角色的事实。",
+        "unsaved": "未保存的更改",
+        "primary": "主角色",
+        "primaryHelp": "原始账户角色。可以编辑但无法删除。",
+        "accountNameHelp": "服务器管理员可见。不会更改您的角色名称或设置。",
+        "discardTitle": "切换角色？",
+        "discardHelp": "当前角色的未保存更改将会丢失。",
+        "discard": "不保存并切换",
+        "deleteTitle": "删除角色？",
+        "deleteHelp": "角色“{{name}}”将被删除。",
+        "saved": "人设已保存"
       }
     },
     "prompt": {
@@ -354,6 +507,17 @@
         "scenario": "情境和背景……",
         "examples": "示例对话……",
         "other": "任何剩余说明..."
+      },
+      "catalog": {
+        "help": "机器人的性格和沟通风格。",
+        "search": "查找提示词",
+        "create": "创建提示词",
+        "builtIn": "内置",
+        "draft": "草稿",
+        "newHelp": "在编辑器中设置新机器人的名称、描述和角色。",
+        "discardTitle": "未保存的更改",
+        "discardHelp": "切换提示词吗？未保存的编辑和 AI 生成的建议将被弃。",
+        "discard": "切换提示词"
       }
     },
     "voice": {
@@ -375,7 +539,19 @@
       "recognitionSourceLocalHint": "本地Whisper",
       "recognitionSourceServer": "在服务器上",
       "recognitionSourceServerReady": "可用 · {{model}}",
-      "recognitionSourceServerUnavailable": "不可用或未配置"
+      "recognitionSourceServerUnavailable": "不可用或未配置",
+      "activation": {
+        "title": "语音激活",
+        "enabled": "响应唤醒词",
+        "help": "在此电脑上本地运行。关闭后将停止麦克风监听唤醒。",
+        "options": "语音激活设置",
+        "names": "名称与问候语",
+        "phrases": "额外短语",
+        "sensitivity": "灵敏度",
+        "strict": "减少误触",
+        "sensitive": "更容易激活",
+        "sensitivityHelp": "高灵敏度可以更易识别唤醒词，但可能会导致更多误触。50% 是之前的设置。"
+      }
     },
     "restrictions": {
       "help": "限制对数据和工具的访问。更改会立即保存。",
@@ -401,12 +577,35 @@
       "noWakeWordHelp": "停止监听唤醒词（Alexa、Hey Jarvis、Hey Mycroft、Hey Rhasspy）。麦克风流将被关闭。",
       "injectionProtection": "提示注入防护",
       "injectionProtectionHint": "帮助区分你的指令与网站、邮件和文件中的指令。",
-      "injectionProtectionHelp": "禁用后，防护协议和不受信任内容标记不会发送给模型。网站、电子邮件和文件中的指令可能会影响回复和工具调用。访问权限和服务器限制仍然生效。单个聊天可以覆盖此设置。"
+      "injectionProtectionHelp": "禁用后，防护协议和不受信任内容标记不会发送给模型。网站、电子邮件和文件中的指令可能会影响回复和工具调用。访问权限和服务器限制仍然生效。单个聊天可以覆盖此设置。",
+      "hidePixelAvatar": "隐藏像素头像",
+      "hidePixelAvatarHelp": "将脸部替换为机器人的首字母。机器人将无法获得头像工具或指令。自定义提示词图片保持可见。",
+      "layout": {
+        "agents": "代理",
+        "avatar": "头像",
+        "inheritedAvatar": "当像素头像隐藏时，无法进行控制",
+        "privacy": "个人数据",
+        "access": "电脑与网络",
+        "helpers": "代理与头像",
+        "security": "保护",
+        "inheritedFull": "已由桌面工具拦截执行",
+        "inheritedGuest": "已由访客模式执行",
+        "details": "关于此保护",
+        "loadFailed": "无法加载限制。请重试以查看当前设置。",
+        "retry": "重试加载"
+      }
     },
     "models": {
       "title": "模型设置",
       "help": "每个模型的生成参数。“自动”表示使用服务器默认值。",
-      "empty": "没有自定义模型。通过服务器上的 MODELS_MANUAL 添加模型。"
+      "empty": "没有自定义模型。通过服务器上的 MODELS_MANUAL 添加模型。",
+      "search": "查找模型",
+      "noResults": "未找到模型。",
+      "defaults": "默认设置",
+      "changed_one": "{{count}} 个参数已更改",
+      "changed_other": "{{count}} 个参数已更改",
+      "reset": "重置为默认设置",
+      "noParameters": "此模型没有可用的生成参数。"
     },
     "app": {
       "interfaceLanguage": "界面语言",
@@ -439,7 +638,29 @@
       "desktopSearch": "使用桌面浏览器进行网页搜索",
       "desktopSearchHelp": "当选择该提供商时，允许search_web使用本地桌面浏览器。",
       "desktopReader": "使用桌面浏览器解析页面",
-      "desktopReaderHelp": "允许read_webpage在本地桌面浏览器中解析页面。禁用时，后端可能使用其他配置的阅读器。"
+      "desktopReaderHelp": "允许read_webpage在本地桌面浏览器中解析页面。禁用时，后端可能使用其他配置的阅读器。",
+      "layout": {
+        "appearance": "外观",
+        "chat": "聊天",
+        "history": "可见聊天历史",
+        "renderHelp": "低表示初始显示较少旧消息。您可以查看其余消息。此设置适用于打开聊天界面时。",
+        "tokensHelp": "在聊天中显示 Token 使用情况。",
+        "webTitle": "在此电脑上的搜索和页面阅读",
+        "webQuotaHelp": "当 Chatter 运行时，通过后台 Chromium 进行的搜索和页面阅读不会计入月度额度。请在下方启用您需要的选项。您可以在 Chatter 的任务管理器中停止后台任务。",
+        "desktopBrowserConcurrency": "并发任务",
+        "desktopBrowserConcurrencyHelp": "允许同时运行的搜索和页面阅读数量。CAPTCHA 窗口在关闭前会占用一个名位。",
+        "desktopSearch": "使用此电脑上的浏览器进行搜索",
+        "desktopSearchHelp": "当选择桌面浏览器搜索时，将使用此电脑上的浏览器。",
+        "desktopReader": "在此 PC 上使用浏览器阅读页面",
+        "desktopReaderHelp": "允许使用此电脑上的浏览器阅读页面。关闭此项时，可能会使用其他配置的阅读器。"
+      },
+      "themeHour": "小时",
+      "themeMinute": "分钟",
+      "themeSchedule": "已计划",
+      "themeLightFrom": "浅色模式自：",
+      "themeDarkFrom": "深色模式自：",
+      "themeScheduleHelp": "使用电脑的本地时间。如果两个时间匹配，深色模式将全天开启。",
+      "attachmentAuto": "自动 · 90% 的上下文"
     },
     "toasts": {
       "saveSettingFailed": "保存设置失败",
@@ -654,7 +875,25 @@
       },
       "openCharacter": "打开角色",
       "openPersonas": "打开角色",
-      "openChat": "打开聊天"
+      "openChat": "打开聊天",
+      "individualImports": "导入单个项目"
+    },
+    "avatar": {
+      "showShort": "显示头像",
+      "controlShort": "机器人控制",
+      "menu": "像素头像",
+      "show": "显示头像",
+      "control": "机器人控制头像",
+      "hiddenHint": "将显示机器人的首字母而非像素头像。在此处或限制设置中恢复脸部显示。",
+      "menuHint": "这些设置适用于您的账户。提示词图片保持可见。"
+    },
+    "agents": {
+      "help": "Chatter 委托单个任务给助手的设置。",
+      "specialists": "专业代理",
+      "specialistsHelp": "具有特定任务的内置助手。Chatter 在工作时会调用它们。",
+      "loadFailed": "无法加载代理设置。",
+      "catalogFailed": "无法加载代理目录。",
+      "empty": "此服务器上尚未注册任何专用代理。"
     }
   },
   "chat": {
@@ -710,7 +949,8 @@
       "followUpBrief": "您还想了解什么？可选",
       "followUpBriefPlaceholder": "例如：更多关于对话风格的问题。留空则由模型自行选择主题。",
       "startFollowUp": "创建补充问题",
-      "followUpHelp": "新一轮将利用之前的问题、答案和已保存的上下文来探索空白。之前的问题集仍保留在列表中；最终指令会考虑所有轮次。会消耗您的模型配额。"
+      "followUpHelp": "新一轮将利用之前的问题、答案和已保存的上下文来探索空白。之前的问题集仍保留在列表中；最终指令会考虑所有轮次。会消耗您的模型配额。",
+      "actionsSummary": "操作 · {{count}}"
     },
     "reasoning": {
       "auto": "自动",
@@ -763,7 +1003,14 @@
         "moveTo": "移动到文件夹"
       },
       "notificationsOn": "通知已开启",
-      "notificationsOff": "通知已关闭"
+      "notificationsOff": "通知已关闭",
+      "dateGroups": {
+        "today": "今天",
+        "yesterday": "昨天",
+        "thisWeek": "本周",
+        "thisMonth": "本月",
+        "older": "更早"
+      }
     },
     "empty": {
       "selectOrCreate": "选择一个聊天或新建一个"
@@ -808,7 +1055,8 @@
       "reasoning": "推理",
       "prompt": "提示",
       "providerTooltip": "最新提供商请求\n输入：{{input}} tk\n缓存命中：{{cacheHit}} tk\n缓存未命中：{{cacheMiss}} tk\n输出：{{output}} tk\n推理：{{reasoning}} tk\n模型：{{model}}",
-      "cached": "已缓存"
+      "cached": "已缓存",
+      "cache": "缓存"
     },
     "macro": {
       "title": "宏建议",
@@ -888,7 +1136,9 @@
       "normalTitle": "d20骰子模式。点击切换模式。"
     },
     "composer": {
-      "placeholder": "输入消息..."
+      "placeholder": "输入消息...",
+      "activityManager": "活动管理器",
+      "keyboardHint": "回车发送 · Shift + Enter 换行"
     },
     "deleteChat": {
       "title": "删除聊天？",
@@ -1133,7 +1383,8 @@
           "deleteSpace": "无法删除记忆",
           "updateRecord": "无法更新记忆",
           "deleteRecord": "无法删除记忆"
-        }
+        },
+        "preferencesTitle": "记忆设置"
       },
       "modeLabel": "使用记忆",
       "mode": {
@@ -1180,6 +1431,23 @@
     "contextSummary": {
       "title": "更早的对话摘要",
       "meta": "{{count}} 条消息 · {{model}}"
+    },
+    "approvals": {
+      "expandDiff": "展开差异",
+      "queue": "等待审批：{{count}}",
+      "commentFor": "拒绝意见：{{title}}",
+      "rejectAndSend": "拒绝并发送",
+      "permissions": "权限选项",
+      "expandEmail": "展开邮件",
+      "failed": "无法提交决策"
+    },
+    "activityManager": {
+      "empty": "此聊天的后台活动将在此显示。",
+      "working": "忙中",
+      "idle": "空闲",
+      "challenge": "需要关注",
+      "stop": "停止：{{title}}",
+      "actionFailed": "无法完成操作"
     }
   },
   "promptSelector": {
@@ -1323,7 +1591,8 @@
       "testRoomRedirect": "从房间重定向",
       "testNewChat": "已创建新聊天",
       "testSilent": "任务未产生任何可报告的内容（空答案）。",
-      "testFailed": "运行测试失败"
+      "testFailed": "运行测试失败",
+      "loadMore": "加载更多"
     },
     "browser": {
       "title": "浏览器",
@@ -1522,7 +1791,39 @@
       "enabled": "已启用",
       "pinned": "已固定（AI始终可见名称）",
       "executionMode": "执行模式",
-      "create": "创建宏"
+      "create": "创建宏",
+      "catalog": {
+        "pinnedLabel": "固定到机器人",
+        "pinnedState": "已固定",
+        "disabledState": "已禁用",
+        "help": "日常操作的保存命令。选择宏以查看其命令、编辑它或运行它。",
+        "search": "查找宏",
+        "list": "宏列表",
+        "all": "全部",
+        "pinned": "已固定",
+        "disabled": "已禁用",
+        "defaultName": "宏 #{{number}}",
+        "edit": "编辑宏",
+        "commandCount_one": "{{count}} 条命令",
+        "commandCount_other": "{{count}} 条命令",
+        "sequence": "执行顺序",
+        "available": "机器人可用",
+        "availableHelp": "机器人可以找到并运行此宏。无论此开关处于何种状态，您都可以手动运行它。",
+        "pinnedHelp": "其名称将始终包含在机器人的上下文中，以便更易找到该操作。",
+        "suggestionReady": "名称和描述已添加到草稿中。如果合适，请保存。",
+        "running": "运行中…",
+        "lastOutput": "上一次运行输出",
+        "noOutput": "命令已完成，无文本输出。",
+        "emptyTitle": "您的宏将在此处显示",
+        "emptyHelp": "为您经常重复的动作创建宏。",
+        "loadFailed": "无法加载宏。",
+        "retry": "重试加载",
+        "discardTitle": "放弃未保存的更改吗？",
+        "discardHelp": "您对此宏的编辑将会丢失。",
+        "discard": "放弃更改",
+        "deleteTitle": "删除“{{name}}”?",
+        "deleteHelp": "该宏将从您的列表中移除。"
+      }
     },
     "common": {
       "deleteFailed": "删除失败",
@@ -1551,7 +1852,39 @@
       "autoApproveHelp": "AI将能够在您的电脑上执行任何命令而无需请求许可",
       "allowedCommands": "允许的命令（自动批准）",
       "patternsHelp": "AI无需确认即可执行的命令的Regex模式",
-      "patternPlaceholder": "Regex模式（例如 ^dir$ 或 ^ipconfig）"
+      "patternPlaceholder": "Regex模式（例如 ^dir$ 或 ^ipconfig）",
+      "layout": {
+        "confirmAutoTitle": "启用无需确认直接执行?",
+        "confirmAutoHelp": "AI 将能够在无需询问的情况下在您的电脑上运行命令，包括修改或删除文件的命令。",
+        "confirmAutoEnable": "启用",
+        "intro": "选择 Chatter 在此计算机上的功能以及它何时请求确认。更改将立即生效。",
+        "files": "文件和文件夹",
+        "browse": "浏览文件和文件夹",
+        "browseHelp": "允许 AI 列出文件夹并导航文件系统。此设置不会授予文件内容的访问权限。",
+        "read": "无需确认读取文件",
+        "readHelp": "允许 AI 在无需询问的情况下直接读取文件内容。写入文件仍需确认。",
+        "execution": "命令执行",
+        "auto": "无需确认运行所有命令",
+        "autoHelp": "跳过 PC 命令的审批请求。这同样适用于更改或删除数据的命令；内置命令块仍然有效。",
+        "exceptions": "无需确认的命令",
+        "exceptionsHelp": "在此处或通过“始终允许”添加规则。匹配的命令将跳过确认；其他其他命令仍会提示。",
+        "allApproved": "所有 PC 命令均已自动批准。这些规则将被保留，并在关闭该设置时生效。",
+        "empty": "暂无异常。添加您想要自动批准的命令。",
+        "matchMode": "命令匹配",
+        "exact": "精确命令",
+        "regex": "正则表达式",
+        "command": "命令",
+        "pattern": "正则表达式",
+        "commandPlaceholder": "例如：git status",
+        "regexPlaceholder": "例如：^git status$",
+        "exactHelp": "必须匹配整个命令，包括参数和大小写。它将以转义的锚定正则表达式的形式存储。",
+        "regexHelp": "高级：在命令中任何位置匹配都将跳过确认。使用 ^ 和 $ 匹配整个命令。保存的规则将以正则表达式的形式显示。",
+        "invalidRegex": "正则表达式无效。请检查模式。",
+        "duplicate": "此规则已存在。",
+        "saveFailed": "无法保存更改。请重试。",
+        "loadFailed": "无法加载 PC 权限。",
+        "retry": "重试"
+      }
     },
     "ssh": {
       "fillRequired": "请填写名称和公钥",
@@ -1573,7 +1906,11 @@
       "deleteTitle": "删除SSH密钥？",
       "deleteMessage": "此密钥将被删除。如果它被选为某个服务器的默认密钥，链接将被重置。",
       "fullPair": "完整密钥对",
-      "publicOnly": "仅公钥"
+      "publicOnly": "仅公钥",
+      "addKey": "添加密钥",
+      "keyPairLabel": "公钥和私钥",
+      "publicOnlyLabel": "仅限公钥",
+      "emptyKeys": "暂无保存的密钥。"
     },
     "server": {
       "fillRequired": "请填写名称、主机和用户",
@@ -1615,7 +1952,52 @@
       "deleteMessage": "所有服务器策略和设置将被删除。",
       "commandsTitle": "命令：{{count}} — {{preview}}",
       "sudoCleared": "sudo密码已清除",
-      "sudoClearFailed": "无法清除sudo密码"
+      "sudoClearFailed": "无法清除sudo密码",
+      "layout": {
+        "keyHelp": "使用所选密钥登录。关闭状态时，该密钥仍可用于安装到服务器上。",
+        "clearSudo": "移除 sudo 密码",
+        "intro": "Chatter 用于连接您的服务器的 SSH 连接。",
+        "add": "添加服务器",
+        "edit": "编辑服务器",
+        "search": "查找服务器",
+        "emptyList": "尚未添加服务器。",
+        "emptyTitle": "一键管理您的服务器",
+        "emptyHelp": "添加 SSH 连接。然后您就可以让 Chatter 与此服务器工作了",
+        "connection": "连接",
+        "authentication": "身份验证",
+        "permissions": "命令权限",
+        "loginMethod": "登录方式",
+        "sshLogin": "SSH密钥",
+        "passwordLogin": "密码",
+        "sudo": "Sudo 密码",
+        "configured": "已保存",
+        "notConfigured": "未保存",
+        "keepPassword": "保留已保存的密码",
+        "passwordPlaceholder": "连接密码",
+        "keepSecrets": "留空密码字段以保留已保存的值",
+        "credentialsHelp": "输入密码或选择带有私钥的 SSH 密钥进行登录",
+        "savedKey": "已保存的 SSH 密钥",
+        "clearOnSave": "保存更改时将移除保存的 sudo 密码。",
+        "undoClear": "保留 sudo 密码",
+        "working": "检查中…",
+        "testHelp": "检查保存的 SSH 连接。不使用未保存的编辑。",
+        "automatic": "无需确认直接运行命令。",
+        "ask": "命令需要确认，已保存规则除外。",
+        "policiesHelp": "通过“始终允许”保存的规则。匹配的命令将跳过确认。。模式支持正则表达式。",
+        "noPolicies": "此服务器没有命令例外。",
+        "allApproved": "已对所有命令启用自动批准。单条规则将保留，以便在关闭时使用。",
+        "keysFailed": "无法加载 SSH 密钥。已保留保存的密钥。",
+        "policiesFailed": "无法加载命令规则。",
+        "loadFailed": "无法加载服务器。",
+        "retry": "重试",
+        "invalidPort": "请输入 1 到 65535 之间的整数端口。",
+        "discardTitle": "放弃未保存的更改吗？",
+        "discardHelp": "对此连接的更改将丢失。",
+        "discard": "放弃更改",
+        "autoTitle": "启用无确认执行？",
+        "autoHelp": "AI 将能够在无需询问的情况下在此服务器上运行命令，包括修改或删除文件的命令。",
+        "enable": "启用"
+      }
     },
     "runbook": {
       "enterText": "输入指令文本",
@@ -1658,7 +2040,42 @@
       "commandCount_few": "{{count}} 条命令",
       "commandCount_many": "{{count}} 条命令",
       "commandCount_other": "{{count}} 条命令",
-      "commandCount": "{{count}} 条命令"
+      "commandCount": "{{count}} 条命令",
+      "library": {
+        "intro": "保存机器人的工作流，从准备报告到配置应用。描述一次流程，即可在聊天中重复使用。",
+        "howTo": "使用说明",
+        "howToBody": "保存步骤、条件和预期结果。机器人可以查找并读取您的指令并在任务执行期间遵循。保存操作不会运行任何程序。这些描述的是工作流，与机器人的人格设置相互独立。",
+        "example": "例如，保存“每周报告”，然后在聊天中询问：“按照我的‘每周报告’指令准备一份报告。”",
+        "list": "指令库",
+        "search": "查找指令",
+        "create": "创建指令",
+        "edit": "编辑指令",
+        "loadFailed": "无法加载指令",
+        "retry": "重试",
+        "loading": "正在加载指令…",
+        "emptyMine": "您尚没有任何指令。",
+        "emptyPublic": "目前没有公开指令。",
+        "emptyTitle": "保存您重复使用的工作流",
+        "emptyHelp": "创建分步指令，或从公共库中保存指令。",
+        "titlePlaceholder": "例如，每周报告",
+        "contentPlaceholder": "何时应该使用此指令?\n\n1. 应该收集哪些信息?\n2. 应该执行哪些操作并检查?\n3. 结果应该是什么样的？",
+        "write": "编写",
+        "preview": "预览",
+        "previewEmpty": "添加文本以预览您的指令。",
+        "editorHelp": "描述步骤、重要条件和预期结果。支持标题、列表和其他其他 Markdown 格式。",
+        "editingPublic": "您正在编辑公开指令。此服务器上的所有用户都将看到您的更改。",
+        "publicSource": "公开指令",
+        "updated": "已更新",
+        "publicHelp": "将此指令保存到您的库中以便机器人找到它。您可以独立于原始文件编辑您的副本。",
+        "discardTitle": "放弃更改吗？",
+        "discardHelp": "您对此条指令的编辑将会丢失。",
+        "discard": "放弃更改",
+        "publishTitle": "要发布此条指令吗？",
+        "publishHelp": "将创建一个公共副本。其内容将对此服务器上的所有用户可见。请先检查是否包含个人信息或密钥。",
+        "deleteTitle": "删除指令？",
+        "deleteHelp": "此指令将从您的库中移除。",
+        "deletePublicHelp": "公共指令将从所有用户中移除。之前保存的个人副本将保留。"
+      }
     },
     "smart": {
       "loadFailed": "无法加载智能家居设置",
@@ -1738,6 +2155,17 @@
         "step5": "步骤 5。",
         "step5Text": "点击同步。来自 Zigbee2MQTT 的已配对设备将出现在下面的列表中。",
         "note": "注意：MQTT 代理必须可从运行 Chatter 后端的服务器访问。如果代理需要身份验证，请在 URL 中包含：mqtt://user:password@host:port"
+      },
+      "layout": {
+        "title": "智能家居",
+        "connections": "连接",
+        "configured": "已配置",
+        "notConfigured": "未配置",
+        "configure": "配置",
+        "collapse": "收起",
+        "saveBroker": "保存代理地址",
+        "empty": "连接 Yandex 或 Zigbee2MQTT 以查看您的设备。",
+        "noDetails": "无更多详情。"
       }
     },
     "mail": {
@@ -1824,7 +2252,8 @@
       "desktopNote": "仅在应用关闭时，搜索和网页阅读才会消耗此限额",
       "buy": "购买更多生成次数",
       "buyHint": "额外生成次数购买即将上线"
-    }
+    },
+    "caption": "配额"
   },
   "forcePassword": {
     "title": "更改密码",
@@ -2062,5 +2491,15 @@
   },
   "messageImages": {
     "loadFailed": "无法加载此图片"
+  },
+  "reasoningDisclosure": {
+    "thinking": "思考中…"
+  },
+  "workLog": {
+    "title": "工作日志",
+    "actions_one": "{{count}} 次操作",
+    "actions_other": "{{count}} 次操作",
+    "errors_one": "{{count}} 个错误",
+    "errors_other": "{{count}} 处错误"
   }
 }
