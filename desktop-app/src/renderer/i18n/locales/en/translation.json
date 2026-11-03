@@ -298,6 +298,7 @@
       "about": "About"
     },
     "data": {
+      "individualImports": "Import individual items",
       "help": "Import data from other applications. Chatter backup and export will be added here later.",
       "sillyTavern": {
         "title": "Move from SillyTavern",

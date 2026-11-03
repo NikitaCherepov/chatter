@@ -290,10 +290,6 @@
     "key": "advanced.mail.appPassword"
   },
   {
-    "section": "smart_home",
-    "key": "advanced.smart.zigbee.title"
-  },
-  {
     "section": "restrictions",
     "key": "settings.restrictions.injectionProtection",
     "relatedKeys": [
@@ -395,19 +391,23 @@
   },
   {
     "section": "data",
-    "key": "settings.data.backup.title"
+    "key": "settings.data.backup.title",
+    "relatedKeys": ["settings.data.backup.button"]
   },
   {
     "section": "data",
-    "key": "settings.data.character.title"
+    "key": "settings.data.character.title",
+    "relatedKeys": ["settings.data.character.button"]
   },
   {
     "section": "data",
-    "key": "settings.data.personas.title"
+    "key": "settings.data.personas.title",
+    "relatedKeys": ["settings.data.personas.button"]
   },
   {
     "section": "data",
-    "key": "settings.data.chats.title"
+    "key": "settings.data.chats.title",
+    "relatedKeys": ["settings.data.chats.button"]
   },
   {
     "section": "personas",
@@ -423,11 +423,8 @@
   },
   {
     "section": "smart_home",
-    "key": "advanced.smart.oauthToken"
-  },
-  {
-    "section": "smart_home",
-    "key": "advanced.smart.deviceSync"
+    "key": "advanced.smart.layout.connections",
+    "relatedKeys": ["advanced.smart.zigbee.title", "advanced.smart.oauthToken", "advanced.smart.deviceSync", "advanced.smart.sync", "advanced.smart.layout.saveBroker"]
   },
   {
     "section": "agents",

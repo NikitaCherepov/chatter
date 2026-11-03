@@ -1,4 +1,6 @@
 import { useTranslation } from 'react-i18next';
+import { useState } from 'react';
+import { AnimatedCollapse } from './AnimatedDisclosure';
 import { MemorySetupNotice } from './MemorySetupNotice';
 import type { SillyTavernBackupPreview, BackupImportProgress } from '../lib/api';
 import s from './SillyTavernChatImportDialog.module.scss';
@@ -14,6 +16,7 @@ type Props = {
 
 export function SillyTavernBackupImportDialog({ preview, importing, progress, onCancel, onImport }: Props) {
   const { t, i18n } = useTranslation();
+  const [showNotes, setShowNotes] = useState(false);
   const groups = preview.groups;
   const totalChats = preview.chats.count + groups.history_count;
   const importable = preview.characters.count + preview.personas.count + totalChats;
@@ -87,15 +90,18 @@ export function SillyTavernBackupImportDialog({ preview, importing, progress, on
               {warnings.map(warning => <li key={warning}>{t('settings.data.backup.warnings.' + warning)}</li>)}
             </ul>
           )}
-          <details className={b.notes}>
-            <summary>{t('settings.data.backup.summary.more')}</summary>
-            <div>
+          <div className={b.notes}>
+            <button type="button" className={b.notesToggle} aria-expanded={showNotes} onClick={() => setShowNotes(value => !value)}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><path d="m9 5 7 7-7 7" /></svg>
+              {t('settings.data.backup.summary.more')}
+            </button>
+            <AnimatedCollapse open={showNotes}><div className={b.noteBody}>
               <p>{t('settings.data.backup.summary.cancelNote')}</p>
               {groups.history_count > 0 && <p>{t('settings.data.backup.summary.groupNote')}</p>}
               {preview.warnings.includes('other_data_ignored') && <p>{t('settings.data.backup.warnings.other_data_ignored')}</p>}
               {preview.chat_memory.chat_count > 0 && <p>{t('settings.data.backup.summary.vectorNote')}</p>}
-            </div>
-          </details>
+            </div></AnimatedCollapse>
+          </div>
         </div>
         <div className={[s.actions, b.actions].join(' ')}>
           {progress && <span className={b.progress} role="status">{t('settings.data.backup.progress.' + progress.stage, { done: progress.done, total: progress.total })}</span>}

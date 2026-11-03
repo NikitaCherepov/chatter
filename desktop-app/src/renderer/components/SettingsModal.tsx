@@ -2221,14 +2221,15 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
               <p className={s.connectionsHelp}>{t('settings.data.sillyTavern.help')}</p>
 
               <div className={s.dataImportGrid}>
-                <section className={s.dataImportCard}>
+                <section className={`${s.dataImportCard} ${s.dataImportFeatured}`}>
                   <div>
+                    <span className={s.dataImportIcon}><Icon name="database" size={18} /></span>
                     <h4>{t('settings.data.backup.title')}</h4>
                     <p>{t('settings.data.backup.help')}</p>
                   </div>
                   <div className={s.dataImportActions}>
                     <button
-                      className={s.cancelBtn}
+                      className={s.saveBtn}
                       type="button"
                       onClick={() => sillyTavernBackupInputRef.current?.click()}
                       disabled={sillyTavernBackupReading || sillyTavernBackupImporting}
@@ -2265,11 +2266,12 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
                 </section>
               </div>
 
-              <div className={s.macroFormDivider} />
+              <h3 className={s.dataImportHeading}>{t('settings.data.individualImports')}</h3>
 
               <div className={s.dataImportGrid}>
                 <section className={s.dataImportCard}>
                   <div>
+                    <span className={s.dataImportIcon}><Icon name="avatar" size={18} /></span>
                     <h4>{t('settings.data.character.title')}</h4>
                     <p>{t('settings.data.character.help')}</p>
                   </div>
@@ -2295,6 +2297,7 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
 
                 <section className={s.dataImportCard}>
                   <div>
+                    <span className={s.dataImportIcon}><Icon name="user" size={18} /></span>
                     <h4>{t('settings.data.personas.title')}</h4>
                     <p>{t('settings.data.personas.help')}</p>
                   </div>
@@ -2320,6 +2323,7 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
 
                 <section className={s.dataImportCard}>
                   <div>
+                    <span className={s.dataImportIcon}><Icon name="file" size={18} /></span>
                     <h4>{t('settings.data.chats.title')}</h4>
                     <p>{t('settings.data.chats.help')}</p>
                   </div>
