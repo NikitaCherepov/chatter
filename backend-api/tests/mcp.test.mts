@@ -614,6 +614,32 @@ try {
   assert.match(publicPage.items[0].registry_url, /versions\/2.0/);
   await catalog.registryCatalog('fixture', publicPage.next_cursor);
   assert.equal(registryRequests, 2);
+  await request('/admin/users/81', 'PUT', { override: 'allow' });
+  const personalRegistry = await request('/user/81/mcp/catalog?search=fixture');
+  assert.equal(personalRegistry.status, 200);
+  assert.equal(
+    personalRegistry.body.items[0].name,
+    'com.example/test',
+    'custom permission enables public Registry',
+  );
+  const customFromRegistry = await request('/user/81/mcp/connections', 'POST', {
+    name: 'Registry server',
+    url: personalRegistry.body.items[0].url,
+  });
+  assert.equal(customFromRegistry.status, 201, 'Registry entries connect as custom URLs');
+  await request('/user/81/mcp/connections/' + customFromRegistry.body.connection.id, 'DELETE');
+  await request('/admin/users/81', 'PUT', { override: 'inherit' });
+  const restrictedCatalog = await request('/user/81/mcp/catalog?search=fixture');
+  assert.equal(restrictedCatalog.body.items.length, 0, 'revocation switches back to approved list');
+  assert.equal(
+    (
+      await request('/user/81/mcp/connections', 'POST', {
+        name: 'Denied',
+        url: 'https://unapproved.example/mcp',
+      })
+    ).status,
+    403,
+  );
   await assert.rejects(() => catalog.registryCatalog('ab'), /invalid_catalog_query/);
   await request('/admin/policy', 'PUT', {
     enabled: true,

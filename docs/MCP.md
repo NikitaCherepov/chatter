@@ -92,9 +92,12 @@ The official Registry is discovery metadata, not Chatter's security approval.
 The admin tab searches the public Registry (latest active remote Streamable
 HTTP entries, ten-minute cache, cursor pagination) or adds a server manually.
 Approval controls whether that server appears in the desktop catalog.
-The desktop catalog and its API expose only approved entries from Chatter's
-database; desktop search filters that list and never queries the Registry.
-Custom URLs retain their separate permission. There is no recommendation flag
+For users without custom-server permission, the desktop catalog and its API
+expose only approved entries from Chatter's database; search filters that list.
+Users allowed to add custom servers can also search the public Registry and
+connect its entries as custom URLs. The catalog-visibility setting gates both
+sources. Permissions are rechecked after Registry requests, and revocation hides
+remote results and clears any selected custom endpoint. There is no recommendation flag
 in either UI; the old database column is retained for compatibility.
 
 Public Registry cards include version, publisher, endpoint and HTTPS links to

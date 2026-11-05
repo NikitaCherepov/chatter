@@ -1,6 +1,7 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient, useInfiniteQuery } from '@tanstack/react-query';
 import { API_BASE } from './api';
 import { useAuth } from './auth';
+import { getMcpCatalog } from './mcp-service';
 import { useSettingsRead } from './useSettingsQueries';
 export function useMcp() {
   const { user } = useAuth(),
@@ -12,4 +13,18 @@ export function useMcp() {
     onSuccess: () => client.invalidateQueries({ queryKey: key }),
   });
   return { query, mutation };
+}
+
+export function useMcpCatalog(search: string | null, enabled: boolean) {
+  const { user } = useAuth();
+  return useInfiniteQuery({
+    queryKey: ['settings', API_BASE, user?.id, 'mcp', 'catalog', search],
+    queryFn: ({ pageParam, signal }) => getMcpCatalog(search || '', pageParam, signal),
+    initialPageParam: '',
+    getNextPageParam: (page) => page.next_cursor || undefined,
+    enabled: !!user && enabled && search !== null,
+    staleTime: 60_000,
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
 }

@@ -11,7 +11,7 @@ const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'chatter-mcp-ui-'));
 const desktopRequire = createRequire(path.join(root, 'desktop-app/package.json'));
 const styles: string[] = [];
 const fixture = String.raw`
-export const state={policy:{enabled:true,allow_custom:true,show_catalog:true},servers:[{id:1,name:'GitHub',url:'https://github.example/mcp',description:'Repositories and issues',allowed:1,recommended:1}],
+export const state={policy:{enabled:true,allow_custom:false,show_catalog:true},servers:[{id:1,name:'GitHub',url:'https://github.example/mcp',description:'Repositories and issues',allowed:1,recommended:1}],
 connections:[{id:1,name:'GitHub account',url:'https://github.example/mcp',enabled:1,mode:'search',timeout_seconds:300,has_credentials:true,blocked:false,tools:[{name:'search_repositories',description:'Search repositories'},{name:'create_issue',description:'Create an issue'}],selected_tools:null,capabilities:{tools:true,resources:true},resources:[{name:'Guide',uri:'notes://guide'}],resource_templates:[]}]};
 window.__calls=[];
 const access={allow_custom:{mode:'none',user_ids:[],excluded_user_ids:[]},show_catalog:{mode:'all',user_ids:[],excluded_user_ids:[]}};
@@ -188,6 +188,16 @@ let win;const errors=[];
  assert.equal(options.staleTime,60000,'same shared settings cache policy');
  assert.equal(options.polling,false,'no independent polling timer');
 
+ await js('window.__state.policy.allow_custom=true;window.emitMcpUpdate()');
+ await until('document.body.innerText.includes("Собственные MCP разрешены.")');
+ await js('(()=>{const input=document.querySelector(\'input[aria-label="Найти"]\');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value").set.call(input,"Sentry");input.dispatchEvent(new Event("input",{bubbles:true}));})()');
+ await click('Найти');
+ await until('document.body.innerText.includes("Remote tools")');
+ assert.ok(await js('!!document.querySelector(\'a[href="https://github.com/example/mcp"]\')'));
+ await click('Выбрать');
+ await until('document.querySelector(\'input[type="url"]\')?.value==="https://remote.example/mcp"');
+ await js('window.__state.policy.allow_custom=false;window.emitMcpUpdate()');
+ await until('!document.body.innerText.includes("Remote tools")&&!document.querySelector(\'input[type="url"]\')');
  if(process.env.MCP_UI_SCREENSHOT_DIR){await new Promise(r=>setTimeout(r,100));fs.writeFileSync(path.join(process.env.MCP_UI_SCREENSHOT_DIR,'mcp-desktop.png'),(await wc.capturePage()).toPNG());}
  await js('window.renderFixture("admin")');
  await until('document.body.innerText.includes("Политика доступа")');

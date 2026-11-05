@@ -1,5 +1,7 @@
 {
   "mcp": {
+    "registryHelp": "Custom MCP servers are allowed. Search the public Registry or add your own URL. Enter at least three characters to search.",
+    "noRegistryServers": "No servers found in the Registry.",
     "noApprovedServers": "No approved servers match this search.",
     "showCatalog": "Show the MCP catalog in desktop",
     "show": "Show",

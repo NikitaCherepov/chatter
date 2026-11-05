@@ -76,15 +76,25 @@ export function userMcpRouter(account: (req: any) => number) {
   );
   router.get(
     '/catalog',
-    route((req, res) => {
-      const access = policy(account(req));
-      if (!access.enabled) throw new Error('mcp_disabled');
-      if (!access.show_catalog) throw new Error('mcp_catalog_hidden');
-      const search = String(req.query.search || '')
-        .trim()
-        .toLowerCase();
+    route(async (req, res) => {
+      const userId = account(req);
+      const allowed = () => {
+        const access = policy(userId);
+        if (!access.enabled) throw new Error('mcp_disabled');
+        if (!access.show_catalog) throw new Error('mcp_catalog_hidden');
+        return access;
+      };
+      const access = allowed();
+      const search = String(req.query.search || '').trim();
       if (search.length > 120) throw new Error('mcp_invalid_catalog_query');
-      const words = search.split(/\s+/).filter(Boolean);
+      if (access.allow_custom) {
+        const result = await registryCatalog(search, String(req.query.cursor || ''));
+        if (allowed().allow_custom) {
+          res.json(result);
+          return;
+        }
+      }
+      const words = search.toLowerCase().split(/\s+/).filter(Boolean);
       const items = allServers().filter(
         (server) =>
           server.allowed &&

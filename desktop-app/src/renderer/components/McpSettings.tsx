@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
-import { useMcp } from '../lib/useMcp';
+import { useMcp, useMcpCatalog } from '../lib/useMcp';
 import * as api from '../lib/mcp-service';
 import { Select } from './Select';
 import Checkbox from './Checkbox';
@@ -18,6 +18,16 @@ export function McpSettings() {
   const [mode, setMode] = useState('search'),
     [timeout, setTimeoutValue] = useState(300);
   const [search, setSearch] = useState('');
+  const [catalogSearch, setCatalogSearch] = useState<string | null>(null);
+  const canSearchRegistry = !!(
+    query.data?.policy.enabled &&
+    query.data?.policy.show_catalog &&
+    query.data?.policy.allow_custom
+  );
+  const registry = useMcpCatalog(catalogSearch, canSearchRegistry);
+  useEffect(() => {
+    if (!canSearchRegistry) setCatalogSearch(null);
+  }, [canSearchRegistry]);
   const [authorization, setAuthorization] = useState('');
   useEffect(() => {
     const policy = query.data?.policy;
@@ -48,8 +58,9 @@ export function McpSettings() {
       toast.error(t('mcp.error') + ': ' + String(error?.message || ''));
     }
   };
-  const pick = (item: api.McpServer) => {
-    setServer(String(item.id));
+  const pick = (item: api.CatalogItem) => {
+    const approved = query.data?.servers.find((server) => server.url === item.url);
+    setServer(approved ? String(approved.id) : 'custom');
     setUrl(item.url);
     setName(item.name);
     setToken('');
@@ -67,11 +78,23 @@ export function McpSettings() {
   const data = query.data!,
     busy = mutation.isPending;
   const words = search.toLowerCase().trim().split(/\s+/).filter(Boolean);
-  const catalog = data.servers.filter((item) =>
+  const approvedCatalog = data.servers.filter((item) =>
     words.every((word) =>
       (item.name + ' ' + item.description + ' ' + item.url).toLowerCase().includes(word),
     ),
   );
+  const catalog: api.CatalogItem[] =
+    canSearchRegistry && catalogSearch !== null
+      ? [
+          ...new Map(
+            (registry.data?.pages.flatMap((page) => page.items) || []).map((item) => [
+              item.name + '\n' + item.url,
+              item,
+            ]),
+          ).values(),
+        ]
+      : approvedCatalog;
+  const showingRegistry = canSearchRegistry && catalogSearch !== null;
   return (
     <div className={s.panel}>
       <div className={s.panelTitle}>MCP</div>
@@ -209,8 +232,17 @@ export function McpSettings() {
       {data.policy.enabled && data.policy.show_catalog && (
         <section className={styles.catalog}>
           <h3>{t('mcp.catalog')}</h3>
-          <p className={s.connectionsHelp}>{t('mcp.catalogHelp')}</p>
-          <div className={styles.search}>
+          <p className={s.connectionsHelp}>
+            {t(canSearchRegistry ? 'mcp.registryHelp' : 'mcp.catalogHelp')}
+          </p>
+          <form
+            className={styles.search}
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (canSearchRegistry && (!search.trim() || search.trim().length >= 3))
+                setCatalogSearch(search.trim());
+            }}
+          >
             <input
               aria-label={t('mcp.search')}
               className={s.fieldInput}
@@ -218,20 +250,67 @@ export function McpSettings() {
               onChange={(e) => setSearch(e.target.value)}
               placeholder={t('mcp.search')}
             />
-          </div>
-          {!catalog.length && <p>{t('mcp.noApprovedServers')}</p>}
+            {canSearchRegistry && (
+              <button
+                className={s.cancelBtn}
+                disabled={registry.isFetching || (!!search.trim() && search.trim().length < 3)}
+              >
+                {t('mcp.search')}
+              </button>
+            )}
+          </form>
+          {showingRegistry && registry.isPending && <p role="status">{t('common.loading')}</p>}
+          {showingRegistry && registry.isError && <p role="alert">{t('mcp.error')}</p>}
+          {!catalog.length && !(showingRegistry && (registry.isPending || registry.isError)) && (
+            <p>{t(showingRegistry ? 'mcp.noRegistryServers' : 'mcp.noApprovedServers')}</p>
+          )}
           {catalog.map((item) => (
-            <div className={s.macroCard} key={item.id}>
-              <strong>{item.name}</strong>
+            <div className={s.macroCard} key={item.url + ' ' + item.name}>
+              <strong>{item.title || item.name}</strong>
+              {item.title && item.title !== item.name && <p className={styles.url}>{item.name}</p>}
               <p>{item.description}</p>
               <a href={item.url} target="_blank" rel="noopener noreferrer" className={styles.url}>
                 {item.url}
               </a>
+              {item.publisher && (
+                <p>
+                  {t('mcp.publisher')}: {item.publisher}
+                </p>
+              )}
+              {item.version && (
+                <p>
+                  {t('mcp.version')}: {item.version}
+                </p>
+              )}
+              {item.repository_url && (
+                <a href={item.repository_url} target="_blank" rel="noopener noreferrer">
+                  {t('mcp.repository')}
+                </a>
+              )}
+              {item.website_url && (
+                <a href={item.website_url} target="_blank" rel="noopener noreferrer">
+                  {t('mcp.website')}
+                </a>
+              )}
+              {item.registry_url && (
+                <a href={item.registry_url} target="_blank" rel="noopener noreferrer">
+                  {t('mcp.registryEntry')}
+                </a>
+              )}
               <button className={s.cancelBtn} disabled={busy} onClick={() => pick(item)}>
                 {t('mcp.select')}
               </button>
             </div>
           ))}
+          {showingRegistry && registry.hasNextPage && (
+            <button
+              className={s.cancelBtn}
+              disabled={registry.isFetching || search.trim() !== catalogSearch}
+              onClick={() => void registry.fetchNextPage()}
+            >
+              {t('mcp.more')}
+            </button>
+          )}
         </section>
       )}
     </div>

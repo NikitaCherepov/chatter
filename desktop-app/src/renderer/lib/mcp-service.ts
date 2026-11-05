@@ -52,3 +52,21 @@ export const authorizeMcp = (id: number) =>
   });
 export const cancelMcp = (id: number) =>
   apiFetch(base + '/connections/' + id + '/cancel', { method: 'POST' });
+
+export type CatalogItem = {
+  id?: number;
+  name: string;
+  title?: string;
+  description: string;
+  url: string;
+  version?: string;
+  publisher?: string;
+  repository_url?: string;
+  website_url?: string;
+  registry_url?: string;
+};
+export const getMcpCatalog = (search: string, cursor = '', signal?: AbortSignal) =>
+  apiFetch<{ items: CatalogItem[]; next_cursor: string | null }>(
+    base + '/catalog?' + new URLSearchParams({ search, cursor }),
+    { signal },
+  );
