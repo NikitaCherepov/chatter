@@ -5,7 +5,7 @@ import { BrowserVisualSession } from './browser-visual';
 import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, statfsSync, unlinkSync } from 'node:fs';
 import { copyFile, rename, unlink } from 'node:fs/promises';
-import { click as naturalClick, driftTo, generateTrajectory, pickTargetPoint, pressHumanKey, scrollWheel, typeHumanText, type CancellationToken, type MouseEventDispatcher, type Point } from './cursor-input';
+import { click as naturalClick, driftTo, generateTrajectory, pickTargetPoint, planIdleMotion, pressHumanKey, scrollWheel, typeHumanText, type CancellationToken, type MouseEventDispatcher, type Point } from './cursor-input';
 import { applyBrowserIdentity, buildBrowserIdentity, type BrowserIdentityHandle } from './browser-identity';
 
 export type BrowserState = {
@@ -383,8 +383,6 @@ export class ChatterBrowser {
   private identityReady: Promise<void> = Promise.resolve();
   /** Idle "phantom cursor" drift timer keeping pages seeing pointer life. */
   private idleDriftTimer: ReturnType<typeof setTimeout> | null = null;
-  /** Wandering anchor the idle drift gravitates towards. */
-  private idleDriftAnchor: Point | null = null;
   private readonly homeUrl: string;
   private readonly stateChannel: string;
   private readonly onStateChange?: (state: BrowserState) => void;
@@ -683,13 +681,7 @@ export class ChatterBrowser {
     };
   }
 
-  /**
-   * Keeps a phantom cursor "alive" between explicit interactions: a light
-   * random-walk drift that emits native mouseMove events every few seconds.
-   * Pages see continuous pointer presence (a fully static cursor is a bot
-   * heuristic), and real click trajectories start from a plausible position
-   * instead of the viewport center every time.
-   */
+  /** Schedule separate idle episodes, including long periods without input. */
   private scheduleIdleCursorDrift(): void {
     if (this.idleDriftTimer) return;
     const scheduleNext = (delay: number) => {
@@ -700,45 +692,29 @@ export class ChatterBrowser {
       this.idleDriftTimer = null;
       const contents = this.view.webContents;
       if (contents.isDestroyed()) return;
-      // Never interfere with an in-flight pointer sequence or scroll.
-      if (!this.interactionInProgress && !this.clickToken) {
+      let delay = 3000 + Math.random() * 5000;
+      if (!this.interactionInProgress && !this.clickToken && !this.googleAiInProgress) {
         try {
-          await this.performIdleCursorDrift(contents);
+          const bounds = this.view.getBounds();
+          if (bounds.width > 1 && bounds.height > 1) {
+            const plan = planIdleMotion(this.cursorPos, bounds);
+            delay = plan.pauseMs;
+            if (plan.target) await this.performIdleCursorDrift(contents, plan.target);
+          }
         } catch {
           // The view may be mid-teardown; the next tick re-checks liveness.
         }
       }
-      if (!this.view.webContents.isDestroyed()) scheduleNext(2200 + Math.random() * 4800);
+      if (!this.view.webContents.isDestroyed()) scheduleNext(delay);
     };
-    scheduleNext(2200 + Math.random() * 4800);
+    scheduleNext(3000 + Math.random() * 5000);
   }
 
-  private async performIdleCursorDrift(contents: WebContents): Promise<void> {
-    const bounds = this.view.getBounds();
-    if (!bounds.width || !bounds.height) return;
-    if (!this.idleDriftAnchor || Math.random() < 0.08) {
-      // Pick a fresh wandering anchor: reading area, search field, nav bar…
-      this.idleDriftAnchor = {
-        x: bounds.width * (0.15 + Math.random() * 0.7),
-        y: bounds.height * (0.15 + Math.random() * 0.7),
-      };
-    }
-    const anchor = this.idleDriftAnchor;
-    const stepSpread = Math.random() < 0.2 ? 26 : 9;
-    const dx = (anchor.x - this.cursorPos.x) * 0.1 + (Math.random() - 0.5) * stepSpread;
-    const dy = (anchor.y - this.cursorPos.y) * 0.1 + (Math.random() - 0.5) * stepSpread;
-    const next = {
-      x: Math.min(Math.max(this.cursorPos.x + dx, 1), bounds.width - 1),
-      y: Math.min(Math.max(this.cursorPos.y + dy, 1), bounds.height - 1),
-    };
-    // Glide there through intermediate points: a single mouseMove jump
-    // would read as a teleport in the page's mousemove recording. An
-    // explicit interaction aborts the glide mid-way and wins instantly.
-    this.cursorPos = await driftTo(
-      contents,
-      this.cursorPos,
-      next,
-      () => this.interactionInProgress || this.clickToken !== null,
+  private async performIdleCursorDrift(contents: WebContents, target: Point): Promise<void> {
+    await driftTo(
+      contents, this.cursorPos, target,
+      () => this.interactionInProgress || this.clickToken !== null || this.googleAiInProgress,
+      point => { this.cursorPos = point; },
     );
   }
 

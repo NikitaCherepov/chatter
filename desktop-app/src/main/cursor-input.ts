@@ -33,13 +33,11 @@ const FRAME_JITTER = 8;
 const MIN_POINTS = 24;
 const POINTS_PER_PX = 0.06;
 const MAX_POINTS = 220;
-const TREMOR_ZONE = 14;
-const TREMOR_SLOWDOWN = 2.4;
 const PRE_CLICK_MIN = 50;
 const PRE_CLICK_MAX = 150;
 const HOLD_MIN = 50;
 const HOLD_MAX = 100;
-const MAX_CURVE_DEVIATION = 80;
+const MAX_CURVE_DEVIATION = 160;
 
 // Scroll
 const SCROLL_PIXELS_PER_TICK = 110;
@@ -142,11 +140,11 @@ function cubicBezier(
  * curvature) without touching the click defaults.
  */
 export type TrajectoryOptions = {
-  /** Lower point-count bound (clicks use 24; idle glides use 3). */
+  /** Lower point-count bound (clicks use 24; idle glides use 12). */
   minPoints?: number;
-  /** Upper point-count bound (clicks use 220; idle glides use 18). */
+  /** Upper point-count bound (clicks use 220; idle glides use 60). */
   maxPoints?: number;
-  /** Max lateral control-point deviation in px (clicks use 80; idle glides scale with distance). */
+  /** Maximum lateral control-point deviation; idle glides use a smaller bound. */
   maxCurveDeviation?: number;
 };
 
@@ -159,7 +157,7 @@ export function generateTrajectory(start: Point, end: Point, options: Trajectory
 
   const minPoints = options.minPoints ?? MIN_POINTS;
   const maxPoints = options.maxPoints ?? MAX_POINTS;
-  const maxCurveDeviation = options.maxCurveDeviation ?? MAX_CURVE_DEVIATION;
+  const maxCurveDeviation = options.maxCurveDeviation ?? Math.min(MAX_CURVE_DEVIATION, distance * 0.22);
 
   const count = clamp(
     Math.round(minPoints + distance * POINTS_PER_PX),
@@ -170,22 +168,36 @@ export function generateTrajectory(start: Point, end: Point, options: Trajectory
   const perpX = -dy / distance;
   const perpY = dx / distance;
 
-  const offset1 = randRange(-maxCurveDeviation, maxCurveDeviation);
-  const offset2 = randRange(-maxCurveDeviation, maxCurveDeviation);
+  const bend = randRange(-maxCurveDeviation, maxCurveDeviation);
+  const offset1 = bend;
+  const offset2 = Math.random() < 0.2
+    ? -bend * randRange(0.3, 0.8)
+    : bend * randRange(0.55, 1) + randRange(-maxCurveDeviation * 0.12, maxCurveDeviation * 0.12);
+  const correction = distance > 160 && Math.random() < 0.3 ? randRange(-4, 4) : 0;
 
+  const fraction1 = randRange(0.22, 0.36);
+  const fraction2 = randRange(0.62, 0.78);
   const cp1: Point = {
-    x: start.x + dx * 0.3 + perpX * offset1,
-    y: start.y + dy * 0.3 + perpY * offset1,
+    x: start.x + dx * fraction1 + perpX * offset1,
+    y: start.y + dy * fraction1 + perpY * offset1,
   };
   const cp2: Point = {
-    x: start.x + dx * 0.66 + perpX * offset2,
-    y: start.y + dy * 0.66 + perpY * offset2,
+    x: start.x + dx * fraction2 + perpX * offset2,
+    y: start.y + dy * fraction2 + perpY * offset2,
   };
 
   const points: Point[] = [];
   for (let i = 0; i <= count; i++) {
-    const t = i / count;
-    points.push(cubicBezier(start, cp1, cp2, end, t));
+    const time = i / count;
+    // Minimum-jerk progress: smooth acceleration and deceleration, while
+    // preserving the exact start/end. This is a motion heuristic, not a
+    // statistically validated model of a particular user's mouse.
+    const t = time * time * time * (10 + time * (-15 + 6 * time));
+    const point = cubicBezier(start, cp1, cp2, end, t);
+    const approach = time > 0.75 ? Math.sin(Math.PI * (time - 0.75) / 0.25) * correction : 0;
+    point.x += perpX * approach;
+    point.y += perpY * approach;
+    points.push(point);
   }
 
   points[points.length - 1] = { ...end };
@@ -196,22 +208,10 @@ export function generateTrajectory(start: Point, end: Point, options: Trajectory
 // 3. Timing
 // ──────────────────────────────────────────────────────────────────────────
 
-function frameDelayForPoint(
-  points: Point[],
-  index: number,
-  target: Point,
-): number {
-  const point = points[index];
-  const distToTarget = Math.hypot(point.x - target.x, point.y - target.y);
-
-  const base = BASE_FRAME_DELAY + Math.random() * FRAME_JITTER;
-
-  if (distToTarget <= TREMOR_ZONE) {
-    const factor = 1 + (1 - distToTarget / TREMOR_ZONE) * (TREMOR_SLOWDOWN - 1);
-    return base * factor;
-  }
-
-  return base;
+function frameDelayForPoint(): number {
+  // Speed variation comes from eased point spacing, rather than adding
+  // another long tail of delays near the target.
+  return BASE_FRAME_DELAY + Math.random() * FRAME_JITTER;
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -485,9 +485,28 @@ export async function pressHumanKey(webContents: WebContents, key: 'Enter' | 'Sp
 // 5b. Idle drift glide
 // ──────────────────────────────────────────────────────────────────────────
 
+export type IdleMotionPlan = { kind: 'rest' | 'adjustment' | 'reposition'; pauseMs: number; target?: Point };
+
+/** Independent idle episodes; no permanent anchor or obligatory periodic move. */
+export function planIdleMotion(current: Point, bounds: { width: number; height: number }): IdleMotionPlan {
+  const kind = Math.random();
+  if (kind < 0.5) return { kind: 'rest', pauseMs: Math.random() < 0.2 ? randRange(45000, 120000) : randRange(10000, 40000) };
+  const reposition = kind > 0.88;
+  const distance = reposition ? randRange(35, Math.max(35, Math.min(180, Math.min(bounds.width, bounds.height) * 0.25))) : randRange(3, 20);
+  const angle = randRange(-Math.PI, Math.PI);
+  return {
+    kind: reposition ? 'reposition' : 'adjustment',
+    pauseMs: reposition ? randRange(5000, 18000) : randRange(2000, 8000),
+    target: {
+      x: clamp(current.x + Math.cos(angle) * distance, 1, Math.max(1, bounds.width - 1)),
+      y: clamp(current.y + Math.sin(angle) * distance, 1, Math.max(1, bounds.height - 1)),
+    },
+  };
+}
+
 const DRIFT_POINT_DELAY_MIN = 12;
 const DRIFT_POINT_DELAY_MAX = 26;
-const DRIFT_MAX_POINTS = 18;
+const DRIFT_MAX_POINTS = 60;
 
 /**
  * Glides the pointer smoothly to a nearby point along a short curved path.
@@ -495,7 +514,7 @@ const DRIFT_MAX_POINTS = 18;
  * read as teleports in mousemove recordings. A person either rests the hand
  * (no events at all) or glides it, so every drift step streams a small
  * bezier trajectory of native mouseMove events with human inter-event
- * timing and a natural ease-out (the hand decelerates while arriving).
+ * timing and eased point spacing for acceleration and deceleration.
  * Returns the point actually reached (an aborted glide stops mid-way).
  */
 export async function driftTo(
@@ -503,6 +522,7 @@ export async function driftTo(
   currentMouse: Point,
   target: Point,
   shouldAbort?: () => boolean,
+  onMove?: (point: Point) => void,
 ): Promise<Point> {
   if (webContents.isDestroyed()) throw new Error('webcontents_destroyed');
   const dx = target.x - currentMouse.x;
@@ -514,9 +534,9 @@ export async function driftTo(
   // proportions: a handful of points and lateral curvature proportional
   // to the glide distance instead of the click-sized 80px arcs.
   const trajectory = generateTrajectory(currentMouse, target, {
-    minPoints: 3,
+    minPoints: 12,
     maxPoints: DRIFT_MAX_POINTS,
-    maxCurveDeviation: distance * 0.6,
+    maxCurveDeviation: Math.min(18, distance * 0.22),
   });
 
   let last = { ...currentMouse };
@@ -524,12 +544,13 @@ export async function driftTo(
     // An explicit interaction wins over the drift instantly.
     if (shouldAbort?.()) break;
     if (webContents.isDestroyed()) throw new Error('webcontents_destroyed');
-    last = trajectory[i]!;
-    webContents.sendInputEvent({ type: 'mouseMove', x: Math.round(last.x), y: Math.round(last.y) });
-    // Ease-out: the hand decelerates while arriving — later points take
-    // progressively longer inter-event delays.
-    const progress = i / (trajectory.length - 1);
-    await sleep(randRange(DRIFT_POINT_DELAY_MIN, DRIFT_POINT_DELAY_MAX) * (0.75 + progress * 0.75));
+    const point = trajectory[i]!;
+    last = { x: Math.round(point.x * 100) / 100, y: Math.round(point.y * 100) / 100 };
+    sendMouseEvent(webContents, 'mouseMove', last.x, last.y);
+    // Publish synchronously, before yielding: an interrupting click starts
+    // from the last emitted position and cannot be overwritten on return.
+    onMove?.({ ...last });
+    await sleep(randRange(DRIFT_POINT_DELAY_MIN, DRIFT_POINT_DELAY_MAX));
   }
   return last;
 }
@@ -569,7 +590,7 @@ export async function click(
     const point = resolvedTrajectory[i];
     await dispatch('mouseMove', point.x, point.y);
 
-    await sleep(frameDelayForPoint(resolvedTrajectory, i, resolvedTarget));
+    await sleep(frameDelayForPoint());
   }
 
   if (token?.cancelled) throw new Error('click_cancelled');
