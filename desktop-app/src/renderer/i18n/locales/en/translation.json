@@ -1,5 +1,6 @@
 {
   "mcp": {
+    "noApprovedServers": "No approved servers match this search.",
     "showCatalog": "Show the MCP catalog in desktop",
     "show": "Show",
     "hide": "Hide",
@@ -33,7 +34,7 @@
     "cancel": "Cancel",
     "urlChangeHelp": "Changing a server URL blocks existing connections. Create a new connection to use the new address; saved credentials are never redirected.",
     "catalog": "MCP catalog",
-    "catalogHelp": "Latest active remote HTTPS servers from the official MCP Registry. Use the source links to inspect a server; listing is not a security approval.",
+    "catalogHelp": "MCP servers approved by the administrator. Search is limited to this list.",
     "search": "Search",
     "select": "Select",
     "more": "Load more",

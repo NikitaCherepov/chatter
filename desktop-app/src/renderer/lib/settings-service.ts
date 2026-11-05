@@ -1,6 +1,8 @@
 import * as api from './api';
+import { getMcpState } from './mcp-service';
 
 export const settingsReads = {
+  mcp: getMcpState,
   models: api.getModels,
   modelSettings: api.getModelSettings,
   agentModel: api.getSubagentModel,

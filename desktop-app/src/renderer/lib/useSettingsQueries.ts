@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { API_BASE } from './api';
 import { settingsReads } from './settings-service';
 
-function useSettingsRead<K extends keyof typeof settingsReads>(key: K, userId: number | undefined, enabled: boolean) {
+export function useSettingsRead<K extends keyof typeof settingsReads>(key: K, userId: number | undefined, enabled: boolean) {
   const queryFn = settingsReads[key] as () => Promise<Awaited<ReturnType<(typeof settingsReads)[K]>>>;
   return useQuery({
     queryKey: ['settings', API_BASE, userId, key],

@@ -1033,6 +1033,7 @@ type WsCallbacks = StreamCallbacks & {
   onConnect?: () => void;
   onDisconnect?: () => void;
   onModelCatalogUpdated?: () => void;
+  onMcpSettingsUpdated?: () => void;
   onTaskResult?: (data: { chat_id: number; text: string; is_new_chat: boolean }) => void;
   onNewspaperRunEvent?: (run: NewspaperRun) => void;
   onRoomEvent?: (event: RoomEvent) => void;
@@ -1247,6 +1248,13 @@ export function onModelCatalogUpdated(cb: NonNullable<WsCallbacks['onModelCatalo
   };
 }
 
+export function onMcpSettingsUpdated(cb: NonNullable<WsCallbacks['onMcpSettingsUpdated']>) {
+  wsCallbacks.onMcpSettingsUpdated = cb;
+  return () => {
+    if (wsCallbacks.onMcpSettingsUpdated === cb) wsCallbacks.onMcpSettingsUpdated = undefined;
+  };
+}
+
 export function initWebSocket(callbacks?: WsCallbacks) {
   if (callbacks) wsCallbacks = { ...wsCallbacks, ...callbacks };
   ensureBrowserDownloadBridge();
@@ -1268,6 +1276,7 @@ export function initWebSocket(callbacks?: WsCallbacks) {
     console.log('[ws] connected');
     scheduleWebSocketTokenRefresh(socket);
     wsCallbacks.onConnect?.();
+    wsCallbacks.onMcpSettingsUpdated?.();
     flushBrowserDownloadEvents(socket);
   };
 
@@ -1279,6 +1288,7 @@ export function initWebSocket(callbacks?: WsCallbacks) {
         case 'task_result': wsCallbacks.onTaskResult?.({ chat_id: msg.chat_id, text: msg.text, is_new_chat: msg.is_new_chat }); break;
         case 'newspaper_run_updated': wsCallbacks.onNewspaperRunEvent?.(msg.run); break;
         case 'model_catalog_updated': wsCallbacks.onModelCatalogUpdated?.(); break;
+        case 'mcp_settings_updated': wsCallbacks.onMcpSettingsUpdated?.(); break;
         case 'chat_agent_start':
         case 'chat_agent_token':
         case 'chat_agent_reasoning':

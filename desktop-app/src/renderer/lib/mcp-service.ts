@@ -5,7 +5,6 @@ export type McpServer = {
   name: string;
   url: string;
   description: string;
-  recommended: number;
 };
 export type McpResource = {
   name: string;
@@ -36,25 +35,6 @@ export type McpState = {
   servers: McpServer[];
   connections: McpConnection[];
 };
-export type CatalogItem = {
-  name: string;
-  title?: string;
-  description: string;
-  url: string;
-  version: string;
-  publisher?: string;
-  transport?: string;
-  repository_url?: string;
-  website_url?: string;
-  registry_url?: string;
-  published_at?: string;
-  updated_at?: string;
-};
-export function mergeMcpCatalog(previous: CatalogItem[], next: CatalogItem[]) {
-  return [
-    ...new Map([...previous, ...next].map((item) => [item.name + '\n' + item.url, item])).values(),
-  ];
-}
 const base = '/api/v1/mcp';
 export const getMcpState = () => apiFetch<McpState>(base);
 export const saveMcpConnection = (body: Record<string, unknown>, id?: number) =>
@@ -72,7 +52,3 @@ export const authorizeMcp = (id: number) =>
   });
 export const cancelMcp = (id: number) =>
   apiFetch(base + '/connections/' + id + '/cancel', { method: 'POST' });
-export const getMcpCatalog = (search: string, cursor = '') =>
-  apiFetch<{ items: CatalogItem[]; next_cursor: string | null }>(
-    base + '/catalog?' + new URLSearchParams({ search, cursor }),
-  );

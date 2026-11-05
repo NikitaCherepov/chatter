@@ -18,7 +18,12 @@ const access={allow_custom:{mode:'none',user_ids:[],excluded_user_ids:[]},show_c
 
 const record=(name,body)=>window.__calls.push({name,body});
 export const API_BASE='https://chatter.example';
-export const getMcpState=async()=>structuredClone(state);
+let mcpUpdate;
+export const onMcpSettingsUpdated=fn=>{mcpUpdate=fn;return()=>{mcpUpdate=undefined}};
+export const onBackendRestored=()=>()=>{};
+window.emitMcpUpdate=()=>mcpUpdate?.();
+
+export const getMcpState=async()=>{record('state',{});return structuredClone(state)};
 export const saveMcpConnection=async(body,id)=>{record('save',body);const row=state.connections.find(c=>c.id===id);if(row)Object.assign(row,body);return {};};
 export const deleteMcpConnection=async(id)=>{record('delete',{id});state.connections=state.connections.filter(c=>c.id!==id);};
 export const refreshMcpTools=async(id)=>{record('refresh',{id});return {tools:state.connections[0].tools};};
@@ -43,7 +48,8 @@ fs.writeFileSync(path.join(dir, 'fixture.js'), fixture);
 const entry = String.raw`
 import React from 'react';
 import {createRoot} from 'react-dom/client';
-import {QueryClient,QueryClientProvider} from '@tanstack/react-query';
+import {useQueryClient} from '@tanstack/react-query';
+import {QueryProvider} from 'QUERY_PROVIDER';
 import i18next from 'i18next';
 import {initReactI18next} from 'react-i18next';
 import {McpSettings} from 'DESKTOP_COMPONENT';
@@ -52,12 +58,18 @@ import {McpUserCard} from 'USER_COMPONENT';
 import desktop from 'DESKTOP_LOCALE';
 import admin from 'ADMIN_LOCALE';
 i18next.use(initReactI18next).init({lng:'ru',resources:{ru:{translation:{...desktop,mcp:{...desktop.mcp,...admin.mcp}}}},initImmediate:false});
-const client=new QueryClient({defaultOptions:{queries:{retry:false}}});
 const root=createRoot(document.getElementById('app'));
-window.reloadFixture=()=>client.invalidateQueries();
-window.renderFixture=kind=>root.render(<QueryClientProvider client={client}>{kind==='desktop'?<McpSettings/>:kind==='admin'?<McpPage/>:<McpUserCard userId={81}/>}</QueryClientProvider>);
+function Content({kind}){
+ const client=useQueryClient(); window.__queryClient=client;
+ return kind==='desktop'?<McpSettings/>:kind==='admin'?<McpPage/>:<McpUserCard userId={81}/>;
+}
+window.renderFixture=kind=>root.render(<QueryProvider><Content kind={kind}/></QueryProvider>);
 window.renderFixture('desktop');
 `
+  .replace(
+    'QUERY_PROVIDER',
+    path.join(root, 'desktop-app/src/renderer/lib/QueryProvider.tsx').replaceAll('\\', '/'),
+  )
   .replace(
     'DESKTOP_COMPONENT',
     path.join(root, 'desktop-app/src/renderer/components/McpSettings.tsx').replaceAll('\\', '/'),
@@ -147,7 +159,7 @@ let win;const errors=[];
  wc.on('console-message',(_e,level,message)=>{if(level>=3)errors.push(message)});
  await win.loadFile(path.join(__dirname,'index.html'));
  const js=code=>wc.executeJavaScript(code);
- const until=async(code)=>{for(let n=0;n<100;n++){if(await js(code))return;await new Promise(r=>setTimeout(r,30));}throw new Error('UI condition: '+code)};
+ const until=async(code,attempts=100)=>{for(let n=0;n<attempts;n++){if(await js(code))return;await new Promise(r=>setTimeout(r,30));}throw new Error('UI condition: '+code)};
  const click=async(text)=>{await js('Array.from(document.querySelectorAll("button")).find(b=>b.textContent.trim()==='+JSON.stringify(text)+').click()');};
  await until('document.body.innerText.includes("GitHub account")');
  assert.equal(await js('getComputedStyle(document.querySelector("section")).borderWidth'),'1px','real component styles are applied');
@@ -155,19 +167,37 @@ let win;const errors=[];
  await until('window.__calls.some(c=>c.name==="refresh")');
  await js('document.querySelector("input[type=checkbox]").click()');
  await until('window.__calls.some(c=>c.name==="save"&&c.body.enabled===false)');
- await click('Найти');
- await until('document.body.innerText.includes("Remote tools")');
- assert.ok(await js('document.body.innerText.includes("2.0")'));
- assert.ok(await js('!!document.querySelector(\'a[href="https://github.com/example/mcp"]\')'));
+ assert.equal(await js('document.body.innerText.includes("Remote tools")'),false,'desktop shows approved servers only');
+ assert.ok(await js('!!document.querySelector(\'a[href="https://github.example/mcp"]\')'));
+ await js('(()=>{const input=document.querySelector(\'input[aria-label="Найти"]\');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value").set.call(input,"unknown");input.dispatchEvent(new Event("input",{bubbles:true}));})()');
+ await until('document.body.innerText.includes("Одобренных серверов по этому запросу нет.")');
+ await js('(()=>{const input=document.querySelector(\'input[aria-label="Найти"]\');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value").set.call(input,"");input.dispatchEvent(new Event("input",{bubbles:true}));})()');
  const callsBeforeHide=await js('window.__calls.filter(c=>c.name==="catalog").length');
- await js('window.__state.policy.show_catalog=false;window.reloadFixture()');
+ assert.equal(callsBeforeHide,0,'desktop never requests public Registry');
+ await js('window.__queryClient.setQueryData(["chats","https://chatter.example",81],[]);window.__queryClient.setQueryData(["settings","https://chatter.example",81,"models"],{});window.__state.policy.show_catalog=false;window.emitMcpUpdate()');
  await until('!document.body.innerText.includes("Каталог MCP")');
  assert.ok(await js('document.body.innerText.includes("GitHub account")'));
- assert.equal(await js('Array.from(document.querySelectorAll("button")).some(b=>b.textContent.trim()==="Найти")'),false);
- assert.equal(await js('window.__calls.filter(c=>c.name==="catalog").length'),callsBeforeHide);
- await js('window.__state.policy.show_catalog=true;window.reloadFixture()');
- await until('document.body.innerText.includes("Каталог MCP")');
+ assert.equal(await js('!!document.querySelector(\'input[aria-label="Найти"]\')'),false);
+ assert.equal(await js('window.__calls.filter(c=>c.name==="catalog").length'),0);
+ await js('window.__state.policy.show_catalog=true;window.__state.servers[0].description="Updated by admin";window.emitMcpUpdate()');
+ await until('document.body.innerText.includes("Каталог MCP")&&document.body.innerText.includes("Updated by admin")');
+ assert.equal(await js('window.__queryClient.getQueryState(["chats","https://chatter.example",81]).isInvalidated'),false,'MCP event does not invalidate chats');
+ assert.equal(await js('window.__queryClient.getQueryState(["settings","https://chatter.example",81,"models"]).isInvalidated'),false,'MCP event does not invalidate other settings');
+ assert.equal(await js('Array.from(document.querySelectorAll("button")).some(x=>x.textContent.trim()==="Обновить настройки")'),false);
+ const options=await js('(()=>{const q=window.__queryClient.getQueryCache().find({queryKey:["settings","https://chatter.example",81,"mcp"]});return {staleTime:q.options.staleTime,polling:!!q.options.refetchInterval}})()');
+ assert.equal(options.staleTime,60000,'same shared settings cache policy');
+ assert.equal(options.polling,false,'no independent polling timer');
+
  if(process.env.MCP_UI_SCREENSHOT_DIR){await new Promise(r=>setTimeout(r,100));fs.writeFileSync(path.join(process.env.MCP_UI_SCREENSHOT_DIR,'mcp-desktop.png'),(await wc.capturePage()).toPNG());}
+ await js('window.renderFixture("admin")');
+ await until('document.body.innerText.includes("Политика доступа")');
+ await click('Найти');
+ await until('document.body.innerText.includes("Remote tools")');
+ assert.ok(await js('!!document.querySelector(\'a[href="https://github.com/example/mcp"]\')'));
+
+ await js('window.__state.policy.show_catalog=false;window.emitMcpUpdate()');
+ await js('window.renderFixture("desktop")');
+ await until('document.body.innerText.includes("GitHub account")&&!document.body.innerText.includes("Каталог MCP")');
  await js('window.renderFixture("admin")');
  await until('document.body.innerText.includes("Политика доступа")');
  await js('document.querySelector("button[role=switch]").click()');

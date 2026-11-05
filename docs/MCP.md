@@ -20,7 +20,7 @@ No stdio, subprocesses, package installation, sampling, roots or elicitation.
 ## First use
 
 1. Admin MCP tab: add an allowed HTTPS endpoint or select one from the catalog.
-   Recommended is a display marker, separate from permission.
+   Only approved entries are exposed in the desktop catalog.
 2. In the MCP tab, independently choose who can add custom URLs and who can
    see the catalog: everyone / selected users / nobody. User selection reuses
    the existing searchable admin Select. Existing per-user deny exceptions
@@ -89,15 +89,26 @@ The official Registry is discovery metadata, not Chatter's security approval.
 
 ## Catalog
 
-Admin and desktop share the backend catalog API, ten-minute cache and cursor
-pagination over the official Registry. Each page requests latest versions and
-filters inactive entries, unsupported transports and duplicate name/URL pairs.
-Cards include version, publisher, endpoint and HTTPS links to the repository,
-website and Registry record when supplied. Search uses the Registry's minimum
-of three characters; pagination retains the submitted search.
-Only remote Streamable HTTP entries are shown. Package installation commands
-are never executed. Catalog metadata does not claim tools/resources support:
-actual capabilities are read only after connecting to the server.
+The admin tab searches the public Registry (latest active remote Streamable
+HTTP entries, ten-minute cache, cursor pagination) or adds a server manually.
+Approval controls whether that server appears in the desktop catalog.
+The desktop catalog and its API expose only approved entries from Chatter's
+database; desktop search filters that list and never queries the Registry.
+Custom URLs retain their separate permission. There is no recommendation flag
+in either UI; the old database column is retained for compatibility.
+
+Public Registry cards include version, publisher, endpoint and HTTPS links to
+the repository, website and Registry record when supplied. Registry search
+requires three characters; desktop search has no minimum length.
+Catalog metadata does not claim tools/resources support: actual capabilities
+are read only after connecting. Package installation commands are never executed.
+
+Desktop MCP reads use the shared settings query hook and cache policy.
+Successful admin changes send an MCP-only notification over the existing desktop
+WebSocket. Personal changes notify only that account; shared changes notify all
+connected desktops. The notification invalidates only the MCP settings query,
+including inactive cached queries. Reconnection revalidates MCP settings too.
+There is no polling timer or separate settings-refresh button.
 
 ## Verification
 

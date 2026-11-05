@@ -30,7 +30,7 @@ export type McpConnection = {
   updated_at: number;
 };
 export const allServers = () =>
-  db.prepare('SELECT * FROM mcp_servers ORDER BY recommended DESC,name,id').all() as McpServer[];
+  db.prepare('SELECT * FROM mcp_servers ORDER BY name,id').all() as McpServer[];
 export const connections = (userId: number) =>
   db
     .prepare('SELECT * FROM mcp_connections WHERE user_id=? ORDER BY id')
@@ -166,15 +166,8 @@ export function saveServer(body: any, id?: number) {
   const name = String(body.name || '')
     .trim()
     .slice(0, 120);
-  if (!name || typeof body.allowed !== 'boolean' || typeof body.recommended !== 'boolean')
-    throw new Error('mcp_invalid_server');
-  const args = [
-    name,
-    url,
-    String(body.description || '').slice(0, 1500),
-    +body.allowed,
-    +body.recommended,
-  ];
+  if (!name || typeof body.allowed !== 'boolean') throw new Error('mcp_invalid_server');
+  const args = [name, url, String(body.description || '').slice(0, 1500), +body.allowed, 0];
   if (id) {
     if (!allServers().some((server) => server.id === id)) throw new Error('mcp_server_not_found');
     // Connections and credentials are bound to the exact URL. An edit must not redirect existing secrets.

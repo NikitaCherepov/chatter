@@ -13,9 +13,8 @@ type Server = {
   url: string;
   description: string;
   allowed: number;
-  recommended: number;
 };
-const empty = { name: '', url: '', description: '', allowed: true, recommended: false };
+const empty = { name: '', url: '', description: '', allowed: true };
 export function McpPage() {
   const { t } = useTranslation();
   const [policy, setPolicy] = useState({ enabled: false, allow_custom: false, show_catalog: true }),
@@ -101,9 +100,7 @@ export function McpPage() {
       <Card title={t('mcp.servers')}>
         {servers.map((server) => (
           <div className={s.secret} key={server.id}>
-            <strong>
-              {server.name} {server.recommended ? '★' : ''}
-            </strong>
+            <strong>{server.name}</strong>
             <p>{server.description}</p>
             <a href={server.url} target="_blank" rel="noopener noreferrer">
               {server.url}
@@ -120,21 +117,7 @@ export function McpPage() {
                       body: JSON.stringify({
                         ...server,
                         allowed,
-                        recommended: !!server.recommended,
                       }),
-                    }),
-                  )
-                }
-              />
-              <Toggle
-                checked={!!server.recommended}
-                disabled={busy}
-                label={t('mcp.recommended')}
-                onChange={(recommended) =>
-                  void run(() =>
-                    api('/api/mcp/servers/' + server.id, {
-                      method: 'PATCH',
-                      body: JSON.stringify({ ...server, allowed: !!server.allowed, recommended }),
                     }),
                   )
                 }
@@ -146,7 +129,6 @@ export function McpPage() {
                   setDraft({
                     ...server,
                     allowed: !!server.allowed,
-                    recommended: !!server.recommended,
                   });
                 }}
               >
@@ -203,11 +185,6 @@ export function McpPage() {
             checked={draft.allowed}
             label={t('mcp.allowed')}
             onChange={(allowed) => setDraft({ ...draft, allowed })}
-          />
-          <Toggle
-            checked={draft.recommended}
-            label={t('mcp.recommended')}
-            onChange={(recommended) => setDraft({ ...draft, recommended })}
           />
           <button type="submit" disabled={busy}>
             {editId ? t('mcp.save') : t('mcp.addServer')}

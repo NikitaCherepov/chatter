@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { notifyMcpSettingsUpdated } from '../../ws-clients.js';
 import { UriTemplate } from '@modelcontextprotocol/sdk/shared/uriTemplate.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
@@ -292,6 +293,7 @@ export async function refreshTools(userId: number, id: number, signal?: AbortSig
       id,
       row.user_id,
     );
+    notifyMcpSettingsUpdated(userId);
     return tools;
   });
 }

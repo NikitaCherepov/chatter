@@ -25,6 +25,15 @@ const dns = require('node:dns/promises');
 const originalLookup = dns.lookup,
   originalFetch = network.mcpHttp.fetch;
 const received: any[] = [];
+const { wsClients } = require('../src/ws-clients.ts');
+const notices: Array<{ userId: number; event: any }> = [];
+for (const userId of [81, 82, 83])
+  wsClients.set(userId, {
+    ws: {
+      readyState: userId === 83 ? 3 : 1,
+      send: (payload: string) => notices.push({ userId, event: JSON.parse(payload) }),
+    },
+  });
 let registryRequests = 0;
 
 let sessionNumber = 0;
@@ -372,11 +381,13 @@ try {
   );
   dns.lookup = async () => [{ address: '93.184.216.34', family: 4 }];
 
+  const notificationsBeforeInvalid = notices.length;
   const blocked = await request('/user/81/mcp/connections', 'POST', {
     name: 'custom',
     url: 'https://mcp.example/mcp',
   });
   assert.equal(blocked.status, 403);
+  assert.equal(notices.length, notificationsBeforeInvalid, 'failed mutation sends no notification');
   const serverResult = await request('/admin/servers', 'POST', {
     name: 'Test MCP',
     url: 'https://mcp.example/mcp',
@@ -385,6 +396,17 @@ try {
     description: 'test',
   });
   assert.equal(serverResult.status, 201);
+  assert.deepEqual(
+    notices.slice(-2).map((item) => item.userId),
+    [81, 82],
+    'admin server changes notify connected users',
+  );
+  assert.ok(notices.every((item) => item.event.type === 'mcp_settings_updated'));
+  assert.ok(
+    notices.every((item) => Object.keys(item.event).length === 1),
+    'notifications contain no metadata or secrets',
+  );
+  const beforePersonalChange = notices.length;
   const server = serverResult.body.server;
   const created = await request('/user/81/mcp/connections', 'POST', {
     server_id: server.id,
@@ -393,6 +415,11 @@ try {
     mode: 'search',
   });
   assert.equal(created.status, 201);
+  assert.deepEqual(
+    notices.slice(beforePersonalChange).map((item) => item.userId),
+    [81],
+    'personal connection changes notify only owner',
+  );
   const connection = created.body.connection;
   assert.equal(
     JSON.stringify(created.body).includes('private-test-token'),
@@ -563,6 +590,21 @@ try {
   );
   await discovery.readMcpResource(81, { connection_id: resourceOnly.id, uri: 'notes://guide' });
   store.deleteConnection(81, resourceOnly.id);
+  const unapproved = await request('/admin/servers', 'POST', {
+    name: 'Not approved',
+    url: 'https://unapproved.example/mcp',
+    allowed: false,
+  });
+  assert.equal(unapproved.status, 201, 'manual admin add needs no recommendation flag');
+  const requestsBefore = registryRequests;
+  const approved = (await request('/user/81/mcp/catalog')).body.items;
+  assert.deepEqual(
+    approved.map((item: any) => item.id),
+    [server.id],
+  );
+  assert.equal((await request('/user/81/mcp/catalog?search=TEST%20MCP')).body.items.length, 1);
+  assert.equal((await request('/user/81/mcp/catalog?search=unapproved')).body.items.length, 0);
+  assert.equal(registryRequests, requestsBefore, 'desktop catalog never fetches public Registry');
   const catalog = require('../src/services/mcp/catalog.ts');
   const publicPage = await catalog.registryCatalog('fixture');
   assert.equal(publicPage.items.length, 1);
@@ -587,7 +629,13 @@ try {
     403,
   );
   assert.ok(store.requireConnection(81, connection.id), 'existing connections remain usable');
+  const beforeOverride = notices.length;
   await request('/admin/users/81', 'PUT', { catalog_override: 'allow' });
+  assert.deepEqual(
+    notices.slice(beforeOverride).map((item) => item.userId),
+    [81],
+    'personal admin policy notification targets only owner',
+  );
   assert.equal(store.policy(81).show_catalog, true);
   assert.equal(
     store.policy(81).allow_custom,
@@ -922,6 +970,7 @@ try {
     'PASS: actual MCP SDK HTTP initialization/discovery/calls, schemas, search/eager modes, encrypted per-user credentials, SSRF checks, policy, revocation, cancellation and sampling rejection',
   );
 } finally {
+  wsClients.clear();
   network.mcpHttp.fetch = originalFetch;
   dns.lookup = originalLookup;
   for (const call of client.activeCalls.values()) call.controller.abort();

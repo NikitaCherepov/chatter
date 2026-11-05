@@ -21,6 +21,7 @@ import {
   cancelCall,
   cancelForbiddenCalls,
 } from './client.js';
+import { notifyMcpSettingsUpdated } from '../../ws-clients.js';
 import { registryCatalog } from './catalog.js';
 
 const route =
@@ -75,23 +76,35 @@ export function userMcpRouter(account: (req: any) => number) {
   );
   router.get(
     '/catalog',
-    route(async (req, res) => {
-      if (!policy(account(req)).enabled) throw new Error('mcp_disabled');
-      if (!policy(account(req)).show_catalog) throw new Error('mcp_catalog_hidden');
-      const result = await registryCatalog(
-        String(req.query.search || ''),
-        String(req.query.cursor || ''),
+    route((req, res) => {
+      const access = policy(account(req));
+      if (!access.enabled) throw new Error('mcp_disabled');
+      if (!access.show_catalog) throw new Error('mcp_catalog_hidden');
+      const search = String(req.query.search || '')
+        .trim()
+        .toLowerCase();
+      if (search.length > 120) throw new Error('mcp_invalid_catalog_query');
+      const words = search.split(/\s+/).filter(Boolean);
+      const items = allServers().filter(
+        (server) =>
+          server.allowed &&
+          words.every((word) =>
+            (server.name + ' ' + server.description + ' ' + server.url)
+              .toLowerCase()
+              .includes(word),
+          ),
       );
-      if (!policy(account(req)).enabled) throw new Error('mcp_disabled');
-      if (!policy(account(req)).show_catalog) throw new Error('mcp_catalog_hidden');
-      res.json(result);
+      res.json({ items, next_cursor: null });
     }),
   );
   router.post(
     '/connections',
-    route((req, res) =>
-      res.status(201).json({ connection: saveConnection(account(req), req.body) }),
-    ),
+    route((req, res) => {
+      const userId = account(req),
+        connection = saveConnection(userId, req.body);
+      notifyMcpSettingsUpdated(userId);
+      res.status(201).json({ connection });
+    }),
   );
   router.patch(
     '/connections/:id',
@@ -100,6 +113,7 @@ export function userMcpRouter(account: (req: any) => number) {
         connectionId = id(req.params.id);
       const connection = saveConnection(userId, req.body, connectionId);
       cancelCall(userId, connectionId);
+      notifyMcpSettingsUpdated(userId);
       res.json({ connection });
     }),
   );
@@ -110,6 +124,7 @@ export function userMcpRouter(account: (req: any) => number) {
         connectionId = id(req.params.id);
       cancelCall(userId, connectionId);
       deleteConnection(userId, connectionId);
+      notifyMcpSettingsUpdated(userId);
       res.json({ ok: true });
     }),
   );
@@ -153,6 +168,7 @@ export function adminMcpRouter() {
     route((req, res) => {
       const access = saveAccessSettings(req.body);
       cancelForbiddenCalls();
+      notifyMcpSettingsUpdated();
       res.json({ access });
     }),
   );
@@ -161,18 +177,24 @@ export function adminMcpRouter() {
     route((req, res) => {
       const value = savePolicy(req.body);
       cancelForbiddenCalls();
+      notifyMcpSettingsUpdated();
       res.json({ policy: value });
     }),
   );
   router.post(
     '/servers',
-    route((req, res) => res.status(201).json({ server: saveServer(req.body) })),
+    route((req, res) => {
+      const server = saveServer(req.body);
+      notifyMcpSettingsUpdated();
+      res.status(201).json({ server });
+    }),
   );
   router.patch(
     '/servers/:id',
     route((req, res) => {
       const server = saveServer(req.body, id(req.params.id));
       cancelForbiddenCalls();
+      notifyMcpSettingsUpdated();
       res.json({ server });
     }),
   );
@@ -181,6 +203,7 @@ export function adminMcpRouter() {
     route((req, res) => {
       deleteServer(id(req.params.id));
       cancelForbiddenCalls();
+      notifyMcpSettingsUpdated();
       res.json({ ok: true });
     }),
   );
@@ -196,8 +219,10 @@ export function adminMcpRouter() {
   router.put(
     '/users/:id',
     route((req, res) => {
-      const value = savePolicy(req.body, id(req.params.id));
+      const userId = id(req.params.id);
+      const value = savePolicy(req.body, userId);
       cancelForbiddenCalls();
+      notifyMcpSettingsUpdated(userId);
       res.json({ policy: value });
     }),
   );

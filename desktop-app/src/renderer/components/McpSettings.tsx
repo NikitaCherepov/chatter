@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { useMcp } from '../lib/useMcp';
@@ -17,25 +17,23 @@ export function McpSettings() {
     [token, setToken] = useState('');
   const [mode, setMode] = useState('search'),
     [timeout, setTimeoutValue] = useState(300);
-  const [search, setSearch] = useState(''),
-    [catalog, setCatalog] = useState<api.CatalogItem[]>([]),
-    [next, setNext] = useState<string | null>(null),
-    [catalogBusy, setCatalogBusy] = useState(false);
+  const [search, setSearch] = useState('');
   const [authorization, setAuthorization] = useState('');
-  const [catalogQuery, setCatalogQuery] = useState('');
-  const catalogRequest = useRef(0);
   useEffect(() => {
-    catalogRequest.current++;
-    setCatalogBusy(false);
-    if (!query.data?.policy.enabled || !query.data?.policy.show_catalog) {
-      setCatalog([]);
-      setNext(null);
-      setCatalogQuery('');
+    const policy = query.data?.policy;
+    const selected = query.data?.servers.find((item) => String(item.id) === server);
+    if (!policy?.show_catalog) setSearch('');
+    if (
+      !policy?.enabled ||
+      (server === 'custom' && !policy.allow_custom) ||
+      (server && server !== 'custom' && (!policy.show_catalog || !selected || selected.url !== url))
+    ) {
       setServer('');
+      setName('');
       setUrl('');
       setToken('');
     }
-  }, [query.data?.policy.enabled, query.data?.policy.show_catalog]);
+  }, [query.data, server, url]);
 
   const run = async (action: () => Promise<unknown>) => {
     try {
@@ -50,35 +48,8 @@ export function McpSettings() {
       toast.error(t('mcp.error') + ': ' + String(error?.message || ''));
     }
   };
-  const browse = async (more = false) => {
-    if (catalogBusy || !query.data?.policy.enabled || !query.data?.policy.show_catalog) return;
-    const applied = more ? catalogQuery : search.trim();
-    if (applied && applied.length < 3) return;
-    const request = ++catalogRequest.current;
-    setCatalogBusy(true);
-    try {
-      const result = await api.getMcpCatalog(applied, more ? next || '' : '');
-      if (request !== catalogRequest.current) return;
-      setCatalogQuery(applied);
-      setCatalog(
-        more ? api.mergeMcpCatalog(catalog, result.items) : api.mergeMcpCatalog([], result.items),
-      );
-      setNext(result.next_cursor);
-    } catch (error: any) {
-      if (request !== catalogRequest.current) return;
-      if (/mcp_catalog_hidden|mcp_disabled/.test(String(error?.message || ''))) {
-        setCatalog([]);
-        setNext(null);
-        void query.refetch();
-      }
-      toast.error(t('mcp.error'));
-    } finally {
-      if (request === catalogRequest.current) setCatalogBusy(false);
-    }
-  };
-  const pick = (item: api.CatalogItem) => {
-    const allowed = query.data?.servers.find((value) => value.url === item.url);
-    setServer(allowed ? String(allowed.id) : 'custom');
+  const pick = (item: api.McpServer) => {
+    setServer(String(item.id));
     setUrl(item.url);
     setName(item.name);
     setToken('');
@@ -95,6 +66,12 @@ export function McpSettings() {
     );
   const data = query.data!,
     busy = mutation.isPending;
+  const words = search.toLowerCase().trim().split(/\s+/).filter(Boolean);
+  const catalog = data.servers.filter((item) =>
+    words.every((word) =>
+      (item.name + ' ' + item.description + ' ' + item.url).toLowerCase().includes(word),
+    ),
+  );
   return (
     <div className={s.panel}>
       <div className={s.panelTitle}>MCP</div>
@@ -158,9 +135,6 @@ export function McpSettings() {
                   value: String(item.id),
                   label: item.name,
                   hint: item.description,
-                  badge: item.recommended
-                    ? { text: t('mcp.recommended'), color: 'success' as const }
-                    : undefined,
                 })),
                 ...(data.policy.allow_custom ? [{ value: 'custom', label: t('mcp.custom') }] : []),
               ]}
@@ -236,13 +210,7 @@ export function McpSettings() {
         <section className={styles.catalog}>
           <h3>{t('mcp.catalog')}</h3>
           <p className={s.connectionsHelp}>{t('mcp.catalogHelp')}</p>
-          <form
-            className={styles.search}
-            onSubmit={(e) => {
-              e.preventDefault();
-              void browse();
-            }}
-          >
+          <div className={styles.search}>
             <input
               aria-label={t('mcp.search')}
               className={s.fieldInput}
@@ -250,68 +218,20 @@ export function McpSettings() {
               onChange={(e) => setSearch(e.target.value)}
               placeholder={t('mcp.search')}
             />
-            <button
-              className={s.cancelBtn}
-              disabled={catalogBusy || (!!search.trim() && search.trim().length < 3)}
-            >
-              {t('mcp.search')}
-            </button>
-          </form>
-          {catalog.map((item, index) => (
-            <div className={s.macroCard} key={item.url + index}>
-              <strong>{item.title || item.name}</strong>
-              {item.title && item.title !== item.name && (
-                <div className={styles.url}>{item.name}</div>
-              )}
+          </div>
+          {!catalog.length && <p>{t('mcp.noApprovedServers')}</p>}
+          {catalog.map((item) => (
+            <div className={s.macroCard} key={item.id}>
+              <strong>{item.name}</strong>
               <p>{item.description}</p>
-              <p className={styles.url}>
-                {t('mcp.version')}: {item.version || '—'} · Streamable HTTP
-              </p>
-              <p className={styles.url}>
-                {t('mcp.publisher')}: {item.publisher || item.name.split('/')[0]}
-              </p>
-              <div className={styles.actions}>
-                <a href={item.url} target="_blank" rel="noopener noreferrer" className={styles.url}>
-                  {item.url}
-                </a>
-                {item.repository_url && (
-                  <a href={item.repository_url} target="_blank" rel="noopener noreferrer">
-                    {t('mcp.repository')}
-                  </a>
-                )}
-                {item.website_url && (
-                  <a href={item.website_url} target="_blank" rel="noopener noreferrer">
-                    {t('mcp.website')}
-                  </a>
-                )}
-                {item.registry_url && (
-                  <a href={item.registry_url} target="_blank" rel="noopener noreferrer">
-                    {t('mcp.registryEntry')}
-                  </a>
-                )}
-              </div>
-              <button
-                className={s.cancelBtn}
-                disabled={
-                  busy ||
-                  (!data.policy.allow_custom &&
-                    !data.servers.some((server) => server.url === item.url))
-                }
-                onClick={() => pick(item)}
-              >
+              <a href={item.url} target="_blank" rel="noopener noreferrer" className={styles.url}>
+                {item.url}
+              </a>
+              <button className={s.cancelBtn} disabled={busy} onClick={() => pick(item)}>
                 {t('mcp.select')}
               </button>
             </div>
           ))}
-          {next && (
-            <button
-              className={s.cancelBtn}
-              disabled={catalogBusy || search.trim() !== catalogQuery}
-              onClick={() => void browse(true)}
-            >
-              {t('mcp.more')}
-            </button>
-          )}
         </section>
       )}
     </div>

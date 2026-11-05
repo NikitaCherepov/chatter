@@ -22,6 +22,15 @@ export type WsClient = {
 // Keyed by the single canonical account ID used by every client.
 export const wsClients = new Map<number, WsClient>();
 
+/** Same notification pattern as model_catalog_updated; no settings or credentials in the event. */
+export function notifyMcpSettingsUpdated(userId?: number) {
+  const clients = userId === undefined ? wsClients.values() : [wsClients.get(userId)];
+  for (const client of clients) {
+    if (client?.ws.readyState !== WebSocket.OPEN) continue;
+    try { client.ws.send(JSON.stringify({ type: 'mcp_settings_updated' })); } catch { /* disconnected desktop */ }
+  }
+}
+
 export const WS_HEARTBEAT_INTERVAL_MS = 25_000;
 export const WS_HEARTBEAT_GRACE_MS = 75_000;
 
