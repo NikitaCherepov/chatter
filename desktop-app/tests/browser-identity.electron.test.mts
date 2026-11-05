@@ -86,6 +86,13 @@ const touch=()=>{
   return{same,nested:nestedData,cross};
  }.toString()+')('+JSON.stringify(probe.toString())+','+JSON.stringify('http://127.0.0.2:'+server.address().port+'/cross-frame')+')');
  for(const [kind,data] of Object.entries(frameData))assert.deepEqual(data,windowData,kind+' iframe identity matches');
+ console.log('Reading real page with workers and nested/cross-site frames');
+ const read=await browser.control({action:'read',mode:'viewport'});
+ assert.ok(read && typeof read==='object');
+ console.log('Read completed');
+ const secondRead=await browser.control({action:'read',mode:'viewport'});
+ assert.ok(secondRead && typeof secondRead==='object');
+ console.log('Repeated read completed');
  const actualTouch=await wc.executeJavaScript('('+touch.toString()+')()');
  assert.deepEqual(actualTouch,nativeTouch,'native touch capability is preserved');
  assert.deepEqual(actualTouch.js,actualTouch.css,'simple, compact and compound JS queries agree with real CSS');

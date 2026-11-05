@@ -449,6 +449,9 @@
       "clickHelp": "Allow clicking links, buttons and other page elements without confirmation.",
       "fill": "Entering text",
       "fillHelp": "Allow entering text into page fields without confirmation.",
+      "typingTitle": "Typing mode",
+      "humanTyping": "Humanized typing",
+      "humanTypingHelp": "Type character by character with pauses and corrected typos. When disabled, all text is inserted instantly.",
       "sensitiveFieldsNote": "Passwords can only be entered manually — the model cannot access them."
     },
     "language": {

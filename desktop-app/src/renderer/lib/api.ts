@@ -59,6 +59,7 @@ export type UiSettings = {
   browser_confirm_open?: boolean;
   browser_confirm_click?: boolean;
   browser_confirm_fill?: boolean;
+  browser_human_typing?: boolean;
 };
 
 type User = {
@@ -1362,6 +1363,8 @@ export function initWebSocket(callbacks?: WsCallbacks) {
             (window as any).electronAPI?.cancelVideoConversion(msg.request_id).catch(console.error);
           } else if (msg.ipc_type === 'google_ai') {
             (window as any).electronAPI?.cancelGoogleAi(googleAiRequestChats.get(msg.request_id)).catch(console.error);
+          } else if (msg.ipc_type === 'browser_control') {
+            (window as any).electronAPI?.cancelBrowserControl?.(msg.request_id).catch(console.error);
           } else if (msg.ipc_type === 'read_webpage') {
             (window as any).electronAPI?.cancelWebPageRead().catch(console.error);
           }
@@ -1660,6 +1663,14 @@ const googleAiRequestChats = new Map<string, number | undefined>();
 
 async function handleExecuteIpc(msg: { request_id: string; ipc_type: string; payload: any }) {
   const { request_id, ipc_type, payload } = msg;
+  const requestSocket = ws;
+  const stopProgress = (ipc_type === 'google_ai' || (ipc_type === 'browser_control' && payload?.action === 'fill'))
+    ? window.electronAPI?.onBrowserInputProgress?.(progress => {
+        if (progress.request_id === request_id && ws === requestSocket && requestSocket?.readyState === WebSocket.OPEN) {
+          requestSocket.send(JSON.stringify({ type: 'ipc_progress', ...progress }));
+        }
+      })
+    : undefined;
 
   try {
     let result: any;
@@ -1759,7 +1770,7 @@ async function handleExecuteIpc(msg: { request_id: string; ipc_type: string; pay
         ref: payload?.ref,
         url: payload?.url,
       });
-      result = await (window as any).electronAPI?.browserControl(payload);
+      result = await (window as any).electronAPI?.browserControl({ ...payload, request_id });
     } else if (ipc_type === 'web_search') {
       console.log('[ipc] renderer invoke searchWeb', {
         requestId: request_id,
@@ -1784,7 +1795,7 @@ async function handleExecuteIpc(msg: { request_id: string; ipc_type: string; pay
       const googleAi = (window as any).electronAPI?.googleAi;
       if (typeof googleAi !== 'function') throw new Error('desktop_google_ai_unsupported');
       googleAiRequestChats.set(request_id, Number.isInteger(payload?.chat_id) ? Number(payload.chat_id) : undefined);
-      result = await googleAi(payload);
+      result = await googleAi({ ...payload, request_id });
     } else {
       throw new Error(`unknown ipc_type: ${ipc_type}`);
     }
@@ -1807,6 +1818,7 @@ async function handleExecuteIpc(msg: { request_id: string; ipc_type: string; pay
     ws?.send(JSON.stringify({ type: 'ipc_result', request_id, error: err?.message || String(err) }));
     console.log('[ipc] renderer ipc_result error sent', { requestId: request_id });
   } finally {
+    stopProgress?.();
     googleAiRequestChats.delete(request_id);
   }
 }

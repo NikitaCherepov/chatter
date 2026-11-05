@@ -344,8 +344,8 @@ const SELECT_ALL_TO_TYPE_MIN = 24;
 const SELECT_ALL_TO_TYPE_MAX = 70;
 const KEY_TO_TEXT_MIN = 16;
 const KEY_TO_TEXT_MAX = 48;
-const PER_CHAR_MIN = 55;
-const PER_CHAR_MAX = 150;
+const PER_CHAR_MIN = 85;
+const PER_CHAR_MAX = 180;
 const PAUSE_AFTER_SPACE_MIN = 40;
 const PAUSE_AFTER_SPACE_MAX = 140;
 const PAUSE_AFTER_PUNCT_MIN = 80;
@@ -353,13 +353,17 @@ const PAUSE_AFTER_PUNCT_MAX = 260;
 const THINK_PAUSE_PROBABILITY = 0.015;
 const THINK_PAUSE_MIN = 350;
 const THINK_PAUSE_MAX = 1100;
-const DEFAULT_TYPE_BUDGET_MS = 8000;
+const TYPO_PROBABILITY = 0.025;
+const MAX_TYPOS_PER_INPUT = 3;
+const TYPO_MIN_SPACING = 8;
 
 export type HumanTypeOptions = {
-  /** Select-all before typing so the first burst replaces the current value. */
+  /** Select-all before typing to replace the current value. */
   clearFirst?: boolean;
-  /** Upper bound on total typing time; longer texts are typed in bursts. */
-  budgetMs?: number;
+  /** Rare adjacent-letter mistakes, immediately corrected before continuing. */
+  typos?: boolean;
+  humanTyping?: boolean;
+  onProgress?: () => void;
 };
 
 const PUNCTUATION = /[.,!?;:—–…)\]}>"']/;
@@ -376,6 +380,22 @@ const isPlainAsciiPrintable = (char: string): boolean => {
   return code >= 0x21 && code <= 0x7e;
 };
 
+const LETTER_NEIGHBORS = new Map<string, string[]>();
+for (const rows of [['qwertyuiop', 'asdfghjkl', 'zxcvbnm'], ['йцукенгшщзхъ', 'фывапролджэ', 'ячсмитьбю']]) {
+  const keys = rows.flatMap((row, y) => Array.from(row, (letter, x) => ({ letter, x: x + [0, 0.25, 0.75][y]!, y })));
+  for (const key of keys) LETTER_NEIGHBORS.set(key.letter, keys
+    .filter(other => other !== key && Math.hypot(other.x - key.x, other.y - key.y) <= 1.25)
+    .map(other => other.letter));
+}
+
+function nearbyLetter(letter: string): string | undefined {
+  const lower = letter.toLowerCase();
+  const neighbors = LETTER_NEIGHBORS.get(lower);
+  if (!neighbors?.length) return undefined;
+  const neighbor = neighbors[Math.floor(Math.random() * neighbors.length)]!;
+  return letter === lower ? neighbor : neighbor.toUpperCase();
+}
+
 function assertKeyboardActive(webContents: WebContents, token?: CancellationToken): void {
   if (token?.cancelled) throw new Error('fill_cancelled');
   if (webContents.isDestroyed()) throw new Error('webcontents_destroyed');
@@ -390,13 +410,13 @@ async function keyboardDelay(webContents: WebContents, delay: number, token?: Ca
 /** Always release a pressed key, including when cancellation happens during its hold. */
 async function holdKeyboardKey(
   webContents: WebContents, keyCode: string, holdMs: number, token?: CancellationToken,
-  modifiers?: Array<'control' | 'meta'>, beforeRelease?: () => void,
+  modifiers?: Array<'control' | 'meta'>, beforeRelease?: () => void | Promise<void>,
 ): Promise<void> {
   assertKeyboardActive(webContents, token);
   webContents.sendInputEvent({ type: 'keyDown', keyCode, ...(modifiers ? { modifiers } : {}) });
   try {
     await keyboardDelay(webContents, holdMs, token);
-    beforeRelease?.();
+    await beforeRelease?.();
   } finally {
     if (!webContents.isDestroyed()) webContents.sendInputEvent({ type: 'keyUp', keyCode, ...(modifiers ? { modifiers } : {}) });
   }
@@ -409,9 +429,9 @@ async function holdKeyboardKey(
  * events (`isTrusted: true`) that React-controlled fields and anti-bot
  * scripts accept — unlike synthetic `new Event('input')` dispatches.
  * Single plain-ASCII characters also get a keyDown/keyUp pair so key-aware
- * editors observe a full keyboard flow. Long texts are merged into bursts
- * to respect `budgetMs` (people paste wall-of-text, they don't type for a
- * minute straight).
+ * editors observe a full keyboard flow. Every insertion contains one Unicode
+ * code point, including spaces and corrections. With humanTyping=false, the
+ * whole value is inserted at once.
  */
 export async function typeHumanText(
   webContents: WebContents,
@@ -422,7 +442,7 @@ export async function typeHumanText(
   assertKeyboardActive(webContents, token);
   const value = String(text ?? '');
   if (!value && !options.clearFirst) return;
-  // Keep surrogate pairs intact in both individual characters and longer bursts.
+  // Keep surrogate pairs intact while inserting one code point at a time.
   const characters = Array.from(value);
 
   try { webContents.focus(); } catch { /* the view may be hidden */ }
@@ -438,36 +458,50 @@ export async function typeHumanText(
     }
   }
 
-  // Plan a human-cadenced timeline, then merge characters into bursts when
-  // the natural typing time would exceed the budget.
-  const delays = characters.map((_, i) => humanCharDelay(i > 0 ? characters[i - 1]! : ' '));
-  const budget = Math.max(1500, Math.floor(options.budgetMs ?? DEFAULT_TYPE_BUDGET_MS));
-  const naturalTotal = delays.reduce((sum, delay) => sum + delay, 0);
-
-  type Burst = { text: string; delayBefore: number };
-  const bursts: Burst[] = [];
-  if (naturalTotal <= budget) {
-    for (let i = 0; i < characters.length; i += 1) bursts.push({ text: characters[i]!, delayBefore: delays[i]! });
-  } else {
-    const segmentCount = Math.ceil(naturalTotal / budget);
-    const segmentLength = Math.max(2, Math.ceil(characters.length / segmentCount));
-    const averageDelay = naturalTotal / characters.length;
-    const compression = Math.min(1, budget / naturalTotal);
-    for (let start = 0; start < characters.length; start += segmentLength) {
-      const slice = characters.slice(start, start + segmentLength);
-      const delayBefore = Math.max(PER_CHAR_MIN, Math.round(averageDelay * slice.length * compression));
-      bursts.push({ text: slice.join(''), delayBefore });
-    }
+  if (options.humanTyping === false) {
+    assertKeyboardActive(webContents, token);
+    await webContents.insertText(value);
+    options.onProgress?.();
+    return;
   }
+  let tempo = 1;
+  const delays = characters.map((_, i) => {
+    const previous = i > 0 ? characters[i - 1]! : ' ';
+    if (i === 0 || /\s/.test(previous)) tempo = randRange(0.75, 1.3);
+    return humanCharDelay(previous) * tempo;
+  });
 
-  for (const burst of bursts) {
-    await keyboardDelay(webContents, burst.delayBefore, token);
-    if (burst.text.length === 1 && isPlainAsciiPrintable(burst.text)) {
-      await holdKeyboardKey(webContents, burst.text, randRange(KEY_TO_TEXT_MIN, KEY_TO_TEXT_MAX), token,
-        undefined, () => { webContents.insertText(burst.text); });
+  const insert = async (part: string) => {
+    if (!part) return;
+    assertKeyboardActive(webContents, token);
+    if (part.length === 1 && isPlainAsciiPrintable(part)) {
+      await holdKeyboardKey(webContents, part, randRange(KEY_TO_TEXT_MIN, KEY_TO_TEXT_MAX), token,
+        undefined, () => webContents.insertText(part));
     } else {
-      webContents.insertText(burst.text);
+      await webContents.insertText(part);
     }
+  };
+  let typoCount = 0;
+  let lastTypo = -TYPO_MIN_SPACING;
+  for (let position = 0; position < characters.length; position++) {
+    const letter = characters[position]!;
+    await keyboardDelay(webContents, delays[position]!, token);
+    const makeTypo = options.typos !== false && typoCount < MAX_TYPOS_PER_INPUT
+      && position >= 2 && position - lastTypo >= TYPO_MIN_SPACING
+      && LETTER_NEIGHBORS.has(letter.toLowerCase())
+      && !/[\u0300-\u036f\u200d]/.test(characters[position - 1] || '')
+      && Math.random() > 1 - TYPO_PROBABILITY;
+    const wrong = makeTypo ? nearbyLetter(letter) : undefined;
+    if (wrong !== undefined) {
+      await insert(wrong);
+      await keyboardDelay(webContents, randRange(180, 520), token);
+      await holdKeyboardKey(webContents, 'Backspace', randRange(45, 110), token);
+      await keyboardDelay(webContents, randRange(70, 180), token);
+      lastTypo = position;
+      typoCount++;
+    }
+    await insert(letter);
+    options.onProgress?.();
   }
   await keyboardDelay(webContents, randRange(24, 80), token);
 }

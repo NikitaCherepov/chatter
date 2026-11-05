@@ -1,3 +1,4 @@
+﻿import { browserInputTimeout } from './services/browser-input-timeout.js';
 import express from 'express';
 import path from 'path';
 import { listTaskPage } from './services/tasks.js';
@@ -6539,6 +6540,7 @@ const VALID_UI_KEYS = [
   'browser_confirm_open',
   'browser_confirm_click',
   'browser_confirm_fill',
+  'browser_human_typing',
 ] as const;
 
 type UiSettingValue = boolean | string[];
@@ -6568,6 +6570,7 @@ app.get('/api/v1/user/ui-settings', (req: AuthedRequest, res: any) => {
     browser_confirm_open: true,
     browser_confirm_click: true,
     browser_confirm_fill: true,
+    browser_human_typing: true,
   };
   try {
     const raw = JSON.parse(user.ui_settings || '{}');
@@ -6590,6 +6593,7 @@ app.put('/api/v1/user/ui-settings', (req: AuthedRequest, res: any) => {
     browser_confirm_open: true,
     browser_confirm_click: true,
     browser_confirm_fill: true,
+    browser_human_typing: true,
   };
   try {
     const raw = JSON.parse(user?.ui_settings || '{}');
@@ -7594,7 +7598,7 @@ app.post('/api/v1/pc-commands/approve', async (req: AuthedRequest, res: any) => 
     const ipcTimeout = pending.kind === 'browser_download'
       ? 270000
       : pending.payload.ipcType === 'execute_commands' ? 150000 : 60000;
-    const result = await sendIpcToDesktop(userId, pending.payload.ipcType, pending.payload.ipcPayload, ipcTimeout);
+    const result = await sendIpcToDesktop(userId, pending.payload.ipcType, pending.payload.ipcPayload, browserInputTimeout(pending.payload.ipcType, pending.payload.ipcPayload, ipcTimeout));
     console.log('[pc_action] desktop ipc completed', {
       userId,
       confirmationId,
@@ -7696,7 +7700,7 @@ app.post('/internal/pc-commands/approve', internalAuth, async (req, res) => {
     const ipcPayload = pending.kind === 'browser_download' && pending.payload.ipcType === 'browser_control'
       ? { ...pending.payload.ipcPayload, destination: 'downloads' as const }
       : pending.payload.ipcPayload;
-    const result = await sendIpcToDesktop(pending.userId, pending.payload.ipcType, ipcPayload, ipcTimeout);
+    const result = await sendIpcToDesktop(pending.userId, pending.payload.ipcType, ipcPayload, browserInputTimeout(pending.payload.ipcType, ipcPayload, ipcTimeout));
     pending.resolve(result);
     const resolvedStatus = pending.kind === 'browser_download'
       && result && typeof result === 'object' && result.status === 'cancelled'
@@ -8198,6 +8202,10 @@ wss.on('connection', (ws, req) => {
         const chatId = Number(msg.chat_id);
         if (Number.isSafeInteger(chatId) && chatId > 0 && canReadChatMessages(client.accountId, chatId)) {
           stopRoomQueue(chatId);
+        }
+      } else if (msg.type === 'ipc_progress') {
+        if (wsClients.get(client.accountId) === client && typeof msg.request_id === 'string') {
+          client.pendingIpc.get(msg.request_id)?.progress?.(msg.sequence);
         }
       } else if (msg.type === 'ipc_result') {
         handleIpcResult(client, msg);

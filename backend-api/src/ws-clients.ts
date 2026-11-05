@@ -8,7 +8,7 @@ export type WsClient = {
   ws: WebSocket;
   accessToken: string;
   accountId: number;
-  pendingIpc: Map<string, { resolve: (data: any) => void; reject: (err: Error) => void; timer: ReturnType<typeof setTimeout> }>;
+  pendingIpc: Map<string, { resolve: (data: any) => void; reject: (err: Error) => void; timer: ReturnType<typeof setTimeout>; progress?: (sequence: unknown) => void }>;
   connectionId: string;
   connectedAt: number;
   lastMessageAt: number;
@@ -73,7 +73,9 @@ export function sendIpcToDesktop(userId: number, ipcType: string, payload: any, 
       }
     };
 
-    const timer = setTimeout(() => {
+    const expiresAt = Date.now() + timeoutMs + 60_000;
+    let sequence = 0;
+    const onTimeout = () => {
       client.pendingIpc.delete(requestId);
       signal?.removeEventListener('abort', onAbort);
       cancelDesktopIpc('timeout');
@@ -85,7 +87,8 @@ export function sendIpcToDesktop(userId: number, ipcType: string, payload: any, 
         pendingIpcCount: client.pendingIpc.size,
       });
       reject(new Error('ipc_timeout'));
-    }, timeoutMs);
+    };
+    let timer = setTimeout(onTimeout, timeoutMs);
 
     // Если сигнал отмены прийдёт пока ждём — чистим pending и режектим
     const onAbort = () => {
@@ -117,6 +120,16 @@ export function sendIpcToDesktop(userId: number, ipcType: string, payload: any, 
         reject(err);
       },
       timer,
+      progress: (next: unknown) => {
+        if (!((ipcType === 'browser_control' && payload?.action === 'fill') || ipcType === 'google_ai')) return;
+        if (payload?.human_typing === false || !Number.isSafeInteger(next) || Number(next) <= sequence) return;
+        if (wsClients.get(userId) !== client || !client.pendingIpc.has(requestId)) return;
+        sequence = Number(next);
+        clearTimeout(timer);
+        const remaining = expiresAt - Date.now();
+        timer = setTimeout(onTimeout, Math.max(0, Math.min(ipcType === 'google_ai' ? 120_000 : 30_000, remaining)));
+        client.pendingIpc.get(requestId)!.timer = timer;
+      },
     });
     try {
       console.log('[ipc] sending execute_ipc to desktop', {

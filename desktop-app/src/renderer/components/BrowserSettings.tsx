@@ -8,23 +8,27 @@ import rows from './RestrictionsSettings.module.scss';
 import toggle from './MemoryPopover.module.scss';
 import styles from './BrowserSettings.module.scss';
 
-type BrowserConfirmationKey =
+type BrowserSettingKey =
   | 'browser_confirm_open'
   | 'browser_confirm_click'
-  | 'browser_confirm_fill';
+  | 'browser_confirm_fill'
+  | 'browser_human_typing';
 
-type BrowserConfirmationSettings = Record<BrowserConfirmationKey, boolean>;
+type BrowserConfirmationKey = Exclude<BrowserSettingKey, 'browser_human_typing'>;
+type BrowserSettingsValues = Record<BrowserSettingKey, boolean>;
 
-const DEFAULT_SETTINGS: BrowserConfirmationSettings = {
+const DEFAULT_SETTINGS: BrowserSettingsValues = {
   browser_confirm_open: true,
   browser_confirm_click: true,
   browser_confirm_fill: true,
+  browser_human_typing: true,
 };
 
-const normalizeSettings = (settings: api.UiSettings): BrowserConfirmationSettings => ({
+const normalizeSettings = (settings: api.UiSettings): BrowserSettingsValues => ({
   browser_confirm_open: settings.browser_confirm_open !== false,
   browser_confirm_click: settings.browser_confirm_click !== false,
   browser_confirm_fill: settings.browser_confirm_fill !== false,
+  browser_human_typing: settings.browser_human_typing !== false,
 });
 
 export function BrowserSettings({ children }: { children?: ReactNode }) {
@@ -32,7 +36,7 @@ export function BrowserSettings({ children }: { children?: ReactNode }) {
   const id = useId();
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [loading, setLoading] = useState(true);
-  const [savingKey, setSavingKey] = useState<BrowserConfirmationKey | null>(null);
+  const [savingKey, setSavingKey] = useState<BrowserSettingKey | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -49,7 +53,7 @@ export function BrowserSettings({ children }: { children?: ReactNode }) {
     return () => { cancelled = true; };
   }, [t]);
 
-  const handleChange = async (key: BrowserConfirmationKey, checked: boolean) => {
+  const handleChange = async (key: BrowserSettingKey, checked: boolean) => {
     const previous = settings;
     setSettings(current => ({ ...current, [key]: checked }));
     setSavingKey(key);
@@ -116,6 +120,21 @@ export function BrowserSettings({ children }: { children?: ReactNode }) {
                   className={`${toggle.toggle} ${!settings[option.key] ? toggle.toggleActive : ''}`}><span /></button>
               </div>;
             })}
+          </section>
+          <section className={rows.group} aria-labelledby={id + '-typing'}>
+            <h3 id={id + '-typing'}>{t('settings.browser.typingTitle')}</h3>
+            <div className={rows.row}>
+              <span className={rows.icon}><Icon name="text" size={18} /></span>
+              <div className={rows.text}>
+                <span className={rows.label} id={id + '-human-typing'}>{t('settings.browser.humanTyping')}</span>
+                <p id={id + '-human-typing-hint'}>{t('settings.browser.humanTypingHelp')}</p>
+              </div>
+              <button type="button" role="switch" aria-checked={settings.browser_human_typing}
+                aria-labelledby={id + '-human-typing'} aria-describedby={id + '-human-typing-hint'}
+                disabled={savingKey !== null}
+                onClick={() => void handleChange('browser_human_typing', !settings.browser_human_typing)}
+                className={[toggle.toggle, settings.browser_human_typing ? toggle.toggleActive : ''].join(' ')}><span /></button>
+            </div>
           </section>
           <div className={styles.notice}>
             <Icon name="lock" size={16} /><span>{t('settings.browser.sensitiveFieldsNote')}</span>

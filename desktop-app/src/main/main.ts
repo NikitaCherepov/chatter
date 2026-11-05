@@ -1369,6 +1369,17 @@ function createWindow() {
     return chatterBrowser.getState();
   });
 
+  const inputProgress = (event: Electron.IpcMainInvokeEvent, requestId?: string) => {
+    let sequence = 0;
+    let lastSent = 0;
+    return () => {
+      sequence++;
+      if (!requestId || event.sender.isDestroyed() || Date.now() - lastSent < 1000) return;
+      lastSent = Date.now();
+      event.sender.send('browser:input-progress', { request_id: requestId, sequence });
+    };
+  };
+
   ipcMain.handle('browser:control', async (event, payload: BrowserControlPayload) => {
     assertTrustedIpcSender(event);
     if (!chatterBrowser) throw new Error('browser_unavailable');
@@ -1376,7 +1387,13 @@ function createWindow() {
       if (!youtubeMusicBrowser) throw new Error('youtube_music_unavailable');
       return youtubeMusicBrowser.control(payload);
     }
-    return chatterBrowser.control(payload);
+    return chatterBrowser.control(payload, inputProgress(event, payload.request_id));
+  });
+
+  ipcMain.handle('browser:cancel-control', (event, requestId: unknown) => {
+    assertTrustedIpcSender(event);
+    if (typeof requestId !== 'string') throw new Error('invalid_request_id');
+    return chatterBrowser?.cancelBrowserControl(requestId) || { cancelled: false };
   });
 
   ipcMain.handle('browser-runtime:get-settings', (event) => {
@@ -1465,7 +1482,7 @@ function createWindow() {
     dismissChallengeForBrowser(browser);
     const previewRun = preview.start(browser, { chatId });
     try {
-      const result = await browser.googleAi(payload) as { challenge?: string };
+      const result = await browser.googleAi(payload, inputProgress(event, payload.request_id)) as { challenge?: string };
       preview.stop(browser, previewRun);
       if (result?.challenge === 'captcha') {
         backgroundActivityRegistry.setStatus(browserSessionActivityId('google_ai', chatId), 'challenge');

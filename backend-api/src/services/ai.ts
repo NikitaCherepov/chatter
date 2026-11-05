@@ -1,3 +1,4 @@
+﻿import { browserInputTimeout, usesHumanBrowserTyping } from './browser-input-timeout.js';
 import { avatarControlAllowed, withoutAvatarTools } from './avatar-policy.js';
 import OpenAI from 'openai';
 import dotenv from 'dotenv';
@@ -3879,7 +3880,8 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
         action,
         ...(subagentExtra?.chatId ? { chat_id: subagentExtra.chatId } : {}),
         ...(message ? { message } : {}),
-      }, 120_000, signal);
+        human_typing: usesHumanBrowserTyping(user.ui_settings),
+      }, browserInputTimeout('google_ai', { message, human_typing: usesHumanBrowserTyping(user.ui_settings) }, 120_000), signal);
       if (result?.challenge === 'captcha') {
         return 'Tool error: Google requires verification. A CAPTCHA window was opened in Chatter Desktop. Ask the user to complete it, then repeat the Google AI request.';
       }
@@ -6374,6 +6376,7 @@ If the task is a description, return a detailed text response.`
     if (url) ipcPayload.url = url;
     if (ref) ipcPayload.ref = ref;
     if (text !== undefined) ipcPayload.text = text;
+    if (action === 'fill') ipcPayload.human_typing = usesHumanBrowserTyping(user.ui_settings);
     if (key) ipcPayload.key = key;
     if (action === 'read') ipcPayload.mode = mode;
     if (action === 'scroll') {
@@ -6430,7 +6433,7 @@ If the task is a description, return a detailed text response.`
     // use the user's per-account confirmation preferences (safe default: confirm).
     if (!confirmationRequired) {
       try {
-        const ipcResult = await sendIpcToDesktop(user.id, 'browser_control', ipcPayload, isBatch ? 60000 : 30000, signal);
+        const ipcResult = await sendIpcToDesktop(user.id, 'browser_control', ipcPayload, browserInputTimeout('browser_control', ipcPayload, isBatch ? 60000 : 30000), signal);
         const result = ipcResult;
         return wrapUntrustedContent(JSON.stringify({
           status: 'success',
@@ -6467,6 +6470,7 @@ If the task is a description, return a detailed text response.`
             ...(url ? { url } : {}),
             ...(ref ? { ref } : {}),
             ...(text !== undefined ? { text } : {}),
+            ...(action === 'fill' ? { human_typing: ipcPayload.human_typing as boolean } : {}),
             ...(key ? { key } : {}),
             ...(siteOrigin ? { expected_origin: siteOrigin } : {}),
           },

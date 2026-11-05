@@ -22,6 +22,7 @@ declare global {
       browserGetState: () => Promise<BrowserState>;
       browserSetVisible: (payload: { visible: boolean; ownerId: string; bounds?: BrowserBounds }) => Promise<BrowserState>;
       browserSetBounds: (bounds: BrowserBounds) => Promise<BrowserState>;
+      cancelBrowserControl: (requestId: string) => Promise<{ cancelled: boolean }>;
       browserControl: (payload: BrowserControlPayload) => Promise<any>;
       searchWeb: (payload: {
         query: string;
@@ -38,6 +39,8 @@ declare global {
       setDesktopBrowserSettings: (settings: { concurrency: number; searchEnabled: boolean; readerEnabled: boolean }) => Promise<{ concurrency: number; searchEnabled: boolean; readerEnabled: boolean }>;
       cancelWebPageRead: () => Promise<{ cancelled: boolean }>;
       googleAi: (payload: {
+        request_id?: string;
+        human_typing?: boolean;
         action?: 'ask' | 'new_chat' | 'reload' | 'close_session';
         message?: string;
         chat_id?: number;
@@ -50,6 +53,7 @@ declare global {
       openBrowserSession: (id: string) => Promise<{ opened: boolean }>;
       stopBrowserSession: (id: string) => Promise<{ stopped: boolean }>;
       onBackgroundActivitiesChanged: (callback: (payload: { activeChatId: number | null; activities: BackgroundActivitySnapshot[] }) => void) => () => void;
+      onBrowserInputProgress: (callback: (payload: { request_id: string; sequence: number }) => void) => () => void;
       onBrowserState: (callback: (payload: BrowserState) => void) => () => void;
       youtubeMusicGetState: () => Promise<BrowserState>;
       youtubeMusicSetVisible: (payload: { visible: boolean; ownerId: string; bounds?: BrowserBounds }) => Promise<BrowserState>;
@@ -156,6 +160,8 @@ type BrowserState = {
 };
 
 type BrowserControlPayload = {
+  request_id?: string;
+  human_typing?: boolean;
   action: 'open' | 'read' | 'back' | 'forward' | 'reload' | 'scroll' | 'click' | 'fill' | 'press_key' | 'screenshot' | 'click_coordinates' | 'click_coordinates_batch' | 'check_site_permission' | 'grant_site_permission' | 'resolve_download' | 'youtube_music';
   snapshot_id?: string;
   points?: { x: number; y: number }[];

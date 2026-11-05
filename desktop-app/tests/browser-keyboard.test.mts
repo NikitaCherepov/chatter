@@ -38,7 +38,7 @@ let win;
  await typeHumanText(wc,unicode);assert.equal(await value(),unicode,'single-character typing preserves Unicode');
  await reset();
  const long='a😀'.repeat(40);
- await typeHumanText(wc,long,{budgetMs:1500});assert.equal(await value(),long,'merged bursts preserve surrogate pairs');
+ await typeHumanText(wc,long,{});assert.equal(await value(),long,'long input preserves surrogate pairs');
  await reset();
  const token={cancelled:false};
  const timer=setTimeout(()=>{token.cancelled=true},80);
@@ -64,8 +64,8 @@ let win;
 
  // Exercise the actual fill method against a local native textarea.
  const browser=Object.create(ChatterBrowser.prototype);
- Object.assign(browser,{view:{webContents:wc},interactionInProgress:false,googleAiRunId:0,googleAiInProgress:false,
-   getSnapshotTarget:()=>({element:{tag:'textarea',sensitive:false},frame:{},internalRef:'field'}),
+ Object.assign(browser,{view:{webContents:wc},cursorPos:{x:0,y:0},visible:false,interactionInProgress:false,googleAiRunId:0,googleAiInProgress:false,
+   getSnapshotTarget:()=>({element:{tag:'textarea',sensitive:false},frame:wc.mainFrame,internalRef:'field'}),
    executeInFrameIsolated:(_frame,code)=>execute(code),executeInBrowserWorld:execute,
    getState:()=>({}),navigateToUrl:async()=>{},ensureReadablePage:async()=>{}});
  await reset('   ');
@@ -75,6 +75,19 @@ let win;
  assert.equal(await value(),'','fill with empty text clears through native input');
  await browser.fillElement('field','  exact  value  ');
  assert.equal(await value(),'  exact  value  ','fill preserves requested whitespace exactly');
+
+ // Cancellation is scoped to the IPC request that owns the active fill.
+ await reset();
+ await wc.executeJavaScript('document.querySelector("textarea").oninput=()=>console.log("cancel-ipc-fill");void 0');
+ const cancelFill=(_event,_level,message)=>{if(message==='cancel-ipc-fill'){
+   assert.deepEqual(browser.cancelBrowserControl('other-request'),{cancelled:false});
+   assert.deepEqual(browser.cancelBrowserControl('typing-request'),{cancelled:true});
+ }};
+ wc.on('console-message',cancelFill);
+ await assert.rejects(()=>browser.fillElement('field','Stop this text before the rest is typed','typing-request'),/fill_cancelled|click_cancelled/);
+ wc.removeListener('console-message',cancelFill);
+ assert.equal(browser.inputRequest,null,'request ownership is cleared after cancellation');
+ assert.equal(browser.interactionInProgress,false);
 
  // Run the actual Google AI submission method on the local page; no external requests.
  await reset();
@@ -96,7 +109,7 @@ let win;
  wc.removeListener('console-message',cancelRetry);
  assert.equal(await wc.executeJavaScript('window.enters'),1,'cancelled retry must not press a second Enter');
  assert.equal(browser.googleAiInProgress,false);
- console.log('PASS: real Electron Unicode characters/bursts, cancellation before insertion/Enter, key release, exact fill/empty clear and cancelled Google AI submission');
+ console.log('PASS: real Electron Unicode characters/long input, cancellation before insertion/Enter, key release, exact fill/empty clear and cancelled Google AI submission');
 })().catch(e=>{console.error(e);process.exitCode=1}).finally(()=>{win?.destroy();app.exit(process.exitCode||0)});
 `);
 const env = { ...process.env }; delete env.ELECTRON_RUN_AS_NODE;

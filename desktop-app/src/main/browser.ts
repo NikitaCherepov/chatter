@@ -18,6 +18,8 @@ export type BrowserState = {
 };
 
 export type BrowserControlPayload = {
+  request_id?: string;
+  human_typing?: boolean;
   action: 'open' | 'read' | 'back' | 'forward' | 'reload' | 'scroll' | 'click' | 'fill' | 'press_key' | 'screenshot' | 'click_coordinates' | 'click_coordinates_batch' | 'check_site_permission' | 'grant_site_permission' | 'resolve_download' | 'youtube_music';
   snapshot_id?: string;
   points?: { x: number; y: number }[];
@@ -78,6 +80,8 @@ export type BrowserSearchPayload = {
 };
 
 export type GoogleAiPayload = {
+  request_id?: string;
+  human_typing?: boolean;
   action?: 'ask' | 'new_chat' | 'reload' | 'close_session';
   message?: string;
   chat_id?: number;
@@ -376,6 +380,7 @@ export class ChatterBrowser {
   private cursorPos: Point = { x: 0, y: 0 };
   /** Active cancellation token for the in-flight pointer sequence (if any). */
   private clickToken: CancellationToken | null = null;
+  private inputRequest: { id: string; token: CancellationToken } | null = null;
   private visualSession?: BrowserVisualSession;
   /** Browser identity override handle; disposed together with the view. */
   private identity: BrowserIdentityHandle | null = null;
@@ -762,7 +767,7 @@ export class ChatterBrowser {
     }
   }
 
-  async control(payload: BrowserControlPayload): Promise<unknown> {
+  async control(payload: BrowserControlPayload, onProgress?: () => void): Promise<unknown> {
     const action = payload?.action;
     const contents = this.view.webContents;
     if (contents.isDestroyed()) throw new Error('browser_unavailable');
@@ -908,7 +913,7 @@ export class ChatterBrowser {
         throw new Error('browser_origin_changed');
       }
       if (action === 'click') return this.clickElement(`${payload.ref || ''}`);
-      return this.fillElement(`${payload.ref || ''}`, `${payload.text || ''}`);
+      return this.fillElement(`${payload.ref || ''}`, `${payload.text || ''}`, payload.request_id, payload.human_typing, onProgress);
     }
     if (action === 'press_key') {
       const expectedOrigin = payload.expected_origin ? this.normalizeHttpOrigin(payload.expected_origin) : null;
@@ -1438,7 +1443,7 @@ export class ChatterBrowser {
     }
   }
 
-  async googleAi(payload: GoogleAiPayload): Promise<unknown> {
+  async googleAi(payload: GoogleAiPayload, onProgress?: () => void): Promise<unknown> {
     const action = payload?.action === 'new_chat' || payload?.action === 'reload' ? payload.action : 'ask';
     const message = `${payload?.message || ''}`.trim();
     const normalizedMessage = message.replace(/\s+/g, ' ').trim();
@@ -1617,7 +1622,7 @@ export class ChatterBrowser {
 
       // Human typing produces trusted input events that Google's controlled
       // composer accepts, and the natural cadence matches a real user.
-      await typeHumanText(contents, message, { clearFirst: composer.value.length > 0, budgetMs: 9000 }, inputToken);
+      await typeHumanText(contents, message, { clearFirst: composer.value.length > 0, humanTyping: payload.human_typing, onProgress }, inputToken);
       assertActive();
       await pressHumanKey(contents, 'Enter', inputToken);
       assertActive();
@@ -1698,7 +1703,7 @@ export class ChatterBrowser {
 
         // Retry through native input. This updates Google's controlled editor more
         // reliably than assigning DOM values after a hydration/re-render race.
-        await typeHumanText(contents, message, { clearFirst: true, budgetMs: 4000 }, inputToken);
+        await typeHumanText(contents, message, { clearFirst: true, humanTyping: payload.human_typing, onProgress }, inputToken);
         assertActive();
         await pressHumanKey(contents, 'Enter', inputToken);
         assertActive();
@@ -3767,7 +3772,15 @@ export class ChatterBrowser {
     })()`).catch(() => {});
   }
 
-  private async fillElement(ref: string, text: string): Promise<unknown> {
+  cancelBrowserControl(requestId: string): { cancelled: boolean } {
+    const request = this.inputRequest;
+    if (!requestId || !request || request.id !== requestId) return { cancelled: false };
+    request.token.cancelled = true;
+    this.abortInteraction();
+    return { cancelled: true };
+  }
+
+  private async fillElement(ref: string, text: string, requestId?: string, humanTyping?: boolean, onProgress?: () => void): Promise<unknown> {
     if (this.interactionInProgress) throw new Error('browser_interaction_in_progress');
     const { element: expected, frame, internalRef } = this.getSnapshotTarget(ref);
     this.interactionInProgress = true;
@@ -3780,6 +3793,8 @@ export class ChatterBrowser {
       throw new Error('browser_input_too_large');
     }
 
+    const inputRequest = { id: requestId || '', token: { cancelled: false } };
+    this.inputRequest = inputRequest;
     try {
       // Validate first — no focus() teleport: sensitive checks must precede
       // any pointer interaction, and the real click below is what focuses
@@ -3849,7 +3864,7 @@ export class ChatterBrowser {
       }
       await this.setElementHighlight(frame, internalRef);
 
-      this.clickToken = { cancelled: false };
+      this.clickToken = inputRequest.token;
       const token = this.clickToken;
       let frameInputSession: BrowserFrameInputSession | null = null;
       try {
@@ -3869,7 +3884,7 @@ export class ChatterBrowser {
         await new Promise(resolve => setTimeout(resolve, 140 + Math.random() * 240));
         // Human typing: native key events + trusted insertText with a
         // natural cadence — the click above has already focused the field.
-        await typeHumanText(contents, text, { clearFirst: prepared.value.length > 0 }, token);
+        await typeHumanText(contents, text, { clearFirst: prepared.value.length > 0, humanTyping, onProgress }, token);
       } finally {
         await this.clearElementHighlight(frame, internalRef);
         await hideBrowserCursor(code => this.executeInBrowserWorld(code), target);
@@ -3877,6 +3892,7 @@ export class ChatterBrowser {
         if (this.clickToken === token) this.clickToken = null;
       }
 
+      if (inputRequest.token.cancelled) throw new Error('fill_cancelled');
       // Verify the editor accepted the typed text. Exotic controlled
       // components fall back to the direct value assignment.
       const actual = await this.executeInFrameIsolated<string>(frame, `(() => {
@@ -3884,6 +3900,7 @@ export class ChatterBrowser {
         if (!element) return '';
         return element.isContentEditable ? String(element.textContent || '') : String(element.value || '');
       })()`);
+      if (inputRequest.token.cancelled) throw new Error('fill_cancelled');
       if (actual !== text) {
         await this.executeInFrameIsolated(frame, `(() => {
           const element = globalThis.__cb_e?.get(${JSON.stringify(internalRef)});
@@ -3903,6 +3920,7 @@ export class ChatterBrowser {
       }
       return { status: 'success', action: 'fill', element: expected, characters: text.length, ...this.getState() };
     } finally {
+      if (this.inputRequest === inputRequest) this.inputRequest = null;
       this.interactionInProgress = false;
     }
   }

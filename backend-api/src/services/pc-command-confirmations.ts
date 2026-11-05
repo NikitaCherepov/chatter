@@ -36,6 +36,7 @@ type BrowserActionPayload = {
     url?: string;
     ref?: string;
     text?: string;
+    human_typing?: boolean;
     key?: 'Enter' | 'Space';
     expected_origin?: string;
     snapshot_id?: string;

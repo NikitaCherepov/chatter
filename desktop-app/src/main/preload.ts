@@ -43,7 +43,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('browser:set-visible', payload),
   browserSetBounds: (bounds: { x: number; y: number; width: number; height: number }) =>
     ipcRenderer.invoke('browser:set-bounds', bounds),
+  cancelBrowserControl: (requestId: string) => ipcRenderer.invoke('browser:cancel-control', requestId),
   browserControl: (payload: {
+    request_id?: string;
+    human_typing?: boolean;
     action: 'open' | 'read' | 'back' | 'forward' | 'reload' | 'scroll' | 'click' | 'fill' | 'press_key' | 'screenshot' | 'click_coordinates' | 'click_coordinates_batch' | 'check_site_permission' | 'grant_site_permission' | 'resolve_download' | 'youtube_music';
     snapshot_id?: string;
     points?: { x: number; y: number }[];
@@ -83,6 +86,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('browser-runtime:set-settings', settings),
   cancelWebPageRead: () => ipcRenderer.invoke('web-reader:cancel'),
   googleAi: (payload: {
+    request_id?: string;
+    human_typing?: boolean;
     action?: 'ask' | 'new_chat' | 'reload' | 'close_session';
     message?: string;
     chat_id?: number;
@@ -107,6 +112,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     const handler = (_event: Electron.IpcRendererEvent, payload: unknown) => callback(payload);
     ipcRenderer.on('background-activities:changed', handler);
     return () => ipcRenderer.removeListener('background-activities:changed', handler);
+  },
+  onBrowserInputProgress: (callback: (payload: { request_id: string; sequence: number }) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, payload: { request_id: string; sequence: number }) => callback(payload);
+    ipcRenderer.on('browser:input-progress', handler);
+    return () => ipcRenderer.removeListener('browser:input-progress', handler);
   },
   onBrowserState: (callback: (payload: unknown) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, payload: unknown) => callback(payload);
