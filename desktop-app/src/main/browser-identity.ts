@@ -1,15 +1,28 @@
-import type { WebContents } from 'electron';
+import { BrowserWindow, type Session, type WebContents } from 'electron';
+import { randomUUID } from 'node:crypto';
+import { writeFile, unlink } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+
+function detectReportedChromeVersion(): { major: string; full: string } {
+  const engine = String(process.versions?.chrome || '');
+  const match = engine.match(/^(\d+)(?:\.\d+)*$/);
+  if (match) return { major: match[1]!, full: engine };
+  // Static fallback (Electron 33's Chromium) for hosts without versions.chrome.
+  return { major: '130', full: '130.0.6723.191' };
+}
+
+const reportedChromeVersion = detectReportedChromeVersion();
 
 /**
- * Chrome version the embedded browser reports as its own. Electron ships an
- * older Chromium (e.g. 130 while the real stable Chrome is far ahead), and an
- * outdated Chrome/<major> in the UA makes the app look stale to websites.
- * Keep these in sync with the current stable Chrome when bumping the
- * Electron version.
+ * Chrome version the embedded browser reports as its own: derived from the
+ * real engine (process.versions.chrome), so the UA string, client hints and
+ * the actual feature set always agree — and the identity follows Electron
+ * upgrades for free. The reduced UA uses the major only (Chrome/<major>.0.0.0).
  */
-export const REPORTED_CHROME_MAJOR = '152';
-/** Plausible full build for high-entropy client hints (the reduced UA zeroes it out). */
-export const REPORTED_CHROME_FULL_VERSION = '152.0.8065.128';
+export const REPORTED_CHROME_MAJOR: string = reportedChromeVersion.major;
+/** Full engine build for high-entropy client hints (the reduced UA zeroes it out). */
+export const REPORTED_CHROME_FULL_VERSION: string = reportedChromeVersion.full;
 
 export type UaBrand = { brand: string; version: string };
 
@@ -92,9 +105,10 @@ function detectPlatformInfo(): {
  * - rebuilds the UA string in genuine Chrome form: whatever product tokens
  *   Electron injects (Electron/33.4.11, chatter-desktop/2.0.0, …), only the
  *   authentic platform section survives, so the UA can never leak the app;
- * - reports the current stable Chrome version in reduced-UA form;
+ * - reports the actual Chromium version in reduced-UA form;
  * - derives userAgentMetadata so Sec-CH-UA headers and navigator.userAgentData
- *   report the same brands/versions as the UA string instead of "Electron".
+ *   use Chromium fallback metadata; applyBrowserIdentity replaces it with
+ *   the engine's native client hints before loading remote content.
  * The real OS section of the UA is preserved: fonts, WebGL and other
  * platform fingerprints must stay consistent with the claimed platform.
  */
@@ -113,12 +127,10 @@ export function buildBrowserIdentity(defaultUA: string, acceptLanguage = 'en-US'
     brands: [
       { brand: 'Not.A/Brand', version: '99' },
       { brand: 'Chromium', version: REPORTED_CHROME_MAJOR },
-      { brand: 'Google Chrome', version: REPORTED_CHROME_MAJOR },
     ],
     fullVersionList: [
       { brand: 'Not.A/Brand', version: '99' },
       { brand: 'Chromium', version: REPORTED_CHROME_FULL_VERSION },
-      { brand: 'Google Chrome', version: REPORTED_CHROME_FULL_VERSION },
     ],
     fullVersion: REPORTED_CHROME_FULL_VERSION,
     platform,
@@ -138,9 +150,7 @@ export function buildBrowserIdentity(defaultUA: string, acceptLanguage = 'en-US'
  * - `window.chrome` is absent in Electron but present in every Chrome;
  * - `Notification.permission` reports "denied" because Chatter denies all
  *   permission requests, while typical users sit on "default";
- * - `permissions.query({name:'notifications'})` must agree with the above;
- * - `navigator.webdriver` is locked to false (belt and suspenders next to
- *   the `disable-blink-features=AutomationControlled` switch).
+ * - `permissions.query({name:'notifications'})` must agree with the above.
  */
 export const IDENTITY_INIT_SCRIPT_SOURCE = `(() => {
   try {
@@ -169,9 +179,6 @@ export const IDENTITY_INIT_SCRIPT_SOURCE = `(() => {
     }
   } catch (error) { /* page context quirks must never break navigation */ }
   try {
-    Object.defineProperty(Navigator.prototype, 'webdriver', { get: function () { return false; }, configurable: true });
-  } catch (error) { /* already patched or prototype frozen */ }
-  try {
     if (typeof Notification !== 'undefined') {
       Object.defineProperty(Notification, 'permission', { get: function () { return 'default'; }, configurable: true });
     }
@@ -191,9 +198,106 @@ export const IDENTITY_INIT_SCRIPT_SOURCE = `(() => {
   } catch (error) { /* keep the native implementation */ }
 })();`;
 
+/**
+ * Canonical Sec-CH-UA* header values derived from the identity, keyed by the
+ * lower-cased header name. Used to rewrite outgoing requests as a safety net
+ * for contexts the page-level CDP override cannot reach (Service Workers and
+ * Shared Workers live in browser-level targets).
+ */
+export function clientHintHeaders(identity: BrowserIdentity): Record<string, string> {
+  const brands = identity.metadata.brands.map((brand) => `"${brand.brand}";v="${brand.version}"`).join(', ');
+  const fullBrands = identity.metadata.fullVersionList.map((brand) => `"${brand.brand}";v="${brand.version}"`).join(', ');
+  return {
+    'sec-ch-ua': brands,
+    'sec-ch-ua-mobile': '?0',
+    'sec-ch-ua-platform': `"${identity.metadata.platform}"`,
+    'sec-ch-ua-full-version-list': fullBrands,
+    'sec-ch-ua-arch': `"${identity.metadata.architecture}"`,
+    'sec-ch-ua-bitness': `"${identity.metadata.bitness}"`,
+    'sec-ch-ua-platform-version': identity.metadata.platformVersion ? `"${identity.metadata.platformVersion}"` : '',
+    'sec-ch-ua-model': '""',
+    'sec-ch-ua-wow64': '?0',
+  };
+}
+
+/**
+ * Rewrites identity-related request headers in place: every Sec-CH-UA* hint
+ * becomes the canonical value and a User-Agent still carrying Electron/app
+ * tokens is replaced. Returns true when the headers were modified. Pure, so
+ * it stays unit-testable without Electron.
+ */
+export function normalizeIdentityHeaders(requestHeaders: Record<string, string>, identity: BrowserIdentity): boolean {
+  const hints = clientHintHeaders(identity);
+  let changed = false;
+  for (const name of Object.keys(requestHeaders)) {
+    const canonical = hints[name.toLowerCase()];
+    // Empty canonical values (e.g. platform-version on Linux) are skipped:
+    // the platform simply does not send that hint.
+    if (canonical !== undefined && canonical !== '' && requestHeaders[name] !== canonical) {
+      requestHeaders[name] = canonical;
+      changed = true;
+    }
+  }
+  const userAgentKey = Object.keys(requestHeaders).find((name) => name.toLowerCase() === 'user-agent');
+  if (userAgentKey && typeof requestHeaders[userAgentKey] === 'string' && /Electron|chatter/i.test(requestHeaders[userAgentKey])) {
+    requestHeaders[userAgentKey] = identity.userAgent;
+    changed = true;
+  }
+  return changed;
+}
+
+type NativeIdentity = { metadata: UserAgentMetadata; language: string; navigatorPlatform: string };
+const nativeIdentities = new WeakMap<Session, Promise<NativeIdentity>>();
+
+function readNativeIdentity(session: Session): Promise<NativeIdentity> {
+  const existing = nativeIdentities.get(session);
+  if (existing) return existing;
+  const pending = (async () => {
+    const file = path.join(os.tmpdir(), 'chatter-browser-identity-' + randomUUID() + '.html');
+    let probe: BrowserWindow | undefined;
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    try {
+      // file: is a secure local context with UA-CH, unlike initial about:blank.
+      await writeFile(file, `<!doctype html><meta http-equiv="Content-Security-Policy" content="default-src 'none'"><title>Browser identity</title>`);
+      probe = new BrowserWindow({ show: false, webPreferences: { session, sandbox: true, contextIsolation: true, nodeIntegration: false } });
+      const probeContents = probe.webContents;
+      const read = (async () => {
+        await probe!.loadFile(file);
+        return await probeContents.executeJavaScript(`(async () => {
+          if (!navigator.userAgentData) throw new Error('native_user_agent_data_unavailable');
+          const data = await navigator.userAgentData.getHighEntropyValues([
+            'architecture', 'bitness', 'model', 'platformVersion', 'uaFullVersion', 'wow64', 'fullVersionList'
+          ]);
+          return {
+            language: navigator.language,
+            navigatorPlatform: navigator.platform,
+            metadata: {
+              brands: data.brands, fullVersionList: data.fullVersionList, fullVersion: data.uaFullVersion,
+              platform: data.platform, platformVersion: data.platformVersion, architecture: data.architecture,
+              model: data.model, mobile: data.mobile, bitness: data.bitness, wow64: data.wow64
+            }
+          };
+      })()`) as NativeIdentity;
+      })();
+      return await Promise.race([read, new Promise<NativeIdentity>((_, reject) => {
+        timeout = setTimeout(() => reject(new Error('native_identity_timeout')), 5000);
+      })]);
+    } finally {
+      if (timeout) clearTimeout(timeout);
+      probe?.destroy();
+      await unlink(file).catch(() => {});
+    }
+  })();
+  nativeIdentities.set(session, pending);
+  void pending.catch(() => { if (nativeIdentities.get(session) === pending) nativeIdentities.delete(session); });
+  return pending;
+}
+
 export type BrowserIdentityHandle = { dispose: () => void };
 
 const noopIdentityHandle: BrowserIdentityHandle = { dispose: () => {} };
+
+const WORKER_TARGET_TYPES = new Set(['worker', 'shared_worker', 'service_worker']);
 
 /**
  * Applies the browser identity via the Chromium DevTools Protocol:
@@ -201,7 +305,16 @@ const noopIdentityHandle: BrowserIdentityHandle = { dispose: () => {} };
  *   headers (including Sec-CH-UA* client hints) and navigator.userAgentData
  *   in one shot — this is what `session.setUserAgent` alone cannot do;
  * - `Page.addScriptToEvaluateOnNewDocument` installs the JS fingerprint
- *   patch in the main world before any page script runs.
+ *   patch in the main world before any page script runs;
+ * - `Target.setAutoAttach` catches related worker targets (workers are
+ *   separate CDP targets and would otherwise run with the raw embedder UA,
+ *   leaking "Electron" and the app token) and repeats the override inside
+ *   reachable workers before their first script runs. Shared Worker JS identity
+ *   stays native; pages use the same native metadata and language;
+ * - a session-level webRequest pass rewrites Sec-CH-UA* headers on every
+ *   request: Service Workers / Shared Workers belong to browser-level
+ *   targets the page debugger cannot reach, but their requests still flow
+ *   through session.webRequest.
  *
  * The debugger attachment stays alive for the lifetime of the webContents
  * (the isolated-world machinery in browser.ts rides on top of it). On any
@@ -210,8 +323,75 @@ const noopIdentityHandle: BrowserIdentityHandle = { dispose: () => {} };
  */
 export async function applyBrowserIdentity(contents: WebContents, profile: BrowserIdentity): Promise<BrowserIdentityHandle> {
   if (contents.isDestroyed()) return noopIdentityHandle;
+  try {
+    const native = await readNativeIdentity(contents.session);
+    // Shared Workers use the engine's native metadata and primary language.
+    // Reuse those values in pages and dedicated workers instead of inventing
+    // a Google Chrome brand/language list that Shared Workers cannot inherit.
+    profile = { ...profile, metadata: native.metadata, acceptLanguage: native.language,
+      platform: native.metadata.platform, navigatorPlatform: native.navigatorPlatform };
+  } catch (error) {
+    console.warn('[browser-identity] native metadata unavailable:', error);
+  }
+  if (contents.isDestroyed()) return noopIdentityHandle;
+  contents.session.setUserAgent(profile.userAgent, profile.acceptLanguage);
   const debuggerApi = contents.debugger;
   let attachedByUs = false;
+  const overrideParams = {
+    userAgent: profile.userAgent,
+    acceptLanguage: profile.acceptLanguage,
+    platform: profile.navigatorPlatform,
+    userAgentMetadata: profile.metadata,
+  };
+  const onDebuggerMessage = (_event: unknown, method: string, params: any, sessionId?: string): void => {
+    if (method !== 'Target.attachedToTarget' || !params?.targetInfo) return;
+    // Electron delivers the flat session id both as the fourth listener
+    // argument and inside params; trust whichever one is present.
+    const workerSession: string | undefined = params.sessionId || sessionId;
+    if (!workerSession) return;
+    let released = false;
+    const resume = () => {
+      if (released) return;
+      released = true;
+      void debuggerApi.sendCommand('Runtime.runIfWaitingForDebugger', undefined, workerSession).catch(() => {});
+    };
+    if (WORKER_TARGET_TYPES.has(String(params.targetInfo.type || ''))) {
+      // Workers are separate CDP targets: without this they run with the raw
+      // embedder UA (Electron + app tokens) regardless of the page override.
+      // A worker paused by waitForDebuggerOnStart must NEVER stay frozen: a
+      // hung override command would make every worker read as "unsupported",
+      // which is a far louder anomaly than a missed hint override. Hence the
+      // watchdog plus the guaranteed release below.
+      const watchdog = setTimeout(resume, 1500);
+      watchdog.unref?.();
+      void debuggerApi.sendCommand('Network.enable', undefined, workerSession)
+        .then(() => debuggerApi.sendCommand('Network.setUserAgentOverride', overrideParams, workerSession))
+        .catch(() => {
+          // Some worker targets expose the Emulation domain instead of
+          // Network; it accepts the very same override parameters.
+          return debuggerApi.sendCommand('Emulation.setUserAgentOverride', overrideParams, workerSession);
+        })
+        .catch(() => {})
+        .then(() => {
+          clearTimeout(watchdog);
+          resume();
+        });
+    } else if (String(params.targetInfo.type || '') === 'iframe') {
+      // Cross-site frames have their own renderer/CDP session. Enabling Page
+      // there both initializes the paused document and installs the same
+      // early script; the top-level override does not cover these renderers.
+      const watchdog = setTimeout(resume, 1500);
+      watchdog.unref?.();
+      void debuggerApi.sendCommand('Emulation.setUserAgentOverride', overrideParams, workerSession)
+        .then(() => debuggerApi.sendCommand('Page.enable', undefined, workerSession))
+        .then(() => debuggerApi.sendCommand('Page.addScriptToEvaluateOnNewDocument',
+          { source: IDENTITY_INIT_SCRIPT_SOURCE }, workerSession))
+        .catch((error) => console.warn('[browser-identity] iframe override failed:', error))
+        .finally(() => { clearTimeout(watchdog); resume(); });
+    } else if (params.waitingForDebugger) {
+      resume();
+    }
+  };
   try {
     // A fresh WebContentsView has no renderer document yet. CDP commands such
     // as Network.enable can wait for that renderer indefinitely while the
@@ -224,18 +404,42 @@ export async function applyBrowserIdentity(contents: WebContents, profile: Brows
       attachedByUs = true;
     }
     await debuggerApi.sendCommand('Network.enable');
-    await debuggerApi.sendCommand('Network.setUserAgentOverride', {
-      userAgent: profile.userAgent,
-      acceptLanguage: profile.acceptLanguage,
-      platform: profile.navigatorPlatform,
-      userAgentMetadata: profile.metadata,
-    });
+    await debuggerApi.sendCommand('Network.setUserAgentOverride', overrideParams);
+    await debuggerApi.sendCommand('Page.enable');
     await debuggerApi.sendCommand('Page.addScriptToEvaluateOnNewDocument', { source: IDENTITY_INIT_SCRIPT_SOURCE });
+    debuggerApi.on('message', onDebuggerMessage);
+    await debuggerApi.sendCommand('Target.setAutoAttach', {
+      autoAttach: true,
+      waitForDebuggerOnStart: true,
+      flatten: true,
+    });
   } catch (error) {
     console.warn('[browser-identity] CDP override failed; keeping the session-level UA only:', error);
   }
+  // Network-layer safety net for workers the page debugger cannot see.
+  // Registered per session; sibling browsers on a shared partition register
+  // an identical handler, so the last registration is still correct.
+  try {
+    contents.session.webRequest.onBeforeSendHeaders({ urls: ['http://*/*', 'https://*/*'] }, (details, callback) => {
+      if (normalizeIdentityHeaders(details.requestHeaders, profile)) {
+        callback({ requestHeaders: details.requestHeaders });
+        return;
+      }
+      callback({});
+    });
+  } catch (error) {
+    // The session may already be torn down; requests then flow untouched.
+  }
   return {
     dispose: () => {
+      try {
+        debuggerApi.removeListener('message', onDebuggerMessage);
+      } catch {
+        // The webContents is already gone.
+      }
+      // The session-level header rewrite intentionally stays installed: the
+      // session can outlive this view on shared partitions, and sibling
+      // browsers re-register an identical handler on construction anyway.
       // The isolated-world owners ride on external attachments and never
       // detach, so detaching here can only race with webContents teardown.
       if (!attachedByUs) return;

@@ -13,6 +13,7 @@ import { connectChatGptOnDesktop } from './chatgpt-auth';
 import { getTextMenuItems, type TextMenuAction } from './text-context-menu';
 import { isValidZoomLevel, readZoomLevel, saveZoomLevel } from './zoom-settings';
 import { ChatterBrowser, type BrowserControlPayload, type BrowserSearchPayload, type GoogleAiPayload } from './browser';
+import { buildBrowserIdentity } from './browser-identity';
 import { BrowserPreviewSession, type BrowserPreviewPayload, type BrowserPreviewSource } from './browser-preview';
 import { InteractivePreviews } from './interactive-preview';
 import { INTERACTIVE_SCHEME } from './interactive-document';
@@ -3193,7 +3194,10 @@ function setupGithubDesktopUpdater() {
   }, 3000);
 }
 
-app.commandLine.appendSwitch('disable-blink-features', 'AutomationControlled');
+// Workers (Dedicated/Shared/Service) take their navigator.userAgent from the
+// app-level fallback, not from any session override — rebuild it in genuine
+// Chrome form, or every Worker leaks the raw "Electron/<ver> <app>/<ver>" UA.
+app.userAgentFallback = buildBrowserIdentity(app.userAgentFallback).userAgent;
 // Single-instance lock only in production builds; dev mode allows multiple instances
 const hasSingleInstanceLock = !app.isPackaged || app.requestSingleInstanceLock();
 
