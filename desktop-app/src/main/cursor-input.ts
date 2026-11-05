@@ -138,25 +138,40 @@ function cubicBezier(
 /**
  * Generates a list of points along a cubic Bezier curve from `start` to `end`.
  * Two control points add lateral curvature. Point count scales with distance.
+ * `options` scales the generator down for idle glides (fewer points, gentle
+ * curvature) without touching the click defaults.
  */
-export function generateTrajectory(start: Point, end: Point): Point[] {
+export type TrajectoryOptions = {
+  /** Lower point-count bound (clicks use 24; idle glides use 3). */
+  minPoints?: number;
+  /** Upper point-count bound (clicks use 220; idle glides use 18). */
+  maxPoints?: number;
+  /** Max lateral control-point deviation in px (clicks use 80; idle glides scale with distance). */
+  maxCurveDeviation?: number;
+};
+
+export function generateTrajectory(start: Point, end: Point, options: TrajectoryOptions = {}): Point[] {
   const dx = end.x - start.x;
   const dy = end.y - start.y;
   const distance = Math.hypot(dx, dy);
 
   if (distance < 1) return [{ ...start }, { ...end }];
 
+  const minPoints = options.minPoints ?? MIN_POINTS;
+  const maxPoints = options.maxPoints ?? MAX_POINTS;
+  const maxCurveDeviation = options.maxCurveDeviation ?? MAX_CURVE_DEVIATION;
+
   const count = clamp(
-    Math.round(MIN_POINTS + distance * POINTS_PER_PX),
-    MIN_POINTS,
-    MAX_POINTS,
+    Math.round(minPoints + distance * POINTS_PER_PX),
+    minPoints,
+    maxPoints,
   );
 
   const perpX = -dy / distance;
   const perpY = dx / distance;
 
-  const offset1 = randRange(-MAX_CURVE_DEVIATION, MAX_CURVE_DEVIATION);
-  const offset2 = randRange(-MAX_CURVE_DEVIATION, MAX_CURVE_DEVIATION);
+  const offset1 = randRange(-maxCurveDeviation, maxCurveDeviation);
+  const offset2 = randRange(-maxCurveDeviation, maxCurveDeviation);
 
   const cp1: Point = {
     x: start.x + dx * 0.3 + perpX * offset1,
@@ -464,6 +479,59 @@ export async function pressHumanKey(webContents: WebContents, key: 'Enter' | 'Sp
   await keyboardDelay(webContents, randRange(40, 130), token);
   await holdKeyboardKey(webContents, key, randRange(45, 110), token);
   await keyboardDelay(webContents, randRange(24, 70), token);
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// 5b. Idle drift glide
+// ──────────────────────────────────────────────────────────────────────────
+
+const DRIFT_POINT_DELAY_MIN = 12;
+const DRIFT_POINT_DELAY_MAX = 26;
+const DRIFT_MAX_POINTS = 18;
+
+/**
+ * Glides the pointer smoothly to a nearby point along a short curved path.
+ * Idle pointer presence must not be a stream of single-event jumps — those
+ * read as teleports in mousemove recordings. A person either rests the hand
+ * (no events at all) or glides it, so every drift step streams a small
+ * bezier trajectory of native mouseMove events with human inter-event
+ * timing and a natural ease-out (the hand decelerates while arriving).
+ * Returns the point actually reached (an aborted glide stops mid-way).
+ */
+export async function driftTo(
+  webContents: WebContents,
+  currentMouse: Point,
+  target: Point,
+  shouldAbort?: () => boolean,
+): Promise<Point> {
+  if (webContents.isDestroyed()) throw new Error('webcontents_destroyed');
+  const dx = target.x - currentMouse.x;
+  const dy = target.y - currentMouse.y;
+  const distance = Math.hypot(dx, dy);
+  if (distance < 0.5) return { ...currentMouse };
+
+  // The same trajectory generator the clicks use, scaled to idle
+  // proportions: a handful of points and lateral curvature proportional
+  // to the glide distance instead of the click-sized 80px arcs.
+  const trajectory = generateTrajectory(currentMouse, target, {
+    minPoints: 3,
+    maxPoints: DRIFT_MAX_POINTS,
+    maxCurveDeviation: distance * 0.6,
+  });
+
+  let last = { ...currentMouse };
+  for (let i = 1; i < trajectory.length; i += 1) {
+    // An explicit interaction wins over the drift instantly.
+    if (shouldAbort?.()) break;
+    if (webContents.isDestroyed()) throw new Error('webcontents_destroyed');
+    last = trajectory[i]!;
+    webContents.sendInputEvent({ type: 'mouseMove', x: Math.round(last.x), y: Math.round(last.y) });
+    // Ease-out: the hand decelerates while arriving — later points take
+    // progressively longer inter-event delays.
+    const progress = i / (trajectory.length - 1);
+    await sleep(randRange(DRIFT_POINT_DELAY_MIN, DRIFT_POINT_DELAY_MAX) * (0.75 + progress * 0.75));
+  }
+  return last;
 }
 
 // ──────────────────────────────────────────────────────────────────────────

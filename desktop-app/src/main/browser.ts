@@ -5,7 +5,7 @@ import { BrowserVisualSession } from './browser-visual';
 import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, statfsSync, unlinkSync } from 'node:fs';
 import { copyFile, rename, unlink } from 'node:fs/promises';
-import { click as naturalClick, generateTrajectory, pickTargetPoint, pressHumanKey, scrollWheel, typeHumanText, type CancellationToken, type MouseEventDispatcher, type Point } from './cursor-input';
+import { click as naturalClick, driftTo, generateTrajectory, pickTargetPoint, pressHumanKey, scrollWheel, typeHumanText, type CancellationToken, type MouseEventDispatcher, type Point } from './cursor-input';
 import { applyBrowserIdentity, buildBrowserIdentity, type BrowserIdentityHandle } from './browser-identity';
 
 export type BrowserState = {
@@ -696,24 +696,24 @@ export class ChatterBrowser {
       this.idleDriftTimer = setTimeout(tick, delay);
       this.idleDriftTimer.unref?.();
     };
-    const tick = () => {
+    const tick = async () => {
       this.idleDriftTimer = null;
       const contents = this.view.webContents;
       if (contents.isDestroyed()) return;
       // Never interfere with an in-flight pointer sequence or scroll.
       if (!this.interactionInProgress && !this.clickToken) {
         try {
-          this.performIdleCursorDrift(contents);
+          await this.performIdleCursorDrift(contents);
         } catch {
           // The view may be mid-teardown; the next tick re-checks liveness.
         }
       }
-      if (!contents.isDestroyed()) scheduleNext(2200 + Math.random() * 4800);
+      if (!this.view.webContents.isDestroyed()) scheduleNext(2200 + Math.random() * 4800);
     };
     scheduleNext(2200 + Math.random() * 4800);
   }
 
-  private performIdleCursorDrift(contents: WebContents): void {
+  private async performIdleCursorDrift(contents: WebContents): Promise<void> {
     const bounds = this.view.getBounds();
     if (!bounds.width || !bounds.height) return;
     if (!this.idleDriftAnchor || Math.random() < 0.08) {
@@ -727,15 +727,19 @@ export class ChatterBrowser {
     const stepSpread = Math.random() < 0.2 ? 26 : 9;
     const dx = (anchor.x - this.cursorPos.x) * 0.1 + (Math.random() - 0.5) * stepSpread;
     const dy = (anchor.y - this.cursorPos.y) * 0.1 + (Math.random() - 0.5) * stepSpread;
-    this.cursorPos = {
+    const next = {
       x: Math.min(Math.max(this.cursorPos.x + dx, 1), bounds.width - 1),
       y: Math.min(Math.max(this.cursorPos.y + dy, 1), bounds.height - 1),
     };
-    contents.sendInputEvent({
-      type: 'mouseMove',
-      x: Math.round(this.cursorPos.x),
-      y: Math.round(this.cursorPos.y),
-    });
+    // Glide there through intermediate points: a single mouseMove jump
+    // would read as a teleport in the page's mousemove recording. An
+    // explicit interaction aborts the glide mid-way and wins instantly.
+    this.cursorPos = await driftTo(
+      contents,
+      this.cursorPos,
+      next,
+      () => this.interactionInProgress || this.clickToken !== null,
+    );
   }
 
   private async clickNativeSearchMoreButton(button: {
@@ -3605,27 +3609,74 @@ export class ChatterBrowser {
     let frameInputSession: BrowserFrameInputSession | null = null;
     let actualChecked = expected.checked;
 
-    // Highlight element outline — save original values for restoration.
-    // The outline is a page-visible style mutation: only apply it while a
-    // human can actually watch the click.
-    if (this.visible) {
-      this.executeInFrameIsolated(frame, `(() => {
-        const element = globalThis.__cb_e?.get(${JSON.stringify(internalRef)});
-        if (!element) return false;
-        globalThis.__cb_so = element.style.outline;
-        globalThis.__cb_soo = element.style.outlineOffset;
-        element.style.outline = '2px solid rgba(34, 105, 225, .9)';
-        element.style.outlineOffset = '3px';
-        return true;
-      })()`).catch(() => {});
-    }
+    // Highlight element outline — a page-visible style mutation, applied
+    // only while a human can actually watch the interaction.
+    await this.setElementHighlight(frame, internalRef);
 
     try {
       frameInputSession = await this.createFrameInputSession(frame, internalRef, transform);
       // Pass the pre-selected target AND trajectory so visual cursor and
       // native events follow the exact same path and speed.
-      const validateTarget = async () => {
-        const localTargetValid = await this.executeInFrameIsolated<boolean>(frame, `(() => {
+      const validateTarget = this.makeElementTargetValidator(frame, internalRef, localTarget, target);
+      this.cursorPos = await naturalClick(
+        contents,
+        elementRect,
+        this.cursorPos,
+        token,
+        target,
+        trajectory,
+        validateTarget,
+        frameInputSession?.dispatch,
+      );
+
+      if (expected.checked !== undefined) {
+        const shouldChange = expected.inputType === 'checkbox'
+          || expected.role === 'checkbox'
+          || expected.role === 'switch'
+          || ((expected.inputType === 'radio' || expected.role === 'radio') && expected.checked === false);
+        for (let attempt = 0; attempt < 4; attempt += 1) {
+          actualChecked = await this.getTargetCheckedState(frame, internalRef);
+          if (!shouldChange || actualChecked === undefined || actualChecked !== expected.checked) break;
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+        if (shouldChange && actualChecked === expected.checked) throw new Error('browser_click_no_effect');
+      }
+
+      // Brief settle, then restore outline + hide cursor.
+      await new Promise(resolve => setTimeout(resolve, 200));
+      await this.clearElementHighlight(frame, internalRef);
+      await hideBrowserCursor(code => this.executeInBrowserWorld(code), target);
+
+      const resultElement = actualChecked === undefined ? expected : { ...expected, checked: actualChecked };
+      this.snapshotElements.set(ref, resultElement);
+
+      return {
+        status: 'success',
+        action: 'click',
+        element: resultElement,
+        ...this.getState(),
+      };
+    } catch (error) {
+      // Clean up: restore outline + hide visual cursor on error / cancellation.
+      await this.clearElementHighlight(frame, internalRef);
+      await hideBrowserCursor(code => this.executeInBrowserWorld(code));
+      throw error;
+    } finally {
+      await frameInputSession?.dispose();
+      this.clickToken = null;
+      this.interactionInProgress = false;
+    }
+  }
+
+  /** Confirms the pre-picked target point still hits the element (shadow-DOM aware). */
+  private makeElementTargetValidator(
+    frame: WebFrameMain,
+    internalRef: string,
+    localTarget: { x: number; y: number },
+    target: { x: number; y: number },
+  ): () => Promise<boolean> {
+    return async () => {
+      const localTargetValid = await this.executeInFrameIsolated<boolean>(frame, `(() => {
         const element = globalThis.__cb_e?.get(${JSON.stringify(internalRef)});
         if (!element || !element.isConnected) return false;
         let hit = document.elementFromPoint(${localTarget.x}, ${localTarget.y});
@@ -3655,82 +3706,89 @@ export class ChatterBrowser {
           composedContains(element, hit)
           || (hit.shadowRoot && composedContains(hit, element))
         );
-        })()`);
-        if (!localTargetValid) return false;
-        const currentTransform = await this.getFrameTransform(frame);
-        if (!currentTransform.visible) return false;
-        const currentTargetX = currentTransform.offsetX + localTarget.x * currentTransform.scaleX;
-        const currentTargetY = currentTransform.offsetY + localTarget.y * currentTransform.scaleY;
-        return Math.abs(currentTargetX - target.x) <= 2 && Math.abs(currentTargetY - target.y) <= 2;
-      };
-      this.cursorPos = await naturalClick(
-        contents,
-        elementRect,
-        this.cursorPos,
-        token,
-        target,
-        trajectory,
-        validateTarget,
-        frameInputSession?.dispatch,
-      );
+      })()`);
+      if (!localTargetValid) return false;
+      const currentTransform = await this.getFrameTransform(frame);
+      if (!currentTransform.visible) return false;
+      const currentTargetX = currentTransform.offsetX + localTarget.x * currentTransform.scaleX;
+      const currentTargetY = currentTransform.offsetY + localTarget.y * currentTransform.scaleY;
+      return Math.abs(currentTargetX - target.x) <= 2 && Math.abs(currentTargetY - target.y) <= 2;
+    };
+  }
 
-      if (expected.checked !== undefined) {
-        const shouldChange = expected.inputType === 'checkbox'
-          || expected.role === 'checkbox'
-          || expected.role === 'switch'
-          || ((expected.inputType === 'radio' || expected.role === 'radio') && expected.checked === false);
-        for (let attempt = 0; attempt < 4; attempt += 1) {
-          actualChecked = await this.getTargetCheckedState(frame, internalRef);
-          if (!shouldChange || actualChecked === undefined || actualChecked !== expected.checked) break;
-          await new Promise(resolve => setTimeout(resolve, 100));
-        }
-        if (shouldChange && actualChecked === expected.checked) throw new Error('browser_click_no_effect');
-      }
+  /**
+   * Brings the element into view with a human wheel scroll, starting from
+   * wherever the phantom cursor idles — a person scrolls first, then moves
+   * the pointer. Falls back to a smooth scrollIntoView when the wheel cannot
+   * reach the field (custom scroll containers, virtualized lists) so the
+   * interaction never fails because of an exotic layout.
+   */
+  private async revealElementWithWheel(frame: WebFrameMain, internalRef: string): Promise<void> {
+    const measure = () => this.executeInFrameIsolated<{ top: number; height: number } | null>(frame, `(() => {
+      const element = globalThis.__cb_e?.get(${JSON.stringify(internalRef)});
+      if (!element || !element.isConnected) return null;
+      const rect = element.getBoundingClientRect();
+      return { top: rect.top, height: rect.height };
+    })()`);
 
-      // Brief settle, then restore outline + hide cursor.
-      await new Promise(resolve => setTimeout(resolve, 200));
-      await this.executeInFrameIsolated(frame, `(() => {
-        if (globalThis.__cb_so === undefined) return false;
-        const element = globalThis.__cb_e?.get(${JSON.stringify(internalRef)});
-        if (element && element.isConnected) {
-          element.style.outline = globalThis.__cb_so || '';
-          element.style.outlineOffset = globalThis.__cb_soo || '';
-        }
-        delete globalThis.__cb_so;
-        delete globalThis.__cb_soo;
-        return true;
-      })()`).catch(() => {});
-      await hideBrowserCursor(code => this.executeInBrowserWorld(code), target);
-
-      const resultElement = actualChecked === undefined ? expected : { ...expected, checked: actualChecked };
-      this.snapshotElements.set(ref, resultElement);
-
-      return {
-        status: 'success',
-        action: 'click',
-        element: resultElement,
-        ...this.getState(),
-      };
-    } catch (error) {
-      // Clean up: restore outline + hide visual cursor on error / cancellation.
-      await this.executeInFrameIsolated(frame, `(() => {
-        if (globalThis.__cb_so === undefined) return false;
-        const element = globalThis.__cb_e?.get(${JSON.stringify(internalRef)});
-        if (element && element.isConnected) {
-          element.style.outline = globalThis.__cb_so || '';
-          element.style.outlineOffset = globalThis.__cb_soo || '';
-        }
-        delete globalThis.__cb_so;
-        delete globalThis.__cb_soo;
-        return true;
-      })()`).catch(() => {});
-      await hideBrowserCursor(code => this.executeInBrowserWorld(code));
-      throw error;
-    } finally {
-      await frameInputSession?.dispose();
-      this.clickToken = null;
-      this.interactionInProgress = false;
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      const rect = await measure();
+      if (!rect) throw new Error('browser_element_not_found');
+      const transform = await this.getFrameTransform(frame);
+      const globalTop = transform.offsetY + rect.top * transform.scaleY;
+      const globalBottom = globalTop + rect.height * transform.scaleY;
+      const margin = Math.min(120, transform.viewportH * 0.15);
+      // Comfortably inside the viewport: nothing left to scroll.
+      if (globalBottom > margin && globalTop < transform.viewportH - margin) return;
+      const centerDelta = (globalTop + globalBottom) / 2 - transform.viewportH / 2;
+      // Over-wheel slightly the way people do; the next attempt corrects
+      // back if the page scrolled past the field.
+      await this.performNaturalScroll(centerDelta > 0 ? 1 : -1, Math.abs(centerDelta) + 60 + Math.random() * 100);
     }
+
+    // Still out of reach — an exotic scroll container owns the field: let
+    // the page scroll it programmatically instead of failing.
+    const rect = await measure();
+    if (!rect) throw new Error('browser_element_not_found');
+    const transform = await this.getFrameTransform(frame);
+    const globalTop = transform.offsetY + rect.top * transform.scaleY;
+    const globalBottom = globalTop + rect.height * transform.scaleY;
+    if (globalBottom <= 0 || globalTop >= transform.viewportH) {
+      await this.executeInFrameIsolated(frame, `(() => {
+        const element = globalThis.__cb_e?.get(${JSON.stringify(internalRef)});
+        if (element) element.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+        return true;
+      })()`);
+      await new Promise(resolve => setTimeout(resolve, 350));
+    }
+  }
+
+  /** Page-visible target highlight; only drawn while a human watches. */
+  private async setElementHighlight(frame: WebFrameMain, internalRef: string): Promise<void> {
+    if (!this.visible) return;
+    await this.executeInFrameIsolated(frame, `(() => {
+      const element = globalThis.__cb_e?.get(${JSON.stringify(internalRef)});
+      if (!element) return false;
+      globalThis.__cb_so = element.style.outline;
+      globalThis.__cb_soo = element.style.outlineOffset;
+      element.style.outline = '2px solid rgba(34, 105, 225, .9)';
+      element.style.outlineOffset = '3px';
+      return true;
+    })()`).catch(() => {});
+  }
+
+  private async clearElementHighlight(frame: WebFrameMain, internalRef: string): Promise<void> {
+    await this.executeInFrameIsolated(frame, `(() => {
+      if (globalThis.__cb_so === undefined) return false;
+      const element = globalThis.__cb_e?.get(${JSON.stringify(internalRef)});
+      if (element && element.isConnected) {
+        element.style.outline = globalThis.__cb_so || '';
+        element.style.outlineOffset = globalThis.__cb_soo || '';
+      }
+      delete globalThis.__cb_so;
+      delete globalThis.__cb_soo;
+      return true;
+    })()`).catch(() => {});
   }
 
   private async fillElement(ref: string, text: string): Promise<unknown> {
@@ -3747,6 +3805,9 @@ export class ChatterBrowser {
     }
 
     try {
+      // Validate first — no focus() teleport: sensitive checks must precede
+      // any pointer interaction, and the real click below is what focuses
+      // the field and places the caret.
       const prepared = await this.executeInFrameIsolated<{ value: string }>(frame, `(() => {
         const element = globalThis.__cb_e?.get(${JSON.stringify(internalRef)});
         if (!element) throw new Error('browser_element_not_found');
@@ -3757,18 +3818,86 @@ export class ChatterBrowser {
         if ((element instanceof HTMLInputElement && element.type.toLowerCase() === 'password') || /current-password|new-password|one-time-code|\\botp\\b|\\btotp\\b|\\b2fa\\b|verification.?code|auth(?:entication)?.?code|cc-number|cc-csc|cc-exp|credit.?card|card.?number|\\bcvv\\b|\\bcvc\\b|security.?code/.test(sensitiveHint)) {
           throw new Error('browser_sensitive_fields_are_manual_only');
         }
-        element.focus();
         return { value: element.isContentEditable ? String(element.textContent || '') : String(element.value || '') };
       })()`);
 
-      // Human typing: native key events + trusted insertText with a natural
-      // cadence, instead of synthetic input/change events that page scripts
-      // can spot via isTrusted === false.
-      const token: CancellationToken = { cancelled: false };
-      this.clickToken = token;
+      // Human approach, mirroring clickElement: wheel the page to the field
+      // from wherever the phantom cursor idles, then ride the cursor there
+      // and click — only afterwards does the typing start.
+      const contents = this.view.webContents;
+      await this.scrollFrameChainIntoView(frame);
+      await this.revealElementWithWheel(frame, internalRef);
+
+      const rect = await this.executeInFrameIsolated<{ x: number; y: number; width: number; height: number; viewportW: number; viewportH: number }>(frame, `(async () => {
+        const element = globalThis.__cb_e?.get(${JSON.stringify(internalRef)});
+        if (!element) throw new Error('browser_element_not_found');
+        if (!element.isConnected) throw new Error('browser_element_not_found');
+        const visibleRects = Array.from(element.getClientRects()).filter(r =>
+          r.width > 0 && r.height > 0
+          && r.bottom > 0 && r.right > 0
+          && r.top < window.innerHeight && r.left < window.innerWidth
+        );
+        const r = visibleRects.sort((a, b) => (b.width * b.height) - (a.width * a.height))[0]
+          || element.getBoundingClientRect();
+        return {
+          x: r.left, y: r.top, width: r.width, height: r.height,
+          viewportW: window.innerWidth, viewportH: window.innerHeight,
+        };
+      })()`);
+      const transform = await this.getFrameTransform(frame);
+      if (!transform.visible || Math.abs(transform.scaleX) < 0.001 || Math.abs(transform.scaleY) < 0.001) {
+        throw new Error('browser_fill_target_moved');
+      }
+
+      const viewport = { width: transform.viewportW, height: transform.viewportH };
+      if (this.cursorPos.x === 0 && this.cursorPos.y === 0) {
+        this.cursorPos = { x: viewport.width / 2, y: viewport.height / 2 };
+      }
+      const elementRect = {
+        x: transform.offsetX + rect.x * transform.scaleX,
+        y: transform.offsetY + rect.y * transform.scaleY,
+        width: rect.width * transform.scaleX,
+        height: rect.height * transform.scaleY,
+      };
+      // pickTargetPoint clips to viewport internally.
+      const target = pickTargetPoint(elementRect, viewport);
+      const localTarget = {
+        x: (target.x - transform.offsetX) / transform.scaleX,
+        y: (target.y - transform.offsetY) / transform.scaleY,
+      };
+      const trajectory = generateTrajectory(this.cursorPos, target);
+
+      // The DOM cursor mutates the page; draw it only while a human watches.
+      if (this.visible) {
+        await showBrowserCursor(code => this.executeInBrowserWorld(code), this.cursorPos, trajectory, contents.getZoomFactor());
+      }
+      await this.setElementHighlight(frame, internalRef);
+
+      this.clickToken = { cancelled: false };
+      const token = this.clickToken;
+      let frameInputSession: BrowserFrameInputSession | null = null;
       try {
-        await typeHumanText(this.view.webContents, text, { clearFirst: prepared.value.length > 0 }, token);
+        frameInputSession = await this.createFrameInputSession(frame, internalRef, transform);
+        const validateTarget = this.makeElementTargetValidator(frame, internalRef, localTarget, target);
+        this.cursorPos = await naturalClick(
+          contents,
+          elementRect,
+          this.cursorPos,
+          token,
+          target,
+          trajectory,
+          validateTarget,
+          frameInputSession?.dispatch,
+        );
+        // The hand moves from the mouse to the keyboard.
+        await new Promise(resolve => setTimeout(resolve, 140 + Math.random() * 240));
+        // Human typing: native key events + trusted insertText with a
+        // natural cadence — the click above has already focused the field.
+        await typeHumanText(contents, text, { clearFirst: prepared.value.length > 0 }, token);
       } finally {
+        await this.clearElementHighlight(frame, internalRef);
+        await hideBrowserCursor(code => this.executeInBrowserWorld(code), target);
+        await frameInputSession?.dispose();
         if (this.clickToken === token) this.clickToken = null;
       }
 
