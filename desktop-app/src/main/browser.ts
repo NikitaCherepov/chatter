@@ -5,7 +5,8 @@ import { BrowserVisualSession } from './browser-visual';
 import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, statfsSync, unlinkSync } from 'node:fs';
 import { copyFile, rename, unlink } from 'node:fs/promises';
-import { click as naturalClick, generateTrajectory, pickTargetPoint, scrollWheel, type CancellationToken, type MouseEventDispatcher, type Point } from './cursor-input';
+import { click as naturalClick, generateTrajectory, pickTargetPoint, pressHumanKey, scrollWheel, typeHumanText, type CancellationToken, type MouseEventDispatcher, type Point } from './cursor-input';
+import { applyBrowserIdentity, buildBrowserIdentity, type BrowserIdentityHandle } from './browser-identity';
 
 export type BrowserState = {
   url: string;
@@ -308,6 +309,12 @@ function isClientRedirectorUrl(value: string): boolean {
   }
 }
 
+/** Accept-Language header value that matches the app locale with a sane fallback chain. */
+function browserAcceptLanguage(): string {
+  const locale = app.getLocale() || 'en-US';
+  return locale.startsWith('en') ? locale : `${locale},en-US;q=0.9,en;q=0.8`;
+}
+
 export class ChatterBrowser {
   private host: BrowserWindow;
   private readonly view: WebContentsView;
@@ -363,6 +370,14 @@ export class ChatterBrowser {
   /** Active cancellation token for the in-flight pointer sequence (if any). */
   private clickToken: CancellationToken | null = null;
   private visualSession?: BrowserVisualSession;
+  /** Browser identity override handle; disposed together with the view. */
+  private identity: BrowserIdentityHandle | null = null;
+  /** Resolves once the CDP UA/client-hints override is in place (or failed). */
+  private identityReady: Promise<void> = Promise.resolve();
+  /** Idle "phantom cursor" drift timer keeping pages seeing pointer life. */
+  private idleDriftTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Wandering anchor the idle drift gravitates towards. */
+  private idleDriftAnchor: Point | null = null;
   private readonly homeUrl: string;
   private readonly stateChannel: string;
   private readonly onStateChange?: (state: BrowserState) => void;
@@ -406,10 +421,19 @@ export class ChatterBrowser {
     const browserSession = contents.session;
 
     const defaultUA = browserSession.getUserAgent();
-    const cleanedUA = defaultUA
-      .replace(/\s*Electron\/[\d.]+/gi, '')
-      .replace(/\s*chatter\/[\d.a-z-]+/gi, '');
-    browserSession.setUserAgent(cleanedUA.trim());
+    // Baseline UA for every request (service workers included). The CDP
+    // override below additionally synchronizes Sec-CH-UA headers and
+    // navigator.userAgentData so client hints stop leaking "Electron", and
+    // bumps the frozen Chromium version to a current stable Chrome.
+    const identityProfile = buildBrowserIdentity(defaultUA, browserAcceptLanguage());
+    browserSession.setUserAgent(identityProfile.userAgent);
+    this.identityReady = applyBrowserIdentity(contents, identityProfile).then((handle) => {
+      if (contents.isDestroyed()) {
+        handle.dispose();
+        return;
+      }
+      this.identity = handle;
+    }).catch(() => {});
 
     browserSession.setPermissionCheckHandler(() => false);
     browserSession.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false));
@@ -460,11 +484,18 @@ export class ChatterBrowser {
     });
     contents.on('page-title-updated', () => this.emitState());
 
+    // Phantom cursor drift: subtle background mousemoves so pages observe
+    // continuous pointer presence between explicit interactions.
+    this.scheduleIdleCursorDrift();
   }
 
   destroy(): void {
     this.abortInteraction();
     this.cancelGoogleAi();
+    if (this.idleDriftTimer) {
+      clearTimeout(this.idleDriftTimer);
+      this.idleDriftTimer = null;
+    }
     // Unblocks an in-flight web page read so its IPC handler can settle.
     this.requestWebPageReadAbort();
     void this.disposeOopifWorlds();
@@ -476,6 +507,10 @@ export class ChatterBrowser {
     }
     this.visible = false;
     if (!this.view.webContents.isDestroyed()) this.view.webContents.close();
+    // Detach the identity override debugger only after the oopif world teardown
+    // above has been kicked off; after close() this is a defensive no-op.
+    this.identity?.dispose();
+    this.identity = null;
   }
 
   private attachToHost(host: BrowserWindow): void {
@@ -576,7 +611,12 @@ export class ChatterBrowser {
       && (!this.view.webContents.getURL() || this.view.webContents.getURL() === 'about:blank')
     ) {
       this.initialNavigationStarted = true;
-      const initialNavigation = this.view.webContents.loadURL(this.homeUrl).catch((error) => {
+      // The first load must happen after the CDP UA/client-hints override,
+      // otherwise the very first request leaks the raw Electron fingerprint.
+      const initialNavigation = this.identityReady.catch(() => {}).then(() => {
+        if (this.view.webContents.isDestroyed()) return undefined;
+        return this.view.webContents.loadURL(this.homeUrl);
+      }).catch((error) => {
         if (!isAbortedNavigationError(error)) console.error('[browser] initial navigation failed:', error);
       }).finally(() => {
         if (this.initialNavigationPromise === initialNavigation) this.initialNavigationPromise = null;
@@ -636,6 +676,61 @@ export class ChatterBrowser {
     };
   }
 
+  /**
+   * Keeps a phantom cursor "alive" between explicit interactions: a light
+   * random-walk drift that emits native mouseMove events every few seconds.
+   * Pages see continuous pointer presence (a fully static cursor is a bot
+   * heuristic), and real click trajectories start from a plausible position
+   * instead of the viewport center every time.
+   */
+  private scheduleIdleCursorDrift(): void {
+    if (this.idleDriftTimer) return;
+    const scheduleNext = (delay: number) => {
+      this.idleDriftTimer = setTimeout(tick, delay);
+      this.idleDriftTimer.unref?.();
+    };
+    const tick = () => {
+      this.idleDriftTimer = null;
+      const contents = this.view.webContents;
+      if (contents.isDestroyed()) return;
+      // Never interfere with an in-flight pointer sequence or scroll.
+      if (!this.interactionInProgress && !this.clickToken) {
+        try {
+          this.performIdleCursorDrift(contents);
+        } catch {
+          // The view may be mid-teardown; the next tick re-checks liveness.
+        }
+      }
+      if (!contents.isDestroyed()) scheduleNext(2200 + Math.random() * 4800);
+    };
+    scheduleNext(2200 + Math.random() * 4800);
+  }
+
+  private performIdleCursorDrift(contents: WebContents): void {
+    const bounds = this.view.getBounds();
+    if (!bounds.width || !bounds.height) return;
+    if (!this.idleDriftAnchor || Math.random() < 0.08) {
+      // Pick a fresh wandering anchor: reading area, search field, nav bar…
+      this.idleDriftAnchor = {
+        x: bounds.width * (0.15 + Math.random() * 0.7),
+        y: bounds.height * (0.15 + Math.random() * 0.7),
+      };
+    }
+    const anchor = this.idleDriftAnchor;
+    const stepSpread = Math.random() < 0.2 ? 26 : 9;
+    const dx = (anchor.x - this.cursorPos.x) * 0.1 + (Math.random() - 0.5) * stepSpread;
+    const dy = (anchor.y - this.cursorPos.y) * 0.1 + (Math.random() - 0.5) * stepSpread;
+    this.cursorPos = {
+      x: Math.min(Math.max(this.cursorPos.x + dx, 1), bounds.width - 1),
+      y: Math.min(Math.max(this.cursorPos.y + dy, 1), bounds.height - 1),
+    };
+    contents.sendInputEvent({
+      type: 'mouseMove',
+      x: Math.round(this.cursorPos.x),
+      y: Math.round(this.cursorPos.y),
+    });
+  }
+
   private async clickNativeSearchMoreButton(button: {
     x: number;
     y: number;
@@ -684,7 +779,7 @@ export class ChatterBrowser {
     const action = payload?.action;
     const contents = this.view.webContents;
     if (contents.isDestroyed()) throw new Error('browser_unavailable');
-    const visual = this.visualSession ??= new BrowserVisualSession(contents, code => this.executeInBrowserWorld(code));
+    const visual = this.visualSession ??= new BrowserVisualSession(contents, code => this.executeInBrowserWorld(code), () => this.visible);
     if (action === 'screenshot') {
       if (this.interactionInProgress) throw new Error('browser_interaction_in_progress');
       return visual.capture();
@@ -838,10 +933,9 @@ export class ChatterBrowser {
       if (this.interactionInProgress) throw new Error('browser_interaction_in_progress');
       this.interactionInProgress = true;
       try {
-        contents.focus();
-        contents.sendInputEvent({ type: 'keyDown', keyCode: key });
-        contents.sendInputEvent({ type: 'keyUp', keyCode: key });
-        await new Promise(resolve => setTimeout(resolve, 150));
+        // Humanized press: reaction delay + natural hold time instead of an
+        // instant synthetic keyDown/keyUp pair.
+        await pressHumanKey(contents, key);
         return { status: 'success', action, key, ...this.getState() };
       } finally {
         this.interactionInProgress = false;
@@ -1373,8 +1467,10 @@ export class ChatterBrowser {
 
     const contents = this.view.webContents;
     const runId = ++this.googleAiRunId;
+    const isCancelled = () => runId !== this.googleAiRunId;
+    const inputToken: CancellationToken = { get cancelled() { return isCancelled(); } };
     const assertActive = () => {
-      if (runId !== this.googleAiRunId) throw new Error('google_ai_cancelled');
+      if (isCancelled()) throw new Error('google_ai_cancelled');
     };
     this.googleAiInProgress = true;
     this.explicitNavigationRequested = true;
@@ -1505,8 +1601,7 @@ export class ChatterBrowser {
         return { status: 'new_chat_started', url: contents.getURL(), title: contents.getTitle() };
       }
 
-      const filled = await this.executeInBrowserWorld<boolean>(`(() => {
-        const message = ${JSON.stringify(message)};
+      const composer = await this.executeInBrowserWorld<{ inputFound: boolean; value: string }>(`(() => {
         const visible = (element) => {
           if (!(element instanceof HTMLElement)) return false;
           const style = getComputedStyle(element);
@@ -1524,27 +1619,21 @@ export class ChatterBrowser {
           })
           .sort((left, right) => right.score - left.score);
         const element = candidates[0]?.element;
-        if (!(element instanceof HTMLElement)) return false;
+        if (!(element instanceof HTMLElement)) return { inputFound: false, value: '' };
         element.focus();
-        if (element.isContentEditable) {
-          element.textContent = message;
-          element.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: message }));
-        } else if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
-          const prototype = element instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
-          const setter = Object.getOwnPropertyDescriptor(prototype, 'value')?.set;
-          setter?.call(element, message);
-          element.dispatchEvent(new Event('input', { bubbles: true }));
-          element.dispatchEvent(new Event('change', { bubbles: true }));
-        } else {
-          return false;
-        }
-        return true;
+        return {
+          inputFound: true,
+          value: element.isContentEditable ? String(element.textContent || '') : String(element.value || '')
+        };
       })()`);
-      if (!filled) throw new Error('google_ai_input_not_found');
+      if (!composer.inputFound) throw new Error('google_ai_input_not_found');
 
-      contents.focus();
-      contents.sendInputEvent({ type: 'keyDown', keyCode: 'Enter' });
-      contents.sendInputEvent({ type: 'keyUp', keyCode: 'Enter' });
+      // Human typing produces trusted input events that Google's controlled
+      // composer accepts, and the natural cadence matches a real user.
+      await typeHumanText(contents, message, { clearFirst: composer.value.length > 0, budgetMs: 9000 }, inputToken);
+      assertActive();
+      await pressHumanKey(contents, 'Enter', inputToken);
+      assertActive();
 
       // Google can replace the composer between filling it and pressing Enter.
       // Confirm submission against the current composer, not document.activeElement:
@@ -1622,12 +1711,10 @@ export class ChatterBrowser {
 
         // Retry through native input. This updates Google's controlled editor more
         // reliably than assigning DOM values after a hydration/re-render race.
-        contents.focus();
-        contents.sendInputEvent({ type: 'keyDown', keyCode: 'A', modifiers: ['control'] });
-        contents.sendInputEvent({ type: 'keyUp', keyCode: 'A', modifiers: ['control'] });
-        contents.insertText(message);
-        contents.sendInputEvent({ type: 'keyDown', keyCode: 'Enter' });
-        contents.sendInputEvent({ type: 'keyUp', keyCode: 'Enter' });
+        await typeHumanText(contents, message, { clearFirst: true, budgetMs: 4000 }, inputToken);
+        assertActive();
+        await pressHumanKey(contents, 'Enter', inputToken);
+        assertActive();
       }
       console.log('[google-ai] submission', {
         action,
@@ -2543,6 +2630,8 @@ export class ChatterBrowser {
   }
 
   private async navigateToUrl(url: string): Promise<void> {
+    // Navigations must observe the browser identity override.
+    await this.identityReady.catch(() => {});
     const contents = this.view.webContents;
     await new Promise<void>((resolve, reject) => {
       let settled = false;
@@ -3498,7 +3587,10 @@ export class ChatterBrowser {
     };
     const trajectory = generateTrajectory(this.cursorPos, target);
 
-    await showBrowserCursor(code => this.executeInBrowserWorld(code), this.cursorPos, trajectory, contents.getZoomFactor());
+    // The DOM cursor mutates the page; draw it only while a human watches.
+    if (this.visible) {
+      await showBrowserCursor(code => this.executeInBrowserWorld(code), this.cursorPos, trajectory, contents.getZoomFactor());
+    }
 
     // -- Phase 4: stream native sendInputEvent via cursor-input module --
     this.clickToken = { cancelled: false };
@@ -3507,15 +3599,19 @@ export class ChatterBrowser {
     let actualChecked = expected.checked;
 
     // Highlight element outline — save original values for restoration.
-    this.executeInFrameIsolated(frame, `(() => {
-      const element = globalThis.__cb_e?.get(${JSON.stringify(internalRef)});
-      if (!element) return false;
-      globalThis.__cb_so = element.style.outline;
-      globalThis.__cb_soo = element.style.outlineOffset;
-      element.style.outline = '2px solid rgba(34, 105, 225, .9)';
-      element.style.outlineOffset = '3px';
-      return true;
-    })()`).catch(() => {});
+    // The outline is a page-visible style mutation: only apply it while a
+    // human can actually watch the click.
+    if (this.visible) {
+      this.executeInFrameIsolated(frame, `(() => {
+        const element = globalThis.__cb_e?.get(${JSON.stringify(internalRef)});
+        if (!element) return false;
+        globalThis.__cb_so = element.style.outline;
+        globalThis.__cb_soo = element.style.outlineOffset;
+        element.style.outline = '2px solid rgba(34, 105, 225, .9)';
+        element.style.outlineOffset = '3px';
+        return true;
+      })()`).catch(() => {});
+    }
 
     try {
       frameInputSession = await this.createFrameInputSession(frame, internalRef, transform);
@@ -3587,6 +3683,7 @@ export class ChatterBrowser {
       // Brief settle, then restore outline + hide cursor.
       await new Promise(resolve => setTimeout(resolve, 200));
       await this.executeInFrameIsolated(frame, `(() => {
+        if (globalThis.__cb_so === undefined) return false;
         const element = globalThis.__cb_e?.get(${JSON.stringify(internalRef)});
         if (element && element.isConnected) {
           element.style.outline = globalThis.__cb_so || '';
@@ -3610,6 +3707,7 @@ export class ChatterBrowser {
     } catch (error) {
       // Clean up: restore outline + hide visual cursor on error / cancellation.
       await this.executeInFrameIsolated(frame, `(() => {
+        if (globalThis.__cb_so === undefined) return false;
         const element = globalThis.__cb_e?.get(${JSON.stringify(internalRef)});
         if (element && element.isConnected) {
           element.style.outline = globalThis.__cb_so || '';
@@ -3641,31 +3739,56 @@ export class ChatterBrowser {
       throw new Error('browser_input_too_large');
     }
 
-    const script = `(() => {
-      const element = globalThis.__cb_e?.get(${JSON.stringify(internalRef)});
-      if (!element) throw new Error('browser_element_not_found');
-      if (!(element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement || element.isContentEditable)) {
-        throw new Error('browser_element_not_editable');
-      }
-      const sensitiveHint = [element.getAttribute('type'), element.getAttribute('autocomplete'), element.getAttribute('name'), element.id, element.getAttribute('aria-label'), element.getAttribute('placeholder')].filter(Boolean).join(' ').toLowerCase();
-      if ((element instanceof HTMLInputElement && element.type.toLowerCase() === 'password') || /current-password|new-password|one-time-code|\\botp\\b|\\btotp\\b|\\b2fa\\b|verification.?code|auth(?:entication)?.?code|cc-number|cc-csc|cc-exp|credit.?card|card.?number|\\bcvv\\b|\\bcvc\\b|security.?code/.test(sensitiveHint)) {
-        throw new Error('browser_sensitive_fields_are_manual_only');
-      }
-      element.focus();
-      if (element.isContentEditable) {
-        element.textContent = ${JSON.stringify(text)};
-        element.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: ${JSON.stringify(text)} }));
-      } else {
-        const prototype = element instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
-        const setter = Object.getOwnPropertyDescriptor(prototype, 'value')?.set;
-        setter?.call(element, ${JSON.stringify(text)});
-        element.dispatchEvent(new Event('input', { bubbles: true }));
-        element.dispatchEvent(new Event('change', { bubbles: true }));
-      }
-      return true;
-    })()`;
     try {
-      await this.executeInFrameIsolated(frame, script);
+      const prepared = await this.executeInFrameIsolated<{ value: string }>(frame, `(() => {
+        const element = globalThis.__cb_e?.get(${JSON.stringify(internalRef)});
+        if (!element) throw new Error('browser_element_not_found');
+        if (!(element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement || element.isContentEditable)) {
+          throw new Error('browser_element_not_editable');
+        }
+        const sensitiveHint = [element.getAttribute('type'), element.getAttribute('autocomplete'), element.getAttribute('name'), element.id, element.getAttribute('aria-label'), element.getAttribute('placeholder')].filter(Boolean).join(' ').toLowerCase();
+        if ((element instanceof HTMLInputElement && element.type.toLowerCase() === 'password') || /current-password|new-password|one-time-code|\\botp\\b|\\btotp\\b|\\b2fa\\b|verification.?code|auth(?:entication)?.?code|cc-number|cc-csc|cc-exp|credit.?card|card.?number|\\bcvv\\b|\\bcvc\\b|security.?code/.test(sensitiveHint)) {
+          throw new Error('browser_sensitive_fields_are_manual_only');
+        }
+        element.focus();
+        return { value: element.isContentEditable ? String(element.textContent || '') : String(element.value || '') };
+      })()`);
+
+      // Human typing: native key events + trusted insertText with a natural
+      // cadence, instead of synthetic input/change events that page scripts
+      // can spot via isTrusted === false.
+      const token: CancellationToken = { cancelled: false };
+      this.clickToken = token;
+      try {
+        await typeHumanText(this.view.webContents, text, { clearFirst: prepared.value.length > 0 }, token);
+      } finally {
+        if (this.clickToken === token) this.clickToken = null;
+      }
+
+      // Verify the editor accepted the typed text. Exotic controlled
+      // components fall back to the direct value assignment.
+      const actual = await this.executeInFrameIsolated<string>(frame, `(() => {
+        const element = globalThis.__cb_e?.get(${JSON.stringify(internalRef)});
+        if (!element) return '';
+        return element.isContentEditable ? String(element.textContent || '') : String(element.value || '');
+      })()`);
+      if (actual !== text) {
+        await this.executeInFrameIsolated(frame, `(() => {
+          const element = globalThis.__cb_e?.get(${JSON.stringify(internalRef)});
+          if (!element) return false;
+          if (element.isContentEditable) {
+            element.textContent = ${JSON.stringify(text)};
+            element.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: ${JSON.stringify(text)} }));
+          } else {
+            const prototype = element instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+            const setter = Object.getOwnPropertyDescriptor(prototype, 'value')?.set;
+            setter?.call(element, ${JSON.stringify(text)});
+            element.dispatchEvent(new Event('input', { bubbles: true }));
+            element.dispatchEvent(new Event('change', { bubbles: true }));
+          }
+          return true;
+        })()`);
+      }
       return { status: 'success', action: 'fill', element: expected, characters: text.length, ...this.getState() };
     } finally {
       this.interactionInProgress = false;

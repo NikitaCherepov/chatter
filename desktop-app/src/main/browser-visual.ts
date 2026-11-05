@@ -19,7 +19,12 @@ const stateScript = `(() => {
 /** Browser-only, one-use coordinates tied to a full PNG viewport snapshot. */
 export class BrowserVisualSession {
   private shot: Shot | null = null;
-  constructor(private contents: WebContents, private execute: Execute) {}
+  constructor(
+    private contents: WebContents,
+    private execute: Execute,
+    /** DOM cursor overlay is rendered only when a human can actually watch it. */
+    private showOverlay: () => boolean = () => true,
+  ) {}
   clear() { this.shot = null; }
   private async state() { return { ...await this.execute<PageState>(stateScript), zoom: this.contents.getZoomFactor() }; }
   private async check(id: string) {
@@ -64,7 +69,11 @@ export class BrowserVisualSession {
     const trajectory = generateTrajectory(currentMouse, point);
     try {
       this.contents.focus();
-      await showBrowserCursor(this.execute, currentMouse, trajectory, this.contents.getZoomFactor());
+      // The DOM cursor is a page-visible mutation: only draw it while the
+      // browser view is actually shown to the user.
+      if (this.showOverlay()) {
+        await showBrowserCursor(this.execute, currentMouse, trajectory, this.contents.getZoomFactor());
+      }
       return await click(this.contents, { x: point.x, y: point.y, width: 1, height: 1 }, currentMouse, token, point, trajectory, async () => {
         await this.check(id);
         if (deadline && Date.now() > deadline) throw new Error('browser_batch_timeout');

@@ -320,6 +320,153 @@ export async function scrollWheel(
 }
 
 // ──────────────────────────────────────────────────────────────────────────
+// 7. Keyboard
+// ──────────────────────────────────────────────────────────────────────────
+
+const TYPE_FOCUS_SETTLE_MIN = 60;
+const TYPE_FOCUS_SETTLE_MAX = 180;
+const SELECT_ALL_TO_TYPE_MIN = 24;
+const SELECT_ALL_TO_TYPE_MAX = 70;
+const KEY_TO_TEXT_MIN = 16;
+const KEY_TO_TEXT_MAX = 48;
+const PER_CHAR_MIN = 55;
+const PER_CHAR_MAX = 150;
+const PAUSE_AFTER_SPACE_MIN = 40;
+const PAUSE_AFTER_SPACE_MAX = 140;
+const PAUSE_AFTER_PUNCT_MIN = 80;
+const PAUSE_AFTER_PUNCT_MAX = 260;
+const THINK_PAUSE_PROBABILITY = 0.015;
+const THINK_PAUSE_MIN = 350;
+const THINK_PAUSE_MAX = 1100;
+const DEFAULT_TYPE_BUDGET_MS = 8000;
+
+export type HumanTypeOptions = {
+  /** Select-all before typing so the first burst replaces the current value. */
+  clearFirst?: boolean;
+  /** Upper bound on total typing time; longer texts are typed in bursts. */
+  budgetMs?: number;
+};
+
+const PUNCTUATION = /[.,!?;:—–…)\]}>"']/;
+
+function humanCharDelay(previousChar: string): number {
+  if (/\s/.test(previousChar)) return randRange(PAUSE_AFTER_SPACE_MIN, PAUSE_AFTER_SPACE_MAX);
+  if (PUNCTUATION.test(previousChar)) return randRange(PAUSE_AFTER_PUNCT_MIN, PAUSE_AFTER_PUNCT_MAX);
+  if (Math.random() < THINK_PAUSE_PROBABILITY) return randRange(THINK_PAUSE_MIN, THINK_PAUSE_MAX);
+  return randRange(PER_CHAR_MIN, PER_CHAR_MAX);
+}
+
+const isPlainAsciiPrintable = (char: string): boolean => {
+  const code = char.charCodeAt(0);
+  return code >= 0x21 && code <= 0x7e;
+};
+
+function assertKeyboardActive(webContents: WebContents, token?: CancellationToken): void {
+  if (token?.cancelled) throw new Error('fill_cancelled');
+  if (webContents.isDestroyed()) throw new Error('webcontents_destroyed');
+}
+
+async function keyboardDelay(webContents: WebContents, delay: number, token?: CancellationToken): Promise<void> {
+  assertKeyboardActive(webContents, token);
+  await sleep(delay);
+  assertKeyboardActive(webContents, token);
+}
+
+/** Always release a pressed key, including when cancellation happens during its hold. */
+async function holdKeyboardKey(
+  webContents: WebContents, keyCode: string, holdMs: number, token?: CancellationToken,
+  modifiers?: Array<'control' | 'meta'>, beforeRelease?: () => void,
+): Promise<void> {
+  assertKeyboardActive(webContents, token);
+  webContents.sendInputEvent({ type: 'keyDown', keyCode, ...(modifiers ? { modifiers } : {}) });
+  try {
+    await keyboardDelay(webContents, holdMs, token);
+    beforeRelease?.();
+  } finally {
+    if (!webContents.isDestroyed()) webContents.sendInputEvent({ type: 'keyUp', keyCode, ...(modifiers ? { modifiers } : {}) });
+  }
+}
+
+/**
+ * Types `text` the way a person does: focus → optional select-all →
+ * per-character input with a natural cadence. The characters themselves are
+ * inserted via `insertText`, which produces trusted `beforeinput`/`input`
+ * events (`isTrusted: true`) that React-controlled fields and anti-bot
+ * scripts accept — unlike synthetic `new Event('input')` dispatches.
+ * Single plain-ASCII characters also get a keyDown/keyUp pair so key-aware
+ * editors observe a full keyboard flow. Long texts are merged into bursts
+ * to respect `budgetMs` (people paste wall-of-text, they don't type for a
+ * minute straight).
+ */
+export async function typeHumanText(
+  webContents: WebContents,
+  text: string,
+  options: HumanTypeOptions = {},
+  token?: CancellationToken,
+): Promise<void> {
+  assertKeyboardActive(webContents, token);
+  const value = String(text ?? '');
+  if (!value && !options.clearFirst) return;
+  // Keep surrogate pairs intact in both individual characters and longer bursts.
+  const characters = Array.from(value);
+
+  try { webContents.focus(); } catch { /* the view may be hidden */ }
+  await keyboardDelay(webContents, randRange(TYPE_FOCUS_SETTLE_MIN, TYPE_FOCUS_SETTLE_MAX), token);
+
+  if (options.clearFirst) {
+    await holdKeyboardKey(webContents, 'A', randRange(SELECT_ALL_TO_TYPE_MIN, SELECT_ALL_TO_TYPE_MAX), token,
+      [process.platform === 'darwin' ? 'meta' : 'control']);
+    await keyboardDelay(webContents, randRange(30, 90), token);
+    if (!value) {
+      await holdKeyboardKey(webContents, 'Backspace', randRange(45, 110), token);
+      return;
+    }
+  }
+
+  // Plan a human-cadenced timeline, then merge characters into bursts when
+  // the natural typing time would exceed the budget.
+  const delays = characters.map((_, i) => humanCharDelay(i > 0 ? characters[i - 1]! : ' '));
+  const budget = Math.max(1500, Math.floor(options.budgetMs ?? DEFAULT_TYPE_BUDGET_MS));
+  const naturalTotal = delays.reduce((sum, delay) => sum + delay, 0);
+
+  type Burst = { text: string; delayBefore: number };
+  const bursts: Burst[] = [];
+  if (naturalTotal <= budget) {
+    for (let i = 0; i < characters.length; i += 1) bursts.push({ text: characters[i]!, delayBefore: delays[i]! });
+  } else {
+    const segmentCount = Math.ceil(naturalTotal / budget);
+    const segmentLength = Math.max(2, Math.ceil(characters.length / segmentCount));
+    const averageDelay = naturalTotal / characters.length;
+    const compression = Math.min(1, budget / naturalTotal);
+    for (let start = 0; start < characters.length; start += segmentLength) {
+      const slice = characters.slice(start, start + segmentLength);
+      const delayBefore = Math.max(PER_CHAR_MIN, Math.round(averageDelay * slice.length * compression));
+      bursts.push({ text: slice.join(''), delayBefore });
+    }
+  }
+
+  for (const burst of bursts) {
+    await keyboardDelay(webContents, burst.delayBefore, token);
+    if (burst.text.length === 1 && isPlainAsciiPrintable(burst.text)) {
+      await holdKeyboardKey(webContents, burst.text, randRange(KEY_TO_TEXT_MIN, KEY_TO_TEXT_MAX), token,
+        undefined, () => { webContents.insertText(burst.text); });
+    } else {
+      webContents.insertText(burst.text);
+    }
+  }
+  await keyboardDelay(webContents, randRange(24, 80), token);
+}
+
+/** Presses a single key with human timing, respecting cancellation before keyDown. */
+export async function pressHumanKey(webContents: WebContents, key: 'Enter' | 'Space', token?: CancellationToken): Promise<void> {
+  assertKeyboardActive(webContents, token);
+  try { webContents.focus(); } catch { /* the view may be hidden */ }
+  await keyboardDelay(webContents, randRange(40, 130), token);
+  await holdKeyboardKey(webContents, key, randRange(45, 110), token);
+  await keyboardDelay(webContents, randRange(24, 70), token);
+}
+
+// ──────────────────────────────────────────────────────────────────────────
 // 6. Click
 // ──────────────────────────────────────────────────────────────────────────
 
