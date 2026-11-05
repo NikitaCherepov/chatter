@@ -309,10 +309,17 @@ function isClientRedirectorUrl(value: string): boolean {
   }
 }
 
-/** Accept-Language header value that matches the app locale with a sane fallback chain. */
+/**
+ * Accept-Language as plain comma-separated tags. Chromium's CDP layer appends
+ * its own position-based ;q= values (2nd tag → q=0.9, 3rd → q=0.8 …), so
+ * pre-baked quality values would end up duplicated as ";q=0.9;q=0.9". The
+ * resulting header matches what real Chrome sends for this locale.
+ */
 function browserAcceptLanguage(): string {
   const locale = app.getLocale() || 'en-US';
-  return locale.startsWith('en') ? locale : `${locale},en-US;q=0.9,en;q=0.8`;
+  const base = locale.split('-')[0]!.toLowerCase();
+  if (base === 'en') return 'en-US,en';
+  return locale.toLowerCase() === base ? `${base},en-US,en` : `${locale},${base},en-US,en`;
 }
 
 export class ChatterBrowser {

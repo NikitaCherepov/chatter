@@ -89,23 +89,25 @@ function detectPlatformInfo(): {
 
 /**
  * Builds a consistent Chrome browser identity from the real Electron UA:
- * - strips the `Electron/...` and `chatter/...` tokens;
- * - bumps the frozen Chrome version to the reported one (reduced-UA form);
+ * - rebuilds the UA string in genuine Chrome form: whatever product tokens
+ *   Electron injects (Electron/33.4.11, chatter-desktop/2.0.0, …), only the
+ *   authentic platform section survives, so the UA can never leak the app;
+ * - reports the current stable Chrome version in reduced-UA form;
  * - derives userAgentMetadata so Sec-CH-UA headers and navigator.userAgentData
  *   report the same brands/versions as the UA string instead of "Electron".
  * The real OS section of the UA is preserved: fonts, WebGL and other
  * platform fingerprints must stay consistent with the claimed platform.
  */
 export function buildBrowserIdentity(defaultUA: string, acceptLanguage = 'en-US'): BrowserIdentity {
-  const cleaned = String(defaultUA || '')
-    .replace(/\s*Electron\/[\d.]+/gi, '')
-    .replace(/\s*chatter\/[\d.a-z-]+/gi, '');
+  // The platform section must stay authentic (real OS, real CPU arc), so it
+  // is lifted verbatim from the default UA instead of being guessed.
+  const platformSection = String(defaultUA || '').match(/Mozilla\/5\.0\s*\(([^)]+)\)/i)?.[1]?.trim()
+    || (process.platform === 'win32' ? 'Windows NT 10.0; Win64; x64'
+      : process.platform === 'darwin' ? 'Macintosh; Intel Mac OS X 10_15_7'
+      : 'X11; Linux x86_64');
   // Modern Chrome reports the reduced UA (major-only, zeroed minor/build/patch)
   // while the full version lives in client hints.
-  const userAgent = cleaned
-    .replace(/Chrome\/\d+(?:\.\d+)*/gi, `Chrome/${REPORTED_CHROME_MAJOR}.0.0.0`)
-    .replace(/\s{2,}/g, ' ')
-    .trim();
+  const userAgent = `Mozilla/5.0 (${platformSection}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${REPORTED_CHROME_MAJOR}.0.0.0 Safari/537.36`;
   const { platform, navigatorPlatform, platformVersion, architecture, bitness } = detectPlatformInfo();
   const metadata: UserAgentMetadata = {
     brands: [

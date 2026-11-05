@@ -2,18 +2,26 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 const { buildBrowserIdentity, REPORTED_CHROME_MAJOR, REPORTED_CHROME_FULL_VERSION } = createRequire(import.meta.url)('../src/main/browser-identity.ts');
 
-const electronWinUA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) chatter/1.9.294 Chrome/130.0.0.0 Electron/33.4.11 Safari/537.36';
-const electronMacUA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) chatter/1.9.294 Chrome/130.0.0.0 Electron/33.4.11 Safari/537.36';
+const electronWinUA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) chatter-desktop/2.0.0 Chrome/130.0.0.0 Electron/33.4.11 Safari/537.36';
+const electronMacUA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) chatter-desktop/2.0.0 Chrome/130.0.0.0 Electron/33.4.11 Safari/537.36';
 
 const expectedPlatform = process.platform === 'win32' ? 'Windows' : process.platform === 'darwin' ? 'macOS' : 'Linux';
 
 try {
   const profile = buildBrowserIdentity(electronWinUA, 'ru');
 
-  // UA cleanup: no Electron/chatter tokens, no double spaces left behind.
+  // UA rebuild: no Electron/chatter tokens survive, whatever the app token is.
   assert.ok(!/Electron/i.test(profile.userAgent), 'UA must not leak Electron');
-  assert.ok(!/chatter/i.test(profile.userAgent), 'UA must not leak chatter');
+  assert.ok(!/chatter/i.test(profile.userAgent), 'UA must not leak chatter (incl. chatter-desktop)');
+  assert.ok(!/chatter-desktop/i.test(profile.userAgent), 'UA must not leak the package name token');
   assert.ok(!/\s{2,}/.test(profile.userAgent), 'UA must not contain double spaces');
+
+  // The UA is rebuilt byte-for-byte in genuine Chrome form.
+  assert.equal(
+    profile.userAgent,
+    `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${REPORTED_CHROME_MAJOR}.0.0.0 Safari/537.36`,
+    'UA must be rebuilt in genuine Chrome form',
+  );
 
   // Reported Chrome version in reduced-UA form.
   assert.ok(profile.userAgent.includes(`Chrome/${REPORTED_CHROME_MAJOR}.0.0.0`), 'UA must carry the reported Chrome major');
@@ -47,7 +55,12 @@ try {
   const twice = buildBrowserIdentity(once).userAgent;
   assert.equal(twice, once, 'profile must be stable when applied twice');
 
-  // acceptLanguage passes through untouched.
+  // A missing default UA still yields a valid Chrome UA for the real OS.
+  const fallback = buildBrowserIdentity('');
+  assert.ok(fallback.userAgent.startsWith('Mozilla/5.0 ('), 'fallback UA must be well-formed');
+  assert.ok(fallback.userAgent.includes(`Chrome/${REPORTED_CHROME_MAJOR}.0.0.0`), 'fallback UA must carry the reported Chrome major');
+
+  // acceptLanguage passes through untouched (as plain tags; Chromium adds ;q= itself).
   assert.equal(buildBrowserIdentity(electronWinUA, 'ru-RU').acceptLanguage, 'ru-RU');
   assert.equal(buildBrowserIdentity(electronWinUA).acceptLanguage, 'en-US');
 
