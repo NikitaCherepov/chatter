@@ -1748,3 +1748,18 @@ db.exec(`
     connection_id INTEGER NOT NULL REFERENCES mcp_connections(id) ON DELETE CASCADE, expires_at INTEGER NOT NULL
   );
 `);
+
+// MCP additions also migrate databases created by the first HTTP-only implementation.
+for (const [table, column, definition] of [
+  ['mcp_policy', 'show_catalog', 'INTEGER NOT NULL DEFAULT 1'],
+  ['mcp_user_policy', 'show_catalog', 'INTEGER'],
+  ['mcp_connections', 'resources_json', "TEXT NOT NULL DEFAULT '[]'"],
+  ['mcp_connections', 'templates_json', "TEXT NOT NULL DEFAULT '[]'"],
+  ['mcp_connections', 'capabilities_json', 'TEXT'],
+  ['mcp_connections', 'server_info_json', 'TEXT'],
+] as const) {
+  const columns = db.prepare('PRAGMA table_info(' + table + ')').all() as Array<{ name: string }>;
+  if (!columns.some(item => item.name === column)) {
+    db.exec('ALTER TABLE ' + table + ' ADD COLUMN ' + column + ' ' + definition);
+  }
+}

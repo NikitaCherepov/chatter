@@ -9,6 +9,11 @@ const dbPath = path.join(os.tmpdir(), 'chatter-mcp-' + process.pid + '-' + Date.
 process.env.API_DB_PATH = dbPath;
 process.env.ENCRYPTION_KEY = 'mcp-local-test-key';
 process.env.MCP_CALLBACK_URL = 'https://chatter.example/backend/mcp/oauth/callback';
+const previousDb = new (require('better-sqlite3'))(dbPath);
+previousDb.exec(
+  'CREATE TABLE mcp_policy(id INTEGER PRIMARY KEY CHECK(id=1),enabled INTEGER NOT NULL DEFAULT 1,allow_custom INTEGER NOT NULL DEFAULT 0); INSERT INTO mcp_policy VALUES(1,1,0); CREATE TABLE mcp_user_policy(user_id INTEGER PRIMARY KEY,allow_custom INTEGER);',
+);
+previousDb.close();
 const { db } = require('../src/db.ts');
 const store = require('../src/services/mcp/store.ts');
 const network = require('../src/services/mcp/network.ts');
@@ -20,6 +25,8 @@ const dns = require('node:dns/promises');
 const originalLookup = dns.lookup,
   originalFetch = network.mcpHttp.fetch;
 const received: any[] = [];
+let registryRequests = 0;
+
 let sessionNumber = 0;
 let pendingResponse: any,
   invalidCatalog = false,
@@ -74,13 +81,43 @@ const fake = http.createServer(async (req, res) => {
   if (body.method === 'initialize')
     return reply({
       protocolVersion: body.params.protocolVersion,
-      capabilities: { tools: {} },
+      capabilities:
+        req.headers.authorization === 'Bearer resources-only'
+          ? { resources: {} }
+          : { tools: {}, resources: {} },
       serverInfo: { name: 'test', version: '1' },
     });
   if (body.method === 'notifications/initialized') {
     res.writeHead(202).end();
     return;
   }
+  if (body.method === 'resources/list')
+    return reply({
+      resources: [
+        {
+          uri: 'notes://guide',
+          name: 'guide',
+          description: 'Project guide',
+          mimeType: 'text/plain',
+        },
+      ],
+    });
+  if (body.method === 'resources/templates/list')
+    return reply({
+      resourceTemplates: [
+        { uriTemplate: 'notes://project/{id}', name: 'project', description: 'Project notes' },
+      ],
+    });
+  if (body.method === 'resources/read')
+    return reply({
+      contents: [
+        {
+          uri: body.params.uri,
+          mimeType: 'text/plain',
+          text: 'PRIVATE_RESOURCE_BODY: ' + body.params.uri,
+        },
+      ],
+    });
   if (body.method === 'tools/list')
     return reply({
       tools: invalidCatalog
@@ -173,6 +210,55 @@ network.mcpHttp.fetch = async (input: any, init: any) => {
       status,
       headers: { 'content-type': 'application/json', ...extra },
     });
+  if (url.hostname === 'registry.modelcontextprotocol.io') {
+    registryRequests++;
+    assert.equal(url.searchParams.get('version'), 'latest');
+    assert.equal(url.searchParams.get('search'), 'fixture');
+    const server = {
+      name: 'com.example/test',
+      title: 'Test Server',
+      description: 'Current',
+      version: '2.0',
+      repository: { url: 'https://github.com/example/test' },
+      websiteUrl: 'javascript:bad()',
+      remotes: [{ type: 'streamable-http', url: 'https://mcp.example/mcp' }],
+    };
+    return json({
+      servers: [
+        {
+          server,
+          _meta: {
+            'io.modelcontextprotocol.registry/official': { isLatest: true, status: 'active' },
+          },
+        },
+        { server },
+        {
+          server: { ...server, version: '1.0' },
+          _meta: { 'io.modelcontextprotocol.registry/official': { isLatest: false } },
+        },
+        {
+          server: { ...server, name: 'com.example/deleted' },
+          _meta: { 'io.modelcontextprotocol.registry/official': { status: 'deleted' } },
+        },
+        {
+          server: {
+            ...server,
+            name: 'com.example/private',
+            remotes: [{ type: 'streamable-http', url: 'https://127.0.0.1/mcp' }],
+          },
+        },
+        {
+          server: {
+            ...server,
+            name: 'com.example/stdio',
+            remotes: [],
+            packages: [{ registryType: 'npm' }],
+          },
+        },
+      ],
+      metadata: { nextCursor: url.searchParams.get('cursor') ? undefined : 'page2' },
+    });
+  }
   if (url.hostname === 'auth.example') {
     if (url.pathname.includes('.well-known'))
       return json({
@@ -343,13 +429,18 @@ try {
   );
   store.saveConnection(81, { token: 'private-test-token' }, connection.id);
   const defs = tools.getMcpDefinitions(81);
-  assert.ok(defs.some((d: any) => d.function.name === 'search_mcp_tools'));
+  assert.ok(defs.some((d: any) => d.function.name === 'browse_mcp'));
   assert.ok(
     !defs.some((d: any) => d.function.name.startsWith('mcp_')),
     'search mode keeps schemas out of initial context',
   );
+  assert.ok(defs.some((d: any) => d.function.name === 'read_mcp_resource'));
+  assert.ok(!defs.some((d: any) => d.function.name === 'search_mcp_tools'));
+  assert.ok(
+    tools.getMcpDefinitions(81, true).some((d: any) => d.function.name === 'search_mcp_tools'),
+  );
   const definitionsBeforeSearch = JSON.stringify(defs);
-  const search = await tools.runMcpTool(81, 'search_mcp_tools', { query: 'echo' });
+  const search = await tools.runMcpTool(81, 'browse_mcp', { query: 'echo' });
   assert.match(search, /Echo supplied/);
   assert.match(search, /inputSchema/);
   assert.match(search, /call_mcp_tool/);
@@ -362,11 +453,163 @@ try {
     definitionsBeforeSearch,
     'search leaves the function-tool prefix unchanged',
   );
-  await tools.runMcpTool(81, 'search_mcp_tools', { query: 'wait' });
+  await tools.runMcpTool(81, 'browse_mcp', { query: 'wait' });
   assert.equal(
     JSON.stringify(tools.getMcpDefinitions(81)),
     definitionsBeforeSearch,
     'different searches do not rebuild the prefix',
+  );
+  const discovery = require('../src/services/mcp/discovery.ts');
+  const unwrap = (value: string) =>
+    JSON.parse(value.slice(value.indexOf('{'), value.lastIndexOf('}') + 1));
+  assert.equal(
+    received.filter((x) => x.body.method === 'resources/read').length,
+    0,
+    'discovery never reads content',
+  );
+  const servers = unwrap(await discovery.browseMcp(81, {}));
+  assert.equal(servers.items[0].resource_count, 1);
+  assert.equal(servers.items[0].capabilities.resources, true);
+  const first = unwrap(
+    await discovery.browseMcp(81, { connection_id: connection.id, kind: 'resources', limit: 1 }),
+  );
+  assert.equal(first.items[0].uri, 'notes://guide');
+  assert.equal(first.total, 2);
+  assert.ok(first.next_cursor);
+  const second = unwrap(
+    await discovery.browseMcp(81, {
+      connection_id: connection.id,
+      kind: 'resources',
+      limit: 1,
+      cursor: first.next_cursor,
+    }),
+  );
+  assert.equal(second.items[0].uriTemplate, 'notes://project/{id}');
+  assert.equal(second.next_cursor, null);
+  await assert.rejects(
+    () => discovery.browseMcp(81, { kind: 'tools', cursor: first.next_cursor }),
+    /cursor_stale/,
+  );
+  await assert.rejects(
+    () => discovery.browseMcp(82, { kind: 'resources', cursor: first.next_cursor }),
+    /cursor_stale/,
+  );
+  assert.equal(JSON.stringify(first).includes('PRIVATE_RESOURCE_BODY'), false);
+  const readFirst = JSON.parse(
+    await discovery.readMcpResource(81, {
+      connection_id: connection.id,
+      uri: 'notes://guide',
+      max_chars: 7,
+    }),
+  );
+  const readPage = unwrap(readFirst.result);
+  assert.equal(readPage.contents[0].text, 'PRIVATE');
+  assert.equal(readPage.next_offset, 7);
+  const readRest = unwrap(
+    JSON.parse(
+      await discovery.readMcpResource(81, {
+        connection_id: connection.id,
+        uri: 'notes://guide',
+        offset: 7,
+      }),
+    ).result,
+  );
+  assert.equal(
+    readPage.contents[0].text + readRest.contents[0].text,
+    'PRIVATE_RESOURCE_BODY: notes://guide',
+  );
+  assert.equal(readRest.next_offset, null);
+  assert.match(
+    await discovery.readMcpResource(81, {
+      connection_id: connection.id,
+      uri: 'notes://project/42',
+    }),
+    /project/,
+  );
+  const readCount = received.filter((x) => x.body.method === 'resources/read').length;
+  await assert.rejects(
+    () =>
+      discovery.readMcpResource(81, { connection_id: connection.id, uri: 'file:///etc/passwd' }),
+    /resource_not_allowed/,
+  );
+  await assert.rejects(
+    () => discovery.readMcpResource(82, { connection_id: connection.id, uri: 'notes://guide' }),
+    /connection_not_found/,
+  );
+  assert.equal(received.filter((x) => x.body.method === 'resources/read').length, readCount);
+  assert.equal(
+    JSON.stringify(tools.getMcpDefinitions(81)),
+    definitionsBeforeSearch,
+    'resource reads preserve tools prefix',
+  );
+  store.saveConnection(81, { selected_tools: ['echo'] }, connection.id);
+  assert.equal(unwrap(await discovery.browseMcp(81, { kind: 'tools' })).total, 1);
+  store.saveConnection(81, { selected_tools: null }, connection.id);
+  const resourceOnly = store.saveConnection(81, {
+    server_id: server.id,
+    name: 'resources',
+    token: 'resources-only',
+  });
+  const listToolsCount = received.filter((x) => x.body.method === 'tools/list').length;
+  await client.refreshTools(81, resourceOnly.id);
+  assert.equal(
+    received.filter((x) => x.body.method === 'tools/list').length,
+    listToolsCount,
+    'resource-only servers do not require tools/list',
+  );
+  assert.equal(
+    store.publicConnection(store.requireConnection(81, resourceOnly.id)).resources.length,
+    1,
+  );
+  await discovery.readMcpResource(81, { connection_id: resourceOnly.id, uri: 'notes://guide' });
+  store.deleteConnection(81, resourceOnly.id);
+  const catalog = require('../src/services/mcp/catalog.ts');
+  const publicPage = await catalog.registryCatalog('fixture');
+  assert.equal(publicPage.items.length, 1);
+  assert.equal(publicPage.items[0].version, '2.0');
+  assert.equal(publicPage.items[0].repository_url, 'https://github.com/example/test');
+  assert.equal(publicPage.items[0].website_url, undefined);
+  assert.match(publicPage.items[0].registry_url, /versions\/2.0/);
+  await catalog.registryCatalog('fixture', publicPage.next_cursor);
+  assert.equal(registryRequests, 2);
+  await assert.rejects(() => catalog.registryCatalog('ab'), /invalid_catalog_query/);
+  await request('/admin/policy', 'PUT', {
+    enabled: true,
+    allow_custom: false,
+    show_catalog: false,
+  });
+  assert.equal((await request('/user/81/mcp')).body.servers.length, 0);
+  assert.equal((await request('/user/81/mcp/catalog?search=fixture')).status, 403);
+  assert.equal(registryRequests, 2, 'hidden catalog does not contact Registry');
+  assert.equal(
+    (await request('/user/81/mcp/connections', 'POST', { server_id: server.id, name: 'hidden' }))
+      .status,
+    403,
+  );
+  assert.ok(store.requireConnection(81, connection.id), 'existing connections remain usable');
+  await request('/admin/users/81', 'PUT', { catalog_override: 'allow' });
+  assert.equal(store.policy(81).show_catalog, true);
+  assert.equal(
+    store.policy(81).allow_custom,
+    false,
+    'catalog permission does not alter custom URL permission',
+  );
+  await request('/admin/users/81', 'PUT', { override: 'allow' });
+  assert.equal(
+    store.policy(81).catalog_override,
+    'allow',
+    'partial policy updates preserve catalog override',
+  );
+  await request('/admin/policy', 'PUT', { enabled: true, allow_custom: false, show_catalog: true });
+  await request('/admin/users/81', 'PUT', { catalog_override: 'deny', override: 'inherit' });
+  assert.equal(
+    (await request('/user/81/mcp')).body.servers.length,
+    0,
+    'personal hide overrides global show',
+  );
+  await request('/admin/users/81', 'PUT', { catalog_override: 'inherit' });
+  console.log(
+    'PASS: resource metadata/read/templates, pagination, resource-only servers, stable definitions, latest catalog and global/personal visibility',
   );
   const named = {
     function: { name: tools.toolCatalog(81).find((item: any) => item.tool.name === 'echo').name },
@@ -392,7 +635,7 @@ try {
   const existingSearch = await ai.runTool(
     user,
     0,
-    'search_mcp_tools',
+    'browse_mcp',
     JSON.stringify({ query: 'echo' }),
     noModel,
     [],
@@ -443,7 +686,7 @@ try {
     { availableToolDefs: [] },
   );
   assert.match(deniedRunner, /not allowed/);
-  assert.ok(ai.getTaskAllowedToolNames().includes('search_mcp_tools'));
+  assert.ok(ai.getTaskAllowedToolNames().includes('browse_mcp'));
   assert.ok(ai.getTaskAllowedToolNames().includes('call_mcp_tool'));
   await assert.rejects(
     () =>
@@ -567,6 +810,67 @@ try {
   await request('/admin/policy', 'PUT', { enabled: false, allow_custom: false });
   assert.equal(tools.getMcpDefinitions(82).length, 0, 'global disable wins over user override');
   await request('/admin/policy', 'PUT', { enabled: true, allow_custom: false });
+  const previousAccess = (await request('/admin/access')).body.access;
+  assert.equal(previousAccess.allow_custom.mode, 'selected');
+  assert.deepEqual(previousAccess.allow_custom.user_ids, [82]);
+  let accessResult = await request('/admin/access', 'PUT', {
+    allow_custom: { mode: 'selected', user_ids: [81] },
+  });
+  assert.equal(accessResult.status, 200);
+  assert.equal(store.policy(81).allow_custom, true);
+  assert.equal(store.policy(82).allow_custom, false);
+  assert.equal(store.policy(82).show_catalog, true, 'permissions stay independent');
+  await request('/admin/access', 'PUT', { show_catalog: { mode: 'none' } });
+  assert.equal(store.policy(81).show_catalog, false);
+  assert.equal(store.policy(81).allow_custom, true);
+  assert.equal((await request('/user/81/mcp')).body.servers.length, 0);
+  await request('/admin/access', 'PUT', { show_catalog: { mode: 'all', excluded_user_ids: [82] } });
+  assert.equal(store.policy(81).show_catalog, true);
+  assert.equal(store.policy(82).show_catalog, false);
+  assert.deepEqual(
+    (await request('/admin/access')).body.access.show_catalog.excluded_user_ids,
+    [82],
+  );
+  const beforeInvalid = JSON.stringify(store.accessSettings());
+  assert.equal(
+    (
+      await request('/admin/access', 'PUT', {
+        allow_custom: { mode: 'all' },
+        show_catalog: { mode: 'selected', user_ids: [999999] },
+      })
+    ).status,
+    404,
+  );
+  assert.equal(
+    JSON.stringify(store.accessSettings()),
+    beforeInvalid,
+    'invalid bulk updates are atomic',
+  );
+  assert.equal(
+    (
+      await request('/admin/access', 'PUT', {
+        allow_custom: { mode: 'selected', user_ids: ['81'] },
+      })
+    ).status,
+    400,
+  );
+  await request('/admin/policy', 'PUT', { enabled: false });
+  assert.equal(store.policy(81).enabled, false);
+  assert.equal(
+    store.policy(81).allow_custom,
+    true,
+    'global enable switch preserves selected users',
+  );
+  await request('/admin/access', 'PUT', {
+    allow_custom: { mode: 'none' },
+    show_catalog: { mode: 'all' },
+  });
+  assert.equal(store.policy(81).allow_custom, false);
+  await request('/admin/policy', 'PUT', { enabled: true });
+  await request('/admin/users/82', 'PUT', { override: 'allow' });
+  console.log(
+    'PASS: central access modes, user selection, legacy exclusions, independent permissions and atomic validation',
+  );
   const oauthConnection = store.saveConnection(82, {
     name: 'OAuth MCP',
     url: 'https://oauth-mcp.example/mcp',

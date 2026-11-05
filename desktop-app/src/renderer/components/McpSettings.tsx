@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { useMcp } from '../lib/useMcp';
@@ -22,6 +22,21 @@ export function McpSettings() {
     [next, setNext] = useState<string | null>(null),
     [catalogBusy, setCatalogBusy] = useState(false);
   const [authorization, setAuthorization] = useState('');
+  const [catalogQuery, setCatalogQuery] = useState('');
+  const catalogRequest = useRef(0);
+  useEffect(() => {
+    catalogRequest.current++;
+    setCatalogBusy(false);
+    if (!query.data?.policy.enabled || !query.data?.policy.show_catalog) {
+      setCatalog([]);
+      setNext(null);
+      setCatalogQuery('');
+      setServer('');
+      setUrl('');
+      setToken('');
+    }
+  }, [query.data?.policy.enabled, query.data?.policy.show_catalog]);
+
   const run = async (action: () => Promise<unknown>) => {
     try {
       await mutation.mutateAsync(action);
@@ -36,15 +51,29 @@ export function McpSettings() {
     }
   };
   const browse = async (more = false) => {
+    if (catalogBusy || !query.data?.policy.enabled || !query.data?.policy.show_catalog) return;
+    const applied = more ? catalogQuery : search.trim();
+    if (applied && applied.length < 3) return;
+    const request = ++catalogRequest.current;
     setCatalogBusy(true);
     try {
-      const result = await api.getMcpCatalog(search, more ? next || '' : '');
-      setCatalog(more ? [...catalog, ...result.items] : result.items);
+      const result = await api.getMcpCatalog(applied, more ? next || '' : '');
+      if (request !== catalogRequest.current) return;
+      setCatalogQuery(applied);
+      setCatalog(
+        more ? api.mergeMcpCatalog(catalog, result.items) : api.mergeMcpCatalog([], result.items),
+      );
       setNext(result.next_cursor);
-    } catch {
+    } catch (error: any) {
+      if (request !== catalogRequest.current) return;
+      if (/mcp_catalog_hidden|mcp_disabled/.test(String(error?.message || ''))) {
+        setCatalog([]);
+        setNext(null);
+        void query.refetch();
+      }
       toast.error(t('mcp.error'));
     } finally {
-      setCatalogBusy(false);
+      if (request === catalogRequest.current) setCatalogBusy(false);
     }
   };
   const pick = (item: api.CatalogItem) => {
@@ -97,7 +126,7 @@ export function McpSettings() {
           </button>
         </div>
       )}
-      {data.policy.enabled && (
+      {data.policy.enabled && (data.policy.show_catalog || data.policy.allow_custom) && (
         <form
           className={styles.form}
           onSubmit={(event) => {
@@ -125,7 +154,7 @@ export function McpSettings() {
               value={server}
               disabled={busy}
               options={[
-                ...data.servers.map((item) => ({
+                ...(data.policy.show_catalog ? data.servers : []).map((item) => ({
                   value: String(item.id),
                   label: item.name,
                   hint: item.description,
@@ -203,7 +232,7 @@ export function McpSettings() {
           </button>
         </form>
       )}
-      {data.policy.enabled && (
+      {data.policy.enabled && data.policy.show_catalog && (
         <section className={styles.catalog}>
           <h3>{t('mcp.catalog')}</h3>
           <p className={s.connectionsHelp}>{t('mcp.catalogHelp')}</p>
@@ -221,15 +250,46 @@ export function McpSettings() {
               onChange={(e) => setSearch(e.target.value)}
               placeholder={t('mcp.search')}
             />
-            <button className={s.cancelBtn} disabled={catalogBusy}>
+            <button
+              className={s.cancelBtn}
+              disabled={catalogBusy || (!!search.trim() && search.trim().length < 3)}
+            >
               {t('mcp.search')}
             </button>
           </form>
           {catalog.map((item, index) => (
             <div className={s.macroCard} key={item.url + index}>
-              <strong>{item.name}</strong>
+              <strong>{item.title || item.name}</strong>
+              {item.title && item.title !== item.name && (
+                <div className={styles.url}>{item.name}</div>
+              )}
               <p>{item.description}</p>
-              <small className={styles.url}>{item.url}</small>
+              <p className={styles.url}>
+                {t('mcp.version')}: {item.version || '—'} · Streamable HTTP
+              </p>
+              <p className={styles.url}>
+                {t('mcp.publisher')}: {item.publisher || item.name.split('/')[0]}
+              </p>
+              <div className={styles.actions}>
+                <a href={item.url} target="_blank" rel="noopener noreferrer" className={styles.url}>
+                  {item.url}
+                </a>
+                {item.repository_url && (
+                  <a href={item.repository_url} target="_blank" rel="noopener noreferrer">
+                    {t('mcp.repository')}
+                  </a>
+                )}
+                {item.website_url && (
+                  <a href={item.website_url} target="_blank" rel="noopener noreferrer">
+                    {t('mcp.website')}
+                  </a>
+                )}
+                {item.registry_url && (
+                  <a href={item.registry_url} target="_blank" rel="noopener noreferrer">
+                    {t('mcp.registryEntry')}
+                  </a>
+                )}
+              </div>
               <button
                 className={s.cancelBtn}
                 disabled={
@@ -246,7 +306,7 @@ export function McpSettings() {
           {next && (
             <button
               className={s.cancelBtn}
-              disabled={catalogBusy}
+              disabled={catalogBusy || search.trim() !== catalogQuery}
               onClick={() => void browse(true)}
             >
               {t('mcp.more')}
@@ -283,7 +343,29 @@ function ConnectionCard({
           onChange={(enabled) => void save({ enabled })}
         />
       </div>
-      <p className={styles.url}>{c.url}</p>
+      <p className={styles.url}>
+        <a href={c.url} target="_blank" rel="noopener noreferrer">
+          {c.url}
+        </a>
+      </p>
+      <p className={styles.url}>
+        {c.capabilities
+          ? [
+              c.capabilities.tools ? t('mcp.tools') + ': ' + c.tools.length : '',
+              c.capabilities.resources
+                ? t('mcp.resources') +
+                  ': ' +
+                  (c.resources?.length || 0) +
+                  ' · ' +
+                  t('mcp.resourceTemplates') +
+                  ': ' +
+                  (c.resource_templates?.length || 0)
+                : '',
+            ]
+              .filter(Boolean)
+              .join(' · ') || t('mcp.noSupportedCapabilities')
+          : t('mcp.metadataUnknown')}
+      </p>
       {c.blocked && <p>{t('mcp.blocked')}</p>}
       <div className={styles.actions}>
         <button
@@ -376,6 +458,22 @@ function ConnectionCard({
             </button>
           )}
         </div>
+        {!!c.capabilities?.resources && (
+          <details>
+            <summary>
+              {t('mcp.resources')} · {c.resources?.length || 0} / {t('mcp.resourceTemplates')} ·{' '}
+              {c.resource_templates?.length || 0}
+            </summary>
+            <p className={s.connectionsHelp}>{t('mcp.resourcesHelp')}</p>
+            {[...(c.resources || []), ...(c.resource_templates || [])].map((resource) => (
+              <div className={styles.tool} key={resource.uri || resource.uriTemplate}>
+                <strong>{resource.title || resource.name}</strong>
+                <p className={styles.url}>{resource.uri || resource.uriTemplate}</p>
+                <small>{resource.description}</small>
+              </div>
+            ))}
+          </details>
+        )}
         <h4>
           {t('mcp.tools')} · {c.tools.length}
         </h4>
@@ -395,7 +493,7 @@ function ConnectionCard({
             {t('mcp.noTools')}
           </button>
         </div>
-        {!c.tools.length && <p>{t('mcp.refreshHelp')}</p>}
+        {!c.tools.length && !c.capabilities && <p>{t('mcp.refreshHelp')}</p>}
         {c.tools.map((tool) => (
           <div className={styles.tool} key={tool.name}>
             <Checkbox

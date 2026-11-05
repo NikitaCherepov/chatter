@@ -7,6 +7,8 @@ import {
   publicConnection,
   policy,
   savePolicy,
+  accessSettings,
+  saveAccessSettings,
   saveServer,
   deleteServer,
   saveConnection,
@@ -30,7 +32,7 @@ const route =
     } catch (error: any) {
       const code = String(error?.message || '');
       const safe = /^mcp_[a-z_]+$/.test(code) ? code : 'mcp_request_failed';
-      const status = /not_allowed|disabled/.test(safe)
+      const status = /not_allowed|disabled|catalog_hidden/.test(safe)
         ? 403
         : /not_found/.test(safe)
           ? 404
@@ -63,7 +65,10 @@ export function userMcpRouter(account: (req: any) => number) {
       const userId = account(req);
       res.json({
         policy: policy(userId),
-        servers: allServers().filter((server) => server.allowed),
+        servers:
+          policy(userId).enabled && policy(userId).show_catalog
+            ? allServers().filter((server) => server.allowed)
+            : [],
         connections: connections(userId).map(publicConnection),
       });
     }),
@@ -72,9 +77,14 @@ export function userMcpRouter(account: (req: any) => number) {
     '/catalog',
     route(async (req, res) => {
       if (!policy(account(req)).enabled) throw new Error('mcp_disabled');
-      res.json(
-        await registryCatalog(String(req.query.search || ''), String(req.query.cursor || '')),
+      if (!policy(account(req)).show_catalog) throw new Error('mcp_catalog_hidden');
+      const result = await registryCatalog(
+        String(req.query.search || ''),
+        String(req.query.cursor || ''),
       );
+      if (!policy(account(req)).enabled) throw new Error('mcp_disabled');
+      if (!policy(account(req)).show_catalog) throw new Error('mcp_catalog_hidden');
+      res.json(result);
     }),
   );
   router.post(
@@ -133,6 +143,18 @@ export function adminMcpRouter() {
   router.get(
     '/',
     route((_req, res) => res.json({ policy: policy(), servers: allServers() })),
+  );
+  router.get(
+    '/access',
+    route((_req, res) => res.json({ access: accessSettings() })),
+  );
+  router.put(
+    '/access',
+    route((req, res) => {
+      const access = saveAccessSettings(req.body);
+      cancelForbiddenCalls();
+      res.json({ access });
+    }),
   );
   router.put(
     '/policy',

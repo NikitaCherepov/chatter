@@ -7,6 +7,14 @@ export type McpServer = {
   description: string;
   recommended: number;
 };
+export type McpResource = {
+  name: string;
+  title?: string;
+  description?: string;
+  uri?: string;
+  uriTemplate?: string;
+  mimeType?: string;
+};
 export type McpConnection = {
   id: number;
   name: string;
@@ -18,13 +26,35 @@ export type McpConnection = {
   blocked: boolean;
   tools: McpTool[];
   selected_tools: string[] | null;
+  resources?: McpResource[];
+  resource_templates?: McpResource[];
+  capabilities?: { tools: boolean; resources: boolean; prompts: boolean } | null;
+  server_info?: { name: string; title?: string; version?: string; description?: string } | null;
 };
 export type McpState = {
-  policy: { enabled: boolean; allow_custom: boolean };
+  policy: { enabled: boolean; allow_custom: boolean; show_catalog: boolean };
   servers: McpServer[];
   connections: McpConnection[];
 };
-export type CatalogItem = { name: string; description: string; url: string; version: string };
+export type CatalogItem = {
+  name: string;
+  title?: string;
+  description: string;
+  url: string;
+  version: string;
+  publisher?: string;
+  transport?: string;
+  repository_url?: string;
+  website_url?: string;
+  registry_url?: string;
+  published_at?: string;
+  updated_at?: string;
+};
+export function mergeMcpCatalog(previous: CatalogItem[], next: CatalogItem[]) {
+  return [
+    ...new Map([...previous, ...next].map((item) => [item.name + '\n' + item.url, item])).values(),
+  ];
+}
 const base = '/api/v1/mcp';
 export const getMcpState = () => apiFetch<McpState>(base);
 export const saveMcpConnection = (body: Record<string, unknown>, id?: number) =>

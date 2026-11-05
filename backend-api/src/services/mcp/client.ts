@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { UriTemplate } from '@modelcontextprotocol/sdk/shared/uriTemplate.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import type { OAuthClientProvider } from '@modelcontextprotocol/sdk/client/auth.js';
@@ -198,20 +199,45 @@ async function session<T>(
 }
 export async function refreshTools(userId: number, id: number, signal?: AbortSignal) {
   return session(userId, id, signal, async (client, _transport, row) => {
-    const tools: any[] = [];
-    let cursor: string | undefined;
-    const seen = new Set<string>();
-    do {
-      if (seen.size >= 20 || (cursor && seen.has(cursor)))
-        throw new Error('mcp_invalid_tool_catalog');
-      seen.add(cursor || '');
-      const page = await client.listTools(cursor ? { cursor } : {}, { timeout: 30_000, signal });
-      tools.push(...page.tools);
-      if (tools.length > 200 || JSON.stringify(tools).length > 512_000)
-        throw new Error('mcp_tool_catalog_too_large');
-      cursor = page.nextCursor;
-    } while (cursor);
-    const names = new Set();
+    const advertised = client.getServerCapabilities() || {};
+    const capabilities = {
+      tools: !!advertised.tools,
+      resources: !!advertised.resources,
+      prompts: !!advertised.prompts,
+    };
+    async function pages(
+      method: 'tools' | 'resources' | 'templates',
+      maximum: number,
+    ): Promise<any[]> {
+      const result: any[] = [];
+      const seen = new Set<string>();
+      let cursor: string | undefined;
+      do {
+        if (seen.size >= 20 || seen.has(cursor || '')) throw new Error('mcp_invalid_catalog');
+        seen.add(cursor || '');
+        let page: any;
+        try {
+          const params = cursor ? { cursor } : {},
+            options = { timeout: 30_000, signal };
+          page =
+            method === 'tools'
+              ? await client.listTools(params, options)
+              : method === 'resources'
+                ? await client.listResources(params, options)
+                : await client.listResourceTemplates(params, options);
+        } catch (error: any) {
+          if (method !== 'tools' && error?.code === -32601) return [];
+          throw error;
+        }
+        result.push(...(page[method === 'templates' ? 'resourceTemplates' : method] || []));
+        if (result.length > maximum || JSON.stringify(result).length > 512_000)
+          throw new Error('mcp_catalog_too_large');
+        cursor = page.nextCursor;
+      } while (cursor);
+      return result;
+    }
+    const tools = capabilities.tools ? await pages('tools', 200) : [];
+    const names = new Set<string>();
     for (const tool of tools) {
       if (
         !/^[a-zA-Z0-9_.-]{1,128}$/.test(tool.name) ||
@@ -220,13 +246,48 @@ export async function refreshTools(userId: number, id: number, signal?: AbortSig
       )
         throw new Error('mcp_invalid_tool_schema');
       names.add(tool.name);
-      // Never resolve external schema references.
       const schema = JSON.stringify(tool.inputSchema);
       if (schema.length > 64_000 || /"\$ref"\s*:\s*"(?!#)/.test(schema))
         throw new Error('mcp_invalid_tool_schema');
     }
-    db.prepare('UPDATE mcp_connections SET tools_json=?,updated_at=? WHERE id=? AND user_id=?').run(
+    const normalize = (item: any, template: boolean) => {
+      const locator = template ? item.uriTemplate : item.uri;
+      if (typeof locator !== 'string' || locator.length > 4096 || /[\u0000-\u001f]/.test(locator))
+        throw new Error('mcp_invalid_resource_catalog');
+      if (template) new UriTemplate(locator);
+      else new URL(locator);
+      return {
+        ...(template ? { uriTemplate: locator } : { uri: locator }),
+        name: String(item.name || locator).slice(0, 160),
+        title: String(item.title || '').slice(0, 160),
+        description: String(item.description || '').slice(0, 1500),
+        mimeType: String(item.mimeType || '').slice(0, 128),
+      };
+    };
+    const resources = capabilities.resources
+      ? (await pages('resources', 500)).map((item) => normalize(item, false))
+      : [];
+    const templates = capabilities.resources
+      ? (await pages('templates', 200)).map((item) => normalize(item, true))
+      : [];
+    const version = client.getServerVersion() as any;
+    const info = version
+      ? {
+          name: String(version.name || '').slice(0, 160),
+          title: String(version.title || '').slice(0, 160),
+          version: String(version.version || '').slice(0, 100),
+          description: String(version.description || '').slice(0, 1500),
+        }
+      : null;
+    requireConnection(userId, id);
+    db.prepare(
+      'UPDATE mcp_connections SET tools_json=?,resources_json=?,templates_json=?,capabilities_json=?,server_info_json=?,updated_at=? WHERE id=? AND user_id=?',
+    ).run(
       JSON.stringify(tools),
+      JSON.stringify(resources),
+      JSON.stringify(templates),
+      JSON.stringify(capabilities),
+      JSON.stringify(info),
       Date.now(),
       id,
       row.user_id,
@@ -258,6 +319,33 @@ export async function callRemoteTool(
         }
       },
     });
+  });
+}
+export async function readRemoteResource(
+  userId: number,
+  id: number,
+  uri: string,
+  signal?: AbortSignal,
+  onProgress?: () => void,
+) {
+  return session(userId, id, signal, async (client, _transport, row) => {
+    if (!client.getServerCapabilities()?.resources) throw new Error('mcp_resources_not_supported');
+    let lastProgress = 0;
+    return client.readResource(
+      { uri },
+      {
+        signal,
+        timeout: row.timeout_seconds * 1000,
+        resetTimeoutOnProgress: true,
+        onprogress: () => {
+          if (Date.now() - lastProgress < 1000) return;
+          lastProgress = Date.now();
+          try {
+            void Promise.resolve(onProgress?.()).catch(() => {});
+          } catch {}
+        },
+      },
+    );
   });
 }
 export function cancelCall(userId: number, id: number) {

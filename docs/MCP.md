@@ -21,33 +21,55 @@ No stdio, subprocesses, package installation, sampling, roots or elicitation.
 
 1. Admin MCP tab: add an allowed HTTPS endpoint or select one from the catalog.
    Recommended is a display marker, separate from permission.
-2. Set the global custom-URL permission. User cards can override it with
-   inherit / allow / deny. Global MCP disable always wins.
+2. In the MCP tab, independently choose who can add custom URLs and who can
+   see the catalog: everyone / selected users / nobody. User selection reuses
+   the existing searchable admin Select. Existing per-user deny exceptions
+   remain visible as exclusions when the base permission allows everyone.
+   User cards show connections; all access editing lives in the MCP tab.
+   Global MCP disable always wins. Hiding the catalog removes the picker,
+   public catalog and search from desktop and blocks its catalog API.
+   Existing connections still work; custom URLs retain their separate permission.
 3. Desktop Settings → MCP: create a personal connection, add a bearer token or
-   authorize with OAuth, then refresh tools.
+   authorize with OAuth, then refresh capabilities.
 4. Select tools and choose eager injection or on-demand discovery.
 
 ## Execution
 
 - The existing function-tool pipeline, task allowlists and subagent tool grants
   are reused. Room runs use the initiating account's connections.
-- A personal connection reuses its MCP session between calls so server-side state\n survives. Idle sessions close after ten minutes; errors or explicit cancellation\n close the affected session. The backend keeps at most 128 sessions.\n- Calls recheck current policy, connection state and tool selection.
+- A personal connection reuses its MCP session between calls so server-side state
+  survives. Idle sessions close after ten minutes; errors or explicit cancellation
+  close the affected session. The backend keeps at most 128 sessions.
+- Calls recheck current policy, connection state and tool selection.
   The existing disable-internet restriction also blocks MCP.
 - Eager tools have stable, connection-specific names.
-- `search_mcp_tools` returns authorized names, descriptions and input schemas only
-  in its tool result. Search never changes the model function-tool definitions.
-  The model then calls the permanent `call_mcp_tool` function using that schema.
+- `browse_mcp` lists connected server summaries by default. Set `connection_id`
+  to inspect tools, resources and resource templates; metadata loads on first
+  inspection, or explicitly with `refresh: true`. `query` searches cached
+  metadata, `kind` filters it, and `next_cursor` continues pages of up to 20 items.
+  Unknown connections are reported in `needs_refresh`. Tool results contain
+  schemas and resource metadata, never resource bodies. Discovery does not
+  change model function-tool definitions or inject new tools on the next turn.
+- `search_mcp_tools` remains a compatibility alias for existing task allowlists;
+  new runs use `browse_mcp`.
 - `call_mcp_tool` invokes a selected tool using its returned input schema.
 - At most 32 MCP definitions are injected; additional tools remain searchable.
-- Tool lists refresh explicitly. Limits: 20 connections per account, 200 tools
+- Refresh capabilities loads advertised tools, resources and templates without
+  reading documents. Resource-only servers work without tools/list. Limits:
+  20 connections per account, 200 tools / 500 resources / 200 resource templates
   per connection, three active operations per account and one per connection.
+- `read_mcp_resource` reads an advertised URI or expanded resource template on
+  explicit request. The URI goes only to the selected MCP server; Chatter never
+  fetches it as a local file or URL. Text is paged with `offset` / `next_offset`
+  (24,000 characters by default, at most 48,000). It reuses session cancellation,
+  progress and access checks. Resources are never automatically injected.
 - Wait time is configurable, 10–3600 seconds without progress, default 300.
   Progress resets it; there is no additional total-duration cap.
   Chat Stop and Stop operation abort local waiting. They cannot guarantee that
   the remote service undoes an operation. Transport reconnection retries are off.
 - Arguments are validated against JSON Schema. Text results use the existing
   untrusted-content wrapper; images can use the existing direct-vision sink.
-  Other nontext content returns metadata. Resource/prompt browsing is not exposed.
+  Other nontext content returns metadata. MCP prompts are not exposed.
 
 ## Security boundary
 
@@ -68,17 +90,25 @@ The official Registry is discovery metadata, not Chatter's security approval.
 ## Catalog
 
 Admin and desktop share the backend catalog API, ten-minute cache and cursor
-pagination over the official Registry. Only remote Streamable HTTP entries are
-shown. Package installation commands are never executed.
+pagination over the official Registry. Each page requests latest versions and
+filters inactive entries, unsupported transports and duplicate name/URL pairs.
+Cards include version, publisher, endpoint and HTTPS links to the repository,
+website and Registry record when supplied. Search uses the Registry's minimum
+of three characters; pagination retains the submitted search.
+Only remote Streamable HTTP entries are shown. Package installation commands
+are never executed. Catalog metadata does not claim tools/resources support:
+actual capabilities are read only after connecting to the server.
 
 ## Verification
 
 - `pnpm exec tsx backend-api/tests/mcp.test.mts`: temporary SQLite and the real
   SDK HTTP transport against a local server; discovery/calls/schemas, account
-  isolation, policies, encrypted secrets, cancellation, progress, sampling denial.
+  isolation, policies, encrypted secrets, cancellation, progress, sampling denial,
+  resource metadata/templates/reads/pagination, resource-only servers, stable
+  tool definitions, latest-version catalog filtering and catalog visibility.
   OAuth tests use a local fake authorization service with the real SDK PKCE flow.
 - `pnpm exec tsx desktop-app/tests/mcp-ui.test.mts`: actual React desktop/admin/
   user-card components in hidden Electron, with mocked APIs; toggles, query
-  invalidation and catalog. Optional `MCP_UI_SCREENSHOT_DIR` saves screenshots.
+  invalidation, catalog links and complete catalog/search hiding. Optional `MCP_UI_SCREENSHOT_DIR` saves screenshots.
 - A separate real Registry request checks public HTTPS/DNS/TLS.
 - These tests do not log into a real third-party account or verify deployment.

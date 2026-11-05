@@ -11,9 +11,11 @@ const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'chatter-mcp-ui-'));
 const desktopRequire = createRequire(path.join(root, 'desktop-app/package.json'));
 const styles: string[] = [];
 const fixture = String.raw`
-export const state={policy:{enabled:true,allow_custom:true},servers:[{id:1,name:'GitHub',url:'https://github.example/mcp',description:'Repositories and issues',allowed:1,recommended:1}],
-connections:[{id:1,name:'GitHub account',url:'https://github.example/mcp',enabled:1,mode:'search',timeout_seconds:300,has_credentials:true,blocked:false,tools:[{name:'search_repositories',description:'Search repositories'},{name:'create_issue',description:'Create an issue'}],selected_tools:null}]};
+export const state={policy:{enabled:true,allow_custom:true,show_catalog:true},servers:[{id:1,name:'GitHub',url:'https://github.example/mcp',description:'Repositories and issues',allowed:1,recommended:1}],
+connections:[{id:1,name:'GitHub account',url:'https://github.example/mcp',enabled:1,mode:'search',timeout_seconds:300,has_credentials:true,blocked:false,tools:[{name:'search_repositories',description:'Search repositories'},{name:'create_issue',description:'Create an issue'}],selected_tools:null,capabilities:{tools:true,resources:true},resources:[{name:'Guide',uri:'notes://guide'}],resource_templates:[]}]};
 window.__calls=[];
+const access={allow_custom:{mode:'none',user_ids:[],excluded_user_ids:[]},show_catalog:{mode:'all',user_ids:[],excluded_user_ids:[]}};
+
 const record=(name,body)=>window.__calls.push({name,body});
 export const API_BASE='https://chatter.example';
 export const getMcpState=async()=>structuredClone(state);
@@ -22,11 +24,16 @@ export const deleteMcpConnection=async(id)=>{record('delete',{id});state.connect
 export const refreshMcpTools=async(id)=>{record('refresh',{id});return {tools:state.connections[0].tools};};
 export const authorizeMcp=async()=>({authorization_url:'https://github.example/authorize'});
 export const cancelMcp=async(id)=>{record('cancel',{id});return {cancelled:true};};
-export const getMcpCatalog=async()=>({items:[{name:'Remote tools',description:'Example remote MCP server',url:'https://remote.example/mcp'}],next_cursor:null});
+export const mergeMcpCatalog=(previous,next)=>Array.from(new Map([...previous,...next].map(x=>[x.name+'|'+x.url,x])).values());
+export const getMcpCatalog=async()=>{record('catalog',{});return {items:[{name:'Remote tools',title:'Remote tools',description:'Example remote MCP server',url:'https://remote.example/mcp',version:'2.0',transport:'streamable-http',publisher:'example',repository_url:'https://github.com/example/mcp',registry_url:'https://registry.example/server'}],next_cursor:null};};
+window.__state=state;
+
 export const useAuth=()=>({user:{id:81}});
 export const api=async(url,options={})=>{
  const body=options.body?JSON.parse(options.body):undefined;record(url,body);
- if(url.includes('/users/'))return {policy:{override:body?.override||'inherit',allow_custom:true,enabled:true},connections:state.connections};
+ if(url==='/api/model-access-users')return {users:[{id:81,name:'Alice',role:'user',is_admin:false},{id:82,name:'Bob',role:'user',is_admin:false}]};
+ if(url==='/api/mcp/access'){if(body)Object.assign(access,body);return {access:structuredClone(access)};}
+ if(url.includes('/users/'))return {policy:{override:body?.override||'inherit',allow_custom:true,enabled:true,show_catalog:state.policy.show_catalog,catalog_override:body?.catalog_override||'inherit'},connections:state.connections};
  if(url.endsWith('/policy')){Object.assign(state.policy,body);return {policy:state.policy};}
  if(url.includes('/catalog'))return getMcpCatalog();
  return {policy:state.policy,servers:state.servers};
@@ -47,6 +54,7 @@ import admin from 'ADMIN_LOCALE';
 i18next.use(initReactI18next).init({lng:'ru',resources:{ru:{translation:{...desktop,mcp:{...desktop.mcp,...admin.mcp}}}},initImmediate:false});
 const client=new QueryClient({defaultOptions:{queries:{retry:false}}});
 const root=createRoot(document.getElementById('app'));
+window.reloadFixture=()=>client.invalidateQueries();
 window.renderFixture=kind=>root.render(<QueryClientProvider client={client}>{kind==='desktop'?<McpSettings/>:kind==='admin'?<McpPage/>:<McpUserCard userId={81}/>}</QueryClientProvider>);
 window.renderFixture('desktop');
 `
@@ -143,20 +151,41 @@ let win;const errors=[];
  const click=async(text)=>{await js('Array.from(document.querySelectorAll("button")).find(b=>b.textContent.trim()==='+JSON.stringify(text)+').click()');};
  await until('document.body.innerText.includes("GitHub account")');
  assert.equal(await js('getComputedStyle(document.querySelector("section")).borderWidth'),'1px','real component styles are applied');
- await click('Обновить инструменты');
+ await click('Обновить возможности');
  await until('window.__calls.some(c=>c.name==="refresh")');
  await js('document.querySelector("input[type=checkbox]").click()');
  await until('window.__calls.some(c=>c.name==="save"&&c.body.enabled===false)');
  await click('Найти');
  await until('document.body.innerText.includes("Remote tools")');
+ assert.ok(await js('document.body.innerText.includes("2.0")'));
+ assert.ok(await js('!!document.querySelector(\'a[href="https://github.com/example/mcp"]\')'));
+ const callsBeforeHide=await js('window.__calls.filter(c=>c.name==="catalog").length');
+ await js('window.__state.policy.show_catalog=false;window.reloadFixture()');
+ await until('!document.body.innerText.includes("Каталог MCP")');
+ assert.ok(await js('document.body.innerText.includes("GitHub account")'));
+ assert.equal(await js('Array.from(document.querySelectorAll("button")).some(b=>b.textContent.trim()==="Найти")'),false);
+ assert.equal(await js('window.__calls.filter(c=>c.name==="catalog").length'),callsBeforeHide);
+ await js('window.__state.policy.show_catalog=true;window.reloadFixture()');
+ await until('document.body.innerText.includes("Каталог MCP")');
  if(process.env.MCP_UI_SCREENSHOT_DIR){await new Promise(r=>setTimeout(r,100));fs.writeFileSync(path.join(process.env.MCP_UI_SCREENSHOT_DIR,'mcp-desktop.png'),(await wc.capturePage()).toPNG());}
  await js('window.renderFixture("admin")');
  await until('document.body.innerText.includes("Политика доступа")');
  await js('document.querySelector("button[role=switch]").click()');
  await until('window.__calls.some(c=>c.name==="/api/mcp/policy"&&c.body.enabled===false)');
+ await until('!!document.querySelector(\'button[aria-label="Разрешать собственные URL MCP"]\')');
+ await js('document.querySelector(\'button[aria-label="Разрешать собственные URL MCP"]\').click()');
+ await click('Для выбранных пользователей');
+ await js('document.querySelector(\'button[aria-label="Пользователи с доступом к своим MCP"]\').click()');
+ await until('document.body.innerText.includes("Alice")');
+ await js('Array.from(document.querySelectorAll("label")).find(x=>x.textContent.includes("Alice")).querySelector("input[type=checkbox]").click()');
+ await js('document.querySelector(\'button[aria-label="Пользователи с доступом к своим MCP"]\').click()');
+ await click('Сохранить');
+ await until('window.__calls.some(c=>c.name==="/api/mcp/access"&&c.body?.allow_custom?.user_ids.includes(81))');
+ assert.ok(await js('window.__calls.some(c=>c.name==="/api/model-access-users")'));
  if(process.env.MCP_UI_SCREENSHOT_DIR)fs.writeFileSync(path.join(process.env.MCP_UI_SCREENSHOT_DIR,'mcp-admin.png'),(await wc.capturePage()).toPNG());
  await js('window.renderFixture("user")');
- await until('document.body.innerText.includes("Разрешение собственных URL")');
+ await until('document.body.innerText.includes("GitHub account")');
+ assert.equal(await js('document.querySelectorAll("button").length'),0,"user card has no duplicate access editor");
  assert.ok(await js('document.body.innerText.includes("GitHub account")'));
  assert.deepEqual(errors,[],'no runtime component errors');
  console.log('PASS: actual React MCP desktop/admin/user components, query reload, toggles, catalog and user connections');

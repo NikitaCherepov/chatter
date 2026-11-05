@@ -41,6 +41,8 @@
     "priceSwitchDisabled": "Стратегия автоматического переключения не выбрана. Провайдер не изменён."
   },
   "toolStatus": {
+    "browse_mcp": "Изучаю подключения MCP...",
+    "read_mcp_resource": "Читаю ресурс MCP...",
     "search_mcp_tools": "Поиск инструментов MCP",
     "call_mcp_tool": "Вызов инструмента MCP",
     "mcpRunning": "MCP: {{tool}}",

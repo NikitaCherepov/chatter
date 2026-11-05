@@ -2828,7 +2828,7 @@ async function handleRequest(req, res) {
       method: req.method, ...(body ? { body: JSON.stringify(body) } : {}),
     }));
   }
-  const mcpMatch = pathname.match(/^\/api\/mcp(?:\/(policy|servers|users|catalog)(?:\/(\d+))?)?$/);
+  const mcpMatch = pathname.match(/^\/api\/mcp(?:\/(policy|servers|users|catalog|access)(?:\/(\d+))?)?$/);
   if (mcpMatch && ['GET','POST','PUT','PATCH','DELETE'].includes(req.method)) {
     res.setHeader('Cache-Control','no-store');
     const tail = mcpMatch[1] ? '/' + mcpMatch[1] + (mcpMatch[2] ? '/' + mcpMatch[2] : '') : '';

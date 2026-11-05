@@ -47,7 +47,7 @@ import { listSubagentNames, buildSubagentListDescription, getSubagent } from './
 import { hasBackendTranslation, translateForLanguage } from '../i18n/index.js';
 import { readChatAttachment, searchChatAttachment, type AttachmentReadContext } from './chat-attachments.js';
 import { attachFileToResponse, materializeAssetInput, type ResponseFileSink } from './response-attachments.js';
-import { getMcpDefinitions, runMcpTool, mcpSearchTool, mcpCallTool, searchToolName as mcpSearchName, callToolName as mcpCallName } from './mcp/tools.js';
+import { getMcpDefinitions, runMcpTool, mcpSearchTool, mcpCallTool, mcpBrowseTool, mcpReadResourceTool, browseToolName as mcpBrowseName, readResourceToolName as mcpReadName, searchToolName as mcpSearchName, callToolName as mcpCallName } from './mcp/tools.js';
 import { getModularTool, modularToolDefinitions } from './tools/registry.js';
 import { buildDescribeImageTool } from './tools/images/describe-image.js';
 import { getContextSummary, type ContextSummaryDto } from './context-summary.js';
@@ -3665,6 +3665,8 @@ export const getTaskAllowedToolNames = (): string[] => {
     buildDesktopActionTool(),
     mcpSearchTool,
     mcpCallTool,
+    mcpBrowseTool,
+    mcpReadResourceTool,
   ];
   taskAllowedToolNamesCache = defs
     .map((t: any) => `${t?.function?.name || ''}`)
@@ -3839,7 +3841,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     }
     return completion;
   };
-  if (toolName === mcpSearchName || toolName === mcpCallName || /^mcp_\d+_[a-zA-Z0-9_-]+_[a-f0-9]{8}$/.test(toolName)) {
+  if (toolName === mcpBrowseName || toolName === mcpReadName || toolName === mcpSearchName || toolName === mcpCallName || /^mcp_\d+_[a-zA-Z0-9_-]+_[a-f0-9]{8}$/.test(toolName)) {
     if (!subagentExtra?.availableToolDefs?.some(tool => tool.function?.name === toolName)) return 'MCP tool is not allowed in this run.';
     try {
       return await runMcpTool(user.id,toolName,parsed,signal,
@@ -8014,7 +8016,7 @@ const sendMessageThroughAiInternal = async (
     ...(avatarControlEnabled ? [buildDisplayStateTool(options?.displayManifest)] : []),
     ...serverOnlyTools,
     ...desktopOnlyTools,
-    ...(!flags?.disable_internet ? getMcpDefinitions(toolUser.id) : []),
+    ...(!flags?.disable_internet ? getMcpDefinitions(toolUser.id, options?.allowedTools?.includes(mcpSearchName)) : []),
   ];
   const spawnSubagentTool = options?.isDesktop ? buildSpawnSubagentTool(allBaseToolDefs) : null;
   // Background task whitelist: intersect the built set with the task's allowed

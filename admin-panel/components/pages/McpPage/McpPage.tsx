@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { api } from '../../../lib/api';
 import { Card } from '../../ui/Card/Card';
 import { Toggle } from '../../ui/Toggle/Toggle';
+import { McpAccessSettings } from './McpAccessSettings';
 import { ConfirmModal } from '../../ui/ConfirmModal/ConfirmModal';
 import s from '../ModelApiPage/ModelApiPage.module.css';
 type Server = {
@@ -17,7 +18,7 @@ type Server = {
 const empty = { name: '', url: '', description: '', allowed: true, recommended: false };
 export function McpPage() {
   const { t } = useTranslation();
-  const [policy, setPolicy] = useState({ enabled: false, allow_custom: false }),
+  const [policy, setPolicy] = useState({ enabled: false, allow_custom: false, show_catalog: true }),
     [servers, setServers] = useState<Server[]>([]);
   const [draft, setDraft] = useState(empty),
     [editId, setEditId] = useState<number | null>(null),
@@ -27,6 +28,7 @@ export function McpPage() {
   const [search, setSearch] = useState(''),
     [items, setItems] = useState<any[]>([]),
     [next, setNext] = useState<string | null>(null);
+  const [catalogQuery, setCatalogQuery] = useState('');
   const load = async () => {
     const data = await api<{ policy: typeof policy; servers: Server[] }>('/api/mcp');
     setPolicy(data.policy);
@@ -48,13 +50,25 @@ export function McpPage() {
     }
   };
   const browse = async (more = false) => {
+    if (busy) return;
+    const applied = more ? catalogQuery : search.trim();
+    if (applied && applied.length < 3) return;
     setBusy(true);
     setError('');
     try {
       const data = await api<{ items: any[]; next_cursor: string | null }>(
-        '/api/mcp/catalog?' + new URLSearchParams({ search, cursor: more ? next || '' : '' }),
+        '/api/mcp/catalog?' +
+          new URLSearchParams({ search: applied, cursor: more ? next || '' : '' }),
       );
-      setItems(more ? [...items, ...data.items] : data.items);
+      setCatalogQuery(applied);
+      setItems([
+        ...new Map(
+          [...(more ? items : []), ...data.items].map((item) => [
+            item.name + '\n' + item.url,
+            item,
+          ]),
+        ).values(),
+      ]);
       setNext(data.next_cursor);
     } catch {
       setError(t('mcp.error'));
@@ -75,26 +89,14 @@ export function McpPage() {
               void run(() =>
                 api('/api/mcp/policy', {
                   method: 'PUT',
-                  body: JSON.stringify({ ...policy, enabled }),
-                }),
-              )
-            }
-          />
-          <Toggle
-            checked={policy.allow_custom}
-            disabled={busy}
-            label={t('mcp.allowCustom')}
-            onChange={(allow_custom) =>
-              void run(() =>
-                api('/api/mcp/policy', {
-                  method: 'PUT',
-                  body: JSON.stringify({ ...policy, allow_custom }),
+                  body: JSON.stringify({ enabled }),
                 }),
               )
             }
           />
         </div>
         <p className={s.help}>{t('mcp.policyHelp')}</p>
+        <McpAccessSettings />
       </Card>
       <Card title={t('mcp.servers')}>
         {servers.map((server) => (
@@ -103,7 +105,9 @@ export function McpPage() {
               {server.name} {server.recommended ? '★' : ''}
             </strong>
             <p>{server.description}</p>
-            <code>{server.url}</code>
+            <a href={server.url} target="_blank" rel="noopener noreferrer">
+              {server.url}
+            </a>
             <div className={s.copy}>
               <Toggle
                 checked={!!server.allowed}
@@ -236,13 +240,39 @@ export function McpPage() {
             onChange={(e) => setSearch(e.target.value)}
             placeholder={t('mcp.search')}
           />
-          <button disabled={busy}>{t('mcp.search')}</button>
+          <button disabled={busy || (!!search.trim() && search.trim().length < 3)}>
+            {t('mcp.search')}
+          </button>
         </form>
         {items.map((item, index) => (
           <div className={s.secret} key={item.url + index}>
-            <strong>{item.name}</strong>
+            <strong>{item.title || item.name}</strong>
+            {item.title && item.title !== item.name && <small>{item.name}</small>}
             <p>{item.description}</p>
-            <code>{item.url}</code>
+            <p className={s.help}>
+              {t('mcp.version')}: {item.version || '—'} · Streamable HTTP · {t('mcp.publisher')}:{' '}
+              {item.publisher || item.name.split('/')[0]}
+            </p>
+            <div className={s.copy}>
+              <a href={item.url} target="_blank" rel="noopener noreferrer">
+                {item.url}
+              </a>
+              {item.repository_url && (
+                <a href={item.repository_url} target="_blank" rel="noopener noreferrer">
+                  {t('mcp.repository')}
+                </a>
+              )}
+              {item.website_url && (
+                <a href={item.website_url} target="_blank" rel="noopener noreferrer">
+                  {t('mcp.website')}
+                </a>
+              )}
+              {item.registry_url && (
+                <a href={item.registry_url} target="_blank" rel="noopener noreferrer">
+                  {t('mcp.registryEntry')}
+                </a>
+              )}
+            </div>
             <button
               disabled={busy}
               onClick={() => {
@@ -260,7 +290,10 @@ export function McpPage() {
           </div>
         ))}
         {next && (
-          <button disabled={busy} onClick={() => void browse(true)}>
+          <button
+            disabled={busy || search.trim() !== catalogQuery}
+            onClick={() => void browse(true)}
+          >
             {t('mcp.more')}
           </button>
         )}
