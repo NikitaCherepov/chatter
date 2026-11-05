@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api } from '../../../lib/api';
 import { formatDateTime } from '../../../lib/formatDate';
+import { McpUserCard } from '../McpPage/McpUserCard';
 import { Card } from '../../ui/Card/Card';
 import { Select } from '../../ui/Select/Select';
 import { PlanDurationModal, type PlanDuration, type UserPlan } from './PlanDurationModal/PlanDurationModal';
@@ -435,6 +436,7 @@ export function UserDetailPage({ userId, onBack }: { userId: number; onBack: () 
         </div>
       </Card>
 
+      <McpUserCard userId={user.id} />
       <UsageByModelCard
         userId={user.id}
         quotaUsed={user.weekly_tokens_used}

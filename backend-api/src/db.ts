@@ -1724,3 +1724,27 @@ dropLegacyColumn('users', 'daily_cost_rub');
 dropLegacyColumn('users', 'total_cost_rub');
 dropLegacyColumn('user_token_usage', 'is_free');
 
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS mcp_servers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, url TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '', allowed INTEGER NOT NULL DEFAULT 1,
+    recommended INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE TABLE IF NOT EXISTS mcp_policy (id INTEGER PRIMARY KEY CHECK(id=1), enabled INTEGER NOT NULL DEFAULT 1, allow_custom INTEGER NOT NULL DEFAULT 0);
+  INSERT OR IGNORE INTO mcp_policy(id) VALUES(1);
+  CREATE TABLE IF NOT EXISTS mcp_user_policy (
+    user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE, allow_custom INTEGER
+  );
+  CREATE TABLE IF NOT EXISTS mcp_connections (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    server_id INTEGER, name TEXT NOT NULL, url TEXT NOT NULL, enabled INTEGER NOT NULL DEFAULT 1,
+    mode TEXT NOT NULL DEFAULT 'search', timeout_seconds INTEGER NOT NULL DEFAULT 300,
+    credentials TEXT, tools_json TEXT NOT NULL DEFAULT '[]', selected_tools TEXT NOT NULL DEFAULT 'null', updated_at INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_mcp_connections_user ON mcp_connections(user_id);
+  CREATE TABLE IF NOT EXISTS mcp_oauth_states (
+    state_hash TEXT PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    connection_id INTEGER NOT NULL REFERENCES mcp_connections(id) ON DELETE CASCADE, expires_at INTEGER NOT NULL
+  );
+`);

@@ -47,6 +47,7 @@ import { listSubagentNames, buildSubagentListDescription, getSubagent } from './
 import { hasBackendTranslation, translateForLanguage } from '../i18n/index.js';
 import { readChatAttachment, searchChatAttachment, type AttachmentReadContext } from './chat-attachments.js';
 import { attachFileToResponse, materializeAssetInput, type ResponseFileSink } from './response-attachments.js';
+import { getMcpDefinitions, runMcpTool, mcpSearchTool, mcpCallTool, searchToolName as mcpSearchName, callToolName as mcpCallName } from './mcp/tools.js';
 import { getModularTool, modularToolDefinitions } from './tools/registry.js';
 import { buildDescribeImageTool } from './tools/images/describe-image.js';
 import { getContextSummary, type ContextSummaryDto } from './context-summary.js';
@@ -3662,6 +3663,8 @@ export const getTaskAllowedToolNames = (): string[] => {
     buildExploreFsTool(),
     buildSuggestMacroTool(),
     buildDesktopActionTool(),
+    mcpSearchTool,
+    mcpCallTool,
   ];
   taskAllowedToolNamesCache = defs
     .map((t: any) => `${t?.function?.name || ''}`)
@@ -3676,13 +3679,13 @@ export const getTaskAllowedToolNames = (): string[] => {
  * means "run without tools"; null clears the restriction ("all available").
  */
 const resolveTaskAllowedTools = (
-  raw: any
+  raw: any, extraTools: string[] = []
 ): { ok: true; tools: string[] | null } | { ok: false; error: string } => {
   if (raw === null) return { ok: true, tools: null };
   if (!Array.isArray(raw)) {
     return { ok: false, error: 'Error: allowed_tools must be an array of tool names (or null to allow all tools).' };
   }
-  const known = new Set(getTaskAllowedToolNames());
+  const known = new Set([...getTaskAllowedToolNames(), ...extraTools]);
   const requested = Array.from(new Set(
     raw.filter((t: any) => typeof t === 'string').map((t: string) => t.trim()).filter(Boolean)
   )).slice(0, 50);
@@ -3836,6 +3839,21 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     }
     return completion;
   };
+  if (toolName === mcpSearchName || toolName === mcpCallName || /^mcp_\d+_[a-zA-Z0-9_-]+_[a-f0-9]{8}$/.test(toolName)) {
+    if (!subagentExtra?.availableToolDefs?.some(tool => tool.function?.name === toolName)) return 'MCP tool is not allowed in this run.';
+    try {
+      return await runMcpTool(user.id,toolName,parsed,signal,
+        () => { void Promise.resolve(subagentExtra?.onToolStatus?.(getToolUserMessage(user.language, toolName, argsRaw) || 'MCP')).catch(() => {}); },
+        subagentExtra?.currentModelSupportsVision ? subagentExtra?.directImageSink : undefined) || '';
+    } catch(error: any) {
+      if (signal?.aborted) throw error;
+      const message=String(error?.message||'');
+      return JSON.stringify({
+        error: /^mcp_[a-z_]+$/.test(message) ? message : 'mcp_request_failed',
+        ...(message === 'mcp_cancelled' ? { instruction: 'The user cancelled this operation. Do not retry it without a new user request.' } : {}),
+      });
+    }
+  }
   const modularTool = getModularTool(toolName);
   if (modularTool) {
     return modularTool.handler(parsed, {
@@ -3976,7 +3994,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     let allowedTools: string[] | null = null;
     if (parsed.allowed_tools !== undefined) {
       if (taskType !== 'ai_instruction') return 'Error: allowed_tools is only valid for task_type=ai_instruction.';
-      const toolsRes = resolveTaskAllowedTools(parsed.allowed_tools);
+      const toolsRes = resolveTaskAllowedTools(parsed.allowed_tools, getMcpDefinitions(user.id).map(tool => tool.function.name));
       if (toolsRes.ok === false) return toolsRes.error;
       allowedTools = toolsRes.tools;
     }
@@ -4083,7 +4101,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     if (parsed.allowed_tools !== undefined) {
       const effectiveType = `${parsed.task_type || task.task_type}` as TaskType;
       if (effectiveType !== 'ai_instruction') return 'Error: allowed_tools is only valid for ai_instruction tasks.';
-      const toolsRes = resolveTaskAllowedTools(parsed.allowed_tools);
+      const toolsRes = resolveTaskAllowedTools(parsed.allowed_tools, getMcpDefinitions(user.id).map(tool => tool.function.name));
       if (toolsRes.ok === false) return toolsRes.error;
       fields.allowed_tools = toolsRes.tools;
     }
@@ -6825,6 +6843,8 @@ If the task is a description, return a detailed text response.`
 };
 
 const getToolUserMessage = (language: unknown, toolName: string, argsRaw: string) => {
+  const mcpName=toolName.match(/^mcp_\d+_([a-zA-Z0-9_-]+)_[a-f0-9]{8}$/);
+  if(mcpName)return translateForLanguage(language,'toolStatus.mcpRunning',{tool:mcpName[1]});
   const webStatus = getWebToolStatus(toolName, argsRaw);
   if (webStatus) return translateForLanguage(language, webStatus.key, webStatus.values);
   if (toolName === 'random_roll') {
@@ -7994,6 +8014,7 @@ const sendMessageThroughAiInternal = async (
     ...(avatarControlEnabled ? [buildDisplayStateTool(options?.displayManifest)] : []),
     ...serverOnlyTools,
     ...desktopOnlyTools,
+    ...(!flags?.disable_internet ? getMcpDefinitions(toolUser.id) : []),
   ];
   const spawnSubagentTool = options?.isDesktop ? buildSpawnSubagentTool(allBaseToolDefs) : null;
   // Background task whitelist: intersect the built set with the task's allowed

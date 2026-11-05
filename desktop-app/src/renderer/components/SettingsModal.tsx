@@ -50,6 +50,7 @@ import { SshKeySettings } from './SshKeySettings';
 import { SmartHomeSettings } from './SmartHomeSettings';
 import { MailSettings } from './MailSettings';
 import { PCSettings } from './PCSettings';
+import { McpSettings } from './McpSettings';
 import { BrowserSettings } from './BrowserSettings';
 import { LinkTelegramModal } from './LinkTelegramModal';
 import { QuotaWidget } from './QuotaWidget';
@@ -2463,6 +2464,7 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
             <PCSettings />
           )}
 
+          {section === 'mcp' && <McpSettings />}
           {section === 'browser' && (
             <BrowserSettings />
           )}

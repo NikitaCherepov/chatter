@@ -41,6 +41,9 @@
     "priceSwitchDisabled": "Automatic provider switching is not configured. Provider was not changed."
   },
   "toolStatus": {
+    "search_mcp_tools": "Finding MCP tools",
+    "call_mcp_tool": "Calling an MCP tool",
+    "mcpRunning": "MCP: {{tool}}",
     "searchQuery": "Searching for “{{query}}”",
     "readingPage": "Reading {{url}}",
     "search_web": "Searching the web...",

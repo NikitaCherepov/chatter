@@ -24,6 +24,7 @@ const ICONS: Record<SettingsSection, string> = {
   macros: 'M13 2 4 14h7l-1 8 10-13h-7z',
   runbooks: 'M8 5h13M8 12h13M8 19h13M3 5h.01M3 12h.01M3 19h.01',
   pc: 'M3 3h18v13H3z M12 16v5m-5 0h10',
+  mcp: 'M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-2 2 M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l2-2',
   browser: 'M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0 M3 12h18 M12 3a18 18 0 0 1 0 18 18 18 0 0 1 0-18',
   servers: 'M3 3h18v7H3z M3 14h18v7H3z M7 6.5h.01M7 17.5h.01',
   sshkeys: 'M14 10a5 5 0 1 0-3 4L3 22l-2-2 8-8 M5 18l2 2',

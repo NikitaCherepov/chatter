@@ -12,6 +12,7 @@ export type SettingsSection =
   | 'billing'
   | 'macros'
   | 'pc'
+  | 'mcp'
   | 'browser'
   | 'servers'
   | 'runbooks'
@@ -28,7 +29,7 @@ export const SETTINGS_GROUPS: { id: string; sections: SettingsSection[] }[] = [
   { id: 'ai', sections: ['models', 'agents', 'prompt', 'voice', 'restrictions'] },
   {
     id: 'automation',
-    sections: ['macros', 'runbooks', 'pc', 'browser', 'servers', 'sshkeys', 'mail', 'smart_home'],
+    sections: ['macros', 'runbooks', 'pc', 'browser', 'mcp', 'servers', 'sshkeys', 'mail', 'smart_home'],
   },
   { id: 'access', sections: ['data', 'billing'] },
   { id: 'application', sections: ['app', 'admin', 'about'] },

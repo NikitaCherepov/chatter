@@ -1,0 +1,45 @@
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 16px 0;
+  max-width: 640px;
+  label {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 13px;
+  }
+  > button {
+    align-self: flex-start;
+  }
+}
+.actions,
+.search {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+}
+.search input {
+  flex: 1;
+  min-width: 160px;
+}
+.url {
+  overflow-wrap: anywhere;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.catalog {
+  margin-top: 24px;
+}
+.tool {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border-light);
+  small {
+    display: block;
+    margin-top: 4px;
+    color: var(--text-muted);
+    overflow-wrap: anywhere;
+  }
+}

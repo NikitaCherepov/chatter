@@ -1,5 +1,6 @@
 ﻿import { browserInputTimeout } from './services/browser-input-timeout.js';
 import express from 'express';
+import { userMcpRouter, adminMcpRouter, oauthCallback } from './services/mcp/routes.js';
 import path from 'path';
 import { listTaskPage } from './services/tasks.js';
 import { uploadBackupSession, startBackupSession, backupSessionStatus, cancelBackupSession } from './services/sillytavern-backup-session.js';
@@ -1272,7 +1273,10 @@ app.get('/api/v1/audio/:filename', (req: AuthedRequest, res) => {
   res.sendFile(filepath);
 });
 
+app.get('/mcp/oauth/callback', oauthCallback);
 app.use('/api/v1', authMiddleware);
+app.use('/api/v1/mcp', userMcpRouter(req => accountIdFromRequest(req)));
+app.use('/internal/admin/mcp', internalAuth, adminMcpRouter());
 app.use('/api/v1', (req: AuthedRequest, _res, next) => {
   const user = getUserById(resolveAccountId(req.authUserId!));
   const isAdmin = user?.is_admin === 1 || user?.role === 'admin';

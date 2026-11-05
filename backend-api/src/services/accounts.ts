@@ -236,6 +236,7 @@ const moveSimpleOwnership = (sourceAccountId: number, targetAccountId: number) =
     'devops_ssh_keys',
     'pc_commands_policies',
     'telegram_link_codes',
+    'mcp_connections',
   ];
 
   for (const table of tables) {
@@ -509,6 +510,9 @@ export const mergeAccounts = (
       targetAccountId);
   }
 
+  // Transfer connections but never widen the destination's administrative MCP policy.
+  db.prepare('DELETE FROM mcp_oauth_states WHERE user_id=?').run(sourceAccountId);
+  db.prepare('DELETE FROM mcp_user_policy WHERE user_id=?').run(sourceAccountId);
   mergeUserScalarData(sourceAccountId, targetAccountId);
   moveSimpleOwnership(sourceAccountId, targetAccountId);
   moveRowsWithSourcePriority('mail_accounts', ['provider'], sourceAccountId, targetAccountId);

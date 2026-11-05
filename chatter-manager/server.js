@@ -2828,6 +2828,16 @@ async function handleRequest(req, res) {
       method: req.method, ...(body ? { body: JSON.stringify(body) } : {}),
     }));
   }
+  const mcpMatch = pathname.match(/^\/api\/mcp(?:\/(policy|servers|users|catalog)(?:\/(\d+))?)?$/);
+  if (mcpMatch && ['GET','POST','PUT','PATCH','DELETE'].includes(req.method)) {
+    res.setHeader('Cache-Control','no-store');
+    const tail = mcpMatch[1] ? '/' + mcpMatch[1] + (mcpMatch[2] ? '/' + mcpMatch[2] : '') : '';
+    const query = mcpMatch[1] === 'catalog' ? '?' + new URLSearchParams({search:url.searchParams.get('search')||'',cursor:url.searchParams.get('cursor')||''}) : '';
+    const body = ['POST','PUT','PATCH'].includes(req.method) ? await readJson(req) : undefined;
+    return sendJson(res,200,await backendInternalRequest('/internal/admin/mcp'+tail+query,{
+      method:req.method,...(body?{body:JSON.stringify(body)}:{})
+    }));
+  }
   const modelApiMatch = pathname.match(/^\/api\/model-api\/(keys|models)(?:\/(\d+))?$/);
   if (modelApiMatch && ['GET','POST','PATCH','DELETE'].includes(req.method)) {
     res.setHeader('Cache-Control', 'no-store');

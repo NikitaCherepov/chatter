@@ -19,7 +19,7 @@ const entries = [
   ...fields,
 ];
 const find = (q: string, lang: any = ru, admin = false) => searchSettings(q, entries, translate(lang), admin);
-assert.equal(new Set(SETTINGS_GROUPS.flatMap((g: any) => g.sections)).size, 23);
+assert.equal(new Set(SETTINGS_GROUPS.flatMap((g: any) => g.sections)).size, 24);
 assert(SETTINGS_GROUPS.find((g: any) => g.id === 'profile').sections.includes('limits'));
 assert(SETTINGS_GROUPS.find((g: any) => g.id === 'ai').sections.includes('restrictions'));
 assert(!SETTINGS_GROUPS.find((g: any) => g.id === 'access').sections.includes('restrictions'));
@@ -66,3 +66,5 @@ for (const lang of ['cs', 'de', 'en', 'es', 'fr', 'it', 'ja', 'ko', 'pl', 'pt-BR
 console.log(
   'Settings navigation: grouping, localized labels/help, ranking, multi-word search and admin visibility passed.'
 );
+
+assert.equal(find('MCP')[0]?.section, 'mcp');
