@@ -133,7 +133,9 @@ function getServerConnectionHeaders(): Record<string, string> {
 }
 
 function notifyBackendRestored() {
-  reconnectWebSocket();
+  // HTTP recovery must not close an open socket and discard in-flight IPC.
+  // initWebSocket already preserves OPEN/CONNECTING connections.
+  initWebSocket();
   for (const listener of backendRestoredListeners) {
     try { listener(); } catch (error) { console.error('[recovery] listener failed', error); }
   }
