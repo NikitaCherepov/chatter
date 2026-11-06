@@ -107,6 +107,7 @@ try {
                 name: 'io.example/local',
                 version: '1.0.0',
                 packages: [
+                  {registryType:'pypi',identifier:'windows-mcp',version:'0.8.8',transport:{type:'stdio'}},
                   {
                     registryType: 'npm',
                     identifier: '@example/local',
@@ -124,7 +125,8 @@ try {
       'local-fixture',
     );
     assert.equal(catalog.items[0].transport, 'stdio');
-    assert.equal(catalog.items[0].package.identifier, '@example/local');
+    assert.ok(catalog.items.some((item:any)=>item.package?.identifier==='@example/local'));
+    assert.ok(catalog.items.some((item:any)=>item.package?.registryType==='pypi'&&item.package.identifier==='windows-mcp'));
   } finally {
     network.mcpHttp.fetch = originalFetch;
   }

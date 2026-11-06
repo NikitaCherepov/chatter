@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocalMcp } from '../lib/useMcp';
 import * as api from '../lib/mcp-service';
-import { packageFields } from '../../main/local-mcp-spec';
+import { packageFields, packageFromSource } from '../../main/local-mcp-spec';
 import s from './SettingsModal.module.scss';
 import styles from './McpSettings.module.scss';
 
@@ -21,6 +21,7 @@ export function LocalMcpForm({
   const [values, setValues] = useState<Record<string, string>>({});
   const [error, setError] = useState('');
   const busy = mutation.isPending;
+  const packageData = draft?.package || packageFromSource(source);
   useEffect(() => {
     setValues({});
     setSource(draft?.source || '');
@@ -51,7 +52,7 @@ export function LocalMcpForm({
             await api.installLocalMcp({
               name: name || undefined,
               description: draft?.description,
-              ...(draft?.package ? { package: draft.package, values } : { source }),
+              ...(packageData ? { package: packageData, values } : { source }),
               env: env ? JSON.parse(env) : {},
             });
             setSource('');
@@ -80,8 +81,8 @@ export function LocalMcpForm({
           {t('mcp.name')}
           <input className={s.fieldInput} value={name} onChange={(e) => setName(e.target.value)} />
         </label>
-        {draft?.package &&
-          packageFields(draft.package).map((field) => (
+        {packageData &&
+          packageFields(packageData).map((field) => (
             <label key={field.key}>
               {field.label}
               <input

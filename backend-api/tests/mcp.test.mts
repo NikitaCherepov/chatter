@@ -41,6 +41,7 @@ let sessionNumber = 0;
 let pendingResponse: any,
   invalidCatalog = false,
   samplingDenied = false;
+let noDynamicRegistration = false;
 let oauthUrl: URL | undefined,
   pkceVerifier = '';
 const echo = {
@@ -276,7 +277,7 @@ network.mcpHttp.fetch = async (input: any, init: any) => {
         issuer: 'https://auth.example',
         authorization_endpoint: 'https://auth.example/authorize',
         token_endpoint: 'https://auth.example/token',
-        registration_endpoint: 'https://auth.example/register',
+        registration_endpoint: noDynamicRegistration ? undefined : 'https://auth.example/register',
         response_types_supported: ['code'],
         grant_types_supported: ['authorization_code', 'refresh_token'],
         code_challenge_methods_supported: ['S256'],
@@ -968,6 +969,8 @@ try {
     name: 'OAuth MCP',
     url: 'https://oauth-mcp.example/mcp',
   });
+  const unauthenticated = await request('/user/82/mcp/connections/'+oauthConnection.id+'/refresh','POST');
+  assert.equal(unauthenticated.body.error,'mcp_authorization_required','refresh without a token asks for sign-in rather than callback configuration');
   assert.equal(store.policy().oauth_callback_url, '');
   assert.equal((await request('/admin/policy','PUT',{oauth_callback_url:'http://unsafe.example/callback'})).status,400);
   assert.equal((await request('/admin/policy','PUT',{oauth_callback_url:'https://safe.example/callback?secret=x'})).status,400);
@@ -1018,6 +1021,13 @@ try {
   for (const bad of ['http://unsafe.example/callback', 'https://localhost/mcp/oauth/callback','https://user:pass@host.example/callback','https://safe.example/callback#fragment'])
     await assert.rejects(()=>client.beginOAuth(82,oauthConnection.id,bad),/mcp_invalid_callback_url/);
   await assert.rejects(()=>client.beginOAuth(82,oauthConnection.id),/mcp_oauth_callback_not_configured/);
+  const staticOnly = store.saveConnection(82,{name:'Static OAuth only',url:'https://oauth-mcp.example/mcp'});
+  noDynamicRegistration=true;
+  const staticResponse=await request('/user/82/mcp/connections/'+staticOnly.id+'/oauth','POST',{callback_url:expectedCallback});
+  assert.equal(staticResponse.status,400);
+  assert.equal(staticResponse.body.error,'mcp_oauth_client_registration_required','missing DCR returns an actionable error');
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM mcp_oauth_states WHERE connection_id=?').get(staticOnly.id).n,0,'failed authorization leaves no pending state');
+  noDynamicRegistration=false;
   store.savePolicy({ override: 'allow' }, 81);
   store.savePolicy({ override: 'deny' }, 82);
   db.prepare(

@@ -38,13 +38,13 @@ export const onBackendRestored=()=>()=>{};
 window.emitMcpUpdate=()=>mcpUpdate?.();
 
 export const getMcpState=async()=>{record('state',{});return structuredClone(state)};
-export const saveMcpConnection=async(body,id)=>{record('save',body);const row=state.connections.find(c=>c.id===id);if(row)Object.assign(row,body);return {};};
+export const saveMcpConnection=async(body,id)=>{record('save',body);let row=state.connections.find(c=>c.id===id);if(row)Object.assign(row,body);else {row={id:state.connections.length+1,enabled:1,blocked:false,tools:[],resources:[],resource_templates:[],selected_tools:null,...body};state.connections.push(row);}return {connection:structuredClone(row)};};
 export const deleteMcpConnection=async(id)=>{record('delete',{id});state.connections=state.connections.filter(c=>c.id!==id);};
 export const refreshMcpTools=async(id)=>{record('refresh',{id});return {tools:state.connections[0].tools};};
-export const authorizeMcp=async()=>({authorization_url:'https://github.example/authorize'});
+export const authorizeMcp=async id=>{record('oauth',{id});if(window.__oauthFail)throw new Error('mcp_oauth_client_registration_required');return {authorization_url:'https://github.example/authorize'}};
 export const cancelMcp=async(id)=>{record('cancel',{id});return {cancelled:true};};
 export const mergeMcpCatalog=(previous,next)=>Array.from(new Map([...previous,...next].map(x=>[x.name+'|'+x.url,x])).values());
-export const getMcpCatalog=async()=>{record('catalog',{});return {items:[{name:'Remote tools',title:'Remote tools',description:'Example remote MCP server',url:'https://remote.example/mcp',version:'2.0',transport:'streamable-http',publisher:'example',repository_url:'https://github.com/example/mcp',registry_url:'https://registry.example/server'},{name:'Local package',description:'A local package',url:'',transport:'stdio',version:'1.0.0',package:{registryType:'npm',identifier:'@example/local',version:'1.0.0',transport:{type:'stdio'}}},{name:'Configured package',description:'Requires a key',url:'',transport:'stdio',version:'1.0.0',package:{registryType:'npm',identifier:'@example/configured',version:'1.0.0',transport:{type:'stdio'},environmentVariables:[{name:'TEST_SECRET',description:'Fixture secret',isRequired:true,isSecret:true}]}}],next_cursor:null};};
+export const getMcpCatalog=async()=>{record('catalog',{});return {items:[{name:'Python package',description:'Python stdio',url:'',transport:'stdio',version:'0.8.8',package:{registryType:'pypi',identifier:'windows-mcp',version:'0.8.8',transport:{type:'stdio'},packageArguments:[{type:'positional',value:'serve'}]}},{name:'Remote tools',title:'Remote tools',description:'Example remote MCP server',url:'https://remote.example/mcp',version:'2.0',transport:'streamable-http',publisher:'example',repository_url:'https://github.com/example/mcp',registry_url:'https://registry.example/server'},{name:'Local package',description:'A local package',url:'',transport:'stdio',version:'1.0.0',package:{registryType:'npm',identifier:'@example/local',version:'1.0.0',transport:{type:'stdio'}}},{name:'Configured package',description:'Requires a key',url:'',transport:'stdio',version:'1.0.0',package:{registryType:'npm',identifier:'@example/configured',version:'1.0.0',transport:{type:'stdio'},environmentVariables:[{name:'TEST_SECRET',description:'Fixture secret',isRequired:true,isSecret:true}]}}],next_cursor:null};};
 window.__state=state;
 
 export const useAuth=()=>({user:{id:81}});
@@ -61,6 +61,7 @@ export const api=async(url,options={})=>{
 fs.writeFileSync(path.join(dir, 'fixture.js'), fixture);
 const entry = String.raw`
 import React from 'react';
+import {Toaster} from 'sonner';
 import {createRoot} from 'react-dom/client';
 import {McpConfirmationCard} from 'CARD_COMPONENT';
 import {ConfirmationQueue} from 'QUEUE_COMPONENT';
@@ -84,7 +85,7 @@ function Content({kind}){
  const client=useQueryClient(); window.__queryClient=client;
  return kind==='card'?<CardFixture/>:kind==='desktop'?<McpSettings/>:kind==='admin'?<McpPage/>:<McpUserCard userId={81}/>;
 }
-window.renderFixture=kind=>root.render(<QueryProvider><Content kind={kind}/></QueryProvider>);
+window.renderFixture=kind=>root.render(<QueryProvider><Content kind={kind}/><Toaster/></QueryProvider>);
 window.renderFixture('desktop');
 `
   .replace('CARD_COMPONENT',path.join(root,'desktop-app/src/renderer/components/McpConfirmationCard.tsx').split(path.sep).join('/'))
@@ -181,7 +182,7 @@ let win;const errors=[];
  const wc=win.webContents;
  wc.on('console-message',(_e,level,message)=>{if(level>=3)errors.push(message)});
  await win.loadFile(path.join(__dirname,'index.html'));
- const js=code=>wc.executeJavaScript(code);
+ const js=code=>wc.executeJavaScript(code).catch(error=>{throw new Error('UI script: '+code+'; '+error.message)});
  const until=async(code,attempts=100)=>{for(let n=0;n<attempts;n++){if(await js(code))return;await new Promise(r=>setTimeout(r,30));}throw new Error('UI condition: '+code)};
  const click=async(text)=>{await js('Array.from(document.querySelectorAll("button")).find(b=>b.getClientRects().length&&b.textContent.trim()==='+JSON.stringify(text)+').click()');};
  await until('document.body.innerText.includes("Рекомендованные")');
@@ -269,6 +270,15 @@ let win;const errors=[];
  await until('window.__calls.some(c=>c.name==="local_remove")');
  await until('!document.querySelector("article")');
  await click('Каталог MCP');
+ await js('Array.from(document.querySelectorAll("strong")).find(e=>e.textContent==="Python package").closest("[class*=catalogCard]").querySelector("button").click()');
+ await click('Установить на ПК');
+ await until('window.__calls.some(c=>c.name==="local_install"&&c.body.package?.registryType==="pypi"&&c.body.package.packageArguments[0].value==="serve")');
+ await until('document.querySelector("article")?.textContent.includes("Python package")');
+ await js('Array.from(document.querySelector("article").querySelectorAll("button")).find(b=>b.textContent==="Удалить").click()');
+ await until('document.body.innerText.includes("Удалить локальный MCP?")');
+ await js('Array.from(document.querySelectorAll("button")).find(b=>b.className.includes("confirmDanger")).click()');
+ await until('!document.querySelector("article")');
+ await click('Каталог MCP');
  await js('Array.from(document.querySelectorAll("strong")).find(e=>e.textContent==="Configured package").closest("[class*=catalogCard]").querySelector("button").click()');
  await until('document.body.innerText.includes("Fixture secret")');
  await js('(()=>{const input=Array.from(document.querySelectorAll("label")).find(e=>e.textContent.trim()==="Fixture secret").querySelector("input");Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value").set.call(input,"test-value");input.dispatchEvent(new Event("input",{bubbles:true}));})()');
@@ -277,8 +287,20 @@ let win;const errors=[];
  await click('Каталог MCP');
  await click('Подключить');
  await until('document.querySelector(\'input[type="url"]\')?.value==="https://remote.example/mcp"');
+ await js('window.__oauthFail=true');
+ await click('Добавить и войти через OAuth');
+ await until('window.__calls.some(c=>c.name==="oauth"&&c.body.id===2)');
+ await until('document.body.innerText.includes("не поддерживает автоматическую регистрацию OAuth-клиента")');
+ await until('Array.from(document.querySelectorAll("section[class*=connection]")).some(e=>e.textContent.includes("Remote tools"))');
+ assert.equal(await js('window.__calls.filter(c=>c.name==="save"&&c.body.url==="https://remote.example/mcp").length'),1,'failed OAuth does not duplicate connection');
+ await js('window.__oauthFail=false;Array.from(document.querySelectorAll("section[class*=connection]")).find(e=>e.textContent.includes("Remote tools")).querySelectorAll("summary")[1].click()');
+ await until('Array.from(document.querySelectorAll("button")).some(b=>b.getClientRects().length&&b.textContent.trim()==="Войти через OAuth"&&!b.disabled)');
+ await js('Array.from(document.querySelectorAll("section[class*=connection]")).find(e=>e.textContent.includes("Remote tools")).querySelectorAll("button").forEach(b=>{if(b.textContent.trim()==="Войти через OAuth")b.click()})');
+ await until('window.__calls.filter(c=>c.name==="oauth").length===2');
+ await until('!!document.querySelector(\'a[href="https://github.example/authorize"]\')');
+
  await js('window.__state.policy.allow_custom=false;window.emitMcpUpdate()');
- await until('!document.body.innerText.includes("Remote tools")&&!document.querySelector(\'input[type="url"]\')');
+ await until('!Array.from(document.querySelectorAll("[class*=catalogCard]")).some(e=>e.textContent.includes("Remote tools"))&&!document.querySelector(\'input[type="url"]\')');
  if(process.env.MCP_UI_SCREENSHOT_DIR){await new Promise(r=>setTimeout(r,100));fs.writeFileSync(path.join(process.env.MCP_UI_SCREENSHOT_DIR,'mcp-desktop.png'),(await wc.capturePage()).toPNG());}
  await js('window.renderFixture("admin")');
  await until('document.body.innerText.includes("Политика доступа")');
@@ -330,6 +352,12 @@ let win;const errors=[];
  await click('Добавить сервер');
  await until('window.__calls.some(c=>c.name==="/api/mcp/servers"&&c.body?.transport==="stdio"&&c.body.source==="npx -y @playwright/mcp@latest"&&c.body.recommended===true&&c.body.allowed===true)');
 
+ await click('Найти');
+ await until('Array.from(document.querySelectorAll("h3")).some(e=>e.textContent==="Python package")');
+ await js('Array.from(document.querySelectorAll("h3")).find(e=>e.textContent==="Python package").closest("article").querySelector("button").click()');
+ await until('document.querySelector(\'input[placeholder^="npx"]\')?.value.includes("pypi")');
+ await click('Добавить сервер');
+ await until('window.__calls.some(c=>c.name==="/api/mcp/servers"&&c.body.source?.startsWith("{")&&JSON.parse(c.body.source).package?.registryType==="pypi"&&JSON.parse(c.body.source).package.packageArguments[0].value==="serve")');
  await js('window.renderFixture("user")');
  await until('document.body.innerText.includes("GitHub account")');
  assert.equal(await js('document.querySelectorAll("button").length'),0,"user card has no duplicate access editor");

@@ -123,12 +123,15 @@ export function McpPage() {
     setDraft({
       ...empty,
       transport: item.transport === 'stdio' ? 'stdio' : 'streamable-http',
-      source: item.package?.identifier
-        ? item.package.identifier +
-          (item.package.version && item.package.version !== 'latest'
-            ? '@' + item.package.version
-            : '')
-        : '',
+      source:
+        item.package?.registryType === 'pypi'
+          ? JSON.stringify({ package: item.package })
+          : item.package?.identifier
+            ? item.package.identifier +
+              (item.package.version && item.package.version !== 'latest'
+                ? '@' + item.package.version
+                : '')
+            : '',
       name: item.title || item.name,
       url: item.url || '',
       description: item.description || '',

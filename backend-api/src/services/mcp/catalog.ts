@@ -35,7 +35,7 @@ export async function registryCatalog(search = '', cursor = '') {
     if (!name) continue;
     for (const pkg of server.packages || []) {
       if (
-        pkg.registryType !== 'npm' ||
+        !['npm', 'pypi'].includes(pkg.registryType) ||
         pkg.transport?.type !== 'stdio' ||
         typeof pkg.identifier !== 'string' ||
         JSON.stringify(pkg).length > 64000

@@ -35,14 +35,21 @@ function provider(
     saved = { ...saved, ...patch };
     saveCredentials(row, saved);
   };
+  const redirect = () => {
+    // A capability refresh must report "sign in" rather than trying to start
+    // an interactive OAuth registration without a callback supplied by desktop.
+    if (!onRedirect && !saved.tokens && !saved.client)
+      throw new Error('mcp_authorization_required');
+    return callbackUrl(redirectUri ?? saved.oauth_redirect_uri);
+  };
   return {
     get redirectUrl() {
-      return callbackUrl(redirectUri ?? saved.oauth_redirect_uri);
+      return redirect();
     },
     get clientMetadata() {
       return {
         client_name: 'Chatter',
-        redirect_uris: [callbackUrl(redirectUri ?? saved.oauth_redirect_uri)],
+        redirect_uris: [redirect()],
         grant_types: ['authorization_code', 'refresh_token'],
         response_types: ['code'],
         token_endpoint_auth_method: 'none',
@@ -199,6 +206,11 @@ async function session<T>(
         ? entry.controller.signal.reason
         : new Error('mcp_cancelled');
     }
+    if (
+      (error as Error)?.message ===
+      'Incompatible auth server: does not support dynamic client registration'
+    )
+      throw new Error('mcp_oauth_client_registration_required');
     throw error;
   } finally {
     if (handshakeTimer) clearTimeout(handshakeTimer);

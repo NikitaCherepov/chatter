@@ -46,7 +46,7 @@ export type McpState = {
 const base = '/api/v1/mcp';
 export const getMcpState = () => apiFetch<McpState>(base);
 export const saveMcpConnection = (body: Record<string, unknown>, id?: number) =>
-  apiFetch(base + '/connections' + (id ? '/' + id : ''), {
+  apiFetch<{ connection: McpConnection }>(base + '/connections' + (id ? '/' + id : ''), {
     method: id ? 'PATCH' : 'POST',
     body: JSON.stringify(body),
   });

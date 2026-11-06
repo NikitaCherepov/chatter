@@ -3,7 +3,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-import { installNpm } from './local-mcp-runtime';
+import { installNpm, installPython } from './local-mcp-runtime';
 import {
   resolveLocalInput,
   emptyMcpApproval,
@@ -62,6 +62,7 @@ export class LocalMcpManager {
     private encrypt: (text: string) => Buffer,
     private decrypt: (data: Buffer) => string,
     private npmInstaller = installNpm,
+    private pythonInstaller = installPython,
   ) {}
   private account(scope: string) {
     if (typeof scope !== 'string' || !scope || scope.length > 2048)
@@ -76,6 +77,20 @@ export class LocalMcpManager {
     if (!/^[a-f0-9-]{36}$/.test(id)) throw new Error('mcp_invalid_local_id');
     const base = this.account(scope),
       target = path.resolve(base, id);
+    if (path.dirname(target) !== base) throw new Error('mcp_invalid_local_path');
+    return target;
+  }
+  private pythonDirectory(scope: string, id: string) {
+    this.directory(scope, id); // Reuse the account/id validation before deriving a deletion target.
+    const base = path.resolve(this.root, 'py');
+    const target = path.join(
+      base,
+      crypto
+        .createHash('sha256')
+        .update(scope + ':' + id)
+        .digest('hex')
+        .slice(0, 24),
+    );
     if (path.dirname(target) !== base) throw new Error('mcp_invalid_local_path');
     return target;
   }
@@ -103,7 +118,10 @@ export class LocalMcpManager {
       mode: record.mode,
       timeout_seconds: record.timeout_seconds,
       selected_tools: record.selected_tools,
-      source: record.config.npm || path.basename(record.config.command || ''),
+      source:
+        record.config.npm ||
+        (record.config.pypi ? 'uvx ' + record.config.pypi : '') ||
+        path.basename(record.config.command || ''),
       running: this.sessions.has(record.id),
       error: record.error,
       ...record.metadata,
@@ -163,6 +181,31 @@ export class LocalMcpManager {
           throw new Error('mcp_package_install_failed');
         }
       }
+      if (config.pypi) {
+        try {
+          const pythonDir = this.pythonDirectory(scope, record.id);
+          await fs.mkdir(pythonDir, { recursive: true });
+          const installed = await this.pythonInstaller(
+            path.join(this.root, 'runtime'),
+            pythonDir,
+            config.pypi,
+            {
+              python: config.python,
+              tool: config.tool,
+              env: config.env,
+            },
+          );
+          config.command = installed.command;
+          config.env = {
+            ...config.env,
+            ...installed.env,
+            PATH: installed.path + path.delimiter + (process.env.PATH || ''),
+          };
+        } catch (error) {
+          await this.remove(scope, record.id);
+          throw error;
+        }
+      }
       record.enabled = true;
       await this.write(record);
       try {
@@ -203,6 +246,48 @@ export class LocalMcpManager {
     }
   }
   private async discoverRecord(record: RecordData, signal?: AbortSignal) {
+    // Older direct uvx configurations may have been saved before managed Python
+    // support existed. Refresh capabilities prepares them through the same installer.
+    if (
+      !record.config.pypi &&
+      ['uvx', 'uvx.exe', 'uv', 'uv.exe'].includes(record.config.command || '')
+    ) {
+      const config = resolveLocalInput({
+        name: record.name,
+        source: JSON.stringify({
+          command: record.config.command,
+          args: record.config.args,
+          env: record.config.env,
+        }),
+      });
+      if (config.pypi) {
+        const pythonDir = this.pythonDirectory(record.scope, record.id);
+        await fs.mkdir(pythonDir, { recursive: true });
+        const installed = await this.pythonInstaller(
+          path.join(this.root, 'runtime'),
+          pythonDir,
+          config.pypi,
+          { python: config.python, tool: config.tool, env: config.env },
+        );
+        signal?.throwIfAborted();
+        config.command = installed.command;
+        config.env = {
+          ...config.env,
+          ...installed.env,
+          PATH: installed.path + path.delimiter + (process.env.PATH || ''),
+        };
+        await this.serialized(record.id, async () => {
+          const latest = await this.read(record.scope, record.id);
+          if (latest.config_revision !== record.config_revision)
+            throw new Error('mcp_connection_changed');
+          latest.config = config;
+          latest.config_revision = crypto.randomUUID();
+          latest.metadata = empty();
+          await this.write(latest);
+          Object.assign(record, latest);
+        });
+      }
+    }
     const client = await this.connect(record),
       cap = client.getServerCapabilities() || {};
     const pages = async (kind: 'tools' | 'resources' | 'templates', max: number) => {
@@ -243,7 +328,8 @@ export class LocalMcpManager {
     return this.serialized(record.id, async () => {
       signal?.throwIfAborted();
       const latest = await this.read(record.scope, record.id);
-      if (latest.config_revision !== record.config_revision) throw new Error('mcp_connection_changed');
+      if (latest.config_revision !== record.config_revision)
+        throw new Error('mcp_connection_changed');
       latest.metadata = discovered;
       latest.error = undefined;
       await this.write(latest);
@@ -368,6 +454,8 @@ export class LocalMcpManager {
       await this.read(scope, id);
       await this.stop(id);
       const target = this.directory(scope, id);
+      const pythonTarget = this.pythonDirectory(scope, id);
+      await fs.rm(pythonTarget, { recursive: true, force: true });
       await fs.rm(target, { recursive: true, force: true });
     });
   }

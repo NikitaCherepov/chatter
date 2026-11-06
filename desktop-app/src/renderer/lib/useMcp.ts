@@ -10,7 +10,7 @@ export function useMcp() {
   const query = useSettingsRead('mcp', user?.id, true);
   const mutation = useMutation({
     mutationFn: async (action: () => Promise<unknown>) => action(),
-    onSuccess: () => client.invalidateQueries({ queryKey: key }),
+    onSettled: () => client.invalidateQueries({ queryKey: key }),
   });
   return { query, mutation };
 }

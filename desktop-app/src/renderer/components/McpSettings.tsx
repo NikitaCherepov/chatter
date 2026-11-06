@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { useMcp, useMcpCatalog } from '../lib/useMcp';
 import * as api from '../lib/mcp-service';
+import { getApiErrorMessage } from '../lib/api';
 import { LocalMcpPanel } from './LocalMcpPanel';
 import { LocalMcpForm } from './LocalMcpForm';
 import { emptyMcpApproval } from '../../main/local-mcp-spec';
@@ -75,9 +76,41 @@ export function McpSettings() {
         setToken('');
         void query.refetch();
       }
-      toast.error(t('mcp.error') + ': ' + String(error?.message || ''));
+      const code = String(error?.code || error?.message || '');
+      toast.error(
+        t('mcp.error') +
+          ': ' +
+          getApiErrorMessage(
+            error,
+            t('mcp.errors.' + code, { defaultValue: code || t('mcp.error') }),
+          ),
+      );
     }
   };
+  const authorizeConnection = async (id: number) => {
+    setAuthorization('');
+    const result = await api.authorizeMcp(id);
+    setAuthorization(result.authorization_url);
+  };
+  const addConnection = (oauth = false) =>
+    run(async () => {
+      const result = await api.saveMcpConnection({
+        name,
+        url,
+        server_id: server === 'custom' ? null : Number(server),
+        mode,
+        timeout_seconds: timeout,
+        ...(token ? { token } : {}),
+      });
+      // Creation succeeded even if the following sign-in needs provider setup.
+      // Close the form to prevent accidentally creating the same connection twice.
+      setName('');
+      setUrl('');
+      setToken('');
+      setServer('');
+      setAdding(false);
+      if (oauth) await authorizeConnection(result.connection.id);
+    });
   const pick = (item: api.CatalogItem) => {
     setAdding(true);
     setAddType('remote');
@@ -208,21 +241,7 @@ export function McpSettings() {
                   className={styles.form}
                   onSubmit={(event) => {
                     event.preventDefault();
-                    void run(async () => {
-                      await api.saveMcpConnection({
-                        name,
-                        url,
-                        server_id: server === 'custom' ? null : Number(server),
-                        mode,
-                        timeout_seconds: timeout,
-                        ...(token ? { token } : {}),
-                      });
-                      setName('');
-                      setUrl('');
-                      setToken('');
-                      setServer('');
-                      setAdding(false);
-                    });
+                    void addConnection();
                   }}
                 >
                   <h3>{t('mcp.add')}</h3>
@@ -307,9 +326,19 @@ export function McpSettings() {
                       onChange={(e) => setTimeoutValue(Number(e.target.value))}
                     />
                   </label>
-                  <button className={s.saveBtn} disabled={busy || !server} type="submit">
-                    {t('mcp.add')}
-                  </button>
+                  <div className={styles.actions}>
+                    <button className={s.saveBtn} disabled={busy || !server} type="submit">
+                      {t('mcp.add')}
+                    </button>
+                    <button
+                      className={s.cancelBtn}
+                      disabled={busy || !server || !!token.trim()}
+                      type="button"
+                      onClick={() => void addConnection(true)}
+                    >
+                      {t('mcp.addWithOAuth')}
+                    </button>
+                  </div>
                 </form>
               )}
           </div>
@@ -330,13 +359,7 @@ export function McpSettings() {
               connection={connection}
               busy={busy}
               run={run}
-              authorize={async () => {
-                setAuthorization('');
-                await run(async () => {
-                  const result = await api.authorizeMcp(connection.id);
-                  setAuthorization(result.authorization_url);
-                });
-              }}
+              authorize={() => run(() => authorizeConnection(connection.id))}
             />
           ))}
         {authorization && (
@@ -455,7 +478,7 @@ export function McpSettings() {
                               )}
                               {item.package && (
                                 <>
-                                  <dt>npm</dt>
+                                  <dt>{item.package.registryType === 'pypi' ? 'PyPI' : 'npm'}</dt>
                                   <dd>{item.package.identifier}</dd>
                                 </>
                               )}

@@ -10,7 +10,7 @@ export type PackageField = {
   variables?: Record<string, PackageField>;
 };
 export type NpmMcpPackage = {
-  registryType: 'npm';
+  registryType: 'npm' | 'pypi';
   identifier: string;
   version?: string;
   transport?: { type: string };
@@ -30,6 +30,9 @@ export type LocalMcpInput = {
 export type LocalMcpConfig = {
   name: string;
   npm?: string;
+  pypi?: string;
+  python?: string;
+  tool?: string;
   command?: string;
   args: string[];
   env: Record<string, string>;
@@ -85,6 +88,84 @@ export function npmSpec(source: string): string {
     throw new Error('mcp_invalid_npm_package');
   return source;
 }
+export function pypiSpec(source: string): string {
+  if (source.startsWith('https://')) {
+    const url = new URL(source);
+    const parts = decodeURIComponent(url.pathname).split('/').filter(Boolean);
+    if (
+      url.hostname !== 'pypi.org' ||
+      url.username ||
+      url.password ||
+      url.search ||
+      url.hash ||
+      parts[0] !== 'project' ||
+      parts.length < 2 ||
+      parts.length > 3
+    )
+      throw new Error('mcp_invalid_python_package');
+    source = parts[1] + (parts[2] ? '==' + parts[2] : '');
+  }
+  source = source
+    .replace(/^pypi:/, '')
+    .replace(/@latest$/, '')
+    .replace(/@([\w.+!-]+)$/, '==$1');
+  if (
+    !/^[a-zA-Z0-9][a-zA-Z0-9._-]*(?:\[[a-zA-Z0-9._-]+(?:,[a-zA-Z0-9._-]+)*\])?(?:==[a-zA-Z0-9][a-zA-Z0-9.+!_-]*)?$/.test(
+      source,
+    )
+  )
+    throw new Error('mcp_invalid_python_package');
+  return source;
+}
+function pythonInvocation(args: string[]) {
+  let python: string | undefined, from: string | undefined;
+  while (args[0]?.startsWith('-')) {
+    const flag = args.shift();
+    if (flag === '--') break;
+    if (flag === '--python' || flag === '-p') {
+      python = args.shift();
+      if (!python || !/^[0-9][0-9.*+<>=!, -]{0,100}$/.test(python))
+        throw new Error('mcp_invalid_python_version');
+    } else if (flag === '--from') {
+      from = args.shift();
+      if (!from) throw new Error('mcp_invalid_python_package');
+    } else throw new Error('mcp_unsupported_uvx_option');
+  }
+  const command = args.shift();
+  if (!command) throw new Error('mcp_invalid_python_package');
+  const spec = pypiSpec(from || command);
+  const tool = from ? command : spec.split('==')[0].split('[')[0];
+  if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(tool)) throw new Error('mcp_invalid_python_executable');
+  return { spec, python, tool };
+}
+export function packageFromSource(source: string): NpmMcpPackage | undefined {
+  try {
+    const pkg = JSON.parse(source)?.package;
+    if (!pkg || !['npm', 'pypi'].includes(pkg.registryType) || typeof pkg.identifier !== 'string')
+      return;
+    // The existing configuration form must remain usable for partially edited JSON.
+    if (
+      [pkg.environmentVariables, pkg.packageArguments].some(
+        (fields) =>
+          fields !== undefined &&
+          (!Array.isArray(fields) ||
+            fields.some(
+              (field) =>
+                !field ||
+                typeof field !== 'object' ||
+                (field.variables &&
+                  Object.values(field.variables).some(
+                    (value) => !value || typeof value !== 'object',
+                  )),
+            )),
+      )
+    )
+      return;
+    return pkg;
+  } catch {
+    return;
+  }
+}
 export function packageFields(pkg: NpmMcpPackage) {
   const fields: Array<{
     key: string;
@@ -128,20 +209,32 @@ export function resolveLocalInput(input: LocalMcpInput): LocalMcpConfig {
   let args: string[] = [],
     env: Record<string, string> = { ...input.env },
     npm: string | undefined,
+    pypi: string | undefined,
+    python: string | undefined,
+    tool: string | undefined,
     command: string | undefined;
   const pkg = input.package;
   if (pkg) {
     if (
-      pkg.registryType !== 'npm' ||
+      !['npm', 'pypi'].includes(pkg.registryType) ||
       pkg.transport?.type !== 'stdio' ||
       pkg.runtimeArguments?.length ||
       (pkg.registryBaseUrl &&
-        !['https://registry.npmjs.org', 'https://registry.npmjs.org/'].includes(
-          pkg.registryBaseUrl,
-        ))
+        !(
+          pkg.registryType === 'npm'
+            ? ['https://registry.npmjs.org', 'https://registry.npmjs.org/']
+            : [
+                'https://pypi.org',
+                'https://pypi.org/',
+                'https://pypi.org/simple',
+                'https://pypi.org/simple/',
+              ]
+        ).includes(pkg.registryBaseUrl))
     )
       throw new Error('mcp_unsupported_package');
-    npm = npmSpec(pkg.identifier + (pkg.version ? '@' + pkg.version : ''));
+    if (pkg.registryType === 'pypi') {
+      pypi = pypiSpec(pkg.identifier + (pkg.version ? '==' + pkg.version : ''));
+    } else npm = npmSpec(pkg.identifier + (pkg.version ? '@' + pkg.version : ''));
     const values = input.values || {};
     for (const field of packageFields(pkg))
       if (field.required && !(values[field.key] ?? field.default).trim())
@@ -168,9 +261,18 @@ export function resolveLocalInput(input: LocalMcpInput): LocalMcpConfig {
     const source = String(input.source || '').trim();
     if (source.startsWith('{')) {
       const json = JSON.parse(source);
+      if (json.package)
+        return resolveLocalInput({
+          ...json,
+          name: input.name || json.name,
+          values: input.values || json.values,
+          env: { ...json.env, ...env },
+        });
       command = json.command;
       args = json.args || [];
       env = { ...json.env, ...env };
+    } else if (source.startsWith('pypi:') || source.startsWith('https://pypi.org/')) {
+      pypi = pypiSpec(source);
     } else if (
       source.startsWith('https://') ||
       source.startsWith('npm:') ||
@@ -190,7 +292,20 @@ export function resolveLocalInput(input: LocalMcpInput): LocalMcpConfig {
     }
   }
   if (
+    command === 'uvx' ||
+    command === 'uvx.exe' ||
+    ((command === 'uv' || command === 'uv.exe') && args[0] === 'tool' && args[1] === 'run')
+  ) {
+    if (command === 'uv' || command === 'uv.exe') args.splice(0, 2);
+    const parsed = pythonInvocation(args);
+    pypi = parsed.spec;
+    python = parsed.python;
+    tool = parsed.tool;
+    command = undefined;
+  }
+  if (
     !npm &&
+    !pypi &&
     (typeof command !== 'string' ||
       !command ||
       command.length > 2048 ||
@@ -217,7 +332,16 @@ export function resolveLocalInput(input: LocalMcpInput): LocalMcpConfig {
     )
   )
     throw new Error('mcp_invalid_environment');
-  return { name: String(input.name || npm || command).slice(0, 120), npm, command, args, env };
+  return {
+    name: String(input.name || npm || pypi || command).slice(0, 120),
+    npm,
+    pypi,
+    python,
+    tool,
+    command,
+    args,
+    env,
+  };
 }
 
 export type McpApprovalPolicy = { allow_all: boolean; tools: string[]; resources: string[] };

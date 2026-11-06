@@ -200,3 +200,38 @@ There is no polling timer or separate settings-refresh button.
   RAM-only metadata, progress, cancellation, permission revocation and removal.
   MCP_REAL_INSTALL=1 also downloads Node, installs the official server-memory
   npm package, calls read_graph and removes the test installation.
+
+## Managed Python MCP packages
+
+The existing local installer accepts uvx commands and command/args JSON, for example
+uvx windows-mcp serve. It also accepts PyPI package entries from the Registry and
+pypi:package or https://pypi.org/project/package/ sources.
+
+Chatter downloads an official uv release and verifies its SHA-256 before extracting.
+It reads the selected PyPI package's Python requirement, then uv prepares a managed
+Python and installs the pinned package version in an isolated tool environment.
+Neither a system uv nor a system Python installation is required. Commands run as
+direct executables, without a shell. uvx --python and --from are supported; other
+uvx installation options are rejected explicitly rather than silently ignored.
+Application arguments after the tool name are preserved.
+
+Python environments use short per-connection directories under the existing MCP
+data root (py/<scope-and-id-hash>) to avoid Windows DLL/path-length failures.
+Configuration stays in the existing encrypted account directory. Removing an MCP
+stops its process and deletes its tool environment/cache along with its settings.
+The shared uv/Python runtime remains available for other installed MCPs.
+Restarting a server uses its installed executable and does not reinstall or upgrade
+packages. Existing raw uvx configurations are prepared when capabilities are refreshed.
+
+## Sign-in during connection creation
+
+The existing remote connection form offers Add and sign in with OAuth as well as
+plain creation with an optional token. A failed sign-in retains the created
+connection for retry. Refreshing an unauthenticated connection returns
+mcp_authorization_required instead of requiring callback configuration.
+
+Servers that do not support automatic client registration return
+mcp_oauth_client_registration_required. In particular, the remote GitHub MCP
+requires a pre-registered OAuth/GitHub application. The current UI/provider does
+not yet accept pre-registered client ID/secret configuration, so GitHub OAuth is
+not a complete supported login path. A PAT can still be supplied explicitly.
