@@ -4,6 +4,7 @@
 !tsconfig.json
 !index.ts
 !message-accents.ts
+!mcp-telegram-confirmations.ts
 !i18n/
 !i18n/**
 !Dockerfile.bot
