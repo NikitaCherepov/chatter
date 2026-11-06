@@ -74,6 +74,10 @@ packages or starts their processes. Sampling, roots and elicitation are not expo
   the remote service undoes an operation. Transport reconnection retries are off.
 - Arguments are validated against JSON Schema. Text results use the existing
   untrusted-content wrapper; images can use the existing direct-vision sink.
+  Tool-call JSON-RPC errors retain their code and bounded message in an ordinary
+  error result, for both HTTP and stdio servers; arbitrary error data/stacks are
+  omitted. Such validation failures do not close an otherwise healthy session.
+  Connection-closed and timeout failures remain distinct transport errors.
   Other nontext content returns metadata. MCP prompts are not exposed.
 
 ## Confirmations
@@ -172,6 +176,9 @@ There is no polling timer or separate settings-refresh button.
   Saving identical values keeps the current process and tools. Removing a key,
   or saving an empty object, removes that user variable without deleting managed
   runtime paths. Invalid JSON/values leave the existing process unchanged.
+  Both install and edit forms validate JSON before starting a mutation, show
+  the error next to the environment field, and keep the draft for correction.
+  The editor confirms successful saving; reopening reads the persisted values.
   Restart failures remain visible on the connection and can be corrected by
   editing the saved JSON.
 - Opening the authenticated desktop WebSocket sends its local metadata snapshot.

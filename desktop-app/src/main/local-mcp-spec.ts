@@ -320,20 +320,7 @@ export function resolveLocalInput(input: LocalMcpInput): LocalMcpConfig {
     args.some((a) => typeof a !== 'string' || a.length > 8192 || a.includes('\u0000'))
   )
     throw new Error('mcp_invalid_arguments');
-  if (
-    !env ||
-    typeof env !== 'object' ||
-    Array.isArray(env) ||
-    Object.entries(env).length > 100 ||
-    Object.entries(env).some(
-      ([k, v]) =>
-        !/^[a-zA-Z_][a-zA-Z0-9_]{0,127}$/.test(k) ||
-        typeof v !== 'string' ||
-        v.length > 16384 ||
-        v.includes('\u0000'),
-    )
-  )
-    throw new Error('mcp_invalid_environment');
+  env = validateLocalMcpEnvironment(env);
   return {
     name: String(input.name || npm || pypi || command).slice(0, 120),
     npm,
@@ -371,4 +358,25 @@ export function normalizeMcpApproval(value: any): McpApprovalPolicy {
     tools: [...new Set<string>(value.tools)],
     resources: [...new Set<string>(value.resources)],
   };
+}
+
+export function validateLocalMcpEnvironment(env: unknown): Record<string, string> {
+  if (
+    !env ||
+    typeof env !== 'object' ||
+    Array.isArray(env) ||
+    Object.entries(env).length > 100 ||
+    Object.entries(env).some(
+      ([k, v]) =>
+        !/^[a-zA-Z_][a-zA-Z0-9_]{0,127}$/.test(k) ||
+        typeof v !== 'string' ||
+        v.length > 16384 ||
+        v.includes('\u0000'),
+    )
+  )
+    throw new Error('mcp_invalid_environment');
+  return env as Record<string, string>;
+}
+export function parseLocalMcpEnvironment(source: string): Record<string, string> {
+  return validateLocalMcpEnvironment(JSON.parse(source.trim() || '{}'));
 }

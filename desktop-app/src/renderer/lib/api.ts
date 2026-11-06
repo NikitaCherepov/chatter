@@ -1863,7 +1863,10 @@ async function handleExecuteIpc(msg: { request_id: string; ipc_type: string; pay
       error: err?.message || String(err),
       wsReadyState: ws?.readyState,
     });
-    ws?.send(JSON.stringify({ type: 'ipc_result', request_id, error: err?.message || String(err) }));
+    const ipcErrorMessage = err?.message || String(err);
+    const mcpErrorCode = (ipc_type === 'mcp_control' || ipc_type === 'mcp_permission')
+      ? /(?:^|Error: )(mcp_[a-z_]+)$/.exec(ipcErrorMessage)?.[1] : undefined;
+    ws?.send(JSON.stringify({ type: 'ipc_result', request_id, error: mcpErrorCode || ipcErrorMessage }));
     console.log('[ipc] renderer ipc_result error sent', { requestId: request_id });
   } finally {
     stopProgress?.();

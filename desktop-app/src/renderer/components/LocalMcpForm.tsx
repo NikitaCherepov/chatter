@@ -2,7 +2,11 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocalMcp } from '../lib/useMcp';
 import * as api from '../lib/mcp-service';
-import { packageFields, packageFromSource } from '../../main/local-mcp-spec';
+import {
+  packageFields,
+  packageFromSource,
+  parseLocalMcpEnvironment,
+} from '../../main/local-mcp-spec';
 import s from './SettingsModal.module.scss';
 import styles from './McpSettings.module.scss';
 
@@ -39,7 +43,7 @@ export function LocalMcpForm({
   };
   return (
     <>
-      {error && (
+      {error && error !== t('mcp.local.envInvalid') && (
         <p className={styles.empty} role="alert">
           {error}
         </p>
@@ -48,12 +52,19 @@ export function LocalMcpForm({
         className={styles.form}
         onSubmit={(e) => {
           e.preventDefault();
+          let environment: Record<string, string>;
+          try {
+            environment = parseLocalMcpEnvironment(env);
+          } catch {
+            setError(t('mcp.local.envInvalid'));
+            return;
+          }
           void run(async () => {
             await api.installLocalMcp({
               name: name || undefined,
               description: draft?.description,
               ...(packageData ? { package: packageData, values } : { source }),
-              env: env ? JSON.parse(env) : {},
+              env: environment,
             });
             setSource('');
             setName('');
@@ -101,10 +112,24 @@ export function LocalMcpForm({
             rows={5}
             spellCheck={false}
             value={env}
-            onChange={(e) => setEnv(e.target.value)}
+            onChange={(e) => {
+              setEnv(e.target.value);
+              setError('');
+            }}
             placeholder='{"API_KEY":"..."}'
             autoComplete="off"
+            aria-invalid={error === t('mcp.local.envInvalid')}
           />
+          <small className={s.connectionsHelp}>{t('mcp.local.envHint')}</small>
+          {error === t('mcp.local.envInvalid') && (
+            <small
+              role="alert"
+              className={s.connectionsHelp}
+              style={{ color: 'var(--color-error)' }}
+            >
+              {error}
+            </small>
+          )}
         </label>
         <button className={s.saveBtn} disabled={busy}>
           {t(busy ? 'mcp.local.installing' : 'mcp.local.install')}

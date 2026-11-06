@@ -276,10 +276,26 @@ let win;const errors=[];
  await js('document.querySelector("article summary").click()');
  await until('!!document.querySelector("article textarea[name=env]")');
  assert.equal(await js('JSON.parse(document.querySelector("article textarea[name=env]").value).WINDOWS_MCP_CONTROL_POLICY'),'balanced');
- await js('(()=>{const form=document.querySelector("article form");form.querySelector("textarea").value=JSON.stringify({WINDOWS_MCP_CONTROL_POLICY:"relaxed",WINDOWS_MCP_CONTROL_IDLE_TIMEOUT:"10"},null,2);form.requestSubmit()})()');
+ const beforeInvalid=await js('window.__calls.filter(c=>c.name==="local_configure").length');
+ await js('(()=>{const form=document.querySelector("article form");form.querySelector("textarea").value="{BASE_DIR=D:"+String.fromCharCode(92)+"Documents}";form.requestSubmit()})()');
+ await until('document.querySelector("article textarea[name=env]")?.getAttribute("aria-invalid")==="true"');
+ assert.ok(await js('document.querySelector("article form [role=alert]").textContent.includes("Не сохранено")'));
+ assert.equal(await js('window.__calls.filter(c=>c.name==="local_configure").length'),beforeInvalid,'invalid JSON never starts saving or invalidates queries');
+ assert.ok(await js('document.querySelector("article textarea[name=env]").value.includes("BASE_DIR=D:")'),'invalid draft remains visible for correction');
+ if(process.env.MCP_UI_SCREENSHOT_DIR){
+   await new Promise(r=>setTimeout(r,500));
+   await js('document.querySelector("article textarea[name=env]").scrollIntoView({block:"center"})');
+   await new Promise(r=>setTimeout(r,100));
+   fs.writeFileSync(path.join(process.env.MCP_UI_SCREENSHOT_DIR,'mcp-env-validation.png'),(await wc.capturePage()).toPNG());
+ }
+
+
+ await js('(()=>{const form=document.querySelector("article form");form.querySelector("textarea").value=JSON.stringify({BASE_DIR:"D:/Documents",WINDOWS_MCP_CONTROL_POLICY:"relaxed",WINDOWS_MCP_CONTROL_IDLE_TIMEOUT:"10"},null,2);form.requestSubmit()})()');
  await until('window.__calls.some(c=>c.name==="local_configure"&&c.body.patch.env?.WINDOWS_MCP_CONTROL_POLICY==="relaxed")');
  assert.equal(await js('window.__calls.find(c=>c.name==="local_configure"&&c.body.patch.env).body.patch.expected_revision'),'initial');
  await until('document.querySelector("article form button")?.disabled===false');
+ await until('document.querySelector("article form [role=status]")?.textContent.includes("сохранены")');
+
  const reads=await js('window.__calls.filter(c=>c.name==="local_settings").length');
  await js('document.querySelector("article summary").click()');
  await until('!document.querySelector("article textarea[name=env]")');
@@ -287,7 +303,7 @@ let win;const errors=[];
  await until('!!document.querySelector("article textarea[name=env]")');
  assert.ok(await js('window.__calls.filter(c=>c.name==="local_settings").length')>reads,'reopening reads current local settings');
  assert.deepEqual(await js('JSON.parse(document.querySelector("article textarea[name=env]").value)'),{
-   WINDOWS_MCP_CONTROL_POLICY:'relaxed',WINDOWS_MCP_CONTROL_IDLE_TIMEOUT:'10',
+   BASE_DIR:'D:/Documents',WINDOWS_MCP_CONTROL_POLICY:'relaxed',WINDOWS_MCP_CONTROL_IDLE_TIMEOUT:'10',
  });
 
  await js('Array.from(document.querySelector("article").querySelectorAll("button[role=switch]")).find(b=>document.getElementById(b.getAttribute("aria-labelledby"))?.textContent.trim()==="Не запрашивать подтверждения для этого MCP").click()');
@@ -329,6 +345,19 @@ let win;const errors=[];
  await js('Array.from(document.querySelectorAll("section[class*=connection]")).find(e=>e.textContent.includes("Remote tools")).querySelectorAll("button").forEach(b=>{if(b.textContent.trim()==="Войти через OAuth")b.click()})');
  await until('window.__calls.filter(c=>c.name==="oauth").length===2');
  await until('!!document.querySelector(\'a[href="https://github.example/authorize"]\')');
+ assert.ok(await js('document.querySelector(\'a[href="https://github.example/authorize"]\').closest("section[class*=connection]").textContent.includes("Remote tools")'),'OAuth follow-up belongs to the connection being authorized');
+ if(process.env.MCP_UI_SCREENSHOT_DIR){
+   await new Promise(r=>setTimeout(r,300));
+   await js('document.querySelector(\'a[href="https://github.example/authorize"]\').closest("section").scrollIntoView({block:"center"})');
+   fs.writeFileSync(path.join(process.env.MCP_UI_SCREENSHOT_DIR,'mcp-oauth-light.png'),(await wc.capturePage()).toPNG());
+   await js('document.documentElement.dataset.theme="dark"');await new Promise(r=>setTimeout(r,150));
+   fs.writeFileSync(path.join(process.env.MCP_UI_SCREENSHOT_DIR,'mcp-oauth-dark.png'),(await wc.capturePage()).toPNG());
+   await js('document.documentElement.dataset.theme="light"');
+ }
+ await js('document.querySelector(\'a[href="https://github.example/authorize"]\').closest("section").querySelector(\'button[aria-label="Закрыть"]\').click()');
+ await until('!document.querySelector(\'a[href="https://github.example/authorize"]\')');
+ assert.equal(await js('window.__calls.filter(c=>c.name==="oauth").length'),2,'dismissing follow-up does not start another OAuth request');
+
 
  await js('window.__state.policy.allow_custom=false;window.emitMcpUpdate()');
  await until('!Array.from(document.querySelectorAll("[class*=catalogCard]")).some(e=>e.textContent.includes("Remote tools"))&&!document.querySelector(\'input[type="url"]\')');

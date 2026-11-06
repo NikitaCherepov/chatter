@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocalMcp, useLocalMcpSettings } from '../lib/useMcp';
 import * as api from '../lib/mcp-service';
-import { emptyMcpApproval } from '../../main/local-mcp-spec';
+import { emptyMcpApproval, parseLocalMcpEnvironment } from '../../main/local-mcp-spec';
 import { Select } from './Select';
 import { McpToggle, McpTools } from './McpControls';
 import { Icon } from './Icon';
@@ -29,8 +29,10 @@ export function LocalMcpPanel({ allowed }: { allowed: boolean }) {
     setError('');
     try {
       await mutation.mutateAsync(action);
+      return true;
     } catch (e: any) {
       setError(String(e?.message || t('mcp.error')));
+      return false;
     }
   };
   if (!available) return null;
@@ -180,10 +182,11 @@ function LocalMcpConfiguration({
 }: {
   row: api.LocalMcpSummary;
   busy: boolean;
-  run: (action: () => Promise<unknown>) => Promise<void>;
+  run: (action: () => Promise<unknown>) => Promise<boolean>;
 }) {
   const { t } = useTranslation();
   const query = useLocalMcpSettings(row.id);
+  const [feedback, setFeedback] = useState<'invalid' | 'saved' | 'failed' | null>(null);
   if (query.isPending) return <p role="status">{t('common.loading')}</p>;
   if (query.isError)
     return (
@@ -203,13 +206,22 @@ function LocalMcpConfiguration({
       onSubmit={(event) => {
         event.preventDefault();
         const data = new FormData(event.currentTarget);
+        let env: Record<string, string>;
+        try {
+          env = parseLocalMcpEnvironment(String(data.get('env') || ''));
+        } catch {
+          setFeedback('invalid');
+          event.currentTarget.querySelector<HTMLTextAreaElement>('textarea[name=env]')?.focus();
+          return;
+        }
+        setFeedback(null);
         void run(() =>
           api.configureLocalMcp(row.id, {
             expected_revision: config.config_revision,
             timeout_seconds: Number(data.get('timeout')),
-            env: JSON.parse(String(data.get('env') || '').trim() || '{}'),
+            env,
           }),
-        );
+        ).then((saved) => setFeedback(saved ? 'saved' : 'failed'));
       }}
     >
       <label>
@@ -247,7 +259,27 @@ function LocalMcpConfiguration({
           disabled={disabled}
           placeholder='{"API_KEY":"..."}'
           autoComplete="off"
+          aria-invalid={feedback === 'invalid'}
+          aria-describedby={row.id + '-env-feedback'}
+          onChange={() => setFeedback(null)}
         />
+        <small className={s.connectionsHelp}>{t('mcp.local.envHint')}</small>
+        <small
+          id={row.id + '-env-feedback'}
+          className={s.connectionsHelp}
+          role={feedback === 'saved' ? 'status' : 'alert'}
+          style={feedback && feedback !== 'saved' ? { color: 'var(--color-error)' } : undefined}
+        >
+          {feedback
+            ? t(
+                feedback === 'invalid'
+                  ? 'mcp.local.envInvalid'
+                  : feedback === 'saved'
+                    ? 'mcp.local.envSaved'
+                    : 'mcp.error',
+              )
+            : ''}
+        </small>
       </label>
       <button className={s.cancelBtn} disabled={disabled}>
         {t('mcp.save')}

@@ -31,6 +31,8 @@ await fs.writeFile(
     "if(m.method==='resources/read')return send(m.id,{contents:[{uri:m.params.uri,text:'LOCAL RESOURCE'}]});",
     "if(m.method==='tools/call'){",
     "if(m.params.name==='wait')return;",
+    "if(m.params.arguments?.text==='rpc-error'){process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:m.id,error:{code:-32602,message:'File path must be within BASE_DIR',data:{stack:'private-server-stack'}}})+'\\n');return;}",
+
     "if(m.params.name==='progress'){let n=0;const timer=setInterval(()=>{n++;process.stdout.write(JSON.stringify({jsonrpc:'2.0',method:'notifications/progress',params:{progressToken:m.params._meta.progressToken,progress:n}})+'\\n');if(n===8){clearInterval(timer);send(m.id,{content:[{type:'text',text:'progress done'}]});}},50);return;}",
     "return send(m.id,{content:[{type:'text',text:m.params.arguments.text+':'+(++count)+':'+(process.env.PRIVATE_KEY==='secret-local')}]});}",
     '});',
@@ -247,6 +249,16 @@ try {
     /second:2:true/,
     'process session is reused',
   );
+  const failure=JSON.parse(await tools.runMcpTool(81,'call_mcp_tool',{
+    connection_id:row.id,tool:'echo',arguments:{text:'rpc-error'},
+  }));
+  assert.equal(failure.status,'error');
+  assert.match(failure.result,/File path must be within BASE_DIR/);
+  assert.match(failure.result,/-32602/);
+  assert.equal(failure.result.includes('private-server-stack'),false,'only the protocol message is returned, not arbitrary error data');
+  assert.match(await tools.runMcpTool(81,'call_mcp_tool',{
+    connection_id:row.id,tool:'echo',arguments:{text:'after-error'},
+  }),/after-error:3:true/,'validation error keeps the stdio process alive');
   await assert.rejects(
     () =>
       tools.runMcpTool(82, 'call_mcp_tool', {

@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { installNpm, installPython } from './local-mcp-runtime';
 import {
@@ -495,11 +496,28 @@ export class LocalMcpManager {
           )
         )
           throw new Error('mcp_tool_not_allowed');
-        result = await client.callTool(
-          { name: payload.tool, arguments: payload.arguments },
-          undefined,
-          options,
-        );
+        result = await client
+          .callTool({ name: payload.tool, arguments: payload.arguments }, undefined, options)
+          .catch((error: unknown) => {
+            if (controller.signal.aborted || !(error instanceof McpError)) throw error;
+            if (error.code === ErrorCode.ConnectionClosed) throw new Error('mcp_connection_closed');
+            if (error.code === ErrorCode.RequestTimeout) throw new Error('mcp_request_timeout');
+            // Some servers use JSON-RPC errors for tool validation failures.
+            // Preserve them as ordinary tool errors, through the existing result pipeline.
+            return {
+              isError: true,
+              content: [
+                {
+                  type: 'text' as const,
+                  text: JSON.stringify({
+                    error: 'mcp_tool_failed',
+                    code: error.code,
+                    message: error.message.slice(0, 12000),
+                  }),
+                },
+              ],
+            };
+          });
       } else if (payload.action === 'read_resource') {
         result = await client.readResource({ uri: payload.uri }, options);
       } else throw new Error('mcp_invalid_local_action');

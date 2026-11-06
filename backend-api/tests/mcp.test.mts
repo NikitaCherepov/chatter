@@ -148,6 +148,14 @@ const fake = http.createServer(async (req, res) => {
         : [echo, wait, sampling, progressTool],
     });
   if (body.method === 'tools/call') {
+    if(body.params.arguments?.text==='rpc-error') {
+      res.setHeader('content-type','application/json');
+      res.end(JSON.stringify({jsonrpc:'2.0',id:body.id,error:{
+        code:-32602,message:'File path must be within BASE_DIR',data:{stack:'private-server-stack'},
+      }}));
+      return;
+    }
+
     if (body.params.name === 'wait') {
       pendingResponse = res;
       return;
@@ -486,6 +494,18 @@ try {
     /connection_changed/,
   );
   store.saveConnection(81, { token: 'private-test-token' }, connection.id);
+  const failure=JSON.parse(await tools.runMcpTool(81,'call_mcp_tool',{
+    connection_id:connection.id,tool:'echo',arguments:{text:'rpc-error'},
+  }));
+  assert.equal(failure.status,'error');
+  assert.match(failure.result,/File path must be within BASE_DIR/);
+  assert.match(failure.result,/-32602/);
+  assert.equal(failure.result.includes('private-server-stack'),false);
+  const errorSession=sessionNumber;
+  await tools.runMcpTool(81,'call_mcp_tool',{
+    connection_id:connection.id,tool:'echo',arguments:{text:'after-error'},
+  });
+  assert.equal(sessionNumber,errorSession,'validation failures keep the HTTP MCP session alive');
   const defs = tools.getMcpDefinitions(81);
   assert.ok(defs.some((d: any) => d.function.name === 'browse_mcp'));
   assert.ok(

@@ -4,8 +4,13 @@ import os from 'node:os';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
-const { resolveLocalInput, pypiSpec, packageFromSource } = require('../src/main/local-mcp-spec.ts');
+const { resolveLocalInput, pypiSpec, packageFromSource, parseLocalMcpEnvironment } = require('../src/main/local-mcp-spec.ts');
 const { LocalMcpManager } = require('../src/main/local-mcp.ts');
+assert.deepEqual(parseLocalMcpEnvironment('{"BASE_DIR":"D:/Documents"}'),{BASE_DIR:'D:/Documents'});
+assert.deepEqual(parseLocalMcpEnvironment(''),{});
+for(const invalid of ['{BASE_DIR=D:/Documents}','{"BASE_DIR":42}','[]','null'])
+  assert.throws(()=>parseLocalMcpEnvironment(invalid));
+
 for (const source of [
   'uvx windows-mcp serve',
   JSON.stringify({ command: 'uvx', args: ['windows-mcp', 'serve'] }),

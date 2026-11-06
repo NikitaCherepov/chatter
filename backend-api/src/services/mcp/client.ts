@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import { updateLocalMetadata } from './local.js';
 import { sendIpcToDesktop } from '../../ws-clients.js';
 import { notifyMcpSettingsUpdated } from '../../ws-clients.js';
@@ -417,20 +418,39 @@ export async function callRemoteTool(
     );
   return session(userId, id, signal, async (client, _transport, row) => {
     let lastProgress = 0;
-    return client.callTool({ name, arguments: args }, undefined, {
-      signal,
-      timeout: row.timeout_seconds * 1000,
-      resetTimeoutOnProgress: true,
-      onprogress: () => {
-        if (Date.now() - lastProgress < 1000) return;
-        lastProgress = Date.now();
-        try {
-          void Promise.resolve(onProgress?.()).catch(() => {});
-        } catch {
-          /* status callbacks cannot fail a tool call */
-        }
-      },
-    });
+    return client
+      .callTool({ name, arguments: args }, undefined, {
+        signal,
+        timeout: row.timeout_seconds * 1000,
+        resetTimeoutOnProgress: true,
+        onprogress: () => {
+          if (Date.now() - lastProgress < 1000) return;
+          lastProgress = Date.now();
+          try {
+            void Promise.resolve(onProgress?.()).catch(() => {});
+          } catch {
+            /* status callbacks cannot fail a tool call */
+          }
+        },
+      })
+      .catch((error: unknown) => {
+        if (signal?.aborted || !(error instanceof McpError)) throw error;
+        if (error.code === ErrorCode.ConnectionClosed) throw new Error('mcp_connection_closed');
+        if (error.code === ErrorCode.RequestTimeout) throw new Error('mcp_request_timeout');
+        return {
+          isError: true,
+          content: [
+            {
+              type: 'text' as const,
+              text: JSON.stringify({
+                error: 'mcp_tool_failed',
+                code: error.code,
+                message: error.message.slice(0, 12000),
+              }),
+            },
+          ],
+        };
+      });
   });
 }
 export async function readRemoteResource(

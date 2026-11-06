@@ -39,7 +39,9 @@ export function McpSettings() {
   useEffect(() => {
     if (!canSearchRegistry) setCatalogSearch(null);
   }, [canSearchRegistry]);
-  const [authorization, setAuthorization] = useState('');
+  const [authorization, setAuthorization] = useState<{ connectionId: number; url: string } | null>(
+    null,
+  );
   useEffect(() => {
     const policy = query.data?.policy;
     const selected = query.data?.servers.find((item) => String(item.id) === server);
@@ -88,9 +90,9 @@ export function McpSettings() {
     }
   };
   const authorizeConnection = async (id: number) => {
-    setAuthorization('');
+    setAuthorization(null);
     const result = await api.authorizeMcp(id);
-    setAuthorization(result.authorization_url);
+    setAuthorization({ connectionId: id, url: result.authorization_url });
   };
   const addConnection = (oauth = false) =>
     run(async () => {
@@ -360,19 +362,13 @@ export function McpSettings() {
               busy={busy}
               run={run}
               authorize={() => run(() => authorizeConnection(connection.id))}
+              authorizationUrl={
+                authorization?.connectionId === connection.id ? authorization.url : undefined
+              }
+              onDismissAuthorization={() => setAuthorization(null)}
+              onRefreshAuthorization={() => void query.refetch()}
             />
           ))}
-        {authorization && (
-          <div className={s.macroCard}>
-            <a href={authorization} target="_blank" rel="noopener noreferrer">
-              {t('mcp.openAuthorization')}
-            </a>
-            <p>{t('mcp.afterAuthorization')}</p>
-            <button className={s.cancelBtn} onClick={() => void query.refetch()}>
-              {t('mcp.refresh')}
-            </button>
-          </div>
-        )}
         <LocalMcpPanel allowed={data.policy.enabled && data.policy.allow_custom} />
       </div>
       <div hidden={view !== 'catalog'}>
@@ -576,11 +572,17 @@ function ConnectionCard({
   busy,
   run,
   authorize,
+  authorizationUrl,
+  onDismissAuthorization,
+  onRefreshAuthorization,
 }: {
   connection: api.McpConnection;
   busy: boolean;
   run: (action: () => Promise<unknown>) => Promise<void>;
   authorize: () => Promise<void>;
+  authorizationUrl?: string;
+  onDismissAuthorization: () => void;
+  onRefreshAuthorization: () => void;
 }) {
   const { t } = useTranslation();
   const [remove, setRemove] = useState(false);
@@ -641,6 +643,48 @@ function ConnectionCard({
           {t('mcp.cancelOperation')}
         </button>
       </div>
+      <AnimatedCollapse open={!!authorizationUrl}>
+        {authorizationUrl && (
+          <section className={styles.authorization} aria-label={t('mcp.design.oauthTitle')}>
+            <div className={styles.authorizationHeading}>
+              <span className={styles.icon}>
+                <Icon name="lock" />
+              </span>
+              <div>
+                <h4>{t('mcp.design.oauthTitle')}</h4>
+                <p>{t('mcp.afterAuthorization')}</p>
+              </div>
+              <button
+                type="button"
+                className={styles.dismiss}
+                aria-label={t('common.close')}
+                onClick={onDismissAuthorization}
+              >
+                ×
+              </button>
+            </div>
+            <div className={styles.authorizationActions}>
+              <a
+                className={`${s.saveBtn} ${styles.authorizationLink}`}
+                href={authorizationUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {t('mcp.openAuthorization')}
+                <span aria-hidden="true">↗</span>
+              </a>
+              <button
+                type="button"
+                className={s.cancelBtn}
+                disabled={busy}
+                onClick={onRefreshAuthorization}
+              >
+                {t('mcp.refresh')}
+              </button>
+            </div>
+          </section>
+        )}
+      </AnimatedCollapse>
       <AnimatedDetails
         className={styles.details}
         summary={
