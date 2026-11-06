@@ -131,6 +131,45 @@ export class LocalMcpManager {
       },
     };
   }
+  private environment(record: RecordData) {
+    const managed =
+      record.config.managed_env ||
+      Object.fromEntries(
+        Object.entries(record.config.env).filter(
+          ([key]) =>
+            (record.config.npm || record.config.pypi) &&
+            (key === 'PATH' ||
+              key === 'ELECTRON_RUN_AS_NODE' ||
+              [
+                'UV_TOOL_DIR',
+                'UV_TOOL_BIN_DIR',
+                'UV_CACHE_DIR',
+                'UV_PYTHON_INSTALL_DIR',
+                'UV_PYTHON_BIN_DIR',
+                'UV_PYTHON_INSTALL_BIN',
+                'UV_PYTHON_INSTALL_REGISTRY',
+                'UV_MANAGED_PYTHON',
+                'UV_PYTHON_DOWNLOADS',
+                'UV_NO_CONFIG',
+                'UV_NO_PROGRESS',
+              ].includes(key)),
+        ),
+      );
+    const user =
+      record.config.user_env ||
+      Object.fromEntries(Object.entries(record.config.env).filter(([key]) => !(key in managed)));
+    return { user, managed };
+  }
+  // Sensitive settings are read only by the trusted local renderer, never list/sync.
+  async settings(scope: string, id: string) {
+    const record = await this.read(scope, id);
+    return {
+      env: this.environment(record).user,
+      config_revision: record.config_revision,
+      mode: record.mode,
+      timeout_seconds: record.timeout_seconds,
+    };
+  }
   async list(scope: string) {
     let entries: string[];
     try {
@@ -149,6 +188,7 @@ export class LocalMcpManager {
     this.installing.add(scope);
     try {
       const config = resolveLocalInput(input);
+      config.user_env = { ...config.env };
       if ((await this.list(scope)).length >= 20) throw new Error('mcp_connection_limit');
       const record: RecordData = {
         id: crypto.randomUUID(),
@@ -175,7 +215,8 @@ export class LocalMcpManager {
           );
           config.command = installed.command;
           config.args = [installed.entry, ...config.args];
-          config.env.PATH = installed.path + path.delimiter + (process.env.PATH || '');
+          config.managed_env = { PATH: installed.path + path.delimiter + (process.env.PATH || '') };
+          config.env = { ...config.user_env, ...config.managed_env };
         } catch {
           await this.remove(scope, record.id);
           throw new Error('mcp_package_install_failed');
@@ -196,11 +237,11 @@ export class LocalMcpManager {
             },
           );
           config.command = installed.command;
-          config.env = {
-            ...config.env,
+          config.managed_env = {
             ...installed.env,
             PATH: installed.path + path.delimiter + (process.env.PATH || ''),
           };
+          config.env = { ...config.user_env, ...config.managed_env };
         } catch (error) {
           await this.remove(scope, record.id);
           throw error;
@@ -261,6 +302,7 @@ export class LocalMcpManager {
         }),
       });
       if (config.pypi) {
+        config.user_env = this.environment(record).user;
         const pythonDir = this.pythonDirectory(record.scope, record.id);
         await fs.mkdir(pythonDir, { recursive: true });
         const installed = await this.pythonInstaller(
@@ -271,11 +313,11 @@ export class LocalMcpManager {
         );
         signal?.throwIfAborted();
         config.command = installed.command;
-        config.env = {
-          ...config.env,
+        config.managed_env = {
           ...installed.env,
           PATH: installed.path + path.delimiter + (process.env.PATH || ''),
         };
+        config.env = { ...config.user_env, ...config.managed_env };
         await this.serialized(record.id, async () => {
           const latest = await this.read(record.scope, record.id);
           if (latest.config_revision !== record.config_revision)
@@ -338,10 +380,31 @@ export class LocalMcpManager {
     });
   }
   async configure(scope: string, id: string, patch: any) {
-    return this.serialized(id, () => this.configureRecord(scope, id, patch));
+    const { summary, restart } = await this.serialized(id, () =>
+      this.configureRecord(scope, id, patch),
+    );
+    if (!restart) return summary;
+    // Discovery also serializes metadata writes; run it outside the write queue.
+    try {
+      await this.control(scope, {
+        local_id: id,
+        action: 'discover',
+        config_revision: summary.config_revision,
+      });
+    } catch (error: any) {
+      await this.serialized(id, async () => {
+        const current = await this.read(scope, id);
+        if (current.config_revision !== summary.config_revision)
+          throw new Error('mcp_connection_changed');
+        current.error = String(error?.message || 'mcp_discovery_failed').slice(0, 1000);
+        await this.write(current);
+      });
+    }
+    return this.public(await this.read(scope, id));
   }
   private async configureRecord(scope: string, id: string, patch: any) {
     const record = await this.read(scope, id);
+    let environmentChanged = false;
     if ('expected_revision' in patch && patch.expected_revision !== record.config_revision)
       throw new Error('mcp_connection_changed');
     if (patch.approval_policy !== undefined)
@@ -374,21 +437,32 @@ export class LocalMcpManager {
       record.selected_tools = patch.selected_tools;
     }
     if (patch.env !== undefined) {
-      record.config_revision = crypto.randomUUID();
-      record.metadata = empty();
-      record.error = undefined;
-      record.config.env = resolveLocalInput({
+      if (!patch.env || typeof patch.env !== 'object' || Array.isArray(patch.env))
+        throw new Error('mcp_invalid_environment');
+      const env = resolveLocalInput({
         source: JSON.stringify({
           command: record.config.command,
           args: record.config.args,
-          env: { ...record.config.env, ...patch.env },
+          env: patch.env,
         }),
       }).env;
-      await this.stop(id);
+      const previous = this.environment(record);
+      const sorted = (value: Record<string, string>) =>
+        JSON.stringify(Object.entries(value).sort());
+      environmentChanged = sorted(env) !== sorted(previous.user);
+      if (environmentChanged) {
+        record.config_revision = crypto.randomUUID();
+        record.metadata = empty();
+        record.error = undefined;
+        record.config.user_env = env;
+        record.config.managed_env = previous.managed;
+        record.config.env = { ...env, ...previous.managed };
+        await this.stop(id);
+      }
     }
     if (!record.enabled) await this.stop(id);
     await this.write(record);
-    return this.public(record);
+    return { summary: this.public(record), restart: environmentChanged && record.enabled };
   }
   async control(scope: string, payload: any, progress?: () => void) {
     const id = payload.local_id,

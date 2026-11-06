@@ -18,7 +18,7 @@ const build = await esbuild.build({
         b.onLoad({ filter: /.*/, namespace: 'fixture' }, () => ({
           loader: 'js',
           contents:
-            "export let API_BASE='https://chatter.example/backend';globalThis.__setMcpApiBase=value=>API_BASE=value;export const apiFetch=async(url,options)=>{globalThis.__mcpCalls.push({url,...options});return {authorization_url:'https://auth.example/authorize'}};export const localMcpScope=()=>'';export const syncLocalMcp=async()=>{};",
+            "export let API_BASE='https://chatter.example/backend';globalThis.__setMcpApiBase=value=>API_BASE=value;export const apiFetch=async(url,options)=>{globalThis.__mcpCalls.push({url,...options});return {authorization_url:'https://auth.example/authorize'}};export const localMcpScope=()=>'fixture-account';export const syncLocalMcp=async()=>{globalThis.__mcpCalls.push({url:'local-sync'})};",
         }));
       },
     },
@@ -42,6 +42,27 @@ try {
     assert.deepEqual(JSON.parse(call.body), {
       callback_url: base.replace(/\/+$/, '') + '/mcp/oauth/callback',
     });
+  }
+  const originalWindow=(globalThis as any).window;
+  try {
+    (globalThis as any).window={electronAPI:{localMcpManage:async(payload:any)=>{
+      (globalThis as any).__mcpCalls.push({url:'native-settings',payload});
+      return payload.action==='settings'
+        ? {env:{PRIVATE_KEY:'only-on-PC'},config_revision:'one',mode:'search',timeout_seconds:300}
+        : {error:'fixture_restart_failed'};
+    }}};
+    const before=(globalThis as any).__mcpCalls.length;
+    const settings=await fixture.exports.getLocalMcpSettings('fixture-id');
+    assert.deepEqual(settings.env,{PRIVATE_KEY:'only-on-PC'});
+    assert.deepEqual((globalThis as any).__mcpCalls.slice(before),[{
+      url:'native-settings',payload:{action:'settings',scope:'fixture-account',id:'fixture-id'},
+    }],'private settings use native IPC only, without HTTP or metadata sync');
+    await assert.rejects(()=>fixture.exports.configureLocalMcp('fixture-id',{env:{}}),
+      /fixture_restart_failed/);
+    assert.equal((globalThis as any).__mcpCalls.at(-1).url,'local-sync',
+      'persisted restart errors still resync public metadata before surfacing');
+  } finally {
+    (globalThis as any).window=originalWindow;
   }
   console.log(
     'PASS: desktop MCP OAuth uses current configured API base, preserves proxy prefix, and sends only the public callback URL',

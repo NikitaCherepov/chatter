@@ -96,9 +96,10 @@ export function LocalMcpForm({
           ))}
         <label>
           {t('mcp.local.env')}
-          <input
-            className={s.fieldInput}
-            type="password"
+          <textarea
+            className={s.textareaInput}
+            rows={5}
+            spellCheck={false}
             value={env}
             onChange={(e) => setEnv(e.target.value)}
             placeholder='{"API_KEY":"..."}'

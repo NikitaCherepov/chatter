@@ -151,7 +151,7 @@ There is no polling timer or separate settings-refresh button.
 - Desktop MCP settings install npm/stdio entries from Registry, npmjs package
   links, package identifiers, or npx commands. Direct executable commands and
   JSON with command/args/env can register an existing stdio server. Python/uvx
-  commands require that runtime to already be installed. Bare GitHub repository
+  packages use the managed runtime described below. Bare GitHub repository
   URLs are not automatic installation manifests.
 - npm uses a Chatter-managed current LTS Node runtime (24+). The official archive
   is checked against Node's SHA256 manifest and unpacked with the OS tar utility.
@@ -163,6 +163,17 @@ There is no polling timer or separate settings-refresh button.
   per-account folders under Electron userData/mcp. The full configuration uses
   Electron safeStorage; secret storage must be available. Credentials and launch
   commands are not included in the WebSocket metadata snapshot.
+- Expanding local connection settings reads its current environment JSON from
+  the encrypted configuration on that PC through the existing trusted IPC.
+  User variables are shown separately from Chatter-managed runtime variables;
+  closing the settings releases their query cache. They are not sent to the backend.
+- Saving changed environment JSON replaces the user variable map, restarts the
+  enabled process and rediscovers capabilities before syncing public metadata.
+  Saving identical values keeps the current process and tools. Removing a key,
+  or saving an empty object, removes that user variable without deleting managed
+  runtime paths. Invalid JSON/values leave the existing process unchanged.
+  Restart failures remain visible on the connection and can be corrected by
+  editing the saved JSON.
 - Opening the authenticated desktop WebSocket sends its local metadata snapshot.
   Admin permission changes request a fresh snapshot over the same connection.
   The backend keeps it in RAM, bound to the current authenticated WS connection,

@@ -36,6 +36,8 @@ export type LocalMcpConfig = {
   command?: string;
   args: string[];
   env: Record<string, string>;
+  user_env?: Record<string, string>;
+  managed_env?: Record<string, string>;
 };
 export function splitCommand(source: string): string[] {
   const out: string[] = [];

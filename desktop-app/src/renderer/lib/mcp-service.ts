@@ -99,6 +99,14 @@ export type LocalMcpSummary = {
 };
 export const getLocalMcp = (): Promise<LocalMcpSummary[]> =>
   window.electronAPI.localMcpManage({ action: 'list', scope: localMcpScope() });
+export type LocalMcpSettings = {
+  env: Record<string, string>;
+  config_revision?: string;
+  mode: 'search' | 'eager';
+  timeout_seconds: number;
+};
+export const getLocalMcpSettings = (id: string): Promise<LocalMcpSettings> =>
+  window.electronAPI.localMcpManage({ action: 'settings', scope: localMcpScope(), id });
 async function localManage(action: string, body: any) {
   const result = await window.electronAPI.localMcpManage({
     action,
@@ -106,6 +114,8 @@ async function localManage(action: string, body: any) {
     ...body,
   });
   await syncLocalMcp();
+  if (action === 'configure' && body.patch?.env !== undefined && result?.error)
+    throw new Error(result.error);
   return result;
 }
 export const installLocalMcp = (input: LocalMcpInput) => localManage('install', { input });

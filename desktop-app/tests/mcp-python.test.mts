@@ -77,10 +77,11 @@ const root = await fs.mkdtemp(path.join(os.tmpdir(), 'chatter-mcp-python-test-')
 await fs.writeFile(
   fixture,
   [
+    "if(process.env.MCP_TEST_FAIL==='1')process.exit(2);",
     "const r=require('node:readline');const send=(id,result)=>process.stdout.write(JSON.stringify({jsonrpc:'2.0',id,result})+'\\n');",
     "r.createInterface({input:process.stdin}).on('line',line=>{const m=JSON.parse(line);if(m.method==='initialize')send(m.id,{protocolVersion:m.params.protocolVersion,capabilities:{tools:{}},serverInfo:{name:'python-fixture',version:'1'}});",
-    "if(m.method==='tools/list')send(m.id,{tools:[{name:'echo',inputSchema:{type:'object',properties:{text:{type:'string'}}}}]});",
-    "if(m.method==='tools/call')send(m.id,{content:[{type:'text',text:m.params.arguments.text}]});});",
+    "if(m.method==='tools/list')send(m.id,{tools:[{name:'echo',description:JSON.stringify({value:process.env.MCP_TEST_VALUE||'',pid:process.pid}),inputSchema:{type:'object',properties:{text:{type:'string'}}}}]});",
+    "if(m.method==='tools/call'){if(m.params.arguments.text==='wait')setTimeout(()=>send(m.id,{content:[{type:'text',text:'late'}]}),10000);else send(m.id,{content:[{type:'text',text:m.params.arguments.text}]});}});",
   ].join('\n'),
 );
 const { uvRuntime } = require('../src/main/local-mcp-runtime.ts');
@@ -159,6 +160,54 @@ try {
     arguments: { text: 'cached' },
   });
   assert.equal(installs, 1, 'restart uses installed executable without reinstalling');
+  assert.deepEqual((await manager.settings('test-account',entry.id)).env, {},
+    'private settings exclude managed runtime environment');
+  const env = {MCP_TEST_VALUE:'updated',API_KEY:'private-fixture'};
+  const configured = await manager.configure('test-account',entry.id,{env});
+  assert.equal(configured.error,undefined);
+  assert.equal(configured.tools.length,1,'save rediscovers tools before returning');
+  assert.equal(JSON.parse(configured.tools[0].description).value,'updated',
+    'new process actually received changed environment');
+  assert.deepEqual((await manager.settings('test-account',entry.id)).env,env);
+  assert.equal(JSON.stringify(await manager.list('test-account')).includes('private-fixture'),false,
+    'public metadata never includes private settings');
+  await assert.rejects(()=>manager.settings('other-account',entry.id),/ENOENT/);
+  const unchanged=await manager.configure('test-account',entry.id,{
+    env:{API_KEY:'private-fixture',MCP_TEST_VALUE:'updated'},
+  });
+  assert.equal(unchanged.config_revision,configured.config_revision);
+  assert.equal(unchanged.tools[0].description,configured.tools[0].description,
+    'saving same values keeps the running process and tools');
+  for(const invalid of [null,[],42,{INVALID:42}]) {
+    await assert.rejects(()=>manager.configure('test-account',entry.id,{env:invalid}),/mcp_/);
+    assert.equal((await manager.list('test-account'))[0].tools.length,1);
+  }
+  await assert.rejects(()=>manager.configure('test-account',entry.id,{
+    expected_revision:entry.config_revision,env:{},
+  }),/mcp_connection_changed/);
+  const failed=await manager.configure('test-account',entry.id,{env:{MCP_TEST_FAIL:'1'}});
+  assert.ok(failed.error,'failed restart persists an explicit error');
+  assert.deepEqual((await manager.settings('test-account',entry.id)).env,{MCP_TEST_FAIL:'1'});
+  const recovered=await manager.configure('test-account',entry.id,{env:{}});
+  assert.equal(recovered.error,undefined);
+  assert.equal(recovered.tools.length,1,'correcting configuration recovers tools automatically');
+  assert.equal(JSON.parse(recovered.tools[0].description).value,'',
+    'empty JSON removes previous user variables');
+  assert.deepEqual((await manager.settings('test-account',entry.id)).env,{});
+  assert.equal(installs,1,'environment edits never reinstall the package');
+  const waiting=manager.control('test-account',{
+    local_id:entry.id,action:'call',tool:'echo',arguments:{text:'wait'},
+  }).then(()=>false,()=>true);
+  for(let attempt=0;attempt<100&&!manager.busy.has(entry.id);attempt++)
+    await new Promise(resolve=>setTimeout(resolve,5));
+  assert.ok(manager.busy.has(entry.id));
+  const duringCall=await manager.configure('test-account',entry.id,{
+    env:{MCP_TEST_VALUE:'after-cancel'},
+  });
+  assert.equal(duringCall.error,undefined,'active call cancellation does not block rediscovery');
+  assert.equal(duringCall.tools.length,1);
+  assert.equal(await waiting,true,'changing environment stops the old call');
+
   const account = path.join(
     root,
     'managed',

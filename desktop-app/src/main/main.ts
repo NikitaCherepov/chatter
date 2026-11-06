@@ -38,6 +38,7 @@ ipcMain.handle('mcp:manage',async(event,payload:any)=>{
  const manager=localMcpManager(),scope=payload?.scope;
  switch(payload?.action){
   case 'list':return manager.list(scope);
+  case 'settings':return manager.settings(scope,payload.id);
   case 'install':return manager.install(scope,payload.input);
   case 'configure':return manager.configure(scope,payload.id,payload.patch);
   case 'remove':return manager.remove(scope,payload.id);

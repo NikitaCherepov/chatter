@@ -20,12 +20,17 @@ const record=(name,body)=>window.__calls.push({name,body});
 window.electronAPI={localMcpManage:async()=>{}};
 let localEntries=[];
 export const getLocalMcp=async()=>structuredClone(localEntries);
+export const getLocalMcpSettings=async id=>{
+ record('local_settings',{id});
+ const row=localEntries.find(e=>e.id===id);
+ return {env:row.env||{},config_revision:row.config_revision,mode:row.mode,timeout_seconds:row.timeout_seconds};
+};
 export const installLocalMcp=async input=>{
  record('local_install',input);
- const entry={id:'local-fixture',name:input.name||'Local package',source:input.package?.identifier||input.source,enabled:true,mode:'search',tools:[{name:'local_echo',description:'Local echo tool'}],resources:[],selected_tools:null,timeout_seconds:300};
+ const entry={config_revision:'initial',env:{WINDOWS_MCP_CONTROL_POLICY:'balanced'},id:'local-fixture',name:input.name||'Local package',source:input.package?.identifier||input.source,enabled:true,mode:'search',tools:[{name:'local_echo',description:'Local echo tool'}],resources:[],selected_tools:null,timeout_seconds:300};
  localEntries.push(entry);return structuredClone(entry);
 };
-export const configureLocalMcp=async(id,patch)=>{record('local_configure',{id,patch});Object.assign(localEntries.find(e=>e.id===id),patch);};
+export const configureLocalMcp=async(id,patch)=>{record('local_configure',{id,patch});Object.assign(localEntries.find(e=>e.id===id),patch,patch.env?{config_revision:'updated'}:{});};
 export const removeLocalMcp=async id=>{record('local_remove',{id});localEntries=localEntries.filter(e=>e.id!==id);};
 export const refreshLocalMcp=async id=>{record('local_refresh',{id});};
 export const resolveImageUrl=url=>url;
@@ -258,7 +263,24 @@ let win;const errors=[];
  await until('window.__calls.some(c=>c.name==="local_install"&&c.body.package.identifier==="@example/local")');
  await until('document.querySelector("article")?.textContent.includes("Local package")');
  if(process.env.MCP_UI_SCREENSHOT_DIR){await new Promise(r=>setTimeout(r,250));fs.writeFileSync(path.join(process.env.MCP_UI_SCREENSHOT_DIR,'mcp-local-connected.png'),(await wc.capturePage()).toPNG());}
+ assert.equal(await js('window.__calls.filter(c=>c.name==="local_settings").length'),0,'closed settings never read private environment');
  await js('document.querySelector("article summary").click()');
+ await until('!!document.querySelector("article textarea[name=env]")');
+ assert.equal(await js('JSON.parse(document.querySelector("article textarea[name=env]").value).WINDOWS_MCP_CONTROL_POLICY'),'balanced');
+ await js('(()=>{const form=document.querySelector("article form");form.querySelector("textarea").value=JSON.stringify({WINDOWS_MCP_CONTROL_POLICY:"relaxed",WINDOWS_MCP_CONTROL_IDLE_TIMEOUT:"10"},null,2);form.requestSubmit()})()');
+ await until('window.__calls.some(c=>c.name==="local_configure"&&c.body.patch.env?.WINDOWS_MCP_CONTROL_POLICY==="relaxed")');
+ assert.equal(await js('window.__calls.find(c=>c.name==="local_configure"&&c.body.patch.env).body.patch.expected_revision'),'initial');
+ await until('document.querySelector("article form button")?.disabled===false');
+ const reads=await js('window.__calls.filter(c=>c.name==="local_settings").length');
+ await js('document.querySelector("article summary").click()');
+ await until('!document.querySelector("article textarea[name=env]")');
+ await js('document.querySelector("article summary").click()');
+ await until('!!document.querySelector("article textarea[name=env]")');
+ assert.ok(await js('window.__calls.filter(c=>c.name==="local_settings").length')>reads,'reopening reads current local settings');
+ assert.deepEqual(await js('JSON.parse(document.querySelector("article textarea[name=env]").value)'),{
+   WINDOWS_MCP_CONTROL_POLICY:'relaxed',WINDOWS_MCP_CONTROL_IDLE_TIMEOUT:'10',
+ });
+
  await js('Array.from(document.querySelector("article").querySelectorAll("button[role=switch]")).find(b=>document.getElementById(b.getAttribute("aria-labelledby"))?.textContent.trim()==="Не запрашивать подтверждения для этого MCP").click()');
  await until('window.__calls.some(c=>c.name==="local_configure"&&c.body.patch.approval_policy?.allow_all===true)');
  await until('!document.querySelector("article button[role=switch]").disabled');

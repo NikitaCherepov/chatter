@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useLocalMcp } from '../lib/useMcp';
+import { useLocalMcp, useLocalMcpSettings } from '../lib/useMcp';
 import * as api from '../lib/mcp-service';
 import { emptyMcpApproval } from '../../main/local-mcp-spec';
 import { Select } from './Select';
@@ -15,7 +15,8 @@ export function LocalMcpPanel({ allowed }: { allowed: boolean }) {
   const { t } = useTranslation(),
     { query, mutation, available } = useLocalMcp();
   const [error, setError] = useState(''),
-    [remove, setRemove] = useState<string | null>(null);
+    [remove, setRemove] = useState<string | null>(null),
+    [expandedSettings, setExpandedSettings] = useState<Set<string>>(() => new Set());
   useEffect(() => {
     const handler = (event: Event) => {
       const error = (event as CustomEvent).detail?.error;
@@ -83,6 +84,16 @@ export function LocalMcpPanel({ allowed }: { allowed: boolean }) {
               </button>
             </div>
             <AnimatedDetails
+              open={expandedSettings.has(row.id)}
+              locked={busy}
+              onOpenChange={(open) =>
+                setExpandedSettings((previous) => {
+                  const next = new Set(previous);
+                  if (open) next.add(row.id);
+                  else next.delete(row.id);
+                  return next;
+                })
+              }
               className={styles.details}
               summary={
                 <>
@@ -114,58 +125,9 @@ export function LocalMcpPanel({ allowed }: { allowed: boolean }) {
                   </div>
                 ))}
 
-                <form
-                  className={`${styles.settingsForm} ${styles.settingsGrid}`}
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    const data = new FormData(e.currentTarget);
-                    void run(async () =>
-                      api.configureLocalMcp(row.id, {
-                        timeout_seconds: Number(data.get('timeout')),
-                        ...(String(data.get('env') || '').trim()
-                          ? { env: JSON.parse(String(data.get('env'))) }
-                          : {}),
-                      }),
-                    );
-                  }}
-                >
-                  <label>
-                    {t('mcp.mode')}
-                    <Select
-                      value={row.mode}
-                      disabled={busy}
-                      onChange={(mode) => void run(() => api.configureLocalMcp(row.id, { mode }))}
-                      options={[
-                        { value: 'search', label: t('mcp.searchMode') },
-                        { value: 'eager', label: t('mcp.eagerMode') },
-                      ]}
-                    />
-                  </label>
-                  <label>
-                    {t('mcp.timeout')}
-                    <input
-                      className={s.fieldInput}
-                      type="number"
-                      name="timeout"
-                      min={10}
-                      max={3600}
-                      defaultValue={row.timeout_seconds}
-                    />
-                  </label>
-                  <label className={styles.fullWidth}>
-                    {t('mcp.local.env')}
-                    <input
-                      className={s.fieldInput}
-                      name="env"
-                      type="password"
-                      placeholder='{"API_KEY":"..."}'
-                      autoComplete="off"
-                    />
-                  </label>
-                  <button className={s.cancelBtn} disabled={busy}>
-                    {t('mcp.save')}
-                  </button>
-                </form>
+                {expandedSettings.has(row.id) && (
+                  <LocalMcpConfiguration row={row} busy={busy} run={run} />
+                )}
               </div>
             </AnimatedDetails>
             <McpTools
@@ -208,5 +170,88 @@ export function LocalMcpPanel({ allowed }: { allowed: boolean }) {
         />
       )}
     </section>
+  );
+}
+
+function LocalMcpConfiguration({
+  row,
+  busy,
+  run,
+}: {
+  row: api.LocalMcpSummary;
+  busy: boolean;
+  run: (action: () => Promise<unknown>) => Promise<void>;
+}) {
+  const { t } = useTranslation();
+  const query = useLocalMcpSettings(row.id);
+  if (query.isPending) return <p role="status">{t('common.loading')}</p>;
+  if (query.isError)
+    return (
+      <div role="alert">
+        <p>{t('mcp.error')}</p>
+        <button className={s.cancelBtn} onClick={() => void query.refetch()}>
+          {t('mcp.refresh')}
+        </button>
+      </div>
+    );
+  const config = query.data,
+    disabled = busy || query.isFetching;
+  return (
+    <form
+      key={config.config_revision || row.id}
+      className={styles.settingsForm + ' ' + styles.settingsGrid}
+      onSubmit={(event) => {
+        event.preventDefault();
+        const data = new FormData(event.currentTarget);
+        void run(() =>
+          api.configureLocalMcp(row.id, {
+            expected_revision: config.config_revision,
+            timeout_seconds: Number(data.get('timeout')),
+            env: JSON.parse(String(data.get('env') || '').trim() || '{}'),
+          }),
+        );
+      }}
+    >
+      <label>
+        {t('mcp.mode')}
+        <Select
+          value={config.mode}
+          disabled={disabled}
+          onChange={(mode) => void run(() => api.configureLocalMcp(row.id, { mode }))}
+          options={[
+            { value: 'search', label: t('mcp.searchMode') },
+            { value: 'eager', label: t('mcp.eagerMode') },
+          ]}
+        />
+      </label>
+      <label>
+        {t('mcp.timeout')}
+        <input
+          className={s.fieldInput}
+          type="number"
+          name="timeout"
+          min={10}
+          max={3600}
+          defaultValue={config.timeout_seconds}
+          disabled={disabled}
+        />
+      </label>
+      <label className={styles.fullWidth}>
+        {t('mcp.local.env')}
+        <textarea
+          className={s.textareaInput}
+          name="env"
+          rows={5}
+          spellCheck={false}
+          defaultValue={JSON.stringify(config.env, null, 2)}
+          disabled={disabled}
+          placeholder='{"API_KEY":"..."}'
+          autoComplete="off"
+        />
+      </label>
+      <button className={s.cancelBtn} disabled={disabled}>
+        {t('mcp.save')}
+      </button>
+    </form>
   );
 }
