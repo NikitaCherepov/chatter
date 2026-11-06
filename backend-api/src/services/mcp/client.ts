@@ -10,6 +10,7 @@ import { db } from '../../db.js';
 import { mcpHttp, mcpUrl, resolveMcpAddress } from './network.js';
 import {
   credentials,
+  serverOAuthClient,
   saveCredentials,
   requireConnection,
   policy,
@@ -18,7 +19,10 @@ import {
 } from './store.js';
 
 const busy = new Set<number>();
-export const activeCalls = new Map<number, { userId: number; controller: AbortController }>();
+export const activeCalls = new Map<
+  number,
+  { userId: number; controller: AbortController; row?: McpConnection }
+>();
 function callbackUrl(value?: unknown) {
   const url = normalizeMcpCallbackUrl(value ?? policy().oauth_callback_url ?? '');
   if (!url) throw new Error('mcp_oauth_callback_not_configured');
@@ -31,6 +35,7 @@ function provider(
   redirectUri?: string,
 ): OAuthClientProvider {
   let saved = credentials(row);
+  const registered = serverOAuthClient(row.server_id, row.url);
   const update = (patch: any) => {
     saved = { ...saved, ...patch };
     saveCredentials(row, saved);
@@ -38,7 +43,7 @@ function provider(
   const redirect = () => {
     // A capability refresh must report "sign in" rather than trying to start
     // an interactive OAuth registration without a callback supplied by desktop.
-    if (!onRedirect && !saved.tokens && !saved.client)
+    if (!onRedirect && !saved.tokens && !saved.client && !redirectUri)
       throw new Error('mcp_authorization_required');
     return callbackUrl(redirectUri ?? saved.oauth_redirect_uri);
   };
@@ -52,18 +57,46 @@ function provider(
         redirect_uris: [redirect()],
         grant_types: ['authorization_code', 'refresh_token'],
         response_types: ['code'],
-        token_endpoint_auth_method: 'none',
+        token_endpoint_auth_method:
+          registered?.token_endpoint_auth_method ||
+          (registered?.client_secret ? 'client_secret_post' : 'none'),
+        ...(registered?.scope ? { scope: registered.scope } : {}),
       };
     },
     state: () => state || '',
-    clientInformation: () => saved.client,
-    saveClientInformation: (client) => update({ client }),
+    clientInformation: () => {
+      if (
+        registered &&
+        saved.client?.issuer &&
+        saved.discovery?.authorizationServerUrl &&
+        saved.client.issuer !== saved.discovery.authorizationServerUrl
+      )
+        throw new Error('mcp_oauth_issuer_changed');
+      return registered
+        ? { ...registered, ...(saved.client?.issuer ? { issuer: saved.client.issuer } : {}) }
+        : saved.client;
+    },
+    saveClientInformation: (client) => {
+      if (registered && client.client_id !== registered.client_id)
+        throw new Error('mcp_oauth_client_changed');
+      update({
+        client: registered ? { client_id: client.client_id, issuer: client.issuer } : client,
+      });
+    },
     tokens: () => saved.tokens,
     saveTokens: (tokens) => update({ tokens }),
     saveCodeVerifier: (verifier) => update({ verifier }),
     codeVerifier: () => saved.verifier,
     discoveryState: () => saved.discovery,
-    saveDiscoveryState: (discovery) => update({ discovery }),
+    saveDiscoveryState: (discovery) => {
+      if (
+        registered &&
+        saved.client?.issuer &&
+        saved.client.issuer !== discovery.authorizationServerUrl
+      )
+        throw new Error('mcp_oauth_issuer_changed');
+      update({ discovery });
+    },
     redirectToAuthorization: async (url) => {
       await resolveMcpAddress(mcpUrl(url.href));
       if (!onRedirect) throw new Error('mcp_authorization_required');
@@ -183,7 +216,7 @@ async function session<T>(
         30_000,
       );
     }
-    activeCalls.set(id, { userId, controller: entry.controller });
+    activeCalls.set(id, { userId, controller: entry.controller, row: entry.row });
     signal?.addEventListener('abort', abort, { once: true });
     if (signal?.aborted) abort();
     if (handshakeTimer) {
@@ -439,7 +472,8 @@ export function cancelCall(userId: number, id: number) {
 export function cancelForbiddenCalls() {
   for (const entry of sessions.values()) {
     try {
-      requireConnection(entry.userId, entry.id);
+      const current = requireConnection(entry.userId, entry.id);
+      if (current.credentials !== entry.row.credentials) throw new Error('mcp_connection_changed');
     } catch {
       entry.controller.abort(new Error('mcp_access_revoked'));
       void closeSession(entry);
@@ -448,7 +482,9 @@ export function cancelForbiddenCalls() {
 
   for (const [id, call] of activeCalls) {
     try {
-      requireConnection(call.userId, id);
+      const current = requireConnection(call.userId, id);
+      if (call.row && current.credentials !== call.row.credentials)
+        throw new Error('mcp_connection_changed');
     } catch {
       call.controller.abort(new Error('mcp_access_revoked'));
     }
@@ -473,7 +509,8 @@ export async function beginOAuth(userId: number, id: number, automaticCallback?:
     // Force user authorization rather than silently reusing old tokens.
     const secret = credentials(row);
     delete secret.tokens;
-    if (secret.oauth_redirect_uri !== redirectUri) delete secret.client;
+    if (secret.oauth_redirect_uri !== redirectUri && !serverOAuthClient(row.server_id, row.url))
+      delete secret.client;
     secret.oauth_redirect_uri = redirectUri;
     saveCredentials(row, secret);
     await session(userId, id, undefined, async () => ({}), {

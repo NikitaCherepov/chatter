@@ -11,7 +11,7 @@ const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'chatter-mcp-ui-'));
 const desktopRequire = createRequire(path.join(root, 'desktop-app/package.json'));
 const styles: string[] = [];
 const fixture = String.raw`
-export const state={policy:{enabled:true,allow_custom:false,show_catalog:true},servers:[{id:1,name:'GitHub',url:'https://github.example/mcp',description:'Repositories and issues',allowed:1,recommended:1}],
+export const state={policy:{enabled:true,allow_custom:false,show_catalog:true},servers:[{oauth_client:{client_id:'saved-client',scope:'repo',token_endpoint_auth_method:'auto',has_client_secret:true},transport:'streamable-http',source:'',id:1,name:'GitHub',url:'https://github.example/mcp',description:'Repositories and issues',allowed:1,recommended:1}],
 connections:[{id:1,name:'GitHub account',url:'https://github.example/mcp',enabled:1,mode:'search',timeout_seconds:300,has_credentials:true,blocked:false,tools:[{name:'search_repositories',description:'Search repositories'},{name:'create_issue',description:'Create an issue'}],selected_tools:null,capabilities:{tools:true,resources:true},resources:[{name:'Guide',uri:'notes://guide'}],resource_templates:[]}]};
 window.__calls=[];
 const access={allow_custom:{mode:'none',user_ids:[],excluded_user_ids:[]},show_catalog:{mode:'all',user_ids:[],excluded_user_ids:[]}};
@@ -57,6 +57,15 @@ export const api=async(url,options={})=>{
  const body=options.body?JSON.parse(options.body):undefined;record(url,body);
  if(url==='/api/model-access-users')return {users:[{id:81,name:'Alice',role:'user',is_admin:false},{id:82,name:'Bob',role:'user',is_admin:false}]};
  if(url==='/api/mcp/access'){if(body)Object.assign(access,body);return {access:structuredClone(access)};}
+ if(url.startsWith('/api/mcp/servers')&&body){
+   const id=Number(url.split('/').at(-1));
+   let row=state.servers.find(row=>row.id===id);
+   if(!row){row={id:state.servers.length+1};state.servers.push(row);}
+   const oauth=body.oauth_client;
+   const clean=oauth?{client_id:oauth.client_id,scope:oauth.scope,token_endpoint_auth_method:oauth.token_endpoint_auth_method,has_client_secret:oauth.client_secret===undefined?!!row.oauth_client?.has_client_secret:!!oauth.client_secret}:null;
+   Object.assign(row,body,{oauth_client:clean});
+   return {server:structuredClone(row)};
+ }
  if(url.includes('/users/'))return {policy:{override:body?.override||'inherit',allow_custom:true,enabled:true,show_catalog:state.policy.show_catalog,catalog_override:body?.catalog_override||'inherit'},connections:state.connections};
  if(url.endsWith('/policy')){Object.assign(state.policy,body);return {policy:state.policy};}
  if(url.includes('/catalog'))return getMcpCatalog();
@@ -334,6 +343,24 @@ let win;const errors=[];
  await js('document.querySelector(\'input[placeholder="Автоматически"]\').closest("form").dispatchEvent(new Event("submit",{bubbles:true,cancelable:true}))');
  await until('window.__calls.some(c=>c.name==="/api/mcp/policy"&&c.body.oauth_callback_url==="https://custom.example/backend/mcp/oauth/callback")');
  await js('Array.from(document.querySelectorAll("summary")).find(e=>e.textContent.includes("Авторизация OAuth")).click()');
+
+ await js('Array.from(document.querySelectorAll("article")).find(e=>e.querySelector("h3")?.textContent==="GitHub").querySelector("[class*=cardActions] button").click()');
+ await until('Array.from(document.querySelectorAll("label")).some(e=>e.textContent.includes("Client ID"))');
+ assert.equal(await js('Array.from(document.querySelectorAll("label")).find(e=>e.textContent.startsWith("Client ID")).querySelector("input").value'),'saved-client');
+ assert.equal(await js('document.querySelector("input[type=password]").value'),'','stored secret is not returned to the form');
+ assert.equal(await js('document.querySelector("input[type=password]").placeholder'),'Секрет сохранён');
+ if(process.env.MCP_UI_SCREENSHOT_DIR){
+   await new Promise(r=>setTimeout(r,350));await js('document.querySelector("input[type=password]").scrollIntoView({block:"center"})');
+   fs.writeFileSync(path.join(process.env.MCP_UI_SCREENSHOT_DIR,'mcp-admin-registration.png'),(await wc.capturePage()).toPNG());
+ }
+ await js('document.querySelector("input[type=password]").closest("form").requestSubmit()');
+ await until('window.__calls.some(c=>c.name==="/api/mcp/servers/1"&&c.body.oauth_client?.client_id==="saved-client")');
+ assert.equal(await js('window.__calls.find(c=>c.name==="/api/mcp/servers/1"&&c.body.oauth_client?.client_id==="saved-client").body.oauth_client.client_secret'),undefined,'unchanged secret is omitted when saving');
+ await until('!Array.from(document.querySelectorAll("article")).find(e=>e.querySelector("h3")?.textContent==="GitHub").querySelector("[class*=cardActions] button").disabled');
+ await js('Array.from(document.querySelectorAll("article")).find(e=>e.querySelector("h3")?.textContent==="GitHub").querySelector("[class*=cardActions] button").click()');
+ await click('Удалить сохранённый секрет');
+ await js('document.querySelector("input[type=password]").closest("form").requestSubmit()');
+ await until('window.__calls.some(c=>c.name==="/api/mcp/servers/1"&&c.body.oauth_client?.client_secret==="")');
 
  await click('Найти');
  await until('document.body.innerText.includes("Remote tools")');

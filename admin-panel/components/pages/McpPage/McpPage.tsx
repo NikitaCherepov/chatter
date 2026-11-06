@@ -11,7 +11,15 @@ import { FormField } from '../../ui/FormField/FormField';
 import { AnimatedDetails } from '../ModelsPage/AnimatedDetails';
 import { McpIcon } from './McpIcon';
 import s from './McpPage.module.css';
+type OAuthClient = {
+  client_id: string;
+  client_secret?: string;
+  has_client_secret?: boolean;
+  token_endpoint_auth_method: 'auto' | 'none' | 'client_secret_basic' | 'client_secret_post';
+  scope: string;
+};
 type Server = {
+  oauth_client?: OAuthClient | null;
   id: number;
   name: string;
   url: string;
@@ -22,6 +30,7 @@ type Server = {
   source: string;
 };
 const empty = {
+  oauth_client: null as OAuthClient | null,
   name: '',
   url: '',
   description: '',
@@ -115,7 +124,12 @@ export function McpPage() {
   };
   const editServer = (server: Server) => {
     setEditId(server.id);
-    setDraft({ ...server, allowed: !!server.allowed, recommended: !!server.recommended });
+    setDraft({
+      ...server,
+      oauth_client: server.oauth_client || null,
+      allowed: !!server.allowed,
+      recommended: !!server.recommended,
+    });
     setFormOpen(true);
   };
   const selectItem = (item: any) => {
@@ -247,7 +261,10 @@ export function McpPage() {
                 void run(async () => {
                   await api('/api/mcp/servers' + (editId ? '/' + editId : ''), {
                     method: editId ? 'PATCH' : 'POST',
-                    body: JSON.stringify(draft),
+                    body: JSON.stringify({
+                      ...draft,
+                      oauth_client: draft.transport === 'stdio' ? null : draft.oauth_client,
+                    }),
                   });
                   setFormOpen(false);
                   setDraft(empty);
@@ -270,7 +287,11 @@ export function McpPage() {
                   disabled={busy}
                   aria-label={t('mcp.design.connectionType')}
                   onChange={(value) =>
-                    setDraft({ ...draft, transport: value as typeof draft.transport })
+                    setDraft({
+                      ...draft,
+                      transport: value as typeof draft.transport,
+                      oauth_client: null,
+                    })
                   }
                   options={[
                     { value: 'streamable-http', label: t('mcp.design.remote') },
@@ -302,11 +323,143 @@ export function McpPage() {
                       setDraft({
                         ...draft,
                         [draft.transport === 'stdio' ? 'source' : 'url']: event.target.value,
+                        oauth_client: null,
                       })
                     }
                   />
                 </FormField>
               </div>
+              {draft.transport === 'streamable-http' && (
+                <div className={s.wide}>
+                  <Toggle
+                    checked={!!draft.oauth_client}
+                    disabled={busy}
+                    label={t('mcp.oauth.registered')}
+                    onChange={(enabled) =>
+                      setDraft({
+                        ...draft,
+                        oauth_client: enabled
+                          ? { client_id: '', token_endpoint_auth_method: 'auto', scope: '' }
+                          : null,
+                      })
+                    }
+                  />
+                  <p className={s.hint}>{t('mcp.oauth.registeredHint')}</p>
+                </div>
+              )}
+              {draft.transport === 'streamable-http' && draft.oauth_client && (
+                <>
+                  <FormField label="Client ID">
+                    <input
+                      value={draft.oauth_client.client_id}
+                      required
+                      maxLength={2048}
+                      disabled={busy}
+                      autoComplete="off"
+                      onChange={(event) =>
+                        setDraft({
+                          ...draft,
+                          oauth_client: {
+                            ...draft.oauth_client!,
+                            client_id: event.target.value,
+                            ...(event.target.value !== draft.oauth_client!.client_id
+                              ? { client_secret: undefined, has_client_secret: false }
+                              : {}),
+                          },
+                        })
+                      }
+                    />
+                  </FormField>
+                  <FormField
+                    label="Client Secret"
+                    hint={t(
+                      draft.oauth_client.has_client_secret
+                        ? 'mcp.oauth.secretSaved'
+                        : 'mcp.oauth.secretHint',
+                    )}
+                  >
+                    <input
+                      type="password"
+                      value={draft.oauth_client.client_secret || ''}
+                      maxLength={8192}
+                      disabled={busy}
+                      autoComplete="new-password"
+                      placeholder={
+                        draft.oauth_client.has_client_secret ? t('mcp.oauth.secretStored') : ''
+                      }
+                      onChange={(event) =>
+                        setDraft({
+                          ...draft,
+                          oauth_client: {
+                            ...draft.oauth_client!,
+                            client_secret:
+                              event.target.value ||
+                              (draft.oauth_client!.has_client_secret ? undefined : ''),
+                          },
+                        })
+                      }
+                    />
+                    {draft.oauth_client.has_client_secret && (
+                      <button
+                        type="button"
+                        className="buttonSecondary"
+                        disabled={busy}
+                        onClick={() =>
+                          setDraft({
+                            ...draft,
+                            oauth_client: {
+                              ...draft.oauth_client!,
+                              has_client_secret: false,
+                              client_secret: '',
+                            },
+                          })
+                        }
+                      >
+                        {t('mcp.oauth.removeSecret')}
+                      </button>
+                    )}
+                  </FormField>
+                  <FormField label={t('mcp.oauth.authMethod')}>
+                    <Select
+                      value={draft.oauth_client.token_endpoint_auth_method}
+                      disabled={busy}
+                      onChange={(value) =>
+                        setDraft({
+                          ...draft,
+                          oauth_client: {
+                            ...draft.oauth_client!,
+                            token_endpoint_auth_method:
+                              value as OAuthClient['token_endpoint_auth_method'],
+                          },
+                        })
+                      }
+                      options={[
+                        { value: 'auto', label: t('mcp.oauth.automatic') },
+                        { value: 'client_secret_post', label: 'client_secret_post' },
+                        { value: 'client_secret_basic', label: 'client_secret_basic' },
+                        { value: 'none', label: t('mcp.oauth.noSecret') },
+                      ]}
+                    />
+                  </FormField>
+                  <FormField label={t('mcp.oauth.scope')} hint={t('mcp.oauth.scopeHint')}>
+                    <input
+                      value={draft.oauth_client.scope}
+                      maxLength={2000}
+                      disabled={busy}
+                      onChange={(event) =>
+                        setDraft({
+                          ...draft,
+                          oauth_client: {
+                            ...draft.oauth_client!,
+                            scope: event.target.value,
+                          },
+                        })
+                      }
+                    />
+                  </FormField>
+                  <p className={s.wide + ' ' + s.hint}>{t('mcp.oauth.registrationCallback')}</p>
+                </>
+              )}
               <div className={s.wide}>
                 <FormField label={t('mcp.description')}>
                   <textarea

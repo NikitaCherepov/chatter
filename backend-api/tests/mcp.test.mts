@@ -42,6 +42,9 @@ let pendingResponse: any,
   invalidCatalog = false,
   samplingDenied = false;
 let noDynamicRegistration = false;
+let registrations=0, issuedToken='oauth-private-token', rejectNextToken=false;
+const acceptedTokens=new Set(['oauth-private-token']);
+const tokenExchanges:any[]=[];
 let oauthUrl: URL | undefined,
   pkceVerifier = '';
 const echo = {
@@ -278,14 +281,19 @@ network.mcpHttp.fetch = async (input: any, init: any) => {
         authorization_endpoint: 'https://auth.example/authorize',
         token_endpoint: 'https://auth.example/token',
         registration_endpoint: noDynamicRegistration ? undefined : 'https://auth.example/register',
+        token_endpoint_auth_methods_supported:['none','client_secret_post','client_secret_basic'],
         response_types_supported: ['code'],
         grant_types_supported: ['authorization_code', 'refresh_token'],
         code_challenge_methods_supported: ['S256'],
       });
-    if (url.pathname === '/register')
+    if (url.pathname === '/register') {
+      registrations++;
       return json({ ...JSON.parse(String(init.body)), client_id: 'test-chatter-client' });
+    }
     if (url.pathname === '/token') {
       const params = new URLSearchParams(init.body);
+      tokenExchanges.push({params:Object.fromEntries(params),authorization:headers.get('Authorization')});
+      if(params.get('grant_type')==='authorization_code') {
       assert.equal(params.get('redirect_uri'), expectedCallback, 'token exchange uses the original callback');
       assert.equal(params.get('code'), 'test-authorization-code');
       assert.equal(
@@ -293,8 +301,10 @@ network.mcpHttp.fetch = async (input: any, init: any) => {
         pkceVerifier,
         'callback uses the saved PKCE verifier',
       );
+      } else assert.equal(params.get('grant_type'),'refresh_token');
+      acceptedTokens.add(issuedToken);
       return json({
-        access_token: 'oauth-private-token',
+        access_token: issuedToken,
         refresh_token: 'oauth-private-refresh',
         token_type: 'Bearer',
         expires_in: 3600,
@@ -307,7 +317,9 @@ network.mcpHttp.fetch = async (input: any, init: any) => {
         resource: 'https://oauth-mcp.example/mcp',
         authorization_servers: ['https://auth.example'],
       });
-    if (headers.get('Authorization') !== 'Bearer oauth-private-token')
+    const reject=rejectNextToken;
+    rejectNextToken=false;
+    if (reject || !acceptedTokens.has((headers.get('Authorization') || '').replace(/^Bearer /,'')))
       return json({}, 401, {
         'WWW-Authenticate':
           'Bearer resource_metadata="https://oauth-mcp.example/.well-known/oauth-protected-resource"',
@@ -1027,6 +1039,116 @@ try {
   assert.equal(staticResponse.status,400);
   assert.equal(staticResponse.body.error,'mcp_oauth_client_registration_required','missing DCR returns an actionable error');
   assert.equal(db.prepare('SELECT COUNT(*) AS n FROM mcp_oauth_states WHERE connection_id=?').get(staticOnly.id).n,0,'failed authorization leaves no pending state');
+  const appSecret='registered-app-private-secret';
+  const appBody={name:'Registered OAuth',url:'https://oauth-mcp.example/mcp',allowed:true,
+    oauth_client:{client_id:'registered-client',client_secret:appSecret,
+      token_endpoint_auth_method:'client_secret_post',scope:'repo read:user'}};
+  const configuredResponse=await request('/admin/servers','POST',appBody);
+  assert.equal(configuredResponse.status,201);
+  const configuredServer=configuredResponse.body.server;
+  assert.equal(configuredServer.oauth_client.has_client_secret,true);
+  assert.equal(JSON.stringify(configuredServer).includes(appSecret),false);
+  assert.equal(JSON.stringify((await request('/admin')).body).includes(appSecret),false);
+  assert.equal(JSON.stringify((await request('/user/81/mcp')).body).includes('registered-client'),false,
+    'desktop server lists never receive application credentials');
+  assert.equal(JSON.stringify((await request('/user/81/mcp/catalog')).body).includes(appSecret),false);
+  const encryptedApp=(db.prepare('SELECT oauth_client FROM mcp_servers WHERE id=?').get(configuredServer.id) as any).oauth_client;
+  assert.equal(encryptedApp.includes(appSecret),false,'application credentials are encrypted at rest');
+  const user81=store.saveConnection(81,{name:'Registered 81',server_id:configuredServer.id});
+  const user82=store.saveConnection(82,{name:'Registered 82',server_id:configuredServer.id});
+  const beforeRegistrations=registrations;
+  async function signInRegistered(userId:number,id:number,token:string) {
+    const result=await client.beginOAuth(userId,id,expectedCallback);
+    const url=new URL(result.authorization_url);
+    assert.equal(url.searchParams.get('client_id'),'registered-client');
+    assert.equal(url.searchParams.get('scope'),'repo read:user');
+    assert.equal(url.searchParams.get('code_challenge_method'),'S256');
+    assert.equal(result.authorization_url.includes(appSecret),false);
+    const row=store.connections(userId).find((row:any)=>row.id===id);
+    assert.equal(JSON.stringify(store.credentials(row)).includes(appSecret),false,
+      'shared application secret is not copied into per-user credentials');
+    pkceVerifier=store.credentials(row).verifier;
+    issuedToken=token;
+    await client.finishOAuth(url.searchParams.get('state')!,'test-authorization-code');
+    return url.searchParams.get('state')!;
+  }
+  await signInRegistered(81,user81.id,'oauth-user-81');
+  assert.equal(tokenExchanges.at(-1).params.client_id,'registered-client');
+  assert.equal(tokenExchanges.at(-1).params.client_secret,appSecret);
+  await signInRegistered(82,user82.id,'oauth-user-82');
+  const tokenFor=(user:number,id:number)=>store.credentials(store.connections(user).find((r:any)=>r.id===id)).tokens?.access_token;
+  assert.equal(tokenFor(81,user81.id),'oauth-user-81');
+  assert.equal(tokenFor(82,user82.id),'oauth-user-82','users keep independent access tokens');
+  assert.equal(registrations,beforeRegistrations,'pre-registered apps never call dynamic registration');
+  rejectNextToken=true;
+  issuedToken='oauth-user-81-refreshed';
+  await client.refreshTools(81,user81.id);
+  assert.equal(tokenExchanges.at(-1).params.grant_type,'refresh_token');
+  assert.equal(tokenExchanges.at(-1).params.client_secret,appSecret);
+  assert.equal(tokenFor(81,user81.id),'oauth-user-81-refreshed');
+  assert.equal(tokenFor(82,user82.id),'oauth-user-82');
+  const unchanged=await request('/admin/servers/'+configuredServer.id,'PATCH',{
+    ...configuredServer,allowed:true,recommended:false,
+  });
+  assert.equal(unchanged.status,200);
+  assert.equal((db.prepare('SELECT oauth_client FROM mcp_servers WHERE id=?').get(configuredServer.id) as any).oauth_client,encryptedApp);
+  assert.equal(tokenFor(82,user82.id),'oauth-user-82','unrelated edits keep valid user logins');
+  const pending=await client.beginOAuth(81,user81.id,expectedCallback);
+  const personal=store.saveConnection(81,{name:'PAT unaffected',server_id:configuredServer.id,token:'personal-pat'});
+  const inFlight=client.callRemoteTool(82,user82.id,'wait',{}).catch((error:any)=>error);
+  await waitFor(()=>!!pendingResponse);
+  assert.equal((await request('/admin/servers/'+configuredServer.id,'PATCH',{
+    ...appBody,oauth_client:{...appBody.oauth_client,client_secret:'rotated-app-secret'},
+  })).status,200);
+  assert.match(String(await inFlight),/mcp_access_revoked/,'application changes cancel calls using the old login');
+  pendingResponse.destroy();
+  pendingResponse=null;
+  assert.equal(tokenFor(81,user81.id),undefined);
+  assert.equal(tokenFor(82,user82.id),undefined,'rotation clears all logins bound to this app');
+  assert.equal(store.credentials(store.connections(81).find((r:any)=>r.id===personal.id)).bearer,'personal-pat');
+  await assert.rejects(()=>client.finishOAuth(new URL(pending.authorization_url).searchParams.get('state')!,'test-authorization-code'),/invalid_oauth_state/);
+  for(const invalid of [
+    {client_id:''},{client_id:'x',client_secret:42},
+    {client_id:'x',token_endpoint_auth_method:'invalid'},
+    {client_id:'new-client',token_endpoint_auth_method:'client_secret_post'},
+  ]) {
+    assert.equal((await request('/admin/servers/'+configuredServer.id,'PATCH',{
+      ...appBody,oauth_client:invalid,
+    })).status,400);
+  }
+  for(const method of ['client_secret_basic','none']) {
+    assert.equal((await request('/admin/servers/'+configuredServer.id,'PATCH',{
+      ...appBody,oauth_client:{...appBody.oauth_client,token_endpoint_auth_method:method,
+        client_secret:method==='none'?'':appSecret},
+    })).status,200);
+    await signInRegistered(81,user81.id,'oauth-'+method);
+    const exchange=tokenExchanges.at(-1);
+    if(method==='client_secret_basic') {
+      assert.equal(exchange.authorization,'Basic '+Buffer.from('registered-client:'+appSecret).toString('base64'));
+      assert.equal(exchange.params.client_secret,undefined);
+    } else {
+      assert.equal(exchange.authorization,null);
+      assert.equal(exchange.params.client_secret,undefined);
+      assert.equal(store.serverOAuthClient(configuredServer.id,configuredServer.url).client_secret,undefined);
+    }
+  }
+  const issuerRow=store.connections(81).find((r:any)=>r.id===user81.id);
+  const issuerSecret=store.credentials(issuerRow);
+  store.saveCredentials(issuerRow,{...issuerSecret,discovery:{
+    ...issuerSecret.discovery,authorizationServerUrl:'https://other-auth.example',
+  }});
+  const beforeIssuerChange=tokenExchanges.length;
+  await assert.rejects(()=>client.beginOAuth(81,user81.id,expectedCallback),/mcp_oauth_issuer_changed/);
+  assert.equal(tokenExchanges.length,beforeIssuerChange,'changed authorization server never receives registered credentials');
+  assert.equal(store.serverOAuthClient(configuredServer.id,'https://other.example/mcp'),undefined,
+    'application credentials are pinned to the exact approved endpoint');
+  assert.equal((await request('/admin/servers/'+configuredServer.id,'PATCH',{
+    ...appBody,url:'https://other.example/mcp',oauth_client:undefined,
+  })).body.server.oauth_client,null,'changing endpoint removes the previous registration');
+  assert.equal((await request('/admin/servers/'+configuredServer.id,'PATCH',{
+    ...appBody,oauth_client:null,
+  })).body.server.oauth_client,null,'administrator can explicitly remove application credentials');
+  console.log('PASS: pre-registered OAuth without DCR, PKCE, post/basic/public clients, encrypted secrets, refresh, per-user isolation, rotation and endpoint binding');
   noDynamicRegistration=false;
   store.savePolicy({ override: 'allow' }, 81);
   store.savePolicy({ override: 'deny' }, 82);

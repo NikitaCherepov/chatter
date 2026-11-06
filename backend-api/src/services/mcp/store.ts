@@ -38,7 +38,11 @@ export type McpConnection = {
   updated_at: number;
 };
 export const allServers = () =>
-  db.prepare('SELECT * FROM mcp_servers ORDER BY name,id').all() as McpServer[];
+  db
+    .prepare(
+      'SELECT id,name,url,description,allowed,recommended,transport,source FROM mcp_servers ORDER BY name,id',
+    )
+    .all() as McpServer[];
 export const connections = (userId: number) => [
   ...(db
     .prepare('SELECT * FROM mcp_connections WHERE user_id=? ORDER BY id')
@@ -192,8 +196,87 @@ export function saveAccessSettings(body: any) {
   })();
   return accessSettings();
 }
+export type McpOAuthClient = {
+  client_id: string;
+  client_secret?: string;
+  token_endpoint_auth_method?: 'none' | 'client_secret_basic' | 'client_secret_post';
+  scope?: string;
+};
+export function serverOAuthClient(
+  serverId: number | null,
+  url: string,
+): McpOAuthClient | undefined {
+  if (serverId == null) return;
+  const row = db
+    .prepare(
+      "SELECT oauth_client FROM mcp_servers WHERE id=? AND url=? AND transport='streamable-http'",
+    )
+    .get(serverId, url) as any;
+  return row?.oauth_client ? unseal(row.oauth_client) : undefined;
+}
+export function adminServers() {
+  return allServers().map((server) => {
+    const client = serverOAuthClient(server.id, server.url);
+    return {
+      ...server,
+      oauth_client: client
+        ? {
+            client_id: client.client_id,
+            has_client_secret: !!client.client_secret,
+            token_endpoint_auth_method: client.token_endpoint_auth_method || 'auto',
+            scope: client.scope || '',
+          }
+        : null,
+    };
+  });
+}
+function normalizeOAuthClient(value: any, previous?: McpOAuthClient): McpOAuthClient | undefined {
+  if (value === null) return;
+  if (
+    !value ||
+    typeof value !== 'object' ||
+    Array.isArray(value) ||
+    typeof value.client_id !== 'string' ||
+    !value.client_id.trim() ||
+    value.client_id.length > 2048 ||
+    /[\x00-\x1f\x7f]/.test(value.client_id)
+  )
+    throw new Error('mcp_invalid_oauth_client');
+  const client_id = value.client_id.trim();
+  const method = value.token_endpoint_auth_method || 'auto';
+  if (!['auto', 'none', 'client_secret_basic', 'client_secret_post'].includes(method))
+    throw new Error('mcp_invalid_oauth_client');
+  const secret =
+    value.client_secret === undefined
+      ? previous?.client_id === client_id
+        ? previous.client_secret
+        : undefined
+      : value.client_secret;
+  if (
+    secret !== undefined &&
+    (typeof secret !== 'string' || secret.length > 8192 || /[\x00\r\n]/.test(secret))
+  )
+    throw new Error('mcp_invalid_oauth_client');
+  if (['client_secret_basic', 'client_secret_post'].includes(method) && !secret)
+    throw new Error('mcp_invalid_oauth_client');
+  if (method === 'none' && secret) throw new Error('mcp_invalid_oauth_client');
+  if (
+    value.scope !== undefined &&
+    (typeof value.scope !== 'string' ||
+      value.scope.length > 2000 ||
+      /[\x00-\x1f\x7f]/.test(value.scope))
+  )
+    throw new Error('mcp_invalid_oauth_client');
+  return {
+    client_id,
+    ...(secret ? { client_secret: secret } : {}),
+    ...(method !== 'auto' ? { token_endpoint_auth_method: method } : {}),
+    ...(value.scope?.trim() ? { scope: value.scope.trim().split(/\s+/).join(' ') } : {}),
+  };
+}
 export function saveServer(body: any, id?: number) {
   const existing = id ? allServers().find((server) => server.id === id) : undefined;
+  if (id && !existing) throw new Error('mcp_server_not_found');
   const transport = body.transport ?? existing?.transport ?? 'streamable-http';
   if (!['streamable-http', 'stdio'].includes(transport)) throw new Error('mcp_invalid_server');
   const source = transport === 'stdio' ? String(body.source ?? existing?.source ?? '').trim() : '';
@@ -210,6 +293,21 @@ export function saveServer(body: any, id?: number) {
     ![0, 1].includes(body.recommended)
   )
     throw new Error('mcp_invalid_server');
+  const previousClient = existing ? serverOAuthClient(existing.id, existing.url) : undefined;
+  const sameEndpoint = existing?.url === url && existing?.transport === transport;
+  const nextClient =
+    transport === 'stdio'
+      ? undefined
+      : body.oauth_client === undefined
+        ? sameEndpoint
+          ? previousClient
+          : undefined
+        : normalizeOAuthClient(body.oauth_client, sameEndpoint ? previousClient : undefined);
+  const clientChanged = JSON.stringify(previousClient) !== JSON.stringify(nextClient);
+  const previousEncrypted = existing
+    ? (db.prepare('SELECT oauth_client FROM mcp_servers WHERE id=?').get(id) as any).oauth_client
+    : null;
+  const encrypted = clientChanged ? (nextClient ? seal(nextClient) : null) : previousEncrypted;
   const args = [
     name,
     url,
@@ -219,21 +317,36 @@ export function saveServer(body: any, id?: number) {
     transport,
     source,
   ];
-  if (id) {
-    if (!allServers().some((server) => server.id === id)) throw new Error('mcp_server_not_found');
-    // Connections and credentials are bound to the exact URL. An edit must not redirect existing secrets.
-    db.prepare(
-      'UPDATE mcp_servers SET name=?,url=?,description=?,allowed=?,recommended=?,transport=?,source=? WHERE id=?',
-    ).run(...args, id);
-  } else
-    id = Number(
-      db
-        .prepare(
-          'INSERT INTO mcp_servers(name,url,description,allowed,recommended,transport,source) VALUES(?,?,?,?,?,?,?)',
-        )
-        .run(...args).lastInsertRowid,
-    );
-  return allServers().find((server) => server.id === id)!;
+  db.transaction(() => {
+    if (id) {
+      db.prepare(
+        'UPDATE mcp_servers SET name=?,url=?,description=?,allowed=?,recommended=?,transport=?,source=?,oauth_client=? WHERE id=?',
+      ).run(...args, encrypted, id);
+    } else {
+      id = Number(
+        db
+          .prepare(
+            'INSERT INTO mcp_servers(name,url,description,allowed,recommended,transport,source,oauth_client) VALUES(?,?,?,?,?,?,?,?)',
+          )
+          .run(...args, encrypted).lastInsertRowid,
+      );
+    }
+    if (existing && (clientChanged || !sameEndpoint)) {
+      const rows = db
+        .prepare('SELECT * FROM mcp_connections WHERE server_id=?')
+        .all(id) as McpConnection[];
+      for (const row of rows) {
+        db.prepare('DELETE FROM mcp_oauth_states WHERE connection_id=?').run(row.id);
+        // Personal access tokens are independent of the OAuth application.
+        if (row.credentials && !credentials(row).bearer)
+          db.prepare('UPDATE mcp_connections SET credentials=NULL,updated_at=? WHERE id=?').run(
+            Date.now(),
+            row.id,
+          );
+      }
+    }
+  })();
+  return adminServers().find((server) => server.id === id)!;
 }
 export function deleteServer(id: number) {
   db.prepare('DELETE FROM mcp_servers WHERE id=?').run(id);
@@ -273,9 +386,8 @@ function seal(value: unknown) {
   const data = Buffer.concat([cipher.update(JSON.stringify(value)), cipher.final()]);
   return Buffer.concat([iv, cipher.getAuthTag(), data]).toString('base64');
 }
-export function credentials(row: McpConnection): any {
-  if (!row.credentials) return {};
-  const data = Buffer.from(row.credentials, 'base64');
+function unseal(encrypted: string): any {
+  const data = Buffer.from(encrypted, 'base64');
   const decipher = crypto.createDecipheriv(
     'aes-256-gcm',
     getEncryptionKey(['ENCRYPTION_KEY']),
@@ -286,6 +398,10 @@ export function credentials(row: McpConnection): any {
     Buffer.concat([decipher.update(data.subarray(28)), decipher.final()]).toString(),
   );
 }
+export function credentials(row: McpConnection): any {
+  return row.credentials ? unseal(row.credentials) : {};
+}
+
 export function saveCredentials(row: McpConnection, value: any) {
   const encrypted = seal(value);
   const result = db

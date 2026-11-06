@@ -241,8 +241,35 @@ plain creation with an optional token. A failed sign-in retains the created
 connection for retry. Refreshing an unauthenticated connection returns
 mcp_authorization_required instead of requiring callback configuration.
 
-Servers that do not support automatic client registration return
-mcp_oauth_client_registration_required. In particular, the remote GitHub MCP
-requires a pre-registered OAuth/GitHub application. The current UI/provider does
-not yet accept pre-registered client ID/secret configuration, so GitHub OAuth is
-not a complete supported login path. A PAT can still be supplied explicitly.
+## Pre-registered OAuth applications
+
+The administrator can enable a pre-registered OAuth application in the existing
+remote MCP server editor. Set its Client ID and optional Client Secret, select
+automatic/client_secret_post/client_secret_basic/none authentication, and optionally
+supply space-separated scopes as a fallback to the MCP server's metadata.
+
+The registration is bound to that approved server's exact HTTPS URL. Its credentials
+use the same AES-256-GCM encryption as per-user MCP credentials, in mcp_servers.oauth_client. The admin response exposes the Client ID and whether a secret exists,
+never the secret itself. Desktop lists and catalog results omit application
+credentials. Leaving the secret field empty preserves a saved secret; the separate
+remove action deletes it. Changing the endpoint clears the old registration.
+
+Users connect the approved server and use the existing OAuth sign-in button.
+Each user keeps independent encrypted access/refresh tokens. Shared application
+secrets remain in the server registration, not in users' credentials or browser URLs.
+Changing/removing the registration invalidates pending OAuth states and existing
+OAuth logins, and cancels calls using them. Manually supplied PATs are independent.
+The SDK continues to handle discovery, PKCE, callback and refresh, including
+dynamic registration when no pre-registered application is configured.
+
+For GitHub, first register a GitHub App or OAuth App and enter its credentials in
+the approved GitHub MCP entry. Register the public callback as the desktop's
+backend URL plus /mcp/oauth/callback, or the global callback override if configured.
+This is application registration; each user authorizes their own GitHub account.
+See https://github.com/github/github-mcp-server/blob/main/docs/host-integration.md.
+
+Tests cover an authorization server without dynamic registration, post/basic/public
+clients, PKCE, token refresh, two independent users, encrypted and redacted
+credentials, secret preservation/removal, rotation, cancellation and endpoint/issuer
+binding. The real GitHub login still requires a registered application and a live
+interactive login; it is not proven by the protocol fixtures.

@@ -1753,6 +1753,7 @@ db.exec(`
 for (const [table, column, definition] of [
   ['mcp_servers', 'transport', "TEXT NOT NULL DEFAULT 'streamable-http'"],
   ['mcp_servers', 'source', "TEXT NOT NULL DEFAULT ''"],
+  ['mcp_servers', 'oauth_client', 'TEXT'],
   ['mcp_policy', 'show_catalog', 'INTEGER NOT NULL DEFAULT 1'],
   ['mcp_policy', 'oauth_callback_url', "TEXT NOT NULL DEFAULT ''"],
   ['mcp_oauth_states', 'redirect_uri', 'TEXT'],

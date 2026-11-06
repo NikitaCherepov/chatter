@@ -10,6 +10,7 @@ type RequestHandler = (req: any, res: any) => any;
 const Router = express.Router;
 import {
   allServers,
+  adminServers,
   connections,
   publicConnection,
   policy,
@@ -180,7 +181,7 @@ export function adminMcpRouter() {
   const router = Router();
   router.get(
     '/',
-    route((_req, res) => res.json({ policy: policy(), servers: allServers() })),
+    route((_req, res) => res.json({ policy: policy(), servers: adminServers() })),
   );
   router.get(
     '/access',
