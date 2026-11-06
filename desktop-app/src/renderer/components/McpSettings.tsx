@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import { useMcp, useMcpCatalog } from '../lib/useMcp';
 import * as api from '../lib/mcp-service';
 import { LocalMcpPanel } from './LocalMcpPanel';
-import { packageFields } from '../../main/local-mcp-spec';
+import { packageFields, emptyMcpApproval } from '../../main/local-mcp-spec';
 import { Select } from './Select';
 import Checkbox from './Checkbox';
 import s from './SettingsModal.module.scss';
@@ -367,6 +367,9 @@ function ConnectionCard({
   const [token, setToken] = useState(''),
     [timeout, setTimeoutValue] = useState(c.timeout_seconds);
   const save = (body: Record<string, unknown>) => run(() => api.saveMcpConnection(body, c.id));
+  const approval = c.approval_policy || emptyMcpApproval();
+  const saveApproval = (patch: Partial<typeof approval>) =>
+    save({ approval_policy: { ...approval, ...patch } });
   return (
     <section className={s.macroCard}>
       <div className={s.macroHeader}>
@@ -430,6 +433,28 @@ function ConnectionCard({
       </div>
       <details>
         <summary>{t('mcp.settings')}</summary>
+        <Checkbox
+          label={t('mcp.approvals.allowAll')}
+          checked={approval.allow_all}
+          disabled={busy || c.blocked}
+          onChange={(allow_all) => void saveApproval({ allow_all })}
+        />
+        <p className={s.connectionsHelp}>{t('mcp.approvals.allowAllHint')}</p>
+        {approval.resources.map((uri) => (
+          <div className={styles.tool} key={uri}>
+            <Checkbox
+              label={t('mcp.approvals.alwaysResource') + ': ' + uri}
+              checked
+              disabled={busy || approval.allow_all}
+              onChange={() =>
+                void saveApproval({
+                  resources: approval.resources.filter((value) => value !== uri),
+                })
+              }
+            />
+          </div>
+        ))}
+
         <div className={styles.form}>
           <label>
             {t('mcp.mode')}
@@ -541,6 +566,18 @@ function ConnectionCard({
                 else selected.delete(tool.name);
                 void save({ selected_tools: [...selected] });
               }}
+            />
+            <Checkbox
+              label={t('mcp.approvals.withoutConfirmation')}
+              checked={approval.allow_all || approval.tools.includes(tool.name)}
+              disabled={busy || c.blocked || approval.allow_all}
+              onChange={(checked) =>
+                void saveApproval({
+                  tools: checked
+                    ? [...new Set([...approval.tools, tool.name])]
+                    : approval.tools.filter((name) => name !== tool.name),
+                })
+              }
             />
             <small>{tool.description}</small>
           </div>

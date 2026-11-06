@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocalMcp } from '../lib/useMcp';
 import * as api from '../lib/mcp-service';
-import { packageFields } from '../../main/local-mcp-spec';
+import { packageFields, emptyMcpApproval } from '../../main/local-mcp-spec';
 import { Select } from './Select';
 import Checkbox from './Checkbox';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -57,114 +57,153 @@ export function LocalMcpPanel({
       <h3>{t('mcp.local.title')}</h3>
       <p className={s.connectionsHelp}>{t('mcp.local.help')}</p>
       {(error || query.isError) && <p role="alert">{error || t('mcp.error')}</p>}
-      {(query.data || []).map((row) => (
-        <article className={s.macroCard} key={row.id}>
-          <div className={s.macroHeader}>
-            <strong>{row.name}</strong>
-            <Checkbox
-              checked={row.enabled}
-              disabled={busy}
-              label={t('mcp.connectionEnabled')}
-              onChange={(enabled) => void run(() => api.configureLocalMcp(row.id, { enabled }))}
-            />
-          </div>
-          <p className={styles.url}>{row.source}</p>
-          <p>
-            {t('mcp.tools')}: {row.tools.length} · {t('mcp.resources')}: {row.resources.length}
-          </p>
-          {row.error && <p role="alert">{row.error}</p>}
-          <div className={styles.actions}>
-            <button
-              className={s.cancelBtn}
-              disabled={busy || !row.enabled || !allowed}
-              onClick={() => void run(() => api.refreshLocalMcp(row.id))}
-            >
-              {t('mcp.refresh')}
-            </button>
-            <button className={s.cancelBtn} disabled={busy} onClick={() => setRemove(row.id)}>
-              {t('mcp.remove')}
-            </button>
-          </div>
-          <details>
-            <summary>{t('mcp.settings')}</summary>
-            <label>
-              {t('mcp.mode')}
-              <Select
-                value={row.mode}
+      {(query.data || []).map((row) => {
+        const approval = row.approval_policy || emptyMcpApproval();
+        const saveApproval = (patch: Partial<typeof approval>) =>
+          run(() => api.configureLocalMcp(row.id, { approval_policy: { ...approval, ...patch } }));
+        return (
+          <article className={s.macroCard} key={row.id}>
+            <div className={s.macroHeader}>
+              <strong>{row.name}</strong>
+              <Checkbox
+                checked={row.enabled}
                 disabled={busy}
-                onChange={(mode) => void run(() => api.configureLocalMcp(row.id, { mode }))}
-                options={[
-                  { value: 'search', label: t('mcp.searchMode') },
-                  { value: 'eager', label: t('mcp.eagerMode') },
-                ]}
+                label={t('mcp.connectionEnabled')}
+                onChange={(enabled) => void run(() => api.configureLocalMcp(row.id, { enabled }))}
               />
-            </label>
-            <form
-              className={styles.form}
-              onSubmit={(e) => {
-                e.preventDefault();
-                const data = new FormData(e.currentTarget);
-                void run(() =>
-                  api.configureLocalMcp(row.id, {
-                    timeout_seconds: Number(data.get('timeout')),
-                    ...(String(data.get('env') || '').trim()
-                      ? { env: JSON.parse(String(data.get('env'))) }
-                      : {}),
-                  }),
-                );
-              }}
-            >
-              <label>
-                {t('mcp.timeout')}
-                <input
-                  className={s.fieldInput}
-                  type="number"
-                  name="timeout"
-                  min={10}
-                  max={3600}
-                  defaultValue={row.timeout_seconds}
-                />
-              </label>
-              <label>
-                {t('mcp.local.env')}
-                <input
-                  className={s.fieldInput}
-                  name="env"
-                  type="password"
-                  placeholder='{"API_KEY":"..."}'
-                  autoComplete="off"
-                />
-              </label>
-              <button className={s.cancelBtn} disabled={busy}>
-                {t('mcp.save')}
-              </button>
-            </form>
+            </div>
+            <p className={styles.url}>{row.source}</p>
             <p>
-              {t('mcp.tools')}: {row.tools.length}
+              {t('mcp.tools')}: {row.tools.length} · {t('mcp.resources')}: {row.resources.length}
             </p>
-            {row.tools.map((tool) => (
-              <div className={styles.tool} key={tool.name}>
-                <Checkbox
-                  checked={row.selected_tools === null || row.selected_tools.includes(tool.name)}
+            {row.error && <p role="alert">{row.error}</p>}
+            <div className={styles.actions}>
+              <button
+                className={s.cancelBtn}
+                disabled={busy || !row.enabled || !allowed}
+                onClick={() => void run(() => api.refreshLocalMcp(row.id))}
+              >
+                {t('mcp.refresh')}
+              </button>
+              <button className={s.cancelBtn} disabled={busy} onClick={() => setRemove(row.id)}>
+                {t('mcp.remove')}
+              </button>
+            </div>
+            <details>
+              <summary>{t('mcp.settings')}</summary>
+              <Checkbox
+                label={t('mcp.approvals.allowAll')}
+                checked={approval.allow_all}
+                disabled={busy}
+                onChange={(allow_all) => void saveApproval({ allow_all })}
+              />
+              <p className={s.connectionsHelp}>{t('mcp.approvals.allowAllHint')}</p>
+              {approval.resources.map((uri) => (
+                <div className={styles.tool} key={uri}>
+                  <Checkbox
+                    label={t('mcp.approvals.alwaysResource') + ': ' + uri}
+                    checked
+                    disabled={busy || approval.allow_all}
+                    onChange={() =>
+                      void saveApproval({
+                        resources: approval.resources.filter((value) => value !== uri),
+                      })
+                    }
+                  />
+                </div>
+              ))}
+
+              <label>
+                {t('mcp.mode')}
+                <Select
+                  value={row.mode}
                   disabled={busy}
-                  label={tool.name}
-                  onChange={(checked) => {
-                    const selected = row.selected_tools ?? row.tools.map((x) => x.name);
-                    void run(() =>
-                      api.configureLocalMcp(row.id, {
-                        selected_tools: checked
-                          ? [...selected, tool.name]
-                          : selected.filter((x) => x !== tool.name),
-                      }),
-                    );
-                  }}
+                  onChange={(mode) => void run(() => api.configureLocalMcp(row.id, { mode }))}
+                  options={[
+                    { value: 'search', label: t('mcp.searchMode') },
+                    { value: 'eager', label: t('mcp.eagerMode') },
+                  ]}
                 />
-                <small>{tool.description}</small>
-              </div>
-            ))}
-          </details>
-        </article>
-      ))}
+              </label>
+              <form
+                className={styles.form}
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const data = new FormData(e.currentTarget);
+                  void run(() =>
+                    api.configureLocalMcp(row.id, {
+                      timeout_seconds: Number(data.get('timeout')),
+                      ...(String(data.get('env') || '').trim()
+                        ? { env: JSON.parse(String(data.get('env'))) }
+                        : {}),
+                    }),
+                  );
+                }}
+              >
+                <label>
+                  {t('mcp.timeout')}
+                  <input
+                    className={s.fieldInput}
+                    type="number"
+                    name="timeout"
+                    min={10}
+                    max={3600}
+                    defaultValue={row.timeout_seconds}
+                  />
+                </label>
+                <label>
+                  {t('mcp.local.env')}
+                  <input
+                    className={s.fieldInput}
+                    name="env"
+                    type="password"
+                    placeholder='{"API_KEY":"..."}'
+                    autoComplete="off"
+                  />
+                </label>
+                <button className={s.cancelBtn} disabled={busy}>
+                  {t('mcp.save')}
+                </button>
+              </form>
+              <p>
+                {t('mcp.tools')}: {row.tools.length}
+              </p>
+              {row.tools.map((tool) => (
+                <div className={styles.tool} key={tool.name}>
+                  <Checkbox
+                    checked={row.selected_tools === null || row.selected_tools.includes(tool.name)}
+                    disabled={busy}
+                    label={tool.name}
+                    onChange={(checked) => {
+                      const selected = row.selected_tools ?? row.tools.map((x) => x.name);
+                      void run(() =>
+                        api.configureLocalMcp(row.id, {
+                          selected_tools: checked
+                            ? [...selected, tool.name]
+                            : selected.filter((x) => x !== tool.name),
+                        }),
+                      );
+                    }}
+                  />
+                  <Checkbox
+                    label={t('mcp.approvals.withoutConfirmation')}
+                    checked={approval.allow_all || approval.tools.includes(tool.name)}
+                    disabled={busy || approval.allow_all}
+                    onChange={(checked) =>
+                      void saveApproval({
+                        tools: checked
+                          ? [...new Set([...approval.tools, tool.name])]
+                          : approval.tools.filter((name) => name !== tool.name),
+                      })
+                    }
+                  />
+                  <small>{tool.description}</small>
+                </div>
+              ))}
+            </details>
+          </article>
+        );
+      })}
       {allowed && (
         <form
           ref={form}

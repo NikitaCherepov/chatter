@@ -1,3 +1,4 @@
+import type { McpApprovalPolicy } from '../../main/local-mcp-spec';
 import { apiFetch, localMcpScope, syncLocalMcp } from './api';
 import type { LocalMcpInput, NpmMcpPackage } from '../../main/local-mcp-spec';
 export type McpTool = { name: string; description?: string };
@@ -16,6 +17,7 @@ export type McpResource = {
   mimeType?: string;
 };
 export type McpConnection = {
+  approval_policy?: McpApprovalPolicy;
   transport?: 'stdio';
   local_id?: string;
   id: number;
@@ -77,6 +79,7 @@ export const getMcpCatalog = (search: string, cursor = '', signal?: AbortSignal)
   );
 
 export type LocalMcpSummary = {
+  approval_policy?: McpApprovalPolicy;
   id: string;
   name: string;
   source: string;

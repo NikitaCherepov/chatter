@@ -7603,11 +7603,13 @@ app.post('/api/v1/pc-commands/approve', async (req: AuthedRequest, res: any) => 
     const ipcTimeout = pending.kind === 'browser_download'
       ? 270000
       : pending.payload.ipcType === 'execute_commands' ? 150000 : 60000;
-    const result = await sendIpcToDesktop(userId, pending.payload.ipcType, pending.payload.ipcPayload, browserInputTimeout(pending.payload.ipcType, pending.payload.ipcPayload, ipcTimeout));
+    const result = pending.kind==='mcp_action'
+      ? await pending.execute!({remember:req.body?.remember_mcp===true})
+      : await sendIpcToDesktop(userId, pending.payload.ipcType, pending.payload.ipcPayload, browserInputTimeout(pending.payload.ipcType, pending.payload.ipcPayload, ipcTimeout));
     console.log('[pc_action] desktop ipc completed', {
       userId,
       confirmationId,
-      resultPreview: typeof result === 'string' ? result.slice(0, 500) : undefined,
+      resultPreview: pending.kind !== 'mcp_action' && typeof result === 'string' ? result.slice(0, 500) : undefined,
     });
     pending.resolve(result);
     const resolvedStatus = pending.kind === 'browser_download'
@@ -7705,7 +7707,9 @@ app.post('/internal/pc-commands/approve', internalAuth, async (req, res) => {
     const ipcPayload = pending.kind === 'browser_download' && pending.payload.ipcType === 'browser_control'
       ? { ...pending.payload.ipcPayload, destination: 'downloads' as const }
       : pending.payload.ipcPayload;
-    const result = await sendIpcToDesktop(pending.userId, pending.payload.ipcType, ipcPayload, browserInputTimeout(pending.payload.ipcType, ipcPayload, ipcTimeout));
+    const result = pending.kind==='mcp_action'
+      ? await pending.execute!({remember:req.body?.remember_mcp===true})
+      : await sendIpcToDesktop(pending.userId, pending.payload.ipcType, ipcPayload, browserInputTimeout(pending.payload.ipcType, ipcPayload, ipcTimeout));
     pending.resolve(result);
     const resolvedStatus = pending.kind === 'browser_download'
       && result && typeof result === 'object' && result.status === 'cancelled'

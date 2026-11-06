@@ -28,6 +28,9 @@ export const installLocalMcp=async input=>{
 export const configureLocalMcp=async(id,patch)=>{record('local_configure',{id,patch});Object.assign(localEntries.find(e=>e.id===id),patch);};
 export const removeLocalMcp=async id=>{record('local_remove',{id});localEntries=localEntries.filter(e=>e.id!==id);};
 export const refreshLocalMcp=async id=>{record('local_refresh',{id});};
+export const resolveImageUrl=url=>url;
+export const apiFetch=async(url,options)=>{record('approve',JSON.parse(options.body));return {ok:true}};
+export const getApiErrorMessage=(error,fallback)=>fallback;
 export const API_BASE='https://chatter.example';
 let mcpUpdate;
 export const onMcpSettingsUpdated=fn=>{mcpUpdate=fn;return()=>{mcpUpdate=undefined}};
@@ -59,6 +62,8 @@ fs.writeFileSync(path.join(dir, 'fixture.js'), fixture);
 const entry = String.raw`
 import React from 'react';
 import {createRoot} from 'react-dom/client';
+import {McpConfirmationCard} from 'CARD_COMPONENT';
+import {ConfirmationQueue} from 'QUEUE_COMPONENT';
 import {useQueryClient} from '@tanstack/react-query';
 import {QueryProvider} from 'QUERY_PROVIDER';
 import i18next from 'i18next';
@@ -70,13 +75,20 @@ import desktop from 'DESKTOP_LOCALE';
 import admin from 'ADMIN_LOCALE';
 i18next.use(initReactI18next).init({lng:'ru',resources:{ru:{translation:{...desktop,mcp:{...desktop.mcp,...admin.mcp}}}},initImmediate:false});
 const root=createRoot(document.getElementById('app'));
+function CardFixture(){
+ const [items,setItems]=React.useState([1,2,3]);
+ const composer={comment:null,request:target=>{window.__comment=target},cancel(){},change(){},submit:async()=>{},busy:false,registerReject:()=>()=>{}};
+ return <ConfirmationQueue items={items.map(n=><McpConfirmationCard key={n} id={'card-'+n} title="MCP approval" summary={'tool-'+n} confirmation={{confirmation_id:'card-'+n,connection_id:1,server_name:'Fixture MCP',target:'tool-'+n,operation:'tool',arguments:{text:'review this'}}} onResolved={id=>setItems(rows=>rows.filter(n=>'card-'+n!==id))}/>)} order={new Map([['card-1',1],['card-2',2],['card-3',3]])} composer={composer}/>;
+}
 function Content({kind}){
  const client=useQueryClient(); window.__queryClient=client;
- return kind==='desktop'?<McpSettings/>:kind==='admin'?<McpPage/>:<McpUserCard userId={81}/>;
+ return kind==='card'?<CardFixture/>:kind==='desktop'?<McpSettings/>:kind==='admin'?<McpPage/>:<McpUserCard userId={81}/>;
 }
 window.renderFixture=kind=>root.render(<QueryProvider><Content kind={kind}/></QueryProvider>);
 window.renderFixture('desktop');
 `
+  .replace('CARD_COMPONENT',path.join(root,'desktop-app/src/renderer/components/McpConfirmationCard.tsx').split(path.sep).join('/'))
+  .replace('QUEUE_COMPONENT',path.join(root,'desktop-app/src/renderer/components/ConfirmationCard.tsx').split(path.sep).join('/'))
   .replace(
     'QUERY_PROVIDER',
     path.join(root, 'desktop-app/src/renderer/lib/QueryProvider.tsx').replaceAll('\\', '/'),
@@ -176,6 +188,11 @@ let win;const errors=[];
  assert.equal(await js('getComputedStyle(document.querySelector("section")).borderWidth'),'1px','real component styles are applied');
  await click('Обновить возможности');
  await until('window.__calls.some(c=>c.name==="refresh")');
+ await js('Array.from(document.querySelectorAll("label")).find(e=>e.textContent.trim()==="Без подтверждения").querySelector("input").click()');
+ await until('window.__calls.some(c=>c.name==="save"&&c.body.approval_policy?.tools.includes("search_repositories"))');
+ await until('!Array.from(document.querySelectorAll("label")).find(e=>e.textContent.trim()==="Без подтверждения").querySelector("input").disabled');
+ await js('Array.from(document.querySelectorAll("label")).find(e=>e.textContent.trim()==="Без подтверждения").querySelector("input").click()');
+ await until('window.__calls.some(c=>c.name==="save"&&c.body.approval_policy?.tools.length===0)');
  await js('document.querySelector("input[type=checkbox]").click()');
  await until('window.__calls.some(c=>c.name==="save"&&c.body.enabled===false)');
  assert.equal(await js('document.body.innerText.includes("Remote tools")'),false,'desktop shows approved servers only');
@@ -208,6 +225,9 @@ let win;const errors=[];
  await js('Array.from(document.querySelectorAll("strong")).find(e=>e.textContent==="Local package").parentElement.querySelector("button").click()');
  await until('window.__calls.some(c=>c.name==="local_install"&&c.body.package.identifier==="@example/local")');
  await until('document.querySelector("article")?.textContent.includes("Local package")');
+ await js('Array.from(document.querySelector("article").querySelectorAll("label")).find(e=>e.textContent.trim()==="Не запрашивать подтверждения для этого MCP").querySelector("input").click()');
+ await until('window.__calls.some(c=>c.name==="local_configure"&&c.body.patch.approval_policy?.allow_all===true)');
+ await until('!document.querySelector("article input[type=checkbox]").disabled');
  await js('document.querySelector("article input[type=checkbox]").click()');
  await until('window.__calls.some(c=>c.name==="local_configure"&&c.body.patch.enabled===false)');
  await js('Array.from(document.querySelector("article").querySelectorAll("button")).find(b=>b.textContent==="Удалить").click()');
@@ -253,8 +273,23 @@ let win;const errors=[];
  await until('document.body.innerText.includes("GitHub account")');
  assert.equal(await js('document.querySelectorAll("button").length'),0,"user card has no duplicate access editor");
  assert.ok(await js('document.body.innerText.includes("GitHub account")'));
+ await js('window.renderFixture("card")');
+ await until('document.body.innerText.includes("Fixture MCP")');
+ assert.ok(await js('document.body.innerText.includes("review this")'),'arguments visible');
+ await click('Разрешить');
+ await until('window.__calls.some(c=>c.name==="approve"&&c.body.confirmation_id==="card-1"&&c.body.approved===true&&c.body.remember_mcp===false)');
+ await until('document.body.innerText.includes("tool-2")');
+ await js('Array.from(document.querySelectorAll("button")).find(b=>b.textContent.includes("Отклонить с комментарием")).click()');
+ assert.ok(await js('!!window.__comment'),'uses composer comment flow');
+ await js('window.__comment.reject("Please stop")');
+ await until('window.__calls.some(c=>c.name==="approve"&&c.body.confirmation_id==="card-2"&&c.body.rejection_comment==="Please stop")');
+ await until('document.body.innerText.includes("tool-3")');
+ await js('document.querySelector("details summary").click()');
+ await click('Всегда разрешать этот инструмент');
+ await until('window.__calls.some(c=>c.name==="approve"&&c.body.confirmation_id==="card-3"&&c.body.remember_mcp===true)');
+ await until('!document.querySelector("[data-confirmation-id]")');
  assert.deepEqual(errors,[],'no runtime component errors');
- console.log('PASS: actual React MCP desktop/admin/user components, query reload, toggles, catalog and user connections');
+ console.log('PASS: React MCP settings, grant/revoke, native permissions, confirmation queue buttons and composer comments, catalog and admin access');
 })().catch(e=>{console.error(e,errors);process.exitCode=1}).finally(()=>{win?.destroy();app.exit(process.exitCode||0)});
 `,
 );

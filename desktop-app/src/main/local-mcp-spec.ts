@@ -219,3 +219,30 @@ export function resolveLocalInput(input: LocalMcpInput): LocalMcpConfig {
     throw new Error('mcp_invalid_environment');
   return { name: String(input.name || npm || command).slice(0, 120), npm, command, args, env };
 }
+
+export type McpApprovalPolicy = { allow_all: boolean; tools: string[]; resources: string[] };
+export const emptyMcpApproval = (): McpApprovalPolicy => ({
+  allow_all: false,
+  tools: [],
+  resources: [],
+});
+export function normalizeMcpApproval(value: any): McpApprovalPolicy {
+  if (
+    !value ||
+    typeof value.allow_all !== 'boolean' ||
+    !Array.isArray(value.tools) ||
+    value.tools.length > 200 ||
+    value.tools.some((x: any) => typeof x !== 'string' || !/^[a-zA-Z0-9_.-]{1,128}$/.test(x)) ||
+    !Array.isArray(value.resources) ||
+    value.resources.length > 500 ||
+    value.resources.some(
+      (x: any) => typeof x !== 'string' || !x || x.length > 4096 || /[\u0000-\u001f]/.test(x),
+    )
+  )
+    throw new Error('mcp_invalid_approval_policy');
+  return {
+    allow_all: value.allow_all,
+    tools: [...new Set<string>(value.tools)],
+    resources: [...new Set<string>(value.resources)],
+  };
+}

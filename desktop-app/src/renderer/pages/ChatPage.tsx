@@ -33,6 +33,7 @@ import { questionnaireAnswerText, type QuestionnaireSubmission } from '../lib/me
 import { EmailBodyPreview } from '../components/EmailBodyPreview';
 import { AttachModal, prepareAttachmentFiles } from '../components/AttachModal';
 import { RoomInvitesModal } from '../components/RoomInvitesModal';
+import {McpConfirmationCard,type McpConfirmation} from '../components/McpConfirmationCard';
 import { RejectWithComment } from '../components/RejectWithComment';
 import { ConfirmationCard, ConfirmationQueue, ConfirmationCommentInput, ConfirmationEmailBody, ConfirmationFileDiff } from '../components/ConfirmationCard';
 import { useConfirmationComposer } from '../lib/useConfirmationComposer';
@@ -1641,6 +1642,7 @@ export function ChatPage() {
   const [devopsConfirmations, setDevopsConfirmations] = useState<Array<{ confirmation_id: string; server_name: string; server_id: number; host: string; command: string; needs_sudo_password?: boolean; sudo_password?: string; save_sudo_password?: boolean; needs_new_password?: boolean; new_password?: string; new_username?: string; _reviewing?: boolean; _verdict?: string }>>([]);
   const [pendingRunbooks, setPendingRunbooks] = useState<Array<{ title: string; content: string; commands: string[]; _reviewing?: boolean; _verdict?: string }>>([]);
   const [pendingCredsUpdates, setPendingCredsUpdates] = useState<Array<{ confirmation_id?: string; server_id: number; server_name: string; current_username: string; new_username: string; reason: string; use_ssh_key: boolean; remove_password: boolean }>>([]);
+  const [mcpConfirmations,setMcpConfirmations]=useState<McpConfirmation[]>([]);
   const [pcCommandConfirmations, setPcCommandConfirmations] = useState<Array<{ confirmation_id: string; command: string; _reviewing?: boolean; _verdict?: string }>>([]);
   const [browserActionConfirmations, setBrowserActionConfirmations] = useState<Array<{ confirmation_id: string; action_type: 'open' | 'click' | 'fill' | 'press_key'; description: string; url?: string; text?: string; key?: 'Enter' | 'Space'; origin?: string; target_element?: { tag?: string; role?: string; text?: string; href?: string; inputType?: string; placeholder?: string; sensitive?: boolean } }>>([]);
   const [browserDownloadConfirmations, setBrowserDownloadConfirmations] = useState<Array<{ confirmation_id: string; download_id: string; filename: string; url: string; mime_type?: string; total_bytes?: number; origin?: string | null }>>([]);
@@ -2377,6 +2379,9 @@ export function ChatPage() {
         body = String(value?.command || '');
         sensitive = value?.needs_sudo_password === true || value?.needs_new_password === true;
         break;
+      case 'mcp_confirmation':
+        body=String(value?.server_name||'MCP')+' / '+String(value?.target||'');sensitive=true;
+        break;
       case 'pc_command_confirmation':
         body = String(value?.command || '');
         break;
@@ -2456,6 +2461,7 @@ export function ChatPage() {
       setDevopsConfirmations(prev => prev.filter(c => c.confirmation_id !== confirmationId));
       setPendingCredsUpdates(prev => prev.filter(c => c.confirmation_id !== confirmationId));
       setPcCommandConfirmations(prev => prev.filter(c => c.confirmation_id !== confirmationId));
+      setMcpConfirmations(prev=>prev.filter(c=>c.confirmation_id!==confirmationId));
       setBrowserActionConfirmations(prev => prev.filter(c => c.confirmation_id !== confirmationId));
       setBrowserDownloadConfirmations(prev => prev.filter(c => c.confirmation_id !== confirmationId));
       setFileActionConfirmations(prev => prev.filter(c => c.confirmation_id !== confirmationId));
@@ -2513,6 +2519,10 @@ export function ChatPage() {
           remove_password: val.remove_password || false,
         }]);
       }
+    }
+    if(action.action==='mcp_confirmation'&&action.value){
+      const val=action.value as McpConfirmation;
+      if(val.confirmation_id&&val.target)setMcpConfirmations(previous=>previous.some(item=>item.confirmation_id===val.confirmation_id)?previous:[...previous,val]);
     }
     if (action.action === 'pc_command_confirmation' && action.value) {
       const val = action.value as { confirmation_id?: string; command?: string };
@@ -2746,6 +2756,7 @@ export function ChatPage() {
   ) => {
     const devops = devopsConfirmations.find(c => c.confirmation_id === confirmationId);
     const credentials = pendingCredsUpdates.find(c => c.confirmation_id === confirmationId);
+    const mcp=mcpConfirmations.find(c=>c.confirmation_id===confirmationId);
     const pcCommand = pcCommandConfirmations.find(c => c.confirmation_id === confirmationId);
     const browserAction = browserActionConfirmations.find(c => c.confirmation_id === confirmationId);
     const browserDownload = browserDownloadConfirmations.find(c => c.confirmation_id === confirmationId);
@@ -2753,12 +2764,12 @@ export function ChatPage() {
     const fileEdit = editFileLinesConfirmations.find(c => c.confirmation_id === confirmationId);
     const webcam = webcamCaptureConfirmations.find(c => c.confirmation_id === confirmationId);
     const email = emailConfirmations.find(c => c.confirmation_id === confirmationId);
-    if (!devops && !credentials && !pcCommand && !browserAction && !browserDownload && !fileAction && !fileEdit && !webcam && !email) return;
+    if (!mcp && !devops && !credentials && !pcCommand && !browserAction && !browserDownload && !fileAction && !fileEdit && !webcam && !email) return;
 
     const browserSensitive = browserAction?.target_element?.sensitive === true
       || browserAction?.target_element?.inputType === 'password';
     const sensitive = Boolean(
-      credentials || browserDownload || webcam || email || browserSensitive
+      mcp || credentials || browserDownload || webcam || email || browserSensitive
       || devops?.needs_sudo_password || devops?.needs_new_password,
     );
     // Sensitive actions intentionally cannot be approved directly from a notification.
@@ -2777,6 +2788,7 @@ export function ChatPage() {
       setDevopsConfirmations(prev => prev.filter(c => c.confirmation_id !== confirmationId));
       setPendingCredsUpdates(prev => prev.filter(c => c.confirmation_id !== confirmationId));
       setPcCommandConfirmations(prev => prev.filter(c => c.confirmation_id !== confirmationId));
+      setMcpConfirmations(prev=>prev.filter(c=>c.confirmation_id!==confirmationId));
       setBrowserActionConfirmations(prev => prev.filter(c => c.confirmation_id !== confirmationId));
       setBrowserDownloadConfirmations(prev => prev.filter(c => c.confirmation_id !== confirmationId));
       setFileActionConfirmations(prev => prev.filter(c => c.confirmation_id !== confirmationId));
@@ -2799,6 +2811,7 @@ export function ChatPage() {
     fileActionConfirmations,
     finishConfirmationSubmission,
     pcCommandConfirmations,
+    mcpConfirmations,
     pendingCredsUpdates,
     t,
     webcamCaptureConfirmations,
@@ -5185,6 +5198,10 @@ export function ChatPage() {
   };
 
   const confirmationCards = [
+    ...mcpConfirmations.map(conf=><McpConfirmationCard
+      key={conf.confirmation_id} id={conf.confirmation_id} title={t('mcp.approvals.title')}
+      summary={conf.server_name+' / '+conf.target} confirmation={conf}
+      onResolved={id=>setMcpConfirmations(previous=>previous.filter(item=>item.confirmation_id!==id))}/>),
     ...pendingChatLinks.map(link => {
       const id = `chat-link-${link.chat_id}`;
       const dismiss = () => setPendingChatLinks(previous => previous.filter(item => item.chat_id !== link.chat_id));

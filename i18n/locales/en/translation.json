@@ -1,4 +1,5 @@
 {
+  "mcpConfirmation": {"title": "MCP confirmation", "alwaysTool": "Always allow this tool", "alwaysResource": "Always allow this resource", "toolHint": "Permission applies to this tool with any arguments in this connection.", "resourceHint": "Permission applies to reading this URI, including subsequent pages.", "executed": "Completed", "rejected": "Rejected", "expired": "Confirmation expired", "failed": "Execution failed"},
   "common": {
     "unknown": "unknown",
     "unlimited": "unlimited",

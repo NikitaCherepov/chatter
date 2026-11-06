@@ -68,10 +68,11 @@ const wsClient: any = {
       sent.push(msg);
       callback?.();
       if (msg.type === 'execute_ipc')
-        void manager
-          .control(scope, { ...msg.payload, request_id: msg.request_id }, () =>
+        void (msg.ipc_type === 'mcp_permission'
+          ? manager.configure(scope,msg.payload.local_id,{approval_policy:msg.payload.approval_policy,expected_revision:msg.payload.config_revision})
+          : manager.control(scope, { ...msg.payload, request_id: msg.request_id }, () =>
             wsClient.pendingIpc.get(msg.request_id)?.progress?.(++sequence),
-          )
+          ))
           .then((value: any) => {
             const pending = wsClient.pendingIpc.get(msg.request_id);
             wsClient.pendingIpc.delete(msg.request_id);
@@ -175,6 +176,8 @@ try {
     package: pkg,
     values: { 'env:PRIVATE_KEY': 'secret-local', 'arg:0': root },
   });
+  assert.deepEqual(installed.approval_policy,{allow_all:false,tools:[],resources:[]});
+  const {saveMcpApproval}=require('../src/services/mcp/approval-policy.ts');
   assert.deepEqual(installations, ['@scope/server@1.2.3']);
   assert.equal(installed.tools.length, 3);
   assert.equal(installed.resources.length, 1);
@@ -211,6 +214,19 @@ try {
   wsClients.set(81, wsClient);
   syncDesktopMcp(wsClient, [installed]);
   row = store.connections(81).find((r: any) => r.local_id === installed.id);
+  await saveMcpApproval(81,row.id,{allow_all:false,tools:['echo'],resources:[]});
+  await Promise.all([
+    manager.control(scope,{local_id:installed.id,action:'discover'}),
+    manager.configure(scope,installed.id,{approval_policy:{allow_all:false,tools:['echo'],resources:[]}})
+  ]);
+  await assert.rejects(()=>manager.configure(scope,installed.id,{expected_revision:'stale',approval_policy:{allow_all:true,tools:[],resources:[]}}),/connection_changed/);
+  const persisted=(await manager.list(scope))[0];
+  assert.deepEqual(persisted.approval_policy.tools,['echo'],'remember permission persisted on PC');
+  syncDesktopMcp(wsClient,[persisted]);
+  assert.equal(JSON.parse(store.connections(81)[0].approval_policy_json).allow_all,false);
+  await manager.configure(scope,installed.id,{approval_policy:{allow_all:true,tools:[],resources:[]}});
+  Object.assign(installed,(await manager.list(scope))[0]);
+  syncDesktopMcp(wsClient,[installed]);
   const prefix = JSON.stringify(tools.getMcpDefinitions(81));
   const browse = await tools.runMcpTool(81, 'browse_mcp', { connection_id: row.id });
   assert.match(browse, /Local echo/);

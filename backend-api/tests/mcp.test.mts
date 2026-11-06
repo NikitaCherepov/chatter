@@ -448,6 +448,7 @@ try {
     received.every((item) => item.authorization === 'Bearer private-test-token'),
     'credentials only forwarded through the MCP connection',
   );
+  store.saveConnection(81, {approval_policy:{allow_all:true,tools:[],resources:[]}}, connection.id);
   const staleSecretRow = store.connections(81)[0];
   store.saveConnection(81, { token: 'new-secret' }, connection.id);
   assert.throws(
@@ -840,6 +841,7 @@ try {
   });
   assert.ok(tools.getMcpDefinitions(81).some((d: any) => d.function.name === named.function.name));
 
+  await (await import('./mcp-approvals.fixture.mjs')).checkApprovals({tools, store, connection, received, require});
   invalidCatalog = true;
   assert.equal(
     (await request('/user/81/mcp/connections/' + connection.id + '/refresh', 'POST')).status,

@@ -221,7 +221,12 @@ async function localOperation(
     const result = await sendIpcToDesktop(
       userId,
       'mcp_control',
-      { ...payload, local_id: row.local_id, timeout_seconds: row.timeout_seconds },
+      {
+        ...payload,
+        local_id: row.local_id,
+        timeout_seconds: row.timeout_seconds,
+        config_revision: row.config_revision,
+      },
       row.timeout_seconds * 1000,
       linked,
       onProgress,

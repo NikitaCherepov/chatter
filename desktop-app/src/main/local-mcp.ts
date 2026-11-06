@@ -4,7 +4,14 @@ import crypto from 'node:crypto';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { installNpm } from './local-mcp-runtime';
-import { resolveLocalInput, type LocalMcpInput, type LocalMcpConfig } from './local-mcp-spec';
+import {
+  resolveLocalInput,
+  emptyMcpApproval,
+  normalizeMcpApproval,
+  type McpApprovalPolicy,
+  type LocalMcpInput,
+  type LocalMcpConfig,
+} from './local-mcp-spec';
 type Metadata = {
   tools: any[];
   resources: any[];
@@ -21,6 +28,8 @@ type RecordData = {
   mode: 'search' | 'eager';
   timeout_seconds: number;
   selected_tools: string[] | null;
+  approval_policy?: McpApprovalPolicy;
+  config_revision?: string;
   config: LocalMcpConfig;
   metadata: Metadata;
   error?: string;
@@ -37,6 +46,17 @@ export class LocalMcpManager {
   private requests = new Map<string, { id: string; controller: AbortController }>();
   private busy = new Set<string>();
   private installing = new Set<string>();
+  private writes = new Map<string, Promise<unknown>>();
+  private async serialized<T>(id: string, action: () => Promise<T>): Promise<T> {
+    const previous = this.writes.get(id) || Promise.resolve(),
+      next = previous.catch(() => {}).then(action);
+    this.writes.set(id, next);
+    try {
+      return await next;
+    } finally {
+      if (this.writes.get(id) === next) this.writes.delete(id);
+    }
+  }
   constructor(
     private root: string,
     private encrypt: (text: string) => Buffer,
@@ -76,6 +96,8 @@ export class LocalMcpManager {
   private public(record: RecordData) {
     return {
       id: record.id,
+      approval_policy: record.approval_policy || emptyMcpApproval(),
+      config_revision: record.config_revision,
       name: record.name,
       enabled: record.enabled,
       mode: record.mode,
@@ -112,6 +134,8 @@ export class LocalMcpManager {
       if ((await this.list(scope)).length >= 20) throw new Error('mcp_connection_limit');
       const record: RecordData = {
         id: crypto.randomUUID(),
+        config_revision: crypto.randomUUID(),
+        approval_policy: emptyMcpApproval(),
         scope,
         name: config.name,
         description: String(input.description || '').slice(0, 1500),
@@ -209,19 +233,33 @@ export class LocalMcpManager {
       } while (cursor);
       return values;
     };
-    record.metadata = {
+    const discovered: Metadata = {
       tools: cap.tools ? await pages('tools', 200) : [],
       resources: cap.resources ? await pages('resources', 500) : [],
       resource_templates: cap.resources ? await pages('templates', 200) : [],
       capabilities: { tools: !!cap.tools, resources: !!cap.resources, prompts: !!cap.prompts },
       server_info: client.getServerVersion() || null,
     };
-    record.error = undefined;
-    await this.write(record);
-    return record.metadata;
+    return this.serialized(record.id, async () => {
+      signal?.throwIfAborted();
+      const latest = await this.read(record.scope, record.id);
+      if (latest.config_revision !== record.config_revision) throw new Error('mcp_connection_changed');
+      latest.metadata = discovered;
+      latest.error = undefined;
+      await this.write(latest);
+      Object.assign(record, latest);
+      return discovered;
+    });
   }
   async configure(scope: string, id: string, patch: any) {
+    return this.serialized(id, () => this.configureRecord(scope, id, patch));
+  }
+  private async configureRecord(scope: string, id: string, patch: any) {
     const record = await this.read(scope, id);
+    if ('expected_revision' in patch && patch.expected_revision !== record.config_revision)
+      throw new Error('mcp_connection_changed');
+    if (patch.approval_policy !== undefined)
+      record.approval_policy = normalizeMcpApproval(patch.approval_policy);
     if (patch.enabled !== undefined) {
       if (typeof patch.enabled !== 'boolean') throw new Error('mcp_invalid_connection');
       record.enabled = patch.enabled;
@@ -250,6 +288,7 @@ export class LocalMcpManager {
       record.selected_tools = patch.selected_tools;
     }
     if (patch.env !== undefined) {
+      record.config_revision = crypto.randomUUID();
       record.metadata = empty();
       record.error = undefined;
       record.config.env = resolveLocalInput({
@@ -269,6 +308,8 @@ export class LocalMcpManager {
     const id = payload.local_id,
       record = await this.read(scope, id);
     if (!record.enabled) throw new Error('mcp_connection_disabled');
+    if ('config_revision' in payload && payload.config_revision !== record.config_revision)
+      throw new Error('mcp_connection_changed');
     if (this.busy.has(id)) throw new Error('mcp_connection_busy');
     const controller = new AbortController(),
       requestId = payload.request_id || crypto.randomUUID();
@@ -323,10 +364,12 @@ export class LocalMcpManager {
     if (session) await session.client.close().catch(() => {});
   }
   async remove(scope: string, id: string) {
-    await this.read(scope, id);
-    await this.stop(id);
-    const target = this.directory(scope, id);
-    await fs.rm(target, { recursive: true, force: true });
+    return this.serialized(id, async () => {
+      await this.read(scope, id);
+      await this.stop(id);
+      const target = this.directory(scope, id);
+      await fs.rm(target, { recursive: true, force: true });
+    });
   }
   async closeAll() {
     await Promise.all([...this.sessions.keys()].map((id) => this.stop(id)));

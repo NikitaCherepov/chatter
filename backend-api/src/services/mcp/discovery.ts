@@ -190,13 +190,7 @@ export async function browseMcp(userId: number, args: any, signal?: AbortSignal)
     }),
   );
 }
-export async function readMcpResource(
-  userId: number,
-  args: any,
-  signal?: AbortSignal,
-  onProgress?: () => void,
-  imageSink?: { items: Array<{ base64: string; mimeType: string; question: string }> },
-) {
+export async function prepareMcpResource(userId: number, args: any, signal?: AbortSignal) {
   const id = Number(args.connection_id),
     uri = args.uri;
   if (!Number.isSafeInteger(id) || id <= 0) throw new Error('mcp_invalid_id');
@@ -229,6 +223,17 @@ export async function readMcpResource(
       }
     });
   if (!allowed) throw new Error('mcp_resource_not_allowed');
+  return { row, uri, offset, limit, definition: { uri, resources, templates } };
+}
+export async function readMcpResource(
+  userId: number,
+  args: any,
+  signal?: AbortSignal,
+  onProgress?: () => void,
+  imageSink?: { items: Array<{ base64: string; mimeType: string; question: string }> },
+) {
+  const { row, uri, offset, limit } = await prepareMcpResource(userId, args, signal);
+  const id = row.id;
   const response = await readRemoteResource(userId, id, uri, signal, onProgress);
   requireConnection(userId, id);
   const parts = (response.contents || []) as any[];

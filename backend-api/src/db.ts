@@ -1757,6 +1757,7 @@ for (const [table, column, definition] of [
   ['mcp_connections', 'templates_json', "TEXT NOT NULL DEFAULT '[]'"],
   ['mcp_connections', 'capabilities_json', 'TEXT'],
   ['mcp_connections', 'server_info_json', 'TEXT'],
+  ['mcp_connections', 'approval_policy_json', 'TEXT'],
 ] as const) {
   const columns = db.prepare('PRAGMA table_info(' + table + ')').all() as Array<{ name: string }>;
   if (!columns.some(item => item.name === column)) {

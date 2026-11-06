@@ -12,7 +12,7 @@
 
 import { sendToDesktop } from '../ws-clients.js';
 
-export type PendingActionKind = 'pc_command' | 'file_action' | 'webcam_capture' | 'browser_action' | 'browser_download';
+export type PendingActionKind = 'mcp_action' | 'pc_command' | 'file_action' | 'webcam_capture' | 'browser_action' | 'browser_download';
 
 type ExecutePayload = {
   ipcType: 'execute_commands';
@@ -49,7 +49,8 @@ type BrowserActionPayload = {
   };
 };
 
-type ActionPayload = ExecutePayload | FileActionPayload | WebcamCapturePayload | BrowserActionPayload;
+type McpActionPayload={ipcType:'mcp';ipcPayload:{connection_id:number;operation:'tool'|'resource';target:string;arguments:unknown}};
+type ActionPayload = McpActionPayload | ExecutePayload | FileActionPayload | WebcamCapturePayload | BrowserActionPayload;
 
 export type PendingPcCommandConfirmation = {
   userId: number;
@@ -59,6 +60,7 @@ export type PendingPcCommandConfirmation = {
   label: string;
   /** IPC command to execute after approval. */
   payload: ActionPayload;
+  execute?: (options:{remember:boolean})=>Promise<any>;
   resolve: (result: any) => void;
   reject: (err: Error) => void;
   onExpired?: () => void;
@@ -112,7 +114,7 @@ export const waitForNoPendingPcConfirmations = (userId: number): Promise<void> =
 };
 
 // Auto-cleanup expired (5 min TTL)
-setInterval(() => {
+const cleanupTimer=setInterval(() => {
   const now = Date.now();
   for (const [id, pending] of pendingConfirmations) {
     if (now - pending.createdAt > 5 * 60 * 1000) {
@@ -128,3 +130,4 @@ setInterval(() => {
     }
   }
 }, 30_000);
+cleanupTimer.unref();

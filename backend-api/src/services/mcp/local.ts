@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { normalizeMcpApproval, emptyMcpApproval } from './approval-policy.js';
 import { wsClients, notifyMcpSettingsUpdated, type WsClient } from '../../ws-clients.js';
 import { policy, type McpConnection } from './store.js';
 import { UriTemplate } from '@modelcontextprotocol/sdk/shared/uriTemplate.js';
@@ -112,6 +113,11 @@ export function syncLocalConnections(client: WsClient, input: unknown) {
       url: 'stdio:' + item.id,
       transport: 'stdio' as const,
       local_id: item.id,
+      config_revision:
+        typeof item.config_revision === 'string' ? item.config_revision.slice(0, 80) : undefined,
+      approval_policy_json: JSON.stringify(
+        item.approval_policy ? normalizeMcpApproval(item.approval_policy) : emptyMcpApproval(),
+      ),
       enabled: item.enabled === true ? 1 : 0,
       mode: item.mode === 'eager' ? ('eager' as const) : ('search' as const),
       timeout_seconds: timeout,

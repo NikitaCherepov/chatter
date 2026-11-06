@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { approvalPolicy, normalizeMcpApproval } from './approval-policy.js';
 import { getLocalConnections } from './local.js';
 import { db } from '../../db.js';
 import { getEncryptionKey } from '../../utils/encryption.js';
@@ -13,6 +14,8 @@ export type McpServer = {
   recommended: number;
 };
 export type McpConnection = {
+  approval_policy_json?: string | null;
+  config_revision?: string;
   transport?: 'stdio';
   local_id?: string;
   id: number;
@@ -257,6 +260,7 @@ export function publicConnection(row: McpConnection) {
     templates_json,
     capabilities_json,
     server_info_json,
+    approval_policy_json,
     selected_tools,
     ...rest
   } = row;
@@ -270,6 +274,7 @@ export function publicConnection(row: McpConnection) {
     ...rest,
     blocked,
     has_credentials: !!secret,
+    approval_policy: approvalPolicy(row),
     tools: JSON.parse(tools_json),
     resources: JSON.parse(resources_json || '[]'),
     resource_templates: JSON.parse(templates_json || '[]'),
@@ -334,6 +339,10 @@ export function saveConnection(userId: number, body: any, id?: number) {
       throw new Error('mcp_invalid_token');
     secret = body.token ? seal({ bearer: body.token }) : null;
   }
+  const approval =
+    body.approval_policy === undefined
+      ? (current?.approval_policy_json ?? null)
+      : JSON.stringify(normalizeMcpApproval(body.approval_policy));
   const args = [
     name,
     mode,
@@ -342,16 +351,17 @@ export function saveConnection(userId: number, body: any, id?: number) {
     JSON.stringify(selected),
     secret,
     Date.now(),
+    approval,
   ];
   if (current)
     db.prepare(
-      'UPDATE mcp_connections SET name=?,mode=?,timeout_seconds=?,enabled=?,selected_tools=?,credentials=?,updated_at=? WHERE id=? AND user_id=?',
+      'UPDATE mcp_connections SET name=?,mode=?,timeout_seconds=?,enabled=?,selected_tools=?,credentials=?,updated_at=?,approval_policy_json=? WHERE id=? AND user_id=?',
     ).run(...args, id, userId);
   else
     id = Number(
       db
         .prepare(
-          'INSERT INTO mcp_connections(name,mode,timeout_seconds,enabled,selected_tools,credentials,updated_at,user_id,server_id,url) VALUES(?,?,?,?,?,?,?,?,?,?)',
+          'INSERT INTO mcp_connections(name,mode,timeout_seconds,enabled,selected_tools,credentials,updated_at,approval_policy_json,user_id,server_id,url) VALUES(?,?,?,?,?,?,?,?,?,?,?)',
         )
         .run(...args, userId, serverId, url).lastInsertRowid,
     );

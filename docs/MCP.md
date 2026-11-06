@@ -72,6 +72,30 @@ packages or starts their processes. Sampling, roots and elicitation are not expo
   untrusted-content wrapper; images can use the existing direct-vision sink.
   Other nontext content returns metadata. MCP prompts are not exposed.
 
+## Confirmations
+
+- Tool calls (eager aliases and call_mcp_tool) and resource reads require user
+  approval by default. browse_mcp and metadata refresh do not read resource
+  contents or invoke tools and need no card.
+- Desktop uses the existing confirmation queue attached to the chat input.
+  The card shows the connection, exact tool/resource and arguments. Users can
+  approve once, reject, reject with a comment, or remember a permission.
+  Telegram provides the equivalent buttons; long arguments are attached as JSON.
+- A remembered tool permission covers that exact tool name on that connection,
+  with any arguments. A resource permission covers the exact URI, including
+  subsequent pages; it does not grant an entire URI template.
+- Connection settings can revoke individual permissions or allow all operations
+  on that connection. Tool availability and confirmation permissions are separate.
+  Existing connections start with no saved grants.
+- Remote grants are stored in mcp_connections.approval_policy_json. Local grants
+  are persisted in the encrypted desktop configuration and synchronized with the
+  existing RAM-only metadata snapshot; the backend does not store local grants in DB.
+- Pending cards expire after five minutes and disappear on cancellation.
+  Approval is consumed once; account ownership, current permissions and the
+  connection/schema/configuration are checked again before execution.
+  Background tasks that cannot ask for approval return a rejection unless an
+  existing saved grant permits the operation.
+
 ## Security boundary
 
 Only public HTTPS endpoints are accepted. Private, loopback, link-local, reserved

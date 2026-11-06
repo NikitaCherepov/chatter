@@ -1,8 +1,9 @@
 import crypto from 'node:crypto';
+import { confirmMcpOperation, type McpApprovalContext } from './confirmations.js';
 import Ajv from 'ajv';
 import { availableConnections, requireConnection } from './store.js';
 import { callRemoteTool } from './client.js';
-import { browseMcp, readMcpResource } from './discovery.js';
+import { browseMcp, readMcpResource, prepareMcpResource } from './discovery.js';
 import { wrapUntrustedContent } from '../web-reader.js';
 
 export const browseToolName = 'browse_mcp';
@@ -106,7 +107,29 @@ export function getMcpDefinitions(userId: number, legacySearch = false) {
   }
   return defs;
 }
-export async function runMcpTool(
+function prepareTool(userId: number, name: string, args: any) {
+  const entry = toolCatalog(userId).find((item) =>
+    name === callToolName
+      ? item.connection.id === Number(args.connection_id) && item.tool.name === args.tool
+      : item.name === name,
+  );
+  if (!entry) throw new Error('mcp_tool_not_allowed');
+  requireConnection(userId, entry.connection.id);
+  const parameters = name === callToolName ? args.arguments : args;
+  if (
+    !parameters ||
+    typeof parameters !== 'object' ||
+    Array.isArray(parameters) ||
+    JSON.stringify(parameters).length > 256_000
+  )
+    throw new Error('mcp_invalid_arguments');
+  const validate = new Ajv({ strict: false, allErrors: false, validateFormats: false }).compile(
+    entry.tool.inputSchema,
+  );
+  if (!validate(parameters)) throw new Error('mcp_invalid_arguments');
+  return { entry, parameters };
+}
+async function executeMcpTool(
   userId: number,
   name: string,
   args: any,
@@ -162,25 +185,7 @@ export async function runMcpTool(
       });
     return wrapUntrustedContent(JSON.stringify({ tools: results, call_with: callToolName }));
   }
-  const entry = toolCatalog(userId).find((item) =>
-    name === callToolName
-      ? item.connection.id === Number(args.connection_id) && item.tool.name === args.tool
-      : item.name === name,
-  );
-  if (!entry) throw new Error('mcp_tool_not_allowed');
-  requireConnection(userId, entry.connection.id);
-  const parameters = name === callToolName ? args.arguments : args;
-  if (
-    !parameters ||
-    typeof parameters !== 'object' ||
-    Array.isArray(parameters) ||
-    JSON.stringify(parameters).length > 256_000
-  )
-    throw new Error('mcp_invalid_arguments');
-  const validate = new Ajv({ strict: false, allErrors: false, validateFormats: false }).compile(
-    entry.tool.inputSchema,
-  );
-  if (!validate(parameters)) throw new Error('mcp_invalid_arguments');
+  const { entry, parameters } = prepareTool(userId, name, args);
   const result = await callRemoteTool(
     userId,
     entry.connection.id,
@@ -233,4 +238,65 @@ export async function runMcpTool(
       }),
     ),
   });
+}
+
+export async function runMcpTool(
+  userId: number,
+  name: string,
+  args: any,
+  signal?: AbortSignal,
+  onProgress?: () => void,
+  imageSink?: { items: Array<{ base64: string; mimeType: string; question: string }> },
+  context?: McpApprovalContext,
+): Promise<string | undefined> {
+  if (name === browseToolName || name === searchToolName)
+    return executeMcpTool(userId, name, args, signal, onProgress, imageSink);
+  if (
+    name !== readResourceToolName &&
+    name !== callToolName &&
+    !/^mcp_\d+_[a-zA-Z0-9_-]+_[a-f0-9]{8}$/.test(name)
+  )
+    return undefined;
+  const captured = JSON.parse(JSON.stringify(args));
+  if (name === readResourceToolName) {
+    const prepare = async () => {
+      const resource = await prepareMcpResource(userId, captured, signal);
+      return { row: resource.row, definition: resource.definition };
+    };
+    const prepared = await prepare();
+    return confirmMcpOperation(
+      userId,
+      {
+        connection_id: prepared.row.id,
+        operation: 'resource',
+        target: captured.uri,
+        arguments: captured,
+        definition: prepared.definition,
+      },
+      prepare,
+      async () =>
+        (await executeMcpTool(userId, name, captured, signal, onProgress, imageSink)) || '',
+      signal,
+      context,
+    );
+  }
+  const prepare = async () => {
+    const { entry } = prepareTool(userId, name, captured);
+    return { row: requireConnection(userId, entry.connection.id), definition: entry.tool };
+  };
+  const { entry, parameters } = prepareTool(userId, name, captured);
+  return confirmMcpOperation(
+    userId,
+    {
+      connection_id: entry.connection.id,
+      operation: 'tool',
+      target: entry.tool.name,
+      arguments: parameters,
+      definition: entry.tool,
+    },
+    prepare,
+    async () => (await executeMcpTool(userId, name, captured, signal, onProgress, imageSink)) || '',
+    signal,
+    context,
+  );
 }

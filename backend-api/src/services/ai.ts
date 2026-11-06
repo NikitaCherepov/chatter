@@ -3846,7 +3846,8 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     try {
       return await runMcpTool(user.id,toolName,parsed,signal,
         () => { void Promise.resolve(subagentExtra?.onToolStatus?.(getToolUserMessage(user.language, toolName, argsRaw) || 'MCP')).catch(() => {}); },
-        subagentExtra?.currentModelSupportsVision ? subagentExtra?.directImageSink : undefined) || '';
+        subagentExtra?.currentModelSupportsVision ? subagentExtra?.directImageSink : undefined,
+        {autoRejectHitl,onDesktopAction:subagentExtra?.onDesktopAction,waitForApproval:promise=>waitForHitlConfirmation(user.id,promise)}) || '';
     } catch(error: any) {
       if (signal?.aborted) throw error;
       const message=String(error?.message||'');

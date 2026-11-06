@@ -3,6 +3,7 @@ import type { Context } from 'telegraf';
 import * as dotenv from 'dotenv';
 import crypto from 'crypto';
 import axios from 'axios';
+import {registerMcpTelegramConfirmations} from './mcp-telegram-confirmations.js';
 import { marked, Renderer } from 'marked';
 import { stripMessageAccents } from './message-accents.js';
 import {
@@ -5081,6 +5082,8 @@ const rejectWithOptionalComment = async (
     { headers: { Authorization: `Bearer ${BACKEND_INTERNAL_TOKEN}` }, timeout: 15000 }
 );
 
+const handleMcpConfirmationAction=registerMcpTelegramConfirmations(bot,{base:BACKEND_API_BASE_URL,token:BACKEND_INTERNAL_TOKEN,requestRejectionComment});
+
 // ── PC Command Confirmation (Telegram inline buttons) ─────────────────────
 
 bot.action(/^browserdownload:(allow|reject):(.+)$/, async (ctx) => {
@@ -6289,6 +6292,7 @@ const processUserTextThroughAi = async (
                 if (richStream) richStream.onReasoning(text);
             },
             onDesktopAction: async (action) => {
+                if(await handleMcpConfirmationAction(ctx,action))return;
                 if (action?.action === 'pc_command_confirmation' && action?.value?.confirmation_id) {
                     const confirmationId = action.value.confirmation_id;
                     const command = action.value.command || '';
