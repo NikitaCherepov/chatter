@@ -45,6 +45,17 @@ export const connections = (userId: number) => [
     .all(userId) as McpConnection[]),
   ...getLocalConnections(userId),
 ];
+export function normalizeMcpCallbackUrl(value: unknown): string {
+  if (typeof value !== 'string') throw new Error('mcp_invalid_callback_url');
+  if (!value.trim()) return '';
+  try {
+    const url = mcpUrl(value.trim());
+    if (url.search || url.hash) throw new Error();
+    return url.href;
+  } catch {
+    throw new Error('mcp_invalid_callback_url');
+  }
+}
 export function policy(userId?: number) {
   const global = db.prepare('SELECT * FROM mcp_policy WHERE id=1').get() as any;
   const personal = userId
@@ -52,6 +63,7 @@ export function policy(userId?: number) {
     : null;
   return {
     enabled: !!global.enabled,
+    ...(userId ? {} : { oauth_callback_url: global.oauth_callback_url || '' }),
     show_catalog: personal?.show_catalog == null ? !!global.show_catalog : !!personal.show_catalog,
     catalog_override:
       personal?.show_catalog == null ? 'inherit' : personal.show_catalog ? 'allow' : 'deny',
@@ -81,17 +93,26 @@ export function savePolicy(body: any, userId?: number) {
     );
   } else {
     if (
-      !['enabled', 'allow_custom', 'show_catalog'].some((key) => body[key] !== undefined) ||
+      !['enabled', 'allow_custom', 'show_catalog', 'oauth_callback_url'].some(
+        (key) => body[key] !== undefined,
+      ) ||
       ['enabled', 'allow_custom', 'show_catalog'].some(
         (key) => body[key] !== undefined && typeof body[key] !== 'boolean',
       )
     )
       throw new Error('mcp_invalid_policy');
     const current = db.prepare('SELECT * FROM mcp_policy WHERE id=1').get() as any;
-    db.prepare('UPDATE mcp_policy SET enabled=?,allow_custom=?,show_catalog=? WHERE id=1').run(
+    const callback =
+      body.oauth_callback_url === undefined
+        ? current.oauth_callback_url || ''
+        : normalizeMcpCallbackUrl(body.oauth_callback_url);
+    db.prepare(
+      'UPDATE mcp_policy SET enabled=?,allow_custom=?,show_catalog=?,oauth_callback_url=? WHERE id=1',
+    ).run(
       body.enabled === undefined ? current.enabled : +body.enabled,
       body.allow_custom === undefined ? current.allow_custom : +body.allow_custom,
       body.show_catalog === undefined ? current.show_catalog : +body.show_catalog,
+      callback,
     );
   }
   return policy(userId);
@@ -327,9 +348,7 @@ export function saveConnection(userId: number, body: any, id?: number) {
   const access = policy(userId);
   if (
     !access.enabled ||
-    (serverId != null
-      ? !server?.allowed || server.url !== url
-      : !access.allow_custom)
+    (serverId != null ? !server?.allowed || server.url !== url : !access.allow_custom)
   )
     throw new Error('mcp_not_allowed');
   const name = String(body.name ?? current?.name ?? server?.name ?? '')

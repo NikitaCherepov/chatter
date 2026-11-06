@@ -56,7 +56,11 @@ const id = (value: any) => {
   return n;
 };
 export const oauthCallback: RequestHandler = route(async (req, res) => {
-  await finishOAuth(String(req.query.state || ''), String(req.query.code || ''));
+  await finishOAuth(
+    String(req.query.state || ''),
+    String(req.query.code || ''),
+    String(req.query.error || ''),
+  );
   res.setHeader('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'");
   res.setHeader('Referrer-Policy', 'no-referrer');
   res
@@ -162,7 +166,9 @@ export function userMcpRouter(account: (req: any) => number) {
   );
   router.post(
     '/connections/:id/oauth',
-    route(async (req, res) => res.json(await beginOAuth(account(req), id(req.params.id)))),
+    route(async (req, res) =>
+      res.json(await beginOAuth(account(req), id(req.params.id), req.body?.callback_url)),
+    ),
   );
   router.post(
     '/connections/:id/cancel',

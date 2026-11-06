@@ -282,6 +282,15 @@ let win;const errors=[];
  if(process.env.MCP_UI_SCREENSHOT_DIR){await new Promise(r=>setTimeout(r,100));fs.writeFileSync(path.join(process.env.MCP_UI_SCREENSHOT_DIR,'mcp-desktop.png'),(await wc.capturePage()).toPNG());}
  await js('window.renderFixture("admin")');
  await until('document.body.innerText.includes("Политика доступа")');
+ await js('Array.from(document.querySelectorAll("summary")).find(e=>e.textContent.includes("Авторизация OAuth")).click()');
+ await until('!!document.querySelector(\'input[placeholder="Автоматически"]\')');
+ if(process.env.MCP_UI_SCREENSHOT_DIR){await new Promise(r=>setTimeout(r,350));await js('window.scrollTo(0,0)');fs.writeFileSync(path.join(process.env.MCP_UI_SCREENSHOT_DIR,'mcp-admin-oauth.png'),(await wc.capturePage()).toPNG());}
+
+ await js('(()=>{const input=document.querySelector(\'input[placeholder="Автоматически"]\');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value").set.call(input,"https://custom.example/backend/mcp/oauth/callback");input.dispatchEvent(new Event("input",{bubbles:true}));})()');
+ await js('document.querySelector(\'input[placeholder="Автоматически"]\').closest("form").dispatchEvent(new Event("submit",{bubbles:true,cancelable:true}))');
+ await until('window.__calls.some(c=>c.name==="/api/mcp/policy"&&c.body.oauth_callback_url==="https://custom.example/backend/mcp/oauth/callback")');
+ await js('Array.from(document.querySelectorAll("summary")).find(e=>e.textContent.includes("Авторизация OAuth")).click()');
+
  await click('Найти');
  await until('document.body.innerText.includes("Remote tools")');
  assert.ok(await js('!!document.querySelector(\'a[href="https://github.com/example/mcp"]\')'));
@@ -305,7 +314,7 @@ let win;const errors=[];
  assert.ok(await js('window.__calls.some(c=>c.name==="/api/model-access-users")'));
  await until('!document.querySelector("button[role=switch]").disabled');
  if(process.env.MCP_UI_SCREENSHOT_DIR){await js('window.scrollTo(0,0)');fs.writeFileSync(path.join(process.env.MCP_UI_SCREENSHOT_DIR,'mcp-admin.png'),(await wc.capturePage()).toPNG());}
- await js('document.querySelector("details > summary").click()');
+ await js('Array.from(document.querySelectorAll("details > summary")).find(e=>e.textContent.includes("Добавить сервер")).click()');
  await until('!!document.querySelector(\'button[aria-label="Тип подключения"]\')');
  await js('document.querySelector(\'button[aria-label="Тип подключения"]\').click()');
  await click('На компьютере пользователя');

@@ -1,5 +1,5 @@
 import type { McpApprovalPolicy } from '../../main/local-mcp-spec';
-import { apiFetch, localMcpScope, syncLocalMcp } from './api';
+import { API_BASE, apiFetch, localMcpScope, syncLocalMcp } from './api';
 import type { LocalMcpInput, NpmMcpPackage } from '../../main/local-mcp-spec';
 export type McpTool = { name: string; description?: string };
 export type McpServer = {
@@ -57,6 +57,7 @@ export const refreshMcpTools = (id: number) =>
 export const authorizeMcp = (id: number) =>
   apiFetch<{ authorization_url: string }>(base + '/connections/' + id + '/oauth', {
     method: 'POST',
+    body: JSON.stringify({ callback_url: API_BASE.replace(/\/+$/, '') + '/mcp/oauth/callback' }),
   });
 export const cancelMcp = (id: number) =>
   apiFetch(base + '/connections/' + id + '/cancel', { method: 'POST' });

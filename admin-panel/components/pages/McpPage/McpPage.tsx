@@ -32,7 +32,12 @@ const empty = {
 };
 export function McpPage() {
   const { t } = useTranslation();
-  const [policy, setPolicy] = useState({ enabled: false, allow_custom: false, show_catalog: true }),
+  const [policy, setPolicy] = useState({
+      enabled: false,
+      allow_custom: false,
+      show_catalog: true,
+      oauth_callback_url: '',
+    }),
     [servers, setServers] = useState<Server[]>([]);
   const [draft, setDraft] = useState(empty),
     [editId, setEditId] = useState<number | null>(null),
@@ -40,6 +45,7 @@ export function McpPage() {
     [error, setError] = useState('');
   const [remove, setRemove] = useState<Server | null>(null);
   const [formOpen, setFormOpen] = useState(false);
+  const [oauthOpen, setOauthOpen] = useState(false);
   const [serverSearch, setServerSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const editor = useRef<HTMLDivElement>(null);
@@ -162,6 +168,45 @@ export function McpPage() {
         }
       >
         <McpAccessSettings />
+        <AnimatedDetails
+          open={oauthOpen}
+          onToggle={setOauthOpen}
+          className={s.disclosure}
+          summary={t('mcp.oauth.title')}
+        >
+          <form
+            className={s.form}
+            onSubmit={(event) => {
+              event.preventDefault();
+              void run(() =>
+                api('/api/mcp/policy', {
+                  method: 'PUT',
+                  body: JSON.stringify({ oauth_callback_url: policy.oauth_callback_url }),
+                }),
+              );
+            }}
+          >
+            <div className={s.wide}>
+              <FormField label={t('mcp.oauth.callback')} hint={t('mcp.oauth.hint')}>
+                <input
+                  type="url"
+                  maxLength={2048}
+                  value={policy.oauth_callback_url || ''}
+                  disabled={busy || loading}
+                  placeholder={t('mcp.oauth.automatic')}
+                  onChange={(event) =>
+                    setPolicy((current) => ({ ...current, oauth_callback_url: event.target.value }))
+                  }
+                />
+              </FormField>
+            </div>
+            <div className={s.actions}>
+              <button type="submit" disabled={busy || loading}>
+                {t('mcp.save')}
+              </button>
+            </div>
+          </form>
+        </AnimatedDetails>
       </Card>
       <Card
         title={t('mcp.servers')}

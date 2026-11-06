@@ -8,11 +8,15 @@ packages or starts their processes. Sampling, roots and elicitation are not expo
 
 - `ENCRYPTION_KEY`: existing backend encryption key; required for tokens and OAuth.
   Preserve it across deployments and keep it separate from the database.
-- `MCP_CALLBACK_URL`: public HTTPS address of `/mcp/oauth/callback`, for example
-  `https://your-host/backend/mcp/oauth/callback` behind that proxy prefix.
-  The callback uses expiring, single-use state bound to the account and connection.
-  It must reach the backend without requiring a Chatter bearer header.
-- Bearer-token connections do not need the OAuth callback setting.
+- OAuth callbacks are derived from the desktop's existing server connection address
+  (API base plus /mcp/oauth/callback), preserving any reverse-proxy prefix.
+  No MCP-specific environment variable is required.
+- Admin MCP settings can override the complete public HTTPS callback URL for a
+  custom deployment. This nonsecret setting is stored in the existing MCP policy
+  in the database and takes effect immediately. An empty value restores automatic
+  selection. Each attempt retains its original callback until completion.
+- The callback must reach the backend without a Chatter bearer header.
+  Bearer-token connections do not need any callback configuration.
 - OAuth discovery, automatic client registration, PKCE, refresh and issuer-bound
   credentials use the SDK. Providers requiring a separately registered OAuth app
   may need provider-specific setup; arbitrary OAuth client-secret configuration

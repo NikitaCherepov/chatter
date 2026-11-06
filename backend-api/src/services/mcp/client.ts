@@ -8,18 +8,27 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import type { OAuthClientProvider } from '@modelcontextprotocol/sdk/client/auth.js';
 import { db } from '../../db.js';
 import { mcpHttp, mcpUrl, resolveMcpAddress } from './network.js';
-import { credentials, saveCredentials, requireConnection, type McpConnection } from './store.js';
+import {
+  credentials,
+  saveCredentials,
+  requireConnection,
+  policy,
+  normalizeMcpCallbackUrl,
+  type McpConnection,
+} from './store.js';
 
 const busy = new Set<number>();
 export const activeCalls = new Map<number, { userId: number; controller: AbortController }>();
-function callbackUrl() {
-  if (!process.env.MCP_CALLBACK_URL) throw new Error('mcp_oauth_callback_not_configured');
-  return mcpUrl(process.env.MCP_CALLBACK_URL).href;
+function callbackUrl(value?: unknown) {
+  const url = normalizeMcpCallbackUrl(value ?? policy().oauth_callback_url ?? '');
+  if (!url) throw new Error('mcp_oauth_callback_not_configured');
+  return url;
 }
 function provider(
   row: McpConnection,
   state?: string,
   onRedirect?: (url: string) => void,
+  redirectUri?: string,
 ): OAuthClientProvider {
   let saved = credentials(row);
   const update = (patch: any) => {
@@ -28,12 +37,12 @@ function provider(
   };
   return {
     get redirectUrl() {
-      return callbackUrl();
+      return callbackUrl(redirectUri ?? saved.oauth_redirect_uri);
     },
     get clientMetadata() {
       return {
         client_name: 'Chatter',
-        redirect_uris: [callbackUrl()],
+        redirect_uris: [callbackUrl(redirectUri ?? saved.oauth_redirect_uri)],
         grant_types: ['authorization_code', 'refresh_token'],
         response_types: ['code'],
         token_endpoint_auth_method: 'none',
@@ -105,7 +114,7 @@ async function session<T>(
     transport: StreamableHTTPClientTransport,
     row: McpConnection,
   ) => Promise<T>,
-  oauth?: { state?: string; redirect?: (url: string) => void; code?: string },
+  oauth?: { state?: string; redirect?: (url: string) => void; code?: string; redirectUri?: string },
 ) {
   const row = requireConnection(userId, id);
   signal?.throwIfAborted();
@@ -150,7 +159,9 @@ async function session<T>(
         requestInit: secret.bearer
           ? { headers: { Authorization: 'Bearer ' + secret.bearer } }
           : undefined,
-        authProvider: secret.bearer ? undefined : provider(row, oauth?.state, oauth?.redirect),
+        authProvider: secret.bearer
+          ? undefined
+          : provider(row, oauth?.state, oauth?.redirect, oauth?.redirectUri),
         reconnectionOptions: {
           maxRetries: 0,
           initialReconnectionDelay: 1000,
@@ -432,9 +443,10 @@ export function cancelForbiddenCalls() {
   }
 }
 const stateHash = (state: string) => crypto.createHash('sha256').update(state).digest('hex');
-export async function beginOAuth(userId: number, id: number) {
+export async function beginOAuth(userId: number, id: number, automaticCallback?: unknown) {
   const row = requireConnection(userId, id);
-  callbackUrl();
+  if (row.transport === 'stdio') throw new Error('mcp_oauth_remote_only');
+  const redirectUri = callbackUrl(policy().oauth_callback_url || automaticCallback);
   if (credentials(row).bearer) throw new Error('mcp_remove_token_before_oauth');
   const state = crypto.randomBytes(32).toString('base64url');
   db.prepare('DELETE FROM mcp_oauth_states WHERE expires_at<? OR connection_id=?').run(
@@ -442,16 +454,19 @@ export async function beginOAuth(userId: number, id: number) {
     id,
   );
   db.prepare(
-    'INSERT INTO mcp_oauth_states(state_hash,user_id,connection_id,expires_at) VALUES(?,?,?,?)',
-  ).run(stateHash(state), userId, id, Date.now() + 600_000);
+    'INSERT INTO mcp_oauth_states(state_hash,user_id,connection_id,expires_at,redirect_uri) VALUES(?,?,?,?,?)',
+  ).run(stateHash(state), userId, id, Date.now() + 600_000, redirectUri);
   let authorizationUrl = '';
   try {
     // Force user authorization rather than silently reusing old tokens.
     const secret = credentials(row);
     delete secret.tokens;
+    if (secret.oauth_redirect_uri !== redirectUri) delete secret.client;
+    secret.oauth_redirect_uri = redirectUri;
     saveCredentials(row, secret);
     await session(userId, id, undefined, async () => ({}), {
       state,
+      redirectUri,
       redirect: (url) => (authorizationUrl = url),
     });
   } catch (error) {
@@ -460,15 +475,23 @@ export async function beginOAuth(userId: number, id: number) {
       throw error;
     }
   }
-  if (!authorizationUrl) throw new Error('mcp_oauth_not_required');
+  if (!authorizationUrl) {
+    db.prepare('DELETE FROM mcp_oauth_states WHERE state_hash=?').run(stateHash(state));
+    throw new Error('mcp_oauth_not_required');
+  }
   return { authorization_url: authorizationUrl };
 }
-export async function finishOAuth(state: string, code: string) {
+export async function finishOAuth(state: string, code: string, authorizationError = '') {
   const hash = stateHash(state);
   const record = db
     .prepare('DELETE FROM mcp_oauth_states WHERE state_hash=? AND expires_at>? RETURNING *')
     .get(hash, Date.now()) as any;
-  if (!record || !code || code.length > 8192) throw new Error('mcp_invalid_oauth_state');
-  await session(record.user_id, record.connection_id, undefined, async () => ({}), { code } as any);
+  if (!record || !record.redirect_uri) throw new Error('mcp_invalid_oauth_state');
+  if (authorizationError) throw new Error('mcp_authorization_declined');
+  if (!code || code.length > 8192) throw new Error('mcp_invalid_oauth_state');
+  await session(record.user_id, record.connection_id, undefined, async () => ({}), {
+    code,
+    redirectUri: record.redirect_uri,
+  });
   await refreshTools(record.user_id, record.connection_id);
 }

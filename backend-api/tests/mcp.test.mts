@@ -8,7 +8,8 @@ const require = createRequire(import.meta.url);
 const dbPath = path.join(os.tmpdir(), 'chatter-mcp-' + process.pid + '-' + Date.now() + '.sqlite');
 process.env.API_DB_PATH = dbPath;
 process.env.ENCRYPTION_KEY = 'mcp-local-test-key';
-process.env.MCP_CALLBACK_URL = 'https://chatter.example/backend/mcp/oauth/callback';
+delete process.env.MCP_CALLBACK_URL;
+let expectedCallback = 'https://chatter.example/backend/mcp/oauth/callback';
 const previousDb = new (require('better-sqlite3'))(dbPath);
 previousDb.exec(
   'CREATE TABLE mcp_policy(id INTEGER PRIMARY KEY CHECK(id=1),enabled INTEGER NOT NULL DEFAULT 1,allow_custom INTEGER NOT NULL DEFAULT 0); INSERT INTO mcp_policy VALUES(1,1,0); CREATE TABLE mcp_user_policy(user_id INTEGER PRIMARY KEY,allow_custom INTEGER);',
@@ -19,7 +20,7 @@ const store = require('../src/services/mcp/store.ts');
 const network = require('../src/services/mcp/network.ts');
 const tools = require('../src/services/mcp/tools.ts');
 const client = require('../src/services/mcp/client.ts');
-const { userMcpRouter, adminMcpRouter } = require('../src/services/mcp/routes.ts');
+const { userMcpRouter, adminMcpRouter, oauthCallback } = require('../src/services/mcp/routes.ts');
 const express = require('express');
 const dns = require('node:dns/promises');
 const originalLookup = dns.lookup,
@@ -284,6 +285,7 @@ network.mcpHttp.fetch = async (input: any, init: any) => {
       return json({ ...JSON.parse(String(init.body)), client_id: 'test-chatter-client' });
     if (url.pathname === '/token') {
       const params = new URLSearchParams(init.body);
+      assert.equal(params.get('redirect_uri'), expectedCallback, 'token exchange uses the original callback');
       assert.equal(params.get('code'), 'test-authorization-code');
       assert.equal(
         params.get('code_verifier'),
@@ -324,6 +326,7 @@ app.use(
   userMcpRouter((req: any) => req.testUser),
 );
 app.use('/admin', adminMcpRouter());
+app.get('/mcp/oauth/callback', oauthCallback);
 const api = http.createServer(app);
 await new Promise<void>((resolve) => api.listen(0, '127.0.0.1', resolve));
 const apiBase = 'http://127.0.0.1:' + (api.address() as any).port;
@@ -965,9 +968,16 @@ try {
     name: 'OAuth MCP',
     url: 'https://oauth-mcp.example/mcp',
   });
-  const authorization = await client.beginOAuth(82, oauthConnection.id);
+  assert.equal(store.policy().oauth_callback_url, '');
+  assert.equal((await request('/admin/policy','PUT',{oauth_callback_url:'http://unsafe.example/callback'})).status,400);
+  assert.equal((await request('/admin/policy','PUT',{oauth_callback_url:'https://safe.example/callback?secret=x'})).status,400);
+  assert.equal(store.policy().oauth_callback_url, '', 'invalid settings leave policy unchanged');
+  const authResponse = await request('/user/82/mcp/connections/'+oauthConnection.id+'/oauth','POST',{callback_url:expectedCallback});
+  assert.equal(authResponse.status,200);
+  const authorization = authResponse.body;
   oauthUrl = new URL(authorization.authorization_url);
   assert.equal(oauthUrl.origin, 'https://auth.example');
+  assert.equal(oauthUrl.searchParams.get('redirect_uri'), expectedCallback);
   assert.equal(oauthUrl.searchParams.get('code_challenge_method'), 'S256');
   const state = oauthUrl.searchParams.get('state')!;
   assert.ok(state);
@@ -979,7 +989,10 @@ try {
     () => client.finishOAuth('wrong-state', 'test-authorization-code'),
     /invalid_oauth_state/,
   );
-  await client.finishOAuth(state, 'test-authorization-code');
+  assert.equal((await request('/admin/policy','PUT',{oauth_callback_url:'https://changed.example/backend/mcp/oauth/callback'})).status,200);
+  const callbackResponse = await fetch(apiBase+'/mcp/oauth/callback?'+new URLSearchParams({state,code:'test-authorization-code'}));
+  assert.equal(callbackResponse.status,200,'public callback works without Chatter credentials');
+  assert.match(await callbackResponse.text(),/MCP connected/);
   const oauthRow = store.connections(82).find((c: any) => c.id === oauthConnection.id);
   assert.equal(store.credentials(oauthRow).tokens.access_token, 'oauth-private-token');
   assert.equal(
@@ -994,6 +1007,17 @@ try {
   console.log(
     'PASS: OAuth discovery, dynamic registration, PKCE, encrypted tokens and single-use account-bound callback',
   );
+  // Administrator override wins over the automatic client address, and survives a DB read.
+  const overridden = await client.beginOAuth(82, oauthConnection.id, 'https://automatic.example/mcp/oauth/callback');
+  const overrideUrl = new URL(overridden.authorization_url);
+  assert.equal(overrideUrl.searchParams.get('redirect_uri'), 'https://changed.example/backend/mcp/oauth/callback');
+  assert.equal(store.policy().oauth_callback_url, 'https://changed.example/backend/mcp/oauth/callback');
+  await assert.rejects(()=>client.finishOAuth(overrideUrl.searchParams.get('state')!, '', 'access_denied'),/mcp_authorization_declined/);
+  assert.equal((await request('/admin/policy','PUT',{oauth_callback_url:''})).status,200);
+  assert.equal(store.policy().oauth_callback_url, '');
+  for (const bad of ['http://unsafe.example/callback', 'https://localhost/mcp/oauth/callback','https://user:pass@host.example/callback','https://safe.example/callback#fragment'])
+    await assert.rejects(()=>client.beginOAuth(82,oauthConnection.id,bad),/mcp_invalid_callback_url/);
+  await assert.rejects(()=>client.beginOAuth(82,oauthConnection.id),/mcp_oauth_callback_not_configured/);
   store.savePolicy({ override: 'allow' }, 81);
   store.savePolicy({ override: 'deny' }, 82);
   db.prepare(

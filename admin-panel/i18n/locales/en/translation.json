@@ -1,5 +1,6 @@
 {
   "mcp": {
+    "oauth": {"title": "OAuth sign-in", "callback": "Sign-in callback URL", "hint": "Normally derived automatically from the server address used by the desktop. Set a complete public HTTPS callback URL only for a custom deployment. Clear this field to restore automatic selection.", "automatic": "Automatic"},
     "design": {
         "pageHelp": "Manage MCP access, recommended servers and local packages.",
         "customAccess": "Adding custom MCP servers",
