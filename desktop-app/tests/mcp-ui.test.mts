@@ -251,6 +251,8 @@ let win;const errors=[];
  }
  assert.ok(await js('!!document.querySelector(\'a[href="https://github.com/example/mcp"]\')'));
  await js('Array.from(document.querySelectorAll("strong")).find(e=>e.textContent==="Local package").closest("[class*=catalogCard]").querySelector("button").click()');
+ assert.ok(await js('(()=>{const form=document.querySelector("[class*=addPanel]");const connection=document.querySelector("section[class*=connection]");return !!form&&!!connection&&!!(form.compareDocumentPosition(connection)&Node.DOCUMENT_POSITION_FOLLOWING)})()'),'add form precedes connected MCP cards');
+ if(process.env.MCP_UI_SCREENSHOT_DIR){await new Promise(r=>setTimeout(r,300));await js('document.querySelector("[class*=addPanel]").scrollIntoView({block:"start"})');fs.writeFileSync(path.join(process.env.MCP_UI_SCREENSHOT_DIR,'mcp-add-top.png'),(await wc.capturePage()).toPNG());}
  await click('Установить на ПК');
  await until('window.__calls.some(c=>c.name==="local_install"&&c.body.package.identifier==="@example/local")');
  await until('document.querySelector("article")?.textContent.includes("Local package")');
