@@ -293,8 +293,8 @@ let win;const errors=[];
  await until('document.body.innerText.includes("Политика доступа")');
  await js('document.querySelector("button[role=switch]").click()');
  await until('window.__calls.some(c=>c.name==="/api/mcp/policy"&&c.body.enabled===false)');
- await until('!!document.querySelector(\'button[aria-label="Разрешать собственные URL MCP"]\')');
- await js('document.querySelector(\'button[aria-label="Разрешать собственные URL MCP"]\').click()');
+ await until('!!document.querySelector(\'button[aria-label="Добавление собственных MCP"]\')');
+ await js('document.querySelector(\'button[aria-label="Добавление собственных MCP"]\').click()');
  await click('Для выбранных пользователей');
  await js('document.querySelector(\'button[aria-label="Пользователи с доступом к своим MCP"]\').click()');
  await until('document.body.innerText.includes("Alice")');
@@ -303,7 +303,24 @@ let win;const errors=[];
  await click('Сохранить');
  await until('window.__calls.some(c=>c.name==="/api/mcp/access"&&c.body?.allow_custom?.user_ids.includes(81))');
  assert.ok(await js('window.__calls.some(c=>c.name==="/api/model-access-users")'));
- if(process.env.MCP_UI_SCREENSHOT_DIR)fs.writeFileSync(path.join(process.env.MCP_UI_SCREENSHOT_DIR,'mcp-admin.png'),(await wc.capturePage()).toPNG());
+ await until('!document.querySelector("button[role=switch]").disabled');
+ if(process.env.MCP_UI_SCREENSHOT_DIR){await js('window.scrollTo(0,0)');fs.writeFileSync(path.join(process.env.MCP_UI_SCREENSHOT_DIR,'mcp-admin.png'),(await wc.capturePage()).toPNG());}
+ await js('document.querySelector("details > summary").click()');
+ await until('!!document.querySelector(\'button[aria-label="Тип подключения"]\')');
+ await js('document.querySelector(\'button[aria-label="Тип подключения"]\').click()');
+ await click('На компьютере пользователя');
+ await until('!!document.querySelector(\'input[placeholder="npx -y @playwright/mcp@latest"]\')');
+ await js('(()=>{for(const [selector,value] of [["form input[maxlength=\\\"120\\\"]","Admin local"],["form input[placeholder^=\\\"npx\\\"]","npx -y @playwright/mcp@latest"]]){const input=document.querySelector(selector);Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value").set.call(input,value);input.dispatchEvent(new Event("input",{bubbles:true}));}})()');
+ if(process.env.MCP_UI_SCREENSHOT_DIR){
+   await new Promise(r=>setTimeout(r,350));await js('document.querySelector("details").scrollIntoView({block:"start"})');
+   fs.writeFileSync(path.join(process.env.MCP_UI_SCREENSHOT_DIR,'mcp-admin-add.png'),(await wc.capturePage()).toPNG());
+   await js('document.documentElement.dataset.theme="dark"');await new Promise(r=>setTimeout(r,150));
+   fs.writeFileSync(path.join(process.env.MCP_UI_SCREENSHOT_DIR,'mcp-admin-add-dark.png'),(await wc.capturePage()).toPNG());
+   await js('document.documentElement.dataset.theme="light"');
+ }
+ await click('Добавить сервер');
+ await until('window.__calls.some(c=>c.name==="/api/mcp/servers"&&c.body?.transport==="stdio"&&c.body.source==="npx -y @playwright/mcp@latest"&&c.body.recommended===true&&c.body.allowed===true)');
+
  await js('window.renderFixture("user")');
  await until('document.body.innerText.includes("GitHub account")');
  assert.equal(await js('document.querySelectorAll("button").length'),0,"user card has no duplicate access editor");

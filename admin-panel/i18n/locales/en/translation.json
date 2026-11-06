@@ -1,6 +1,18 @@
 {
   "mcp": {
     "design": {
+        "pageHelp": "Manage MCP access, recommended servers and local packages.",
+        "customAccess": "Adding custom MCP servers",
+        "serversHelp": "Servers available in the desktop catalog. Recommend the ones users should see first.",
+        "address": "Server URL",
+        "localHint": "The user installs and runs this MCP on their computer. You can provide an npm package or a stdio launch command.",
+        "remoteHint": "An HTTPS endpoint that supports MCP Streamable HTTP.",
+        "findServer": "Find an added server",
+        "noServersFound": "No servers found.",
+        "noServers": "Add a server or select one from the Registry below.",
+        "registryHelp": "Find remote servers and local packages in the official MCP Registry. Select an entry to review it and add it to your catalog.",
+        "searchCatalog": "Search the Registry by name or purpose",
+        "catalogEmpty": "Enter at least three characters, or search with an empty field to browse the Registry.",
       "connectionType": "Connection type",
       "remote": "Remote server",
       "local": "On the user’s computer",

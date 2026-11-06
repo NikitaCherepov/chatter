@@ -70,7 +70,7 @@ export function AdminShell({
     overview: [t('nav.overviewTitle'), t('nav.overviewDesc')],
     users: [t('nav.usersTitle'), t('nav.usersDesc')],
     accessKeys: [t('nav.accessKeysTitle'), t('nav.accessKeysDesc')],
-    mcp: ['MCP', t('mcp.help')],
+    mcp: ['MCP', t('mcp.design.pageHelp')],
     modelApi: [t('modelApi.title'), t('modelApi.description')],
     models: [t('nav.modelsTitle'), t('nav.modelsDesc')],
     prompts: [t('nav.promptsTitle'), t('nav.promptsDesc')],

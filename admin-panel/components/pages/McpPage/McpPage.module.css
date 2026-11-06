@@ -1,0 +1,321 @@
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  max-width: var(--content-max);
+}
+.hint,
+.status {
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+  line-height: 1.6;
+}
+.hint {
+  margin: 0;
+}
+.status {
+  margin: var(--sp-4) 0;
+}
+.count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  padding: 4px 8px;
+  border-radius: var(--radius);
+  background: var(--bg-secondary);
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+}
+.accessGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sp-4);
+}
+.accessRule {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--sp-3);
+  min-width: 0;
+  padding: var(--sp-4);
+  border-radius: var(--radius);
+  background: var(--bg-secondary);
+}
+.accessRule > button {
+  align-self: flex-start;
+}
+.accessRule > label {
+  margin: 0;
+}
+.editor {
+  scroll-margin-top: var(--sp-4);
+  margin-bottom: var(--sp-4);
+}
+.disclosure {
+  border-bottom: 1px solid var(--border-light);
+}
+.disclosure > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: var(--sp-3) 0;
+  list-style: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: var(--fs-sm);
+}
+.disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+.sectionLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-weight: var(--fw-medium);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.chevron {
+  color: var(--text-hint);
+  font-size: var(--fs-md);
+  flex-shrink: 0;
+}
+.form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sp-4);
+  padding: var(--sp-4) 0 var(--sp-5);
+  align-items: start;
+}
+.form label {
+  margin: 0;
+}
+.form textarea {
+  resize: vertical;
+}
+.formToggles {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4) var(--sp-5);
+  flex-wrap: wrap;
+  padding-block: var(--sp-2);
+}
+.wide {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+.actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin-top: var(--sp-3);
+}
+.form .actions {
+  margin: 0;
+}
+.search {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding-inline: var(--sp-3);
+  border: 1px solid var(--border-input);
+  border-radius: var(--radius);
+  background: var(--bg-input);
+  color: var(--text-hint);
+  min-width: 0;
+}
+.search:focus-within {
+  outline: 2px solid var(--accent-focus);
+  outline-offset: 1px;
+}
+.search > svg {
+  flex-shrink: 0;
+}
+.search input {
+  border: 0;
+  background: transparent;
+  padding-inline: 0;
+  min-width: 0;
+}
+.search input:focus-visible {
+  outline: none;
+}
+.serverGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+  gap: var(--sp-4);
+  margin-top: var(--sp-4);
+}
+.serverCard,
+.catalogCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius);
+  min-width: 0;
+}
+.cardHeading {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+}
+.cardHeading > div {
+  min-width: 0;
+}
+.cardHeading h3 {
+  margin: 0 0 3px;
+  color: var(--text-primary);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  border-radius: var(--radius);
+  background: var(--bg-secondary);
+  color: var(--text-muted);
+}
+.description {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.endpoint {
+  display: block;
+  margin: 0;
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+  line-height: 1.6;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+a.endpoint:hover {
+  color: var(--text-primary);
+  text-decoration: underline;
+}
+.serverControls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--sp-3) var(--sp-4);
+  margin-top: auto;
+  padding-top: var(--sp-2);
+}
+.cardActions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--border-light);
+}
+.remove {
+  background: transparent;
+  color: var(--text-muted);
+  padding-inline: var(--sp-2);
+}
+.remove:hover {
+  color: var(--color-error);
+}
+.catalogSearch {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+}
+.catalogSearch > .search {
+  flex: 1;
+  min-width: min(100%, 220px);
+}
+.metadata {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2) var(--sp-4);
+  margin: 0;
+  font-size: var(--fs-xs);
+  line-height: 1.5;
+}
+.metadata > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+.metadata dt {
+  color: var(--text-hint);
+}
+.metadata dd {
+  margin: 0;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+.links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+.links a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+  text-decoration: none;
+}
+.links svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+.links a:hover {
+  color: var(--text-primary);
+  background: var(--bg-modal-hover);
+}
+.catalogAction {
+  margin-top: auto;
+  padding-top: var(--sp-2);
+}
+@media (max-width: 700px) {
+  .accessGrid,
+  .form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.policyCard > div:first-child {
+  flex-wrap: wrap;
+}
+.policyToggle {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.chevron {
+  display: inline-flex;
+  transition: transform 0.22s;
+}
+.chevron.expanded {
+  transform: rotate(90deg);
+}
+@media (prefers-reduced-motion: reduce) {
+  .chevron {
+    transition: none;
+  }
+}
