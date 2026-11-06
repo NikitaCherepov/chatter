@@ -407,6 +407,19 @@ try {
     notices.every((item) => Object.keys(item.event).every(key=>['type','resync_local'].includes(key))),
     'notifications contain no metadata or secrets',
   );
+  const localRecommendation = await request('/admin/servers', 'POST', {
+    name: 'Local browser', transport: 'stdio', source: 'npx -y @playwright/mcp@latest',
+    allowed: true, recommended: true,
+  });
+  assert.equal(localRecommendation.status, 201);
+  assert.equal(localRecommendation.body.server.source, 'npx -y @playwright/mcp@latest');
+  assert.equal(localRecommendation.body.server.recommended, 1);
+  const localInCatalog = (await request('/user/81/mcp')).body.servers.find(item => item.id === localRecommendation.body.server.id);
+  assert.equal(localInCatalog.transport, 'stdio');
+  assert.equal((await request('/user/81/mcp/connections', 'POST', {
+    server_id: localRecommendation.body.server.id, name: 'Invalid remote',
+  })).status, 403);
+  await request('/admin/servers/' + localRecommendation.body.server.id, 'DELETE');
   const beforePersonalChange = notices.length;
   const server = serverResult.body.server;
   const created = await request('/user/81/mcp/connections', 'POST', {

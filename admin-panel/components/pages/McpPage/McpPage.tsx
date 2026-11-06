@@ -13,8 +13,19 @@ type Server = {
   url: string;
   description: string;
   allowed: number;
+  recommended: number;
+  transport: 'streamable-http' | 'stdio';
+  source: string;
 };
-const empty = { name: '', url: '', description: '', allowed: true };
+const empty = {
+  name: '',
+  url: '',
+  description: '',
+  allowed: true,
+  recommended: true,
+  transport: 'streamable-http' as 'streamable-http' | 'stdio',
+  source: '',
+};
 export function McpPage() {
   const { t } = useTranslation();
   const [policy, setPolicy] = useState({ enabled: false, allow_custom: false, show_catalog: true }),
@@ -102,9 +113,13 @@ export function McpPage() {
           <div className={s.secret} key={server.id}>
             <strong>{server.name}</strong>
             <p>{server.description}</p>
-            <a href={server.url} target="_blank" rel="noopener noreferrer">
-              {server.url}
-            </a>
+            {server.transport === 'stdio' ? (
+              <code>{server.source}</code>
+            ) : (
+              <a href={server.url} target="_blank" rel="noopener noreferrer">
+                {server.url}
+              </a>
+            )}
             <div className={s.copy}>
               <Toggle
                 checked={!!server.allowed}
@@ -129,6 +144,7 @@ export function McpPage() {
                   setDraft({
                     ...server,
                     allowed: !!server.allowed,
+                    recommended: !!server.recommended,
                   });
                 }}
               >
@@ -164,15 +180,40 @@ export function McpPage() {
             />
           </label>
           <label>
-            URL
-            <input
-              type="url"
-              required
-              placeholder="https://example.com/mcp"
-              value={draft.url}
-              onChange={(e) => setDraft({ ...draft, url: e.target.value })}
-            />
+            {t('mcp.design.connectionType')}
+            <select
+              value={draft.transport}
+              onChange={(event) =>
+                setDraft({ ...draft, transport: event.target.value as typeof draft.transport })
+              }
+            >
+              <option value="streamable-http">{t('mcp.design.remote')}</option>
+              <option value="stdio">{t('mcp.design.local')}</option>
+            </select>
           </label>
+          {draft.transport === 'stdio' ? (
+            <label className={s.wide}>
+              {t('mcp.design.command')}
+              <input
+                required
+                maxLength={8000}
+                value={draft.source}
+                placeholder="npx -y @playwright/mcp@latest"
+                onChange={(event) => setDraft({ ...draft, source: event.target.value })}
+              />
+            </label>
+          ) : (
+            <label>
+              URL
+              <input
+                type="url"
+                required
+                placeholder="https://example.com/mcp"
+                value={draft.url}
+                onChange={(event) => setDraft({ ...draft, url: event.target.value })}
+              />
+            </label>
+          )}
           <label className={s.wide}>
             {t('mcp.description')}
             <input
@@ -181,6 +222,11 @@ export function McpPage() {
               onChange={(e) => setDraft({ ...draft, description: e.target.value })}
             />
           </label>
+          <Toggle
+            checked={draft.recommended}
+            label={t('mcp.design.recommend')}
+            onChange={(recommended) => setDraft({ ...draft, recommended })}
+          />
           <Toggle
             checked={draft.allowed}
             label={t('mcp.allowed')}
@@ -252,18 +298,25 @@ export function McpPage() {
               )}
             </div>
             <button
-              disabled={busy || item.transport === 'stdio'}
+              disabled={busy}
               onClick={() => {
                 setEditId(null);
                 setDraft({
                   ...empty,
-                  name: item.name,
+                  transport: item.transport === 'stdio' ? 'stdio' : 'streamable-http',
+                  source: item.package?.identifier
+                    ? item.package.identifier +
+                      (item.package.version && item.package.version !== 'latest'
+                        ? '@' + item.package.version
+                        : '')
+                    : '',
+                  name: item.title || item.name,
                   url: item.url,
                   description: item.description,
                 });
               }}
             >
-              {t(item.transport === 'stdio' ? 'mcp.installInDesktop' : 'mcp.select')}
+              {t('mcp.select')}
             </button>
           </div>
         ))}

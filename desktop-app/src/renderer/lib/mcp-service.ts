@@ -7,6 +7,9 @@ export type McpServer = {
   name: string;
   url: string;
   description: string;
+  recommended?: number;
+  transport?: string;
+  source?: string;
 };
 export type McpResource = {
   name: string;
@@ -59,6 +62,8 @@ export const cancelMcp = (id: number) =>
   apiFetch(base + '/connections/' + id + '/cancel', { method: 'POST' });
 
 export type CatalogItem = {
+  recommended?: number;
+  source?: string;
   transport?: string;
   package?: NpmMcpPackage;
   id?: number;

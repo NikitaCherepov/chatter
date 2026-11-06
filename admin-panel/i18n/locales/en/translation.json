@@ -1,5 +1,12 @@
 {
   "mcp": {
+    "design": {
+      "connectionType": "Connection type",
+      "remote": "Remote server",
+      "local": "On the user’s computer",
+      "command": "Package or launch command",
+      "recommend": "Recommend in the catalog"
+    },
     "installInDesktop": "Install in desktop",
     "access": {
       "all": "Everyone",

@@ -4,15 +4,22 @@ import { toast } from 'sonner';
 import { useMcp, useMcpCatalog } from '../lib/useMcp';
 import * as api from '../lib/mcp-service';
 import { LocalMcpPanel } from './LocalMcpPanel';
-import { packageFields, emptyMcpApproval } from '../../main/local-mcp-spec';
+import { LocalMcpForm } from './LocalMcpForm';
+import { emptyMcpApproval } from '../../main/local-mcp-spec';
 import { Select } from './Select';
-import Checkbox from './Checkbox';
+import { McpToggle, McpTools } from './McpControls';
+import { Icon } from './Icon';
+import { AnimatedCollapse, AnimatedDetails } from './AnimatedDisclosure';
+import { ConfirmDialog } from './ConfirmDialog';
 import s from './SettingsModal.module.scss';
 import styles from './McpSettings.module.scss';
 
 export function McpSettings() {
   const { t } = useTranslation(),
     { query, mutation } = useMcp();
+  const [view, setView] = useState<'catalog' | 'connections'>('catalog');
+  const [adding, setAdding] = useState(false);
+  const [addType, setAddType] = useState('remote');
   const [server, setServer] = useState(''),
     [name, setName] = useState(''),
     [url, setUrl] = useState(''),
@@ -39,7 +46,12 @@ export function McpSettings() {
     if (
       !policy?.enabled ||
       (server === 'custom' && !policy.allow_custom) ||
-      (server && server !== 'custom' && (!policy.show_catalog || !selected || selected.url !== url))
+      (server &&
+        server !== 'custom' &&
+        (!policy.show_catalog ||
+          !selected ||
+          selected.transport === 'stdio' ||
+          selected.url !== url))
     ) {
       setServer('');
       setName('');
@@ -47,6 +59,11 @@ export function McpSettings() {
       setToken('');
     }
   }, [query.data, server, url]);
+
+  useEffect(() => {
+    if (query.data && (!query.data.policy.enabled || !query.data.policy.show_catalog))
+      setView('connections');
+  }, [query.data?.policy.enabled, query.data?.policy.show_catalog]);
 
   const run = async (action: () => Promise<unknown>) => {
     try {
@@ -62,20 +79,31 @@ export function McpSettings() {
     }
   };
   const pick = (item: api.CatalogItem) => {
+    setAdding(true);
+    setAddType('remote');
+    setLocalDraft(null);
+    setView('connections');
     const approved = query.data?.servers.find((server) => server.url === item.url);
     setServer(approved ? String(approved.id) : 'custom');
     setUrl(item.url);
     setName(item.name);
     setToken('');
   };
-  if (query.isPending) return <div role="status">{t('common.loading')}</div>;
-  if (query.isError)
+  if (query.isPending || query.isError)
     return (
-      <div role="alert">
-        {t('mcp.error')}{' '}
-        <button className={s.cancelBtn} onClick={() => void query.refetch()}>
-          {t('mcp.refresh')}
-        </button>
+      <div className={s.panel}>
+        <div className={s.panelTitle}>MCP</div>
+        <p className={s.connectionsHelp}>{t('mcp.design.intro')}</p>
+        <div className={styles.empty} role={query.isError ? 'alert' : 'status'}>
+          {t(query.isError ? 'mcp.error' : 'common.loading')}
+          {query.isError && (
+            <div className={styles.actions}>
+              <button className={s.cancelBtn} onClick={() => void query.refetch()}>
+                {t('mcp.refresh')}
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     );
   const data = query.data!,
@@ -101,254 +129,422 @@ export function McpSettings() {
   return (
     <div className={s.panel}>
       <div className={s.panelTitle}>MCP</div>
-      <p className={s.connectionsHelp}>{t('mcp.help')}</p>
-      {!data.policy.enabled && <p role="status">{t('mcp.disabled')}</p>}
-      {data.connections
-        .filter((connection) => connection.transport !== 'stdio')
-        .map((connection) => (
-          <ConnectionCard
-            key={connection.id}
-            connection={connection}
-            busy={busy}
-            run={run}
-            authorize={async () => {
-              setAuthorization('');
-              await run(async () => {
-                const result = await api.authorizeMcp(connection.id);
-                setAuthorization(result.authorization_url);
-              });
-            }}
-          />
-        ))}
-      {authorization && (
-        <div className={s.macroCard}>
-          <a href={authorization} target="_blank" rel="noopener noreferrer">
-            {t('mcp.openAuthorization')}
-          </a>
-          <p>{t('mcp.afterAuthorization')}</p>
-          <button className={s.cancelBtn} onClick={() => void query.refetch()}>
-            {t('mcp.refresh')}
-          </button>
-        </div>
-      )}
-      <LocalMcpPanel
-        allowed={data.policy.enabled && data.policy.allow_custom}
-        draft={localDraft}
-        onClose={() => setLocalDraft(null)}
-      />
-      {data.policy.enabled && (data.policy.show_catalog || data.policy.allow_custom) && (
-        <form
-          className={styles.form}
-          onSubmit={(event) => {
-            event.preventDefault();
-            void run(async () => {
-              await api.saveMcpConnection({
-                name,
-                url,
-                server_id: server === 'custom' ? null : Number(server),
-                mode,
-                timeout_seconds: timeout,
-                ...(token ? { token } : {}),
-              });
-              setName('');
-              setUrl('');
-              setToken('');
-              setServer('');
-            });
-          }}
-        >
-          <h3>{t('mcp.add')}</h3>
-          <label>
-            {t('mcp.server')}
-            <Select
-              value={server}
-              disabled={busy}
-              options={[
-                ...(data.policy.show_catalog ? data.servers : []).map((item) => ({
-                  value: String(item.id),
-                  label: item.name,
-                  hint: item.description,
-                })),
-                ...(data.policy.allow_custom ? [{ value: 'custom', label: t('mcp.custom') }] : []),
-              ]}
-              onChange={(value) => {
-                setServer(value);
-                const item = data.servers.find((item) => String(item.id) === value);
-                setName(item?.name || '');
-                setUrl(item?.url || '');
-              }}
-            />
-          </label>
-          {server === 'custom' && (
-            <label>
-              URL
-              <input
-                className={s.fieldInput}
-                type="url"
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-                required
-                placeholder="https://example.com/mcp"
-              />
-            </label>
-          )}
-          <label>
-            {t('mcp.name')}
-            <input
-              className={s.fieldInput}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              maxLength={120}
-              required
-            />
-          </label>
-          <label>
-            {t('mcp.token')}
-            <input
-              className={s.fieldInput}
-              type="password"
-              autoComplete="new-password"
-              value={token}
-              onChange={(e) => setToken(e.target.value)}
-            />
-          </label>
-          <label>
-            {t('mcp.mode')}
-            <Select
-              value={mode}
-              onChange={setMode}
-              options={[
-                { value: 'search', label: t('mcp.searchMode') },
-                { value: 'eager', label: t('mcp.eagerMode') },
-              ]}
-            />
-          </label>
-          <label>
-            {t('mcp.timeout')}
-            <input
-              className={s.fieldInput}
-              type="number"
-              min={10}
-              max={3600}
-              value={timeout}
-              onChange={(e) => setTimeoutValue(Number(e.target.value))}
-            />
-          </label>
-          <button className={s.saveBtn} disabled={busy || !server} type="submit">
-            {t('mcp.add')}
-          </button>
-        </form>
-      )}
-      {data.policy.enabled && data.policy.show_catalog && (
-        <section className={styles.catalog}>
-          <h3>{t('mcp.catalog')}</h3>
-          <p className={s.connectionsHelp}>
-            {t(canSearchRegistry ? 'mcp.registryHelp' : 'mcp.catalogHelp')}
-          </p>
-          <form
-            className={styles.search}
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (canSearchRegistry && (!search.trim() || search.trim().length >= 3))
-                setCatalogSearch(search.trim());
-            }}
-          >
-            <input
-              aria-label={t('mcp.search')}
-              className={s.fieldInput}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder={t('mcp.search')}
-            />
-            {canSearchRegistry && (
-              <button
-                className={s.cancelBtn}
-                disabled={registry.isFetching || (!!search.trim() && search.trim().length < 3)}
-              >
-                {t('mcp.search')}
-              </button>
-            )}
-          </form>
-          {showingRegistry && registry.isPending && <p role="status">{t('common.loading')}</p>}
-          {showingRegistry && registry.isError && <p role="alert">{t('mcp.error')}</p>}
-          {!catalog.length && !(showingRegistry && (registry.isPending || registry.isError)) && (
-            <p>{t(showingRegistry ? 'mcp.noRegistryServers' : 'mcp.noApprovedServers')}</p>
-          )}
-          {catalog.map((item) => (
-            <div
-              className={s.macroCard}
-              key={(item.package?.identifier || item.url) + ' ' + item.name}
-            >
-              <strong>{item.title || item.name}</strong>
-              {item.title && item.title !== item.name && <p className={styles.url}>{item.name}</p>}
-              <p>{item.description}</p>
-              {item.url && (
-                <a href={item.url} target="_blank" rel="noopener noreferrer" className={styles.url}>
-                  {item.url}
-                </a>
-              )}
-              {item.package && <p className={styles.url}>npm · {item.package.identifier}</p>}
-              {item.publisher && (
-                <p>
-                  {t('mcp.publisher')}: {item.publisher}
-                </p>
-              )}
-              {item.version && (
-                <p>
-                  {t('mcp.version')}: {item.version}
-                </p>
-              )}
-              {item.repository_url && (
-                <a href={item.repository_url} target="_blank" rel="noopener noreferrer">
-                  {t('mcp.repository')}
-                </a>
-              )}
-              {item.website_url && (
-                <a href={item.website_url} target="_blank" rel="noopener noreferrer">
-                  {t('mcp.website')}
-                </a>
-              )}
-              {item.registry_url && (
-                <a href={item.registry_url} target="_blank" rel="noopener noreferrer">
-                  {t('mcp.registryEntry')}
-                </a>
-              )}
-              {item.package ? (
-                <button
-                  className={s.cancelBtn}
-                  disabled={busy || !window.electronAPI?.localMcpManage}
-                  onClick={() => {
-                    if (packageFields(item.package!).length) setLocalDraft(item);
-                    else
-                      void run(() =>
-                        api.installLocalMcp({
-                          name: item.title || item.name,
-                          description: item.description,
-                          package: item.package,
-                        }),
-                      );
-                  }}
-                >
-                  {t('mcp.local.install')}
-                </button>
-              ) : (
-                <button className={s.cancelBtn} disabled={busy} onClick={() => pick(item)}>
-                  {t('mcp.select')}
-                </button>
-              )}
-            </div>
-          ))}
-          {showingRegistry && registry.hasNextPage && (
+      <p className={s.connectionsHelp}>{t('mcp.design.intro')}</p>
+      <div className={styles.toolbar}>
+        <div className={styles.tabs} role="group" aria-label="MCP">
+          {data.policy.enabled && data.policy.show_catalog && (
             <button
-              className={s.cancelBtn}
-              disabled={registry.isFetching || search.trim() !== catalogSearch}
-              onClick={() => void registry.fetchNextPage()}
+              type="button"
+              aria-pressed={view === 'catalog'}
+              onClick={() => setView('catalog')}
             >
-              {t('mcp.more')}
+              {t('mcp.catalog')}
             </button>
           )}
-        </section>
-      )}
+          <button
+            type="button"
+            aria-pressed={view === 'connections'}
+            onClick={() => setView('connections')}
+          >
+            {t('mcp.design.connected')}
+          </button>
+        </div>
+        {data.policy.enabled && (data.policy.allow_custom || data.policy.show_catalog) && (
+          <button
+            className={s.saveBtn}
+            aria-expanded={view === 'connections' && (adding || !!localDraft)}
+            onClick={() => {
+              setView('connections');
+              setLocalDraft(null);
+              setAdding(!(adding || localDraft));
+            }}
+          >
+            {t(
+              (adding || localDraft) && view === 'connections'
+                ? 'mcp.cancel'
+                : 'mcp.design.addCustom',
+            )}
+          </button>
+        )}
+      </div>
+      <div hidden={view !== 'connections'}>
+        <AnimatedCollapse
+          open={
+            (adding || !!localDraft) &&
+            data.policy.enabled &&
+            (data.policy.allow_custom || data.policy.show_catalog)
+          }
+        >
+          <div className={styles.addPanel}>
+            {adding && (
+              <div className={styles.addType}>
+                <Select
+                  value={addType}
+                  onChange={setAddType}
+                  options={[
+                    { value: 'remote', label: t('mcp.design.remote') },
+                    ...(data.policy.allow_custom &&
+                    typeof window.electronAPI?.localMcpManage === 'function'
+                      ? [{ value: 'local', label: t('mcp.design.local') }]
+                      : []),
+                  ]}
+                />
+              </div>
+            )}
+            {data.policy.allow_custom && (localDraft || addType === 'local') && (
+              <LocalMcpForm
+                draft={localDraft}
+                onClose={() => {
+                  setLocalDraft(null);
+                  setAdding(false);
+                }}
+              />
+            )}
+            {!localDraft &&
+              addType === 'remote' &&
+              data.policy.enabled &&
+              (data.policy.show_catalog || data.policy.allow_custom) && (
+                <form
+                  className={styles.form}
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    void run(async () => {
+                      await api.saveMcpConnection({
+                        name,
+                        url,
+                        server_id: server === 'custom' ? null : Number(server),
+                        mode,
+                        timeout_seconds: timeout,
+                        ...(token ? { token } : {}),
+                      });
+                      setName('');
+                      setUrl('');
+                      setToken('');
+                      setServer('');
+                      setAdding(false);
+                    });
+                  }}
+                >
+                  <h3>{t('mcp.add')}</h3>
+                  <label>
+                    {t('mcp.server')}
+                    <Select
+                      value={server}
+                      disabled={busy}
+                      options={[
+                        ...(data.policy.show_catalog
+                          ? data.servers.filter((item) => item.transport !== 'stdio')
+                          : []
+                        ).map((item) => ({
+                          value: String(item.id),
+                          label: item.name,
+                          hint: item.description,
+                        })),
+                        ...(data.policy.allow_custom
+                          ? [{ value: 'custom', label: t('mcp.custom') }]
+                          : []),
+                      ]}
+                      onChange={(value) => {
+                        setServer(value);
+                        const item = data.servers.find((item) => String(item.id) === value);
+                        setName(item?.name || '');
+                        setUrl(item?.url || '');
+                      }}
+                    />
+                  </label>
+                  {server === 'custom' && (
+                    <label>
+                      URL
+                      <input
+                        className={s.fieldInput}
+                        type="url"
+                        value={url}
+                        onChange={(e) => setUrl(e.target.value)}
+                        required
+                        placeholder="https://example.com/mcp"
+                      />
+                    </label>
+                  )}
+                  <label>
+                    {t('mcp.name')}
+                    <input
+                      className={s.fieldInput}
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      maxLength={120}
+                      required
+                    />
+                  </label>
+                  <label>
+                    {t('mcp.token')}
+                    <input
+                      className={s.fieldInput}
+                      type="password"
+                      autoComplete="new-password"
+                      value={token}
+                      onChange={(e) => setToken(e.target.value)}
+                    />
+                  </label>
+                  <label>
+                    {t('mcp.mode')}
+                    <Select
+                      value={mode}
+                      onChange={setMode}
+                      options={[
+                        { value: 'search', label: t('mcp.searchMode') },
+                        { value: 'eager', label: t('mcp.eagerMode') },
+                      ]}
+                    />
+                  </label>
+                  <label>
+                    {t('mcp.timeout')}
+                    <input
+                      className={s.fieldInput}
+                      type="number"
+                      min={10}
+                      max={3600}
+                      value={timeout}
+                      onChange={(e) => setTimeoutValue(Number(e.target.value))}
+                    />
+                  </label>
+                  <button className={s.saveBtn} disabled={busy || !server} type="submit">
+                    {t('mcp.add')}
+                  </button>
+                </form>
+              )}
+          </div>
+        </AnimatedCollapse>
+        {!data.connections.length && (
+          <p className={styles.empty}>{t('mcp.design.emptyConnections')}</p>
+        )}
+        {!data.policy.enabled && (
+          <p className={styles.empty} role="status">
+            {t('mcp.disabled')}
+          </p>
+        )}
+        {data.connections
+          .filter((connection) => connection.transport !== 'stdio')
+          .map((connection) => (
+            <ConnectionCard
+              key={connection.id}
+              connection={connection}
+              busy={busy}
+              run={run}
+              authorize={async () => {
+                setAuthorization('');
+                await run(async () => {
+                  const result = await api.authorizeMcp(connection.id);
+                  setAuthorization(result.authorization_url);
+                });
+              }}
+            />
+          ))}
+        {authorization && (
+          <div className={s.macroCard}>
+            <a href={authorization} target="_blank" rel="noopener noreferrer">
+              {t('mcp.openAuthorization')}
+            </a>
+            <p>{t('mcp.afterAuthorization')}</p>
+            <button className={s.cancelBtn} onClick={() => void query.refetch()}>
+              {t('mcp.refresh')}
+            </button>
+          </div>
+        )}
+        <LocalMcpPanel allowed={data.policy.enabled && data.policy.allow_custom} />
+      </div>
+      <div hidden={view !== 'catalog'}>
+        {data.policy.enabled && data.policy.show_catalog && (
+          <section className={styles.catalog}>
+            <p className={s.connectionsHelp}>
+              {t(canSearchRegistry ? 'mcp.registryHelp' : 'mcp.catalogHelp')}
+            </p>
+            <form
+              className={styles.search}
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (canSearchRegistry && (!search.trim() || search.trim().length >= 3))
+                  setCatalogSearch(search.trim());
+              }}
+            >
+              <input
+                aria-label={t('mcp.search')}
+                className={s.fieldInput}
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder={t('mcp.search')}
+              />
+              {canSearchRegistry && (
+                <button
+                  className={s.cancelBtn}
+                  disabled={registry.isFetching || (!!search.trim() && search.trim().length < 3)}
+                >
+                  {t('mcp.search')}
+                </button>
+              )}
+            </form>
+            {showingRegistry && registry.isPending && (
+              <p className={styles.empty} role="status">
+                {t('common.loading')}
+              </p>
+            )}
+            {showingRegistry && registry.isError && (
+              <p className={styles.empty} role="alert">
+                {t('mcp.error')}
+              </p>
+            )}
+            {!catalog.length && !(showingRegistry && (registry.isPending || registry.isError)) && (
+              <p className={styles.empty} role="status">
+                {t(showingRegistry ? 'mcp.noRegistryServers' : 'mcp.noApprovedServers')}
+              </p>
+            )}
+            {[
+              {
+                title: t('mcp.design.recommended'),
+                items: approvedCatalog.filter((item) => item.recommended) as api.CatalogItem[],
+              },
+              { title: t('mcp.catalog'), items: catalog.filter((item) => !item.recommended) },
+            ]
+              .filter((group) => group.items.length > 0)
+              .map((group) => (
+                <section key={group.title}>
+                  <h3>{group.title}</h3>
+                  <div className={styles.cards}>
+                    {group.items.map((item) => (
+                      <div
+                        className={styles.catalogCard}
+                        key={(item.package?.identifier || item.url) + ' ' + item.name}
+                      >
+                        <div className={styles.cardHeading}>
+                          <span className={styles.icon}>
+                            <Icon name={item.package || item.source ? 'monitor' : 'globe'} />
+                          </span>
+                          <strong>{item.title || item.name}</strong>
+                          {Boolean(item.recommended) && (
+                            <span className={styles.badge}>{t('mcp.design.recommendedBadge')}</span>
+                          )}
+                        </div>
+                        <span className={styles.meta}>
+                          {t(
+                            item.package || item.source ? 'mcp.design.local' : 'mcp.design.remote',
+                          )}
+                        </span>
+                        {item.title && item.title !== item.name && (
+                          <p className={styles.url}>{item.name}</p>
+                        )}
+                        <p>{item.description}</p>
+                        <AnimatedDetails
+                          className={styles.details}
+                          summary={
+                            <>
+                              <Icon name="code" size={14} />
+                              {t('mcp.design.details')}
+                            </>
+                          }
+                        >
+                          <div className={styles.detailBody}>
+                            <dl className={styles.metadata}>
+                              {item.url && (
+                                <>
+                                  <dt>URL</dt>
+                                  <dd>
+                                    <a href={item.url} target="_blank" rel="noopener noreferrer">
+                                      {item.url}
+                                    </a>
+                                  </dd>
+                                </>
+                              )}
+                              {item.package && (
+                                <>
+                                  <dt>npm</dt>
+                                  <dd>{item.package.identifier}</dd>
+                                </>
+                              )}
+                              {item.publisher && (
+                                <>
+                                  <dt>{t('mcp.publisher')}</dt>
+                                  <dd>{item.publisher}</dd>
+                                </>
+                              )}
+                              {item.version && (
+                                <>
+                                  <dt>{t('mcp.version')}</dt>
+                                  <dd>{item.version}</dd>
+                                </>
+                              )}
+                            </dl>
+                            {item.source && <pre className={styles.source}>{item.source}</pre>}
+                            <div className={styles.links}>
+                              {[
+                                {
+                                  url: item.repository_url,
+                                  label: t('mcp.repository'),
+                                  icon: 'code',
+                                },
+                                { url: item.website_url, label: t('mcp.website'), icon: 'globe' },
+                                {
+                                  url: item.registry_url,
+                                  label: t('mcp.registryEntry'),
+                                  icon: 'book',
+                                },
+                              ]
+                                .filter((link) => link.url)
+                                .map((link) => (
+                                  <a
+                                    key={link.label}
+                                    href={link.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                  >
+                                    <Icon name={link.icon} size={14} />
+                                    {link.label}
+                                    <span aria-hidden="true">↗</span>
+                                  </a>
+                                ))}
+                            </div>
+                          </div>
+                        </AnimatedDetails>
+                        {item.package || item.source ? (
+                          <button
+                            className={s.cancelBtn}
+                            disabled={
+                              busy ||
+                              !data.policy.allow_custom ||
+                              !window.electronAPI?.localMcpManage
+                            }
+                            onClick={() => {
+                              setLocalDraft(item);
+                              setView('connections');
+                              setAdding(false);
+                            }}
+                          >
+                            {t('mcp.local.install')}
+                          </button>
+                        ) : (
+                          <button
+                            className={s.cancelBtn}
+                            disabled={busy}
+                            onClick={() => pick(item)}
+                          >
+                            {t('mcp.design.connect')}
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              ))}
+            {showingRegistry && registry.hasNextPage && (
+              <button
+                className={s.cancelBtn}
+                disabled={registry.isFetching || search.trim() !== catalogSearch}
+                onClick={() => void registry.fetchNextPage()}
+              >
+                {t('mcp.more')}
+              </button>
+            )}
+          </section>
+        )}
+      </div>
     </div>
   );
 }
@@ -364,6 +560,7 @@ function ConnectionCard({
   authorize: () => Promise<void>;
 }) {
   const { t } = useTranslation();
+  const [remove, setRemove] = useState(false);
   const [token, setToken] = useState(''),
     [timeout, setTimeoutValue] = useState(c.timeout_seconds);
   const save = (body: Record<string, unknown>) => run(() => api.saveMcpConnection(body, c.id));
@@ -371,10 +568,13 @@ function ConnectionCard({
   const saveApproval = (patch: Partial<typeof approval>) =>
     save({ approval_policy: { ...approval, ...patch } });
   return (
-    <section className={s.macroCard}>
-      <div className={s.macroHeader}>
+    <section className={styles.connection}>
+      <div className={styles.cardHeading}>
+        <span className={styles.icon}>
+          <Icon name="globe" />
+        </span>
         <strong>{c.name}</strong>
-        <Checkbox
+        <McpToggle
           label={t('mcp.connectionEnabled')}
           checked={!!c.enabled}
           disabled={busy || c.blocked}
@@ -413,117 +613,143 @@ function ConnectionCard({
         >
           {t('mcp.refresh')}
         </button>
-        <button
-          className={s.cancelBtn}
-          disabled={busy || c.blocked || !c.enabled}
-          onClick={() => void authorize()}
-        >
-          {t('mcp.authorize')}
-        </button>
+
         <button className={s.cancelBtn} onClick={() => void run(() => api.cancelMcp(c.id))}>
           {t('mcp.cancelOperation')}
         </button>
-        <button
-          className={s.cancelBtn}
-          disabled={busy}
-          onClick={() => void run(() => api.deleteMcpConnection(c.id))}
-        >
-          {t('mcp.remove')}
-        </button>
       </div>
-      <details>
-        <summary>{t('mcp.settings')}</summary>
-        <Checkbox
-          label={t('mcp.approvals.allowAll')}
-          checked={approval.allow_all}
-          disabled={busy || c.blocked}
-          onChange={(allow_all) => void saveApproval({ allow_all })}
-        />
-        <p className={s.connectionsHelp}>{t('mcp.approvals.allowAllHint')}</p>
-        {approval.resources.map((uri) => (
-          <div className={styles.tool} key={uri}>
-            <Checkbox
-              label={t('mcp.approvals.alwaysResource') + ': ' + uri}
-              checked
-              disabled={busy || approval.allow_all}
-              onChange={() =>
-                void saveApproval({
-                  resources: approval.resources.filter((value) => value !== uri),
-                })
-              }
-            />
-          </div>
-        ))}
-
-        <div className={styles.form}>
-          <label>
-            {t('mcp.mode')}
-            <Select
-              value={c.mode}
-              disabled={busy || c.blocked}
-              onChange={(mode) => void save({ mode })}
-              options={[
-                { value: 'search', label: t('mcp.searchMode') },
-                { value: 'eager', label: t('mcp.eagerMode') },
-              ]}
-            />
-          </label>
-          <label>
-            {t('mcp.timeout')}
-            <input
-              type="number"
-              className={s.fieldInput}
-              value={timeout}
-              min={10}
-              max={3600}
-              onChange={(e) => setTimeoutValue(Number(e.target.value))}
-            />
-          </label>
-          <button
-            className={s.cancelBtn}
+      <AnimatedDetails
+        className={styles.details}
+        summary={
+          <>
+            <Icon name="key" size={14} />
+            {t('mcp.settings')}
+          </>
+        }
+      >
+        <div className={styles.detailBody}>
+          <McpToggle
+            label={t('mcp.approvals.allowAll')}
+            hint={t('mcp.approvals.allowAllHint')}
+            checked={approval.allow_all}
             disabled={busy || c.blocked}
-            onClick={() => void save({ timeout_seconds: timeout })}
-          >
-            {t('mcp.save')}
-          </button>
-          <label>
-            {t('mcp.replaceToken')}
-            <input
-              type="password"
-              className={s.fieldInput}
-              autoComplete="new-password"
-              value={token}
-              onChange={(e) => setToken(e.target.value)}
-            />
-          </label>
-          <button
-            className={s.cancelBtn}
-            disabled={busy || !token || c.blocked}
-            onClick={() =>
-              void run(async () => {
-                await api.saveMcpConnection({ token }, c.id);
-                setToken('');
-              })
-            }
-          >
-            {t('mcp.save')}
-          </button>
-          {c.has_credentials && (
+            onChange={(allow_all) => void saveApproval({ allow_all })}
+          />
+          {approval.resources.map((uri) => (
+            <div className={styles.tool} key={uri}>
+              <McpToggle
+                label={t('mcp.approvals.alwaysResource') + ': ' + uri}
+                checked
+                disabled={busy || approval.allow_all}
+                onChange={() =>
+                  void saveApproval({
+                    resources: approval.resources.filter((value) => value !== uri),
+                  })
+                }
+              />
+            </div>
+          ))}
+
+          <div className={`${styles.settingsForm} ${styles.settingsGrid}`}>
+            <label>
+              {t('mcp.mode')}
+              <Select
+                value={c.mode}
+                disabled={busy || c.blocked}
+                onChange={(mode) => void save({ mode })}
+                options={[
+                  { value: 'search', label: t('mcp.searchMode') },
+                  { value: 'eager', label: t('mcp.eagerMode') },
+                ]}
+              />
+            </label>
+            <label>
+              {t('mcp.timeout')}
+              <input
+                type="number"
+                className={s.fieldInput}
+                value={timeout}
+                min={10}
+                max={3600}
+                onChange={(e) => setTimeoutValue(Number(e.target.value))}
+              />
+            </label>
             <button
               className={s.cancelBtn}
               disabled={busy || c.blocked}
-              onClick={() => void save({ token: '' })}
+              onClick={() => void save({ timeout_seconds: timeout })}
             >
-              {t('mcp.clearCredentials')}
+              {t('mcp.save')}
             </button>
-          )}
+          </div>
         </div>
-        {!!c.capabilities?.resources && (
-          <details>
-            <summary>
+      </AnimatedDetails>
+      <AnimatedDetails
+        className={styles.details}
+        summary={
+          <>
+            <Icon name="lock" size={14} />
+            {t('mcp.design.authorization')}
+          </>
+        }
+      >
+        <div className={styles.detailBody}>
+          <div className={styles.settingsForm}>
+            <div className={styles.actions}>
+              <button
+                className={s.cancelBtn}
+                disabled={busy || c.blocked || !c.enabled}
+                onClick={() => void authorize()}
+              >
+                {t('mcp.authorize')}
+              </button>{' '}
+            </div>
+            <label>
+              {t('mcp.replaceToken')}
+              <input
+                type="password"
+                className={s.fieldInput}
+                autoComplete="new-password"
+                value={token}
+                onChange={(e) => setToken(e.target.value)}
+              />
+            </label>
+            <button
+              className={s.cancelBtn}
+              disabled={busy || !token || c.blocked}
+              onClick={() =>
+                void run(async () => {
+                  await api.saveMcpConnection({ token }, c.id);
+                  setToken('');
+                })
+              }
+            >
+              {t('mcp.save')}
+            </button>
+            {c.has_credentials && (
+              <button
+                className={s.cancelBtn}
+                disabled={busy || c.blocked}
+                onClick={() => void save({ token: '' })}
+              >
+                {t('mcp.clearCredentials')}
+              </button>
+            )}
+          </div>
+        </div>
+      </AnimatedDetails>
+      {!!c.capabilities?.resources && (
+        <AnimatedDetails
+          className={styles.details}
+          summary={
+            <>
+              <Icon name="file" size={14} />
               {t('mcp.resources')} · {c.resources?.length || 0} / {t('mcp.resourceTemplates')} ·{' '}
               {c.resource_templates?.length || 0}
-            </summary>
+            </>
+          }
+        >
+          <div className={styles.detailBody}>
             <p className={s.connectionsHelp}>{t('mcp.resourcesHelp')}</p>
             {[...(c.resources || []), ...(c.resource_templates || [])].map((resource) => (
               <div className={styles.tool} key={resource.uri || resource.uriTemplate}>
@@ -532,57 +758,34 @@ function ConnectionCard({
                 <small>{resource.description}</small>
               </div>
             ))}
-          </details>
-        )}
-        <h4>
-          {t('mcp.tools')} · {c.tools.length}
-        </h4>
-        <div className={styles.actions}>
-          <button
-            className={s.cancelBtn}
-            disabled={busy || c.blocked}
-            onClick={() => void save({ selected_tools: null })}
-          >
-            {t('mcp.allTools')}
-          </button>
-          <button
-            className={s.cancelBtn}
-            disabled={busy || c.blocked}
-            onClick={() => void save({ selected_tools: [] })}
-          >
-            {t('mcp.noTools')}
-          </button>
-        </div>
-        {!c.tools.length && !c.capabilities && <p>{t('mcp.refreshHelp')}</p>}
-        {c.tools.map((tool) => (
-          <div className={styles.tool} key={tool.name}>
-            <Checkbox
-              checked={c.selected_tools === null || c.selected_tools.includes(tool.name)}
-              label={tool.name}
-              disabled={busy || c.blocked}
-              onChange={(checked) => {
-                const selected = new Set(c.selected_tools ?? c.tools.map((tool) => tool.name));
-                if (checked) selected.add(tool.name);
-                else selected.delete(tool.name);
-                void save({ selected_tools: [...selected] });
-              }}
-            />
-            <Checkbox
-              label={t('mcp.approvals.withoutConfirmation')}
-              checked={approval.allow_all || approval.tools.includes(tool.name)}
-              disabled={busy || c.blocked || approval.allow_all}
-              onChange={(checked) =>
-                void saveApproval({
-                  tools: checked
-                    ? [...new Set([...approval.tools, tool.name])]
-                    : approval.tools.filter((name) => name !== tool.name),
-                })
-              }
-            />
-            <small>{tool.description}</small>
           </div>
-        ))}
-      </details>
+        </AnimatedDetails>
+      )}
+      <McpTools
+        tools={c.tools}
+        selected={c.selected_tools}
+        approval={approval}
+        disabled={busy || c.blocked}
+        saveSelected={(selected_tools) => void save({ selected_tools })}
+        saveApproval={(patch) => void saveApproval(patch)}
+      />
+      <div className={styles.connectionFooter}>
+        <button className={styles.removeButton} disabled={busy} onClick={() => setRemove(true)}>
+          {t('mcp.remove')}
+        </button>
+      </div>
+      {remove && (
+        <ConfirmDialog
+          open={remove}
+          title={t('mcp.remove')}
+          text={c.name}
+          confirmDisabled={busy}
+          onCancel={() => {
+            if (!busy) setRemove(false);
+          }}
+          onConfirm={() => void run(() => api.deleteMcpConnection(c.id))}
+        />
+      )}
     </section>
   );
 }

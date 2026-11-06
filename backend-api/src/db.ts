@@ -1751,6 +1751,8 @@ db.exec(`
 
 // MCP additions also migrate databases created by the first HTTP-only implementation.
 for (const [table, column, definition] of [
+  ['mcp_servers', 'transport', "TEXT NOT NULL DEFAULT 'streamable-http'"],
+  ['mcp_servers', 'source', "TEXT NOT NULL DEFAULT ''"],
   ['mcp_policy', 'show_catalog', 'INTEGER NOT NULL DEFAULT 1'],
   ['mcp_user_policy', 'show_catalog', 'INTEGER'],
   ['mcp_connections', 'resources_json', "TEXT NOT NULL DEFAULT '[]'"],

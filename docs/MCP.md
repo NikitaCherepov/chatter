@@ -122,8 +122,12 @@ expose only approved entries from Chatter's database; search filters that list.
 Users allowed to add custom servers can also search the public Registry and
 connect its entries as custom URLs. The catalog-visibility setting gates both
 sources. Permissions are rechecked after Registry requests, and revocation hides
-remote results and clears any selected custom endpoint. There is no recommendation flag
-in either UI; the old database column is retained for compatibility.
+remote results and clears any selected custom endpoint.
+Admins can mark catalog entries as recommended. These appear in a separate section
+above other entries. Approved entries may be remote HTTP servers or local stdio
+launch commands/packages. Local installations use the existing desktop installer
+and require local/custom MCP permission; the backend never executes these commands.
+Changing an entry to stdio blocks its old HTTP connections.
 
 Public Registry cards include version, publisher, endpoint and HTTPS links to
 the repository, website and Registry record when supplied. Registry search

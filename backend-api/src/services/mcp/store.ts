@@ -12,6 +12,8 @@ export type McpServer = {
   description: string;
   allowed: number;
   recommended: number;
+  transport: 'streamable-http' | 'stdio';
+  source: string;
 };
 export type McpConnection = {
   approval_policy_json?: string | null;
@@ -170,23 +172,43 @@ export function saveAccessSettings(body: any) {
   return accessSettings();
 }
 export function saveServer(body: any, id?: number) {
-  const url = mcpUrl(body.url).href;
+  const existing = id ? allServers().find((server) => server.id === id) : undefined;
+  const transport = body.transport ?? existing?.transport ?? 'streamable-http';
+  if (!['streamable-http', 'stdio'].includes(transport)) throw new Error('mcp_invalid_server');
+  const source = transport === 'stdio' ? String(body.source ?? existing?.source ?? '').trim() : '';
+  if (transport === 'stdio' && (!source || source.length > 8000 || source.includes('\0')))
+    throw new Error('mcp_invalid_server');
+  const url = transport === 'stdio' ? '' : mcpUrl(body.url).href;
   const name = String(body.name || '')
     .trim()
     .slice(0, 120);
   if (!name || typeof body.allowed !== 'boolean') throw new Error('mcp_invalid_server');
-  const args = [name, url, String(body.description || '').slice(0, 1500), +body.allowed, 0];
+  if (
+    body.recommended !== undefined &&
+    typeof body.recommended !== 'boolean' &&
+    ![0, 1].includes(body.recommended)
+  )
+    throw new Error('mcp_invalid_server');
+  const args = [
+    name,
+    url,
+    String(body.description || '').slice(0, 1500),
+    +body.allowed,
+    +(body.recommended ?? existing?.recommended ?? false),
+    transport,
+    source,
+  ];
   if (id) {
     if (!allServers().some((server) => server.id === id)) throw new Error('mcp_server_not_found');
     // Connections and credentials are bound to the exact URL. An edit must not redirect existing secrets.
     db.prepare(
-      'UPDATE mcp_servers SET name=?,url=?,description=?,allowed=?,recommended=? WHERE id=?',
+      'UPDATE mcp_servers SET name=?,url=?,description=?,allowed=?,recommended=?,transport=?,source=? WHERE id=?',
     ).run(...args, id);
   } else
     id = Number(
       db
         .prepare(
-          'INSERT INTO mcp_servers(name,url,description,allowed,recommended) VALUES(?,?,?,?,?)',
+          'INSERT INTO mcp_servers(name,url,description,allowed,recommended,transport,source) VALUES(?,?,?,?,?,?,?)',
         )
         .run(...args).lastInsertRowid,
     );
@@ -210,7 +232,8 @@ export function requireConnection(userId: number, id: number, enabled = true) {
   if (enabled && !row.enabled) throw new Error('mcp_connection_disabled');
   if (row.server_id != null) {
     const server = allServers().find((server) => server.id === row.server_id);
-    if (!server?.allowed || server.url !== row.url) throw new Error('mcp_server_not_allowed');
+    if (!server?.allowed || server.transport === 'stdio' || server.url !== row.url)
+      throw new Error('mcp_server_not_allowed');
   } else if (!access.allow_custom) throw new Error('mcp_custom_not_allowed');
   return row;
 }
@@ -296,6 +319,7 @@ export function saveConnection(userId: number, body: any, id?: number) {
   const server = serverId == null ? null : allServers().find((row) => row.id === serverId);
   if (!current && serverId != null && !policy(userId).show_catalog)
     throw new Error('mcp_catalog_hidden');
+  if (server?.transport === 'stdio') throw new Error('mcp_not_allowed');
   if (!current && server && body.url !== undefined && mcpUrl(body.url).href !== server.url) {
     throw new Error('mcp_server_changed');
   }
@@ -303,7 +327,9 @@ export function saveConnection(userId: number, body: any, id?: number) {
   const access = policy(userId);
   if (
     !access.enabled ||
-    (serverId != null ? !server?.allowed || server.url !== url : !access.allow_custom)
+    (serverId != null
+      ? !server?.allowed || server.url !== url
+      : !access.allow_custom)
   )
     throw new Error('mcp_not_allowed');
   const name = String(body.name ?? current?.name ?? server?.name ?? '')
