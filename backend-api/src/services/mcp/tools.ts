@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import { confirmMcpOperation, type McpApprovalContext } from './confirmations.js';
-import Ajv from 'ajv';
+import { compileMcpInputSchema } from './input-schema.js';
 import { availableConnections, requireConnection } from './store.js';
 import { callRemoteTool } from './client.js';
 import { browseMcp, readMcpResource, prepareMcpResource } from './discovery.js';
@@ -123,9 +123,7 @@ function prepareTool(userId: number, name: string, args: any) {
     JSON.stringify(parameters).length > 256_000
   )
     throw new Error('mcp_invalid_arguments');
-  const validate = new Ajv({ strict: false, allErrors: false, validateFormats: false }).compile(
-    entry.tool.inputSchema,
-  );
+  const validate = compileMcpInputSchema(entry.tool.inputSchema);
   if (!validate(parameters)) throw new Error('mcp_invalid_arguments');
   return { entry, parameters };
 }

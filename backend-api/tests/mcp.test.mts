@@ -46,6 +46,7 @@ const echo = {
   name: 'echo',
   description: 'Echo supplied text',
   inputSchema: {
+    $schema: 'https://json-schema.org/draft/2020-12/schema',
     type: 'object',
     properties: { text: { type: 'string' } },
     required: ['text'],

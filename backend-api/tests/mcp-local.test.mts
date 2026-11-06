@@ -25,7 +25,7 @@ await fs.writeFile(
     "const send=(id,result)=>process.stdout.write(JSON.stringify({jsonrpc:'2.0',id,result})+'\\n');",
     "readline.createInterface({input:process.stdin}).on('line',line=>{const m=JSON.parse(line);",
     "if(m.method==='initialize')return send(m.id,{protocolVersion:m.params.protocolVersion,capabilities:{tools:{},resources:{}},serverInfo:{name:'fixture',version:'1'}});",
-    "if(m.method==='tools/list')return send(m.id,{tools:[{name:'echo',description:'Local echo',inputSchema:{type:'object',properties:{text:{type:'string'}},required:['text']}},{name:'wait',inputSchema:{type:'object',properties:{}}},{name:'progress',inputSchema:{type:'object',properties:{}}}]});",
+    "if(m.method==='tools/list')return send(m.id,{tools:[{name:'echo',description:'Local echo',inputSchema:{$schema:'https://json-schema.org/draft/2020-12/schema',type:'object',properties:{text:{type:'string'}},required:['text']}},{name:'wait',inputSchema:{type:'object',properties:{}}},{name:'progress',inputSchema:{type:'object',properties:{}}}]});",
     "if(m.method==='resources/list')return send(m.id,{resources:[{name:'guide',uri:'fixture://guide'}]});",
     "if(m.method==='resources/templates/list')return send(m.id,{resourceTemplates:[]});",
     "if(m.method==='resources/read')return send(m.id,{contents:[{uri:m.params.uri,text:'LOCAL RESOURCE'}]});",
