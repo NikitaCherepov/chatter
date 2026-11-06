@@ -11,6 +11,9 @@ declare global {
       onTextContextMenu: (callback: (menu: { x: number; y: number; items: { action: 'undo' | 'redo' | 'cut' | 'copy' | 'paste' | 'selectAll'; enabled: boolean; separator?: boolean }[] }) => void) => () => void;
       textContextMenuAction: (action: 'undo' | 'redo' | 'cut' | 'copy' | 'paste' | 'selectAll') => Promise<void>;
       connectChatGpt: (input: { apiBase: string; accessToken: string; serverKey: string; connectionId?: number }) => Promise<{ id: number; name: string; email: string }>;
+      localMcpManage: (payload:unknown)=>Promise<any>;
+      localMcpControl: (payload:unknown)=>Promise<any>;
+      cancelLocalMcp: (requestId:string)=>Promise<void>;
       platform: string;
       apiBaseUrl: string;
       appVersion: string;

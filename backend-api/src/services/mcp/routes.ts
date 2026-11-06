@@ -1,4 +1,11 @@
 import express from 'express';
+import { syncLocalConnections } from './local.js';
+import type { WsClient } from '../../ws-clients.js';
+export function syncDesktopMcp(client: WsClient, input: unknown) {
+  const count = syncLocalConnections(client, input);
+  cancelForbiddenCalls();
+  return count;
+}
 type RequestHandler = (req: any, res: any) => any;
 const Router = express.Router;
 import {
@@ -178,7 +185,7 @@ export function adminMcpRouter() {
     route((req, res) => {
       const access = saveAccessSettings(req.body);
       cancelForbiddenCalls();
-      notifyMcpSettingsUpdated();
+      notifyMcpSettingsUpdated(undefined, true);
       res.json({ access });
     }),
   );
@@ -187,7 +194,7 @@ export function adminMcpRouter() {
     route((req, res) => {
       const value = savePolicy(req.body);
       cancelForbiddenCalls();
-      notifyMcpSettingsUpdated();
+      notifyMcpSettingsUpdated(undefined, true);
       res.json({ policy: value });
     }),
   );
@@ -195,7 +202,7 @@ export function adminMcpRouter() {
     '/servers',
     route((req, res) => {
       const server = saveServer(req.body);
-      notifyMcpSettingsUpdated();
+      notifyMcpSettingsUpdated(undefined, true);
       res.status(201).json({ server });
     }),
   );
@@ -204,7 +211,7 @@ export function adminMcpRouter() {
     route((req, res) => {
       const server = saveServer(req.body, id(req.params.id));
       cancelForbiddenCalls();
-      notifyMcpSettingsUpdated();
+      notifyMcpSettingsUpdated(undefined, true);
       res.json({ server });
     }),
   );
@@ -213,7 +220,7 @@ export function adminMcpRouter() {
     route((req, res) => {
       deleteServer(id(req.params.id));
       cancelForbiddenCalls();
-      notifyMcpSettingsUpdated();
+      notifyMcpSettingsUpdated(undefined, true);
       res.json({ ok: true });
     }),
   );
@@ -232,7 +239,7 @@ export function adminMcpRouter() {
       const userId = id(req.params.id);
       const value = savePolicy(req.body, userId);
       cancelForbiddenCalls();
-      notifyMcpSettingsUpdated(userId);
+      notifyMcpSettingsUpdated(userId, true);
       res.json({ policy: value });
     }),
   );

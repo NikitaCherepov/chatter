@@ -1,6 +1,7 @@
 ﻿import { browserInputTimeout } from './services/browser-input-timeout.js';
 import express from 'express';
-import { userMcpRouter, adminMcpRouter, oauthCallback } from './services/mcp/routes.js';
+import { userMcpRouter, adminMcpRouter, oauthCallback, syncDesktopMcp } from './services/mcp/routes.js';
+import {dropLocalConnections} from './services/mcp/local.js';
 import path from 'path';
 import { listTaskPage } from './services/tasks.js';
 import { uploadBackupSession, startBackupSession, backupSessionStatus, cancelBackupSession } from './services/sillytavern-backup-session.js';
@@ -8207,6 +8208,11 @@ wss.on('connection', (ws, req) => {
         if (Number.isSafeInteger(chatId) && chatId > 0 && canReadChatMessages(client.accountId, chatId)) {
           stopRoomQueue(chatId);
         }
+      } else if (msg.type === 'mcp_local_sync') {
+        try {
+          const count=syncDesktopMcp(client,msg.connections);
+          ws.send(JSON.stringify({type:'mcp_local_synced',count}));
+        } catch { ws.send(JSON.stringify({type:'mcp_local_synced',error:'mcp_local_sync_failed'})); }
       } else if (msg.type === 'ipc_progress') {
         if (wsClients.get(client.accountId) === client && typeof msg.request_id === 'string') {
           client.pendingIpc.get(msg.request_id)?.progress?.(msg.sequence);
@@ -8233,6 +8239,7 @@ wss.on('connection', (ws, req) => {
   });
 
   ws.on('close', (code, reason) => {
+    dropLocalConnections(client);
     // Check if this socket was already superseded by a newer connection.
     const wasAlreadyReplaced = wsClients.get(accountId) !== client;
     unregisterWsClient(client);

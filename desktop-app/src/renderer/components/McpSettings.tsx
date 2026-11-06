@@ -3,6 +3,8 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { useMcp, useMcpCatalog } from '../lib/useMcp';
 import * as api from '../lib/mcp-service';
+import { LocalMcpPanel } from './LocalMcpPanel';
+import { packageFields } from '../../main/local-mcp-spec';
 import { Select } from './Select';
 import Checkbox from './Checkbox';
 import s from './SettingsModal.module.scss';
@@ -17,6 +19,7 @@ export function McpSettings() {
     [token, setToken] = useState('');
   const [mode, setMode] = useState('search'),
     [timeout, setTimeoutValue] = useState(300);
+  const [localDraft, setLocalDraft] = useState<api.CatalogItem | null>(null);
   const [search, setSearch] = useState('');
   const [catalogSearch, setCatalogSearch] = useState<string | null>(null);
   const canSearchRegistry = !!(
@@ -88,7 +91,7 @@ export function McpSettings() {
       ? [
           ...new Map(
             (registry.data?.pages.flatMap((page) => page.items) || []).map((item) => [
-              item.name + '\n' + item.url,
+              item.name + '\n' + (item.package?.identifier || item.url),
               item,
             ]),
           ).values(),
@@ -100,21 +103,23 @@ export function McpSettings() {
       <div className={s.panelTitle}>MCP</div>
       <p className={s.connectionsHelp}>{t('mcp.help')}</p>
       {!data.policy.enabled && <p role="status">{t('mcp.disabled')}</p>}
-      {data.connections.map((connection) => (
-        <ConnectionCard
-          key={connection.id}
-          connection={connection}
-          busy={busy}
-          run={run}
-          authorize={async () => {
-            setAuthorization('');
-            await run(async () => {
-              const result = await api.authorizeMcp(connection.id);
-              setAuthorization(result.authorization_url);
-            });
-          }}
-        />
-      ))}
+      {data.connections
+        .filter((connection) => connection.transport !== 'stdio')
+        .map((connection) => (
+          <ConnectionCard
+            key={connection.id}
+            connection={connection}
+            busy={busy}
+            run={run}
+            authorize={async () => {
+              setAuthorization('');
+              await run(async () => {
+                const result = await api.authorizeMcp(connection.id);
+                setAuthorization(result.authorization_url);
+              });
+            }}
+          />
+        ))}
       {authorization && (
         <div className={s.macroCard}>
           <a href={authorization} target="_blank" rel="noopener noreferrer">
@@ -126,6 +131,11 @@ export function McpSettings() {
           </button>
         </div>
       )}
+      <LocalMcpPanel
+        allowed={data.policy.enabled && data.policy.allow_custom}
+        draft={localDraft}
+        onClose={() => setLocalDraft(null)}
+      />
       {data.policy.enabled && (data.policy.show_catalog || data.policy.allow_custom) && (
         <form
           className={styles.form}
@@ -265,13 +275,19 @@ export function McpSettings() {
             <p>{t(showingRegistry ? 'mcp.noRegistryServers' : 'mcp.noApprovedServers')}</p>
           )}
           {catalog.map((item) => (
-            <div className={s.macroCard} key={item.url + ' ' + item.name}>
+            <div
+              className={s.macroCard}
+              key={(item.package?.identifier || item.url) + ' ' + item.name}
+            >
               <strong>{item.title || item.name}</strong>
               {item.title && item.title !== item.name && <p className={styles.url}>{item.name}</p>}
               <p>{item.description}</p>
-              <a href={item.url} target="_blank" rel="noopener noreferrer" className={styles.url}>
-                {item.url}
-              </a>
+              {item.url && (
+                <a href={item.url} target="_blank" rel="noopener noreferrer" className={styles.url}>
+                  {item.url}
+                </a>
+              )}
+              {item.package && <p className={styles.url}>npm · {item.package.identifier}</p>}
               {item.publisher && (
                 <p>
                   {t('mcp.publisher')}: {item.publisher}
@@ -297,9 +313,29 @@ export function McpSettings() {
                   {t('mcp.registryEntry')}
                 </a>
               )}
-              <button className={s.cancelBtn} disabled={busy} onClick={() => pick(item)}>
-                {t('mcp.select')}
-              </button>
+              {item.package ? (
+                <button
+                  className={s.cancelBtn}
+                  disabled={busy || !window.electronAPI?.localMcpManage}
+                  onClick={() => {
+                    if (packageFields(item.package!).length) setLocalDraft(item);
+                    else
+                      void run(() =>
+                        api.installLocalMcp({
+                          name: item.title || item.name,
+                          description: item.description,
+                          package: item.package,
+                        }),
+                      );
+                  }}
+                >
+                  {t('mcp.local.install')}
+                </button>
+              ) : (
+                <button className={s.cancelBtn} disabled={busy} onClick={() => pick(item)}>
+                  {t('mcp.select')}
+                </button>
+              )}
             </div>
           ))}
           {showingRegistry && registry.hasNextPage && (

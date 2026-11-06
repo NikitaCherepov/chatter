@@ -1,7 +1,7 @@
-import { useMutation, useQueryClient, useInfiniteQuery } from '@tanstack/react-query';
+import { useMutation, useQueryClient, useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { API_BASE } from './api';
 import { useAuth } from './auth';
-import { getMcpCatalog } from './mcp-service';
+import { getMcpCatalog, getLocalMcp } from './mcp-service';
 import { useSettingsRead } from './useSettingsQueries';
 export function useMcp() {
   const { user } = useAuth(),
@@ -27,4 +27,24 @@ export function useMcpCatalog(search: string | null, enabled: boolean) {
     retry: false,
     refetchOnWindowFocus: false,
   });
+}
+
+export function useLocalMcp() {
+  const { user } = useAuth(),
+    client = useQueryClient();
+  const available = !!window.electronAPI?.localMcpManage;
+  const key = ['settings', API_BASE, user?.id, 'mcp'];
+  const query = useQuery({
+    queryKey: [...key, 'local'],
+    queryFn: () => getLocalMcp(),
+    enabled: available && !!user,
+    staleTime: 60_000,
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+  const mutation = useMutation({
+    mutationFn: async (action: () => Promise<unknown>) => action(),
+    onSuccess: () => client.invalidateQueries({ queryKey: key }),
+  });
+  return { query, mutation, available };
 }

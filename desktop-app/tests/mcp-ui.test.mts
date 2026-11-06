@@ -17,6 +17,17 @@ window.__calls=[];
 const access={allow_custom:{mode:'none',user_ids:[],excluded_user_ids:[]},show_catalog:{mode:'all',user_ids:[],excluded_user_ids:[]}};
 
 const record=(name,body)=>window.__calls.push({name,body});
+window.electronAPI={localMcpManage:async()=>{}};
+let localEntries=[];
+export const getLocalMcp=async()=>structuredClone(localEntries);
+export const installLocalMcp=async input=>{
+ record('local_install',input);
+ const entry={id:'local-fixture',name:input.name||'Local package',source:input.package?.identifier||input.source,enabled:true,mode:'search',tools:[{name:'local_echo',description:'Local echo tool'}],resources:[],selected_tools:null,timeout_seconds:300};
+ localEntries.push(entry);return structuredClone(entry);
+};
+export const configureLocalMcp=async(id,patch)=>{record('local_configure',{id,patch});Object.assign(localEntries.find(e=>e.id===id),patch);};
+export const removeLocalMcp=async id=>{record('local_remove',{id});localEntries=localEntries.filter(e=>e.id!==id);};
+export const refreshLocalMcp=async id=>{record('local_refresh',{id});};
 export const API_BASE='https://chatter.example';
 let mcpUpdate;
 export const onMcpSettingsUpdated=fn=>{mcpUpdate=fn;return()=>{mcpUpdate=undefined}};
@@ -30,7 +41,7 @@ export const refreshMcpTools=async(id)=>{record('refresh',{id});return {tools:st
 export const authorizeMcp=async()=>({authorization_url:'https://github.example/authorize'});
 export const cancelMcp=async(id)=>{record('cancel',{id});return {cancelled:true};};
 export const mergeMcpCatalog=(previous,next)=>Array.from(new Map([...previous,...next].map(x=>[x.name+'|'+x.url,x])).values());
-export const getMcpCatalog=async()=>{record('catalog',{});return {items:[{name:'Remote tools',title:'Remote tools',description:'Example remote MCP server',url:'https://remote.example/mcp',version:'2.0',transport:'streamable-http',publisher:'example',repository_url:'https://github.com/example/mcp',registry_url:'https://registry.example/server'}],next_cursor:null};};
+export const getMcpCatalog=async()=>{record('catalog',{});return {items:[{name:'Remote tools',title:'Remote tools',description:'Example remote MCP server',url:'https://remote.example/mcp',version:'2.0',transport:'streamable-http',publisher:'example',repository_url:'https://github.com/example/mcp',registry_url:'https://registry.example/server'},{name:'Local package',description:'A local package',url:'',transport:'stdio',version:'1.0.0',package:{registryType:'npm',identifier:'@example/local',version:'1.0.0',transport:{type:'stdio'}}},{name:'Configured package',description:'Requires a key',url:'',transport:'stdio',version:'1.0.0',package:{registryType:'npm',identifier:'@example/configured',version:'1.0.0',transport:{type:'stdio'},environmentVariables:[{name:'TEST_SECRET',description:'Fixture secret',isRequired:true,isSecret:true}]}}],next_cursor:null};};
 window.__state=state;
 
 export const useAuth=()=>({user:{id:81}});
@@ -194,6 +205,21 @@ let win;const errors=[];
  await click('Найти');
  await until('document.body.innerText.includes("Remote tools")');
  assert.ok(await js('!!document.querySelector(\'a[href="https://github.com/example/mcp"]\')'));
+ await js('Array.from(document.querySelectorAll("strong")).find(e=>e.textContent==="Local package").parentElement.querySelector("button").click()');
+ await until('window.__calls.some(c=>c.name==="local_install"&&c.body.package.identifier==="@example/local")');
+ await until('document.querySelector("article")?.textContent.includes("Local package")');
+ await js('document.querySelector("article input[type=checkbox]").click()');
+ await until('window.__calls.some(c=>c.name==="local_configure"&&c.body.patch.enabled===false)');
+ await js('Array.from(document.querySelector("article").querySelectorAll("button")).find(b=>b.textContent==="Удалить").click()');
+ await until('document.body.innerText.includes("Удалить локальный MCP?")');
+ await js('Array.from(document.querySelectorAll("button")).find(b=>b.className.includes("confirmDanger")).click()');
+ await until('window.__calls.some(c=>c.name==="local_remove")');
+ await until('!document.querySelector("article")');
+ await js('Array.from(document.querySelectorAll("strong")).find(e=>e.textContent==="Configured package").parentElement.querySelector("button").click()');
+ await until('document.body.innerText.includes("Fixture secret")');
+ await js('(()=>{const input=Array.from(document.querySelectorAll("label")).find(e=>e.textContent.trim()==="Fixture secret").querySelector("input");Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value").set.call(input,"test-value");input.dispatchEvent(new Event("input",{bubbles:true}));})()');
+ await click('Установить на ПК');
+ await until('window.__calls.some(c=>c.name==="local_install"&&c.body.package.identifier==="@example/configured"&&c.body.values["env:TEST_SECRET"]==="test-value")');
  await click('Выбрать');
  await until('document.querySelector(\'input[type="url"]\')?.value==="https://remote.example/mcp"');
  await js('window.__state.policy.allow_custom=false;window.emitMcpUpdate()');

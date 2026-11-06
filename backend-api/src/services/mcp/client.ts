@@ -1,4 +1,6 @@
 import crypto from 'node:crypto';
+import { updateLocalMetadata } from './local.js';
+import { sendIpcToDesktop } from '../../ws-clients.js';
 import { notifyMcpSettingsUpdated } from '../../ws-clients.js';
 import { UriTemplate } from '@modelcontextprotocol/sdk/shared/uriTemplate.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -198,7 +200,46 @@ async function session<T>(
     }
   }
 }
+async function localOperation(
+  userId: number,
+  id: number,
+  payload: any,
+  signal?: AbortSignal,
+  onProgress?: () => void,
+) {
+  const row = requireConnection(userId, id);
+  if (
+    busy.has(id) ||
+    [...activeCalls.values()].filter((call) => call.userId === userId).length >= 3
+  )
+    throw new Error('mcp_connection_busy');
+  const controller = new AbortController();
+  const linked = signal ? AbortSignal.any([signal, controller.signal]) : controller.signal;
+  busy.add(id);
+  activeCalls.set(id, { userId, controller });
+  try {
+    const result = await sendIpcToDesktop(
+      userId,
+      'mcp_control',
+      { ...payload, local_id: row.local_id, timeout_seconds: row.timeout_seconds },
+      row.timeout_seconds * 1000,
+      linked,
+      onProgress,
+    );
+    requireConnection(userId, id);
+    return result;
+  } finally {
+    busy.delete(id);
+    activeCalls.delete(id);
+  }
+}
 export async function refreshTools(userId: number, id: number, signal?: AbortSignal) {
+  const row = requireConnection(userId, id);
+  if (row.transport === 'stdio') {
+    const result = await localOperation(userId, id, { action: 'discover' }, signal);
+    updateLocalMetadata(userId, row.local_id!, result);
+    return JSON.parse(requireConnection(userId, id).tools_json);
+  }
   return session(userId, id, signal, async (client, _transport, row) => {
     const advertised = client.getServerCapabilities() || {};
     const capabilities = {
@@ -305,6 +346,14 @@ export async function callRemoteTool(
   signal?: AbortSignal,
   onProgress?: () => void,
 ) {
+  if (requireConnection(userId, id).transport === 'stdio')
+    return localOperation(
+      userId,
+      id,
+      { action: 'call', tool: name, arguments: args },
+      signal,
+      onProgress,
+    );
   return session(userId, id, signal, async (client, _transport, row) => {
     let lastProgress = 0;
     return client.callTool({ name, arguments: args }, undefined, {
@@ -330,6 +379,8 @@ export async function readRemoteResource(
   signal?: AbortSignal,
   onProgress?: () => void,
 ) {
+  if (requireConnection(userId, id).transport === 'stdio')
+    return localOperation(userId, id, { action: 'read_resource', uri }, signal, onProgress);
   return session(userId, id, signal, async (client, _transport, row) => {
     if (!client.getServerCapabilities()?.resources) throw new Error('mcp_resources_not_supported');
     let lastProgress = 0;

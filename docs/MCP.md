@@ -1,7 +1,8 @@
 # MCP in Chatter
 
 The backend is an MCP **client** for remote Streamable HTTP servers over HTTPS.
-No stdio, subprocesses, package installation, sampling, roots or elicitation.
+The desktop additionally runs local stdio MCP servers. The backend never installs
+packages or starts their processes. Sampling, roots and elicitation are not exposed.
 
 ## Configuration
 
@@ -113,6 +114,40 @@ connected desktops. The notification invalidates only the MCP settings query,
 including inactive cached queries. Reconnection revalidates MCP settings too.
 There is no polling timer or separate settings-refresh button.
 
+## Local MCP servers
+
+- Desktop MCP settings install npm/stdio entries from Registry, npmjs package
+  links, package identifiers, or npx commands. Direct executable commands and
+  JSON with command/args/env can register an existing stdio server. Python/uvx
+  commands require that runtime to already be installed. Bare GitHub repository
+  URLs are not automatic installation manifests.
+- npm uses a Chatter-managed current LTS Node runtime (24+). The official archive
+  is checked against Node's SHA256 manifest and unpacked with the OS tar utility.
+  Each MCP has its own package directory; npm's engine compatibility is enforced.
+- Node/runtime and package downloads/installations run only on the PC. There is
+  no global npm installation. Catalog-required variables/arguments are requested
+  before installing. Custom commands run without an implicit shell.
+- Local configuration, credentials and cached capabilities stay in per-server,
+  per-account folders under Electron userData/mcp. The full configuration uses
+  Electron safeStorage; secret storage must be available. Credentials and launch
+  commands are not included in the WebSocket metadata snapshot.
+- Opening the authenticated desktop WebSocket sends its local metadata snapshot.
+  Admin permission changes request a fresh snapshot over the same connection.
+  The backend keeps it in RAM, bound to the current authenticated WS connection,
+  without device records or new database tables. Closing that connection drops
+  the snapshot. A replacement socket cannot use the previous snapshot.
+- browse_mcp/call_mcp_tool/read_mcp_resource reuse existing routing, validation,
+  progress, cancellation and vision processing. The backend uses execute_ipc
+  with mcp_control to ask the current desktop to discover/call/read; it cannot
+  install packages or change local commands through that IPC operation.
+- Local MCP requires custom-server permission, global MCP enable, and absence
+  of the existing disable-internet restriction. The tools are available to the
+  same account from desktop, Telegram or other backend chat clients while its
+  desktop is connected. Telegram live behavior has not been manually tested.
+- Disable stops the process but keeps configuration. Remove stops it, removes
+  only its UUID directory and resynchronizes availability. External files are
+  not removed. Shared Node runtime remains for other installations.
+
 ## Verification
 
 - `pnpm exec tsx backend-api/tests/mcp.test.mts`: temporary SQLite and the real
@@ -126,3 +161,10 @@ There is no polling timer or separate settings-refresh button.
   invalidation, catalog links and complete catalog/search hiding. Optional `MCP_UI_SCREENSHOT_DIR` saves screenshots.
 - A separate real Registry request checks public HTTPS/DNS/TLS.
 - These tests do not log into a real third-party account or verify deployment.
+
+- pnpm exec tsx backend-api/tests/mcp-local.test.mts uses an actual stdio child
+  process and the existing backend IPC gateway with a simulated WebSocket.
+  It checks discovery, resources, persistent sessions, account isolation,
+  RAM-only metadata, progress, cancellation, permission revocation and removal.
+  MCP_REAL_INSTALL=1 also downloads Node, installs the official server-memory
+  npm package, calls read_graph and removes the test installation.

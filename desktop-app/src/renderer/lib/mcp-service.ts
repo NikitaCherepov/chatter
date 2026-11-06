@@ -1,4 +1,5 @@
-import { apiFetch } from './api';
+import { apiFetch, localMcpScope, syncLocalMcp } from './api';
+import type { LocalMcpInput, NpmMcpPackage } from '../../main/local-mcp-spec';
 export type McpTool = { name: string; description?: string };
 export type McpServer = {
   id: number;
@@ -15,6 +16,8 @@ export type McpResource = {
   mimeType?: string;
 };
 export type McpConnection = {
+  transport?: 'stdio';
+  local_id?: string;
   id: number;
   name: string;
   url: string;
@@ -54,6 +57,8 @@ export const cancelMcp = (id: number) =>
   apiFetch(base + '/connections/' + id + '/cancel', { method: 'POST' });
 
 export type CatalogItem = {
+  transport?: string;
+  package?: NpmMcpPackage;
   id?: number;
   name: string;
   title?: string;
@@ -70,3 +75,40 @@ export const getMcpCatalog = (search: string, cursor = '', signal?: AbortSignal)
     base + '/catalog?' + new URLSearchParams({ search, cursor }),
     { signal },
   );
+
+export type LocalMcpSummary = {
+  id: string;
+  name: string;
+  source: string;
+  enabled: boolean;
+  mode: 'search' | 'eager';
+  timeout_seconds: number;
+  tools: McpTool[];
+  resources: McpResource[];
+  selected_tools: string[] | null;
+  error?: string;
+};
+export const getLocalMcp = (): Promise<LocalMcpSummary[]> =>
+  window.electronAPI.localMcpManage({ action: 'list', scope: localMcpScope() });
+async function localManage(action: string, body: any) {
+  const result = await window.electronAPI.localMcpManage({
+    action,
+    scope: localMcpScope(),
+    ...body,
+  });
+  await syncLocalMcp();
+  return result;
+}
+export const installLocalMcp = (input: LocalMcpInput) => localManage('install', { input });
+export const configureLocalMcp = (id: string, patch: any) =>
+  localManage('configure', { id, patch });
+export const removeLocalMcp = (id: string) => localManage('remove', { id });
+export const refreshLocalMcp = async (id: string) => {
+  const result = await window.electronAPI.localMcpControl({
+    action: 'discover',
+    scope: localMcpScope(),
+    local_id: id,
+  });
+  await syncLocalMcp();
+  return result;
+};

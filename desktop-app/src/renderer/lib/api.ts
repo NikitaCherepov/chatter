@@ -1045,6 +1045,22 @@ type WsCallbacks = StreamCallbacks & {
 };
 
 let wsCallbacks: WsCallbacks = {};
+export function localMcpScope(userId?:number):string {
+  const id=userId??JSON.parse(localStorage.getItem('chatter_user')||'null')?.id;
+  if(!Number.isSafeInteger(id)||id<=0)throw new Error('mcp_account_not_ready');
+  return API_BASE.replace(/\/$/,'')+':'+id;
+}
+export async function syncLocalMcp(socket=ws){
+  if(!socket||socket.readyState!==WebSocket.OPEN||!window.electronAPI?.localMcpManage)return;
+  const scope=localMcpScope();
+  const list=await window.electronAPI.localMcpManage({action:'list',scope});
+  if(ws!==socket||socket.readyState!==WebSocket.OPEN||scope!==localMcpScope())return;
+  const connections=list.map(({id,name,enabled,mode,timeout_seconds,selected_tools,tools,resources,resource_templates,capabilities,server_info}:any)=>
+    ({id,name,enabled,mode,timeout_seconds,selected_tools,tools,resources,resource_templates,capabilities,server_info}));
+  if(JSON.stringify(connections).length>2_000_000)throw new Error('mcp_local_snapshot_too_large');
+  socket.send(JSON.stringify({type:'mcp_local_sync',connections}));
+}
+const localMcpRequests=new Set<string>();
 
 // Multi-subscriber room events (newspaper reader chat etc.), filtered by chat_id.
 const roomEventSubscribers = new Set<(event: RoomEvent) => void>();
@@ -1277,6 +1293,7 @@ export function initWebSocket(callbacks?: WsCallbacks) {
     scheduleWebSocketTokenRefresh(socket);
     wsCallbacks.onConnect?.();
     wsCallbacks.onMcpSettingsUpdated?.();
+    void syncLocalMcp(socket).catch(error=>console.warn('[mcp] sync failed',error?.message));
     flushBrowserDownloadEvents(socket);
   };
 
@@ -1288,7 +1305,13 @@ export function initWebSocket(callbacks?: WsCallbacks) {
         case 'task_result': wsCallbacks.onTaskResult?.({ chat_id: msg.chat_id, text: msg.text, is_new_chat: msg.is_new_chat }); break;
         case 'newspaper_run_updated': wsCallbacks.onNewspaperRunEvent?.(msg.run); break;
         case 'model_catalog_updated': wsCallbacks.onModelCatalogUpdated?.(); break;
-        case 'mcp_settings_updated': wsCallbacks.onMcpSettingsUpdated?.(); break;
+        case 'mcp_settings_updated':
+          wsCallbacks.onMcpSettingsUpdated?.();
+          if(msg.resync_local)void syncLocalMcp(socket).catch(error=>console.warn('[mcp] sync failed',error?.message));
+          break;
+        case 'mcp_local_synced':
+          window.dispatchEvent(new CustomEvent('mcp-local-sync',{detail:{error:msg.error||null}}));
+          break;
         case 'chat_agent_start':
         case 'chat_agent_token':
         case 'chat_agent_reasoning':
@@ -1356,7 +1379,7 @@ export function initWebSocket(callbacks?: WsCallbacks) {
           console.log('[ws] execute_ipc received', {
             requestId: msg.request_id,
             ipcType: msg.ipc_type,
-            payloadPreview: msg.ipc_type === 'google_ai'
+            payloadPreview: msg.ipc_type === 'mcp_control' ? JSON.stringify({action:msg.payload?.action,tool:msg.payload?.tool}) : msg.ipc_type === 'google_ai'
               ? JSON.stringify({
                   action: msg.payload?.action,
                   messageLength: typeof msg.payload?.message === 'string' ? msg.payload.message.length : 0,
@@ -1375,6 +1398,8 @@ export function initWebSocket(callbacks?: WsCallbacks) {
             (window as any).electronAPI?.cancelVideoConversion(msg.request_id).catch(console.error);
           } else if (msg.ipc_type === 'google_ai') {
             (window as any).electronAPI?.cancelGoogleAi(googleAiRequestChats.get(msg.request_id)).catch(console.error);
+          } else if (msg.ipc_type === 'mcp_control') {
+            void window.electronAPI?.cancelLocalMcp?.(msg.request_id);
           } else if (msg.ipc_type === 'browser_control') {
             (window as any).electronAPI?.cancelBrowserControl?.(msg.request_id).catch(console.error);
           } else if (msg.ipc_type === 'read_webpage') {
@@ -1403,7 +1428,10 @@ export function initWebSocket(callbacks?: WsCallbacks) {
       clearTimeout(wsAuthRefreshAckTimer);
       wsAuthRefreshAckTimer = null;
     }
-    if (wasCurrentSocket) wsCallbacks.onDisconnect?.();
+    if (wasCurrentSocket) {
+      for(const id of localMcpRequests)void window.electronAPI?.cancelLocalMcp?.(id);
+      wsCallbacks.onDisconnect?.();
+    }
 
     // 4001 means that the access token is no longer valid (usually expired).
     // Refresh it before reconnecting, otherwise every retry would reuse the same token.
@@ -1676,7 +1704,7 @@ const googleAiRequestChats = new Map<string, number | undefined>();
 async function handleExecuteIpc(msg: { request_id: string; ipc_type: string; payload: any }) {
   const { request_id, ipc_type, payload } = msg;
   const requestSocket = ws;
-  const stopProgress = (ipc_type === 'google_ai' || (ipc_type === 'browser_control' && payload?.action === 'fill'))
+  const stopProgress = (ipc_type === 'mcp_control' || ipc_type === 'google_ai' || (ipc_type === 'browser_control' && payload?.action === 'fill'))
     ? window.electronAPI?.onBrowserInputProgress?.(progress => {
         if (progress.request_id === request_id && ws === requestSocket && requestSocket?.readyState === WebSocket.OPEN) {
           requestSocket.send(JSON.stringify({ type: 'ipc_progress', ...progress }));
@@ -1689,7 +1717,7 @@ async function handleExecuteIpc(msg: { request_id: string; ipc_type: string; pay
     console.log('[ipc] renderer start', {
       requestId: request_id,
       ipcType: ipc_type,
-      payloadPreview: ipc_type === 'google_ai'
+      payloadPreview: ipc_type === 'mcp_control' ? JSON.stringify({action:payload?.action,tool:payload?.tool}) : ipc_type === 'google_ai'
         ? JSON.stringify({
             action: payload?.action,
             messageLength: typeof payload?.message === 'string' ? payload.message.length : 0,
@@ -1698,7 +1726,12 @@ async function handleExecuteIpc(msg: { request_id: string; ipc_type: string; pay
       hasElectronApi: Boolean((window as any).electronAPI),
     });
 
-    if (ipc_type === 'execute_commands') {
+    if(ipc_type==='mcp_control'){
+      if(!window.electronAPI?.localMcpControl)throw new Error('mcp_desktop_upgrade_required');
+      localMcpRequests.add(request_id);
+      result=await window.electronAPI.localMcpControl({...payload,scope:localMcpScope(),request_id});
+      if(payload.action==='discover')void syncLocalMcp(requestSocket).catch(()=>{});
+    } else if (ipc_type === 'execute_commands') {
       console.log('[ipc] renderer invoke executeCommands', {
         requestId: request_id,
         commands: Array.isArray(payload.commands) ? payload.commands : undefined,
@@ -1832,6 +1865,7 @@ async function handleExecuteIpc(msg: { request_id: string; ipc_type: string; pay
   } finally {
     stopProgress?.();
     googleAiRequestChats.delete(request_id);
+    localMcpRequests.delete(request_id);
   }
 }
 

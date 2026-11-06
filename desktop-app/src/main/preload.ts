@@ -18,6 +18,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   textContextMenuAction: (action: TextMenuAction) => ipcRenderer.invoke('text-menu:action', action),
   connectChatGpt: (input: { apiBase: string; accessToken: string; serverKey: string; connectionId?: number }) => ipcRenderer.invoke('chatgpt:connect', input),
+  localMcpManage: (payload:unknown)=>ipcRenderer.invoke('mcp:manage',payload),
+  localMcpControl: (payload:unknown)=>ipcRenderer.invoke('mcp:control',payload),
+  cancelLocalMcp: (requestId:string)=>ipcRenderer.invoke('mcp:cancel',requestId),
   platform: process.platform,
   appVersion: ipcRenderer.sendSync('get-app-version'),
 

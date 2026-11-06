@@ -403,7 +403,7 @@ try {
   );
   assert.ok(notices.every((item) => item.event.type === 'mcp_settings_updated'));
   assert.ok(
-    notices.every((item) => Object.keys(item.event).length === 1),
+    notices.every((item) => Object.keys(item.event).every(key=>['type','resync_local'].includes(key))),
     'notifications contain no metadata or secrets',
   );
   const beforePersonalChange = notices.length;

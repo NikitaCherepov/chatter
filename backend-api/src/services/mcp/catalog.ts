@@ -33,6 +33,35 @@ export async function registryCatalog(search = '', cursor = '') {
     const name = String(server.name || '').slice(0, 160),
       version = String(server.version || '').slice(0, 100);
     if (!name) continue;
+    for (const pkg of server.packages || []) {
+      if (
+        pkg.registryType !== 'npm' ||
+        pkg.transport?.type !== 'stdio' ||
+        typeof pkg.identifier !== 'string' ||
+        JSON.stringify(pkg).length > 64000
+      )
+        continue;
+      const key = name + '\n' + pkg.identifier + '\n' + String(pkg.version || '');
+      if (seen.has(key)) continue;
+      seen.add(key);
+      items.push({
+        name,
+        title: String(server.title || name).slice(0, 160),
+        description: String(server.description || '').slice(0, 1500),
+        url: '',
+        transport: 'stdio',
+        version: String(pkg.version || version),
+        publisher: name.split('/')[0],
+        package: pkg,
+        repository_url: link(server.repository?.url),
+        website_url: link(server.websiteUrl),
+        registry_url:
+          'https://registry.modelcontextprotocol.io/v0.1/servers/' +
+          encodeURIComponent(name) +
+          '/versions/' +
+          encodeURIComponent(version || 'latest'),
+      });
+    }
     for (const remote of server.remotes || []) {
       if (remote.type !== 'streamable-http') continue;
       try {

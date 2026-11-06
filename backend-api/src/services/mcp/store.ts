@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { getLocalConnections } from './local.js';
 import { db } from '../../db.js';
 import { getEncryptionKey } from '../../utils/encryption.js';
 import { mcpUrl } from './network.js';
@@ -12,6 +13,8 @@ export type McpServer = {
   recommended: number;
 };
 export type McpConnection = {
+  transport?: 'stdio';
+  local_id?: string;
   id: number;
   user_id: number;
   server_id: number | null;
@@ -31,10 +34,12 @@ export type McpConnection = {
 };
 export const allServers = () =>
   db.prepare('SELECT * FROM mcp_servers ORDER BY name,id').all() as McpServer[];
-export const connections = (userId: number) =>
-  db
+export const connections = (userId: number) => [
+  ...(db
     .prepare('SELECT * FROM mcp_connections WHERE user_id=? ORDER BY id')
-    .all(userId) as McpConnection[];
+    .all(userId) as McpConnection[]),
+  ...getLocalConnections(userId),
+];
 export function policy(userId?: number) {
   const global = db.prepare('SELECT * FROM mcp_policy WHERE id=1').get() as any;
   const personal = userId
@@ -276,6 +281,7 @@ export function publicConnection(row: McpConnection) {
 export function saveConnection(userId: number, body: any, id?: number) {
   const current = id ? connections(userId).find((row) => row.id === id) : null;
   if (id && !current) throw new Error('mcp_connection_not_found');
+  if (current?.transport === 'stdio') throw new Error('mcp_local_managed_on_desktop');
   if (!id && connections(userId).length >= 20) throw new Error('mcp_connection_limit');
   const serverId = current
     ? current.server_id
@@ -352,5 +358,7 @@ export function saveConnection(userId: number, body: any, id?: number) {
   return publicConnection(connections(userId).find((row) => row.id === id)!);
 }
 export function deleteConnection(userId: number, id: number) {
+  if (getLocalConnections(userId).some((row) => row.id === id))
+    throw new Error('mcp_local_managed_on_desktop');
   db.prepare('DELETE FROM mcp_connections WHERE user_id=? AND id=?').run(userId, id);
 }

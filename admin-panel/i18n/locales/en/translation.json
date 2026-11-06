@@ -1,5 +1,6 @@
 {
   "mcp": {
+    "installInDesktop": "Install in desktop",
     "access": {
       "all": "Everyone",
       "selected": "Selected users",

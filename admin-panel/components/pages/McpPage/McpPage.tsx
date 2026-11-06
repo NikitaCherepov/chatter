@@ -227,12 +227,13 @@ export function McpPage() {
             {item.title && item.title !== item.name && <small>{item.name}</small>}
             <p>{item.description}</p>
             <p className={s.help}>
-              {t('mcp.version')}: {item.version || '—'} · Streamable HTTP · {t('mcp.publisher')}:{' '}
-              {item.publisher || item.name.split('/')[0]}
+              {t('mcp.version')}: {item.version || '—'} ·{' '}
+              {item.transport === 'stdio' ? 'npm / stdio' : 'Streamable HTTP'} ·{' '}
+              {t('mcp.publisher')}: {item.publisher || item.name.split('/')[0]}
             </p>
             <div className={s.copy}>
-              <a href={item.url} target="_blank" rel="noopener noreferrer">
-                {item.url}
+              <a href={item.url || item.registry_url} target="_blank" rel="noopener noreferrer">
+                {item.url || item.package?.identifier}
               </a>
               {item.repository_url && (
                 <a href={item.repository_url} target="_blank" rel="noopener noreferrer">
@@ -251,7 +252,7 @@ export function McpPage() {
               )}
             </div>
             <button
-              disabled={busy}
+              disabled={busy || item.transport === 'stdio'}
               onClick={() => {
                 setEditId(null);
                 setDraft({
@@ -262,7 +263,7 @@ export function McpPage() {
                 });
               }}
             >
-              {t('mcp.select')}
+              {t(item.transport === 'stdio' ? 'mcp.installInDesktop' : 'mcp.select')}
             </button>
           </div>
         ))}

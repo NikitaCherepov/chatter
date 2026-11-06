@@ -23,11 +23,11 @@ export type WsClient = {
 export const wsClients = new Map<number, WsClient>();
 
 /** Same notification pattern as model_catalog_updated; no settings or credentials in the event. */
-export function notifyMcpSettingsUpdated(userId?: number) {
+export function notifyMcpSettingsUpdated(userId?: number, resyncLocal = false) {
   const clients = userId === undefined ? wsClients.values() : [wsClients.get(userId)];
   for (const client of clients) {
     if (client?.ws.readyState !== WebSocket.OPEN) continue;
-    try { client.ws.send(JSON.stringify({ type: 'mcp_settings_updated' })); } catch { /* disconnected desktop */ }
+    try { client.ws.send(JSON.stringify({ type: 'mcp_settings_updated', ...(resyncLocal ? { resync_local: true } : {}) })); } catch { /* disconnected desktop */ }
   }
 }
 
@@ -42,7 +42,7 @@ const wsStateName = (state: number): string => {
   return `UNKNOWN(${state})`;
 };
 
-export function sendIpcToDesktop(userId: number, ipcType: string, payload: any, timeoutMs = 30000, signal?: AbortSignal): Promise<any> {
+export function sendIpcToDesktop(userId: number, ipcType: string, payload: any, timeoutMs = 30000, signal?: AbortSignal, onProgress?: () => void): Promise<any> {
   const client = wsClients.get(userId);
   if (!client) {
     throw new Error('desktop_not_connected');
@@ -130,13 +130,14 @@ export function sendIpcToDesktop(userId: number, ipcType: string, payload: any, 
       },
       timer,
       progress: (next: unknown) => {
-        if (!((ipcType === 'browser_control' && payload?.action === 'fill') || ipcType === 'google_ai')) return;
+        if (!((ipcType === 'browser_control' && payload?.action === 'fill') || ipcType === 'google_ai' || ipcType === 'mcp_control')) return;
         if (payload?.human_typing === false || !Number.isSafeInteger(next) || Number(next) <= sequence) return;
         if (wsClients.get(userId) !== client || !client.pendingIpc.has(requestId)) return;
         sequence = Number(next);
+        try { void Promise.resolve(onProgress?.()).catch(()=>{}); } catch {}
         clearTimeout(timer);
-        const remaining = expiresAt - Date.now();
-        timer = setTimeout(onTimeout, Math.max(0, Math.min(ipcType === 'google_ai' ? 120_000 : 30_000, remaining)));
+        const remaining = ipcType === 'mcp_control' ? timeoutMs : expiresAt - Date.now();
+        timer = setTimeout(onTimeout, Math.max(0, Math.min(ipcType === 'mcp_control' ? timeoutMs : ipcType === 'google_ai' ? 120_000 : 30_000, remaining)));
         client.pendingIpc.get(requestId)!.timer = timer;
       },
     });
@@ -151,7 +152,7 @@ export function sendIpcToDesktop(userId: number, ipcType: string, payload: any, 
         connectionId: client.connectionId,
         lastPongAgeMs: Date.now() - client.lastPongAt,
         pendingIpcCount: client.pendingIpc.size,
-        payloadPreview: JSON.stringify(payload).slice(0, 500),
+        payloadPreview: JSON.stringify(ipcType==='mcp_control'?{action:payload?.action,tool:payload?.tool,local_id:payload?.local_id}:payload).slice(0,500),
       });
       client.ws.send(JSON.stringify({ type: 'execute_ipc', request_id: requestId, ipc_type: ipcType, payload }), (err) => {
         if (!err) {

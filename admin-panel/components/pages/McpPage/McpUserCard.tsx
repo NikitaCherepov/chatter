@@ -7,6 +7,7 @@ export function McpUserCard({ userId }: { userId: number }) {
   const { t } = useTranslation();
   const [data, setData] = useState<{
     connections: Array<{
+      transport?: string;
       id: number;
       name: string;
       url: string;
@@ -36,9 +37,13 @@ export function McpUserCard({ userId }: { userId: number }) {
           {data.connections.map((connection) => (
             <p key={connection.id}>
               <strong>{connection.name}</strong> ·{' '}
-              <a href={connection.url} target="_blank" rel="noopener noreferrer">
-                {connection.url}
-              </a>{' '}
+              {connection.transport === 'stdio' ? (
+                <span>stdio</span>
+              ) : (
+                <a href={connection.url} target="_blank" rel="noopener noreferrer">
+                  {connection.url}
+                </a>
+              )}{' '}
               {connection.blocked ? '(' + t('mcp.blocked') + ')' : ''}
             </p>
           ))}

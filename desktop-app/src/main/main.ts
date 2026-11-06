@@ -1,5 +1,7 @@
 import { app, BrowserWindow, desktopCapturer, dialog, ipcMain, Menu, Notification, protocol, screen, session, shell, Tray, type OpenDialogOptions } from 'electron';
 import { autoUpdater } from 'electron-updater';
+import {safeStorage} from 'electron';
+import {LocalMcpManager} from './local-mcp';
 import dotenv from 'dotenv';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -24,6 +26,35 @@ import {
   type BackgroundActivitySnapshot,
 } from './background-activity-registry';
 
+let localMcp:LocalMcpManager|undefined;
+function localMcpManager(){
+ if(!localMcp)localMcp=new LocalMcpManager(path.join(app.getPath('userData'),'mcp'),
+  text=>{if(!safeStorage.isEncryptionAvailable())throw new Error('mcp_secret_storage_unavailable');return safeStorage.encryptString(text);},
+  data=>safeStorage.decryptString(data));
+ return localMcp;
+}
+ipcMain.handle('mcp:manage',async(event,payload:any)=>{
+ assertTrustedIpcSender(event);
+ const manager=localMcpManager(),scope=payload?.scope;
+ switch(payload?.action){
+  case 'list':return manager.list(scope);
+  case 'install':return manager.install(scope,payload.input);
+  case 'configure':return manager.configure(scope,payload.id,payload.patch);
+  case 'remove':return manager.remove(scope,payload.id);
+  default:throw new Error('mcp_invalid_manage_action');
+ }
+});
+ipcMain.handle('mcp:control',(event,payload:any)=>{
+ assertTrustedIpcSender(event);
+ let sequence=0,lastProgress=0;
+ return localMcpManager().control(payload.scope,payload,()=>{
+  if(Date.now()-lastProgress<1000||event.sender.isDestroyed())return;
+  lastProgress=Date.now();event.sender.send('browser:input-progress',{request_id:payload.request_id,sequence:++sequence});
+ });
+});
+ipcMain.handle('mcp:cancel',(event,requestId:string)=>{
+ assertTrustedIpcSender(event);return localMcpManager().cancel(requestId);
+});
 const execFileAsync = util.promisify(execFile);
 protocol.registerSchemesAsPrivileged([{ scheme: INTERACTIVE_SCHEME, privileges: { standard: true, secure: true } }]);
 const interactivePreviews = new InteractivePreviews();
@@ -815,6 +846,7 @@ function rebuildTrayMenu() {
       label: trayLabels.quit,
       click: () => {
         isQuitting = true;
+    void localMcp?.closeAll();
         app.quit();
       },
     },
