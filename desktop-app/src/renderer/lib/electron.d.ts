@@ -1,4 +1,5 @@
 import type { InteractiveInput, InteractivePlacement, InteractiveStatus } from '../../main/interactive-types';
+import type { LocalMcpInstallPhase } from '../../main/local-mcp-spec';
 export {};
 
 declare global {
@@ -12,6 +13,7 @@ declare global {
       textContextMenuAction: (action: 'undo' | 'redo' | 'cut' | 'copy' | 'paste' | 'selectAll') => Promise<void>;
       connectChatGpt: (input: { apiBase: string; accessToken: string; serverKey: string; connectionId?: number }) => Promise<{ id: number; name: string; email: string }>;
       localMcpManage: (payload:unknown)=>Promise<any>;
+      onLocalMcpInstallProgress: (callback: (progress: { requestId: string; phase: LocalMcpInstallPhase }) => void) => () => void;
       localMcpControl: (payload:unknown)=>Promise<any>;
       cancelLocalMcp: (requestId:string)=>Promise<void>;
       platform: string;

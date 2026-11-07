@@ -6,6 +6,7 @@ import {
   packageFields,
   packageFromSource,
   parseLocalMcpEnvironment,
+  type LocalMcpInstallPhase,
 } from '../../main/local-mcp-spec';
 import s from './SettingsModal.module.scss';
 import styles from './McpSettings.module.scss';
@@ -24,6 +25,7 @@ export function LocalMcpForm({
   const [env, setEnv] = useState('');
   const [values, setValues] = useState<Record<string, string>>({});
   const [error, setError] = useState('');
+  const [phase, setPhase] = useState<LocalMcpInstallPhase>('installing');
   const busy = mutation.isPending;
   const packageData = draft?.package || packageFromSource(source);
   useEffect(() => {
@@ -44,7 +46,11 @@ export function LocalMcpForm({
   return (
     <>
       {error && error !== t('mcp.local.envInvalid') && (
-        <p className={styles.empty} role="alert">
+        <p
+          className={styles.empty}
+          role="alert"
+          style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}
+        >
           {error}
         </p>
       )}
@@ -59,13 +65,17 @@ export function LocalMcpForm({
             setError(t('mcp.local.envInvalid'));
             return;
           }
+          setPhase('installing');
           void run(async () => {
-            await api.installLocalMcp({
-              name: name || undefined,
-              description: draft?.description,
-              ...(packageData ? { package: packageData, values } : { source }),
-              env: environment,
-            });
+            await api.installLocalMcp(
+              {
+                name: name || undefined,
+                description: draft?.description,
+                ...(packageData ? { package: packageData, values } : { source }),
+                env: environment,
+              },
+              setPhase,
+            );
             setSource('');
             setName('');
             setEnv('');
@@ -132,7 +142,7 @@ export function LocalMcpForm({
           )}
         </label>
         <button className={s.saveBtn} disabled={busy}>
-          {t(busy ? 'mcp.local.installing' : 'mcp.local.install')}
+          {t(busy ? 'mcp.local.' + phase : 'mcp.local.install')}
         </button>
         <button type="button" className={s.cancelBtn} disabled={busy} onClick={onClose}>
           {t('mcp.cancel')}

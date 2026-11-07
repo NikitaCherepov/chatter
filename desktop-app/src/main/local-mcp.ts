@@ -4,13 +4,14 @@ import crypto from 'node:crypto';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-import { installNpm, installPython } from './local-mcp-runtime';
+import { installNpm, installPython, mcpProcessError } from './local-mcp-runtime';
 import {
   resolveLocalInput,
   emptyMcpApproval,
   normalizeMcpApproval,
   type McpApprovalPolicy,
   type LocalMcpInput,
+  type LocalMcpInstallPhase,
   type LocalMcpConfig,
 } from './local-mcp-spec';
 type Metadata = {
@@ -43,7 +44,7 @@ const empty = (): Metadata => ({
   server_info: null,
 });
 export class LocalMcpManager {
-  private sessions = new Map<string, { client: Client; transport: StdioClientTransport }>();
+  private sessions = new Map<string, { client: Client; stderr: string }>();
   private requests = new Map<string, { id: string; controller: AbortController }>();
   private busy = new Set<string>();
   private installing = new Set<string>();
@@ -81,7 +82,7 @@ export class LocalMcpManager {
     if (path.dirname(target) !== base) throw new Error('mcp_invalid_local_path');
     return target;
   }
-  private pythonDirectory(scope: string, id: string) {
+  private pythonDirectory(scope: string, id: string, generation?: string) {
     this.directory(scope, id); // Reuse the account/id validation before deriving a deletion target.
     const base = path.resolve(this.root, 'py');
     const target = path.join(
@@ -93,7 +94,18 @@ export class LocalMcpManager {
         .slice(0, 24),
     );
     if (path.dirname(target) !== base) throw new Error('mcp_invalid_local_path');
-    return target;
+    if (generation === undefined) return target;
+    if (!/^[0-9a-f]{8}$/.test(generation)) throw new Error('mcp_invalid_local_path');
+    return path.join(target, generation);
+  }
+  private async removePythonGeneration(scope: string, id: string, generation: string) {
+    const directory = this.pythonDirectory(scope, id, generation);
+    const base = path.resolve(this.root, 'py');
+    const resolvedBase = await fs.realpath(base);
+    const resolved = await fs.realpath(directory);
+    if (path.relative(resolvedBase, resolved) !== path.relative(base, directory))
+      throw new Error('mcp_invalid_local_path');
+    await fs.rm(directory, { recursive: true, force: true });
   }
   private async read(scope: string, id: string): Promise<RecordData> {
     const record = JSON.parse(
@@ -121,8 +133,11 @@ export class LocalMcpManager {
       selected_tools: record.selected_tools,
       source:
         record.config.npm ||
+        record.config.git ||
         (record.config.pypi ? 'uvx ' + record.config.pypi : '') ||
         path.basename(record.config.command || ''),
+      git_commit: record.config.git_commit,
+      updatable: !!record.config.git,
       running: this.sessions.has(record.id),
       error: record.error,
       ...record.metadata,
@@ -184,12 +199,40 @@ export class LocalMcpManager {
       result.push(this.public(await this.read(scope, id)));
     return result;
   }
-  async install(scope: string, input: LocalMcpInput) {
+  private async preparePython(scope: string, id: string, config: LocalMcpConfig) {
+    const source = config.git || config.pypi;
+    if (!source) throw new Error('mcp_invalid_python_package');
+    const directory = this.pythonDirectory(scope, id, config.git_generation);
+    await fs.mkdir(directory, { recursive: true });
+    const installed = await this.pythonInstaller(
+      path.join(this.root, 'runtime'),
+      directory,
+      source,
+      {
+        python: config.python,
+        tool: config.tool,
+        env: config.user_env || config.env,
+      },
+    );
+    config.command = installed.command;
+    config.git_commit = installed.commit;
+    config.managed_env = {
+      ...installed.env,
+      PATH: installed.path + path.delimiter + (process.env.PATH || ''),
+    };
+    config.env = { ...config.user_env, ...config.managed_env };
+  }
+  async install(
+    scope: string,
+    input: LocalMcpInput,
+    progress?: (phase: LocalMcpInstallPhase) => void,
+  ) {
     if (this.installing.has(scope)) throw new Error('mcp_install_busy');
     this.installing.add(scope);
     try {
       const config = resolveLocalInput(input);
       config.user_env = { ...config.env };
+      if (config.git) config.git_generation = crypto.randomBytes(4).toString('hex');
       if ((await this.list(scope)).length >= 20) throw new Error('mcp_connection_limit');
       const record: RecordData = {
         id: crypto.randomUUID(),
@@ -208,6 +251,7 @@ export class LocalMcpManager {
       const dir = this.directory(scope, record.id);
       await this.write(record);
       if (config.npm) {
+        progress?.('installing');
         try {
           const installed = await this.npmInstaller(
             path.join(this.root, 'runtime'),
@@ -223,37 +267,22 @@ export class LocalMcpManager {
           throw new Error('mcp_package_install_failed');
         }
       }
-      if (config.pypi) {
+      if (config.pypi || config.git) {
+        progress?.('installing');
         try {
-          const pythonDir = this.pythonDirectory(scope, record.id);
-          await fs.mkdir(pythonDir, { recursive: true });
-          const installed = await this.pythonInstaller(
-            path.join(this.root, 'runtime'),
-            pythonDir,
-            config.pypi,
-            {
-              python: config.python,
-              tool: config.tool,
-              env: config.env,
-            },
-          );
-          config.command = installed.command;
-          config.managed_env = {
-            ...installed.env,
-            PATH: installed.path + path.delimiter + (process.env.PATH || ''),
-          };
-          config.env = { ...config.user_env, ...config.managed_env };
+          await this.preparePython(scope, record.id, config);
         } catch (error) {
           await this.remove(scope, record.id);
           throw error;
         }
       }
+      progress?.('connecting');
       record.enabled = true;
       await this.write(record);
       try {
         await this.discoverRecord(record);
       } catch (error: any) {
-        record.error = String(error?.message || 'mcp_discovery_failed').slice(0, 300);
+        record.error = String(error?.message || 'mcp_discovery_failed').slice(0, 2000);
         await this.write(record);
       }
       return this.public(record);
@@ -261,7 +290,7 @@ export class LocalMcpManager {
       this.installing.delete(scope);
     }
   }
-  private async connect(record: RecordData) {
+  private async connect(record: RecordData, showDiagnostics = false) {
     const existing = this.sessions.get(record.id);
     if (existing) return existing.client;
     const transport = new StdioClientTransport({
@@ -272,9 +301,11 @@ export class LocalMcpManager {
       stderr: 'pipe',
       maxBufferSize: 8_000_000,
     });
-    transport.stderr?.on('data', () => {});
     const client = new Client({ name: 'chatter-desktop', version: '2.0.0' }, { capabilities: {} });
-    const entry = { client, transport };
+    const entry = { client, stderr: '' };
+    transport.stderr?.on('data', (chunk: Buffer) => {
+      entry.stderr = (entry.stderr + chunk.toString()).slice(-16000);
+    });
     this.sessions.set(record.id, entry);
     client.onclose = () => {
       if (this.sessions.get(record.id) === entry) this.sessions.delete(record.id);
@@ -284,14 +315,20 @@ export class LocalMcpManager {
       return client;
     } catch (error) {
       await this.stop(record.id);
-      throw error;
+      if (!showDiagnostics || !entry.stderr.trim()) throw error;
+      throw mcpProcessError(
+        error instanceof Error ? error.message : String(error),
+        entry.stderr,
+        record.config.env,
+      );
     }
   }
-  private async discoverRecord(record: RecordData, signal?: AbortSignal) {
+  private async discoverRecord(record: RecordData, signal?: AbortSignal, showDiagnostics = true) {
     // Older direct uvx configurations may have been saved before managed Python
     // support existed. Refresh capabilities prepares them through the same installer.
     if (
       !record.config.pypi &&
+      !record.config.git &&
       ['uvx', 'uvx.exe', 'uv', 'uv.exe'].includes(record.config.command || '')
     ) {
       const config = resolveLocalInput({
@@ -302,23 +339,21 @@ export class LocalMcpManager {
           env: record.config.env,
         }),
       });
-      if (config.pypi) {
+      if (config.pypi || config.git) {
         config.user_env = this.environment(record).user;
-        const pythonDir = this.pythonDirectory(record.scope, record.id);
-        await fs.mkdir(pythonDir, { recursive: true });
-        const installed = await this.pythonInstaller(
-          path.join(this.root, 'runtime'),
-          pythonDir,
-          config.pypi,
-          { python: config.python, tool: config.tool, env: config.env },
-        );
+        if (config.git) config.git_generation = crypto.randomBytes(4).toString('hex');
+        try {
+          await this.preparePython(record.scope, record.id, config);
+        } catch (error) {
+          if (config.git_generation)
+            await this.removePythonGeneration(record.scope, record.id, config.git_generation).catch(
+              () => {},
+            );
+          if (!showDiagnostics && error instanceof Error)
+            throw new Error(error.message.split('\n', 1)[0]);
+          throw error;
+        }
         signal?.throwIfAborted();
-        config.command = installed.command;
-        config.managed_env = {
-          ...installed.env,
-          PATH: installed.path + path.delimiter + (process.env.PATH || ''),
-        };
-        config.env = { ...config.user_env, ...config.managed_env };
         await this.serialized(record.id, async () => {
           const latest = await this.read(record.scope, record.id);
           if (latest.config_revision !== record.config_revision)
@@ -331,8 +366,27 @@ export class LocalMcpManager {
         });
       }
     }
-    const client = await this.connect(record),
-      cap = client.getServerCapabilities() || {};
+    const discovered = await this.discoverMetadata(record, signal, showDiagnostics);
+    return this.serialized(record.id, async () => {
+      signal?.throwIfAborted();
+      const latest = await this.read(record.scope, record.id);
+      if (latest.config_revision !== record.config_revision)
+        throw new Error('mcp_connection_changed');
+      latest.metadata = discovered;
+      latest.error = undefined;
+      await this.write(latest);
+      Object.assign(record, latest);
+      return discovered;
+    });
+  }
+  private async discoverMetadata(
+    record: RecordData,
+    signal?: AbortSignal,
+    showDiagnostics = true,
+  ): Promise<Metadata> {
+    const client = await this.connect(record, showDiagnostics);
+    const session = this.sessions.get(record.id);
+    const cap = client.getServerCapabilities() || {};
     const pages = async (kind: 'tools' | 'resources' | 'templates', max: number) => {
       const values: any[] = [];
       const seen = new Set<string>();
@@ -361,23 +415,58 @@ export class LocalMcpManager {
       } while (cursor);
       return values;
     };
-    const discovered: Metadata = {
-      tools: cap.tools ? await pages('tools', 200) : [],
-      resources: cap.resources ? await pages('resources', 500) : [],
-      resource_templates: cap.resources ? await pages('templates', 200) : [],
-      capabilities: { tools: !!cap.tools, resources: !!cap.resources, prompts: !!cap.prompts },
-      server_info: client.getServerVersion() || null,
-    };
-    return this.serialized(record.id, async () => {
-      signal?.throwIfAborted();
-      const latest = await this.read(record.scope, record.id);
-      if (latest.config_revision !== record.config_revision)
-        throw new Error('mcp_connection_changed');
-      latest.metadata = discovered;
-      latest.error = undefined;
-      await this.write(latest);
-      Object.assign(record, latest);
-      return discovered;
+    try {
+      return {
+        tools: cap.tools ? await pages('tools', 200) : [],
+        resources: cap.resources ? await pages('resources', 500) : [],
+        resource_templates: cap.resources ? await pages('templates', 200) : [],
+        capabilities: { tools: !!cap.tools, resources: !!cap.resources, prompts: !!cap.prompts },
+        server_info: client.getServerVersion() || null,
+      };
+    } catch (error) {
+      if (!showDiagnostics || !session?.stderr.trim() || signal?.aborted) throw error;
+      throw mcpProcessError(
+        error instanceof Error ? error.message : String(error),
+        session.stderr,
+        record.config.env,
+      );
+    }
+  }
+  async update(scope: string, id: string, progress?: (phase: LocalMcpInstallPhase) => void) {
+    return this.serialized(id, async () => {
+      const current = await this.read(scope, id);
+      if (!current.config.git) throw new Error('mcp_package_update_unsupported');
+      if (this.busy.has(id)) throw new Error('mcp_connection_busy');
+      this.busy.add(id);
+      const generation = crypto.randomBytes(4).toString('hex');
+      const candidate: RecordData = {
+        ...current,
+        config_revision: crypto.randomUUID(),
+        config: { ...current.config, git_generation: generation },
+        error: undefined,
+      };
+      let connecting = false;
+      try {
+        progress?.('installing');
+        await this.preparePython(scope, id, candidate.config);
+        progress?.('connecting');
+        await this.stop(id);
+        connecting = true;
+        candidate.metadata = await this.discoverMetadata(candidate);
+        if (!candidate.enabled) await this.stop(id);
+        await this.write(candidate);
+      } catch (error) {
+        if (connecting) await this.stop(id);
+        await this.removePythonGeneration(scope, id, generation).catch(() => {});
+        current.error = String(error instanceof Error ? error.message : error).slice(0, 2000);
+        await this.write(current);
+        return this.public(current);
+      } finally {
+        this.busy.delete(id);
+      }
+      if (current.config.git_generation)
+        await this.removePythonGeneration(scope, id, current.config.git_generation).catch(() => {});
+      return this.public(candidate);
     });
   }
   async configure(scope: string, id: string, patch: any) {
@@ -466,19 +555,20 @@ export class LocalMcpManager {
     return { summary: this.public(record), restart: environmentChanged && record.enabled };
   }
   async control(scope: string, payload: any, progress?: () => void) {
-    const id = payload.local_id,
-      record = await this.read(scope, id);
-    if (!record.enabled) throw new Error('mcp_connection_disabled');
-    if ('config_revision' in payload && payload.config_revision !== record.config_revision)
-      throw new Error('mcp_connection_changed');
+    const id = payload.local_id;
     if (this.busy.has(id)) throw new Error('mcp_connection_busy');
-    const controller = new AbortController(),
-      requestId = payload.request_id || crypto.randomUUID();
+    const controller = new AbortController();
+    const requestId = payload.request_id || crypto.randomUUID();
     this.busy.add(id);
     this.requests.set(requestId, { id, controller });
     try {
+      const record = await this.read(scope, id);
+      controller.signal.throwIfAborted();
+      if (!record.enabled) throw new Error('mcp_connection_disabled');
+      if ('config_revision' in payload && payload.config_revision !== record.config_revision)
+        throw new Error('mcp_connection_changed');
       if (payload.action === 'discover')
-        return await this.discoverRecord(record, controller.signal);
+        return await this.discoverRecord(record, controller.signal, !payload.request_id);
       const client = await this.connect(record);
       const options = {
         signal: controller.signal,

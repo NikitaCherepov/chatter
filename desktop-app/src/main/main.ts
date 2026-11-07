@@ -2,6 +2,7 @@ import { app, BrowserWindow, desktopCapturer, dialog, ipcMain, Menu, Notificatio
 import { autoUpdater } from 'electron-updater';
 import {safeStorage} from 'electron';
 import {LocalMcpManager} from './local-mcp';
+import type { LocalMcpInstallPhase } from './local-mcp-spec';
 import dotenv from 'dotenv';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -36,10 +37,16 @@ function localMcpManager(){
 ipcMain.handle('mcp:manage',async(event,payload:any)=>{
  assertTrustedIpcSender(event);
  const manager=localMcpManager(),scope=payload?.scope;
+ const requestId = payload?.requestId;
+ const progress = (phase: LocalMcpInstallPhase) => {
+  if (typeof requestId === 'string' && requestId.length <= 64 && !event.sender.isDestroyed())
+   event.sender.send('mcp:install-progress', { requestId, phase });
+ };
  switch(payload?.action){
   case 'list':return manager.list(scope);
   case 'settings':return manager.settings(scope,payload.id);
-  case 'install':return manager.install(scope,payload.input);
+  case 'install':return manager.install(scope,payload.input,progress);
+  case 'update':return manager.update(scope,payload.id,progress);
   case 'configure':return manager.configure(scope,payload.id,payload.patch);
   case 'remove':return manager.remove(scope,payload.id);
   default:throw new Error('mcp_invalid_manage_action');

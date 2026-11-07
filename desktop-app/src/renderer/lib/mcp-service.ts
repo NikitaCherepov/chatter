@@ -1,6 +1,6 @@
 import type { McpApprovalPolicy } from '../../main/local-mcp-spec';
 import { API_BASE, apiFetch, localMcpScope, syncLocalMcp } from './api';
-import type { LocalMcpInput, NpmMcpPackage } from '../../main/local-mcp-spec';
+import type { LocalMcpInput, LocalMcpInstallPhase, NpmMcpPackage } from '../../main/local-mcp-spec';
 export type McpTool = { name: string; description?: string };
 export type McpServer = {
   id: number;
@@ -96,6 +96,8 @@ export type LocalMcpSummary = {
   resources: McpResource[];
   selected_tools: string[] | null;
   error?: string;
+  git_commit?: string;
+  updatable?: boolean;
 };
 export const getLocalMcp = (): Promise<LocalMcpSummary[]> =>
   window.electronAPI.localMcpManage({ action: 'list', scope: localMcpScope() });
@@ -107,18 +109,39 @@ export type LocalMcpSettings = {
 };
 export const getLocalMcpSettings = (id: string): Promise<LocalMcpSettings> =>
   window.electronAPI.localMcpManage({ action: 'settings', scope: localMcpScope(), id });
-async function localManage(action: string, body: any) {
-  const result = await window.electronAPI.localMcpManage({
-    action,
-    scope: localMcpScope(),
-    ...body,
-  });
+async function localManage(
+  action: string,
+  body: any,
+  onProgress?: (phase: LocalMcpInstallPhase) => void,
+) {
+  const requestId = onProgress ? crypto.randomUUID() : undefined;
+  const unsubscribe =
+    onProgress &&
+    window.electronAPI.onLocalMcpInstallProgress?.((progress) => {
+      if (progress.requestId === requestId) onProgress(progress.phase);
+    });
+  let result;
+  try {
+    result = await window.electronAPI.localMcpManage({
+      action,
+      scope: localMcpScope(),
+      requestId,
+      ...body,
+    });
+  } finally {
+    unsubscribe?.();
+  }
   await syncLocalMcp();
   if (action === 'configure' && body.patch?.env !== undefined && result?.error)
     throw new Error(result.error);
   return result;
 }
-export const installLocalMcp = (input: LocalMcpInput) => localManage('install', { input });
+export const installLocalMcp = (
+  input: LocalMcpInput,
+  onProgress?: (phase: LocalMcpInstallPhase) => void,
+) => localManage('install', { input }, onProgress);
+export const updateLocalMcp = (id: string, onProgress?: (phase: LocalMcpInstallPhase) => void) =>
+  localManage('update', { id }, onProgress);
 export const configureLocalMcp = (id: string, patch: any) =>
   localManage('configure', { id, patch });
 export const removeLocalMcp = (id: string) => localManage('remove', { id });

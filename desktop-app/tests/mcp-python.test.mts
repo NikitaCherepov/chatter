@@ -29,6 +29,18 @@ assert.equal(
   'actual-tool',
 );
 assert.equal(resolveLocalInput({ source: 'uvx --python 3.14 foo' }).python, '3.14');
+const gitSource = 'git+https://github.com/example/local-mcp.git@feature/control';
+const gitConfig = resolveLocalInput({
+  source: 'uvx --python 3.14 --from ' + gitSource + ' local-mcp serve --no-control',
+});
+assert.equal(gitConfig.git, gitSource);
+assert.equal(gitConfig.pypi, undefined);
+assert.equal(gitConfig.tool, 'local-mcp');
+assert.equal(gitConfig.python, '3.14');
+assert.deepEqual(gitConfig.args, ['serve', '--no-control']);
+for (const source of ['git+http://example.com/mcp.git', 'git+https://user@example.com/mcp.git', 'git+file:///mcp']) {
+  assert.throws(() => resolveLocalInput({ source: 'uvx --from ' + source + ' local-mcp' }), /mcp_invalid_git_package/);
+}
 assert.deepEqual(
   resolveLocalInput({ source: 'uvx foo --index-url evil' }).args,
   ['--index-url', 'evil'],
@@ -82,7 +94,7 @@ const root = await fs.mkdtemp(path.join(os.tmpdir(), 'chatter-mcp-python-test-')
 await fs.writeFile(
   fixture,
   [
-    "if(process.env.MCP_TEST_FAIL==='1')process.exit(2);",
+    "if(process.env.MCP_TEST_FAIL==='1'){console.error('fixture startup failed: '+process.env.API_KEY);process.exit(2);}",
     "const r=require('node:readline');const send=(id,result)=>process.stdout.write(JSON.stringify({jsonrpc:'2.0',id,result})+'\\n');",
     "r.createInterface({input:process.stdin}).on('line',line=>{const m=JSON.parse(line);if(m.method==='initialize')send(m.id,{protocolVersion:m.params.protocolVersion,capabilities:{tools:{}},serverInfo:{name:'python-fixture',version:'1'}});",
     "if(m.method==='tools/list')send(m.id,{tools:[{name:'echo',description:JSON.stringify({value:process.env.MCP_TEST_VALUE||'',pid:process.pid}),inputSchema:{type:'object',properties:{text:{type:'string'}}}}]});",
@@ -118,6 +130,8 @@ try {
   globalThis.fetch = previousFetch;
 }
 let installs = 0;
+let gitCommit = 'a'.repeat(40);
+let gitStartupFails = false;
 const installedDirs: string[] = [];
 const manager = new LocalMcpManager(
   path.join(root, 'managed'),
@@ -129,7 +143,7 @@ const manager = new LocalMcpManager(
   async (runtime: string, directory: string, spec: string, options: any) => {
     installs++;
     installedDirs.push(directory);
-    assert.equal(spec, 'fake-mcp');
+    assert.ok(spec === 'fake-mcp' || spec === gitSource);
     assert.equal(options.python, '3.14');
     assert.ok(directory.startsWith(root));
     assert.ok(runtime.startsWith(root));
@@ -137,8 +151,12 @@ const manager = new LocalMcpManager(
     return {
       command: process.execPath,
       version: '1',
+      commit: spec === gitSource ? gitCommit : undefined,
       path: path.dirname(process.execPath),
-      env: { UV_PYTHON_INSTALL_DIR: path.join(runtime, 'python') },
+      env: {
+        UV_PYTHON_INSTALL_DIR: path.join(runtime, 'python'),
+        ...(spec === gitSource && gitStartupFails ? { MCP_TEST_FAIL: '1' } : {}),
+      },
     };
   },
 );
@@ -240,8 +258,50 @@ try {
   await manager.remove('test-account', entry.id);
   for (const dir of installedDirs) await assert.rejects(() => fs.access(dir), /ENOENT/);
   assert.deepEqual(await manager.list('test-account'), []);
+
+  const phases: string[] = [];
+  const gitEntry = await manager.install('test-account', {
+    source: JSON.stringify({
+      command: 'uvx',
+      args: ['--python', '3.14', '--from', gitSource, 'local-mcp', fixture, 'serve', '--no-control'],
+    }),
+    env: { API_KEY: 'git-private-key' },
+  }, (phase: string) => phases.push(phase));
+  assert.deepEqual(phases, ['installing', 'connecting']);
+  assert.equal(gitEntry.git_commit, 'a'.repeat(40));
+  assert.equal(gitEntry.tools.length, 1);
+  const previousPackage = installedDirs.at(-1)!;
+  const approval = { allow_all: false, tools: ['echo'], resources: [] };
+  await manager.configure('test-account', gitEntry.id, { approval_policy: approval });
+
+  gitCommit = 'b'.repeat(40);
+  gitStartupFails = true;
+  const failedUpdate = await manager.update('test-account', gitEntry.id);
+  assert.equal(failedUpdate.git_commit, gitEntry.git_commit);
+  assert.equal(failedUpdate.config_revision, gitEntry.config_revision);
+  assert.match(failedUpdate.error, /fixture startup failed: \[redacted\]/);
+  assert.equal(failedUpdate.error.includes('git-private-key'), false);
+  await fs.access(previousPackage);
+  await assert.rejects(() => fs.access(installedDirs.at(-1)!), /ENOENT/);
+  const resultAfterFailure = await manager.control('test-account', {
+    local_id: gitEntry.id, action: 'call', tool: 'echo', arguments: { text: 'old package still works' },
+  });
+  assert.equal(resultAfterFailure.content[0].text, 'old package still works');
+
+  gitStartupFails = false;
+  phases.length = 0;
+  const updated = await manager.update('test-account', gitEntry.id, (phase: string) => phases.push(phase));
+  assert.deepEqual(phases, ['installing', 'connecting']);
+  assert.equal(updated.git_commit, gitCommit);
+  assert.notEqual(updated.config_revision, gitEntry.config_revision);
+  assert.deepEqual(updated.approval_policy, approval);
+  assert.deepEqual((await manager.settings('test-account', gitEntry.id)).env, { API_KEY: 'git-private-key' });
+  assert.equal(updated.error, undefined);
+  await assert.rejects(() => fs.access(previousPackage), /ENOENT/);
+  await manager.remove('test-account', gitEntry.id);
+  for (const directory of installedDirs) await assert.rejects(() => fs.access(directory), /ENOENT/);
   console.log(
-    'PASS: uvx/JSON/PyPI parsing, explicit executables, unsupported options, shared MCP discovery/calls, restart and removal',
+    'PASS: Python and Git MCP parsing, discovery, restart, update rollback and cleanup',
   );
 } finally {
   await manager.closeAll();

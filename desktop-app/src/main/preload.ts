@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
+import type { LocalMcpInstallPhase } from './local-mcp-spec';
 import type { TextMenuAction, TextMenuItem } from './text-context-menu';
 import type { InteractiveInput, InteractivePlacement, InteractiveStatus } from './interactive-types';
 
@@ -19,6 +20,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   textContextMenuAction: (action: TextMenuAction) => ipcRenderer.invoke('text-menu:action', action),
   connectChatGpt: (input: { apiBase: string; accessToken: string; serverKey: string; connectionId?: number }) => ipcRenderer.invoke('chatgpt:connect', input),
   localMcpManage: (payload:unknown)=>ipcRenderer.invoke('mcp:manage',payload),
+  onLocalMcpInstallProgress: (callback: (progress: { requestId: string; phase: LocalMcpInstallPhase }) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, progress: { requestId: string; phase: LocalMcpInstallPhase }) => callback(progress);
+    ipcRenderer.on('mcp:install-progress', listener);
+    return () => ipcRenderer.removeListener('mcp:install-progress', listener);
+  },
   localMcpControl: (payload:unknown)=>ipcRenderer.invoke('mcp:control',payload),
   cancelLocalMcp: (requestId:string)=>ipcRenderer.invoke('mcp:cancel',requestId),
   platform: process.platform,

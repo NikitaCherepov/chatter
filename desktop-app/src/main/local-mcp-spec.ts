@@ -31,6 +31,9 @@ export type LocalMcpConfig = {
   name: string;
   npm?: string;
   pypi?: string;
+  git?: string;
+  git_commit?: string;
+  git_generation?: string;
   python?: string;
   tool?: string;
   command?: string;
@@ -39,6 +42,8 @@ export type LocalMcpConfig = {
   user_env?: Record<string, string>;
   managed_env?: Record<string, string>;
 };
+export type LocalMcpInstallPhase = 'installing' | 'connecting';
+
 export function splitCommand(source: string): string[] {
   const out: string[] = [];
   let value = '',
@@ -119,6 +124,23 @@ export function pypiSpec(source: string): string {
     throw new Error('mcp_invalid_python_package');
   return source;
 }
+export function gitPythonSpec(source: string): string {
+  if (
+    source.length > 2048 ||
+    !/^git\+https:\/\/[a-z0-9.-]+(?::\d+)?\/[a-z0-9_.-]+(?:\/[a-z0-9_.-]+)*(?:@[a-z0-9_./-]+)?$/i.test(
+      source,
+    ) ||
+    /(?:^|\/)\.{1,2}(?:\/|@|$)|@-/.test(source)
+  )
+    throw new Error('mcp_invalid_git_package');
+  try {
+    new URL(source.slice(4));
+  } catch {
+    throw new Error('mcp_invalid_git_package');
+  }
+  return source;
+}
+
 function pythonInvocation(args: string[]) {
   let python: string | undefined, from: string | undefined;
   while (args[0]?.startsWith('-')) {
@@ -135,10 +157,11 @@ function pythonInvocation(args: string[]) {
   }
   const command = args.shift();
   if (!command) throw new Error('mcp_invalid_python_package');
-  const spec = pypiSpec(from || command);
-  const tool = from ? command : spec.split('==')[0].split('[')[0];
+  const git = from?.startsWith('git+') ? gitPythonSpec(from) : undefined;
+  const pypi = git ? undefined : pypiSpec(from || command);
+  const tool = from || !pypi ? command : pypi.split('==')[0].split('[')[0];
   if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(tool)) throw new Error('mcp_invalid_python_executable');
-  return { spec, python, tool };
+  return { git, pypi, python, tool };
 }
 export function packageFromSource(source: string): NpmMcpPackage | undefined {
   try {
@@ -212,6 +235,7 @@ export function resolveLocalInput(input: LocalMcpInput): LocalMcpConfig {
     env: Record<string, string> = { ...input.env },
     npm: string | undefined,
     pypi: string | undefined,
+    git: string | undefined,
     python: string | undefined,
     tool: string | undefined,
     command: string | undefined;
@@ -300,7 +324,8 @@ export function resolveLocalInput(input: LocalMcpInput): LocalMcpConfig {
   ) {
     if (command === 'uv' || command === 'uv.exe') args.splice(0, 2);
     const parsed = pythonInvocation(args);
-    pypi = parsed.spec;
+    pypi = parsed.pypi;
+    git = parsed.git;
     python = parsed.python;
     tool = parsed.tool;
     command = undefined;
@@ -308,6 +333,7 @@ export function resolveLocalInput(input: LocalMcpInput): LocalMcpConfig {
   if (
     !npm &&
     !pypi &&
+    !git &&
     (typeof command !== 'string' ||
       !command ||
       command.length > 2048 ||
@@ -322,9 +348,10 @@ export function resolveLocalInput(input: LocalMcpInput): LocalMcpConfig {
     throw new Error('mcp_invalid_arguments');
   env = validateLocalMcpEnvironment(env);
   return {
-    name: String(input.name || npm || pypi || command).slice(0, 120),
+    name: String(input.name || npm || pypi || (git && tool) || command).slice(0, 120),
     npm,
     pypi,
+    git,
     python,
     tool,
     command,

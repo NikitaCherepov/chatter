@@ -2,7 +2,11 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocalMcp, useLocalMcpSettings } from '../lib/useMcp';
 import * as api from '../lib/mcp-service';
-import { emptyMcpApproval, parseLocalMcpEnvironment } from '../../main/local-mcp-spec';
+import {
+  emptyMcpApproval,
+  parseLocalMcpEnvironment,
+  type LocalMcpInstallPhase,
+} from '../../main/local-mcp-spec';
 import { Select } from './Select';
 import { McpToggle, McpTools } from './McpControls';
 import { Icon } from './Icon';
@@ -17,6 +21,9 @@ export function LocalMcpPanel({ allowed }: { allowed: boolean }) {
   const [error, setError] = useState(''),
     [remove, setRemove] = useState<string | null>(null),
     [expandedSettings, setExpandedSettings] = useState<Set<string>>(() => new Set());
+  const [updating, setUpdating] = useState<{ id: string; phase: LocalMcpInstallPhase } | null>(
+    null,
+  );
   useEffect(() => {
     const handler = (event: Event) => {
       const error = (event as CustomEvent).detail?.error;
@@ -71,11 +78,18 @@ export function LocalMcpPanel({ allowed }: { allowed: boolean }) {
                 onChange={(enabled) => void run(() => api.configureLocalMcp(row.id, { enabled }))}
               />
             </div>
-            <p className={styles.url}>{row.source}</p>
+            <p className={styles.url}>
+              {row.source}
+              {row.git_commit && ' · ' + row.git_commit.slice(0, 12)}
+            </p>
             <p className={styles.url}>
               {t('mcp.tools')}: {row.tools.length} · {t('mcp.resources')}: {row.resources.length}
             </p>
-            {row.error && <p role="alert">{row.error}</p>}
+            {row.error && (
+              <p role="alert" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
+                {row.error}
+              </p>
+            )}
             <div className={styles.actions}>
               <button
                 className={s.cancelBtn}
@@ -84,6 +98,24 @@ export function LocalMcpPanel({ allowed }: { allowed: boolean }) {
               >
                 {t('mcp.refresh')}
               </button>
+              {row.updatable && (
+                <button
+                  className={s.cancelBtn}
+                  disabled={busy || !allowed}
+                  onClick={() => {
+                    setUpdating({ id: row.id, phase: 'installing' });
+                    void run(() =>
+                      api.updateLocalMcp(row.id, (phase) => setUpdating({ id: row.id, phase })),
+                    ).finally(() => setUpdating(null));
+                  }}
+                >
+                  {t(
+                    updating?.id === row.id
+                      ? 'mcp.local.' + updating.phase
+                      : 'mcp.local.updatePackage',
+                  )}
+                </button>
+              )}
             </div>
             <AnimatedDetails
               open={expandedSettings.has(row.id)}

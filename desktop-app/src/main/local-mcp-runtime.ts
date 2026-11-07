@@ -3,7 +3,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { pypiSpec } from './local-mcp-spec';
+import { gitPythonSpec, pypiSpec } from './local-mcp-spec';
 const exec = promisify(execFile);
 let pending: Promise<{ node: string; npm: string }> | undefined;
 async function download(url: string, maximum: number, uvAsset = false): Promise<Buffer> {
@@ -244,6 +244,53 @@ export async function uvRuntime(root: string): Promise<string> {
   }
 }
 
+export function mcpProcessError(message: string, diagnostics: string, env: Record<string, string>) {
+  let detail = diagnostics.replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '');
+  for (const [key, value] of Object.entries(env)) {
+    if (value && /key|token|secret|pass|credential|auth|cookie/i.test(key))
+      detail = detail.split(value).join('[redacted]');
+  }
+  detail = detail
+    .replace(/(https?:\/\/)[^\s/@]+(?::[^\s/@]*)?@/gi, '$1[redacted]@')
+    .trim()
+    .slice(-1800);
+  return new Error(detail ? message + '\n' + detail : message);
+}
+
+async function installedGitCommit(toolDir: string) {
+  // uv installs one environment named after the requested distribution.
+  const environments = await fs.readdir(toolDir, { withFileTypes: true });
+  for (const entry of environments) {
+    if (!entry.isDirectory() || entry.name.startsWith('.')) continue;
+    const environment = path.join(toolDir, entry.name);
+    const libraries =
+      process.platform === 'win32'
+        ? [path.join(environment, 'Lib')]
+        : (await fs.readdir(path.join(environment, 'lib')))
+            .filter((name) => /^python\d+\.\d+$/.test(name))
+            .map((name) => path.join(environment, 'lib', name));
+    const prefix = entry.name.replace(/[-.]+/g, '_').toLowerCase() + '-';
+    for (const library of libraries) {
+      const packages = path.join(library, 'site-packages');
+      const metadata = (await fs.readdir(packages)).find(
+        (name) => name.toLowerCase().startsWith(prefix) && name.endsWith('.dist-info'),
+      );
+      if (!metadata) continue;
+      const origin = JSON.parse(
+        await fs.readFile(path.join(packages, metadata, 'direct_url.json'), 'utf8'),
+      );
+      const commit = origin.vcs_info?.commit_id;
+      if (
+        origin.vcs_info?.vcs === 'git' &&
+        typeof commit === 'string' &&
+        /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/i.test(commit)
+      )
+        return commit;
+    }
+  }
+  throw new Error('mcp_git_commit_unavailable');
+}
+
 export type PythonInstallOptions = { python?: string; tool?: string; env?: Record<string, string> };
 export async function installPython(
   root: string,
@@ -251,26 +298,29 @@ export async function installPython(
   requested: string,
   options: PythonInstallOptions = {},
 ) {
-  const spec = pypiSpec(requested);
+  const git = requested.startsWith('git+');
+  const spec = git ? gitPythonSpec(requested) : pypiSpec(requested);
   const [withExtras, requestedVersion] = spec.split('==');
   const name = withExtras.split('[')[0];
   // Read package requirements before choosing Python, rather than assuming that
   // the interpreter bundled on a user's PC is suitable for this MCP.
-  const metadata = JSON.parse(
-    (
-      await download(
-        'https://pypi.org/pypi/' +
-          encodeURIComponent(name) +
-          (requestedVersion ? '/' + encodeURIComponent(requestedVersion) : '') +
-          '/json',
-        8_000_000,
-      )
-    ).toString(),
-  );
-  const version = String(metadata.info?.version || '');
-  if (!version || !/^[a-zA-Z0-9.+!_-]+$/.test(version))
+  const metadata = git
+    ? undefined
+    : JSON.parse(
+        (
+          await download(
+            'https://pypi.org/pypi/' +
+              encodeURIComponent(name) +
+              (requestedVersion ? '/' + encodeURIComponent(requestedVersion) : '') +
+              '/json',
+            8_000_000,
+          )
+        ).toString(),
+      );
+  const version = String(metadata?.info?.version || '');
+  if (!git && (!version || !/^[a-zA-Z0-9.+!_-]+$/.test(version)))
     throw new Error('mcp_invalid_python_package');
-  const requirement = options.python || String(metadata.info?.requires_python || '');
+  const requirement = options.python || String(metadata?.info?.requires_python || '');
   if (requirement.length > 256 || (requirement && !/^[0-9.*+<>=!,\s-]+$/.test(requirement)))
     throw new Error('mcp_invalid_python_version');
   const uv = await uvRuntime(root);
@@ -288,7 +338,7 @@ export async function installPython(
     UV_NO_PROGRESS: 'true',
     ELECTRON_RUN_AS_NODE: '',
   };
-  const env = { ...process.env, ...options.env, ...managedEnv };
+  const env = { ...process.env, ...options.env, ...managedEnv, GIT_TERMINAL_PROMPT: '0' };
   try {
     await exec(
       uv,
@@ -299,14 +349,17 @@ export async function installPython(
         '--no-config',
         ...(requirement ? ['--python', requirement] : []),
         '--',
-        withExtras + '==' + version,
+        git ? spec : withExtras + '==' + version,
       ],
       { windowsHide: true, cwd: directory, env, timeout: 900_000, maxBuffer: 4_000_000 },
     );
   } catch (cause) {
-    const error = new Error('mcp_python_package_install_failed');
-    (error as Error & { cause?: unknown }).cause = cause;
-    throw error;
+    const failure = cause as { stderr?: string; code?: string | number; killed?: boolean };
+    const message = failure.killed
+      ? 'mcp_python_install_timeout'
+      : 'mcp_python_package_install_failed';
+    const exit = typeof failure.code === 'number' ? ' (' + failure.code + ')' : '';
+    throw mcpProcessError(message + exit, failure.stderr || '', env);
   }
   const bin = env.UV_TOOL_BIN_DIR;
   const entries = (await fs.readdir(bin)).filter(
@@ -319,5 +372,6 @@ export async function installPython(
   if (!selected) throw new Error('mcp_package_requires_single_executable');
   const command = path.join(bin, selected);
   await fs.access(command);
-  return { command, version, path: bin, env: managedEnv };
+  const commit = git ? await installedGitCommit(managedEnv.UV_TOOL_DIR) : undefined;
+  return { command, version, commit, path: bin, env: managedEnv };
 }
