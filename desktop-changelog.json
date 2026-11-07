@@ -1,95 +1,43 @@
 {
   "changes": {
     "en": [
-      "A brand new design — everything that could be reworked has been reworked",
-      "Added a schedule for automatic switching between the light and dark themes",
-      "Redesigned the settings menu, along with a huge number of other improvements",
-      "Added wake word sensitivity settings and wake phrases selection",
-      "Fixed caching in many places"
+      "Added MCP (not yet available on the main branch)"
     ],
     "cs": [
-      "Zcela nový design — vše, co šlo přepracovat, bylo přepracováno",
-      "Přidán harmonogram pro automatické přepínání mezi světlým a tmavým motivem",
-      "Přepracováno menu nastavení spolu s velkým množstvím dalších vylepšení",
-      "Přidána možnost nastavení citlivosti probuzovacího slova a výběru probuzovacích frází",
-      "Opraveno ukládání do mezipaměti na mnoha místech"
+      "Přidáno MCP (zatím není dostupné v hlavní větvi)"
     ],
     "de": [
-      "Ein völlig neues Design – alles, was überarbeitet werden konnte, wurde überarbeitet",
-      "Zeitplan für das automatische Umschalten zwischen hellem und dunklem Theme hinzugefügt",
-      "Das Einstellungen-Menü wurde neu gestaltet, zusammen mit einer Vielzahl weiterer Verbesserungen",
-      "Empfindlichkeitseinstellungen für Wake Words und Auswahl von Wake Phrases hinzugefügt",
-      "Caching an vielen Stellen behoben"
+      "MCP hinzugefügt (auf dem Haupt-Branch noch nicht verfügbar)"
     ],
     "es": [
-      "Un diseño completamente nuevo: todo lo que podía rediseñarse ha sido rediseñado",
-      "Se ha añadido un horario para el cambio automático entre los temas claro y oscuro",
-      "Rediseño del menú de ajustes, junto con un gran número de otras mejoras",
-      "Se han añadido ajustes de sensibilidad de la palabra de activación y selección de frases de activación",
-      "Se corrigió el almacenamiento en caché en muchos lugares"
+      "Añadido MCP (aún no disponible en la rama principal)"
     ],
     "fr": [
-      "Un tout nouveau design — tout ce qui pouvait être retravaillé l'a été",
-      "Ajout d'un planning pour le basculement automatique entre les thèmes clair et sombre",
-      "Refonte du menu des paramètres, ainsi qu'un grand nombre d'autres améliorations",
-      "Ajout des réglages de sensibilité du mot de réveil et de la sélection des phrases de réveil",
-      "Correction de la mise en cache à de nombreux endroits"
+      "Ajout de MCP (pas encore disponible sur la branche principale)"
     ],
     "it": [
-      "Un design completamente nuovo — tutto ciò che poteva essere riprogettato è stato riprogettato",
-      "Aggiunta una pianificazione per il passaggio automatico tra tema chiaro e tema scuro",
-      "Riprogettato il menu delle impostazioni, insieme a un gran numero di altri miglioramenti",
-      "Aggiunte le impostazioni di sensibilità della wake word e la selezione delle frasi di attivazione",
-      "Corretto il caching in molti punti"
+      "Aggiunto MCP (non ancora disponibile sul branch principale)"
     ],
     "ja": [
-      "全新のデザイン — 再構築可能なものはすべて再構築しました",
-      "ライトテーマとダークテーマの自動切り替えスケジュールを追加しました",
-      "設定メニューを再設計し、その他多数の改善を加えました",
-      "ウェイクワードの感度設定とウェイクフレーズの選択を追加しました",
-      "多くの箇所でキャッシュの問題を修正しました"
+      "MCP を追加しました（メインブランチではまだ利用できません）"
     ],
     "ko": [
-      "완전히 새로운 디자인 — 재작업이 가능한 모든 것을 재작업했습니다",
-      "라이트 테마와 다크 테마 간 자동 전환 스케줄 추가",
-      "설정 메뉴를 재설계하고 수많은 기타 개선 사항을 적용했습니다",
-      "웨이크 워드 감도 설정 및 웨이크 프레이즈 선택 추가",
-      "여러 위치의 캐싱 문제 수정"
+      "MCP 추가됨 (메인 브랜치에서는 아직 사용할 수 없음)"
     ],
     "pl": [
-      "Całkowicie nowy design — wszystko, co mogło zostać przebudowane, zostało przebudowane",
-      "Dodano harmonogram automatycznego przełączania między motywem jasnym a ciemnym",
-      "Przebudowano menu ustawień, wraz z ogromną liczbą innych usprawnień",
-      "Dodano ustawienia czułości słowa wybudzającego oraz wybór fraz wybudzających",
-      "Poprawiono cache w wielu miejscach"
+      "Dodano MCP (jeszcze niedostępne w gałęzi głównej)"
     ],
     "pt-BR": [
-      "Um design totalmente novo — tudo que podia ser reformulado foi reformulado",
-      "Adicionado um agendamento para alternância automática entre os temas claro e escuro",
-      "Redesenhamos o menu de configurações, junto com um grande número de outras melhorias",
-      "Adicionados ajustes de sensibilidade da palavra de ativação e seleção de frases de ativação",
-      "Corrigido o cache em vários lugares"
+      "Adicionado MCP (ainda não disponível no branch principal)"
     ],
     "ru": [
-      "Полностью новый дизайн — переделано всё, что можно было переделать",
-      "Добавлено расписание для автоматического переключения между светлой и тёмной темами",
-      "Переработано меню настроек, а также внесено множество других улучшений",
-      "Добавлены настройки чувствительности слова-активатора и выбор фраз активации",
-      "Исправлено кэширование во многих местах"
+      "Добавлен MCP (пока недоступен в основной ветке)"
     ],
     "tr": [
-      "Tamamen yeni bir tasarım — yeniden yapılabilecek her şey yeniden yapıldı",
-      "Açık ve koyu temalar arasında otomatik geçiş için zamanlama eklendi",
-      "Ayarlar menüsü yeniden tasarlandı, bununla birlikte çok sayıda diğer iyileştirme yapıldı",
-      "Uyanma kelimesi hassasiyet ayarları ve uyanma ifadeleri seçimi eklendi",
-      "Birçok yerde önbellekleme düzeltildi"
+      "MCP eklendi (henüz ana dalda kullanılamıyor)"
     ],
     "zh-CN": [
-      "全新设计——所有可重构的部分均已重新设计",
-      "新增浅色与深色主题自动切换计划",
-      "重新设计了设置菜单，并进行了大量其他改进",
-      "新增唤醒词灵敏度设置和唤醒短语选择",
-      "修复了多处缓存问题"
+      "已添加 MCP（主分支暂不可用）"
     ]
   }
 }
