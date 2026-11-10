@@ -4,6 +4,7 @@ import { useLocalMcp, useLocalMcpSettings } from '../lib/useMcp';
 import * as api from '../lib/mcp-service';
 import {
   emptyMcpApproval,
+  packageFields,
   parseLocalMcpEnvironment,
   type LocalMcpInstallPhase,
 } from '../../main/local-mcp-spec';
@@ -65,7 +66,12 @@ export function LocalMcpPanel({ allowed }: { allowed: boolean }) {
         const saveApproval = (patch: Partial<typeof approval>) =>
           run(() => api.configureLocalMcp(row.id, { approval_policy: { ...approval, ...patch } }));
         return (
-          <article className={styles.connection} key={row.id}>
+          <article
+            className={styles.connection}
+            key={row.id}
+            id={'mcp-local-' + row.id}
+            tabIndex={-1}
+          >
             <div className={styles.cardHeading}>
               <span className={styles.icon}>
                 <Icon name="monitor" />
@@ -80,6 +86,7 @@ export function LocalMcpPanel({ allowed }: { allowed: boolean }) {
             </div>
             <p className={styles.url}>
               {row.source}
+              {row.installed_version && ' · ' + row.installed_version}
               {row.git_commit && ' · ' + row.git_commit.slice(0, 12)}
             </p>
             <p className={styles.url}>
@@ -231,6 +238,13 @@ function LocalMcpConfiguration({
     );
   const config = query.data,
     disabled = busy || query.isFetching;
+  const manifest = config.manifest;
+  const fields = manifest ? packageFields(manifest.package) : [];
+  const additionalEnv = Object.fromEntries(
+    Object.entries(config.env).filter(
+      ([name]) => !fields.some((field) => field.key === 'env:' + name),
+    ),
+  );
   return (
     <form
       key={config.config_revision || row.id}
@@ -252,6 +266,11 @@ function LocalMcpConfiguration({
             expected_revision: config.config_revision,
             timeout_seconds: Number(data.get('timeout')),
             env,
+            ...(manifest && {
+              manifest_values: Object.fromEntries(
+                fields.map((field) => [field.key, String(data.get(field.key) ?? '')]),
+              ),
+            }),
           }),
         ).then((saved) => setFeedback(saved ? 'saved' : 'failed'));
       }}
@@ -280,14 +299,33 @@ function LocalMcpConfiguration({
           disabled={disabled}
         />
       </label>
+      {fields.map((field) => (
+        <label key={field.key}>
+          {field.label}
+          <input
+            className={s.fieldInput}
+            name={field.key}
+            type={field.secret ? 'password' : 'text'}
+            required={field.required}
+            autoComplete="off"
+            disabled={disabled}
+            defaultValue={manifest?.values[field.key] ?? field.default}
+            onChange={() => setFeedback(null)}
+          />
+        </label>
+      ))}
       <label className={styles.fullWidth}>
-        {t('mcp.local.env')}
+        {t(
+          fields.some((field) => field.key.startsWith('env:'))
+            ? 'mcp.local.extraEnv'
+            : 'mcp.local.env',
+        )}
         <textarea
           className={s.textareaInput}
           name="env"
           rows={5}
           spellCheck={false}
-          defaultValue={JSON.stringify(config.env, null, 2)}
+          defaultValue={JSON.stringify(additionalEnv, null, 2)}
           disabled={disabled}
           placeholder='{"API_KEY":"..."}'
           autoComplete="off"

@@ -1,4 +1,8 @@
-import type { McpApprovalPolicy } from '../../main/local-mcp-spec';
+import {
+  githubMcpRepository,
+  type LocalMcpManifest,
+  type McpApprovalPolicy,
+} from '../../main/local-mcp-spec';
 import { API_BASE, apiFetch, localMcpScope, syncLocalMcp } from './api';
 import type { LocalMcpInput, LocalMcpInstallPhase, NpmMcpPackage } from '../../main/local-mcp-spec';
 export type McpTool = { name: string; description?: string };
@@ -23,6 +27,7 @@ export type McpConnection = {
   approval_policy?: McpApprovalPolicy;
   transport?: 'stdio';
   local_id?: string;
+  server_id?: number | null;
   id: number;
   name: string;
   url: string;
@@ -84,11 +89,48 @@ export const getMcpCatalog = (search: string, cursor = '', signal?: AbortSignal)
     { signal },
   );
 
+export async function importGithubMcp(
+  url: string,
+  allowRegistry: boolean,
+  signal?: AbortSignal,
+): Promise<{ items: CatalogItem[] }> {
+  const repository = githubMcpRepository(url);
+  if (!repository) throw new Error('mcp_invalid_github_url');
+  signal?.throwIfAborted();
+  let manifestError: unknown;
+  try {
+    const result: { items: CatalogItem[] } = await window.electronAPI.localMcpManage({
+      action: 'import-github',
+      url: repository.url,
+    });
+    signal?.throwIfAborted();
+    if (result.items.length) return result;
+  } catch (error) {
+    signal?.throwIfAborted();
+    manifestError = error;
+  }
+
+  if (allowRegistry && repository.repo.length >= 3) {
+    const result = await getMcpCatalog(repository.repo, '', signal);
+    const items = result.items.filter(
+      (item) =>
+        githubMcpRepository(item.repository_url)?.url.toLowerCase() ===
+        repository.url.toLowerCase(),
+    );
+    if (items.length) return { items };
+  }
+  if (manifestError) throw manifestError;
+  return { items: [] };
+}
+
 export type LocalMcpSummary = {
   approval_policy?: McpApprovalPolicy;
   id: string;
   name: string;
   source: string;
+  source_key?: string;
+  catalog_id?: number;
+  installed_version?: string;
   enabled: boolean;
   mode: 'search' | 'eager';
   timeout_seconds: number;
@@ -102,6 +144,7 @@ export type LocalMcpSummary = {
 export const getLocalMcp = (): Promise<LocalMcpSummary[]> =>
   window.electronAPI.localMcpManage({ action: 'list', scope: localMcpScope() });
 export type LocalMcpSettings = {
+  manifest?: LocalMcpManifest;
   env: Record<string, string>;
   config_revision?: string;
   mode: 'search' | 'eager';
@@ -140,8 +183,11 @@ export const installLocalMcp = (
   input: LocalMcpInput,
   onProgress?: (phase: LocalMcpInstallPhase) => void,
 ) => localManage('install', { input }, onProgress);
-export const updateLocalMcp = (id: string, onProgress?: (phase: LocalMcpInstallPhase) => void) =>
-  localManage('update', { id }, onProgress);
+export const updateLocalMcp = (
+  id: string,
+  onProgress?: (phase: LocalMcpInstallPhase) => void,
+  version?: string,
+) => localManage('update', { id, version }, onProgress);
 export const configureLocalMcp = (id: string, patch: any) =>
   localManage('configure', { id, patch });
 export const removeLocalMcp = (id: string) => localManage('remove', { id });

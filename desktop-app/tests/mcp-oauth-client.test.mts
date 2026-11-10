@@ -18,7 +18,7 @@ const build = await esbuild.build({
         b.onLoad({ filter: /.*/, namespace: 'fixture' }, () => ({
           loader: 'js',
           contents:
-            "export let API_BASE='https://chatter.example/backend';globalThis.__setMcpApiBase=value=>API_BASE=value;export const apiFetch=async(url,options)=>{globalThis.__mcpCalls.push({url,...options});return {authorization_url:'https://auth.example/authorize'}};export const localMcpScope=()=>'fixture-account';export const syncLocalMcp=async()=>{globalThis.__mcpCalls.push({url:'local-sync'})};",
+            "export let API_BASE='https://chatter.example/backend';globalThis.__setMcpApiBase=value=>API_BASE=value;export const apiFetch=async(url,options)=>{globalThis.__mcpCalls.push({url,...options});if(url.startsWith('/api/v1/mcp/catalog?'))return {items:[{name:'Match',repository_url:'https://github.com/example/tool'},{name:'Other',repository_url:'https://github.com/other/tool'}]};return {authorization_url:'https://auth.example/authorize'}};export const localMcpScope=()=>'fixture-account';export const syncLocalMcp=async()=>{globalThis.__mcpCalls.push({url:'local-sync'})};",
         }));
       },
     },
@@ -47,10 +47,22 @@ try {
   try {
     (globalThis as any).window={electronAPI:{localMcpManage:async(payload:any)=>{
       (globalThis as any).__mcpCalls.push({url:'native-settings',payload});
+      if(payload.action==='import-github')
+        return {items:payload.url.endsWith('/has-manifest')?[{name:'Local manifest'}]:[]};
       return payload.action==='settings'
         ? {env:{PRIVATE_KEY:'only-on-PC'},config_revision:'one',mode:'search',timeout_seconds:300}
         : {error:'fixture_restart_failed'};
     }}};
+    const start=(globalThis as any).__mcpCalls.length;
+    assert.deepEqual(await fixture.exports.importGithubMcp('https://github.com/example/has-manifest',true),
+      {items:[{name:'Local manifest'}]});
+    assert.deepEqual((globalThis as any).__mcpCalls.slice(start),[{
+      url:'native-settings',payload:{action:'import-github',url:'https://github.com/example/has-manifest'},
+    }],'successful import only uses desktop IPC');
+    assert.deepEqual((await fixture.exports.importGithubMcp('https://github.com/example/tool',true)).items.map(x=>x.name),['Match']);
+    assert.match((globalThis as any).__mcpCalls.at(-1).url,/^\/api\/v1\/mcp\/catalog\?search=tool/);
+    assert.deepEqual(await fixture.exports.importGithubMcp('https://github.com/example/tool',false),{items:[]});
+    assert.equal((globalThis as any).__mcpCalls.at(-1).url,'native-settings','hidden catalog prevents fallback');
     const before=(globalThis as any).__mcpCalls.length;
     const settings=await fixture.exports.getLocalMcpSettings('fixture-id');
     assert.deepEqual(settings.env,{PRIVATE_KEY:'only-on-PC'});

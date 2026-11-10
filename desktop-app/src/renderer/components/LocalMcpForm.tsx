@@ -14,9 +14,11 @@ import styles from './McpSettings.module.scss';
 export function LocalMcpForm({
   draft,
   onClose,
+  reuseExisting,
 }: {
   draft: api.CatalogItem | null;
   onClose: () => void;
+  reuseExisting?: boolean;
 }) {
   const { t } = useTranslation();
   const { mutation } = useLocalMcp();
@@ -71,6 +73,8 @@ export function LocalMcpForm({
               {
                 name: name || undefined,
                 description: draft?.description,
+                catalog_id: draft?.id,
+                reuse_existing: reuseExisting,
                 ...(packageData ? { package: packageData, values } : { source }),
                 env: environment,
               },
@@ -86,6 +90,12 @@ export function LocalMcpForm({
         <h4>
           {draft ? t('mcp.local.install') + ': ' + (draft.title || draft.name) : t('mcp.local.add')}
         </h4>
+        {draft?.package && (
+          <p className={s.connectionsHelp}>
+            {draft.package.registryType === 'pypi' ? 'PyPI' : 'npm'} · {draft.package.identifier}
+            {draft.package.version && ' · ' + draft.package.version}
+          </p>
+        )}
         {(!draft || draft.source) && (
           <label>
             {t('mcp.local.source')}

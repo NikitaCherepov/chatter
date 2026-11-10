@@ -1,12 +1,19 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
-import { useMcp, useMcpCatalog } from '../lib/useMcp';
+import { useLocalMcp, useMcp, useMcpCatalog } from '../lib/useMcp';
 import * as api from '../lib/mcp-service';
 import { getApiErrorMessage } from '../lib/api';
 import { LocalMcpPanel } from './LocalMcpPanel';
 import { LocalMcpForm } from './LocalMcpForm';
-import { emptyMcpApproval } from '../../main/local-mcp-spec';
+import {
+  emptyMcpApproval,
+  packageFromSource,
+  localMcpInputSource,
+  normalizeMcpEndpoint,
+  resolveLocalInput,
+  type LocalMcpInstallPhase,
+} from '../../main/local-mcp-spec';
 import { Select } from './Select';
 import { McpToggle, McpTools } from './McpControls';
 import { Icon } from './Icon';
@@ -15,12 +22,23 @@ import { ConfirmDialog } from './ConfirmDialog';
 import s from './SettingsModal.module.scss';
 import styles from './McpSettings.module.scss';
 
-export function McpSettings() {
+export function McpSettings({
+  onAskMcpHelp,
+}: {
+  onAskMcpHelp?: (message: string) => Promise<void>;
+} = {}) {
   const { t } = useTranslation(),
     { query, mutation } = useMcp();
+  const { query: localQuery } = useLocalMcp();
+  const [reuseExisting, setReuseExisting] = useState(false);
+  const [jumpTo, setJumpTo] = useState<string | null>(null);
   const [view, setView] = useState<'catalog' | 'connections'>('catalog');
   const [adding, setAdding] = useState(false);
-  const [addType, setAddType] = useState('remote');
+  const [addType, setAddType] = useState('auto');
+  const [directInstall, setDirectInstall] = useState<{
+    item: api.CatalogItem;
+    phase: LocalMcpInstallPhase;
+  } | null>(null);
   const [server, setServer] = useState(''),
     [name, setName] = useState(''),
     [url, setUrl] = useState(''),
@@ -68,6 +86,14 @@ export function McpSettings() {
       setView('connections');
   }, [query.data?.policy.enabled, query.data?.policy.show_catalog]);
 
+  useEffect(() => {
+    if (view !== 'connections' || !jumpTo) return;
+    const card = document.getElementById(jumpTo);
+    card?.focus({ preventScroll: true });
+    card?.scrollIntoView({ block: 'nearest' });
+    setJumpTo(null);
+  }, [view, jumpTo]);
+
   const run = async (action: () => Promise<unknown>) => {
     try {
       await mutation.mutateAsync(action);
@@ -100,6 +126,7 @@ export function McpSettings() {
         name,
         url,
         server_id: server === 'custom' ? null : Number(server),
+        reuse_existing: reuseExisting,
         mode,
         timeout_seconds: timeout,
         ...(token ? { token } : {}),
@@ -113,7 +140,8 @@ export function McpSettings() {
       setAdding(false);
       if (oauth) await authorizeConnection(result.connection.id);
     });
-  const pick = (item: api.CatalogItem) => {
+  const pick = (item: api.CatalogItem, allowDuplicate = false) => {
+    setReuseExisting(!allowDuplicate);
     setAdding(true);
     setAddType('remote');
     setLocalDraft(null);
@@ -123,6 +151,45 @@ export function McpSettings() {
     setUrl(item.url);
     setName(item.name);
     setToken('');
+  };
+  const openLocal = (item: api.CatalogItem, allowDuplicate = false) => {
+    setReuseExisting(!allowDuplicate);
+    setLocalDraft(item);
+    setView('connections');
+    setAdding(false);
+  };
+  const showConnection = (target: string) => {
+    setView('connections');
+    setAdding(false);
+    setLocalDraft(null);
+    setJumpTo(target);
+  };
+  const installFromCatalog = (item: api.CatalogItem) => {
+    if (!item.recommended) {
+      openLocal(item);
+      return;
+    }
+    const input = {
+      name: item.title || item.name,
+      description: item.description,
+      catalog_id: item.id,
+      reuse_existing: true,
+      ...(item.package ? { package: item.package } : { source: item.source }),
+    };
+    try {
+      resolveLocalInput(input);
+    } catch {
+      // The same form handles credentials and any other required values.
+      openLocal(item);
+      return;
+    }
+    setDirectInstall({ item, phase: 'installing' });
+    void run(async () => {
+      const installed = await api.installLocalMcp(input, (phase) =>
+        setDirectInstall({ item, phase }),
+      );
+      showConnection('mcp-local-' + installed.id);
+    }).finally(() => setDirectInstall(null));
   };
   if (query.isPending || query.isError)
     return (
@@ -143,6 +210,9 @@ export function McpSettings() {
     );
   const data = query.data!,
     busy = mutation.isPending;
+  const canAddLocal =
+    data.policy.allow_custom && typeof window.electronAPI?.localMcpManage === 'function';
+  const autoAdding = adding && addType === 'auto' && canAddLocal;
   const words = search.toLowerCase().trim().split(/\s+/).filter(Boolean);
   const approvedCatalog = data.servers.filter((item) =>
     words.every((word) =>
@@ -161,6 +231,115 @@ export function McpSettings() {
         ]
       : approvedCatalog;
   const showingRegistry = canSearchRegistry && catalogSearch !== null;
+  const catalogActions = (item: api.CatalogItem) => {
+    const local = !!(item.package || item.source);
+    const source = local ? localMcpInputSource(item) : undefined;
+    const endpoint = local ? undefined : normalizeMcpEndpoint(item.url);
+    const matches = local
+      ? (localQuery.data || [])
+          .filter((row) => source && row.source_key === source.key)
+          .map((row) => ({
+            id: 'mcp-local-' + row.id,
+            name: row.name,
+            installedVersion: row.installed_version,
+            localId: row.updatable ? row.id : undefined,
+          }))
+      : data.connections
+          .filter(
+            (row) =>
+              row.transport !== 'stdio' && endpoint && normalizeMcpEndpoint(row.url) === endpoint,
+          )
+          .map((row) => ({
+            id: 'mcp-remote-' + row.id,
+            name: row.name,
+            installedVersion: undefined,
+            localId: undefined,
+          }));
+    const disabled = busy || (local && !canAddLocal);
+    if (!matches.length)
+      return (
+        <button
+          className={s.cancelBtn}
+          disabled={disabled}
+          onClick={() => (local ? installFromCatalog(item) : pick(item))}
+        >
+          {t(
+            directInstall?.item === item
+              ? 'mcp.local.' + directInstall.phase
+              : local
+                ? 'mcp.local.install'
+                : 'mcp.connect',
+          )}
+        </button>
+      );
+    const openButton = (entry: (typeof matches)[number], showName = false) => (
+      <button className={s.cancelBtn} onClick={() => showConnection(entry.id)}>
+        {showName ? entry.name : t('mcp.catalogConnection.open')}
+      </button>
+    );
+    const updateButton = (entry: (typeof matches)[number]) => {
+      const version = source?.version;
+      if (
+        !version ||
+        !/^(?:v)?[0-9]/.test(version) ||
+        !entry.localId ||
+        entry.installedVersion === version
+      )
+        return null;
+      return (
+        <button
+          className={s.cancelBtn}
+          disabled={disabled}
+          onClick={() => {
+            setDirectInstall({ item, phase: 'installing' });
+            void run(async () => {
+              await api.updateLocalMcp(
+                entry.localId!,
+                (phase) => setDirectInstall({ item, phase }),
+                version,
+              );
+              showConnection(entry.id);
+            }).finally(() => setDirectInstall(null));
+          }}
+        >
+          {directInstall?.item === item
+            ? t('mcp.local.' + directInstall.phase)
+            : t('mcp.catalogConnection.version', { version })}
+        </button>
+      );
+    };
+    return (
+      <div className={styles.actions}>
+        {matches.length === 1 ? (
+          <>
+            {openButton(matches[0])}
+            {matches[0].installedVersion && (
+              <small className={s.connectionsHelp}>
+                {t('mcp.catalogConnection.installed', { version: matches[0].installedVersion })}
+              </small>
+            )}
+            {updateButton(matches[0])}
+          </>
+        ) : (
+          <AnimatedDetails className={styles.details} summary={t('mcp.catalogConnection.open')}>
+            {matches.map((entry) => (
+              <div className={styles.actions} key={entry.id}>
+                {openButton(entry, true)}
+                {updateButton(entry)}
+              </div>
+            ))}
+          </AnimatedDetails>
+        )}
+        <button
+          className={s.cancelBtn}
+          disabled={disabled}
+          onClick={() => (local ? openLocal(item, true) : pick(item, true))}
+        >
+          {t('mcp.catalogConnection.addAnother')}
+        </button>
+      </div>
+    );
+  };
   return (
     <div className={s.panel}>
       <div className={s.panelTitle}>MCP</div>
@@ -189,9 +368,18 @@ export function McpSettings() {
             className={s.saveBtn}
             aria-expanded={view === 'connections' && (adding || !!localDraft)}
             onClick={() => {
+              const open = view !== 'connections' || !(adding || localDraft);
               setView('connections');
               setLocalDraft(null);
-              setAdding(!(adding || localDraft));
+              setAdding(open);
+              if (open) {
+                setAddType(data.policy.allow_custom ? 'auto' : 'remote');
+                setReuseExisting(false);
+                setServer('');
+                setName('');
+                setUrl('');
+                setToken('');
+              }
             }}
           >
             {t(
@@ -211,32 +399,43 @@ export function McpSettings() {
           }
         >
           <div className={styles.addPanel}>
-            {adding && (
+            {autoAdding && view === 'connections' && (
+              <GithubMcpImport
+                canAddLocal={canAddLocal}
+                allowRegistry={canSearchRegistry}
+                onPick={(item) => (item.package || item.source ? openLocal(item) : pick(item))}
+                onManual={() => setAddType(canAddLocal ? 'local' : 'remote')}
+                onAskMcpHelp={onAskMcpHelp}
+              />
+            )}
+            {adding && !autoAdding && (
               <div className={styles.addType}>
                 <Select
-                  value={addType}
+                  value={
+                    addType === 'auto' || (addType === 'local' && !canAddLocal) ? 'remote' : addType
+                  }
                   onChange={setAddType}
                   options={[
                     { value: 'remote', label: t('mcp.design.remote') },
-                    ...(data.policy.allow_custom &&
-                    typeof window.electronAPI?.localMcpManage === 'function'
-                      ? [{ value: 'local', label: t('mcp.design.local') }]
-                      : []),
+                    ...(canAddLocal ? [{ value: 'local', label: t('mcp.design.local') }] : []),
                   ]}
                 />
               </div>
             )}
-            {data.policy.allow_custom && (localDraft || addType === 'local') && (
+            {canAddLocal && (localDraft || (adding && addType === 'local')) && (
               <LocalMcpForm
                 draft={localDraft}
+                reuseExisting={reuseExisting}
                 onClose={() => {
                   setLocalDraft(null);
                   setAdding(false);
                 }}
               />
             )}
-            {!localDraft &&
-              addType === 'remote' &&
+            {adding &&
+              !autoAdding &&
+              !localDraft &&
+              (addType !== 'local' || !canAddLocal) &&
               data.policy.enabled &&
               (data.policy.show_catalog || data.policy.allow_custom) && (
                 <form
@@ -522,31 +721,7 @@ export function McpSettings() {
                             </div>
                           </div>
                         </AnimatedDetails>
-                        {item.package || item.source ? (
-                          <button
-                            className={s.cancelBtn}
-                            disabled={
-                              busy ||
-                              !data.policy.allow_custom ||
-                              !window.electronAPI?.localMcpManage
-                            }
-                            onClick={() => {
-                              setLocalDraft(item);
-                              setView('connections');
-                              setAdding(false);
-                            }}
-                          >
-                            {t('mcp.local.install')}
-                          </button>
-                        ) : (
-                          <button
-                            className={s.cancelBtn}
-                            disabled={busy}
-                            onClick={() => pick(item)}
-                          >
-                            {t('mcp.design.connect')}
-                          </button>
-                        )}
+                        {catalogActions(item)}
                       </div>
                     ))}
                   </div>
@@ -567,6 +742,144 @@ export function McpSettings() {
     </div>
   );
 }
+function GithubMcpImport({
+  canAddLocal,
+  allowRegistry,
+  onPick,
+  onManual,
+  onAskMcpHelp,
+}: {
+  canAddLocal: boolean;
+  allowRegistry: boolean;
+  onPick: (item: api.CatalogItem) => void;
+  onManual: () => void;
+  onAskMcpHelp?: (message: string) => Promise<void>;
+}) {
+  const { t } = useTranslation();
+  const [link, setLink] = useState('');
+  const [items, setItems] = useState<api.CatalogItem[]>([]);
+  const [status, setStatus] = useState<
+    'idle' | 'loading' | 'ready' | 'empty' | 'error' | 'invalidUrl' | 'invalidManifest'
+  >('idle');
+  const failed =
+    status === 'empty' ||
+    status === 'error' ||
+    status === 'invalidUrl' ||
+    status === 'invalidManifest';
+  const [asking, setAsking] = useState(false);
+  const request = useRef<AbortController>();
+  useEffect(() => () => request.current?.abort(), []);
+  const load = async () => {
+    request.current?.abort();
+    const controller = new AbortController();
+    request.current = controller;
+    setStatus('loading');
+    try {
+      const result = await api.importGithubMcp(link.trim(), allowRegistry, controller.signal);
+      if (controller.signal.aborted) return;
+      const supported = result.items.filter((item) => {
+        if (!item.package) return !!item.url;
+        if (!canAddLocal || !packageFromSource(JSON.stringify({ package: item.package })))
+          return false;
+        try {
+          resolveLocalInput({ package: item.package });
+          return true;
+        } catch (error) {
+          return error instanceof Error && error.message === 'mcp_required_configuration';
+        }
+      });
+      if (supported.length === 1) {
+        onPick(supported[0]);
+      } else {
+        setItems(supported);
+        setStatus(supported.length ? 'ready' : 'empty');
+      }
+    } catch (error) {
+      if (controller.signal.aborted) return;
+      const message = error instanceof Error ? error.message : '';
+      setStatus(
+        message.includes('mcp_invalid_github_url')
+          ? 'invalidUrl'
+          : message.includes('mcp_invalid_manifest')
+            ? 'invalidManifest'
+            : 'error',
+      );
+    }
+  };
+  return (
+    <form
+      className={styles.form}
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (status !== 'loading' && link.trim()) void load();
+      }}
+    >
+      <label>
+        {t('mcp.github.repository')}
+        <input
+          className={s.fieldInput}
+          type="url"
+          required
+          maxLength={2048}
+          value={link}
+          onChange={(event) => {
+            request.current?.abort();
+            setLink(event.target.value);
+            setItems([]);
+            setStatus('idle');
+          }}
+          placeholder="https://github.com/owner/repository"
+        />
+      </label>
+      {failed && (
+        <p className={s.connectionsHelp} role="status">
+          {t('mcp.github.' + status)}
+        </p>
+      )}
+      {status === 'ready' &&
+        items.map((item) => (
+          <button
+            key={
+              item.package
+                ? item.package.registryType + ':' + item.package.identifier + '@' + item.version
+                : item.url
+            }
+            type="button"
+            className={s.cancelBtn}
+            onClick={() => onPick(item)}
+          >
+            {item.package
+              ? [item.package.identifier, item.version].filter(Boolean).join(' · ')
+              : item.url}
+          </button>
+        ))}
+      <div className={styles.actions}>
+        <button className={s.saveBtn} type="submit" disabled={status === 'loading' || !link.trim()}>
+          {t(status === 'loading' ? 'mcp.github.loading' : 'mcp.github.load')}
+        </button>
+        <button className={s.cancelBtn} type="button" onClick={onManual}>
+          {t('mcp.github.manual')}
+        </button>
+        {failed && onAskMcpHelp && (
+          <button
+            className={s.cancelBtn}
+            type="button"
+            disabled={asking}
+            onClick={() => {
+              setAsking(true);
+              void onAskMcpHelp(t('mcp.github.prompt') + '\n' + link.trim()).finally(() =>
+                setAsking(false),
+              );
+            }}
+          >
+            {t('mcp.github.ask')}
+          </button>
+        )}
+      </div>
+    </form>
+  );
+}
+
 function ConnectionCard({
   connection: c,
   busy,
@@ -593,7 +906,7 @@ function ConnectionCard({
   const saveApproval = (patch: Partial<typeof approval>) =>
     save({ approval_policy: { ...approval, ...patch } });
   return (
-    <section className={styles.connection}>
+    <section className={styles.connection} id={'mcp-remote-' + c.id} tabIndex={-1}>
       <div className={styles.cardHeading}>
         <span className={styles.icon}>
           <Icon name="globe" />

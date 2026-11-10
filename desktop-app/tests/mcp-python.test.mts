@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
-const { resolveLocalInput, pypiSpec, packageFromSource, parseLocalMcpEnvironment } = require('../src/main/local-mcp-spec.ts');
+const { resolveLocalInput, pypiSpec, packageFromSource, parseLocalMcpEnvironment, localMcpInputSource, normalizeMcpEndpoint } = require('../src/main/local-mcp-spec.ts');
 const { LocalMcpManager } = require('../src/main/local-mcp.ts');
 assert.deepEqual(parseLocalMcpEnvironment('{"BASE_DIR":"D:/Documents"}'),{BASE_DIR:'D:/Documents'});
 assert.deepEqual(parseLocalMcpEnvironment(''),{});
@@ -23,6 +23,26 @@ for (const source of [
 }
 assert.equal(pypiSpec('https://pypi.org/project/windows-mcp/0.8.8/'), 'windows-mcp==0.8.8');
 assert.equal(pypiSpec('windows-mcp@0.8.8'), 'windows-mcp==0.8.8');
+assert.equal(
+  localMcpInputSource({ source: JSON.stringify({ command: 'C:/tools/uvx.exe', args: ['windows-mcp'] }) }).key,
+  localMcpInputSource({ source: 'uvx windows-mcp' }).key,
+);
+assert.equal(
+  localMcpInputSource({ source: 'uvx Windows_MCP' }).key,
+  localMcpInputSource({ source: 'pypi:windows-mcp==0.8.8' }).key,
+);
+assert.equal(
+  localMcpInputSource({ source: 'npx -y @example/tools@1.0.0' }).key,
+  localMcpInputSource({ source: 'npx -y @example/tools@2.0.0' }).key,
+);
+assert.equal(
+  localMcpInputSource({ source: 'uvx --from git+https://github.com/Example/Tool.git@main entry' }).key,
+  localMcpInputSource({ source: 'uvx --from git+https://github.com/example/tool@release entry' }).key,
+);
+assert.notEqual(
+  normalizeMcpEndpoint('https://example.test/mcp?account=1'),
+  normalizeMcpEndpoint('https://example.test/mcp?account=2'),
+);
 assert.equal(
   resolveLocalInput({ source: 'uvx --python 3.14 --from package-name==1.0 actual-tool serve' })
     .tool,
@@ -97,13 +117,46 @@ await fs.writeFile(
     "if(process.env.MCP_TEST_FAIL==='1'){console.error('fixture startup failed: '+process.env.API_KEY);process.exit(2);}",
     "const r=require('node:readline');const send=(id,result)=>process.stdout.write(JSON.stringify({jsonrpc:'2.0',id,result})+'\\n');",
     "r.createInterface({input:process.stdin}).on('line',line=>{const m=JSON.parse(line);if(m.method==='initialize')send(m.id,{protocolVersion:m.params.protocolVersion,capabilities:{tools:{}},serverInfo:{name:'python-fixture',version:'1'}});",
-    "if(m.method==='tools/list')send(m.id,{tools:[{name:'echo',description:JSON.stringify({value:process.env.MCP_TEST_VALUE||'',pid:process.pid}),inputSchema:{type:'object',properties:{text:{type:'string'}}}}]});",
+    "if(m.method==='tools/list')send(m.id,{tools:[{name:'echo',description:JSON.stringify({value:process.env.MCP_TEST_VALUE||'',args:process.argv.slice(2),pid:process.pid}),inputSchema:{type:'object',properties:{text:{type:'string'}}}}]});",
     "if(m.method==='tools/call'){if(m.params.arguments.text==='wait')setTimeout(()=>send(m.id,{content:[{type:'text',text:'late'}]}),10000);else send(m.id,{content:[{type:'text',text:m.params.arguments.text}]});}});",
   ].join('\n'),
 );
-const { uvRuntime } = require('../src/main/local-mcp-runtime.ts');
+const { uvRuntime, readGithubMcpManifest } = require('../src/main/local-mcp-runtime.ts');
 const previousFetch = globalThis.fetch;
 try {
+  const manifestUrl = 'https://raw.githubusercontent.com/CursorTouch/Windows-MCP/HEAD/server.json';
+  let githubRequests = 0;
+  globalThis.fetch = async (input: any, options?: RequestInit) => {
+    githubRequests++;
+    assert.equal(String(input), manifestUrl);
+    assert.equal(options?.redirect, 'error');
+    return Response.json({
+      name: 'io.github.CursorTouch/Windows-MCP',
+      version: '1.0.1',
+      packages: [
+        { registryType: 'pypi', identifier: 'windows-mcp', version: '0.8.8', transport: { type: 'stdio' },
+          environmentVariables: [{ name: 'MODE', default: 'auto' }] },
+        { registryType: 'oci', identifier: 'unsupported', transport: { type: 'stdio' } },
+      ],
+      remotes: [
+        { type: 'streamable-http', url: 'https://fixture.example/mcp' },
+        { type: 'streamable-http', url: 'https://credential@fixture.example/mcp' },
+      ],
+    });
+  };
+  const github = await readGithubMcpManifest('https://github.com/CursorTouch/Windows-MCP.git');
+  assert.equal(github.items.length, 2);
+  assert.equal(github.items[0].package.version, '0.8.8');
+  assert.equal(github.items[0].package.environmentVariables[0].default, 'auto');
+  assert.equal(github.items[1].url, 'https://fixture.example/mcp');
+  await assert.rejects(() => readGithubMcpManifest('https://github.com@private.example/x/y'), /invalid_github_url/);
+  assert.equal(githubRequests, 1);
+  globalThis.fetch = async () => new Response('Not found', { status: 404 });
+  assert.deepEqual(await readGithubMcpManifest('https://github.com/CursorTouch/Windows-MCP'), { items: [] });
+  globalThis.fetch = async () => new Response('x'.repeat(100_001));
+  await assert.rejects(() => readGithubMcpManifest('https://github.com/CursorTouch/Windows-MCP'), /invalid_manifest/);
+  globalThis.fetch = async () => new Response(null, { status: 429 });
+  await assert.rejects(() => readGithubMcpManifest('https://github.com/CursorTouch/Windows-MCP'), /github_unavailable/);
   globalThis.fetch = async (input: any) => {
     const url = String(input);
     if (url.includes('api.github.com')) return new Response(JSON.stringify({ tag_name: '1.2.3' }));
@@ -137,20 +190,33 @@ const manager = new LocalMcpManager(
   path.join(root, 'managed'),
   (s: string) => Buffer.from(s),
   (b: Buffer) => b.toString(),
-  async () => {
-    throw new Error('npm must not be used');
+  async (runtime: string, directory: string, spec: string) => {
+    installs++;
+    installedDirs.push(directory);
+    assert.ok(runtime.startsWith(root) && directory.startsWith(root));
+    assert.match(spec, /^@example\/fixture(?:@\d+\.0\.0)?$/);
+    const version = spec.split('@').at(2) || '1.0.0';
+    const entry = path.join(directory, 'server.cjs');
+    if (version === '3.0.0') await fs.writeFile(entry, 'process.exit(2);');
+    else await fs.copyFile(fixture, entry);
+    return {
+      command: process.execPath,
+      version,
+      entry,
+      path: path.dirname(process.execPath),
+    };
   },
   async (runtime: string, directory: string, spec: string, options: any) => {
     installs++;
     installedDirs.push(directory);
-    assert.ok(spec === 'fake-mcp' || spec === gitSource);
-    assert.equal(options.python, '3.14');
+    assert.ok(/^fake-mcp(?:==2\.0\.0)?$/.test(spec) || spec === gitSource);
+    if (options.python !== undefined) assert.equal(options.python, '3.14');
     assert.ok(directory.startsWith(root));
     assert.ok(runtime.startsWith(root));
     await fs.writeFile(path.join(directory, 'owned-package'), 'installed');
     return {
       command: process.execPath,
-      version: '1',
+      version: spec.split('==')[1] || '1.0.0',
       commit: spec === gitSource ? gitCommit : undefined,
       path: path.dirname(process.execPath),
       env: {
@@ -300,8 +366,96 @@ try {
   await assert.rejects(() => fs.access(previousPackage), /ENOENT/);
   await manager.remove('test-account', gitEntry.id);
   for (const directory of installedDirs) await assert.rejects(() => fs.access(directory), /ENOENT/);
+  const packageManifest = {
+    registryType: 'pypi',
+    identifier: 'fake-mcp',
+    transport: { type: 'stdio' },
+    environmentVariables: [
+      { name: 'MCP_TEST_VALUE', description: 'Sample value', default: 'balanced' },
+      { name: 'EXTRA_OPTION', description: 'Optional setting' },
+    ],
+    packageArguments: [
+      { type: 'positional', value: fixture },
+      { type: 'named', name: '--policy', default: 'auto' },
+    ],
+  };
+  const manifestEntry = await manager.install('test-account', {
+    package: packageManifest,
+    env: { CUSTOM_ENV: 'kept' },
+  });
+  assert.equal(manifestEntry.error, undefined);
+  assert.equal(manifestEntry.manifest, undefined, 'launch configuration stays out of the summary');
+  const manifestSettings = await manager.settings('test-account', manifestEntry.id);
+  assert.deepEqual(manifestSettings.manifest.package, packageManifest);
+  assert.deepEqual(manifestSettings.manifest.values, {
+    'env:MCP_TEST_VALUE': 'balanced',
+    'env:EXTRA_OPTION': '',
+    'arg:1': 'auto',
+  });
+  const beforeManifestEdit = installs;
+  const edited = await manager.configure('test-account', manifestEntry.id, {
+    expected_revision: manifestEntry.config_revision,
+    env: { CUSTOM_ENV: 'kept' },
+    manifest_values: { 'env:MCP_TEST_VALUE': 'relaxed', 'arg:1': 'manual' },
+  });
+  assert.equal(edited.error, undefined);
+  assert.notEqual(edited.config_revision, manifestEntry.config_revision);
+  const discovered = JSON.parse(edited.tools[0].description);
+  assert.equal(discovered.value, 'relaxed');
+  assert.deepEqual(discovered.args, ['--policy', 'manual']);
+  assert.equal(installs, beforeManifestEdit, 'manifest edits reuse the installed package');
+  assert.deepEqual((await manager.settings('test-account', manifestEntry.id)).env, {
+    CUSTOM_ENV: 'kept', MCP_TEST_VALUE: 'relaxed', EXTRA_OPTION: '',
+  });
+  assert.equal(
+    (await manager.settings('test-account', manifestEntry.id)).manifest.values['arg:1'],
+    'manual',
+  );
+  const sameSource = await manager.install('test-account', {
+    name: 'A different title',
+    source: 'pypi:fake-mcp==2.0.0',
+    catalog_id: 9,
+    reuse_existing: true,
+  });
+  assert.equal(sameSource.id, manifestEntry.id);
+  assert.equal(installs, beforeManifestEdit, 'deduplication happens before version downloads');
+  const pythonUpdated = await manager.update('test-account', manifestEntry.id, undefined, '2.0.0');
+  assert.equal(pythonUpdated.id, manifestEntry.id);
+  assert.equal(pythonUpdated.installed_version, '2.0.0');
+  assert.equal(pythonUpdated.source_key, manifestEntry.source_key);
+  assert.deepEqual(JSON.parse(pythonUpdated.tools[0].description).args, ['--policy', 'manual']);
+  await manager.update('test-account', manifestEntry.id, undefined, '2.0.0');
+  assert.equal(installs, beforeManifestEdit + 1, 'already installed version is not fetched again');
+  const second = await manager.install('test-account', {
+    package: packageManifest, catalog_id: 9,
+  });
+  assert.notEqual(second.id, manifestEntry.id, 'explicitly adding another configuration is supported');
+  assert.equal(second.catalog_id, 9);
+  await manager.remove('test-account', second.id);
+  await manager.remove('test-account', manifestEntry.id);
+
+  const npmEntry = await manager.install('test-account', {
+    source: 'npx -y @example/fixture@1.0.0 --policy balanced',
+    env: { MCP_TEST_VALUE: 'keep' },
+  });
+  assert.equal(npmEntry.installed_version, '1.0.0');
+  const npmUpdated = await manager.update('test-account', npmEntry.id, undefined, '2.0.0');
+  assert.equal(npmUpdated.installed_version, '2.0.0');
+  assert.equal(npmUpdated.id, npmEntry.id);
+  assert.equal(npmUpdated.source_key, npmEntry.source_key);
+  assert.deepEqual(JSON.parse(npmUpdated.tools[0].description).args, ['--policy', 'balanced']);
+  assert.equal(JSON.parse(npmUpdated.tools[0].description).value, 'keep');
+  const npmFailed = await manager.update('test-account', npmEntry.id, undefined, '3.0.0');
+  assert.equal(npmFailed.installed_version, '2.0.0');
+  assert.match(npmFailed.error, /Connection closed/);
+  const afterNpmFailure = await manager.control('test-account', {
+    local_id: npmEntry.id, action: 'call', tool: 'echo', arguments: { text: 'still running' },
+  });
+  assert.equal(afterNpmFailure.content[0].text, 'still running');
+  await manager.remove('test-account', npmEntry.id);
+  for (const directory of installedDirs) await assert.rejects(() => fs.access(directory), /ENOENT/);
   console.log(
-    'PASS: Python and Git MCP parsing, discovery, restart, update rollback and cleanup',
+    'PASS: Python and Git MCP parsing, manifest settings, discovery, restart, update rollback and cleanup',
   );
 } finally {
   await manager.closeAll();

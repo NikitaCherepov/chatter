@@ -7,6 +7,11 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { installNpm, installPython, mcpProcessError } from './local-mcp-runtime';
 import {
   resolveLocalInput,
+  packageFields,
+  localMcpSource,
+  npmSpec,
+  pypiSpec,
+  validateLocalMcpEnvironment,
   emptyMcpApproval,
   normalizeMcpApproval,
   type McpApprovalPolicy,
@@ -23,6 +28,7 @@ type Metadata = {
 };
 type RecordData = {
   id: string;
+  catalog_id?: number;
   scope: string;
   name: string;
   description?: string;
@@ -82,7 +88,7 @@ export class LocalMcpManager {
     if (path.dirname(target) !== base) throw new Error('mcp_invalid_local_path');
     return target;
   }
-  private pythonDirectory(scope: string, id: string, generation?: string) {
+  private packageDirectory(scope: string, id: string, generation?: string) {
     this.directory(scope, id); // Reuse the account/id validation before deriving a deletion target.
     const base = path.resolve(this.root, 'py');
     const target = path.join(
@@ -98,8 +104,8 @@ export class LocalMcpManager {
     if (!/^[0-9a-f]{8}$/.test(generation)) throw new Error('mcp_invalid_local_path');
     return path.join(target, generation);
   }
-  private async removePythonGeneration(scope: string, id: string, generation: string) {
-    const directory = this.pythonDirectory(scope, id, generation);
+  private async removePackageGeneration(scope: string, id: string, generation: string) {
+    const directory = this.packageDirectory(scope, id, generation);
     const base = path.resolve(this.root, 'py');
     const resolvedBase = await fs.realpath(base);
     const resolved = await fs.realpath(directory);
@@ -122,6 +128,13 @@ export class LocalMcpManager {
     await fs.rename(path.join(dir, 'config.tmp'), path.join(dir, 'config.bin'));
   }
   private public(record: RecordData) {
+    const source = localMcpSource(record.config);
+    const pinnedVersion = source?.version;
+    const legacyVersion =
+      record.config.pypi ||
+      (pinnedVersion && /^\d+\.\d+\.\d+(?:[-+][a-z0-9.-]+)?$/i.test(pinnedVersion))
+        ? pinnedVersion
+        : undefined;
     return {
       id: record.id,
       approval_policy: record.approval_policy || emptyMcpApproval(),
@@ -137,7 +150,10 @@ export class LocalMcpManager {
         (record.config.pypi ? 'uvx ' + record.config.pypi : '') ||
         path.basename(record.config.command || ''),
       git_commit: record.config.git_commit,
-      updatable: !!record.config.git,
+      source_key: source?.key,
+      catalog_id: record.catalog_id,
+      installed_version: record.config.installed_version || legacyVersion,
+      updatable: !!(record.config.git || record.config.npm || record.config.pypi),
       running: this.sessions.has(record.id),
       error: record.error,
       ...record.metadata,
@@ -179,8 +195,15 @@ export class LocalMcpManager {
   // Sensitive settings are read only by the trusted local renderer, never list/sync.
   async settings(scope: string, id: string) {
     const record = await this.read(scope, id);
+    const env = this.environment(record).user;
+    const manifest = record.config.manifest;
+    const values = manifest && { ...manifest.values };
+    if (manifest && values)
+      for (const field of manifest.package.environmentVariables || [])
+        if (field.name) values['env:' + field.name] = env[field.name] ?? '';
     return {
-      env: this.environment(record).user,
+      env,
+      ...(manifest && values && { manifest: { package: manifest.package, values } }),
       config_revision: record.config_revision,
       mode: record.mode,
       timeout_seconds: record.timeout_seconds,
@@ -202,7 +225,11 @@ export class LocalMcpManager {
   private async preparePython(scope: string, id: string, config: LocalMcpConfig) {
     const source = config.git || config.pypi;
     if (!source) throw new Error('mcp_invalid_python_package');
-    const directory = this.pythonDirectory(scope, id, config.git_generation);
+    const directory = this.packageDirectory(
+      scope,
+      id,
+      config.package_generation ?? config.git_generation,
+    );
     await fs.mkdir(directory, { recursive: true });
     const installed = await this.pythonInstaller(
       path.join(this.root, 'runtime'),
@@ -216,10 +243,25 @@ export class LocalMcpManager {
     );
     config.command = installed.command;
     config.git_commit = installed.commit;
+    config.installed_version = installed.version || undefined;
     config.managed_env = {
       ...installed.env,
       PATH: installed.path + path.delimiter + (process.env.PATH || ''),
     };
+    config.env = { ...config.user_env, ...config.managed_env };
+  }
+  private async prepareNpm(scope: string, id: string, config: LocalMcpConfig) {
+    const directory = this.packageDirectory(scope, id, config.package_generation);
+    await fs.mkdir(directory, { recursive: true });
+    const installed = await this.npmInstaller(
+      path.join(this.root, 'runtime'),
+      directory,
+      config.npm!,
+    );
+    config.command = installed.command;
+    config.args = [installed.entry, ...config.args];
+    config.installed_version = installed.version || undefined;
+    config.managed_env = { PATH: installed.path + path.delimiter + (process.env.PATH || '') };
     config.env = { ...config.user_env, ...config.managed_env };
   }
   async install(
@@ -232,10 +274,20 @@ export class LocalMcpManager {
     try {
       const config = resolveLocalInput(input);
       config.user_env = { ...config.env };
-      if (config.git) config.git_generation = crypto.randomBytes(4).toString('hex');
-      if ((await this.list(scope)).length >= 20) throw new Error('mcp_connection_limit');
+      const entries = await this.list(scope);
+      const source = localMcpSource(config);
+      if (input.reuse_existing && source) {
+        const existing = entries.find((entry) => entry.source_key === source.key);
+        if (existing) return existing;
+      }
+      if (entries.length >= 20) throw new Error('mcp_connection_limit');
+      if (config.git || config.npm || config.pypi)
+        config.package_generation = crypto.randomBytes(4).toString('hex');
       const record: RecordData = {
         id: crypto.randomUUID(),
+        ...(Number.isSafeInteger(input.catalog_id) && Number(input.catalog_id) > 0
+          ? { catalog_id: input.catalog_id }
+          : {}),
         config_revision: crypto.randomUUID(),
         approval_policy: emptyMcpApproval(),
         scope,
@@ -248,20 +300,11 @@ export class LocalMcpManager {
         config,
         metadata: empty(),
       };
-      const dir = this.directory(scope, record.id);
       await this.write(record);
       if (config.npm) {
         progress?.('installing');
         try {
-          const installed = await this.npmInstaller(
-            path.join(this.root, 'runtime'),
-            dir,
-            config.npm,
-          );
-          config.command = installed.command;
-          config.args = [installed.entry, ...config.args];
-          config.managed_env = { PATH: installed.path + path.delimiter + (process.env.PATH || '') };
-          config.env = { ...config.user_env, ...config.managed_env };
+          await this.prepareNpm(scope, record.id, config);
         } catch {
           await this.remove(scope, record.id);
           throw new Error('mcp_package_install_failed');
@@ -289,6 +332,17 @@ export class LocalMcpManager {
     } finally {
       this.installing.delete(scope);
     }
+  }
+  private diagnosticsEnv(record: RecordData) {
+    const env = { ...record.config.env };
+    const manifest = record.config.manifest;
+    if (manifest)
+      for (const field of packageFields(manifest.package))
+        if (field.secret)
+          env['secret:' + field.key] = field.key.startsWith('env:')
+            ? (env[field.key.slice(4)] ?? '')
+            : (manifest.values[field.key] ?? '');
+    return env;
   }
   private async connect(record: RecordData, showDiagnostics = false) {
     const existing = this.sessions.get(record.id);
@@ -319,7 +373,7 @@ export class LocalMcpManager {
       throw mcpProcessError(
         error instanceof Error ? error.message : String(error),
         entry.stderr,
-        record.config.env,
+        this.diagnosticsEnv(record),
       );
     }
   }
@@ -346,9 +400,11 @@ export class LocalMcpManager {
           await this.preparePython(record.scope, record.id, config);
         } catch (error) {
           if (config.git_generation)
-            await this.removePythonGeneration(record.scope, record.id, config.git_generation).catch(
-              () => {},
-            );
+            await this.removePackageGeneration(
+              record.scope,
+              record.id,
+              config.git_generation,
+            ).catch(() => {});
           if (!showDiagnostics && error instanceof Error)
             throw new Error(error.message.split('\n', 1)[0]);
           throw error;
@@ -428,27 +484,58 @@ export class LocalMcpManager {
       throw mcpProcessError(
         error instanceof Error ? error.message : String(error),
         session.stderr,
-        record.config.env,
+        this.diagnosticsEnv(record),
       );
     }
   }
-  async update(scope: string, id: string, progress?: (phase: LocalMcpInstallPhase) => void) {
+  async update(
+    scope: string,
+    id: string,
+    progress?: (phase: LocalMcpInstallPhase) => void,
+    version?: string,
+  ) {
     return this.serialized(id, async () => {
       const current = await this.read(scope, id);
-      if (!current.config.git) throw new Error('mcp_package_update_unsupported');
+      const config = current.config;
+      if (!config.git && !config.npm && !config.pypi)
+        throw new Error('mcp_package_update_unsupported');
+      if (
+        version !== undefined &&
+        (typeof version !== 'string' ||
+          !/^[a-zA-Z0-9][a-zA-Z0-9.+!_~-]*$/.test(version) ||
+          version.length > 100 ||
+          config.git)
+      )
+        throw new Error('mcp_invalid_package_version');
+      if (version && config.installed_version === version) return this.public(current);
+      const npm = config.npm
+        ? npmSpec(config.npm.replace(/@[^/@]+$/, '') + (version ? '@' + version : ''))
+        : undefined;
+      const pypi = config.pypi
+        ? pypiSpec(config.pypi.split('==')[0] + (version ? '==' + version : ''))
+        : undefined;
       if (this.busy.has(id)) throw new Error('mcp_connection_busy');
       this.busy.add(id);
       const generation = crypto.randomBytes(4).toString('hex');
       const candidate: RecordData = {
         ...current,
         config_revision: crypto.randomUUID(),
-        config: { ...current.config, git_generation: generation },
+        config: {
+          ...config,
+          npm,
+          pypi,
+          args: config.npm ? config.args.slice(1) : config.args,
+          user_env: this.environment(current).user,
+          package_generation: generation,
+          git_generation: undefined,
+        },
         error: undefined,
       };
       let connecting = false;
       try {
         progress?.('installing');
-        await this.preparePython(scope, id, candidate.config);
+        if (npm) await this.prepareNpm(scope, id, candidate.config);
+        else await this.preparePython(scope, id, candidate.config);
         progress?.('connecting');
         await this.stop(id);
         connecting = true;
@@ -457,15 +544,16 @@ export class LocalMcpManager {
         await this.write(candidate);
       } catch (error) {
         if (connecting) await this.stop(id);
-        await this.removePythonGeneration(scope, id, generation).catch(() => {});
+        await this.removePackageGeneration(scope, id, generation).catch(() => {});
         current.error = String(error instanceof Error ? error.message : error).slice(0, 2000);
         await this.write(current);
         return this.public(current);
       } finally {
         this.busy.delete(id);
       }
-      if (current.config.git_generation)
-        await this.removePythonGeneration(scope, id, current.config.git_generation).catch(() => {});
+      const previousGeneration = config.package_generation ?? config.git_generation;
+      if (previousGeneration)
+        await this.removePackageGeneration(scope, id, previousGeneration).catch(() => {});
       return this.public(candidate);
     });
   }
@@ -494,7 +582,7 @@ export class LocalMcpManager {
   }
   private async configureRecord(scope: string, id: string, patch: any) {
     const record = await this.read(scope, id);
-    let environmentChanged = false;
+    let launchConfigChanged = false;
     if ('expected_revision' in patch && patch.expected_revision !== record.config_revision)
       throw new Error('mcp_connection_changed');
     if (patch.approval_policy !== undefined)
@@ -526,24 +614,50 @@ export class LocalMcpManager {
         throw new Error('mcp_invalid_tools');
       record.selected_tools = patch.selected_tools;
     }
-    if (patch.env !== undefined) {
-      if (!patch.env || typeof patch.env !== 'object' || Array.isArray(patch.env))
-        throw new Error('mcp_invalid_environment');
-      const env = resolveLocalInput({
-        source: JSON.stringify({
-          command: record.config.command,
-          args: record.config.args,
-          env: patch.env,
-        }),
-      }).env;
+    if (patch.env !== undefined || patch.manifest_values !== undefined) {
       const previous = this.environment(record);
+      let env = patch.env === undefined ? previous.user : validateLocalMcpEnvironment(patch.env);
+      let { args, manifest } = record.config;
+      if (patch.manifest_values !== undefined) {
+        if (
+          !manifest ||
+          !patch.manifest_values ||
+          typeof patch.manifest_values !== 'object' ||
+          Array.isArray(patch.manifest_values)
+        )
+          throw new Error('mcp_invalid_install_input');
+        const resolved = resolveLocalInput({
+          package: manifest.package,
+          values: {
+            ...manifest.values,
+            ...Object.fromEntries(
+              (manifest.package.environmentVariables || [])
+                .filter((field) => field.name)
+                .map((field) => ['env:' + field.name, previous.user[field.name!] ?? '']),
+            ),
+            ...patch.manifest_values,
+          },
+          env,
+        });
+        env = resolved.env;
+        args = record.config.npm ? [args[0], ...resolved.args] : resolved.args;
+        manifest = resolved.manifest;
+      }
       const sorted = (value: Record<string, string>) =>
         JSON.stringify(Object.entries(value).sort());
-      environmentChanged = sorted(env) !== sorted(previous.user);
-      if (environmentChanged) {
+      launchConfigChanged =
+        sorted(env) !== sorted(previous.user) ||
+        JSON.stringify(args) !== JSON.stringify(record.config.args);
+      const valuesChanged =
+        sorted(manifest?.values || {}) !== sorted(record.config.manifest?.values || {});
+      if (launchConfigChanged || valuesChanged) {
         record.config_revision = crypto.randomUUID();
+        record.config.manifest = manifest;
+      }
+      if (launchConfigChanged) {
         record.metadata = empty();
         record.error = undefined;
+        record.config.args = args;
         record.config.user_env = env;
         record.config.managed_env = previous.managed;
         record.config.env = { ...env, ...previous.managed };
@@ -552,7 +666,7 @@ export class LocalMcpManager {
     }
     if (!record.enabled) await this.stop(id);
     await this.write(record);
-    return { summary: this.public(record), restart: environmentChanged && record.enabled };
+    return { summary: this.public(record), restart: launchConfigChanged && record.enabled };
   }
   async control(scope: string, payload: any, progress?: () => void) {
     const id = payload.local_id;
@@ -636,7 +750,7 @@ export class LocalMcpManager {
       await this.read(scope, id);
       await this.stop(id);
       const target = this.directory(scope, id);
-      const pythonTarget = this.pythonDirectory(scope, id);
+      const pythonTarget = this.packageDirectory(scope, id);
       await fs.rm(pythonTarget, { recursive: true, force: true });
       await fs.rm(target, { recursive: true, force: true });
     });

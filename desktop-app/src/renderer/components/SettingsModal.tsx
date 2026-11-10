@@ -82,6 +82,7 @@ type Props = {
   onClose: () => void;
   onAccountChanged?: () => void | Promise<void>;
   onChatCreated?: (chatId: number) => void | Promise<void>;
+  onAskMcpHelp?: (message: string) => Promise<void>;
   /** Called when the user changed their password or login and server tokens
    *  were revoked — the parent must force a sign-out and close the modal. */
   onAuthInvalidated?: () => void;
@@ -150,7 +151,7 @@ function clampZoomPct(pct: number): number {
   return Math.min(ZOOM_MAX_PCT, Math.max(ZOOM_MIN_PCT, snapped));
 }
 
-export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuthInvalidated }: Props) {
+export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuthInvalidated, onAskMcpHelp }: Props) {
   const { user, setUser } = useAuth();
   const queryClient = useQueryClient();
   const isAdmin = user?.is_admin === 1 || user?.role === 'admin';
@@ -2464,7 +2465,7 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
             <PCSettings />
           )}
 
-          {section === 'mcp' && <McpSettings />}
+          {section === 'mcp' && <McpSettings onAskMcpHelp={onAskMcpHelp} />}
           {section === 'browser' && (
             <BrowserSettings />
           )}

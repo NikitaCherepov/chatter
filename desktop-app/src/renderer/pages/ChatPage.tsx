@@ -2316,7 +2316,7 @@ export function ChatPage() {
     try { await api.activateChat(chatId); } catch {}
   };
 
-  const handleCreateChat = async () => {
+  const handleCreateChat = async (draft?: string) => {
     try {
       const res = await api.createChat();
       const hasActiveFilters = Object.values(getCurrentChatFilters()).some((value) => value !== undefined && value !== false);
@@ -2345,6 +2345,10 @@ export function ChatPage() {
         }
       }
       selectChat(res.chat_id);
+      if (draft !== undefined) {
+        setInput(draft);
+        setShowSettings(false);
+      }
       void refreshChatListMetadata();
     } catch (err) {
       console.error('Failed to create chat:', err);
@@ -6036,7 +6040,7 @@ export function ChatPage() {
         </div>
 
         {!sidebarCollapsed && (
-            <button className={s.sidebarNewChat} onClick={handleCreateChat} title={t('chat.sidebar.newChat')}>
+            <button className={s.sidebarNewChat} onClick={() => void handleCreateChat()} title={t('chat.sidebar.newChat')}>
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                 <line x1="7" y1="1" x2="7" y2="13" />
                 <line x1="1" y1="7" x2="13" y2="7" />
@@ -8141,6 +8145,7 @@ export function ChatPage() {
               void queryClient.invalidateQueries({ queryKey: chatPromptKey.slice(0, 3) });
             }}
             onAccountChanged={loadChats}
+            onAskMcpHelp={handleCreateChat}
             onChatCreated={async (chatId) => {
               await loadChats();
               await selectChat(chatId);

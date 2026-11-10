@@ -647,6 +647,21 @@ try {
     allowed: false,
   });
   assert.equal(unapproved.status, 201, 'manual admin add needs no recommendation flag');
+  const reusedEndpoint = await request('/user/81/mcp/connections', 'POST', {
+    server_id: server.id,
+    name: 'Duplicate from catalog',
+    reuse_existing: true,
+  });
+  assert.equal(reusedEndpoint.status, 409);
+  assert.equal(reusedEndpoint.body.error, 'mcp_connection_already_exists');
+  const secondAccount = await request('/user/81/mcp/connections', 'POST', {
+    server_id: server.id,
+    name: 'Second account on the same endpoint',
+  });
+  assert.equal(secondAccount.status, 201);
+  assert.notEqual(secondAccount.body.connection.id, connection.id);
+  await request('/user/81/mcp/connections/' + secondAccount.body.connection.id, 'DELETE');
+
   const requestsBefore = registryRequests;
   const approved = (await request('/user/81/mcp/catalog')).body.items;
   assert.deepEqual(

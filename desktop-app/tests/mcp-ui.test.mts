@@ -20,25 +20,44 @@ const record=(name,body)=>window.__calls.push({name,body});
 window.electronAPI={localMcpManage:async()=>{}};
 let localEntries=[];
 export const getLocalMcp=async()=>structuredClone(localEntries);
+export const importGithubMcp=async url=>{
+ record('github_import',{url});
+ if(url.endsWith('/empty'))return {items:[]};
+ return {items:[{name:'Imported MCP',description:'From manifest',url:'',transport:'stdio',
+  package:{registryType:'pypi',identifier:'imported-mcp',version:'1.2.3',transport:{type:'stdio'}}}]};
+};
 export const getLocalMcpSettings=async id=>{
  record('local_settings',{id});
  const row=localEntries.find(e=>e.id===id);
- return {env:row.env||{},config_revision:row.config_revision,mode:row.mode,timeout_seconds:row.timeout_seconds};
+ return {env:row.env||{},manifest:row.manifest,config_revision:row.config_revision,mode:row.mode,timeout_seconds:row.timeout_seconds};
 };
 export const installLocalMcp=async input=>{
  record('local_install',input);
  const entry={config_revision:'initial',env:{WINDOWS_MCP_CONTROL_POLICY:'balanced'},id:'local-fixture',name:input.name||'Local package',source:input.package?.identifier||input.source,enabled:true,mode:'search',tools:[{name:'local_echo',description:'Local echo tool'}],resources:[],selected_tools:null,timeout_seconds:300};
+ if(input.package?.identifier==='@example/configured'){
+  entry.manifest={package:input.package,values:{'env:TEST_SECRET':input.values['env:TEST_SECRET'],'env:OPTIONAL_MODE':'auto'}};
+  Object.assign(entry.env,{TEST_SECRET:input.values['env:TEST_SECRET'],OPTIONAL_MODE:'auto'});
+ }
+ if(input.source?.startsWith('uvx recommended-mcp'))
+  Object.assign(entry,{source_key:JSON.stringify(['pypi','recommended-mcp','recommended-mcp']),installed_version:'1.0.0',updatable:true});
  if(input.source?.includes('git+https://'))Object.assign(entry,{updatable:true,git_commit:'a'.repeat(40)});
  localEntries.push(entry);return structuredClone(entry);
 };
-export const configureLocalMcp=async(id,patch)=>{record('local_configure',{id,patch});Object.assign(localEntries.find(e=>e.id===id),patch,patch.env?{config_revision:'updated'}:{});};
+export const configureLocalMcp=async(id,patch)=>{
+ record('local_configure',{id,patch});
+ const entry=localEntries.find(e=>e.id===id);
+ Object.assign(entry,patch,patch.env?{config_revision:'updated'}:{});
+ if(patch.manifest_values)Object.assign(entry.manifest.values,patch.manifest_values);
+};
 export const removeLocalMcp=async id=>{record('local_remove',{id});localEntries=localEntries.filter(e=>e.id!==id);};
 export const refreshLocalMcp=async id=>{record('local_refresh',{id});};
-export const updateLocalMcp=async(id,onProgress)=>{
- record('local_update',{id});
+export const updateLocalMcp=async(id,onProgress,version)=>{
+ record('local_update',{id,version});
  onProgress('connecting');
  await new Promise(resolve=>{window.finishLocalUpdate=resolve;});
- localEntries.find(entry=>entry.id===id).git_commit='b'.repeat(40);
+ const entry=localEntries.find(entry=>entry.id===id);
+ if(version)entry.installed_version=version;
+ else entry.git_commit='b'.repeat(40);
 };
 export const resolveImageUrl=url=>url;
 export const apiFetch=async(url,options)=>{record('approve',JSON.parse(options.body));return {ok:true}};
@@ -56,7 +75,7 @@ export const refreshMcpTools=async(id)=>{record('refresh',{id});return {tools:st
 export const authorizeMcp=async id=>{record('oauth',{id});if(window.__oauthFail)throw new Error('mcp_oauth_client_registration_required');return {authorization_url:'https://github.example/authorize'}};
 export const cancelMcp=async(id)=>{record('cancel',{id});return {cancelled:true};};
 export const mergeMcpCatalog=(previous,next)=>Array.from(new Map([...previous,...next].map(x=>[x.name+'|'+x.url,x])).values());
-export const getMcpCatalog=async()=>{record('catalog',{});return {items:[{name:'Python package',description:'Python stdio',url:'',transport:'stdio',version:'0.8.8',package:{registryType:'pypi',identifier:'windows-mcp',version:'0.8.8',transport:{type:'stdio'},packageArguments:[{type:'positional',value:'serve'}]}},{name:'Remote tools',title:'Remote tools',description:'Example remote MCP server',url:'https://remote.example/mcp',version:'2.0',transport:'streamable-http',publisher:'example',repository_url:'https://github.com/example/mcp',registry_url:'https://registry.example/server'},{name:'Local package',description:'A local package',url:'',transport:'stdio',version:'1.0.0',package:{registryType:'npm',identifier:'@example/local',version:'1.0.0',transport:{type:'stdio'}}},{name:'Configured package',description:'Requires a key',url:'',transport:'stdio',version:'1.0.0',package:{registryType:'npm',identifier:'@example/configured',version:'1.0.0',transport:{type:'stdio'},environmentVariables:[{name:'TEST_SECRET',description:'Fixture secret',isRequired:true,isSecret:true}]}}],next_cursor:null};};
+export const getMcpCatalog=async()=>{record('catalog',{});return {items:[{name:'Python package',description:'Python stdio',url:'',transport:'stdio',version:'0.8.8',package:{registryType:'pypi',identifier:'windows-mcp',version:'0.8.8',transport:{type:'stdio'},packageArguments:[{type:'positional',value:'serve'}]}},{name:'Remote tools',title:'Remote tools',description:'Example remote MCP server',url:'https://remote.example/mcp',version:'2.0',transport:'streamable-http',publisher:'example',repository_url:'https://github.com/example/mcp',registry_url:'https://registry.example/server'},{name:'Local package',description:'A local package',url:'',transport:'stdio',version:'1.0.0',package:{registryType:'npm',identifier:'@example/local',version:'1.0.0',transport:{type:'stdio'}}},{name:'Configured package',description:'Requires a key',url:'',transport:'stdio',version:'1.0.0',package:{registryType:'npm',identifier:'@example/configured',version:'1.0.0',transport:{type:'stdio'},environmentVariables:[{name:'TEST_SECRET',description:'Fixture secret',isRequired:true,isSecret:true},{name:'OPTIONAL_MODE',description:'Optional mode',default:'auto'}]}}],next_cursor:null};};
 window.__state=state;
 
 export const useAuth=()=>({user:{id:81}});
@@ -104,7 +123,7 @@ function CardFixture(){
 }
 function Content({kind}){
  const client=useQueryClient(); window.__queryClient=client;
- return kind==='card'?<CardFixture/>:kind==='desktop'?<McpSettings/>:kind==='admin'?<McpPage/>:<McpUserCard userId={81}/>;
+ return kind==='card'?<CardFixture/>:kind==='desktop'?<McpSettings onAskMcpHelp={async message=>{window.__calls.push({name:'github_help_draft',body:{message}})}}/>:kind==='admin'?<McpPage/>:<McpUserCard userId={81}/>;
 }
 window.renderFixture=kind=>root.render(<QueryProvider><Content kind={kind}/><Toaster/></QueryProvider>);
 window.renderFixture('desktop');
@@ -239,6 +258,16 @@ let win;const errors=[];
  await until('window.__calls.some(c=>c.name==="save"&&c.body.enabled===false)');
  if(process.env.MCP_UI_SCREENSHOT_DIR){await new Promise(r=>setTimeout(r,250));fs.writeFileSync(path.join(process.env.MCP_UI_SCREENSHOT_DIR,'mcp-connected.png'),(await wc.capturePage()).toPNG());}
  await click('Каталог MCP');
+ const approvedRemote='Array.from(document.querySelectorAll("[class*=catalogCard] strong")).find(e=>e.textContent==="GitHub").closest("[class*=catalogCard]")';
+ await until(approvedRemote+'.textContent.includes("Открыть подключение")');
+ await js(approvedRemote+'.querySelector("button").click()');
+ await until('document.activeElement.id==="mcp-remote-1"');
+ assert.equal(await js('window.__state.connections.length'),1,'opening a remote catalog match does not create another account');
+ await click('Каталог MCP');
+ await click('Добавить ещё одно');
+ await until('document.querySelector("[class*=addPanel] input")?.value==="GitHub"');
+ await click('Отменить');
+ await click('Каталог MCP');
  assert.equal(await js('document.body.innerText.includes("Remote tools")'),false,'desktop shows approved servers only');
  assert.ok(await js('!!document.querySelector(\'a[href="https://github.example/mcp"]\')'));
  await js('(()=>{const input=document.querySelector(\'input[aria-label="Найти"]\');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value").set.call(input,"unknown");input.dispatchEvent(new Event("input",{bubbles:true}));})()');
@@ -332,7 +361,53 @@ let win;const errors=[];
  await until('document.body.innerText.includes("Удалить локальный MCP?")');
  await js('Array.from(document.querySelectorAll("button")).find(b=>b.className.includes("confirmDanger")).click()');
  await until('!document.querySelector("article")');
+ await js('window.__state.servers.push({id:501,name:"Recommended local",description:"Ready to install",url:"",transport:"stdio",allowed:1,recommended:1,source:"uvx recommended-mcp"});window.emitMcpUpdate()');
+ await click('Каталог MCP');
+ await js('(()=>{const input=document.querySelector(\'input[aria-label="Найти"]\');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value").set.call(input,"");input.dispatchEvent(new Event("input",{bubbles:true}));})()');
+ await until('document.body.innerText.includes("Recommended local")');
+ await js('Array.from(document.querySelectorAll("strong")).find(e=>e.textContent==="Recommended local").closest("[class*=catalogCard]").querySelector("button").click()');
+ await until('window.__calls.filter(c=>c.name==="local_install"&&c.body.source==="uvx recommended-mcp").length===1');
+ await until('document.querySelector("article")?.textContent.includes("Recommended local")');
+ await until('!document.querySelector("[class*=addPanel] form")');
+ await click('Каталог MCP');
+ const recommendedCard='Array.from(document.querySelectorAll("[class*=catalogCard] strong")).find(e=>e.textContent==="Recommended local").closest("[class*=catalogCard]")';
+ await until(recommendedCard+'.textContent.includes("Открыть подключение")');
+ await js(recommendedCard+'.querySelector("button").click()');
+ await until('document.activeElement.id==="mcp-local-local-fixture"');
+ assert.equal(await js('window.__calls.filter(c=>c.name==="local_install"&&c.body.source==="uvx recommended-mcp").length'),1);
+ await js('window.__state.servers.find(s=>s.id===501).source="uvx recommended-mcp==2.0.0";window.emitMcpUpdate()');
+ await click('Каталог MCP');
+ await until(recommendedCard+'.textContent.includes("Установить версию 2.0.0")');
+ await click('Установить версию 2.0.0');
+ await until('window.__calls.some(c=>c.name==="local_update"&&c.body.version==="2.0.0")');
+ await js('window.finishLocalUpdate()');
+ await until('document.querySelector("article")?.textContent.includes("2.0.0")');
+ await js('Array.from(document.querySelector("article").querySelectorAll("button")).find(b=>b.textContent==="Удалить").click()');
+ await until('document.body.innerText.includes("Удалить локальный MCP?")');
+ await js('Array.from(document.querySelectorAll("button")).find(b=>b.className.includes("confirmDanger")).click()');
+ await until('!document.querySelector("article")');
+ await js('window.__state.servers.push({id:502,name:"Recommended with key",description:"Requires a key",url:"",transport:"stdio",allowed:1,recommended:1,source:JSON.stringify({package:{registryType:"pypi",identifier:"needs-key",transport:{type:"stdio"},environmentVariables:[{name:"TOKEN",description:"Required token",isSecret:true,isRequired:true}]}})});window.emitMcpUpdate()');
+ await click('Каталог MCP');
+ await until('document.body.innerText.includes("Recommended with key")');
+ await js('Array.from(document.querySelectorAll("strong")).find(e=>e.textContent==="Recommended with key").closest("[class*=catalogCard]").querySelector("button").click()');
+ await until('document.body.innerText.includes("Required token")');
+ assert.equal(await js('window.__calls.some(c=>c.name==="local_install"&&c.body.name==="Recommended with key")'),false,'recommendation opens the form when a required value is missing');
+ await click('Отменить');
  await click('Добавить MCP');
+ await until('document.querySelector("input[placeholder*=github]")');
+ const fillGithub = url => js('(()=>{const input=document.querySelector(\'input[placeholder*="github.com/owner/"]\');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value").set.call(input,'+JSON.stringify(url)+');input.dispatchEvent(new Event("input",{bubbles:true}));})()');
+ await fillGithub('https://github.com/example/manifest');
+ await click('Найти конфигурацию');
+ await until('document.querySelector("[class*=addPanel]")?.textContent.includes("imported-mcp · 1.2.3")');
+ assert.equal(await js('window.__calls.some(c=>c.name==="local_install"&&c.body.package?.identifier==="imported-mcp")'),false,'import only prepares the installation form');
+ await click('Отменить');
+ await click('Добавить MCP');
+ await fillGithub('https://github.com/example/empty');
+ await click('Найти конфигурацию');
+ await until('document.body.innerText.includes("Поддерживаемая конфигурация не найдена.")');
+ await click('Попросить Вегу');
+ await until('window.__calls.some(c=>c.name==="github_help_draft"&&c.body.message.includes("https://github.com/example/empty"))');
+ await click('Ручная установка');
  await until('document.querySelector("[class*=addType] button")');
  await js('document.querySelector("[class*=addType] button").click()');
  await until('Array.from(document.querySelectorAll("[class*=addType] button")).some(b=>b.textContent.trim()==="На компьютере пользователя")');
@@ -355,8 +430,21 @@ let win;const errors=[];
  await js('(()=>{const input=Array.from(document.querySelectorAll("label")).find(e=>e.textContent.trim()==="Fixture secret").querySelector("input");Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value").set.call(input,"test-value");input.dispatchEvent(new Event("input",{bubbles:true}));})()');
  await click('Установить на ПК');
  await until('window.__calls.some(c=>c.name==="local_install"&&c.body.package?.identifier==="@example/configured"&&c.body.values["env:TEST_SECRET"]==="test-value")');
+ await until('document.querySelector("article")?.textContent.includes("Configured package")');
+ await js('(()=>{const summary=document.querySelector("article summary");if(summary.getAttribute("aria-expanded")==="false")summary.click()})()');
+ await until('document.getElementsByName("env:OPTIONAL_MODE")[0]?.value==="auto"');
+ assert.equal(await js('document.getElementsByName("env:TEST_SECRET")[0]?.type'),'password');
+ assert.equal(await js('document.getElementsByName("env:TEST_SECRET")[0]?.value'),'test-value');
+ assert.ok(await js('!document.querySelector("article textarea[name=env]").value.includes("TEST_SECRET")'));
+ await js('(()=>{const field=document.getElementsByName("env:OPTIONAL_MODE")[0];field.value="manual";field.form.requestSubmit()})()');
+ await until('window.__calls.some(c=>c.name==="local_configure"&&c.body.patch.manifest_values?.["env:OPTIONAL_MODE"]==="manual")');
+ await until('!document.getElementsByName("env:OPTIONAL_MODE")[0]?.disabled');
+ await js('document.querySelector("article summary").click()');
+ await until('!document.getElementsByName("env:OPTIONAL_MODE").length');
+ await js('document.querySelector("article summary").click()');
+ await until('document.getElementsByName("env:OPTIONAL_MODE")[0]?.value==="manual"');
  await click('Каталог MCP');
- await click('Подключить');
+ await js('Array.from(document.querySelectorAll("strong")).find(e=>e.textContent==="Remote tools").closest("[class*=catalogCard]").querySelector("button").click()');
  await until('document.querySelector(\'input[type="url"]\')?.value==="https://remote.example/mcp"');
  await js('window.__oauthFail=true');
  await click('Добавить и войти через OAuth');

@@ -24,8 +24,14 @@ export type LocalMcpInput = {
   name?: string;
   source?: string;
   package?: NpmMcpPackage;
+  catalog_id?: number;
+  reuse_existing?: boolean;
   values?: Record<string, string>;
   env?: Record<string, string>;
+};
+export type LocalMcpManifest = {
+  package: NpmMcpPackage;
+  values: Record<string, string>;
 };
 export type LocalMcpConfig = {
   name: string;
@@ -34,6 +40,8 @@ export type LocalMcpConfig = {
   git?: string;
   git_commit?: string;
   git_generation?: string;
+  package_generation?: string;
+  installed_version?: string;
   python?: string;
   tool?: string;
   command?: string;
@@ -41,6 +49,7 @@ export type LocalMcpConfig = {
   env: Record<string, string>;
   user_env?: Record<string, string>;
   managed_env?: Record<string, string>;
+  manifest?: LocalMcpManifest;
 };
 export type LocalMcpInstallPhase = 'installing' | 'connecting';
 
@@ -202,7 +211,7 @@ export function packageFields(pkg: NpmMcpPackage) {
   for (const e of pkg.environmentVariables || [])
     fields.push({
       key: 'env:' + e.name,
-      label: e.description || e.name || '',
+      label: String(e.description || e.name || ''),
       secret: !!e.isSecret,
       required: !!e.isRequired,
       default: String(e.default || ''),
@@ -212,7 +221,7 @@ export function packageFields(pkg: NpmMcpPackage) {
       for (const [name, v] of Object.entries(arg.variables))
         fields.push({
           key: 'var:' + i + ':' + name,
-          label: v.description || name,
+          label: String(v.description || name),
           secret: !!v.isSecret,
           required: !!v.isRequired,
           default: String(v.default || ''),
@@ -220,7 +229,7 @@ export function packageFields(pkg: NpmMcpPackage) {
     if (arg.value === undefined)
       fields.push({
         key: 'arg:' + i,
-        label: arg.description || arg.name || 'Argument ' + (i + 1),
+        label: String(arg.description || arg.name || 'Argument ' + (i + 1)),
         secret: !!arg.isSecret,
         required: !!arg.isRequired,
         default: String(arg.default || ''),
@@ -240,6 +249,7 @@ export function resolveLocalInput(input: LocalMcpInput): LocalMcpConfig {
     tool: string | undefined,
     command: string | undefined;
   const pkg = input.package;
+  let manifest: LocalMcpManifest | undefined;
   if (pkg) {
     if (
       !['npm', 'pypi'].includes(pkg.registryType) ||
@@ -261,21 +271,34 @@ export function resolveLocalInput(input: LocalMcpInput): LocalMcpConfig {
     if (pkg.registryType === 'pypi') {
       pypi = pypiSpec(pkg.identifier + (pkg.version ? '==' + pkg.version : ''));
     } else npm = npmSpec(pkg.identifier + (pkg.version ? '@' + pkg.version : ''));
-    const values = input.values || {};
-    for (const field of packageFields(pkg))
-      if (field.required && !(values[field.key] ?? field.default).trim())
-        throw new Error('mcp_required_configuration');
+    const values = input.values ?? {};
+    if (
+      typeof values !== 'object' ||
+      Array.isArray(values) ||
+      Object.values(values).some(
+        (value) => typeof value !== 'string' || value.length > 16384 || value.includes('\u0000'),
+      )
+    )
+      throw new Error('mcp_invalid_install_input');
+    const resolvedValues: Record<string, string> = {};
+    for (const field of packageFields(pkg)) {
+      const value = values[field.key] ?? field.default;
+      if (field.required && !value.trim()) throw new Error('mcp_required_configuration');
+      resolvedValues[field.key] = value;
+    }
+    manifest = { package: pkg, values: resolvedValues };
     for (const e of pkg.environmentVariables || []) {
       if (!e.name) throw new Error('mcp_invalid_environment');
       env[e.name] = values['env:' + e.name] ?? String(e.default || '');
     }
     (pkg.packageArguments || []).forEach((arg, i) => {
       let value = arg.value ?? values['arg:' + i] ?? arg.default ?? '';
-      value = String(value).replace(
-        /\{([^}]+)\}/g,
-        (_, name) =>
-          values['var:' + i + ':' + name] ?? arg.variables?.[name]?.default ?? env[name] ?? '',
-      );
+      value = String(value).replace(/\{([^}]+)\}/g, (_, name) => {
+        const key = 'var:' + i + ':' + name;
+        const value = values[key] ?? arg.variables?.[name]?.default ?? env[name] ?? '';
+        if (Object.prototype.hasOwnProperty.call(resolvedValues, key)) resolvedValues[key] = value;
+        return value;
+      });
       if (!value && !arg.isRequired) return;
       if (arg.type === 'named') {
         if (!arg.name) throw new Error('mcp_invalid_package_argument');
@@ -357,7 +380,101 @@ export function resolveLocalInput(input: LocalMcpInput): LocalMcpConfig {
     command,
     args,
     env,
+    ...(manifest && { manifest }),
   };
+}
+
+type McpSource = { key: string; version?: string };
+const pythonName = (name: string) => name.toLowerCase().replace(/[-_.]+/g, '-');
+
+export function localMcpSource(
+  config: Partial<Pick<LocalMcpConfig, 'pypi' | 'npm' | 'git' | 'tool' | 'command' | 'args'>>,
+): McpSource | undefined {
+  if (config.pypi) {
+    const [withExtras, version] = config.pypi.split('==');
+    const name = pythonName(withExtras.split('[')[0]);
+    const tool = config.tool && pythonName(config.tool) !== name ? config.tool : name;
+    return { key: JSON.stringify(['pypi', name, tool]), version };
+  }
+  if (config.npm) {
+    const match = config.npm.match(/@([^/@]+)$/);
+    return {
+      key: JSON.stringify(['npm', match ? config.npm.slice(0, match.index) : config.npm]),
+      version: match?.[1],
+    };
+  }
+  if (config.git) {
+    const url = new URL(config.git.slice(4));
+    const repo = url.pathname.split('@')[0].replace(/\.git$/i, '');
+    return {
+      key: JSON.stringify([
+        'git',
+        url.origin + (url.hostname === 'github.com' ? repo.toLowerCase() : repo),
+        config.tool,
+      ]),
+    };
+  }
+  const command = config.command?.replace(/\\/g, '/');
+  if (!command) return;
+  const executable = command
+    .split('/')
+    .pop()!
+    .toLowerCase()
+    .replace(/\.exe$/, '');
+  const args = config.args || [];
+  if (executable === 'uvx' || (executable === 'uv' && args[0] === 'tool' && args[1] === 'run')) {
+    try {
+      return localMcpSource(pythonInvocation(args.slice(executable === 'uv' ? 2 : 0)));
+    } catch {
+      return;
+    }
+  }
+  if (!/^(?:[a-z]:\/|\/)/i.test(command)) return;
+  // A launcher alone cannot identify the script or server it starts.
+  if (/\/(?:node|python\d*(?:\.\d+)?|uvx?|cmd|pwsh|powershell|bash|sh)(?:\.exe)?$/i.test(command))
+    return;
+  return {
+    key: JSON.stringify([
+      'executable',
+      /^[a-z]:\//i.test(command) ? command.toLowerCase() : command,
+    ]),
+  };
+}
+
+export function localMcpInputSource(input: LocalMcpInput): McpSource | undefined {
+  try {
+    const pkg = input.package || packageFromSource(input.source || '');
+    if (pkg?.registryType === 'pypi')
+      return localMcpSource({
+        pypi: pypiSpec(pkg.identifier + (pkg.version ? '==' + pkg.version : '')),
+      });
+    if (pkg?.registryType === 'npm')
+      return localMcpSource({
+        npm: npmSpec(pkg.identifier + (pkg.version ? '@' + pkg.version : '')),
+      });
+    return localMcpSource(resolveLocalInput(input));
+  } catch {
+    return;
+  }
+}
+
+export function githubMcpRepository(value: unknown) {
+  if (typeof value !== 'string' || value.length > 2048) return;
+  const match = value
+    .trim()
+    .match(/^https:\/\/github\.com\/([a-z0-9-]{1,39})\/([a-z0-9_.-]{1,100})\/?$/i);
+  if (!match) return;
+  const repo = match[2].replace(/\.git$/i, '');
+  if (!repo || repo === '.' || repo === '..') return;
+  return { owner: match[1], repo, url: 'https://github.com/' + match[1] + '/' + repo };
+}
+
+export function normalizeMcpEndpoint(value: string) {
+  try {
+    return new URL(value).href;
+  } catch {
+    return undefined;
+  }
 }
 
 export type McpApprovalPolicy = { allow_all: boolean; tools: string[]; resources: string[] };

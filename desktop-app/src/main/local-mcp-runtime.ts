@@ -3,7 +3,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { gitPythonSpec, pypiSpec } from './local-mcp-spec';
+import { githubMcpRepository, gitPythonSpec, packageFromSource, pypiSpec } from './local-mcp-spec';
 const exec = promisify(execFile);
 let pending: Promise<{ node: string; npm: string }> | undefined;
 async function download(url: string, maximum: number, uvAsset = false): Promise<Buffer> {
@@ -33,6 +33,10 @@ async function download(url: string, maximum: number, uvAsset = false): Promise<
   }
   if (!response) throw new Error('mcp_runtime_download_failed');
   if (!response.ok || !response.body) throw new Error('mcp_runtime_download_failed');
+  return readBoundedResponse(response, maximum);
+}
+
+async function readBoundedResponse(response: Response, maximum: number) {
   const chunks: Uint8Array[] = [];
   let size = 0;
   for await (const part of response.body as any) {
@@ -42,6 +46,79 @@ async function download(url: string, maximum: number, uvAsset = false): Promise<
   }
   return Buffer.concat(chunks);
 }
+export async function readGithubMcpManifest(value: unknown) {
+  const repository = githubMcpRepository(value);
+  if (!repository) throw new Error('mcp_invalid_github_url');
+  const response = await fetch(
+    'https://raw.githubusercontent.com/' +
+      repository.owner +
+      '/' +
+      repository.repo +
+      '/HEAD/server.json',
+    { redirect: 'error', signal: AbortSignal.timeout(10_000) },
+  ).catch(() => {
+    throw new Error('mcp_github_unavailable');
+  });
+  if (!response.ok) {
+    await response.body?.cancel().catch(() => {});
+    if (response.status === 404) return { items: [] };
+    throw new Error('mcp_github_unavailable');
+  }
+  let manifest;
+  try {
+    manifest = JSON.parse((await readBoundedResponse(response, 100_000)).toString('utf8'));
+  } catch {
+    throw new Error('mcp_invalid_manifest');
+  }
+  if (typeof manifest?.name !== 'string' || !manifest.name.trim())
+    throw new Error('mcp_invalid_manifest');
+  const name = manifest.name.trim().slice(0, 160);
+  const base = {
+    name,
+    title: typeof manifest.title === 'string' ? manifest.title.slice(0, 160) : name,
+    description:
+      typeof manifest.description === 'string' ? manifest.description.slice(0, 1500) : '',
+    version: typeof manifest.version === 'string' ? manifest.version.slice(0, 100) : undefined,
+    repository_url: repository.url,
+  };
+  const items = new Map<
+    string,
+    typeof base & {
+      url: string;
+      transport: 'stdio' | 'streamable-http';
+      package?: ReturnType<typeof packageFromSource>;
+    }
+  >();
+  for (const entry of Array.isArray(manifest.packages) ? manifest.packages : []) {
+    const pkg = packageFromSource(JSON.stringify({ package: entry }));
+    if (pkg?.transport?.type !== 'stdio' || pkg.runtimeArguments?.length) continue;
+    items.set(JSON.stringify([pkg.registryType, pkg.identifier, pkg.version]), {
+      ...base,
+      url: '',
+      transport: 'stdio',
+      package: pkg,
+      version: pkg.version || base.version,
+    });
+  }
+  for (const remote of Array.isArray(manifest.remotes) ? manifest.remotes : []) {
+    if (
+      remote?.type !== 'streamable-http' ||
+      typeof remote.url !== 'string' ||
+      remote.url.length > 2048 ||
+      /[{}]/.test(remote.url)
+    )
+      continue;
+    try {
+      const url = new URL(remote.url);
+      if (url.protocol !== 'https:' || url.username || url.password || url.hash) continue;
+      items.set(url.href, { ...base, url: url.href, transport: 'streamable-http' });
+    } catch {
+      // Invalid endpoint. The backend also checks access and address policy on connection.
+    }
+  }
+  return { items: [...items.values()] };
+}
+
 export async function nodeRuntime(root: string) {
   const pointer = path.join(root, 'node-runtime.json');
   try {

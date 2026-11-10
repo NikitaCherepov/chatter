@@ -45,7 +45,7 @@ const route =
         ? 403
         : /not_found/.test(safe)
           ? 404
-          : /busy/.test(safe)
+          : /busy|already_exists/.test(safe)
             ? 409
             : 400;
       res.status(status).json({ error: safe });

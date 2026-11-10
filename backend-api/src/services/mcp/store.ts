@@ -447,7 +447,6 @@ export function saveConnection(userId: number, body: any, id?: number) {
   const current = id ? connections(userId).find((row) => row.id === id) : null;
   if (id && !current) throw new Error('mcp_connection_not_found');
   if (current?.transport === 'stdio') throw new Error('mcp_local_managed_on_desktop');
-  if (!id && connections(userId).length >= 20) throw new Error('mcp_connection_limit');
   const serverId = current
     ? current.server_id
     : body.server_id == null
@@ -467,6 +466,15 @@ export function saveConnection(userId: number, body: any, id?: number) {
     (serverId != null ? !server?.allowed || server.url !== url : !access.allow_custom)
   )
     throw new Error('mcp_not_allowed');
+  if (!current) {
+    const existing = connections(userId);
+    if (
+      body.reuse_existing === true &&
+      existing.some((row) => row.transport !== 'stdio' && row.url === url)
+    )
+      throw new Error('mcp_connection_already_exists');
+    if (existing.length >= 20) throw new Error('mcp_connection_limit');
+  }
   const name = String(body.name ?? current?.name ?? server?.name ?? '')
     .trim()
     .slice(0, 120);
