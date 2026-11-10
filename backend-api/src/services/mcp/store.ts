@@ -479,6 +479,8 @@ export function saveConnection(userId: number, body: any, id?: number) {
       throw new Error('mcp_connection_already_exists');
     if (existing.length >= 20) throw new Error('mcp_connection_limit');
   }
+  if (body.name !== undefined && typeof body.name !== 'string')
+    throw new Error('mcp_invalid_connection');
   const name = String(body.name ?? current?.name ?? server?.name ?? '')
     .trim()
     .slice(0, 120);

@@ -756,6 +756,12 @@ export class LocalMcpManager {
       patch = this.settingsPatchForBot(record, changes);
     }
     const before = [record.mode, record.timeout_seconds, record.enabled];
+    if (patch.name !== undefined) {
+      if (typeof patch.name !== 'string' || !patch.name.trim())
+        throw new Error('mcp_invalid_connection');
+      record.name = patch.name.trim().slice(0, 120);
+      record.config.name = record.name;
+    }
     if (patch.approval_policy !== undefined)
       record.approval_policy = normalizeMcpApproval(patch.approval_policy);
     if (patch.enabled !== undefined) {

@@ -459,6 +459,13 @@ try {
     'personal connection changes notify only owner',
   );
   const connection = created.body.connection;
+  const renameUrl = '/user/81/mcp/connections/' + connection.id;
+  const renamed = await request(renameUrl, 'PATCH', { name: '  Work GitHub  ' });
+  assert.equal(renamed.status, 200);
+  assert.equal(renamed.body.connection.name, 'Work GitHub');
+  assert.equal(store.requireConnection(81, connection.id).name, 'Work GitHub');
+  assert.equal((await request(renameUrl, 'PATCH', { name: '   ' })).status, 400);
+  assert.equal((await request(renameUrl, 'PATCH', { name: connection.name })).status, 200);
   assert.equal(
     JSON.stringify(created.body).includes('private-test-token'),
     false,

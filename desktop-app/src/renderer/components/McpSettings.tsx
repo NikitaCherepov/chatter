@@ -16,6 +16,7 @@ import {
 } from '../../main/local-mcp-spec';
 import { Select } from './Select';
 import { McpToggle, McpTools } from './McpControls';
+import { McpConnectionName } from './McpConnectionName';
 import { Icon } from './Icon';
 import { AnimatedCollapse, AnimatedDetails } from './AnimatedDisclosure';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -97,6 +98,7 @@ export function McpSettings({
   const run = async (action: () => Promise<unknown>) => {
     try {
       await mutation.mutateAsync(action);
+      return true;
     } catch (error: any) {
       if (String(error?.message || '').includes('mcp_server_changed')) {
         setServer('');
@@ -113,6 +115,7 @@ export function McpSettings({
             t('mcp.errors.' + code, { defaultValue: code || t('mcp.error') }),
           ),
       );
+      return false;
     }
   };
   const authorizeConnection = async (id: number) => {
@@ -895,8 +898,8 @@ function ConnectionCard({
 }: {
   connection: api.McpConnection;
   busy: boolean;
-  run: (action: () => Promise<unknown>) => Promise<void>;
-  authorize: () => Promise<void>;
+  run: (action: () => Promise<unknown>) => Promise<boolean>;
+  authorize: () => Promise<boolean>;
   authorizationUrl?: string;
   onDismissAuthorization: () => void;
   onRefreshAuthorization: () => void;
@@ -915,7 +918,7 @@ function ConnectionCard({
         <span className={styles.icon}>
           <Icon name="globe" />
         </span>
-        <strong>{c.name}</strong>
+        <McpConnectionName name={c.name} disabled={c.blocked} onSave={(name) => save({ name })} />
         <McpToggle
           label={t('mcp.connectionEnabled')}
           checked={!!c.enabled}

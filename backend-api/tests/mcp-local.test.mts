@@ -58,6 +58,7 @@ const manager = new LocalMcpManager(
 const scope = 'https://test.example:81';
 const sent: Array<{ type: string; payload?: any }> = [];
 let sequence = 0;
+let syncInstall = true;
 const wsClient: any = {
   accountId: 81,
   lastPongAt: Date.now(),
@@ -76,7 +77,9 @@ const wsClient: any = {
           : manager.control(scope, { ...msg.payload, request_id: msg.request_id }, (phase: string) =>
             wsClient.pendingIpc.get(msg.request_id)?.progress?.(++sequence, phase),
           ))
-          .then((value: any) => {
+          .then(async (value: any) => {
+            if (msg.payload.action === 'install' && syncInstall)
+              syncDesktopMcp(wsClient, await manager.list(scope));
             const pending = wsClient.pendingIpc.get(msg.request_id);
             wsClient.pendingIpc.delete(msg.request_id);
             pending?.resolve(value);
@@ -395,6 +398,7 @@ try {
   const result = JSON.parse(await approveInstall(request));
   assert.equal(result.status, 'connected');
   assert.equal(result.tools, 3);
+  assert.equal(store.requireConnection(81, result.connection_id).local_id, result.local_id);
   assert.deepEqual(request.actions.filter((action) => action.action === 'mcp_install_progress').map((action) => action.value.phase),
     ['installing', 'connecting']);
   assert.equal(installations.length, previousInstalls + 1);
@@ -402,6 +406,13 @@ try {
   const repeated = JSON.parse(await approveInstall(prepareInstall()));
   assert.equal(repeated.status, 'already_connected');
   assert.equal(repeated.local_id, result.local_id);
+  assert.equal(repeated.connection_id, result.connection_id);
+  local.dropLocalConnections(wsClient);
+  syncInstall = false;
+  const unsynced = JSON.parse(await approveInstall(prepareInstall()));
+  assert.equal(unsynced.status, 'installed_sync_failed');
+  assert.equal(unsynced.connection_id, undefined);
+  syncInstall = true;
   assert.equal(installations.length, previousInstalls + 1);
   await manager.configure(scope, result.local_id, {
     args: ['serve', '--token', 'private-argument'],
@@ -409,7 +420,12 @@ try {
   });
   const syncSettings = async () => syncDesktopMcp(wsClient, await manager.list(scope));
   await syncSettings();
-  const configId = store.connections(81).find((item: any) => item.local_id === result.local_id).id;
+  const configId = result.connection_id;
+  const renamed = await manager.configure(scope, result.local_id, { name: '  Renamed local MCP  ' });
+  assert.equal(renamed.name, 'Renamed local MCP');
+  assert.equal(renamed.running, true, 'renaming preserves the MCP session');
+  await assert.rejects(() => manager.configure(scope, result.local_id, { name: '  ' }), /invalid_connection/);
+  await syncSettings();
   const servers = unwrap(await tools.runMcpTool(81, 'browse_mcp', { kind: 'servers' }));
   assert.equal(servers.items.find((item: any) => item.connection_id === configId).installed_version, '1');
   function requestConfiguration(input: any) {

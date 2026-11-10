@@ -136,6 +136,35 @@
   color: var(--accent-icon);
   border-radius: 7px;
 }
+.connectionName {
+  flex: 1 1 100px;
+  min-width: 0;
+  padding: 3px 0;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  border-radius: 0;
+  outline: none;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  cursor: text;
+
+  &:focus {
+    border-bottom-color: var(--accent-icon);
+  }
+  &[aria-invalid='true'] {
+    border-bottom-color: var(--color-error);
+  }
+  &:disabled {
+    opacity: 1;
+  }
+}
 .badge {
   font-size: 10px;
   padding: 3px 6px;

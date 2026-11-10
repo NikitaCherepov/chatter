@@ -24,7 +24,7 @@ const functionTool = (name: string, description: string, properties: any, requir
 });
 export const mcpInstallTool = functionTool(
   installToolName,
-  'Propose an MCP installation for user confirmation. Check the official README for a stdio command (command/args or after -- in claude mcp add) or a Streamable HTTP URL. Example: {"name":"Windows-MCP","documentation":"https://github.com/CursorTouch/Windows-MCP#installation","command":"uvx","args":["windows-mcp","serve"]}. Chatter supplies uv/uvx and Python when needed. For an approved catalog entry, use its catalog_id from browse_mcp. Never include credentials.',
+  'Propose an MCP installation for user confirmation. Check the official README for a stdio command (command/args or after -- in claude mcp add) or a Streamable HTTP URL. Example: {"name":"Windows-MCP","documentation":"https://github.com/CursorTouch/Windows-MCP#installation","command":"uvx","args":["windows-mcp","serve"]}. Chatter supplies uv/uvx and Python when needed. For an approved catalog entry, use its catalog_id from browse_mcp. Use the returned connection_id for follow-up calls. Never include credentials.',
   {
     name: { type: 'string' },
     documentation: {
@@ -55,7 +55,7 @@ export const mcpSearchTool = functionTool(
 );
 export const mcpConfigureTool = functionTool(
   configureToolName,
-  'Read or update an existing MCP connection after one-time user confirmation. Use connection_id from browse_mcp and check the installed version before changing launch flags. For read, optionally set looking_for to part of a setting name. Secrets and environment values are hidden. For update, send only exact fields to change. Use append_args to preserve existing arguments. On mcp_unsupported_launch_option, explain which flag was rejected and avoid retrying it. Use env with null to remove a variable. Enter credentials manually in settings.',
+  'Read or update an existing MCP connection after one-time user confirmation. Use connection_id from browse_mcp and check the installed version before changing launch flags. For read, optionally set looking_for to part of a setting name. Secrets and environment values are hidden. For update, send only exact fields to change. Use append_args to preserve existing arguments. On mcp_unsupported_launch_option, explain which flag was rejected and avoid retrying it. Use env with null to remove a variable. Enter credentials manually in settings. Only the user can delete an MCP connection, from MCP settings. Direct deletion requests there; never delete MCP files or processes through other tools.',
   {
     connection_id: { type: 'integer' },
     action: { type: 'string', enum: ['read', 'update'] },

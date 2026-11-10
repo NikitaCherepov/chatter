@@ -1,8 +1,16 @@
 import { notifyMcpSettingsUpdated, sendIpcToDesktop, wsClients } from '../../ws-clients.js';
 import { refreshTools } from './client.js';
 import { confirmMcpAction, type McpApprovalContext } from './confirmations.js';
+import { getLocalConnections } from './local.js';
 import { mcpUrl } from './network.js';
-import { allServers, connections, policy, requireMcpAccount, saveConnection } from './store.js';
+import {
+  allServers,
+  connections,
+  policy,
+  requireConnection,
+  requireMcpAccount,
+  saveConnection,
+} from './store.js';
 import { wrapUntrustedContent } from '../web-reader.js';
 
 export function canInstallMcp(userId: number) {
@@ -131,12 +139,24 @@ export async function installMcp(
             if (phase === 'installing' || phase === 'connecting') reportPhase(phase);
           },
         );
+        // Desktop sends its local snapshot over the same socket before returning the IPC result.
+        const registered = getLocalConnections(userId).find((row) => row.local_id === result.id);
+        const connection = registered && requireConnection(userId, registered.id, false);
         return JSON.stringify({
-          status: result.error
-            ? 'installed_connection_failed'
-            : result.reused
-              ? 'already_connected'
-              : 'connected',
+          status: !connection
+            ? 'installed_sync_failed'
+            : result.error
+              ? 'installed_connection_failed'
+              : result.reused
+                ? 'already_connected'
+                : 'connected',
+          ...(connection
+            ? { connection_id: connection.id }
+            : {
+                error: 'mcp_local_sync_failed',
+                instruction:
+                  'The local installation is saved. After desktop sync, use browse_mcp to find its connection_id. Do not reinstall to recover the ID.',
+              }),
           local_id: result.id,
           version: result.installed_version,
           tools: result.tool_count,

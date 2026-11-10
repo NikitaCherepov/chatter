@@ -10,6 +10,7 @@ import {
 } from '../../main/local-mcp-spec';
 import { Select } from './Select';
 import { McpToggle, McpTools } from './McpControls';
+import { McpConnectionName } from './McpConnectionName';
 import { Icon } from './Icon';
 import { AnimatedDetails } from './AnimatedDisclosure';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -76,7 +77,11 @@ export function LocalMcpPanel({ allowed }: { allowed: boolean }) {
               <span className={styles.icon}>
                 <Icon name="monitor" />
               </span>
-              <strong>{row.name}</strong>
+              <McpConnectionName
+                name={row.name}
+                disabled={!allowed}
+                onSave={(name) => run(() => api.configureLocalMcp(row.id, { name }))}
+              />
               <McpToggle
                 checked={row.enabled}
                 disabled={busy}

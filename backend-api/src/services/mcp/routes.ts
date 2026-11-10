@@ -134,7 +134,7 @@ export function userMcpRouter(account: (req: any) => number) {
       const userId = account(req),
         connectionId = id(req.params.id);
       const connection = saveConnection(userId, req.body, connectionId);
-      cancelCall(userId, connectionId);
+      if (Object.keys(req.body).some((key) => key !== 'name')) cancelCall(userId, connectionId);
       notifyMcpSettingsUpdated(userId);
       res.json({ connection });
     }),
