@@ -6,9 +6,10 @@ import { apiFetch, getApiErrorMessage } from '../lib/api';
 import s from '../pages/ChatPage.module.scss';
 export type McpConfirmation = {
   confirmation_id: string;
-  connection_id: number;
+  connection_id?: number;
   server_name: string;
-  operation: 'tool' | 'resource';
+  operation: 'tool' | 'resource' | 'install';
+  phase?: 'installing' | 'connecting';
   target: string;
   arguments: unknown;
 };
@@ -23,10 +24,12 @@ function AllowButton({
   remember,
   submit,
   resource,
+  install,
 }: {
   remember?: boolean;
   submit: (approved: boolean, remember?: boolean, comment?: string) => Promise<void>;
   resource: boolean;
+  install?: boolean;
 }) {
   const { t } = useTranslation(),
     card = useContext(ConfirmationCardContext);
@@ -42,18 +45,21 @@ function AllowButton({
           ? resource
             ? 'mcp.approvals.alwaysResource'
             : 'mcp.approvals.alwaysTool'
-          : 'chat.confirm.allow',
+          : install
+            ? 'mcp.installApproval.allow'
+            : 'chat.confirm.allow',
       )}
     </button>
   );
 }
 export function McpConfirmationCard({ confirmation: conf, onResolved, ...props }: Props) {
   const { t } = useTranslation(),
-    [error, setError] = useState('');
+    [error, setError] = useState(''),
+    [installAccepted, setInstallAccepted] = useState(false);
   const submit = async (approved: boolean, remember = false, comment = '') => {
     setError('');
     try {
-      await apiFetch('/api/v1/pc-commands/approve', {
+      const result = await apiFetch<{ status?: string }>('/api/v1/pc-commands/approve', {
         method: 'POST',
         body: JSON.stringify({
           confirmation_id: conf.confirmation_id,
@@ -62,37 +68,61 @@ export function McpConfirmationCard({ confirmation: conf, onResolved, ...props }
           ...(comment ? { rejection_comment: comment } : {}),
         }),
       });
-      onResolved(conf.confirmation_id);
+      if (result?.status === 'executing' && conf.operation === 'install') setInstallAccepted(true);
+      else onResolved(conf.confirmation_id);
     } catch (error: any) {
       setError(getApiErrorMessage(error, t('chat.toasts.commandApprovalFailed')));
       throw error;
     }
   };
   const resource = conf.operation === 'resource';
+  const install = conf.operation === 'install';
+  const phase = conf.phase || (installAccepted ? 'installing' : undefined);
+  const setup = install
+    ? (conf.arguments as { command?: string; url?: string; documentation?: string })
+    : undefined;
   return (
     <ConfirmationCard
       {...props}
       actions={
-        <>
-          <AllowButton submit={submit} resource={resource} />
-          <RejectWithComment
-            className={s.suggestMacroDismissBtn}
-            onReject={(comment) => submit(false, false, comment)}
-          />
-        </>
+        phase && install ? null : (
+          <>
+            <AllowButton submit={submit} resource={resource} install={install} />
+            <RejectWithComment
+              className={s.suggestMacroDismissBtn}
+              onReject={(comment) => submit(false, false, comment)}
+            />
+          </>
+        )
       }
       extraActions={
-        <>
-          <p>{t(resource ? 'mcp.approvals.resourceHint' : 'mcp.approvals.toolHint')}</p>
-          <AllowButton remember submit={submit} resource={resource} />
-        </>
+        install ? undefined : (
+          <>
+            <p>{t(resource ? 'mcp.approvals.resourceHint' : 'mcp.approvals.toolHint')}</p>
+            <AllowButton remember submit={submit} resource={resource} />
+          </>
+        )
       }
     >
       <div className={s.suggestMacroName}>{conf.server_name}</div>
       <div className={s.suggestMacroCommands}>
-        <code className={s.suggestMacroCmd}>{conf.target}</code>
-        <pre className={s.suggestMacroCmd}>{JSON.stringify(conf.arguments, null, 2)}</pre>
+        {setup ? (
+          <>
+            <pre className={s.suggestMacroCmd}>{setup.command || setup.url}</pre>
+            {setup.documentation && (
+              <a href={setup.documentation} target="_blank" rel="noreferrer">
+                {t('mcp.github.instructions')}
+              </a>
+            )}
+          </>
+        ) : (
+          <>
+            <code className={s.suggestMacroCmd}>{conf.target}</code>
+            <pre className={s.suggestMacroCmd}>{JSON.stringify(conf.arguments, null, 2)}</pre>
+          </>
+        )}
       </div>
+      {install && phase && <p role="status">{t('mcp.local.' + phase)}</p>}
       {error && <p role="alert">{error}</p>}
     </ConfirmationCard>
   );

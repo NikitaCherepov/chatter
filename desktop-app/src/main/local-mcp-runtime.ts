@@ -3,7 +3,14 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { githubMcpRepository, gitPythonSpec, packageFromSource, pypiSpec } from './local-mcp-spec';
+import {
+  githubMcpRepository,
+  gitPythonSpec,
+  localMcpSource,
+  packageFromSource,
+  pypiSpec,
+  resolveLocalInput,
+} from './local-mcp-spec';
 const exec = promisify(execFile);
 let pending: Promise<{ node: string; npm: string }> | undefined;
 async function download(url: string, maximum: number, uvAsset = false): Promise<Buffer> {
@@ -46,39 +53,84 @@ async function readBoundedResponse(response: Response, maximum: number) {
   }
   return Buffer.concat(chunks);
 }
+function readmeMcpCommands(readme: string) {
+  const commands = new Map<
+    string,
+    { source: string; config: ReturnType<typeof resolveLocalInput> }
+  >();
+  const add = (source: string) => {
+    try {
+      const config = resolveLocalInput({ source });
+      if (!config.npm && !config.pypi) return;
+      if (config.args.some((arg) => /[{}]|^<.*>$/.test(arg))) return;
+      const transport = config.args.findIndex((arg) => arg === '--transport' || arg === '-t');
+      if (transport >= 0 && config.args[transport + 1] !== 'stdio') return;
+      if (config.args.some((arg) => /^--transport=(?!stdio$)/.test(arg))) return;
+      const key = JSON.stringify([
+        config.npm,
+        config.pypi,
+        config.python,
+        config.tool,
+        config.args,
+      ]);
+      commands.set(key, { source, config });
+    } catch {
+      // README examples can contain placeholders, shell syntax or unsupported launchers.
+    }
+  };
+  for (const block of readme.matchAll(/^[ \t]*```[^\r\n]*\r?\n([\s\S]*?)^[ \t]*```/gm)) {
+    const content = block[1].trim();
+    if (content.startsWith('{')) {
+      try {
+        const json = JSON.parse(content);
+        for (const item of Object.values(json?.mcpServers ?? { server: json }) as any[]) {
+          if (!['npx', 'uvx'].includes(item?.command) || !Array.isArray(item.args)) continue;
+          // Credentials and other environment values from a README remain documentation.
+          add(JSON.stringify({ command: item.command, args: item.args }));
+        }
+      } catch {}
+      continue;
+    }
+    for (const line of content.replace(/\\\r?\n\s*/g, ' ').split(/\r?\n/)) {
+      const command = line.trim().replace(/^claude mcp add\b.*?\s--\s+/, '');
+      if (/^(npx|uvx)\s/.test(command)) add(command);
+    }
+  }
+  return [...commands.values()];
+}
+
 export async function readGithubMcpManifest(value: unknown) {
   const repository = githubMcpRepository(value);
   if (!repository) throw new Error('mcp_invalid_github_url');
-  const response = await fetch(
-    'https://raw.githubusercontent.com/' +
-      repository.owner +
-      '/' +
-      repository.repo +
-      '/HEAD/server.json',
-    { redirect: 'error', signal: AbortSignal.timeout(10_000) },
-  ).catch(() => {
-    throw new Error('mcp_github_unavailable');
-  });
+  const rawBase =
+    'https://raw.githubusercontent.com/' + repository.owner + '/' + repository.repo + '/HEAD/';
+  const signal = AbortSignal.timeout(10_000);
+  const fetchFile = (file: string) =>
+    fetch(rawBase + file, { redirect: 'error', signal }).catch(() => {
+      throw new Error('mcp_github_unavailable');
+    });
+  const response = await fetchFile('server.json');
+  let manifest;
+  let invalidManifest = false;
   if (!response.ok) {
     await response.body?.cancel().catch(() => {});
-    if (response.status === 404) return { items: [] };
-    throw new Error('mcp_github_unavailable');
+    if (response.status !== 404) throw new Error('mcp_github_unavailable');
+  } else {
+    try {
+      manifest = JSON.parse((await readBoundedResponse(response, 100_000)).toString('utf8'));
+      if (typeof manifest?.name !== 'string' || !manifest.name.trim()) throw new Error();
+    } catch {
+      invalidManifest = true;
+      manifest = undefined;
+    }
   }
-  let manifest;
-  try {
-    manifest = JSON.parse((await readBoundedResponse(response, 100_000)).toString('utf8'));
-  } catch {
-    throw new Error('mcp_invalid_manifest');
-  }
-  if (typeof manifest?.name !== 'string' || !manifest.name.trim())
-    throw new Error('mcp_invalid_manifest');
-  const name = manifest.name.trim().slice(0, 160);
+  const name = (manifest?.name?.trim() || repository.repo).slice(0, 160);
   const base = {
     name,
-    title: typeof manifest.title === 'string' ? manifest.title.slice(0, 160) : name,
+    title: typeof manifest?.title === 'string' ? manifest.title.slice(0, 160) : name,
     description:
-      typeof manifest.description === 'string' ? manifest.description.slice(0, 1500) : '',
-    version: typeof manifest.version === 'string' ? manifest.version.slice(0, 100) : undefined,
+      typeof manifest?.description === 'string' ? manifest.description.slice(0, 1500) : '',
+    version: typeof manifest?.version === 'string' ? manifest.version.slice(0, 100) : undefined,
     repository_url: repository.url,
   };
   const items = new Map<
@@ -87,9 +139,12 @@ export async function readGithubMcpManifest(value: unknown) {
       url: string;
       transport: 'stdio' | 'streamable-http';
       package?: ReturnType<typeof packageFromSource>;
+      source?: string;
+      setup_url?: string;
+      readme_examples?: string[];
     }
   >();
-  for (const entry of Array.isArray(manifest.packages) ? manifest.packages : []) {
+  for (const entry of Array.isArray(manifest?.packages) ? manifest.packages : []) {
     const pkg = packageFromSource(JSON.stringify({ package: entry }));
     if (pkg?.transport?.type !== 'stdio' || pkg.runtimeArguments?.length) continue;
     items.set(JSON.stringify([pkg.registryType, pkg.identifier, pkg.version]), {
@@ -100,7 +155,7 @@ export async function readGithubMcpManifest(value: unknown) {
       version: pkg.version || base.version,
     });
   }
-  for (const remote of Array.isArray(manifest.remotes) ? manifest.remotes : []) {
+  for (const remote of Array.isArray(manifest?.remotes) ? manifest.remotes : []) {
     if (
       remote?.type !== 'streamable-http' ||
       typeof remote.url !== 'string' ||
@@ -116,6 +171,54 @@ export async function readGithubMcpManifest(value: unknown) {
       // Invalid endpoint. The backend also checks access and address policy on connection.
     }
   }
+  if (
+    !items.size ||
+    [...items.values()].some((item) => item.package && !item.package.packageArguments?.length)
+  ) {
+    const readme = await fetchFile('README.md')
+      .then(async (file) => {
+        if (file.ok) return (await readBoundedResponse(file, 250_000)).toString('utf8');
+        await file.body?.cancel().catch(() => {});
+        return '';
+      })
+      .catch(() => '');
+    const commands = readmeMcpCommands(readme);
+    for (const item of items.values()) {
+      const pkg = item.package;
+      if (!pkg || pkg.packageArguments?.length) continue;
+      const expected = localMcpSource(
+        pkg.registryType === 'pypi' ? { pypi: pkg.identifier } : { npm: pkg.identifier },
+      );
+      const matches = commands.filter(({ config }) => {
+        const actual = localMcpSource(config);
+        return (
+          actual?.key === expected?.key &&
+          (!actual?.version || !pkg.version || actual.version === pkg.version)
+        );
+      });
+      if (!matches.length) continue;
+      item.setup_url = repository.url + '#readme';
+      if (matches.length === 1 && !matches[0].config.python) {
+        item.package = {
+          ...pkg,
+          packageArguments: matches[0].config.args.map((arg) => ({
+            type: 'positional',
+            value: arg,
+          })),
+        };
+      } else item.readme_examples = matches.slice(0, 5).map(({ source }) => source);
+    }
+    if (!items.size)
+      for (const { source } of commands.slice(0, 5))
+        items.set(source, {
+          ...base,
+          source,
+          url: '',
+          transport: 'stdio',
+          setup_url: repository.url + '#readme',
+        });
+  }
+  if (!items.size && invalidManifest) throw new Error('mcp_invalid_manifest');
   return { items: [...items.values()] };
 }
 
@@ -200,8 +303,14 @@ export async function nodeRuntime(root: string) {
     pending = undefined;
   }
 }
-export async function installNpm(root: string, directory: string, spec: string) {
+export async function installNpm(
+  root: string,
+  directory: string,
+  spec: string,
+  signal?: AbortSignal,
+) {
   const runtime = await nodeRuntime(root);
+  signal?.throwIfAborted();
   await exec(
     runtime.node,
     [
@@ -218,6 +327,7 @@ export async function installNpm(root: string, directory: string, spec: string) 
     ],
     {
       windowsHide: true,
+      signal,
       maxBuffer: 4_000_000,
       env: {
         ...process.env,
@@ -368,7 +478,12 @@ async function installedGitCommit(toolDir: string) {
   throw new Error('mcp_git_commit_unavailable');
 }
 
-export type PythonInstallOptions = { python?: string; tool?: string; env?: Record<string, string> };
+export type PythonInstallOptions = {
+  python?: string;
+  tool?: string;
+  env?: Record<string, string>;
+  signal?: AbortSignal;
+};
 export async function installPython(
   root: string,
   directory: string,
@@ -401,6 +516,7 @@ export async function installPython(
   if (requirement.length > 256 || (requirement && !/^[0-9.*+<>=!,\s-]+$/.test(requirement)))
     throw new Error('mcp_invalid_python_version');
   const uv = await uvRuntime(root);
+  options.signal?.throwIfAborted();
   const managedEnv = {
     UV_TOOL_DIR: path.join(directory, 'tools'),
     UV_TOOL_BIN_DIR: path.join(directory, 'bin'),
@@ -428,7 +544,14 @@ export async function installPython(
         '--',
         git ? spec : withExtras + '==' + version,
       ],
-      { windowsHide: true, cwd: directory, env, timeout: 900_000, maxBuffer: 4_000_000 },
+      {
+        windowsHide: true,
+        cwd: directory,
+        env,
+        signal: options.signal,
+        timeout: 900_000,
+        maxBuffer: 4_000_000,
+      },
     );
   } catch (cause) {
     const failure = cause as { stderr?: string; code?: string | number; killed?: boolean };

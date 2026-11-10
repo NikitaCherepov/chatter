@@ -112,7 +112,7 @@ export function registerMcpTelegramConfirmations(bot: any, options: Options) {
         Markup.button.callback(ctx.t('confirmations.buttons.allow'), 'mcpconfirm:allow:' + id),
         Markup.button.callback(ctx.t('confirmations.buttons.reject'), 'mcpconfirm:reject:' + id),
       ],
-      [
+      ...(value.operation === 'install' ? [] : [[
         Markup.button.callback(
           ctx.t(
             value.operation === 'resource'
@@ -121,7 +121,7 @@ export function registerMcpTelegramConfirmations(bot: any, options: Options) {
           ),
           'mcpconfirm:always:' + id,
         ),
-      ],
+      ]]),
       [
         Markup.button.callback(
           ctx.t('confirmations.buttons.rejectWithComment'),
@@ -129,7 +129,7 @@ export function registerMcpTelegramConfirmations(bot: any, options: Options) {
         ),
       ],
     ]);
-    const hint = ctx.t(
+    const hint = value.operation === 'install' ? '' : ctx.t(
       value.operation === 'resource' ? 'mcpConfirmation.resourceHint' : 'mcpConfirmation.toolHint',
     );
     const text = header + '\n\n' + args + '\n\n' + hint;

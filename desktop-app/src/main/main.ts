@@ -57,9 +57,9 @@ ipcMain.handle('mcp:manage',async(event,payload:any)=>{
 ipcMain.handle('mcp:control',(event,payload:any)=>{
  assertTrustedIpcSender(event);
  let sequence=0,lastProgress=0;
- return localMcpManager().control(payload.scope,payload,()=>{
-  if(Date.now()-lastProgress<1000||event.sender.isDestroyed())return;
-  lastProgress=Date.now();event.sender.send('browser:input-progress',{request_id:payload.request_id,sequence:++sequence});
+ return localMcpManager().control(payload.scope,payload,(phase)=>{
+  if((!phase&&Date.now()-lastProgress<1000)||event.sender.isDestroyed())return;
+  lastProgress=Date.now();event.sender.send('browser:input-progress',{request_id:payload.request_id,sequence:++sequence,...(phase&&{phase})});
  });
 });
 ipcMain.handle('mcp:cancel',(event,requestId:string)=>{

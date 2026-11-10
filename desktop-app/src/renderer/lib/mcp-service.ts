@@ -80,6 +80,8 @@ export type CatalogItem = {
   version?: string;
   publisher?: string;
   repository_url?: string;
+  setup_url?: string;
+  readme_examples?: string[];
   website_url?: string;
   registry_url?: string;
 };
@@ -117,7 +119,8 @@ export async function importGithubMcp(
         githubMcpRepository(item.repository_url)?.url.toLowerCase() ===
         repository.url.toLowerCase(),
     );
-    if (items.length) return { items };
+    if (items.length)
+      return { items: items.map((item) => ({ ...item, setup_url: repository.url + '#readme' })) };
   }
   if (manifestError) throw manifestError;
   return { items: [] };
@@ -144,6 +147,7 @@ export type LocalMcpSummary = {
 export const getLocalMcp = (): Promise<LocalMcpSummary[]> =>
   window.electronAPI.localMcpManage({ action: 'list', scope: localMcpScope() });
 export type LocalMcpSettings = {
+  args?: string[];
   manifest?: LocalMcpManifest;
   env: Record<string, string>;
   config_revision?: string;

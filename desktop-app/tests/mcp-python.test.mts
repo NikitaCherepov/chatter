@@ -6,6 +6,7 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const { resolveLocalInput, pypiSpec, packageFromSource, parseLocalMcpEnvironment, localMcpInputSource, normalizeMcpEndpoint } = require('../src/main/local-mcp-spec.ts');
 const { LocalMcpManager } = require('../src/main/local-mcp.ts');
+const { localMcpLaunchArgs } = require('../src/main/local-mcp-spec.ts');
 assert.deepEqual(parseLocalMcpEnvironment('{"BASE_DIR":"D:/Documents"}'),{BASE_DIR:'D:/Documents'});
 assert.deepEqual(parseLocalMcpEnvironment(''),{});
 for(const invalid of ['{BASE_DIR=D:/Documents}','{"BASE_DIR":42}','[]','null'])
@@ -105,6 +106,15 @@ assert.equal(
 );
 
 assert.deepEqual(resolveLocalInput({ package: pkg }).args, ['serve']);
+const bareWindows = resolveLocalInput({ package: { ...pkg, packageArguments: undefined } });
+assert.deepEqual(localMcpLaunchArgs(bareWindows), ['serve']);
+assert.deepEqual(localMcpLaunchArgs({ ...bareWindows, installed_version: '0.8.1' }), ['serve']);
+assert.deepEqual(localMcpLaunchArgs({ ...bareWindows, installed_version: '0.7.0' }), []);
+assert.deepEqual(localMcpLaunchArgs({ ...bareWindows, args: ['serve', '--no-control'] }), [
+  'serve',
+  '--no-control',
+]);
+assert.deepEqual(localMcpLaunchArgs({ ...bareWindows, pypi: 'another-mcp==0.8.8' }), []);
 assert.throws(
   () => resolveLocalInput({ package: { ...pkg, registryBaseUrl: 'https://evil.example' } }),
   /unsupported_package/,
@@ -128,8 +138,11 @@ try {
   let githubRequests = 0;
   globalThis.fetch = async (input: any, options?: RequestInit) => {
     githubRequests++;
-    assert.equal(String(input), manifestUrl);
     assert.equal(options?.redirect, 'error');
+    if (String(input) === manifestUrl.replace('server.json', 'README.md'))
+      return new Response(['```sh', 'claude mcp add windows -- uvx windows-mcp serve',
+        'uvx windows-mcp serve --transport sse', 'uvx other-mcp start', '```'].join('\n'));
+    assert.equal(String(input), manifestUrl);
     return Response.json({
       name: 'io.github.CursorTouch/Windows-MCP',
       version: '1.0.1',
@@ -148,9 +161,10 @@ try {
   assert.equal(github.items.length, 2);
   assert.equal(github.items[0].package.version, '0.8.8');
   assert.equal(github.items[0].package.environmentVariables[0].default, 'auto');
+  assert.deepEqual(github.items[0].package.packageArguments, [{ type: 'positional', value: 'serve' }]);
   assert.equal(github.items[1].url, 'https://fixture.example/mcp');
   await assert.rejects(() => readGithubMcpManifest('https://github.com@private.example/x/y'), /invalid_github_url/);
-  assert.equal(githubRequests, 1);
+  assert.equal(githubRequests, 2);
   globalThis.fetch = async () => new Response('Not found', { status: 404 });
   assert.deepEqual(await readGithubMcpManifest('https://github.com/CursorTouch/Windows-MCP'), { items: [] });
   globalThis.fetch = async () => new Response('x'.repeat(100_001));

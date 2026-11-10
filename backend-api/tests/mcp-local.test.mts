@@ -72,8 +72,8 @@ const wsClient: any = {
       if (msg.type === 'execute_ipc')
         void (msg.ipc_type === 'mcp_permission'
           ? manager.configure(scope,msg.payload.local_id,{approval_policy:msg.payload.approval_policy,expected_revision:msg.payload.config_revision})
-          : manager.control(scope, { ...msg.payload, request_id: msg.request_id }, () =>
-            wsClient.pendingIpc.get(msg.request_id)?.progress?.(++sequence),
+          : manager.control(scope, { ...msg.payload, request_id: msg.request_id }, (phase: string) =>
+            wsClient.pendingIpc.get(msg.request_id)?.progress?.(++sequence, phase),
           ))
           .then((value: any) => {
             const pending = wsClient.pendingIpc.get(msg.request_id);
@@ -211,10 +211,12 @@ try {
   assert.equal(store.connections(82).length, 0);
   const replacement = { ...wsClient, connectionId: 'replacement' };
   wsClients.set(81, replacement);
-  assert.equal(tools.getMcpDefinitions(81).length, 0, 'new socket cannot reuse previous metadata');
+  assert.ok(!tools.getMcpDefinitions(81).some((item: any) => item.function.name === 'call_mcp_tool'),
+    'new socket cannot reuse previous metadata');
   syncDesktopMcp(replacement, [installed]);
   local.dropLocalConnections(wsClient);
-  assert.ok(tools.getMcpDefinitions(81).length, 'closing superseded socket preserves new metadata');
+  assert.ok(tools.getMcpDefinitions(81).some((item: any) => item.function.name === 'call_mcp_tool'),
+    'closing superseded socket preserves new metadata');
   wsClients.set(81, wsClient);
   syncDesktopMcp(wsClient, [installed]);
   row = store.connections(81).find((r: any) => r.local_id === installed.id);
@@ -326,21 +328,22 @@ try {
   await new Promise((r) => setTimeout(r, 100));
   await manager.configure(scope, installed.id, { enabled: false });
   syncDesktopMcp(wsClient, await manager.list(scope));
-  assert.equal(tools.getMcpDefinitions(81).length, 0, 'disabled local server unavailable');
+  const hasLocalCalls = () => tools.getMcpDefinitions(81).some((item: any) => item.function.name === 'call_mcp_tool');
+  assert.equal(hasLocalCalls(), false, 'disabled local server unavailable');
   await manager.configure(scope, installed.id, { enabled: true });
   syncDesktopMcp(wsClient, await manager.list(scope));
   store.savePolicy({ allow_custom: false });
   assert.equal(
-    tools.getMcpDefinitions(81).length,
-    0,
+    hasLocalCalls(),
+    false,
     'administrator revocation applies to local MCP',
   );
   store.savePolicy({ allow_custom: true });
   local.dropLocalConnections(wsClient);
   wsClient.ws.readyState = 3;
   assert.equal(
-    tools.getMcpDefinitions(81).length,
-    0,
+    hasLocalCalls(),
+    false,
     'offline desktop has no callable local tools',
   );
   wsClient.ws.readyState = 1;
@@ -354,6 +357,53 @@ try {
   assert.equal((await manager.list(scope)).length, 0);
   assert.equal(store.connections(81).length, 0);
   assert.equal(await fs.readFile(outside, 'utf8'), 'keep');
+  const { getPendingPcConfirmation, deletePendingPcConfirmation } = require('../src/services/pc-command-confirmations.ts');
+  const plan = {
+    name: 'MCP Install Fixture',
+    documentation: 'https://github.com/example/fixture#installation',
+    command: 'npx',
+    args: ['-y', '@example/install-fixture'],
+  };
+  const prepareInstall = () => {
+    const actions: any[] = [];
+    const run = tools.runMcpTool(81, 'install_mcp', plan, undefined, undefined, undefined, {
+      onDesktopAction: (action: any) => { actions.push(action); },
+    });
+    return { run, actions };
+  };
+  const approveInstall = async (request: ReturnType<typeof prepareInstall>) => {
+    const action = request.actions.find((item) => item.action === 'mcp_confirmation');
+    assert.equal(action.value.operation, 'install');
+    const id = action.value.confirmation_id;
+    const pending = getPendingPcConfirmation(id);
+    assert.equal(deletePendingPcConfirmation(id), true);
+    try { pending.resolve(await pending.execute({ remember: true })); }
+    catch (error) { pending.reject(error); }
+    return request.run;
+  };
+  const previousInstalls = installations.length;
+  const revokedInstall = prepareInstall();
+  assert.equal(installations.length, previousInstalls);
+  store.savePolicy({ allow_custom: false });
+  await assert.rejects(() => approveInstall(revokedInstall), /mcp_custom_not_allowed/);
+  assert.equal(installations.length, previousInstalls);
+  await assert.rejects(() => prepareInstall().run, /mcp_custom_not_allowed/);
+  store.savePolicy({ allow_custom: true });
+  const request = prepareInstall();
+  assert.equal(installations.length, previousInstalls, 'install waits for explicit approval');
+  const result = JSON.parse(await approveInstall(request));
+  assert.equal(result.status, 'connected');
+  assert.equal(result.tools, 3);
+  assert.deepEqual(request.actions.filter((action) => action.action === 'mcp_install_progress').map((action) => action.value.phase),
+    ['installing', 'connecting']);
+  assert.equal(installations.length, previousInstalls + 1);
+  assert.deepEqual((await manager.list(scope))[0].approval_policy, spec.emptyMcpApproval());
+  const repeated = JSON.parse(await approveInstall(prepareInstall()));
+  assert.equal(repeated.status, 'already_connected');
+  assert.equal(repeated.local_id, result.local_id);
+  assert.equal(installations.length, previousInstalls + 1);
+  await manager.remove(scope, result.local_id);
+  console.log('PASS: bot install confirmation, policy recheck, desktop install and progress, duplicate reuse');
   console.log(
     'PASS: actual stdio discovery/calls/resources, session reuse, local encrypted configuration, scope isolation, RAM-only WS bridge, progress, cancellation, permissions, offline and removal',
   );

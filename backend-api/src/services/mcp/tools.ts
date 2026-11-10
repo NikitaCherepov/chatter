@@ -5,11 +5,13 @@ import { availableConnections, requireConnection } from './store.js';
 import { callRemoteTool } from './client.js';
 import { browseMcp, readMcpResource, prepareMcpResource } from './discovery.js';
 import { wrapUntrustedContent } from '../web-reader.js';
+import { browseInstallCatalog, canInstallMcp, installMcp } from './install.js';
 
 export const browseToolName = 'browse_mcp';
 export const readResourceToolName = 'read_mcp_resource';
 export const searchToolName = 'search_mcp_tools';
 export const callToolName = 'call_mcp_tool';
+export const installToolName = 'install_mcp';
 const functionTool = (name: string, description: string, properties: any, required: string[]) => ({
   type: 'function' as const,
   function: {
@@ -18,6 +20,28 @@ const functionTool = (name: string, description: string, properties: any, requir
     parameters: { type: 'object', properties, required, additionalProperties: false },
   },
 });
+export const mcpInstallTool = functionTool(
+  installToolName,
+  'Propose an MCP installation for user confirmation. Check the official README for a stdio command (command/args or after -- in claude mcp add) or a Streamable HTTP URL. Example: {"name":"Windows-MCP","documentation":"https://github.com/CursorTouch/Windows-MCP#installation","command":"uvx","args":["windows-mcp","serve"]}. Chatter supplies uv/uvx and Python when needed. For an approved catalog entry, use its catalog_id from browse_mcp. Never include credentials.',
+  {
+    name: { type: 'string' },
+    documentation: {
+      type: 'string',
+      description: 'HTTPS link to official installation instructions',
+    },
+    command: { type: 'string', enum: ['uvx', 'npx'] },
+    args: { type: 'array', items: { type: 'string' } },
+    url: {
+      type: 'string',
+      description: 'Remote Streamable HTTP endpoint, instead of command and args',
+    },
+    catalog_id: {
+      type: 'integer',
+      description: 'Approved catalog entry, instead of a custom configuration',
+    },
+  },
+  [],
+);
 export const mcpSearchTool = functionTool(
   searchToolName,
   'Find connected external MCP tools by server name, tool name or purpose. Read each returned inputSchema, then invoke call_mcp_tool with connection_id, tool name and arguments. Search results do not register additional function tools.',
@@ -35,11 +59,11 @@ export const mcpCallTool = functionTool(
 );
 export const mcpBrowseTool = functionTool(
   browseToolName,
-  'Explore your connected MCP servers, tools and resources. With no arguments list server summaries. Set connection_id to inspect a server (loads metadata if needed). Search by query across cached metadata; filter kind. Use next_cursor for more pages. Resource contents are never included. Call tools with call_mcp_tool; read resources with read_mcp_resource. Search does not change function definitions.',
+  'Explore your connected MCP servers, tools and resources. With no arguments list server summaries. Set connection_id to inspect a server (loads metadata if needed). Search by query across cached metadata; filter kind. Use next_cursor for more pages. Use kind=catalog to find administrator-approved servers for install_mcp. Resource contents are never included. Call tools with call_mcp_tool; read resources with read_mcp_resource. Search does not change function definitions.',
   {
     connection_id: { type: 'integer' },
     query: { type: 'string' },
-    kind: { type: 'string', enum: ['servers', 'tools', 'resources', 'all'] },
+    kind: { type: 'string', enum: ['servers', 'tools', 'resources', 'all', 'catalog'] },
     cursor: { type: 'string' },
     limit: { type: 'integer', minimum: 1, maximum: 20 },
     refresh: {
@@ -104,6 +128,11 @@ export function getMcpDefinitions(userId: number, legacySearch = false) {
   if (availableConnections(userId).length) {
     defs.push(mcpBrowseTool as any, mcpCallTool as any, mcpReadResourceTool as any);
     if (legacySearch) defs.push(mcpSearchTool as any);
+  }
+  if (canInstallMcp(userId)) {
+    if (!defs.some((tool) => tool.function.name === browseToolName))
+      defs.push(mcpBrowseTool as any);
+    defs.push(mcpInstallTool as any);
   }
   return defs;
 }
@@ -247,6 +276,9 @@ export async function runMcpTool(
   imageSink?: { items: Array<{ base64: string; mimeType: string; question: string }> },
   context?: McpApprovalContext,
 ): Promise<string | undefined> {
+  if (name === installToolName) return installMcp(userId, args, signal, context);
+  if (name === browseToolName && args?.kind === 'catalog')
+    return wrapUntrustedContent(JSON.stringify(browseInstallCatalog(userId, args.query)));
   if (name === browseToolName || name === searchToolName)
     return executeMcpTool(userId, name, args, signal, onProgress, imageSink);
   if (

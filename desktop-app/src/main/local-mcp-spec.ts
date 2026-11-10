@@ -329,16 +329,16 @@ export function resolveLocalInput(input: LocalMcpInput): LocalMcpConfig {
     ) {
       npm = npmSpec(source);
     } else {
-      const parts = splitCommand(source);
-      command = parts.shift();
-      if (command === 'npx' || (command === 'pnpm' && parts[0] === 'dlx')) {
-        if (command === 'pnpm') parts.shift();
-        while (parts[0] === '-y' || parts[0] === '--yes') parts.shift();
-        npm = npmSpec(parts.shift() || '');
-        command = undefined;
-        args = parts;
-      } else args = parts;
+      args = splitCommand(source);
+      command = args.shift();
     }
+  }
+  args = [...validateLocalMcpArguments(args)];
+  if (command === 'npx' || (command === 'pnpm' && args[0] === 'dlx')) {
+    if (command === 'pnpm') args.shift();
+    while (args[0] === '-y' || args[0] === '--yes') args.shift();
+    npm = npmSpec(args.shift() || '');
+    command = undefined;
   }
   if (
     command === 'uvx' ||
@@ -363,12 +363,6 @@ export function resolveLocalInput(input: LocalMcpInput): LocalMcpConfig {
       /[\r\n\u0000]/.test(command))
   )
     throw new Error('mcp_invalid_command');
-  if (
-    !Array.isArray(args) ||
-    args.length > 100 ||
-    args.some((a) => typeof a !== 'string' || a.length > 8192 || a.includes('\u0000'))
-  )
-    throw new Error('mcp_invalid_arguments');
   env = validateLocalMcpEnvironment(env);
   return {
     name: String(input.name || npm || pypi || (git && tool) || command).slice(0, 120),
@@ -386,6 +380,31 @@ export function resolveLocalInput(input: LocalMcpInput): LocalMcpConfig {
 
 type McpSource = { key: string; version?: string };
 const pythonName = (name: string) => name.toLowerCase().replace(/[-_.]+/g, '-');
+
+export function validateLocalMcpArguments(args: unknown): string[] {
+  if (
+    !Array.isArray(args) ||
+    args.length > 100 ||
+    args.some((arg) => typeof arg !== 'string' || arg.length > 8192 || arg.includes('\u0000'))
+  )
+    throw new Error('mcp_invalid_arguments');
+  return args;
+}
+
+export function localMcpLaunchArgs(config: LocalMcpConfig): string[] {
+  if (!config.pypi || config.args.length) return config.args;
+  const [packageName, pinnedVersion] = config.pypi.split('==');
+  if (
+    pythonName(packageName.split('[')[0]) !== 'windows-mcp' ||
+    (config.tool && pythonName(config.tool) !== 'windows-mcp')
+  )
+    return config.args;
+  const version = /^(\d+)\.(\d+)\.(\d+)/.exec(config.installed_version || pinnedVersion || '');
+  if (!version) return config.args;
+  const [, major, minor, patch] = version.map(Number);
+  // Windows-MCP's manifest omits the serve subcommand required by its newer CLI.
+  return major > 0 || minor > 8 || (minor === 8 && patch >= 1) ? ['serve'] : config.args;
+}
 
 export function localMcpSource(
   config: Partial<Pick<LocalMcpConfig, 'pypi' | 'npm' | 'git' | 'tool' | 'command' | 'args'>>,

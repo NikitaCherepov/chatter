@@ -60,7 +60,7 @@ export const updateLocalMcp=async(id,onProgress,version)=>{
  else entry.git_commit='b'.repeat(40);
 };
 export const resolveImageUrl=url=>url;
-export const apiFetch=async(url,options)=>{record('approve',JSON.parse(options.body));return {ok:true}};
+export const apiFetch=async(url,options)=>{const body=JSON.parse(options.body);record('approve',body);return {ok:true,status:body.confirmation_id==='install-card'?'executing':undefined}};
 export const getApiErrorMessage=(error,fallback)=>fallback;
 export const API_BASE='https://chatter.example';
 let mcpUpdate;
@@ -123,6 +123,7 @@ function CardFixture(){
 }
 function Content({kind}){
  const client=useQueryClient(); window.__queryClient=client;
+ if(kind==='install-card') return <McpConfirmationCard id="install-card" title="Установка MCP" confirmation={{confirmation_id:'install-card',server_name:'Fixture MCP',operation:'install',target:'stdio',arguments:{command:'uvx fixture serve',documentation:'https://github.com/example/fixture'}}} onResolved={()=>{window.__unexpectedInstallResolution=true}}/>;
  return kind==='card'?<CardFixture/>:kind==='desktop'?<McpSettings onAskMcpHelp={async message=>{window.__calls.push({name:'github_help_draft',body:{message}})}}/>:kind==='admin'?<McpPage/>:<McpUserCard userId={81}/>;
 }
 window.renderFixture=kind=>root.render(<QueryProvider><Content kind={kind}/><Toaster/></QueryProvider>);
@@ -399,13 +400,16 @@ let win;const errors=[];
  await fillGithub('https://github.com/example/manifest');
  await click('Найти конфигурацию');
  await until('document.querySelector("[class*=addPanel]")?.textContent.includes("imported-mcp · 1.2.3")');
+ await until('document.querySelector("[class*=addPanel]")?.textContent.includes("uvx imported-mcp==1.2.3")');
+ await click('Изменить команду');
+ await until('document.querySelector("[class*=addPanel] input[placeholder^=npx]")?.value.includes("imported-mcp==1.2.3")');
  assert.equal(await js('window.__calls.some(c=>c.name==="local_install"&&c.body.package?.identifier==="imported-mcp")'),false,'import only prepares the installation form');
  await click('Отменить');
  await click('Добавить MCP');
  await fillGithub('https://github.com/example/empty');
  await click('Найти конфигурацию');
  await until('document.body.innerText.includes("Поддерживаемая конфигурация не найдена.")');
- await click('Попросить Вегу');
+ await click('Спросить бота');
  await until('window.__calls.some(c=>c.name==="github_help_draft"&&c.body.message.includes("https://github.com/example/empty"))');
  await click('Ручная установка');
  await until('document.querySelector("[class*=addType] button")');
@@ -567,6 +571,12 @@ let win;const errors=[];
  await click('Всегда разрешать этот инструмент');
  await until('window.__calls.some(c=>c.name==="approve"&&c.body.confirmation_id==="card-3"&&c.body.remember_mcp===true)');
  await until('!document.querySelector("[data-confirmation-id]")');
+ await js('window.renderFixture("install-card")');
+ await until('document.body.innerText.includes("uvx fixture serve")');
+ assert.equal(await js('!!document.querySelector("details")'),false,'install offers no remembered grant');
+ await click('Установить');
+ await until('document.body.innerText.includes("Установка…")');
+ assert.equal(await js('!!window.__unexpectedInstallResolution'),false,'accepted install keeps the card mounted');
  assert.deepEqual(errors,[],'no runtime component errors');
  console.log('PASS: React MCP settings, grant/revoke, native permissions, confirmation queue buttons and composer comments, catalog and admin access');
 })().catch(e=>{console.error(e,errors);process.exitCode=1}).finally(()=>{win?.destroy();app.exit(process.exitCode||0)});

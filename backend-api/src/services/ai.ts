@@ -47,7 +47,7 @@ import { listSubagentNames, buildSubagentListDescription, getSubagent } from './
 import { hasBackendTranslation, translateForLanguage } from '../i18n/index.js';
 import { readChatAttachment, searchChatAttachment, type AttachmentReadContext } from './chat-attachments.js';
 import { attachFileToResponse, materializeAssetInput, type ResponseFileSink } from './response-attachments.js';
-import { getMcpDefinitions, runMcpTool, mcpSearchTool, mcpCallTool, mcpBrowseTool, mcpReadResourceTool, browseToolName as mcpBrowseName, readResourceToolName as mcpReadName, searchToolName as mcpSearchName, callToolName as mcpCallName } from './mcp/tools.js';
+import { getMcpDefinitions, runMcpTool, mcpSearchTool, mcpCallTool, mcpBrowseTool, mcpReadResourceTool, browseToolName as mcpBrowseName, readResourceToolName as mcpReadName, searchToolName as mcpSearchName, callToolName as mcpCallName, installToolName as mcpInstallName } from './mcp/tools.js';
 import { getModularTool, modularToolDefinitions } from './tools/registry.js';
 import { buildDescribeImageTool } from './tools/images/describe-image.js';
 import { getContextSummary, type ContextSummaryDto } from './context-summary.js';
@@ -3841,7 +3841,7 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     }
     return completion;
   };
-  if (toolName === mcpBrowseName || toolName === mcpReadName || toolName === mcpSearchName || toolName === mcpCallName || /^mcp_\d+_[a-zA-Z0-9_-]+_[a-f0-9]{8}$/.test(toolName)) {
+  if (toolName === mcpInstallName || toolName === mcpBrowseName || toolName === mcpReadName || toolName === mcpSearchName || toolName === mcpCallName || /^mcp_\d+_[a-zA-Z0-9_-]+_[a-f0-9]{8}$/.test(toolName)) {
     if (!subagentExtra?.availableToolDefs?.some(tool => tool.function?.name === toolName)) return 'MCP tool is not allowed in this run.';
     try {
       return await runMcpTool(user.id,toolName,parsed,signal,

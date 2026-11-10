@@ -44,6 +44,7 @@
     "browse_mcp": "Browsing MCP connections...",
     "read_mcp_resource": "Reading an MCP resource...",
     "search_mcp_tools": "Finding MCP tools",
+    "install_mcp": "Installing an MCP server",
     "call_mcp_tool": "Calling an MCP tool",
     "mcpRunning": "MCP: {{tool}}",
     "searchQuery": "Searching for “{{query}}”",

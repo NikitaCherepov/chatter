@@ -49,7 +49,7 @@ type BrowserActionPayload = {
   };
 };
 
-type McpActionPayload={ipcType:'mcp';ipcPayload:{connection_id:number;operation:'tool'|'resource';target:string;arguments:unknown}};
+type McpActionPayload={ipcType:'mcp';ipcPayload:{connection_id?:number;operation:'tool'|'resource'|'install';target:string;arguments:unknown}};
 type ActionPayload = McpActionPayload | ExecutePayload | FileActionPayload | WebcamCapturePayload | BrowserActionPayload;
 
 export type PendingPcCommandConfirmation = {

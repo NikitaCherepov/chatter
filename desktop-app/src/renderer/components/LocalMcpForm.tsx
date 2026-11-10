@@ -5,7 +5,9 @@ import * as api from '../lib/mcp-service';
 import {
   packageFields,
   packageFromSource,
+  localMcpLaunchArgs,
   parseLocalMcpEnvironment,
+  resolveLocalInput,
   type LocalMcpInstallPhase,
 } from '../../main/local-mcp-spec';
 import s from './SettingsModal.module.scss';
@@ -15,24 +17,46 @@ export function LocalMcpForm({
   draft,
   onClose,
   reuseExisting,
+  onAskMcpHelp,
 }: {
   draft: api.CatalogItem | null;
   onClose: () => void;
   reuseExisting?: boolean;
+  onAskMcpHelp?: (message: string) => Promise<void>;
 }) {
   const { t } = useTranslation();
   const { mutation } = useLocalMcp();
   const [source, setSource] = useState('');
+  const [editSource, setEditSource] = useState(false);
+  const [asking, setAsking] = useState(false);
   const [name, setName] = useState('');
   const [env, setEnv] = useState('');
   const [values, setValues] = useState<Record<string, string>>({});
   const [error, setError] = useState('');
   const [phase, setPhase] = useState<LocalMcpInstallPhase>('installing');
   const busy = mutation.isPending;
-  const packageData = draft?.package || packageFromSource(source);
+  const packageData = editSource
+    ? packageFromSource(source)
+    : draft?.package || packageFromSource(source);
+  const documentation = draft?.setup_url || draft?.repository_url;
+  const hasSecretArguments =
+    packageData &&
+    packageFields(packageData).some((field) => field.secret && !field.key.startsWith('env:'));
+  let launch: { command: string; args: string[] } | undefined;
+  let launchEnv: Record<string, string> | undefined;
+  if (draft?.package && packageData === draft.package) {
+    try {
+      const config = resolveLocalInput({ package: packageData, values });
+      launch = config.pypi
+        ? { command: 'uvx', args: [config.pypi, ...localMcpLaunchArgs(config)] }
+        : { command: 'npx', args: ['-y', config.npm!, ...config.args] };
+      launchEnv = config.env;
+    } catch {}
+  }
   useEffect(() => {
     setValues({});
     setSource(draft?.source || '');
+    setEditSource(false);
     setName(draft ? draft.title || draft.name : '');
     setEnv('');
     setError('');
@@ -96,7 +120,57 @@ export function LocalMcpForm({
             {draft.package.version && ' · ' + draft.package.version}
           </p>
         )}
-        {(!draft || draft.source) && (
+        {documentation && (
+          <a href={documentation} target="_blank" rel="noreferrer" className={s.connectionsHelp}>
+            {t('mcp.github.instructions')}
+          </a>
+        )}
+        {launch && !hasSecretArguments && (
+          <div className={styles.actions}>
+            <code>
+              {[
+                launch.command,
+                ...launch.args.map((arg) => (/\s|["']/.test(arg) ? JSON.stringify(arg) : arg)),
+              ].join(' ')}
+            </code>
+            <button
+              className={s.cancelBtn}
+              type="button"
+              onClick={() => {
+                try {
+                  setEnv(
+                    JSON.stringify({ ...launchEnv, ...parseLocalMcpEnvironment(env) }, null, 2),
+                  );
+                  setSource(JSON.stringify(launch));
+                  setEditSource(true);
+                } catch {
+                  setError(t('mcp.local.envInvalid'));
+                }
+              }}
+            >
+              {t('mcp.github.editCommand')}
+            </button>
+          </div>
+        )}
+        {!!draft?.readme_examples?.length && (
+          <div className={styles.actions}>
+            <span>{t('mcp.github.examples')}</span>
+            {draft.readme_examples.map((example) => (
+              <button
+                type="button"
+                className={s.cancelBtn}
+                key={example}
+                onClick={() => {
+                  setSource(example);
+                  setEditSource(true);
+                }}
+              >
+                <code>{example}</code>
+              </button>
+            ))}
+          </div>
+        )}
+        {(!draft || draft.source || editSource) && (
           <label>
             {t('mcp.local.source')}
             <input
@@ -151,9 +225,26 @@ export function LocalMcpForm({
             </small>
           )}
         </label>
-        <button className={s.saveBtn} disabled={busy}>
-          {t(busy ? 'mcp.local.' + phase : 'mcp.local.install')}
-        </button>
+        <div className={styles.actions}>
+          <button className={s.saveBtn} disabled={busy}>
+            {t(busy ? 'mcp.local.' + phase : 'mcp.local.install')}
+          </button>
+          {onAskMcpHelp && documentation && (
+            <button
+              className={s.cancelBtn}
+              type="button"
+              disabled={busy || asking}
+              onClick={() => {
+                setAsking(true);
+                void onAskMcpHelp(t('mcp.github.prompt') + '\n' + documentation).finally(() =>
+                  setAsking(false),
+                );
+              }}
+            >
+              {t('mcp.github.ask')}
+            </button>
+          )}
+        </div>
         <button type="button" className={s.cancelBtn} disabled={busy} onClick={onClose}>
           {t('mcp.cancel')}
         </button>

@@ -2385,6 +2385,7 @@ export function ChatPage() {
         break;
       case 'mcp_confirmation':
         body=String(value?.server_name||'MCP')+' / '+String(value?.target||'');sensitive=true;
+        reviewOnly=value?.operation==='install';
         break;
       case 'pc_command_confirmation':
         body = String(value?.command || '');
@@ -2459,13 +2460,15 @@ export function ChatPage() {
       confirmationArrivalRef.current.set(incomingConfirmationId, confirmationArrivalRef.current.size);
     }
     if (action.action === 'confirmation_resolved' && action.value) {
-      const val = action.value as { confirmation_id?: string };
+      const val = action.value as { confirmation_id?: string; status?: string };
       const confirmationId = val.confirmation_id;
       if (!confirmationId) return;
       setDevopsConfirmations(prev => prev.filter(c => c.confirmation_id !== confirmationId));
       setPendingCredsUpdates(prev => prev.filter(c => c.confirmation_id !== confirmationId));
       setPcCommandConfirmations(prev => prev.filter(c => c.confirmation_id !== confirmationId));
-      setMcpConfirmations(prev=>prev.filter(c=>c.confirmation_id!==confirmationId));
+      setMcpConfirmations(prev=>val.status==='executing'
+        ? prev.flatMap(c=>c.confirmation_id!==confirmationId?[c]:c.operation==='install'?[{...c,phase:'installing'}]:[])
+        : prev.filter(c=>c.confirmation_id!==confirmationId));
       setBrowserActionConfirmations(prev => prev.filter(c => c.confirmation_id !== confirmationId));
       setBrowserDownloadConfirmations(prev => prev.filter(c => c.confirmation_id !== confirmationId));
       setFileActionConfirmations(prev => prev.filter(c => c.confirmation_id !== confirmationId));
@@ -2523,6 +2526,12 @@ export function ChatPage() {
           remove_password: val.remove_password || false,
         }]);
       }
+    }
+    if(action.action==='mcp_install_progress'&&action.value){
+      const {confirmation_id,phase}=action.value as {confirmation_id?:string;phase?:string};
+      if(phase==='installing'||phase==='connecting')
+        setMcpConfirmations(previous=>previous.map(item=>item.confirmation_id===confirmation_id&&item.operation==='install'?{...item,phase}:item));
+      return;
     }
     if(action.action==='mcp_confirmation'&&action.value){
       const val=action.value as McpConfirmation;
@@ -5203,7 +5212,7 @@ export function ChatPage() {
 
   const confirmationCards = [
     ...mcpConfirmations.map(conf=><McpConfirmationCard
-      key={conf.confirmation_id} id={conf.confirmation_id} title={t('mcp.approvals.title')}
+      key={conf.confirmation_id} id={conf.confirmation_id} title={t(conf.operation==='install'?'mcp.installApproval.title':'mcp.approvals.title')}
       summary={conf.server_name+' / '+conf.target} confirmation={conf}
       onResolved={id=>setMcpConfirmations(previous=>previous.filter(item=>item.confirmation_id!==id))}/>),
     ...pendingChatLinks.map(link => {

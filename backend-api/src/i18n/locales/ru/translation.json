@@ -44,6 +44,7 @@
     "browse_mcp": "Изучаю подключения MCP...",
     "read_mcp_resource": "Читаю ресурс MCP...",
     "search_mcp_tools": "Поиск инструментов MCP",
+    "install_mcp": "Установка MCP",
     "call_mcp_tool": "Вызов инструмента MCP",
     "mcpRunning": "MCP: {{tool}}",
     "searchQuery": "Ищу «{{query}}»",

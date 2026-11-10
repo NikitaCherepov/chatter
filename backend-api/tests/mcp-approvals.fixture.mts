@@ -230,6 +230,30 @@ export async function checkApprovals({ tools, store, connection, received, requi
   await reject(q, 'rejected_by_user');
   store.saveConnection(81, { mode: 'search' }, connection.id);
   reset();
+  const approvalUrl = '/api/v1/pc-commands/approve';
+  let finishInstall!: (result: string) => void, settleInstall!: (result: string) => void;
+  const installExecution = new Promise<string>((resolve) => { finishInstall = resolve; });
+  const installResult = new Promise<string>((resolve) => { settleInstall = resolve; });
+  const install = { id: 'fixture-install-confirmation' };
+  pc.registerPendingPcConfirmation(install.id, {
+    userId: 81,
+    kind: 'mcp_action',
+    label: 'Fixture MCP',
+    payload: { ipcType: 'mcp', ipcPayload: { operation: 'install', target: 'stdio', arguments: {} } },
+    execute: ({ remember }: any) => {
+      assert.equal(remember, false);
+      return installExecution;
+    },
+    resolve: settleInstall,
+    reject: () => assert.fail('fixture install should succeed'),
+    createdAt: Date.now(),
+  });
+  const accepted = await route(approvalUrl, install, { remember_mcp: true });
+  assert.equal(accepted.code, 202, 'approval returns while the installer is running');
+  assert.equal(accepted.body.status, 'executing');
+  assert.equal(getPendingPcConfirmation(install.id), undefined);
+  finishInstall('installed');
+  assert.equal(await installResult, 'installed');
   console.log(
     'MCP confirmation checks passed: captured args, once/remember, resource scope, rejection, cancellation, stale grants, background, eager',
   );

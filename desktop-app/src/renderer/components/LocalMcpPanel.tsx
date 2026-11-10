@@ -225,7 +225,9 @@ function LocalMcpConfiguration({
 }) {
   const { t } = useTranslation();
   const query = useLocalMcpSettings(row.id);
-  const [feedback, setFeedback] = useState<'invalid' | 'saved' | 'failed' | null>(null);
+  const [feedback, setFeedback] = useState<'invalid' | 'invalidArgs' | 'saved' | 'failed' | null>(
+    null,
+  );
   if (query.isPending) return <p role="status">{t('common.loading')}</p>;
   if (query.isError)
     return (
@@ -253,6 +255,7 @@ function LocalMcpConfiguration({
         event.preventDefault();
         const data = new FormData(event.currentTarget);
         let env: Record<string, string>;
+        let args: string[] | undefined;
         try {
           env = parseLocalMcpEnvironment(String(data.get('env') || ''));
         } catch {
@@ -260,12 +263,25 @@ function LocalMcpConfiguration({
           event.currentTarget.querySelector<HTMLTextAreaElement>('textarea[name=env]')?.focus();
           return;
         }
+        if (config.args !== undefined) {
+          try {
+            const parsed: unknown = JSON.parse(String(data.get('args') || '[]'));
+            if (!Array.isArray(parsed) || parsed.some((arg) => typeof arg !== 'string'))
+              throw new Error();
+            args = parsed;
+          } catch {
+            setFeedback('invalidArgs');
+            event.currentTarget.querySelector<HTMLTextAreaElement>('textarea[name=args]')?.focus();
+            return;
+          }
+        }
         setFeedback(null);
         void run(() =>
           api.configureLocalMcp(row.id, {
             expected_revision: config.config_revision,
             timeout_seconds: Number(data.get('timeout')),
             env,
+            ...(args && { args }),
             ...(manifest && {
               manifest_values: Object.fromEntries(
                 fields.map((field) => [field.key, String(data.get(field.key) ?? '')]),
@@ -314,6 +330,23 @@ function LocalMcpConfiguration({
           />
         </label>
       ))}
+      {config.args !== undefined && (
+        <label className={styles.fullWidth}>
+          {t('mcp.local.args')}
+          <textarea
+            className={s.textareaInput}
+            rows={2}
+            name="args"
+            spellCheck={false}
+            disabled={disabled}
+            defaultValue={JSON.stringify(config.args)}
+            placeholder='["serve"]'
+            aria-invalid={feedback === 'invalidArgs'}
+            onChange={() => setFeedback(null)}
+          />
+          {feedback === 'invalidArgs' && <small role="alert">{t('mcp.local.argsInvalid')}</small>}
+        </label>
+      )}
       <label className={styles.fullWidth}>
         {t(
           fields.some((field) => field.key.startsWith('env:'))
@@ -340,7 +373,7 @@ function LocalMcpConfiguration({
           role={feedback === 'saved' ? 'status' : 'alert'}
           style={feedback && feedback !== 'saved' ? { color: 'var(--color-error)' } : undefined}
         >
-          {feedback
+          {feedback && feedback !== 'invalidArgs'
             ? t(
                 feedback === 'invalid'
                   ? 'mcp.local.envInvalid'

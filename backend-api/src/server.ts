@@ -7586,6 +7586,17 @@ app.post('/api/v1/pc-commands/approve', async (req: AuthedRequest, res: any) => 
   try {
     deletePendingPcConfirmation(confirmationId);
     notifyConfirmationResolved(userId, confirmationId, 'executing');
+    if (pending.payload.ipcType === 'mcp' && pending.payload.ipcPayload.operation === 'install') {
+      // The approval request can return before the desktop downloads the runtime and package.
+      void Promise.resolve().then(() => pending.execute!({ remember: false })).then((result) => {
+        pending.resolve(result);
+        notifyPcConfirmationResolved(pending, confirmationId, 'executed');
+      }, (error) => {
+        pending.reject(error);
+        notifyPcConfirmationResolved(pending, confirmationId, 'failed');
+      });
+      return res.status(202).json({ ok: true, status: 'executing' });
+    }
     const { sendIpcToDesktop } = await import('./ws-clients.js');
     if (browserPermissionGrant) {
       await sendIpcToDesktop(userId, 'browser_control', {
@@ -8219,7 +8230,7 @@ wss.on('connection', (ws, req) => {
         } catch { ws.send(JSON.stringify({type:'mcp_local_synced',error:'mcp_local_sync_failed'})); }
       } else if (msg.type === 'ipc_progress') {
         if (wsClients.get(client.accountId) === client && typeof msg.request_id === 'string') {
-          client.pendingIpc.get(msg.request_id)?.progress?.(msg.sequence);
+          client.pendingIpc.get(msg.request_id)?.progress?.(msg.sequence, msg.phase);
         }
       } else if (msg.type === 'ipc_result') {
         handleIpcResult(client, msg);

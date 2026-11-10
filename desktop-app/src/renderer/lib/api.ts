@@ -944,7 +944,7 @@ export async function sendChatMessage(text: string, chatId?: number, images?: Ch
 // ---------- SSE Streaming (fallback, kept for reference) ----------
 
 export type DesktopActionPayload = {
-  action: 'open_widget' | 'close_widget' | 'set_widget_data' | 'open_note' | 'read_widget_state' | 'toggle_panel' | 'execute_macro' | 'suggest_macro' | 'devops_confirmation' | 'suggest_devops_runbook' | 'suggest_server_creds_update' | 'mcp_confirmation' | 'pc_command_confirmation' | 'confirmation_resolved' | 'browser_action_confirmation' | 'browser_action_confirmation_resolved' | 'browser_download_confirmation' | 'browser_download_confirmation_resolved' | 'file_action_confirmation' | 'edit_file_lines_confirmation' | 'email_confirmation' | 'chat_title_update' | 'webcam_capture_confirmation' | 'suggest_chat_link';
+  action: 'open_widget' | 'close_widget' | 'set_widget_data' | 'open_note' | 'read_widget_state' | 'toggle_panel' | 'execute_macro' | 'suggest_macro' | 'devops_confirmation' | 'suggest_devops_runbook' | 'suggest_server_creds_update' | 'mcp_confirmation' | 'mcp_install_progress' | 'pc_command_confirmation' | 'confirmation_resolved' | 'browser_action_confirmation' | 'browser_action_confirmation_resolved' | 'browser_download_confirmation' | 'browser_download_confirmation_resolved' | 'file_action_confirmation' | 'edit_file_lines_confirmation' | 'email_confirmation' | 'chat_title_update' | 'webcam_capture_confirmation' | 'suggest_chat_link';
   target?: string;
   value?: { title?: string; content?: string; note_id?: number; macro_name?: string; target_path?: string; description?: string; commands?: string[]; confirmation_id?: string; server_name?: string; server_id?: number; host?: string; command?: string; current_username?: string; new_username?: string; reason?: string; use_ssh_key?: boolean; remove_password?: boolean; chat_id?: number; from?: string; to?: string; subject?: string; body?: string; purpose?: string; camera_name?: string };
 };
@@ -1730,7 +1730,10 @@ async function handleExecuteIpc(msg: { request_id: string; ipc_type: string; pay
       if(!window.electronAPI?.localMcpControl)throw new Error('mcp_desktop_upgrade_required');
       localMcpRequests.add(request_id);
       result=await window.electronAPI.localMcpControl({...payload,config_revision:payload.config_revision,scope:localMcpScope(),request_id});
-      if(payload.action==='discover')void syncLocalMcp(requestSocket).catch(()=>{});
+      if(payload.action==='install'){
+        await syncLocalMcp(requestSocket).catch(()=>{});
+        wsCallbacks.onMcpSettingsUpdated?.();
+      } else if(payload.action==='discover')void syncLocalMcp(requestSocket).catch(()=>{});
     } else if(ipc_type==='mcp_permission'){
       result=await window.electronAPI.localMcpManage({action:'configure',scope:localMcpScope(),id:payload.local_id,patch:{approval_policy:payload.approval_policy,expected_revision:payload.config_revision}});
       void syncLocalMcp(requestSocket).catch(()=>{});
@@ -1854,6 +1857,7 @@ async function handleExecuteIpc(msg: { request_id: string; ipc_type: string; pay
       resultPreview: typeof result === 'string' ? result.slice(0, 500) : undefined,
       wsReadyState: ws?.readyState,
     });
+    if(ipc_type==='mcp_control'&&payload?.action==='install'&&(ws!==requestSocket||requestSocket?.readyState!==WebSocket.OPEN))return;
     ws?.send(JSON.stringify({ type: 'ipc_result', request_id, data: result }));
     console.log('[ipc] renderer ipc_result sent', { requestId: request_id });
   } catch (err: any) {
@@ -1866,6 +1870,7 @@ async function handleExecuteIpc(msg: { request_id: string; ipc_type: string; pay
     const ipcErrorMessage = err?.message || String(err);
     const mcpErrorCode = (ipc_type === 'mcp_control' || ipc_type === 'mcp_permission')
       ? /(?:^|Error: )(mcp_[a-z_]+)$/.exec(ipcErrorMessage)?.[1] : undefined;
+    if(ipc_type==='mcp_control'&&payload?.action==='install'&&(ws!==requestSocket||requestSocket?.readyState!==WebSocket.OPEN))return;
     ws?.send(JSON.stringify({ type: 'ipc_result', request_id, error: mcpErrorCode || ipcErrorMessage }));
     console.log('[ipc] renderer ipc_result error sent', { requestId: request_id });
   } finally {

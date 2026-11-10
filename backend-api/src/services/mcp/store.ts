@@ -351,7 +351,7 @@ export function saveServer(body: any, id?: number) {
 export function deleteServer(id: number) {
   db.prepare('DELETE FROM mcp_servers WHERE id=?').run(id);
 }
-export function requireConnection(userId: number, id: number, enabled = true) {
+export function requireMcpAccount(userId: number) {
   const user = db.prepare('SELECT status,feature_flags FROM users WHERE id=?').get(userId) as any;
   if (!user || user.status !== 'approved') throw new Error('mcp_not_allowed');
   try {
@@ -359,6 +359,9 @@ export function requireConnection(userId: number, id: number, enabled = true) {
   } catch (error) {
     if ((error as Error).message === 'mcp_not_allowed') throw error;
   }
+}
+export function requireConnection(userId: number, id: number, enabled = true) {
+  requireMcpAccount(userId);
   const row = connections(userId).find((connection) => connection.id === id);
   if (!row) throw new Error('mcp_connection_not_found');
   const access = policy(userId);

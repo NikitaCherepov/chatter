@@ -65,6 +65,40 @@ export async function confirmMcpOperation(
     return current;
   };
   if (isMcpAutoApproved(initial.row, op.operation, op.target)) return execute();
+  return confirmMcpAction(
+    userId,
+    {
+      connection_id: op.connection_id,
+      operation: op.operation,
+      target: op.target,
+      arguments: op.arguments,
+    },
+    initial.row.name,
+    async (rememberChoice) => {
+      await checked();
+      if (rememberChoice) await remember(userId, op, checked);
+      await checked();
+      return execute();
+    },
+    signal,
+    context,
+  );
+}
+
+export async function confirmMcpAction(
+  userId: number,
+  op: {
+    connection_id?: number;
+    operation: 'tool' | 'resource' | 'install';
+    target: string;
+    arguments: unknown;
+  },
+  serverName: string,
+  execute: (remember: boolean, reportPhase: (phase: string) => void) => Promise<string>,
+  signal?: AbortSignal,
+  context?: McpApprovalContext,
+): Promise<string> {
+  signal?.throwIfAborted();
   if (context?.autoRejectHitl)
     return JSON.stringify({
       status: 'rejected',
@@ -80,13 +114,14 @@ export async function confirmMcpOperation(
   });
   // Handle cancellation even while a client delivery callback is still pending.
   void promise.catch(() => {});
-  const emitResolution = (status: string) => {
-    const action = { action: 'confirmation_resolved', value: { confirmation_id: id, status } };
+  const emit = (action: { action: string; value: unknown }) => {
     sendToDesktop(userId, { type: 'desktop_action', ...action });
     try {
       void Promise.resolve(context?.onDesktopAction?.(action)).catch(() => {});
     } catch {}
   };
+  const emitResolution = (status: string) =>
+    emit({ action: 'confirmation_resolved', value: { confirmation_id: id, status } });
   const abort = () => {
     if (deletePendingPcConfirmation(id)) {
       reject(signal?.reason instanceof Error ? signal.reason : new Error('mcp_cancelled'));
@@ -96,21 +131,16 @@ export async function confirmMcpOperation(
   registerPendingPcConfirmation(id, {
     userId,
     kind: 'mcp_action',
-    label: initial.row.name + ' / ' + op.target,
+    label: serverName + ' / ' + (op.operation === 'install' ? 'MCP install' : op.target),
     payload: {
       ipcType: 'mcp',
-      ipcPayload: {
-        connection_id: op.connection_id,
-        operation: op.operation,
-        target: op.target,
-        arguments: op.arguments,
-      },
+      ipcPayload: op,
     },
     execute: async (options) => {
-      await checked();
-      if (options.remember) await remember(userId, op, checked);
-      await checked();
-      return execute();
+      signal?.throwIfAborted();
+      return execute(options.remember, (phase) =>
+        emit({ action: 'mcp_install_progress', value: { confirmation_id: id, phase } }),
+      );
     },
     resolve,
     reject,
@@ -123,11 +153,8 @@ export async function confirmMcpOperation(
     action: 'mcp_confirmation',
     value: {
       confirmation_id: id,
-      connection_id: op.connection_id,
-      server_name: initial.row.name,
-      operation: op.operation,
-      target: op.target,
-      arguments: op.arguments,
+      ...op,
+      server_name: serverName,
     },
   };
   try {

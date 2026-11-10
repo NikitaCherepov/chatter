@@ -8,10 +8,12 @@ import { installNpm, installPython, mcpProcessError } from './local-mcp-runtime'
 import {
   resolveLocalInput,
   packageFields,
+  localMcpLaunchArgs,
   localMcpSource,
   npmSpec,
   pypiSpec,
   validateLocalMcpEnvironment,
+  validateLocalMcpArguments,
   emptyMcpApproval,
   normalizeMcpApproval,
   type McpApprovalPolicy,
@@ -49,9 +51,11 @@ const empty = (): Metadata => ({
   capabilities: null,
   server_info: null,
 });
+const hasEditableManifestArgs = (manifest: LocalMcpConfig['manifest']) =>
+  !!manifest && packageFields(manifest.package).some((field) => !field.key.startsWith('env:'));
 export class LocalMcpManager {
   private sessions = new Map<string, { client: Client; stderr: string }>();
-  private requests = new Map<string, { id: string; controller: AbortController }>();
+  private requests = new Map<string, { id?: string; controller: AbortController }>();
   private busy = new Set<string>();
   private installing = new Set<string>();
   private writes = new Map<string, Promise<unknown>>();
@@ -203,6 +207,13 @@ export class LocalMcpManager {
         if (field.name) values['env:' + field.name] = env[field.name] ?? '';
     return {
       env,
+      ...(hasEditableManifestArgs(manifest)
+        ? {}
+        : {
+            args: record.config.npm
+              ? record.config.args.slice(1)
+              : localMcpLaunchArgs(record.config),
+          }),
       ...(manifest && values && { manifest: { package: manifest.package, values } }),
       config_revision: record.config_revision,
       mode: record.mode,
@@ -222,7 +233,12 @@ export class LocalMcpManager {
       result.push(this.public(await this.read(scope, id)));
     return result;
   }
-  private async preparePython(scope: string, id: string, config: LocalMcpConfig) {
+  private async preparePython(
+    scope: string,
+    id: string,
+    config: LocalMcpConfig,
+    signal?: AbortSignal,
+  ) {
     const source = config.git || config.pypi;
     if (!source) throw new Error('mcp_invalid_python_package');
     const directory = this.packageDirectory(
@@ -239,6 +255,7 @@ export class LocalMcpManager {
         python: config.python,
         tool: config.tool,
         env: config.user_env || config.env,
+        signal,
       },
     );
     config.command = installed.command;
@@ -250,13 +267,19 @@ export class LocalMcpManager {
     };
     config.env = { ...config.user_env, ...config.managed_env };
   }
-  private async prepareNpm(scope: string, id: string, config: LocalMcpConfig) {
+  private async prepareNpm(
+    scope: string,
+    id: string,
+    config: LocalMcpConfig,
+    signal?: AbortSignal,
+  ) {
     const directory = this.packageDirectory(scope, id, config.package_generation);
     await fs.mkdir(directory, { recursive: true });
     const installed = await this.npmInstaller(
       path.join(this.root, 'runtime'),
       directory,
       config.npm!,
+      signal,
     );
     config.command = installed.command;
     config.args = [installed.entry, ...config.args];
@@ -268,6 +291,7 @@ export class LocalMcpManager {
     scope: string,
     input: LocalMcpInput,
     progress?: (phase: LocalMcpInstallPhase) => void,
+    signal?: AbortSignal,
   ) {
     if (this.installing.has(scope)) throw new Error('mcp_install_busy');
     this.installing.add(scope);
@@ -275,10 +299,11 @@ export class LocalMcpManager {
       const config = resolveLocalInput(input);
       config.user_env = { ...config.env };
       const entries = await this.list(scope);
+      signal?.throwIfAborted();
       const source = localMcpSource(config);
       if (input.reuse_existing && source) {
         const existing = entries.find((entry) => entry.source_key === source.key);
-        if (existing) return existing;
+        if (existing) return { ...existing, reused: true as const };
       }
       if (entries.length >= 20) throw new Error('mcp_connection_limit');
       if (config.git || config.npm || config.pypi)
@@ -304,18 +329,22 @@ export class LocalMcpManager {
       if (config.npm) {
         progress?.('installing');
         try {
-          await this.prepareNpm(scope, record.id, config);
+          await this.prepareNpm(scope, record.id, config, signal);
+          signal?.throwIfAborted();
         } catch {
           await this.remove(scope, record.id);
+          signal?.throwIfAborted();
           throw new Error('mcp_package_install_failed');
         }
       }
       if (config.pypi || config.git) {
         progress?.('installing');
         try {
-          await this.preparePython(scope, record.id, config);
+          await this.preparePython(scope, record.id, config, signal);
+          signal?.throwIfAborted();
         } catch (error) {
           await this.remove(scope, record.id);
+          signal?.throwIfAborted();
           throw error;
         }
       }
@@ -323,8 +352,13 @@ export class LocalMcpManager {
       record.enabled = true;
       await this.write(record);
       try {
-        await this.discoverRecord(record);
+        signal?.throwIfAborted();
+        await this.discoverRecord(record, signal);
       } catch (error: any) {
+        if (signal?.aborted) {
+          await this.remove(scope, record.id);
+          throw signal.reason;
+        }
         record.error = String(error?.message || 'mcp_discovery_failed').slice(0, 2000);
         await this.write(record);
       }
@@ -349,7 +383,7 @@ export class LocalMcpManager {
     if (existing) return existing.client;
     const transport = new StdioClientTransport({
       command: record.config.command!,
-      args: record.config.args,
+      args: localMcpLaunchArgs(record.config),
       env: record.config.env,
       cwd: this.directory(record.scope, record.id),
       stderr: 'pipe',
@@ -614,7 +648,11 @@ export class LocalMcpManager {
         throw new Error('mcp_invalid_tools');
       record.selected_tools = patch.selected_tools;
     }
-    if (patch.env !== undefined || patch.manifest_values !== undefined) {
+    if (
+      patch.env !== undefined ||
+      patch.manifest_values !== undefined ||
+      patch.args !== undefined
+    ) {
       const previous = this.environment(record);
       let env = patch.env === undefined ? previous.user : validateLocalMcpEnvironment(patch.env);
       let { args, manifest } = record.config;
@@ -640,8 +678,14 @@ export class LocalMcpManager {
           env,
         });
         env = resolved.env;
-        args = record.config.npm ? [args[0], ...resolved.args] : resolved.args;
+        if (hasEditableManifestArgs(manifest))
+          args = record.config.npm ? [args[0], ...resolved.args] : resolved.args;
         manifest = resolved.manifest;
+      }
+      if (patch.args !== undefined) {
+        if (hasEditableManifestArgs(manifest)) throw new Error('mcp_invalid_arguments');
+        const userArgs = validateLocalMcpArguments(patch.args);
+        args = record.config.npm ? [args[0], ...userArgs] : userArgs;
       }
       const sorted = (value: Record<string, string>) =>
         JSON.stringify(Object.entries(value).sort());
@@ -668,7 +712,32 @@ export class LocalMcpManager {
     await this.write(record);
     return { summary: this.public(record), restart: launchConfigChanged && record.enabled };
   }
-  async control(scope: string, payload: any, progress?: () => void) {
+  async control(scope: string, payload: any, progress?: (phase?: LocalMcpInstallPhase) => void) {
+    if (payload.action === 'install') {
+      const controller = new AbortController();
+      const requestId = payload.request_id;
+      if (typeof requestId !== 'string' || this.requests.has(requestId))
+        throw new Error('mcp_invalid_install_input');
+      this.requests.set(requestId, { controller });
+      try {
+        const config = resolveLocalInput(payload.input);
+        if (!payload.input.catalog_id && !config.npm && !config.pypi && !config.git)
+          throw new Error('mcp_invalid_install_input');
+        const result = await this.install(scope, payload.input, progress, controller.signal);
+        return {
+          id: result.id,
+          installed_version: result.installed_version,
+          reused: 'reused' in result && result.reused,
+          error:
+            result.error ||
+            (!result.enabled || !result.capabilities ? 'mcp_connection_not_ready' : undefined),
+          tool_count: result.tools.length,
+          resource_count: result.resources.length,
+        };
+      } finally {
+        this.requests.delete(requestId);
+      }
+    }
     const id = payload.local_id;
     if (this.busy.has(id)) throw new Error('mcp_connection_busy');
     const controller = new AbortController();
@@ -736,7 +805,7 @@ export class LocalMcpManager {
     const request = this.requests.get(requestId);
     if (!request) return;
     request.controller.abort(new Error('mcp_cancelled'));
-    await this.stop(request.id);
+    if (request.id) await this.stop(request.id);
   }
   private async stop(id: string) {
     for (const request of this.requests.values())

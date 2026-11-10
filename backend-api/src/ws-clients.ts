@@ -8,7 +8,7 @@ export type WsClient = {
   ws: WebSocket;
   accessToken: string;
   accountId: number;
-  pendingIpc: Map<string, { resolve: (data: any) => void; reject: (err: Error) => void; timer: ReturnType<typeof setTimeout>; progress?: (sequence: unknown) => void }>;
+  pendingIpc: Map<string, { resolve: (data: any) => void; reject: (err: Error) => void; timer: ReturnType<typeof setTimeout>; progress?: (sequence: unknown, phase?: unknown) => void }>;
   connectionId: string;
   connectedAt: number;
   lastMessageAt: number;
@@ -42,7 +42,7 @@ const wsStateName = (state: number): string => {
   return `UNKNOWN(${state})`;
 };
 
-export function sendIpcToDesktop(userId: number, ipcType: string, payload: any, timeoutMs = 30000, signal?: AbortSignal, onProgress?: () => void): Promise<any> {
+export function sendIpcToDesktop(userId: number, ipcType: string, payload: any, timeoutMs = 30000, signal?: AbortSignal, onProgress?: (phase?: unknown) => void): Promise<any> {
   const client = wsClients.get(userId);
   if (!client) {
     throw new Error('desktop_not_connected');
@@ -129,14 +129,14 @@ export function sendIpcToDesktop(userId: number, ipcType: string, payload: any, 
         reject(err);
       },
       timer,
-      progress: (next: unknown) => {
+      progress: (next: unknown, phase?: unknown) => {
         if (!((ipcType === 'browser_control' && payload?.action === 'fill') || ipcType === 'google_ai' || ipcType === 'mcp_control')) return;
         if (payload?.human_typing === false || !Number.isSafeInteger(next) || Number(next) <= sequence) return;
         if (wsClients.get(userId) !== client || !client.pendingIpc.has(requestId)) return;
         sequence = Number(next);
-        try { void Promise.resolve(onProgress?.()).catch(()=>{}); } catch {}
+        try { void Promise.resolve(onProgress?.(phase)).catch(()=>{}); } catch {}
         clearTimeout(timer);
-        const remaining = ipcType === 'mcp_control' ? timeoutMs : expiresAt - Date.now();
+        const remaining = ipcType === 'mcp_control' && payload?.action !== 'install' ? timeoutMs : expiresAt - Date.now();
         timer = setTimeout(onTimeout, Math.max(0, Math.min(ipcType === 'mcp_control' ? timeoutMs : ipcType === 'google_ai' ? 120_000 : 30_000, remaining)));
         client.pendingIpc.get(requestId)!.timer = timer;
       },

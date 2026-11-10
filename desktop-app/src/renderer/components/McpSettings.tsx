@@ -430,6 +430,7 @@ export function McpSettings({
                   setLocalDraft(null);
                   setAdding(false);
                 }}
+                onAskMcpHelp={onAskMcpHelp}
               />
             )}
             {adding &&
@@ -778,7 +779,7 @@ function GithubMcpImport({
       const result = await api.importGithubMcp(link.trim(), allowRegistry, controller.signal);
       if (controller.signal.aborted) return;
       const supported = result.items.filter((item) => {
-        if (!item.package) return !!item.url;
+        if (!item.package) return !!item.url || (canAddLocal && !!item.source);
         if (!canAddLocal || !packageFromSource(JSON.stringify({ package: item.package })))
           return false;
         try {
@@ -831,6 +832,9 @@ function GithubMcpImport({
           placeholder="https://github.com/owner/repository"
         />
       </label>
+      <p className={s.connectionsHelp}>
+        {t('mcp.github.hint')} <code>uvx windows-mcp serve</code>
+      </p>
       {failed && (
         <p className={s.connectionsHelp} role="status">
           {t('mcp.github.' + status)}
@@ -842,7 +846,7 @@ function GithubMcpImport({
             key={
               item.package
                 ? item.package.registryType + ':' + item.package.identifier + '@' + item.version
-                : item.url
+                : item.url || item.source
             }
             type="button"
             className={s.cancelBtn}
@@ -850,7 +854,7 @@ function GithubMcpImport({
           >
             {item.package
               ? [item.package.identifier, item.version].filter(Boolean).join(' · ')
-              : item.url}
+              : item.url || item.source || item.title || item.name}
           </button>
         ))}
       <div className={styles.actions}>
@@ -860,11 +864,11 @@ function GithubMcpImport({
         <button className={s.cancelBtn} type="button" onClick={onManual}>
           {t('mcp.github.manual')}
         </button>
-        {failed && onAskMcpHelp && (
+        {onAskMcpHelp && (
           <button
             className={s.cancelBtn}
             type="button"
-            disabled={asking}
+            disabled={asking || !link.trim()}
             onClick={() => {
               setAsking(true);
               void onAskMcpHelp(t('mcp.github.prompt') + '\n' + link.trim()).finally(() =>
