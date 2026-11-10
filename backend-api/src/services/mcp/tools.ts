@@ -6,12 +6,14 @@ import { callRemoteTool } from './client.js';
 import { browseMcp, readMcpResource, prepareMcpResource } from './discovery.js';
 import { wrapUntrustedContent } from '../web-reader.js';
 import { browseInstallCatalog, canInstallMcp, installMcp } from './install.js';
+import { configureMcp } from './configure.js';
 
 export const browseToolName = 'browse_mcp';
 export const readResourceToolName = 'read_mcp_resource';
 export const searchToolName = 'search_mcp_tools';
 export const callToolName = 'call_mcp_tool';
 export const installToolName = 'install_mcp';
+export const configureToolName = 'configure_mcp';
 const functionTool = (name: string, description: string, properties: any, required: string[]) => ({
   type: 'function' as const,
   function: {
@@ -50,6 +52,44 @@ export const mcpSearchTool = functionTool(
     server: { type: 'string', description: 'Optional connection name' },
   },
   ['query'],
+);
+export const mcpConfigureTool = functionTool(
+  configureToolName,
+  'Read or update an existing MCP connection after one-time user confirmation. Use its connection_id from browse_mcp. For read, optionally set looking_for to part of a setting name; omission reads all safe settings. Secrets and environment values are hidden. For update, send only exact fields to change. Example: {"connection_id":123,"action":"update","patch":{"append_args":["--no-control"]}}. Use env with null to remove a variable. Enter credentials manually in settings.',
+  {
+    connection_id: { type: 'integer' },
+    action: { type: 'string', enum: ['read', 'update'] },
+    looking_for: { type: 'string' },
+    patch: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        mode: { type: 'string', enum: ['search', 'eager'] },
+        timeout_seconds: { type: 'integer', minimum: 10, maximum: 3600 },
+        args: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Replace all launch arguments (local only)',
+        },
+        append_args: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Append arguments while preserving existing ones (local only)',
+        },
+        env: {
+          type: 'object',
+          additionalProperties: { type: ['string', 'null'] },
+          description: 'Patch environment variables (local only)',
+        },
+        manifest_values: {
+          type: 'object',
+          additionalProperties: { type: 'string' },
+          description: 'Edit non-secret structured argument fields by their exact key (local only)',
+        },
+      },
+    },
+  },
+  ['connection_id', 'action'],
 );
 export const mcpCallTool = functionTool(
   callToolName,
@@ -126,7 +166,12 @@ export function getMcpDefinitions(userId: number, legacySearch = false) {
     },
   }));
   if (availableConnections(userId).length) {
-    defs.push(mcpBrowseTool as any, mcpCallTool as any, mcpReadResourceTool as any);
+    defs.push(
+      mcpBrowseTool as any,
+      mcpCallTool as any,
+      mcpReadResourceTool as any,
+      mcpConfigureTool as any,
+    );
     if (legacySearch) defs.push(mcpSearchTool as any);
   }
   if (canInstallMcp(userId)) {
@@ -277,6 +322,7 @@ export async function runMcpTool(
   context?: McpApprovalContext,
 ): Promise<string | undefined> {
   if (name === installToolName) return installMcp(userId, args, signal, context);
+  if (name === configureToolName) return configureMcp(userId, args, signal, context);
   if (name === browseToolName && args?.kind === 'catalog')
     return wrapUntrustedContent(JSON.stringify(browseInstallCatalog(userId, args.query)));
   if (name === browseToolName || name === searchToolName)

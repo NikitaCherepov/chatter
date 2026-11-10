@@ -254,6 +254,25 @@ export async function checkApprovals({ tools, store, connection, received, requi
   assert.equal(getPendingPcConfirmation(install.id), undefined);
   finishInstall('installed');
   assert.equal(await installResult, 'installed');
+  async function configure(input: any, beforeApproval?: () => void) {
+    let card: any;
+    const run = tools.runMcpTool(81, 'configure_mcp', { connection_id: connection.id, ...input },
+      undefined, undefined, undefined, { onDesktopAction: (action: any) => {
+        if (action.action === 'mcp_confirmation') card = action.value;
+      } });
+    void run.catch(() => {});
+    assert.equal(card.operation, input.action === 'read' ? 'config_read' : 'config_update');
+    beforeApproval?.();
+    await route(approvalUrl, { id: card.confirmation_id });
+    return JSON.parse(await run);
+  }
+  assert.deepEqual((await configure({ action: 'read', looking_for: 'credentials' })).settings,
+    { has_credentials: true });
+  const originalTimeout = store.requireConnection(81, connection.id).timeout_seconds;
+  await assert.rejects(() => configure({ action: 'update', patch: { timeout_seconds: 90 } }, () =>
+    store.saveConnection(81, { timeout_seconds: 91 }, connection.id)), /mcp_confirmation_stale/);
+  assert.equal(store.requireConnection(81, connection.id).timeout_seconds, 91);
+  assert.equal((await configure({ action: 'update', patch: { timeout_seconds: originalTimeout } })).status, 'updated');
   console.log(
     'MCP confirmation checks passed: captured args, once/remember, resource scope, rejection, cancellation, stale grants, background, eager',
   );

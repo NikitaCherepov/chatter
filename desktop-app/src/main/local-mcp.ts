@@ -53,6 +53,22 @@ const empty = (): Metadata => ({
 });
 const hasEditableManifestArgs = (manifest: LocalMcpConfig['manifest']) =>
   !!manifest && packageFields(manifest.package).some((field) => !field.key.startsWith('env:'));
+const userLaunchArgs = (config: LocalMcpConfig) =>
+  config.npm ? config.args.slice(1) : localMcpLaunchArgs(config);
+const visibleBotArgs = new Set([
+  'serve',
+  '--no-control',
+  '--control',
+  '--transport',
+  '--control-policy',
+  '--control-idle-timeout',
+  '--host',
+  '--port',
+  '--debug',
+  '--verbose',
+  '--quiet',
+  '--log-level',
+]);
 export class LocalMcpManager {
   private sessions = new Map<string, { client: Client; stderr: string }>();
   private requests = new Map<string, { id?: string; controller: AbortController }>();
@@ -210,15 +226,129 @@ export class LocalMcpManager {
       ...(hasEditableManifestArgs(manifest)
         ? {}
         : {
-            args: record.config.npm
-              ? record.config.args.slice(1)
-              : localMcpLaunchArgs(record.config),
+            args: userLaunchArgs(record.config),
           }),
       ...(manifest && values && { manifest: { package: manifest.package, values } }),
       config_revision: record.config_revision,
       mode: record.mode,
       timeout_seconds: record.timeout_seconds,
     };
+  }
+  private settingsForBot(record: RecordData, query: string) {
+    const filter = query.toLowerCase();
+    const matches = (key: string) => key.toLowerCase().includes(filter);
+    const env = this.environment(record).user;
+    const { manifest } = record.config;
+    const fields = manifest ? packageFields(manifest.package) : [];
+    const settings = Object.fromEntries(
+      Object.entries({
+        enabled: record.enabled,
+        mode: record.mode,
+        timeout_seconds: record.timeout_seconds,
+        args_editable: !hasEditableManifestArgs(manifest),
+      }).filter(([key]) => matches(key)),
+    );
+    const args = userLaunchArgs(record.config).map((arg) =>
+      visibleBotArgs.has(arg) ? arg : '[redacted]',
+    );
+    const envNames = [
+      ...new Set([
+        ...Object.keys(env),
+        ...fields
+          .filter((field) => field.key.startsWith('env:'))
+          .map((field) => field.key.slice(4)),
+      ]),
+    ];
+    const environment = envNames.filter((name) => matches('env') || matches(name));
+    const manifestFields = fields.filter(
+      (field) =>
+        !field.key.startsWith('env:') && (matches('manifest_values') || matches(field.key)),
+    );
+    return {
+      ...settings,
+      ...(matches('args') || args.some(matches) ? { args } : {}),
+      ...(matches('env') || environment.length
+        ? {
+            env: Object.fromEntries(
+              environment.map((name) => [name, { set: Object.prototype.hasOwnProperty.call(env, name) }]),
+            ),
+          }
+        : {}),
+      ...(matches('manifest_values') || manifestFields.length
+        ? {
+            manifest_values: Object.fromEntries(
+              manifestFields.map((field) => [
+                field.key,
+                {
+                  set: !!manifest?.values[field.key],
+                  editable: !field.secret,
+                },
+              ]),
+            ),
+          }
+        : {}),
+    };
+  }
+  private settingsPatchForBot(record: RecordData, patch: any) {
+    if (
+      !patch ||
+      typeof patch !== 'object' ||
+      Array.isArray(patch) ||
+      Object.keys(patch).some(
+        (key) =>
+          !['mode', 'timeout_seconds', 'args', 'append_args', 'env', 'manifest_values'].includes(
+            key,
+          ),
+      )
+    )
+      throw new Error('mcp_invalid_configuration');
+    const fields = record.config.manifest ? packageFields(record.config.manifest.package) : [];
+    const { user, managed } = this.environment(record);
+    const { env: envChanges, append_args: appendArgs, ...result } = patch;
+    if (envChanges !== undefined) {
+      if (!envChanges || typeof envChanges !== 'object' || Array.isArray(envChanges))
+        throw new Error('mcp_invalid_environment');
+      const entries = new Map(Object.entries(user));
+      for (const [name, value] of Object.entries(envChanges)) {
+        const field = fields.find((item) => item.key === 'env:' + name);
+        if (
+          !/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(name) ||
+          Object.keys(managed).some((key) => key.toUpperCase() === name.toUpperCase()) ||
+          field?.secret ||
+          /(?:^|_)(?:KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIALS?)(?:_|$)/i.test(name) ||
+          (value === null && field?.required)
+        )
+          throw new Error('mcp_configuration_field_not_allowed');
+        if (value === null) entries.delete(name);
+        else if (typeof value === 'string') entries.set(name, value);
+        else throw new Error('mcp_invalid_environment');
+      }
+      result.env = validateLocalMcpEnvironment(Object.fromEntries(entries));
+    }
+    if (result.manifest_values !== undefined) {
+      const values = result.manifest_values;
+      if (
+        !values ||
+        typeof values !== 'object' ||
+        Array.isArray(values) ||
+        Object.keys(values).some(
+          (key) =>
+            key.startsWith('env:') || !fields.some((field) => field.key === key && !field.secret),
+        )
+      )
+        throw new Error('mcp_configuration_field_not_allowed');
+    }
+    if (appendArgs !== undefined) {
+      if (result.args !== undefined) throw new Error('mcp_invalid_arguments');
+      const extra = validateLocalMcpArguments(appendArgs);
+      const previous = userLaunchArgs(record.config);
+      if (
+        extra.length &&
+        !extra.every((arg, i) => arg === previous[previous.length - extra.length + i])
+      )
+        result.args = [...previous, ...extra];
+    }
+    return result;
   }
   async list(scope: string) {
     let entries: string[];
@@ -591,9 +721,9 @@ export class LocalMcpManager {
       return this.public(candidate);
     });
   }
-  async configure(scope: string, id: string, patch: any) {
+  async configure(scope: string, id: string, patch: any, bot = false) {
     const { summary, restart } = await this.serialized(id, () =>
-      this.configureRecord(scope, id, patch),
+      this.configureRecord(scope, id, patch, bot),
     );
     if (!restart) return summary;
     // Discovery also serializes metadata writes; run it outside the write queue.
@@ -614,11 +744,17 @@ export class LocalMcpManager {
     }
     return this.public(await this.read(scope, id));
   }
-  private async configureRecord(scope: string, id: string, patch: any) {
+  private async configureRecord(scope: string, id: string, patch: any, bot: boolean) {
     const record = await this.read(scope, id);
     let launchConfigChanged = false;
-    if ('expected_revision' in patch && patch.expected_revision !== record.config_revision)
+    const expected = patch.expected_revision;
+    if ((bot || 'expected_revision' in patch) && expected !== record.config_revision)
       throw new Error('mcp_connection_changed');
+    if (bot) {
+      const { expected_revision, ...changes } = patch;
+      patch = this.settingsPatchForBot(record, changes);
+    }
+    const before = [record.mode, record.timeout_seconds, record.enabled];
     if (patch.approval_policy !== undefined)
       record.approval_policy = normalizeMcpApproval(patch.approval_policy);
     if (patch.enabled !== undefined) {
@@ -671,13 +807,16 @@ export class LocalMcpManager {
             ...Object.fromEntries(
               (manifest.package.environmentVariables || [])
                 .filter((field) => field.name)
-                .map((field) => ['env:' + field.name, previous.user[field.name!] ?? '']),
+                .map((field) => [
+                  'env:' + field.name,
+                  (bot ? env : previous.user)[field.name!] ?? '',
+                ]),
             ),
             ...patch.manifest_values,
           },
           env,
         });
-        env = resolved.env;
+        if (!bot) env = resolved.env;
         if (hasEditableManifestArgs(manifest))
           args = record.config.npm ? [args[0], ...resolved.args] : resolved.args;
         manifest = resolved.manifest;
@@ -708,11 +847,44 @@ export class LocalMcpManager {
         await this.stop(id);
       }
     }
+    if (
+      before[0] !== record.mode ||
+      before[1] !== record.timeout_seconds ||
+      before[2] !== record.enabled
+    )
+      record.config_revision = crypto.randomUUID();
     if (!record.enabled) await this.stop(id);
     await this.write(record);
     return { summary: this.public(record), restart: launchConfigChanged && record.enabled };
   }
   async control(scope: string, payload: any, progress?: (phase?: LocalMcpInstallPhase) => void) {
+    if (payload.action === 'read_settings') {
+      const record = await this.read(scope, payload.local_id);
+      if (payload.config_revision !== record.config_revision)
+        throw new Error('mcp_connection_changed');
+      return this.settingsForBot(
+        record,
+        typeof payload.looking_for === 'string' ? payload.looking_for : '',
+      );
+    }
+    if (payload.action === 'update_settings') {
+      const result = await this.configure(
+        scope,
+        payload.local_id,
+        {
+          ...payload.patch,
+          expected_revision: payload.config_revision,
+        },
+        true,
+      );
+      return {
+        status: result.error ? 'updated_connection_failed' : 'updated',
+        ...(result.error && { error: 'mcp_discovery_failed' }),
+        enabled: result.enabled,
+        tool_count: result.tools.length,
+        resource_count: result.resources.length,
+      };
+    }
     if (payload.action === 'install') {
       const controller = new AbortController();
       const requestId = payload.request_id;

@@ -2385,7 +2385,7 @@ export function ChatPage() {
         break;
       case 'mcp_confirmation':
         body=String(value?.server_name||'MCP')+' / '+String(value?.target||'');sensitive=true;
-        reviewOnly=value?.operation==='install';
+        reviewOnly=value?.operation!=='tool'&&value?.operation!=='resource';
         break;
       case 'pc_command_confirmation':
         body = String(value?.command || '');
@@ -5212,7 +5212,11 @@ export function ChatPage() {
 
   const confirmationCards = [
     ...mcpConfirmations.map(conf=><McpConfirmationCard
-      key={conf.confirmation_id} id={conf.confirmation_id} title={t(conf.operation==='install'?'mcp.installApproval.title':'mcp.approvals.title')}
+      key={conf.confirmation_id} id={conf.confirmation_id} title={t(
+        conf.operation==='install'?'mcp.installApproval.title':
+        conf.operation==='config_read'?'mcp.configApproval.read':
+        conf.operation==='config_update'?'mcp.configApproval.update':'mcp.approvals.title'
+      )}
       summary={conf.server_name+' / '+conf.target} confirmation={conf}
       onResolved={id=>setMcpConfirmations(previous=>previous.filter(item=>item.confirmation_id!==id))}/>),
     ...pendingChatLinks.map(link => {

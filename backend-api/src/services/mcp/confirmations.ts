@@ -89,7 +89,7 @@ export async function confirmMcpAction(
   userId: number,
   op: {
     connection_id?: number;
-    operation: 'tool' | 'resource' | 'install';
+    operation: 'tool' | 'resource' | 'install' | 'config_read' | 'config_update';
     target: string;
     arguments: unknown;
   },

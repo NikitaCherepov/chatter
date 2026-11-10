@@ -8,7 +8,7 @@ export type McpConfirmation = {
   confirmation_id: string;
   connection_id?: number;
   server_name: string;
-  operation: 'tool' | 'resource' | 'install';
+  operation: 'tool' | 'resource' | 'install' | 'config_read' | 'config_update';
   phase?: 'installing' | 'connecting';
   target: string;
   arguments: unknown;
@@ -25,11 +25,13 @@ function AllowButton({
   submit,
   resource,
   install,
+  update,
 }: {
   remember?: boolean;
   submit: (approved: boolean, remember?: boolean, comment?: string) => Promise<void>;
   resource: boolean;
   install?: boolean;
+  update?: boolean;
 }) {
   const { t } = useTranslation(),
     card = useContext(ConfirmationCardContext);
@@ -47,7 +49,9 @@ function AllowButton({
             : 'mcp.approvals.alwaysTool'
           : install
             ? 'mcp.installApproval.allow'
-            : 'chat.confirm.allow',
+            : update
+              ? 'mcp.configApproval.apply'
+              : 'chat.confirm.allow',
       )}
     </button>
   );
@@ -77,6 +81,10 @@ export function McpConfirmationCard({ confirmation: conf, onResolved, ...props }
   };
   const resource = conf.operation === 'resource';
   const install = conf.operation === 'install';
+  const update = conf.operation === 'config_update';
+  const read = conf.operation === 'config_read';
+  const filter = read ? (conf.arguments as { looking_for?: string })?.looking_for : undefined;
+  const reusable = resource || conf.operation === 'tool';
   const phase = conf.phase || (installAccepted ? 'installing' : undefined);
   const setup = install
     ? (conf.arguments as { command?: string; url?: string; documentation?: string })
@@ -87,7 +95,7 @@ export function McpConfirmationCard({ confirmation: conf, onResolved, ...props }
       actions={
         phase && install ? null : (
           <>
-            <AllowButton submit={submit} resource={resource} install={install} />
+            <AllowButton submit={submit} resource={resource} install={install} update={update} />
             <RejectWithComment
               className={s.suggestMacroDismissBtn}
               onReject={(comment) => submit(false, false, comment)}
@@ -96,7 +104,7 @@ export function McpConfirmationCard({ confirmation: conf, onResolved, ...props }
         )
       }
       extraActions={
-        install ? undefined : (
+        !reusable ? undefined : (
           <>
             <p>{t(resource ? 'mcp.approvals.resourceHint' : 'mcp.approvals.toolHint')}</p>
             <AllowButton remember submit={submit} resource={resource} />
@@ -115,9 +123,22 @@ export function McpConfirmationCard({ confirmation: conf, onResolved, ...props }
               </a>
             )}
           </>
+        ) : read ? (
+          <div>
+            <p>
+              {filter ? (
+                <>
+                  {t('mcp.configApproval.filter')} <code>{filter}</code>
+                </>
+              ) : (
+                t('mcp.configApproval.all')
+              )}
+            </p>
+            <small>{t('mcp.configApproval.privacy')}</small>
+          </div>
         ) : (
           <>
-            <code className={s.suggestMacroCmd}>{conf.target}</code>
+            {reusable && <code className={s.suggestMacroCmd}>{conf.target}</code>}
             <pre className={s.suggestMacroCmd}>{JSON.stringify(conf.arguments, null, 2)}</pre>
           </>
         )}

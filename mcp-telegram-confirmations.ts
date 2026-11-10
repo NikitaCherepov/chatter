@@ -104,6 +104,7 @@ export function registerMcpTelegramConfirmations(bot: any, options: Options) {
     if (action?.action !== 'mcp_confirmation' || !value?.confirmation_id) return false;
     const id = value.confirmation_id;
     if (messages.has(id)) return true;
+    const reusable = value.operation === 'tool' || value.operation === 'resource';
     const label = String(value.server_name || 'MCP') + ' / ' + String(value.target || '');
     const args = JSON.stringify(value.arguments, null, 2),
       header = ctx.t('mcpConfirmation.title') + '\n' + label.slice(0, 700);
@@ -112,7 +113,7 @@ export function registerMcpTelegramConfirmations(bot: any, options: Options) {
         Markup.button.callback(ctx.t('confirmations.buttons.allow'), 'mcpconfirm:allow:' + id),
         Markup.button.callback(ctx.t('confirmations.buttons.reject'), 'mcpconfirm:reject:' + id),
       ],
-      ...(value.operation === 'install' ? [] : [[
+      ...(!reusable ? [] : [[
         Markup.button.callback(
           ctx.t(
             value.operation === 'resource'
@@ -129,7 +130,7 @@ export function registerMcpTelegramConfirmations(bot: any, options: Options) {
         ),
       ],
     ]);
-    const hint = value.operation === 'install' ? '' : ctx.t(
+    const hint = !reusable ? '' : ctx.t(
       value.operation === 'resource' ? 'mcpConfirmation.resourceHint' : 'mcpConfirmation.toolHint',
     );
     const text = header + '\n\n' + args + '\n\n' + hint;

@@ -402,6 +402,61 @@ try {
   assert.equal(repeated.status, 'already_connected');
   assert.equal(repeated.local_id, result.local_id);
   assert.equal(installations.length, previousInstalls + 1);
+  await manager.configure(scope, result.local_id, {
+    args: ['serve', '--token', 'private-argument'],
+    env: { PRIVATE_KEY: 'private-environment', WINDOWS_MCP_CONTROL_POLICY: 'relaxed' },
+  });
+  const syncSettings = async () => syncDesktopMcp(wsClient, await manager.list(scope));
+  await syncSettings();
+  const configId = store.connections(81).find((item: any) => item.local_id === result.local_id).id;
+  function requestConfiguration(input: any) {
+    let confirmation: any;
+    const response = tools.runMcpTool(81, 'configure_mcp', { connection_id: configId, ...input },
+      undefined, undefined, undefined, {
+        onDesktopAction: (action: any) => {
+          if (action.action === 'mcp_confirmation') confirmation = action.value;
+        },
+      });
+    const id = confirmation.confirmation_id;
+    const pending = getPendingPcConfirmation(id);
+    return {
+      confirmation,
+      approve: async () => {
+        assert.equal(deletePendingPcConfirmation(id), true);
+        try { pending.resolve(await pending.execute({ remember: true })); }
+        catch (error) { pending.reject(error); }
+        return response;
+      },
+    };
+  }
+  const beforeRead = sent.filter((item) => item.payload?.action === 'read_settings').length;
+  const read = requestConfiguration({ action: 'read', looking_for: 'CONTROL_POLICY' });
+  assert.equal(read.confirmation.operation, 'config_read');
+  assert.equal(sent.filter((item) => item.payload?.action === 'read_settings').length, beforeRead);
+  const filtered = unwrap(JSON.parse(await read.approve()).settings);
+  assert.deepEqual(filtered, { env: { WINDOWS_MCP_CONTROL_POLICY: { set: true } } });
+  const all = await requestConfiguration({ action: 'read' }).approve();
+  assert.doesNotMatch(all, /private-argument|private-environment|relaxed/);
+  assert.deepEqual(unwrap(JSON.parse(all).settings).args, ['serve', '[redacted]', '[redacted]']);
+  const changes = { append_args: ['--no-control'], env: { WINDOWS_MCP_CONTROL_POLICY: 'balanced' } };
+  const update = requestConfiguration({ action: 'update', patch: changes });
+  assert.equal(update.confirmation.operation, 'config_update');
+  assert.deepEqual(update.confirmation.arguments, changes);
+  assert.equal(JSON.parse(await update.approve()).tool_count, 3);
+  const settings = await manager.settings(scope, result.local_id);
+  assert.deepEqual(settings.args, ['serve', '--token', 'private-argument', '--no-control']);
+  assert.deepEqual(settings.env, { PRIVATE_KEY: 'private-environment', WINDOWS_MCP_CONTROL_POLICY: 'balanced' });
+  await syncSettings();
+  const stale = requestConfiguration({ action: 'update', patch: { env: { WINDOWS_MCP_CONTROL_POLICY: null } } });
+  await manager.configure(scope, result.local_id, { timeout_seconds: 42 });
+  // Simulate a manual edit whose new revision has not yet reached the backend.
+  await assert.rejects(stale.approve, /mcp_connection_changed/);
+  await syncSettings();
+  await assert.rejects(requestConfiguration({ action: 'update', patch: { env: { PRIVATE_KEY: 'replace' } } }).approve,
+    /mcp_configuration_field_not_allowed/);
+  await requestConfiguration({ action: 'update', patch: { env: { WINDOWS_MCP_CONTROL_POLICY: null } } }).approve();
+  assert.deepEqual((await manager.settings(scope, result.local_id)).env, { PRIVATE_KEY: 'private-environment' });
+  console.log('PASS: bot config confirmation, filtering, secret redaction, patches, restart and stale revision');
   await manager.remove(scope, result.local_id);
   console.log('PASS: bot install confirmation, policy recheck, desktop install and progress, duplicate reuse');
   console.log(

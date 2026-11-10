@@ -1704,6 +1704,7 @@ const googleAiRequestChats = new Map<string, number | undefined>();
 async function handleExecuteIpc(msg: { request_id: string; ipc_type: string; payload: any }) {
   const { request_id, ipc_type, payload } = msg;
   const requestSocket = ws;
+  const scopedMcp = ipc_type === 'mcp_control' && ['install', 'read_settings', 'update_settings'].includes(payload?.action);
   const stopProgress = (ipc_type === 'mcp_control' || ipc_type === 'google_ai' || (ipc_type === 'browser_control' && payload?.action === 'fill'))
     ? window.electronAPI?.onBrowserInputProgress?.(progress => {
         if (progress.request_id === request_id && ws === requestSocket && requestSocket?.readyState === WebSocket.OPEN) {
@@ -1730,7 +1731,7 @@ async function handleExecuteIpc(msg: { request_id: string; ipc_type: string; pay
       if(!window.electronAPI?.localMcpControl)throw new Error('mcp_desktop_upgrade_required');
       localMcpRequests.add(request_id);
       result=await window.electronAPI.localMcpControl({...payload,config_revision:payload.config_revision,scope:localMcpScope(),request_id});
-      if(payload.action==='install'){
+      if(payload.action==='install'||payload.action==='update_settings'){
         await syncLocalMcp(requestSocket).catch(()=>{});
         wsCallbacks.onMcpSettingsUpdated?.();
       } else if(payload.action==='discover')void syncLocalMcp(requestSocket).catch(()=>{});
@@ -1857,7 +1858,7 @@ async function handleExecuteIpc(msg: { request_id: string; ipc_type: string; pay
       resultPreview: typeof result === 'string' ? result.slice(0, 500) : undefined,
       wsReadyState: ws?.readyState,
     });
-    if(ipc_type==='mcp_control'&&payload?.action==='install'&&(ws!==requestSocket||requestSocket?.readyState!==WebSocket.OPEN))return;
+    if(scopedMcp&&(ws!==requestSocket||requestSocket?.readyState!==WebSocket.OPEN))return;
     ws?.send(JSON.stringify({ type: 'ipc_result', request_id, data: result }));
     console.log('[ipc] renderer ipc_result sent', { requestId: request_id });
   } catch (err: any) {
@@ -1870,7 +1871,7 @@ async function handleExecuteIpc(msg: { request_id: string; ipc_type: string; pay
     const ipcErrorMessage = err?.message || String(err);
     const mcpErrorCode = (ipc_type === 'mcp_control' || ipc_type === 'mcp_permission')
       ? /(?:^|Error: )(mcp_[a-z_]+)$/.exec(ipcErrorMessage)?.[1] : undefined;
-    if(ipc_type==='mcp_control'&&payload?.action==='install'&&(ws!==requestSocket||requestSocket?.readyState!==WebSocket.OPEN))return;
+    if(scopedMcp&&(ws!==requestSocket||requestSocket?.readyState!==WebSocket.OPEN))return;
     ws?.send(JSON.stringify({ type: 'ipc_result', request_id, error: mcpErrorCode || ipcErrorMessage }));
     console.log('[ipc] renderer ipc_result error sent', { requestId: request_id });
   } finally {
