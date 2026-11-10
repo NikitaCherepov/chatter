@@ -21,6 +21,7 @@ const fixture = path.join(root, 'server.cjs');
 await fs.writeFile(
   fixture,
   [
+    "if(process.argv.includes('--unsupported-fixture')){console.error(\"Error: No such option '--unsupported-fixture'.\\nprivate fixture diagnostics\");process.exit(2);}",
     "const readline=require('node:readline');let count=0;",
     "const send=(id,result)=>process.stdout.write(JSON.stringify({jsonrpc:'2.0',id,result})+'\\n');",
     "readline.createInterface({input:process.stdin}).on('line',line=>{const m=JSON.parse(line);",
@@ -409,6 +410,8 @@ try {
   const syncSettings = async () => syncDesktopMcp(wsClient, await manager.list(scope));
   await syncSettings();
   const configId = store.connections(81).find((item: any) => item.local_id === result.local_id).id;
+  const servers = unwrap(await tools.runMcpTool(81, 'browse_mcp', { kind: 'servers' }));
+  assert.equal(servers.items.find((item: any) => item.connection_id === configId).installed_version, '1');
   function requestConfiguration(input: any) {
     let confirmation: any;
     const response = tools.runMcpTool(81, 'configure_mcp', { connection_id: configId, ...input },
@@ -456,6 +459,13 @@ try {
     /mcp_configuration_field_not_allowed/);
   await requestConfiguration({ action: 'update', patch: { env: { WINDOWS_MCP_CONTROL_POLICY: null } } }).approve();
   assert.deepEqual((await manager.settings(scope, result.local_id)).env, { PRIVATE_KEY: 'private-environment' });
+  await syncSettings();
+  const failedConfig = await requestConfiguration({ action: 'update', patch: { append_args: ['--unsupported-fixture'] } }).approve();
+  assert.doesNotMatch(failedConfig, /private fixture diagnostics/);
+  assert.deepEqual(JSON.parse(failedConfig), {
+    status: 'updated_connection_failed', installed_version: '1', error: 'mcp_unsupported_launch_option',
+    rejected_option: '--unsupported-fixture', enabled: true, tool_count: 0, resource_count: 0,
+  });
   console.log('PASS: bot config confirmation, filtering, secret redaction, patches, restart and stale revision');
   await manager.remove(scope, result.local_id);
   console.log('PASS: bot install confirmation, policy recheck, desktop install and progress, duplicate reuse');

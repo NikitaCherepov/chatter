@@ -113,6 +113,8 @@ export function syncLocalConnections(client: WsClient, input: unknown) {
       url: 'stdio:' + item.id,
       transport: 'stdio' as const,
       local_id: item.id,
+      installed_version: typeof item.installed_version === 'string' && /^[a-zA-Z0-9][a-zA-Z0-9.+!_~-]{0,99}$/.test(item.installed_version)
+        ? item.installed_version : undefined,
       config_revision:
         typeof item.config_revision === 'string' ? item.config_revision.slice(0, 80) : undefined,
       approval_policy_json: JSON.stringify(

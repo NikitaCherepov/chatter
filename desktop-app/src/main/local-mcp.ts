@@ -246,6 +246,7 @@ export class LocalMcpManager {
         mode: record.mode,
         timeout_seconds: record.timeout_seconds,
         args_editable: !hasEditableManifestArgs(manifest),
+        installed_version: this.public(record).installed_version,
       }).filter(([key]) => matches(key)),
     );
     const args = userLaunchArgs(record.config).map((arg) =>
@@ -877,9 +878,17 @@ export class LocalMcpManager {
         },
         true,
       );
+      // Return only a rejected flag already present in the approved patch, never process stderr.
+      const option = /^\s*(?:error:\s*)?(?:no such option|unknown option):?\s+['"]?(--[\w-]+)(?=['"\s.]|$)/im
+        .exec(result.error || '')?.[1];
+      const requestedArgs: string[] = payload.patch?.append_args ?? payload.patch?.args ?? [];
+      const rejectedOption = option && requestedArgs.some((arg) => arg.split('=', 1)[0] === option)
+        ? option : undefined;
       return {
         status: result.error ? 'updated_connection_failed' : 'updated',
-        ...(result.error && { error: 'mcp_discovery_failed' }),
+        installed_version: result.installed_version,
+        ...(result.error && { error: rejectedOption ? 'mcp_unsupported_launch_option' : 'mcp_discovery_failed' }),
+        ...(rejectedOption && { rejected_option: rejectedOption }),
         enabled: result.enabled,
         tool_count: result.tools.length,
         resource_count: result.resources.length,

@@ -1055,8 +1055,8 @@ export async function syncLocalMcp(socket=ws){
   const scope=localMcpScope();
   const list=await window.electronAPI.localMcpManage({action:'list',scope});
   if(ws!==socket||socket.readyState!==WebSocket.OPEN||scope!==localMcpScope())return;
-  const connections=list.map(({id,name,enabled,mode,timeout_seconds,selected_tools,tools,resources,resource_templates,capabilities,server_info,approval_policy,config_revision}:any)=>
-    ({id,name,enabled,mode,timeout_seconds,selected_tools,tools,resources,resource_templates,capabilities,server_info,approval_policy,config_revision}));
+  const connections=list.map(({id,name,enabled,mode,timeout_seconds,selected_tools,tools,resources,resource_templates,capabilities,server_info,approval_policy,config_revision,installed_version}:any)=>
+    ({id,name,enabled,mode,timeout_seconds,selected_tools,tools,resources,resource_templates,capabilities,server_info,approval_policy,config_revision,installed_version}));
   if(JSON.stringify(connections).length>2_000_000)throw new Error('mcp_local_snapshot_too_large');
   socket.send(JSON.stringify({type:'mcp_local_sync',connections}));
 }

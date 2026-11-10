@@ -72,6 +72,7 @@ export async function browseMcp(userId: number, args: any, signal?: AbortSignal)
           description,
           url: row.url,
           mode: row.mode,
+          installed_version: row.installed_version,
           capabilities,
           metadata_ready: !!capabilities,
           tool_count: capabilities ? tools.length : null,

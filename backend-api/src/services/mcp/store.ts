@@ -18,6 +18,7 @@ export type McpServer = {
 export type McpConnection = {
   approval_policy_json?: string | null;
   config_revision?: string;
+  installed_version?: string;
   transport?: 'stdio';
   local_id?: string;
   id: number;
