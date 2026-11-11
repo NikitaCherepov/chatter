@@ -1,43 +1,43 @@
 {
   "changes": {
     "en": [
-      "The bot can now find and install MCP servers for you"
+      "MCP support is here: connect external tools yourself or let the bot find and install them for you"
     ],
     "cs": [
-      "Bot nyní může za vás najít a nainstalovat MCP servery"
+      "Přidána podpora MCP: externí nástroje můžete připojit sami nebo nechat bota, aby je vyhledal a nainstaloval"
     ],
     "de": [
-      "Der Bot kann jetzt MCP-Server für Sie finden und installieren."
+      "MCP-Unterstützung ist da: Verbinde externe Tools selbst oder lass den Bot sie finden und installieren"
     ],
     "es": [
-      "El bot ahora puede encontrar e instalar servidores MCP para ti"
+      "Ya puedes usar MCP: conecta herramientas externas o deja que el bot las busque e instale por ti"
     ],
     "fr": [
-      "Le bot peut désormais trouver et installer des serveurs MCP pour vous"
+      "MCP est désormais disponible : connectez des outils externes ou laissez le bot les trouver et les installer pour vous"
     ],
     "it": [
-      "Il bot ora può trovare e installare server MCP per te"
+      "Arriva il supporto MCP: collega strumenti esterni oppure lascia che il bot li trovi e li installi per te"
     ],
     "ja": [
-      "ボットがMCPサーバーを検索してインストールできるようになりました"
+      "MCPに対応しました。外部ツールを自分で接続することも、ボットに検索とインストールを任せることもできます"
     ],
     "ko": [
-      "봇이 이제 MCP 서버를 찾아 설치해 드립니다"
+      "MCP 지원이 추가되었습니다. 외부 도구를 직접 연결하거나 봇이 찾아 설치하도록 할 수 있습니다"
     ],
     "pl": [
-      "Bot może teraz znajdować i instalować serwery MCP za Ciebie"
+      "Dodano obsługę MCP: podłączaj zewnętrzne narzędzia samodzielnie lub pozwól botowi je znaleźć i zainstalować"
     ],
     "pt-BR": [
-      "O bot agora pode encontrar e instalar servidores MCP para você"
+      "O MCP chegou: conecte ferramentas externas ou deixe o bot encontrá-las e instalá-las para você"
     ],
     "ru": [
-      "Бот теперь может находить и устанавливать MCP-серверы за вас"
+      "Добавлена поддержка MCP: подключайте внешние инструменты сами или доверьте их поиск и установку боту"
     ],
     "tr": [
-      "Bot artık sizin için MCP sunucuları bulup yükleyebilir"
+      "MCP desteği eklendi: harici araçları kendiniz bağlayın veya botun bulup kurmasına izin verin"
     ],
     "zh-CN": [
-      "机器人现在可以为你查找并安装 MCP 服务器"
+      "现已支持 MCP：你可以自行连接外部工具，也可以让机器人帮你查找并安装"
     ]
   }
 }
