@@ -495,6 +495,36 @@ try {
   });
   console.log('PASS: bot config confirmation, filtering, secret redaction, patches, restart and stale revision');
   await manager.remove(scope, result.local_id);
+  const requiresKey = store.saveServer({
+    name: 'Requires key', transport: 'stdio', allowed: true,
+    source: JSON.stringify({ package: {
+      registryType: 'npm', identifier: '@example/requires-key', transport: { type: 'stdio' },
+      environmentVariables: [{ name: 'PRIVATE_KEY', isRequired: true, isSecret: true }],
+    } }),
+  });
+  const credentialCards: any[] = [];
+  const credentialInstall = tools.runMcpTool(81, 'install_mcp', { catalog_id: requiresKey.id },
+    undefined, undefined, undefined, {
+      onDesktopAction: (action: any) => { if (action.action === 'mcp_confirmation') credentialCards.push(action.value); },
+    });
+  const submitCredentialCard = async (index: number, mcpValues?: Record<string, string>) => {
+    const id = credentialCards[index].confirmation_id;
+    const pending = getPendingPcConfirmation(id);
+    deletePendingPcConfirmation(id);
+    try { pending.resolve(await pending.execute({ remember: false, mcpValues })); }
+    catch (error) { pending.reject(error); throw error; }
+  };
+  const beforeCredentials = installations.length;
+  await submitCredentialCard(0);
+  assert.equal(installations.length, beforeCredentials, 'missing configuration stops before package installation');
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(credentialCards[1].operation, 'install_config');
+  await submitCredentialCard(1, { 'env:PRIVATE_KEY': 'fixture-secret-credential' });
+  const credentialResult = JSON.parse(await credentialInstall);
+  assert.equal(credentialResult.status, 'connected');
+  assert.doesNotMatch(JSON.stringify(credentialResult), /fixture-secret-credential/);
+  assert.equal((await manager.settings(scope, credentialResult.local_id)).env.PRIVATE_KEY, 'fixture-secret-credential');
+  await manager.remove(scope, credentialResult.local_id);
   console.log('PASS: bot install confirmation, policy recheck, desktop install and progress, duplicate reuse');
   console.log(
     'PASS: actual stdio discovery/calls/resources, session reuse, local encrypted configuration, scope isolation, RAM-only WS bridge, progress, cancellation, permissions, offline and removal',

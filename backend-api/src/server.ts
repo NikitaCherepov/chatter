@@ -7582,13 +7582,24 @@ app.post('/api/v1/pc-commands/approve', async (req: AuthedRequest, res: any) => 
     return res.status(400).json({ error: 'browser_site_session_not_available_for_action' });
   }
 
+  const mcpOperation = pending.payload.ipcType === 'mcp' ? pending.payload.ipcPayload.operation : undefined;
+  const mcpValues = mcpOperation === 'install_config' ? req.body?.mcp_values : undefined;
+  if (mcpOperation === 'install_config' && (
+    !mcpValues || typeof mcpValues !== 'object' || Array.isArray(mcpValues) ||
+    JSON.stringify(mcpValues).length > 64_000 ||
+    !Object.values(mcpValues).length ||
+    Object.values(mcpValues).some(value => typeof value !== 'string' || !value.trim())
+  )) {
+    return res.status(400).json({ error: 'mcp_required_configuration' });
+  }
+
   // Execute the approved command on user's PC via WS IPC
   try {
     deletePendingPcConfirmation(confirmationId);
     notifyConfirmationResolved(userId, confirmationId, 'executing');
-    if (pending.payload.ipcType === 'mcp' && pending.payload.ipcPayload.operation === 'install') {
+    if (mcpOperation === 'install' || mcpOperation === 'install_config') {
       // The approval request can return before the desktop downloads the runtime and package.
-      void Promise.resolve().then(() => pending.execute!({ remember: false })).then((result) => {
+      void Promise.resolve().then(() => pending.execute!({ remember: false, mcpValues })).then((result) => {
         pending.resolve(result);
         notifyPcConfirmationResolved(pending, confirmationId, 'executed');
       }, (error) => {

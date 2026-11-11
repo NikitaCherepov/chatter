@@ -314,7 +314,7 @@ export function resolveLocalInput(input: LocalMcpInput): LocalMcpConfig {
         return resolveLocalInput({
           ...json,
           name: input.name || json.name,
-          values: input.values || json.values,
+          values: { ...json.values, ...input.values },
           env: { ...json.env, ...env },
         });
       command = json.command;

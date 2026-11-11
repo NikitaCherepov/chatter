@@ -60,7 +60,7 @@ export const updateLocalMcp=async(id,onProgress,version)=>{
  else entry.git_commit='b'.repeat(40);
 };
 export const resolveImageUrl=url=>url;
-export const apiFetch=async(url,options)=>{const body=JSON.parse(options.body);record('approve',body);return {ok:true,status:body.confirmation_id==='install-card'?'executing':undefined}};
+export const apiFetch=async(url,options)=>{const body=JSON.parse(options.body);record('approve',body);return {ok:true,status:['install-card','key-card'].includes(body.confirmation_id)?'executing':undefined}};
 export const getApiErrorMessage=(error,fallback)=>fallback;
 export const API_BASE='https://chatter.example';
 let mcpUpdate;
@@ -124,6 +124,8 @@ function CardFixture(){
 function Content({kind}){
  const client=useQueryClient(); window.__queryClient=client;
  if(kind==='install-card') return <McpConfirmationCard id="install-card" title="Установка MCP" confirmation={{confirmation_id:'install-card',server_name:'Fixture MCP',operation:'install',target:'stdio',arguments:{command:'uvx fixture serve',documentation:'https://github.com/example/fixture'}}} onResolved={()=>{window.__unexpectedInstallResolution=true}}/>;
+ if(kind==='oauth-card') return <McpConfirmationCard key="oauth-card" id="oauth-card" title="Авторизация MCP" confirmation={{confirmation_id:'oauth-card',connection_id:1,server_name:'Fixture MCP',operation:'authorize',target:'https://github.example/mcp',arguments:{}}} onResolved={()=>{window.__oauthCardResolved=true}}/>;
+ if(kind==='key-card') return <McpConfirmationCard key="key-card" id="key-card" title="Настройка MCP" confirmation={{confirmation_id:'key-card',server_name:'Fixture MCP',operation:'install_config',target:'stdio',arguments:{source:JSON.stringify({package:{registryType:'npm',identifier:'fixture',transport:{type:'stdio'},environmentVariables:[{name:'PRIVATE_KEY',isSecret:true,isRequired:true}]}})}}} onResolved={()=>{window.__unexpectedInstallResolution=true}}/>;
  return kind==='card'?<CardFixture/>:kind==='desktop'?<McpSettings onAskMcpHelp={async message=>{window.__calls.push({name:'github_help_draft',body:{message}})}}/>:kind==='admin'?<McpPage/>:<McpUserCard userId={81}/>;
 }
 window.renderFixture=kind=>root.render(<QueryProvider><Content kind={kind}/><Toaster/></QueryProvider>);
@@ -601,6 +603,17 @@ let win;const errors=[];
  await click('Установить');
  await until('document.body.innerText.includes("Установка…")');
  assert.equal(await js('!!window.__unexpectedInstallResolution'),false,'accepted install keeps the card mounted');
+ await js('window.renderFixture("oauth-card")');
+ await click('Войти через OAuth');
+ await until('!!document.querySelector(\'a[href="https://github.example/authorize"]\')');
+ await click('Проверить подключение');
+ await until('window.__oauthCardResolved===true');
+ await js('window.renderFixture("key-card")');
+ await until('!!document.querySelector("input[type=password]")');
+ assert.equal(await js('Array.from(document.querySelectorAll("button")).find(b=>b.textContent.trim()==="Установить").disabled'),true);
+ await js('(()=>{const input=document.querySelector("input[type=password]");Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value").set.call(input,"fixture-secret");input.dispatchEvent(new Event("input",{bubbles:true}));})()');
+ await click('Установить');
+ await until('window.__calls.some(c=>c.name==="approve"&&c.body.confirmation_id==="key-card"&&c.body.mcp_values["env:PRIVATE_KEY"]==="fixture-secret")');
  assert.deepEqual(errors,[],'no runtime component errors');
  console.log('PASS: React MCP settings, grant/revoke, native permissions, confirmation queue buttons and composer comments, catalog and admin access');
 })().catch(e=>{console.error(e,errors);process.exitCode=1}).finally(()=>{win?.destroy();app.exit(process.exitCode||0)});

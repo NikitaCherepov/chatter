@@ -1072,10 +1072,25 @@ try {
   console.log(
     'PASS: central access modes, user selection, legacy exclusions, independent permissions and atomic validation',
   );
-  const oauthConnection = store.saveConnection(82, {
-    name: 'OAuth MCP',
-    url: 'https://oauth-mcp.example/mcp',
+  const { getPendingPcConfirmation, deletePendingPcConfirmation } = require('../src/services/pc-command-confirmations.ts');
+  const oauthActions: any[] = [];
+  const oauthInstall = tools.runMcpTool(82, 'install_mcp', {
+    name: 'OAuth MCP', url: 'https://oauth-mcp.example/mcp',
+    documentation: 'https://github.com/example/oauth-mcp',
+  }, undefined, undefined, undefined, {
+    onDesktopAction: (action: any) => oauthActions.push(action.value),
   });
+  const approveOAuthAction = async (id: string) => {
+    const pending = getPendingPcConfirmation(id);
+    assert.ok(pending);
+    deletePendingPcConfirmation(id);
+    try { pending.resolve(await pending.execute({ remember: false })); }
+    catch (error) { pending.reject(error); throw error; }
+  };
+  await approveOAuthAction(oauthActions.find((action) => action.operation === 'install').confirmation_id);
+  await waitFor(() => oauthActions.some((action) => action.operation === 'authorize'));
+  const oauthCard = oauthActions.find((action) => action.operation === 'authorize');
+  const oauthConnection = store.requireConnection(82, oauthCard.connection_id);
   const unauthenticated = await request('/user/82/mcp/connections/'+oauthConnection.id+'/refresh','POST');
   assert.equal(unauthenticated.body.error,'mcp_authorization_required','refresh without a token asks for sign-in rather than callback configuration');
   assert.equal(store.policy().oauth_callback_url, '');
@@ -1109,6 +1124,8 @@ try {
     JSON.stringify(store.publicConnection(oauthRow)).includes('oauth-private-token'),
     false,
   );
+  await approveOAuthAction(oauthCard.confirmation_id);
+  assert.equal(JSON.parse(await oauthInstall).status, 'connected');
   await assert.rejects(
     () => client.finishOAuth(state, 'test-authorization-code'),
     /invalid_oauth_state/,

@@ -1,3 +1,5 @@
+import { UnauthorizedError } from '@modelcontextprotocol/sdk/client/auth.js';
+import { StreamableHTTPError } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { notifyMcpSettingsUpdated, sendIpcToDesktop, wsClients } from '../../ws-clients.js';
 import { refreshTools } from './client.js';
 import { confirmMcpAction, type McpApprovalContext } from './confirmations.js';
@@ -105,7 +107,66 @@ export async function installMcp(
   const plan = installPlan(userId, captured);
   const desktop = plan.source ? wsClients.get(userId) : undefined;
   if (plan.source && desktop?.ws.readyState !== 1) throw new Error('mcp_desktop_not_connected');
-  return confirmMcpAction(
+  const checkPlan = () => {
+    if (JSON.stringify(installPlan(userId, captured)) !== JSON.stringify(plan))
+      throw new Error('mcp_confirmation_stale');
+  };
+  const connectRemote = async (connectionId: number) => {
+    const tools = await refreshTools(userId, connectionId, signal);
+    return JSON.stringify({ status: 'connected', connection_id: connectionId, tools: tools.length });
+  };
+  const installLocal = async (reportPhase: (phase: string) => void, values?: Record<string, string>) => {
+    checkPlan();
+    if (wsClients.get(userId) !== desktop) throw new Error('mcp_desktop_connection_changed');
+    const result = await sendIpcToDesktop(
+      userId,
+      'mcp_control',
+      {
+        action: 'install',
+        input: {
+          source: plan.source,
+          name: plan.name,
+          catalog_id: plan.catalogId,
+          reuse_existing: true,
+          ...(values && { values }),
+        },
+      },
+      20 * 60_000,
+      signal,
+      (phase) => {
+        if (phase === 'installing' || phase === 'connecting') reportPhase(phase);
+      },
+    );
+    // Desktop sends its local snapshot over the same socket before returning the IPC result.
+    const registered = getLocalConnections(userId).find((row) => row.local_id === result.id);
+    const connection = registered && requireConnection(userId, registered.id, false);
+    return JSON.stringify({
+      status: !connection
+        ? 'installed_sync_failed'
+        : result.error
+          ? 'installed_connection_failed'
+          : result.reused
+            ? 'already_connected'
+            : 'connected',
+      ...(connection
+        ? { connection_id: connection.id }
+        : {
+            error: 'mcp_local_sync_failed',
+            instruction:
+              'The local installation is saved. After desktop sync, use browse_mcp to find its connection_id. Do not reinstall to recover the ID.',
+          }),
+      local_id: result.id,
+      version: result.installed_version,
+      tools: result.tool_count,
+      resources: result.resource_count,
+      ...(result.error && (values
+        ? { instruction: 'See the connection diagnostics in MCP settings.' }
+        : { diagnostic: wrapUntrustedContent(String(result.error).slice(0, 2000)) })),
+    });
+  };
+  let authorizationId: number | undefined;
+  let needsLocalConfiguration = false;
+  const result = await confirmMcpAction(
     userId,
     {
       operation: 'install',
@@ -117,54 +178,16 @@ export async function installMcp(
     },
     plan.name,
     async (_remember, reportPhase) => {
-      if (JSON.stringify(installPlan(userId, captured)) !== JSON.stringify(plan))
-        throw new Error('mcp_confirmation_stale');
+      checkPlan();
       if (plan.source) {
-        if (wsClients.get(userId) !== desktop) throw new Error('mcp_desktop_connection_changed');
-        const result = await sendIpcToDesktop(
-          userId,
-          'mcp_control',
-          {
-            action: 'install',
-            input: {
-              source: plan.source,
-              name: plan.name,
-              catalog_id: plan.catalogId,
-              reuse_existing: true,
-            },
-          },
-          20 * 60_000,
-          signal,
-          (phase) => {
-            if (phase === 'installing' || phase === 'connecting') reportPhase(phase);
-          },
-        );
-        // Desktop sends its local snapshot over the same socket before returning the IPC result.
-        const registered = getLocalConnections(userId).find((row) => row.local_id === result.id);
-        const connection = registered && requireConnection(userId, registered.id, false);
-        return JSON.stringify({
-          status: !connection
-            ? 'installed_sync_failed'
-            : result.error
-              ? 'installed_connection_failed'
-              : result.reused
-                ? 'already_connected'
-                : 'connected',
-          ...(connection
-            ? { connection_id: connection.id }
-            : {
-                error: 'mcp_local_sync_failed',
-                instruction:
-                  'The local installation is saved. After desktop sync, use browse_mcp to find its connection_id. Do not reinstall to recover the ID.',
-              }),
-          local_id: result.id,
-          version: result.installed_version,
-          tools: result.tool_count,
-          resources: result.resource_count,
-          ...(result.error && {
-            diagnostic: wrapUntrustedContent(String(result.error).slice(0, 2000)),
-          }),
-        });
+        try {
+          return await installLocal(reportPhase);
+        } catch (error) {
+          if (!(error instanceof Error) || error.message !== 'mcp_required_configuration')
+            throw error;
+          needsLocalConfiguration = true;
+          return JSON.stringify({ status: 'configuration_required' });
+        }
       }
       reportPhase('connecting');
       const existing = connections(userId).find(
@@ -183,15 +206,16 @@ export async function installMcp(
         });
       notifyMcpSettingsUpdated(userId);
       try {
-        const tools = await refreshTools(userId, connection.id, signal);
-        return JSON.stringify({
-          status: 'connected',
-          connection_id: connection.id,
-          tools: tools.length,
-        });
+        return await connectRemote(connection.id);
       } catch (error) {
         signal?.throwIfAborted();
         const code = error instanceof Error ? error.message : '';
+        if (
+          code === 'mcp_authorization_required' || code.startsWith('mcp_oauth_') ||
+          error instanceof UnauthorizedError ||
+          (error instanceof StreamableHTTPError && error.code === 401)
+        )
+          authorizationId = connection.id;
         return JSON.stringify({
           status: 'configured_connection_failed',
           connection_id: connection.id,
@@ -204,4 +228,37 @@ export async function installMcp(
     signal,
     context,
   );
+  if (needsLocalConfiguration)
+    return confirmMcpAction(
+      userId,
+      { operation: 'install_config', target: 'stdio', arguments: { source: plan.source } },
+      plan.name,
+      async (_remember, reportPhase, values) => {
+        if (!values) throw new Error('mcp_required_configuration');
+        try {
+          return await installLocal(reportPhase, values);
+        } catch (error) {
+          signal?.throwIfAborted();
+          const code = error instanceof Error ? error.message : '';
+          throw new Error(/^mcp_[a-z_]+$/.test(code) ? code : 'mcp_local_install_failed');
+        }
+      },
+      signal,
+      context,
+    );
+  if (authorizationId !== undefined) {
+    const id = authorizationId;
+    return confirmMcpAction(
+      userId,
+      { operation: 'authorize', target: plan.url, connection_id: id, arguments: {} },
+      plan.name,
+      async () => {
+        checkPlan();
+        return connectRemote(id);
+      },
+      signal,
+      context,
+    );
+  }
+  return result;
 }

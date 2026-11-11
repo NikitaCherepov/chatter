@@ -89,12 +89,12 @@ export async function confirmMcpAction(
   userId: number,
   op: {
     connection_id?: number;
-    operation: 'tool' | 'resource' | 'install' | 'config_read' | 'config_update';
+    operation: 'tool' | 'resource' | 'install' | 'install_config' | 'authorize' | 'config_read' | 'config_update';
     target: string;
     arguments: unknown;
   },
   serverName: string,
-  execute: (remember: boolean, reportPhase: (phase: string) => void) => Promise<string>,
+  execute: (remember: boolean, reportPhase: (phase: string) => void, values?: Record<string, string>) => Promise<string>,
   signal?: AbortSignal,
   context?: McpApprovalContext,
 ): Promise<string> {
@@ -139,7 +139,7 @@ export async function confirmMcpAction(
     execute: async (options) => {
       signal?.throwIfAborted();
       return execute(options.remember, (phase) =>
-        emit({ action: 'mcp_install_progress', value: { confirmation_id: id, phase } }),
+        emit({ action: 'mcp_install_progress', value: { confirmation_id: id, phase } }), options.mcpValues,
       );
     },
     resolve,

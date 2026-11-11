@@ -49,7 +49,7 @@ type BrowserActionPayload = {
   };
 };
 
-type McpActionPayload={ipcType:'mcp';ipcPayload:{connection_id?:number;operation:'tool'|'resource'|'install'|'config_read'|'config_update';target:string;arguments:unknown}};
+type McpActionPayload={ipcType:'mcp';ipcPayload:{connection_id?:number;operation:'tool'|'resource'|'install'|'install_config'|'authorize'|'config_read'|'config_update';target:string;arguments:unknown}};
 type ActionPayload = McpActionPayload | ExecutePayload | FileActionPayload | WebcamCapturePayload | BrowserActionPayload;
 
 export type PendingPcCommandConfirmation = {
@@ -60,7 +60,7 @@ export type PendingPcCommandConfirmation = {
   label: string;
   /** IPC command to execute after approval. */
   payload: ActionPayload;
-  execute?: (options:{remember:boolean})=>Promise<any>;
+  execute?: (options:{remember:boolean; mcpValues?: Record<string, string>})=>Promise<any>;
   resolve: (result: any) => void;
   reject: (err: Error) => void;
   onExpired?: () => void;

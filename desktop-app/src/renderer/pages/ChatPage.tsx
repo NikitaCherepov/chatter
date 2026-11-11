@@ -2467,7 +2467,9 @@ export function ChatPage() {
       setPendingCredsUpdates(prev => prev.filter(c => c.confirmation_id !== confirmationId));
       setPcCommandConfirmations(prev => prev.filter(c => c.confirmation_id !== confirmationId));
       setMcpConfirmations(prev=>val.status==='executing'
-        ? prev.flatMap(c=>c.confirmation_id!==confirmationId?[c]:c.operation==='install'?[{...c,phase:'installing'}]:[])
+        ? prev.flatMap(c=>c.confirmation_id!==confirmationId?[c]:
+          c.operation==='install'||c.operation==='install_config'?[{...c,phase:'installing'}]:
+          c.operation==='authorize'?[c]:[])
         : prev.filter(c=>c.confirmation_id!==confirmationId));
       setBrowserActionConfirmations(prev => prev.filter(c => c.confirmation_id !== confirmationId));
       setBrowserDownloadConfirmations(prev => prev.filter(c => c.confirmation_id !== confirmationId));
@@ -2530,7 +2532,8 @@ export function ChatPage() {
     if(action.action==='mcp_install_progress'&&action.value){
       const {confirmation_id,phase}=action.value as {confirmation_id?:string;phase?:string};
       if(phase==='installing'||phase==='connecting')
-        setMcpConfirmations(previous=>previous.map(item=>item.confirmation_id===confirmation_id&&item.operation==='install'?{...item,phase}:item));
+        setMcpConfirmations(previous=>previous.map(item=>item.confirmation_id===confirmation_id&&
+          (item.operation==='install'||item.operation==='install_config')?{...item,phase}:item));
       return;
     }
     if(action.action==='mcp_confirmation'&&action.value){
@@ -5214,6 +5217,8 @@ export function ChatPage() {
     ...mcpConfirmations.map(conf=><McpConfirmationCard
       key={conf.confirmation_id} id={conf.confirmation_id} title={t(
         conf.operation==='install'?'mcp.installApproval.title':
+        conf.operation==='install_config'?'mcp.authApproval.localTitle':
+        conf.operation==='authorize'?'mcp.authApproval.remoteTitle':
         conf.operation==='config_read'?'mcp.configApproval.read':
         conf.operation==='config_update'?'mcp.configApproval.update':'mcp.approvals.title'
       )}
