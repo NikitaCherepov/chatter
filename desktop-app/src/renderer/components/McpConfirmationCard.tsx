@@ -28,6 +28,7 @@ function AllowButton({
   submit,
   resource,
   install,
+  duplicate,
   update,
   authorize,
   disabled,
@@ -36,6 +37,7 @@ function AllowButton({
   submit: (approved: boolean, remember?: boolean, comment?: string) => Promise<void>;
   resource: boolean;
   install?: boolean;
+  duplicate?: boolean;
   update?: boolean;
   authorize?: boolean;
   disabled?: boolean;
@@ -55,7 +57,7 @@ function AllowButton({
             ? 'mcp.approvals.alwaysResource'
             : 'mcp.approvals.alwaysTool'
           : install
-            ? 'mcp.installApproval.allow'
+            ? duplicate ? 'mcp.catalogConnection.addAnother' : 'mcp.installApproval.allow'
             : authorize
               ? 'mcp.authApproval.check'
               : update
@@ -147,7 +149,7 @@ export function McpConfirmationCard({ confirmation: conf, onResolved, ...props }
   const reusable = resource || conf.operation === 'tool';
   const phase = conf.phase || (installAccepted ? 'installing' : undefined);
   const setup = conf.operation === 'install'
-    ? (conf.arguments as { command?: string; url?: string; documentation?: string })
+    ? (conf.arguments as { command?: string; url?: string; documentation?: string; allow_duplicate?: boolean })
     : undefined;
   return (
     <ConfirmationCard
@@ -159,6 +161,7 @@ export function McpConfirmationCard({ confirmation: conf, onResolved, ...props }
               submit={submit}
               resource={resource}
               install={install}
+              duplicate={setup?.allow_duplicate}
               update={update}
               authorize={authorize}
               disabled={oauthBusy || (localConfiguration && (!fields.length || fields.some((field) => !values[field.key]?.trim())))}

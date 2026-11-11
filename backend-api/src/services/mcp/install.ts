@@ -15,6 +15,9 @@ import {
 } from './store.js';
 import { mcpErrorDiagnostic, mcpErrorResult, redactMcpErrorText } from './errors.js';
 
+const reuseInstruction =
+  'Existing connection reused. Requested settings were not applied. If the user explicitly wants a separate connection, call install_mcp with allow_duplicate=true.';
+
 export function canInstallMcp(userId: number) {
   const access = policy(userId);
   return access.enabled && (access.allow_custom || access.show_catalog);
@@ -48,8 +51,12 @@ function installPlan(userId: number, input: any) {
   requireMcpAccount(userId);
   const access = policy(userId);
   if (!access.enabled) throw new Error('mcp_disabled');
-  if (!input || typeof input !== 'object' || JSON.stringify(input).length > 8000)
+  if (
+    !input || typeof input !== 'object' || JSON.stringify(input).length > 8000 ||
+    (input.allow_duplicate !== undefined && typeof input.allow_duplicate !== 'boolean')
+  )
     throw new Error('mcp_invalid_install_input');
+  const allowDuplicate = input.allow_duplicate === true;
   if (input.catalog_id !== undefined) {
     if (!access.show_catalog || !Number.isSafeInteger(input.catalog_id))
       throw new Error('mcp_catalog_hidden');
@@ -62,6 +69,7 @@ function installPlan(userId: number, input: any) {
       source: row.source,
       url: row.url,
       documentation: '',
+      allowDuplicate,
     };
   }
   if (!access.allow_custom) throw new Error('mcp_custom_not_allowed');
@@ -80,7 +88,7 @@ function installPlan(userId: number, input: any) {
   if (input.url !== undefined) {
     if (input.command !== undefined || input.args !== undefined)
       throw new Error('mcp_invalid_install_input');
-    return { name, documentation, url: mcpUrl(input.url).href, source: '' };
+    return { name, documentation, url: mcpUrl(input.url).href, source: '', allowDuplicate };
   }
   if (
     !['npx', 'uvx'].includes(input.command) ||
@@ -94,6 +102,7 @@ function installPlan(userId: number, input: any) {
     documentation,
     url: '',
     source: JSON.stringify({ command: input.command, args: input.args }),
+    allowDuplicate,
   };
 }
 
@@ -111,9 +120,14 @@ export async function installMcp(
     if (JSON.stringify(installPlan(userId, captured)) !== JSON.stringify(plan))
       throw new Error('mcp_confirmation_stale');
   };
-  const connectRemote = async (connectionId: number) => {
+  const connectRemote = async (connectionId: number, reused = false) => {
     const tools = await refreshTools(userId, connectionId, signal);
-    return JSON.stringify({ status: 'connected', connection_id: connectionId, tools: tools.length });
+    return JSON.stringify({
+      status: reused ? 'already_connected' : 'connected',
+      connection_id: connectionId,
+      tools: tools.length,
+      ...(reused && { instruction: reuseInstruction }),
+    });
   };
   const installLocal = async (reportPhase: (phase: string) => void, values?: Record<string, string>) => {
     checkPlan();
@@ -127,7 +141,7 @@ export async function installMcp(
           source: plan.source,
           name: plan.name,
           catalog_id: plan.catalogId,
-          reuse_existing: true,
+          reuse_existing: !plan.allowDuplicate,
           ...(values && { values }),
         },
       },
@@ -149,7 +163,7 @@ export async function installMcp(
             ? 'already_connected'
             : 'connected',
       ...(connection
-        ? { connection_id: connection.id }
+        ? { connection_id: connection.id, ...(result.reused && { instruction: reuseInstruction }) }
         : {
             error: 'mcp_local_sync_failed',
             instruction:
@@ -162,7 +176,7 @@ export async function installMcp(
       ...(result.error && mcpErrorDiagnostic(String(result.error), Object.values(values || {}))),
     });
   };
-  let authorizationId: number | undefined;
+  let authorization: { id: number; reused: boolean } | undefined;
   let needsLocalConfiguration = false;
   const result = await confirmMcpAction(
     userId,
@@ -172,6 +186,7 @@ export async function installMcp(
       arguments: {
         ...(plan.source ? { command: plan.source } : { url: plan.url }),
         ...(plan.documentation && { documentation: plan.documentation }),
+        ...(plan.allowDuplicate && { allow_duplicate: true }),
       },
     },
     plan.name,
@@ -188,7 +203,7 @@ export async function installMcp(
         }
       }
       reportPhase('connecting');
-      const existing = connections(userId).find(
+      const existing = !plan.allowDuplicate && connections(userId).find(
         (row) =>
           row.transport !== 'stdio' &&
           row.url === plan.url &&
@@ -200,11 +215,11 @@ export async function installMcp(
           name: plan.name,
           url: plan.url,
           server_id: plan.catalogId,
-          reuse_existing: true,
+          reuse_existing: !plan.allowDuplicate,
         });
       notifyMcpSettingsUpdated(userId);
       try {
-        return await connectRemote(connection.id);
+        return await connectRemote(connection.id, !!existing);
       } catch (error) {
         signal?.throwIfAborted();
         const code = error instanceof Error ? error.message : '';
@@ -213,7 +228,7 @@ export async function installMcp(
           error instanceof UnauthorizedError ||
           (error instanceof StreamableHTTPError && error.code === 401)
         )
-          authorizationId = connection.id;
+          authorization = { id: connection.id, reused: !!existing };
         return JSON.stringify({
           status: 'configured_connection_failed',
           connection_id: connection.id,
@@ -245,15 +260,15 @@ export async function installMcp(
       signal,
       context,
     );
-  if (authorizationId !== undefined) {
-    const id = authorizationId;
+  if (authorization) {
+    const { id, reused } = authorization;
     return confirmMcpAction(
       userId,
       { operation: 'authorize', target: plan.url, connection_id: id, arguments: {} },
       plan.name,
       async () => {
         checkPlan();
-        return connectRemote(id);
+        return connectRemote(id, reused);
       },
       signal,
       context,

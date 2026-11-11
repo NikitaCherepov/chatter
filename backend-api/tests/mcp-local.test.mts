@@ -380,9 +380,9 @@ try {
     command: 'npx',
     args: ['-y', '@example/install-fixture'],
   };
-  const prepareInstall = () => {
+  const prepareInstall = (input: typeof plan & { allow_duplicate?: boolean } = plan) => {
     const actions: any[] = [];
-    const run = tools.runMcpTool(81, 'install_mcp', plan, undefined, undefined, undefined, {
+    const run = tools.runMcpTool(81, 'install_mcp', input, undefined, undefined, undefined, {
       onDesktopAction: (action: any) => { actions.push(action); },
     });
     return { run, actions };
@@ -415,17 +415,31 @@ try {
     ['installing', 'connecting']);
   assert.equal(installations.length, previousInstalls + 1);
   assert.deepEqual((await manager.list(scope))[0].approval_policy, spec.emptyMcpApproval());
-  const repeated = JSON.parse(await approveInstall(prepareInstall()));
+  const another = { ...plan, name: 'Second MCP instance', args: [...plan.args, '--fixture-second'] };
+  const repeated = JSON.parse(await approveInstall(prepareInstall(another)));
   assert.equal(repeated.status, 'already_connected');
   assert.equal(repeated.local_id, result.local_id);
   assert.equal(repeated.connection_id, result.connection_id);
+  assert.match(repeated.instruction, /allow_duplicate=true/);
+  assert.deepEqual((await manager.settings(scope, result.local_id)).args, []);
+  const secondRequest = prepareInstall({ ...another, allow_duplicate: true });
+  const secondCard = secondRequest.actions.find((action) => action.action === 'mcp_confirmation');
+  assert.equal(secondCard.value.arguments.allow_duplicate, true);
+  assert.equal(installations.length, previousInstalls + 1, 'another instance also needs confirmation');
+  const second = JSON.parse(await approveInstall(secondRequest));
+  assert.equal(second.status, 'connected');
+  assert.notEqual(second.connection_id, result.connection_id);
+  assert.notEqual(second.local_id, result.local_id);
+  assert.deepEqual((await manager.settings(scope, second.local_id)).args, ['--fixture-second']);
+  assert.deepEqual((await manager.settings(scope, result.local_id)).args, []);
+  await manager.remove(scope, second.local_id);
   local.dropLocalConnections(wsClient);
   syncInstall = false;
   const unsynced = JSON.parse(await approveInstall(prepareInstall()));
   assert.equal(unsynced.status, 'installed_sync_failed');
   assert.equal(unsynced.connection_id, undefined);
   syncInstall = true;
-  assert.equal(installations.length, previousInstalls + 1);
+  assert.equal(installations.length, previousInstalls + 2);
   await manager.configure(scope, result.local_id, {
     args: ['serve', '--token', 'private-argument'],
     env: { PRIVATE_KEY: 'private-environment', WINDOWS_MCP_CONTROL_POLICY: 'relaxed' },

@@ -24,7 +24,7 @@ const functionTool = (name: string, description: string, properties: any, requir
 });
 export const mcpInstallTool = functionTool(
   installToolName,
-  'Propose an MCP installation for user confirmation. Check the official README for a stdio command (command/args or after -- in claude mcp add) or a Streamable HTTP URL. Example: {"name":"Windows-MCP","documentation":"https://github.com/CursorTouch/Windows-MCP#installation","command":"uvx","args":["windows-mcp","serve"]}. Chatter supplies uv/uvx and Python when needed. For an approved catalog entry, use its catalog_id from browse_mcp. Use the returned connection_id for follow-up calls. Chatter asks for detected credentials in a separate card. Never ask for credentials in chat or include them in tool arguments.',
+  'Propose an MCP installation for user confirmation. Check the official README for a stdio command (command/args or after -- in claude mcp add) or a Streamable HTTP URL. Example: {"name":"Windows-MCP","documentation":"https://github.com/CursorTouch/Windows-MCP#installation","command":"uvx","args":["windows-mcp","serve"]}. Chatter supplies uv/uvx and Python when needed. For an approved catalog entry, use its catalog_id from browse_mcp. Set allow_duplicate=true when the user explicitly wants another connection to the same MCP. Otherwise an existing connection is reused and its settings are unchanged. Use the returned connection_id for follow-up calls. Chatter asks for detected credentials in a separate card. Never ask for credentials in chat or include them in tool arguments.',
   {
     name: { type: 'string' },
     documentation: {
@@ -40,6 +40,10 @@ export const mcpInstallTool = functionTool(
     catalog_id: {
       type: 'integer',
       description: 'Approved catalog entry, instead of a custom configuration',
+    },
+    allow_duplicate: {
+      type: 'boolean',
+      description: 'Create a separate connection when the user explicitly asks for another instance.',
     },
   },
   [],

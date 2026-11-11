@@ -1084,13 +1084,19 @@ try {
     'PASS: central access modes, user selection, legacy exclusions, independent permissions and atomic validation',
   );
   const { getPendingPcConfirmation, deletePendingPcConfirmation } = require('../src/services/pc-command-confirmations.ts');
-  const oauthActions: any[] = [];
-  const oauthInstall = tools.runMcpTool(82, 'install_mcp', {
+  const oauthInput = {
     name: 'OAuth MCP <fixture>', url: 'https://oauth-mcp.example/mcp',
     documentation: 'https://github.com/example/oauth-mcp',
-  }, undefined, undefined, undefined, {
-    onDesktopAction: (action: any) => oauthActions.push(action.value),
-  });
+  };
+  const proposeOAuthInstall = (allowDuplicate = false) => {
+    const actions: any[] = [];
+    const run = tools.runMcpTool(82, 'install_mcp', { ...oauthInput, allow_duplicate: allowDuplicate },
+      undefined, undefined, undefined, {
+        onDesktopAction: (action: any) => { actions.push(action.value); },
+      });
+    return { actions, run };
+  };
+  const { actions: oauthActions, run: oauthInstall } = proposeOAuthInstall();
   const approveOAuthAction = async (id: string) => {
     const pending = getPendingPcConfirmation(id);
     assert.ok(pending);
@@ -1153,6 +1159,23 @@ try {
     /invalid_oauth_state/,
     'OAuth callback is single-use',
   );
+  const reusedRemote = proposeOAuthInstall();
+  await approveOAuthAction(reusedRemote.actions[0].confirmation_id);
+  const reusedResult = JSON.parse(await reusedRemote.run);
+  assert.equal(reusedResult.status, 'already_connected');
+  assert.equal(reusedResult.connection_id, oauthConnection.id);
+  const anotherRemote = proposeOAuthInstall(true);
+  assert.equal(anotherRemote.actions[0].arguments.allow_duplicate, true);
+  await approveOAuthAction(anotherRemote.actions[0].confirmation_id);
+  await waitFor(() => anotherRemote.actions.some((action) => action.operation === 'authorize'));
+  const secondAuth = anotherRemote.actions.find((action) => action.operation === 'authorize');
+  assert.notEqual(secondAuth.connection_id, oauthConnection.id);
+  assert.equal(store.publicConnection(store.requireConnection(82, secondAuth.connection_id)).has_credentials, false);
+  const secondPending = getPendingPcConfirmation(secondAuth.confirmation_id);
+  deletePendingPcConfirmation(secondAuth.confirmation_id);
+  secondPending.reject(new Error('rejected_by_user'));
+  assert.equal(JSON.parse(await anotherRemote.run).status, 'rejected');
+  await request('/user/82/mcp/connections/' + secondAuth.connection_id, 'DELETE');
   const unlinked = await request('/user/82/mcp/connections/' + oauthConnection.id, 'PATCH', { token: '' });
   assert.equal(unlinked.body.connection.id, oauthConnection.id);
   assert.equal(unlinked.body.connection.has_credentials, false);
