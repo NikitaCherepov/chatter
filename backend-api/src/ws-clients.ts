@@ -132,7 +132,10 @@ export function sendIpcToDesktop(userId: number, ipcType: string, payload: any, 
       reject: (err: Error) => {
         signal?.removeEventListener('abort', onAbort);
         clearTimeout(timer);
-        console.warn('[ipc] desktop result rejected', { userId, requestId, ipcType, error: err.message });
+        const message = ipcType === 'mcp_control'
+          ? /^(mcp_[a-z_]+)(?:\r?\n|$)/.exec(err.message)?.[1] || 'mcp_request_failed'
+          : err.message;
+        console.warn('[ipc] desktop result rejected', { userId, requestId, ipcType, error: message });
         reject(err);
       },
       timer,

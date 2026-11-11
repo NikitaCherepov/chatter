@@ -9,6 +9,7 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import type { OAuthClientProvider } from '@modelcontextprotocol/sdk/client/auth.js';
 import { db } from '../../db.js';
 import { mcpHttp, mcpUrl, resolveMcpAddress } from './network.js';
+import { redactMcpErrorText } from './errors.js';
 import {
   credentials,
   serverOAuthClient,
@@ -166,9 +167,11 @@ async function session<T>(
     throw new Error('mcp_connection_busy');
   busy.add(id);
   let entry: RuntimeSession | undefined, handshakeTimer: ReturnType<typeof setTimeout> | undefined;
+  let auth: any;
   let succeeded = false;
   const abort = () => entry?.controller.abort(signal?.reason);
   try {
+    auth = credentials(row);
     const previous = sessions.get(id);
     if (
       previous &&
@@ -189,7 +192,7 @@ async function session<T>(
         await closeSession(idle);
       }
       const controller = new AbortController();
-      const secret = credentials(row);
+      const secret = auth;
       const client = new Client({ name: 'chatter', version: '1.0.0' }, { capabilities: {} });
       const transport = new StreamableHTTPClientTransport(new URL(row.url), {
         fetch: (input, init) =>
@@ -245,6 +248,16 @@ async function session<T>(
       'Incompatible auth server: does not support dynamic client registration'
     )
       throw new Error('mcp_oauth_client_registration_required');
+    if (error instanceof Error && !/^mcp_[a-z_]+$/.test(error.message)) {
+      const secrets = [auth?.bearer, auth?.tokens?.access_token, auth?.tokens?.refresh_token,
+        auth?.client?.client_secret, oauth?.code, oauth?.state];
+      try {
+        const current = credentials(requireConnection(userId, id, false));
+        secrets.push(current.bearer, current.tokens?.access_token, current.tokens?.refresh_token,
+          current.client?.client_secret, serverOAuthClient(row.server_id, row.url)?.client_secret);
+      } catch { /* preserve the original failure if credentials are no longer accessible */ }
+      error.message = redactMcpErrorText(error.message, secrets);
+    }
     throw error;
   } finally {
     if (handshakeTimer) clearTimeout(handshakeTimer);

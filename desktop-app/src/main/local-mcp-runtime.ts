@@ -311,39 +311,51 @@ export async function installNpm(
 ) {
   const runtime = await nodeRuntime(root);
   signal?.throwIfAborted();
-  await exec(
-    runtime.node,
-    [
-      runtime.npm,
-      'install',
-      '--prefix',
-      directory,
-      '--no-audit',
-      '--no-fund',
-      '--save-exact',
-      '--engine-strict',
-      '--',
-      spec,
-    ],
-    {
-      windowsHide: true,
-      signal,
-      maxBuffer: 4_000_000,
-      env: {
-        ...process.env,
-        PATH: path.dirname(runtime.node) + path.delimiter + (process.env.PATH || ''),
-        ELECTRON_RUN_AS_NODE: '',
-      },
-    },
-  );
+  const env = {
+    ...process.env,
+    PATH: path.dirname(runtime.node) + path.delimiter + (process.env.PATH || ''),
+    ELECTRON_RUN_AS_NODE: '',
+  };
+  try {
+    await exec(
+      runtime.node,
+      [
+        runtime.npm,
+        'install',
+        '--prefix',
+        directory,
+        '--no-audit',
+        '--no-fund',
+        '--save-exact',
+        '--engine-strict',
+        '--',
+        spec,
+      ],
+      { windowsHide: true, signal, maxBuffer: 4_000_000, env },
+    );
+  } catch (cause) {
+    signal?.throwIfAborted();
+    const failure = cause as { stderr?: string; stdout?: string; message?: string };
+    throw mcpProcessError(
+      'mcp_package_install_failed',
+      failure.stderr || failure.stdout || failure.message || '',
+      env,
+    );
+  }
   const pkgName = spec.replace(/@[^/]+$/, '');
   const packagePath = path.join(directory, 'node_modules', pkgName, 'package.json');
   const pkg = JSON.parse(await fs.readFile(packagePath, 'utf8'));
-  const bins = typeof pkg.bin === 'string' ? [pkg.bin] : Object.values(pkg.bin || {});
-  if (bins.length !== 1 || typeof bins[0] !== 'string')
+  const bins = typeof pkg.bin === 'string' ? [pkg.bin] : [...new Set(Object.values(pkg.bin || {}))];
+  const commandName = path.basename(pkgName);
+  const matchingBin = Object.prototype.hasOwnProperty.call(pkg.bin || {}, commandName)
+    ? pkg.bin[commandName]
+    : undefined;
+  // Match npm exec: a single target, aliases of it, or the unscoped package name.
+  const executable = bins.length === 1 ? bins[0] : matchingBin;
+  if (typeof executable !== 'string' || !executable)
     throw new Error('mcp_package_requires_single_executable');
   const base = path.dirname(packagePath),
-    entry = path.resolve(base, bins[0]);
+    entry = path.resolve(base, executable);
   if (!entry.startsWith(base + path.sep)) throw new Error('mcp_invalid_package_executable');
   await fs.access(entry);
   return {
@@ -431,17 +443,25 @@ export async function uvRuntime(root: string): Promise<string> {
   }
 }
 
-export function mcpProcessError(message: string, diagnostics: string, env: Record<string, string>) {
-  let detail = diagnostics.replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '');
+export function redactMcpProcessText(text: string, env: NodeJS.ProcessEnv) {
+  let detail = text.replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '');
   for (const [key, value] of Object.entries(env)) {
-    if (value && /key|token|secret|pass|credential|auth|cookie/i.test(key))
-      detail = detail.split(value).join('[redacted]');
+    if (value && /key|token|secret|pass|credential|auth|cookie/i.test(key)) {
+      for (const form of new Set([value, JSON.stringify(value).slice(1, -1)]))
+        detail = detail.split(form).join('[redacted]');
+    }
   }
-  detail = detail
+  return detail
     .replace(/(https?:\/\/)[^\s/@]+(?::[^\s/@]*)?@/gi, '$1[redacted]@')
-    .trim()
-    .slice(-1800);
-  return new Error(detail ? message + '\n' + detail : message);
+    .trim();
+}
+
+export function mcpProcessError(message: string, diagnostics: string, env: NodeJS.ProcessEnv) {
+  const detail = redactMcpProcessText(diagnostics, env);
+  const limited = detail.length > 1800 ? detail.slice(-1750) + '\n[diagnostic truncated]' : detail;
+  const safeMessage = /^mcp_[a-z_]+(?: \(\d+\))?$/.test(message)
+    ? message : redactMcpProcessText(message, env);
+  return new Error(limited ? safeMessage + '\n' + limited : safeMessage);
 }
 
 async function installedGitCommit(toolDir: string) {

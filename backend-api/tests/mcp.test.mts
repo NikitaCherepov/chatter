@@ -842,6 +842,17 @@ try {
     { availableToolDefs: [] },
   );
   assert.match(deniedRunner, /not allowed/);
+  const { mcpErrorResult, mcpErrorDiagnostic } = require('../src/services/mcp/errors.ts');
+  assert.deepEqual(mcpErrorResult(new Error('mcp_connection_closed')), { error: 'mcp_connection_closed' });
+  assert.match(mcpErrorResult(new Error('ipc_timeout')).diagnostic, /ipc_timeout/);
+  const failedInstall = mcpErrorResult(new Error(
+    'mcp_python_package_install_failed (1)\nFailed to fetch https://user:pass@example.test/?token=private-token\n' + 'x'.repeat(2200),
+  ));
+  assert.equal(failedInstall.error, 'mcp_python_package_install_failed');
+  assert.equal(failedInstall.truncated, true);
+  assert.match(failedInstall.diagnostic, /Failed to fetch/);
+  assert.doesNotMatch(failedInstall.diagnostic, /user:pass|private-token/);
+  assert.doesNotMatch(mcpErrorDiagnostic('Bad value: fixture-private-key', ['fixture-private-key']).diagnostic, /fixture-private-key/);
   assert.ok(ai.getTaskAllowedToolNames().includes('browse_mcp'));
   assert.ok(ai.getTaskAllowedToolNames().includes('call_mcp_tool'));
   await assert.rejects(

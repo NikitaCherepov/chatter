@@ -13,7 +13,7 @@ import {
   requireMcpAccount,
   saveConnection,
 } from './store.js';
-import { wrapUntrustedContent } from '../web-reader.js';
+import { mcpErrorDiagnostic, mcpErrorResult, redactMcpErrorText } from './errors.js';
 
 export function canInstallMcp(userId: number) {
   const access = policy(userId);
@@ -159,9 +159,7 @@ export async function installMcp(
       version: result.installed_version,
       tools: result.tool_count,
       resources: result.resource_count,
-      ...(result.error && (values
-        ? { instruction: 'See the connection diagnostics in MCP settings.' }
-        : { diagnostic: wrapUntrustedContent(String(result.error).slice(0, 2000)) })),
+      ...(result.error && mcpErrorDiagnostic(String(result.error), Object.values(values || {}))),
     });
   };
   let authorizationId: number | undefined;
@@ -219,7 +217,7 @@ export async function installMcp(
         return JSON.stringify({
           status: 'configured_connection_failed',
           connection_id: connection.id,
-          error: /^mcp_[a-z_]+$/.test(code) ? code : 'mcp_request_failed',
+          ...mcpErrorResult(error),
           instruction:
             'The connection is saved. If it requires credentials, the user can sign in from MCP settings.',
         });
@@ -239,8 +237,9 @@ export async function installMcp(
           return await installLocal(reportPhase, values);
         } catch (error) {
           signal?.throwIfAborted();
-          const code = error instanceof Error ? error.message : '';
-          throw new Error(/^mcp_[a-z_]+$/.test(code) ? code : 'mcp_local_install_failed');
+          const message = error instanceof Error ? redactMcpErrorText(error.message, Object.values(values)) : '';
+          const code = mcpErrorResult(message, 'mcp_local_install_failed').error;
+          throw new Error(message.startsWith(code) ? message : [code, message].filter(Boolean).join('\n'));
         }
       },
       signal,

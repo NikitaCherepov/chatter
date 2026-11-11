@@ -48,6 +48,7 @@ import { hasBackendTranslation, translateForLanguage } from '../i18n/index.js';
 import { readChatAttachment, searchChatAttachment, type AttachmentReadContext } from './chat-attachments.js';
 import { attachFileToResponse, materializeAssetInput, type ResponseFileSink } from './response-attachments.js';
 import { getMcpDefinitions, runMcpTool, mcpSearchTool, mcpCallTool, mcpBrowseTool, mcpReadResourceTool, browseToolName as mcpBrowseName, readResourceToolName as mcpReadName, searchToolName as mcpSearchName, callToolName as mcpCallName, installToolName as mcpInstallName, configureToolName as mcpConfigureName } from './mcp/tools.js';
+import { mcpErrorResult } from './mcp/errors.js';
 import { getModularTool, modularToolDefinitions } from './tools/registry.js';
 import { buildDescribeImageTool } from './tools/images/describe-image.js';
 import { getContextSummary, type ContextSummaryDto } from './context-summary.js';
@@ -3850,10 +3851,10 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
         {autoRejectHitl,onDesktopAction:subagentExtra?.onDesktopAction,waitForApproval:promise=>waitForHitlConfirmation(user.id,promise)}) || '';
     } catch(error: any) {
       if (signal?.aborted) throw error;
-      const message=String(error?.message||'');
+      const result = mcpErrorResult(error);
       return JSON.stringify({
-        error: /^mcp_[a-z_]+$/.test(message) ? message : 'mcp_request_failed',
-        ...(message === 'mcp_cancelled' ? { instruction: 'The user cancelled this operation. Do not retry it without a new user request.' } : {}),
+        ...result,
+        ...(result.error === 'mcp_cancelled' ? { instruction: 'The user cancelled this operation. Do not retry it without a new user request.' } : {}),
       });
     }
   }

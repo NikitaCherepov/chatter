@@ -22,6 +22,7 @@ await fs.writeFile(
   fixture,
   [
     "if(process.argv.includes('--unsupported-fixture')){console.error(\"Error: No such option '--unsupported-fixture'.\\nprivate fixture diagnostics\");process.exit(2);}",
+    "if(process.argv.includes('--fixture-crash')){console.error('fixture dependency missing: '+process.env.PRIVATE_KEY);process.exit(2);}",
     "const readline=require('node:readline');let count=0;",
     "const send=(id,result)=>process.stdout.write(JSON.stringify({jsonrpc:'2.0',id,result})+'\\n');",
     "readline.createInterface({input:process.stdin}).on('line',line=>{const m=JSON.parse(line);",
@@ -493,6 +494,13 @@ try {
     status: 'updated_connection_failed', installed_version: '1', error: 'mcp_unsupported_launch_option',
     rejected_option: '--unsupported-fixture', enabled: true, tool_count: 0, resource_count: 0,
   });
+  await syncSettings();
+  const crashedConfig = JSON.parse(await requestConfiguration({
+    action: 'update', patch: { args: ['serve', '--fixture-crash'] },
+  }).approve());
+  assert.equal(crashedConfig.error, 'mcp_discovery_failed');
+  assert.match(crashedConfig.diagnostic, /fixture dependency missing: \[redacted\]/);
+  assert.doesNotMatch(crashedConfig.diagnostic, /private-environment/);
   console.log('PASS: bot config confirmation, filtering, secret redaction, patches, restart and stale revision');
   await manager.remove(scope, result.local_id);
   const requiresKey = store.saveServer({

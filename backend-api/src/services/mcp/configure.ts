@@ -4,6 +4,7 @@ import { mcpApprovalFingerprint } from './approval-policy.js';
 import { cancelCall } from './client.js';
 import { confirmMcpAction, type McpApprovalContext } from './confirmations.js';
 import { requireConnection, saveConnection, type McpConnection } from './store.js';
+import { mcpErrorDiagnostic } from './errors.js';
 
 const currentSettings = (row: McpConnection) => ({
   mode: row.mode,
@@ -114,12 +115,15 @@ export async function configureMcp(
           signal,
         );
         requireConnection(userId, row.id, false);
-        return read
-          ? JSON.stringify({
-              status: 'success',
-              settings: wrapUntrustedContent(JSON.stringify(result)),
-            })
-          : JSON.stringify(result);
+        if (read) return JSON.stringify({
+          status: 'success',
+          settings: wrapUntrustedContent(JSON.stringify(result)),
+        });
+        const { diagnostic, ...outcome } = result;
+        return JSON.stringify({
+          ...outcome,
+          ...(typeof diagnostic === 'string' && mcpErrorDiagnostic(diagnostic)),
+        });
       }
       if (read) {
         const settings = { ...currentSettings(current), has_credentials: !!current.credentials };

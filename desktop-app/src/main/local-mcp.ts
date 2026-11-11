@@ -4,7 +4,7 @@ import crypto from 'node:crypto';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-import { installNpm, installPython, mcpProcessError } from './local-mcp-runtime';
+import { installNpm, installPython, mcpProcessError, redactMcpProcessText } from './local-mcp-runtime';
 import {
   resolveLocalInput,
   packageFields,
@@ -464,10 +464,11 @@ export class LocalMcpManager {
         try {
           await this.prepareNpm(scope, record.id, config, signal);
           signal?.throwIfAborted();
-        } catch {
+        } catch (error) {
           await this.remove(scope, record.id);
           signal?.throwIfAborted();
-          throw new Error('mcp_package_install_failed');
+          if (error instanceof Error && /^mcp_[a-z_]+(?:\r?\n|$)/.test(error.message)) throw error;
+          throw mcpProcessError('mcp_package_install_failed', String(error), this.diagnosticsEnv(record));
         }
       }
       if (config.pypi || config.git) {
@@ -492,7 +493,8 @@ export class LocalMcpManager {
           await this.remove(scope, record.id);
           throw signal.reason;
         }
-        record.error = String(error?.message || 'mcp_discovery_failed').slice(0, 2000);
+        const detail = redactMcpProcessText(String(error?.message || 'mcp_discovery_failed'), this.diagnosticsEnv(record));
+        record.error = detail.length > 2000 ? detail.slice(0, 1960) + '\n[diagnostic truncated]' : detail;
         await this.write(record);
       }
       return this.public(record);
@@ -501,7 +503,7 @@ export class LocalMcpManager {
     }
   }
   private diagnosticsEnv(record: RecordData) {
-    const env = { ...record.config.env };
+    const env = { ...process.env, ...record.config.env };
     const manifest = record.config.manifest;
     if (manifest)
       for (const field of packageFields(manifest.package))
@@ -741,7 +743,8 @@ export class LocalMcpManager {
         const current = await this.read(scope, id);
         if (current.config_revision !== summary.config_revision)
           throw new Error('mcp_connection_changed');
-        current.error = String(error?.message || 'mcp_discovery_failed').slice(0, 1000);
+        const detail = String(error?.message || 'mcp_discovery_failed');
+        current.error = detail.length > 2000 ? detail.slice(0, 1960) + '\n[diagnostic truncated]' : detail;
         await this.write(current);
       });
     }
@@ -908,6 +911,7 @@ export class LocalMcpManager {
         installed_version: result.installed_version,
         ...(result.error && { error: rejectedOption ? 'mcp_unsupported_launch_option' : 'mcp_discovery_failed' }),
         ...(rejectedOption && { rejected_option: rejectedOption }),
+        ...(result.error && !rejectedOption && { diagnostic: result.error }),
         enabled: result.enabled,
         tool_count: result.tools.length,
         resource_count: result.resources.length,
@@ -944,8 +948,10 @@ export class LocalMcpManager {
     const requestId = payload.request_id || crypto.randomUUID();
     this.busy.add(id);
     this.requests.set(requestId, { id, controller });
+    let diagnosticRecord: RecordData | undefined;
     try {
       const record = await this.read(scope, id);
+      diagnosticRecord = record;
       controller.signal.throwIfAborted();
       if (!record.enabled) throw new Error('mcp_connection_disabled');
       if ('config_revision' in payload && payload.config_revision !== record.config_revision)
@@ -996,6 +1002,10 @@ export class LocalMcpManager {
       } else throw new Error('mcp_invalid_local_action');
       if (JSON.stringify(result).length > 8_000_000) throw new Error('mcp_result_too_large');
       return result;
+    } catch (error) {
+      if (diagnosticRecord && error instanceof Error && !/^mcp_[a-z_]+$/.test(error.message))
+        error.message = redactMcpProcessText(error.message, this.diagnosticsEnv(diagnosticRecord));
+      throw error;
     } finally {
       this.busy.delete(id);
       this.requests.delete(requestId);
