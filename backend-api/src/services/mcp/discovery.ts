@@ -89,7 +89,7 @@ export async function browseMcp(userId: number, args: any, signal?: AbortSignal)
             connection_id: row.id,
             server: row.name,
             name: tool.name,
-            description: String(tool.description || '').slice(0, 3000),
+            description: String(tool.description || ''),
             inputSchema: tool.inputSchema,
             call_with: 'call_mcp_tool',
           });
@@ -141,6 +141,11 @@ export async function browseMcp(userId: number, args: any, signal?: AbortSignal)
           });
     }
   }
+  if (kind === 'tools' && query) {
+    const exactName = query.toLowerCase();
+    const matchesName = (item: { name: string }) => Number(item.name.toLowerCase() === exactName);
+    items.sort((a, b) => matchesName(b) - matchesName(a));
+  }
   const limit = args.limit === undefined ? 10 : Number(args.limit);
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > 20)
     throw new Error('mcp_invalid_browse');
@@ -168,11 +173,11 @@ export async function browseMcp(userId: number, args: any, signal?: AbortSignal)
   let bytes = 0;
   for (const item of items.slice(offset, offset + limit)) {
     const size = JSON.stringify(item).length;
-    if (bytes + size > 100_000) break;
+    // A large result gets its own page so its description and schema stay intact.
+    if (page.length && bytes + size > 100_000) break;
     page.push(item);
     bytes += size;
   }
-  if (!page.length && offset < items.length) throw new Error('mcp_catalog_item_too_large');
   const next = offset + page.length;
   return wrapUntrustedContent(
     JSON.stringify({

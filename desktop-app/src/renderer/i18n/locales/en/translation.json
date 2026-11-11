@@ -9,6 +9,7 @@
     "design": {
       "oauthTitle": "Continue sign-in in your browser",
       "available": "Available to Chatter",
+      "alwaysIncludeTool": "Always include",
       "noToolsFound": "No tools found",
       "authorization": "Authorization",
 
@@ -81,7 +82,8 @@
     "clearCredentials": "Clear saved authorization",
     "mode": "Tool availability",
     "searchMode": "Find tools when needed",
-    "eagerMode": "Always include tools",
+    "eagerMode": "Always include enabled tools",
+    "githubPromptWithoutLink": "Help me connect an MCP server in Chatter. I’ll give you its name or a link.",
     "timeout": "Wait without progress (seconds)",
     "refresh": "Refresh capabilities",
     "authorize": "Authorize with OAuth",

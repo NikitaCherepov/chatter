@@ -26,7 +26,7 @@ await fs.writeFile(
     "const send=(id,result)=>process.stdout.write(JSON.stringify({jsonrpc:'2.0',id,result})+'\\n');",
     "readline.createInterface({input:process.stdin}).on('line',line=>{const m=JSON.parse(line);",
     "if(m.method==='initialize')return send(m.id,{protocolVersion:m.params.protocolVersion,capabilities:{tools:{},resources:{}},serverInfo:{name:'fixture',version:'1'}});",
-    "if(m.method==='tools/list')return send(m.id,{tools:[{name:'echo',description:'Local echo',inputSchema:{$schema:'https://json-schema.org/draft/2020-12/schema',type:'object',properties:{text:{type:'string'}},required:['text']}},{name:'wait',inputSchema:{type:'object',properties:{}}},{name:'progress',inputSchema:{type:'object',properties:{}}}]});",
+    "if(m.method==='tools/list')return send(m.id,{tools:[{name:'echo',description:'Local echo'+'x'.repeat(4000)+' end of local instructions',inputSchema:{$schema:'https://json-schema.org/draft/2020-12/schema',type:'object',properties:{text:{type:'string'}},required:['text']}},{name:'wait',inputSchema:{type:'object',properties:{}}},{name:'progress',inputSchema:{type:'object',properties:{}}}]});",
     "if(m.method==='resources/list')return send(m.id,{resources:[{name:'guide',uri:'fixture://guide'}]});",
     "if(m.method==='resources/templates/list')return send(m.id,{resourceTemplates:[]});",
     "if(m.method==='resources/read')return send(m.id,{contents:[{uri:m.params.uri,text:'LOCAL RESOURCE'}]});",
@@ -235,11 +235,22 @@ try {
   syncDesktopMcp(wsClient,[persisted]);
   assert.equal(JSON.parse(store.connections(81)[0].approval_policy_json).allow_all,false);
   await manager.configure(scope,installed.id,{approval_policy:{allow_all:true,tools:[],resources:[]}});
+  await manager.configure(scope, installed.id, { tool_mode_exceptions: ['echo'] });
+  const withPinnedTool = (await manager.list(scope))[0];
+  assert.deepEqual(withPinnedTool.tool_mode_exceptions, ['echo']);
+  syncDesktopMcp(wsClient, [withPinnedTool]);
+  const included = tools.getMcpDefinitions(81).filter(
+    (definition: any) => definition.function.name.startsWith(`mcp_${row.id}_`),
+  );
+  assert.equal(included.length, 1, 'only the pinned local tool is sent by default');
+  assert.match(included[0].function.name, /_echo_/);
+  await manager.configure(scope, installed.id, { tool_mode_exceptions: [] });
   Object.assign(installed,(await manager.list(scope))[0]);
   syncDesktopMcp(wsClient,[installed]);
   const prefix = JSON.stringify(tools.getMcpDefinitions(81));
   const browse = await tools.runMcpTool(81, 'browse_mcp', { connection_id: row.id });
   assert.match(browse, /Local echo/);
+  assert.match(browse, /end of local instructions/);
   const echoed = await tools.runMcpTool(81, 'call_mcp_tool', {
     connection_id: row.id,
     tool: 'echo',

@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import { normalizeMcpApproval, emptyMcpApproval } from './approval-policy.js';
 import { wsClients, notifyMcpSettingsUpdated, type WsClient } from '../../ws-clients.js';
-import { policy, type McpConnection } from './store.js';
+import { normalizeMcpToolModeExceptions, policy, type McpConnection } from './store.js';
 import { UriTemplate } from '@modelcontextprotocol/sdk/shared/uriTemplate.js';
 
 const snapshots = new Map<number, { client: WsClient; rows: McpConnection[] }>();
@@ -48,7 +48,7 @@ function metadata(input: any) {
     tools_json: JSON.stringify(
       tools.map((t) => ({
         name: t.name,
-        description: String(t.description || '').slice(0, 3000),
+        description: String(t.description || ''),
         inputSchema: t.inputSchema,
       })),
     ),
@@ -126,6 +126,9 @@ export function syncLocalConnections(client: WsClient, input: unknown) {
       credentials: null,
       selected_tools: JSON.stringify(
         Array.isArray(item.selected_tools) ? item.selected_tools.slice(0, 200) : null,
+      ),
+      tool_mode_exceptions: JSON.stringify(
+        normalizeMcpToolModeExceptions(item.tool_mode_exceptions ?? []),
       ),
       updated_at: Date.now(),
       ...metadata(item),

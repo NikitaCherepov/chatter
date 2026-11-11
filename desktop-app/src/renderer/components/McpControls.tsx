@@ -47,16 +47,22 @@ export function McpToggle({
 export function McpTools({
   tools,
   selected,
+  eagerByDefault,
+  modeExceptions = [],
   approval,
   disabled,
   saveSelected,
+  saveModeExceptions,
   saveApproval,
 }: {
   tools: McpTool[];
   selected: string[] | null;
+  eagerByDefault: boolean;
+  modeExceptions?: string[];
   approval: McpApprovalPolicy;
   disabled: boolean;
   saveSelected: (selected: string[] | null) => void;
+  saveModeExceptions: (names: string[]) => void;
   saveApproval: (patch: Partial<McpApprovalPolicy>) => void;
 }) {
   const { t } = useTranslation();
@@ -98,39 +104,53 @@ export function McpTools({
             {t('mcp.noTools')}
           </button>
         </div>
-        {filtered.map((tool) => (
-          <div className={styles.toolItem} key={tool.name}>
-            <div className={styles.toolInfo}>
-              <strong>{tool.name}</strong>
-              {tool.description && <p>{tool.description}</p>}
+        {filtered.map((tool) => {
+          const available = selected === null || selected.includes(tool.name);
+          return (
+            <div className={styles.toolItem} key={tool.name}>
+              <div className={styles.toolInfo}>
+                <strong>{tool.name}</strong>
+                {tool.description && <p>{tool.description}</p>}
+              </div>
+              <div className={styles.toolSwitches}>
+                <McpToggle
+                  label={t('mcp.design.available')}
+                  checked={available}
+                  disabled={disabled}
+                  onChange={(checked) => {
+                    const next = new Set(selected ?? tools.map((item) => item.name));
+                    if (checked) next.add(tool.name);
+                    else next.delete(tool.name);
+                    saveSelected([...next]);
+                  }}
+                />
+                <McpToggle
+                  label={t('mcp.design.alwaysIncludeTool')}
+                  checked={available && (eagerByDefault !== modeExceptions.includes(tool.name))}
+                  disabled={disabled || !available}
+                  onChange={(checked) => {
+                    const next = new Set(modeExceptions);
+                    if (checked !== eagerByDefault) next.add(tool.name);
+                    else next.delete(tool.name);
+                    saveModeExceptions([...next]);
+                  }}
+                />
+                <McpToggle
+                  label={t('mcp.approvals.withoutConfirmation')}
+                  checked={approval.allow_all || approval.tools.includes(tool.name)}
+                  disabled={disabled || approval.allow_all}
+                  onChange={(checked) =>
+                    saveApproval({
+                      tools: checked
+                        ? [...new Set([...approval.tools, tool.name])]
+                        : approval.tools.filter((name) => name !== tool.name),
+                    })
+                  }
+                />
+              </div>
             </div>
-            <div className={styles.toolSwitches}>
-              <McpToggle
-                label={t('mcp.design.available')}
-                checked={selected === null || selected.includes(tool.name)}
-                disabled={disabled}
-                onChange={(checked) => {
-                  const next = new Set(selected ?? tools.map((item) => item.name));
-                  if (checked) next.add(tool.name);
-                  else next.delete(tool.name);
-                  saveSelected([...next]);
-                }}
-              />
-              <McpToggle
-                label={t('mcp.approvals.withoutConfirmation')}
-                checked={approval.allow_all || approval.tools.includes(tool.name)}
-                disabled={disabled || approval.allow_all}
-                onChange={(checked) =>
-                  saveApproval({
-                    tools: checked
-                      ? [...new Set([...approval.tools, tool.name])]
-                      : approval.tools.filter((name) => name !== tool.name),
-                  })
-                }
-              />
-            </div>
-          </div>
-        ))}
+          );
+        })}
         {!filtered.length && <p className={styles.empty}>{t('mcp.design.noToolsFound')}</p>}
       </div>
     </AnimatedDetails>

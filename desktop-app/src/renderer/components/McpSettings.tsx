@@ -871,12 +871,12 @@ function GithubMcpImport({
           <button
             className={s.cancelBtn}
             type="button"
-            disabled={asking || !link.trim()}
+            disabled={asking}
             onClick={() => {
               setAsking(true);
-              void onAskMcpHelp(t('mcp.github.prompt') + '\n' + link.trim()).finally(() =>
-                setAsking(false),
-              );
+              const url = link.trim();
+              const draft = url ? t('mcp.github.prompt') + '\n' + url : t('mcp.githubPromptWithoutLink');
+              void onAskMcpHelp(draft).finally(() => setAsking(false));
             }}
           >
             {t('mcp.github.ask')}
@@ -1151,9 +1151,12 @@ function ConnectionCard({
       <McpTools
         tools={c.tools}
         selected={c.selected_tools}
+        eagerByDefault={c.mode === 'eager'}
+        modeExceptions={c.tool_mode_exceptions}
         approval={approval}
         disabled={busy || c.blocked}
         saveSelected={(selected_tools) => void save({ selected_tools })}
+        saveModeExceptions={(tool_mode_exceptions) => void save({ tool_mode_exceptions })}
         saveApproval={(patch) => void saveApproval(patch)}
       />
       <div className={styles.connectionFooter}>

@@ -525,7 +525,10 @@ try {
     tools.getMcpDefinitions(81, true).some((d: any) => d.function.name === 'search_mcp_tools'),
   );
   const definitionsBeforeSearch = JSON.stringify(defs);
-  const search = await tools.runMcpTool(81, 'browse_mcp', { query: 'echo' });
+  const search = await tools.runMcpTool(81, 'browse_mcp', {
+    kind: 'tools', query: 'echo', connection_id: connection.id, limit: 1,
+  });
+  assert.match(search, /"name":"echo"/);
   assert.match(search, /Echo supplied/);
   assert.match(search, /inputSchema/);
   assert.match(search, /call_mcp_tool/);
@@ -538,6 +541,12 @@ try {
     definitionsBeforeSearch,
     'search leaves the function-tool prefix unchanged',
   );
+  const browseDefinition = defs.find((d: any) => d.function.name === 'browse_mcp');
+  const connectionSummary = JSON.stringify(connection.name);
+  assert.ok(browseDefinition?.function.description.includes(connectionSummary));
+  assert.ok(!browseDefinition?.function.description.includes('"connection_id"'));
+  const otherUserBrowse = tools.getMcpDefinitions(82).find((d: any) => d.function.name === 'browse_mcp');
+  assert.ok(!otherUserBrowse?.function.description.includes(connectionSummary));
   await tools.runMcpTool(81, 'browse_mcp', { query: 'wait' });
   assert.equal(
     JSON.stringify(tools.getMcpDefinitions(81)),
@@ -912,6 +921,50 @@ try {
     mode: 'eager',
   });
   assert.ok(tools.getMcpDefinitions(81).some((d: any) => d.function.name === named.function.name));
+
+  const savedTools = store.requireConnection(81, connection.id).tools_json;
+  const largeCatalog = Array.from({ length: 40 }, (_, index) => ({
+    name: `test_tool_${index}`,
+    description: index === 0 ? 'x'.repeat(100_001) + ' end of instructions' : 'Test tool',
+    inputSchema: { type: 'object', description: 'x'.repeat(4000) },
+  }));
+  const updateToolMetadata = db.prepare('UPDATE mcp_connections SET tools_json=? WHERE id=?');
+  updateToolMetadata.run(JSON.stringify(largeCatalog), connection.id);
+  try {
+    const eagerTools = tools.getMcpDefinitions(81).filter(
+      (definition: any) => definition.function.name.startsWith(`mcp_${connection.id}_`),
+    );
+    assert.equal(eagerTools.length, largeCatalog.length, 'all enabled tools are included in eager mode');
+    assert.ok(eagerTools[0].function.description.endsWith(largeCatalog[0].description));
+    const filters = { connection_id: connection.id, kind: 'tools' };
+    const first = unwrap(await tools.runMcpTool(81, 'browse_mcp', filters));
+    assert.equal(first.items.length, 1, 'oversized entries get their own page');
+    assert.equal(first.items[0].description, largeCatalog[0].description);
+    assert.equal(first.items[0].connection_id, connection.id);
+    assert.ok(first.next_cursor);
+    const second = unwrap(await tools.runMcpTool(81, 'browse_mcp', { ...filters, cursor: first.next_cursor }));
+    assert.equal(second.items[0].name, largeCatalog[1].name);
+  } finally {
+    updateToolMetadata.run(savedTools, connection.id);
+  }
+
+  const includesEcho = () => tools.getMcpDefinitions(81).some(
+    (definition: any) => definition.function.name === named.function.name,
+  );
+  const settingsUrl = '/user/81/mcp/connections/' + connection.id;
+  const unpinned = await request(settingsUrl, 'PATCH', { tool_mode_exceptions: ['echo'] });
+  assert.deepEqual(unpinned.body.connection.tool_mode_exceptions, ['echo']);
+  assert.equal(includesEcho(), false, 'eager mode can omit an individual tool');
+  assert.match(await tools.runMcpTool(81, 'browse_mcp', {
+    connection_id: connection.id, kind: 'tools', query: 'echo',
+  }), /"name":"echo"/, 'omitting a definition preserves discovery');
+  const searchMode = await request(settingsUrl, 'PATCH', { mode: 'search' });
+  assert.deepEqual(searchMode.body.connection.tool_mode_exceptions, []);
+  await request(settingsUrl, 'PATCH', { tool_mode_exceptions: ['echo'] });
+  assert.equal(includesEcho(), true, 'search mode can include an individual tool');
+  await request(settingsUrl, 'PATCH', { selected_tools: [] });
+  assert.equal(includesEcho(), false, 'disabled tools never reach the model');
+  await request(settingsUrl, 'PATCH', { mode: 'eager', selected_tools: null });
 
   await (await import('./mcp-approvals.fixture.mjs')).checkApprovals({tools, store, connection, received, require});
   invalidCatalog = true;

@@ -179,10 +179,15 @@ export function LocalMcpPanel({ allowed }: { allowed: boolean }) {
             <McpTools
               tools={row.tools}
               selected={row.selected_tools}
+              eagerByDefault={row.mode === 'eager'}
+              modeExceptions={row.tool_mode_exceptions}
               approval={approval}
               disabled={busy}
               saveSelected={(selected_tools) =>
                 void run(() => api.configureLocalMcp(row.id, { selected_tools }))
+              }
+              saveModeExceptions={(tool_mode_exceptions) =>
+                void run(() => api.configureLocalMcp(row.id, { tool_mode_exceptions }))
               }
               saveApproval={(patch) => void saveApproval(patch)}
             />

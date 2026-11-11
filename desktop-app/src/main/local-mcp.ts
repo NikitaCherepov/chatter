@@ -38,6 +38,7 @@ type RecordData = {
   mode: 'search' | 'eager';
   timeout_seconds: number;
   selected_tools: string[] | null;
+  tool_mode_exceptions?: string[];
   approval_policy?: McpApprovalPolicy;
   config_revision?: string;
   config: LocalMcpConfig;
@@ -164,6 +165,7 @@ export class LocalMcpManager {
       mode: record.mode,
       timeout_seconds: record.timeout_seconds,
       selected_tools: record.selected_tools,
+      tool_mode_exceptions: record.tool_mode_exceptions ?? [],
       source:
         record.config.npm ||
         record.config.git ||
@@ -770,7 +772,18 @@ export class LocalMcpManager {
     }
     if (patch.mode !== undefined) {
       if (!['search', 'eager'].includes(patch.mode)) throw new Error('mcp_invalid_connection');
+      if (record.mode !== patch.mode) record.tool_mode_exceptions = [];
       record.mode = patch.mode;
+    }
+    if (patch.tool_mode_exceptions !== undefined) {
+      const names = patch.tool_mode_exceptions;
+      if (
+        !Array.isArray(names) ||
+        names.length > 200 ||
+        names.some((name) => typeof name !== 'string' || !/^[a-zA-Z0-9_.-]{1,128}$/.test(name))
+      )
+        throw new Error('mcp_invalid_tools');
+      record.tool_mode_exceptions = [...new Set<string>(names)];
     }
     if (patch.timeout_seconds !== undefined) {
       if (

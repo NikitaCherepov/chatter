@@ -38,6 +38,7 @@ export type McpConnection = {
   blocked: boolean;
   tools: McpTool[];
   selected_tools: string[] | null;
+  tool_mode_exceptions?: string[];
   resources?: McpResource[];
   resource_templates?: McpResource[];
   capabilities?: { tools: boolean; resources: boolean; prompts: boolean } | null;
@@ -140,6 +141,7 @@ export type LocalMcpSummary = {
   tools: McpTool[];
   resources: McpResource[];
   selected_tools: string[] | null;
+  tool_mode_exceptions?: string[];
   error?: string;
   git_commit?: string;
   updatable?: boolean;

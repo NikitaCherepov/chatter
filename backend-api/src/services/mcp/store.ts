@@ -36,6 +36,7 @@ export type McpConnection = {
   capabilities_json: string | null;
   server_info_json: string | null;
   selected_tools: string;
+  tool_mode_exceptions: string;
   updated_at: number;
 };
 export const allServers = () =>
@@ -426,6 +427,7 @@ export function publicConnection(row: McpConnection) {
     server_info_json,
     approval_policy_json,
     selected_tools,
+    tool_mode_exceptions,
     ...rest
   } = row;
   let blocked = false;
@@ -445,7 +447,17 @@ export function publicConnection(row: McpConnection) {
     capabilities: capabilities_json ? JSON.parse(capabilities_json) : null,
     server_info: server_info_json ? JSON.parse(server_info_json) : null,
     selected_tools: JSON.parse(selected_tools),
+    tool_mode_exceptions: JSON.parse(tool_mode_exceptions),
   };
+}
+export function normalizeMcpToolModeExceptions(value: unknown): string[] {
+  if (
+    !Array.isArray(value) ||
+    value.length > 200 ||
+    value.some((name) => typeof name !== 'string' || !/^[a-zA-Z0-9_.-]{1,128}$/.test(name))
+  )
+    throw new Error('mcp_invalid_tools');
+  return [...new Set<string>(value)];
 }
 export function saveConnection(userId: number, body: any, id?: number) {
   const current = id ? connections(userId).find((row) => row.id === id) : null;
@@ -507,6 +519,9 @@ export function saveConnection(userId: number, body: any, id?: number) {
       selected.some((item) => typeof item !== 'string' || item.length > 128))
   )
     throw new Error('mcp_invalid_tools');
+  const modeExceptions = body.tool_mode_exceptions === undefined
+    ? (mode === current?.mode ? current.tool_mode_exceptions : '[]')
+    : JSON.stringify(normalizeMcpToolModeExceptions(body.tool_mode_exceptions));
   let secret = current?.credentials || null;
   if (body.token !== undefined) {
     if (current) db.prepare('DELETE FROM mcp_oauth_states WHERE connection_id=?').run(current.id);
@@ -527,16 +542,17 @@ export function saveConnection(userId: number, body: any, id?: number) {
     secret,
     Date.now(),
     approval,
+    modeExceptions,
   ];
   if (current)
     db.prepare(
-      'UPDATE mcp_connections SET name=?,mode=?,timeout_seconds=?,enabled=?,selected_tools=?,credentials=?,updated_at=?,approval_policy_json=? WHERE id=? AND user_id=?',
+      'UPDATE mcp_connections SET name=?,mode=?,timeout_seconds=?,enabled=?,selected_tools=?,credentials=?,updated_at=?,approval_policy_json=?,tool_mode_exceptions=? WHERE id=? AND user_id=?',
     ).run(...args, id, userId);
   else
     id = Number(
       db
         .prepare(
-          'INSERT INTO mcp_connections(name,mode,timeout_seconds,enabled,selected_tools,credentials,updated_at,approval_policy_json,user_id,server_id,url) VALUES(?,?,?,?,?,?,?,?,?,?,?)',
+          'INSERT INTO mcp_connections(name,mode,timeout_seconds,enabled,selected_tools,credentials,updated_at,approval_policy_json,tool_mode_exceptions,user_id,server_id,url) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',
         )
         .run(...args, userId, serverId, url).lastInsertRowid,
     );

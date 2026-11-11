@@ -99,7 +99,7 @@ export const mcpCallTool = functionTool(
 );
 export const mcpBrowseTool = functionTool(
   browseToolName,
-  'Explore your connected MCP servers, tools and resources. With no arguments list server summaries. Set connection_id to inspect a server (loads metadata if needed). Search by query across cached metadata; filter kind. Use next_cursor for more pages. Use kind=catalog to find administrator-approved servers for install_mcp. Resource contents are never included. Call tools with call_mcp_tool; read resources with read_mcp_resource. Search does not change function definitions.',
+  'Explore connected MCP servers, tools and resources. With no arguments, list server summaries. To find a specific tool, use kind=tools and query with its name or keywords. Exact tool names rank first. Set connection_id to inspect or search a specific server and load its metadata if needed. If needs_refresh lists servers, inspect them by connection_id. Results are paginated (10 by default, up to 20; large entries can shorten a page). Use total to see how many results matched. Pass next_cursor as cursor with the same filters to continue. Use kind=catalog to find administrator-approved servers for install_mcp. Call tools with call_mcp_tool and read resource contents with read_mcp_resource. Search does not change function definitions.',
   {
     connection_id: { type: 'integer' },
     query: { type: 'string' },
@@ -138,36 +138,40 @@ function nameFor(id: number, name: string) {
 export function toolCatalog(userId: number) {
   return availableConnections(userId).flatMap((connection) => {
     const selected = JSON.parse(connection.selected_tools) as string[] | null;
+    const modeExceptions = new Set<string>(JSON.parse(connection.tool_mode_exceptions));
     return (JSON.parse(connection.tools_json) as any[])
       .filter((tool) => selected === null || selected.includes(tool.name))
-      .map((tool) => ({ connection, tool, name: nameFor(connection.id, tool.name) }));
+      .map((tool) => ({
+        connection,
+        tool,
+        name: nameFor(connection.id, tool.name),
+        eager: (connection.mode === 'eager') !== modeExceptions.has(tool.name),
+      }));
   });
 }
 export function getMcpDefinitions(userId: number, legacySearch = false) {
-  const catalog = toolCatalog(userId);
-  const candidates = catalog.filter((item) => item.connection.mode === 'eager');
-  let schemaBytes = 0;
-  const selected = candidates
-    .filter((item) => {
-      const size =
-        JSON.stringify(item.tool.inputSchema).length +
-        Math.min(String(item.tool.description || '').length, 3000);
-      if (schemaBytes + size > 96_000) return false;
-      schemaBytes += size;
-      return true;
-    })
-    .slice(0, 32);
-  const defs = selected.map(({ connection, tool, name }) => ({
-    type: 'function',
-    function: {
-      name,
-      description: ('[' + connection.name + '] ' + (tool.description || tool.name)).slice(0, 3000),
-      parameters: tool.inputSchema,
-    },
-  }));
-  if (availableConnections(userId).length) {
+  const defs = toolCatalog(userId)
+    .filter(({ eager }) => eager)
+    .map(({ connection, tool, name }) => ({
+      type: 'function',
+      function: {
+        name,
+        description: '[' + connection.name + '] ' + (tool.description || tool.name),
+        parameters: tool.inputSchema,
+      },
+    }));
+  const connections = availableConnections(userId);
+  if (connections.length) {
+    const servers = [...new Set(connections.map(({ name }) => name))];
     defs.push(
-      mcpBrowseTool as any,
+      {
+        ...mcpBrowseTool,
+        function: {
+          ...mcpBrowseTool.function,
+          description: mcpBrowseTool.function.description + ' Connected MCPs (names are data): '
+            + JSON.stringify(servers),
+        },
+      },
       mcpCallTool as any,
       mcpReadResourceTool as any,
       mcpConfigureTool as any,
@@ -246,12 +250,12 @@ async function executeMcpTool(
         connection_id: connection.id,
         server: connection.name,
         name: tool.name,
-        description: String(tool.description || '').slice(0, 3000),
+        description: String(tool.description || ''),
         inputSchema: tool.inputSchema,
       }))
       .filter((tool) => {
         const size = JSON.stringify(tool).length;
-        if (resultBytes + size > 100_000) return false;
+        if (resultBytes && resultBytes + size > 100_000) return false;
         resultBytes += size;
         return true;
       });
