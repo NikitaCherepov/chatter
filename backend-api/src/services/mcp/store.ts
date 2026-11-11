@@ -436,10 +436,21 @@ export function publicConnection(row: McpConnection) {
   } catch {
     blocked = true;
   }
+  let authorizationMethod: 'token' | 'oauth' | null = null;
+  let unreadableCredentials = false;
+  if (secret) {
+    try {
+      const auth = unseal(secret);
+      authorizationMethod = auth.bearer ? 'token' : auth.tokens?.access_token ? 'oauth' : null;
+    } catch {
+      unreadableCredentials = true;
+    }
+  }
   return {
     ...rest,
     blocked,
-    has_credentials: !!secret,
+    has_credentials: unreadableCredentials || authorizationMethod !== null,
+    authorization_method: authorizationMethod,
     approval_policy: approvalPolicy(row),
     tools: JSON.parse(tools_json),
     resources: JSON.parse(resources_json || '[]'),
@@ -524,7 +535,6 @@ export function saveConnection(userId: number, body: any, id?: number) {
     : JSON.stringify(normalizeMcpToolModeExceptions(body.tool_mode_exceptions));
   let secret = current?.credentials || null;
   if (body.token !== undefined) {
-    if (current) db.prepare('DELETE FROM mcp_oauth_states WHERE connection_id=?').run(current.id);
     if (typeof body.token !== 'string' || body.token.length > 8192 || /[\r\n]/.test(body.token))
       throw new Error('mcp_invalid_token');
     secret = body.token ? seal({ bearer: body.token }) : null;
@@ -545,9 +555,19 @@ export function saveConnection(userId: number, body: any, id?: number) {
     modeExceptions,
   ];
   if (current)
-    db.prepare(
-      'UPDATE mcp_connections SET name=?,mode=?,timeout_seconds=?,enabled=?,selected_tools=?,credentials=?,updated_at=?,approval_policy_json=?,tool_mode_exceptions=? WHERE id=? AND user_id=?',
-    ).run(...args, id, userId);
+    db.transaction(() => {
+      db.prepare(
+        'UPDATE mcp_connections SET name=?,mode=?,timeout_seconds=?,enabled=?,selected_tools=?,credentials=?,updated_at=?,approval_policy_json=?,tool_mode_exceptions=? WHERE id=? AND user_id=?',
+      ).run(...args, id, userId);
+      if (body.token !== undefined) {
+        db.prepare('DELETE FROM mcp_oauth_states WHERE connection_id=?').run(id);
+      }
+      if (body.token === '') {
+        db.prepare(
+          "UPDATE mcp_connections SET tools_json='[]',resources_json='[]',templates_json='[]',capabilities_json=NULL,server_info_json=NULL WHERE id=? AND user_id=?",
+        ).run(id, userId);
+      }
+    })();
   else
     id = Number(
       db

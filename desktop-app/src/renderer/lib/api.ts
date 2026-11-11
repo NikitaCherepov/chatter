@@ -1271,6 +1271,12 @@ export function onMcpSettingsUpdated(cb: NonNullable<WsCallbacks['onMcpSettingsU
   };
 }
 
+export function onMcpOAuthCompleted(callback: (connectionId: number) => void) {
+  const listener = (event: Event) => callback((event as CustomEvent<number>).detail);
+  window.addEventListener('mcp-oauth-completed', listener);
+  return () => window.removeEventListener('mcp-oauth-completed', listener);
+}
+
 export function initWebSocket(callbacks?: WsCallbacks) {
   if (callbacks) wsCallbacks = { ...wsCallbacks, ...callbacks };
   ensureBrowserDownloadBridge();
@@ -1307,6 +1313,8 @@ export function initWebSocket(callbacks?: WsCallbacks) {
         case 'model_catalog_updated': wsCallbacks.onModelCatalogUpdated?.(); break;
         case 'mcp_settings_updated':
           wsCallbacks.onMcpSettingsUpdated?.();
+          if (Number.isSafeInteger(msg.oauth_connection_id))
+            window.dispatchEvent(new CustomEvent('mcp-oauth-completed', { detail: msg.oauth_connection_id }));
           if(msg.resync_local)void syncLocalMcp(socket).catch(error=>console.warn('[mcp] sync failed',error?.message));
           break;
         case 'mcp_local_synced':

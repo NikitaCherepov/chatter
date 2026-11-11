@@ -295,7 +295,7 @@ async function localOperation(
     activeCalls.delete(id);
   }
 }
-export async function refreshTools(userId: number, id: number, signal?: AbortSignal) {
+export async function refreshTools(userId: number, id: number, signal?: AbortSignal, oauthCompleted = false) {
   const row = requireConnection(userId, id);
   if (row.transport === 'stdio') {
     const result = await localOperation(userId, id, { action: 'discover' }, signal);
@@ -383,6 +383,7 @@ export async function refreshTools(userId: number, id: number, signal?: AbortSig
           description: String(version.description || '').slice(0, 1500),
         }
       : null;
+    activeCalls.get(id)?.controller.signal.throwIfAborted();
     requireConnection(userId, id);
     db.prepare(
       'UPDATE mcp_connections SET tools_json=?,resources_json=?,templates_json=?,capabilities_json=?,server_info_json=?,updated_at=? WHERE id=? AND user_id=?',
@@ -396,7 +397,7 @@ export async function refreshTools(userId: number, id: number, signal?: AbortSig
       id,
       row.user_id,
     );
-    notifyMcpSettingsUpdated(userId);
+    notifyMcpSettingsUpdated(userId, false, oauthCompleted ? id : undefined);
     return tools;
   });
 }
@@ -562,5 +563,7 @@ export async function finishOAuth(state: string, code: string, authorizationErro
     code,
     redirectUri: record.redirect_uri,
   });
-  await refreshTools(record.user_id, record.connection_id);
+  await refreshTools(record.user_id, record.connection_id, undefined, true);
+  const row = requireConnection(record.user_id, record.connection_id);
+  return { userId: row.user_id, name: row.name };
 }

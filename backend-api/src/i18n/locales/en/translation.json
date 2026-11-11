@@ -1,4 +1,8 @@
 {
+  "mcp": {
+    "oauthSuccessTitle": "{{name}} is connected",
+    "oauthSuccessHelp": "You can close this tab and return to Chatter. The connection updates automatically."
+  },
   "chat": {
     "defaultTitle": "Chat {{number}}",
     "hitlWaitingConfirmation": "I am waiting for your response to the confirmation card above. Press \"Allow\", \"Deny\", or \"Deny with comment\" — and I will continue that request.",

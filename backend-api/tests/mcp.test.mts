@@ -1075,7 +1075,7 @@ try {
   const { getPendingPcConfirmation, deletePendingPcConfirmation } = require('../src/services/pc-command-confirmations.ts');
   const oauthActions: any[] = [];
   const oauthInstall = tools.runMcpTool(82, 'install_mcp', {
-    name: 'OAuth MCP', url: 'https://oauth-mcp.example/mcp',
+    name: 'OAuth MCP <fixture>', url: 'https://oauth-mcp.example/mcp',
     documentation: 'https://github.com/example/oauth-mcp',
   }, undefined, undefined, undefined, {
     onDesktopAction: (action: any) => oauthActions.push(action.value),
@@ -1091,6 +1091,7 @@ try {
   await waitFor(() => oauthActions.some((action) => action.operation === 'authorize'));
   const oauthCard = oauthActions.find((action) => action.operation === 'authorize');
   const oauthConnection = store.requireConnection(82, oauthCard.connection_id);
+  assert.equal(store.publicConnection(oauthConnection).has_credentials, false);
   const unauthenticated = await request('/user/82/mcp/connections/'+oauthConnection.id+'/refresh','POST');
   assert.equal(unauthenticated.body.error,'mcp_authorization_required','refresh without a token asks for sign-in rather than callback configuration');
   assert.equal(store.policy().oauth_callback_url, '');
@@ -1110,16 +1111,26 @@ try {
     store.connections(82).find((c: any) => c.id === oauthConnection.id),
   ).verifier;
   assert.ok(pkceVerifier);
+  assert.equal(store.publicConnection(store.requireConnection(82, oauthConnection.id)).has_credentials, false);
   await assert.rejects(
     () => client.finishOAuth('wrong-state', 'test-authorization-code'),
     /invalid_oauth_state/,
   );
   assert.equal((await request('/admin/policy','PUT',{oauth_callback_url:'https://changed.example/backend/mcp/oauth/callback'})).status,200);
+  db.prepare('UPDATE users SET language=? WHERE id=?').run('ru', 82);
+  const beforeCallback = notices.length;
   const callbackResponse = await fetch(apiBase+'/mcp/oauth/callback?'+new URLSearchParams({state,code:'test-authorization-code'}));
   assert.equal(callbackResponse.status,200,'public callback works without Chatter credentials');
-  assert.match(await callbackResponse.text(),/MCP connected/);
+  const callbackPage = await callbackResponse.text();
+  assert.match(callbackPage, /<html lang="ru">/);
+  assert.match(callbackPage, /OAuth MCP &lt;fixture&gt; подключён/);
+  assert.doesNotMatch(callbackPage, /oauth-private-token|test-authorization-code/);
+  assert.deepEqual(notices.slice(beforeCallback).filter(item => item.event.oauth_connection_id), [{
+    userId: 82, event: { type: 'mcp_settings_updated', oauth_connection_id: oauthConnection.id },
+  }]);
   const oauthRow = store.connections(82).find((c: any) => c.id === oauthConnection.id);
   assert.equal(store.credentials(oauthRow).tokens.access_token, 'oauth-private-token');
+  assert.equal(store.publicConnection(oauthRow).authorization_method, 'oauth');
   assert.equal(
     JSON.stringify(store.publicConnection(oauthRow)).includes('oauth-private-token'),
     false,
@@ -1131,6 +1142,12 @@ try {
     /invalid_oauth_state/,
     'OAuth callback is single-use',
   );
+  const unlinked = await request('/user/82/mcp/connections/' + oauthConnection.id, 'PATCH', { token: '' });
+  assert.equal(unlinked.body.connection.id, oauthConnection.id);
+  assert.equal(unlinked.body.connection.has_credentials, false);
+  assert.equal(unlinked.body.connection.authorization_method, null);
+  assert.equal(unlinked.body.connection.capabilities, null);
+  assert.deepEqual(unlinked.body.connection.tools, []);
   console.log(
     'PASS: OAuth discovery, dynamic registration, PKCE, encrypted tokens and single-use account-bound callback',
   );

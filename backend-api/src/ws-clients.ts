@@ -23,11 +23,18 @@ export type WsClient = {
 export const wsClients = new Map<number, WsClient>();
 
 /** Same notification pattern as model_catalog_updated; no settings or credentials in the event. */
-export function notifyMcpSettingsUpdated(userId?: number, resyncLocal = false) {
+export function notifyMcpSettingsUpdated(userId?: number, resyncLocal = false, oauthConnectionId?: number) {
   const clients = userId === undefined ? wsClients.values() : [wsClients.get(userId)];
   for (const client of clients) {
     if (client?.ws.readyState !== WebSocket.OPEN) continue;
-    try { client.ws.send(JSON.stringify({ type: 'mcp_settings_updated', ...(resyncLocal ? { resync_local: true } : {}) })); } catch { /* disconnected desktop */ }
+    try {
+      client.ws.send(JSON.stringify({
+        type: 'mcp_settings_updated',
+        ...(resyncLocal ? { resync_local: true } : {}),
+        ...(userId !== undefined && oauthConnectionId !== undefined
+          ? { oauth_connection_id: oauthConnectionId } : {}),
+      }));
+    } catch { /* disconnected desktop */ }
   }
 }
 

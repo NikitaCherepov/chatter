@@ -65,11 +65,12 @@ export const getApiErrorMessage=(error,fallback)=>fallback;
 export const API_BASE='https://chatter.example';
 let mcpUpdate;
 export const onMcpSettingsUpdated=fn=>{mcpUpdate=fn;return()=>{mcpUpdate=undefined}};
+export const onMcpOAuthCompleted=fn=>{const listener=e=>fn(e.detail);window.addEventListener('mcp-oauth-completed',listener);return()=>window.removeEventListener('mcp-oauth-completed',listener);};
 export const onBackendRestored=()=>()=>{};
 window.emitMcpUpdate=()=>mcpUpdate?.();
 
 export const getMcpState=async()=>{record('state',{});return structuredClone(state)};
-export const saveMcpConnection=async(body,id)=>{record('save',body);let row=state.connections.find(c=>c.id===id);if(row)Object.assign(row,body);else {row={id:state.connections.length+1,enabled:1,blocked:false,tools:[],resources:[],resource_templates:[],selected_tools:null,...body};state.connections.push(row);}return {connection:structuredClone(row)};};
+export const saveMcpConnection=async(body,id)=>{record('save',body);let row=state.connections.find(c=>c.id===id);if(row)Object.assign(row,body);else {row={id:state.connections.length+1,enabled:1,blocked:false,tools:[],resources:[],resource_templates:[],selected_tools:null,...body};state.connections.push(row);}if(body.token!==undefined)Object.assign(row,{has_credentials:!!body.token,authorization_method:body.token?'token':null});return {connection:structuredClone(row)};};
 export const deleteMcpConnection=async(id)=>{record('delete',{id});state.connections=state.connections.filter(c=>c.id!==id);};
 export const refreshMcpTools=async(id)=>{record('refresh',{id});return {tools:state.connections[0].tools};};
 export const authorizeMcp=async id=>{record('oauth',{id});if(window.__oauthFail)throw new Error('mcp_oauth_client_registration_required');return {authorization_url:'https://github.example/authorize'}};
@@ -496,9 +497,15 @@ let win;const errors=[];
    fs.writeFileSync(path.join(process.env.MCP_UI_SCREENSHOT_DIR,'mcp-oauth-dark.png'),(await wc.capturePage()).toPNG());
    await js('document.documentElement.dataset.theme="light"');
  }
- await js('document.querySelector(\'a[href="https://github.example/authorize"]\').closest("section").querySelector(\'button[aria-label="Закрыть"]\').click()');
+ await js('window.dispatchEvent(new CustomEvent("mcp-oauth-completed",{detail:1}))');
+ assert.ok(await js('!!document.querySelector(\'a[href="https://github.example/authorize"]\')'),'another connection does not dismiss this OAuth step');
+ await js('Object.assign(window.__state.connections.find(c=>c.id===2),{authorization_method:"oauth",has_credentials:true});window.emitMcpUpdate();window.dispatchEvent(new CustomEvent("mcp-oauth-completed",{detail:2}))');
  await until('!document.querySelector(\'a[href="https://github.example/authorize"]\')');
- assert.equal(await js('window.__calls.filter(c=>c.name==="oauth").length'),2,'dismissing follow-up does not start another OAuth request');
+ await until('document.querySelector("#mcp-remote-2").innerText.includes("Выполнен вход через OAuth")');
+ await js('Array.from(document.querySelectorAll("#mcp-remote-2 button")).find(b=>b.textContent.trim()==="Отвязать").click()');
+ await until('!document.querySelector("#mcp-remote-2").innerText.includes("Выполнен вход через OAuth")');
+ await until('window.__calls.some(c=>c.name==="save"&&c.body.token==="")');
+ assert.equal(await js('window.__calls.filter(c=>c.name==="oauth").length'),2,'completion and unlink do not start another OAuth request');
 
 
  await js('window.__state.policy.allow_custom=false;window.emitMcpUpdate()');
@@ -606,7 +613,7 @@ let win;const errors=[];
  await js('window.renderFixture("oauth-card")');
  await click('Войти через OAuth');
  await until('!!document.querySelector(\'a[href="https://github.example/authorize"]\')');
- await click('Проверить подключение');
+ await js('window.dispatchEvent(new CustomEvent("mcp-oauth-completed",{detail:1}))');
  await until('window.__oauthCardResolved===true');
  await js('window.renderFixture("key-card")');
  await until('!!document.querySelector("input[type=password]")');

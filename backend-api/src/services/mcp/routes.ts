@@ -1,4 +1,8 @@
 import express from 'express';
+import { createHash } from 'node:crypto';
+import { db } from '../../db.js';
+import { translateForLanguage } from '../../i18n/index.js';
+import { normalizeSupportedLanguage } from '../../i18n/languages.js';
 import { syncLocalConnections } from './local.js';
 import type { WsClient } from '../../ws-clients.js';
 export function syncDesktopMcp(client: WsClient, input: unknown) {
@@ -56,18 +60,33 @@ const id = (value: any) => {
   if (!Number.isSafeInteger(n) || n <= 0) throw new Error('mcp_invalid_id');
   return n;
 };
+const oauthPageStyle = `
+  :root { color-scheme: light dark; font-family: system-ui, sans-serif }
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center }
+  main { box-sizing: border-box; width: min(34rem, calc(100% - 2rem)); padding: 2rem;
+    border: 1px solid GrayText; border-radius: 1rem; overflow-wrap: anywhere }
+  h1 { margin: .5rem 0 1rem; font-size: 1.65rem }
+  p { margin: 0; line-height: 1.5 }
+`;
+const oauthPageStyleHash = createHash('sha256').update(oauthPageStyle).digest('base64');
+const htmlText = (value: string) => value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 export const oauthCallback: RequestHandler = route(async (req, res) => {
-  await finishOAuth(
+  const { userId, name } = await finishOAuth(
     String(req.query.state || ''),
     String(req.query.code || ''),
     String(req.query.error || ''),
   );
-  res.setHeader('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'");
+  const user = db.prepare('SELECT language FROM users WHERE id = ?').get(userId) as { language?: string } | undefined;
+  const preferredLanguage = normalizeSupportedLanguage(user?.language) || req.acceptsLanguages('en', 'ru');
+  const language = preferredLanguage === 'ru' ? 'ru' : 'en';
+  const title = htmlText(translateForLanguage(language, 'mcp.oauthSuccessTitle', { name }));
+  const message = htmlText(translateForLanguage(language, 'mcp.oauthSuccessHelp'));
+  res.setHeader('Content-Security-Policy', `default-src 'none'; style-src 'sha256-${oauthPageStyleHash}'; frame-ancestors 'none'`);
   res.setHeader('Referrer-Policy', 'no-referrer');
   res
     .type('html')
     .send(
-      '<!doctype html><meta charset="utf-8"><title>Chatter MCP</title><p>MCP connected. You can close this tab and return to Chatter.</p>',
+      `<!doctype html><html lang="${language}"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${title} · Chatter</title><style>${oauthPageStyle}</style><main><p>Chatter</p><h1>${title}</h1><p>${message}</p></main></html>`,
     );
 });
 export function userMcpRouter(account: (req: any) => number) {

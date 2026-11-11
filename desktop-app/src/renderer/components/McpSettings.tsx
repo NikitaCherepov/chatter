@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { useLocalMcp, useMcp, useMcpCatalog } from '../lib/useMcp';
 import * as api from '../lib/mcp-service';
-import { getApiErrorMessage } from '../lib/api';
+import { getApiErrorMessage, onMcpOAuthCompleted } from '../lib/api';
 import { LocalMcpPanel } from './LocalMcpPanel';
 import { LocalMcpForm } from './LocalMcpForm';
 import {
@@ -61,6 +61,14 @@ export function McpSettings({
   const [authorization, setAuthorization] = useState<{ connectionId: number; url: string } | null>(
     null,
   );
+  useEffect(() => onMcpOAuthCompleted((id) => {
+    setAuthorization((pending) => pending?.connectionId === id ? null : pending);
+  }), []);
+  useEffect(() => {
+    if (query.data?.connections.some((connection) =>
+      connection.id === authorization?.connectionId && connection.authorization_method === 'oauth'
+    )) setAuthorization(null);
+  }, [authorization, query.data]);
   useEffect(() => {
     const policy = query.data?.policy;
     const selected = query.data?.servers.find((item) => String(item.id) === server);
@@ -1082,44 +1090,52 @@ function ConnectionCard({
       >
         <div className={styles.detailBody}>
           <div className={styles.settingsForm}>
-            <div className={styles.actions}>
-              <button
-                className={s.cancelBtn}
-                disabled={busy || c.blocked || !c.enabled}
-                onClick={() => void authorize()}
-              >
-                {t('mcp.authorize')}
-              </button>{' '}
-            </div>
-            <label>
-              {t('mcp.replaceToken')}
-              <input
-                type="password"
-                className={s.fieldInput}
-                autoComplete="new-password"
-                value={token}
-                onChange={(e) => setToken(e.target.value)}
-              />
-            </label>
-            <button
-              className={s.cancelBtn}
-              disabled={busy || !token || c.blocked}
-              onClick={() =>
-                void run(async () => {
-                  await api.saveMcpConnection({ token }, c.id);
-                  setToken('');
-                })
-              }
-            >
-              {t('mcp.save')}
-            </button>
+            {c.authorization_method ? (
+              <p role="status">{t(c.authorization_method === 'oauth' ? 'mcp.authorizedViaOAuth' : 'mcp.authorizedViaToken')}</p>
+            ) : (
+              <div className={styles.actions}>
+                <button
+                  className={s.cancelBtn}
+                  disabled={busy || c.blocked || !c.enabled}
+                  onClick={() => void authorize()}
+                >
+                  {t('mcp.authorize')}
+                </button>
+              </div>
+            )}
+            {c.authorization_method !== 'oauth' && (
+              <>
+                <label>
+                  {t(c.has_credentials ? 'mcp.replaceToken' : 'mcp.token')}
+                  <input
+                    type="password"
+                    className={s.fieldInput}
+                    autoComplete="new-password"
+                    value={token}
+                    onChange={(e) => setToken(e.target.value)}
+                  />
+                </label>
+                <button
+                  className={s.cancelBtn}
+                  disabled={busy || !token || c.blocked}
+                  onClick={() =>
+                    void run(async () => {
+                      await api.saveMcpConnection({ token }, c.id);
+                      setToken('');
+                    })
+                  }
+                >
+                  {t('mcp.save')}
+                </button>
+              </>
+            )}
             {c.has_credentials && (
               <button
                 className={s.cancelBtn}
                 disabled={busy || c.blocked}
                 onClick={() => void save({ token: '' })}
               >
-                {t('mcp.clearCredentials')}
+                {t('mcp.unlinkAuthorization')}
               </button>
             )}
           </div>

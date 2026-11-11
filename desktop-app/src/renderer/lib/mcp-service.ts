@@ -35,6 +35,7 @@ export type McpConnection = {
   mode: 'eager' | 'search';
   timeout_seconds: number;
   has_credentials: boolean;
+  authorization_method?: 'oauth' | 'token' | null;
   blocked: boolean;
   tools: McpTool[];
   selected_tools: string[] | null;

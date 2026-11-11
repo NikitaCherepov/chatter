@@ -1,8 +1,8 @@
-import { useContext, useState, type ComponentProps } from 'react';
+import { useContext, useEffect, useRef, useState, type ComponentProps } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ConfirmationCard, ConfirmationCardContext } from './ConfirmationCard';
 import { RejectWithComment } from './RejectWithComment';
-import { apiFetch, getApiErrorMessage } from '../lib/api';
+import { apiFetch, getApiErrorMessage, onMcpOAuthCompleted } from '../lib/api';
 import { authorizeMcp, refreshMcpTools, saveMcpConnection } from '../lib/mcp-service';
 import { packageFields, packageFromSource } from '../../main/local-mcp-spec';
 import s from '../pages/ChatPage.module.scss';
@@ -73,6 +73,7 @@ export function McpConfirmationCard({ confirmation: conf, onResolved, ...props }
     [oauthUrl, setOAuthUrl] = useState(''),
     [oauthBusy, setOAuthBusy] = useState(false),
     [values, setValues] = useState<Record<string, string>>({});
+  const checkingAuthorization = useRef(false);
   const resource = conf.operation === 'resource';
   const localConfiguration = conf.operation === 'install_config';
   const install = conf.operation === 'install' || localConfiguration;
@@ -99,10 +100,12 @@ export function McpConfirmationCard({ confirmation: conf, onResolved, ...props }
       setOAuthBusy(false);
     }
   };
-  const submit = async (approved: boolean, remember = false, comment = '') => {
+  const submit = async (approved: boolean, remember = false, comment = '', oauthVerified = false) => {
+    if (approved && authorize && checkingAuthorization.current) return;
+    if (approved && authorize) checkingAuthorization.current = true;
     setError('');
     try {
-      if (approved && authorize) {
+      if (approved && authorize && !oauthVerified) {
         const id = conf.connection_id!;
         if (token.trim()) {
           await saveMcpConnection({ token: token.trim() }, id);
@@ -128,8 +131,16 @@ export function McpConfirmationCard({ confirmation: conf, onResolved, ...props }
     } catch (error: any) {
       showError(error);
       throw error;
+    } finally {
+      if (approved && authorize) checkingAuthorization.current = false;
     }
   };
+  useEffect(() => {
+    if (!authorize || !oauthUrl) return;
+    return onMcpOAuthCompleted((id) => {
+      if (id === conf.connection_id) void submit(true, false, '', true).catch(() => {});
+    });
+  }, [authorize, conf.connection_id, oauthUrl, submit]);
   const update = conf.operation === 'config_update';
   const read = conf.operation === 'config_read';
   const filter = read ? (conf.arguments as { looking_for?: string })?.looking_for : undefined;
