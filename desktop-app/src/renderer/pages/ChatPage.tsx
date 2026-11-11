@@ -5216,7 +5216,8 @@ export function ChatPage() {
   const confirmationCards = [
     ...mcpConfirmations.map(conf=><McpConfirmationCard
       key={conf.confirmation_id} id={conf.confirmation_id} title={t(
-        conf.operation==='install'?'mcp.installApproval.title':
+        conf.operation==='install'
+          ? (conf.target==='streamable-http'?'mcp.installApproval.remoteTitle':'mcp.installApproval.title'):
         conf.operation==='install_config'?'mcp.authApproval.localTitle':
         conf.operation==='authorize'?'mcp.authApproval.remoteTitle':
         conf.operation==='config_read'?'mcp.configApproval.read':

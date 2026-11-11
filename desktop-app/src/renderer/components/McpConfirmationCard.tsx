@@ -2,16 +2,27 @@ import { useContext, useEffect, useRef, useState, type ComponentProps } from 're
 import { useTranslation } from 'react-i18next';
 import { ConfirmationCard, ConfirmationCardContext } from './ConfirmationCard';
 import { RejectWithComment } from './RejectWithComment';
+import { Icon } from './Icon';
 import { apiFetch, getApiErrorMessage, onMcpOAuthCompleted } from '../lib/api';
 import { authorizeMcp, refreshMcpTools, saveMcpConnection } from '../lib/mcp-service';
 import { packageFields, packageFromSource } from '../../main/local-mcp-spec';
 import s from '../pages/ChatPage.module.scss';
 import settingsStyles from './SettingsModal.module.scss';
+import styles from './McpConfirmationCard.module.scss';
+import activityStyles from './ToolActivity.module.scss';
+
 export type McpConfirmation = {
   confirmation_id: string;
   connection_id?: number;
   server_name: string;
-  operation: 'tool' | 'resource' | 'install' | 'install_config' | 'authorize' | 'config_read' | 'config_update';
+  operation:
+    | 'tool'
+    | 'resource'
+    | 'install'
+    | 'install_config'
+    | 'authorize'
+    | 'config_read'
+    | 'config_update';
   phase?: 'installing' | 'connecting';
   target: string;
   arguments: unknown;
@@ -24,26 +35,17 @@ type Props = Omit<
   onResolved: (id: string) => void;
 };
 function AllowButton({
+  label,
   remember,
   submit,
-  resource,
-  install,
-  duplicate,
-  update,
-  authorize,
   disabled,
 }: {
+  label: string;
   remember?: boolean;
   submit: (approved: boolean, remember?: boolean, comment?: string) => Promise<void>;
-  resource: boolean;
-  install?: boolean;
-  duplicate?: boolean;
-  update?: boolean;
-  authorize?: boolean;
   disabled?: boolean;
 }) {
-  const { t } = useTranslation(),
-    card = useContext(ConfirmationCardContext);
+  const card = useContext(ConfirmationCardContext);
   return (
     <button
       type="button"
@@ -51,19 +53,7 @@ function AllowButton({
       disabled={card?.busy || disabled}
       onClick={() => void card?.run(() => submit(true, remember)).catch(() => {})}
     >
-      {t(
-        remember
-          ? resource
-            ? 'mcp.approvals.alwaysResource'
-            : 'mcp.approvals.alwaysTool'
-          : install
-            ? duplicate ? 'mcp.catalogConnection.addAnother' : 'mcp.installApproval.allow'
-            : authorize
-              ? 'mcp.authApproval.check'
-              : update
-              ? 'mcp.configApproval.apply'
-              : 'chat.confirm.allow',
-      )}
+      {label}
     </button>
   );
 }
@@ -83,12 +73,19 @@ export function McpConfirmationCard({ confirmation: conf, onResolved, ...props }
   const source = localConfiguration ? (conf.arguments as { source?: string })?.source : undefined;
   const pkg = source ? packageFromSource(source) : undefined;
   const configured = pkg ? JSON.parse(source!).values : undefined;
-  const fields = pkg ? packageFields(pkg).filter(
-    (field) => field.required && !String(configured?.[field.key] ?? field.default).trim(),
-  ) : [];
+  const fields = pkg
+    ? packageFields(pkg).filter(
+        (field) => field.required && !String(configured?.[field.key] ?? field.default).trim(),
+      )
+    : [];
   const showError = (error: any) => {
     const code = error?.body?.error || error?.message;
-    setError(getApiErrorMessage(error, t('mcp.errors.' + code, { defaultValue: t('chat.toasts.commandApprovalFailed') })));
+    setError(
+      getApiErrorMessage(
+        error,
+        t('mcp.errors.' + code, { defaultValue: t('chat.toasts.commandApprovalFailed') }),
+      ),
+    );
   };
   const openOAuth = async () => {
     if (conf.connection_id === undefined) return;
@@ -102,7 +99,12 @@ export function McpConfirmationCard({ confirmation: conf, onResolved, ...props }
       setOAuthBusy(false);
     }
   };
-  const submit = async (approved: boolean, remember = false, comment = '', oauthVerified = false) => {
+  const submit = async (
+    approved: boolean,
+    remember = false,
+    comment = '',
+    oauthVerified = false,
+  ) => {
     if (approved && authorize && checkingAuthorization.current) return;
     if (approved && authorize) checkingAuthorization.current = true;
     setError('');
@@ -128,8 +130,7 @@ export function McpConfirmationCard({ confirmation: conf, onResolved, ...props }
       if (result?.status === 'executing' && install) {
         setValues({});
         setInstallAccepted(true);
-      }
-      else onResolved(conf.confirmation_id);
+      } else onResolved(conf.confirmation_id);
     } catch (error: any) {
       showError(error);
       throw error;
@@ -147,24 +148,59 @@ export function McpConfirmationCard({ confirmation: conf, onResolved, ...props }
   const read = conf.operation === 'config_read';
   const filter = read ? (conf.arguments as { looking_for?: string })?.looking_for : undefined;
   const reusable = resource || conf.operation === 'tool';
-  const phase = conf.phase || (installAccepted ? 'installing' : undefined);
-  const setup = conf.operation === 'install'
-    ? (conf.arguments as { command?: string; url?: string; documentation?: string; allow_duplicate?: boolean })
-    : undefined;
+  const setup =
+    conf.operation === 'install'
+      ? (conf.arguments as {
+          command?: string;
+          url?: string;
+          documentation?: string;
+        })
+      : undefined;
+  const remoteInstall = !!setup?.url;
+  const phase =
+    conf.phase || (installAccepted ? (remoteInstall ? 'connecting' : 'installing') : undefined);
+  const allowLabel = install
+    ? remoteInstall
+      ? 'mcp.design.connect'
+      : 'mcp.installApproval.allow'
+    : authorize
+      ? 'mcp.authApproval.check'
+      : update
+        ? 'mcp.configApproval.apply'
+        : 'chat.confirm.allow';
+
   return (
     <ConfirmationCard
       {...props}
+      icon={
+        props.icon ?? (
+          <Icon
+            size={16}
+            name={
+              authorize || localConfiguration
+                ? 'key'
+                : install
+                  ? remoteInstall
+                    ? 'globe'
+                    : 'monitor'
+                  : resource || read
+                    ? 'file'
+                    : 'terminal'
+            }
+          />
+        )
+      }
       actions={
         phase && install ? null : (
           <>
             <AllowButton
               submit={submit}
-              resource={resource}
-              install={install}
-              duplicate={setup?.allow_duplicate}
-              update={update}
-              authorize={authorize}
-              disabled={oauthBusy || (localConfiguration && (!fields.length || fields.some((field) => !values[field.key]?.trim())))}
+              label={t(allowLabel)}
+              disabled={
+                oauthBusy ||
+                (localConfiguration &&
+                  (!fields.length || fields.some((field) => !values[field.key]?.trim())))
+              }
             />
             <RejectWithComment
               className={s.suggestMacroDismissBtn}
@@ -177,55 +213,91 @@ export function McpConfirmationCard({ confirmation: conf, onResolved, ...props }
         !reusable ? undefined : (
           <>
             <p>{t(resource ? 'mcp.approvals.resourceHint' : 'mcp.approvals.toolHint')}</p>
-            <AllowButton remember submit={submit} resource={resource} />
+            <AllowButton
+              remember
+              submit={submit}
+              label={t(resource ? 'mcp.approvals.alwaysResource' : 'mcp.approvals.alwaysTool')}
+            />
           </>
         )
       }
     >
-      <div className={s.suggestMacroName}>{conf.server_name}</div>
-      <div className={s.suggestMacroCommands}>
+      <div className={styles.content}>
+        <div className={styles.server}>{conf.server_name}</div>
         {setup ? (
           <>
-            <pre className={s.suggestMacroCmd}>{setup.command || setup.url}</pre>
+            <div className={styles.preview}>
+              <span className={styles.caption}>
+                <Icon name={remoteInstall ? 'globe' : 'terminal'} size={14} />
+                {t(remoteInstall ? 'mcp.installApproval.address' : 'mcp.installApproval.command')}
+              </span>
+              <pre className={styles.code}>{setup.url || setup.command}</pre>
+            </div>
             {setup.documentation && (
-              <a href={setup.documentation} target="_blank" rel="noreferrer">
-                {t('mcp.github.instructions')}
+              <a
+                className={styles.documentation}
+                href={setup.documentation}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <Icon name="book" size={14} />
+                {t('mcp.installApproval.documentation')}
+                <span aria-hidden="true">↗</span>
               </a>
             )}
           </>
         ) : authorize ? (
           <>
-            <p>{t('mcp.authApproval.remoteHelp')}</p>
+            <p className={styles.hint}>{t('mcp.authApproval.remoteHelp')}</p>
             {oauthUrl ? (
-              <a href={oauthUrl} target="_blank" rel="noreferrer">{t('mcp.openAuthorization')}</a>
+              <a className={styles.documentation} href={oauthUrl} target="_blank" rel="noreferrer">
+                <Icon name="lock" size={14} />
+                {t('mcp.openAuthorization')}
+                <span aria-hidden="true">↗</span>
+              </a>
             ) : (
-              <button type="button" className={s.suggestMacroDismissBtn} disabled={oauthBusy}
-                onClick={() => void openOAuth()}>
+              <button
+                type="button"
+                className={s.suggestMacroDismissBtn}
+                disabled={oauthBusy}
+                onClick={() => void openOAuth()}
+              >
                 {t('mcp.authorize')}
               </button>
             )}
-            <label>
+            <label className={styles.field}>
               {t('mcp.token')}
-              <input className={settingsStyles.fieldInput} type="password" autoComplete="new-password"
-                value={token} onChange={(event) => setToken(event.target.value)} />
+              <input
+                className={settingsStyles.fieldInput}
+                type="password"
+                autoComplete="new-password"
+                value={token}
+                onChange={(event) => setToken(event.target.value)}
+              />
             </label>
           </>
         ) : localConfiguration ? (
           !phase && (
             <>
-              <p>{t('mcp.authApproval.localHelp')}</p>
+              <p className={styles.hint}>{t('mcp.authApproval.localHelp')}</p>
               {fields.map((field) => (
-                <label key={field.key}>
+                <label className={styles.field} key={field.key}>
                   {field.label}
-                  <input className={settingsStyles.fieldInput} type={field.secret ? 'password' : 'text'}
-                    autoComplete="off" value={values[field.key] ?? ''}
-                    onChange={(event) => setValues((previous) => ({ ...previous, [field.key]: event.target.value }))} />
+                  <input
+                    className={settingsStyles.fieldInput}
+                    type={field.secret ? 'password' : 'text'}
+                    autoComplete={field.secret ? 'new-password' : 'off'}
+                    value={values[field.key] ?? ''}
+                    onChange={(event) =>
+                      setValues((previous) => ({ ...previous, [field.key]: event.target.value }))
+                    }
+                  />
                 </label>
               ))}
             </>
           )
         ) : read ? (
-          <div>
+          <div className={styles.readDetails}>
             <p>
               {filter ? (
                 <>
@@ -235,17 +307,26 @@ export function McpConfirmationCard({ confirmation: conf, onResolved, ...props }
                 t('mcp.configApproval.all')
               )}
             </p>
-            <small>{t('mcp.configApproval.privacy')}</small>
+            <small className={styles.hint}>{t('mcp.configApproval.privacy')}</small>
           </div>
         ) : (
-          <>
-            {reusable && <code className={s.suggestMacroCmd}>{conf.target}</code>}
-            <pre className={s.suggestMacroCmd}>{JSON.stringify(conf.arguments, null, 2)}</pre>
-          </>
+          <div className={styles.preview}>
+            {reusable && <code className={styles.target}>{conf.target}</code>}
+            <pre className={styles.code}>{JSON.stringify(conf.arguments, null, 2)}</pre>
+          </div>
+        )}
+        {install && phase && (
+          <p className={styles.progress} role="status">
+            <span aria-hidden="true" className={activityStyles.spinner} />
+            {t('mcp.local.' + phase)}
+          </p>
+        )}
+        {error && (
+          <p className={styles.error} role="alert">
+            {error}
+          </p>
         )}
       </div>
-      {install && phase && <p role="status">{t('mcp.local.' + phase)}</p>}
-      {error && <p role="alert">{error}</p>}
     </ConfirmationCard>
   );
 }

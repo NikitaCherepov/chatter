@@ -144,7 +144,7 @@ export function LocalMcpPanel({ allowed }: { allowed: boolean }) {
               summary={
                 <>
                   <Icon name="key" size={14} />
-                  {t('mcp.settings')}
+                  {t('mcp.design.connectionSettings')}
                 </>
               }
             >
@@ -304,6 +304,7 @@ function LocalMcpConfiguration({
       <label>
         {t('mcp.mode')}
         <Select
+          floating
           value={config.mode}
           disabled={disabled}
           onChange={(mode) => void run(() => api.configureLocalMcp(row.id, { mode }))}

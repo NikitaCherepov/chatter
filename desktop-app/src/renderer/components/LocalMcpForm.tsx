@@ -244,10 +244,10 @@ export function LocalMcpForm({
               {t('mcp.github.ask')}
             </button>
           )}
+          <button type="button" className={s.cancelBtn} disabled={busy} onClick={onClose}>
+            {t('mcp.cancel')}
+          </button>
         </div>
-        <button type="button" className={s.cancelBtn} disabled={busy} onClick={onClose}>
-          {t('mcp.cancel')}
-        </button>
         <small className={s.connectionsHelp}>{t('mcp.local.formHelp')}</small>
       </form>
     </>

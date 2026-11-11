@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { useLocalMcp, useMcp, useMcpCatalog } from '../lib/useMcp';
@@ -95,13 +95,15 @@ export function McpSettings({
       setView('connections');
   }, [query.data?.policy.enabled, query.data?.policy.show_catalog]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (view !== 'connections' || !jumpTo) return;
     const card = document.getElementById(jumpTo);
-    card?.focus({ preventScroll: true });
-    card?.scrollIntoView({ block: 'nearest' });
+    if (!card) return;
+    const heading = card.querySelector(':scope > .' + styles.cardHeading);
+    card.focus({ preventScroll: true });
+    (heading ?? card).scrollIntoView({ block: 'nearest', inline: 'nearest' });
     setJumpTo(null);
-  }, [view, jumpTo]);
+  }, [view, jumpTo, query.data, localQuery.data]);
 
   const run = async (action: () => Promise<unknown>) => {
     try {
@@ -269,22 +271,25 @@ export function McpSettings({
     const disabled = busy || (local && !canAddLocal);
     if (!matches.length)
       return (
-        <button
-          className={s.cancelBtn}
-          disabled={disabled}
-          onClick={() => (local ? installFromCatalog(item) : pick(item))}
-        >
-          {t(
-            directInstall?.item === item
-              ? 'mcp.local.' + directInstall.phase
-              : local
-                ? 'mcp.local.install'
-                : 'mcp.connect',
-          )}
-        </button>
+        <div className={styles.catalogFooter}>
+          <button
+            type="button"
+            className={s.saveBtn}
+            disabled={disabled}
+            onClick={() => (local ? installFromCatalog(item) : pick(item))}
+          >
+            {t(
+              directInstall?.item === item
+                ? 'mcp.local.' + directInstall.phase
+                : local
+                  ? 'mcp.local.install'
+                  : 'mcp.design.connect',
+            )}
+          </button>
+        </div>
       );
     const openButton = (entry: (typeof matches)[number], showName = false) => (
-      <button className={s.cancelBtn} onClick={() => showConnection(entry.id)}>
+      <button type="button" className={s.cancelBtn} onClick={() => showConnection(entry.id)}>
         {showName ? entry.name : t('mcp.catalogConnection.open')}
       </button>
     );
@@ -320,34 +325,42 @@ export function McpSettings({
       );
     };
     return (
-      <div className={styles.actions}>
+      <div className={styles.catalogFooter}>
         {matches.length === 1 ? (
-          <>
-            {openButton(matches[0])}
-            {matches[0].installedVersion && (
-              <small className={s.connectionsHelp}>
-                {t('mcp.catalogConnection.installed', { version: matches[0].installedVersion })}
-              </small>
-            )}
-            {updateButton(matches[0])}
-          </>
+          <span className={styles.catalogStatus}>
+            {matches[0].installedVersion
+              ? t('mcp.catalogConnection.installed', { version: matches[0].installedVersion })
+              : t('mcp.catalogConnection.added')}
+          </span>
         ) : (
-          <AnimatedDetails className={styles.details} summary={t('mcp.catalogConnection.open')}>
+          <AnimatedDetails
+            className={styles.details}
+            summary={t('mcp.catalogConnection.manage', { count: matches.length })}
+          >
             {matches.map((entry) => (
-              <div className={styles.actions} key={entry.id}>
+              <div className={styles.catalogActions} key={entry.id}>
                 {openButton(entry, true)}
                 {updateButton(entry)}
               </div>
             ))}
           </AnimatedDetails>
         )}
-        <button
-          className={s.cancelBtn}
-          disabled={disabled}
-          onClick={() => (local ? openLocal(item, true) : pick(item, true))}
-        >
-          {t('mcp.catalogConnection.addAnother')}
-        </button>
+        <div className={styles.catalogActions}>
+          {matches.length === 1 && (
+            <>
+              {openButton(matches[0])}
+              {updateButton(matches[0])}
+            </>
+          )}
+          <button
+            type="button"
+            className={styles.textButton}
+            disabled={disabled}
+            onClick={() => (local ? openLocal(item, true) : pick(item, true))}
+          >
+            {t('mcp.catalogConnection.addAnother')}
+          </button>
+        </div>
       </div>
     );
   };
@@ -422,6 +435,7 @@ export function McpSettings({
             {adding && !autoAdding && (
               <div className={styles.addType}>
                 <Select
+                  floating
                   value={
                     addType === 'auto' || (addType === 'local' && !canAddLocal) ? 'remote' : addType
                   }
@@ -461,6 +475,7 @@ export function McpSettings({
                   <label>
                     {t('mcp.server')}
                     <Select
+                      floating
                       value={server}
                       disabled={busy}
                       options={[
@@ -520,6 +535,7 @@ export function McpSettings({
                   <label>
                     {t('mcp.mode')}
                     <Select
+                      floating
                       value={mode}
                       onChange={setMode}
                       options={[
@@ -649,19 +665,16 @@ export function McpSettings({
                             <Icon name={item.package || item.source ? 'monitor' : 'globe'} />
                           </span>
                           <strong>{item.title || item.name}</strong>
-                          {Boolean(item.recommended) && (
-                            <span className={styles.badge}>{t('mcp.design.recommendedBadge')}</span>
-                          )}
+                          <span className={styles.badge}>
+                            {t(item.package || item.source ? 'mcp.design.local' : 'mcp.design.remote')}
+                          </span>
                         </div>
-                        <span className={styles.meta}>
-                          {t(
-                            item.package || item.source ? 'mcp.design.local' : 'mcp.design.remote',
-                          )}
-                        </span>
                         {item.title && item.title !== item.name && (
                           <p className={styles.url}>{item.name}</p>
                         )}
-                        <p>{item.description}</p>
+                        {item.description && (
+                          <p className={styles.catalogDescription}>{item.description}</p>
+                        )}
                         <AnimatedDetails
                           className={styles.details}
                           summary={
@@ -1018,7 +1031,7 @@ function ConnectionCard({
         summary={
           <>
             <Icon name="key" size={14} />
-            {t('mcp.settings')}
+            {t('mcp.design.connectionSettings')}
           </>
         }
       >
@@ -1049,6 +1062,7 @@ function ConnectionCard({
             <label>
               {t('mcp.mode')}
               <Select
+                floating
                 value={c.mode}
                 disabled={busy || c.blocked}
                 onChange={(mode) => void save({ mode })}
@@ -1089,22 +1103,40 @@ function ConnectionCard({
         }
       >
         <div className={styles.detailBody}>
-          <div className={styles.settingsForm}>
-            {c.authorization_method ? (
-              <p role="status">{t(c.authorization_method === 'oauth' ? 'mcp.authorizedViaOAuth' : 'mcp.authorizedViaToken')}</p>
-            ) : (
-              <div className={styles.actions}>
+          <div className={styles.authFields}>
+            <div className={styles.authStatus}>
+              {c.authorization_method ? (
+                <span role="status">
+                  <Icon name="lock" size={14} />
+                  {t(
+                    c.authorization_method === 'oauth'
+                      ? 'mcp.authorizedViaOAuth'
+                      : 'mcp.authorizedViaToken',
+                  )}
+                </span>
+              ) : !authorizationUrl && (
                 <button
+                  type="button"
                   className={s.cancelBtn}
                   disabled={busy || c.blocked || !c.enabled}
                   onClick={() => void authorize()}
                 >
                   {t('mcp.authorize')}
                 </button>
-              </div>
-            )}
+              )}
+              {c.has_credentials && (
+                <button
+                  type="button"
+                  className={styles.removeButton}
+                  disabled={busy || c.blocked}
+                  onClick={() => void save({ token: '' })}
+                >
+                  {t('mcp.unlinkAuthorization')}
+                </button>
+              )}
+            </div>
             {c.authorization_method !== 'oauth' && (
-              <>
+              <div className={styles.tokenRow}>
                 <label>
                   {t(c.has_credentials ? 'mcp.replaceToken' : 'mcp.token')}
                   <input
@@ -1116,6 +1148,7 @@ function ConnectionCard({
                   />
                 </label>
                 <button
+                  type="button"
                   className={s.cancelBtn}
                   disabled={busy || !token || c.blocked}
                   onClick={() =>
@@ -1127,16 +1160,7 @@ function ConnectionCard({
                 >
                   {t('mcp.save')}
                 </button>
-              </>
-            )}
-            {c.has_credentials && (
-              <button
-                className={s.cancelBtn}
-                disabled={busy || c.blocked}
-                onClick={() => void save({ token: '' })}
-              >
-                {t('mcp.unlinkAuthorization')}
-              </button>
+              </div>
             )}
           </div>
         </div>

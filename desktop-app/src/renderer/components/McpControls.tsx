@@ -97,12 +97,24 @@ export function McpTools({
             value={search}
             onChange={(event) => setSearch(event.target.value)}
           />
-          <button className={s.cancelBtn} disabled={disabled} onClick={() => saveSelected(null)}>
-            {t('mcp.allTools')}
-          </button>
-          <button className={s.cancelBtn} disabled={disabled} onClick={() => saveSelected([])}>
-            {t('mcp.noTools')}
-          </button>
+          <div className={styles.bulkActions}>
+            <button
+              type="button"
+              className={s.cancelBtn}
+              disabled={disabled}
+              onClick={() => saveSelected(null)}
+            >
+              {t('mcp.design.enableAllTools')}
+            </button>
+            <button
+              type="button"
+              className={s.cancelBtn}
+              disabled={disabled}
+              onClick={() => saveSelected([])}
+            >
+              {t('mcp.design.disableAllTools')}
+            </button>
+          </div>
         </div>
         {filtered.map((tool) => {
           const available = selected === null || selected.includes(tool.name);
@@ -126,7 +138,7 @@ export function McpTools({
                 />
                 <McpToggle
                   label={t('mcp.design.alwaysIncludeTool')}
-                  checked={available && (eagerByDefault !== modeExceptions.includes(tool.name))}
+                  checked={available && eagerByDefault !== modeExceptions.includes(tool.name)}
                   disabled={disabled || !available}
                   onChange={(checked) => {
                     const next = new Set(modeExceptions);

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo, type ReactNode } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect, useMemo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import s from './Select.module.scss';
 
@@ -47,6 +47,7 @@ type Props = {
   searchable?: boolean;
   maxVisibleItems?: number;
   inline?: boolean;
+  floating?: boolean;
 };
 
 export function Select({
@@ -60,12 +61,14 @@ export function Select({
   searchable = false,
   maxVisibleItems = 8,
   inline = false,
+  floating = false,
 }: Props) {
   const { t } = useTranslation();
   const resolvedPlaceholder = placeholder ?? t('common.selectPlaceholder');
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
   const rootRef = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
   const filtered = useMemo(() => {
@@ -83,18 +86,54 @@ export function Select({
 
   const selectedLabel = selectedOption ? selectedOption.label : resolvedPlaceholder;
 
-  // Close on outside click
+  const useTopLayer = floating && !inline && typeof HTMLElement.prototype.showPopover === 'function';
+
+  useLayoutEffect(() => {
+    if (!useTopLayer || !isOpen || !rootRef.current || !dropdownRef.current) return;
+    const dropdown = dropdownRef.current;
+    // Keep the menu in the normal tab order while rendering it outside ancestor clipping.
+    dropdown.setAttribute('popover', 'manual');
+    dropdown.showPopover();
+
+    const anchor = rootRef.current.getBoundingClientRect();
+    const gap = 4;
+    const viewportMargin = 8;
+    const spaceBelow = window.innerHeight - anchor.bottom - gap - viewportMargin;
+    const spaceAbove = anchor.top - gap - viewportMargin;
+
+    dropdown.style.left = anchor.left + 'px';
+    dropdown.style.width = anchor.width + 'px';
+    const openAbove = dropdown.offsetHeight > spaceBelow && spaceAbove > spaceBelow;
+    if (openAbove) dropdown.style.bottom = window.innerHeight - anchor.top + gap + 'px';
+    else dropdown.style.top = anchor.bottom + gap + 'px';
+    dropdown.style.maxHeight = Math.max(0, openAbove ? spaceAbove : spaceBelow) + 'px';
+  }, [isOpen, useTopLayer]);
+
   useEffect(() => {
     if (!isOpen) return;
-    const handler = (e: MouseEvent) => {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
-        setIsOpen(false);
-        setSearch('');
+    const close = () => {
+      setIsOpen(false);
+      setSearch('');
+    };
+    const outside = (event: MouseEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) close();
+    };
+    const scroll = (event: Event) => {
+      if (!(event.target instanceof Node) || !dropdownRef.current?.contains(event.target)) close();
+    };
+    document.addEventListener('mousedown', outside);
+    if (useTopLayer) {
+      window.addEventListener('scroll', scroll, true);
+      window.addEventListener('resize', close);
+    }
+    return () => {
+      document.removeEventListener('mousedown', outside);
+      if (useTopLayer) {
+        window.removeEventListener('scroll', scroll, true);
+        window.removeEventListener('resize', close);
       }
     };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [isOpen]);
+  }, [isOpen, useTopLayer]);
 
   // Focus search on open
   useEffect(() => {
@@ -202,7 +241,11 @@ export function Select({
       </button>}
 
       {(inline || isOpen) && (
-        <div className={s.dropdown} data-native-overlay={!inline || undefined}>
+        <div
+          ref={dropdownRef}
+          className={useTopLayer ? s.dropdown + ' ' + s.floatingDropdown : s.dropdown}
+          data-native-overlay={!inline || undefined}
+        >
           {searchable && (
             <div className={s.searchWrap}>
               <input

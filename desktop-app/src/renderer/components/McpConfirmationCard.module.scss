@@ -1,0 +1,79 @@
+.content {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+  min-width: 0;
+  > button {
+    max-width: 100%;
+  }
+}
+.server {
+  color: var(--text-primary);
+  font-size: 15px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.preview {
+  display: grid;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  padding: 9px 12px;
+  border-radius: 7px;
+  background: var(--bg-input);
+}
+.caption,
+.progress,
+.documentation {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.caption,
+.hint,
+.progress {
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.caption svg,
+.documentation svg {
+  flex-shrink: 0;
+}
+.code,
+.target {
+  margin: 0;
+  color: var(--text-body);
+  font-family: Consolas, Monaco, monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.target {
+  font-weight: 600;
+}
+.documentation {
+  color: var(--text-secondary);
+  font-size: 12px;
+  text-decoration: none;
+  &:hover {
+    text-decoration: underline;
+  }
+}
+.field {
+  display: grid;
+  gap: 6px;
+  width: min(100%, 460px);
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.hint,
+.progress,
+.error,
+.readDetails p {
+  margin: 0;
+}
+.error {
+  color: var(--color-error);
+}

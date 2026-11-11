@@ -88,6 +88,17 @@
   overflow: hidden;
 }
 
+.floatingDropdown {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  padding: 0;
+
+  .list {
+    min-height: 0;
+  }
+}
+
 .searchWrap {
   padding: 8px;
   border-bottom: 1px solid var(--border-light);

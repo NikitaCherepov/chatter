@@ -74,7 +74,7 @@
 }
 .cards {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 310px), 1fr));
   gap: 10px;
 }
 .catalog {
@@ -101,8 +101,53 @@
     margin: 0;
     overflow-wrap: anywhere;
   }
+}
+.catalogDescription {
+  white-space: pre-line;
+}
+.catalogFooter {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-light);
   > button {
-    margin-top: auto;
+    justify-self: start;
+  }
+}
+.catalogStatus {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.catalogActions,
+.bulkActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.catalogActions > button {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.textButton {
+  padding: 7px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  &:hover:not(:disabled) {
+    background: var(--bg-modal-hover);
+    color: var(--text-primary);
+  }
+  &:disabled {
+    opacity: 0.45;
+    cursor: default;
   }
 }
 .connection {
@@ -120,7 +165,8 @@
   width: 100%;
   min-width: 0;
   strong {
-    flex: 1;
+    flex: 1 1 100px;
+    min-width: 0;
     font-size: 13px;
     font-weight: 600;
     color: var(--text-primary);
@@ -323,7 +369,7 @@
     }
   }
   > .details {
-    margin-top: 10px;
+    margin-top: 6px;
   }
 }
 .toggleRow {
@@ -349,7 +395,7 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 12px;
-  margin: 18px 0;
+  margin: 12px 0 6px;
   min-width: 0;
   label {
     display: grid;
@@ -373,19 +419,18 @@
 .toolsToolbar {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 8px;
   align-items: center;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
   input {
-    flex: 1;
-    min-width: 160px;
+    flex: 1 1 180px;
+    min-width: 0;
   }
 }
 .toolItem {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 160px;
-  gap: 12px 20px;
-  padding: 14px 0;
+  gap: 8px;
+  padding: 12px 0;
   + .toolItem {
     border-top: 1px solid var(--border-light);
   }
@@ -407,9 +452,14 @@
   }
 }
 .toolSwitches {
-  display: grid;
-  align-content: start;
-  gap: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-self: start;
+  gap: 6px 16px;
+  max-width: 100%;
+  > div {
+    gap: 8px;
+  }
 }
 .connectionFooter {
   display: flex;
@@ -426,16 +476,46 @@
   font-size: 11px;
   padding: 4px;
   cursor: pointer;
-  &:hover {
+  &:hover:not(:disabled) {
     color: var(--color-error);
   }
-}
-@media (max-width: 600px) {
-  .toolItem {
-    grid-template-columns: minmax(0, 1fr);
+  &:disabled {
+    opacity: 0.45;
+    cursor: default;
   }
-  .toolSwitches {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.authFields {
+  display: grid;
+  gap: 12px;
+  padding: 2px 0 8px;
+}
+.authStatus,
+.tokenRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+.authStatus {
+  justify-content: space-between;
+  align-items: center;
+  &:empty {
+    display: none;
+  }
+  > span {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-muted);
+  }
+}
+.tokenRow {
+  align-items: flex-end;
+  > label {
+    display: grid;
+    flex: 1 1 180px;
+    gap: 6px;
+    min-width: 0;
+    color: var(--text-muted);
   }
 }
 
