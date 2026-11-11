@@ -816,5 +816,16 @@
     "expired": "⌛ Solicitud caducada. Usa /recover_desktop o el botón del menú nuevamente.",
     "expiredCallback": "Esta solicitud ha caducado",
     "wrongUser": "Este botón es para una cuenta diferente"
+  },
+  "mcpConfirmation": {
+    "title": "Confirmación de MCP",
+    "alwaysTool": "Permitir siempre esta herramienta",
+    "alwaysResource": "Permitir siempre este recurso",
+    "toolHint": "El permiso se aplica a esta herramienta con cualquier argumento en esta conexión.",
+    "resourceHint": "El permiso se aplica a la lectura de este URI, incluidas las páginas posteriores.",
+    "executed": "Completado",
+    "rejected": "Rechazado",
+    "expired": "Confirmación expirada",
+    "failed": "Error de ejecución"
   }
 }

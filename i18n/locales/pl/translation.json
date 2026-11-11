@@ -816,5 +816,16 @@
     "expired": "⌛ Żądanie wygasło. Użyj /recover_desktop lub przycisku menu ponownie.",
     "expiredCallback": "To żądanie wygasło",
     "wrongUser": "Ten przycisk jest dla innego konta"
+  },
+  "mcpConfirmation": {
+    "title": "Potwierdzenie MCP",
+    "alwaysTool": "Zawsze zezwalaj na to narzędzie",
+    "alwaysResource": "Zawsze zezwalaj na ten zasób",
+    "toolHint": "Uprawnienie dotyczy tego narzędza z dowolnymi argumentami w tym połączeniu.",
+    "resourceHint": "Uprawnienie dotyczy odczytu tego URI, w tym kolejnych stron.",
+    "executed": "Zakończono",
+    "rejected": "Odrzucono",
+    "expired": "Potwierdzenie wygasło",
+    "failed": "Wykonanie nie powiodło się"
   }
 }

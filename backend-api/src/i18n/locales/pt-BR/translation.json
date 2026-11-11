@@ -59,7 +59,14 @@
     "read_email_content": "📧 Lendo e-mail...",
     "send_email": "📧 Preparando um e-mail para confirmação...",
     "searchQuery": "Pesquisando por “{{query}}”",
-    "readingPage": "Lendo a página {{url}}"
+    "readingPage": "Lendo a página {{url}}",
+    "browse_mcp": "Navegando nas conexões MCP...",
+    "read_mcp_resource": "Lendo um recurso MCP...",
+    "search_mcp_tools": "Localizando ferramentas MCP",
+    "install_mcp": "Instalando um servidor MCP",
+    "configure_mcp": "Configurações de conexão MCP",
+    "call_mcp_tool": "Chamando uma ferramenta MCP",
+    "mcpRunning": "MCP: {{tool}}"
   },
   "moderationNotifications": {
     "approved": "✅ Acesso aprovado. Você pode enviar mensagens para o bot.",
@@ -152,5 +159,9 @@
     "aiInstructionDone": "🤖 *Instrução de IA agendada concluída:*\n\n{{text}}",
     "failed": "⚠️ *Tarefa #{{id}} falhou:*\n\n{{error}}",
     "aiInstructionRun": "[Instrução de IA agendada] {{text}}"
+  },
+  "mcp": {
+    "oauthSuccessTitle": "{{name}} está conectado",
+    "oauthSuccessHelp": "Você pode fechar esta aba e voltar ao Chatter. A conexão é atualizada automaticamente."
   }
 }

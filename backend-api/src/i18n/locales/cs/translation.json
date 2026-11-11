@@ -65,7 +65,14 @@
     "desktopOpeningToolsPanel": "Otevírání panelu nástrojů...",
     "desktopAction": "Provádění akce...",
     "searchQuery": "Hledám „{{query}}“",
-    "readingPage": "Načítám stránku {{url}}"
+    "readingPage": "Načítám stránku {{url}}",
+    "browse_mcp": "Prohlížení připojení MCP...",
+    "read_mcp_resource": "Čtení zdroje MCP...",
+    "search_mcp_tools": "Vyhledávání nástrojů MCP",
+    "install_mcp": "Instalace MCP serveru",
+    "configure_mcp": "Nastavení připojení MCP",
+    "call_mcp_tool": "Volání MCP nástroje",
+    "mcpRunning": "MCP: {{tool}}"
   },
   "moderationNotifications": {
     "approved": "✅ Přístup schválen. Můžete botovi posílat zprávy.",
@@ -152,5 +159,9 @@
     "aiInstructionDone": "🤖 *Naplánovaná instrukce AI dokončena:*\n\n{{text}}",
     "failed": "⚠️ *Úloha #{{id}} selhala:*\n\n{{error}}",
     "aiInstructionRun": "[Naplánovaná AI instrukce] {{text}}"
+  },
+  "mcp": {
+    "oauthSuccessTitle": "{{name}} je připojeno",
+    "oauthSuccessHelp": "Můžete zavřít tuto záložku a vrátit se do Chatteru. Připojení se aktualizuje automaticky."
   }
 }

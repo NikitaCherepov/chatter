@@ -59,7 +59,14 @@
     "read_email_content": "📧 メールを読込中...",
     "send_email": "📧 確認用メールを準備中...",
     "searchQuery": "「{{query}}」を検索中",
-    "readingPage": "{{url}}を読み込み中"
+    "readingPage": "{{url}}を読み込み中",
+    "browse_mcp": "MCP接続を閲覧中...",
+    "read_mcp_resource": "MCPリソースを読み取り中...",
+    "search_mcp_tools": "MCPツールを検索中",
+    "install_mcp": "MCPサーバーをインストール中",
+    "configure_mcp": "MCP接続設定",
+    "call_mcp_tool": "MCPツールを呼び出し中",
+    "mcpRunning": "MCP: {{tool}}"
   },
   "moderationNotifications": {
     "approved": "✅ アクセスが承認されました。ボットにメッセージを送信できます。",
@@ -152,5 +159,9 @@
     "aiInstructionDone": "🤖 *スケジュールされたAI指示が完了しました:*\n\n{{text}}",
     "failed": "⚠️ *タスク #{{id}} が失敗しました:*\n\n{{error}}",
     "aiInstructionRun": "[スケジュールされたAI指示] {{text}}"
+  },
+  "mcp": {
+    "oauthSuccessTitle": "{{name}} に接続しました",
+    "oauthSuccessHelp": "このタブを閉じてChatterに戻れます。接続は自動的に更新されます。"
   }
 }

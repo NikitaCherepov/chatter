@@ -816,5 +816,16 @@
     "expired": "⌛ Richiesta scaduta. Usa /recover_desktop o il pulsante del menu.",
     "expiredCallback": "Questa richiesta è scaduta",
     "wrongUser": "Questo pulsante è per un account diverso"
+  },
+  "mcpConfirmation": {
+    "title": "Conferma MCP",
+    "alwaysTool": "Consenti sempre questo strumento",
+    "alwaysResource": "Consenti sempre questa risorsa",
+    "toolHint": "Il permesso si applica a questo strumento con qualsiasi argomento in questa connessione.",
+    "resourceHint": "Il permesso si applica alla lettura di questo URI, incluse le pagine successive.",
+    "executed": "Completato",
+    "rejected": "Rifiutato",
+    "expired": "Conferma scaduta",
+    "failed": "Esecuzione non riuscita"
   }
 }

@@ -65,7 +65,14 @@
     "desktopOpeningToolsPanel": "Araç paneli açılıyor...",
     "desktopAction": "İşlem yapılıyor...",
     "searchQuery": "“{{query}}” aranıyor",
-    "readingPage": "{{{{url}} okunuyor"
+    "readingPage": "{{{{url}} okunuyor",
+    "browse_mcp": "MCP bağlantıları taranıyor...",
+    "read_mcp_resource": "Bir MCP kaynağı okunuyor...",
+    "search_mcp_tools": "MCP araçları aranıyor",
+    "install_mcp": "MCP sunucusu kuruluyor",
+    "configure_mcp": "MCP bağlantı ayarları",
+    "call_mcp_tool": "MCP aracı çağrılıyor",
+    "mcpRunning": "MCP: {{tool}}"
   },
   "moderationNotifications": {
     "approved": "✅ Erişim onaylandı. Bot'a mesaj gönderebilirsiniz.",
@@ -152,5 +159,9 @@
     "aiInstructionDone": "🤖 *Zamanlanmış AI talimatı tamamlandı:*\n\n{{text}}",
     "failed": "⚠️ *Görev #{{id}} başarısız oldu:*\n\n{{error}}",
     "aiInstructionRun": "[Zamanlanmış AI talimatı] {{text}}"
+  },
+  "mcp": {
+    "oauthSuccessTitle": "{{name}} bağlandı",
+    "oauthSuccessHelp": "Bu sekmeyi kapatıp Chatter'a dönebilirsiniz. Bağlantı otomatik olarak güncellenir."
   }
 }

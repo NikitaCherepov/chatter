@@ -816,5 +816,16 @@
     "expired": "⌛ Anfrage abgelaufen. Verwenden Sie /recover_desktop oder die Menüschaltfläche erneut.",
     "expiredCallback": "Diese Anfrage ist abgelaufen",
     "wrongUser": "Diese Schaltfläche ist für ein anderes Konto"
+  },
+  "mcpConfirmation": {
+    "title": "MCP-Bestätigung",
+    "alwaysTool": "Dieses Tool immer erlauben",
+    "alwaysResource": "Diese Ressource immer erlauben",
+    "toolHint": "Die Berechtigung gilt für dieses Tool mit beliebigen Argumenten in dieser Verbindung.",
+    "resourceHint": "Die Berechtigung gilt für das Lesen dieser URI, einschließlich nachfolgender Seiten.",
+    "executed": "Abgeschlossen",
+    "rejected": "Abgelehnt",
+    "expired": "Bestätigung abgelaufen",
+    "failed": "Ausführung fehlgeschlagen"
   }
 }

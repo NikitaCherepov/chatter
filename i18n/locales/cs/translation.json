@@ -816,5 +816,16 @@
     "expired": "⌛ Požadavek vypršel. Použijte /recover_desktop nebo tlačítko v nabídce.",
     "expiredCallback": "Tento požadavek vypršel",
     "wrongUser": "Toto tlačítko je pro jiný účet"
+  },
+  "mcpConfirmation": {
+    "title": "Potvrzení MCP",
+    "alwaysTool": "Vždy povolit tento nástroj",
+    "alwaysResource": "Vždy povolit tento zdroj",
+    "toolHint": "Oprávnění se vztahuje na tento nástroj s jakýmkoli argumenty v tomto připojení.",
+    "resourceHint": "Oprávnění se vztahuje na čtení tohoto URI, včetně následujících stránek.",
+    "executed": "Dokončeno",
+    "rejected": "Zamítnuto",
+    "expired": "Potvrzení vypršelo",
+    "failed": "Vykonání selhalo"
   }
 }

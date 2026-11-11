@@ -816,5 +816,16 @@
     "expired": "⌛ 요청이 만료되었습니다. /recover_desktop 또는 메뉴 버튼을 다시 사용하세요.",
     "expiredCallback": "이 요청은 만료되었습니다",
     "wrongUser": "이 버튼은 다른 계정용입니다"
+  },
+  "mcpConfirmation": {
+    "title": "MCP 확인",
+    "alwaysTool": "이 도구 항상 허용",
+    "alwaysResource": "이 리소스 항상 허용",
+    "toolHint": "이 권한은 이 연결에서 모든 인자와 함께 이 도구에 적용됩니다.",
+    "resourceHint": "이 권한은 이 URI 읽기에 적용되며, 후속 페이지를 포함합니다.",
+    "executed": "완료됨",
+    "rejected": "거부됨",
+    "expired": "확인 기한 초과",
+    "failed": "실행 실패"
   }
 }

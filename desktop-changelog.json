@@ -1,43 +1,43 @@
 {
   "changes": {
     "en": [
-      "Added MCP (not yet available on the main branch)"
+      "The bot can now find and install MCP servers for you"
     ],
     "cs": [
-      "Přidáno MCP (zatím není dostupné v hlavní větvi)"
+      "Bot nyní může za vás najít a nainstalovat MCP servery"
     ],
     "de": [
-      "MCP hinzugefügt (auf dem Haupt-Branch noch nicht verfügbar)"
+      "Der Bot kann jetzt MCP-Server für Sie finden und installieren."
     ],
     "es": [
-      "Añadido MCP (aún no disponible en la rama principal)"
+      "El bot ahora puede encontrar e instalar servidores MCP para ti"
     ],
     "fr": [
-      "Ajout de MCP (pas encore disponible sur la branche principale)"
+      "Le bot peut désormais trouver et installer des serveurs MCP pour vous"
     ],
     "it": [
-      "Aggiunto MCP (non ancora disponibile sul branch principale)"
+      "Il bot ora può trovare e installare server MCP per te"
     ],
     "ja": [
-      "MCP を追加しました（メインブランチではまだ利用できません）"
+      "ボットがMCPサーバーを検索してインストールできるようになりました"
     ],
     "ko": [
-      "MCP 추가됨 (메인 브랜치에서는 아직 사용할 수 없음)"
+      "봇이 이제 MCP 서버를 찾아 설치해 드립니다"
     ],
     "pl": [
-      "Dodano MCP (jeszcze niedostępne w gałęzi głównej)"
+      "Bot może teraz znajdować i instalować serwery MCP za Ciebie"
     ],
     "pt-BR": [
-      "Adicionado MCP (ainda não disponível no branch principal)"
+      "O bot agora pode encontrar e instalar servidores MCP para você"
     ],
     "ru": [
-      "Добавлен MCP (пока недоступен в основной ветке)"
+      "Бот теперь может находить и устанавливать MCP-серверы за вас"
     ],
     "tr": [
-      "MCP eklendi (henüz ana dalda kullanılamıyor)"
+      "Bot artık sizin için MCP sunucuları bulup yükleyebilir"
     ],
     "zh-CN": [
-      "已添加 MCP（主分支暂不可用）"
+      "机器人现在可以为你查找并安装 MCP 服务器"
     ]
   }
 }

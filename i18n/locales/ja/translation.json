@@ -816,5 +816,16 @@
     "expired": "⌛ リクエストの有効期限が切れました。/recover_desktop またはメニューボタンをもう一度使用してください。",
     "expiredCallback": "このリクエストは期限切れです",
     "wrongUser": "このボタンは別のアカウント用です"
+  },
+  "mcpConfirmation": {
+    "title": "MCPの確認",
+    "alwaysTool": "このツールを常に許可する",
+    "alwaysResource": "このリソースを常に許可する",
+    "toolHint": "この接続では、このツールのすべての引数に権限が適用されます。",
+    "resourceHint": "この権限は、このURIの読み取り（後続のページを含む）に適用されます。",
+    "executed": "完了",
+    "rejected": "拒否",
+    "expired": "確認期限切れ",
+    "failed": "実行失敗"
   }
 }

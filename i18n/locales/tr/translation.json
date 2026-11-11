@@ -816,5 +816,16 @@
     "expired": "⌛ İstek süresi doldu. /recover_desktop veya menü düğmesini tekrar kullanın.",
     "expiredCallback": "Bu isteğin süresi doldu",
     "wrongUser": "Bu düğme farklı bir hesap içindir"
+  },
+  "mcpConfirmation": {
+    "title": "MCP onayı",
+    "alwaysTool": "Bu araca her zaman izin ver",
+    "alwaysResource": "Bu kaynağa her zaman izin ver",
+    "toolHint": "İzin, bu bağlantıda herhangi bir argümanla bu araca uygulanır.",
+    "resourceHint": "İzin, bu URI'yi okumaya, sonraki sayfalar dahil olmak üzere uygulanır.",
+    "executed": "Tamamlandı",
+    "rejected": "Reddedildi",
+    "expired": "Onay süresi doldu",
+    "failed": "Çalıştırma başarısız oldu"
   }
 }

@@ -816,5 +816,16 @@
     "expired": "⌛ 请求已过期。请使用 /recover_desktop 或菜单按钮重新操作。",
     "expiredCallback": "此请求已过期",
     "wrongUser": "此按钮用于其他账户"
+  },
+  "mcpConfirmation": {
+    "title": "MCP 确认",
+    "alwaysTool": "始终允许此工具",
+    "alwaysResource": "始终允许此资源",
+    "toolHint": "此权限适用于此连接中该工具的任何参数。",
+    "resourceHint": "此权限适用于读取此 URI，包括后续页面。",
+    "executed": "已完成",
+    "rejected": "已拒绝",
+    "expired": "确认已过期",
+    "failed": "执行失败"
   }
 }

@@ -59,7 +59,14 @@
     "read_email_content": "📧 正在阅读电子邮件...",
     "send_email": "📧 正在准备确认邮件...",
     "searchQuery": "正在搜索“{{query}}”",
-    "readingPage": "正在读取 {{url}}"
+    "readingPage": "正在读取 {{url}}",
+    "browse_mcp": "正在浏览 MCP 连接...",
+    "read_mcp_resource": "正在读取 MCP 资源...",
+    "search_mcp_tools": "正在查找 MCP 工具",
+    "install_mcp": "正在安装 MCP 服务器",
+    "configure_mcp": "MCP 连接设置",
+    "call_mcp_tool": "正在调用 MCP 工具",
+    "mcpRunning": "MCP：{{tool}}"
   },
   "moderationNotifications": {
     "approved": "✅ 访问已批准。您可以向机器人发送消息。",
@@ -152,5 +159,9 @@
     "aiInstructionDone": "🤖 *定时AI指令已完成：*\n\n{{text}}",
     "failed": "⚠️ *任务 #{{id}} 失败：*\n\n{{error}}",
     "aiInstructionRun": "[计划中的 AI 指令] {{text}}"
+  },
+  "mcp": {
+    "oauthSuccessTitle": "{{name}} 已连接",
+    "oauthSuccessHelp": "您可以关闭此标签页并返回 Chatter。连接将自动更新。"
   }
 }
