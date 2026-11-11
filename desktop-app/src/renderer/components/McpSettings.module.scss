@@ -300,9 +300,14 @@
   }
 }
 
+.setupMode,
 .addType {
-  max-width: 320px;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
+}
+
+.setupMode {
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-light);
 }
 .source {
   white-space: pre-wrap;
@@ -542,9 +547,6 @@
   padding: 16px;
   border: 1px solid var(--border-light);
   border-radius: 10px;
-  .addType {
-    margin-bottom: 12px;
-  }
   .form {
     border: 0;
     padding: 0;

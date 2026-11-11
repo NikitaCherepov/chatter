@@ -423,28 +423,37 @@ export function McpSettings({
           }
         >
           <div className={styles.addPanel}>
-            {autoAdding && view === 'connections' && (
+            {adding && canAddLocal && view === 'connections' && (
               <GithubMcpImport
+                active={autoAdding}
                 canAddLocal={canAddLocal}
                 allowRegistry={canSearchRegistry}
                 onPick={(item) => (item.package || item.source ? openLocal(item) : pick(item))}
-                onManual={() => setAddType(canAddLocal ? 'local' : 'remote')}
+                onGithub={() => setAddType('auto')}
+                onManual={() => setAddType('local')}
                 onAskMcpHelp={onAskMcpHelp}
               />
             )}
-            {adding && !autoAdding && (
-              <div className={styles.addType}>
-                <Select
-                  floating
-                  value={
-                    addType === 'auto' || (addType === 'local' && !canAddLocal) ? 'remote' : addType
-                  }
-                  onChange={setAddType}
-                  options={[
-                    { value: 'remote', label: t('mcp.design.remote') },
-                    ...(canAddLocal ? [{ value: 'local', label: t('mcp.design.local') }] : []),
-                  ]}
-                />
+            {adding && !autoAdding && canAddLocal && (
+              <div
+                className={styles.tabs + ' ' + styles.addType}
+                role="group"
+                aria-label={t('mcp.design.connectionType')}
+              >
+                <button
+                  type="button"
+                  aria-pressed={addType === 'remote'}
+                  onClick={() => setAddType('remote')}
+                >
+                  {t('mcp.design.remote')}
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={addType === 'local'}
+                  onClick={() => setAddType('local')}
+                >
+                  {t('mcp.design.local')}
+                </button>
               </div>
             )}
             {canAddLocal && (localDraft || (adding && addType === 'local')) && (
@@ -768,15 +777,19 @@ export function McpSettings({
   );
 }
 function GithubMcpImport({
+  active,
   canAddLocal,
   allowRegistry,
   onPick,
+  onGithub,
   onManual,
   onAskMcpHelp,
 }: {
+  active: boolean;
   canAddLocal: boolean;
   allowRegistry: boolean;
   onPick: (item: api.CatalogItem) => void;
+  onGithub: () => void;
   onManual: () => void;
   onAskMcpHelp?: (message: string) => Promise<void>;
 }) {
@@ -831,7 +844,7 @@ function GithubMcpImport({
       );
     }
   };
-  return (
+  const form = (
     <form
       className={styles.form}
       onSubmit={(event) => {
@@ -885,9 +898,6 @@ function GithubMcpImport({
         <button className={s.saveBtn} type="submit" disabled={status === 'loading' || !link.trim()}>
           {t(status === 'loading' ? 'mcp.github.loading' : 'mcp.github.load')}
         </button>
-        <button className={s.cancelBtn} type="button" onClick={onManual}>
-          {t('mcp.github.manual')}
-        </button>
         {onAskMcpHelp && (
           <button
             className={s.cancelBtn}
@@ -905,6 +915,33 @@ function GithubMcpImport({
         )}
       </div>
     </form>
+  );
+
+  return (
+    <>
+      <div
+        className={styles.tabs + ' ' + styles.setupMode}
+        role="group"
+        aria-label={t('mcp.design.setupMethod')}
+      >
+        <button type="button" aria-pressed={active} onClick={onGithub}>
+          {t('mcp.github.fromGithub')}
+        </button>
+        <button
+          type="button"
+          aria-pressed={!active}
+          onClick={() => {
+            if (!active) return;
+            request.current?.abort();
+            if (status === 'loading') setStatus('idle');
+            onManual();
+          }}
+        >
+          {t('mcp.github.manual')}
+        </button>
+      </div>
+      <div hidden={!active}>{form}</div>
+    </>
   );
 }
 
