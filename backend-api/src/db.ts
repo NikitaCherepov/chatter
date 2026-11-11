@@ -1381,6 +1381,8 @@ ensureMonitorSettingsColumn('price_tracking',
   " CHECK (price_tracking IN ('off', 'notify', 'update'))");
 ensureMonitorSettingsColumn('price_switch_cheapest',
   'ALTER TABLE openrouter_monitor_settings ADD COLUMN price_switch_cheapest INTEGER NOT NULL DEFAULT 0');
+ensureMonitorSettingsColumn('price_silent_update',
+  'ALTER TABLE openrouter_monitor_settings ADD COLUMN price_silent_update INTEGER NOT NULL DEFAULT 0');
 ensureMonitorSettingsColumn('price_threshold_pct',
   'ALTER TABLE openrouter_monitor_settings ADD COLUMN price_threshold_pct REAL NOT NULL DEFAULT 5');
 {

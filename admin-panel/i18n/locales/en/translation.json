@@ -389,6 +389,7 @@
       "priceTrackingOff": "Off",
       "priceTrackingNotify": "Notify only",
       "priceTrackingUpdate": "Notify and update prices",
+      "priceTrackingUpdateSilent": "Update prices only",
       "priceTrackingSwitchCheapest": "Notify and switch to the cheapest provider",
       "priceThreshold": "Change threshold (%)",
       "priceThresholdHint": "Ignore changes smaller than this percentage; manual pricing is never overwritten",

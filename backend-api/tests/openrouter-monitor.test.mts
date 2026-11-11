@@ -318,6 +318,25 @@ assert.ok(!outcomes.find(o => o.modelId === 'manual-1')?.notified, 'small drift 
 assert.strictEqual(notifications.length, 0);
 console.log('✔ below-threshold drift ignored');
 
+// Silent updates persist like the other modes and use the same threshold.
+setSettings({ priceTracking: 'update_silent' });
+assert.strictEqual(getMonitorSettings().priceTracking, 'update_silent');
+setModelProvider('lite-1', { pricingMode: 'manual' });
+reprice('0.0000032'); // 3.1 → 3.2 $/M ≈ 3.2% < 5%
+await runMonitorCycle();
+assert.strictEqual(getModelOverride('manual-1')?.input_price_per_million, 3);
+
+reprice('0.000004'); // 3.2 → 4 $/M (25%)
+outcomes = await runMonitorCycle();
+assert.strictEqual(getModelOverride('manual-1')?.input_price_per_million, 4);
+assert.strictEqual(getModelOverride('manual-1')?.openrouter_provider_slug, 'provider-a');
+assert.strictEqual(getModelOverride('lite-1')?.input_price_per_million, 3);
+assert.ok(!outcomes.find(o => o.modelId === 'manual-1')?.notified);
+assert.strictEqual(notifications.length, 0);
+setSettings({ priceTracking: 'update' });
+assert.strictEqual(getMonitorSettings().priceTracking, 'update');
+console.log('✔ silent mode updates automatic prices without notifying or switching providers');
+
 // The dedicated switch mode re-evaluates all endpoints after a significant
 // price change and switches when another provider is now cheaper.
 resetWorld();

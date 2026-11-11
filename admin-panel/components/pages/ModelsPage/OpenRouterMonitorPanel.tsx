@@ -65,6 +65,7 @@ export function OpenRouterMonitorPanel() {
     { value: 'off', label: t('models.monitor.priceTrackingOff') || 'Off' },
     { value: 'notify', label: t('models.monitor.priceTrackingNotify') || 'Notify only' },
     { value: 'update', label: t('models.monitor.priceTrackingUpdate') || 'Notify and update prices' },
+    { value: 'update_silent', label: t('models.monitor.priceTrackingUpdateSilent') || 'Update prices only' },
     {
       value: 'switch_cheapest',
       label:

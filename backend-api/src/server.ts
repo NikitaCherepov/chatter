@@ -5803,7 +5803,7 @@ app.put('/internal/admin/openrouter-monitor/settings', internalAuth, (req, res) 
     action?: 'notify' | 'cheapest' | 'throughput' | 'latency';
     recipientsMode?: 'all_admins' | 'selected';
     recipientUserIds?: number[];
-    priceTracking?: 'off' | 'notify' | 'update' | 'switch_cheapest';
+    priceTracking?: 'off' | 'notify' | 'update' | 'update_silent' | 'switch_cheapest';
     priceThresholdPct?: number;
   } | null;
   const settings = saveMonitorSettings(body ?? {});
