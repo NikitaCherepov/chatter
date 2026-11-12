@@ -34,6 +34,7 @@ await fs.writeFile(
     "if(m.method==='tools/call'){",
     "if(m.params.name==='wait')return;",
     "if(m.params.arguments?.text==='rpc-error'){process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:m.id,error:{code:-32602,message:'File path must be within BASE_DIR',data:{stack:'private-server-stack'}}})+'\\n');return;}",
+    "if(m.params.arguments?.text==='direct')return send(m.id,{content:[{type:'text',text:process.env.FIXTURE_MODE}]});",
 
     "if(m.params.name==='progress'){let n=0;const timer=setInterval(()=>{n++;process.stdout.write(JSON.stringify({jsonrpc:'2.0',method:'notifications/progress',params:{progressToken:m.params._meta.progressToken,progress:n}})+'\\n');if(n===8){clearInterval(timer);send(m.id,{content:[{type:'text',text:'progress done'}]});}},50);return;}",
     "return send(m.id,{content:[{type:'text',text:m.params.arguments.text+':'+(++count)+':'+(process.env.PRIVATE_KEY==='secret-local')}]});}",
@@ -380,7 +381,7 @@ try {
     command: 'npx',
     args: ['-y', '@example/install-fixture'],
   };
-  const prepareInstall = (input: typeof plan & { allow_duplicate?: boolean } = plan) => {
+  const prepareInstall = (input: Record<string, unknown> = plan) => {
     const actions: any[] = [];
     const run = tools.runMcpTool(81, 'install_mcp', input, undefined, undefined, undefined, {
       onDesktopAction: (action: any) => { actions.push(action); },
@@ -517,6 +518,39 @@ try {
   assert.doesNotMatch(crashedConfig.diagnostic, /private-environment/);
   console.log('PASS: bot config confirmation, filtering, secret redaction, patches, restart and stale revision');
   await manager.remove(scope, result.local_id);
+  const directInput = {
+    name: 'Local stdio project',
+    command: process.execPath,
+    args: [path.basename(fixture)],
+    cwd: root,
+    env: { FIXTURE_MODE: 'visible launch setting' },
+  };
+  const beforeDirect = installations.length;
+  const directRequest = prepareInstall(directInput);
+  assert.equal((await manager.list(scope)).length, 0, 'direct registration waits for approval');
+  const directCard = directRequest.actions.find((action) => action.action === 'mcp_confirmation');
+  assert.deepEqual(JSON.parse(directCard.value.arguments.command), {
+    command: process.execPath, args: [path.basename(fixture)], cwd: root,
+    env: directInput.env,
+  });
+  const direct = JSON.parse(await approveInstall(directRequest));
+  assert.equal(direct.status, 'connected');
+  assert.equal(direct.tools, 3);
+  assert.equal(installations.length, beforeDirect, 'direct stdio never calls a package installer');
+  assert.equal(store.requireConnection(81, direct.connection_id).local_id, direct.local_id);
+  const directEcho = await manager.control(scope, {
+    action: 'call', local_id: direct.local_id, tool: 'echo', arguments: { text: 'direct' },
+  });
+  assert.match(JSON.stringify(directEcho), /visible launch setting/);
+  await manager.remove(scope, direct.local_id);
+  await assert.rejects(() => prepareInstall({ ...directInput, cwd: './relative' }).run, /mcp_invalid_install_input/);
+  await assert.rejects(() => prepareInstall({ ...directInput, env: { PATH: 42 } }).run, /mcp_invalid_environment/);
+  for (const env of [{ PRIVATE_KEY: 'fixture-secret' }, { FIXTURE_MODE: 'https://user:pass@example.com' }]) {
+    const rejected = prepareInstall({ ...directInput, env });
+    await assert.rejects(rejected.run, /^Error: mcp_secret_environment_not_allowed$/);
+    assert.deepEqual(rejected.actions, [], 'credentials never reach the approval card');
+  }
+  console.log('PASS: bot registers a direct executable with cwd and env after approval');
   const requiresKey = store.saveServer({
     name: 'Requires key', transport: 'stdio', allowed: true,
     source: JSON.stringify({ package: {

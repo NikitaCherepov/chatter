@@ -28,6 +28,7 @@ export type LocalMcpInput = {
   reuse_existing?: boolean;
   values?: Record<string, string>;
   env?: Record<string, string>;
+  cwd?: string;
 };
 export type LocalMcpManifest = {
   package: NpmMcpPackage;
@@ -45,6 +46,7 @@ export type LocalMcpConfig = {
   python?: string;
   tool?: string;
   command?: string;
+  cwd?: string;
   args: string[];
   env: Record<string, string>;
   user_env?: Record<string, string>;
@@ -248,6 +250,7 @@ export function resolveLocalInput(input: LocalMcpInput): LocalMcpConfig {
     python: string | undefined,
     tool: string | undefined,
     command: string | undefined;
+  let cwd = input.cwd;
   const pkg = input.package;
   let manifest: LocalMcpManifest | undefined;
   if (pkg) {
@@ -310,12 +313,14 @@ export function resolveLocalInput(input: LocalMcpInput): LocalMcpConfig {
     const source = String(input.source || '').trim();
     if (source.startsWith('{')) {
       const json = JSON.parse(source);
+      if (cwd === undefined) cwd = json.cwd;
       if (json.package)
         return resolveLocalInput({
           ...json,
           name: input.name || json.name,
           values: { ...json.values, ...input.values },
           env: { ...json.env, ...env },
+          cwd,
         });
       command = json.command;
       args = json.args || [];
@@ -364,6 +369,10 @@ export function resolveLocalInput(input: LocalMcpInput): LocalMcpConfig {
   )
     throw new Error('mcp_invalid_command');
   env = validateLocalMcpEnvironment(env);
+  if (cwd !== undefined && (
+    typeof cwd !== 'string' || cwd.length > 2048 || /[\x00-\x1f]/.test(cwd) ||
+    !/^(?:[a-z]:[\\/]|\\\\|\/)/i.test(cwd)
+  )) throw new Error('mcp_invalid_working_directory');
   return {
     name: String(input.name || npm || pypi || (git && tool) || command).slice(0, 120),
     npm,
@@ -372,6 +381,7 @@ export function resolveLocalInput(input: LocalMcpInput): LocalMcpConfig {
     python,
     tool,
     command,
+    ...(cwd !== undefined && { cwd }),
     args,
     env,
     ...(manifest && { manifest }),

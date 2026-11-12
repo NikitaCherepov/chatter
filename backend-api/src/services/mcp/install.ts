@@ -76,32 +76,60 @@ function installPlan(userId: number, input: any) {
   const name = typeof input.name === 'string' ? input.name.trim() : '';
   if (!name || name.length > 120 || /[\x00-\x1f]/.test(name))
     throw new Error('mcp_invalid_install_input');
-  let documentation: string;
-  try {
-    const docs = new URL(input.documentation);
-    if (docs.protocol !== 'https:' || docs.username || docs.password || docs.search)
-      throw new Error();
-    documentation = docs.href;
-  } catch {
-    throw new Error('mcp_invalid_install_source');
+  const command = typeof input.command === 'string' ? input.command.trim() : '';
+  let documentation = '';
+  if (input.documentation !== undefined || input.url !== undefined || ['npx', 'uvx'].includes(command)) {
+    try {
+      const docs = new URL(input.documentation);
+      if (docs.protocol !== 'https:' || docs.username || docs.password || docs.search)
+        throw new Error();
+      documentation = docs.href;
+    } catch {
+      throw new Error('mcp_invalid_install_source');
+    }
   }
   if (input.url !== undefined) {
-    if (input.command !== undefined || input.args !== undefined)
+    if (input.command !== undefined || input.args !== undefined || input.env !== undefined || input.cwd !== undefined)
       throw new Error('mcp_invalid_install_input');
     return { name, documentation, url: mcpUrl(input.url).href, source: '', allowDuplicate };
   }
+  const args = input.args === undefined ? [] : input.args;
+  const { cwd, env } = input;
   if (
-    !['npx', 'uvx'].includes(input.command) ||
-    !Array.isArray(input.args) ||
-    !input.args.length ||
-    input.args.some((arg: unknown) => typeof arg !== 'string' || /[\x00-\x1f]/.test(arg))
+    !command || command.length > 2048 || /[\x00-\x1f]/.test(command) ||
+    !Array.isArray(args) || args.length > 100 ||
+    (['npx', 'uvx'].includes(command) && !args.length) ||
+    args.some((arg: unknown) => typeof arg !== 'string' || arg.includes('\u0000')) ||
+    (cwd !== undefined && (
+      typeof cwd !== 'string' || cwd.length > 2048 || /[\x00-\x1f]/.test(cwd) ||
+      !/^(?:[a-z]:[\\/]|\\\\|\/)/i.test(cwd)
+    ))
   )
     throw new Error('mcp_invalid_install_input');
+  if (env !== undefined && (
+    !env || typeof env !== 'object' || Array.isArray(env) ||
+    Object.entries(env).length > 100 ||
+    Object.entries(env).some(([key, value]) =>
+      !/^[a-zA-Z_][a-zA-Z0-9_]{0,127}$/.test(key) ||
+      typeof value !== 'string' || value.includes('\u0000'),
+    )
+  )) throw new Error('mcp_invalid_environment');
+  const environment = env as Record<string, string> | undefined;
+  for (const [key, value] of Object.entries(environment ?? {})) {
+    const quoted = JSON.stringify(value);
+    if (
+      /(?:^|_)(?:token|secret|password|passwd|(?:api|access|private)_?key|authorization|credentials?|cookie)(?:_|$)/i.test(key) ||
+      redactMcpErrorText(quoted) !== quoted
+    )
+      throw new Error('mcp_secret_environment_not_allowed');
+  }
+  const config = { command, args, cwd, env: environment };
   return {
     name,
     documentation,
     url: '',
-    source: JSON.stringify({ command: input.command, args: input.args }),
+    source: JSON.stringify(config, null, 2),
+    env: environment,
     allowDuplicate,
   };
 }
@@ -173,7 +201,9 @@ export async function installMcp(
       version: result.installed_version,
       tools: result.tool_count,
       resources: result.resource_count,
-      ...(result.error && mcpErrorDiagnostic(String(result.error), Object.values(values || {}))),
+      ...(result.error && mcpErrorDiagnostic(String(result.error), [
+        ...Object.values(plan.env || {}), ...Object.values(values || {}),
+      ])),
     });
   };
   let authorization: { id: number; reused: boolean } | undefined;

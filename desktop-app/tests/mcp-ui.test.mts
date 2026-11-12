@@ -124,7 +124,7 @@ function CardFixture(){
 }
 function Content({kind}){
  const client=useQueryClient(); window.__queryClient=client;
- if(kind==='install-card'||kind==='duplicate-card') return <McpConfirmationCard key={kind} id="install-card" title="Установка MCP" confirmation={{confirmation_id:'install-card',server_name:'Fixture MCP',operation:'install',target:'stdio',arguments:{command:'uvx fixture serve',documentation:'https://github.com/example/fixture',allow_duplicate:kind==='duplicate-card'}}} onResolved={()=>{window.__unexpectedInstallResolution=true}}/>;
+ if(kind==='install-card'||kind==='duplicate-card') return <McpConfirmationCard key={kind} id="install-card" title="Установка MCP" confirmation={{confirmation_id:'install-card',server_name:'Fixture MCP',operation:'install',target:'stdio',arguments:{command:JSON.stringify({command:'uv',args:['run','server.py'],cwd:'C:/fixture',env:{FIXTURE_MODE:'visible launch setting'}},null,2),documentation:'https://github.com/example/fixture',allow_duplicate:kind==='duplicate-card'}}} onResolved={()=>{window.__unexpectedInstallResolution=true}}/>;
  if(kind==='remote-install-card') return <McpConfirmationCard key={kind} id={kind} title="Подключение MCP" confirmation={{confirmation_id:kind,server_name:'Fixture MCP',operation:'install',target:'streamable-http',arguments:{url:'https://github.example/mcp'}}} onResolved={()=>{window.__unexpectedInstallResolution=true}}/>;
  if(kind==='oauth-card') return <McpConfirmationCard key="oauth-card" id="oauth-card" title="Авторизация MCP" confirmation={{confirmation_id:'oauth-card',connection_id:1,server_name:'Fixture MCP',operation:'authorize',target:'https://github.example/mcp',arguments:{}}} onResolved={()=>{window.__oauthCardResolved=true}}/>;
  if(kind==='key-card') return <McpConfirmationCard key="key-card" id="key-card" title="Настройка MCP" confirmation={{confirmation_id:'key-card',server_name:'Fixture MCP',operation:'install_config',target:'stdio',arguments:{source:JSON.stringify({package:{registryType:'npm',identifier:'fixture',transport:{type:'stdio'},environmentVariables:[{name:'PRIVATE_KEY',isSecret:true,isRequired:true}]}})}}} onResolved={()=>{window.__unexpectedInstallResolution=true}}/>;
@@ -640,7 +640,7 @@ let win;const errors=[];
  await until('window.__calls.some(c=>c.name==="approve"&&c.body.confirmation_id==="card-3"&&c.body.remember_mcp===true)');
  await until('!document.querySelector("[data-confirmation-id]")');
  await js('window.renderFixture("install-card")');
- await until('document.body.innerText.includes("uvx fixture serve")');
+ await until('document.body.innerText.includes("visible launch setting")&&document.body.innerText.includes("запустить эту программу на вашем компьютере")');
  assert.equal(await js('!!document.querySelector("details")'),false,'install offers no remembered grant');
  if(process.env.MCP_UI_SCREENSHOT_DIR){
    await new Promise(r=>setTimeout(r,150));
@@ -657,6 +657,7 @@ let win;const errors=[];
  await until('document.body.innerText.includes("Установка…")');
  await js('window.renderFixture("remote-install-card")');
  await until('document.body.innerText.includes("Адрес сервера")&&document.body.innerText.includes("https://github.example/mcp")');
+ assert.equal(await js('document.body.innerText.includes("запустить эту программу на вашем компьютере")'),false);
  await click('Подключить');
  await until('document.querySelector("[role=status]")?.textContent.includes("Подключение к MCP…")');
  await js('window.renderFixture("oauth-card")');

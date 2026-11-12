@@ -24,15 +24,21 @@ const functionTool = (name: string, description: string, properties: any, requir
 });
 export const mcpInstallTool = functionTool(
   installToolName,
-  'Propose an MCP installation for user confirmation. Check the official README for a stdio command (command/args or after -- in claude mcp add) or a Streamable HTTP URL. Example: {"name":"Windows-MCP","documentation":"https://github.com/CursorTouch/Windows-MCP#installation","command":"uvx","args":["windows-mcp","serve"]}. Chatter supplies uv/uvx and Python when needed. For an approved catalog entry, use its catalog_id from browse_mcp. Set allow_duplicate=true when the user explicitly wants another connection to the same MCP. Otherwise an existing connection is reused and its settings are unchanged. Use the returned connection_id for follow-up calls. Chatter asks for detected credentials in a separate card. Never ask for credentials in chat or include them in tool arguments.',
+  'Install or register an MCP connection after user confirmation. Check the official README for its stdio launch configuration or Streamable HTTP URL. Published packages can use npx or uvx with documentation; Chatter supplies the managed runtime when needed. For a local project, prepare the project and its dependencies on the desktop, then register the documented executable and separate arguments. Example: {"name":"Houdini MCP","command":"uv","args":["run","python","houdini_mcp_server.py"],"cwd":"C:/path/to/houdini-mcp"}. Use cwd for commands that expect the project directory; otherwise use absolute paths for scripts. The executable for a direct launch must already be available on the desktop. Preserve the project’s documented launch method. Use catalog_id for an approved catalog entry, and allow_duplicate=true only when the user wants a separate connection. Use the returned connection_id to inspect its tools. Never put credentials in tool arguments or chat; Chatter asks for detected credentials in a separate card.',
   {
     name: { type: 'string' },
     documentation: {
       type: 'string',
-      description: 'HTTPS link to official installation instructions',
+      description: 'HTTPS link to official instructions. Required for npx, uvx and remote URLs; optional for direct local launches.',
     },
-    command: { type: 'string', enum: ['uvx', 'npx'] },
-    args: { type: 'array', items: { type: 'string' } },
+    command: { type: 'string', description: 'Executable name on PATH or an absolute path on the desktop.' },
+    args: { type: 'array', items: { type: 'string' }, description: 'Individual arguments for the executable.' },
+    cwd: { type: 'string', description: 'Optional absolute working directory on the desktop.' },
+    env: {
+      type: 'object',
+      additionalProperties: { type: 'string' },
+      description: 'Optional non-secret environment overrides for local stdio. Values are shown on the approval card. The user enters credentials in the package configuration card or MCP settings.',
+    },
     url: {
       type: 'string',
       description: 'Remote Streamable HTTP endpoint, instead of command and args',

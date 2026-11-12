@@ -520,7 +520,7 @@ export class LocalMcpManager {
       command: record.config.command!,
       args: localMcpLaunchArgs(record.config),
       env: record.config.env,
-      cwd: this.directory(record.scope, record.id),
+      cwd: record.config.cwd ?? this.directory(record.scope, record.id),
       stderr: 'pipe',
       maxBufferSize: 8_000_000,
     });
@@ -560,6 +560,7 @@ export class LocalMcpManager {
           command: record.config.command,
           args: record.config.args,
           env: record.config.env,
+          cwd: record.config.cwd,
         }),
       });
       if (config.pypi || config.git) {
@@ -924,9 +925,6 @@ export class LocalMcpManager {
         throw new Error('mcp_invalid_install_input');
       this.requests.set(requestId, { controller });
       try {
-        const config = resolveLocalInput(payload.input);
-        if (!payload.input.catalog_id && !config.npm && !config.pypi && !config.git)
-          throw new Error('mcp_invalid_install_input');
         const result = await this.install(scope, payload.input, progress, controller.signal);
         return {
           id: result.id,

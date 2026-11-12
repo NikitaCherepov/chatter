@@ -233,6 +233,7 @@ export function McpConfirmationCard({ confirmation: conf, onResolved, ...props }
               </span>
               <pre className={styles.code}>{setup.url || setup.command}</pre>
             </div>
+            {!remoteInstall && <p className={styles.hint}>{t('mcp.installApproval.localHelp')}</p>}
             {setup.documentation && (
               <a
                 className={styles.documentation}
