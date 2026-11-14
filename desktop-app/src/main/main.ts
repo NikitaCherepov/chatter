@@ -15,6 +15,7 @@ import ffmpegStatic from 'ffmpeg-static';
 import { WakeWordOnnxService } from './wakeword';
 import { connectChatGptOnDesktop } from './chatgpt-auth';
 import { getTextMenuItems, type TextMenuAction } from './text-context-menu';
+import { editFileLines } from './file-edit';
 import { isValidZoomLevel, readZoomLevel, saveZoomLevel } from './zoom-settings';
 import { ChatterBrowser, type BrowserControlPayload, type BrowserSearchPayload, type GoogleAiPayload } from './browser';
 import { buildBrowserIdentity } from './browser-identity';
@@ -2700,62 +2701,7 @@ function redactApiKeys(content: string): string {
     assertTrustedIpcSender(event);
     const filePath = typeof payload?.file_path === 'string' ? payload.file_path.trim() : '';
     if (!filePath) throw new Error('file_path_required');
-
-    const startLine = typeof payload?.start_line === 'number' ? Math.floor(payload.start_line) : 0;
-    const endLine = typeof payload?.end_line === 'number' ? Math.floor(payload.end_line) : 0;
-    const newContent = typeof payload?.new_content === 'string' ? payload.new_content : '';
-    const expectedContent = typeof payload?.expected_content === 'string' ? payload.expected_content : null;
-    const expectedFileVersion = typeof payload?.expected_file_version === 'string' ? payload.expected_file_version : '';
-
-    if (startLine < 1) throw new Error('start_line must be >= 1');
-    if (expectedContent === null || !expectedFileVersion) throw new Error('file_edit_snapshot_required');
-
-    const resolved = path.resolve(filePath);
-    const initialStat = await fs.promises.stat(resolved);
-    const currentFileVersion = `${initialStat.size}:${initialStat.mtimeMs}`;
-    if (currentFileVersion !== expectedFileVersion) throw new Error('file_changed_since_preview');
-
-    // Read entire file and split into lines
-    const rawData = await fs.promises.readFile(resolved, 'utf-8');
-    const eol = rawData.includes('\r\n') ? '\r\n' : '\n';
-    const lines = rawData.split(/\r?\n/);
-    const totalLinesBefore = lines.length;
-    const statAfterRead = await fs.promises.stat(resolved);
-    if (`${statAfterRead.size}:${statAfterRead.mtimeMs}` !== currentFileVersion) {
-      throw new Error('file_changed_since_preview');
-    }
-
-    // Bounds check
-    if (startLine > lines.length + 1) {
-      throw new Error(`start_line (${startLine}) выходит за пределы файла (всего строк: ${lines.length})`);
-    }
-
-    // Convert 1-indexed line numbers to 0-indexed array positions
-    const startIndex = startLine - 1;
-    const deleteCount = endLine >= startLine ? endLine - startLine + 1 : 0;
-    if (endLine > lines.length) throw new Error(`end_line (${endLine}) exceeds file length (${lines.length})`);
-    const actualContent = deleteCount > 0 ? lines.slice(startIndex, startIndex + deleteCount).join('\n') : '';
-    if (actualContent !== expectedContent.replace(/\r\n/g, '\n')) {
-      throw new Error('file_changed_since_preview');
-    }
-
-    // Split new content into lines
-    const newLines = newContent ? newContent.split(/\r?\n/) : [];
-
-    // Splice: remove old lines, insert new ones
-    lines.splice(startIndex, deleteCount, ...newLines);
-
-    // Write back
-    await fs.promises.writeFile(resolved, lines.join(eol), { encoding: 'utf-8' });
-
-    const totalLinesAfter = lines.length;
-    return {
-      ok: true,
-      lines_removed: deleteCount,
-      lines_added: newLines.length,
-      total_lines_before: totalLinesBefore,
-      total_lines_after: totalLinesAfter,
-    };
+    return editFileLines(filePath, payload);
   });
 
   // ── Visual Control: capture screen (all monitors) ──

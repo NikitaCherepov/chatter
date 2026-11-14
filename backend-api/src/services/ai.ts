@@ -2868,12 +2868,12 @@ Use when:
 - Need to read file contents (code, config, log, text, Word document)
 - User asks to show or analyze a file
 - Need to read part of a large file (paginated)
-- Need to know exact line numbers before using edit_file_lines
+- Need to copy the original lines before using edit_file_lines
 
 Returns UTF-8 text together with the starting line, total line count, and snapshot_id. Pass that snapshot_id to edit_file_lines.
 Supports pagination: if the file is large, read it in parts via offset/limit (or the legacy start_line/max_lines aliases).
 
-IMPORTANT for edit_file_lines: Before editing, ALWAYS call read_file with line_numbers=true and the needed offset/limit to see exact line numbers. This prevents errors when specifying start_line/end_line in edit_file_lines.`,
+For edit_file_lines, read the complete block and its neighbors with line_numbers=false so you can copy the original text.`,
       parameters: {
         type: 'object',
         properties: {
@@ -2899,7 +2899,7 @@ IMPORTANT for edit_file_lines: Before editing, ALWAYS call read_file with line_n
           },
           line_numbers: {
             type: 'boolean',
-            description: 'If true — each line in the content will have a line number prefix (format: "     1\\tcontent"). Always use true before edit_file_lines to see exact line numbers. Default is false.'
+            description: 'Prefix each line with its line number. Defaults to false, which returns plain text for edit_file_lines.'
           }
         },
         required: ['file_path']
@@ -3004,24 +3004,16 @@ Writing to system directories (C:\\Windows, /etc, /usr, /bin) is blocked.`,
   };
 };
 
-/** Build edit_file_lines tool — surgically replace specific lines in a file */
+/** Build edit_file_lines tool — replace a block of complete lines by matching its text */
 const buildEditFileLinesTool = () => {
   return {
     type: 'function' as const,
     function: {
       name: 'edit_file_lines',
-      description: `Surgically replaces lines in a file with new text. Works like a scalpel — does not overwrite the entire file.
-Supports text files (.txt, .md, .log, .json, .js, .ts, .py, etc.). For .docx use read_file + write_file (overwrite).
-
-IMPORTANT: ALWAYS use read_file first (with start_line and max_lines) to find exact line numbers. Line numbering starts at 1.
-
-Scenarios:
-- Replace lines 10-15 with new text: start_line=10, end_line=15, new_content="new text"
-- Replace a single line 568: start_line=568, end_line=568, new_content="new line"
-- Insert text after line 5 (without deleting): start_line=6, end_line=5, new_content="inserted text"
-- Delete lines 20-30: start_line=20, end_line=30, new_content=""
-
-Always requires user confirmation (HitL card with diff preview).`,
+      description: `Replace complete lines in a text file. Read the block and its neighbors with read_file and pass its snapshot_id.
+Copy old_content exactly, including indentation. It must match once in the read window. Include unchanged adjacent lines in both fragments when needed to make the match unique. Use old_content="" only for an empty file.
+Keep the same boundaries in both fragments. If new_content includes a closing brace from the existing block, old_content must include that line too. To insert, include a neighboring line in both fragments and add the new lines before or after it. To delete the selected lines, use new_content="".
+For .docx use read_file + write_file. Requires user confirmation with a diff preview.`,
       parameters: {
         type: 'object',
         properties: {
@@ -3029,24 +3021,20 @@ Always requires user confirmation (HitL card with diff preview).`,
             type: 'string',
             description: 'Full path to the file on the user\'s PC.'
           },
-          start_line: {
-            type: 'number',
-            description: 'Line number to start replacing from (inclusive, 1-based).'
-          },
-          end_line: {
-            type: 'number',
-            description: 'Line number to end replacing at (inclusive). To insert text without deleting, set end_line = start_line - 1.'
+          old_content: {
+            type: 'string',
+            description: 'Exact original fragment of complete lines from read_file, without line numbers or an extra final newline. Empty only for an empty file.'
           },
           new_content: {
             type: 'string',
-            description: 'New text to insert in place of old lines. Empty string = delete lines.'
+            description: 'Replacement for exactly old_content, with no extra final newline. Use an empty string to delete it.'
           },
           snapshot_id: {
             type: 'string',
             description: 'The snapshot_id returned by the latest read_file call for this file and line range.'
           }
         },
-        required: ['file_path', 'start_line', 'end_line', 'new_content', 'snapshot_id']
+        required: ['file_path', 'old_content', 'new_content', 'snapshot_id']
       }
     }
   };
@@ -5741,21 +5729,13 @@ If the task is a description, return a detailed text response.`
     const filePath: string = typeof parsed.file_path === 'string' ? parsed.file_path.trim() : '';
     if (!filePath) return JSON.stringify({ status: 'error', message: 'file_path is required' });
 
-    const parseLineNumber = (value: unknown) => {
-      const parsedValue = typeof value === 'number' ? value : Number(`${value ?? ''}`.trim());
-      return Number.isFinite(parsedValue) ? Math.floor(parsedValue) : 0;
-    };
-    const startLine = parseLineNumber(parsed.start_line);
-    const endLine = parseLineNumber(parsed.end_line);
-    const newContent: string = typeof parsed.new_content === 'string' ? parsed.new_content : '';
+    const { old_content: oldContent, new_content: newContent } = parsed;
     const snapshotId = typeof parsed.snapshot_id === 'string' ? parsed.snapshot_id.trim() : '';
 
-    if (startLine < 1) return JSON.stringify({ status: 'error', message: 'start_line must be >= 1' });
-    if (!snapshotId) return JSON.stringify({ status: 'error', message: 'snapshot_id is required. Read the target lines again with read_file first.' });
-    if (endLine < 0) return JSON.stringify({ status: 'error', message: 'end_line must be >= 0' });
-    if (endLine !== 0 && endLine < startLine - 1) {
-      return JSON.stringify({ status: 'error', message: 'end_line must be >= start_line - 1 (to insert, set end_line = start_line - 1)' });
+    if (typeof oldContent !== 'string' || typeof newContent !== 'string') {
+      return JSON.stringify({ status: 'error', message: 'Pass old_content copied from read_file and new_content for the same block. Both must be strings.' });
     }
+    if (!snapshotId) return JSON.stringify({ status: 'error', message: 'snapshot_id is required. Read the target lines again with read_file first.' });
 
     // Block .docx — use read_file + write_file instead
     const ext = filePath.toLowerCase().split('.').pop();
@@ -5773,48 +5753,44 @@ If the task is a description, return a detailed text response.`
     if (!snapshot || snapshot.userId !== user.id || snapshot.filePathKey !== filePathSnapshotKey(filePath)) {
       return JSON.stringify({ status: 'error', message: 'The file snapshot is missing, expired, or belongs to another file. Read the target lines again.', file_path: filePath });
     }
-    const rangeIsCovered = endLine >= startLine
-      ? startLine >= snapshot.startLine && endLine <= snapshot.endLine
-      : startLine >= snapshot.startLine && startLine <= snapshot.endLine + 1;
-    if (!rangeIsCovered) {
-      return JSON.stringify({ status: 'error', message: 'The requested edit range is outside the lines covered by the snapshot. Read that range again.', file_path: filePath });
-    }
-
-    // Pre-read only the affected range for diff preview. read_file has a
-    // pagination cap, so reading from line 1 would make large-file edits look
-    // out of bounds even when the target lines exist.
-    let oldLinesPreview = '';
-    let expectedFileVersion = '';
+    const oldLinesPreview = oldContent.replace(/\r\n?/g, '\n');
+    const expectedFileVersion = snapshot.fileVersion;
+    let startLine = snapshot.startLine;
+    let endLine = startLine - 1;
     try {
-      const previewLineCount = endLine >= startLine
-        ? Math.max(1, Math.min(endLine - startLine + 1, 2000))
-        : 1;
-      const readResult = await sendIpcToDesktop(user.id, 'read_file', { file_path: filePath, start_line: startLine, max_lines: previewLineCount }, 30000, signal);
-      const previewContent = typeof readResult === 'object' && readResult !== null && 'content' in readResult
-        ? String((readResult as any).content)
-        : typeof readResult === 'string' ? readResult : '';
-      const totalLines = typeof readResult === 'object' && readResult !== null && typeof (readResult as any).total_lines === 'number'
-        ? Math.floor((readResult as any).total_lines)
-        : startLine + (previewContent ? previewContent.split('\n').length : 0) - 1;
-      expectedFileVersion = typeof readResult === 'object' && readResult !== null && typeof (readResult as any).file_version === 'string'
-        ? (readResult as any).file_version
-        : '';
-
-      if (startLine > totalLines + 1) {
-        return JSON.stringify({ status: 'error', message: `start_line (${startLine}) is out of bounds for the file (total lines: ${totalLines}).` });
-      }
-
-      oldLinesPreview = endLine >= startLine ? previewContent : '';
-      const normalizedOldContent = oldLinesPreview.replace(/\r\n/g, '\n');
-      if (!expectedFileVersion) {
-        fileReadSnapshots.delete(snapshotId);
-        return JSON.stringify({ status: 'error', message: 'The desktop app did not return a file version. Update the desktop app before editing.', file_path: filePath });
-      }
-      if (expectedFileVersion !== snapshot.fileVersion) {
+      const windowSize = snapshot.endLine - snapshot.startLine + 1;
+      const readResult = await sendIpcToDesktop(user.id, 'read_file', {
+        file_path: filePath, start_line: snapshot.startLine, max_lines: Math.max(1, windowSize),
+      }, 30000, signal);
+      if (readResult?.file_version !== expectedFileVersion) {
         fileReadSnapshots.delete(snapshotId);
         return JSON.stringify({ status: 'error', message: 'The file changed after it was last read. Read the target lines again and prepare a new edit.', file_path: filePath });
       }
-      if (endLine >= startLine && normalizedOldContent === newContent.replace(/\r\n/g, '\n')) {
+      if (typeof readResult.content !== 'string' || readResult.start_line !== snapshot.startLine ||
+          readResult.read_lines !== windowSize) {
+        return JSON.stringify({ status: 'error', message: 'Could not verify the original read window. Read the target lines again.', file_path: filePath });
+      }
+      if (oldLinesPreview === '') {
+        if (readResult.total_lines !== 0 || startLine !== 1) {
+          return JSON.stringify({ status: 'error', message: 'For an insertion in a non-empty file, copy a neighboring line into old_content and keep it in new_content.', file_path: filePath });
+        }
+      } else {
+        const window = '\n' + readResult.content.replace(/\r\n?/g, '\n') + '\n';
+        const needle = '\n' + oldLinesPreview + '\n';
+        const match = window.indexOf(needle);
+        if (windowSize <= 0 || match === -1) {
+          return JSON.stringify({ status: 'error', message: 'old_content does not match complete lines in the read window. Copy the exact text from read_file.', file_path: filePath });
+        }
+        if (window.indexOf(needle, match + 1) !== -1) {
+          return JSON.stringify({ status: 'error', message: 'old_content matches more than once. Include unchanged neighboring lines in both fragments.', file_path: filePath });
+        }
+        startLine += window.slice(0, match).split('\n').length - 1;
+        endLine = startLine + oldLinesPreview.split('\n').length - 1;
+        if (endLine > snapshot.endLine || endLine > readResult.total_lines) {
+          return JSON.stringify({ status: 'error', message: 'The matched lines extend outside the read window. Read the target lines again.', file_path: filePath });
+        }
+      }
+      if (oldLinesPreview === newContent.replace(/\r\n?/g, '\n')) {
         fileReadSnapshots.delete(snapshotId);
         return JSON.stringify({ status: 'info', message: 'No changes were made because the replacement matches the current content.', file_path: filePath });
       }
