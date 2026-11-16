@@ -1275,106 +1275,11 @@ app.get('/api/v1/audio/:filename', (req: AuthedRequest, res) => {
 });
 
 app.get('/mcp/oauth/callback', oauthCallback);
-app.use('/api/v1', authMiddleware);
-app.use('/api/v1/mcp', userMcpRouter(req => accountIdFromRequest(req)));
-app.use('/internal/admin/mcp', internalAuth, adminMcpRouter());
-app.use('/api/v1', (req: AuthedRequest, _res, next) => {
-  const user = getUserById(resolveAccountId(req.authUserId!));
-  const isAdmin = user?.is_admin === 1 || user?.role === 'admin';
-  return withModelActor({ userId: user?.id, isAdmin }, () => withChatGptActor(isAdmin, next));
-});
-
-app.get('/api/v1/transcription/status', async (_req: AuthedRequest, res) => {
-  try {
-    return res.json(await getTranscriptionStatus());
-  } catch (err: any) {
-    return res.status(503).json({ error: err?.message || 'transcription_status_failed' });
-  }
-});
-
-app.post('/api/v1/transcription', async (req: AuthedRequest, res) => {
-  try {
-    const audioBase64 = `${req.body?.audio_base64 || ''}`.trim();
-    if (!audioBase64) return res.status(400).json({ error: 'empty_audio' });
-    const result = await transcribeAudio({
-      userId: req.authUserId!,
-      audioBuffer: Buffer.from(audioBase64, 'base64'),
-      language: req.body?.language,
-    });
-    return res.json(result);
-  } catch (err: any) {
-    const error = `${err?.message || 'transcription_failed'}`;
-    const status = error === 'quota_exceeded' ? 429
-      : error === 'audio_too_large' ? 413
-        : error === 'transcription_not_configured' ? 503 : 502;
-    return res.status(status).json({ error });
-  }
-});
-
-// Return current authenticated user profile
-app.get('/api/v1/auth/me', (req: AuthedRequest, res) => {
-  const userId = req.authUserId!;
-  const user = getUserById(userId);
-  if (!user) return res.status(404).json({ error: 'user_not_found' });
-  return res.json({ user: toAuthUserDto(user) });
-});
-
-app.get('/api/v1/user/language', (req: AuthedRequest, res) => {
-  const userId = resolveAccountId(req.authUserId!);
-  const user = getUserById(userId);
-  if (!user) return res.status(404).json({ error: 'user_not_found' });
-  return res.json({ language: normalizeSupportedLanguage(user.language) });
-});
-
-app.put('/api/v1/user/language', (req: AuthedRequest, res) => {
-  const language = normalizeSupportedLanguage(req.body?.language);
-  if (!language) {
-    return res.status(400).json({
-      error: 'unsupported_language',
-      supported_languages: SUPPORTED_LANGUAGES,
-    });
-  }
-
-  const userId = resolveAccountId(req.authUserId!);
-  const result = db.prepare('UPDATE users SET language = ? WHERE id = ?').run(language, userId);
-  if (result.changes === 0) return res.status(404).json({ error: 'user_not_found' });
-  return res.json({ ok: true, language });
-});
-
-app.put('/api/v1/user/name', (req: AuthedRequest, res) => {
-  const name = `${req.body?.name || ''}`.trim();
-  if (!name) return res.status(400).json({ error: 'name_required' });
-  const userId = resolveAccountId(req.authUserId!);
-  const result = db.prepare('UPDATE users SET name = ? WHERE id = ?').run(name, userId);
-  if (result.changes === 0) return res.status(404).json({ error: 'user_not_found' });
-  return res.json({ ok: true, name });
-});
-
-app.put('/api/v1/user/timezone', (req: AuthedRequest, res) => {
-  const rawOffset = Number(req.body?.timezone_offset);
-  const timezoneOffset = Math.round(rawOffset * 4) / 4;
-  if (
-    !Number.isFinite(rawOffset)
-    || rawOffset < -12
-    || rawOffset > 14
-    || Math.abs(rawOffset - timezoneOffset) > 1e-7
-  ) {
-    return res.status(400).json({ error: 'bad_timezone_offset' });
-  }
-
-  const userId = resolveAccountId(req.authUserId!);
-  const result = setUserTimezone(userId, timezoneOffset);
-  if (result.changes === 0) return res.status(404).json({ error: 'user_not_found' });
-  return res.json({ ok: true, timezone_offset: timezoneOffset, timezone_confirmed: true });
-});
-
-// Revoke every access/refresh token previously issued to this account.
-app.post('/api/v1/auth/logout', (req: AuthedRequest, res) => {
-  revokeUserAuthTokens(req.authUserId!);
-  return res.json({ ok: true, all_sessions_revoked: true });
-});
 
 // ── Password recovery ────────────────────────────────────────────────────
+// Public endpoints: must stay ABOVE app.use('/api/v1', authMiddleware),
+// otherwise unauthenticated users get 401 before the handlers run.
+// (Login/register above follow the same pattern.)
 
 // Step 1: Request password reset code. Sends a 6-digit code via Telegram.
 app.post('/api/v1/auth/forgot-password', (req, res) => {
@@ -1480,6 +1385,105 @@ app.post('/api/v1/auth/reset-password', (req, res) => {
   revokeUserAuthTokens(accountId);
 
   return res.json({ ok: true });
+});
+
+app.use('/api/v1', authMiddleware);
+app.use('/api/v1/mcp', userMcpRouter(req => accountIdFromRequest(req)));
+app.use('/internal/admin/mcp', internalAuth, adminMcpRouter());
+app.use('/api/v1', (req: AuthedRequest, _res, next) => {
+  const user = getUserById(resolveAccountId(req.authUserId!));
+  const isAdmin = user?.is_admin === 1 || user?.role === 'admin';
+  return withModelActor({ userId: user?.id, isAdmin }, () => withChatGptActor(isAdmin, next));
+});
+
+app.get('/api/v1/transcription/status', async (_req: AuthedRequest, res) => {
+  try {
+    return res.json(await getTranscriptionStatus());
+  } catch (err: any) {
+    return res.status(503).json({ error: err?.message || 'transcription_status_failed' });
+  }
+});
+
+app.post('/api/v1/transcription', async (req: AuthedRequest, res) => {
+  try {
+    const audioBase64 = `${req.body?.audio_base64 || ''}`.trim();
+    if (!audioBase64) return res.status(400).json({ error: 'empty_audio' });
+    const result = await transcribeAudio({
+      userId: req.authUserId!,
+      audioBuffer: Buffer.from(audioBase64, 'base64'),
+      language: req.body?.language,
+    });
+    return res.json(result);
+  } catch (err: any) {
+    const error = `${err?.message || 'transcription_failed'}`;
+    const status = error === 'quota_exceeded' ? 429
+      : error === 'audio_too_large' ? 413
+        : error === 'transcription_not_configured' ? 503 : 502;
+    return res.status(status).json({ error });
+  }
+});
+
+// Return current authenticated user profile
+app.get('/api/v1/auth/me', (req: AuthedRequest, res) => {
+  const userId = req.authUserId!;
+  const user = getUserById(userId);
+  if (!user) return res.status(404).json({ error: 'user_not_found' });
+  return res.json({ user: toAuthUserDto(user) });
+});
+
+app.get('/api/v1/user/language', (req: AuthedRequest, res) => {
+  const userId = resolveAccountId(req.authUserId!);
+  const user = getUserById(userId);
+  if (!user) return res.status(404).json({ error: 'user_not_found' });
+  return res.json({ language: normalizeSupportedLanguage(user.language) });
+});
+
+app.put('/api/v1/user/language', (req: AuthedRequest, res) => {
+  const language = normalizeSupportedLanguage(req.body?.language);
+  if (!language) {
+    return res.status(400).json({
+      error: 'unsupported_language',
+      supported_languages: SUPPORTED_LANGUAGES,
+    });
+  }
+
+  const userId = resolveAccountId(req.authUserId!);
+  const result = db.prepare('UPDATE users SET language = ? WHERE id = ?').run(language, userId);
+  if (result.changes === 0) return res.status(404).json({ error: 'user_not_found' });
+  return res.json({ ok: true, language });
+});
+
+app.put('/api/v1/user/name', (req: AuthedRequest, res) => {
+  const name = `${req.body?.name || ''}`.trim();
+  if (!name) return res.status(400).json({ error: 'name_required' });
+  const userId = resolveAccountId(req.authUserId!);
+  const result = db.prepare('UPDATE users SET name = ? WHERE id = ?').run(name, userId);
+  if (result.changes === 0) return res.status(404).json({ error: 'user_not_found' });
+  return res.json({ ok: true, name });
+});
+
+app.put('/api/v1/user/timezone', (req: AuthedRequest, res) => {
+  const rawOffset = Number(req.body?.timezone_offset);
+  const timezoneOffset = Math.round(rawOffset * 4) / 4;
+  if (
+    !Number.isFinite(rawOffset)
+    || rawOffset < -12
+    || rawOffset > 14
+    || Math.abs(rawOffset - timezoneOffset) > 1e-7
+  ) {
+    return res.status(400).json({ error: 'bad_timezone_offset' });
+  }
+
+  const userId = resolveAccountId(req.authUserId!);
+  const result = setUserTimezone(userId, timezoneOffset);
+  if (result.changes === 0) return res.status(404).json({ error: 'user_not_found' });
+  return res.json({ ok: true, timezone_offset: timezoneOffset, timezone_confirmed: true });
+});
+
+// Revoke every access/refresh token previously issued to this account.
+app.post('/api/v1/auth/logout', (req: AuthedRequest, res) => {
+  revokeUserAuthTokens(req.authUserId!);
+  return res.json({ ok: true, all_sessions_revoked: true });
 });
 
 // ── Password / login change (authenticated) ──────────────────────────────
