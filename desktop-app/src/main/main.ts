@@ -3181,7 +3181,7 @@ function setupGithubDesktopUpdater() {
 
     setImmediate(() => {
       isQuitting = true;
-      autoUpdater.quitAndInstall(false, true);
+      autoUpdater.quitAndInstall(true, true); // silent: no setup wizard on updates
     });
     return { success: true };
   });
