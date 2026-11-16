@@ -2543,7 +2543,8 @@
       "allow": "Installieren",
       "command": "Startbefehl",
       "address": "Serveradresse",
-      "documentation": "Einrichtungsanweisungen"
+      "documentation": "Einrichtungsanweisungen",
+      "localHelp": "Durch Bestätigen ermöglichen Sie es Chatter, dieses Programm auf Ihrem Computer mit den Berechtigungen Ihres Kontos auszuführen."
     },
     "authApproval": {
       "remoteTitle": "MCP autorisieren",

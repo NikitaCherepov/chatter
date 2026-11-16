@@ -2552,7 +2552,8 @@
       "allow": "Nainstalovat",
       "command": "Spouštěcí příkaz",
       "address": "Adresa serveru",
-      "documentation": "Návod k nastavení"
+      "documentation": "Návod k nastavení",
+      "localHelp": "Potvrzením povolíte Chatteru spustit tento program na vašem počítači s oprávněními vašeho účtu."
     },
     "authApproval": {
       "remoteTitle": "Autorizace MCP",

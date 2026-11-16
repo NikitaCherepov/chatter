@@ -1,43 +1,43 @@
 {
   "changes": {
     "en": [
-      "Added MCP connections"
+      "Fixed password recovery"
     ],
     "cs": [
-      "Přidáno MCP připojení"
+      "Opravena obnova hesla"
     ],
     "de": [
-      "MCP-Verbindungen hinzugefügt"
+      "Passwortwiederherstellung behoben"
     ],
     "es": [
-      "Añadidas conexiones MCP"
+      "Corregida la recuperación de contraseña"
     ],
     "fr": [
-      "Ajout de connexions MCP"
+      "Correction de la récupération du mot de passe"
     ],
     "it": [
-      "Connessioni MCP aggiunte"
+      "Corretto il recupero password"
     ],
     "ja": [
-      "MCP接続の追加"
+      "パスワード復旧の修正"
     ],
     "ko": [
-      "MCP 연결 추가됨"
+      "비밀번호 복구 수정"
     ],
     "pl": [
-      "Dodano połączenia MCP"
+      "Poprawiono odzyskiwanie hasła"
     ],
     "pt-BR": [
-      "Conexões MCP adicionadas"
+      "Corrigida a recuperação de senha"
     ],
     "ru": [
-      "Добавлены подключения MCP"
+      "Исправлено восстановление пароля"
     ],
     "tr": [
-      "MCP bağlantıları eklendi"
+      "Şifre kurtarma düzeltildi"
     ],
     "zh-CN": [
-      "已添加 MCP 连接"
+      "修复了密码找回功能"
     ]
   }
 }

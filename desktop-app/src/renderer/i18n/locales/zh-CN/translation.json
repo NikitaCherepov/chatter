@@ -2543,7 +2543,8 @@
       "allow": "安装",
       "command": "启动命令",
       "address": "服务器地址",
-      "documentation": "设置说明"
+      "documentation": "设置说明",
+      "localHelp": "确认后将允许 Chatter 使用您账户的权限在您的计算机上运行此程序。"
     },
     "authApproval": {
       "remoteTitle": "授权 MCP",

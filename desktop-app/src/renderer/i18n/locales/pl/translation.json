@@ -2552,7 +2552,8 @@
       "allow": "Zainstaluj",
       "command": "Polecenie uruchomienia",
       "address": "Adres serwera",
-      "documentation": "Instrukcja konfiguracji"
+      "documentation": "Instrukcja konfiguracji",
+      "localHelp": "Potwierdzenie pozwala Chatterowi uruchomić ten program na Twoim komputerze z uprawnieniami Twojego konta."
     },
     "authApproval": {
       "remoteTitle": "Autoryzacja MCP",

@@ -239,7 +239,8 @@
       "colModel": "모델",
       "colProvider": "제공자",
       "colStatus": "상태",
-      "colLastCheck": "마지막 확인"
+      "colLastCheck": "마지막 확인",
+      "priceTrackingUpdateSilent": "가격만 갱신"
     },
     "access": {
       "label": "모델 액세스",

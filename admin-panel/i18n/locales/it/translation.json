@@ -239,7 +239,8 @@
       "colModel": "Modello",
       "colProvider": "Provider",
       "colStatus": "Stato",
-      "colLastCheck": "Ultimo controllo"
+      "colLastCheck": "Ultimo controllo",
+      "priceTrackingUpdateSilent": "Aggiorna solo i prezzi"
     },
     "access": {
       "label": "Accesso ai modelli",

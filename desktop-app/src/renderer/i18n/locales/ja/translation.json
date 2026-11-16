@@ -2543,7 +2543,8 @@
       "allow": "インストール",
       "command": "起動コマンド",
       "address": "サーバーアドレス",
-      "documentation": "セットアップ手順"
+      "documentation": "セットアップ手順",
+      "localHelp": "確認すると、Chatterがこのプログラムをお使いのコンピューター上で、アカウントの権限を使用して実行できるようになります。"
     },
     "authApproval": {
       "remoteTitle": "MCPの認証",

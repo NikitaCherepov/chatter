@@ -2552,7 +2552,8 @@
       "allow": "설치",
       "command": "실행 명령",
       "address": "서버 주소",
-      "documentation": "설정 안내"
+      "documentation": "설정 안내",
+      "localHelp": "확인하면 Chatter가 이 프로그램을 컴퓨터에서 계정 권한으로 실행할 수 있습니다."
     },
     "authApproval": {
       "remoteTitle": "MCP 인증",

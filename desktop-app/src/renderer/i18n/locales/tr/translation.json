@@ -2552,7 +2552,8 @@
       "allow": "Yükle",
       "command": "Başlatma komutu",
       "address": "Sunucu adresi",
-      "documentation": "Kurulum talimatları"
+      "documentation": "Kurulum talimatları",
+      "localHelp": "Onaylayarak, Chatter'ın bu programı bilgisayarınızda hesabınızın izinleriyle çalıştırmasına izin vermiş olursunuz."
     },
     "authApproval": {
       "remoteTitle": "MCP'yi yetkilendir",

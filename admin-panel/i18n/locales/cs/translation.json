@@ -245,7 +245,8 @@
       "colModel": "Model",
       "colProvider": "Poskytovatel",
       "colStatus": "Stav",
-      "colLastCheck": "Naposledy zkontrolováno"
+      "colLastCheck": "Naposledy zkontrolováno",
+      "priceTrackingUpdateSilent": "Aktualizovat pouze ceny"
     },
     "access": {
       "label": "Přístup k modelům",

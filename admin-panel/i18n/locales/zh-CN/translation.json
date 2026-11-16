@@ -239,7 +239,8 @@
       "colModel": "模型",
       "colProvider": "提供商",
       "colStatus": "状态",
-      "colLastCheck": "上次检查"
+      "colLastCheck": "上次检查",
+      "priceTrackingUpdateSilent": "仅更新价格"
     },
     "access": {
       "label": "模型访问权限",

@@ -239,7 +239,8 @@
       "colModel": "モデル",
       "colProvider": "プロバイダー",
       "colStatus": "ステータス",
-      "colLastCheck": "最終確認"
+      "colLastCheck": "最終確認",
+      "priceTrackingUpdateSilent": "価格のみ更新"
     },
     "access": {
       "label": "モデルアクセス",
