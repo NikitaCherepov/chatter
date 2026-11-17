@@ -4,7 +4,6 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { extractQuestionnaires, questionnaireSchema, validateQuestionnaireAnswers, questionnaireAnswerText, type QuestionnaireSubmission, type QuestionnaireResponse } from './message-questionnaires.js';
 import { db, toUnix } from '../db.js';
-import { intuitionHint } from './intuition-prompt.js';
 import type { ChatDto, MessageDto, MessageImage, MessageAudio, MessageAttachment, ChatRole, UserRecord, MessageUsage } from '../types.js';
 import { copyAttachmentFile, deleteAttachmentFile } from './attachment-storage.js';
 import { deleteImageFile, filenameFromUrl, resolveImageFile } from './image-storage.js';
@@ -2224,17 +2223,6 @@ export const getHistoryForAi = (
   const messages: any[] = [];
   const attachmentBudget = attachmentBudgetState ?? { remaining: attachmentMaxTokens };
   const attachmentInjectionByMessage = new Map<number, string>();
-  const intuitionByUserMessage = new Map<number, string>();
-  let precedingUserId: number | null = null;
-  for (const row of rows) {
-    if (row.role === 'user') precedingUserId = row.id;
-    else if (precedingUserId !== null && row.usage_json) {
-      try {
-        const hint = intuitionHint(JSON.parse(row.usage_json).intuition);
-        if (hint && !intuitionByUserMessage.has(precedingUserId)) intuitionByUserMessage.set(precedingUserId, hint);
-      } catch { /* Older usage records may not contain intuition metadata. */ }
-    }
-  }
 
   // Newest documents have priority when the global document budget is tight.
   if (attachmentMaxTokens > 0) {
@@ -2276,7 +2264,6 @@ export const getHistoryForAi = (
 
       let textContent = row.content;
       if (injected) textContent += '\n\n' + injected;
-      textContent += intuitionByUserMessage.get(row.id) ?? '';
       // Multi-user room: label human messages with the author's name so room
       // agents can tell participants apart (same convention as agent messages).
       if (multiUserRoom && row.author_name) {

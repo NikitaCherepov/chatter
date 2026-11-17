@@ -98,6 +98,8 @@ try {
       .get().n,
     1,
   );
+  assert.match(intuitionHint(snapshot), /Current intuition/);
+  assert.ok(!intuitionHint(snapshot).includes(snapshot!.signals[0].question));
   const usage: any = { latest: {}, aggregate: {}, calls: [], intuition: snapshot };
   await appendChatMessage(81, chatId, 'user', 'Why?');
   const assistantId = await appendChatMessage(
@@ -115,7 +117,7 @@ try {
     { usage },
   );
   assert.equal(getChatMessages(81, chatId)[1].usage?.intuition?.signals[0].probability, 0.81);
-  assert.match(getHistoryForAi(81, chatId)[0].content, /Conversational intuition/);
+  assert.doesNotMatch(getHistoryForAi(81, chatId)[0].content, /intuition/i);
   const unavailable = { ...snapshot!, status: 'unavailable' as const, signals: [] };
   await appendChatMessage(
     81,
@@ -136,7 +138,7 @@ try {
   assert.doesNotMatch(getHistoryForAi(81, chatId)[0].content, /Conversational intuition/);
   activateChatMessageVariant(81, chatId, assistantId, 0);
   assert.equal(getChatMessages(81, chatId)[1].usage?.intuition?.status, 'ready');
-  assert.match(getHistoryForAi(81, chatId)[0].content, /Conversational intuition/);
+  assert.doesNotMatch(getHistoryForAi(81, chatId)[0].content, /intuition/i);
   const fork = forkChat(81, chatId, assistantId)!;
   assert.equal(getChatMessages(81, fork.chat_id)[1].usage?.intuition?.status, 'ready');
   const local = saveIntuitionSettings(
@@ -205,7 +207,7 @@ try {
   assert.equal(getDecisionSettings().enabled, false);
   assert.equal(getDecisionSettings().apiKeyId, null);
   console.log(
-    'PASS: Decision protocol, quotas, inheritance, revisions, one batched request, regeneration reuse, variants, forks, history replay, failures and cancellation',
+    'PASS: Decision protocol, quotas, inheritance, revisions, one batched request, regeneration reuse, variants, forks, clean history, failures and cancellation',
   );
 } finally {
   globalThis.fetch = originalFetch;
