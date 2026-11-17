@@ -959,7 +959,7 @@ const MessageItem = React.memo(function MessageItem({
         tokens={showTokens ? msg.reasoning_tokens : undefined}
         onImageClick={onSetViewerImageSrc}
       />}
-      {msg.role === 'assistant' && msg.usage?.intuition && <IntuitionDisclosure key={String(msg.id) + ':' + activeVariantIndex} snapshot={msg.usage.intuition} />}
+      {msg.role === 'assistant' && msg.usage?.intuition && <IntuitionDisclosure snapshot={msg.usage.intuition} />}
       {msg.role === 'assistant' && <WorkLog
         key={`${msg.id}:${activeVariantIndex}`}
         messages={workContent.messages}
