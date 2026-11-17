@@ -157,7 +157,7 @@ export function prepareMessageAccents(source: string): string {
 }
 
 function transformMessageAccents(source: string, stripComplete: boolean): string {
-  if (!source.includes('](style') && !(stripComplete && (source.includes('](chat:') || source.includes('](file:///') || source.includes('layout:') || source.includes('questionnaire') || source.includes('diagram') || source.includes('chart')))
+  if (!source.includes('](style') && !(stripComplete && (source.includes('](chat:') || source.includes('](file:///') || source.includes('](<file:') || source.includes('layout:') || source.includes('questionnaire') || source.includes('diagram') || source.includes('chart')))
     && !/<\/?(?:grid|flex|box)\b/.test(source)) return source;
   let result = '';
   let index = 0;
@@ -247,7 +247,7 @@ function transformMessageAccents(source: string, stripComplete: boolean): string
         continue;
       }
       const localLink = stripComplete && depth === 0
-        ? /^\]\((?:chat:[1-9][0-9]*(?:#[1-9][0-9]*)?|file:\/\/\/[^()\s]+)\)/.exec(source.slice(end))
+        ? /^\]\((?:chat:[1-9][0-9]*(?:#[1-9][0-9]*)?|file:\/\/\/[^()\s]+|<file:(?:[A-Za-z]:)?\/[^/<>\r\n][^<>\r\n]*>)\)/.exec(source.slice(end))
         : null;
       if (localLink) {
         result += source.slice(index + 1, end);

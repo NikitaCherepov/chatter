@@ -13,7 +13,7 @@ import { rehypeSearchHighlights } from '../lib/markdown-search';
 import { ImageClickContext, MarkdownImage } from './MessageImage';
 import { QuestionnaireContext, type QuestionnaireContextValue } from './Questionnaire';
 import { resolveImageUrl } from '../lib/api';
-import { parseMessageLink, transformMessageLink, type MessageLink } from '../lib/message-links';
+import { parseMessageLink, remarkLocalFileLinks, transformMessageLink, type MessageLink } from '../lib/message-links';
 import s from './MarkdownRenderer.module.scss';
 
 const MessageLinkContext = createContext<((link: MessageLink) => void) | undefined>(undefined);
@@ -78,7 +78,7 @@ export function MarkdownRenderer({ content, className, highlightQuery = '', onIm
     <div className={className ? `${s.md} ${className}` : s.md}>
       <ReactMarkdown
         urlTransform={transformMessageLink}
-        remarkPlugins={[remarkGfm, remarkMessageLayouts, remarkMessageAccents, remarkMessageImages, remarkInteractiveCode]}
+        remarkPlugins={[remarkGfm, remarkMessageLayouts, remarkMessageAccents, remarkLocalFileLinks, remarkMessageImages, remarkInteractiveCode]}
         rehypePlugins={[[rehypeHighlight, { ignoreMissing: true }], [rehypeSearchHighlights, { query: highlightQuery }]]}
         components={useMemo(() => ({
           img: MarkdownImage,

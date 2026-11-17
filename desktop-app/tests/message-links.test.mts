@@ -9,7 +9,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import ReactMarkdown from 'react-markdown';
 
 const require = createRequire(import.meta.url);
-const { parseMessageLink, transformMessageLink } = require('../src/renderer/lib/message-links.ts');
+const { parseMessageLink, remarkLocalFileLinks, transformMessageLink } = require('../src/renderer/lib/message-links.ts');
 const { getMessageFilePath } = require('../src/main/message-file-link.ts');
 const { prepareMessageAccents, stripMessageAccents } = require('../src/renderer/lib/message-accents.ts');
 
@@ -40,8 +40,14 @@ try {
     assert.equal(await getMessageFilePath(unavailable), undefined, String(unavailable));
   }
 
+  const literalFilePath = join(directory, 'Отчёт %20 #1 (готово).xlsx');
+  await writeFile(literalFilePath, '');
+  const literalDestination = `<file:${literalFilePath.replace(/\\/g, '/')}>`;
+  const literalMarkdown = `[File](${literalDestination})`;
+
   const markdown = `[Chat](chat:123) [Message](chat:123#456) [File](${url})`;
   const render = (children: string) => renderToStaticMarkup(React.createElement(ReactMarkdown, {
+    remarkPlugins: [remarkLocalFileLinks],
     urlTransform: transformMessageLink,
     children: prepareMessageAccents(children),
   }));
@@ -50,6 +56,12 @@ try {
   assert.ok(render(markdown).includes(`href="${url}"`));
   assert.doesNotMatch(render(`![File](${url}) [Script](javascript:alert%281%29)`), /file:\/\/\/|javascript:/);
   assert.match(render('[Web](https://example.com/path)'), /href="https:\/\/example.com\/path"/);
+  const literalHref = render(literalMarkdown).match(/href="([^"]+)"/)?.[1];
+  assert.ok(literalHref, 'literal file path should render as a link');
+  assert.equal(await getMessageFilePath(literalHref), literalFilePath);
+  assert.doesNotMatch(render(`![File](${literalDestination})`), /file:/);
+  assert.doesNotMatch(render('[Network](<file://server/share/video.mp4>)'), /file:/);
+  assert.equal(stripMessageAccents(literalMarkdown), 'File');
   assert.equal(stripMessageAccents(markdown), 'Chat Message File');
   assert.equal(stripMessageAccents('`[Message](chat:123#456)`'), '`[Message](chat:123#456)`');
 } finally {
