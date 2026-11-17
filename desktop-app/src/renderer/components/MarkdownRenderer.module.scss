@@ -214,13 +214,44 @@
 // --- Links ---
 .messageLink {
   appearance: none;
-  display: inline;
-  background: none;
-  border: 0;
-  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  gap: 6px;
+  max-width: min(100%, 32em);
+  padding: 3px 8px;
+  border: 1px solid var(--border-light);
+  border-radius: 7px;
+  background: var(--bg-bubble);
+  color: var(--text-body);
   font: inherit;
-  text-align: inherit;
+  font-size: 0.93em;
+  font-weight: 500;
+  line-height: 1.4;
+  text-align: start;
   cursor: pointer;
+
+  &:hover {
+    background: var(--bg-modal-hover);
+    border-color: var(--border-medium);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--accent-icon);
+    outline-offset: 2px;
+  }
+}
+
+.messageLinkIcon {
+  flex: none;
+  color: var(--accent-icon);
+}
+
+.messageLinkLabel {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .link {

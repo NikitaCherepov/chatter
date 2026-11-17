@@ -7,13 +7,15 @@ import { prepareMessageAccents } from '../lib/message-accents';
 import { isMessageImageUrl, remarkMessageImages } from '../lib/remark-message-images';
 import { remarkMessageLayouts } from '../lib/remark-message-layouts';
 import { remarkInteractiveCode } from '../lib/remark-interactive-code';
+import { Icon } from './Icon';
+import { Tooltip } from './Tooltip';
 import { MarkdownCode } from './MarkdownCode';
 import { MarkdownSearchContext } from './MarkdownSearchContext';
 import { rehypeSearchHighlights } from '../lib/markdown-search';
 import { ImageClickContext, MarkdownImage } from './MessageImage';
 import { QuestionnaireContext, type QuestionnaireContextValue } from './Questionnaire';
 import { resolveImageUrl } from '../lib/api';
-import { parseMessageLink, remarkLocalFileLinks, transformMessageLink, type MessageLink } from '../lib/message-links';
+import { formatMessageFilePath, parseMessageLink, remarkLocalFileLinks, transformMessageLink, type MessageLink } from '../lib/message-links';
 import s from './MarkdownRenderer.module.scss';
 
 const MessageLinkContext = createContext<((link: MessageLink) => void) | undefined>(undefined);
@@ -30,24 +32,38 @@ type MarkdownRendererProps = {
   onMessageLink?: (link: MessageLink) => void;
 };
 
+function MessageLinkButton({ link, onOpen, children }: {
+  link: MessageLink;
+  onOpen: (link: MessageLink) => void;
+  children: React.ReactNode;
+}) {
+  const button = (
+    <button
+      type="button"
+      className={s.messageLink}
+      onClick={event => {
+        event.stopPropagation();
+        onOpen(link);
+      }}
+    >
+      <Icon name={link.kind === 'file' ? 'file' : 'chat'} size={15} className={s.messageLinkIcon} />
+      <span className={s.messageLinkLabel}>{children}</span>
+    </button>
+  );
+
+  if (link.kind !== 'file') return button;
+
+  const filePath = formatMessageFilePath(link.url, globalThis.window?.electronAPI?.platform === 'win32');
+  return <Tooltip content={filePath} arrowAtPointer>{button}</Tooltip>;
+}
+
 function MarkdownLink({ href, children, node }: React.ComponentProps<'a'> & ExtraProps) {
   const onImageClick = useContext(ImageClickContext);
   const onMessageLink = useContext(MessageLinkContext);
   const messageLink = href && parseMessageLink(href);
   if (messageLink) {
     if (!onMessageLink) return <>{children}</>;
-    return (
-      <button
-        type="button"
-        className={`${s.messageLink} ${s.link}`}
-        onClick={event => {
-          event.stopPropagation();
-          onMessageLink(messageLink);
-        }}
-      >
-        {children}
-      </button>
-    );
+    return <MessageLinkButton link={messageLink} onOpen={onMessageLink}>{children}</MessageLinkButton>;
   }
   const imageNode = node?.children.find(child => child.type === 'element' && child.tagName === 'img');
   const imageLink = !!imageNode;

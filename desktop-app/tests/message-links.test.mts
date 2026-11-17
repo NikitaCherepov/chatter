@@ -9,7 +9,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import ReactMarkdown from 'react-markdown';
 
 const require = createRequire(import.meta.url);
-const { parseMessageLink, remarkLocalFileLinks, transformMessageLink } = require('../src/renderer/lib/message-links.ts');
+const { formatMessageFilePath, parseMessageLink, remarkLocalFileLinks, transformMessageLink } = require('../src/renderer/lib/message-links.ts');
 const { getMessageFilePath } = require('../src/main/message-file-link.ts');
 const { prepareMessageAccents, stripMessageAccents } = require('../src/renderer/lib/message-accents.ts');
 
@@ -59,6 +59,9 @@ try {
   const literalHref = render(literalMarkdown).match(/href="([^"]+)"/)?.[1];
   assert.ok(literalHref, 'literal file path should render as a link');
   assert.equal(await getMessageFilePath(literalHref), literalFilePath);
+  assert.equal(formatMessageFilePath(literalHref, process.platform === 'win32'), literalFilePath);
+  assert.equal(formatMessageFilePath('file:///home/user/Report%20%231.txt', false), '/home/user/Report #1.txt');
+  assert.equal(formatMessageFilePath('file:///D:/bad%FF', true), 'file:///D:/bad%FF');
   assert.doesNotMatch(render(`![File](${literalDestination})`), /file:/);
   assert.doesNotMatch(render('[Network](<file://server/share/video.mp4>)'), /file:/);
   assert.equal(stripMessageAccents(literalMarkdown), 'File');

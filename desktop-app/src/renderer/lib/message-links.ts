@@ -19,6 +19,16 @@ export function parseMessageLink(url: string): MessageLink | undefined {
   return undefined;
 }
 
+export function formatMessageFilePath(url: string, isWindows: boolean): string {
+  try {
+    const path = decodeURIComponent(new URL(url).pathname);
+    if (/[\x00-\x1f\x7f]/.test(path)) return url;
+    return isWindows && /^\/[A-Za-z]:\//.test(path) ? path.slice(1).replace(/\//g, '\\') : path;
+  } catch {
+    return url;
+  }
+}
+
 type MarkdownNode = {
   type: string;
   url?: string;

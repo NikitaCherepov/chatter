@@ -10,6 +10,7 @@ const PATHS = {
   avatar: 'M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2 M7 8v2 M17 8v2 M8 15c2 2 6 2 8 0',
   agent: 'M8 8h8v8H8z M12 3v5 M3 12h5 M16 12h5 M12 16v5 M10 3h4 M3 10v4 M21 10v4 M10 21h4',
   search: 'M20 11a8 8 0 1 1-16 0 8 8 0 0 1 16 0 M17 17l5 5',
+  chat: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z',
   file: 'M7 3h8l4 4v14H5V3h2 M14 3v5h5 M8 13h8m-3-3 3 3-3 3',
   code: 'm8 6-6 6 6 6 M16 6l6 6-6 6 M14 3l-4 18',
   terminal: 'M3 4h18v16H3z M7 8l4 4-4 4 M13 16h4',
