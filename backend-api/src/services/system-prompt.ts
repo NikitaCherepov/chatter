@@ -53,9 +53,10 @@ export const buildSystemPrompt = (
   coreMemory: string,
   includeToolHints = true,
   injectionProtection = isPromptInjectionProtectionEnabled(),
+  includeIntuitionHint = true,
 ) => {
   const toolHints = includeToolHints ? `${COLD_MEMORY_PROMPT_HINT}${TOOL_USAGE_RULES}` : '';
-  return `${prompt}\n\nUser name {{user}}: ${userName}\n\n[USER CORE MEMORY]\n${(coreMemory || '').trim() || 'Empty for now.'}${toolHints}${SECURITY_PROTOCOL_HINT}${injectionProtection ? UNTRUSTED_DATA_PROTOCOL_HINT : ''}${LANGUAGE_HINT}${CONVERSATIONAL_INTUITION_HINT}${MESSAGE_FORMATTING_HINT}`;
+  return `${prompt}\n\nUser name {{user}}: ${userName}\n\n[USER CORE MEMORY]\n${(coreMemory || '').trim() || 'Empty for now.'}${toolHints}${SECURITY_PROTOCOL_HINT}${injectionProtection ? UNTRUSTED_DATA_PROTOCOL_HINT : ''}${LANGUAGE_HINT}${includeIntuitionHint ? CONVERSATIONAL_INTUITION_HINT : ''}${MESSAGE_FORMATTING_HINT}`;
 };
 
 export const buildTimeContext = (timezoneOffset: number) => {
@@ -84,10 +85,11 @@ export const buildBaseSystemPromptForUser = (
   pinnedMacrosHint: string,
   isGuestMode: boolean,
   protectionMode: PromptInjectionProtectionMode = 'automatic',
+  includeIntuitionHint = true,
 ): string => {
   if (isGuestMode) return '';
   const userName = user.name || 'User';
   let disabledGlobally = false;
   try { disabledGlobally = JSON.parse(user.feature_flags || '{}').disable_prompt_injection_protection === true; } catch { /* safe default */ }
-  return `${buildSystemPrompt(promptContent, userName, coreMemory || '', true, resolvePromptInjectionProtection(protectionMode, disabledGlobally))}${pinnedMacrosHint}`;
+  return `${buildSystemPrompt(promptContent, userName, coreMemory || '', true, resolvePromptInjectionProtection(protectionMode, disabledGlobally), includeIntuitionHint)}${pinnedMacrosHint}`;
 };

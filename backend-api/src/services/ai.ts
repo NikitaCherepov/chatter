@@ -12,7 +12,7 @@ import { withModelActor, currentModelActor, canUseModel, assertModelAccess, regi
 import nodeFetch from 'node-fetch';
 import { ProxyAgent } from 'proxy-agent';
 import { intuitionHint } from './intuition-prompt.js';
-import { evaluateIntuition, type IntuitionSnapshot } from './intuition.js';
+import { evaluateIntuition, getIntuitionSettings, type IntuitionSnapshot } from './intuition.js';
 import { Readable } from 'node:stream';
 import { resolveQuestionnaireSubmission } from './chats.js';
 import { questionnaireAnswerText, type QuestionnaireSubmission, type QuestionnaireResponse } from './message-questionnaires.js';
@@ -7935,7 +7935,8 @@ const sendMessageThroughAiInternal = async (
 
   const playerInstructions = !isGuestMode && chatMemorySettings.use_user_instructions === 1
     ? buildPlayerInstructions(activePersona?.persona.user_instructions || '', chatMemorySettings.user_instructions || '', chatMemorySettings.user_instructions_mode) : '';
-  const proSystemPrompt = `${voicePromptHint}${buildSystemPrompt(`${roomIdentityPrompt}${promptContent}`, activePersona?.persona.name || toolUser.name || 'User', coreMemoryForPrompt, currentModelSupportsTools)}${playerInstructions}${pinnedHintForPrompt}${dynamicContextToolHint}${avatarPromptHint}`;
+  const includeIntuitionHint = !isGuestMode && getIntuitionSettings(toolUser.id, chatId).effective.enabled;
+  const proSystemPrompt = `${voicePromptHint}${buildSystemPrompt(`${roomIdentityPrompt}${promptContent}`, activePersona?.persona.name || toolUser.name || 'User', coreMemoryForPrompt, currentModelSupportsTools, undefined, includeIntuitionHint)}${playerInstructions}${pinnedHintForPrompt}${dynamicContextToolHint}${avatarPromptHint}`;
 
   // executionMode больше не переключается на vision-pro/lite при наличии фото.
   // Фото идёт через нативный vision (если модель поддерживает) или через tool describe_image.

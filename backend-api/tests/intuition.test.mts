@@ -207,6 +207,11 @@ try {
     buildSystemPrompt('Character', 'User', '', false).includes('[CONVERSATIONAL INTUITION]'),
   );
   assert.ok(
+    !buildSystemPrompt('Character', 'User', '', false, undefined, false).includes(
+      '[CONVERSATIONAL INTUITION]',
+    ),
+  );
+  assert.ok(
     !buildSystemPrompt('Character', 'User', '', false).includes('\\n\\n[CONVERSATIONAL INTUITION]'),
   );
   replaceDecisionKey(apiKeyId, null);
