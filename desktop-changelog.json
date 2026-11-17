@@ -1,69 +1,43 @@
 {
   "changes": {
     "en": [
-      "Fixed and improved the bot's file editing — Chatter now works as a full-fledged CLI",
-      "Fixed MCP installation: Chatter can now install external MCP servers and connect them automatically",
-      "Fixed password recovery"
+      "Fixed MCP detection during server migration"
     ],
     "cs": [
-      "Opraveno a vylepšeno úpravy souborů bota — Chatter nyní funguje jako plnohodnotné CLI",
-      "Opravena instalace MCP: Chatter nyní dokáže nainstalovat externí MCP servery a automaticky je připojit",
-      "Opraveno obnovení hesla"
+      "Opraveno rozpoznávání MCP při migraci serveru"
     ],
     "de": [
-      "Dateibearbeitung des Bots behoben und verbessert – Chatter funktioniert jetzt als vollwertige CLI",
-      "MCP-Installation behoben: Chatter kann jetzt externe MCP-Server installieren und automatisch verbinden",
-      "Passwortwiederherstellung behoben"
+      "Erkennung von MCP bei der Server-Migration behoben"
     ],
     "es": [
-      "Corregido y mejorado la edición de archivos del bot: Chatter ahora funciona como una CLI completa",
-      "Corregida la instalación de MCP: Chatter ahora puede instalar servidores MCP externos y conectarlos automáticamente",
-      "Corregida la recuperación de contraseña"
+      "Corregida la detección de MCP durante la migración del servidor"
     ],
     "fr": [
-      "Correction et amélioration de l'édition de fichiers du bot — Chatter fonctionne désormais comme un CLI à part entière",
-      "Correction de l'installation MCP : Chatter peut désormais installer des serveurs MCP externes et les connecter automatiquement",
-      "Correction de la récupération de mot de passe"
+      "Correction de la détection MCP lors de la migration du serveur"
     ],
     "it": [
-      "Corretta e migliorata la modifica dei file del bot — Chatter ora funziona come una CLI a tutti gli effetti",
-      "Corretta l'installazione MCP: Chatter può ora installare server MCP esterni e connetterli automaticamente",
-      "Corretto il recupero della password"
+      "Corretto il rilevamento MCP durante la migrazione del server"
     ],
     "ja": [
-      "ボットのファイル編集を修正・改善 — Chatter がフル機能の CLI として動作するようになりました",
-      "MCP インストールを修正：Chatter が外部 MCP サーバーをインストールし、自動的に接続できるようになりました",
-      "パスワード復旧を修正"
+      "サーバー移行時のMCP検出を修正"
     ],
     "ko": [
-      "봇의 파일 편집을 수정하고 개선 — Chatter가 이제 완전한 CLI로 작동합니다",
-      "MCP 설치 수정: Chatter가 이제 외부 MCP 서버를 설치하고 자동으로 연결할 수 있습니다",
-      "비밀번호 복구 수정"
+      "서버 마이그레이션 중 MCP 감지 수정"
     ],
     "pl": [
-      "Poprawiono i ulepszono edycję plików bota — Chatter działa teraz jako pełnoprawny CLI",
-      "Poprawiono instalację MCP: Chatter może teraz instalować zewnętrzne serwery MCP i automatycznie je podłączać",
-      "Poprawiono odzyskiwanie hasła"
+      "Naprawiono wykrywanie MCP podczas migracji serwera"
     ],
     "pt-BR": [
-      "Corrigido e melhorado a edição de arquivos do bot — o Chatter agora funciona como uma CLI completa",
-      "Corrigida a instalação do MCP: o Chatter agora pode instalar servidores MCP externos e conectá-los automaticamente",
-      "Corrigida a recuperação de senha"
+      "Corrigida a detecção de MCP durante a migração do servidor"
     ],
     "ru": [
-      "Исправлено и улучшено редактирование файлов — Chatter теперь работает как полноценный CLI",
-      "Исправлена установка MCP: теперь Chatter может устанавливать внешние MCP-серверы и подключать их автоматически",
-      "Исправлено восстановление пароля"
+      "Исправлено обнаружение MCP при миграции сервера"
     ],
     "tr": [
-      "Botun dosya düzenleme özelliği düzeltildi ve iyileştirildi — Chatter artık tam teşekküllü bir CLI olarak çalışıyor",
-      "MCP kurulumu düzeltildi: Chatter artık harici MCP sunucularını kurabilir ve onları otomatik olarak bağlayabilir",
-      "Şifre kurtarma düzeltildi"
+      "Sunucu geçişi sırasında MCP algılama düzeltildi"
     ],
     "zh-CN": [
-      "修复并改进了机器人的文件编辑功能 — Chatter 现在可作为完整的 CLI 使用",
-      "修复了 MCP 安装：Chatter 现在可以安装外部 MCP 服务器并自动连接",
-      "修复了密码恢复功能"
+      "修复了服务器迁移期间的MCP检测"
     ]
   }
 }
