@@ -13,7 +13,7 @@ const { getDecisionSettings, setDecisionSettings, decisionKeyUsage, replaceDecis
   await import('../src/services/decision-settings.js');
 const { getIntuitionSettings, saveIntuitionSettings, evaluateIntuition } =
   await import('../src/services/intuition.js');
-const { intuitionHint } = await import('../src/services/intuition-prompt.js');
+const { intuitionHint, stripIntuitionHint } = await import('../src/services/intuition-prompt.js');
 const { buildSystemPrompt } = await import('../src/services/system-prompt.js');
 const {
   appendChatMessage,
@@ -99,7 +99,8 @@ try {
     1,
   );
   assert.match(intuitionHint(snapshot), /Current intuition/);
-  assert.ok(!intuitionHint(snapshot).includes(snapshot!.signals[0].question));
+  assert.ok(intuitionHint(snapshot).includes(snapshot!.signals[0].question));
+  assert.match(intuitionHint(snapshot), /User frustration \([^)]+\): 0\.81/);
   const usage: any = { latest: {}, aggregate: {}, calls: [], intuition: snapshot };
   await appendChatMessage(81, chatId, 'user', 'Why?');
   const assistantId = await appendChatMessage(
@@ -186,6 +187,11 @@ try {
   });
   assert.equal(failed?.status, 'unavailable');
   assert.equal(intuitionHint(failed), '');
+  assert.equal(stripIntuitionHint('Hi\n\n[Current intuition — auxiliary signals]\nHumor: 0.90'), 'Hi');
+  assert.equal(
+    stripIntuitionHint('A\n\n[Conversational intuition] old [/Conversational intuition] B'),
+    'A B',
+  );
   const controller = new AbortController();
   controller.abort();
   await assert.rejects(
