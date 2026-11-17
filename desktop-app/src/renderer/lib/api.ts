@@ -1020,6 +1020,7 @@ export type RoomEvent = { stream_id?: string; sequence?: number; content?: strin
   | { type: 'room_message_variant_changed'; chat_id: number; message: Message; initiator_user_id: number }
   | { type: 'chat_intermediate'; chat_id: number; text: string }
   | { type: 'chat_tool_status'; chat_id: number; text: string; call?: ToolCall }
+  | { type: 'chat_intuition'; chat_id: number; agent_id: number | null; snapshot: import('./intuition-service').IntuitionSnapshot | null }
   | { type: 'chat_desktop_action'; chat_id: number; action: string; target?: string; value?: any }
   | { type: 'chat_display_state'; chat_id: number; [key: string]: any }
   | { type: 'chat_map_update'; chat_id: number; [key: string]: any }
@@ -1328,6 +1329,7 @@ export function initWebSocket(callbacks?: WsCallbacks) {
         case 'chat_agent_error':
         case 'chat_intermediate':
         case 'chat_tool_status':
+        case 'chat_intuition':
         case 'chat_desktop_action':
         case 'chat_display_state':
         case 'chat_map_update':

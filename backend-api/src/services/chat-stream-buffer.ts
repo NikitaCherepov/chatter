@@ -42,6 +42,8 @@ export class ChatStreamBuffer {
           this.data.work_log = [...this.data.work_log as unknown[], {type:'message',text:text.trim()}];
         }
       }
+    } else if (payload.type === 'chat_intuition') {
+      this.data.intuition = payload.snapshot ?? null;
     } else return { ...payload, stream_id: this.data.stream_id };
     this.data.sequence = Number(this.data.sequence) + 1;
     return { ...payload, stream_id: this.data.stream_id, sequence: this.data.sequence };

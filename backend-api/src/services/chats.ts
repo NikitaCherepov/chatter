@@ -16,6 +16,7 @@ import {
 import type { ToolIteration } from './ai.js';
 import { countTokens, countMessageTokens, countToolCallTokens, countToolResultTokens } from './tokenizer.js';
 import { buildBaseSystemPromptForUser } from './system-prompt.js';
+import { getIntuitionSettings } from './intuition.js';
 import { getChatMemorySettings, resolvePersonaForChat } from './memory-foundation.js';
 import { buildPlayerInstructions } from './player-instructions-prompt.js';
 
@@ -2364,6 +2365,7 @@ const getProviderContextEstimateForUsers = (userIds: number[], chatId: number): 
     SELECT id, created_at, usage_json
     FROM chat_messages
     WHERE user_id IN (${placeholders}) AND chat_id = ? AND role = 'assistant' AND usage_json IS NOT NULL
+      AND CASE WHEN json_valid(usage_json) THEN json_extract(usage_json, '$.latest.prompt_tokens') > 0 ELSE 0 END
     ORDER BY id DESC
     LIMIT 1
   `).get(...userIds, chatId) as { id: number; created_at: string; usage_json: string | null } | undefined;
@@ -2480,7 +2482,11 @@ export const trimUserHistoryByChat = (userId: number, chatId: number, maxContext
     const pinnedMacrosHint = pinnedMacros.length > 0
       ? `\n\n[ЗАКРЕПЛЁННЫЕ МАКРОСЫ]\nУ пользователя есть часто используемые макросы: ${pinnedMacros.map(m => `"${m.title}"`).join(', ')}. Если запрос пользователя явно совпадает с назначением одного из них — вызови list_my_macros чтобы посмотреть подробности, затем execute_macro для запуска.`
       : '';
-    const systemPrompt = buildBaseSystemPromptForUser(user, promptContent, coreMemory, pinnedMacrosHint, false, getChatMemorySettings(userId, chatId).prompt_injection_protection);
+    const systemPrompt = buildBaseSystemPromptForUser(
+      user, promptContent, coreMemory, pinnedMacrosHint, false,
+      getChatMemorySettings(userId, chatId).prompt_injection_protection,
+      getIntuitionSettings(userId, chatId).effective.enabled,
+    );
     systemPromptTokens = countMessageTokens('system', systemPrompt + playerInstructionsForPrompt(userId, chatId));
   }
 
@@ -3317,7 +3323,11 @@ export const getChatContextTokens = (userId: number, chatId: number): ChatContex
     const pinnedMacrosHint = pinnedMacros.length > 0
       ? `\n\n[ЗАКРЕПЛЁННЫЕ МАКРОСЫ]\nУ пользователя есть часто используемые макросы: ${pinnedMacros.map(m => `"${m.title}"`).join(', ')}. Если запрос пользователя явно совпадает с назначением одного из них — вызови list_my_macros чтобы посмотреть подробности, затем execute_macro для запуска.`
       : '';
-    const systemPrompt = buildBaseSystemPromptForUser(user, promptContent, coreMemory, pinnedMacrosHint, false, getChatMemorySettings(userId, chatId).prompt_injection_protection);
+    const systemPrompt = buildBaseSystemPromptForUser(
+      user, promptContent, coreMemory, pinnedMacrosHint, false,
+      getChatMemorySettings(userId, chatId).prompt_injection_protection,
+      getIntuitionSettings(userId, chatId).effective.enabled,
+    );
     system_prompt_tokens = countMessageTokens('system', systemPrompt + playerInstructionsForPrompt(userId, chatId));
   }
 

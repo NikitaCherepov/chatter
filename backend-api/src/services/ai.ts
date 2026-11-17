@@ -6938,6 +6938,8 @@ const sendMessageThroughAiInternal = async (
     onStreamToken?: (text: string) => Promise<void> | void;
     /** Стрим reasoning-токенов в реальном времени. */
     onReasoningStream?: (text: string) => Promise<void> | void;
+    /** Интуиция-снапшот готов до старта генерации — отдаём сразу, не дожидаясь chat_agent_done. */
+    onIntuition?: (snapshot: IntuitionSnapshot) => Promise<void> | void;
     activeMacros?: Array<{ id: number; title: string; description?: string; commands: string[]; pinned?: boolean; return_output?: boolean }>;
     preferredModel?: string | null;
     featureFlags?: {
@@ -8192,6 +8194,9 @@ User request: "${text}"`;
       current.content = typeof current.content === 'string' ? current.content + hint
         : [...current.content, { type: 'text', text: hint }];
     }
+    if (intuitionSnapshot) {
+      Promise.resolve(options?.onIntuition?.(intuitionSnapshot)).catch(e => console.warn('[stream onIntuition]', e));
+    }
   }
 
   let loop = 0;
@@ -8778,7 +8783,7 @@ if (taskCompletion) {
   const subagentsJson = subagentTraces.length > 0 ? JSON.stringify(subagentTraces) : null;
   const aggregateUsage = sumTokenUsage(usageCalls);
   const latestUsage = tokenUsageWithoutCallMeta(usageCalls[usageCalls.length - 1]);
-  const messageUsage: MessageUsage | null = usageCalls.length > 0
+  const messageUsage: MessageUsage | null = usageCalls.length > 0 || intuitionSnapshot
     ? { latest: latestUsage, aggregate: aggregateUsage, calls: usageCalls, intuition: intuitionSnapshot, perf: buildUsagePerf(aggregateUsage.completion_tokens) }
     : null;
   // Track speed only when every completed provider call belongs to the same
@@ -8930,7 +8935,7 @@ if (taskCompletion) {
       const abortedSubagentsJson = subagentTraces.length > 0 ? JSON.stringify(subagentTraces) : null;
       const abortedAggregateUsage = sumTokenUsage(usageCalls);
       const abortedLatestUsage = tokenUsageWithoutCallMeta(usageCalls[usageCalls.length - 1]);
-      const abortedMessageUsage: MessageUsage | null = usageCalls.length > 0
+      const abortedMessageUsage: MessageUsage | null = usageCalls.length > 0 || intuitionSnapshot
         ? { latest: abortedLatestUsage, aggregate: abortedAggregateUsage, calls: usageCalls, intuition: intuitionSnapshot, perf: buildUsagePerf(abortedAggregateUsage.completion_tokens) }
         : null;
       const abortedModelName = usedProvider === 'manual' && selectedManualModelName

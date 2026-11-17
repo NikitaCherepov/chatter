@@ -103,5 +103,44 @@ assert.equal(state.typing,false);
 emit(onlyToolServer.event({type:'chat_tool_status',text:'',call:{id:'pending-only',name:'get_user_time',arguments:{},running:false,result_preview:'Time'}}));
 assert.equal(activityMessage().work_log.length,1);
 assert.equal(activityMessage().work_log[0].call.running,false);
+emit(onlyToolServer.event({ type: 'chat_agent_done', result: { message_id: 89, reply_text: 'Done' } }));
+emit({ type: 'chat_queue_done' });
+
+const intuition = {
+  status: 'ready', model: 'decision', createdAt: 1, fingerprint: 'test',
+  historyMessages: 1, signals: [{ id: 'humor', name: 'Humor', question: 'A joke?', enabled: true, probability: 0.9 }],
+};
+const intuitionServer = new ChatStreamBuffer(start);
+emit(intuitionServer.snapshot());
+emit(intuitionServer.event({ type: 'chat_intuition', snapshot: intuition }));
+assert.equal(activityMessage().streamingIntuition, intuition, 'intuition is visible before the first token');
+assert.equal(activityMessage().usage, undefined, 'streaming intuition does not fake token usage');
+const intuitionOnlySnapshot = intuitionServer.snapshot();
+mount(2);
+await tick();
+context.roomStreamBuffersRef.current.clear();
+context.roomEventAgentMsgIds.current.clear();
+status = async () => ({ active: true, stream: intuitionOnlySnapshot });
+mount(1);
+await tick();
+assert.equal(activityMessage().streamingIntuition, intuition, 'intuition-only HTTP snapshots restore a message');
+assert.equal(state.typing, false);
+emit(intuitionServer.event({ type: 'chat_agent_reasoning', text: 'Reasoning' }));
+assert.equal(activityMessage().streamingIntuition, intuition);
+assert.equal(activityMessage().reasoning_content, 'Reasoning');
+
+emit(intuitionServer.event({
+  type: 'chat_agent_done', result: { message_id: 90, reply_text: 'Answer', message_usage: { intuition } },
+}));
+emit({ type: 'chat_queue_done' });
+const finishedWithIntuition = state.messages.find((message: any) => message.id === 90);
+assert.equal(finishedWithIntuition.usage.intuition, intuition);
+assert.equal(finishedWithIntuition.streamingIntuition, undefined);
+const noIntuitionServer = new ChatStreamBuffer(start);
+emit(noIntuitionServer.snapshot());
+emit(noIntuitionServer.event({ type: 'chat_agent_reasoning', text: 'Reasoning' }));
+assert.equal(activityMessage().streamingIntuition, undefined, 'a new response does not inherit a previous score');
+assert.equal(activityMessage().usage?.intuition, undefined);
+
 for(const cleanup of cleanups)cleanup();
 console.log('PASS: actual ChatPage switching, background text, racing status/tokens, completion during status/history, late join, reconnect and regeneration');

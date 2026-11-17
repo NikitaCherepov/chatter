@@ -577,9 +577,11 @@ const DocxAttachmentPreview = ({ src, cacheKey, loadingLabel, errorLabel }: Docx
   );
 };
 
+type ChatPageMessage = api.Message & { streamingIntuition?: api.MessageUsage['intuition'] };
+
 type MessageItemProps = {
   questionnaire?: QuestionnaireContextValue;
-  msg: api.Message;
+  msg: ChatPageMessage;
   authorName?: string;
   isOwnUser: boolean;
   userPersonaImageUrl?: string | null;
@@ -702,12 +704,13 @@ const MessageItem = React.memo(function MessageItem({
     return () => observer.disconnect();
   }, [msg.id, msg.role, isOwnUser, isEditing]);
 
+  const intuition = msg.streamingIntuition ?? msg.usage?.intuition;
   const reasoningOpen = isReasoningOpen;
   const hasReasoning = msg.role === 'assistant' && Boolean(msg.reasoning_content?.trim());
   const isStreamingReasoning = streamingState === 'reasoning';
   const isStreamingContent = streamingState === 'content';
   const exactAssistantTokens = msg.role === 'assistant'
-    ? msg.usage?.aggregate.completion_tokens
+    ? msg.usage?.aggregate?.completion_tokens
     : undefined;
   const displayedTokenCount = exactAssistantTokens && exactAssistantTokens > 0
     ? exactAssistantTokens
@@ -951,6 +954,7 @@ const MessageItem = React.memo(function MessageItem({
           </svg>
         </button>
       </div>
+      {msg.role === 'assistant' && intuition && <IntuitionDisclosure snapshot={intuition} />}
       {(hasReasoning || isStreamingReasoning) && <ReasoningDisclosure
         content={msg.reasoning_content || ''}
         streaming={isStreamingReasoning}
@@ -959,7 +963,6 @@ const MessageItem = React.memo(function MessageItem({
         tokens={showTokens ? msg.reasoning_tokens : undefined}
         onImageClick={onSetViewerImageSrc}
       />}
-      {msg.role === 'assistant' && msg.usage?.intuition && <IntuitionDisclosure snapshot={msg.usage.intuition} />}
       {msg.role === 'assistant' && <WorkLog
         key={`${msg.id}:${activeVariantIndex}`}
         messages={workContent.messages}
@@ -1350,7 +1353,7 @@ export function ChatPage() {
     }, 25000));
   }, [clearSendWatchdog, t]);
   const { unreadByChat, incrementUnread, markAsRead, getUnread } = useUnreadChats();
-  const [messages, setMessages] = useState<api.Message[]>([]);
+  const [messages, setMessages] = useState<ChatPageMessage[]>([]);
   const messagesRef = useRef<api.Message[]>(messages);
   messagesRef.current = messages;
   const [switchingVariantId, setSwitchingVariantId] = useState<number | null>(null);
@@ -1995,15 +1998,17 @@ export function ChatPage() {
     setSending(true);
     setStreamingMsgId(tempId);
     setStreamingState(snapshot.content ? 'content' : snapshot.reasoning_content ? 'reasoning' : 'idle');
-    setShowTyping(!snapshot.content && !snapshot.reasoning_content && !snapshot.tool_status && !snapshot.work_log?.length);
-    setTypingIdentity({ name: snapshot.prompt_name || 'Chatter', imageUrl: snapshot.prompt_image_url ?? null });
-    if (!snapshot.content && !snapshot.reasoning_content && !snapshot.tool_status && !snapshot.work_log?.length) return;
+    const hasActivity = Boolean(snapshot.content || snapshot.reasoning_content || snapshot.tool_status || snapshot.work_log?.length || snapshot.intuition);
+    setShowTyping(!hasActivity);
+    setTypingIdentity(hasActivity ? null : { name: snapshot.prompt_name || 'Chatter', imageUrl: snapshot.prompt_image_url ?? null });
+    if (!hasActivity) return;
     suppressNextMessageAutoScrollRef.current = true;
     setMessages(previous => {
       const messages = previous.filter(message => message.id !== tempId && message.id !== snapshot.regenerate_message_id);
       return [...messages, { id: tempId, role: 'assistant', content: snapshot.content, reasoning_content: snapshot.reasoning_content || null, tool_status: snapshot.tool_status, intermediate_messages: snapshot.intermediate_messages, work_log: snapshot.work_log,
         created_at: snapshot.created_at, agent_id: snapshot.agent_id, prompt_id: snapshot.prompt_id ?? null,
-        prompt_name: snapshot.prompt_name ?? null, prompt_image_url: snapshot.prompt_image_url ?? null }];
+        prompt_name: snapshot.prompt_name ?? null, prompt_image_url: snapshot.prompt_image_url ?? null,
+        streamingIntuition: snapshot.intuition }];
     });
   };
 
@@ -2237,13 +2242,13 @@ export function ChatPage() {
    */
   /** Promoted newspaper chats keep model-payload rows ([ACTIVE_VIEW] /
    *  [NEWSPAPER CONTEXT ...]) in history — never shown as conversation. */
-  const displayMessages = useMemo<api.Message[]>(() =>
+  const displayMessages = useMemo<ChatPageMessage[]>(() =>
     messages.filter(message =>
       !message.content?.startsWith('[ACTIVE_VIEW]')
       && !message.content?.startsWith('[NEWSPAPER CONTEXT')),
     [messages]);
 
-  const visibleMessages = useMemo<api.Message[]>(() => {
+  const visibleMessages = useMemo<ChatPageMessage[]>(() => {
     if (displayMessages.length <= MIN_VISIBLE_MESSAGES) return displayMessages;
     let sumChars = 0;
     let cutIndex = displayMessages.length;
@@ -3002,7 +3007,7 @@ export function ChatPage() {
           agent_id: event.agent_id, prompt_id: event.prompt_id, prompt_name: event.prompt_name,
           prompt_image_url: event.prompt_image_url, created_at: event.created_at ?? Math.floor(Date.now() / 1000), regenerate_message_id: event.regenerate_message_id });
         roomStreamBuffersRef.current.set(event.chat_id, buffer);
-      } else if (event.stream_id && ['chat_agent_token', 'chat_agent_reasoning', 'chat_intermediate', 'chat_tool_status'].includes(event.type)) {
+      } else if (event.stream_id && ['chat_agent_token', 'chat_agent_reasoning', 'chat_intermediate', 'chat_tool_status', 'chat_intuition'].includes(event.type)) {
         let buffer = roomStreamBuffersRef.current.get(event.chat_id);
         if (!buffer || buffer.streamId !== event.stream_id) {
           buffer = new RoomStreamBuffer(event.stream_id);
@@ -3136,7 +3141,7 @@ export function ChatPage() {
           const stream = roomEventAgentMsgIds.current.get(event.chat_id);
           if (!stream) break;
           // Show the "typing" dots first; the assistant bubble is created lazily
-          // on the first token/reasoning chunk. During regeneration the old
+          // on the first piece of streamed activity. During regeneration the old
           // bubble owns this waiting state while its text contracts.
           setShowTyping(regeneratingMessageRef.current?.chatId !== event.chat_id);
           setTypingIdentity({ name: stream.promptName, imageUrl: stream.promptImageUrl });
@@ -3166,6 +3171,7 @@ export function ChatPage() {
               prompt_id: stream.promptId,
               prompt_name: stream.promptName,
               prompt_image_url: stream.promptImageUrl,
+              streamingIntuition: accumulatedStream?.intuition,
             }];
             return base.map((message) => message.id === stream.tempId
               ? { ...message, tool_status: null, intermediate_messages: accumulatedStream?.intermediate_messages ?? message.intermediate_messages, work_log: accumulatedStream?.work_log ?? message.work_log, content: accumulatedStream?.content ?? message.content + event.text }
@@ -3194,6 +3200,7 @@ export function ChatPage() {
               prompt_id: stream.promptId,
               prompt_name: stream.promptName,
               prompt_image_url: stream.promptImageUrl,
+              streamingIntuition: accumulatedStream?.intuition,
             }];
             return base.map((message) => message.id === stream.tempId
               ? { ...message, tool_status: null, intermediate_messages: accumulatedStream?.intermediate_messages ?? message.intermediate_messages, work_log: accumulatedStream?.work_log ?? message.work_log, reasoning_content: accumulatedStream?.reasoning_content ?? `${message.reasoning_content || ''}${event.text}` }
@@ -3201,14 +3208,16 @@ export function ChatPage() {
           });
           break;
         }
+        case 'chat_intuition':
         case 'chat_intermediate':
         case 'chat_tool_status': {
           const stream = roomEventAgentMsgIds.current.get(event.chat_id);
           if (!stream) break;
+          if (event.type === 'chat_intuition' && (!event.snapshot || event.stream_id !== stream.streamId)) break;
           setShowTyping(false);
           setTypingIdentity(null);
           const isToolStatus = event.type === 'chat_tool_status';
-          const text = event.text;
+          const text = event.type === 'chat_intuition' ? '' : event.text;
           setMessages((prev) => {
             const regeneration = regeneratingMessageRef.current;
             const current = regeneration?.chatId === event.chat_id
@@ -3224,7 +3233,13 @@ export function ChatPage() {
               prompt_id: stream.promptId,
               prompt_name: stream.promptName,
               prompt_image_url: stream.promptImageUrl,
+              streamingIntuition: accumulatedStream?.intuition,
             }];
+            if (event.type === 'chat_intuition') {
+              return base.map((message) => message.id === stream.tempId
+                ? { ...message, streamingIntuition: event.snapshot }
+                : message);
+            }
             return base.map((message) => message.id === stream.tempId
               ? { ...message, tool_status: isToolStatus ? text : null,
                   work_log: accumulatedStream?.work_log ?? [...(message.work_log ?? []), {type:isToolStatus ? 'activity' as const : 'message' as const,text}],
@@ -3264,6 +3279,13 @@ export function ChatPage() {
           if (res.aborted && !res.message_id) {
             if (tempId !== undefined) {
               setMessages((prev) => prev.filter((message) => message.id !== tempId));
+            }
+            const regeneration = regeneratingMessageRef.current;
+            if (regeneration?.chatId === event.chat_id) {
+              setMessages((prev) => prev.some((message) => message.id === regeneration.message.id)
+                ? prev
+                : [...prev, regeneration.message]);
+              regeneratingMessageRef.current = null;
             }
             if (roomEventAgentMsgIds.current.size === 0) {
               setStreamingState('done');

@@ -19,6 +19,8 @@ const {
   appendChatMessage,
   createUserChat,
   getChatMessages,
+  getChatContextTokens,
+  trimUserHistoryByChat,
   getHistoryForAi,
   activateChatMessageVariant,
   getChatMessageVariants,
@@ -30,6 +32,10 @@ try {
     "INSERT INTO users(id,name,status,is_admin) VALUES (81,'Owner','approved',1),(82,'Other','approved',0)",
   ).run();
   const chatId = createUserChat(81, 'Intuition');
+  const contextChatId = createUserChat(81, 'Intuition context');
+  await appendChatMessage(81, contextChatId, 'user', 'Hello');
+  const withoutIntuition = getChatContextTokens(81, contextChatId);
+  assert.equal(trimUserHistoryByChat(81, contextChatId, 100_000).tokens_before, withoutIntuition.current_context_tokens);
   const apiKeyId = importModelKey('Decision test', 'test-secret');
   setDecisionSettings({ enabled: true, apiKeyId });
   assert.deepEqual(decisionKeyUsage(apiKeyId), ['Decision']);
@@ -41,6 +47,12 @@ try {
     0,
   );
   assert.equal(getIntuitionSettings(81, chatId).effective.enabled, true);
+  const withIntuition = getChatContextTokens(81, contextChatId);
+  assert.ok(withIntuition.system_prompt_tokens > withoutIntuition.system_prompt_tokens);
+  assert.equal(trimUserHistoryByChat(81, contextChatId, 100_000).tokens_before, withIntuition.current_context_tokens);
+  saveIntuitionSettings(81, contextChatId, { mode: 'disabled', questions: null, historyMessages: null }, 0);
+  assert.equal(getChatContextTokens(81, contextChatId).current_context_tokens, withoutIntuition.current_context_tokens);
+  assert.equal(trimUserHistoryByChat(81, contextChatId, 100_000).tokens_before, withoutIntuition.current_context_tokens);
   assert.equal(getIntuitionSettings(82, null).effective.enabled, false);
   assert.throws(() => saveIntuitionSettings(81, null, global.settings, 0), /settings_changed/);
   assert.throws(() =>

@@ -1,9 +1,10 @@
 export type RoomStreamSnapshot = {
   stream_id: string; sequence: number; content: string; reasoning_content: string; tool_status?: string | null; intermediate_messages?: string[]; work_log?: import('./api').WorkLogStep[];
+  intuition?: import('./api').MessageUsage['intuition'];
   agent_id: number | null; prompt_id?: number | null; prompt_name?: string | null;
   prompt_image_url?: string | null; created_at: number; regenerate_message_id?: number | null;
 };
-type Delta = { stream_id?: string; sequence?: number; type: string; text?: string; content?: string; call?: import('./api').ToolCall };
+type Delta = { stream_id?: string; sequence?: number; type: string; text?: string; content?: string; call?: import('./api').ToolCall; snapshot?: unknown };
 
 /** Events newer than an HTTP snapshot are replayed once, in server order. */
 export class RoomStreamBuffer {
@@ -37,6 +38,9 @@ export class RoomStreamBuffer {
         } else if (text.trim() && !steps.some(step=>step.type==='tool'&&step.call.running)) {
           next.work_log = [...steps, {type:'activity',text}];
         }
+      }
+      else if (event.type === 'chat_intuition') {
+        next.intuition = (event.snapshot ?? null) as RoomStreamSnapshot['intuition'];
       }
       else {
         next.tool_status = null;

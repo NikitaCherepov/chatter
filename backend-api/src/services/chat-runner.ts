@@ -187,6 +187,9 @@ const runSteps = async (
           onReasoningStream: async (text) => {
             emit({ type: 'chat_agent_reasoning', chat_id: chatId, agent_id: agentId, text });
           },
+          onIntuition: async (snapshot) => {
+            emit({ type: 'chat_intuition', chat_id: chatId, agent_id: agentId, snapshot });
+          },
           onIntermediateMessage: async (text, content) => {
             emit({ type: 'chat_intermediate', chat_id: chatId, text, content });
             separateNextContent = Boolean(content);
