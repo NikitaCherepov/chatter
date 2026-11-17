@@ -9,6 +9,7 @@ const path = require('node:path');
 const { spawn } = require('node:child_process');
 const { createSecretRotation } = require('./secret-rotation');
 const { containerEnvironment, assertSecretEnvironment } = require('./secret-config');
+const { createQdrantBackup, validateQdrantBackup, snapshotPattern } = require('./qdrant-backup');
 
 const PORT = Number.parseInt(process.env.ADMIN_INTERNAL_PORT || '8080', 10);
 const CONFIG_DIR = path.resolve(process.env.CHATTER_CONFIG_DIR || '/config');
@@ -1796,6 +1797,33 @@ function listBackups() {
   return backups.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
+function qdrantBackupClient() {
+  const env = parseEnv(BACKEND_ENV_FILE);
+  return createQdrantBackup({
+    url: env.QDRANT_URL || 'http://qdrant:6333',
+    apiKey: env.QDRANT_API_KEY || '',
+  });
+}
+
+async function memoryCollectionNames(database) {
+  const tables = JSON.parse(await runProcess('sqlite3', ['-json', database,
+    "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('vector_memory_collections','system_settings','memory_chunks')"]) || '[]');
+  const names = new Set();
+  const hasTable = name => tables.some(table => table.name === name);
+  if (hasTable('vector_memory_collections')) {
+    const rows = JSON.parse(await runProcess('sqlite3', ['-json', database, 'SELECT collection_name FROM vector_memory_collections']) || '[]');
+    for (const row of rows) names.add(row.collection_name);
+  }
+  if (hasTable('system_settings')) {
+    const rows = JSON.parse(await runProcess('sqlite3', ['-json', database,
+      "SELECT value_json FROM system_settings WHERE key='vector_memory_settings'"]) || '[]');
+    if (rows.length) names.add(JSON.parse(rows[0].value_json).activeCollection);
+  }
+  if (!names.size && hasTable('memory_chunks'))
+    names.add(parseEnv(BACKEND_ENV_FILE).QDRANT_COLLECTION || 'chatter_memory');
+  return [...names];
+}
+
 async function createBackup({ includeUploads = false, includeConfiguration = false, source = 'manual' } = {}) {
   if (!fs.existsSync(DATABASE_FILE)) throw new Error('Chatter database was not found');
   const id = crypto.randomUUID();
@@ -1809,7 +1837,8 @@ async function createBackup({ includeUploads = false, includeConfiguration = fal
   fs.mkdirSync(tempDir, { recursive: true, mode: 0o700 });
   try {
     const databaseCopy = path.join(tempDir, 'database.sqlite');
-    await runProcess('sqlite3', [DATABASE_FILE, `.backup ${databaseCopy}`]);
+    await runProcess('sqlite3', [DATABASE_FILE, `.backup '${databaseCopy.replace(/'/g, "''")}'`]);
+    const qdrant = await qdrantBackupClient().capture(tempDir, await memoryCollectionNames(databaseCopy));
     const hasUploads = includeUploads && fs.existsSync(UPLOADS_DIR);
     const configurationFiles = includeConfiguration
       ? BACKUP_CONFIG_FILES.filter((file) => fs.existsSync(path.join(CONFIG_DIR, file)))
@@ -1824,16 +1853,19 @@ async function createBackup({ includeUploads = false, includeConfiguration = fal
     }
     const manifest = {
       format: 'chatter-backup',
-      schemaVersion: 1,
+      schemaVersion: 2,
       createdAt,
       version: process.env.CHATTER_IMAGE_TAG || 'local',
       includesUploads: hasUploads,
       includesConfiguration: configurationFiles.length > 0,
       configurationFiles,
+      includesMemoryVectors: true,
+      qdrant,
       source: source === 'automatic' ? 'automatic' : 'manual'
     };
     fs.writeFileSync(path.join(tempDir, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`, { mode: 0o600 });
     const tarArgs = ['-czf', tempArchive, '-C', tempDir, 'manifest.json', 'database.sqlite'];
+    if (qdrant.collections.length) tarArgs.push('qdrant');
     if (configurationFiles.length) tarArgs.push('config');
     if (hasUploads) {
       fs.symlinkSync(UPLOADS_DIR, path.join(tempDir, 'uploads'), 'dir');
@@ -1913,7 +1945,8 @@ async function inspectBackupArchive(filePath, extractDir) {
     const name = names[index].replace(/^\.\//, '');
     const normalized = path.posix.normalize(name);
     const allowedConfig = name === 'config' || name === 'config/' || BACKUP_CONFIG_FILES.some((file) => name === `config/${file}`);
-    const allowed = name === 'manifest.json' || name === 'database.sqlite' || name === 'uploads' || name.startsWith('uploads/') || allowedConfig;
+    const allowed = name === 'manifest.json' || name === 'database.sqlite' || name === 'uploads' || name.startsWith('uploads/') ||
+      name === 'qdrant' || name === 'qdrant/' || snapshotPattern.test(name) || allowedConfig;
     if (!allowed || name.includes('\\') || normalized.startsWith('../') || path.posix.isAbsolute(name)) throw new Error('Backup archive contains an unsafe path');
     if (!['-', 'd'].includes(verbose[index][0])) throw new Error('Backup archive contains unsupported links or special files');
   }
@@ -1923,7 +1956,10 @@ async function inspectBackupArchive(filePath, extractDir) {
   fs.mkdirSync(extractDir, { recursive: true, mode: 0o700 });
   await runProcess('tar', ['-xzf', filePath, '-C', extractDir], 60 * 60 * 1000);
   const manifest = loadJson(path.join(extractDir, 'manifest.json'), null);
-  if (manifest?.format !== 'chatter-backup' || manifest?.schemaVersion !== 1) throw new Error('Unsupported Chatter backup format');
+  if (manifest?.format !== 'chatter-backup' || ![1, 2].includes(manifest?.schemaVersion)) throw new Error('Unsupported Chatter backup format');
+  if (manifest.schemaVersion === 2 && (manifest.includesMemoryVectors !== true || !manifest.qdrant))
+    throw new Error('Backup is missing its Qdrant manifest');
+  await validateQdrantBackup(extractDir, manifest.qdrant);
   await sqliteQuickCheck(path.join(extractDir, 'database.sqlite'));
   return manifest;
 }
@@ -1975,6 +2011,7 @@ async function importBackup(uploadPath, originalName) {
       const tarArgs = ['-czf', destination, '-C', tempDir, 'manifest.json', 'database.sqlite'];
       if (fs.existsSync(path.join(tempDir, 'uploads'))) tarArgs.push('uploads');
       if (fs.existsSync(path.join(tempDir, 'config'))) tarArgs.push('config');
+      if (manifest.qdrant?.collections.length) tarArgs.push('qdrant');
       await runProcess('tar', tarArgs, 60 * 60 * 1000);
     } else if (lowerName.endsWith('.db') || lowerName.endsWith('.sqlite') || lowerName.endsWith('.sqlite3')) {
       await sqliteQuickCheck(uploadPath);
@@ -2111,12 +2148,26 @@ async function restoreBackup(name) {
   const newDatabase = path.join(DATA_DIR, `.restore-new-${id}.sqlite`);
   const oldUploads = path.join(DATA_DIR, `.restore-old-uploads-${id}`);
   const newUploads = path.join(DATA_DIR, `.restore-new-uploads-${id}`);
+  const qdrantClient = qdrantBackupClient();
+  const qdrantRollbackDir = path.join(extractDir, 'before-restore');
+  const previousConfiguration = new Map();
+  let previousVectors;
+  let incomingVectors;
+  let vectorsChanged = false;
+  let preserveRecovery = false;
   let databaseMoved = false;
   let uploadsMoved = false;
   try {
     const manifest = await inspectBackupArchive(archivePath, extractDir);
     await createBackup({ includeUploads: Boolean(manifest.includesUploads), includeConfiguration: Boolean(manifest.includesConfiguration), source: 'manual' });
     await stopDataServices();
+    if (manifest.qdrant) {
+      incomingVectors = manifest.qdrant;
+      previousVectors = await qdrantClient.capture(qdrantRollbackDir, [
+        ...incomingVectors.collections.map(entry => entry.name),
+        ...(incomingVectors.absentCollections ?? []),
+      ]);
+    }
 
     const databaseOwner = fs.statSync(fs.existsSync(DATABASE_FILE) ? DATABASE_FILE : DATA_DIR);
     fs.copyFileSync(path.join(extractDir, 'database.sqlite'), newDatabase);
@@ -2135,31 +2186,54 @@ async function restoreBackup(name) {
       setOwnershipRecursive(UPLOADS_DIR, uploadsOwner.uid, uploadsOwner.gid);
     }
 
+    if (incomingVectors) {
+      vectorsChanged = true;
+      await qdrantClient.restore(extractDir, incomingVectors);
+    }
+
     if (manifest.includesConfiguration && fs.existsSync(path.join(extractDir, 'config'))) {
       for (const file of BACKUP_CONFIG_FILES) {
         const source = path.join(extractDir, 'config', file);
         if (!fs.existsSync(source)) continue;
-        atomicWrite(path.join(CONFIG_DIR, file), fs.readFileSync(source), 0o600);
+        const current = path.join(CONFIG_DIR, file);
+        previousConfiguration.set(current, fs.existsSync(current) ? fs.readFileSync(current) : null);
+        atomicWrite(current, fs.readFileSync(source), 0o600);
       }
     }
 
     await applyConfiguration();
-    fs.rmSync(oldDatabase, { force: true });
-    fs.rmSync(oldUploads, { recursive: true, force: true });
+    // Cleanup failures must not roll back vectors after the previous SQLite was deleted.
+    try {
+      fs.rmSync(oldDatabase, { force: true });
+      fs.rmSync(oldUploads, { recursive: true, force: true });
+    } catch (error) { console.error('[backups] restore cleanup:', error.message); }
     return { ok: true };
   } catch (error) {
-    if (databaseMoved && fs.existsSync(oldDatabase)) {
-      fs.rmSync(DATABASE_FILE, { force: true });
-      fs.renameSync(oldDatabase, DATABASE_FILE);
-    }
-    if (uploadsMoved && fs.existsSync(oldUploads)) {
-      fs.rmSync(UPLOADS_DIR, { recursive: true, force: true });
-      fs.renameSync(oldUploads, UPLOADS_DIR);
+    try {
+      // A failed service restart may already have started a backend against the restored data.
+      if (databaseMoved) await stopDataServices();
+      if (databaseMoved && fs.existsSync(oldDatabase)) {
+        fs.rmSync(DATABASE_FILE, { force: true });
+        fs.renameSync(oldDatabase, DATABASE_FILE);
+      }
+      if (uploadsMoved && fs.existsSync(oldUploads)) {
+        fs.rmSync(UPLOADS_DIR, { recursive: true, force: true });
+        fs.renameSync(oldUploads, UPLOADS_DIR);
+      }
+      for (const [file, content] of previousConfiguration) {
+        if (content === null) fs.rmSync(file, { force: true });
+        else atomicWrite(file, content, 0o600);
+      }
+      if (vectorsChanged)
+        await qdrantClient.restore(qdrantRollbackDir, previousVectors);
+    } catch (rollbackError) {
+      preserveRecovery = true;
+      throw new Error(`Backup restore failed (${error.message}) and rollback failed (${rollbackError.message}). Recovery files retained in ${extractDir}.`);
     }
     try { await applyConfiguration(); } catch {}
     throw error;
   } finally {
-    fs.rmSync(extractDir, { recursive: true, force: true });
+    if (!preserveRecovery) fs.rmSync(extractDir, { recursive: true, force: true });
     fs.rmSync(newDatabase, { force: true });
     fs.rmSync(newUploads, { recursive: true, force: true });
   }
@@ -3237,6 +3311,7 @@ async function handleRequest(req, res) {
       name,
       includesUploads: Boolean(manifest?.includesUploads),
       includesConfiguration: Boolean(manifest?.includesConfiguration),
+      includesMemoryVectors: manifest?.includesMemoryVectors === true,
       version: `${manifest?.version || 'unknown'}`,
       source: manifest?.source === 'automatic' ? 'automatic' : 'manual',
     });

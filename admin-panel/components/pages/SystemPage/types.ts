@@ -15,6 +15,7 @@ export type BackupInfo = {
   createdAt: string;
   includesUploads?: boolean;
   includesConfiguration?: boolean;
+  includesMemoryVectors?: boolean;
   version?: string;
   source?: 'manual' | 'automatic';
 };

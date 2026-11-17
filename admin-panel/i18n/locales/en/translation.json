@@ -942,7 +942,7 @@
     },
     "backups": {
       "title": "Backups",
-      "description": "Database is always included, media files are optional",
+      "description": "The database and memory vectors are always included. Media files are optional.",
       "tableHeaders": {
         "date": "Date",
         "content": "Content",
@@ -952,6 +952,7 @@
       "db": "DB",
       "dbAndFiles": "DB + files",
       "configuration": "config",
+      "memoryVectors": "memory vectors",
       "auto": "auto",
       "download": "Download",
       "restore": "Restore",

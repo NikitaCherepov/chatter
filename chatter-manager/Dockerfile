@@ -7,6 +7,7 @@ WORKDIR /app
 COPY chatter-manager/server.js ./server.js
 COPY chatter-manager/secret-rotation.js ./secret-rotation.js
 COPY chatter-manager/secret-config.js ./secret-config.js
+COPY chatter-manager/qdrant-backup.js ./qdrant-backup.js
 COPY docker-compose.yml ./release/project/docker-compose.yml
 COPY deploy ./release/project/deploy
 
