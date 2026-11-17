@@ -16,6 +16,7 @@ import { WakeWordOnnxService } from './wakeword';
 import { connectChatGptOnDesktop } from './chatgpt-auth';
 import { getTextMenuItems, type TextMenuAction } from './text-context-menu';
 import { editFileLines } from './file-edit';
+import { getMessageFilePath } from './message-file-link';
 import { isValidZoomLevel, readZoomLevel, saveZoomLevel } from './zoom-settings';
 import { ChatterBrowser, type BrowserControlPayload, type BrowserSearchPayload, type GoogleAiPayload } from './browser';
 import { buildBrowserIdentity } from './browser-identity';
@@ -1807,6 +1808,14 @@ function createWindow() {
       : null;
     toolWindow.webContents.send('tool-window:context', { activeChatId });
     return { updated: true };
+  });
+
+  ipcMain.handle('show-message-file', async (event, url: unknown) => {
+    assertTrustedIpcSender(event);
+    const filePath = await getMessageFilePath(url);
+    if (!filePath) return false;
+    shell.showItemInFolder(filePath);
+    return true;
   });
 
   // ── IPC: save-file (shows save dialog, writes blob to disk) ─────────────

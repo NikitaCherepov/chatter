@@ -15,7 +15,7 @@ import { Readable } from 'node:stream';
 import { resolveQuestionnaireSubmission } from './chats.js';
 import { questionnaireAnswerText, type QuestionnaireSubmission, type QuestionnaireResponse } from './message-questionnaires.js';
 import type { AiSendResult, DesktopActionPayload, DisplayStatePayload, MapUpdatePayload, TaskNotifyMode, TaskRecurrenceType, TaskTargetMode, TaskType, UserPlan, UserRecord, MessageAttachment, MessageImage, MessageUsage, NormalizedTokenUsage, TokenUsageCall } from '../types.js';
-import { getChatMessageVariants, appendChatMessage, ensureActiveChat, getHistoryForAi, getMessageTokens, getMessageVariantState, getUserById, getUserChatListItem, renameUserChat, resolveMaxContextTokens, resolveAttachmentMaxTokens, injectAttachments, setUserTimezone, trimUserHistoryByChat, isMultiUserRoomChat, planRoomHistorySummary, getChatContextTokens, resolvePromptForChat } from './chats.js';
+import { getChatMessageVariants, appendChatMessage, ensureActiveChat, getHistoryForAi, getMessageTokens, getMessageVariantState, getUserById, renameUserChat, resolveMaxContextTokens, resolveAttachmentMaxTokens, injectAttachments, setUserTimezone, trimUserHistoryByChat, isMultiUserRoomChat, planRoomHistorySummary, getChatContextTokens, resolvePromptForChat } from './chats.js';
 import { calculateChargedTokens, checkQuota, chargeTokens, getModelOverride, getPricingSnapshot, calculateEstimatedCostUsd, isModelFree } from './token-quota.js';
 import { recordModelTps, setKnownModelStatsFilter } from './model-stats.js';
 import { registerMonitoredModelsProvider, isProviderMissingError, attemptRuntimeProviderSwitch } from './openrouter-monitor.js';
@@ -2475,23 +2475,6 @@ export const toolDefinitions = [
         }
       }
     }
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'suggest_chat_link',
-      description: 'Show the user a card that opens one specific chat. Use only after search_chat_history or read_chat_context, when you have selected the exact relevant chat and opening it is genuinely useful. Do not call this automatically for every search. The server validates access and resolves the title.',
-      parameters: {
-        type: 'object',
-        properties: {
-          chat_id: {
-            type: 'number',
-            description: 'The exact chat_id selected from search_chat_history or read_chat_context results.'
-          }
-        },
-        required: ['chat_id']
-      }
-    }
   }
 ] as const;
 
@@ -4317,23 +4300,6 @@ export const runTool = async (user: UserRecord, timezoneOffset: number, toolName
     subagentExtra?.chatId,
     user.language || 'en',
   );
-
-  // ── Chat history search tools ───────────────────────────────────────────────
-
-  if (toolName === 'suggest_chat_link') {
-    if (desktopActionSink) desktopActionSink.value = null;
-    const chatId = Number(parsed.chat_id);
-    if (!Number.isSafeInteger(chatId) || chatId <= 0) return 'Error: chat_id must be a positive integer.';
-    const chat = getUserChatListItem(user.id, chatId);
-    if (!chat) return 'Chat not found or access denied.';
-    if (desktopActionSink) {
-      desktopActionSink.value = {
-        action: 'suggest_chat_link',
-        value: { chat_id: chat.id, title: chat.title },
-      };
-    }
-    return `Chat link prepared: "${chat.title}" (chat_id: ${chat.id}).`;
-  }
 
   if (toolName === 'create_pixel_image') {
     try {
@@ -8525,7 +8491,7 @@ const runOneToolCall = async (toolCall: any, emitStatus = true): Promise<Execute
     }
 
     // Если тулз вызвал desktop_action / macro tools — прокидываем наружу в реалтайме
-    if ((toolName === 'desktop_action' || toolName === 'suggest_chat_link' || toolName === 'execute_macro' || toolName === 'explore_fs' || toolName === 'get_file_info' || toolName === 'suggest_macro' || toolName === 'execute_ssh_command' || toolName === 'execute_pc_command' || toolName === 'read_file' || toolName === 'search_file_keywords' || toolName === 'write_file' || toolName === 'edit_file_lines' || toolName === 'suggest_devops_runbook' || toolName === 'install_ssh_public_key' || toolName === 'suggest_server_creds_update' || toolName === 'execute_visual_click') && desktopActionSink.value && safeOnDesktopAction) {
+    if ((toolName === 'desktop_action' || toolName === 'execute_macro' || toolName === 'explore_fs' || toolName === 'get_file_info' || toolName === 'suggest_macro' || toolName === 'execute_ssh_command' || toolName === 'execute_pc_command' || toolName === 'read_file' || toolName === 'search_file_keywords' || toolName === 'write_file' || toolName === 'edit_file_lines' || toolName === 'suggest_devops_runbook' || toolName === 'install_ssh_public_key' || toolName === 'suggest_server_creds_update' || toolName === 'execute_visual_click') && desktopActionSink.value && safeOnDesktopAction) {
       await safeOnDesktopAction(desktopActionSink.value);
     }
 

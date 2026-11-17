@@ -1,4 +1,4 @@
-import React, { useContext, useMemo } from 'react';
+import React, { createContext, useContext, useMemo } from 'react';
 import ReactMarkdown, { type ExtraProps } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
@@ -13,7 +13,10 @@ import { rehypeSearchHighlights } from '../lib/markdown-search';
 import { ImageClickContext, MarkdownImage } from './MessageImage';
 import { QuestionnaireContext, type QuestionnaireContextValue } from './Questionnaire';
 import { resolveImageUrl } from '../lib/api';
+import { parseMessageLink, transformMessageLink, type MessageLink } from '../lib/message-links';
 import s from './MarkdownRenderer.module.scss';
+
+const MessageLinkContext = createContext<((link: MessageLink) => void) | undefined>(undefined);
 
 type MarkdownRendererProps = {
   questionnaire?: QuestionnaireContextValue;
@@ -24,10 +27,28 @@ type MarkdownRendererProps = {
   highlightQuery?: string;
   /** Open images in the host's existing viewer instead of an external browser. */
   onImageClick?: (src: string) => void;
+  onMessageLink?: (link: MessageLink) => void;
 };
 
 function MarkdownLink({ href, children, node }: React.ComponentProps<'a'> & ExtraProps) {
   const onImageClick = useContext(ImageClickContext);
+  const onMessageLink = useContext(MessageLinkContext);
+  const messageLink = href && parseMessageLink(href);
+  if (messageLink) {
+    if (!onMessageLink) return <>{children}</>;
+    return (
+      <button
+        type="button"
+        className={`${s.messageLink} ${s.link}`}
+        onClick={event => {
+          event.stopPropagation();
+          onMessageLink(messageLink);
+        }}
+      >
+        {children}
+      </button>
+    );
+  }
   const imageNode = node?.children.find(child => child.type === 'element' && child.tagName === 'img');
   const imageLink = !!imageNode;
   const imageSrc = imageNode?.type === 'element' && typeof imageNode.properties.src === 'string'
@@ -48,13 +69,15 @@ function MarkdownParagraph({ children }: React.ComponentProps<'p'>) {
   return <p className={s.paragraph}>{children}</p>;
 }
 
-export function MarkdownRenderer({ content, className, highlightQuery = '', onImageClick, questionnaire }: MarkdownRendererProps) {
+export function MarkdownRenderer({ content, className, highlightQuery = '', onImageClick, questionnaire, onMessageLink }: MarkdownRendererProps) {
   return (
     <MarkdownSearchContext.Provider value={highlightQuery}>
     <QuestionnaireContext.Provider value={questionnaire}>
     <ImageClickContext.Provider value={onImageClick}>
+    <MessageLinkContext.Provider value={onMessageLink}>
     <div className={className ? `${s.md} ${className}` : s.md}>
       <ReactMarkdown
+        urlTransform={transformMessageLink}
         remarkPlugins={[remarkGfm, remarkMessageLayouts, remarkMessageAccents, remarkMessageImages, remarkInteractiveCode]}
         rehypePlugins={[[rehypeHighlight, { ignoreMissing: true }], [rehypeSearchHighlights, { query: highlightQuery }]]}
         components={useMemo(() => ({
@@ -132,6 +155,7 @@ export function MarkdownRenderer({ content, className, highlightQuery = '', onIm
         {prepareMessageAccents(content)}
       </ReactMarkdown>
     </div>
+    </MessageLinkContext.Provider>
     </ImageClickContext.Provider>
     </QuestionnaireContext.Provider>
     </MarkdownSearchContext.Provider>

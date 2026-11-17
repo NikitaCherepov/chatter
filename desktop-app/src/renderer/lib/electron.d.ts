@@ -73,6 +73,7 @@ declare global {
       onToolWindowContext: (callback: (payload: { activeChatId?: number | null }) => void) => () => void;
       onToolWindowClosed: (callback: (payload: { toolId: string }) => void) => () => void;
       onAvatarState: (callback: (payload: unknown) => void) => () => void;
+      showMessageFile?: (url: string) => Promise<boolean>;
       saveFile: (fileName: string, data: ArrayBuffer) => Promise<{ canceled: boolean; filePath?: string }>;
       setZoomLevel: (level: number) => Promise<void>;
       getZoomLevel: () => Promise<number>;

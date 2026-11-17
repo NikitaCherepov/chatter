@@ -28,6 +28,7 @@ import { promoteChatInFolder } from '../lib/chat-list-order';
 import { groupChatsByActivity, activityDay, moveActivityCount, activityGroupCounts } from '../lib/chat-date-groups';
 import { generateDocxBlob, generateChatDocxBlob } from '../lib/markdownToDocx';
 import { MarkdownRenderer } from '../components/MarkdownRenderer';
+import type { MessageLink } from '../lib/message-links';
 import { QuestionnaireResult, type QuestionnaireContextValue } from '../components/Questionnaire';
 import { questionnaireAnswerText, type QuestionnaireSubmission } from '../lib/message-questionnaires';
 import { EmailBodyPreview } from '../components/EmailBodyPreview';
@@ -603,6 +604,7 @@ type MessageItemProps = {
   showTokens: boolean;
   resolveImageUrl: (url: string, thumbnailWidth?: number) => string;
   onSetMessages: React.Dispatch<React.SetStateAction<api.Message[]>>;
+  onMessageLink: (link: MessageLink) => void;
   onSetViewerImageSrc: (src: string, messageId?: number, url?: string) => void;
   onOpenAttachment: (attachment: api.MessageAttachment) => void;
   onDownloadImage: (src: string) => void;
@@ -663,6 +665,7 @@ const MessageItem = React.memo(function MessageItem({
   showTokens,
   resolveImageUrl,
   onSetMessages,
+  onMessageLink,
   onSetViewerImageSrc,
   onOpenAttachment,
   onDownloadImage,
@@ -1087,7 +1090,7 @@ const MessageItem = React.memo(function MessageItem({
                     <span className={s.dot} />
                   </div>
                 ) : (
-                  <div className={`${s.bubbleText} ${isStreamingContent ? s.bubbleTextStreaming : ''}`}><MarkdownRenderer content={isGenerating ? '' : workContent.answer} highlightQuery={searchHighlightQuery} onImageClick={onSetViewerImageSrc} questionnaire={questionnaire} /></div>
+                  <div className={`${s.bubbleText} ${isStreamingContent ? s.bubbleTextStreaming : ''}`}><MarkdownRenderer content={isGenerating ? '' : workContent.answer} highlightQuery={searchHighlightQuery} onImageClick={onSetViewerImageSrc} questionnaire={questionnaire} onMessageLink={onMessageLink} /></div>
                 )
               )
               : msg.questionnaire_response ? <QuestionnaireResult response={msg.questionnaire_response} onImageClick={onSetViewerImageSrc} />
@@ -1292,6 +1295,7 @@ export function ChatPage() {
   const [effectivePersonaImageUrl, setEffectivePersonaImageUrl] = useState<string | null>(null);
   const activeChatIdRef = useRef<number | null>(activeChatId);
   activeChatIdRef.current = activeChatId;
+  const chatSelectionVersionRef = useRef(0);
 
   // Chats with a server-side room queue currently running (used to keep the
   // composer blocked when switching away and back).
@@ -1598,7 +1602,7 @@ export function ChatPage() {
     return () => { cancelled = true; };
   }, [addParticipantKind, changingRoomParticipantPromptId, roomPrompts.length]);
   const messagesScrollRef = useRef<ChatMessagesScrollHandle>(null);
-  const pendingMessageJumpRef = useRef<{ chatId: number; messageId: number; query?: string } | null>(null);
+  const pendingMessageJumpRef = useRef<{ chatId: number; messageId: number; query?: string; onMissing?: () => void } | null>(null);
   const suppressNextMessageAutoScrollRef = useRef(false);
   const searchHighlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [highlightedMessageId, setHighlightedMessageId] = useState<number | null>(null);
@@ -2144,9 +2148,11 @@ export function ChatPage() {
       const variants = res.variants ?? [];
       let lastBatchSize = res.messages.length;
 
+      // The messages endpoint pages by descending ID, with each page returned oldest first.
       while (
         (pendingJump
-          ? !loadedMessages.some(message => message.id === pendingJump.messageId)
+          ? isCurrent() && activeChatIdRef.current === chatId
+            && pendingMessageJumpRef.current === pendingJump && loadedMessages[0]?.id > pendingJump.messageId
           : loadedMessages.length < (cached?.messages.length ?? 0))
         && lastBatchSize === pageSize
       ) {
@@ -2156,16 +2162,18 @@ export function ChatPage() {
         loadedMessages = [...res.messages, ...loadedMessages];
       }
 
-      const targetIndex = pendingJump
-        ? loadedMessages.findIndex(message => message.id === pendingJump.messageId)
-        : -1;
-      if (pendingJump && targetIndex >= 0) {
-        const charsThroughTarget = loadedMessages
-          .slice(targetIndex)
-          .reduce((sum, message) => sum + (message.content?.length ?? 0), 0);
-        setCharBudget(Math.max(getRenderPerfBudget(), charsThroughTarget + getRenderPerfStep()));
-      } else if (pendingJump) {
-        pendingMessageJumpRef.current = null;
+      if (pendingJump && pendingMessageJumpRef.current === pendingJump
+        && isCurrent() && activeChatIdRef.current === chatId) {
+        const targetIndex = loadedMessages.findIndex(message => message.id === pendingJump.messageId);
+        if (targetIndex >= 0) {
+          const charsThroughTarget = loadedMessages
+            .slice(targetIndex)
+            .reduce((sum, message) => sum + (message.content?.length ?? 0), 0);
+          setCharBudget(Math.max(getRenderPerfBudget(), charsThroughTarget + getRenderPerfStep()));
+        } else {
+          pendingMessageJumpRef.current = null;
+          pendingJump.onMissing?.();
+        }
       }
 
       if (revision !== messageCache.revision(chatId)) return;
@@ -2312,6 +2320,7 @@ export function ChatPage() {
   }, [hiddenMessagesCount, loadOlderMessages]);
 
   const selectChat = async (chatId: number) => {
+    chatSelectionVersionRef.current++;
     setActiveChatId(chatId);
     try { await api.activateChat(chatId); } catch {}
   };
@@ -4366,11 +4375,11 @@ export function ChatPage() {
     });
   }, []);
 
-  const jumpToCurrentChatMessage = useCallback((messageId: number) => {
+  const jumpToCurrentChatMessage = useCallback((messageId: number, onMissing?: () => void) => {
     const chatId = activeChatIdRef.current;
     if (chatId === null) return;
 
-    pendingMessageJumpRef.current = { chatId, messageId };
+    pendingMessageJumpRef.current = { chatId, messageId, onMissing };
     setHighlightedMessageId(null);
     setHighlightedMessageQuery('');
 
@@ -4387,6 +4396,34 @@ export function ChatPage() {
     setCharBudget(current => Math.max(current, charsThroughTarget + getRenderPerfStep()));
     setMessageJumpVersion(current => current + 1);
   }, [loadMessages]);
+
+  const openMessageLink = useCallback(async (link: MessageLink) => {
+    if (link.kind === 'file') {
+      const shown = await window.electronAPI?.showMessageFile?.(link.url).catch(() => false);
+      if (!shown) toast.error(t('chat.messageLinks.fileUnavailable'));
+      return;
+    }
+
+    const originChatId = activeChatIdRef.current;
+    const request = ++chatSelectionVersionRef.current;
+    const onMissing = () => toast.error(t('chat.messageLinks.messageUnavailable'));
+    if (originChatId === link.chatId) {
+      if (link.messageId !== undefined) jumpToCurrentChatMessage(link.messageId, onMissing);
+      return;
+    }
+
+    const isCurrent = () => request === chatSelectionVersionRef.current && activeChatIdRef.current === originChatId;
+    try {
+      await api.activateChat(link.chatId);
+      if (!isCurrent()) return;
+      pendingMessageJumpRef.current = link.messageId === undefined
+        ? null
+        : { chatId: link.chatId, messageId: link.messageId, onMissing };
+      setActiveChatId(link.chatId);
+    } catch {
+      if (isCurrent()) toast.error(t('chat.messageLinks.chatUnavailable'));
+    }
+  }, [jumpToCurrentChatMessage, t]);
 
   const navigateChatFind = useCallback((direction: 1 | -1) => {
     if (!chatFindResults.length) return;
@@ -6887,6 +6924,7 @@ export function ChatPage() {
                   showTokens={showTokens}
                   resolveImageUrl={resolveImageUrl}
                   onSetMessages={setMessages}
+                  onMessageLink={openMessageLink}
                   onSetViewerImageSrc={(src, msgId, url) => {
                     setViewerImageSrc(src);
                     setViewerImageMsgId(msgId ?? null);
@@ -7149,7 +7187,7 @@ export function ChatPage() {
                         </div>
                       )}
                       {msg.role === 'assistant'
-                        ? <div className={`${s.bubbleText} ${msg.id === streamingMsgId && streamingState === 'content' ? s.bubbleTextStreaming : ''}`}><MarkdownRenderer content={msg.content} onImageClick={openMarkdownImage} /></div>
+                        ? <div className={`${s.bubbleText} ${msg.id === streamingMsgId && streamingState === 'content' ? s.bubbleTextStreaming : ''}`}><MarkdownRenderer content={msg.content} onImageClick={openMarkdownImage} onMessageLink={openMessageLink} /></div>
                         : <div className={s.bubbleTextPlain}>{msg.content}</div>
                       }
                     </div>

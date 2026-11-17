@@ -185,6 +185,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
 
   // File save: shows save dialog, writes ArrayBuffer to chosen path
+  showMessageFile: (url: string) => ipcRenderer.invoke('show-message-file', url),
   saveFile: (fileName: string, data: ArrayBuffer) =>
     ipcRenderer.invoke('save-file', fileName, data),
 

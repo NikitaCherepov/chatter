@@ -1269,6 +1269,11 @@
       "title": "Macro suggestion",
       "save": "Save to settings"
     },
+    "messageLinks": {
+      "messageUnavailable": "This message is unavailable.",
+      "chatUnavailable": "This chat is unavailable.",
+      "fileUnavailable": "Could not show this file in the file manager."
+    },
     "chatLink": {
       "title": "Found chat",
       "open": "Open chat"
