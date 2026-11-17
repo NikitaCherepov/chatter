@@ -1,5 +1,7 @@
 {
   "decision": {
+    "connectionTitle": "Connection",
+    "parametersTitle": "Request settings",
     "title": "Decision",
     "description": "Typed decisions for intuition and other assistant features.",
     "failed": "Could not complete the Decision request.",

@@ -1,5 +1,7 @@
 {
   "decision": {
+    "connectionTitle": "Подключение",
+    "parametersTitle": "Параметры запросов",
     "title": "Decision",
     "description": "Модель решений для интуиции и других функций ассистента.",
     "failed": "Не удалось выполнить запрос Decision.",
