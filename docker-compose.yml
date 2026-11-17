@@ -206,6 +206,9 @@ services:
       CHATTER_HOST_CONFIG_DIR: "${CHATTER_CONFIG_DIR:-}"
       CHATTER_DATA_DIR: /data
       CHATTER_BACKUPS_DIR: /backups
+      BACKEND_PORT: "${BACKEND_PORT:-3050}"
+      CHATTER_GATEWAY_ENABLED: "${CHATTER_GATEWAY_ENABLED:-1}"
+      CHATTER_HTTPS_PORT: "${CHATTER_HTTPS_PORT:-443}"
       CHATTER_PUBLIC_HOST: "${CHATTER_PUBLIC_HOST:-}"
       CHATTER_PUBLIC_URL: "${CHATTER_PUBLIC_URL:-}"
     ports:
@@ -238,10 +241,11 @@ services:
     restart: unless-stopped
     logging: *default-logging
     environment:
-      CHATTER_PUBLIC_HOST: "${CHATTER_PUBLIC_HOST}"
+      CHATTER_PUBLIC_HOST: "${CHATTER_PUBLIC_HOST:-localhost}"
+      CHATTER_PUBLIC_URL: "${CHATTER_PUBLIC_URL:-https://${CHATTER_PUBLIC_HOST:-localhost}:${CHATTER_HTTPS_PORT:-443}}"
     ports:
       - "80:80"
-      - "443:443"
+      - "${CHATTER_HTTPS_PORT:-443}:443"
     volumes:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
       - chatter_caddy_data:/data

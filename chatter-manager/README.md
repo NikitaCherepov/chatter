@@ -11,7 +11,10 @@ and `voice`. The main backend never receives access to the Docker socket.
 On first start the installer provides the generated password through the
 one-use `/config/admin.bootstrap` file. Manager stores only its scrypt hash in
 `/config/auth.json` and immediately deletes the bootstrap file. The password is
-never placed in the container environment.
+never placed in the container environment. The installer keeps a private
+`admin.pending` file until it can print the password at the end of a successful
+run. If setup fails after Manager starts, rerun the installer to see the
+password. Use `--reset-admin` to replace existing credentials.
 
 The Docker socket gives this service host-level privileges. Keep the manager
 small, authenticated and behind TLS. Never add arbitrary shell-command routes.

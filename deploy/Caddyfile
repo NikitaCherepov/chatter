@@ -1,5 +1,10 @@
 {
 	default_sni {$CHATTER_PUBLIC_HOST}
+	auto_https disable_redirects
+}
+
+http://{$CHATTER_PUBLIC_HOST} {
+	redir {$CHATTER_PUBLIC_URL}{uri} 308
 }
 
 {$CHATTER_PUBLIC_HOST} {

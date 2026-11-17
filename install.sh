@@ -1,19 +1,19 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="$SCRIPT_DIR"
+SCRIPT_PATH="${BASH_SOURCE[0]:-}"
+PROJECT_DIR=""
+if [[ -n "$SCRIPT_PATH" && -f "$SCRIPT_PATH" ]]; then
+  PROJECT_DIR="$(cd -- "$(dirname -- "$SCRIPT_PATH")" && pwd)"
+fi
 CONFIG_DIR="${CHATTER_CONFIG_DIR:-/var/lib/chatter}"
 INSTALL_DIR="${CHATTER_INSTALL_DIR:-/opt/chatter}"
 SOURCE_REF="${CHATTER_SOURCE_REF:-main}"
 SOURCE_BASE_URL="https://raw.githubusercontent.com/NikitaCherepov/chatter/${SOURCE_REF}"
-AUTH_WAS_PRESENT=0
-[[ -f "$CONFIG_DIR/auth.json" ]] && AUTH_WAS_PRESENT=1
 RESET_ADMIN=0
-
-if [[ "${EUID}" -ne 0 ]]; then
-  exec sudo --preserve-env=CHATTER_CONFIG_DIR,CHATTER_INSTALL_DIR,CHATTER_SOURCE_REF,CHATTER_IMAGE_PREFIX,CHATTER_IMAGE_TAG,CHATTER_PUBLIC_HOST,GH_TOKEN,GH_USERNAME,SSH_CONNECTION bash "$0" "$@"
-fi
+GATEWAY_ENABLED=""
+FIREWALL_MODE=auto
+HTTPS_PORT="${CHATTER_HTTPS_PORT:-}"
 
 log() {
   printf '\n[chatter] %s\n' "$1"
@@ -24,11 +24,35 @@ fail() {
   exit 1
 }
 
-if [[ "${1:-}" == "--reset-admin" ]]; then
-  RESET_ADMIN=1
-elif [[ $# -gt 0 ]]; then
-  fail "Unknown option: $1"
+if [[ "$EUID" -ne 0 ]]; then
+  sudo_options=(--preserve-env=CHATTER_CONFIG_DIR,CHATTER_INSTALL_DIR,CHATTER_SOURCE_REF,CHATTER_IMAGE_PREFIX,CHATTER_IMAGE_TAG,CHATTER_PUBLIC_HOST,CHATTER_PUBLIC_URL,CHATTER_HTTPS_PORT,GH_TOKEN,GH_USERNAME,SSH_CONNECTION)
+  if [[ -n "$PROJECT_DIR" ]]; then
+    exec sudo "${sudo_options[@]}" bash "$SCRIPT_PATH" "$@"
+  fi
+  # stdin is already being consumed by Bash. Elevate a fresh download.
+  exec sudo "${sudo_options[@]}" bash -c '
+    set -e
+    installer="$(mktemp)"
+    trap '\''rm -f -- "$installer"'\'' EXIT
+    curl_args=(-fsSL --retry 3 --connect-timeout 10)
+    if [[ -n "${GH_TOKEN:-}" ]]; then curl_args+=(-H "Authorization: Bearer ${GH_TOKEN}"); fi
+    curl "${curl_args[@]}" "$1/install.sh" -o "$installer"
+    shift
+    CHATTER_BOOTSTRAP_FROM_STDIN=1 bash "$installer" "$@"
+  ' bash "$SOURCE_BASE_URL" "$@"
 fi
+
+for arg in "$@"; do
+  case "$arg" in
+    --reset-admin) RESET_ADMIN=1 ;;
+    --gateway) GATEWAY_ENABLED=1 ;;
+    --no-gateway) GATEWAY_ENABLED=0 ;;
+    --enable-ufw) FIREWALL_MODE=enable ;;
+    --skip-firewall) FIREWALL_MODE=skip ;;
+    --https-port=*) HTTPS_PORT="${arg#*=}"; [[ -n "$HTTPS_PORT" ]] || fail "Specify --https-port=PORT." ;;
+    *) fail "Unknown option: $arg" ;;
+  esac
+done
 
 random_hex() {
   openssl rand -hex "${1:-32}"
@@ -44,16 +68,17 @@ env_get() {
 write_private_file() {
   local file="$1"
   shift
-  umask 077
-  printf '%s\n' "$@" > "$file"
-  chmod 600 "$file"
+  local temp
+  temp="$(mktemp "${file}.XXXXXX")"
+  printf '%s\n' "$@" > "$temp"
+  mv -f -- "$temp" "$file"
 }
 
 find_free_port() {
   local candidate
   for _ in $(seq 1 100); do
     candidate="$(shuf -i 18000-40000 -n 1)"
-    if ! ss -ltnH | awk '{print $4}' | grep -Eq "[:.]${candidate}$"; then
+    if [[ "$candidate" != "$HTTPS_PORT" && "$candidate" != "$BACKEND_PORT" && -z "$(ss -Hltn "sport = :${candidate}")" ]]; then
       printf '%s' "$candidate"
       return 0
     fi
@@ -61,8 +86,52 @@ find_free_port() {
   return 1
 }
 
+valid_port() {
+  [[ "$1" =~ ^[1-9][0-9]{0,4}$ ]] && (( $1 <= 65535 ))
+}
+
+install_compose_plugin() {
+  local package plan changes
+  apt-get update
+  for package in docker-compose-v2 docker-compose-plugin docker-compose; do
+    if [[ "$package" == docker-compose && "$(apt-cache policy "$package" | awk '/Candidate:/{print $2}')" != 2.* ]]; then
+      continue
+    fi
+    plan="$(LC_ALL=C apt-get -s --no-remove install "$package" 2>/dev/null)" || continue
+    changes="$(awk '$1 == "Inst" { sub(/:.*/, "", $2); print $2 }' <<<"$plan")"
+    if grep -q '^Remv ' <<<"$plan" ||
+      grep -Exq 'docker|docker\.io|docker-engine|docker-ce(-cli|-rootless-extras)?|docker-desktop|containerd(\.io)?|runc|moby-(engine|cli|containerd|runc)' <<<"$changes"; then
+      continue
+    fi
+    log "Installing Compose v2 for the existing Docker Engine"
+    apt-get install -y --no-remove "$package"
+    docker compose version >/dev/null 2>&1 && return 0
+  done
+  fail "Docker is already installed. Install or repair its Compose v2 plugin and rerun Chatter's installer."
+}
+
+check_docker() {
+  local fresh_install="$1"
+  if docker -H unix:///var/run/docker.sock info >/dev/null 2>&1; then
+    return 0
+  fi
+  if [[ "$fresh_install" == 1 ]] && journalctl -u docker.service -b -n 40 --no-pager |
+    grep -F 'no sockets found via socket activation' >/dev/null; then
+    log "Recovering Docker socket activation"
+    systemctl daemon-reload &&
+      systemctl stop docker.service docker.socket &&
+      systemctl reset-failed docker.service docker.socket &&
+      systemctl enable --now docker.socket &&
+      systemctl enable --now docker.service || true
+  fi
+  docker -H unix:///var/run/docker.sock info >/dev/null 2>&1 ||
+    fail "Docker is not responding on /var/run/docker.sock. Check: systemctl status docker.service docker.socket; journalctl -u docker.service -b"
+}
+
 install_docker() {
-  if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
+  if command -v docker >/dev/null 2>&1; then
+    check_docker 0
+    docker compose version >/dev/null 2>&1 || install_compose_plugin
     return
   fi
 
@@ -79,8 +148,112 @@ install_docker() {
   arch="$(dpkg --print-architecture)"
   printf 'deb [arch=%s signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/%s %s stable\n' "$arch" "$ID" "$VERSION_CODENAME" > /etc/apt/sources.list.d/docker.list
   apt-get update
-  apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-  systemctl enable --now docker
+  apt-get install -y --no-remove docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+  systemctl enable --now docker.service || true
+  check_docker 1
+  docker compose version >/dev/null 2>&1 || fail "Docker Compose v2 did not start."
+}
+
+check_port() {
+  local port="$1" service="$2" listeners name project owner published target host
+  local filter="sport = :${port}"
+  local owned=0
+  if [[ "$service" != gateway ]]; then
+    filter+=" and ( src 127.0.0.1 or src 0.0.0.0 or src :: )"
+  fi
+  listeners="$(ss -Hltnp "$filter")" || fail "Could not check TCP port ${port}."
+  if [[ -n "${RUNNING_CONTAINERS:-}" ]]; then
+    while IFS='|' read -r name project owner published target host; do
+      [[ "$published" == "$port" && "$target" == */tcp ]] || continue
+      if [[ "$service" != gateway && "$host" != 127.0.0.1 && "$host" != 0.0.0.0 && "$host" != :: ]]; then
+        continue
+      fi
+      if [[ "$project" == chatter && "$owner" == "$service" ]]; then
+        owned=1
+      else
+        printf 'TCP port %s for %s is already published by Docker container %s.\n' "$port" "$service" "${name#/}" >&2
+        return 1
+      fi
+    done <<<"$RUNNING_CONTAINERS"
+  fi
+  if [[ -n "$listeners" ]]; then
+    if [[ "$owned" == 1 ]]; then
+      listeners="$(sed '/users:(("docker-proxy",/d' <<<"$listeners")"
+    fi
+    if [[ -n "$listeners" ]]; then
+      printf 'TCP port %s for %s is already in use:\n%s\n' "$port" "$service" "$listeners" >&2
+      return 1
+    fi
+  fi
+}
+
+running_container_ports() {
+  local ids
+  local -a container_ids
+  if command -v docker >/dev/null 2>&1; then
+    ids="$(docker ps -q 2>/dev/null)" || ids=""
+    if [[ -n "$ids" ]]; then
+      mapfile -t container_ids <<<"$ids"
+      docker inspect --format '{{range $port, $bindings := .NetworkSettings.Ports}}{{range $bindings}}{{$.Name}}|{{index $.Config.Labels "com.docker.compose.project"}}|{{index $.Config.Labels "com.docker.compose.service"}}|{{.HostPort}}|{{$port}}|{{.HostIp}}{{println}}{{end}}{{end}}' "${container_ids[@]}" 2>/dev/null || true
+    fi
+  fi
+}
+
+prompt_gateway_port_conflict() {
+  local port="$1" terminal choice replacement suggestion=8443
+  if [[ "$HTTPS_PORT" == 8443 ]]; then suggestion=9443; fi
+  if ! { exec {terminal}<>/dev/tty; } 2>/dev/null; then
+    if [[ "$port" == 80 ]]; then
+      fail "Free TCP port 80 for certificate validation or rerun with --no-gateway."
+    fi
+    fail "Free TCP port ${port}, or rerun with --https-port=${suggestion} or --no-gateway."
+  fi
+
+  while true; do
+    printf '\nHow should Chatter proceed?\n' >&"$terminal"
+    if [[ "$port" == 80 ]]; then
+      printf 'The built-in gateway uses TCP port 80 for HTTP and certificate validation.\n' >&"$terminal"
+    else
+      printf '  p) Choose a different HTTPS port\n' >&"$terminal"
+    fi
+    printf '  n) Continue without the built-in gateway\n  r) Recheck the port\n  q) Quit\n> ' >&"$terminal"
+    IFS= read -r choice <&"$terminal" || fail "Installation cancelled."
+    case "$choice" in
+      p|P)
+        [[ "$port" != 80 ]] || continue
+        printf 'HTTPS port [%s]: ' "$suggestion" >&"$terminal"
+        IFS= read -r replacement <&"$terminal" || fail "Installation cancelled."
+        replacement="${replacement:-$suggestion}"
+        if valid_port "$replacement" && [[ "$replacement" != 80 && "$replacement" != "$BACKEND_PORT" && "$replacement" != "$ADMIN_PORT" ]]; then
+          HTTPS_PORT="$replacement"
+          break
+        fi
+        printf 'Choose a port from 1 to 65535 that is not reserved by Chatter.\n' >&"$terminal"
+        ;;
+      n|N) GATEWAY_ENABLED=0; break ;;
+      r|R) break ;;
+      q|Q) fail "Installation cancelled." ;;
+    esac
+  done
+  exec {terminal}>&-
+}
+
+check_ports() {
+  local RUNNING_CONTAINERS
+  while true; do
+    RUNNING_CONTAINERS="$(running_container_ports)"
+    if [[ "$GATEWAY_ENABLED" != 1 ]]; then
+      break
+    elif ! check_port 80 gateway; then
+      prompt_gateway_port_conflict 80
+    elif ! check_port "$HTTPS_PORT" gateway; then
+      prompt_gateway_port_conflict "$HTTPS_PORT"
+    else
+      break
+    fi
+  done
+  check_port "$BACKEND_PORT" backend || fail "Free the backend port and retry."
+  check_port "$ADMIN_PORT" chatter-manager || fail "Free the manager port and retry."
 }
 
 detect_ssh_port() {
@@ -95,37 +268,32 @@ detect_ssh_port() {
 }
 
 configure_firewall() {
-  local ssh_port
-  ssh_port="$(detect_ssh_port)"
+  [[ "$FIREWALL_MODE" != skip ]] || return 0
+  [[ "$GATEWAY_ENABLED" == 1 || "$FIREWALL_MODE" == enable ]] || return 0
+  local status
 
   if ! command -v ufw >/dev/null 2>&1; then
+    [[ "$FIREWALL_MODE" == enable ]] || return 0
     log "Installing UFW"
     apt-get update
     apt-get install -y ufw
   fi
 
-  log "Allowing SSH, HTTP and HTTPS through UFW"
-  if ! ufw status | grep -q '^Status: active'; then
+  status="$(LC_ALL=C ufw status)"
+  if [[ "$status" != "Status: active"* ]]; then
+    [[ "$FIREWALL_MODE" == enable ]] || return 0
+    ufw allow "$(detect_ssh_port)/tcp" comment 'SSH' >/dev/null
     ufw default deny incoming >/dev/null
     ufw default allow outgoing >/dev/null
   fi
-  ufw allow "${ssh_port}/tcp" comment 'SSH' >/dev/null
-  ufw allow 80/tcp comment 'Chatter HTTP' >/dev/null
-  ufw allow 443/tcp comment 'Chatter HTTPS' >/dev/null
-  ufw --force enable >/dev/null
-
-  # Older Chatter installers exposed the random manager port publicly.
-  mapfile -t legacy_rules < <(
-    ufw status numbered |
-      sed -n 's/^\[[[:space:]]*\([0-9][0-9]*\)\].*Chatter Admin.*$/\1/p' |
-      sort -rn
-  )
-  local rule
-  for rule in "${legacy_rules[@]:-}"; do
-    [[ -n "$rule" ]] && ufw --force delete "$rule" >/dev/null
-  done
-
-  return 0
+  if [[ "$GATEWAY_ENABLED" == 1 ]]; then
+    log "Allowing TCP ports 80 and ${HTTPS_PORT} through UFW"
+    ufw allow 80/tcp comment 'Chatter HTTP' >/dev/null
+    ufw allow "${HTTPS_PORT}/tcp" comment 'Chatter HTTPS' >/dev/null
+  fi
+  if [[ "$status" != "Status: active"* ]]; then
+    ufw --force enable >/dev/null
+  fi
 }
 
 download_source_file() {
@@ -144,7 +312,7 @@ bootstrap_installation() {
   local staging_dir managed_path
   local -a managed_files=()
   staging_dir="$(mktemp -d)"
-  trap 'rm -rf "$staging_dir"' RETURN
+  trap 'rm -rf -- "$staging_dir"' EXIT
 
   log "Downloading Chatter installation files"
   install -d -m 755 "$staging_dir/deploy" "$INSTALL_DIR/deploy"
@@ -173,10 +341,12 @@ bootstrap_installation() {
   done
 
   log "Continuing installation from ${INSTALL_DIR}"
-  exec bash "$INSTALL_DIR/install.sh" "$@"
+  rm -rf -- "$staging_dir"
+  trap - EXIT
+  exec env -u CHATTER_BOOTSTRAP_FROM_STDIN bash "$INSTALL_DIR/install.sh" "$@"
 }
 
-if [[ ! -f "$PROJECT_DIR/docker-compose.yml" ]]; then
+if [[ "${CHATTER_BOOTSTRAP_FROM_STDIN:-}" == 1 || -z "$PROJECT_DIR" || ! -f "$PROJECT_DIR/docker-compose.yml" ]]; then
   bootstrap_installation "$@"
 fi
 
@@ -190,51 +360,83 @@ cd "$PROJECT_DIR"
 command -v openssl >/dev/null 2>&1 || { apt-get update && apt-get install -y openssl; }
 command -v ss >/dev/null 2>&1 || { apt-get update && apt-get install -y iproute2; }
 command -v curl >/dev/null 2>&1 || { apt-get update && apt-get install -y ca-certificates curl; }
-install_docker
-
-if [[ -n "${GH_TOKEN:-}" ]]; then
-  log "Signing in to the private GitHub container registry"
-  printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "${GH_USERNAME:-NikitaCherepov}" --password-stdin >/dev/null
-fi
 
 install -d -m 700 "$CONFIG_DIR"
+exec 9>"$CONFIG_DIR/install.lock"
+flock -n 9 || fail "Another Chatter installation is using ${CONFIG_DIR}."
 
 COMPOSE_ENV="$CONFIG_DIR/compose.env"
 MANAGER_ENV="$CONFIG_DIR/manager.env"
 BOOTSTRAP_PASSWORD_FILE="$CONFIG_DIR/admin.bootstrap"
+PENDING_PASSWORD_FILE="$CONFIG_DIR/admin.pending"
 BACKEND_ENV="$CONFIG_DIR/backend.env"
 TELEGRAM_ENV="$CONFIG_DIR/telegram.env"
 VOICE_ENV="$CONFIG_DIR/voice.env"
 IMAGE_PREFIX="${CHATTER_IMAGE_PREFIX:-ghcr.io/nikitacherepov/chatter}"
 IMAGE_TAG="${CHATTER_IMAGE_TAG:-latest}"
 
+PREVIOUS_GATEWAY_ENABLED="$(env_get "$COMPOSE_ENV" CHATTER_GATEWAY_ENABLED)"
+GATEWAY_ENABLED="${GATEWAY_ENABLED:-${PREVIOUS_GATEWAY_ENABLED:-1}}"
+[[ "$GATEWAY_ENABLED" == 0 || "$GATEWAY_ENABLED" == 1 ]] || fail "Invalid saved gateway mode."
+HTTPS_PORT="${HTTPS_PORT:-$(env_get "$COMPOSE_ENV" CHATTER_HTTPS_PORT)}"
+HTTPS_PORT="${HTTPS_PORT:-443}"
+valid_port "$HTTPS_PORT" ||
+  fail "Invalid HTTPS port: ${HTTPS_PORT}. Use a port from 1 to 65535."
+
+BACKEND_PORT="${BACKEND_PORT:-$(env_get "$COMPOSE_ENV" BACKEND_PORT)}"
+BACKEND_PORT="${BACKEND_PORT:-3050}"
+valid_port "$BACKEND_PORT" ||
+  fail "Invalid backend port: ${BACKEND_PORT}."
 ADMIN_PORT="$(env_get "$COMPOSE_ENV" ADMIN_PORT)"
-[[ "$ADMIN_PORT" =~ ^[0-9]+$ ]] || ADMIN_PORT="$(find_free_port)"
+valid_port "$ADMIN_PORT" ||
+  ADMIN_PORT="$(find_free_port)" || fail "Could not find a free port for the manager."
+[[ "$BACKEND_PORT" != "$ADMIN_PORT" ]] || fail "Backend and manager must use different ports."
+if [[ "$GATEWAY_ENABLED" == 1 ]]; then
+  for port in 80 "$BACKEND_PORT" "$ADMIN_PORT"; do
+    [[ "$HTTPS_PORT" != "$port" ]] || fail "HTTPS port ${HTTPS_PORT} conflicts with another Chatter port."
+  done
+  [[ "$BACKEND_PORT" != 80 && "$ADMIN_PORT" != 80 ]] || fail "TCP port 80 is reserved for the gateway."
+fi
+
+# The deployment and manager both operate on the local Docker socket.
+unset DOCKER_CONTEXT COMPOSE_PROFILES
+export DOCKER_HOST=unix:///var/run/docker.sock
+check_ports
+install_docker
+check_ports
+
+if [[ -n "${GH_TOKEN:-}" ]]; then
+  log "Signing in to the private GitHub container registry"
+  printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "${GH_USERNAME:-NikitaCherepov}" --password-stdin >/dev/null
+fi
 
 ADMIN_USERNAME="$(env_get "$MANAGER_ENV" ADMIN_USERNAME)"
 [[ -n "$ADMIN_USERNAME" ]] || ADMIN_USERNAME="admin"
 
-if [[ "$RESET_ADMIN" -eq 1 ]]; then
-  rm -f "$CONFIG_DIR/auth.json" "$BOOTSTRAP_PASSWORD_FILE"
-  AUTH_WAS_PRESENT=0
-fi
-
-ADMIN_PASSWORD=""
-if [[ "$AUTH_WAS_PRESENT" -eq 0 ]]; then
-  if [[ -s "$BOOTSTRAP_PASSWORD_FILE" ]]; then
-    ADMIN_PASSWORD="$(<"$BOOTSTRAP_PASSWORD_FILE")"
-  else
-    ADMIN_PASSWORD="$(random_hex 16)"
-    write_private_file "$BOOTSTRAP_PASSWORD_FILE" "$ADMIN_PASSWORD"
-  fi
-fi
-
 SERVER_IP="${CHATTER_PUBLIC_HOST:-}"
-[[ -n "$SERVER_IP" ]] || SERVER_IP="$(curl -4 -fsS --max-time 5 https://api.ipify.org 2>/dev/null || true)"
-if [[ ! "$SERVER_IP" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
-  SERVER_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
+[[ -n "$SERVER_IP" ]] || SERVER_IP="$(env_get "$COMPOSE_ENV" CHATTER_PUBLIC_HOST)"
+PREVIOUS_PUBLIC_URL="$(env_get "$COMPOSE_ENV" CHATTER_PUBLIC_URL)"
+if [[ "$GATEWAY_ENABLED" == 1 ]]; then
+  if [[ -z "$SERVER_IP" || "$SERVER_IP" == 127.0.0.1 ]]; then
+    SERVER_IP="$(curl -4 -fsS --max-time 5 https://api.ipify.org 2>/dev/null || true)"
+  fi
+  if [[ ! "$SERVER_IP" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+    SERVER_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
+  fi
+  [[ "$SERVER_IP" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] || fail "Could not detect the public IPv4 address. Retry with CHATTER_PUBLIC_HOST=1.2.3.4."
+  PUBLIC_URL="https://${SERVER_IP}"
+  [[ "$HTTPS_PORT" == 443 ]] || PUBLIC_URL+=":${HTTPS_PORT}"
+else
+  [[ "$SERVER_IP" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] || SERVER_IP=127.0.0.1
+  PUBLIC_URL="${CHATTER_PUBLIC_URL:-}"
+  if [[ ! -v CHATTER_PUBLIC_URL && "$PREVIOUS_GATEWAY_ENABLED" == 0 ]]; then
+    PUBLIC_URL="$PREVIOUS_PUBLIC_URL"
+  fi
+  [[ -z "$PUBLIC_URL" || "$PUBLIC_URL" =~ ^https://[A-Za-z0-9.-]+(:[0-9]{1,5})?$ ]] ||
+    fail "CHATTER_PUBLIC_URL must be an HTTPS origin, for example https://chatter.example.org."
 fi
-[[ "$SERVER_IP" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] || fail "Could not detect the public IPv4 address. Retry with CHATTER_PUBLIC_HOST=1.2.3.4."
+export CHATTER_GATEWAY_ENABLED="$GATEWAY_ENABLED" CHATTER_HTTPS_PORT="$HTTPS_PORT"
+export CHATTER_PUBLIC_HOST="$SERVER_IP" CHATTER_PUBLIC_URL="$PUBLIC_URL" ADMIN_PORT BACKEND_PORT
 
 if [[ ! -s "$CONFIG_DIR/tls.crt" || ! -s "$CONFIG_DIR/tls.key" ]]; then
   log "Creating an encrypted self-signed HTTPS endpoint"
@@ -263,11 +465,18 @@ else
   [[ -n "$INTERNAL_TOKEN" ]] || fail "BACKEND_INTERNAL_TOKEN is missing from ${BACKEND_ENV}."
 fi
 
+NOTES_URL="${PUBLIC_URL:+${PUBLIC_URL}/notes}"
 if [[ ! -f "$TELEGRAM_ENV" ]]; then
   write_private_file "$TELEGRAM_ENV" \
     "TELEGRAM_TOKEN=" \
     "BACKEND_INTERNAL_TOKEN=${INTERNAL_TOKEN}" \
-    "NOTES_WEBAPP_URL=https://${SERVER_IP}/notes"
+    "NOTES_WEBAPP_URL=${NOTES_URL}"
+else
+  existing_notes_url="$(env_get "$TELEGRAM_ENV" NOTES_WEBAPP_URL)"
+  if [[ "$existing_notes_url" != "$NOTES_URL" && ( -z "$existing_notes_url" || "$existing_notes_url" == "${PREVIOUS_PUBLIC_URL}/notes" ) ]]; then
+    telegram_config="$(sed '/^NOTES_WEBAPP_URL=/d' "$TELEGRAM_ENV")"
+    write_private_file "$TELEGRAM_ENV" "$telegram_config" "NOTES_WEBAPP_URL=${NOTES_URL}"
+  fi
 fi
 
 if [[ ! -f "$VOICE_ENV" ]]; then
@@ -297,40 +506,86 @@ write_private_file "$COMPOSE_ENV" \
   "CHATTER_IMAGE_PREFIX=${IMAGE_PREFIX}" \
   "CHATTER_IMAGE_TAG=${IMAGE_TAG}" \
   "CHATTER_PULL_IMAGES=1" \
+  "CHATTER_GATEWAY_ENABLED=${GATEWAY_ENABLED}" \
+  "CHATTER_HTTPS_PORT=${HTTPS_PORT}" \
   "CHATTER_PUBLIC_HOST=${SERVER_IP}" \
-  "CHATTER_PUBLIC_URL=https://${SERVER_IP}" \
+  "CHATTER_PUBLIC_URL=${PUBLIC_URL}" \
+  "BACKEND_PORT=${BACKEND_PORT}" \
   "ADMIN_BIND=127.0.0.1" \
   "ADMIN_PORT=${ADMIN_PORT}"
 
 configure_firewall
 
+COMPOSE=(docker compose --project-name chatter --env-file "$COMPOSE_ENV" -f "$PROJECT_DIR/docker-compose.yml")
+PROFILES=(--profile admin)
+if [[ "$GATEWAY_ENABLED" == 1 ]]; then
+  PROFILES+=(--profile gateway)
+fi
+
 log "Downloading ready-to-run Chatter images"
-if ! docker compose --project-name chatter --env-file "$COMPOSE_ENV" --profile admin --profile gateway pull; then
+if ! "${COMPOSE[@]}" "${PROFILES[@]}" pull; then
   fail "Could not download the deployment images. If a registry requires authentication, sign in with Docker and retry."
 fi
 
-log "Starting Chatter behind the HTTPS gateway"
-docker compose --project-name chatter --env-file "$COMPOSE_ENV" --profile admin --profile gateway up -d --no-build
-
-if [[ "$RESET_ADMIN" -eq 1 ]]; then
-  docker compose --project-name chatter --env-file "$COMPOSE_ENV" --profile admin up -d --no-build --force-recreate chatter-manager
+if [[ "$RESET_ADMIN" == 1 ]]; then
+  "${COMPOSE[@]}" --profile admin stop chatter-manager
+  rm -f -- "$PENDING_PASSWORD_FILE" "$BOOTSTRAP_PASSWORD_FILE" "$CONFIG_DIR/auth.json"
+fi
+if [[ ! -s "$CONFIG_DIR/auth.json" ]]; then
+  if [[ ! -s "$PENDING_PASSWORD_FILE" ]]; then
+    if [[ -s "$BOOTSTRAP_PASSWORD_FILE" ]]; then
+      write_private_file "$PENDING_PASSWORD_FILE" "$(<"$BOOTSTRAP_PASSWORD_FILE")"
+    else
+      write_private_file "$PENDING_PASSWORD_FILE" "$(random_hex 16)"
+    fi
+  fi
+  write_private_file "$BOOTSTRAP_PASSWORD_FILE" "$(<"$PENDING_PASSWORD_FILE")"
+fi
+if [[ "$GATEWAY_ENABLED" == 0 ]]; then
+  "${COMPOSE[@]}" --profile admin --profile gateway stop gateway
 fi
 
+log "Starting Chatter"
+"${COMPOSE[@]}" "${PROFILES[@]}" up -d --no-build
+if [[ -n "$("${COMPOSE[@]}" --profile telegram ps --status running -q telegram-bot)" ]]; then
+  "${COMPOSE[@]}" --profile telegram up -d --no-deps --no-build telegram-bot
+fi
+
+LOCAL_URL="https://127.0.0.1:${ADMIN_PORT}"
+HEALTH_ARGS=(-k "${LOCAL_URL}/health")
+HEALTH_SERVICE=chatter-manager
+if [[ "$GATEWAY_ENABLED" == 1 ]]; then
+  HEALTH_ARGS=(--resolve "${SERVER_IP}:${HTTPS_PORT}:127.0.0.1" "${PUBLIC_URL}/health")
+  HEALTH_SERVICE=gateway
+fi
+
+ready=0
 for _ in $(seq 1 60); do
-  if curl -kfsS --resolve "${SERVER_IP}:443:127.0.0.1" "https://${SERVER_IP}/health" >/dev/null 2>&1; then
+  if curl -fsS --noproxy '*' --max-time 5 "${HEALTH_ARGS[@]}" >/dev/null 2>&1; then
+    ready=1
     break
   fi
   sleep 2
 done
-curl -fsS --resolve "${SERVER_IP}:443:127.0.0.1" "https://${SERVER_IP}/health" >/dev/null 2>&1 || fail "The HTTPS gateway did not become ready. Ensure provider firewalls allow TCP 80/443, then rerun install.sh. Logs: docker compose --project-name chatter --env-file ${COMPOSE_ENV} --profile gateway logs gateway"
+if [[ "$ready" == 0 ]]; then
+  if [[ "$GATEWAY_ENABLED" == 1 ]]; then
+    log "Check that TCP ports 80 and ${HTTPS_PORT} are reachable and Caddy can obtain its certificate."
+  fi
+  fail "${HEALTH_SERVICE} did not become ready. Logs: docker compose --project-name chatter --env-file ${COMPOSE_ENV} --profile admin --profile gateway logs ${HEALTH_SERVICE}"
+fi
 
 printf '\nChatter is ready.\n\n'
-printf '  URL:      https://%s\n' "$SERVER_IP"
-if [[ "$AUTH_WAS_PRESENT" -eq 0 ]]; then
-  printf '  Login:    %s\n' "$ADMIN_USERNAME"
-  printf '  Password: %s\n\n' "$ADMIN_PASSWORD"
+printf '  URL:      %s\n' "${PUBLIC_URL:-$LOCAL_URL}"
+if [[ -s "$PENDING_PASSWORD_FILE" ]]; then
+  ADMIN_PASSWORD="$(<"$PENDING_PASSWORD_FILE")"
+  printf '  Login:    %s\n  Password: %s\n\n' "$ADMIN_USERNAME" "$ADMIN_PASSWORD"
+  rm -f -- "$PENDING_PASSWORD_FILE" "$BOOTSTRAP_PASSWORD_FILE"
 else
-  printf '  Admin credentials were preserved from the existing installation.\n\n'
+  printf '  Admin credentials were preserved. To reset them, rerun install.sh --reset-admin.\n\n'
 fi
-printf 'Caddy manages the public IP certificate and renews it automatically.\n'
+if [[ "$GATEWAY_ENABLED" == 1 ]]; then
+  printf 'Caddy manages the public IP certificate and renews it automatically.\n'
+else
+  printf 'Manager is listening at %s on the server. Use your reverse proxy or ssh -L %s:127.0.0.1:%s user@server.\n' "$LOCAL_URL" "$ADMIN_PORT" "$ADMIN_PORT"
+fi
 printf 'After login, configure the AI provider, Telegram and Voice in the panel.\n\n'

@@ -19,6 +19,7 @@ const DOCKER_BIN = process.env.CHATTER_DOCKER_BIN || 'docker';
 const AUTH_FILE = path.join(CONFIG_DIR, 'auth.json');
 const SESSIONS_FILE = path.join(CONFIG_DIR, 'admin-sessions.json');
 const BOOTSTRAP_PASSWORD_FILE = path.resolve(process.env.ADMIN_BOOTSTRAP_PASSWORD_FILE || path.join(CONFIG_DIR, 'admin.bootstrap'));
+const PENDING_PASSWORD_FILE = path.join(CONFIG_DIR, 'admin.pending');
 const SETTINGS_FILE = path.join(CONFIG_DIR, 'settings.json');
 const BACKEND_ENV_FILE = path.join(CONFIG_DIR, 'backend.env');
 const TELEGRAM_ENV_FILE = path.join(CONFIG_DIR, 'telegram.env');
@@ -280,6 +281,8 @@ writeEnv(COMPOSE_RUNTIME_ENV_FILE, {
   CHATTER_IMAGE_PREFIX: currentImagePrefix(),
   CHATTER_IMAGE_TAG: currentImageTag(),
   CHATTER_PULL_IMAGES: process.env.CHATTER_PULL_IMAGES || '0',
+  CHATTER_GATEWAY_ENABLED: process.env.CHATTER_GATEWAY_ENABLED || '1',
+  CHATTER_HTTPS_PORT: process.env.CHATTER_HTTPS_PORT || '443',
   CHATTER_PUBLIC_HOST: process.env.CHATTER_PUBLIC_HOST || '',
   CHATTER_PUBLIC_URL: process.env.CHATTER_PUBLIC_URL || ''
 });
@@ -787,7 +790,9 @@ function serverUpdateInProgress() {
 
 async function updateServiceSelection() {
   const settings = loadSettings();
-  const desiredProfiles = new Set(['admin', 'gateway']);
+  const gatewayEnabled = process.env.CHATTER_GATEWAY_ENABLED !== '0';
+  const desiredProfiles = new Set(['admin']);
+  if (gatewayEnabled) desiredProfiles.add('gateway');
   if (settings.telegramEnabled) desiredProfiles.add('telegram');
   if (settings.notesEnabled) desiredProfiles.add('notes');
   if (settings.voiceMode === 'local') desiredProfiles.add('voice');
@@ -802,6 +807,7 @@ async function updateServiceSelection() {
   const runningServices = new Set(existingOutput.split(/\r?\n/).filter(Boolean));
   const serviceEntries = Object.entries(config.services || {}).filter(([service, definition]) => {
     const serviceProfiles = Array.isArray(definition?.profiles) ? definition.profiles : [];
+    if (!gatewayEnabled && serviceProfiles.includes('gateway')) return false;
     return serviceProfiles.length === 0
       || runningServices.has(service)
       || serviceProfiles.some(profile => desiredProfiles.has(profile));
@@ -3705,6 +3711,7 @@ async function handleRequest(req, res) {
     if (!username || newPassword.length < 12) return sendJson(res, 400, { error: 'username_and_12_character_password_required' });
     authConfig = { username, ...hashPassword(newPassword), updatedAt: new Date().toISOString() };
     atomicWrite(AUTH_FILE, `${JSON.stringify(authConfig, null, 2)}\n`);
+    fs.rmSync(PENDING_PASSWORD_FILE, { force: true });
     sessions.clear();
     persistSessions();
     return sendJson(res, 200, { ok: true });
