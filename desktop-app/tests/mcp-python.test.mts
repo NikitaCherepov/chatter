@@ -340,7 +340,8 @@ try {
   assert.deepEqual(await manager.list('test-account'), []);
 
   const phases: string[] = [];
-  const gitEntry = await manager.install('test-account', {
+  const gitAccount = '81';
+  const gitEntry = await manager.install('https://old.example:3050/backend:81', {
     source: JSON.stringify({
       command: 'uvx',
       args: ['--python', '3.14', '--from', gitSource, 'local-mcp', fixture, 'serve', '--no-control'],
@@ -352,33 +353,33 @@ try {
   assert.equal(gitEntry.tools.length, 1);
   const previousPackage = installedDirs.at(-1)!;
   const approval = { allow_all: false, tools: ['echo'], resources: [] };
-  await manager.configure('test-account', gitEntry.id, { approval_policy: approval });
+  await manager.configure(gitAccount, gitEntry.id, { approval_policy: approval });
 
   gitCommit = 'b'.repeat(40);
   gitStartupFails = true;
-  const failedUpdate = await manager.update('test-account', gitEntry.id);
+  const failedUpdate = await manager.update(gitAccount, gitEntry.id);
   assert.equal(failedUpdate.git_commit, gitEntry.git_commit);
   assert.equal(failedUpdate.config_revision, gitEntry.config_revision);
   assert.match(failedUpdate.error, /fixture startup failed: \[redacted\]/);
   assert.equal(failedUpdate.error.includes('git-private-key'), false);
   await fs.access(previousPackage);
   await assert.rejects(() => fs.access(installedDirs.at(-1)!), /ENOENT/);
-  const resultAfterFailure = await manager.control('test-account', {
+  const resultAfterFailure = await manager.control(gitAccount, {
     local_id: gitEntry.id, action: 'call', tool: 'echo', arguments: { text: 'old package still works' },
   });
   assert.equal(resultAfterFailure.content[0].text, 'old package still works');
 
   gitStartupFails = false;
   phases.length = 0;
-  const updated = await manager.update('test-account', gitEntry.id, (phase: string) => phases.push(phase));
+  const updated = await manager.update(gitAccount, gitEntry.id, (phase: string) => phases.push(phase));
   assert.deepEqual(phases, ['installing', 'connecting']);
   assert.equal(updated.git_commit, gitCommit);
   assert.notEqual(updated.config_revision, gitEntry.config_revision);
   assert.deepEqual(updated.approval_policy, approval);
-  assert.deepEqual((await manager.settings('test-account', gitEntry.id)).env, { API_KEY: 'git-private-key' });
+  assert.deepEqual((await manager.settings(gitAccount, gitEntry.id)).env, { API_KEY: 'git-private-key' });
   assert.equal(updated.error, undefined);
   await assert.rejects(() => fs.access(previousPackage), /ENOENT/);
-  await manager.remove('test-account', gitEntry.id);
+  await manager.remove(gitAccount, gitEntry.id);
   for (const directory of installedDirs) await assert.rejects(() => fs.access(directory), /ENOENT/);
   const packageManifest = {
     registryType: 'pypi',

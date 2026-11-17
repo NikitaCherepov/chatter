@@ -80,7 +80,8 @@ export function getLocalConnections(userId: number): McpConnection[] {
 export function syncLocalConnections(client: WsClient, input: unknown) {
   if (wsClients.get(client.accountId) !== client) throw new Error('mcp_desktop_connection_changed');
   const access = policy(client.accountId);
-  if (!Array.isArray(input) || input.length > 20 || JSON.stringify(input).length > 2_000_000)
+  // The desktop can include installations from several former server-specific folders.
+  if (!Array.isArray(input) || input.length > 200 || JSON.stringify(input).length > 2_000_000)
     throw new Error('mcp_invalid_local_snapshot');
   if (!access.enabled || !access.allow_custom) {
     snapshots.delete(client.accountId);

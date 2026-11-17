@@ -1048,7 +1048,7 @@ let wsCallbacks: WsCallbacks = {};
 export function localMcpScope(userId?:number):string {
   const id=userId??JSON.parse(localStorage.getItem('chatter_user')||'null')?.id;
   if(!Number.isSafeInteger(id)||id<=0)throw new Error('mcp_account_not_ready');
-  return API_BASE.replace(/\/$/,'')+':'+id;
+  return String(id);
 }
 export async function syncLocalMcp(socket=ws){
   if(!socket||socket.readyState!==WebSocket.OPEN||!window.electronAPI?.localMcpManage)return;

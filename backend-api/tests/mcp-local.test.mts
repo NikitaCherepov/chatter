@@ -57,7 +57,7 @@ const manager = new LocalMcpManager(
     };
   },
 );
-const scope = 'https://test.example:81';
+const scope = '81';
 const sent: Array<{ type: string; payload?: any }> = [];
 let sequence = 0;
 let syncInstall = true;
@@ -181,7 +181,12 @@ try {
     0,
     'failed secret storage leaves no broken install',
   );
-  const installed = await manager.install(scope, {
+  const olderScope = 'https://old.example:8443:81';
+  const otherServer = await manager.install('https://new.example:81', {
+    name: 'MCP from the new address',
+    source: JSON.stringify({ command: process.execPath, args: [fixture] }),
+  });
+  const installed = await manager.install(olderScope, {
     name: 'Local fixture',
     package: pkg,
     values: { 'env:PRIVATE_KEY': 'secret-local', 'arg:0': root },
@@ -197,11 +202,15 @@ try {
     false,
     'public metadata omits configuration',
   );
-  assert.equal(
-    (await manager.list(scope + ':other')).length,
-    0,
-    'local installations isolated by account/server scope',
+  assert.deepEqual(
+    (await manager.list(scope)).map((entry: any) => entry.id).sort(),
+    [installed.id, otherServer.id].sort(),
+    'both previous server folders are visible using just the account ID',
   );
+  assert.deepEqual(await manager.list('82'), [], 'another account sees a separate list');
+  await assert.rejects(() => manager.settings('82', installed.id), /ENOENT/);
+  await manager.remove(scope, otherServer.id);
+  assert.deepEqual(await manager.list('https://new.example:81'), [], 'removal cleans the original folder');
   assert.throws(
     () => syncDesktopMcp({ ...wsClient, accountId: 82 }, [installed]),
     /connection_changed/,

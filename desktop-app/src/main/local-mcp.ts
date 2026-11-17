@@ -70,12 +70,16 @@ const visibleBotArgs = new Set([
   '--quiet',
   '--log-level',
 ]);
+const accountIdPattern = /^[1-9][0-9]*$/;
+const localIdPattern = /^[a-f0-9-]{36}$/;
+
 export class LocalMcpManager {
   private sessions = new Map<string, { client: Client; stderr: string }>();
   private requests = new Map<string, { id?: string; controller: AbortController }>();
   private busy = new Set<string>();
   private installing = new Set<string>();
   private writes = new Map<string, Promise<unknown>>();
+  private legacyScopes?: Promise<Map<string, string[]>>;
   private async serialized<T>(id: string, action: () => Promise<T>): Promise<T> {
     const previous = this.writes.get(id) || Promise.resolve(),
       next = previous.catch(() => {}).then(action);
@@ -103,7 +107,7 @@ export class LocalMcpManager {
     );
   }
   private directory(scope: string, id: string) {
-    if (!/^[a-f0-9-]{36}$/.test(id)) throw new Error('mcp_invalid_local_id');
+    if (!localIdPattern.test(id)) throw new Error('mcp_invalid_local_id');
     const base = this.account(scope),
       target = path.resolve(base, id);
     if (path.dirname(target) !== base) throw new Error('mcp_invalid_local_path');
@@ -134,12 +138,67 @@ export class LocalMcpManager {
       throw new Error('mcp_invalid_local_path');
     await fs.rm(directory, { recursive: true, force: true });
   }
-  private async read(scope: string, id: string): Promise<RecordData> {
-    const record = JSON.parse(
-      this.decrypt(await fs.readFile(path.join(this.directory(scope, id), 'config.bin'))),
-    );
+  private async readConfig(directory: string): Promise<RecordData> {
+    return JSON.parse(this.decrypt(await fs.readFile(path.join(directory, 'config.bin'))));
+  }
+  private async readStored(scope: string, id: string): Promise<RecordData> {
+    const record = await this.readConfig(this.directory(scope, id));
     if (record.scope !== scope || record.id !== id) throw new Error('mcp_local_account_mismatch');
     return record;
+  }
+  private async scanLegacyScopes() {
+    const scopes = new Map<string, string[]>();
+    const root = path.resolve(this.root, 'accounts');
+    const folders = await fs.readdir(root, { withFileTypes: true }).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === 'ENOENT') return [];
+      throw error;
+    });
+    for (const folder of folders) {
+      if (!folder.isDirectory() || !/^[a-f0-9]{64}$/.test(folder.name)) continue;
+      const directory = path.join(root, folder.name);
+      const entries = await fs.readdir(directory, { withFileTypes: true }).catch(() => []);
+      for (const entry of entries) {
+        if (!entry.isDirectory() || !localIdPattern.test(entry.name)) continue;
+        const record = await this.readConfig(path.join(directory, entry.name)).catch(() => null);
+        if (
+          typeof record?.scope !== 'string' || !record.scope || record.scope.length > 2048 ||
+          record.id !== entry.name || this.account(record.scope) !== directory
+        ) continue;
+        const separator = record.scope.lastIndexOf(':');
+        if (separator < 0) break;
+        const id = record.scope.slice(separator + 1);
+        if (accountIdPattern.test(id)) {
+          const matches = scopes.get(id) || [];
+          matches.push(record.scope);
+          scopes.set(id, matches);
+        }
+        break;
+      }
+    }
+    return scopes;
+  }
+  private async getLegacyScopes(scope: string): Promise<string[]> {
+    if (!accountIdPattern.test(scope)) return [];
+    this.legacyScopes ??= this.scanLegacyScopes().catch((error) => {
+      this.legacyScopes = undefined;
+      throw error;
+    });
+    return (await this.legacyScopes).get(scope) ?? [];
+  }
+  private async read(scope: string, id: string): Promise<RecordData> {
+    try {
+      return await this.readStored(scope, id);
+    } catch (error: any) {
+      if (error.code !== 'ENOENT') throw error;
+      for (const legacyScope of await this.getLegacyScopes(scope)) {
+        try {
+          return await this.readStored(legacyScope, id);
+        } catch (legacyError: any) {
+          if (legacyError.code !== 'ENOENT') throw legacyError;
+        }
+      }
+      throw error;
+    }
   }
   private async write(record: RecordData) {
     const encrypted = this.encrypt(JSON.stringify(record));
@@ -354,17 +413,22 @@ export class LocalMcpManager {
     return result;
   }
   async list(scope: string) {
-    let entries: string[];
-    try {
-      entries = await fs.readdir(this.account(scope));
-    } catch (error: any) {
-      if (error.code === 'ENOENT') return [];
-      throw error;
+    const result = new Map<string, ReturnType<LocalMcpManager['public']>>();
+    for (const storedScope of [scope, ...(await this.getLegacyScopes(scope))]) {
+      const entries = await fs.readdir(this.account(storedScope)).catch((error: NodeJS.ErrnoException) => {
+        if (error.code === 'ENOENT') return [];
+        throw error;
+      });
+      for (const id of entries) {
+        if (!localIdPattern.test(id) || result.has(id)) continue;
+        const record = await this.readStored(storedScope, id).catch((error: NodeJS.ErrnoException) => {
+          if (error.code === 'ENOENT') return null;
+          throw error;
+        });
+        if (record) result.set(id, this.public(record));
+      }
     }
-    const result = [];
-    for (const id of entries.filter((name) => /^[a-f0-9-]{36}$/.test(name)))
-      result.push(this.public(await this.read(scope, id)));
-    return result;
+    return [...result.values()];
   }
   private async preparePython(
     scope: string,
@@ -704,8 +768,8 @@ export class LocalMcpManager {
       let connecting = false;
       try {
         progress?.('installing');
-        if (npm) await this.prepareNpm(scope, id, candidate.config);
-        else await this.preparePython(scope, id, candidate.config);
+        if (npm) await this.prepareNpm(current.scope, id, candidate.config);
+        else await this.preparePython(current.scope, id, candidate.config);
         progress?.('connecting');
         await this.stop(id);
         connecting = true;
@@ -714,7 +778,7 @@ export class LocalMcpManager {
         await this.write(candidate);
       } catch (error) {
         if (connecting) await this.stop(id);
-        await this.removePackageGeneration(scope, id, generation).catch(() => {});
+        await this.removePackageGeneration(current.scope, id, generation).catch(() => {});
         current.error = String(error instanceof Error ? error.message : error).slice(0, 2000);
         await this.write(current);
         return this.public(current);
@@ -723,7 +787,7 @@ export class LocalMcpManager {
       }
       const previousGeneration = config.package_generation ?? config.git_generation;
       if (previousGeneration)
-        await this.removePackageGeneration(scope, id, previousGeneration).catch(() => {});
+        await this.removePackageGeneration(current.scope, id, previousGeneration).catch(() => {});
       return this.public(candidate);
     });
   }
@@ -1024,10 +1088,10 @@ export class LocalMcpManager {
   }
   async remove(scope: string, id: string) {
     return this.serialized(id, async () => {
-      await this.read(scope, id);
+      const record = await this.read(scope, id);
       await this.stop(id);
-      const target = this.directory(scope, id);
-      const pythonTarget = this.packageDirectory(scope, id);
+      const target = this.directory(record.scope, id);
+      const pythonTarget = this.packageDirectory(record.scope, id);
       await fs.rm(pythonTarget, { recursive: true, force: true });
       await fs.rm(target, { recursive: true, force: true });
     });
