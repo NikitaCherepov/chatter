@@ -44,15 +44,22 @@ async function validateQdrantBackup(directory, manifest) {
 function createQdrantBackup({ url, apiKey = '', fetchImpl = fetch }) {
   const base = new URL(url);
   async function request(endpoint, options = {}) {
-    const response = await fetchImpl(new URL(base.href.replace(/\/$/, '') + endpoint), {
-      ...options,
-      headers: { ...(apiKey ? { 'api-key': apiKey } : {}), ...options.headers },
-      signal: AbortSignal.timeout(60 * 60 * 1000),
-      redirect: 'error',
-    });
+    let response;
+    const operation = `Qdrant backup ${options.method || 'GET'} ${endpoint}`;
+    try {
+      response = await fetchImpl(new URL(base.href.replace(/\/$/, '') + endpoint), {
+        ...options,
+        headers: { ...(apiKey ? { 'api-key': apiKey } : {}), ...options.headers },
+        signal: AbortSignal.timeout(60 * 60 * 1000),
+        redirect: 'error',
+      });
+    } catch (error) {
+      const reason = error?.cause?.code || error?.cause?.message || error?.message || String(error);
+      throw new Error(`${operation} failed: ${reason}`, { cause: error });
+    }
     if (!response.ok) {
       await response.body?.cancel();
-      throw new Error(`Qdrant backup request failed (HTTP ${response.status})`);
+      throw new Error(`${operation} failed (HTTP ${response.status})`);
     }
     return response;
   }

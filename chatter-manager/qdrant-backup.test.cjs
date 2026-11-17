@@ -33,8 +33,12 @@ async function fixture(t) {
   const snapshots = new Map();
   const requests = [];
   let failUpload = false;
+  let qdrantRunning = true;
+  const stoppedServices = new Set();
+  const dockerCalls = [];
   const server = http.createServer(async (req, res) => {
     try {
+      if (!qdrantRunning) return res.writeHead(503).end('Qdrant is stopped');
       const url = new URL(req.url, 'http://localhost');
       const parts = url.pathname.split('/').filter(Boolean).map(decodeURIComponent);
       requests.push({ method: req.method, url });
@@ -97,8 +101,23 @@ async function fixture(t) {
     atomicWrite: (file, content) => fs.writeFileSync(file, content), setOwnershipRecursive() {},
     stopDataServices: async () => {},
     applyConfiguration: async () => { starts++; if (failRestart) { failRestart = false; throw new Error('restart failed'); } },
+    composeArgs: (...args) => ['compose', ...args],
+    runDocker: async args => {
+      dockerCalls.push([...args]);
+      for (const command of ['stop', 'start']) {
+        const index = args.indexOf(command);
+        if (index === -1) continue;
+        for (const service of args.slice(index + 1)) {
+          if (command === 'stop') stoppedServices.add(service);
+          else stoppedServices.delete(service);
+          if (service === 'qdrant') qdrantRunning = command !== 'stop';
+        }
+      }
+    },
   });
-  const names = ['readBackupManifest', 'listBackups', 'memoryCollectionNames', 'createBackup', 'sqliteQuickCheck', 'inspectBackupArchive', 'importBackup', 'restoreBackup'];
+  const names = ['readBackupManifest', 'listBackups', 'memoryCollectionNames', 'createBackup', 'sqliteQuickCheck',
+    'inspectBackupArchive', 'importBackup', 'restoreBackup', 'performServerUpdate', 'stopDataServicesForUpdate',
+    'restartStoppedDataServices', 'shortImageHash'];
   vm.runInContext(ast.statements.filter(node => ts.isFunctionDeclaration(node) && names.includes(node.name?.text))
     .map(node => node.getText(ast)).join('\n'), manager);
   t.after(async () => {
@@ -109,7 +128,7 @@ async function fixture(t) {
   });
   const writeMessage = value => { const db = new Database(database); db.prepare('UPDATE messages SET text=?').run(value); db.close(); };
   const readMessage = () => { const db = new Database(database, { readonly: true }); try { return db.prepare('SELECT text FROM messages').get().text; } finally { db.close(); } };
-  return { root, backups, database, collections, snapshots, requests, original, client, manager, runProcess,
+  return { root, backups, database, collections, snapshots, requests, original, client, manager, runProcess, dockerCalls, stoppedServices,
     writeMessage, readMessage, failUpload: () => { failUpload = true; }, failRestart: () => { failRestart = true; }, starts: () => starts };
 }
 
@@ -132,6 +151,93 @@ test('a downloaded archive survives import on a fresh installation and restores 
   assert.equal(f.readMessage(), 'original');
   assert.deepEqual(f.collections.get('chatter_memory'), f.original);
   assert.ok(f.collections.has('unrelated'), 'other Qdrant collections remain intact');
+});
+
+function prepareUpdate(f, { failBackup = false } = {}) {
+  const selection = {
+    profiles: ['*'],
+    services: ['backend', 'qdrant', 'search', 'telegram-bot', 'webapp-notes', 'chatter-manager', 'admin-panel'],
+    images: { 'chatter-manager': 'fixture-manager:latest' },
+  };
+  const states = [];
+  let helperStarted = false;
+  Object.assign(f.manager, {
+    assertUpdateStorage() {}, assertBackupStorageAvailable() {},
+    updateServiceSelection: async () => selection,
+    captureRollbackImages: async () => [],
+    pullServerUpdateImages: async () => ({ selection, updatedDeploymentFiles: [] }),
+    ensureSelectedImagesAvailable: async () => {},
+    inspectImage: async () => ({ id: 'sha256:' + 'a'.repeat(64) }),
+    imageContentId: async image => image.id,
+    writeUpdateState: state => states.push(state),
+    pruneAutomaticBackups: async () => {},
+    getBackupSchedule: () => ({ retention: 3 }),
+    launchServerUpdateHelper: async () => {
+      assert.ok(f.stoppedServices.has('backend'), 'writers remain stopped until the helper takes over');
+      const backup = f.manager.listBackups()[0];
+      const manifest = await f.manager.readBackupManifest(path.join(f.backups, backup.name));
+      assert.equal(manifest.qdrant.collections.length, 1, 'helper starts only after the actual vector backup');
+      helperStarted = true;
+    },
+    restoreDeploymentFiles() {}, restoreImageTags: async () => {}, pruneDockerImagesBestEffort: async () => {},
+  });
+  if (failBackup) {
+    f.manager.qdrantBackupClient = () => createQdrantBackup({
+      url: 'http://127.0.0.1',
+      fetchImpl: async () => new Response('unavailable', { status: 503 }),
+    });
+  }
+  return { states, helperStarted: () => helperStarted };
+}
+
+test('updater stops writers, backs up a running Qdrant and then hands over to the detached helper', async t => {
+  const f = await fixture(t);
+  const update = prepareUpdate(f);
+  await f.manager.performServerUpdate({ latestHash: 'preflight', storage: {} }, 'test-attempt');
+  const stop = f.dockerCalls.find(args => args.includes('stop'));
+  assert.ok(stop.includes('backend') && stop.includes('telegram-bot') && stop.includes('webapp-notes'));
+  assert.ok(!stop.includes('qdrant') && !stop.includes('chatter-manager') && !stop.includes('admin-panel'));
+  assert.equal(update.helperStarted(), true);
+  assert.equal(update.states.at(-1).status, 'restarting');
+});
+
+test('updater restarts stopped services if the real vector backup fails', async t => {
+  const f = await fixture(t);
+  const update = prepareUpdate(f, { failBackup: true });
+  await assert.rejects(f.manager.performServerUpdate({ latestHash: 'preflight', storage: {} }, 'test-attempt'), /HTTP 503/);
+  assert.equal(update.helperStarted(), false);
+  assert.equal(update.states.at(-1).status, 'failed');
+  assert.equal(f.stoppedServices.size, 0);
+  assert.deepEqual(fs.readdirSync(f.backups), []);
+});
+
+test('updater restarts services after a partially failed stop command', async t => {
+  const f = await fixture(t);
+  const update = prepareUpdate(f);
+  const docker = f.manager.runDocker;
+  f.manager.runDocker = async args => {
+    await docker(args);
+    if (args.includes('stop')) throw new Error('partial stop failure');
+  };
+  await assert.rejects(f.manager.performServerUpdate({ latestHash: 'preflight', storage: {} }, 'test-attempt'), /partial stop failure/);
+  assert.equal(update.helperStarted(), false);
+  assert.equal(update.states.at(-1).status, 'failed');
+  assert.equal(f.stoppedServices.size, 0);
+});
+
+test('network failures identify Qdrant, the request and the underlying connection error', async t => {
+  const f = await fixture(t);
+  const client = createQdrantBackup({
+    url: 'http://127.0.0.1', apiKey: 'must-not-appear',
+    fetchImpl: async () => {
+      throw new TypeError('fetch failed', { cause: Object.assign(new Error('connection refused'), { code: 'ECONNREFUSED' }) });
+    },
+  });
+  await assert.rejects(client.capture(f.root, ['chatter_memory']), error => {
+    assert.match(error.message, /Qdrant backup GET \/collections failed: ECONNREFUSED/);
+    assert.doesNotMatch(error.message, /must-not-appear/);
+    return true;
+  });
 });
 
 test('a corrupt snapshot is rejected during import before replacing either database', async t => {

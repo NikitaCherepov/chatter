@@ -1579,10 +1579,11 @@ async function performServerUpdate(snapshot, operationId) {
     // chatter.db open; running `sqlite3 .backup` against a live database on
     // slow-I/O hosts aborts with "database is locked" while the backend is
     // checkpointing its WAL. The manager itself is not stopped here (it owns
-    // this update flow), and launchServerUpdateHelper recreates everything,
-    // including the manager, from a detached container.
-    await stopDataServicesForUpdate(selection);
+    // this update flow). Qdrant stays running so createBackup can capture its
+    // memory snapshots after its writers stop. launchServerUpdateHelper then
+    // recreates everything, including the manager, from a detached container.
     dataServicesStopped = true;
+    await stopDataServicesForUpdate(selection);
     await createBackup({ includeUploads: false, source: 'automatic' });
     await pruneAutomaticBackups(getBackupSchedule().retention);
     writeUpdateState({ status: 'restarting', targetHash, message: 'restarting_server_services' });
@@ -1614,13 +1615,13 @@ async function performServerUpdate(snapshot, operationId) {
   }
 }
 
-// Stops only the services that touch chatter.db / uploads. The manager and
-// admin-panel are left running: the manager drives this update, and the panel
-// needs to keep polling /api/server/updates/state. The helper container later
-// recreates (and thus restarts) every selected service, including the manager.
+// Keep Qdrant available for the vector backup, and keep the manager and panel
+// running while this update is prepared. The detached helper later recreates
+// every selected service, including Qdrant and the manager.
 async function stopDataServicesForUpdate(selection) {
   const profileArgs = selection.profiles.flatMap(profile => ['--profile', profile]);
-  const dataServices = selection.services.filter(service => service !== 'chatter-manager' && service !== 'admin-panel');
+  const dataServices = selection.services.filter(service =>
+    service !== 'chatter-manager' && service !== 'admin-panel' && service !== 'qdrant');
   if (dataServices.length === 0) return;
   await runDocker(composeArgs(...profileArgs, 'stop', ...dataServices), 3 * 60 * 1000);
 }
