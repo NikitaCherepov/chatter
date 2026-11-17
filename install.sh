@@ -159,7 +159,7 @@ check_port() {
   local filter="sport = :${port}"
   local owned=0
   if [[ "$service" != gateway ]]; then
-    filter+=" and ( src 127.0.0.1 or src 0.0.0.0 or src :: )"
+    filter+=" and ( src 127.0.0.1 or src 0.0.0.0 or src [::] )"
   fi
   listeners="$(ss -Hltnp "$filter")" || fail "Could not check TCP port ${port}."
   if [[ -n "${RUNNING_CONTAINERS:-}" ]]; then
@@ -213,14 +213,19 @@ prompt_gateway_port_conflict() {
     printf '\nHow should Chatter proceed?\n' >&"$terminal"
     if [[ "$port" == 80 ]]; then
       printf 'The built-in gateway uses TCP port 80 for HTTP and certificate validation.\n' >&"$terminal"
+      printf '  1) Continue without the built-in gateway\n  2) Recheck the port\n  3) Quit\n> ' >&"$terminal"
     else
-      printf '  p) Choose a different HTTPS port\n' >&"$terminal"
+      printf '  1) Choose a different HTTPS port\n  2) Continue without the built-in gateway\n  3) Recheck the port\n  4) Quit\n> ' >&"$terminal"
     fi
-    printf '  n) Continue without the built-in gateway\n  r) Recheck the port\n  q) Quit\n> ' >&"$terminal"
     IFS= read -r choice <&"$terminal" || fail "Installation cancelled."
+    if [[ "$port" == 80 ]]; then
+      case "$choice" in
+        1|2|3) choice=$((choice + 1)) ;;
+        *) printf 'Choose 1, 2 or 3.\n' >&"$terminal"; continue ;;
+      esac
+    fi
     case "$choice" in
-      p|P)
-        [[ "$port" != 80 ]] || continue
+      1)
         printf 'HTTPS port [%s]: ' "$suggestion" >&"$terminal"
         IFS= read -r replacement <&"$terminal" || fail "Installation cancelled."
         replacement="${replacement:-$suggestion}"
@@ -230,9 +235,10 @@ prompt_gateway_port_conflict() {
         fi
         printf 'Choose a port from 1 to 65535 that is not reserved by Chatter.\n' >&"$terminal"
         ;;
-      n|N) GATEWAY_ENABLED=0; break ;;
-      r|R) break ;;
-      q|Q) fail "Installation cancelled." ;;
+      2) GATEWAY_ENABLED=0; break ;;
+      3) break ;;
+      4) fail "Installation cancelled." ;;
+      *) printf 'Choose 1, 2, 3 or 4.\n' >&"$terminal" ;;
     esac
   done
   exec {terminal}>&-
