@@ -9,6 +9,7 @@ import { useInvalidateMemory } from '../lib/memory-queries';
 import { useQueryClient } from '@tanstack/react-query';
 import { useChatPromptKey, type ChatPromptSettings } from '../lib/chat-prompt-queries';
 import { ChatPersonaSelector } from './ChatPersonaSelector';
+import { IntuitionSettings } from './IntuitionSettings';
 import { PlayerInstructionsEditor } from './PlayerInstructionsEditor';
 import { ConfirmDialog } from './ConfirmDialog';
 import { MemoryRecordsPanel, type MemoryRecord } from './MemoryRecordsPanel';
@@ -269,6 +270,7 @@ export function MemoryPopover({ chatId, compactTrigger = false, preferredModel }
                 </div>
               </div>
               <PlayerInstructionsEditor key={chatId} scope="chat" targetId={chatId} modelId={preferredModel} appearance="settings" />
+              <IntuitionSettings key={chatId} chatId={chatId} />
               <div className={s.behaviorGroup}>
                 <div className={s.toggleRow}>
                   <div className={s.toggleText}>

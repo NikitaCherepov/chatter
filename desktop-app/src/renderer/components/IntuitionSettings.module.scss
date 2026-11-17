@@ -1,0 +1,99 @@
+.settings {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 16px;
+  min-width: 0;
+  color: var(--text-body);
+  font-size: 13px;
+}
+.hint {
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+.notice {
+  padding: 12px;
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: var(--text-muted);
+}
+.settings input:not([type='checkbox']),
+.settings textarea {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid var(--border-input);
+  border-radius: 7px;
+  background: var(--bg-input);
+  color: var(--text-body);
+  font: inherit;
+  outline: none;
+  &:focus {
+    border-color: var(--accent-icon);
+  }
+}
+.settings textarea {
+  resize: vertical;
+  line-height: 1.5;
+}
+.questions {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.question {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border-light);
+}
+.questionHeader {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  input {
+    min-width: 0;
+  }
+  button {
+    flex-shrink: 0;
+  }
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.chat,
+.suggest {
+  color: var(--text-body);
+  min-width: 0;
+  > summary {
+    cursor: pointer;
+    color: var(--text-muted);
+    padding: 10px 0;
+  }
+  > div > .settings {
+    padding: 12px 0;
+  }
+}
+.draft {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  p {
+    line-height: 1.5;
+  }
+}

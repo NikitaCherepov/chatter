@@ -27,6 +27,7 @@ import { RoomStreamBuffer } from '../lib/room-stream-buffer';
 import { promoteChatInFolder } from '../lib/chat-list-order';
 import { groupChatsByActivity, activityDay, moveActivityCount, activityGroupCounts } from '../lib/chat-date-groups';
 import { generateDocxBlob, generateChatDocxBlob } from '../lib/markdownToDocx';
+import { IntuitionDisclosure } from '../components/IntuitionDisclosure';
 import { MarkdownRenderer } from '../components/MarkdownRenderer';
 import type { MessageLink } from '../lib/message-links';
 import { QuestionnaireResult, type QuestionnaireContextValue } from '../components/Questionnaire';
@@ -958,6 +959,7 @@ const MessageItem = React.memo(function MessageItem({
         tokens={showTokens ? msg.reasoning_tokens : undefined}
         onImageClick={onSetViewerImageSrc}
       />}
+      {msg.role === 'assistant' && msg.usage?.intuition && <IntuitionDisclosure key={String(msg.id) + ':' + activeVariantIndex} snapshot={msg.usage.intuition} />}
       {msg.role === 'assistant' && <WorkLog
         key={`${msg.id}:${activeVariantIndex}`}
         messages={workContent.messages}

@@ -206,6 +206,7 @@ export type TokenUsageCall = NormalizedTokenUsage & {
 };
 
 export type MessageUsage = {
+  intuition?: import('./services/intuition.js').IntuitionSnapshot | null;
   latest: NormalizedTokenUsage;
   aggregate: NormalizedTokenUsage;
   calls: TokenUsageCall[];

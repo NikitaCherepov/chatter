@@ -11,14 +11,16 @@ import { PineconePage } from './PineconePage';
 import { WebReaderPage } from './WebReaderPage';
 import { WebSearchPage } from './WebSearchPage';
 import { TranscriptionPage } from './TranscriptionPage';
+import { DecisionPage } from './DecisionPage';
 import { ChatGptPage } from './ChatGptPage';
 import { api } from '../../../lib/api';
 import styles from './IntegrationsPage.module.css';
 
-type IntegrationId = 'pinecone' | 'web-search' | 'web-reader' | 'cloud-tts' | 'image-generation' | 'transcription' | 'chatgpt';
+type IntegrationId = 'decision' | 'pinecone' | 'web-search' | 'web-reader' | 'cloud-tts' | 'image-generation' | 'transcription' | 'chatgpt';
 
 const INTEGRATION_IDS: Array<{ id: IntegrationId; icon: string }> = [
   { id: 'chatgpt', icon: 'GPT' },
+  { id: 'decision', icon: 'D' },
   { id: 'pinecone', icon: 'Pi' },
   { id: 'web-search', icon: 'WS' },
   { id: 'web-reader', icon: 'WR' },
@@ -46,13 +48,18 @@ export function IntegrationsPage({
   const [selected, setSelected] = useState<IntegrationId | null>(null);
   const [transcriptionConfigured, setTranscriptionConfigured] = useState(false);
   const [chatGptConfigured, setChatGptConfigured] = useState(false);
+  const [decisionConfigured, setDecisionConfigured] = useState(false);
 
   useEffect(() => {
+    void api<{ enabled: boolean; hasApiKey: boolean }>('/api/decision/settings')
+      .then(value => setDecisionConfigured(value.enabled && value.hasApiKey)).catch(() => setDecisionConfigured(false));
     void api<{ connections: unknown[] }>('/api/chatgpt/connections').then(value => setChatGptConfigured(value.connections.length > 0)).catch(() => setChatGptConfigured(false));
     void api<{ enabled: boolean; hasApiKey: boolean }>('/api/transcription/settings')
       .then(value => setTranscriptionConfigured(value.enabled && value.hasApiKey))
       .catch(() => setTranscriptionConfigured(false));
   }, [selected]);
+
+  if (selected === 'decision') return <DecisionPage onBack={() => setSelected(null)} />;
 
   if (selected === 'pinecone') {
     return (
@@ -138,6 +145,7 @@ export function IntegrationsPage({
 
   if (selected === 'chatgpt') return <ChatGptPage onBack={() => setSelected(null)} />;
   const configured: Record<IntegrationId, boolean> = {
+    decision: decisionConfigured,
     chatgpt: chatGptConfigured,
     pinecone: settings.pinecone.hasEmbeddingApiKey,
     'web-search': settings.webSearch.enabled,

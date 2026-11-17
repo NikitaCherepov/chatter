@@ -3498,6 +3498,15 @@ async function handleRequest(req, res) {
     }
   }
 
+  if (pathname === '/api/decision/settings' || pathname === '/api/decision/test') {
+    if (!['GET', 'PUT', 'POST'].includes(req.method)) return sendJson(res, 405, { error: 'method_not_allowed' });
+    try {
+      const options = { method: req.method };
+      if (req.method !== 'GET') options.body = JSON.stringify(await readJson(req));
+      return sendJson(res, 200, await backendInternalRequest('/internal/admin' + pathname.slice(4), options));
+    } catch { return sendJson(res, 400, { error: 'decision_request_failed' }); }
+  }
+
   if (pathname === '/api/transcription/settings') {
     if (req.method === 'GET') {
       try {

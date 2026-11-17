@@ -19,7 +19,7 @@ const entries = [
   ...fields,
 ];
 const find = (q: string, lang: any = ru, admin = false) => searchSettings(q, entries, translate(lang), admin);
-assert.equal(new Set(SETTINGS_GROUPS.flatMap((g: any) => g.sections)).size, 24);
+assert.equal(new Set(SETTINGS_GROUPS.flatMap((g: any) => g.sections)).size, 25);
 assert(SETTINGS_GROUPS.find((g: any) => g.id === 'profile').sections.includes('limits'));
 assert(SETTINGS_GROUPS.find((g: any) => g.id === 'ai').sections.includes('restrictions'));
 assert(!SETTINGS_GROUPS.find((g: any) => g.id === 'access').sections.includes('restrictions'));

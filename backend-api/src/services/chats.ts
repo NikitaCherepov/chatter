@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { extractQuestionnaires, questionnaireSchema, validateQuestionnaireAnswers, questionnaireAnswerText, type QuestionnaireSubmission, type QuestionnaireResponse } from './message-questionnaires.js';
 import { db, toUnix } from '../db.js';
+import { intuitionHint } from './intuition-prompt.js';
 import type { ChatDto, MessageDto, MessageImage, MessageAudio, MessageAttachment, ChatRole, UserRecord, MessageUsage } from '../types.js';
 import { copyAttachmentFile, deleteAttachmentFile } from './attachment-storage.js';
 import { deleteImageFile, filenameFromUrl, resolveImageFile } from './image-storage.js';
@@ -901,6 +902,9 @@ export const forkChat = (
         } catch { /* invalid legacy JSON: keep the copied value unchanged */ }
       }
     }
+
+    db.prepare('INSERT INTO intuition_settings (user_id, chat_id, settings_json, revision) SELECT user_id, ?, settings_json, 1 FROM intuition_settings WHERE user_id = ? AND chat_id = ?')
+      .run(newChatId, userId, sourceChatId);
 
     // Player instructions must survive a fork even when vector-memory cloning is unavailable.
     const sourceInstructions = db.prepare('SELECT user_instructions, use_user_instructions, user_instructions_mode, persona_override_id FROM chat_memory_settings WHERE user_id = ? AND chat_id = ?')
@@ -2173,7 +2177,7 @@ export const getHistoryForAi = (
     ? ' AND COALESCE(cm.timeline_index, cm.id) > ? AND COALESCE(cm.timeline_index, cm.id) <= ?'
     : '';
   const rowsQuery = db.prepare(`
-    SELECT cm.id, cm.timeline_index, cm.role, cm.content, cm.tool_calls_json, cm.attachments, cm.images,
+    SELECT cm.id, cm.timeline_index, cm.role, cm.content, cm.tool_calls_json, cm.attachments, cm.images, cm.usage_json,
            cm.agent_id, ca.name AS agent_name, u.name AS author_name, cm.token_count
     FROM chat_messages cm
     LEFT JOIN chat_agents ca ON ca.id = cm.agent_id
@@ -2186,7 +2190,7 @@ export const getHistoryForAi = (
     ...historyUserIds,
     chatId,
     ...(multiUserRoom ? [roomHistoryAfterTimelineIndex, roomThrough] : []),
-  ) as Array<{ id: number; timeline_index: number | null; role: ChatRole; content: string; tool_calls_json: string | null; attachments: string | null; images: string | null; agent_id: number | null; agent_name: string | null; author_name: string | null; token_count: number | null }>;
+  ) as Array<{ id: number; timeline_index: number | null; role: ChatRole; content: string; tool_calls_json: string | null; attachments: string | null; images: string | null; agent_id: number | null; agent_name: string | null; author_name: string | null; token_count: number | null; usage_json: string | null }>;
 
   // Remove the complete stored response before expanding its tool iterations.
   // Filtering expanded API messages by role leaves tool results and earlier
@@ -2220,6 +2224,17 @@ export const getHistoryForAi = (
   const messages: any[] = [];
   const attachmentBudget = attachmentBudgetState ?? { remaining: attachmentMaxTokens };
   const attachmentInjectionByMessage = new Map<number, string>();
+  const intuitionByUserMessage = new Map<number, string>();
+  let precedingUserId: number | null = null;
+  for (const row of rows) {
+    if (row.role === 'user') precedingUserId = row.id;
+    else if (precedingUserId !== null && row.usage_json) {
+      try {
+        const hint = intuitionHint(JSON.parse(row.usage_json).intuition);
+        if (hint && !intuitionByUserMessage.has(precedingUserId)) intuitionByUserMessage.set(precedingUserId, hint);
+      } catch { /* Older usage records may not contain intuition metadata. */ }
+    }
+  }
 
   // Newest documents have priority when the global document budget is tight.
   if (attachmentMaxTokens > 0) {
@@ -2261,6 +2276,7 @@ export const getHistoryForAi = (
 
       let textContent = row.content;
       if (injected) textContent += '\n\n' + injected;
+      textContent += intuitionByUserMessage.get(row.id) ?? '';
       // Multi-user room: label human messages with the author's name so room
       // agents can tell participants apart (same convention as agent messages).
       if (multiUserRoom && row.author_name) {

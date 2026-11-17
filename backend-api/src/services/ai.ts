@@ -11,6 +11,8 @@ import { getChatGptConnection, withChatGptActor } from './chatgpt-connections.js
 import { withModelActor, currentModelActor, canUseModel, assertModelAccess, registerModelAccessClient } from './model-access.js';
 import nodeFetch from 'node-fetch';
 import { ProxyAgent } from 'proxy-agent';
+import { intuitionHint } from './intuition-prompt.js';
+import { evaluateIntuition, type IntuitionSnapshot } from './intuition.js';
 import { Readable } from 'node:stream';
 import { resolveQuestionnaireSubmission } from './chats.js';
 import { questionnaireAnswerText, type QuestionnaireSubmission, type QuestionnaireResponse } from './message-questionnaires.js';
@@ -7114,6 +7116,7 @@ const sendMessageThroughAiInternal = async (
     previousController.abort();
   }
 
+  let intuitionSnapshot: IntuitionSnapshot | null = null;
   const abortController = new AbortController();
   if (!options?.isBackgroundTask) {
     activeGenerations.set(currentGenerationKey, abortController);
@@ -8169,6 +8172,27 @@ User request: "${text}"`;
     }
   }
 
+  if (!isGuestMode && !options?.skipHistory && !options?.scheduledTask) {
+    const previous = requestedRegenerateFromHistory && options?.regenerateMessageId
+      ? getChatMessageVariants(userId, chatId, options.regenerateMessageId).find(m => m.usage?.intuition?.status === 'ready')?.usage?.intuition
+      : null;
+    const lastHumanIndex = history.map(message => message.role).lastIndexOf('user');
+    intuitionSnapshot = await evaluateIntuition({
+      userId: toolUser.id, billingUserId: user.id, chatId,
+      history: options?.skipUserHistory && !regenerateUserMessage
+        ? history.slice(0, Math.max(0, lastHumanIndex)) : history,
+      currentMessage: regenerateUserMessage?.content ?? (options?.skipUserHistory
+        ? history[lastHumanIndex]?.content ?? text : text),
+      signal: abortController.signal, previous,
+    });
+    const hint = intuitionHint(intuitionSnapshot);
+    if (hint) {
+      const current = currentMessages[currentMessages.length - 1];
+      current.content = typeof current.content === 'string' ? current.content + hint
+        : [...current.content, { type: 'text', text: hint }];
+    }
+  }
+
   let loop = 0;
   const effectiveMaxLoops = options?.isVoice ? MAX_TOOL_LOOPS_VOICE : MAX_TOOL_LOOPS;
   const toolOutputsForFallback: string[] = [];
@@ -8754,7 +8778,7 @@ if (taskCompletion) {
   const aggregateUsage = sumTokenUsage(usageCalls);
   const latestUsage = tokenUsageWithoutCallMeta(usageCalls[usageCalls.length - 1]);
   const messageUsage: MessageUsage | null = usageCalls.length > 0
-    ? { latest: latestUsage, aggregate: aggregateUsage, calls: usageCalls, perf: buildUsagePerf(aggregateUsage.completion_tokens) }
+    ? { latest: latestUsage, aggregate: aggregateUsage, calls: usageCalls, intuition: intuitionSnapshot, perf: buildUsagePerf(aggregateUsage.completion_tokens) }
     : null;
   // Track speed only when every completed provider call belongs to the same
   // model. A mid-response fallback would otherwise blend multiple models and
@@ -8906,7 +8930,7 @@ if (taskCompletion) {
       const abortedAggregateUsage = sumTokenUsage(usageCalls);
       const abortedLatestUsage = tokenUsageWithoutCallMeta(usageCalls[usageCalls.length - 1]);
       const abortedMessageUsage: MessageUsage | null = usageCalls.length > 0
-        ? { latest: abortedLatestUsage, aggregate: abortedAggregateUsage, calls: usageCalls, perf: buildUsagePerf(abortedAggregateUsage.completion_tokens) }
+        ? { latest: abortedLatestUsage, aggregate: abortedAggregateUsage, calls: usageCalls, intuition: intuitionSnapshot, perf: buildUsagePerf(abortedAggregateUsage.completion_tokens) }
         : null;
       const abortedModelName = usedProvider === 'manual' && selectedManualModelName
         ? selectedManualModelName

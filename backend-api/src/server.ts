@@ -161,6 +161,9 @@ import { associateServerAccessKeyUser, createServerAccessKey, getLastServerAcces
 import { addChatAgent, canReadChatMessages, createChatRoom, createChatRoomInvite, deleteChatRoom, getChatAgentForResponse, getChatRoom, getChatRoomInviteInfo, joinChatRoomByInvite, leaveChatRoom, listChatReaderUserIds, listChatRoomInvites, removeChatAgent, removeChatRoomMember, revokeChatRoomInvite, reorderChatAgents, reorderChatMembers, updateChatAgent, updateChatRoomSettings } from './services/chat-rooms.js';
 import { runChatSteps, hasActiveChatRun, getChatRunStatus } from './services/chat-runner.js';
 import { questionnaireAnswerText } from './services/message-questionnaires.js';
+import { registerIntuitionRoutes } from './services/intuition-routes.js';
+import { decisionPublicSettings, setDecisionSettings, decisionKeyUsage, replaceDecisionKey } from './services/decision-settings.js';
+import { runDecision } from './services/decision-runner.js';
 import { registerPlayerInstructionRoutes } from './services/player-instructions-routes.js';
 import { isRoomChat, runRoomAgents, runRoomResponseQueue, stopRoomQueue } from './services/room-runner.js';
 
@@ -1563,6 +1566,19 @@ app.get('/api/v1/memory/personas', (req: AuthedRequest, res: any) => {
   return res.json({ personas: listPersonas(accountIdFromRequest(req)) });
 });
 registerPlayerInstructionRoutes(app, req => accountIdFromRequest(req));
+registerIntuitionRoutes(app, req => accountIdFromRequest(req));
+app.get('/internal/admin/decision/settings', internalAuth, (_req, res) => res.json(decisionPublicSettings()));
+app.put('/internal/admin/decision/settings', internalAuth, (req, res) => {
+  try { res.json(setDecisionSettings(req.body)); }
+  catch { res.status(400).json({ error: 'decision_invalid_settings' }); }
+});
+app.post('/internal/admin/decision/test', internalAuth, async (_req, res) => {
+  try {
+    const result = await runDecision({ purpose: 'connection-test', input: 'The sky is blue.',
+      questions: [{ id: 'blue', question: 'Does this text mention the sky?' }] });
+    res.json({ ok: true, elapsedMs: result.elapsedMs });
+  } catch { res.status(400).json({ error: 'decision_test_failed' }); }
+});
 
 app.post('/api/v1/memory/personas/import/sillytavern/preview', (req: AuthedRequest, res: any) => {
   try {
@@ -6176,6 +6192,7 @@ app.get('/internal/admin/api-keys/:id/used-by', internalAuth, async (req, res) =
       ...models.map(m => m.model_id),
       ...getImageGenerationApiKeyUsage(keyId),
       ...getVectorMemoryApiKeyUsage(keyId),
+      ...decisionKeyUsage(keyId),
       ...getTranscriptionApiKeyUsage(keyId),
     ])] });
   } catch (error: any) {
@@ -6213,6 +6230,7 @@ app.delete('/internal/admin/api-keys/:id', internalAuth, async (req, res) => {
     const tx = db.transaction(() => {
       replaceImageGenerationApiKeyReference(keyId, replacementIdNum);
       replaceVectorMemoryApiKeyReference(keyId, replacementIdNum);
+      replaceDecisionKey(keyId, replacementIdNum);
       replaceTranscriptionApiKeyReference(keyId, replacementIdNum);
       replaceModelKeyReference(keyId, replacementIdNum);
       if (replacementIdNum === null) {
