@@ -5906,7 +5906,16 @@ app.post('/internal/admin/model-config/import', internalAuth, (req, res) => {
     const result = importModelConfig(req.body);
     refreshConfiguredModels();
     broadcastModelCatalogUpdated();
-    return res.json({ ...result, settings: publicModelSettings() });
+    const settings = { ...publicModelSettings() } as Record<string, unknown>;
+    if (req.body.imageGeneration) {
+      const image = getImageGenerationSettings();
+      settings.imageGeneration = {
+        ...image,
+        openrouter: { ...image.openrouter, apiKey: '', hasApiKey: !!image.openrouter.apiKey },
+        cloudflare: { ...image.cloudflare, apiToken: '', hasApiToken: !!image.cloudflare.apiToken },
+      };
+    }
+    return res.json({ ...result, settings });
   } catch (error: any) { return res.status(400).json({ error: error.message || 'invalid_model_config' }); }
 });
 

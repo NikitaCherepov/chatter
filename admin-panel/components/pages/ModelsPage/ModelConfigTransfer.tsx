@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { api } from '../../../lib/api';
-import type { ApiKey, ProviderModelConfig, Settings } from '../../../lib/types';
+import type { ApiKey, ImageGenerationSettings, ProviderModelConfig, Settings } from '../../../lib/types';
 import { Select } from '../../ui/Select/Select';
 import { Checkbox } from '../../ui/Checkbox/Checkbox';
 import { FormField } from '../../ui/FormField/FormField';
@@ -13,7 +13,12 @@ import modelStyles from './ModelsPage.module.css';
 
 type Role = 'pro' | 'lite' | 'manual' | 'vision';
 type Row = ProviderModelConfig & { name?: string; roles: Role[]; keyRef?: string; enabled?: boolean; billing?: Record<string, unknown> };
-type Transfer = { format: 'chatter-models'; version: 1; models: Row[]; keys: { id: string; sourceId?: number; name: string; key?: string }[]; warnings: string[] };
+type ImageTransfer = Omit<ImageGenerationSettings, 'openrouter' | 'cloudflare'> & {
+  openrouter: Omit<ImageGenerationSettings['openrouter'], 'apiKey' | 'hasApiKey'> & { keyRef?: string };
+  cloudflare: Omit<ImageGenerationSettings['cloudflare'], 'apiToken' | 'hasApiToken'> & { keyRef?: string };
+};
+type Transfer = { format: 'chatter-models'; version: 1; models: Row[]; keys: { id: string; sourceId?: number; name: string; key?: string }[]; warnings: string[]; imageGeneration?: ImageTransfer };
+const imageProviders = ['openrouter', 'cloudflare'] as const;
 const roles: Role[] = ['pro', 'lite', 'manual', 'vision'];
 const keyFingerprint = (value: string) => value.length > 12 ? `${value.slice(0, 6)}…${value.slice(-4)}` : value.length >= 6 ? `••••…${value.slice(-2)}` : '••••';
 const connectionLabel = (model: Row) => {
@@ -27,6 +32,7 @@ export function ModelConfigTransfer({ onImported }: { onImported: (settings: Par
   const [data, setData] = useState<Transfer | null>(null);
   const [savedKeys, setSavedKeys] = useState<ApiKey[]>([]);
   const [includeKeys, setIncludeKeys] = useState(false);
+  const [importImages, setImportImages] = useState(true);
   const [visibleKeys, setVisibleKeys] = useState<Set<string>>(() => new Set());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -73,6 +79,7 @@ export function ModelConfigTransfer({ onImported }: { onImported: (settings: Par
         headers: { 'Content-Type': zip ? 'application/zip' : 'application/json' }, signal: requestRef.current.signal,
       });
       setData({ ...result, models: result.models.map(m => ({ ...m, enabled: true, apiKey: '', hasApiKey: false })) });
+      setImportImages(true);
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
     finally { setBusy(false); }
   };
@@ -94,15 +101,32 @@ export function ModelConfigTransfer({ onImported }: { onImported: (settings: Par
     setVisibleKeys(current => { const next = new Set(current); next.delete(id); return next; });
     if (pendingKeyFocus.current === id) pendingKeyFocus.current = null;
   };
+  const patchImageKey = (provider: typeof imageProviders[number], value: string) => {
+    const saved = value.startsWith('saved:') ? Number(value.slice(6)) : null;
+    const keyRef = value.startsWith('import:') ? value.slice(7) : undefined;
+    setData(current => current?.imageGeneration ? ({
+      ...current,
+      imageGeneration: {
+        ...current.imageGeneration,
+        [provider]: { ...current.imageGeneration[provider], keyRef,
+          ...(provider === 'openrouter' ? { apiKeyId: saved } : { apiTokenId: saved }) },
+      },
+    }) : current);
+  };
   const selected = data?.models.filter(m => m.enabled) || [];
-  const ready = selected.length > 0 && selected.every(m => m.baseUrl && m.model && m.roles.length &&
-    (m.apiKeyId || (m.keyRef && data?.keys.some(k => k.id === m.keyRef && k.name.trim() && k.key?.trim()))));
+  const selectedImages = importImages ? data?.imageGeneration : undefined;
+  const hasKey = (keyRef?: string) => data?.keys.some(k => k.id === keyRef && k.name.trim() && k.key?.trim());
+  const ready = (selected.length > 0 || !!selectedImages) && selected.every(m => m.baseUrl && m.model && m.roles.length &&
+    (m.apiKeyId || hasKey(m.keyRef))) && (!selectedImages || imageProviders.every(provider => {
+      const branch = selectedImages[provider];
+      return !branch.keyRef || hasKey(branch.keyRef);
+    }));
   const commit = async () => {
     if (!data || !ready) return;
     setBusy(true); setError('');
     try {
       const result = await api<{ added: number; skipped: number; settings: Partial<Settings> }>('/api/model-config/import', {
-        method: 'POST', body: JSON.stringify({ ...data, models: selected }),
+        method: 'POST', body: JSON.stringify({ ...data, models: selected, imageGeneration: selectedImages }),
       });
       onImported(result.settings);
       window.dispatchEvent(new Event('chatter:api-keys-changed'));
@@ -161,7 +185,11 @@ export function ModelConfigTransfer({ onImported }: { onImported: (settings: Par
                   </FormField>
                   <div className={styles.keyInfo}>
                     <code>{key.key ? keyFingerprint(key.key) : t('models.transfer.missingKey')}</code>
-                    <span>{t('models.transfer.linkedModels')}: {[...new Set(data.models.filter(m => m.keyRef === key.id).map(connectionLabel))].join(', ') || t('models.transfer.noLinkedModels')}</span>
+                    <span>{t('models.transfer.linkedModels')}: {[...new Set([
+                      ...data.models.filter(m => m.keyRef === key.id).map(connectionLabel),
+                      ...imageProviders.filter(provider => data.imageGeneration?.[provider].keyRef === key.id)
+                        .map(provider => data.imageGeneration![provider].model.name),
+                    ])].join(', ') || t('models.transfer.noLinkedModels')}</span>
                     <button type="button" className={`${modelStyles.dangerButton} ${styles.removeKey}`} disabled={busy} aria-label={t('models.transfer.removeKeyLabel', { name: key.name })} title={t('models.transfer.removeKeyHint')} onClick={() => removeKey(key.id)}>{t('common.delete')}</button>
                   </div>
                 </div>)}
@@ -190,6 +218,32 @@ export function ModelConfigTransfer({ onImported }: { onImported: (settings: Par
                 </section>)}
               </div>
               <p>{t('models.transfer.noOverwrite')}</p>
+              {data.imageGeneration && <section className={styles.modelRow}>
+                <Checkbox checked={importImages} onChange={setImportImages} disabled={busy}
+                  label={<strong>{t('models.transfer.imageGeneration')}</strong>} />
+                <p>{t('models.transfer.imageGenerationHint')}</p>
+                <p>{t('integrations.imageGeneration.providerLabel')} — {data.imageGeneration.provider === 'openrouter' ? 'OpenRouter' : 'Cloudflare'}</p>
+                {imageProviders.map(provider => {
+                  const branch = data.imageGeneration![provider];
+                  const keyId = provider === 'openrouter'
+                    ? data.imageGeneration!.openrouter.apiKeyId : data.imageGeneration!.cloudflare.apiTokenId;
+                  return <div className={styles.modelFields} key={provider}>
+                    <div><strong>{provider === 'openrouter' ? 'OpenRouter' : 'Cloudflare'}</strong>
+                      <p>{branch.model.name || branch.model.id}</p><code>{branch.model.id}</code>
+                      <p>{provider === 'openrouter' ? data.imageGeneration!.openrouter.baseUrl : data.imageGeneration!.cloudflare.accountId}</p>
+                    </div>
+                    <FormField label={t('models.transfer.key')}>
+                      <Select disabled={busy || !importImages}
+                        value={keyId ? `saved:${keyId}` : branch.keyRef ? `import:${branch.keyRef}` : ''}
+                        placeholder={t('security.apiKeySelectPlaceholder')}
+                        options={[...savedKeys.map(k => ({ value: `saved:${k.id}`, label: k.name, hint: k.key_prefix })),
+                          ...data.keys.map(k => ({ value: `import:${k.id}`, label: k.name,
+                            hint: k.key ? keyFingerprint(k.key) : t('models.transfer.missingKey') }))]}
+                        onChange={value => patchImageKey(provider, value)} />
+                    </FormField>
+                  </div>;
+                })}
+              </section>}
               {data.warnings.map(w => <p key={w} className={styles.warning}>{t(`models.transfer.warnings.${w}`, { defaultValue: w })}</p>)}
             </>}
           </>}

@@ -9,6 +9,8 @@ const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'chatter-model-settings-
 process.env.API_DB_PATH = path.join(directory, 'test.sqlite');
 process.env.UPLOADS_DIR = path.join(directory, 'uploads');
 process.env.ENCRYPTION_KEY = 'test-encryption-key-not-a-real-secret';
+process.env.OPENROUTER_API_KEY = '';
+process.env.OPENROUTER_BASE_URL = '';
 process.env.TIMEWEB_BASE_URL = 'https://example.test/v1';
 process.env.TIMEWEB_API_KEY = 'test-secret-original';
 process.env.TIMEWEB_MODEL = 'model-one';
@@ -45,7 +47,7 @@ try {
   assert.equal(exported.models[0].billing.inputPricePerMillion, 0.9);
   assert.equal(transfer.exportModelConfig(false).keys[0].key, undefined);
   const read = transfer.parseModelConfig([{ name: 'models.json', data: Buffer.from(JSON.stringify(exported)) }]);
-  assert.deepEqual(transfer.importModelConfig(read), { added: 0, skipped: 5 });
+  assert.deepEqual(transfer.importModelConfig(read), { added: 0, skipped: 6 });
   assert.equal(settings.getModelSettings().proModels.length, 2);
   assert.equal(getModelOverride('stable-one').openrouter_provider_slug, 'deepinfra');
   const collision = { format: 'chatter-models', version: 1, warnings: [], keys: [{ id: 'imported', sourceId: initial.proModels[0].apiKeyId, name: 'Different key', key: 'test-different-key' }],
