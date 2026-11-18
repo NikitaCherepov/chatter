@@ -20,6 +20,7 @@ import {
 } from '@dnd-kit/core';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { VirtualMessage } from '../components/VirtualMessage';
 import { ChatMessagesScroll, type ChatMessagesScrollHandle } from '../components/ChatMessagesScroll';
 import { useAuth } from '../lib/auth';
 import { useUnreadChats } from '../lib/useUnreadChats';
@@ -6959,6 +6960,7 @@ export function ChatPage() {
               className={s.messages}
               contentClassName={s.messagesContent}
               resetKey={activeChatId}
+              virtualize
               positionScope={`${api.API_BASE}:${user?.id ?? ''}`}
               ready={activeChatId !== null && messagesChatIdRef.current === activeChatId && !loadingMessages}
             >
@@ -6975,7 +6977,17 @@ export function ChatPage() {
                 </button>
               )}
               {visibleMessages.map((msg, index) => (
-                <React.Fragment key={msg.id}>
+                <VirtualMessage
+                  key={msg.id}
+                  id={msg.id}
+                  revision={msg}
+                  keepMounted={msg.id === streamingMsgId || msg.id === liveAvatarMessageId || msg.id === editingMsgId
+                    || msg.id === regenHintMsgId || msg.id === msgMenuId
+                    || msg.id === openReasoningId || msg.id === openToolCallsId
+                    || msg.id === switchingVariantId || msg.id === ttsPlayingId
+                    || Boolean(msg.images?.length || msg.attachments?.length || msg.questionnaire_response)
+                    || /(?:`{3,}|~{3,})[ \t]*(?:interactive|jsx|tsx|html|questionnaire|chart|diagram)\b/i.test(msg.content)}
+                >
                 {startsMessageDay(msg.created_at, visibleMessages[index - 1]?.created_at) && (
                   <div className={s.messageDay} role="separator" aria-label={messageDate(msg.created_at, locale)}>
                     <time dateTime={new Date(msg.created_at * 1000).toISOString()} title={fullMessageDate(msg.created_at, locale)}>{messageDate(msg.created_at, locale)}</time>
@@ -7062,7 +7074,7 @@ export function ChatPage() {
                   onDeleteAttachment={handleDeleteAttachment}
                   onDeleteImage={requestImageDelete}
                 />
-                </React.Fragment>
+                </VirtualMessage>
               ))}
               {false && messages.map((msg) => (
                 <div key={msg.id} className={`${s.messageGroup} ${openReasoningId === msg.id ? s.messageGroupRaised : ''}`}>

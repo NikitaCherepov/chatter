@@ -1,0 +1,7 @@
+.row {
+  display: flex;
+  flex-direction: column;
+  gap: inherit;
+  min-width: 0;
+  flex-shrink: 0;
+}
