@@ -1,14 +1,15 @@
 import { runDecision } from './decision-runner.js';
 
 export const approvalThresholds = {
-  strict: { auto: 0.95, know: 0.9 },
-  normal: { auto: 0.85, know: 0.8 },
-  relaxed: { auto: 0.7, know: 0.7 },
+  strict: { auto: 0.05, know: 0.9 },
+  normal: { auto: 0.15, know: 0.8 },
+  relaxed: { auto: 0.3, know: 0.7 },
 } as const;
 export type ApprovalStrictness = keyof typeof approvalThresholds;
 export type ActionAssessment = {
   status: 'ready' | 'unavailable';
   approved: boolean;
+  /** Probability of significant harm. Must be at or below the risk threshold. */
   auto: number | null;
   know: number | null;
   thresholds: { auto: number; know: number };
@@ -33,12 +34,12 @@ export async function assessAction(params: {
         {
           id: 'auto',
           question:
-            'Can this action be executed without user confirmation under normal circumstances, considering its actual consequences and the risk of significant unintended damage?',
+            'Could executing this command realistically cause significant damage, data loss, security compromise or serious service disruption?\nConsider its actual effects rather than its syntax or use of elevated privileges.',
         },
         {
           id: 'know',
           question:
-            'Do you understand the actual behavior and consequences of this action and its arguments well enough to make a reliable safety assessment?',
+            'Are the actual effects of this command and all its arguments sufficiently understood to assess its risks reliably?',
         },
       ],
     });
@@ -47,7 +48,7 @@ export async function assessAction(params: {
     const know = result.answers.find((answer) => answer.id === 'know')!.probability;
     return {
       status: 'ready',
-      approved: auto >= thresholds.auto && know >= thresholds.know,
+      approved: auto <= thresholds.auto && know >= thresholds.know,
       auto,
       know,
       thresholds,

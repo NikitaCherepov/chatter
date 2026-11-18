@@ -16,10 +16,15 @@ export function CommandAssessment({ assessment }: { assessment: Assessment }) {
               <div className={signals.label}>
                 <span>{t(`autoConfirmation.${key}`)}</span>
                 <span>
-                  {t('autoConfirmation.score', {
-                    score: Math.round((assessment[key] ?? 0) * 100),
-                    threshold: Math.round(assessment.thresholds[key] * 100),
-                  })}
+                  {t(
+                    key === 'auto'
+                      ? 'autoConfirmation.riskScore'
+                      : 'autoConfirmation.understandingScore',
+                    {
+                      score: Math.round((assessment[key] ?? 0) * 100),
+                      threshold: Math.round(assessment.thresholds[key] * 100),
+                    },
+                  )}
                 </span>
               </div>
               <meter

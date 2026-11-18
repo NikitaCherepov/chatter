@@ -51,7 +51,7 @@ try {
   assert.throws(() => save({ enabled: true, strictness: 'unknown' }), /invalid_settings/);
   const apiKeyId = importModelKey('Decision', 'test-secret');
   setDecisionSettings({ enabled: true, apiKeyId });
-  let scores = [0.85, 0.8];
+  let scores = [0.15, 0.8];
   let calls = 0;
   let duringRequest: (() => void) | undefined;
   globalThis.fetch = (async (_url, init) => {
@@ -60,6 +60,14 @@ try {
     assert.deepEqual(
       body.questions.map((question: any) => question.name),
       ['auto', 'know'],
+    );
+    assert.equal(
+      body.questions[0].instructions,
+      'Could executing this command realistically cause significant damage, data loss, security compromise or serious service disruption?\nConsider its actual effects rather than its syntax or use of elevated privileges.',
+    );
+    assert.equal(
+      body.questions[1].instructions,
+      'Are the actual effects of this command and all its arguments sufficiently understood to assess its risks reliably?',
     );
     const input = JSON.parse(body.input);
     assert.equal(input.command, 'pwd');
@@ -81,18 +89,30 @@ try {
     true,
     'thresholds are inclusive',
   );
-  scores = [0.99, 0.79];
+  scores = [0.01, 0.79];
   assert.equal(
     (await assessServerCommand(81, firstId, 'pwd'))?.approved,
     false,
     'both predicates must pass',
   );
-  scores = [0.84, 0.99];
+  scores = [0.16, 0.99];
   assert.equal((await assessServerCommand(81, firstId, 'pwd'))?.approved, false);
+  scores = [1, 1];
+  assert.equal(
+    (await assessServerCommand(81, firstId, 'pwd'))?.approved,
+    false,
+    'certain harm must never pass',
+  );
+  scores = [0, 1];
+  assert.equal(
+    (await assessServerCommand(81, firstId, 'pwd'))?.approved,
+    true,
+    'low risk and high understanding pass',
+  );
   save({ enabled: true, strictness: 'strict' });
-  scores = [0.94, 0.99];
+  scores = [0.06, 0.99];
   assert.equal((await assessServerCommand(81, firstId, 'pwd'))?.approved, false);
-  scores = [0.99, 0.99];
+  scores = [0.01, 0.99];
   duringRequest = () => save({ enabled: false, strictness: 'normal' });
   assert.equal(
     (await assessServerCommand(81, firstId, 'pwd'))?.approved,
@@ -129,7 +149,7 @@ try {
     return new Response(
       JSON.stringify({
         answers: [
-          { name: 'auto', type: 'predicate', probability: 0.96 },
+          { name: 'auto', type: 'predicate', probability: 0.04 },
           { name: 'know', type: 'predicate', probability: 0.91 },
         ],
       }),
@@ -143,9 +163,9 @@ try {
   });
   assert.equal(action.status, 'ready');
   assert.equal(action.approved, true, 'generic actions do not require server settings');
-  assert.equal(action.auto, 0.96);
+  assert.equal(action.auto, 0.04);
   assert.equal(action.know, 0.91);
-  assert.deepEqual(action.thresholds, { auto: 0.95, know: 0.9 });
+  assert.deepEqual(action.thresholds, { auto: 0.05, know: 0.9 });
   globalThis.fetch = (async () => {
     throw new Error('offline');
   }) as typeof fetch;
@@ -178,7 +198,7 @@ try {
     new Response(
       JSON.stringify({
         answers: [
-          { name: 'auto', type: 'predicate', probability: 0.99 },
+          { name: 'auto', type: 'predicate', probability: 0.01 },
           { name: 'know', type: 'predicate', probability: 0.99 },
         ],
       }),
@@ -200,7 +220,7 @@ try {
   assert.equal(
     JSON.parse(await run('pwd')).status,
     'rejected',
-    'low scores use the existing confirmation path',
+    'excessive risk uses the existing confirmation path',
   );
   db.prepare(
     'UPDATE users SET is_admin = 0, weekly_tokens_quota = 0, weekly_tokens_used = 1 WHERE id = 81',
