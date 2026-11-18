@@ -14,6 +14,6 @@ export function ReasoningDisclosure({content,streaming,open,onToggle,tokens,onIm
    <span>{streaming?t('reasoningDisclosure.thinking'):t('chat.message.reasoningLabel')}</span>
    {!streaming&&typeof tokens==='number'&&tokens>0&&<span className={s.tokens}>· {tokens} tk</span>}
   </button>
-  <AnimatedCollapse open={open}><div className={s.content}><MarkdownRenderer content={content} onImageClick={onImageClick}/></div></AnimatedCollapse>
+  <AnimatedCollapse open={open}><div className={s.content}><MarkdownRenderer content={content} onImageClick={onImageClick} deferOffscreen={!streaming}/></div></AnimatedCollapse>
  </div>;
 }

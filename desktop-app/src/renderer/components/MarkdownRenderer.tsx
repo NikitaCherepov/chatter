@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useMemo } from 'react';
-import ReactMarkdown, { type ExtraProps } from 'react-markdown';
+import React, { createContext, useContext, useMemo, useRef } from 'react';
+import ReactMarkdown, { type Components, type ExtraProps } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import { remarkMessageAccents } from '../lib/remark-message-accents';
@@ -16,6 +16,7 @@ import { ImageClickContext, MarkdownImage } from './MessageImage';
 import { QuestionnaireContext, type QuestionnaireContextValue } from './Questionnaire';
 import { resolveImageUrl } from '../lib/api';
 import { formatMessageFilePath, parseMessageLink, remarkLocalFileLinks, transformMessageLink, type MessageLink } from '../lib/message-links';
+import { useDeferredMarkdown } from '../lib/useDeferredMarkdown';
 import s from './MarkdownRenderer.module.scss';
 
 const MessageLinkContext = createContext<((link: MessageLink) => void) | undefined>(undefined);
@@ -30,6 +31,7 @@ type MarkdownRendererProps = {
   /** Open images in the host's existing viewer instead of an external browser. */
   onImageClick?: (src: string) => void;
   onMessageLink?: (link: MessageLink) => void;
+  deferOffscreen?: boolean;
 };
 
 function MessageLinkButton({ link, onOpen, children }: {
@@ -85,91 +87,99 @@ function MarkdownParagraph({ children }: React.ComponentProps<'p'>) {
   return <p className={s.paragraph}>{children}</p>;
 }
 
-export function MarkdownRenderer({ content, className, highlightQuery = '', onImageClick, questionnaire, onMessageLink }: MarkdownRendererProps) {
+export function MarkdownRenderer({ content, className, highlightQuery = '', onImageClick, questionnaire, onMessageLink, deferOffscreen = false }: MarkdownRendererProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  useDeferredMarkdown(containerRef, deferOffscreen && content.length >= 8_000, content);
+  const components = useMemo<Components>(() => ({
+    img: MarkdownImage,
+    // --- Code blocks ---
+    code: MarkdownCode,
+
+    // --- Pre tag: render children directly (code block wrapper is handled above) ---
+    pre({ children }) {
+      return <>{children}</>;
+    },
+
+    // --- Links ---
+    a: MarkdownLink,
+
+    // --- Tables ---
+    table({ children }) {
+      return (
+        <div className={s.tableWrapper}>
+          <table>{children}</table>
+        </div>
+      );
+    },
+
+    // --- Paragraphs ---
+    p: MarkdownParagraph,
+
+    // --- Lists ---
+    ul({ children }) {
+      return <ul className={s.ul}>{children}</ul>;
+    },
+    ol({ children }) {
+      return <ol className={s.ol}>{children}</ol>;
+    },
+    li({ children }) {
+      return <li className={s.li}>{children}</li>;
+    },
+
+    // --- Blockquote ---
+    blockquote({ children }) {
+      return <blockquote className={s.blockquote}>{children}</blockquote>;
+    },
+
+    // --- Headings ---
+    h1({ children }) {
+      return <h1 className={s.h1}>{children}</h1>;
+    },
+    h2({ children }) {
+      return <h2 className={s.h2}>{children}</h2>;
+    },
+    h3({ children }) {
+      return <h3 className={s.h3}>{children}</h3>;
+    },
+    h4({ children }) {
+      return <h4 className={s.h4}>{children}</h4>;
+    },
+
+    // --- Horizontal rule ---
+    hr() {
+      return <hr className={s.hr} />;
+    },
+
+    // --- Strong / Em ---
+    strong({ children }) {
+      return <strong className={s.strong}>{children}</strong>;
+    },
+    em({ children }) {
+      return <em className={s.em}>{children}</em>;
+    },
+    mark({ children }) {
+      return <mark className={s.searchHighlight}>{children}</mark>;
+    },
+  }), []);
+  // Context providers may update buttons/forms without reparsing the Markdown.
+  const markdown = useMemo(() => (
+      <ReactMarkdown
+        urlTransform={transformMessageLink}
+        remarkPlugins={[remarkGfm, remarkMessageLayouts, remarkMessageAccents, remarkLocalFileLinks, remarkMessageImages, remarkInteractiveCode]}
+        rehypePlugins={[[rehypeHighlight, { ignoreMissing: true }], [rehypeSearchHighlights, { query: highlightQuery }]]}
+        components={components}
+      >
+        {prepareMessageAccents(content)}
+      </ReactMarkdown>
+  ), [content, highlightQuery, components]);
+
   return (
     <MarkdownSearchContext.Provider value={highlightQuery}>
     <QuestionnaireContext.Provider value={questionnaire}>
     <ImageClickContext.Provider value={onImageClick}>
     <MessageLinkContext.Provider value={onMessageLink}>
-    <div className={className ? `${s.md} ${className}` : s.md}>
-      <ReactMarkdown
-        urlTransform={transformMessageLink}
-        remarkPlugins={[remarkGfm, remarkMessageLayouts, remarkMessageAccents, remarkLocalFileLinks, remarkMessageImages, remarkInteractiveCode]}
-        rehypePlugins={[[rehypeHighlight, { ignoreMissing: true }], [rehypeSearchHighlights, { query: highlightQuery }]]}
-        components={useMemo(() => ({
-          img: MarkdownImage,
-          // --- Code blocks ---
-          code: MarkdownCode,
-
-          // --- Pre tag: render children directly (code block wrapper is handled above) ---
-          pre({ children }) {
-            return <>{children}</>;
-          },
-
-          // --- Links ---
-          a: MarkdownLink,
-
-          // --- Tables ---
-          table({ children }) {
-            return (
-              <div className={s.tableWrapper}>
-                <table>{children}</table>
-              </div>
-            );
-          },
-
-          // --- Paragraphs ---
-          p: MarkdownParagraph,
-
-          // --- Lists ---
-          ul({ children }) {
-            return <ul className={s.ul}>{children}</ul>;
-          },
-          ol({ children }) {
-            return <ol className={s.ol}>{children}</ol>;
-          },
-          li({ children }) {
-            return <li className={s.li}>{children}</li>;
-          },
-
-          // --- Blockquote ---
-          blockquote({ children }) {
-            return <blockquote className={s.blockquote}>{children}</blockquote>;
-          },
-
-          // --- Headings ---
-          h1({ children }) {
-            return <h1 className={s.h1}>{children}</h1>;
-          },
-          h2({ children }) {
-            return <h2 className={s.h2}>{children}</h2>;
-          },
-          h3({ children }) {
-            return <h3 className={s.h3}>{children}</h3>;
-          },
-          h4({ children }) {
-            return <h4 className={s.h4}>{children}</h4>;
-          },
-
-          // --- Horizontal rule ---
-          hr() {
-            return <hr className={s.hr} />;
-          },
-
-          // --- Strong / Em ---
-          strong({ children }) {
-            return <strong className={s.strong}>{children}</strong>;
-          },
-          em({ children }) {
-            return <em className={s.em}>{children}</em>;
-          },
-          mark({ children }) {
-            return <mark className={s.searchHighlight}>{children}</mark>;
-          },
-        }), [])}
-      >
-        {prepareMessageAccents(content)}
-      </ReactMarkdown>
+    <div ref={containerRef} className={className ? `${s.md} ${className}` : s.md}>
+      {markdown}
     </div>
     </MessageLinkContext.Provider>
     </ImageClickContext.Provider>

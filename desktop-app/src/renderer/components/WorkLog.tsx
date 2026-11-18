@@ -43,7 +43,7 @@ export function WorkLog({ messages, entries, calls, subagents, showTokens, curre
       </>}>
       <div className={s.entries}>{rows.map(({ step, trace, agentName, task }, index) => <div className={s.entry} key={index}>
         {step.type === 'tool' && (trace || task !== undefined && (step.call.running || step.call.agent_tools?.length)) ? <AgentWork trace={trace} agentName={agentName} showTokens={showTokens} call={step.call} task={task} /> : step.type === 'tool' ? <ToolActivityCall call={step.call} />
-          : step.type === 'message' ? <MarkdownRenderer content={step.text} onImageClick={onImageClick} />
+          : step.type === 'message' ? <MarkdownRenderer content={step.text} onImageClick={onImageClick} deferOffscreen />
           : <div className={s.status}>{generating && current === step.text && index === steps.length - 1 && <span className={s.spinner} />}<span>{step.text}</span></div>}
       </div>)}{[...unmatched].map((trace, index) => <AgentWork key={index} trace={trace} showTokens={showTokens} />)}{generating && draft && <div className={s.entry}><MarkdownRenderer content={draft} onImageClick={onImageClick} /></div>}
       {generating && current && !steps.some(step=>step.type==='tool'&&step.call.running) && steps.at(-1)?.type !== 'activity' && <div className={s.status} role="status"><span className={s.spinner}/>{current}</div>}</div>

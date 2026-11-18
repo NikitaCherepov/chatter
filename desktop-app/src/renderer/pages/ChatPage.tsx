@@ -1098,7 +1098,7 @@ const MessageItem = React.memo(function MessageItem({
                     <span className={s.dot} />
                   </div>
                 ) : (
-                  <div className={`${s.bubbleText} ${isStreamingContent ? s.bubbleTextStreaming : ''}`}><MarkdownRenderer content={isGenerating ? '' : workContent.answer} highlightQuery={searchHighlightQuery} onImageClick={onSetViewerImageSrc} questionnaire={questionnaire} onMessageLink={onMessageLink} /></div>
+                  <div className={`${s.bubbleText} ${isStreamingContent ? s.bubbleTextStreaming : ''}`}><MarkdownRenderer content={isGenerating ? '' : workContent.answer} highlightQuery={searchHighlightQuery} onImageClick={onSetViewerImageSrc} questionnaire={questionnaire} onMessageLink={onMessageLink} deferOffscreen={!isGenerating} /></div>
                 )
               )
               : msg.questionnaire_response ? <QuestionnaireResult response={msg.questionnaire_response} onImageClick={onSetViewerImageSrc} />
@@ -1648,6 +1648,14 @@ export function ChatPage() {
   }, []);
   const [imageDeleteTarget, setImageDeleteTarget] = useState<{ messageId: number; url: string } | null>(null);
   const [deletingImage, setDeletingImage] = useState(false);
+  const openMessageImage = useCallback((src: string, messageId?: number, url?: string) => {
+    setViewerImageSrc(src);
+    setViewerImageMsgId(messageId ?? null);
+    setViewerImageUrl(url ?? null);
+  }, []);
+  const requestImageDelete = useCallback((messageId: number, url: string) => {
+    setImageDeleteTarget({ messageId, url });
+  }, []);
   const [ttsPlayingId, setTtsPlayingId] = useState<number | null>(null);
   const [pendingMacros, setPendingMacros] = useState<Array<{ title: string; description?: string; commands: string[] }>>([]);
   const [pendingChatLinks, setPendingChatLinks] = useState<Array<{ chat_id: number; title: string }>>([]);
@@ -3925,11 +3933,11 @@ export function ChatPage() {
     setEditingText(msg.content);
   };
 
-  const handleSaveEdit = async (messageId: number) => {
+  const handleSaveEdit = useCallback(async (messageId: number) => {
     if (!activeChatId || !editingMsgId) return;
     const trimmed = editingText.trim();
     if (!trimmed) return;
-    const msg = messages.find(m => m.id === messageId);
+    const msg = messagesRef.current.find(m => m.id === messageId);
     if (!msg) return;
     const oldContent = msg.content;
     setMessages(prev => prev.map(m => m.id === messageId ? { ...m, content: trimmed } : m));
@@ -3944,12 +3952,12 @@ export function ChatPage() {
       console.error('Failed to edit message:', err);
       setMessages(prev => prev.map(m => m.id === messageId ? { ...m, content: oldContent } : m));
     }
-  };
+  }, [activeChatId, editingMsgId, editingText]);
 
-  const handleCancelEdit = () => {
+  const handleCancelEdit = useCallback(() => {
     setEditingMsgId(null);
     setEditingText('');
-  };
+  }, []);
 
   const [forking, setForking] = useState(false);
 
@@ -4152,15 +4160,15 @@ export function ChatPage() {
     }
   }, [activeChatId, sending, ttsPlayingId, refreshContextTokens, t, messageCache, loadMessages]);
 
-  const handleCopyMessage = (messageId: number) => {
-    const msg = messages.find(m => m.id === messageId);
+  const handleCopyMessage = useCallback((messageId: number) => {
+    const msg = messagesRef.current.find(m => m.id === messageId);
     if (!msg) return;
     navigator.clipboard.writeText(msg.content).then(
       () => toast.success(t('chat.toasts.copied')),
       () => toast.error(t('chat.toasts.copyFailed')),
     );
     closeMsgMenu();
-  };
+  }, [closeMsgMenu, t]);
 
   const handleDownloadDocx = async (messageId: number) => {
     const msg = messages.find(m => m.id === messageId);
@@ -7027,18 +7035,14 @@ export function ChatPage() {
                         : ''
                   }
                   streamingState={msg.id === streamingMsgId ? streamingState : 'idle'}
-                  editingText={editingText}
+                  editingText={editingMsgId === msg.id ? editingText : ''}
                   sending={sending}
-                  regenHintText={regenHintText}
+                  regenHintText={regenHintMsgId === msg.id ? regenHintText : ''}
                   showTokens={showTokens}
                   resolveImageUrl={resolveImageUrl}
                   onSetMessages={setMessages}
                   onMessageLink={openMessageLink}
-                  onSetViewerImageSrc={(src, msgId, url) => {
-                    setViewerImageSrc(src);
-                    setViewerImageMsgId(msgId ?? null);
-                    setViewerImageUrl(url ?? null);
-                  }}
+                  onSetViewerImageSrc={openMessageImage}
                   onOpenAttachment={setViewerAttachment}
                   onDownloadImage={handleDownloadImage}
                   onToggleReasoning={handleToggleReasoning}
@@ -7056,7 +7060,7 @@ export function ChatPage() {
                   onSaveEdit={handleSaveEdit}
                   onCancelEdit={handleCancelEdit}
                   onDeleteAttachment={handleDeleteAttachment}
-                  onDeleteImage={(messageId, url) => setImageDeleteTarget({ messageId, url })}
+                  onDeleteImage={requestImageDelete}
                 />
                 </React.Fragment>
               ))}
