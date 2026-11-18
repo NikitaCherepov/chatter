@@ -1455,7 +1455,8 @@
       "failed": "Could not process the download"
     },
     "runbook": {
-      "title": "Runbook suggestion"
+      "title": "Runbook suggestion",
+      "expand": "Expand instructions"
     },
     "credentials": {
       "title": "Change credentials",

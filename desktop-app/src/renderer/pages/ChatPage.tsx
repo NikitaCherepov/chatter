@@ -1,4 +1,5 @@
 import { RUNBOOK_COMMAND_TOOLS_ENABLED } from '../lib/runbook-ui';
+import { Icon } from '../components/Icon';
 import React, { useEffect, useLayoutEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { ChatMessageCache } from '../lib/chat-message-cache';
@@ -1651,7 +1652,7 @@ export function ChatPage() {
   const [pendingMacros, setPendingMacros] = useState<Array<{ title: string; description?: string; commands: string[] }>>([]);
   const [pendingChatLinks, setPendingChatLinks] = useState<Array<{ chat_id: number; title: string }>>([]);
   const [devopsConfirmations, setDevopsConfirmations] = useState<Array<{ confirmation_id: string; server_name: string; server_id: number; host: string; command: string; assessment?: CommandAssessmentData | null; needs_sudo_password?: boolean; sudo_password?: string; save_sudo_password?: boolean; needs_new_password?: boolean; new_password?: string; new_username?: string; _reviewing?: boolean; _verdict?: string }>>([]);
-  const [pendingRunbooks, setPendingRunbooks] = useState<Array<{ title: string; content: string; commands: string[]; _reviewing?: boolean; _verdict?: string }>>([]);
+  const [pendingRunbooks, setPendingRunbooks] = useState<Array<{ id: string; title: string; content: string; commands: string[]; _reviewing?: boolean; _verdict?: string }>>([]);
   const [pendingCredsUpdates, setPendingCredsUpdates] = useState<Array<{ confirmation_id?: string; server_id: number; server_name: string; current_username: string; new_username: string; reason: string; use_ssh_key: boolean; remove_password: boolean }>>([]);
   const [mcpConfirmations,setMcpConfirmations]=useState<McpConfirmation[]>([]);
   const [pcCommandConfirmations, setPcCommandConfirmations] = useState<Array<{ confirmation_id: string; command: string; _reviewing?: boolean; _verdict?: string }>>([]);
@@ -2530,7 +2531,9 @@ export function ChatPage() {
     if (action.action === 'suggest_devops_runbook' && action.value) {
       const val = action.value as { title?: string; content?: string; commands?: string[] };
       if (val.title && val.content) {
-        setPendingRunbooks(prev => [...prev, { title: val.title!, content: val.content!, commands: val.commands || [] }]);
+        const id = 'runbook-' + crypto.randomUUID();
+        confirmationArrivalRef.current.set(id, confirmationArrivalRef.current.size);
+        setPendingRunbooks(prev => [...prev, { id, title: val.title!, content: val.content!, commands: val.commands || [] }]);
       }
     }
     if (action.action === 'suggest_server_creds_update' && action.value) {
@@ -5278,6 +5281,85 @@ export function ChatPage() {
   };
 
   const confirmationCards = [
+    ...pendingRunbooks.map(rb => (
+      <ConfirmationCard
+        key={rb.id}
+        id={rb.id}
+        title={t('chat.runbook.title')}
+        summary={rb.title}
+        icon={<Icon name="book" size={16} />}
+        expandable
+        expandLabel={t('chat.runbook.expand')}
+        actions={<>
+          <button
+            type="button"
+            className={s.suggestMacroSaveBtn}
+            onClick={async () => {
+              try {
+                await api.apiFetch('/api/v1/devops/runbooks', {
+                  method: 'POST',
+                  body: JSON.stringify({
+                    title: rb.title,
+                    content: rb.content,
+                    commands: rb.commands,
+                  }),
+                });
+                toast.success(t('chat.toasts.runbookSaved'));
+                setPendingRunbooks(prev => prev.filter(item => item.id !== rb.id));
+              } catch {
+                toast.error(t('chat.toasts.runbookSaveFailed'));
+              }
+            }}
+          >
+            {t('common.save')}
+          </button>
+          <button
+            type="button"
+            className={s.suggestMacroDismissBtn}
+            onClick={() => setPendingRunbooks(prev => prev.filter(item => item.id !== rb.id))}
+          >
+            {t('common.reject')}
+          </button>
+        </>}
+        reviewAction={RUNBOOK_COMMAND_TOOLS_ENABLED && rb.commands.length > 0 && (
+          <button
+            type="button"
+            className={s.suggestMacroSaveBtn}
+            disabled={rb._reviewing}
+            style={{ background: 'var(--bg-modal-hover)', color: 'var(--text-primary)', border: '1px solid var(--border-input)' }}
+            onClick={async () => {
+              setPendingRunbooks(prev => prev.map(item => item.id === rb.id ? { ...item, _reviewing: true } : item));
+              try {
+                const res = await api.apiFetch<{ verdict: string }>('/api/v1/devops/runbooks/review-commands', {
+                  method: 'POST',
+                  body: JSON.stringify({ commands: rb.commands }),
+                });
+                setPendingRunbooks(prev => prev.map(item => item.id === rb.id
+                  ? { ...item, _reviewing: false, _verdict: res.verdict } : item));
+              } catch (err) {
+                toast.error(api.getApiErrorMessage(err, t('chat.toasts.commandsReviewFailed')));
+                setPendingRunbooks(prev => prev.map(item => item.id === rb.id ? { ...item, _reviewing: false } : item));
+              }
+            }}
+          >
+            {rb._reviewing ? t('chat.confirm.reviewing') : t('chat.confirm.review')}
+          </button>
+        )}
+      >
+        <div className={s.suggestMacroName}>{rb.title}</div>
+        <div className={s.suggestRunbookContent}><MarkdownRenderer content={rb.content} /></div>
+        {RUNBOOK_COMMAND_TOOLS_ENABLED && rb.commands.length > 0 && (
+          <div className={s.suggestMacroCommands}>
+            {rb.commands.map((command, index) => <code key={index} className={s.suggestMacroCmd}>{command}</code>)}
+          </div>
+        )}
+        {RUNBOOK_COMMAND_TOOLS_ENABLED && rb._verdict && (
+          <div style={{ color: 'var(--text-muted)', padding: '8px', background: 'var(--bg-modal-hover)', borderRadius: '6px', marginTop: '6px' }}>
+            <MarkdownRenderer content={rb._verdict} />
+          </div>
+        )}
+      </ConfirmationCard>
+    )),
     ...mcpConfirmations.map(conf=><McpConfirmationCard
       key={conf.confirmation_id} id={conf.confirmation_id} title={t(
         conf.operation==='install'
@@ -7392,87 +7474,7 @@ export function ChatPage() {
 
 
 
-              {/* Suggest DevOps Runbook cards */}
-              {pendingRunbooks.map((rb, rbIdx) => (
-                <div key={rbIdx} className={s.suggestMacroCard}>
-                  <div className={s.suggestMacroHeader}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
-                      <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
-                    </svg>
-                    <span className={s.suggestMacroTitle}>{t('chat.runbook.title')}</span>
-                    <button
-                      className={s.suggestMacroClose}
-                      onClick={() => setPendingRunbooks(prev => prev.filter((_, i) => i !== rbIdx))}
-                    >
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                        <line x1="18" y1="6" x2="6" y2="18" />
-                        <line x1="6" y1="6" x2="18" y2="18" />
-                      </svg>
-                    </button>
-                  </div>
-                  <div className={s.suggestMacroName}>{rb.title}</div>
-                  <div className={s.suggestRunbookContent}><MarkdownRenderer content={rb.content} /></div>
-                  {RUNBOOK_COMMAND_TOOLS_ENABLED && rb.commands.length > 0 && (
-                    <div className={s.suggestMacroCommands}>
-                      {rb.commands.map((cmd: string, i: number) => (
-                        <code key={i} className={s.suggestMacroCmd}>{cmd}</code>
-                      ))}
-                    </div>
-                  )}
-                  {RUNBOOK_COMMAND_TOOLS_ENABLED && rb._verdict && (
-                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', padding: '8px', background: 'var(--bg-modal-hover)', borderRadius: '6px', marginTop: '6px' }}><MarkdownRenderer content={rb._verdict} /></div>
-                  )}
-                  <div className={s.suggestMacroActions}>
-                    <button
-                      className={s.suggestMacroSaveBtn}
-                      onClick={async () => {
-                        try {
-                          await api.apiFetch('/api/v1/devops/runbooks', {
-                            method: 'POST',
-                            body: JSON.stringify({
-                              title: rb.title,
-                              content: rb.content,
-                              commands: rb.commands,
-                            }),
-                          });
-                          toast.success(t('chat.toasts.runbookSaved'));
-                          setPendingRunbooks(prev => prev.filter((_, i) => i !== rbIdx));
-                        } catch {
-                          toast.error(t('chat.toasts.runbookSaveFailed'));
-                        }
-                      }}
-                    >
-                      {t('common.save')}
-                    </button>
-                    {RUNBOOK_COMMAND_TOOLS_ENABLED && <button
-                      className={s.suggestMacroSaveBtn}
-                      style={{ background: 'var(--bg-modal-hover)', color: 'var(--text-primary)', border: '1px solid var(--border-input)', opacity: rb._reviewing ? 0.6 : 1 }}
-                      onClick={async () => {
-                        setPendingRunbooks(prev => prev.map((r, i) => i === rbIdx ? { ...r, _reviewing: true } : r));
-                        try {
-                          const res = await api.apiFetch<{ verdict: string }>('/api/v1/devops/runbooks/review-commands', {
-                            method: 'POST',
-                            body: JSON.stringify({ commands: rb.commands }),
-                          });
-                          setPendingRunbooks(prev => prev.map((r, i) => i === rbIdx ? { ...r, _reviewing: false, _verdict: res.verdict } : r));
-                        } catch (err) {
-                          toast.error(api.getApiErrorMessage(err, t('chat.toasts.commandsReviewFailed')));
-                          setPendingRunbooks(prev => prev.map((r, i) => i === rbIdx ? { ...r, _reviewing: false } : r));
-                        }
-                      }}
-                    >
-                      {rb._reviewing ? t('chat.confirm.reviewing') : t('chat.confirm.review')}
-                    </button>}
-                    <button
-                      className={s.suggestMacroDismissBtn}
-                      onClick={() => setPendingRunbooks(prev => prev.filter((_, i) => i !== rbIdx))}
-                    >
-                      {t('common.reject')}
-                    </button>
-                  </div>
-                </div>
-              ))}
+
 
 
 
