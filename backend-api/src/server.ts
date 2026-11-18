@@ -162,6 +162,7 @@ import { addChatAgent, canReadChatMessages, createChatRoom, createChatRoomInvite
 import { runChatSteps, hasActiveChatRun, getChatRunStatus } from './services/chat-runner.js';
 import { questionnaireAnswerText } from './services/message-questionnaires.js';
 import { registerIntuitionRoutes } from './services/intuition-routes.js';
+import { registerAutoConfirmationRoutes } from './services/auto-confirmation-routes.js';
 import { decisionPublicSettings, setDecisionSettings, decisionKeyUsage, replaceDecisionKey } from './services/decision-settings.js';
 import { runDecision } from './services/decision-runner.js';
 import { registerPlayerInstructionRoutes } from './services/player-instructions-routes.js';
@@ -1567,6 +1568,7 @@ app.get('/api/v1/memory/personas', (req: AuthedRequest, res: any) => {
 });
 registerPlayerInstructionRoutes(app, req => accountIdFromRequest(req));
 registerIntuitionRoutes(app, req => accountIdFromRequest(req));
+registerAutoConfirmationRoutes(app, req => accountIdFromRequest(req));
 app.get('/internal/admin/decision/settings', internalAuth, (_req, res) => res.json(decisionPublicSettings()));
 app.put('/internal/admin/decision/settings', internalAuth, (req, res) => {
   try { res.json(setDecisionSettings(req.body)); }

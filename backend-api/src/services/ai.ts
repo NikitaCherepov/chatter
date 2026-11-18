@@ -5126,10 +5126,16 @@ If the task is a description, return a detailed text response.`
     if (!server) return JSON.stringify({ status: 'error', message: `Server with id=${serverId} not found. Call list_devops_servers for the list of available servers.` });
 
     // Check if command is auto-approved: by policy or by server-level auto_approve_all flag
-    const autoOk = server.auto_approve_all || isAutoApproved(user.id, serverId, command);
+    let autoOk = server.auto_approve_all || isAutoApproved(user.id, serverId, command);
 
     // Check if command needs sudo but server has no stored sudo password
     const needsSudoPasswordPrompt = server.username !== 'root' && /\bsudo\b/.test(command) && !serverHasSudoPassword(user.id, serverId);
+
+    const { assessServerCommand } = await import('./auto-confirmation.js');
+    const assessment = !autoOk && !needsSudoPasswordPrompt
+      ? await assessServerCommand(user.id, serverId, command, signal) : null;
+    throwIfAborted(signal);
+    autoOk ||= assessment?.approved === true;
 
     if (autoOk && !needsSudoPasswordPrompt) {
       // Execute immediately — no confirmation needed
@@ -5140,6 +5146,7 @@ If the task is a description, return a detailed text response.`
           status: result.exitCode === 0 ? 'success' : 'error',
           server: server.name,
           command,
+          ...(assessment ? { auto_confirmation: assessment } : {}),
           stdout: result.stdout.slice(-3000),
           stderr: result.stderr.slice(-1000),
           exit_code: result.exitCode,
@@ -5161,7 +5168,7 @@ If the task is a description, return a detailed text response.`
       type: 'desktop_action',
       action: 'devops_confirmation',
       target: String(serverId),
-      value: { confirmation_id: confirmationId, server_name: server.name, server_id: serverId, host: server.host, command, needs_sudo_password: needsSudoPasswordPrompt }
+      value: { confirmation_id: confirmationId, server_name: server.name, server_id: serverId, host: server.host, command, needs_sudo_password: needsSudoPasswordPrompt, assessment }
     };
 
     let devopsSent = false;

@@ -15,6 +15,7 @@ const ICONS: Record<SettingsSection, string> = {
   account: 'M20 21v-2a7 7 0 0 0-14 0v2 M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8',
   personas: 'M16 21v-2a5 5 0 0 0-10 0v2 M11 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8 M19 8a3 3 0 0 1 0 6 M22 21v-2a5 5 0 0 0-3-4.6',
   intuition: 'M3 12h4l3-8 4 16 3-8h4',
+  autoConfirmation: 'm9 12 2 2 4-4 M12 3 4 6v6c0 5 8 9 8 9s8-4 8-9V6l-8-3',
   memory: 'M5 3h14v18l-7-4-7 4z',
   connections: 'M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-2 2 M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l2-2',
   agents: 'M8 8h8v8H8z M12 3v5 M3 12h5 M16 12h5 M12 16v5 M10 3h4 M3 10v4 M21 10v4 M10 21h4',

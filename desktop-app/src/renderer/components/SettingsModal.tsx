@@ -60,6 +60,7 @@ import { ModelGenerationSettings } from './ModelGenerationSettings';
 import agentsStyles from './AgentsSettings.module.scss';
 import { AboutSettings } from './AboutSettings/AboutSettings';
 import { IntuitionSettings } from './IntuitionSettings';
+import { AutoConfirmationSettings } from './AutoConfirmationSettings';
 import { GlobalMemorySettings } from './GlobalMemorySettings';
 import { ChatGptSettings } from './ChatGptSettings';
 import { PromptImageCropDialog } from './PromptImageCropDialog';
@@ -1842,6 +1843,7 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
 
           {section === 'memory' && <GlobalMemorySettings />}
           {section === 'intuition' && <IntuitionSettings />}
+          {section === 'autoConfirmation' && <AutoConfirmationSettings />}
 
           {section === 'connections' && (
             <div className={s.panel}>

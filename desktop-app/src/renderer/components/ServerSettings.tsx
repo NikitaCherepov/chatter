@@ -7,6 +7,7 @@ import { normalizeSettingsSearch } from '../lib/settings-navigation';
 import { Icon } from './Icon';
 import { Select } from './Select';
 import { ConfirmDialog } from './ConfirmDialog';
+import { AutoConfirmationSettings } from './AutoConfirmationSettings';
 import shared from './SettingsModal.module.scss';
 import catalog from './MacroSettings.module.scss';
 import rows from './RestrictionsSettings.module.scss';
@@ -191,6 +192,7 @@ export function ServerSettings() {
             <div><dt>{copy('sudo')}</dt><dd>{copy(selected.has_sudo_password ? 'configured' : 'notConfigured')}</dd></div>
           </dl>}
           <h4 className={s.sectionTitle}>{copy('permissions')}</h4>
+          {view === 'read' && selected && <AutoConfirmationSettings key={selected.id} serverId={selected.id} />}
           {editing ? switchRow('autoApprove', 'terminal', t('advanced.server.autoApprove'), t('advanced.server.dangerousBlocked')) : selected && <p className={s.permission}><Icon name="shield" size={17} />{copy(selected.auto_approve_all ? 'automatic' : 'ask')}</p>}
           {view !== 'new' && selected && <>
           <h4 className={s.sectionTitle}>{t('advanced.pc.layout.exceptions')}</h4>

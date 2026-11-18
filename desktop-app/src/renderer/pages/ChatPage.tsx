@@ -28,6 +28,8 @@ import { promoteChatInFolder } from '../lib/chat-list-order';
 import { groupChatsByActivity, activityDay, moveActivityCount, activityGroupCounts } from '../lib/chat-date-groups';
 import { generateDocxBlob, generateChatDocxBlob } from '../lib/markdownToDocx';
 import { IntuitionDisclosure } from '../components/IntuitionDisclosure';
+import { CommandAssessment } from '../components/CommandAssessment';
+import type { CommandAssessment as CommandAssessmentData } from '../lib/auto-confirmation-service';
 import { MarkdownRenderer } from '../components/MarkdownRenderer';
 import type { MessageLink } from '../lib/message-links';
 import { QuestionnaireResult, type QuestionnaireContextValue } from '../components/Questionnaire';
@@ -1648,7 +1650,7 @@ export function ChatPage() {
   const [ttsPlayingId, setTtsPlayingId] = useState<number | null>(null);
   const [pendingMacros, setPendingMacros] = useState<Array<{ title: string; description?: string; commands: string[] }>>([]);
   const [pendingChatLinks, setPendingChatLinks] = useState<Array<{ chat_id: number; title: string }>>([]);
-  const [devopsConfirmations, setDevopsConfirmations] = useState<Array<{ confirmation_id: string; server_name: string; server_id: number; host: string; command: string; needs_sudo_password?: boolean; sudo_password?: string; save_sudo_password?: boolean; needs_new_password?: boolean; new_password?: string; new_username?: string; _reviewing?: boolean; _verdict?: string }>>([]);
+  const [devopsConfirmations, setDevopsConfirmations] = useState<Array<{ confirmation_id: string; server_name: string; server_id: number; host: string; command: string; assessment?: CommandAssessmentData | null; needs_sudo_password?: boolean; sudo_password?: string; save_sudo_password?: boolean; needs_new_password?: boolean; new_password?: string; new_username?: string; _reviewing?: boolean; _verdict?: string }>>([]);
   const [pendingRunbooks, setPendingRunbooks] = useState<Array<{ title: string; content: string; commands: string[]; _reviewing?: boolean; _verdict?: string }>>([]);
   const [pendingCredsUpdates, setPendingCredsUpdates] = useState<Array<{ confirmation_id?: string; server_id: number; server_name: string; current_username: string; new_username: string; reason: string; use_ssh_key: boolean; remove_password: boolean }>>([]);
   const [mcpConfirmations,setMcpConfirmations]=useState<McpConfirmation[]>([]);
@@ -2507,7 +2509,7 @@ export function ChatPage() {
       }
     }
     if (action.action === 'devops_confirmation' && action.value) {
-      const val = action.value as { confirmation_id?: string; server_name?: string; server_id?: number; host?: string; command?: string; needs_sudo_password?: boolean; needs_new_password?: boolean; new_username?: string };
+      const val = action.value as { confirmation_id?: string; server_name?: string; server_id?: number; host?: string; command?: string; assessment?: CommandAssessmentData | null; needs_sudo_password?: boolean; needs_new_password?: boolean; new_username?: string };
       if (val.confirmation_id && val.command) {
         setDevopsConfirmations(prev => {
           if (prev.some(c => c.confirmation_id === val.confirmation_id)) return prev;
@@ -2517,6 +2519,7 @@ export function ChatPage() {
             server_id: val.server_id || 0,
             host: val.host || '',
             command: val.command!,
+            assessment: val.assessment,
             needs_sudo_password: Boolean(val.needs_sudo_password),
             needs_new_password: Boolean(val.needs_new_password),
             new_username: val.new_username,
@@ -5438,7 +5441,7 @@ export function ChatPage() {
                       {conf._reviewing ? t('chat.confirm.reviewing') : t('chat.confirm.review')}
                     </button></>}><div className={s.suggestMacroName}>{conf.server_name}</div><div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '6px' }}>{conf.host}</div><div className={s.suggestMacroCommands}>
                     <code className={s.suggestMacroCmd}>{conf.command}</code>
-                  </div>{conf.needs_new_password && (
+                  </div>{conf.assessment && <CommandAssessment assessment={conf.assessment} />}{conf.needs_new_password && (
                     <div style={{ marginTop: '8px', marginBottom: conf.needs_sudo_password ? '0' : '8px' }}>
                       <input
                         type="password"

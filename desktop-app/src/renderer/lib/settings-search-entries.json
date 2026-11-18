@@ -1,4 +1,5 @@
 [
+  { "section": "autoConfirmation", "key": "autoConfirmation.title", "relatedKeys": ["autoConfirmation.description", "autoConfirmation.strictness", "autoConfirmation.override"] },
   { "section": "intuition", "key": "intuition.title", "relatedKeys": ["intuition.description", "intuition.history"] },
   {
     "section": "account",
