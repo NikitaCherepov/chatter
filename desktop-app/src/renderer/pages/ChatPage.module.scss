@@ -1700,6 +1700,14 @@
   padding: 12px;
 }
 
+.historyStatus {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .loadOlderBtn {
   align-self: center;
   border: 1px solid var(--border-light);

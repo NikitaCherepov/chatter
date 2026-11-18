@@ -1436,11 +1436,19 @@ export function ChatPage() {
   }, []);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [loadingOlderMessages, setLoadingOlderMessages] = useState(false);
+  const [olderMessagesError, setOlderMessagesError] = useState(false);
+  const olderMessagesRequestRef = useRef<object | null>(null);
+  useLayoutEffect(() => {
+    olderMessagesRequestRef.current = null;
+    setLoadingOlderMessages(false);
+    setOlderMessagesError(false);
+    return () => { olderMessagesRequestRef.current = null; };
+  }, [activeChatId]);
   const [hasMoreMessages, setHasMoreMessages] = useState(false);
   /**
    * Бюджет символов для ленивого рендеринга ленты.
    * Базовое значение берётся из настроек (low / medium / high).
-   * Кнопка «Показать ещё» увеличивает бюджет на шаг.
+   * При прокрутке к началу бюджет увеличивается порциями.
    * Сбрасывается при смене чата.
    */
   const [charBudget, setCharBudget] = useState(() => getRenderPerfBudget());
@@ -1617,7 +1625,6 @@ export function ChatPage() {
   const [highlightedMessageId, setHighlightedMessageId] = useState<number | null>(null);
   const [highlightedMessageQuery, setHighlightedMessageQuery] = useState('');
   const [messageJumpVersion, setMessageJumpVersion] = useState(0);
-  const pendingPrependScrollRef = useRef<{ scrollHeight: number; scrollTop: number } | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const confirmationComposer = useConfirmationComposer(activeChatId);
   const confirmationArrivalRef = useRef(new Map<string, number>());
@@ -2220,30 +2227,39 @@ export function ChatPage() {
   }), [loadChats, loadMessages, loadModelConfiguration]);
 
   const loadOlderMessages = useCallback(async () => {
-    if (!activeChatId || loadingOlderMessages || !hasMoreMessages) return;
+    if (!activeChatId || loadingMessages || loadingOlderMessages || !hasMoreMessages
+      || olderMessagesRequestRef.current || messagesChatIdRef.current !== activeChatId) return;
     const chatId = activeChatId;
-    pendingPrependScrollRef.current = messagesScrollRef.current?.getMetrics() ?? null;
+    const request = {};
+    olderMessagesRequestRef.current = request;
+    const isCurrent = () => olderMessagesRequestRef.current === request && activeChatIdRef.current === chatId;
     setLoadingOlderMessages(true);
+    setOlderMessagesError(false);
     try {
       const res = await api.getMessages(chatId, MESSAGE_PAGE_SIZE, messages.length);
-      if (activeChatIdRef.current !== chatId) return;
+      if (!isCurrent()) return;
       setHasMoreMessages(res.messages.length === MESSAGE_PAGE_SIZE);
       if (res.messages.length > 0) {
-        // Increase budget by the total length of the loaded batch + step,
-        // so new messages immediately appear in the visible render.
         const loadedChars = res.messages.reduce((sum, m) => sum + (m.content?.length ?? 0), 0);
         setCharBudget(prev => prev + loadedChars + getRenderPerfStep());
-        setMessages(prev => [...res.messages, ...prev]);
-      } else {
-        pendingPrependScrollRef.current = null;
+        suppressNextMessageAutoScrollRef.current = true;
+        setMessages(prev => {
+          const existing = new Set(prev.map(message => message.id));
+          const older = res.messages.filter(message => !existing.has(message.id));
+          return older.length ? [...older, ...prev] : prev;
+        });
       }
     } catch (err) {
-      pendingPrependScrollRef.current = null;
+      if (!isCurrent()) return;
+      setOlderMessagesError(true);
       console.error('Failed to load older messages:', err);
     } finally {
-      setLoadingOlderMessages(false);
+      if (isCurrent()) {
+        olderMessagesRequestRef.current = null;
+        setLoadingOlderMessages(false);
+      }
     }
-  }, [activeChatId, loadingOlderMessages, hasMoreMessages, messages.length]);
+  }, [activeChatId, loadingMessages, loadingOlderMessages, hasMoreMessages, messages.length]);
 
   /**
    * Срез сообщений для DOM-рендера. Идём с конца (свежие) к началу (старые):
@@ -2306,37 +2322,18 @@ export function ChatPage() {
   /** How many messages are hidden (not rendered in DOM) beyond visibleMessages. */
   const hiddenMessagesCount = displayMessages.length - visibleMessages.length;
 
-  /** How many messages will actually be revealed on the next click.
-   *  Simulates increasing charBudget by one step and computes the difference. */
-  const willRevealCount = useMemo(() => {
-    if (hiddenMessagesCount === 0) return 0;
-    const step = getRenderPerfStep();
-    const nextBudget = charBudget + step;
-    let sumChars = 0;
-    let cutIndex = displayMessages.length;
-    for (let i = displayMessages.length - 1; i >= 0; i--) {
-      const len = displayMessages[i].content?.length ?? 0;
-      const withinMin = i >= displayMessages.length - MIN_VISIBLE_MESSAGES;
-      if (!withinMin && sumChars + len > nextBudget) {
-        cutIndex = i + 1;
-        break;
-      }
-      sumChars += len;
-      cutIndex = i;
-    }
-    const nextVisible = displayMessages.length - cutIndex;
-    return Math.max(0, nextVisible - visibleMessages.length);
-  }, [displayMessages, charBudget, hiddenMessagesCount, visibleMessages.length]);
-
-  /** Reveal another batch of hidden messages.
-   *  If all in-memory messages are already visible — fall back to server fetch. */
+  /** Reveal cached history before requesting another server page. */
   const showMoreHidden = useCallback(() => {
     if (hiddenMessagesCount > 0) {
-      setCharBudget(prev => prev + getRenderPerfStep());
+      // Always reveal at least one message, even when it exceeds an entire budget step.
+      const nextMessageIndex = hiddenMessagesCount - 1;
+      const charsThroughNext = displayMessages.slice(nextMessageIndex)
+        .reduce((sum, message) => sum + (message.content?.length ?? 0), 0);
+      setCharBudget(prev => Math.max(prev + getRenderPerfStep(), charsThroughNext));
     } else {
       void loadOlderMessages();
     }
-  }, [hiddenMessagesCount, loadOlderMessages]);
+  }, [displayMessages, hiddenMessagesCount, loadOlderMessages]);
 
   const selectChat = async (chatId: number) => {
     chatSelectionVersionRef.current++;
@@ -4208,20 +4205,8 @@ export function ChatPage() {
   };
 
   const prevMsgCountRef = useRef(0);
-  useLayoutEffect(() => {
-    const pending = pendingPrependScrollRef.current;
-    const scroller = messagesScrollRef.current;
-    if (!pending || !scroller) return;
-    const currentMetrics = scroller.getMetrics();
-    if (!currentMetrics) return;
-    const nextScrollTop = currentMetrics.scrollHeight - pending.scrollHeight + pending.scrollTop;
-    scroller.scrollTo(nextScrollTop, { immediate: true });
-    pendingPrependScrollRef.current = null;
-    prevMsgCountRef.current = messages.length;
-  }, [messages.length]);
 
   useEffect(() => {
-    if (pendingPrependScrollRef.current) return;
     if (suppressNextMessageAutoScrollRef.current) {
       suppressNextMessageAutoScrollRef.current = false;
       prevMsgCountRef.current = messages.length;
@@ -6961,20 +6946,23 @@ export function ChatPage() {
               contentClassName={s.messagesContent}
               resetKey={activeChatId}
               virtualize
+              onReachStart={!loadingMessages && !loadingOlderMessages && !olderMessagesError
+                && (hiddenMessagesCount > 0 || hasMoreMessages) ? showMoreHidden : undefined}
               positionScope={`${api.API_BASE}:${user?.id ?? ''}`}
               ready={activeChatId !== null && messagesChatIdRef.current === activeChatId && !loadingMessages}
             >
               {loadingMessages && (
                 <div className={s.loadingRow}>{t('chat.messages.loading')}</div>
               )}
-              {!loadingMessages && (hiddenMessagesCount > 0 || hasMoreMessages) && (
-                <button className={s.loadOlderBtn} onClick={showMoreHidden} disabled={loadingOlderMessages}>
-                  {loadingOlderMessages
-                    ? t('common.loading')
-                    : hiddenMessagesCount > 0
-                      ? t('chat.messages.loadMoreHint', { reveal: willRevealCount, count: hiddenMessagesCount })
-                      : t('chat.messages.loadOlderFromServer', { count: MESSAGE_PAGE_SIZE })}
-                </button>
+              {!loadingMessages && (loadingOlderMessages || olderMessagesError) && (
+                <div className={`${s.loadingRow} ${s.historyStatus}`} role="status" aria-live="polite">
+                  {olderMessagesError ? <>
+                    <span>{t('chat.messages.loadOlderFailed')}</span>
+                    <button className={s.loadOlderBtn} onClick={() => { void loadOlderMessages(); }}>
+                      {t('common.tryAgain')}
+                    </button>
+                  </> : t('chat.messages.loading')}
+                </div>
               )}
               {visibleMessages.map((msg, index) => (
                 <VirtualMessage

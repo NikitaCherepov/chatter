@@ -1376,6 +1376,7 @@
       "loadOlderTitle": "Загрузить старые сообщения",
       "showMoreCount": "Показать ещё {{count}} сообщ.",
       "loadMoreHint": "Показать ещё {{reveal}} (из {{count}} скрытых)",
+      "loadOlderFailed": "Не удалось загрузить предыдущие сообщения.",
       "loadOlderFromServer": "Загрузить {{count}} старых сообщений",
       "hiddenTokens": " (~{{count}}k токенов)"
     },

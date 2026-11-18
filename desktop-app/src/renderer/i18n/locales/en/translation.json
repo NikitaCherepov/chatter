@@ -1334,6 +1334,7 @@
       "loadOlderTitle": "Load older messages",
       "showMoreCount": "Show {{count}} more messages",
       "loadMoreHint": "Show {{reveal}} more (of {{count}} hidden)",
+      "loadOlderFailed": "Could not load older messages.",
       "loadOlderFromServer": "Load {{count}} older messages",
       "hiddenTokens": " (~{{count}}k tokens)"
     },

@@ -14,8 +14,102 @@ const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'chatter-virtual-history
 const modulePath = (file: string) =>
   JSON.stringify(path.resolve(desktopRoot, 'src/renderer', file).replaceAll('\\', '/'));
 
+// Run the actual ChatPage history callbacks with a controlled API and real scroll DOM.
+const ts = desktopRequire('typescript');
+const pageSource = fs.readFileSync(path.join(desktopRoot, 'src/renderer/pages/ChatPage.tsx'), 'utf8');
+const pageAst = ts.createSourceFile('ChatPage.tsx', pageSource, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+function pageSnippet(name: string): string {
+  let result: string | undefined;
+  const visit = (node: any) => {
+    if (ts.isVariableDeclaration(node) && node.name.getText(pageAst) === name) {
+      result = node.initializer.getText(pageAst);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(pageAst);
+  assert.ok(result, 'ChatPage callback not found: ' + name);
+  return result;
+}
+function pageEffect(marker: string): string {
+  let result: string | undefined;
+  const visit = (node: any) => {
+    if (ts.isCallExpression(node) && ['useEffect', 'useLayoutEffect'].includes(node.expression.getText(pageAst))) {
+      const text = node.getText(pageAst);
+      if (text.includes(marker)) result = text;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(pageAst);
+  assert.ok(result, 'ChatPage effect not found: ' + marker);
+  return result;
+}
+const autoFixture = String.raw`
+const MESSAGE_PAGE_SIZE = 50;
+const MIN_VISIBLE_MESSAGES = 8;
+const getRenderPerfStep = () => 2000;
+type ChatPageMessage = { id: number; content: string };
+function AutoHistoryApp() {
+  const short = location.hash === '#auto-short';
+  const initialItems = () => Array.from({ length: short ? 8 : 24 }, (_, index) =>
+    short ? { id: index + 1, content: 'Короткое сообщение' } : makeItem(index + 1));
+  const [messages, setMessages] = useState(initialItems);
+  const [activeChatId, setActiveChatId] = useState(1);
+  const activeChatIdRef = useRef(activeChatId);
+  activeChatIdRef.current = activeChatId;
+  const messagesChatIdRef = useRef(activeChatId);
+  messagesChatIdRef.current = activeChatId;
+  const [loadingMessages, setLoadingMessages] = useState(false);
+  const [loadingOlderMessages, setLoadingOlderMessages] = useState(false);
+  const [olderMessagesError, setOlderMessagesError] = useState(false);
+  const [hasMoreMessages, setHasMoreMessages] = useState(true);
+  const [charBudget, setCharBudget] = useState(2000);
+  const olderMessagesRequestRef = useRef<object | null>(null);
+  const suppressNextMessageAutoScrollRef = useRef(false);
+  const prevMsgCountRef = useRef(0);
+  ${pageEffect('olderMessagesRequestRef.current = null;')};
+  const api = { getMessages(chatId, limit, offset) {
+    window.historyRequests.push({ chatId, limit, offset });
+    return new Promise((resolve, reject) => window.historyResponses.push({ resolve, reject }));
+  } };
+  const loadOlderMessages = ${pageSnippet('loadOlderMessages')};
+  const displayMessages = messages;
+  const visibleMessages = ${pageSnippet('visibleMessages')};
+  const hiddenMessagesCount = messages.length - visibleMessages.length;
+  const showMoreHidden = ${pageSnippet('showMoreHidden')};
+  const messagesScrollRef = scroller;
+  ${pageEffect('if (suppressNextMessageAutoScrollRef.current)')};
+  window.historyState = { chatId: activeChatId, visible: visibleMessages.length, total: messages.length,
+    hidden: hiddenMessagesCount, loading: loadingOlderMessages, error: olderMessagesError, ready: !loadingMessages };
+  window.retryOlder = loadOlderMessages;
+  window.historyReady = (ready) => flushSync(() => setLoadingMessages(!ready));
+  window.switchHistory = (id) => flushSync(() => {
+    setActiveChatId(id);
+    setMessages(initialItems());
+    setCharBudget(2000);
+    setHasMoreMessages(true);
+    suppressNextMessageAutoScrollRef.current = true;
+  });
+  window.finishOlder = (fail = false, count = 2) => {
+    const pending = window.historyResponses.shift();
+    if (fail) pending.reject(new Error('Expected offline fixture'));
+    else pending.resolve({ messages: Array.from({length:count}, (_, index) =>
+      ({ id: -count + index, content: short ? 'Раннее сообщение' : makeItem(-count + index).content })) });
+  };
+  return <ChatMessagesScroll ref={scroller} className={s.messages} contentClassName={s.messagesContent}
+    resetKey={activeChatId} positionScope="auto-fixture" ready={!loadingMessages} virtualize
+    onReachStart={!loadingMessages && !loadingOlderMessages && !olderMessagesError
+      && (hiddenMessagesCount > 0 || hasMoreMessages) ? showMoreHidden : undefined}>
+    {(loadingOlderMessages || olderMessagesError) && <div className={s.loadingRow} role="status">
+      {olderMessagesError ? <button onClick={loadOlderMessages}>Повторить</button> : 'Загрузка…'}
+    </div>}
+    {visibleMessages.map(item => <VirtualMessage key={item.id} id={item.id} revision={item}>
+      <Body item={item}/>
+    </VirtualMessage>)}
+  </ChatMessagesScroll>;
+}
+`;
 const fixture = String.raw`
-import React, { useState, useLayoutEffect } from 'react';
+import React, { useState, useLayoutEffect, useCallback, useMemo, useRef, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 import { flushSync } from 'react-dom';
 import { createInstance } from 'i18next';
@@ -123,6 +217,7 @@ function App() {
     </I18nextProvider>
   );
 }
+${autoFixture}
 const i18n = createInstance();
 i18n
   .init({
@@ -131,7 +226,9 @@ i18n
     interpolation: { escapeValue: false },
   })
   .then(() => {
-    createRoot(document.getElementById('root')).render(<App />);
+    window.historyRequests = [];
+    window.historyResponses = [];
+    createRoot(document.getElementById('root')).render(location.hash.startsWith('#auto') ? <AutoHistoryApp /> : <App />);
     window.fixtureReady = true;
   });
 `;
@@ -182,7 +279,7 @@ app
       await win.loadURL('about:blank');
       await win.loadFile(path.join(__dirname, 'renderer/index.html'), { hash });
       await until(
-        'window.fixtureReady && (location.hash === "#baseline" ? document.querySelectorAll("[data-message-id]").length === 60 : document.querySelectorAll("[data-virtual-message-id]").length === 60)',
+        'window.fixtureReady && (location.hash.startsWith("#auto") ? !!window.historyState : location.hash === "#baseline" ? document.querySelectorAll("[data-message-id]").length === 60 : document.querySelectorAll("[data-virtual-message-id]").length === 60)',
       );
       await sleep(200);
     };
@@ -326,6 +423,77 @@ app
         ')<=2',
     );
     assert.deepEqual(errors, []);
+
+    // Automatic cached batches, then a single remote request near the top.
+    await load('auto');
+    await until('window.historyState?.visible === 8');
+    assert.equal(await js('window.historyRequests.length'), 0, 'opening at the bottom must not fetch old history');
+    await js('window.scroller.current.scrollTo(250,{immediate:true})');
+    await until('window.historyState.visible > 8');
+    assert.equal(await js('window.historyRequests.length'), 0, 'cached history must be revealed first');
+    assert.equal(await js('window.historyState.visible'), 9, 'one oversized message must still make progress');
+    await until('window.scroller.current.getMetrics().scrollTop > 400');
+    for (let step = 0; step < 30; step++) {
+      const state = await js('window.historyState');
+      if (state.loading) break;
+      const previous = state.visible;
+      await js('window.scroller.current.scrollTo(200,{immediate:true})');
+      await until('window.historyState.loading || window.historyState.visible > ' + previous);
+      await sleep(40);
+    }
+    await until('window.historyRequests.length === 1 && window.historyState.loading');
+    assert.deepEqual(await js('window.historyRequests[0]'), { chatId: 1, limit: 50, offset: 24 });
+    await js('window.retryOlder();window.retryOlder();window.scroller.current.scrollTo(0,{immediate:true})');
+    await sleep(120);
+    assert.equal(await js('window.historyRequests.length'), 1, 'in-flight requests must not be duplicated');
+    await js('window.scroller.current.scrollToMessage(16,{immediate:true})');
+    await sleep(150);
+    const readingBeforeResponse = await js('document.querySelector("[data-message-id=\\"16\\"]").getBoundingClientRect().top');
+    await js('window.finishOlder()');
+    await until('window.historyState.total === 26 && !window.historyState.loading');
+    await until('Math.abs(document.querySelector("[data-message-id=\\"16\\"]").getBoundingClientRect().top - ' + readingBeforeResponse + ') <= 2');
+    await js('window.scroller.current.scrollTo(0,{immediate:true})');
+    await sleep(150);
+    assert.equal(await js('window.historyRequests.length'), 1, 'end of history must stop automatic requests');
+
+    // Short histories fill automatically; an error pauses until an explicit retry.
+    await load('auto-short');
+    await until('window.historyRequests.length === 1');
+    await js('window.finishOlder(true)');
+    await until('window.historyState.error && !window.historyState.loading');
+    await js('window.scroller.current.scrollTo(0,{immediate:true})');
+    await sleep(150);
+    assert.equal(await js('window.historyRequests.length'), 1, 'an error must not create an automatic retry loop');
+    await js('document.querySelector("[role=status] button").click()');
+    await until('window.historyRequests.length === 2 && window.historyState.loading');
+    await js('window.finishOlder(false, 50)');
+    await until('window.historyState.total === 58 && !window.historyState.loading');
+    await sleep(100);
+    assert.equal(await js('window.historyRequests.length'), 2, 'filling the viewport must not drain all history');
+    await js('window.historyReady(false);window.scroller.current.scrollTo(0,{immediate:true})');
+    await sleep(100);
+    assert.equal(await js('window.historyRequests.length'), 2, 'an unready chat must not load more history');
+    await js('window.historyReady(true)');
+    await until('window.historyRequests.length === 3');
+    await js('window.finishOlder()');
+    await until('!window.historyState.loading');
+
+    // Returning to the same chat must invalidate its earlier pending request too.
+    await load('auto-short');
+    await until('window.historyRequests.length === 1');
+    await js('window.switchHistory(2)');
+    await until('window.historyRequests.length === 2');
+    await js('window.switchHistory(1)');
+    await until('window.historyRequests.length === 3');
+    await js('window.finishOlder();window.finishOlder()');
+    await sleep(120);
+    assert.equal(await js('window.historyState.total'), 8, 'stale responses must not modify the current chat');
+    assert.equal(await js('window.historyState.loading'), true, 'a stale request must not clear the current loading state');
+    await js('window.finishOlder()');
+    await until('window.historyState.total === 10 && !window.historyState.loading');
+    assert.equal(errors.filter(message => message.startsWith('Failed to load older messages:')).length, 1);
+    assert.deepEqual(errors.filter(message => !message.startsWith('Failed to load older messages:')), []);
+    console.log('PASS: automatic cached batches, oversized-message progress, remote pagination, reading position during requests, short-history fill, single-flight requests, error retry, history end and stale-chat responses');
     win.destroy();
     console.log(
       'PASS: DOM reduction, exact measured heights, search jumps, interactive pins, selection, history prepending, source updates, width changes and chat scroll restoration',

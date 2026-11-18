@@ -38,6 +38,7 @@ type Props = {
   positionScope?: string;
   ready?: boolean;
   virtualize?: boolean;
+  onReachStart?: () => void;
   children: ReactNode;
 };
 
@@ -48,6 +49,7 @@ export const ChatMessagesScroll = forwardRef<ChatMessagesScrollHandle, Props>(fu
   positionScope = '',
   ready = true,
   virtualize = false,
+  onReachStart,
   children,
 }, ref) {
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -120,6 +122,36 @@ export const ChatMessagesScroll = forwardRef<ChatMessagesScrollHandle, Props>(fu
     observer.observe(content);
     return () => observer.disconnect();
   }, [positionKey, ready]);
+
+  // Check after layout/anchor restoration, including short histories and viewport resizes.
+  // Each callback represents one available batch; loading/error states remove it.
+  useEffect(() => {
+    const wrapper = wrapperRef.current;
+    const content = contentRef.current;
+    if (!wrapper || !content || !ready || positionKey === null || !onReachStart) return;
+    let requested = false;
+    let frame = 0;
+    const check = () => {
+      frame = 0;
+      if (requested || restoredKeyRef.current !== positionKey || !wrapper.clientHeight
+        || wrapper.scrollTop > Math.min(400, wrapper.clientHeight / 2)) return;
+      requested = true;
+      onReachStart();
+    };
+    const schedule = () => {
+      if (!frame && !requested) frame = requestAnimationFrame(check);
+    };
+    wrapper.addEventListener('scroll', schedule, { passive: true });
+    const observer = new ResizeObserver(schedule);
+    observer.observe(wrapper);
+    observer.observe(content);
+    schedule();
+    return () => {
+      wrapper.removeEventListener('scroll', schedule);
+      observer.disconnect();
+      cancelAnimationFrame(frame);
+    };
+  }, [ready, positionKey, onReachStart]);
 
   useEffect(() => {
     if (!CHAT_MESSAGES_LENIS_ENABLED) return;
