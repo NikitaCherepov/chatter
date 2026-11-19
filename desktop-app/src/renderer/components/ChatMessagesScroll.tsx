@@ -221,7 +221,7 @@ export const ChatMessagesScroll = forwardRef<ChatMessagesScrollHandle, Props>(fu
   }), [viewport, positionKey, readPosition]);
 
   return (
-    <div className={className} ref={wrapperRef} style={{ overflowAnchor: 'none' }} onClickCapture={(event) => {
+    <div data-chat-messages className={className} ref={wrapperRef} style={{ overflowAnchor: 'none' }} onClickCapture={(event) => {
       // A deliberate disclosure click means reading in place, not following the bottom.
       // Run before the toggle changes layout and before ResizeObserver sees its animation.
       const target = event.target;

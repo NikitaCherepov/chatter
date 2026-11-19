@@ -1,3 +1,4 @@
+import { ChatComposerDock } from '../components/ChatComposerDock';
 import { AppearanceConfirmation, type AppearanceProposal } from '../components/AppearanceConfirmation';
 import { parseAppearanceProfile } from '../lib/appearance-schema';
 import { useMessageArrival } from '../lib/use-message-arrival';
@@ -7648,6 +7649,8 @@ export function ChatPage() {
               )}
             </div>}
 
+            <ChatComposerDock compact={compactComposer}>
+            <div className={`${s.composerWrap} ${compactComposer ? s.composerWrapCompact : ''}`}>
             {/* Image previews above input */}
             {attachedImages.length > 0 && (
               <div className={s.imagePreviews}>
@@ -7695,10 +7698,12 @@ export function ChatPage() {
               </div>
             )}
 
-            <div className={`${s.composerWrap} ${compactComposer ? s.composerWrapCompact : ''}`}>
-            <div className={confirmationCards.length ? s.composerWithConfirmations : undefined}>
+
+            <div className={`${s.composerBody} ${confirmationCards.length ? s.composerWithConfirmations : ''}`}>
+            <div className={s.composerReview}>
             <ConfirmationQueue items={confirmationCards} order={confirmationArrivalRef.current} composer={confirmationComposer} />
             <ConfirmationCommentInput composer={confirmationComposer} />
+            </div>
             <div className={s.inputArea}>
               {/* Dice Roll Mode: круглый кубик d20 слева от иконки файлов */}
               {diceRollEnabled && (
@@ -7845,6 +7850,7 @@ export function ChatPage() {
               <QuotaWidget variant="caption" />
             </div>
             </div>
+            </ChatComposerDock>
           </>
         )}
       </main>

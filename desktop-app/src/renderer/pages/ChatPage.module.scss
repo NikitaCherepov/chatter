@@ -1701,7 +1701,7 @@
   background-repeat: no-repeat;
   flex: 1;
   overflow-y: auto;
-  padding: calc(32px * var(--appearance-density, 1)) 10% calc(32px * var(--appearance-density, 1)) max(10%, calc(66px * var(--appearance-density, 1)));
+  padding: calc(32px * var(--appearance-density, 1)) 10% calc(32px * var(--appearance-density, 1) + var(--chat-composer-height, 0px)) max(10%, calc(66px * var(--appearance-density, 1)));
 }
 
 .messagesContent {
@@ -3305,8 +3305,8 @@
   .toolCallItem { padding-top: calc(10px * var(--appearance-density, 1)); border-top: 1px solid var(--border-light); }
   summary { cursor: pointer; padding-bottom: calc(4px * var(--appearance-density, 1)); overflow-wrap: anywhere; }
 }
-.composerWrap { margin: 12px 10% 16px; flex-shrink: 0; min-width: 0; }
-.composerWrapCompact { margin: 10px 16px 12px; }
+.composerWrap { margin: 12px 0 16px; flex-shrink: 0; min-width: 0; }
+.composerWrapCompact { margin: 10px 0 12px; }
 .composerFootnote {
   display: flex;
   justify-content: space-between;
@@ -3433,5 +3433,28 @@
 }
 
 :global([data-appearance-panels]) {
-  .sidebar, .roomPanel, .chatTopBar, .composerWrap { @include appearance.scope(panel); background-color: var(--bg-secondary); }
+  .sidebar, .roomPanel, .chatTopBar { @include appearance.scope(panel); background-color: var(--bg-secondary); }
+  .composerWrap { @include appearance.scope(panel); }
 }
+
+.composerWrap .imagePreviews {
+  padding: calc(8px * var(--appearance-density, 1));
+  margin-bottom: 8px;
+  border: 1px solid var(--border-input);
+  border-radius: var(--appearance-radius, 8px);
+  background: var(--bg-input);
+  max-height: 20vh;
+  overflow: auto;
+}
+:global([data-appearance]) .composerFootnote { @include appearance.scope(chat); }
+
+.composerWrap {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  pointer-events: auto;
+}
+.composerBody { display: flex; flex-direction: column; min-height: 0; }
+.composerReview { min-height: 0; max-height: 40vh; overflow: auto; overscroll-behavior: contain; }
+.composerReview:empty { display: none; }
+.composerFootnote { flex-shrink: 0; }

@@ -57,6 +57,8 @@ import {appearanceColors,contrastRatio} from ${modulePath('lib/appearance-colors
 import {ToolActivityCall} from ${modulePath('components/ToolActivity.tsx')};
 import {ReasoningDisclosure} from ${modulePath('components/ReasoningDisclosure.tsx')};
 import {useMessageArrival} from ${modulePath('lib/use-message-arrival.ts')};
+import {ChatComposerDock} from ${modulePath('components/ChatComposerDock.tsx')};
+import {ConfirmationCard} from ${modulePath('components/ConfirmationCard.tsx')};
 import {ChatMessagesScroll} from ${modulePath('components/ChatMessagesScroll.tsx')};
 import {VirtualMessage} from ${modulePath('components/VirtualMessage.tsx')};
 import {MarkdownRenderer} from ${modulePath('components/MarkdownRenderer.tsx')};
@@ -71,13 +73,13 @@ const nativeAnimate=Element.prototype.animate;
 Element.prototype.animate=function(...args){if(this.hasAttribute('data-message-id'))window.animationCount++;return nativeAnimate.apply(this,args);};
 function Conversation(){
  const [items,setItems]=useState(()=>Array.from({length:60},(_,n)=>({id:n+1,content:'# Message '+(n+1)+'\n\n'+Array.from({length:12},()=> 'A paragraph with **formatting** and words to wrap.').join('\n\n')})));
- const [chatId,setChatId]=useState(1);
+ const [chatId,setChatId]=useState(1),[extra,setExtra]=useState("none");window.setComposerExtra=setExtra;
  useMessageArrival(items,chatId,true);
  const ref=useRef(null);window.scrollRef=ref;
  window.appendMessage=()=>setItems(prev=>[...prev,{id:prev.at(-1).id+1,content:'New message'}]);
  window.prependMessage=()=>setItems(prev=>[{id:-10,content:'Earlier message'},...prev]);
  window.switchChat=()=>setChatId(id=>id+1);
- return <ChatMessagesScroll ref={ref} className={chat.messages} contentClassName={chat.messagesContent} resetKey={chatId} virtualize>
+ return <><ChatMessagesScroll ref={ref} className={chat.messages} contentClassName={chat.messagesContent} resetKey={chatId} virtualize>
   {items.map(item=><VirtualMessage id={item.id} key={item.id} revision={item}>
    <div data-message-id={item.id} className={chat.messageGroup}>
     <div className={chat.messageIdentity}><span>Vega</span><span className={chat.messageTime}>23:11</span></div>
@@ -86,7 +88,13 @@ function Conversation(){
     <div className={item.id%2?chat.bubbleText:chat.bubbleUser}><MarkdownRenderer content={item.content}/></div>
    </div>
   </VirtualMessage>)}
- </ChatMessagesScroll>;
+ </ChatMessagesScroll><ChatComposerDock><div className={chat.composerWrap}>
+ {extra==='image'&&<div className={chat.imagePreviews}><div style={{height:56,width:56}}>Image</div></div>}
+ <div className={chat.composerBody}><div className={chat.composerReview}>
+ {(extra==='card'||extra==='large')&&<ConfirmationCard id="dock-check" title="Confirmation" actions={<button>Apply</button>}><div style={{height:extra==='large'?1200:120}}>Review</div></ConfirmationCard>}
+ </div><div className={chat.inputArea}><textarea aria-label="Dock input" rows={2}/><button>Send</button></div></div>
+ <div className={chat.composerFootnote}>Enter to send</div></div></ChatComposerDock></>;
+
 }
 function App(){
  const [user,setUser]=useState({id:1,ui_settings:{}}),[proposal,setProposal]=useState(null);
@@ -97,7 +105,7 @@ function App(){
  window.dark=()=>{setThemePreference('dark');window.dispatchEvent(new CustomEvent('chatter-theme-change',{detail:'dark'}));};
  return <TestAuth.Provider value={{user,setUser}}><AppearanceController/>
   <div id="panel-fixture" className={chat.sidebar} style={{width:'48%',height:'100%',overflow:'auto',padding:20}}><AppearancePanel/>{proposal&&<AppearanceConfirmation proposal={proposal} onResolved={()=>setProposal(null)}/>}</div>
-  <div style={{width:'52%',height:'100%',display:'flex',flexDirection:'column'}}><Conversation/></div>
+  <div className={chat.main} style={{width:'52%',height:'100%',display:'flex',flexDirection:'column'}}><Conversation/></div>
  </TestAuth.Provider>;
 }
 window.clickText=text=>{const button=[...document.querySelectorAll('button')].find(el=>el.textContent.trim()===text&&!el.disabled&&el.getBoundingClientRect().height>0);if(!button)throw new Error('Button missing: '+text);button.click();};
@@ -130,6 +138,19 @@ app.whenReady().then(async()=>{
  await win.loadFile(path.join(__dirname,'renderer/index.html'));
  await until('window.fixtureReady && [...document.querySelectorAll("button")].some(el=>el.textContent==="Создать оформление")');
  await until('document.querySelectorAll("[data-virtual-row-placeholder]").length>30');
+ // The floating dock must reserve space without shrinking or recoloring the viewport.
+ const dockMetrics=()=>js('(()=>{const v=window.messageViewport(),dock=document.querySelector("[data-chat-composer-dock]"),input=dock.querySelector("textarea"),last=[...document.querySelectorAll("[data-message-id]")].at(-1);return {height:v.clientHeight,bottom:v.getBoundingClientRect().bottom,dockTop:dock.getBoundingClientRect().top,inputBottom:input.getBoundingClientRect().bottom,reserve:parseFloat(v.parentElement.style.getPropertyValue("--chat-composer-height")),lastBottom:last.getBoundingClientRect().bottom,background:getComputedStyle(v).backgroundImage};})()');
+ await until('parseFloat(window.messageViewport().parentElement.style.getPropertyValue("--chat-composer-height"))>0');
+ const initialDock=await dockMetrics();
+ for(const kind of ['image','card','large','none']){
+  await js('window.setComposerExtra('+JSON.stringify(kind)+')');
+  await until('Math.abs(parseFloat(window.messageViewport().parentElement.style.getPropertyValue("--chat-composer-height"))-document.querySelector("[data-chat-composer-dock]").getBoundingClientRect().height)<1');
+  await sleep(100);
+  const next=await dockMetrics();assert.equal(next.height,initialDock.height,'extras must not shrink message viewport');
+  assert.ok(next.inputBottom<=next.bottom,'input remains visible even with a large confirmation');
+  assert.ok(next.lastBottom<=next.dockTop+1,'last message remains above floating composer '+kind+' '+JSON.stringify(next));
+  assert.equal(next.background,initialDock.background);
+ }
  const originalHeight=await js('window.scrollRef.current.getMetrics().scrollHeight');
  await js('window.clickText("Создать оформление")');
  await until('!!document.querySelector("input[list=appearance-fonts]")');
