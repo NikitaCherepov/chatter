@@ -15,15 +15,11 @@
     align-self: flex-start;
   }
 }
-.description {
-  margin: 0;
-  color: var(--text-muted);
-  font-size: 12px;
-  line-height: 1.6;
-}
 .scopeSection + .scopeSection {
   border-top: 1px solid var(--border-light);
 }
+section.commands { margin-bottom: 0; }
+.checkHelp { margin: 0; padding-left: 30px; color: var(--text-muted); font-size: 11px; line-height: 1.6; }
 .scopeSummary {
   display: inline-flex;
   align-items: center;
@@ -156,10 +152,19 @@
 .embedded {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  margin: 16px 0;
-  padding: 16px 0;
+  gap: 0;
+  margin: 12px 0;
+  padding: 0;
   border-block: 1px solid var(--border-light);
+}
+.overrideStatus {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+.embeddedNotice {
+  padding: 0 0 13px 42px;
 }
 .assessment {
   display: flex;
@@ -178,5 +183,10 @@
   }
   .modes {
     grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 600px) {
+  .embeddedNotice {
+    padding-left: 35px;
   }
 }

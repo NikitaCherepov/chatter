@@ -11,7 +11,6 @@ import type {
 } from '../lib/auto-confirmation-service';
 import Slider from './Slider';
 import { AnimatedCollapse } from './AnimatedDisclosure';
-import Checkbox from './Checkbox';
 import { ConfirmDialog } from './ConfirmDialog';
 import { Icon } from './Icon';
 import shared from './SettingsModal.module.scss';
@@ -76,12 +75,32 @@ export function AutoConfirmationSettings({ serverId }: { serverId?: number }) {
             <span id={id + '-server'} className={rows.label}>
               {t('autoConfirmation.title')}
             </span>
-            <p>
-              {t(
-                override === undefined
-                  ? 'autoConfirmation.inherited'
-                  : 'autoConfirmation.overrideStatus',
+            <p className={s.overrideStatus}>
+              <span>
+                {t(
+                  override === undefined
+                    ? 'autoConfirmation.inherited'
+                    : 'autoConfirmation.overridden',
+                )}
+              </span>
+              {override !== undefined && (
+                <button
+                  type="button"
+                  className={layout.textButton}
+                  disabled={busy}
+                  title={t('autoConfirmation.resetAction')}
+                  onClick={() => void change({ revision: config.revision, serverId, enabled: null })}
+                >
+                  {t('autoConfirmation.resetServer')}
+                </button>
               )}
+            </p>
+            <p>
+              {t('autoConfirmation.currentMode', {
+                mode: t('autoConfirmation.' + config.settings.strictness),
+                auto: Math.round(thresholds.auto * 100),
+                know: Math.round(thresholds.know * 100),
+              })}
             </p>
           </div>
           <button
@@ -89,29 +108,18 @@ export function AutoConfirmationSettings({ serverId }: { serverId?: number }) {
             role="switch"
             aria-checked={enabled}
             aria-labelledby={id + '-server'}
-            disabled={busy || override === undefined}
+            disabled={busy}
             className={`${toggle.toggle} ${enabled ? toggle.toggleActive : ''}`}
             onClick={() => void change({ revision: config.revision, serverId, enabled: !enabled })}
           >
             <span />
           </button>
         </div>
-        <Checkbox
-          checked={override !== undefined}
-          disabled={busy}
-          label={t('autoConfirmation.override')}
-          onChange={(checked) =>
-            void change({ revision: config.revision, serverId, enabled: checked ? enabled : null })
-          }
-        />
-        <p className={layout.help}>
-          {t('autoConfirmation.currentMode', {
-            mode: t('autoConfirmation.' + config.settings.strictness),
-            auto: Math.round(thresholds.auto * 100),
-            know: Math.round(thresholds.know * 100),
-          })}
-        </p>
-        {!config.available && <p className={layout.help}>{t('autoConfirmation.unavailable')}</p>}
+        {!config.available && (
+          <p className={`${layout.help} ${s.embeddedNotice}`}>
+            {t('autoConfirmation.unavailable')}
+          </p>
+        )}
       </section>
     );
   }
@@ -122,12 +130,11 @@ export function AutoConfirmationSettings({ serverId }: { serverId?: number }) {
         <div className={layout.fields}>
           <header className={layout.heading}>
             <h3 className={shared.panelTitle}>{t('autoConfirmation.title')}</h3>
-            <p className={s.description}>{t('autoConfirmation.description')}</p>
           </header>
           {!config.available && (
             <p className={layout.notice}>{t('autoConfirmation.unavailable')}</p>
           )}
-          <section className={rows.group} aria-labelledby={id + '-commands'}>
+          <section className={`${rows.group} ${s.commands}`} aria-labelledby={id + '-commands'}>
             <h3 id={id + '-commands'}>{t('autoConfirmation.commands')}</h3>
             {(['pc', 'servers'] as ApprovalScope[]).map((scope) => {
               const settings = scope === 'pc' ? config.settings.pc : config.settings;
@@ -164,13 +171,6 @@ export function AutoConfirmationSettings({ serverId }: { serverId?: number }) {
                         </svg>
                       </button>
                       <p id={labelId + '-hint'}>{t('autoConfirmation.' + scope + 'Help')}</p>
-                      <small className={layout.help}>
-                        {t('autoConfirmation.currentMode', {
-                          mode: t('autoConfirmation.' + settings.strictness),
-                          auto: Math.round(thresholds[settings.strictness].auto * 100),
-                          know: Math.round(thresholds[settings.strictness].know * 100),
-                        })}
-                      </small>
                     </div>
                     <button
                       type="button"
@@ -180,10 +180,7 @@ export function AutoConfirmationSettings({ serverId }: { serverId?: number }) {
                       aria-describedby={labelId + '-hint'}
                       disabled={busy}
                       className={`${toggle.toggle} ${settings.enabled ? toggle.toggleActive : ''}`}
-                      onClick={() => {
-                        if (!settings.enabled) setEditingScope(scope);
-                        void updateScope(scope, { enabled: !settings.enabled });
-                      }}
+                      onClick={() => void updateScope(scope, { enabled: !settings.enabled })}
                     >
                       <span />
                     </button>
@@ -236,15 +233,10 @@ export function AutoConfirmationSettings({ serverId }: { serverId?: number }) {
                 <p>{t('autoConfirmation.knowHelp')}</p>
               </div>
             </div>
-            <p className={layout.help}>{t('autoConfirmation.fallback')}</p>
+            <p className={s.checkHelp}>{t('autoConfirmation.fallback')}</p>
           </section>
         </div>
       </div>
-      <footer className={layout.footer}>
-        <p className={layout.help} role="status">
-          {t(busy ? 'common.saving' : 'autoConfirmation.instant')}
-        </p>
-      </footer>
       {resetOpen && (
         <ConfirmDialog
           open
