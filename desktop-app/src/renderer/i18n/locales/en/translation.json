@@ -1,7 +1,7 @@
 {
   "autoConfirmation": {
     "title": "Auto-confirmation",
-    "description": "Decision assesses server and PC commands before execution. Commands run automatically when risk is within the selected limit and understanding reaches its threshold.",
+    "description": "Configure auto-confirmation separately for PC and server commands. Commands run automatically when risk is within the limit and understanding reaches the selected threshold.",
     "enabled": "Auto-confirm commands",
     "defaultHelp": "Default for PC commands and servers that inherit your settings.",
     "strictness": "Strictness",
@@ -39,7 +39,13 @@
     "customHelp": "Choose the maximum risk and minimum understanding for automatic execution.",
     "maxRisk": "Maximum risk of harm",
     "minUnderstanding": "Minimum understanding",
-    "pcUsesGlobal": "Decision checks use your default settings in Auto-confirmation."
+    "pcUsesGlobal": "Decision checks use PC commands settings in Auto-confirmation.",
+    "commands": "Commands",
+    "pcTitle": "PC commands",
+    "pcHelp": "Automatic assessment before running commands on your computer.",
+    "serversTitle": "Server commands",
+    "serversHelp": "Default for SSH commands. Individual servers can override whether it is enabled.",
+    "overrideStatus": "Custom setting for this server"
   },
   "intuition": {
     "saved": "Intuition saved",

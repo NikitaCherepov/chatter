@@ -28,7 +28,17 @@ try {
   assert.deepEqual(getAutoConfirmation(81).settings.customThresholds, { auto: 0.15, know: 0.8 });
   db.prepare(
     'INSERT INTO auto_confirmation_settings(user_id, settings_json, revision) VALUES (?, ?, 1)',
-  ).run(82, JSON.stringify({ enabled: false, strictness: 'normal', overrides: {} }));
+  ).run(82, JSON.stringify({ enabled: true, strictness: 'normal', overrides: {} }));
+  assert.equal(
+    getAutoConfirmation(82).settings.enabled,
+    true,
+    'legacy server preference is preserved',
+  );
+  assert.equal(
+    getAutoConfirmation(82).settings.pc.enabled,
+    false,
+    'PC starts disabled independently',
+  );
   assert.deepEqual(
     getAutoConfirmation(82).settings.customThresholds,
     { auto: 0.15, know: 0.8 },
@@ -54,7 +64,12 @@ try {
   );
   assert.equal(await assessServerCommand(81, firstId, 'pwd'), null);
   assert.throws(
-    () => saveAutoConfirmation(82, { revision: getAutoConfirmation(82).revision, serverId: firstId, enabled: true }),
+    () =>
+      saveAutoConfirmation(82, {
+        revision: getAutoConfirmation(82).revision,
+        serverId: firstId,
+        enabled: true,
+      }),
     /server_not_found/,
   );
   save({ serverId: firstId, enabled: false });
@@ -304,13 +319,44 @@ try {
       throw new Error('unexpected model call');
     });
   try {
-    save({ enabled: true, strictness: 'custom', customThresholds: { auto: 0.1, know: 0.92 } });
+    const serversBefore = getAutoConfirmation(81).settings;
+    save({
+      scope: 'pc',
+      enabled: true,
+      strictness: 'custom',
+      customThresholds: { auto: 0.1, know: 0.92 },
+    });
+    assert.equal(getAutoConfirmation(81).settings.enabled, serversBefore.enabled);
+    assert.equal(getAutoConfirmation(81).settings.strictness, serversBefore.strictness);
+    assert.deepEqual(
+      getAutoConfirmation(81).settings.customThresholds,
+      serversBefore.customThresholds,
+    );
+    assert.deepEqual(getAutoConfirmation(81).settings.overrides, serversBefore.overrides);
     const approvedPc = JSON.parse(await pcRun('echo test', true));
     assert.equal(approvedPc.status, 'success');
     assert.equal(approvedPc.auto_confirmation.approved, true);
     assert.deepEqual(approvedPc.auto_confirmation.thresholds, { auto: 0.1, know: 0.92 });
     assert.equal(sent.at(-1).payload.background, true);
     assert.equal(sent.at(-1).ipc_type, 'execute_commands');
+    pcDuringRequest = () =>
+      save({ scope: 'servers', enabled: !serversBefore.enabled, strictness: 'relaxed' });
+    assert.equal(
+      JSON.parse(await pcRun()).status,
+      'success',
+      'changing server settings does not invalidate a PC assessment',
+    );
+    assert.equal(getAutoConfirmation(81).settings.pc.strictness, 'custom');
+    assert.deepEqual(getAutoConfirmation(81).settings.pc.customThresholds, {
+      auto: 0.1,
+      know: 0.92,
+    });
+    pcDuringRequest = undefined;
+    save({
+      scope: 'servers',
+      enabled: serversBefore.enabled,
+      strictness: serversBefore.strictness,
+    });
     pcScores = [0.11, 1];
     assert.equal(JSON.parse(await pcRun()).status, 'rejected');
     assert.equal(sent.at(-1).value.assessment.approved, false);
@@ -322,7 +368,7 @@ try {
       'insufficient understanding needs confirmation',
     );
     pcScores = [0, 1];
-    pcDuringRequest = () => save({ enabled: false, strictness: 'custom' });
+    pcDuringRequest = () => save({ scope: 'pc', enabled: false, strictness: 'custom' });
     assert.equal(JSON.parse(await pcRun()).status, 'rejected');
     assert.equal(
       sent.at(-1).value.assessment.status,
@@ -333,10 +379,10 @@ try {
     const before = pcFetches;
     assert.equal(JSON.parse(await pcRun('rm -rf /')).status, 'error');
     assert.equal(pcFetches, before, 'blocked PC commands never reach Decision');
-    save({ enabled: false, strictness: 'custom' });
+    save({ scope: 'pc', enabled: false, strictness: 'custom' });
     assert.equal(JSON.parse(await pcRun()).status, 'rejected');
     assert.equal(pcFetches, before, 'disabled default does not call Decision');
-    save({ enabled: true, strictness: 'custom' });
+    save({ scope: 'pc', enabled: true, strictness: 'custom' });
     globalThis.fetch = (async () => new Response('{}', { status: 503 })) as typeof fetch;
     assert.equal(JSON.parse(await pcRun()).status, 'rejected');
     assert.equal(

@@ -1,8 +1,14 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { useAutoConfirmation } from '../lib/auto-confirmation-queries';
-import type { ApprovalStrictness, ApprovalThresholds } from '../lib/auto-confirmation-service';
+import type {
+  ApprovalScope,
+  ApprovalSettings,
+  ApprovalStrictness,
+  ApprovalThresholds,
+  AutoConfirmationConfig,
+} from '../lib/auto-confirmation-service';
 import Slider from './Slider';
 import { AnimatedCollapse } from './AnimatedDisclosure';
 import Checkbox from './Checkbox';
@@ -10,13 +16,16 @@ import { ConfirmDialog } from './ConfirmDialog';
 import { Icon } from './Icon';
 import shared from './SettingsModal.module.scss';
 import layout from './IntuitionSettings.module.scss';
+import rows from './RestrictionsSettings.module.scss';
 import toggle from './MemoryPopover.module.scss';
 import s from './AutoConfirmationSettings.module.scss';
 
 export function AutoConfirmationSettings({ serverId }: { serverId?: number }) {
   const { t } = useTranslation();
+  const id = useId();
   const { query, save } = useAutoConfirmation();
   const [resetOpen, setResetOpen] = useState(false);
+  const [editingScope, setEditingScope] = useState<ApprovalScope | null>(null);
   const config = query.data;
   const change = async (update: Parameters<typeof save.mutateAsync>[0]) => {
     try {
@@ -40,45 +49,52 @@ export function AutoConfirmationSettings({ serverId }: { serverId?: number }) {
       </div>
     );
 
-  const override = serverId === undefined ? undefined : config.settings.overrides[String(serverId)];
-  const enabled = override ?? config.settings.enabled;
   const busy = save.isPending;
-  const thresholds = config.thresholds[config.settings.strictness];
-  const enableSwitch = (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={enabled}
-      aria-label={t('autoConfirmation.enabled')}
-      disabled={busy || (serverId !== undefined && override === undefined)}
-      className={`${toggle.toggle} ${enabled ? toggle.toggleActive : ''}`}
-      onClick={() =>
-        void change(
-          serverId === undefined
-            ? {
-                revision: config.revision,
-                enabled: !enabled,
-                strictness: config.settings.strictness,
-              }
-            : { revision: config.revision, serverId, enabled: !enabled },
-        )
-      }
-    >
-      <span />
-    </button>
-  );
+  const updateScope = (scope: ApprovalScope, patch: Partial<ApprovalSettings>) => {
+    const settings = scope === 'pc' ? config.settings.pc : config.settings;
+    return change({
+      revision: config.revision,
+      scope,
+      enabled: settings.enabled,
+      strictness: settings.strictness,
+      customThresholds: settings.customThresholds,
+      ...patch,
+    });
+  };
 
-  if (serverId !== undefined)
+  if (serverId !== undefined) {
+    const override = config.settings.overrides[String(serverId)];
+    const enabled = override ?? config.settings.enabled;
+    const thresholds = config.thresholds[config.settings.strictness];
     return (
       <section className={s.embedded} aria-label={t('autoConfirmation.title')}>
-        <div className={layout.enableRow}>
-          <div>
-            <strong>{t('autoConfirmation.title')}</strong>
-            <p className={layout.help}>
-              {t(override === undefined ? 'autoConfirmation.inherited' : 'autoConfirmation.custom')}
+        <div className={rows.row}>
+          <span className={rows.icon}>
+            <Icon name="server" size={18} />
+          </span>
+          <div className={rows.text}>
+            <span id={id + '-server'} className={rows.label}>
+              {t('autoConfirmation.title')}
+            </span>
+            <p>
+              {t(
+                override === undefined
+                  ? 'autoConfirmation.inherited'
+                  : 'autoConfirmation.overrideStatus',
+              )}
             </p>
           </div>
-          {enableSwitch}
+          <button
+            type="button"
+            role="switch"
+            aria-checked={enabled}
+            aria-labelledby={id + '-server'}
+            disabled={busy || override === undefined}
+            className={`${toggle.toggle} ${enabled ? toggle.toggleActive : ''}`}
+            onClick={() => void change({ revision: config.revision, serverId, enabled: !enabled })}
+          >
+            <span />
+          </button>
         </div>
         <Checkbox
           checked={override !== undefined}
@@ -90,7 +106,7 @@ export function AutoConfirmationSettings({ serverId }: { serverId?: number }) {
         />
         <p className={layout.help}>
           {t('autoConfirmation.currentMode', {
-            mode: t(`autoConfirmation.${config.settings.strictness}`),
+            mode: t('autoConfirmation.' + config.settings.strictness),
             auto: Math.round(thresholds.auto * 100),
             know: Math.round(thresholds.know * 100),
           })}
@@ -98,6 +114,7 @@ export function AutoConfirmationSettings({ serverId }: { serverId?: number }) {
         {!config.available && <p className={layout.help}>{t('autoConfirmation.unavailable')}</p>}
       </section>
     );
+  }
 
   return (
     <div className={layout.panel}>
@@ -110,55 +127,98 @@ export function AutoConfirmationSettings({ serverId }: { serverId?: number }) {
           {!config.available && (
             <p className={layout.notice}>{t('autoConfirmation.unavailable')}</p>
           )}
-          <section className={s.section}>
-            <div className={layout.enableRow}>
-              <div>
-                <strong>{t('autoConfirmation.enabled')}</strong>
-                <p className={layout.help}>{t('autoConfirmation.defaultHelp')}</p>
-              </div>
-              {enableSwitch}
-            </div>
-          </section>
-          <section className={s.section}>
-            <h4>{t('autoConfirmation.strictness')}</h4>
-            <div className={s.modes}>
-              {(['strict', 'normal', 'relaxed', 'custom'] as ApprovalStrictness[]).map((mode) => (
-                <button
-                  type="button"
-                  key={mode}
-                  aria-pressed={config.settings.strictness === mode}
-                  disabled={busy}
-                  className={`${s.mode} ${config.settings.strictness === mode ? s.selected : ''}`}
-                  onClick={() =>
-                    void change({ revision: config.revision, enabled, strictness: mode })
-                  }
-                >
-                  <strong>{t(`autoConfirmation.${mode}`)}</strong>
-                  <span>{t(`autoConfirmation.${mode}Help`)}</span>
-                  <small>
-                    {t('autoConfirmation.modeThresholds', {
-                      auto: Math.round(config.thresholds[mode].auto * 100),
-                      know: Math.round(config.thresholds[mode].know * 100),
-                    })}
-                  </small>
-                </button>
-              ))}
-            </div>
-            <AnimatedCollapse open={config.settings.strictness === 'custom'}>
-              <CustomThresholds
-                value={config.settings.customThresholds}
-                disabled={busy}
-                save={(customThresholds) =>
-                  change({
-                    revision: config.revision,
-                    enabled,
-                    strictness: 'custom',
-                    customThresholds,
-                  })
-                }
-              />
-            </AnimatedCollapse>
-            <p className={layout.help}>{t('autoConfirmation.experimental')}</p>
+          <section className={rows.group} aria-labelledby={id + '-commands'}>
+            <h3 id={id + '-commands'}>{t('autoConfirmation.commands')}</h3>
+            {(['pc', 'servers'] as ApprovalScope[]).map((scope) => {
+              const settings = scope === 'pc' ? config.settings.pc : config.settings;
+              const thresholds = scope === 'pc' ? config.pcThresholds : config.thresholds;
+              const expanded = editingScope === scope;
+              const labelId = id + '-' + scope;
+              return (
+                <section className={s.scopeSection} key={scope}>
+                  <div className={rows.row}>
+                    <span className={rows.icon}>
+                      <Icon name={scope === 'pc' ? 'monitor' : 'server'} size={18} />
+                    </span>
+                    <div className={rows.text}>
+                      <button
+                        type="button"
+                        className={s.scopeSummary}
+                        aria-expanded={expanded}
+                        aria-controls={labelId + '-editor'}
+                        onClick={() => setEditingScope(expanded ? null : scope)}
+                      >
+                        <span id={labelId} className={rows.label}>
+                          {t('autoConfirmation.' + scope + 'Title')}
+                        </span>
+                        <svg
+                          width="12"
+                          height="12"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.7"
+                          className={expanded ? layout.chevronOpen : layout.chevron}
+                        >
+                          <path d="m9 5 7 7-7 7" />
+                        </svg>
+                      </button>
+                      <p id={labelId + '-hint'}>{t('autoConfirmation.' + scope + 'Help')}</p>
+                      <small className={layout.help}>
+                        {t('autoConfirmation.currentMode', {
+                          mode: t('autoConfirmation.' + settings.strictness),
+                          auto: Math.round(thresholds[settings.strictness].auto * 100),
+                          know: Math.round(thresholds[settings.strictness].know * 100),
+                        })}
+                      </small>
+                    </div>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={settings.enabled}
+                      aria-labelledby={labelId}
+                      aria-describedby={labelId + '-hint'}
+                      disabled={busy}
+                      className={`${toggle.toggle} ${settings.enabled ? toggle.toggleActive : ''}`}
+                      onClick={() => {
+                        if (!settings.enabled) setEditingScope(scope);
+                        void updateScope(scope, { enabled: !settings.enabled });
+                      }}
+                    >
+                      <span />
+                    </button>
+                  </div>
+                  <AnimatedCollapse open={expanded}>
+                    <div id={labelId + '-editor'} className={s.scopeEditor}>
+                      <ModeSettings
+                        value={settings}
+                        thresholds={thresholds}
+                        disabled={busy}
+                        onChange={(patch) => updateScope(scope, patch)}
+                      />
+                      {scope === 'servers' && (
+                        <div className={s.resetArea}>
+                          <p className={layout.help}>{t('autoConfirmation.inheritanceHelp')}</p>
+                          <span className={layout.help}>
+                            {t('autoConfirmation.overrides', {
+                              count: Object.keys(config.settings.overrides).length,
+                            })}
+                          </span>
+                          <button
+                            type="button"
+                            className={shared.cancelBtn}
+                            disabled={busy || !Object.keys(config.settings.overrides).length}
+                            onClick={() => setResetOpen(true)}
+                          >
+                            {t('autoConfirmation.reset')}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </AnimatedCollapse>
+                </section>
+              );
+            })}
           </section>
           <section className={s.section}>
             <h4>{t('autoConfirmation.howItWorks')}</h4>
@@ -177,25 +237,6 @@ export function AutoConfirmationSettings({ serverId }: { serverId?: number }) {
               </div>
             </div>
             <p className={layout.help}>{t('autoConfirmation.fallback')}</p>
-          </section>
-          <section className={s.section}>
-            <div className={layout.sectionHeader}>
-              <h4>{t('settings.sections.servers')}</h4>
-              <span className={layout.help}>
-                {t('autoConfirmation.overrides', {
-                  count: Object.keys(config.settings.overrides).length,
-                })}
-              </span>
-            </div>
-            <p className={layout.help}>{t('autoConfirmation.inheritanceHelp')}</p>
-            <button
-              type="button"
-              className={shared.cancelBtn}
-              disabled={busy || !Object.keys(config.settings.overrides).length}
-              onClick={() => setResetOpen(true)}
-            >
-              {t('autoConfirmation.reset')}
-            </button>
           </section>
         </div>
       </div>
@@ -220,6 +261,54 @@ export function AutoConfirmationSettings({ serverId }: { serverId?: number }) {
           }}
         />
       )}
+    </div>
+  );
+}
+
+function ModeSettings({
+  value,
+  thresholds,
+  disabled,
+  onChange,
+}: {
+  value: ApprovalSettings;
+  thresholds: AutoConfirmationConfig['thresholds'];
+  disabled: boolean;
+  onChange: (patch: Partial<ApprovalSettings>) => Promise<boolean>;
+}) {
+  const { t } = useTranslation();
+  return (
+    <div className={s.modeSettings}>
+      <h4>{t('autoConfirmation.strictness')}</h4>
+      <div className={s.modes}>
+        {(['strict', 'normal', 'relaxed', 'custom'] as ApprovalStrictness[]).map((mode) => (
+          <button
+            type="button"
+            key={mode}
+            aria-pressed={value.strictness === mode}
+            disabled={disabled}
+            className={`${s.mode} ${value.strictness === mode ? s.selected : ''}`}
+            onClick={() => void onChange({ strictness: mode })}
+          >
+            <strong>{t('autoConfirmation.' + mode)}</strong>
+            <span>{t('autoConfirmation.' + mode + 'Help')}</span>
+            <small>
+              {t('autoConfirmation.modeThresholds', {
+                auto: Math.round(thresholds[mode].auto * 100),
+                know: Math.round(thresholds[mode].know * 100),
+              })}
+            </small>
+          </button>
+        ))}
+      </div>
+      <AnimatedCollapse open={value.strictness === 'custom'}>
+        <CustomThresholds
+          value={value.customThresholds}
+          disabled={disabled}
+          save={(customThresholds) => onChange({ strictness: 'custom', customThresholds })}
+        />
+      </AnimatedCollapse>
+      <p className={layout.help}>{t('autoConfirmation.experimental')}</p>
     </div>
   );
 }

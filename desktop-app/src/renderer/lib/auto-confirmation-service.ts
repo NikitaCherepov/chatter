@@ -2,6 +2,12 @@ import { apiFetch } from './api';
 
 export type ApprovalStrictness = 'strict' | 'normal' | 'relaxed' | 'custom';
 export type ApprovalThresholds = { auto: number; know: number };
+export type ApprovalScope = 'servers' | 'pc';
+export type ApprovalSettings = {
+  enabled: boolean;
+  strictness: ApprovalStrictness;
+  customThresholds: ApprovalThresholds;
+};
 export type CommandAssessment = {
   status: 'ready' | 'unavailable';
   approved: boolean;
@@ -17,8 +23,10 @@ export type AutoConfirmationConfig = {
     strictness: ApprovalStrictness;
     overrides: Record<string, boolean>;
     customThresholds: ApprovalThresholds;
+    pc: ApprovalSettings;
   };
   thresholds: Record<ApprovalStrictness, { auto: number; know: number }>;
+  pcThresholds: Record<ApprovalStrictness, { auto: number; know: number }>;
 };
 export type AutoConfirmationUpdate =
   | {
@@ -26,6 +34,7 @@ export type AutoConfirmationUpdate =
       enabled: boolean;
       strictness: ApprovalStrictness;
       customThresholds?: ApprovalThresholds;
+      scope?: ApprovalScope;
     }
   | { revision: number; serverId: number; enabled: boolean | null }
   | { revision: number; resetOverrides: true };
