@@ -1,5 +1,16 @@
 {
   "appearance": {
+    "materialsTitle": "Surface materials",
+    "materialsHelp": "Opacity affects the fill only. Blur is visible when there is an image or content behind the surface. Fill opacity may increase automatically to retain readable contrast. Auto restores previous surface styling. Reduced transparency uses an opaque fill.",
+    "materialRegions": {"panels": "Panels", "composer": "Composer"},
+    "materialEnable": "Customize material",
+    "materialCustom": "Custom material",
+    "materialOpacity": "Fill opacity",
+    "materialBlur": "Backdrop blur",
+    "materialShadow": "Shadow",
+    "materialBorder": "Border",
+    "materialRadius": "Surface corner radius",
+    "materialRadiusAuto": "Use global radius",
     "shellBackground": "Application background",
     "panelBackground": "Panels and windows",
     "chatSolid": "Solid conversation background",
@@ -56,7 +67,7 @@
   "proposal": "Appearance suggestion",
   "proposalHelp": "Preview this look in the app. It is saved and activated only after you apply it.",
   "dismiss": "Dismiss",
-  "values": {
+  "values": {"soft":"Soft","medium":"Medium","strong":"Strong","subtle":"Subtle","defined":"Defined",
     "solid": "Solid",
     "gradient": "Gradient",
     "image": "Image",

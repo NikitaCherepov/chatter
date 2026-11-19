@@ -21,7 +21,19 @@ try {
     );
   const p = schema.newAppearance('evening');
   assert.deepEqual(schema.parseAppearanceProfile(p), p, 'legacy profiles retain their data');
-  const extended = { ...p, light: { ...p.light, surface: '#112233', chat: '#223344' } };
+  const extended = {
+    ...p,
+    light: { ...p.light, surface: '#112233', chat: '#223344' },
+    materials: {
+      composer: {
+        opacity: 0.75,
+        blur: 16,
+        shadow: 'soft' as const,
+        border: 'defined' as const,
+        radius: 12,
+      },
+    },
+  };
   assert.equal(schema.parseAppearanceProfile(extended).light.surface, '#112233');
   assert.throws(
     () => schema.parseAppearanceProfile({ ...p, light: { ...p.light, surface: null } }),
@@ -41,6 +53,8 @@ try {
   const saved = changeAppearance(101, { action: 'save', profile: extended, apply: false });
   assert.equal(getAppearance(101).profiles[0].light.chat, '#223344');
   assert.equal(saved.profiles[0].light.surface, '#112233');
+  assert.equal(saved.profiles[0].materials?.composer?.blur, 16);
+  assert.equal(saved.profiles[0].materials?.composer?.opacity, 0.75);
   assert.equal(saved.activeId, null);
   assert.equal(saved.profiles[0].revision, 1);
   assert.equal(getAppearance(202).profiles.length, 0);
@@ -88,6 +102,19 @@ try {
   assert.deepEqual(appearanceFromJson('bad JSON'), original);
   // Image lifetime follows profile references, including duplicate variants and account isolation.
   const sharp = (await import('sharp')).default;
+  for (const invalid of [
+    null,
+    { composer: null },
+    { unknown: {} },
+    { composer: { opacity: 0.2, blur: 16, shadow: 'soft', border: 'subtle' } },
+    { composer: { opacity: 0.8, blur: 100, shadow: 'soft', border: 'subtle' } },
+    { panels: { opacity: 0.8, blur: 16, shadow: 'url(x)', border: 'subtle' } },
+    { panels: { opacity: 0.8, blur: 16, shadow: 'soft', border: 'subtle', css: 'color:red' } },
+  ])
+    assert.throws(
+      () => schema.parseAppearanceProfile({ ...p, materials: invalid }),
+      /appearance_invalid/,
+    );
   const png = await sharp({ create: { width: 2, height: 2, channels: 4, background: '#ffffff' } })
     .png()
     .toBuffer();

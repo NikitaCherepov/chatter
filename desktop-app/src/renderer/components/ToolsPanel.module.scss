@@ -265,3 +265,5 @@
 }
 
 :global([data-appearance-panels]) .panel { @include appearance.scope(panel); }
+
+:global([data-material-panels]) .panel { @include appearance.material(panels); border-radius: var(--material-panels-radius); }

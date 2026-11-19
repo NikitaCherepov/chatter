@@ -43,3 +43,5 @@
 }
 
 :global([data-appearance-panels]) .titleBar { @include appearance.scope(panel); }
+
+:global([data-material-panels]) .titleBar { @include appearance.material(panels); }

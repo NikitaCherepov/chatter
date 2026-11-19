@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
-const { appearanceColors, contrastRatio } = require('../src/renderer/lib/appearance-colors.ts');
+const {
+  appearanceColors,
+  contrastRatio,
+  materialColors,
+  mixColor,
+} = require('../src/renderer/lib/appearance-colors.ts');
 const { newAppearance } = require('../src/renderer/lib/appearance-schema.ts');
 const textTokens = [
   '--text-primary',
@@ -122,3 +127,32 @@ assert.equal(scoped.panel['--bg-primary'], '#081a2b');
 assert.equal(scoped.chat['--bg-secondary'], '#253443');
 const legacy = appearanceColors(newAppearance(), 'light');
 assert.deepEqual(legacy.panel, legacy.shell);
+
+for (const fill of ['#000000', '#ffffff', '#777777', '#ff00ff', '#0d2036']) {
+  for (const opacity of [0.55, 0.8, 1]) {
+    const profile = newAppearance();
+    const result = materialColors(
+      profile.light,
+      { opacity, blur: 16, shadow: 'soft', border: 'defined' },
+      fill,
+    );
+    assert.ok(result.opacity >= opacity && result.opacity <= 1);
+    for (const bg of ['#000000', '#ffffff'])
+      for (const token of [
+        '--text-body',
+        '--text-muted',
+        '--text-hint',
+        '--accent-icon',
+        '--color-error',
+      ])
+        assert.ok(
+          contrastRatio(result.tokens[token], mixColor(bg, fill, result.opacity)) >= 4.5,
+          fill + ' ' + token,
+        );
+    assert.equal(result.filter, 'blur(16px)');
+    assert.ok(result.fill.startsWith('rgba('));
+  }
+}
+console.log(
+  'PASS: material fill contrast over unknown backdrops, bounded blur and opaque text tokens',
+);

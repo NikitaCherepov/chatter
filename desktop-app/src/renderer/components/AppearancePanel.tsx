@@ -3,6 +3,8 @@ import { useTranslation } from 'react-i18next';
 import { useAppearance } from '../lib/appearance-service';
 import {
   APPEARANCE_FONTS,
+  DEFAULT_MATERIAL,
+  type AppearanceMaterial,
   DEFAULT_APPEARANCE,
   newAppearance,
   parseAppearanceProfile,
@@ -14,7 +16,7 @@ import {
   getAppearancePreview,
   previewAppearance,
 } from '../lib/appearance-runtime';
-import { appearanceColors } from '../lib/appearance-colors';
+import { appearanceColors, materialColors } from '../lib/appearance-colors';
 import { apiFetch, resolveAuthenticatedAssetUrl } from '../lib/api';
 import { Select } from './Select';
 import Slider from './Slider';
@@ -31,6 +33,20 @@ export const AppearanceSample = memo(function AppearanceSample({
     <div className={s.sample} aria-hidden="true">
       {(['light', 'dark'] as const).map((mode) => {
         const colors = appearanceColors(profile, mode, resolveAuthenticatedAssetUrl);
+        const panel = profile.materials?.panels
+          ? materialColors(
+              profile[mode],
+              profile.materials.panels,
+              profile[mode].surface ?? colors.panel['--bg-secondary'],
+            )
+          : null;
+        const composer = profile.materials?.composer
+          ? materialColors(
+              profile[mode],
+              profile.materials.composer,
+              profile[mode].surface ?? colors.panel['--bg-input'],
+            )
+          : null;
         return (
           <div
             className={s.mini}
@@ -42,14 +58,31 @@ export const AppearanceSample = memo(function AppearanceSample({
           >
             <aside
               style={{
-                background: colors.panel['--bg-secondary'],
-                color: colors.panel['--text-body'],
+                background: panel?.fill ?? colors.panel['--bg-secondary'],
+                color: panel?.tokens['--text-body'] ?? colors.panel['--text-body'],
+                backdropFilter: panel?.filter,
+                boxShadow: panel?.shadow,
               }}
             />
             <div>
               <i />
               <i style={{ background: profile[mode].accent }} />
               <i />
+              {composer && (
+                <span
+                  className={s.materialMini}
+                  style={{
+                    background: composer.fill,
+                    color: composer.tokens['--text-body'],
+                    backdropFilter: composer.filter,
+                    boxShadow: composer.shadow,
+                    borderColor: composer.border,
+                    borderRadius: (composer.radius ?? profile.geometry.radius) / 2,
+                  }}
+                >
+                  Aa
+                </span>
+              )}
             </div>
           </div>
         );
@@ -157,6 +190,16 @@ export function AppearancePanel() {
     key: K,
     value: Partial<AppearanceProfile[K]>,
   ) => setDraft(draft ? { ...draft, [key]: { ...draft[key], ...value } } : null);
+  const material = (region: 'panels' | 'composer', value: AppearanceMaterial | undefined) => {
+    if (!draft) return;
+    const materials = { ...draft.materials };
+    if (value) materials[region] = value;
+    else delete materials[region];
+    const updated = { ...draft };
+    if (Object.keys(materials).length) updated.materials = materials;
+    else delete updated.materials;
+    setDraft(updated);
+  };
   const upload = async (file: File) => {
     setUploading(true);
     await run(async () => {
@@ -426,6 +469,105 @@ export function AppearancePanel() {
               formatValue={(v) => Math.round(v * 100) + '%'}
               onChange={(v) => part('geometry', { density: v ?? 1 })}
             />
+          </div>
+          <h4>{t('appearance.materialsTitle')}</h4>
+          <p className={s.hint}>{t('appearance.materialsHelp')}</p>
+          <div className={s.fields}>
+            {(['panels', 'composer'] as const).map((region) => {
+              const value = draft.materials?.[region];
+              const change = (patch: Partial<AppearanceMaterial>) =>
+                material(region, { ...(value ?? DEFAULT_MATERIAL), ...patch });
+              return (
+                <div className={s.colors} key={region}>
+                  <div className={s.heading}>
+                    <strong>{t('appearance.materialRegions.' + region)}</strong>
+                    <button
+                      type="button"
+                      className={a.cancelBtn}
+                      aria-label={
+                        t('appearance.materialRegions.' + region) + ' ' + t('appearance.auto')
+                      }
+                      disabled={!value}
+                      onClick={() => material(region, undefined)}
+                    >
+                      {t('appearance.auto')}
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    className={a.cancelBtn}
+                    disabled={!!value}
+                    onClick={() =>
+                      material(region, {
+                        ...DEFAULT_MATERIAL,
+                        opacity: 0.8,
+                        blur: 16,
+                        shadow: 'soft',
+                      })
+                    }
+                  >
+                    {value ? t('appearance.materialCustom') : t('appearance.materialEnable')}
+                  </button>
+                  {value && (
+                    <>
+                      <Slider
+                        mode="numeric"
+                        label={t('appearance.materialOpacity')}
+                        min={0.55}
+                        max={1}
+                        step={0.05}
+                        value={value.opacity}
+                        formatValue={(v) => Math.round(v * 100) + '%'}
+                        onChange={(v) => change({ opacity: v ?? 1 })}
+                      />
+                      <Slider
+                        mode="numeric"
+                        label={t('appearance.materialBlur')}
+                        min={0}
+                        max={32}
+                        step={1}
+                        value={value.blur}
+                        formatValue={(v) => v + ' px'}
+                        onChange={(v) => change({ blur: v ?? 0 })}
+                      />
+                      {options(
+                        t('appearance.materialShadow'),
+                        value.shadow,
+                        ['none', 'soft', 'medium', 'strong'],
+                        (v) => change({ shadow: v as AppearanceMaterial['shadow'] }),
+                      )}
+                      {options(
+                        t('appearance.materialBorder'),
+                        value.border,
+                        ['none', 'subtle', 'defined'],
+                        (v) => change({ border: v as AppearanceMaterial['border'] }),
+                      )}
+                      <Slider
+                        mode="numeric"
+                        label={t('appearance.materialRadius')}
+                        min={0}
+                        max={24}
+                        step={1}
+                        value={value.radius ?? draft.geometry.radius}
+                        onChange={(v) => change({ radius: v ?? draft.geometry.radius })}
+                      />
+                      <button
+                        type="button"
+                        className={a.cancelBtn}
+                        disabled={value.radius === undefined}
+                        onClick={() => {
+                          const next = { ...value };
+                          delete next.radius;
+                          material(region, next);
+                        }}
+                      >
+                        {t('appearance.materialRadiusAuto')}
+                      </button>
+                    </>
+                  )}
+                </div>
+              );
+            })}
           </div>
           <h4>{t('appearance.background')}</h4>
           <p className={s.hint}>{t('appearance.backgroundHelp')}</p>

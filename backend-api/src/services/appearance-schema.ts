@@ -6,6 +6,19 @@ export type Palette = {
   surface?: string;
   chat?: string;
 };
+export type AppearanceMaterial = {
+  opacity: number;
+  blur: number;
+  shadow: 'none' | 'soft' | 'medium' | 'strong';
+  border: 'none' | 'subtle' | 'defined';
+  radius?: number;
+};
+export const DEFAULT_MATERIAL: AppearanceMaterial = {
+  opacity: 1,
+  blur: 0,
+  shadow: 'none',
+  border: 'subtle',
+};
 export type AppearanceProfile = {
   id: string;
   name: string;
@@ -22,6 +35,7 @@ export type AppearanceProfile = {
     lineHeight: number;
   };
   geometry: { radius: number; density: number };
+  materials?: { panels?: AppearanceMaterial; composer?: AppearanceMaterial };
   background: {
     type: 'solid' | 'gradient' | 'image';
     color: string;
@@ -127,6 +141,7 @@ export function parseAppearanceProfile(value: unknown): AppearanceProfile {
     'geometry',
     'background',
     'motion',
+    'materials',
   ]);
   const id = text(v.id, 64);
   if (!/^[a-zA-Z0-9_-]+$/.test(id)) fail();
@@ -162,10 +177,27 @@ export function parseAppearanceProfile(value: unknown): AppearanceProfile {
       fail();
     }
   }
+  let materials: AppearanceProfile['materials'];
+  if (v.materials !== undefined) {
+    const source = keys(v.materials, ['panels', 'composer']);
+    materials = {};
+    for (const region of ['panels', 'composer'] as const) {
+      if (source[region] === undefined) continue;
+      const item = keys(source[region], ['opacity', 'blur', 'shadow', 'border', 'radius']);
+      materials[region] = {
+        opacity: number(item.opacity, 0.55, 1),
+        blur: number(item.blur, 0, 32),
+        shadow: choice(item.shadow, ['none', 'soft', 'medium', 'strong']),
+        border: choice(item.border, ['none', 'subtle', 'defined']),
+        ...(item.radius !== undefined ? { radius: number(item.radius, 0, 24) } : {}),
+      };
+    }
+  }
   return {
     id,
     name: text(v.name, 80),
     revision: revision(v.revision ?? 0),
+    ...(materials !== undefined ? { materials } : {}),
     light: palette(v.light),
     dark: palette(v.dark),
     typography: {
@@ -244,6 +276,15 @@ export const APPEARANCE_CAPABILITIES = {
   motion: {
     preset: ['none', 'fade', 'slide', 'custom'],
     easing: ['ease-out', 'ease-in-out', 'linear'],
+  },
+  materials: {
+    regions: ['panels', 'composer'],
+    template: DEFAULT_MATERIAL,
+    limits: { opacity: [0.55, 1], blur: [0, 32], radius: [0, 24] },
+    shadow: ['none', 'soft', 'medium', 'strong'],
+    border: ['none', 'subtle', 'defined'],
+    description:
+      'Optional material per region. Omit a region for unchanged legacy styling. Opacity affects fill only; text remains opaque. The renderer can raise effective opacity to retain readable contrast. Blur affects content behind the surface, not text. It is only visible over varied content; panels over a flat background may show no visible blur. Optional radius overrides the global radius in this region only. Use the existing preview/confirmation flow.',
   },
   template: newAppearance(),
 };

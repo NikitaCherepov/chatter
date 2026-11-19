@@ -1,5 +1,5 @@
 import { getResolvedTheme } from './theme';
-import { appearanceColors } from './appearance-colors';
+import { appearanceColors, materialColors } from './appearance-colors';
 import {
   DEFAULT_APPEARANCE,
   parseAppearanceProfile,
@@ -32,6 +32,8 @@ export function refreshAppearance() {
   if (!profile) {
     delete root.dataset.appearance;
     delete root.dataset.appearancePanels;
+    delete root.dataset.materialPanels;
+    delete root.dataset.materialComposer;
     window.dispatchEvent(new Event(APPEARANCE_STYLE_EVENT));
     if (measuredSignature) {
       measuredSignature = '';
@@ -48,11 +50,33 @@ export function refreshAppearance() {
   for (const [key, value] of Object.entries(colors.shell)) set(key, value);
   for (const [key, value] of Object.entries(colors.chat))
     set('--appearance-chat-' + key.slice(2), value);
-  if (profile[getResolvedTheme()].surface) {
+  const palette = profile[getResolvedTheme()];
+  const panelMaterial = profile.materials?.panels;
+  if (palette.surface || panelMaterial) {
     root.dataset.appearancePanels = 'custom';
     for (const [key, value] of Object.entries(colors.panel))
       set('--appearance-panel-' + key.slice(2), value);
   } else delete root.dataset.appearancePanels;
+  for (const region of ['panels', 'composer'] as const) {
+    const material = profile.materials?.[region];
+    const attribute = region === 'panels' ? 'materialPanels' : 'materialComposer';
+    if (!material) {
+      delete root.dataset[attribute];
+      continue;
+    }
+    root.dataset[attribute] = 'custom';
+    const color =
+      region === 'panels'
+        ? (palette.surface ?? colors.panel['--bg-secondary'])
+        : (palette.surface ?? colors.panel['--bg-input']);
+    const result = materialColors(palette, material, color);
+    const scope = region === 'panels' ? 'panel' : 'composer';
+    for (const [key, value] of Object.entries(result.tokens))
+      set('--appearance-' + scope + '-' + key.slice(2), value);
+    for (const key of ['fill', 'opaque', 'filter', 'shadow', 'border'] as const)
+      set('--material-' + region + '-' + key, result[key]);
+    set('--material-' + region + '-radius', (result.radius ?? profile.geometry.radius) + 'px');
+  }
   const t = profile.typography;
   set('--appearance-ui-font', JSON.stringify(t.uiFont) + ', system-ui, sans-serif');
   set('--appearance-message-font', JSON.stringify(t.messageFont) + ', system-ui, sans-serif');

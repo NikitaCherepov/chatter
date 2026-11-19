@@ -5,3 +5,18 @@
   color: var(--text-body);
   color-scheme: var(--color-scheme);
 }
+
+// Preserve opaque paint when backdrop-filter is unavailable or transparency is reduced.
+@mixin material($region) {
+  background: var(--material-#{$region}-opaque);
+  box-shadow: var(--material-#{$region}-shadow);
+  border-color: var(--material-#{$region}-border);
+  @supports (backdrop-filter: blur(1px)) {
+    background: var(--material-#{$region}-fill);
+    backdrop-filter: var(--material-#{$region}-filter);
+  }
+  @media (prefers-reduced-transparency: reduce) {
+    background: var(--material-#{$region}-opaque);
+    backdrop-filter: none;
+  }
+}

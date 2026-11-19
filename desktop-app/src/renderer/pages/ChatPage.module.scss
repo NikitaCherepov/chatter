@@ -3458,3 +3458,15 @@
 .composerReview { min-height: 0; max-height: 40vh; overflow: auto; overscroll-behavior: contain; }
 .composerReview:empty { display: none; }
 .composerFootnote { flex-shrink: 0; }
+
+:global([data-material-panels]) {
+  .sidebar, .roomPanel, .chatTopBar { @include appearance.material(panels); border-radius: var(--material-panels-radius); }
+  .roomPanel { border-radius: var(--material-panels-radius); }
+}
+:global([data-material-composer]) .composerWrap {
+  @include appearance.scope(composer);
+  .composerBody:not(.composerWithConfirmations) > .inputArea,
+  .composerWithConfirmations { @include appearance.material(composer); border-radius: var(--material-composer-radius); }
+  .composerWithConfirmations .inputArea { background: transparent; }
+  .composerReview > section { background: transparent; }
+}

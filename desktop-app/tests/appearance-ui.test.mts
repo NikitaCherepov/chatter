@@ -216,6 +216,30 @@ app.whenReady().then(async()=>{
  assert.notEqual(darkInk,'rgb(15, 29, 48)');
  await js('window.clickText("Вернуть оформление")');
  await until('document.documentElement.dataset.appearance==="from-bot"');
+ // Real renderer/editor materials: only surfaces change opacity; text stays fully opaque.
+ await js('window.clickText("Изменить")');
+ await until('!!document.querySelector("input[list=appearance-fonts]")');
+ await js('window.clickText("Настроить материал")');
+ await js('window.clickText("Настроить материал")');
+ await js('window.clickText("Предпросмотр")');
+ await until('document.documentElement.dataset.materialPanels==="custom" && document.documentElement.dataset.materialComposer==="custom"');
+ const materialStyle=await js('(()=>{const panel=document.querySelector("#panel-fixture"),input=document.querySelector("[data-chat-composer-dock] textarea"),surface=input.parentElement;return {panelFilter:getComputedStyle(panel).backdropFilter,filter:getComputedStyle(surface).backdropFilter,fill:getComputedStyle(surface).backgroundColor,opacity:getComputedStyle(input).opacity,shadow:getComputedStyle(surface).boxShadow};})()');
+ assert.equal(materialStyle.panelFilter,'blur(16px)'); assert.equal(materialStyle.filter,'blur(16px)');
+ assert.equal(materialStyle.opacity,'1');assert.notEqual(materialStyle.shadow,'none');assert.ok(materialStyle.fill.startsWith('rgba('));
+ await js('[...document.querySelectorAll("h4")].find(el=>el.textContent==="Материалы поверхностей").scrollIntoView({block:"start"});window.scrollRef.current.scrollTo(0,{immediate:true})');
+ await sleep(250);await wc.capturePage();await sleep(100);
+ fs.writeFileSync(path.join(process.env.TEMP,'chatter-materials-review.png'),(await wc.capturePage()).toPNG());
+ await js('window.scrollRef.current.scrollTo("end",{immediate:true})');
+
+ await wc.debugger.attach('1.3');
+ await wc.debugger.sendCommand('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-transparency',value:'reduce'}]});
+ const fallback=await js('getComputedStyle(document.querySelector("[data-chat-composer-dock] textarea").parentElement).backdropFilter');
+ assert.equal(fallback,'none');await wc.debugger.detach();
+ await js('[...document.querySelectorAll("button")].find(el=>el.getAttribute("aria-label")==="Поле ввода Авто").click()');
+ await until('!document.documentElement.dataset.materialComposer');
+ assert.equal(await js('getComputedStyle(document.querySelector("[data-chat-composer-dock] textarea").parentElement).backdropFilter'),'none');
+ await js('window.clickText("Вернуть оформление");window.clickText("Отмена")');
+ assert.ok(await js('!document.documentElement.dataset.materialComposer && !document.documentElement.dataset.materialPanels'));
  // Animation is tied to append events, never to row remounts or prepending history.
  await js('window.motionPreview()');
  await js('window.appendMessage()');

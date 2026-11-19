@@ -1,4 +1,4 @@
-import type { AppearanceProfile, Palette } from './appearance-schema';
+import type { AppearanceProfile, Palette, AppearanceMaterial } from './appearance-schema';
 
 const rgb = (hex: string) => [1, 3, 5].map((offset) => parseInt(hex.slice(offset, offset + 2), 16));
 export const mixColor = (a: string, b: string, amount: number) =>
@@ -192,5 +192,44 @@ export function appearanceColors(
     chat: paletteTokens({ ...p, background: backgroundColor, text }, samples),
     background,
     samples,
+  };
+}
+
+export function materialColors(palette: Palette, material: AppearanceMaterial, color: string) {
+  let opacity = material.opacity;
+  let tokens: Record<string, string> = {};
+  // Bound the unknown backdrop by black and white, including the text on controls.
+  // No image sampling, network requests or work during scrolling is needed.
+  for (;;) {
+    const backgrounds = ['#000000', '#ffffff'].map((bg) => mixColor(bg, color, opacity));
+    tokens = paletteTokens({ ...palette, background: color }, backgrounds);
+    const textTokens = [
+      '--text-body',
+      '--text-muted',
+      '--text-hint',
+      '--accent-icon',
+      '--color-error',
+    ];
+    if (textTokens.every((key) => minimumContrast(tokens[key], backgrounds) >= 4.5) || opacity >= 1)
+      break;
+    opacity = Math.min(1, opacity + 0.025);
+  }
+  const dark = luminance(color) < 0.25;
+  const strength = { none: 0, soft: 0.12, medium: 0.22, strong: 0.34 }[material.shadow];
+  const shadow = strength
+    ? `0 ${material.shadow === 'soft' ? 2 : 8}px ${material.shadow === 'strong' ? 32 : 16}px rgba(0,0,0,${Math.min(0.65, strength * (dark ? 1.6 : 1))})`
+    : 'none';
+  return {
+    tokens,
+    fill: `rgba(${rgb(color).join(',')},${opacity})`,
+    opaque: color,
+    filter: material.blur ? `blur(${material.blur}px)` : 'none',
+    shadow,
+    border:
+      material.border === 'none'
+        ? 'transparent'
+        : `rgba(${rgb(tokens['--text-body']).join(',')},${material.border === 'subtle' ? 0.12 : 0.28})`,
+    radius: material.radius,
+    opacity,
   };
 }

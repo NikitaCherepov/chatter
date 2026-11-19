@@ -1199,3 +1199,5 @@
 }
 
 :global([data-appearance-panels]) .modal { @include appearance.scope(panel); }
+
+:global([data-material-panels]) .modal { @include appearance.material(panels); border-radius: var(--material-panels-radius); }

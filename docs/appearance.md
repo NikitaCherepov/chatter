@@ -39,3 +39,9 @@ Preview state is local and temporary. The independent recovery bar and Escape re
 ## Color regions
 
 Each light/dark palette has background (application shell), text and accent. Optional surface controls the sidebar, header, composer, tools panel, title bar and settings window, with its own derived text and control colors. Optional chat sets the solid conversation color. The existing profile.background gradient/image is conversation-only and takes precedence over chat. Omitted surface/chat retain previous behavior exactly; Auto removes the corresponding override. No database migration or theme preference change is needed. The shared schema, capabilities and editor use the same names; legacy profiles still validate without adding fields.
+
+## Surface materials
+
+Optional profile.materials.panels and profile.materials.composer each contain opacity (0.55–1), blur (0–32px), shadow (none/soft/medium/strong), border (none/subtle/defined), and optional radius (0–24px, otherwise the global radius). Omission means exact legacy styling; Auto removes that region. These additive fields use the existing API, tools, saved variants and confirmation flow.
+
+Only the background fill is translucent. Text/control colors are derived against worst-case black/white backdrops; effective opacity can be raised for contrast, without rewriting the requested value. Backdrop blur is static, bounded, and scoped to chrome/composer surfaces; it never filters the conversation or runs in scroll handlers. Panels above flat content may show no visible blur. Reduced transparency and browsers without backdrop-filter get opaque paint. Shadow and border use finite presets, not arbitrary CSS. Materials do not change measured row heights.
