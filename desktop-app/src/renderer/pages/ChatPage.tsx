@@ -1,3 +1,6 @@
+import { AppearanceConfirmation, type AppearanceProposal } from '../components/AppearanceConfirmation';
+import { parseAppearanceProfile } from '../lib/appearance-schema';
+import { useMessageArrival } from '../lib/use-message-arrival';
 import { RUNBOOK_COMMAND_TOOLS_ENABLED } from '../lib/runbook-ui';
 import { Icon } from '../components/Icon';
 import React, { useEffect, useLayoutEffect, useRef, useState, useCallback, useMemo } from 'react';
@@ -1430,6 +1433,7 @@ export function ChatPage() {
     setStreamingMsgIdRaw(id);
   }, []);
   const [loadingMessages, setLoadingMessages] = useState(false);
+  useMessageArrival(messages,activeChatId,!loadingMessages);
   const [loadingOlderMessages, setLoadingOlderMessages] = useState(false);
   const [olderMessagesError, setOlderMessagesError] = useState(false);
   const olderMessagesRequestRef = useRef<object | null>(null);
@@ -1626,6 +1630,8 @@ export function ChatPage() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const confirmationComposer = useConfirmationComposer(activeChatId);
   const confirmationArrivalRef = useRef(new Map<string, number>());
+  const [appearanceProposals,setAppearanceProposals]=useState<AppearanceProposal[]>([]);
+  useEffect(()=>{setAppearanceProposals([]);},[activeChatId]);
   useEffect(() => { if (confirmationComposer.comment && !document.querySelector('[data-confirmation-expanded]')) textareaRef.current?.focus(); }, [confirmationComposer.comment?.id]);
 
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -2519,6 +2525,15 @@ export function ChatPage() {
     }
     if (action.action !== 'file_action_confirmation' && action.action !== 'edit_file_lines_confirmation') {
       notifyConfirmationAction(action);
+    }
+    if(action.action==='suggest_appearance'&&action.value){
+      try{
+        const value=action.value as AppearanceProposal, profile=parseAppearanceProfile(value.profile);
+        if(typeof value.proposal_id!=='string')return;
+        if(!confirmationArrivalRef.current.has(value.proposal_id))confirmationArrivalRef.current.set(value.proposal_id,confirmationArrivalRef.current.size);
+        setAppearanceProposals(items=>items.some(item=>item.proposal_id===value.proposal_id)?items:[...items,{proposal_id:value.proposal_id,profile}]);
+      }catch{ /* Ignore invalid proposals from an incompatible server. */ }
+      return;
     }
     if (action.action === 'suggest_macro' && action.value) {
       const val = action.value as { title?: string; description?: string; commands?: string[] };
@@ -5297,6 +5312,7 @@ export function ChatPage() {
   };
 
   const confirmationCards = [
+    ...appearanceProposals.map(proposal=><AppearanceConfirmation key={proposal.proposal_id} proposal={proposal} onResolved={()=>setAppearanceProposals(items=>items.filter(item=>item.proposal_id!==proposal.proposal_id))}/>),
     ...pendingRunbooks.map(rb => (
       <ConfirmationCard
         key={rb.id}

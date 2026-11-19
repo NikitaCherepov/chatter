@@ -104,6 +104,7 @@ export function useVirtualRows(rootRef: RefObject<HTMLDivElement>, scope: string
       for (const row of rows.values()) row.remeasure();
     };
     document.fonts.addEventListener('loadingdone', refreshSizes);
+    window.addEventListener('chatter-appearance-change', refreshSizes);
     document.addEventListener('selectionchange', selectionChanged);
     selectionChanged();
     return () => {
@@ -111,6 +112,7 @@ export function useVirtualRows(rootRef: RefObject<HTMLDivElement>, scope: string
       selectionActive.current = false;
       document.removeEventListener('selectionchange', selectionChanged);
       document.fonts.removeEventListener('loadingdone', refreshSizes);
+      window.removeEventListener('chatter-appearance-change', refreshSizes);
       intersection.current?.disconnect();
       resize.current?.disconnect();
       intersection.current = null;

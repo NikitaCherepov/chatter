@@ -10,7 +10,7 @@
 
 .modal {
   background-color: var(--bg-primary);
-  border-radius: 12px;
+  border-radius: var(--appearance-radius, 12px);
   box-shadow: var(--shadow-modal);
   width: 82vw;
   min-width: 480px;
@@ -28,12 +28,12 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 18px 20px;
+  padding: calc(18px * var(--appearance-density, 1)) calc(20px * var(--appearance-density, 1));
   border-bottom: 1px solid var(--border-light);
 }
 
 .title {
-  font-size: 16px;
+  font-size: calc(16px * var(--appearance-ui-scale, 1));
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -41,7 +41,7 @@
 .closeBtn {
   width: 28px;
   height: 28px;
-  border-radius: 6px;
+  border-radius: var(--appearance-radius, 6px);
   border: none;
   background-color: transparent;
   cursor: pointer;
@@ -67,26 +67,26 @@
   width: 160px;
   min-width: 160px;
   border-right: 1px solid var(--border-light);
-  padding: 8px;
+  padding: calc(8px * var(--appearance-density, 1));
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: calc(2px * var(--appearance-density, 1));
   overflow-y: auto;
 }
 
 .menuItem {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: calc(8px * var(--appearance-density, 1));
   width: 100%;
-  padding: 10px 12px;
+  padding: calc(10px * var(--appearance-density, 1)) calc(12px * var(--appearance-density, 1));
   border: none;
   background: none;
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: calc(13px * var(--appearance-ui-scale, 1));
   font-weight: 500;
   cursor: pointer;
-  border-radius: 6px;
+  border-radius: var(--appearance-radius, 6px);
   text-align: left;
   transition: background-color 0.1s, color 0.1s;
 
@@ -110,14 +110,14 @@
 
 .panel {
   flex: 1;
-  padding: 20px 24px;
+  padding: calc(20px * var(--appearance-density, 1)) calc(24px * var(--appearance-density, 1));
   overflow-y: auto;
   display: flex;
   flex-direction: column;
 }
 
 .panelTitle {
-  font-size: 14px;
+  font-size: calc(14px * var(--appearance-ui-scale, 1));
   font-weight: 600;
   color: var(--text-primary);
   margin-bottom: 16px;
@@ -128,17 +128,17 @@
 .connectionsHelp {
   margin: -6px 0 16px;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: calc(12px * var(--appearance-ui-scale, 1));
   line-height: 1.5;
 }
 
 .connectionCard {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 14px;
+  gap: calc(14px * var(--appearance-density, 1));
+  padding: calc(14px * var(--appearance-density, 1));
   border: 1px solid var(--border-light);
-  border-radius: 10px;
+  border-radius: var(--appearance-radius, 10px);
   background: var(--bg-input);
 
   > .saveBtn {
@@ -153,7 +153,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 10px;
+  border-radius: var(--appearance-radius, 10px);
   background: var(--bg-primary);
 }
 
@@ -171,22 +171,22 @@
 .connectionTitleRow {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: calc(8px * var(--appearance-density, 1));
   margin-bottom: 4px;
 }
 
 .connectionTitle {
   color: var(--text-primary);
-  font-size: 14px;
+  font-size: calc(14px * var(--appearance-ui-scale, 1));
   font-weight: 600;
 }
 
 .connectionStatus {
-  padding: 2px 7px;
-  border-radius: 999px;
+  padding: calc(2px * var(--appearance-density, 1)) calc(7px * var(--appearance-density, 1));
+  border-radius: var(--appearance-radius, 999px);
   background: var(--bg-modal-hover);
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: calc(10px * var(--appearance-ui-scale, 1));
   font-weight: 600;
 }
 
@@ -198,29 +198,29 @@
 .connectionSubtitle {
   overflow: hidden;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: calc(12px * var(--appearance-ui-scale, 1));
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .connectionNotice {
   margin-top: 12px;
-  padding: 10px 12px;
-  border-radius: 8px;
+  padding: calc(10px * var(--appearance-density, 1)) calc(12px * var(--appearance-density, 1));
+  border-radius: var(--appearance-radius, 8px);
   background: var(--bg-input);
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: calc(11px * var(--appearance-ui-scale, 1));
   line-height: 1.5;
 }
 
 .connectionDangerBtn {
   flex: 0 0 auto;
-  padding: 8px 16px;
+  padding: calc(8px * var(--appearance-density, 1)) calc(16px * var(--appearance-density, 1));
   border: 1px solid rgba(229, 57, 53, 0.35);
-  border-radius: 6px;
+  border-radius: var(--appearance-radius, 6px);
   background: rgba(229, 57, 53, 0.08);
   color: var(--color-error);
-  font-size: 13px;
+  font-size: calc(13px * var(--appearance-ui-scale, 1));
   font-weight: 500;
   cursor: pointer;
   transition: opacity 0.15s, background-color 0.15s;
@@ -242,16 +242,16 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 20px;
+  padding: calc(20px * var(--appearance-density, 1));
   background: var(--overlay-bg);
 }
 
 .accountSplitModal {
   width: 460px;
   max-width: 100%;
-  padding: 24px;
+  padding: calc(24px * var(--appearance-density, 1));
   border: 1px solid var(--border-light);
-  border-radius: 12px;
+  border-radius: var(--appearance-radius, 12px);
   background: var(--bg-primary);
   box-shadow: var(--shadow-modal);
 }
@@ -259,7 +259,7 @@
 .accountSplitHeader {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: calc(14px * var(--appearance-density, 1));
 }
 
 .accountSplitIcon {
@@ -272,31 +272,31 @@
 .accountSplitTitle {
   margin-bottom: 4px;
   color: var(--text-primary);
-  font-size: 16px;
+  font-size: calc(16px * var(--appearance-ui-scale, 1));
   font-weight: 600;
 }
 
 .accountSplitText {
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: calc(12px * var(--appearance-ui-scale, 1));
   line-height: 1.45;
 }
 
 .accountOwnerChoices {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: calc(8px * var(--appearance-density, 1));
   margin: 20px 0 14px;
 }
 
 .accountOwnerChoice {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
+  gap: calc(10px * var(--appearance-density, 1));
   width: 100%;
-  padding: 12px;
+  padding: calc(12px * var(--appearance-density, 1));
   border: 1px solid var(--border-light);
-  border-radius: 8px;
+  border-radius: var(--appearance-radius, 8px);
   background: var(--bg-input);
   color: var(--text-primary);
   text-align: left;
@@ -310,12 +310,12 @@
 
   strong {
     margin-bottom: 3px;
-    font-size: 13px;
+    font-size: calc(13px * var(--appearance-ui-scale, 1));
   }
 
   small {
     color: var(--text-muted);
-    font-size: 11px;
+    font-size: calc(11px * var(--appearance-ui-scale, 1));
     line-height: 1.45;
   }
 
@@ -351,43 +351,43 @@
 }
 
 .accountSplitWarning {
-  padding: 10px 12px;
+  padding: calc(10px * var(--appearance-density, 1)) calc(12px * var(--appearance-density, 1));
   border: 1px solid rgba(245, 158, 11, 0.35);
-  border-radius: 8px;
+  border-radius: var(--appearance-radius, 8px);
   background: rgba(245, 158, 11, 0.08);
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: calc(11px * var(--appearance-ui-scale, 1));
   line-height: 1.5;
 }
 
 .accountSplitActions {
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
+  gap: calc(8px * var(--appearance-density, 1));
   margin-top: 18px;
 }
 
 .fieldGroup {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: calc(8px * var(--appearance-density, 1));
   margin-bottom: 16px;
 }
 
 .fieldLabel {
-  font-size: 12px;
+  font-size: calc(12px * var(--appearance-ui-scale, 1));
   font-weight: 500;
   color: var(--text-muted);
 }
 
 .fieldInput {
   width: 100%;
-  padding: 8px 12px;
-  border-radius: 6px;
+  padding: calc(8px * var(--appearance-density, 1)) calc(12px * var(--appearance-density, 1));
+  border-radius: var(--appearance-radius, 6px);
   border: 1px solid var(--border-input);
   background-color: var(--bg-input);
   color: var(--text-body);
-  font-size: 13px;
+  font-size: calc(13px * var(--appearance-ui-scale, 1));
   outline: none;
   transition: border-color 0.1s;
 
@@ -401,12 +401,12 @@
 }
 
 .saveBtn {
-  padding: 8px 20px;
-  border-radius: 6px;
+  padding: calc(8px * var(--appearance-density, 1)) calc(20px * var(--appearance-density, 1));
+  border-radius: var(--appearance-radius, 6px);
   border: none;
   background-color: var(--accent);
   color: var(--accent-contrast);
-  font-size: 13px;
+  font-size: calc(13px * var(--appearance-ui-scale, 1));
   font-weight: 500;
   cursor: pointer;
   transition: opacity 0.15s;
@@ -430,17 +430,17 @@
   align-items: center;
   justify-content: center;
   color: var(--text-hint);
-  font-size: 13px;
+  font-size: calc(13px * var(--appearance-ui-scale, 1));
 }
 
 .textareaInput {
   width: 100%;
-  padding: 8px 12px;
-  border-radius: 6px;
+  padding: calc(8px * var(--appearance-density, 1)) calc(12px * var(--appearance-density, 1));
+  border-radius: var(--appearance-radius, 6px);
   border: 1px solid var(--border-input);
   background-color: var(--bg-input);
   color: var(--text-body);
-  font-size: 13px;
+  font-size: calc(13px * var(--appearance-ui-scale, 1));
   outline: none;
   resize: vertical;
   min-height: 100px;
@@ -459,11 +459,11 @@
 .promptImportRow {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: calc(10px * var(--appearance-density, 1));
 
   span {
     color: var(--text-hint);
-    font-size: 11px;
+    font-size: calc(11px * var(--appearance-ui-scale, 1));
     line-height: 1.35;
   }
 }
@@ -471,10 +471,10 @@
 .promptImageEditor {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 10px;
+  gap: calc(14px * var(--appearance-density, 1));
+  padding: calc(10px * var(--appearance-density, 1));
   border: 1px solid var(--border-light);
-  border-radius: 8px;
+  border-radius: var(--appearance-radius, 8px);
   background: var(--bg-input);
 }
 
@@ -487,10 +487,10 @@
   justify-content: center;
   overflow: hidden;
   border: 1px dashed var(--border-input);
-  border-radius: 8px;
+  border-radius: var(--appearance-radius, 8px);
   background: var(--bg-primary);
   color: var(--text-hint);
-  font-size: 11px;
+  font-size: calc(11px * var(--appearance-ui-scale, 1));
   text-align: center;
 
   img {
@@ -505,19 +505,19 @@
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: 5px;
+  gap: calc(5px * var(--appearance-density, 1));
 }
 
 .promptImageHelp {
   color: var(--text-hint);
-  font-size: 11px;
+  font-size: calc(11px * var(--appearance-ui-scale, 1));
   line-height: 1.4;
 }
 
 .promptImageButtons {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: calc(8px * var(--appearance-density, 1));
   margin-top: 4px;
 }
 
@@ -528,19 +528,19 @@
 .promptEditorModes {
   display: flex;
   width: fit-content;
-  padding: 2px;
+  padding: calc(2px * var(--appearance-density, 1));
   border: 1px solid var(--border-input);
-  border-radius: 7px;
+  border-radius: var(--appearance-radius, 7px);
   background: var(--bg-input);
 }
 
 .promptEditorMode {
-  padding: 6px 12px;
+  padding: calc(6px * var(--appearance-density, 1)) calc(12px * var(--appearance-density, 1));
   border: none;
-  border-radius: 5px;
+  border-radius: var(--appearance-radius, 5px);
   background: transparent;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: calc(12px * var(--appearance-ui-scale, 1));
   cursor: pointer;
   transition: background-color 0.1s, color 0.1s;
 
@@ -557,13 +557,13 @@
 .promptAdvancedFields {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: calc(12px * var(--appearance-density, 1));
 }
 
 .promptAdvancedField {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: calc(6px * var(--appearance-density, 1));
 
   .textareaInput {
     min-height: 76px;
@@ -576,7 +576,7 @@
   display: flex;
   align-items: center;
   gap: 0;
-  border-radius: 6px;
+  border-radius: var(--appearance-radius, 6px);
   border: 1px solid var(--border-input);
   background-color: var(--bg-input);
   overflow: hidden;
@@ -612,8 +612,8 @@
 }
 
 .zoomInput {
-  padding: 0 4px;
-  font-size: 13px;
+  padding: 0 calc(4px * var(--appearance-density, 1));
+  font-size: calc(13px * var(--appearance-ui-scale, 1));
   font-weight: 500;
   font-family: inherit;
   color: var(--text-primary);
@@ -638,14 +638,14 @@
 .voiceSectionTitle {
   margin: 2px 0 10px;
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: calc(13px * var(--appearance-ui-scale, 1));
   font-weight: 600;
 }
 
 .voiceHint {
   margin-top: 7px;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: calc(12px * var(--appearance-ui-scale, 1));
   line-height: 1.45;
 }
 
@@ -659,7 +659,7 @@
 .voiceRow {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
+  gap: calc(8px * var(--appearance-density, 1));
 }
 
 .voiceSelect {
@@ -670,7 +670,7 @@
 .previewBtn {
   width: 36px;
   height: 36px;
-  border-radius: 6px;
+  border-radius: var(--appearance-radius, 6px);
   border: 1px solid var(--border-input);
   background-color: var(--bg-input);
   color: var(--text-muted);
@@ -698,7 +698,7 @@
 .volumeRow {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: calc(10px * var(--appearance-density, 1));
 }
 
 .volumeSlider {
@@ -706,7 +706,7 @@
   -webkit-appearance: none;
   appearance: none;
   height: 4px;
-  border-radius: 2px;
+  border-radius: var(--appearance-radius, 2px);
   background-color: var(--border-medium);
   outline: none;
   cursor: pointer;
@@ -730,7 +730,7 @@
 }
 
 .volumeValue {
-  font-size: 12px;
+  font-size: calc(12px * var(--appearance-ui-scale, 1));
   font-weight: 500;
   color: var(--text-muted);
   min-width: 32px;
@@ -741,8 +741,8 @@
 
 .macroCard {
   border: 1px solid var(--border-light);
-  border-radius: 8px;
-  padding: 12px 14px;
+  border-radius: var(--appearance-radius, 8px);
+  padding: calc(12px * var(--appearance-density, 1)) calc(14px * var(--appearance-density, 1));
   margin-bottom: 10px;
   background-color: var(--bg-secondary);
   transition: border-color 0.15s;
@@ -756,13 +756,13 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: calc(8px * var(--appearance-density, 1));
 }
 
 .macroToggleLabel {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: calc(8px * var(--appearance-density, 1));
   cursor: pointer;
   user-select: none;
 }
@@ -776,7 +776,7 @@
 }
 
 .macroTitle {
-  font-size: 13px;
+  font-size: calc(13px * var(--appearance-ui-scale, 1));
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -784,14 +784,14 @@
 .macroActions {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: calc(2px * var(--appearance-density, 1));
   flex-shrink: 0;
 }
 
 .macroActionBtn {
   width: 28px;
   height: 28px;
-  border-radius: 6px;
+  border-radius: var(--appearance-radius, 6px);
   border: none;
   background: none;
   color: var(--text-muted);
@@ -817,7 +817,7 @@
 }
 
 .macroDescription {
-  font-size: 12px;
+  font-size: calc(12px * var(--appearance-ui-scale, 1));
   color: var(--text-muted);
   margin-top: 6px;
   line-height: 1.4;
@@ -826,17 +826,17 @@
 .macroCommands {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: calc(4px * var(--appearance-density, 1));
   margin-top: 8px;
 }
 
 .macroCmd {
-  font-size: 12px;
+  font-size: calc(12px * var(--appearance-ui-scale, 1));
   font-family: 'Consolas', 'Monaco', monospace;
   color: var(--text-body);
   background-color: var(--bg-input);
-  padding: 4px 8px;
-  border-radius: 4px;
+  padding: calc(4px * var(--appearance-density, 1)) calc(8px * var(--appearance-density, 1));
+  border-radius: var(--appearance-radius, 4px);
   white-space: pre-wrap;
   word-break: break-all;
 }
@@ -844,24 +844,24 @@
 .macroModeBadge {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  font-size: 11px;
+  gap: calc(4px * var(--appearance-density, 1));
+  font-size: calc(11px * var(--appearance-ui-scale, 1));
   color: var(--accent-icon);
   background-color: rgba(26, 115, 232, 0.08);
-  padding: 2px 8px;
-  border-radius: 4px;
+  padding: calc(2px * var(--appearance-density, 1)) calc(8px * var(--appearance-density, 1));
+  border-radius: var(--appearance-radius, 4px);
   margin-left: 4px;
 }
 
 .planBadge {
   display: inline-flex;
   align-items: center;
-  font-size: 11px;
+  font-size: calc(11px * var(--appearance-ui-scale, 1));
   font-weight: 600;
   color: var(--accent-icon);
   background-color: var(--bg-secondary);
-  padding: 2px 8px;
-  border-radius: 4px;
+  padding: calc(2px * var(--appearance-density, 1)) calc(8px * var(--appearance-density, 1));
+  border-radius: var(--appearance-radius, 4px);
   margin-left: 8px;
   vertical-align: middle;
 }
@@ -869,7 +869,7 @@
 .commandRow {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: calc(6px * var(--appearance-density, 1));
 
   > input {
     flex: 1;
@@ -880,7 +880,7 @@
 .removeCmdBtn {
   width: 28px;
   height: 28px;
-  border-radius: 6px;
+  border-radius: var(--appearance-radius, 6px);
   border: none;
   background: none;
   color: var(--text-muted);
@@ -898,12 +898,12 @@
 }
 
 .addCmdBtn {
-  padding: 6px 12px;
-  border-radius: 6px;
+  padding: calc(6px * var(--appearance-density, 1)) calc(12px * var(--appearance-density, 1));
+  border-radius: var(--appearance-radius, 6px);
   border: 1px dashed var(--border-medium);
   background: none;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: calc(12px * var(--appearance-ui-scale, 1));
   cursor: pointer;
   transition: border-color 0.1s, color 0.1s;
   align-self: flex-start;
@@ -926,16 +926,16 @@
 .macroFormButtons {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: calc(10px * var(--appearance-density, 1));
 }
 
 .cancelBtn {
-  padding: 8px 16px;
-  border-radius: 6px;
+  padding: calc(8px * var(--appearance-density, 1)) calc(16px * var(--appearance-density, 1));
+  border-radius: var(--appearance-radius, 6px);
   border: 1px solid var(--border-input);
   background: none;
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: calc(13px * var(--appearance-ui-scale, 1));
   font-weight: 500;
   cursor: pointer;
   transition: background-color 0.1s;
@@ -957,30 +957,30 @@
 
 .explainBox {
   background-color: var(--bg-primary);
-  border-radius: 12px;
+  border-radius: var(--appearance-radius, 12px);
   box-shadow: var(--shadow-modal);
-  padding: 24px;
+  padding: calc(24px * var(--appearance-density, 1));
   max-width: 440px;
   width: 90vw;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: calc(16px * var(--appearance-density, 1));
 }
 
 .explainTitle {
-  font-size: 14px;
+  font-size: calc(14px * var(--appearance-ui-scale, 1));
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .explainText {
-  font-size: 13px;
+  font-size: calc(13px * var(--appearance-ui-scale, 1));
   color: var(--text-body);
   line-height: 1.6;
 }
 
 .versionLabel {
-  font-size: 11px;
+  font-size: calc(11px * var(--appearance-ui-scale, 1));
   color: var(--text-hint);
   flex: 1;
   text-align: right;
@@ -993,7 +993,7 @@
   display: grid;
   grid-template-columns: 70px 1fr;
   align-items: center;
-  gap: 12px;
+  gap: calc(12px * var(--appearance-density, 1));
 }
 
 // ── AI prompt generation: diff preview ────────────────────────────────────
@@ -1002,7 +1002,7 @@
   margin-top: 10px;
   margin-bottom: 10px;
   border: 1px solid var(--border-light);
-  border-radius: 6px;
+  border-radius: var(--appearance-radius, 6px);
   overflow: hidden;
 }
 
@@ -1010,20 +1010,20 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 10px;
+  padding: calc(6px * var(--appearance-density, 1)) calc(10px * var(--appearance-density, 1));
   background: var(--bg-input);
-  font-size: 11px;
+  font-size: calc(11px * var(--appearance-ui-scale, 1));
   font-weight: 600;
   color: var(--text-secondary);
 }
 
 .aiDiffApplyBtn {
-  padding: 4px 12px;
-  border-radius: 4px;
+  padding: calc(4px * var(--appearance-density, 1)) calc(12px * var(--appearance-density, 1));
+  border-radius: var(--appearance-radius, 4px);
   border: none;
   background: var(--accent);
   color: #fff;
-  font-size: 11px;
+  font-size: calc(11px * var(--appearance-ui-scale, 1));
   font-weight: 500;
   cursor: pointer;
 
@@ -1036,13 +1036,13 @@
   max-height: 300px;
   overflow-y: auto;
   font-family: 'Cascadia Code', 'Consolas', monospace;
-  font-size: 12px;
+  font-size: calc(12px * var(--appearance-ui-scale, 1));
   line-height: 1.5;
 }
 
 .aiDiffLine {
   display: flex;
-  padding: 0 8px;
+  padding: 0 calc(8px * var(--appearance-density, 1));
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -1075,29 +1075,29 @@
 }
 .dataImportGrid {
   display: grid;
-  gap: 10px;
+  gap: calc(10px * var(--appearance-density, 1));
 }
 
 .dataImportCard {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
-  padding: 12px 0;
+  gap: calc(12px * var(--appearance-density, 1));
+  padding: calc(12px * var(--appearance-density, 1)) 0;
   border-bottom: 1px solid var(--border-light);
 }
 
 .dataImportFeatured {
-  padding: 14px;
+  padding: calc(14px * var(--appearance-density, 1));
   border: 1px solid var(--border-light);
-  border-radius: 9px;
+  border-radius: var(--appearance-radius, 9px);
   background: var(--bg-input);
 }
 
 .dataImportHeading {
   margin: 20px 0 4px;
   color: var(--text-primary);
-  font-size: 12px;
+  font-size: calc(12px * var(--appearance-ui-scale, 1));
 }
 
 .dataImportCard > div:first-child {
@@ -1115,7 +1115,7 @@
   place-items: center;
   width: 30px;
   height: 30px;
-  border-radius: 7px;
+  border-radius: var(--appearance-radius, 7px);
   background: var(--bg-input);
   color: var(--accent-icon);
 }
@@ -1123,13 +1123,13 @@
 .dataImportCard h4 {
   margin: 0;
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: calc(13px * var(--appearance-ui-scale, 1));
 }
 
 .dataImportCard p {
   margin: 5px 0 0;
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: calc(11px * var(--appearance-ui-scale, 1));
   line-height: 1.45;
 }
 
@@ -1145,14 +1145,14 @@
   flex: 0 0 100%;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: calc(12px * var(--appearance-density, 1));
   padding-top: 11px;
   border-top: 1px solid var(--border-light);
 }
 
 .dataImportResult span {
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: calc(11px * var(--appearance-ui-scale, 1));
 }
 
 @media (max-width: 760px) {
@@ -1185,14 +1185,14 @@
 }
 .searchNotice {
   flex-shrink: 0;
-  padding: 10px 24px;
+  padding: calc(10px * var(--appearance-density, 1)) calc(24px * var(--appearance-density, 1));
   border-bottom: 1px solid var(--border-light);
   background: var(--bg-secondary);
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: calc(12px * var(--appearance-ui-scale, 1));
   line-height: 1.5;
 }
 @media (max-width: 680px) {
   .modal { width: calc(100vw - 24px); min-width: 0; height: calc(100dvh - 24px); min-height: 0; }
-  .settingsPanelHost > .panel { padding: 18px 16px; }
+  .settingsPanelHost > .panel { padding: calc(18px * var(--appearance-density, 1)) calc(16px * var(--appearance-density, 1)); }
 }

@@ -1,18 +1,18 @@
 .themes {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
+  gap: calc(8px * var(--appearance-density, 1));
   button {
     min-width: 0;
     display: grid;
-    gap: 7px;
-    padding: 8px;
+    gap: calc(7px * var(--appearance-density, 1));
+    padding: calc(8px * var(--appearance-density, 1));
     border: 1px solid var(--border-light);
-    border-radius: 8px;
+    border-radius: var(--appearance-radius, 8px);
     background: var(--bg-primary);
     color: var(--text-secondary);
     font: inherit;
-    font-size: 12px;
+    font-size: calc(12px * var(--appearance-ui-scale, 1));
     cursor: pointer;
     overflow-wrap: anywhere;
     &[aria-pressed='true'] { border-color: var(--accent); background: var(--bg-input); color: var(--text-primary); }
@@ -22,24 +22,24 @@
 .themeHours {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px 16px;
+  gap: calc(8px * var(--appearance-density, 1)) calc(16px * var(--appearance-density, 1));
 }
-.themeTime { display: grid; gap: 6px; }
+.themeTime { display: grid; gap: calc(6px * var(--appearance-density, 1)); }
 .preview {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 5px;
+  gap: calc(5px * var(--appearance-density, 1));
   height: 34px;
-  padding: 0 8px;
+  padding: 0 calc(8px * var(--appearance-density, 1));
   border: 1px solid var(--border-light);
-  border-radius: 5px;
+  border-radius: var(--appearance-radius, 5px);
   background: #eef2f7;
-  i { width: 65%; height: 4px; border-radius: 3px; background: #7891ae; }
+  i { width: 65%; height: 4px; border-radius: var(--appearance-radius, 3px); background: #7891ae; }
   i + i { width: 42%; align-self: flex-end; }
   &[data-mode='dark'] { background: #1b2636; }
   &[data-mode='system'], &[data-mode='schedule'] { background: linear-gradient(90deg, #eef2f7 50%, #1b2636 50%); }
 }
 
-.webQuotaHelp { margin: 8px 0 14px; color: var(--text-muted); font-size: 12px; line-height: 1.5; }
-.hint { margin: 2px 0 0; font-size: 11px; line-height: 1.5; color: var(--text-muted); }
+.webQuotaHelp { margin: 8px 0 14px; color: var(--text-muted); font-size: calc(12px * var(--appearance-ui-scale, 1)); line-height: 1.5; }
+.hint { margin: 2px 0 0; font-size: calc(11px * var(--appearance-ui-scale, 1)); line-height: 1.5; color: var(--text-muted); }

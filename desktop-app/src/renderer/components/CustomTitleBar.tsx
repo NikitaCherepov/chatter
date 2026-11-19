@@ -1,3 +1,4 @@
+import { APPEARANCE_STYLE_EVENT } from '../lib/appearance-runtime';
 import { useLayoutEffect } from 'react';
 import { THEME_CHANGE_EVENT } from '../lib/theme';
 import s from './CustomTitleBar.module.scss';
@@ -18,7 +19,8 @@ export function CustomTitleBar() {
 
     syncColors();
     window.addEventListener(THEME_CHANGE_EVENT, syncColors);
-    return () => window.removeEventListener(THEME_CHANGE_EVENT, syncColors);
+    window.addEventListener(APPEARANCE_STYLE_EVENT, syncColors);
+    return () => {window.removeEventListener(THEME_CHANGE_EVENT, syncColors);window.removeEventListener(APPEARANCE_STYLE_EVENT, syncColors);};
   }, [electronAPI]);
 
   if (!electronAPI) return null;

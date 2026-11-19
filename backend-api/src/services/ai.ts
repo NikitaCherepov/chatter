@@ -1,3 +1,5 @@
+import { getAppearance } from './appearance.js';
+import { APPEARANCE_CAPABILITIES, parseAppearanceProfile } from './appearance-schema.js';
 ﻿import { browserInputTimeout, usesHumanBrowserTyping } from './browser-input-timeout.js';
 import { avatarControlAllowed, withoutAvatarTools } from './avatar-policy.js';
 import OpenAI from 'openai';
@@ -2727,6 +2729,11 @@ const buildExploreFsTool = () => {
   };
 };
 
+const buildAppearanceTools = () => [
+ {type:'function' as const,function:{name:'get_appearance',description:'Read desktop appearance. Default returns active profile and saved variant summaries. Request capabilities before composing a profile. Does not change settings.',parameters:{type:'object',properties:{view:{type:'string',enum:['list','capabilities','profile']},id:{type:'string'}},required:[]}}},
+ {type:'function' as const,function:{name:'suggest_appearance',description:'Propose a complete desktop appearance profile for user preview and explicit application. Get capabilities/template first. To create a variant use a new unique id and revision 0. To revise a saved variant first read its current revision. Never changes active appearance automatically. No layout or executable CSS/JS.',parameters:{type:'object',properties:{profile:{type:'object',description:'Complete profile matching the get_appearance capabilities template.'}},required:['profile']}}},
+];
+
 /** Build suggest_macro tool — lets AI offer user to save a new macro */
 const buildSuggestMacroTool = () => {
   return {
@@ -3638,6 +3645,7 @@ export const getTaskAllowedToolNames = (): string[] => {
     buildExecuteMacroTool(),
     buildExploreFsTool(),
     buildSuggestMacroTool(),
+    ...buildAppearanceTools(),
     buildDesktopActionTool(),
     mcpSearchTool,
     mcpCallTool,
@@ -5078,6 +5086,24 @@ If the task is a description, return a detailed text response.`
       }
       return JSON.stringify({ status: 'error', message: `Error: ${err?.message || String(err)}` });
     }
+  }
+
+  if (toolName === 'get_appearance') {
+    const appearance=getAppearance(user.id);
+    if(parsed.view==='capabilities')return JSON.stringify(APPEARANCE_CAPABILITIES);
+    if(parsed.view==='profile')return JSON.stringify(appearance.profiles.find(p=>p.id===parsed.id)??{error:'appearance_not_found'});
+    return JSON.stringify({activeId:appearance.activeId,profiles:appearance.profiles.map(p=>({id:p.id,name:p.name,revision:p.revision})),active:appearance.profiles.find(p=>p.id===appearance.activeId)??null});
+  }
+  if (toolName === 'suggest_appearance') {
+    try {
+      const profile=parseAppearanceProfile(parsed.profile);
+      const current=getAppearance(user.id).profiles.find(p=>p.id===profile.id);
+      if((current?.revision??0)!==profile.revision)return JSON.stringify({error:'appearance_conflict',message:'Read the current profile before updating it.'});
+      const payload:DesktopActionPayload={action:'suggest_appearance',value:{proposal_id:randomUUID(),profile}};
+      if(desktopActionSink)desktopActionSink.value=payload;
+      else if(!sendToDesktop(user.id,{type:'desktop_action',...payload}))return JSON.stringify({error:'desktop_offline',message:'Open the desktop app before proposing an appearance.'});
+      return JSON.stringify({status:'proposed',id:profile.id,message:'Sent for user preview and explicit application. Not applied or saved yet.'});
+    }catch(error:any){return JSON.stringify({error:error.message||'appearance_invalid'});}
   }
 
   if (toolName === 'suggest_macro') {
@@ -7970,6 +7996,7 @@ const sendMessageThroughAiInternal = async (
   // Expose them whenever the request itself comes from Desktop or Desktop is online.
   const desktopUiAvailable = Boolean(options?.isDesktop || isDesktopOnline(userId) || (toolUser !== user && isDesktopOnline(toolUser.id)));
   const desktopOnlyTools = desktopUiAvailable ? [
+    ...buildAppearanceTools(),
     buildDesktopActionTool(),
   ] : [];
   // Build spawn_subagent AFTER we know all available tools (including serverOnlyTools, desktopOnlyTools, etc.)
@@ -8538,7 +8565,7 @@ const runOneToolCall = async (toolCall: any, emitStatus = true): Promise<Execute
     }
 
     // Если тулз вызвал desktop_action / macro tools — прокидываем наружу в реалтайме
-    if ((toolName === 'desktop_action' || toolName === 'execute_macro' || toolName === 'explore_fs' || toolName === 'get_file_info' || toolName === 'suggest_macro' || toolName === 'execute_ssh_command' || toolName === 'execute_pc_command' || toolName === 'read_file' || toolName === 'search_file_keywords' || toolName === 'write_file' || toolName === 'edit_file_lines' || toolName === 'suggest_devops_runbook' || toolName === 'install_ssh_public_key' || toolName === 'suggest_server_creds_update' || toolName === 'execute_visual_click') && desktopActionSink.value && safeOnDesktopAction) {
+    if ((toolName === 'desktop_action' || toolName === 'execute_macro' || toolName === 'explore_fs' || toolName === 'get_file_info' || toolName === 'suggest_macro' || toolName === 'suggest_appearance' || toolName === 'execute_ssh_command' || toolName === 'execute_pc_command' || toolName === 'read_file' || toolName === 'search_file_keywords' || toolName === 'write_file' || toolName === 'edit_file_lines' || toolName === 'suggest_devops_runbook' || toolName === 'install_ssh_public_key' || toolName === 'suggest_server_creds_update' || toolName === 'execute_visual_click') && desktopActionSink.value && safeOnDesktopAction) {
       await safeOnDesktopAction(desktopActionSink.value);
     }
 

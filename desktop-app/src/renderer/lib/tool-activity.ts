@@ -42,7 +42,7 @@ export function describeToolCall(call: ToolCall): ToolActivity {
     if (names?.includes(name)) { kind = category as ActivityKind; break; }
   }
   const confirmed = name === 'save_note' && !failed && /^Note saved:\s*#\d+/i.test(text);
-  const target = [args.title, args.query, args.url, args.path, args.file_path, args.filename, args.command, args.target, args.agent]
+  const target = [args.title, name==='suggest_appearance'?args.profile?.name:undefined, args.query, args.url, args.path, args.file_path, args.filename, args.command, args.target, args.agent]
     .find(value => typeof value === 'string' && value.trim()) ?? '';
   return { call, kind, confirmed, target: String(target).slice(0, 240), internal,
     status: failed ? 'error' : text ? 'returned' : 'unknown' };

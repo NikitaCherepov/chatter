@@ -1,3 +1,4 @@
+import { AppearanceController } from './components/AppearanceController';
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'sonner';
@@ -65,6 +66,7 @@ export function App() {
 
   return (
     <AuthProvider>
+      <AppearanceController />
       <div className={s.appShell}>
         <CustomTitleBar />
         <div className={s.appContent}>

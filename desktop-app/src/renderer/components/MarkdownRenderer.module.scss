@@ -108,8 +108,9 @@
 // ====== Markdown container ======
 
 .md {
-  font-size: 14px;
-  line-height: 1.6;
+  font-family: var(--appearance-message-font, inherit);
+  font-size: var(--appearance-message-size, 14px);
+  line-height: var(--appearance-line-height, 1.6);
   color: var(--text-body);
   word-break: break-word;
 
@@ -143,7 +144,7 @@
   border-radius: 4px;
   padding: 1px 6px;
   font-size: 0.9em;
-  font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+  font-family: var(--appearance-code-font, 'Cascadia Code'), 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
   color: var(--text-primary);
 }
 
@@ -204,9 +205,9 @@
 }
 
 .codeBlockWrapper code {
-  font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
-  font-size: 13px;
-  line-height: 1.6;
+  font-family: var(--appearance-code-font, 'Cascadia Code'), 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+  font-size: var(--appearance-code-size, 13px);
+  line-height: var(--appearance-line-height, 1.6);
   color: var(--text-body);
   background: transparent !important;
 }

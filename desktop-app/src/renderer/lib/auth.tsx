@@ -6,7 +6,7 @@ type UserInfo = api.AuthResponse['user'];
 type AuthContextValue = {
   user: UserInfo | null;
   initialized: boolean;
-  setUser: (user: UserInfo | null) => void;
+  setUser: React.Dispatch<React.SetStateAction<UserInfo | null>>;
   loginAndSet: (login: string, password: string) => Promise<api.AuthResponse>;
   registerAndSet: (login: string, password: string, name?: string) => Promise<api.AuthResponse>;
   logout: () => void;
@@ -89,6 +89,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       api.closeWebSocket();
     };
   }, []);
+
+  // Keep the existing offline user snapshot in sync with explicit settings changes.
+  useEffect(() => {
+    if (!initialized) return;
+    try {
+      if (user) localStorage.setItem('chatter_user', JSON.stringify(user));
+      else localStorage.removeItem('chatter_user');
+    } catch { /* The authenticated session still works without a local cache. */ }
+  }, [user, initialized]);
 
   const loginAndSet = useCallback(async (login: string, password: string) => {
     const res = await api.login(login, password);

@@ -1,3 +1,4 @@
+import { AppearancePanel } from './AppearancePanel';
 import { useSettingsQueries } from '../lib/useSettingsQueries';
 import appLayout from './AppSettings.module.scss';
 import settingsRows from './RestrictionsSettings.module.scss';
@@ -2606,6 +2607,7 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
                   )}
                 </div>
 
+                <AppearancePanel />
                 <div className={s.fieldGroup}>
                   <label className={s.fieldLabel}>{t('settings.app.zoom')}</label>
                   <div className={s.zoomControl}>

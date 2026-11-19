@@ -3,6 +3,8 @@
   "version": "1.0.0",
   "license": "AGPL-3.0-only",
   "scripts": {
+    "sync:appearance": "node scripts/sync-appearance.mjs",
+    "sync:appearance:check": "node scripts/sync-appearance.mjs --check",
     "sync:languages": "node scripts/sync-languages.mjs",
     "sync:languages:check": "node scripts/sync-languages.mjs --check",
     "presync:languages": "echo \"[sync] copying shared/languages.ts to all projects...\"",

@@ -1,3 +1,4 @@
+import type { AppearanceSettings } from './appearance-schema';
 const DEFAULT_API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:3050';
 const CONNECTION_KEY = 'chatter_server_connection';
 
@@ -53,6 +54,7 @@ type Tokens = {
 };
 
 export type UiSettings = {
+  appearance?: AppearanceSettings;
   show_tokens?: boolean;
   dice_roll_enabled?: boolean;
   seen_announcements?: string[];
@@ -953,7 +955,7 @@ export async function sendChatMessage(text: string, chatId?: number, images?: Ch
 // ---------- SSE Streaming (fallback, kept for reference) ----------
 
 export type DesktopActionPayload = {
-  action: 'open_widget' | 'close_widget' | 'set_widget_data' | 'open_note' | 'read_widget_state' | 'toggle_panel' | 'execute_macro' | 'suggest_macro' | 'devops_confirmation' | 'suggest_devops_runbook' | 'suggest_server_creds_update' | 'mcp_confirmation' | 'mcp_install_progress' | 'pc_command_confirmation' | 'confirmation_resolved' | 'browser_action_confirmation' | 'browser_action_confirmation_resolved' | 'browser_download_confirmation' | 'browser_download_confirmation_resolved' | 'file_action_confirmation' | 'edit_file_lines_confirmation' | 'email_confirmation' | 'chat_title_update' | 'webcam_capture_confirmation' | 'suggest_chat_link';
+  action: 'open_widget' | 'close_widget' | 'set_widget_data' | 'open_note' | 'read_widget_state' | 'toggle_panel' | 'execute_macro' | 'suggest_macro' | 'suggest_appearance' | 'devops_confirmation' | 'suggest_devops_runbook' | 'suggest_server_creds_update' | 'mcp_confirmation' | 'mcp_install_progress' | 'pc_command_confirmation' | 'confirmation_resolved' | 'browser_action_confirmation' | 'browser_action_confirmation_resolved' | 'browser_download_confirmation' | 'browser_download_confirmation_resolved' | 'file_action_confirmation' | 'edit_file_lines_confirmation' | 'email_confirmation' | 'chat_title_update' | 'webcam_capture_confirmation' | 'suggest_chat_link';
   target?: string;
   value?: { title?: string; content?: string; note_id?: number; macro_name?: string; target_path?: string; description?: string; commands?: string[]; confirmation_id?: string; server_name?: string; server_id?: number; host?: string; command?: string; current_username?: string; new_username?: string; reason?: string; use_ssh_key?: boolean; remove_password?: boolean; chat_id?: number; from?: string; to?: string; subject?: string; body?: string; purpose?: string; camera_name?: string };
 };

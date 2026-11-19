@@ -1,3 +1,5 @@
+import { appearanceFromJson, getAppearance, changeAppearance } from './services/appearance.js';
+import { parseAppearanceSettings, type AppearanceSettings } from './services/appearance-schema.js';
 ﻿import { browserInputTimeout } from './services/browser-input-timeout.js';
 import express from 'express';
 import { userMcpRouter, adminMcpRouter, oauthCallback, syncDesktopMcp } from './services/mcp/routes.js';
@@ -985,6 +987,7 @@ const parseFeatureFlags = (user: UserRecord): Record<string, boolean> => {
 
 /** UI settings: configurable display options stored per-user. */
 export const parseUiSettings = (user: UserRecord): {
+  appearance: AppearanceSettings;
   show_tokens?: boolean;
   dice_roll_enabled?: boolean;
   seen_announcements?: string[];
@@ -995,6 +998,7 @@ export const parseUiSettings = (user: UserRecord): {
   try {
     const parsed = JSON.parse(user.ui_settings || '{}');
     return {
+      appearance: appearanceFromJson(user.ui_settings),
       ...(typeof parsed.show_tokens === 'boolean' ? { show_tokens: parsed.show_tokens } : {}),
       ...(typeof parsed.dice_roll_enabled === 'boolean' ? { dice_roll_enabled: parsed.dice_roll_enabled } : {}),
       ...(Array.isArray(parsed.seen_announcements) && parsed.seen_announcements.every((id: unknown) => typeof id === 'string')
@@ -1006,6 +1010,7 @@ export const parseUiSettings = (user: UserRecord): {
     };
   } catch {
     return {
+      appearance: appearanceFromJson(null),
       browser_confirm_open: true,
       browser_confirm_click: true,
       browser_confirm_fill: true,
@@ -6574,9 +6579,27 @@ app.put('/api/v1/user/feature-flags', (req: AuthedRequest, res: any) => {
   return res.json({ ok: true, flags });
 });
 
+app.get('/api/v1/user/appearance', (req: AuthedRequest,res) => {
+ try{return res.json({appearance:getAppearance(accountIdFromRequest(req))});}
+ catch{return res.status(404).json({error:'user_not_found'});}
+});
+app.post('/api/v1/user/appearance/image', async (req: AuthedRequest,res) => {
+ try{
+  const data=Buffer.from(String(req.body?.base64||''),'base64');
+  if(!data.length||data.length>8*1024*1024)return res.status(400).json({error:'appearance_image_invalid'});
+  const asset=await saveImageAsset({userId:accountIdFromRequest(req),data,kind:'appearance_background',retention:'temporary',transform:'thumbnail'});
+  return res.json({image:asset.url});
+ }catch{return res.status(400).json({error:'appearance_image_invalid'});}
+});
+app.post('/api/v1/user/appearance', (req: AuthedRequest,res) => {
+ try{return res.json({appearance:changeAppearance(accountIdFromRequest(req),req.body)});}
+ catch(error:any){return res.status(error.message==='appearance_conflict'?409:400).json({error:error.message||'appearance_invalid'});}
+});
+
 // ─── UI settings (display options stored per user) ──────────────────────────
 
 const VALID_UI_KEYS = [
+  'appearance',
   'show_tokens',
   'dice_roll_enabled',
   'seen_announcements',
@@ -6586,7 +6609,7 @@ const VALID_UI_KEYS = [
   'browser_human_typing',
 ] as const;
 
-type UiSettingValue = boolean | string[];
+type UiSettingValue = boolean | string[] | AppearanceSettings;
 
 /** Преобразует dice_mode из body запроса в форсированное значение d20. */
 const resolveDiceForceValue = (mode: unknown): number | undefined => {
@@ -6596,6 +6619,7 @@ const resolveDiceForceValue = (mode: unknown): number | undefined => {
 };
 
 const isValidUiValue = (key: string, value: unknown): value is UiSettingValue => {
+  if (key === 'appearance') {try{parseAppearanceSettings(value);return true;}catch{return false;}}
   if (key === 'seen_announcements') {
     return Array.isArray(value) && value.every((v: unknown) => typeof v === 'string');
   }
@@ -6645,7 +6669,7 @@ app.put('/api/v1/user/ui-settings', (req: AuthedRequest, res: any) => {
     }
   } catch { /* empty */ }
   for (const key of VALID_UI_KEYS) {
-    if (key in incoming && isValidUiValue(key, incoming[key])) existing[key] = incoming[key];
+    if (key !== 'appearance' && key in incoming && isValidUiValue(key, incoming[key])) existing[key] = incoming[key];
   }
   db.prepare('UPDATE users SET ui_settings = ? WHERE id = ?').run(JSON.stringify(existing), userId);
   return res.json({ ok: true, settings: existing });
