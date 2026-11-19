@@ -5253,7 +5253,11 @@ If the task is a description, return a detailed text response.`
     console.log('[pc_command] checking approval policy', { userId: user.id, command: command.slice(0, 300) });
     const settings = getPcCommandsSettings(user.id);
     const policyAutoOk = isPcCommandAutoApproved(user.id, command);
-    const autoOk = settings.auto_approve_all || policyAutoOk;
+    let autoOk = settings.auto_approve_all || policyAutoOk;
+    const { assessPcCommand } = await import('./auto-confirmation.js');
+    const assessment = !autoOk ? await assessPcCommand(user.id, command, background, signal) : null;
+    throwIfAborted(signal);
+    autoOk ||= assessment?.approved === true;
     console.log('[pc_command] approval policy result', {
       userId: user.id,
       autoApproveAll: settings.auto_approve_all,
@@ -5272,6 +5276,7 @@ If the task is a description, return a detailed text response.`
           command,
           background,
           output: limitPcCommandOutput(output),
+          ...(assessment ? { auto_confirmation: assessment } : {}),
         });
       } catch (err: any) {
         return JSON.stringify({ status: 'error', message: `Execution error: ${err?.message || String(err)}`, command });
@@ -5302,7 +5307,7 @@ If the task is a description, return a detailed text response.`
 
     const confirmationAction: DesktopActionPayload = {
       action: 'pc_command_confirmation',
-      value: { confirmation_id: confirmationId, command, background }
+      value: { confirmation_id: confirmationId, command, background, assessment }
     };
 
     let sent = false;

@@ -1,6 +1,7 @@
 import { apiFetch } from './api';
 
-export type ApprovalStrictness = 'strict' | 'normal' | 'relaxed';
+export type ApprovalStrictness = 'strict' | 'normal' | 'relaxed' | 'custom';
+export type ApprovalThresholds = { auto: number; know: number };
 export type CommandAssessment = {
   status: 'ready' | 'unavailable';
   approved: boolean;
@@ -15,11 +16,17 @@ export type AutoConfirmationConfig = {
     enabled: boolean;
     strictness: ApprovalStrictness;
     overrides: Record<string, boolean>;
+    customThresholds: ApprovalThresholds;
   };
   thresholds: Record<ApprovalStrictness, { auto: number; know: number }>;
 };
 export type AutoConfirmationUpdate =
-  | { revision: number; enabled: boolean; strictness: ApprovalStrictness }
+  | {
+      revision: number;
+      enabled: boolean;
+      strictness: ApprovalStrictness;
+      customThresholds?: ApprovalThresholds;
+    }
   | { revision: number; serverId: number; enabled: boolean | null }
   | { revision: number; resetOverrides: true };
 const endpoint = '/api/v1/auto-confirmation';

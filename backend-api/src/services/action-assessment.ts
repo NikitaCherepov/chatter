@@ -5,7 +5,24 @@ export const approvalThresholds = {
   normal: { auto: 0.15, know: 0.8 },
   relaxed: { auto: 0.3, know: 0.7 },
 } as const;
-export type ApprovalStrictness = keyof typeof approvalThresholds;
+export type ApprovalThresholds = { auto: number; know: number };
+export type ApprovalStrictness = keyof typeof approvalThresholds | 'custom';
+
+export function resolveApprovalThresholds(
+  strictness: ApprovalStrictness,
+  customThresholds?: ApprovalThresholds,
+): ApprovalThresholds {
+  const thresholds = strictness === 'custom' ? customThresholds : approvalThresholds[strictness];
+  if (
+    !thresholds ||
+    ![thresholds.auto, thresholds.know].every(
+      (value) => typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1,
+    )
+  ) {
+    throw new Error('invalid_settings');
+  }
+  return { auto: thresholds.auto, know: thresholds.know };
+}
 export type ActionAssessment = {
   status: 'ready' | 'unavailable';
   approved: boolean;
@@ -21,9 +38,10 @@ export async function assessAction(params: {
   purpose: string;
   input: unknown;
   strictness: ApprovalStrictness;
+  customThresholds?: ApprovalThresholds;
   signal?: AbortSignal;
 }): Promise<ActionAssessment> {
-  const thresholds = approvalThresholds[params.strictness];
+  const thresholds = resolveApprovalThresholds(params.strictness, params.customThresholds);
   try {
     const result = await runDecision({
       userId: params.userId,

@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { useAutoConfirmation } from '../lib/auto-confirmation-queries';
-import type { ApprovalStrictness } from '../lib/auto-confirmation-service';
+import type { ApprovalStrictness, ApprovalThresholds } from '../lib/auto-confirmation-service';
+import Slider from './Slider';
+import { AnimatedCollapse } from './AnimatedDisclosure';
 import Checkbox from './Checkbox';
 import { ConfirmDialog } from './ConfirmDialog';
 import { Icon } from './Icon';
@@ -89,8 +91,8 @@ export function AutoConfirmationSettings({ serverId }: { serverId?: number }) {
         <p className={layout.help}>
           {t('autoConfirmation.currentMode', {
             mode: t(`autoConfirmation.${config.settings.strictness}`),
-            auto: thresholds.auto * 100,
-            know: thresholds.know * 100,
+            auto: Math.round(thresholds.auto * 100),
+            know: Math.round(thresholds.know * 100),
           })}
         </p>
         {!config.available && <p className={layout.help}>{t('autoConfirmation.unavailable')}</p>}
@@ -120,7 +122,7 @@ export function AutoConfirmationSettings({ serverId }: { serverId?: number }) {
           <section className={s.section}>
             <h4>{t('autoConfirmation.strictness')}</h4>
             <div className={s.modes}>
-              {(['strict', 'normal', 'relaxed'] as ApprovalStrictness[]).map((mode) => (
+              {(['strict', 'normal', 'relaxed', 'custom'] as ApprovalStrictness[]).map((mode) => (
                 <button
                   type="button"
                   key={mode}
@@ -135,13 +137,27 @@ export function AutoConfirmationSettings({ serverId }: { serverId?: number }) {
                   <span>{t(`autoConfirmation.${mode}Help`)}</span>
                   <small>
                     {t('autoConfirmation.modeThresholds', {
-                      auto: config.thresholds[mode].auto * 100,
-                      know: config.thresholds[mode].know * 100,
+                      auto: Math.round(config.thresholds[mode].auto * 100),
+                      know: Math.round(config.thresholds[mode].know * 100),
                     })}
                   </small>
                 </button>
               ))}
             </div>
+            <AnimatedCollapse open={config.settings.strictness === 'custom'}>
+              <CustomThresholds
+                value={config.settings.customThresholds}
+                disabled={busy}
+                save={(customThresholds) =>
+                  change({
+                    revision: config.revision,
+                    enabled,
+                    strictness: 'custom',
+                    customThresholds,
+                  })
+                }
+              />
+            </AnimatedCollapse>
             <p className={layout.help}>{t('autoConfirmation.experimental')}</p>
           </section>
           <section className={s.section}>
@@ -204,6 +220,89 @@ export function AutoConfirmationSettings({ serverId }: { serverId?: number }) {
           }}
         />
       )}
+    </div>
+  );
+}
+
+function CustomThresholds({
+  value,
+  disabled,
+  save,
+}: {
+  value: ApprovalThresholds;
+  disabled: boolean;
+  save: (thresholds: ApprovalThresholds) => Promise<boolean>;
+}) {
+  const { t } = useTranslation();
+  const [draft, setDraft] = useState(value);
+  const latest = useRef(value);
+  const saving = useRef(false);
+  useEffect(() => {
+    latest.current = value;
+    setDraft(value);
+  }, [value]);
+  const commit = async () => {
+    if (
+      saving.current ||
+      disabled ||
+      (latest.current.auto === value.auto && latest.current.know === value.know)
+    )
+      return;
+    saving.current = true;
+    try {
+      await save(latest.current);
+    } finally {
+      saving.current = false;
+    }
+  };
+  return (
+    <div
+      className={s.customSliders}
+      onBlur={() => void commit()}
+      onKeyUp={(event) => {
+        if (
+          [
+            'ArrowLeft',
+            'ArrowRight',
+            'ArrowUp',
+            'ArrowDown',
+            'Home',
+            'End',
+            'PageUp',
+            'PageDown',
+          ].includes(event.key)
+        )
+          void commit();
+      }}
+    >
+      {(['auto', 'know'] as const).map((key) => (
+        <div key={key}>
+          <div className={s.sliderHeading}>
+            <strong>
+              {t(key === 'auto' ? 'autoConfirmation.maxRisk' : 'autoConfirmation.minUnderstanding')}
+            </strong>
+            <span>{Math.round(draft[key] * 100)}%</span>
+          </div>
+          <Slider
+            mode="numeric"
+            layout="standalone"
+            label={t(
+              key === 'auto' ? 'autoConfirmation.maxRisk' : 'autoConfirmation.minUnderstanding',
+            )}
+            min={0}
+            max={100}
+            step={1}
+            value={Math.round(draft[key] * 100)}
+            disabled={disabled}
+            onChange={(next) => {
+              const updated = { ...latest.current, [key]: (next ?? 0) / 100 };
+              latest.current = updated;
+              setDraft(updated);
+            }}
+            onCommit={() => void commit()}
+          />
+        </div>
+      ))}
     </div>
   );
 }

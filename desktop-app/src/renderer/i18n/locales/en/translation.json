@@ -1,9 +1,9 @@
 {
   "autoConfirmation": {
     "title": "Auto-confirmation",
-    "description": "Decision assesses each server command before execution. Commands run automatically when risk is within the selected limit and understanding reaches its threshold.",
-    "enabled": "Auto-confirm server commands",
-    "defaultHelp": "Default for servers that inherit your settings.",
+    "description": "Decision assesses server and PC commands before execution. Commands run automatically when risk is within the selected limit and understanding reaches its threshold.",
+    "enabled": "Auto-confirm commands",
+    "defaultHelp": "Default for PC commands and servers that inherit your settings.",
     "strictness": "Strictness",
     "strict": "Strict",
     "normal": "Normal",
@@ -20,7 +20,7 @@
     "knowHelp": "Are the actual effects of this command and all its arguments sufficiently understood to assess its risks reliably?",
     "fallback": "If either threshold is missed or Decision is unavailable, normal confirmation is required. Decision calls count towards your quota.",
     "inherited": "Using the default",
-    "custom": "Custom setting for this server",
+    "custom": "Custom",
     "override": "Override the default",
     "currentMode": "{{mode}} · auto ≤ {{auto}}% · know ≥ {{know}}%",
     "unavailable": "Decision is unavailable. An administrator can configure it in Integrations. Commands will require normal confirmation.",
@@ -35,7 +35,11 @@
     "confirmRequired": "Confirmation required",
     "assessmentUnavailable": "Decision assessment is unavailable. Confirm this command manually.",
     "riskScore": "{{score}}% · maximum {{threshold}}%",
-    "understandingScore": "{{score}}% · minimum {{threshold}}%"
+    "understandingScore": "{{score}}% · minimum {{threshold}}%",
+    "customHelp": "Choose the maximum risk and minimum understanding for automatic execution.",
+    "maxRisk": "Maximum risk of harm",
+    "minUnderstanding": "Minimum understanding",
+    "pcUsesGlobal": "Decision checks use your default settings in Auto-confirmation."
   },
   "intuition": {
     "saved": "Intuition saved",

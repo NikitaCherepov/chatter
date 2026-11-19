@@ -23,7 +23,7 @@
 }
 .modes {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
 .mode {
@@ -69,6 +69,28 @@
 .selected {
   border-color: var(--accent-icon);
   background: var(--bg-bubble);
+}
+.customSliders {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  padding: 16px;
+  border: 1px solid var(--border-light);
+  border-radius: 10px;
+}
+.sliderHeading {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 8px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  strong {
+    font-weight: 500;
+  }
+  span {
+    font-variant-numeric: tabular-nums;
+  }
 }
 .predicate {
   display: flex;

@@ -87,6 +87,7 @@ export function PCSettings() {
       </section>
       <section className={rows.group}><h3>{copy('execution')}</h3>
         {row('auto_approve_all', 'terminal', 'auto', 'autoHelp')}
+        <p className={s.hint}>{t('autoConfirmation.pcUsesGlobal')}</p>
       </section>
       <section className={s.exceptions} aria-labelledby={`${id}-exceptions`}>
         <div className={s.heading}><h3 id={`${id}-exceptions`}>{copy('exceptions')}</h3><span>{policies.length}</span></div>

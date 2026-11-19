@@ -25,9 +25,36 @@ try {
   const save = (update: object) =>
     saveAutoConfirmation(81, { revision: getAutoConfirmation(81).revision, ...update });
   assert.equal(getAutoConfirmation(81).settings.enabled, false);
+  assert.deepEqual(getAutoConfirmation(81).settings.customThresholds, { auto: 0.15, know: 0.8 });
+  db.prepare(
+    'INSERT INTO auto_confirmation_settings(user_id, settings_json, revision) VALUES (?, ?, 1)',
+  ).run(82, JSON.stringify({ enabled: false, strictness: 'normal', overrides: {} }));
+  assert.deepEqual(
+    getAutoConfirmation(82).settings.customThresholds,
+    { auto: 0.15, know: 0.8 },
+    'legacy settings gain default custom values',
+  );
+  for (const customThresholds of [
+    { auto: -0.1, know: 0.8 },
+    { auto: 0.5, know: 1.1 },
+    { auto: '0.2', know: 0.8 },
+    { auto: 0.1 },
+  ]) {
+    assert.throws(
+      () => save({ enabled: true, strictness: 'custom', customThresholds }),
+      /invalid_settings/,
+    );
+  }
+  save({ enabled: false, strictness: 'custom', customThresholds: { auto: 0.12, know: 0.92 } });
+  save({ enabled: false, strictness: 'normal' });
+  assert.deepEqual(
+    getAutoConfirmation(81).settings.customThresholds,
+    { auto: 0.12, know: 0.92 },
+    'switching presets preserves custom thresholds',
+  );
   assert.equal(await assessServerCommand(81, firstId, 'pwd'), null);
   assert.throws(
-    () => saveAutoConfirmation(82, { revision: 0, serverId: firstId, enabled: true }),
+    () => saveAutoConfirmation(82, { revision: getAutoConfirmation(82).revision, serverId: firstId, enabled: true }),
     /server_not_found/,
   );
   save({ serverId: firstId, enabled: false });
@@ -222,6 +249,107 @@ try {
     'rejected',
     'excessive risk uses the existing confirmation path',
   );
+  const { wsClients } = await import('../src/ws-clients.js');
+  const { getPendingPcConfirmation, deletePendingPcConfirmation } =
+    await import('../src/services/pc-command-confirmations.js');
+  const { updatePcCommandsSettings } = await import('../src/services/pc-commands.js');
+  const sent: any[] = [];
+  const desktop: any = {
+    accountId: 81,
+    connectionId: 'test-desktop',
+    lastPongAt: Date.now(),
+    pendingIpc: new Map(),
+    ws: {
+      readyState: 1,
+      send(raw: string, callback?: () => void) {
+        const message = JSON.parse(raw);
+        sent.push(message);
+        callback?.();
+        if (message.type === 'execute_ipc')
+          queueMicrotask(() => {
+            const pending = desktop.pendingIpc.get(message.request_id);
+            desktop.pendingIpc.delete(message.request_id);
+            pending?.resolve('test output');
+          });
+        if (message.action === 'pc_command_confirmation')
+          queueMicrotask(() => {
+            const pending = getPendingPcConfirmation(message.value.confirmation_id);
+            deletePendingPcConfirmation(message.value.confirmation_id);
+            pending?.reject(new Error('rejected_by_user'));
+          });
+      },
+    },
+  };
+  wsClients.set(81, desktop);
+  let pcFetches = 0;
+  let pcScores = [0.1, 0.92];
+  let pcDuringRequest: (() => void) | undefined;
+  globalThis.fetch = (async (_url, init) => {
+    pcFetches++;
+    const body = JSON.parse(String(init?.body));
+    assert.equal(JSON.parse(body.input).command, 'echo test');
+    pcDuringRequest?.();
+    return new Response(
+      JSON.stringify({
+        usage: { input_tokens: 10 },
+        answers: [
+          { name: 'auto', type: 'predicate', probability: pcScores[0] },
+          { name: 'know', type: 'predicate', probability: pcScores[1] },
+        ],
+      }),
+    );
+  }) as typeof fetch;
+  const pcRun = (command = 'echo test', background = false) =>
+    runTool(user, 0, 'execute_pc_command', JSON.stringify({ command, background }), async () => {
+      throw new Error('unexpected model call');
+    });
+  try {
+    save({ enabled: true, strictness: 'custom', customThresholds: { auto: 0.1, know: 0.92 } });
+    const approvedPc = JSON.parse(await pcRun('echo test', true));
+    assert.equal(approvedPc.status, 'success');
+    assert.equal(approvedPc.auto_confirmation.approved, true);
+    assert.deepEqual(approvedPc.auto_confirmation.thresholds, { auto: 0.1, know: 0.92 });
+    assert.equal(sent.at(-1).payload.background, true);
+    assert.equal(sent.at(-1).ipc_type, 'execute_commands');
+    pcScores = [0.11, 1];
+    assert.equal(JSON.parse(await pcRun()).status, 'rejected');
+    assert.equal(sent.at(-1).value.assessment.approved, false);
+    assert.equal(sent.at(-1).value.assessment.auto, 0.11);
+    pcScores = [0, 0.91];
+    assert.equal(
+      JSON.parse(await pcRun()).status,
+      'rejected',
+      'insufficient understanding needs confirmation',
+    );
+    pcScores = [0, 1];
+    pcDuringRequest = () => save({ enabled: false, strictness: 'custom' });
+    assert.equal(JSON.parse(await pcRun()).status, 'rejected');
+    assert.equal(
+      sent.at(-1).value.assessment.status,
+      'unavailable',
+      'a concurrent disable prevents PC auto-execution',
+    );
+    pcDuringRequest = undefined;
+    const before = pcFetches;
+    assert.equal(JSON.parse(await pcRun('rm -rf /')).status, 'error');
+    assert.equal(pcFetches, before, 'blocked PC commands never reach Decision');
+    save({ enabled: false, strictness: 'custom' });
+    assert.equal(JSON.parse(await pcRun()).status, 'rejected');
+    assert.equal(pcFetches, before, 'disabled default does not call Decision');
+    save({ enabled: true, strictness: 'custom' });
+    globalThis.fetch = (async () => new Response('{}', { status: 503 })) as typeof fetch;
+    assert.equal(JSON.parse(await pcRun()).status, 'rejected');
+    assert.equal(
+      sent.at(-1).value.assessment.status,
+      'unavailable',
+      'Decision failure falls back to PC confirmation',
+    );
+    updatePcCommandsSettings(81, { auto_approve_all: true });
+    assert.equal(JSON.parse(await pcRun()).status, 'success');
+    assert.equal(pcFetches, before, 'explicit PC approvals retain their existing path');
+  } finally {
+    wsClients.delete(81);
+  }
   db.prepare(
     'UPDATE users SET is_admin = 0, weekly_tokens_quota = 0, weekly_tokens_used = 1 WHERE id = 81',
   ).run();

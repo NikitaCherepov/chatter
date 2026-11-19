@@ -1669,7 +1669,7 @@ export function ChatPage() {
   const [pendingRunbooks, setPendingRunbooks] = useState<Array<{ id: string; title: string; content: string; commands: string[]; _reviewing?: boolean; _verdict?: string }>>([]);
   const [pendingCredsUpdates, setPendingCredsUpdates] = useState<Array<{ confirmation_id?: string; server_id: number; server_name: string; current_username: string; new_username: string; reason: string; use_ssh_key: boolean; remove_password: boolean }>>([]);
   const [mcpConfirmations,setMcpConfirmations]=useState<McpConfirmation[]>([]);
-  const [pcCommandConfirmations, setPcCommandConfirmations] = useState<Array<{ confirmation_id: string; command: string; _reviewing?: boolean; _verdict?: string }>>([]);
+  const [pcCommandConfirmations, setPcCommandConfirmations] = useState<Array<{ confirmation_id: string; command: string; assessment?: CommandAssessmentData | null; _reviewing?: boolean; _verdict?: string }>>([]);
   const [browserActionConfirmations, setBrowserActionConfirmations] = useState<Array<{ confirmation_id: string; action_type: 'open' | 'click' | 'fill' | 'press_key'; description: string; url?: string; text?: string; key?: 'Enter' | 'Space'; origin?: string; target_element?: { tag?: string; role?: string; text?: string; href?: string; inputType?: string; placeholder?: string; sensitive?: boolean } }>>([]);
   const [browserDownloadConfirmations, setBrowserDownloadConfirmations] = useState<Array<{ confirmation_id: string; download_id: string; filename: string; url: string; mime_type?: string; total_bytes?: number; origin?: string | null }>>([]);
   const confirmationSubmissionsRef = useRef(new Set<string>());
@@ -2580,13 +2580,14 @@ export function ChatPage() {
       if(val.confirmation_id&&val.target)setMcpConfirmations(previous=>previous.some(item=>item.confirmation_id===val.confirmation_id)?previous:[...previous,val]);
     }
     if (action.action === 'pc_command_confirmation' && action.value) {
-      const val = action.value as { confirmation_id?: string; command?: string };
+      const val = action.value as { confirmation_id?: string; command?: string; assessment?: CommandAssessmentData | null };
       if (val.confirmation_id && val.command) {
         setPcCommandConfirmations(prev => {
           if (prev.some(c => c.confirmation_id === val.confirmation_id)) return prev;
           return [...prev, {
             confirmation_id: val.confirmation_id!,
             command: val.command!,
+            assessment: val.assessment,
           }];
         });
       }
@@ -5828,7 +5829,7 @@ export function ChatPage() {
                       {conf._reviewing ? t('chat.confirm.reviewing') : t('chat.confirm.review')}
                     </button></>}><div className={s.suggestMacroCommands}>
                     <code className={s.suggestMacroCmd}>{conf.command}</code>
-                  </div>{conf._verdict && (
+                  </div>{conf.assessment && <CommandAssessment assessment={conf.assessment} />}{conf._verdict && (
                     <div style={{ fontSize: '12px', color: 'var(--text-muted)', padding: '8px', background: 'var(--bg-modal-hover)', borderRadius: '6px', marginTop: '6px' }}><MarkdownRenderer content={conf._verdict} /></div>
                   )}</ConfirmationCard>
               )),
