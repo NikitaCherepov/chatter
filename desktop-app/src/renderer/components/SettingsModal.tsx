@@ -2027,8 +2027,8 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
                           ))}
                         </div>
                       )}
-                      <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 'calc(8px * var(--appearance-density, 1))' }}>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'calc(8px * var(--appearance-density, 1))' }}>
                           <button
                             className={s.saveBtn}
                             onClick={handleSaveCustomPrompt}
@@ -2059,7 +2059,7 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
                             </button>
                           )}
                         </div>
-                        <span style={{ fontSize: '11px', color: customContent.length >= maxPromptLength ? '#e74c3c' : 'var(--text-hint)' }}>
+                        <span style={{ fontSize: 'calc(11px * var(--appearance-ui-scale, 1))', color: customContent.length >= maxPromptLength ? '#e74c3c' : 'var(--text-hint)' }}>
                           {customContent.length} / {maxPromptLength}
                         </span>
                       </div>
@@ -2075,10 +2075,10 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
                             setAiPanelOpen(v => !v);
                           }}
                           style={{
-                            display: 'flex', alignItems: 'center', gap: '6px',
+                            display: 'flex', alignItems: 'center', gap: 'calc(6px * var(--appearance-density, 1))',
                             background: 'transparent', border: 'none', cursor: 'pointer',
                             color: aiPanelOpen ? 'var(--accent_icon, var(--accent))' : 'var(--text-muted)',
-                            fontSize: '13px', fontWeight: 500, padding: 0,
+                            fontSize: 'calc(13px * var(--appearance-ui-scale, 1))', fontWeight: 500, padding: 0,
                             transition: 'color 0.1s',
                           }}
                           type="button"
@@ -2143,7 +2143,7 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
                                   <div className={s.aiDiffWrap}>
                                     <div className={s.aiDiffHeader}>
                                       <span>{t('settings.prompt.preview')}</span>
-                                      <div style={{ display: 'flex', gap: '6px' }}>
+                                      <div style={{ display: 'flex', gap: 'calc(6px * var(--appearance-density, 1))' }}>
                                         <button
                                           type="button"
                                           className={s.aiDiffApplyBtn}
@@ -2397,7 +2397,7 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
                 <div className={s.voiceRow}>
                   <div className={s.voiceSelect}>
                     {selectedVoiceListLoading ? (
-                      <div style={{ color: 'var(--text-muted)', fontSize: 13, padding: '8px 0' }}>{t('settings.voice.loadingVoices')}</div>
+                      <div style={{ color: 'var(--text-muted)', fontSize: 'calc(13px * var(--appearance-ui-scale, 1))', padding: 'calc(8px * var(--appearance-density, 1)) 0' }}>{t('settings.voice.loadingVoices')}</div>
                     ) : (
                       <Select
                         options={voiceOptions}
@@ -2654,7 +2654,7 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
                     value={renderPerf}
                     onChange={handleRenderPerfChange}
                   />
-                  <div style={{ fontSize: 11, color: 'var(--text-hint)', marginTop: 2 }}>
+                  <div style={{ fontSize: 'calc(11px * var(--appearance-ui-scale, 1))', color: 'var(--text-hint)', marginTop: 2 }}>
                     {t('settings.app.layout.renderHelp')}
                   </div>
                 </div>

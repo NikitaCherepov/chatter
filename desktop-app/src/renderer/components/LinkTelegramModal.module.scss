@@ -13,8 +13,8 @@
 
 .modal {
   background-color: var(--bg-primary);
-  border-radius: 12px;
-  padding: 36px 32px;
+  border-radius: var(--appearance-radius, 12px);
+  padding: calc(36px * var(--appearance-density, 1)) calc(32px * var(--appearance-density, 1));
   width: 400px;
   text-align: center;
   box-shadow: var(--shadow-modal);
@@ -28,7 +28,7 @@
   right: 12px;
   width: 28px;
   height: 28px;
-  border-radius: 6px;
+  border-radius: var(--appearance-radius, 6px);
   border: none;
   background-color: transparent;
   cursor: pointer;
@@ -45,7 +45,7 @@
 .iconWrap {
   width: 52px;
   height: 52px;
-  border-radius: 12px;
+  border-radius: var(--appearance-radius, 12px);
   background-color: var(--bg-secondary);
   display: flex;
   align-items: center;
@@ -61,44 +61,44 @@
 
 .title {
   margin: 0 0 20px;
-  font-size: 18px;
+  font-size: calc(18px * var(--appearance-ui-scale, 1));
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .mergeWarning {
   margin: -8px 0 18px;
-  padding: 10px 12px;
+  padding: calc(10px * var(--appearance-density, 1)) calc(12px * var(--appearance-density, 1));
   border: 1px solid rgba(245, 158, 11, 0.35);
-  border-radius: 8px;
+  border-radius: var(--appearance-radius, 8px);
   background: rgba(245, 158, 11, 0.08);
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: calc(12px * var(--appearance-ui-scale, 1));
   line-height: 1.5;
   text-align: left;
 }
 
 .hint {
   color: var(--text-muted);
-  font-size: 14px;
+  font-size: calc(14px * var(--appearance-ui-scale, 1));
   line-height: 1.6;
   margin-bottom: 20px;
 }
 
 .codeTag {
   background-color: var(--bg-secondary);
-  padding: 2px 7px;
-  border-radius: 4px;
+  padding: calc(2px * var(--appearance-density, 1)) calc(7px * var(--appearance-density, 1));
+  border-radius: var(--appearance-radius, 4px);
   color: var(--text-primary);
   font-weight: 600;
-  font-size: 13px;
-  font-family: monospace;
+  font-size: calc(13px * var(--appearance-ui-scale, 1));
+  font-family: var(--appearance-code-font, monospace);
 }
 
 .codeBlock {
   display: flex;
   justify-content: center;
-  gap: 8px;
+  gap: calc(8px * var(--appearance-density, 1));
   margin: 0 auto 16px;
 }
 
@@ -110,8 +110,8 @@
   height: 52px;
   background-color: var(--bg-secondary);
   border: 1px solid var(--border-light);
-  border-radius: 8px;
-  font-size: 28px;
+  border-radius: var(--appearance-radius, 8px);
+  font-size: calc(28px * var(--appearance-ui-scale, 1));
   font-weight: 700;
   color: var(--text-primary);
   letter-spacing: 0;
@@ -119,7 +119,7 @@
 
 .timer {
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: calc(13px * var(--appearance-ui-scale, 1));
   margin-bottom: 16px;
 }
 
@@ -129,7 +129,7 @@
 }
 
 .success {
-  padding: 12px 0;
+  padding: calc(12px * var(--appearance-density, 1)) 0;
 }
 
 .successCheck {
@@ -138,16 +138,16 @@
 
 .successText {
   color: var(--color-success);
-  font-size: 15px;
+  font-size: calc(15px * var(--appearance-ui-scale, 1));
   font-weight: 500;
 }
 
 .loadingState {
-  padding: 16px 0;
+  padding: calc(16px * var(--appearance-density, 1)) 0;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
+  gap: calc(12px * var(--appearance-density, 1));
 }
 
 .spinner {
@@ -161,26 +161,26 @@
 
 .loadingText {
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: calc(13px * var(--appearance-ui-scale, 1));
 }
 
 .errorBlock {
-  padding: 8px 0;
+  padding: calc(8px * var(--appearance-density, 1)) 0;
 }
 
 .errorText {
   color: var(--color-error);
-  font-size: 14px;
+  font-size: calc(14px * var(--appearance-ui-scale, 1));
   margin-bottom: 12px;
 }
 
 .actionBtn {
-  padding: 9px 24px;
-  border-radius: 8px;
+  padding: calc(9px * var(--appearance-density, 1)) calc(24px * var(--appearance-density, 1));
+  border-radius: var(--appearance-radius, 8px);
   border: none;
   background-color: var(--accent);
   color: var(--accent-contrast);
-  font-size: 13px;
+  font-size: calc(13px * var(--appearance-ui-scale, 1));
   font-weight: 500;
   cursor: pointer;
   transition: opacity 0.15s;

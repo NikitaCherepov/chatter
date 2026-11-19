@@ -1,16 +1,17 @@
 import { APPEARANCE_STYLE_EVENT } from '../lib/appearance-runtime';
-import { useLayoutEffect } from 'react';
+import { useLayoutEffect, useRef } from 'react';
 import { THEME_CHANGE_EVENT } from '../lib/theme';
 import s from './CustomTitleBar.module.scss';
 
 export function CustomTitleBar() {
   const electronAPI = window.electronAPI;
+  const titleBarRef = useRef<HTMLElement>(null);
 
   useLayoutEffect(() => {
     if (!electronAPI?.setTitleBarOverlay) return;
 
     const syncColors = () => {
-      const rootStyles = getComputedStyle(document.documentElement);
+      const rootStyles = getComputedStyle(titleBarRef.current ?? document.documentElement);
       const color = rootStyles.getPropertyValue('--bg-secondary').trim();
       const symbolColor = rootStyles.getPropertyValue('--text-secondary').trim();
 
@@ -26,7 +27,7 @@ export function CustomTitleBar() {
   if (!electronAPI) return null;
 
   return (
-    <header className={s.titleBar} aria-label="Chatter">
+    <header ref={titleBarRef} className={s.titleBar} aria-label="Chatter">
       <div className={s.safeArea}>
         <span className={s.logo} aria-hidden="true">
           <svg width="16" height="16" viewBox="0 0 28 28" fill="none">

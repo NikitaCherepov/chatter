@@ -1,3 +1,4 @@
+@use '../styles/appearance';
 // ====== PANEL — always in DOM, animates width ======
 
 .panel {
@@ -13,10 +14,10 @@
 }
 
 .panelCompact {
-  .panelHeader { padding: 24px 0 16px; justify-content: center; }
+  .panelHeader { padding: calc(24px * var(--appearance-density, 1)) 0 calc(16px * var(--appearance-density, 1)); justify-content: center; }
   .headerLeft { display: none; }
   .toolList { overflow-y: auto; min-height: 0; }
-  .toolItem { padding: 8px 0; justify-content: center; }
+  .toolItem { padding: calc(8px * var(--appearance-density, 1)) 0; justify-content: center; }
   .toolInfo, .toolItem > svg { display: none; }
 }
 
@@ -26,7 +27,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 24px 65px 16px 16px;
+  padding: calc(24px * var(--appearance-density, 1)) calc(65px * var(--appearance-density, 1)) calc(16px * var(--appearance-density, 1)) calc(16px * var(--appearance-density, 1));
   height: 68px;
   box-sizing: border-box;
   flex-shrink: 0;
@@ -46,7 +47,7 @@
 }
 
 .panelTitle {
-  font-size: 14px;
+  font-size: calc(14px * var(--appearance-ui-scale, 1));
   font-weight: 600;
   color: var(--text-primary);
   overflow: hidden;
@@ -57,7 +58,7 @@
 .backBtn {
   width: 28px;
   height: 28px;
-  border-radius: 6px;
+  border-radius: var(--appearance-radius, 6px);
   border: none;
   background-color: transparent;
   color: var(--text-secondary);
@@ -78,7 +79,7 @@
   top: 24px;
   width: 28px;
   height: 28px;
-  border-radius: 6px;
+  border-radius: var(--appearance-radius, 6px);
   border: none;
   background-color: transparent;
   color: var(--text-secondary);
@@ -97,7 +98,7 @@
 .layoutBtns {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: calc(2px * var(--appearance-density, 1));
   margin-left: auto;
   flex-shrink: 0;
 }
@@ -105,7 +106,7 @@
 .layoutBtn {
   width: 24px;
   height: 24px;
-  border-radius: 4px;
+  border-radius: var(--appearance-radius, 4px);
   border: none;
   background-color: transparent;
   color: var(--text-muted);
@@ -137,23 +138,23 @@
 .toolList {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 8px 0 8px 0;
+  gap: calc(4px * var(--appearance-density, 1));
+  padding: calc(8px * var(--appearance-density, 1)) 0 calc(8px * var(--appearance-density, 1)) 0;
 }
 
 .toolItem {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: calc(12px * var(--appearance-density, 1));
   width: 100%;
-  padding: 12px 26px 12px 14px;
+  padding: calc(12px * var(--appearance-density, 1)) calc(26px * var(--appearance-density, 1)) calc(12px * var(--appearance-density, 1)) calc(14px * var(--appearance-density, 1));
   border: none;
   background: none;
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: calc(13px * var(--appearance-ui-scale, 1));
   font-weight: 500;
   cursor: pointer;
-  border-radius: 8px;
+  border-radius: var(--appearance-radius, 8px);
   text-align: left;
   transition: background-color 0.1s;
 
@@ -165,7 +166,7 @@
 .toolIcon {
   width: 36px;
   height: 36px;
-  border-radius: 8px;
+  border-radius: var(--appearance-radius, 8px);
   background-color: var(--bg-primary);
   border: 1px solid var(--border-light);
   color: var(--accent-icon);
@@ -181,13 +182,13 @@
 }
 
 .toolItemTitle {
-  font-size: 13px;
+  font-size: calc(13px * var(--appearance-ui-scale, 1));
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .toolItemDesc {
-  font-size: 11px;
+  font-size: calc(11px * var(--appearance-ui-scale, 1));
   color: var(--text-muted);
   margin-top: 2px;
 }
@@ -205,7 +206,7 @@
 // Quick access while collapsed. Only the header toggle stays fixed in both states.
 .panelCollapsed {
   .panelHeader {
-    padding: 24px 0 16px;
+    padding: calc(24px * var(--appearance-density, 1)) 0 calc(16px * var(--appearance-density, 1));
     justify-content: center;
     flex-shrink: 0;
   }
@@ -223,8 +224,8 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
-  padding: 8px 0 16px;
+  gap: calc(6px * var(--appearance-density, 1));
+  padding: calc(8px * var(--appearance-density, 1)) 0 calc(16px * var(--appearance-density, 1));
   min-height: 0;
   overflow-y: auto;
   scrollbar-width: thin;
@@ -239,7 +240,7 @@
   height: 38px;
   padding: 0;
   border: none;
-  border-radius: 9px;
+  border-radius: var(--appearance-radius, 9px);
   background: transparent;
   color: var(--text-secondary);
   cursor: pointer;
@@ -262,3 +263,5 @@
   background: var(--bg-input);
   color: var(--text-primary);
 }
+
+:global([data-appearance-panels]) .panel { @include appearance.scope(panel); }

@@ -1,3 +1,4 @@
+@use '../styles/appearance';
 .titleBar {
   position: relative;
   z-index: 1000;
@@ -15,8 +16,8 @@
   width: env(titlebar-area-width, 100%);
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 0 12px;
+  gap: calc(8px * var(--appearance-density, 1));
+  padding: 0 calc(12px * var(--appearance-density, 1));
   -webkit-app-region: drag;
   app-region: drag;
 }
@@ -34,9 +35,11 @@
 .title {
   overflow: hidden;
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: calc(12px * var(--appearance-ui-scale, 1));
   font-weight: 600;
   line-height: 1;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+:global([data-appearance-panels]) .titleBar { @include appearance.scope(panel); }

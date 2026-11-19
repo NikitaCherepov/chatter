@@ -10,9 +10,9 @@
 
 .confirmDialog {
   background-color: var(--bg-primary);
-  border-radius: 12px;
+  border-radius: var(--appearance-radius, 12px);
   box-shadow: var(--shadow-modal);
-  padding: 24px;
+  padding: calc(24px * var(--appearance-density, 1));
   width: 360px;
   max-width: 90vw;
   display: flex;
@@ -20,14 +20,14 @@
 }
 
 .confirmTitle {
-  font-size: 16px;
+  font-size: calc(16px * var(--appearance-ui-scale, 1));
   font-weight: 600;
   color: var(--text-primary);
   margin-bottom: 8px;
 }
 
 .confirmText {
-  font-size: 13px;
+  font-size: calc(13px * var(--appearance-ui-scale, 1));
   color: var(--text-muted);
   line-height: 1.5;
   margin-bottom: 20px;
@@ -37,13 +37,13 @@
   width: 100%;
   box-sizing: border-box;
   margin-bottom: 20px;
-  padding: 8px 12px;
+  padding: calc(8px * var(--appearance-density, 1)) calc(12px * var(--appearance-density, 1));
   border: 1px solid var(--border-input);
-  border-radius: 6px;
+  border-radius: var(--appearance-radius, 6px);
   outline: none;
   background-color: var(--bg-input);
   color: var(--text-body);
-  font-size: 13px;
+  font-size: calc(13px * var(--appearance-ui-scale, 1));
   transition: border-color 0.1s;
 
   &::placeholder {
@@ -65,16 +65,16 @@
   display: flex;
   flex-direction: row;
   justify-content: flex-end;
-  gap: 8px;
+  gap: calc(8px * var(--appearance-density, 1));
 }
 
 .confirmCancel {
-  padding: 8px 16px;
-  border-radius: 6px;
+  padding: calc(8px * var(--appearance-density, 1)) calc(16px * var(--appearance-density, 1));
+  border-radius: var(--appearance-radius, 6px);
   border: 1px solid var(--border-input);
   background: none;
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: calc(13px * var(--appearance-ui-scale, 1));
   font-weight: 500;
   cursor: pointer;
   transition: background-color 0.1s;
@@ -85,12 +85,12 @@
 }
 
 .confirmDanger {
-  padding: 8px 16px;
-  border-radius: 6px;
+  padding: calc(8px * var(--appearance-density, 1)) calc(16px * var(--appearance-density, 1));
+  border-radius: var(--appearance-radius, 6px);
   border: none;
   background-color: var(--color-error);
-  color: #fff;
-  font-size: 13px;
+  color: var(--color-error-contrast, #fff);
+  font-size: calc(13px * var(--appearance-ui-scale, 1));
   font-weight: 500;
   cursor: pointer;
   transition: opacity 0.15s;
@@ -101,12 +101,12 @@
 }
 
 .confirmPrimary {
-  padding: 8px 20px;
-  border-radius: 6px;
+  padding: calc(8px * var(--appearance-density, 1)) calc(20px * var(--appearance-density, 1));
+  border-radius: var(--appearance-radius, 6px);
   border: none;
   background-color: var(--accent);
   color: var(--accent-contrast);
-  font-size: 13px;
+  font-size: calc(13px * var(--appearance-ui-scale, 1));
   font-weight: 500;
   cursor: pointer;
   transition: opacity 0.15s;

@@ -1,77 +1,77 @@
 .dialog {
-  font-size: 12px;
+  font-size: calc(12px * var(--appearance-ui-scale, 1));
   line-height: 1.45;
   p { margin: 0; }
 }
 .content {
-  gap: 12px;
+  gap: calc(12px * var(--appearance-density, 1));
   // Scroll the whole content instead of shrinking and clipping individual blocks.
   > * { flex-shrink: 0; }
 }
 .tableWrap {
   border: 1px solid var(--border-light);
-  border-radius: 8px;
+  border-radius: var(--appearance-radius, 8px);
   overflow: hidden;
 }
 .summary {
   width: 100%;
   border-collapse: collapse;
   text-align: left;
-  font-size: 12px;
-  th, td { padding: 11px 13px; vertical-align: top; }
-  thead th { background: var(--bg-input); color: var(--text-hint); font-weight: 500; font-size: 11px; }
+  font-size: calc(12px * var(--appearance-ui-scale, 1));
+  th, td { padding: calc(11px * var(--appearance-density, 1)) calc(13px * var(--appearance-density, 1)); vertical-align: top; }
+  thead th { background: var(--bg-input); color: var(--text-hint); font-weight: 500; font-size: calc(11px * var(--appearance-ui-scale, 1)); }
   tbody tr + tr { border-top: 1px solid var(--border-light); }
-  tbody th { color: var(--text-primary); font-size: 13px; font-weight: 600; width: 34%; }
+  tbody th { color: var(--text-primary); font-size: calc(13px * var(--appearance-ui-scale, 1)); font-weight: 600; width: 34%; }
 }
-.total { text-align: right; font-variant-numeric: tabular-nums; width: 55px; color: var(--text-primary); font-size: 13px; }
-.rowNote { display: block; margin-top: 3px; font-size: 11px; font-weight: 400; color: var(--text-hint); }
+.total { text-align: right; font-variant-numeric: tabular-nums; width: 55px; color: var(--text-primary); font-size: calc(13px * var(--appearance-ui-scale, 1)); }
+.rowNote { display: block; margin-top: 3px; font-size: calc(11px * var(--appearance-ui-scale, 1)); font-weight: 400; color: var(--text-hint); }
 .rowDetails {
   color: var(--text-muted);
   span {
     display: inline-block;
     margin-right: 12px;
-    font-size: 12px;
+    font-size: calc(12px * var(--appearance-ui-scale, 1));
     line-height: 1.5;
     &:last-child { margin-right: 0; }
   }
 }
-.hint { color: var(--text-hint); font-size: 11px; line-height: 1.5; }
+.hint { color: var(--text-hint); font-size: calc(11px * var(--appearance-ui-scale, 1)); line-height: 1.5; }
 .storage {
   border: 1px solid var(--border-light);
-  border-radius: 8px;
-  padding: 12px 13px;
+  border-radius: var(--appearance-radius, 8px);
+  padding: calc(12px * var(--appearance-density, 1)) calc(13px * var(--appearance-density, 1));
   background: var(--bg-input);
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: calc(8px * var(--appearance-density, 1));
 }
-.storageHeader, .diskLabels { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 5px 12px; }
+.storageHeader, .diskLabels { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: calc(5px * var(--appearance-density, 1)) calc(12px * var(--appearance-density, 1)); }
 .storageHeader {
-  h4 { margin: 0; font-size: 13px; font-weight: 600; color: var(--text-primary); }
-  > span { font-size: 11px; }
+  h4 { margin: 0; font-size: calc(13px * var(--appearance-ui-scale, 1)); font-weight: 600; color: var(--text-primary); }
+  > span { font-size: calc(11px * var(--appearance-ui-scale, 1)); }
 }
-.diskLabels { font-size: 12px; font-variant-numeric: tabular-nums; color: var(--text-muted); }
+.diskLabels { font-size: calc(12px * var(--appearance-ui-scale, 1)); font-variant-numeric: tabular-nums; color: var(--text-muted); }
 .enough { color: var(--accent); }
-.error { color: var(--color-error); font-size: 12px; }
-.diskMeter { height: 6px; border-radius: 4px; background: var(--border-light); overflow: hidden; }
+.error { color: var(--color-error); font-size: calc(12px * var(--appearance-ui-scale, 1)); }
+.diskMeter { height: 6px; border-radius: var(--appearance-radius, 4px); background: var(--border-light); overflow: hidden; }
 .diskFill { height: 100%; min-width: 2px; border-radius: inherit; background: var(--accent); }
 .diskFillError { background: var(--color-error); }
 .warnings {
   margin: 0;
-  padding: 10px 13px 10px 28px;
+  padding: calc(10px * var(--appearance-density, 1)) calc(13px * var(--appearance-density, 1)) calc(10px * var(--appearance-density, 1)) calc(28px * var(--appearance-density, 1));
   border: 1px solid var(--border-light);
-  border-radius: 8px;
+  border-radius: var(--appearance-radius, 8px);
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: calc(12px * var(--appearance-ui-scale, 1));
   line-height: 1.5;
   li + li { margin-top: 5px; }
 }
-.notes { font-size: 11px; color: var(--text-muted); }
+.notes { font-size: calc(11px * var(--appearance-ui-scale, 1)); color: var(--text-muted); }
 .notesToggle {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 0;
+  gap: calc(6px * var(--appearance-density, 1));
+  padding: calc(4px * var(--appearance-density, 1)) 0;
   border: 0;
   background: transparent;
   color: var(--text-secondary);
@@ -81,21 +81,21 @@
   &[aria-expanded='true'] svg { transform: rotate(90deg); }
   &:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 }
-.noteBody { display: grid; gap: 6px; margin-top: 8px; padding-left: 12px; border-left: 1px solid var(--border-light); }
+.noteBody { display: grid; gap: calc(6px * var(--appearance-density, 1)); margin-top: 8px; padding-left: calc(12px * var(--appearance-density, 1)); border-left: 1px solid var(--border-light); }
 .actions { align-items: center; flex-wrap: wrap; }
-.progress { flex: 1 1 180px; min-width: 0; color: var(--text-hint); font-size: 12px; }
+.progress { flex: 1 1 180px; min-width: 0; color: var(--text-hint); font-size: calc(12px * var(--appearance-ui-scale, 1)); }
 @media (max-width: 520px) {
   .summary {
     thead { display: none; }
     tbody tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; }
-    tbody th { width: auto; padding-bottom: 3px; }
-    .total { width: auto; padding-bottom: 3px; }
+    tbody th { width: auto; padding-bottom: calc(3px * var(--appearance-density, 1)); }
+    .total { width: auto; padding-bottom: calc(3px * var(--appearance-density, 1)); }
     .rowDetails {
       grid-column: 1 / -1;
       padding-top: 0;
       display: flex;
       flex-wrap: wrap;
-      gap: 3px 12px;
+      gap: calc(3px * var(--appearance-density, 1)) calc(12px * var(--appearance-density, 1));
       span { margin-right: 0; }
     }
   }

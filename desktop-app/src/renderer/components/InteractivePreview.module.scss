@@ -2,29 +2,29 @@
 .preview[hidden] { display: none; }
 .toolbar {
   display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap;
-  gap: 8px; padding: 8px 12px; font-size: 11px; color: var(--text-muted);
-  div { display: flex; gap: 8px; }
-  button { border: 1px solid var(--border-light); border-radius: 5px; background: var(--bg-primary); color: var(--text-primary); padding: 4px 8px; cursor: pointer; }
+  gap: calc(8px * var(--appearance-density, 1)); padding: calc(8px * var(--appearance-density, 1)) calc(12px * var(--appearance-density, 1)); font-size: calc(11px * var(--appearance-ui-scale, 1)); color: var(--text-muted);
+  div { display: flex; gap: calc(8px * var(--appearance-density, 1)); }
+  button { border: 1px solid var(--border-light); border-radius: var(--appearance-radius, 5px); background: var(--bg-primary); color: var(--text-primary); padding: calc(4px * var(--appearance-density, 1)) calc(8px * var(--appearance-density, 1)); cursor: pointer; }
   button:disabled { opacity: .5; cursor: default; }
 }
 .slot {
   height: clamp(160px, calc((100dvh - 40px) * .75), 800px); width: 100%;
   overflow: hidden; position: relative;
-  > p { padding: 16px; color: var(--text-muted); font-family: system-ui, sans-serif; }
+  > p { padding: calc(16px * var(--appearance-density, 1)); color: var(--text-muted); font-family: system-ui, sans-serif; }
 }
 .overlay {
-  position: fixed; inset: 40px 0 0; z-index: 12000; padding: 20px;
+  position: fixed; inset: 40px 0 0; z-index: 12000; padding: calc(20px * var(--appearance-density, 1));
   display: flex; align-items: center; justify-content: center; background: var(--overlay-bg);
 }
 .dialog {
   width: 100%; max-width: 1600px; height: 100%; min-height: 0;
   display: flex; flex-direction: column; overflow: hidden;
-  border: 1px solid var(--border-light); border-radius: 12px;
+  border: 1px solid var(--border-light); border-radius: var(--appearance-radius, 12px);
   background: var(--bg-bubble); box-shadow: var(--shadow-modal);
   > .toolbar { flex-shrink: 0; border-bottom: 1px solid var(--border-light); }
 }
 .expandedSlot {
   flex: 1; min-height: 0; width: 100%; overflow: hidden;
-  > p { padding: 16px; color: var(--text-muted); font-family: system-ui, sans-serif; }
+  > p { padding: calc(16px * var(--appearance-density, 1)); color: var(--text-muted); font-family: system-ui, sans-serif; }
 }
-@media (max-width: 640px), (max-height: 600px) { .overlay { padding: 8px; } }
+@media (max-width: 640px), (max-height: 600px) { .overlay { padding: calc(8px * var(--appearance-density, 1)); } }

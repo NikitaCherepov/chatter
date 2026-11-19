@@ -6,9 +6,9 @@
   max-height: calc(100vh - 16px);
   overflow-y: auto;
   box-sizing: border-box;
-  padding: 5px;
+  padding: calc(5px * var(--appearance-density, 1));
   border: 1px solid var(--border-light);
-  border-radius: 8px;
+  border-radius: var(--appearance-radius, 8px);
   background: var(--bg-primary);
   box-shadow: var(--shadow-card);
   transform-origin: top left;
@@ -19,15 +19,15 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 20px;
+  gap: calc(20px * var(--appearance-density, 1));
   width: 100%;
-  padding: 8px 10px;
+  padding: calc(8px * var(--appearance-density, 1)) calc(10px * var(--appearance-density, 1));
   border: none;
-  border-radius: 4px;
+  border-radius: var(--appearance-radius, 4px);
   background: none;
   color: var(--text-secondary);
   font: inherit;
-  font-size: 13px;
+  font-size: calc(13px * var(--appearance-ui-scale, 1));
   text-align: left;
   cursor: pointer;
   transition: background-color 0.1s, color 0.1s;
@@ -40,5 +40,5 @@
   &:disabled { opacity: 0.45; cursor: default; }
 }
 
-.shortcut { color: var(--text-muted); font-size: 11px; white-space: nowrap; }
+.shortcut { color: var(--text-muted); font-size: calc(11px * var(--appearance-ui-scale, 1)); white-space: nowrap; }
 .separator { height: 1px; margin: 4px 5px; background: var(--border-light); }

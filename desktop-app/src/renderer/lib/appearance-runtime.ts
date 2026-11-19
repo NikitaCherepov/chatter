@@ -1,4 +1,5 @@
 import { getResolvedTheme } from './theme';
+import { appearanceColors } from './appearance-colors';
 import {
   DEFAULT_APPEARANCE,
   parseAppearanceProfile,
@@ -23,24 +24,15 @@ export const subscribeAppearancePreview = (fn: () => void) => {
 };
 export const currentAppearance = () =>
   preview ?? settings.profiles.find((p) => p.id === settings.activeId) ?? null;
-const rgb = (hex: string) => [1, 3, 5].map((offset) => parseInt(hex.slice(offset, offset + 2), 16));
-const mix = (a: string, b: string, t: number) =>
-  '#' +
-  rgb(a)
-    .map((c, i) =>
-      Math.round(c + (rgb(b)[i] - c) * t)
-        .toString(16)
-        .padStart(2, '0'),
-    )
-    .join('');
 export function refreshAppearance() {
   const root = document.documentElement;
   for (const key of applied) root.style.removeProperty(key);
   applied.clear();
   const profile = currentAppearance();
   if (!profile) {
-    window.dispatchEvent(new Event(APPEARANCE_STYLE_EVENT));
     delete root.dataset.appearance;
+    delete root.dataset.appearancePanels;
+    window.dispatchEvent(new Event(APPEARANCE_STYLE_EVENT));
     if (measuredSignature) {
       measuredSignature = '';
       window.dispatchEvent(new Event(APPEARANCE_CHANGE_EVENT));
@@ -48,42 +40,19 @@ export function refreshAppearance() {
     return;
   }
   root.dataset.appearance = profile.id;
-  const p = profile[getResolvedTheme()],
-    dark = getResolvedTheme() === 'dark',
-    opposite = dark ? '#ffffff' : '#000000';
+  const colors = appearanceColors(profile, getResolvedTheme(), imageUrl);
   const set = (key: string, value: string | number) => {
     root.style.setProperty(key, String(value));
     applied.add(key);
   };
-  const c: Record<string, string> = {
-    '--bg-primary': mix(p.background, '#ffffff', dark ? 0.06 : 0.85),
-    '--bg-secondary': p.background,
-    '--bg-input': mix(p.background, p.text, 0.035),
-    '--bg-bubble': mix(p.background, p.text, 0.045),
-    '--bg-modal-hover': mix(p.background, p.text, 0.08),
-    '--text-primary': p.text,
-    '--text-body': p.text,
-    '--text-secondary': mix(p.text, p.background, 0.12),
-    '--text-muted': mix(p.text, p.background, 0.3),
-    '--text-hint': mix(p.text, p.background, 0.44),
-    '--border-light': mix(p.background, p.text, 0.17),
-    '--border-medium': mix(p.background, p.text, 0.3),
-    '--border-input': mix(p.background, p.text, 0.3),
-    '--accent': p.accent,
-    '--accent-contrast':
-      rgb(p.accent).reduce((a, c, i) => a + c * [0.299, 0.587, 0.114][i], 0) > 145
-        ? '#080f1d'
-        : '#ffffff',
-    '--accent-icon': mix(p.accent, p.text, 0.1),
-    '--accent-icon-light': mix(p.accent, p.background, 0.2),
-    '--accent-icon-placeholder': mix(p.accent, p.background, 0.4),
-    '--scrollbar-thumb': mix(p.background, p.text, 0.28),
-    '--scrollbar-hover': mix(p.background, p.text, 0.42),
-    '--selection-bg': mix(p.background, p.accent, 0.3),
-    '--selection-text': p.text,
-    '--overlay-bg': dark ? 'rgba(0,0,0,.58)' : 'rgba(0,0,0,.3)',
-  };
-  for (const [key, value] of Object.entries(c)) set(key, value);
+  for (const [key, value] of Object.entries(colors.shell)) set(key, value);
+  for (const [key, value] of Object.entries(colors.chat))
+    set('--appearance-chat-' + key.slice(2), value);
+  if (profile[getResolvedTheme()].surface) {
+    root.dataset.appearancePanels = 'custom';
+    for (const [key, value] of Object.entries(colors.panel))
+      set('--appearance-panel-' + key.slice(2), value);
+  } else delete root.dataset.appearancePanels;
   const t = profile.typography;
   set('--appearance-ui-font', JSON.stringify(t.uiFont) + ', system-ui, sans-serif');
   set('--appearance-message-font', JSON.stringify(t.messageFont) + ', system-ui, sans-serif');
@@ -95,11 +64,7 @@ export function refreshAppearance() {
   set('--appearance-radius', profile.geometry.radius + 'px');
   set('--appearance-density', profile.geometry.density);
   const b = profile.background;
-  let background = 'none';
-  if (b.type === 'gradient') background = `linear-gradient(${b.angle}deg, ${b.color}, ${b.color2})`;
-  if (b.type === 'image' && b.image)
-    background = `linear-gradient(rgba(0,0,0,${b.dim}),rgba(0,0,0,${b.dim})),url(${JSON.stringify(imageUrl(b.image))})`;
-  set('--appearance-chat-background', background);
+  set('--appearance-chat-background', colors.background);
   set('--appearance-chat-position', b.position);
   window.dispatchEvent(new Event(APPEARANCE_STYLE_EVENT));
   const signature = JSON.stringify([profile.typography, profile.geometry]);

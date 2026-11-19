@@ -5,7 +5,7 @@
 .limitSection {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: calc(12px * var(--appearance-density, 1));
   margin-top: 32px;
   min-width: 0;
 }
@@ -13,22 +13,22 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  label { color: var(--text-primary); font-size: 13px; font-weight: 600; }
+  gap: calc(16px * var(--appearance-density, 1));
+  label { color: var(--text-primary); font-size: calc(13px * var(--appearance-ui-scale, 1)); font-weight: 600; }
 }
-.titleGroup { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
-.autoCaption { color: var(--text-muted); font-size: 11px; line-height: 1.5; }
-.heading .numberInput { flex: 0 0 128px; width: 128px; min-width: 0; padding: 7px 10px; font-size: 12px; font-variant-numeric: tabular-nums; }
-.help { margin: 0; color: var(--text-hint); font-size: 11px; line-height: 1.6; }
-.presets { display: flex; flex-wrap: wrap; gap: 6px; }
+.titleGroup { display: flex; flex-direction: column; gap: calc(5px * var(--appearance-density, 1)); min-width: 0; }
+.autoCaption { color: var(--text-muted); font-size: calc(11px * var(--appearance-ui-scale, 1)); line-height: 1.5; }
+.heading .numberInput { flex: 0 0 128px; width: 128px; min-width: 0; padding: calc(7px * var(--appearance-density, 1)) calc(10px * var(--appearance-density, 1)); font-size: calc(12px * var(--appearance-ui-scale, 1)); font-variant-numeric: tabular-nums; }
+.help { margin: 0; color: var(--text-hint); font-size: calc(11px * var(--appearance-ui-scale, 1)); line-height: 1.6; }
+.presets { display: flex; flex-wrap: wrap; gap: calc(6px * var(--appearance-density, 1)); }
 .presets .preset {
-  padding: 5px 10px;
-  font-size: 11px;
+  padding: calc(5px * var(--appearance-density, 1)) calc(10px * var(--appearance-density, 1));
+  font-size: calc(11px * var(--appearance-ui-scale, 1));
   font-variant-numeric: tabular-nums;
   &[aria-pressed='true'] { background: var(--accent); color: var(--accent-contrast); border-color: var(--accent); }
   &:disabled { opacity: 0.5; cursor: default; }
 }
 @media (max-width: 600px) {
-  .heading { align-items: flex-start; flex-wrap: wrap; gap: 10px; }
+  .heading { align-items: flex-start; flex-wrap: wrap; gap: calc(10px * var(--appearance-density, 1)); }
   .heading .numberInput { flex-basis: 112px; width: 112px; margin-left: auto; }
 }

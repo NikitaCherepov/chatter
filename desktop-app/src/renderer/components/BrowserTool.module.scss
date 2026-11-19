@@ -11,10 +11,10 @@
 .toolbar {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: calc(6px * var(--appearance-density, 1));
   flex: 0 0 auto;
   min-height: 44px;
-  padding: 6px 10px;
+  padding: calc(6px * var(--appearance-density, 1)) calc(10px * var(--appearance-density, 1));
   border-bottom: 1px solid var(--border-light);
   background: var(--bg-secondary);
 }
@@ -26,10 +26,10 @@
   height: 32px;
   padding: 0;
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--appearance-radius, 8px);
   color: var(--text-primary);
   background: transparent;
-  font-size: 20px;
+  font-size: calc(20px * var(--appearance-ui-scale, 1));
   cursor: pointer;
 
   &:hover:not(:disabled) {
@@ -45,13 +45,13 @@
 .homeButton {
   overflow: hidden;
   min-width: 0;
-  padding: 7px 10px;
+  padding: calc(7px * var(--appearance-density, 1)) calc(10px * var(--appearance-density, 1));
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--appearance-radius, 8px);
   color: var(--text-primary);
   background: transparent;
   font: inherit;
-  font-size: 13px;
+  font-size: calc(13px * var(--appearance-ui-scale, 1));
   font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -73,7 +73,7 @@
   min-width: 0;
   height: 32px;
   border: 1px solid var(--border-input);
-  border-radius: 9px;
+  border-radius: var(--appearance-radius, 9px);
   background: var(--bg-primary);
 
   &:focus-within {
@@ -83,31 +83,31 @@
 
 .securityIcon {
   flex: 0 0 auto;
-  padding-left: 10px;
+  padding-left: calc(10px * var(--appearance-density, 1));
   color: var(--text-hint);
-  font-size: 14px;
+  font-size: calc(14px * var(--appearance-ui-scale, 1));
 }
 
 .addressInput {
   width: 100%;
   min-width: 0;
   height: 100%;
-  padding: 0 10px 0 7px;
+  padding: 0 calc(10px * var(--appearance-density, 1)) 0 calc(7px * var(--appearance-density, 1));
   border: 0;
   outline: 0;
   color: var(--text-primary);
   background: transparent;
   font: inherit;
-  font-size: 13px;
+  font-size: calc(13px * var(--appearance-ui-scale, 1));
 }
 
 .pageTitle {
   flex: 0 0 auto;
   overflow: hidden;
-  padding: 3px 12px 5px;
+  padding: calc(3px * var(--appearance-density, 1)) calc(12px * var(--appearance-density, 1)) calc(5px * var(--appearance-density, 1));
   color: var(--text-hint);
   background: var(--bg-secondary);
-  font-size: 11px;
+  font-size: calc(11px * var(--appearance-ui-scale, 1));
   line-height: 1.2;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -119,7 +119,7 @@
   min-width: 1px;
   min-height: 1px;
   overflow: hidden;
-  background: #fff;
+  background: var(--bg-primary);
 }
 
 .placeholder {
@@ -127,8 +127,8 @@
   place-items: center;
   width: 100%;
   height: 100%;
-  color: #777;
-  font-size: 13px;
+  color: var(--text-muted);
+  font-size: calc(13px * var(--appearance-ui-scale, 1));
 }
 
 @keyframes browserSpin {

@@ -135,6 +135,10 @@ body {
   line-height: 1.5;
 }
 
+:root[data-appearance] body {
+  color-scheme: var(--color-scheme);
+}
+
 // ---------- Scrollbar ----------
 
 ::-webkit-scrollbar {

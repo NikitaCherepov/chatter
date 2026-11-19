@@ -11,22 +11,22 @@
 .dialog {
   width: 400px;
   max-width: calc(100vw - 32px);
-  padding: 24px;
-  border-radius: 12px;
+  padding: calc(24px * var(--appearance-density, 1));
+  border-radius: var(--appearance-radius, 12px);
   background: var(--bg-primary);
   box-shadow: var(--shadow-modal);
 }
 
 .title {
   color: var(--text-primary);
-  font-size: 16px;
+  font-size: calc(16px * var(--appearance-ui-scale, 1));
   font-weight: 600;
 }
 
 .help {
   margin-top: 6px;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: calc(12px * var(--appearance-ui-scale, 1));
   line-height: 1.45;
 }
 
@@ -36,7 +36,7 @@
   height: 320px;
   margin: 18px auto 16px;
   overflow: hidden;
-  border-radius: 12px;
+  border-radius: var(--appearance-radius, 12px);
   background: var(--bg-input);
   cursor: grab;
   touch-action: none;
@@ -60,7 +60,7 @@
   position: absolute;
   inset: 0;
   border: 2px solid var(--accent);
-  border-radius: 12px;
+  border-radius: var(--appearance-radius, 12px);
   box-shadow: inset 0 0 0 1px rgb(255 255 255 / 18%);
   pointer-events: none;
 }
@@ -69,14 +69,14 @@
   display: grid;
   grid-template-columns: auto 1fr;
   align-items: center;
-  gap: 12px;
+  gap: calc(12px * var(--appearance-density, 1));
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: calc(12px * var(--appearance-ui-scale, 1));
 
   input {
     appearance: none;
     height: 4px;
-    border-radius: 2px;
+    border-radius: var(--appearance-radius, 2px);
     outline: none;
     background: var(--border-medium);
     cursor: pointer;
@@ -95,15 +95,15 @@
 .actions {
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
+  gap: calc(8px * var(--appearance-density, 1));
   margin-top: 22px;
 }
 
 .cancelButton,
 .confirmButton {
-  padding: 8px 16px;
-  border-radius: 6px;
-  font-size: 13px;
+  padding: calc(8px * var(--appearance-density, 1)) calc(16px * var(--appearance-density, 1));
+  border-radius: var(--appearance-radius, 6px);
+  font-size: calc(13px * var(--appearance-ui-scale, 1));
   font-weight: 500;
   cursor: pointer;
 }

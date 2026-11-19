@@ -1,13 +1,13 @@
 // Scoped to message content; the same palette covers formatted and streamed code.
 .md {
-  --code-keyword: #a626a4;
-  --code-string: #116329;
-  --code-number: #0550ae;
-  --code-comment: #57606a;
-  --code-function: #6639ba;
-  --code-type: #953800;
-  --code-name: #0550ae;
-  --code-meta: #6e5300;
+  --code-keyword: var(--syntax-keyword, #a626a4);
+  --code-string: var(--syntax-string, #116329);
+  --code-number: var(--syntax-number, #0550ae);
+  --code-comment: var(--syntax-comment, #57606a);
+  --code-function: var(--syntax-function, #6639ba);
+  --code-type: var(--syntax-type, #953800);
+  --code-name: var(--syntax-name, #0550ae);
+  --code-meta: var(--syntax-meta, #6e5300);
   :global(.hljs) { color: var(--text-body); background: transparent; }
   :global(.hljs-keyword), :global(.hljs-selector-tag), :global(.hljs-literal), :global(.hljs-operator) { color: var(--code-keyword); }
   :global(.hljs-string), :global(.hljs-regexp), :global(.hljs-template-tag), :global(.hljs-addition) { color: var(--code-string); }
@@ -18,25 +18,25 @@
   :global(.hljs-tag), :global(.hljs-name), :global(.hljs-selector-id), :global(.hljs-selector-class), :global(.hljs-property), :global(.hljs-attribute) { color: var(--code-name); }
   :global(.hljs-params), :global(.hljs-subst), :global(.hljs-punctuation) { color: var(--text-body); }
   :global(.hljs-meta) { color: var(--code-meta); }
-  :global(.hljs-deletion) { color: var(--danger, #b42318); }
+  :global(.hljs-deletion) { color: var(--color-error, #b42318); }
   :global(.hljs-emphasis) { font-style: italic; }
   :global(.hljs-strong) { font-weight: 600; }
 }
 :global([data-theme='dark']) .md {
-  --code-keyword: #c5a5e8;
-  --code-string: #c3d59d;
-  --code-number: #e7b78e;
-  --code-comment: #94a3b5;
-  --code-function: #e6d19b;
-  --code-type: #9ed6ce;
-  --code-name: #9dc4e4;
-  --code-meta: #b8b8df;
-  :global(.hljs-deletion) { color: #f0a8a8; }
+  --code-keyword: var(--syntax-keyword, #c5a5e8);
+  --code-string: var(--syntax-string, #c3d59d);
+  --code-number: var(--syntax-number, #e7b78e);
+  --code-comment: var(--syntax-comment, #94a3b5);
+  --code-function: var(--syntax-function, #e6d19b);
+  --code-type: var(--syntax-type, #9ed6ce);
+  --code-name: var(--syntax-name, #9dc4e4);
+  --code-meta: var(--syntax-meta, #b8b8df);
+  :global(.hljs-deletion) { color: var(--color-error, #f0a8a8); }
 }
 
 // Model-authored text accents use theme colors, never arbitrary model CSS.
 .md {
-  --message-warning: #85530a;
+  --message-warning: var(--color-warning, #85530a);
 }
 
 :global(:root[data-theme='dark']) .md {
@@ -85,7 +85,7 @@
 .md [data-message-accent^='highlight-'] {
   color: var(--text-primary);
   background: color-mix(in srgb, var(--message-tone) 20%, transparent);
-  border-radius: 4px;
+  border-radius: var(--appearance-radius, 4px);
   padding: .08em .25em;
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;
@@ -141,8 +141,8 @@
 .inlineCode {
   background-color: var(--bg-bubble);
   border: 1px solid var(--border-light);
-  border-radius: 4px;
-  padding: 1px 6px;
+  border-radius: var(--appearance-radius, 4px);
+  padding: calc(1px * var(--appearance-density, 1)) calc(6px * var(--appearance-density, 1));
   font-size: 0.9em;
   font-family: var(--appearance-code-font, 'Cascadia Code'), 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
   color: var(--text-primary);
@@ -151,7 +151,7 @@
 // --- Code block wrapper ---
 .codeBlockWrapper {
   margin: 0.75em 0;
-  border-radius: 8px;
+  border-radius: var(--appearance-radius, 8px);
   border: 1px solid var(--border-light);
   overflow: hidden;
   background-color: var(--bg-primary);
@@ -161,31 +161,31 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 12px;
+  padding: calc(6px * var(--appearance-density, 1)) calc(12px * var(--appearance-density, 1));
   background-color: var(--bg-bubble);
   border-bottom: 1px solid var(--border-light);
 }
 
 .codeLang {
-  font-size: 11px;
+  font-size: calc(11px * var(--appearance-ui-scale, 1));
   font-weight: 600;
   text-transform: uppercase;
   color: var(--text-muted);
   letter-spacing: 0.5px;
 }
 
-.codeActions { display: flex; align-items: center; gap: 4px; }
-.previewPending { padding: 16px; color: var(--text-muted); font-size: 13px; }
+.codeActions { display: flex; align-items: center; gap: calc(4px * var(--appearance-density, 1)); }
+.previewPending { padding: calc(16px * var(--appearance-density, 1)); color: var(--text-muted); font-size: calc(13px * var(--appearance-ui-scale, 1)); }
 
 .copyBtn {
   border: none;
   background: none;
-  font-size: 11px;
+  font-size: calc(11px * var(--appearance-ui-scale, 1));
   font-weight: 500;
   color: var(--accent-icon-light);
   cursor: pointer;
-  padding: 2px 8px;
-  border-radius: 4px;
+  padding: calc(2px * var(--appearance-density, 1)) calc(8px * var(--appearance-density, 1));
+  border-radius: var(--appearance-radius, 4px);
   transition: background-color 0.15s, color 0.15s;
 
   &:hover {
@@ -197,7 +197,7 @@
 // Override pre/code inside code block
 .codeBlockWrapper pre {
   margin: 0;
-  padding: 14px 16px;
+  padding: calc(14px * var(--appearance-density, 1)) calc(16px * var(--appearance-density, 1));
   overflow-x: auto;
   white-space: pre;
   tab-size: 2;
@@ -218,11 +218,11 @@
   display: inline-flex;
   align-items: center;
   vertical-align: middle;
-  gap: 6px;
+  gap: calc(6px * var(--appearance-density, 1));
   max-width: min(100%, 32em);
-  padding: 3px 8px;
+  padding: calc(3px * var(--appearance-density, 1)) calc(8px * var(--appearance-density, 1));
   border: 1px solid var(--border-light);
-  border-radius: 7px;
+  border-radius: var(--appearance-radius, 7px);
   background: var(--bg-bubble);
   color: var(--text-body);
   font: inherit;
@@ -332,7 +332,7 @@
 .md :global(.task-list-item) {
   display: flex;
   align-items: flex-start;
-  gap: 6px;
+  gap: calc(6px * var(--appearance-density, 1));
 
   input[type='checkbox'] {
     margin-top: 4px;
@@ -346,7 +346,7 @@
   padding: 0.5em 1em;
   border-left: 3px solid var(--accent);
   background-color: var(--bg-bubble);
-  border-radius: 0 6px 6px 0;
+  border-radius: 0 var(--appearance-radius, 6px) var(--appearance-radius, 6px) 0;
   color: var(--text-secondary);
 
   > :first-child {
@@ -379,27 +379,27 @@
 .tableWrapper {
   margin: 0.75em 0;
   overflow-x: auto;
-  border-radius: 6px;
+  border-radius: var(--appearance-radius, 6px);
   border: 1px solid var(--border-light);
 }
 
 .tableWrapper table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 13px;
+  font-size: calc(13px * var(--appearance-ui-scale, 1));
 }
 
 .tableWrapper th {
   background-color: var(--bg-bubble);
   font-weight: 600;
   text-align: left;
-  padding: 8px 12px;
+  padding: calc(8px * var(--appearance-density, 1)) calc(12px * var(--appearance-density, 1));
   border-bottom: 2px solid var(--border-light);
   color: var(--text-primary);
 }
 
 .tableWrapper td {
-  padding: 8px 12px;
+  padding: calc(8px * var(--appearance-density, 1)) calc(12px * var(--appearance-density, 1));
   border-bottom: 1px solid var(--border-light);
   color: var(--text-body);
 }
@@ -454,7 +454,7 @@
   width: fit-content;
   max-width: 100%;
   border: 0;
-  border-radius: 12px;
+  border-radius: var(--appearance-radius, 12px);
   overflow: hidden;
   text-decoration: none;
   cursor: pointer;
@@ -478,13 +478,13 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: calc(6px * var(--appearance-density, 1));
   box-sizing: border-box;
   min-height: 100px;
   max-width: 100%;
-  padding: 12px;
+  padding: calc(12px * var(--appearance-density, 1));
   border: 1px dashed var(--border-light);
-  border-radius: 12px;
+  border-radius: var(--appearance-radius, 12px);
   background: var(--bg-bubble);
   color: var(--text-muted);
   font-size: .9em;
@@ -501,7 +501,7 @@
   display: flex;
   flex-wrap: wrap;
   align-items: flex-start;
-  gap: 16px;
+  gap: calc(16px * var(--appearance-density, 1));
 
   > figure { flex: 0 1 auto; width: fit-content; max-width: min(100%, 220px); }
   > [data-message-image-body] { flex: 3 1 240px; min-width: 0; }
@@ -511,7 +511,7 @@
   display: grid;
   max-width: 960px;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, max(160px, calc((100% - 28px) / 3))), 1fr));
-  gap: 14px;
+  gap: calc(14px * var(--appearance-density, 1));
 }
 
 .md [data-message-image] {
@@ -523,7 +523,7 @@
     width: 100%;
     height: auto;
     margin: 0;
-    border-radius: 12px;
+    border-radius: var(--appearance-radius, 12px);
     background: var(--bg-bubble);
   }
   figcaption {
@@ -557,12 +557,12 @@
   max-width: min(100%, 640px);
   max-height: 360px;
   object-fit: contain;
-  border-radius: 12px;
+  border-radius: var(--appearance-radius, 12px);
   margin: 0;
 }
 .searchHighlight {
-  padding: 0 1px;
-  border-radius: 2px;
+  padding: 0 calc(1px * var(--appearance-density, 1));
+  border-radius: var(--appearance-radius, 2px);
   background: color-mix(in srgb, var(--color-warning) 28%, var(--bg-primary));
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-warning) 38%, transparent);
   color: var(--text-body);

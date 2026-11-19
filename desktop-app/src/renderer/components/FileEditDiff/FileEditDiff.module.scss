@@ -3,9 +3,9 @@
   margin-top: 8px;
   overflow: auto;
   border: 1px solid var(--border-light);
-  border-radius: 6px;
+  border-radius: var(--appearance-radius, 6px);
   background: var(--bg-primary);
-  font-size: 12px;
+  font-size: calc(12px * var(--appearance-ui-scale, 1));
 }
 
 .line {
@@ -20,7 +20,7 @@
 }
 
 .prefix {
-  padding: 3px 7px;
+  padding: calc(3px * var(--appearance-density, 1)) calc(7px * var(--appearance-density, 1));
   color: var(--text-muted);
   text-align: center;
   user-select: none;
@@ -28,7 +28,7 @@
 }
 
 .content {
-  padding: 3px 8px;
+  padding: calc(3px * var(--appearance-density, 1)) calc(8px * var(--appearance-density, 1));
   overflow-wrap: anywhere;
   color: var(--text-primary);
   white-space: pre-wrap;
@@ -39,7 +39,7 @@
 }
 
 .added .prefix {
-  color: #18794e;
+  color: var(--color-success);
   background: rgba(39, 174, 96, 0.2);
 }
 
@@ -48,7 +48,7 @@
 }
 
 .removed .prefix {
-  color: #b42318;
+  color: var(--color-error);
   background: rgba(231, 76, 60, 0.18);
 }
 

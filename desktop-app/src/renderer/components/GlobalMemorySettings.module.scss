@@ -1,35 +1,35 @@
 .panel {
   flex: 1;
-  padding: 20px 24px;
+  padding: calc(20px * var(--appearance-density, 1)) calc(24px * var(--appearance-density, 1));
   overflow-y: auto;
 }
 .title {
   margin-bottom: 8px;
   color: var(--text-primary);
-  font-size: 14px;
+  font-size: calc(14px * var(--appearance-ui-scale, 1));
   font-weight: 600;
 }
 .hint {
   margin-bottom: 18px;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: calc(12px * var(--appearance-ui-scale, 1));
   line-height: 1.5;
 }
 .field {
   display: grid;
-  gap: 7px;
+  gap: calc(7px * var(--appearance-density, 1));
   margin-bottom: 8px;
 }
 .field label,
 .sectionTitle {
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: calc(12px * var(--appearance-ui-scale, 1));
   font-weight: 600;
 }
 .selectorRow {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
+  gap: calc(8px * var(--appearance-density, 1));
 }
 .selector {
   flex: 1;
@@ -39,11 +39,11 @@
   width: 38px;
   height: 38px;
   border: 1px solid var(--border-input);
-  border-radius: 7px;
+  border-radius: var(--appearance-radius, 7px);
   background: var(--bg-input);
   color: var(--text-primary);
   cursor: pointer;
-  font-size: 18px;
+  font-size: calc(18px * var(--appearance-ui-scale, 1));
 }
 .addButton:hover {
   background: var(--bg-modal-hover);
@@ -57,7 +57,7 @@
   align-items: center;
   justify-content: center;
   border: 1px solid var(--border-input);
-  border-radius: 7px;
+  border-radius: var(--appearance-radius, 7px);
   background: var(--bg-input);
   color: var(--text-muted);
   cursor: pointer;
@@ -87,18 +87,18 @@
 .preferences {
   margin-top: 24px;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: calc(12px * var(--appearance-ui-scale, 1));
 
   summary {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 8px 0;
+    gap: calc(8px * var(--appearance-density, 1));
+    padding: calc(8px * var(--appearance-density, 1)) 0;
     list-style: none;
     cursor: pointer;
     font-weight: 500;
     &::-webkit-details-marker { display: none; }
-    &::before { content: '›'; font-size: 17px; transition: transform 0.15s; }
+    &::before { content: '›'; font-size: calc(17px * var(--appearance-ui-scale, 1)); transition: transform 0.15s; }
     &:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
   }
   &[open] > summary::before { transform: rotate(90deg); }
@@ -106,8 +106,8 @@
 .preferencesBody {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding-top: 12px;
+  gap: calc(8px * var(--appearance-density, 1));
+  padding-top: calc(12px * var(--appearance-density, 1));
 }
 @media (prefers-reduced-motion: reduce) {
   .preferences summary::before { transition: none; }

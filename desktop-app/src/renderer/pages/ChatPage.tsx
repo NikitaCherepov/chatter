@@ -5386,7 +5386,7 @@ export function ChatPage() {
           </div>
         )}
         {RUNBOOK_COMMAND_TOOLS_ENABLED && rb._verdict && (
-          <div style={{ color: 'var(--text-muted)', padding: '8px', background: 'var(--bg-modal-hover)', borderRadius: '6px', marginTop: '6px' }}>
+          <div style={{ color: 'var(--text-muted)', padding: 'calc(8px * var(--appearance-density, 1))', background: 'var(--bg-modal-hover)', borderRadius: 'var(--appearance-radius, 6px)', marginTop: '6px' }}>
             <MarkdownRenderer content={rb._verdict} />
           </div>
         )}
@@ -5553,7 +5553,7 @@ export function ChatPage() {
                       }}
                     >
                       {conf._reviewing ? t('chat.confirm.reviewing') : t('chat.confirm.review')}
-                    </button></>}><div className={s.suggestMacroName}>{conf.server_name}</div><div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '6px' }}>{conf.host}</div><div className={s.suggestMacroCommands}>
+                    </button></>}><div className={s.suggestMacroName}>{conf.server_name}</div><div style={{ fontSize: 'calc(11px * var(--appearance-ui-scale, 1))', color: 'var(--text-muted)', marginBottom: '6px' }}>{conf.host}</div><div className={s.suggestMacroCommands}>
                     <code className={s.suggestMacroCmd}>{conf.command}</code>
                   </div>{conf.assessment && <CommandAssessment assessment={conf.assessment} />}{conf.needs_new_password && (
                     <div style={{ marginTop: '8px', marginBottom: conf.needs_sudo_password ? '0' : '8px' }}>
@@ -5563,11 +5563,11 @@ export function ChatPage() {
                         disabled={submittingConfirmationIds.has(conf.confirmation_id)}
                         value={conf.new_password || ''}
                         onChange={(e) => setDevopsConfirmations(prev => prev.map((c, i) => i === confIdx ? { ...c, new_password: e.target.value } : c))}
-                        style={{ fontSize: '12px', padding: '6px 10px', borderRadius: '6px', border: '1px solid var(--border-input)', background: 'var(--bg-primary)', color: 'var(--text-primary)', outline: 'none', width: '100%' }}
+                        style={{ fontSize: 'calc(12px * var(--appearance-ui-scale, 1))', padding: 'calc(6px * var(--appearance-density, 1)) calc(10px * var(--appearance-density, 1))', borderRadius: 'var(--appearance-radius, 6px)', border: '1px solid var(--border-input)', background: 'var(--bg-primary)', color: 'var(--text-primary)', outline: 'none', width: '100%' }}
                       />
                     </div>
                   )}{conf.needs_sudo_password && (
-                    <div style={{ marginTop: '8px', marginBottom: '8px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <div style={{ marginTop: '8px', marginBottom: '8px', display: 'flex', flexDirection: 'column', gap: 'calc(6px * var(--appearance-density, 1))' }}>
                       <>
                           <input
                             type="password"
@@ -5575,9 +5575,9 @@ export function ChatPage() {
                             disabled={submittingConfirmationIds.has(conf.confirmation_id)}
                             value={conf.sudo_password || ''}
                             onChange={(e) => setDevopsConfirmations(prev => prev.map((c, i) => i === confIdx ? { ...c, sudo_password: e.target.value } : c))}
-                            style={{ fontSize: '12px', padding: '6px 10px', borderRadius: '6px', border: '1px solid var(--border-input)', background: 'var(--bg-primary)', color: 'var(--text-primary)', outline: 'none' }}
+                            style={{ fontSize: 'calc(12px * var(--appearance-ui-scale, 1))', padding: 'calc(6px * var(--appearance-density, 1)) calc(10px * var(--appearance-density, 1))', borderRadius: 'var(--appearance-radius, 6px)', border: '1px solid var(--border-input)', background: 'var(--bg-primary)', color: 'var(--text-primary)', outline: 'none' }}
                           />
-                          <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: 'var(--text-muted)', cursor: 'pointer', marginBottom: '6px' }}>
+                          <label style={{ display: 'flex', alignItems: 'center', gap: 'calc(6px * var(--appearance-density, 1))', fontSize: 'calc(11px * var(--appearance-ui-scale, 1))', color: 'var(--text-muted)', cursor: 'pointer', marginBottom: '6px' }}>
                             <input
                               className={s.devopsCheckbox}
                               type="checkbox"
@@ -5590,7 +5590,7 @@ export function ChatPage() {
                       </>
                     </div>
                   )}{conf._verdict && (
-                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', padding: '8px', background: 'var(--bg-modal-hover)', borderRadius: '6px', marginTop: '6px' }}><MarkdownRenderer content={conf._verdict} /></div>
+                    <div style={{ fontSize: 'calc(12px * var(--appearance-ui-scale, 1))', color: 'var(--text-muted)', padding: 'calc(8px * var(--appearance-density, 1))', background: 'var(--bg-modal-hover)', borderRadius: 'var(--appearance-radius, 6px)', marginTop: '6px' }}><MarkdownRenderer content={conf._verdict} /></div>
                   )}</ConfirmationCard>
               )),
 ...browserActionConfirmations.map((conf) => (
@@ -5686,7 +5686,7 @@ export function ChatPage() {
                           : t('chat.browser.click', { target: conf.description })}
                     </code>
                   </div>{conf.target_element && conf.action_type !== 'open' && (
-                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', padding: '8px', background: 'var(--bg-modal-hover)', borderRadius: '6px', marginTop: '6px' }}>
+                    <div style={{ fontSize: 'calc(12px * var(--appearance-ui-scale, 1))', color: 'var(--text-muted)', padding: 'calc(8px * var(--appearance-density, 1))', background: 'var(--bg-modal-hover)', borderRadius: 'var(--appearance-radius, 6px)', marginTop: '6px' }}>
                       <div>
                         {t('chat.browser.actualTarget')}: &lt;{conf.target_element.tag || 'element'}{conf.target_element.inputType ? ` type="${conf.target_element.inputType}"` : ''}{conf.target_element.role ? ` role="${conf.target_element.role}"` : ''}&gt;
                       </div>
@@ -5695,11 +5695,11 @@ export function ChatPage() {
                       )}
                     </div>
                   )}{conf.text && (
-                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', padding: '8px', background: 'var(--bg-modal-hover)', borderRadius: '6px', marginTop: '6px', whiteSpace: 'pre-wrap' }}>
+                    <div style={{ fontSize: 'calc(12px * var(--appearance-ui-scale, 1))', color: 'var(--text-muted)', padding: 'calc(8px * var(--appearance-density, 1))', background: 'var(--bg-modal-hover)', borderRadius: 'var(--appearance-radius, 6px)', marginTop: '6px', whiteSpace: 'pre-wrap' }}>
                       {conf.text}
                     </div>
                   )}{conf.origin && conf.action_type !== 'open' && (
-                    <div style={{ fontSize: '11px', color: 'var(--text-hint)', marginTop: '6px' }}>
+                    <div style={{ fontSize: 'calc(11px * var(--appearance-ui-scale, 1))', color: 'var(--text-hint)', marginTop: '6px' }}>
                       {t('chat.browser.currentSite', { site: conf.origin })}
                     </div>
                   )}</ConfirmationCard>
@@ -5743,7 +5743,7 @@ export function ChatPage() {
                       </button>
 <RejectWithComment className={s.suggestMacroDismissBtn} disabled={submittingConfirmationIds.has(conf.confirmation_id)} onReject={comment => submitDownloadDecision(false, comment)} /></>}  ><div className={s.suggestMacroCommands}>
                       <code className={s.suggestMacroCmd}>{conf.filename}</code>
-                    </div><div style={{ fontSize: '12px', color: 'var(--text-muted)', padding: '8px', background: 'var(--bg-modal-hover)', borderRadius: '6px', marginTop: '6px' }}>
+                    </div><div style={{ fontSize: 'calc(12px * var(--appearance-ui-scale, 1))', color: 'var(--text-muted)', padding: 'calc(8px * var(--appearance-density, 1))', background: 'var(--bg-modal-hover)', borderRadius: 'var(--appearance-radius, 6px)', marginTop: '6px' }}>
                       {conf.total_bytes && conf.total_bytes > 0 && (
                         <div>{t('chat.browserDownload.size', { size: conf.total_bytes < 1024 * 1024 ? `${(conf.total_bytes / 1024).toFixed(1)} KB` : `${(conf.total_bytes / (1024 * 1024)).toFixed(1)} MB` })}</div>
                       )}
@@ -5846,7 +5846,7 @@ export function ChatPage() {
                     </button></>}><div className={s.suggestMacroCommands}>
                     <code className={s.suggestMacroCmd}>{conf.command}</code>
                   </div>{conf.assessment && <CommandAssessment assessment={conf.assessment} />}{conf._verdict && (
-                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', padding: '8px', background: 'var(--bg-modal-hover)', borderRadius: '6px', marginTop: '6px' }}><MarkdownRenderer content={conf._verdict} /></div>
+                    <div style={{ fontSize: 'calc(12px * var(--appearance-ui-scale, 1))', color: 'var(--text-muted)', padding: 'calc(8px * var(--appearance-density, 1))', background: 'var(--bg-modal-hover)', borderRadius: 'var(--appearance-radius, 6px)', marginTop: '6px' }}><MarkdownRenderer content={conf._verdict} /></div>
                   )}</ConfirmationCard>
               )),
 ...fileActionConfirmations.map((conf, confIdx) => (
@@ -5908,16 +5908,16 @@ export function ChatPage() {
                     )}</>} ><div className={s.suggestMacroCommands}>
                     <code className={s.suggestMacroCmd}>{conf.file_path}</code>
                   </div>{conf.action_type === 'write' && conf.size_bytes !== undefined && (
-                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                    <div style={{ fontSize: 'calc(12px * var(--appearance-ui-scale, 1))', color: 'var(--text-muted)', marginTop: '4px' }}>
                       {t('chat.file.sizeValue', { size: (conf.size_bytes / 1024).toFixed(1) })}
                       {conf.mode === 'append' ? t('chat.file.appendMode') : t('chat.file.overwriteMode')}
                     </div>
                   )}{conf.action_type === 'read' && conf.start_line !== undefined && (
-                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                    <div style={{ fontSize: 'calc(12px * var(--appearance-ui-scale, 1))', color: 'var(--text-muted)', marginTop: '4px' }}>
                       {t('chat.file.lineRange', { start: conf.start_line, end: conf.start_line + (conf.max_lines || 500) - 1 })}
                     </div>
                   )}{conf.content_preview && (
-                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', padding: '8px', background: 'var(--bg-modal-hover)', borderRadius: '6px', marginTop: '6px', maxHeight: '200px', overflow: 'auto' }}>
+                    <div style={{ fontSize: 'calc(12px * var(--appearance-ui-scale, 1))', color: 'var(--text-muted)', padding: 'calc(8px * var(--appearance-density, 1))', background: 'var(--bg-modal-hover)', borderRadius: 'var(--appearance-radius, 6px)', marginTop: '6px', maxHeight: '200px', overflow: 'auto' }}>
                       <pre style={{ whiteSpace: 'pre-wrap', margin: 0, fontFamily: 'inherit' }}>{conf.content_preview.slice(0, 1500)}</pre>
                     </div>
                   )}</ConfirmationCard>
@@ -6018,7 +6018,7 @@ export function ChatPage() {
                       }}
                     /></>}  ><div className={s.suggestMacroCommands}>
                     <code className={s.suggestMacroCmd}>{t('chat.webcam.cameraValue', { camera: conf.camera_name })}</code>
-                  </div><div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                  </div><div style={{ fontSize: 'calc(12px * var(--appearance-ui-scale, 1))', color: 'var(--text-muted)', marginTop: '4px' }}>
                     {t('chat.webcam.taskValue', { task: conf.purpose })}
                   </div></ConfirmationCard>
               )),
@@ -6056,16 +6056,16 @@ export function ChatPage() {
                         setEmailConfirmations(prev => prev.filter(c => c.confirmation_id !== conf.confirmation_id));
                       }}
                     /></>}  >{conf.from && (
-                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '2px' }}>
+                    <div style={{ fontSize: 'calc(11px * var(--appearance-ui-scale, 1))', color: 'var(--text-muted)', marginBottom: '2px' }}>
                       {t('chat.email.from')} <span style={{ color: 'var(--text-primary)' }}>{conf.from}</span>
                     </div>
-                  )}<div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '2px' }}>
+                  )}<div style={{ fontSize: 'calc(11px * var(--appearance-ui-scale, 1))', color: 'var(--text-muted)', marginBottom: '2px' }}>
                     {t('chat.email.to')} <span style={{ color: 'var(--text-primary)' }}>{conf.to}</span>
-                  </div><div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '6px' }}>
+                  </div><div style={{ fontSize: 'calc(11px * var(--appearance-ui-scale, 1))', color: 'var(--text-muted)', marginBottom: '6px' }}>
                     {t('chat.email.subject')} <span style={{ color: 'var(--text-primary)' }}>{conf.subject}</span>
                   </div>{conf.attachments.length > 0 && (
                     <div style={{ marginBottom: '8px' }}>
-                      <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px' }}>
+                      <div style={{ fontSize: 'calc(11px * var(--appearance-ui-scale, 1))', color: 'var(--text-muted)', marginBottom: '4px' }}>
                         {t('chat.email.attachments')}
                       </div>
                       {conf.attachments.map(attachment => (
@@ -6078,11 +6078,11 @@ export function ChatPage() {
                             display: 'flex',
                             width: '100%',
                             justifyContent: 'space-between',
-                            gap: '8px',
-                            padding: '6px 8px',
+                            gap: 'calc(8px * var(--appearance-density, 1))',
+                            padding: 'calc(6px * var(--appearance-density, 1)) calc(8px * var(--appearance-density, 1))',
                             marginBottom: '4px',
                             border: '1px solid var(--border-color)',
-                            borderRadius: '6px',
+                            borderRadius: 'var(--appearance-radius, 6px)',
                             background: 'var(--bg-modal-hover)',
                             color: 'var(--text-primary)',
                             cursor: 'pointer',
@@ -6146,25 +6146,25 @@ export function ChatPage() {
                         }
                         setPendingCredsUpdates(prev => prev.filter(c => (c.confirmation_id || 'credentials-' + c.server_id) !== (upd.confirmation_id || 'credentials-' + upd.server_id)));
                       }}
-                    /></>}  ><div className={s.suggestMacroName}>{upd.server_name}</div><div style={{ fontSize: '12px', color: 'var(--text-body)', marginTop: '6px', lineHeight: '1.5' }}>
+                    /></>}  ><div className={s.suggestMacroName}>{upd.server_name}</div><div style={{ fontSize: 'calc(12px * var(--appearance-ui-scale, 1))', color: 'var(--text-body)', marginTop: '6px', lineHeight: '1.5' }}>
                     <div>{upd.reason}</div>
-                    <div style={{ marginTop: '6px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{t('chat.credentials.user')}</span>
-                        <code style={{ fontSize: '11px', color: 'var(--danger, #e53935)', textDecoration: 'line-through' }}>{upd.current_username}</code>
+                    <div style={{ marginTop: '6px', display: 'flex', flexDirection: 'column', gap: 'calc(4px * var(--appearance-density, 1))' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 'calc(6px * var(--appearance-density, 1))' }}>
+                        <span style={{ fontSize: 'calc(11px * var(--appearance-ui-scale, 1))', color: 'var(--text-muted)' }}>{t('chat.credentials.user')}</span>
+                        <code style={{ fontSize: 'calc(11px * var(--appearance-ui-scale, 1))', color: 'var(--danger, #e53935)', textDecoration: 'line-through' }}>{upd.current_username}</code>
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round"><line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" /></svg>
-                        <code style={{ fontSize: '11px', color: 'var(--accent)' }}>{upd.new_username}</code>
+                        <code style={{ fontSize: 'calc(11px * var(--appearance-ui-scale, 1))', color: 'var(--accent)' }}>{upd.new_username}</code>
                       </div>
                       {upd.use_ssh_key && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{t('chat.credentials.authentication')}</span>
-                          <span style={{ fontSize: '11px', color: 'var(--accent)' }}>{t('chat.credentials.sshKey')}</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 'calc(6px * var(--appearance-density, 1))' }}>
+                          <span style={{ fontSize: 'calc(11px * var(--appearance-ui-scale, 1))', color: 'var(--text-muted)' }}>{t('chat.credentials.authentication')}</span>
+                          <span style={{ fontSize: 'calc(11px * var(--appearance-ui-scale, 1))', color: 'var(--accent)' }}>{t('chat.credentials.sshKey')}</span>
                         </div>
                       )}
                       {upd.remove_password && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{t('chat.credentials.password')}</span>
-                          <span style={{ fontSize: '11px', color: 'var(--danger, #e53935)' }}>{t('chat.credentials.willBeRemoved')}</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 'calc(6px * var(--appearance-density, 1))' }}>
+                          <span style={{ fontSize: 'calc(11px * var(--appearance-ui-scale, 1))', color: 'var(--text-muted)' }}>{t('chat.credentials.password')}</span>
+                          <span style={{ fontSize: 'calc(11px * var(--appearance-ui-scale, 1))', color: 'var(--danger, #e53935)' }}>{t('chat.credentials.willBeRemoved')}</span>
                         </div>
                       )}
                     </div>
@@ -7667,9 +7667,9 @@ export function ChatPage() {
 
             {/* Document previews above input */}
             {attachedDocuments.length > 0 && (
-              <div className={s.imagePreviews} style={{ flexDirection: 'column', alignItems: 'stretch', gap: '4px' }}>
+              <div className={s.imagePreviews} style={{ flexDirection: 'column', alignItems: 'stretch', gap: 'calc(4px * var(--appearance-density, 1))' }}>
                 {attachedDocuments.map((doc, i) => (
-                  <div key={i} className={s.docPreviewItem} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '4px 8px', borderRadius: '6px', backgroundColor: 'var(--bg-secondary)', fontSize: '12px' }}>
+                  <div key={i} className={s.docPreviewItem} style={{ display: 'flex', alignItems: 'center', gap: 'calc(6px * var(--appearance-density, 1))', padding: 'calc(4px * var(--appearance-density, 1)) calc(8px * var(--appearance-density, 1))', borderRadius: 'var(--appearance-radius, 6px)', backgroundColor: 'var(--bg-secondary)', fontSize: 'calc(12px * var(--appearance-ui-scale, 1))' }}>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
                       <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
                       <polyline points="14 2 14 8 20 8" />
@@ -7677,11 +7677,11 @@ export function ChatPage() {
                     <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-primary)' }}>
                       {doc.filename}
                     </span>
-                    <span style={{ color: 'var(--text-hint)', fontSize: '11px' }}>
+                    <span style={{ color: 'var(--text-hint)', fontSize: 'calc(11px * var(--appearance-ui-scale, 1))' }}>
                       {(doc.size_bytes / 1024).toFixed(1)} KB
                     </span>
                     <button
-                      style={{ border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '16px', padding: '0 4px', lineHeight: 1 }}
+                      style={{ border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 'calc(16px * var(--appearance-ui-scale, 1))', padding: "0 calc(4px * var(--appearance-density, 1))", lineHeight: 1 }}
                       onClick={() => setAttachedDocuments((prev) => prev.filter((_, idx) => idx !== i))}
                       title={t('common.delete')}
                     >

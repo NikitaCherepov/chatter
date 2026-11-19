@@ -1,24 +1,24 @@
 .form {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: calc(12px * var(--appearance-density, 1));
   margin: 16px 0;
   min-width: 0;
-  padding: 16px;
+  padding: calc(16px * var(--appearance-density, 1));
   border: 1px solid var(--border-light);
-  border-radius: 10px;
+  border-radius: var(--appearance-radius, 10px);
   label {
     display: flex;
     flex-direction: column;
-    gap: 6px;
-    font-size: 12px;
+    gap: calc(6px * var(--appearance-density, 1));
+    font-size: calc(12px * var(--appearance-ui-scale, 1));
     color: var(--text-muted);
   }
   h3,
   h4 {
     margin: 0;
     color: var(--text-primary);
-    font-size: 13px;
+    font-size: calc(13px * var(--appearance-ui-scale, 1));
   }
   > button {
     align-self: flex-start;
@@ -29,21 +29,21 @@
   justify-content: space-between;
   align-items: center;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: calc(10px * var(--appearance-density, 1));
   margin: 4px 0 20px;
 }
 .tabs {
   display: flex;
-  gap: 4px;
+  gap: calc(4px * var(--appearance-density, 1));
   flex-wrap: wrap;
   button {
     border: 0;
-    padding: 8px 12px;
-    border-radius: 7px;
+    padding: calc(8px * var(--appearance-density, 1)) calc(12px * var(--appearance-density, 1));
+    border-radius: var(--appearance-radius, 7px);
     color: var(--text-muted);
     background: transparent;
     font: inherit;
-    font-size: 12px;
+    font-size: calc(12px * var(--appearance-ui-scale, 1));
     cursor: pointer;
     &:hover {
       background: var(--bg-modal-hover);
@@ -58,7 +58,7 @@
 .search {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: calc(8px * var(--appearance-density, 1));
   margin: 12px 0;
 }
 .search input {
@@ -69,19 +69,19 @@
 .meta {
   overflow-wrap: anywhere;
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: calc(11px * var(--appearance-ui-scale, 1));
   line-height: 1.5;
 }
 .cards {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 310px), 1fr));
-  gap: 10px;
+  gap: calc(10px * var(--appearance-density, 1));
 }
 .catalog {
   margin: 0;
   h3 {
     margin: 16px 0 10px;
-    font-size: 12px;
+    font-size: calc(12px * var(--appearance-ui-scale, 1));
     color: var(--text-muted);
   }
 }
@@ -89,14 +89,14 @@
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 10px;
-  padding: 14px;
+  gap: calc(10px * var(--appearance-density, 1));
+  padding: calc(14px * var(--appearance-density, 1));
   border: 1px solid var(--border-light);
-  border-radius: 10px;
+  border-radius: var(--appearance-radius, 10px);
   min-width: 0;
   > p {
     color: var(--text-muted);
-    font-size: 12px;
+    font-size: calc(12px * var(--appearance-ui-scale, 1));
     line-height: 1.6;
     margin: 0;
     overflow-wrap: anywhere;
@@ -107,17 +107,17 @@
 }
 .catalogFooter {
   display: grid;
-  gap: 8px;
+  gap: calc(8px * var(--appearance-density, 1));
   width: 100%;
   margin-top: auto;
-  padding-top: 12px;
+  padding-top: calc(12px * var(--appearance-density, 1));
   border-top: 1px solid var(--border-light);
   > button {
     justify-self: start;
   }
 }
 .catalogStatus {
-  font-size: 11px;
+  font-size: calc(11px * var(--appearance-ui-scale, 1));
   color: var(--text-muted);
 }
 .catalogActions,
@@ -125,20 +125,20 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: calc(8px * var(--appearance-density, 1));
 }
 .catalogActions > button {
   max-width: 100%;
   overflow-wrap: anywhere;
 }
 .textButton {
-  padding: 7px 8px;
+  padding: calc(7px * var(--appearance-density, 1)) calc(8px * var(--appearance-density, 1));
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--appearance-radius, 6px);
   background: transparent;
   color: var(--text-muted);
   font: inherit;
-  font-size: 12px;
+  font-size: calc(12px * var(--appearance-ui-scale, 1));
   text-align: left;
   cursor: pointer;
   &:hover:not(:disabled) {
@@ -151,23 +151,23 @@
   }
 }
 .connection {
-  padding: 12px 14px;
+  padding: calc(12px * var(--appearance-density, 1)) calc(14px * var(--appearance-density, 1));
   margin-bottom: 12px;
   border: 1px solid var(--border-light);
-  border-radius: 10px;
+  border-radius: var(--appearance-radius, 10px);
   min-width: 0;
 }
 .cardHeading {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: calc(10px * var(--appearance-density, 1));
   flex-wrap: wrap;
   width: 100%;
   min-width: 0;
   strong {
     flex: 1 1 100px;
     min-width: 0;
-    font-size: 13px;
+    font-size: calc(13px * var(--appearance-ui-scale, 1));
     font-weight: 600;
     color: var(--text-primary);
     overflow-wrap: anywhere;
@@ -180,12 +180,12 @@
   height: 30px;
   background: var(--bg-input);
   color: var(--accent-icon);
-  border-radius: 7px;
+  border-radius: var(--appearance-radius, 7px);
 }
 .connectionName {
   flex: 1 1 100px;
   min-width: 0;
-  padding: 3px 0;
+  padding: calc(3px * var(--appearance-density, 1)) 0;
   border: 0;
   border-bottom: 1px solid transparent;
   border-radius: 0;
@@ -193,7 +193,7 @@
   background: transparent;
   color: var(--text-primary);
   font: inherit;
-  font-size: 13px;
+  font-size: calc(13px * var(--appearance-ui-scale, 1));
   font-weight: 600;
   text-align: left;
   overflow: hidden;
@@ -212,9 +212,9 @@
   }
 }
 .badge {
-  font-size: 10px;
-  padding: 3px 6px;
-  border-radius: 4px;
+  font-size: calc(10px * var(--appearance-ui-scale, 1));
+  padding: calc(3px * var(--appearance-density, 1)) calc(6px * var(--appearance-density, 1));
+  border-radius: var(--appearance-radius, 4px);
   color: var(--text-muted);
   background: var(--bg-input);
 }
@@ -224,12 +224,12 @@
   > summary {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: calc(6px * var(--appearance-density, 1));
     cursor: pointer;
     color: var(--text-muted);
-    font-size: 11px;
+    font-size: calc(11px * var(--appearance-ui-scale, 1));
     list-style: none;
-    padding: 6px 0;
+    padding: calc(6px * var(--appearance-density, 1)) 0;
     &::-webkit-details-marker {
       display: none;
     }
@@ -244,20 +244,20 @@
   }
 }
 .detailBody {
-  padding-top: 10px;
+  padding-top: calc(10px * var(--appearance-density, 1));
   border-top: 1px solid var(--border-light);
-  font-size: 12px;
+  font-size: calc(12px * var(--appearance-ui-scale, 1));
   min-width: 0;
   h4 {
-    font-size: 12px;
+    font-size: calc(12px * var(--appearance-ui-scale, 1));
   }
 }
 .tool {
   display: flex;
   align-items: flex-start;
   flex-wrap: wrap;
-  gap: 8px 16px;
-  padding: 12px 0;
+  gap: calc(8px * var(--appearance-density, 1)) calc(16px * var(--appearance-density, 1));
+  padding: calc(12px * var(--appearance-density, 1)) 0;
   border-bottom: 1px solid var(--border-light);
   > label:first-child {
     flex: 1;
@@ -266,7 +266,7 @@
   small {
     flex-basis: 100%;
     color: var(--text-muted);
-    font-size: 11px;
+    font-size: calc(11px * var(--appearance-ui-scale, 1));
     line-height: 1.5;
     overflow-wrap: anywhere;
   }
@@ -278,7 +278,7 @@
   margin-bottom: 16px;
   h3 {
     margin: 0 0 8px;
-    font-size: 12px;
+    font-size: calc(12px * var(--appearance-ui-scale, 1));
     line-height: 1.5;
   }
   > p {
@@ -289,8 +289,8 @@
   grid-column: 1 / -1;
 }
 .empty {
-  padding: 16px 0;
-  font-size: 12px;
+  padding: calc(16px * var(--appearance-density, 1)) 0;
+  font-size: calc(12px * var(--appearance-ui-scale, 1));
   color: var(--text-muted);
   line-height: 1.6;
 }
@@ -306,21 +306,21 @@
 }
 
 .setupMode {
-  padding-bottom: 10px;
+  padding-bottom: calc(10px * var(--appearance-density, 1));
   border-bottom: 1px solid var(--border-light);
 }
 .source {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  font-size: 11px;
+  font-size: calc(11px * var(--appearance-ui-scale, 1));
 }
 
 .metadata {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  gap: 8px 12px;
+  gap: calc(8px * var(--appearance-density, 1)) calc(12px * var(--appearance-density, 1));
   margin: 0 0 12px;
-  font-size: 11px;
+  font-size: calc(11px * var(--appearance-ui-scale, 1));
   line-height: 1.5;
   dt {
     color: var(--text-muted);
@@ -341,16 +341,16 @@
 .links {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: calc(6px * var(--appearance-density, 1));
   a {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    padding: 5px 8px;
-    border-radius: 5px;
+    gap: calc(6px * var(--appearance-density, 1));
+    padding: calc(5px * var(--appearance-density, 1)) calc(8px * var(--appearance-density, 1));
+    border-radius: var(--appearance-radius, 5px);
     background: var(--bg-input);
     color: var(--text-muted);
-    font-size: 11px;
+    font-size: calc(11px * var(--appearance-ui-scale, 1));
     text-decoration: none;
     &:hover {
       color: var(--text-primary);
@@ -360,7 +360,7 @@
 }
 .connection {
   > .cardHeading {
-    padding-bottom: 6px;
+    padding-bottom: calc(6px * var(--appearance-density, 1));
   }
   > .url {
     margin: 4px 0;
@@ -381,31 +381,31 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
+  gap: calc(14px * var(--appearance-density, 1));
   min-width: 0;
 }
 .toggleText {
   display: grid;
-  gap: 5px;
+  gap: calc(5px * var(--appearance-density, 1));
   min-width: 0;
-  font-size: 11px;
+  font-size: calc(11px * var(--appearance-ui-scale, 1));
   color: var(--text-primary);
   small {
     color: var(--text-muted);
     line-height: 1.5;
-    font-size: 11px;
+    font-size: calc(11px * var(--appearance-ui-scale, 1));
   }
 }
 .settingsForm {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 12px;
+  gap: calc(12px * var(--appearance-density, 1));
   margin: 12px 0 6px;
   min-width: 0;
   label {
     display: grid;
-    gap: 7px;
-    font-size: 12px;
+    gap: calc(7px * var(--appearance-density, 1));
+    font-size: calc(12px * var(--appearance-ui-scale, 1));
     color: var(--text-muted);
   }
   > button {
@@ -419,12 +419,12 @@
   font-weight: 600;
   color: var(--text-primary);
   margin-top: 8px;
-  font-size: 12px;
+  font-size: calc(12px * var(--appearance-ui-scale, 1));
 }
 .toolsToolbar {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: calc(8px * var(--appearance-density, 1));
   align-items: center;
   margin-bottom: 6px;
   input {
@@ -434,8 +434,8 @@
 }
 .toolItem {
   display: grid;
-  gap: 8px;
-  padding: 12px 0;
+  gap: calc(8px * var(--appearance-density, 1));
+  padding: calc(12px * var(--appearance-density, 1)) 0;
   + .toolItem {
     border-top: 1px solid var(--border-light);
   }
@@ -444,13 +444,13 @@
   min-width: 0;
   strong {
     font-weight: 500;
-    font-size: 12px;
+    font-size: calc(12px * var(--appearance-ui-scale, 1));
     color: var(--text-primary);
     overflow-wrap: anywhere;
   }
   p {
     color: var(--text-muted);
-    font-size: 11px;
+    font-size: calc(11px * var(--appearance-ui-scale, 1));
     line-height: 1.6;
     margin: 5px 0 0;
     overflow-wrap: anywhere;
@@ -460,10 +460,10 @@
   display: flex;
   flex-wrap: wrap;
   justify-self: start;
-  gap: 6px 16px;
+  gap: calc(6px * var(--appearance-density, 1)) calc(16px * var(--appearance-density, 1));
   max-width: 100%;
   > div {
-    gap: 8px;
+    gap: calc(8px * var(--appearance-density, 1));
   }
 }
 .connectionFooter {
@@ -471,15 +471,15 @@
   justify-content: flex-end;
   margin-top: 12px;
   border-top: 1px solid var(--border-light);
-  padding-top: 10px;
+  padding-top: calc(10px * var(--appearance-density, 1));
 }
 .removeButton {
   border: 0;
   background: transparent;
   color: var(--text-muted);
   font: inherit;
-  font-size: 11px;
-  padding: 4px;
+  font-size: calc(11px * var(--appearance-ui-scale, 1));
+  padding: calc(4px * var(--appearance-density, 1));
   cursor: pointer;
   &:hover:not(:disabled) {
     color: var(--color-error);
@@ -491,14 +491,14 @@
 }
 .authFields {
   display: grid;
-  gap: 12px;
-  padding: 2px 0 8px;
+  gap: calc(12px * var(--appearance-density, 1));
+  padding: calc(2px * var(--appearance-density, 1)) 0 calc(8px * var(--appearance-density, 1));
 }
 .authStatus,
 .tokenRow {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px 12px;
+  gap: calc(8px * var(--appearance-density, 1)) calc(12px * var(--appearance-density, 1));
 }
 .authStatus {
   justify-content: space-between;
@@ -509,7 +509,7 @@
   > span {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: calc(6px * var(--appearance-density, 1));
     color: var(--text-muted);
   }
 }
@@ -518,7 +518,7 @@
   > label {
     display: grid;
     flex: 1 1 180px;
-    gap: 6px;
+    gap: calc(6px * var(--appearance-density, 1));
     min-width: 0;
     color: var(--text-muted);
   }
@@ -544,9 +544,9 @@
 
 .addPanel {
   margin-bottom: 20px;
-  padding: 16px;
+  padding: calc(16px * var(--appearance-density, 1));
   border: 1px solid var(--border-light);
-  border-radius: 10px;
+  border-radius: var(--appearance-radius, 10px);
   .form {
     border: 0;
     padding: 0;
@@ -556,14 +556,14 @@
 
 .authorization {
   margin: 16px 0;
-  padding: 14px;
-  border-radius: 8px;
+  padding: calc(14px * var(--appearance-density, 1));
+  border-radius: var(--appearance-radius, 8px);
   background: var(--bg-input);
 }
 .authorizationHeading {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
+  gap: calc(10px * var(--appearance-density, 1));
   > .icon {
     background: var(--bg-primary);
   }
@@ -574,14 +574,14 @@
   h4 {
     margin: 0 0 5px;
     color: var(--text-primary);
-    font-size: 13px;
+    font-size: calc(13px * var(--appearance-ui-scale, 1));
     font-weight: 600;
     line-height: 1.5;
   }
   p {
     margin: 0;
     color: var(--text-muted);
-    font-size: 11px;
+    font-size: calc(11px * var(--appearance-ui-scale, 1));
     line-height: 1.6;
   }
 }
@@ -593,11 +593,11 @@
   width: 24px;
   padding: 0;
   border: 0;
-  border-radius: 5px;
+  border-radius: var(--appearance-radius, 5px);
   background: transparent;
   color: var(--text-muted);
   font: inherit;
-  font-size: 18px;
+  font-size: calc(18px * var(--appearance-ui-scale, 1));
   cursor: pointer;
   &:hover {
     color: var(--text-primary);
@@ -608,7 +608,7 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: calc(8px * var(--appearance-density, 1));
   margin-top: 14px;
   > a,
   > button {
@@ -620,7 +620,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: calc(8px * var(--appearance-density, 1));
   text-decoration: none;
   line-height: 1.4;
 }

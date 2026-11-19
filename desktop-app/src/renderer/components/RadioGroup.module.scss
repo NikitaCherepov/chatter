@@ -13,10 +13,10 @@ $ctrl-size: 30px;
 .trigger {
   width: $ctrl-size;
   height: $ctrl-size;
-  border-radius: $ctrl-radius;
+  border-radius: var(--appearance-radius, 8px);
   border: none;
-  background-color: $ctrl-bg;
-  color: $ctrl-text;
+  background-color: var(--appearance-control-bg, #e8f0fe);
+  color: var(--appearance-control-ink, #1a73e8);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -26,16 +26,16 @@ $ctrl-size: 30px;
   padding: 0;
 
   &:hover {
-    background-color: $ctrl-hover;
+    background-color: var(--appearance-control-hover, #d2e3fc);
   }
 }
 
 .triggerActive {
-  background-color: $ctrl-text;
-  color: #fff;
+  background-color: var(--appearance-control-accent, #1a73e8);
+  color: var(--appearance-control-contrast, #fff);
 
   &:hover {
-    background-color: $ctrl-text;
+    background-color: var(--appearance-control-accent, #1a73e8);
     opacity: 0.9;
   }
 }
@@ -46,9 +46,9 @@ $ctrl-size: 30px;
   left: 0;
   z-index: 1100;
   min-width: 120px;
-  padding: 6px 10px;
-  background-color: $ctrl-bg;
-  border-radius: $ctrl-radius;
+  padding: calc(6px * var(--appearance-density, 1)) calc(10px * var(--appearance-density, 1));
+  background-color: var(--appearance-control-bg, #e8f0fe);
+  border-radius: var(--appearance-radius, 8px);
   box-shadow: $ctrl-shadow;
   animation: slideUp 0.12s ease-out;
 }
@@ -67,13 +67,13 @@ $ctrl-size: 30px;
 .option {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 4px 0;
+  gap: calc(8px * var(--appearance-density, 1));
+  padding: calc(4px * var(--appearance-density, 1)) 0;
   cursor: pointer;
   user-select: none;
 
   &:not(:last-child) {
-    padding-bottom: 5px;
+    padding-bottom: calc(5px * var(--appearance-density, 1));
     border-bottom: 1px solid rgba(255, 255, 255, 0.4);
     margin-bottom: 3px;
   }
@@ -93,20 +93,20 @@ $ctrl-size: 30px;
 }
 
 .radioChecked {
-  border-color: $ctrl-text;
+  border-color: var(--appearance-control-ink, #1a73e8);
 }
 
 .radioDot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background-color: $ctrl-text;
+  background-color: var(--appearance-control-accent, #1a73e8);
 }
 
 .optionLabel {
-  font-size: 12px;
+  font-size: calc(12px * var(--appearance-ui-scale, 1));
   font-weight: 500;
-  color: $ctrl-text;
+  color: var(--appearance-control-ink, #1a73e8);
   white-space: nowrap;
 }
 
@@ -122,7 +122,7 @@ $ctrl-size: 30px;
 .inline {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px 24px;
+  gap: calc(12px * var(--appearance-density, 1)) calc(24px * var(--appearance-density, 1));
 
   .option {
     position: relative;

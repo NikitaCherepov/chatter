@@ -9,34 +9,34 @@
 .full {
   display: flex;
   flex-direction: column;
-  gap: 28px;
+  gap: calc(28px * var(--appearance-density, 1));
 }
 
-.quotaSummary { display: flex; flex-direction: column; gap: 9px; }
+.quotaSummary { display: flex; flex-direction: column; gap: calc(9px * var(--appearance-density, 1)); }
 .quotaHeading {
-  display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
-  color: var(--text-primary); font-size: 13px; font-weight: 600;
-  strong { font-size: 15px; font-variant-numeric: tabular-nums; }
+  display: flex; justify-content: space-between; align-items: baseline; gap: calc(12px * var(--appearance-density, 1));
+  color: var(--text-primary); font-size: calc(13px * var(--appearance-ui-scale, 1)); font-weight: 600;
+  strong { font-size: calc(15px * var(--appearance-ui-scale, 1)); font-variant-numeric: tabular-nums; }
 }
 .quotaTrack {
-  height: 6px; border-radius: 4px; overflow: hidden; background: var(--border-light);
+  height: 6px; border-radius: var(--appearance-radius, 4px); overflow: hidden; background: var(--border-light);
   > span { display: block; height: 100%; border-radius: inherit; background: var(--accent-icon); transition: width 0.3s ease; }
 }
 .resetInfo {
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  gap: 6px;
+  gap: calc(6px * var(--appearance-density, 1));
 }
 
 .resetLabel {
   color: var(--text-hint);
-  font-size: 11px;
+  font-size: calc(11px * var(--appearance-ui-scale, 1));
 }
 
 .resetValue {
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: calc(12px * var(--appearance-ui-scale, 1));
   font-weight: 500;
 }
 
@@ -46,7 +46,7 @@
 .monthly {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: calc(14px * var(--appearance-density, 1));
 }
 
 .monthlyHeader {
@@ -54,18 +54,18 @@
   align-items: baseline;
   flex-wrap: wrap;
   justify-content: space-between;
-  gap: 8px;
+  gap: calc(8px * var(--appearance-density, 1));
 }
 
 .monthlyTitle {
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: calc(13px * var(--appearance-ui-scale, 1));
   font-weight: 600;
 }
 
 .monthlyResets {
   color: var(--text-hint);
-  font-size: 11px;
+  font-size: calc(11px * var(--appearance-ui-scale, 1));
 }
 
 .monthlyRow {
@@ -74,20 +74,20 @@
   grid-template-areas:
     'label value'
     'bar bar';
-  row-gap: 4px;
-  column-gap: 8px;
+  row-gap: calc(4px * var(--appearance-density, 1));
+  column-gap: calc(8px * var(--appearance-density, 1));
 }
 
 .monthlyLabel {
   grid-area: label;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: calc(12px * var(--appearance-ui-scale, 1));
 }
 
 .monthlyValue {
   grid-area: value;
   color: var(--text-primary);
-  font-size: 12px;
+  font-size: calc(12px * var(--appearance-ui-scale, 1));
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
@@ -95,21 +95,21 @@
 .monthlyBar {
   grid-area: bar;
   height: 4px;
-  border-radius: 2px;
+  border-radius: var(--appearance-radius, 2px);
   background: var(--border-light);
   overflow: hidden;
 }
 
 .monthlyBarFill {
   height: 100%;
-  border-radius: 2px;
+  border-radius: var(--appearance-radius, 2px);
   background: var(--accent-icon);
   transition: width 0.3s ease;
 }
 
 .monthlyNote {
   color: var(--text-hint);
-  font-size: 11px;
+  font-size: calc(11px * var(--appearance-ui-scale, 1));
   line-height: 1.6;
   margin-top: -6px;
 }
@@ -120,12 +120,12 @@
 }
 
 .buyButton {
-  padding: 6px 14px;
+  padding: calc(6px * var(--appearance-density, 1)) calc(14px * var(--appearance-density, 1));
   border: 1px solid var(--border-light);
-  border-radius: 8px;
+  border-radius: var(--appearance-radius, 8px);
   background: transparent;
   color: var(--text-hint);
-  font-size: 12px;
+  font-size: calc(12px * var(--appearance-ui-scale, 1));
   cursor: not-allowed;
   opacity: 0.6;
 }
@@ -148,18 +148,18 @@
 
 .compactLabel {
   position: absolute;
-  font-size: 9px;
+  font-size: calc(9px * var(--appearance-ui-scale, 1));
   font-weight: 700;
   color: var(--accent-icon);
   pointer-events: none;
 }
 
-.caption { display: inline-flex; align-items: center; gap: 8px; }
+.caption { display: inline-flex; align-items: center; gap: calc(8px * var(--appearance-density, 1)); }
 .captionTrack {
   display: block;
   width: 72px;
   height: 3px;
-  border-radius: 3px;
+  border-radius: var(--appearance-radius, 3px);
   background: var(--border-light);
   overflow: hidden;
   flex-shrink: 0;

@@ -8,8 +8,8 @@
 
 .card {
   background-color: var(--bg-primary);
-  border-radius: 12px;
-  padding: 40px 36px;
+  border-radius: var(--appearance-radius, 12px);
+  padding: calc(40px * var(--appearance-density, 1)) calc(36px * var(--appearance-density, 1));
   width: 380px;
   box-shadow: var(--shadow-card);
   border: 1px solid var(--border-light);
@@ -19,13 +19,13 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: calc(10px * var(--appearance-density, 1));
   margin-bottom: 4px;
 }
 
 .title {
   margin: 0;
-  font-size: 24px;
+  font-size: calc(24px * var(--appearance-ui-scale, 1));
   font-weight: 700;
   color: var(--text-primary);
 }
@@ -34,22 +34,22 @@
   margin: 8px 0 28px;
   text-align: center;
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: calc(13px * var(--appearance-ui-scale, 1));
 }
 
 .form {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: calc(14px * var(--appearance-density, 1));
 }
 
 .input {
-  padding: 11px 14px;
-  border-radius: 8px;
+  padding: calc(11px * var(--appearance-density, 1)) calc(14px * var(--appearance-density, 1));
+  border-radius: var(--appearance-radius, 8px);
   border: 1px solid var(--border-input);
   background-color: var(--bg-input);
   color: var(--text-body);
-  font-size: 14px;
+  font-size: calc(14px * var(--appearance-ui-scale, 1));
   outline: none;
   transition: border-color 0.15s;
 
@@ -63,12 +63,12 @@
 }
 
 .button {
-  padding: 11px;
-  border-radius: 8px;
+  padding: calc(11px * var(--appearance-density, 1));
+  border-radius: var(--appearance-radius, 8px);
   border: none;
   background-color: var(--accent);
   color: var(--accent-contrast);
-  font-size: 14px;
+  font-size: calc(14px * var(--appearance-ui-scale, 1));
   font-weight: 600;
   cursor: pointer;
   margin-top: 4px;
@@ -82,9 +82,9 @@
 
 .error {
   color: var(--color-error);
-  font-size: 13px;
+  font-size: calc(13px * var(--appearance-ui-scale, 1));
   text-align: center;
-  padding: 4px 0;
+  padding: calc(4px * var(--appearance-density, 1)) 0;
 }
 
 .divider {
@@ -95,7 +95,7 @@
 
 .switchText {
   text-align: center;
-  font-size: 13px;
+  font-size: calc(13px * var(--appearance-ui-scale, 1));
   color: var(--text-muted);
 }
 

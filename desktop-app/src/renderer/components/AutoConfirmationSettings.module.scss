@@ -2,13 +2,13 @@
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 14px;
-  padding-bottom: 20px;
+  gap: calc(14px * var(--appearance-density, 1));
+  padding-bottom: calc(20px * var(--appearance-density, 1));
   border-bottom: 1px solid var(--border-light);
   h4 {
     margin: 0;
     color: var(--text-secondary);
-    font-size: 12px;
+    font-size: calc(12px * var(--appearance-ui-scale, 1));
     font-weight: 600;
   }
   > button {
@@ -19,11 +19,11 @@
   border-top: 1px solid var(--border-light);
 }
 section.commands { margin-bottom: 0; }
-.checkHelp { margin: 0; padding-left: 30px; color: var(--text-muted); font-size: 11px; line-height: 1.6; }
+.checkHelp { margin: 0; padding-left: calc(30px * var(--appearance-density, 1)); color: var(--text-muted); font-size: calc(11px * var(--appearance-ui-scale, 1)); line-height: 1.6; }
 .scopeSummary {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: calc(8px * var(--appearance-density, 1));
   border: 0;
   padding: 0;
   background: transparent;
@@ -35,23 +35,23 @@ section.commands { margin-bottom: 0; }
   }
 }
 .scopeEditor {
-  padding: 8px 0 20px 42px;
+  padding: calc(8px * var(--appearance-density, 1)) 0 calc(20px * var(--appearance-density, 1)) calc(42px * var(--appearance-density, 1));
 }
 .modeSettings,
 .resetArea {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 14px;
+  gap: calc(14px * var(--appearance-density, 1));
 }
 .modeSettings h4 {
   margin: 0;
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: calc(12px * var(--appearance-ui-scale, 1));
   font-weight: 500;
 }
 .resetArea {
-  padding-top: 18px;
+  padding-top: calc(18px * var(--appearance-density, 1));
   margin-top: 18px;
   border-top: 1px solid var(--border-light);
   > button {
@@ -61,34 +61,34 @@ section.commands { margin-bottom: 0; }
 .modes {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  gap: calc(10px * var(--appearance-density, 1));
 }
 .mode {
   display: flex;
   flex-direction: column;
-  gap: 9px;
+  gap: calc(9px * var(--appearance-density, 1));
   min-width: 0;
-  padding: 14px;
+  padding: calc(14px * var(--appearance-density, 1));
   border: 1px solid var(--border-light);
-  border-radius: 10px;
+  border-radius: var(--appearance-radius, 10px);
   background: transparent;
   color: var(--text-secondary);
   font: inherit;
   text-align: left;
   cursor: pointer;
   strong {
-    font-size: 13px;
+    font-size: calc(13px * var(--appearance-ui-scale, 1));
     font-weight: 600;
   }
   span {
     flex: 1;
     color: var(--text-muted);
-    font-size: 11px;
+    font-size: calc(11px * var(--appearance-ui-scale, 1));
     line-height: 1.6;
   }
   small {
     color: var(--text-hint);
-    font-size: 11px;
+    font-size: calc(11px * var(--appearance-ui-scale, 1));
     line-height: 1.5;
   }
   &:hover {
@@ -110,18 +110,18 @@ section.commands { margin-bottom: 0; }
 .customSliders {
   display: flex;
   flex-direction: column;
-  gap: 22px;
-  padding: 16px;
+  gap: calc(22px * var(--appearance-density, 1));
+  padding: calc(16px * var(--appearance-density, 1));
   border: 1px solid var(--border-light);
-  border-radius: 10px;
+  border-radius: var(--appearance-radius, 10px);
 }
 .sliderHeading {
   display: flex;
   justify-content: space-between;
-  gap: 16px;
+  gap: calc(16px * var(--appearance-density, 1));
   margin-bottom: 8px;
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: calc(12px * var(--appearance-ui-scale, 1));
   strong {
     font-weight: 500;
   }
@@ -132,7 +132,7 @@ section.commands { margin-bottom: 0; }
 .predicate {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
+  gap: calc(12px * var(--appearance-density, 1));
   color: var(--text-muted);
   svg {
     flex-shrink: 0;
@@ -140,12 +140,12 @@ section.commands { margin-bottom: 0; }
   }
   strong {
     color: var(--text-secondary);
-    font-size: 12px;
+    font-size: calc(12px * var(--appearance-ui-scale, 1));
     font-weight: 500;
   }
   p {
     margin: 5px 0 0;
-    font-size: 12px;
+    font-size: calc(12px * var(--appearance-ui-scale, 1));
     line-height: 1.6;
   }
 }
@@ -161,22 +161,22 @@ section.commands { margin-bottom: 0; }
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;
-  gap: 4px 10px;
+  gap: calc(4px * var(--appearance-density, 1)) calc(10px * var(--appearance-density, 1));
 }
 .embeddedNotice {
-  padding: 0 0 13px 42px;
+  padding: 0 0 calc(13px * var(--appearance-density, 1)) calc(42px * var(--appearance-density, 1));
 }
 .assessment {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: calc(10px * var(--appearance-density, 1));
   margin: 12px 0;
   padding-block: 12px;
   border-block: 1px solid var(--border-light);
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: calc(12px * var(--appearance-ui-scale, 1));
 }
-.assessmentLine { margin: 6px 0; font-size: 11px; line-height: 1.6; color: var(--text-muted); overflow-wrap: anywhere; }
+.assessmentLine { margin: 6px 0; font-size: calc(11px * var(--appearance-ui-scale, 1)); line-height: 1.6; color: var(--text-muted); overflow-wrap: anywhere; }
 @media (max-width: 680px) {
   .scopeEditor {
     padding-left: 0;
@@ -187,6 +187,6 @@ section.commands { margin-bottom: 0; }
 }
 @media (max-width: 600px) {
   .embeddedNotice {
-    padding-left: 35px;
+    padding-left: calc(35px * var(--appearance-density, 1));
   }
 }

@@ -6,19 +6,19 @@
 .heading {
   margin-bottom: 10px;
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: calc(13px * var(--appearance-ui-scale, 1));
   font-weight: 600;
 }
 
 .controls {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: calc(12px * var(--appearance-density, 1));
 }
 
 .help {
   margin: 8px 0 0;
   color: var(--text-hint);
-  font-size: 11px;
+  font-size: calc(11px * var(--appearance-ui-scale, 1));
   line-height: 1.45;
 }

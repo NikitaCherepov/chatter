@@ -3,7 +3,7 @@
 .wrap {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: calc(6px * var(--appearance-density, 1));
   cursor: pointer;
   user-select: none;
 }
@@ -21,7 +21,7 @@
 }
 
 .label {
-  font-size: 12px;
+  font-size: calc(12px * var(--appearance-ui-scale, 1));
   color: var(--text-primary);
   white-space: nowrap;
 }

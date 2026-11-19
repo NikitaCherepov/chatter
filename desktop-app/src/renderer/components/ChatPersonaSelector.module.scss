@@ -1,13 +1,13 @@
 .root {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: calc(7px * var(--appearance-density, 1));
   flex: 0 1 210px;
   min-width: 145px;
 }
 .label {
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: calc(12px * var(--appearance-ui-scale, 1));
   white-space: nowrap;
 }
 .select {

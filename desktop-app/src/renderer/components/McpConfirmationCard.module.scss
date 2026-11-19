@@ -1,7 +1,7 @@
 .content {
   display: grid;
   justify-items: start;
-  gap: 8px;
+  gap: calc(8px * var(--appearance-density, 1));
   min-width: 0;
   > button {
     max-width: 100%;
@@ -9,17 +9,17 @@
 }
 .server {
   color: var(--text-primary);
-  font-size: 15px;
+  font-size: calc(15px * var(--appearance-ui-scale, 1));
   font-weight: 600;
   overflow-wrap: anywhere;
 }
 .preview {
   display: grid;
-  gap: 6px;
+  gap: calc(6px * var(--appearance-density, 1));
   width: 100%;
   min-width: 0;
-  padding: 9px 12px;
-  border-radius: 7px;
+  padding: calc(9px * var(--appearance-density, 1)) calc(12px * var(--appearance-density, 1));
+  border-radius: var(--appearance-radius, 7px);
   background: var(--bg-input);
 }
 .caption,
@@ -27,13 +27,13 @@
 .documentation {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: calc(7px * var(--appearance-density, 1));
 }
 .caption,
 .hint,
 .progress {
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: calc(12px * var(--appearance-ui-scale, 1));
   line-height: 1.5;
 }
 .caption svg,
@@ -44,8 +44,8 @@
 .target {
   margin: 0;
   color: var(--text-body);
-  font-family: Consolas, Monaco, monospace;
-  font-size: 12px;
+  font-family: var(--appearance-code-font, Consolas, Monaco, monospace);
+  font-size: calc(12px * var(--appearance-ui-scale, 1));
   line-height: 1.55;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -55,7 +55,7 @@
 }
 .documentation {
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: calc(12px * var(--appearance-ui-scale, 1));
   text-decoration: none;
   &:hover {
     text-decoration: underline;
@@ -63,10 +63,10 @@
 }
 .field {
   display: grid;
-  gap: 6px;
+  gap: calc(6px * var(--appearance-density, 1));
   width: min(100%, 460px);
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: calc(12px * var(--appearance-ui-scale, 1));
 }
 .hint,
 .progress,

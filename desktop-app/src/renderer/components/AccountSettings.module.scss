@@ -4,48 +4,48 @@
 .intro {
   margin: -6px 0 24px;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: calc(12px * var(--appearance-ui-scale, 1));
   line-height: 1.6;
 }
 .headingRow {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: calc(12px * var(--appearance-density, 1));
   margin-bottom: 10px;
   flex-wrap: wrap;
 }
 .heading {
   margin: 0;
-  font-size: 13px;
+  font-size: calc(13px * var(--appearance-ui-scale, 1));
   line-height: 1.5;
   font-weight: 600;
   color: var(--text-primary);
 }
 .help {
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: calc(11px * var(--appearance-ui-scale, 1));
   line-height: 1.6;
 }
 .personaGrid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr));
-  gap: 8px;
+  gap: calc(8px * var(--appearance-density, 1));
   margin: 0;
 }
 .personaCard {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: calc(10px * var(--appearance-density, 1));
   min-width: 0;
-  padding: 12px;
+  padding: calc(12px * var(--appearance-density, 1));
   border: 1px solid var(--border-light);
-  border-radius: 10px;
+  border-radius: var(--appearance-radius, 10px);
   background: transparent;
   color: var(--text-secondary);
   text-align: left;
   font: inherit;
-  font-size: 12px;
+  font-size: calc(12px * var(--appearance-ui-scale, 1));
   cursor: pointer;
   transition:
     border-color 0.15s,
@@ -72,23 +72,23 @@
   width: 36px;
   height: 36px;
   flex: 0 0 36px;
-  border-radius: 9px;
+  border-radius: var(--appearance-radius, 9px);
   overflow: hidden;
   background: var(--bg-secondary);
   color: var(--accent-icon);
-  font-size: 16px;
+  font-size: calc(16px * var(--appearance-ui-scale, 1));
   font-weight: 600;
 }
 .cardText {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: calc(3px * var(--appearance-density, 1));
   strong {
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
-    font-size: 12px;
+    font-size: calc(12px * var(--appearance-ui-scale, 1));
     color: var(--text-primary);
   }
   small {
@@ -97,7 +97,7 @@
     -webkit-line-clamp: 2;
     overflow: hidden;
     color: var(--text-muted);
-    font-size: 10px;
+    font-size: calc(10px * var(--appearance-ui-scale, 1));
     line-height: 1.4;
   }
 }
@@ -113,13 +113,13 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: calc(12px * var(--appearance-density, 1));
   margin-top: 8px;
   .textAction {
     min-height: 28px;
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: calc(6px * var(--appearance-density, 1));
   }
   .textAction:last-child {
     margin-left: auto;
@@ -131,41 +131,41 @@
   .textAction:focus-visible {
     outline: 2px solid var(--accent-icon);
     outline-offset: 2px;
-    border-radius: 4px;
+    border-radius: var(--appearance-radius, 4px);
   }
 }
 .addIcon {
-  font-size: 18px;
+  font-size: calc(18px * var(--appearance-ui-scale, 1));
   line-height: 1;
   font-weight: 400;
 }
 .personaEditor {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: calc(20px * var(--appearance-density, 1));
 }
 .badge {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 3px 7px;
+  gap: calc(5px * var(--appearance-density, 1));
+  padding: calc(3px * var(--appearance-density, 1)) calc(7px * var(--appearance-density, 1));
   background: var(--bg-secondary);
-  border-radius: 5px;
-  font-size: 10px;
+  border-radius: var(--appearance-radius, 5px);
+  font-size: calc(10px * var(--appearance-ui-scale, 1));
   font-weight: 500;
   color: var(--text-muted);
 }
 .identity {
   display: flex;
   align-items: center;
-  gap: 18px;
+  gap: calc(18px * var(--appearance-density, 1));
 }
 .avatarColumn {
   flex: 0 0 80px;
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 8px;
+  gap: calc(8px * var(--appearance-density, 1));
 }
 .avatarButton {
   position: relative;
@@ -175,11 +175,11 @@
   place-items: center;
   overflow: hidden;
   border: 1px solid var(--border-light);
-  border-radius: 14px;
+  border-radius: var(--appearance-radius, 14px);
   background: var(--bg-input);
   color: var(--accent-icon);
   font: inherit;
-  font-size: 28px;
+  font-size: calc(28px * var(--appearance-ui-scale, 1));
   cursor: pointer;
   &:focus-visible {
     outline: 2px solid var(--accent-icon);
@@ -203,12 +203,12 @@
   min-width: 0;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
+  gap: calc(16px * var(--appearance-density, 1));
 }
 .field {
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: calc(7px * var(--appearance-density, 1));
 }
 .textAction {
   padding: 0;
@@ -216,7 +216,7 @@
   background: transparent;
   color: var(--text-muted);
   font: inherit;
-  font-size: 11px;
+  font-size: calc(11px * var(--appearance-ui-scale, 1));
   cursor: pointer;
   &:hover {
     color: var(--text-primary);
@@ -228,29 +228,29 @@
 }
 .sectionLabel {
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: calc(13px * var(--appearance-ui-scale, 1));
   font-weight: 600;
 }
 .memoryHeading {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: calc(12px * var(--appearance-density, 1));
   justify-content: space-between;
 }
 .charCount {
   color: var(--text-hint);
-  font-size: 11px;
+  font-size: calc(11px * var(--appearance-ui-scale, 1));
   font-variant-numeric: tabular-nums;
 }
 .editorActions {
   display: flex;
-  gap: 8px;
+  gap: calc(8px * var(--appearance-density, 1));
   align-items: center;
   flex-wrap: wrap;
 }
 .dirty {
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: calc(11px * var(--appearance-ui-scale, 1));
   margin-left: auto;
 }
 .instructions {
@@ -260,7 +260,7 @@
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 10px;
+  gap: calc(10px * var(--appearance-density, 1));
   min-width: 0;
 
   > button {
@@ -274,7 +274,7 @@
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
   align-items: start;
-  gap: 28px 24px;
+  gap: calc(28px * var(--appearance-density, 1)) calc(24px * var(--appearance-density, 1));
   margin-top: 28px;
 
   h3 {
@@ -283,11 +283,11 @@
 }
 @media (max-width: 760px) {
   .identity {
-    gap: 12px;
+    gap: calc(12px * var(--appearance-density, 1));
   }
   .identityFields {
     grid-template-columns: minmax(0, 1fr);
-    gap: 12px;
+    gap: calc(12px * var(--appearance-density, 1));
   }
   .avatarColumn {
     flex-basis: 64px;
@@ -310,8 +310,8 @@
 .deletePersona {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 0;
+  gap: calc(6px * var(--appearance-density, 1));
+  padding: calc(6px * var(--appearance-density, 1)) 0;
   color: var(--color-error);
 
   &:hover {

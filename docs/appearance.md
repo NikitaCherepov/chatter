@@ -9,6 +9,8 @@ Appearance changes use data profiles, not user CSS or JavaScript. Component plac
 - The existing system/light/dark/scheduled theme preference chooses the palette. Its behavior is preserved.
 - Font names refer to fonts installed on the current PC. A fallback is used when unavailable; no font installation is performed.
 - Solid chat backgrounds follow the selected palette. Gradient colors and uploaded/HTTPS images are explicit profile settings.
+- Shell and chat colors are derived separately. Text, metadata, links, tool surfaces and code colors adapt to the actual chat backdrop, including when a dark gradient is used in light mode. Low-contrast palettes are corrected locally without rewriting the saved colors. Images receive a contrast scrim; mixed gradients receive one only when needed. Miniature previews use the same rendering rules.
+- Fonts, sizes, density and corners use the existing appearance tokens across settings, tools, dialogs, work logs and navigation. Circular controls, avatars and document artwork retain their shapes.
 - Image uploads use existing media storage. Draft uploads expire unless saved; owned assets become persistent through profile references.
 - Arrival motion supports fade, translation and scale with bounded duration and easing. It respects reduced motion, does not animate loaded history, and does not replay when virtual rows remount.
 
@@ -30,5 +32,10 @@ Preview state is local and temporary. The independent recovery bar and Escape re
 
 - node scripts/sync-appearance.mjs --check
 - tsx backend-api/tests/appearance.test.mts
+- tsx desktop-app/tests/appearance-colors.test.mts
 - tsx desktop-app/tests/appearance-ui.test.mts
 - Existing message/sidebar virtualization tests verify the unchanged default layout.
+
+## Color regions
+
+Each light/dark palette has background (application shell), text and accent. Optional surface controls the sidebar, header, composer, tools panel, title bar and settings window, with its own derived text and control colors. Optional chat sets the solid conversation color. The existing profile.background gradient/image is conversation-only and takes precedence over chat. Omitted surface/chat retain previous behavior exactly; Auto removes the corresponding override. No database migration or theme preference change is needed. The shared schema, capabilities and editor use the same names; legacy profiles still validate without adding fields.

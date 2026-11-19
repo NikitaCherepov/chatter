@@ -6,7 +6,7 @@
 .content { padding: 0 calc(16px * var(--appearance-density, 1)); max-height: min(340px, 40vh); overflow: auto; overflow-wrap: anywhere; }
 .footer { padding: calc(12px * var(--appearance-density, 1)) calc(16px * var(--appearance-density, 1)); display: flex; flex-direction: column; gap: calc(10px * var(--appearance-density, 1)); }
 .actions { display: flex; align-items: center; flex-wrap: wrap; gap: calc(8px * var(--appearance-density, 1)); }
-.permissions { color: var(--text-muted); font-size: calc(12px * var(--appearance-ui-scale, 1)); summary { cursor: pointer; } .actions { padding-top: 10px; } }
+.permissions { color: var(--text-muted); font-size: calc(12px * var(--appearance-ui-scale, 1)); summary { cursor: pointer; } .actions { padding-top: calc(10px * var(--appearance-density, 1)); } }
 .status { font-size: calc(12px * var(--appearance-ui-scale, 1)); color: var(--text-muted); }
 .iconButton { display: grid; place-items: center; width: 28px; height: 28px; flex-shrink: 0; padding: 0; background: transparent; border: 0; border-radius: var(--appearance-radius, 6px); color: var(--text-muted); cursor: pointer; &:hover { color: var(--text-primary); background: var(--bg-modal-hover); } }
 .emailPreview { max-height: 200px; overflow: auto; }

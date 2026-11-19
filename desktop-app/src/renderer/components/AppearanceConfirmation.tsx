@@ -35,36 +35,34 @@ export function AppearanceConfirmation({
     <ConfirmationCard
       id={proposal.proposal_id}
       title={t('appearance.proposal')}
-      extraActions={
-        <button
-          className={s.cancelBtn}
-          disabled={query.saving}
-          onClick={async () => {
-            try {
-              const profile =
-                query.data?.activeId === proposal.profile.id
-                  ? {
-                      ...proposal.profile,
-                      id: crypto.randomUUID(),
-                      revision: 0,
-                      name: proposal.profile.name,
-                    }
-                  : proposal.profile;
-              await query.change({ action: 'save', profile, apply: false });
-              previewAppearance(null);
-              onResolved();
-            } catch {
-              setError(t('appearance.failed'));
-            }
-          }}
-        >
-          {query.data?.activeId === proposal.profile.id
-            ? t('appearance.copy')
-            : t('appearance.save')}
-        </button>
-      }
       actions={
         <>
+          <button
+            className={s.cancelBtn}
+            disabled={query.saving}
+            onClick={async () => {
+              try {
+                const profile =
+                  query.data?.activeId === proposal.profile.id
+                    ? {
+                        ...proposal.profile,
+                        id: crypto.randomUUID(),
+                        revision: 0,
+                        name: proposal.profile.name,
+                      }
+                    : proposal.profile;
+                await query.change({ action: 'save', profile, apply: false });
+                previewAppearance(null);
+                onResolved();
+              } catch {
+                setError(t('appearance.failed'));
+              }
+            }}
+          >
+            {query.data?.activeId === proposal.profile.id
+              ? t('appearance.copy')
+              : t('appearance.save')}
+          </button>
           <button className={s.cancelBtn} onClick={() => previewAppearance(proposal.profile)}>
             {t('appearance.preview')}
           </button>

@@ -1,0 +1,7 @@
+@mixin scope($region) {
+  @each $token in bg-primary, bg-secondary, bg-input, bg-bubble, bg-modal-hover, text-primary, text-body, text-secondary, text-muted, text-hint, border-light, border-medium, border-input, accent, accent-contrast, accent-icon, accent-icon-light, accent-icon-placeholder, scrollbar-thumb, scrollbar-hover, selection-bg, selection-text, color-success, color-error, color-info, color-warning, color-error-contrast, color-success-contrast, color-info-contrast, color-warning-contrast, syntax-keyword, syntax-string, syntax-number, syntax-comment, syntax-function, syntax-type, syntax-name, syntax-meta, shadow-card, shadow-fab, shadow-modal, color-scheme, appearance-control-bg, appearance-control-hover, appearance-control-accent, appearance-control-ink, appearance-control-contrast {
+    --#{$token}: var(--appearance-#{$region}-#{$token});
+  }
+  color: var(--text-body);
+  color-scheme: var(--color-scheme);
+}

@@ -5,17 +5,17 @@
   display: grid;
   grid-template-columns: 130px 1fr;
   align-items: center;
-  gap: 12px;
+  gap: calc(12px * var(--appearance-density, 1));
 }
 
 .rowCompact {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: calc(6px * var(--appearance-density, 1));
 }
 
 .label {
-  font-size: 12px;
+  font-size: calc(12px * var(--appearance-ui-scale, 1));
   color: var(--text-primary);
   white-space: nowrap;
 }
@@ -23,7 +23,7 @@
 .slider {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: calc(8px * var(--appearance-density, 1));
   min-width: 0;
 }
 
@@ -34,7 +34,7 @@
   min-width: 60px;
   height: 4px;
   background: var(--border-medium);
-  border-radius: 2px;
+  border-radius: var(--appearance-radius, 2px);
   outline: none;
   cursor: pointer;
 
@@ -69,7 +69,7 @@
 }
 
 .value {
-  font-size: 12px;
+  font-size: calc(12px * var(--appearance-ui-scale, 1));
   color: var(--text-muted);
   min-width: 36px;
   text-align: left;
@@ -79,6 +79,6 @@
 .standalone {
   width: 100%;
   min-width: 0;
-  padding: 6px 0;
+  padding: calc(6px * var(--appearance-density, 1)) 0;
   .input { width: 100%; margin: 0; }
 }

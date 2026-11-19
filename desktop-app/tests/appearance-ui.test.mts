@@ -53,6 +53,9 @@ import {AppearanceController} from ${modulePath('components/AppearanceController
 import {AppearanceConfirmation} from ${modulePath('components/AppearanceConfirmation.tsx')};
 import {newAppearance} from ${modulePath('lib/appearance-schema.ts')};
 import {previewAppearance,animateMessageArrival} from ${modulePath('lib/appearance-runtime.ts')};
+import {appearanceColors,contrastRatio} from ${modulePath('lib/appearance-colors.ts')};
+import {ToolActivityCall} from ${modulePath('components/ToolActivity.tsx')};
+import {ReasoningDisclosure} from ${modulePath('components/ReasoningDisclosure.tsx')};
 import {useMessageArrival} from ${modulePath('lib/use-message-arrival.ts')};
 import {ChatMessagesScroll} from ${modulePath('components/ChatMessagesScroll.tsx')};
 import {VirtualMessage} from ${modulePath('components/VirtualMessage.tsx')};
@@ -61,6 +64,8 @@ import {setThemePreference} from ${modulePath('lib/theme.ts')};
 import ru from ${modulePath('i18n/locales/ru/translation.json')};
 import chat from ${modulePath('pages/ChatPage.module.scss')};
 import ${modulePath('global.scss')};
+window.newAppearance=newAppearance;window.previewAppearance=previewAppearance;window.appearanceColors=appearanceColors;window.contrastRatio=contrastRatio;window.light=()=>setThemePreference("light");
+window.messageViewport=()=>document.querySelector('.'+chat.messages);
 window.testAccount=1;window.testDb={};window.animationCount=0;
 const nativeAnimate=Element.prototype.animate;
 Element.prototype.animate=function(...args){if(this.hasAttribute('data-message-id'))window.animationCount++;return nativeAnimate.apply(this,args);};
@@ -74,7 +79,12 @@ function Conversation(){
  window.switchChat=()=>setChatId(id=>id+1);
  return <ChatMessagesScroll ref={ref} className={chat.messages} contentClassName={chat.messagesContent} resetKey={chatId} virtualize>
   {items.map(item=><VirtualMessage id={item.id} key={item.id} revision={item}>
-   <div data-message-id={item.id} className={chat.messageGroup}><MarkdownRenderer content={item.content}/></div>
+   <div data-message-id={item.id} className={chat.messageGroup}>
+    <div className={chat.messageIdentity}><span>Vega</span><span className={chat.messageTime}>23:11</span></div>
+    <ReasoningDisclosure content="Reasoning text" streaming={false} open={false} onToggle={()=>{}} tokens={141}/>
+    <ToolActivityCall call={{id:'search-'+item.id,name:'search_web',arguments:{query:'Interface design'},result_preview:'Done'}}/>
+    <div className={item.id%2?chat.bubbleText:chat.bubbleUser}><MarkdownRenderer content={item.content}/></div>
+   </div>
   </VirtualMessage>)}
  </ChatMessagesScroll>;
 }
@@ -86,11 +96,11 @@ function App(){
  window.motionPreview=()=>previewAppearance({...newAppearance('motion'),motion:{preset:'custom',duration:100,distance:12,scale:0.97,easing:'ease-out'}});
  window.dark=()=>{setThemePreference('dark');window.dispatchEvent(new CustomEvent('chatter-theme-change',{detail:'dark'}));};
  return <TestAuth.Provider value={{user,setUser}}><AppearanceController/>
-  <div style={{width:'48%',height:'100%',overflow:'auto',padding:20}}><AppearancePanel/>{proposal&&<AppearanceConfirmation proposal={proposal} onResolved={()=>setProposal(null)}/>}</div>
+  <div id="panel-fixture" className={chat.sidebar} style={{width:'48%',height:'100%',overflow:'auto',padding:20}}><AppearancePanel/>{proposal&&<AppearanceConfirmation proposal={proposal} onResolved={()=>setProposal(null)}/>}</div>
   <div style={{width:'52%',height:'100%',display:'flex',flexDirection:'column'}}><Conversation/></div>
  </TestAuth.Provider>;
 }
-window.clickText=text=>{const button=[...document.querySelectorAll('button')].find(el=>el.textContent.trim()===text&&!el.disabled);if(!button)throw new Error('Button missing: '+text);button.click();};
+window.clickText=text=>{const button=[...document.querySelectorAll('button')].find(el=>el.textContent.trim()===text&&!el.disabled&&el.getBoundingClientRect().height>0);if(!button)throw new Error('Button missing: '+text);button.click();};
 window.inputText=(label,value)=>{
  const input=document.querySelector('input[aria-label="'+label+'"]')??[...document.querySelectorAll('label')].find(el=>el.textContent.trim()===label)?.querySelector('input');
  if(!input)throw new Error('Input missing: '+label);
@@ -134,7 +144,7 @@ app.whenReady().then(async()=>{
  await until('!!document.querySelector("[aria-label=Предпросмотр]")');
  assert.equal(await js('window.testDb[1].profiles[0].name'),'My evening','preview must not mutate stored data');
  await until('window.scrollRef.current.getMetrics().scrollHeight>'+originalHeight);
- const type=await js('(()=>{const md=document.querySelector("[data-message-id] > div");return {font:getComputedStyle(md).fontFamily,size:getComputedStyle(md).fontSize};})()');
+ const type=await js('(()=>{const md=document.querySelector("[data-message-id] h1").parentElement;return {font:getComputedStyle(md).fontFamily,size:getComputedStyle(md).fontSize};})()');
  assert.ok(type.font.includes('Georgia'));assert.equal(type.size,'22px');
  await js('window.clickText("Вернуть оформление")');
  await until('!document.documentElement.dataset.appearance');
@@ -158,6 +168,33 @@ app.whenReady().then(async()=>{
  await js('window.clickText("Сохранить вариант")');
  await until('window.testDb[1].profiles.length===3 && !document.body.textContent.includes("Предложение оформления")');
  assert.equal(await js('window.testDb[1].activeId'),'from-bot','saving a bot variant must not change active appearance');
+ // Set each region through the real editor, preview without saving, and reset to Auto.
+ await js('window.light();window.clickText("Изменить")');
+ await until('!!document.querySelector("input[list=appearance-fonts]")');
+ await js('window.inputText("Светлая палитра Панели и окна","#081a2b");window.inputText("Светлая палитра Однотонный фон переписки","#253443");window.clickText("Предпросмотр")');
+ await until('document.documentElement.dataset.appearancePanels==="custom"');
+ assert.equal(await js('getComputedStyle(document.querySelector("#panel-fixture")).backgroundColor'),'rgb(8, 26, 43)');
+ assert.equal(await js('getComputedStyle(window.messageViewport()).backgroundColor'),'rgb(37, 52, 67)');
+ assert.notEqual(await js('getComputedStyle(document.body).color'),await js('getComputedStyle(document.querySelector("#panel-fixture")).color'));
+ await js('[...document.querySelectorAll("button")].find(el=>el.getAttribute("aria-label")==="Светлая палитра Панели и окна Авто").click()');
+ await until('!document.documentElement.dataset.appearancePanels');
+ await js('window.clickText("Вернуть оформление");window.clickText("Отмена")');
+ // Reproduce a dark Mass Effect gradient while the shell remains light.
+ await js('window.light();window.previewAppearance({...window.newAppearance("contrast"),typography:{...window.newAppearance().typography,uiSize:18},geometry:{radius:0,density:1.2},background:{...window.newAppearance().background,type:"gradient",color:"#04101e",color2:"#12365a"}})');
+ await until('document.documentElement.dataset.appearance==="contrast"');
+ const contrast=await js('(()=>{const hex=rgb=>"#"+rgb.match(/\\d+/g).slice(0,3).map(n=>Number(n).toString(16).padStart(2,"0")).join("");const row=document.querySelector("[data-message-id]");const heading=row.querySelector("h1"),summary=row.querySelector("summary"),reasoning=row.querySelector("button"),md=heading.parentElement;return {body:hex(getComputedStyle(md).color),hint:getComputedStyle(reasoning).color,shell:getComputedStyle(document.body).color,tool:hex(getComputedStyle(summary).color),toolBg:hex(getComputedStyle(summary).backgroundColor),radius:getComputedStyle(summary).borderRadius,size:getComputedStyle(summary.parentElement).fontSize,backdrop:getComputedStyle(window.messageViewport()).backgroundImage};})()');
+ assert.ok(await js('window.contrastRatio('+JSON.stringify(contrast.body)+',"#04101e")>=4.5 && window.contrastRatio('+JSON.stringify(contrast.body)+',"#12365a")>=4.5'),'message ink must contrast with both gradient stops');
+ assert.ok(await js('window.contrastRatio('+JSON.stringify(contrast.tool)+','+JSON.stringify(contrast.toolBg)+')>=4.5'),'tool surface contrast');
+ assert.equal(contrast.radius,'0px','work log tool corners follow appearance');
+ assert.ok(Math.abs(parseFloat(contrast.size)-12*18/14)<0.01,'work log font size follows interface size');
+ assert.notEqual(contrast.hint,contrast.shell,'reasoning must inherit the chat palette rather than the light shell');
+ await sleep(250);await wc.capturePage();await sleep(100);
+ fs.writeFileSync(path.join(process.env.TEMP,'chatter-appearance-contrast-light.png'),(await wc.capturePage()).toPNG());
+ await js('window.dark()');await sleep(100);
+ const darkInk=await js('getComputedStyle(document.querySelector("[data-message-id] h1").parentElement).color');
+ assert.notEqual(darkInk,'rgb(15, 29, 48)');
+ await js('window.clickText("Вернуть оформление")');
+ await until('document.documentElement.dataset.appearance==="from-bot"');
  // Animation is tied to append events, never to row remounts or prepending history.
  await js('window.motionPreview()');
  await js('window.appendMessage()');

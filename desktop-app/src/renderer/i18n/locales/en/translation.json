@@ -1,5 +1,10 @@
 {
   "appearance": {
+    "shellBackground": "Application background",
+    "panelBackground": "Panels and windows",
+    "chatSolid": "Solid conversation background",
+    "auto": "Auto",
+    "paletteHelp": "Application and panel colors style the interface. The solid conversation color is used when the background type below is Solid. Auto restores the automatic choice for that color.",
   "title": "Appearances",
     "recovery": "Default appearance restored",
     "recoveryHint": "Emergency reset: Ctrl/⌘ + Alt + Backspace.",
@@ -14,7 +19,7 @@
   "name": "Name",
   "light": "Light palette",
   "dark": "Dark palette",
-  "background": "Background",
+  "background": "Conversation background", "backgroundHelp": "Text colors adapt to the chat background. Images and mixed light/dark gradients receive an automatic readability overlay.",
   "text": "Text",
   "accent": "Accent",
   "typography": "Fonts and sizes",
@@ -35,7 +40,7 @@
   "image": "Image URL",
   "upload": "Upload image (up to 8 MB)",
   "position": "Position",
-  "dim": "Dimming",
+  "dim": "Minimum overlay",
   "motion": "Message animations",
   "motionPreset": "Message arrival",
   "duration": "Duration, ms",

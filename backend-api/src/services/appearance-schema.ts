@@ -1,5 +1,11 @@
 // Canonical appearance contract. Run scripts/sync-appearance.mjs after editing.
-export type Palette = { background: string; text: string; accent: string };
+export type Palette = {
+  background: string;
+  text: string;
+  accent: string;
+  surface?: string;
+  chat?: string;
+};
 export type AppearanceProfile = {
   id: string;
   name: string;
@@ -125,8 +131,14 @@ export function parseAppearanceProfile(value: unknown): AppearanceProfile {
   const id = text(v.id, 64);
   if (!/^[a-zA-Z0-9_-]+$/.test(id)) fail();
   const palette = (p: any): Palette => {
-    keys(p, ['background', 'text', 'accent']);
-    return { background: color(p.background), text: color(p.text), accent: color(p.accent) };
+    keys(p, ['background', 'text', 'accent', 'surface', 'chat']);
+    return {
+      background: color(p.background),
+      text: color(p.text),
+      accent: color(p.accent),
+      ...(p.surface !== undefined ? { surface: color(p.surface) } : {}),
+      ...(p.chat !== undefined ? { chat: color(p.chat) } : {}),
+    };
   };
   const t = keys(v.typography, [
     'uiFont',
@@ -202,7 +214,14 @@ export const APPEARANCE_CAPABILITIES = {
   fonts: APPEARANCE_FONTS,
   customFont: 'Installed font family name; other devices use a fallback. Installation is separate.',
   colors:
-    'Six-digit hex. light/dark each contain background, text, accent. Other UI shades are derived.',
+    'Six-digit hex. light/dark each contain background (application shell), text and accent. Optional surface colors panels, header, composer and settings; optional chat colors the solid conversation backdrop. Omit optional colors for automatic legacy behavior. Text contrast adapts independently in each region.',
+  paletteExample: {
+    background: '#07111f',
+    surface: '#112237',
+    chat: '#08192b',
+    text: '#d5eaff',
+    accent: '#f59542',
+  },
   limits: {
     profiles: 32,
     uiSize: [12, 20],
@@ -216,6 +235,8 @@ export const APPEARANCE_CAPABILITIES = {
     scale: [0.9, 1],
   },
   background: {
+    scope:
+      'Conversation only. solid follows light/dark.chat or falls back to light/dark.background; gradient/image override that solid color. Never changes the application shell or theme preference.',
     type: ['solid', 'gradient', 'image'],
     image: 'An existing /api/v1/images/file or HTTPS URL',
     position: ['center', 'top', 'bottom'],

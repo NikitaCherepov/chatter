@@ -4,12 +4,12 @@
 .intro {
   margin: -4px 0 12px;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: calc(12px * var(--appearance-ui-scale, 1));
   line-height: 1.6;
 }
 .help {
   margin-bottom: 18px;
-  font-size: 12px;
+  font-size: calc(12px * var(--appearance-ui-scale, 1));
   line-height: 1.6;
   color: var(--text-muted);
   p {
@@ -20,8 +20,8 @@
     max-width: 680px;
     box-sizing: border-box;
     margin: 0 0 2px;
-    padding: 10px 12px;
-    border-radius: 8px;
+    padding: calc(10px * var(--appearance-density, 1)) calc(12px * var(--appearance-density, 1));
+    border-radius: var(--appearance-radius, 8px);
     background: var(--bg-input);
     color: var(--text-secondary);
     overflow-wrap: anywhere;
@@ -30,16 +30,16 @@
 .tabs {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: calc(4px * var(--appearance-density, 1));
   margin-bottom: 4px;
   button {
-    padding: 6px 9px;
+    padding: calc(6px * var(--appearance-density, 1)) calc(9px * var(--appearance-density, 1));
     border: 0;
-    border-radius: 6px;
+    border-radius: var(--appearance-radius, 6px);
     background: transparent;
     color: var(--text-muted);
     font: inherit;
-    font-size: 12px;
+    font-size: calc(12px * var(--appearance-ui-scale, 1));
     cursor: pointer;
     &[aria-pressed='true'] {
       background: var(--bg-input);
@@ -50,7 +50,7 @@
 }
 .document {
   color: var(--text-body);
-  font-size: 13px;
+  font-size: calc(13px * var(--appearance-ui-scale, 1));
   line-height: 1.7;
   min-width: 0;
   overflow-wrap: anywhere;
@@ -60,15 +60,15 @@
 }
 .hint {
   color: var(--text-hint);
-  font-size: 11px;
+  font-size: calc(11px * var(--appearance-ui-scale, 1));
   line-height: 1.6;
   margin: 8px 0 14px;
 }
 .source {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px 14px;
-  font-size: 11px;
+  gap: calc(6px * var(--appearance-density, 1)) calc(14px * var(--appearance-density, 1));
+  font-size: calc(11px * var(--appearance-ui-scale, 1));
   color: var(--text-hint);
   margin: 0 0 16px;
 }
@@ -84,7 +84,7 @@
 .body {
   min-height: 240px;
   resize: vertical;
-  font-size: 12px;
+  font-size: calc(12px * var(--appearance-ui-scale, 1));
   line-height: 1.7;
 }
 .toolbar {
@@ -92,20 +92,20 @@
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: calc(8px * var(--appearance-density, 1));
   margin: 16px 0 12px;
 }
 .modes {
   display: flex;
-  gap: 3px;
+  gap: calc(3px * var(--appearance-density, 1));
   button {
     border: 0;
     background: transparent;
-    border-radius: 6px;
-    padding: 6px 9px;
+    border-radius: var(--appearance-radius, 6px);
+    padding: calc(6px * var(--appearance-density, 1)) calc(9px * var(--appearance-density, 1));
     color: var(--text-muted);
     font: inherit;
-    font-size: 11px;
+    font-size: calc(11px * var(--appearance-ui-scale, 1));
     cursor: pointer;
     &[aria-pressed='true'] {
       background: var(--bg-input);
@@ -120,18 +120,18 @@
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
-  gap: 10px;
+  gap: calc(10px * var(--appearance-density, 1));
   margin-top: 24px;
-  padding-top: 12px;
+  padding-top: calc(12px * var(--appearance-density, 1));
   border-top: 1px solid var(--border-light);
   > button {
     border: 0;
     background: transparent;
     color: var(--text-muted);
     font: inherit;
-    font-size: 11px;
+    font-size: calc(11px * var(--appearance-ui-scale, 1));
     cursor: pointer;
-    padding: 5px 0;
+    padding: calc(5px * var(--appearance-density, 1)) 0;
   }
   > .danger {
     color: var(--color-error);
@@ -142,17 +142,17 @@
 .helpToggle {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: calc(6px * var(--appearance-density, 1));
   max-width: 100%;
   background: transparent;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--appearance-radius, 4px);
   cursor: pointer;
   color: var(--text-secondary);
   font: inherit;
   font-weight: 500;
   text-align: left;
-  padding: 2px 0;
+  padding: calc(2px * var(--appearance-density, 1)) 0;
   transition: color 0.1s;
   > svg { flex-shrink: 0; }
   &:hover, &[aria-expanded='true'] { color: var(--accent-icon); }

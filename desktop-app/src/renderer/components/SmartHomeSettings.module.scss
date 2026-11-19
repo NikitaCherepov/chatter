@@ -1,23 +1,23 @@
 
 .group { margin-bottom: 22px; min-width: 0;
-  h3 { margin: 0 0 8px; font-size: 12px; color: var(--text-primary); }
+  h3 { margin: 0 0 8px; font-size: calc(12px * var(--appearance-ui-scale, 1)); color: var(--text-primary); }
 }
-.device, .connection { border: 1px solid var(--border-light); border-radius: 9px; margin-bottom: 8px; }
-.deviceButton, .connectionHeader { display: flex; align-items: center; gap: 10px; padding: 10px 12px; }
+.device, .connection { border: 1px solid var(--border-light); border-radius: var(--appearance-radius, 9px); margin-bottom: 8px; }
+.deviceButton, .connectionHeader { display: flex; align-items: center; gap: calc(10px * var(--appearance-density, 1)); padding: calc(10px * var(--appearance-density, 1)) calc(12px * var(--appearance-density, 1)); }
 .deviceButton { width: 100%; border: 0; border-radius: inherit; background: transparent; color: var(--text-primary); font: inherit; text-align: left; cursor: pointer;
   &:hover { background: var(--bg-modal-hover); }
 }
 .connectionHeader { flex-wrap: wrap; }
-.icon { display: grid; place-items: center; width: 30px; height: 30px; flex: 0 0 30px; border-radius: 7px; color: var(--accent-icon); background: var(--bg-input); }
-.info { display: flex; flex: 1; flex-direction: column; gap: 4px; min-width: 0; overflow-wrap: anywhere;
-  strong { font-size: 12px; font-weight: 600; }
+.icon { display: grid; place-items: center; width: 30px; height: 30px; flex: 0 0 30px; border-radius: var(--appearance-radius, 7px); color: var(--accent-icon); background: var(--bg-input); }
+.info { display: flex; flex: 1; flex-direction: column; gap: calc(4px * var(--appearance-density, 1)); min-width: 0; overflow-wrap: anywhere;
+  strong { font-size: calc(12px * var(--appearance-ui-scale, 1)); font-weight: 600; }
 }
-.meta { color: var(--text-muted); font-size: 11px; line-height: 1.5; }
-.actions, .capabilities { display: flex; gap: 6px; flex-wrap: wrap; }
-.capabilities { padding: 8px 12px 10px 52px;
-  code { padding: 2px 6px; border-radius: 4px; background: var(--bg-input); color: var(--text-secondary); font-size: 11px; overflow-wrap: anywhere; }
+.meta { color: var(--text-muted); font-size: calc(11px * var(--appearance-ui-scale, 1)); line-height: 1.5; }
+.actions, .capabilities { display: flex; gap: calc(6px * var(--appearance-density, 1)); flex-wrap: wrap; }
+.capabilities { padding: calc(8px * var(--appearance-density, 1)) calc(12px * var(--appearance-density, 1)) calc(10px * var(--appearance-density, 1)) calc(52px * var(--appearance-density, 1));
+  code { padding: calc(2px * var(--appearance-density, 1)) calc(6px * var(--appearance-density, 1)); border-radius: var(--appearance-radius, 4px); background: var(--bg-input); color: var(--text-secondary); font-size: calc(11px * var(--appearance-ui-scale, 1)); overflow-wrap: anywhere; }
 }
-.configuration { border-top: 1px solid var(--border-light); padding: 12px; }
+.configuration { border-top: 1px solid var(--border-light); padding: calc(12px * var(--appearance-density, 1)); }
 
 .chevron { flex-shrink: 0; color: var(--text-muted); transition: transform .15s; }
 .deviceButton[aria-expanded="true"] .chevron { transform: rotate(90deg); }

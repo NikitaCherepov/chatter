@@ -1,12 +1,12 @@
 .notice {
   display: flex;
   align-items: flex-start;
-  gap: 9px;
-  padding: 12px 14px;
-  border-radius: 8px;
+  gap: calc(9px * var(--appearance-density, 1));
+  padding: calc(12px * var(--appearance-density, 1)) calc(14px * var(--appearance-density, 1));
+  border-radius: var(--appearance-radius, 8px);
   background: var(--bg-input);
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: calc(11px * var(--appearance-ui-scale, 1));
   line-height: 1.6;
   > svg { flex-shrink: 0; margin-top: 1px; }
 }

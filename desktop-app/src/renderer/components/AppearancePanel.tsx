@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAppearance } from '../lib/appearance-service';
 import {
@@ -14,40 +14,49 @@ import {
   getAppearancePreview,
   previewAppearance,
 } from '../lib/appearance-runtime';
+import { appearanceColors } from '../lib/appearance-colors';
 import { apiFetch, resolveAuthenticatedAssetUrl } from '../lib/api';
 import { Select } from './Select';
 import Slider from './Slider';
 import a from './SettingsModal.module.scss';
 import s from './AppearancePanel.module.scss';
 
-export function AppearanceSample({ profile }: { profile: AppearanceProfile }) {
+const STANDARD_SAMPLE = newAppearance();
+export const AppearanceSample = memo(function AppearanceSample({
+  profile,
+}: {
+  profile: AppearanceProfile;
+}) {
   return (
     <div className={s.sample} aria-hidden="true">
-      {(['light', 'dark'] as const).map((mode) => (
-        <div
-          className={s.mini}
-          key={mode}
-          style={{
-            background:
-              profile.background.type === 'gradient'
-                ? `linear-gradient(${profile.background.angle}deg,${profile.background.color},${profile.background.color2})`
-                : profile.background.type === 'image' && profile.background.image
-                  ? `linear-gradient(#0004,#0004),url(${JSON.stringify(resolveAuthenticatedAssetUrl(profile.background.image))}) center/cover`
-                  : profile[mode].background,
-            color: profile[mode].text,
-          }}
-        >
-          <aside />
-          <div>
-            <i />
-            <i style={{ background: profile[mode].accent }} />
-            <i />
+      {(['light', 'dark'] as const).map((mode) => {
+        const colors = appearanceColors(profile, mode, resolveAuthenticatedAssetUrl);
+        return (
+          <div
+            className={s.mini}
+            key={mode}
+            style={{
+              background: `${colors.background === 'none' ? '' : colors.background + ' center/cover '}${colors.chat['--bg-secondary']}`,
+              color: colors.chat['--text-body'],
+            }}
+          >
+            <aside
+              style={{
+                background: colors.panel['--bg-secondary'],
+                color: colors.panel['--text-body'],
+              }}
+            />
+            <div>
+              <i />
+              <i style={{ background: profile[mode].accent }} />
+              <i />
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
-}
+});
 export function AppearancePanel() {
   const { t } = useTranslation(),
     query = useAppearance(),
@@ -206,7 +215,7 @@ export function AppearancePanel() {
       )}
       <div className={s.grid}>
         <article className={s.card} data-active={!state.activeId}>
-          <AppearanceSample profile={newAppearance()} />
+          <AppearanceSample profile={STANDARD_SAMPLE} />
           <div className={s.name}>
             {t('appearance.standard')}
             {!state.activeId && <small>{t('appearance.active')}</small>}
@@ -301,10 +310,14 @@ export function AppearancePanel() {
                 <strong>{t('appearance.' + mode)}</strong>
                 {(['background', 'text', 'accent'] as const).map((key) => (
                   <label className={s.color} key={key}>
-                    {t('appearance.' + key)}
+                    {t('appearance.' + (key === 'background' ? 'shellBackground' : key))}
                     <input
                       type="color"
-                      aria-label={t('appearance.' + mode) + ' ' + t('appearance.' + key)}
+                      aria-label={
+                        t('appearance.' + mode) +
+                        ' ' +
+                        t('appearance.' + (key === 'background' ? 'shellBackground' : key))
+                      }
                       value={draft[mode][key]}
                       onChange={(e) =>
                         setDraft({ ...draft, [mode]: { ...draft[mode], [key]: e.target.value } })
@@ -312,9 +325,53 @@ export function AppearancePanel() {
                     />
                   </label>
                 ))}
+                {(['surface', 'chat'] as const).map((key) => {
+                  const colors = appearanceColors(draft, mode);
+                  const label = t(
+                    'appearance.' + (key === 'surface' ? 'panelBackground' : 'chatSolid'),
+                  );
+                  const fallback =
+                    key === 'surface'
+                      ? colors.panel['--bg-secondary']
+                      : colors.chat['--bg-secondary'];
+                  return (
+                    <div className={s.color} key={key}>
+                      <label>
+                        {label}
+                        <input
+                          type="color"
+                          aria-label={t('appearance.' + mode) + ' ' + label}
+                          value={draft[mode][key] ?? fallback}
+                          onChange={(event) =>
+                            setDraft({
+                              ...draft,
+                              [mode]: { ...draft[mode], [key]: event.target.value },
+                            })
+                          }
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        className={a.cancelBtn}
+                        disabled={draft[mode][key] === undefined}
+                        aria-label={
+                          t('appearance.' + mode) + ' ' + label + ' ' + t('appearance.auto')
+                        }
+                        onClick={() => {
+                          const palette = { ...draft[mode] };
+                          delete palette[key];
+                          setDraft({ ...draft, [mode]: palette });
+                        }}
+                      >
+                        {t('appearance.auto')}
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             ))}
           </div>
+          <p className={s.hint}>{t('appearance.paletteHelp')}</p>
           <h4>{t('appearance.typography')}</h4>
           <div className={s.fields}>
             {(['uiFont', 'messageFont', 'codeFont'] as const).map((key) => (
@@ -371,6 +428,7 @@ export function AppearancePanel() {
             />
           </div>
           <h4>{t('appearance.background')}</h4>
+          <p className={s.hint}>{t('appearance.backgroundHelp')}</p>
           <div className={s.fields}>
             {options(
               t('appearance.backgroundType'),

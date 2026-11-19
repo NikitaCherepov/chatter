@@ -33,7 +33,7 @@ $ctrl-size: 30px;
     width: $ctrl-size !important;
     height: $ctrl-size !important;
     line-height: $ctrl-size !important;
-    font-size: 15px !important;
+    font-size: calc(15px * var(--appearance-ui-scale, 1)) !important;
     font-weight: 500 !important;
     color: $ctrl-text !important;
     background-color: $ctrl-bg !important;
@@ -53,7 +53,7 @@ $ctrl-size: 30px;
   :global(.leaflet-popup-content-wrapper) {
     border-radius: $ctrl-radius !important;
     box-shadow: $ctrl-shadow !important;
-    font-size: 12px;
+    font-size: calc(12px * var(--appearance-ui-scale, 1));
   }
 
   :global(.leaflet-popup-tip) {
@@ -62,10 +62,10 @@ $ctrl-size: 30px;
 
   // ── Attribution ────────────────────────────────────────────────────────
   :global(.leaflet-control-attribution) {
-    font-size: 9px !important;
+    font-size: calc(9px * var(--appearance-ui-scale, 1)) !important;
     background-color: rgba(232, 240, 254, 0.7) !important;
     color: #888 !important;
-    border-radius: 4px 0 0 0;
+    border-radius: var(--appearance-radius, 4px) 0 0 0;
   }
 }
 
@@ -138,29 +138,29 @@ $ctrl-size: 30px;
 .pinPopup {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: calc(4px * var(--appearance-density, 1));
   min-width: 120px;
 
   strong {
-    font-size: 12px;
+    font-size: calc(12px * var(--appearance-ui-scale, 1));
   }
 }
 
 .pinPopupCoords {
-  font-size: 10px;
+  font-size: calc(10px * var(--appearance-ui-scale, 1));
   color: #888;
 }
 
 .pinPopupActions {
   display: flex;
-  gap: 6px;
+  gap: calc(6px * var(--appearance-density, 1));
   margin-top: 4px;
 }
 
 .pinPopupBtn {
   background: none;
   border: none;
-  font-size: 11px;
+  font-size: calc(11px * var(--appearance-ui-scale, 1));
   color: $ctrl-text;
   cursor: pointer;
   padding: 0;
@@ -172,15 +172,15 @@ $ctrl-size: 30px;
 
 .pinEditPopup {
   display: flex;
-  gap: 4px;
+  gap: calc(4px * var(--appearance-density, 1));
   align-items: center;
 }
 
 .pinEditInput {
-  padding: 4px 8px;
+  padding: calc(4px * var(--appearance-density, 1)) calc(8px * var(--appearance-density, 1));
   border: 1px solid #ccc;
-  border-radius: 4px;
-  font-size: 12px;
+  border-radius: var(--appearance-radius, 4px);
+  font-size: calc(12px * var(--appearance-ui-scale, 1));
   outline: none;
   width: 120px;
 
@@ -190,12 +190,12 @@ $ctrl-size: 30px;
 }
 
 .pinEditSave {
-  padding: 4px 10px;
+  padding: calc(4px * var(--appearance-density, 1)) calc(10px * var(--appearance-density, 1));
   border: none;
-  border-radius: 4px;
+  border-radius: var(--appearance-radius, 4px);
   background-color: $ctrl-text;
   color: #fff;
-  font-size: 11px;
+  font-size: calc(11px * var(--appearance-ui-scale, 1));
   cursor: pointer;
 
   &:hover {

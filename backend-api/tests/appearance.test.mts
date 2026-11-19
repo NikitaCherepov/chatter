@@ -20,13 +20,27 @@ try {
       JSON.stringify({ show_tokens: false, browser_confirm_open: true }),
     );
   const p = schema.newAppearance('evening');
+  assert.deepEqual(schema.parseAppearanceProfile(p), p, 'legacy profiles retain their data');
+  const extended = { ...p, light: { ...p.light, surface: '#112233', chat: '#223344' } };
+  assert.equal(schema.parseAppearanceProfile(extended).light.surface, '#112233');
+  assert.throws(
+    () => schema.parseAppearanceProfile({ ...p, light: { ...p.light, surface: null } }),
+    /appearance_invalid/,
+  );
+  assert.throws(
+    () => schema.parseAppearanceProfile({ ...p, dark: { ...p.dark, chat: 'red' } }),
+    /appearance_invalid/,
+  );
+
   assert.throws(
     () => changeAppearance(101, { action: 'save', profile: p, apply: 'false' }),
     /appearance_invalid/,
   );
   assert.throws(() => schema.parseAppearanceProfile({ ...p, revision: 1.5 }), /appearance_invalid/);
   const original = getAppearance(101);
-  const saved = changeAppearance(101, { action: 'save', profile: p, apply: false });
+  const saved = changeAppearance(101, { action: 'save', profile: extended, apply: false });
+  assert.equal(getAppearance(101).profiles[0].light.chat, '#223344');
+  assert.equal(saved.profiles[0].light.surface, '#112233');
   assert.equal(saved.activeId, null);
   assert.equal(saved.profiles[0].revision, 1);
   assert.equal(getAppearance(202).profiles.length, 0);
@@ -226,8 +240,13 @@ try {
   assert.equal(proposed.status, 'proposed');
   assert.equal(context.desktopActionSink.value.action, 'suggest_appearance');
   assert.deepEqual(getAppearance(101), before);
-  context.desktopActionSink=null;context.sendToDesktop=()=>false;
-  assert.equal(JSON.parse(context.tool('suggest_appearance',{profile:schema.newAppearance('offline')})).error,'desktop_offline');
+  context.desktopActionSink = null;
+  context.sendToDesktop = () => false;
+  assert.equal(
+    JSON.parse(context.tool('suggest_appearance', { profile: schema.newAppearance('offline') }))
+      .error,
+    'desktop_offline',
+  );
   const caps = JSON.parse(context.tool('get_appearance', { view: 'capabilities' }));
   assert.ok(caps.template);
   assert.equal(caps.limits.profiles, 32);

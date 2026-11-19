@@ -10,9 +10,9 @@
 
 .dialog {
   background-color: var(--bg-primary);
-  border-radius: 12px;
+  border-radius: var(--appearance-radius, 12px);
   box-shadow: var(--shadow-modal);
-  padding: 20px;
+  padding: calc(20px * var(--appearance-density, 1));
   width: 420px;
   max-width: 90vw;
   display: flex;
@@ -27,7 +27,7 @@
 }
 
 .title {
-  font-size: 15px;
+  font-size: calc(15px * var(--appearance-ui-scale, 1));
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -36,7 +36,7 @@
   width: 28px;
   height: 28px;
   border: 1px solid var(--border-light);
-  border-radius: 7px;
+  border-radius: var(--appearance-radius, 7px);
   background: transparent;
   color: var(--text-muted);
   display: inline-flex;
@@ -55,30 +55,30 @@
 
 .hint {
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: calc(12px * var(--appearance-ui-scale, 1));
 }
 
 .list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: calc(8px * var(--appearance-density, 1));
   max-height: 300px;
   overflow-y: auto;
-  padding-right: 2px;
+  padding-right: calc(2px * var(--appearance-density, 1));
 }
 
 .item {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 8px;
+  gap: calc(6px * var(--appearance-density, 1));
+  padding: calc(8px * var(--appearance-density, 1));
   border: 1px solid var(--border-light);
-  border-radius: 8px;
+  border-radius: var(--appearance-radius, 8px);
   background-color: var(--bg-secondary);
 }
 
 .link {
-  font-size: 10px;
+  font-size: calc(10px * var(--appearance-ui-scale, 1));
   line-height: 1.4;
   word-break: break-all;
   user-select: all;
@@ -87,20 +87,20 @@
 
 .itemActions {
   display: flex;
-  gap: 6px;
+  gap: calc(6px * var(--appearance-density, 1));
 
   button {
     flex: 1;
     height: 27px;
     border: 1px solid var(--border-light);
-    border-radius: 6px;
+    border-radius: var(--appearance-radius, 6px);
     background: transparent;
     color: var(--text-muted);
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 5px;
-    font-size: 10px;
+    gap: calc(5px * var(--appearance-density, 1));
+    font-size: calc(10px * var(--appearance-ui-scale, 1));
     cursor: pointer;
     transition: border-color 0.12s, color 0.12s;
 
@@ -118,14 +118,14 @@
   width: 100%;
   height: 32px;
   border: 1px dashed var(--border-medium);
-  border-radius: 8px;
+  border-radius: var(--appearance-radius, 8px);
   background: transparent;
   color: var(--text-muted);
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 7px;
-  font-size: 11px;
+  gap: calc(7px * var(--appearance-density, 1));
+  font-size: calc(11px * var(--appearance-ui-scale, 1));
   cursor: pointer;
   transition: border-color 0.12s, color 0.12s, background-color 0.12s;
 

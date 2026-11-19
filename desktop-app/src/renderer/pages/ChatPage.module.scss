@@ -1,3 +1,4 @@
+@use '../styles/appearance';
 .layout {
   display: flex;
   height: 100%;
@@ -105,7 +106,7 @@
 }
 
 .roomTriggerText { font-size: calc(12px * var(--appearance-ui-scale, 1)); font-weight: 500; }
-.roomAvatarStack { display: flex; align-items: center; padding-left: 6px; }
+.roomAvatarStack { display: flex; align-items: center; padding-left: calc(6px * var(--appearance-density, 1)); }
 
 .roomTriggerEmpty {
   width: 30px;
@@ -202,7 +203,7 @@
   border: 1px solid var(--accent);
   border-radius: var(--appearance-radius, 8px);
   background-color: var(--accent);
-  color: #fff;
+  color: var(--accent-contrast);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -705,7 +706,7 @@
 
 .roomAutoRespondRow {
   margin-top: 2px;
-  padding-top: 12px;
+  padding-top: calc(12px * var(--appearance-density, 1));
   border-top: 1px solid var(--border-light);
   display: flex;
   align-items: center;
@@ -1171,7 +1172,7 @@
 .chatItem {
   position: relative;
   padding: calc(12px * var(--appearance-density, 1)) calc(16px * var(--appearance-density, 1));
-  padding-right: 42px;
+  padding-right: calc(42px * var(--appearance-density, 1));
   cursor: pointer;
   margin: 3px 10px;
   border-radius: var(--appearance-radius, 8px);
@@ -1202,7 +1203,7 @@
   height: 18px;
   border-radius: var(--appearance-radius, 9px);
   background: var(--accent, #3b82f6);
-  color: #fff;
+  color: var(--accent-contrast);
   font-size: calc(11px * var(--appearance-ui-scale, 1));
   font-weight: 600;
   display: inline-flex;
@@ -1357,7 +1358,7 @@
 
 .demoMoveMenuOptions {
   margin: 2px 8px 5px 30px;
-  padding-left: 7px;
+  padding-left: calc(7px * var(--appearance-density, 1));
   border-left: 1px solid var(--border-light);
   display: flex;
   flex-direction: column;
@@ -1685,6 +1686,14 @@
 
 // ====== MESSAGES ======
 
+// The chat backdrop can have a different tone from the surrounding application.
+:global([data-appearance]) .messages {
+  @include appearance.scope(chat);
+  color: var(--text-body);
+  color-scheme: var(--color-scheme);
+  background-color: var(--bg-secondary);
+}
+
 .messages {
   background-image: var(--appearance-chat-background, none);
   background-size: cover;
@@ -1814,7 +1823,7 @@
 .metaRow {
   font-size: calc(12px * var(--appearance-ui-scale, 1));
   color: var(--text-muted);
-  padding-left: 2px;
+  padding-left: calc(2px * var(--appearance-density, 1));
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1822,7 +1831,7 @@
   flex-wrap: wrap;
   position: relative;
   min-height: 24px;
-  padding-right: 30px;
+  padding-right: calc(30px * var(--appearance-density, 1));
 }
 
 .metaRowLeft {
@@ -1991,7 +2000,7 @@
   border-radius: var(--appearance-radius, 4px);
   border: none;
   background: var(--accent);
-  color: #fff;
+  color: var(--accent-contrast);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -2181,7 +2190,7 @@
   border-radius: var(--appearance-radius, 6px);
   background: var(--bg-bubble);
   color: var(--text-muted);
-  font-family: ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', monospace;
+  font-family: var(--appearance-code-font, ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', monospace);
   font-size: calc(11px * var(--appearance-ui-scale, 1));
   line-height: 1.45;
   white-space: pre-wrap;
@@ -2265,7 +2274,7 @@
   border-radius: var(--appearance-radius, 6px);
   border: none;
   background-color: var(--accent);
-  color: #fff;
+  color: var(--accent-contrast);
   cursor: pointer;
   transition: opacity 0.1s;
 
@@ -2583,7 +2592,7 @@
 }
 
 .chatItemNested {
-  padding-left: 32px;
+  padding-left: calc(32px * var(--appearance-density, 1));
 }
 
 .composerInputSlot {
@@ -3148,7 +3157,7 @@
 
 .suggestMacroCmd {
   font-size: calc(12px * var(--appearance-ui-scale, 1));
-  font-family: 'Consolas', 'Monaco', monospace;
+  font-family: var(--appearance-code-font, 'Consolas', 'Monaco', monospace);
   color: var(--text-body);
   background-color: var(--bg-input);
   padding: calc(4px * var(--appearance-density, 1)) calc(8px * var(--appearance-density, 1));
@@ -3221,7 +3230,7 @@
   font-size: calc(11px * var(--appearance-ui-scale, 1));
   color: var(--text-muted);
   summary { cursor: pointer; overflow-wrap: anywhere; }
-  .messageUsageMeta { display: flex; flex-wrap: wrap; padding-top: 6px; }
+  .messageUsageMeta { display: flex; flex-wrap: wrap; padding-top: calc(6px * var(--appearance-density, 1)); }
 }
 
 .sidebarNewChat {
@@ -3244,7 +3253,7 @@
 .searchInput { background: transparent; border-color: transparent; }
 .searchInput:focus { border-color: var(--accent-icon); }
 .demoFolder { border-bottom: 0; }
-.demoFolderHeader { width: calc(100% - 20px); margin: 2px 10px; border-radius: var(--appearance-radius, 8px); padding-left: 6px; padding-right: 6px; }
+.demoFolderHeader { width: calc(100% - 20px); margin: 2px 10px; border-radius: var(--appearance-radius, 8px); padding-left: calc(6px * var(--appearance-density, 1)); padding-right: calc(6px * var(--appearance-density, 1)); }
 .chatItemActive .chatItemTitle { font-weight: 600; }
 .sidebarCollapsed .chatItem { margin-left: 0; margin-right: 0; }
 
@@ -3293,8 +3302,8 @@
   max-height: min(420px, 50vh);
   overflow: auto;
   font-size: calc(12px * var(--appearance-ui-scale, 1));
-  .toolCallItem { padding-top: 10px; border-top: 1px solid var(--border-light); }
-  summary { cursor: pointer; padding-bottom: 4px; overflow-wrap: anywhere; }
+  .toolCallItem { padding-top: calc(10px * var(--appearance-density, 1)); border-top: 1px solid var(--border-light); }
+  summary { cursor: pointer; padding-bottom: calc(4px * var(--appearance-density, 1)); overflow-wrap: anywhere; }
 }
 .composerWrap { margin: 12px 10% 16px; flex-shrink: 0; min-width: 0; }
 .composerWrapCompact { margin: 10px 16px 12px; }
@@ -3314,7 +3323,7 @@
   .modelLabel { display: none; }
   .modelSelector { display: block; width: 100%; }
   .modelSelectWrap { width: 100%; max-width: none; }
-  .reasoningControl { margin: 0; padding-top: 14px; border-top: 1px solid var(--border-light); }
+  .reasoningControl { margin: 0; padding-top: calc(14px * var(--appearance-density, 1)); border-top: 1px solid var(--border-light); }
 }
 .chatTopBar { position: relative; z-index: 40; }
 
@@ -3421,4 +3430,8 @@
   font-size: calc(12px * var(--appearance-ui-scale, 1));
   line-height: 1.6;
   overflow-wrap: anywhere;
+}
+
+:global([data-appearance-panels]) {
+  .sidebar, .roomPanel, .chatTopBar, .composerWrap { @include appearance.scope(panel); background-color: var(--bg-secondary); }
 }
