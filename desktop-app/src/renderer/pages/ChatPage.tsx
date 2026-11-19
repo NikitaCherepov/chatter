@@ -21,12 +21,14 @@ import {
 import { toast } from 'sonner';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { VirtualMessage } from '../components/VirtualMessage';
+import { VirtualRow, VirtualRowsContext, useVirtualRows } from '../components/VirtualRows';
 import { ChatMessagesScroll, type ChatMessagesScrollHandle } from '../components/ChatMessagesScroll';
 import { useAuth } from '../lib/auth';
 import { useUnreadChats } from '../lib/useUnreadChats';
 import * as api from '../lib/api';
 import { RoomStreamBuffer } from '../lib/room-stream-buffer';
 import { promoteChatInFolder } from '../lib/chat-list-order';
+import { loadChatSidebar, CHAT_LIST_PAGE_SIZE, type ChatSectionKey, type ChatSectionPaging } from '../lib/chat-sidebar-service';
 import { groupChatsByActivity, activityDay, moveActivityCount, activityGroupCounts } from '../lib/chat-date-groups';
 import { generateDocxBlob, generateChatDocxBlob } from '../lib/markdownToDocx';
 import { IntuitionDisclosure } from '../components/IntuitionDisclosure';
@@ -202,13 +204,6 @@ const chatFolderCollisionDetection: CollisionDetection = (args) => {
   return pointerHits.length > 0 ? pointerHits : closestCenter(args);
 };
 
-type ChatSectionKey = `folder:${number}` | 'unfiled';
-type ChatSectionPaging = {
-  offset: number;
-  total: number;
-  hasMore: boolean;
-  loading: boolean;
-};
 
 function ChatSectionSentinel({
   disabled,
@@ -269,7 +264,7 @@ const ALLOWED_FORMATS: string[] = (() => {
 
 const MESSAGE_PAGE_SIZE = 50;
 const MESSAGE_JUMP_PAGE_SIZE = 100;
-const CHAT_PAGE_SIZE = 25;
+const CHAT_PAGE_SIZE = CHAT_LIST_PAGE_SIZE;
 /**
  * Minimum number of messages always shown, regardless of character budget.
  */
@@ -1456,6 +1451,7 @@ export function ChatPage() {
   const [sectionPaging, setSectionPaging] = useState<Record<ChatSectionKey, ChatSectionPaging>>({} as Record<ChatSectionKey, ChatSectionPaging>);
   const sectionPagingRef = useRef<Record<ChatSectionKey, ChatSectionPaging>>({} as Record<ChatSectionKey, ChatSectionPaging>);
   const chatListGenerationRef = useRef(0);
+  const chatListScopeRef = useRef<string | null>(null);
   const [showAttachModal, setShowAttachModal] = useState(false);
   const [attachedImages, setAttachedImages] = useState<ImageItem[]>([]);
   const [attachedDocuments, setAttachedDocuments] = useState<DocumentItem[]>([]);
@@ -1618,6 +1614,8 @@ export function ChatPage() {
       .catch((error) => console.error('Failed to load room prompts:', error));
     return () => { cancelled = true; };
   }, [addParticipantKind, changingRoomParticipantPromptId, roomPrompts.length]);
+  const sidebarScrollRef = useRef<HTMLDivElement>(null);
+  const sidebarViewport = useVirtualRows(sidebarScrollRef, `${api.API_BASE}:${user?.id ?? ''}:sidebar`, true);
   const messagesScrollRef = useRef<ChatMessagesScrollHandle>(null);
   const pendingMessageJumpRef = useRef<{ chatId: number; messageId: number; query?: string; onMissing?: () => void } | null>(null);
   const suppressNextMessageAutoScrollRef = useRef(false);
@@ -1869,45 +1867,55 @@ export function ChatPage() {
 
   const loadChats = useCallback(async () => {
     const generation = ++chatListGenerationRef.current;
+    const selectionVersion = chatSelectionVersionRef.current;
+    const filters = getCurrentChatFilters();
+    const scope = JSON.stringify([api.API_BASE, user?.id ?? null, filters]);
+    const sameScope = chatListScopeRef.current === scope;
+    const previous = sameScope ? sectionPagingRef.current : {};
+    chatListScopeRef.current = scope;
+    if (!sameScope) {
+      setChats([]);
+      setChatFolders([]);
+      setUnfiledChatCount(0);
+      setActivityDays(undefined);
+      updateSectionPaging({} as Record<ChatSectionKey, ChatSectionPaging>);
+    } else {
+      // Pause section pagination while its loaded prefix is being refreshed.
+      const refreshing = { ...sectionPagingRef.current };
+      for (const key of Object.keys(refreshing) as ChatSectionKey[])
+        refreshing[key] = { ...refreshing[key], loading: true };
+      updateSectionPaging(refreshing as Record<ChatSectionKey, ChatSectionPaging>);
+    }
     setLoadingChats(true);
-    setActivityDays(undefined);
     try {
-      const filters = getCurrentChatFilters();
       const activityRevision = activityRevisionRef.current;
-      const [folderRes, filterOptions] = await Promise.all([
-        api.getChatFolders(filters).catch(() => ({ folders: [] as api.ChatFolder[], unfiled_count: 0, total_count: 0, active_chat_id: null, active_chat: null, unfiled_activity_days: undefined as Record<string, number> | undefined })),
-        api.getChatFilterOptions().catch(() => ({ prompts: [] as Array<{ id: number; name: string }>, models: [] as string[] })),
+      const [snapshot, filterOptions] = await Promise.all([
+        loadChatSidebar(api, filters, previous, () => generation === chatListGenerationRef.current),
+        api.getChatFilterOptions().catch(() => null),
       ]);
-      if (generation !== chatListGenerationRef.current) return;
-      const hasActiveFilters = Boolean(filters.promptId !== undefined || filters.model || filters.hasFiles || filters.hasImages);
-      setChats(!hasActiveFilters && folderRes.active_chat
-        ? [{ ...folderRes.active_chat, folder_id: folderRes.active_chat.folder_id ?? null }]
-        : []);
-      setChatFolders(folderRes.folders.map((folder) => ({
-        ...folder,
-        chat_count: Number.isFinite(folder.chat_count) ? folder.chat_count : 0,
-      })));
-      setUnfiledChatCount(Number.isFinite(folderRes.unfiled_count)
-        ? folderRes.unfiled_count
-        : 0);
+      if (!snapshot || generation !== chatListGenerationRef.current) return;
+      setChats(snapshot.chats);
+      setChatFolders(snapshot.folders);
+      setUnfiledChatCount(snapshot.unfiled_count);
       if (activityRevision === activityRevisionRef.current && pendingActivityRef.current.size === 0)
-        setActivityDays(folderRes.unfiled_activity_days);
-      setChatFilterOptions(filterOptions);
-      const nextPaging = {} as Record<ChatSectionKey, ChatSectionPaging>;
-      for (const folder of folderRes.folders) {
-        const total = Math.max(0, Number(folder.chat_count) || 0);
-        nextPaging[`folder:${folder.id}`] = { offset: 0, total, hasMore: total > 0, loading: false };
-      }
-      const unfiledTotal = Math.max(0, Number(folderRes.unfiled_count) || 0);
-      nextPaging.unfiled = { offset: 0, total: unfiledTotal, hasMore: unfiledTotal > 0, loading: false };
-      updateSectionPaging(nextPaging);
-      if (folderRes.active_chat_id) setActiveChatId(folderRes.active_chat_id);
+        setActivityDays(snapshot.unfiled_activity_days);
+      if (filterOptions) setChatFilterOptions(filterOptions);
+      updateSectionPaging(snapshot.paging as Record<ChatSectionKey, ChatSectionPaging>);
+      if (snapshot.active_chat_id && selectionVersion === chatSelectionVersionRef.current)
+        setActiveChatId(snapshot.active_chat_id);
     } catch (err) {
       console.error('Failed to load chats:', err);
+      if (generation === chatListGenerationRef.current) {
+        // Old section requests were invalidated by this refresh; let them be retried.
+        const paging = { ...sectionPagingRef.current };
+        for (const key of Object.keys(paging) as ChatSectionKey[])
+          paging[key] = { ...paging[key], loading: false };
+        updateSectionPaging(paging);
+      }
     } finally {
       if (generation === chatListGenerationRef.current) setLoadingChats(false);
     }
-  }, [getCurrentChatFilters, updateSectionPaging]);
+  }, [getCurrentChatFilters, updateSectionPaging, user?.id]);
 
   const loadChatSection = useCallback(async (folderId: number | null) => {
     if (searchQuery.trim().length >= 3) return;
@@ -1990,7 +1998,10 @@ export function ChatPage() {
     }
   }, [getCurrentChatFilters, updateSectionPaging]);
 
-  useEffect(() => { void loadChats(); }, [loadChats]);
+  useEffect(() => {
+    void loadChats();
+    return () => { chatListGenerationRef.current++; };
+  }, [loadChats]);
   useEffect(() => {
     if (activityRefresh > 0) void refreshChatListMetadata();
   }, [activityRefresh, refreshChatListMetadata]);
@@ -4664,7 +4675,10 @@ export function ChatPage() {
   };
 
   const renderSidebarChat = (chat: api.ChatInfo, nested = false) => (
-    <DemoDraggableChat key={chat.id} chatId={chat.id}>
+    <VirtualRow key={chat.id} id={`chat-${chat.id}`} revision={chat} className={s.sidebarVirtualRow}
+      keepMounted={chat.id === activeChatId || chat.id === renamingChatId
+        || chat.id === contextMenuChatId || chat.id === demoDraggingChatId}>
+    {() => <DemoDraggableChat chatId={chat.id}>
       {(dragHandleProps) => <div
         className={`${s.chatItem} ${nested ? s.chatItemNested : ''} ${chat.id === activeChatId ? s.chatItemActive : ''}`}
         onClick={() => {
@@ -4736,20 +4750,27 @@ export function ChatPage() {
           <div className={s.chatItemTime}>{formatTime(chat.updated_at || chat.created_at)}</div>
         )}
       </div>}
-    </DemoDraggableChat>
+    </DemoDraggableChat>}
+    </VirtualRow>
   );
 
-  const demoFolders = chatFolders.map((folder) => ({
-    ...folder,
-    chats: chats.filter((chat) => chat.folder_id === folder.id),
-  }));
-  const demoUnfiledChats = chats.filter((chat) => chat.folder_id === null);
+  const demoFolders = useMemo(() => {
+    const byFolder = new Map<number, api.ChatInfo[]>();
+    for (const chat of chats) {
+      if (chat.folder_id === null) continue;
+      const group = byFolder.get(chat.folder_id) ?? [];
+      group.push(chat);
+      byFolder.set(chat.folder_id, group);
+    }
+    return chatFolders.map(folder => ({ ...folder, chats: byFolder.get(folder.id) ?? [] }));
+  }, [chatFolders, chats]);
+  const demoUnfiledChats = useMemo(() => chats.filter(chat => chat.folder_id === null), [chats]);
   const [chatGroupingNow, setChatGroupingNow] = useState(() => new Date());
   useEffect(() => {
     const timer = window.setInterval(() => setChatGroupingNow(new Date()), 60_000);
     return () => window.clearInterval(timer);
   }, []);
-  const unfiledDateGroups = groupChatsByActivity(demoUnfiledChats, chatGroupingNow);
+  const unfiledDateGroups = useMemo(() => groupChatsByActivity(demoUnfiledChats, chatGroupingNow), [demoUnfiledChats, chatGroupingNow]);
   const dateGroupCounts = activityDays ? activityGroupCounts(activityDays, chatGroupingNow) : undefined;
   const demoDraggingChat = chats.find((chat) => chat.id === demoDraggingChatId) ?? null;
 
@@ -6331,11 +6352,13 @@ export function ChatPage() {
         </AnimatePresence>
 
         <motion.div
+          ref={sidebarScrollRef}
           className={s.sidebarContentBody}
           animate={{ opacity: sidebarCollapsed ? 0 : 1 }}
           transition={{ duration: 0.15 }}
           style={{ pointerEvents: sidebarCollapsed ? 'none' : 'auto' }}
         >
+          <VirtualRowsContext.Provider value={sidebarViewport}>
           {searchQuery.trim().length >= 3 ? (
             <div className={s.chatList}>
               {searchLoading && (
@@ -6345,8 +6368,9 @@ export function ChatPage() {
                 <div className={s.emptyChats}>{t('chat.sidebar.nothingFound')}</div>
               )}
               {!searchLoading && searchResults.map((result) => (
-                <div
-                  key={result.chat_id}
+                <VirtualRow key={`${result.chat_id}-${result.message_id}`} id={`search-${result.chat_id}-${result.message_id}`}
+                  revision={result}>
+                {() => <div
                   className={`${s.chatItem} ${result.chat_id === activeChatId ? s.chatItemActive : ''}`}
                   onClick={() => {
                     setChats(prev => prev.some(chat => chat.id === result.chat_id)
@@ -6367,7 +6391,8 @@ export function ChatPage() {
                     <div className={s.chatItemTitle}>{result.chat_title}</div>
                   </div>
                   <div className={s.searchSnippet}>{renderSnippet(result.snippet)}</div>
-                </div>
+                </div>}
+                </VirtualRow>
               ))}
             </div>
           ) : (
@@ -6521,6 +6546,7 @@ export function ChatPage() {
           </DragOverlay>
           </DndContext>
           )}
+          </VirtualRowsContext.Provider>
         </motion.div>
 
         {/* Context menu */}

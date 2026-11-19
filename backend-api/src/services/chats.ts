@@ -268,6 +268,29 @@ const buildUserChatFilter = (userId: number, filters: ChatListFilters) => {
   return { where: conditions.join('\n      AND '), params };
 };
 
+type ChatListRow = {
+  id: number; title: string; folder_id: number | null; created_at: string; updated_at: string;
+  bot_hidden: number; is_owner: number;
+};
+
+const CHAT_LIST_COLUMNS = `uc.id,
+           CASE
+             WHEN uc.user_id = ? THEN uc.title
+             ELSE COALESCE(NULLIF((SELECT um.title FROM chat_members um WHERE um.chat_id = uc.id AND um.user_id = ?), ''), uc.title)
+           END AS title,
+           uc.created_at, uc.updated_at, uc.bot_hidden,
+           (uc.user_id = ?) AS is_owner,
+           CASE
+             WHEN uc.user_id = ? THEN uc.folder_id
+             ELSE (SELECT um.folder_id FROM chat_members um WHERE um.chat_id = uc.id AND um.user_id = ?)
+           END AS folder_id`;
+
+const chatListDto = (row: ChatListRow, activeId: number): ChatDto => ({
+  id: row.id, title: row.title, folder_id: row.folder_id,
+  created_at: toUnix(row.created_at), updated_at: toUnix(row.updated_at),
+  is_active: row.id === activeId, bot_hidden: row.bot_hidden === 1, is_owner: row.is_owner === 1,
+});
+
 export const listUserChats = (userId: number, limit = 50, offset = 0, filters: ChatListFilters = {}): ChatDto[] => {
   const activeId = ensureActiveChat(userId);
   const parsedLimit = Number.isFinite(limit) ? Math.floor(limit) : 50;
@@ -276,64 +299,47 @@ export const listUserChats = (userId: number, limit = 50, offset = 0, filters: C
   const safeOffset = Math.max(0, parsedOffset);
   const { where, params } = buildUserChatFilter(userId, filters);
   const rows = db.prepare(`
-    SELECT uc.id,
-           CASE
-             WHEN uc.user_id = ? THEN uc.title
-             ELSE COALESCE(NULLIF((SELECT um.title FROM chat_members um WHERE um.chat_id = uc.id AND um.user_id = ?), ''), uc.title)
-           END AS title,
-           uc.created_at, uc.updated_at, uc.bot_hidden,
-           (uc.user_id = ?) AS is_owner,
-           CASE
-             WHEN uc.user_id = ? THEN uc.folder_id
-             ELSE (SELECT um.folder_id FROM chat_members um WHERE um.chat_id = uc.id AND um.user_id = ?)
-           END AS folder_id
+    SELECT ${CHAT_LIST_COLUMNS}
     FROM user_chats uc
     WHERE ${where}
     ORDER BY uc.updated_at DESC, uc.id DESC
     LIMIT ? OFFSET ?
-  `).all(userId, userId, userId, userId, userId, ...params, safeLimit, safeOffset) as Array<{ id: number; title: string; folder_id: number | null; created_at: string; updated_at: string; bot_hidden: number; is_owner: number }>;
+  `).all(userId, userId, userId, userId, userId, ...params, safeLimit, safeOffset) as ChatListRow[];
 
-  return rows.map(row => ({
-    id: row.id,
-    title: row.title,
-    folder_id: row.folder_id,
-    created_at: toUnix(row.created_at),
-    updated_at: toUnix(row.updated_at),
-    is_active: row.id === activeId,
-    bot_hidden: row.bot_hidden === 1,
-    is_owner: row.is_owner === 1
-  }));
+  return rows.map(row => chatListDto(row, activeId));
+};
+
+/** One bounded first page per user-visible section, without one SQL query per folder. */
+export const listUserChatPreviews = (userId: number, limit = 25, filters: ChatListFilters = {}): ChatDto[] => {
+  const activeId = ensureActiveChat(userId);
+  const safeLimit = Math.max(1, Math.min(100, Number.isFinite(limit) ? Math.floor(limit) : 25));
+  const { where, params } = buildUserChatFilter(userId, filters);
+  const rows = db.prepare(`
+    WITH visible_chats AS (
+      SELECT ${CHAT_LIST_COLUMNS}
+      FROM user_chats uc WHERE ${where}
+    ), ranked_chats AS (
+      SELECT *, ROW_NUMBER() OVER (
+        PARTITION BY folder_id ORDER BY updated_at DESC, id DESC
+      ) AS section_rank
+      FROM visible_chats
+    )
+    SELECT * FROM ranked_chats WHERE section_rank <= ?
+    ORDER BY folder_id, section_rank
+  `).all(userId, userId, userId, userId, userId, ...params, safeLimit) as ChatListRow[];
+  return rows.map(row => chatListDto(row, activeId));
 };
 
 export const getUserChatListItem = (userId: number, chatId: number): ChatDto | undefined => {
   const activeId = ensureActiveChat(userId);
   const row = db.prepare(`
-    SELECT uc.id,
-           CASE
-             WHEN uc.user_id = ? THEN uc.title
-             ELSE COALESCE(NULLIF((SELECT um.title FROM chat_members um WHERE um.chat_id = uc.id AND um.user_id = ?), ''), uc.title)
-           END AS title,
-           uc.created_at, uc.updated_at, uc.bot_hidden,
-           (uc.user_id = ?) AS is_owner,
-           CASE
-             WHEN uc.user_id = ? THEN uc.folder_id
-             ELSE (SELECT um.folder_id FROM chat_members um WHERE um.chat_id = uc.id AND um.user_id = ?)
-           END AS folder_id
+    SELECT ${CHAT_LIST_COLUMNS}
     FROM user_chats uc
     WHERE uc.id = ?
       AND (uc.user_id = ? OR EXISTS (SELECT 1 FROM chat_members um2 WHERE um2.chat_id = uc.id AND um2.user_id = ?))
-  `).get(userId, userId, userId, userId, userId, chatId, userId, userId) as { id: number; title: string; folder_id: number | null; created_at: string; updated_at: string; bot_hidden: number; is_owner: number } | undefined;
+  `).get(userId, userId, userId, userId, userId, chatId, userId, userId) as ChatListRow | undefined;
   if (!row) return undefined;
-  return {
-    id: row.id,
-    title: row.title,
-    folder_id: row.folder_id,
-    created_at: toUnix(row.created_at),
-    updated_at: toUnix(row.updated_at),
-    is_active: row.id === activeId,
-    bot_hidden: row.bot_hidden === 1,
-    is_owner: row.is_owner === 1,
-  };
+  return chatListDto(row, activeId);
 };
 
 export const countUserChats = (userId: number, filters: ChatListFilters = {}): number => {

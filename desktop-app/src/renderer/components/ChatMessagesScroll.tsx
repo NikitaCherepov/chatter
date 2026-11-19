@@ -1,5 +1,5 @@
 import { forwardRef, useCallback, useEffect, useLayoutEffect, useImperativeHandle, useRef, type ReactNode } from 'react';
-import { MessageViewportContext, useMessageViewport } from './VirtualMessage';
+import { VirtualRowsContext, useVirtualRows } from './VirtualRows';
 import Lenis, { type LenisOptions } from 'lenis';
 import 'lenis/dist/lenis.css';
 
@@ -58,7 +58,7 @@ export const ChatMessagesScroll = forwardRef<ChatMessagesScrollHandle, Props>(fu
   const positionsRef = useRef(new Map<string, SavedPosition>());
   const restoredKeyRef = useRef<string | null>(null);
   const positionKey = resetKey === null ? null : `${positionScope}:${resetKey}`;
-  const viewport = useMessageViewport(wrapperRef, positionKey, ready && virtualize);
+  const viewport = useVirtualRows(wrapperRef, positionKey, ready && virtualize);
   const jumpVersionRef = useRef(0);
   const readPosition = useCallback((wrapper: HTMLDivElement): SavedPosition => {
     const position: SavedPosition = {
@@ -67,12 +67,12 @@ export const ChatMessagesScroll = forwardRef<ChatMessagesScrollHandle, Props>(fu
     };
     if (!virtualize || position.bottom) return position;
     const top = wrapper.getBoundingClientRect().top;
-    for (const row of contentRef.current?.querySelectorAll<HTMLElement>('[data-virtual-message-id]') ?? []) {
+    for (const row of contentRef.current?.querySelectorAll<HTMLElement>('[data-virtual-row-id]') ?? []) {
       const element = row.querySelector<HTMLElement>('[data-message-id]') ?? row;
       const rect = element.getBoundingClientRect();
       if (rect.bottom <= top) continue;
       position.anchor = {
-        messageId: row.dataset.virtualMessageId!,
+        messageId: row.dataset.virtualRowId!,
         offset: rect.top - top,
         bodyOffset: rect.top - row.getBoundingClientRect().top,
       };
@@ -107,7 +107,7 @@ export const ChatMessagesScroll = forwardRef<ChatMessagesScrollHandle, Props>(fu
       if (saved?.bottom) {
         wrapper.scrollTo({ top: wrapper.scrollHeight, behavior: 'instant' });
       } else if (saved?.anchor && Math.abs(saved.top - wrapper.scrollTop) < 1) {
-        const row = content.querySelector<HTMLElement>('[data-virtual-message-id="' + saved.anchor.messageId + '"]');
+        const row = content.querySelector<HTMLElement>('[data-virtual-row-id="' + saved.anchor.messageId + '"]');
         const element = row?.querySelector<HTMLElement>('[data-message-id]') ?? row;
         if (!element) return;
         const delta = element.getBoundingClientRect().top
@@ -238,7 +238,7 @@ export const ChatMessagesScroll = forwardRef<ChatMessagesScrollHandle, Props>(fu
       positionsRef.current.set(positionKey, readPosition(wrapper));
     }}>
       <div className={contentClassName} ref={contentRef}>
-        <MessageViewportContext.Provider key={positionKey} value={viewport}>{children}</MessageViewportContext.Provider>
+        <VirtualRowsContext.Provider key={positionKey} value={viewport}>{children}</VirtualRowsContext.Provider>
       </div>
     </div>
   );

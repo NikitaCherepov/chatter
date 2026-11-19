@@ -1024,6 +1024,11 @@
   box-shadow: inset 3px 0 0 var(--accent);
 }
 
+.sidebarVirtualRow {
+  // Match the existing collapsed vertical margins, including empty row shells.
+  margin: 3px 0;
+}
+
 .demoDraggableChat {
   position: relative;
   z-index: 0;

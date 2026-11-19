@@ -279,18 +279,18 @@ app
       await win.loadURL('about:blank');
       await win.loadFile(path.join(__dirname, 'renderer/index.html'), { hash });
       await until(
-        'window.fixtureReady && (location.hash.startsWith("#auto") ? !!window.historyState : location.hash === "#baseline" ? document.querySelectorAll("[data-message-id]").length === 60 : document.querySelectorAll("[data-virtual-message-id]").length === 60)',
+        'window.fixtureReady && (location.hash.startsWith("#auto") ? !!window.historyState : location.hash === "#baseline" ? document.querySelectorAll("[data-message-id]").length === 60 : document.querySelectorAll("[data-virtual-row-id]").length === 60)',
       );
       await sleep(200);
     };
     const metrics = () =>
       js(
-        '({height:window.scroller.current.getMetrics().scrollHeight,top:window.scroller.current.getMetrics().scrollTop,mounted:document.querySelectorAll("[data-message-id]").length,nodes:document.querySelector("#root").querySelectorAll("*").length,rows:document.querySelectorAll("[data-virtual-message-id]").length,placeholders:document.querySelectorAll("[data-message-placeholder]").length})',
+        '({height:window.scroller.current.getMetrics().scrollHeight,top:window.scroller.current.getMetrics().scrollTop,mounted:document.querySelectorAll("[data-message-id]").length,nodes:document.querySelector("#root").querySelectorAll("*").length,rows:document.querySelectorAll("[data-virtual-row-id]").length,placeholders:document.querySelectorAll("[data-virtual-row-placeholder]").length})',
       );
     await load('baseline');
     const baseline = await metrics();
     await load('');
-    await until('document.querySelectorAll("[data-message-placeholder]").length>40');
+    await until('document.querySelectorAll("[data-virtual-row-placeholder]").length>40');
     const virtual = await metrics();
     console.log(JSON.stringify({ baseline, virtual }));
     assert.ok(
@@ -335,7 +335,7 @@ app
       '(()=>{const input=document.querySelector("input");input.value="Мой ответ";window.savedInput=input;const details=document.querySelector("[data-message-id=\\"2\\"] details");details.open=true;})()',
     );
     await js('window.pin(3);window.scroller.current.scrollTo("end",{immediate:true})');
-    await until('document.querySelectorAll("[data-message-placeholder]").length>40');
+    await until('document.querySelectorAll("[data-virtual-row-placeholder]").length>40');
     assert.equal(
       await js(
         'document.querySelector("input")===window.savedInput&&window.savedInput.value==="Мой ответ"',
@@ -403,13 +403,13 @@ app
     await js(
       '(()=>{const root=document.querySelector("#root");const range=document.createRange();range.selectNodeContents(root);const selection=getSelection();selection.removeAllRanges();selection.addRange(range);})()',
     );
-    await until('document.querySelectorAll("[data-message-placeholder]").length===0');
+    await until('document.querySelectorAll("[data-virtual-row-placeholder]").length===0');
     assert.ok(
       await js('getSelection().toString().length>100000'),
       'selection must include loaded offscreen messages',
     );
     await js('getSelection().removeAllRanges()');
-    await until('document.querySelectorAll("[data-message-placeholder]").length>40');
+    await until('document.querySelectorAll("[data-virtual-row-placeholder]").length>40');
 
     await js('window.setChat(2)');
     await sleep(200);

@@ -494,9 +494,17 @@ export async function getChatFilterOptions(): Promise<{ prompts: Array<{ id: num
   return apiFetch('/api/v1/chat-filter-options');
 }
 
-export async function getChatFolders(filters: ChatListFilters = {}): Promise<{ unfiled_activity_days?: Record<string, number>; folders: ChatFolder[]; unfiled_count: number; total_count: number; active_chat_id: number | null; active_chat: ChatInfo | null }> {
+export type ChatFolderList = {
+  unfiled_activity_days?: Record<string, number>;
+  folders: ChatFolder[]; unfiled_count: number; total_count: number;
+  active_chat_id: number | null; active_chat: ChatInfo | null;
+  chat_previews?: ChatInfo[];
+};
+
+export async function getChatFolders(filters: ChatListFilters = {}, previewLimit?: number): Promise<ChatFolderList> {
   const params = new URLSearchParams();
   params.set('time_zone', Intl.DateTimeFormat().resolvedOptions().timeZone);
+  if (previewLimit !== undefined) params.set('preview_limit', String(previewLimit));
   if (filters.promptId !== undefined) params.set('prompt_id', `${filters.promptId}`);
   if (filters.model) params.set('model', filters.model);
   if (filters.hasFiles) params.set('has_files', '1');
