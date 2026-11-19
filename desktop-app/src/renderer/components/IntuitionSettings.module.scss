@@ -184,10 +184,15 @@
 .questionEditor {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 14px 12px;
+  gap: 16px;
+  margin: 0 12px;
+  padding: 16px 0 14px;
   border-top: 1px solid var(--border-light);
-  background: var(--bg-bubble);
+  input,
+  textarea {
+    background-color: var(--bg-primary);
+    border-color: var(--border-light);
+  }
   textarea {
     min-height: 76px;
   }
