@@ -237,7 +237,7 @@ export type MessageDto = {
   reasoning_content?: string | null;
   intermediate_messages?: string[];
   work_log?: import('./services/intermediate-messages.js').WorkLogEntry[];
-  tool_calls?: Array<{ id?: string; name: string; arguments: any; result_preview?: string }> | null;
+  tool_calls?: Array<{ id?: string; name: string; arguments: any; result_preview?: string; assessment?: import('./services/action-assessment.js').ActionAssessment }> | null;
   images?: MessageImage[] | null;
   audio?: MessageAudio | null;
   telegram_chat_id?: number | null;
@@ -360,7 +360,7 @@ export type AiSendResult = {
   display_state?: DisplayStatePayload | null;
   desktop_action?: DesktopActionPayload | null;
   aborted?: boolean;
-  tool_calls?: Array<{ id?: string; name: string; arguments: any; result_preview?: string }>;
+  tool_calls?: Array<{ id?: string; name: string; arguments: any; result_preview?: string; assessment?: import('./services/action-assessment.js').ActionAssessment }>;
   /** Полные trace ad-hoc субагентов (для UI-блока «Сабагенты»). */
   subagents?: Array<{
     task: string;
@@ -375,7 +375,7 @@ export type AiSendResult = {
       step: number;
       content: string;
       tool_calls: Array<{ id?: string; name: string; arguments: any }>;
-      results: Array<{ id?: string; name: string; content: string }>;
+      results: Array<{ id?: string; name: string; content: string; assessment?: import('./services/action-assessment.js').ActionAssessment }>;
       is_final?: boolean;
     }>;
   }>;

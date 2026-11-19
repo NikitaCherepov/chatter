@@ -14,6 +14,8 @@
 
 import { SubagentContext, SubagentResult, SubagentIteration } from './types.js';
 import { setMaxListeners } from 'events';
+import { separateCommandAssessment, toolContentForModel } from '../command-assessment-result.js';
+import type { ActionAssessment } from '../action-assessment.js';
 import { getSubagent, RegisteredSubagent } from './registry.js';
 import { hasBackendTranslation, translateForLanguage } from '../../i18n/index.js';
 import type { MessageUsage, NormalizedTokenUsage, TokenUsageCall } from '../../types.js';
@@ -384,11 +386,12 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
     // A model may emit several independent subagent delegations in one turn.
     // Run that batch concurrently, while preserving tool-result order. Other
     // tools remain sequential because they may be stateful or dependent.
-    const reportActivity = async (index: number, name: string, args: string, result?: string) => {
+    const reportActivity = async (index: number, name: string, args: string, result?: string, assessment?: ActionAssessment) => {
       await ctx.onToolActivity?.({
         id: `${currentIteration.step}:${index}`,
         name, arguments: args, running: result === undefined,
         result_preview: result === undefined ? undefined : truncateToolResult(result),
+        assessment,
       });
     };
     const parallelSubagentBatch = toolCalls.length > 1 && toolCalls.every((toolCall: any) => {
@@ -430,8 +433,8 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
       for (const { toolCall, toolName, parsedArgs, toolContent } of batchResults) {
         toolCallsHistory.push({ tool: toolName, args: parsedArgs, result: toolContent });
         currentIteration.tool_calls.push({ id: toolCall.id, name: toolName, arguments: parsedArgs });
-        currentIteration.results.push({ id: toolCall.id, name: toolName, content: truncateToolResult(toolContent) });
-        messages.push({ role: 'tool', tool_call_id: toolCall.id, content: toolContent });
+        currentIteration.results.push({ id: toolCall.id, name: toolName, content: truncateToolResult(toolContentForModel(toolName, toolContent)) });
+        messages.push({ role: 'tool', tool_call_id: toolCall.id, content: toolContentForModel(toolName, toolContent) });
       }
       iterations.push(currentIteration);
       continue;
@@ -539,10 +542,14 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
         });
       }
 
+      const separated = separateCommandAssessment(toolName, toolContent);
+      toolContent = separated.content;
+      const assessment = separated.assessment;
+
       // Log tool result
       if (SUBAGENT_LOGS) console.log(`[subagent:${resolvedAgentName}][tool_result] ${toolName} -> ${toolContent.slice(0, 1000)}`);
 
-      await reportActivity(activityIndex, toolName, argsRaw, toolContent);
+      await reportActivity(activityIndex, toolName, argsRaw, toolContent, assessment);
 
       // Record flat history
       let parsedArgs: any;
@@ -555,13 +562,13 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
       } catch {
         currentIteration.tool_calls.push({ id: toolCall.id, name: toolName, arguments: { _raw: argsRaw } });
       }
-      currentIteration.results.push({ id: toolCall.id, name: toolName, content: truncateToolResult(toolContent) });
+      currentIteration.results.push({ id: toolCall.id, name: toolName, content: truncateToolResult(toolContentForModel(toolName, toolContent)), assessment });
 
       // Push tool result to messages
       messages.push({
         role: 'tool',
         tool_call_id: toolCall.id,
-        content: toolContent,
+        content: toolContentForModel(toolName, toolContent),
       });
 
       // Dispatch desktop action if shared tool produced one

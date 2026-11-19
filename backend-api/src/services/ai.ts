@@ -12,6 +12,8 @@ import { withModelActor, currentModelActor, canUseModel, assertModelAccess, regi
 import nodeFetch from 'node-fetch';
 import { ProxyAgent } from 'proxy-agent';
 import { intuitionHint } from './intuition-prompt.js';
+import { separateCommandAssessment, toolContentForModel } from './command-assessment-result.js';
+import type { ActionAssessment } from './action-assessment.js';
 import { evaluateIntuition, getIntuitionSettings, type IntuitionSnapshot } from './intuition.js';
 import { Readable } from 'node:stream';
 import { resolveQuestionnaireSubmission } from './chats.js';
@@ -153,7 +155,7 @@ export type ToolIteration = {
   content: string;
   tool_calls: Array<{ id?: string; name: string; arguments: any }>;
   /** Full runTool results для каждого tool_call этой итерации. */
-  results: Array<{ id?: string; name: string; content: string }>;
+  results: Array<{ id?: string; name: string; content: string; assessment?: ActionAssessment }>;
   /** true for the final iteration без tool_calls (только текстовый ответ). */
   is_final?: boolean;
 };
@@ -3789,7 +3791,7 @@ const getTaskByUserAndId = (userId: number, taskId: number) => db.prepare(`
   WHERE user_id = ? AND id = ?
 `).get(userId, taskId) as { id: number; status: string } | undefined;
 
-type AgentToolActivity = { id: string; name: string; arguments: string; running: boolean; result_preview?: string };
+type AgentToolActivity = { id: string; name: string; arguments: string; running: boolean; result_preview?: string; assessment?: ActionAssessment };
 
 export const runTool = async (user: UserRecord, timezoneOffset: number, toolName: string, argsRaw: string, aiCall: (requestPayload: Record<string, unknown>) => Promise<CompletionMeta>, generatedImages?: Array<{ image_base64: string; image_url?: string; prompt_used: string }>, displayStateSink?: { value: DisplayStatePayload | null }, desktopActionSink?: { value: DesktopActionPayload | null }, mapUpdateSink?: { value: MapUpdatePayload | null }, activeMacros?: Array<{ id: number; title: string; description?: string; commands: string[]; pinned?: boolean; return_output?: boolean }>, signal?: AbortSignal, subagentExtra?: { onToolActivity?: (call: AgentToolActivity) => Promise<void> | void; chatId?: number; originMessageCursor?: number; manualModel?: any; subagentMode?: 'auto' | 'manual'; subagentReasoningLevel?: ReasoningLevel | null; onToolStatus?: (text: string) => Promise<void> | void; onDesktopAction?: (action: any) => Promise<void> | void; displayManifest?: { moods?: string[]; reactions?: string[] } | null; currentDisplayState?: DisplayStatePayload | null; avatarControlEnabled?: boolean; onSubagentTrace?: (trace: any) => void; onSubagentUsageCall?: (agentName: string, usage: TokenUsageCall) => void; onVisionUsageCall?: (usage: TokenUsageCall) => void; shouldStopForQuota?: (usage: TokenUsageCall) => boolean; availableToolDefs?: any[]; attachmentReadContext?: AttachmentReadContext; responseFileSink?: ResponseFileSink; currentModelSupportsVision?: boolean; directImageSink?: { items: Array<{ base64: string; mimeType: string; question: string; localUrl?: string }> } }, autoRejectHitl?: boolean, userImages?: Array<{ base64: string; mimeType: string }>, billingUserId?: number) => {
   throwIfAborted(signal);
@@ -5136,29 +5138,30 @@ If the task is a description, return a detailed text response.`
       ? await assessServerCommand(user.id, serverId, command, signal) : null;
     throwIfAborted(signal);
     autoOk ||= assessment?.approved === true;
+    const sshCommandResult = ({ status, ...result }: { status: string; [key: string]: unknown }) =>
+      JSON.stringify({ status, ...(assessment ? { auto_confirmation: assessment } : {}), ...result });
 
     if (autoOk && !needsSudoPasswordPrompt) {
       // Execute immediately — no confirmation needed
       try {
         const { execSshCommand } = await import('./ssh.js');
         const result = await execSshCommand(user.id, serverId, command);
-        return JSON.stringify({
+        return sshCommandResult({
           status: result.exitCode === 0 ? 'success' : 'error',
           server: server.name,
           command,
-          ...(assessment ? { auto_confirmation: assessment } : {}),
           stdout: result.stdout.slice(-3000),
           stderr: result.stderr.slice(-1000),
           exit_code: result.exitCode,
           ...(result.exitCode === 0 ? {} : { message: `Command exited with code ${result.exitCode ?? 'unknown'}.` })
         });
       } catch (err: any) {
-        return JSON.stringify({ status: 'error', message: `SSH error: ${err?.message || String(err)}`, server: server.name, command });
+        return sshCommandResult({ status: 'error', message: `SSH error: ${err?.message || String(err)}`, server: server.name, command });
       }
     }
 
     // Auto-reject in scheduler mode
-    if (autoRejectHitl) return JSON.stringify({ status: 'rejected', message: 'Task is running in auto-mode. This command is not in the auto-approve policies for this server, so it was automatically rejected.', server: server.name, command });
+    if (autoRejectHitl) return sshCommandResult({ status: 'rejected', message: 'Task is running in auto-mode. This command is not in the auto-approve policies for this server, so it was automatically rejected.', server: server.name, command });
 
     // Needs user confirmation — push via SSE callback (TG) and/or WS (desktop)
     const { randomUUID } = await import('node:crypto');
@@ -5180,7 +5183,7 @@ If the task is a description, return a detailed text response.`
       devopsSent = true;
     }
     if (!devopsSent) {
-      return JSON.stringify({ status: 'error', message: 'No client is connected. Command confirmation impossible.' });
+      return sshCommandResult({ status: 'error', message: 'No client is connected. Command confirmation impossible.' });
     }
 
     // Wait for user response via WS → POST /api/v1/devops/approve
@@ -5197,7 +5200,7 @@ If the task is a description, return a detailed text response.`
         });
       });
 
-      return JSON.stringify({
+      return sshCommandResult({
         status: result.exitCode === 0 ? 'success' : 'error',
         server: server.name,
         command,
@@ -5208,12 +5211,12 @@ If the task is a description, return a detailed text response.`
       });
     } catch (err: any) {
       if (err?.message?.startsWith('rejected_by_user')) {
-        return JSON.stringify(withRejectionComment({ status: 'rejected', message: 'User rejected command execution.', server: server.name, command }, err));
+        return sshCommandResult(withRejectionComment({ status: 'rejected', message: 'User rejected command execution.', server: server.name, command }, err));
       }
       if (err?.message === 'confirmation_timeout' || err?.message === 'confirmation_expired') {
-        return JSON.stringify({ status: 'timeout', message: 'Confirmation wait time expired (5 minutes).', server: server.name, command });
+        return sshCommandResult({ status: 'timeout', message: 'Confirmation wait time expired (5 minutes).', server: server.name, command });
       }
-      return JSON.stringify({ status: 'error', message: `SSH error: ${err?.message || String(err)}`, server: server.name, command });
+      return sshCommandResult({ status: 'error', message: `SSH error: ${err?.message || String(err)}`, server: server.name, command });
     }
   }
 
@@ -5258,6 +5261,8 @@ If the task is a description, return a detailed text response.`
     const assessment = !autoOk ? await assessPcCommand(user.id, command, background, signal) : null;
     throwIfAborted(signal);
     autoOk ||= assessment?.approved === true;
+    const pcCommandResult = ({ status, ...result }: { status: string; [key: string]: unknown }) =>
+      JSON.stringify({ status, ...(assessment ? { auto_confirmation: assessment } : {}), ...result });
     console.log('[pc_command] approval policy result', {
       userId: user.id,
       autoApproveAll: settings.auto_approve_all,
@@ -5271,20 +5276,19 @@ If the task is a description, return a detailed text response.`
         const result = await sendIpcToDesktop(user.id, 'execute_commands', { commands: [command], background }, 150000, signal);
         // result is a string (stdout/stderr joined by \n---\n)
         const output = typeof result === 'string' ? result : JSON.stringify(result);
-        return JSON.stringify({
+        return pcCommandResult({
           status: 'success',
           command,
           background,
           output: limitPcCommandOutput(output),
-          ...(assessment ? { auto_confirmation: assessment } : {}),
         });
       } catch (err: any) {
-        return JSON.stringify({ status: 'error', message: `Execution error: ${err?.message || String(err)}`, command });
+        return pcCommandResult({ status: 'error', message: `Execution error: ${err?.message || String(err)}`, command });
       }
     }
 
     // Auto-reject in scheduler mode
-    if (autoRejectHitl) return JSON.stringify({ status: 'rejected', message: 'Task is running in auto-mode. This command is not in the auto-approve policies, so it was automatically rejected.', command });
+    if (autoRejectHitl) return pcCommandResult({ status: 'rejected', message: 'Task is running in auto-mode. This command is not in the auto-approve policies, so it was automatically rejected.', command });
 
     // Needs user confirmation — push to desktop via WS
     const { randomUUID } = await import('node:crypto');
@@ -5339,7 +5343,7 @@ If the task is a description, return a detailed text response.`
 
     if (!sent) {
       deletePendingPcConfirmation(confirmationId);
-      return JSON.stringify({
+      return pcCommandResult({
         status: 'error',
         message: 'Failed to deliver confirmation. No client is available.',
         command,
@@ -5350,7 +5354,7 @@ If the task is a description, return a detailed text response.`
       const result = await waitForHitlConfirmation(user.id, confirmationPromise);
 
       const output = typeof result === 'string' ? result : JSON.stringify(result);
-      return JSON.stringify({
+      return pcCommandResult({
         status: 'success',
         command,
         background,
@@ -5358,12 +5362,12 @@ If the task is a description, return a detailed text response.`
       });
     } catch (err: any) {
       if (err?.message?.startsWith('rejected_by_user')) {
-        return JSON.stringify(withRejectionComment({ status: 'rejected', message: 'User rejected command execution.', command }, err));
+        return pcCommandResult(withRejectionComment({ status: 'rejected', message: 'User rejected command execution.', command }, err));
       }
       if (err?.message === 'confirmation_expired') {
-        return JSON.stringify({ status: 'timeout', message: 'Confirmation wait time expired (5 minutes).', command });
+        return pcCommandResult({ status: 'timeout', message: 'Confirmation wait time expired (5 minutes).', command });
       }
-      return JSON.stringify({ status: 'error', message: `Execution error: ${err?.message || String(err)}`, command });
+      return pcCommandResult({ status: 'error', message: `Execution error: ${err?.message || String(err)}`, command });
     }
   }
 
@@ -6941,7 +6945,7 @@ const sendMessageThroughAiInternal = async (
     userAttachments?: MessageAttachment[] | null;
     onIntermediateMessage?: (text: string, accumulatedContent: string) => Promise<void> | void;
     onStateChange?: (state: DisplayStatePayload) => Promise<void> | void;
-    onToolCall?: (call: { id: string; name: string; arguments: any; result_preview?: string; running: boolean; agent_tools?: AgentToolActivity[] }) => Promise<void> | void;
+    onToolCall?: (call: { id: string; name: string; arguments: any; result_preview?: string; assessment?: ActionAssessment; running: boolean; agent_tools?: AgentToolActivity[] }) => Promise<void> | void;
     onToolStatus?: (text: string) => Promise<void> | void;
     onMapUpdate?: (data: MapUpdatePayload) => Promise<void> | void;
     onDiceRoll?: (roll: number) => Promise<void> | void;
@@ -7449,7 +7453,7 @@ const sendMessageThroughAiInternal = async (
   let streamReasoningBuffer = '';
   let finalAnswer = '';
   const reasoningParts: string[] = [];
-  const toolCallsHistory: Array<{ id?: string; name: string; arguments: any; result_preview?: string }> = [];
+  const toolCallsHistory: Array<{ id?: string; name: string; arguments: any; result_preview?: string; assessment?: ActionAssessment }> = [];
   const iterations: ToolIteration[] = [];
   const toolUserMessages: string[] = [];
   const generatedImages: Array<{ image_base64: string; image_url?: string; prompt_used: string }> = [];
@@ -7494,7 +7498,7 @@ const sendMessageThroughAiInternal = async (
       step: number;
       content: string;
       tool_calls: Array<{ id?: string; name: string; arguments: any }>;
-      results: Array<{ id?: string; name: string; content: string }>;
+      results: Array<{ id?: string; name: string; content: string; assessment?: ActionAssessment }>;
       is_final?: boolean;
     }>;
   }> = [];
@@ -8425,6 +8429,7 @@ type ExecutedToolCall = {
   toolCall: any;
   toolName: string;
   toolContent: string;
+  assessment?: ActionAssessment;
   directImages: Array<{ base64: string; mimeType: string; question: string; localUrl?: string }>;
 };
 
@@ -8547,36 +8552,40 @@ const runOneToolCall = async (toolCall: any, emitStatus = true): Promise<Execute
     toolContent = `Tool error ${toolName}: ${err?.message || String(err)}`;
   }
 
-  if (safeOnToolCall) await safeOnToolCall({ ...liveCall, running: false, agent_tools: agentTools.size ? [...agentTools.values()] : undefined, result_preview: formatToolResultPreview(toolContent) });
-  return { toolCall, toolName, toolContent, directImages: directImageSink.items };
+  const separated = separateCommandAssessment(toolName, toolContent);
+  toolContent = separated.content;
+  const assessment = separated.assessment;
+  if (safeOnToolCall) await safeOnToolCall({ ...liveCall, running: false, assessment, agent_tools: agentTools.size ? [...agentTools.values()] : undefined, result_preview: formatToolResultPreview(toolContent) });
+  return { toolCall, toolName, toolContent, assessment, directImages: directImageSink.items };
 };
 
 const applyExecutedToolCall = (executed: ExecutedToolCall) => {
-  const { toolCall, toolName, toolContent } = executed;
+  const { toolCall, toolName, toolContent, assessment } = executed;
+  const modelContent = toolContentForModel(toolName, toolContent);
   directImagesForNextTurn.push(...executed.directImages);
   const resultPreview = formatToolResultPreview(toolContent);
   if (resultPreview) {
     const historyEntry = [...toolCallsHistory]
       .reverse()
       .find(t => (toolCall.id && t.id === toolCall.id) || (!toolCall.id && t.name === toolName && !t.result_preview));
-    if (historyEntry) historyEntry.result_preview = resultPreview;
+    if (historyEntry) { historyEntry.result_preview = resultPreview; historyEntry.assessment = assessment; }
   }
 
   // Save the full tool result in the iteration trace (for correct unwinding
   // in getHistoryForAi). Limit to TOOL_RESULT_FULL_MAX so tool_calls_json doesn't bloat.
-  const fullResultContent = toolContent.length > TOOL_RESULT_FULL_MAX
-    ? toolContent.slice(0, TOOL_RESULT_FULL_MAX) + `\\n\\n[...result truncated, total ${toolContent.length} characters]`
-    : toolContent;
-  currentIteration.results.push({ id: toolCall.id, name: toolName, content: fullResultContent });
+  const fullResultContent = modelContent.length > TOOL_RESULT_FULL_MAX
+    ? modelContent.slice(0, TOOL_RESULT_FULL_MAX) + `\\n\\n[...result truncated, total ${modelContent.length} characters]`
+    : modelContent;
+  currentIteration.results.push({ id: toolCall.id, name: toolName, content: fullResultContent, assessment });
 
   currentMessages.push({
     role: 'tool',
     tool_call_id: toolCall.id,
-    content: toolContent
+    content: modelContent
   });
 
   if (toolContent.trim()) {
-    toolOutputsForFallback.push(toolContent.trim());
+    toolOutputsForFallback.push(modelContent.trim());
   }
   if (toolName === 'spawn_subagent' || toolName === 'invoke_subagent') {
     try {

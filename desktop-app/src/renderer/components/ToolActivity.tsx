@@ -4,6 +4,7 @@ import type { ToolCall } from '../lib/api';
 import { describeToolCall, groupToolActivities, toolValue, type ActivityKind, type ToolActivity as Activity } from '../lib/tool-activity';
 import s from './ToolActivity.module.scss';
 import { AnimatedCollapse, AnimatedDetails } from './AnimatedDisclosure';
+import { CommandAssessmentLine } from './CommandAssessment';
 
 const paths: Record<ActivityKind, ReactNode> = {
   search: <><circle cx="10.5" cy="10.5" r="6.5" /><path d="m16 16 5 5" /></>,
@@ -43,6 +44,7 @@ function ActionRow({ row }: { row: Activity }) {
       <div className={s.detailLabel}>{t('chat.message.arguments')}</div>
       <pre>{toolValue(row.call.arguments) || '{}'}</pre>
       <div className={s.detailLabel}>{t('chat.message.result')}</div>
+      {row.call.assessment && <CommandAssessmentLine assessment={row.call.assessment} />}
       <pre>{toolValue(row.call.result_preview) || t('toolActivity.noResult')}</pre>
     </div>
   </AnimatedDetails>;

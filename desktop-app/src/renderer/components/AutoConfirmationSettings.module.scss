@@ -171,6 +171,7 @@
   color: var(--text-muted);
   font-size: 12px;
 }
+.assessmentLine { margin: 6px 0; font-size: 11px; line-height: 1.6; color: var(--text-muted); overflow-wrap: anywhere; }
 @media (max-width: 680px) {
   .scopeEditor {
     padding-left: 0;

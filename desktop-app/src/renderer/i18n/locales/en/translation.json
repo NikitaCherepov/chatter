@@ -45,7 +45,9 @@
     "pcHelp": "Automatic assessment before running commands on your computer.",
     "serversTitle": "Server commands",
     "serversHelp": "Default for SSH commands. Individual servers can override whether it is enabled.",
-    "overrideStatus": "Custom setting for this server"
+    "overrideStatus": "Custom setting for this server",
+    "debugScores": "Decision · risk {{risk}}% (maximum {{maxRisk}}%) · understanding {{know}}% (minimum {{minKnow}}%)",
+    "debugUnavailable": "Decision · assessment unavailable"
   },
   "intuition": {
     "saved": "Intuition saved",

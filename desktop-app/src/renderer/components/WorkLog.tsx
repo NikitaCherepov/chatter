@@ -78,7 +78,7 @@ function AgentWork({ trace, agentName, showTokens, call, task }: {
             const result = call.id
               ? iteration.results?.find(item => item.id === call.id)
               : iteration.results?.[callIndex];
-            return <ToolActivityCall key={call.id ?? callIndex} call={{ ...call, result_preview: result?.content }} />;
+            return <ToolActivityCall key={call.id ?? callIndex} call={{ ...call, result_preview: result?.content, assessment: result?.assessment }} />;
           })}
         </div>)}
         {trace?.answer && <div><strong>{t('chat.message.answer')}</strong><MarkdownRenderer content={trace.answer} /></div>}

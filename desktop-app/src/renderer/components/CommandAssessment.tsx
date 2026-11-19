@@ -3,6 +3,22 @@ import type { CommandAssessment as Assessment } from '../lib/auto-confirmation-s
 import s from './AutoConfirmationSettings.module.scss';
 import signals from './IntuitionDisclosure.module.scss';
 
+export function CommandAssessmentLine({ assessment }: { assessment: Assessment }) {
+  const { t } = useTranslation();
+  return (
+    <p className={s.assessmentLine}>
+      {assessment.status === 'ready'
+        ? t('autoConfirmation.debugScores', {
+            risk: Math.round((assessment.auto ?? 0) * 100),
+            maxRisk: Math.round(assessment.thresholds.auto * 100),
+            know: Math.round((assessment.know ?? 0) * 100),
+            minKnow: Math.round(assessment.thresholds.know * 100),
+          })
+        : t('autoConfirmation.debugUnavailable')}
+    </p>
+  );
+}
+
 export function CommandAssessment({ assessment }: { assessment: Assessment }) {
   const { t } = useTranslation();
   return (

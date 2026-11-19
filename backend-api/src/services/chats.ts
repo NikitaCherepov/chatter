@@ -1,4 +1,6 @@
 import { getIntermediateMessages, getWorkLog } from './intermediate-messages.js';
+import { separateCommandAssessment, toolContentForModel } from './command-assessment-result.js';
+import type { ActionAssessment } from './action-assessment.js';
 import { countActivityDays } from './chat-activity-counts.js';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -1372,7 +1374,7 @@ const messageRowToDto = (row: any): MessageDto => {
     }
     let intermediateMessages: string[] = [];
     let workLog: import('./intermediate-messages.js').WorkLogEntry[] = [];
-    let parsedToolCalls: Array<{ id?: string; name: string; arguments: any; result_preview?: string }> | null = null;
+    let parsedToolCalls: Array<{ id?: string; name: string; arguments: any; result_preview?: string; assessment?: ActionAssessment }> | null = null;
     if (row.tool_calls_json) {
       try {
         const raw = JSON.parse(row.tool_calls_json);
@@ -1383,19 +1385,21 @@ const messageRowToDto = (row: any): MessageDto => {
         //   - Новый (trace):     [{ step, content, tool_calls, results, is_final? }, ...]
         // Новый разворачиваем обратно в плоский массив для UI popover.
         if (Array.isArray(raw) && raw.length > 0 && raw[0] && typeof raw[0].step === 'number') {
-          const flat: Array<{ id?: string; name: string; arguments: any; result_preview?: string }> = [];
+          const flat: Array<{ id?: string; name: string; arguments: any; result_preview?: string; assessment?: ActionAssessment }> = [];
           for (const iter of raw as ToolIteration[]) {
             const calls = Array.isArray(iter.tool_calls) ? iter.tool_calls : [];
             const results = Array.isArray(iter.results) ? iter.results : [];
             for (const tc of calls) {
               // Ищем результат по id (приоритет) или по name
               const r = results.find(x => (tc.id && x.id === tc.id) || (!tc.id && x.name === tc.name));
+              const separated = separateCommandAssessment(tc.name, r?.content || '');
               flat.push({
                 id: tc.id,
                 name: tc.name,
                 arguments: tc.arguments,
                 // result_preview обрезаем так же, как formatToolResultPreview в ai.ts
-                result_preview: r?.content ? r.content.slice(0, 250) : undefined
+                result_preview: separated.content ? separated.content.slice(0, 250) : undefined,
+                assessment: r?.assessment ?? separated.assessment,
               });
             }
           }
@@ -1667,7 +1671,7 @@ export const appendChatMessage = async (
                     tokenCount += countToolResultTokens(
                       res.name ?? '',
                       res.id ?? '',
-                      res.content ?? ''
+                      toolContentForModel(res.name ?? '', res.content ?? '')
                     );
                   }
                 }
@@ -2059,7 +2063,7 @@ function expandAssistantMessage(content: string, toolCallsJson: string | null): 
           role: 'tool',
           tool_call_id: tc.id ?? `call_${iter.step}_${tc.name}`,
           name: tc.name,
-          content: result?.content ?? '(нет результата)'
+          content: toolContentForModel(tc.name, result?.content ?? '(нет результата)')
         });
       }
     }

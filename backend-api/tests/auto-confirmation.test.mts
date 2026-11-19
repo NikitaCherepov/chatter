@@ -269,6 +269,9 @@ try {
     await import('../src/services/pc-command-confirmations.js');
   const { updatePcCommandsSettings } = await import('../src/services/pc-commands.js');
   const sent: any[] = [];
+  let approvePcConfirmation = false;
+  let pcExecutionError = false;
+  const pcOutput = 'test output '.repeat(300);
   const desktop: any = {
     accountId: 81,
     connectionId: 'test-desktop',
@@ -284,13 +287,15 @@ try {
           queueMicrotask(() => {
             const pending = desktop.pendingIpc.get(message.request_id);
             desktop.pendingIpc.delete(message.request_id);
-            pending?.resolve('test output');
+            if (pcExecutionError) pending?.reject(new Error('test execution failed'));
+            else pending?.resolve(pcOutput);
           });
         if (message.action === 'pc_command_confirmation')
           queueMicrotask(() => {
             const pending = getPendingPcConfirmation(message.value.confirmation_id);
             deletePendingPcConfirmation(message.value.confirmation_id);
-            pending?.reject(new Error('rejected_by_user'));
+            if (approvePcConfirmation) pending?.resolve(pcOutput);
+            else pending?.reject(new Error('rejected_by_user'));
           });
       },
     },
@@ -336,9 +341,15 @@ try {
     const approvedPc = JSON.parse(await pcRun('echo test', true));
     assert.equal(approvedPc.status, 'success');
     assert.equal(approvedPc.auto_confirmation.approved, true);
+    assert.equal(approvedPc.output, pcOutput);
     assert.deepEqual(approvedPc.auto_confirmation.thresholds, { auto: 0.1, know: 0.92 });
     assert.equal(sent.at(-1).payload.background, true);
     assert.equal(sent.at(-1).ipc_type, 'execute_commands');
+    pcExecutionError = true;
+    const failedPc = JSON.parse(await pcRun());
+    assert.equal(failedPc.status, 'error');
+    assert.deepEqual(failedPc.auto_confirmation, approvedPc.auto_confirmation, 'execution errors retain diagnostics for display');
+    pcExecutionError = false;
     pcDuringRequest = () =>
       save({ scope: 'servers', enabled: !serversBefore.enabled, strictness: 'relaxed' });
     assert.equal(
@@ -361,6 +372,12 @@ try {
     assert.equal(JSON.parse(await pcRun()).status, 'rejected');
     assert.equal(sent.at(-1).value.assessment.approved, false);
     assert.equal(sent.at(-1).value.assessment.auto, 0.11);
+    approvePcConfirmation = true;
+    const manualPc = JSON.parse(await pcRun());
+    assert.equal(manualPc.status, 'success');
+    assert.equal(manualPc.auto_confirmation.auto, 0.11, 'manual approval retains the original Decision result');
+    assert.equal(manualPc.output, pcOutput);
+    approvePcConfirmation = false;
     pcScores = [0, 0.91];
     assert.equal(
       JSON.parse(await pcRun()).status,

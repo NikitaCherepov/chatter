@@ -6,6 +6,7 @@
  */
 
 import type { MessageUsage, TokenUsageCall } from '../../types.js';
+import type { ActionAssessment } from '../action-assessment.js';
 import type { Tool, ToolContext } from '../tools/types.js';
 
 export type { ToolDefinition } from '../tools/types.js';
@@ -15,7 +16,7 @@ export type SubagentTool = Tool<SubagentContext>;
 
 /** Context passed into every subagent run — mirrors the relevant parts of the main agent context. */
 export interface SubagentContext extends ToolContext {
-  onToolActivity?: (call: { id: string; name: string; arguments: string; running: boolean; result_preview?: string }) => Promise<void> | void;
+  onToolActivity?: (call: { id: string; name: string; arguments: string; running: boolean; result_preview?: string; assessment?: ActionAssessment }) => Promise<void> | void;
   isDesktop: boolean;
   /** Sink for pushing desktop actions (confirmation cards, etc.) out of band. */
   desktopActionSink?: { value: any | null };
@@ -58,7 +59,7 @@ export interface SubagentIteration {
   /** Tool calls на этой итерации. */
   tool_calls: Array<{ id?: string; name: string; arguments: any }>;
   /** Полные результаты для каждого tool_call этой итерации. */
-  results: Array<{ id?: string; name: string; content: string }>;
+  results: Array<{ id?: string; name: string; content: string; assessment?: ActionAssessment }>;
   /** true у финальной итерации без tool_calls (только текстовый ответ). */
   is_final?: boolean;
 }
