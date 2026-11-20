@@ -1,7 +1,10 @@
 {
   "appearance": {
+    "materialReducedNotice": "Reduced transparency is enabled by the system: fill is currently opaque (100%) and blur is off. Your setting is preserved and returns when this mode is disabled.",
+    "materialUnsupportedNotice": "This browser does not support backdrop blur: fill is currently opaque (100%). Your settings are preserved.",
+    "materialContrastHint": "Text may be harder to read on a varied backdrop in one of the palettes. You can increase fill opacity or change its color; your opacity setting is never changed automatically.",
     "materialsTitle": "Surface materials",
-    "materialsHelp": "Opacity affects the fill only. Blur is visible when there is an image or content behind the surface. Fill opacity may increase automatically to retain readable contrast. Auto restores previous surface styling. Reduced transparency uses an opaque fill.",
+    "materialsHelp": "Opacity affects the fill only and is applied exactly as set. Blur is visible when there is an image or content behind the surface. Auto restores previous surface styling. Reduced transparency uses an opaque fill.",
     "materialRegions": {"panels": "Panels", "composer": "Composer"},
     "materialEnable": "Customize material",
     "materialCustom": "Custom material",

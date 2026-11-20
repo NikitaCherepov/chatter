@@ -127,7 +127,7 @@ const formatTimezoneOffset = (offset: number) => {
 };
 
 
-const overlayVariants = {
+const backdropVariants = {
   hidden: { opacity: 0 },
   visible: { opacity: 1 },
   exit: { opacity: 0 },
@@ -1702,13 +1702,16 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
   const selectedCharacterCard = customPrompts.find(prompt => prompt.id === selectedPromptId)?.character_card;
 
   return (
-    <motion.div
-      className={s.overlay}
-      variants={overlayVariants}
-      initial="hidden"
-      animate="visible"
-      exit="exit"
-    >
+    <div className={s.overlay}>
+      {/* Fading the wrapper changes what backdrop-filter can see during opening. */}
+      <motion.div
+        className={s.backdrop}
+        aria-hidden="true"
+        variants={backdropVariants}
+        initial="hidden"
+        animate="visible"
+        exit="exit"
+      />
       <motion.div
         className={s.modal}
         onClick={(e) => e.stopPropagation()}
@@ -2966,6 +2969,6 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
           onImport={handleCharacterCardImport}
         />
       )}
-    </motion.div>
+    </div>
   );
 }

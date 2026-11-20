@@ -136,7 +136,9 @@ for (const fill of ['#000000', '#ffffff', '#777777', '#ff00ff', '#0d2036']) {
       { opacity, blur: 16, shadow: 'soft', border: 'defined' },
       fill,
     );
-    assert.ok(result.opacity >= opacity && result.opacity <= 1);
+    assert.equal(result.opacity, opacity, 'requested opacity must not be raised');
+    assert.ok(result.fill.endsWith(',' + opacity + ')'));
+    let poorContrast = false;
     for (const bg of ['#000000', '#ffffff'])
       for (const token of [
         '--text-body',
@@ -145,14 +147,14 @@ for (const fill of ['#000000', '#ffffff', '#777777', '#ff00ff', '#0d2036']) {
         '--accent-icon',
         '--color-error',
       ])
-        assert.ok(
-          contrastRatio(result.tokens[token], mixColor(bg, fill, result.opacity)) >= 4.5,
-          fill + ' ' + token,
-        );
+        if (contrastRatio(result.tokens[token], mixColor(bg, fill, result.opacity)) < 4.5)
+          poorContrast = true;
+    if (poorContrast)
+      assert.equal(result.contrastRisk, true, 'show a hint instead of changing opacity');
     assert.equal(result.filter, 'blur(16px)');
     assert.ok(result.fill.startsWith('rgba('));
   }
 }
 console.log(
-  'PASS: material fill contrast over unknown backdrops, bounded blur and opaque text tokens',
+  'PASS: exact material alpha over unknown backdrops, contrast hints, bounded blur and opaque text tokens',
 );

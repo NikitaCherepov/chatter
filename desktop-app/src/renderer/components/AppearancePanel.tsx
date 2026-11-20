@@ -472,6 +472,21 @@ export function AppearancePanel() {
           </div>
           <h4>{t('appearance.materialsTitle')}</h4>
           <p className={s.hint}>{t('appearance.materialsHelp')}</p>
+          {draft.materials && (
+            <>
+              <p
+                className={`${s.hint} ${s.materialReducedNotice}`}
+                data-material-fallback="reduced"
+                role="status"
+              >
+                {t('appearance.materialReducedNotice')}
+              </p>
+              <p className={`${s.hint} ${s.materialUnsupportedNotice}`} role="status">
+                {t('appearance.materialUnsupportedNotice')}
+              </p>
+            </>
+          )}
+
           <div className={s.fields}>
             {(['panels', 'composer'] as const).map((region) => {
               const value = draft.materials?.[region];
@@ -510,6 +525,18 @@ export function AppearancePanel() {
                   </button>
                   {value && (
                     <>
+                      {(['light', 'dark'] as const).some((mode) => {
+                        const colors = appearanceColors(draft, mode);
+                        const fill =
+                          region === 'panels'
+                            ? (draft[mode].surface ?? colors.panel['--bg-secondary'])
+                            : (draft[mode].surface ?? colors.panel['--bg-input']);
+                        return materialColors(draft[mode], value, fill).contrastRisk;
+                      }) && (
+                        <p className={s.hint} role="status">
+                          {t('appearance.materialContrastHint')}
+                        </p>
+                      )}
                       <Slider
                         mode="numeric"
                         label={t('appearance.materialOpacity')}

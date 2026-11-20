@@ -181,3 +181,7 @@
 .color > label { display: flex; align-items: center; justify-content: space-between; flex: 1; gap: 8px; }
 
 .materialMini { display: block; width: 90%; padding: 2px 6px; border: 1px solid; font: 10px/1.2 system-ui; }
+
+.materialReducedNotice, .materialUnsupportedNotice { display: none; }
+@media (prefers-reduced-transparency: reduce) { .materialReducedNotice { display: block; } }
+@supports not (backdrop-filter: blur(1px)) { .materialUnsupportedNotice { display: block; } }

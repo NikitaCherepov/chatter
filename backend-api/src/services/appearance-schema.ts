@@ -284,7 +284,7 @@ export const APPEARANCE_CAPABILITIES = {
     shadow: ['none', 'soft', 'medium', 'strong'],
     border: ['none', 'subtle', 'defined'],
     description:
-      'Optional material per region. Omit a region for unchanged legacy styling. Opacity affects fill only; text remains opaque. The renderer can raise effective opacity to retain readable contrast. Blur affects content behind the surface, not text. It is only visible over varied content; panels over a flat background may show no visible blur. Optional radius overrides the global radius in this region only. Use the existing preview/confirmation flow.',
+      'Optional material per region. Omit a region for unchanged legacy styling. Opacity affects fill only; text remains opaque. Fill opacity is applied exactly as requested; only foreground colors adapt for contrast. The editor warns when a varied backdrop may reduce legibility. System reduced-transparency preferences use an opaque fallback. Blur affects content behind the surface, not text. It is only visible over varied content; panels over a flat background may show no visible blur. Optional radius overrides the global radius in this region only. Use the existing preview/confirmation flow.',
   },
   template: newAppearance(),
 };

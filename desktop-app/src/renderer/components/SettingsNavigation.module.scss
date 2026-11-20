@@ -155,3 +155,6 @@
     transition: none;
   }
 }
+
+// The dialog paints the material once; navigation must not cover it with solid paint.
+:global([data-material-panels]) .navigation { background: transparent; }

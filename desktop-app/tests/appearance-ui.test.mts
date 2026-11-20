@@ -231,10 +231,31 @@ app.whenReady().then(async()=>{
  fs.writeFileSync(path.join(process.env.TEMP,'chatter-materials-review.png'),(await wc.capturePage()).toPNG());
  await js('window.scrollRef.current.scrollTo("end",{immediate:true})');
 
+ // A mid-grey fill previously jumped from 80% to 100%. Check the actual CSS
+ // and captured pixels, so an opaque ancestor/child cannot hide behind a rgba assertion.
+ await js('(()=>{const p=window.newAppearance("alpha-regression");p.light.surface=p.dark.surface="#777777";p.materials={panels:{opacity:0.8,blur:16,shadow:"soft",border:"subtle"},composer:{opacity:0.8,blur:16,shadow:"soft",border:"subtle"}};window.previewAppearance(p);const bg=document.createElement("div");bg.id="alpha-backdrop";bg.style.cssText="position:absolute;z-index:1;bottom:0;left:0;right:0;height:220px;background:rgb(255,0,0);pointer-events:none";window.messageViewport().parentElement.append(bg);})()');
+ await until('document.documentElement.dataset.appearance==="alpha-regression"');
+ const actualFill=await js('getComputedStyle(document.querySelector("[data-chat-composer-dock] textarea").parentElement).backgroundColor');
+ assert.ok(/rgba\(119, 119, 119, 0\.8\)/.test(actualFill),actualFill);
+ const panelFill=await js('getComputedStyle(document.querySelector("#panel-fixture")).backgroundColor');
+ assert.equal(panelFill,actualFill,'panel and composer both retain requested alpha');
+ const samplePixel=async()=>{
+  const box=await js('(()=>{const r=document.querySelector("[data-chat-composer-dock] textarea").parentElement.getBoundingClientRect();return {x:r.right-30,y:r.top+r.height/2};})()');
+  await sleep(100);await wc.capturePage();await sleep(75);const shot=await wc.capturePage(),size=shot.getSize(),screen=win.getContentSize();
+  const x=Math.floor(box.x*size.width/screen[0]),y=Math.floor(box.y*size.height/screen[1]),offset=(y*size.width+x)*4;
+  return [...shot.toBitmap().subarray(offset,offset+3)];
+ };
+ const red=await samplePixel();
+ await js('document.querySelector("#alpha-backdrop").style.background="rgb(0,0,255)"');
+ const blue=await samplePixel();
+ assert.ok(red.some((channel,i)=>Math.abs(channel-blue[i])>10),'changing the backdrop must be visible through the composer: '+JSON.stringify({red,blue}));
+ await js('document.querySelector("#alpha-backdrop").remove();window.clickText("Предпросмотр")');
  await wc.debugger.attach('1.3');
  await wc.debugger.sendCommand('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-transparency',value:'reduce'}]});
  const fallback=await js('getComputedStyle(document.querySelector("[data-chat-composer-dock] textarea").parentElement).backdropFilter');
- assert.equal(fallback,'none');await wc.debugger.detach();
+ assert.equal(fallback,'none');
+ assert.equal(await js('getComputedStyle(document.querySelector("[data-material-fallback]")).display'),'block','the opaque system override must be visible in the editor');
+ await wc.debugger.detach();
  await js('[...document.querySelectorAll("button")].find(el=>el.getAttribute("aria-label")==="Поле ввода Авто").click()');
  await until('!document.documentElement.dataset.materialComposer');
  assert.equal(await js('getComputedStyle(document.querySelector("[data-chat-composer-dock] textarea").parentElement).backdropFilter'),'none');
