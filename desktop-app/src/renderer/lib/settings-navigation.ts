@@ -9,6 +9,7 @@ export type SettingsSection =
   | 'data'
   | 'voice'
   | 'app'
+  | 'chatLayout'
   | 'admin'
   | 'limits'
   | 'billing'
@@ -34,10 +35,11 @@ export const SETTINGS_GROUPS: { id: string; sections: SettingsSection[] }[] = [
     sections: ['autoConfirmation', 'macros', 'runbooks', 'pc', 'browser', 'mcp', 'servers', 'sshkeys', 'mail', 'smart_home'],
   },
   { id: 'access', sections: ['data', 'billing'] },
-  { id: 'application', sections: ['app', 'admin', 'about'] },
+  { id: 'application', sections: ['app', 'chatLayout', 'admin', 'about'] },
 ];
 
 export function settingsSectionKey(section: SettingsSection): string {
+  if (section === 'chatLayout') return 'chatLayout.title';
   return `settings.sections.${section === 'smart_home' ? 'smartHome' : section}`;
 }
 

@@ -1,3 +1,5 @@
+import { getChatLayouts, changeChatLayouts } from './services/chat-layout.js';
+import { parseChatLayoutSettings, type ChatLayoutSettings } from './services/chat-layout-schema.js';
 import { appearanceFromJson, getAppearance, changeAppearance } from './services/appearance.js';
 import { parseAppearanceSettings, type AppearanceSettings } from './services/appearance-schema.js';
 ﻿import { browserInputTimeout } from './services/browser-input-timeout.js';
@@ -988,6 +990,7 @@ const parseFeatureFlags = (user: UserRecord): Record<string, boolean> => {
 /** UI settings: configurable display options stored per-user. */
 export const parseUiSettings = (user: UserRecord): {
   appearance: AppearanceSettings;
+  chat_layout?: ChatLayoutSettings;
   show_tokens?: boolean;
   dice_roll_enabled?: boolean;
   seen_announcements?: string[];
@@ -997,8 +1000,11 @@ export const parseUiSettings = (user: UserRecord): {
 } => {
   try {
     const parsed = JSON.parse(user.ui_settings || '{}');
+    let chatLayout: ChatLayoutSettings | undefined;
+    try { chatLayout = parseChatLayoutSettings(parsed.chat_layout); } catch { /* Keep the other UI settings available. */ }
     return {
       appearance: appearanceFromJson(user.ui_settings),
+      chat_layout: chatLayout,
       ...(typeof parsed.show_tokens === 'boolean' ? { show_tokens: parsed.show_tokens } : {}),
       ...(typeof parsed.dice_roll_enabled === 'boolean' ? { dice_roll_enabled: parsed.dice_roll_enabled } : {}),
       ...(Array.isArray(parsed.seen_announcements) && parsed.seen_announcements.every((id: unknown) => typeof id === 'string')
@@ -6596,10 +6602,28 @@ app.post('/api/v1/user/appearance', (req: AuthedRequest,res) => {
  catch(error:any){return res.status(error.message==='appearance_conflict'?409:400).json({error:error.message||'appearance_invalid'});}
 });
 
+app.get('/api/v1/user/chat-layout', (req: AuthedRequest, res) => {
+  try {
+    return res.json({ layout: getChatLayouts(accountIdFromRequest(req)) });
+  } catch (error: any) {
+    return res.status(error.message === 'user_not_found' ? 404 : 400).json({ error: error.message });
+  }
+});
+
+app.post('/api/v1/user/chat-layout', (req: AuthedRequest, res) => {
+  try {
+    return res.json({ layout: changeChatLayouts(accountIdFromRequest(req), req.body) });
+  } catch (error: any) {
+    const status = error.message === 'chat_layout_conflict' ? 409 : error.message === 'user_not_found' ? 404 : 400;
+    return res.status(status).json({ error: error.message });
+  }
+});
+
 // ─── UI settings (display options stored per user) ──────────────────────────
 
 const VALID_UI_KEYS = [
   'appearance',
+  'chat_layout',
   'show_tokens',
   'dice_roll_enabled',
   'seen_announcements',
@@ -6609,7 +6633,7 @@ const VALID_UI_KEYS = [
   'browser_human_typing',
 ] as const;
 
-type UiSettingValue = boolean | string[] | AppearanceSettings;
+type UiSettingValue = boolean | string[] | AppearanceSettings | ChatLayoutSettings;
 
 /** Преобразует dice_mode из body запроса в форсированное значение d20. */
 const resolveDiceForceValue = (mode: unknown): number | undefined => {
@@ -6620,6 +6644,7 @@ const resolveDiceForceValue = (mode: unknown): number | undefined => {
 
 const isValidUiValue = (key: string, value: unknown): value is UiSettingValue => {
   if (key === 'appearance') {try{parseAppearanceSettings(value);return true;}catch{return false;}}
+  if (key === 'chat_layout') { try { parseChatLayoutSettings(value); return true; } catch { return false; } }
   if (key === 'seen_announcements') {
     return Array.isArray(value) && value.every((v: unknown) => typeof v === 'string');
   }
@@ -6669,7 +6694,7 @@ app.put('/api/v1/user/ui-settings', (req: AuthedRequest, res: any) => {
     }
   } catch { /* empty */ }
   for (const key of VALID_UI_KEYS) {
-    if (key !== 'appearance' && key in incoming && isValidUiValue(key, incoming[key])) existing[key] = incoming[key];
+    if (key !== 'appearance' && key !== 'chat_layout' && key in incoming && isValidUiValue(key, incoming[key])) existing[key] = incoming[key];
   }
   db.prepare('UPDATE users SET ui_settings = ? WHERE id = ?').run(JSON.stringify(existing), userId);
   return res.json({ ok: true, settings: existing });

@@ -36,6 +36,7 @@ const ICONS: Record<SettingsSection, string> = {
   restrictions: 'M12 2l9 4v6c0 5-9 10-9 10S3 17 3 12V6z M9 12l2 2 4-4',
   billing: 'M3 4h18v16H3z M3 9h18 M7 16h4',
   app: 'M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z',
+  chatLayout: 'M3 4h18v16H3z M9 4v16m0-11h12',
   admin: 'M12 2l9 4v6c0 5-9 10-9 10S3 17 3 12V6z M9 12h6M12 9v6',
   about: 'M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0 M12 11v6 M12 7h.01',
 };

@@ -14,6 +14,9 @@ const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'chatter-appearance-ui-'
 const modulePath = (file: string) =>
   JSON.stringify(path.resolve(desktopRoot, 'src/renderer', file).replaceAll('\\', '/'));
 
+const pageSource = fs.readFileSync(new URL('../src/renderer/pages/ChatPage.tsx', import.meta.url), 'utf8');
+const shellOrder = pageSource.match(/\{layout\.chatSide === 'right'\s*\? \[toolsSidebar, conversation, roomSidebar, chatSidebar\]\s*:\s*\[chatSidebar, conversation, roomSidebar, toolsSidebar\]\}/)?.[0];
+assert.ok(shellOrder);
 const authModule = String.raw`
 import React from 'react';
 export const TestAuth=React.createContext(null);
@@ -26,6 +29,18 @@ export const resolveAuthenticatedAssetUrl=(url)=>url;
 export const apiFetch=async(path,options)=>{
  await new Promise(resolve=>setTimeout(resolve,5));
  const userId=window.testAccount;
+ if(path==='/api/v1/user/chat-layout'){
+  const current=window.layoutDb[userId]??{revision:0,activeId:null,profiles:[]};
+  if(options?.method!=='POST')return {layout:structuredClone(current)};
+  const command=JSON.parse(options.body);
+  if(command.action==='save'){
+   const profile={...command.profile,revision:command.profile.revision+1};
+   current.profiles=[...current.profiles.filter(item=>item.id!==profile.id),profile];
+   if(command.apply)current.activeId=profile.id;
+  }else if(command.action==='activate')current.activeId=command.id;
+  current.revision++;window.layoutDb[userId]=current;
+  return {layout:structuredClone(current)};
+ }
  const current=window.testDb[userId]??{version:1,revision:0,activeId:null,profiles:[]};
  if(!options)return {appearance:structuredClone(current)};
  if(window.failSave){window.failSave=false;throw {data:{error:'appearance_conflict'}};}
@@ -49,6 +64,10 @@ import {createInstance} from 'i18next';
 import {I18nextProvider} from 'react-i18next';
 import {TestAuth} from 'test-auth';
 import {AppearancePanel} from ${modulePath('components/AppearancePanel.tsx')};
+import {ChatLayoutPanel,ChatLayoutConfirmation,ChatLayoutPreviewBar} from ${modulePath('components/ChatLayoutPanel.tsx')};
+import {useChatLayouts} from ${modulePath('lib/chat-layout-service.ts')};
+import {CHAT_LAYOUT_CAPABILITIES,DEFAULT_CHAT_LAYOUT} from ${modulePath('lib/chat-layout-schema.ts')};
+import {ToolsPanel,ToolsHeaderButton} from ${modulePath('components/ToolsPanel.tsx')};
 import {AppearanceController} from ${modulePath('components/AppearanceController.tsx')};
 import {AppearanceConfirmation} from ${modulePath('components/AppearanceConfirmation.tsx')};
 import {newAppearance} from ${modulePath('lib/appearance-schema.ts')};
@@ -68,14 +87,15 @@ import chat from ${modulePath('pages/ChatPage.module.scss')};
 import ${modulePath('global.scss')};
 window.newAppearance=newAppearance;window.previewAppearance=previewAppearance;window.appearanceColors=appearanceColors;window.contrastRatio=contrastRatio;window.light=()=>setThemePreference("light");
 window.messageViewport=()=>document.querySelector('.'+chat.messages);
-window.testAccount=1;window.testDb={};window.animationCount=0;window.motionSamples=[];
+window.testAccount=1;window.testDb={};window.layoutDb={};
+window.electronAPI={onToolWindowClosed:()=>()=>{}};window.animationCount=0;window.motionSamples=[];
 const nativeAnimate=Element.prototype.animate;
 Element.prototype.animate=function(...args){
  if(this.hasAttribute('data-message-id'))window.animationCount++;
  if(this.hasAttribute('data-motion-sample'))window.motionSamples.push(args);
  return nativeAnimate.apply(this,args);
 };
-function Conversation(){
+function Conversation({mode='floating'}={}){
  const [items,setItems]=useState(()=>Array.from({length:60},(_,n)=>({id:n+1,content:'# Message '+(n+1)+'\n\n'+Array.from({length:12},()=> 'A paragraph with **formatting** and words to wrap.').join('\n\n')})));
  const [chatId,setChatId]=useState(1),[extra,setExtra]=useState("none");window.setComposerExtra=setExtra;
  useMessageArrival(items,chatId,true);
@@ -92,7 +112,7 @@ function Conversation(){
     <div className={item.id%2?chat.bubbleText:chat.bubbleUser}><MarkdownRenderer content={item.content}/></div>
    </div>
   </VirtualMessage>)}
- </ChatMessagesScroll><ChatComposerDock><div className={chat.composerWrap}>
+ </ChatMessagesScroll><ChatComposerDock mode={mode}><div className={chat.composerWrap}>
  {extra==='image'&&<div className={chat.imagePreviews}><div style={{height:56,width:56}}>Image</div></div>}
  <div className={chat.composerBody}><div className={chat.composerReview}>
  {(extra==='card'||extra==='large')&&<ConfirmationCard id="dock-check" title="Confirmation" actions={<button>Apply</button>}><div style={{height:extra==='large'?1200:120}}>Review</div></ConfirmationCard>}
@@ -100,17 +120,49 @@ function Conversation(){
  <div className={chat.composerFootnote}>Enter to send</div></div></ChatComposerDock></>;
 
 }
+function LayoutFixture(){
+ const layouts=useChatLayouts();
+ const [editor,setEditor]=useState(true),[draft,setDraft]=useState(),[preview,setPreview]=useState(),[proposal,setProposal]=useState();
+ const active=layouts.state?.profiles.find(item=>item.id===layouts.state.activeId);
+ const layout=preview?.profile??active??DEFAULT_CHAT_LAYOUT;
+ window.openLayoutEditor=()=>setEditor(true);
+ window.layoutProposal=()=>setProposal({proposal_id:'layout-bot',profile:{...CHAT_LAYOUT_CAPABILITIES.template,name:'Bot layout',id:'from-bot-layout',chatSide:'left'}});
+ const chatSidebar=<aside key="chat-list" className={chat.sidebar} data-chat-list style={{width:layout.sidebarWidth??260}}>
+  <button onClick={()=>setEditor(true)}>Settings</button><details open><summary>Folder</summary>Test chat</details>
+ </aside>;
+ const toolsSidebar=<ToolsPanel key="tools" placement={layout.tools} side={layout.chatSide==='left'?'right':'left'} plan="free" isAdmin={0}/>;
+ const roomSidebar=null;
+ const conversation=<main key="conversation" className={chat.main}>
+  {preview&&<ChatLayoutPreviewBar profile={preview.profile} layouts={layouts} fromSettings={preview.editor}
+   onClose={()=>{if(preview.editor){setDraft(preview.profile);setEditor(true);}setPreview(undefined);}}
+   onApply={()=>{if(!preview.editor)setProposal(undefined);setPreview(undefined);}}/>}
+  {layout.tools==='header'&&<div className={chat.chatTopBar}><ToolsHeaderButton className={chat.chatFindTrigger} onOpen={()=>{}}/></div>}
+  <Conversation mode={layout.composer}/>
+  {proposal&&<div style={{position:'absolute',bottom:12,left:0,right:0,zIndex:60}}>
+    <ChatLayoutConfirmation proposal={proposal} layouts={layouts} onPreview={()=>setPreview({profile:proposal.profile,editor:false})}
+        onResolved={()=>{setProposal(undefined);setPreview(undefined);}}/>
+  </div>}
+ </main>;
+ return <div className={chat.layout} data-layout-side={layout.chatSide} data-layout-column={layout.column}
+  data-layout-density={layout.chatList} data-layout-messages={layout.messages} data-layout-custom={!!(active||preview)}>
+  ${shellOrder}
+  {editor&&<div id="layout-editor-fixture" style={{position:'absolute',zIndex:95,top:20,left:20,width:'min(680px, 90vw)',maxHeight:'90vh',overflow:'auto',background:'var(--bg-primary)',padding:20}}>
+   <ChatLayoutPanel layouts={layouts} initialDraft={draft} onPreview={profile=>{setPreview({profile,editor:true});setEditor(false);}}/>
+  </div>}
+ </div>;
+}
 function App(){
- const [user,setUser]=useState({id:1,ui_settings:{}}),[proposal,setProposal]=useState(null);
+ const [user,setUser]=useState({id:1,ui_settings:{}}),[proposal,setProposal]=useState(null),[layoutFixture,setLayoutFixture]=useState(false);
+ window.openLayoutFixture=()=>setLayoutFixture(true);
  window.changeAccount=()=>{window.testAccount=2;setUser({id:2,ui_settings:{}});};
  window.propose=()=>setProposal({proposal_id:'bot-proposal',profile:{...newAppearance('from-bot'),name:'Bot look'}});
  window.proposeDraft=()=>setProposal({proposal_id:'bot-draft',profile:{...newAppearance('saved-bot'),name:'Saved bot draft'}});
  window.motionPreview=()=>previewAppearance({...newAppearance('motion'),motion:{preset:'custom',duration:100,distance:12,scale:0.97,easing:'ease-out'}});
  window.dark=()=>{setThemePreference('dark');window.dispatchEvent(new CustomEvent('chatter-theme-change',{detail:'dark'}));};
- return <TestAuth.Provider value={{user,setUser}}><AppearanceController/>
+ return <TestAuth.Provider value={{user,setUser}}>{layoutFixture ? <LayoutFixture/> : <><AppearanceController/>
   <div id="panel-fixture" className={chat.sidebar} style={{width:'48%',height:'100%',overflow:'auto',padding:20}}><AppearancePanel/>{proposal&&<AppearanceConfirmation proposal={proposal} onResolved={()=>setProposal(null)}/>}</div>
   <div className={chat.main} style={{width:'52%',height:'100%',display:'flex',flexDirection:'column'}}><Conversation/></div>
- </TestAuth.Provider>;
+ </>}</TestAuth.Provider>;
 }
 window.clickText=text=>{const button=[...document.querySelectorAll('button')].find(el=>el.textContent.trim()===text&&!el.disabled&&el.getBoundingClientRect().height>0);if(!button)throw new Error('Button missing: '+text);button.click();};
 window.inputText=(label,value)=>{
@@ -138,7 +190,7 @@ app.whenReady().then(async()=>{
  wc.on('console-message',(_event,level,message)=>{if(level===3)errors.push(message);});
  wc.session.webRequest.onBeforeRequest({urls:['http://*/*','https://*/*']},(_details,cb)=>cb({cancel:true}));
  const js=async code=>{try{return await wc.executeJavaScript(code);}catch(error){console.error('Failed JS:',code);console.error('Renderer errors:',errors);throw error;}},sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
- const until=async code=>{for(let n=0;n<120;n++){if(await js(code))return;await sleep(25);}throw new Error('Timed out: '+code);};
+ const until=async code=>{for(let n=0;n<120;n++){if(await js(code))return;await sleep(25);}throw new Error('Timed out: '+code+'\nRenderer errors: '+errors.join('\n'));};
  await win.loadFile(path.join(__dirname,'renderer/index.html'));
  await until('window.fixtureReady && [...document.querySelectorAll("button")].some(el=>el.textContent==="Создать оформление")');
  await until('document.querySelectorAll("[data-virtual-row-placeholder]").length>30');
@@ -322,6 +374,47 @@ app.whenReady().then(async()=>{
  await wc.capturePage();await sleep(100);
  const shot=await wc.capturePage();
  fs.writeFileSync(path.join(process.env.TEMP,'chatter-appearance-review.png'),shot.toPNG());
+ await js('window.openLayoutFixture()');
+ await until('[...document.querySelectorAll("#layout-editor-fixture button")].some(el=>el.getAttribute("aria-label")==="Сохранённые компоновки")');
+ await until('document.querySelectorAll("[data-virtual-row-placeholder]").length>30');
+ await js('window.originalViewport=window.messageViewport();window.originalList=document.querySelector("[data-chat-list]");window.originalList.querySelector("details").open=false');
+ await js('window.clickText("Широкая")');
+ await until('!!document.querySelector("#layout-editor-fixture input[type=range]")');
+ await js('window.clickText("Кнопка в шапке")');
+ await js('window.inputText("Название","Wide layout")');
+ await sleep(200);await wc.capturePage();await sleep(100);
+ fs.writeFileSync(path.join(process.env.TEMP,'chatter-layout-review.png'),(await wc.capturePage()).toPNG());
+ await js('window.clickText("Посмотреть в чате")');
+ await until('document.querySelector("[data-layout-side]").dataset.layoutSide==="right" && document.querySelector("[data-composer-mode]").dataset.composerMode==="docked"');
+ assert.ok(await js('window.messageViewport()===window.originalViewport && document.querySelector("[data-chat-list]")===window.originalList && !window.originalList.querySelector("details").open'));
+ assert.ok(await js('window.originalList.getBoundingClientRect().left>window.messageViewport().getBoundingClientRect().left'));
+ assert.equal(await js('window.layoutDb[2]'),undefined,'preview must not write settings');
+ await until('Math.abs(window.messageViewport().scrollHeight-window.messageViewport().clientHeight-window.messageViewport().scrollTop)<=4');
+ assert.equal(await js('window.messageViewport().parentElement.style.getPropertyValue("--chat-composer-height")'),'');
+ await js('window.clickText("К настройкам")');
+ await until('document.querySelector("#layout-editor-fixture input")?.value==="Wide layout"');
+ assert.equal(await js('document.querySelector("[data-layout-side]").dataset.layoutSide'),'left');
+ await js('window.clickText("Посмотреть в чате")');
+ await until('!document.querySelector("#layout-editor-fixture")');
+ await js('window.clickText("Сохранить и применить")');
+ await until('!!window.layoutDb[2]?.activeId && ![...document.querySelectorAll("aside[aria-label]")].some(el=>el.getAttribute("aria-label")==="Предпросмотр компоновки")');
+ win.setSize(740,810);
+ await sleep(300);
+ await js('document.querySelector("button[aria-controls=chat-tools-panel]").click()');
+ await until('document.querySelector("#chat-tools-panel").dataset.toolsPanelOpen==="true"');
+ assert.equal(await js('getComputedStyle(document.querySelector("#chat-tools-panel")).position'),'absolute');
+ assert.ok(await js('window.messageViewport().clientWidth>=400'));
+ await js('document.querySelector("button[aria-controls=chat-tools-panel]").click();window.layoutProposal()');
+ await until('[...document.querySelectorAll("strong")].some(el=>el.textContent==="Bot layout")');
+ await js('window.clickText("Посмотреть в чате")');
+ await until('document.querySelector("[data-layout-side]").dataset.layoutSide==="left"');
+ await js('window.clickText("Закрыть предпросмотр")');
+ await until('document.querySelector("[data-layout-side]").dataset.layoutSide==="right"');
+ await js('window.clickText("Сохранить")');
+ await until('window.layoutDb[2].profiles.length===2');
+ assert.equal(await js('window.layoutDb[2].profiles.find(p=>p.id===window.layoutDb[2].activeId).name'),'Wide layout');
+ assert.deepEqual(errors,[]);
+ console.log('PASS: layout editor, in-chat preview, stateful panel reorder, docked composer bottom follow, narrow tools panel, and inactive bot layout save');
  win.destroy();
  console.log('PASS: actual appearance editor and cards, inactive saves, reversible preview, palette/typography/density, virtual height restoration, applying proposals from recovery bar, arrival-only animation, reduced motion and account isolation');
  app.exit(0);
@@ -341,12 +434,14 @@ try {
             return '\0test-auth';
           if (
             (id.endsWith('/lib/api') || id === './api') &&
-            /AppearancePanel|AppearanceController|appearance-service/.test(importer ?? '')
+            /AppearancePanel|AppearanceController|appearance-service|chat-layout-service/.test(importer ?? '')
           )
             return '\0test-api';
+          if (['./ToolContent', './FloatingWidget'].includes(id) && importer?.endsWith('ToolsPanel.tsx')) return '\0layout-fixture-tools';
           if (id === 'appearance-ui.tsx') return '\0' + id;
         },
         async load(id: string) {
+          if (id === '\0layout-fixture-tools') return 'export const ToolContent = () => null; export const FloatingWidget = () => null;';
           if (id === '\0test-auth')
             return transformWithEsbuild(authModule, 'auth.tsx', {
               loader: 'tsx',

@@ -1,3 +1,6 @@
+import { ChatLayoutPanel } from './ChatLayoutPanel';
+import type { ChatLayoutProfile } from '../lib/chat-layout-schema';
+import type { ChatLayouts } from '../lib/chat-layout-service';
 import { AppearancePanel } from './AppearancePanel';
 import { useSettingsQueries } from '../lib/useSettingsQueries';
 import appLayout from './AppSettings.module.scss';
@@ -83,6 +86,9 @@ import { useSettingsSearchTarget } from '../lib/useSettingsSearchTarget';
 
 type Props = {
   onClose: () => void;
+  chatLayouts: ChatLayouts;
+  initialLayoutDraft?: ChatLayoutProfile;
+  onLayoutPreview: (profile: ChatLayoutProfile) => void;
   onAccountChanged?: () => void | Promise<void>;
   onChatCreated?: (chatId: number) => void | Promise<void>;
   onAskMcpHelp?: (message: string) => Promise<void>;
@@ -154,12 +160,15 @@ function clampZoomPct(pct: number): number {
   return Math.min(ZOOM_MAX_PCT, Math.max(ZOOM_MIN_PCT, snapped));
 }
 
-export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuthInvalidated, onAskMcpHelp }: Props) {
+export function SettingsModal({
+  onClose, chatLayouts, initialLayoutDraft, onLayoutPreview,
+  onAccountChanged, onChatCreated, onAuthInvalidated, onAskMcpHelp,
+}: Props) {
   const { user, setUser } = useAuth();
   const queryClient = useQueryClient();
   const isAdmin = user?.is_admin === 1 || user?.role === 'admin';
   const { t, i18n } = useTranslation();
-  const [section, setSection] = useState<Section>('account');
+  const [section, setSection] = useState<Section>(initialLayoutDraft ? 'chatLayout' : 'account');
   const { panelRef, selectTarget, unavailable } = useSettingsSearchTarget(section);
 
   // Account
@@ -2555,6 +2564,13 @@ export function SettingsModal({ onClose, onAccountChanged, onChatCreated, onAuth
             <div className={s.panel}>
               <div className={s.panelTitle}>{t('settings.sections.billing')}</div>
               <div className={s.promptLoading}>{t('common.inDevelopment')}</div>
+            </div>
+          )}
+
+          {section === 'chatLayout' && (
+            <div className={s.panel}>
+              <div className={s.panelTitle}>{t('chatLayout.title')}</div>
+              <ChatLayoutPanel layouts={chatLayouts} initialDraft={initialLayoutDraft} onPreview={onLayoutPreview} />
             </div>
           )}
 

@@ -99,10 +99,10 @@ export const ChatMessagesScroll = forwardRef<ChatMessagesScrollHandle, Props>(fu
   // Keep a chat that was left at the bottom pinned there without animating.
   useLayoutEffect(() => {
     const content = contentRef.current;
-    if (!content || !ready || positionKey === null) return;
+    const wrapper = wrapperRef.current;
+    if (!content || !wrapper || !ready || positionKey === null) return;
     const observer = new ResizeObserver(() => {
-      const wrapper = wrapperRef.current;
-      if (!wrapper || restoredKeyRef.current !== positionKey) return;
+      if (restoredKeyRef.current !== positionKey) return;
       const saved = positionsRef.current.get(positionKey);
       if (saved?.bottom) {
         wrapper.scrollTo({ top: wrapper.scrollHeight, behavior: 'instant' });
@@ -120,6 +120,7 @@ export const ChatMessagesScroll = forwardRef<ChatMessagesScrollHandle, Props>(fu
       }
     });
     observer.observe(content);
+    observer.observe(wrapper);
     return () => observer.disconnect();
   }, [positionKey, ready]);
 

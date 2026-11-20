@@ -19,7 +19,8 @@ const entries = [
   ...fields,
 ];
 const find = (q: string, lang: any = ru, admin = false) => searchSettings(q, entries, translate(lang), admin);
-assert.equal(new Set(SETTINGS_GROUPS.flatMap((g: any) => g.sections)).size, 25);
+const sections = SETTINGS_GROUPS.flatMap((group: any) => group.sections);
+assert.equal(new Set(sections).size, sections.length);
 assert(SETTINGS_GROUPS.find((g: any) => g.id === 'profile').sections.includes('limits'));
 assert(SETTINGS_GROUPS.find((g: any) => g.id === 'ai').sections.includes('restrictions'));
 assert(!SETTINGS_GROUPS.find((g: any) => g.id === 'access').sections.includes('restrictions'));
@@ -30,6 +31,8 @@ assert.equal(find('пароль').find((item: any) => item.key === 'settings.acc
 assert.equal(find('модель субагентов').find((item: any) => item.key === 'settings.app.subagentModel')?.section, 'agents');
 assert.equal(find('квоты').find((item: any) => item.key === 'quota.title')?.section, 'limits');
 
+assert.equal(find('компоновка')[0]?.section, 'chatLayout');
+assert.equal(find('chat layout', en)[0]?.section, 'chatLayout');
 assert.equal(find('масштаб')[0].key, 'settings.app.zoom');
 assert.equal(find('scale', en)[0].key, 'settings.app.zoom');
 assert.equal(find('Whisper', en)[0].key, 'settings.voice.recognitionSource');

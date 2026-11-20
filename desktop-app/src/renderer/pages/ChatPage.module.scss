@@ -3,6 +3,7 @@
   display: flex;
   height: 100%;
   width: 100vw;
+  position: relative;
 }
 
 // ====== SIDEBAR ======
@@ -1517,6 +1518,7 @@
 }
 
 .emptyState {
+  position: relative;
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -1701,7 +1703,49 @@
   background-repeat: no-repeat;
   flex: 1;
   overflow-y: auto;
-  padding: calc(32px * var(--appearance-density, 1)) 10% calc(32px * var(--appearance-density, 1) + var(--chat-composer-height, 0px)) max(10%, calc(66px * var(--appearance-density, 1)));
+  --message-inset: max(var(--chat-layout-inset, 10%), calc((100% - var(--chat-layout-column, 200vw)) / 2));
+  padding: calc(32px * var(--appearance-density, 1)) var(--message-inset)
+    calc(32px * var(--appearance-density, 1) + var(--chat-composer-height, 0px))
+    max(var(--message-inset), calc(66px * var(--appearance-density, 1)));
+}
+
+.layout[data-layout-side='right'] .sidebar {
+  border-right: 0;
+  border-left: 1px solid var(--border-light);
+}
+
+.layout[data-layout-column='reading'] { --chat-layout-column: 820px; }
+.layout[data-layout-column='wide'] { --chat-layout-inset: 6%; }
+
+.layout[data-layout-density='compact'] {
+  .chatItem { padding-block: calc(6px * var(--appearance-density, 1)); margin-block: 1px; }
+  .chatItemTime { margin-top: 2px; }
+}
+
+.layout[data-layout-messages='bubbles'] .messageGroupAssistant .bubble {
+  background: var(--bg-bubble);
+  border-color: var(--border-light);
+  border-radius: var(--appearance-radius, 12px);
+  padding: calc(10px * var(--appearance-density, 1)) calc(14px * var(--appearance-density, 1));
+}
+
+.emptyToolsTrigger { position: absolute; top: 12px; right: 16px; }
+
+@media (max-width: 1100px) {
+  .layout[data-layout-custom='true'] {
+    .sidebar:not(.sidebarCollapsed) { max-width: 34vw; }
+    .roomPanel,
+    [data-tools-panel-open='true'] {
+      position: absolute;
+      inset-block: 0;
+      right: 0;
+      z-index: 40;
+      max-width: min(72vw, 420px);
+      box-shadow: -4px 0 16px #0002;
+    }
+    .roomPanel { z-index: 39; }
+    [data-tools-panel-open='true'][data-tools-panel-side='left'] { right: auto; left: 0; }
+  }
 }
 
 .messagesContent {

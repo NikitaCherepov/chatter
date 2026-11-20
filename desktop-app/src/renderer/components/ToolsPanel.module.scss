@@ -13,6 +13,16 @@
   flex-shrink: 0;
 }
 
+.panelLeft {
+  border-left: 0;
+  border-right: 1px solid var(--border-light);
+}
+
+.panelHidden {
+  visibility: hidden;
+  border: 0;
+}
+
 .panelCompact {
   .panelHeader { padding: calc(24px * var(--appearance-density, 1)) 0 calc(16px * var(--appearance-density, 1)); justify-content: center; }
   .headerLeft { display: none; }

@@ -2,8 +2,9 @@
   position: absolute;
   z-index: 30;
   bottom: 0;
-  left: 10%;
-  right: 10%;
+  --composer-inset: max(var(--chat-layout-inset, 10%), calc((100% - var(--chat-layout-column, 200vw)) / 2));
+  left: var(--composer-inset);
+  right: var(--composer-inset);
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -14,6 +15,12 @@
   background: transparent;
 }
 .compact {
-  left: 16px;
-  right: 16px;
+  --composer-inset: 16px;
+}
+
+.docked {
+  position: relative;
+  inset: auto;
+  margin-inline: var(--composer-inset);
+  flex-shrink: 0;
 }

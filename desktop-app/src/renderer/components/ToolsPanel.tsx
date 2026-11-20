@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState, useMemo } from 'react';
+import React, { useCallback, useEffect, useState, useMemo, useSyncExternalStore } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { toast } from 'sonner';
@@ -169,6 +169,8 @@ const buildTools = (contentMax: number, t: (key: string) => string): ToolEntry[]
 type Props = {
   plan: string;
   isAdmin: number;
+  placement?: 'rail' | 'header';
+  side?: 'left' | 'right';
   activeChatId?: number | null;
   onImageClick?: (src: string, messageId?: number, url?: string) => void;
   onChatSelect?: (chatId: number) => void;
@@ -180,7 +182,32 @@ const CONTENT_LIMITS: Record<string, number> = {
   pro: 3000,
 };
 
-export function ToolsPanel({ plan, isAdmin, activeChatId, onImageClick, onChatSelect }: Props) {
+function ToolsIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+    </svg>
+  );
+}
+
+const readToolsOpen = () => getToolsPanelState().isOpen;
+
+export function ToolsHeaderButton({ className, onOpen }: { className: string; onOpen: () => void }) {
+  const { t } = useTranslation();
+  const open = useSyncExternalStore(subscribeToolsPanel, readToolsOpen);
+  const label = t(open ? 'tools.panel.collapse' : 'tools.panel.tools');
+  return (
+    <button type="button" className={className} aria-expanded={open} aria-controls="chat-tools-panel"
+      title={label} aria-label={label} onClick={() => {
+        if (!open) onOpen();
+        setToolsPanelState({ isOpen: !open });
+      }}>
+      <ToolsIcon />
+    </button>
+  );
+}
+
+export function ToolsPanel({ plan, isAdmin, placement = 'rail', side = 'right', activeChatId, onImageClick, onChatSelect }: Props) {
   const { t } = useTranslation();
   const reduceMotion = useReducedMotion();
   const [isOpen, setIsOpen] = useState(() => getToolsPanelState().isOpen);
@@ -246,9 +273,10 @@ export function ToolsPanel({ plan, isAdmin, activeChatId, onImageClick, onChatSe
 
   const compactMenu = narrowWindow && !sidebarToolId;
   // Only the menu becomes an icon rail; active tools keep their full interface.
+  const hidden = !isOpen && placement === 'header';
   const panelWidth = isOpen
     ? (compactMenu ? 65 : sidebarToolId === 'browser' || sidebarToolId === 'youtube-music' || sidebarToolId === 'json-extractor' || sidebarToolId === 'newspapers' ? 420 : 260)
-    : 65;
+    : hidden ? 0 : 65;
 
   const handleToggle = () => {
     setToolsPanelState({ isOpen: !isOpen });
@@ -325,7 +353,12 @@ export function ToolsPanel({ plan, isAdmin, activeChatId, onImageClick, onChatSe
     >
       {/* Sidebar (always rendered) */}
       <motion.aside
-        className={`${s.panel} ${compactMenu ? s.panelCompact : ''} ${!isOpen ? s.panelCollapsed : ''}`}
+        id="chat-tools-panel"
+        data-tools-panel-open={isOpen}
+        data-tools-panel-side={side}
+        ref={panel => { if (panel) panel.inert = hidden; }}
+        initial={false}
+        className={`${s.panel} ${compactMenu ? s.panelCompact : ''} ${!isOpen ? s.panelCollapsed : ''} ${side === 'left' ? s.panelLeft : ''} ${hidden ? s.panelHidden : ''}`}
         animate={{ width: panelWidth }}
         transition={{ duration: reduceMotion ? 0 : 0.2, ease: 'easeInOut' }}
       >
@@ -379,14 +412,12 @@ export function ToolsPanel({ plan, isAdmin, activeChatId, onImageClick, onChatSe
           </div>
 
           <button className={s.toolsIconBtn} onClick={handleToggle} aria-expanded={isOpen} aria-label={isOpen ? t('tools.panel.collapse') : t('tools.panel.tools')} title={isOpen ? t('tools.panel.collapse') : t('tools.panel.tools')}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
-            </svg>
+            <ToolsIcon />
           </button>
         </div>
 
         <AnimatePresence initial={false}>
-          {!isOpen && (
+          {!isOpen && placement === 'rail' && (
           <motion.nav
             key="collapsed-tool-rail"
             className={s.toolRail}

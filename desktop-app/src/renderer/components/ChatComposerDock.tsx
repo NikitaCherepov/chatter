@@ -5,15 +5,17 @@ import s from './ChatComposerDock.module.scss';
 export function ChatComposerDock({
   children,
   compact = false,
+  mode = 'floating',
 }: {
   children: ReactNode;
   compact?: boolean;
+  mode?: 'floating' | 'docked';
 }) {
   const ref = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     const dock = ref.current,
       parent = dock?.parentElement;
-    if (!dock || !parent) return;
+    if (!dock || !parent || mode === 'docked') return;
     const viewport = parent.querySelector<HTMLElement>('[data-chat-messages]');
     let previous = '';
     const measure = () => {
@@ -42,9 +44,9 @@ export function ChatComposerDock({
       cancelAnimationFrame(frame);
       parent.style.removeProperty('--chat-composer-height');
     };
-  }, []);
+  }, [mode]);
   return (
-    <div ref={ref} data-chat-composer-dock className={`${s.dock} ${compact ? s.compact : ''}`}>
+    <div ref={ref} data-chat-composer-dock data-composer-mode={mode} className={`${s.dock} ${compact ? s.compact : ''} ${mode === 'docked' ? s.docked : ''}`}>
       {children}
     </div>
   );

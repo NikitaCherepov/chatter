@@ -11,6 +11,8 @@ const { db } = await import('../src/db.js');
 const schema = await import('../src/services/appearance-schema.js');
 const { getAppearance, changeAppearance, appearanceFromJson } =
   await import('../src/services/appearance.js');
+const { getChatLayouts, changeChatLayouts } = await import('../src/services/chat-layout.js');
+const layoutSchema = await import('../src/services/chat-layout-schema.js');
 const media = await import('../src/services/media-assets.js');
 try {
   for (const id of [101, 202])
@@ -177,6 +179,9 @@ try {
     appearanceFromJson,
     getAppearance,
     changeAppearance,
+    getChatLayouts,
+    changeChatLayouts,
+    parseChatLayoutSettings: layoutSchema.parseChatLayoutSettings,
     saveImageAsset: media.saveImageAsset,
     accountIdFromRequest: (req: any) => req.userId,
     getUserById: (id: number) => db.prepare('SELECT * FROM users WHERE id=?').get(id),
@@ -213,11 +218,24 @@ try {
     return { status, result };
   }
   const before = getAppearance(101);
+  const layoutUrl = '/api/v1/user/chat-layout';
+  const profile = { ...layoutSchema.CHAT_LAYOUT_CAPABILITIES.template, id: 'reading', chatSide: 'right', sidebarWidth: 290 };
+  const saveLayout = (profile: unknown, apply: boolean) => request('post', layoutUrl, { action: 'save', profile, apply });
+  assert.equal((await request('get', layoutUrl, {})).result.layout.activeId, null);
+  assert.equal((await saveLayout({ ...profile, sidebarWidth: 800 }, true)).status, 400);
+  assert.equal((await saveLayout({ ...profile, chatSide: 'top' }, true)).status, 400);
+  assert.equal((await saveLayout(profile, false)).result.layout.activeId, null);
+  assert.equal((await saveLayout(profile, true)).status, 409, 'a stale draft cannot replace a saved layout');
+  assert.equal((await saveLayout({ ...profile, revision: 1 }, true)).result.layout.activeId, 'reading');
+  const activeLayout = getChatLayouts(101);
+  assert.equal((await saveLayout({ ...profile, revision: 2 }, false)).status, 400, 'saving an active edit requires explicit apply');
+  assert.equal((await request('get', layoutUrl, {}, 202)).result.layout.profiles.length, 0);
   const toggled = await request('put', '/api/v1/user/ui-settings', {
-    settings: { dice_roll_enabled: true, appearance: {} },
+    settings: { dice_roll_enabled: true, appearance: {}, chat_layout: { activeId: null, revision: 0, profiles: [] } },
   });
   assert.equal(toggled.status, 200);
   assert.deepEqual(getAppearance(101), before);
+  assert.deepEqual(getChatLayouts(101), activeLayout, 'generic UI updates preserve the active layout');
   assert.ok((await request('get', '/api/v1/user/ui-settings', {})).result.settings.appearance);
   const conflict = await request('post', '/api/v1/user/appearance', {
     action: 'activate',
@@ -237,13 +255,16 @@ try {
   // Actual bot builders/handlers: proposals never write the user settings.
   const ai = fs.readFileSync(new URL('../src/services/ai.ts', import.meta.url), 'utf8');
   const builder = ai.slice(
-    ai.indexOf('const buildAppearanceTools'),
+    ai.indexOf('const buildChatLayoutTools'),
     ai.indexOf('/** Build suggest_macro'),
   );
   const handlers = ai.slice(
-    ai.indexOf("  if (toolName === 'get_appearance')"),
+    ai.indexOf("  if (toolName === 'get_chat_layout')"),
     ai.indexOf("  if (toolName === 'suggest_macro')"),
   );
+  context.CHAT_LAYOUT_CAPABILITIES = layoutSchema.CHAT_LAYOUT_CAPABILITIES;
+  context.parseChatLayoutProfile = layoutSchema.parseChatLayoutProfile;
+  context.subagentExtra = { onDesktopAction: () => undefined };
   context.APPEARANCE_CAPABILITIES = schema.APPEARANCE_CAPABILITIES;
   context.parseAppearanceProfile = schema.parseAppearanceProfile;
   context.user = { id: 101 };
@@ -253,7 +274,7 @@ try {
   vm.runInContext(
     ts.transpileModule(
       builder +
-        '\nglobalThis.definitions=buildAppearanceTools();\nglobalThis.tool=(toolName,parsed)=>{' +
+        '\nglobalThis.definitions=buildAppearanceTools();\nglobalThis.layoutDefinitions=buildChatLayoutTools();\nglobalThis.tool=(toolName,parsed)=>{' +
         handlers +
         '};',
       { compilerOptions: { target: ts.ScriptTarget.ES2022 } },
@@ -293,9 +314,20 @@ try {
     'proposed',
   );
   assert.equal(context.desktopActionSink.value.value.profile.motion.scale, 0.97);
+  assert.equal(context.layoutDefinitions.length, 2);
+  assert.equal(JSON.parse(context.tool('get_chat_layout', {})).active.sidebarWidth, 290);
+  assert.equal(JSON.parse(context.tool('suggest_chat_layout', { profile })).error, 'chat_layout_conflict');
+  assert.equal(JSON.parse(context.tool('suggest_chat_layout', { profile: { ...profile, id: 'bot-layout' } })).status, 'proposed');
+  assert.equal(context.desktopActionSink.value.action, 'suggest_chat_layout');
+  assert.deepEqual(getChatLayouts(101), activeLayout, 'a bot proposal must never save or apply');
+  context.subagentExtra = undefined;
+  assert.equal(JSON.parse(context.tool('suggest_chat_layout', { profile: { ...profile, id: 'bot-layout' } })).error, 'desktop_offline');
+  const remove = await request('post', layoutUrl, { action: 'delete', id: 'reading', revision: activeLayout.revision });
+  assert.equal(remove.result.layout.activeId, null);
+  assert.equal(remove.result.layout.profiles.length, 0);
 
   console.log(
-    'PASS: strict appearance contract, atomic revision conflicts, inactive saves, explicit application, account isolation, media lifetime, UI settings preservation, real HTTP handlers and read-only bot proposals',
+    'PASS: strict appearance contract, atomic revision conflicts, inactive saves, explicit application, account isolation, media lifetime, UI settings preservation, real HTTP handlers and read-only bot proposals, independent layout profiles and approval',
   );
 } finally {
   db.close();

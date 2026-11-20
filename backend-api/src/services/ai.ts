@@ -1,3 +1,5 @@
+import { getChatLayouts } from './chat-layout.js';
+import { CHAT_LAYOUT_CAPABILITIES, parseChatLayoutProfile } from './chat-layout-schema.js';
 import { getAppearance } from './appearance.js';
 import { APPEARANCE_CAPABILITIES, parseAppearanceProfile } from './appearance-schema.js';
 ﻿import { browserInputTimeout, usesHumanBrowserTyping } from './browser-input-timeout.js';
@@ -2729,6 +2731,32 @@ const buildExploreFsTool = () => {
   };
 };
 
+const buildChatLayoutTools = () => [
+  {
+    type: 'function' as const,
+    function: {
+      name: 'get_chat_layout',
+      description: 'Read the desktop chat layout, its saved profiles, and supported options. Use capabilities before composing a proposal. Appearance is configured separately.',
+      parameters: {
+        type: 'object',
+        properties: { view: { type: 'string', enum: ['list', 'capabilities', 'profile'] }, id: { type: 'string' } },
+      },
+    },
+  },
+  {
+    type: 'function' as const,
+    function: {
+      name: 'suggest_chat_layout',
+      description: 'Offer a desktop chat layout for the user to preview and accept. Use the capabilities template. New profiles need a unique id and revision 0. For an existing profile, read its current revision and keep fields the user did not ask to change.',
+      parameters: {
+        type: 'object',
+        properties: { profile: { type: 'object', description: 'Layout profile from get_chat_layout capabilities or an updated saved profile.' } },
+        required: ['profile'],
+      },
+    },
+  },
+];
+
 const buildAppearanceTools = () => [
  {type:'function' as const,function:{name:'get_appearance',description:'Read desktop appearance. Default returns active profile and saved variant summaries. Request capabilities before composing a profile. Does not change settings.',parameters:{type:'object',properties:{view:{type:'string',enum:['list','capabilities','profile']},id:{type:'string'}},required:[]}}},
  {type:'function' as const,function:{name:'suggest_appearance',description:'Propose a complete desktop appearance profile for user preview and explicit application. Get capabilities/template first. To create a variant use a new unique id and revision 0. To revise a saved variant first read its current revision. Never changes active appearance automatically. No layout or executable CSS/JS.',parameters:{type:'object',properties:{profile:{type:'object',description:'Complete profile matching the get_appearance capabilities template.'}},required:['profile']}}},
@@ -3646,6 +3674,7 @@ export const getTaskAllowedToolNames = (): string[] => {
     buildExploreFsTool(),
     buildSuggestMacroTool(),
     ...buildAppearanceTools(),
+    ...buildChatLayoutTools(),
     buildDesktopActionTool(),
     mcpSearchTool,
     mcpCallTool,
@@ -5088,6 +5117,33 @@ If the task is a description, return a detailed text response.`
     }
   }
 
+  if (toolName === 'get_chat_layout') {
+    if (parsed.view === 'capabilities') return JSON.stringify(CHAT_LAYOUT_CAPABILITIES);
+    const layout = getChatLayouts(user.id);
+    if (parsed.view === 'profile') {
+      return JSON.stringify(layout.profiles.find(profile => profile.id === parsed.id) ?? { error: 'chat_layout_not_found' });
+    }
+    return JSON.stringify({
+      activeId: layout.activeId,
+      active: layout.profiles.find(profile => profile.id === layout.activeId) ?? null,
+      profiles: layout.profiles.map(({ id, name, revision }) => ({ id, name, revision })),
+    });
+  }
+  if (toolName === 'suggest_chat_layout') {
+    try {
+      const profile = parseChatLayoutProfile(parsed.profile);
+      const current = getChatLayouts(user.id).profiles.find(item => item.id === profile.id);
+      if ((current?.revision ?? 0) !== profile.revision) return JSON.stringify({ error: 'chat_layout_conflict' });
+      const payload: DesktopActionPayload = { action: 'suggest_chat_layout', value: { proposal_id: randomUUID(), profile } };
+      if (desktopActionSink && subagentExtra?.onDesktopAction) desktopActionSink.value = payload;
+      else if (!sendToDesktop(user.id, { type: 'desktop_action', ...payload })) {
+        return JSON.stringify({ error: 'desktop_offline' });
+      }
+      return JSON.stringify({ status: 'proposed', awaiting_user: true, profile: profile.name });
+    } catch (error: any) {
+      return JSON.stringify({ error: error.message || 'chat_layout_invalid' });
+    }
+  }
   if (toolName === 'get_appearance') {
     const appearance=getAppearance(user.id);
     if(parsed.view==='capabilities')return JSON.stringify(APPEARANCE_CAPABILITIES);
@@ -7997,6 +8053,7 @@ const sendMessageThroughAiInternal = async (
   const desktopUiAvailable = Boolean(options?.isDesktop || isDesktopOnline(userId) || (toolUser !== user && isDesktopOnline(toolUser.id)));
   const desktopOnlyTools = desktopUiAvailable ? [
     ...buildAppearanceTools(),
+    ...buildChatLayoutTools(),
     buildDesktopActionTool(),
   ] : [];
   // Build spawn_subagent AFTER we know all available tools (including serverOnlyTools, desktopOnlyTools, etc.)
@@ -8565,7 +8622,7 @@ const runOneToolCall = async (toolCall: any, emitStatus = true): Promise<Execute
     }
 
     // Если тулз вызвал desktop_action / macro tools — прокидываем наружу в реалтайме
-    if ((toolName === 'desktop_action' || toolName === 'execute_macro' || toolName === 'explore_fs' || toolName === 'get_file_info' || toolName === 'suggest_macro' || toolName === 'suggest_appearance' || toolName === 'execute_ssh_command' || toolName === 'execute_pc_command' || toolName === 'read_file' || toolName === 'search_file_keywords' || toolName === 'write_file' || toolName === 'edit_file_lines' || toolName === 'suggest_devops_runbook' || toolName === 'install_ssh_public_key' || toolName === 'suggest_server_creds_update' || toolName === 'execute_visual_click') && desktopActionSink.value && safeOnDesktopAction) {
+    if ((toolName === 'desktop_action' || toolName === 'execute_macro' || toolName === 'explore_fs' || toolName === 'get_file_info' || toolName === 'suggest_macro' || toolName === 'suggest_appearance' || toolName === 'suggest_chat_layout' || toolName === 'execute_ssh_command' || toolName === 'execute_pc_command' || toolName === 'read_file' || toolName === 'search_file_keywords' || toolName === 'write_file' || toolName === 'edit_file_lines' || toolName === 'suggest_devops_runbook' || toolName === 'install_ssh_public_key' || toolName === 'suggest_server_creds_update' || toolName === 'execute_visual_click') && desktopActionSink.value && safeOnDesktopAction) {
       await safeOnDesktopAction(desktopActionSink.value);
     }
 

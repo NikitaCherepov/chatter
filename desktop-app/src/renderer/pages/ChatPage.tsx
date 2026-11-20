@@ -1,3 +1,6 @@
+import { ChatLayoutConfirmation, ChatLayoutPreviewBar, type ChatLayoutProposal } from '../components/ChatLayoutPanel';
+import { useChatLayouts } from '../lib/chat-layout-service';
+import { CHAT_LAYOUT_SIDEBAR_WIDTH, DEFAULT_CHAT_LAYOUT, parseChatLayoutProfile, type ChatLayoutProfile } from '../lib/chat-layout-schema';
 import { ChatComposerDock } from '../components/ChatComposerDock';
 import { AppearanceConfirmation, type AppearanceProposal } from '../components/AppearanceConfirmation';
 import { parseAppearanceProfile } from '../lib/appearance-schema';
@@ -65,7 +68,7 @@ import { ReasoningDisclosure } from '../components/ReasoningDisclosure';
 import { startsMessageDay, messageClock, messageDate, fullMessageDate } from '../lib/message-dates';
 import { splitWorkContent, messageSpeechText } from '../lib/work-log-content';
 import type { SetDisplayStatePayload } from '../components/PixelAvatar';
-import { ToolsPanel } from '../components/ToolsPanel';
+import { ToolsPanel, ToolsHeaderButton } from '../components/ToolsPanel';
 import { ImageViewerModal } from '../components/ImageViewerModal';
 import { QuotaWidget } from '../components/QuotaWidget';
 import { MemoryPopover } from '../components/MemoryPopover';
@@ -1162,6 +1165,16 @@ export function ChatPage() {
   const locale = i18n.resolvedLanguage || i18n.language;
   const { user, setUser, logout } = useAuth();
   const navigate = useNavigate();
+  const layouts = useChatLayouts();
+  const [layoutPreview, setLayoutPreview] = useState<{ profile: ChatLayoutProfile; proposalId?: string }>();
+  const [layoutEditorDraft, setLayoutEditorDraft] = useState<ChatLayoutProfile>();
+  const activeLayout = layouts.state?.profiles.find(profile => profile.id === layouts.state?.activeId);
+  const layout = layoutPreview?.profile ?? activeLayout ?? DEFAULT_CHAT_LAYOUT;
+  const sidebarWidth = layoutPreview?.profile.sidebarWidth ?? activeLayout?.sidebarWidth ?? CHAT_LAYOUT_SIDEBAR_WIDTH.default;
+  useEffect(() => {
+    setLayoutPreview(undefined);
+    setLayoutEditorDraft(undefined);
+  }, [user?.id, api.API_BASE]);
   const showTokens = user?.ui_settings?.show_tokens !== false;
   const diceRollEnabled = Boolean(user?.ui_settings?.dice_roll_enabled);
   const chatMainRef = useRef<HTMLElement>(null);
@@ -1632,7 +1645,16 @@ export function ChatPage() {
   const confirmationComposer = useConfirmationComposer(activeChatId);
   const confirmationArrivalRef = useRef(new Map<string, number>());
   const [appearanceProposals,setAppearanceProposals]=useState<AppearanceProposal[]>([]);
-  useEffect(()=>{setAppearanceProposals([]);},[activeChatId]);
+  const [layoutProposals, setLayoutProposals] = useState<ChatLayoutProposal[]>([]);
+  useEffect(() => {
+    setAppearanceProposals([]);
+    setLayoutProposals([]);
+  }, [activeChatId, user?.id]);
+
+  const resolveLayoutProposal = (id: string) => {
+    setLayoutProposals(items => items.filter(item => item.proposal_id !== id));
+    setLayoutPreview(preview => preview?.proposalId === id ? undefined : preview);
+  };
   useEffect(() => { if (confirmationComposer.comment && !document.querySelector('[data-confirmation-expanded]')) textareaRef.current?.focus(); }, [confirmationComposer.comment?.id]);
 
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -2526,6 +2548,19 @@ export function ChatPage() {
     }
     if (action.action !== 'file_action_confirmation' && action.action !== 'edit_file_lines_confirmation') {
       notifyConfirmationAction(action);
+    }
+    if (action.action === 'suggest_chat_layout' && action.value) {
+      try {
+        const value = action.value as ChatLayoutProposal;
+        if (typeof value.proposal_id !== 'string') return;
+        const profile = parseChatLayoutProfile(value.profile);
+        if (!confirmationArrivalRef.current.has(value.proposal_id)) {
+          confirmationArrivalRef.current.set(value.proposal_id, confirmationArrivalRef.current.size);
+        }
+        setLayoutProposals(items => items.some(item => item.proposal_id === value.proposal_id)
+          ? items : [...items, { proposal_id: value.proposal_id, profile }]);
+      } catch { /* Ignore invalid payloads from an incompatible server. */ }
+      return;
     }
     if(action.action==='suggest_appearance'&&action.value){
       try{
@@ -5313,6 +5348,11 @@ export function ChatPage() {
   };
 
   const confirmationCards = [
+    ...layoutProposals.map(proposal => (
+      <ChatLayoutConfirmation key={proposal.proposal_id} proposal={proposal} layouts={layouts}
+        onPreview={() => setLayoutPreview({ profile: proposal.profile, proposalId: proposal.proposal_id })}
+        onResolved={() => resolveLayoutProposal(proposal.proposal_id)} />
+    )),
     ...appearanceProposals.map(proposal=><AppearanceConfirmation key={proposal.proposal_id} proposal={proposal} onResolved={()=>setAppearanceProposals(items=>items.filter(item=>item.proposal_id!==proposal.proposal_id))}/>),
     ...pendingRunbooks.map(rb => (
       <ConfirmationCard
@@ -6177,12 +6217,12 @@ export function ChatPage() {
     if (confirmationComposer.comment && !pendingConfirmationIds.split('\n').includes(confirmationComposer.comment.id)) confirmationComposer.cancel();
   }, [pendingConfirmationIds, confirmationComposer.comment?.id, confirmationComposer.busy]);
 
-  return (
-    <div className={s.layout}>
-      {/* SIDEBAR */}
-      <motion.aside
+  const chatSidebar = (
+      <motion.aside key="chat-list"
+        data-chat-list
         className={`${s.sidebar} ${sidebarCollapsed ? s.sidebarCollapsed : ''}`}
-        animate={{ width: sidebarCollapsed ? 65 : 260 }}
+        initial={false}
+        animate={{ width: sidebarCollapsed ? 65 : sidebarWidth }}
         transition={{ duration: 0.2, ease: 'easeInOut' }}
       >
         <div className={s.sidebarHeader}>
@@ -6724,11 +6764,33 @@ export function ChatPage() {
           </motion.div>
         </div>
       </motion.aside>
+  );
 
-      {/* MAIN */}
-      <main className={s.main} ref={chatMainRef}>
+  const toolsTrigger = layout.tools === 'header'
+    ? <ToolsHeaderButton className={s.chatFindTrigger} onOpen={() => setRoomOpen(false)} />
+    : null;
+
+  const conversation = (
+      <main key="conversation" className={s.main} ref={chatMainRef}>
+        {layoutPreview && (
+          <ChatLayoutPreviewBar key={layoutPreview.proposalId ?? layoutPreview.profile.id} profile={layoutPreview.profile}
+            layouts={layouts} fromSettings={!layoutPreview.proposalId}
+            onClose={() => {
+              if (!layoutPreview.proposalId) {
+                setLayoutEditorDraft(layoutPreview.profile);
+                setShowSettings(true);
+              }
+              setLayoutPreview(undefined);
+            }}
+            onApply={() => {
+              if (layoutPreview.proposalId) resolveLayoutProposal(layoutPreview.proposalId);
+              else setLayoutPreview(undefined);
+            }}
+          />
+        )}
         {!activeChatId ? (
           <div className={s.emptyState}>
+            {toolsTrigger && <div className={s.emptyToolsTrigger}>{toolsTrigger}</div>}
             <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--accent-icon-placeholder)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
             </svg>
@@ -6900,6 +6962,7 @@ export function ChatPage() {
               </div>
               </ModelSettingsPopover>
               <div className={s.chatTopActions}>
+              {toolsTrigger}
               <button
                 type="button"
                 className={`${s.chatFindTrigger} ${chatFindOpen ? s.chatFindTriggerActive : ''}`}
@@ -6947,7 +7010,7 @@ export function ChatPage() {
                 )}
               </button>
               <MemoryPopover chatId={activeChatId} compactTrigger preferredModel={preferredModel} />
-              {showTokens && contextTokens && (
+              {showTokens && layout.headerDetails === 'full' && contextTokens && (
                 <div
                   className={s.contextTokensCompact}
                   title={contextTokens.latest_total_tokens > 0
@@ -7649,7 +7712,7 @@ export function ChatPage() {
               )}
             </div>}
 
-            <ChatComposerDock compact={compactComposer}>
+            <ChatComposerDock compact={compactComposer} mode={layout.composer}>
             <div className={`${s.composerWrap} ${compactComposer ? s.composerWrapCompact : ''}`}>
             {/* Image previews above input */}
             {attachedImages.length > 0 && (
@@ -7854,8 +7917,10 @@ export function ChatPage() {
           </>
         )}
       </main>
+  );
 
-      <AnimatePresence initial={false}>
+  const roomSidebar = (
+      <AnimatePresence key="room" initial={false}>
         {roomOpen && (
           <motion.aside
             className={s.roomPanel}
@@ -8272,14 +8337,40 @@ export function ChatPage() {
         )}
       </AnimatePresence>
 
-      {/* RIGHT TOOLS PANEL */}
-      <ToolsPanel plan={user?.plan || 'free'} isAdmin={user?.is_admin || 0} activeChatId={activeChatId} onImageClick={(src, msgId, url) => { setViewerImageSrc(src); setViewerImageMsgId(msgId ?? null); setViewerImageUrl(url ?? null); }} onChatSelect={selectChat} />
+  );
+  const toolsSidebar = (
+    <ToolsPanel key="tools" placement={layout.tools} side={layout.chatSide === 'left' ? 'right' : 'left'}
+      plan={user?.plan || 'free'} isAdmin={user?.is_admin || 0} activeChatId={activeChatId}
+      onImageClick={(src, msgId, url) => {
+        setViewerImageSrc(src);
+        setViewerImageMsgId(msgId ?? null);
+        setViewerImageUrl(url ?? null);
+      }} onChatSelect={selectChat} />
+  );
 
+  return (
+    <div className={s.layout} data-layout-side={layout.chatSide} data-layout-column={layout.column}
+      data-layout-density={layout.chatList} data-layout-messages={layout.messages}
+      data-layout-custom={Boolean(activeLayout || layoutPreview)}
+    >
+      {/* The keys preserve mounted chat, folder and tool state when the sides swap. */}
+      {layout.chatSide === 'right'
+        ? [toolsSidebar, conversation, roomSidebar, chatSidebar]
+        : [chatSidebar, conversation, roomSidebar, toolsSidebar]}
       <AnimatePresence>
         {showSettings && (
           <SettingsModal
             key="settings-modal"
+            chatLayouts={layouts}
+            initialLayoutDraft={layoutEditorDraft}
+            onLayoutPreview={profile => {
+              setLayoutEditorDraft(undefined);
+              setShowSettings(false);
+              setLayoutPreview({ profile });
+              void queryClient.invalidateQueries({ queryKey: chatPromptKey.slice(0, 3) });
+            }}
             onClose={() => {
+              setLayoutEditorDraft(undefined);
               setShowSettings(false);
               void queryClient.invalidateQueries({ queryKey: chatPromptKey.slice(0, 3) });
             }}
