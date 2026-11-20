@@ -1,4 +1,17 @@
 {
+  "chatWorkspace": {
+    "allChats": "All chats",
+    "allTools": "More",
+    "allToolsLabel": "All tools",
+    "pin": "Pin",
+    "unpin": "Unpin",
+    "pinChat": "Pin “{{title}}”",
+    "unpinChat": "Unpin “{{title}}”",
+    "closeTab": "Close tab",
+    "closeChat": "Close tab “{{title}}”",
+    "toolsLimit": "The toolbar holds up to three tools",
+    "untitled": "Chat {{id}}"
+  },
   "chatLayout": {
     "title": "Chat layout",
     "profiles": "Saved layouts",
@@ -7,6 +20,7 @@
     "newProfile": "New layout",
     "name": "Layout name",
     "width": "Chat list width",
+    "libraryWidth": "Width of All chats",
     "active": "Current layout",
     "loading": "Loading layouts…",
     "loadFailed": "Couldn’t load layouts.",
@@ -29,7 +43,8 @@
     "templates": {
       "classic": "Classic",
       "reading": "Reading",
-      "wide": "Wide"
+      "wide": "Wide",
+      "workspace": "Top navigation"
     },
     "fields": {
       "chatSide": "Chat list position",
@@ -41,6 +56,8 @@
       "headerDetails": "Chat header"
     },
     "options": {
+      "top": "Tabs at the top",
+      "toolbar": "Top toolbar",
       "left": "Left",
       "right": "Right",
       "rail": "Side rail",

@@ -1,0 +1,133 @@
+@use '../styles/appearance';
+
+.bar {
+  @include appearance.scope(panel);
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  padding: 6px 12px;
+  background-color: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-light);
+  flex-shrink: 0;
+  min-width: 0;
+  font-size: calc(13px * var(--appearance-ui-scale, 1));
+}
+
+.chats, .tools, .tabs, .tab {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.chats { flex: 1 1 260px; gap: 10px; }
+.tools { flex: 0 0 auto; margin-inline-start: auto; position: relative; }
+.tabs {
+  flex: 1 1 auto;
+  overflow-x: auto;
+  padding: 2px;
+  scrollbar-width: thin;
+}
+
+.tab {
+  flex: 0 0 auto;
+  gap: 0;
+  max-width: 226px;
+  border: 1px solid transparent;
+  border-radius: var(--appearance-radius, 8px);
+  color: var(--text-secondary);
+}
+
+.tab:hover { background-color: var(--bg-modal-hover); }
+.tab[data-active='true'] {
+  border-color: var(--border-light);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.action, .tabLink, .iconButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: var(--appearance-radius, 8px);
+  border: 1px solid transparent;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+
+  > svg { width: 16px; height: 16px; flex-shrink: 0; }
+  &:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  &:hover:not(:disabled) { background-color: var(--bg-modal-hover); color: var(--text-primary); }
+}
+
+.action {
+  min-height: 34px;
+  padding: 4px 8px;
+  white-space: nowrap;
+  color: var(--text-secondary);
+
+  &[aria-expanded='true'], &[aria-pressed='true'] {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    border-color: var(--border-light);
+  }
+}
+
+.tabLink { min-height: 32px; padding: 3px 4px 3px 6px; min-width: 0; }
+.tabText { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.tabMark {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border-radius: min(var(--appearance-radius, 6px), 50%);
+  flex: 0 0 auto;
+}
+.tab[data-active='true'] .tabMark { background: var(--accent); color: var(--accent-contrast); }
+
+.iconButton {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 26px;
+  padding: 0;
+  color: var(--text-muted);
+  &:disabled { opacity: .4; cursor: default; }
+}
+
+.toolFavorite {
+  width: 34px;
+  padding-inline: 0;
+}
+
+.toolMenu {
+  @include appearance.scope(panel);
+  position: absolute;
+  z-index: 62;
+  inset-block-start: calc(100% + 5px);
+  inset-inline-end: 0;
+  display: grid;
+  gap: 2px;
+  width: min(255px, calc(100vw - 28px));
+  max-height: min(420px, calc(100vh - 110px));
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid var(--border-medium);
+  border-radius: var(--appearance-radius, 10px);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  box-shadow: 0 8px 24px #0002;
+}
+
+.toolMenuRow {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+
+  .action { flex: 1; min-width: 0; justify-content: flex-start; white-space: normal; text-align: start; }
+  .iconButton { width: 32px; height: 32px; }
+}

@@ -1714,6 +1714,27 @@
   border-left: 1px solid var(--border-light);
 }
 
+.chatLibraryBackdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 64;
+  background: color-mix(in srgb, var(--text-primary) 16%, transparent);
+}
+
+.sidebar[data-chat-library] {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  z-index: 65;
+  max-width: calc(100% - 32px);
+  box-shadow: 8px 0 28px #0002;
+}
+
+.sidebar[data-chat-library='false'] {
+  visibility: hidden;
+  pointer-events: none;
+}
+
 .layout[data-layout-column='reading'] { --chat-layout-column: 820px; }
 .layout[data-layout-column='wide'] { --chat-layout-inset: 6%; }
 
@@ -1737,7 +1758,7 @@
     .roomPanel,
     [data-tools-panel-open='true'] {
       position: absolute;
-      inset-block: 0;
+      inset-block: var(--workspace-nav-bottom, 0px) 0;
       right: 0;
       z-index: 40;
       max-width: min(72vw, 420px);

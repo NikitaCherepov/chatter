@@ -1,6 +1,6 @@
 export const CHAT_LAYOUT_OPTIONS = {
-  chatSide: ['left', 'right'],
-  tools: ['rail', 'header'],
+  chatSide: ['left', 'right', 'top'],
+  tools: ['rail', 'header', 'toolbar'],
   composer: ['floating', 'docked'],
   column: ['fluid', 'reading', 'wide'],
   chatList: ['comfortable', 'compact'],

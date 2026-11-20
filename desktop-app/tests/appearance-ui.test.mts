@@ -17,6 +17,10 @@ const modulePath = (file: string) =>
 const pageSource = fs.readFileSync(new URL('../src/renderer/pages/ChatPage.tsx', import.meta.url), 'utf8');
 const shellOrder = pageSource.match(/\{layout\.chatSide === 'right'\s*\? \[toolsSidebar, conversation, roomSidebar, chatSidebar\]\s*:\s*\[chatSidebar, conversation, roomSidebar, toolsSidebar\]\}/)?.[0];
 assert.ok(shellOrder);
+const workspaceBar = pageSource.slice(pageSource.indexOf("        {(tabsEnabled || layout.tools === 'toolbar')"), pageSource.indexOf('        {layoutPreview && (', pageSource.indexOf('  const conversation = (')));
+assert.ok(workspaceBar.includes('<ChatWorkspaceTabs') && workspaceBar.includes('<ToolsToolbar'));
+const workspaceTitle = pageSource.slice(pageSource.indexOf('  const activeChatTitle ='), pageSource.indexOf('  const [libraryOpen,'));
+assert.ok(workspaceTitle.includes('workspace.tabs.find'));
 const authModule = String.raw`
 import React from 'react';
 export const TestAuth=React.createContext(null);
@@ -57,7 +61,7 @@ export const apiFetch=async(path,options)=>{
 };
 `;
 const fixture = String.raw`
-import React,{useState,useRef,useEffect} from 'react';
+import React,{useState,useRef,useEffect,useLayoutEffect} from 'react';
 import {createRoot} from 'react-dom/client';
 import {QueryClient,QueryClientProvider} from '@tanstack/react-query';
 import {createInstance} from 'i18next';
@@ -67,7 +71,9 @@ import {AppearancePanel} from ${modulePath('components/AppearancePanel.tsx')};
 import {ChatLayoutPanel,ChatLayoutConfirmation,ChatLayoutPreviewBar} from ${modulePath('components/ChatLayoutPanel.tsx')};
 import {useChatLayouts} from ${modulePath('lib/chat-layout-service.ts')};
 import {CHAT_LAYOUT_CAPABILITIES,DEFAULT_CHAT_LAYOUT} from ${modulePath('lib/chat-layout-schema.ts')};
-import {ToolsPanel,ToolsHeaderButton} from ${modulePath('components/ToolsPanel.tsx')};
+import {ToolsPanel,ToolsHeaderButton,ToolsToolbar} from ${modulePath('components/ToolsPanel.tsx')};
+import {ChatWorkspaceBar,ChatWorkspaceTabs} from ${modulePath('components/ChatWorkspaceTabs.tsx')};
+import {useChatWorkspace} from ${modulePath('lib/chat-workspace.ts')};
 import {AppearanceController} from ${modulePath('components/AppearanceController.tsx')};
 import {AppearanceConfirmation} from ${modulePath('components/AppearanceConfirmation.tsx')};
 import {newAppearance} from ${modulePath('lib/appearance-schema.ts')};
@@ -120,19 +126,42 @@ function Conversation({mode='floating'}={}){
  <div className={chat.composerFootnote}>Enter to send</div></div></ChatComposerDock></>;
 
 }
-function LayoutFixture(){
+const testChats=[{id:101,title:'Рабочий чат'},{id:102,title:'Второй чат'}];
+function LayoutFixture({initialEditor=true}){
  const layouts=useChatLayouts();
- const [editor,setEditor]=useState(true),[draft,setDraft]=useState(),[preview,setPreview]=useState(),[proposal,setProposal]=useState();
+ const [editor,setEditor]=useState(initialEditor),[draft,setDraft]=useState(),[preview,setPreview]=useState(),[proposal,setProposal]=useState();
  const active=layouts.state?.profiles.find(item=>item.id===layouts.state.activeId);
  const layout=preview?.profile??active??DEFAULT_CHAT_LAYOUT;
+ const [activeChatId,setActiveChatId]=useState(window.testActiveChat??101);
+ const [chats,setVisibleChats]=useState(testChats);
+ window.filterWorkspaceChats=()=>setVisibleChats(testChats.slice(0,1));
+ const [libraryOpen,setLibraryOpen]=useState(false);
+ const libraryTrigger=useRef(null),librarySearch=useRef(null);
+ const tabsEnabled=layout.chatSide==='top';
+ const workspace=useChatWorkspace('fixture:'+window.testAccount,activeChatId,chats,tabsEnabled);
+ ${workspaceTitle}
+ window.workspaceChatTitle=activeChatTitle;
+ const setRoomOpen=()=>{};
+ const closeLibrary=()=>{setLibraryOpen(false);libraryTrigger.current?.focus();};
+ useLayoutEffect(()=>{if(libraryOpen)librarySearch.current?.focus();},[libraryOpen]);
+ const selectChat=id=>{setActiveChatId(id);window.testActiveChat=id;if(libraryOpen)closeLibrary();};
+ const closeWorkspaceTab=id=>{
+  workspace.removeTab(id);
+  if(id===activeChatId)selectChat(workspace.tabs.find(tab=>tab.id!==id)?.id??null);
+ };
  window.openLayoutEditor=()=>setEditor(true);
  window.layoutProposal=()=>setProposal({proposal_id:'layout-bot',profile:{...CHAT_LAYOUT_CAPABILITIES.template,name:'Bot layout',id:'from-bot-layout',chatSide:'left'}});
- const chatSidebar=<aside key="chat-list" className={chat.sidebar} data-chat-list style={{width:layout.sidebarWidth??260}}>
-  <button onClick={()=>setEditor(true)}>Settings</button><details open><summary>Folder</summary>Test chat</details>
+ const chatSidebar=<aside key="chat-list" className={chat.sidebar} data-chat-list id={tabsEnabled?'chat-library':undefined}
+  data-chat-library={tabsEnabled?libraryOpen:undefined} ref={panel=>{if(panel)panel.inert=tabsEnabled&&!libraryOpen;}}
+  onKeyDown={event=>{if(event.key==='Escape')closeLibrary();}} style={{width:layout.sidebarWidth??260}}>
+  <button onClick={()=>setEditor(true)}>Settings</button>
+  <input ref={librarySearch} aria-label="Library search"/>
+  <details open><summary>Folder</summary>{testChats.map(item=><button key={item.id} onClick={()=>selectChat(item.id)}>{item.title}</button>)}</details>
  </aside>;
- const toolsSidebar=<ToolsPanel key="tools" placement={layout.tools} side={layout.chatSide==='left'?'right':'left'} plan="free" isAdmin={0}/>;
+ const toolsSidebar=<ToolsPanel key="tools" placement={layout.tools} side={layout.chatSide==='right'?'left':'right'} plan="free" isAdmin={0}/>;
  const roomSidebar=null;
  const conversation=<main key="conversation" className={chat.main}>
+  ${workspaceBar}
   {preview&&<ChatLayoutPreviewBar profile={preview.profile} layouts={layouts} fromSettings={preview.editor}
    onClose={()=>{if(preview.editor){setDraft(preview.profile);setEditor(true);}setPreview(undefined);}}
    onApply={()=>{if(!preview.editor)setProposal(undefined);setPreview(undefined);}}/>}
@@ -153,13 +182,15 @@ function LayoutFixture(){
 }
 function App(){
  const [user,setUser]=useState({id:1,ui_settings:{}}),[proposal,setProposal]=useState(null),[layoutFixture,setLayoutFixture]=useState(false);
+ const [workspaceEpoch,setWorkspaceEpoch]=useState(0);
  window.openLayoutFixture=()=>setLayoutFixture(true);
+ window.reloadWorkspace=()=>setWorkspaceEpoch(epoch=>epoch+1);
  window.changeAccount=()=>{window.testAccount=2;setUser({id:2,ui_settings:{}});};
  window.propose=()=>setProposal({proposal_id:'bot-proposal',profile:{...newAppearance('from-bot'),name:'Bot look'}});
  window.proposeDraft=()=>setProposal({proposal_id:'bot-draft',profile:{...newAppearance('saved-bot'),name:'Saved bot draft'}});
  window.motionPreview=()=>previewAppearance({...newAppearance('motion'),motion:{preset:'custom',duration:100,distance:12,scale:0.97,easing:'ease-out'}});
  window.dark=()=>{setThemePreference('dark');window.dispatchEvent(new CustomEvent('chatter-theme-change',{detail:'dark'}));};
- return <TestAuth.Provider value={{user,setUser}}>{layoutFixture ? <LayoutFixture/> : <><AppearanceController/>
+ return <TestAuth.Provider value={{user,setUser}}>{layoutFixture ? <LayoutFixture key={workspaceEpoch} initialEditor={!workspaceEpoch}/> : <><AppearanceController/>
   <div id="panel-fixture" className={chat.sidebar} style={{width:'48%',height:'100%',overflow:'auto',padding:20}}><AppearancePanel/>{proposal&&<AppearanceConfirmation proposal={proposal} onResolved={()=>setProposal(null)}/>}</div>
   <div className={chat.main} style={{width:'52%',height:'100%',display:'flex',flexDirection:'column'}}><Conversation/></div>
  </>}</TestAuth.Provider>;
@@ -413,7 +444,44 @@ app.whenReady().then(async()=>{
  await js('window.clickText("Сохранить")');
  await until('window.layoutDb[2].profiles.length===2');
  assert.equal(await js('window.layoutDb[2].profiles.find(p=>p.id===window.layoutDb[2].activeId).name'),'Wide layout');
+ await js('window.openLayoutEditor()');
+ await until('!!document.querySelector("#layout-editor-fixture input")');
+ await js('window.clickText("Новая компоновка")');
+ await js('window.clickText("Вкладки сверху")');
+ await js('window.clickText("Полоска сверху")');
+ await js('window.clickText("Посмотреть в чате")');
+ await until('document.querySelector("[data-layout-side]").dataset.layoutSide==="top" && document.querySelector("[data-workspace-chat]")?.dataset.workspaceChat==="101"');
+ assert.ok(await js('window.originalList===document.querySelector("#chat-library") && window.originalList.inert && window.messageViewport()===window.originalViewport'));
+ await js('window.clickText("Все чаты")');
+ await until('document.activeElement.getAttribute("aria-label")==="Library search"');
+ assert.ok(await js('!document.querySelector("#chat-library details").open'));
+ await js('document.activeElement.dispatchEvent(new KeyboardEvent("keydown",{key:"Escape",bubbles:true}))');
+ await until('document.querySelector("#chat-library").inert && document.activeElement.getAttribute("aria-controls")==="chat-library"');
+ await js('window.clickText("Все чаты");document.querySelector("#chat-library details").open=true');
+ await js('window.clickText("Второй чат")');
+ await until('document.querySelector("[data-workspace-chat][aria-current=page]")?.dataset.workspaceChat==="102"');
+ await js('[...document.querySelectorAll("button[aria-label]")].find(button=>button.getAttribute("aria-label")==="Закрепить «Второй чат»").click()');
+ await until('document.querySelector("[data-workspace-chat]").dataset.workspaceChat==="102"');
+ await js('window.clickText("Ещё")');
+ await until('!!document.querySelector("#workspace-tool-menu")');
+ await js('document.querySelector("#workspace-tool-menu > div:nth-child(3) button[aria-pressed=false][aria-label]").click()');
+ await js('document.querySelector("#workspace-tool-menu > div:nth-child(3) button").click()');
+ await until('document.querySelector("#chat-tools-panel").dataset.toolsPanelOpen==="true"');
+ // ResizeObserver aligns the narrow panel after the viewport and scrollbar settle.
+ await until('document.querySelector("#chat-tools-panel").getBoundingClientRect().top>=document.querySelector("[data-workspace-nav]").getBoundingClientRect().bottom-1');
+ await js('window.clickText("Сохранить и применить")');
+ await until('window.layoutDb[2].profiles.some(item=>item.id===window.layoutDb[2].activeId && item.chatSide==="top" && item.tools==="toolbar")');
+ await js('window.reloadWorkspace()');
+ await until('document.querySelector("[data-workspace-chat]")?.dataset.workspaceChat==="102" && document.querySelectorAll("nav[aria-label] button[aria-pressed][aria-label]").length>=3');
+ assert.ok(await js('JSON.parse(localStorage.getItem("chatter_workspace:fixture:2")).tools.includes("map")'));
+ await js('window.filterWorkspaceChats()');
+ await until('window.workspaceChatTitle==="Второй чат"');
+ await sleep(250);await wc.capturePage();await sleep(100);
+ fs.writeFileSync(path.join(process.env.TEMP,'chatter-workspace-review.png'),(await wc.capturePage()).toPNG());
+ await js('[...document.querySelectorAll("button[aria-label]")].find(button=>button.getAttribute("aria-label")==="Закрыть вкладку «Второй чат»").click()');
+ await until('document.querySelector("[data-workspace-chat][aria-current=page]")?.dataset.workspaceChat==="101" && document.activeElement.dataset.workspaceChat==="101"');
  assert.deepEqual(errors,[]);
+ console.log('PASS: top workspace preview, mounted library and folder state, Escape/focus, tab pin and close, tool favorites and persistence');
  console.log('PASS: layout editor, in-chat preview, stateful panel reorder, docked composer bottom follow, narrow tools panel, and inactive bot layout save');
  win.destroy();
  console.log('PASS: actual appearance editor and cards, inactive saves, reversible preview, palette/typography/density, virtual height restoration, applying proposals from recovery bar, arrival-only animation, reduced motion and account isolation');

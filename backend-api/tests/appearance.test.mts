@@ -223,7 +223,10 @@ try {
   const saveLayout = (profile: unknown, apply: boolean) => request('post', layoutUrl, { action: 'save', profile, apply });
   assert.equal((await request('get', layoutUrl, {})).result.layout.activeId, null);
   assert.equal((await saveLayout({ ...profile, sidebarWidth: 800 }, true)).status, 400);
-  assert.equal((await saveLayout({ ...profile, chatSide: 'top' }, true)).status, 400);
+  assert.equal((await saveLayout({ ...profile, chatSide: 'bottom' }, true)).status, 400);
+  const topLayout = await saveLayout({ ...profile, id: 'workspace', chatSide: 'top', tools: 'toolbar' }, false);
+  assert.equal(topLayout.result.layout.profiles[0].chatSide, 'top');
+  assert.equal(topLayout.result.layout.profiles[0].tools, 'toolbar');
   assert.equal((await saveLayout(profile, false)).result.layout.activeId, null);
   assert.equal((await saveLayout(profile, true)).status, 409, 'a stale draft cannot replace a saved layout');
   assert.equal((await saveLayout({ ...profile, revision: 1 }, true)).result.layout.activeId, 'reading');
@@ -324,7 +327,7 @@ try {
   assert.equal(JSON.parse(context.tool('suggest_chat_layout', { profile: { ...profile, id: 'bot-layout' } })).error, 'desktop_offline');
   const remove = await request('post', layoutUrl, { action: 'delete', id: 'reading', revision: activeLayout.revision });
   assert.equal(remove.result.layout.activeId, null);
-  assert.equal(remove.result.layout.profiles.length, 0);
+  assert.deepEqual(Array.from(remove.result.layout.profiles, (item: { id: string }) => item.id), ['workspace']);
 
   console.log(
     'PASS: strict appearance contract, atomic revision conflicts, inactive saves, explicit application, account isolation, media lifetime, UI settings preservation, real HTTP handlers and read-only bot proposals, independent layout profiles and approval',

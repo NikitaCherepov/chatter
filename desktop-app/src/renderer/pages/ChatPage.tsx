@@ -1,3 +1,5 @@
+import { useChatWorkspace } from '../lib/chat-workspace';
+import { ChatWorkspaceBar, ChatWorkspaceTabs } from '../components/ChatWorkspaceTabs';
 import { ChatLayoutConfirmation, ChatLayoutPreviewBar, type ChatLayoutProposal } from '../components/ChatLayoutPanel';
 import { useChatLayouts } from '../lib/chat-layout-service';
 import { CHAT_LAYOUT_SIDEBAR_WIDTH, DEFAULT_CHAT_LAYOUT, parseChatLayoutProfile, type ChatLayoutProfile } from '../lib/chat-layout-schema';
@@ -68,7 +70,7 @@ import { ReasoningDisclosure } from '../components/ReasoningDisclosure';
 import { startsMessageDay, messageClock, messageDate, fullMessageDate } from '../lib/message-dates';
 import { splitWorkContent, messageSpeechText } from '../lib/work-log-content';
 import type { SetDisplayStatePayload } from '../components/PixelAvatar';
-import { ToolsPanel, ToolsHeaderButton } from '../components/ToolsPanel';
+import { ToolsPanel, ToolsHeaderButton, ToolsToolbar } from '../components/ToolsPanel';
 import { ImageViewerModal } from '../components/ImageViewerModal';
 import { QuotaWidget } from '../components/QuotaWidget';
 import { MemoryPopover } from '../components/MemoryPopover';
@@ -1313,6 +1315,23 @@ export function ChatPage() {
     setChats(next);
   }, []);
   const [activeChatId, setActiveChatId] = useState<number | null>(null);
+  const tabsEnabled = layout.chatSide === 'top';
+  const workspace = useChatWorkspace(JSON.stringify([api.API_BASE, user?.id ?? null]), activeChatId, chats, tabsEnabled);
+  const activeChatTitle = chats.find(chat => chat.id === activeChatId)?.title
+    || (tabsEnabled ? workspace.tabs.find(tab => tab.id === activeChatId)?.title : undefined);
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  const libraryTrigger = useRef<HTMLButtonElement>(null);
+  const librarySearch = useRef<HTMLInputElement>(null);
+  const closeChatLibrary = () => {
+    setLibraryOpen(false);
+    if (tabsEnabled) libraryTrigger.current?.focus({ preventScroll: true });
+  };
+  useEffect(() => {
+    if (!tabsEnabled) setLibraryOpen(false);
+  }, [tabsEnabled]);
+  useLayoutEffect(() => {
+    if (libraryOpen && tabsEnabled) librarySearch.current?.focus({ preventScroll: true });
+  }, [libraryOpen, tabsEnabled]);
   const [effectivePersonaImageUrl, setEffectivePersonaImageUrl] = useState<string | null>(null);
   const activeChatIdRef = useRef<number | null>(activeChatId);
   activeChatIdRef.current = activeChatId;
@@ -1496,7 +1515,8 @@ export function ChatPage() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const [contextMenuPos, setContextMenuPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sideCollapsed, setSidebarCollapsed] = useState(false);
+  const sidebarCollapsed = !tabsEnabled && sideCollapsed;
   const [demoFiltersOpen, setDemoFiltersOpen] = useState(false);
   const [demoFolderCreatorOpen, setDemoFolderCreatorOpen] = useState(false);
   const [demoFolderName, setDemoFolderName] = useState(() => t('chat.sidebar.folders.new'));
@@ -2376,9 +2396,30 @@ export function ChatPage() {
   }, [displayMessages, hiddenMessagesCount, loadOlderMessages]);
 
   const selectChat = async (chatId: number) => {
-    chatSelectionVersionRef.current++;
+    const version = ++chatSelectionVersionRef.current;
     setActiveChatId(chatId);
-    try { await api.activateChat(chatId); } catch {}
+    if (libraryOpen) closeChatLibrary();
+    try {
+      await api.activateChat(chatId);
+    } catch (error) {
+      if (error instanceof api.ApiError && (error.status === 404 || error.status === 403)) {
+        workspace.removeTab(chatId);
+        if (chatSelectionVersionRef.current === version) setActiveChatId(null);
+      }
+    }
+  };
+
+  const closeWorkspaceTab = (chatId: number) => {
+    workspace.removeTab(chatId);
+    if (chatId !== activeChatId) return;
+    const index = workspace.tabs.findIndex(tab => tab.id === chatId);
+    const neighbor = workspace.tabs[index + 1] ?? workspace.tabs[index - 1];
+    if (neighbor) {
+      void selectChat(neighbor.id);
+    } else {
+      chatSelectionVersionRef.current++;
+      setActiveChatId(null);
+    }
   };
 
   const handleCreateChat = async (draft?: string) => {
@@ -3865,6 +3906,7 @@ export function ChatPage() {
     setContextMenuChatId(null);
     try {
       await api.leaveRoom(chatId);
+      workspace.removeTab(chatId);
       setChats(prev => prev.filter(c => c.id !== chatId));
       if (activeChatId === chatId) {
         setActiveChatId(null);
@@ -3895,6 +3937,7 @@ export function ChatPage() {
     if (!deletingChatId) return;
     try {
       await api.deleteChat(deletingChatId);
+      workspace.removeTab(deletingChatId);
       const deletedChat = chats.find((chat) => chat.id === deletingChatId);
       setChats(prev => prev.filter(c => c.id !== deletingChatId));
       if (deletedChat) {
@@ -6219,6 +6262,14 @@ export function ChatPage() {
 
   const chatSidebar = (
       <motion.aside key="chat-list"
+        id={tabsEnabled ? 'chat-library' : undefined}
+        data-chat-library={tabsEnabled ? libraryOpen : undefined}
+        ref={panel => { if (panel) panel.inert = tabsEnabled && !libraryOpen; }}
+        onKeyDown={event => {
+          if (event.key !== 'Escape' || !tabsEnabled || !libraryOpen || event.defaultPrevented) return;
+          event.stopPropagation();
+          closeChatLibrary();
+        }}
         data-chat-list
         className={`${s.sidebar} ${sidebarCollapsed ? s.sidebarCollapsed : ''}`}
         initial={false}
@@ -6226,11 +6277,9 @@ export function ChatPage() {
         transition={{ duration: 0.2, ease: 'easeInOut' }}
       >
         <div className={s.sidebarHeader}>
-          <button className={s.burgerBtn} onClick={() => setSidebarCollapsed(!sidebarCollapsed)} title={sidebarCollapsed ? t('chat.sidebar.expand') : t('chat.sidebar.collapse')}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-              <line x1="3" y1="6" x2="21" y2="6" />
-              <line x1="3" y1="12" x2="21" y2="12" />
-              <line x1="3" y1="18" x2="21" y2="18" />
+          <button className={s.burgerBtn} onClick={() => tabsEnabled ? closeChatLibrary() : setSidebarCollapsed(!sidebarCollapsed)} title={tabsEnabled ? t('common.close') : sidebarCollapsed ? t('chat.sidebar.expand') : t('chat.sidebar.collapse')} aria-label={tabsEnabled ? t('common.close') : undefined}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+              <path d={tabsEnabled ? 'm6 6 12 12M18 6 6 18' : 'M3 6h18M3 12h18M3 18h18'} />
             </svg>
           </button>
           <motion.div
@@ -6299,6 +6348,7 @@ export function ChatPage() {
             <line x1="21" y1="21" x2="16.65" y2="16.65" />
           </svg>
           <input
+            ref={librarySearch}
             className={s.searchInput}
             type="text"
             placeholder={t('chat.sidebar.searchPlaceholder')}
@@ -6440,8 +6490,10 @@ export function ChatPage() {
                       query: searchQuery.trim(),
                     };
                     setHighlightedMessageId(null);
-                    if (result.chat_id === activeChatId) void loadMessages(result.chat_id);
-                    else void selectChat(result.chat_id);
+                    if (result.chat_id === activeChatId) {
+                      if (libraryOpen) closeChatLibrary();
+                      void loadMessages(result.chat_id);
+                    } else void selectChat(result.chat_id);
                     handleSearchClear();
                   }}
                 >
@@ -6772,6 +6824,21 @@ export function ChatPage() {
 
   const conversation = (
       <main key="conversation" className={s.main} ref={chatMainRef}>
+        {(tabsEnabled || layout.tools === 'toolbar') && (
+          <ChatWorkspaceBar>
+            {tabsEnabled && (
+              <ChatWorkspaceTabs tabs={workspace.tabs} activeId={activeChatId}
+                libraryOpen={libraryOpen} libraryTrigger={libraryTrigger}
+                onToggleLibrary={() => setLibraryOpen(open => !open)}
+                onSelect={id => void selectChat(id)} onClose={closeWorkspaceTab}
+                onPin={workspace.togglePin} />
+            )}
+            {layout.tools === 'toolbar' && (
+              <ToolsToolbar favorites={workspace.tools} onFavorite={workspace.setFavorite}
+                activeChatId={activeChatId} onOpen={() => setRoomOpen(false)} />
+            )}
+          </ChatWorkspaceBar>
+        )}
         {layoutPreview && (
           <ChatLayoutPreviewBar key={layoutPreview.proposalId ?? layoutPreview.profile.id} profile={layoutPreview.profile}
             layouts={layouts} fromSettings={!layoutPreview.proposalId}
@@ -6868,9 +6935,7 @@ export function ChatPage() {
               )}
             </AnimatePresence>
             <div className={`${s.chatTopBar} ${compactTopBar ? s.chatTopBarCompact : ''}`}>
-                <h1 className={s.chatTitle} title={chats.find(chat => chat.id === activeChatId)?.title}>
-                  {chats.find(chat => chat.id === activeChatId)?.title || t('chat.sidebar.chats')}
-                </h1>
+                <h1 className={s.chatTitle} title={activeChatTitle}>{activeChatTitle || t('chat.sidebar.chats')}</h1>
               <ModelSettingsPopover key={activeChatId} className={s.modelSettings}
                 label={modelsCatalog.find(model => model.id === preferredModel)?.name || t('chat.reasoning.auto')}>
               <div className={s.modelControls}>
@@ -8339,7 +8404,7 @@ export function ChatPage() {
 
   );
   const toolsSidebar = (
-    <ToolsPanel key="tools" placement={layout.tools} side={layout.chatSide === 'left' ? 'right' : 'left'}
+    <ToolsPanel key="tools" placement={layout.tools} side={layout.chatSide === 'right' ? 'left' : 'right'}
       plan={user?.plan || 'free'} isAdmin={user?.is_admin || 0} activeChatId={activeChatId}
       onImageClick={(src, msgId, url) => {
         setViewerImageSrc(src);
@@ -8353,6 +8418,7 @@ export function ChatPage() {
       data-layout-density={layout.chatList} data-layout-messages={layout.messages}
       data-layout-custom={Boolean(activeLayout || layoutPreview)}
     >
+      {tabsEnabled && libraryOpen && <div className={s.chatLibraryBackdrop} onPointerDown={() => closeChatLibrary()} />}
       {/* The keys preserve mounted chat, folder and tool state when the sides swap. */}
       {layout.chatSide === 'right'
         ? [toolsSidebar, conversation, roomSidebar, chatSidebar]

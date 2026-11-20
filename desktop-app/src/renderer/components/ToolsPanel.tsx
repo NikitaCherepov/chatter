@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState, useMemo, useSyncExternalStore } from 'react';
+import React, { useCallback, useEffect, useState, useMemo, useRef, useSyncExternalStore } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { toast } from 'sonner';
@@ -8,6 +8,7 @@ import {
   subscribeToolsPanel,
   getToolsPanelState,
   setToolsPanelState,
+  openToolInLastLayout,
   closeTool,
   getToolNav,
   getToolLayout,
@@ -19,6 +20,10 @@ import {
 } from '../lib/tools';
 import { ToolContent } from './ToolContent';
 import { FloatingWidget } from './FloatingWidget';
+import { Tooltip } from './Tooltip';
+import { WorkspacePin } from './ChatWorkspaceTabs';
+import { MAX_TOOL_FAVORITES } from '../lib/chat-workspace';
+import nav from './ChatWorkspaceNav.module.scss';
 import s from './ToolsPanel.module.scss';
 
 // ── Tool definitions (registry) ──────────────────────────────────────────
@@ -169,7 +174,7 @@ const buildTools = (contentMax: number, t: (key: string) => string): ToolEntry[]
 type Props = {
   plan: string;
   isAdmin: number;
-  placement?: 'rail' | 'header';
+  placement?: 'rail' | 'header' | 'toolbar';
   side?: 'left' | 'right';
   activeChatId?: number | null;
   onImageClick?: (src: string, messageId?: number, url?: string) => void;
@@ -204,6 +209,97 @@ export function ToolsHeaderButton({ className, onOpen }: { className: string; on
       }}>
       <ToolsIcon />
     </button>
+  );
+}
+
+const readSidebarTool = () => {
+  const { isOpen, openTools } = getToolsPanelState();
+  return isOpen ? openTools.find(id => getToolLayout(id).mode === 'sidebar') ?? null : null;
+};
+
+export function ToolsToolbar({ favorites, onFavorite, activeChatId, onOpen }: {
+  favorites: readonly string[];
+  onFavorite: (id: string, favorite: boolean) => void;
+  activeChatId: number | null;
+  onOpen: () => void;
+}) {
+  const { t } = useTranslation();
+  const activeTool = useSyncExternalStore(subscribeToolsPanel, readSidebarTool);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const root = useRef<HTMLElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const tools = useMemo(() => buildTools(0, t), [t]);
+  const pinned = favorites.flatMap(id => tools.filter(tool => tool.id === id));
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const dismiss = (event: PointerEvent) => {
+      if (!root.current?.contains(event.target as Node)) setMenuOpen(false);
+    };
+    document.addEventListener('pointerdown', dismiss);
+    return () => document.removeEventListener('pointerdown', dismiss);
+  }, [menuOpen]);
+
+  const open = (tool: ToolEntry) => {
+    if (menuOpen) {
+      setMenuOpen(false);
+      trigger.current?.focus();
+    }
+    if (activeTool === tool.id) {
+      setToolsPanelState({ isOpen: false });
+      return;
+    }
+    onOpen();
+    openToolInLastLayout(tool.id, { title: tool.title, activeChatId });
+  };
+
+  return (
+    <nav className={nav.tools} aria-label={t('tools.panel.tools')} ref={root}
+      onKeyDown={event => {
+        if (event.key !== 'Escape' || !menuOpen) return;
+        event.stopPropagation();
+        setMenuOpen(false);
+        trigger.current?.focus();
+      }}>
+      {pinned.map(tool => (
+        <Tooltip key={tool.id} content={tool.title} side="bottom">
+          <button type="button" className={`${nav.action} ${nav.toolFavorite}`}
+            aria-label={tool.title} aria-pressed={activeTool === tool.id} onClick={() => open(tool)}>
+            {tool.icon}
+          </button>
+        </Tooltip>
+      ))}
+      <button type="button" ref={trigger} className={nav.action}
+        aria-expanded={menuOpen} aria-label={t('chatWorkspace.allToolsLabel')} aria-controls="workspace-tool-menu" onClick={() => setMenuOpen(!menuOpen)}>
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <circle cx="5" cy="12" r="1.8" /><circle cx="12" cy="12" r="1.8" /><circle cx="19" cy="12" r="1.8" />
+        </svg>
+        {t('chatWorkspace.allTools')}
+      </button>
+      {menuOpen && (
+        <div id="workspace-tool-menu" className={nav.toolMenu}>
+          {tools.map(tool => {
+            const favorite = favorites.includes(tool.id);
+            const full = !favorite && pinned.length >= MAX_TOOL_FAVORITES;
+            const pinLabel = t(full ? 'chatWorkspace.toolsLimit' : favorite ? 'chatWorkspace.unpin' : 'chatWorkspace.pin', { count: MAX_TOOL_FAVORITES });
+            return (
+              <div className={nav.toolMenuRow} key={tool.id}>
+                <button type="button" className={nav.action} aria-pressed={activeTool === tool.id}
+                  onClick={() => open(tool)}>
+                  {tool.icon}{tool.title}
+                </button>
+                <button type="button" className={nav.iconButton} disabled={full}
+                  aria-pressed={favorite} title={pinLabel}
+                  aria-label={t(favorite ? 'chatWorkspace.unpinChat' : 'chatWorkspace.pinChat', { title: tool.title })}
+                  onClick={() => onFavorite(tool.id, !favorite)}>
+                  <WorkspacePin filled={favorite} />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </nav>
   );
 }
 
@@ -273,7 +369,7 @@ export function ToolsPanel({ plan, isAdmin, placement = 'rail', side = 'right', 
 
   const compactMenu = narrowWindow && !sidebarToolId;
   // Only the menu becomes an icon rail; active tools keep their full interface.
-  const hidden = !isOpen && placement === 'header';
+  const hidden = !isOpen && placement !== 'rail';
   const panelWidth = isOpen
     ? (compactMenu ? 65 : sidebarToolId === 'browser' || sidebarToolId === 'youtube-music' || sidebarToolId === 'json-extractor' || sidebarToolId === 'newspapers' ? 420 : 260)
     : hidden ? 0 : 65;

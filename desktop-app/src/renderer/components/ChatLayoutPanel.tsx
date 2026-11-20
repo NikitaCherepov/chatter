@@ -16,6 +16,7 @@ export type ChatLayoutProposal = { proposal_id: string; profile: ChatLayoutProfi
 
 const templates = {
   classic: DEFAULT_CHAT_LAYOUT,
+  workspace: { ...DEFAULT_CHAT_LAYOUT, chatSide: 'top', tools: 'toolbar' },
   reading: {
     ...DEFAULT_CHAT_LAYOUT, tools: 'header', column: 'reading',
     chatList: 'compact', headerDetails: 'minimal',
@@ -44,7 +45,7 @@ function LayoutSample({ layout }: { layout: ChatLayout & { sidebarWidth?: number
       style={{ '--sample-side': `${width / 14}%` } as CSSProperties}>
       <div className={s.sampleList}><i /><i /><i /><i /><i /></div>
       <div className={s.sampleChat}>
-        <div className={s.sampleHeader}><i /><i /><i /><b /></div>
+        <div className={s.sampleHeader}><i /><i /><i /><b /><b /></div>
         <div className={s.sampleThread}>
           <div className={s.sampleExchange}><i /><i /><i /></div>
           <div className={s.sampleExchange}><i /><i /></div>
@@ -140,7 +141,7 @@ export function ChatLayoutPanel({
                 onChange={event => setEdited({ ...draft, name: event.target.value })} />
             </label>
             <label className={s.field} htmlFor={widthId}>
-              <span>{t('chatLayout.width')} <output>{draft.sidebarWidth} px</output></span>
+              <span>{t(draft.chatSide === 'top' ? 'chatLayout.libraryWidth' : 'chatLayout.width')} <output>{draft.sidebarWidth} px</output></span>
               <input id={widthId} type="range" min={CHAT_LAYOUT_SIDEBAR_WIDTH.min} max={CHAT_LAYOUT_SIDEBAR_WIDTH.max}
                 value={draft.sidebarWidth} disabled={saving} onChange={event => setEdited({ ...draft, sidebarWidth: Number(event.target.value) })} />
             </label>
