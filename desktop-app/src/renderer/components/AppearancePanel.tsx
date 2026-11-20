@@ -3,6 +3,10 @@ import { useTranslation } from 'react-i18next';
 import { useAppearance } from '../lib/appearance-service';
 import {
   APPEARANCE_FONTS,
+  APPEARANCE_MOTION_PRESETS,
+  appearanceMotionValues,
+  parseAppearanceMotion,
+  type AppearanceMotion,
   DEFAULT_MATERIAL,
   type AppearanceMaterial,
   DEFAULT_APPEARANCE,
@@ -12,6 +16,7 @@ import {
 } from '../lib/appearance-schema';
 import {
   APPEARANCE_APPLIED_EVENT,
+  animateMessageArrival,
   finishAppearancePreview,
   getAppearancePreview,
   previewAppearance,
@@ -22,6 +27,25 @@ import { Select } from './Select';
 import Slider from './Slider';
 import a from './SettingsModal.module.scss';
 import s from './AppearancePanel.module.scss';
+
+const motionPresets = ['none', 'fade', 'slide', 'scale'] as const;
+type MotionPreset = (typeof motionPresets)[number];
+
+function selectedMotionPreset(motion: AppearanceMotion): MotionPreset | 'custom' {
+  if (motion.preset === 'none') return 'none';
+  for (const name of ['fade', 'slide', 'scale'] as const) {
+    const preset = APPEARANCE_MOTION_PRESETS[name];
+    if (
+      motion.preset === preset.preset &&
+      motion.duration === preset.duration &&
+      motion.distance === preset.distance &&
+      motion.scale === preset.scale &&
+      motion.easing === preset.easing
+    )
+      return name;
+  }
+  return 'custom';
+}
 
 const STANDARD_SAMPLE = newAppearance();
 export const AppearanceSample = memo(function AppearanceSample({
@@ -98,6 +122,11 @@ export function AppearancePanel() {
     [error, setError] = useState(''),
     [uploading, setUploading] = useState(false);
   const editor = useRef<HTMLDivElement>(null);
+  const motionSample = useRef<HTMLDivElement>(null);
+  const sampleAnimation = useRef<Animation | undefined>(undefined);
+  const motion = draft ? appearanceMotionValues(draft.motion) : undefined;
+  const motionPreset = motion ? selectedMotionPreset(motion) : 'none';
+  useEffect(() => () => sampleAnimation.current?.cancel(), [draft?.motion]);
   useEffect(() => {
     const done = (event: Event) => {
       const detail = (event as CustomEvent).detail;
@@ -190,6 +219,17 @@ export function AppearancePanel() {
     key: K,
     value: Partial<AppearanceProfile[K]>,
   ) => setDraft(draft ? { ...draft, [key]: { ...draft[key], ...value } } : null);
+  const editMotion = (patch: Partial<AppearanceMotion>) => {
+    if (motion) part('motion', { ...motion, ...patch, preset: 'custom' });
+  };
+  const playMotion = () => {
+    if (!draft || !motionSample.current) return;
+    const element = motionSample.current;
+    sampleAnimation.current?.cancel();
+    void run(async () => {
+      sampleAnimation.current = animateMessageArrival(element, parseAppearanceMotion(draft.motion));
+    });
+  };
   const material = (region: 'panels' | 'composer', value: AppearanceMaterial | undefined) => {
     if (!draft) return;
     const materials = { ...draft.materials };
@@ -670,47 +710,66 @@ export function AppearancePanel() {
             )}
           </div>
           <h4>{t('appearance.motion')}</h4>
-          <div className={s.fields}>
-            {options(
-              t('appearance.motionPreset'),
-              draft.motion.preset,
-              ['none', 'fade', 'slide', 'custom'],
-              (v) => part('motion', { preset: v as any }),
-            )}
-            {draft.motion.preset !== 'none' && (
-              <>
-                {input(
-                  t('appearance.duration'),
-                  draft.motion.duration,
-                  (v) => part('motion', { duration: Number(v) }),
-                  'number',
-                  { min: 0, max: 800, step: 10 },
-                )}
+          {motion && (
+            <>
+              <div className={s.fields}>
                 {options(
-                  t('appearance.easing'),
-                  draft.motion.easing,
-                  ['ease-out', 'ease-in-out', 'linear'],
-                  (v) => part('motion', { easing: v as any }),
+                  t('appearance.motionPreset'),
+                  motionPreset,
+                  motionPreset === 'custom' ? [...motionPresets, 'custom'] : [...motionPresets],
+                  (value) => {
+                    if (value !== 'custom')
+                      part('motion', APPEARANCE_MOTION_PRESETS[value as MotionPreset]);
+                  },
                 )}
-                {draft.motion.preset !== 'fade' &&
-                  input(
-                    t('appearance.distance'),
-                    draft.motion.distance,
-                    (v) => part('motion', { distance: Number(v) }),
-                    'number',
-                    { min: 0, max: 40 },
-                  )}
-                {draft.motion.preset === 'custom' &&
-                  input(
-                    t('appearance.scale'),
-                    draft.motion.scale,
-                    (v) => part('motion', { scale: Number(v) }),
-                    'number',
-                    { min: 0.9, max: 1, step: 0.01 },
-                  )}
-              </>
-            )}
-          </div>
+                {motion.preset !== 'none' && (
+                  <>
+                    {input(
+                      t('appearance.duration'),
+                      motion.duration,
+                      (v) => editMotion({ duration: Number(v) }),
+                      'number',
+                      { min: 0, max: 800, step: 1 },
+                    )}
+                    {input(
+                      t('appearance.distance'),
+                      motion.distance,
+                      (v) => editMotion({ distance: Number(v) }),
+                      'number',
+                      { min: 0, max: 40, step: 'any' },
+                    )}
+                    {input(
+                      t('appearance.scale'),
+                      motion.scale,
+                      (v) => editMotion({ scale: Number(v) }),
+                      'number',
+                      { min: 0.9, max: 1, step: 0.01 },
+                    )}
+                    {options(
+                      t('appearance.easing'),
+                      motion.easing,
+                      ['ease-out', 'ease-in-out', 'linear'],
+                      (value) => editMotion({ easing: value as AppearanceMotion['easing'] }),
+                    )}
+                  </>
+                )}
+              </div>
+              <div className={s.motionPreview}>
+                <div ref={motionSample} data-motion-sample className={s.motionMessage}>
+                  <strong>Vega</strong>
+                  <p>{t('appearance.motionExample')}</p>
+                </div>
+                <button
+                  type="button"
+                  className={a.cancelBtn}
+                  onClick={playMotion}
+                  disabled={motion.preset === 'none' || motion.duration === 0}
+                >
+                  {t('appearance.motionPlay')}
+                </button>
+              </div>
+            </>
+          )}
           <p className={s.hint}>{t('appearance.motionHelp')}</p>
           {error && (
             <p role="alert" className={s.error}>

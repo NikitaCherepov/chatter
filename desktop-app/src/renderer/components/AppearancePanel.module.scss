@@ -185,3 +185,25 @@
 .materialReducedNotice, .materialUnsupportedNotice { display: none; }
 @media (prefers-reduced-transparency: reduce) { .materialReducedNotice { display: block; } }
 @supports not (backdrop-filter: blur(1px)) { .materialUnsupportedNotice { display: block; } }
+
+.motionPreview {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 88px;
+  padding: 14px;
+  overflow: hidden;
+  border: 1px solid var(--border-light);
+  border-radius: var(--appearance-radius, 8px);
+  background: var(--bg-secondary);
+  color: var(--text-body);
+}
+.motionMessage {
+  flex: 1 1 180px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  strong { font-weight: 600; }
+  p { margin-top: 4px; font-family: var(--appearance-message-font, inherit); }
+}

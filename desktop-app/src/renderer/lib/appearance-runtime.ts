@@ -2,6 +2,8 @@ import { getResolvedTheme } from './theme';
 import { appearanceColors, materialColors } from './appearance-colors';
 import {
   DEFAULT_APPEARANCE,
+  appearanceMotionValues,
+  type AppearanceMotion,
   parseAppearanceProfile,
   parseAppearanceSettings,
   type AppearanceProfile,
@@ -114,8 +116,10 @@ export function previewAppearance(value: AppearanceProfile | null) {
   refreshAppearance();
   for (const fn of subscribers) fn();
 }
-export function animateMessageArrival(element: HTMLElement) {
-  const motion = currentAppearance()?.motion;
+export function animateMessageArrival(
+  element: HTMLElement,
+  motion: AppearanceMotion | undefined = currentAppearance()?.motion,
+) {
   if (
     !motion ||
     motion.preset === 'none' ||
@@ -123,12 +127,10 @@ export function animateMessageArrival(element: HTMLElement) {
     window.matchMedia('(prefers-reduced-motion: reduce)').matches
   )
     return;
-  const custom = motion.preset === 'custom';
+  const { distance, scale } = appearanceMotionValues(motion);
   const transform =
-    motion.preset === 'fade'
-      ? 'none'
-      : `translateY(${motion.distance}px) scale(${custom ? motion.scale : 1})`;
-  element.animate(
+    distance === 0 && scale === 1 ? 'none' : `translateY(${distance}px) scale(${scale})`;
+  return element.animate(
     [
       { opacity: 0, transform },
       { opacity: 1, transform: 'none' },

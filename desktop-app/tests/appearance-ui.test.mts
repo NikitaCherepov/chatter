@@ -68,9 +68,13 @@ import chat from ${modulePath('pages/ChatPage.module.scss')};
 import ${modulePath('global.scss')};
 window.newAppearance=newAppearance;window.previewAppearance=previewAppearance;window.appearanceColors=appearanceColors;window.contrastRatio=contrastRatio;window.light=()=>setThemePreference("light");
 window.messageViewport=()=>document.querySelector('.'+chat.messages);
-window.testAccount=1;window.testDb={};window.animationCount=0;
+window.testAccount=1;window.testDb={};window.animationCount=0;window.motionSamples=[];
 const nativeAnimate=Element.prototype.animate;
-Element.prototype.animate=function(...args){if(this.hasAttribute('data-message-id'))window.animationCount++;return nativeAnimate.apply(this,args);};
+Element.prototype.animate=function(...args){
+ if(this.hasAttribute('data-message-id'))window.animationCount++;
+ if(this.hasAttribute('data-motion-sample'))window.motionSamples.push(args);
+ return nativeAnimate.apply(this,args);
+};
 function Conversation(){
  const [items,setItems]=useState(()=>Array.from({length:60},(_,n)=>({id:n+1,content:'# Message '+(n+1)+'\n\n'+Array.from({length:12},()=> 'A paragraph with **formatting** and words to wrap.').join('\n\n')})));
  const [chatId,setChatId]=useState(1),[extra,setExtra]=useState("none");window.setComposerExtra=setExtra;
@@ -155,8 +159,33 @@ app.whenReady().then(async()=>{
  await js('window.clickText("Создать оформление")');
  await until('!!document.querySelector("input[list=appearance-fonts]")');
  await js('window.inputText("Название","My evening");window.inputText("Размер сообщений",22);window.inputText("Шрифт сообщений","Georgia");window.inputText("Плотность",1.2)');
+ const motionLabel='Появление сообщения';
+ const motionMenu='[...document.querySelectorAll("button")].find(el=>el.getAttribute("aria-label")==='+JSON.stringify(motionLabel)+')';
+ const pickMotion=async label=>{
+  await js(motionMenu+'.click()');
+  await until('[...document.querySelectorAll("button")].some(el=>el!=='+motionMenu+' && el.textContent.trim()==='+JSON.stringify(label)+')');
+  await js('[...document.querySelectorAll("button")].find(el=>el!=='+motionMenu+' && el.textContent.trim()==='+JSON.stringify(label)+').click()');
+ };
+ await pickMotion('Лёгкий масштаб');
+ await js('window.clickText("Проиграть")');
+ const scalePreview=await js('window.motionSamples.at(-1)');
+ assert.equal(scalePreview[0][0].transform,'translateY(0px) scale(0.97)');
+ assert.equal(scalePreview[1].duration,240);
+ await pickMotion('Мягкий подъём');
+ await js('window.clickText("Проиграть")');
+ const risePreview=await js('window.motionSamples.at(-1)');
+ assert.equal(risePreview[0][0].transform,'translateY(8px) scale(1)');
+ assert.equal(risePreview[1].duration,220);
+ await js('window.inputText("Длительность, мс",180)');
+ await until(motionMenu+'.textContent.trim()==="Свой вариант"');
+ await js('window.clickText("Проиграть")');
+ assert.equal(await js('window.motionSamples.at(-1)[1].duration'),180);
+ assert.equal(await js('window.testDb[1]?.profiles.length??0'),0,'replaying a draft must not save it');
+
  await js('window.clickText("Сохранить вариант")');
  await until('window.testDb[1]?.profiles.length===1');
+ assert.deepEqual(await js('window.testDb[1].profiles[0].motion'),{preset:'custom',duration:180,distance:8,scale:1,easing:'ease-out'});
+
  assert.equal(await js('document.documentElement.dataset.appearance??null'),null,'saving a variant must not activate it');
  assert.equal(await js('window.testDb[1].activeId'),null);
  await js('window.clickText("Изменить")');

@@ -19,6 +19,30 @@ export const DEFAULT_MATERIAL: AppearanceMaterial = {
   shadow: 'none',
   border: 'subtle',
 };
+export type AppearanceMotion = {
+  preset: 'none' | 'fade' | 'slide' | 'custom';
+  duration: number;
+  distance: number;
+  scale: number;
+  easing: 'ease-out' | 'ease-in-out' | 'linear';
+};
+
+// These are complete motion values, so existing clients can play them too.
+export const APPEARANCE_MOTION_PRESETS = {
+  none: { preset: 'none', duration: 0, distance: 0, scale: 1, easing: 'ease-out' },
+  fade: { preset: 'fade', duration: 160, distance: 0, scale: 1, easing: 'ease-out' },
+  slide: { preset: 'slide', duration: 220, distance: 8, scale: 1, easing: 'ease-out' },
+  scale: { preset: 'custom', duration: 240, distance: 0, scale: 0.97, easing: 'ease-out' },
+} as const satisfies Record<string, AppearanceMotion>;
+
+export function appearanceMotionValues(motion: AppearanceMotion): AppearanceMotion {
+  return {
+    ...motion,
+    distance: motion.preset === 'fade' || motion.preset === 'none' ? 0 : motion.distance,
+    scale: motion.preset === 'custom' ? motion.scale : 1,
+  };
+}
+
 export type AppearanceProfile = {
   id: string;
   name: string;
@@ -45,13 +69,7 @@ export type AppearanceProfile = {
     dim: number;
     position: 'center' | 'top' | 'bottom';
   };
-  motion: {
-    preset: 'none' | 'fade' | 'slide' | 'custom';
-    duration: number;
-    distance: number;
-    scale: number;
-    easing: 'ease-out' | 'ease-in-out' | 'linear';
-  };
+  motion: AppearanceMotion;
 };
 export type AppearanceSettings = {
   version: 1;
@@ -102,7 +120,7 @@ export function newAppearance(id = 'custom'): AppearanceProfile {
       dim: 0.25,
       position: 'center',
     },
-    motion: { preset: 'none', duration: 220, distance: 12, scale: 0.98, easing: 'ease-out' },
+    motion: { ...APPEARANCE_MOTION_PRESETS.none },
   };
 }
 const object = (v: unknown): v is Record<string, any> =>
@@ -130,6 +148,17 @@ const font = (v: unknown): string => {
   const s = text(v, 100);
   return /^[\p{L}\p{N} _.-]+$/u.test(s) ? s : fail();
 };
+export function parseAppearanceMotion(value: unknown): AppearanceMotion {
+  const motion = keys(value, ['preset', 'duration', 'distance', 'scale', 'easing']);
+  return {
+    preset: choice(motion.preset, ['none', 'fade', 'slide', 'custom']),
+    duration: number(motion.duration, 0, 800),
+    distance: number(motion.distance, 0, 40),
+    scale: number(motion.scale, 0.9, 1),
+    easing: choice(motion.easing, ['ease-out', 'ease-in-out', 'linear']),
+  };
+}
+
 export function parseAppearanceProfile(value: unknown): AppearanceProfile {
   const v = keys(value, [
     'id',
@@ -166,7 +195,6 @@ export function parseAppearanceProfile(value: unknown): AppearanceProfile {
   ]);
   const g = keys(v.geometry, ['radius', 'density']);
   const b = keys(v.background, ['type', 'color', 'color2', 'angle', 'image', 'dim', 'position']);
-  const m = keys(v.motion, ['preset', 'duration', 'distance', 'scale', 'easing']);
   if (typeof b.image !== 'string' || b.image.length > 2048) fail();
   if (b.type === 'image' && !b.image) fail();
   if (b.image && !/^\/api\/v1\/images\/[a-zA-Z0-9_.-]+$/.test(b.image)) {
@@ -219,13 +247,7 @@ export function parseAppearanceProfile(value: unknown): AppearanceProfile {
       dim: number(b.dim, 0, 0.9),
       position: choice(b.position, ['center', 'top', 'bottom']),
     },
-    motion: {
-      preset: choice(m.preset, ['none', 'fade', 'slide', 'custom']),
-      duration: number(m.duration, 0, 800),
-      distance: number(m.distance, 0, 40),
-      scale: number(m.scale, 0.9, 1),
-      easing: choice(m.easing, ['ease-out', 'ease-in-out', 'linear']),
-    },
+    motion: parseAppearanceMotion(v.motion),
   };
 }
 export function parseAppearanceSettings(value: unknown): AppearanceSettings {
@@ -276,6 +298,9 @@ export const APPEARANCE_CAPABILITIES = {
   motion: {
     preset: ['none', 'fade', 'slide', 'custom'],
     easing: ['ease-out', 'ease-in-out', 'linear'],
+    presets: APPEARANCE_MOTION_PRESETS,
+    description:
+      'For a ready-made message arrival, copy one complete value from motion.presets into profile.motion. For custom motion, use preset custom with duration in milliseconds, distance in pixels, starting scale and easing. Only new arrivals animate.',
   },
   materials: {
     regions: ['panels', 'composer'],

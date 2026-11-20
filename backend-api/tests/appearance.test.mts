@@ -277,6 +277,23 @@ try {
   const caps = JSON.parse(context.tool('get_appearance', { view: 'capabilities' }));
   assert.ok(caps.template);
   assert.equal(caps.limits.profiles, 32);
+  for (const motion of Object.values(caps.motion.presets)) {
+    assert.deepEqual(
+      schema.parseAppearanceProfile({ ...schema.newAppearance(), motion }).motion,
+      motion,
+    );
+  }
+  const motionProposal = {
+    ...schema.newAppearance('bot-motion'),
+    motion: caps.motion.presets.scale,
+  };
+  context.desktopActionSink = { value: null };
+  assert.equal(
+    JSON.parse(context.tool('suggest_appearance', { profile: motionProposal })).status,
+    'proposed',
+  );
+  assert.equal(context.desktopActionSink.value.value.profile.motion.scale, 0.97);
+
   console.log(
     'PASS: strict appearance contract, atomic revision conflicts, inactive saves, explicit application, account isolation, media lifetime, UI settings preservation, real HTTP handlers and read-only bot proposals',
   );
