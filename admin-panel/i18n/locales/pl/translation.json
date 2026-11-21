@@ -290,7 +290,9 @@
         "st_settings_not_transferred": "Ustawienia próbkowania SillyTavern, szablony promptów i skrypty nie są przenoszone.",
         "st_connection_needs_configuration": "Niektóre połączenia wymagają adresu URL API zgodnego z OpenAI. Natywne punkty końcowe Anthropic nie są zgodne z tym importerem.",
         "st_text_completion_not_supported": "Profile Text Completion nie są importowane. Użyj połączenia Chat Completions zgodnego z OpenAI."
-      }
+      },
+      "imageGeneration": "Importuj generowanie obrazów",
+      "imageGenerationHint": "Zastępuje bieżące ustawienia generowania obrazów ustawieniami z pliku, w tym dostawcę i parametry modelu."
     }
   },
   "integrations": {
@@ -353,6 +355,11 @@
         "name": "Transkrypcja głosowa",
         "description": "Rozpoznawanie mowy po stronie serwera",
         "group": "Media"
+      },
+      "decision": {
+        "group": "AI",
+        "name": "Decyzja",
+        "description": "Typowane decyzje na potrzeby intuicji i innych funkcji asystenta."
       }
     },
     "secretField": {
@@ -867,7 +874,8 @@
       "restoreConfirm": "Przywrócić {{name}}? Usługi zostaną krótko zatrzymane, a bieżące dane zostaną automatycznie zabezpieczone.",
       "restoring": "Sprawdzanie archiwum, tworzenie kopii bezpieczeństwa i przywracanie danych…",
       "restored": "Dane przywrócone, usługi uruchomione.",
-      "restoreError": "Błąd przywracania: {{message}}"
+      "restoreError": "Błąd przywracania: {{message}}",
+      "memoryVectors": "wektory pamięci"
     },
     "schedule": {
       "title": "Automatyczne kopie zapasowe",
@@ -1465,5 +1473,22 @@
     "allTools": "Włącz wszystkie narzędzia",
     "noTools": "Wyłącz wszystkie narzędzia",
     "refreshHelp": "Odśwież możliwości po połączeniu lub autoryzacji."
+  },
+  "decision": {
+    "connectionTitle": "Połączenie",
+    "parametersTitle": "Ustawienia żądania",
+    "title": "Decyzja",
+    "description": "Typowane decyzje na potrzeby intuicji i innych funkcji asystenta.",
+    "failed": "Nie udało się zrealizować żądania decyzji.",
+    "saved": "Zapisano",
+    "enabled": "Decyzja włączona",
+    "url": "Bazowy adres URL API",
+    "model": "Model",
+    "key": "Klucz API",
+    "timeout": "Limit czasu (ms)",
+    "price": "Cena wejściowa za milion tokenów (USD)",
+    "test": "Testuj połączenie",
+    "connected": "Połączenie zweryfikowane",
+    "loading": "Ładowanie…"
   }
 }

@@ -290,7 +290,9 @@
         "st_settings_not_transferred": "Les paramètres d'échantillonnage, les modèles de prompt et les scripts de SillyTavern ne sont pas transférés.",
         "st_connection_needs_configuration": "Certaines connexions nécessitent une URL d'API compatible OpenAI. Les points de terminaison Anthropic natifs ne sont pas compatibles avec cet importateur.",
         "st_text_completion_not_supported": "Les profils Text Completion ne sont pas importés. Utilisez une connexion Chat Completions compatible OpenAI."
-      }
+      },
+      "imageGeneration": "Importer la génération d'images",
+      "imageGenerationHint": "Remplace les paramètres actuels de génération d'images par ceux du fichier, y compris le fournisseur et les paramètres du modèle."
     }
   },
   "integrations": {
@@ -353,6 +355,11 @@
         "name": "Transcription vocale",
         "description": "Reconnaissance vocale côté serveur",
         "group": "Médias"
+      },
+      "decision": {
+        "group": "IA",
+        "name": "Décision",
+        "description": "Décisions typées pour l'intuition et les autres fonctionnalités de l'assistant."
       }
     },
     "secretField": {
@@ -867,7 +874,8 @@
       "restoreConfirm": "Restaurer {{name}} ? Les services seront brièvement arrêtés et les données actuelles seront automatiquement sauvegardées.",
       "restoring": "Vérification de l'archive, création d'une sauvegarde de sécurité et restauration des données…",
       "restored": "Données restaurées, services en cours d'exécution.",
-      "restoreError": "Erreur de restauration : {{message}}"
+      "restoreError": "Erreur de restauration : {{message}}",
+      "memoryVectors": "vecteurs de mémoire"
     },
     "schedule": {
       "title": "Sauvegardes automatiques",
@@ -1465,5 +1473,22 @@
     "allTools": "Activer tous les outils",
     "noTools": "Désactiver tous les outils",
     "refreshHelp": "Actualiser les capacités après la connexion ou l'autorisation."
+  },
+  "decision": {
+    "connectionTitle": "Connexion",
+    "parametersTitle": "Paramètres de la requête",
+    "title": "Décision",
+    "description": "Décisions typées pour l'intuition et d'autres fonctionnalités de l'assistant.",
+    "failed": "Impossible de terminer la requête Décision.",
+    "saved": "Enregistré",
+    "enabled": "Décision activée",
+    "url": "URL de base de l'API",
+    "model": "Modèle",
+    "key": "Clé API",
+    "timeout": "Délai d'expiration (ms)",
+    "price": "Prix d'entrée par million de jetons (USD)",
+    "test": "Tester la connexion",
+    "connected": "Connexion vérifiée",
+    "loading": "Chargement…"
   }
 }

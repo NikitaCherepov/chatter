@@ -295,7 +295,9 @@
         "st_settings_not_transferred": "SillyTavern örnekleme ayarları, istem şablonları ve betikler aktarılmaz.",
         "st_connection_needs_configuration": "Bazı bağlantılar OpenAI uyumlu bir API URL'si gerektirir. Yerel Anthropic uç noktaları bu içe aktarıcıyla uyumlu değildir.",
         "st_text_completion_not_supported": "Metin Tamamlama profilleri içe aktarılmaz. OpenAI uyumlu bir Sohbet Tamamlamaları bağlantısı kullanın."
-      }
+      },
+      "imageGeneration": "Görüntü üretimini içe aktar",
+      "imageGenerationHint": "Mevcut görüntü üretimi ayarlarını, sağlayıcı ve model parametreleri dahil olmak üzere dosyadakilerle değiştirir."
     }
   },
   "integrations": {
@@ -338,6 +340,11 @@
         "name": "Ses Transkripsiyonu",
         "description": "Sunucu tarafı konuşma tanıma",
         "group": "Medya"
+      },
+      "decision": {
+        "group": "Yapay zeka",
+        "name": "Karar",
+        "description": "Sezgi ve diğer asistan özellikleri için tiplendirilmiş kararlar."
       }
     },
     "secretField": {
@@ -859,7 +866,8 @@
       "restoreConfirm": "{{name}} geri yüklensin mi? Hizmetler kısa süreliğine durdurulacak ve mevcut veriler otomatik olarak yedeklenecek.",
       "restoring": "Arşiv kontrol ediliyor, güvenlik yedeklemesi oluşturuluyor ve veriler geri yükleniyor…",
       "restored": "Veriler geri yüklendi, hizmetler çalışıyor.",
-      "restoreError": "Geri yükleme hatası: {{message}}"
+      "restoreError": "Geri yükleme hatası: {{message}}",
+      "memoryVectors": "bellek vektörleri"
     },
     "schedule": {
       "title": "Otomatik Yedeklemeler",
@@ -1445,5 +1453,22 @@
     "allTools": "Tüm araçları etkinleştir",
     "noTools": "Tüm araçları devre dışı bırak",
     "refreshHelp": "Bağlandıktan veya yetkilendirdikten sonra yetenekleri yenileyin."
+  },
+  "decision": {
+    "connectionTitle": "Bağlantı",
+    "parametersTitle": "İstek ayarları",
+    "title": "Karar",
+    "description": "Sezgi ve diğer asistan özellikleri için türü belirlenmiş kararlar.",
+    "failed": "Karar isteği tamamlanamadı.",
+    "saved": "Kaydedildi",
+    "enabled": "Karar etkinleştirildi",
+    "url": "API temel URL'si",
+    "model": "Model",
+    "key": "API anahtarı",
+    "timeout": "Zaman aşımı (ms)",
+    "price": "Milyon token başına giriş fiyatı (USD)",
+    "test": "Bağlantıyı test et",
+    "connected": "Bağlantı doğrulandı",
+    "loading": "Yükleniyor…"
   }
 }

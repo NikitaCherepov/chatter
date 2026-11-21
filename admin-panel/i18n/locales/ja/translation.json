@@ -290,7 +290,9 @@
         "st_settings_not_transferred": "SillyTavernのサンプリング設定、プロンプトテンプレート、スクリプトは転送されません。",
         "st_connection_needs_configuration": "一部の接続にはOpenAI互換のAPI URLが必要です。ネイティブのAnthropicエンドポイントはこのインポーターと互換性がありません。",
         "st_text_completion_not_supported": "Text Completionプロファイルはインポートされません。OpenAI互換のChat Completions接続を使用してください。"
-      }
+      },
+      "imageGeneration": "画像生成をインポート",
+      "imageGenerationHint": "現在の画像生成設定を、プロバイダーとモデルパラメータを含むファイル内の設定で置き換えます。"
     }
   },
   "integrations": {
@@ -353,6 +355,11 @@
         "name": "音声文字起こし",
         "description": "サーバー側の音声認識",
         "group": "メディア"
+      },
+      "decision": {
+        "group": "AI",
+        "name": "意思決定",
+        "description": "直感やその他のアシスタント機能向けの型付き意思決定。"
       }
     },
     "secretField": {
@@ -867,7 +874,8 @@
       "restoreConfirm": "{{name}} を復元しますか？サービスが一時的に停止し、現在のデータは自動的にバックアップされます。",
       "restoring": "アーカイブを確認し、安全バックアップを作成し、データを復元中…",
       "restored": "データが復元され、サービスが実行中です。",
-      "restoreError": "復元エラー: {{message}}"
+      "restoreError": "復元エラー: {{message}}",
+      "memoryVectors": "メモリベクトル"
     },
     "schedule": {
       "title": "自動バックアップ",
@@ -1465,5 +1473,22 @@
     "allTools": "すべてのツールを有効にする",
     "noTools": "すべてのツールを無効にする",
     "refreshHelp": "接続または認証後に機能を更新します。"
+  },
+  "decision": {
+    "connectionTitle": "接続",
+    "parametersTitle": "リクエスト設定",
+    "title": "意思決定",
+    "description": "直感やその他のアシスタント機能向けの型付き意思決定。",
+    "failed": "意思決定リクエストを完了できませんでした。",
+    "saved": "保存しました",
+    "enabled": "Decisionを有効化",
+    "url": "APIベースURL",
+    "model": "モデル",
+    "key": "APIキー",
+    "timeout": "タイムアウト (ms)",
+    "price": "100万トークンあたりの入力料金 (USD)",
+    "test": "接続テスト",
+    "connected": "接続を確認しました",
+    "loading": "読み込み中…"
   }
 }

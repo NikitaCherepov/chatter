@@ -296,7 +296,9 @@
         "st_settings_not_transferred": "Nastavení vzorkování SillyTavern, šablony výzev a skripty se nepřenášejí.",
         "st_connection_needs_configuration": "Některá připojení vyžadují API URL kompatibilní s OpenAI. Nativní koncové body Anthropic nejsou s tímto importérem kompatibilní.",
         "st_text_completion_not_supported": "Profily Text Completion se neimportují. Použijte připojení Chat Completions kompatibilní s OpenAI."
-      }
+      },
+      "imageGeneration": "Importovat generování obrázků",
+      "imageGenerationHint": "Nahradí aktuální nastavení generování obrázků nastavením z daného souboru, včetně poskytovatele a parametrů modelu."
     }
   },
   "integrations": {
@@ -339,6 +341,11 @@
         "name": "Přepis hlasu",
         "description": "Rozpoznávání řeči na straně serveru",
         "group": "Média"
+      },
+      "decision": {
+        "group": "AI",
+        "name": "Rozhodnutí",
+        "description": "Typovaná rozhodnutí pro intuici a další funkce asistenta."
       }
     },
     "secretField": {
@@ -860,7 +867,8 @@
       "restoreConfirm": "Obnovit {{name}}? Služby budou krátce zastaveny a aktuální data budou automaticky zálohována.",
       "restoring": "Kontrola archivu, vytváření bezpečnostní zálohy a obnova dat…",
       "restored": "Data obnovena, služby běží.",
-      "restoreError": "Chyba obnovy: {{message}}"
+      "restoreError": "Chyba obnovy: {{message}}",
+      "memoryVectors": "paměťové vektory"
     },
     "schedule": {
       "title": "Automatické zálohy",
@@ -1446,5 +1454,22 @@
     "allTools": "Povolit všechny nástroje",
     "noTools": "Zakázat všechny nástroje",
     "refreshHelp": "Aktualizujte schopnosti po připojení nebo autorizaci."
+  },
+  "decision": {
+    "connectionTitle": "Připojení",
+    "parametersTitle": "Nastavení požadavku",
+    "title": "Rozhodnutí",
+    "description": "Typovaná rozhodnutí pro intuici a další funkce asistenta.",
+    "failed": "Požadavek Rozhodnutí se nepodařilo dokončit.",
+    "saved": "Uloženo",
+    "enabled": "Rozhodování povoleno",
+    "url": "Základní URL API",
+    "model": "Model",
+    "key": "Klíč API",
+    "timeout": "Časový limit (ms)",
+    "price": "Vstupní cena za milion tokenů (USD)",
+    "test": "Otestovat připojení",
+    "connected": "Připojení ověřeno",
+    "loading": "Načítání…"
   }
 }

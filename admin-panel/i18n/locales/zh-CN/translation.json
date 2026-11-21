@@ -290,7 +290,9 @@
         "st_settings_not_transferred": "SillyTavern 的采样设置、提示模板和脚本不会被转移。",
         "st_connection_needs_configuration": "部分连接需要 OpenAI 兼容的 API URL。原生 Anthropic 端点与此导入器不兼容。",
         "st_text_completion_not_supported": "不会导入文本补全配置文件。请使用 OpenAI 兼容的聊天补全连接。"
-      }
+      },
+      "imageGeneration": "导入图像生成",
+      "imageGenerationHint": "用文件中的设置替换当前图像生成设置，包括提供商和模型参数。"
     }
   },
   "integrations": {
@@ -353,6 +355,11 @@
         "name": "语音转录",
         "description": "服务器端语音识别",
         "group": "媒体"
+      },
+      "decision": {
+        "group": "AI",
+        "name": "决策",
+        "description": "用于直觉及其他助手功能的类型化决策。"
       }
     },
     "secretField": {
@@ -867,7 +874,8 @@
       "restoreConfirm": "恢复 {{name}}？服务将短暂停止，当前数据将自动备份。",
       "restoring": "正在检查归档、创建安全备份并恢复数据…",
       "restored": "数据已恢复，服务正在运行。",
-      "restoreError": "恢复错误：{{message}}"
+      "restoreError": "恢复错误：{{message}}",
+      "memoryVectors": "记忆向量"
     },
     "schedule": {
       "title": "自动备份",
@@ -1465,5 +1473,22 @@
     "allTools": "启用所有工具",
     "noTools": "禁用所有工具",
     "refreshHelp": "连接或授权后刷新功能。"
+  },
+  "decision": {
+    "connectionTitle": "连接",
+    "parametersTitle": "请求设置",
+    "title": "决策",
+    "description": "用于直觉及其他助手功能的类型化决策。",
+    "failed": "无法完成决策请求。",
+    "saved": "已保存",
+    "enabled": "已启用决策",
+    "url": "API 基础 URL",
+    "model": "模型",
+    "key": "API 密钥",
+    "timeout": "超时时间（毫秒）",
+    "price": "每百万个令牌的输入价格（美元）",
+    "test": "测试连接",
+    "connected": "连接已验证",
+    "loading": "加载中…"
   }
 }

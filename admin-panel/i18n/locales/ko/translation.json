@@ -290,7 +290,9 @@
         "st_settings_not_transferred": "SillyTavern 샘플링 설정, 프롬프트 템플릿 및 스크립트는 전송되지 않습니다.",
         "st_connection_needs_configuration": "일부 연결에는 OpenAI 호환 API URL이 필요합니다. 네이티브 Anthropic 엔드포인트는 이 가져오기 도구와 호환되지 않습니다.",
         "st_text_completion_not_supported": "Text Completion 프로필은 가져오지 않습니다. OpenAI 호환 Chat Completions 연결을 사용하세요."
-      }
+      },
+      "imageGeneration": "이미지 생성 가져오기",
+      "imageGenerationHint": "현재 이미지 생성 설정을 파일에 있는 설정으로 대체하며, 제공자와 모델 매개변수도 포함합니다."
     }
   },
   "integrations": {
@@ -353,6 +355,11 @@
         "name": "음성 전사",
         "description": "서버 측 음성 인식",
         "group": "미디어"
+      },
+      "decision": {
+        "group": "AI",
+        "name": "의사 결정",
+        "description": "직관 및 기타 어시스턴트 기능을 위한 유형화된 의사 결정."
       }
     },
     "secretField": {
@@ -867,7 +874,8 @@
       "restoreConfirm": "{{name}}을(를) 복원하시겠습니까? 서비스가 잠시 중단되며, 현재 데이터는 자동으로 백업됩니다.",
       "restoring": "아카이브 확인, 안전 백업 생성 및 데이터 복원 중…",
       "restored": "데이터가 복원되었으며, 서비스가 실행 중입니다.",
-      "restoreError": "복원 오류: {{message}}"
+      "restoreError": "복원 오류: {{message}}",
+      "memoryVectors": "메모리 벡터"
     },
     "schedule": {
       "title": "자동 백업",
@@ -1465,5 +1473,22 @@
     "allTools": "모든 도구 활성화",
     "noTools": "모든 도구 비활성화",
     "refreshHelp": "연결 또는 인증 후 기능을 새로고침합니다."
+  },
+  "decision": {
+    "connectionTitle": "연결",
+    "parametersTitle": "요청 설정",
+    "title": "결정",
+    "description": "직관 및 기타 어시스턴트 기능을 위한 타입 지정 결정입니다.",
+    "failed": "Decision 요청을 완료할 수 없습니다.",
+    "saved": "저장됨",
+    "enabled": "결정 활성화됨",
+    "url": "API 기본 URL",
+    "model": "모델",
+    "key": "API 키",
+    "timeout": "타임아웃 (ms)",
+    "price": "백만 토큰당 입력 가격 (USD)",
+    "test": "연결 테스트",
+    "connected": "연결 확인됨",
+    "loading": "불러오는 중…"
   }
 }

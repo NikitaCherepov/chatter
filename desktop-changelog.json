@@ -1,43 +1,69 @@
 {
   "changes": {
     "en": [
-      "Fixed MCP detection during server migration"
+      "Added auto-confirmation of commands",
+      "Added intuition",
+      "Added theme switching"
     ],
     "cs": [
-      "Opraveno rozpoznávání MCP při migraci serveru"
+      "Přidáno automatické potvrzování příkazů",
+      "Přidána intuice",
+      "Přidáno přepínání motivů"
     ],
     "de": [
-      "Erkennung von MCP bei der Server-Migration behoben"
+      "Automatische Bestätigung von Befehlen hinzugefügt",
+      "Intuition hinzugefügt",
+      "Theme-Wechsel hinzugefügt"
     ],
     "es": [
-      "Corregida la detección de MCP durante la migración del servidor"
+      "Se agregó confirmación automática de comandos",
+      "Se agregó intuición",
+      "Se agregó cambio de tema"
     ],
     "fr": [
-      "Correction de la détection MCP lors de la migration du serveur"
+      "Ajout de la confirmation automatique des commandes",
+      "Ajout de l'intuition",
+      "Ajout du changement de thème"
     ],
     "it": [
-      "Corretto il rilevamento MCP durante la migrazione del server"
+      "Aggiunta conferma automatica dei comandi",
+      "Aggiunta intuizione",
+      "Aggiunto cambio tema"
     ],
     "ja": [
-      "サーバー移行時のMCP検出を修正"
+      "コマンドの自動確認を追加しました",
+      "直感を追加しました",
+      "テーマ切り替えを追加しました"
     ],
     "ko": [
-      "서버 마이그레이션 중 MCP 감지 수정"
+      "명령 자동 확인 기능 추가",
+      "직관 기능 추가",
+      "테마 전환 기능 추가"
     ],
     "pl": [
-      "Naprawiono wykrywanie MCP podczas migracji serwera"
+      "Dodano automatyczne potwierdzanie poleceń",
+      "Dodano intuicję",
+      "Dodano przełączanie motywów"
     ],
     "pt-BR": [
-      "Corrigida a detecção de MCP durante a migração do servidor"
+      "Adicionada confirmação automática de comandos",
+      "Adicionada intuição",
+      "Adicionada alternância de temas"
     ],
     "ru": [
-      "Исправлено обнаружение MCP при миграции сервера"
+      "Добавлено автоподтверждение команд",
+      "Добавлена интуиция",
+      "Добавлено переключение темы"
     ],
     "tr": [
-      "Sunucu geçişi sırasında MCP algılama düzeltildi"
+      "Komutların otomatik onaylanması eklendi",
+      "Sezgi eklendi",
+      "Tema değiştirme eklendi"
     ],
     "zh-CN": [
-      "修复了服务器迁移期间的MCP检测"
+      "新增命令自动确认",
+      "新增直觉",
+      "新增主题切换"
     ]
   }
 }

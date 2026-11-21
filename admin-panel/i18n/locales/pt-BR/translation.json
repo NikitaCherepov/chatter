@@ -290,7 +290,9 @@
         "st_settings_not_transferred": "As configurações de amostragem, os modelos de prompt e os scripts do SillyTavern não são transferidos.",
         "st_connection_needs_configuration": "Algumas conexões precisam de uma URL de API compatível com OpenAI. Os endpoints nativos da Anthropic não são compatíveis com este importador.",
         "st_text_completion_not_supported": "Perfis de Text Completion não são importados. Use uma conexão de Chat Completions compatível com OpenAI."
-      }
+      },
+      "imageGeneration": "Importar geração de imagens",
+      "imageGenerationHint": "Substitui as configurações atuais de geração de imagens pelas do arquivo, incluindo o provedor e os parâmetros do modelo."
     }
   },
   "integrations": {
@@ -353,6 +355,11 @@
         "name": "Transcrição de Voz",
         "description": "Reconhecimento de fala no servidor",
         "group": "Mídia"
+      },
+      "decision": {
+        "group": "IA",
+        "name": "Decisão",
+        "description": "Decisões tipadas para a intuição e outros recursos do assistente."
       }
     },
     "secretField": {
@@ -867,7 +874,8 @@
       "restoreConfirm": "Restaurar {{name}}? Os serviços serão brevemente interrompidos e os dados atuais serão automaticamente copiados.",
       "restoring": "Verificando o arquivo, criando um backup de segurança e restaurando dados…",
       "restored": "Dados restaurados, serviços em execução.",
-      "restoreError": "Erro de restauração: {{message}}"
+      "restoreError": "Erro de restauração: {{message}}",
+      "memoryVectors": "vetores de memória"
     },
     "schedule": {
       "title": "Backups Automáticos",
@@ -1465,5 +1473,22 @@
     "allTools": "Ativar todas as ferramentas",
     "noTools": "Desativar todas as ferramentas",
     "refreshHelp": "Atualize as capacidades após conectar ou autorizar."
+  },
+  "decision": {
+    "connectionTitle": "Conexão",
+    "parametersTitle": "Configurações da solicitação",
+    "title": "Decisão",
+    "description": "Decisões tipadas para intuição e outros recursos do assistente.",
+    "failed": "Não foi possível concluir a solicitação de Decisão.",
+    "saved": "Salvo",
+    "enabled": "Decisão ativada",
+    "url": "URL base da API",
+    "model": "Modelo",
+    "key": "Chave da API",
+    "timeout": "Tempo limite (ms)",
+    "price": "Preço de entrada por milhão de tokens (USD)",
+    "test": "Testar conexão",
+    "connected": "Conexão verificada",
+    "loading": "Carregando…"
   }
 }

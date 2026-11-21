@@ -1,43 +1,82 @@
 {
   "changes": {
     "en": [
-      "Fixed password recovery"
+      "Added a decision model (Celeris only for now)",
+      "Added auto-confirmation of commands",
+      "Added intuition",
+      "Added theme switching"
     ],
     "cs": [
-      "Opravena obnova hesla"
+      "Přidán rozhodovací model (zatím pouze Celeris)",
+      "Přidáno automatické potvrzování příkazů",
+      "Přidána intuice",
+      "Přidáno přepínání témat"
     ],
     "de": [
-      "Passwortwiederherstellung behoben"
+      "Entscheidungsmodell hinzugefügt (vorerst nur Celeris)",
+      "Automatische Bestätigung von Befehlen hinzugefügt",
+      "Intuition hinzugefügt",
+      "Theme-Wechsel hinzugefügt"
     ],
     "es": [
-      "Corregida la recuperación de contraseña"
+      "Se agregó un modelo de decisión (solo Celeris por ahora)",
+      "Se agregó la confirmación automática de comandos",
+      "Se agregó intuición",
+      "Se agregó el cambio de tema"
     ],
     "fr": [
-      "Correction de la récupération du mot de passe"
+      "Ajout d'un modèle de décision (Celeris uniquement pour l'instant)",
+      "Ajout de la confirmation automatique des commandes",
+      "Ajout de l'intuition",
+      "Ajout du changement de thème"
     ],
     "it": [
-      "Corretto il recupero password"
+      "Aggiunto un modello decisionale (solo Celeris per ora)",
+      "Aggiunta la conferma automatica dei comandi",
+      "Aggiunta l'intuizione",
+      "Aggiunto il cambio di tema"
     ],
     "ja": [
-      "パスワード復旧の修正"
+      "意思決定モデルを追加しました（現時点ではCelerisのみ）",
+      "コマンドの自動確認を追加しました",
+      "直感を追加しました",
+      "テーマ切り替えを追加しました"
     ],
     "ko": [
-      "비밀번호 복구 수정"
+      "의사 결정 모델 추가(현재 Celeris 전용)",
+      "명령 자동 확인 추가",
+      "직관 추가",
+      "테마 전환 추가"
     ],
     "pl": [
-      "Poprawiono odzyskiwanie hasła"
+      "Dodano model decyzyjny (na razie tylko Celeris)",
+      "Dodano automatyczne potwierdzanie poleceń",
+      "Dodano intuicję",
+      "Dodano przełączanie motywów"
     ],
     "pt-BR": [
-      "Corrigida a recuperação de senha"
+      "Adicionado um modelo de decisão (somente Celeris por enquanto)",
+      "Adicionada a confirmação automática de comandos",
+      "Adicionada a intuição",
+      "Adicionada a troca de tema"
     ],
     "ru": [
-      "Исправлено восстановление пароля"
+      "Добавлена модель принятия решений (пока только Celeris)",
+      "Добавлено автоподтверждение команд",
+      "Добавлена интуиция",
+      "Добавлено переключение тем"
     ],
     "tr": [
-      "Şifre kurtarma düzeltildi"
+      "Bir karar modeli eklendi (şimdilik yalnızca Celeris)",
+      "Komutların otomatik onaylanması eklendi",
+      "Sezgi eklendi",
+      "Tema değiştirme eklendi"
     ],
     "zh-CN": [
-      "修复了密码找回功能"
+      "添加了决策模型（目前仅限 Celeris）",
+      "添加了命令自动确认",
+      "添加了直觉",
+      "添加了主题切换"
     ]
   }
 }
