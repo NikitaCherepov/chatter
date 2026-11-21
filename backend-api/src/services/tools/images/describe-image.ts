@@ -1,42 +1,30 @@
 import { materializeAssetInput } from '../../response-attachments.js';
 import type { Tool, ToolDefinition } from '../types.js';
 
-/** Build describe_image tool — sends image(s) to vision model for analysis */
-export const buildDescribeImageTool = (supportsDirectView = false): ToolDefinition => {
-  const properties: Record<string, unknown> = {
-    question: {
-      type: 'string',
-      description: 'Specific task or question (e.g.: "Describe the image", "Read the text").'
+export const buildDescribeImageTool = (): ToolDefinition => ({
+  type: 'function',
+  function: {
+    name: 'describe_image',
+    description: 'Inspect an image from a web URL, a user photo, or chat history. You automatically receive the image itself when you support image input, or a text analysis otherwise. DO NOT call this tool if the image is already visible in your context.',
+    parameters: {
+      type: 'object',
+      properties: {
+        question: {
+          type: 'string',
+          description: 'Specific task or question (e.g.: "Describe the image", "Read the text").',
+        },
+        image_url: {
+          type: 'string',
+          description: 'Exact public URL or stored relative /api/v1/images/... URL of the image to analyze.',
+        },
+      },
+      required: ['question', 'image_url'],
     },
-    image_url: {
-      type: 'string',
-      description: 'REQUIRED. Exact public URL or stored relative /api/v1/images/... URL of the image to analyze.'
-    },
-  };
-  if (supportsDirectView) {
-    properties.mode = {
-      type: 'string',
-      enum: ['description', 'direct'],
-      default: 'description',
-      description: 'description returns a text analysis from a vision helper. direct loads the pixels into your own next turn so you can inspect them yourself.',
-    };
-  }
-  return {
-    type: 'function' as const,
-    function: {
-      name: 'describe_image',
-      description: 'Analyzes the specified image using a vision model. Supports web image URLs, user photos, and images from chat history. DO NOT call this tool if the image is already visible in your context. Read, translate, and analyze it yourself.',
-      parameters: {
-        type: 'object',
-        properties,
-        required: ['question', 'image_url']
-      }
-    }
-  };
-};
+  },
+});
 
 export const describeImageTool: Tool = {
-  definition: buildDescribeImageTool(false),
+  definition: buildDescribeImageTool(),
   handler: async (args, context) => {
     const question: string = typeof args.question === 'string' ? args.question.trim() : '';
     const imageUrl: string | undefined = typeof args.image_url === 'string' ? args.image_url.trim() || undefined : undefined;
@@ -44,8 +32,6 @@ export const describeImageTool: Tool = {
     if (!question) return JSON.stringify({ status: 'error', message: 'question is required — specify what you need to know about the image.' });
 
     try {
-      // Collect images to analyze.
-      // Priority: 1) explicit image_url param 2) current request context.userImages 3) load from disk by URL
       type ImgData = { base64: string; mimeType: string };
       let imagesToAnalyze: ImgData[] = [];
 
@@ -74,12 +60,13 @@ export const describeImageTool: Tool = {
         return { base64: firstFrame.toString('base64'), mimeType: 'image/webp' };
       }));
 
-      if (args.mode === 'direct') {
-        if (!context.currentModelSupportsVision || !context.directImageSink) {
-          return JSON.stringify({ status: 'error', message: 'Direct image viewing is unavailable for this model. Use description mode.' });
+      if (context.currentModelSupportsVision) {
+        const { directImageSink } = context;
+        if (!directImageSink) {
+          return JSON.stringify({ status: 'error', message: 'Image input is unavailable in this run.' });
         }
         for (const image of imagesToAnalyze) {
-          context.directImageSink.items.push({ ...image, question, localUrl });
+          directImageSink.items.push({ ...image, question, localUrl });
         }
         return JSON.stringify({
           status: 'loaded_for_direct_view',
@@ -88,35 +75,32 @@ export const describeImageTool: Tool = {
         });
       }
 
-      const visionMessages = [
-        {
-          role: 'system',
-          content: `You are a vision analyst. Analyze the user's image(s) and complete the requested task.
-Respond in the user's language. Be detailed and precise.`
-        },
-        {
-          role: 'user',
-          content: [
-            { type: 'text', text: question },
-            ...imagesToAnalyze.map(img => ({
-              type: 'image_url',
-              image_url: { url: `data:${img.mimeType};base64,${img.base64}` }
-            }))
-          ]
-        }
-      ];
-
-      const visionResp = await context.runVisionCompletion!({
-        messages: visionMessages,
+      if (!context.runVisionCompletion) {
+        return JSON.stringify({ status: 'error', message: 'Image analysis is unavailable in this run.' });
+      }
+      const visionResponse = await context.runVisionCompletion({
+        messages: [
+          {
+            role: 'system',
+            content: "You are a vision analyst. Analyze the user's image(s) and complete the requested task. Respond in the user's language. Be detailed and precise.",
+          },
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: question },
+              ...imagesToAnalyze.map(image => ({
+                type: 'image_url',
+                image_url: { url: `data:${image.mimeType};base64,${image.base64}` },
+              })),
+            ],
+          },
+        ],
         max_tokens: 2000,
       });
-
-      const visionText = visionResp.response?.choices?.[0]?.message?.content || '';
-
       return JSON.stringify({
         status: 'success',
         images_analyzed: imagesToAnalyze.length,
-        vision_result: visionText,
+        vision_result: visionResponse.response?.choices?.[0]?.message?.content || '',
       });
     } catch (err: any) {
       return JSON.stringify({ status: 'error', message: `Image analysis error: ${err?.message || String(err)}` });

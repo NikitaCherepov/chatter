@@ -930,6 +930,9 @@ const MessageItem = React.memo(function MessageItem({
     </div>
   );
   const workContent = splitWorkContent(displayedVariantContent, msg.intermediate_messages);
+  const answer = isGenerating ? '' : workContent.answer;
+  const hasAnswerBody = Boolean(answer.trim() || msg.images?.length || msg.attachments?.length || isEditing);
+  const showReasoningDots = (isStreamingReasoning || isRegenerating) && !displayedVariantContent && !msg.tool_status;
 
   return (
     <div
@@ -983,9 +986,10 @@ const MessageItem = React.memo(function MessageItem({
         draft={isGenerating ? workContent.answer : undefined}
         onImageClick={onSetViewerImageSrc}
       />}
-      <div className={s.bubbleWrap}>
+      <div className={s.bubbleWrap} data-empty-answer={msg.role === 'assistant' && !hasAnswerBody && !showReasoningDots || undefined}>
         <motion.div
           className={msg.role === 'user' && isOwnUser ? s.bubbleUser : s.bubble}
+          data-answer-bubble={msg.role === 'assistant' && hasAnswerBody || undefined}
           layout={isVariantMorphing ? 'size' : false}
           transition={{ layout: { duration: 0.12, ease: 'easeOut' } }}
         >
@@ -1096,14 +1100,14 @@ const MessageItem = React.memo(function MessageItem({
           ) : (
             msg.role === 'assistant'
               ? (
-                (isStreamingReasoning || isRegenerating) && !displayedVariantContent && !msg.tool_status ? (
+                showReasoningDots ? (
                   <div className={`${s.typingDots} ${isStreamingReasoning ? s.typingDotsStreaming : ''}`}>
                     <span className={s.dot} />
                     <span className={s.dot} />
                     <span className={s.dot} />
                   </div>
                 ) : (
-                  <div className={`${s.bubbleText} ${isStreamingContent ? s.bubbleTextStreaming : ''}`}><MarkdownRenderer content={isGenerating ? '' : workContent.answer} highlightQuery={searchHighlightQuery} onImageClick={onSetViewerImageSrc} questionnaire={questionnaire} onMessageLink={onMessageLink} deferOffscreen={!isGenerating} /></div>
+                  <div className={`${s.bubbleText} ${isStreamingContent ? s.bubbleTextStreaming : ''}`}><MarkdownRenderer content={answer} highlightQuery={searchHighlightQuery} onImageClick={onSetViewerImageSrc} questionnaire={questionnaire} onMessageLink={onMessageLink} deferOffscreen={!isGenerating} /></div>
                 )
               )
               : msg.questionnaire_response ? <QuestionnaireResult response={msg.questionnaire_response} onImageClick={onSetViewerImageSrc} />
@@ -1320,6 +1324,7 @@ export function ChatPage() {
   const activeChatTitle = chats.find(chat => chat.id === activeChatId)?.title
     || (tabsEnabled ? workspace.tabs.find(tab => tab.id === activeChatId)?.title : undefined);
   const [libraryOpen, setLibraryOpen] = useState(false);
+  const chatSidebarRef = useRef<HTMLElement>(null);
   const libraryTrigger = useRef<HTMLButtonElement>(null);
   const librarySearch = useRef<HTMLInputElement>(null);
   const closeChatLibrary = () => {
@@ -1330,6 +1335,8 @@ export function ChatPage() {
     if (!tabsEnabled) setLibraryOpen(false);
   }, [tabsEnabled]);
   useLayoutEffect(() => {
+    const panel = chatSidebarRef.current;
+    if (panel) panel.inert = tabsEnabled && !libraryOpen;
     if (libraryOpen && tabsEnabled) librarySearch.current?.focus({ preventScroll: true });
   }, [libraryOpen, tabsEnabled]);
   const [effectivePersonaImageUrl, setEffectivePersonaImageUrl] = useState<string | null>(null);
@@ -6264,7 +6271,7 @@ export function ChatPage() {
       <motion.aside key="chat-list"
         id={tabsEnabled ? 'chat-library' : undefined}
         data-chat-library={tabsEnabled ? libraryOpen : undefined}
-        ref={panel => { if (panel) panel.inert = tabsEnabled && !libraryOpen; }}
+        ref={chatSidebarRef}
         onKeyDown={event => {
           if (event.key !== 'Escape' || !tabsEnabled || !libraryOpen || event.defaultPrevented) return;
           event.stopPropagation();
@@ -8418,7 +8425,7 @@ export function ChatPage() {
       data-layout-density={layout.chatList} data-layout-messages={layout.messages}
       data-layout-custom={Boolean(activeLayout || layoutPreview)}
     >
-      {tabsEnabled && libraryOpen && <div className={s.chatLibraryBackdrop} onPointerDown={() => closeChatLibrary()} />}
+      {tabsEnabled && <div className={s.chatLibraryBackdrop} data-open={libraryOpen} onPointerDown={closeChatLibrary} />}
       {/* The keys preserve mounted chat, folder and tool state when the sides swap. */}
       {layout.chatSide === 'right'
         ? [toolsSidebar, conversation, roomSidebar, chatSidebar]

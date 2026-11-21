@@ -8,6 +8,8 @@
     "pinChat": "Закрепить «{{title}}»",
     "unpinChat": "Открепить «{{title}}»",
     "closeTab": "Закрыть вкладку",
+    "scrollTabsLeft": "Прокрутить вкладки влево",
+    "scrollTabsRight": "Прокрутить вкладки вправо",
     "closeChat": "Закрыть вкладку «{{title}}»",
     "toolsLimit": "На верхней панели помещается до трёх инструментов",
     "untitled": "Чат {{id}}"

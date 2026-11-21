@@ -486,6 +486,7 @@ try {
     throwIfAborted: (signal) => signal?.throwIfAborted(),
     withAbort: async (promise) => promise,
     toolDefinitions: [],
+    modelSupportsVision: () => false,
     normalizeTokenUsage: () => ({
       prompt_tokens: 0,
       completion_tokens: 0,

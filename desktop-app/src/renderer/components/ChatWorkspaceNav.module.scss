@@ -14,7 +14,7 @@
   font-size: calc(13px * var(--appearance-ui-scale, 1));
 }
 
-.chats, .tools, .tabs, .tab {
+.chats, .tools, .tabLane, .tabItems, .tab {
   display: flex;
   align-items: center;
   gap: 4px;
@@ -23,12 +23,16 @@
 
 .chats { flex: 1 1 260px; gap: 10px; }
 .tools { flex: 0 0 auto; margin-inline-start: auto; position: relative; }
+.tabLane { flex: 1 1 0; gap: 2px; }
 .tabs {
-  flex: 1 1 auto;
+  flex: 1 1 0;
+  min-width: 0;
   overflow-x: auto;
-  padding: 2px;
-  scrollbar-width: thin;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar { display: none; }
 }
+.tabItems { width: max-content; padding-block: 2px; }
 
 .tab {
   flex: 0 0 auto;
@@ -97,6 +101,17 @@
   padding: 0;
   color: var(--text-muted);
   &:disabled { opacity: .4; cursor: default; }
+}
+
+.tabScrollButton {
+  width: 24px;
+  color: var(--text-secondary);
+
+  &[aria-disabled='true'] {
+    opacity: .35;
+    cursor: default;
+    background: transparent;
+  }
 }
 
 .toolFavorite {

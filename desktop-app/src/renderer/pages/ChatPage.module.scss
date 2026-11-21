@@ -1719,6 +1719,17 @@
   inset: 0;
   z-index: 64;
   background: color-mix(in srgb, var(--text-primary) 16%, transparent);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.18s ease, visibility 0s linear 0.18s;
+}
+
+.chatLibraryBackdrop[data-open='true'] {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transition-delay: 0s;
 }
 
 .sidebar[data-chat-library] {
@@ -1728,11 +1739,19 @@
   z-index: 65;
   max-width: calc(100% - 32px);
   box-shadow: 8px 0 28px #0002;
+  translate: none;
+  transition: translate 0.18s ease-in-out, visibility 0s;
 }
 
 .sidebar[data-chat-library='false'] {
+  translate: -100%;
   visibility: hidden;
   pointer-events: none;
+  transition-delay: 0s, 0.18s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar[data-chat-library], .chatLibraryBackdrop { transition: none; }
 }
 
 .layout[data-layout-column='reading'] { --chat-layout-column: 820px; }
@@ -1743,11 +1762,15 @@
   .chatItemTime { margin-top: 2px; }
 }
 
-.layout[data-layout-messages='bubbles'] .messageGroupAssistant .bubble {
-  background: var(--bg-bubble);
-  border-color: var(--border-light);
-  border-radius: var(--appearance-radius, 12px);
-  padding: calc(10px * var(--appearance-density, 1)) calc(14px * var(--appearance-density, 1));
+.layout[data-layout-messages='bubbles'] .messageGroupAssistant {
+  .bubbleWrap[data-empty-answer] { display: none; }
+
+  .bubble[data-answer-bubble] {
+    background: var(--bg-bubble);
+    border-color: var(--border-light);
+    border-radius: var(--appearance-radius, 12px);
+    padding: calc(12px * var(--appearance-density, 1)) calc(14px * var(--appearance-density, 1));
+  }
 }
 
 .emptyToolsTrigger { position: absolute; top: 12px; right: 16px; }
@@ -1756,7 +1779,8 @@
   .layout[data-layout-custom='true'] {
     .sidebar:not(.sidebarCollapsed) { max-width: 34vw; }
     .roomPanel,
-    [data-tools-panel-open='true'] {
+    [data-tools-panel-open='true'],
+    [data-tools-panel-overlay] {
       position: absolute;
       inset-block: var(--workspace-nav-bottom, 0px) 0;
       right: 0;
@@ -1765,7 +1789,7 @@
       box-shadow: -4px 0 16px #0002;
     }
     .roomPanel { z-index: 39; }
-    [data-tools-panel-open='true'][data-tools-panel-side='left'] { right: auto; left: 0; }
+    [data-tools-panel-side='left']:is([data-tools-panel-open='true'], [data-tools-panel-overlay]) { right: auto; left: 0; }
   }
 }
 

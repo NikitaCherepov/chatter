@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState, useMemo, useRef, useSyncExternalStore } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useState, useMemo, useRef, useSyncExternalStore } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { toast } from 'sonner';
@@ -306,6 +306,7 @@ export function ToolsToolbar({ favorites, onFavorite, activeChatId, onOpen }: {
 export function ToolsPanel({ plan, isAdmin, placement = 'rail', side = 'right', activeChatId, onImageClick, onChatSelect }: Props) {
   const { t } = useTranslation();
   const reduceMotion = useReducedMotion();
+  const panelRef = useRef<HTMLElement>(null);
   const [isOpen, setIsOpen] = useState(() => getToolsPanelState().isOpen);
   const [narrowWindow, setNarrowWindow] = useState(() => window.matchMedia('(max-width: 1100px)').matches);
   useEffect(() => {
@@ -370,6 +371,10 @@ export function ToolsPanel({ plan, isAdmin, placement = 'rail', side = 'right', 
   const compactMenu = narrowWindow && !sidebarToolId;
   // Only the menu becomes an icon rail; active tools keep their full interface.
   const hidden = !isOpen && placement !== 'rail';
+  useLayoutEffect(() => {
+    if (panelRef.current) panelRef.current.inert = hidden;
+  }, [hidden]);
+
   const panelWidth = isOpen
     ? (compactMenu ? 65 : sidebarToolId === 'browser' || sidebarToolId === 'youtube-music' || sidebarToolId === 'json-extractor' || sidebarToolId === 'newspapers' ? 420 : 260)
     : hidden ? 0 : 65;
@@ -452,7 +457,8 @@ export function ToolsPanel({ plan, isAdmin, placement = 'rail', side = 'right', 
         id="chat-tools-panel"
         data-tools-panel-open={isOpen}
         data-tools-panel-side={side}
-        ref={panel => { if (panel) panel.inert = hidden; }}
+        data-tools-panel-overlay={placement !== 'rail' || undefined}
+        ref={panelRef}
         initial={false}
         className={`${s.panel} ${compactMenu ? s.panelCompact : ''} ${!isOpen ? s.panelCollapsed : ''} ${side === 'left' ? s.panelLeft : ''} ${hidden ? s.panelHidden : ''}`}
         animate={{ width: panelWidth }}

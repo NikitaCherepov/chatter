@@ -14,13 +14,23 @@ const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'chatter-appearance-ui-'
 const modulePath = (file: string) =>
   JSON.stringify(path.resolve(desktopRoot, 'src/renderer', file).replaceAll('\\', '/'));
 
-const pageSource = fs.readFileSync(new URL('../src/renderer/pages/ChatPage.tsx', import.meta.url), 'utf8');
+const pageSource = fs.readFileSync(new URL('../src/renderer/pages/ChatPage.tsx', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
 const shellOrder = pageSource.match(/\{layout\.chatSide === 'right'\s*\? \[toolsSidebar, conversation, roomSidebar, chatSidebar\]\s*:\s*\[chatSidebar, conversation, roomSidebar, toolsSidebar\]\}/)?.[0];
 assert.ok(shellOrder);
 const workspaceBar = pageSource.slice(pageSource.indexOf("        {(tabsEnabled || layout.tools === 'toolbar')"), pageSource.indexOf('        {layoutPreview && (', pageSource.indexOf('  const conversation = (')));
 assert.ok(workspaceBar.includes('<ChatWorkspaceTabs') && workspaceBar.includes('<ToolsToolbar'));
 const workspaceTitle = pageSource.slice(pageSource.indexOf('  const activeChatTitle ='), pageSource.indexOf('  const [libraryOpen,'));
 assert.ok(workspaceTitle.includes('workspace.tabs.find'));
+const libraryState = pageSource.slice(pageSource.indexOf('  const [libraryOpen,'), pageSource.indexOf('  const [effectivePersonaImageUrl,'));
+const libraryFrameStart = pageSource.indexOf('      <motion.aside key="chat-list"');
+const libraryFrame = pageSource.slice(libraryFrameStart, pageSource.indexOf('        <div className={s.sidebarHeader}>', libraryFrameStart));
+const libraryBackdrop = pageSource.match(/\{tabsEnabled && <div className=\{s\.chatLibraryBackdrop\}[^\n]+\}/)?.[0];
+assert.ok(libraryState.includes('chatSidebarRef') && libraryFrame.includes('data-chat-library') && libraryBackdrop);
+const answerStateStart = pageSource.indexOf('  const workContent = splitWorkContent(displayedVariantContent,');
+const answerState = pageSource.slice(answerStateStart, pageSource.indexOf('\n\n  return (', answerStateStart));
+const answerBubbleStart = pageSource.indexOf('      <div className={s.bubbleWrap}', answerStateStart);
+const answerBubble = pageSource.slice(answerBubbleStart, pageSource.indexOf("      {(msg.role === 'assistant' || msg.role === 'user')", answerBubbleStart));
+assert.ok(answerState.includes('hasAnswerBody') && answerBubble.includes('data-answer-bubble'));
 const authModule = String.raw`
 import React from 'react';
 export const TestAuth=React.createContext(null);
@@ -30,6 +40,11 @@ const apiModule = String.raw`
 import { parseAppearanceProfile } from ${modulePath('lib/appearance-schema.ts')};
 export const API_BASE='test-server';
 export const resolveAuthenticatedAssetUrl=(url)=>url;
+const notes=Array.from({length:45},(_,i)=>({id:i+1,title:'Notebook note '+(i+1),content:'Test note text',created_at:1700000000}));
+export const listNotes=async()=>({notes,total:notes.length});
+export const getNoteById=async(id)=>({note:notes.find(note=>note.id===id)});
+export const createNote=async()=>({note_id:46});
+export const deleteNote=async()=>({ok:true});
 export const apiFetch=async(path,options)=>{
  await new Promise(resolve=>setTimeout(resolve,5));
  const userId=window.testAccount;
@@ -66,10 +81,13 @@ import {createRoot} from 'react-dom/client';
 import {QueryClient,QueryClientProvider} from '@tanstack/react-query';
 import {createInstance} from 'i18next';
 import {I18nextProvider} from 'react-i18next';
+import {AnimatePresence,motion} from 'framer-motion';
 import {TestAuth} from 'test-auth';
 import {AppearancePanel} from ${modulePath('components/AppearancePanel.tsx')};
 import {ChatLayoutPanel,ChatLayoutConfirmation,ChatLayoutPreviewBar} from ${modulePath('components/ChatLayoutPanel.tsx')};
 import {useChatLayouts} from ${modulePath('lib/chat-layout-service.ts')};
+import {setNotebookDraftState,setToolsPanelState} from ${modulePath('lib/tools.ts')};
+import notebook from ${modulePath('components/NotebookTool.module.scss')};
 import {CHAT_LAYOUT_CAPABILITIES,DEFAULT_CHAT_LAYOUT} from ${modulePath('lib/chat-layout-schema.ts')};
 import {ToolsPanel,ToolsHeaderButton,ToolsToolbar} from ${modulePath('components/ToolsPanel.tsx')};
 import {ChatWorkspaceBar,ChatWorkspaceTabs} from ${modulePath('components/ChatWorkspaceTabs.tsx')};
@@ -80,6 +98,8 @@ import {newAppearance} from ${modulePath('lib/appearance-schema.ts')};
 import {previewAppearance,animateMessageArrival} from ${modulePath('lib/appearance-runtime.ts')};
 import {appearanceColors,contrastRatio} from ${modulePath('lib/appearance-colors.ts')};
 import {ToolActivityCall} from ${modulePath('components/ToolActivity.tsx')};
+import {WorkLog} from ${modulePath('components/WorkLog.tsx')};
+import {splitWorkContent} from ${modulePath('lib/work-log-content.ts')};
 import {ReasoningDisclosure} from ${modulePath('components/ReasoningDisclosure.tsx')};
 import {useMessageArrival} from ${modulePath('lib/use-message-arrival.ts')};
 import {ChatComposerDock} from ${modulePath('components/ChatComposerDock.tsx')};
@@ -93,6 +113,7 @@ import chat from ${modulePath('pages/ChatPage.module.scss')};
 import ${modulePath('global.scss')};
 window.newAppearance=newAppearance;window.previewAppearance=previewAppearance;window.appearanceColors=appearanceColors;window.contrastRatio=contrastRatio;window.light=()=>setThemePreference("light");
 window.messageViewport=()=>document.querySelector('.'+chat.messages);
+window.notebookList=()=>document.querySelector('.'+notebook.notesList);
 window.testAccount=1;window.testDb={};window.layoutDb={};
 window.electronAPI={onToolWindowClosed:()=>()=>{}};window.animationCount=0;window.motionSamples=[];
 const nativeAnimate=Element.prototype.animate;
@@ -127,6 +148,22 @@ function Conversation({mode='floating'}={}){
 
 }
 const testChats=[{id:101,title:'Рабочий чат'},{id:102,title:'Второй чат'}];
+function AnswerSample({phase}){
+ const s=chat;
+ const msg={role:'assistant',intermediate_messages:phase==='reasoning'?[]:['Checking the files.']};
+ const displayedVariantContent=phase==='reasoning'?'':phase==='draft'?'Checking the files.\n\nPartial answer':'Checking the files.\n\nFinal answer';
+ const isGenerating=phase!=='final',isStreamingContent=phase==='draft',isStreamingReasoning=phase==='reasoning';
+ const isEditing=false,isOwnUser=false,isVariantMorphing=false,isRegenerating=false;
+ const searchHighlightQuery='',questionnaire=undefined,onSetViewerImageSrc=()=>{},onMessageLink=()=>{};
+ ${answerState}
+ return <div className={s.layout} data-layout-messages="bubbles" data-answer-sample
+   style={{position:'absolute',top:90,left:'25%',right:0,width:'75%',height:'auto',padding:20,zIndex:95}}>
+  <div className={s.messageGroupAssistant}>
+   <WorkLog messages={workContent.messages} generating={isGenerating} draft={isGenerating?workContent.answer:undefined}/>
+   ${answerBubble}
+  </div>
+ </div>;
+}
 function LayoutFixture({initialEditor=true}){
  const layouts=useChatLayouts();
  const [editor,setEditor]=useState(initialEditor),[draft,setDraft]=useState(),[preview,setPreview]=useState(),[proposal,setProposal]=useState();
@@ -135,29 +172,40 @@ function LayoutFixture({initialEditor=true}){
  const [activeChatId,setActiveChatId]=useState(window.testActiveChat??101);
  const [chats,setVisibleChats]=useState(testChats);
  window.filterWorkspaceChats=()=>setVisibleChats(testChats.slice(0,1));
- const [libraryOpen,setLibraryOpen]=useState(false);
- const libraryTrigger=useRef(null),librarySearch=useRef(null);
  const tabsEnabled=layout.chatSide==='top';
+ ${libraryState}
  const workspace=useChatWorkspace('fixture:'+window.testAccount,activeChatId,chats,tabsEnabled);
  ${workspaceTitle}
  window.workspaceChatTitle=activeChatTitle;
  const setRoomOpen=()=>{};
- const closeLibrary=()=>{setLibraryOpen(false);libraryTrigger.current?.focus();};
- useLayoutEffect(()=>{if(libraryOpen)librarySearch.current?.focus();},[libraryOpen]);
- const selectChat=id=>{setActiveChatId(id);window.testActiveChat=id;if(libraryOpen)closeLibrary();};
+ const selectChat=id=>{setActiveChatId(id);window.testActiveChat=id;if(libraryOpen)closeChatLibrary();};
  const closeWorkspaceTab=id=>{
   workspace.removeTab(id);
   if(id===activeChatId)selectChat(workspace.tabs.find(tab=>tab.id!==id)?.id??null);
  };
  window.openLayoutEditor=()=>setEditor(true);
+ window.closeLayoutEditor=()=>setEditor(false);
+ window.resetWorkspaceTools=()=>{
+  setNotebookDraftState({title:'',content:'',isOpen:false});
+  setToolsPanelState({isOpen:false,openTools:[]});
+ };
  window.layoutProposal=()=>setProposal({proposal_id:'layout-bot',profile:{...CHAT_LAYOUT_CAPABILITIES.template,name:'Bot layout',id:'from-bot-layout',chatSide:'left'}});
- const chatSidebar=<aside key="chat-list" className={chat.sidebar} data-chat-list id={tabsEnabled?'chat-library':undefined}
-  data-chat-library={tabsEnabled?libraryOpen:undefined} ref={panel=>{if(panel)panel.inert=tabsEnabled&&!libraryOpen;}}
-  onKeyDown={event=>{if(event.key==='Escape')closeLibrary();}} style={{width:layout.sidebarWidth??260}}>
-  <button onClick={()=>setEditor(true)}>Settings</button>
+ const s=chat, sidebarCollapsed=false, sidebarWidth=layout.sidebarWidth??260;
+ const [notifications,setNotifications]=useState(false);
+ const [answerSample,setAnswerSample]=useState(null);
+ window.setAnswerSample=setAnswerSample;
+ const chatSidebar=(
+ ${libraryFrame}
   <input ref={librarySearch} aria-label="Library search"/>
-  <details open><summary>Folder</summary>{testChats.map(item=><button key={item.id} onClick={()=>selectChat(item.id)}>{item.title}</button>)}</details>
- </aside>;
+  <div className={chat.sidebarContentBody} data-library-scroll>
+   <details open><summary>Folder</summary>{testChats.map(item=><button key={item.id} onClick={()=>selectChat(item.id)}>{item.title}</button>)}</details>
+   {Array.from({length:65},(_,i)=><div key={i} className={chat.chatItem}>Chat {i+1}</div>)}
+  </div>
+  <div className={chat.sidebarFooter}>
+   <button className={chat.userInfo} data-library-settings onClick={()=>setEditor(true)}>Settings</button>
+   <button className={chat.iconBtn} data-library-notifications aria-pressed={notifications} onClick={()=>setNotifications(value=>!value)}>Notifications</button>
+  </div>
+ </motion.aside>);
  const toolsSidebar=<ToolsPanel key="tools" placement={layout.tools} side={layout.chatSide==='right'?'left':'right'} plan="free" isAdmin={0}/>;
  const roomSidebar=null;
  const conversation=<main key="conversation" className={chat.main}>
@@ -174,7 +222,9 @@ function LayoutFixture({initialEditor=true}){
  </main>;
  return <div className={chat.layout} data-layout-side={layout.chatSide} data-layout-column={layout.column}
   data-layout-density={layout.chatList} data-layout-messages={layout.messages} data-layout-custom={!!(active||preview)}>
+  ${libraryBackdrop}
   ${shellOrder}
+  {answerSample&&<AnswerSample phase={answerSample}/>}
   {editor&&<div id="layout-editor-fixture" style={{position:'absolute',zIndex:95,top:20,left:20,width:'min(680px, 90vw)',maxHeight:'90vh',overflow:'auto',background:'var(--bg-primary)',padding:20}}>
    <ChatLayoutPanel layouts={layouts} initialDraft={draft} onPreview={profile=>{setPreview({profile,editor:true});setEditor(false);}}/>
   </div>}
@@ -216,7 +266,7 @@ const {app,BrowserWindow}=require('electron');
 app.setPath('userData',path.join(__dirname,'user-data'));
 setTimeout(()=>{console.error('Appearance UI timed out');app.exit(1);},60000);
 app.whenReady().then(async()=>{
- const win=new BrowserWindow({show:false,width:1440,height:1000,useContentSize:true,webPreferences:{sandbox:true,nodeIntegration:false,contextIsolation:true,backgroundThrottling:false}});
+ const win=new BrowserWindow({show:false,width:1440,height:1000,useContentSize:true,webPreferences:{offscreen:true,sandbox:true,nodeIntegration:false,contextIsolation:true,backgroundThrottling:false}});
  const wc=win.webContents,errors=[];
  wc.on('console-message',(_event,level,message)=>{if(level===3)errors.push(message);});
  wc.session.webRequest.onBeforeRequest({urls:['http://*/*','https://*/*']},(_details,cb)=>cb({cancel:true}));
@@ -480,7 +530,101 @@ app.whenReady().then(async()=>{
  fs.writeFileSync(path.join(process.env.TEMP,'chatter-workspace-review.png'),(await wc.capturePage()).toPNG());
  await js('[...document.querySelectorAll("button[aria-label]")].find(button=>button.getAttribute("aria-label")==="Закрыть вкладку «Второй чат»").click()');
  await until('document.querySelector("[data-workspace-chat][aria-current=page]")?.dataset.workspaceChat==="101" && document.activeElement.dataset.workspaceChat==="101"');
+ const strip='document.querySelector("[data-workspace-tab-strip]")';
+ const arrow=direction=>'[...document.querySelectorAll("button[aria-label]")].find(button=>button.getAttribute("aria-label")==='+JSON.stringify('Прокрутить вкладки '+direction)+')';
+ assert.equal(await js('Boolean('+arrow('влево')+')'),false);
+ await js('(()=>{const key="chatter_workspace:fixture:2";const state=JSON.parse(localStorage.getItem(key));state.tabs=Array.from({length:24},(_,i)=>({id:200+i,title:"Длинный заголовок разговора "+(i+1),pinned:i===0}));localStorage.setItem(key,JSON.stringify(state));window.testActiveChat=223;window.reloadWorkspace();})()');
+ await until(arrow('вправо')+'?.getAttribute("aria-disabled")==="true" && '+strip+'.scrollLeft>0');
+ assert.equal(await js('getComputedStyle('+strip+').scrollbarWidth'),'none');
+ const fitsActive='(()=>{const strip='+strip+'.getBoundingClientRect(),active=document.querySelector("[data-workspace-chat][aria-current=page]").parentElement.getBoundingClientRect();return active.left>=strip.left-1 && active.right<=strip.right+1;})()';
+ assert.equal(await js(fitsActive),true,'an active chat at the far end is revealed together with its actions');
+ const end=await js(strip+'.scrollLeft');
+ await js(arrow('влево')+'.click()');
+ await until(strip+'.scrollLeft<'+end);
+ await until(arrow('вправо')+'.getAttribute("aria-disabled")==="false"');
+ await js(strip+'.scrollLeft=0');
+ await until(arrow('влево')+'.getAttribute("aria-disabled")==="true"');
+ const wheel=await js('(()=>{const strip='+strip+';const event=new WheelEvent("wheel",{deltaY:140,bubbles:true,cancelable:true});strip.dispatchEvent(event);return {position:strip.scrollLeft,cancelled:event.defaultPrevented};})()');
+ assert.deepEqual(wheel,{position:140,cancelled:true});
+ await js(strip+'.scrollLeft=0');
+ assert.equal(await js('(()=>{const strip='+strip+';const event=new WheelEvent("wheel",{deltaY:-100,bubbles:true,cancelable:true});strip.dispatchEvent(event);return event.defaultPrevented;})()'),false,'wheel events at the edge remain available to the surrounding UI');
+ await js('document.querySelector("[data-workspace-chat][title$=\\\"24\\\"]").click()');
+ win.setSize(1000,810);
+ await until(fitsActive);
+ await sleep(150);await wc.capturePage();await sleep(100);
+ fs.writeFileSync(path.join(process.env.TEMP,'chatter-workspace-scroll-review.png'),(await wc.capturePage()).toPNG());
+ console.log('PASS: hidden native scrollbar, overflow arrows, horizontal wheel scrolling and active tab visibility after resize');
+ // Exercise Chromium hit testing and real input after a fresh mount with the top preset.
+ const target=async expression=>{
+  const result=await js('(()=>{const element='+expression+';const r=element.getBoundingClientRect(),x=Math.round(r.left+r.width/2),y=Math.round(r.top+r.height/2),hit=document.elementFromPoint(x,y);return {x,y,receiver:hit?.tagName,hit:element.contains(hit)};})()');
+  assert.ok(result.hit,expression+' was blocked '+JSON.stringify(result));
+  return {x:result.x,y:result.y};
+ };
+ const clickAt=async expression=>{
+  const point=await target(expression);
+  await wc.debugger.sendCommand('Input.dispatchMouseEvent',{...point,type:'mousePressed',button:'left',clickCount:1});
+  await wc.debugger.sendCommand('Input.dispatchMouseEvent',{...point,type:'mouseReleased',button:'left',clickCount:1});
+ };
+ const wheelAt=async expression=>{
+  const point=await target(expression);
+  await wc.debugger.sendCommand('Input.dispatchMouseEvent',{...point,type:'mouseWheel',deltaX:0,deltaY:360});
+ };
+ await wc.debugger.attach('1.3');
+ await wc.debugger.sendCommand('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'no-preference'}]});
+ for(const width of [740,1450]){
+  win.setSize(width,850);
+  await js('window.resetWorkspaceTools();window.reloadWorkspace()');
+  await until('document.querySelector("#chat-library")?.inert && document.querySelector("#chat-tools-panel")?.inert');
+  await clickAt('document.querySelector("button[aria-controls=chat-library]")');
+  await until('!document.querySelector("#chat-library").inert && document.activeElement.getAttribute("aria-label")==="Library search" && Math.abs(document.querySelector("#chat-library").getBoundingClientRect().left)<1');
+  assert.ok(await js('getComputedStyle(document.querySelector("#chat-library")).transitionProperty.includes("translate")'));
+  await wheelAt('document.querySelector("[data-library-scroll]")');
+  await until('document.querySelector("[data-library-scroll]").scrollTop>0');
+  await clickAt('document.querySelector("[data-library-notifications]")');
+  await until('document.querySelector("[data-library-notifications]").getAttribute("aria-pressed")==="true"');
+  await clickAt('document.querySelector("[data-library-settings]")');
+  await until('!!document.querySelector("#layout-editor-fixture")');
+  await js('window.closeLayoutEditor()');
+  await until('!document.querySelector("#layout-editor-fixture")');
+  await clickAt('document.querySelector("[data-layout-side] > [data-open=true]")');
+  await until('document.querySelector("#chat-library").inert && getComputedStyle(document.querySelector("#chat-library")).visibility==="hidden"');
+  const notebookButton='[...document.querySelectorAll("button[aria-label]")].find(button=>button.getAttribute("aria-label")==="Блокнот")';
+  await clickAt(notebookButton);
+  try {
+   await until('!document.querySelector("#chat-tools-panel")?.inert && document.querySelector("#chat-tools-panel").getBoundingClientRect().width>=259 && Boolean(window.notebookList()?.scrollHeight>window.notebookList()?.clientHeight)');
+  } catch (error) {
+   console.error('Notebook panel:',await js('(()=>{const p=document.querySelector("#chat-tools-panel"),l=window.notebookList();return {inert:p.inert,open:p.dataset.toolsPanelOpen,width:p.getBoundingClientRect().width,visibility:getComputedStyle(p).visibility,tool:p.textContent.slice(0,120),listHeight:l?.clientHeight,listScrollHeight:l?.scrollHeight};})()'));
+   throw error;
+  }
+  await wheelAt('window.notebookList()');
+  await until('window.notebookList().scrollTop>0');
+  const createNote='[...document.querySelectorAll("#chat-tools-panel button")].find(button=>button.textContent.trim()==="Создать")';
+  await until('Boolean('+createNote+')');
+  await clickAt(createNote);
+  await until('!!document.querySelector("#chat-tools-panel textarea")');
+  if(width===740){
+   await clickAt(notebookButton);
+   await until('document.querySelector("#chat-tools-panel").inert && document.querySelector("#chat-tools-panel").getBoundingClientRect().width<1');
+   assert.equal(await js('getComputedStyle(document.querySelector("#chat-tools-panel")).position'),'absolute');
+  }
+ }
+ await wc.debugger.detach();
+
+ const answerSample='document.querySelector("[data-answer-sample]")';
+ await js('window.setAnswerSample("reasoning")');
+ await until('!!'+answerSample);
+ assert.equal(await js('Boolean('+answerSample+'.querySelector("[data-answer-bubble]"))'),false);
+ await js('window.setAnswerSample("draft")');
+ await until('Boolean('+answerSample+'.querySelector("[data-empty-answer]"))');
+ assert.equal(await js('getComputedStyle('+answerSample+'.querySelector("[data-empty-answer]")).display'),'none');
+ assert.ok(await js(answerSample+'.querySelector("[data-work-log]").textContent.includes("Partial answer")'));
+ await js('window.setAnswerSample("final")');
+ await until('Boolean('+answerSample+'.querySelector("[data-answer-bubble]"))');
+ assert.equal(await js('getComputedStyle('+answerSample+'.querySelector("[data-answer-bubble]")).paddingTop'),'12px');
+ assert.ok(await js(answerSample+'.querySelector("[data-answer-bubble]").textContent.includes("Final answer")'));
+ console.log('PASS: thinking and work-log drafts have no answer bubble, final answer has top padding after the work log');
  assert.deepEqual(errors,[]);
+ console.log('PASS: real pointer clicks and wheel scrolling in the chat library and Notebook with the persisted top layout');
  console.log('PASS: top workspace preview, mounted library and folder state, Escape/focus, tab pin and close, tool favorites and persistence');
  console.log('PASS: layout editor, in-chat preview, stateful panel reorder, docked composer bottom follow, narrow tools panel, and inactive bot layout save');
  win.destroy();
@@ -502,14 +646,17 @@ try {
             return '\0test-auth';
           if (
             (id.endsWith('/lib/api') || id === './api') &&
-            /AppearancePanel|AppearanceController|appearance-service|chat-layout-service/.test(importer ?? '')
+            /AppearancePanel|AppearanceController|appearance-service|chat-layout-service|NotebookTool/.test(importer ?? '')
           )
             return '\0test-api';
           if (['./ToolContent', './FloatingWidget'].includes(id) && importer?.endsWith('ToolsPanel.tsx')) return '\0layout-fixture-tools';
           if (id === 'appearance-ui.tsx') return '\0' + id;
         },
         async load(id: string) {
-          if (id === '\0layout-fixture-tools') return 'export const ToolContent = () => null; export const FloatingWidget = () => null;';
+          if (id === '\0layout-fixture-tools') return `import { createElement } from 'react';
+            import { NotebookTool } from ${modulePath('components/NotebookTool.tsx')};
+            export const ToolContent = ({toolId, contentMax}) => toolId === 'notebook' ? createElement(NotebookTool, {contentMax}) : null;
+            export const FloatingWidget = () => null;`;
           if (id === '\0test-auth')
             return transformWithEsbuild(authModule, 'auth.tsx', {
               loader: 'tsx',

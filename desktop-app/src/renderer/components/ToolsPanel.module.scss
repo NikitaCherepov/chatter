@@ -21,6 +21,11 @@
 .panelHidden {
   visibility: hidden;
   border: 0;
+  transition: visibility 0s linear 0.2s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panelHidden { transition: none; }
 }
 
 .panelCompact {

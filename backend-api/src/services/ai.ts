@@ -59,6 +59,7 @@ import { getMcpDefinitions, runMcpTool, mcpSearchTool, mcpCallTool, mcpBrowseToo
 import { mcpErrorResult } from './mcp/errors.js';
 import { getModularTool, modularToolDefinitions } from './tools/registry.js';
 import { buildDescribeImageTool } from './tools/images/describe-image.js';
+import { buildToolImageMessage, type DirectToolImage } from './tools/image-input.js';
 import { getContextSummary, type ContextSummaryDto } from './context-summary.js';
 
 dotenv.config();
@@ -550,16 +551,8 @@ export function refreshConfiguredModels() {
 }
 refreshConfiguredModels();
 
-/**
- * Определяет, whether the current model supports native vision (приём изображений).
- * - manual-модель: проверяет флаг supportsVision из MODELS_MANUAL
- * - auto: проверяет env-флаг PRO_MODEL_SUPPORTS_VISION / LITE_MODEL_SUPPORTS_VISION
- */
-const modelSupportsVision = (manualModel: ManualModelEntry | undefined, plan: string): boolean => {
-  if (manualModel) return manualModel.supportsVision;
-  // auto-роутинг: PRO по умолчанию
-  return plan === 'pro' ? PRO_MODEL_SUPPORTS_VISION : LITE_MODEL_SUPPORTS_VISION;
-};
+export const modelSupportsVision = (manualModel: ManualModelEntry | undefined, mode: 'pro' | 'lite'): boolean =>
+  manualModel?.supportsVision ?? (mode === 'pro' ? PRO_MODEL_SUPPORTS_VISION : LITE_MODEL_SUPPORTS_VISION);
 
 const toSafeTokenCount = (value: unknown): number => {
   const numberValue = Number(value);
@@ -2007,7 +2000,7 @@ const waitForHitlConfirmation = async <T>(userId: number, promise: Promise<T>): 
 };
 
 export const toolDefinitions = [
-  // describe_image is added below with the active model's direct-view capability.
+  // describe_image is added with the other server tools below.
   ...modularToolDefinitions.filter(tool => tool.function.name !== 'describe_image'),
   {
     type: 'function',
@@ -3830,7 +3823,7 @@ const getTaskByUserAndId = (userId: number, taskId: number) => db.prepare(`
 
 type AgentToolActivity = { id: string; name: string; arguments: string; running: boolean; result_preview?: string; assessment?: ActionAssessment };
 
-export const runTool = async (user: UserRecord, timezoneOffset: number, toolName: string, argsRaw: string, aiCall: (requestPayload: Record<string, unknown>) => Promise<CompletionMeta>, generatedImages?: Array<{ image_base64: string; image_url?: string; prompt_used: string }>, displayStateSink?: { value: DisplayStatePayload | null }, desktopActionSink?: { value: DesktopActionPayload | null }, mapUpdateSink?: { value: MapUpdatePayload | null }, activeMacros?: Array<{ id: number; title: string; description?: string; commands: string[]; pinned?: boolean; return_output?: boolean }>, signal?: AbortSignal, subagentExtra?: { onToolActivity?: (call: AgentToolActivity) => Promise<void> | void; chatId?: number; originMessageCursor?: number; manualModel?: any; subagentMode?: 'auto' | 'manual'; subagentReasoningLevel?: ReasoningLevel | null; onToolStatus?: (text: string) => Promise<void> | void; onDesktopAction?: (action: any) => Promise<void> | void; displayManifest?: { moods?: string[]; reactions?: string[] } | null; currentDisplayState?: DisplayStatePayload | null; avatarControlEnabled?: boolean; onSubagentTrace?: (trace: any) => void; onSubagentUsageCall?: (agentName: string, usage: TokenUsageCall) => void; onVisionUsageCall?: (usage: TokenUsageCall) => void; shouldStopForQuota?: (usage: TokenUsageCall) => boolean; availableToolDefs?: any[]; attachmentReadContext?: AttachmentReadContext; responseFileSink?: ResponseFileSink; currentModelSupportsVision?: boolean; directImageSink?: { items: Array<{ base64: string; mimeType: string; question: string; localUrl?: string }> } }, autoRejectHitl?: boolean, userImages?: Array<{ base64: string; mimeType: string }>, billingUserId?: number) => {
+export const runTool = async (user: UserRecord, timezoneOffset: number, toolName: string, argsRaw: string, aiCall: (requestPayload: Record<string, unknown>) => Promise<CompletionMeta>, generatedImages?: Array<{ image_base64: string; image_url?: string; prompt_used: string }>, displayStateSink?: { value: DisplayStatePayload | null }, desktopActionSink?: { value: DesktopActionPayload | null }, mapUpdateSink?: { value: MapUpdatePayload | null }, activeMacros?: Array<{ id: number; title: string; description?: string; commands: string[]; pinned?: boolean; return_output?: boolean }>, signal?: AbortSignal, subagentExtra?: { onToolActivity?: (call: AgentToolActivity) => Promise<void> | void; chatId?: number; originMessageCursor?: number; manualModel?: any; subagentMode?: 'auto' | 'manual'; subagentReasoningLevel?: ReasoningLevel | null; onToolStatus?: (text: string) => Promise<void> | void; onDesktopAction?: (action: any) => Promise<void> | void; displayManifest?: { moods?: string[]; reactions?: string[] } | null; currentDisplayState?: DisplayStatePayload | null; avatarControlEnabled?: boolean; onSubagentTrace?: (trace: any) => void; onSubagentUsageCall?: (agentName: string, usage: TokenUsageCall) => void; onVisionUsageCall?: (usage: TokenUsageCall) => void; shouldStopForQuota?: (usage: TokenUsageCall) => boolean; availableToolDefs?: any[]; attachmentReadContext?: AttachmentReadContext; responseFileSink?: ResponseFileSink; currentModelSupportsVision?: boolean; directImageSink?: { items: DirectToolImage[] } }, autoRejectHitl?: boolean, userImages?: Array<{ base64: string; mimeType: string }>, billingUserId?: number) => {
   throwIfAborted(signal);
   const parsed = JSON.parse(argsRaw || '{}');
   // Room runs: `user` is the INITIATOR (data privacy: their servers, desktop,
@@ -7127,7 +7120,6 @@ const sendMessageThroughAiInternal = async (
   }
   if (!text && !hasImages && !hasAttachments) throw new Error('empty_text');
   // Фото форсирует PRO-маршрут (минуя LITE-роутер), но не переключает модель на vision-pro/lite.
-  // Если основная модель поддерживает vision — фото пойдёт напрямую. Если нет — будет доступен tool describe_image.
   const forceProRoute = Boolean(options?.forcePro) || text.startsWith('!!!') || hasImages;
   if (forceProRoute && !options?.forcePro && !hasImages) {
     text = text.replace(/^!{3,}/, '').trim();
@@ -7151,7 +7143,7 @@ const sendMessageThroughAiInternal = async (
     console.warn(`[ai] preferred_model "${preferredModelId}" not found in MODELS_MANUAL, falling back to auto`);
   }
   // Проверяем, whether the current model supports native vision
-  const currentModelSupportsVision = modelSupportsVision(manualModel, user.plan || 'free');
+  const currentModelSupportsVision = modelSupportsVision(manualModel, 'pro');
   // Auto routes are expected to support tools. Manual models can explicitly
   // disable them (OpenRouter capability is detected by the admin panel).
   const currentModelSupportsTools = manualModel?.supportsTools !== false;
@@ -8039,13 +8031,11 @@ const sendMessageThroughAiInternal = async (
   const proSystemPrompt = `${voicePromptHint}${buildSystemPrompt(`${roomIdentityPrompt}${promptContent}`, activePersona?.persona.name || toolUser.name || 'User', coreMemoryForPrompt, currentModelSupportsTools, undefined, includeIntuitionHint)}${playerInstructions}${pinnedHintForPrompt}${dynamicContextToolHint}${avatarPromptHint}`;
 
   // executionMode больше не переключается на vision-pro/lite при наличии фото.
-  // Фото идёт через нативный vision (если модель поддерживает) или через tool describe_image.
   let executionMode: 'pro' | 'lite' | 'vision-pro' | 'vision-lite' = 'pro';
   const subagentTool = options?.isDesktop ? buildInvokeSubagentTool() : null;
   // Tools that work from the server (SSH, maps, DevOps DB, PC command via WS) — available to ALL clients
   const serverOnlyTools = [
-    ...serverOnlyToolBuilders.filter(build => build !== buildDescribeImageTool && build !== buildBrowserControlTool).map(build => build()),
-    buildDescribeImageTool(currentModelSupportsVision),
+    ...serverOnlyToolBuilders.filter(build => build !== buildBrowserControlTool).map(build => build()),
     buildBrowserControlTool(currentModelSupportsVision),
   ];
   // UI actions can originate from any client (Telegram, future messengers, Desktop).
@@ -8514,10 +8504,10 @@ type ExecutedToolCall = {
   toolName: string;
   toolContent: string;
   assessment?: ActionAssessment;
-  directImages: Array<{ base64: string; mimeType: string; question: string; localUrl?: string }>;
+  directImages: DirectToolImage[];
 };
 
-const directImagesForNextTurn: Array<{ base64: string; mimeType: string; question: string; localUrl?: string }> = [];
+const directImagesForNextTurn: DirectToolImage[] = [];
 
 const runOneToolCall = async (toolCall: any, emitStatus = true): Promise<ExecutedToolCall> => {
   throwIfAborted(abortController.signal);
@@ -8535,7 +8525,7 @@ const runOneToolCall = async (toolCall: any, emitStatus = true): Promise<Execute
   }
 
   let toolContent = '';
-  const directImageSink: { items: Array<{ base64: string; mimeType: string; question: string; localUrl?: string }> } = { items: [] };
+  const directImageSink: { items: DirectToolImage[] } = { items: [] };
   try {
     if (options?.scheduledTask && toolName === 'finish_task') {
       if (message.tool_calls.length !== 1) throw new Error('finish_task_must_be_called_alone');
@@ -8587,8 +8577,7 @@ const runOneToolCall = async (toolCall: any, emitStatus = true): Promise<Execute
               && t.function.name !== 'invoke_subagent'
               && t.function.name !== 'attach_file_to_response'
               && t.function.name !== 'finish_task'
-          ).map((t: any) => t?.function?.name === 'describe_image' ? buildDescribeImageTool(false)
-            : t?.function?.name === 'browser_control' ? buildBrowserControlTool(false) : t),
+          ).map((t: any) => t.function.name === 'browser_control' ? buildBrowserControlTool(false) : t),
           attachmentReadContext: {
             chatId,
             maxContextTokens,
@@ -8604,7 +8593,7 @@ const runOneToolCall = async (toolCall: any, emitStatus = true): Promise<Execute
             capacityState: attachmentCapacityState,
           },
     ...(!options?.skipHistory || options?.scheduledTask ? { responseFileSink } : {}),
-          currentModelSupportsVision,
+          currentModelSupportsVision: executionMode === 'pro' && currentModelSupportsVision,
           directImageSink,
         },
         options?.autoRejectHitl,
@@ -8776,20 +8765,7 @@ if (escalatedToPro) {
 }
 
 if (directImagesForNextTurn.length > 0 && !abortController.signal.aborted) {
-  const directImages = directImagesForNextTurn.splice(0);
-  currentMessages.push({
-    role: 'user',
-    content: [
-      {
-        type: 'text',
-        text: directImages.map((item, index) => `Image ${index + 1}: ${item.question}`).join('\n'),
-      },
-      ...directImages.map(item => ({
-        type: 'image_url',
-        image_url: { url: `data:${item.mimeType};base64,${item.base64}` },
-      })),
-    ],
-  });
+  currentMessages.push(buildToolImageMessage(directImagesForNextTurn.splice(0)));
 }
 
 // Если были прерваны во время tool_calls — фиксируем partial-итерацию в trace

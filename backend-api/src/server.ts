@@ -34,7 +34,7 @@ import { listMapPins, getMapPinById, createMapPin, updateMapPin, deleteMapPin } 
 import { sendMessageThroughAi, generateAdminOutreach, callLiteAi, ensureUtilityAiQuota, chargeUtilityAiCompletion, getModelsCatalog, getAutoReasoningLevels, getAutoVisionSupport, abortChatGeneration, abortUserGenerations, beginActiveHitlWait, endActiveHitlWait, getUpdateState, setUpdatePrepare, forceAbortActiveGenerations, clearUpdatePrepare, resolveManualModel } from './services/ai.js';
 import { initSubagentRunner } from './services/subagents/runner.js';
 import { listSubagentCatalog, validateSubagentCatalogMetadata } from './services/subagents/registry.js';
-import { runCompletion, runTool, throwIfAborted, withAbort, toolDefinitions, normalizeTokenUsage, getTaskAllowedToolNames, buildDescribeImageTool } from './services/ai.js';
+import { runCompletion, runTool, throwIfAborted, withAbort, toolDefinitions, normalizeTokenUsage, getTaskAllowedToolNames, buildDescribeImageTool, modelSupportsVision } from './services/ai.js';
 import { listMacros, getMacroById, getEnabledMacros, createMacro, updateMacro, deleteMacro } from './services/macros.js';
 import { listServers, getServerById, createServer, updateServer, deleteServer, listPolicies, createPolicy, deletePolicy, isAutoApproved, serverHasSudoPassword, listRunbooks, getRunbookById, createRunbook, updateRunbook, deleteRunbook, attachRunbookToServer, listSshKeys, createSshKey, deleteSshKey, buildInstallKeyScript, getSshPublicKey, listPublicRunbooks, getPublicRunbookById, createPublicRunbook, updatePublicRunbook, deletePublicRunbook } from './services/devops.js';
 import { execSshCommand, testSshConnection } from './services/ssh.js';
@@ -8077,7 +8077,8 @@ const server = app.listen(PORT, () => {
     runTool,
     throwIfAborted,
     withAbort,
-    toolDefinitions: [...toolDefinitions, buildDescribeImageTool(false)],
+    toolDefinitions: [...toolDefinitions, buildDescribeImageTool()],
+    modelSupportsVision,
     normalizeTokenUsage,
   });
 

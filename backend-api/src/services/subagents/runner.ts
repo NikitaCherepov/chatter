@@ -16,6 +16,7 @@ import { SubagentContext, SubagentResult, SubagentIteration } from './types.js';
 import { setMaxListeners } from 'events';
 import { separateCommandAssessment, toolContentForModel } from '../command-assessment-result.js';
 import type { ActionAssessment } from '../action-assessment.js';
+import { buildToolImageMessage, type DirectToolImage } from '../tools/image-input.js';
 import { getSubagent, RegisteredSubagent } from './registry.js';
 import { hasBackendTranslation, translateForLanguage } from '../../i18n/index.js';
 import type { MessageUsage, NormalizedTokenUsage, TokenUsageCall } from '../../types.js';
@@ -26,6 +27,7 @@ let _runTool: typeof import('../ai.js').runTool;
 let _throwIfAborted: typeof import('../ai.js').throwIfAborted;
 let _withAbort: typeof import('../ai.js').withAbort;
 let _toolDefinitions: typeof import('../ai.js').toolDefinitions;
+let _modelSupportsVision: typeof import('../ai.js').modelSupportsVision;
 let _normalizeTokenUsage: (rawUsage: any) => NormalizedTokenUsage;
 
 type RunCompletionFn = (
@@ -49,6 +51,8 @@ type SubagentExtra = {
   onToolStatus?: (text: string) => Promise<void> | void;
   onDesktopAction?: (action: any) => Promise<void> | void;
   availableToolDefs?: any[];
+  currentModelSupportsVision?: boolean;
+  directImageSink?: { items: DirectToolImage[] };
 };
 
 type RunToolFn = (
@@ -78,6 +82,7 @@ export function initSubagentRunner(deps: {
   throwIfAborted: (signal?: AbortSignal) => void;
   withAbort: <T>(promise: Promise<T>, signal?: AbortSignal) => Promise<T>;
   toolDefinitions: readonly any[];
+  modelSupportsVision: typeof import('../ai.js').modelSupportsVision;
   normalizeTokenUsage: (rawUsage: any) => NormalizedTokenUsage;
 }): void {
   _runCompletion = deps.runCompletion as any;
@@ -85,6 +90,7 @@ export function initSubagentRunner(deps: {
   _throwIfAborted = deps.throwIfAborted;
   _withAbort = deps.withAbort;
   _toolDefinitions = deps.toolDefinitions as any;
+  _modelSupportsVision = deps.modelSupportsVision;
   _normalizeTokenUsage = deps.normalizeTokenUsage;
 }
 
@@ -173,6 +179,8 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
 
   // Resolve user's preferred model (manual model selection)
   const manualModel = ctx.subagentMode === 'manual' ? (ctx.manualModel || undefined) : undefined;
+  const mode = resolveMode(ctx);
+  const supportsVision = _modelSupportsVision(manualModel, mode);
   const reasoningLevel = (ctx.subagentReasoningLevel === 'auto' ? null : (ctx.subagentReasoningLevel ?? null)) as import('../ai.js').ReasoningLevel | null;
 
   // 1. Resolve agent config — either from registry or direct (ad-hoc)
@@ -277,7 +285,6 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
   // 4. Agent loop
   const toolCallsHistory: SubagentResult['toolCallsHistory'] = [];
   const iterations: SubagentIteration[] = [];
-  const mode = resolveMode(ctx);
   const maxLoops = agent.maxLoops;
   const debugRaw = process.env.DEBUG_AI_RAW_SUBAGENT === '1';
   let quotaFinalizationIssued = false;
@@ -441,6 +448,7 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
     }
 
     // Process stateful or dependent tool calls sequentially.
+    const directImageSink: { items: DirectToolImage[] } = { items: [] };
     for (const toolCall of toolCalls) {
       _throwIfAborted(ctx.signal);
 
@@ -517,6 +525,10 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
                 onDesktopAction: ctx.onDesktopAction,
                 onVisionUsageCall: ctx.onVisionUsageCall,
                 availableToolDefs: ctx.runtimeToolDefs,
+                ...(toolName === 'describe_image' && {
+                  currentModelSupportsVision: supportsVision,
+                  directImageSink,
+                }),
               },
             ),
             ctx.signal,
@@ -576,6 +588,10 @@ export async function runSubagent(params: RunSubagentParams): Promise<SubagentRe
         await ctx.onDesktopAction(ctx.desktopActionSink.value);
         ctx.desktopActionSink.value = null;
       }
+    }
+
+    if (directImageSink.items.length > 0) {
+      messages.push(buildToolImageMessage(directImageSink.items));
     }
 
     // Save completed iteration

@@ -8,6 +8,8 @@
     "pinChat": "Pin “{{title}}”",
     "unpinChat": "Unpin “{{title}}”",
     "closeTab": "Close tab",
+    "scrollTabsLeft": "Scroll tabs left",
+    "scrollTabsRight": "Scroll tabs right",
     "closeChat": "Close tab “{{title}}”",
     "toolsLimit": "The toolbar holds up to three tools",
     "untitled": "Chat {{id}}"

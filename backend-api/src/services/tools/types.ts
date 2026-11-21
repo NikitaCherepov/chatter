@@ -1,4 +1,5 @@
 import type { UserRecord } from '../../types.js';
+import type { DirectToolImage } from './image-input.js';
 
 export interface ToolDefinition {
   type: 'function';
@@ -29,8 +30,7 @@ export interface ToolContext {
   generatedImages?: Array<{ image_base64: string; image_url?: string; prompt_used: string }>;
   userImages?: Array<{ base64: string; mimeType: string }>;
   currentModelSupportsVision?: boolean;
-  directImageSink?: { items: Array<{ base64: string; mimeType: string; question: string; localUrl?: string }> };
-  /** Request-scoped vision completion with the existing usage tracking. */
+  directImageSink?: { items: DirectToolImage[] };
   runVisionCompletion?: (request: Record<string, unknown>) => Promise<{
     response?: { choices?: Array<{ message?: { content?: string | null } }> };
   }>;
