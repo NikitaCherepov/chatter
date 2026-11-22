@@ -25,6 +25,7 @@ import { InteractivePreviews } from './interactive-preview';
 import { INTERACTIVE_SCHEME } from './interactive-document';
 import type { InteractivePlacement } from './interactive-types';
 import type { AppearanceShellState } from './appearance-shell-types';
+import { LocalAppearanceStore, openAppearanceWorkspace, saveAppearanceLocation, copyAppearanceWorkspace, appearanceImageResponse } from './local-appearance';
 import {
   BackgroundActivityRegistry,
   type ActiveBackgroundActivityPreview,
@@ -32,6 +33,59 @@ import {
 } from './background-activity-registry';
 
 let localMcp:LocalMcpManager|undefined;
+let localAppearanceStore: { store: LocalAppearanceStore; close: () => void } | undefined;
+function themeStore(owner: Electron.WebContents) {
+  if (localAppearanceStore) return localAppearanceStore.store;
+  const store = openAppearanceWorkspace(app.getPath('userData'));
+  const close = store.watch(() => { if (!owner.isDestroyed()) owner.send('themes:changed', {}); });
+  const entry = { store, close };
+  localAppearanceStore = entry;
+  owner.once('destroyed', () => { close(); if (localAppearanceStore === entry) localAppearanceStore = undefined; });
+  return store;
+}
+ipcMain.handle('themes:manage', async (event, payload: any) => {
+  assertTrustedIpcSender(event);
+  const store = themeStore(event.sender);
+  switch (payload?.action) {
+    case 'load': return store.load();
+    case 'docs': return { readme: store.readDocumentation(), desktopVersion: app.getVersion(), workspace: store.load().workspace };
+    case 'migrate': return store.migrate(payload.legacy, payload.images, payload.imageErrors);
+    case 'image': return { image: store.importImage(payload.base64) };
+    case 'export-bundle': return store.exportBundle(payload.id);
+    case 'import-bundle': return store.importBundle(payload.data);
+    case 'change': return store.change(payload.command);
+    case 'read-draft': return store.readDraft(payload.id);
+    case 'write-draft': return store.writeDraft(payload.profile);
+    case 'prepare': return store.prepareDraft(payload.id, payload.project === true);
+    case 'open': {
+      if (!payload.id) {
+        const error = await shell.openPath(store.directory);
+        if (error) throw new Error('appearance_open_failed');
+        return { opened: true };
+      }
+      const snapshot = store.load();
+      const target = payload.id ? snapshot.workspace.drafts.find(draft => draft.id === payload.id)?.directory : store.directory;
+      if (!target) throw new Error('appearance_not_found');
+      const error = await shell.openPath(target);
+      if (error) throw new Error('appearance_open_failed');
+      return snapshot;
+    }
+    case 'choose-directory': {
+      const owner = BrowserWindow.fromWebContents(event.sender);
+      const options: OpenDialogOptions = { defaultPath: store.directory, properties: ['openDirectory', 'createDirectory'] };
+      const chosen = owner ? await dialog.showOpenDialog(owner, options) : await dialog.showOpenDialog(options);
+      if (chosen.canceled || !chosen.filePaths[0]) return store.load();
+      const target = path.resolve(chosen.filePaths[0]);
+      if (target === path.resolve(store.directory)) return store.load();
+      copyAppearanceWorkspace(store, target);
+      saveAppearanceLocation(app.getPath('userData'), target);
+      localAppearanceStore?.close();
+      localAppearanceStore = undefined;
+      return themeStore(event.sender).load();
+    }
+    default: throw new Error('appearance_invalid');
+  }
+});
 function localMcpManager(){
  if(!localMcp)localMcp=new LocalMcpManager(path.join(app.getPath('userData'),'mcp'),
   text=>{if(!safeStorage.isEncryptionAvailable())throw new Error('mcp_secret_storage_unavailable');return safeStorage.encryptString(text);},
@@ -69,7 +123,10 @@ ipcMain.handle('mcp:cancel',(event,requestId:string)=>{
  assertTrustedIpcSender(event);return localMcpManager().cancel(requestId);
 });
 const execFileAsync = util.promisify(execFile);
-protocol.registerSchemesAsPrivileged([{ scheme: INTERACTIVE_SCHEME, privileges: { standard: true, secure: true } }]);
+protocol.registerSchemesAsPrivileged([
+  { scheme: INTERACTIVE_SCHEME, privileges: { standard: true, secure: true } },
+  { scheme: 'chatter-theme', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } },
+]);
 const interactivePreviews = new InteractivePreviews();
 
 ipcMain.handle('interactive-preview:create', (event, input: unknown) => {
@@ -3044,6 +3101,7 @@ function setupContentSecurityPolicy(): void {
       "'self'",
       'data:',
       'blob:',
+      'chatter-theme:',
       // Markdown messages may include external HTTPS images. This does not
       // grant remote scripts, frames, media or fetch requests any new access.
       'https:',
@@ -3232,6 +3290,7 @@ if (!hasSingleInstanceLock) {
     loadNotificationSettings();
     loadBrowserRuntimeSettings();
     loadTrustedServerOrigin();
+    protocol.handle('chatter-theme', request => appearanceImageResponse(request, host => localAppearanceStore?.store.assetHost === host ? localAppearanceStore.store : undefined));
     setupContentSecurityPolicy();
     if (process.platform !== 'darwin') {
       Menu.setApplicationMenu(null);

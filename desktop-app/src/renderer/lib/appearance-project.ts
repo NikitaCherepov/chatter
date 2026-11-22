@@ -17,8 +17,7 @@ export function isAppearanceFilePath(value: unknown): value is string {
     typeof value === 'string' &&
     value.length <= 180 &&
     value.split('/').every((part) => /^[a-zA-Z0-9_-][a-zA-Z0-9_.-]*$/.test(part)) &&
-    /\.(tsx?|jsx?|css|json)$/.test(value) &&
-    !/\.d\.ts$/.test(value)
+    /\.(tsx?|jsx?|css|json)$/.test(value)
   );
 }
 
@@ -31,6 +30,7 @@ export function parseAppearanceProject(value: unknown): AppearanceProject {
     !project ||
     !isAppearanceFilePath(project.entry) ||
     !/\.[jt]sx?$/.test(project.entry) ||
+    /\.d\.ts$/.test(project.entry) ||
     !project.files ||
     typeof project.files !== 'object' ||
     Array.isArray(project.files)
@@ -59,12 +59,13 @@ export function resolveAppearanceImport(
   from: string,
   request: string,
 ): string {
-  if (!request.startsWith('./') && !request.startsWith('../')) {
+  const rooted = request.startsWith('@/');
+  if (!rooted && !request.startsWith('./') && !request.startsWith('../')) {
     if ((APPEARANCE_PROJECT_MODULES as readonly string[]).includes(request)) return request;
     throw new Error(`Unsupported module: ${request}`);
   }
-  const segments = from.split('/').slice(0, -1);
-  for (const part of request.split('/')) {
+  const segments = rooted ? [] : from.split('/').slice(0, -1);
+  for (const part of (rooted ? request.slice(2) : request).split('/')) {
     if (part === '.' || part === '') continue;
     if (part === '..') {
       if (!segments.length) throw new Error(`Import escapes the project: ${request}`);
@@ -74,6 +75,9 @@ export function resolveAppearanceImport(
   const path = segments.join('/');
   const found = [
     path,
+    ...(/\.jsx?$/.test(path)
+      ? [path.replace(/\.js$/, '.ts'), path.replace(/\.jsx?$/, '.tsx')]
+      : []),
     ...[
       '.tsx',
       '.ts',
@@ -88,6 +92,7 @@ export function resolveAppearanceImport(
     ].map((ext) => path + ext),
   ].find((candidate) => own(project.files, candidate));
   if (!found) throw new Error(`File not found: ${request}`);
+  if (found.endsWith('.d.ts')) throw new Error(`Use import type for declarations: ${request}`);
   return found;
 }
 
@@ -97,6 +102,7 @@ export function compileAppearanceProject(value: AppearanceProject, ts: typeof Ty
   const diagnostics: AppearanceCodeDiagnostic[] = [];
   const compiled: Record<string, string> = {};
   for (const [file, source] of Object.entries(project.files)) {
+    if (file.endsWith('.d.ts')) continue;
     const report = (message: string, offset = 0) => {
       const before = source.slice(0, offset).split('\n');
       diagnostics.push({

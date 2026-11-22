@@ -7,6 +7,8 @@ declare global {
   interface Window {
     electronAPI: {
       interactiveCreate: (input: InteractiveInput) => Promise<string>;
+      localAppearance: (payload: unknown) => Promise<any>;
+      onLocalAppearanceChanged: (callback: () => void) => () => void;
       interactivePlace: (placement: InteractivePlacement) => Promise<void>;
       interactiveStop: (id: string) => Promise<void>;
       appearanceShellState: (id: string, state: AppearanceShellState) => Promise<void>;

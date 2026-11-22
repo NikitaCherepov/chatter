@@ -22,11 +22,11 @@ import {
   previewAppearance,
 } from '../lib/appearance-runtime';
 import { appearanceColors, materialColors } from '../lib/appearance-colors';
-import { apiFetch, resolveAuthenticatedAssetUrl } from '../lib/api';
+import { resolveAuthenticatedAssetUrl } from '../lib/api';
 import { Select } from './Select';
 import Slider from './Slider';
 import { AppearanceShellEditor } from './AppearanceShellEditor';
-import { compileAppearanceProject } from '../lib/appearance-project';
+import { validateAppearanceCode as validateShell } from '../lib/appearance-validation';
 import a from './SettingsModal.module.scss';
 import s from './AppearancePanel.module.scss';
 
@@ -50,12 +50,6 @@ function selectedMotionPreset(motion: AppearanceMotion): MotionPreset | 'custom'
 }
 
 const STANDARD_SAMPLE = newAppearance();
-async function validateShell(profile: AppearanceProfile) {
-  if (!profile.shell?.files) return;
-  const compiler = await import('typescript');
-  const { diagnostics } = compileAppearanceProject({ entry: profile.shell.entry, files: profile.shell.files }, compiler.default ?? compiler);
-  if (diagnostics.length) throw Object.assign(new Error('appearance_build_failed'), { diagnostics });
-}
 export const AppearanceSample = memo(function AppearanceSample({
   profile,
 }: {
@@ -133,6 +127,8 @@ export function AppearancePanel({ initialDraft, onShellPreview }: {
     [error, setError] = useState(''),
     [uploading, setUploading] = useState(false);
   const editor = useRef<HTMLDivElement>(null);
+  const currentDraft = useRef(draft);
+  currentDraft.current = draft;
   const importFile = useRef<HTMLInputElement>(null);
   const motionSample = useRef<HTMLDivElement>(null);
   const sampleAnimation = useRef<Animation | undefined>(undefined);
@@ -167,7 +163,7 @@ export function AppearancePanel({ initialDraft, onShellPreview }: {
       }
       setError(
         t('appearance.errors.' + (e?.data?.error || e?.message), {
-          defaultValue: t('appearance.failed'),
+          defaultValue: e?.message?.startsWith('theme.json:') ? e.message : t('appearance.failed'),
         }),
       );
     }
@@ -181,16 +177,22 @@ export function AppearancePanel({ initialDraft, onShellPreview }: {
   };
   const importProfile = async (file: File) => {
     await run(async () => {
+      if (file.name.toLowerCase().endsWith('.zip')) {
+        if (file.size > 12 * 1024 * 1024) throw new Error('appearance_invalid');
+        open(await query.manage('import-bundle', { data: new Uint8Array(await file.arrayBuffer()) }));
+        return;
+      }
       if (file.size > 1_000_000) throw new Error('appearance_invalid');
       const profile = parseAppearanceProfile(JSON.parse((await file.text()).replace(/^\uFEFF/, '')));
       open({ ...profile, id: crypto.randomUUID(), revision: 0 });
     });
   };
-  const exportProfile = (profile: AppearanceProfile) => {
-    const url = URL.createObjectURL(new Blob([JSON.stringify(profile, null, 2)], { type: 'application/json' }));
+  const exportProfile = async (profile: AppearanceProfile) => {
+    const bytes = await query.manage('export-bundle', { id: profile.id });
+    const url = URL.createObjectURL(new Blob([bytes], { type: 'application/zip' }));
     const link = document.createElement('a');
     link.href = url;
-    link.download = profile.id + '.json';
+    link.download = profile.id + '.zip';
     link.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
@@ -282,10 +284,7 @@ export function AppearancePanel({ initialDraft, onShellPreview }: {
         reader.onerror = () => reject(new Error('appearance_image_invalid'));
         reader.readAsDataURL(file);
       });
-      const result = await apiFetch<{ image: string }>('/api/v1/user/appearance/image', {
-        method: 'POST',
-        body: JSON.stringify({ base64: data }),
-      });
+      const result = await query.manage('image', { base64: data });
       setDraft((current) =>
         current
           ? {
@@ -301,17 +300,21 @@ export function AppearancePanel({ initialDraft, onShellPreview }: {
   if (query.isError)
     return (
       <div className={s.section}>
-        <p className={s.error}>{t('appearance.failed')}</p>
+        <p className={s.error}>{t('appearance.localReadFailed')}</p>
         <button className={a.cancelBtn} onClick={() => void query.refetch()}>
           {t('common.tryAgain')}
         </button>
+        <button className={a.cancelBtn} onClick={() => void run(() => query.manage('open'))}>
+          {t('appearance.openDirectory')}
+        </button>
+        {error && <p role="alert" className={s.error}>{error}</p>}
       </div>
     );
   return (
     <section className={s.section}>
       <div className={s.heading}>
         <h3>{t('appearance.title')}</h3>
-        <input ref={importFile} type="file" accept=".json,application/json" hidden
+        <input ref={importFile} type="file" accept=".json,.zip,application/json,application/zip" hidden
           aria-label={t('appearance.import')}
           onChange={event => {
             const file = event.target.files?.[0];
@@ -334,6 +337,38 @@ export function AppearancePanel({ initialDraft, onShellPreview }: {
       <p className={s.hint}>
         {t('appearance.help')} {t('appearance.recoveryHint')}
       </p>
+      <div className={s.card}>
+        <div className={s.name}>{t('appearance.localDirectory')}</div>
+        {query.workspace && <code className={s.localPath}>{query.workspace.directory}</code>}
+        <p className={s.hint}>{t('appearance.localHelp')}</p>
+        {query.workspace && !query.workspace.migrationComplete && <div className={s.actions}>
+          <span className={s.hint}>{t('appearance.migrationPending')}</span>
+          <button type="button" className={a.cancelBtn} onClick={() => void query.refetch()}>{t('appearance.retryMigration')}</button>
+        </div>}
+        <div className={s.actions}>
+          <button type="button" className={a.cancelBtn} onClick={() => void run(() => query.manage('open'))}>{t('appearance.openDirectory')}</button>
+          <button type="button" className={a.cancelBtn} onClick={() => void run(() => query.manage('choose-directory'))}>{t('appearance.chooseDirectory')}</button>
+          <button type="button" className={a.cancelBtn} onClick={() => void run(async () => {
+            const id = 'theme-' + Date.now().toString(36);
+            await query.manage('prepare', { id, project: true });
+            await query.manage('open', { id });
+          })}>{t('appearance.createProject')}</button>
+        </div>
+        {query.isError && <p className={s.error} role="alert">{t('appearance.localReadFailed')}</p>}
+        {query.workspace && [...query.workspace.migrationErrors, ...query.workspace.issues].length > 0 &&
+          <p role="alert" className={s.error}>{t('appearance.migrationNotice')}<br />{[...query.workspace.migrationErrors, ...query.workspace.issues].join('\n')}</p>}
+      </div>
+      {Boolean(query.workspace?.drafts.length) && <details className={s.card}>
+        <summary>{t('appearance.localDrafts')} · {query.workspace!.drafts.length}</summary>
+        {query.workspace!.drafts.map(item => <div key={item.id} className={s.actions}>
+          <span>{state.profiles.find(profile => profile.id === item.id)?.name ?? item.id}</span>
+          <button type="button" className={a.cancelBtn} onClick={() => void run(async () => {
+            const profile = await query.previewDraft(item.id);
+            if (profile.shell) onShellPreview?.(profile);
+          })}>{t('appearance.preview')}</button>
+          <button type="button" className={a.cancelBtn} onClick={() => void run(() => query.manage('open', { id: item.id }))}>{t('appearance.openFiles')}</button>
+        </div>)}
+      </details>}
       {error && !draft && (
         <p role="alert" className={s.error}>
           {error}
@@ -388,7 +423,16 @@ export function AppearancePanel({ initialDraft, onShellPreview }: {
               <button className={a.cancelBtn} disabled={query.saving} onClick={() => open(profile)}>
                 {t('appearance.edit')}
               </button>
-              <button type="button" className={a.cancelBtn} onClick={() => exportProfile(profile)}>
+              <button type="button" className={a.cancelBtn} onClick={() => void run(async () => {
+                await query.manage('prepare', { id: profile.id });
+                await query.manage('open', { id: profile.id });
+              })}>{t('appearance.openFiles')}</button>
+              {query.workspace?.profiles.find(item => item.id === profile.id)?.hasPrevious &&
+                <button type="button" className={a.cancelBtn} disabled={query.saving} onClick={() => void run(async () => {
+                  await query.change({ action: 'rollback', id: profile.id, revision: state.revision });
+                  previewAppearance(null);
+                })}>{t('appearance.previousVersion')}</button>}
+              <button type="button" className={a.cancelBtn} onClick={() => void run(() => exportProfile(profile))}>
                 {t('appearance.export')}
               </button>
               <button
@@ -854,7 +898,12 @@ export function AppearancePanel({ initialDraft, onShellPreview }: {
                   const profile = parseAppearanceProfile(draft);
                   await validateShell(profile);
                   previewAppearance(profile);
-                  if (profile.shell) onShellPreview?.(profile);
+                  const instance = getAppearancePreview();
+                  await query.saveDraft(profile);
+                  if (currentDraft.current === draft && getAppearancePreview() === instance) {
+                    previewAppearance(profile, profile.id);
+                    if (profile.shell) onShellPreview?.(profile);
+                  }
                 })
               }
             >

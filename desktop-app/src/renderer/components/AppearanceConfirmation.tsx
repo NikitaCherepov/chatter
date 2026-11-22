@@ -11,7 +11,7 @@ import {
 import type { AppearanceProfile } from '../lib/appearance-schema';
 import s from './SettingsModal.module.scss';
 import styles from './AppearancePanel.module.scss';
-export type AppearanceProposal = { proposal_id: string; profile: AppearanceProfile };
+export type AppearanceProposal = { proposal_id: string; profile: AppearanceProfile; local_draft?: string };
 export function AppearanceConfirmation({
   proposal,
   onResolved,
@@ -63,7 +63,7 @@ export function AppearanceConfirmation({
               ? t('appearance.copy')
               : t('appearance.save')}
           </button>
-          <button className={s.cancelBtn} onClick={() => previewAppearance(proposal.profile)}>
+          <button className={s.cancelBtn} onClick={() => previewAppearance(proposal.profile, proposal.local_draft)}>
             {t('appearance.preview')}
           </button>
           <button

@@ -5,6 +5,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 for (const [name, directory] of ['appearance', 'chat-layout'].flatMap(name => [
   [name, 'backend-api/src/services'],
   [name, 'desktop-app/src/renderer/lib'],
+  ...(name === 'appearance' ? [[name, 'desktop-app/src/main']] : []),
 ])) {
   const source = fs.readFileSync(path.join(root, 'shared', name + '.ts'), 'utf8');
   const target = path.join(directory, name + '-schema.ts');

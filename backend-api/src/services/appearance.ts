@@ -24,6 +24,15 @@ export function getAppearance(userId: number) {
   if (!row) throw new Error('user_not_found');
   return appearanceFromJson(row.ui_settings);
 }
+/** Migration must preserve older/unknown profiles instead of normalizing the whole collection to empty. */
+export function getLegacyAppearance(userId: number): unknown {
+  const row = db.prepare('SELECT ui_settings FROM users WHERE id=?').get(userId) as { ui_settings: string } | undefined;
+  if (!row) throw new Error('user_not_found');
+  try {
+    const settings = JSON.parse(row.ui_settings || '{}');
+    return settings.appearance ?? { ...DEFAULT_APPEARANCE, profiles: [] };
+  } catch { throw new Error('appearance_migration_invalid_json'); }
+}
 export function changeAppearance(userId: number, command: any): AppearanceSettings {
   if (
     !command ||

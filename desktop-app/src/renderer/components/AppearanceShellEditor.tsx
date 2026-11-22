@@ -48,7 +48,7 @@ export function AppearanceShellEditor({
                 ariaLabel={t('appearance.shellEntry')}
                 value={shell.entry}
                 options={paths
-                  .filter((file) => /\.[jt]sx?$/.test(file))
+                .filter((file) => /\.[jt]sx?$/.test(file) && !file.endsWith('.d.ts'))
                   .map((value) => ({ value, label: value }))}
                 onChange={(entry) => onChange({ ...shell, entry })}
               />

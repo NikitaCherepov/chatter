@@ -206,7 +206,9 @@ export function parseAppearanceProfile(value: unknown): AppearanceProfile {
   const b = keys(v.background, ['type', 'color', 'color2', 'angle', 'image', 'dim', 'position']);
   if (typeof b.image !== 'string' || b.image.length > 2048) fail();
   if (b.type === 'image' && !b.image) fail();
-  if (b.image && !/^\/api\/v1\/images\/[a-zA-Z0-9_.-]+$/.test(b.image)) {
+  const localImage = /^chatter-theme:\/\/[a-f0-9]{24}\/[a-f0-9]{64}\.(png|jpg|webp|gif)$/.test(b.image)
+    || /^assets\/(?:[a-zA-Z0-9_-][a-zA-Z0-9_.-]*\/)*[a-zA-Z0-9_-][a-zA-Z0-9_.-]*\.(png|jpe?g|webp|gif)$/.test(b.image);
+  if (b.image && !localImage && !/^\/api\/v1\/images\/[a-zA-Z0-9_.-]+$/.test(b.image)) {
     try {
       const url = new URL(b.image);
       if (url.protocol !== 'https:' || url.username || url.password) fail();
@@ -300,7 +302,7 @@ export const APPEARANCE_CAPABILITIES = {
         'components/Composer.tsx': 'import React from "react";\nexport default function Composer({state}){const [text,setText]=React.useState("");return <form onSubmit={event=>{event.preventDefault();if(state.canSend&&text.trim()&&window.chatter.sendMessage(text))setText("");}}><textarea aria-label="Message" value={text} onChange={event=>setText(event.target.value)}/>{state.sending?<button type="button" onClick={()=>window.chatter.stopGeneration()}>Stop</button>:<button disabled={!state.canSend||!text.trim()}>Send</button>}</form>;}',
         'styles.css': 'body{margin:0;font:15px/1.6 system-ui,sans-serif;background:#101722;color:#e4ebf3}main{max-width:900px;margin:auto;padding:24px}header,form{display:flex;gap:12px;align-items:center}button,input,textarea{padding:12px;border-radius:8px;border:1px solid #456;background:#182536;color:inherit}.chat{display:block;width:100%;margin-top:8px;text-align:left}article{padding:12px;margin:12px 0;background:#182536;border-radius:8px}textarea{flex:1;min-width:0}',
       } },
-      editing: 'get_appearance defaults to metadata with source code omitted. view:profile reads a full saved profile; view:files returns metadata and file names without source; view:file with id/path reads one file. suggest_appearance(id,revision,files) replaces only supplied files; null deletes a file. It merges with the saved profile, checks syntax/imports and proposes the complete result without saving. For an unsaved draft, pass profile plus files. Use checkOnly:true to validate without showing a proposal. There is no persistent server draft workspace: an unsaved proposal is not a saved profile. Never increment revision yourself.',
+      editing: 'Themes live in a local directory on the user PC. get_theme_docs returns this guide and current state: directory, active theme, saved themes and drafts. Edit theme.json and component files under .drafts/<id> with ordinary desktop file tools. Relative imports and @/ project-root imports are supported; chatter.d.ts describes the bridge. The app discovers files automatically. suggest_appearance({id}) reads and validates this draft locally, then offers user preview/confirmation. checkOnly:true returns diagnostics. Never pass source code or increment revision. Only the user applies a draft; existing previews update when its files change.',
     },
     description: 'Optional independently coded full-screen UI inside this appearance. scope navigator opens selected chats in the native conversation; scope workspace keeps the shell visible and supplies actual messages and generation state. The shell owns its HTML/CSS/JS or React TSX. React, react-markdown and remark-gfm imports are bundled. No external resources or direct app/OS access.',
     template: { version: 1, language: 'html', source: '<main id="chats"></main><script>window.chatter.subscribe(state => { document.getElementById("chats").replaceChildren(...state.chats.map(chat => { const button = document.createElement("button"); button.textContent = chat.title; button.onclick = () => window.chatter.openChat(chat.id); return button; })); });</script>' },
@@ -352,7 +354,7 @@ export const APPEARANCE_CAPABILITIES = {
     scope:
       'Conversation only. solid follows light/dark.chat or falls back to light/dark.background; gradient/image override that solid color. Never changes the application shell or theme preference.',
     type: ['solid', 'gradient', 'image'],
-    image: 'An existing /api/v1/images/file or HTTPS URL',
+    image: 'On disk use a relative assets/image.png (PNG/JPEG/WebP/GIF, up to 8 MiB) or an HTTPS URL. Local uploads are managed by the app. Legacy /api/v1/images/file references remain supported for migration.',
     position: ['center', 'top', 'bottom'],
   },
   motion: {

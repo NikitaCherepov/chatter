@@ -1,30 +1,52 @@
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { useAuth } from '../lib/auth';
-import { useAppearance } from '../lib/appearance-service';
+import { useAppearance, readLocalDraft } from '../lib/appearance-service';
 import { DEFAULT_APPEARANCE } from '../lib/appearance-schema';
 import {
   configureAppearance,
   finishAppearancePreview,
   getAppearancePreview,
+  getAppearancePreviewError,
+  getAppearancePreviewDraft,
+  setAppearancePreviewError,
   previewAppearance,
   subscribeAppearancePreview,
   refreshAppearance,
 } from '../lib/appearance-runtime';
 import { THEME_CHANGE_EVENT } from '../lib/theme';
-import { API_BASE, resolveAuthenticatedAssetUrl } from '../lib/api';
+import { resolveAuthenticatedAssetUrl } from '../lib/api';
 import s from './AppearancePanel.module.scss';
 export function AppearanceController() {
-  const { user } = useAuth(),
-    query = useAppearance(),
+  const query = useAppearance(),
     { t } = useTranslation(),
     [error, setError] = useState('');
   const [emergency, setEmergency] = useState(false);
   const resetting = useRef(false);
   const recovery = useRef<HTMLDivElement>(null);
-  const state = query.data ?? user?.ui_settings?.appearance ?? DEFAULT_APPEARANCE;
+  const state = query.data ?? DEFAULT_APPEARANCE;
   const preview = useSyncExternalStore(subscribeAppearancePreview, getAppearancePreview);
+  const previewError = useSyncExternalStore(subscribeAppearancePreview, getAppearancePreviewError);
+  useEffect(() => {
+    if (!window.electronAPI?.onLocalAppearanceChanged) return;
+    let generation = 0;
+    const unsubscribe = window.electronAPI.onLocalAppearanceChanged(() => {
+      const current = ++generation, draft = getAppearancePreviewDraft();
+      void query.refetch();
+      if (!draft) return;
+      void readLocalDraft(draft).then(profile => {
+        if (generation === current && getAppearancePreviewDraft() === draft) {
+          if (JSON.stringify(getAppearancePreview()) !== JSON.stringify(profile)) previewAppearance(profile, draft);
+          else setAppearancePreviewError('');
+        }
+      }).catch(error => {
+        if (generation !== current || getAppearancePreviewDraft() !== draft) return;
+        const detail = error.diagnostics?.map((item: any) => `${item.file}:${item.line}:${item.column} ${item.message}`).join('\n');
+        setAppearancePreviewError(detail || error.message);
+      });
+    });
+    return () => { generation++; unsubscribe(); };
+  }, []);
   useLayoutEffect(() => {
     const element = recovery.current;
     if (!element) return;
@@ -45,13 +67,13 @@ export function AppearanceController() {
     previewAppearance(null);
     setEmergency(false);
     return () => previewAppearance(null);
-  }, [user?.id, API_BASE]);
+  }, []);
   useLayoutEffect(() => {
     configureAppearance(
-      user ? (emergency ? { ...state, activeId: null } : state) : DEFAULT_APPEARANCE,
+      emergency ? { ...state, activeId: null } : state,
       resolveAuthenticatedAssetUrl,
     );
-  }, [query.data, user?.ui_settings?.appearance, user?.id, emergency]);
+  }, [query.data, emergency]);
   useEffect(() => {
     window.addEventListener(THEME_CHANGE_EVENT, refreshAppearance);
     return () => window.removeEventListener(THEME_CHANGE_EVENT, refreshAppearance);
@@ -70,7 +92,7 @@ export function AppearanceController() {
     return () => window.removeEventListener('keydown', key, true);
   }, [preview]);
   const reset = async () => {
-    if (!user || resetting.current) return;
+    if (resetting.current) return;
     resetting.current = true;
     previewAppearance(null);
     setEmergency(true);
@@ -100,8 +122,8 @@ export function AppearanceController() {
     };
     window.addEventListener('keydown', key, true);
     return () => window.removeEventListener('keydown', key, true);
-  }, [user?.id, state.revision]);
-  if (emergency && user)
+  }, [state.revision]);
+  if (emergency)
     return createPortal(
       <div ref={recovery} className={s.recovery} role="region" aria-label={t('appearance.recovery')}>
         <span>{t('appearance.recovery')}</span>
@@ -115,14 +137,14 @@ export function AppearanceController() {
       </div>,
       document.body,
     );
-  if (!preview || !user) return null;
+  if (!preview) return null;
   return createPortal(
     <div ref={recovery} className={s.recovery} role="region" aria-label={t('appearance.preview')}>
       <span>
         {t('appearance.preview')}: <strong>{preview.name}</strong>
       </span>
       <button
-        disabled={query.saving}
+        disabled={query.saving || Boolean(previewError)}
         onClick={async () => {
           setError('');
           try {
@@ -138,7 +160,7 @@ export function AppearanceController() {
       <button disabled={query.saving} onClick={() => previewAppearance(null)}>
         {t('appearance.restore')}
       </button>
-      {error && <small role="alert">{error}</small>}
+      {(error || previewError) && <small role="alert">{error || previewError}</small>}
     </div>,
     document.body,
   );

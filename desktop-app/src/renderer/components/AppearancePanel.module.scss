@@ -97,6 +97,7 @@
   min-width: 0;
 }
 .shellSource { width: 100%; resize: vertical; font-family: var(--appearance-code-font, monospace); }
+.localPath { overflow-wrap: anywhere; font-size: 12px; }
 .error { white-space: pre-wrap; overflow-wrap: anywhere; }
 .fields {
   display: grid;

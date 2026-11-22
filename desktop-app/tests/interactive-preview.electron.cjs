@@ -1,13 +1,17 @@
 // Run after build:interactive + tsc -p tsconfig.main.json, using Electron (not Node).
 const assert = require('node:assert/strict');
-const { app, BrowserWindow, protocol } = require('electron');
+const { app, BrowserWindow, protocol, nativeImage } = require('electron');
 const { createServer } = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
 const { InteractivePreviews } = require('../dist/main/interactive-preview.js');
 const { INTERACTIVE_SCHEME } = require('../dist/main/interactive-document.js');
-protocol.registerSchemesAsPrivileged([{ scheme: INTERACTIVE_SCHEME, privileges: { standard: true, secure: true } }]);
+const { LocalAppearanceStore, appearanceImageResponse } = require('../dist/main/local-appearance.js');
+protocol.registerSchemesAsPrivileged([
+  { scheme: INTERACTIVE_SCHEME, privileges: { standard: true, secure: true } },
+  { scheme: 'chatter-theme', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } },
+]);
 app.setPath('userData', fs.mkdtempSync(path.join(os.tmpdir(), 'chatter-preview-test-')));
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const until = async (predicate, timeout = 15000) => {
@@ -20,8 +24,18 @@ app.whenReady().then(async () => {
   server = createServer((_req, res) => { hits++; res.end('must not be reached'); });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const endpoint = `http://127.0.0.1:${server.address().port}/blocked`;
+  assert.equal(typeof appearanceImageResponse, 'function');
+  const assetDirectory = path.join(app.getPath('userData'), 'themes');
+  const assetStore = new LocalAppearanceStore(assetDirectory);
+  protocol.handle('chatter-theme', request => appearanceImageResponse(request, host => host === assetStore.assetHost ? assetStore : undefined));
   host = new BrowserWindow({ show: false, width: 1000, height: 800, webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false } });
   await host.loadURL('data:text/html,<body>Trusted host</body>');
+  const pixelUrl = assetStore.importImage(nativeImage.createFromBitmap(Buffer.from([255, 0, 0, 255]), { width: 1, height: 1 }).toPNG().toString('base64'));
+  const imageWidth = await host.webContents.executeJavaScript(`new Promise(resolve=>{const image=new Image();image.onload=()=>resolve(image.naturalWidth);image.onerror=()=>resolve(-1);image.src=${JSON.stringify(pixelUrl)};document.body.append(image);})`);
+  assert.equal(imageWidth, 1, 'local theme resources render in Chromium');
+  assert.equal(appearanceImageResponse({url:'chatter-theme://'+assetStore.assetHost+'/Windows/win.ini',method:'GET'},()=>assetStore).status,404);
+  assert.equal(appearanceImageResponse({url:pixelUrl,method:'POST'},()=>assetStore).status,403);
+  console.log('PASS: actual local-theme image protocol renders raster assets and rejects arbitrary paths/methods');
   manager = new InteractivePreviews();
   const create = async (language, source, options = {}) => {
     const id = manager.create(host.webContents, { language, source, dark: true, errorLabel: 'Preview failed', ...options });
@@ -74,7 +88,9 @@ app.whenReady().then(async () => {
   assert.equal(await preview.contents.executeJavaScript('(()=>{try{localStorage.getItem("private-test");return false}catch{return true}})()'), true);
   manager.stop(host.webContents, preview.id);
   const project = { entry: 'App.tsx', files: {
-    'App.tsx': 'import React from "react"; import Counter from "./parts/Counter"; import "./styles.css"; export default function App(){const [state,setState]=React.useState(null);React.useEffect(()=>window.chatter.subscribe(setState,{navigation:true}),[]);return <><h1>{state?.chats[0]?.title}</h1><Counter/></>}',
+    'App.tsx': 'import React from "react"; import Counter from "@/parts"; import type {CounterState} from "./types"; import "./styles.css"; export default function App(){const [state,setState]=React.useState(null);React.useEffect(()=>window.chatter.subscribe(setState,{navigation:true}),[]);return <><h1>{state?.chats[0]?.title}</h1><Counter/></>}',
+    'types.d.ts': 'export type CounterState = number;',
+    'parts/index.ts': 'export {default} from "./Counter";',
     'parts/Counter.tsx': 'import React from "react"; import data from "../data.json"; import {format} from "./format"; export default function Counter(){const [n,setN]=React.useState(0);return <button onClick={()=>setN(n+1)}>{format(data.label,n)}</button>}',
     'parts/format.ts': 'export function format(label:string,n:number){return label+": "+n}',
     'data.json': '{"label":"Project"}',

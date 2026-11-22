@@ -9,6 +9,7 @@ export interface ToolDefinition {
     parameters: {
       type: 'object';
       properties: Record<string, any>;
+      additionalProperties?: boolean;
       required?: string[];
     };
   };

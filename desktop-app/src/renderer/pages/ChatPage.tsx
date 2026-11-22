@@ -2643,7 +2643,7 @@ export function ChatPage() {
         const value=action.value as AppearanceProposal, profile=parseAppearanceProfile(value.profile);
         if(typeof value.proposal_id!=='string')return;
         if(!confirmationArrivalRef.current.has(value.proposal_id))confirmationArrivalRef.current.set(value.proposal_id,confirmationArrivalRef.current.size);
-        setAppearanceProposals(items=>items.some(item=>item.proposal_id===value.proposal_id)?items:[...items,{proposal_id:value.proposal_id,profile}]);
+        setAppearanceProposals(items=>items.some(item=>item.proposal_id===value.proposal_id)?items:[...items,{proposal_id:value.proposal_id,profile,local_draft:value.local_draft}]);
       }catch{ /* Ignore invalid proposals from an incompatible server. */ }
       return;
     }

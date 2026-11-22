@@ -1,72 +1,74 @@
 # Desktop appearances
 
-Appearance profiles include palettes, materials, typography and optional independently coded shells. A shell can supply a chat navigator or a complete custom workspace using the existing desktop isolation runtime.
+## Local storage and migration
 
-- Canonical schema: shared/appearance.ts. Run node scripts/sync-appearance.mjs; use --check in validation.
-- Storage: users.ui_settings.appearance, with a version, collection revision, active ID and up to 32 profiles.
-- Each profile includes light/dark palettes, interface/message/code fonts and sizes, radius/density, a chat background and message-arrival motion. Optional shell source is stored in the same profile and follows the same preview/save/apply lifecycle.
-- A null activeId selects the built-in appearance; it is always available and cannot be deleted.
-- The existing system/light/dark/scheduled theme preference chooses the palette. Its behavior is preserved.
-- Font names refer to fonts installed on the current PC. A fallback is used when unavailable; no font installation is performed.
-- Solid chat backgrounds follow the selected palette. Gradient colors and uploaded/HTTPS images are explicit profile settings.
-- Shell and chat colors are derived separately. Text, metadata, links, tool surfaces and code colors adapt to the actual chat backdrop, including when a dark gradient is used in light mode. Low-contrast palettes are corrected locally without rewriting the saved colors. Images receive a contrast scrim; mixed gradients receive one only when needed. Miniature previews use the same rendering rules.
-- Fonts, sizes, density and corners use the existing appearance tokens across settings, tools, dialogs, work logs and navigation. Circular controls, avatars and document artwork retain their shapes.
-- Image uploads use existing media storage. Draft uploads expire unless saved; owned assets become persistent through profile references.
-- Arrival motion supports fade, translation and scale with bounded duration and easing. It respects reduced motion, does not animate loaded history, and does not replay when virtual rows remount.
+Desktop themes belong to the local app installation, independently of accounts and servers. The default directory is Electron userData/themes. Settings show the actual path and can copy the complete workspace to a different empty directory, or reopen an existing local workspace. The original directory is retained. The selected location is stored in theme-location.json as a single directory; .workspace.json identifies the local image origin, without user or server IDs. Older .scope.json markers remain readable for compatibility, without ownership checks.
 
-## API and tools
+On upgrade, old account/server directories (including custom locations in theme-locations.json) are copied into the common workspace. Imported IDs receive a deterministic suffix to preserve themes with identical IDs. Draft source files, assets and preceding saved versions are retained; invalid drafts remain available for repair. The most recently modified old selection is used when the common workspace is empty. Old directories are retained as backups. Reopening the common workspace does not repeat the import or reset local changes.
 
-GET /api/v1/user/appearance reads the collection.
+- .drafts/<id>/theme.json and source files are the editable workspace.
+- .saved/<id>/<snapshot>/ contains immutable published versions. A completed snapshot is written and read back before .state.json is atomically replaced.
+- .state.json stores selection, saved snapshot pointers, collection revisions and the migration marker. Only the app edits it.
+- Current and preceding published versions are retained. Rollback publishes a new monotonic revision. If a current snapshot is damaged, the preceding valid snapshot is recovered; unreadable records and original files are preserved for inspection.
+- .trash retains replaced/deleted draft directories. Canceling a preview retains its draft.
+- THEMES.md, template.json and chatter.d.ts provide on-demand documentation and editor types.
 
-POST /api/v1/user/appearance accepts save, activate or delete. Saving includes the complete profile and an explicit apply flag; a stale profile revision returns HTTP 409. Activate/delete require the collection revision. Updates preserve unrelated user settings. The ordinary UI settings endpoint preserves appearance data but does not replace it.
+On first load, the desktop reads /api/v1/user/appearance/legacy, which preserves raw appearance entries instead of filtering unknown older fields. Older servers fall back to /api/v1/user/appearance; a fresh login snapshot can seed migration if the server is unavailable. All valid profiles are materialized into local manifests/source files; active selection is preserved only for a previously empty workspace. Existing local profiles, selection and draft files are never overwritten by migration. .migration-backup.json retains the original collection, including any invalid entries, and migration errors are shown in settings. The database collection is not deleted. After successful migration, the desktop no longer reads or writes it for normal appearance operations. A pending migration can be retried in settings.
 
-POST /api/v1/user/appearance/image accepts an image as base64, up to 8 MiB before encoding.
+Ordinary appearances remain ordinary configuration. They need only theme.json with palettes, typography, geometry, materials, background and motion. No HTML is required. The existing CSS tokens, contrast correction, fonts, density, material and animation runtime apply these values as before. A null activeId selects the built-in appearance. Existing system/light/dark/scheduled palette selection is unchanged.
 
-get_appearance defaults to saved variant summaries and the active profile. The capabilities view returns supported fields, limits and a complete template; profile reads a variant by ID.
+## Components and source files
 
-suggest_appearance validates a complete profile and emits the existing desktop action/confirmation flow. It never saves or applies a theme. Saving and applying require explicit user action in the editor or confirmation/preview UI.
+Canonical contracts are shared/appearance.ts and shared/appearance-project.ts; run node scripts/sync-appearance.mjs and validate with --check. They are mirrored into the main process, renderer and legacy backend parser.
 
-Preview state is local and temporary. The independent recovery bar and Escape restore the saved appearance. Ctrl/Command + Alt + Backspace restores the default locally immediately and saves the choice to the server; a failed save retains readable local recovery controls. Changing accounts clears previews and account-scoped query data is kept separate.
+A component project's on-disk shell manifest is:
 
-## Custom shells
+```json
+{"version":1,"language":"tsx","scope":"workspace","entry":"App.tsx"}
+```
 
-Optional profile.shell contains version 1, language html or tsx and optional scope navigator or workspace. Navigator is the default. A single-file shell uses source (nonempty, up to 100,000 characters). A multi-file shell uses language tsx, entry and files instead of source. files maps relative paths to source strings, with up to 32 files and 100,000 characters total. Both formats support arbitrary markup, styles and animations. Workspace also receives the active conversation and can supply its own message renderer and composer.
+The app discovers TSX, TS, JSX, JS, CSS and JSON files recursively, with up to 32 runtime files and 100,000 source characters. theme.json, tsconfig.json, declaration files, node_modules and hidden directories are excluded. Components support named/default exports, relative imports, extensionless and index imports, @/ aliases rooted at the project, JS-to-TS import resolution, shared CSS side-effect imports and JSON data. The entry default-exports a React component. Bundled external modules are react, react-markdown and remark-gfm. Package installation and direct OS access are not exposed inside the running shell.
 
-Projects support relative TSX, TS, JSX, JS, CSS and JSON imports, including extensionless component and index imports. CSS imports add a stylesheet once; JSON imports return parsed data. React, react-markdown and remark-gfm are the only bundled external imports. Files are virtual profile data, never paths on disk. Absolute paths, traversal outside the project, unsupported modules and CSS @import are rejected. The entry must export a default React component. All modules are compiled before execution, in the existing isolated renderer. No user code runs on the server.
+chatter.d.ts gives editor types for window.chatter. The generated tsconfig.json includes the @/ alias. Create component project in settings writes a working App.tsx, separate chat list, conversation and composer components, a stylesheet and editor support files. The native editor can still edit individual files, while Open files goes straight to the draft directory in the file manager.
 
-The capabilities response includes a small workspace starter with App.tsx, separate chat list, conversation and composer components, and styles.css. It is a working structural starting point rather than a fixed visual preset. Existing single-file imports and exports remain compatible. The editor lists project files, supports adding/deleting files and choosing the entry, and preserves all files in the same appearance JSON. A single TSX source can be converted into App.tsx without discarding its code.
+HTML and legacy single-source TSX retain exact source in a file. Their shell manifests use sourceFile (index.html or App.tsx) instead of entry. Existing full-profile JSON imports remain supported. Source is assembled into the existing in-memory AppearanceProfile contract only when needed by the UI or isolation runtime.
 
-examples/appearances/workspace-starter.json is an importable copy of this starter. It contains no chat history or user data. Like other examples it receives live data only when running inside the app.
+navigator scope opens selected chats in the native conversation. workspace scope keeps its own message renderer and composer. The live bridge supports chat/folder summaries, pagination, search, active messages, generation state and user-triggered actions. Read generated THEMES.md/chatter.d.ts for the complete API. Route-aware shells subscribe with {navigation:true}; older shells still reload their initial overview on return home.
 
-Source runs in the existing isolated WebContentsView, with a separate process/session, offline CSP, no application preload, and a dedicated narrow window.chatter bridge. Bundled TSX supports react, react-markdown and remark-gfm. The bridge publishes chat summaries, folders, existing section pagination, server search, active-chat messages, generation state, locale, palette and translated labels. No app credentials or direct OS access are passed to source.
+## Editing, preview and application
 
-window.chatter.subscribe(callback) returns unsubscribe and immediately supplies the latest state when available. State.messages is the loaded history, with id, role, content (final-answer body), and createdAt. messagesLoading, hasOlderMessages, olderMessagesLoading, sending, canSend and attachmentCount describe the native conversation. Existing bot confirmation cards temporarily reveal the native interface.
+Draft file changes are observed with filesystem events and debouncing, without polling. Before a preview or proposal, the desktop checks syntax and imports without executing model code. An already open draft preview refreshes when valid files change. Invalid edits keep the preceding preview visible, show file/line diagnostics, and disable application until repaired. After cancellation, filesystem edits cannot reopen the preview. Active appearance snapshots never follow draft changes automatically.
 
-Actions are openChat(id), showHome(), newChat(), loadMore(folderId), search(query), sendMessage(text), stopGeneration(), loadOlderMessages(), openConversation(), attachFiles(), openLibrary(), and openSettings(). Folder ID null means unfiled. Main validates actions against the owning view, published chat IDs and section pagination. Sending uses the existing composer/streaming flow, requires real user activation, and captures the active chat ID to reject stale requests.
+Only explicit user application saves/selects a new published snapshot. Native controls provide a Back to custom interface button in the native conversation and the chat library drawer. Settings opened from a shell return to that shell when closed. Escape and the independent recovery bar restore the saved appearance; Ctrl/Command + Alt + Backspace selects the built-in appearance locally. Changing accounts, servers or signing out retains the same local library and selection; local appearance loading and recovery are available without signing in.
 
-Native controls outside generated code open settings/library and close the shell. Route-aware source subscribes with window.chatter.subscribe(callback, {navigation:true}) to retain its running UI on back navigation. Previously imported source without this option reloads its own initial overview when the host returns home.
+## Images and portability
 
-The shell reads state.view (home/conversation) and can call showHome() to return to its own overview. The native conversation and the chat library drawer expose an explicit Back to custom interface button. It closes the library and selects home without changing the active chat or appearance. Settings opened from the shell temporarily hide it; closing settings reveals the same shell view again. Escape from a conversation returns home and keeps the appearance preview. Escape from home leaves a temporary preview. Standard interface is a separate explicitly labeled action. Ctrl/Command + Alt + Backspace still restores the default from a focused isolated surface. Render failures and the existing hang watchdog release the custom view and leave the native app available.
+Uploaded raster backgrounds are stored locally, with an 8 MiB limit and PNG/JPEG/WebP/GIF signature validation. On disk, a theme refers to assets/<image>. In memory, the app uses a content-addressed chatter-theme URL; the protocol serves only validated image hashes in an initialized theme workspace. Paths, symlinks and arbitrary files are rejected. The isolated code surface does not receive a filesystem bridge.
 
-Import appearance opens a new draft with a new ID and revision 0. Export includes all source. The editor exposes source format, scope and code. Neither importing nor editing applies a profile automatically. Existing profiles without shell are unchanged.
+Migration tries to copy owned /api/v1/images backgrounds to the PC. If a resource cannot be downloaded, the original server reference remains and settings report it. External HTTPS image links retain their original behavior. The database backup remains unchanged.
 
-The bot uses the same get_appearance capabilities and suggest_appearance tools. Capabilities include the source contract, bridge API, minimal HTML and a multi-file starter. Default reads omit source code. view profile reads a complete saved profile, view files returns metadata and file names/sizes, and view file with id/path reads one project file. To edit saved files, suggest_appearance accepts id, the current saved revision, a files map (string adds/replaces; null deletes), and optional entry. The server merges edits into a copy, validates the complete project and proposes that result through the same confirmation flow. A complete profile can also be supplied, optionally with file edits. There is no separate persistent server draft workspace: for an unsaved draft the bot must still pass the complete profile. checkOnly validates without proposing. Syntax and import errors return appearance_build_failed with file/line/column diagnostics. This does not execute code or prove runtime correctness. The desktop editor also validates projects before preview or application; inactive drafts can still be saved while being edited. A supplied profile revision must equal the current saved revision; the server increments it on save.
+Export creates a ZIP containing theme.json, source and local assets. ZIP import creates a new inactive draft with a new ID. Old complete JSON exports still import. Archive paths and expanded size are bounded; traversal and symlinks are rejected. Copying a theme directory or importing its package preserves local raster resources across PCs/accounts.
 
-examples/appearances/journal.json is a typographic paper journal with a full-page reading view and Markdown. examples/appearances/worktable.json is a note-card board whose conversations open in a modal card. Both are independent TSX implementations with their exact source beside the JSON.
+## Bot integration
 
-examples/appearances/holographic.json is an importable full appearance. examples/appearances/holographic.html is its exact shell source, ready to give to a bot as a starting point. The sample opens with an orbital chat map and provides its own conversation, live text updates, composer, stop action, native attachments and conversation actions. It maintains keyed message elements, skips empty answer bubbles, supports reduced motion and pauses decorative animation while hidden.
+No theme instructions or state are injected into the system prompt, and theme metadata is not synchronized to the backend automatically. get_theme_docs() requests two blocks from the connected desktop: readme (the current THEMES.md guide for creating and editing themes) and state (directory/documentation paths, active theme ID, saved theme IDs/names and draft IDs). desktopVersion identifies the app supplying the guide. Source files are read on demand through the existing desktop file tools. The backend only forwards this request over appearance_workspace IPC; guide content can change with desktop releases without backend changes. The request has no file path argument, returns no theme source, and cannot propose or apply a theme.
+
+The two exposed appearance tools are get_theme_docs() and suggest_appearance({id, checkOnly?}). The latter requires the draft folder ID, reads and validates that draft locally, then emits the existing confirmation card. checkOnly:true returns diagnostics without a proposal. Raw profiles and source maps are not tool arguments, and bot proposals do not save or apply files. Refresh documentation and state by calling get_theme_docs() again.
+
+The old HTTP appearance endpoints remain for migration and older clients. The updated desktop does not use POST /api/v1/user/appearance or the server image-upload endpoint for its local themes. Chat layout remains a separate existing feature.
 
 ## Checks
 
 - node scripts/sync-appearance.mjs --check
 - tsx backend-api/tests/appearance.test.mts
+- tsx desktop-app/tests/local-appearance.test.mts
 - tsx desktop-app/tests/appearance-colors.test.mts
 - tsx desktop-app/tests/appearance-ui.test.mts
 - Existing message/sidebar virtualization tests verify the unchanged default layout.
 
 ## Color regions
 
-Each light/dark palette has background (application shell), text and accent. Optional surface controls the sidebar, header, composer, tools panel, title bar and settings window, with its own derived text and control colors. Optional chat sets the solid conversation color. The existing profile.background gradient/image is conversation-only and takes precedence over chat. Omitted surface/chat retain previous behavior exactly; Auto removes the corresponding override. No database migration or theme preference change is needed. The shared schema, capabilities and editor use the same names; legacy profiles still validate without adding fields.
+Each light/dark palette has background (application shell), text and accent. Optional surface controls the sidebar, header, composer, tools panel, title bar and settings window, with its own derived text and control colors. Optional chat sets the solid conversation color. The existing profile.background gradient/image is conversation-only and takes precedence over chat. Omitted surface/chat retain previous behavior exactly; Auto removes the corresponding override. The optional color fields require no additional migration or palette-preference change. The shared schema, capabilities and editor use the same names; legacy profiles still validate without adding fields.
 
 ## Surface materials
 

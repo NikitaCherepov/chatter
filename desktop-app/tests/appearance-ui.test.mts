@@ -52,6 +52,11 @@ export const createNote=async()=>({note_id:46});
 export const deleteNote=async()=>({ok:true});
 export const apiFetch=async(path,options)=>{
  await new Promise(resolve=>setTimeout(resolve,5));
+ if(path==='/api/v1/user/appearance/legacy'||path==='/api/v1/user/appearance'){
+  (window.migrationRequests??=[]).push({userId:window.testAccount,path});
+  if(window.forceOldThemeServer&&path.endsWith('/legacy'))throw {status:404};
+ }
+ if(path==='/api/v1/user/appearance'&&options?.method==='POST'){window.serverAppearanceWrites=(window.serverAppearanceWrites??0)+1;throw new Error('Desktop themes must be stored locally');}
  const userId=window.testAccount;
  if(path==='/api/v1/user/chat-layout'){
   const current=window.layoutDb[userId]??{revision:0,activeId:null,profiles:[]};
@@ -89,6 +94,7 @@ import {I18nextProvider,useTranslation} from 'react-i18next';
 import {AnimatePresence,motion} from 'framer-motion';
 import {TestAuth} from 'test-auth';
 import {AppearancePanel} from ${modulePath('components/AppearancePanel.tsx')};
+import {executeAppearanceWorkspace} from ${modulePath('lib/appearance-service.ts')};
 import {ChatLayoutPanel,ChatLayoutConfirmation,ChatLayoutPreviewBar} from ${modulePath('components/ChatLayoutPanel.tsx')};
 import {useChatLayouts} from ${modulePath('lib/chat-layout-service.ts')};
 import {setNotebookDraftState,setToolsPanelState} from ${modulePath('lib/tools.ts')};
@@ -100,7 +106,7 @@ import {useChatWorkspace} from ${modulePath('lib/chat-workspace.ts')};
 import {AppearanceController} from ${modulePath('components/AppearanceController.tsx')};
 import {AppearanceConfirmation} from ${modulePath('components/AppearanceConfirmation.tsx')};
 import {newAppearance} from ${modulePath('lib/appearance-schema.ts')};
-import {previewAppearance,animateMessageArrival} from ${modulePath('lib/appearance-runtime.ts')};
+import {previewAppearance,animateMessageArrival,getAppearancePreview} from ${modulePath('lib/appearance-runtime.ts')};
 import {appearanceColors,contrastRatio} from ${modulePath('lib/appearance-colors.ts')};
 import {ToolActivityCall} from ${modulePath('components/ToolActivity.tsx')};
 import {WorkLog} from ${modulePath('components/WorkLog.tsx')};
@@ -119,8 +125,56 @@ import ${modulePath('global.scss')};
 window.newAppearance=newAppearance;window.previewAppearance=previewAppearance;window.appearanceColors=appearanceColors;window.contrastRatio=contrastRatio;window.light=()=>setThemePreference("light");
 window.messageViewport=()=>document.querySelector('.'+chat.messages);
 window.notebookList=()=>document.querySelector('.'+notebook.notesList);
-window.testAccount=1;window.testDb={};window.layoutDb={};
-window.electronAPI={onToolWindowClosed:()=>()=>{}};window.animationCount=0;window.motionSamples=[];
+window.testAccount=1;window.testDb={};window.layoutDb={};window.forceOldThemeServer=true;
+window.callThemeTool=payload=>executeAppearanceWorkspace(payload,profile=>{window.lastLocalThemeProposal=profile;});
+localStorage.setItem('chatter_user',JSON.stringify({id:1}));
+window.localDrafts={};window.localThemeHistory={};window.localThemeMigrated={};window.themeLocations={};
+const localThemeListeners=new Set();
+window.emitThemeChange=()=>{for(const listener of localThemeListeners)listener();};
+const localThemeSnapshot=userId=>{
+ const appearance=window.testDb[userId]??{version:1,revision:0,activeId:null,profiles:[]};
+ const drafts=window.localDrafts[userId]??={};
+ for(const profile of appearance.profiles)drafts[profile.id]??=structuredClone(profile);
+ const directory=window.themeLocations[userId]??('C:/TestThemes/'+userId);
+ return {appearance:structuredClone(appearance),workspace:{directory,draftsDirectory:directory+'/.drafts',documentation:directory+'/THEMES.md',activeId:appearance.activeId,
+  migrationComplete:!!window.localThemeMigrated[userId],migrationErrors:[],issues:[],
+  profiles:appearance.profiles.map(profile=>({id:profile.id,name:profile.name,directory:directory+'/.saved/'+profile.id,draftDirectory:directory+'/.drafts/'+profile.id,hasPrevious:!!window.localThemeHistory[userId]?.[profile.id]})),
+  drafts:Object.keys(drafts).map(id=>({id,directory:directory+'/.drafts/'+id}))}};
+};
+window.electronAPI={onToolWindowClosed:()=>()=>{},
+ onLocalAppearanceChanged:listener=>{localThemeListeners.add(listener);return()=>localThemeListeners.delete(listener);},
+ localAppearance:async payload=>{
+  await new Promise(resolve=>setTimeout(resolve,5));
+  const userId=1;
+  if(payload.action==='docs')return {readme:window.themeGuideText??'# Local desktop guide',desktopVersion:'test-desktop',workspace:localThemeSnapshot(userId).workspace};
+  if(payload.action==='migrate'){
+   if(!window.localThemeMigrated[userId])window.testDb[userId]??=structuredClone(payload.legacy);
+   window.localThemeMigrated[userId]=true;
+  } else if(payload.action==='change'){
+   if(window.failSave){window.failSave=false;throw {data:{error:'appearance_conflict'}};}
+   const current=window.testDb[userId]??={version:1,revision:0,activeId:null,profiles:[]},command=payload.command;
+   if(command.action==='save'){
+    const profile=structuredClone(command.profile),old=current.profiles.find(item=>item.id===profile.id);
+    profile.revision=(old?.revision??0)+1;
+    if(old){(window.localThemeHistory[userId]??={})[profile.id]=old;}
+    current.profiles=[...current.profiles.filter(item=>item.id!==profile.id),profile];
+    if(command.apply)current.activeId=profile.id;
+   }else if(command.action==='activate')current.activeId=command.id;
+   else if(command.action==='delete'){current.profiles=current.profiles.filter(item=>item.id!==command.id);if(current.activeId===command.id)current.activeId=null;delete window.localDrafts[userId]?.[command.id];}
+   current.revision++;
+  } else if(payload.action==='read-draft'){
+   const profile=structuredClone(window.localDrafts[userId]?.[payload.id]);
+   if(!profile)throw new Error('appearance_not_found');
+   profile.revision=window.testDb[userId]?.profiles.find(item=>item.id===profile.id)?.revision??0;
+   return profile;
+  } else if(payload.action==='write-draft'){
+   (window.localDrafts[userId]??={})[payload.profile.id]=structuredClone(payload.profile);
+  } else if(payload.action==='prepare'){
+   (window.localDrafts[userId]??={})[payload.id]??=window.newAppearance(payload.id);
+  } else if(payload.action==='choose-directory')window.themeLocations[userId]='C:/ChosenThemes/'+userId;
+  else if(payload.action==='open')window.openedThemeFolder=payload.id??'root';
+  return localThemeSnapshot(userId);
+ }};window.peekThemePreview=getAppearancePreview;window.animationCount=0;window.motionSamples=[];
 const nativeAnimate=Element.prototype.animate;
 Element.prototype.animate=function(...args){
  if(this.hasAttribute('data-message-id'))window.animationCount++;
@@ -246,7 +300,8 @@ function App(){
  const [workspaceEpoch,setWorkspaceEpoch]=useState(0);
  window.openLayoutFixture=()=>setLayoutFixture(true);
  window.reloadWorkspace=()=>setWorkspaceEpoch(epoch=>epoch+1);
- window.changeAccount=()=>{window.testAccount=2;setUser({id:2,ui_settings:{}});};
+ window.logoutAccount=()=>{localStorage.removeItem('chatter_user');setUser(null);};
+ window.changeAccount=()=>{window.testAccount=2;window.forceOldThemeServer=false;localStorage.setItem('chatter_user',JSON.stringify({id:2}));setUser({id:2,ui_settings:{}});};
  window.propose=()=>setProposal({proposal_id:'bot-proposal',profile:{...newAppearance('from-bot'),name:'Bot look'}});
  window.proposeDraft=()=>setProposal({proposal_id:'bot-draft',profile:{...newAppearance('saved-bot'),name:'Saved bot draft'}});
  window.motionPreview=()=>previewAppearance({...newAppearance('motion'),motion:{preset:'custom',duration:100,distance:12,scale:0.97,easing:'ease-out'}});
@@ -256,7 +311,7 @@ function App(){
   <div className={chat.main} style={{width:'52%',height:'100%',display:'flex',flexDirection:'column'}}><Conversation/></div>
  </>}</TestAuth.Provider>;
 }
-window.clickText=text=>{const button=[...document.querySelectorAll('button')].find(el=>el.textContent.trim()===text&&!el.disabled&&el.getBoundingClientRect().height>0);if(!button)throw new Error('Button missing: '+text);button.click();};
+window.clickText=text=>{const button=[...document.querySelectorAll('button')].find(el=>el.textContent.trim()===text&&!el.disabled&&!el.closest('details:not([open])')&&el.getBoundingClientRect().height>0);if(!button)throw new Error('Button missing: '+text);button.click();};
 window.inputText=(label,value)=>{
  const input=document.querySelector('input[aria-label="'+label+'"]')??[...document.querySelectorAll('label')].find(el=>el.textContent.trim()===label)?.querySelector('input');
  if(!input)throw new Error('Input missing: '+label);
@@ -291,6 +346,7 @@ app.whenReady().then(async()=>{
  const until=async code=>{for(let n=0;n<120;n++){if(await js(code))return;await sleep(25);}throw new Error('Timed out: '+code+'\nRenderer errors: '+errors.join('\n'));};
  await win.loadFile(path.join(__dirname,'renderer/index.html'));
  await until('window.fixtureReady && [...document.querySelectorAll("button")].some(el=>el.textContent==="Создать оформление")');
+ assert.ok(await js('window.migrationRequests.some(item=>item.userId===1&&item.path.endsWith("/legacy"))&&window.migrationRequests.some(item=>item.userId===1&&item.path==="/api/v1/user/appearance")'),'older-server migration fallback is supported');
  await until('document.querySelectorAll("[data-virtual-row-placeholder]").length>30');
  // The floating dock must reserve space without shrinking or recoloring the viewport.
  const dockMetrics=()=>js('(()=>{const v=window.messageViewport(),dock=document.querySelector("[data-chat-composer-dock]"),input=dock.querySelector("textarea"),last=[...document.querySelectorAll("[data-message-id]")].at(-1);return {height:v.clientHeight,bottom:v.getBoundingClientRect().bottom,dockTop:dock.getBoundingClientRect().top,inputBottom:input.getBoundingClientRect().bottom,reserve:parseFloat(v.parentElement.style.getPropertyValue("--chat-composer-height")),lastBottom:last.getBoundingClientRect().bottom,background:getComputedStyle(v).backgroundImage};})()');
@@ -459,11 +515,23 @@ app.whenReady().then(async()=>{
  await js('window.motionPreview()');
  await js('window.dispatchEvent(new KeyboardEvent("keydown",{code:"Backspace",key:"Backspace",ctrlKey:true,altKey:true,bubbles:true}))');
  await until('window.testDb[1].activeId===null && !document.documentElement.dataset.appearance');
- // Account changes clear both the selected profile and any unfinished preview.
- await js('window.changeAccount()');
- await until('!document.documentElement.dataset.appearance && !document.querySelector("[aria-label=Предпросмотр]")');
- assert.ok(await js('window.testDb[1].profiles.length===3'));
+ // Account changes and logout retain the shared selection, library and preview.
+ await js('window.electronAPI.localAppearance({action:"change",command:{action:"activate",id:window.testDb[1].profiles[0].id}}).then(()=>window.emitThemeChange())');
+ await until('document.documentElement.dataset.appearance===window.testDb[1].activeId');
+ const selectedBeforeAccount=await js('window.testDb[1].activeId');
+ await js('window.motionPreview();window.changeAccount()');
+ await until('!!document.querySelector("[aria-label=Предпросмотр]")');
+ assert.equal(await js('window.peekThemePreview().id'),'motion');
+ assert.equal((await js('window.callThemeTool({action:"docs"})')).state.activeId,selectedBeforeAccount);
+ await js('window.logoutAccount()');
+ assert.equal((await js('window.callThemeTool({action:"docs"})')).state.activeId,selectedBeforeAccount);
+ assert.equal(await js('window.testDb[1].profiles.length'),3);
+ await js('window.changeAccount();window.previewAppearance(null)');
+ await until('document.documentElement.dataset.appearance===window.testDb[1].activeId');
  assert.deepEqual(errors,[]);
+ // Start the separate project-editor scenario with an empty fixture library.
+ await js('window.testDb[1]={version:1,revision:0,activeId:null,profiles:[]};window.localDrafts[1]={};window.emitThemeChange()');
+ await until('!document.documentElement.dataset.appearance');
  // Leave a reviewable screenshot of the real catalog/editor.
  await until('[...document.querySelectorAll("button")].some(el=>el.textContent==="Создать оформление"&&!el.disabled)');
  await js('window.clickText("Создать оформление")');
@@ -502,10 +570,51 @@ app.whenReady().then(async()=>{
  await js('window.clickText("Вернуть оформление")');
  await until('!document.documentElement.dataset.appearance');
  await js('window.clickText("Сохранить вариант")');
- await until('window.testDb[2]?.profiles.length===1');
- assert.equal(await js('window.testDb[2].profiles[0].shell.files["styles.css"]'),'main { color: blue; }');
- assert.equal(await js('window.testDb[2].profiles[0].shell.entry'),'App.tsx');
- assert.equal(await js('window.testDb[2].activeId'),null);
+ await until('window.testDb[1]?.profiles.length===1');
+ assert.equal(await js('window.testDb[1].profiles[0].shell.files["styles.css"]'),'main { color: blue; }');
+ assert.equal(await js('window.testDb[1].profiles[0].shell.entry'),'App.tsx');
+ assert.equal(await js('window.testDb[1].activeId'),null);
+ await js('document.querySelector("#panel-fixture details summary").click()');
+ await js('window.clickText("Предпросмотр")');
+ await until('window.peekThemePreview()?.id===window.testDb[1].profiles[0].id');
+ await js('(()=>{const id=window.testDb[1].profiles[0].id;window.localDrafts[1][id].shell.files["styles.css"]="main { color: red; }";window.emitThemeChange();})()');
+ await until('window.peekThemePreview()?.shell.files["styles.css"]==="main { color: red; }"');
+ const themeId=await js('window.testDb[1].profiles[0].id');
+ const themeDocs=await js('window.callThemeTool({action:"docs"})');
+ assert.equal(themeDocs.readme,'# Local desktop guide');
+ assert.equal(themeDocs.desktopVersion,'test-desktop');
+ assert.equal(themeDocs.state.directory,await js('window.themeLocations[1]??"C:/TestThemes/1"'));
+ assert.equal(themeDocs.state.activeId,null);
+ assert.ok(themeDocs.state.profiles.some(profile=>profile.id===themeId));
+ assert.ok(themeDocs.state.drafts.includes(themeId));
+ assert.equal(JSON.stringify(themeDocs.state).includes('export default'),false,'state contains metadata only');
+ await js('window.themeGuideText="# Updated local guide"');
+ assert.equal((await js('window.callThemeTool({action:"docs"})')).readme,'# Updated local guide');
+ await js('window.localDrafts[1]["new-draft"]=structuredClone(window.localDrafts[1]['+JSON.stringify(themeId)+'])');
+ assert.ok((await js('window.callThemeTool({action:"docs"})')).state.drafts.includes('new-draft'),'each call reads current state');
+ await js('delete window.localDrafts[1]["new-draft"]');
+ assert.equal(await js('window.testDb[1].activeId'),null,'reading docs never applies a theme');
+ assert.equal(await js('window.lastLocalThemeProposal'),undefined,'reading docs never opens a proposal');
+ assert.equal((await js('window.callThemeTool({id:'+JSON.stringify(themeId)+',checkOnly:true})')).status,'valid');
+ assert.equal(await js('window.lastLocalThemeProposal'),undefined);
+ assert.equal((await js('window.callThemeTool({id:'+JSON.stringify(themeId)+'})')).status,'proposed');
+ assert.equal(await js('window.lastLocalThemeProposal.shell.files["styles.css"]'),'main { color: red; }');
+ assert.equal(await js('window.testDb[1].profiles[0].shell.files["styles.css"]'),'main { color: blue; }','watching a draft must not save or apply it');
+ await js('(()=>{const id=window.testDb[1].profiles[0].id;window.validEntry=window.localDrafts[1][id].shell.files["App.tsx"];window.localDrafts[1][id].shell.files["App.tsx"]="export default function App(){return <main> }";window.emitThemeChange();})()');
+ await until('document.querySelector("[aria-label=Предпросмотр] [role=alert]")?.textContent.includes("App.tsx")');
+ assert.equal((await js('window.callThemeTool({id:'+JSON.stringify(themeId)+',checkOnly:true})')).error,'appearance_build_failed');
+ assert.ok(await js('[...document.querySelectorAll("[aria-label=Предпросмотр] button")].find(button=>button.textContent==="Сохранить и применить").disabled'));
+ await js('(()=>{const id=window.testDb[1].profiles[0].id;window.localDrafts[1][id].shell.files["App.tsx"]=window.validEntry;window.emitThemeChange();})()');
+ await until('!document.querySelector("[aria-label=Предпросмотр] [role=alert]")');
+ await js('window.clickText("Вернуть оформление")');
+ await js('(()=>{const id=window.testDb[1].profiles[0].id;window.localDrafts[1][id].shell.files["styles.css"]="main { color: green; }";window.emitThemeChange();})()');
+ await sleep(100);
+ assert.equal(await js('window.peekThemePreview()'),null,'file edits after cancellation must not reopen a preview');
+ assert.equal(await js('window.serverAppearanceWrites??0'),0);
+ await js('window.clickText("Выбрать другой каталог")');
+ await until('document.querySelector("#panel-fixture").textContent.includes("C:/ChosenThemes/1")');
+ assert.equal(await js('window.testDb[1].activeId'),null,'moving the theme directory does not activate a theme');
+ console.log('PASS: local draft live reload, error diagnostics and apply guard, cancellation, directory selection and no server appearance writes');
  console.log('PASS: actual project file editor, conversion without source loss, entry protection, file diagnostics before preview, and complete inactive project save');
  await js('window.openLayoutFixture()');
  await until('[...document.querySelectorAll("#layout-editor-fixture button")].some(el=>el.getAttribute("aria-label")==="Сохранённые компоновки")');
@@ -701,7 +810,7 @@ app.whenReady().then(async()=>{
  console.log('PASS: top workspace preview, mounted library and folder state, Escape/focus, tab pin and close, tool favorites and persistence');
  console.log('PASS: layout editor, in-chat preview, stateful panel reorder, docked composer bottom follow, narrow tools panel, and inactive bot layout save');
  win.destroy();
- console.log('PASS: actual appearance editor and cards, inactive saves, reversible preview, palette/typography/density, virtual height restoration, applying proposals from recovery bar, arrival-only animation, reduced motion and account isolation');
+ console.log('PASS: actual appearance editor and cards, inactive saves, reversible preview, palette/typography/density, virtual height restoration, applying proposals from recovery bar, arrival-only animation, reduced motion and app-wide themes across account changes/logout');
  app.exit(0);
 }).catch(error=>{console.error(error);app.exit(1);});
 `;

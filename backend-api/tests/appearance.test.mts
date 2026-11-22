@@ -9,12 +9,13 @@ process.env.API_DB_PATH = path.join(temp, 'test.sqlite');
 process.env.UPLOADS_DIR = path.join(temp, 'images');
 const { db } = await import('../src/db.js');
 const schema = await import('../src/services/appearance-schema.js');
-const appearanceCode = await import('../src/services/appearance-code.js');
-const { getAppearance, changeAppearance, appearanceFromJson } =
+const { getAppearance, getLegacyAppearance, changeAppearance, appearanceFromJson } =
   await import('../src/services/appearance.js');
 const { getChatLayouts, changeChatLayouts } = await import('../src/services/chat-layout.js');
 const layoutSchema = await import('../src/services/chat-layout-schema.js');
 const media = await import('../src/services/media-assets.js');
+const { desktopToolDefinitions, modularToolDefinitions, getModularTool } = await import('../src/services/tools/registry.js');
+const { wsClients } = await import('../src/ws-clients.js');
 try {
   for (const id of [101, 202])
     db.prepare('INSERT INTO users (id,name,ui_settings) VALUES (?,?,?)').run(
@@ -186,6 +187,7 @@ try {
     parseAppearanceSettings: schema.parseAppearanceSettings,
     appearanceFromJson,
     getAppearance,
+    getLegacyAppearance,
     changeAppearance,
     getChatLayouts,
     changeChatLayouts,
@@ -226,6 +228,13 @@ try {
     return { status, result };
   }
   const before = getAppearance(101);
+  const rawLegacy = { version: 1, revision: 4, activeId: 'old', profiles: [{ ...schema.newAppearance('old'), old_future_field: 'preserve me' }] };
+  db.prepare('INSERT INTO users (id,name,ui_settings) VALUES (?,?,?)').run(303, 'legacy', JSON.stringify({ appearance: rawLegacy, unrelated: 'private' }));
+  const rawRead = await request('get', '/api/v1/user/appearance/legacy', {}, 303);
+  assert.equal(rawRead.status, 200);
+  assert.deepEqual(rawRead.result.appearance, rawLegacy);
+  assert.equal(rawRead.result.unrelated, undefined);
+  assert.equal(getAppearance(303).profiles.length, 0, 'legacy migration read preserves data that strict current reads cannot parse');
   const layoutUrl = '/api/v1/user/chat-layout';
   const profile = { ...layoutSchema.CHAT_LAYOUT_CAPABILITIES.template, id: 'reading', chatSide: 'right', sidebarWidth: 290 };
   const saveLayout = (profile: unknown, apply: boolean) => request('post', layoutUrl, { action: 'save', profile, apply });
@@ -273,13 +282,18 @@ try {
     ai.indexOf("  if (toolName === 'get_chat_layout')"),
     ai.indexOf("  if (toolName === 'suggest_macro')"),
   );
+  const modularDispatch = ai.slice(ai.indexOf('  const modularTool = getModularTool('), ai.indexOf("  if (toolName === 'get_user_time')"));
+  assert.ok(modularDispatch.includes('modularTool.handler'));
+  context.definitions = desktopToolDefinitions;
+  Object.assign(context, {
+    getModularTool, billingUser: undefined, timezoneOffset: 0,
+    generatedImages: undefined, userImages: undefined, runTrackedVisionCompletion: undefined,
+  });
   context.CHAT_LAYOUT_CAPABILITIES = layoutSchema.CHAT_LAYOUT_CAPABILITIES;
   context.parseChatLayoutProfile = layoutSchema.parseChatLayoutProfile;
   context.subagentExtra = { onDesktopAction: () => undefined };
   context.APPEARANCE_CAPABILITIES = schema.APPEARANCE_CAPABILITIES;
   context.parseAppearanceProfile = schema.parseAppearanceProfile;
-  context.appearanceProposalProfile = appearanceCode.appearanceProposalProfile;
-  context.appearanceCodeDiagnostics = appearanceCode.appearanceCodeDiagnostics;
   context.user = { id: 101 };
   context.randomUUID = () => 'proposal-test';
   context.desktopActionSink = { value: null };
@@ -287,109 +301,75 @@ try {
   vm.runInContext(
     ts.transpileModule(
       builder +
-        '\nglobalThis.definitions=buildAppearanceTools();\nglobalThis.layoutDefinitions=buildChatLayoutTools();\nglobalThis.tool=(toolName,parsed)=>{' +
-        handlers +
+        '\nglobalThis.layoutDefinitions=buildChatLayoutTools();\nglobalThis.tool=async(toolName,parsed)=>{' +
+        modularDispatch + handlers +
         '};',
       { compilerOptions: { target: ts.ScriptTarget.ES2022 } },
     ).outputText,
     context,
   );
   assert.equal(context.definitions.length, 2);
-  const proposed = JSON.parse(
-    context.tool('suggest_appearance', { profile: schema.newAppearance('bot-theme') }),
-  );
-  assert.equal(proposed.status, 'proposed');
-  assert.equal(context.desktopActionSink.value.action, 'suggest_appearance');
-  assert.deepEqual(getAppearance(101), before);
-  context.desktopActionSink = null;
-  context.sendToDesktop = () => false;
-  assert.equal(
-    JSON.parse(context.tool('suggest_appearance', { profile: schema.newAppearance('offline') }))
-      .error,
-    'desktop_offline',
-  );
-  const caps = JSON.parse(context.tool('get_appearance', { view: 'capabilities' }));
-  assert.ok(caps.template);
-  assert.equal(caps.limits.profiles, 32);
-  assert.deepEqual(appearanceCode.appearanceCodeDiagnostics(schema.parseAppearanceProfile({
-    ...schema.newAppearance('starter'), shell: caps.shell.project.template,
-  })), [], 'the documented workspace starter compiles');
-  const projectProfile = schema.parseAppearanceProfile({ ...schema.newAppearance('project'), shell: {
-    version: 1, language: 'tsx', scope: 'workspace', entry: 'App.tsx', files: {
-      'App.tsx': 'import React from "react"; import Counter from "./components/Counter"; import "./styles.css"; export default function App(){return <Counter/>}',
-      'components/Counter.tsx': 'import React from "react"; import data from "../data.json"; export default function Counter(){return <button>{data.label}</button>}',
-      'styles.css': 'button { color: red; }',
-      'data.json': '{"label":"Count"}',
+  assert.equal(modularToolDefinitions.some(tool => desktopToolDefinitions.includes(tool)), false, 'desktop tools must not become generic server tools');
+  const docsTool = context.definitions.find((item: any) => item.function.name === 'get_theme_docs').function;
+  const proposalTool = context.definitions.find((item: any) => item.function.name === 'suggest_appearance').function;
+  assert.deepEqual(JSON.parse(JSON.stringify(docsTool.parameters.properties)), {});
+  assert.equal(docsTool.parameters.additionalProperties, false);
+  assert.equal(proposalTool.parameters.properties.profile, undefined);
+  assert.ok(proposalTool.description.includes('get_theme_docs'));
+  assert.deepEqual(proposalTool.parameters.required, ['id']);
+  assert.deepEqual(Object.keys(proposalTool.parameters.properties), ['id', 'checkOnly']);
+  context.signal = undefined;
+  context.appearanceIpc = [];
+  context.appearanceOffline = false;
+  const pendingIpc = new Map();
+  wsClients.set(101, {
+    accountId: 101, connectionId: 'appearance-test', lastPongAt: Date.now(), pendingIpc,
+    ws: {
+      get readyState() { return context.appearanceOffline ? 3 : 1; },
+      send(raw: string, done?: () => void) {
+        const { request_id, ipc_type, payload } = JSON.parse(raw);
+        context.appearanceIpc.push({ userId: 101, type: ipc_type, payload });
+        done?.();
+        queueMicrotask(() => {
+          const result = payload.action === 'docs' ? { readme: '# Desktop guide', desktopVersion: '2.0.5',
+            state: { directory: 'C:/TestThemes', activeId: 'local-theme', profiles: [{ id: 'local-theme', name: 'Local theme' }], drafts: ['local-theme'] } }
+            : payload.checkOnly ? { status: 'valid', id: payload.id } : { status: 'proposed', id: payload.id };
+          pendingIpc.get(request_id)?.resolve(result);
+          pendingIpc.delete(request_id);
+        });
+      },
     },
-  } });
-  assert.deepEqual(appearanceCode.appearanceCodeDiagnostics(projectProfile), []);
-  for (const shell of [
-    { ...projectProfile.shell, source: 'ambiguous' },
-    { ...projectProfile.shell, language: 'html' },
-    { ...projectProfile.shell, entry: '../App.tsx' },
-    { ...projectProfile.shell, entry: 'Missing.tsx' },
-    { ...projectProfile.shell, files: { ...projectProfile.shell!.files, '../escape.ts': '' } },
-    { ...projectProfile.shell, files: { ...projectProfile.shell!.files, 'large.css': 'x'.repeat(100_001) } },
-  ]) assert.throws(() => schema.parseAppearanceProfile({ ...projectProfile, shell }), /appearance_invalid/);
-  const projectState = changeAppearance(202, { action: 'save', profile: projectProfile, apply: true });
-  context.user = { id: 202 };
-  const tree = JSON.parse(context.tool('get_appearance', { view: 'files', id: 'project' }));
-  assert.equal(tree.revision, 1);
-  assert.equal(tree.shell.files.length, 4);
-  assert.equal(JSON.stringify(tree).includes('return <Counter'), false, 'file listing omits source');
-  assert.equal(JSON.parse(context.tool('get_appearance', {})).active.shell.sourceOmitted, true);
-  assert.equal(JSON.stringify(JSON.parse(context.tool('get_appearance', {}))).includes('return <Counter'), false, 'default reads do not copy the entire project into context');
-  assert.deepEqual(JSON.parse(context.tool('get_appearance', { view: 'profile', id: 'project' })).shell.files, projectProfile.shell!.files);
-  assert.equal(JSON.parse(context.tool('get_appearance', { view: 'file', id: 'project', path: 'styles.css' })).source, 'button { color: red; }');
-  assert.equal(JSON.parse(context.tool('get_appearance', { view: 'file', id: 'project', path: '../escape.ts' })).error, 'appearance_file_not_found');
-  const edit = { id: 'project', revision: 1, files: { 'styles.css': 'button { color: blue; }' } };
+  } as any);
+  assert.equal(JSON.parse(await context.tool('suggest_appearance', { id: 'local-theme' })).status, 'proposed');
+  assert.deepEqual(JSON.parse(JSON.stringify(context.appearanceIpc[0])), { userId: 101, type: 'appearance_workspace', payload: { action: 'preview', id: 'local-theme', checkOnly: false } });
+  assert.equal(JSON.parse(await context.tool('suggest_appearance', { id: 'local-theme', checkOnly: true })).status, 'valid');
+  assert.equal(JSON.parse(await context.tool('suggest_appearance', {})).error, 'appearance_invalid');
+  assert.equal(JSON.parse(await context.tool('suggest_appearance', { profile: schema.newAppearance() })).error, 'appearance_use_local_files');
+  assert.equal(JSON.parse(await context.tool('suggest_appearance', { id: '../escape' })).error, 'appearance_invalid');
+  const proposalBeforeDocs = context.desktopActionSink?.value;
+  assert.deepEqual(JSON.parse(await context.tool('get_theme_docs', {})), { readme: '# Desktop guide', desktopVersion: '2.0.5',
+    state: { directory: 'C:/TestThemes', activeId: 'local-theme', profiles: [{ id: 'local-theme', name: 'Local theme' }], drafts: ['local-theme'] } });
+  assert.deepEqual(JSON.parse(JSON.stringify(context.appearanceIpc.at(-1))), { userId: 101, type: 'appearance_workspace', payload: { action: 'docs' } });
+  assert.equal(context.desktopActionSink?.value, proposalBeforeDocs, 'reading docs never proposes a theme');
+  context.appearanceOffline = true;
+  assert.equal(JSON.parse(await context.tool('get_theme_docs', {})).error, 'desktop_not_connected');
+  assert.equal(JSON.parse(await context.tool('suggest_appearance', { id: 'local-theme' })).error, 'desktop_not_connected');
+  assert.deepEqual(getAppearance(101), before, 'local theme tools never read, save or apply database themes');
+  context.appearanceOffline = false;
   context.desktopActionSink = { value: null };
-  assert.equal(JSON.parse(context.tool('suggest_appearance', { ...edit, checkOnly: true })).status, 'valid');
-  assert.equal(context.desktopActionSink.value, null, 'validation does not propose');
-  assert.equal(JSON.parse(context.tool('suggest_appearance', edit)).status, 'proposed');
-  assert.equal(context.desktopActionSink.value.value.profile.shell.files['styles.css'], 'button { color: blue; }');
-  assert.deepEqual(getAppearance(202), projectState, 'partial suggestions never modify saved files');
-  assert.equal(JSON.parse(context.tool('suggest_appearance', { ...edit, revision: 0 })).error, 'appearance_conflict');
-  for (const source of [
-    'import React from "react";\nexport default function App(){ return <div> }',
-    'import Missing from "./missing"; export default function App(){return null}',
-    'import value from "node:fs"; export default function App(){return null}',
-    'import value from "../outside"; export default function App(){return null}',
-    'export default function App(){require(window.target);return null}',
-    'export function App(){return null}',
-  ]) {
-    const failure = JSON.parse(context.tool('suggest_appearance', { ...edit, files: { 'App.tsx': source } }));
-    assert.equal(failure.error, 'appearance_build_failed');
-    assert.ok(failure.diagnostics.some((item: any) => item.file === 'App.tsx' && item.line > 0 && item.column > 0));
-  }
-  assert.equal(JSON.parse(context.tool('suggest_appearance', { ...edit, files: { 'styles.css': null } })).error, 'appearance_build_failed', 'deleting an imported file is diagnosed');
-  assert.deepEqual(getAppearance(202), projectState);
-  context.user = { id: 101 };
-  assert.equal(JSON.parse(context.tool('get_appearance', { view: 'file', id: 'project', path: 'App.tsx' })).error, 'appearance_not_found', 'file reads remain account-scoped');
+  const caps = schema.APPEARANCE_CAPABILITIES;
   for (const motion of Object.values(caps.motion.presets)) {
-    assert.deepEqual(
-      schema.parseAppearanceProfile({ ...schema.newAppearance(), motion }).motion,
-      motion,
-    );
+    assert.deepEqual(schema.parseAppearanceProfile({ ...schema.newAppearance(), motion }).motion, motion);
   }
-  const motionProposal = {
-    ...schema.newAppearance('bot-motion'),
-    motion: caps.motion.presets.scale,
-  };
-  context.desktopActionSink = { value: null };
-  assert.equal(
-    JSON.parse(context.tool('suggest_appearance', { profile: motionProposal })).status,
-    'proposed',
-  );
-  assert.equal(context.desktopActionSink.value.value.profile.motion.scale, 0.97);
   assert.equal(context.layoutDefinitions.length, 2);
-  assert.equal(JSON.parse(context.tool('get_chat_layout', {})).active.sidebarWidth, 290);
-  assert.equal(JSON.parse(context.tool('suggest_chat_layout', { profile })).error, 'chat_layout_conflict');
-  assert.equal(JSON.parse(context.tool('suggest_chat_layout', { profile: { ...profile, id: 'bot-layout' } })).status, 'proposed');
+  assert.equal(JSON.parse(await context.tool('get_chat_layout', {})).active.sidebarWidth, 290);
+  assert.equal(JSON.parse(await context.tool('suggest_chat_layout', { profile })).error, 'chat_layout_conflict');
+  assert.equal(JSON.parse(await context.tool('suggest_chat_layout', { profile: { ...profile, id: 'bot-layout' } })).status, 'proposed');
   assert.equal(context.desktopActionSink.value.action, 'suggest_chat_layout');
   assert.deepEqual(getChatLayouts(101), activeLayout, 'a bot proposal must never save or apply');
   context.subagentExtra = undefined;
-  assert.equal(JSON.parse(context.tool('suggest_chat_layout', { profile: { ...profile, id: 'bot-layout' } })).error, 'desktop_offline');
+  context.sendToDesktop = () => false;
+  assert.equal(JSON.parse(await context.tool('suggest_chat_layout', { profile: { ...profile, id: 'bot-layout' } })).error, 'desktop_offline');
   const remove = await request('post', layoutUrl, { action: 'delete', id: 'reading', revision: activeLayout.revision });
   assert.equal(remove.result.layout.activeId, null);
   assert.deepEqual(Array.from(remove.result.layout.profiles, (item: { id: string }) => item.id), ['workspace']);
@@ -398,6 +378,7 @@ try {
     'PASS: strict appearance contract, atomic revision conflicts, inactive saves, explicit application, account isolation, media lifetime, UI settings preservation, real HTTP handlers and read-only bot proposals, independent layout profiles and approval',
   );
 } finally {
+  wsClients.delete(101);
   db.close();
   assert.equal(path.dirname(path.resolve(temp)), path.resolve(os.tmpdir()));
   assert.ok(path.basename(temp).startsWith('chatter-appearance-'));

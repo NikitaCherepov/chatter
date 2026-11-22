@@ -1,8 +1,5 @@
 import { getChatLayouts } from './chat-layout.js';
 import { CHAT_LAYOUT_CAPABILITIES, parseChatLayoutProfile } from './chat-layout-schema.js';
-import { getAppearance } from './appearance.js';
-import { APPEARANCE_CAPABILITIES } from './appearance-schema.js';
-import { appearanceProposalProfile, appearanceCodeDiagnostics } from './appearance-code.js';
 ﻿import { browserInputTimeout, usesHumanBrowserTyping } from './browser-input-timeout.js';
 import { avatarControlAllowed, withoutAvatarTools } from './avatar-policy.js';
 import OpenAI from 'openai';
@@ -58,7 +55,7 @@ import { readChatAttachment, searchChatAttachment, type AttachmentReadContext } 
 import { attachFileToResponse, materializeAssetInput, type ResponseFileSink } from './response-attachments.js';
 import { getMcpDefinitions, runMcpTool, mcpSearchTool, mcpCallTool, mcpBrowseTool, mcpReadResourceTool, browseToolName as mcpBrowseName, readResourceToolName as mcpReadName, searchToolName as mcpSearchName, callToolName as mcpCallName, installToolName as mcpInstallName, configureToolName as mcpConfigureName } from './mcp/tools.js';
 import { mcpErrorResult } from './mcp/errors.js';
-import { getModularTool, modularToolDefinitions } from './tools/registry.js';
+import { getModularTool, modularToolDefinitions, desktopToolDefinitions } from './tools/registry.js';
 import { buildDescribeImageTool } from './tools/images/describe-image.js';
 import { buildToolImageMessage, type DirectToolImage } from './tools/image-input.js';
 import { getContextSummary, type ContextSummaryDto } from './context-summary.js';
@@ -2806,11 +2803,6 @@ const buildChatLayoutTools = () => [
   },
 ];
 
-const buildAppearanceTools = () => [
- {type:'function' as const,function:{name:'get_appearance',description:'Read desktop appearance. Default returns active profile metadata and saved variant summaries without source code. Request capabilities before composing a profile. View profile reads a complete saved profile; view files returns metadata and a file list without source; view file reads one project path. Does not change settings.',parameters:{type:'object',properties:{view:{type:'string',enum:['list','capabilities','profile','files','file']},id:{type:'string'},path:{type:'string'}},required:[]}}},
- {type:'function' as const,function:{name:'suggest_appearance',description:'Propose desktop appearance for user preview and explicit application. Read capabilities/template first. Create with complete profile, unique id and revision 0. Prefer profile.shell with language tsx, entry and files for a substantial UI; source still supports single HTML/TSX files. Relative component/CSS/JSON imports are supported. Scope workspace supplies messages and composer actions; navigator opens native conversations. To edit saved project files, pass id, its CURRENT revision, and files map (text replaces/adds, null deletes), optionally entry. Or pass profile plus file edits for a draft. Syntax/import errors return file/line diagnostics before a proposal is shown. checkOnly validates without proposing. Never saves or applies automatically.',parameters:{type:'object',properties:{profile:{type:'object',description:'Complete profile from capabilities; mutually exclusive with id.'},id:{type:'string',description:'Saved profile to edit.'},revision:{type:'integer',description:'Current saved revision, required with id.'},files:{type:'object',description:'Project file replacements, additions or deletions (null).',additionalProperties:{anyOf:[{type:'string'},{type:'null'}]}},entry:{type:'string',description:'Optional new project entry path.'},checkOnly:{type:'boolean'}},required:[]}}},
-];
-
 /** Build suggest_macro tool — lets AI offer user to save a new macro */
 const buildSuggestMacroTool = () => {
   return {
@@ -3722,7 +3714,7 @@ export const getTaskAllowedToolNames = (): string[] => {
     buildExecuteMacroTool(),
     buildExploreFsTool(),
     buildSuggestMacroTool(),
-    ...buildAppearanceTools(),
+    ...desktopToolDefinitions,
     ...buildChatLayoutTools(),
     buildDesktopActionTool(),
     mcpSearchTool,
@@ -5192,42 +5184,6 @@ If the task is a description, return a detailed text response.`
     } catch (error: any) {
       return JSON.stringify({ error: error.message || 'chat_layout_invalid' });
     }
-  }
-  if (toolName === 'get_appearance') {
-    const appearance=getAppearance(user.id);
-    const overview=(profile:any)=>profile?{...profile,shell:profile.shell?{version:profile.shell.version,language:profile.shell.language,scope:profile.shell.scope,entry:profile.shell.entry,
-      files:profile.shell.files?Object.entries(profile.shell.files).map(([path,source])=>({path,length:(source as string).length})):undefined,sourceLength:profile.shell.source?.length,sourceOmitted:true}:undefined}:null;
-    if(parsed.view==='capabilities')return JSON.stringify(APPEARANCE_CAPABILITIES);
-    if(parsed.view==='profile')return JSON.stringify(appearance.profiles.find(p=>p.id===parsed.id)??{error:'appearance_not_found'});
-    if(parsed.view==='files'||parsed.view==='file') {
-      const profile=appearance.profiles.find(p=>p.id===parsed.id);
-      if(!profile)return JSON.stringify({error:'appearance_not_found'});
-      const files=profile.shell?.files;
-      if(parsed.view==='file') {
-        if(!files||typeof parsed.path!=='string'||!Object.prototype.hasOwnProperty.call(files,parsed.path))return JSON.stringify({error:'appearance_file_not_found'});
-        return JSON.stringify({id:profile.id,revision:profile.revision,path:parsed.path,source:files[parsed.path]});
-      }
-      return JSON.stringify(overview(profile));
-    }
-    return JSON.stringify({activeId:appearance.activeId,profiles:appearance.profiles.map(p=>({id:p.id,name:p.name,revision:p.revision})),active:overview(appearance.profiles.find(p=>p.id===appearance.activeId))});
-  }
-  if (toolName === 'suggest_appearance') {
-    try {
-      if(parsed.profile!==undefined&&parsed.id!==undefined)return JSON.stringify({error:'appearance_invalid'});
-      const saved=parsed.id!==undefined?getAppearance(user.id).profiles.find(p=>p.id===parsed.id):undefined;
-      if(parsed.id!==undefined&&!saved)return JSON.stringify({error:'appearance_not_found'});
-      if(saved&&saved.revision!==parsed.revision)return JSON.stringify({error:'appearance_conflict',message:'Use the current saved revision.',revision:saved.revision});
-      const profile=appearanceProposalProfile(saved??parsed.profile,parsed);
-      const current=getAppearance(user.id).profiles.find(p=>p.id===profile.id);
-      if((current?.revision??0)!==profile.revision)return JSON.stringify({error:'appearance_conflict',message:'Read the current profile before updating it.'});
-      const diagnostics=appearanceCodeDiagnostics(profile);
-      if(diagnostics.length)return JSON.stringify({error:'appearance_build_failed',diagnostics});
-      if(parsed.checkOnly===true)return JSON.stringify({status:'valid',id:profile.id,revision:profile.revision});
-      const payload:DesktopActionPayload={action:'suggest_appearance',value:{proposal_id:randomUUID(),profile}};
-      if(desktopActionSink)desktopActionSink.value=payload;
-      else if(!sendToDesktop(user.id,{type:'desktop_action',...payload}))return JSON.stringify({error:'desktop_offline',message:'Open the desktop app before proposing an appearance.'});
-      return JSON.stringify({status:'proposed',id:profile.id,message:'Sent for user preview and explicit application. Not applied or saved yet.'});
-    }catch(error:any){return JSON.stringify({error:error.message||'appearance_invalid'});}
   }
 
   if (toolName === 'suggest_macro') {
@@ -8117,7 +8073,7 @@ const sendMessageThroughAiInternal = async (
   // Expose them whenever the request itself comes from Desktop or Desktop is online.
   const desktopUiAvailable = Boolean(options?.isDesktop || isDesktopOnline(userId) || (toolUser !== user && isDesktopOnline(toolUser.id)));
   const desktopOnlyTools = desktopUiAvailable ? [
-    ...buildAppearanceTools(),
+    ...desktopToolDefinitions,
     ...buildChatLayoutTools(),
     buildDesktopActionTool(),
   ] : [];

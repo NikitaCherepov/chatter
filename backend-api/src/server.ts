@@ -1,6 +1,6 @@
 import { getChatLayouts, changeChatLayouts } from './services/chat-layout.js';
 import { parseChatLayoutSettings, type ChatLayoutSettings } from './services/chat-layout-schema.js';
-import { appearanceFromJson, getAppearance, changeAppearance } from './services/appearance.js';
+import { appearanceFromJson, getAppearance, getLegacyAppearance, changeAppearance } from './services/appearance.js';
 import { parseAppearanceSettings, type AppearanceSettings } from './services/appearance-schema.js';
 ﻿import { browserInputTimeout } from './services/browser-input-timeout.js';
 import express from 'express';
@@ -6588,6 +6588,10 @@ app.put('/api/v1/user/feature-flags', (req: AuthedRequest, res: any) => {
 app.get('/api/v1/user/appearance', (req: AuthedRequest,res) => {
  try{return res.json({appearance:getAppearance(accountIdFromRequest(req))});}
  catch{return res.status(404).json({error:'user_not_found'});}
+});
+app.get('/api/v1/user/appearance/legacy', (req: AuthedRequest, res) => {
+  try { return res.json({ appearance: getLegacyAppearance(accountIdFromRequest(req)) }); }
+  catch (error: any) { return res.status(error.message === 'user_not_found' ? 404 : 400).json({ error: error.message }); }
 });
 app.post('/api/v1/user/appearance/image', async (req: AuthedRequest,res) => {
  try{

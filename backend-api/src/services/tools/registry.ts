@@ -8,6 +8,7 @@ import { readMemoryTool } from './memory/read-memory.js';
 import { readWebpageTool } from './web/read-webpage.js';
 import { searchWebTool } from './web/search-web.js';
 import { newspaperIssueContentsTool, newspapersListTool, readNewspaperItemTool } from './newspapers.js';
+import { getThemeDocsTool, suggestAppearanceTool } from './appearance.js';
 
 export {
   readChatContextTool,
@@ -32,8 +33,15 @@ export const toolRegistry: Readonly<Record<string, Tool>> = {
   newspapers_list: newspapersListTool,
   newspaper_issue_contents: newspaperIssueContentsTool,
   read_newspaper_item: readNewspaperItemTool,
+  get_theme_docs: getThemeDocsTool,
+  suggest_appearance: suggestAppearanceTool,
 };
 
-export const modularToolDefinitions = Object.values(toolRegistry).map(tool => tool.definition);
+// Desktop tools share dispatch with server tools but are advertised only when Desktop is available.
+const desktopTools = [getThemeDocsTool, suggestAppearanceTool];
+export const desktopToolDefinitions = desktopTools.map(tool => tool.definition);
+export const modularToolDefinitions = Object.values(toolRegistry)
+  .filter(tool => !desktopTools.includes(tool))
+  .map(tool => tool.definition);
 
 export const getModularTool = (name: string): Tool | undefined => toolRegistry[name];

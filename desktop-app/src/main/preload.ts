@@ -6,6 +6,12 @@ import type { AppearanceShellEvent, AppearanceShellState } from './appearance-sh
 
 contextBridge.exposeInMainWorld('electronAPI', {
   interactiveCreate: (input: InteractiveInput) => ipcRenderer.invoke('interactive-preview:create', input),
+  localAppearance: (payload: unknown) => ipcRenderer.invoke('themes:manage', payload),
+  onLocalAppearanceChanged: (callback: (event: { key: string; scope: { server: string; userId: number } }) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, value: { key: string; scope: { server: string; userId: number } }) => callback(value);
+    ipcRenderer.on('themes:changed', listener);
+    return () => ipcRenderer.removeListener('themes:changed', listener);
+  },
   interactivePlace: (placement: InteractivePlacement) => ipcRenderer.invoke('interactive-preview:place', placement),
   interactiveStop: (id: string) => ipcRenderer.invoke('interactive-preview:stop', id),
   appearanceShellState: (id: string, state: AppearanceShellState) =>

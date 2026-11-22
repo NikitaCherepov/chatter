@@ -12,12 +12,17 @@ import {
 export const APPEARANCE_CHANGE_EVENT = 'chatter-appearance-change';
 export const APPEARANCE_STYLE_EVENT = 'chatter-appearance-style';
 let settings: AppearanceSettings = DEFAULT_APPEARANCE;
-let preview: AppearanceProfile | null = null;
+let preview: { profile: AppearanceProfile; draft?: string; error?: string } | null = null;
 let imageUrl = (url: string) => url;
 const subscribers = new Set<() => void>();
 const applied = new Set<string>();
 let measuredSignature = '';
-export const getAppearancePreview = () => preview;
+export const getAppearancePreview = () => preview?.profile ?? null;
+export const getAppearancePreviewDraft = () => preview?.draft;
+export const getAppearancePreviewError = () => preview?.error ?? '';
+export function setAppearancePreviewError(error: string) {
+  if (preview) { preview = { ...preview, error }; for (const fn of subscribers) fn(); }
+}
 export const subscribeAppearancePreview = (fn: () => void) => {
   subscribers.add(fn);
   return () => {
@@ -25,7 +30,7 @@ export const subscribeAppearancePreview = (fn: () => void) => {
   };
 };
 export const currentAppearance = () =>
-  preview ?? settings.profiles.find((p) => p.id === settings.activeId) ?? null;
+  preview?.profile ?? settings.profiles.find((p) => p.id === settings.activeId) ?? null;
 export function refreshAppearance() {
   const root = document.documentElement;
   for (const key of applied) root.style.removeProperty(key);
@@ -111,8 +116,8 @@ export function configureAppearance(
   imageUrl = resolveImage;
   refreshAppearance();
 }
-export function previewAppearance(value: AppearanceProfile | null) {
-  preview = value ? parseAppearanceProfile(value) : null;
+export function previewAppearance(value: AppearanceProfile | null, draft?: string) {
+  preview = value ? { profile: parseAppearanceProfile(value), draft } : null;
   refreshAppearance();
   for (const fn of subscribers) fn();
 }
