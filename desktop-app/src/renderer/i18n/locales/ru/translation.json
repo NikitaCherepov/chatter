@@ -78,6 +78,9 @@
     }
   },
   "appearance": {
+    "pauseSpeech": "Приостановить озвучку",
+    "resumeSpeech": "Продолжить озвучку",
+    "reviewConfirmation": "Рассмотреть запрос",
     "shellTitle": "Собственный интерфейс",
     "shellScope": "Область интерфейса",
     "shellLibrary": "Обычный список чатов",

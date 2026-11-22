@@ -5,14 +5,14 @@ export const INTERACTIVE_SCHEME = 'chatter-interactive';
 export const MAX_INTERACTIVE_SOURCE = 100_000;
 
 export const INTERACTIVE_CSP = [
-  "sandbox allow-scripts",
+  "sandbox allow-scripts allow-forms",
   "default-src 'none'", "script-src 'unsafe-inline' 'unsafe-eval'", "style-src 'unsafe-inline'",
   "img-src data: blob:", "connect-src 'none'", "font-src 'none'", "media-src 'none'",
   "frame-src 'none'", "child-src 'none'", "worker-src 'none'", "object-src 'none'",
   "base-uri 'none'", "form-action 'none'",
 ].join('; ');
 
-/** Runs before model HTML. No app bridge or credentials exist in this session. */
+/** Runs before model HTML; optional appearance access is provided only by its narrow isolated preload. */
 const lockdown = `(() => {
   const deny = () => { throw new Error('Unavailable in isolated preview'); };
   for (const name of ['RTCPeerConnection','webkitRTCPeerConnection','RTCDataChannel','WebTransport',

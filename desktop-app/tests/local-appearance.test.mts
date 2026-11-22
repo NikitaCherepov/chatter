@@ -17,6 +17,8 @@ try {
   const guidePath = path.join(directory, 'THEMES.md');
   assert.equal(store.readDocumentation(), fs.readFileSync(guidePath, 'utf8'));
   assert.ok(store.readDocumentation().includes('theme.json'));
+  assert.ok(store.readDocumentation().includes('workLog'));
+  assert.ok(fs.readFileSync(path.join(directory, 'chatter.d.ts'), 'utf8').includes('workLog:WorkLogStep[]'));
   fs.appendFileSync(guidePath, '\nUpdated desktop guide\n');
   assert.ok(store.readDocumentation().includes('Updated desktop guide'), 'docs are read from the current local file');
   assert.deepEqual(store.load().appearance, beforeDocs, 'reading docs preserves all theme settings');

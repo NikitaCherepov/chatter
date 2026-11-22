@@ -78,6 +78,9 @@
     }
   },
   "appearance": {
+    "pauseSpeech": "Pause speech",
+    "resumeSpeech": "Resume speech",
+    "reviewConfirmation": "Review request",
     "shellTitle": "Custom interface",
     "shellScope": "Interface scope",
     "shellLibrary": "Standard chat list",

@@ -18,7 +18,8 @@ import i18n from '../i18n';
 import { generateTts, fetchAudioBuffer } from './api';
 import type { MessageAudio } from './api';
 
-type Listener = (playingId: number | null) => void;
+export type TtsPlaybackState = { messageId: number | null; status: 'idle' | 'loading' | 'playing' | 'paused' };
+type Listener = (playingId: number | null, state: TtsPlaybackState) => void;
 
 // ── TTS Model / Voice types ────────────────────────────────────────────
 
@@ -162,17 +163,37 @@ export function getVoicesForModel(modelId: string): TtsVoice[] {
 // ── Playback state ──────────────────────────────────────────────────────
 
 let playingId: number | null = null;
+let playbackStatus: TtsPlaybackState['status'] = 'idle';
+let paused = false;
+let ready = false;
+let provider: 'builtin' | 'buffer' = 'builtin';
 /** Generation ticket — incremented on every stop, so stale generation results are discarded. */
 let generationTicket = 0;
 const listeners = new Set<Listener>();
 
 function notify() {
-  listeners.forEach((fn) => fn(playingId));
+  if (playingId === null) { playbackStatus = 'idle'; paused = false; ready = false; }
+  const state = ttsGetPlaybackState();
+  listeners.forEach((fn) => fn(playingId, state));
 }
+export function ttsGetPlaybackState(): TtsPlaybackState { return { messageId: playingId, status: playbackStatus }; }
+export async function ttsPause(): Promise<void> {
+  if (playingId === null || paused) return;
+  paused = true; playbackStatus = 'paused'; notify();
+  if (provider === 'builtin') speechSynthesis.pause();
+  else if (ready) await audioManager.pause();
+}
+export async function ttsResume(): Promise<void> {
+  if (playingId === null || !paused) return;
+  paused = false; playbackStatus = ready ? 'playing' : 'loading'; notify();
+  if (provider === 'builtin') speechSynthesis.resume();
+  else await audioManager.resume();
+}
+function playbackStarted() { ready = true; playbackStatus = paused ? 'paused' : 'playing'; notify(); }
 
 export function ttsSubscribe(fn: Listener): () => void {
   listeners.add(fn);
-  fn(playingId);
+  fn(playingId, ttsGetPlaybackState());
   return () => { listeners.delete(fn); };
 }
 
@@ -221,22 +242,22 @@ function getPreviewText(language: string): string {
 
 export async function ttsStop(): Promise<void> {
   generationTicket++; // invalidate any in-flight generation
-  speechSynthesis.cancel();
-  await audioManager.stopWithFade(150);
   playingId = null;
   notify();
+  speechSynthesis.cancel();
+  await audioManager.stopWithFade(150);
 }
 
 // ── Piper: generate via IPC and play ───────────────────────────────────
 
 async function piperSpeak(messageId: number, text: string): Promise<void> {
-  await audioManager.stopWithFade(150);
-
   // Capture ticket — if stop() is called during generation, ticket will differ
   const ticket = ++generationTicket;
-
+  provider = 'buffer'; paused = false; ready = false; playbackStatus = 'loading';
   playingId = messageId;
   notify();
+  await audioManager.stopWithFade(150);
+  if (ticket !== generationTicket) return;
 
   const settings = loadSettings();
 
@@ -257,7 +278,9 @@ async function piperSpeak(messageId: number, text: string): Promise<void> {
       : new Uint8Array(buffer as unknown as Iterable<number>).buffer as ArrayBuffer;
 
     // playBuffer awaits until audio physically finishes
-    await audioManager.playBuffer(raw, settings.volume);
+    if (paused) await audioManager.pause();
+    if (ticket !== generationTicket) return;
+    await audioManager.playBuffer(raw, settings.volume, false, () => { if (ticket === generationTicket) playbackStarted(); }, () => paused);
 
     // Check ticket again — stop may have been called during playback
     if (ticket === generationTicket && playingId === messageId) {
@@ -281,11 +304,12 @@ async function cartesiaSpeak(
   existingAudio: MessageAudio | null | undefined,
   onAudioGenerated?: (messageId: number, audio: MessageAudio) => void,
 ): Promise<void> {
-  await audioManager.stopWithFade(150);
-
   const ticket = ++generationTicket;
+  provider = 'buffer'; paused = false; ready = false; playbackStatus = 'loading';
   playingId = messageId;
   notify();
+  await audioManager.stopWithFade(150);
+  if (ticket !== generationTicket) return;
 
   const settings = loadSettings();
 
@@ -310,7 +334,9 @@ async function cartesiaSpeak(
 
     if (ticket !== generationTicket) return;
 
-    await audioManager.playBuffer(audioBuffer, settings.volume);
+    if (paused) await audioManager.pause();
+    if (ticket !== generationTicket) return;
+    await audioManager.playBuffer(audioBuffer, settings.volume, false, () => { if (ticket === generationTicket) playbackStarted(); }, () => paused);
 
     if (ticket === generationTicket && playingId === messageId) {
       playingId = null;
@@ -343,6 +369,7 @@ export function ttsSpeak(
 
   const settings = loadSettings();
 
+  speechSynthesis.cancel();
   if (settings.modelId === 'piper') {
     // Piper is async — fire and forget
     piperSpeak(messageId, text);
@@ -357,7 +384,8 @@ export function ttsSpeak(
 
   // Builtin (SpeechSynthesis) — synchronous API
   audioManager.abort();
-  speechSynthesis.cancel();
+  const ticket = ++generationTicket;
+  provider = 'builtin'; paused = false; ready = false; playbackStatus = 'loading';
 
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.rate = 1.0;
@@ -371,14 +399,15 @@ export function ttsSpeak(
     utterance.lang = i18n.resolvedLanguage || i18n.language || 'en';
   }
 
+  utterance.onstart = () => { if (ticket === generationTicket) playbackStarted(); };
   utterance.onend = () => {
-    if (playingId === messageId) { playingId = null; notify(); }
+    if (ticket === generationTicket && playingId === messageId) { playingId = null; notify(); }
   };
   utterance.onerror = (e) => {
     if (e.error !== 'interrupted' && e.error !== 'canceled') {
       console.error('[TTS] Speech error:', e.error);
     }
-    if (playingId === messageId) { playingId = null; notify(); }
+    if (ticket === generationTicket && playingId === messageId) { playingId = null; notify(); }
   };
 
   playingId = messageId;

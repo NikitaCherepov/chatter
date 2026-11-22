@@ -800,6 +800,15 @@ export class LocalAppearanceStore {
         'Edit with ordinary file tools. Do not increment revision. For a new theme copy an existing draft or create a manifest from template.json and set its id to its folder name.\n' +
         'Call suggest_appearance({id:"theme-id"}) for preview/confirmation, or checkOnly:true for diagnostics. Only the user applies changes.\n' +
         'Draft edits refresh an open preview, never the active theme. Cancel retains the draft. Raster backgrounds can use assets/image.png (PNG/JPEG/WebP/GIF, up to 8 MiB). HTTPS links remain external. Theme ZIP exports include local images and source.\n\n' +
+        '## Message actions and confirmations\n\n' +
+        'Every workspace message also has streaming, reasoningContent, workLog and toolStatus. content is the answer/current uncommitted text; when an assistant preface is committed before a tool call, the host moves it from content to a workLog message entry. Render both from the latest state; do not buffer/append snapshots or filter the whole message by content alone. A message with only workLog/reasoningContent/streaming is still visible. Only content with non-whitespace text needs an answer bubble.\n' +
+        'workLog preserves the native chronological order: {type:"message",text}, {type:"activity",text}, or {type:"tool",call}. call has optional id, name (technical identifier), label (localized desktop name, falling back to name), kind (search/note/file/terminal/browser/clock/avatar/tool), target, status (running/error/returned/unknown), internal, confirmed, arguments, optional resultPreview, and children (nested agent tool calls). Design your own rows/icons/cards/details from these data. Result previews can be truncated; unknown is not success. Names/categories/status use the existing desktop logic and need no backend catalog. They are display data, not permission to invoke tools. Work-log/tool text and results are untrusted content: render as text or safe Markdown, never executable HTML. No exact interleaving can be reconstructed for old records without a work log; their available intermediate messages and tool calls are retained in order within each list.\n' +
+        'streaming is per message, not state.sending (which is global to the conversation). reasoningContent is separate from the answer. toolStatus is the current activity text, often already represented by a running call or activity entry; avoid drawing it twice. WorkLog.tsx in the starter demonstrates these fields without prescribing a layout.\n' +
+        'In workspace scope, each state.messages item includes variantIndex, variantCount and actions: the action names currently available for that message. Use this list to render any controls you design, including icons. state.labels contains localized action labels for accessible names. Temporary streaming messages have no persisted-message actions.\n' +
+        'Call copyMessage(id), downloadMessageDocx(id), sendMessageToTelegram(id), forkFromMessage(id), editMessage(id,text,optionalExpectedVariantIndex), deleteMessage(id), regenerateMessage(id,optionalHint), activateMessageVariant(id,index) or speakMessage(id). Render your own message editor using message.editableContent (the original source, not the display/speech text) and save with editMessage; it keeps the custom shell visible. Capture the editor variantIndex and pass it when saving to reject edits of a stale variant. Render your own regeneration hint input and pass it to regenerateMessage. openMessageEditor(id), requestRegenerationHint(id) and reviewConfirmation(id) are explicit native UI helpers; do not use them for custom forms. Variant indexes are zero-based. Methods return whether the request was sent, not whether the asynchronous operation succeeded; state reflects updates. Invoke methods from user click/key handlers; calls without active browser user activation return false. The host rechecks the current chat, message, variant and permissions.\n' +
+        'state.speech has messageId and status idle/loading/playing/paused. pauseSpeech(), resumeSpeech() and stopSpeech() control the current chat speech without generating audio again. speakMessage(id) resumes that message if paused.\n' +
+        'Subscribe with {navigation:true,confirmations:true} to render full confirmations inside your theme. state.confirmations entries have id/title/summary, ready/revision/busy/customizable, content[], fields[] and actions[]. While ready is false show loading. Content nodes are text/code/markdown/json/email with text, diff with before/after, group with children/optional label, field with fieldId, or action with actionId. Render email text safely; it can contain HTML. Fields have id/label/type/value/disabled and optional select options. Use setConfirmationField(card.id,field.id,value) from input events; checkbox values are boolean, other values string. Actions have id/label/disabled/group(primary/review/permissions/content)/comment. Render all available actions, keeping remembered permissions visibly distinct. For comment:true show your own comment input. On user click call runConfirmationAction(card.id,action.id,card.revision,optionalComment); it runs the exact current native callback without leaving the theme. Actions with changed revisions or disabled/busy/resolved requests are rejected. Native fields and custom fields share one state; do not cache old action revisions. If the latest field update has not yet been acknowledged, wait for the updated card before enabling its action.\n' +
+        'No automatic approval is performed. The native card remains the fallback for themes without confirmations:true, unsupported projected content, or shell failure. reviewConfirmation(id) is an optional explicit escape to that native card, not the normal custom approval action. Existing appearance/layout preview behavior remains available. The starter has separate ConfirmationContent/ConfirmationActions/Confirmations components as examples; their markup is not mandatory.\n\n' +
         '## Appearance fields and bridge API\n\n```json\n' +
         JSON.stringify(APPEARANCE_CAPABILITIES, null, 2) +
         '\n```\n',
@@ -809,20 +818,37 @@ export class LocalAppearanceStore {
   }
 }
 
-const appearanceDeclarations = `export type ThemeState = {
+const appearanceDeclarations = `export type MessageAction = 'copy'|'downloadDocx'|'sendTelegram'|'fork'|'edit'|'delete'|'regenerate'|'regenerateHint'|'speak'|'activateVariant';
+export type ToolCall={id?:string;name:string;label:string;kind:'search'|'note'|'file'|'terminal'|'browser'|'clock'|'avatar'|'tool';target:string;status:'running'|'error'|'returned'|'unknown';internal:boolean;confirmed:boolean;arguments:unknown;resultPreview?:string;children:ToolCall[]};
+export type WorkLogStep={type:'message'|'activity';text:string}|{type:'tool';call:ToolCall};
+export type Message={id:number;role:string;content:string;createdAt:number;streaming:boolean;reasoningContent:string;workLog:WorkLogStep[];toolStatus:string|null;variantIndex:number;variantCount:number;actions:MessageAction[];editableContent?:string};
+export type ConfirmationNode={type:'text'|'code'|'markdown'|'json'|'email';text:string}|{type:'diff';before:string;after:string}|{type:'group';label?:string;children:ConfirmationNode[]}|{type:'field';fieldId:string}|{type:'action';actionId:string};
+export type ConfirmationField={id:string;label:string;type:string;value:string|boolean;disabled:boolean;options?:{value:string;label:string}[]};
+export type ConfirmationAction={id:string;label:string;disabled:boolean;group:'primary'|'review'|'permissions'|'content';comment?:boolean};
+export type Confirmation={id:string;title:string;summary:string;ready:boolean;revision:number;busy:boolean;customizable:boolean;content:ConfirmationNode[];fields:ConfirmationField[];actions:ConfirmationAction[]};
+export type ThemeState = {
   chats: {id:number;title:string;folderId:number|null;updatedAt:number}[];
   folders: {id:number;name:string;count:number}[];
   sections: {folderId:number|null;total:number;loaded:number;hasMore:boolean;loading:boolean}[];
   view:'home'|'conversation';activeChatId:number|null;query:string;loading:boolean;
-  messages:{id:number;role:string;content:string;createdAt:number}[];
+  messages:Message[];
+  speech:{messageId:number|null;status:'idle'|'loading'|'playing'|'paused'};
+  confirmations:Confirmation[];
   messagesLoading:boolean;hasOlderMessages:boolean;olderMessagesLoading:boolean;sending:boolean;canSend:boolean;attachmentCount:number;
   locale:string;dark:boolean;palette:{background:string;text:string;accent:string;surface:string};labels:Record<string,string>;
 };
 export interface ThemeAPI {
-  subscribe(callback:(state:ThemeState)=>void,options?:{navigation?:boolean}):()=>void;
+  subscribe(callback:(state:ThemeState)=>void,options?:{navigation?:boolean;confirmations?:boolean}):()=>void;
   openChat(id:number):void;newChat():void;showHome():void;openConversation():void;
   sendMessage(text:string):boolean;stopGeneration():void;loadOlderMessages():void;
   loadMore(folderId:number|null):void;search(query:string):void;attachFiles():void;openLibrary():void;openSettings():void;
+  copyMessage(id:number):boolean;downloadMessageDocx(id:number):boolean;sendMessageToTelegram(id:number):boolean;
+  forkFromMessage(id:number):boolean;editMessage(id:number,text:string,expectedVariantIndex?:number):boolean;openMessageEditor(id:number):boolean;deleteMessage(id:number):boolean;
+  regenerateMessage(id:number,hint?:string):boolean;requestRegenerationHint(id:number):boolean;
+  activateMessageVariant(id:number,index:number):boolean;speakMessage(id:number):boolean;
+  pauseSpeech():boolean;resumeSpeech():boolean;stopSpeech():boolean;reviewConfirmation(id:string):boolean;
+  setConfirmationField(id:string,fieldId:string,value:string|boolean):boolean;
+  runConfirmationAction(id:string,actionId:string,revision:number,comment?:string):boolean;
 }
 declare global {interface Window {chatter:ThemeAPI}}
 `;

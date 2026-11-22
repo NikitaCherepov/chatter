@@ -6,6 +6,7 @@ export type InteractiveStatus = {
   phase: 'loading' | 'ready' | 'stopped' | 'failed';
   escape?: boolean;
   reset?: boolean;
+  confirmations?: boolean;
 };
 export type InteractiveInput = {
   language: InteractiveLanguage;

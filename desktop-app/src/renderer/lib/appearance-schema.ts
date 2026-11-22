@@ -296,9 +296,103 @@ export const APPEARANCE_CAPABILITIES = {
       limits: APPEARANCE_PROJECT_LIMITS,
       modules: APPEARANCE_PROJECT_MODULES,
       template: { version: 1, language: 'tsx', scope: 'workspace', entry: 'App.tsx', files: {
-        'App.tsx': 'import React from "react";\nimport ChatList from "./components/ChatList";\nimport Conversation from "./components/Conversation";\nimport "./styles.css";\nexport default function App(){const [state,setState]=React.useState(null);React.useEffect(()=>window.chatter.subscribe(setState,{navigation:true}),[]);if(!state)return <p>Loading…</p>;return state.view==="home"?<ChatList state={state}/>:<Conversation state={state}/>;}',
+        'App.tsx': 'import React from "react";\nimport ChatList from "./components/ChatList";\nimport Conversation from "./components/Conversation";\nimport Confirmations from "./components/Confirmations";\nimport "./styles.css";\nexport default function App(){const [state,setState]=React.useState(null);React.useEffect(()=>window.chatter.subscribe(setState,{navigation:true,confirmations:true}),[]);if(!state)return <p>Loading…</p>;return <><Confirmations state={state}/>{state.view==="home"?<ChatList state={state}/>:<Conversation state={state}/>}</>;}',
         'components/ChatList.tsx': 'import React from "react";\nexport default function ChatList({state}){return <main><header><h1>{state.labels.allChats}</h1><button onClick={()=>window.chatter.newChat()}>{state.labels.newChat}</button><button onClick={()=>window.chatter.openLibrary()}>{state.labels.allChats}</button></header><input aria-label={state.labels.search} placeholder={state.labels.search} value={state.query} onChange={event=>window.chatter.search(event.target.value)}/>{state.chats.map(chat=><button className="chat" key={chat.id} onClick={()=>window.chatter.openChat(chat.id)}>{chat.title}</button>)}{state.query.trim().length<3&&state.sections.filter(section=>section.hasMore).map(section=><button key={section.folderId??"unfiled"} disabled={section.loading} onClick={()=>window.chatter.loadMore(section.folderId)}>{state.labels.loadMore}</button>)}</main>;}',
-        'components/Conversation.tsx': 'import React from "react";\nimport Markdown from "react-markdown";\nimport remarkGfm from "remark-gfm";\nimport Composer from "./Composer";\nexport default function Conversation({state}){return <main><header><button onClick={()=>window.chatter.showHome()}>{state.labels.allChats}</button><button onClick={()=>window.chatter.openConversation()}>…</button></header>{state.hasOlderMessages&&<button disabled={state.olderMessagesLoading} onClick={()=>window.chatter.loadOlderMessages()}>{state.labels.loadMore}</button>}<section className="messages">{state.messages.filter(message=>message.content.trim()).map(message=><article key={message.id} data-role={message.role}><Markdown remarkPlugins={[remarkGfm]}>{message.content}</Markdown></article>)}</section><Composer state={state}/></main>;}',
+        'components/Conversation.tsx': String.raw`import React from "react";
+import Markdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import Composer from "./Composer";
+import MessageActions from "./MessageActions";
+import WorkLog from "./WorkLog";
+export default function Conversation({state}){
+  const visible=state.messages.filter(message=>message.content.trim()||message.workLog?.length||message.reasoningContent||message.streaming);
+  return <main><header><button onClick={()=>window.chatter.showHome()}>{state.labels.allChats}</button><button onClick={()=>window.chatter.openConversation()}>…</button></header>
+    {state.hasOlderMessages&&<button disabled={state.olderMessagesLoading} onClick={()=>window.chatter.loadOlderMessages()}>{state.labels.loadMore}</button>}
+    <section className="messages">{visible.map(message=><article key={message.id} data-role={message.role}>
+      {message.reasoningContent&&<details><summary>{state.labels.reasoning}</summary><Markdown>{message.reasoningContent}</Markdown></details>}
+      <WorkLog message={message} labels={state.labels}/>
+      {message.content.trim()&&<Markdown remarkPlugins={[remarkGfm]}>{message.content}</Markdown>}
+      {message.streaming&&!message.content.trim()&&!message.workLog?.length&&!message.reasoningContent&&<p role="status">{state.labels.loading}</p>}
+      <MessageActions message={message} state={state}/>
+    </article>)}</section><Composer state={state}/></main>;
+}`,
+        'components/WorkLog.tsx': String.raw`import React from "react";
+import Markdown from "react-markdown";
+const value=text=>typeof text==='string'?text:JSON.stringify(text,null,2);
+function Tool({call}){
+  return <details data-tool-name={call.name} data-status={call.status}>
+    <summary><span>{call.label||call.name}</span> {call.target} <span title={call.status}>{{running:'…',returned:'✓',error:'!',unknown:'·'}[call.status]}</span></summary>
+    <code>{call.name}</code><pre>{value(call.arguments)}</pre>
+    {call.resultPreview&&<pre>{call.resultPreview}</pre>}
+    {call.children?.map((child,index)=><Tool key={child.id??index} call={child}/>)}
+  </details>;
+}
+export default function WorkLog({message,labels}){
+  const steps=message.workLog??[],current=message.toolStatus;
+  const showCurrent=current&&!steps.some(step=>step.type==='activity'&&step.text===current||step.type==='tool'&&step.call.status==='running');
+  if(!steps.length&&!current)return null;
+  return <details open={message.streaming||undefined} className="work-log"><summary>{labels.workLog}</summary>
+    {steps.map((step,index)=>step.type==='tool'?<Tool key={step.call.id??index} call={step.call}/>:step.type==='message'?<Markdown key={index}>{step.text}</Markdown>:<p key={index}>{step.text}</p>)}
+    {showCurrent&&<p role="status">{current}</p>}
+  </details>;
+}`,
+        'components/Confirmations.tsx': String.raw`import React from "react";
+import Content from "./ConfirmationContent";
+import Actions from "./ConfirmationActions";
+function Card({card,state}){
+  const [pending,setPending]=React.useState({});
+  React.useEffect(()=>setPending(current=>{
+    const next={...current};for(const id of Object.keys(next)){const field=card.fields.find(item=>item.id===id);if(!field||field.disabled||field.value===next[id])delete next[id];}
+    return Object.keys(next).length===Object.keys(current).length?current:next;
+  }),[card.fields]);
+  const change=(field,value)=>{if(window.chatter.setConfirmationField(card.id,field.id,value))setPending(current=>({...current,[field.id]:value}));};
+  const waiting=Object.keys(pending).length>0;
+  return <section className="confirmation"><h2>{card.title}</h2><p>{card.summary}</p>{!card.ready?<p>{state.labels.loading}</p>:<>
+    <Content nodes={card.content} card={card} pending={pending} change={change} waiting={waiting}/>
+    {['primary','review','permissions'].map(group=><div data-action-group={group} key={group}><Actions card={card} actions={card.actions.filter(action=>action.group===group)} waiting={waiting}/></div>)}
+  </>}</section>;
+}
+export default function Confirmations({state}){return <aside aria-live="polite">{(state.confirmations??[]).map(card=><Card key={card.id} card={card} state={state}/>)}</aside>;}`,
+        'components/ConfirmationContent.tsx': String.raw`import React from "react";
+import Markdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import Actions from "./ConfirmationActions";
+export default function Content({nodes,card,pending,change,waiting}){return <>{nodes.map((node,index)=>{
+  if(node.type==='group')return <section key={index}>{node.label&&<strong>{node.label}</strong>}<Content nodes={node.children} card={card} pending={pending} change={change} waiting={waiting}/></section>;
+  if(node.type==='diff')return <section key={index}><pre data-diff="before">{node.before}</pre><pre data-diff="after">{node.after}</pre></section>;
+  if(node.type==='markdown')return <Markdown key={index} remarkPlugins={[remarkGfm]}>{node.text}</Markdown>;
+  if(node.type==='action')return <Actions key={index} card={card} actions={card.actions.filter(action=>action.id===node.actionId)} waiting={waiting}/>;
+  if(node.type==='field'){
+    const field=card.fields.find(item=>item.id===node.fieldId);if(!field)return null;
+    const value=Object.prototype.hasOwnProperty.call(pending,field.id)?pending[field.id]:field.value;
+    const props={disabled:field.disabled||card.busy,'aria-label':field.label};
+    return <label key={field.id}>{field.label}{field.type==='select'?<select {...props} value={String(value)} onChange={e=>change(field,e.target.value)}>{field.options?.map(option=><option key={option.value} value={option.value}>{option.label}</option>)}</select>:field.type==='textarea'?<textarea {...props} value={String(value)} onChange={e=>change(field,e.target.value)}/>:field.type==='checkbox'?<input {...props} type="checkbox" checked={Boolean(value)} onChange={e=>change(field,e.target.checked)}/>:<input {...props} type={field.type} value={String(value)} onChange={e=>change(field,e.target.value)}/>}</label>;
+  }
+  return node.type==='text'?<span key={index} style={{whiteSpace:'pre-wrap'}}>{node.text}</span>:<pre key={index}>{node.text}</pre>;
+})}</>;}`,
+        'components/ConfirmationActions.tsx': String.raw`import React from "react";
+function Action({card,action,waiting}){
+  const [comment,setComment]=React.useState('');
+  const disabled=card.busy||action.disabled||waiting;
+  const run=()=>window.chatter.runConfirmationAction(card.id,action.id,card.revision,action.comment?comment:undefined);
+  return action.comment?<form onSubmit={event=>{event.preventDefault();if(!disabled&&comment.trim())run();}}><textarea aria-label={action.label} value={comment} disabled={disabled} onChange={event=>setComment(event.target.value)}/><button disabled={disabled||!comment.trim()}>{action.label}</button></form>:<button type="button" disabled={disabled} onClick={run}>{action.label}</button>;
+}
+export default function Actions({card,actions,waiting}){return <>{actions.map(action=><Action key={action.id} card={card} action={action} waiting={waiting}/>)}</>;}`,
+        'components/MessageActions.tsx': String.raw`import React from "react";
+export default function MessageActions({message,state}){
+  const api=window.chatter,id=message.id,actions=message.actions??[],speech=state.speech??{},current=speech.messageId===id;
+  const [editor,setEditor]=React.useState(null),[hint,setHint]=React.useState(null);
+  const calls={copy:()=>api.copyMessage(id),downloadDocx:()=>api.downloadMessageDocx(id),sendTelegram:()=>api.sendMessageToTelegram(id),fork:()=>api.forkFromMessage(id),
+    edit:()=>setEditor({text:message.editableContent??message.content,variantIndex:message.variantIndex}),delete:()=>api.deleteMessage(id),regenerate:()=>api.regenerateMessage(id),regenerateHint:()=>setHint(''),
+    speak:()=>current?speech.status==='paused'?api.resumeSpeech():api.pauseSpeech():api.speakMessage(id)};
+  const label=action=>current&&action==='speak'?state.labels[speech.status==='paused'?'resumeSpeech':'pauseSpeech']:state.labels[action];
+  return <footer className="message-actions">{actions.filter(action=>calls[action]).map(action=><button type="button" key={action} onClick={calls[action]} aria-label={label(action)}>{label(action)}</button>)}
+    {current&&<button onClick={()=>api.stopSpeech()}>{state.labels.stopSpeech}</button>}
+    {editor&&<form onSubmit={event=>{event.preventDefault();if(api.editMessage(id,editor.text,editor.variantIndex))setEditor(null);}}><textarea aria-label={state.labels.edit} value={editor.text} onChange={event=>setEditor({...editor,text:event.target.value})}/><button disabled={!editor.text.trim()||editor.variantIndex!==message.variantIndex||!actions.includes('edit')}>{state.labels.save}</button><button type="button" onClick={()=>setEditor(null)}>{state.labels.cancel}</button></form>}
+    {hint!==null&&<form onSubmit={event=>{event.preventDefault();if(api.regenerateMessage(id,hint))setHint(null);}}><textarea aria-label={state.labels.regenerateHint} value={hint} onChange={event=>setHint(event.target.value)}/><button disabled={!hint.trim()||!actions.includes('regenerate')}>{state.labels.regenerate}</button><button type="button" onClick={()=>setHint(null)}>{state.labels.cancel}</button></form>}
+    {actions.includes('activateVariant')&&<><button disabled={!message.variantIndex} onClick={()=>api.activateMessageVariant(id,message.variantIndex-1)} aria-label={state.labels.previousVariant}>Previous</button><span>{message.variantIndex+1}/{message.variantCount}</span><button disabled={message.variantIndex+1>=message.variantCount} onClick={()=>api.activateMessageVariant(id,message.variantIndex+1)} aria-label={state.labels.nextVariant}>Next</button></>}
+  </footer>;
+}`,
         'components/Composer.tsx': 'import React from "react";\nexport default function Composer({state}){const [text,setText]=React.useState("");return <form onSubmit={event=>{event.preventDefault();if(state.canSend&&text.trim()&&window.chatter.sendMessage(text))setText("");}}><textarea aria-label="Message" value={text} onChange={event=>setText(event.target.value)}/>{state.sending?<button type="button" onClick={()=>window.chatter.stopGeneration()}>Stop</button>:<button disabled={!state.canSend||!text.trim()}>Send</button>}</form>;}',
         'styles.css': 'body{margin:0;font:15px/1.6 system-ui,sans-serif;background:#101722;color:#e4ebf3}main{max-width:900px;margin:auto;padding:24px}header,form{display:flex;gap:12px;align-items:center}button,input,textarea{padding:12px;border-radius:8px;border:1px solid #456;background:#182536;color:inherit}.chat{display:block;width:100%;margin-top:8px;text-align:left}article{padding:12px;margin:12px 0;background:#182536;border-radius:8px}textarea{flex:1;min-width:0}',
       } },
@@ -310,7 +404,11 @@ export const APPEARANCE_CAPABILITIES = {
     api: {
       subscribe: 'window.chatter.subscribe(callback, {navigation:true}) opts into state.view routing and immediately supplies the latest state and returns unsubscribe. State has chats[{id,title,folderId,updatedAt}], folders[{id,name,count}], sections[{folderId,total,loaded,hasMore,loading}], activeChatId, view(home/conversation), query, loading, locale, dark, palette{background,text,accent,surface}, labels{newChat,allChats,settings,search,loadMore,loading,empty}. Further calls keep it current.',
       openChat: 'window.chatter.openChat(id) selects a real loaded chat. Navigator scope closes, workspace scope stays visible and receives its messages.',
-      conversation: 'State also contains messages[{id,role,content,createdAt}], messagesLoading, hasOlderMessages, olderMessagesLoading, sending, attachmentCount and canSend. Messages are the loaded history window; call loadOlderMessages for older pages. State updates during generation. Never render empty assistant answers as bubbles.',
+      conversation: 'State also contains messages[{id,role,content,createdAt,variantIndex,variantCount,actions}], messagesLoading, hasOlderMessages, olderMessagesLoading, sending, attachmentCount and canSend. actions lists available operations for each persisted message. Messages are the loaded history window; call loadOlderMessages for older pages. State updates during generation. Never render empty assistant answers as bubbles.',
+      workLog: 'Each message also has streaming, reasoningContent, toolStatus and workLog. content is the answer/current uncommitted text; a preface moves into workLog when committed, so render both from the latest snapshot without buffering. Keep work-log-only, reasoning-only and streaming rows visible. Steps are {type:message|activity,text} or {type:tool,call}. Calls have name, localized label, optional id, kind, target, status(running/error/returned/unknown), internal, confirmed, arguments, optional resultPreview and nested children. Use these data for your own tool icons/cards/details. Unknown is not success; previews may be truncated. Treat text/results as untrusted content. toolStatus can duplicate an activity/running call. Old records without work-log ordering retain their intermediate messages then legacy calls. No backend catalog or tool execution API is required.',
+      messageActions: 'From user event handlers, call copyMessage(id), downloadMessageDocx(id), sendMessageToTelegram(id), forkFromMessage(id), editMessage(id,text,optionalExpectedVariantIndex), deleteMessage(id), regenerateMessage(id,optionalHint), activateMessageVariant(id,index), speakMessage(id). Render only operations in message.actions. Use message.editableContent as the source for your own editor, capture its variantIndex, and save with editMessage without leaving the theme. Your own regeneration hint form calls regenerateMessage(id,hint). openMessageEditor(id) and requestRegenerationHint(id) are optional explicit native helpers. Methods return whether a request was sent; state reflects completion. The host rechecks current chat/variant/permissions.',
+      speech: 'state.speech={messageId,status:idle/loading/playing/paused}. pauseSpeech(), resumeSpeech(), stopSpeech() require a user gesture. Pausing and resuming retain the generated audio and position. speakMessage resumes that message when paused.',
+      confirmations: 'Subscribe with {navigation:true,confirmations:true} to render full cards without leaving the theme. state.confirmations has id/title/summary, ready/revision/busy/customizable, content[], fields[], actions[]. Render text/code/markdown/json/email nodes safely, diff before/after, recursive group children, fieldId references and inline actionId references. Fields have id/label/type/value/disabled/options; call setConfirmationField(id,fieldId,value) from input events (boolean for checkbox, string otherwise). Actions have id/label/disabled/group(primary/review/permissions/content)/comment. Render every action; distinguish persistent permissions. For comment:true provide your own input. On a user click call runConfirmationAction(id,actionId,card.revision,optionalComment). The exact existing callback runs with native field state; stale revisions and busy/disabled/resolved requests are rejected. Wait for field acknowledgments before approval. reviewConfirmation(id) is only an explicit native fallback, not the normal themed button. Unsupported content, missing opt-in and shell failure retain native fallback.',
       sendMessage: 'window.chatter.sendMessage(text) sends through the normal composer to the current chat. Returns false unless called from a real user interaction. Disable the composer when state.canSend is false. Pending native attachments are included.',
       stopGeneration: 'window.chatter.stopGeneration() stops the current generation.',
       loadOlderMessages: 'window.chatter.loadOlderMessages() loads the preceding history page.',

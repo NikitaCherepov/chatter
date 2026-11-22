@@ -1,3 +1,11 @@
+import type { ToolCall, WorkLogStep } from './api';
+
+/** Old records have no interleaving metadata; retain every available item. */
+export function workLogSteps(messages: string[], entries?: WorkLogStep[], calls?: ToolCall[] | null): WorkLogStep[] {
+  return entries?.length ? entries
+    : [...messages.map(text => ({ type: 'message' as const, text })), ...(calls ?? []).map(call => ({ type: 'tool' as const, call }))];
+}
+
 /** Hide only the exact committed prefix; edited or legacy text must stay intact. */
 export function splitWorkContent(content: string, intermediate: string[] | null | undefined) {
   const messages = (intermediate ?? []).filter(text => typeof text === 'string' && text.trim());

@@ -5,10 +5,11 @@ import type { InteractiveInput, InteractivePlacement, InteractiveStatus } from '
 import type { AppearanceShellEvent, AppearanceShellState } from './appearance-shell-types';
 
 contextBridge.exposeInMainWorld('electronAPI', {
+  writeClipboardText: (text: string) => ipcRenderer.invoke('clipboard:write-text', text),
   interactiveCreate: (input: InteractiveInput) => ipcRenderer.invoke('interactive-preview:create', input),
   localAppearance: (payload: unknown) => ipcRenderer.invoke('themes:manage', payload),
-  onLocalAppearanceChanged: (callback: (event: { key: string; scope: { server: string; userId: number } }) => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, value: { key: string; scope: { server: string; userId: number } }) => callback(value);
+  onLocalAppearanceChanged: (callback: () => void) => {
+    const listener = () => callback();
     ipcRenderer.on('themes:changed', listener);
     return () => ipcRenderer.removeListener('themes:changed', listener);
   },

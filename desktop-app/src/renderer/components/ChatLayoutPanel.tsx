@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useId, useRef, useState, type CSSProperties, type ComponentProps } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AnimatePresence } from 'framer-motion';
 import { Select } from './Select';
@@ -207,12 +207,12 @@ export function ChatLayoutPanel({
   );
 }
 
-export function ChatLayoutConfirmation({ proposal, layouts, onPreview, onResolved }: {
+export function ChatLayoutConfirmation({ proposal, layouts, onPreview, onResolved, ...queueProps }: {
   proposal: ChatLayoutProposal;
   layouts: ChatLayouts;
   onPreview: () => void;
   onResolved: () => void;
-}) {
+} & Pick<ComponentProps<typeof ConfirmationCard>, 'queueControl' | 'onBusyChange'>) {
   const { t } = useTranslation();
   const [error, setError] = useState('');
   const { profile } = proposal;
@@ -231,7 +231,7 @@ export function ChatLayoutConfirmation({ proposal, layouts, onPreview, onResolve
   }
 
   return (
-    <ConfirmationCard id={proposal.proposal_id} title={t('chatLayout.proposal')} actions={
+    <ConfirmationCard {...queueProps} id={proposal.proposal_id} title={t('chatLayout.proposal')} actions={
       <>
         <button type="button" className={settings.cancelBtn} onClick={onPreview} disabled={layouts.saving || stale || !layouts.state}>{t('chatLayout.preview')}</button>
         <button type="button" className={settings.cancelBtn} disabled={layouts.saving || stale || !layouts.state}

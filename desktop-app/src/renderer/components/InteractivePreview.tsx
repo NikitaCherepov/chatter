@@ -54,6 +54,8 @@ export function InteractivePreview({ source, language, visible, appearance, proj
     const api = window.electronAPI;
     const applyStatus = (status: InteractiveStatus) => {
       setPhase(status.phase);
+      if (status.confirmations !== undefined)
+        appearanceRef.current?.onAction({ type: 'confirmationPresentation', custom: status.confirmations });
       if (status.escape) {
         setExpanded(false);
         const shell = appearanceRef.current;

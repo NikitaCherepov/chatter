@@ -1,4 +1,4 @@
-import { app, BrowserWindow, desktopCapturer, dialog, ipcMain, Menu, Notification, protocol, screen, session, shell, Tray, type OpenDialogOptions } from 'electron';
+import { app, BrowserWindow, clipboard, desktopCapturer, dialog, ipcMain, Menu, Notification, protocol, screen, session, shell, Tray, type OpenDialogOptions } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import {safeStorage} from 'electron';
 import {LocalMcpManager} from './local-mcp';
@@ -33,6 +33,11 @@ import {
 } from './background-activity-registry';
 
 let localMcp:LocalMcpManager|undefined;
+ipcMain.handle('clipboard:write-text', (event, text: unknown) => {
+  assertTrustedIpcSender(event);
+  if (typeof text !== 'string') throw new Error('clipboard_invalid_text');
+  clipboard.writeText(text);
+});
 let localAppearanceStore: { store: LocalAppearanceStore; close: () => void } | undefined;
 function themeStore(owner: Electron.WebContents) {
   if (localAppearanceStore) return localAppearanceStore.store;

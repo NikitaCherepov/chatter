@@ -14,18 +14,26 @@ class ChatterAudioManager {
   private currentSource: AudioBufferSourceNode | null = null;
   private gainNode: GainNode | null = null;
   private nextStartTime = 0;
+  private paused = false;
+  private playbackTicket = 0;
 
   init() {
     if (!this.ctx) {
       this.ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
     }
-    if (this.ctx.state === 'suspended') {
+    if (this.ctx.state === 'suspended' && !this.paused) {
       this.ctx.resume();
     }
   }
 
   /** Smooth fade-out and stop. */
   async stopWithFade(fadeTimeMs = 150) {
+    this.playbackTicket++;
+    if (this.paused || this.ctx?.state === 'suspended') {
+      this.abort();
+      await this.ctx?.resume();
+      return;
+    }
     if (!this.ctx || !this.gainNode || !this.currentSource) return;
 
     const ctx = this.ctx;
@@ -57,12 +65,16 @@ class ChatterAudioManager {
    * @param volume  Master volume 0..1
    * @param isChain If true, queue after previous phrase (gapless playback)
    */
-  async playBuffer(buffer: ArrayBuffer, volume: number, isChain = false) {
+  async playBuffer(buffer: ArrayBuffer, volume: number, isChain = false, onStart?: () => void, shouldPause?: () => boolean) {
+    const ticket = ++this.playbackTicket;
     this.init();
     const ctx = this.ctx!;
 
     // decodeAudioData "consumes" the buffer — slice to keep a copy
     const audioBuffer = await ctx.decodeAudioData(buffer.slice(0));
+    if (ticket !== this.playbackTicket) return;
+    if (shouldPause?.() || this.paused) await this.pause();
+    if (ticket !== this.playbackTicket) return;
 
     const source = ctx.createBufferSource();
     source.buffer = audioBuffer;
@@ -91,19 +103,26 @@ class ChatterAudioManager {
     // Return a Promise that resolves only when audio physically finishes
     return new Promise<void>((resolve) => {
       source.onended = () => {
+        if (this.currentSource === source) { this.currentSource = null; this.gainNode = null; }
         resolve();
       };
       source.start(startTime);
+      onStart?.();
     });
   }
 
   /** Hard stop (no fade). */
   abort() {
+    this.playbackTicket++;
     try { this.currentSource?.stop(); } catch { /* ignore */ }
     this.currentSource = null;
     this.gainNode = null;
     this.nextStartTime = 0;
+    this.paused = false;
+    if (this.ctx?.state === 'suspended') void this.ctx.resume();
   }
+  async pause() { this.paused = true; await this.ctx?.suspend(); }
+  async resume() { this.paused = false; await this.ctx?.resume(); }
 }
 
 export const audioManager = new ChatterAudioManager();

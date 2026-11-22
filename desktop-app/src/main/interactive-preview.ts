@@ -4,14 +4,14 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { INTERACTIVE_CSP, INTERACTIVE_SCHEME, interactiveDocument, validateInteractiveInput } from './interactive-document';
 import type { InteractivePlacement, InteractiveStatus } from './interactive-types';
-import { parseAppearanceShellAction, type AppearanceShellState } from './appearance-shell-types';
+import { parseAppearanceShellAction, canRunAppearanceAction, type AppearanceShellState } from './appearance-shell-types';
 
 type Entry = {
   id: string; host: BrowserWindow; owner: WebContents; clip: View; view: WebContentsView;
   visible: boolean; timer?: ReturnType<typeof setInterval>; deadline?: ReturnType<typeof setTimeout>;
   isolated: Session;
   expanded?: boolean;
-  appearance?: { state?: AppearanceShellState; window: number; count: number; handlesNavigation?: boolean };
+  appearance?: { state?: AppearanceShellState; window: number; count: number; handlesNavigation?: boolean; handlesConfirmations?: boolean };
   cleanup: () => void;
 };
 
@@ -80,10 +80,16 @@ export class InteractivePreviews {
         entry.appearance.handlesNavigation = value === true;
         return;
       }
+      if (channel === 'appearance-shell:confirmations') {
+        entry.appearance.handlesConfirmations = value === true;
+        this.emit(entry, 'ready', { confirmations: value === true });
+        return;
+      }
       if (channel !== 'appearance-shell:action') return;
       const action = parseAppearanceShellAction(value);
       const bridge = entry.appearance;
       if (!action || !bridge.state) return;
+      if (!canRunAppearanceAction(bridge.state, action)) return;
       if (Date.now() - bridge.window >= 1000) { bridge.window = Date.now(); bridge.count = 0; }
       if (++bridge.count > 60) return;
       if (action.type === 'openChat' && !bridge.state.chats.some(chat => chat.id === action.id)) return;
@@ -172,8 +178,10 @@ export class InteractivePreviews {
 
   destroy(): void { for (const id of [...this.entries.keys()]) this.remove(id); }
 
-  private emit(entry: Entry, phase: InteractiveStatus['phase'], detail: Pick<InteractiveStatus, 'escape' | 'reset'> = {}): void {
-    if (!entry.owner.isDestroyed()) entry.owner.send('interactive-preview:status', { id: entry.id, phase, ...detail } satisfies InteractiveStatus);
+  private emit(entry: Entry, phase: InteractiveStatus['phase'], detail: Pick<InteractiveStatus, 'escape' | 'reset' | 'confirmations'> = {}): void {
+    if (!entry.owner.isDestroyed()) entry.owner.send('interactive-preview:status', {
+      id: entry.id, phase, ...(entry.appearance ? { confirmations: Boolean(entry.appearance.handlesConfirmations) } : {}), ...detail,
+    } satisfies InteractiveStatus);
   }
 
   private remove(id: string, phase?: InteractiveStatus['phase'], crash = false): void {

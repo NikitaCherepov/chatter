@@ -105,6 +105,10 @@ import {ChatWorkspaceBar,ChatWorkspaceTabs} from ${modulePath('components/ChatWo
 import {useChatWorkspace} from ${modulePath('lib/chat-workspace.ts')};
 import {AppearanceController} from ${modulePath('components/AppearanceController.tsx')};
 import {AppearanceConfirmation} from ${modulePath('components/AppearanceConfirmation.tsx')};
+import {ConfirmationCard,ConfirmationQueue,ConfirmationFileDiff} from ${modulePath('components/ConfirmationCard.tsx')};
+import {useConfirmationComposer} from ${modulePath('lib/useConfirmationComposer.ts')};
+import {useConfirmationBridge} from ${modulePath('lib/useConfirmationBridge.ts')};
+import {RejectWithComment} from ${modulePath('components/RejectWithComment.tsx')};
 import {newAppearance} from ${modulePath('lib/appearance-schema.ts')};
 import {previewAppearance,animateMessageArrival,getAppearancePreview} from ${modulePath('lib/appearance-runtime.ts')};
 import {appearanceColors,contrastRatio} from ${modulePath('lib/appearance-colors.ts')};
@@ -144,6 +148,7 @@ const localThemeSnapshot=userId=>{
 window.electronAPI={onToolWindowClosed:()=>()=>{},
  onLocalAppearanceChanged:listener=>{localThemeListeners.add(listener);return()=>localThemeListeners.delete(listener);},
  localAppearance:async payload=>{
+  if('scope' in payload)throw new Error('Local themes must not be scoped to an account/server');
   await new Promise(resolve=>setTimeout(resolve,5));
   const userId=1;
   if(payload.action==='docs')return {readme:window.themeGuideText??'# Local desktop guide',desktopVersion:'test-desktop',workspace:localThemeSnapshot(userId).workspace};
@@ -295,9 +300,25 @@ function LayoutFixture({initialEditor=true}){
   </div>}
  </div>;
 }
+function WrappedQueueCard({proposal,...props}){return <ConfirmationCard {...props} id={proposal.proposal_id} title="Second request"
+ actions={<button onClick={()=>{window.queueCalls.push('second');}}>Approve second</button>}>Second request details</ConfirmationCard>;}
+function QueueFixture(){
+ const [request,setRequest]=useState(null),composer=useConfirmationComposer(1),bridge=useConfirmationBridge();
+ const [custom,setCustom]=useState(false),[password,setPassword]=useState(''),[remember,setRemember]=useState(false),[unsupported,setUnsupported]=useState(false);
+ window.enableCustomConfirmations=()=>setCustom(true);window.setUnsupportedConfirmation=setUnsupported;
+ window.projectedConfirmations=bridge.cards;window.runProjectedConfirmation=(...args)=>bridge.api.execute(...args);window.setProjectedField=(...args)=>bridge.api.change(...args);
+ window.pickRequest=id=>setRequest({id});window.queueCalls??=[];
+ const UnknownBody=()=> <p>Unsupported native widget</p>;
+ const items=[<ConfirmationCard key="first" id="first" title="First request" actions={<><button onClick={async()=>{window.queueLastValues={password,remember};window.queueCalls.push('first');await new Promise(resolve=>{window.finishQueueAction=resolve;});}}>Approve first</button><RejectWithComment onReject={text=>{window.queueLastComment=text;}}/></>}>
+ First request details<label>Password<input type="password" value={password} onChange={event=>setPassword(event.target.value)}/></label><label>Remember<input type="checkbox" checked={remember} onChange={event=>setRemember(event.target.checked)}/></label><ConfirmationFileDiff oldContent="before source" newContent="after source"/>{unsupported&&<UnknownBody/>}</ConfirmationCard>,
+ <WrappedQueueCard key="second" proposal={{proposal_id:'second'}}/>];
+ return <ConfirmationQueue items={items} composer={composer} order={new Map([['first',1],['second',2]])} request={request}
+   bridge={custom?bridge.api:undefined} custom={custom&&!bridge.cards.some(card=>!card.customizable)}/>;
+}
 function App(){
  const [user,setUser]=useState({id:1,ui_settings:{}}),[proposal,setProposal]=useState(null),[layoutFixture,setLayoutFixture]=useState(false);
  const [workspaceEpoch,setWorkspaceEpoch]=useState(0);
+ const [queueFixture,setQueueFixture]=useState(false);window.openQueueFixture=()=>setQueueFixture(true);
  window.openLayoutFixture=()=>setLayoutFixture(true);
  window.reloadWorkspace=()=>setWorkspaceEpoch(epoch=>epoch+1);
  window.logoutAccount=()=>{localStorage.removeItem('chatter_user');setUser(null);};
@@ -306,7 +327,7 @@ function App(){
  window.proposeDraft=()=>setProposal({proposal_id:'bot-draft',profile:{...newAppearance('saved-bot'),name:'Saved bot draft'}});
  window.motionPreview=()=>previewAppearance({...newAppearance('motion'),motion:{preset:'custom',duration:100,distance:12,scale:0.97,easing:'ease-out'}});
  window.dark=()=>{setThemePreference('dark');window.dispatchEvent(new CustomEvent('chatter-theme-change',{detail:'dark'}));};
- return <TestAuth.Provider value={{user,setUser}}>{layoutFixture ? <LayoutFixture key={workspaceEpoch} initialEditor={!workspaceEpoch}/> : <><AppearanceController/>
+ return <TestAuth.Provider value={{user,setUser}}>{queueFixture ? <QueueFixture/> : layoutFixture ? <LayoutFixture key={workspaceEpoch} initialEditor={!workspaceEpoch}/> : <><AppearanceController/>
   <div id="panel-fixture" className={chat.sidebar} style={{width:'48%',height:'100%',overflow:'auto',padding:20}}><AppearancePanel/>{proposal&&<AppearanceConfirmation proposal={proposal} onResolved={()=>setProposal(null)}/>}</div>
   <div className={chat.main} style={{width:'52%',height:'100%',display:'flex',flexDirection:'column'}}><Conversation/></div>
  </>}</TestAuth.Provider>;
@@ -327,6 +348,7 @@ window.sourceText=value=>{
 const i18n=createInstance();
 i18n.init({lng:'ru',resources:{ru:{translation:ru}},interpolation:{escapeValue:false}}).then(()=>{
  const client=new QueryClient({defaultOptions:{queries:{retry:false},mutations:{retry:false}}});
+ window.reloadLocalAppearance=()=>client.resetQueries({queryKey:['appearance']});
  createRoot(document.getElementById('root')).render(<QueryClientProvider client={client}><I18nextProvider i18n={i18n}><App/></I18nextProvider></QueryClientProvider>);
  window.fixtureReady=true;
 });
@@ -524,6 +546,11 @@ app.whenReady().then(async()=>{
  assert.equal(await js('window.peekThemePreview().id'),'motion');
  assert.equal((await js('window.callThemeTool({action:"docs"})')).state.activeId,selectedBeforeAccount);
  await js('window.logoutAccount()');
+ await sleep(50);
+ const requestsBeforeLoggedOutReload=await js('window.migrationRequests.length');
+ await js('window.reloadLocalAppearance()');
+ await until('document.documentElement.dataset.appearance==="motion"');
+ assert.equal(await js('window.migrationRequests.length'),requestsBeforeLoggedOutReload,'loading local themes while signed out needs no server request');
  assert.equal((await js('window.callThemeTool({action:"docs"})')).state.activeId,selectedBeforeAccount);
  assert.equal(await js('window.testDb[1].profiles.length'),3);
  await js('window.changeAccount();window.previewAppearance(null)');
@@ -809,6 +836,49 @@ app.whenReady().then(async()=>{
  console.log('PASS: real pointer clicks and wheel scrolling in the chat library and Notebook with the persisted top layout');
  console.log('PASS: top workspace preview, mounted library and folder state, Escape/focus, tab pin and close, tool favorites and persistence');
  console.log('PASS: layout editor, in-chat preview, stateful panel reorder, docked composer bottom follow, narrow tools panel, and inactive bot layout save');
+ await js('window.openQueueFixture()');
+ await until('!!document.querySelector("[data-confirmation-id=first]")');
+ await js('window.pickRequest("second")');
+ await until('!!document.querySelector("[data-confirmation-id=second]")');
+ assert.deepEqual(await js('window.queueCalls'),[],'reviewing a request never approves it');
+ await js('window.pickRequest("first")');
+ await until('!!document.querySelector("[data-confirmation-id=first]")');
+ await js('window.clickText("Approve first")');
+ await until('!!window.finishQueueAction');
+ await js('window.pickRequest("second")');
+ await sleep(50);
+ assert.ok(await js('!!document.querySelector("[data-confirmation-id=first]")'),'review waits for a running native action');
+ await js('window.finishQueueAction()');
+ await until('!!document.querySelector("[data-confirmation-id=second]")');
+ assert.deepEqual(await js('window.queueCalls'),['first']);
+ await js('window.clickText("Approve second")');
+ assert.deepEqual(await js('window.queueCalls'),['first','second']);
+ await js('window.enableCustomConfirmations()');
+ await until('window.projectedConfirmations?.length===2&&window.projectedConfirmations.every(card=>card.ready)');
+ assert.equal(await js('document.querySelectorAll("[data-confirmation-id]").length'),0,'custom cards do not reveal native UI');
+ const customCard=await js('window.projectedConfirmations.find(card=>card.id==="first")');
+ assert.equal(customCard.fields.length,2);
+ assert.ok(JSON.stringify(customCard.content).includes('before source'));
+ assert.ok(JSON.stringify(customCard.content).includes('after source'));
+ const passwordField=customCard.fields.find(field=>field.type==='password').id,rememberField=customCard.fields.find(field=>field.type==='checkbox').id;
+ await js('window.setProjectedField("first",'+JSON.stringify(passwordField)+',"new password")');
+ await js('window.setProjectedField("first",'+JSON.stringify(rememberField)+',true)');
+ await until('window.projectedConfirmations.find(card=>card.id==="first").fields.some(field=>field.type==="password"&&field.value==="new password")');
+ const customApprove=customCard.actions.find(action=>action.label==='Approve first').id;
+ assert.equal(await js('window.runProjectedConfirmation("first",'+JSON.stringify(customApprove)+','+customCard.revision+').then(()=>"ran",error=>error.message)'),'confirmation_changed','old action revisions cannot approve changed fields');
+ await js('void (window.pendingProjectedAction=window.runProjectedConfirmation("first",'+JSON.stringify(customApprove)+',window.projectedConfirmations.find(card=>card.id==="first").revision))');
+ await until('window.projectedConfirmations.find(card=>card.id==="first").busy');
+ assert.deepEqual(await js('window.queueLastValues'),{password:'new password',remember:true},'the original handler consumes current custom field values');
+ assert.equal(await js('window.runProjectedConfirmation("first",'+JSON.stringify(customApprove)+',window.projectedConfirmations.find(card=>card.id==="first").revision).then(()=>"ran",error=>error.message)'),'confirmation_unavailable');
+ await js('window.finishQueueAction();window.pendingProjectedAction');
+ await until('!window.projectedConfirmations.find(card=>card.id==="first").busy');
+ await js('(()=>{const card=window.projectedConfirmations.find(card=>card.id==="first");return window.runProjectedConfirmation(card.id,card.actions.find(action=>action.comment).id,card.revision,"  Please change the command  ");})()');
+ assert.equal(await js('window.queueLastComment'),'Please change the command');
+ await js('window.setUnsupportedConfirmation(true)');
+ await until('window.projectedConfirmations.some(card=>!card.customizable)&&document.querySelectorAll("[data-confirmation-id]").length>0');
+ assert.deepEqual(errors,[]);
+ console.log('PASS: full custom confirmation projection, fields/diff data, native callback reuse, comments, stale/busy guards and unsupported-content fallback');
+ console.log('PASS: requested native confirmation selection, wrapped card IDs, busy-action protection and no automatic approval');
  win.destroy();
  console.log('PASS: actual appearance editor and cards, inactive saves, reversible preview, palette/typography/density, virtual height restoration, applying proposals from recovery bar, arrival-only animation, reduced motion and app-wide themes across account changes/logout');
  app.exit(0);

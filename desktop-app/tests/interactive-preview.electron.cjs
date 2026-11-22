@@ -111,15 +111,84 @@ app.whenReady().then(async () => {
   manager.updateAppearanceState(host.webContents, preview.id, shellState);
   await sleep(100);
   assert.equal(await preview.contents.executeJavaScript('document.querySelector("button").textContent'), 'Project: 1', 'project modules and state survive route-aware return');
+  const forwarded = [], statuses = [], hostSend = host.webContents.send.bind(host.webContents);
+  host.webContents.send = (channel, payload) => {
+    if (channel === 'interactive-preview:appearance-action') forwarded.push(payload.action);
+    if (channel === 'interactive-preview:status') statuses.push(payload);
+    return hostSend(channel, payload);
+  };
+  const actionState = { ...shellState, activeChatId: 1, messages: [{ id: 10, variantIndex: 0, variantCount: 2, actions: ['copy','regenerate','speak','activateVariant'] }],
+    speech: { messageId: 10, status: 'playing' }, confirmations: [{ id: 'request-1', title: 'Review', summary: 'Command' }] };
+  await preview.contents.executeJavaScript('void window.chatter.subscribe(state=>window.latestThemeState=state,{confirmations:true})');
+  manager.updateAppearanceState(host.webContents, preview.id, actionState);
+  await until(async () => await preview.contents.executeJavaScript('window.latestThemeState?.activeChatId') === 1);
+  assert.equal(await preview.contents.executeJavaScript('window.chatter.copyMessage(10)'), false, 'script effects have no user activation');
+  assert.equal(await preview.contents.executeJavaScript('window.chatter.reviewConfirmation("request-1")'), false);
+  assert.equal(await preview.contents.executeJavaScript('window.chatter.copyMessage(10)', true), true);
+  await until(() => forwarded.some(action => action.type === 'messageAction' && action.action === 'copy'));
+  assert.equal(await preview.contents.executeJavaScript('window.chatter.regenerateMessage(10,"More detail")', true), true);
+  assert.equal(await preview.contents.executeJavaScript('window.chatter.reviewConfirmation("request-1")', true), true);
+  await until(() => forwarded.some(action => action.type === 'reviewConfirmation' && action.id === 'request-1'));
+  assert.ok(statuses.some(status => status.confirmations === true), 'custom request presentation is opt-in');
+  manager.updateAppearanceState(host.webContents, preview.id, { ...actionState, messages: [{ ...actionState.messages[0], actions: [] }] });
+  await until(async () => await preview.contents.executeJavaScript('window.latestThemeState.messages[0].actions.length') === 0);
+  assert.equal(await preview.contents.executeJavaScript('window.chatter.copyMessage(10)', true), false, 'unavailable actions are not sent');
+  host.webContents.send = hostSend;
+  console.log('PASS: real isolated action bridge, user-gesture gating, confirmation review and capability negotiation');
   manager.stop(host.webContents, preview.id);
   const starter = JSON.parse(fs.readFileSync(path.join(__dirname, '../../examples/appearances/workspace-starter.json'), 'utf8'));
   preview = await create('tsx', '', { bridge: 'appearance-chat-list-v1', project: { entry: starter.shell.entry, files: starter.shell.files } });
-  const starterState = { ...shellState, query: '', messages: [], labels: { allChats: 'All chats', newChat: 'New chat', search: 'Search', loadMore: 'More' } };
+  const starterState = { ...shellState, activeChatId: 1, query: '', messages: [], confirmations: [],
+    labels: { allChats: 'All chats', newChat: 'New chat', search: 'Search', loadMore: 'More', edit: 'Edit', save: 'Save', cancel: 'Cancel', workLog: 'Work log', reasoning: 'Reasoning', loading: 'Loading' } };
   manager.updateAppearanceState(host.webContents, preview.id, starterState);
   await until(async () => await preview.contents.executeJavaScript('document.querySelector(".chat")?.textContent') === 'Live chat');
   manager.updateAppearanceState(host.webContents, preview.id, { ...starterState, view: 'conversation', canSend: true, messages: [{ id: 1, role: 'assistant', content: '# Live answer' }, { id: 2, role: 'assistant', content: '' }] });
   await until(async () => await preview.contents.executeJavaScript('document.querySelector("article h1")?.textContent') === 'Live answer');
   assert.equal(await preview.contents.executeJavaScript('document.querySelectorAll("article").length'), 1, 'the starter excludes empty answers');
+  const streamState = { ...starterState, view: 'conversation', sending: true, messages: [{ id: -1, role: 'assistant', content: 'Checking the file', streaming: true, workLog: [] }] };
+  manager.updateAppearanceState(host.webContents, preview.id, streamState);
+  await until(async () => await preview.contents.executeJavaScript('document.querySelector("article p")?.textContent') === 'Checking the file');
+  const toolCall = { id: 'stream-tool', name: 'read_file', label: 'Read file', kind: 'file', target: 'C:/demo.txt', status: 'running', arguments: { path: 'C:/demo.txt' }, children: [] };
+  const committed = { ...streamState, messages: [{ ...streamState.messages[0], content: '', workLog: [{ type: 'message', text: 'Checking the file' }, { type: 'tool', call: toolCall }] }] };
+  manager.updateAppearanceState(host.webContents, preview.id, committed);
+  await until(async () => await preview.contents.executeJavaScript('document.querySelector("[data-tool-name=read_file]")?.dataset.status') === 'running');
+  assert.equal(await preview.contents.executeJavaScript('document.querySelector(".work-log p").textContent'), 'Checking the file', 'a committed preface remains rendered when the answer becomes empty');
+  assert.equal(await preview.contents.executeJavaScript('document.querySelectorAll("article").length'), 1, 'work-log-only streaming messages remain visible');
+  manager.updateAppearanceState(host.webContents, preview.id, { ...committed, sending: false, messages: [{ ...committed.messages[0], streaming: false, content: '# Result', workLog: [committed.messages[0].workLog[0], { type: 'tool', call: { ...toolCall, status: 'returned', resultPreview: '<script>unsafe</script>' } }] }] });
+  await until(async () => await preview.contents.executeJavaScript('document.querySelector("article h1")?.textContent') === 'Result');
+  assert.equal(await preview.contents.executeJavaScript('document.querySelector("[data-tool-name=read_file]").dataset.status'), 'returned');
+  assert.equal(await preview.contents.executeJavaScript('document.querySelector("[data-tool-name=read_file] script")'), null, 'tool previews are text, never executable HTML');
+  assert.equal(await preview.contents.executeJavaScript('document.querySelector(".work-log").open'), false, 'completed work log can be collapsed without losing its content');
+  console.log('PASS: isolated starter retains intermediate text through tool streaming, renders live tool status and final answer safely');
+  host.webContents.send = (channel, payload) => {
+    if (channel === 'interactive-preview:appearance-action') forwarded.push(payload.action);
+    return hostSend(channel, payload);
+  };
+  const richCard = { id: 'full-card', title: 'Full confirmation', summary: 'Review details', ready: true, revision: 1, busy: false, customizable: true,
+    content: [{ type: 'diff', before: 'old content', after: 'new content' }, { type: 'field', fieldId: 'body-0' }],
+    fields: [{ id: 'body-0', label: 'Password', type: 'password', value: '', disabled: false }],
+    actions: [{ id: 'primary-0', label: 'Approve custom', group: 'primary', disabled: false }] };
+  const richState = { ...starterState, view: 'conversation', canSend: true, confirmations: [richCard], messages: [{ id: 10, role: 'assistant',
+    content: 'Displayed answer', editableContent: '# Original source', variantIndex: 0, variantCount: 1, actions: ['edit'] }] };
+  manager.updateAppearanceState(host.webContents, preview.id, richState);
+  await until(async () => await preview.contents.executeJavaScript('document.querySelector(".confirmation h2")?.textContent') === 'Full confirmation');
+  assert.equal(await preview.contents.executeJavaScript('document.querySelector("[data-diff=before]").textContent'), 'old content');
+  const inputText = async (selector, text) => preview.contents.executeJavaScript(`(()=>{const input=document.querySelector(${JSON.stringify(selector)});Object.getOwnPropertyDescriptor(input.tagName==='TEXTAREA'?HTMLTextAreaElement.prototype:HTMLInputElement.prototype,'value').set.call(input,${JSON.stringify(text)});input.dispatchEvent(new Event('input',{bubbles:true}));})()`, true);
+  await inputText('.confirmation input', 'typed password');
+  await until(() => forwarded.some(action => action.type === 'confirmationField' && action.id === 'full-card' && action.value === 'typed password'));
+  assert.equal(await preview.contents.executeJavaScript('document.querySelector(".confirmation button").disabled'), true, 'approval waits for field acknowledgment');
+  const acknowledged = { ...richState, confirmations: [{ ...richCard, revision: 2, fields: [{ ...richCard.fields[0], value: 'typed password' }] }] };
+  manager.updateAppearanceState(host.webContents, preview.id, acknowledged);
+  await until(async () => !await preview.contents.executeJavaScript('document.querySelector(".confirmation button").disabled'));
+  await preview.contents.executeJavaScript('document.querySelector(".confirmation button").click()', true);
+  await until(() => forwarded.some(action => action.type === 'confirmationAction' && action.id === 'full-card' && action.revision === 2));
+  await preview.contents.executeJavaScript('document.querySelector(".message-actions button").click()', true);
+  await until(async () => await preview.contents.executeJavaScript('document.querySelector(".message-actions textarea")?.value') === '# Original source');
+  await inputText('.message-actions textarea', '# Updated original source');
+  await preview.contents.executeJavaScript('document.querySelector(".message-actions form").requestSubmit()', true);
+  await until(() => forwarded.some(action => action.type === 'messageAction' && action.action === 'edit' && action.text === '# Updated original source' && action.variantIndex === 0 && !action.nativeEditor));
+  host.webContents.send = hostSend;
+  console.log('PASS: isolated starter renders full confirmation fields/diffs/actions and saves custom message edits without native navigation');
   await preview.contents.executeJavaScript('document.querySelector("textarea").focus()');
   manager.updateAppearanceState(host.webContents, preview.id, { ...starterState, view: 'conversation', canSend: false, sending: true });
   await until(async () => await preview.contents.executeJavaScript('document.querySelector("form button")?.textContent') === 'Stop');
@@ -139,13 +208,15 @@ app.whenReady().then(async () => {
   manager.stop(host.webContents, preview.id);
   preview = await create('html', `<h1>HTML works</h1><button onclick="this.textContent='Clicked'">Click</button><script>
     window.probe={};
+    document.addEventListener('securitypolicyviolation',event=>{if(event.violatedDirective==='form-action')probe.formBlocked=true;});
+    const forbiddenForm=document.createElement('form');forbiddenForm.action='${endpoint}';forbiddenForm.method='POST';document.body.append(forbiddenForm);forbiddenForm.requestSubmit();
     try{new RTCPeerConnection({iceServers:[{urls:'stun:127.0.0.1:3478'}]})}catch{probe.rtcBlocked=true}
     try{window.open('${endpoint}')}catch{probe.popupsBlocked=true}
     Promise.allSettled([fetch('${endpoint}'),fetch('file:///C:/Windows/win.ini')]).then(r=>probe.fetchBlocked=r.every(v=>v.status==='rejected'));
   </script><iframe src="${endpoint}"></iframe><img src="${endpoint}">`);
   await preview.contents.executeJavaScript('document.querySelector("button").click()');
   assert.equal(await preview.contents.executeJavaScript('document.querySelector("button").textContent'), 'Clicked');
-  assert.deepEqual(await preview.contents.executeJavaScript('probe'), { rtcBlocked: true, popupsBlocked: true, fetchBlocked: true });
+  assert.deepEqual(await preview.contents.executeJavaScript('probe'), { rtcBlocked: true, popupsBlocked: true, fetchBlocked: true, formBlocked: true });
   void preview.contents.executeJavaScript(`location.href='${endpoint}'`).catch(() => {});
   await sleep(400);
   assert.ok(preview.contents.getURL().startsWith(`${INTERACTIVE_SCHEME}://`));

@@ -1,10 +1,12 @@
-import React, { createContext, useContext, useEffect, useId, useRef, useState, type ReactElement, type ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useLayoutEffect, useId, useRef, useState, type ReactElement, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { AnimatedDetails } from './AnimatedDisclosure';
 import { EmailBodyPreview } from './EmailBodyPreview';
 import { FileEditDiff } from './FileEditDiff/FileEditDiff';
 import s from './ConfirmationCard.module.scss';
+import { projectConfirmation } from '../lib/confirmation-projection';
+import type { ConfirmationBridgeApi } from '../lib/useConfirmationBridge';
 
 export type ConfirmationComment = {
   id: string; title: string; text: string;
@@ -28,6 +30,7 @@ type CardContextValue = {
 };
 export const ConfirmationCardContext = createContext<CardContextValue | null>(null);
 const ComposerContext = createContext<ConfirmationComposer | null>(null);
+const BridgeContext = createContext<{ api: ConfirmationBridgeApi; custom: boolean } | null>(null);
 
 export function ConfirmationCommentInput({ composer, modal = false }: { composer: ConfirmationComposer; modal?: boolean }) {
   const { t } = useTranslation();
@@ -49,9 +52,10 @@ type CardProps = {
   queueControl?: ReactNode; onBusyChange?: (busy: boolean) => void;
 };
 
-export function ConfirmationCard({ id, title, icon, children, actions, extraActions, reviewAction, expandable, expandLabel, fullScreen, queueControl, onBusyChange }: CardProps) {
+export function ConfirmationCard({ id, title, summary = '', icon, children, actions, extraActions, reviewAction, expandable, expandLabel, fullScreen, queueControl, onBusyChange }: CardProps) {
   const { t } = useTranslation();
   const composer = useContext(ComposerContext);
+  const bridge = useContext(BridgeContext);
   const [expanded, setExpanded] = useState(false);
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
@@ -100,6 +104,15 @@ export function ConfirmationCard({ id, title, icon, children, actions, extraActi
     requestComment: reject => composer?.request({ id, title, reject: text => run(() => reject(text)) }),
     registerReject: reject => composer?.registerReject(id, text => run(() => reject(text))),
   };
+  const projection = bridge ? projectConfirmation(children, { primary: actions, permissions: extraActions, review: reviewAction },
+    { reject: t('review.reject'), rejectWithComment: t('review.rejectWithComment') }, busy) : undefined;
+  useLayoutEffect(() => {
+    if (!bridge || !projection) return;
+    bridge.api.register({ id, title, summary, busy, customizable: projection.customizable,
+      content: projection.content, fields: projection.fields, actions: projection.actions },
+    { commands: projection.commands, changes: projection.changes, run, busy: () => busyRef.current });
+  });
+  useLayoutEffect(() => () => bridge?.api.remove(id), [bridge?.api, id]);
   const card = <ConfirmationCardContext.Provider value={context}>
     <section className={`${s.card} ${expanded ? s.expanded : ''}`} data-confirmation-id={id} data-confirmation-expanded={expanded || undefined}>
       <div className={s.header}>
@@ -122,6 +135,7 @@ export function ConfirmationCard({ id, title, icon, children, actions, extraActi
       </div>
     </section>
   </ConfirmationCardContext.Provider>;
+  if (bridge?.custom) return null;
   return expanded ? createPortal(<div className={`${s.overlay} ${fullScreen ? s.fullScreen : ''}`} onClick={() => setExpanded(false)}>
     <div ref={panelRef} className={s.dialog} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onClick={e => e.stopPropagation()}>{card}</div>
   </div>, document.body) : card;
@@ -139,21 +153,35 @@ export function ConfirmationEmailBody({ body }: { body: string }) {
   </div>;
 }
 
-export function ConfirmationQueue({ items, order, composer }: {
-  items: ReactElement<CardProps>[]; order: Map<string, number>; composer: ConfirmationComposer;
+export function confirmationCardId(item: ReactElement<any>): string {
+  return item.props.id ?? item.props.proposal?.proposal_id ?? String(item.key);
+}
+
+export function ConfirmationQueue({ items, order, composer, request, bridge, custom = false }: {
+  items: ReactElement<CardProps>[]; order: Map<string, number>; composer: ConfirmationComposer; request?: { id: string } | null;
+  bridge?: ConfirmationBridgeApi; custom?: boolean;
 }) {
   const { t } = useTranslation();
   const [selected, setSelected] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const ordered = [...items].sort((a, b) => (order.get(a.props.id) ?? Infinity) - (order.get(b.props.id) ?? Infinity));
-  const active = ordered.find(item => item.props.id === selected) || ordered[0];
-  useEffect(() => { setBusy(false); }, [active?.props.id]);
+  const consumedRequest = useRef<typeof request>();
+  const ordered = [...items].sort((a, b) => (order.get(confirmationCardId(a)) ?? Infinity) - (order.get(confirmationCardId(b)) ?? Infinity));
+  const active = ordered.find(item => confirmationCardId(item) === selected) || ordered[0];
+  useEffect(() => {
+    if (!request || consumedRequest.current === request || busy || composer.busy) return;
+    consumedRequest.current = request;
+    composer.cancel();
+    setSelected(request.id);
+  }, [request, busy, composer.busy]);
+  useEffect(() => { setBusy(false); }, [active && confirmationCardId(active)]);
   if (!active) return null;
-  const control = <select className={s.queueSelect} value={active.props.id} disabled={busy || composer.busy}
+  const control = <select className={s.queueSelect} value={confirmationCardId(active)} disabled={busy || composer.busy}
     aria-label={t('chat.approvals.queue', { count: items.length })} onChange={e => { composer.cancel(); setSelected(e.target.value); }}>
-    {ordered.map((item, index) => <option key={item.props.id} value={item.props.id}>{index + 1}/{items.length} · {item.props.title}{item.props.summary ? ` — ${item.props.summary}` : ''}</option>)}
+    {ordered.map((item, index) => <option key={confirmationCardId(item)} value={confirmationCardId(item)}>{index + 1}/{items.length} · {item.props.title ?? (item.props as any).proposal?.profile?.name ?? confirmationCardId(item)}{item.props.summary ? ` — ${item.props.summary}` : ''}</option>)}
   </select>;
-  return <ComposerContext.Provider value={composer}>
-    {React.cloneElement(active, { key: active.props.id, queueControl: control, onBusyChange: setBusy })}
-  </ComposerContext.Provider>;
+  const renderCard = (item: ReactElement<CardProps>) => React.cloneElement(item, { key: confirmationCardId(item),
+    queueControl: control, onBusyChange: confirmationCardId(item) === confirmationCardId(active) ? setBusy : undefined });
+  return <ComposerContext.Provider value={composer}><BridgeContext.Provider value={bridge ? { api: bridge, custom } : null}>
+    {bridge ? ordered.map(item => <div key={confirmationCardId(item)} hidden={confirmationCardId(item) !== confirmationCardId(active)}>{renderCard(item)}</div>) : renderCard(active)}
+  </BridgeContext.Provider></ComposerContext.Provider>;
 }

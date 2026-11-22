@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { SubagentTrace, ToolCall, WorkLogStep } from '../lib/api';
 import { describeToolCall } from '../lib/tool-activity';
+import { workLogSteps } from '../lib/work-log-content';
 import { MarkdownRenderer } from './MarkdownRenderer';
 import { Icon } from './Icon';
 import { ToolActivityCall } from './ToolActivity';
@@ -16,9 +17,7 @@ export function WorkLog({ messages, entries, calls, subagents, showTokens, curre
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   useEffect(() => { if (!generating) setOpen(false); }, [generating]);
-  // Old flat records have no interleaving metadata; retain every available item.
-  const steps: WorkLogStep[] = entries?.length ? entries
-    : [...messages.map(text => ({ type: 'message' as const, text })), ...(calls ?? []).map(call => ({ type: 'tool' as const, call }))];
+  const steps = workLogSteps(messages, entries, calls);
   const unmatched = new Set(subagents ?? []);
   const rows = steps.map(step => {
     if (step.type !== 'tool' || !['invoke_subagent', 'spawn_subagent'].includes(step.call.name)) return { step };

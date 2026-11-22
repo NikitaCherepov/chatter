@@ -6,7 +6,8 @@ import { CHAT_LAYOUT_SIDEBAR_WIDTH, DEFAULT_CHAT_LAYOUT, parseChatLayoutProfile,
 import { ChatComposerDock } from '../components/ChatComposerDock';
 import { AppearanceConfirmation, type AppearanceProposal } from '../components/AppearanceConfirmation';
 import { AppearanceShell, useCurrentAppearance, useAppearanceShellTheme } from '../components/AppearanceShell';
-import type { AppearanceShellAction, AppearanceShellState } from '../../main/appearance-shell-types';
+import { canRunAppearanceAction, type AppearanceShellAction, type AppearanceShellState } from '../../main/appearance-shell-types';
+import { appearanceMessageActions, canEditChatMessage } from '../lib/appearance-message-actions';
 import { parseAppearanceProfile, type AppearanceProfile } from '../lib/appearance-schema';
 import { APPEARANCE_APPLIED_EVENT } from '../lib/appearance-runtime';
 import { useMessageArrival } from '../lib/use-message-arrival';
@@ -55,8 +56,9 @@ import { AttachModal, prepareAttachmentFiles } from '../components/AttachModal';
 import { RoomInvitesModal } from '../components/RoomInvitesModal';
 import {McpConfirmationCard,type McpConfirmation} from '../components/McpConfirmationCard';
 import { RejectWithComment } from '../components/RejectWithComment';
-import { ConfirmationCard, ConfirmationQueue, ConfirmationCommentInput, ConfirmationEmailBody, ConfirmationFileDiff } from '../components/ConfirmationCard';
+import { ConfirmationCard, ConfirmationQueue, confirmationCardId, ConfirmationCommentInput, ConfirmationEmailBody, ConfirmationFileDiff } from '../components/ConfirmationCard';
 import { useConfirmationComposer } from '../lib/useConfirmationComposer';
+import { useConfirmationBridge } from '../lib/useConfirmationBridge';
 import { FileEditDiff } from '../components/FileEditDiff/FileEditDiff';
 import type { ImageItem, DocumentItem } from '../components/AttachModal';
 import { Select } from '../components/Select';
@@ -72,6 +74,7 @@ import { WorkLog } from '../components/WorkLog';
 import { ReasoningDisclosure } from '../components/ReasoningDisclosure';
 import { startsMessageDay, messageClock, messageDate, fullMessageDate } from '../lib/message-dates';
 import { splitWorkContent, messageSpeechText } from '../lib/work-log-content';
+import { appearanceMessageContent } from '../lib/appearance-message-content';
 import type { SetDisplayStatePayload } from '../components/PixelAvatar';
 import { ToolsPanel, ToolsHeaderButton, ToolsToolbar } from '../components/ToolsPanel';
 import { ImageViewerModal } from '../components/ImageViewerModal';
@@ -82,7 +85,7 @@ import { openTool, handleDesktopAction, dispatchMapData, emitSuggestMacro, setTo
 import { createSpeechRecorder } from '../lib/speechRecorder';
 import { startWakeWordAudioStream, stopWakeWordAudioStream } from '../lib/wakeWordAudio';
 import { getWakeWordConfig, getWakeWordEnabled } from '../lib/wakeWordToggle';
-import { ttsSpeak, ttsStop, ttsSubscribe, playSfx } from '../lib/tts';
+import { ttsSpeak, ttsPause, ttsResume, ttsStop, ttsSubscribe, ttsGetPlaybackState, type TtsPlaybackState, playSfx } from '../lib/tts';
 import { getSpeechRecognitionLanguage } from '../lib/speechRecognition';
 import { transcribeRecordedAudio } from '../lib/transcription';
 import { getRenderPerfBudget, getRenderPerfStep } from '../lib/renderPerf';
@@ -1177,8 +1180,12 @@ export function ChatPage() {
   const appearanceTheme = useAppearanceShellTheme();
   const appearanceShell = appearanceProfile?.shell;
   const [shellOpen, setShellOpen] = useState(Boolean(appearanceShell));
+  const [shellHandlesConfirmations, setShellHandlesConfirmations] = useState(false);
+  const [shellConfirmationRequest, setShellConfirmationRequest] = useState<{ id: string } | null>(null);
+  const confirmationBridge = useConfirmationBridge();
   const [shellView, setShellView] = useState<'home' | 'conversation'>('home');
   const shellSendPending = useRef(false);
+  const shellMessageActionsPending = useRef(new Set<string>());
   const [appearanceEditorDraft, setAppearanceEditorDraft] = useState<AppearanceProfile>();
   useEffect(() => {
     const done = () => setAppearanceEditorDraft(undefined);
@@ -1188,6 +1195,7 @@ export function ChatPage() {
   useEffect(() => setAppearanceEditorDraft(undefined), [user?.id, api.API_BASE]);
   useEffect(() => {
     setShellOpen(Boolean(appearanceShell));
+    setShellHandlesConfirmations(false);
     setShellView('home');
   }, [appearanceShell?.source, appearanceShell?.entry, appearanceShell?.files, appearanceShell?.language, appearanceShell?.scope, user?.id, api.API_BASE]);
   const navigate = useNavigate();
@@ -1744,6 +1752,7 @@ export function ChatPage() {
     setImageDeleteTarget({ messageId, url });
   }, []);
   const [ttsPlayingId, setTtsPlayingId] = useState<number | null>(null);
+  const [ttsPlayback, setTtsPlayback] = useState<TtsPlaybackState>(ttsGetPlaybackState);
   const [pendingMacros, setPendingMacros] = useState<Array<{ title: string; description?: string; commands: string[] }>>([]);
   const [pendingChatLinks, setPendingChatLinks] = useState<Array<{ chat_id: number; title: string }>>([]);
   const [devopsConfirmations, setDevopsConfirmations] = useState<Array<{ confirmation_id: string; server_name: string; server_id: number; host: string; command: string; assessment?: CommandAssessmentData | null; needs_sudo_password?: boolean; sudo_password?: string; save_sudo_password?: boolean; needs_new_password?: boolean; new_password?: string; new_username?: string; _reviewing?: boolean; _verdict?: string }>>([]);
@@ -1787,7 +1796,7 @@ export function ChatPage() {
 
   // Subscribe to TTS state
   useEffect(() => {
-    return ttsSubscribe((id) => setTtsPlayingId(id));
+    return ttsSubscribe((id, state) => { setTtsPlayingId(id); setTtsPlayback(state); });
   }, []);
 
   const loadModelConfiguration = useCallback(async () => {
@@ -4072,26 +4081,29 @@ export function ChatPage() {
     setEditingText(msg.content);
   };
 
-  const handleSaveEdit = useCallback(async (messageId: number) => {
-    if (!activeChatId || !editingMsgId) return;
-    const trimmed = editingText.trim();
+  const handleSaveEdit = useCallback(async (messageId: number, text?: string) => {
+    const chatId = activeChatIdRef.current;
+    if (!chatId || (text === undefined && editingMsgId !== messageId)) return;
+    const trimmed = (text ?? editingText).trim();
     if (!trimmed) return;
     const msg = messagesRef.current.find(m => m.id === messageId);
-    if (!msg) return;
+    if (!msg || !canEditChatMessage(msg, user?.id) || msg.questionnaire_response) return;
+    const variantIndex = msg.variant_index ?? 0;
     const oldContent = msg.content;
     setMessages(prev => prev.map(m => m.id === messageId ? { ...m, content: trimmed } : m));
     setEditingMsgId(null);
     setEditingText('');
     try {
-      const result = await api.editMessage(activeChatId, messageId, trimmed);
-      if (typeof result.token_count === 'number') {
-        setMessages(prev => prev.map(m => m.id === messageId ? { ...m, token_count: result.token_count } : m));
+      const result = await api.editMessage(chatId, messageId, trimmed);
+      if (activeChatIdRef.current === chatId && typeof result.token_count === 'number') {
+        setMessages(prev => prev.map(m => m.id === messageId && (m.variant_index ?? 0) === variantIndex && m.content === trimmed ? { ...m, token_count: result.token_count } : m));
       }
     } catch (err) {
       console.error('Failed to edit message:', err);
-      setMessages(prev => prev.map(m => m.id === messageId ? { ...m, content: oldContent } : m));
+      if (activeChatIdRef.current === chatId)
+        setMessages(prev => prev.map(m => m.id === messageId && (m.variant_index ?? 0) === variantIndex && m.content === trimmed ? { ...m, content: oldContent } : m));
     }
-  }, [activeChatId, editingMsgId, editingText]);
+  }, [editingMsgId, editingText, user?.id]);
 
   const handleCancelEdit = useCallback(() => {
     setEditingMsgId(null);
@@ -4302,7 +4314,10 @@ export function ChatPage() {
   const handleCopyMessage = useCallback((messageId: number) => {
     const msg = messagesRef.current.find(m => m.id === messageId);
     if (!msg) return;
-    navigator.clipboard.writeText(msg.content).then(
+    const copied = window.electronAPI?.writeClipboardText
+      ? window.electronAPI.writeClipboardText(msg.content)
+      : navigator.clipboard.writeText(msg.content);
+    copied.then(
       () => toast.success(t('chat.toasts.copied')),
       () => toast.error(t('chat.toasts.copyFailed')),
     );
@@ -5412,7 +5427,7 @@ export function ChatPage() {
   const otherRoomHumans = roomMembers.filter((member) => member.user_id !== user?.id);
   const isRoomAdmin = roomMembers.some((member) => member.user_id === user?.id && member.role === 'admin');
   const menuMessage = msgMenuId === null ? undefined : messages.find((message) => message.id === msgMenuId);
-  const canEditMenuMessage = !menuMessage || menuMessage.user_id == null || menuMessage.user_id === user?.id;
+  const canEditMenuMessage = canEditChatMessage(menuMessage, user?.id);
   // Bots this user may trigger: their own + shared ones (others' private bots
   // are hidden from manual controls — the server rejects them anyway).
   const controllableRoomAgents = roomCharacters.filter((participant) => participant.owner_user_id === user?.id || participant.access === 'shared');
@@ -6290,7 +6305,7 @@ export function ChatPage() {
                   </div></ConfirmationCard>
               ))
 ];
-  const pendingConfirmationIds = confirmationCards.map(card => card.props.id).join('\n');
+  const pendingConfirmationIds = confirmationCards.map(confirmationCardId).join('\n');
   useEffect(() => {
     if (confirmationComposer.comment && !pendingConfirmationIds.split('\n').includes(confirmationComposer.comment.id)) confirmationComposer.cancel();
   }, [pendingConfirmationIds, confirmationComposer.comment?.id, confirmationComposer.busy]);
@@ -6868,6 +6883,9 @@ export function ChatPage() {
     ? <ToolsHeaderButton className={s.chatFindTrigger} onOpen={() => setRoomOpen(false)} />
     : null;
 
+  const nativeConfirmationRequired = confirmationBridge.cards.some(card => !card.customizable
+    && confirmationCards.some(item => confirmationCardId(item) === card.id));
+  const customConfirmationRendering = Boolean(appearanceShell && shellOpen && shellHandlesConfirmations && !nativeConfirmationRequired);
   const conversation = (
       <main key="conversation" className={s.main} ref={chatMainRef}>
         {appearanceShell && (
@@ -7880,7 +7898,8 @@ export function ChatPage() {
 
             <div className={`${s.composerBody} ${confirmationCards.length ? s.composerWithConfirmations : ''}`}>
             <div className={s.composerReview}>
-            <ConfirmationQueue items={confirmationCards} order={confirmationArrivalRef.current} composer={confirmationComposer} />
+            <ConfirmationQueue items={confirmationCards} order={confirmationArrivalRef.current} composer={confirmationComposer} request={shellConfirmationRequest}
+              bridge={appearanceShell && shellHandlesConfirmations ? confirmationBridge.api : undefined} custom={customConfirmationRendering} />
             <ConfirmationCommentInput composer={confirmationComposer} />
             </div>
             <div className={s.inputArea}>
@@ -8464,6 +8483,11 @@ export function ChatPage() {
       }} onChatSelect={selectChat} />
   );
 
+  const shellConfirmationsJSON = JSON.stringify(confirmationCards.map(card => confirmationBridge.cards.find(item => item.id === confirmationCardId(card)) ?? ({
+    id: confirmationCardId(card), title: card.props.title ?? card.props.proposal?.profile?.name ?? t('common.confirm'),
+    summary: card.props.summary ?? '', ready: false, revision: 0, busy: false, customizable: true, content: [], fields: [], actions: [],
+  })));
+  const shellConfirmations = useMemo<AppearanceShellState['confirmations']>(() => JSON.parse(shellConfirmationsJSON), [shellConfirmationsJSON]);
   const shellState = useMemo<AppearanceShellState>(() => {
     const palette = appearanceProfile?.[appearanceTheme];
     const visibleChats: api.ChatInfo[] = searchQuery.trim().length >= 3
@@ -8491,8 +8515,17 @@ export function ChatPage() {
       }),
       view: shellView, activeChatId, query: searchQuery,
       messages: appearanceShell?.scope === 'workspace' && messagesChatIdRef.current === activeChatId ? messages.map(message => ({
-        id: message.id, role: message.role, content: messageSpeechText(message), createdAt: message.created_at,
+        id: message.id, role: message.role, createdAt: message.created_at,
+        ...appearanceMessageContent(message, sending && message.id === streamingMsgId,
+          name => t(`toolActivity.names.${name}`, { defaultValue: name })),
+        variantIndex: message.variant_index ?? 0, variantCount: message.variant_count ?? 1,
+        ...(canEditChatMessage(message, user?.id) && !message.questionnaire_response ? { editableContent: message.content } : {}),
+        actions: appearanceMessageActions(message, { sending, forking, switchingVariant: switchingVariantId !== null,
+          canEdit: canEditChatMessage(message, user?.id), canRegenerate: canRegenerateMessage(message),
+          canFork: otherRoomHumans.length === 0, canTelegram: Boolean(user?.telegram_linked) }),
       })) : [],
+      speech: messagesChatIdRef.current === activeChatId && messages.some(message => message.id === ttsPlayback.messageId) ? ttsPlayback : { messageId: null, status: 'idle' },
+      confirmations: shellConfirmations,
       messagesLoading: loadingMessages || messagesChatIdRef.current !== activeChatId,
       hasOlderMessages: hasMoreMessages, olderMessagesLoading: loadingOlderMessages,
       sending,
@@ -8510,14 +8543,71 @@ export function ChatPage() {
         settings: t('settings.title'), search: t('chat.sidebar.searchPlaceholder'),
         loadMore: t('appearance.shellLoadMore'), loading: t('common.loading'),
         empty: t('chat.sidebar.nothingFound'),
+        workLog: t('workLog.title'), reasoning: t('chat.message.reasoning'),
+        copy: t('common.copy'), downloadDocx: t('chat.sidebar.downloadDocx'), sendTelegram: t('chat.message.sendTelegram'),
+        save: t('common.save'), cancel: t('common.cancel'),
+        fork: t('chat.message.createBranch'), edit: t('common.edit'), delete: t('common.delete'),
+        regenerate: t('chat.message.regenerate'), regenerateHint: t('chat.message.regenerateWithHint'),
+        speak: t('chat.message.speak'), pauseSpeech: t('appearance.pauseSpeech'), resumeSpeech: t('appearance.resumeSpeech'),
+        stopSpeech: t('chat.message.stopSpeaking'), reviewConfirmation: t('appearance.reviewConfirmation'),
+        previousVariant: t('chat.message.previousVariant'), nextVariant: t('chat.message.nextVariant'),
       },
     };
   }, [chats, chatFolders, sectionPaging, activeChatId, searchQuery, searchResults,
     searchLoading, loadingChats, locale, appearanceProfile, appearanceTheme, shellView, t,
     appearanceShell?.scope === 'workspace' ? messages : null, loadingMessages, hasMoreMessages, loadingOlderMessages, sending,
-    attachedImages.length, attachedDocuments.length, confirmationComposer.comment]);
+    attachedImages.length, attachedDocuments.length, confirmationComposer.comment, ttsPlayback, shellConfirmations,
+    user?.id, user?.telegram_linked, roomCharacters, otherRoomHumans.length, forking, switchingVariantId, streamingMsgId]);
   const handleShellAction = (action: AppearanceShellAction) => {
-    if (action.type === 'home') {
+    if (action.type === 'confirmationPresentation') {
+      setShellHandlesConfirmations(action.custom);
+    } else if (action.type === 'confirmationAction' || action.type === 'confirmationField') {
+      if (!canRunAppearanceAction(shellState, action)) return;
+      if (action.type === 'confirmationField') {
+        try { confirmationBridge.api.change(action.id, action.fieldId, action.value); }
+        catch (error: any) { toast.error(error.message); }
+      } else void confirmationBridge.api.execute(action.id, action.actionId, action.revision, action.comment).catch(error => toast.error(error.message));
+    } else if (action.type === 'reviewConfirmation') {
+      if (!canRunAppearanceAction(shellState, action)) return;
+      setShellConfirmationRequest({ id: action.id });
+      setShellOpen(false);
+    } else if (action.type === 'speechAction') {
+      if (action.chatId !== activeChatIdRef.current || !canRunAppearanceAction(shellState, action)) return;
+      const result = action.action === 'pause' ? ttsPause() : action.action === 'resume' ? ttsResume() : ttsStop();
+      void result.catch(error => toast.error(error.message));
+    } else if (action.type === 'messageAction') {
+      if (appearanceShell?.scope !== 'workspace' || action.chatId !== activeChatIdRef.current
+          || messagesChatIdRef.current !== action.chatId || !canRunAppearanceAction(shellState, action)) return;
+      const message = messagesRef.current.find(message => message.id === action.messageId);
+      if (!message || (message.variant_index ?? 0) !== action.variantIndex) return;
+      const pendingKey = `${action.chatId}:${action.messageId}:${action.action}`;
+      if (shellMessageActionsPending.current.has(pendingKey)) return;
+      shellMessageActionsPending.current.add(pendingKey);
+      const run = async () => {
+        if (action.action === 'copy') handleCopyMessage(message.id);
+        else if (action.action === 'downloadDocx') await handleDownloadDocx(message.id);
+        else if (action.action === 'sendTelegram') await handleSendToTelegram(message.id);
+        else if (action.action === 'fork') await handleForkFromMessage(message.id);
+        else if (action.action === 'delete') await handleDeleteMessage(message.id);
+        else if (action.action === 'edit' && typeof action.text === 'string') await handleSaveEdit(message.id, action.text);
+        else if ((action.action === 'edit' && action.nativeEditor) || action.action === 'regenerateHint') {
+          setShellOpen(false);
+          if (action.action === 'edit') handleStartEdit(message.id);
+          else { setRegenHintMsgId(message.id); setRegenHintText(''); }
+          requestAnimationFrame(() => messagesScrollRef.current?.scrollToMessage(message.id));
+        } else if (action.action === 'regenerate') {
+          if (action.hint !== undefined) await handleRegenerateWithHint(message.id, action.hint);
+          else await handleRegenerate(message.id);
+        } else if (action.action === 'activateVariant') await handleActivateVariant(message.id, action.index!);
+        else if (action.action === 'speak') {
+          if (ttsPlayback.messageId === message.id) { if (ttsPlayback.status === 'paused') await ttsResume(); return; }
+          const text = messageSpeechText(message);
+          ttsSpeak(message.id, text, text !== message.content && !message.audio?.source_text ? null : message.audio,
+            (id, audio) => { if (activeChatIdRef.current === action.chatId) setMessages(previous => previous.map(item => item.id === id ? { ...item, audio } : item)); });
+        }
+      };
+      void run().catch(error => toast.error(error.message)).finally(() => shellMessageActionsPending.current.delete(pendingKey));
+    } else if (action.type === 'home') {
       setShellView('home');
       setShellOpen(true);
     } else if (action.type === 'openChat') {
@@ -8550,8 +8640,8 @@ export function ChatPage() {
     }
   };
   const shellVisible = Boolean(appearanceShell && shellOpen && !showSettings && !libraryOpen
-    && !showAttachModal && !confirmationCards.some(card =>
-      card.type !== AppearanceConfirmation && card.type !== ChatLayoutConfirmation));
+    && !showAttachModal && !nativeConfirmationRequired && (shellHandlesConfirmations || !confirmationCards.some(card =>
+      card.type !== AppearanceConfirmation && card.type !== ChatLayoutConfirmation)));
 
   return (
     <div className={s.layout} data-shell-open={shellVisible} data-layout-side={layout.chatSide} data-layout-column={layout.column}

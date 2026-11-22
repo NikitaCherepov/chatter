@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ComponentProps } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ConfirmationCard } from './ConfirmationCard';
 import { AppearanceSample } from './AppearancePanel';
@@ -15,10 +15,11 @@ export type AppearanceProposal = { proposal_id: string; profile: AppearanceProfi
 export function AppearanceConfirmation({
   proposal,
   onResolved,
+  ...queueProps
 }: {
   proposal: AppearanceProposal;
   onResolved: () => void;
-}) {
+} & Pick<ComponentProps<typeof ConfirmationCard>, 'queueControl' | 'onBusyChange'>) {
   useEffect(() => {
     const done = (event: Event) => {
       const detail = (event as CustomEvent).detail;
@@ -33,6 +34,7 @@ export function AppearanceConfirmation({
     [error, setError] = useState('');
   return (
     <ConfirmationCard
+      {...queueProps}
       id={proposal.proposal_id}
       title={t('appearance.proposal')}
       actions={

@@ -6,6 +6,7 @@ export {};
 declare global {
   interface Window {
     electronAPI: {
+      writeClipboardText: (text: string) => Promise<void>;
       interactiveCreate: (input: InteractiveInput) => Promise<string>;
       localAppearance: (payload: unknown) => Promise<any>;
       onLocalAppearanceChanged: (callback: () => void) => () => void;
