@@ -26,6 +26,7 @@ try {
   const extended = {
     ...p,
     light: { ...p.light, surface: '#112233', chat: '#223344' },
+    shell: { version: 1, language: 'html', source: '<button onclick="chatter.newChat()">New chat</button>' },
     materials: {
       composer: {
         opacity: 0.75,
@@ -55,6 +56,12 @@ try {
   const saved = changeAppearance(101, { action: 'save', profile: extended, apply: false });
   assert.equal(getAppearance(101).profiles[0].light.chat, '#223344');
   assert.equal(saved.profiles[0].light.surface, '#112233');
+  assert.deepEqual(saved.profiles[0].shell, extended.shell);
+  for (const shell of [
+    null, { ...extended.shell, version: 2 }, { ...extended.shell, language: 'javascript' },
+    { ...extended.shell, source: '' }, { ...extended.shell, source: 'x'.repeat(100_001) },
+    { ...extended.shell, unexpected: true },
+  ]) assert.throws(() => schema.parseAppearanceProfile({ ...p, shell }), /appearance_invalid/);
   assert.equal(saved.profiles[0].materials?.composer?.blur, 16);
   assert.equal(saved.profiles[0].materials?.composer?.opacity, 0.75);
   assert.equal(saved.activeId, null);

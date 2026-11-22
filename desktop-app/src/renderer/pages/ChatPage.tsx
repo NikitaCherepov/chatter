@@ -5,7 +5,10 @@ import { useChatLayouts } from '../lib/chat-layout-service';
 import { CHAT_LAYOUT_SIDEBAR_WIDTH, DEFAULT_CHAT_LAYOUT, parseChatLayoutProfile, type ChatLayoutProfile } from '../lib/chat-layout-schema';
 import { ChatComposerDock } from '../components/ChatComposerDock';
 import { AppearanceConfirmation, type AppearanceProposal } from '../components/AppearanceConfirmation';
-import { parseAppearanceProfile } from '../lib/appearance-schema';
+import { AppearanceShell, useCurrentAppearance, useAppearanceShellTheme } from '../components/AppearanceShell';
+import type { AppearanceShellAction, AppearanceShellState } from '../../main/appearance-shell-types';
+import { parseAppearanceProfile, type AppearanceProfile } from '../lib/appearance-schema';
+import { APPEARANCE_APPLIED_EVENT } from '../lib/appearance-runtime';
 import { useMessageArrival } from '../lib/use-message-arrival';
 import { RUNBOOK_COMMAND_TOOLS_ENABLED } from '../lib/runbook-ui';
 import { Icon } from '../components/Icon';
@@ -1170,6 +1173,23 @@ export function ChatPage() {
   const { t, i18n } = useTranslation();
   const locale = i18n.resolvedLanguage || i18n.language;
   const { user, setUser, logout } = useAuth();
+  const appearanceProfile = useCurrentAppearance();
+  const appearanceTheme = useAppearanceShellTheme();
+  const appearanceShell = appearanceProfile?.shell;
+  const [shellOpen, setShellOpen] = useState(Boolean(appearanceShell));
+  const [shellView, setShellView] = useState<'home' | 'conversation'>('home');
+  const shellSendPending = useRef(false);
+  const [appearanceEditorDraft, setAppearanceEditorDraft] = useState<AppearanceProfile>();
+  useEffect(() => {
+    const done = () => setAppearanceEditorDraft(undefined);
+    window.addEventListener(APPEARANCE_APPLIED_EVENT, done);
+    return () => window.removeEventListener(APPEARANCE_APPLIED_EVENT, done);
+  }, []);
+  useEffect(() => setAppearanceEditorDraft(undefined), [user?.id, api.API_BASE]);
+  useEffect(() => {
+    setShellOpen(Boolean(appearanceShell));
+    setShellView('home');
+  }, [appearanceShell?.source, appearanceShell?.language, appearanceShell?.scope, user?.id, api.API_BASE]);
   const navigate = useNavigate();
   const layouts = useChatLayouts();
   const [layoutPreview, setLayoutPreview] = useState<{ profile: ChatLayoutProfile; proposalId?: string }>();
@@ -2403,6 +2423,8 @@ export function ChatPage() {
   }, [displayMessages, hiddenMessagesCount, loadOlderMessages]);
 
   const selectChat = async (chatId: number) => {
+    if (appearanceShell?.scope !== 'workspace') setShellOpen(false);
+    if (appearanceShell) setShellView('conversation');
     const version = ++chatSelectionVersionRef.current;
     setActiveChatId(chatId);
     if (libraryOpen) closeChatLibrary();
@@ -2430,6 +2452,7 @@ export function ChatPage() {
   };
 
   const handleCreateChat = async (draft?: string) => {
+    if (appearanceShell?.scope !== 'workspace') setShellOpen(false);
     try {
       const res = await api.createChat();
       const hasActiveFilters = Object.values(getCurrentChatFilters()).some((value) => value !== undefined && value !== false);
@@ -3512,8 +3535,8 @@ export function ChatPage() {
     });
   }, [user?.id, notifyAssistantResponse, refreshContextTokens, t, clearSendWatchdog, applyAvatarState, promoteChat, messageCache]);
 
-  const handleSend = useCallback(async () => {
-    const text = input.trim();
+  const handleSend = useCallback(async (textOverride?: string) => {
+    const text = (textOverride ?? input).trim();
     const hasImages = attachedImages.length > 0;
     const hasDocuments = attachedDocuments.length > 0;
     if ((!text && !hasImages && !hasDocuments) || sending) return;
@@ -6831,6 +6854,13 @@ export function ChatPage() {
 
   const conversation = (
       <main key="conversation" className={s.main} ref={chatMainRef}>
+        {appearanceShell && (
+          <div className={s.shellNavigation}>
+            <button type="button" className={s.roomTrigger} onClick={() => { setShellView('home'); setShellOpen(true); }}>
+              {t('chatWorkspace.allChats')}
+            </button>
+          </div>
+        )}
         {(tabsEnabled || layout.tools === 'toolbar') && (
           <ChatWorkspaceBar>
             {tabsEnabled && (
@@ -8420,11 +8450,108 @@ export function ChatPage() {
       }} onChatSelect={selectChat} />
   );
 
+  const shellState = useMemo<AppearanceShellState>(() => {
+    const palette = appearanceProfile?.[appearanceTheme];
+    const visibleChats: api.ChatInfo[] = searchQuery.trim().length >= 3
+      ? [...new Map(searchResults.map(result => [result.chat_id, {
+          id: result.chat_id, title: result.chat_title, folder_id: result.folder_id,
+          created_at: result.created_at,
+        }])).values()]
+      : chats;
+    return {
+      chats: visibleChats.map(chat => ({
+        id: chat.id, title: chat.title || t('chat.sidebar.newChat'),
+        folderId: chat.folder_id, updatedAt: chat.updated_at || chat.created_at,
+      })),
+      folders: chatFolders.map(folder => ({ id: folder.id, name: folder.name, count: folder.chat_count })),
+      sections: [
+        ...chatFolders.map(folder => ({ folderId: folder.id, key: `folder:${folder.id}` as ChatSectionKey })),
+        { folderId: null, key: 'unfiled' as ChatSectionKey },
+      ].map(section => {
+        const paging = sectionPaging[section.key];
+        return {
+          folderId: section.folderId, total: paging?.total ?? 0,
+          loaded: paging?.offset ?? 0, hasMore: paging?.hasMore ?? false,
+          loading: paging?.loading ?? false,
+        };
+      }),
+      view: shellView, activeChatId, query: searchQuery,
+      messages: appearanceShell?.scope === 'workspace' && messagesChatIdRef.current === activeChatId ? messages.map(message => ({
+        id: message.id, role: message.role, content: messageSpeechText(message), createdAt: message.created_at,
+      })) : [],
+      messagesLoading: loadingMessages || messagesChatIdRef.current !== activeChatId,
+      hasOlderMessages: hasMoreMessages, olderMessagesLoading: loadingOlderMessages,
+      sending,
+      canSend: !!activeChatId && messagesChatIdRef.current === activeChatId && !sending
+        && !loadingMessages && !confirmationComposer.comment,
+      attachmentCount: attachedImages.length + attachedDocuments.length,
+      loading: searchQuery.trim().length >= 3 ? searchLoading : loadingChats,
+      locale, dark: appearanceTheme === 'dark',
+      palette: {
+        background: palette?.background ?? '#101722', text: palette?.text ?? '#e4ebf3',
+        accent: palette?.accent ?? '#7da6cf', surface: palette?.surface ?? palette?.background ?? '#101722',
+      },
+      labels: {
+        newChat: t('chat.sidebar.newChat'), allChats: t('chatWorkspace.allChats'),
+        settings: t('settings.title'), search: t('chat.sidebar.searchPlaceholder'),
+        loadMore: t('appearance.shellLoadMore'), loading: t('common.loading'),
+        empty: t('chat.sidebar.nothingFound'),
+      },
+    };
+  }, [chats, chatFolders, sectionPaging, activeChatId, searchQuery, searchResults,
+    searchLoading, loadingChats, locale, appearanceProfile, appearanceTheme, shellView, t,
+    appearanceShell?.scope === 'workspace' ? messages : null, loadingMessages, hasMoreMessages, loadingOlderMessages, sending,
+    attachedImages.length, attachedDocuments.length, confirmationComposer.comment]);
+  const handleShellAction = (action: AppearanceShellAction) => {
+    if (action.type === 'home') {
+      setShellView('home');
+      setShellOpen(true);
+    } else if (action.type === 'openChat') {
+      setShellView('conversation');
+      const result = searchResults.find(result => result.chat_id === action.id);
+      if (result) setChats(previous => previous.some(chat => chat.id === result.chat_id) ? previous : [
+        { id: result.chat_id, title: result.chat_title, folder_id: result.folder_id, created_at: result.created_at },
+        ...previous,
+      ]);
+      void selectChat(action.id);
+    } else if (action.type === 'sendMessage') {
+      if (appearanceShell?.scope !== 'workspace' || action.chatId !== activeChatIdRef.current
+          || !shellState.canSend || shellSendPending.current) return;
+      shellSendPending.current = true;
+      void handleSend(action.text).finally(() => { shellSendPending.current = false; });
+    } else if (action.type === 'stopGeneration') {
+      if (action.chatId === activeChatIdRef.current) api.stopRoomStream(action.chatId);
+    } else if (action.type === 'loadOlderMessages') {
+      if (action.chatId === activeChatIdRef.current) void loadOlderMessages();
+    } else if (action.type === 'openConversation') setShellOpen(false);
+    else if (action.type === 'attachFiles') { setShellOpen(false); setShowAttachModal(true); }
+    else if (action.type === 'newChat') void handleCreateChat();
+    else if (action.type === 'loadMore') void loadChatSection(action.folderId);
+    else if (action.type === 'search') handleSearchChange(action.query);
+    else if (action.type === 'openSettings') { setShellOpen(false); setShowSettings(true); }
+    else if (action.type === 'openLibrary') {
+      setShellOpen(false);
+      setSidebarCollapsed(false);
+      if (tabsEnabled) setLibraryOpen(true);
+    }
+  };
+  const shellVisible = Boolean(appearanceShell && shellOpen && !showSettings && !libraryOpen
+    && !showAttachModal && !confirmationCards.some(card =>
+      card.type !== AppearanceConfirmation && card.type !== ChatLayoutConfirmation));
+
   return (
-    <div className={s.layout} data-layout-side={layout.chatSide} data-layout-column={layout.column}
+    <div className={s.layout} data-shell-open={shellVisible} data-layout-side={layout.chatSide} data-layout-column={layout.column}
       data-layout-density={layout.chatList} data-layout-messages={layout.messages}
       data-layout-custom={Boolean(activeLayout || layoutPreview)}
     >
+      {appearanceShell && (
+        <AppearanceShell key={`${api.API_BASE}:${user?.id}`} shell={appearanceShell} state={shellState}
+          visible={shellVisible} onAction={handleShellAction} onClose={() => setShellOpen(false)}
+          onFailure={() => {
+            setShellOpen(false);
+            toast.error(t('appearance.shellFailed'));
+          }} />
+      )}
       {tabsEnabled && <div className={s.chatLibraryBackdrop} data-open={libraryOpen} onPointerDown={closeChatLibrary} />}
       {/* The keys preserve mounted chat, folder and tool state when the sides swap. */}
       {layout.chatSide === 'right'
@@ -8435,6 +8562,13 @@ export function ChatPage() {
           <SettingsModal
             key="settings-modal"
             chatLayouts={layouts}
+            initialAppearanceDraft={appearanceEditorDraft}
+            onAppearancePreview={profile => {
+              setAppearanceEditorDraft(profile);
+              setShellView('home');
+              setShowSettings(false);
+              setShellOpen(true);
+            }}
             initialLayoutDraft={layoutEditorDraft}
             onLayoutPreview={profile => {
               setLayoutEditorDraft(undefined);
@@ -8443,6 +8577,7 @@ export function ChatPage() {
               void queryClient.invalidateQueries({ queryKey: chatPromptKey.slice(0, 3) });
             }}
             onClose={() => {
+              setAppearanceEditorDraft(undefined);
               setLayoutEditorDraft(undefined);
               setShowSettings(false);
               void queryClient.invalidateQueries({ queryKey: chatPromptKey.slice(0, 3) });

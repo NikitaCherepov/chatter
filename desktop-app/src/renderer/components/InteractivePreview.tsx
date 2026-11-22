@@ -2,10 +2,26 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import type { InteractiveLanguage, InteractiveStatus } from '../../main/interactive-types';
+import type { AppearanceShellAction, AppearanceShellState } from '../../main/appearance-shell-types';
 import s from './InteractivePreview.module.scss';
 
-export function InteractivePreview({ source, language, visible }: { source: string; language: InteractiveLanguage; visible: boolean }) {
+type AppearanceBridge = {
+  state: AppearanceShellState;
+  onAction: (action: AppearanceShellAction) => void;
+  onClose: () => void;
+  onFailure: () => void;
+};
+
+export function InteractivePreview({ source, language, visible, appearance }: {
+  source: string;
+  language: InteractiveLanguage;
+  visible: boolean;
+  appearance?: AppearanceBridge;
+}) {
   const { t } = useTranslation();
+  const appearanceRef = useRef(appearance);
+  appearanceRef.current = appearance;
+  const bridge = appearance ? 'appearance-chat-list-v1' as const : undefined;
   const slot = useRef<HTMLDivElement>(null);
   const expandedSlot = useRef<HTMLDivElement>(null);
   const overlay = useRef<HTMLDivElement>(null);
@@ -36,26 +52,60 @@ export function InteractivePreview({ source, language, visible }: { source: stri
     const api = window.electronAPI;
     const applyStatus = (status: InteractiveStatus) => {
       setPhase(status.phase);
-      if (status.escape) setExpanded(false);
+      if (status.escape) {
+        setExpanded(false);
+        const shell = appearanceRef.current;
+        if (shell?.state.view === 'conversation') shell.onAction({ type: 'home' });
+        else {
+          if (shell) window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+          shell?.onClose();
+        }
+      }
+      if (status.reset) {
+        window.dispatchEvent(new KeyboardEvent('keydown', {
+          code: 'Backspace', key: 'Backspace', ctrlKey: true, altKey: true,
+        }));
+        appearanceRef.current?.onClose();
+      }
+      if (status.phase === 'failed') appearanceRef.current?.onFailure();
     };
     const pendingStatuses = new Map<string, InteractiveStatus>();
     const unsubscribe = api.onInteractiveStatus(status => {
       if (status.id === id.current) applyStatus(status);
       else pendingStatuses.set(status.id, status);
     });
-    void api.interactiveCreate({ source, language, dark: document.documentElement.dataset.theme === 'dark', errorLabel })
+    const unsubscribeActions = bridge ? api.onAppearanceShellAction(event => {
+      if (event.id === id.current) appearanceRef.current?.onAction(event.action);
+    }) : () => {};
+    void api.interactiveCreate({ source, language, dark: document.documentElement.dataset.theme === 'dark', errorLabel, bridge })
       .then(created => {
         if (disposed) { void api.interactiveStop(created); return; }
         id.current = created;
+        if (appearanceRef.current)
+          void api.appearanceShellState(created, appearanceRef.current.state).catch(() => {});
         const pending = pendingStatuses.get(created);
         if (pending) applyStatus(pending);
         pendingStatuses.clear();
-      }).catch(() => { if (!disposed) setPhase('failed'); });
+      }).catch(() => {
+        if (!disposed) { setPhase('failed'); appearanceRef.current?.onFailure(); }
+      });
     return () => {
-      disposed = true; unsubscribe();
+      disposed = true; unsubscribe(); unsubscribeActions();
       if (id.current) { void api.interactiveStop(id.current).catch(() => {}); id.current = null; }
     };
-  }, [available, seen, stopped, source, language, errorLabel, run]);
+  }, [available, seen, stopped, source, language, errorLabel, run, bridge]);
+
+  useEffect(() => {
+    if (appearance && id.current)
+      void window.electronAPI.appearanceShellState(id.current, appearance.state).catch(() => {});
+  }, [appearance?.state, phase]);
+
+  useEffect(() => {
+    if (bridge && visible && (phase === 'failed' || phase === 'stopped')) {
+      setPhase('loading');
+      setRun(value => value + 1);
+    }
+  }, [bridge, visible]);
 
   useEffect(() => {
     if (!expanded || !visible) return;
@@ -102,7 +152,9 @@ export function InteractivePreview({ source, language, visible }: { source: stri
         });
         const placement = { id: previewId,
           expanded: expanded && visible,
-          visible: visible && !stopped && phase !== 'failed' && phase !== 'stopped' && !modal && !covered && right > left && bottom > top && element.getClientRects().length > 0,
+          visible: visible && !stopped && phase !== 'failed' && phase !== 'stopped' && !modal && !covered
+            && getComputedStyle(element).visibility !== 'hidden'
+            && right > left && bottom > top && element.getClientRects().length > 0,
           bounds: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
           clip: { x: left, y: top, width: Math.max(0, right - left), height: Math.max(0, bottom - top) } };
         const key = JSON.stringify(placement) + devicePixelRatio;
@@ -122,14 +174,14 @@ export function InteractivePreview({ source, language, visible }: { source: stri
     <button type="button" disabled={stopped} onClick={() => { setStopped(true); setPhase('stopped'); }}>{t('interactivePreview.stop')}</button>
   </>;
   return <>
-  <section className={s.preview} hidden={!visible} aria-hidden={expanded && visible ? true : undefined} data-interactive-preview>
-    <div className={s.toolbar}>
+  <section className={`${s.preview} ${appearance ? s.embedded : ''}`} hidden={!visible} aria-hidden={expanded && visible ? true : undefined} data-interactive-preview>
+    {!appearance && <div className={s.toolbar}>
       <span>{t('interactivePreview.isolated')}</span>
       <div>
         <button ref={expandButton} type="button" onClick={() => setExpanded(true)}>{t('interactivePreview.expand')}</button>
         {controls}
       </div>
-    </div>
+    </div>}
     <div ref={slot} className={s.slot}>
       {status}
     </div>

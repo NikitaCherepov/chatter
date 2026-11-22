@@ -1,6 +1,8 @@
 import * as React from 'react';
 import { createRoot } from 'react-dom/client';
 import * as ts from 'typescript';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 // This bundle runs only in the isolated WebContents, never in the chat renderer.
 const payload = JSON.parse(document.getElementById('preview-source')!.textContent!);
@@ -8,6 +10,7 @@ const root = createRoot(document.getElementById('root')!);
 class PreviewErrorBoundary extends React.Component<React.PropsWithChildren, { failed: boolean }> {
   state = { failed: false };
   static getDerivedStateFromError() { return { failed: true }; }
+  componentDidCatch() { (window as any).chatter?.reportError(); }
   render() { return this.state.failed ? <p role="alert">{payload.errorLabel}</p> : this.props.children; }
 }
 try {
@@ -21,12 +24,15 @@ try {
   const module = { exports };
   const localRequire = (name: string) => {
     if (name === 'react') return React;
-    throw new Error('Only the bundled React module is available');
+    if (name === 'react-markdown') return { default: ReactMarkdown, __esModule: true };
+    if (name === 'remark-gfm') return { default: remarkGfm, __esModule: true };
+    throw new Error('Only bundled react, react-markdown and remark-gfm modules are available');
   };
   const Component = new Function('React', 'require', 'exports', 'module',
     `${compiled.outputText}\nreturn module.exports.default ?? (typeof App === 'function' ? App : null);`)(React, localRequire, exports, module);
   if (typeof Component !== 'function') throw new Error('Export a default React component');
   root.render(<PreviewErrorBoundary><Component /></PreviewErrorBoundary>);
 } catch {
+  (window as any).chatter?.reportError();
   root.render(<p role="alert">{payload.errorLabel}</p>);
 }

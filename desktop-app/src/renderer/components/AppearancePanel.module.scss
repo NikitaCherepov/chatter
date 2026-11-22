@@ -5,6 +5,7 @@
 }
 .heading {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: calc(12px * var(--appearance-density, 1));
@@ -95,6 +96,7 @@
   gap: calc(20px * var(--appearance-density, 1));
   min-width: 0;
 }
+.shellSource { width: 100%; resize: vertical; font-family: var(--appearance-code-font, monospace); }
 .fields {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));

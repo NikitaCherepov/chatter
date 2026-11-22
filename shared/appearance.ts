@@ -43,6 +43,13 @@ export function appearanceMotionValues(motion: AppearanceMotion): AppearanceMoti
   };
 }
 
+export type AppearanceShell = {
+  version: 1;
+  language: 'html' | 'tsx';
+  source: string;
+  scope?: 'navigator' | 'workspace';
+};
+
 export type AppearanceProfile = {
   id: string;
   name: string;
@@ -60,6 +67,7 @@ export type AppearanceProfile = {
   };
   geometry: { radius: number; density: number };
   materials?: { panels?: AppearanceMaterial; composer?: AppearanceMaterial };
+  shell?: AppearanceShell;
   background: {
     type: 'solid' | 'gradient' | 'image';
     color: string;
@@ -171,6 +179,7 @@ export function parseAppearanceProfile(value: unknown): AppearanceProfile {
     'background',
     'motion',
     'materials',
+    'shell',
   ]);
   const id = text(v.id, 64);
   if (!/^[a-zA-Z0-9_-]+$/.test(id)) fail();
@@ -221,9 +230,22 @@ export function parseAppearanceProfile(value: unknown): AppearanceProfile {
       };
     }
   }
+  let shell: AppearanceShell | undefined;
+  if (v.shell !== undefined) {
+    const source = keys(v.shell, ['version', 'language', 'source', 'scope']);
+    if (source.version !== 1 || typeof source.source !== 'string'
+        || !source.source.trim() || source.source.length > 100_000) fail();
+    shell = {
+      version: 1,
+      language: choice(source.language, ['html', 'tsx']),
+      source: source.source,
+      ...(source.scope !== undefined ? { scope: choice(source.scope, ['navigator', 'workspace'] as const) } : {}),
+    };
+  }
   return {
     id,
     name: text(v.name, 80),
+    ...(shell ? { shell } : {}),
     revision: revision(v.revision ?? 0),
     ...(materials !== undefined ? { materials } : {}),
     light: palette(v.light),
@@ -264,6 +286,29 @@ export function parseAppearanceSettings(value: unknown): AppearanceSettings {
   };
 }
 export const APPEARANCE_CAPABILITIES = {
+  shell: {
+    description: 'Optional independently coded full-screen UI inside this appearance. scope navigator opens selected chats in the native conversation; scope workspace keeps the shell visible and supplies actual messages and generation state. The shell owns its HTML/CSS/JS or React TSX. React, react-markdown and remark-gfm imports are bundled. No external resources or direct app/OS access.',
+    template: { version: 1, language: 'html', source: '<main id="chats"></main><script>window.chatter.subscribe(state => { document.getElementById("chats").replaceChildren(...state.chats.map(chat => { const button = document.createElement("button"); button.textContent = chat.title; button.onclick = () => window.chatter.openChat(chat.id); return button; })); });</script>' },
+    maxSourceLength: 100_000,
+    api: {
+      subscribe: 'window.chatter.subscribe(callback, {navigation:true}) opts into state.view routing and immediately supplies the latest state and returns unsubscribe. State has chats[{id,title,folderId,updatedAt}], folders[{id,name,count}], sections[{folderId,total,loaded,hasMore,loading}], activeChatId, view(home/conversation), query, loading, locale, dark, palette{background,text,accent,surface}, labels{newChat,allChats,settings,search,loadMore,loading,empty}. Further calls keep it current.',
+      openChat: 'window.chatter.openChat(id) selects a real loaded chat. Navigator scope closes, workspace scope stays visible and receives its messages.',
+      conversation: 'State also contains messages[{id,role,content,createdAt}], messagesLoading, hasOlderMessages, olderMessagesLoading, sending, attachmentCount and canSend. Messages are the loaded history window; call loadOlderMessages for older pages. State updates during generation. Never render empty assistant answers as bubbles.',
+      sendMessage: 'window.chatter.sendMessage(text) sends through the normal composer to the current chat. Returns false unless called from a real user interaction. Disable the composer when state.canSend is false. Pending native attachments are included.',
+      stopGeneration: 'window.chatter.stopGeneration() stops the current generation.',
+      loadOlderMessages: 'window.chatter.loadOlderMessages() loads the preceding history page.',
+      showHome: 'window.chatter.showHome() returns to this shell overview without leaving the appearance. Use state.view to render home vs conversation, including when the user returns from native chat actions. Opt in with subscribe(callback, {navigation:true}) to preserve local state during navigation. Earlier shells are reloaded to their initial overview on a host home action.',
+      openConversation: 'window.chatter.openConversation() reveals the native conversation and its complete message actions.',
+      attachFiles: 'window.chatter.attachFiles() opens the native conversation and attachment picker.',
+      newChat: 'window.chatter.newChat() creates and opens a real chat.',
+      loadMore: 'window.chatter.loadMore(folderId) loads the next page through existing pagination. null selects chats outside folders.',
+      search: 'window.chatter.search(query) uses the existing server search with a minimum of 3 characters. state.chats then contains search results.',
+      openLibrary: 'window.chatter.openLibrary() opens the native chat library, including folder management and filters.',
+      openSettings: 'window.chatter.openSettings() opens native app settings.',
+    },
+    scopes: ['navigator', 'workspace'],
+    behavior: 'Keep all chats reachable through paging/search/library. Use textContent or escape text before HTML insertion. Respect prefers-reduced-motion. Updates must retain input focus and scroll position. Host recovery controls stay available outside the shell. Escape from a conversation returns to this shell home. Escape from home exits a temporary preview.',
+  },
   version: 1,
   fonts: APPEARANCE_FONTS,
   customFont: 'Installed font family name; other devices use a fallback. Installation is separate.',

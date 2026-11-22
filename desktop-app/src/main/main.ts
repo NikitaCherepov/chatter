@@ -24,6 +24,7 @@ import { BrowserPreviewSession, type BrowserPreviewPayload, type BrowserPreviewS
 import { InteractivePreviews } from './interactive-preview';
 import { INTERACTIVE_SCHEME } from './interactive-document';
 import type { InteractivePlacement } from './interactive-types';
+import type { AppearanceShellState } from './appearance-shell-types';
 import {
   BackgroundActivityRegistry,
   type ActiveBackgroundActivityPreview,
@@ -78,6 +79,10 @@ ipcMain.handle('interactive-preview:create', (event, input: unknown) => {
 ipcMain.handle('interactive-preview:place', (event, placement: InteractivePlacement) => {
   assertTrustedIpcSender(event);
   interactivePreviews.place(event.sender, placement);
+});
+ipcMain.handle('interactive-preview:appearance-state', (event, id: string, state: AppearanceShellState) => {
+  assertTrustedIpcSender(event);
+  interactivePreviews.updateAppearanceState(event.sender, id, state);
 });
 ipcMain.handle('interactive-preview:stop', (event, id: string) => {
   assertTrustedIpcSender(event);

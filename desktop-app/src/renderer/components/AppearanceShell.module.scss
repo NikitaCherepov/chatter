@@ -1,0 +1,49 @@
+@use '../styles/appearance';
+.shell {
+  position: absolute;
+  inset: 0 0 var(--appearance-recovery-space, 0px);
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  &[hidden] {
+    display: none;
+  }
+}
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  gap: 12px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border-light);
+  font-size: calc(12px * var(--appearance-ui-scale, 1));
+  > div {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  button {
+    border: 1px solid var(--border-light);
+    border-radius: var(--appearance-radius, 6px);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    padding: 6px 10px;
+    cursor: pointer;
+    font: inherit;
+    &:hover {
+      background: var(--bg-modal-hover);
+    }
+  }
+}
+@media (max-width: 600px) {
+  .toolbar {
+    align-items: flex-start;
+    > span {
+      display: none;
+    }
+  }
+}

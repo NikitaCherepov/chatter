@@ -114,14 +114,18 @@ export const AppearanceSample = memo(function AppearanceSample({
     </div>
   );
 });
-export function AppearancePanel() {
+export function AppearancePanel({ initialDraft, onShellPreview }: {
+  initialDraft?: AppearanceProfile;
+  onShellPreview?: (profile: AppearanceProfile) => void;
+} = {}) {
   const { t } = useTranslation(),
     query = useAppearance(),
     state = query.data ?? DEFAULT_APPEARANCE;
-  const [draft, setDraft] = useState<AppearanceProfile | null>(null),
+  const [draft, setDraft] = useState<AppearanceProfile | null>(() => initialDraft ? structuredClone(initialDraft) : null),
     [error, setError] = useState(''),
     [uploading, setUploading] = useState(false);
   const editor = useRef<HTMLDivElement>(null);
+  const importFile = useRef<HTMLInputElement>(null);
   const motionSample = useRef<HTMLDivElement>(null);
   const sampleAnimation = useRef<Animation | undefined>(undefined);
   const motion = draft ? appearanceMotionValues(draft.motion) : undefined;
@@ -161,6 +165,21 @@ export function AppearancePanel() {
     requestAnimationFrame(() =>
       editor.current?.scrollIntoView({ block: 'start', behavior: 'smooth' }),
     );
+  };
+  const importProfile = async (file: File) => {
+    await run(async () => {
+      if (file.size > 1_000_000) throw new Error('appearance_invalid');
+      const profile = parseAppearanceProfile(JSON.parse((await file.text()).replace(/^\uFEFF/, '')));
+      open({ ...profile, id: crypto.randomUUID(), revision: 0 });
+    });
+  };
+  const exportProfile = (profile: AppearanceProfile) => {
+    const url = URL.createObjectURL(new Blob([JSON.stringify(profile, null, 2)], { type: 'application/json' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = profile.id + '.json';
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
   const duplicate = (profile: AppearanceProfile) =>
     open({
@@ -278,6 +297,16 @@ export function AppearancePanel() {
     <section className={s.section}>
       <div className={s.heading}>
         <h3>{t('appearance.title')}</h3>
+        <input ref={importFile} type="file" accept=".json,application/json" hidden
+          aria-label={t('appearance.import')}
+          onChange={event => {
+            const file = event.target.files?.[0];
+            if (file) void importProfile(file);
+            event.target.value = '';
+          }} />
+        <button type="button" className={a.cancelBtn} onClick={() => importFile.current?.click()}>
+          {t('appearance.import')}
+        </button>
         <button
           className={a.saveBtn}
           disabled={query.saving || state.profiles.length >= 32}
@@ -344,6 +373,9 @@ export function AppearancePanel() {
               </button>
               <button className={a.cancelBtn} disabled={query.saving} onClick={() => open(profile)}>
                 {t('appearance.edit')}
+              </button>
+              <button type="button" className={a.cancelBtn} onClick={() => exportProfile(profile)}>
+                {t('appearance.export')}
               </button>
               <button
                 className={a.cancelBtn}
@@ -636,6 +668,35 @@ export function AppearancePanel() {
               );
             })}
           </div>
+          <h4>{t('appearance.shellTitle')}</h4>
+          <p className={s.hint}>{t('appearance.shellHelp')}</p>
+          <label className={s.field}>
+            <span>
+              <input type="checkbox" checked={Boolean(draft.shell)}
+                onChange={event => {
+                  const updated = { ...draft };
+                  if (event.target.checked)
+                    updated.shell = { version: 1, language: 'html', source: '<main id="chats"></main>' };
+                  else delete updated.shell;
+                  setDraft(updated);
+                }} />
+              {t('appearance.shellEnable')}
+            </span>
+          </label>
+          {draft.shell && (
+            <>
+              {options(t('appearance.shellScope'), draft.shell.scope ?? 'navigator', ['navigator', 'workspace'],
+                scope => setDraft({ ...draft, shell: { ...draft.shell!, scope: scope as 'navigator' | 'workspace' } }))}
+              {options(t('appearance.shellLanguage'), draft.shell.language, ['html', 'tsx'],
+                language => setDraft({ ...draft, shell: { ...draft.shell!, language: language as 'html' | 'tsx' } }))}
+              <label className={s.field}>
+                {t('appearance.shellSource')}
+                <textarea className={`${a.fieldInput} ${s.shellSource}`} rows={14} spellCheck={false}
+                  maxLength={100_000} value={draft.shell.source}
+                  onChange={event => setDraft({ ...draft, shell: { ...draft.shell!, source: event.target.value } })} />
+              </label>
+            </>
+          )}
           <h4>{t('appearance.background')}</h4>
           <p className={s.hint}>{t('appearance.backgroundHelp')}</p>
           <div className={s.fields}>
@@ -782,7 +843,9 @@ export function AppearancePanel() {
               disabled={uploading || query.saving}
               onClick={() =>
                 void run(async () => {
-                  previewAppearance(parseAppearanceProfile(draft));
+                  const profile = parseAppearanceProfile(draft);
+                  previewAppearance(profile);
+                  if (profile.shell) onShellPreview?.(profile);
                 })
               }
             >

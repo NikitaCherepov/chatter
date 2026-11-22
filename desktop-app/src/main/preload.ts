@@ -2,11 +2,19 @@ import { contextBridge, ipcRenderer } from 'electron';
 import type { LocalMcpInstallPhase } from './local-mcp-spec';
 import type { TextMenuAction, TextMenuItem } from './text-context-menu';
 import type { InteractiveInput, InteractivePlacement, InteractiveStatus } from './interactive-types';
+import type { AppearanceShellEvent, AppearanceShellState } from './appearance-shell-types';
 
 contextBridge.exposeInMainWorld('electronAPI', {
   interactiveCreate: (input: InteractiveInput) => ipcRenderer.invoke('interactive-preview:create', input),
   interactivePlace: (placement: InteractivePlacement) => ipcRenderer.invoke('interactive-preview:place', placement),
   interactiveStop: (id: string) => ipcRenderer.invoke('interactive-preview:stop', id),
+  appearanceShellState: (id: string, state: AppearanceShellState) =>
+    ipcRenderer.invoke('interactive-preview:appearance-state', id, state),
+  onAppearanceShellAction: (callback: (event: AppearanceShellEvent) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, value: AppearanceShellEvent) => callback(value);
+    ipcRenderer.on('interactive-preview:appearance-action', listener);
+    return () => ipcRenderer.removeListener('interactive-preview:appearance-action', listener);
+  },
   onInteractiveStatus: (callback: (status: InteractiveStatus) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, status: InteractiveStatus) => callback(status);
     ipcRenderer.on('interactive-preview:status', listener);

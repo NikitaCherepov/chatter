@@ -36,7 +36,8 @@ export function validateInteractiveInput(value: unknown): InteractiveInput {
   const input = value as Partial<InteractiveInput> | null;
   if (!input || !['interactive', 'jsx', 'tsx', 'html'].includes(input.language ?? '')
     || typeof input.source !== 'string' || input.source.length > MAX_INTERACTIVE_SOURCE
-    || typeof input.dark !== 'boolean' || typeof input.errorLabel !== 'string' || input.errorLabel.length > 200) {
+    || typeof input.dark !== 'boolean' || typeof input.errorLabel !== 'string' || input.errorLabel.length > 200
+    || (input.bridge !== undefined && input.bridge !== 'appearance-chat-list-v1')) {
     throw new Error('Invalid interactive preview');
   }
   return input as InteractiveInput;

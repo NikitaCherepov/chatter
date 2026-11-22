@@ -22,8 +22,25 @@ export function AppearanceController() {
     [error, setError] = useState('');
   const [emergency, setEmergency] = useState(false);
   const resetting = useRef(false);
+  const recovery = useRef<HTMLDivElement>(null);
   const state = query.data ?? user?.ui_settings?.appearance ?? DEFAULT_APPEARANCE;
   const preview = useSyncExternalStore(subscribeAppearancePreview, getAppearancePreview);
+  useLayoutEffect(() => {
+    const element = recovery.current;
+    if (!element) return;
+    const root = document.documentElement;
+    const update = () => root.style.setProperty('--appearance-recovery-space',
+      Math.max(0, window.innerHeight - element.getBoundingClientRect().top + 8) + 'px');
+    const observer = new ResizeObserver(update);
+    observer.observe(element);
+    window.addEventListener('resize', update);
+    update();
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', update);
+      root.style.removeProperty('--appearance-recovery-space');
+    };
+  }, [Boolean(preview), emergency]);
   useLayoutEffect(() => {
     previewAppearance(null);
     setEmergency(false);
@@ -86,7 +103,7 @@ export function AppearanceController() {
   }, [user?.id, state.revision]);
   if (emergency && user)
     return createPortal(
-      <div className={s.recovery} role="region" aria-label={t('appearance.recovery')}>
+      <div ref={recovery} className={s.recovery} role="region" aria-label={t('appearance.recovery')}>
         <span>{t('appearance.recovery')}</span>
         <button disabled={query.saving} onClick={() => void reset()}>
           {t('appearance.apply')}
@@ -100,7 +117,7 @@ export function AppearanceController() {
     );
   if (!preview || !user) return null;
   return createPortal(
-    <div className={s.recovery} role="region" aria-label={t('appearance.preview')}>
+    <div ref={recovery} className={s.recovery} role="region" aria-label={t('appearance.preview')}>
       <span>
         {t('appearance.preview')}: <strong>{preview.name}</strong>
       </span>

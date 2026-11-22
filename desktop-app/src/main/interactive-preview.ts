@@ -4,12 +4,14 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { INTERACTIVE_CSP, INTERACTIVE_SCHEME, interactiveDocument, validateInteractiveInput } from './interactive-document';
 import type { InteractivePlacement, InteractiveStatus } from './interactive-types';
+import { parseAppearanceShellAction, type AppearanceShellState } from './appearance-shell-types';
 
 type Entry = {
   id: string; host: BrowserWindow; owner: WebContents; clip: View; view: WebContentsView;
   visible: boolean; timer?: ReturnType<typeof setInterval>; deadline?: ReturnType<typeof setTimeout>;
   isolated: Session;
   expanded?: boolean;
+  appearance?: { state?: AppearanceShellState; window: number; count: number; handlesNavigation?: boolean };
   cleanup: () => void;
 };
 
@@ -24,7 +26,7 @@ export class InteractivePreviews {
     const host = BrowserWindow.fromWebContents(owner);
     if (!host) throw new Error('Preview owner unavailable');
     if (this.entries.size >= 4) {
-      const idle = [...this.entries.values()].find(entry => !entry.visible);
+      const idle = [...this.entries.values()].find(entry => !entry.visible && !entry.appearance);
       if (!idle) throw new Error('Too many active previews');
       this.remove(idle.id, 'stopped');
     }
@@ -52,6 +54,8 @@ export class InteractivePreviews {
       session: isolated, sandbox: true, contextIsolation: true, nodeIntegration: false,
       nodeIntegrationInSubFrames: false, nodeIntegrationInWorker: false, webSecurity: true,
       webviewTag: false, allowRunningInsecureContent: false, navigateOnDragDrop: false, spellcheck: false,
+      ...(input.bridge === 'appearance-chat-list-v1'
+        ? { preload: path.join(__dirname, 'appearance-shell-preload.js') } : {}),
     } });
     clip.addChildView(view);
     host.contentView.addChildView(clip);
@@ -59,6 +63,7 @@ export class InteractivePreviews {
     const gone = () => this.remove(id);
     const entry: Entry = { id, host, owner, clip, view, isolated, visible: false,
       cleanup: () => { owner.removeListener('destroyed', gone); } };
+    if (input.bridge) entry.appearance = { window: Date.now(), count: 0 };
     this.entries.set(id, entry);
     owner.once('destroyed', gone);
     const contents = view.webContents;
@@ -68,18 +73,46 @@ export class InteractivePreviews {
     contents.on('will-frame-navigate', event => event.preventDefault());
     contents.on('will-redirect', event => event.preventDefault());
     contents.on('will-attach-webview', event => event.preventDefault());
+    contents.on('ipc-message', (event, channel, value) => {
+      if (!entry.appearance || event.senderFrame !== contents.mainFrame || !this.entries.has(id)) return;
+      if (channel === 'appearance-shell:failed') { this.remove(id, 'failed'); return; }
+      if (channel === 'appearance-shell:navigation') {
+        entry.appearance.handlesNavigation = value === true;
+        return;
+      }
+      if (channel !== 'appearance-shell:action') return;
+      const action = parseAppearanceShellAction(value);
+      const bridge = entry.appearance;
+      if (!action || !bridge.state) return;
+      if (Date.now() - bridge.window >= 1000) { bridge.window = Date.now(); bridge.count = 0; }
+      if (++bridge.count > 60) return;
+      if (action.type === 'openChat' && !bridge.state.chats.some(chat => chat.id === action.id)) return;
+      if ('chatId' in action && action.chatId !== bridge.state.activeChatId) return;
+      if (action.type === 'sendMessage' && !bridge.state.canSend) return;
+      if (action.type === 'loadMore' && !bridge.state.sections.some(section =>
+          section.folderId === action.folderId && section.hasMore && !section.loading)) return;
+      if (!owner.isDestroyed()) owner.send('interactive-preview:appearance-action', { id, action });
+    });
     contents.on('before-input-event', (event, input) => {
-      if (entry.expanded && input.type === 'keyDown' && input.key === 'Escape') {
+      if (entry.appearance && input.type === 'keyDown'
+          && input.alt && (input.control || input.meta) && input.key === 'Backspace') {
+        event.preventDefault();
+        this.emit(entry, 'ready', { reset: true });
+        return;
+      }
+      if ((entry.expanded || entry.appearance) && input.type === 'keyDown' && input.key === 'Escape') {
         event.preventDefault();
         this.emit(entry, 'ready', { escape: true });
       }
     });
     contents.on('unresponsive', () => this.remove(id, 'failed', true));
     contents.on('render-process-gone', () => this.remove(id, 'failed'));
-    contents.once('did-finish-load', () => {
+    contents.on('did-finish-load', () => {
       if (!this.entries.has(id)) return;
       clearTimeout(entry.deadline);
+      if (entry.appearance?.state) contents.send('appearance-shell:state', entry.appearance.state);
       this.emit(entry, 'ready');
+      clearInterval(entry.timer);
       // Main-process watchdog remains usable even if generated code blocks its renderer.
       entry.timer = setInterval(() => {
         if (entry.deadline || contents.isDestroyed()) return;
@@ -117,13 +150,29 @@ export class InteractivePreviews {
     entry.view.webContents.setZoomFactor(factor);
   }
 
+  updateAppearanceState(owner: WebContents, id: string, state: AppearanceShellState): void {
+    const entry = this.entries.get(id);
+    if (!entry?.appearance || entry.owner !== owner || !state || !Array.isArray(state.chats)
+        || !Array.isArray(state.sections)) return;
+    const resetLegacyNavigation = entry.appearance.state?.view === 'conversation'
+      && state.view === 'home' && !entry.appearance.handlesNavigation;
+    entry.appearance.state = state;
+    if (resetLegacyNavigation && !entry.view.webContents.isDestroyed()
+        && !entry.view.webContents.isLoading()) {
+      entry.view.webContents.reload();
+      return;
+    }
+    if (!entry.view.webContents.isDestroyed() && !entry.view.webContents.isLoading())
+      entry.view.webContents.send('appearance-shell:state', state);
+  }
+
   stop(owner: WebContents, id: string): void {
     if (this.entries.get(id)?.owner === owner) this.remove(id, 'stopped');
   }
 
   destroy(): void { for (const id of [...this.entries.keys()]) this.remove(id); }
 
-  private emit(entry: Entry, phase: InteractiveStatus['phase'], detail: Pick<InteractiveStatus, 'escape'> = {}): void {
+  private emit(entry: Entry, phase: InteractiveStatus['phase'], detail: Pick<InteractiveStatus, 'escape' | 'reset'> = {}): void {
     if (!entry.owner.isDestroyed()) entry.owner.send('interactive-preview:status', { id: entry.id, phase, ...detail } satisfies InteractiveStatus);
   }
 

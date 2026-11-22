@@ -2,6 +2,7 @@ import { ChatLayoutPanel } from './ChatLayoutPanel';
 import type { ChatLayoutProfile } from '../lib/chat-layout-schema';
 import type { ChatLayouts } from '../lib/chat-layout-service';
 import { AppearancePanel } from './AppearancePanel';
+import type { AppearanceProfile } from '../lib/appearance-schema';
 import { useSettingsQueries } from '../lib/useSettingsQueries';
 import appLayout from './AppSettings.module.scss';
 import settingsRows from './RestrictionsSettings.module.scss';
@@ -89,6 +90,8 @@ type Props = {
   chatLayouts: ChatLayouts;
   initialLayoutDraft?: ChatLayoutProfile;
   onLayoutPreview: (profile: ChatLayoutProfile) => void;
+  initialAppearanceDraft?: AppearanceProfile;
+  onAppearancePreview?: (profile: AppearanceProfile) => void;
   onAccountChanged?: () => void | Promise<void>;
   onChatCreated?: (chatId: number) => void | Promise<void>;
   onAskMcpHelp?: (message: string) => Promise<void>;
@@ -161,14 +164,14 @@ function clampZoomPct(pct: number): number {
 }
 
 export function SettingsModal({
-  onClose, chatLayouts, initialLayoutDraft, onLayoutPreview,
+  onClose, chatLayouts, initialLayoutDraft, onLayoutPreview, initialAppearanceDraft, onAppearancePreview,
   onAccountChanged, onChatCreated, onAuthInvalidated, onAskMcpHelp,
 }: Props) {
   const { user, setUser } = useAuth();
   const queryClient = useQueryClient();
   const isAdmin = user?.is_admin === 1 || user?.role === 'admin';
   const { t, i18n } = useTranslation();
-  const [section, setSection] = useState<Section>(initialLayoutDraft ? 'chatLayout' : 'account');
+  const [section, setSection] = useState<Section>(initialLayoutDraft ? 'chatLayout' : initialAppearanceDraft ? 'app' : 'account');
   const { panelRef, selectTarget, unavailable } = useSettingsSearchTarget(section);
 
   // Account
@@ -2626,7 +2629,7 @@ export function SettingsModal({
                   )}
                 </div>
 
-                <AppearancePanel />
+                <AppearancePanel initialDraft={initialAppearanceDraft} onShellPreview={onAppearancePreview} />
                 <div className={s.fieldGroup}>
                   <label className={s.fieldLabel}>{t('settings.app.zoom')}</label>
                   <div className={s.zoomControl}>

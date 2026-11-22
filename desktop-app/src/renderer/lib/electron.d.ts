@@ -1,4 +1,5 @@
 import type { InteractiveInput, InteractivePlacement, InteractiveStatus } from '../../main/interactive-types';
+import type { AppearanceShellEvent, AppearanceShellState } from '../../main/appearance-shell-types';
 import type { LocalMcpInstallPhase } from '../../main/local-mcp-spec';
 export {};
 
@@ -8,6 +9,8 @@ declare global {
       interactiveCreate: (input: InteractiveInput) => Promise<string>;
       interactivePlace: (placement: InteractivePlacement) => Promise<void>;
       interactiveStop: (id: string) => Promise<void>;
+      appearanceShellState: (id: string, state: AppearanceShellState) => Promise<void>;
+      onAppearanceShellAction: (callback: (event: AppearanceShellEvent) => void) => () => void;
       onInteractiveStatus: (callback: (status: InteractiveStatus) => void) => () => void;
       onTextContextMenu: (callback: (menu: { x: number; y: number; items: { action: 'undo' | 'redo' | 'cut' | 'copy' | 'paste' | 'selectAll'; enabled: boolean; separator?: boolean }[] }) => void) => () => void;
       textContextMenuAction: (action: 'undo' | 'redo' | 'cut' | 'copy' | 'paste' | 'selectAll') => Promise<void>;

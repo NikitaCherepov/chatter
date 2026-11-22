@@ -1,0 +1,979 @@
+<style>
+  :root {
+    --bg: #07151a;
+    --panel: #0b242c;
+    --ink: #c2f1ee;
+    --muted: #8ab4bc;
+    --line: #27505b;
+    --glow: #79e1de;
+    color-scheme: dark;
+  }
+  html,
+  body {
+    height: 100%;
+    overflow: hidden;
+  }
+  body {
+    margin: 0;
+    background: var(--bg) !important;
+    color: var(--ink) !important;
+    font:
+      14px/1.6 "Segoe UI",
+      system-ui,
+      sans-serif !important;
+  }
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+  }
+  button {
+    cursor: pointer;
+  }
+  button:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible {
+    outline: 2px solid var(--glow);
+    outline-offset: 4px;
+  }
+  button {
+    color: inherit;
+  }
+  button:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+  .scene {
+    height: 100%;
+    position: relative;
+    isolation: isolate;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background:
+      radial-gradient(ellipse at 70% 25%, #12323c99, transparent 65%), var(--bg);
+  }
+  .scene:before {
+    content: "";
+    position: absolute;
+    inset: -20%;
+    z-index: -1;
+    pointer-events: none;
+    background-image:
+      linear-gradient(#27505b26 1px, transparent 1px),
+      linear-gradient(90deg, #27505b26 1px, transparent 1px);
+    background-size: 48px 48px;
+    mask-image: radial-gradient(ellipse, black, transparent 70%);
+    animation: drift 36s linear infinite;
+  }
+  .scene:after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 3;
+    background: repeating-linear-gradient(
+      transparent 0,
+      transparent 3px,
+      #07151a1a 4px
+    );
+    opacity: 0.35;
+  }
+  .top {
+    padding: 23px clamp(18px, 4vw, 50px) 17px;
+    display: flex;
+    gap: 20px;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--line);
+  }
+  .brand {
+    font:
+      500 13px/1.5 ui-monospace,
+      Consolas,
+      monospace;
+    letter-spacing: 0.15em;
+  }
+  .brand span {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    margin-right: 12px;
+    background: var(--glow);
+    border-radius: 50%;
+    box-shadow: 0 0 12px var(--glow);
+  }
+  .counter {
+    font:
+      11px/1.5 ui-monospace,
+      Consolas,
+      monospace;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+  }
+  .nav {
+    display: flex;
+    gap: 10px;
+    padding: 16px clamp(18px, 4vw, 50px);
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  input,
+  select,
+  textarea {
+    color: var(--ink);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    background: var(--panel);
+    padding: 10px 13px;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+  .search {
+    flex: 1;
+    min-width: 120px;
+    max-width: 430px;
+  }
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--muted);
+  }
+  .control {
+    border: 1px solid var(--line);
+    background: var(--panel);
+    padding: 9px 15px;
+    border-radius: 3px;
+    transition:
+      background 0.2s,
+      box-shadow 0.2s;
+  }
+  .control:hover {
+    background: #153640;
+    box-shadow: 0 0 20px #79e1de0a;
+  }
+  .control.primary {
+    border-color: #79e1de66;
+    background: #12383e;
+  }
+  .scroll {
+    overflow: auto;
+    min-height: 0;
+    flex: 1;
+    scrollbar-color: var(--line) transparent;
+    scrollbar-width: thin;
+    overscroll-behavior: contain;
+  }
+  .map {
+    height: 440px;
+    max-width: 1080px;
+    margin: auto;
+    position: relative;
+  }
+  .ring {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 300px;
+    height: 300px;
+    margin: -150px 0 0 -150px;
+    border: 1px solid var(--line);
+    border-radius: 50%;
+    pointer-events: none;
+    box-shadow:
+      0 0 80px #79e1de05,
+      inset 0 0 80px #79e1de05;
+  }
+  .ring:before {
+    content: "";
+    position: absolute;
+    inset: 33px;
+    border: 1px dashed #46747c66;
+    border-radius: 50%;
+    animation: rotate 90s linear infinite;
+  }
+  .ring:after {
+    content: "";
+    position: absolute;
+    inset: 75px;
+    border: 1px solid #27505b99;
+    border-radius: 50%;
+  }
+  .center {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    pointer-events: none;
+  }
+  .center b {
+    font:
+      400 20px/1.5 ui-monospace,
+      Consolas,
+      monospace;
+    letter-spacing: 0.18em;
+    display: block;
+  }
+  .center span {
+    display: block;
+    color: var(--muted);
+    font:
+      10px/1.6 ui-monospace,
+      Consolas,
+      monospace;
+    letter-spacing: 0.14em;
+    margin-top: 8px;
+  }
+  .channel {
+    position: relative;
+    text-align: left;
+    padding: 18px 21px;
+    border: 1px solid var(--line);
+    background: linear-gradient(135deg, #0c2730, #0a2028);
+    color: var(--ink);
+    box-sizing: border-box;
+    min-width: 0;
+    transition:
+      transform 0.25s ease,
+      border-color 0.25s ease,
+      box-shadow 0.25s ease;
+    overflow: hidden;
+    border-radius: 2px;
+  }
+  .channel:before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 24px;
+    height: 2px;
+    background: var(--glow);
+    opacity: 0.65;
+  }
+  .channel:after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      110deg,
+      transparent 20%,
+      #79e1de0d 45%,
+      transparent 65%
+    );
+    transform: translateX(-120%);
+    transition: transform 0.7s ease;
+    pointer-events: none;
+  }
+  .channel:hover {
+    transform: translateY(-4px);
+    border-color: #79e1de80;
+    box-shadow:
+      0 8px 35px #0003,
+      inset 0 0 28px #79e1de06;
+  }
+  .channel:hover:after {
+    transform: translateX(120%);
+  }
+  .channel[aria-current="true"] {
+    border-color: #79e1de99;
+    background: linear-gradient(135deg, #12343d, #0a2028);
+  }
+  .channel strong {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+    font-size: 16px;
+    line-height: 1.4;
+    font-weight: 500;
+    margin: 9px 0 14px;
+    overflow-wrap: anywhere;
+  }
+  .channel time,
+  .channel small {
+    font:
+      11px/1.5 ui-monospace,
+      Consolas,
+      monospace;
+    color: var(--muted);
+  }
+  .channel small {
+    display: block;
+    color: var(--glow);
+    opacity: 0.8;
+  }
+  .map .channel {
+    position: absolute;
+    width: 29%;
+    max-width: 290px;
+    min-height: 132px;
+    clip-path: polygon(
+      0 0,
+      calc(100% - 13px) 0,
+      100% 13px,
+      100% 100%,
+      13px 100%,
+      0 calc(100% - 13px)
+    );
+  }
+  .map .channel:focus-visible {
+    clip-path: none;
+  }
+  .map .channel:nth-of-type(1) {
+    left: 5%;
+    top: 27px;
+  }
+  .map .channel:nth-of-type(2) {
+    right: 5%;
+    top: 60px;
+  }
+  .map .channel:nth-of-type(3) {
+    left: 9%;
+    bottom: 35px;
+  }
+  .map .channel:nth-of-type(4) {
+    right: 2%;
+    bottom: 14px;
+  }
+  .more-channels {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    gap: 15px;
+    max-width: 1040px;
+    margin: 15px auto 30px;
+    padding: 0 20px;
+  }
+  .more-channels .channel {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 130px;
+  }
+  .bottom {
+    padding: 8px 20px 30px;
+    display: flex;
+    justify-content: center;
+  }
+  .empty {
+    padding: 80px 25px;
+    text-align: center;
+    color: var(--muted);
+  }
+  .conversation {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .thread-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 16px clamp(18px, 4vw, 50px);
+    border-bottom: 1px solid var(--line);
+  }
+  .thread-head h1 {
+    font-size: 18px;
+    font-weight: 500;
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+  .thread-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .messages {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    overscroll-behavior: contain;
+    scrollbar-color: var(--line) transparent;
+    padding: 25px max(20px, calc((100% - 840px) / 2));
+    scroll-behavior: smooth;
+  }
+  .message {
+    margin: 0 0 30px;
+    content-visibility: auto;
+    contain-intrinsic-size: auto 130px;
+  }
+  .message .meta {
+    font:
+      11px/1.5 ui-monospace,
+      Consolas,
+      monospace;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    margin-bottom: 10px;
+  }
+  .message .body {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    padding: 17px 20px;
+    background: #0d2830;
+    border-left: 2px solid #79e1de77;
+  }
+  .message.user {
+    margin-left: 15%;
+  }
+  .message.user .body {
+    background: #0b2028;
+    border-left-color: var(--line);
+  }
+  .message.fresh {
+    animation: transmit 0.35s ease-out both;
+  }
+  .message.assistant .body {
+    box-shadow: inset 14px 0 28px #79e1de04;
+  }
+  .typing {
+    color: var(--muted);
+    font:
+      12px/1.6 ui-monospace,
+      Consolas,
+      monospace;
+    padding: 0 0 20px;
+    letter-spacing: 0.1em;
+  }
+  .typing span {
+    display: inline-block;
+    width: 5px;
+    height: 5px;
+    background: var(--glow);
+    margin-right: 10px;
+    box-shadow: 0 0 10px #79e1de77;
+    animation: pulse 2s ease-in-out infinite;
+  }
+  .composer {
+    padding: 12px max(20px, calc((100% - 840px) / 2)) 22px;
+    border-top: 1px solid var(--line);
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+    background: #091c23;
+  }
+  .composer textarea {
+    flex: 1;
+    resize: none;
+    min-height: 64px;
+    max-height: 160px;
+    padding: 14px;
+  }
+  .composer-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .composer .control {
+    white-space: nowrap;
+  }
+  .attachment-count {
+    color: var(--muted);
+    font-size: 12px;
+  }
+  [hidden] {
+    display: none !important;
+  }
+  @keyframes drift {
+    to {
+      transform: translate(48px, 48px);
+    }
+  }
+  @keyframes rotate {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  @keyframes pulse {
+    50% {
+      opacity: 0.3;
+    }
+  }
+  @keyframes transmit {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  html[data-paused="true"] *,
+  html[data-paused="true"] *:before {
+    animation-play-state: paused !important;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *:before,
+    *:after {
+      animation: none !important;
+      transition: none !important;
+      scroll-behavior: auto !important;
+    }
+  }
+  @media (max-width: 650px) {
+    .top {
+      padding: 18px;
+    }
+    .counter {
+      font-size: 10px;
+    }
+    .nav {
+      padding: 14px 18px;
+    }
+    .nav select {
+      max-width: 150px;
+    }
+    .map {
+      height: 480px;
+    }
+    .map .channel {
+      width: 43%;
+      padding: 14px;
+      min-height: 145px;
+    }
+    .map .channel:nth-of-type(1) {
+      left: 3%;
+      top: 10px;
+    }
+    .map .channel:nth-of-type(2) {
+      right: 3%;
+      top: 32px;
+    }
+    .map .channel:nth-of-type(3) {
+      left: 3%;
+      bottom: 45px;
+    }
+    .map .channel:nth-of-type(4) {
+      right: 3%;
+      bottom: 20px;
+    }
+    .ring {
+      width: 240px;
+      height: 240px;
+      margin: -120px 0 0 -120px;
+    }
+    .center b {
+      font-size: 16px;
+    }
+    .channel strong {
+      font-size: 14px;
+    }
+    .thread-head {
+      align-items: flex-start;
+      flex-direction: column;
+    }
+    .messages {
+      padding: 20px;
+    }
+    .message.user {
+      margin-left: 8%;
+    }
+    .composer {
+      padding: 12px 16px;
+    }
+    .composer-actions .control {
+      padding: 9px;
+    }
+    .more-channels {
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .more-channels .channel {
+      padding: 13px;
+    }
+  }
+  @media (max-width: 380px) {
+    .more-channels {
+      grid-template-columns: 1fr;
+    }
+    .brand {
+      font-size: 11px;
+      letter-spacing: 0.08em;
+    }
+    .counter {
+      letter-spacing: 0;
+    }
+    .nav .control {
+      padding: 9px;
+    }
+    .composer {
+      gap: 7px;
+    }
+    .composer textarea {
+      padding: 10px;
+    }
+    .composer-actions .control {
+      font-size: 12px;
+    }
+  }
+</style>
+<div class="scene">
+  <header class="top">
+    <div class="brand"><span></span>VEGA / ARCHIVE</div>
+    <div class="counter" id="counter"></div>
+  </header>
+  <div id="archive" class="conversation">
+    <nav class="nav" aria-label="Chats">
+      <input
+        id="search"
+        class="search"
+        type="search"
+        maxlength="200"
+        autocomplete="off"
+      />
+      <select id="folder" aria-label="Folder"></select>
+      <button id="new" class="control primary" type="button"></button>
+    </nav>
+    <div class="scroll" id="archive-scroll">
+      <div class="map" id="map">
+        <div class="ring" aria-hidden="true"></div>
+        <div class="center"><b>ДИАЛОГИ</b><span>ПАМЯТЬ РАЗГОВОРОВ</span></div>
+      </div>
+      <div class="more-channels" id="remaining"></div>
+      <div id="empty" class="empty" hidden></div>
+      <div class="bottom">
+        <button class="control" id="more" type="button" hidden></button>
+      </div>
+    </div>
+  </div>
+  <main id="conversation" class="conversation" hidden>
+    <header class="thread-head">
+      <h1 id="chat-title"></h1>
+      <div class="thread-actions">
+        <button class="control" id="back" type="button">← Карта</button
+        ><button class="control" id="native" type="button">
+          Действия чата ↗
+        </button>
+      </div>
+    </header>
+    <div class="messages" id="messages" role="log" aria-label="Messages"></div>
+    <form class="composer" id="composer">
+      <textarea
+        id="draft"
+        rows="2"
+        maxlength="100000"
+        aria-label="Message"
+      ></textarea>
+      <div class="composer-actions">
+        <button class="control primary" type="submit" id="send"></button
+        ><button class="control" type="button" id="attach"></button>
+      </div>
+    </form>
+  </main>
+</div>
+<script>
+  (() => {
+    const $ = (id) => document.getElementById(id);
+    const bridge = window.chatter;
+    if (!bridge) {
+      $("counter").textContent = "Откройте этот код через оформление Chatter";
+      return;
+    }
+    let state,
+      selectedFolder = "all",
+      view = "archive",
+      requestedChat = null;
+    let archiveSignature = "",
+      folderSignature = "";
+    let messageNodes = new Map();
+    let lastChat = null;
+    let creatingFrom = undefined;
+    const channelNodes = new Map();
+    const ru = () => (state?.locale || "").startsWith("ru");
+    function text(russian, english) {
+      return ru() ? russian : english;
+    }
+    function makeChannel(chat) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "channel";
+      button.innerHTML = "<time></time><strong></strong><small></small>";
+      button.onclick = () => {
+        requestedChat = chat.id;
+        view = "conversation";
+        bridge.openChat(chat.id);
+        render();
+        $("draft").focus();
+      };
+      return button;
+    }
+    function updateArchive() {
+      const folders = [
+        { value: "all", name: state.labels.allChats },
+        { value: "unfiled", name: text("Без папки", "Unfiled") },
+        ...state.folders.map((folder) => ({
+          value: String(folder.id),
+          name: folder.name,
+        })),
+      ];
+      if (!folders.some((folder) => folder.value === selectedFolder))
+        selectedFolder = "all";
+      const nextFolderSignature = JSON.stringify(folders);
+      if (nextFolderSignature !== folderSignature) {
+        $("folder").replaceChildren(
+          ...folders.map((folder) => {
+            const option = document.createElement("option");
+            option.value = folder.value;
+            option.textContent = folder.name;
+            return option;
+          }),
+        );
+        $("folder").value = selectedFolder;
+        folderSignature = nextFolderSignature;
+      }
+      const chats = state.chats
+        .filter(
+          (chat) =>
+            selectedFolder === "all" ||
+            (selectedFolder === "unfiled"
+              ? chat.folderId === null
+              : chat.folderId === Number(selectedFolder)),
+        )
+        .slice()
+        .sort((a, b) => b.updatedAt - a.updatedAt || b.id - a.id);
+      const signature = JSON.stringify([
+        chats,
+        selectedFolder,
+        state.activeChatId,
+        state.locale,
+      ]);
+      if (signature !== archiveSignature) {
+        const liveIds = new Set(chats.map((chat) => chat.id));
+        for (const [id, button] of channelNodes) {
+          if (!liveIds.has(id)) {
+            button.remove();
+            channelNodes.delete(id);
+          }
+        }
+        chats.forEach((chat, index) => {
+          const button = channelNodes.get(chat.id) || makeChannel(chat);
+          channelNodes.set(chat.id, button);
+          button.title = chat.title;
+          button.setAttribute(
+            "aria-current",
+            String(chat.id === state.activeChatId),
+          );
+          button.querySelector("strong").textContent = chat.title;
+          button.querySelector("time").textContent = new Date(
+            chat.updatedAt * 1000,
+          ).toLocaleDateString(state.locale, {
+            day: "numeric",
+            month: "short",
+          });
+          button.querySelector("small").textContent = text(
+            "Открыть канал ↗",
+            "Open channel ↗",
+          );
+          (index < 4 ? $("map") : $("remaining")).append(button);
+        });
+        archiveSignature = signature;
+      }
+      $("map").hidden = !chats.length;
+      $("remaining").hidden = chats.length <= 4;
+      $("empty").hidden = chats.length > 0 && !state.loading;
+      $("empty").textContent = state.loading
+        ? state.labels.loading
+        : state.labels.empty;
+      const pending =
+        state.query.trim().length >= 3
+          ? []
+          : state.sections.filter(
+              (section) =>
+                section.hasMore &&
+                (selectedFolder === "all" ||
+                  (selectedFolder === "unfiled"
+                    ? section.folderId === null
+                    : section.folderId === Number(selectedFolder))),
+            );
+      $("more").hidden = pending.length === 0;
+      $("more").disabled = pending.every((section) => section.loading);
+      $("more").textContent = state.labels.loadMore;
+      $("counter").textContent =
+        text("КАНАЛОВ", "CHANNELS") + " / " + chats.length;
+      $("new").textContent = state.labels.newChat;
+      $("search").placeholder = state.labels.search;
+      if (document.activeElement !== $("search"))
+        $("search").value = state.query;
+    }
+    function updateConversation() {
+      const ready =
+        state.activeChatId === requestedChat && !state.messagesLoading;
+      const chat = state.chats.find((chat) => chat.id === requestedChat);
+      $("chat-title").textContent =
+        chat?.title || text("Разговор", "Conversation");
+      $("back").textContent = text("← Карта", "← Map");
+      $("native").textContent = text("Действия чата ↗", "Chat actions ↗");
+      $("draft").placeholder = text("Введите сообщение…", "Write a message…");
+      $("draft").disabled = !ready || !state.canSend;
+      $("attach").textContent =
+        text("Файл", "Attach") +
+        (state.attachmentCount ? " · " + state.attachmentCount : "");
+      $("send").textContent = state.sending
+        ? text("Остановить", "Stop")
+        : text("Отправить", "Send");
+      $("send").disabled =
+        !ready ||
+        (!state.sending && (!state.canSend || !$("draft").value.trim()));
+      const panel = $("messages");
+      const nearBottom =
+        panel.scrollHeight - panel.scrollTop - panel.clientHeight < 100;
+      const chatChanged = lastChat !== requestedChat;
+      if (chatChanged) {
+        panel.replaceChildren();
+        messageNodes.clear();
+        lastChat = requestedChat;
+      }
+      let older = panel.querySelector("[data-older]");
+      if (!older) {
+        older = document.createElement("button");
+        older.type = "button";
+        older.className = "control";
+        older.dataset.older = "";
+        older.onclick = () => bridge.loadOlderMessages();
+        panel.prepend(older);
+      }
+      older.hidden = !ready || !state.hasOlderMessages;
+      older.disabled = state.olderMessagesLoading;
+      older.textContent = text("Предыдущие сообщения", "Earlier messages");
+      const rows = ready
+        ? state.messages.filter((message) => message.content.trim())
+        : [];
+      const liveIds = new Set(rows.map((message) => message.id));
+      for (const [id, node] of messageNodes)
+        if (!liveIds.has(id)) {
+          node.remove();
+          messageNodes.delete(id);
+        }
+      const typing = panel.querySelector(".typing");
+      if (typing) typing.remove();
+      const previousHeight = panel.scrollHeight;
+      const previousTop = panel.scrollTop;
+      const insertingOlder =
+        rows.length && messageNodes.size && !messageNodes.has(rows[0].id);
+      rows.forEach((message) => {
+        let node = messageNodes.get(message.id);
+        if (!node) {
+          node = document.createElement("article");
+          node.className =
+            "message " + (message.role === "user" ? "user" : "assistant");
+          if (!chatChanged && !insertingOlder) node.classList.add("fresh");
+          node.innerHTML = '<div class="meta"></div><div class="body"></div>';
+          messageNodes.set(message.id, node);
+        }
+        node.querySelector(".meta").textContent =
+          (message.role === "user" ? text("ВЫ", "YOU") : "VEGA") +
+          " / " +
+          new Date(message.createdAt * 1000).toLocaleTimeString(state.locale, {
+            hour: "2-digit",
+            minute: "2-digit",
+          });
+        const body = node.querySelector(".body");
+        if (body.textContent !== message.content)
+          body.textContent = message.content;
+        const next = panel.children[rows.indexOf(message) + 1];
+        if (next !== node) panel.insertBefore(node, next || null);
+      });
+      if (!ready || state.sending) {
+        const label = document.createElement("div");
+        label.className = "typing";
+        label.innerHTML = "<span></span>";
+        label.append(
+          document.createTextNode(
+            !ready
+              ? state.labels.loading
+              : text("СИГНАЛ ПОСТУПАЕТ", "RECEIVING SIGNAL"),
+          ),
+        );
+        panel.append(label);
+      }
+      if (chatChanged || nearBottom) panel.scrollTop = panel.scrollHeight;
+      else if (insertingOlder)
+        panel.scrollTop = previousTop + panel.scrollHeight - previousHeight;
+    }
+    function render() {
+      if (!state) return;
+      $("archive").hidden = view !== "archive";
+      $("conversation").hidden = view !== "conversation";
+      updateArchive();
+      if (view === "conversation") updateConversation();
+    }
+    bridge.subscribe(
+      (next) => {
+        if (
+          creatingFrom !== undefined &&
+          next.activeChatId &&
+          next.activeChatId !== creatingFrom
+        ) {
+          requestedChat = next.activeChatId;
+          creatingFrom = undefined;
+        }
+        if (next.view === "home") view = "archive";
+        else if (next.view === "conversation") {
+          view = "conversation";
+          if (creatingFrom === undefined) requestedChat = next.activeChatId;
+        }
+        state = next;
+        render();
+      },
+      { navigation: true },
+    );
+    $("search").addEventListener("input", (event) =>
+      bridge.search(event.target.value),
+    );
+    $("folder").onchange = (event) => {
+      selectedFolder = event.target.value;
+      archiveSignature = "";
+      render();
+    };
+    $("new").onclick = () => {
+      creatingFrom = state.activeChatId;
+      view = "conversation";
+      requestedChat = null;
+      bridge.newChat();
+    };
+    $("more").onclick = () => {
+      const section = state.sections.find(
+        (section) =>
+          section.hasMore &&
+          !section.loading &&
+          (selectedFolder === "all" ||
+            (selectedFolder === "unfiled"
+              ? section.folderId === null
+              : section.folderId === Number(selectedFolder))),
+      );
+      if (section) bridge.loadMore(section.folderId);
+    };
+    $("back").onclick = () => bridge.showHome();
+    $("native").onclick = () => bridge.openConversation();
+    $("attach").onclick = () => bridge.attachFiles();
+    $("draft").addEventListener("input", () => {
+      if (state)
+        $("send").disabled =
+          !state.sending && (!state.canSend || !$("draft").value.trim());
+    });
+    $("draft").addEventListener("keydown", (event) => {
+      if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
+        event.preventDefault();
+        $("composer").requestSubmit();
+      }
+    });
+    $("composer").onsubmit = (event) => {
+      event.preventDefault();
+      if (state.sending) {
+        bridge.stopGeneration();
+        return;
+      }
+      const value = $("draft").value.trim();
+      if (value && state.canSend && bridge.sendMessage(value)) {
+        $("draft").value = "";
+        $("send").disabled = true;
+      }
+    };
+    document.addEventListener("visibilitychange", () => {
+      document.documentElement.dataset.paused = String(document.hidden);
+    });
+  })();
+</script>
