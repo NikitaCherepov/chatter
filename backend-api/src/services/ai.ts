@@ -444,7 +444,7 @@ export const getModelsCatalog = (isAdmin = false, userId?: number) => MANUAL_MOD
   id: m.id,
   name: m.name,
   description: m.description,
-  reasoning_levels: chatGptConnectionForClient(m.client) ? [...CHATGPT_REASONING_LEVELS] : getReasoningLevelsForBaseURL(m.baseURL),
+  reasoning_levels: chatGptConnectionForClient(m.client) ? [...CHATGPT_REASONING_LEVELS] : getReasoningLevelsForBaseURL(m.baseURL, m.apiModelName),
   supported_params: chatGptConnectionForClient(m.client) ? [] : [...getProviderSupportedParams(m.baseURL)],
   supports_vision: m.supportsVision,
   supports_tools: m.supportsTools,
@@ -471,12 +471,43 @@ export const getAutoVisionSupport = () => ({
 
 const ALL_REASONING_LEVELS: ReasoningLevel[] = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh'];
 
+const REFUSELESS_MODELS_WITH_OFF = new Set([
+  'deepseek-v4.1-flash-abliterated',
+  'deepseek-v4.1-flash-abliterated-fast',
+  'deepseek-v4.1-flash-fast',
+]);
+const REFUSELESS_MODELS_WITH_EFFORT = new Set([
+  'glm-5.3-abliterated',
+  'glm-5.3-flash-abliterated',
+  'minimax-m3.1-flash',
+  'kimi-k3.1-pro',
+  'kimi-k3.1-pro-abliterated',
+]);
+
+function getModelReasoningProfile(baseURL: string, model: string): {
+  format: 'celeris' | 'refuseless'; levels: ReasoningLevel[];
+} | null {
+  const hostname = URL.canParse(baseURL) ? new URL(baseURL).hostname : '';
+  const modelId = model.toLowerCase();
+  if (hostname === 'inference.celeris.ai') {
+    if (modelId === 'celeris-1') return { format: 'celeris', levels: ['none', 'low'] };
+    if (modelId === 'celeris-1-magnus') return { format: 'celeris', levels: ['none', 'low', 'medium', 'xhigh'] };
+  }
+  if (hostname === 'api.refuseless.com') {
+    if (REFUSELESS_MODELS_WITH_OFF.has(modelId)) return { format: 'refuseless', levels: ['none', 'low', 'high', 'xhigh'] };
+    if (REFUSELESS_MODELS_WITH_EFFORT.has(modelId)) return { format: 'refuseless', levels: ['low', 'high', 'xhigh'] };
+  }
+  return null;
+}
+
 /**
- * Determines available reasoning levels по baseURL провайдера.
+ * Determines available reasoning levels for the provider and, where needed, the model.
  * Returns null if reasoning control не поддерживается (ползунок скрыт).
  */
-export const getReasoningLevelsForBaseURL = (baseURL: string): ReasoningLevel[] | null => {
+export const getReasoningLevelsForBaseURL = (baseURL: string, model = ''): ReasoningLevel[] | null => {
   const url = (baseURL || '').toLowerCase();
+  const profile = getModelReasoningProfile(baseURL, model);
+  if (profile) return profile.levels;
 
   if (url.includes('openrouter.ai')) {
     return ALL_REASONING_LEVELS; // none | minimal | low | medium | high | xhigh
@@ -804,8 +835,7 @@ const applyModelSettingsToBody = (
 
 /**
  * Adapts requestBody for конкретного провайдера перед отправкой.
- * Only OpenRouter and DeepSeek direct получают специальные параметры.
- * All other providers — текущая логика без изменений.
+ * Providers without a dedicated format keep the original reasoning fields.
  */
 const adaptRequestBodyForProvider = (
   requestBody: Record<string, unknown>,
@@ -816,6 +846,31 @@ const adaptRequestBodyForProvider = (
   openRouterProviderSlug?: string | null,
 ): Record<string, unknown> => {
   const url = (baseURL || '').toLowerCase();
+  const profile = getModelReasoningProfile(baseURL, model);
+
+  if (profile) {
+    const { thinking: _t, clear_thinking: _ct, reasoning_effort: _re, reasoning: _r, ...body } = requestBody;
+    if (level && level !== 'auto') {
+      if (profile.format === 'celeris') {
+        const kwargs = body.chat_template_kwargs;
+        const template = kwargs && typeof kwargs === 'object' && !Array.isArray(kwargs) ? kwargs : {};
+        const { reasoning_effort: _nestedEffort, ...otherOptions } = template as Record<string, unknown>;
+        body.chat_template_kwargs = { ...otherOptions, enable_thinking: level !== 'none' };
+        if (level !== 'none' && profile.levels.includes('xhigh')) {
+          body.reasoning_effort = level === 'medium' ? 'medium' : level === 'high' || level === 'xhigh' ? 'xhigh' : 'low';
+        }
+      } else {
+        // An explicit level replaces the provider's alternative `effort` field.
+        delete body.effort;
+        if (level === 'none' && profile.levels.includes('none')) body.reasoning_effort = 'off';
+        else if (level === 'xhigh') body.reasoning_effort = 'max';
+        else if (level === 'high') body.reasoning_effort = 'high';
+        // For unsupported levels (including Lite on always-thinking models), use the lowest tier.
+        else body.reasoning_effort = 'low';
+      }
+    }
+    return applyModelSettingsToBody(body, baseURL, modelSettings);
+  }
 
   // ── OpenRouter: reasoning.effort + optional provider routing ──
   if (url.includes('openrouter.ai')) {

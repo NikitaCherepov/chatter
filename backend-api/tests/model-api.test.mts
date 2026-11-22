@@ -19,6 +19,10 @@ const upstream=http.createServer(async(req,res)=>{
   if(body.stream){
     res.writeHead(200,{'Content-Type':'text/event-stream'});
     const chunk=(delta:any,finish_reason:any=null,index=0)=>({id:'upstream-id',object:'chat.completion.chunk',created:123,model:body.model,choices:[{index,delta,finish_reason}]});
+    if (mode === 'reasoning') {
+      const field = body.model.startsWith('celeris-') ? 'reasoning' : 'reasoning_content';
+      res.write('data: '+JSON.stringify(chunk({[field]:'Thinking'}))+'\n\n');
+    }
     res.write('data: '+JSON.stringify(chunk({role:'assistant',content:'Hello'}))+'\n\n');
     if(mode==='wait') {req.on('close',()=>{cancelled++;});res.on('close',()=>{cancelled++;});return;}
     res.write('data: '+JSON.stringify(chunk({tool_calls:[{index:0,id:'call-1',type:'function',function:{name:'read',arguments:'{"a":'}}]}))+'\n\n');
@@ -129,6 +133,72 @@ try{
   assert.equal(db.prepare("SELECT COUNT(*) AS n FROM model_api_requests WHERE key_id=? AND status='running'").get(otherKey.id).n,0,'client disconnect must abort and clean up requests');
   db.prepare("UPDATE users SET status='banned' WHERE id=2").run();assert.equal((await post(input,otherKey.key)).status,401);
   console.log('PASS: real HTTP gateway/SDK adapter, hashed keys, model ACLs, normal+stream/tool metadata, usage/cost accounting, unknown cost, no chat context, malformed requests, revocation+abort and owner ban');
+
+  const celeris = 'https://inference.celeris.ai';
+  const refuseless = 'https://api.refuseless.com/v1';
+  const reasoningModels = [
+    { uniqueId: 'celeris', model: 'celeris-1', baseUrl: celeris + '/celeris-1/v1', levels: ['none', 'low'] },
+    { uniqueId: 'magnus', model: 'celeris-1-magnus', baseUrl: celeris + '/celeris-1-magnus/v1', levels: ['none', 'low', 'medium', 'xhigh'] },
+    { uniqueId: 'refuseless-deepseek', model: 'deepseek-v4.1-flash-abliterated', baseUrl: refuseless, levels: ['none', 'low', 'high', 'xhigh'] },
+    { uniqueId: 'refuseless-glm', model: 'glm-5.3-abliterated', baseUrl: refuseless, levels: ['low', 'high', 'xhigh'] },
+  ];
+  settings.updateModelSettings({ manualModels: reasoningModels.map(({ levels, ...entry }) => ({ ...model, ...entry, id: entry.uniqueId })) });
+  ai.refreshConfiguredModels();
+  const catalog = ai.getModelsCatalog(true, 1);
+  for (const entry of reasoningModels) {
+    assert.deepEqual(catalog.find(item => item.id === entry.uniqueId)?.reasoning_levels, entry.levels);
+    // Keep real provider metadata for adaptation, but send via the local HTTP fixture.
+    ai.resolveManualModel(entry.uniqueId, true, 1)!.client.baseURL = baseUrl;
+  }
+  assert.equal(ai.getReasoningLevelsForBaseURL(celeris + '/celeris-1-decision/v1', 'celeris-1.1-decision'), null);
+  assert.equal(ai.getReasoningLevelsForBaseURL(refuseless, 'unlisted-model'), null);
+
+  type ReasoningLevel = import('../src/services/ai.js').ReasoningLevel;
+  const cases: Array<[string, ReasoningLevel | null, boolean | undefined, string | undefined]> = [
+    ['celeris', null, undefined, undefined],
+    ['celeris', 'none', false, undefined],
+    ['celeris', 'low', true, undefined],
+    ['magnus', 'auto', undefined, undefined],
+    ['magnus', 'none', false, undefined],
+    ['magnus', 'low', true, 'low'],
+    ['magnus', 'medium', true, 'medium'],
+    ['magnus', 'xhigh', true, 'xhigh'],
+    ['refuseless-deepseek', null, undefined, undefined],
+    ['refuseless-deepseek', 'none', undefined, 'off'],
+    ['refuseless-deepseek', 'high', undefined, 'high'],
+    ['refuseless-deepseek', 'xhigh', undefined, 'max'],
+    ['refuseless-glm', 'none', undefined, 'low'],
+    ['refuseless-glm', 'medium', undefined, 'low'],
+  ];
+  const { withModelActor } = await import('../src/services/model-access.js');
+  for (const [id, level, enabled, effort] of cases) {
+    const manual = ai.resolveManualModel(id, true, 1)!;
+    let reasoning = '';
+    const result = await withModelActor({ userId: 1, isAdmin: true }, () => ai.runCompletion('pro', {
+      messages: [{ role: 'user', content: 'reasoning' }],
+      thinking: { type: 'enabled' }, clear_thinking: false,
+    }, manual, undefined, level, null, { onReasoningToken: text => { reasoning += text; } }));
+    assert.equal(result.usedUniqueId, id);
+    const sent = received.at(-1);
+    assert.equal(sent.chat_template_kwargs?.enable_thinking, enabled, `${id} ${level} thinking`);
+    assert.equal(sent.reasoning_effort, effort, `${id} ${level} effort`);
+    assert.ok(!('thinking' in sent) && !('clear_thinking' in sent) && !('reasoning' in sent));
+    assert.equal(reasoning, 'Thinking');
+  }
+
+  const reasoningKey = keys.createModelApiKey({ name: 'Reasoning client', owner_user_id: 1, models: ['magnus', 'refuseless-deepseek'] });
+  const gatewayPayload = { messages: [{ role: 'user', content: 'Hello' }] };
+  response = await post({ ...gatewayPayload, model: 'magnus', reasoning: { effort: 'medium' }, chat_template_kwargs: { reasoning_effort: 'low' } }, reasoningKey.key);
+  assert.equal(response.status, 200);
+  await response.text();
+  assert.deepEqual(received.at(-1).chat_template_kwargs, { enable_thinking: true });
+  assert.equal(received.at(-1).reasoning_effort, 'medium');
+  response = await post({ ...gatewayPayload, model: 'refuseless-deepseek', reasoning_effort: 'xhigh', effort: 'low' }, reasoningKey.key);
+  assert.equal(response.status, 200);
+  await response.text();
+  assert.equal(received.at(-1).reasoning_effort, 'max');
+  assert.ok(!('effort' in received.at(-1)));
+  console.log('PASS: Celeris and Refuseless catalog, chat streaming and Model API request formats');
 }finally{
   for(const timer of intervals)clearInterval(timer);
   server.closeAllConnections();upstream.closeAllConnections();await new Promise<void>(resolve=>server.close(()=>resolve()));await new Promise<void>(resolve=>upstream.close(()=>resolve()));
