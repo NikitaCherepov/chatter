@@ -1,0 +1,209 @@
+// Canonical virtual appearance project. Synced by scripts/sync-appearance.mjs.
+import type * as TypeScript from 'typescript';
+
+export type AppearanceProject = { entry: string; files: Record<string, string> };
+export type AppearanceCodeDiagnostic = {
+  file: string;
+  line: number;
+  column: number;
+  message: string;
+};
+export const APPEARANCE_PROJECT_LIMITS = { files: 32, sourceLength: 100_000 } as const;
+export const APPEARANCE_PROJECT_MODULES = ['react', 'react-markdown', 'remark-gfm'] as const;
+const own = (object: object, key: string) => Object.prototype.hasOwnProperty.call(object, key);
+
+export function isAppearanceFilePath(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    value.length <= 180 &&
+    value.split('/').every((part) => /^[a-zA-Z0-9_-][a-zA-Z0-9_.-]*$/.test(part)) &&
+    /\.(tsx?|jsx?|css|json)$/.test(value) &&
+    !/\.d\.ts$/.test(value)
+  );
+}
+
+export function parseAppearanceProject(value: unknown): AppearanceProject {
+  const project = value as Partial<AppearanceProject> | null;
+  const invalid = () => {
+    throw new Error('appearance_invalid');
+  };
+  if (
+    !project ||
+    !isAppearanceFilePath(project.entry) ||
+    !/\.[jt]sx?$/.test(project.entry) ||
+    !project.files ||
+    typeof project.files !== 'object' ||
+    Array.isArray(project.files)
+  )
+    return invalid();
+  const files = Object.entries(project.files);
+  if (
+    !files.length ||
+    files.length > APPEARANCE_PROJECT_LIMITS.files ||
+    !own(project.files, project.entry)
+  )
+    return invalid();
+  let length = 0;
+  for (const [file, source] of files) {
+    if (!isAppearanceFilePath(file) || typeof source !== 'string') return invalid();
+    length += source.length;
+  }
+  if (length > APPEARANCE_PROJECT_LIMITS.sourceLength || !project.files[project.entry].trim())
+    return invalid();
+  return { entry: project.entry, files: Object.fromEntries(files) };
+}
+
+/** Resolve only files supplied in the profile. Never consult disk or the network. */
+export function resolveAppearanceImport(
+  project: AppearanceProject,
+  from: string,
+  request: string,
+): string {
+  if (!request.startsWith('./') && !request.startsWith('../')) {
+    if ((APPEARANCE_PROJECT_MODULES as readonly string[]).includes(request)) return request;
+    throw new Error(`Unsupported module: ${request}`);
+  }
+  const segments = from.split('/').slice(0, -1);
+  for (const part of request.split('/')) {
+    if (part === '.' || part === '') continue;
+    if (part === '..') {
+      if (!segments.length) throw new Error(`Import escapes the project: ${request}`);
+      segments.pop();
+    } else segments.push(part);
+  }
+  const path = segments.join('/');
+  const found = [
+    path,
+    ...[
+      '.tsx',
+      '.ts',
+      '.jsx',
+      '.js',
+      '.css',
+      '.json',
+      '/index.tsx',
+      '/index.ts',
+      '/index.jsx',
+      '/index.js',
+    ].map((ext) => path + ext),
+  ].find((candidate) => own(project.files, candidate));
+  if (!found) throw new Error(`File not found: ${request}`);
+  return found;
+}
+
+/** Syntax and imports only. Model code is never executed during validation. */
+export function compileAppearanceProject(value: AppearanceProject, ts: typeof TypeScript) {
+  const project = parseAppearanceProject(value);
+  const diagnostics: AppearanceCodeDiagnostic[] = [];
+  const compiled: Record<string, string> = {};
+  for (const [file, source] of Object.entries(project.files)) {
+    const report = (message: string, offset = 0) => {
+      const before = source.slice(0, offset).split('\n');
+      diagnostics.push({
+        file,
+        line: before.length,
+        column: before[before.length - 1].length + 1,
+        message,
+      });
+    };
+    if (file.endsWith('.css')) {
+      if (/@import\b/i.test(source)) report('Import CSS from a script instead of using @import.');
+      continue;
+    }
+    if (file.endsWith('.json')) {
+      try {
+        JSON.parse(source);
+      } catch {
+        report('Invalid JSON');
+      }
+      continue;
+    }
+    const tree = ts.createSourceFile(
+      file,
+      source,
+      ts.ScriptTarget.ES2020,
+      true,
+      file.endsWith('.tsx')
+        ? ts.ScriptKind.TSX
+        : file.endsWith('.jsx')
+          ? ts.ScriptKind.JSX
+          : file.endsWith('.js')
+            ? ts.ScriptKind.JS
+            : ts.ScriptKind.TS,
+    );
+    const checkImport = (node: TypeScript.Node, request: string) => {
+      try {
+        resolveAppearanceImport(project, file, request);
+      } catch (error) {
+        report((error as Error).message, node.getStart(tree));
+      }
+    };
+    const visit = (node: TypeScript.Node) => {
+      if (
+        (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
+        node.moduleSpecifier &&
+        ts.isStringLiteral(node.moduleSpecifier)
+      ) {
+        const typeOnly = ts.isImportDeclaration(node)
+          ? node.importClause?.isTypeOnly
+          : node.isTypeOnly;
+        if (!typeOnly) checkImport(node, node.moduleSpecifier.text);
+      }
+      if (
+        ts.isImportEqualsDeclaration(node) &&
+        ts.isExternalModuleReference(node.moduleReference) &&
+        node.moduleReference.expression &&
+        ts.isStringLiteral(node.moduleReference.expression)
+      )
+        checkImport(node, node.moduleReference.expression.text);
+      if (
+        ts.isCallExpression(node) &&
+        (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
+          (ts.isIdentifier(node.expression) && node.expression.text === 'require'))
+      ) {
+        const argument = node.arguments[0];
+        if (node.arguments.length !== 1 || !argument || !ts.isStringLiteral(argument))
+          report('Imports must use a literal module path.', node.getStart(tree));
+        else checkImport(node, argument.text);
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(tree);
+    const result = ts.transpileModule(source, {
+      fileName: file,
+      reportDiagnostics: true,
+      compilerOptions: {
+        target: ts.ScriptTarget.ES2020,
+        module: ts.ModuleKind.CommonJS,
+        jsx: ts.JsxEmit.React,
+        esModuleInterop: true,
+        isolatedModules: true,
+      },
+    });
+    for (const diagnostic of result.diagnostics ?? []) {
+      if (diagnostic.category === ts.DiagnosticCategory.Error)
+        report(
+          ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n'),
+          diagnostic.start ?? 0,
+        );
+    }
+    compiled[file] = result.outputText;
+    if (
+      file === project.entry &&
+      !tree.statements.some(
+        (statement) =>
+          (ts.isExportAssignment(statement) && !statement.isExportEquals) ||
+          (ts.canHaveModifiers(statement) &&
+            ts
+              .getModifiers(statement)
+              ?.some((modifier) => modifier.kind === ts.SyntaxKind.DefaultKeyword)) ||
+          (ts.isExportDeclaration(statement) &&
+            statement.exportClause &&
+            ts.isNamedExports(statement.exportClause) &&
+            statement.exportClause.elements.some((element) => element.name.text === 'default')),
+      )
+    )
+      report('The entry file must export a default React component.');
+  }
+  return { project, compiled, diagnostics: diagnostics.slice(0, 20) };
+}

@@ -9,6 +9,7 @@ process.env.API_DB_PATH = path.join(temp, 'test.sqlite');
 process.env.UPLOADS_DIR = path.join(temp, 'images');
 const { db } = await import('../src/db.js');
 const schema = await import('../src/services/appearance-schema.js');
+const appearanceCode = await import('../src/services/appearance-code.js');
 const { getAppearance, changeAppearance, appearanceFromJson } =
   await import('../src/services/appearance.js');
 const { getChatLayouts, changeChatLayouts } = await import('../src/services/chat-layout.js');
@@ -277,6 +278,8 @@ try {
   context.subagentExtra = { onDesktopAction: () => undefined };
   context.APPEARANCE_CAPABILITIES = schema.APPEARANCE_CAPABILITIES;
   context.parseAppearanceProfile = schema.parseAppearanceProfile;
+  context.appearanceProposalProfile = appearanceCode.appearanceProposalProfile;
+  context.appearanceCodeDiagnostics = appearanceCode.appearanceCodeDiagnostics;
   context.user = { id: 101 };
   context.randomUUID = () => 'proposal-test';
   context.desktopActionSink = { value: null };
@@ -308,6 +311,61 @@ try {
   const caps = JSON.parse(context.tool('get_appearance', { view: 'capabilities' }));
   assert.ok(caps.template);
   assert.equal(caps.limits.profiles, 32);
+  assert.deepEqual(appearanceCode.appearanceCodeDiagnostics(schema.parseAppearanceProfile({
+    ...schema.newAppearance('starter'), shell: caps.shell.project.template,
+  })), [], 'the documented workspace starter compiles');
+  const projectProfile = schema.parseAppearanceProfile({ ...schema.newAppearance('project'), shell: {
+    version: 1, language: 'tsx', scope: 'workspace', entry: 'App.tsx', files: {
+      'App.tsx': 'import React from "react"; import Counter from "./components/Counter"; import "./styles.css"; export default function App(){return <Counter/>}',
+      'components/Counter.tsx': 'import React from "react"; import data from "../data.json"; export default function Counter(){return <button>{data.label}</button>}',
+      'styles.css': 'button { color: red; }',
+      'data.json': '{"label":"Count"}',
+    },
+  } });
+  assert.deepEqual(appearanceCode.appearanceCodeDiagnostics(projectProfile), []);
+  for (const shell of [
+    { ...projectProfile.shell, source: 'ambiguous' },
+    { ...projectProfile.shell, language: 'html' },
+    { ...projectProfile.shell, entry: '../App.tsx' },
+    { ...projectProfile.shell, entry: 'Missing.tsx' },
+    { ...projectProfile.shell, files: { ...projectProfile.shell!.files, '../escape.ts': '' } },
+    { ...projectProfile.shell, files: { ...projectProfile.shell!.files, 'large.css': 'x'.repeat(100_001) } },
+  ]) assert.throws(() => schema.parseAppearanceProfile({ ...projectProfile, shell }), /appearance_invalid/);
+  const projectState = changeAppearance(202, { action: 'save', profile: projectProfile, apply: true });
+  context.user = { id: 202 };
+  const tree = JSON.parse(context.tool('get_appearance', { view: 'files', id: 'project' }));
+  assert.equal(tree.revision, 1);
+  assert.equal(tree.shell.files.length, 4);
+  assert.equal(JSON.stringify(tree).includes('return <Counter'), false, 'file listing omits source');
+  assert.equal(JSON.parse(context.tool('get_appearance', {})).active.shell.sourceOmitted, true);
+  assert.equal(JSON.stringify(JSON.parse(context.tool('get_appearance', {}))).includes('return <Counter'), false, 'default reads do not copy the entire project into context');
+  assert.deepEqual(JSON.parse(context.tool('get_appearance', { view: 'profile', id: 'project' })).shell.files, projectProfile.shell!.files);
+  assert.equal(JSON.parse(context.tool('get_appearance', { view: 'file', id: 'project', path: 'styles.css' })).source, 'button { color: red; }');
+  assert.equal(JSON.parse(context.tool('get_appearance', { view: 'file', id: 'project', path: '../escape.ts' })).error, 'appearance_file_not_found');
+  const edit = { id: 'project', revision: 1, files: { 'styles.css': 'button { color: blue; }' } };
+  context.desktopActionSink = { value: null };
+  assert.equal(JSON.parse(context.tool('suggest_appearance', { ...edit, checkOnly: true })).status, 'valid');
+  assert.equal(context.desktopActionSink.value, null, 'validation does not propose');
+  assert.equal(JSON.parse(context.tool('suggest_appearance', edit)).status, 'proposed');
+  assert.equal(context.desktopActionSink.value.value.profile.shell.files['styles.css'], 'button { color: blue; }');
+  assert.deepEqual(getAppearance(202), projectState, 'partial suggestions never modify saved files');
+  assert.equal(JSON.parse(context.tool('suggest_appearance', { ...edit, revision: 0 })).error, 'appearance_conflict');
+  for (const source of [
+    'import React from "react";\nexport default function App(){ return <div> }',
+    'import Missing from "./missing"; export default function App(){return null}',
+    'import value from "node:fs"; export default function App(){return null}',
+    'import value from "../outside"; export default function App(){return null}',
+    'export default function App(){require(window.target);return null}',
+    'export function App(){return null}',
+  ]) {
+    const failure = JSON.parse(context.tool('suggest_appearance', { ...edit, files: { 'App.tsx': source } }));
+    assert.equal(failure.error, 'appearance_build_failed');
+    assert.ok(failure.diagnostics.some((item: any) => item.file === 'App.tsx' && item.line > 0 && item.column > 0));
+  }
+  assert.equal(JSON.parse(context.tool('suggest_appearance', { ...edit, files: { 'styles.css': null } })).error, 'appearance_build_failed', 'deleting an imported file is diagnosed');
+  assert.deepEqual(getAppearance(202), projectState);
+  context.user = { id: 101 };
+  assert.equal(JSON.parse(context.tool('get_appearance', { view: 'file', id: 'project', path: 'App.tsx' })).error, 'appearance_not_found', 'file reads remain account-scoped');
   for (const motion of Object.values(caps.motion.presets)) {
     assert.deepEqual(
       schema.parseAppearanceProfile({ ...schema.newAppearance(), motion }).motion,

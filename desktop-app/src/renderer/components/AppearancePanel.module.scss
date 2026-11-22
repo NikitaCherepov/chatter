@@ -97,6 +97,7 @@
   min-width: 0;
 }
 .shellSource { width: 100%; resize: vertical; font-family: var(--appearance-code-font, monospace); }
+.error { white-space: pre-wrap; overflow-wrap: anywhere; }
 .fields {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));

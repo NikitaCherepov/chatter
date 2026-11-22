@@ -26,6 +26,11 @@ const libraryFrameStart = pageSource.indexOf('      <motion.aside key="chat-list
 const libraryFrame = pageSource.slice(libraryFrameStart, pageSource.indexOf('        <div className={s.sidebarHeader}>', libraryFrameStart));
 const libraryBackdrop = pageSource.match(/\{tabsEnabled && <div className=\{s\.chatLibraryBackdrop\}[^\n]+\}/)?.[0];
 assert.ok(libraryState.includes('chatSidebarRef') && libraryFrame.includes('data-chat-library') && libraryBackdrop);
+const shellReturnStart = pageSource.indexOf('  const shellReturnButton =');
+const shellReturnButton = pageSource.slice(shellReturnStart, pageSource.indexOf('  const chatSidebar =', shellReturnStart));
+const shellNavigationStart = pageSource.indexOf('        {appearanceShell && (', pageSource.indexOf('  const conversation ='));
+const shellNavigation = pageSource.slice(shellNavigationStart, pageSource.indexOf("        {(tabsEnabled || layout.tools === 'toolbar')", shellNavigationStart));
+assert.ok(shellReturnButton.includes('returnToAppearanceShell') && shellNavigation.includes('shellReturnButton'));
 const answerStateStart = pageSource.indexOf('  const workContent = splitWorkContent(displayedVariantContent,');
 const answerState = pageSource.slice(answerStateStart, pageSource.indexOf('\n\n  return (', answerStateStart));
 const answerBubbleStart = pageSource.indexOf('      <div className={s.bubbleWrap}', answerStateStart);
@@ -80,7 +85,7 @@ import React,{useState,useRef,useEffect,useLayoutEffect} from 'react';
 import {createRoot} from 'react-dom/client';
 import {QueryClient,QueryClientProvider} from '@tanstack/react-query';
 import {createInstance} from 'i18next';
-import {I18nextProvider} from 'react-i18next';
+import {I18nextProvider,useTranslation} from 'react-i18next';
 import {AnimatePresence,motion} from 'framer-motion';
 import {TestAuth} from 'test-auth';
 import {AppearancePanel} from ${modulePath('components/AppearancePanel.tsx')};
@@ -165,7 +170,10 @@ function AnswerSample({phase}){
  </div>;
 }
 function LayoutFixture({initialEditor=true}){
+ const {t}=useTranslation();
  const layouts=useChatLayouts();
+ const [appearanceShell,setAppearanceShell]=useState(null),[shellOpen,setShellOpen]=useState(false),[shellView,setShellView]=useState('conversation');
+ window.enableShellReturn=()=>{setAppearanceShell({scope:'navigator'});setShellOpen(false);setShellView('conversation');};
  const [editor,setEditor]=useState(initialEditor),[draft,setDraft]=useState(),[preview,setPreview]=useState(),[proposal,setProposal]=useState();
  const active=layouts.state?.profiles.find(item=>item.id===layouts.state.activeId);
  const layout=preview?.profile??active??DEFAULT_CHAT_LAYOUT;
@@ -174,6 +182,7 @@ function LayoutFixture({initialEditor=true}){
  window.filterWorkspaceChats=()=>setVisibleChats(testChats.slice(0,1));
  const tabsEnabled=layout.chatSide==='top';
  ${libraryState}
+ window.shellReturnState={open:shellOpen,view:shellView,activeChatId,libraryOpen};
  const workspace=useChatWorkspace('fixture:'+window.testAccount,activeChatId,chats,tabsEnabled);
  ${workspaceTitle}
  window.workspaceChatTitle=activeChatTitle;
@@ -191,6 +200,7 @@ function LayoutFixture({initialEditor=true}){
  };
  window.layoutProposal=()=>setProposal({proposal_id:'layout-bot',profile:{...CHAT_LAYOUT_CAPABILITIES.template,name:'Bot layout',id:'from-bot-layout',chatSide:'left'}});
  const s=chat, sidebarCollapsed=false, sidebarWidth=layout.sidebarWidth??260;
+ ${shellReturnButton}
  const [notifications,setNotifications]=useState(false);
  const [answerSample,setAnswerSample]=useState(null);
  window.setAnswerSample=setAnswerSample;
@@ -209,6 +219,7 @@ function LayoutFixture({initialEditor=true}){
  const toolsSidebar=<ToolsPanel key="tools" placement={layout.tools} side={layout.chatSide==='right'?'left':'right'} plan="free" isAdmin={0}/>;
  const roomSidebar=null;
  const conversation=<main key="conversation" className={chat.main}>
+  ${shellNavigation}
   ${workspaceBar}
   {preview&&<ChatLayoutPreviewBar profile={preview.profile} layouts={layouts} fromSettings={preview.editor}
    onClose={()=>{if(preview.editor){setDraft(preview.profile);setEditor(true);}setPreview(undefined);}}
@@ -251,6 +262,12 @@ window.inputText=(label,value)=>{
  if(!input)throw new Error('Input missing: '+label);
  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,String(value));
  input.dispatchEvent(new Event('input',{bubbles:true}));input.dispatchEvent(new Event('change',{bubbles:true}));
+};
+window.sourceText=value=>{
+ const input=document.querySelector('#panel-fixture textarea');
+ if(!input)throw new Error('Source editor missing');
+ Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(input,value);
+ input.dispatchEvent(new Event('input',{bubbles:true}));
 };
 const i18n=createInstance();
 i18n.init({lng:'ru',resources:{ru:{translation:ru}},interpolation:{escapeValue:false}}).then(()=>{
@@ -455,6 +472,41 @@ app.whenReady().then(async()=>{
  await wc.capturePage();await sleep(100);
  const shot=await wc.capturePage();
  fs.writeFileSync(path.join(process.env.TEMP,'chatter-appearance-review.png'),shot.toPNG());
+ // Exercise the real project editor and compiler before applying a profile.
+ await js('[...document.querySelectorAll("label")].find(label=>label.textContent.trim()==="Использовать свой экран чатов").querySelector("input").click()');
+ const choose=async(label,value)=>{
+  await js('[...document.querySelectorAll("button")].find(button=>button.getAttribute("aria-label")==='+JSON.stringify(label)+').click()');
+  await until('[...document.querySelectorAll("[data-native-overlay] button")].some(button=>button.textContent.trim()==='+JSON.stringify(value)+')');
+  await js('[...document.querySelectorAll("[data-native-overlay] button")].find(button=>button.textContent.trim()==='+JSON.stringify(value)+').click()');
+ };
+ await choose('Формат исходного кода','tsx');
+ await js('window.sourceText("export default function App(){return <main>Project</main>}")');
+ await js('window.clickText("Разделить на файлы")');
+ await until('!!document.querySelector("button[aria-label=\\\"Файл проекта\\\"]")');
+ assert.equal(await js('[...document.querySelectorAll("button")].find(button=>button.textContent.trim()==="Удалить файл").disabled'),true,'entry deletion is disabled');
+ await js('window.inputText("Путь нового файла","styles.css")');
+ await js('window.clickText("Добавить файл")');
+ await js('window.sourceText("main { color: blue; }")');
+ await choose('Файл проекта','App.tsx');
+ await js('window.sourceText(\'import "./styles.css"; export default function App(){return <main>Project</main>}\')');
+ await choose('Файл проекта','styles.css');
+ await js('window.clickText("Удалить файл")');
+ await js('window.clickText("Предпросмотр")');
+ await until('[...document.querySelectorAll("#panel-fixture [role=alert]")].some(element=>element.textContent.includes("App.tsx:1:") && element.textContent.includes("styles.css"))');
+ assert.equal(await js('document.documentElement.dataset.appearance??null'),null,'invalid code must not start a preview');
+ await js('window.inputText("Путь нового файла","styles.css")');
+ await js('window.clickText("Добавить файл")');
+ await js('window.sourceText("main { color: blue; }")');
+ await js('window.clickText("Предпросмотр")');
+ await until('!!document.documentElement.dataset.appearance');
+ await js('window.clickText("Вернуть оформление")');
+ await until('!document.documentElement.dataset.appearance');
+ await js('window.clickText("Сохранить вариант")');
+ await until('window.testDb[2]?.profiles.length===1');
+ assert.equal(await js('window.testDb[2].profiles[0].shell.files["styles.css"]'),'main { color: blue; }');
+ assert.equal(await js('window.testDb[2].profiles[0].shell.entry'),'App.tsx');
+ assert.equal(await js('window.testDb[2].activeId'),null);
+ console.log('PASS: actual project file editor, conversion without source loss, entry protection, file diagnostics before preview, and complete inactive project save');
  await js('window.openLayoutFixture()');
  await until('[...document.querySelectorAll("#layout-editor-fixture button")].some(el=>el.getAttribute("aria-label")==="Сохранённые компоновки")');
  await until('document.querySelectorAll("[data-virtual-row-placeholder]").length>30');
@@ -556,7 +608,7 @@ app.whenReady().then(async()=>{
  console.log('PASS: hidden native scrollbar, overflow arrows, horizontal wheel scrolling and active tab visibility after resize');
  // Exercise Chromium hit testing and real input after a fresh mount with the top preset.
  const target=async expression=>{
-  const result=await js('(()=>{const element='+expression+';const r=element.getBoundingClientRect(),x=Math.round(r.left+r.width/2),y=Math.round(r.top+r.height/2),hit=document.elementFromPoint(x,y);return {x,y,receiver:hit?.tagName,hit:element.contains(hit)};})()');
+  const result=await js('(()=>{const element='+expression+';const r=element.getBoundingClientRect(),x=Math.round(r.left+r.width/2),y=Math.round(r.top+r.height/2),hit=document.elementFromPoint(x,y);return {x,y,receiver:hit?.outerHTML.slice(0,250),hit:element.contains(hit)};})()');
   assert.ok(result.hit,expression+' was blocked '+JSON.stringify(result));
   return {x:result.x,y:result.y};
  };
@@ -608,6 +660,27 @@ app.whenReady().then(async()=>{
    assert.equal(await js('getComputedStyle(document.querySelector("#chat-tools-panel")).position'),'absolute');
   }
  }
+ // Return controls must work both in the native conversation and above the library backdrop.
+ for(const width of [320,740,1450]){
+  win.setSize(width,850);
+  await js('window.resetWorkspaceTools();window.reloadWorkspace()');
+  await until('document.querySelector("#chat-library")?.inert');
+  assert.equal(await js('[...document.querySelectorAll("button")].some(button=>button.textContent.trim()==="Вернуться к своему интерфейсу")'),false);
+  const before=await js('window.shellReturnState.activeChatId');
+  await js('window.enableShellReturn()');
+  const nativeReturn='[...document.querySelectorAll("main button")].find(button=>button.textContent.trim()==="Вернуться к своему интерфейсу")';
+  await until('Boolean('+nativeReturn+')');
+  await clickAt(nativeReturn);
+  await until('window.shellReturnState.open && window.shellReturnState.view==="home"');
+  assert.equal(await js('window.shellReturnState.activeChatId'),before);
+  await js('window.enableShellReturn()');
+  await clickAt('document.querySelector("button[aria-controls=chat-library]")');
+  await until('!document.querySelector("#chat-library").inert && Math.abs(document.querySelector("#chat-library").getBoundingClientRect().left)<1');
+  await clickAt('[...document.querySelectorAll("#chat-library button")].find(button=>button.textContent.trim()==="Вернуться к своему интерфейсу")');
+  await until('document.querySelector("#chat-library").inert && window.shellReturnState.open && window.shellReturnState.view==="home" && !window.shellReturnState.libraryOpen');
+  assert.equal(await js('window.shellReturnState.activeChatId'),before);
+ }
+ console.log('PASS: custom interface return is clickable in the native conversation and chat drawer at narrow/wide widths, closes the drawer and preserves the active chat');
  await wc.debugger.detach();
 
  const answerSample='document.querySelector("[data-answer-sample]")';

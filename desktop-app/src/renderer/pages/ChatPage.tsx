@@ -1189,7 +1189,7 @@ export function ChatPage() {
   useEffect(() => {
     setShellOpen(Boolean(appearanceShell));
     setShellView('home');
-  }, [appearanceShell?.source, appearanceShell?.language, appearanceShell?.scope, user?.id, api.API_BASE]);
+  }, [appearanceShell?.source, appearanceShell?.entry, appearanceShell?.files, appearanceShell?.language, appearanceShell?.scope, user?.id, api.API_BASE]);
   const navigate = useNavigate();
   const layouts = useChatLayouts();
   const [layoutPreview, setLayoutPreview] = useState<{ profile: ChatLayoutProfile; proposalId?: string }>();
@@ -1350,6 +1350,11 @@ export function ChatPage() {
   const closeChatLibrary = () => {
     setLibraryOpen(false);
     if (tabsEnabled) libraryTrigger.current?.focus({ preventScroll: true });
+  };
+  const returnToAppearanceShell = () => {
+    setLibraryOpen(false);
+    setShellView('home');
+    setShellOpen(true);
   };
   useEffect(() => {
     if (!tabsEnabled) setLibraryOpen(false);
@@ -6290,6 +6295,14 @@ export function ChatPage() {
     if (confirmationComposer.comment && !pendingConfirmationIds.split('\n').includes(confirmationComposer.comment.id)) confirmationComposer.cancel();
   }, [pendingConfirmationIds, confirmationComposer.comment?.id, confirmationComposer.busy]);
 
+  const shellReturnButton = appearanceShell ? (
+    <button type="button" className={s.roomTrigger} onClick={returnToAppearanceShell}>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="m12 19-7-7 7-7M5 12h14" />
+      </svg>
+      {t('appearance.shellReturn')}
+    </button>
+  ) : null;
   const chatSidebar = (
       <motion.aside key="chat-list"
         id={tabsEnabled ? 'chat-library' : undefined}
@@ -6306,6 +6319,9 @@ export function ChatPage() {
         animate={{ width: sidebarCollapsed ? 65 : sidebarWidth }}
         transition={{ duration: 0.2, ease: 'easeInOut' }}
       >
+        {tabsEnabled && shellReturnButton && (
+          <div className={s.shellNavigation}>{shellReturnButton}</div>
+        )}
         <div className={s.sidebarHeader}>
           <button className={s.burgerBtn} onClick={() => tabsEnabled ? closeChatLibrary() : setSidebarCollapsed(!sidebarCollapsed)} title={tabsEnabled ? t('common.close') : sidebarCollapsed ? t('chat.sidebar.expand') : t('chat.sidebar.collapse')} aria-label={tabsEnabled ? t('common.close') : undefined}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
@@ -6856,9 +6872,7 @@ export function ChatPage() {
       <main key="conversation" className={s.main} ref={chatMainRef}>
         {appearanceShell && (
           <div className={s.shellNavigation}>
-            <button type="button" className={s.roomTrigger} onClick={() => { setShellView('home'); setShellOpen(true); }}>
-              {t('chatWorkspace.allChats')}
-            </button>
+            {shellReturnButton}
           </div>
         )}
         {(tabsEnabled || layout.tools === 'toolbar') && (
@@ -8528,7 +8542,7 @@ export function ChatPage() {
     else if (action.type === 'newChat') void handleCreateChat();
     else if (action.type === 'loadMore') void loadChatSection(action.folderId);
     else if (action.type === 'search') handleSearchChange(action.query);
-    else if (action.type === 'openSettings') { setShellOpen(false); setShowSettings(true); }
+    else if (action.type === 'openSettings') setShowSettings(true);
     else if (action.type === 'openLibrary') {
       setShellOpen(false);
       setSidebarCollapsed(false);

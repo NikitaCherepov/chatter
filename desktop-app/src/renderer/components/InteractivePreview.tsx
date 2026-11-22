@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import type { InteractiveLanguage, InteractiveStatus } from '../../main/interactive-types';
+import type { AppearanceProject } from '../lib/appearance-project';
 import type { AppearanceShellAction, AppearanceShellState } from '../../main/appearance-shell-types';
 import s from './InteractivePreview.module.scss';
 
@@ -12,11 +13,12 @@ type AppearanceBridge = {
   onFailure: () => void;
 };
 
-export function InteractivePreview({ source, language, visible, appearance }: {
+export function InteractivePreview({ source, language, visible, appearance, project }: {
   source: string;
   language: InteractiveLanguage;
   visible: boolean;
   appearance?: AppearanceBridge;
+  project?: AppearanceProject;
 }) {
   const { t } = useTranslation();
   const appearanceRef = useRef(appearance);
@@ -77,7 +79,7 @@ export function InteractivePreview({ source, language, visible, appearance }: {
     const unsubscribeActions = bridge ? api.onAppearanceShellAction(event => {
       if (event.id === id.current) appearanceRef.current?.onAction(event.action);
     }) : () => {};
-    void api.interactiveCreate({ source, language, dark: document.documentElement.dataset.theme === 'dark', errorLabel, bridge })
+    void api.interactiveCreate({ source, language, project, dark: document.documentElement.dataset.theme === 'dark', errorLabel, bridge })
       .then(created => {
         if (disposed) { void api.interactiveStop(created); return; }
         id.current = created;
@@ -93,7 +95,7 @@ export function InteractivePreview({ source, language, visible, appearance }: {
       disposed = true; unsubscribe(); unsubscribeActions();
       if (id.current) { void api.interactiveStop(id.current).catch(() => {}); id.current = null; }
     };
-  }, [available, seen, stopped, source, language, errorLabel, run, bridge]);
+  }, [available, seen, stopped, source, project, language, errorLabel, run, bridge]);
 
   useEffect(() => {
     if (appearance && id.current)

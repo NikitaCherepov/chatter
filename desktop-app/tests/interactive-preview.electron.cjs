@@ -23,8 +23,8 @@ app.whenReady().then(async () => {
   host = new BrowserWindow({ show: false, width: 1000, height: 800, webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false } });
   await host.loadURL('data:text/html,<body>Trusted host</body>');
   manager = new InteractivePreviews();
-  const create = async (language, source) => {
-    const id = manager.create(host.webContents, { language, source, dark: true, errorLabel: 'Preview failed' });
+  const create = async (language, source, options = {}) => {
+    const id = manager.create(host.webContents, { language, source, dark: true, errorLabel: 'Preview failed', ...options });
     const contents = host.contentView.children.at(-1).children[0].webContents;
     contents.on('console-message', (_event, level, message) => { if (level >= 2) console.log('sandbox:', message.slice(0, 180)); });
     await until(() => !contents.isLoading());
@@ -73,6 +73,51 @@ app.whenReady().then(async () => {
   assert.equal(await preview.contents.executeJavaScript('document.querySelector("p")?.textContent'), 'TSX 7');
   assert.equal(await preview.contents.executeJavaScript('(()=>{try{localStorage.getItem("private-test");return false}catch{return true}})()'), true);
   manager.stop(host.webContents, preview.id);
+  const project = { entry: 'App.tsx', files: {
+    'App.tsx': 'import React from "react"; import Counter from "./parts/Counter"; import "./styles.css"; export default function App(){const [state,setState]=React.useState(null);React.useEffect(()=>window.chatter.subscribe(setState,{navigation:true}),[]);return <><h1>{state?.chats[0]?.title}</h1><Counter/></>}',
+    'parts/Counter.tsx': 'import React from "react"; import data from "../data.json"; import {format} from "./format"; export default function Counter(){const [n,setN]=React.useState(0);return <button onClick={()=>setN(n+1)}>{format(data.label,n)}</button>}',
+    'parts/format.ts': 'export function format(label:string,n:number){return label+": "+n}',
+    'data.json': '{"label":"Project"}',
+    'styles.css': 'button { color: rgb(1, 2, 3); }',
+  } };
+  assert.throws(() => manager.create(host.webContents, { language: 'tsx', source: '', dark: true, errorLabel: '', project }), /Invalid appearance project/, 'projects require the appearance bridge');
+  preview = await create('tsx', '', { bridge: 'appearance-chat-list-v1', project });
+  const shellState = { chats: [{ id: 1, title: 'Live chat' }], sections: [], view: 'home' };
+  manager.updateAppearanceState(host.webContents, preview.id, shellState);
+  await until(async () => await preview.contents.executeJavaScript('document.querySelector("h1")?.textContent') === 'Live chat');
+  assert.equal(await preview.contents.executeJavaScript('document.querySelector("button")?.textContent'), 'Project: 0');
+  assert.equal(await preview.contents.executeJavaScript('getComputedStyle(document.querySelector("button")).color'), 'rgb(1, 2, 3)');
+  assert.deepEqual(await preview.contents.executeJavaScript('[typeof window.chatter,typeof electronAPI,typeof require,typeof process]'), ['object','undefined','undefined','undefined']);
+  await preview.contents.executeJavaScript('document.querySelector("button").click()');
+  await until(async () => await preview.contents.executeJavaScript('document.querySelector("button").textContent') === 'Project: 1');
+  manager.updateAppearanceState(host.webContents, preview.id, { ...shellState, view: 'conversation' });
+  await sleep(100);
+  manager.updateAppearanceState(host.webContents, preview.id, shellState);
+  await sleep(100);
+  assert.equal(await preview.contents.executeJavaScript('document.querySelector("button").textContent'), 'Project: 1', 'project modules and state survive route-aware return');
+  manager.stop(host.webContents, preview.id);
+  const starter = JSON.parse(fs.readFileSync(path.join(__dirname, '../../examples/appearances/workspace-starter.json'), 'utf8'));
+  preview = await create('tsx', '', { bridge: 'appearance-chat-list-v1', project: { entry: starter.shell.entry, files: starter.shell.files } });
+  const starterState = { ...shellState, query: '', messages: [], labels: { allChats: 'All chats', newChat: 'New chat', search: 'Search', loadMore: 'More' } };
+  manager.updateAppearanceState(host.webContents, preview.id, starterState);
+  await until(async () => await preview.contents.executeJavaScript('document.querySelector(".chat")?.textContent') === 'Live chat');
+  manager.updateAppearanceState(host.webContents, preview.id, { ...starterState, view: 'conversation', canSend: true, messages: [{ id: 1, role: 'assistant', content: '# Live answer' }, { id: 2, role: 'assistant', content: '' }] });
+  await until(async () => await preview.contents.executeJavaScript('document.querySelector("article h1")?.textContent') === 'Live answer');
+  assert.equal(await preview.contents.executeJavaScript('document.querySelectorAll("article").length'), 1, 'the starter excludes empty answers');
+  await preview.contents.executeJavaScript('document.querySelector("textarea").focus()');
+  manager.updateAppearanceState(host.webContents, preview.id, { ...starterState, view: 'conversation', canSend: false, sending: true });
+  await until(async () => await preview.contents.executeJavaScript('document.querySelector("form button")?.textContent') === 'Stop');
+  assert.equal(await preview.contents.executeJavaScript('document.activeElement.tagName'), 'TEXTAREA', 'stream updates retain composer focus');
+  manager.updateAppearanceState(host.webContents, preview.id, starterState);
+  await until(async () => await preview.contents.executeJavaScript('document.querySelector(".chat")?.textContent') === 'Live chat');
+  manager.stop(host.webContents, preview.id);
+  console.log('PASS: importable workspace starter home/conversation, Markdown, empty-answer handling and composer focus during updates');
+  manager.create(host.webContents, { language: 'tsx', source: '', dark: true, errorLabel: 'Preview failed', bridge: 'appearance-chat-list-v1', project: {
+    entry: 'App.tsx', files: { 'App.tsx': 'import Missing from "./missing"; export default function App(){return null}' },
+  } });
+  await until(() => host.contentView.children.length === 0);
+  assert.equal(await host.webContents.executeJavaScript('2+2'), 4, 'an invalid project returns control to the host');
+  console.log('PASS: virtual TSX project, relative component/JSON/CSS imports, live bridge, state-preserving routing and invalid-project recovery');
   preview = await create('jsx', 'export default function Broken(){ throw new Error("broken") }');
   assert.equal(await preview.contents.executeJavaScript('document.querySelector("[role=alert]")?.textContent'), 'Preview failed');
   manager.stop(host.webContents, preview.id);

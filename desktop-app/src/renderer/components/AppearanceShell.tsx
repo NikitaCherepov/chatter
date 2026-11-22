@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react';
+import { useMemo, useSyncExternalStore } from 'react';
 import { useTranslation } from 'react-i18next';
 import { InteractivePreview } from './InteractivePreview';
 import { APPEARANCE_STYLE_EVENT, currentAppearance } from '../lib/appearance-runtime';
@@ -41,6 +41,8 @@ export function AppearanceShell({
   onFailure: () => void;
 }) {
   const { t } = useTranslation();
+  const project = useMemo(() => shell.files ? { entry: shell.entry, files: shell.files } : undefined,
+    [shell.entry, shell.files]);
   return (
     <section
       className={s.shell}
@@ -67,7 +69,8 @@ export function AppearanceShell({
         </div>
       </header>
       <InteractivePreview
-        source={shell.source}
+        source={shell.source ?? ''}
+        project={project}
         language={shell.language}
         visible={visible}
         appearance={{ state, onAction, onClose, onFailure }}

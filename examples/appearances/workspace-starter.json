@@ -1,0 +1,57 @@
+{
+  "id": "workspace-starter",
+  "name": "Workspace starter",
+  "shell": {
+    "version": 1,
+    "language": "tsx",
+    "entry": "App.tsx",
+    "files": {
+      "App.tsx": "import React from \"react\";\nimport ChatList from \"./components/ChatList\";\nimport Conversation from \"./components/Conversation\";\nimport \"./styles.css\";\nexport default function App(){const [state,setState]=React.useState(null);React.useEffect(()=>window.chatter.subscribe(setState,{navigation:true}),[]);if(!state)return <p>Loading…</p>;return state.view===\"home\"?<ChatList state={state}/>:<Conversation state={state}/>;}",
+      "components/ChatList.tsx": "import React from \"react\";\nexport default function ChatList({state}){return <main><header><h1>{state.labels.allChats}</h1><button onClick={()=>window.chatter.newChat()}>{state.labels.newChat}</button><button onClick={()=>window.chatter.openLibrary()}>{state.labels.allChats}</button></header><input aria-label={state.labels.search} placeholder={state.labels.search} value={state.query} onChange={event=>window.chatter.search(event.target.value)}/>{state.chats.map(chat=><button className=\"chat\" key={chat.id} onClick={()=>window.chatter.openChat(chat.id)}>{chat.title}</button>)}{state.query.trim().length<3&&state.sections.filter(section=>section.hasMore).map(section=><button key={section.folderId??\"unfiled\"} disabled={section.loading} onClick={()=>window.chatter.loadMore(section.folderId)}>{state.labels.loadMore}</button>)}</main>;}",
+      "components/Conversation.tsx": "import React from \"react\";\nimport Markdown from \"react-markdown\";\nimport remarkGfm from \"remark-gfm\";\nimport Composer from \"./Composer\";\nexport default function Conversation({state}){return <main><header><button onClick={()=>window.chatter.showHome()}>{state.labels.allChats}</button><button onClick={()=>window.chatter.openConversation()}>…</button></header>{state.hasOlderMessages&&<button disabled={state.olderMessagesLoading} onClick={()=>window.chatter.loadOlderMessages()}>{state.labels.loadMore}</button>}<section className=\"messages\">{state.messages.filter(message=>message.content.trim()).map(message=><article key={message.id} data-role={message.role}><Markdown remarkPlugins={[remarkGfm]}>{message.content}</Markdown></article>)}</section><Composer state={state}/></main>;}",
+      "components/Composer.tsx": "import React from \"react\";\nexport default function Composer({state}){const [text,setText]=React.useState(\"\");return <form onSubmit={event=>{event.preventDefault();if(state.canSend&&text.trim()&&window.chatter.sendMessage(text))setText(\"\");}}><textarea aria-label=\"Message\" value={text} onChange={event=>setText(event.target.value)}/>{state.sending?<button type=\"button\" onClick={()=>window.chatter.stopGeneration()}>Stop</button>:<button disabled={!state.canSend||!text.trim()}>Send</button>}</form>;}",
+      "styles.css": "body{margin:0;font:15px/1.6 system-ui,sans-serif;background:#101722;color:#e4ebf3}main{max-width:900px;margin:auto;padding:24px}header,form{display:flex;gap:12px;align-items:center}button,input,textarea{padding:12px;border-radius:8px;border:1px solid #456;background:#182536;color:inherit}.chat{display:block;width:100%;margin-top:8px;text-align:left}article{padding:12px;margin:12px 0;background:#182536;border-radius:8px}textarea{flex:1;min-width:0}"
+    },
+    "scope": "workspace"
+  },
+  "revision": 0,
+  "light": {
+    "background": "#dfe6ef",
+    "text": "#0f1d30",
+    "accent": "#122d4d"
+  },
+  "dark": {
+    "background": "#101722",
+    "text": "#e4ebf3",
+    "accent": "#7da6cf"
+  },
+  "typography": {
+    "uiFont": "Inter",
+    "messageFont": "Inter",
+    "codeFont": "Consolas",
+    "uiSize": 14,
+    "messageSize": 14,
+    "codeSize": 13,
+    "lineHeight": 1.6
+  },
+  "geometry": {
+    "radius": 8,
+    "density": 1
+  },
+  "background": {
+    "type": "solid",
+    "color": "#101722",
+    "color2": "#243348",
+    "angle": 135,
+    "image": "",
+    "dim": 0.25,
+    "position": "center"
+  },
+  "motion": {
+    "preset": "none",
+    "duration": 0,
+    "distance": 0,
+    "scale": 1,
+    "easing": "ease-out"
+  }
+}

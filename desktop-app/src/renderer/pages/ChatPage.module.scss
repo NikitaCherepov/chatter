@@ -12,6 +12,16 @@
 .shellNavigation {
   flex-shrink: 0; display: flex; gap: 8px;
   padding: 8px 16px; border-bottom: 1px solid var(--border-light);
+  .roomTrigger {
+    flex-shrink: 1;
+    min-width: 0;
+    height: auto;
+    min-height: 36px;
+    color: var(--text-primary);
+    text-align: left;
+    white-space: normal;
+    svg { flex-shrink: 0; }
+  }
 }
 
 // ====== SIDEBAR ======
@@ -1785,7 +1795,7 @@
 
 @media (max-width: 1100px) {
   .layout[data-layout-custom='true'] {
-    .sidebar:not(.sidebarCollapsed) { max-width: 34vw; }
+    .sidebar:not(.sidebarCollapsed):not([data-chat-library]) { max-width: 34vw; }
     .roomPanel,
     [data-tools-panel-open='true'],
     [data-tools-panel-overlay] {

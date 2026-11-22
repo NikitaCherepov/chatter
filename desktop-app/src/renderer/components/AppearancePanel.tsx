@@ -25,6 +25,8 @@ import { appearanceColors, materialColors } from '../lib/appearance-colors';
 import { apiFetch, resolveAuthenticatedAssetUrl } from '../lib/api';
 import { Select } from './Select';
 import Slider from './Slider';
+import { AppearanceShellEditor } from './AppearanceShellEditor';
+import { compileAppearanceProject } from '../lib/appearance-project';
 import a from './SettingsModal.module.scss';
 import s from './AppearancePanel.module.scss';
 
@@ -48,6 +50,12 @@ function selectedMotionPreset(motion: AppearanceMotion): MotionPreset | 'custom'
 }
 
 const STANDARD_SAMPLE = newAppearance();
+async function validateShell(profile: AppearanceProfile) {
+  if (!profile.shell?.files) return;
+  const compiler = await import('typescript');
+  const { diagnostics } = compileAppearanceProject({ entry: profile.shell.entry, files: profile.shell.files }, compiler.default ?? compiler);
+  if (diagnostics.length) throw Object.assign(new Error('appearance_build_failed'), { diagnostics });
+}
 export const AppearanceSample = memo(function AppearanceSample({
   profile,
 }: {
@@ -152,6 +160,11 @@ export function AppearancePanel({ initialDraft, onShellPreview }: {
     try {
       await fn();
     } catch (e: any) {
+      if (Array.isArray(e?.diagnostics)) {
+        setError(t('appearance.errors.appearance_build_failed') + '\n' + e.diagnostics
+          .map((item: { file: string; line: number; column: number; message: string }) => `${item.file}:${item.line}:${item.column} ${item.message}`).join('\n'));
+        return;
+      }
       setError(
         t('appearance.errors.' + (e?.data?.error || e?.message), {
           defaultValue: t('appearance.failed'),
@@ -192,6 +205,7 @@ export function AppearancePanel({ initialDraft, onShellPreview }: {
     if (!draft) return;
     await run(async () => {
       const profile = parseAppearanceProfile(draft);
+      if (apply) await validateShell(profile);
       await query.change({ action: 'save', profile, apply });
       finishAppearancePreview(profile);
       setDraft(null);
@@ -687,14 +701,8 @@ export function AppearancePanel({ initialDraft, onShellPreview }: {
             <>
               {options(t('appearance.shellScope'), draft.shell.scope ?? 'navigator', ['navigator', 'workspace'],
                 scope => setDraft({ ...draft, shell: { ...draft.shell!, scope: scope as 'navigator' | 'workspace' } }))}
-              {options(t('appearance.shellLanguage'), draft.shell.language, ['html', 'tsx'],
-                language => setDraft({ ...draft, shell: { ...draft.shell!, language: language as 'html' | 'tsx' } }))}
-              <label className={s.field}>
-                {t('appearance.shellSource')}
-                <textarea className={`${a.fieldInput} ${s.shellSource}`} rows={14} spellCheck={false}
-                  maxLength={100_000} value={draft.shell.source}
-                  onChange={event => setDraft({ ...draft, shell: { ...draft.shell!, source: event.target.value } })} />
-              </label>
+              <AppearanceShellEditor key={draft.id} shell={draft.shell}
+                onChange={shell => setDraft({ ...draft, shell })} />
             </>
           )}
           <h4>{t('appearance.background')}</h4>
@@ -844,6 +852,7 @@ export function AppearancePanel({ initialDraft, onShellPreview }: {
               onClick={() =>
                 void run(async () => {
                   const profile = parseAppearanceProfile(draft);
+                  await validateShell(profile);
                   previewAppearance(profile);
                   if (profile.shell) onShellPreview?.(profile);
                 })
