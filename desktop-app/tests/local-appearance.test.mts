@@ -19,6 +19,24 @@ try {
   assert.ok(store.readDocumentation().includes('theme.json'));
   assert.ok(store.readDocumentation().includes('workLog'));
   assert.ok(fs.readFileSync(path.join(directory, 'chatter.d.ts'), 'utf8').includes('workLog:WorkLogStep[]'));
+  // Editor declarations must resolve the bundled component API, not only runtime syntax.
+  const virtualRoot = path.resolve('desktop-app/.theme-typecheck');
+  const virtualFiles = new Map([
+    [path.join(virtualRoot, 'chatter.d.ts'), fs.readFileSync(path.join(directory, 'chatter.d.ts'), 'utf8')],
+    [path.join(virtualRoot, 'chatter-ui.d.ts'), fs.readFileSync(path.join(directory, 'chatter-ui.d.ts'), 'utf8')],
+    [path.join(virtualRoot, 'App.tsx'), 'import React from "react";import {Markdown,MessageImages,Attachments,useChatterState} from "@chatter/ui";export default function App(){const state=useChatterState();const message=state?.messages[0];return message?<><Markdown messageId={message.id} content={message.content}/><MessageImages message={message}/><Attachments message={message}/></>:null;}'],
+  ]);
+  const compilerOptions = { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.ESNext, moduleResolution: ts.ModuleResolutionKind.Bundler,
+    jsx: ts.JsxEmit.React, noEmit: true, strict: true, esModuleInterop: true, types: [], skipLibCheck: false };
+  const compilerHost = ts.createCompilerHost(compilerOptions), originalRead = compilerHost.readFile, originalExists = compilerHost.fileExists;
+  compilerHost.readFile = (file: string) => virtualFiles.get(path.normalize(file)) ?? originalRead(file);
+  compilerHost.fileExists = (file: string) => virtualFiles.has(path.normalize(file)) || originalExists(file);
+  compilerHost.getSourceFile = (file: string, version: any) => { const source = compilerHost.readFile(file); return source === undefined ? undefined : ts.createSourceFile(file, source, version); };
+  const originalDirectoryExists = compilerHost.directoryExists;
+  compilerHost.directoryExists = (file: string) => path.normalize(file) === virtualRoot || originalDirectoryExists?.(file) || false;
+  const editorProgram = ts.createProgram([...virtualFiles.keys()], compilerOptions, compilerHost);
+  assert.deepEqual(ts.getPreEmitDiagnostics(editorProgram).filter((item: any) => item.category === ts.DiagnosticCategory.Error)
+    .map((item: any) => ts.flattenDiagnosticMessageText(item.messageText, '\n')), [], 'generated @chatter/ui declarations type-check with the real React API');
   fs.appendFileSync(guidePath, '\nUpdated desktop guide\n');
   assert.ok(store.readDocumentation().includes('Updated desktop guide'), 'docs are read from the current local file');
   assert.deepEqual(store.load().appearance, beforeDocs, 'reading docs preserves all theme settings');

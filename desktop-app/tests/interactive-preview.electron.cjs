@@ -28,6 +28,8 @@ app.whenReady().then(async () => {
       imageHits++;
       if (!req.url.includes('token=host-private')) { res.writeHead(403); res.end(); return; }
       if (req.url.includes('bad=true')) { res.setHeader('Content-Type', 'text/html'); res.end('<script>bad</script>'); return; }
+      if (req.url.includes('large=true')) { res.setHeader('Content-Type', 'image/png'); res.setHeader('Content-Length', String(17 * 1024 * 1024)); res.end(); return; }
+      if (req.url.includes('slow=true')) { setTimeout(() => { res.setHeader('Content-Type', 'image/png'); res.end(fixtureImage); }, 500); return; }
       res.setHeader('Content-Type', 'image/png'); res.end(fixtureImage); return;
     }
     hits++; res.end('must not be reached');
@@ -171,14 +173,14 @@ app.whenReady().then(async () => {
   assert.equal(await preview.contents.executeJavaScript('document.querySelector(".work-log").open'), false, 'completed work log can be collapsed without losing its content');
   console.log('PASS: isolated starter retains intermediate text through tool streaming, renders live tool status and final answer safely');
   const resourceRequests = [];
-  const allowedSources = new Set(['/api/v1/images/photo.png', '/api/v1/images/inline.png', '/api/v1/images/bad.png']);
+  const allowedSources = new Set(['/api/v1/images/photo.png', '/api/v1/images/inline.png', '/api/v1/images/bad.png', '/api/v1/images/large.png', '/api/v1/images/slow.png']);
   host.webContents.send = (channel, payload) => {
     if (channel === 'interactive-preview:appearance-image') {
       resourceRequests.push(payload);
       manager.resolveAppearanceImage({}, payload.id, payload.requestId, endpoint.replace('/blocked', '/theme-image?token=wrong-owner'));
       const allowed = payload.chatId === 1 && payload.messageId === 11 && payload.variantIndex === 0 && allowedSources.has(payload.url);
       manager.resolveAppearanceImage(host.webContents, payload.id, payload.requestId,
-        allowed ? endpoint.replace('/blocked', '/theme-image?token=host-private' + (payload.url.endsWith('bad.png') ? '&bad=true' : '')) : null);
+        allowed ? endpoint.replace('/blocked', '/theme-image?token=host-private' + (payload.url.endsWith('bad.png') ? '&bad=true' : payload.url.endsWith('large.png') ? '&large=true' : payload.url.endsWith('slow.png') ? '&slow=true' : '')) : null);
     }
     if (channel === 'interactive-preview:appearance-action') forwarded.push(payload.action);
     return hostSend(channel, payload);
@@ -207,6 +209,18 @@ app.whenReady().then(async () => {
   await until(() => forwarded.some(action => action.type === 'contentAction' && action.action === 'openLink' && action.url === 'chat:1#10'));
   manager.updateAppearanceState(host.webContents, preview.id, { ...mediaState, messages: [{ ...mediaMessage, images: [{ url: '/api/v1/images/bad.png', type: 'external' }] }] });
   await until(async () => await preview.contents.executeJavaScript('!!document.querySelector(".chatter-image-error")'));
+  manager.updateAppearanceState(host.webContents, preview.id, { ...mediaState, messages: [{ ...mediaMessage, images: [{ url: '/api/v1/images/large.png', type: 'external' }] }] });
+  await until(() => resourceRequests.some(request => request.url.endsWith('large.png')));
+  await until(async () => await preview.contents.executeJavaScript('!!document.querySelector(".chatter-image-error")'));
+  manager.updateAppearanceState(host.webContents, preview.id, { ...mediaState, messages: [{ ...mediaMessage, images: [{ url: '/api/v1/images/slow.png', type: 'external' }] }] });
+  await until(() => resourceRequests.some(request => request.url.endsWith('slow.png')));
+  manager.updateAppearanceState(host.webContents, preview.id, { ...mediaState, activeChatId: 2, messages: [] });
+  await sleep(550);
+  assert.equal(await preview.contents.executeJavaScript('document.querySelectorAll("article img").length'), 0, 'a late image cannot reappear after changing chat');
+  const beforeStaleRequest = resourceRequests.length;
+  const staleSource = await preview.contents.executeJavaScript('(()=>{const url=new URL("/_image",location.href);url.search=new URLSearchParams({chatId:"1",messageId:"11",variantIndex:"0",url:"/api/v1/images/photo.png",width:"560"});return url.href})()');
+  await preview.contents.executeJavaScript(`new Promise(resolve=>{const image=new Image();image.onload=()=>resolve(true);image.onerror=()=>resolve(false);image.src=${JSON.stringify(staleSource)};document.body.append(image);})`).then(loaded => assert.equal(loaded, false));
+  assert.equal(resourceRequests.length, beforeStaleRequest, 'stale chat image requests are rejected before reaching the host loader');
   assert.ok(resourceRequests.every(request => !request.url.includes('host-private')));
   host.webContents.send = hostSend;
   console.log('PASS: scoped authenticated image bytes, media-only messages, shared Markdown/gallery/code/table styles, native content actions and invalid-MIME fallback');

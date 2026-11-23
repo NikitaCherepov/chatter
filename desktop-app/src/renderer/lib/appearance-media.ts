@@ -6,9 +6,13 @@ import { remarkLocalFileLinks, transformMessageLink } from './message-links';
 import { isMessageImageUrl } from './remark-message-images';
 
 type Message = AppearanceShellState['messages'][number];
+type References = { images: Set<string>; links: Set<string>; texts: string[] };
+const referencesByMessage = new WeakMap<Message, References>();
 
 /** Parse real Markdown references (including reference links), never code examples or raw HTML. */
 export function appearanceContentReferences(message: Message) {
+  const existing = referencesByMessage.get(message);
+  if (existing) return existing;
   const images = new Set((message.images ?? []).map(image => image.url));
   for (const file of message.attachments ?? []) if (file.mimeType.startsWith('image/')) images.add(file.url);
   const links = new Set<string>();
@@ -23,7 +27,9 @@ export function appearanceContentReferences(message: Message) {
   };
   for (const text of texts) if (text) visit(ReactMarkdown({ children: text,
     remarkPlugins: [remarkGfm, remarkLocalFileLinks], urlTransform: transformMessageLink }));
-  return { images, links, texts };
+  const references = { images, links, texts };
+  referencesByMessage.set(message, references);
+  return references;
 }
 
 export function allowedAppearanceImage(url: string): boolean {
