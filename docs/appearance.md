@@ -46,6 +46,17 @@ HTML and React shells use one file-project format: entry in the on-disk manifest
 
 navigator scope opens selected chats in the native conversation. workspace scope keeps its own message renderer and composer. The live bridge supports chat/folder summaries, pagination, search, active messages, generation state and user-triggered actions. Read generated THEMES.md/chatter.d.ts for the complete API. Route-aware shells subscribe with {navigation:true}; older shells still reload their initial overview on return home.
 
+## Chat and folder menus
+
+Chat/folder library operations are available as data/functions in both shell scopes. Generated
+docs/library.md describes per-entity actions, read-only getChatMenu/getFolderMenu descriptors,
+rename/export/move/bot visibility/delete-or-leave functions and folder create/rename/delete.
+The theme owns forms and confirmation markup. Destructive final calls explicitly require true
+after user confirmation. ChatPage reuses its native handlers and sidebar counts/paging, with a
+shared mutation lock, localized failure state and account/server/filter-scope guards. Search
+summaries have no mutation actions until real ownership metadata is loaded. Tool panels and tool
+contents are unaffected.
+
 ## Editing, preview and application
 
 useChatterState({navigation:true, confirmations:true}) from @chatter/ui reads ThemeState (initially undefined) and opts the shell into custom routing/confirmation handling. Both options default to false; child components may call useChatterState() without disabling the root. Hook consumers share one state subscription whose options are combined across mounted consumers. Boolean option changes and unmounts release that consumer's claim; the isolated bridge also counts direct subscribe consumers and only disables a capability after its last owner leaves. Keep the navigation owner mounted across routes, and confirmations ownership mounted while rendering every pending card.
@@ -59,6 +70,8 @@ fullImageSource(messageId,url) returns an original-resolution scoped src without
 Documents can also be rendered entirely by the theme. readAttachment(messageId,index) returns kind/name/mimeType/sizeBytes/text, sanitized DOCX html and PDF pageCount. Text is the existing server extraction, which may be an excerpt; the original remains available for download. renderAttachmentPage(messageId,index,page,width?) returns PNG pixels for one PDF page as source/width/height/page/pageCount. Pages are one-based and requested on demand, with width 128-1600 (default 1000). The trusted host reuses native PDF/DOCX parsing and the same byte cache, scoped by source as well as filename. Read-only requests are limited to current attachment URLs/variants, bounded and cancelled on scope changes. Tokens and raw source bytes never reach the theme. Optional Attachments.onAttachmentClick passes a descriptor to the author's own viewer instead of opening native UI. Catch read/page errors and discard stale async results.
 
 Outgoing attachments use chooseAttachments() (alias attachFiles()) from a user event. It opens only the system file chooser; it does not switch to native chat or upload anything. Exact selected files are held under owner-scoped, expiring opaque tickets, read sequentially, and prepared with the same format/size/compression logic as AttachModal. The theme receives state.composer.busy/error/items/limits, with stable item IDs, names, types and sizes. pendingAttachmentSource(id) supplies scoped pending-image previews; removePendingAttachment(id) and clearPendingAttachments() update the existing composer. sendMessage accepts empty text when attachments exist and sends through the normal chat handler. The theme owns the upload list/panel/modal; a file input or filesystem API is not exposed. Selection cancellation, unmounts and chat changes discard unfinished additions. Existing pending document behavior remains metadata-only before sending. Crop/import flows are unchanged.
+
+For pasted screenshots/files, call `attachPastedFiles()` synchronously inside the message input's `paste` handler and call `preventDefault()` only when it returns true. Text-only paste remains native. The isolated preload captures only genuine user paste events, never reads the clipboard in the background, and sends files through the same preparation/composer flow. See generated `docs/media.md` for the complete contract and transfer limits. Existing themes must add the handler; their source is never rewritten automatically. Native chat accepts pasted images and documents through the same preparation flow.
 
 Workspace messages expose content, streaming, reasoningContent, workLog and toolStatus. content remains the answer or the currently uncommitted streaming text for compatibility. When a preface is committed before a tool call, it moves into workLog; render both fields from the latest snapshot instead of caching text that disappears from content. Keep rows with work-log entries, reasoning or active streaming even when content is empty; avoid empty answer bubbles. streaming identifies the particular active message, whereas state.sending is conversation-wide.
 

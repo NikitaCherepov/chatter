@@ -4,7 +4,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { INTERACTIVE_CSP, INTERACTIVE_SCHEME, interactiveDocument, validateInteractiveInput } from './interactive-document';
 import type { InteractivePlacement, InteractiveStatus } from './interactive-types';
-import { parseAppearanceShellAction, canRunAppearanceAction, parseAppearanceDocumentRequest, canReadAppearanceDocument,
+import { parseAppearanceShellAction, canRunAppearanceAction, parseAppearanceDocumentRequest, canReadAppearanceDocument, parseAppearancePaste,
   type AppearanceShellState, type AppearanceImageRequest, type AppearanceDocumentRequest } from './appearance-shell-types';
 
 type Entry = {
@@ -96,6 +96,12 @@ export class InteractivePreviews {
       if (!entry.appearance || event.senderFrame !== contents.mainFrame || !this.entries.has(id)) return;
       if (channel === 'appearance-shell:failed') { this.remove(id, 'failed'); return; }
       if (channel === 'appearance-shell:escape') { this.emit(entry, 'ready', { escape: true }); return; }
+      if (channel === 'appearance-shell:paste') {
+        const action = parseAppearancePaste(value);
+        if (action && entry.appearance.state && canRunAppearanceAction(entry.appearance.state, action) && !owner.isDestroyed())
+          owner.send('interactive-preview:appearance-action', { id, action });
+        return;
+      }
       if (channel === 'appearance-shell:request') {
         const request = parseAppearanceDocumentRequest(value);
         if (!request || !entry.appearance.state || !canReadAppearanceDocument(entry.appearance.state, request)

@@ -408,7 +408,7 @@ export default function Composer({state}){
   </li>)}</ul>{composer.busy&&<p role="status">{state.labels.loading}</p>}{composer.error&&<p role="alert">{composer.error}</p>}
   <form onSubmit={event=>{event.preventDefault();if(state.canSend&&(text.trim()||state.attachmentCount)&&window.chatter.sendMessage(text))setText("");}}>
     <button type="button" disabled={!state.canSend||composer.busy} onClick={()=>window.chatter.chooseAttachments()}>Attach files</button>
-    <textarea aria-label="Message" value={text} onChange={event=>setText(event.target.value)}/>
+    <textarea aria-label="Message" value={text} onChange={event=>setText(event.target.value)} onPaste={event=>{if(window.chatter.attachPastedFiles())event.preventDefault();}}/>
     {state.sending?<button type="button" onClick={()=>window.chatter.stopGeneration()}>Stop</button>:<button disabled={!state.canSend||(!text.trim()&&!state.attachmentCount)}>Send</button>}
   </form></section>;
 }`,

@@ -1,6 +1,12 @@
-export const APPEARANCE_LABEL_KEYS = ["newChat", "allChats", "settings", "search", "loadMore", "loading", "empty", "workLog", "reasoning", "download", "image", "imageLoadFailed", "copy", "downloadDocx", "sendTelegram", "save", "cancel", "fork", "edit", "delete", "regenerate", "regenerateHint", "speak", "pauseSpeech", "resumeSpeech", "stopSpeech", "reviewConfirmation", "previousVariant", "nextVariant"] as const;
+export const APPEARANCE_LABEL_KEYS = ["newChat", "allChats", "settings", "search", "loadMore", "loading", "empty", "workLog", "reasoning", "download", "image", "imageLoadFailed", "copy", "downloadDocx", "sendTelegram", "save", "cancel", "fork", "edit", "delete", "regenerate", "regenerateHint", "speak", "pauseSpeech", "resumeSpeech", "stopSpeech", "reviewConfirmation", "previousVariant", "nextVariant", "renameChat", "moveChat", "hideFromBot", "showInBot", "leaveChat", "createFolder", "renameFolder", "deleteFolder", "unfiled"] as const;
 export type AppearanceLabelKey = typeof APPEARANCE_LABEL_KEYS[number];
 export type AppearanceLabels = Record<AppearanceLabelKey, string> & Partial<Record<string, string>>;
+export type AppearanceChatMenuActionName = 'rename' | 'downloadDocx' | 'move' | 'setBotHidden' | 'delete' | 'leave';
+export type AppearanceFolderMenuActionName = 'create' | 'rename' | 'delete';
+export type AppearanceChatMenuAction = { type: 'chatMenuAction'; id: number; action: AppearanceChatMenuActionName;
+  title?: string; folderId?: number | null; hidden?: boolean; confirmed?: true };
+export type AppearanceFolderMenuAction = { type: 'folderMenuAction'; id: number | null; action: AppearanceFolderMenuActionName; name?: string; confirmed?: true };
+export type AppearanceMenuItem = { id: string; label: string; disabled: boolean; dangerous: boolean; requiresConfirmation: boolean };
 
 type AppearanceNavigationAction =
   | { type: 'openChat'; id: number }
@@ -34,8 +40,9 @@ export type AppearanceDocumentPreview = { kind: 'pdf' | 'docx' | 'spreadsheet' |
   text: string; html?: string; pageCount?: number };
 export type AppearanceDocumentPage = { source: string; width: number; height: number; page: number; pageCount: number };
 export type AppearanceComposerAction = { type: 'composerAction'; chatId: number; action: 'choose' | 'remove' | 'clear'; id?: string };
+export type AppearancePasteAction = { type: 'pasteAttachments'; chatId: number; files: { name: string; type: string; bytes: ArrayBuffer | null }[] };
 export type AppearanceShellAction = AppearanceNavigationAction | AppearanceMessageAction | AppearanceSpeechAction | AppearanceReviewAction
-  | AppearanceConfirmationRequest | AppearanceContentAction | AppearanceComposerAction
+  | AppearanceConfirmationRequest | AppearanceContentAction | AppearanceComposerAction | AppearancePasteAction | AppearanceChatMenuAction | AppearanceFolderMenuAction
   | { type: 'confirmationPresentation'; custom: boolean };
 
 export type AppearanceToolCall = {
@@ -55,8 +62,11 @@ export type AppearanceMessageContent = {
 };
 
 export type AppearanceShellState = {
-  chats: Array<{ id: number; title: string; folderId: number | null; updatedAt: number }>;
-  folders: Array<{ id: number; name: string; count: number }>;
+  chats: Array<{ id: number; title: string; folderId: number | null; updatedAt: number;
+    isOwner?: boolean | null; botHidden?: boolean; actions?: AppearanceChatMenuActionName[] }>;
+  folders: Array<{ id: number; name: string; count: number; actions?: Exclude<AppearanceFolderMenuActionName, 'create'>[] }>;
+  library?: { busy: boolean; operation: string | null; error: string | null; canCreateFolder: boolean;
+    limits: { chatTitle: number; folderName: number } };
   sections: Array<{
     folderId: number | null;
     total: number;
@@ -88,9 +98,44 @@ export type AppearanceShellState = {
 
 export type AppearanceShellEvent = { id: string; action: AppearanceShellAction };
 
+// Only the isolated preload's genuine paste handler sends this channel; generic theme actions cannot.
+export function parseAppearancePaste(value: unknown): AppearancePasteAction | null {
+  if (!value || typeof value !== 'object') return null;
+  const input = value as AppearancePasteAction;
+  if (!Number.isSafeInteger(input.chatId) || input.chatId <= 0 || !Array.isArray(input.files) || !input.files.length || input.files.length > 256) return null;
+  let size = 0;
+  for (const file of input.files) {
+    if (!file || typeof file.name !== 'string' || !file.name || file.name.length > 255 || /[\\/\x00]/.test(file.name)
+        || typeof file.type !== 'string' || file.type.length > 255 || file.bytes !== null && !(file.bytes instanceof ArrayBuffer)) return null;
+    size += file.bytes?.byteLength ?? 0;
+    if (size > 50 * 1024 * 1024) return null;
+  }
+  return { type: 'pasteAttachments', chatId: input.chatId, files: input.files.map(file => ({ name: file.name, type: file.type, bytes: file.bytes })) };
+}
+
 export function parseAppearanceShellAction(value: unknown): AppearanceShellAction | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const input = value as Record<string, unknown>;
+  const validId = (value: unknown) => Number.isSafeInteger(value) && Number(value) > 0;
+  if (input.type === 'chatMenuAction' && validId(input.id)) {
+    const base = { type: 'chatMenuAction' as const, id: Number(input.id) };
+    if (input.action === 'rename' && typeof input.title === 'string' && input.title.trim() && input.title.trim().length <= 120)
+      return { ...base, action: 'rename', title: input.title.trim() };
+    if (input.action === 'move' && (input.folderId === null || validId(input.folderId)))
+      return { ...base, action: 'move', folderId: input.folderId as number | null };
+    if (input.action === 'setBotHidden' && typeof input.hidden === 'boolean') return { ...base, action: 'setBotHidden', hidden: input.hidden };
+    if (input.action === 'downloadDocx') return { ...base, action: 'downloadDocx' };
+    if ((input.action === 'delete' || input.action === 'leave') && input.confirmed === true) return { ...base, action: input.action, confirmed: true };
+    return null;
+  }
+  if (input.type === 'folderMenuAction') {
+    if ((input.action === 'create' && input.id === null || input.action === 'rename' && validId(input.id))
+        && typeof input.name === 'string' && input.name.trim() && input.name.trim().length <= 80)
+      return { type: 'folderMenuAction', id: input.id as number | null, action: input.action as 'create' | 'rename', name: input.name.trim() };
+    if (input.action === 'delete' && validId(input.id) && input.confirmed === true)
+      return { type: 'folderMenuAction', id: Number(input.id), action: 'delete', confirmed: true };
+    return null;
+  }
   if (typeof input.id === 'string' && input.id.length > 0 && input.id.length <= 200) {
     if (input.type === 'confirmationAction' && typeof input.actionId === 'string' && /^[a-z0-9-]{1,160}$/.test(input.actionId)
         && Number.isSafeInteger(input.revision) && Number(input.revision) > 0
@@ -168,8 +213,20 @@ export function parseAppearanceShellAction(value: unknown): AppearanceShellActio
 }
 
 export function canRunAppearanceAction(state: AppearanceShellState, action: AppearanceShellAction): boolean {
+  if (action.type === 'chatMenuAction') {
+    const chat = state.chats.find(chat => chat.id === action.id);
+    return !state.library?.busy && Boolean(chat?.actions?.includes(action.action))
+      && (action.action !== 'move' || action.folderId === null || state.folders.some(folder => folder.id === action.folderId))
+      && (action.action !== 'delete' || chat?.isOwner === true && action.confirmed === true)
+      && (action.action !== 'leave' || chat?.isOwner === false && action.confirmed === true);
+  }
+  if (action.type === 'folderMenuAction') return !state.library?.busy && (action.action === 'create'
+    ? action.id === null && state.library?.canCreateFolder === true
+    : Boolean(state.folders.find(folder => folder.id === action.id)?.actions?.includes(action.action))
+      && (action.action !== 'delete' || action.confirmed === true));
   if ('chatId' in action && action.chatId !== state.activeChatId) return false;
   if (action.type === 'sendMessage') return state.canSend && Boolean(action.text.trim() || state.attachmentCount);
+  if (action.type === 'pasteAttachments') return state.canSend && !state.sending && !state.composer?.busy;
   if (action.type === 'composerAction') return !state.sending && !state.composer?.busy
     && (action.action === 'choose' ? state.canSend : action.action === 'clear' ? Boolean(state.composer?.items.length) : Boolean(state.composer?.items.some(item => item.id === action.id)));
   if (action.type === 'contentAction') {

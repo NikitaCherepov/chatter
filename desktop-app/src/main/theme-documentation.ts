@@ -15,6 +15,7 @@ export const THEME_README = `# Local Chatter themes
 ## Guides
 
 - docs/theme-files.md: per-theme README.md, persistence and portable theme files.
+- docs/library.md: chat/folder menus, available operations and custom forms.
 - docs/runtime.md: state/subscriptions (including useChatterState), navigation, isolated runtime and user actions.
 - docs/messages.md: content, streaming, workLog, tools, message actions, variants and speech.
 - docs/media.md: images, full-resolution viewers, documents and outgoing attachments.
@@ -33,6 +34,68 @@ Local raster backgrounds use assets/image.png (PNG/JPEG/WebP/GIF, up to 8 MiB); 
 `;
 
 export const THEME_GUIDES: Record<string, string> = {
+  'library.md': `# Chat and folder menus
+
+Menus are data and functions, not a predefined component. This API covers the chat/folder library;
+it does not expose the tools panel or the individual tools. It works in navigator and workspace
+shells without switching to native UI. Use useChatterState() or subscribe for live data.
+
+## Available actions and state
+
+state.chats adds isOwner (boolean or null when metadata is unknown), botHidden and actions.
+Chat actions are rename, downloadDocx, move, setBotHidden, and delete for owned chats OR leave for
+joined rooms. state.folders adds actions (rename/delete). Render only the listed operations.
+getChatMenu(chatId) and getFolderMenu(folderId) return optional descriptors:
+{id,label,disabled,dangerous,requiresConfirmation}. These read-only helpers require no gesture.
+Labels are localized from state.labels; bot visibility uses hideFromBot/showInBot as appropriate.
+Choose your own icons, menus, inline controls, command palette or terminal commands.
+
+state.library has busy, operation (such as chat:42:rename or folder:create), error,
+canCreateFolder and limits{chatTitle:120,folderName:80}. These name limits match server truncation.
+busy also covers initial list refresh and in-flight section pagination. Disable commands while
+busy. Commands return request-sent booleans, not completion results; observe state changes/error.
+Only one library mutation runs at a time, shared with the native sidebar. Errors remain until the
+next command; the theme decides where/how to show or dismiss them visually. A newly created
+folder appears with its server ID in state.folders; names need not be unique.
+
+Search summaries can lack ownership metadata and expose an empty actions list. Do not infer
+ownership or available mutations from the title. Opening that chat refreshes its metadata.
+Only currently exposed, loaded entities and destination folders may be targeted. Close stale
+menus when their entity disappears. Server access checks still apply. Existing pagination,
+folder counts, optimistic updates and error rollback are reused. The client ignores late UI
+updates after an account/server/filter scope change.
+
+## Chat operations
+
+- renameChat(id,title): submit your own input. Blank titles are rejected; at most 120 characters.
+- downloadChatDocx(id): uses the existing DOCX exporter and system save dialog. Empty chats report
+  an error. The current exporter reads up to 10,000 messages; this API does not change that limit.
+- moveChat(id,folderId): choose from state.folders; null moves to the unfiled list.
+- setChatBotHidden(id,hidden): explicit boolean, not a toggle; the list reflects the resulting state.
+- deleteChat(id,true): final deletion of an owned chat, after your own explicit confirmation.
+- leaveChat(id,true): final exit from a joined room, after your own explicit confirmation; it is
+  not deletion of that room for its owner. delete is unavailable for such rooms.
+
+## Folder operations
+
+- createFolder(name): create a folder, when canCreateFolder and not busy.
+- renameFolder(id,name): submit your own input. Nonempty names, at most 80 characters.
+- deleteFolder(id,true): after your own confirmation, remove ONLY the folder. Its chats remain
+  and return to the unfiled list. It never recursively deletes conversations.
+
+All mutation/export functions require a genuine user click/key event. The final true argument
+for delete/leave explicitly acknowledges the theme's own confirmation step; false/missing is
+rejected. That flag is not a substitute for a clear confirmation UI. There is no forced menu,
+modal markup or automatic confirmation. Do not call these actions from a render/effect. Use a
+form submit or command handler so user activation is present. The host revalidates entity,
+available action, destination and busy state; vanished/stale requests are rejected. Opening,
+editing or submitting these custom menus does not call openConversation/openLibrary.
+
+For example, getChatMenu(id) can populate any UI. A rename form submits renameChat(id,title), a
+move chooser submits moveChat(id,selectedFolderId), and your delete confirmation calls
+deleteChat(id,true) only from its final confirmation button. Use state.library.error for failures
+and keep the user's form text until success. Full signatures and menu types are in chatter.d.ts.
+`,
   'theme-files.md': `# Theme files and README
 
 A theme can have a root README.md next to theme.json, with or without a custom shell.
@@ -217,6 +280,18 @@ sendMessage reuses the normal composer; nothing is uploaded just by selecting fi
 preparation status and errors from state; actions return request-sent booleans. Pending documents
 show metadata until sent, just like the native composer. Selection cancellation or chat changes
 during preparation do not add files to another chat.
+
+For Ctrl+V (or the system Paste command), call attachPastedFiles() synchronously from your message
+input's paste handler. It returns true when it claims image/document files from that actual user
+paste; then preventDefault(). Text-only paste returns false: allow the browser to insert it.
+React: onPaste={event=>{if(window.chatter.attachPastedFiles())event.preventDefault();}}.
+HTML: input.addEventListener('paste',event=>{if(chatter.attachPastedFiles())event.preventDefault();}).
+No event/File argument is needed; the isolated preload captures the original trusted event.
+Calls outside dispatch, synthetic events, repeated claims or a busy composer return false. This
+does not read the clipboard in the background. Accepts screenshots and files exposed by the OS
+as clipboard files (not a copied file-path string). Uses the same preparation, preview, removal
+and sending flow as chooseAttachments. Transfer ceiling: 256 files / 50 MiB total per paste;
+unreadable/oversized files show preparation errors. No upload occurs until sendMessage.
 `,
   'confirmations.md': `# Confirmations
 
@@ -253,7 +328,7 @@ window.chatter.subscribe(callback, {navigation:true, confirmations:true}) immedi
 
 Optional useChatterState(options?) from @chatter/ui returns ThemeState | undefined. In the shell root use useChatterState({navigation:true, confirmations:true}) when you render custom navigation and all confirmations. Other components can call useChatterState() with no options. Defaults are false. Active hook consumers share one state subscription; their options are combined, so an ordinary consumer never disables another consumer's capabilities. Unmounting or changing options releases only that consumer's request. Direct chatter.subscribe subscriptions are counted too. No additional explicit subscription is needed when using the hook. Handle undefined while loading. Keep a navigation owner mounted across home/conversation routes; keep confirmations:true mounted only while your theme renders all pending cards.
 
-Read chatter.d.ts for all state fields and function signatures. State includes chats, folders, pagination sections, activeChatId, view, search query/loading, locale, dark, palette, localized labels, messages, message-history loading flags, sending, canSend, attachmentCount, composer, speech and confirmations. Message history is a loaded window; loadOlderMessages() loads earlier pages.
+Read chatter.d.ts for all state fields and function signatures. State includes chats, folders, library operation status, pagination sections, activeChatId, view, search query/loading, locale, dark, palette, localized labels, messages, message-history loading flags, sending, canSend, attachmentCount, composer, speech and confirmations. Message history is a loaded window; loadOlderMessages() loads earlier pages.
 
 ## Localized labels
 

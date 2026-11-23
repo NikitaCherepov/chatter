@@ -17,7 +17,7 @@ const modulePath = (file: string) =>
 const pageSource = fs.readFileSync(new URL('../src/renderer/pages/ChatPage.tsx', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
 const previewSource = fs.readFileSync(new URL('../src/renderer/components/InteractivePreview.tsx', import.meta.url), 'utf8');
 const modalCheck = previewSource.slice(previewSource.indexOf('        const modal ='), previewSource.indexOf('        // Native WebContentsView'));
-const chooseAttachmentsSource = pageSource.slice(pageSource.indexOf('  const chooseComposerAttachments ='), pageSource.indexOf('  const handleDeleteAttachment ='));
+const chooseAttachmentsSource = pageSource.slice(pageSource.indexOf('  const chooseComposerAttachments ='), pageSource.indexOf('  const handlePaste ='));
 const { Document, Packer, Paragraph } = desktopRequire('docx');
 const docxFixture = (await Packer.toBuffer(new Document({ sections: [{ children: [new Paragraph('Document fixture text')] }] }))).toString('base64');
 function pdfFixture() {
@@ -378,7 +378,7 @@ window.testDocumentPreviews=async()=>{
 };
 window.testChooseComposer=async(options={})=>{
  const images=[],documents=[],errors=[],busy=[];let reads=0,releases=0;
- const composerContextRef={current:{chatId:1,sending:false,images,documents,maxImageCount:1,maxImageBytes:32*1024*1024}};
+ const composerContextRef={current:{chatId:options.newChat?null:1,epoch:1,sending:false,images,documents,maxImageCount:1,maxImageBytes:32*1024*1024}};
  const composerMountedRef={current:true},composerBusyRef={current:false};
  const useCallback=fn=>fn,setPreparingAttachments=value=>busy.push(value),setAttachmentError=value=>{if(value)errors.push(value);};
  const t=(key,values)=>key+':'+JSON.stringify(values??{});
@@ -389,7 +389,9 @@ window.testChooseComposer=async(options={})=>{
  window.electronAPI.readPickedAttachment=async(id,index)=>{reads++;if(options.changeChat)composerContextRef.current={...composerContextRef.current,chatId:2};const encoded=index===0?btoa('hello'):png;return Uint8Array.from(atob(encoded),char=>char.charCodeAt(0)).buffer;};
  window.electronAPI.releasePickedAttachments=async()=>{releases++;};
  ${chooseAttachmentsSource}
- try{await chooseComposerAttachments();return {images:images.map(image=>({name:image.file.name,bytes:image.size_bytes})),documents:documents.map(file=>({name:file.filename,base64:file.base64})),reads,releases,errors,busy};}
+ const pasteFiles=options.paste?[{name:'pasted.txt',type:'text/plain',bytes:new TextEncoder().encode('hello').buffer},{name:'clipboard.png',type:'image/png',bytes:Uint8Array.from(atob(png),char=>char.charCodeAt(0)).buffer},...(options.broken?[{name:'broken.txt',type:'text/plain',bytes:null}]:[])]:undefined;
+ if(options.native&&pasteFiles)for(let i=0;i<pasteFiles.length;i++){const value=pasteFiles[i];pasteFiles[i]=new File([value.bytes],value.name,{type:value.type});if(options.scopeChange)pasteFiles[i].arrayBuffer=async()=>{composerContextRef.current={...composerContextRef.current,epoch:3};return value.bytes;};}
+ try{await chooseComposerAttachments(pasteFiles);return {images:images.map(image=>({name:image.file.name,bytes:image.size_bytes})),documents:documents.map(file=>({name:file.filename,base64:file.base64})),reads,releases,errors,busy};}
  finally{images.forEach(image=>URL.revokeObjectURL(image.preview));window.electronAPI.pickAttachmentFiles=original.pick;window.electronAPI.readPickedAttachment=original.read;window.electronAPI.releasePickedAttachments=original.release;}
 };
 window.clickText=text=>{const button=[...document.querySelectorAll('button')].find(el=>el.textContent.trim()===text&&!el.disabled&&!el.closest('details:not([open])')&&el.getBoundingClientRect().height>0);if(!button)throw new Error('Button missing: '+text);button.click();};
@@ -451,6 +453,13 @@ app.whenReady().then(async()=>{
  assert.ok(picked.errors.some(message=>message.includes('imageLimit')));
  const canceledFiles=await js('window.testChooseComposer({cancel:true})');assert.equal(canceledFiles.reads,0);assert.equal(canceledFiles.documents.length,0);
  const changedFiles=await js('window.testChooseComposer({changeChat:true})');assert.equal(changedFiles.images.length,0);assert.equal(changedFiles.documents.length,0);assert.equal(changedFiles.releases,1);
+ for(const native of [false,true]){
+  const pasted=await js('window.testChooseComposer('+JSON.stringify({paste:true,native,newChat:native})+')');
+  assert.equal(pasted.images.length,1);assert.equal(pasted.documents[0].base64,'aGVsbG8=');assert.equal(pasted.reads,0);assert.equal(pasted.releases,0);assert.deepEqual(pasted.busy,[true,false]);
+ }
+ const brokenPaste=await js('window.testChooseComposer({paste:true,broken:true})');assert.equal(brokenPaste.images.length,1);assert.equal(brokenPaste.documents.length,1);assert.ok(brokenPaste.errors.some(message=>message.includes('attach.error.read')));
+ const stalePaste=await js('window.testChooseComposer({paste:true,native:true,scopeChange:true})');assert.equal(stalePaste.images.length,0);assert.equal(stalePaste.documents.length,0);
+ console.log('PASS: pasted images/documents use real preparation in native and custom composers, preserve attachment-only sending, report read failures and discard stale contexts');
  console.log('PASS: real PDF page pixels, DOCX sanitization, text/spreadsheet data, selected-file preparation, native image limits, cancellation and chat-switch isolation');
  assert.ok(await js('window.migrationRequests.some(item=>item.userId===1&&item.path.endsWith("/legacy"))&&window.migrationRequests.some(item=>item.userId===1&&item.path==="/api/v1/user/appearance")'),'older-server migration fallback is supported');
  await until('document.querySelectorAll("[data-virtual-row-placeholder]").length>30');

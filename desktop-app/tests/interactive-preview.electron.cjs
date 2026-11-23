@@ -358,6 +358,25 @@ return <main><button id="choose" onClick={()=>window.chatter.chooseAttachments()
     return hostSend(channel, payload);
   };
   manager.updateAppearanceState(host.webContents, preview.id, documentState);
+  // Exercise the actual isolated bridge without overwriting the user's system clipboard.
+  assert.equal(await preview.contents.executeJavaScript('window.chatter.attachPastedFiles()'), false);
+  const beforePaste = forwarded.length;
+  assert.equal(await preview.contents.executeJavaScript(`(()=>{
+    const input=document.createElement('textarea');document.body.append(input);
+    let claimed=null;input.addEventListener('paste',event=>{claimed=window.chatter.attachPastedFiles();if(claimed)event.preventDefault();});
+    const data=new DataTransfer();data.items.add(new File(['fixture'],'note.txt',{type:'text/plain'}));
+    input.dispatchEvent(new ClipboardEvent('paste',{bubbles:true,cancelable:true,clipboardData:data}));
+    input.remove();return claimed;
+  })()`), false, 'a real Chromium synthetic event must not import files');
+  const pasted = { chatId: documentState.activeChatId, files: [{ name: 'fixture.txt', type: 'text/plain', bytes: new Uint8Array([104,105]).buffer }] };
+  preview.contents.emit('ipc-message', { senderFrame: preview.contents.mainFrame }, 'appearance-shell:paste', pasted);
+  assert.equal(forwarded.length, beforePaste + 1);
+  assert.equal(forwarded.at(-1).type, 'pasteAttachments');
+  assert.deepEqual(new Uint8Array(forwarded.at(-1).files[0].bytes), new Uint8Array([104,105]));
+  preview.contents.emit('ipc-message', { senderFrame: null }, 'appearance-shell:paste', pasted);
+  preview.contents.emit('ipc-message', { senderFrame: preview.contents.mainFrame }, 'appearance-shell:paste', { ...pasted, chatId: 999999 });
+  assert.equal(forwarded.length, beforePaste + 1, 'foreign frame and stale chat cannot paste into the host composer');
+  console.log('PASS: isolated paste API, real Chromium synthetic-event rejection and validated main-frame file transport without touching the OS clipboard');
   await until(async () => await preview.contents.executeJavaScript('!!document.querySelector(".chatter-attachment button")'));
   const beforeDocumentActions = forwarded.length;
   await preview.contents.executeJavaScript('document.querySelector(".chatter-attachment button").click()', true);

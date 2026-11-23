@@ -4,6 +4,9 @@ import type { AppearanceShellState, AppearanceDocumentRequest } from './appearan
 
 // This preload exposes only the appearance navigator contract in its isolated renderer.
 let state: AppearanceShellState | undefined;
+let pasteEpoch = 0;
+let pasteBusy = false;
+let currentPaste: { event: ClipboardEvent; files: File[]; epoch: number; claimed: boolean } | undefined;
 const listeners = new Set<(state: AppearanceShellState) => void>();
 let confirmationSubscribers = 0;
 let navigationSubscribers = 0;
@@ -15,6 +18,7 @@ ipcRenderer.on('appearance-shell:result', (_event, reply: { requestId: string; r
   if (reply.error) pending.reject(new Error(reply.error)); else pending.resolve(reply.result);
 });
 ipcRenderer.on('appearance-shell:state', (_event, next: AppearanceShellState) => {
+  if (next.activeChatId !== state?.activeChatId) { pasteEpoch++; currentPaste = undefined; }
   state = next;
   for (const [id, pending] of documentRequests) {
     const request = pending.request;
@@ -32,6 +36,20 @@ ipcRenderer.on('appearance-shell:state', (_event, next: AppearanceShellState) =>
   }
 });
 const send = (action: unknown) => ipcRenderer.send('appearance-shell:action', action);
+const chatMenuAction = (id: number, action: string, extra: Record<string, unknown> = {}) => {
+  const chat = state?.chats.find(chat => chat.id === id);
+  if (!navigator.userActivation.isActive || state?.library?.busy || !chat?.actions?.includes(action as any)) return false;
+  if (action === 'move' && extra.folderId !== null && !state?.folders.some(folder => folder.id === extra.folderId)) return false;
+  if ((action === 'delete' || action === 'leave') && extra.confirmed !== true) return false;
+  send({ type: 'chatMenuAction', id, action, ...extra }); return true;
+};
+const folderMenuAction = (id: number | null, action: string, extra: Record<string, unknown> = {}) => {
+  if (!navigator.userActivation.isActive || state?.library?.busy) return false;
+  if (action === 'create' ? !state?.library?.canCreateFolder
+      : !state?.folders.find(folder => folder.id === id)?.actions?.includes(action as any)) return false;
+  if (action === 'delete' && extra.confirmed !== true) return false;
+  send({ type: 'folderMenuAction', id, action, ...extra }); return true;
+};
 const messageAction = (messageId: number, action: string, extra: Record<string, unknown> = {}) => {
   if (!navigator.userActivation.isActive) return false;
   const message = state?.messages.find(message => message.id === messageId);
@@ -61,9 +79,44 @@ const imageSource = (messageId: number, source: string, width: number) => {
   return url.href;
 };
 const composerAction = (action: 'choose' | 'remove' | 'clear', id?: string) => {
-  if (!navigator.userActivation.isActive || !state?.activeChatId || state.sending || state.composer?.busy) return false;
+  if (!navigator.userActivation.isActive || !state?.activeChatId || state.sending || state.composer?.busy || pasteBusy) return false;
   if (action === 'choose' ? !state.canSend : action === 'clear' ? !state.composer?.items.length : !state.composer?.items.some(item => item.id === id)) return false;
   send({ type: 'composerAction', chatId: state.activeChatId, action, ...(id ? { id } : {}) }); return true;
+};
+// Capture files in the isolated world. Do not expose arbitrary clipboard reads, paths or File objects.
+window.addEventListener('paste', event => {
+  if (!event.isTrusted) return;
+  const files = Array.from(event.clipboardData?.files ?? []);
+  if (!files.length) return;
+  const paste = { event, files, epoch: pasteEpoch, claimed: false };
+  currentPaste = paste;
+  // A microtask can run between DOM listeners; keep the event until dispatch has finished.
+  setTimeout(() => { if (currentPaste === paste) currentPaste = undefined; }, 0);
+}, true);
+const attachPastedFiles = () => {
+  const paste = currentPaste;
+  if (!paste || !paste.event.eventPhase || paste.claimed || paste.epoch !== pasteEpoch || pasteBusy
+      || !state?.activeChatId || !state.canSend || state.sending || state.composer?.busy) return false;
+  paste.claimed = true; pasteBusy = true;
+  const chatId = state.activeChatId;
+  // Bound the transport, matching the existing raw-image ceiling. Oversized/unreadable files
+  // travel as failed reads so the usual composer error is visible instead of a silent failure.
+  void (async () => {
+    const files = [];
+    let total = 0;
+    for (const file of paste.files.slice(0, 256)) {
+      if (paste.epoch !== pasteEpoch || state?.activeChatId !== chatId) return;
+      let bytes: ArrayBuffer | null = null;
+      if (file.size <= 50 * 1024 * 1024 - total) {
+        total += file.size;
+        try { bytes = await file.arrayBuffer(); } catch { /* Report through the shared preparation flow. */ }
+      }
+      files.push({ name: file.name, type: file.type, bytes });
+    }
+    if (paste.epoch === pasteEpoch && state?.activeChatId === chatId)
+      ipcRenderer.send('appearance-shell:paste', { chatId, files });
+  })().finally(() => { pasteBusy = false; });
+  return true;
 };
 const documentRequest = (method: AppearanceDocumentRequest['method'], messageId: number, index: number, page?: number, width?: number) => {
   const message = state?.messages.find(message => message.id === messageId), file = message?.attachments?.[index];
@@ -77,6 +130,25 @@ const documentRequest = (method: AppearanceDocumentRequest['method'], messageId:
   });
 };
 contextBridge.exposeInMainWorld('chatter', {
+  getChatMenu: (id: number) => (state?.chats.find(chat => chat.id === id)?.actions ?? []).map(action => ({
+    id: action, disabled: Boolean(state?.library?.busy), dangerous: action === 'delete' || action === 'leave',
+    requiresConfirmation: action === 'delete' || action === 'leave',
+    label: action === 'setBotHidden' ? state!.labels[state!.chats.find(chat => chat.id === id)?.botHidden ? 'showInBot' : 'hideFromBot'] ?? action
+      : state!.labels[{ rename: 'renameChat', downloadDocx: 'downloadDocx', move: 'moveChat', delete: 'delete', leave: 'leaveChat' }[action] ?? action] ?? action,
+  })),
+  getFolderMenu: (id: number) => (state?.folders.find(folder => folder.id === id)?.actions ?? []).map(action => ({
+    id: action, disabled: Boolean(state?.library?.busy), dangerous: action === 'delete', requiresConfirmation: action === 'delete',
+    label: state!.labels[action === 'rename' ? 'renameFolder' : 'deleteFolder'] ?? action,
+  })),
+  renameChat: (id: number, title: string) => typeof title === 'string' && Boolean(title.trim()) && title.trim().length <= 120 && chatMenuAction(id, 'rename', { title: title.trim() }),
+  downloadChatDocx: (id: number) => chatMenuAction(id, 'downloadDocx'),
+  moveChat: (id: number, folderId: number | null) => chatMenuAction(id, 'move', { folderId }),
+  setChatBotHidden: (id: number, hidden: boolean) => typeof hidden === 'boolean' && chatMenuAction(id, 'setBotHidden', { hidden }),
+  deleteChat: (id: number, confirmed: boolean) => chatMenuAction(id, 'delete', { confirmed }),
+  leaveChat: (id: number, confirmed: boolean) => chatMenuAction(id, 'leave', { confirmed }),
+  createFolder: (name: string) => typeof name === 'string' && Boolean(name.trim()) && name.trim().length <= 80 && folderMenuAction(null, 'create', { name: name.trim() }),
+  renameFolder: (id: number, name: string) => typeof name === 'string' && Boolean(name.trim()) && name.trim().length <= 80 && folderMenuAction(id, 'rename', { name: name.trim() }),
+  deleteFolder: (id: number, confirmed: boolean) => folderMenuAction(id, 'delete', { confirmed }),
   imageSource: (messageId: number, source: string, width = 560) =>
     imageSource(messageId, source, Math.max(64, Math.min(1600, Math.round(Number(width) || 560)))),
   fullImageSource: (messageId: number, source: string) => imageSource(messageId, source, 0),
@@ -86,6 +158,7 @@ contextBridge.exposeInMainWorld('chatter', {
     return documentRequest('renderAttachmentPage', id, index, page, Math.max(128, Math.min(1600, Math.round(Number(width) || 1000))));
   },
   chooseAttachments: () => composerAction('choose'),
+  attachPastedFiles,
   removePendingAttachment: (id: string) => composerAction('remove', id),
   clearPendingAttachments: () => composerAction('clear'),
   pendingAttachmentSource: (id: string) => {
@@ -118,7 +191,7 @@ contextBridge.exposeInMainWorld('chatter', {
   openChat: (id: number) => send({ type: 'openChat', id }),
   newChat: () => send({ type: 'newChat' }),
   sendMessage: (text: string) => {
-    if (!navigator.userActivation.isActive || !state?.canSend || typeof text !== 'string' || text.length > 100000 || !text.trim() && !state.attachmentCount) return false;
+    if (!navigator.userActivation.isActive || !state?.canSend || pasteBusy || typeof text !== 'string' || text.length > 100000 || !text.trim() && !state.attachmentCount) return false;
     send({ type: 'sendMessage', chatId: state.activeChatId, text });
     return true;
   },

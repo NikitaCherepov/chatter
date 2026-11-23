@@ -95,7 +95,6 @@ import { getRenderPerfBudget, getRenderPerfStep } from '../lib/renderPerf';
 import { saveImageFile } from '../lib/saveImageFile';
 import {
   DEFAULT_MAX_IMAGE_ATTACHMENTS_TOTAL_BYTES,
-  prepareImageForUpload,
 } from '../lib/imageCompression';
 import s from './ChatPage.module.scss';
 
@@ -271,14 +270,6 @@ function FolderAddIcon({ size = 16 }: { size?: number }) {
     </svg>
   );
 }
-
-const ALLOWED_FORMATS: string[] = (() => {
-  const raw = import.meta.env.VITE_ALLOWED_IMAGE_FORMATS || '';
-  if (!raw.trim()) {
-    return ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
-  }
-  return raw.split(',').map((f: string) => f.trim()).filter(Boolean);
-})();
 
 const MESSAGE_PAGE_SIZE = 50;
 const MESSAGE_JUMP_PAGE_SIZE = 100;
@@ -1860,9 +1851,48 @@ export function ChatPage() {
     () => attachedImages.reduce((total, image) => total + image.size_bytes, 0),
     [attachedImages],
   );
-  const composerContextRef = useRef<{ chatId: number | null; sending: boolean; images: ImageItem[]; documents: DocumentItem[]; maxImageCount: number; maxImageBytes: number } | null>(null);
-  composerContextRef.current = { chatId: activeChatId, sending, images: attachedImages, documents: attachedDocuments, maxImageCount, maxImageBytes };
+  const composerScopeRef = useRef({ key: '', epoch: 0 });
+  const composerScope = JSON.stringify([api.API_BASE, user?.id, activeChatId]);
+  if (composerScopeRef.current.key !== composerScope) composerScopeRef.current = { key: composerScope, epoch: composerScopeRef.current.epoch + 1 };
+  const composerContextRef = useRef<{ chatId: number | null; epoch: number; sending: boolean; images: ImageItem[]; documents: DocumentItem[]; maxImageCount: number; maxImageBytes: number } | null>(null);
+  composerContextRef.current = { chatId: activeChatId, epoch: composerScopeRef.current.epoch, sending, images: attachedImages, documents: attachedDocuments, maxImageCount, maxImageBytes };
   useEffect(() => { composerMountedRef.current = true; return () => { composerMountedRef.current = false; }; }, []);
+
+  const libraryScope = JSON.stringify([api.API_BASE, user?.id, demoPromptFilter, demoModelFilter, demoFilesFilter, demoImagesFilter]);
+  const libraryScopeRef = useRef<string | null>(libraryScope);
+  const libraryMountedRef = useRef(true);
+  const libraryEpochRef = useRef(0);
+  if (libraryScopeRef.current !== libraryScope) libraryEpochRef.current++;
+  libraryScopeRef.current = libraryScope;
+  const libraryPending = useRef<{ scope: string; epoch: number; operation: string } | null>(null);
+  const [libraryStatus, setLibraryStatus] = useState<{ scope: string; epoch: number; busy: boolean; operation: string | null; error: string | null }>({ scope: libraryScope, epoch: 0, busy: false, operation: null, error: null });
+  const libraryReadyRef = useRef(false);
+  const libraryReloadRef = useRef<(() => Promise<void>) | null>(null);
+  useEffect(() => { libraryMountedRef.current = true; return () => { libraryEpochRef.current++; libraryMountedRef.current = false; }; }, []);
+  const runLibraryMutation = async (operation: string, perform: (current: () => boolean) => Promise<void | boolean>, failure = t('auth.error.generic')) => {
+    const scope = libraryScopeRef.current;
+    if (!scope || !libraryMountedRef.current || !libraryReadyRef.current || libraryPending.current) return false;
+    const token = { scope, epoch: libraryEpochRef.current, operation };
+    libraryPending.current = token;
+    setLibraryStatus({ ...token, busy: true, error: null });
+    const current = () => libraryMountedRef.current && libraryScopeRef.current === scope && libraryEpochRef.current === token.epoch && libraryPending.current === token;
+    let error: string | null = null;
+    try { const result = await perform(current); return current() && result !== false; }
+    catch (reason) {
+      if (current()) { error = reason instanceof Error && reason.message === 'chat_empty' ? t('chat.toasts.emptyChat') : failure; toast.error(error); }
+      return false;
+    } finally {
+      const sameScope = current();
+      if (libraryPending.current === token) {
+        libraryPending.current = null;
+        if (libraryMountedRef.current && libraryScopeRef.current !== null) setLibraryStatus({ scope: libraryScopeRef.current, epoch: libraryEpochRef.current,
+          busy: false, operation: sameScope ? operation : null, error: sameScope ? error : null });
+        // A mutation may finish after the user changed filters/accounts. Reconcile using
+        // the current loader; never replay the obsolete callback's filters or credentials.
+        if (!sameScope && libraryMountedRef.current) void libraryReloadRef.current?.();
+      }
+    }
+  };
 
   const updateSectionPaging = useCallback((next: Record<ChatSectionKey, ChatSectionPaging>) => {
     sectionPagingRef.current = next;
@@ -1875,6 +1905,9 @@ export function ChatPage() {
     hasFiles: demoFilesFilter,
     hasImages: demoImagesFilter,
   }), [demoPromptFilter, demoModelFilter, demoFilesFilter, demoImagesFilter]);
+  libraryReadyRef.current = !loadingChats && !Object.values(sectionPaging).some(section => section.loading)
+    && chatListScopeRef.current === JSON.stringify([api.API_BASE, user?.id ?? null, getCurrentChatFilters()]);
+  const libraryBusy = !libraryReadyRef.current || Boolean(libraryPending.current);
 
   const loadChats = useCallback(async () => {
     const generation = ++chatListGenerationRef.current;
@@ -1927,9 +1960,10 @@ export function ChatPage() {
       if (generation === chatListGenerationRef.current) setLoadingChats(false);
     }
   }, [getCurrentChatFilters, updateSectionPaging, user?.id]);
+  libraryReloadRef.current = loadChats;
 
   const loadChatSection = useCallback(async (folderId: number | null) => {
-    if (searchQuery.trim().length >= 3) return;
+    if (searchQuery.trim().length >= 3 || libraryPending.current) return;
     const key: ChatSectionKey = folderId === null ? 'unfiled' : `folder:${folderId}`;
     const current = sectionPagingRef.current[key];
     if (!current || current.loading || !current.hasMore) return;
@@ -2360,11 +2394,20 @@ export function ChatPage() {
   const selectChat = async (chatId: number) => {
     if (appearanceShell?.scope !== 'workspace') setShellOpen(false);
     if (appearanceShell) setShellView('conversation');
+    const selectionScope = libraryScopeRef.current, selectionEpoch = libraryEpochRef.current;
     const version = ++chatSelectionVersionRef.current;
     setActiveChatId(chatId);
     if (libraryOpen) closeChatLibrary();
     try {
       await api.activateChat(chatId);
+      if (appearanceShell && selectionScope === libraryScopeRef.current && selectionEpoch === libraryEpochRef.current && chatSelectionVersionRef.current === version
+          && typeof chats.find(chat => chat.id === chatId)?.is_owner !== 'boolean') {
+        try {
+          const metadata = await api.getChatFolders(getCurrentChatFilters());
+          if (selectionScope === libraryScopeRef.current && selectionEpoch === libraryEpochRef.current && chatSelectionVersionRef.current === version && metadata.active_chat?.id === chatId)
+            setChats(previous => previous.map(chat => chat.id === chatId ? { ...chat, ...metadata.active_chat! } : chat));
+        } catch { /* Keep summary actions unavailable until real metadata arrives. */ }
+      }
     } catch (error) {
       if (error instanceof api.ApiError && (error.status === 404 || error.status === 403)) {
         workspace.removeTab(chatId);
@@ -2393,7 +2436,7 @@ export function ChatPage() {
       const hasActiveFilters = Object.values(getCurrentChatFilters()).some((value) => value !== undefined && value !== false);
       if (!hasActiveFilters) {
         const createdChat: api.ChatInfo = res.chat ?? {
-          id: res.chat_id,
+          id: res.chat_id, is_owner: true, bot_hidden: false,
           title: t('chat.sidebar.newChat'),
           folder_id: null,
           created_at: Math.floor(Date.now() / 1000),
@@ -3712,44 +3755,6 @@ export function ChatPage() {
     }
   }, [attachedImageBytes, attachedImages.length, maxImageBytes, maxImageCount, sending, t]);
 
-  // Ctrl+V / paste handler for images
-  const handlePaste = useCallback(async (e: React.ClipboardEvent) => {
-    const items = e.clipboardData?.items;
-    if (!items) return;
-
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i];
-      if (!item.type.startsWith('image/')) continue;
-      if (!ALLOWED_FORMATS.includes(item.type)) continue;
-
-      const file = item.getAsFile();
-      if (!file) continue;
-
-      e.preventDefault();
-
-      try {
-        if (attachedImages.length >= maxImageCount) {
-          toast.error(t('attach.error.imageLimit', { count: maxImageCount }));
-          break;
-        }
-        const newItem = await prepareImageForUpload(file);
-        if (attachedImageBytes + newItem.size_bytes > maxImageBytes) {
-          URL.revokeObjectURL(newItem.preview);
-          toast.error(t('attach.error.imageTotalTooLarge', {
-            size: `${Math.round(maxImageBytes / (1024 * 1024))} MB`,
-          }));
-          break;
-        }
-        setAttachedImages((prev) => [...prev, newItem]);
-      } catch {
-        toast.error(t('attach.error.imagePrepare', { name: file.name }));
-      }
-
-      // Only handle first image from paste
-      break;
-    }
-  }, [attachedImages.length, attachedImageBytes, maxImageBytes, maxImageCount, t]);
-
   const handleAttachFromModal = useCallback((items: { images: ImageItem[]; documents: DocumentItem[] }) => {
     if (items.images.length > 0) {
       setAttachedImages((prev) => {
@@ -3772,44 +3777,58 @@ export function ChatPage() {
     setShowAttachModal(false);
   }, [maxImageBytes, maxImageCount]);
 
-  const chooseComposerAttachments = useCallback(async () => {
+  const chooseComposerAttachments = useCallback(async (pastedFiles?: File[] | { name: string; type: string; bytes: ArrayBuffer | null }[]) => {
     const origin = composerContextRef.current;
-    if (!origin?.chatId || origin.sending || composerBusyRef.current || !composerMountedRef.current) return;
+    if (!origin || !pastedFiles && !origin.chatId || origin.sending || composerBusyRef.current || !composerMountedRef.current) return;
     composerBusyRef.current = true; setPreparingAttachments(true); setAttachmentError(null);
     let selectionId: string | undefined;
     const images: ImageItem[] = [], documents: DocumentItem[] = [];
     let committed = false;
     try {
-      const selection = await window.electronAPI.pickAttachmentFiles(); selectionId = selection.selectionId;
-      if (selection.canceled || !selectionId) return;
+      const selection = pastedFiles ? { canceled: false, selectionId: undefined, files: pastedFiles.map((file, index) => ({
+        index, name: file.name, size: file instanceof File ? file.size : file.bytes?.byteLength ?? 0,
+      })) } : await window.electronAPI.pickAttachmentFiles();
+      selectionId = selection.selectionId;
+      if (selection.canceled || !pastedFiles && !selectionId) return;
       for (const selected of selection.files) {
         const context = composerContextRef.current;
-        if (!context || context.chatId !== origin.chatId || context.sending || !composerMountedRef.current) break;
+        if (!context || context.epoch !== origin.epoch || context.chatId !== origin.chatId || context.sending || !composerMountedRef.current) break;
         try {
           if (selected.size > MAX_DOC_SIZE && ALLOWED_DOC_EXTENSIONS.includes(selected.name.split('.').pop()?.toLowerCase() ?? '')) {
             setAttachmentError(t('attach.error.documentTooLarge', { name: selected.name })); continue;
           }
-          const bytes = await window.electronAPI.readPickedAttachment(selectionId, selected.index);
-          if (composerContextRef.current?.chatId !== origin.chatId || !composerMountedRef.current) break;
-          const file = new File([bytes], selected.name, { type: selectedFileMime(selected.name) });
+          const pasted = pastedFiles?.[selected.index];
+          if (selected.size > 50 * 1024 * 1024) throw new Error('attachment_source_too_large');
+          const bytes = pasted ? pasted instanceof File ? await pasted.arrayBuffer() : pasted.bytes
+            : await window.electronAPI.readPickedAttachment(selectionId!, selected.index);
+          if (bytes === null) throw new Error('attachment_read_failed');
+          if (composerContextRef.current?.epoch !== origin.epoch || composerContextRef.current?.chatId !== origin.chatId || !composerMountedRef.current) break;
+          const file = new File([bytes], selected.name, { type: pasted?.type || selectedFileMime(selected.name) });
           const prepared = await prepareAttachmentFiles([file], {
             currentImageCount: context.images.length + images.length, maxImageCount: context.maxImageCount,
             currentImageBytes: context.images.reduce((sum, image) => sum + image.size_bytes, 0) + images.reduce((sum, image) => sum + image.size_bytes, 0),
             maxTotalImageBytes: context.maxImageBytes,
           });
           images.push(...prepared.images); documents.push(...prepared.documents);
-          if (prepared.error) setAttachmentError(t(prepared.error.key, prepared.error.values));
-        } catch { setAttachmentError(t('attach.error.read', { name: selected.name })); }
+          if (prepared.error && composerContextRef.current?.epoch === origin.epoch) setAttachmentError(t(prepared.error.key, prepared.error.values));
+        } catch { if (composerContextRef.current?.epoch === origin.epoch) setAttachmentError(t('attach.error.read', { name: selected.name })); }
       }
       const latest = composerContextRef.current;
-      if (latest?.chatId === origin.chatId && !latest.sending && composerMountedRef.current) { handleAttachFromModal({ images, documents }); committed = true; }
-    } catch { setAttachmentError(t('attach.error.read', { name: '' })); }
+      if (latest?.epoch === origin.epoch && latest?.chatId === origin.chatId && !latest.sending && composerMountedRef.current) { handleAttachFromModal({ images, documents }); committed = true; }
+    } catch { if (composerContextRef.current?.epoch === origin.epoch) setAttachmentError(t('attach.error.read', { name: '' })); }
     finally {
       if (!committed) for (const image of images) URL.revokeObjectURL(image.preview);
       if (selectionId) await window.electronAPI.releasePickedAttachments(selectionId).catch(() => {});
       composerBusyRef.current = false; if (composerMountedRef.current) setPreparingAttachments(false);
     }
   }, [handleAttachFromModal, t]);
+
+  const handlePaste = useCallback((event: React.ClipboardEvent) => {
+    const files = Array.from(event.clipboardData.files);
+    if (!files.length || sending || composerBusyRef.current) return;
+    event.preventDefault();
+    void chooseComposerAttachments(files);
+  }, [chooseComposerAttachments, sending]);
 
   const handleDeleteAttachment = useCallback(async (messageId: number, filename: string) => {
     if (!activeChatId) return;
@@ -3882,17 +3901,19 @@ export function ChatPage() {
     setContextMenuChatId(null);
   };
 
+  const renameSidebarChat = (chatId: number, value: string) => runLibraryMutation(`chat:${chatId}:rename`, async current => {
+    const title = value.trim().slice(0, 120);
+    if (!title || !chats.some(chat => chat.id === chatId)) return false;
+    await api.renameChat(chatId, title);
+    if (!current()) return;
+    setChats(previous => previous.map(chat => chat.id === chatId ? { ...chat, title } : chat));
+    setSearchResults(previous => previous.map(result => result.chat_id === chatId ? { ...result, chat_title: title } : result));
+  });
   const handleConfirmRename = async () => {
-    const title = renamingTitle.trim();
-    if (!title || !renamingChatId) return;
-    try {
-      await api.renameChat(renamingChatId, title);
-      setChats(prev => prev.map(c => c.id === renamingChatId ? { ...c, title } : c));
-    } catch (err) {
-      console.error('Failed to rename chat:', err);
+    if (!renamingChatId || !renamingTitle.trim()) return;
+    if (await renameSidebarChat(renamingChatId, renamingTitle)) {
+      setRenamingChatId(null); setRenamingTitle('');
     }
-    setRenamingChatId(null);
-    setRenamingTitle('');
   };
 
   const handleRenameKeyDown = (e: React.KeyboardEvent) => {
@@ -3905,45 +3926,17 @@ export function ChatPage() {
     setContextMenuChatId(null);
   };
 
-  // Participating (not owned) rooms: "delete" means leaving the room.
-  const handleLeaveRoomFromSidebar = async (chatId: number) => {
+  // Delete and leave share sidebar counts, paging and active-conversation cleanup.
+  const removeSidebarChat = (chatId: number, leave: boolean) => runLibraryMutation(`chat:${chatId}:${leave ? 'leave' : 'delete'}`, async current => {
+    const chat = chats.find(chat => chat.id === chatId);
+    if (!chat || (leave ? chat.is_owner !== false : chat.is_owner === false)) return false;
     setContextMenuChatId(null);
-    try {
-      await api.leaveRoom(chatId);
+    if (leave) await api.leaveRoom(chatId); else await api.deleteChat(chatId);
+    if (!current()) return;
+    setSearchResults(previous => previous.filter(result => result.chat_id !== chatId));
       workspace.removeTab(chatId);
+      const deletedChat = chats.find((chat) => chat.id === chatId);
       setChats(prev => prev.filter(c => c.id !== chatId));
-      if (activeChatId === chatId) {
-        setActiveChatId(null);
-        setMessages([]);
-      }
-    } catch (err) {
-      console.error('Failed to leave room:', err);
-      toast.error(t('auth.error.generic'));
-    }
-  };
-
-  const handleToggleBotHidden = async (chatId: number) => {
-    const chat = chats.find(c => c.id === chatId);
-    const newHidden = !chat?.bot_hidden;
-    setContextMenuChatId(null);
-    // Optimistic update
-    setChats(prev => prev.map(c => c.id === chatId ? { ...c, bot_hidden: newHidden } : c));
-    try {
-      await api.setChatBotHidden(chatId, newHidden);
-    } catch (err) {
-      console.error('Failed to toggle bot visibility:', err);
-      // Revert on error
-      setChats(prev => prev.map(c => c.id === chatId ? { ...c, bot_hidden: !newHidden } : c));
-    }
-  };
-
-  const handleConfirmDelete = async () => {
-    if (!deletingChatId) return;
-    try {
-      await api.deleteChat(deletingChatId);
-      workspace.removeTab(deletingChatId);
-      const deletedChat = chats.find((chat) => chat.id === deletingChatId);
-      setChats(prev => prev.filter(c => c.id !== deletingChatId));
       if (deletedChat) {
         if (deletedChat.folder_id === null) {
           setUnfiledChatCount((current) => Math.max(0, current - 1));
@@ -3966,41 +3959,51 @@ export function ChatPage() {
           });
         }
       }
-      if (activeChatId === deletingChatId) {
+      if (activeChatIdRef.current === chatId) {
         setActiveChatId(null);
         setMessages([]);
+        setShellView('home');
       }
       void refreshChatListMetadata();
-    } catch (err) {
-      console.error('Failed to delete chat:', err);
-    }
-    setDeletingChatId(null);
+  });
+  const handleLeaveRoomFromSidebar = (chatId: number) => removeSidebarChat(chatId, true);
+  const handleConfirmDelete = async () => {
+    if (deletingChatId && await removeSidebarChat(deletingChatId, false)) setDeletingChatId(null);
   };
 
-  const handleExportChat = async (chatId: number) => {
+  const setSidebarBotHidden = (chatId: number, hidden: boolean) => runLibraryMutation(`chat:${chatId}:setBotHidden`, async current => {
+    const chat = chats.find(chat => chat.id === chatId);
+    if (!chat) return false;
     setContextMenuChatId(null);
-    const chat = chats.find(c => c.id === chatId);
-    const chatName = chat?.title || t('chat.export.defaultTitle');
-    try {
-      const res = await api.getMessages(chatId, 10000);
-      if (res.messages.length === 0) {
-        toast.error(t('chat.toasts.emptyChat'));
-        return;
-      }
-      const blob = await generateChatDocxBlob(res.messages, chatName);
-      const buffer = await blob.arrayBuffer();
-      const d = new Date();
-      const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-      const safeName = chatName.replace(/[/\\?%*:|"<>]/g, '_').slice(0, 60);
-      const result = await window.electronAPI?.saveFile(`${safeName} ${dateStr}.docx`, buffer);
-      if (result && !result.canceled) {
-        toast.success(t('chat.toasts.chatSaved'));
-      }
-    } catch (err) {
-      console.error('Failed to export chat:', err);
-      toast.error(t('chat.toasts.chatExportFailed'));
+    const previous = Boolean(chat.bot_hidden);
+    if (previous === hidden) return;
+    setChats(chats => chats.map(chat => chat.id === chatId ? { ...chat, bot_hidden: hidden } : chat));
+    try { await api.setChatBotHidden(chatId, hidden); }
+    catch (error) {
+      if (current()) setChats(chats => chats.map(chat => chat.id === chatId ? { ...chat, bot_hidden: previous } : chat));
+      throw error;
     }
-  };
+  });
+  const handleToggleBotHidden = (chatId: number) => setSidebarBotHidden(chatId, !chats.find(chat => chat.id === chatId)?.bot_hidden);
+
+  const handleExportChat = (chatId: number) => runLibraryMutation(`chat:${chatId}:downloadDocx`, async current => {
+    setContextMenuChatId(null);
+    const chat = chats.find(chat => chat.id === chatId);
+    if (!chat) return false;
+    const chatName = chat.title || t('chat.export.defaultTitle');
+    const res = await api.getMessages(chatId, 10000);
+    if (!current()) return false;
+    if (!res.messages.length) throw new Error('chat_empty');
+    const blob = await generateChatDocxBlob(res.messages, chatName);
+    const buffer = await blob.arrayBuffer();
+    if (!current()) return false;
+    const d = new Date();
+    const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const safeName = chatName.replace(/[/\\?%*:|"<>]/g, '_').slice(0, 60);
+    const result = await window.electronAPI?.saveFile(`${safeName} ${dateStr}.docx`, buffer);
+    if (current() && result && !result.canceled) toast.success(t('chat.toasts.chatSaved'));
+    return !result?.canceled;
+  }, t('chat.toasts.chatExportFailed'));
 
   const startMsgMenuTimer = useCallback(() => {
     if (msgMenuTimerRef.current) clearTimeout(msgMenuTimerRef.current);
@@ -4900,28 +4903,38 @@ export function ChatPage() {
     setDemoFolderMenuId((current) => current === folderId ? null : folderId);
   };
 
+  const createSidebarFolder = (value: string) => runLibraryMutation('folder:create', async current => {
+    const name = value.trim().slice(0, 80);
+    if (!name) return false;
+    const { folder } = await api.createChatFolder(name);
+    if (!current()) return;
+    setChatFolders(previous => [...previous, folder]);
+    updateSectionPaging({ ...sectionPagingRef.current, [`folder:${folder.id}`]: { offset: 0, total: 0, hasMore: false, loading: false } });
+    setDemoExpandedFolders(previous => ({ ...previous, [folder.id]: true }));
+  });
+  const renameSidebarFolder = (folderId: number, value: string) => runLibraryMutation(`folder:${folderId}:rename`, async current => {
+    const name = value.trim().slice(0, 80);
+    const previousName = chatFolders.find(folder => folder.id === folderId)?.name;
+    if (!name || previousName === undefined) return false;
+    setChatFolders(previous => previous.map(folder => folder.id === folderId ? { ...folder, name } : folder));
+    try { await api.renameChatFolder(folderId, name); }
+    catch (error) {
+      if (current()) setChatFolders(previous => previous.map(folder => folder.id === folderId ? { ...folder, name: previousName } : folder));
+      throw error;
+    }
+  });
   const finishDemoFolderRename = async () => {
     if (!demoRenamingFolderId) return;
-    const folderId = demoRenamingFolderId;
-    const nextName = demoRenamingFolderName.trim();
-    setDemoRenamingFolderId(null);
-    setDemoRenamingFolderName('');
-    if (!nextName) return;
-    const previousName = chatFolders.find((folder) => folder.id === folderId)?.name;
-    setChatFolders((current) => current.map((folder) => folder.id === folderId ? { ...folder, name: nextName } : folder));
-    try {
-      await api.renameChatFolder(folderId, nextName);
-    } catch (error) {
-      console.error('Failed to rename chat folder:', error);
-      if (previousName) {
-        setChatFolders((current) => current.map((folder) => folder.id === folderId ? { ...folder, name: previousName } : folder));
-      }
-    }
+    const folderId = demoRenamingFolderId, name = demoRenamingFolderName;
+    setDemoRenamingFolderId(null); setDemoRenamingFolderName('');
+    if (name.trim()) await renameSidebarFolder(folderId, name);
   };
 
-  const deleteDemoFolder = async (folderId: number) => {
+  const deleteDemoFolder = (folderId: number) => runLibraryMutation(`folder:${folderId}:delete`, async current => {
+    if (!chatFolders.some(folder => folder.id === folderId)) return false;
     const previousFolders = chatFolders;
     const deletedFolderCount = chatFolders.find((folder) => folder.id === folderId)?.chat_count || 0;
+    const previousMembers = new Set(chats.filter(chat => chat.folder_id === folderId).map(chat => chat.id));
     setChatFolders((current) => current.filter((folder) => folder.id !== folderId));
     setUnfiledChatCount((current) => current + deletedFolderCount);
     setChats((current) => current.map((chat) => chat.folder_id === folderId ? { ...chat, folder_id: null } : chat));
@@ -4929,15 +4942,20 @@ export function ChatPage() {
     if (demoRenamingFolderId === folderId) setDemoRenamingFolderId(null);
     try {
       await api.deleteChatFolder(folderId);
-      await loadChats();
+      if (current()) await loadChats();
     } catch (error) {
-      console.error('Failed to delete chat folder:', error);
-      setChatFolders(previousFolders);
-      await loadChats();
+      if (current()) {
+        setChatFolders(previousFolders);
+        setUnfiledChatCount(count => Math.max(0, count - deletedFolderCount));
+        setChats(chats => chats.map(chat => previousMembers.has(chat.id) ? { ...chat, folder_id: folderId } : chat));
+        await loadChats();
+      }
+      throw error;
     }
-  };
+  });
 
-  const moveDemoChat = async (chatId: number, folderId: number | null) => {
+  const moveDemoChat = (chatId: number, folderId: number | null) => runLibraryMutation(`chat:${chatId}:move`, async current => {
+    if (!chats.some(chat => chat.id === chatId) || folderId !== null && !chatFolders.some(folder => folder.id === folderId)) return false;
     const previousFolderId = chats.find((chat) => chat.id === chatId)?.folder_id ?? null;
     if (previousFolderId === folderId) {
       setDemoMoveMenuOpen(false);
@@ -4976,14 +4994,18 @@ export function ChatPage() {
     setContextMenuChatId(null);
     try {
       await api.moveChatToFolder(chatId, folderId);
-      void refreshChatListMetadata();
+      if (current()) {
+        setSearchResults(previous => previous.map(result => result.chat_id === chatId ? { ...result, folder_id: folderId } : result));
+        void refreshChatListMetadata();
+      }
     } catch (error) {
-      console.error('Failed to move chat to folder:', error);
-      updateSectionPaging(previousPaging);
-      adjustCounts(folderId, previousFolderId);
-      setChats((current) => current.map((chat) => chat.id === chatId ? { ...chat, folder_id: previousFolderId } : chat));
+      if (current()) {
+        updateSectionPaging(previousPaging); adjustCounts(folderId, previousFolderId);
+        setChats(chats => chats.map(chat => chat.id === chatId ? { ...chat, folder_id: previousFolderId } : chat));
+      }
+      throw error;
     }
-  };
+  });
 
   const handleDemoChatDragStart = ({ active }: DragStartEvent) => {
     const chatId = Number(active.data.current?.chatId);
@@ -6455,21 +6477,10 @@ export function ChatPage() {
               <input value={demoFolderName} onChange={(event) => setDemoFolderName(event.target.value)} autoFocus />
               <button
                 title={t('chat.sidebar.folders.create')}
+                disabled={libraryBusy}
                 onClick={async () => {
-                  const value = demoFolderName.trim();
-                  if (!value) return;
-                  try {
-                    const { folder } = await api.createChatFolder(value);
-                    setChatFolders((current) => [...current, folder]);
-                    updateSectionPaging({
-                      ...sectionPagingRef.current,
-                      [`folder:${folder.id}`]: { offset: 0, total: 0, hasMore: false, loading: false },
-                    });
-                    setDemoExpandedFolders((current) => ({ ...current, [folder.id]: true }));
-                    setDemoFolderName(t('chat.sidebar.folders.new'));
-                    setDemoFolderCreatorOpen(false);
-                  } catch (error) {
-                    console.error('Failed to create chat folder:', error);
+                  if (await createSidebarFolder(demoFolderName)) {
+                    setDemoFolderName(t('chat.sidebar.folders.new')); setDemoFolderCreatorOpen(false);
                   }
                 }}
               >
@@ -6583,8 +6594,8 @@ export function ChatPage() {
                           style={{ top: demoFolderMenuPos.y, left: demoFolderMenuPos.x }}
                           onClick={(event) => event.stopPropagation()}
                         >
-                          <button className={s.contextMenuItem} onClick={() => startDemoFolderRename(folder.id, folder.name)}>{t('chat.sidebar.folders.rename')}</button>
-                          <button className={`${s.contextMenuItem} ${s.contextMenuItemDanger}`} onClick={() => deleteDemoFolder(folder.id)}>{t('chat.sidebar.folders.delete')}</button>
+                          <button disabled={libraryBusy} className={s.contextMenuItem} onClick={() => startDemoFolderRename(folder.id, folder.name)}>{t('chat.sidebar.folders.rename')}</button>
+                          <button disabled={libraryBusy} className={`${s.contextMenuItem} ${s.contextMenuItemDanger}`} onClick={() => deleteDemoFolder(folder.id)}>{t('chat.sidebar.folders.delete')}</button>
                         </div>
                       )}
                     </div>
@@ -6687,14 +6698,14 @@ export function ChatPage() {
             style={{ top: contextMenuPos.y, left: contextMenuPos.x }}
             onClick={(e) => e.stopPropagation()}
           >
-            <button className={s.contextMenuItem} onClick={() => handleStartRename(contextMenuChatId)}>
+            <button disabled={libraryBusy} className={s.contextMenuItem} onClick={() => handleStartRename(contextMenuChatId)}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
                 <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
               </svg>
               {t('chat.sidebar.rename')}
             </button>
-            <button className={s.contextMenuItem} onClick={() => handleExportChat(contextMenuChatId)}>
+            <button disabled={libraryBusy} className={s.contextMenuItem} onClick={() => handleExportChat(contextMenuChatId)}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                 <polyline points="7 10 12 15 17 10" />
@@ -6703,7 +6714,7 @@ export function ChatPage() {
               {t('chat.sidebar.downloadDocx')}
             </button>
             <div className={s.demoMoveMenuGroup}>
-              <button className={s.contextMenuItem} onClick={() => setDemoMoveMenuOpen((value) => !value)}>
+              <button disabled={libraryBusy} className={s.contextMenuItem} onClick={() => setDemoMoveMenuOpen((value) => !value)}>
                 <FolderIcon size={14} />
                 <span>{t('chat.sidebar.folders.moveTo')}</span>
                 <svg className={`${s.demoMoveMenuChevron} ${demoMoveMenuOpen ? s.demoMoveMenuChevronOpen : ''}`} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -6714,6 +6725,7 @@ export function ChatPage() {
                 <div className={s.demoMoveMenuOptions}>
                   {demoFolders.map((folder) => (
                     <button
+                      disabled={libraryBusy}
                       key={folder.id}
                       className={chats.find((chat) => chat.id === contextMenuChatId)?.folder_id === folder.id ? s.demoMoveMenuOptionActive : ''}
                       onClick={() => void moveDemoChat(contextMenuChatId, folder.id)}
@@ -6723,6 +6735,7 @@ export function ChatPage() {
                     </button>
                   ))}
                   <button
+                    disabled={libraryBusy}
                     className={(chats.find((chat) => chat.id === contextMenuChatId)?.folder_id ?? null) === null ? s.demoMoveMenuOptionActive : ''}
                     onClick={() => void moveDemoChat(contextMenuChatId, null)}
                   >
@@ -6732,7 +6745,7 @@ export function ChatPage() {
                 </div>
               )}
             </div>
-            <button className={s.contextMenuItem} onClick={() => handleToggleBotHidden(contextMenuChatId)}>
+            <button disabled={libraryBusy} className={s.contextMenuItem} onClick={() => handleToggleBotHidden(contextMenuChatId)}>
               {chats.find(c => c.id === contextMenuChatId)?.bot_hidden ? (
                 <>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -6752,7 +6765,7 @@ export function ChatPage() {
               )}
             </button>
             {chats.find(c => c.id === contextMenuChatId)?.is_owner === false ? (
-              <button className={`${s.contextMenuItem} ${s.contextMenuItemDanger}`} onClick={() => void handleLeaveRoomFromSidebar(contextMenuChatId)}>
+              <button disabled={libraryBusy} className={`${s.contextMenuItem} ${s.contextMenuItemDanger}`} onClick={() => void handleLeaveRoomFromSidebar(contextMenuChatId)}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
                   <polyline points="16 17 21 12 16 7" />
@@ -6761,7 +6774,7 @@ export function ChatPage() {
                 {t('chat.room.leaveRoom')}
               </button>
             ) : (
-              <button className={`${s.contextMenuItem} ${s.contextMenuItemDanger}`} onClick={() => handleStartDelete(contextMenuChatId)}>
+              <button disabled={libraryBusy} className={`${s.contextMenuItem} ${s.contextMenuItemDanger}`} onClick={() => handleStartDelete(contextMenuChatId)}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="3 6 5 6 21 6" />
                   <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
@@ -8456,12 +8469,18 @@ export function ChatPage() {
           created_at: result.created_at,
         }])).values()]
       : chats;
+    const knownChats = new Map(chats.map(chat => [chat.id, chat]));
     return {
-      chats: visibleChats.map(chat => ({
-        id: chat.id, title: chat.title || t('chat.sidebar.newChat'),
-        folderId: chat.folder_id, updatedAt: chat.updated_at || chat.created_at,
-      })),
-      folders: chatFolders.map(folder => ({ id: folder.id, name: folder.name, count: folder.chat_count })),
+      chats: visibleChats.map(chat => {
+        const known = knownChats.get(chat.id);
+        const isOwner = typeof known?.is_owner === 'boolean' ? known.is_owner : null;
+        return { id: chat.id, title: chat.title || t('chat.sidebar.newChat'), folderId: chat.folder_id,
+          updatedAt: chat.updated_at || chat.created_at, isOwner, botHidden: Boolean(known?.bot_hidden),
+          actions: isOwner === null ? [] : ['rename', 'downloadDocx', 'move', 'setBotHidden', isOwner ? 'delete' : 'leave'] as AppearanceShellState['chats'][number]['actions'] };
+      }),
+      folders: chatFolders.map(folder => ({ id: folder.id, name: folder.name, count: folder.chat_count, actions: ['rename', 'delete'] as ('rename'|'delete')[] })),
+      library: { busy: libraryBusy, operation: libraryStatus.scope === libraryScope && libraryStatus.epoch === libraryEpochRef.current ? libraryStatus.operation : null,
+        error: libraryStatus.scope === libraryScope && libraryStatus.epoch === libraryEpochRef.current ? libraryStatus.error : null, canCreateFolder: Boolean(user?.id), limits: { chatTitle: 120, folderName: 80 } },
       sections: [
         ...chatFolders.map(folder => ({ folderId: folder.id, key: `folder:${folder.id}` as ChatSectionKey })),
         { folderId: null, key: 'unfiled' as ChatSectionKey },
@@ -8517,15 +8536,34 @@ export function ChatPage() {
         speak: t('chat.message.speak'), pauseSpeech: t('appearance.pauseSpeech'), resumeSpeech: t('appearance.resumeSpeech'),
         stopSpeech: t('chat.message.stopSpeaking'), reviewConfirmation: t('appearance.reviewConfirmation'),
         previousVariant: t('chat.message.previousVariant'), nextVariant: t('chat.message.nextVariant'),
+        renameChat: t('chat.sidebar.rename'), moveChat: t('chat.sidebar.folders.moveTo'),
+        hideFromBot: t('chat.sidebar.hideFromBot'), showInBot: t('chat.sidebar.showInBot'), leaveChat: t('chat.room.leaveRoom'),
+        createFolder: t('chat.sidebar.folders.create'), renameFolder: t('chat.sidebar.folders.rename'), deleteFolder: t('chat.sidebar.folders.delete'),
+        unfiled: t('chat.sidebar.folders.unfiled'),
       },
     };
   }, [chats, chatFolders, sectionPaging, activeChatId, searchQuery, searchResults,
     searchLoading, loadingChats, locale, appearanceProfile, appearanceTheme, shellView, t,
     appearanceShell?.scope === 'workspace' ? messages : null, loadingMessages, hasMoreMessages, loadingOlderMessages, sending,
     attachedImages, attachedDocuments, preparingAttachments, attachmentError, maxImageCount, maxImageBytes, pendingAttachmentId, confirmationComposer.comment, ttsPlayback, shellConfirmations,
-    user?.id, user?.telegram_linked, roomCharacters, otherRoomHumans.length, forking, switchingVariantId, streamingMsgId]);
+    libraryBusy, libraryStatus, libraryScope, user?.id, user?.telegram_linked, roomCharacters, otherRoomHumans.length, forking, switchingVariantId, streamingMsgId]);
   const handleShellAction = (action: AppearanceShellAction) => {
-    if (action.type === 'composerAction') {
+    if (action.type === 'chatMenuAction' || action.type === 'folderMenuAction') {
+      if (!appearanceShell || !canRunAppearanceAction(shellState, action)) return;
+      if (action.type === 'chatMenuAction') {
+        if (!chats.some(chat => chat.id === action.id)) return;
+        if (action.action === 'rename') void renameSidebarChat(action.id, action.title!);
+        else if (action.action === 'downloadDocx') void handleExportChat(action.id);
+        else if (action.action === 'move') void moveDemoChat(action.id, action.folderId!);
+        else if (action.action === 'setBotHidden') void setSidebarBotHidden(action.id, action.hidden!);
+        else if (action.confirmed) void removeSidebarChat(action.id, action.action === 'leave');
+      } else if (action.action === 'create') void createSidebarFolder(action.name!);
+      else if (action.action === 'rename') void renameSidebarFolder(action.id!, action.name!);
+      else if (action.confirmed) void deleteDemoFolder(action.id!);
+    } else if (action.type === 'pasteAttachments') {
+      if (appearanceShell?.scope === 'workspace' && action.chatId === activeChatIdRef.current
+          && canRunAppearanceAction(shellState, action)) void chooseComposerAttachments(action.files);
+    } else if (action.type === 'composerAction') {
       if (appearanceShell?.scope !== 'workspace' || action.chatId !== activeChatIdRef.current
           || composerBusyRef.current || !canRunAppearanceAction(shellState, action)) return;
       if (action.action === 'choose') { void chooseComposerAttachments(); return; }

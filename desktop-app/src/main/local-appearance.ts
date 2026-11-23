@@ -831,9 +831,12 @@ export type ConfirmationAction={id:string;label:string;disabled:boolean;group:'p
 export type Confirmation={id:string;title:string;summary:string;ready:boolean;revision:number;busy:boolean;customizable:boolean;content:ConfirmationNode[];fields:ConfirmationField[];actions:ConfirmationAction[]};
 export type LabelKey=${APPEARANCE_LABEL_KEYS.map(key => JSON.stringify(key)).join('|')};
 export type Labels=Record<LabelKey,string>&Partial<Record<string,string>>;
+export type ChatMenuAction='rename'|'downloadDocx'|'move'|'setBotHidden'|'delete'|'leave';
+export type MenuItem={id:string;label:string;disabled:boolean;dangerous:boolean;requiresConfirmation:boolean};
 export type ThemeState = {
-  chats: {id:number;title:string;folderId:number|null;updatedAt:number}[];
-  folders: {id:number;name:string;count:number}[];
+  chats: {id:number;title:string;folderId:number|null;updatedAt:number;isOwner:boolean|null;botHidden:boolean;actions:ChatMenuAction[]}[];
+  folders: {id:number;name:string;count:number;actions:('rename'|'delete')[]}[];
+  library:{busy:boolean;operation:string|null;error:string|null;canCreateFolder:boolean;limits:{chatTitle:number;folderName:number}};
   sections: {folderId:number|null;total:number;loaded:number;hasMore:boolean;loading:boolean}[];
   view:'home'|'conversation';activeChatId:number|null;query:string;loading:boolean;
   messages:Message[];
@@ -844,11 +847,16 @@ export type ThemeState = {
   locale:string;dark:boolean;palette:{background:string;text:string;accent:string;surface:string};labels:Labels;
 };
 export interface ThemeAPI {
+  getChatMenu(id:number):MenuItem[];getFolderMenu(id:number):MenuItem[];
+  renameChat(id:number,title:string):boolean;downloadChatDocx(id:number):boolean;
+  moveChat(id:number,folderId:number|null):boolean;setChatBotHidden(id:number,hidden:boolean):boolean;
+  deleteChat(id:number,confirmed:boolean):boolean;leaveChat(id:number,confirmed:boolean):boolean;
+  createFolder(name:string):boolean;renameFolder(id:number,name:string):boolean;deleteFolder(id:number,confirmed:boolean):boolean;
   imageSource(messageId:number,url:string,width?:number):string;
   fullImageSource(messageId:number,url:string):string;
   readAttachment(messageId:number,index:number):Promise<DocumentPreview>;
   renderAttachmentPage(messageId:number,index:number,page:number,width?:number):Promise<DocumentPage>;
-  chooseAttachments():boolean;removePendingAttachment(id:string):boolean;clearPendingAttachments():boolean;pendingAttachmentSource(id:string):string;
+  chooseAttachments():boolean;attachPastedFiles():boolean;removePendingAttachment(id:string):boolean;clearPendingAttachments():boolean;pendingAttachmentSource(id:string):string;
   openImage(messageId:number,url:string):boolean;downloadImage(messageId:number,url:string):boolean;
   openAttachment(messageId:number,index:number):boolean;downloadAttachment(messageId:number,index:number):boolean;
   openLink(messageId:number,url:string):boolean;copyText(messageId:number,text:string):boolean;
