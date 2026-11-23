@@ -64,6 +64,12 @@ const speechAction = (action: string) => {
   send({ type: 'speechAction', chatId: state.activeChatId, action });
   return true;
 };
+const voiceAction = (action: 'start' | 'stop' | 'cancel') => {
+  const voice = state?.voice;
+  if (!navigator.userActivation.isActive || !state?.activeChatId || !voice || pasteBusy) return false;
+  if (action === 'start' ? !voice.canStart : action === 'stop' ? voice.status !== 'recording' : voice.status === 'idle') return false;
+  send({ type: 'voiceAction', chatId: state.activeChatId, action }); return true;
+};
 const contentAction = (messageId: number, action: string, extra: Record<string, unknown>) => {
   const message = state?.messages.find(message => message.id === messageId);
   if (!navigator.userActivation.isActive || !message) return false;
@@ -130,6 +136,14 @@ const documentRequest = (method: AppearanceDocumentRequest['method'], messageId:
   });
 };
 contextBridge.exposeInMainWorld('chatter', {
+  selectModel: (id: string | null) => {
+    if (!navigator.userActivation.isActive || !state?.models || state.models.loading || state.models.busy
+        || id !== null && !state.models.items.some(model => model.id === id)) return false;
+    send({ type: 'selectModel', id }); return true;
+  },
+  startVoiceRecording: () => voiceAction('start'),
+  stopVoiceRecording: () => voiceAction('stop'),
+  cancelVoiceRecording: () => voiceAction('cancel'),
   getChatMenu: (id: number) => (state?.chats.find(chat => chat.id === id)?.actions ?? []).map(action => ({
     id: action, disabled: Boolean(state?.library?.busy), dangerous: action === 'delete' || action === 'leave',
     requiresConfirmation: action === 'delete' || action === 'leave',
@@ -245,9 +259,12 @@ contextBridge.exposeInMainWorld('chatter', {
 });
 window.addEventListener('error', () => ipcRenderer.send('appearance-shell:failed'));
 window.addEventListener('unhandledrejection', () => ipcRenderer.send('appearance-shell:failed'));
-// Let the theme consume Escape (for example, to close its own image viewer) before host navigation.
+// Observe the modal before theme listeners/browser default actions can close it. A dialog's
+// cancel event is distinct from keydown: consuming cancel need not prevent that keydown.
 window.addEventListener('keydown', event => {
-  if (event.key === 'Escape') setTimeout(() => {
-    if (!event.defaultPrevented) ipcRenderer.send('appearance-shell:escape');
+  if (event.key !== 'Escape') return;
+  const modal = document.querySelector('dialog:modal');
+  setTimeout(() => {
+    if (!modal && !event.defaultPrevented) ipcRenderer.send('appearance-shell:escape');
   }, 0);
-});
+}, true);

@@ -824,7 +824,12 @@ export type ToolCall={id?:string;name:string;label:string;kind:'search'|'note'|'
 export type WorkLogStep={type:'message'|'activity';text:string}|{type:'tool';call:ToolCall};
 export type DocumentPreview={kind:'pdf'|'docx'|'spreadsheet'|'text'|'unsupported';name:string;mimeType:string;sizeBytes:number;text:string;html?:string;pageCount?:number};
 export type DocumentPage={source:string;width:number;height:number;page:number;pageCount:number};
-export type Message={id:number;role:string;content:string;createdAt:number;streaming:boolean;reasoningContent:string;workLog:WorkLogStep[];toolStatus:string|null;variantIndex:number;variantCount:number;actions:MessageAction[];editableContent?:string;images:{url:string;type:'user_photo'|'generated'|'external'}[];attachments:{url:string;name:string;filename:string;mimeType:string;sizeBytes:number}[]};
+export type TokenUsage={promptTokens:number;completionTokens:number;totalTokens:number;cacheHitTokens:number;cacheMissTokens:number;reasoningTokens:number};
+export type MessageInfo={modelName:string|null;providerName:string|null;tokenCount:number|null;tokenCountSource:'provider'|'estimate'|null;usage:TokenUsage|null;performance:{firstTokenLatencyMs:number;generationMs:number;totalMs:number;tokensPerSecond:number}|null};
+export type Models={loading:boolean;busy:boolean;error:string|null;selectedId:string|null;automaticLabel:string;automaticSupportsVision:boolean;contextLimit:number|null;items:{id:string;name:string;description:string;supportsVision:boolean;isFree:boolean;contextLength:number|null;averageTokensPerSecond:number|null;intelligenceTier:number|null;priceTier:number|null}[]};
+export type Context={showTokens:boolean;limit:number|null;tokens:number|null;cachePercent:number|null;messagesTokens:number|null;reasoningTokens:number|null;systemPromptTokens:number|null;activeMessages:number|null;archivedMessages:number|null;latest:(TokenUsage&{modelName:string|null})|null};
+export type Voice={status:'idle'|'requesting'|'recording'|'transcribing';canStart:boolean;error:string|null;transcript:{id:number;text:string}|null};
+export type Message={id:number;role:string;content:string;createdAt:number;streaming:boolean;reasoningContent:string;workLog:WorkLogStep[];toolStatus:string|null;variantIndex:number;variantCount:number;actions:MessageAction[];editableContent?:string;info:MessageInfo;images:{url:string;type:'user_photo'|'generated'|'external'}[];attachments:{url:string;name:string;filename:string;mimeType:string;sizeBytes:number}[]};
 export type ConfirmationNode={type:'text'|'code'|'markdown'|'json'|'email';text:string}|{type:'diff';before:string;after:string}|{type:'group';label?:string;children:ConfirmationNode[]}|{type:'field';fieldId:string}|{type:'action';actionId:string};
 export type ConfirmationField={id:string;label:string;type:string;value:string|boolean;disabled:boolean;options?:{value:string;label:string}[]};
 export type ConfirmationAction={id:string;label:string;disabled:boolean;group:'primary'|'review'|'permissions'|'content';comment?:boolean};
@@ -840,6 +845,7 @@ export type ThemeState = {
   sections: {folderId:number|null;total:number;loaded:number;hasMore:boolean;loading:boolean}[];
   view:'home'|'conversation';activeChatId:number|null;query:string;loading:boolean;
   messages:Message[];
+  models:Models;context:Context;voice:Voice;
   speech:{messageId:number|null;status:'idle'|'loading'|'playing'|'paused'};
   confirmations:Confirmation[];
   messagesLoading:boolean;hasOlderMessages:boolean;olderMessagesLoading:boolean;sending:boolean;canSend:boolean;attachmentCount:number;
@@ -847,6 +853,8 @@ export type ThemeState = {
   locale:string;dark:boolean;palette:{background:string;text:string;accent:string;surface:string};labels:Labels;
 };
 export interface ThemeAPI {
+  selectModel(id:string|null):boolean;
+  startVoiceRecording():boolean;stopVoiceRecording():boolean;cancelVoiceRecording():boolean;
   getChatMenu(id:number):MenuItem[];getFolderMenu(id:number):MenuItem[];
   renameChat(id:number,title:string):boolean;downloadChatDocx(id:number):boolean;
   moveChat(id:number,folderId:number|null):boolean;setChatBotHidden(id:number,hidden:boolean):boolean;

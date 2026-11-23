@@ -77,6 +77,7 @@ import { ReasoningDisclosure } from '../components/ReasoningDisclosure';
 import { startsMessageDay, messageClock, messageDate, fullMessageDate } from '../lib/message-dates';
 import { splitWorkContent, messageSpeechText } from '../lib/work-log-content';
 import { appearanceMessageContent } from '../lib/appearance-message-content';
+import { appearanceMessageInfo } from '../lib/appearance-message-info';
 import { appearanceContentReferences, allowedAppearanceImage } from '../lib/appearance-media';
 import type { SetDisplayStatePayload } from '../components/PixelAvatar';
 import { ToolsPanel, ToolsHeaderButton, ToolsToolbar } from '../components/ToolsPanel';
@@ -1445,10 +1446,15 @@ export function ChatPage() {
   const [contextMenuChatId, setContextMenuChatId] = useState<number | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
+  const [voiceRequesting, setVoiceRequesting] = useState(false);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
+  const [voiceTranscript, setVoiceTranscript] = useState<{ id: number; text: string; epoch: number } | null>(null);
+  const manualVoiceRef = useRef({ id: 0, pending: false });
+  const recordingStreamRef = useRef<MediaStream | null>(null);
   const speechRecorderRef = useRef<ReturnType<typeof createSpeechRecorder> | null>(null);
   const wakeVoiceSessionRef = useRef(0);
-  const voiceBusyRef = useRef({ isRecording, isTranscribing, sending });
-  voiceBusyRef.current = { isRecording, isTranscribing, sending };
+  const voiceBusyRef = useRef({ isRecording, isTranscribing, sending, voiceRequesting });
+  voiceBusyRef.current = { isRecording, isTranscribing, sending, voiceRequesting };
   // ── Dice Roll Mode (d20) ──
   const [diceRolling, setDiceRolling] = useState(false);
   const [diceValue, setDiceValue] = useState<number | null>(null);
@@ -1462,7 +1468,6 @@ export function ChatPage() {
   });
   const diceAnimTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const chunksRef = useRef<Blob[]>([]);
   const [contextMenuPos, setContextMenuPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [sideCollapsed, setSidebarCollapsed] = useState(false);
   const sidebarCollapsed = !tabsEnabled && sideCollapsed;
@@ -1687,6 +1692,15 @@ export function ChatPage() {
     attachments: Array<{ url: string; name: string; mime_type: string; size_bytes: number }>;
   }>>([]);
   const [modelsCatalog, setModelsCatalog] = useState<api.ModelCatalogEntry[]>([]);
+  const [modelsLoading, setModelsLoading] = useState(true);
+  const [modelBusy, setModelBusy] = useState(false);
+  const [modelError, setModelError] = useState<string | null>(null);
+  const modelOperationRef = useRef<{ epoch: number } | null>(null);
+  const modelSelectionVersionRef = useRef(0);
+  const modelCatalogEpochRef = useRef(-1);
+  const modelScope = JSON.stringify([api.API_BASE, user?.id]);
+  const modelScopeRef = useRef({ scope: modelScope, epoch: 0 });
+  if (modelScopeRef.current.scope !== modelScope) modelScopeRef.current = { scope: modelScope, epoch: modelScopeRef.current.epoch + 1 };
   const [preferredModel, setPreferredModel] = useState<string | null>(null);
   const [selectedContextLimit, setSelectedContextLimit] = useState<number | null>(null);
   const [reasoningLevel, setReasoningLevel] = useState<api.ReasoningLevel | null>(null);
@@ -1697,6 +1711,7 @@ export function ChatPage() {
   const [openReasoningId, setOpenReasoningId] = useState<number | null>(null);
   const [openToolCallsId, setOpenToolCallsId] = useState<number | null>(null);
   const [contextTokens, setContextTokens] = useState<api.ChatContextTokens | null>(null);
+  const contextTokensEpochRef = useRef<number | null>(null);
   const cachePercent = contextTokens && contextTokens.latest_prompt_tokens > 0
     ? Math.max(0, Math.min(100, Math.round(contextTokens.latest_cache_hit_tokens / contextTokens.latest_prompt_tokens * 100)))
     : null;
@@ -1709,10 +1724,16 @@ export function ChatPage() {
   }, []);
 
   const loadModelConfiguration = useCallback(async () => {
+    const epoch = modelScopeRef.current.epoch, selection = modelSelectionVersionRef.current;
+    const current = () => composerMountedRef.current && epoch === modelScopeRef.current.epoch;
+    setModelsLoading(true);
     try {
       const res = await api.getModels();
+      if (!current()) return;
+      setModelError(null);
+      modelCatalogEpochRef.current = epoch;
       setModelsCatalog(res.models);
-      setPreferredModel(res.preferred_model);
+      if (selection === modelSelectionVersionRef.current && modelOperationRef.current?.epoch !== epoch) setPreferredModel(res.preferred_model);
       if (res.model_selection_reset && res.model_selection_reset_notice) {
         toast.info(res.model_selection_reset_notice);
         void window.electronAPI.showDesktopNotification({
@@ -1723,18 +1744,44 @@ export function ChatPage() {
       }
       if (res.auto_reasoning_levels) setAutoReasoningLevels(res.auto_reasoning_levels);
       if (res.auto_supports_vision) setAutoSupportsVision(res.auto_supports_vision);
-    } catch {}
+    } catch { if (current()) { modelCatalogEpochRef.current = epoch; setModelError(t('chat.toasts.modelChangeFailed')); } }
+    finally { if (current()) setModelsLoading(false); }
     try {
       const res = await api.getReasoningLevel();
+      if (!current()) return;
       setReasoningLevel(res.reasoning_level);
     } catch {}
     try {
       const res = await api.getContextTokenLimit();
+      if (!current()) return;
       setSelectedContextLimit(res.max_context_tokens);
     } catch {}
-  }, []);
+  }, [modelScope, t]);
+
+  const selectPreferredModel = useCallback(async (modelId: string | null) => {
+    const epoch = modelScopeRef.current.epoch;
+    if (modelCatalogEpochRef.current !== epoch || modelOperationRef.current?.epoch === epoch || modelId !== null && !modelsCatalog.some(model => model.id === modelId)) return;
+    const operation = { epoch }; modelOperationRef.current = operation; modelSelectionVersionRef.current++;
+    const current = () => composerMountedRef.current && modelScopeRef.current.epoch === epoch;
+    setModelBusy(true); setModelError(null);
+    try {
+      await api.setPreferredModel(modelId);
+      if (!current()) return;
+      setPreferredModel(modelId);
+      let currentContextLimit = selectedContextLimit;
+      try { const limit = await api.getContextTokenLimit(); if (!current()) return;
+        currentContextLimit = limit.max_context_tokens; setSelectedContextLimit(currentContextLimit); } catch {}
+      const modelContext = modelId ? modelsCatalog.find(model => model.id === modelId)?.context_length : null;
+      if (current() && modelContext && currentContextLimit && currentContextLimit > modelContext)
+        toast.info(t('chat.toasts.modelContextLimited', { selected: Math.round(currentContextLimit / 1000), model: Math.round(modelContext / 1000) }));
+    } catch { if (current()) { const error = t('chat.toasts.modelChangeFailed'); setModelError(error); toast.error(error); } }
+    finally { if (modelOperationRef.current === operation) modelOperationRef.current = null; if (current()) setModelBusy(false); }
+  }, [modelsCatalog, selectedContextLimit, t]);
 
   // Load models catalog + reasoning level
+  useEffect(() => {
+    setModelsCatalog([]); setPreferredModel(null); setSelectedContextLimit(null); setModelBusy(false); setModelError(null);
+  }, [modelScope]);
   useEffect(() => {
     void loadModelConfiguration();
   }, [loadModelConfiguration]);
@@ -2196,8 +2243,11 @@ export function ChatPage() {
   }), [activeChatId, loadChats, promoteChat]);
 
   const refreshContextTokens = useCallback(async (chatId: number) => {
+    const epoch = composerScopeRef.current.epoch;
     try {
       const tokens = await api.getChatContextTokens(chatId);
+      if (activeChatIdRef.current !== chatId || composerScopeRef.current.epoch !== epoch || !composerMountedRef.current) return;
+      contextTokensEpochRef.current = epoch;
       setContextTokens(tokens);
       const summary = tokens.context_summary ?? null;
       setContextSummary(summary);
@@ -2205,6 +2255,7 @@ export function ChatPage() {
       console.error('Failed to load context tokens:', err);
     }
   }, []);
+  useEffect(() => { setContextTokens(null); setContextSummary(null); }, [composerScope]);
 
   const loadMessages = useCallback(async (chatId: number, isCurrent: () => boolean = () => true) => {
     const cached = messageCache.read(chatId);
@@ -3517,7 +3568,7 @@ export function ChatPage() {
     const text = (textOverride ?? input).trim();
     const hasImages = attachedImages.length > 0;
     const hasDocuments = attachedDocuments.length > 0;
-    if ((!text && !hasImages && !hasDocuments) || sending || composerBusyRef.current) return;
+    if ((!text && !hasImages && !hasDocuments) || sending || composerBusyRef.current || manualVoiceRef.current.pending) return;
 
     const isVoice = isVoiceInputRef.current;
     isVoiceInputRef.current = false;
@@ -3654,57 +3705,87 @@ export function ChatPage() {
   handleSendRef.current = handleSend;
 
   // ── Voice recording ───────────────────────────────────────────────────
-  const startRecording = useCallback(async () => {
+  const cancelRecording = useCallback(() => {
+    manualVoiceRef.current.id++; manualVoiceRef.current.pending = false;
+    wakeVoiceSessionRef.current++; isVoiceInputRef.current = false;
+    const recorder = mediaRecorderRef.current; mediaRecorderRef.current = null;
+    if (recorder) { recorder.onstop = null; recorder.ondataavailable = null; recorder.onerror = null;
+      if (recorder.state !== 'inactive') recorder.stop(); }
+    recordingStreamRef.current?.getTracks().forEach(track => track.stop()); recordingStreamRef.current = null;
+    speechRecorderRef.current?.stop(); speechRecorderRef.current = null;
+    setVoiceRequesting(false); setIsRecording(false); setIsTranscribing(false);
+  }, []);
+  useEffect(() => {
+    setVoiceError(null); setVoiceTranscript(null);
+    return () => { cancelRecording(); };
+  }, [composerScope, cancelRecording]);
+
+  const startRecording = useCallback(async (destination: 'native' | 'theme' = 'native') => {
+    const busy = voiceBusyRef.current;
+    if (manualVoiceRef.current.pending || busy.isRecording || busy.isTranscribing || busy.voiceRequesting || busy.sending || speechRecorderRef.current) return;
+    const id = ++manualVoiceRef.current.id, epoch = composerScopeRef.current.epoch;
+    manualVoiceRef.current.pending = true; setVoiceRequesting(true); setVoiceError(null); setVoiceTranscript(null);
+    const current = () => composerMountedRef.current && manualVoiceRef.current.id === id && composerScopeRef.current.epoch === epoch;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (!current()) { stream.getTracks().forEach(track => track.stop()); return; }
+      recordingStreamRef.current = stream;
       const mediaRecorder = new MediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
-      chunksRef.current = [];
+      const chunks: Blob[] = [];
 
       mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) chunksRef.current.push(e.data);
+        if (current() && e.data.size > 0) chunks.push(e.data);
       };
 
       mediaRecorder.onstop = async () => {
         stream.getTracks().forEach((track) => track.stop());
-        const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
-        const arrayBuffer = await blob.arrayBuffer();
-
-        setIsTranscribing(true);
+        if (recordingStreamRef.current === stream) recordingStreamRef.current = null;
+        if (!current()) return;
+        setIsRecording(false); setIsTranscribing(true);
         try {
+          const blob = new Blob(chunks, { type: mediaRecorder.mimeType || 'audio/webm' });
+          const arrayBuffer = await blob.arrayBuffer();
+          if (!current()) return;
           const text = await transcribeRecordedAudio(arrayBuffer, getSpeechRecognitionLanguage());
-          if (text) setInput((prev) => prev ? `${prev} ${text}` : text);
+          if (!current()) return;
+          if (text) {
+            if (destination === 'theme') setVoiceTranscript({ id, text, epoch });
+            else setInput((prev) => prev ? `${prev} ${text}` : text);
+          }
         } catch (err) {
-          console.error('[voice] Transcription failed:', err);
-          toast.error(t('chat.toasts.speechRecognitionFailed'));
+          if (current()) { console.error('[voice] Transcription failed:', err);
+            const error = t('chat.toasts.speechRecognitionFailed'); setVoiceError(error); toast.error(error); }
         } finally {
-          setIsTranscribing(false);
+          if (current()) { manualVoiceRef.current.pending = false; mediaRecorderRef.current = null; setIsTranscribing(false); }
         }
+      };
+      mediaRecorder.onerror = () => {
+        if (!current()) return;
+        cancelRecording(); const error = t('chat.toasts.voiceRecordingFailed'); setVoiceError(error); toast.error(error);
       };
 
       mediaRecorder.start();
-      setIsRecording(true);
+      setVoiceRequesting(false); setIsRecording(true);
     } catch (err) {
-      console.error('[voice] Microphone access denied:', err);
-      toast.error(t('chat.toasts.microphoneDenied'));
+      if (current()) { cancelRecording(); console.error('[voice] Microphone access denied:', err);
+        const error = t('chat.toasts.microphoneDenied'); setVoiceError(error); toast.error(error); }
     }
-  }, []);
+  }, [cancelRecording, t]);
 
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      setIsTranscribing(true);
       mediaRecorderRef.current.stop();
       setIsRecording(false);
+    } else if (speechRecorderRef.current) {
+      cancelRecording();
     }
-  }, []);
+  }, [cancelRecording]);
 
   const toggleRecording = useCallback(() => {
-    if (speechRecorderRef.current) {
-      wakeVoiceSessionRef.current += 1;
-      isVoiceInputRef.current = false;
-      speechRecorderRef.current.stop();
-      speechRecorderRef.current = null;
-      setIsRecording(false);
-      setIsTranscribing(false);
+    if (speechRecorderRef.current || voiceRequesting) {
+      cancelRecording();
       return;
     }
     if (isRecording) {
@@ -3712,7 +3793,7 @@ export function ChatPage() {
     } else {
       startRecording();
     }
-  }, [isRecording, startRecording, stopRecording]);
+  }, [isRecording, voiceRequesting, cancelRecording, startRecording, stopRecording]);
 
   useEffect(() => {
     const containsFiles = (event: DragEvent) => Array.from(event.dataTransfer?.types ?? []).includes('Files');
@@ -4380,7 +4461,7 @@ export function ChatPage() {
   useEffect(() => {
     const unsubscribe = window.electronAPI.onWakeWordDetected(async () => {
       const busy = voiceBusyRef.current;
-      if (busy.isRecording || busy.isTranscribing || busy.sending || speechRecorderRef.current) return;
+      if (busy.isRecording || busy.isTranscribing || busy.voiceRequesting || manualVoiceRef.current.pending || busy.sending || speechRecorderRef.current) return;
       const session = ++wakeVoiceSessionRef.current;
       const isCurrent = () => wakeVoiceSessionRef.current === session;
       void playSfx('Voice Recording Sound.mp3');
@@ -7013,34 +7094,8 @@ export function ChatPage() {
                           }),
                         ]}
                         value={preferredModel || ''}
-                        onChange={async (val) => {
-                          const modelId = val || null;
-                          try {
-                            await api.setPreferredModel(modelId);
-                            setPreferredModel(modelId);
-                            let currentContextLimit = selectedContextLimit;
-                            try {
-                              const limit = await api.getContextTokenLimit();
-                              currentContextLimit = limit.max_context_tokens;
-                              setSelectedContextLimit(currentContextLimit);
-                            } catch {}
-                            const modelContext = modelId
-                              ? modelsCatalog.find((model) => model.id === modelId)?.context_length
-                              : null;
-                            if (
-                              modelContext
-                              && currentContextLimit
-                              && currentContextLimit > modelContext
-                            ) {
-                              toast.info(t('chat.toasts.modelContextLimited', {
-                                selected: Math.round(currentContextLimit / 1000),
-                                model: Math.round(modelContext / 1000),
-                              }));
-                            }
-                          } catch {
-                            toast.error(t('chat.toasts.modelChangeFailed'));
-                          }
-                        }}
+                        disabled={modelsLoading || modelBusy}
+                        onChange={val => { void selectPreferredModel(val || null); }}
                         placeholder={t('chat.reasoning.auto')}
                       />
                     </div>
@@ -8000,11 +8055,11 @@ export function ChatPage() {
               )}
 
               <svg
-                className={isTranscribing ? s.micIconTranscribing : isRecording ? s.micIconRecording : s.micIcon}
+                className={isTranscribing || voiceRequesting ? s.micIconTranscribing : isRecording ? s.micIconRecording : s.micIcon}
                 onClick={confirmationComposer.comment || (isTranscribing && !speechRecorderRef.current) ? undefined : toggleRecording}
                 viewBox="0 0 24 24"
                 fill="none"
-                stroke={isRecording ? '#e53935' : isTranscribing ? 'var(--accent)' : 'var(--accent-icon-light)'}
+                stroke={isRecording ? '#e53935' : isTranscribing || voiceRequesting ? 'var(--accent)' : 'var(--accent-icon-light)'}
                 strokeWidth="2"
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -8463,6 +8518,14 @@ export function ChatPage() {
   const shellConfirmations = useMemo<AppearanceShellState['confirmations']>(() => JSON.parse(shellConfirmationsJSON), [shellConfirmationsJSON]);
   const shellState = useMemo<AppearanceShellState>(() => {
     const palette = appearanceProfile?.[appearanceTheme];
+    const conversationReady = !!activeChatId && messagesChatIdRef.current === activeChatId && !loadingMessages;
+    const canCompose = conversationReady && !sending && !preparingAttachments && !confirmationComposer.comment;
+    const voiceStatus = voiceRequesting ? 'requesting' : isRecording ? 'recording' : isTranscribing ? 'transcribing' : 'idle';
+    const modelsCurrent = modelCatalogEpochRef.current === modelScopeRef.current.epoch;
+    const configuredLimit = modelsCurrent ? selectedContextLimit : null;
+    const modelContext = modelsCurrent ? modelsCatalog.find(model => model.id === preferredModel)?.context_length ?? null : null;
+    const contextLimit = configuredLimit && modelContext ? Math.min(configuredLimit, modelContext) : configuredLimit || modelContext;
+    const tokens = conversationReady && contextTokensEpochRef.current === composerScopeRef.current.epoch ? contextTokens : null;
     const visibleChats: api.ChatInfo[] = searchQuery.trim().length >= 3
       ? [...new Map(searchResults.map(result => [result.chat_id, {
           id: result.chat_id, title: result.chat_title, folder_id: result.folder_id,
@@ -8495,6 +8558,7 @@ export function ChatPage() {
       view: shellView, activeChatId, query: searchQuery,
       messages: appearanceShell?.scope === 'workspace' && messagesChatIdRef.current === activeChatId ? messages.map(message => ({
         id: message.id, role: message.role, createdAt: message.created_at,
+        info: appearanceMessageInfo(message),
         ...appearanceMessageContent(message, sending && message.id === streamingMsgId,
           name => t(`toolActivity.names.${name}`, { defaultValue: name })),
         variantIndex: message.variant_index ?? 0, variantCount: message.variant_count ?? 1,
@@ -8504,12 +8568,25 @@ export function ChatPage() {
           canFork: otherRoomHumans.length === 0, canTelegram: Boolean(user?.telegram_linked) }),
       })) : [],
       speech: messagesChatIdRef.current === activeChatId && messages.some(message => message.id === ttsPlayback.messageId) ? ttsPlayback : { messageId: null, status: 'idle' },
+      models: { loading: modelsLoading || !modelsCurrent, busy: modelsCurrent && modelBusy, error: modelsCurrent ? modelError : null, selectedId: modelsCurrent ? preferredModel : null,
+        automaticLabel: t('chat.reasoning.auto'), automaticSupportsVision: modelsCurrent && (user?.plan === 'pro' ? autoSupportsVision.pro : autoSupportsVision.lite),
+        contextLimit: configuredLimit,
+        items: (modelsCurrent ? modelsCatalog : []).map(model => ({ id: model.id, name: model.name, description: model.description,
+          supportsVision: Boolean(model.supports_vision), isFree: Boolean(model.is_free), contextLength: model.context_length ?? null,
+          averageTokensPerSecond: model.avg_tokens_per_second ?? null, intelligenceTier: model.intel_tier ?? null, priceTier: model.price_tier ?? null })) },
+      context: { showTokens, limit: contextLimit, tokens: tokens?.current_context_tokens ?? null,
+        cachePercent: tokens && tokens.latest_prompt_tokens > 0 ? Math.max(0, Math.min(100, Math.round(tokens.latest_cache_hit_tokens / tokens.latest_prompt_tokens * 100))) : null,
+        messagesTokens: tokens?.messages_tokens ?? null, reasoningTokens: tokens?.reasoning_tokens ?? null,
+        systemPromptTokens: tokens?.system_prompt_tokens ?? null, activeMessages: tokens?.active_messages ?? null, archivedMessages: tokens?.archived_messages ?? null,
+        latest: tokens ? { modelName: tokens.latest_model_name, promptTokens: tokens.latest_prompt_tokens, completionTokens: tokens.latest_completion_tokens,
+          totalTokens: tokens.latest_total_tokens, cacheHitTokens: tokens.latest_cache_hit_tokens, cacheMissTokens: tokens.latest_cache_miss_tokens, reasoningTokens: tokens.latest_reasoning_tokens } : null },
+      voice: { status: voiceStatus, canStart: Boolean(canCompose && voiceStatus === 'idle'), error: voiceError,
+        transcript: voiceTranscript?.epoch === composerScopeRef.current.epoch ? { id: voiceTranscript.id, text: voiceTranscript.text } : null },
       confirmations: shellConfirmations,
       messagesLoading: loadingMessages || messagesChatIdRef.current !== activeChatId,
       hasOlderMessages: hasMoreMessages, olderMessagesLoading: loadingOlderMessages,
       sending,
-      canSend: !!activeChatId && messagesChatIdRef.current === activeChatId && !sending && !preparingAttachments
-        && !loadingMessages && !confirmationComposer.comment,
+      canSend: Boolean(canCompose && voiceStatus === 'idle'),
       attachmentCount: attachedImages.length + attachedDocuments.length,
       composer: { busy: preparingAttachments, error: attachmentError,
         items: [...attachedImages.map(image => ({ id: pendingAttachmentId(image), kind: 'image' as const, name: image.file.name,
@@ -8546,8 +8623,21 @@ export function ChatPage() {
     searchLoading, loadingChats, locale, appearanceProfile, appearanceTheme, shellView, t,
     appearanceShell?.scope === 'workspace' ? messages : null, loadingMessages, hasMoreMessages, loadingOlderMessages, sending,
     attachedImages, attachedDocuments, preparingAttachments, attachmentError, maxImageCount, maxImageBytes, pendingAttachmentId, confirmationComposer.comment, ttsPlayback, shellConfirmations,
-    libraryBusy, libraryStatus, libraryScope, user?.id, user?.telegram_linked, roomCharacters, otherRoomHumans.length, forking, switchingVariantId, streamingMsgId]);
+    libraryBusy, libraryStatus, libraryScope, user?.id, user?.telegram_linked, roomCharacters, otherRoomHumans.length, forking, switchingVariantId, streamingMsgId,
+    modelsCatalog, modelsLoading, modelBusy, modelError, preferredModel, selectedContextLimit, autoSupportsVision, user?.plan, modelScope,
+    contextTokens, showTokens, voiceRequesting, isRecording, isTranscribing, voiceError, voiceTranscript, composerScope]);
   const handleShellAction = (action: AppearanceShellAction) => {
+    if (action.type === 'selectModel') {
+      if (appearanceShell && canRunAppearanceAction(shellState, action)) void selectPreferredModel(action.id);
+      return;
+    }
+    if (action.type === 'voiceAction') {
+      if (appearanceShell?.scope !== 'workspace' || !canRunAppearanceAction(shellState, action)) return;
+      if (action.action === 'start') void startRecording('theme');
+      else if (action.action === 'stop') stopRecording();
+      else cancelRecording();
+      return;
+    }
     if (action.type === 'chatMenuAction' || action.type === 'folderMenuAction') {
       if (!appearanceShell || !canRunAppearanceAction(shellState, action)) return;
       if (action.type === 'chatMenuAction') {

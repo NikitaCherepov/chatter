@@ -30,6 +30,21 @@ export type AppearanceConfirmation = { id: string; title: string; summary: strin
 export type AppearanceConfirmationRequest = { type: 'confirmationAction'; id: string; actionId: string; revision: number; comment?: string }
   | { type: 'confirmationField'; id: string; fieldId: string; value: string | boolean };
 export type AppearanceSpeechAction = { type: 'speechAction'; chatId: number; action: 'pause' | 'resume' | 'stop' };
+export type AppearanceVoiceAction = { type: 'voiceAction'; chatId: number; action: 'start' | 'stop' | 'cancel' };
+export type AppearanceModelAction = { type: 'selectModel'; id: string | null };
+export type AppearanceTokenUsage = { promptTokens: number; completionTokens: number; totalTokens: number; cacheHitTokens: number; cacheMissTokens: number; reasoningTokens: number };
+export type AppearanceMessageInfo = { modelName: string | null; providerName: string | null; tokenCount: number | null;
+  tokenCountSource: 'provider' | 'estimate' | null; usage: AppearanceTokenUsage | null;
+  performance: { firstTokenLatencyMs: number; generationMs: number; totalMs: number; tokensPerSecond: number } | null };
+export type AppearanceModels = { loading: boolean; busy: boolean; error: string | null; selectedId: string | null; automaticLabel: string;
+  automaticSupportsVision: boolean; contextLimit: number | null;
+  items: { id: string; name: string; description: string; supportsVision: boolean; isFree: boolean; contextLength: number | null;
+    averageTokensPerSecond: number | null; intelligenceTier: number | null; priceTier: number | null }[] };
+export type AppearanceVoice = { status: 'idle' | 'requesting' | 'recording' | 'transcribing'; canStart: boolean; error: string | null;
+  transcript: { id: number; text: string } | null };
+export type AppearanceContext = { showTokens: boolean; limit: number | null; tokens: number | null; cachePercent: number | null;
+  messagesTokens: number | null; reasoningTokens: number | null; systemPromptTokens: number | null; activeMessages: number | null; archivedMessages: number | null;
+  latest: (AppearanceTokenUsage & { modelName: string | null }) | null };
 export type AppearanceReviewAction = { type: 'reviewConfirmation'; id: string };
 export type AppearanceContentAction = { type: 'contentAction'; chatId: number; messageId: number; variantIndex: number;
   action: 'openImage' | 'downloadImage' | 'openAttachment' | 'downloadAttachment' | 'openLink' | 'copyText'; url?: string; index?: number; text?: string };
@@ -42,7 +57,7 @@ export type AppearanceDocumentPage = { source: string; width: number; height: nu
 export type AppearanceComposerAction = { type: 'composerAction'; chatId: number; action: 'choose' | 'remove' | 'clear'; id?: string };
 export type AppearancePasteAction = { type: 'pasteAttachments'; chatId: number; files: { name: string; type: string; bytes: ArrayBuffer | null }[] };
 export type AppearanceShellAction = AppearanceNavigationAction | AppearanceMessageAction | AppearanceSpeechAction | AppearanceReviewAction
-  | AppearanceConfirmationRequest | AppearanceContentAction | AppearanceComposerAction | AppearancePasteAction | AppearanceChatMenuAction | AppearanceFolderMenuAction
+  | AppearanceConfirmationRequest | AppearanceContentAction | AppearanceComposerAction | AppearancePasteAction | AppearanceChatMenuAction | AppearanceFolderMenuAction | AppearanceVoiceAction | AppearanceModelAction
   | { type: 'confirmationPresentation'; custom: boolean };
 
 export type AppearanceToolCall = {
@@ -77,7 +92,10 @@ export type AppearanceShellState = {
   view: 'home' | 'conversation';
   activeChatId: number | null;
   messages: Array<AppearanceMessageContent & { id: number; role: string; createdAt: number;
-    variantIndex: number; variantCount: number; actions: AppearanceMessageActionName[]; editableContent?: string }>;
+    variantIndex: number; variantCount: number; actions: AppearanceMessageActionName[]; editableContent?: string; info?: AppearanceMessageInfo }>;
+  models?: AppearanceModels;
+  context?: AppearanceContext;
+  voice?: AppearanceVoice;
   speech: { messageId: number | null; status: 'idle' | 'loading' | 'playing' | 'paused' };
   confirmations: AppearanceConfirmation[];
   messagesLoading: boolean;
@@ -117,6 +135,8 @@ export function parseAppearanceShellAction(value: unknown): AppearanceShellActio
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const input = value as Record<string, unknown>;
   const validId = (value: unknown) => Number.isSafeInteger(value) && Number(value) > 0;
+  if (input.type === 'selectModel' && (input.id === null || typeof input.id === 'string' && input.id.length > 0 && input.id.length <= 500))
+    return { type: 'selectModel', id: input.id as string | null };
   if (input.type === 'chatMenuAction' && validId(input.id)) {
     const base = { type: 'chatMenuAction' as const, id: Number(input.id) };
     if (input.action === 'rename' && typeof input.title === 'string' && input.title.trim() && input.title.trim().length <= 120)
@@ -159,6 +179,8 @@ export function parseAppearanceShellAction(value: unknown): AppearanceShellActio
   if (input.type === 'search' && typeof input.query === 'string' && input.query.length <= 200)
     return { type: 'search', query: input.query };
   if (Number.isSafeInteger(input.chatId) && Number(input.chatId) > 0) {
+    if (input.type === 'voiceAction' && ['start', 'stop', 'cancel'].includes(String(input.action)))
+      return { type: 'voiceAction', chatId: Number(input.chatId), action: input.action as 'start' | 'stop' | 'cancel' };
     if (input.type === 'composerAction' && ['choose', 'remove', 'clear'].includes(String(input.action))) {
       if (input.action === 'remove' && (typeof input.id !== 'string' || !/^[a-zA-Z0-9-]{1,100}$/.test(input.id))) return null;
       return { type: 'composerAction', chatId: Number(input.chatId), action: input.action as 'choose' | 'remove' | 'clear',
@@ -213,6 +235,8 @@ export function parseAppearanceShellAction(value: unknown): AppearanceShellActio
 }
 
 export function canRunAppearanceAction(state: AppearanceShellState, action: AppearanceShellAction): boolean {
+  if (action.type === 'selectModel') return Boolean(state.models && !state.models.loading && !state.models.busy
+    && (action.id === null || state.models.items.some(model => model.id === action.id)));
   if (action.type === 'chatMenuAction') {
     const chat = state.chats.find(chat => chat.id === action.id);
     return !state.library?.busy && Boolean(chat?.actions?.includes(action.action))
@@ -225,6 +249,8 @@ export function canRunAppearanceAction(state: AppearanceShellState, action: Appe
     : Boolean(state.folders.find(folder => folder.id === action.id)?.actions?.includes(action.action))
       && (action.action !== 'delete' || action.confirmed === true));
   if ('chatId' in action && action.chatId !== state.activeChatId) return false;
+  if (action.type === 'voiceAction') return Boolean(state.voice && (action.action === 'start' ? state.voice.canStart
+    : action.action === 'stop' ? state.voice.status === 'recording' : state.voice.status !== 'idle'));
   if (action.type === 'sendMessage') return state.canSend && Boolean(action.text.trim() || state.attachmentCount);
   if (action.type === 'pasteAttachments') return state.canSend && !state.sending && !state.composer?.busy;
   if (action.type === 'composerAction') return !state.sending && !state.composer?.busy

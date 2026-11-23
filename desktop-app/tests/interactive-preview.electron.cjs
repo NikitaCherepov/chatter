@@ -320,17 +320,25 @@ if(!state?.messages.length)return null;const message=state.messages[0];return <m
   preview = await create('tsx', '', { bridge: 'appearance-chat-list-v1', project: { entry: 'App.tsx', files: {
     'App.tsx': `import React from 'react';import {Attachments,useChatterState} from '@chatter/ui';
 export default function App(){const state=useChatterState(),[document,setDocument]=React.useState(null),[page,setPage]=React.useState(null),[error,setError]=React.useState('');
+const [uploadOpen,setUploadOpen]=React.useState(false),upload=React.useRef(null);
+React.useEffect(()=>{const dialog=upload.current;if(uploadOpen)dialog?.showModal();else if(dialog?.open)dialog.close();},[uploadOpen]);
 if(!state)return null;const show=async file=>{try{const result=await window.chatter.readAttachment(file.messageId,file.index);setDocument(result);if(result.kind==='pdf')setPage(await window.chatter.renderAttachmentPage(file.messageId,file.index,1,800));}catch(error){setError(error.message);}};
-return <main><button id="choose" onClick={()=>window.chatter.chooseAttachments()}>Choose</button><button id="send-only-files" onClick={()=>window.chatter.sendMessage('')}>Send files</button>
-{state.composer.items.map(item=><section className="pending" key={item.id}>{item.kind==='image'&&<img src={window.chatter.pendingAttachmentSource(item.id)}/>}<span>{item.name}</span><button onClick={()=>window.chatter.removePendingAttachment(item.id)}>Remove</button></section>)}
+return <main><button id="open-upload" onClick={()=>setUploadOpen(true)}>Attachments</button><button id="send-only-files" onClick={()=>window.chatter.sendMessage('')}>Send files</button>
+<dialog id="own-upload" ref={upload} aria-labelledby="upload-title" onClose={()=>setUploadOpen(false)} onCancel={event=>{event.preventDefault();setUploadOpen(false);}} onKeyDown={event=>{if(event.key==='Escape'){event.preventDefault();setUploadOpen(false);}}}>
+<h1 id="upload-title">Theme attachment dialog</h1><button id="choose" disabled={!state.canSend||state.composer.busy} onClick={()=>window.chatter.chooseAttachments()}>Choose</button>
+<textarea id="upload-paste" aria-label="Paste attachments" onPaste={event=>{if(window.chatter.attachPastedFiles())event.preventDefault();}}/>
+{state.composer.busy&&<p role="status">Preparing</p>}{state.composer.error&&<p role="alert">{state.composer.error}</p>}
+{state.composer.items.map(item=><section className="pending" key={item.id}>{item.kind==='image'&&<img src={window.chatter.pendingAttachmentSource(item.id)}/>}<span>{item.name}</span><button disabled={state.composer.busy} onClick={()=>window.chatter.removePendingAttachment(item.id)}>Remove</button></section>)}
+<button id="clear-pending" disabled={state.composer.busy||!state.composer.items.length} onClick={()=>window.chatter.clearPendingAttachments()}>Clear</button><button id="close-upload" onClick={()=>setUploadOpen(false)}>Done</button></dialog>
 {state.messages.map(message=><React.Fragment key={message.id}><Attachments message={message} onAttachmentClick={show}/>{message.images.map(image=><img className="sent-image" key={image.url} src={window.chatter.imageSource(message.id,image.url)}/>)}</React.Fragment>)}
 {document&&<aside id="own-document"><h1>{document.name}</h1><pre>{document.text}</pre>{page&&<img src={page.source}/>}</aside>}{error&&<p role="alert">{error}</p>}</main>}`,
   } } });
   let documentState = { ...mediaState, canSend: true, attachmentCount: 0,
     composer: { busy: false, error: null, items: [], limits: {} }, messages: [{ ...mediaMessage, images: [],
       attachments: [{ url: '/api/v1/attachments/example.pdf', name: 'Example PDF', filename: 'example.pdf', mimeType: 'application/pdf', sizeBytes: 100 }] }] };
-  const documentEvents = [], outgoingImageRequests = [];
+  const documentEvents = [], outgoingImageRequests = [], uploadEscapes = [];
   host.webContents.send = (channel, payload) => {
+    if (channel === 'interactive-preview:status' && payload.escape) uploadEscapes.push(payload);
     if (channel === 'interactive-preview:appearance-document') {
       documentEvents.push(payload);
       const request = payload.request;
@@ -353,6 +361,8 @@ return <main><button id="choose" onClick={()=>window.chatter.chooseAttachments()
           { id: 'picked-doc', kind: 'document', name: 'chosen.txt', mimeType: 'text/plain', sizeBytes: 10 }] } };
       if (action.type === 'composerAction' && action.action === 'remove') documentState = { ...documentState, attachmentCount: documentState.attachmentCount - 1,
         composer: { ...documentState.composer, items: documentState.composer.items.filter(item=>item.id!==action.id) } };
+      if (action.type === 'composerAction' && action.action === 'clear') documentState = { ...documentState, attachmentCount: 0,
+        composer: { ...documentState.composer, items: [] } };
       manager.updateAppearanceState(host.webContents, preview.id, documentState);
     }
     return hostSend(channel, payload);
@@ -384,6 +394,21 @@ return <main><button id="choose" onClick={()=>window.chatter.chooseAttachments()
   assert.equal(await preview.contents.executeJavaScript('document.querySelector("#own-document pre").textContent'), 'Extracted text');
   assert.equal(documentEvents.length, 2);
   assert.equal(forwarded.length, beforeDocumentActions, 'custom document viewing does not invoke native openAttachment');
+  const beforeUploadActions = forwarded.length;
+  await preview.contents.executeJavaScript('document.querySelector("#open-upload").focus();document.querySelector("#open-upload").click()', true);
+  await until(async () => await preview.contents.executeJavaScript('document.querySelector("#own-upload").open'));
+  assert.equal(forwarded.length, beforeUploadActions, 'opening a theme dialog needs no native action');
+  assert.equal(await preview.contents.executeJavaScript('document.activeElement.closest("#own-upload")!==null'), true, 'modal receives focus');
+  await preview.contents.executeJavaScript('document.querySelector("#send-only-files").focus()');
+  assert.equal(await preview.contents.executeJavaScript('document.activeElement.closest("#own-upload")!==null'), true, 'dialog contains focus');
+  documentState = { ...documentState, canSend: false, composer: { ...documentState.composer, busy: true, error: 'Fixture preparation error' } };
+  manager.updateAppearanceState(host.webContents, preview.id, documentState);
+  await until(async () => await preview.contents.executeJavaScript('!!document.querySelector("#own-upload [role=alert]")'));
+  assert.equal(await preview.contents.executeJavaScript('document.querySelector("#choose").disabled'), true);
+  assert.equal(await preview.contents.executeJavaScript('document.querySelector("#own-upload [role=status]").textContent'), 'Preparing');
+  documentState = { ...documentState, canSend: true, composer: { ...documentState.composer, busy: false, error: null } };
+  manager.updateAppearanceState(host.webContents, preview.id, documentState);
+  await until(async () => await preview.contents.executeJavaScript('!document.querySelector("#choose").disabled'));
   await preview.contents.executeJavaScript('document.querySelector("#choose").click()', true);
   await until(async () => await preview.contents.executeJavaScript('document.querySelector(".pending img")?.naturalWidth') === 1).catch(async error => {
     console.log('Pending image diagnostic:', outgoingImageRequests.map(request=>({pendingId:request.pendingId,messageId:request.messageId,url:request.url})),
@@ -391,10 +416,28 @@ return <main><button id="choose" onClick={()=>window.chatter.chooseAttachments()
     throw error;
   });
   assert.equal(await preview.contents.executeJavaScript('document.querySelectorAll(".pending").length'), 2);
+  assert.equal(await preview.contents.executeJavaScript('document.querySelector("#own-upload").open'), true, 'selection/state updates preserve the custom modal');
+  preview.contents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' });preview.contents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' });
+  await until(async () => await preview.contents.executeJavaScript('!document.querySelector("#own-upload").open'));
+  await sleep(60);
+  assert.equal(uploadEscapes.length, 0, 'Escape closes the custom dialog without navigating out of the shell');
+  assert.equal(await preview.contents.executeJavaScript('document.activeElement.id'), 'open-upload', 'closing restores opener focus');
+  assert.equal(documentState.composer.items.length, 2, 'closing does not discard pending attachments');
+  await preview.contents.executeJavaScript('document.querySelector("#open-upload").click()', true);
+  await until(async () => await preview.contents.executeJavaScript('document.querySelector("#own-upload").open'));
   await preview.contents.executeJavaScript('document.querySelector(".pending button").click()', true);
   await until(async () => await preview.contents.executeJavaScript('document.querySelectorAll(".pending").length') === 1);
+  await preview.contents.executeJavaScript('document.querySelector("#close-upload").click()', true);
+  await until(async () => await preview.contents.executeJavaScript('!document.querySelector("#own-upload").open'));
   await preview.contents.executeJavaScript('document.querySelector("#send-only-files").click()', true);
   await until(() => forwarded.some(action=>action.type==='sendMessage'&&action.text===''));
+  await preview.contents.executeJavaScript('document.querySelector("#open-upload").click()', true);
+  await until(async () => await preview.contents.executeJavaScript('document.querySelector("#own-upload").open'));
+  await preview.contents.executeJavaScript('document.querySelector("#clear-pending").click()', true);
+  await until(async () => await preview.contents.executeJavaScript('document.querySelectorAll(".pending").length') === 0);
+  await preview.contents.executeJavaScript('document.querySelector("#close-upload").click()', true);
+  await until(async () => await preview.contents.executeJavaScript('!document.querySelector("#own-upload").open'));
+  console.log('PASS: theme-authored attachment modal, focus containment/restoration, busy/error updates, scoped image previews, remove/clear and Escape without native shell navigation');
   documentState = { ...documentState, attachmentCount: 0, composer: { ...documentState.composer, items: [] },
     messages: [...documentState.messages, { ...mediaMessage, id: -1, role: 'user', attachments: [], images: [{ url: 'blob:host-owned-image' }] }] };
   manager.updateAppearanceState(host.webContents, preview.id, documentState);
@@ -402,6 +445,57 @@ return <main><button id="choose" onClick={()=>window.chatter.chooseAttachments()
   assert.equal(await preview.contents.executeJavaScript('[typeof electronAPI,typeof require,typeof process].join(",")'), 'undefined,undefined,undefined');
   host.webContents.send = hostSend; manager.stop(host.webContents, preview.id);
   console.log('PASS: custom document read/page callbacks, owner-scoped replies, custom outgoing-file UI, opaque pending previews/removal and attachment-only send without native navigation');
+  preview = await create('tsx', '', { bridge: 'appearance-chat-list-v1', project: { entry: 'App.tsx', files: {
+    'App.tsx': `import React from 'react';import {useChatterState} from '@chatter/ui';
+export default function App(){const state=useChatterState(),[text,setText]=React.useState('draft'),last=React.useRef(null);
+React.useEffect(()=>{const result=state?.voice?.transcript;if(!result||last.current===result.id)return;last.current=result.id;setText(previous=>previous+' '+result.text);},[state?.voice?.transcript]);
+if(!state?.models||!state?.voice)return null;return <main><output id="selected-model">{state.models.selectedId??'auto'}</output><button id="select-model" onClick={()=>window.chatter.selectModel('model-a')}>Model A</button><button id="select-auto" onClick={()=>window.chatter.selectModel(null)}>Automatic</button>
+<output id="context-tokens">{state.context.tokens}/{state.context.limit}</output><output id="message-info">{state.messages[0]?.info?.modelName}:{state.messages[0]?.info?.tokenCount}</output>
+<output id="voice-status">{state.voice.status}</output><button id="voice-start" disabled={!state.voice.canStart} onClick={()=>window.chatter.startVoiceRecording()}>Record</button><button id="voice-stop" onClick={()=>window.chatter.stopVoiceRecording()}>Finish</button><button id="voice-cancel" onClick={()=>window.chatter.cancelVoiceRecording()}>Cancel</button><textarea id="voice-draft" value={text} onChange={event=>setText(event.target.value)}/></main>}`,
+  } } });
+  let sessionState = { ...mediaState, canSend: true,
+    models: { loading: false, busy: false, error: null, selectedId: null, items: [{ id: 'model-a', name: 'Model A' }] },
+    context: { tokens: 1250, limit: 64000, showTokens: true }, voice: { status: 'idle', canStart: true, error: null, transcript: null },
+    messages: [{ ...mediaMessage, info: { modelName: 'Model A', tokenCount: 42 } }] };
+  const sessionActions = [];
+  host.webContents.send = (channel, payload) => {
+    if (channel === 'interactive-preview:appearance-action') {
+      const action = payload.action;sessionActions.push(action);
+      if (action.type === 'selectModel') sessionState = { ...sessionState, models: { ...sessionState.models, selectedId: action.id } };
+      if (action.type === 'voiceAction') sessionState = { ...sessionState, voice: { ...sessionState.voice,
+        status: action.action === 'start' ? 'requesting' : action.action === 'stop' ? 'transcribing' : 'idle', canStart: action.action === 'cancel' } };
+      manager.updateAppearanceState(host.webContents, preview.id, sessionState);
+    }
+    return hostSend(channel, payload);
+  };
+  manager.updateAppearanceState(host.webContents, preview.id, sessionState);
+  await until(async () => await preview.contents.executeJavaScript('!!document.querySelector("#select-model")'));
+  assert.equal(await preview.contents.executeJavaScript('document.querySelector("#context-tokens").textContent'), '1250/64000');
+  assert.equal(await preview.contents.executeJavaScript('document.querySelector("#message-info").textContent'), 'Model A:42');
+  await preview.contents.executeJavaScript('document.querySelector("#select-model").click()', true);
+  await until(async () => await preview.contents.executeJavaScript('document.querySelector("#selected-model").textContent') === 'model-a');
+  await preview.contents.executeJavaScript('document.querySelector("#select-auto").click()', true);
+  await until(async () => await preview.contents.executeJavaScript('document.querySelector("#selected-model").textContent') === 'auto');
+  await preview.contents.executeJavaScript('document.querySelector("#voice-start").click()', true);
+  await until(async () => await preview.contents.executeJavaScript('document.querySelector("#voice-status").textContent') === 'requesting');
+  await preview.contents.executeJavaScript('document.querySelector("#voice-cancel").click()', true);
+  await until(async () => await preview.contents.executeJavaScript('document.querySelector("#voice-status").textContent') === 'idle');
+  await preview.contents.executeJavaScript('document.querySelector("#voice-start").click()', true);
+  await until(() => sessionActions.filter(action=>action.type==='voiceAction'&&action.action==='start').length === 2);
+  sessionState = { ...sessionState, voice: { ...sessionState.voice, status: 'recording', canStart: false } };
+  manager.updateAppearanceState(host.webContents, preview.id, sessionState);
+  await until(async () => await preview.contents.executeJavaScript('document.querySelector("#voice-status").textContent') === 'recording');
+  await preview.contents.executeJavaScript('document.querySelector("#voice-stop").click()', true);
+  await until(async () => await preview.contents.executeJavaScript('document.querySelector("#voice-status").textContent') === 'transcribing');
+  sessionState = { ...sessionState, voice: { ...sessionState.voice, status: 'idle', canStart: true, transcript: { id: 7, text: 'dictated words' } } };
+  manager.updateAppearanceState(host.webContents, preview.id, sessionState);
+  await until(async () => await preview.contents.executeJavaScript('document.querySelector("#voice-draft").value') === 'draft dictated words');
+  manager.updateAppearanceState(host.webContents, preview.id, { ...sessionState, voice: { ...sessionState.voice, transcript: { ...sessionState.voice.transcript } } });
+  await sleep(60);
+  assert.equal(await preview.contents.executeJavaScript('document.querySelector("#voice-draft").value'), 'draft dictated words');
+  assert.equal(sessionActions.some(action=>action.type==='sendMessage'||action.type==='openConversation'), false, 'recording/transcription never sends or changes UI automatically');
+  host.webContents.send = hostSend; manager.stop(host.webContents, preview.id);
+  console.log('PASS: isolated custom model selection/auto, message and context metadata, recording/cancellation states and one-time dictation into a persistent draft');
   manager.create(host.webContents, { language: 'tsx', source: '', dark: true, errorLabel: 'Preview failed', bridge: 'appearance-chat-list-v1', project: {
     entry: 'App.tsx', files: { 'App.tsx': 'import Missing from "./missing"; export default function App(){return null}' },
   } });

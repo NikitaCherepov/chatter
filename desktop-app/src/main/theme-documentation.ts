@@ -12,12 +12,15 @@ export const THEME_README = `# Local Chatter themes
 5. Read chatter.d.ts for signatures/state and the relevant guide below. suggest_appearance({id}) validates and offers preview; checkOnly:true only checks. Only the user applies changes. Draft edits refresh an open preview; cancel retains the draft and never changes the active theme.
 6. Add/update README.md beside theme.json to explain this theme's idea, files, controls and limitations. It is saved/exported with the theme but is not runtime code. See docs/theme-files.md.
 
+Available API features are not a mandatory UI checklist: choose what suits this theme. See docs/runtime.md, "Choosing features".
+
 ## Guides
 
 - docs/theme-files.md: per-theme README.md, persistence and portable theme files.
 - docs/library.md: chat/folder menus, available operations and custom forms.
 - docs/runtime.md: state/subscriptions (including useChatterState), navigation, isolated runtime and user actions.
 - docs/messages.md: content, streaming, workLog, tools, message actions, variants and speech.
+- docs/session.md: model selection, context/token indicators and voice recording/transcription.
 - docs/media.md: images, full-resolution viewers, documents and outgoing attachments.
 - docs/confirmations.md: custom confirmation UI, fields, decisions and native fallback.
 - docs/appearance.json: ordinary appearance fields, allowed values and ranges.
@@ -152,7 +155,8 @@ these fields without prescribing a layout.
 ## Available actions
 
 In workspace scope, each state.messages item includes variantIndex, variantCount and actions: the
-action names currently available for that message. Use this list to render any controls you design,
+action names currently available for that message. This is an allowlist, not a requirement to show
+every action. Use it to render whichever controls you design,
 including icons. state.labels contains localized action labels for accessible names. Temporary
 streaming messages have no persisted-message actions.
 
@@ -176,6 +180,81 @@ variant and permissions.
 state.speech has messageId and status idle/loading/playing/paused. pauseSpeech(), resumeSpeech() and
 stopSpeech() control the current chat speech without generating audio again. speakMessage(id)
 resumes that message if paused.
+
+## Optional message information
+
+message.info supplies modelName, providerName, tokenCount, tokenCountSource, usage and performance.
+It is display data, not a required footer: omit it, put it in a popover or design any other view.
+tokenCount follows the native renderer: assistant provider completion tokens when positive,
+otherwise the local message token estimate. tokenCountSource is provider/estimate/null; do not
+present estimates as exact billing. usage contains aggregate provider prompt/completion/total,
+cache-hit/cache-miss and reasoning tokens across the response's calls, not just the final text.
+performance has firstTokenLatencyMs, generationMs, totalMs and tokensPerSecond. Durations are ms;
+generation excludes tool pauses, total includes them. Unknown values/blocks are null, not zero.
+Respect context.showTokens when deciding whether to display numeric statistics. Record metadata
+may be absent until the response is persisted. See chatter.d.ts for exact field names.
+`,
+  'session.md': `# Models, context and voice input
+
+These are optional capabilities. Choose the controls/indicators your design needs; see
+runtime.md (Choosing features). No model picker, token badge, microphone or statistics footer
+component is mandatory. All data/functions below work without opening the native conversation.
+
+## Model selection
+
+state.models contains items, selectedId, automaticLabel, automaticSupportsVision, loading, busy,
+error and contextLimit. Catalog items expose id/name/description, supportsVision, isFree,
+contextLength, averageTokensPerSecond, intelligenceTier and priceTier; unavailable stats are null.
+Only the models actually available to this account are listed. selectedId:null means automatic.
+Call selectModel(id) or selectModel(null) directly from a user click/change handler. It uses the
+same account-level preferred-model setting as the native selector, not a per-chat override.
+Changes affect future generation; they do not replace an already running response. Follow busy,
+error and selectedId for completion; a true return means request sent. The host validates IDs,
+serializes changes and retains the previous selection on failure. Account/server changes discard
+late UI updates. Build your own select, command menu, cards or other selection UI.
+
+## Context and tokens
+
+state.context contains showTokens (the user's numeric-statistics preference), limit (effective
+selected model/user context cap when known), tokens (current context estimate), cachePercent,
+messagesTokens, reasoningTokens, systemPromptTokens, activeMessages, archivedMessages and latest.
+latest contains modelName and provider prompt/completion/total/cache-hit/cache-miss/reasoning
+tokens for the latest response. models.contextLimit is the user's configured cap before applying
+a selected model's smaller cap. Automatic routing may leave the effective limit unknown.
+Unknown/unloaded values are null; zero is a real count. Counts use the existing context service,
+not a sum of all displayed message rows. Chat changes clear the previous chat's counts. Cache
+percent uses latest cache-hit / latest prompt tokens; it is not the fraction of context occupied.
+Per-message statistics are in message.info (messages.md).
+
+## Recording and transcription
+
+state.voice has status idle/requesting/recording/transcribing, canStart, error and transcript.
+startVoiceRecording() requests the microphone and records through the trusted host; the isolated
+theme itself has no microphone permission. stopVoiceRecording() finishes manual recording and
+starts the app's configured local/server recognition. cancelVoiceRecording() discards recording
+or pending recognition; delayed permission/transcription results are ignored. Call these from
+user click/key handlers and respect canStart/status. Recordings are scoped to the current chat,
+account and server; switching/unmounting stops capture and discards late results. No raw audio or
+device access is given to the theme. The microphone stream is released when stopped/cancelled.
+The native wake-word flow remains separate; voice status also reflects its recording/recognition.
+Stopping that automatically managed flow cancels it using its existing stop behavior.
+
+Manual theme dictation returns transcript:{id,text}, or null before a result. Append each new id
+once to your draft (or show it for review). Keep the consumed id in the persistent composer/root
+so remounting a dialog does not insert it twice. Example inside that persistent React component:
+const lastTranscript = React.useRef<number | null>(null);
+React.useEffect(() => {
+  const result = state?.voice.transcript;
+  if (!result || result.id === lastTranscript.current) return;
+  lastTranscript.current = result.id;
+  setText(previous => previous ? previous + ' ' + result.text : result.text);
+}, [state?.voice.transcript]);
+
+The transcript stays available until the next manual recording or chat/account change; repeated
+state updates are not new results. Recognition never sends a manual theme message automatically:
+the user reviews it and your send control calls sendMessage(text). Playback/paused/loading of
+spoken replies uses state.speech and the separate speak/pause/resume/stop methods (messages.md).
+Recording, recognition and reply playback are distinct states; do not combine them into one flag.
 `,
   'media.md': `# Images, documents and outgoing attachments
 
@@ -270,8 +349,8 @@ remains an explicit native fallback.
 
 chooseAttachments() (also attachFiles()) is a user-gesture action: it opens the system file chooser,
 prepares selected files with the existing format/size/image-compression rules, and keeps the theme
-open. The system chooser is the only mandatory native step; the upload panel/list/modal is yours to
-build. state.composer has busy, error, items[{id,kind:image|document,name,mimeType,sizeBytes}] and
+open. Picking files from disk uses the system chooser; the upload panel/list/modal is yours to
+build inside the theme. state.composer has busy, error, items[{id,kind:image|document,name,mimeType,sizeBytes}] and
 limits{maxImageCount,maxImageBytes,maxDocumentBytes,imageFormats,documentExtensions}. Items use
 stable opaque IDs, never paths or raw file bytes. pendingAttachmentSource(id) provides a scoped
 preview src for a pending image. From user handlers call removePendingAttachment(id),
@@ -292,6 +371,25 @@ does not read the clipboard in the background. Accepts screenshots and files exp
 as clipboard files (not a copied file-path string). Uses the same preparation, preview, removal
 and sending flow as chooseAttachments. Transfer ceiling: 256 files / 50 MiB total per paste;
 unreadable/oversized files show preparation errors. No upload occurs until sendMessage.
+
+## Custom attachment dialogs
+
+A theme can create its own dialog, drawer, terminal prompt or inline attachment view using the
+same functions and state. No upload-modal component is required. Opening/closing this view is
+local theme state; chooseAttachments() only selects files and updates state.composer. Render
+pendingAttachmentSource(id) for image previews and metadata for documents. Offer remove/clear
+using the existing methods, and show busy/error when offering attachment handling. Closing the
+view does not discard pending files; call clearPendingAttachments() explicitly to discard them.
+Files are sent only by sendMessage(text), including attachment-only messages with empty text.
+
+Use a dialog/overlay inside the isolated theme DOM; no additional native window is needed. For
+a modal, label it, move focus inside, keep Tab within it and restore focus on close. A native
+HTML dialog with showModal() supplies focus containment and a top layer inside the theme;
+Escape is reserved for that modal instead of shell navigation. Handle close/cancel events to
+synchronize local state. For your own div/aside overlay, consume the Escape keydown with
+preventDefault() before closing it; otherwise Escape may navigate the whole shell home. Invoke chooseAttachments
+directly in a user handler, not after a timeout/effect. Put attachPastedFiles() on the message
+input or an editable paste target in your dialog. A plain text file-path string is not a file.
 `,
   'confirmations.md': `# Confirmations
 
@@ -323,6 +421,22 @@ ConfirmationContent/ConfirmationActions/Confirmations components as examples; th
 mandatory.
 `,
   'runtime.md': `# State, navigation and rendering
+
+## Choosing features
+
+The API describes available data and functions, not a checklist of controls to put in every
+theme. Choose which capabilities serve the intended design. Message metadata/statistics,
+individual message actions, model/context indicators, attachments and voice controls need not
+all be visible. A theme may omit a feature, show it on demand, or present it in its own way;
+do not fill the interface with controls merely because a field/method exists. This does not
+make new APIs available: consult chatter.d.ts for what this desktop version actually exposes.
+The starter is an example, not a completeness requirement. Describe intentional omissions in
+the theme README when helpful. For a feature you do offer, respect its permissions, availability,
+busy/error states and user gestures. Capability ownership is separate: navigation:true requires
+working navigation; confirmations:true requires rendering every pending confirmation. Leave
+those flags false when relying on native handling. See the corresponding guides.
+
+## Subscriptions and state
 
 window.chatter.subscribe(callback, {navigation:true, confirmations:true}) immediately supplies the latest ThemeState, keeps it current and returns an unsubscribe function. Use navigation:true when the theme handles home/conversation routing. Use confirmations:true only when it renders every pending confirmation (see confirmations.md). Both options default to false.
 

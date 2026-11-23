@@ -6,10 +6,12 @@ const require = createRequire(import.meta.url), ts = require('typescript');
 const { parseAppearancePaste, parseAppearanceShellAction, canRunAppearanceAction } = require('../src/main/appearance-shell-types.ts');
 const ipc = new Map<string, Function>(), dom = new Map<string, Function>(), sent: any[] = [];
 let api: any;
+let modalOpen = false;
 const source = fs.readFileSync(new URL('../src/main/appearance-shell-preload.ts', import.meta.url), 'utf8');
 vm.runInNewContext(ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, {
   exports: {}, ArrayBuffer, URL, URLSearchParams, setTimeout, clearTimeout, console,
   navigator: { userActivation: { isActive: false } }, location: { href: 'chatter-interactive://paste/index.html' },
+  document: { querySelector: (selector: string) => selector === 'dialog:modal' && modalOpen ? {} : null },
   window: { addEventListener: (name: string, handler: Function) => dom.set(name, handler) },
   require: () => ({ contextBridge: { exposeInMainWorld: (_: string, value: any) => { api = value; } },
     ipcRenderer: { on: (name: string, handler: Function) => ipc.set(name, handler), send: (...args: any[]) => sent.push(args) } }),
@@ -68,4 +70,14 @@ paste([{ ...file(), size: 51 * 1024 * 1024, arrayBuffer: async () => { reads++; 
 assert.equal(api.attachPastedFiles(), true); await settle();
 assert.equal(reads, 0, 'oversized clipboard files are not read into memory');
 assert.equal(parseAppearancePaste(messages().at(-1)[1]).files[0].bytes, null);
+const escapes = () => sent.filter(([channel]) => channel === 'appearance-shell:escape').length;
+modalOpen = true;
+dom.get('keydown')!({ key: 'Escape', defaultPrevented: false });
+modalOpen = false; // The dialog's cancel/default action closes it before the delayed navigation check.
+await settle(); assert.equal(escapes(), 0, 'dialog Escape must not also navigate the shell home');
+dom.get('keydown')!({ key: 'Escape', defaultPrevented: true });
+await settle(); assert.equal(escapes(), 0, 'custom overlay keydown handlers may consume Escape');
+dom.get('keydown')!({ key: 'Escape', defaultPrevented: false });
+await settle(); assert.equal(escapes(), 1, 'Escape without an active modal still navigates normally');
 console.log('PASS: genuine paste-only attachment bridge, text/synthetic/late-event guards, images and documents, scoped cancellation, bounded transfer and visible read errors');
+console.log('PASS: modal Escape is reserved before dialog cancellation, custom overlays may consume it, and ordinary shell navigation remains available');

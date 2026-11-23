@@ -43,6 +43,7 @@ vm.runInNewContext(ts.transpileModule(preload, { compilerOptions: { module: ts.M
   require: () => ({ contextBridge: { exposeInMainWorld: (_: any, value: any) => { api = value; } },
     ipcRenderer: { on: (name: string, fn: any) => events.set(name, fn), send: (...args: any[]) => sent.push(args) } }),
   navigator: { userActivation: { get isActive() { return activated; } } }, window: { addEventListener: (name: string, fn: any) => windowEvents.set(name, fn) }, console, setTimeout,
+  document: { querySelector: () => null },
 });
 events.get('appearance-shell:state')({}, state);
 const source = new URL(api.imageSource(10, request.url, 99999));
