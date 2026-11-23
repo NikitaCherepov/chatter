@@ -734,7 +734,7 @@ export function AppearancePanel({ initialDraft, onShellPreview }: {
                 onChange={event => {
                   const updated = { ...draft };
                   if (event.target.checked)
-                    updated.shell = { version: 1, language: 'html', source: '<main id="chats"></main>' };
+                    updated.shell = { version: 1, language: 'tsx', scope: 'workspace', entry: 'App.tsx', files: { 'App.tsx': 'export default function App(){return <main/>}' } };
                   else delete updated.shell;
                   setDraft(updated);
                 }} />

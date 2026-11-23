@@ -8,7 +8,7 @@ export type AppearanceCodeDiagnostic = {
   column: number;
   message: string;
 };
-export const APPEARANCE_PROJECT_LIMITS = { files: 32, sourceLength: 500_000 } as const;
+export const APPEARANCE_PROJECT_LIMITS = { files: 256, sourceLength: 500_000 } as const;
 export const APPEARANCE_PROJECT_MODULES = ['react', 'react-markdown', 'remark-gfm', '@chatter/ui'] as const;
 const own = (object: object, key: string) => Object.prototype.hasOwnProperty.call(object, key);
 
@@ -17,7 +17,7 @@ export function isAppearanceFilePath(value: unknown): value is string {
     typeof value === 'string' &&
     value.length <= 180 &&
     value.split('/').every((part) => /^[a-zA-Z0-9_-][a-zA-Z0-9_.-]*$/.test(part)) &&
-    /\.(tsx?|jsx?|css|json)$/.test(value)
+    /\.(tsx?|jsx?|css|json|html)$/.test(value)
   );
 }
 
@@ -29,7 +29,7 @@ export function parseAppearanceProject(value: unknown): AppearanceProject {
   if (
     !project ||
     !isAppearanceFilePath(project.entry) ||
-    !/\.[jt]sx?$/.test(project.entry) ||
+    !/\.(?:[jt]sx?|html)$/.test(project.entry) ||
     /\.d\.ts$/.test(project.entry) ||
     !project.files ||
     typeof project.files !== 'object' ||
@@ -101,7 +101,7 @@ export function compileAppearanceProject(value: AppearanceProject, ts: typeof Ty
   const diagnostics: AppearanceCodeDiagnostic[] = [];
   const compiled: Record<string, string> = {};
   for (const [file, source] of Object.entries(project.files)) {
-    if (file.endsWith('.d.ts')) continue;
+    if (file.endsWith('.d.ts') || file.endsWith('.html')) continue;
     const report = (message: string, offset = 0) => {
       const before = source.slice(0, offset).split('\n');
       diagnostics.push({

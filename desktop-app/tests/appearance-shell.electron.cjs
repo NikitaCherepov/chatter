@@ -45,7 +45,7 @@ app
       ),
     );
     assert.equal(
-      profile.shell.source,
+      profile.shell.files[profile.shell.entry],
       fs.readFileSync(
         path.resolve(__dirname, '../../examples/appearances/holographic.html'),
         'utf8',
@@ -53,7 +53,8 @@ app
     );
     const create = (source, language = 'html', bridge = 'appearance-chat-list-v1') => {
       const id = manager.create(host.webContents, {
-        source,
+        source: '',
+        project: { entry: language === 'html' ? 'index.html' : 'App.tsx', files: { [language === 'html' ? 'index.html' : 'App.tsx']: source } },
         language,
         bridge,
         dark: true,
@@ -62,7 +63,7 @@ app
       const contents = host.contentView.children.at(-1).children[0].webContents;
       return { id, contents };
     };
-    let preview = create(profile.shell.source);
+    let preview = create(profile.shell.files[profile.shell.entry]);
     const state = {
       chats: Array.from({ length: 4 }, (_, index) => ({
         id: index + 1,
@@ -181,7 +182,7 @@ app
             '<!doctype html><meta charset="utf-8"><script>const snapshot=' +
               fixture +
               ';window.chatter={subscribe(fn){window.updateShell=fn;fn(snapshot)},openChat(id){snapshot.activeChatId=id;snapshot.view="conversation";window.updateShell(snapshot)}};</script>' +
-              profile.shell.source,
+              profile.shell.files[profile.shell.entry],
           ),
       );
       await until(() => painted, 'Offscreen shell did not paint');
@@ -384,13 +385,13 @@ app
         ),
       );
       assert.equal(
-        sample.shell.source,
+        sample.shell.files[sample.shell.entry],
         fs.readFileSync(
           path.resolve(__dirname, '../../examples/appearances/' + exampleName + '.tsx'),
           'utf8',
         ),
       );
-      preview = create(sample.shell.source, 'tsx');
+      preview = create(sample.shell.files[sample.shell.entry], 'tsx');
       exampleState.view = 'home';
       manager.updateAppearanceState(host.webContents, preview.id, structuredClone(exampleState));
       await until(
@@ -488,7 +489,7 @@ app
         const document = interactiveDocument(
           {
             language: 'tsx',
-            source: sample.shell.source,
+            source: sample.shell.files[sample.shell.entry],
             dark: false,
             errorLabel: 'Sample failed',
           },

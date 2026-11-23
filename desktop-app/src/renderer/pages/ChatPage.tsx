@@ -1105,7 +1105,7 @@ export function ChatPage() {
     setShellOpen(Boolean(appearanceShell));
     setShellHandlesConfirmations(false);
     setShellView('home');
-  }, [appearanceShell?.source, appearanceShell?.entry, appearanceShell?.files, appearanceShell?.language, appearanceShell?.scope, user?.id, api.API_BASE]);
+  }, [appearanceShell?.entry, appearanceShell?.files, appearanceShell?.language, appearanceShell?.scope, user?.id, api.API_BASE]);
   const navigate = useNavigate();
   const layouts = useChatLayouts();
   const [layoutPreview, setLayoutPreview] = useState<{ profile: ChatLayoutProfile; proposalId?: string }>();

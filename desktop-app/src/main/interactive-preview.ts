@@ -36,7 +36,9 @@ export class InteractivePreviews {
     }
     if (input.language !== 'html' && this.runtime === null) this.runtime = fs.readFileSync(this.runtimeFile, 'utf8');
     const id = randomUUID();
-    const url = `${INTERACTIVE_SCHEME}://${id}/index.html`;
+    const url = `${INTERACTIVE_SCHEME}://${id}/${input.language === 'html' && input.project ? input.project.entry : 'index.html'}`;
+    const projectResource = (resource: URL) => input.language === 'html' && input.project && resource.protocol === INTERACTIVE_SCHEME + ':' && resource.hostname === id
+      && /\.(js|css)$/.test(resource.pathname) && Object.prototype.hasOwnProperty.call(input.project.files, resource.pathname.slice(1));
     const isolated = session.fromPartition(`interactive-${id}`, { cache: false });
     isolated.enableNetworkEmulation({ offline: true });
     isolated.setPermissionCheckHandler(() => false);
@@ -47,13 +49,17 @@ export class InteractivePreviews {
       const resource = new URL(details.url);
       const image = Boolean(input.bridge && details.resourceType === 'image' && resource.protocol === INTERACTIVE_SCHEME + ':'
         && resource.hostname === id && resource.pathname === '/_image');
-      callback({ cancel: details.method !== 'GET' || !(image || details.url === url && details.resourceType === 'mainFrame') });
+      callback({ cancel: details.method !== 'GET' || !(image || projectResource(resource) || details.url === url && details.resourceType === 'mainFrame') });
     });
     const document = interactiveDocument(input, this.runtime ?? '');
     isolated.protocol.handle(INTERACTIVE_SCHEME, request => {
       const resource = new URL(request.url);
       if (input.bridge && resource.hostname === id && resource.pathname === '/_image' && request.method === 'GET')
         return this.loadAppearanceImage(id, resource);
+      if (request.method === 'GET' && projectResource(resource)) return new Response(input.project!.files[resource.pathname.slice(1)], { headers: {
+        'Content-Type': resource.pathname.endsWith('.css') ? 'text/css; charset=utf-8' : 'text/javascript; charset=utf-8',
+        'Access-Control-Allow-Origin': '*', 'X-Content-Type-Options': 'nosniff',
+      } });
       return new Response(request.url === url ? document : '', {
       status: request.url === url ? 200 : 403,
       headers: { 'Content-Type': 'text/html; charset=utf-8', 'Content-Security-Policy': INTERACTIVE_CSP,

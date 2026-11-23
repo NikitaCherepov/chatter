@@ -19,6 +19,26 @@ try {
     files: { 'App.tsx': 'export default function App(){return <main/>}', 'styles.css': unicodeSource } } });
   assert.equal(budgetStore.readDraft('large-project').shell.files['styles.css'], unicodeSource,
     'on-disk byte guards must allow UTF-8 sources within the shared character budget');
+
+  assert.ok(store.readDocumentation().length < 6000, 'the tool returns a concise index, not embedded sources and an API dump');
+  assert.ok(!store.readDocumentation().includes('export default'));
+  for (const name of ['runtime.md','messages.md','media.md','confirmations.md','appearance.json'])
+    assert.ok(fs.existsSync(path.join(directory,'docs',name)));
+  assert.ok(fs.readFileSync(path.join(directory,'docs/runtime.md'),'utf8').includes('does NOT opt into navigation or confirmations'));
+  assert.ok(fs.existsSync(path.join(directory,'templates/component/components/Composer.tsx')));
+  const htmlTemplate=JSON.parse(fs.readFileSync(path.join(directory,'templates/html/theme.json'),'utf8'));
+  assert.equal(htmlTemplate.shell.entry,'index.html');
+  assert.equal(htmlTemplate.shell.files,undefined);
+  assert.throws(()=>parseAppearanceProfile({...newAppearance('old'),shell:{version:1,language:'html',source:'<main/>'}}),/appearance_invalid/);
+  const manyFiles={ 'App.tsx':'export default function App(){return null}', ...Object.fromEntries(Array.from({length:255},(_,i)=>['components/F'+i+'.tsx','export default function F(){return null}'])) };
+  const largeTheme={...newAppearance('many-components'),shell:{version:1,language:'tsx',entry:'App.tsx',files:manyFiles}};
+  budgetStore.writeDraft(largeTheme);
+  assert.equal(Object.keys(budgetStore.readDraft(largeTheme.id).shell.files).length,256);
+  budgetStore.save(budgetStore.readDraft(largeTheme.id),false);
+  const roundTrip=budgetStore.importBundle(budgetStore.exportBundle(largeTheme.id));
+  assert.equal(Object.keys(roundTrip.shell.files).length,256,'full project plus declarations survives ZIP export/import');
+  assert.throws(()=>parseAppearanceProfile({...largeTheme,shell:{...largeTheme.shell,files:{...manyFiles,'extra.ts':'export {}'}}}),/appearance_project_limit/);
+
   const beforeDocs = store.load().appearance;
   const guidePath = path.join(directory, 'THEMES.md');
   assert.equal(store.readDocumentation(), fs.readFileSync(guidePath, 'utf8'));
@@ -49,8 +69,8 @@ try {
   assert.equal(store.load().workspace.migrationComplete, false);
   const ordinary = newAppearance('ordinary');
   ordinary.name = 'Plain colors'; ordinary.revision = 7;
-  const html = { ...newAppearance('html'), shell: { version: 1, language: 'html', source: '<main>HTML</main>' } };
-  const single = { ...newAppearance('single'), shell: { version: 1, language: 'tsx', source: 'function App(){return <main>Legacy</main>}' } };
+  const html = { ...newAppearance('html'), shell: { version: 1, language: 'html', entry: 'index.html', files: { 'index.html': '<main>HTML</main>' } } };
+  const single = { ...newAppearance('single'), shell: { version: 1, language: 'tsx', entry: 'App.tsx', files: { 'App.tsx': 'export default function App(){return <main>Single file project</main>}' } } };
   const project = parseAppearanceProfile({ ...newAppearance('project'), shell: APPEARANCE_CAPABILITIES.shell.project.template });
   const legacy = { version: 1, revision: 9, activeId: 'ordinary', profiles: [ordinary, html, single, project] };
   const migrated = store.migrate(legacy);
@@ -62,9 +82,9 @@ try {
   assert.equal(fs.existsSync(path.join(plainPath, 'App.tsx')), false, 'ordinary themes only require a manifest');
   assert.equal(JSON.parse(fs.readFileSync(path.join(plainPath, 'theme.json'), 'utf8')).light.accent, ordinary.light.accent);
   const htmlPath = migrated.workspace.profiles.find((item: any) => item.id === 'html').directory;
-  assert.equal(fs.readFileSync(path.join(htmlPath, 'index.html'), 'utf8'), html.shell.source);
+  assert.equal(fs.readFileSync(path.join(htmlPath, 'index.html'), 'utf8'), html.shell.files['index.html']);
   assert.equal(JSON.parse(fs.readFileSync(path.join(htmlPath, 'theme.json'), 'utf8')).shell.source, undefined, 'source is materialized into real files');
-  assert.deepEqual(store.readDraft('single').shell, single.shell, 'legacy single TSX keeps App fallback and exact code');
+  assert.deepEqual(store.readDraft('single').shell, single.shell, 'one-file React project retains exact code');
   assert.deepEqual(store.readDraft('project').shell, project.shell);
   assert.deepEqual(JSON.parse(fs.readFileSync(path.join(directory, '.migration-backup.json'), 'utf8')), legacy);
   const draftPath = path.join(directory, '.drafts', 'ordinary', 'theme.json');
@@ -177,7 +197,7 @@ try {
   oldCustom.save({ ...newAppearance('duplicate'), name: 'Other server theme' }, true);
   const legacyImage = oldDefault.importImage(pixel.toString('base64'));
   oldDefault.save({ ...newAppearance('local-raster'), background: { ...ordinary.background, type: 'image', image: legacyImage } }, false);
-  oldDefault.writeDraft({ ...newAppearance('unfinished'), shell: { version: 1, language: 'tsx', source: 'export default function App(){return <main>Original</main>}' } });
+  oldDefault.writeDraft({ ...newAppearance('unfinished'), shell: { version: 1, language: 'tsx', entry: 'App.tsx', files: { 'App.tsx': 'export default function App(){return <main>Original</main>}' } } });
   fs.writeFileSync(path.join(oldDefault.directory, '.drafts/unfinished/App.tsx'), 'unfinished source');
   fs.mkdirSync(path.join(oldDefault.directory, '.drafts/broken'), { recursive: true });
   fs.writeFileSync(path.join(oldDefault.directory, '.drafts/broken/theme.json'), '{broken');

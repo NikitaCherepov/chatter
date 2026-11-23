@@ -46,7 +46,7 @@ export function AppearanceShell({
   resolvePendingImage?: (id: string) => string | null;
 }) {
   const { t } = useTranslation();
-  const project = useMemo(() => shell.files ? { entry: shell.entry, files: shell.files } : undefined,
+  const project = useMemo(() => ({ entry: shell.entry, files: shell.files }),
     [shell.entry, shell.files]);
   return (
     <section
@@ -74,7 +74,7 @@ export function AppearanceShell({
         </div>
       </header>
       <InteractivePreview
-        source={shell.source ?? ''}
+        source=""
         project={project}
         language={shell.language}
         visible={visible}

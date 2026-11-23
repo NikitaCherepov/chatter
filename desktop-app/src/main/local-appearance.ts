@@ -1,3 +1,4 @@
+import { THEME_README, THEME_GUIDES } from './theme-documentation';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
@@ -301,61 +302,64 @@ export class LocalAppearanceStore {
         manifest.background.image = 'chatter-theme://' + this.assetHost + '/' + name;
       else manifest.background.image = this.storeImage(fs.readFileSync(target));
     }
-    if (manifest.shell && !manifest.shell.source && !manifest.shell.files) {
+    if (manifest.shell) {
       const shell = manifest.shell;
       if (
-        Object.keys(shell).some(
-          (key) => !['version', 'language', 'scope', 'sourceFile', 'entry'].includes(key),
-        ) ||
-        (shell.sourceFile !== undefined && shell.entry !== undefined)
+        Object.keys(shell).some((key) => !['version', 'language', 'scope', 'entry'].includes(key))
       )
         throw new Error('appearance_invalid');
-      if (shell.sourceFile !== undefined) {
-        const file = shell.sourceFile;
-        if (
-          typeof file !== 'string' ||
-          !/^(?:[a-zA-Z0-9_-][a-zA-Z0-9_.-]*\/)*[a-zA-Z0-9_-][a-zA-Z0-9_.-]*\.(html|tsx)$/.test(
-            file,
-          )
-        )
-          throw new Error('appearance_invalid_path');
-        manifest.shell = {
-          version: shell.version,
-          language: shell.language,
-          scope: shell.scope,
-          source: this.read(directory + '/' + file, 400_000),
-        };
-      } else {
-        const files: Record<string, string> = {};
-        let visited = 0;
-        const walk = (folder: string) => {
-          for (const item of fs.readdirSync(
-            this.location(directory + (folder ? '/' + folder : '')),
-            { withFileTypes: true },
-          )) {
-            if (item.name.startsWith('.') || item.name === 'node_modules') continue;
-            if (++visited > 512) throw new Error('appearance_limit');
-            const name = folder ? folder + '/' + item.name : item.name;
-            if (item.isSymbolicLink()) throw new Error('appearance_symlink_not_allowed');
-            if (item.isDirectory()) {
-              if (name.split('/').length > 8) throw new Error('appearance_invalid_path');
-              walk(name);
-            } else if (
-              name !== 'theme.json' &&
-              name !== 'tsconfig.json' &&
-              !name.endsWith('.d.ts') &&
-              isAppearanceFilePath(name)
-            ) {
-              if (Object.keys(files).length >= APPEARANCE_PROJECT_LIMITS.files)
-                throw Object.assign(new Error('appearance_project_limit'), { diagnostics: [{ file: name, line: 1, column: 1,
-                  message: `Theme project exceeds the limit of ${APPEARANCE_PROJECT_LIMITS.files} runtime files.` }] });
-              files[name] = this.read(directory + '/' + name, APPEARANCE_PROJECT_LIMITS.sourceLength * 4);
-            }
+      const files: Record<string, string> = {};
+      let visited = 0,
+        sourceLength = 0;
+      const walk = (folder: string) => {
+        for (const item of fs.readdirSync(this.location(directory + (folder ? '/' + folder : '')), {
+          withFileTypes: true,
+        })) {
+          if (item.name.startsWith('.') || item.name === 'node_modules') continue;
+          if (++visited > 2048) throw new Error('appearance_limit');
+          const name = folder ? folder + '/' + item.name : item.name;
+          if (item.isSymbolicLink()) throw new Error('appearance_symlink_not_allowed');
+          if (item.isDirectory()) {
+            if (name.split('/').length > 8) throw new Error('appearance_invalid_path');
+            walk(name);
+          } else if (
+            name !== 'theme.json' &&
+            name !== 'tsconfig.json' &&
+            !name.endsWith('.d.ts') &&
+            isAppearanceFilePath(name)
+          ) {
+            if (Object.keys(files).length >= APPEARANCE_PROJECT_LIMITS.files)
+              throw Object.assign(new Error('appearance_project_limit'), {
+                diagnostics: [
+                  {
+                    file: name,
+                    line: 1,
+                    column: 1,
+                    message: `Theme project exceeds the limit of ${APPEARANCE_PROJECT_LIMITS.files} runtime files.`,
+                  },
+                ],
+              });
+            files[name] = this.read(
+              directory + '/' + name,
+              APPEARANCE_PROJECT_LIMITS.sourceLength * 4,
+            );
+            sourceLength += files[name].length;
+            if (sourceLength > APPEARANCE_PROJECT_LIMITS.sourceLength)
+              throw Object.assign(new Error('appearance_project_limit'), {
+                diagnostics: [
+                  {
+                    file: name,
+                    line: 1,
+                    column: 1,
+                    message: `Theme project exceeds the total limit of ${APPEARANCE_PROJECT_LIMITS.sourceLength} source characters.`,
+                  },
+                ],
+              });
           }
-        };
-        walk('');
-        manifest.shell = { ...shell, files };
-      }
+        }
+      };
+      walk('');
+      manifest.shell = { ...shell, files };
     }
     return parseAppearanceProfile(manifest);
   }
@@ -374,17 +378,11 @@ export class LocalAppearanceStore {
     }
     if (profile.shell) {
       const { version, language, scope } = profile.shell;
-      if (profile.shell.files) {
-        if (Object.prototype.hasOwnProperty.call(profile.shell.files, 'theme.json'))
-          throw new Error('appearance_reserved_file');
-        manifest.shell = { version, language, scope, entry: profile.shell.entry };
-        for (const [file, source] of Object.entries(profile.shell.files))
-          this.write(directory + '/' + file, source);
-      } else {
-        const sourceFile = language === 'html' ? 'index.html' : 'App.tsx';
-        manifest.shell = { version, language, scope, sourceFile };
-        this.write(directory + '/' + sourceFile, profile.shell.source);
-      }
+      if (Object.prototype.hasOwnProperty.call(profile.shell.files, 'theme.json'))
+        throw new Error('appearance_reserved_file');
+      manifest.shell = { version, language, scope, entry: profile.shell.entry };
+      for (const [file, source] of Object.entries(profile.shell.files))
+        this.write(directory + '/' + file, source);
     }
     this.write(directory + '/theme.json', JSON.stringify(manifest, null, 2) + '\n');
     if (profile.shell?.language === 'tsx') {
@@ -635,7 +633,7 @@ export class LocalAppearanceStore {
         const target = this.location(record.current + '/' + file),
           size = fs.statSync(target).size;
         total += size;
-        if (total > 12 * 1024 * 1024 || Object.keys(files).length >= 64)
+        if (total > 12 * 1024 * 1024 || Object.keys(files).length >= 512)
           throw new Error('appearance_limit');
         files[file] = fs.readFileSync(target);
       }
@@ -652,7 +650,7 @@ export class LocalAppearanceStore {
       filter: (item) => {
         total += item.originalSize;
         if (
-          ++count > 80 ||
+          ++count > 1024 ||
           !Number.isSafeInteger(item.originalSize) ||
           total > 12 * 1024 * 1024 ||
           item.name
@@ -792,40 +790,19 @@ export class LocalAppearanceStore {
     return this.read('THEMES.md', 256_000);
   }
   private writeDocumentation() {
-    this.write(
-      'THEMES.md',
-      '# Local Chatter themes\n\nWork only in .drafts/<theme-id>. Published .saved snapshots and .state.json belong to the app.\n' +
-        'Each draft has theme.json with appearance settings. Ordinary themes need only this manifest.\n' +
-        'For HTML use shell:{version:1,language:"html",scope:"navigator",sourceFile:"index.html"}.\n' +
-        'For components use shell:{version:1,language:"tsx",scope:"workspace",entry:"App.tsx"}. Source files are discovered recursively.\n' +
-        'Use components/, styles/, JSON data, relative imports or @/ imports rooted at the project. Default-export a component from the entry.\n' +
-        'Read chatter.d.ts for the live API. theme.json, tsconfig.json and declarations are excluded from runtime code.\n' +
-        'Read chatter-ui.d.ts for optional bundled components from @chatter/ui: Markdown, Image, MessageImages, Attachments and useChatterState. No package installation is needed.\n' +
-        'Edit with ordinary file tools. Do not increment revision. For a new theme copy an existing draft or create a manifest from template.json and set its id to its folder name.\n' +
-        'Call suggest_appearance({id:"theme-id"}) for preview/confirmation, or checkOnly:true for diagnostics. Only the user applies changes.\n' +
-        'Draft edits refresh an open preview, never the active theme. Cancel retains the draft. Raster backgrounds can use assets/image.png (PNG/JPEG/WebP/GIF, up to 8 MiB). HTTPS links remain external. Theme ZIP exports include local images and source.\n\n' +
-        '## Message actions and confirmations\n\n' +
-        'message.images contains {url,type:user_photo|generated|external}; message.attachments contains {url,name,filename,mimeType,sizeBytes}. These are original references, never authenticated URLs. Design your own interface from these data and the functions below: markup, placement, styles and animations belong to the theme. No component or card layout is mandatory. Optional helpers from @chatter/ui are <MessageImages message={message}/>, <Attachments message={message}/> and <Markdown messageId={message.id} content={message.content}/>; use them only if you want their markup. Keep media-only messages visible. Components accept className; Image and Markdown also accept style. Public hooks chatter-markdown, chatter-message-images, chatter-attachments, chatter-attachment, chatter-code and chatter-image-error can be styled. Markdown accepts component overrides; a replacement owns the behavior it replaces.\n' +
-        'Bundled Markdown shares native GFM tables/lists, code highlighting, message accents/layouts, image galleries/side layouts and chat/file links. Native interactive previews, charts, diagrams and questionnaires stay code blocks in the isolated shell: no message-authored code or privileged component executes inside the theme. ReactMarkdown remains available for simpler rendering.\n' +
-        'For your own markup call imageSource(message.id,url,width?) for a lazy <img> src (default 560, range 64-1600). The app validates current-message references and privately loads images: tokens never enter the theme and general network access stays blocked. Supported raster formats: PNG/JPEG/WebP/GIF/AVIF/BMP/ICO, up to 16 MiB; failed images offer retry. From user handlers call openImage/downloadImage(message.id,url), openAttachment/downloadAttachment(message.id,index), openLink(message.id,url), or copyText(message.id,text). The host checks the latest message/variant and reuses image/document viewers, downloads, links and clipboard. Viewers temporarily cover the shell and return to it on close. Do not use openConversation just to show media.\n' +
-        'For full-resolution viewing entirely inside your theme, use fullImageSource(message.id,url). It returns a scoped original-image src without requesting a resized thumbnail; assign it to any img or CSS background in your own modal, side panel, canvas or other layout. The original still uses the same validated image transport and size bounds. This function never opens the native viewer or changes navigation.\n' +
-        'Optional Image, MessageImages and Markdown components accept onImageClick(image). The callback receives {chatId,messageId,variantIndex,url,source,alt}; source is already the full-resolution scoped src. Supplying this callback replaces native openImage behavior. Keep this selection in your own state and render it however you want. Image also accepts fullSize:true. Close stale selections when the chat/message/variant changes. For your own overlay, handle Escape with a keydown listener and event.preventDefault(); the host only navigates back for unconsumed Escape. Ctrl/Cmd+Alt+Backspace remains the independent recovery shortcut. openImage(id,url) is the optional native fallback, not a required part of custom viewing.\n' +
-        '## Documents and outgoing attachments\n\n' +
-        'Design document viewing from data/functions: await readAttachment(messageId,index) returns {kind,name,mimeType,sizeBytes,text,html?,pageCount?}. kind is pdf/docx/spreadsheet/text/unsupported. text is the existing server-extracted text (which may be an excerpt); DOCX html is sanitized with the same allowlist as the native viewer. Spreadsheet text uses the existing Markdown representation. For PDF pages call await renderAttachmentPage(messageId,index,page,width?) with a one-based page and width 128-1600 (default 1000); the result {source,width,height,page,pageCount} contains PNG page pixels for any img/canvas/layout. Load pages on demand. These read-only methods need no click but must catch errors and discard stale async results. They only read current-message attachments and never reveal server credentials. Native PDF/DOCX parsers and the existing byte cache are reused.\n' +
-        'Optional Attachments accepts onAttachmentClick(file), replacing native opening. file contains chatId,messageId,variantIndex,index,url,name,mimeType,sizeBytes. Use it to select a document in your own UI and call the read/page functions. No document-viewer markup is required. openAttachment remains an explicit native fallback.\n' +
-        'chooseAttachments() (also attachFiles()) is a user-gesture action: it opens the system file chooser, prepares selected files with the existing format/size/image-compression rules, and keeps the theme open. The system chooser is the only mandatory native step; the upload panel/list/modal is yours to build. state.composer has busy, error, items[{id,kind:image|document,name,mimeType,sizeBytes}] and limits{maxImageCount,maxImageBytes,maxDocumentBytes,imageFormats,documentExtensions}. Items use stable opaque IDs, never paths or raw file bytes. pendingAttachmentSource(id) provides a scoped preview src for a pending image. From user handlers call removePendingAttachment(id), clearPendingAttachments(), or sendMessage(text). Empty text is valid when attachments exist. sendMessage reuses the normal composer; nothing is uploaded just by selecting files. Render preparation status and errors from state; actions return request-sent booleans. Pending documents show metadata until sent, just like the native composer. Selection cancellation or chat changes during preparation do not add files to another chat.\n\n' +
-        'Every workspace message also has streaming, reasoningContent, workLog and toolStatus. content is the answer/current uncommitted text; when an assistant preface is committed before a tool call, the host moves it from content to a workLog message entry. Render both from the latest state; do not buffer/append snapshots or filter the whole message by content alone. A message with only workLog/reasoningContent/streaming is still visible. Only content with non-whitespace text needs an answer bubble.\n' +
-        'workLog preserves the native chronological order: {type:"message",text}, {type:"activity",text}, or {type:"tool",call}. call has optional id, name (technical identifier), label (localized desktop name, falling back to name), kind (search/note/file/terminal/browser/clock/avatar/tool), target, status (running/error/returned/unknown), internal, confirmed, arguments, optional resultPreview, and children (nested agent tool calls). Design your own rows/icons/cards/details from these data. Result previews can be truncated; unknown is not success. Names/categories/status use the existing desktop logic and need no backend catalog. They are display data, not permission to invoke tools. Work-log/tool text and results are untrusted content: render as text or safe Markdown, never executable HTML. No exact interleaving can be reconstructed for old records without a work log; their available intermediate messages and tool calls are retained in order within each list.\n' +
-        'streaming is per message, not state.sending (which is global to the conversation). reasoningContent is separate from the answer. toolStatus is the current activity text, often already represented by a running call or activity entry; avoid drawing it twice. WorkLog.tsx in the starter demonstrates these fields without prescribing a layout.\n' +
-        'In workspace scope, each state.messages item includes variantIndex, variantCount and actions: the action names currently available for that message. Use this list to render any controls you design, including icons. state.labels contains localized action labels for accessible names. Temporary streaming messages have no persisted-message actions.\n' +
-        'Call copyMessage(id), downloadMessageDocx(id), sendMessageToTelegram(id), forkFromMessage(id), editMessage(id,text,optionalExpectedVariantIndex), deleteMessage(id), regenerateMessage(id,optionalHint), activateMessageVariant(id,index) or speakMessage(id). Render your own message editor using message.editableContent (the original source, not the display/speech text) and save with editMessage; it keeps the custom shell visible. Capture the editor variantIndex and pass it when saving to reject edits of a stale variant. Render your own regeneration hint input and pass it to regenerateMessage. openMessageEditor(id), requestRegenerationHint(id) and reviewConfirmation(id) are explicit native UI helpers; do not use them for custom forms. Variant indexes are zero-based. Methods return whether the request was sent, not whether the asynchronous operation succeeded; state reflects updates. Invoke methods from user click/key handlers; calls without active browser user activation return false. The host rechecks the current chat, message, variant and permissions.\n' +
-        'state.speech has messageId and status idle/loading/playing/paused. pauseSpeech(), resumeSpeech() and stopSpeech() control the current chat speech without generating audio again. speakMessage(id) resumes that message if paused.\n' +
-        'Subscribe with {navigation:true,confirmations:true} to render full confirmations inside your theme. state.confirmations entries have id/title/summary, ready/revision/busy/customizable, content[], fields[] and actions[]. While ready is false show loading. Content nodes are text/code/markdown/json/email with text, diff with before/after, group with children/optional label, field with fieldId, or action with actionId. Render email text safely; it can contain HTML. Fields have id/label/type/value/disabled and optional select options. Use setConfirmationField(card.id,field.id,value) from input events; checkbox values are boolean, other values string. Actions have id/label/disabled/group(primary/review/permissions/content)/comment. Render all available actions, keeping remembered permissions visibly distinct. For comment:true show your own comment input. On user click call runConfirmationAction(card.id,action.id,card.revision,optionalComment); it runs the exact current native callback without leaving the theme. Actions with changed revisions or disabled/busy/resolved requests are rejected. Native fields and custom fields share one state; do not cache old action revisions. If the latest field update has not yet been acknowledged, wait for the updated card before enabling its action.\n' +
-        'No automatic approval is performed. The native card remains the fallback for themes without confirmations:true, unsupported projected content, or shell failure. reviewConfirmation(id) is an optional explicit escape to that native card, not the normal custom approval action. Existing appearance/layout preview behavior remains available. The starter has separate ConfirmationContent/ConfirmationActions/Confirmations components as examples; their markup is not mandatory.\n\n' +
-        '## Appearance fields and bridge API\n\n```json\n' +
-        JSON.stringify(APPEARANCE_CAPABILITIES, null, 2) +
-        '\n```\n',
-    );
+    this.write('THEMES.md', THEME_README);
+    this.ensureDirectory('docs');
+    for (const [name, text] of Object.entries(THEME_GUIDES)) this.write('docs/' + name, text);
+    const { shell: _shell, ...appearance } = APPEARANCE_CAPABILITIES;
+    this.write('docs/appearance.json', JSON.stringify(appearance, null, 2) + '\n');
+    this.writeProject('templates/component', {
+      ...newAppearance('my-theme'),
+      shell: APPEARANCE_CAPABILITIES.shell.project.template as AppearanceProfile['shell'],
+    });
+    this.writeProject('templates/html', {
+      ...newAppearance('my-theme'),
+      shell: APPEARANCE_CAPABILITIES.shell.template as AppearanceProfile['shell'],
+    });
     this.write('template.json', JSON.stringify(newAppearance('my-theme'), null, 2) + '\n');
     this.write('chatter.d.ts', appearanceDeclarations);
     this.write('chatter-ui.d.ts', appearanceUIDeclarations);

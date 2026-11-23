@@ -28,7 +28,7 @@ try {
   const extended = {
     ...p,
     light: { ...p.light, surface: '#112233', chat: '#223344' },
-    shell: { version: 1, language: 'html', source: '<button onclick="chatter.newChat()">New chat</button>' },
+    shell: { version: 1, language: 'html', entry: 'index.html', files: { 'index.html': '<button onclick="chatter.newChat()">New chat</button>' } },
     materials: {
       composer: {
         opacity: 0.75,

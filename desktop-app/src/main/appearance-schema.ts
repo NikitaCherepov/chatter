@@ -48,7 +48,7 @@ export type AppearanceShell = {
   version: 1;
   language: 'html' | 'tsx';
   scope?: 'navigator' | 'workspace';
-} & ({ source: string; entry?: never; files?: never } | (AppearanceProject & { source?: never }));
+} & AppearanceProject;
 
 export type AppearanceProfile = {
   id: string;
@@ -234,15 +234,14 @@ export function parseAppearanceProfile(value: unknown): AppearanceProfile {
   }
   let shell: AppearanceShell | undefined;
   if (v.shell !== undefined) {
-    const source = keys(v.shell, ['version', 'language', 'source', 'scope', 'entry', 'files']);
+    const source = keys(v.shell, ['version', 'language', 'scope', 'entry', 'files']);
     if (source.version !== 1) fail();
-    const project = source.files !== undefined || source.entry !== undefined;
-    if (project ? source.source !== undefined || source.language !== 'tsx'
-        : typeof source.source !== 'string' || !source.source.trim() || source.source.length > 100_000) fail();
+    const project = parseAppearanceProject(source);
+    if ((source.language === 'html') !== project.entry.endsWith('.html')) fail();
     shell = {
       version: 1,
       language: choice(source.language, ['html', 'tsx']),
-      ...(project ? parseAppearanceProject(source) : { source: source.source }),
+      ...project,
       ...(source.scope !== undefined ? { scope: choice(source.scope, ['navigator', 'workspace'] as const) } : {}),
     };
   }
@@ -292,7 +291,7 @@ export function parseAppearanceSettings(value: unknown): AppearanceSettings {
 export const APPEARANCE_CAPABILITIES = {
   shell: {
     project: {
-      description: 'Prefer a multi-file TSX project for a substantial UI. Use entry and files instead of source; all files stay inside this profile. Relative imports support TSX, TS, JSX, JS, CSS (side effects) and JSON. No package installation, disk or network access.',
+      description: 'A shell is a file project with entry and files. On disk theme.json stores entry and the app discovers files; files is assembled internally. HTML entries end in .html; React entries use JS/TS/JSX/TSX. All files stay inside one theme. Relative imports support TSX, TS, JSX, JS, CSS (side effects) and JSON. No package installation, disk or network access.',
       limits: APPEARANCE_PROJECT_LIMITS,
       modules: APPEARANCE_PROJECT_MODULES,
       template: { version: 1, language: 'tsx', scope: 'workspace', entry: 'App.tsx', files: {
@@ -408,36 +407,11 @@ export default function Composer({state}){
 }`,
         'styles.css': 'body{margin:0;font:15px/1.6 system-ui,sans-serif;background:#101722;color:#e4ebf3}main{max-width:900px;margin:auto;padding:24px}header,form{display:flex;gap:12px;align-items:center}button,input,textarea{padding:12px;border-radius:8px;border:1px solid #456;background:#182536;color:inherit}.chat{display:block;width:100%;margin-top:8px;text-align:left}article{padding:12px;margin:12px 0;background:#182536;border-radius:8px}textarea{flex:1;min-width:0}',
       } },
-      editing: 'Themes live in a local directory on the user PC. get_theme_docs returns this guide and current state: directory, active theme, saved themes and drafts. Edit theme.json and component files under .drafts/<id> with ordinary desktop file tools. Relative imports and @/ project-root imports are supported; chatter.d.ts describes the bridge. The app discovers files automatically. suggest_appearance({id}) reads and validates this draft locally, then offers user preview/confirmation. checkOnly:true returns diagnostics. Never pass source code or increment revision. Only the user applies a draft; existing previews update when its files change.',
     },
     description: 'Optional independently coded full-screen UI inside this appearance. scope navigator opens selected chats in the native conversation; scope workspace keeps the shell visible and supplies actual messages and generation state. The shell owns its HTML/CSS/JS or React TSX. React, react-markdown and remark-gfm imports are bundled. No external resources or direct app/OS access.',
-    template: { version: 1, language: 'html', source: '<main id="chats"></main><script>window.chatter.subscribe(state => { document.getElementById("chats").replaceChildren(...state.chats.map(chat => { const button = document.createElement("button"); button.textContent = chat.title; button.onclick = () => window.chatter.openChat(chat.id); return button; })); });</script>' },
-    maxSourceLength: 100_000,
-    api: {
-      subscribe: 'window.chatter.subscribe(callback, {navigation:true}) opts into state.view routing and immediately supplies the latest state and returns unsubscribe. State has chats[{id,title,folderId,updatedAt}], folders[{id,name,count}], sections[{folderId,total,loaded,hasMore,loading}], activeChatId, view(home/conversation), query, loading, locale, dark, palette{background,text,accent,surface}, labels{newChat,allChats,settings,search,loadMore,loading,empty}. Further calls keep it current.',
-      openChat: 'window.chatter.openChat(id) selects a real loaded chat. Navigator scope closes, workspace scope stays visible and receives its messages.',
-      conversation: 'State also contains messages[{id,role,content,createdAt,variantIndex,variantCount,actions}], messagesLoading, hasOlderMessages, olderMessagesLoading, sending, attachmentCount and canSend. actions lists available operations for each persisted message. Messages are the loaded history window; call loadOlderMessages for older pages. State updates during generation. Never render empty assistant answers as bubbles.',
-      workLog: 'Each message also has streaming, reasoningContent, toolStatus and workLog. content is the answer/current uncommitted text; a preface moves into workLog when committed, so render both from the latest snapshot without buffering. Keep work-log-only, reasoning-only and streaming rows visible. Steps are {type:message|activity,text} or {type:tool,call}. Calls have name, localized label, optional id, kind, target, status(running/error/returned/unknown), internal, confirmed, arguments, optional resultPreview and nested children. Use these data for your own tool icons/cards/details. Unknown is not success; previews may be truncated. Treat text/results as untrusted content. toolStatus can duplicate an activity/running call. Old records without work-log ordering retain their intermediate messages then legacy calls. No backend catalog or tool execution API is required.',
-      messageActions: 'From user event handlers, call copyMessage(id), downloadMessageDocx(id), sendMessageToTelegram(id), forkFromMessage(id), editMessage(id,text,optionalExpectedVariantIndex), deleteMessage(id), regenerateMessage(id,optionalHint), activateMessageVariant(id,index), speakMessage(id). Render only operations in message.actions. Use message.editableContent as the source for your own editor, capture its variantIndex, and save with editMessage without leaving the theme. Your own regeneration hint form calls regenerateMessage(id,hint). openMessageEditor(id) and requestRegenerationHint(id) are optional explicit native helpers. Methods return whether a request was sent; state reflects completion. The host rechecks current chat/variant/permissions.',
-      speech: 'state.speech={messageId,status:idle/loading/playing/paused}. pauseSpeech(), resumeSpeech(), stopSpeech() require a user gesture. Pausing and resuming retain the generated audio and position. speakMessage resumes that message when paused.',
-      confirmations: 'Subscribe with {navigation:true,confirmations:true} to render full cards without leaving the theme. state.confirmations has id/title/summary, ready/revision/busy/customizable, content[], fields[], actions[]. Render text/code/markdown/json/email nodes safely, diff before/after, recursive group children, fieldId references and inline actionId references. Fields have id/label/type/value/disabled/options; call setConfirmationField(id,fieldId,value) from input events (boolean for checkbox, string otherwise). Actions have id/label/disabled/group(primary/review/permissions/content)/comment. Render every action; distinguish persistent permissions. For comment:true provide your own input. On a user click call runConfirmationAction(id,actionId,card.revision,optionalComment). The exact existing callback runs with native field state; stale revisions and busy/disabled/resolved requests are rejected. Wait for field acknowledgments before approval. reviewConfirmation(id) is only an explicit native fallback, not the normal themed button. Unsupported content, missing opt-in and shell failure retain native fallback.',
-      sendMessage: 'window.chatter.sendMessage(text) sends through the normal composer to the current chat. Returns false unless called from a real user interaction. Disable the composer when state.canSend is false. Pending native attachments are included.',
-      stopGeneration: 'window.chatter.stopGeneration() stops the current generation.',
-      imageViewing: 'fullImageSource(messageId,url) returns an original-resolution scoped src for any image element or CSS background in your own interface; it never opens native UI. Optional Image, MessageImages and Markdown accept onImageClick(image), replacing native openImage; image has chatId/messageId/variantIndex/url/source/alt and source is the full-resolution src. Image also supports fullSize. Own the viewer state, markup, styling and layout yourself; close stale selections on chat/variant changes. Consume Escape in your keydown handler with preventDefault to close your own overlay before host navigation. openImage is the optional native fallback.',
-      media: 'Messages also contain images[{url,type}] and attachments[{url,name,filename,mimeType,sizeBytes}]. Data and functions are the primary API: the theme authors its own markup, layout, style and animations. No predefined component or card is required. Optional @chatter/ui exports {Markdown,Image,MessageImages,Attachments,useChatterState} demonstrate shared formatting and media handling; they may be omitted or replaced entirely. Preserve media-only rows. Build your own markup using imageSource(id,url,width?), openImage/downloadImage(id,url), openAttachment/downloadAttachment(id,index), openLink(id,url) and copyText(id,text). View/download/link/copy require user activation and current-message references. Image sources hide server credentials; arbitrary network access remains unavailable. Native interactive/chart/diagram/questionnaire blocks remain code in this renderer. Public chatter-* classes and component overrides preserve theme control.',
-      loadOlderMessages: 'window.chatter.loadOlderMessages() loads the preceding history page.',
-      showHome: 'window.chatter.showHome() returns to this shell overview without leaving the appearance. Use state.view to render home vs conversation, including when the user returns from native chat actions. Opt in with subscribe(callback, {navigation:true}) to preserve local state during navigation. Earlier shells are reloaded to their initial overview on a host home action.',
-      openConversation: 'window.chatter.openConversation() reveals the native conversation and its complete message actions.',
-      attachFiles: 'chooseAttachments() and its alias attachFiles() open only the system file chooser from a user event, prepare files with existing rules and keep the custom shell visible. state.composer exposes busy/error/items/limits; use stable item IDs with removePendingAttachment(id), clearPendingAttachments() and pendingAttachmentSource(id). Design your own upload panel/list/modal. sendMessage accepts empty text when attachments exist and uses the normal sending path; selecting files alone does not upload them.',
-      documents: 'readAttachment(messageId,index) asynchronously returns kind(pdf/docx/spreadsheet/text/unsupported), name/mimeType/sizeBytes, extracted text, sanitized DOCX html and PDF pageCount. renderAttachmentPage(messageId,index,page,width?) returns one-based PDF page pixels as {source,width,height,page,pageCount}; load pages on demand (width 128-1600, default 1000). Both functions only read current-message attachments, reuse native parsing and hide credentials. Catch promise errors and discard stale selections. Optional Attachments.onAttachmentClick receives {chatId,messageId,variantIndex,index,url,name,mimeType,sizeBytes} and replaces native opening. No viewer markup is prescribed.',
-      newChat: 'window.chatter.newChat() creates and opens a real chat.',
-      loadMore: 'window.chatter.loadMore(folderId) loads the next page through existing pagination. null selects chats outside folders.',
-      search: 'window.chatter.search(query) uses the existing server search with a minimum of 3 characters. state.chats then contains search results.',
-      openLibrary: 'window.chatter.openLibrary() opens the native chat library, including folder management and filters.',
-      openSettings: 'window.chatter.openSettings() opens native app settings.',
-    },
+    template: { version: 1, language: 'html', entry: 'index.html', files: { 'index.html': '<main id="chats"></main><script>window.chatter.subscribe(state => { document.getElementById("chats").replaceChildren(...state.chats.map(chat => { const button = document.createElement("button"); button.textContent = chat.title; button.onclick = () => window.chatter.openChat(chat.id); return button; })); });</script>' } },
+    documentation: 'Read THEMES.md, docs/ and chatter.d.ts in the local theme directory.',
     scopes: ['navigator', 'workspace'],
-    behavior: 'Keep all chats reachable through paging/search/library. Use textContent or escape text before HTML insertion. Respect prefers-reduced-motion. Updates must retain input focus and scroll position. Host recovery controls stay available outside the shell. Escape from a conversation returns to this shell home. Escape from home exits a temporary preview.',
   },
   version: 1,
   fonts: APPEARANCE_FONTS,

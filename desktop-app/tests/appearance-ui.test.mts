@@ -660,7 +660,6 @@ app.whenReady().then(async()=>{
  };
  await choose('Формат исходного кода','tsx');
  await js('window.sourceText("export default function App(){return <main>Project</main>}")');
- await js('window.clickText("Разделить на файлы")');
  await until('!!document.querySelector("button[aria-label=\\\"Файл проекта\\\"]")');
  assert.equal(await js('[...document.querySelectorAll("button")].find(button=>button.textContent.trim()==="Удалить файл").disabled'),true,'entry deletion is disabled');
  await js('window.inputText("Путь нового файла","styles.css")');
@@ -726,7 +725,7 @@ app.whenReady().then(async()=>{
  await until('document.querySelector("#panel-fixture").textContent.includes("C:/ChosenThemes/1")');
  assert.equal(await js('window.testDb[1].activeId'),null,'moving the theme directory does not activate a theme');
  console.log('PASS: local draft live reload, error diagnostics and apply guard, cancellation, directory selection and no server appearance writes');
- console.log('PASS: actual project file editor, conversion without source loss, entry protection, file diagnostics before preview, and complete inactive project save');
+ console.log('PASS: actual project file editor, entry protection, file diagnostics before preview, and complete inactive project save');
  await js('window.openLayoutFixture()');
  await until('[...document.querySelectorAll("#layout-editor-fixture button")].some(el=>el.getAttribute("aria-label")==="Сохранённые компоновки")');
  await until('document.querySelectorAll("[data-virtual-row-placeholder]").length>30');

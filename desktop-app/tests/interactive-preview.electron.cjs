@@ -100,6 +100,17 @@ app.whenReady().then(async () => {
   assert.equal(await preview.contents.executeJavaScript('document.querySelector("p")?.textContent'), 'TSX 7');
   assert.equal(await preview.contents.executeJavaScript('(()=>{try{localStorage.getItem("private-test");return false}catch{return true}})()'), true);
   manager.stop(host.webContents, preview.id);
+  preview = await create('html', '', { bridge: 'appearance-chat-list-v1', project: { entry: 'pages/home.html', files: {
+    'pages/home.html': '<link rel="stylesheet" href="../styles.css"><main id="file-project">Loading</main><script type="module" src="../app.js"></script>',
+    'styles.css': '#file-project{color:rgb(11,22,33)}',
+    'app.js': 'import {title} from "./parts/title.js";document.getElementById("file-project").textContent=title;',
+    'parts/title.js': 'export const title="HTML file project";',
+  } } });
+  await until(async () => await preview.contents.executeJavaScript('document.querySelector("#file-project")?.textContent') === 'HTML file project');
+  assert.equal(await preview.contents.executeJavaScript('getComputedStyle(document.querySelector("#file-project")).color'), 'rgb(11, 22, 33)');
+  assert.equal(await preview.contents.executeJavaScript('[typeof electronAPI,typeof require].join(",")'), 'undefined,undefined');
+  manager.stop(host.webContents, preview.id);
+  console.log('PASS: unified HTML file project, nested entry, local CSS and browser modules in the isolated resource allowlist');
   const project = { entry: 'App.tsx', files: {
     'App.tsx': 'import React from "react"; import Counter from "@/parts"; import type {CounterState} from "./types"; import "./styles.css"; export default function App(){const [state,setState]=React.useState(null);React.useEffect(()=>window.chatter.subscribe(setState,{navigation:true}),[]);return <><h1>{state?.chats[0]?.title}</h1><Counter/></>}',
     'types.d.ts': 'export type CounterState = number;',
