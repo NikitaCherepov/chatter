@@ -1,3 +1,7 @@
+export const APPEARANCE_LABEL_KEYS = ["newChat", "allChats", "settings", "search", "loadMore", "loading", "empty", "workLog", "reasoning", "download", "image", "imageLoadFailed", "copy", "downloadDocx", "sendTelegram", "save", "cancel", "fork", "edit", "delete", "regenerate", "regenerateHint", "speak", "pauseSpeech", "resumeSpeech", "stopSpeech", "reviewConfirmation", "previousVariant", "nextVariant"] as const;
+export type AppearanceLabelKey = typeof APPEARANCE_LABEL_KEYS[number];
+export type AppearanceLabels = Record<AppearanceLabelKey, string> & Partial<Record<string, string>>;
+
 type AppearanceNavigationAction =
   | { type: 'openChat'; id: number }
   | { type: 'newChat' | 'openLibrary' | 'openSettings' | 'openConversation' | 'attachFiles' | 'home' }
@@ -79,10 +83,7 @@ export type AppearanceShellState = {
   locale: string;
   dark: boolean;
   palette: { background: string; text: string; accent: string; surface: string };
-  labels: Record<
-    'newChat' | 'allChats' | 'settings' | 'search' | 'loadMore' | 'loading' | 'empty',
-    string
-  > & Record<string, string>;
+  labels: AppearanceLabels;
 };
 
 export type AppearanceShellEvent = { id: string; action: AppearanceShellAction };

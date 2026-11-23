@@ -17,6 +17,17 @@ On first load, the desktop reads /api/v1/user/appearance/legacy, which preserves
 
 Ordinary appearances remain ordinary configuration. They need only theme.json with palettes, typography, geometry, materials, background and motion. No HTML is required. The existing CSS tokens, contrast correction, fonts, density, material and animation runtime apply these values as before. A null activeId selects the built-in appearance. Existing system/light/dark/scheduled palette selection is unchanged.
 
+## Per-theme documentation
+
+An optional UTF-8 README.md beside theme.json is stored independently of runtime source. It works
+for ordinary and custom-shell themes, and is captured with each published snapshot and rollback,
+preserved by draft/editor/proposal paths, workspace moves and ZIP import/export. It never executes
+or enters the model prompt automatically, and consumes neither the source-file nor code-character
+budget. Its independent limit is 256 KiB. The internal profile carries optional readme text; on
+disk it is always README.md, never a manifest field. Deleting the file and publishing that draft
+removes it; an empty file remains an empty file. A captured proposal uses its own README without
+overwriting newer external draft changes. The generated docs/theme-files.md explains the workflow.
+
 ## Components and source files
 
 Canonical contracts are shared/appearance.ts and shared/appearance-project.ts; run node scripts/sync-appearance.mjs and validate with --check. They are mirrored into the main process, renderer and legacy backend parser.

@@ -54,6 +54,8 @@ export type AppearanceProfile = {
   id: string;
   name: string;
   revision: number;
+  /** Internal transport for the separate README.md file; never runtime source. */
+  readme?: string;
   light: Palette;
   dark: Palette;
   typography: {
@@ -91,6 +93,7 @@ export const DEFAULT_APPEARANCE: AppearanceSettings = {
   activeId: null,
   profiles: [],
 };
+export const APPEARANCE_README_MAX_BYTES = 256 * 1024;
 export const APPEARANCE_FONTS = [
   'Inter',
   'Segoe UI',
@@ -180,9 +183,12 @@ export function parseAppearanceProfile(value: unknown): AppearanceProfile {
     'motion',
     'materials',
     'shell',
+    'readme',
   ]);
   const id = text(v.id, 64);
   if (!/^[a-zA-Z0-9_-]+$/.test(id)) fail();
+  if (v.readme !== undefined && (typeof v.readme !== 'string'
+      || new TextEncoder().encode(v.readme).byteLength > APPEARANCE_README_MAX_BYTES)) fail();
   const palette = (p: any): Palette => {
     keys(p, ['background', 'text', 'accent', 'surface', 'chat']);
     return {
@@ -248,6 +254,7 @@ export function parseAppearanceProfile(value: unknown): AppearanceProfile {
   return {
     id,
     name: text(v.name, 80),
+    ...(v.readme !== undefined ? { readme: v.readme as string } : {}),
     ...(shell ? { shell } : {}),
     revision: revision(v.revision ?? 0),
     ...(materials !== undefined ? { materials } : {}),

@@ -1,3 +1,4 @@
+import { APPEARANCE_LABEL_KEYS } from './appearance-shell-types';
 import { THEME_README, THEME_GUIDES } from './theme-documentation';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -6,6 +7,7 @@ import { zipSync, unzipSync } from 'fflate';
 import {
   DEFAULT_APPEARANCE,
   APPEARANCE_CAPABILITIES,
+  APPEARANCE_README_MAX_BYTES,
   newAppearance,
   parseAppearanceProfile,
   type AppearanceProfile,
@@ -280,6 +282,10 @@ export class LocalAppearanceStore {
     } catch (error) {
       throw new Error('theme.json: ' + (error as Error).message);
     }
+    // README is a separate document on disk, carried in the profile only across app boundaries.
+    if (Object.prototype.hasOwnProperty.call(manifest, 'readme')) throw new Error('appearance_invalid');
+    if (fs.existsSync(this.location(directory + '/README.md')))
+      manifest.readme = this.read(directory + '/README.md', APPEARANCE_README_MAX_BYTES);
     if (
       typeof manifest?.background?.image === 'string' &&
       manifest.background.image.startsWith('assets/')
@@ -365,8 +371,9 @@ export class LocalAppearanceStore {
   }
   private writeProject(directory: string, value: AppearanceProfile) {
     const profile = parseAppearanceProfile(value);
-    const manifest: any = structuredClone(profile);
+    const { readme, ...manifest }: any = structuredClone(profile);
     this.ensureDirectory(directory);
+    if (readme !== undefined) this.write(directory + '/README.md', readme);
     if (profile.background.image.startsWith('chatter-theme:')) {
       const image = new URL(profile.background.image);
       if (image.hostname !== this.assetHost) throw new Error('appearance_image_not_found');
@@ -793,14 +800,17 @@ export class LocalAppearanceStore {
     this.write('THEMES.md', THEME_README);
     this.ensureDirectory('docs');
     for (const [name, text] of Object.entries(THEME_GUIDES)) this.write('docs/' + name, text);
-    const { shell: _shell, ...appearance } = APPEARANCE_CAPABILITIES;
-    this.write('docs/appearance.json', JSON.stringify(appearance, null, 2) + '\n');
+    const { shell: _shell, template: _template, paletteExample: _paletteExample, ...appearance } = APPEARANCE_CAPABILITIES;
+    const { template: _materialTemplate, ...materials } = appearance.materials;
+    this.write('docs/appearance.json', JSON.stringify({ ...appearance, materials }, null, 2) + '\n');
     this.writeProject('templates/component', {
       ...newAppearance('my-theme'),
+      readme: '# My theme\n\nDescribe the visual idea, component structure, supported features and known limitations here.\n\nThe entry and appearance settings are in theme.json. Read the workspace THEMES.md for the app API.\n',
       shell: APPEARANCE_CAPABILITIES.shell.project.template as AppearanceProfile['shell'],
     });
     this.writeProject('templates/html', {
       ...newAppearance('my-theme'),
+      readme: '# My HTML theme\n\nDescribe the visual idea, local scripts/styles, supported features and known limitations here.\n\nThe entry is declared in theme.json. Read the workspace THEMES.md for the app API.\n',
       shell: APPEARANCE_CAPABILITIES.shell.template as AppearanceProfile['shell'],
     });
     this.write('template.json', JSON.stringify(newAppearance('my-theme'), null, 2) + '\n');
@@ -819,6 +829,8 @@ export type ConfirmationNode={type:'text'|'code'|'markdown'|'json'|'email';text:
 export type ConfirmationField={id:string;label:string;type:string;value:string|boolean;disabled:boolean;options?:{value:string;label:string}[]};
 export type ConfirmationAction={id:string;label:string;disabled:boolean;group:'primary'|'review'|'permissions'|'content';comment?:boolean};
 export type Confirmation={id:string;title:string;summary:string;ready:boolean;revision:number;busy:boolean;customizable:boolean;content:ConfirmationNode[];fields:ConfirmationField[];actions:ConfirmationAction[]};
+export type LabelKey=${APPEARANCE_LABEL_KEYS.map(key => JSON.stringify(key)).join('|')};
+export type Labels=Record<LabelKey,string>&Partial<Record<string,string>>;
 export type ThemeState = {
   chats: {id:number;title:string;folderId:number|null;updatedAt:number}[];
   folders: {id:number;name:string;count:number}[];
@@ -829,7 +841,7 @@ export type ThemeState = {
   confirmations:Confirmation[];
   messagesLoading:boolean;hasOlderMessages:boolean;olderMessagesLoading:boolean;sending:boolean;canSend:boolean;attachmentCount:number;
   composer:{busy:boolean;error:string|null;items:{id:string;kind:'image'|'document';name:string;mimeType:string;sizeBytes:number}[];limits:{maxImageCount:number;maxImageBytes:number;maxDocumentBytes:number;imageFormats:string[];documentExtensions:string[]}};
-  locale:string;dark:boolean;palette:{background:string;text:string;accent:string;surface:string};labels:Record<string,string>;
+  locale:string;dark:boolean;palette:{background:string;text:string;accent:string;surface:string};labels:Labels;
 };
 export interface ThemeAPI {
   imageSource(messageId:number,url:string,width?:number):string;

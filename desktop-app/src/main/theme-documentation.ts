@@ -1,3 +1,5 @@
+import { APPEARANCE_LABEL_KEYS } from './appearance-shell-types';
+
 // Handbook index and focused guides. API signatures live in chatter.d.ts.
 export const THEME_README = `# Local Chatter themes
 
@@ -8,9 +10,11 @@ export const THEME_README = `# Local Chatter themes
 3. For a custom UI copy templates/component/ (React) or templates/html/ into a new draft, then change the manifest id/name. These are working examples, not mandatory layouts.
 4. On disk the only shell format is {version:1,language:"tsx",scope:"workspace",entry:"App.tsx"} (or language:"html",entry:"index.html"). Source lives in files beside the manifest. Do not put source, sourceFile or files inside the on-disk manifest. The app assembles files internally. There is no legacy inline-source format.
 5. Read chatter.d.ts for signatures/state and the relevant guide below. suggest_appearance({id}) validates and offers preview; checkOnly:true only checks. Only the user applies changes. Draft edits refresh an open preview; cancel retains the draft and never changes the active theme.
+6. Add/update README.md beside theme.json to explain this theme's idea, files, controls and limitations. It is saved/exported with the theme but is not runtime code. See docs/theme-files.md.
 
 ## Guides
 
+- docs/theme-files.md: per-theme README.md, persistence and portable theme files.
 - docs/runtime.md: state/subscriptions (including useChatterState), navigation, isolated runtime and user actions.
 - docs/messages.md: content, streaming, workLog, tools, message actions, variants and speech.
 - docs/media.md: images, full-resolution viewers, documents and outgoing attachments.
@@ -29,6 +33,28 @@ Local raster backgrounds use assets/image.png (PNG/JPEG/WebP/GIF, up to 8 MiB); 
 `;
 
 export const THEME_GUIDES: Record<string, string> = {
+  'theme-files.md': `# Theme files and README
+
+A theme can have a root README.md next to theme.json, with or without a custom shell.
+Recommend writing one when creating or substantially changing a theme: explain its idea,
+file/component structure, controls, supported features and known limitations. Keep it about this
+theme; the app API reference belongs to the workspace docs, not a copied manual in each README.
+
+README.md is optional UTF-8 text, up to 256 KiB (bytes). It is not runtime code, is never executed,
+does not count toward the 256 source files or 500,000 source characters, and is not automatically
+injected into the model prompt. Authors can read/edit it with ordinary file tools when relevant.
+Keep personal chat data, secrets and generated user-specific content out of portable theme docs.
+
+Saving captures the README with that exact theme version. It survives app restart, draft rewriting,
+workspace copying, ZIP import/export and rollback. Preview remains reversible; editing a README in
+the draft never edits the published version. A proposal retains its captured README, even if the
+draft is edited while awaiting a decision. Empty README files and an absent README are distinct;
+delete the draft file and publish that draft to remove it from a saved version.
+
+On disk use README.md only, not a readme field in theme.json or shell.files. The internal full-profile
+transport uses optional readme text so existing editor/save/proposal paths can preserve it. ZIP
+exports carry it as a file. Both templates/component/ and templates/html/ contain a README stub.
+`,
   'messages.md': `# Messages and actions
 
 ## Streaming and work log
@@ -57,7 +83,7 @@ their available intermediate messages and tool calls are retained in order withi
 
 streaming is per message, not state.sending (which is global to the conversation). reasoningContent
 is separate from the answer. toolStatus is the current activity text, often already represented by a
-running call or activity entry; avoid drawing it twice. WorkLog.tsx in the starter demonstrates
+running call or activity entry; avoid drawing it twice. templates/component/components/WorkLog.tsx demonstrates
 these fields without prescribing a layout.
 
 ## Available actions
@@ -140,6 +166,17 @@ and event.preventDefault(); the host only navigates back for unconsumed Escape.
 Ctrl/Cmd+Alt+Backspace remains the independent recovery shortcut. openImage(id,url) is the optional
 native fallback, not a required part of custom viewing.
 
+## Image failures and retry
+
+The optional Image helper (also used by Markdown/MessageImages) replaces a failed img with a
+button.chatter-image-error. Its label is state.labels.imageLoadFailed (localized); clicking clears
+the failure and mounts the image again. It is an interactive retry button, not an error banner.
+Changing the source resets its failure state automatically. Style it as a button, preserving its
+keyboard/focus behavior. If you replace image markup, you own this behavior: track onError per
+source, show an accessible retry control, and clear the error to mount the img again. imageSource
+and fullImageSource return src strings; they do not create an error UI. There is no retryImage API,
+and opening the native conversation is not required.
+
 ## Document data and PDF pages
 
 Design document viewing from data/functions: await readAttachment(messageId,index) returns
@@ -151,6 +188,13 @@ width 128-1600 (default 1000); the result {source,width,height,page,pageCount} c
 pixels for any img/canvas/layout. Load pages on demand. These read-only methods need no click but
 must catch errors and discard stale async results. They only read current-message attachments and
 never reveal server credentials. Native PDF/DOCX parsers and the existing byte cache are reused.
+
+The bridge currently has no reliable original extraction character count or explicit truncation
+flag. text.length is the number of available string code units, not a guaranteed full-document
+length; server char_count also describes the stored extraction. Do not infer completeness from
+file byte size, pageCount, or the absence of a truncation marker. Show the available text count
+without an invented total; offer downloadAttachment for the original. DOCX html and PDF page
+pixels come from the original attachment and are separate from this text extraction limitation.
 
 ## Custom document viewers
 
@@ -210,6 +254,21 @@ window.chatter.subscribe(callback, {navigation:true, confirmations:true}) immedi
 Optional useChatterState(options?) from @chatter/ui returns ThemeState | undefined. In the shell root use useChatterState({navigation:true, confirmations:true}) when you render custom navigation and all confirmations. Other components can call useChatterState() with no options. Defaults are false. Active hook consumers share one state subscription; their options are combined, so an ordinary consumer never disables another consumer's capabilities. Unmounting or changing options releases only that consumer's request. Direct chatter.subscribe subscriptions are counted too. No additional explicit subscription is needed when using the hook. Handle undefined while loading. Keep a navigation owner mounted across home/conversation routes; keep confirmations:true mounted only while your theme renders all pending cards.
 
 Read chatter.d.ts for all state fields and function signatures. State includes chats, folders, pagination sections, activeChatId, view, search query/loading, locale, dark, palette, localized labels, messages, message-history loading flags, sending, canSend, attachmentCount, composer, speech and confirmations. Message history is a loaded window; loadOlderMessages() loads earlier pages.
+
+## Localized labels
+
+state.labels uses the app's current locale (state.locale), including Russian translations when
+Russian is selected. Known keys, also enumerated as LabelKey in chatter.d.ts:
+${APPEARANCE_LABEL_KEYS.join(', ')}.
+
+These are human-readable labels, not stable command identifiers. Action names such as copy or
+regenerate stay technical IDs. A theme can display its own terminal tokens like [copy] and use
+labels.copy as an accessible aria-label, or display the localized value directly. Most action IDs
+match label keys; activateVariant uses previousVariant/nextVariant for directional controls.
+confirmations:true cards carry their own title/field/action labels. Unknown future label keys may
+be absent; use a theme-authored fallback. The hook does not translate custom text automatically.
+
+## Navigation
 
 openChat(id) selects a loaded chat. A navigator shell yields to the native conversation; a workspace shell stays visible. showHome() returns to the custom overview. newChat() creates a chat. search(query) uses server search at 3+ characters; state.chats becomes search results. loadMore(folderId) pages a folder (null for unfiled chats). Keep all chats reachable by paging/search or openLibrary(). openSettings(), openLibrary() and openConversation() explicitly open native UI.
 
