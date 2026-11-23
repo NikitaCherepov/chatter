@@ -59,7 +59,10 @@ ipcMain.handle('themes:manage', async (event, payload: any) => {
     case 'export-bundle': return store.exportBundle(payload.id);
     case 'import-bundle': return store.importBundle(payload.data);
     case 'change': return store.change(payload.command);
-    case 'read-draft': return store.readDraft(payload.id);
+    case 'read-draft': {
+      try { return store.readDraft(payload.id); }
+      catch (error: any) { return { error: error?.message || 'appearance_invalid', diagnostics: error?.diagnostics }; }
+    }
     case 'write-draft': return store.writeDraft(payload.profile);
     case 'prepare': return store.prepareDraft(payload.id, payload.project === true);
     case 'open': {

@@ -8800,6 +8800,9 @@ export function ChatPage() {
           <motion.div
             key="attachment-viewer"
             className={s.documentViewerOverlay}
+            role="dialog"
+            aria-modal="true"
+            aria-label={viewerAttachment.name}
             onClick={() => setViewerAttachment(null)}
             variants={{
               hidden: { opacity: 0 },

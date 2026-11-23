@@ -86,7 +86,7 @@ export function InteractivePreview({ source, language, visible, appearance, proj
     const unsubscribeImages = bridge ? api.onAppearanceImageRequest(request => {
       if (request.id !== id.current) return;
       const state = appearanceRef.current?.state;
-      const url = state && appearanceImageRequestAllowed(state, request) ? resolveImageUrl(request.url, request.width) : null;
+      const url = state && appearanceImageRequestAllowed(state, request) ? resolveImageUrl(request.url, request.width || undefined) : null;
       void api.appearanceImageResult(request.id, request.requestId, url).catch(() => {});
     }) : () => {};
     void api.interactiveCreate({ source, language, project, dark: document.documentElement.dataset.theme === 'dark', errorLabel, bridge })
@@ -149,7 +149,8 @@ export function InteractivePreview({ source, language, visible, appearance, proj
           if (/(auto|scroll|hidden|clip)/.test(style.overflowX)) { left = Math.max(left, bounds.left); right = Math.min(right, bounds.right); }
           if (/(auto|scroll|hidden|clip)/.test(style.overflowY)) { top = Math.max(top, bounds.top); bottom = Math.min(bottom, bounds.bottom); }
         }
-        const modal = [...document.querySelectorAll('[aria-modal="true"]')].some(node => node !== overlay.current && (node as HTMLElement).getClientRects().length);
+        const modal = [...document.querySelectorAll<HTMLElement>('[aria-modal="true"]')].some(node => node !== overlay.current
+          && node.getClientRects().length && getComputedStyle(node).visibility !== 'hidden' && getComputedStyle(node).display !== 'none');
         // Native WebContentsView sits above DOM z-index. Yield its surface while a
         // foreground menu/tooltip overlaps it; never stop/recreate the running UI.
         const covered = [...document.querySelectorAll<HTMLElement>('[data-native-overlay], [role="menu"], [role="listbox"], [role="tooltip"]')].some(layer => {

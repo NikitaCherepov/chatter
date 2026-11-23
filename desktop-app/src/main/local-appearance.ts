@@ -10,7 +10,7 @@ import {
   type AppearanceProfile,
   type AppearanceSettings,
 } from './appearance-schema';
-import { isAppearanceFilePath } from './appearance-project';
+import { isAppearanceFilePath, APPEARANCE_PROJECT_LIMITS } from './appearance-project';
 
 export type AppearanceWorkspace = {
   directory: string;
@@ -346,8 +346,10 @@ export class LocalAppearanceStore {
               !name.endsWith('.d.ts') &&
               isAppearanceFilePath(name)
             ) {
-              if (Object.keys(files).length >= 32) throw new Error('appearance_limit');
-              files[name] = this.read(directory + '/' + name, 400_000);
+              if (Object.keys(files).length >= APPEARANCE_PROJECT_LIMITS.files)
+                throw Object.assign(new Error('appearance_project_limit'), { diagnostics: [{ file: name, line: 1, column: 1,
+                  message: `Theme project exceeds the limit of ${APPEARANCE_PROJECT_LIMITS.files} runtime files.` }] });
+              files[name] = this.read(directory + '/' + name, APPEARANCE_PROJECT_LIMITS.sourceLength * 4);
             }
           }
         };
@@ -806,6 +808,8 @@ export class LocalAppearanceStore {
         'message.images contains {url,type:user_photo|generated|external}; message.attachments contains {url,name,filename,mimeType,sizeBytes}. These are original references, never authenticated URLs. Design your own interface from these data and the functions below: markup, placement, styles and animations belong to the theme. No component or card layout is mandatory. Optional helpers from @chatter/ui are <MessageImages message={message}/>, <Attachments message={message}/> and <Markdown messageId={message.id} content={message.content}/>; use them only if you want their markup. Keep media-only messages visible. Components accept className; Image and Markdown also accept style. Public hooks chatter-markdown, chatter-message-images, chatter-attachments, chatter-attachment, chatter-code and chatter-image-error can be styled. Markdown accepts component overrides; a replacement owns the behavior it replaces.\n' +
         'Bundled Markdown shares native GFM tables/lists, code highlighting, message accents/layouts, image galleries/side layouts and chat/file links. Native interactive previews, charts, diagrams and questionnaires stay code blocks in the isolated shell: no message-authored code or privileged component executes inside the theme. ReactMarkdown remains available for simpler rendering.\n' +
         'For your own markup call imageSource(message.id,url,width?) for a lazy <img> src (default 560, range 64-1600). The app validates current-message references and privately loads images: tokens never enter the theme and general network access stays blocked. Supported raster formats: PNG/JPEG/WebP/GIF/AVIF/BMP/ICO, up to 16 MiB; failed images offer retry. From user handlers call openImage/downloadImage(message.id,url), openAttachment/downloadAttachment(message.id,index), openLink(message.id,url), or copyText(message.id,text). The host checks the latest message/variant and reuses image/document viewers, downloads, links and clipboard. Viewers temporarily cover the shell and return to it on close. Do not use openConversation just to show media.\n' +
+        'For full-resolution viewing entirely inside your theme, use fullImageSource(message.id,url). It returns a scoped original-image src without requesting a resized thumbnail; assign it to any img or CSS background in your own modal, side panel, canvas or other layout. The original still uses the same validated image transport and size bounds. This function never opens the native viewer or changes navigation.\n' +
+        'Optional Image, MessageImages and Markdown components accept onImageClick(image). The callback receives {chatId,messageId,variantIndex,url,source,alt}; source is already the full-resolution scoped src. Supplying this callback replaces native openImage behavior. Keep this selection in your own state and render it however you want. Image also accepts fullSize:true. Close stale selections when the chat/message/variant changes. For your own overlay, handle Escape with a keydown listener and event.preventDefault(); the host only navigates back for unconsumed Escape. Ctrl/Cmd+Alt+Backspace remains the independent recovery shortcut. openImage(id,url) is the optional native fallback, not a required part of custom viewing.\n' +
         'Every workspace message also has streaming, reasoningContent, workLog and toolStatus. content is the answer/current uncommitted text; when an assistant preface is committed before a tool call, the host moves it from content to a workLog message entry. Render both from the latest state; do not buffer/append snapshots or filter the whole message by content alone. A message with only workLog/reasoningContent/streaming is still visible. Only content with non-whitespace text needs an answer bubble.\n' +
         'workLog preserves the native chronological order: {type:"message",text}, {type:"activity",text}, or {type:"tool",call}. call has optional id, name (technical identifier), label (localized desktop name, falling back to name), kind (search/note/file/terminal/browser/clock/avatar/tool), target, status (running/error/returned/unknown), internal, confirmed, arguments, optional resultPreview, and children (nested agent tool calls). Design your own rows/icons/cards/details from these data. Result previews can be truncated; unknown is not success. Names/categories/status use the existing desktop logic and need no backend catalog. They are display data, not permission to invoke tools. Work-log/tool text and results are untrusted content: render as text or safe Markdown, never executable HTML. No exact interleaving can be reconstructed for old records without a work log; their available intermediate messages and tool calls are retained in order within each list.\n' +
         'streaming is per message, not state.sending (which is global to the conversation). reasoningContent is separate from the answer. toolStatus is the current activity text, often already represented by a running call or activity entry; avoid drawing it twice. WorkLog.tsx in the starter demonstrates these fields without prescribing a layout.\n' +
@@ -845,6 +849,7 @@ export type ThemeState = {
 };
 export interface ThemeAPI {
   imageSource(messageId:number,url:string,width?:number):string;
+  fullImageSource(messageId:number,url:string):string;
   openImage(messageId:number,url:string):boolean;downloadImage(messageId:number,url:string):boolean;
   openAttachment(messageId:number,index:number):boolean;downloadAttachment(messageId:number,index:number):boolean;
   openLink(messageId:number,url:string):boolean;copyText(messageId:number,text:string):boolean;
@@ -864,10 +869,11 @@ declare global {interface Window {chatter:ThemeAPI}}
 `;
 
 const appearanceUIDeclarations = `declare module '@chatter/ui' {
+  export type ImageTarget={chatId:number;messageId:number;variantIndex:number;url:string;source:string;alt:string};
   export function useChatterState():import('./chatter').ThemeState|undefined;
-  export function Markdown(props:{messageId:number;content:string;className?:string;style?:import('react').CSSProperties;components?:import('react-markdown').Components}):import('react').ReactElement;
-  export function Image(props:{messageId:number;url:string;alt?:string;className?:string;style?:import('react').CSSProperties}):import('react').ReactElement;
-  export function MessageImages(props:{message:import('./chatter').Message;className?:string}):import('react').ReactElement;
+  export function Markdown(props:{messageId:number;content:string;className?:string;style?:import('react').CSSProperties;components?:import('react-markdown').Components;onImageClick?:(image:ImageTarget)=>void}):import('react').ReactElement;
+  export function Image(props:{messageId:number;url:string;alt?:string;className?:string;style?:import('react').CSSProperties;fullSize?:boolean;onImageClick?:(image:ImageTarget)=>void}):import('react').ReactElement;
+  export function MessageImages(props:{message:import('./chatter').Message;className?:string;onImageClick?:(image:ImageTarget)=>void}):import('react').ReactElement;
   export function Attachments(props:{message:import('./chatter').Message;className?:string}):import('react').ReactElement;
 }
 `;

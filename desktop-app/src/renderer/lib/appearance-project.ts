@@ -8,7 +8,7 @@ export type AppearanceCodeDiagnostic = {
   column: number;
   message: string;
 };
-export const APPEARANCE_PROJECT_LIMITS = { files: 32, sourceLength: 100_000 } as const;
+export const APPEARANCE_PROJECT_LIMITS = { files: 32, sourceLength: 500_000 } as const;
 export const APPEARANCE_PROJECT_MODULES = ['react', 'react-markdown', 'remark-gfm', '@chatter/ui'] as const;
 const own = (object: object, key: string) => Object.prototype.hasOwnProperty.call(object, key);
 
@@ -23,8 +23,8 @@ export function isAppearanceFilePath(value: unknown): value is string {
 
 export function parseAppearanceProject(value: unknown): AppearanceProject {
   const project = value as Partial<AppearanceProject> | null;
-  const invalid = () => {
-    throw new Error('appearance_invalid');
+  const invalid = (message = 'Invalid theme project entry or source files.', code = 'appearance_invalid') => {
+    throw Object.assign(new Error(code), { diagnostics: [{ file: typeof project?.entry === 'string' ? project.entry : 'theme.json', line: 1, column: 1, message }] });
   };
   if (
     !project ||
@@ -37,19 +37,18 @@ export function parseAppearanceProject(value: unknown): AppearanceProject {
   )
     return invalid();
   const files = Object.entries(project.files);
-  if (
-    !files.length ||
-    files.length > APPEARANCE_PROJECT_LIMITS.files ||
-    !own(project.files, project.entry)
-  )
-    return invalid();
+  if (!files.length) return invalid('The theme project has no runtime source files.');
+  if (files.length > APPEARANCE_PROJECT_LIMITS.files)
+    return invalid(`Theme project has ${files.length} runtime files; the limit is ${APPEARANCE_PROJECT_LIMITS.files}.`, 'appearance_project_limit');
+  if (!own(project.files, project.entry)) return invalid(`Entry file ${project.entry} is missing from the theme project.`);
   let length = 0;
   for (const [file, source] of files) {
-    if (!isAppearanceFilePath(file) || typeof source !== 'string') return invalid();
+    if (!isAppearanceFilePath(file) || typeof source !== 'string') return invalid(`Invalid theme source file: ${file}.`);
     length += source.length;
   }
-  if (length > APPEARANCE_PROJECT_LIMITS.sourceLength || !project.files[project.entry].trim())
-    return invalid();
+  if (length > APPEARANCE_PROJECT_LIMITS.sourceLength)
+    return invalid(`Theme project contains ${length} source characters across ${files.length} files; the total limit is ${APPEARANCE_PROJECT_LIMITS.sourceLength}. This counts every runtime file together; splitting files does not reduce the total.`, 'appearance_project_limit');
+  if (!project.files[project.entry].trim()) return invalid(`Entry file ${project.entry} is empty.`);
   return { entry: project.entry, files: Object.fromEntries(files) };
 }
 

@@ -30,19 +30,23 @@ for (const url of ['/api/v1/images/../../admin', '//evil.example/p.png', 'javasc
   assert.equal(allowedAppearanceImage(url), false);
 
 let api: any, activated = false;
-const events = new Map(), sent: any[] = [];
+const events = new Map(), windowEvents = new Map(), sent: any[] = [];
 const preload = fs.readFileSync(new URL('../src/main/appearance-shell-preload.ts', import.meta.url), 'utf8');
 vm.runInNewContext(ts.transpileModule(preload, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, {
   exports: {}, URL, URLSearchParams, location: { href: 'chatter-interactive://theme-id/index.html' },
   require: () => ({ contextBridge: { exposeInMainWorld: (_: any, value: any) => { api = value; } },
     ipcRenderer: { on: (name: string, fn: any) => events.set(name, fn), send: (...args: any[]) => sent.push(args) } }),
-  navigator: { userActivation: { get isActive() { return activated; } } }, window: { addEventListener() {} }, console,
+  navigator: { userActivation: { get isActive() { return activated; } } }, window: { addEventListener: (name: string, fn: any) => windowEvents.set(name, fn) }, console, setTimeout,
 });
 events.get('appearance-shell:state')({}, state);
 const source = new URL(api.imageSource(10, request.url, 99999));
 assert.equal(source.protocol, 'chatter-interactive:'); assert.equal(source.pathname, '/_image');
 assert.equal(source.searchParams.get('width'), '1600'); assert.equal(source.searchParams.get('variantIndex'), '2');
 assert.equal(source.searchParams.has('token'), false);
+const originalSource = new URL(api.fullImageSource(10, request.url));
+assert.equal(originalSource.searchParams.get('width'), '0', 'originals use the same scoped transport without a resize');
+assert.equal(originalSource.searchParams.has('token'), false);
+assert.equal(api.fullImageSource(99, request.url), '');
 assert.equal(api.openImage(10, request.url), false);
 activated = true;
 assert.equal(api.openImage(10, request.url), true);
@@ -50,6 +54,28 @@ assert.equal(canRunAppearanceAction(state, parseAppearanceShellAction(sent.at(-1
 assert.equal(api.openImage(99, request.url), false);
 assert.equal(parseAppearanceShellAction({ ...sent.at(-1)[1], action: 'openAttachment', index: -1 }), null);
 assert.equal(canRunAppearanceAction(state, { type: 'contentAction', ...request, action: 'openAttachment', index: 8 }), false);
+
+// Exercise the real host resource callback: a full-size request must not add a thumbnail width.
+const previewSource = fs.readFileSync(new URL('../src/renderer/components/InteractivePreview.tsx', import.meta.url), 'utf8');
+const imageSubscription = previewSource.slice(previewSource.indexOf('    const unsubscribeImages ='), previewSource.indexOf('    void api.interactiveCreate'));
+let imageRequestHandler: any;
+const resolvedRequests: any[] = [];
+vm.runInNewContext(ts.transpileModule(imageSubscription, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText, {
+  bridge: true, id: { current: 'preview' }, appearanceRef: { current: { state } }, appearanceImageRequestAllowed,
+  resolveImageUrl: (url: string, width?: number) => { resolvedRequests.push({ url, width }); return 'private-source'; },
+  api: { onAppearanceImageRequest: (handler: any) => { imageRequestHandler = handler; }, appearanceImageResult: () => Promise.resolve() },
+});
+imageRequestHandler({ ...request, id: 'preview', requestId: 'original', width: 0 });
+assert.deepEqual(resolvedRequests, [{ url: request.url, width: undefined }]);
+imageRequestHandler({ ...request, id: 'preview', requestId: 'thumbnail', width: 560 });
+assert.equal(resolvedRequests.at(-1).width, 560);
+const beforeEscape = sent.length;
+windowEvents.get('keydown')({ key: 'Escape', defaultPrevented: true });
+await new Promise(resolve => setTimeout(resolve, 5));
+assert.equal(sent.length, beforeEscape, 'a custom overlay can consume Escape before host navigation');
+windowEvents.get('keydown')({ key: 'Escape', defaultPrevented: false });
+await new Promise(resolve => setTimeout(resolve, 5));
+assert.equal(sent.at(-1)[0], 'appearance-shell:escape');
 
 // The actual host dispatch must reuse viewers/download/links without exiting the custom theme.
 const page = fs.readFileSync(new URL('../src/renderer/pages/ChatPage.tsx', import.meta.url), 'utf8');

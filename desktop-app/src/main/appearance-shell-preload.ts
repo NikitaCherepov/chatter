@@ -37,15 +37,18 @@ const contentAction = (messageId: number, action: string, extra: Record<string, 
   send({ type: 'contentAction', chatId: state!.activeChatId, messageId, variantIndex: message.variantIndex, action, ...extra });
   return true;
 };
+const imageSource = (messageId: number, source: string, width: number) => {
+  const message = state?.messages.find(message => message.id === messageId);
+  if (!message || !state?.activeChatId || typeof source !== 'string' || !source || source.length > 8192) return '';
+  const url = new URL('/_image', location.href);
+  url.search = new URLSearchParams({ chatId: String(state.activeChatId), messageId: String(messageId), variantIndex: String(message.variantIndex),
+    url: source, width: String(width) }).toString();
+  return url.href;
+};
 contextBridge.exposeInMainWorld('chatter', {
-  imageSource: (messageId: number, source: string, width = 560) => {
-    const message = state?.messages.find(message => message.id === messageId);
-    if (!message || !state?.activeChatId || typeof source !== 'string' || !source || source.length > 8192) return '';
-    const url = new URL('/_image', location.href);
-    url.search = new URLSearchParams({ chatId: String(state.activeChatId), messageId: String(messageId), variantIndex: String(message.variantIndex),
-      url: source, width: String(Math.max(64, Math.min(1600, Math.round(Number(width) || 560)))) }).toString();
-    return url.href;
-  },
+  imageSource: (messageId: number, source: string, width = 560) =>
+    imageSource(messageId, source, Math.max(64, Math.min(1600, Math.round(Number(width) || 560)))),
+  fullImageSource: (messageId: number, source: string) => imageSource(messageId, source, 0),
   openImage: (id: number, url: string) => contentAction(id, 'openImage', { url }),
   downloadImage: (id: number, url: string) => contentAction(id, 'downloadImage', { url }),
   openAttachment: (id: number, index: number) => contentAction(id, 'openAttachment', { index }),
@@ -122,3 +125,9 @@ contextBridge.exposeInMainWorld('chatter', {
 });
 window.addEventListener('error', () => ipcRenderer.send('appearance-shell:failed'));
 window.addEventListener('unhandledrejection', () => ipcRenderer.send('appearance-shell:failed'));
+// Let the theme consume Escape (for example, to close its own image viewer) before host navigation.
+window.addEventListener('keydown', event => {
+  if (event.key === 'Escape') setTimeout(() => {
+    if (!event.defaultPrevented) ipcRenderer.send('appearance-shell:escape');
+  }, 0);
+});

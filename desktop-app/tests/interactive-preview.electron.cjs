@@ -23,6 +23,7 @@ app.whenReady().then(async () => {
   let hits = 0;
   let imageHits = 0;
   const fixtureImage = nativeImage.createFromBitmap(Buffer.from([255, 0, 0, 255]), { width: 1, height: 1 }).toPNG();
+  const fixtureOriginal = nativeImage.createFromBitmap(Buffer.alloc(8 * 6 * 4, 255), { width: 8, height: 6 }).toPNG();
   server = createServer((req, res) => {
     if (req.url.startsWith('/theme-image?')) {
       imageHits++;
@@ -30,7 +31,7 @@ app.whenReady().then(async () => {
       if (req.url.includes('bad=true')) { res.setHeader('Content-Type', 'text/html'); res.end('<script>bad</script>'); return; }
       if (req.url.includes('large=true')) { res.setHeader('Content-Type', 'image/png'); res.setHeader('Content-Length', String(17 * 1024 * 1024)); res.end(); return; }
       if (req.url.includes('slow=true')) { setTimeout(() => { res.setHeader('Content-Type', 'image/png'); res.end(fixtureImage); }, 500); return; }
-      res.setHeader('Content-Type', 'image/png'); res.end(fixtureImage); return;
+      res.setHeader('Content-Type', 'image/png'); res.end(req.url.includes('original=true') ? fixtureOriginal : fixtureImage); return;
     }
     hits++; res.end('must not be reached');
   });
@@ -180,7 +181,7 @@ app.whenReady().then(async () => {
       manager.resolveAppearanceImage({}, payload.id, payload.requestId, endpoint.replace('/blocked', '/theme-image?token=wrong-owner'));
       const allowed = payload.chatId === 1 && payload.messageId === 11 && payload.variantIndex === 0 && allowedSources.has(payload.url);
       manager.resolveAppearanceImage(host.webContents, payload.id, payload.requestId,
-        allowed ? endpoint.replace('/blocked', '/theme-image?token=host-private' + (payload.url.endsWith('bad.png') ? '&bad=true' : payload.url.endsWith('large.png') ? '&large=true' : payload.url.endsWith('slow.png') ? '&slow=true' : '')) : null);
+        allowed ? endpoint.replace('/blocked', '/theme-image?token=host-private&original=' + (payload.width === 0) + (payload.url.endsWith('bad.png') ? '&bad=true' : payload.url.endsWith('large.png') ? '&large=true' : payload.url.endsWith('slow.png') ? '&slow=true' : '')) : null);
     }
     if (channel === 'interactive-preview:appearance-action') forwarded.push(payload.action);
     return hostSend(channel, payload);
@@ -261,6 +262,50 @@ app.whenReady().then(async () => {
   await until(async () => await preview.contents.executeJavaScript('document.querySelector(".chat")?.textContent') === 'Live chat');
   manager.stop(host.webContents, preview.id);
   console.log('PASS: importable workspace starter home/conversation, Markdown, empty-answer handling and composer focus during updates');
+  // A theme owns the entire image-viewing UI; only the original src comes from the bridge.
+  preview = await create('tsx', '', { bridge: 'appearance-chat-list-v1', project: { entry: 'App.tsx', files: {
+    'App.tsx': `import React from 'react';import {Image,Markdown,MessageImages,useChatterState} from '@chatter/ui';
+export default function App(){const state=useChatterState(),[selected,setSelected]=React.useState(null),[count,setCount]=React.useState(0);
+React.useEffect(()=>{if(!selected)return;const close=event=>{if(event.key==='Escape'){event.preventDefault();setSelected(null);}};window.addEventListener('keydown',close);return()=>window.removeEventListener('keydown',close);},[selected]);
+if(!state?.messages.length)return null;const message=state.messages[0];return <main><button id="counter" onClick={()=>setCount(count+1)}>{count}</button>
+<div id="thumbnail"><Image messageId={message.id} url={message.images[0].url} onImageClick={setSelected}/></div>
+<div id="markdown"><Markdown messageId={message.id} content={'![Inline]('+message.images[0].url+')'} onImageClick={setSelected}/></div>
+<div id="gallery"><MessageImages message={message} onImageClick={setSelected}/></div>
+{selected&&<aside id="own-viewer" role="dialog" aria-modal="true" style={{position:'fixed',right:0,top:0,background:'#123',padding:20}}>
+<img src={selected.source} alt={selected.alt} style={{filter:'grayscale(1)',width:80}}/><button id="close-own-viewer" onClick={()=>setSelected(null)}>Close custom panel</button></aside>}</main>}`,
+  } } });
+  host.webContents.send = (channel, payload) => {
+    if (channel === 'interactive-preview:appearance-image') {
+      const valid = payload.chatId === 1 && payload.messageId === 11 && payload.variantIndex === 0 && payload.url === '/api/v1/images/photo.png';
+      manager.resolveAppearanceImage(host.webContents, payload.id, payload.requestId,
+        valid ? endpoint.replace('/blocked', '/theme-image?token=host-private&original=' + (payload.width === 0)) : null);
+    }
+    if (channel === 'interactive-preview:appearance-action') forwarded.push(payload.action);
+    if (channel === 'interactive-preview:status') statuses.push(payload);
+    return hostSend(channel, payload);
+  };
+  manager.updateAppearanceState(host.webContents, preview.id, mediaState);
+  await until(async () => await preview.contents.executeJavaScript('document.querySelector("#thumbnail img")?.naturalWidth') === 1);
+  const previousActions = forwarded.length;
+  for (const selector of ['#thumbnail img', '#markdown img', '#gallery img']) {
+    await preview.contents.executeJavaScript(`document.querySelector(${JSON.stringify(selector)}).click()`, true);
+    await until(async () => await preview.contents.executeJavaScript('document.querySelector("#own-viewer img")?.naturalWidth') === 8);
+    assert.equal(await preview.contents.executeJavaScript('document.querySelector("#own-viewer img").naturalHeight'), 6);
+    assert.equal(await preview.contents.executeJavaScript('getComputedStyle(document.querySelector("#own-viewer img")).filter'), 'grayscale(1)');
+    assert.equal(await preview.contents.executeJavaScript('document.body.innerHTML.includes("host-private")'), false);
+    const priorEscapes = statuses.filter(status => status.escape).length;
+    preview.contents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' });
+    preview.contents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' });
+    await until(async () => !await preview.contents.executeJavaScript('!!document.querySelector("#own-viewer")'));
+    assert.equal(statuses.filter(status => status.escape).length, priorEscapes, 'theme Escape closes its panel without host navigation');
+  }
+  assert.equal(forwarded.length, previousActions, 'custom image handlers do not invoke native openImage');
+  const priorEscapes = statuses.filter(status => status.escape).length;
+  preview.contents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' });preview.contents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' });
+  await until(() => statuses.filter(status => status.escape).length > priorEscapes);
+  host.webContents.send = hostSend;
+  manager.stop(host.webContents, preview.id);
+  console.log('PASS: theme-authored viewing receives original pixels, retains CSS/control of layout, overrides image/Markdown/gallery clicks and consumes Escape before host navigation');
   manager.create(host.webContents, { language: 'tsx', source: '', dark: true, errorLabel: 'Preview failed', bridge: 'appearance-chat-list-v1', project: {
     entry: 'App.tsx', files: { 'App.tsx': 'import Missing from "./missing"; export default function App(){return null}' },
   } });

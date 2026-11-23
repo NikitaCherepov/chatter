@@ -15,6 +15,8 @@ const modulePath = (file: string) =>
   JSON.stringify(path.resolve(desktopRoot, 'src/renderer', file).replaceAll('\\', '/'));
 
 const pageSource = fs.readFileSync(new URL('../src/renderer/pages/ChatPage.tsx', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
+const previewSource = fs.readFileSync(new URL('../src/renderer/components/InteractivePreview.tsx', import.meta.url), 'utf8');
+const modalCheck = previewSource.slice(previewSource.indexOf('        const modal ='), previewSource.indexOf('        // Native WebContentsView'));
 const shellOrder = pageSource.match(/\{layout\.chatSide === 'right'\s*\? \[toolsSidebar, conversation, roomSidebar, chatSidebar\]\s*:\s*\[chatSidebar, conversation, roomSidebar, toolsSidebar\]\}/)?.[0];
 assert.ok(shellOrder);
 const workspaceBar = pageSource.slice(pageSource.indexOf("        {(tabsEnabled || layout.tools === 'toolbar')"), pageSource.indexOf('        {layoutPreview && (', pageSource.indexOf('  const conversation = (')));
@@ -122,6 +124,7 @@ import {ConfirmationCard} from ${modulePath('components/ConfirmationCard.tsx')};
 import {ChatMessagesScroll} from ${modulePath('components/ChatMessagesScroll.tsx')};
 import {VirtualMessage} from ${modulePath('components/VirtualMessage.tsx')};
 import {MarkdownRenderer} from ${modulePath('components/MarkdownRenderer.tsx')};
+import {ImageViewerModal} from ${modulePath('components/ImageViewerModal.tsx')};
 import {setThemePreference} from ${modulePath('lib/theme.ts')};
 import ru from ${modulePath('i18n/locales/ru/translation.json')};
 import chat from ${modulePath('pages/ChatPage.module.scss')};
@@ -315,6 +318,18 @@ function QueueFixture(){
  return <ConfirmationQueue items={items} composer={composer} order={new Map([['first',1],['second',2]])} request={request}
    bridge={custom?bridge.api:undefined} custom={custom&&!bridge.cards.some(card=>!card.customizable)}/>;
 }
+function NativeImageFixture(){
+ const [enabled,setEnabled]=useState(false),[open,setOpen]=useState(false);
+ window.showNativeImageFixture=()=>{setEnabled(true);setOpen(true);};window.hideNativeImageFixture=()=>setEnabled(false);
+ window.hasBlockingNativeModal=()=>{const overlay={current:null};${modalCheck}return modal;};
+ if(!enabled)return null;
+ return <div id="native-image-fixture" className={chat.layout} data-shell-open="true" style={{position:'fixed',inset:0,zIndex:9000,'--titlebar-height':'0px'}}>
+  <section data-appearance-shell>Custom shell stays mounted</section><main data-native-chat>Native conversation</main>
+  <div role="dialog" aria-modal="true" style={{visibility:'hidden'}}>Hidden dialog</div>
+  {open&&<ImageViewerModal src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jF1kAAAAASUVORK5CYII="
+   closeLabel="Close image" downloadLabel="Download image" onClose={()=>setOpen(false)} onDownload={()=>{}}/>}
+ </div>;
+}
 function App(){
  const [user,setUser]=useState({id:1,ui_settings:{}}),[proposal,setProposal]=useState(null),[layoutFixture,setLayoutFixture]=useState(false);
  const [workspaceEpoch,setWorkspaceEpoch]=useState(0);
@@ -327,7 +342,7 @@ function App(){
  window.proposeDraft=()=>setProposal({proposal_id:'bot-draft',profile:{...newAppearance('saved-bot'),name:'Saved bot draft'}});
  window.motionPreview=()=>previewAppearance({...newAppearance('motion'),motion:{preset:'custom',duration:100,distance:12,scale:0.97,easing:'ease-out'}});
  window.dark=()=>{setThemePreference('dark');window.dispatchEvent(new CustomEvent('chatter-theme-change',{detail:'dark'}));};
- return <TestAuth.Provider value={{user,setUser}}>{queueFixture ? <QueueFixture/> : layoutFixture ? <LayoutFixture key={workspaceEpoch} initialEditor={!workspaceEpoch}/> : <><AppearanceController/>
+ return <TestAuth.Provider value={{user,setUser}}><NativeImageFixture/>{queueFixture ? <QueueFixture/> : layoutFixture ? <LayoutFixture key={workspaceEpoch} initialEditor={!workspaceEpoch}/> : <><AppearanceController/>
   <div id="panel-fixture" className={chat.sidebar} style={{width:'48%',height:'100%',overflow:'auto',padding:20}}><AppearancePanel/>{proposal&&<AppearanceConfirmation proposal={proposal} onResolved={()=>setProposal(null)}/>}</div>
   <div className={chat.main} style={{width:'52%',height:'100%',display:'flex',flexDirection:'column'}}><Conversation/></div>
  </>}</TestAuth.Provider>;
@@ -368,6 +383,18 @@ app.whenReady().then(async()=>{
  const until=async code=>{for(let n=0;n<120;n++){if(await js(code))return;await sleep(25);}throw new Error('Timed out: '+code+'\nRenderer errors: '+errors.join('\n'));};
  await win.loadFile(path.join(__dirname,'renderer/index.html'));
  await until('window.fixtureReady && [...document.querySelectorAll("button")].some(el=>el.textContent==="Создать оформление")');
+ await js('window.showNativeImageFixture()');
+ await until('!!document.querySelector("#native-image-fixture button[aria-label^=Close]")');
+ assert.equal(await js('getComputedStyle(document.querySelector("#native-image-fixture [aria-label^=Close][role=dialog]")).visibility'),'visible','native viewer must remain visible beside the custom shell');
+ assert.equal(await js('getComputedStyle(document.querySelector("#native-image-fixture [data-native-chat]")).visibility'),'hidden');
+ assert.equal(await js('window.hasBlockingNativeModal()'),true,'a visible native viewer must yield the isolated surface');
+ const imageClose=await js('(()=>{const r=document.querySelector("#native-image-fixture button[aria-label^=Close]").getBoundingClientRect();return {x:Math.round(r.x+r.width/2),y:Math.round(r.y+r.height/2)}})()');
+ wc.sendInputEvent({type:'mouseDown',...imageClose,button:'left',clickCount:1});wc.sendInputEvent({type:'mouseUp',...imageClose,button:'left',clickCount:1});
+ await until('!document.querySelector("#native-image-fixture button[aria-label^=Close]")');
+ assert.equal(await js('window.hasBlockingNativeModal()'),false,'hidden native dialogs must not hide the isolated shell');
+ assert.equal(await js('getComputedStyle(document.querySelector("#native-image-fixture [data-appearance-shell]")).visibility'),'visible');
+ await js('window.hideNativeImageFixture()');
+ console.log('PASS: native image viewer remains visible above the custom shell, close is clickable and hidden dialogs do not blank the shell');
  assert.ok(await js('window.migrationRequests.some(item=>item.userId===1&&item.path.endsWith("/legacy"))&&window.migrationRequests.some(item=>item.userId===1&&item.path==="/api/v1/user/appearance")'),'older-server migration fallback is supported');
  await until('document.querySelectorAll("[data-virtual-row-placeholder]").length>30');
  // The floating dock must reserve space without shrinking or recoloring the viewport.

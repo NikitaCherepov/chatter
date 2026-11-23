@@ -12,7 +12,14 @@ async function runAppearanceTool(toolName: string, parsed: Record<string, any>, 
       ? { action: 'docs' } : { action: 'preview', id: parsed.id, checkOnly: parsed.checkOnly === true }, 30000, context.signal);
     return JSON.stringify(result);
   } catch (error: any) {
-    return JSON.stringify({ error: error?.message || 'desktop_offline', message: 'Open the updated desktop app to use local themes.' });
+    const code = error?.message || 'desktop_offline';
+    const message = code === 'appearance_desktop_upgrade_required' ? 'Update Chatter Desktop to use local themes.'
+      : ['desktop_not_connected', 'desktop_offline', 'desktop_connection_stale', 'ws_disconnected'].includes(code) ? 'Connect Chatter Desktop and retry the request.'
+      : code === 'ipc_timeout' ? 'The desktop did not respond in time. Check its connection and retry.'
+      : error?.name === 'AbortError' ? 'The theme request was cancelled.'
+      : code.startsWith('appearance_') ? 'The desktop rejected the theme draft. Check its diagnostics and the current project limits in get_theme_docs; restarting the app does not repair an invalid draft.'
+      : 'The desktop theme request failed. Check the returned error.';
+    return JSON.stringify({ error: code, message, ...(error?.diagnostics ? { diagnostics: error.diagnostics } : {}) });
   }
 }
 

@@ -6,7 +6,7 @@
   position: relative;
 }
 
-.layout[data-shell-open='true'] > :not([data-appearance-shell]) {
+.layout[data-shell-open='true'] > :not([data-appearance-shell]):not([aria-modal='true']) {
   visibility: hidden;
 }
 .shellNavigation {

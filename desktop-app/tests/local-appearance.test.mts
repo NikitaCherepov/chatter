@@ -13,6 +13,12 @@ const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'chatter-local-themes-')
 try {
   const directory = path.join(temporary, 'themes');
   const store = new LocalAppearanceStore(directory);
+  const budgetStore = new LocalAppearanceStore(path.join(temporary, 'project-budget'));
+  const unicodeSource = '/*' + 'я'.repeat(250000) + '*/';
+  budgetStore.writeDraft({ ...newAppearance('large-project'), shell: { version: 1, language: 'tsx', scope: 'workspace', entry: 'App.tsx',
+    files: { 'App.tsx': 'export default function App(){return <main/>}', 'styles.css': unicodeSource } } });
+  assert.equal(budgetStore.readDraft('large-project').shell.files['styles.css'], unicodeSource,
+    'on-disk byte guards must allow UTF-8 sources within the shared character budget');
   const beforeDocs = store.load().appearance;
   const guidePath = path.join(directory, 'THEMES.md');
   assert.equal(store.readDocumentation(), fs.readFileSync(guidePath, 'utf8'));

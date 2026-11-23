@@ -331,6 +331,16 @@ try {
         context.appearanceIpc.push({ userId: 101, type: ipc_type, payload });
         done?.();
         queueMicrotask(() => {
+          if (context.appearanceIpcResult) {
+            pendingIpc.get(request_id)?.resolve(context.appearanceIpcResult);
+            pendingIpc.delete(request_id);
+            return;
+          }
+          if (context.appearanceIpcError) {
+            pendingIpc.get(request_id)?.reject(new Error(context.appearanceIpcError));
+            pendingIpc.delete(request_id);
+            return;
+          }
           const result = payload.action === 'docs' ? { readme: '# Desktop guide', desktopVersion: '2.0.5',
             state: { directory: 'C:/TestThemes', activeId: 'local-theme', profiles: [{ id: 'local-theme', name: 'Local theme' }], drafts: ['local-theme'] } }
             : payload.checkOnly ? { status: 'valid', id: payload.id } : { status: 'proposed', id: payload.id };
@@ -343,6 +353,20 @@ try {
   assert.equal(JSON.parse(await context.tool('suggest_appearance', { id: 'local-theme' })).status, 'proposed');
   assert.deepEqual(JSON.parse(JSON.stringify(context.appearanceIpc[0])), { userId: 101, type: 'appearance_workspace', payload: { action: 'preview', id: 'local-theme', checkOnly: false } });
   assert.equal(JSON.parse(await context.tool('suggest_appearance', { id: 'local-theme', checkOnly: true })).status, 'valid');
+  context.appearanceIpcError = 'appearance_invalid';
+  const invalidDraft = JSON.parse(await context.tool('suggest_appearance', { id: 'local-theme', checkOnly: true }));
+  assert.equal(invalidDraft.error, 'appearance_invalid');
+  assert.equal(invalidDraft.message.includes('updated desktop'), false, 'draft errors must not claim the app is outdated');
+  assert.ok(invalidDraft.message.includes('draft'));
+  context.appearanceIpcError = 'appearance_desktop_upgrade_required';
+  assert.ok(JSON.parse(await context.tool('get_theme_docs', {})).message.includes('Update Chatter Desktop'));
+  context.appearanceIpcError = 'ipc_timeout';
+  assert.ok(JSON.parse(await context.tool('get_theme_docs', {})).message.includes('did not respond'));
+  context.appearanceIpcError = undefined;
+  context.appearanceIpcResult = { error: 'appearance_project_limit', diagnostics: [{ file: 'App.tsx', line: 1, column: 1,
+    message: 'Theme project contains 500001 source characters; the total limit is 500000.' }] };
+  assert.deepEqual(JSON.parse(await context.tool('suggest_appearance', { id: 'local-theme', checkOnly: true })), context.appearanceIpcResult);
+  context.appearanceIpcResult = undefined;
   assert.equal(JSON.parse(await context.tool('suggest_appearance', {})).error, 'appearance_invalid');
   assert.equal(JSON.parse(await context.tool('suggest_appearance', { profile: schema.newAppearance() })).error, 'appearance_use_local_files');
   assert.equal(JSON.parse(await context.tool('suggest_appearance', { id: '../escape' })).error, 'appearance_invalid');

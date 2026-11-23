@@ -21,7 +21,9 @@ export async function localAppearance(
 ): Promise<any> {
   if (!window.electronAPI?.localAppearance) throw new Error('appearance_desktop_upgrade_required');
   try {
-    return await window.electronAPI.localAppearance({ ...payload, action });
+    const result = await window.electronAPI.localAppearance({ ...payload, action });
+    if (result?.error) throw Object.assign(new Error(result.error), { data: result, diagnostics: result.diagnostics });
+    return result;
   } catch (error: any) {
     if (error?.data?.error) throw error;
     const message = String(error?.message ?? error).replace(
@@ -120,13 +122,12 @@ export async function executeAppearanceWorkspace(
     return { readme: documentation.readme, desktopVersion: documentation.desktopVersion,
       state: summarizeLocalAppearance(documentation.workspace) };
   }
-  const profile = parseAppearanceProfile(
-    await localAppearance('read-draft', { id: payload.id }),
-  );
+  let profile: AppearanceProfile;
   try {
+    profile = parseAppearanceProfile(await localAppearance('read-draft', { id: payload.id }));
     await validateAppearanceCode(profile);
   } catch (error: any) {
-    return { error: error.message, diagnostics: error.diagnostics };
+    return { error: error.data?.error ?? error.message, diagnostics: error.diagnostics ?? error.data?.diagnostics };
   }
   if (payload.checkOnly === true) return { status: 'valid', id: profile.id, name: profile.name };
   if (!onProposal) throw new Error('appearance_desktop_not_ready');

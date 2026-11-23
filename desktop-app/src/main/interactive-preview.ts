@@ -87,6 +87,7 @@ export class InteractivePreviews {
     contents.on('ipc-message', (event, channel, value) => {
       if (!entry.appearance || event.senderFrame !== contents.mainFrame || !this.entries.has(id)) return;
       if (channel === 'appearance-shell:failed') { this.remove(id, 'failed'); return; }
+      if (channel === 'appearance-shell:escape') { this.emit(entry, 'ready', { escape: true }); return; }
       if (channel === 'appearance-shell:navigation') {
         entry.appearance.handlesNavigation = value === true;
         return;
@@ -117,7 +118,7 @@ export class InteractivePreviews {
         this.emit(entry, 'ready', { reset: true });
         return;
       }
-      if ((entry.expanded || entry.appearance) && input.type === 'keyDown' && input.key === 'Escape') {
+      if (entry.expanded && !entry.appearance && input.type === 'keyDown' && input.key === 'Escape') {
         event.preventDefault();
         this.emit(entry, 'ready', { escape: true });
       }
@@ -211,7 +212,8 @@ export class InteractivePreviews {
       url: url.searchParams.get('url') ?? '', width: Number(url.searchParams.get('width')) };
     if (!Number.isSafeInteger(request.chatId) || !Number.isSafeInteger(request.messageId) || request.messageId === 0
         || !Number.isSafeInteger(request.variantIndex) || request.variantIndex < 0 || !this.imageScopeCurrent(entry, request)
-        || !request.url || request.url.length > 8192 || !Number.isSafeInteger(request.width) || request.width < 64 || request.width > 1600) return blocked();
+        || !request.url || request.url.length > 8192 || !Number.isSafeInteger(request.width)
+        || request.width !== 0 && (request.width < 64 || request.width > 1600)) return blocked();
     const controller = new AbortController();
     let resolve!: (url: string | null) => void;
     const resolved = new Promise<string | null>(done => { resolve = done; });
