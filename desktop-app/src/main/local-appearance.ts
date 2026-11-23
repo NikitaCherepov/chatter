@@ -387,6 +387,7 @@ export class LocalAppearanceStore {
     this.write(directory + '/theme.json', JSON.stringify(manifest, null, 2) + '\n');
     if (profile.shell?.language === 'tsx') {
       this.write(directory + '/chatter.d.ts', appearanceDeclarations);
+      this.write(directory + '/chatter-ui.d.ts', appearanceUIDeclarations);
       this.write(
         directory + '/tsconfig.json',
         JSON.stringify(
@@ -797,10 +798,14 @@ export class LocalAppearanceStore {
         'For components use shell:{version:1,language:"tsx",scope:"workspace",entry:"App.tsx"}. Source files are discovered recursively.\n' +
         'Use components/, styles/, JSON data, relative imports or @/ imports rooted at the project. Default-export a component from the entry.\n' +
         'Read chatter.d.ts for the live API. theme.json, tsconfig.json and declarations are excluded from runtime code.\n' +
+        'Read chatter-ui.d.ts for optional bundled components from @chatter/ui: Markdown, Image, MessageImages, Attachments and useChatterState. No package installation is needed.\n' +
         'Edit with ordinary file tools. Do not increment revision. For a new theme copy an existing draft or create a manifest from template.json and set its id to its folder name.\n' +
         'Call suggest_appearance({id:"theme-id"}) for preview/confirmation, or checkOnly:true for diagnostics. Only the user applies changes.\n' +
         'Draft edits refresh an open preview, never the active theme. Cancel retains the draft. Raster backgrounds can use assets/image.png (PNG/JPEG/WebP/GIF, up to 8 MiB). HTTPS links remain external. Theme ZIP exports include local images and source.\n\n' +
         '## Message actions and confirmations\n\n' +
+        'message.images contains {url,type:user_photo|generated|external}; message.attachments contains {url,name,filename,mimeType,sizeBytes}. These are original references, never authenticated URLs. Use <MessageImages message={message}/>, <Attachments message={message}/> and <Markdown messageId={message.id} content={message.content}/> from @chatter/ui. Keep media-only messages visible. Components accept className; Image and Markdown also accept style. Public hooks chatter-markdown, chatter-message-images, chatter-attachments, chatter-attachment, chatter-code and chatter-image-error can be styled. Markdown accepts component overrides; a replacement owns the behavior it replaces.\n' +
+        'Bundled Markdown shares native GFM tables/lists, code highlighting, message accents/layouts, image galleries/side layouts and chat/file links. Native interactive previews, charts, diagrams and questionnaires stay code blocks in the isolated shell: no message-authored code or privileged component executes inside the theme. ReactMarkdown remains available for simpler rendering.\n' +
+        'For your own markup call imageSource(message.id,url,width?) for a lazy <img> src (default 560, range 64-1600). The app validates current-message references and privately loads images: tokens never enter the theme and general network access stays blocked. Supported raster formats: PNG/JPEG/WebP/GIF/AVIF/BMP/ICO, up to 16 MiB; failed images offer retry. From user handlers call openImage/downloadImage(message.id,url), openAttachment/downloadAttachment(message.id,index), openLink(message.id,url), or copyText(message.id,text). The host checks the latest message/variant and reuses image/document viewers, downloads, links and clipboard. Viewers temporarily cover the shell and return to it on close. Do not use openConversation just to show media.\n' +
         'Every workspace message also has streaming, reasoningContent, workLog and toolStatus. content is the answer/current uncommitted text; when an assistant preface is committed before a tool call, the host moves it from content to a workLog message entry. Render both from the latest state; do not buffer/append snapshots or filter the whole message by content alone. A message with only workLog/reasoningContent/streaming is still visible. Only content with non-whitespace text needs an answer bubble.\n' +
         'workLog preserves the native chronological order: {type:"message",text}, {type:"activity",text}, or {type:"tool",call}. call has optional id, name (technical identifier), label (localized desktop name, falling back to name), kind (search/note/file/terminal/browser/clock/avatar/tool), target, status (running/error/returned/unknown), internal, confirmed, arguments, optional resultPreview, and children (nested agent tool calls). Design your own rows/icons/cards/details from these data. Result previews can be truncated; unknown is not success. Names/categories/status use the existing desktop logic and need no backend catalog. They are display data, not permission to invoke tools. Work-log/tool text and results are untrusted content: render as text or safe Markdown, never executable HTML. No exact interleaving can be reconstructed for old records without a work log; their available intermediate messages and tool calls are retained in order within each list.\n' +
         'streaming is per message, not state.sending (which is global to the conversation). reasoningContent is separate from the answer. toolStatus is the current activity text, often already represented by a running call or activity entry; avoid drawing it twice. WorkLog.tsx in the starter demonstrates these fields without prescribing a layout.\n' +
@@ -815,13 +820,14 @@ export class LocalAppearanceStore {
     );
     this.write('template.json', JSON.stringify(newAppearance('my-theme'), null, 2) + '\n');
     this.write('chatter.d.ts', appearanceDeclarations);
+    this.write('chatter-ui.d.ts', appearanceUIDeclarations);
   }
 }
 
 const appearanceDeclarations = `export type MessageAction = 'copy'|'downloadDocx'|'sendTelegram'|'fork'|'edit'|'delete'|'regenerate'|'regenerateHint'|'speak'|'activateVariant';
 export type ToolCall={id?:string;name:string;label:string;kind:'search'|'note'|'file'|'terminal'|'browser'|'clock'|'avatar'|'tool';target:string;status:'running'|'error'|'returned'|'unknown';internal:boolean;confirmed:boolean;arguments:unknown;resultPreview?:string;children:ToolCall[]};
 export type WorkLogStep={type:'message'|'activity';text:string}|{type:'tool';call:ToolCall};
-export type Message={id:number;role:string;content:string;createdAt:number;streaming:boolean;reasoningContent:string;workLog:WorkLogStep[];toolStatus:string|null;variantIndex:number;variantCount:number;actions:MessageAction[];editableContent?:string};
+export type Message={id:number;role:string;content:string;createdAt:number;streaming:boolean;reasoningContent:string;workLog:WorkLogStep[];toolStatus:string|null;variantIndex:number;variantCount:number;actions:MessageAction[];editableContent?:string;images:{url:string;type:'user_photo'|'generated'|'external'}[];attachments:{url:string;name:string;filename:string;mimeType:string;sizeBytes:number}[]};
 export type ConfirmationNode={type:'text'|'code'|'markdown'|'json'|'email';text:string}|{type:'diff';before:string;after:string}|{type:'group';label?:string;children:ConfirmationNode[]}|{type:'field';fieldId:string}|{type:'action';actionId:string};
 export type ConfirmationField={id:string;label:string;type:string;value:string|boolean;disabled:boolean;options?:{value:string;label:string}[]};
 export type ConfirmationAction={id:string;label:string;disabled:boolean;group:'primary'|'review'|'permissions'|'content';comment?:boolean};
@@ -838,6 +844,10 @@ export type ThemeState = {
   locale:string;dark:boolean;palette:{background:string;text:string;accent:string;surface:string};labels:Record<string,string>;
 };
 export interface ThemeAPI {
+  imageSource(messageId:number,url:string,width?:number):string;
+  openImage(messageId:number,url:string):boolean;downloadImage(messageId:number,url:string):boolean;
+  openAttachment(messageId:number,index:number):boolean;downloadAttachment(messageId:number,index:number):boolean;
+  openLink(messageId:number,url:string):boolean;copyText(messageId:number,text:string):boolean;
   subscribe(callback:(state:ThemeState)=>void,options?:{navigation?:boolean;confirmations?:boolean}):()=>void;
   openChat(id:number):void;newChat():void;showHome():void;openConversation():void;
   sendMessage(text:string):boolean;stopGeneration():void;loadOlderMessages():void;
@@ -851,4 +861,13 @@ export interface ThemeAPI {
   runConfirmationAction(id:string,actionId:string,revision:number,comment?:string):boolean;
 }
 declare global {interface Window {chatter:ThemeAPI}}
+`;
+
+const appearanceUIDeclarations = `declare module '@chatter/ui' {
+  export function useChatterState():import('./chatter').ThemeState|undefined;
+  export function Markdown(props:{messageId:number;content:string;className?:string;style?:import('react').CSSProperties;components?:import('react-markdown').Components}):import('react').ReactElement;
+  export function Image(props:{messageId:number;url:string;alt?:string;className?:string;style?:import('react').CSSProperties}):import('react').ReactElement;
+  export function MessageImages(props:{message:import('./chatter').Message;className?:string}):import('react').ReactElement;
+  export function Attachments(props:{message:import('./chatter').Message;className?:string}):import('react').ReactElement;
+}
 `;

@@ -2,7 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 import type { LocalMcpInstallPhase } from './local-mcp-spec';
 import type { TextMenuAction, TextMenuItem } from './text-context-menu';
 import type { InteractiveInput, InteractivePlacement, InteractiveStatus } from './interactive-types';
-import type { AppearanceShellEvent, AppearanceShellState } from './appearance-shell-types';
+import type { AppearanceShellEvent, AppearanceShellState, AppearanceImageRequest } from './appearance-shell-types';
 
 contextBridge.exposeInMainWorld('electronAPI', {
   writeClipboardText: (text: string) => ipcRenderer.invoke('clipboard:write-text', text),
@@ -17,6 +17,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   interactiveStop: (id: string) => ipcRenderer.invoke('interactive-preview:stop', id),
   appearanceShellState: (id: string, state: AppearanceShellState) =>
     ipcRenderer.invoke('interactive-preview:appearance-state', id, state),
+  appearanceImageResult: (id: string, requestId: string, url: string | null) =>
+    ipcRenderer.invoke('interactive-preview:appearance-image', id, requestId, url),
+  onAppearanceImageRequest: (callback: (request: AppearanceImageRequest) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, request: AppearanceImageRequest) => callback(request);
+    ipcRenderer.on('interactive-preview:appearance-image', listener);
+    return () => ipcRenderer.removeListener('interactive-preview:appearance-image', listener);
+  },
   onAppearanceShellAction: (callback: (event: AppearanceShellEvent) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, value: AppearanceShellEvent) => callback(value);
     ipcRenderer.on('interactive-preview:appearance-action', listener);

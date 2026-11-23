@@ -146,6 +146,10 @@ ipcMain.handle('interactive-preview:appearance-state', (event, id: string, state
   assertTrustedIpcSender(event);
   interactivePreviews.updateAppearanceState(event.sender, id, state);
 });
+ipcMain.handle('interactive-preview:appearance-image', (event, id: string, requestId: string, url: string | null) => {
+  assertTrustedIpcSender(event);
+  interactivePreviews.resolveAppearanceImage(event.sender, id, requestId, url);
+});
 ipcMain.handle('interactive-preview:stop', (event, id: string) => {
   assertTrustedIpcSender(event);
   interactivePreviews.stop(event.sender, id);

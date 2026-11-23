@@ -9,7 +9,7 @@ export type AppearanceCodeDiagnostic = {
   message: string;
 };
 export const APPEARANCE_PROJECT_LIMITS = { files: 32, sourceLength: 100_000 } as const;
-export const APPEARANCE_PROJECT_MODULES = ['react', 'react-markdown', 'remark-gfm'] as const;
+export const APPEARANCE_PROJECT_MODULES = ['react', 'react-markdown', 'remark-gfm', '@chatter/ui'] as const;
 const own = (object: object, key: string) => Object.prototype.hasOwnProperty.call(object, key);
 
 export function isAppearanceFilePath(value: unknown): value is string {

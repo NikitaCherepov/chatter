@@ -21,8 +21,11 @@ export type AppearanceConfirmationRequest = { type: 'confirmationAction'; id: st
   | { type: 'confirmationField'; id: string; fieldId: string; value: string | boolean };
 export type AppearanceSpeechAction = { type: 'speechAction'; chatId: number; action: 'pause' | 'resume' | 'stop' };
 export type AppearanceReviewAction = { type: 'reviewConfirmation'; id: string };
+export type AppearanceContentAction = { type: 'contentAction'; chatId: number; messageId: number; variantIndex: number;
+  action: 'openImage' | 'downloadImage' | 'openAttachment' | 'downloadAttachment' | 'openLink' | 'copyText'; url?: string; index?: number; text?: string };
+export type AppearanceImageRequest = { id: string; requestId: string; chatId: number; messageId: number; variantIndex: number; url: string; width: number };
 export type AppearanceShellAction = AppearanceNavigationAction | AppearanceMessageAction | AppearanceSpeechAction | AppearanceReviewAction
-  | AppearanceConfirmationRequest
+  | AppearanceConfirmationRequest | AppearanceContentAction
   | { type: 'confirmationPresentation'; custom: boolean };
 
 export type AppearanceToolCall = {
@@ -37,6 +40,8 @@ export type AppearanceWorkLogStep = { type: 'message' | 'activity'; text: string
 export type AppearanceMessageContent = {
   content: string; reasoningContent: string; workLog: AppearanceWorkLogStep[];
   toolStatus: string | null; streaming: boolean;
+  images: { url: string; type: 'user_photo' | 'generated' | 'external' }[];
+  attachments: { url: string; name: string; filename: string; mimeType: string; sizeBytes: number }[];
 };
 
 export type AppearanceShellState = {
@@ -100,6 +105,17 @@ export function parseAppearanceShellAction(value: unknown): AppearanceShellActio
   if (input.type === 'search' && typeof input.query === 'string' && input.query.length <= 200)
     return { type: 'search', query: input.query };
   if (Number.isSafeInteger(input.chatId) && Number(input.chatId) > 0) {
+    if (input.type === 'contentAction' && Number.isSafeInteger(input.messageId) && Number(input.messageId) !== 0
+        && Number.isSafeInteger(input.variantIndex) && Number(input.variantIndex) >= 0) {
+      const base = { type: 'contentAction' as const, chatId: Number(input.chatId), messageId: Number(input.messageId), variantIndex: Number(input.variantIndex) };
+      if (['openImage', 'downloadImage', 'openLink'].includes(String(input.action)) && typeof input.url === 'string' && input.url.length > 0 && input.url.length <= 8192)
+        return { ...base, action: input.action as 'openImage' | 'downloadImage' | 'openLink', url: input.url };
+      if (['openAttachment', 'downloadAttachment'].includes(String(input.action)) && Number.isSafeInteger(input.index) && Number(input.index) >= 0)
+        return { ...base, action: input.action as 'openAttachment' | 'downloadAttachment', index: Number(input.index) };
+      if (input.action === 'copyText' && typeof input.text === 'string' && input.text.length > 0 && input.text.length <= 100000)
+        return { ...base, action: 'copyText', text: input.text };
+      return null;
+    }
     if (input.type === 'speechAction' && ['pause', 'resume', 'stop'].includes(String(input.action)))
       return { type: 'speechAction', chatId: Number(input.chatId), action: input.action as AppearanceSpeechAction['action'] };
     if (input.type === 'messageAction' && Number.isSafeInteger(input.messageId) && Number(input.messageId) > 0
@@ -140,6 +156,11 @@ export function parseAppearanceShellAction(value: unknown): AppearanceShellActio
 
 export function canRunAppearanceAction(state: AppearanceShellState, action: AppearanceShellAction): boolean {
   if ('chatId' in action && action.chatId !== state.activeChatId) return false;
+  if (action.type === 'contentAction') {
+    const message = state.messages.find(message => message.id === action.messageId);
+    return Boolean(message && message.variantIndex === action.variantIndex
+      && (action.index === undefined || message.attachments?.[action.index]));
+  }
   if (action.type === 'messageAction') {
     const message = state.messages.find(message => message.id === action.messageId);
     return Boolean(message && message.variantIndex === action.variantIndex && message.actions.includes(action.action)

@@ -13,6 +13,8 @@ declare global {
       interactivePlace: (placement: InteractivePlacement) => Promise<void>;
       interactiveStop: (id: string) => Promise<void>;
       appearanceShellState: (id: string, state: AppearanceShellState) => Promise<void>;
+      appearanceImageResult: (id: string, requestId: string, url: string | null) => Promise<void>;
+      onAppearanceImageRequest: (callback: (request: import('../../main/appearance-shell-types').AppearanceImageRequest) => void) => () => void;
       onAppearanceShellAction: (callback: (event: AppearanceShellEvent) => void) => () => void;
       onInteractiveStatus: (callback: (status: InteractiveStatus) => void) => () => void;
       onTextContextMenu: (callback: (menu: { x: number; y: number; items: { action: 'undo' | 'redo' | 'cut' | 'copy' | 'paste' | 'selectAll'; enabled: boolean; separator?: boolean }[] }) => void) => () => void;

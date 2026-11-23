@@ -48,7 +48,7 @@ import { IntuitionDisclosure } from '../components/IntuitionDisclosure';
 import { CommandAssessment } from '../components/CommandAssessment';
 import type { CommandAssessment as CommandAssessmentData } from '../lib/auto-confirmation-service';
 import { MarkdownRenderer } from '../components/MarkdownRenderer';
-import type { MessageLink } from '../lib/message-links';
+import { parseMessageLink, type MessageLink } from '../lib/message-links';
 import { QuestionnaireResult, type QuestionnaireContextValue } from '../components/Questionnaire';
 import { questionnaireAnswerText, type QuestionnaireSubmission } from '../lib/message-questionnaires';
 import { EmailBodyPreview } from '../components/EmailBodyPreview';
@@ -75,6 +75,7 @@ import { ReasoningDisclosure } from '../components/ReasoningDisclosure';
 import { startsMessageDay, messageClock, messageDate, fullMessageDate } from '../lib/message-dates';
 import { splitWorkContent, messageSpeechText } from '../lib/work-log-content';
 import { appearanceMessageContent } from '../lib/appearance-message-content';
+import { appearanceContentReferences, allowedAppearanceImage } from '../lib/appearance-media';
 import type { SetDisplayStatePayload } from '../components/PixelAvatar';
 import { ToolsPanel, ToolsHeaderButton, ToolsToolbar } from '../components/ToolsPanel';
 import { ImageViewerModal } from '../components/ImageViewerModal';
@@ -8544,6 +8545,7 @@ export function ChatPage() {
         loadMore: t('appearance.shellLoadMore'), loading: t('common.loading'),
         empty: t('chat.sidebar.nothingFound'),
         workLog: t('workLog.title'), reasoning: t('chat.message.reasoning'),
+        download: t('common.download'), image: t('chat.image.photoAlt'), imageLoadFailed: t('messageImages.loadFailed'),
         copy: t('common.copy'), downloadDocx: t('chat.sidebar.downloadDocx'), sendTelegram: t('chat.message.sendTelegram'),
         save: t('common.save'), cancel: t('common.cancel'),
         fork: t('chat.message.createBranch'), edit: t('common.edit'), delete: t('common.delete'),
@@ -8559,7 +8561,35 @@ export function ChatPage() {
     attachedImages.length, attachedDocuments.length, confirmationComposer.comment, ttsPlayback, shellConfirmations,
     user?.id, user?.telegram_linked, roomCharacters, otherRoomHumans.length, forking, switchingVariantId, streamingMsgId]);
   const handleShellAction = (action: AppearanceShellAction) => {
-    if (action.type === 'confirmationPresentation') {
+    if (action.type === 'contentAction') {
+      if (appearanceShell?.scope !== 'workspace' || action.chatId !== activeChatIdRef.current
+          || messagesChatIdRef.current !== action.chatId || !canRunAppearanceAction(shellState, action)) return;
+      const original = messagesRef.current.find(message => message.id === action.messageId && (message.variant_index ?? 0) === action.variantIndex);
+      const displayed = shellState.messages.find(message => message.id === action.messageId && message.variantIndex === action.variantIndex);
+      if (!original || !displayed) return;
+      const references = appearanceContentReferences({ ...displayed, ...appearanceMessageContent(original, displayed.streaming, name => name) });
+      const run = async () => {
+        if ((action.action === 'openImage' || action.action === 'downloadImage') && action.url
+            && allowedAppearanceImage(action.url) && references.images.has(action.url)) {
+          const source = resolveImageUrl(action.url);
+          if (action.action === 'openImage') openMessageImage(source, original.images?.some(image => image.url === action.url) ? original.id : undefined,
+            original.images?.some(image => image.url === action.url) ? action.url : undefined);
+          else await handleDownloadImage(source);
+        } else if ((action.action === 'openAttachment' || action.action === 'downloadAttachment') && action.index !== undefined) {
+          const file = original.attachments?.[action.index];
+          if (!file) return;
+          if (action.action === 'openAttachment') handleOpenEmailAttachment(file);
+          else await handleDownloadImage(resolveImageUrl(file.url));
+        } else if (action.action === 'openLink' && action.url && references.links.has(action.url)) {
+          const link = parseMessageLink(action.url);
+          if (link) await openMessageLink(link);
+          else if (/^https?:\/\//i.test(action.url)) window.open(action.url, '_blank', 'noopener,noreferrer');
+        } else if (action.action === 'copyText' && action.text && references.texts.some(text => text.includes(action.text!))) {
+          await window.electronAPI.writeClipboardText(action.text);
+        }
+      };
+      void run().catch(error => toast.error(error.message));
+    } else if (action.type === 'confirmationPresentation') {
       setShellHandlesConfirmations(action.custom);
     } else if (action.type === 'confirmationAction' || action.type === 'confirmationField') {
       if (!canRunAppearanceAction(shellState, action)) return;

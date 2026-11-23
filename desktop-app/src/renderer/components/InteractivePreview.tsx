@@ -5,6 +5,8 @@ import type { InteractiveLanguage, InteractiveStatus } from '../../main/interact
 import type { AppearanceProject } from '../lib/appearance-project';
 import type { AppearanceShellAction, AppearanceShellState } from '../../main/appearance-shell-types';
 import s from './InteractivePreview.module.scss';
+import { appearanceImageRequestAllowed } from '../lib/appearance-media';
+import { resolveImageUrl } from '../lib/api';
 
 type AppearanceBridge = {
   state: AppearanceShellState;
@@ -81,6 +83,12 @@ export function InteractivePreview({ source, language, visible, appearance, proj
     const unsubscribeActions = bridge ? api.onAppearanceShellAction(event => {
       if (event.id === id.current) appearanceRef.current?.onAction(event.action);
     }) : () => {};
+    const unsubscribeImages = bridge ? api.onAppearanceImageRequest(request => {
+      if (request.id !== id.current) return;
+      const state = appearanceRef.current?.state;
+      const url = state && appearanceImageRequestAllowed(state, request) ? resolveImageUrl(request.url, request.width) : null;
+      void api.appearanceImageResult(request.id, request.requestId, url).catch(() => {});
+    }) : () => {};
     void api.interactiveCreate({ source, language, project, dark: document.documentElement.dataset.theme === 'dark', errorLabel, bridge })
       .then(created => {
         if (disposed) { void api.interactiveStop(created); return; }
@@ -94,7 +102,7 @@ export function InteractivePreview({ source, language, visible, appearance, proj
         if (!disposed) { setPhase('failed'); appearanceRef.current?.onFailure(); }
       });
     return () => {
-      disposed = true; unsubscribe(); unsubscribeActions();
+      disposed = true; unsubscribe(); unsubscribeActions(); unsubscribeImages();
       if (id.current) { void api.interactiveStop(id.current).catch(() => {}); id.current = null; }
     };
   }, [available, seen, stopped, source, project, language, errorLabel, run, bridge]);

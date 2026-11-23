@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import * as ts from 'typescript';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import * as ChatterUI from './chatter-ui';
 import {
   compileAppearanceProject,
   resolveAppearanceImport,
@@ -28,7 +29,8 @@ try {
     if (name === 'react') return React;
     if (name === 'react-markdown') return { default: ReactMarkdown, __esModule: true };
     if (name === 'remark-gfm') return { default: remarkGfm, __esModule: true };
-    throw new Error('Only bundled react, react-markdown and remark-gfm modules are available');
+    if (name === '@chatter/ui') return ChatterUI;
+    throw new Error('Only bundled react, react-markdown, remark-gfm and @chatter/ui modules are available');
   };
   let Component: any;
   if (payload.project) {

@@ -1,5 +1,5 @@
 import type { AppearanceMessageContent, AppearanceToolCall } from '../../main/appearance-shell-types';
-import type { ToolCall, WorkLogStep } from './api';
+import type { ToolCall, WorkLogStep, MessageImage, MessageAttachment } from './api';
 import { describeToolCall } from './tool-activity';
 import { splitWorkContent, workLogSteps } from './work-log-content';
 
@@ -7,6 +7,7 @@ import { splitWorkContent, workLogSteps } from './work-log-content';
 export function appearanceMessageContent(message: {
   role: string; content: string; reasoning_content?: string | null;
   intermediate_messages?: string[]; work_log?: WorkLogStep[]; tool_calls?: ToolCall[] | null; tool_status?: string | null;
+  images?: MessageImage[] | null; attachments?: MessageAttachment[] | null;
 }, streaming: boolean, toolLabel: (name: string) => string): AppearanceMessageContent {
   const work = splitWorkContent(message.content, message.intermediate_messages);
   const projectTool = (call: ToolCall): AppearanceToolCall => {
@@ -23,6 +24,8 @@ export function appearanceMessageContent(message: {
   return {
     content: message.role === 'assistant' ? work.answer : message.content,
     reasoningContent: message.reasoning_content ?? '', streaming, toolStatus: message.tool_status ?? null,
+    images: (message.images ?? []).map(image => ({ url: image.url, type: image.type })),
+    attachments: (message.attachments ?? []).map(file => ({ url: file.url, name: file.name, filename: file.filename, mimeType: file.mime_type, sizeBytes: file.size_bytes })),
     workLog: message.role === 'assistant' ? workLogSteps(work.messages, message.work_log, message.tool_calls)
       .map(step => step.type === 'tool' ? { type: 'tool', call: projectTool(step.call) } : { type: step.type, text: step.text }) : [],
   };

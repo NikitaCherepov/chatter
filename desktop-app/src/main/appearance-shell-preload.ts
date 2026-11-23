@@ -31,7 +31,27 @@ const speechAction = (action: string) => {
   send({ type: 'speechAction', chatId: state.activeChatId, action });
   return true;
 };
+const contentAction = (messageId: number, action: string, extra: Record<string, unknown>) => {
+  const message = state?.messages.find(message => message.id === messageId);
+  if (!navigator.userActivation.isActive || !message) return false;
+  send({ type: 'contentAction', chatId: state!.activeChatId, messageId, variantIndex: message.variantIndex, action, ...extra });
+  return true;
+};
 contextBridge.exposeInMainWorld('chatter', {
+  imageSource: (messageId: number, source: string, width = 560) => {
+    const message = state?.messages.find(message => message.id === messageId);
+    if (!message || !state?.activeChatId || typeof source !== 'string' || !source || source.length > 8192) return '';
+    const url = new URL('/_image', location.href);
+    url.search = new URLSearchParams({ chatId: String(state.activeChatId), messageId: String(messageId), variantIndex: String(message.variantIndex),
+      url: source, width: String(Math.max(64, Math.min(1600, Math.round(Number(width) || 560)))) }).toString();
+    return url.href;
+  },
+  openImage: (id: number, url: string) => contentAction(id, 'openImage', { url }),
+  downloadImage: (id: number, url: string) => contentAction(id, 'downloadImage', { url }),
+  openAttachment: (id: number, index: number) => contentAction(id, 'openAttachment', { index }),
+  downloadAttachment: (id: number, index: number) => contentAction(id, 'downloadAttachment', { index }),
+  openLink: (id: number, url: string) => contentAction(id, 'openLink', { url }),
+  copyText: (id: number, text: string) => contentAction(id, 'copyText', { text }),
   subscribe: (listener: (state: AppearanceShellState) => void, options?: { navigation?: boolean; confirmations?: boolean }) => {
     if (options?.navigation) ipcRenderer.send('appearance-shell:navigation', true);
     if (options?.confirmations && ++confirmationSubscribers === 1) ipcRenderer.send('appearance-shell:confirmations', true);

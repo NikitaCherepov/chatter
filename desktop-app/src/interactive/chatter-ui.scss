@@ -1,0 +1,16 @@
+.chatter-markdown { min-width: 0; overflow-wrap: anywhere; }
+.chatter-markdown a { color: var(--accent); cursor: pointer; }
+.chatter-markdown code { font-family: var(--appearance-code-font, monospace); }
+.chatter-code { border: 1px solid var(--border-light); border-radius: var(--appearance-radius, 8px); overflow: hidden; margin: .75em 0; }
+.chatter-code header { display: flex; justify-content: space-between; align-items: center; padding: .35em .75em; background: var(--bg-bubble); }
+.chatter-code pre { overflow-x: auto; white-space: pre; padding: .75em; margin: 0; }
+.chatter-message-images { display: flex; gap: 12px; flex-wrap: wrap; }
+.chatter-message-images:empty, .chatter-attachments:empty { display: none; }
+.chatter-message-images figure { margin: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.chatter-message-images img { max-width: min(100%, 560px); max-height: 360px; object-fit: contain; border-radius: var(--appearance-radius, 8px); cursor: zoom-in; }
+.chatter-markdown img { cursor: zoom-in; }
+.chatter-attachments { display: grid; gap: 8px; }
+.chatter-attachment { display: flex; gap: 8px; }
+.chatter-attachment > button:first-child { min-width: 0; display: flex; flex-direction: column; text-align: start; }
+.chatter-attachment span { overflow-wrap: anywhere; }
+.chatter-attachment small { opacity: .7; }

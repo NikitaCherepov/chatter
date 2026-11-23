@@ -21,7 +21,17 @@ const until = async (predicate, timeout = 15000) => {
 let host, manager, server;
 app.whenReady().then(async () => {
   let hits = 0;
-  server = createServer((_req, res) => { hits++; res.end('must not be reached'); });
+  let imageHits = 0;
+  const fixtureImage = nativeImage.createFromBitmap(Buffer.from([255, 0, 0, 255]), { width: 1, height: 1 }).toPNG();
+  server = createServer((req, res) => {
+    if (req.url.startsWith('/theme-image?')) {
+      imageHits++;
+      if (!req.url.includes('token=host-private')) { res.writeHead(403); res.end(); return; }
+      if (req.url.includes('bad=true')) { res.setHeader('Content-Type', 'text/html'); res.end('<script>bad</script>'); return; }
+      res.setHeader('Content-Type', 'image/png'); res.end(fixtureImage); return;
+    }
+    hits++; res.end('must not be reached');
+  });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const endpoint = `http://127.0.0.1:${server.address().port}/blocked`;
   assert.equal(typeof appearanceImageResponse, 'function');
@@ -160,6 +170,46 @@ app.whenReady().then(async () => {
   assert.equal(await preview.contents.executeJavaScript('document.querySelector("[data-tool-name=read_file] script")'), null, 'tool previews are text, never executable HTML');
   assert.equal(await preview.contents.executeJavaScript('document.querySelector(".work-log").open'), false, 'completed work log can be collapsed without losing its content');
   console.log('PASS: isolated starter retains intermediate text through tool streaming, renders live tool status and final answer safely');
+  const resourceRequests = [];
+  const allowedSources = new Set(['/api/v1/images/photo.png', '/api/v1/images/inline.png', '/api/v1/images/bad.png']);
+  host.webContents.send = (channel, payload) => {
+    if (channel === 'interactive-preview:appearance-image') {
+      resourceRequests.push(payload);
+      manager.resolveAppearanceImage({}, payload.id, payload.requestId, endpoint.replace('/blocked', '/theme-image?token=wrong-owner'));
+      const allowed = payload.chatId === 1 && payload.messageId === 11 && payload.variantIndex === 0 && allowedSources.has(payload.url);
+      manager.resolveAppearanceImage(host.webContents, payload.id, payload.requestId,
+        allowed ? endpoint.replace('/blocked', '/theme-image?token=host-private' + (payload.url.endsWith('bad.png') ? '&bad=true' : '')) : null);
+    }
+    if (channel === 'interactive-preview:appearance-action') forwarded.push(payload.action);
+    return hostSend(channel, payload);
+  };
+  const mediaMessage = { id: 11, role: 'assistant', content: '', variantIndex: 0, variantCount: 1, actions: [], workLog: [],
+    images: [{ url: '/api/v1/images/photo.png', type: 'generated' }],
+    attachments: [{ url: '/api/v1/attachments/demo.pdf', name: 'Report.pdf', filename: 'demo.pdf', mimeType: 'application/pdf', sizeBytes: 1024 }] };
+  const mediaState = { ...starterState, view: 'conversation', palette: { text: '#eee', accent: '#f80', surface: '#222' }, messages: [mediaMessage] };
+  manager.updateAppearanceState(host.webContents, preview.id, mediaState);
+  await until(async () => await preview.contents.executeJavaScript('document.querySelector(".chatter-message-images img")?.naturalWidth') === 1);
+  assert.equal(await preview.contents.executeJavaScript('document.querySelectorAll("article").length'), 1, 'image/file-only messages stay visible');
+  assert.equal(await preview.contents.executeJavaScript('document.body.innerHTML.includes("host-private")'), false, 'authenticated source URL never enters theme DOM');
+  assert.ok(imageHits > 0);
+  await preview.contents.executeJavaScript('document.querySelector(".chatter-message-images img").click()', true);
+  await until(() => forwarded.some(action => action.type === 'contentAction' && action.action === 'openImage' && action.messageId === 11));
+  await preview.contents.executeJavaScript('document.querySelector(".chatter-attachment button").click()', true);
+  await until(() => forwarded.some(action => action.type === 'contentAction' && action.action === 'openAttachment' && action.index === 0));
+  const markdownContent = '![Inline](/api/v1/images/inline.png "layout:gallery")\n\n[Chat](chat:1#10)\n\n```js\nconst answer = 42;\n```\n\n| A | B |\n|---|---|\n| 1 | 2 |';
+  manager.updateAppearanceState(host.webContents, preview.id, { ...mediaState, messages: [{ ...mediaMessage, content: markdownContent }] });
+  await until(async () => await preview.contents.executeJavaScript('document.querySelector("[data-message-images=gallery] img")?.naturalWidth') === 1);
+  assert.equal(await preview.contents.executeJavaScript('document.querySelector(".chatter-markdown table td").textContent'), '1');
+  assert.equal(await preview.contents.executeJavaScript('getComputedStyle(document.querySelector(".chatter-code")).borderTopWidth'), '1px', 'shared Markdown styles are loaded inside the isolated document');
+  await preview.contents.executeJavaScript('document.querySelector(".chatter-code button").click()', true);
+  await until(() => forwarded.some(action => action.type === 'contentAction' && action.action === 'copyText' && action.text === 'const answer = 42;'));
+  await preview.contents.executeJavaScript('[...document.querySelectorAll(".chatter-message-link")].find(link=>link.textContent==="Chat").click()', true);
+  await until(() => forwarded.some(action => action.type === 'contentAction' && action.action === 'openLink' && action.url === 'chat:1#10'));
+  manager.updateAppearanceState(host.webContents, preview.id, { ...mediaState, messages: [{ ...mediaMessage, images: [{ url: '/api/v1/images/bad.png', type: 'external' }] }] });
+  await until(async () => await preview.contents.executeJavaScript('!!document.querySelector(".chatter-image-error")'));
+  assert.ok(resourceRequests.every(request => !request.url.includes('host-private')));
+  host.webContents.send = hostSend;
+  console.log('PASS: scoped authenticated image bytes, media-only messages, shared Markdown/gallery/code/table styles, native content actions and invalid-MIME fallback');
   host.webContents.send = (channel, payload) => {
     if (channel === 'interactive-preview:appearance-action') forwarded.push(payload.action);
     return hostSend(channel, payload);

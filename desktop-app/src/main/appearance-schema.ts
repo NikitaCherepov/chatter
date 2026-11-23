@@ -304,20 +304,22 @@ import remarkGfm from "remark-gfm";
 import Composer from "./Composer";
 import MessageActions from "./MessageActions";
 import WorkLog from "./WorkLog";
+import {Markdown as MessageMarkdown, MessageImages, Attachments} from "@chatter/ui";
 export default function Conversation({state}){
-  const visible=state.messages.filter(message=>message.content.trim()||message.workLog?.length||message.reasoningContent||message.streaming);
+  const visible=state.messages.filter(message=>message.content.trim()||message.workLog?.length||message.reasoningContent||message.streaming||message.images?.length||message.attachments?.length);
   return <main><header><button onClick={()=>window.chatter.showHome()}>{state.labels.allChats}</button><button onClick={()=>window.chatter.openConversation()}>…</button></header>
     {state.hasOlderMessages&&<button disabled={state.olderMessagesLoading} onClick={()=>window.chatter.loadOlderMessages()}>{state.labels.loadMore}</button>}
     <section className="messages">{visible.map(message=><article key={message.id} data-role={message.role}>
-      {message.reasoningContent&&<details><summary>{state.labels.reasoning}</summary><Markdown>{message.reasoningContent}</Markdown></details>}
+      {message.reasoningContent&&<details><summary>{state.labels.reasoning}</summary><MessageMarkdown messageId={message.id} content={message.reasoningContent}/></details>}
       <WorkLog message={message} labels={state.labels}/>
-      {message.content.trim()&&<Markdown remarkPlugins={[remarkGfm]}>{message.content}</Markdown>}
+      <MessageImages message={message}/><Attachments message={message}/>
+      {message.content.trim()&&<MessageMarkdown messageId={message.id} content={message.content}/>}
       {message.streaming&&!message.content.trim()&&!message.workLog?.length&&!message.reasoningContent&&<p role="status">{state.labels.loading}</p>}
       <MessageActions message={message} state={state}/>
     </article>)}</section><Composer state={state}/></main>;
 }`,
         'components/WorkLog.tsx': String.raw`import React from "react";
-import Markdown from "react-markdown";
+import {Markdown} from "@chatter/ui";
 const value=text=>typeof text==='string'?text:JSON.stringify(text,null,2);
 function Tool({call}){
   return <details data-tool-name={call.name} data-status={call.status}>
@@ -332,7 +334,7 @@ export default function WorkLog({message,labels}){
   const showCurrent=current&&!steps.some(step=>step.type==='activity'&&step.text===current||step.type==='tool'&&step.call.status==='running');
   if(!steps.length&&!current)return null;
   return <details open={message.streaming||undefined} className="work-log"><summary>{labels.workLog}</summary>
-    {steps.map((step,index)=>step.type==='tool'?<Tool key={step.call.id??index} call={step.call}/>:step.type==='message'?<Markdown key={index}>{step.text}</Markdown>:<p key={index}>{step.text}</p>)}
+    {steps.map((step,index)=>step.type==='tool'?<Tool key={step.call.id??index} call={step.call}/>:step.type==='message'?<Markdown key={index} messageId={message.id} content={step.text}/>:<p key={index}>{step.text}</p>)}
     {showCurrent&&<p role="status">{current}</p>}
   </details>;
 }`,
@@ -411,6 +413,7 @@ export default function MessageActions({message,state}){
       confirmations: 'Subscribe with {navigation:true,confirmations:true} to render full cards without leaving the theme. state.confirmations has id/title/summary, ready/revision/busy/customizable, content[], fields[], actions[]. Render text/code/markdown/json/email nodes safely, diff before/after, recursive group children, fieldId references and inline actionId references. Fields have id/label/type/value/disabled/options; call setConfirmationField(id,fieldId,value) from input events (boolean for checkbox, string otherwise). Actions have id/label/disabled/group(primary/review/permissions/content)/comment. Render every action; distinguish persistent permissions. For comment:true provide your own input. On a user click call runConfirmationAction(id,actionId,card.revision,optionalComment). The exact existing callback runs with native field state; stale revisions and busy/disabled/resolved requests are rejected. Wait for field acknowledgments before approval. reviewConfirmation(id) is only an explicit native fallback, not the normal themed button. Unsupported content, missing opt-in and shell failure retain native fallback.',
       sendMessage: 'window.chatter.sendMessage(text) sends through the normal composer to the current chat. Returns false unless called from a real user interaction. Disable the composer when state.canSend is false. Pending native attachments are included.',
       stopGeneration: 'window.chatter.stopGeneration() stops the current generation.',
+      media: 'Messages also contain images[{url,type}] and attachments[{url,name,filename,mimeType,sizeBytes}]. Import {Markdown,Image,MessageImages,Attachments,useChatterState} from @chatter/ui for native shared formatting and app-mediated image loading. Use <Markdown messageId={message.id} content={message.content}/>, <MessageImages message={message}/> and <Attachments message={message}/>. Preserve media-only rows. Design your own markup using imageSource(id,url,width?), openImage/downloadImage(id,url), openAttachment/downloadAttachment(id,index), openLink(id,url) and copyText(id,text). View/download/link/copy require user activation and current-message references. Image sources hide server credentials; arbitrary network access remains unavailable. Native interactive/chart/diagram/questionnaire blocks remain code in this renderer. Public chatter-* classes and component overrides preserve theme control.',
       loadOlderMessages: 'window.chatter.loadOlderMessages() loads the preceding history page.',
       showHome: 'window.chatter.showHome() returns to this shell overview without leaving the appearance. Use state.view to render home vs conversation, including when the user returns from native chat actions. Opt in with subscribe(callback, {navigation:true}) to preserve local state during navigation. Earlier shells are reloaded to their initial overview on a host home action.',
       openConversation: 'window.chatter.openConversation() reveals the native conversation and its complete message actions.',

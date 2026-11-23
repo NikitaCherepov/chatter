@@ -1,10 +1,10 @@
-import { BrowserWindow, session, View, WebContentsView, type WebContents, type Session } from 'electron';
+import { BrowserWindow, session, net, View, WebContentsView, type WebContents, type Session } from 'electron';
 import { randomUUID } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { INTERACTIVE_CSP, INTERACTIVE_SCHEME, interactiveDocument, validateInteractiveInput } from './interactive-document';
 import type { InteractivePlacement, InteractiveStatus } from './interactive-types';
-import { parseAppearanceShellAction, canRunAppearanceAction, type AppearanceShellState } from './appearance-shell-types';
+import { parseAppearanceShellAction, canRunAppearanceAction, type AppearanceShellState, type AppearanceImageRequest } from './appearance-shell-types';
 
 type Entry = {
   id: string; host: BrowserWindow; owner: WebContents; clip: View; view: WebContentsView;
@@ -13,6 +13,8 @@ type Entry = {
   expanded?: boolean;
   appearance?: { state?: AppearanceShellState; window: number; count: number; handlesNavigation?: boolean; handlesConfirmations?: boolean };
   cleanup: () => void;
+  imageRequests: Map<string, { request: AppearanceImageRequest; controller: AbortController; resolve: (url: string | null) => void }>;
+  imageLoads: Set<Promise<void>>;
 };
 
 /** One non-persistent session and renderer per preview. No preload, IPC or browser-tool reuse. */
@@ -40,15 +42,23 @@ export class InteractivePreviews {
     isolated.setDevicePermissionHandler(() => false);
     isolated.on('will-download', (event, item) => { event.preventDefault(); item.cancel(); });
     isolated.webRequest.onBeforeRequest((details, callback) => {
-      callback({ cancel: details.url !== url || details.resourceType !== 'mainFrame' || details.method !== 'GET' });
+      const resource = new URL(details.url);
+      const image = Boolean(input.bridge && details.resourceType === 'image' && resource.protocol === INTERACTIVE_SCHEME + ':'
+        && resource.hostname === id && resource.pathname === '/_image');
+      callback({ cancel: details.method !== 'GET' || !(image || details.url === url && details.resourceType === 'mainFrame') });
     });
     const document = interactiveDocument(input, this.runtime ?? '');
-    isolated.protocol.handle(INTERACTIVE_SCHEME, request => new Response(request.url === url ? document : '', {
+    isolated.protocol.handle(INTERACTIVE_SCHEME, request => {
+      const resource = new URL(request.url);
+      if (input.bridge && resource.hostname === id && resource.pathname === '/_image' && request.method === 'GET')
+        return this.loadAppearanceImage(id, resource);
+      return new Response(request.url === url ? document : '', {
       status: request.url === url ? 200 : 403,
       headers: { 'Content-Type': 'text/html; charset=utf-8', 'Content-Security-Policy': INTERACTIVE_CSP,
         'X-DNS-Prefetch-Control': 'off', 'Referrer-Policy': 'no-referrer', 'X-Content-Type-Options': 'nosniff',
         'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), clipboard-read=(), clipboard-write=(), display-capture=(), usb=(), serial=(), bluetooth=()' },
-    }));
+      });
+    });
     const clip = new View();
     const view = new WebContentsView({ webPreferences: {
       session: isolated, sandbox: true, contextIsolation: true, nodeIntegration: false,
@@ -62,6 +72,7 @@ export class InteractivePreviews {
     clip.setVisible(false);
     const gone = () => this.remove(id);
     const entry: Entry = { id, host, owner, clip, view, isolated, visible: false,
+      imageRequests: new Map(), imageLoads: new Set(),
       cleanup: () => { owner.removeListener('destroyed', gone); } };
     if (input.bridge) entry.appearance = { window: Date.now(), count: 0 };
     this.entries.set(id, entry);
@@ -163,6 +174,9 @@ export class InteractivePreviews {
     const resetLegacyNavigation = entry.appearance.state?.view === 'conversation'
       && state.view === 'home' && !entry.appearance.handlesNavigation;
     entry.appearance.state = state;
+    for (const pending of entry.imageRequests.values()) {
+      if (!this.imageScopeCurrent(entry, pending.request)) { pending.controller.abort(); pending.resolve(null); }
+    }
     if (resetLegacyNavigation && !entry.view.webContents.isDestroyed()
         && !entry.view.webContents.isLoading()) {
       entry.view.webContents.reload();
@@ -174,6 +188,65 @@ export class InteractivePreviews {
 
   stop(owner: WebContents, id: string): void {
     if (this.entries.get(id)?.owner === owner) this.remove(id, 'stopped');
+  }
+
+  resolveAppearanceImage(owner: WebContents, id: string, requestId: string, url: string | null): void {
+    const entry = this.entries.get(id), pending = entry?.imageRequests.get(requestId);
+    if (!entry || entry.owner !== owner || !pending) return;
+    pending.resolve(typeof url === 'string' && /^https?:\/\//i.test(url) && url.length <= 16384
+      && this.imageScopeCurrent(entry, pending.request) ? url : null);
+  }
+
+  private imageScopeCurrent(entry: Entry, request: AppearanceImageRequest): boolean {
+    return entry.appearance?.state?.activeChatId === request.chatId
+      && Boolean(entry.appearance.state.messages.some(message => message.id === request.messageId && message.variantIndex === request.variantIndex));
+  }
+
+  private async loadAppearanceImage(id: string, url: URL): Promise<Response> {
+    const entry = this.entries.get(id), state = entry?.appearance?.state;
+    const blocked = () => new Response('', { status: 404 });
+    if (!entry || !state || entry.imageRequests.size >= 64) return blocked();
+    const request: AppearanceImageRequest = { id, requestId: randomUUID(), chatId: Number(url.searchParams.get('chatId')),
+      messageId: Number(url.searchParams.get('messageId')), variantIndex: Number(url.searchParams.get('variantIndex')),
+      url: url.searchParams.get('url') ?? '', width: Number(url.searchParams.get('width')) };
+    if (!Number.isSafeInteger(request.chatId) || !Number.isSafeInteger(request.messageId) || request.messageId === 0
+        || !Number.isSafeInteger(request.variantIndex) || request.variantIndex < 0 || !this.imageScopeCurrent(entry, request)
+        || !request.url || request.url.length > 8192 || !Number.isSafeInteger(request.width) || request.width < 64 || request.width > 1600) return blocked();
+    const controller = new AbortController();
+    let resolve!: (url: string | null) => void;
+    const resolved = new Promise<string | null>(done => { resolve = done; });
+    entry.imageRequests.set(request.requestId, { request, controller, resolve });
+    const timeout = setTimeout(() => { controller.abort(); resolve(null); }, 20000);
+    try {
+      entry.owner.send('interactive-preview:appearance-image', request);
+      const source = await resolved;
+      if (!source || controller.signal.aborted || !this.imageScopeCurrent(entry, request)) return blocked();
+      while (entry.imageLoads.size >= 4) await Promise.race(entry.imageLoads);
+      if (controller.signal.aborted) return blocked();
+      let release!: () => void;
+      const loading = new Promise<void>(done => { release = done; });
+      entry.imageLoads.add(loading);
+      try {
+        const response = await net.fetch(source, { signal: controller.signal, credentials: 'omit' });
+        const mime = response.headers.get('content-type')?.split(';')[0].trim().toLowerCase() ?? '';
+        const limit = 16 * 1024 * 1024;
+        if (!response.ok || !/^image\/(png|jpeg|gif|webp|avif|bmp|x-icon|vnd\.microsoft\.icon)$/.test(mime)
+            || Number(response.headers.get('content-length')) > limit) { controller.abort(); return blocked(); }
+        const reader = response.body?.getReader();
+        if (!reader) return blocked();
+        const chunks: Uint8Array[] = []; let size = 0;
+        for (;;) {
+          const { done, value } = await reader.read(); if (done) break;
+          size += value.byteLength;
+          if (size > limit) { await reader.cancel(); return blocked(); }
+          chunks.push(value);
+        }
+        if (!this.imageScopeCurrent(entry, request) || controller.signal.aborted) return blocked();
+        return new Response(Buffer.concat(chunks), { headers: { 'Content-Type': mime, 'Cache-Control': 'no-store',
+          'Content-Security-Policy': "default-src 'none'; sandbox", 'X-Content-Type-Options': 'nosniff' } });
+      } finally { release(); entry.imageLoads.delete(loading); }
+    } catch { return blocked(); }
+    finally { clearTimeout(timeout); entry.imageRequests.delete(request.requestId); }
   }
 
   destroy(): void { for (const id of [...this.entries.keys()]) this.remove(id); }
@@ -188,6 +261,7 @@ export class InteractivePreviews {
     const entry = this.entries.get(id);
     if (!entry) return;
     this.entries.delete(id);
+    for (const pending of entry.imageRequests.values()) { pending.controller.abort(); pending.resolve(null); }
     clearInterval(entry.timer); clearTimeout(entry.deadline);
     entry.cleanup();
     if (phase) this.emit(entry, phase);

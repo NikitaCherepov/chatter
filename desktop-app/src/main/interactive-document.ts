@@ -7,7 +7,7 @@ export const MAX_INTERACTIVE_SOURCE = 100_000;
 export const INTERACTIVE_CSP = [
   "sandbox allow-scripts allow-forms",
   "default-src 'none'", "script-src 'unsafe-inline' 'unsafe-eval'", "style-src 'unsafe-inline'",
-  "img-src data: blob:", "connect-src 'none'", "font-src 'none'", "media-src 'none'",
+  "img-src data: blob: chatter-interactive:", "connect-src 'none'", "font-src 'none'", "media-src 'none'",
   "frame-src 'none'", "child-src 'none'", "worker-src 'none'", "object-src 'none'",
   "base-uri 'none'", "form-action 'none'",
 ].join('; ');
