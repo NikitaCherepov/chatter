@@ -256,7 +256,7 @@ app.whenReady().then(async () => {
   console.log('PASS: isolated starter renders full confirmation fields/diffs/actions and saves custom message edits without native navigation');
   await preview.contents.executeJavaScript('document.querySelector("textarea").focus()');
   manager.updateAppearanceState(host.webContents, preview.id, { ...starterState, view: 'conversation', canSend: false, sending: true });
-  await until(async () => await preview.contents.executeJavaScript('document.querySelector("form button")?.textContent') === 'Stop');
+  await until(async () => await preview.contents.executeJavaScript('[...document.querySelectorAll("form button")].some(button=>button.textContent==="Stop")'));
   assert.equal(await preview.contents.executeJavaScript('document.activeElement.tagName'), 'TEXTAREA', 'stream updates retain composer focus');
   manager.updateAppearanceState(host.webContents, preview.id, starterState);
   await until(async () => await preview.contents.executeJavaScript('document.querySelector(".chat")?.textContent') === 'Live chat');
@@ -306,6 +306,72 @@ if(!state?.messages.length)return null;const message=state.messages[0];return <m
   host.webContents.send = hostSend;
   manager.stop(host.webContents, preview.id);
   console.log('PASS: theme-authored viewing receives original pixels, retains CSS/control of layout, overrides image/Markdown/gallery clicks and consumes Escape before host navigation');
+  preview = await create('tsx', '', { bridge: 'appearance-chat-list-v1', project: { entry: 'App.tsx', files: {
+    'App.tsx': `import React from 'react';import {Attachments,useChatterState} from '@chatter/ui';
+export default function App(){const state=useChatterState(),[document,setDocument]=React.useState(null),[page,setPage]=React.useState(null),[error,setError]=React.useState('');
+if(!state)return null;const show=async file=>{try{const result=await window.chatter.readAttachment(file.messageId,file.index);setDocument(result);if(result.kind==='pdf')setPage(await window.chatter.renderAttachmentPage(file.messageId,file.index,1,800));}catch(error){setError(error.message);}};
+return <main><button id="choose" onClick={()=>window.chatter.chooseAttachments()}>Choose</button><button id="send-only-files" onClick={()=>window.chatter.sendMessage('')}>Send files</button>
+{state.composer.items.map(item=><section className="pending" key={item.id}>{item.kind==='image'&&<img src={window.chatter.pendingAttachmentSource(item.id)}/>}<span>{item.name}</span><button onClick={()=>window.chatter.removePendingAttachment(item.id)}>Remove</button></section>)}
+{state.messages.map(message=><React.Fragment key={message.id}><Attachments message={message} onAttachmentClick={show}/>{message.images.map(image=><img className="sent-image" key={image.url} src={window.chatter.imageSource(message.id,image.url)}/>)}</React.Fragment>)}
+{document&&<aside id="own-document"><h1>{document.name}</h1><pre>{document.text}</pre>{page&&<img src={page.source}/>}</aside>}{error&&<p role="alert">{error}</p>}</main>}`,
+  } } });
+  let documentState = { ...mediaState, canSend: true, attachmentCount: 0,
+    composer: { busy: false, error: null, items: [], limits: {} }, messages: [{ ...mediaMessage, images: [],
+      attachments: [{ url: '/api/v1/attachments/example.pdf', name: 'Example PDF', filename: 'example.pdf', mimeType: 'application/pdf', sizeBytes: 100 }] }] };
+  const documentEvents = [], outgoingImageRequests = [];
+  host.webContents.send = (channel, payload) => {
+    if (channel === 'interactive-preview:appearance-document') {
+      documentEvents.push(payload);
+      const request = payload.request;
+      assert.equal(request.url, '/api/v1/attachments/example.pdf');
+      manager.resolveAppearanceDocument({}, payload.id, request.requestId, { text: 'wrong owner' });
+      manager.resolveAppearanceDocument(host.webContents, payload.id, request.requestId,
+        request.method === 'readAttachment' ? { kind: 'pdf', name: 'Example PDF', text: 'Extracted text', pageCount: 1, mimeType: 'application/pdf', sizeBytes: 100 }
+          : { source: 'data:image/png;base64,' + fixtureOriginal.toString('base64'), page: 1, pageCount: 1, width: 8, height: 6 });
+    }
+    if (channel === 'interactive-preview:appearance-image') {
+      outgoingImageRequests.push(payload);
+      if (payload.pendingId === 'picked-image') manager.resolveAppearanceImage(host.webContents, payload.id, payload.requestId, 'data:image/png;base64,' + fixtureImage.toString('base64'));
+      if (payload.messageId === -1 && payload.url === 'blob:host-owned-image') manager.resolveAppearanceImage(host.webContents, payload.id, payload.requestId, 'data:image/png;base64,' + fixtureImage.toString('base64'));
+    }
+    if (channel === 'interactive-preview:appearance-action') {
+      forwarded.push(payload.action);
+      const action = payload.action;
+      if (action.type === 'composerAction' && action.action === 'choose') documentState = { ...documentState, attachmentCount: 2,
+        composer: { ...documentState.composer, items: [{ id: 'picked-image', kind: 'image', name: 'chosen.png', mimeType: 'image/png', sizeBytes: 100 },
+          { id: 'picked-doc', kind: 'document', name: 'chosen.txt', mimeType: 'text/plain', sizeBytes: 10 }] } };
+      if (action.type === 'composerAction' && action.action === 'remove') documentState = { ...documentState, attachmentCount: documentState.attachmentCount - 1,
+        composer: { ...documentState.composer, items: documentState.composer.items.filter(item=>item.id!==action.id) } };
+      manager.updateAppearanceState(host.webContents, preview.id, documentState);
+    }
+    return hostSend(channel, payload);
+  };
+  manager.updateAppearanceState(host.webContents, preview.id, documentState);
+  await until(async () => await preview.contents.executeJavaScript('!!document.querySelector(".chatter-attachment button")'));
+  const beforeDocumentActions = forwarded.length;
+  await preview.contents.executeJavaScript('document.querySelector(".chatter-attachment button").click()', true);
+  await until(async () => await preview.contents.executeJavaScript('document.querySelector("#own-document img")?.naturalWidth') === 8);
+  assert.equal(await preview.contents.executeJavaScript('document.querySelector("#own-document pre").textContent'), 'Extracted text');
+  assert.equal(documentEvents.length, 2);
+  assert.equal(forwarded.length, beforeDocumentActions, 'custom document viewing does not invoke native openAttachment');
+  await preview.contents.executeJavaScript('document.querySelector("#choose").click()', true);
+  await until(async () => await preview.contents.executeJavaScript('document.querySelector(".pending img")?.naturalWidth') === 1).catch(async error => {
+    console.log('Pending image diagnostic:', outgoingImageRequests.map(request=>({pendingId:request.pendingId,messageId:request.messageId,url:request.url})),
+      await preview.contents.executeJavaScript('({items:document.querySelectorAll(".pending").length,src:document.querySelector(".pending img")?.src,complete:document.querySelector(".pending img")?.complete})'));
+    throw error;
+  });
+  assert.equal(await preview.contents.executeJavaScript('document.querySelectorAll(".pending").length'), 2);
+  await preview.contents.executeJavaScript('document.querySelector(".pending button").click()', true);
+  await until(async () => await preview.contents.executeJavaScript('document.querySelectorAll(".pending").length') === 1);
+  await preview.contents.executeJavaScript('document.querySelector("#send-only-files").click()', true);
+  await until(() => forwarded.some(action=>action.type==='sendMessage'&&action.text===''));
+  documentState = { ...documentState, attachmentCount: 0, composer: { ...documentState.composer, items: [] },
+    messages: [...documentState.messages, { ...mediaMessage, id: -1, role: 'user', attachments: [], images: [{ url: 'blob:host-owned-image' }] }] };
+  manager.updateAppearanceState(host.webContents, preview.id, documentState);
+  await until(async () => await preview.contents.executeJavaScript('document.querySelector(".sent-image")?.naturalWidth') === 1);
+  assert.equal(await preview.contents.executeJavaScript('[typeof electronAPI,typeof require,typeof process].join(",")'), 'undefined,undefined,undefined');
+  host.webContents.send = hostSend; manager.stop(host.webContents, preview.id);
+  console.log('PASS: custom document read/page callbacks, owner-scoped replies, custom outgoing-file UI, opaque pending previews/removal and attachment-only send without native navigation');
   manager.create(host.webContents, { language: 'tsx', source: '', dark: true, errorLabel: 'Preview failed', bridge: 'appearance-chat-list-v1', project: {
     entry: 'App.tsx', files: { 'App.tsx': 'import Missing from "./missing"; export default function App(){return null}' },
   } });

@@ -23,9 +23,15 @@ export type AppearanceSpeechAction = { type: 'speechAction'; chatId: number; act
 export type AppearanceReviewAction = { type: 'reviewConfirmation'; id: string };
 export type AppearanceContentAction = { type: 'contentAction'; chatId: number; messageId: number; variantIndex: number;
   action: 'openImage' | 'downloadImage' | 'openAttachment' | 'downloadAttachment' | 'openLink' | 'copyText'; url?: string; index?: number; text?: string };
-export type AppearanceImageRequest = { id: string; requestId: string; chatId: number; messageId: number; variantIndex: number; url: string; width: number };
+export type AppearanceImageRequest = { id: string; requestId: string; chatId: number; messageId: number; variantIndex: number; url: string; width: number; pendingId?: string };
+export type AppearanceDocumentRequest = { requestId: string; method: 'readAttachment' | 'renderAttachmentPage'; chatId: number; messageId: number;
+  variantIndex: number; index: number; url: string; page?: number; width?: number };
+export type AppearanceDocumentPreview = { kind: 'pdf' | 'docx' | 'spreadsheet' | 'text' | 'unsupported'; name: string; mimeType: string; sizeBytes: number;
+  text: string; html?: string; pageCount?: number };
+export type AppearanceDocumentPage = { source: string; width: number; height: number; page: number; pageCount: number };
+export type AppearanceComposerAction = { type: 'composerAction'; chatId: number; action: 'choose' | 'remove' | 'clear'; id?: string };
 export type AppearanceShellAction = AppearanceNavigationAction | AppearanceMessageAction | AppearanceSpeechAction | AppearanceReviewAction
-  | AppearanceConfirmationRequest | AppearanceContentAction
+  | AppearanceConfirmationRequest | AppearanceContentAction | AppearanceComposerAction
   | { type: 'confirmationPresentation'; custom: boolean };
 
 export type AppearanceToolCall = {
@@ -66,6 +72,8 @@ export type AppearanceShellState = {
   sending: boolean;
   canSend: boolean;
   attachmentCount: number;
+  composer: { busy: boolean; error: string | null; items: { id: string; kind: 'image' | 'document'; name: string; mimeType: string; sizeBytes: number }[];
+    limits: { maxImageCount: number; maxImageBytes: number; maxDocumentBytes: number; imageFormats: string[]; documentExtensions: string[] } };
   query: string;
   loading: boolean;
   locale: string;
@@ -105,6 +113,11 @@ export function parseAppearanceShellAction(value: unknown): AppearanceShellActio
   if (input.type === 'search' && typeof input.query === 'string' && input.query.length <= 200)
     return { type: 'search', query: input.query };
   if (Number.isSafeInteger(input.chatId) && Number(input.chatId) > 0) {
+    if (input.type === 'composerAction' && ['choose', 'remove', 'clear'].includes(String(input.action))) {
+      if (input.action === 'remove' && (typeof input.id !== 'string' || !/^[a-zA-Z0-9-]{1,100}$/.test(input.id))) return null;
+      return { type: 'composerAction', chatId: Number(input.chatId), action: input.action as 'choose' | 'remove' | 'clear',
+        ...(input.action === 'remove' ? { id: input.id as string } : {}) };
+    }
     if (input.type === 'contentAction' && Number.isSafeInteger(input.messageId) && Number(input.messageId) !== 0
         && Number.isSafeInteger(input.variantIndex) && Number(input.variantIndex) >= 0) {
       const base = { type: 'contentAction' as const, chatId: Number(input.chatId), messageId: Number(input.messageId), variantIndex: Number(input.variantIndex) };
@@ -135,7 +148,6 @@ export function parseAppearanceShellAction(value: unknown): AppearanceShellActio
     if (
       input.type === 'sendMessage' &&
       typeof input.text === 'string' &&
-      input.text.trim() &&
       input.text.length <= 100_000
     )
       return { type: 'sendMessage', chatId: Number(input.chatId), text: input.text };
@@ -156,6 +168,9 @@ export function parseAppearanceShellAction(value: unknown): AppearanceShellActio
 
 export function canRunAppearanceAction(state: AppearanceShellState, action: AppearanceShellAction): boolean {
   if ('chatId' in action && action.chatId !== state.activeChatId) return false;
+  if (action.type === 'sendMessage') return state.canSend && Boolean(action.text.trim() || state.attachmentCount);
+  if (action.type === 'composerAction') return !state.sending && !state.composer?.busy
+    && (action.action === 'choose' ? state.canSend : action.action === 'clear' ? Boolean(state.composer?.items.length) : Boolean(state.composer?.items.some(item => item.id === action.id)));
   if (action.type === 'contentAction') {
     const message = state.messages.find(message => message.id === action.messageId);
     return Boolean(message && message.variantIndex === action.variantIndex
@@ -177,4 +192,21 @@ export function canRunAppearanceAction(state: AppearanceShellState, action: Appe
   if (action.type === 'speechAction') return state.speech?.messageId != null
     && (action.action === 'stop' || (action.action === 'resume' ? state.speech.status === 'paused' : state.speech.status !== 'paused'));
   return true;
+}
+
+export function parseAppearanceDocumentRequest(value: unknown): AppearanceDocumentRequest | null {
+  if (!value || typeof value !== 'object') return null;
+  const input = value as AppearanceDocumentRequest;
+  if (typeof input.requestId !== 'string' || !/^[a-zA-Z0-9-]{1,100}$/.test(input.requestId) || !['readAttachment', 'renderAttachmentPage'].includes(input.method)
+    || !Number.isSafeInteger(input.chatId) || input.chatId <= 0 || !Number.isSafeInteger(input.messageId) || input.messageId <= 0
+    || !Number.isSafeInteger(input.variantIndex) || input.variantIndex < 0 || !Number.isSafeInteger(input.index) || input.index < 0
+    || typeof input.url !== 'string' || !input.url || input.url.length > 8192) return null;
+  if (input.method === 'renderAttachmentPage' && (!Number.isSafeInteger(input.page) || input.page! < 1 || input.page! > 100000
+    || !Number.isSafeInteger(input.width) || input.width! < 128 || input.width! > 1600)) return null;
+  return { requestId: input.requestId, method: input.method, chatId: input.chatId, messageId: input.messageId, variantIndex: input.variantIndex,
+    index: input.index, url: input.url, ...(input.method === 'renderAttachmentPage' ? { page: input.page, width: input.width } : {}) };
+}
+export function canReadAppearanceDocument(state: AppearanceShellState, request: AppearanceDocumentRequest): boolean {
+  return state.activeChatId === request.chatId && Boolean(state.messages.find(message => message.id === request.messageId
+    && message.variantIndex === request.variantIndex)?.attachments?.[request.index]?.url === request.url);
 }

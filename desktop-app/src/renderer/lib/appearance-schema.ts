@@ -393,7 +393,19 @@ export default function MessageActions({message,state}){
     {actions.includes('activateVariant')&&<><button disabled={!message.variantIndex} onClick={()=>api.activateMessageVariant(id,message.variantIndex-1)} aria-label={state.labels.previousVariant}>Previous</button><span>{message.variantIndex+1}/{message.variantCount}</span><button disabled={message.variantIndex+1>=message.variantCount} onClick={()=>api.activateMessageVariant(id,message.variantIndex+1)} aria-label={state.labels.nextVariant}>Next</button></>}
   </footer>;
 }`,
-        'components/Composer.tsx': 'import React from "react";\nexport default function Composer({state}){const [text,setText]=React.useState("");return <form onSubmit={event=>{event.preventDefault();if(state.canSend&&text.trim()&&window.chatter.sendMessage(text))setText("");}}><textarea aria-label="Message" value={text} onChange={event=>setText(event.target.value)}/>{state.sending?<button type="button" onClick={()=>window.chatter.stopGeneration()}>Stop</button>:<button disabled={!state.canSend||!text.trim()}>Send</button>}</form>;}',
+        'components/Composer.tsx': String.raw`import React from "react";
+export default function Composer({state}){
+  const [text,setText]=React.useState("");const composer=state.composer??{items:[],busy:false,error:null};
+  return <section><ul>{composer.items.map(item=><li key={item.id}>
+    {item.kind==='image'&&<img src={window.chatter.pendingAttachmentSource(item.id)} alt={item.name} style={{maxWidth:80,maxHeight:60}}/>}
+    {item.name} · {item.sizeBytes} B <button type="button" disabled={composer.busy||state.sending} onClick={()=>window.chatter.removePendingAttachment(item.id)}>Remove</button>
+  </li>)}</ul>{composer.busy&&<p role="status">{state.labels.loading}</p>}{composer.error&&<p role="alert">{composer.error}</p>}
+  <form onSubmit={event=>{event.preventDefault();if(state.canSend&&(text.trim()||state.attachmentCount)&&window.chatter.sendMessage(text))setText("");}}>
+    <button type="button" disabled={!state.canSend||composer.busy} onClick={()=>window.chatter.chooseAttachments()}>Attach files</button>
+    <textarea aria-label="Message" value={text} onChange={event=>setText(event.target.value)}/>
+    {state.sending?<button type="button" onClick={()=>window.chatter.stopGeneration()}>Stop</button>:<button disabled={!state.canSend||(!text.trim()&&!state.attachmentCount)}>Send</button>}
+  </form></section>;
+}`,
         'styles.css': 'body{margin:0;font:15px/1.6 system-ui,sans-serif;background:#101722;color:#e4ebf3}main{max-width:900px;margin:auto;padding:24px}header,form{display:flex;gap:12px;align-items:center}button,input,textarea{padding:12px;border-radius:8px;border:1px solid #456;background:#182536;color:inherit}.chat{display:block;width:100%;margin-top:8px;text-align:left}article{padding:12px;margin:12px 0;background:#182536;border-radius:8px}textarea{flex:1;min-width:0}',
       } },
       editing: 'Themes live in a local directory on the user PC. get_theme_docs returns this guide and current state: directory, active theme, saved themes and drafts. Edit theme.json and component files under .drafts/<id> with ordinary desktop file tools. Relative imports and @/ project-root imports are supported; chatter.d.ts describes the bridge. The app discovers files automatically. suggest_appearance({id}) reads and validates this draft locally, then offers user preview/confirmation. checkOnly:true returns diagnostics. Never pass source code or increment revision. Only the user applies a draft; existing previews update when its files change.',
@@ -416,7 +428,8 @@ export default function MessageActions({message,state}){
       loadOlderMessages: 'window.chatter.loadOlderMessages() loads the preceding history page.',
       showHome: 'window.chatter.showHome() returns to this shell overview without leaving the appearance. Use state.view to render home vs conversation, including when the user returns from native chat actions. Opt in with subscribe(callback, {navigation:true}) to preserve local state during navigation. Earlier shells are reloaded to their initial overview on a host home action.',
       openConversation: 'window.chatter.openConversation() reveals the native conversation and its complete message actions.',
-      attachFiles: 'window.chatter.attachFiles() opens the native conversation and attachment picker.',
+      attachFiles: 'chooseAttachments() and its alias attachFiles() open only the system file chooser from a user event, prepare files with existing rules and keep the custom shell visible. state.composer exposes busy/error/items/limits; use stable item IDs with removePendingAttachment(id), clearPendingAttachments() and pendingAttachmentSource(id). Design your own upload panel/list/modal. sendMessage accepts empty text when attachments exist and uses the normal sending path; selecting files alone does not upload them.',
+      documents: 'readAttachment(messageId,index) asynchronously returns kind(pdf/docx/spreadsheet/text/unsupported), name/mimeType/sizeBytes, extracted text, sanitized DOCX html and PDF pageCount. renderAttachmentPage(messageId,index,page,width?) returns one-based PDF page pixels as {source,width,height,page,pageCount}; load pages on demand (width 128-1600, default 1000). Both functions only read current-message attachments, reuse native parsing and hide credentials. Catch promise errors and discard stale selections. Optional Attachments.onAttachmentClick receives {chatId,messageId,variantIndex,index,url,name,mimeType,sizeBytes} and replaces native opening. No viewer markup is prescribed.',
       newChat: 'window.chatter.newChat() creates and opens a real chat.',
       loadMore: 'window.chatter.loadMore(folderId) loads the next page through existing pagination. null selects chats outside folders.',
       search: 'window.chatter.search(query) uses the existing server search with a minimum of 3 characters. state.chats then contains search results.',

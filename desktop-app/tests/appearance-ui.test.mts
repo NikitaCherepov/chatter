@@ -17,6 +17,22 @@ const modulePath = (file: string) =>
 const pageSource = fs.readFileSync(new URL('../src/renderer/pages/ChatPage.tsx', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
 const previewSource = fs.readFileSync(new URL('../src/renderer/components/InteractivePreview.tsx', import.meta.url), 'utf8');
 const modalCheck = previewSource.slice(previewSource.indexOf('        const modal ='), previewSource.indexOf('        // Native WebContentsView'));
+const chooseAttachmentsSource = pageSource.slice(pageSource.indexOf('  const chooseComposerAttachments ='), pageSource.indexOf('  const handleDeleteAttachment ='));
+const { Document, Packer, Paragraph } = desktopRequire('docx');
+const docxFixture = (await Packer.toBuffer(new Document({ sections: [{ children: [new Paragraph('Document fixture text')] }] }))).toString('base64');
+function pdfFixture() {
+  const stream = 'BT /F1 12 Tf 10 50 Td (Document fixture) Tj ET';
+  const objects = ['<< /Type /Catalog /Pages 2 0 R >>', '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 100] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>',
+    '<< /Length ' + stream.length + ' >>\nstream\n' + stream + '\nendstream', '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>'];
+  let source = '%PDF-1.4\n'; const offsets = [0];
+  objects.forEach((object, index) => { offsets.push(Buffer.byteLength(source)); source += (index + 1) + ' 0 obj\n' + object + '\nendobj\n'; });
+  const xref = Buffer.byteLength(source);
+  source += 'xref\n0 6\n0000000000 65535 f \n' + offsets.slice(1).map(offset => String(offset).padStart(10, '0') + ' 00000 n \n').join('')
+    + 'trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n' + xref + '\n%%EOF';
+  return Buffer.from(source).toString('base64');
+}
+const pdfFixtureBase64 = pdfFixture();
 const shellOrder = pageSource.match(/\{layout\.chatSide === 'right'\s*\? \[toolsSidebar, conversation, roomSidebar, chatSidebar\]\s*:\s*\[chatSidebar, conversation, roomSidebar, toolsSidebar\]\}/)?.[0];
 assert.ok(shellOrder);
 const workspaceBar = pageSource.slice(pageSource.indexOf("        {(tabsEnabled || layout.tools === 'toolbar')"), pageSource.indexOf('        {layoutPreview && (', pageSource.indexOf('  const conversation = (')));
@@ -125,6 +141,8 @@ import {ChatMessagesScroll} from ${modulePath('components/ChatMessagesScroll.tsx
 import {VirtualMessage} from ${modulePath('components/VirtualMessage.tsx')};
 import {MarkdownRenderer} from ${modulePath('components/MarkdownRenderer.tsx')};
 import {ImageViewerModal} from ${modulePath('components/ImageViewerModal.tsx')};
+import {readAttachmentPreview,renderAttachmentPage,sanitizeDocxHtml} from ${modulePath('lib/attachment-preview.ts')};
+import {prepareAttachmentFiles,selectedFileMime,ALLOWED_DOC_EXTENSIONS,MAX_DOC_SIZE} from ${modulePath('lib/attachment-files.ts')};
 import {setThemePreference} from ${modulePath('lib/theme.ts')};
 import ru from ${modulePath('i18n/locales/ru/translation.json')};
 import chat from ${modulePath('pages/ChatPage.module.scss')};
@@ -347,6 +365,33 @@ function App(){
   <div className={chat.main} style={{width:'52%',height:'100%',display:'flex',flexDirection:'column'}}><Conversation/></div>
  </>}</TestAuth.Provider>;
 }
+window.testDocumentPreviews=async()=>{
+ const file={name:'test.pdf',filename:'test.pdf',url:'/api/v1/attachments/test.pdf',mime_type:'application/pdf',size_bytes:1,extracted_text:'Extracted PDF text'};
+ const pdfSource='data:application/pdf;base64,${pdfFixtureBase64}';
+ const pdf=await readAttachmentPreview(file,pdfSource),page=await renderAttachmentPage(file,pdfSource,1,400);
+ const badPage=await renderAttachmentPage(file,pdfSource,2,400).catch(error=>error.message);
+ const docx=await readAttachmentPreview({...file,name:'test.docx',filename:'test.docx',mime_type:'application/vnd.openxmlformats-officedocument.wordprocessingml.document',extracted_text:'Document fixture text'},'data:application/vnd.openxmlformats-officedocument.wordprocessingml.document;base64,${docxFixture}');
+ const table=await readAttachmentPreview({...file,name:'test.xlsx',mime_type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',extracted_text:'|A|B|\n|-|-|\n|1|2|'},'unused');
+ const json=await readAttachmentPreview({...file,name:'test.json',mime_type:'application/json',extracted_text:'{"a":1}'},'unused');
+ const sanitized=sanitizeDocxHtml('<p onclick="bad()">Safe</p><script>bad()</script><img src="https://evil.invalid/img" onerror="bad()">');
+ return {pdf,page:{...page,source:page.source.slice(0,30)},badPage,docx,table,json,sanitized};
+};
+window.testChooseComposer=async(options={})=>{
+ const images=[],documents=[],errors=[],busy=[];let reads=0,releases=0;
+ const composerContextRef={current:{chatId:1,sending:false,images,documents,maxImageCount:1,maxImageBytes:32*1024*1024}};
+ const composerMountedRef={current:true},composerBusyRef={current:false};
+ const useCallback=fn=>fn,setPreparingAttachments=value=>busy.push(value),setAttachmentError=value=>{if(value)errors.push(value);};
+ const t=(key,values)=>key+':'+JSON.stringify(values??{});
+ const handleAttachFromModal=items=>{images.push(...items.images);documents.push(...items.documents);};
+ const original={pick:window.electronAPI.pickAttachmentFiles,read:window.electronAPI.readPickedAttachment,release:window.electronAPI.releasePickedAttachments};
+ const canvas=document.createElement('canvas');canvas.width=1;canvas.height=1;canvas.getContext('2d').fillRect(0,0,1,1);const png=canvas.toDataURL('image/png').split(',')[1];
+ window.electronAPI.pickAttachmentFiles=async()=>({canceled:!!options.cancel,selectionId:options.cancel?undefined:'selected',files:[{index:0,name:'note.txt',size:5},{index:1,name:'photo.png',size:10},{index:2,name:'second.png',size:10}]});
+ window.electronAPI.readPickedAttachment=async(id,index)=>{reads++;if(options.changeChat)composerContextRef.current={...composerContextRef.current,chatId:2};const encoded=index===0?btoa('hello'):png;return Uint8Array.from(atob(encoded),char=>char.charCodeAt(0)).buffer;};
+ window.electronAPI.releasePickedAttachments=async()=>{releases++;};
+ ${chooseAttachmentsSource}
+ try{await chooseComposerAttachments();return {images:images.map(image=>({name:image.file.name,bytes:image.size_bytes})),documents:documents.map(file=>({name:file.filename,base64:file.base64})),reads,releases,errors,busy};}
+ finally{images.forEach(image=>URL.revokeObjectURL(image.preview));window.electronAPI.pickAttachmentFiles=original.pick;window.electronAPI.readPickedAttachment=original.read;window.electronAPI.releasePickedAttachments=original.release;}
+};
 window.clickText=text=>{const button=[...document.querySelectorAll('button')].find(el=>el.textContent.trim()===text&&!el.disabled&&!el.closest('details:not([open])')&&el.getBoundingClientRect().height>0);if(!button)throw new Error('Button missing: '+text);button.click();};
 window.inputText=(label,value)=>{
  const input=document.querySelector('input[aria-label="'+label+'"]')??[...document.querySelectorAll('label')].find(el=>el.textContent.trim()===label)?.querySelector('input');
@@ -395,6 +440,18 @@ app.whenReady().then(async()=>{
  assert.equal(await js('getComputedStyle(document.querySelector("#native-image-fixture [data-appearance-shell]")).visibility'),'visible');
  await js('window.hideNativeImageFixture()');
  console.log('PASS: native image viewer remains visible above the custom shell, close is clickable and hidden dialogs do not blank the shell');
+ const docs=await js('window.testDocumentPreviews()');
+ assert.equal(docs.pdf.kind,'pdf');assert.equal(docs.pdf.pageCount,1);assert.equal(docs.pdf.text,'Extracted PDF text');
+ assert.equal(docs.page.width,400);assert.equal(docs.page.height,200);assert.ok(docs.page.source.startsWith('data:image/png;base64,'));
+ assert.equal(docs.badPage,'attachment_page_unavailable');assert.equal(docs.docx.kind,'docx');assert.ok(docs.docx.html.includes('Document fixture text'));
+ assert.equal(docs.table.kind,'spreadsheet');assert.equal(docs.json.kind,'text');assert.ok(docs.json.text.includes('\n'));
+ assert.equal(/onclick|onerror|<script|https:\/\/evil/.test(docs.sanitized),false);
+ const picked=await js('window.testChooseComposer()');
+ assert.equal(picked.images.length,1);assert.equal(picked.documents[0].base64,'aGVsbG8=');assert.equal(picked.releases,1);assert.deepEqual(picked.busy,[true,false]);
+ assert.ok(picked.errors.some(message=>message.includes('imageLimit')));
+ const canceledFiles=await js('window.testChooseComposer({cancel:true})');assert.equal(canceledFiles.reads,0);assert.equal(canceledFiles.documents.length,0);
+ const changedFiles=await js('window.testChooseComposer({changeChat:true})');assert.equal(changedFiles.images.length,0);assert.equal(changedFiles.documents.length,0);assert.equal(changedFiles.releases,1);
+ console.log('PASS: real PDF page pixels, DOCX sanitization, text/spreadsheet data, selected-file preparation, native image limits, cancellation and chat-switch isolation');
  assert.ok(await js('window.migrationRequests.some(item=>item.userId===1&&item.path.endsWith("/legacy"))&&window.migrationRequests.some(item=>item.userId===1&&item.path==="/api/v1/user/appearance")'),'older-server migration fallback is supported');
  await until('document.querySelectorAll("[data-virtual-row-placeholder]").length>30');
  // The floating dock must reserve space without shrinking or recoloring the viewport.
@@ -913,6 +970,7 @@ app.whenReady().then(async()=>{
 `;
 try {
   await build({
+    base: './',
     configFile: false,
     root: desktopRoot,
     logLevel: 'error',

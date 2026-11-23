@@ -39,8 +39,13 @@ export function allowedAppearanceImage(url: string): boolean {
   return path.startsWith('/api/v1/images/') || path.startsWith('/api/v1/attachments/');
 }
 
-export function appearanceImageRequestAllowed(state: AppearanceShellState, request: Pick<AppearanceImageRequest, 'chatId' | 'messageId' | 'variantIndex' | 'url'>) {
-  if (state.activeChatId !== request.chatId || !allowedAppearanceImage(request.url)) return false;
+export function appearanceImageRequestAllowed(state: AppearanceShellState, request: Pick<AppearanceImageRequest, 'chatId' | 'messageId' | 'variantIndex' | 'url' | 'pendingId'>) {
+  if (state.activeChatId !== request.chatId) return false;
+  if (request.pendingId) return request.url === 'pending:' + request.pendingId
+    && Boolean(state.composer?.items.some(item => item.id === request.pendingId && item.kind === 'image'));
+  if (request.messageId < 0 && request.url.startsWith('blob:')) return Boolean(state.messages.find(message => message.id === request.messageId
+    && message.role === 'user' && message.variantIndex === request.variantIndex)?.images.some(image => image.url === request.url));
+  if (!allowedAppearanceImage(request.url)) return false;
   const message = state.messages.find(message => message.id === request.messageId && message.variantIndex === request.variantIndex);
   return Boolean(message && appearanceContentReferences(message).images.has(request.url));
 }

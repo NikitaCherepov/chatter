@@ -22,6 +22,12 @@ assert.ok([...refs.links].some((url: string) => url.startsWith('file:///')));
 assert.equal(JSON.stringify(message).includes('private preview'), false, 'extracted document text is retained in the host, not duplicated in the shell');
 assert.deepEqual(message.attachments[0], { url: raw.attachments[0].url, name: 'Report', filename: 'report.pdf', mimeType: 'application/pdf', sizeBytes: 1024 });
 const request = { chatId: 5, messageId: 10, variantIndex: 2, url: '/api/v1/images/ref.png' };
+const optimisticMessage = { ...message, id: -1, role: 'user', variantIndex: 0, images: [{ url: 'blob:owned-image' }] };
+const optimisticState = { ...state, messages: [optimisticMessage] };
+const optimisticRequest = { chatId: 5, messageId: -1, variantIndex: 0, url: 'blob:owned-image' };
+assert.equal(appearanceImageRequestAllowed(optimisticState, optimisticRequest), true);
+assert.equal(appearanceImageRequestAllowed(optimisticState, { ...optimisticRequest, url: 'blob:unrelated' }), false);
+assert.equal(appearanceImageRequestAllowed(state, { ...request, url: 'blob:owned-image' }), false);
 assert.equal(appearanceImageRequestAllowed(state, request), true);
 for (const change of [{ chatId: 6 }, { messageId: 11 }, { variantIndex: 1 }, { url: 'https://evil.example/code.png' },
   { url: 'https://evil.example/html.png' }, { url: '/api/v1/admin' }, { url: 'file:///C:/secret.png' }, { url: 'data:image/png;base64,AAAA' }])
@@ -60,15 +66,23 @@ const previewSource = fs.readFileSync(new URL('../src/renderer/components/Intera
 const imageSubscription = previewSource.slice(previewSource.indexOf('    const unsubscribeImages ='), previewSource.indexOf('    void api.interactiveCreate'));
 let imageRequestHandler: any;
 const resolvedRequests: any[] = [];
+const imageReplies: any[] = [];
+const appearanceRef = { current: { state } };
 vm.runInNewContext(ts.transpileModule(imageSubscription, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText, {
-  bridge: true, id: { current: 'preview' }, appearanceRef: { current: { state } }, appearanceImageRequestAllowed,
-  resolveImageUrl: (url: string, width?: number) => { resolvedRequests.push({ url, width }); return 'private-source'; },
-  api: { onAppearanceImageRequest: (handler: any) => { imageRequestHandler = handler; }, appearanceImageResult: () => Promise.resolve() },
+  bridge: true, id: { current: 'preview' }, appearanceRef, appearanceImageRequestAllowed,
+  resolveImageUrl: (url: string, width?: number) => { resolvedRequests.push({ url, width }); return url.startsWith('blob:') ? url : 'private-source'; },
+  fetch: async (url: string) => { assert.equal(url, 'blob:owned-image'); return { blob: async () => new Blob(['pixels']) }; },
+  fileToBase64: async () => 'data:image/png;base64,cGl4ZWxz',
+  api: { onAppearanceImageRequest: (handler: any) => { imageRequestHandler = handler; }, appearanceImageResult: (...args: any[]) => { imageReplies.push(args); return Promise.resolve(); }, onAppearanceDocumentRequest: () => () => {} },
 });
 imageRequestHandler({ ...request, id: 'preview', requestId: 'original', width: 0 });
 assert.deepEqual(resolvedRequests, [{ url: request.url, width: undefined }]);
 imageRequestHandler({ ...request, id: 'preview', requestId: 'thumbnail', width: 560 });
 assert.equal(resolvedRequests.at(-1).width, 560);
+appearanceRef.current.state = optimisticState as any;
+imageRequestHandler({ ...optimisticRequest, id: 'preview', requestId: 'optimistic', width: 560 });
+await new Promise(resolve => setImmediate(resolve));
+assert.equal(imageReplies.at(-1)[2], 'data:image/png;base64,cGl4ZWxz', 'host-owned optimistic blobs cross the isolated boundary as private image bytes');
 const beforeEscape = sent.length;
 windowEvents.get('keydown')({ key: 'Escape', defaultPrevented: true });
 await new Promise(resolve => setTimeout(resolve, 5));

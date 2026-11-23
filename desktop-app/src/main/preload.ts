@@ -2,10 +2,13 @@ import { contextBridge, ipcRenderer } from 'electron';
 import type { LocalMcpInstallPhase } from './local-mcp-spec';
 import type { TextMenuAction, TextMenuItem } from './text-context-menu';
 import type { InteractiveInput, InteractivePlacement, InteractiveStatus } from './interactive-types';
-import type { AppearanceShellEvent, AppearanceShellState, AppearanceImageRequest } from './appearance-shell-types';
+import type { AppearanceShellEvent, AppearanceShellState, AppearanceImageRequest, AppearanceDocumentRequest } from './appearance-shell-types';
 
 contextBridge.exposeInMainWorld('electronAPI', {
   writeClipboardText: (text: string) => ipcRenderer.invoke('clipboard:write-text', text),
+  pickAttachmentFiles: () => ipcRenderer.invoke('composer:pick-files'),
+  readPickedAttachment: (id: string, index: number) => ipcRenderer.invoke('composer:read-picked-file', id, index),
+  releasePickedAttachments: (id: string) => ipcRenderer.invoke('composer:release-picked-files', id),
   interactiveCreate: (input: InteractiveInput) => ipcRenderer.invoke('interactive-preview:create', input),
   localAppearance: (payload: unknown) => ipcRenderer.invoke('themes:manage', payload),
   onLocalAppearanceChanged: (callback: () => void) => {
@@ -19,6 +22,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('interactive-preview:appearance-state', id, state),
   appearanceImageResult: (id: string, requestId: string, url: string | null) =>
     ipcRenderer.invoke('interactive-preview:appearance-image', id, requestId, url),
+  appearanceDocumentResult: (id: string, requestId: string, result: unknown, error?: string) =>
+    ipcRenderer.invoke('interactive-preview:appearance-document', id, requestId, result, error),
+  onAppearanceDocumentRequest: (callback: (event: { id: string; request: AppearanceDocumentRequest }) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, event: { id: string; request: AppearanceDocumentRequest }) => callback(event);
+    ipcRenderer.on('interactive-preview:appearance-document', listener);
+    return () => ipcRenderer.removeListener('interactive-preview:appearance-document', listener);
+  },
   onAppearanceImageRequest: (callback: (request: AppearanceImageRequest) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, request: AppearanceImageRequest) => callback(request);
     ipcRenderer.on('interactive-preview:appearance-image', listener);

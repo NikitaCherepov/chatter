@@ -3,16 +3,19 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import type { InteractiveLanguage, InteractiveStatus } from '../../main/interactive-types';
 import type { AppearanceProject } from '../lib/appearance-project';
-import type { AppearanceShellAction, AppearanceShellState } from '../../main/appearance-shell-types';
+import { canReadAppearanceDocument, type AppearanceShellAction, type AppearanceShellState, type AppearanceDocumentRequest } from '../../main/appearance-shell-types';
 import s from './InteractivePreview.module.scss';
 import { appearanceImageRequestAllowed } from '../lib/appearance-media';
 import { resolveImageUrl } from '../lib/api';
+import { fileToBase64 } from '../lib/attachment-files';
 
 type AppearanceBridge = {
   state: AppearanceShellState;
   onAction: (action: AppearanceShellAction) => void;
   onClose: () => void;
   onFailure: () => void;
+  onReadDocument?: (request: AppearanceDocumentRequest) => Promise<unknown>;
+  resolvePendingImage?: (id: string) => string | null;
 };
 
 export function InteractivePreview({ source, language, visible, appearance, project }: {
@@ -85,9 +88,31 @@ export function InteractivePreview({ source, language, visible, appearance, proj
     }) : () => {};
     const unsubscribeImages = bridge ? api.onAppearanceImageRequest(request => {
       if (request.id !== id.current) return;
-      const state = appearanceRef.current?.state;
-      const url = state && appearanceImageRequestAllowed(state, request) ? resolveImageUrl(request.url, request.width || undefined) : null;
-      void api.appearanceImageResult(request.id, request.requestId, url).catch(() => {});
+      void (async () => {
+        let url: string | null = null;
+        try {
+          const state = appearanceRef.current?.state;
+          url = state && appearanceImageRequestAllowed(state, request)
+            ? request.pendingId ? appearanceRef.current?.resolvePendingImage?.(request.pendingId) ?? null : resolveImageUrl(request.url, request.width || undefined) : null;
+          if (url?.startsWith('blob:')) {
+            const blob = await (await fetch(url)).blob();
+            url = blob.size <= 16 * 1024 * 1024 ? await fileToBase64(blob) : null;
+          }
+        } catch { url = null; }
+        await api.appearanceImageResult(request.id, request.requestId, url).catch(() => {});
+      })();
+    }) : () => {};
+    const unsubscribeDocuments = bridge ? api.onAppearanceDocumentRequest(event => {
+      if (event.id !== id.current) return;
+      void (async () => {
+        let result: unknown, error: string | undefined;
+        try {
+          const shell = appearanceRef.current;
+          if (!shell?.onReadDocument || !canReadAppearanceDocument(shell.state, event.request)) throw new Error('attachment_scope_changed');
+          result = await shell.onReadDocument(event.request);
+        } catch (reason: any) { error = reason?.message?.startsWith('attachment_') ? reason.message : 'attachment_preview_failed'; }
+        await api.appearanceDocumentResult(event.id, event.request.requestId, result, error).catch(() => {});
+      })();
     }) : () => {};
     void api.interactiveCreate({ source, language, project, dark: document.documentElement.dataset.theme === 'dark', errorLabel, bridge })
       .then(created => {
@@ -102,7 +127,7 @@ export function InteractivePreview({ source, language, visible, appearance, proj
         if (!disposed) { setPhase('failed'); appearanceRef.current?.onFailure(); }
       });
     return () => {
-      disposed = true; unsubscribe(); unsubscribeActions(); unsubscribeImages();
+      disposed = true; unsubscribe(); unsubscribeActions(); unsubscribeImages(); unsubscribeDocuments();
       if (id.current) { void api.interactiveStop(id.current).catch(() => {}); id.current = null; }
     };
   }, [available, seen, stopped, source, project, language, errorLabel, run, bridge]);

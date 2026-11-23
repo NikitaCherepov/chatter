@@ -6,7 +6,7 @@ import { CHAT_LAYOUT_SIDEBAR_WIDTH, DEFAULT_CHAT_LAYOUT, parseChatLayoutProfile,
 import { ChatComposerDock } from '../components/ChatComposerDock';
 import { AppearanceConfirmation, type AppearanceProposal } from '../components/AppearanceConfirmation';
 import { AppearanceShell, useCurrentAppearance, useAppearanceShellTheme } from '../components/AppearanceShell';
-import { canRunAppearanceAction, type AppearanceShellAction, type AppearanceShellState } from '../../main/appearance-shell-types';
+import { canRunAppearanceAction, canReadAppearanceDocument, type AppearanceDocumentRequest, type AppearanceShellAction, type AppearanceShellState } from '../../main/appearance-shell-types';
 import { appearanceMessageActions, canEditChatMessage } from '../lib/appearance-message-actions';
 import { parseAppearanceProfile, type AppearanceProfile } from '../lib/appearance-schema';
 import { APPEARANCE_APPLIED_EVENT } from '../lib/appearance-runtime';
@@ -53,6 +53,8 @@ import { QuestionnaireResult, type QuestionnaireContextValue } from '../componen
 import { questionnaireAnswerText, type QuestionnaireSubmission } from '../lib/message-questionnaires';
 import { EmailBodyPreview } from '../components/EmailBodyPreview';
 import { AttachModal, prepareAttachmentFiles } from '../components/AttachModal';
+import { isPdfAttachment, isDocxAttachment, isSpreadsheetAttachment, formatTextAttachment, loadAttachmentBytes, sanitizeDocxHtml, readAttachmentPreview, renderAttachmentPage } from '../lib/attachment-preview';
+import { selectedFileMime, ALLOWED_IMAGE_FORMATS, ALLOWED_DOC_EXTENSIONS, MAX_DOC_SIZE } from '../lib/attachment-files';
 import { RoomInvitesModal } from '../components/RoomInvitesModal';
 import {McpConfirmationCard,type McpConfirmation} from '../components/McpConfirmationCard';
 import { RejectWithComment } from '../components/RejectWithComment';
@@ -361,101 +363,6 @@ const cleanNotificationText = (value: string, maxLength = 240) => {
     .trim();
   if (clean.length <= maxLength) return clean;
   return `${clean.slice(0, maxLength - 1).trimEnd()}…`;
-};
-
-const isPdfAttachment = (attachment: api.MessageAttachment) =>
-  attachment.mime_type === 'application/pdf'
-  || attachment.name.toLowerCase().endsWith('.pdf');
-
-const isDocxAttachment = (attachment: api.MessageAttachment) =>
-  attachment.mime_type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-  || attachment.name.toLowerCase().endsWith('.docx');
-
-const isSpreadsheetAttachment = (attachment: api.MessageAttachment) =>
-  attachment.mime_type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-  || attachment.name.toLowerCase().endsWith('.xlsx');
-
-const formatTextAttachment = (attachment: api.MessageAttachment): string => {
-  const isJson = attachment.mime_type === 'application/json'
-    || attachment.name.toLowerCase().endsWith('.json');
-  if (!isJson) return attachment.extracted_text;
-
-  try {
-    return JSON.stringify(JSON.parse(attachment.extracted_text), null, 2);
-  } catch {
-    return attachment.extracted_text;
-  }
-};
-
-const ATTACHMENT_PREVIEW_CACHE_MAX_BYTES = 64 * 1024 * 1024;
-const attachmentPreviewCache = new Map<string, Uint8Array>();
-let attachmentPreviewCacheBytes = 0;
-
-const loadAttachmentBytes = async (src: string, cacheKey: string): Promise<Uint8Array> => {
-  const cached = attachmentPreviewCache.get(cacheKey);
-  if (cached) {
-    attachmentPreviewCache.delete(cacheKey);
-    attachmentPreviewCache.set(cacheKey, cached);
-    return cached;
-  }
-
-  const response = await fetch(src);
-  if (!response.ok) throw new Error(`Attachment request failed with status ${response.status}`);
-  const bytes = new Uint8Array(await response.arrayBuffer());
-
-  if (bytes.byteLength <= ATTACHMENT_PREVIEW_CACHE_MAX_BYTES) {
-    while (
-      attachmentPreviewCacheBytes + bytes.byteLength > ATTACHMENT_PREVIEW_CACHE_MAX_BYTES
-      && attachmentPreviewCache.size > 0
-    ) {
-      const oldestKey = attachmentPreviewCache.keys().next().value as string | undefined;
-      if (!oldestKey) break;
-      const oldest = attachmentPreviewCache.get(oldestKey);
-      attachmentPreviewCache.delete(oldestKey);
-      attachmentPreviewCacheBytes -= oldest?.byteLength || 0;
-    }
-    attachmentPreviewCache.set(cacheKey, bytes);
-    attachmentPreviewCacheBytes += bytes.byteLength;
-  }
-
-  return bytes;
-};
-
-const DOCX_ALLOWED_TAGS = new Set([
-  'p', 'br', 'strong', 'b', 'em', 'i', 'u', 's',
-  'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
-  'ul', 'ol', 'li', 'table', 'thead', 'tbody', 'tfoot', 'tr', 'td', 'th',
-  'blockquote', 'pre', 'code', 'img',
-]);
-
-const sanitizeDocxHtml = (rawHtml: string) => {
-  const document = new DOMParser().parseFromString(rawHtml, 'text/html');
-  const elements = Array.from(document.body.querySelectorAll('*'));
-
-  for (const element of elements) {
-    const tagName = element.tagName.toLowerCase();
-    if (!DOCX_ALLOWED_TAGS.has(tagName)) {
-      element.replaceWith(...Array.from(element.childNodes));
-      continue;
-    }
-
-    const imageSource = tagName === 'img' ? element.getAttribute('src') : null;
-    const imageAlt = tagName === 'img' ? element.getAttribute('alt') : null;
-    for (const attribute of Array.from(element.attributes)) {
-      element.removeAttribute(attribute.name);
-    }
-
-    if (tagName === 'img') {
-      if (!imageSource?.startsWith('data:image/')) {
-        element.remove();
-      } else {
-        element.setAttribute('src', imageSource);
-        if (imageAlt) element.setAttribute('alt', imageAlt);
-      }
-    }
-  }
-
-  return document.body.innerHTML;
 };
 
 type PdfAttachmentPreviewProps = {
@@ -1533,6 +1440,16 @@ export function ChatPage() {
   const [showAttachModal, setShowAttachModal] = useState(false);
   const [attachedImages, setAttachedImages] = useState<ImageItem[]>([]);
   const [attachedDocuments, setAttachedDocuments] = useState<DocumentItem[]>([]);
+  const [preparingAttachments, setPreparingAttachments] = useState(false);
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
+  const composerBusyRef = useRef(false);
+  const composerMountedRef = useRef(true);
+  const pendingAttachmentIds = useRef(new WeakMap<object, string>());
+  const pendingAttachmentId = useCallback((item: object) => {
+    let id = pendingAttachmentIds.current.get(item);
+    if (!id) { id = crypto.randomUUID(); pendingAttachmentIds.current.set(item, id); }
+    return id;
+  }, []);
   const [draggingFiles, setDraggingFiles] = useState(false);
   const [contextMenuChatId, setContextMenuChatId] = useState<number | null>(null);
   const [isRecording, setIsRecording] = useState(false);
@@ -1943,6 +1860,9 @@ export function ChatPage() {
     () => attachedImages.reduce((total, image) => total + image.size_bytes, 0),
     [attachedImages],
   );
+  const composerContextRef = useRef<{ chatId: number | null; sending: boolean; images: ImageItem[]; documents: DocumentItem[]; maxImageCount: number; maxImageBytes: number } | null>(null);
+  composerContextRef.current = { chatId: activeChatId, sending, images: attachedImages, documents: attachedDocuments, maxImageCount, maxImageBytes };
+  useEffect(() => { composerMountedRef.current = true; return () => { composerMountedRef.current = false; }; }, []);
 
   const updateSectionPaging = useCallback((next: Record<ChatSectionKey, ChatSectionPaging>) => {
     sectionPagingRef.current = next;
@@ -3554,7 +3474,7 @@ export function ChatPage() {
     const text = (textOverride ?? input).trim();
     const hasImages = attachedImages.length > 0;
     const hasDocuments = attachedDocuments.length > 0;
-    if ((!text && !hasImages && !hasDocuments) || sending) return;
+    if ((!text && !hasImages && !hasDocuments) || sending || composerBusyRef.current) return;
 
     const isVoice = isVoiceInputRef.current;
     isVoiceInputRef.current = false;
@@ -3851,6 +3771,45 @@ export function ChatPage() {
     }
     setShowAttachModal(false);
   }, [maxImageBytes, maxImageCount]);
+
+  const chooseComposerAttachments = useCallback(async () => {
+    const origin = composerContextRef.current;
+    if (!origin?.chatId || origin.sending || composerBusyRef.current || !composerMountedRef.current) return;
+    composerBusyRef.current = true; setPreparingAttachments(true); setAttachmentError(null);
+    let selectionId: string | undefined;
+    const images: ImageItem[] = [], documents: DocumentItem[] = [];
+    let committed = false;
+    try {
+      const selection = await window.electronAPI.pickAttachmentFiles(); selectionId = selection.selectionId;
+      if (selection.canceled || !selectionId) return;
+      for (const selected of selection.files) {
+        const context = composerContextRef.current;
+        if (!context || context.chatId !== origin.chatId || context.sending || !composerMountedRef.current) break;
+        try {
+          if (selected.size > MAX_DOC_SIZE && ALLOWED_DOC_EXTENSIONS.includes(selected.name.split('.').pop()?.toLowerCase() ?? '')) {
+            setAttachmentError(t('attach.error.documentTooLarge', { name: selected.name })); continue;
+          }
+          const bytes = await window.electronAPI.readPickedAttachment(selectionId, selected.index);
+          if (composerContextRef.current?.chatId !== origin.chatId || !composerMountedRef.current) break;
+          const file = new File([bytes], selected.name, { type: selectedFileMime(selected.name) });
+          const prepared = await prepareAttachmentFiles([file], {
+            currentImageCount: context.images.length + images.length, maxImageCount: context.maxImageCount,
+            currentImageBytes: context.images.reduce((sum, image) => sum + image.size_bytes, 0) + images.reduce((sum, image) => sum + image.size_bytes, 0),
+            maxTotalImageBytes: context.maxImageBytes,
+          });
+          images.push(...prepared.images); documents.push(...prepared.documents);
+          if (prepared.error) setAttachmentError(t(prepared.error.key, prepared.error.values));
+        } catch { setAttachmentError(t('attach.error.read', { name: selected.name })); }
+      }
+      const latest = composerContextRef.current;
+      if (latest?.chatId === origin.chatId && !latest.sending && composerMountedRef.current) { handleAttachFromModal({ images, documents }); committed = true; }
+    } catch { setAttachmentError(t('attach.error.read', { name: '' })); }
+    finally {
+      if (!committed) for (const image of images) URL.revokeObjectURL(image.preview);
+      if (selectionId) await window.electronAPI.releasePickedAttachments(selectionId).catch(() => {});
+      composerBusyRef.current = false; if (composerMountedRef.current) setPreparingAttachments(false);
+    }
+  }, [handleAttachFromModal, t]);
 
   const handleDeleteAttachment = useCallback(async (messageId: number, filename: string) => {
     if (!activeChatId) return;
@@ -8530,9 +8489,14 @@ export function ChatPage() {
       messagesLoading: loadingMessages || messagesChatIdRef.current !== activeChatId,
       hasOlderMessages: hasMoreMessages, olderMessagesLoading: loadingOlderMessages,
       sending,
-      canSend: !!activeChatId && messagesChatIdRef.current === activeChatId && !sending
+      canSend: !!activeChatId && messagesChatIdRef.current === activeChatId && !sending && !preparingAttachments
         && !loadingMessages && !confirmationComposer.comment,
       attachmentCount: attachedImages.length + attachedDocuments.length,
+      composer: { busy: preparingAttachments, error: attachmentError,
+        items: [...attachedImages.map(image => ({ id: pendingAttachmentId(image), kind: 'image' as const, name: image.file.name,
+          mimeType: image.mime_type, sizeBytes: image.size_bytes })), ...attachedDocuments.map(file => ({ id: pendingAttachmentId(file), kind: 'document' as const,
+          name: file.filename, mimeType: file.file.type, sizeBytes: file.size_bytes }))],
+        limits: { maxImageCount, maxImageBytes, maxDocumentBytes: MAX_DOC_SIZE, imageFormats: ALLOWED_IMAGE_FORMATS, documentExtensions: ALLOWED_DOC_EXTENSIONS } },
       loading: searchQuery.trim().length >= 3 ? searchLoading : loadingChats,
       locale, dark: appearanceTheme === 'dark',
       palette: {
@@ -8558,10 +8522,21 @@ export function ChatPage() {
   }, [chats, chatFolders, sectionPaging, activeChatId, searchQuery, searchResults,
     searchLoading, loadingChats, locale, appearanceProfile, appearanceTheme, shellView, t,
     appearanceShell?.scope === 'workspace' ? messages : null, loadingMessages, hasMoreMessages, loadingOlderMessages, sending,
-    attachedImages.length, attachedDocuments.length, confirmationComposer.comment, ttsPlayback, shellConfirmations,
+    attachedImages, attachedDocuments, preparingAttachments, attachmentError, maxImageCount, maxImageBytes, pendingAttachmentId, confirmationComposer.comment, ttsPlayback, shellConfirmations,
     user?.id, user?.telegram_linked, roomCharacters, otherRoomHumans.length, forking, switchingVariantId, streamingMsgId]);
   const handleShellAction = (action: AppearanceShellAction) => {
-    if (action.type === 'contentAction') {
+    if (action.type === 'composerAction') {
+      if (appearanceShell?.scope !== 'workspace' || action.chatId !== activeChatIdRef.current
+          || composerBusyRef.current || !canRunAppearanceAction(shellState, action)) return;
+      if (action.action === 'choose') { void chooseComposerAttachments(); return; }
+      setAttachedImages(images => images.filter(image => {
+        const remove = action.action === 'clear' || pendingAttachmentId(image) === action.id;
+        if (remove) URL.revokeObjectURL(image.preview);
+        return !remove;
+      }));
+      setAttachedDocuments(files => action.action === 'clear' ? [] : files.filter(file => pendingAttachmentId(file) !== action.id));
+      setAttachmentError(null);
+    } else if (action.type === 'contentAction') {
       if (appearanceShell?.scope !== 'workspace' || action.chatId !== activeChatIdRef.current
           || messagesChatIdRef.current !== action.chatId || !canRunAppearanceAction(shellState, action)) return;
       const original = messagesRef.current.find(message => message.id === action.messageId && (message.variant_index ?? 0) === action.variantIndex);
@@ -8658,7 +8633,7 @@ export function ChatPage() {
     } else if (action.type === 'loadOlderMessages') {
       if (action.chatId === activeChatIdRef.current) void loadOlderMessages();
     } else if (action.type === 'openConversation') setShellOpen(false);
-    else if (action.type === 'attachFiles') { setShellOpen(false); setShowAttachModal(true); }
+    else if (action.type === 'attachFiles') { void chooseComposerAttachments(); }
     else if (action.type === 'newChat') void handleCreateChat();
     else if (action.type === 'loadMore') void loadChatSection(action.folderId);
     else if (action.type === 'search') handleSearchChange(action.query);
@@ -8668,6 +8643,20 @@ export function ChatPage() {
       setSidebarCollapsed(false);
       if (tabsEnabled) setLibraryOpen(true);
     }
+  };
+  const readShellDocument = async (request: AppearanceDocumentRequest) => {
+    if (messagesChatIdRef.current !== request.chatId || activeChatIdRef.current !== request.chatId || !canReadAppearanceDocument(shellState, request))
+      throw new Error('attachment_scope_changed');
+    const message = messagesRef.current.find(message => message.id === request.messageId && (message.variant_index ?? 0) === request.variantIndex);
+    const file = message?.attachments?.[request.index];
+    if (!file || file.url !== request.url) throw new Error('attachment_scope_changed');
+    if (!allowedAppearanceImage(file.url)) throw new Error('attachment_source_unavailable');
+    const source = resolveImageUrl(file.url);
+    return request.method === 'renderAttachmentPage' ? renderAttachmentPage(file, source, request.page!, request.width!) : readAttachmentPreview(file, source);
+  };
+  const resolvePendingImage = (id: string) => {
+    const image = composerContextRef.current?.images.find(image => pendingAttachmentId(image) === id);
+    return image ? `data:${image.mime_type};base64,${image.base64}` : null;
   };
   const shellVisible = Boolean(appearanceShell && shellOpen && !showSettings && !libraryOpen
     && !showAttachModal && !nativeConfirmationRequired && (shellHandlesConfirmations || !confirmationCards.some(card =>
@@ -8681,6 +8670,7 @@ export function ChatPage() {
       {appearanceShell && (
         <AppearanceShell key={`${api.API_BASE}:${user?.id}`} shell={appearanceShell} state={shellState}
           visible={shellVisible} onAction={handleShellAction} onClose={() => setShellOpen(false)}
+          onReadDocument={readShellDocument} resolvePendingImage={resolvePendingImage}
           onFailure={() => {
             setShellOpen(false);
             toast.error(t('appearance.shellFailed'));

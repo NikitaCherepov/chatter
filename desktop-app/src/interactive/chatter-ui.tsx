@@ -11,6 +11,7 @@ document.head.append(style);
 const api = () => (window as any).chatter;
 type Message = AppearanceShellState['messages'][number];
 export type ImageTarget = { chatId: number; messageId: number; variantIndex: number; url: string; source: string; alt: string };
+export type AttachmentTarget = { chatId: number; messageId: number; variantIndex: number; index: number; url: string; name: string; mimeType: string; sizeBytes: number };
 let snapshot: AppearanceShellState | undefined, unsubscribe: (() => void) | undefined;
 const listeners = new Set<() => void>();
 function subscribe(listener: () => void) {
@@ -85,10 +86,14 @@ export function MessageImages({ message, className = '', onImageClick }: { messa
     </figure>)}</div>;
 }
 
-export function Attachments({ message, className = '' }: { message: Message; className?: string }) {
+export function Attachments({ message, className = '', onAttachmentClick }: { message: Message; className?: string; onAttachmentClick?: (file: AttachmentTarget) => void }) {
   const state = useChatterState();
   return <div className={'chatter-attachments ' + className}>{(message.attachments ?? []).map((file, index) =>
-    <div className="chatter-attachment" key={file.url + index}><button type="button" onClick={() => api()?.openAttachment(message.id, index)}>
+    <div className="chatter-attachment" key={file.url + index}><button type="button" onClick={() => {
+      if (onAttachmentClick && state?.activeChatId != null) onAttachmentClick({ chatId: state.activeChatId,
+        messageId: message.id, variantIndex: message.variantIndex, index, ...file });
+      else api()?.openAttachment(message.id, index);
+    }}>
       <span>{file.name}</span><small>{file.mimeType} · {file.sizeBytes.toLocaleString()} B</small></button>
       <button type="button" onClick={() => api()?.downloadAttachment(message.id, index)}>{state?.labels.download || 'Download'}</button>
     </div>)}</div>;

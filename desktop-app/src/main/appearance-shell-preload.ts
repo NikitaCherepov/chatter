@@ -1,13 +1,27 @@
 /// <reference lib="dom" />
 import { contextBridge, ipcRenderer } from 'electron';
-import type { AppearanceShellState } from './appearance-shell-types';
+import type { AppearanceShellState, AppearanceDocumentRequest } from './appearance-shell-types';
 
 // This preload exposes only the appearance navigator contract in its isolated renderer.
 let state: AppearanceShellState | undefined;
 const listeners = new Set<(state: AppearanceShellState) => void>();
 let confirmationSubscribers = 0;
+let documentSequence = 0;
+const documentRequests = new Map<string, { request: AppearanceDocumentRequest; resolve: (value: unknown) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }>();
+ipcRenderer.on('appearance-shell:result', (_event, reply: { requestId: string; result?: unknown; error?: string }) => {
+  const pending = documentRequests.get(reply.requestId); if (!pending) return;
+  clearTimeout(pending.timer); documentRequests.delete(reply.requestId);
+  if (reply.error) pending.reject(new Error(reply.error)); else pending.resolve(reply.result);
+});
 ipcRenderer.on('appearance-shell:state', (_event, next: AppearanceShellState) => {
   state = next;
+  for (const [id, pending] of documentRequests) {
+    const request = pending.request;
+    const file = next.messages.find(message => message.id === request.messageId && message.variantIndex === request.variantIndex)?.attachments?.[request.index];
+    if (next.activeChatId !== request.chatId || file?.url !== request.url) {
+      clearTimeout(pending.timer); documentRequests.delete(id); pending.reject(new Error('attachment_scope_changed'));
+    }
+  }
   for (const listener of listeners) {
     try {
       listener(next);
@@ -45,10 +59,40 @@ const imageSource = (messageId: number, source: string, width: number) => {
     url: source, width: String(width) }).toString();
   return url.href;
 };
+const composerAction = (action: 'choose' | 'remove' | 'clear', id?: string) => {
+  if (!navigator.userActivation.isActive || !state?.activeChatId || state.sending || state.composer?.busy) return false;
+  if (action === 'choose' ? !state.canSend : action === 'clear' ? !state.composer?.items.length : !state.composer?.items.some(item => item.id === id)) return false;
+  send({ type: 'composerAction', chatId: state.activeChatId, action, ...(id ? { id } : {}) }); return true;
+};
+const documentRequest = (method: AppearanceDocumentRequest['method'], messageId: number, index: number, page?: number, width?: number) => {
+  const message = state?.messages.find(message => message.id === messageId), file = message?.attachments?.[index];
+  if (!state?.activeChatId || !message || !file?.url || messageId <= 0 || !Number.isSafeInteger(index) || index < 0 || documentRequests.size >= 4)
+    return Promise.reject(new Error('attachment_request_unavailable'));
+  const request: AppearanceDocumentRequest = { requestId: String(++documentSequence), method, chatId: state.activeChatId,
+    messageId, variantIndex: message.variantIndex, index, url: file.url, ...(method === 'renderAttachmentPage' ? { page, width } : {}) };
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => { documentRequests.delete(request.requestId); reject(new Error('attachment_request_timeout')); }, 30000);
+    documentRequests.set(request.requestId, { request, resolve, reject, timer }); ipcRenderer.send('appearance-shell:request', request);
+  });
+};
 contextBridge.exposeInMainWorld('chatter', {
   imageSource: (messageId: number, source: string, width = 560) =>
     imageSource(messageId, source, Math.max(64, Math.min(1600, Math.round(Number(width) || 560)))),
   fullImageSource: (messageId: number, source: string) => imageSource(messageId, source, 0),
+  readAttachment: (id: number, index: number) => documentRequest('readAttachment', id, index),
+  renderAttachmentPage: (id: number, index: number, page: number, width = 1000) => {
+    if (!Number.isSafeInteger(page) || page < 1 || page > 100000) return Promise.reject(new Error('attachment_page_unavailable'));
+    return documentRequest('renderAttachmentPage', id, index, page, Math.max(128, Math.min(1600, Math.round(Number(width) || 1000))));
+  },
+  chooseAttachments: () => composerAction('choose'),
+  removePendingAttachment: (id: string) => composerAction('remove', id),
+  clearPendingAttachments: () => composerAction('clear'),
+  pendingAttachmentSource: (id: string) => {
+    if (!state?.activeChatId || !state.composer?.items.some(item => item.id === id && item.kind === 'image')) return '';
+    const url = new URL('/_image', location.href);
+    url.search = new URLSearchParams({ chatId: String(state.activeChatId), messageId: '0', variantIndex: '0', pendingId: id, url: 'pending:' + id, width: '560' }).toString();
+    return url.href;
+  },
   openImage: (id: number, url: string) => contentAction(id, 'openImage', { url }),
   downloadImage: (id: number, url: string) => contentAction(id, 'downloadImage', { url }),
   openAttachment: (id: number, index: number) => contentAction(id, 'openAttachment', { index }),
@@ -71,7 +115,7 @@ contextBridge.exposeInMainWorld('chatter', {
   openChat: (id: number) => send({ type: 'openChat', id }),
   newChat: () => send({ type: 'newChat' }),
   sendMessage: (text: string) => {
-    if (!navigator.userActivation.isActive || !state?.canSend) return false;
+    if (!navigator.userActivation.isActive || !state?.canSend || typeof text !== 'string' || text.length > 100000 || !text.trim() && !state.attachmentCount) return false;
     send({ type: 'sendMessage', chatId: state.activeChatId, text });
     return true;
   },
@@ -79,7 +123,7 @@ contextBridge.exposeInMainWorld('chatter', {
   loadOlderMessages: () => send({ type: 'loadOlderMessages', chatId: state?.activeChatId }),
   openConversation: () => send({ type: 'openConversation' }),
   showHome: () => send({ type: 'home' }),
-  attachFiles: () => send({ type: 'attachFiles' }),
+  attachFiles: () => composerAction('choose'),
   openLibrary: () => send({ type: 'openLibrary' }),
   openSettings: () => send({ type: 'openSettings' }),
   loadMore: (folderId: number | null) => send({ type: 'loadMore', folderId }),

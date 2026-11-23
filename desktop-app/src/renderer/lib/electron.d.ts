@@ -7,6 +7,9 @@ declare global {
   interface Window {
     electronAPI: {
       writeClipboardText: (text: string) => Promise<void>;
+      pickAttachmentFiles: () => Promise<{ canceled: boolean; selectionId?: string; files: { index: number; name: string; size: number }[] }>;
+      readPickedAttachment: (id: string, index: number) => Promise<ArrayBuffer>;
+      releasePickedAttachments: (id: string) => Promise<void>;
       interactiveCreate: (input: InteractiveInput) => Promise<string>;
       localAppearance: (payload: unknown) => Promise<any>;
       onLocalAppearanceChanged: (callback: () => void) => () => void;
@@ -14,6 +17,8 @@ declare global {
       interactiveStop: (id: string) => Promise<void>;
       appearanceShellState: (id: string, state: AppearanceShellState) => Promise<void>;
       appearanceImageResult: (id: string, requestId: string, url: string | null) => Promise<void>;
+      appearanceDocumentResult: (id: string, requestId: string, result: unknown, error?: string) => Promise<void>;
+      onAppearanceDocumentRequest: (callback: (event: { id: string; request: import('../../main/appearance-shell-types').AppearanceDocumentRequest }) => void) => () => void;
       onAppearanceImageRequest: (callback: (request: import('../../main/appearance-shell-types').AppearanceImageRequest) => void) => () => void;
       onAppearanceShellAction: (callback: (event: AppearanceShellEvent) => void) => () => void;
       onInteractiveStatus: (callback: (status: InteractiveStatus) => void) => () => void;

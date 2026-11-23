@@ -22,6 +22,7 @@ import { ChatterBrowser, type BrowserControlPayload, type BrowserSearchPayload, 
 import { buildBrowserIdentity } from './browser-identity';
 import { BrowserPreviewSession, type BrowserPreviewPayload, type BrowserPreviewSource } from './browser-preview';
 import { InteractivePreviews } from './interactive-preview';
+import { AttachmentPicker } from './attachment-picker';
 import { INTERACTIVE_SCHEME } from './interactive-document';
 import type { InteractivePlacement } from './interactive-types';
 import type { AppearanceShellState } from './appearance-shell-types';
@@ -136,6 +137,24 @@ protocol.registerSchemesAsPrivileged([
   { scheme: 'chatter-theme', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } },
 ]);
 const interactivePreviews = new InteractivePreviews();
+const attachmentPicker = new AttachmentPicker();
+const attachmentPickerOwners = new Set<number>();
+ipcMain.handle('composer:pick-files', async event => {
+  assertTrustedIpcSender(event);
+  const owner = BrowserWindow.fromWebContents(event.sender);
+  const ownerId = event.sender.id;
+  if (!attachmentPickerOwners.has(ownerId)) {
+    attachmentPickerOwners.add(ownerId);
+    event.sender.once('destroyed', () => { attachmentPicker.release(ownerId); attachmentPickerOwners.delete(ownerId); });
+  }
+  return attachmentPicker.choose(event.sender.id, async () => {
+    const options: OpenDialogOptions = { properties: ['openFile', 'multiSelections'] };
+    const result = owner ? await dialog.showOpenDialog(owner, options) : await dialog.showOpenDialog(options);
+    return result.canceled ? [] : result.filePaths;
+  });
+});
+ipcMain.handle('composer:read-picked-file', (event, id: string, index: number) => { assertTrustedIpcSender(event); return attachmentPicker.read(event.sender.id, id, index); });
+ipcMain.handle('composer:release-picked-files', (event, id: string) => { assertTrustedIpcSender(event); attachmentPicker.release(event.sender.id, id); });
 
 ipcMain.handle('interactive-preview:create', (event, input: unknown) => {
   assertTrustedIpcSender(event);
@@ -152,6 +171,10 @@ ipcMain.handle('interactive-preview:appearance-state', (event, id: string, state
 ipcMain.handle('interactive-preview:appearance-image', (event, id: string, requestId: string, url: string | null) => {
   assertTrustedIpcSender(event);
   interactivePreviews.resolveAppearanceImage(event.sender, id, requestId, url);
+});
+ipcMain.handle('interactive-preview:appearance-document', (event, id: string, requestId: string, result: unknown, error?: string) => {
+  assertTrustedIpcSender(event);
+  interactivePreviews.resolveAppearanceDocument(event.sender, id, requestId, result, error);
 });
 ipcMain.handle('interactive-preview:stop', (event, id: string) => {
   assertTrustedIpcSender(event);

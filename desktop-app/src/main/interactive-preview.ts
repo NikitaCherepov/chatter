@@ -4,7 +4,8 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { INTERACTIVE_CSP, INTERACTIVE_SCHEME, interactiveDocument, validateInteractiveInput } from './interactive-document';
 import type { InteractivePlacement, InteractiveStatus } from './interactive-types';
-import { parseAppearanceShellAction, canRunAppearanceAction, type AppearanceShellState, type AppearanceImageRequest } from './appearance-shell-types';
+import { parseAppearanceShellAction, canRunAppearanceAction, parseAppearanceDocumentRequest, canReadAppearanceDocument,
+  type AppearanceShellState, type AppearanceImageRequest, type AppearanceDocumentRequest } from './appearance-shell-types';
 
 type Entry = {
   id: string; host: BrowserWindow; owner: WebContents; clip: View; view: WebContentsView;
@@ -15,6 +16,7 @@ type Entry = {
   cleanup: () => void;
   imageRequests: Map<string, { request: AppearanceImageRequest; controller: AbortController; resolve: (url: string | null) => void }>;
   imageLoads: Set<Promise<void>>;
+  documentRequests: Map<string, { request: AppearanceDocumentRequest; timer: ReturnType<typeof setTimeout> }>;
 };
 
 /** One non-persistent session and renderer per preview. No preload, IPC or browser-tool reuse. */
@@ -72,7 +74,7 @@ export class InteractivePreviews {
     clip.setVisible(false);
     const gone = () => this.remove(id);
     const entry: Entry = { id, host, owner, clip, view, isolated, visible: false,
-      imageRequests: new Map(), imageLoads: new Set(),
+      imageRequests: new Map(), imageLoads: new Set(), documentRequests: new Map(),
       cleanup: () => { owner.removeListener('destroyed', gone); } };
     if (input.bridge) entry.appearance = { window: Date.now(), count: 0 };
     this.entries.set(id, entry);
@@ -88,6 +90,18 @@ export class InteractivePreviews {
       if (!entry.appearance || event.senderFrame !== contents.mainFrame || !this.entries.has(id)) return;
       if (channel === 'appearance-shell:failed') { this.remove(id, 'failed'); return; }
       if (channel === 'appearance-shell:escape') { this.emit(entry, 'ready', { escape: true }); return; }
+      if (channel === 'appearance-shell:request') {
+        const request = parseAppearanceDocumentRequest(value);
+        if (!request || !entry.appearance.state || !canReadAppearanceDocument(entry.appearance.state, request)
+            || entry.documentRequests.has(request.requestId) || entry.documentRequests.size >= 4) {
+          if (request) contents.send('appearance-shell:result', { requestId: request.requestId, error: 'attachment_request_unavailable' });
+          return;
+        }
+        const timer = setTimeout(() => this.resolveAppearanceDocument(owner, id, request.requestId, null, 'attachment_request_timeout'), 30000);
+        entry.documentRequests.set(request.requestId, { request, timer });
+        owner.send('interactive-preview:appearance-document', { id, request });
+        return;
+      }
       if (channel === 'appearance-shell:navigation') {
         entry.appearance.handlesNavigation = value === true;
         return;
@@ -175,6 +189,8 @@ export class InteractivePreviews {
     const resetLegacyNavigation = entry.appearance.state?.view === 'conversation'
       && state.view === 'home' && !entry.appearance.handlesNavigation;
     entry.appearance.state = state;
+    for (const [requestId, pending] of entry.documentRequests) if (!canReadAppearanceDocument(state, pending.request))
+      this.resolveAppearanceDocument(owner, id, requestId, null, 'attachment_scope_changed');
     for (const pending of entry.imageRequests.values()) {
       if (!this.imageScopeCurrent(entry, pending.request)) { pending.controller.abort(); pending.resolve(null); }
     }
@@ -194,13 +210,27 @@ export class InteractivePreviews {
   resolveAppearanceImage(owner: WebContents, id: string, requestId: string, url: string | null): void {
     const entry = this.entries.get(id), pending = entry?.imageRequests.get(requestId);
     if (!entry || entry.owner !== owner || !pending) return;
-    pending.resolve(typeof url === 'string' && /^https?:\/\//i.test(url) && url.length <= 16384
+    pending.resolve(typeof url === 'string' && (/^https?:\/\//i.test(url) && url.length <= 16384
+      || (Boolean(pending.request.pendingId) || pending.request.messageId < 0) && /^data:image\/[a-z0-9.+-]+;base64,/i.test(url) && url.length <= 24 * 1024 * 1024)
       && this.imageScopeCurrent(entry, pending.request) ? url : null);
   }
 
+  resolveAppearanceDocument(owner: WebContents, id: string, requestId: string, result: unknown, error?: string): void {
+    const entry = this.entries.get(id), pending = entry?.documentRequests.get(requestId);
+    if (!entry || entry.owner !== owner || !pending) return;
+    clearTimeout(pending.timer); entry.documentRequests.delete(requestId);
+    if (!entry.appearance?.state || !canReadAppearanceDocument(entry.appearance.state, pending.request)) error = 'attachment_scope_changed';
+    if (!error && JSON.stringify(result)?.length > 16 * 1024 * 1024) error = 'attachment_preview_too_large';
+    if (!entry.view.webContents.isDestroyed()) entry.view.webContents.send('appearance-shell:result', {
+      requestId, ...(error ? { error } : { result }),
+    });
+  }
+
   private imageScopeCurrent(entry: Entry, request: AppearanceImageRequest): boolean {
-    return entry.appearance?.state?.activeChatId === request.chatId
-      && Boolean(entry.appearance.state.messages.some(message => message.id === request.messageId && message.variantIndex === request.variantIndex));
+    const state = entry.appearance?.state;
+    return state?.activeChatId === request.chatId && (request.pendingId
+      ? Boolean(state.composer?.items.some(item => item.id === request.pendingId && item.kind === 'image'))
+      : Boolean(state.messages.some(message => message.id === request.messageId && message.variantIndex === request.variantIndex)));
   }
 
   private async loadAppearanceImage(id: string, url: URL): Promise<Response> {
@@ -209,8 +239,10 @@ export class InteractivePreviews {
     if (!entry || !state || entry.imageRequests.size >= 64) return blocked();
     const request: AppearanceImageRequest = { id, requestId: randomUUID(), chatId: Number(url.searchParams.get('chatId')),
       messageId: Number(url.searchParams.get('messageId')), variantIndex: Number(url.searchParams.get('variantIndex')),
-      url: url.searchParams.get('url') ?? '', width: Number(url.searchParams.get('width')) };
-    if (!Number.isSafeInteger(request.chatId) || !Number.isSafeInteger(request.messageId) || request.messageId === 0
+      url: url.searchParams.get('url') ?? '', width: Number(url.searchParams.get('width')),
+      ...(url.searchParams.has('pendingId') ? { pendingId: url.searchParams.get('pendingId')! } : {}) };
+    if (!Number.isSafeInteger(request.chatId) || !Number.isSafeInteger(request.messageId) || (!request.pendingId && request.messageId === 0)
+        || request.pendingId && (!/^[a-zA-Z0-9-]{1,100}$/.test(request.pendingId) || request.url !== 'pending:' + request.pendingId)
         || !Number.isSafeInteger(request.variantIndex) || request.variantIndex < 0 || !this.imageScopeCurrent(entry, request)
         || !request.url || request.url.length > 8192 || !Number.isSafeInteger(request.width)
         || request.width !== 0 && (request.width < 64 || request.width > 1600)) return blocked();
@@ -229,7 +261,9 @@ export class InteractivePreviews {
       const loading = new Promise<void>(done => { release = done; });
       entry.imageLoads.add(loading);
       try {
-        const response = await net.fetch(source, { signal: controller.signal, credentials: 'omit' });
+        const embedded = /^data:(image\/[a-z0-9.+-]+);base64,([\s\S]*)$/i.exec(source);
+        const response = embedded ? new Response(Buffer.from(embedded[2], 'base64'), { headers: { 'Content-Type': embedded[1] } })
+          : await net.fetch(source, { signal: controller.signal, credentials: 'omit' });
         const mime = response.headers.get('content-type')?.split(';')[0].trim().toLowerCase() ?? '';
         const limit = 16 * 1024 * 1024;
         if (!response.ok || !/^image\/(png|jpeg|gif|webp|avif|bmp|x-icon|vnd\.microsoft\.icon)$/.test(mime)
@@ -264,6 +298,7 @@ export class InteractivePreviews {
     if (!entry) return;
     this.entries.delete(id);
     for (const pending of entry.imageRequests.values()) { pending.controller.abort(); pending.resolve(null); }
+    for (const pending of entry.documentRequests.values()) clearTimeout(pending.timer);
     clearInterval(entry.timer); clearTimeout(entry.deadline);
     entry.cleanup();
     if (phase) this.emit(entry, phase);
