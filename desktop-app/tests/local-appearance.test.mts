@@ -24,7 +24,7 @@ try {
   assert.ok(!store.readDocumentation().includes('export default'));
   for (const name of ['runtime.md','messages.md','media.md','confirmations.md','appearance.json'])
     assert.ok(fs.existsSync(path.join(directory,'docs',name)));
-  assert.ok(fs.readFileSync(path.join(directory,'docs/runtime.md'),'utf8').includes('does NOT opt into navigation or confirmations'));
+  assert.ok(fs.readFileSync(path.join(directory,'docs/runtime.md'),'utf8').includes('useChatterState({navigation:true, confirmations:true})'));
   assert.ok(fs.existsSync(path.join(directory,'templates/component/components/Composer.tsx')));
   const htmlTemplate=JSON.parse(fs.readFileSync(path.join(directory,'templates/html/theme.json'),'utf8'));
   assert.equal(htmlTemplate.shell.entry,'index.html');
@@ -50,7 +50,7 @@ try {
   const virtualFiles = new Map([
     [path.join(virtualRoot, 'chatter.d.ts'), fs.readFileSync(path.join(directory, 'chatter.d.ts'), 'utf8')],
     [path.join(virtualRoot, 'chatter-ui.d.ts'), fs.readFileSync(path.join(directory, 'chatter-ui.d.ts'), 'utf8')],
-    [path.join(virtualRoot, 'App.tsx'), 'import React from "react";import {Markdown,MessageImages,Attachments,useChatterState} from "@chatter/ui";export default function App(){const state=useChatterState();const message=state?.messages[0];return message?<><Markdown messageId={message.id} content={message.content}/><MessageImages message={message}/><Attachments message={message}/></>:null;}'],
+    [path.join(virtualRoot, 'App.tsx'), 'import React from "react";import {Markdown,MessageImages,Attachments,useChatterState} from "@chatter/ui";export default function App(){const state=useChatterState({navigation:true,confirmations:true});const message=state?.messages[0];return message?<><Markdown messageId={message.id} content={message.content}/><MessageImages message={message}/><Attachments message={message}/></>:null;}'],
   ]);
   const compilerOptions = { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.ESNext, moduleResolution: ts.ModuleResolutionKind.Bundler,
     jsx: ts.JsxEmit.React, noEmit: true, strict: true, esModuleInterop: true, types: [], skipLibCheck: false };

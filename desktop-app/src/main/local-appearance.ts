@@ -858,7 +858,8 @@ declare global {interface Window {chatter:ThemeAPI}}
 const appearanceUIDeclarations = `declare module '@chatter/ui' {
   export type ImageTarget={chatId:number;messageId:number;variantIndex:number;url:string;source:string;alt:string};
   export type AttachmentTarget={chatId:number;messageId:number;variantIndex:number;index:number;url:string;name:string;mimeType:string;sizeBytes:number};
-  export function useChatterState():import('./chatter').ThemeState|undefined;
+  export type ChatterStateOptions={navigation?:boolean;confirmations?:boolean};
+  export function useChatterState(options?:ChatterStateOptions):import('./chatter').ThemeState|undefined;
   export function Markdown(props:{messageId:number;content:string;className?:string;style?:import('react').CSSProperties;components?:import('react-markdown').Components;onImageClick?:(image:ImageTarget)=>void}):import('react').ReactElement;
   export function Image(props:{messageId:number;url:string;alt?:string;className?:string;style?:import('react').CSSProperties;fullSize?:boolean;onImageClick?:(image:ImageTarget)=>void}):import('react').ReactElement;
   export function MessageImages(props:{message:import('./chatter').Message;className?:string;onImageClick?:(image:ImageTarget)=>void}):import('react').ReactElement;

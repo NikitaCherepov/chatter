@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import type { Components, ExtraProps } from 'react-markdown';
 import type { AppearanceShellState } from '../main/appearance-shell-types';
 import { MessageMarkdown } from '../renderer/components/MessageMarkdown';
@@ -12,16 +12,46 @@ const api = () => (window as any).chatter;
 type Message = AppearanceShellState['messages'][number];
 export type ImageTarget = { chatId: number; messageId: number; variantIndex: number; url: string; source: string; alt: string };
 export type AttachmentTarget = { chatId: number; messageId: number; variantIndex: number; index: number; url: string; name: string; mimeType: string; sizeBytes: number };
+export type ChatterStateOptions = { navigation?: boolean; confirmations?: boolean };
 let snapshot: AppearanceShellState | undefined, unsubscribe: (() => void) | undefined;
-const listeners = new Set<() => void>();
-function subscribe(listener: () => void) {
-  listeners.add(listener);
-  if (!unsubscribe && api()) unsubscribe = api().subscribe((state: AppearanceShellState) => {
-    snapshot = state; for (const notify of listeners) notify();
-  });
-  return () => { listeners.delete(listener); if (!listeners.size) { unsubscribe?.(); unsubscribe = undefined; } };
+let subscribedOptions: ChatterStateOptions | undefined;
+const listeners = new Set<{ notify: () => void; options: { current: ChatterStateOptions } }>();
+function updateSubscription() {
+  if (!listeners.size) {
+    const previous = unsubscribe;
+    unsubscribe = undefined; subscribedOptions = undefined;
+    previous?.();
+    return;
+  }
+  const options = { navigation: [...listeners].some(item => item.options.current.navigation),
+    confirmations: [...listeners].some(item => item.options.current.confirmations) };
+  if (unsubscribe && subscribedOptions?.navigation === options.navigation
+      && subscribedOptions.confirmations === options.confirmations) return;
+  const bridge = api();
+  if (!bridge) return;
+  const previous = unsubscribe;
+  // Register the replacement first: unchanged capabilities must not briefly turn off.
+  unsubscribe = bridge.subscribe((state: AppearanceShellState) => {
+    snapshot = state; for (const listener of listeners) listener.notify();
+  }, options);
+  subscribedOptions = options;
+  previous?.();
 }
-export function useChatterState() { return useSyncExternalStore(subscribe, () => snapshot); }
+function subscribe(notify: () => void, options: { current: ChatterStateOptions }) {
+  const listener = { notify, options };
+  listeners.add(listener); updateSubscription();
+  return () => { if (listeners.delete(listener)) updateSubscription(); };
+}
+export function useChatterState({ navigation = false, confirmations = false }: ChatterStateOptions = {}) {
+  const options = useRef({ navigation, confirmations });
+  useLayoutEffect(() => {
+    options.current = { navigation, confirmations };
+    updateSubscription();
+  },
+    [navigation, confirmations]);
+  const subscribeWithOptions = useCallback((notify: () => void) => subscribe(notify, options), []);
+  return useSyncExternalStore(subscribeWithOptions, () => snapshot);
+}
 
 function openImage(messageId: number, url: string, alt: string, onImageClick?: (image: ImageTarget) => void) {
   if (!onImageClick) { api()?.openImage(messageId, url); return; }

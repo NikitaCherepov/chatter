@@ -6,6 +6,7 @@ import type { AppearanceShellState, AppearanceDocumentRequest } from './appearan
 let state: AppearanceShellState | undefined;
 const listeners = new Set<(state: AppearanceShellState) => void>();
 let confirmationSubscribers = 0;
+let navigationSubscribers = 0;
 let documentSequence = 0;
 const documentRequests = new Map<string, { request: AppearanceDocumentRequest; resolve: (value: unknown) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }>();
 ipcRenderer.on('appearance-shell:result', (_event, reply: { requestId: string; result?: unknown; error?: string }) => {
@@ -100,8 +101,9 @@ contextBridge.exposeInMainWorld('chatter', {
   openLink: (id: number, url: string) => contentAction(id, 'openLink', { url }),
   copyText: (id: number, text: string) => contentAction(id, 'copyText', { text }),
   subscribe: (listener: (state: AppearanceShellState) => void, options?: { navigation?: boolean; confirmations?: boolean }) => {
-    if (options?.navigation) ipcRenderer.send('appearance-shell:navigation', true);
-    if (options?.confirmations && ++confirmationSubscribers === 1) ipcRenderer.send('appearance-shell:confirmations', true);
+    const navigation = options?.navigation === true, confirmations = options?.confirmations === true;
+    if (navigation && ++navigationSubscribers === 1) ipcRenderer.send('appearance-shell:navigation', true);
+    if (confirmations && ++confirmationSubscribers === 1) ipcRenderer.send('appearance-shell:confirmations', true);
     listeners.add(listener);
     if (state) listener(state);
     let subscribed = true;
@@ -109,7 +111,8 @@ contextBridge.exposeInMainWorld('chatter', {
       if (!subscribed) return;
       subscribed = false;
       listeners.delete(listener);
-      if (options?.confirmations && --confirmationSubscribers === 0) ipcRenderer.send('appearance-shell:confirmations', false);
+      if (navigation && --navigationSubscribers === 0) ipcRenderer.send('appearance-shell:navigation', false);
+      if (confirmations && --confirmationSubscribers === 0) ipcRenderer.send('appearance-shell:confirmations', false);
     };
   },
   openChat: (id: number) => send({ type: 'openChat', id }),

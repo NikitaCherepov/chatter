@@ -47,4 +47,17 @@ assert.equal(api.removePendingAttachment('unknown'), false);
 assert.equal(api.removePendingAttachment('picked-1'), true);
 events.get('appearance-shell:state')({}, { ...state, composer: { ...state.composer, busy: true } });
 assert.equal(api.chooseAttachments(), false); assert.equal(api.clearPendingAttachments(), false);
+// Direct bridge consumers and hook consumers share capability ownership.
+const flags = { navigation: true, confirmations: true };
+const plain = api.subscribe(() => {});
+const first = api.subscribe(() => {}, flags);
+const second = api.subscribe(() => {}, { navigation: true, confirmations: true });
+const capabilities = () => sent.filter(([channel]) => ['appearance-shell:navigation', 'appearance-shell:confirmations'].includes(channel));
+assert.deepEqual(capabilities().slice(-2), [['appearance-shell:navigation', true], ['appearance-shell:confirmations', true]]);
+const beforeRelease = capabilities().length;
+flags.navigation = false; flags.confirmations = false; // Cleanup uses the original subscription flags.
+first(); first(); plain();
+assert.equal(capabilities().length, beforeRelease, 'one owner leaving must not disable another');
+second();
+assert.deepEqual(capabilities().slice(-2), [['appearance-shell:navigation', false], ['appearance-shell:confirmations', false]]);
 console.log('PASS: asynchronous document/page bridge, exact attachment/variant scope, custom composer gestures, stable pending IDs and media-only send');
