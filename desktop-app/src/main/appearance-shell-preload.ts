@@ -135,7 +135,31 @@ const documentRequest = (method: AppearanceDocumentRequest['method'], messageId:
     documentRequests.set(request.requestId, { request, resolve, reject, timer }); ipcRenderer.send('appearance-shell:request', request);
   });
 };
+const settingsAction = (action: 'open' | 'edit' | 'save' | 'discard' | 'reload', sectionId: string, fieldId?: string, value?: unknown) => {
+  const settings = state?.settings, editor = settings?.editor;
+  if (!settings?.sections.some(section => section.id === sectionId && section.mode !== 'native')) return false;
+  if (action === 'open') {
+    if (editor?.busy || editor?.dirty && editor.sectionId !== sectionId) return false;
+    send({ type: 'settingsAction', action, sectionId }); return true;
+  }
+  if (!editor || editor.sectionId !== sectionId || editor.busy || editor.loading) return false;
+  if (action === 'save' && (!navigator.userActivation.isActive || !editor.dirty || editor.fields.some(field => field.error))) return false;
+  if (action === 'reload' && editor.dirty) return false;
+  if (action === 'edit' && (!editor.fields.some(field => field.id === fieldId) || !(typeof value === 'boolean'
+      || typeof value === 'number' && Number.isFinite(value) || typeof value === 'string' && value.length <= 500))) return false;
+  send({ type: 'settingsAction', action, sectionId, editorId: editor.id, ...(action === 'edit' ? { fieldId, value } : {}) }); return true;
+};
 contextBridge.exposeInMainWorld('chatter', {
+  getSettingsSections: () => state?.settings?.sections ?? [],
+  searchSettings: (query: string) => {
+    if (!state?.settings || typeof query !== 'string' || query.length > 200) return false;
+    send({ type: 'settingsAction', action: 'search', query }); return true;
+  },
+  openSettingsSection: (sectionId: string) => settingsAction('open', sectionId),
+  setSettingValue: (sectionId: string, fieldId: string, value: unknown) => settingsAction('edit', sectionId, fieldId, value),
+  saveSettingsSection: (sectionId: string) => settingsAction('save', sectionId),
+  discardSettingsSection: (sectionId: string) => settingsAction('discard', sectionId),
+  reloadSettingsSection: (sectionId: string) => settingsAction('reload', sectionId),
   selectModel: (id: string | null) => {
     if (!navigator.userActivation.isActive || !state?.models || state.models.loading || state.models.busy
         || id !== null && !state.models.items.some(model => model.id === id)) return false;
@@ -215,7 +239,11 @@ contextBridge.exposeInMainWorld('chatter', {
   showHome: () => send({ type: 'home' }),
   attachFiles: () => composerAction('choose'),
   openLibrary: () => send({ type: 'openLibrary' }),
-  openSettings: () => send({ type: 'openSettings' }),
+  openSettings: (sectionId?: string, target?: string) => {
+    if (sectionId !== undefined && (!navigator.userActivation.isActive || !state?.settings?.sections.some(section => section.id === sectionId))) return false;
+    if (target !== undefined && (sectionId === undefined || typeof target !== 'string' || target.length > 200)) return false;
+    send({ type: 'openSettings', ...(sectionId === undefined ? {} : { sectionId }), ...(target === undefined ? {} : { target }) }); return true;
+  },
   loadMore: (folderId: number | null) => send({ type: 'loadMore', folderId }),
   search: (query: string) => send({ type: 'search', query }),
   copyMessage: (id: number) => messageAction(id, 'copy'),

@@ -2,6 +2,8 @@ import { useChatWorkspace } from '../lib/chat-workspace';
 import { ChatWorkspaceBar, ChatWorkspaceTabs } from '../components/ChatWorkspaceTabs';
 import { ChatLayoutConfirmation, ChatLayoutPreviewBar, type ChatLayoutProposal } from '../components/ChatLayoutPanel';
 import { useChatLayouts } from '../lib/chat-layout-service';
+import { useThemeSettings } from '../lib/use-theme-settings';
+import { nativeSettingsTarget } from '../lib/settings-catalog';
 import { CHAT_LAYOUT_SIDEBAR_WIDTH, DEFAULT_CHAT_LAYOUT, parseChatLayoutProfile, type ChatLayoutProfile } from '../lib/chat-layout-schema';
 import { ChatComposerDock } from '../components/ChatComposerDock';
 import { AppearanceConfirmation, type AppearanceProposal } from '../components/AppearanceConfirmation';
@@ -1100,6 +1102,7 @@ export function ChatPage() {
   }, [appearanceShell?.entry, appearanceShell?.files, appearanceShell?.language, appearanceShell?.scope, user?.id, api.API_BASE]);
   const navigate = useNavigate();
   const layouts = useChatLayouts();
+  const themeSettings = useThemeSettings(appearanceShell ? appearanceProfile?.id ?? 'preview' : null);
   const [layoutPreview, setLayoutPreview] = useState<{ profile: ChatLayoutProfile; proposalId?: string }>();
   const [layoutEditorDraft, setLayoutEditorDraft] = useState<ChatLayoutProfile>();
   const activeLayout = layouts.state?.profiles.find(profile => profile.id === layouts.state?.activeId);
@@ -1644,6 +1647,8 @@ export function ChatPage() {
   const [chatFindIndex, setChatFindIndex] = useState(-1);
   const [chatFindLoading, setChatFindLoading] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [settingsTarget, setSettingsTarget] = useState<ReturnType<typeof nativeSettingsTarget>>(null);
+  useEffect(() => { if (!showSettings) setSettingsTarget(null); }, [showSettings]);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [notificationsEnabled, setNotificationsEnabledState] = useState(true);
   const [viewerImageSrc, setViewerImageSrc] = useState<string | null>(null);
@@ -8582,6 +8587,7 @@ export function ChatPage() {
           totalTokens: tokens.latest_total_tokens, cacheHitTokens: tokens.latest_cache_hit_tokens, cacheMissTokens: tokens.latest_cache_miss_tokens, reasoningTokens: tokens.latest_reasoning_tokens } : null },
       voice: { status: voiceStatus, canStart: Boolean(canCompose && voiceStatus === 'idle'), error: voiceError,
         transcript: voiceTranscript?.epoch === composerScopeRef.current.epoch ? { id: voiceTranscript.id, text: voiceTranscript.text } : null },
+      settings: themeSettings.state,
       confirmations: shellConfirmations,
       messagesLoading: loadingMessages || messagesChatIdRef.current !== activeChatId,
       hasOlderMessages: hasMoreMessages, olderMessagesLoading: loadingOlderMessages,
@@ -8625,8 +8631,12 @@ export function ChatPage() {
     attachedImages, attachedDocuments, preparingAttachments, attachmentError, maxImageCount, maxImageBytes, pendingAttachmentId, confirmationComposer.comment, ttsPlayback, shellConfirmations,
     libraryBusy, libraryStatus, libraryScope, user?.id, user?.telegram_linked, roomCharacters, otherRoomHumans.length, forking, switchingVariantId, streamingMsgId,
     modelsCatalog, modelsLoading, modelBusy, modelError, preferredModel, selectedContextLimit, autoSupportsVision, user?.plan, modelScope,
-    contextTokens, showTokens, voiceRequesting, isRecording, isTranscribing, voiceError, voiceTranscript, composerScope]);
+    contextTokens, showTokens, voiceRequesting, isRecording, isTranscribing, voiceError, voiceTranscript, composerScope, themeSettings.state]);
   const handleShellAction = (action: AppearanceShellAction) => {
+    if (action.type === 'settingsAction') {
+      if (appearanceShell && canRunAppearanceAction(shellState, action)) void themeSettings.handle(action);
+      return;
+    }
     if (action.type === 'selectModel') {
       if (appearanceShell && canRunAppearanceAction(shellState, action)) void selectPreferredModel(action.id);
       return;
@@ -8765,7 +8775,11 @@ export function ChatPage() {
     else if (action.type === 'newChat') void handleCreateChat();
     else if (action.type === 'loadMore') void loadChatSection(action.folderId);
     else if (action.type === 'search') handleSearchChange(action.query);
-    else if (action.type === 'openSettings') setShowSettings(true);
+    else if (action.type === 'openSettings') {
+      const target = action.sectionId ? nativeSettingsTarget(action.sectionId, action.target, user?.is_admin === 1 || user?.role === 'admin', key => t(key)) : null;
+      if (action.sectionId && !target) return;
+      setSettingsTarget(target); setShowSettings(true);
+    }
     else if (action.type === 'openLibrary') {
       setShellOpen(false);
       setSidebarCollapsed(false);
@@ -8813,6 +8827,8 @@ export function ChatPage() {
         {showSettings && (
           <SettingsModal
             key="settings-modal"
+            initialSection={settingsTarget?.section}
+            initialTarget={settingsTarget?.result}
             chatLayouts={layouts}
             initialAppearanceDraft={appearanceEditorDraft}
             onAppearancePreview={profile => {

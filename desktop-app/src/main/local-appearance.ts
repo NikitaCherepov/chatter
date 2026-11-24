@@ -1,5 +1,5 @@
 import { APPEARANCE_LABEL_KEYS } from './appearance-shell-types';
-import { THEME_README, THEME_GUIDES } from './theme-documentation';
+import { THEME_README, THEME_GUIDES, THEME_SETTINGS_EXAMPLES } from './theme-documentation';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
@@ -800,6 +800,7 @@ export class LocalAppearanceStore {
     this.write('THEMES.md', THEME_README);
     this.ensureDirectory('docs');
     for (const [name, text] of Object.entries(THEME_GUIDES)) this.write('docs/' + name, text);
+    for (const [name, text] of Object.entries(THEME_SETTINGS_EXAMPLES)) this.write('examples/settings/' + name, text);
     const { shell: _shell, template: _template, paletteExample: _paletteExample, ...appearance } = APPEARANCE_CAPABILITIES;
     const { template: _materialTemplate, ...materials } = appearance.materials;
     this.write('docs/appearance.json', JSON.stringify({ ...appearance, materials }, null, 2) + '\n');
@@ -829,6 +830,11 @@ export type MessageInfo={modelName:string|null;providerName:string|null;tokenCou
 export type Models={loading:boolean;busy:boolean;error:string|null;selectedId:string|null;automaticLabel:string;automaticSupportsVision:boolean;contextLimit:number|null;items:{id:string;name:string;description:string;supportsVision:boolean;isFree:boolean;contextLength:number|null;averageTokensPerSecond:number|null;intelligenceTier:number|null;priceTier:number|null}[]};
 export type Context={showTokens:boolean;limit:number|null;tokens:number|null;cachePercent:number|null;messagesTokens:number|null;reasoningTokens:number|null;systemPromptTokens:number|null;activeMessages:number|null;archivedMessages:number|null;latest:(TokenUsage&{modelName:string|null})|null};
 export type Voice={status:'idle'|'requesting'|'recording'|'transcribing';canStart:boolean;error:string|null;transcript:{id:number;text:string}|null};
+export type SettingValue=string|number|boolean;
+export type SettingsField={id:string;groupId:string;label:string;help:string;type:'select'|'toggle'|'number'|'time';value:SettingValue;savedValue:SettingValue;dirty:boolean;error:string|null;visible:boolean;options?:{value:string;label:string}[];min?:number;max?:number;step?:number};
+export type SettingsSection={id:string;groupId:string;label:string;mode:'native'|'hybrid'|'fields'};
+export type SettingsSearchResult={sectionId:string;key:string;title:string;sectionTitle:string;fieldId:string|null;native:boolean};
+export type SettingsState={groups:{id:string;label:string}[];sections:SettingsSection[];query:string;results:SettingsSearchResult[];hasMoreResults:boolean;editor:{id:string;sectionId:string;loading:boolean;busy:boolean;dirty:boolean;error:string|null;fields:SettingsField[];groups:{id:string;label:string}[];links:{id:string;label:string;sectionId:string;target:string}[]}|null};
 export type Message={id:number;role:string;content:string;createdAt:number;streaming:boolean;reasoningContent:string;workLog:WorkLogStep[];toolStatus:string|null;variantIndex:number;variantCount:number;actions:MessageAction[];editableContent?:string;info:MessageInfo;images:{url:string;type:'user_photo'|'generated'|'external'}[];attachments:{url:string;name:string;filename:string;mimeType:string;sizeBytes:number}[]};
 export type ConfirmationNode={type:'text'|'code'|'markdown'|'json'|'email';text:string}|{type:'diff';before:string;after:string}|{type:'group';label?:string;children:ConfirmationNode[]}|{type:'field';fieldId:string}|{type:'action';actionId:string};
 export type ConfirmationField={id:string;label:string;type:string;value:string|boolean;disabled:boolean;options?:{value:string;label:string}[]};
@@ -846,6 +852,7 @@ export type ThemeState = {
   view:'home'|'conversation';activeChatId:number|null;query:string;loading:boolean;
   messages:Message[];
   models:Models;context:Context;voice:Voice;
+  settings:SettingsState;
   speech:{messageId:number|null;status:'idle'|'loading'|'playing'|'paused'};
   confirmations:Confirmation[];
   messagesLoading:boolean;hasOlderMessages:boolean;olderMessagesLoading:boolean;sending:boolean;canSend:boolean;attachmentCount:number;
@@ -853,6 +860,9 @@ export type ThemeState = {
   locale:string;dark:boolean;palette:{background:string;text:string;accent:string;surface:string};labels:Labels;
 };
 export interface ThemeAPI {
+  getSettingsSections():SettingsSection[];searchSettings(query:string):boolean;openSettingsSection(sectionId:string):boolean;
+  setSettingValue(sectionId:string,fieldId:string,value:SettingValue):boolean;saveSettingsSection(sectionId:string):boolean;
+  discardSettingsSection(sectionId:string):boolean;reloadSettingsSection(sectionId:string):boolean;
   selectModel(id:string|null):boolean;
   startVoiceRecording():boolean;stopVoiceRecording():boolean;cancelVoiceRecording():boolean;
   getChatMenu(id:number):MenuItem[];getFolderMenu(id:number):MenuItem[];
@@ -871,7 +881,7 @@ export interface ThemeAPI {
   subscribe(callback:(state:ThemeState)=>void,options?:{navigation?:boolean;confirmations?:boolean}):()=>void;
   openChat(id:number):void;newChat():void;showHome():void;openConversation():void;
   sendMessage(text:string):boolean;stopGeneration():void;loadOlderMessages():void;
-  loadMore(folderId:number|null):void;search(query:string):void;attachFiles():boolean;openLibrary():void;openSettings():void;
+  loadMore(folderId:number|null):void;search(query:string):void;attachFiles():boolean;openLibrary():void;openSettings(sectionId?:string,target?:string):boolean;
   copyMessage(id:number):boolean;downloadMessageDocx(id:number):boolean;sendMessageToTelegram(id:number):boolean;
   forkFromMessage(id:number):boolean;editMessage(id:number,text:string,expectedVariantIndex?:number):boolean;openMessageEditor(id:number):boolean;deleteMessage(id:number):boolean;
   regenerateMessage(id:number,hint?:string):boolean;requestRegenerationHint(id:number):boolean;

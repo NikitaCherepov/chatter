@@ -21,6 +21,7 @@ Available API features are not a mandatory UI checklist: choose what suits this 
 - docs/runtime.md: state/subscriptions (including useChatterState), navigation, isolated runtime and user actions.
 - docs/messages.md: content, streaming, workLog, tools, message actions, variants and speech.
 - docs/session.md: model selection, context/token indicators and voice recording/transcription.
+- docs/settings.md: settings catalog/search, reusable field descriptors, drafts/save/discard and native sections.
 - docs/media.md: images, full-resolution viewers, documents and outgoing attachments.
 - docs/confirmations.md: custom confirmation UI, fields, decisions and native fallback.
 - docs/appearance.json: ordinary appearance fields, allowed values and ranges.
@@ -37,6 +38,71 @@ Local raster backgrounds use assets/image.png (PNG/JPEG/WebP/GIF, up to 8 MiB); 
 `;
 
 export const THEME_GUIDES: Record<string, string> = {
+  'settings.md': `# Settings: data, actions and reusable theme components
+
+## Choose your interface
+
+Settings are optional API capabilities, not a mandatory modal or layout. Build a page, dialog,
+drawer, command interface or only the controls your theme needs. getSettingsSections() and
+state.settings.sections return the same localized catalog. state.settings.groups provides group
+labels. Section IDs are stable; labels change with the app's language. Admin sections are omitted
+for non-admin accounts. mode is native (native contents), fields (custom field API) or hybrid
+(custom fields plus explicitly listed native editors). Currently app is hybrid; other sections
+are native. Never infer that a section is editable just because it is in the catalog.
+
+## Search and opening
+
+searchSettings(query) updates state.settings.query/results/hasMoreResults using the native
+settings index of localized UI labels/help, not user values or secrets. Results have sectionId,
+key, title, sectionTitle, fieldId (custom field when mapped) and native. At most 50 results are
+returned; refine a broad query if hasMoreResults is true. Built-in field labels are indexed;
+dynamic records inside native editors remain native for now.
+For a custom section call openSettingsSection(id). For a native result/section explicitly call
+openSettings(sectionId, optionalResultKey) from a user handler. The native modal opens that
+section and can highlight its indexed field, while retaining the selected theme underneath.
+openSettings() without arguments remains the ordinary native settings entry.
+
+## Field-based forms
+
+state.settings.editor is null before opening. Afterwards it has sectionId, loading, busy, dirty,
+error, groups, links and fields. Each field has id, groupId, type, localized label/help, value
+(draft), savedValue, dirty, validation error and visible; select fields add options, number
+fields min/max/step. Fields/links are authoritative: do not invent IDs or save unseen unsupported
+settings. visible controls presentation (for example, schedule times); validation applies to all
+draft fields. Scalar values are string/number/boolean. Numeric/time drafts may temporarily be
+invalid while typing; their errors prevent saving. The opaque editor id is handled by the bridge;
+authors do not read or increment revisions.
+
+setSettingValue(sectionId,fieldId,value) changes only the draft. saveSettingsSection(sectionId)
+requires a real user event and applies only changed valid fields through the same writers as the
+native settings. discardSettingsSection(id) restores the saved draft baseline without writes.
+reloadSettingsSection(id) reads current settings when the draft is clean. Opening the same section
+again keeps its draft. A different custom section cannot replace a dirty draft: save/discard it
+first. Hiding your own settings dialog does not save or discard it. Render loading/busy/errors and
+disable edits during save. Methods return request-sent booleans; state determines completion.
+
+Before saving the host checks whether changed settings diverged from the baseline. A conflict
+preserves the draft: the user may discard and then reload. Successful fields update savedValue;
+if a later field fails, earlier successful writes remain applied and only the remaining draft is
+dirty. This is not one transaction across local preferences and server settings. Account/server
+changes, switching to another theme or unmounting discard obsolete drafts/results; chat navigation
+and editing the same theme's source alone retain them.
+Section app currently exposes language, theme, lightFrom, darkFrom, zoom, renderPerf, showTokens,
+diceRoll. Language/theme/zoom use existing desktop preferences and account UI flags use the existing
+UI-settings endpoint. editor.links explicitly lists the native theme editor (no raw theme-file
+editor API is implied). Invoke openSettings(link.sectionId,link.target) to open it.
+
+## Reuse your components
+
+Build a single SettingsField renderer by type, wrap it in your SettingsRow/SettingsGroup, and
+reuse one SettingsSection component for future field-based sections. This avoids copying forms
+per tab. Metadata describes behavior, not appearance: you own typography, controls, icons, grid,
+animations and interaction style. No bundled SettingsModal/Select is required. Optional source
+examples are in examples/settings/Field.tsx and Section.tsx; copy them together into your draft's
+components/ directory and style/replace them. They use the generated ../chatter types. The
+starter does not insert a settings UI automatically. For a modal, handle focus and Escape as
+described in media.md; an HTML dialog opened with showModal() owns Escape before shell navigation.
+`,
   'library.md': `# Chat and folder menus
 
 Menus are data and functions, not a predefined component. This API covers the chat/folder library;
@@ -278,6 +344,14 @@ galleries/side layouts and chat/file links. Native interactive previews, charts,
 questionnaires stay code blocks in the isolated shell: no message-authored code or privileged
 component executes inside the theme. ReactMarkdown remains available for simpler rendering.
 
+Code blocks: components.code owns the entire .chatter-code block, including its header, copy
+button and body. components.pre wraps that output and defaults to a transparent fragment;
+replacing only pre does not remove the built-in code header. For a complete custom block use
+components={{pre:({children})=><>{children}</>,code:CustomCode}}.
+CustomCode must handle inline code too: node.properties['data-code-block'] === 'yes' identifies a
+block; node.properties['data-code-source'] contains its original text, and className carries the
+language. Copy that source via chatter.copyText(messageId,source), not navigator.clipboard.
+
 ## Image transport and native helpers
 
 For your own markup call imageSource(message.id,url,width?) for a lazy <img> src (default 560, range
@@ -442,7 +516,7 @@ window.chatter.subscribe(callback, {navigation:true, confirmations:true}) immedi
 
 Optional useChatterState(options?) from @chatter/ui returns ThemeState | undefined. In the shell root use useChatterState({navigation:true, confirmations:true}) when you render custom navigation and all confirmations. Other components can call useChatterState() with no options. Defaults are false. Active hook consumers share one state subscription; their options are combined, so an ordinary consumer never disables another consumer's capabilities. Unmounting or changing options releases only that consumer's request. Direct chatter.subscribe subscriptions are counted too. No additional explicit subscription is needed when using the hook. Handle undefined while loading. Keep a navigation owner mounted across home/conversation routes; keep confirmations:true mounted only while your theme renders all pending cards.
 
-Read chatter.d.ts for all state fields and function signatures. State includes chats, folders, library operation status, pagination sections, activeChatId, view, search query/loading, locale, dark, palette, localized labels, messages, message-history loading flags, sending, canSend, attachmentCount, composer, speech and confirmations. Message history is a loaded window; loadOlderMessages() loads earlier pages.
+Read chatter.d.ts for all state fields and function signatures. State includes chats, folders, library operation status, pagination sections, activeChatId, view, search query/loading, locale, dark, palette, localized labels, messages, message-history loading flags, sending, canSend, attachmentCount, composer, models, context, voice, speech, settings and confirmations. Message history is a loaded window; loadOlderMessages() loads earlier pages.
 
 ## Localized labels
 
@@ -469,5 +543,45 @@ Keep input focus, draft text, selection and scroll position across state updates
 
 The isolated shell has no general network, filesystem, package installation or electronAPI access. Use the bridge for app actions and media. React, react-markdown, remark-gfm and @chatter/ui are bundled. chatter-ui.d.ts describes optional components and callback types.
 
+`,
+};
+
+export const THEME_SETTINGS_EXAMPLES: Record<string, string> = {
+  'Field.tsx': `import React from 'react';
+import type { SettingsField } from '../chatter';
+export default function Field({ sectionId, field, disabled }: { sectionId: string; field: SettingsField; disabled: boolean }) {
+  const inputId = React.useId();
+  if (!field.visible) return null;
+  const update = (value: string | number | boolean) => window.chatter.setSettingValue(sectionId, field.id, value);
+  const describedBy = field.help || field.error ? inputId + '-help' : undefined;
+  const props = { id: inputId, disabled, 'aria-describedby': describedBy, 'aria-invalid': Boolean(field.error) };
+  return <div className="settings-row" data-setting={field.id}>
+    <label htmlFor={inputId}>{field.label}</label>
+    {field.type === 'select' ? <select {...props} value={String(field.value)} onChange={event => update(event.target.value)}>{field.options?.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select>
+      : field.type === 'toggle' ? <input {...props} type="checkbox" checked={field.value === true} onChange={event => update(event.target.checked)}/>
+      : <input {...props} type={field.type} min={field.min} max={field.max} step={field.step} value={String(field.value)} onChange={event => update(event.target.value)}/>}
+    <div id={inputId + '-help'}>{field.help && <p>{field.help}</p>}{field.error && <p role="alert">{field.error}</p>}</div>
+  </div>;
+}
+`,
+  'Section.tsx': `import React from 'react';
+import { useChatterState } from '@chatter/ui';
+import Field from './Field';
+export default function Section({ sectionId }: { sectionId: string }) {
+  const state = useChatterState();
+  React.useEffect(() => { window.chatter.openSettingsSection(sectionId); }, [sectionId]);
+  const editor = state?.settings.editor;
+  if (!state || !editor || editor.sectionId !== sectionId) return null;
+  return <section className="settings-section" aria-busy={editor.loading || editor.busy}>
+    <h2>{state.settings.sections.find(section => section.id === sectionId)?.label}</h2>
+    {(editor.loading || editor.busy) && <p role="status">{state.labels.loading}</p>}
+    {editor.error && <p role="alert">{editor.error}</p>}
+    {editor.groups.map(group => <fieldset key={group.id} disabled={editor.busy || editor.loading}><legend>{group.label}</legend>{editor.fields.filter(field => field.groupId === group.id).map(field => <Field key={field.id} sectionId={sectionId} field={field} disabled={editor.busy || editor.loading}/>)}</fieldset>)}
+    {editor.links.map(link => <button type="button" key={link.id} disabled={editor.loading || editor.busy} onClick={() => window.chatter.openSettings(link.sectionId, link.target)}>{link.label}</button>)}
+    <button type="button" disabled={!editor.dirty || editor.busy || editor.loading || editor.fields.some(field => field.error)} onClick={() => window.chatter.saveSettingsSection(sectionId)}>{state.labels.save}</button>
+    <button type="button" disabled={!editor.dirty || editor.busy || editor.loading} onClick={() => window.chatter.discardSettingsSection(sectionId)}>{state.labels.cancel}</button>
+    <button type="button" disabled={editor.dirty || editor.busy || editor.loading} onClick={() => window.chatter.reloadSettingsSection(sectionId)}>Reload</button>
+  </section>;
+}
 `,
 };

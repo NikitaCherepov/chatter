@@ -30,8 +30,8 @@ import {
 } from '../lib/speechRecognition';
 import { WakeWordSettings } from './WakeWordSettings';
 import voiceStyles from './VoiceSettings.module.scss';
-import { getRenderPerfLevel, setRenderPerfLevel, type RenderPerfLevel } from '../lib/renderPerf';
-import { getThemePreference, getThemeSchedule, setThemePreference, setThemeSchedule, type ThemePreference } from '../lib/theme';
+import { getRenderPerfLevel, type RenderPerfLevel } from '../lib/renderPerf';
+import { getThemePreference, getThemeSchedule, type ThemePreference } from '../lib/theme';
 import { parsePromptSections, serializePromptSections, type PromptSectionKey, type PromptSections } from '../lib/promptSections';
 import { Select } from './Select';
 import { TimePicker } from './TimePicker';
@@ -41,7 +41,6 @@ import {
   getLanguageDisplayName,
   getLanguagePreference,
   isLanguagePreference,
-  setLanguagePreference,
   SUPPORTED_LANGUAGES,
   type LanguagePreference,
 } from '../i18n';
@@ -82,11 +81,15 @@ import { AvatarImage } from './AvatarImage';
 import { Icon } from './Icon';
 import { ConfirmDialog } from './ConfirmDialog';
 import { SettingsNavigation } from './SettingsNavigation';
-import type { SettingsSection as Section } from '../lib/settings-navigation';
+import type { SettingsSection as Section, SettingsSearchResult } from '../lib/settings-navigation';
 import { useSettingsSearchTarget } from '../lib/useSettingsSearchTarget';
+import { APP_SETTINGS_CHANGED, saveAppLanguage, saveAppLocalSetting, saveAppUiSettings, setAppZoomPercent,
+  ZOOM_STEP_PCT, ZOOM_MIN_PCT, ZOOM_MAX_PCT, zoomLevelToPercent, clampZoomPct } from '../lib/app-settings';
 
 type Props = {
   onClose: () => void;
+  initialSection?: Section;
+  initialTarget?: SettingsSearchResult;
   chatLayouts: ChatLayouts;
   initialLayoutDraft?: ChatLayoutProfile;
   onLayoutPreview: (profile: ChatLayoutProfile) => void;
@@ -115,9 +118,6 @@ type PersonaInfo = {
   is_default: number;
 };
 
-const ZOOM_STEP_PCT = 5;
-const ZOOM_MIN_PCT = 40;
-const ZOOM_MAX_PCT = 200;
 
 const COMMON_TIMEZONE_OFFSETS = [
   -12, -11, -10, -9.5, -9, -8, -7, -6, -5, -4, -3.5, -3, -2, -1,
@@ -149,30 +149,23 @@ const modalVariants = {
 };
 
 
-// Electron uses logarithmic zoom: zoomFactor = 1.2^level
-function zoomLevelToPercent(level: number): number {
-  return Math.round(Math.pow(1.2, level) * 100);
-}
-
-function percentToZoomLevel(pct: number): number {
-  return Math.log(pct / 100) / Math.log(1.2);
-}
-
-function clampZoomPct(pct: number): number {
-  const snapped = Math.round(pct / ZOOM_STEP_PCT) * ZOOM_STEP_PCT;
-  return Math.min(ZOOM_MAX_PCT, Math.max(ZOOM_MIN_PCT, snapped));
-}
-
 export function SettingsModal({
-  onClose, chatLayouts, initialLayoutDraft, onLayoutPreview, initialAppearanceDraft, onAppearancePreview,
+  onClose, chatLayouts, initialLayoutDraft, onLayoutPreview, initialAppearanceDraft, onAppearancePreview, initialSection, initialTarget,
   onAccountChanged, onChatCreated, onAuthInvalidated, onAskMcpHelp,
 }: Props) {
   const { user, setUser } = useAuth();
   const queryClient = useQueryClient();
   const isAdmin = user?.is_admin === 1 || user?.role === 'admin';
   const { t, i18n } = useTranslation();
-  const [section, setSection] = useState<Section>(initialLayoutDraft ? 'chatLayout' : initialAppearanceDraft ? 'app' : 'account');
+  const [section, setSection] = useState<Section>(initialLayoutDraft ? 'chatLayout' : initialAppearanceDraft ? 'app' : initialSection === 'admin' && !isAdmin ? 'account' : initialSection ?? 'account');
   const { panelRef, selectTarget, unavailable } = useSettingsSearchTarget(section);
+  const appScope = JSON.stringify([api.API_BASE, user?.id]);
+  const appScopeRef = useRef<string | null>(appScope); appScopeRef.current = appScope;
+  useEffect(() => { appScopeRef.current = appScope; return () => { appScopeRef.current = null; }; }, [appScope]);
+  useEffect(() => {
+    if (!initialSection || initialSection === 'admin' && !isAdmin) return;
+    setSection(initialSection); selectTarget(initialTarget);
+  }, [initialSection, initialTarget, isAdmin]);
 
   // Account
   const [nameValue, setNameValue] = useState('');
@@ -436,6 +429,20 @@ export function SettingsModal({
       ...SUPPORTED_LANGUAGES.map((language) => ({ value: language, label: getLanguageDisplayName(language) })),
     ];
   }, [i18n.language, t]);
+  useEffect(() => {
+    let mounted = true;
+    const refresh = (event: Event) => {
+      setLanguagePreferenceState(getLanguagePreference()); setThemePreferenceState(getThemePreference());
+      setThemeScheduleState(getThemeSchedule()); setRenderPerfState(getRenderPerfLevel());
+      const settings = (event as CustomEvent<Partial<api.UiSettings> | undefined>).detail;
+      if (settings) setUiSettingsState(previous => ({ ...previous, ...settings }));
+      void window.electronAPI.getZoomLevel().then(level => {
+        if (mounted) { const percent = zoomLevelToPercent(level); setZoomPct(percent); if (!zoomEditing) setZoomInputValue(String(percent)); }
+      }).catch(() => {});
+    };
+    window.addEventListener(APP_SETTINGS_CHANGED, refresh);
+    return () => { mounted = false; window.removeEventListener(APP_SETTINGS_CHANGED, refresh); };
+  }, [zoomEditing]);
   const [subagentModel, setSubagentModelState] = useState<string | null>(null);
   const [subagentModelSaving, setSubagentModelSaving] = useState(false);
   const [subagentReasoningLevel, setSubagentReasoningLevelState] = useState<api.ReasoningLevel | null>(null);
@@ -573,23 +580,23 @@ export function SettingsModal({
     if (!isLanguagePreference(value)) return;
 
     const previousPreference = languagePreference;
+    const scope = appScopeRef.current, current = () => scope !== null && scope === appScopeRef.current;
     setLanguagePreferenceState(value);
 
     try {
-      const language = await setLanguagePreference(value);
-      const result = await api.setUserLanguage(language);
+      const result = await saveAppLanguage(value, current);
+      if (!current()) return;
       if (user) {
-        const updatedUser = { ...user, language: result.language };
-        setUser(updatedUser);
-        localStorage.setItem('chatter_user', JSON.stringify(updatedUser));
+        setUser(previous => {
+          if (!previous || !current() || previous.id !== user.id) return previous;
+          const updatedUser = { ...previous, language: result.language };
+          try { localStorage.setItem('chatter_user', JSON.stringify(updatedUser)); } catch { /* Session state remains current. */ }
+          return updatedUser;
+        });
       }
     } catch {
+      if (!current()) return;
       setLanguagePreferenceState(previousPreference);
-      try {
-        await setLanguagePreference(previousPreference);
-      } catch {
-        // The save error below is enough; keep the modal responsive.
-      }
       toast.error(t('settings.toasts.saveSettingFailed'));
     }
   };
@@ -611,13 +618,13 @@ export function SettingsModal({
   const handleThemeChange = (value: string) => {
     if (value !== 'system' && value !== 'light' && value !== 'dark' && value !== 'schedule') return;
     setThemePreferenceState(value);
-    setThemePreference(value);
+    saveAppLocalSetting('theme', value);
   };
 
   const handleRenderPerfChange = (value: string) => {
     if (value !== 'low' && value !== 'medium' && value !== 'high' && value !== 'ultra') return;
     setRenderPerfState(value as RenderPerfLevel);
-    setRenderPerfLevel(value as RenderPerfLevel);
+    saveAppLocalSetting('renderPerf', value);
     toast.success(t('settings.app.renderPerfSaved'));
   };
 
@@ -685,19 +692,22 @@ export function SettingsModal({
   };
 
   const handleToggleShowTokens = async () => {
+    const scope = appScopeRef.current, current = () => scope !== null && scope === appScopeRef.current;
     const newValue = !(uiSettings.show_tokens !== false);
     const prev = uiSettings;
-    setUiSettingsState({ show_tokens: newValue });
+    setUiSettingsState({ ...prev, show_tokens: newValue });
     setUiSettingsSaving(true);
     try {
-      const res = await api.setUiSettings({ show_tokens: newValue });
+      const res = await saveAppUiSettings({ show_tokens: newValue }, current);
+      if (!current()) return;
       invalidateSettingsRead('ui');
       setUiSettingsState(res.settings);
       // Обновляем user в AuthProvider чтобы ChatPage сразу перерисовался
       if (user) {
-        setUser({ ...user, ui_settings: res.settings });
+        setUser(previous => previous && current() && previous.id === user.id ? { ...previous, ui_settings: res.settings } : previous);
       }
     } catch {
+      if (!current()) return;
       setUiSettingsState(prev); // rollback
       toast.error(t('settings.toasts.saveSettingFailed'));
     } finally {
@@ -706,18 +716,21 @@ export function SettingsModal({
   };
 
   const handleToggleDiceRoll = async () => {
+    const scope = appScopeRef.current, current = () => scope !== null && scope === appScopeRef.current;
     const newValue = !uiSettings.dice_roll_enabled;
     const prev = uiSettings;
-    setUiSettingsState({ dice_roll_enabled: newValue });
+    setUiSettingsState({ ...prev, dice_roll_enabled: newValue });
     setUiSettingsSaving(true);
     try {
-      const res = await api.setUiSettings({ dice_roll_enabled: newValue });
+      const res = await saveAppUiSettings({ dice_roll_enabled: newValue }, current);
+      if (!current()) return;
       invalidateSettingsRead('ui');
       setUiSettingsState(res.settings);
       if (user) {
-        setUser({ ...user, ui_settings: res.settings });
+        setUser(previous => previous && current() && previous.id === user.id ? { ...previous, ui_settings: res.settings } : previous);
       }
     } catch {
+      if (!current()) return;
       setUiSettingsState(prev); // rollback
       toast.error(t('settings.toasts.saveSettingFailed'));
     } finally {
@@ -1598,9 +1611,10 @@ export function SettingsModal({
   }, [aiGenerated, customContent]);
 
   const applyZoom = async (newPct: number) => {
-    setZoomPct(newPct);
-    setZoomInputValue(String(newPct));
-    await window.electronAPI?.setZoomLevel(percentToZoomLevel(newPct));
+    const previous = zoomPct;
+    setZoomPct(newPct); setZoomInputValue(String(newPct));
+    try { await setAppZoomPercent(newPct); }
+    catch { setZoomPct(previous); setZoomInputValue(String(previous)); toast.error(t('settings.toasts.saveSettingFailed')); }
   };
 
   const handleZoomChange = (deltaPct: number) => {
@@ -2618,7 +2632,7 @@ export function SettingsModal({
                                 onChange={value => {
                                   const next = { ...themeSchedule, [mode]: value };
                                   setThemeScheduleState(next);
-                                  setThemeSchedule(next);
+                                  saveAppLocalSetting(mode === 'light' ? 'lightFrom' : 'darkFrom', value);
                                 }} />
                             </div>
                           );

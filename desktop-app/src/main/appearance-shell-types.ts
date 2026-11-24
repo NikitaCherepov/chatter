@@ -1,4 +1,5 @@
 export const APPEARANCE_LABEL_KEYS = ["newChat", "allChats", "settings", "search", "loadMore", "loading", "empty", "workLog", "reasoning", "download", "image", "imageLoadFailed", "copy", "downloadDocx", "sendTelegram", "save", "cancel", "fork", "edit", "delete", "regenerate", "regenerateHint", "speak", "pauseSpeech", "resumeSpeech", "stopSpeech", "reviewConfirmation", "previousVariant", "nextVariant", "renameChat", "moveChat", "hideFromBot", "showInBot", "leaveChat", "createFolder", "renameFolder", "deleteFolder", "unfiled"] as const;
+import { parseThemeSettingsAction, canUseThemeSettings, type ThemeSettingsAction, type ThemeSettingsState, type NativeSettingsAction } from './settings-shell-types';
 export type AppearanceLabelKey = typeof APPEARANCE_LABEL_KEYS[number];
 export type AppearanceLabels = Record<AppearanceLabelKey, string> & Partial<Record<string, string>>;
 export type AppearanceChatMenuActionName = 'rename' | 'downloadDocx' | 'move' | 'setBotHidden' | 'delete' | 'leave';
@@ -10,7 +11,7 @@ export type AppearanceMenuItem = { id: string; label: string; disabled: boolean;
 
 type AppearanceNavigationAction =
   | { type: 'openChat'; id: number }
-  | { type: 'newChat' | 'openLibrary' | 'openSettings' | 'openConversation' | 'attachFiles' | 'home' }
+  | { type: 'newChat' | 'openLibrary' | 'openConversation' | 'attachFiles' | 'home' }
   | { type: 'sendMessage'; chatId: number; text: string }
   | { type: 'stopGeneration' | 'loadOlderMessages'; chatId: number }
   | { type: 'loadMore'; folderId: number | null }
@@ -57,7 +58,7 @@ export type AppearanceDocumentPage = { source: string; width: number; height: nu
 export type AppearanceComposerAction = { type: 'composerAction'; chatId: number; action: 'choose' | 'remove' | 'clear'; id?: string };
 export type AppearancePasteAction = { type: 'pasteAttachments'; chatId: number; files: { name: string; type: string; bytes: ArrayBuffer | null }[] };
 export type AppearanceShellAction = AppearanceNavigationAction | AppearanceMessageAction | AppearanceSpeechAction | AppearanceReviewAction
-  | AppearanceConfirmationRequest | AppearanceContentAction | AppearanceComposerAction | AppearancePasteAction | AppearanceChatMenuAction | AppearanceFolderMenuAction | AppearanceVoiceAction | AppearanceModelAction
+  | AppearanceConfirmationRequest | AppearanceContentAction | AppearanceComposerAction | AppearancePasteAction | AppearanceChatMenuAction | AppearanceFolderMenuAction | AppearanceVoiceAction | AppearanceModelAction | ThemeSettingsAction | NativeSettingsAction
   | { type: 'confirmationPresentation'; custom: boolean };
 
 export type AppearanceToolCall = {
@@ -96,6 +97,7 @@ export type AppearanceShellState = {
   models?: AppearanceModels;
   context?: AppearanceContext;
   voice?: AppearanceVoice;
+  settings?: ThemeSettingsState;
   speech: { messageId: number | null; status: 'idle' | 'loading' | 'playing' | 'paused' };
   confirmations: AppearanceConfirmation[];
   messagesLoading: boolean;
@@ -134,6 +136,13 @@ export function parseAppearancePaste(value: unknown): AppearancePasteAction | nu
 export function parseAppearanceShellAction(value: unknown): AppearanceShellAction | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const input = value as Record<string, unknown>;
+  if (input.type === 'settingsAction') return parseThemeSettingsAction(input);
+  if (input.type === 'openSettings') {
+    if (input.sectionId === undefined && input.target === undefined) return { type: 'openSettings' };
+    if (typeof input.sectionId !== 'string' || !/^[a-zA-Z0-9_-]{1,80}$/.test(input.sectionId)
+        || input.target !== undefined && (typeof input.target !== 'string' || !/^[a-zA-Z0-9_.:-]{1,200}$/.test(input.target))) return null;
+    return { type: 'openSettings', sectionId: input.sectionId, ...(input.target ? { target: input.target as string } : {}) };
+  }
   const validId = (value: unknown) => Number.isSafeInteger(value) && Number(value) > 0;
   if (input.type === 'selectModel' && (input.id === null || typeof input.id === 'string' && input.id.length > 0 && input.id.length <= 500))
     return { type: 'selectModel', id: input.id as string | null };
@@ -225,7 +234,6 @@ export function parseAppearanceShellAction(value: unknown): AppearanceShellActio
   if (
     input.type === 'newChat' ||
     input.type === 'openLibrary' ||
-    input.type === 'openSettings' ||
     input.type === 'openConversation' ||
     input.type === 'attachFiles' ||
     input.type === 'home'
@@ -235,6 +243,8 @@ export function parseAppearanceShellAction(value: unknown): AppearanceShellActio
 }
 
 export function canRunAppearanceAction(state: AppearanceShellState, action: AppearanceShellAction): boolean {
+  if (action.type === 'settingsAction') return canUseThemeSettings(state.settings, action);
+  if (action.type === 'openSettings') return !action.sectionId || Boolean(state.settings?.sections.some(section => section.id === action.sectionId));
   if (action.type === 'selectModel') return Boolean(state.models && !state.models.loading && !state.models.busy
     && (action.id === null || state.models.items.some(model => model.id === action.id)));
   if (action.type === 'chatMenuAction') {
