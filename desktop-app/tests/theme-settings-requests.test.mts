@@ -18,6 +18,21 @@ let snapshot = { appearance: { version: 1, revision: 3, activeId: 'one', profile
   workspace: { directory: '/fixture', draftsDirectory: '/fixture/.drafts', documentation: '/fixture/THEMES.md', activeId: 'one', profiles: [], drafts: [{ id: 'draft-one', directory: '/fixture/.drafts/draft-one' }], migrationComplete: true, migrationErrors: [], issues: [] } };
 const drafts: any = { 'draft-one': schema.newAppearance('draft-one') };
 const copy = (value: any) => JSON.parse(JSON.stringify(value));
+let intuitionConfig:any={revision:0,settings:{mode:'disabled',historyMessages:null,questions:null},available:false,
+  defaults:[{id:'humor',name:'Humor',question:'Is the user joking?',enabled:true}],effective:{enabled:false,historyMessages:2,questions:[]}};
+const intuitionModule:any={exports:{}};
+vm.runInNewContext(ts.transpileModule(fs.readFileSync(new URL('../src/renderer/lib/intuition-service.ts',import.meta.url),'utf8'),{
+  compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{
+  exports:intuitionModule.exports,require:()=>({apiFetch:async(path:string,options:any={})=>{
+    calls.push(['intuition',path,options]);
+    if(path.endsWith('/suggest'))return {questions:[{id:'new_signal',name:'New',question:'New question?',enabled:true}]};
+    if(options.method==='PUT'){
+      const body=JSON.parse(options.body);
+      if(body.revision!==intuitionConfig.revision)throw Object.assign(new Error('conflict'),{data:{error:'intuition_settings_changed'}});
+      intuitionConfig={...intuitionConfig,revision:intuitionConfig.revision+1,settings:body.settings};
+    }
+    return copy(intuitionConfig);
+  }})});
 let pendingRead: Promise<any> | null = null, observedSignal: AbortSignal | null = null;
 const api = {
   fetchMe: async () => ({ id: 4, name: 'Fixture', username: null, plan: 'pro', role: 'user', identities: [{ provider: 'password', provider_subject: 'fixture-user', username: null }] }),
@@ -56,6 +71,8 @@ vm.runInNewContext(ts.transpileModule(fs.readFileSync(new URL('../src/renderer/l
   if (name === './api') return api;
   if (name.endsWith('settings-request-types')) return { settingsOperations };
   if (name === './memory-settings-service') return memory;
+  if (name === './intuition-service') return intuitionModule.exports;
+  if (name === './theme-profile-settings') return {createThemeProfileRequests:()=>({})}; // Covered by theme-profile-settings.test.mts.
   if (name === './memory-queries') return { memoryPageUrl: (path: string, params: any) => path + '?' + new URLSearchParams(params), computeMemoryProjection: async () => ({ points: [{ id: 'record-1', position: [0, 1, 2] }], spaces: 1 }) };
   if (name === './appearance-schema') return schema;
   if (name === './appearance-runtime') return { previewAppearance: (profile: any) => changes.push(['preview', profile?.id ?? null]) };
@@ -81,6 +98,23 @@ let sequence = 0;
 const open = (sectionId: string) => controller.handle({ type: 'settingsAction', action: 'open', sectionId });
 const raw = (sectionId: string, operation: string, params: any = {}) => ({ method: 'settings', requestId: String(++sequence), sectionId, operation, params, editorId: controller.getState().editor.id });
 const request = async (section: string, operation: string, params: any = {}) => { const input = raw(section, operation, params); const result = await controller.request(input); controller.completeRequest(input.requestId); return result; };
+await open('intuition');
+const config={mode:'enabled',historyMessages:0,questions:[]};
+await assert.rejects(request('intuition','saveIntuitionConfig',{settings:config}),/settings_read_required/);
+assert.equal(parseSettingsRequest(raw('intuition','saveIntuitionConfig',{settings:{...config,mode:'inherit'}})),null);
+assert.equal(parseSettingsRequest(raw('intuition','saveIntuitionConfig',{settings:{...config,historyMessages:51}})),null);
+assert.equal(parseSettingsRequest(raw('intuition','saveIntuitionConfig',{settings:{...config,questions:[{id:'bad-id',name:'x',question:'y',enabled:true}]}})),null);
+const intuitionRead=await request('intuition','getIntuitionConfig');assert.equal(intuitionRead.available,false);assert.equal(intuitionRead.revision,undefined);
+await request('intuition','saveIntuitionConfig',{settings:config});assert.equal(intuitionConfig.settings.mode,'enabled');
+assert.equal(calls.at(-1)[1],'/api/v1/intuition');
+const suggestions=await request('intuition','suggestIntuitionQuestions',{brief:'Understand humor'});
+assert.equal(suggestions.questions[0].id,'new_signal');assert.deepEqual(intuitionConfig.settings.questions,[],'suggestions never change active settings');
+assert.equal(JSON.parse(calls.at(-1)[2].body).includeHistory,false);
+intuitionConfig.revision++;await assert.rejects(request('intuition','saveIntuitionConfig',{settings:config}),/intuition_settings_changed/);
+await assert.rejects(request('intuition','saveIntuitionConfig',{settings:config}),/settings_read_required/);
+await request('intuition','getIntuitionConfig');await request('intuition','saveIntuitionConfig',{settings:{...config,questions:null,historyMessages:null}});
+assert.equal(intuitionConfig.settings.questions,null);
+assert.ok(cached.some(entry=>entry.queryKey?.[0]==='intuition'),'native and per-chat intuition caches are invalidated');
 await open('account'); const oldEditorId = controller.getState().editor.id;
 assert.equal((await request('account', 'getAccount')).login, 'fixture-user');
 assert.equal(parseSettingsRequest(raw('account', 'fetch', { url: '/arbitrary' })), null);

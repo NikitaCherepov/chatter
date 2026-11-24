@@ -1,5 +1,161 @@
 /** Optional source examples, never mounted by the app. Copy, restyle or replace them. */
 export const THEME_SETTINGS_RESOURCE_EXAMPLES: Record<string, string> = {
+  'ProfileLibrary.tsx': String.raw`import React from 'react';
+import {useChatterState} from '@chatter/ui';
+import type {SettingsPromptLibrary,SettingsPersonaLibrary} from '../chatter';
+
+type Draft={id?:number;name:string;description:string;content:string;userInstructions:string;allowCoreMemoryUpdate:boolean};
+type Item={id:number;name:string;active:boolean;editable:boolean;primary:boolean;draft?:Draft};
+const blank=():Draft=>({name:'',description:'',content:'',userInstructions:'',allowCoreMemoryUpdate:true});
+// One optional editor serves both sections. All markup and copy can be replaced.
+export default function ProfileLibrary({sectionId}:{sectionId:'prompt'|'personas'}){
+ const state=useChatterState(),editor=state?.settings.editor;
+ const ready=editor?.sectionId===sectionId&&!editor.loading;
+ const current=React.useRef(editor?.id);current.current=editor?.id;
+ const [items,setItems]=React.useState<Item[]>(),[limit,setLimit]=React.useState<number>();
+ const [form,setForm]=React.useState<{draft:Draft;saved:Draft}>();
+ const [error,setError]=React.useState(''),[busy,setBusy]=React.useState(false);
+ const [remove,setRemove]=React.useState<Item>(),[brief,setBrief]=React.useState(''),[proposal,setProposal]=React.useState<string>();
+ const accept=(value:SettingsPromptLibrary|SettingsPersonaLibrary)=>{
+  if('prompts' in value){setLimit(value.max_custom_prompt_length);setItems([
+   ...value.prompts.map(p=>({id:p.id,name:p.name,active:value.selected_prompt_id===p.id,editable:false,primary:false})),
+   ...value.custom_prompts.map(p=>({id:p.id,name:p.name,active:value.selected_prompt_id===p.id,editable:true,primary:false,draft:{...blank(),id:p.id,name:p.name,description:p.description,content:p.content}})),
+   {id:-1,name:'Legacy custom prompt',active:value.selected_prompt_id===-1,editable:false,primary:false},
+  ]);}else setItems(value.personas.map(p=>({id:p.id,name:p.name,active:p.active,editable:true,primary:p.primary,
+   draft:{id:p.id,name:p.name,description:p.description,content:p.coreMemory,userInstructions:p.userInstructions,allowCoreMemoryUpdate:p.allowCoreMemoryUpdate}})));
+ };
+ const load=async()=>sectionId==='prompt'?window.chatter.requestSettings('prompt','listPrompts'):window.chatter.requestSettings('personas','listPersonas');
+ React.useEffect(()=>{
+  setItems(undefined);setForm(undefined);setError('');setRemove(undefined);setProposal(undefined);setBrief('');setBusy(false);setLimit(undefined);
+  if(!ready)return;let alive=true;
+  load().then(value=>{if(alive)accept(value);},reason=>{if(alive)setError(reason.message);});
+  return()=>{alive=false;};
+ },[ready,editor?.id,sectionId]);
+ if(!ready||!editor)return null;
+ const dirty=!!form&&JSON.stringify(form.draft)!==JSON.stringify(form.saved);
+ const locked=busy||editor.busy;
+ const run=async<R,>(action:()=>Promise<R>,commit:(result:R)=>void)=>{
+  const id=editor.id;setError('');setBusy(true);
+  try{const result=await action();if(current.current===id)commit(result);}
+  catch(reason){if(current.current===id)setError(reason instanceof Error?reason.message:'settings_operation_failed');}
+  finally{if(current.current===id)setBusy(false);}
+ };
+ const edit=(draft:Draft)=>{setForm({draft,saved:draft});setProposal(undefined);};
+ const patch=(value:Partial<Draft>)=>{if(form)setForm({...form,draft:{...form.draft,...value}});};
+ return <section aria-busy={locked}>
+  {error&&<p role="alert">{error}</p>}{!items&&!error&&<p role="status">Loading…</p>}
+  <button type="button" disabled={locked||dirty} onClick={()=>void run(load,accept)}>Reload</button>
+  <button type="button" disabled={locked||dirty||!items} onClick={()=>edit(blank())}>New</button>
+  {dirty&&<p>Save or discard your edits before choosing another profile.</p>}
+  {items?.map(item=><article key={item.id}><strong>{item.name}{item.active?' ✓':''}</strong>
+   <button type="button" disabled={locked||item.active} onClick={()=>void run(async()=>sectionId==='prompt'
+    ?window.chatter.requestSettings('prompt','selectPrompt',{id:item.id}):window.chatter.requestSettings('personas','activatePersona',{id:item.id}),accept)}>Select</button>
+   {item.editable&&<><button type="button" disabled={locked||dirty} onClick={()=>edit(item.draft!)}>Edit</button>
+    <button type="button" disabled={locked||dirty||item.primary} onClick={()=>setRemove(item)}>Delete</button></>}
+  </article>)}
+  {remove&&<section role="alertdialog" aria-label="Delete profile"><p>Delete {remove.name}? {sectionId==='personas'&&'Chats using it will return to automatic persona selection.'}</p>
+   <button type="button" disabled={locked} onClick={()=>setRemove(undefined)}>Cancel</button>
+   <button type="button" disabled={locked} onClick={()=>void run(async()=>sectionId==='prompt'
+    ?window.chatter.requestSettings('prompt','deletePrompt',{id:remove.id,confirmed:true}):window.chatter.requestSettings('personas','deletePersona',{id:remove.id,confirmed:true}),value=>{accept(value);setRemove(undefined);setForm(undefined);})}>Delete permanently</button>
+  </section>}
+  {form&&<form onSubmit={event=>{event.preventDefault();const d=form.draft;
+   void run(async()=>sectionId==='prompt'
+    ?d.id===undefined?window.chatter.requestSettings('prompt','createPrompt',{name:d.name,description:d.description,content:d.content})
+     :window.chatter.requestSettings('prompt','updatePrompt',{id:d.id,name:d.name,description:d.description,content:d.content})
+    :d.id===undefined?window.chatter.requestSettings('personas','createPersona',{name:d.name,description:d.description,coreMemory:d.content,userInstructions:d.userInstructions,allowCoreMemoryUpdate:d.allowCoreMemoryUpdate})
+     :window.chatter.requestSettings('personas','updatePersona',{id:d.id,name:d.name,description:d.description,coreMemory:d.content,userInstructions:d.userInstructions,allowCoreMemoryUpdate:d.allowCoreMemoryUpdate}),value=>{accept(value);setForm(undefined);setProposal(undefined);});
+  }}><fieldset disabled={locked}>
+   <label>Name<input required maxLength={sectionId==='personas'?80:undefined} value={form.draft.name} onChange={event=>patch({name:event.target.value})}/></label>
+   <label>Description<input maxLength={sectionId==='personas'?240:undefined} value={form.draft.description} onChange={event=>patch({description:event.target.value})}/></label>
+   <label>{sectionId==='prompt'?'Prompt':'Core memory'}<textarea maxLength={sectionId==='prompt'?limit:undefined} value={form.draft.content} onChange={event=>patch({content:event.target.value})}/></label>
+   {sectionId==='personas'&&<>
+    <label>Instructions<textarea maxLength={12000} value={form.draft.userInstructions} onChange={event=>patch({userInstructions:event.target.value})}/></label>
+    <label>Allow automatic memory updates<input type="checkbox" checked={form.draft.allowCoreMemoryUpdate} onChange={event=>patch({allowCoreMemoryUpdate:event.target.checked})}/></label>
+   </>}
+   <button type="button" onClick={()=>{setForm(undefined);setProposal(undefined);}}>Discard edits</button>
+   <button type="submit">{sectionId==='prompt'&&form.draft.id===undefined?'Create and select':'Save'}</button>
+  </fieldset></form>}
+  {sectionId==='prompt'&&form&&<form onSubmit={event=>{event.preventDefault();void run(()=>window.chatter.requestSettings('prompt','generatePrompt',{instruction:brief,currentContent:form.draft.content}),result=>setProposal(result.generated_prompt));}}>
+   <label>Describe a proposal<textarea required value={brief} onChange={event=>setBrief(event.target.value)}/></label>
+   <button type="submit" disabled={locked}>Generate proposal</button>
+  </form>}
+  {proposal!==undefined&&<aside><pre>{proposal}</pre><button type="button" disabled={locked} onClick={()=>{patch({content:proposal});setProposal(undefined);}}>Use in draft</button><button type="button" onClick={()=>setProposal(undefined)}>Dismiss</button></aside>}
+  {editor.links.map(link=><button key={link.id} type="button" disabled={locked||dirty} onClick={()=>window.chatter.openSettings(link.sectionId,link.target)}>Advanced native editor: {link.label}</button>)}
+ </section>;
+}
+`,
+  'IntuitionEditor.tsx': String.raw`import React from 'react';
+import {useChatterState} from '@chatter/ui';
+import type {SettingsIntuitionConfig, SettingsIntuitionSettings, SettingsIntuitionQuestion} from '../chatter';
+
+export default function IntuitionEditor(){
+  const state=useChatterState(), editor=state?.settings.editor;
+  const ready=editor?.sectionId==='intuition'&&!editor.loading;
+  const current=React.useRef(editor?.id); current.current=editor?.id;
+  const [form,setForm]=React.useState<{id:string;config:SettingsIntuitionConfig;draft:SettingsIntuitionSettings}>();
+  const [proposal,setProposal]=React.useState<SettingsIntuitionQuestion[]>();
+  const [brief,setBrief]=React.useState('');
+  const [error,setError]=React.useState('');
+  const [busy,setBusy]=React.useState(false);
+  React.useEffect(()=>{
+    setForm(undefined);setProposal(undefined);setError('');setBusy(false);
+    if(!ready||!editor)return;
+    let alive=true;
+    window.chatter.requestSettings('intuition','getIntuitionConfig').then(config=>{
+      if(alive)setForm({id:editor.id,config,draft:config.settings});
+    },reason=>{if(alive)setError(reason.message);});
+    return ()=>{alive=false;};
+  },[ready,editor?.id]);
+  if(!ready||!editor)return null;
+  const data=form?.id===editor.id?form:undefined;
+  const run=async(action:()=>Promise<void>)=>{
+    setBusy(true);setError('');const id=editor.id;
+    try{await action();}catch(reason){if(current.current===id)setError(reason instanceof Error?reason.message:'settings_operation_failed');}
+    finally{if(current.current===id)setBusy(false);}
+  };
+  const accept=(config:SettingsIntuitionConfig)=>{
+    if(current.current===editor.id){setForm({id:editor.id,config,draft:config.settings});setProposal(undefined);}
+  };
+  const change=(patch:Partial<SettingsIntuitionSettings>)=>{
+    if(data)setForm({...data,draft:{...data.draft,...patch}});
+  };
+  const questions=data?.draft.questions??data?.config.defaults??[];
+  const changeQuestion=(id:string,patch:Partial<SettingsIntuitionQuestion>)=>change({questions:questions.map(item=>item.id===id?{...item,...patch}:item)});
+  return <section aria-busy={busy||editor.busy}>
+    {error&&<p role="alert">{error}</p>}
+    <button type="button" disabled={busy||editor.busy} onClick={()=>void run(async()=>accept(await window.chatter.requestSettings('intuition','getIntuitionConfig')))}>Reload</button>
+    {data&&<form onSubmit={event=>{event.preventDefault();void run(async()=>accept(await window.chatter.requestSettings('intuition','saveIntuitionConfig',{settings:data.draft})));}}>
+      <fieldset disabled={busy||editor.busy}>
+        {!data.config.available&&<p role="status">Evaluation service is unavailable. Preferences can still be saved.</p>}
+        <label>Enabled<input type="checkbox" checked={data.draft.mode==='enabled'} onChange={event=>change({mode:event.target.checked?'enabled':'disabled'})}/></label>
+        <label>Use default history depth<input type="checkbox" checked={data.draft.historyMessages===null} onChange={event=>change({historyMessages:event.target.checked?null:data.config.effective.historyMessages})}/></label>
+        {data.draft.historyMessages!==null&&<label>Recent messages<input type="number" min={0} max={50} required value={data.draft.historyMessages} onChange={event=>change({historyMessages:Number(event.target.value)})}/></label>}
+        {questions.map(question=><fieldset key={question.id}>
+          <label>Active<input type="checkbox" checked={question.enabled} onChange={event=>changeQuestion(question.id,{enabled:event.target.checked})}/></label>
+          <label>Name<input required maxLength={100} value={question.name} onChange={event=>changeQuestion(question.id,{name:event.target.value})}/></label>
+          <label>Question<textarea required maxLength={1000} value={question.question} onChange={event=>changeQuestion(question.id,{question:event.target.value})}/></label>
+          <button type="button" onClick={()=>change({questions:questions.filter(item=>item.id!==question.id)})}>Remove</button>
+        </fieldset>)}
+        <button type="button" disabled={questions.length>=20} onClick={()=>change({questions:[...questions,{id:'signal_'+crypto.randomUUID().replace(/-/g,''),name:'',question:'',enabled:true}]})}>Add question</button>
+        <button type="button" onClick={()=>change({questions:null})}>Use default questions</button>
+        <button type="button" onClick={()=>setForm({...data,draft:data.config.settings})}>Discard edits</button>
+        <button type="submit">{state?.labels.save}</button>
+      </fieldset>
+    </form>}
+    <form onSubmit={event=>{event.preventDefault();void run(async()=>{
+      const result=await window.chatter.requestSettings('intuition','suggestIntuitionQuestions',{brief});
+      if(current.current===editor.id)setProposal(result.questions);
+    });}}>
+      <label>Describe the proposed questions<textarea maxLength={2000} value={brief} onChange={event=>setBrief(event.target.value)}/></label>
+      <button type="submit" disabled={busy||editor.busy||!data}>Suggest questions</button>
+    </form>
+    {proposal&&<aside><ul>{proposal.map(item=><li key={item.id}>{item.name}: {item.question}</li>)}</ul>
+      <button type="button" disabled={busy||editor.busy} onClick={()=>{change({questions:proposal});setProposal(undefined);}}>Use in draft</button>
+      <button type="button" onClick={()=>setProposal(undefined)}>Dismiss</button>
+    </aside>}
+  </section>;
+}
+`,
   'AccountSecurity.tsx': `import React from 'react';
 import {useChatterState} from '@chatter/ui';
 export default function AccountSecurity(){

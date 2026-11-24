@@ -483,9 +483,31 @@ const REFUSELESS_MODELS_WITH_EFFORT = new Set([
   'kimi-k3.1-pro-abliterated',
 ]);
 
-function getModelReasoningProfile(baseURL: string, model: string): {
-  format: 'celeris' | 'refuseless'; levels: ReasoningLevel[];
-} | null {
+type SyntheticEfforts = Partial<Record<ReasoningLevel, string>>;
+// Synthetic's /openai/v1/models advertises reasoning_parameters.efforts per model.
+const SYNTHETIC_REASONING_GROUPS: { models: string[]; efforts: SyntheticEfforts }[] = [
+  {
+    models: ['hf:deepseek-ai/deepseek-v4.1-flash-1017', 'syn:large:text', 'syn:small:vision', 'infinite:small:vision'],
+    efforts: { none: 'none', low: 'low', high: 'high', xhigh: 'xhigh' },
+  },
+  {
+    models: ['hf:openai/gpt-oss-120b', 'hf:zai-org/glm-4.7-flash', 'syn:small:text'],
+    efforts: { none: 'none', low: 'low', medium: 'medium', high: 'high' },
+  },
+  {
+    models: ['hf:zai-org/glm-5.3', 'hf:zai-org/glm-5.3-flash', 'hf:moonshotai/kimi-k3.1-pro', 'syn:large:vision'],
+    efforts: { low: 'low', high: 'high', xhigh: 'max' },
+  },
+  {
+    models: ['hf:qwen/qwen3.8-27b'],
+    efforts: { low: 'low', medium: 'medium', xhigh: 'xhigh' },
+  },
+];
+
+function getModelReasoningProfile(baseURL: string, model: string):
+  | { format: 'celeris' | 'refuseless'; levels: ReasoningLevel[] }
+  | { format: 'synthetic'; levels: ReasoningLevel[]; efforts: SyntheticEfforts }
+  | null {
   const hostname = URL.canParse(baseURL) ? new URL(baseURL).hostname : '';
   const modelId = model.toLowerCase();
   if (hostname === 'inference.celeris.ai') {
@@ -495,6 +517,13 @@ function getModelReasoningProfile(baseURL: string, model: string): {
   if (hostname === 'api.refuseless.com') {
     if (REFUSELESS_MODELS_WITH_OFF.has(modelId)) return { format: 'refuseless', levels: ['none', 'low', 'high', 'xhigh'] };
     if (REFUSELESS_MODELS_WITH_EFFORT.has(modelId)) return { format: 'refuseless', levels: ['low', 'high', 'xhigh'] };
+  }
+  if (hostname === 'api.synthetic.new') {
+    const group = SYNTHETIC_REASONING_GROUPS.find(({ models }) => models.includes(modelId));
+    if (group) {
+      const { efforts } = group;
+      return { format: 'synthetic', levels: ALL_REASONING_LEVELS.filter(level => Boolean(efforts[level])), efforts };
+    }
   }
   return null;
 }
@@ -858,7 +887,7 @@ const adaptRequestBodyForProvider = (
         if (level !== 'none' && profile.levels.includes('xhigh')) {
           body.reasoning_effort = level === 'medium' ? 'medium' : level === 'high' || level === 'xhigh' ? 'xhigh' : 'low';
         }
-      } else {
+      } else if (profile.format === 'refuseless') {
         // An explicit level replaces the provider's alternative `effort` field.
         delete body.effort;
         if (level === 'none' && profile.levels.includes('none')) body.reasoning_effort = 'off';
@@ -866,6 +895,10 @@ const adaptRequestBodyForProvider = (
         else if (level === 'high') body.reasoning_effort = 'high';
         // For unsupported levels (including Lite on always-thinking models), use the lowest tier.
         else body.reasoning_effort = 'low';
+      } else if (profile.format === 'synthetic') {
+        const { efforts } = profile;
+        const fallback = level === 'high' || level === 'xhigh' ? (efforts.xhigh ?? efforts.high) : efforts.low;
+        body.reasoning_effort = efforts[level] ?? fallback;
       }
     }
     return applyModelSettingsToBody(body, baseURL, modelSettings);

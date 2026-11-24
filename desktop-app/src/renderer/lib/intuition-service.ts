@@ -23,7 +23,7 @@ export type IntuitionConfig = {
   effective: { enabled: boolean; historyMessages: number; questions: IntuitionQuestion[] };
 };
 const endpoint = (chatId?: number) => '/api/v1/intuition' + (chatId ? '?chat_id=' + chatId : '');
-export const getIntuition = (chatId?: number) => apiFetch<IntuitionConfig>(endpoint(chatId));
+export const getIntuition = (chatId?: number, signal?:AbortSignal) => apiFetch<IntuitionConfig>(endpoint(chatId),{signal});
 export const saveIntuition = (
   chatId: number | undefined,
   settings: IntuitionSettings,
@@ -37,8 +37,9 @@ export const suggestIntuition = (
   chatId: number | undefined,
   brief: string,
   includeHistory: boolean,
+  signal?:AbortSignal,
 ) =>
   apiFetch<{ questions: IntuitionQuestion[] }>(
     '/api/v1/intuition/suggest' + (chatId ? '?chat_id=' + chatId : ''),
-    { method: 'POST', body: JSON.stringify({ brief, includeHistory }) },
+    { method: 'POST', body: JSON.stringify({ brief, includeHistory }),signal },
   );

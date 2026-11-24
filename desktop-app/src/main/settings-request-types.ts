@@ -13,6 +13,32 @@ export const SETTINGS_REQUESTS: Record<string, Record<string, { key: string; mut
     updateRecord: { key: 'common.edit', mutation: true }, deleteRecord: { key: 'common.delete', mutation: true, confirm: true },
   },
   agents: { listAgents: { key: 'settings.agents.specialists' } },
+  intuition: {
+    getIntuitionConfig: { key: 'intuition.title' },
+    saveIntuitionConfig: { key: 'common.save', mutation: true },
+    suggestIntuitionQuestions: { key: 'intuition.suggest', gesture: true },
+  },
+  prompt: {
+    listPrompts: {key:'settings.sections.prompt'},
+    getPromptImageSource: {key:'chat.image.photoAlt'},
+    selectPrompt: {key:'common.apply',mutation:true},
+    createPrompt: {key:'settings.prompt.catalog.create',mutation:true},
+    updatePrompt: {key:'common.save',mutation:true},
+    deletePrompt: {key:'common.delete',mutation:true,confirm:true},
+    generatePrompt: {key:'settings.prompt.generate',gesture:true},
+    setPromptImage: {key:'settings.prompt.imageChoose',mutation:true},
+    deletePromptImage: {key:'common.delete',mutation:true},
+  },
+  personas: {
+    listPersonas: {key:'settings.sections.personas'},
+    getPersonaImageSource: {key:'chat.image.photoAlt'},
+    createPersona: {key:'settings.account.personas.createTitle',mutation:true},
+    updatePersona: {key:'common.save',mutation:true},
+    activatePersona: {key:'common.apply',mutation:true},
+    deletePersona: {key:'common.delete',mutation:true,confirm:true},
+    setPersonaImage: {key:'settings.account.personas.image',mutation:true},
+    deletePersonaImage: {key:'common.delete',mutation:true},
+  },
   limits: { getQuota: { key: 'quota.title' } },
   app: {
     listThemes: { key: 'appearance.title' }, getTheme: { key: 'appearance.title' }, getAppearanceSchema: { key: 'appearance.title' },
@@ -34,6 +60,18 @@ const text = (value: unknown, max: number, blank = false) => typeof value === 's
 const password = (value: unknown, max: number) => typeof value === 'string' && value.length > 0 && value.length <= max;
 const positive = (value: unknown) => typeof value === 'number' && Number.isSafeInteger(value) && value > 0;
 const themeId = (value: unknown) => typeof value === 'string' && /^[a-zA-Z0-9_-]{1,80}$/.test(value);
+export function validGlobalIntuitionSettings(value:unknown):boolean {
+  if (!object(value) || !['enabled','disabled'].includes(String(value.mode))) return false;
+  if (value.historyMessages!==null && !(Number.isInteger(value.historyMessages) && Number(value.historyMessages)>=0 && Number(value.historyMessages)<=50)) return false;
+  if (value.questions===null) return true;
+  if (!Array.isArray(value.questions) || value.questions.length>20) return false;
+  const ids=new Set<string>();
+  return value.questions.every(question=>{
+    if (!object(question) || typeof question.id!=='string' || !/^[a-z][a-z0-9_]{0,63}$/.test(question.id) || ids.has(question.id)
+      || !text(question.name,100) || !text(question.question,1000) || typeof question.enabled!=='boolean') return false;
+    ids.add(question.id);return true;
+  });
+}
 export function parseSettingsRequest(value: unknown): ThemeSettingsRequest | null {
   if (!object(value) || value.method !== 'settings' || !text(value.requestId, 100) || !themeId(value.editorId)
       || typeof value.sectionId !== 'string' || typeof value.operation !== 'string') return null;
@@ -41,9 +79,22 @@ export function parseSettingsRequest(value: unknown): ThemeSettingsRequest | nul
   if (!definition || !object(value.params)) return null;
   const p = value.params, op = value.operation;
   // Serialize once to reject cycles, unsupported objects and oversized input before any operation.
-  try { if (JSON.stringify(p).length > (op === 'importTheme' || op === 'storeThemeImage' ? 17 * 1024 * 1024 : 2 * 1024 * 1024)) return null; } catch { return null; }
+  try { if (JSON.stringify(p).length > (['importTheme','storeThemeImage','setPromptImage','setPersonaImage'].includes(op) ? 17 * 1024 * 1024 : 2 * 1024 * 1024)) return null; } catch { return null; }
   let valid = false;
-  if (op === 'changePassword') valid = password(p.currentPassword, 4096) && password(p.newPassword, 128) && (p.newPassword as string).length >= 8;
+  const promptId=Number.isSafeInteger(p.id) && (Number(p.id)>0 || Number(p.id)<=-1000 || p.id===-1);
+  const customPromptId=promptId && Number(p.id)<=-1000;
+  if (op==='createPrompt'||op==='updatePrompt') valid=(op==='createPrompt'||customPromptId) && text(p.name,2*1024*1024) && text(p.content,2*1024*1024,true) && (p.description===undefined||text(p.description,2*1024*1024,true));
+  else if (op==='selectPrompt') valid=promptId;
+  else if (op==='deletePrompt'||op==='getPromptImageSource') valid=customPromptId;
+  else if (op==='generatePrompt') valid=text(p.instruction,2*1024*1024) && (p.currentContent===undefined||text(p.currentContent,2*1024*1024,true)) && (p.detail===undefined||['minimal','medium','detailed','none'].includes(String(p.detail)));
+  else if(op==='createPersona'||op==='updatePersona') valid=(op==='createPersona'||positive(p.id)) && text(p.name,80) && text(p.description,240,true)
+    && text(p.coreMemory,2*1024*1024,true) && typeof p.allowCoreMemoryUpdate==='boolean' && (p.userInstructions===undefined||text(p.userInstructions,12000,true));
+  else if(op==='activatePersona'||op==='deletePersona'||op==='getPersonaImageSource') valid=positive(p.id);
+  else if(['setPromptImage','setPersonaImage','deletePromptImage','deletePersonaImage'].includes(op)) valid=(op.includes('Prompt')?customPromptId:positive(p.id))
+    && (!op.startsWith('set')||text(p.base64,14*1024*1024)&&typeof p.mimeType==='string'&&['image/png','image/jpeg','image/webp','image/gif'].includes(p.mimeType));
+  else if (op === 'saveIntuitionConfig') valid=validGlobalIntuitionSettings(p.settings);
+  else if (op === 'suggestIntuitionQuestions') valid=text(p.brief,2000,true);
+  else if (op === 'changePassword') valid = password(p.currentPassword, 4096) && password(p.newPassword, 128) && (p.newPassword as string).length >= 8;
   else if (op === 'changeLogin') valid = password(p.currentPassword, 4096) && typeof p.newLogin === 'string' && /^[-_.a-z0-9]{3,64}$/i.test(p.newLogin.trim());
   else if (op === 'createSpace') valid = text(p.name, 100);
   else if (['activateSpace', 'renameSpace', 'deleteSpace'].includes(op)) valid = positive(p.spaceId) && (op !== 'renameSpace' || text(p.name, 100));
@@ -59,7 +110,7 @@ export function parseSettingsRequest(value: unknown): ThemeSettingsRequest | nul
   else if (op === 'saveTheme' || op === 'writeDraft' || op === 'checkTheme') valid = object(p.profile) && (p.apply === undefined || typeof p.apply === 'boolean');
   else if (op === 'importTheme') valid = ['json', 'zip'].includes(String(p.format)) && text(p.content, p.format === 'json' ? 2 * 1024 * 1024 : 17 * 1024 * 1024);
   else if (op === 'storeThemeImage') valid = text(p.base64, 12 * 1024 * 1024);
-  else valid = ['getAccount', 'getMemoryStatus', 'listSpaces', 'listAgents', 'getQuota', 'listThemes', 'getAppearanceSchema', 'cancelPreview', 'chooseThemesDirectory', 'retryThemeMigration'].includes(op);
+  else valid = ['listPrompts','listPersonas','getIntuitionConfig','getAccount', 'getMemoryStatus', 'listSpaces', 'listAgents', 'getQuota', 'listThemes', 'getAppearanceSchema', 'cancelPreview', 'chooseThemesDirectory', 'retryThemeMigration'].includes(op);
   if (!valid || definition.confirm && p.confirmed !== true) return null;
   // Credentials/params remain request-local; never copy them into settings state or diagnostic text.
   return { method: 'settings', requestId: value.requestId as string, sectionId: value.sectionId, editorId: value.editorId as string, operation: op, params: p };

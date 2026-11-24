@@ -2,6 +2,8 @@ import { WAKE_WORD_CHOICES } from '../../main/wakeword-config';
 
 /** Stable IDs shared by the catalog, search and section adapters. */
 export const SECTION_SETTING_KEYS: Record<string, Record<string, string>> = {
+  intuition: {}, // Structured forms use requestSettings rather than scalar field IDs.
+  prompt: {}, personas: {},
   voice: { recognitionSource: 'settings.voice.recognitionSource', recognitionLanguage: 'settings.voice.recognitionLanguage',
     modelId: 'settings.voice.model', voiceId: 'settings.voice.voicePlaceholder', volume: 'settings.voice.speechVolume', sfxVolume: 'settings.voice.effectsVolume',
     wakeEnabled: 'settings.voice.activation.enabled', wakeSensitivity: 'settings.voice.activation.sensitivity',

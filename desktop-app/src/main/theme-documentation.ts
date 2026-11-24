@@ -26,6 +26,8 @@ Available API features are not a mandatory UI checklist: choose what suits this 
 - docs/session.md: model selection, context/token indicators and voice recording/transcription.
 - docs/settings.md: settings catalog/search, reusable field descriptors, drafts/save/discard and native sections.
 - docs/settings-operations.md: account security forms, memory spaces/records/map, quotas, agents and theme management.
+- docs/settings-intuition.md: intuition preferences, editable questions and generated suggestions.
+- docs/settings-profiles.md: prompt libraries, generation, personas and their avatars.
 - docs/media.md: images, full-resolution viewers, documents and outgoing attachments.
 - docs/confirmations.md: custom confirmation UI, fields, decisions and native fallback.
 - docs/appearance.json: ordinary appearance fields, allowed values and ranges.
@@ -42,6 +44,103 @@ Local raster backgrounds use assets/image.png (PNG/JPEG/WebP/GIF, up to 8 MiB); 
 `;
 
 export const THEME_GUIDES: Record<string, string> = {
+  'settings-profiles.md': `# Prompts and personas
+
+Open openSettingsSection('prompt' or 'personas'), wait for editor.loading=false, then load the
+library with listPrompts or listPersonas. These sections offer operations with empty fields arrays.
+Build any form/list/layout; examples/settings/ProfileLibrary.tsx is an optional
+starting points. Keep unsaved input in your own state and ask before discarding it on selection.
+Signatures/results live in SettingsRequestContract in chatter.d.ts.
+
+## Prompts
+
+listPrompts returns built-in prompts (metadata only), custom_prompts (editable content), the
+selected_prompt_id and max_custom_prompt_length when supplied by the server. IDs are opaque:
+pass the returned id unchanged, including negative IDs. Built-ins are selectable, not editable.
+Legacy id -1 selects the old single custom_prompt_content; create a library entry to edit a copy.
+
+createPrompt({name,description?,content}) saves AND selects the new prompt, just like native
+settings. Tell the user this before the final submission. updatePrompt({id,name,description?,content})
+edits a custom entry; selectPrompt selects an existing entry. Results refresh the library; creation
+also returns createdId. Use the returned plan-specific content limit and handle server errors.
+deletePrompt({id,confirmed:true}) requires your own final user confirmation. Existing server
+selection/fallback rules apply after deletion. These are account defaults, not per-chat overrides.
+
+generatePrompt({instruction,currentContent?,detail?}) returns generated_prompt ONLY. It uses the
+configured AI and quota. Invoke directly from a user handler; show the proposal separately and
+only copy it into the local editor on request. Generating never saves or selects a prompt.
+
+## Personas
+
+listPersonas returns safe profile data: id/name/description/coreMemory/userInstructions/imageUrl,
+allowCoreMemoryUpdate/primary/active. IDs are unchanged; flags are booleans. createPersona and
+updatePersona accept name, description, coreMemory, allowCoreMemoryUpdate and optional
+userInstructions. Omitting userInstructions on update preserves it. This is plain instruction
+text, not the advanced instruction-mode/questionnaire API. Names are nonblank, at most 80
+characters; descriptions at most 240; userInstructions at most 12000. Texts may otherwise be
+empty. The shared bridge request limit is 2 MiB total. The server remains authoritative.
+
+Creation returns createdId and leaves the active persona unchanged. activatePersona({id}) is
+a separate user action. It changes the global default; explicit per-chat selections remain.
+deletePersona({id,confirmed:true}) deletes the persona and resets chats referring to it to
+automatic selection, as in native settings. The primary persona cannot be deleted. All writes
+return the refreshed library and update the same native cache/events; there is no second store.
+
+## Avatars, editing and recovery
+
+getPromptImageSource/getPersonaImageSource({id}) fetch the known entry's avatar through the app,
+returning {source:dataURL|null}. Use source in your own img/viewer; raw image_url/imageUrl are
+metadata, not network permission inside the isolated shell. No authentication URL is exposed.
+setPromptImage/setPersonaImage({id,base64,mimeType}) accepts raw base64 raster bytes (no data-URL
+prefix), PNG/JPEG/WebP/GIF, up to 10 MiB decoded. Read only a user-selected file and implement any
+preview/crop in the theme. Strip the FileReader data-URL prefix before submission. Image actions
+operate on existing entries; save a new profile first. deletePromptImage/deletePersonaImage removes
+the avatar. Built-in prompt images are not editable. Failed image reads reject, not source:null.
+
+Read a library before addressing existing IDs. Only entries returned by this settings session's
+library reads are addressable. Before editing/deleting, the host rereads the target to detect outside changes;
+settings_entity_changed means preserve the draft, explicitly reload and reconcile before retrying.
+This preflight is not an atomic server revision lock. Loading/busy/errors and late results must
+be handled by your form, just like other settings operations. Generation does not overwrite drafts.
+
+editor.links explicitly offers the native section for Character Card imports, SillyTavern persona
+imports, questionnaires and other advanced controls not yet exposed as operations. Open that link
+only at the user's request with openSettings(link.sectionId,link.target). Core library operations
+stay in the theme and do not automatically open or replace its interface.
+`,
+  'settings-intuition.md': `# Intuition settings
+
+This section exposes account-wide intuition preferences. Open openSettingsSection('intuition'),
+wait for editor.loading=false, then requestSettings('intuition','getIntuitionConfig').
+The section has operations and an empty fields array. Use your own reusable form components.
+An optional editable example is examples/settings/IntuitionEditor.tsx.
+
+getIntuitionConfig returns settings, available, defaults and effective values. available describes
+whether the server's evaluation service is configured; preferences can still be edited while it
+is unavailable. Global settings.mode is enabled or disabled. historyMessages:null uses the default
+depth; integer values 0..50 choose an explicit depth. questions:null uses the default questions;
+an empty array explicitly clears them. Effective values describe what the server will use.
+
+Keep the edited settings in local form state. Each question has a unique stable id matching
+^[a-z][a-z0-9_]{0,63}$, a nonblank name (up to 100 characters), a nonblank question (up to 1000)
+and enabled:boolean. Up to 20 questions are allowed. Themes choose controls, order and layout.
+Do not generate IDs again when merely editing or reordering an existing question.
+
+saveIntuitionConfig({settings}) submits the whole form from a user handler and returns the saved
+normalized config. It uses the same endpoint and cache as native settings, invalidating chat
+overrides so inherited global values refresh. A read must precede the first save. The host keeps
+the revision internally; do not add a revision parameter. intuition_settings_changed means another
+editor changed the settings. Preserve your draft, explicitly reload and reconcile it before saving
+again. Never retry a conflicting save automatically. Closing/switching an editor discards late
+results; an already submitted save can still finish. Errors/loading/busy belong in your form.
+
+suggestIntuitionQuestions({brief}) generates proposed questions using the existing configured
+AI service. brief may be empty and is at most 2000 characters. Invoke from a user gesture;
+generation may consume quota and may fail if the service is unavailable. The global editor sends
+no chat history. Suggestions return as data and do not save any preferences. Show them separately,
+let the user copy/apply them into the local form, and save only on the final explicit submission.
+Account defaults and per-chat overrides continue to follow the existing inheritance rules.
+`,
   'settings-operations.md': SETTINGS_OPERATIONS_GUIDE,
   'settings.md': `# Settings: data, actions and reusable theme components
 
@@ -53,7 +152,7 @@ state.settings.sections return the same localized catalog. state.settings.groups
 labels. Section IDs are stable; labels change with the app's language. Admin sections are omitted
 for non-admin accounts. mode is native (native contents), fields (custom field API) or hybrid
 (custom fields plus explicitly listed native editors). Currently app, account, limits, agents,
-memory, voice and browser provide fields and operations; other sections are native. Never infer
+memory, voice, browser, intuition, prompt and personas provide custom fields or operations; other sections are native. Never infer
 that a section is editable just because it is in the catalog.
 
 ## Search and opening
@@ -63,7 +162,7 @@ settings index of localized UI labels/help, not user values or secrets. Results 
 key, title, sectionTitle, fieldId (custom field when mapped), operationId (when mapped) and native. At most 50 results are
 returned; refine a broad query if hasMoreResults is true. Built-in field labels are indexed;
 dynamic memory records, specialists and saved themes use the operations in settings-operations.md.
-Search matches inside the seven connected sections stay in their custom section, including
+Search matches inside the connected sections stay in their custom section, including
 password/login and appearance results. operationId identifies a form/control, not permission to
 automatically execute its operation; show the user's inputs/confirmation first.
 For a custom section call openSettingsSection(id). For a native result/section explicitly call

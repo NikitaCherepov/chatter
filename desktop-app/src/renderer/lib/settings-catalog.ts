@@ -8,7 +8,9 @@ import type { ThemeSettingsState } from '../../main/settings-shell-types';
 export function settingsCatalog(t: (key: string) => string, isAdmin: boolean): Pick<ThemeSettingsState, 'groups' | 'sections'> {
   return { groups: SETTINGS_GROUPS.map(group => ({ id: group.id, label: t(`settings.navigation.groups.${group.id}`) })),
     sections: SETTINGS_GROUPS.flatMap(group => group.sections.filter(section => isAdmin || section !== 'admin')
-      .map(section => ({ id: section, groupId: group.id, label: t(settingsSectionKey(section)), mode: section === 'app' || section in SECTION_SETTING_KEYS ? 'fields' as const : 'native' as const }))) };
+      .map(section => ({ id: section, groupId: group.id, label: t(settingsSectionKey(section)),
+        mode: section === 'prompt' || section === 'personas' ? 'hybrid' as const
+          : section === 'app' || section in SECTION_SETTING_KEYS ? 'fields' as const : 'native' as const }))) };
 }
 export function themeSettingsSearch(query: string, t: (key: string) => string, isAdmin: boolean): ThemeSettingsState['results'] {
   const headings: SettingsSearchEntry[] = SETTINGS_GROUPS.flatMap(group => group.sections.map(section => ({ section, key: settingsSectionKey(section) })));

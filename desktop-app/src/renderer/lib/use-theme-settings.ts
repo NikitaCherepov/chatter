@@ -92,7 +92,8 @@ export function useThemeSettings(themeId: string | null, onAuthInvalidated?: () 
   useEffect(() => {
     const refresh = () => {
       const editor = controller.getState().editor;
-      if (editor && !editor.loading && !editor.busy && !editor.dirty)
+      // Operation-only forms own their drafts; a focus event cannot tell whether those are dirty.
+      if (editor && !editor.loading && !editor.busy && !editor.dirty && editor.fields.length > 0)
         void controller.handle({ type: 'settingsAction', action: 'reload', sectionId: editor.sectionId, editorId: editor.id });
     };
     const events = [APP_SETTINGS_CHANGED, 'chatter-voice-settings-changed', 'chatter:wakeword-toggle', 'chatter:wakeword-config', 'focus'];

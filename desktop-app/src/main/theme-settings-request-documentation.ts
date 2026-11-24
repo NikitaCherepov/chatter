@@ -1,5 +1,16 @@
 export const SETTINGS_REQUEST_DECLARATIONS = `
 export type SettingsRequestDescriptor={id:string;label:string;mutation:boolean;requiresGesture:boolean;requiresConfirmation:boolean};
+export type SettingsBuiltinPrompt={id:number;name:string;description:string;is_default:number};
+export type SettingsCustomPrompt={id:number;name:string;description:string;content:string;image_url:string|null;character_card?:{first_message_present:boolean}|null};
+export type SettingsPromptLibrary={prompts:SettingsBuiltinPrompt[];custom_prompts:SettingsCustomPrompt[];selected_prompt_id:number|null;custom_prompt_content:string|null;max_custom_prompt_length?:number};
+export type SettingsPromptInput={name:string;description?:string;content:string};
+export type SettingsPersona={id:number;name:string;description:string;coreMemory:string;userInstructions:string;imageUrl:string|null;allowCoreMemoryUpdate:boolean;primary:boolean;active:boolean};
+export type SettingsPersonaInput={name:string;description:string;coreMemory:string;userInstructions?:string;allowCoreMemoryUpdate:boolean};
+export type SettingsPersonaLibrary={personas:SettingsPersona[]};
+export type SettingsProfileImage={base64:string;mimeType:'image/png'|'image/jpeg'|'image/webp'|'image/gif'};
+export type SettingsIntuitionQuestion={id:string;name:string;question:string;enabled:boolean};
+export type SettingsIntuitionSettings={mode:'enabled'|'disabled';historyMessages:number|null;questions:SettingsIntuitionQuestion[]|null};
+export type SettingsIntuitionConfig={settings:SettingsIntuitionSettings;available:boolean;defaults:SettingsIntuitionQuestion[];effective:{enabled:boolean;historyMessages:number;questions:SettingsIntuitionQuestion[]};inherited?:{historyMessages:number;questions:SettingsIntuitionQuestion[]}};
 export type SettingsMemorySpace={id:number;name:string;kind:'general';is_default:number;is_primary:number};
 export type SettingsMemoryRecord={id:string;memory_space_id:number;text:string;source:string;updated_at:number};
 export type SettingsMemoryPage={records:SettingsMemoryRecord[];total:number;nextOffset:number|null};
@@ -10,6 +21,32 @@ export type SettingsThemeProfile={id:string;name:string;revision:number;readme?:
 export type SettingsThemeWorkspace={directory:string;draftsDirectory:string;documentation:string;activeId:string|null;profiles:{id:string;name:string;directory:string;draftDirectory:string;hasPrevious:boolean}[];drafts:{id:string;directory:string}[];migrationComplete:boolean;migrationErrors:string[];issues:string[]};
 export type SettingsThemeList={revision:number;activeId:string|null;profiles:{id:string;name:string;revision:number}[];workspace:SettingsThemeWorkspace};
 export type SettingsRequestContract={
+ prompt:{
+  listPrompts:{params:{};result:SettingsPromptLibrary};
+  selectPrompt:{params:{id:number};result:SettingsPromptLibrary};
+  createPrompt:{params:SettingsPromptInput;result:SettingsPromptLibrary&{createdId:number}};
+  updatePrompt:{params:SettingsPromptInput&{id:number};result:SettingsPromptLibrary};
+  deletePrompt:{params:{id:number;confirmed:true};result:SettingsPromptLibrary};
+  generatePrompt:{params:{instruction:string;currentContent?:string;detail?:'minimal'|'medium'|'detailed'|'none'};result:{generated_prompt:string}};
+  getPromptImageSource:{params:{id:number};result:{source:string|null}};
+  setPromptImage:{params:SettingsProfileImage&{id:number};result:SettingsPromptLibrary};
+  deletePromptImage:{params:{id:number};result:SettingsPromptLibrary};
+ };
+ personas:{
+  listPersonas:{params:{};result:SettingsPersonaLibrary};
+  createPersona:{params:SettingsPersonaInput;result:SettingsPersonaLibrary&{createdId:number}};
+  updatePersona:{params:SettingsPersonaInput&{id:number};result:SettingsPersonaLibrary};
+  activatePersona:{params:{id:number};result:SettingsPersonaLibrary};
+  deletePersona:{params:{id:number;confirmed:true};result:SettingsPersonaLibrary};
+  getPersonaImageSource:{params:{id:number};result:{source:string|null}};
+  setPersonaImage:{params:SettingsProfileImage&{id:number};result:SettingsPersonaLibrary};
+  deletePersonaImage:{params:{id:number};result:SettingsPersonaLibrary};
+ };
+ intuition:{
+  getIntuitionConfig:{params:{};result:SettingsIntuitionConfig};
+  saveIntuitionConfig:{params:{settings:SettingsIntuitionSettings};result:SettingsIntuitionConfig};
+  suggestIntuitionQuestions:{params:{brief:string};result:{questions:SettingsIntuitionQuestion[]}};
+ };
  account:{
   getAccount:{params:{};result:{name:string|null;username:string|null;login:string|null;plan:string;role:string;canChangeCredentials:boolean;timezoneOffset:number|null;timezoneConfirmed:boolean;passwordRules:{minLength:number;maxLength:number};loginRules:{minLength:number;maxLength:number;pattern:string;caseInsensitive:boolean}}};
   changePassword:{params:{currentPassword:string;newPassword:string};result:{ok:boolean;reauthenticationRequired:true}};
@@ -58,6 +95,9 @@ export type SettingsRequestResult<S extends keyof SettingsRequestContract,O exte
 `;
 
 export const SETTINGS_OPERATIONS_GUIDE = `# Settings operations: forms and data
+
+The structured intuition editor is documented in settings-intuition.md.
+Prompt libraries and personas are documented in settings-profiles.md.
 
 Open the desired section with openSettingsSection(id), then wait for editor.loading=false.
 editor.requests advertises operations: id, localized label, mutation, requiresGesture and

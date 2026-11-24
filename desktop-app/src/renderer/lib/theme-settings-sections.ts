@@ -35,6 +35,15 @@ export function createThemeSettingsSections(context: Context): Record<string, Th
   const keepUnavailable = (options: { value: string; label: string; disabled?: boolean }[], saved: SettingValue) =>
     typeof saved === 'string' && !options.some(option => option.value === saved) ? [...options, { value: saved, label: saved || '—', disabled: true }] : options;
   return {
+    ...Object.fromEntries(['prompt','personas'].map(section=>[section,{
+      groups:()=>[],fields:()=>[],read:async()=>({}),
+      links:()=>[{id:'advanced',sectionId:section,target:'settings.sections.'+section,label:t('settings.sections.'+section)}],
+      write:async()=>{throw new Error('invalid_setting_field');},
+    }])),
+    intuition: {
+      groups:()=>[],links:()=>[],fields:()=>[],read:async()=>({}),
+      write:async()=>{throw new Error('invalid_setting_field');},
+    },
     memory: {
       groups: () => [group('preferences', 'chat.memory.globalSettings.preferencesTitle')],
       links: () => [],

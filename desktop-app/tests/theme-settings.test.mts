@@ -31,6 +31,10 @@ assert.equal(catalog.sections.some((section: any) => section.id === 'admin'), fa
 assert.equal(settingsCatalog(t, true).sections.some((section: any) => section.id === 'admin'), true);
 assert.equal(catalog.sections.find((section: any) => section.id === 'app').mode, 'fields');
 assert.equal(catalog.sections.find((section: any) => section.id === 'voice').mode, 'fields');
+assert.equal(catalog.sections.find((section: any) => section.id === 'intuition').mode, 'fields');
+assert.equal(catalog.sections.find((section: any) => section.id === 'prompt').mode, 'hybrid');
+assert.equal(catalog.sections.find((section: any) => section.id === 'personas').mode, 'hybrid');
+assert.ok(themeSettingsSearch('Create prompt', t, false).some((result: any) => result.sectionId === 'prompt' && result.operationId === 'createPrompt' && !result.native));
 assert.equal(themeSettingsSearch('масштаб', russian, false)[0].fieldId, 'zoom');
 assert.ok(themeSettingsSearch('пароль', russian, false).some((result: any) => result.sectionId === 'account' && result.operationId === 'changePassword' && result.native === false));
 assert.equal(themeSettingsSearch('PRIVATE_VALUE', t, false).length, 0);

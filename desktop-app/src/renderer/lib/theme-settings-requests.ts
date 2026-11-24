@@ -4,6 +4,8 @@ import type { ThemeSettingsSectionAdapter } from './theme-settings-controller';
 import type { SettingsTranslate } from './settings-fields';
 import * as api from './api';
 import * as memory from './memory-settings-service';
+import {createThemeProfileRequests} from './theme-profile-settings';
+import {getIntuition,saveIntuition,suggestIntuition,type IntuitionConfig,type IntuitionSettings} from './intuition-service';
 import { computeMemoryProjection, memoryPageUrl } from './memory-queries';
 import type { MemoryRecord } from '../components/MemoryRecordsPanel';
 import { APPEARANCE_CAPABILITIES, parseAppearanceProfile, newAppearance } from './appearance-schema';
@@ -19,6 +21,8 @@ export function createThemeSettingsRequests(context: Context): Record<string, Re
   const { client, base, userId, current, t } = context;
   const knownSpaces = new Map<number, memory.MemorySpace>(), knownRecords = new Map<string, MemoryRecord>();
   let observedThemeRevision: number | null = null;
+  let observedIntuitionRevision:number|null=null;
+  const publicIntuition=({revision,...config}:IntuitionConfig)=>config;
   const publicSpace = ({ id, name, kind, is_default, is_primary }: memory.MemorySpace) => ({ id, name, kind, is_default, is_primary });
   const publicRecord = ({ id, memory_space_id, text, source, updated_at }: MemoryRecord) => ({ id, memory_space_id, text, source, updated_at });
   const remember = (records: MemoryRecord[]) => { for (const record of records) {
@@ -33,6 +37,39 @@ export function createThemeSettingsRequests(context: Context): Record<string, Re
     profiles: data.appearance.profiles.map(({ id, name, revision }) => ({ id, name, revision })), workspace: data.workspace });
   const decode = (value: string) => Uint8Array.from(atob(value), character => character.charCodeAt(0));
   return {
+    ...createThemeProfileRequests(context),
+    intuition:section('intuition',async(operation,params,operationCurrent,signal)=>{
+      const guard=safe(operationCurrent);guard();
+      const prefix=['intuition',base,userId];
+      const key=[...prefix,'global'];
+      if(operation==='getIntuitionConfig'){
+        const config=await client.fetchQuery({queryKey:key,queryFn:()=>getIntuition(undefined,signal),staleTime:0});
+        guard();observedIntuitionRevision=config.revision;
+        return {result:publicIntuition(config)};
+      }
+      if(operation==='suggestIntuitionQuestions'){
+        const result=await suggestIntuition(undefined,String(params.brief),false,signal);
+        guard();return {result};
+      }
+      if(operation!=='saveIntuitionConfig')throw new Error('settings_bad_request');
+      if(observedIntuitionRevision===null)throw new Error('settings_read_required');
+      const settings=params.settings as IntuitionSettings;
+      let config:IntuitionConfig;
+      try {
+        config=await saveIntuition(undefined,{mode:settings.mode,historyMessages:settings.historyMessages,
+          questions:settings.questions?.map(({id,name,question,enabled})=>({id,name,question,enabled}))??null},observedIntuitionRevision);
+      }catch(error:any){
+        if((error?.data?.error??error?.message)==='intuition_settings_changed')observedIntuitionRevision=null;
+        throw error;
+      }
+      // Refresh the shared native cache even when the initiating editor closes after submission.
+      if(current()){
+        client.setQueryData(key,config);
+        await client.invalidateQueries({queryKey:prefix,refetchType:'active'});
+      }
+      guard();observedIntuitionRevision=config.revision;
+      return {result:publicIntuition(config)};
+    }),
     account: section('account', async (operation, params, operationCurrent) => {
       const guard = safe(operationCurrent); guard();
       if (operation === 'getAccount') { const account = await api.fetchMe(); guard(); if (account.id !== userId) throw new Error('settings_scope_changed');

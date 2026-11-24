@@ -136,11 +136,16 @@ try{
 
   const celeris = 'https://inference.celeris.ai';
   const refuseless = 'https://api.refuseless.com/v1';
+  const synthetic = 'https://api.synthetic.new/openai/v1';
   const reasoningModels = [
     { uniqueId: 'celeris', model: 'celeris-1', baseUrl: celeris + '/celeris-1/v1', levels: ['none', 'low'] },
     { uniqueId: 'magnus', model: 'celeris-1-magnus', baseUrl: celeris + '/celeris-1-magnus/v1', levels: ['none', 'low', 'medium', 'xhigh'] },
     { uniqueId: 'refuseless-deepseek', model: 'deepseek-v4.1-flash-abliterated', baseUrl: refuseless, levels: ['none', 'low', 'high', 'xhigh'] },
     { uniqueId: 'refuseless-glm', model: 'glm-5.3-abliterated', baseUrl: refuseless, levels: ['low', 'high', 'xhigh'] },
+    { uniqueId: 'synthetic-deepseek', model: 'syn:large:text', baseUrl: synthetic, levels: ['none', 'low', 'high', 'xhigh'] },
+    { uniqueId: 'synthetic-glm', model: 'hf:zai-org/GLM-5.3-Flash', baseUrl: synthetic, levels: ['low', 'high', 'xhigh'] },
+    { uniqueId: 'synthetic-qwen', model: 'hf:Qwen/Qwen3.8-27B', baseUrl: synthetic, levels: ['low', 'medium', 'xhigh'] },
+    { uniqueId: 'synthetic-oss', model: 'hf:openai/gpt-oss-120b', baseUrl: synthetic, levels: ['none', 'low', 'medium', 'high'] },
   ];
   settings.updateModelSettings({ manualModels: reasoningModels.map(({ levels, ...entry }) => ({ ...model, ...entry, id: entry.uniqueId })) });
   ai.refreshConfiguredModels();
@@ -152,6 +157,7 @@ try{
   }
   assert.equal(ai.getReasoningLevelsForBaseURL(celeris + '/celeris-1-decision/v1', 'celeris-1.1-decision'), null);
   assert.equal(ai.getReasoningLevelsForBaseURL(refuseless, 'unlisted-model'), null);
+  assert.equal(ai.getReasoningLevelsForBaseURL(synthetic, 'unlisted-model'), null);
 
   type ReasoningLevel = import('../src/services/ai.js').ReasoningLevel;
   const cases: Array<[string, ReasoningLevel | null, boolean | undefined, string | undefined]> = [
@@ -169,6 +175,14 @@ try{
     ['refuseless-deepseek', 'xhigh', undefined, 'max'],
     ['refuseless-glm', 'none', undefined, 'low'],
     ['refuseless-glm', 'medium', undefined, 'low'],
+    ['synthetic-deepseek', null, undefined, undefined],
+    ['synthetic-deepseek', 'none', undefined, 'none'],
+    ['synthetic-deepseek', 'xhigh', undefined, 'xhigh'],
+    ['synthetic-glm', 'none', undefined, 'low'],
+    ['synthetic-glm', 'xhigh', undefined, 'max'],
+    ['synthetic-qwen', 'medium', undefined, 'medium'],
+    ['synthetic-qwen', 'high', undefined, 'xhigh'],
+    ['synthetic-oss', 'xhigh', undefined, 'high'],
   ];
   const { withModelActor } = await import('../src/services/model-access.js');
   for (const [id, level, enabled, effort] of cases) {
@@ -186,7 +200,7 @@ try{
     assert.equal(reasoning, 'Thinking');
   }
 
-  const reasoningKey = keys.createModelApiKey({ name: 'Reasoning client', owner_user_id: 1, models: ['magnus', 'refuseless-deepseek'] });
+  const reasoningKey = keys.createModelApiKey({ name: 'Reasoning client', owner_user_id: 1, models: ['magnus', 'refuseless-deepseek', 'synthetic-glm'] });
   const gatewayPayload = { messages: [{ role: 'user', content: 'Hello' }] };
   response = await post({ ...gatewayPayload, model: 'magnus', reasoning: { effort: 'medium' }, chat_template_kwargs: { reasoning_effort: 'low' } }, reasoningKey.key);
   assert.equal(response.status, 200);
@@ -198,7 +212,12 @@ try{
   await response.text();
   assert.equal(received.at(-1).reasoning_effort, 'max');
   assert.ok(!('effort' in received.at(-1)));
-  console.log('PASS: Celeris and Refuseless catalog, chat streaming and Model API request formats');
+  response = await post({ ...gatewayPayload, model: 'synthetic-glm', reasoning: { effort: 'xhigh' } }, reasoningKey.key);
+  assert.equal(response.status, 200);
+  await response.text();
+  assert.equal(received.at(-1).reasoning_effort, 'max');
+  assert.ok(!('reasoning' in received.at(-1)));
+  console.log('PASS: Celeris, Refuseless and Synthetic catalog, chat streaming and Model API request formats');
 }finally{
   for(const timer of intervals)clearInterval(timer);
   server.closeAllConnections();upstream.closeAllConnections();await new Promise<void>(resolve=>server.close(()=>resolve()));await new Promise<void>(resolve=>upstream.close(()=>resolve()));

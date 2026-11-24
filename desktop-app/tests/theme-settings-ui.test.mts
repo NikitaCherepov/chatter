@@ -14,6 +14,7 @@ const native = fs.readFileSync(path.join(desktop, 'src/renderer/components/Setti
 const nativeFlags = native.slice(native.indexOf('  const handleToggleShowTokens ='), native.indexOf('  const handleSubagentModelChange ='));
 const apiFile = fs.readFileSync(path.join(desktop, 'src/renderer/lib/api.ts'), 'utf8');
 const credentialWriters = apiFile.slice(apiFile.indexOf('export function changeAccountPassword'), apiFile.indexOf('export async function setUserTimezone'));
+const promptWriters = apiFile.slice(apiFile.indexOf('export async function selectPrompt'), apiFile.indexOf('// ---------- Notes ----------'));
 const apiSource = `
 export const API_BASE='fixture';
 export const getUiSettings=async()=>{const user=window.testAccount;if(window.delaySettingsRead)await window.delaySettingsRead;return {settings:structuredClone(window.ui[user])};};
@@ -30,6 +31,18 @@ export const apiFetch=async(url,options={})=>{
   return {ok:true,...(url.endsWith('/login')?{login:payload.new_login.toLowerCase()}: {})};
  }
  if(url==='/api/v1/memory/status')return {configured:true};
+ if(url==='/api/v1/intuition'){
+  if(options.method==='PUT'){if(payload.revision!==window.intuition.revision)throw new Error('intuition_settings_changed');window.intuition={...window.intuition,revision:window.intuition.revision+1,settings:payload.settings};}
+  return structuredClone(window.intuition);
+ }
+ if(url==='/api/v1/intuition/suggest')return {questions:[{id:'suggested',name:'Suggestion',question:'Notice humor?',enabled:true}]};
+ if(url==='/api/v1/prompts')return structuredClone(window.prompts);
+ if(url==='/api/v1/prompts/select'){window.prompts.selected_prompt_id=payload.prompt_id;return {ok:true};}
+ if(url==='/api/v1/prompts/generate')return {generated_prompt:'Generated proposal'};
+ if(url==='/api/v1/prompts/custom'&&options.method==='POST'){const id=-1001;window.prompts.custom_prompts.push({...payload,id,image_url:null});window.prompts.selected_prompt_id=id;return {ok:true,prompt_id:id};}
+ if(url==='/api/v1/memory/personas'&&options.method==='POST'){const persona={...payload,id:2,image_url:null,is_primary:0,is_default:0,allow_core_memory_update:payload.allow_core_memory_update?1:0};window.personas.push(persona);return {persona};}
+ if(url==='/api/v1/memory/personas')return {personas:structuredClone(window.personas)};
+ if(url.includes('/memory/personas/')&&url.endsWith('/activate')){const id=Number(url.split('/').at(-2));window.personas=window.personas.map(p=>({...p,is_default:p.id===id?1:0}));return {};}
  if(url==='/api/v1/memory/spaces'&&options.method==='POST'){const space={id:3,name:payload.name,kind:'general',is_default:0,is_primary:0};window.memorySpaces.push(space);return {space};}
  if(url==='/api/v1/memory/spaces')return {spaces:structuredClone(window.memorySpaces)};
  if(url.includes('/memory/spaces/')&&url.endsWith('/activate')){const id=Number(url.split('/')[5]);window.memorySpaces=window.memorySpaces.map(space=>({...space,is_default:space.id===id?1:0}));return {space:window.memorySpaces.find(space=>space.id===id)};}
@@ -39,6 +52,8 @@ export const apiFetch=async(url,options={})=>{
  return {};
 };export const localMcpScope=()=>'';export const syncLocalMcp=async()=>{};
 ${credentialWriters}
+${promptWriters}
+export const setPersonaImage=async()=>({ok:true});export const deletePersonaImage=async()=>({ok:true});export const resolveImageUrl=value=>value;
 export const getModels=async()=>({models:[{id:'smart',name:'Smart',reasoning_levels:['high']},{id:'simple',name:'Simple',reasoning_levels:[]}],auto_reasoning_levels:['high']});export const getModelSettings=async()=>({model_settings:{}});export const getSubagentModel=async()=>({subagent_model:window.agentModel});export const getSubagentReasoningLevel=async()=>({reasoning_level:window.agentReasoning});export const getLinkStatus=async()=>({});export const getPrompts=async()=>({prompts:[]});
 export const getContextTokenLimit=async()=>({max_context_tokens:window.contextTokens,max_context_tokens_limit:30000});
 export const getAttachmentTokenLimit=async()=>({attachment_max_tokens:Math.min(window.attachmentTokens,Math.floor(window.contextTokens*.9)),attachment_max_tokens_limit:Math.floor(window.contextTokens*.9),max_context_tokens:window.contextTokens});
@@ -66,6 +81,9 @@ window.testAccount=1;window.ui={1:{show_tokens:true,dice_roll_enabled:false},2:{
 window.contextTokens=20000;window.attachmentTokens=15000;window.agentModel='smart';window.agentReasoning='high';window.account={name:'Fixture',plan:'pro',role:'user',timezone_offset:null,timezone_confirmed:false};
 window.memoryPreferences={automatic_memory:false,result_limit:null,admin_result_limit:7,effective_result_limit:7};
 window.memorySpaces=[{id:1,name:'General',kind:'general',is_default:1,is_primary:1},{id:2,name:'Chat only',kind:'chat',is_default:0,is_primary:0}];window.memoryRecords=[{id:'record-fixture',memory_space_id:1,text:'Before',source:'Fixture',updated_at:1}];window.authInvalidations=0;
+window.intuition={revision:0,settings:{mode:'disabled',historyMessages:null,questions:null},available:true,defaults:[],effective:{enabled:false,historyMessages:2,questions:[]}};
+window.prompts={prompts:[{id:1,name:'Builtin',description:'Default',is_default:1}],custom_prompts:[],selected_prompt_id:1,custom_prompt_content:null,max_custom_prompt_length:1000};
+window.personas=[{id:1,name:'Main',description:'Main',core_memory:'Memory',user_instructions:'',image_url:null,allow_core_memory_update:1,is_primary:1,is_default:1}];
 localStorage.setItem('chatter_tts_settings',JSON.stringify({modelId:'piper',voiceId:'ruslan',volume:.3,sfxVolume:.3}));
 function Body({user,setUser}){
  const themeSettings=useThemeSettings('fixture-theme',()=>{window.authInvalidations++;}),{t}=useTranslation();
@@ -123,7 +141,7 @@ app.whenReady().then(async()=>{
   return send(channel,payload);
  };
  id=manager.create(host.webContents,{language:'tsx',source:'',dark:false,errorLabel:'failed',bridge:'appearance-chat-list-v1',project:{entry:'App.tsx',files:{
-  'App.tsx':"import React from 'react';import Section from './components/Section';import AccountSecurity from './components/AccountSecurity';import {useChatterState} from '@chatter/ui';export default function App(){const state=useChatterState();const [section,setSection]=React.useState('');return <main>{['app','voice','account','limits','agents','memory','browser'].map(id=><button key={id} id={id==='app'?'open':'open-'+id} onClick={()=>setSection(id)}>{id}</button>)}<input id='search' onChange={event=>window.chatter.searchSettings(event.target.value)}/><output id='search-result'>{state?.settings?.results[0]?.fieldId}</output>{section&&<Section key={section} sectionId={section}/>}{section==='account'&&<AccountSecurity/>}</main>}",
+  'App.tsx':"import React from 'react';import Section from './components/Section';import AccountSecurity from './components/AccountSecurity';import {useChatterState} from '@chatter/ui';export default function App(){const state=useChatterState();const [section,setSection]=React.useState('');return <main>{['app','voice','account','limits','agents','memory','browser','intuition','prompt','personas'].map(id=><button key={id} id={id==='app'?'open':'open-'+id} onClick={()=>setSection(id)}>{id}</button>)}<input id='search' onChange={event=>window.chatter.searchSettings(event.target.value)}/><output id='search-result'>{state?.settings?.results[0]?.fieldId}</output>{section&&<Section key={section} sectionId={section}/>}{section==='account'&&<AccountSecurity/>}</main>}",
   'components/Field.tsx':THEME_SETTINGS_EXAMPLES['Field.tsx'],'components/Section.tsx':THEME_SETTINGS_EXAMPLES['Section.tsx'],
   'components/AccountSecurity.tsx':THEME_SETTINGS_EXAMPLES['AccountSecurity.tsx'],
  }}});
@@ -226,6 +244,27 @@ app.whenReady().then(async()=>{
  await click('setting-app-autoOpen');await click('setting-app-humanTyping');await until(()=>settings.editor.dirty);await named('Save');await until(()=>!settings.editor.busy&&!settings.editor.dirty);
  assert.equal(await host.webContents.executeJavaScript('window.ui[1].browser_confirm_open'),false);assert.equal(await host.webContents.executeJavaScript('window.ui[1].browser_human_typing'),false);
  assert.equal(await host.webContents.executeJavaScript('window.ui[1].show_tokens'),true);
+ await click('open-intuition');await until(()=>settings.editor?.sectionId==='intuition'&&!settings.editor.loading);
+ assert.equal(settings.editor.fields.length,0);assert.ok(settings.editor.requests.some(item=>item.id==='saveIntuitionConfig'));
+ assert.equal((await resource('intuition','getIntuitionConfig')).settings.mode,'disabled');
+ const intuitionSettings={mode:'enabled',historyMessages:3,questions:[]};await resource('intuition','saveIntuitionConfig',{settings:intuitionSettings},true);
+ assert.equal(await host.webContents.executeJavaScript('window.intuition.settings.mode'),'enabled');
+ assert.equal((await resource('intuition','suggestIntuitionQuestions',{brief:'Humor'},true)).questions[0].id,'suggested');
+ assert.deepEqual(await host.webContents.executeJavaScript('window.intuition.settings.questions'),[],'generated questions remain unsaved');
+ const resourceEditor=settings.editor.id;await host.webContents.executeJavaScript('window.dispatchEvent(new Event("focus"))');await sleep(60);
+ assert.equal(settings.editor.id,resourceEditor,'focus must preserve operation-only form drafts');
+ await click('open-prompt');await until(()=>settings.editor?.sectionId==='prompt'&&!settings.editor.loading);
+ assert.equal(settings.sections.find(item=>item.id==='prompt').mode,'hybrid');assert.equal((await resource('prompt','listPrompts')).selected_prompt_id,1);
+ assert.equal((await resource('prompt','generatePrompt',{instruction:'Proposal'},true)).generated_prompt,'Generated proposal');
+ assert.equal(await host.webContents.executeJavaScript('window.prompts.custom_prompts.length'),0);
+ const createdPrompt=await resource('prompt','createPrompt',{name:'Fixture prompt',description:'Description',content:'Content'},true);
+ assert.equal(createdPrompt.createdId,-1001);assert.equal(createdPrompt.selected_prompt_id,-1001);
+ await resource('prompt','selectPrompt',{id:1},true);assert.equal(await host.webContents.executeJavaScript('window.prompts.selected_prompt_id'),1);
+ await click('open-personas');await until(()=>settings.editor?.sectionId==='personas'&&!settings.editor.loading);
+ assert.equal((await resource('personas','listPersonas')).personas[0].primary,true);
+ const createdPersona=await resource('personas','createPersona',{name:'Fixture persona',description:'Description',coreMemory:'Memory',allowCoreMemoryUpdate:false},true);
+ assert.equal(createdPersona.createdId,2);assert.equal(createdPersona.personas.find(item=>item.id===2).active,false);
+ await resource('personas','activatePersona',{id:2},true);assert.equal(await host.webContents.executeJavaScript('window.personas.find(item=>item.id===2).is_default'),1);
  await host.webContents.executeJavaScript('window.account.name="Stale account read";window.delayAccountRead=new Promise(resolve=>{window.finishAccountRead=resolve});void 0');
  await click('open-account');await until(()=>settings.editor?.sectionId==='account'&&settings.editor.loading);
  await host.webContents.executeJavaScript('window.setSettingsMounted(false)');await until(async()=>await host.webContents.executeJavaScript('!document.getElementById("native-tokens")'));
@@ -235,7 +274,7 @@ app.whenReady().then(async()=>{
  await host.webContents.executeJavaScript('window.delayAccountRead=null;window.setSettingsMounted(true)');await until(()=>settings.editor===null);
  await host.webContents.executeJavaScript('window.switchSettingsAccount(2)');await until(()=>settings.editor===null);assert.equal(await host.webContents.executeJavaScript('window.ui[2].dice_roll_enabled'),false);
  assert.equal(await js('[typeof electronAPI,typeof require].join(",")'),'undefined,undefined');
- console.log('PASS: seven isolated settings sections, generated credential forms/clearing/reauth, private IPC metadata, bad-input replies, memory CRUD, theme drafts, catalogs/quotas, dependent fields, native synchronization, localization and scope isolation');
+ console.log('PASS: ten isolated settings sections, generated credential forms/reauth, intuition saves/proposals, prompt/persona libraries and activation, draft preservation on focus, private IPC metadata, memory CRUD, theme drafts, native synchronization and scope isolation');
 }).catch(error=>{console.error(error);process.exitCode=1;}).finally(async()=>{finishPreview?.(null);await sleep(10);clearTimeout(deadline);manager?.destroy();host?.destroy();app.exit(process.exitCode??0);});
 `;
 try {
