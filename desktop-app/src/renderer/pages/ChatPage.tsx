@@ -1098,7 +1098,6 @@ export function ChatPage() {
   useEffect(() => setAppearanceEditorDraft(undefined), [user?.id, api.API_BASE]);
   useEffect(() => {
     setShellOpen(Boolean(appearanceShell));
-    setShellHandlesConfirmations(false);
     setShellView('home');
   }, [appearanceShell?.entry, appearanceShell?.files, appearanceShell?.language, appearanceShell?.scope, user?.id, api.API_BASE]);
   const navigate = useNavigate();

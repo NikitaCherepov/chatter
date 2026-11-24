@@ -57,6 +57,9 @@ export function InteractivePreview({ source, language, visible, appearance, proj
     if (!available || !seen || stopped) return;
     let disposed = false;
     setPhase('loading');
+    // Capabilities belong to this running preview. A parent refresh must not
+    // discard them while the subscribed theme is still mounted.
+    if (bridge) appearanceRef.current?.onAction({ type: 'confirmationPresentation', custom: false });
     const api = window.electronAPI;
     const applyStatus = (status: InteractiveStatus) => {
       setPhase(status.phase);
