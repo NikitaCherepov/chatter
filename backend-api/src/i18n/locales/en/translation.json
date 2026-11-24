@@ -139,7 +139,6 @@
     "serverUpdating": "⚠️ Server update in progress. Please wait and try again shortly.",
     "genericServerError": "⚠️ Server error. Check logs."
   },
-
   "subagents": {
     "news_researcher": {
       "name": "News researcher",
@@ -157,12 +156,16 @@
     }
   },
   "tasks": {
-    "emptyInstruction": "Empty AI instruction \u2014 the task was not executed.",
-    "roomRedirected": "\u26a0\ufe0f Task #{{id}}: the previous chat turned out to be a shared room \u2014 a new chat was created and the result is delivered here.",
-    "reminder": "\ud83d\udd14 *Reminder:*\n\n{{text}}",
-    "smartHomeDone": "\ud83e\udd16 *Automation executed:*\n{{result}}",
-    "aiInstructionDone": "\ud83e\udd16 *Scheduled AI instruction completed:*\n\n{{text}}",
-    "failed": "\u26a0\ufe0f *Task #{{id}} failed:*\n\n{{error}}",
+    "emptyInstruction": "Empty AI instruction — the task was not executed.",
+    "roomRedirected": "⚠️ Task #{{id}}: the previous chat turned out to be a shared room — a new chat was created and the result is delivered here.",
+    "reminder": "🔔 *Reminder:*\n\n{{text}}",
+    "smartHomeDone": "🤖 *Automation executed:*\n{{result}}",
+    "aiInstructionDone": "🤖 *Scheduled AI instruction completed:*\n\n{{text}}",
+    "failed": "⚠️ *Task #{{id}} failed:*\n\n{{error}}",
     "aiInstructionRun": "[Scheduled AI instruction] {{text}}"
+  },
+  "context": {
+    "compacting": "Summarizing earlier context…",
+    "paused": "_⚠ Context summary failed. Completed actions and the original history were retained; generation paused._"
   }
 }

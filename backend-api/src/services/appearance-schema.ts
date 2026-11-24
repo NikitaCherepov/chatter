@@ -311,16 +311,20 @@ import WorkLog from "./WorkLog";
 import {Markdown as MessageMarkdown, MessageImages, Attachments} from "@chatter/ui";
 export default function Conversation({state}){
   const visible=state.messages.filter(message=>message.content.trim()||message.workLog?.length||message.reasoningContent||message.streaming||message.images?.length||message.attachments?.length);
+  const recap=state.context?.summary;
+  const recapBefore=recap?(visible.find(message=>message.timelineIndex>recap.throughTimelineIndex)?.id??visible[0]?.id):null;
   return <main><header><button onClick={()=>window.chatter.showHome()}>{state.labels.allChats}</button><button onClick={()=>window.chatter.openConversation()}>…</button></header>
     {state.hasOlderMessages&&<button disabled={state.olderMessagesLoading} onClick={()=>window.chatter.loadOlderMessages()}>{state.labels.loadMore}</button>}
-    <section className="messages">{visible.map(message=><article key={message.id} data-role={message.role}>
+    <section className="messages">{recap&&!visible.length&&<aside aria-label={recap.title}><strong>{recap.title}</strong><p>{recap.content}</p></aside>}{visible.map(message=><React.Fragment key={message.id}>
+    {recap&&message.id===recapBefore&&<aside aria-label={recap.title}><strong>{recap.title}</strong><p style={{whiteSpace:'pre-wrap'}}>{recap.content}</p></aside>}
+    <article data-role={message.role}>
       {message.reasoningContent&&<details><summary>{state.labels.reasoning}</summary><MessageMarkdown messageId={message.id} content={message.reasoningContent}/></details>}
       <WorkLog message={message} labels={state.labels}/>
       <MessageImages message={message}/><Attachments message={message}/>
       {message.content.trim()&&<MessageMarkdown messageId={message.id} content={message.content}/>}
       {message.streaming&&!message.content.trim()&&!message.workLog?.length&&!message.reasoningContent&&<p role="status">{state.labels.loading}</p>}
       <MessageActions message={message} state={state}/>
-    </article>)}</section><Composer state={state}/></main>;
+    </article></React.Fragment>)}</section><Composer state={state}/></main>;
 }`,
         'components/WorkLog.tsx': String.raw`import React from "react";
 import {Markdown} from "@chatter/ui";

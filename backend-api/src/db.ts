@@ -611,6 +611,9 @@ ensureChatMessageColumn('reasoning_content', 'ALTER TABLE chat_messages ADD COLU
 ensureChatMessageColumn('tool_calls_json', 'ALTER TABLE chat_messages ADD COLUMN tool_calls_json TEXT');
 ensureChatMessageColumn('archived', 'ALTER TABLE chat_messages ADD COLUMN archived INTEGER NOT NULL DEFAULT 0');
 ensureChatMessageColumn('archived_at', 'ALTER TABLE chat_messages ADD COLUMN archived_at DATETIME');
+if (!(db.prepare('PRAGMA table_info(chat_context_summaries)').all() as {name:string}[]).some(column => column.name === 'snapshot_json')) {
+  db.exec('ALTER TABLE chat_context_summaries ADD COLUMN snapshot_json TEXT');
+}
 // Token accounting (фаза 1: отображение). token_count не включает reasoning_content.
 ensureChatMessageColumn('token_count', 'ALTER TABLE chat_messages ADD COLUMN token_count INTEGER NOT NULL DEFAULT 0');
 ensureChatMessageColumn('reasoning_tokens', 'ALTER TABLE chat_messages ADD COLUMN reasoning_tokens INTEGER NOT NULL DEFAULT 0');

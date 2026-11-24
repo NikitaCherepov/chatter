@@ -344,6 +344,20 @@ not a sum of all displayed message rows. Chat changes clear the previous chat's 
 percent uses latest cache-hit / latest prompt tokens; it is not the fraction of context occupied.
 Per-message statistics are in message.info (messages.md).
 
+context.source is provider or local (fallback only when no provider measurement exists).
+measurementStale means the last measured window predates a compaction or new input; do not
+present that value as the exact size of the next request. Auxiliary models have separate windows.
+context.summary is null or {kind:'summary',title,content,throughTimelineIndex,sourceMessageCount,
+ tokenCount,contextLimit,modelName,providerName,updatedAt}. It is an explicitly labeled recap of
+older dialogue, not a new assistant answer. Show it independently of showTokens, with your own
+markup/styles, and never attach message actions to it. message.timelineIndex is the stable chat
+order; message.archived marks fully summarized original rows (they remain readable in the chat).
+Place the recap before the first loaded message whose timelineIndex exceeds throughTimelineIndex;
+if that boundary is outside loaded history, show it once at the start of the loaded conversation.
+An oversized response may be summarized partway through its tool trace; its remaining steps stay
+verbatim internally. The app targets the freshest ~30% plus the recap, using complete exchanges
+and provider checkpoints; the boundary is approximate, not an exact per-message token count.
+
 ## Recording and transcription
 
 state.voice has status idle/requesting/recording/transcribing, canStart, error and transcript.

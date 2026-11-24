@@ -5,6 +5,7 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const { RoomStreamBuffer } = require('../src/renderer/lib/room-stream-buffer.ts');
 const { appearanceMessageContent } = require('../src/renderer/lib/appearance-message-content.ts');
+const { appearanceMessageInfo } = require('../src/renderer/lib/appearance-message-info.ts');
 const { appearanceMessageActions, canEditChatMessage } = require('../src/renderer/lib/appearance-message-actions.ts');
 const { APPEARANCE_CAPABILITIES } = require('../src/main/appearance-schema.ts');
 const { compileAppearanceProject } = require('../src/main/appearance-project.ts');
@@ -87,7 +88,7 @@ assert.equal(bridge.executeTool, undefined, 'display data add no tool execution 
 const page = fs.readFileSync(new URL('../src/renderer/pages/ChatPage.tsx', import.meta.url), 'utf8');
 const mappingStart = page.indexOf('messages.map(message => ({', page.indexOf('  const shellState ='));
 const mapping = page.slice(mappingStart, page.indexOf('})) : [],', mappingStart) + 3);
-const context: any = { appearanceMessageContent, appearanceMessageActions, canEditChatMessage,
+const context: any = { appearanceMessageContent, appearanceMessageActions, appearanceMessageInfo, canEditChatMessage,
   messages: [{ ...buffer.read(), role: 'assistant', id: -1, created_at: 0 }, { role: 'assistant', id: 4, content: 'Earlier answer', created_at: 0 }],
   sending: true, streamingMsgId: -1, user: { id: 1 }, forking: false, switchingVariantId: null, otherRoomHumans: [], canRegenerateMessage: () => true,
   t: (key: string, options: any) => labels(options.defaultValue) };

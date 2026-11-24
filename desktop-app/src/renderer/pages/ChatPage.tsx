@@ -80,6 +80,7 @@ import { startsMessageDay, messageClock, messageDate, fullMessageDate } from '..
 import { splitWorkContent, messageSpeechText } from '../lib/work-log-content';
 import { appearanceMessageContent } from '../lib/appearance-message-content';
 import { appearanceMessageInfo } from '../lib/appearance-message-info';
+import { appearanceContextSummary } from '../lib/appearance-context';
 import { appearanceContentReferences, allowedAppearanceImage } from '../lib/appearance-media';
 import type { SetDisplayStatePayload } from '../components/PixelAvatar';
 import { ToolsPanel, ToolsHeaderButton, ToolsToolbar } from '../components/ToolsPanel';
@@ -8565,6 +8566,7 @@ export function ChatPage() {
       view: shellView, activeChatId, query: searchQuery,
       messages: appearanceShell?.scope === 'workspace' && messagesChatIdRef.current === activeChatId ? messages.map(message => ({
         id: message.id, role: message.role, createdAt: message.created_at,
+        timelineIndex: message.timeline_index ?? null, archived: Boolean(message.archived),
         info: appearanceMessageInfo(message),
         ...appearanceMessageContent(message, sending && message.id === streamingMsgId,
           name => t(`toolActivity.names.${name}`, { defaultValue: name })),
@@ -8582,6 +8584,8 @@ export function ChatPage() {
           supportsVision: Boolean(model.supports_vision), isFree: Boolean(model.is_free), contextLength: model.context_length ?? null,
           averageTokensPerSecond: model.avg_tokens_per_second ?? null, intelligenceTier: model.intel_tier ?? null, priceTier: model.price_tier ?? null })) },
       context: { showTokens, limit: contextLimit, tokens: tokens?.current_context_tokens ?? null,
+        source:tokens?.context_source??null,measurementStale:tokens?.context_measurement_stale??false,
+        summary:appearanceShell?.scope==='workspace'?appearanceContextSummary(tokens?.context_summary,t('chat.contextSummary.title')):null,
         cachePercent: tokens && tokens.latest_prompt_tokens > 0 ? Math.max(0, Math.min(100, Math.round(tokens.latest_cache_hit_tokens / tokens.latest_prompt_tokens * 100))) : null,
         messagesTokens: tokens?.messages_tokens ?? null, reasoningTokens: tokens?.reasoning_tokens ?? null,
         systemPromptTokens: tokens?.system_prompt_tokens ?? null, activeMessages: tokens?.active_messages ?? null, archivedMessages: tokens?.archived_messages ?? null,

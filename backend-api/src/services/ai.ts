@@ -6,7 +6,7 @@ import OpenAI from 'openai';
 import dotenv from 'dotenv';
 import { inspectBrowserScreenshot } from './browser-screenshot.js';
 import { finishTaskTool, parseTaskCompletion, type TaskCompletion } from './task-completion.js';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
 import { getModelSettings, modelApiKey, type ConfiguredModel } from './model-settings.js';
 import { createChatGptClient, chatGptConnectionForClient, chatGptCompletion, CHATGPT_REASONING_LEVELS } from './chatgpt-responses.js';
 import { getChatGptConnection, withChatGptActor } from './chatgpt-connections.js';
@@ -21,7 +21,7 @@ import { Readable } from 'node:stream';
 import { resolveQuestionnaireSubmission } from './chats.js';
 import { questionnaireAnswerText, type QuestionnaireSubmission, type QuestionnaireResponse } from './message-questionnaires.js';
 import type { AiSendResult, DesktopActionPayload, DisplayStatePayload, MapUpdatePayload, TaskNotifyMode, TaskRecurrenceType, TaskTargetMode, TaskType, UserPlan, UserRecord, MessageAttachment, MessageImage, MessageUsage, NormalizedTokenUsage, TokenUsageCall } from '../types.js';
-import { getChatMessageVariants, appendChatMessage, ensureActiveChat, getHistoryForAi, getMessageTokens, getMessageVariantState, getUserById, renameUserChat, resolveMaxContextTokens, resolveAttachmentMaxTokens, injectAttachments, setUserTimezone, trimUserHistoryByChat, isMultiUserRoomChat, planRoomHistorySummary, getChatContextTokens, resolvePromptForChat } from './chats.js';
+import { getChatMessageVariants, appendChatMessage, ensureActiveChat, getHistoryForAi, getMessageTokens, getMessageVariantState, getUserById, renameUserChat, resolveMaxContextTokens, resolveAttachmentMaxTokens, injectAttachments, setUserTimezone, isMultiUserRoomChat, planRoomHistorySummary, getChatContextTokens, resolvePromptForChat } from './chats.js';
 import { calculateChargedTokens, checkQuota, chargeTokens, getModelOverride, getPricingSnapshot, calculateEstimatedCostUsd, isModelFree } from './token-quota.js';
 import { recordModelTps, setKnownModelStatsFilter } from './model-stats.js';
 import { registerMonitoredModelsProvider, isProviderMissingError, attemptRuntimeProviderSwitch } from './openrouter-monitor.js';
@@ -58,7 +58,8 @@ import { mcpErrorResult } from './mcp/errors.js';
 import { getModularTool, modularToolDefinitions, desktopToolDefinitions } from './tools/registry.js';
 import { buildDescribeImageTool } from './tools/images/describe-image.js';
 import { buildToolImageMessage, type DirectToolImage } from './tools/image-input.js';
-import { getContextSummary, type ContextSummaryDto } from './context-summary.js';
+import { getContextSummary, getContextSnapshot, saveCompactedContext, contextSourceFingerprint, deleteContextSummary, type ContextSummaryDto } from './context-summary.js';
+import { compactContext, contextWindowTokens, isContextOverflow, summaryMessage, closeInterruptedTools, type ContextHistory } from './context-compaction.js';
 
 dotenv.config();
 
@@ -1369,7 +1370,7 @@ const createCompletionWithModelFallback = async (
           actualCostUsd,
         };
       } catch (err) {
-        if (isAbortError(err)) throw err;
+        if (isAbortError(err) || isContextOverflow(err)) throw err;
         lastError = err;
         const summary = getProviderErrorSummary(err);
         console.warn('[ai] model failed', {
@@ -1451,7 +1452,7 @@ const createCompletionWithProProviderFallback = async (requestBody: Record<strin
         failedModels
       };
     } catch (err: any) {
-      if (isAbortError(err)) throw err;
+      if (isAbortError(err) || isContextOverflow(err)) throw err;
       console.warn('[ai] pro provider failed', {
         provider: provider.name,
         baseURL: provider.baseURL,
@@ -1502,7 +1503,7 @@ const createCompletionWithLiteProviderFallback = async (requestBody: Record<stri
         failedModels
       };
     } catch (err: any) {
-      if (isAbortError(err)) throw err;
+      if (isAbortError(err) || isContextOverflow(err)) throw err;
       console.warn('[ai] lite provider failed', {
         provider: provider.name,
         baseURL: provider.baseURL,
@@ -3780,7 +3781,7 @@ export const runCompletion = async (mode: 'pro' | 'lite' | 'vision-pro' | 'visio
         manualFallback: false,
       };
     } catch (err: any) {
-      if (isAbortError(err)) throw err;
+      if (isAbortError(err) || isContextOverflow(err)) throw err;
       console.warn(`[ai] manual model "${manualModel.apiModelName}" failed, falling back to auto`, err?.message || err);
       // Don't throw — fallback to normal routing
       // Continue execution below as if manualModel was not set
@@ -3817,7 +3818,7 @@ export const runCompletion = async (mode: 'pro' | 'lite' | 'vision-pro' | 'visio
           failedProviders
         };
       } catch (err: any) {
-        if (isAbortError(err)) throw err;
+        if (isAbortError(err) || isContextOverflow(err)) throw err;
         failedProviders.push(provider.name);
         if (Array.isArray(err?.failedModels)) {
           failedModels.push(...err.failedModels.map((m: string) => `${provider.name}:${m}`));
@@ -7379,6 +7380,9 @@ const sendMessageThroughAiInternal = async (
   // the actual confirmation flow uses sendToDesktop() / WS IPC separately.
   const safeOnDesktopAction = safeUiCallback(options?.onDesktopAction, 'onDesktopAction');
 
+  let persistContextCompaction: ((messageId:number)=>void) | null = null;
+  let latestMainUsage: NormalizedTokenUsage | undefined;
+  let savedContextWindow: MessageUsage['context_window'] | undefined;
   let chatId = 0;
   let totalTokens = 0;
   let usedModel = '';
@@ -7645,81 +7649,22 @@ const sendMessageThroughAiInternal = async (
   // Multi-user rooms never archive shared rows. Each initiator gets a private
   // rolling summary while the live tail is selected from one stable snapshot.
   const multiUserRoom = isMultiUserRoomChat(chatId);
-  const roomHistoryTokenBudget = multiUserRoom ? Math.floor(maxContextTokens * 0.5) : 0;
-  let effectiveRoomHistoryTokenBudget = roomHistoryTokenBudget;
-  let roomHistoryAfterTimelineIndex = 0;
-  let roomHistoryThroughTimelineIndex: number | undefined;
-  let activeContextSummary: ContextSummaryDto | null = null;
-  // Apply the provider-anchored estimate before assembling the next request.
-  if (multiUserRoom) {
-    activeContextSummary = getContextSummary(toolUser.id, chatId);
-    try {
-      let previousBoundary = activeContextSummary?.through_timeline_index ?? 0;
-      while (true) {
-        const tailBudget = Math.max(
-          256,
-          roomHistoryTokenBudget - (activeContextSummary?.token_count ?? 0),
-        );
-        const plan = planRoomHistorySummary(
-          toolUser.id,
-          chatId,
-          tailBudget,
-          previousBoundary,
-          roomHistoryThroughTimelineIndex,
-        );
-        roomHistoryThroughTimelineIndex = plan.snapshot_timeline_index;
-        if (plan.summarize_through_timeline_index === null) break;
-
-        const { prepareRoomContextSummary } = await import('./context-summary-agent.js');
-        const prepared = await prepareRoomContextSummary({
-          storageUserId: toolUser.id,
-          billingUserId: userId,
-          chatId,
-          throughTimelineIndex: plan.summarize_through_timeline_index,
-          contextLimit: maxContextTokens,
-          preferredModel: preferredModelId,
-          preferredModelDisplayName: selectedManualModelName,
-          reasoningLevel,
-          modelSettings: resolvedModelSettings,
-          signal: abortController.signal,
-        });
-        activeContextSummary = prepared.summary;
-        subagentUsageCalls.push(...prepared.usageCalls);
-        const nextBoundary = activeContextSummary?.through_timeline_index ?? previousBoundary;
-        if (nextBoundary <= previousBoundary) break;
-        previousBoundary = nextBoundary;
-      }
-    } catch (error) {
-      // Keep any previously completed summary and fall back to a virtual tail.
-      console.warn('[context-summary] room generation failed; using available history', error);
-    }
-    roomHistoryAfterTimelineIndex = activeContextSummary?.through_timeline_index ?? 0;
-    effectiveRoomHistoryTokenBudget = Math.max(
-      256,
-      roomHistoryTokenBudget - (activeContextSummary?.token_count ?? 0),
-    );
-  } else if (chatId) {
-    trimUserHistoryByChat(userId, chatId, maxContextTokens);
-    try {
-      const { prepareContextSummary } = await import('./context-summary-agent.js');
-      const prepared = await prepareContextSummary({
-        userId,
-        chatId,
-        contextLimit: maxContextTokens,
-        preferredModel: preferredModelId,
-        preferredModelDisplayName: selectedManualModelName,
-        reasoningLevel,
-        modelSettings: resolvedModelSettings,
-        signal: abortController.signal,
-      });
-      activeContextSummary = prepared.summary;
-      subagentUsageCalls.push(...prepared.usageCalls);
-    } catch (error) {
-      // The original crop remains valid. Summary failure must never block a reply.
-      console.warn('[context-summary] generation failed; using cropped history', error);
-      activeContextSummary = null;
-    }
+  const contextOwnerId=multiUserRoom?toolUser.id:userId;
+  // Context is compacted at complete model/tool boundaries, never by trimming
+  // DB rows independently of their summary. Repair legacy archived histories once.
+  const effectiveRoomHistoryTokenBudget = 0;
+  const roomHistoryAfterTimelineIndex = 0;
+  const roomHistoryThroughTimelineIndex: number | undefined = undefined;
+  let activeContextSummary: ContextSummaryDto | null = requestedRegenerateFromHistory ? null : getContextSummary(contextOwnerId,chatId);
+  if (chatId && !multiUserRoom && !requestedRegenerateFromHistory && !getContextSnapshot(userId,chatId)) {
+    const {prepareContextSummary} = await import('./context-summary-agent.js');
+    const prepared = await prepareContextSummary({userId,chatId,contextLimit:maxContextTokens,
+      preferredModel:preferredModelId,preferredModelDisplayName:selectedManualModelName,reasoningLevel,
+      modelSettings:resolvedModelSettings,signal:abortController.signal});
+    activeContextSummary=prepared.summary;
+    subagentUsageCalls.push(...prepared.usageCalls);
   }
+  const contextHistory: ContextHistory = {origins:[],checkpoints:[]};
   const attachmentBudgetState = { remaining: attachmentMaxTokens };
   const pendingAttachmentText = options?.userAttachments?.length && attachmentBudgetState.remaining > 0
     ? injectAttachments(options.userAttachments, attachmentBudgetState.remaining)
@@ -7731,7 +7676,7 @@ const sendMessageThroughAiInternal = async (
     );
   }
   let history = getHistoryForAi(
-    userId,
+    contextOwnerId,
     chatId,
     attachmentMaxTokens,
     currentModelSupportsVision,
@@ -7741,12 +7686,12 @@ const sendMessageThroughAiInternal = async (
     roomHistoryAfterTimelineIndex,
     roomHistoryThroughTimelineIndex,
     requestedRegenerateFromHistory ? { messageId: options?.regenerateMessageId } : undefined,
+    contextHistory,
   );
   if (activeContextSummary) {
-    history = [{
-      role: 'system',
-      content: `[SUMMARY OF EARLIER CONVERSATION]\n${activeContextSummary.content}\n[/SUMMARY OF EARLIER CONVERSATION]`,
-    }, ...history];
+    history = [summaryMessage(activeContextSummary.content), ...history];
+    contextHistory.origins.unshift(0);
+    contextHistory.checkpoints.forEach(point=>point.index++);
   }
   const automaticChatTitlePromise = (
     !options?.userOnly
@@ -7854,9 +7799,6 @@ const sendMessageThroughAiInternal = async (
             total_message_length = COALESCE(total_message_length, 0) + ?
         WHERE id = ?
       `).run(userTextForHistory.length, userId);
-    }
-    if (!multiUserRoom) {
-      trimUserHistoryByChat(userId, chatId, maxContextTokens);
     }
     return {
       reply_text: '',
@@ -8281,6 +8223,95 @@ User request: "${text}"`;
     ...executionHistory,
     { role: 'user', content: userMessageContent }
   ];
+  if (executionHistory !== history) { contextHistory.origins.length=0;contextHistory.checkpoints.length=0; }
+  contextHistory.origins.unshift(0);
+  contextHistory.origins.push(userMessageCursor || Infinity);
+  contextHistory.checkpoints.forEach(point=>point.index++);
+  let compactedContent: string | null = null;
+  let compactedSummaryTokens:number|undefined;
+  const summarizedOrigins=new Set<number>();
+  let archivedThrough = activeContextSummary?.through_timeline_index ?? 0;
+  const previousSummaryContent=getContextSummary(contextOwnerId,chatId)?.content ?? null;
+  const observedOrigins=[...new Set(contextHistory.origins.filter(value=>Number.isFinite(value)&&value>0))];
+  const observedThrough=Math.max(0,...observedOrigins);
+  const source=chatId&&!options?.skipHistory?{through:observedThrough,positions:observedOrigins,fingerprint:contextSourceFingerprint(contextOwnerId,chatId,observedThrough,observedOrigins)}:undefined;
+  const covered=new Set([...(getContextSnapshot(contextOwnerId,chatId)?.coveredTimelineIndices||[]),...observedOrigins]);
+  const syncContextOrigins = () => {
+    while (contextHistory.origins.length < currentMessages.length) contextHistory.origins.push(Infinity);
+  };
+  const compactForContext = async(force=false) => {
+    syncContextOrigins();
+    const compacted = await compactContext({messages:currentMessages,history:contextHistory,limit:maxContextTokens,force,
+      summarize:async(source) => {
+        if (safeOnToolStatus) await safeOnToolStatus(translateForLanguage(user.language,'context.compacting'));
+        const {summarizeContextMessages}=await import('./context-summary-agent.js');
+        try {
+          const result=await summarizeContextMessages({userId,chatId,contextLimit:maxContextTokens,preferredModel:preferredModelId,
+            preferredModelDisplayName:selectedManualModelName,reasoningLevel,modelSettings:resolvedModelSettings,signal:abortController.signal},source);
+          subagentUsageCalls.push(...result.usageCalls);
+          const last=result.usageCalls.at(-1);
+          if(last) latestRequestUsage=last; // Quota accounting includes auxiliary calls; the context tracker does not.
+          compactedSummaryTokens=last&&last.completion_tokens>0?Math.max(0,last.completion_tokens-last.reasoning_tokens):undefined;
+          return result.content;
+        } catch(error:any) {
+          if (Array.isArray(error?.usageCalls)) subagentUsageCalls.push(...error.usageCalls);
+          console.warn('[context-summary] generation failed',{code:error?.code||error?.message||'unknown'});
+          if (error && typeof error==='object' && !isAbortError(error)) error.contextCompaction=true;
+          throw error;
+        }
+      }});
+    if (!compacted) return false;
+    compactedContent=compacted.content;
+    compacted.summarizedOrigins.forEach(origin=>summarizedOrigins.add(origin));
+    archivedThrough=Math.max(archivedThrough,compacted.archivedThrough);
+    return true;
+  };
+  const recordMainContext = (completion:CompletionMeta, before:number) => {
+    const usage=normalizeTokenUsage(completion.response?.usage);
+    latestMainUsage=usage;
+    if (!usage.prompt_tokens) { contextHistory.checkpoints.length=0;contextHistory.awaitingProvider=false;savedContextWindow=undefined;return; }
+    const epoch=createHash('sha256').update(JSON.stringify([currentMessages[0],executionTools,
+      currentMessages[1]?.role==='system'?currentMessages[1].content:null,completion.usedUniqueId||completion.usedModel])).digest('hex');
+    contextHistory.awaitingProvider=false;
+    contextHistory.checkpoints.push({index:before,tokens:usage.prompt_tokens,epoch},
+      {index:before+1,tokens:contextWindowTokens(usage)!,epoch});
+    savedContextWindow={epoch,beforeTokens:savedContextWindow?.epoch===epoch?savedContextWindow.beforeTokens:usage.prompt_tokens,
+      afterTokens:contextWindowTokens(usage)!};
+  };
+  const runMainCompletion = async(payload:Record<string,unknown>) => {
+    await compactForContext();
+    for(let attempt=0;;attempt++) {
+      const before=currentMessages.length;
+      try {
+        const result=await runCompletion(executionMode,{...payload,messages:currentMessages},manualModel,abortController.signal,
+          executionMode==='lite'?'none':reasoningLevel,executionMode==='lite'?null:resolvedModelSettings,streamCallbacks);
+        recordMainContext(result,before);
+        return result;
+      } catch(error) {
+        if (!isContextOverflow(error)||abortController.signal.aborted) throw error;
+        if (attempt>=1) { (error as any).contextCompaction=true;throw error; }
+        if (!await compactForContext(true)) { (error as any).contextCompaction=true;throw error; }
+      }
+    }
+  };
+  persistContextCompaction=(messageId) => {
+    if (requestedRegenerateFromHistory && !compactedContent && messageId) deleteContextSummary(contextOwnerId,chatId);
+    // A cheap route deliberately omits chat history; it must never publish a
+    // chat-wide summary or archive rows that were not part of its request.
+    if (!compactedContent || !messageId || options?.skipHistory || executionHistory!==history) return;
+    const cursor=(db.prepare('SELECT timeline_index FROM chat_messages WHERE id=? AND user_id=? AND chat_id=?').get(messageId,userId,chatId) as {timeline_index:number}|undefined)?.timeline_index;
+    if (!cursor) return;
+    syncContextOrigins();
+    const keep=currentMessages.map((message,index)=>({message,index})).filter(({message,index})=>index>1&&message.role!=='system');
+    const tail=closeInterruptedTools(keep.map(item=>item.message),keep.map(item=>contextHistory.origins[item.index]===Infinity?cursor:contextHistory.origins[item.index]));
+    const count=Number((db.prepare('SELECT COUNT(*) AS n FROM chat_messages WHERE user_id=? AND chat_id=? AND COALESCE(timeline_index,id)<=?').get(userId,chatId,archivedThrough) as {n:number}).n);
+    saveCompactedContext({userId:contextOwnerId,chatId,source,content:compactedContent,tokenCount:compactedSummaryTokens,sourceHash:createHash('sha256').update(compactedContent).digest('hex'),
+      throughTimelineIndex:archivedThrough,sourceMessageCount:Math.max(count,(activeContextSummary?.source_message_count??0)+[...summarizedOrigins].filter(origin=>origin>(activeContextSummary?.through_timeline_index??0)).length),contextLimit:maxContextTokens,
+      modelName:selectedManualModelName||usedModel||null,providerName:usedProvider||null,previousContent:previousSummaryContent,
+      snapshot:{throughTimelineIndex:cursor,responseAgentId:responseAgent?.id??null,coveredTimelineIndices:[...covered,cursor],messages:tail.messages,origins:tail.origins,
+        checkpoints:tail.messages.length!==keep.length?[]:contextHistory.checkpoints.filter(point=>point.index>=2).map(point=>({...point,index:keep.filter(item=>item.index<point.index).length})),
+        awaitingProvider:contextHistory.awaitingProvider||tail.messages.length!==keep.length}});
+  };
   if (automaticMemoryEnabled) {
     const archive = await retrieveAutomaticMemory({
       userId: toolUser.id, billingUserId: user.id, chatId: chatId || undefined,
@@ -8335,6 +8366,7 @@ User request: "${text}"`;
   while (loop < effectiveMaxLoops) {
     loop += 1;
     await withAbort(waitForNoPendingPcConfirmations(userId), abortController.signal);
+    await compactForContext();
 
     const latestUsage = latestRequestUsage;
     const finalizeForQuota = !quotaFinalizationIssued
@@ -8374,7 +8406,7 @@ User request: "${text}"`;
     if (!perfMetrics.requestStartAt) perfMetrics.requestStartAt = performance.now();
     perfMetrics.callStartAt = performance.now();
     perfMetrics.callFirstTokenAt = 0;
-    const completion = await runCompletion(executionMode, completionPayload, manualModel, abortController.signal, executionMode === 'lite' ? 'none' : reasoningLevel, executionMode === 'lite' ? null : resolvedModelSettings, streamCallbacks);
+    const completion = await runMainCompletion(completionPayload);
     if (perfMetrics.callStartAt > 0) {
       const callEnd = performance.now();
       perfMetrics.genMs += callEnd - perfMetrics.callStartAt;
@@ -8613,7 +8645,7 @@ const runOneToolCall = async (toolCall: any, emitStatus = true): Promise<Execute
             chatId,
             maxContextTokens,
             readBudget: attachmentReadBudgetState,
-            getLatestPromptTokens: () => latestRequestUsage?.prompt_tokens,
+            getLatestPromptTokens: () => latestMainUsage?.prompt_tokens,
             getFallbackContextTokens: () => {
               try {
                 return getChatContextTokens(userId, chatId).current_context_tokens;
@@ -8761,6 +8793,9 @@ for (let toolCallIndex = 0; toolCallIndex < toolCalls.length; toolCallIndex += 1
       { role: 'user', content: originalQuery }
     );
 
+    contextHistory.origins.splice(0,contextHistory.origins.length,0,...contextHistory.origins.slice(1,history.length+1),userMessageCursor||Infinity);
+    contextHistory.checkpoints.length=0;
+    compactedContent=null;
     escalatedToPro = true;
     break;
   }
@@ -8846,13 +8881,13 @@ if (taskCompletion) {
     }
 
     try {
-      const finalCompletion = await runCompletion(executionMode, {
+      const finalCompletion = await runMainCompletion({
         messages: currentMessages,
         tools: [],  // no tools — force text-only response
         max_tokens: Math.min(8192, maxResponseTokens),
         thinking: { type: executionMode === 'lite' ? 'disabled' : 'enabled' },
         clear_thinking: false
-      }, manualModel, abortController.signal, executionMode === 'lite' ? 'none' : reasoningLevel, executionMode === 'lite' ? null : resolvedModelSettings, streamCallbacks);
+      });
       const finalMessage = finalCompletion.response?.choices?.[0]?.message;
       if (finalMessage) {
         const finalReasoning = extractReasoning(finalMessage, finalCompletion.response);
@@ -8875,6 +8910,8 @@ if (taskCompletion) {
     }
   }
 
+  await compactForContext();
+
   // User message is now persisted early (before AI generation starts) — see
   // the block right after `isRegeneratingFromHistory`. Nothing to do here.
   assistantTelegramChatId = Number.isFinite(Number(options?.assistantTelegramChatId))
@@ -8896,7 +8933,7 @@ if (taskCompletion) {
   const aggregateUsage = sumTokenUsage(usageCalls);
   const latestUsage = tokenUsageWithoutCallMeta(usageCalls[usageCalls.length - 1]);
   const messageUsage: MessageUsage | null = usageCalls.length > 0 || intuitionSnapshot
-    ? { latest: latestUsage, aggregate: aggregateUsage, calls: usageCalls, intuition: intuitionSnapshot, perf: buildUsagePerf(aggregateUsage.completion_tokens) }
+    ? { latest: latestUsage, aggregate: aggregateUsage, calls: usageCalls, context_window: savedContextWindow, intuition: intuitionSnapshot, perf: buildUsagePerf(aggregateUsage.completion_tokens) }
     : null;
   // Track speed only when every completed provider call belongs to the same
   // model. A mid-response fallback would otherwise blend multiple models and
@@ -8934,6 +8971,7 @@ if (taskCompletion) {
         WHERE id = ? AND chat_id = ? AND user_id = ?
       `).get(assistantMessageId, chatId, userId) as { timeline_index: number } | undefined)?.timeline_index
     : undefined;
+  persistContextCompaction?.(assistantMessageId);
   notifyDesktopChatUpdated('assistant', assistantMessageId);
 
   const safeTokens = Math.max(0, Math.floor(aggregateUsage.total_tokens || totalTokens));
@@ -8948,9 +8986,6 @@ if (taskCompletion) {
   }
   // Quota charge (weekly_tokens_used + user_token_usage) is handled in finally via chargeFromUsageCalls.
 
-  if (!multiUserRoom && chatId) {
-    trimUserHistoryByChat(userId, chatId, maxContextTokens);
-  }
 
   // Title generation starts in parallel with the main answer, but is applied
   // before the request completes so every client observes the same backend state.
@@ -9027,18 +9062,19 @@ if (taskCompletion) {
     ...(diceRollValue !== null ? { dice_roll: diceRollValue } : {})
   };
   } catch (err: any) {
-    if (isAbortError(err)) {
+    if (isAbortError(err) || err?.contextCompaction) {
       // Generation stopped by user — soft abort.
       // Сохраняем всё что бот успел сделать (tool_calls, промежуточный текст, reasoning)
       // как обычное assistant-сообщение с пометкой aborted: true.
-      console.log(`[AI] Generation aborted by user ${userId} (soft-save)`);
+      console.log(`[AI] Generation paused (${err?.contextCompaction?'context compaction':'user cancellation'}), user ${userId} (soft-save)`);
 
+      const stopNotice=err?.contextCompaction ? translateForLanguage(user.language,'context.paused') : '_⏹ Generation stopped by user_';
       const partialContent = streamContentBuffer || fullDbHistory;
       const abortedAnswer = answer && answer !== FALLBACK_ANSWER
-        ? answer + '\n\n_⏹ Generation stopped by user_'
+        ? answer + '\n\n'+stopNotice
         : (partialContent
-           ? partialContent + '\n\n_⏹ Generation stopped by user_'
-           : (toolUserMessages.length > 0 ? '_⏹ Generation stopped by user_' : ''));
+           ? partialContent + '\n\n'+stopNotice
+           : (err?.contextCompaction || toolUserMessages.length > 0 ? stopNotice : ''));
       const abortedDbText = fullDbHistory || streamContentBuffer || abortedAnswer;
       const abortedReasoning = reasoningParts.length > 0
         ? reasoningParts.join('\n\n').trim()
@@ -9048,7 +9084,7 @@ if (taskCompletion) {
       const abortedAggregateUsage = sumTokenUsage(usageCalls);
       const abortedLatestUsage = tokenUsageWithoutCallMeta(usageCalls[usageCalls.length - 1]);
       const abortedMessageUsage: MessageUsage | null = usageCalls.length > 0 || intuitionSnapshot
-        ? { latest: abortedLatestUsage, aggregate: abortedAggregateUsage, calls: usageCalls, intuition: intuitionSnapshot, perf: buildUsagePerf(abortedAggregateUsage.completion_tokens) }
+        ? { latest: abortedLatestUsage, aggregate: abortedAggregateUsage, calls: usageCalls, context_window: savedContextWindow, intuition: intuitionSnapshot, perf: buildUsagePerf(abortedAggregateUsage.completion_tokens) }
         : null;
       const abortedModelName = usedProvider === 'manual' && selectedManualModelName
         ? selectedManualModelName
@@ -9079,6 +9115,7 @@ if (taskCompletion) {
               regenerateMessageId: options?.regenerateMessageId,
             }
           );
+          persistContextCompaction?.(abortedMessageId);
           notifyDesktopChatUpdated('assistant', abortedMessageId);
         } catch (saveErr) {
           console.warn(`[AI] soft-save failed:`, saveErr);

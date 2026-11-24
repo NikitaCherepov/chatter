@@ -43,7 +43,8 @@ import { formatAutomaticChatTitle } from '../i18n/index.js';
 import { getPlanLimits, getDefaultUserPlanLimits, loadPlanLimitsFromDb } from './plan-limits.js';
 import { withAttachmentMetadata } from './chat-attachments.js';
 import { applyUserPlanEntitlements, clampContextTokensOnPlanChange, ensureUserMonthlyUsageWindow, refreshCurrentQuotaLimits } from './monthly-usage.js';
-import { deleteContextSummary, deleteContextSummariesForChat, deleteContextSummariesForUser, getContextSummary, type ContextSummaryDto } from './context-summary.js';
+import { deleteContextSummary, deleteContextSummariesForChat, deleteContextSummariesForUser, getContextSummary, getContextSnapshot, type ContextSummaryDto } from './context-summary.js';
+import { contextWindowTokens, type ContextHistory } from './context-compaction.js';
 
 export const getRawUserById = (userId: number) => db
   .prepare('SELECT * FROM users WHERE id = ?')
@@ -1849,6 +1850,7 @@ export const activateChatMessageVariant = (
     );
     db.prepare('UPDATE messages_fts SET content = ? WHERE message_id = ?').run(variant.content, messageId);
     db.prepare('DELETE FROM chat_message_audio WHERE message_id = ?').run(messageId);
+    deleteContextSummary(userId,chatId);
   })();
   return { ok: true };
 };
@@ -2166,6 +2168,7 @@ export const getHistoryForAi = (
   roomHistoryAfterTimelineIndex = 0,
   roomHistoryThroughTimelineIndex?: number,
   regeneration?: { messageId?: number },
+  contextHistory?: ContextHistory,
 ): any[] => {
   const activeRoomAgents = responseAgentId !== null
     ? db.prepare(`
@@ -2182,9 +2185,14 @@ export const getHistoryForAi = (
   const readerIds = listRoomReaderUserIds(chatId) ?? [userId];
   const multiUserRoom = readerIds.includes(userId) && readerIds.length > 1;
   const historyUserIds = multiUserRoom ? readerIds : [userId];
+  const storedSnapshot = regeneration ? null : getContextSnapshot(userId,chatId);
+  const snapshot = storedSnapshot?.responseAgentId!==undefined && storedSnapshot.responseAgentId!==responseAgentId ? null : storedSnapshot;
   const placeholders = historyUserIds.map(() => '?').join(', ');
   const roomTimelineFilter = multiUserRoom
     ? ' AND COALESCE(cm.timeline_index, cm.id) > ? AND COALESCE(cm.timeline_index, cm.id) <= ?'
+    : '';
+  const snapshotFilter=snapshot
+    ? snapshot.coveredTimelineIndices?' AND COALESCE(cm.timeline_index,cm.id) NOT IN (SELECT value FROM json_each(?))':' AND COALESCE(cm.timeline_index,cm.id)>?'
     : '';
   const rowsQuery = db.prepare(`
     SELECT cm.id, cm.timeline_index, cm.role, cm.content, cm.tool_calls_json, cm.attachments, cm.images, cm.usage_json,
@@ -2192,7 +2200,7 @@ export const getHistoryForAi = (
     FROM chat_messages cm
     LEFT JOIN chat_agents ca ON ca.id = cm.agent_id
     LEFT JOIN users u ON u.id = cm.user_id
-    WHERE cm.user_id IN (${placeholders}) AND cm.chat_id = ? AND cm.archived = 0${roomTimelineFilter}
+    WHERE cm.user_id IN (${placeholders}) AND cm.chat_id = ? ${regeneration ? '' : 'AND cm.archived = 0'}${roomTimelineFilter}${snapshotFilter}
     ORDER BY ${multiUserRoom ? 'COALESCE(cm.timeline_index, cm.id)' : 'cm.id'} DESC, cm.id DESC
   `);
   const roomThrough = roomHistoryThroughTimelineIndex ?? Number.MAX_SAFE_INTEGER;
@@ -2200,6 +2208,7 @@ export const getHistoryForAi = (
     ...historyUserIds,
     chatId,
     ...(multiUserRoom ? [roomHistoryAfterTimelineIndex, roomThrough] : []),
+    ...(snapshot?[snapshot.coveredTimelineIndices?JSON.stringify(snapshot.coveredTimelineIndices):snapshot.throughTimelineIndex]:[]),
   ) as Array<{ id: number; timeline_index: number | null; role: ChatRole; content: string; tool_calls_json: string | null; attachments: string | null; images: string | null; agent_id: number | null; agent_name: string | null; author_name: string | null; token_count: number | null; usage_json: string | null }>;
 
   // Remove the complete stored response before expanding its tool iterations.
@@ -2231,7 +2240,12 @@ export const getHistoryForAi = (
   }
   rows.reverse();
 
-  const messages: any[] = [];
+  const messages: any[] = snapshot ? [...snapshot.messages] : [];
+  if (contextHistory && snapshot) {
+    contextHistory.origins.push(...snapshot.origins);
+    contextHistory.checkpoints.push(...snapshot.checkpoints);
+    contextHistory.awaitingProvider=snapshot.awaitingProvider;
+  }
   const attachmentBudget = attachmentBudgetState ?? { remaining: attachmentMaxTokens };
   const attachmentInjectionByMessage = new Map<number, string>();
 
@@ -2254,6 +2268,8 @@ export const getHistoryForAi = (
   }
 
   for (const row of rows) {
+    const before = messages.length;
+    try {
     if (row.role === 'user') {
       // Достаём attachments (если есть) и инъектируем в content.
       let injected = attachmentInjectionByMessage.get(row.id) || '';
@@ -2352,22 +2368,26 @@ export const getHistoryForAi = (
     // Картинки остаются в БД и UI; модель может получить к ним доступ через describe_image.
 
     messages.push(...expanded);
+    } finally {
+      if (contextHistory) {
+        for (let index=before;index<messages.length;index++) contextHistory.origins.push(row.timeline_index ?? row.id);
+        if (row.role === 'assistant' && row.usage_json) {
+          try {
+            const usage=JSON.parse(row.usage_json) as MessageUsage;
+            const measured=usage.context_window;
+            if (measured) contextHistory.checkpoints.push({index:before,tokens:measured.beforeTokens,epoch:measured.epoch},
+              {index:messages.length,tokens:measured.afterTokens,epoch:measured.epoch});
+            else if (contextWindowTokens(usage.latest)!>0) contextHistory.checkpoints.push({index:messages.length,tokens:contextWindowTokens(usage.latest)!,epoch:'legacy'});
+          } catch { /* Malformed old usage is not a provider checkpoint. */ }
+        }
+      }
+    }
   }
 
   return messages;
 };
 
-/**
- * Epoch Trimming — архивация по токенам, а не по количеству сообщений.
- *
- * Алгоритм:
- * 1. Считаем SUM(token_count) всех неархивных сообщений + system_prompt_tokens.
- * 2. Если сумма ≤ maxContextTokens — ничего не делаем.
- * 3. Если превышено — архивируем самые старые сообщения, пока контекст
- *    не схлопнется до ~50% от лимита. Один UPDATE, минимум дёрганья кэша.
- *
- * возвращает { archived_count, tokens_before, tokens_after } для логирования.
- */
+/** Last measured MAIN context size. Never adjust provider usage with local token weights. */
 const getProviderContextEstimateForUsers = (userIds: number[], chatId: number): number | null => {
   if (userIds.length === 0) return null;
   const placeholders = userIds.map(() => '?').join(', ');
@@ -2387,49 +2407,10 @@ const getProviderContextEstimateForUsers = (userIds: number[], chatId: number): 
     const latest = usage?.latest;
     if (!latest || latest.prompt_tokens <= 0) return null;
 
-    const activeLocal = db.prepare(`
-      SELECT COALESCE(SUM(token_count), 0) AS tokens
-      FROM chat_messages
-      WHERE user_id IN (${placeholders}) AND chat_id = ? AND archived = 0
-    `).get(...userIds, chatId) as { tokens: number };
+    return usage.context_window?.afterTokens > 0
+      ? usage.context_window.afterTokens
+      : contextWindowTokens(latest);
 
-    if (
-      Number.isFinite(usage.context_estimate_tokens)
-      && Number.isFinite(usage.context_local_tokens)
-    ) {
-      return Math.max(
-        0,
-        Number(usage.context_estimate_tokens)
-          + Number(activeLocal?.tokens || 0)
-          - Number(usage.context_local_tokens)
-      );
-    }
-
-    // Provider prompt already contains system prompt, tools, history and tool-loop.
-    // The visible final answer is added because it becomes part of the next request;
-    // hidden reasoning is not persisted into the AI context.
-    const visibleCompletionTokens = Math.max(0, latest.completion_tokens - latest.reasoning_tokens);
-    const providerContextAtResponse = latest.prompt_tokens + visibleCompletionTokens;
-
-    // Messages archived after this response are no longer in the current context.
-    const archivedAfter = db.prepare(`
-      SELECT COALESCE(SUM(token_count), 0) AS tokens
-      FROM chat_messages
-      WHERE user_id IN (${placeholders}) AND chat_id = ? AND archived = 1
-        AND id <= ? AND archived_at >= ?
-    `).get(...userIds, chatId, latestAssistant.id, latestAssistant.created_at) as { tokens: number };
-
-    // Defensive support for persisted rows added after the latest assistant message.
-    const activeAfter = db.prepare(`
-      SELECT COALESCE(SUM(token_count), 0) AS tokens
-      FROM chat_messages
-      WHERE user_id IN (${placeholders}) AND chat_id = ? AND archived = 0 AND id > ?
-    `).get(...userIds, chatId, latestAssistant.id) as { tokens: number };
-
-    return Math.max(
-      0,
-      providerContextAtResponse - Number(archivedAfter?.tokens || 0) + Number(activeAfter?.tokens || 0)
-    );
   } catch {
     return null;
   }
@@ -2437,172 +2418,6 @@ const getProviderContextEstimateForUsers = (userIds: number[], chatId: number): 
 
 export const getProviderContextEstimate = (userId: number, chatId: number): number | null =>
   getProviderContextEstimateForUsers([userId], chatId);
-
-const saveProviderContextAnchor = (
-  userId: number,
-  chatId: number,
-  contextEstimate: number,
-  localTokens: number
-) => {
-  const latestAssistant = db.prepare(`
-    SELECT id, usage_json
-    FROM chat_messages
-    WHERE user_id = ? AND chat_id = ? AND role = 'assistant' AND usage_json IS NOT NULL
-    ORDER BY id DESC
-    LIMIT 1
-  `).get(userId, chatId) as { id: number; usage_json: string | null } | undefined;
-
-  if (!latestAssistant?.usage_json) return;
-  try {
-    const usage = JSON.parse(latestAssistant.usage_json) as MessageUsage;
-    usage.context_estimate_tokens = Math.max(0, Math.floor(contextEstimate));
-    usage.context_local_tokens = Math.max(0, Math.floor(localTokens));
-    db.prepare('UPDATE chat_messages SET usage_json = ? WHERE id = ? AND user_id = ?')
-      .run(JSON.stringify(usage), latestAssistant.id, userId);
-  } catch {
-    // Ignore malformed legacy usage JSON.
-  }
-};
-
-export const trimUserHistoryByChat = (userId: number, chatId: number, maxContextTokens: number): { archived_count: number; tokens_before: number; tokens_after: number } => {
-  const tokenLimit = Math.max(1000, Math.floor(maxContextTokens));
-
-  // 1. Берём все неархивные сообщения (id, token_count), старые → новые.
-  const rows = db.prepare(`
-    SELECT id, token_count
-    FROM chat_messages
-    WHERE user_id = ? AND chat_id = ? AND archived = 0
-    ORDER BY id ASC
-  `).all(userId, chatId) as Array<{ id: number; token_count: number }>;
-
-  if (rows.length === 0) return { archived_count: 0, tokens_before: 0, tokens_after: 0 };
-
-  // Provider usage is the source of truth for total context size. Local
-  // token_count remains only as a per-message weight for selecting old rows.
-  const providerContextEstimate = getProviderContextEstimate(userId, chatId);
-  const providerAnchored = providerContextEstimate !== null;
-
-  // Fallback for chats without provider usage yet.
-  let systemPromptTokens = 0;
-  const user = providerAnchored ? null : getUserById(userId);
-  if (!providerAnchored && user) {
-    const promptContent = resolvePromptForUser(user).content;
-    const coreMemory = user.core_memory || '';
-    const pinnedMacros = getEnabledMacros(userId).filter(m => m.pinned);
-    const pinnedMacrosHint = pinnedMacros.length > 0
-      ? `\n\n[ЗАКРЕПЛЁННЫЕ МАКРОСЫ]\nУ пользователя есть часто используемые макросы: ${pinnedMacros.map(m => `"${m.title}"`).join(', ')}. Если запрос пользователя явно совпадает с назначением одного из них — вызови list_my_macros чтобы посмотреть подробности, затем execute_macro для запуска.`
-      : '';
-    const systemPrompt = buildBaseSystemPromptForUser(
-      user, promptContent, coreMemory, pinnedMacrosHint, false,
-      getChatMemorySettings(userId, chatId).prompt_injection_protection,
-      getIntuitionSettings(userId, chatId).effective.enabled,
-    );
-    systemPromptTokens = countMessageTokens('system', systemPrompt + playerInstructionsForPrompt(userId, chatId));
-  }
-
-  // 3. Сумма токенов всех неархивных сообщений.
-  let totalMessageTokens = rows.reduce((sum, r) => sum + (r.token_count || 0), 0);
-  let totalContextTokens = providerContextEstimate ?? (totalMessageTokens + systemPromptTokens);
-
-  // 3b. РАЗАРХИВАЦИЯ: если лимит позволяет, возвращаем свежие архивные сообщения.
-  // Критически важно чтобы пользователь мог увеличить лимит и получить историю назад.
-  // Используем 80% лимита как порог разархивации (буфер, чтобы не разархивировать
-  // и тут же заархивировать в одном проходе).
-  if (totalContextTokens < tokenLimit) {
-    const unarchiveThreshold = Math.floor(tokenLimit * 0.8);
-    const availableBudget = unarchiveThreshold - totalContextTokens;
-
-    if (availableBudget > 0) {
-      // Берём архивные сообщения, свежие → старые (id DESC).
-      const archivedRows = db.prepare(`
-        SELECT id, token_count
-        FROM chat_messages
-        WHERE user_id = ? AND chat_id = ? AND archived = 1
-        ORDER BY id DESC
-      `).all(userId, chatId) as Array<{ id: number; token_count: number }>;
-
-      if (archivedRows.length > 0) {
-        const idsToUnarchive: number[] = [];
-        let unarchiveAccumulated = 0;
-
-        for (const row of archivedRows) {
-          if (unarchiveAccumulated + (row.token_count || 0) > availableBudget) break;
-          idsToUnarchive.push(row.id);
-          unarchiveAccumulated += row.token_count || 0;
-        }
-
-        if (idsToUnarchive.length > 0) {
-          const ph = idsToUnarchive.map(() => '?').join(',');
-          db.prepare(`
-            UPDATE chat_messages
-            SET archived = 0,
-                archived_at = NULL
-            WHERE id IN (${ph})
-          `).run(...idsToUnarchive);
-          totalMessageTokens += unarchiveAccumulated;
-          totalContextTokens += unarchiveAccumulated;
-        }
-      }
-    }
-  }
-
-  // 4. Если контекст в пределах лимита — ничего не делаем.
-  if (totalContextTokens <= tokenLimit) {
-    if (providerAnchored) {
-      saveProviderContextAnchor(userId, chatId, totalContextTokens, totalMessageTokens);
-    }
-    return { archived_count: 0, tokens_before: totalContextTokens, tokens_after: totalContextTokens };
-  }
-
-  // 5. Схлопываем до 50% лимита.
-  const targetTokens = Math.floor(tokenLimit * 0.5);
-  // Сколько токенов нужно срезать (минимум, чтобы оказаться в районе target).
-  const tokensToArchive = providerAnchored
-    ? Math.max(0, totalContextTokens - targetTokens)
-    : totalMessageTokens - Math.max(0, targetTokens - systemPromptTokens);
-
-  // 6. Идём от самых старых, собираем ID для архивации.
-  const idsToArchive: number[] = [];
-  let accumulated = 0;
-  for (const row of rows) {
-    if (accumulated >= tokensToArchive) break;
-    idsToArchive.push(row.id);
-    accumulated += row.token_count || 0;
-  }
-
-  // Гарантия: всегда оставляем хотя бы 1 сообщение активным.
-  if (idsToArchive.length >= rows.length) {
-    idsToArchive.pop(); // оставляем самое свежее из тех, что попали в список
-  }
-
-  if (idsToArchive.length === 0) {
-    if (providerAnchored) {
-      saveProviderContextAnchor(userId, chatId, totalContextTokens, totalMessageTokens);
-    }
-    return { archived_count: 0, tokens_before: totalContextTokens, tokens_after: totalContextTokens };
-  }
-
-  // 7. Один пакетный UPDATE.
-  const placeholders = idsToArchive.map(() => '?').join(',');
-  db.prepare(`
-    UPDATE chat_messages
-    SET archived = 1,
-        archived_at = CURRENT_TIMESTAMP
-    WHERE id IN (${placeholders})
-  `).run(...idsToArchive);
-
-  const tokensAfter = totalContextTokens - accumulated;
-  if (providerAnchored) {
-    saveProviderContextAnchor(
-      userId,
-      chatId,
-      Math.max(0, tokensAfter),
-      Math.max(0, totalMessageTokens - accumulated)
-    );
-  }
-
-  return { archived_count: idsToArchive.length, tokens_before: totalContextTokens, tokens_after: Math.max(0, tokensAfter) };
-};
 
 export const resetDailyMessageCounters = () => db.prepare(`
   UPDATE users
@@ -3263,6 +3078,8 @@ export type ChatContextTokens = {
   latest_reasoning_tokens: number;
   latest_model_name: string | null;
   current_context_tokens: number;
+  context_source:'provider'|'local';
+  context_measurement_stale:boolean;
   context_summary: ContextSummaryDto | null;
 };
 
@@ -3303,12 +3120,13 @@ export const getChatContextTokens = (userId: number, chatId: number): ChatContex
   >;
 
   const latestAssistant = db.prepare(`
-    SELECT usage_json, model_name
+    SELECT usage_json, model_name, timeline_index, id
     FROM chat_messages
     WHERE user_id IN (${placeholders}) AND chat_id = ? AND role = 'assistant' AND usage_json IS NOT NULL
+      AND CASE WHEN json_valid(usage_json) THEN json_extract(usage_json, '$.latest.prompt_tokens') > 0 ELSE 0 END
     ORDER BY id DESC
     LIMIT 1
-  `).get(...scopedUserIds, chatId) as { usage_json: string | null; model_name: string | null } | undefined;
+  `).get(...scopedUserIds, chatId) as { usage_json: string | null; model_name: string | null; timeline_index:number;id:number } | undefined;
 
   let latestUsage: MessageUsage['latest'] | null = null;
   if (latestAssistant?.usage_json) {
@@ -3341,6 +3159,9 @@ export const getChatContextTokens = (userId: number, chatId: number): ChatContex
     system_prompt_tokens = countMessageTokens('system', systemPrompt + playerInstructionsForPrompt(userId, chatId));
   }
 
+  const measured=getProviderContextEstimateForUsers(scopedUserIds,chatId);
+  const snapshot=getContextSnapshot(userId,chatId);
+  const latestRow=db.prepare('SELECT id FROM chat_messages WHERE chat_id=? ORDER BY id DESC LIMIT 1').get(chatId) as {id:number}|undefined;
   return {
     ...row,
     system_prompt_tokens,
@@ -3351,8 +3172,10 @@ export const getChatContextTokens = (userId: number, chatId: number): ChatContex
     latest_cache_miss_tokens: latestUsage?.cache_miss_tokens ?? 0,
     latest_reasoning_tokens: latestUsage?.reasoning_tokens ?? 0,
     latest_model_name: latestAssistant?.model_name ?? null,
-    current_context_tokens: getProviderContextEstimateForUsers(scopedUserIds, chatId)
-      ?? (row.messages_tokens + system_prompt_tokens),
+    current_context_tokens: measured ?? (row.messages_tokens + system_prompt_tokens),
+    context_source:measured===null?'local':'provider',
+    context_measurement_stale:measured!==null&&((Boolean(snapshot?.awaitingProvider)&&snapshot!.throughTimelineIndex>=(latestAssistant?.timeline_index??0))
+      ||(latestRow?.id??0)>(latestAssistant?.id??0)),
     context_summary: getContextSummary(userId, chatId),
   };
 };

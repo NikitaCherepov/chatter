@@ -45,8 +45,11 @@ export type AppearanceModels = { loading: boolean; busy: boolean; error: string 
 export type AppearanceVoice = { status: 'idle' | 'requesting' | 'recording' | 'transcribing'; canStart: boolean; error: string | null;
   transcript: { id: number; text: string } | null };
 export type AppearanceContext = { showTokens: boolean; limit: number | null; tokens: number | null; cachePercent: number | null;
+  source?: 'provider' | 'local' | null; measurementStale?: boolean; summary?: AppearanceContextSummary | null;
   messagesTokens: number | null; reasoningTokens: number | null; systemPromptTokens: number | null; activeMessages: number | null; archivedMessages: number | null;
   latest: (AppearanceTokenUsage & { modelName: string | null }) | null };
+export type AppearanceContextSummary = { kind:'summary'; title:string; content:string; throughTimelineIndex:number;
+  sourceMessageCount:number; tokenCount:number; contextLimit:number; modelName:string|null; providerName:string|null; updatedAt:number };
 export type AppearanceReviewAction = { type: 'reviewConfirmation'; id: string };
 export type AppearanceContentAction = { type: 'contentAction'; chatId: number; messageId: number; variantIndex: number;
   action: 'openImage' | 'downloadImage' | 'openAttachment' | 'downloadAttachment' | 'openLink' | 'copyText'; url?: string; index?: number; text?: string };
@@ -95,6 +98,7 @@ export type AppearanceShellState = {
   view: 'home' | 'conversation';
   activeChatId: number | null;
   messages: Array<AppearanceMessageContent & { id: number; role: string; createdAt: number;
+    timelineIndex?:number|null; archived?:boolean;
     variantIndex: number; variantCount: number; actions: AppearanceMessageActionName[]; editableContent?: string; info?: AppearanceMessageInfo }>;
   models?: AppearanceModels;
   context?: AppearanceContext;

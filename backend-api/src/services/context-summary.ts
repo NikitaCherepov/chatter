@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { db, toUnix } from '../db.js';
 import { listRoomReaderUserIds } from './chat-rooms.js';
 import { countTokens } from './tokenizer.js';
+import type { ContextSnapshot } from './context-compaction.js';
 
 export type ContextSummaryDto = {
   content: string;
@@ -204,6 +205,47 @@ export const getMatchingContextSummary = (userId: number, chatId: number, source
   return match?.source_hash === sourceHash ? getContextSummary(userId, chatId) : null;
 };
 
+/** Internal provider history, never exposed as executable theme/UI data. */
+export function getContextSnapshot(userId:number,chatId:number):ContextSnapshot|null {
+  const raw = (db.prepare('SELECT snapshot_json FROM chat_context_summaries WHERE user_id=? AND chat_id=?').get(userId,chatId) as {snapshot_json:string|null}|undefined)?.snapshot_json;
+  if (!raw) return null;
+  const value = JSON.parse(raw) as ContextSnapshot;
+  if (!Array.isArray(value.messages) || value.origins.length !== value.messages.length) throw new Error('context_snapshot_invalid');
+  return value;
+}
+
+export function contextSourceFingerprint(userId:number,chatId:number,through:number,positions?:number[]):string {
+  const readers=listRoomReaderUserIds(chatId)??[];
+  if (!readers.includes(userId)) throw new Error('chat_not_found');
+  const rows=db.prepare(`SELECT id,content,tool_calls_json,images,attachments,active_variant_index FROM chat_messages
+    WHERE chat_id=? AND user_id IN (${readers.map(()=>'?').join(',')}) AND COALESCE(timeline_index,id)<=?
+    ${positions?'AND COALESCE(timeline_index,id) IN (SELECT value FROM json_each(?))':''} ORDER BY id`)
+    .all(chatId,...readers,through,...(positions?[JSON.stringify(positions)]:[]));
+  return createHash('sha256').update(JSON.stringify(rows)).digest('hex');
+}
+
+export function saveCompactedContext(input: Parameters<typeof saveContextSummary>[0] & {snapshot:ContextSnapshot; previousContent:string|null; source?:{through:number;fingerprint:string;positions?:number[]}}):ContextSummaryDto {
+  return db.transaction(() => {
+    const readers = listRoomReaderUserIds(input.chatId) ?? [];
+    if (!readers.includes(input.userId)) throw new Error('chat_not_found');
+    if ((getContextSummary(input.userId,input.chatId)?.content ?? null) !== input.previousContent) throw new Error('context_summary_conflict');
+    if (input.source && contextSourceFingerprint(input.userId,input.chatId,input.source.through,input.source.positions)!==input.source.fingerprint) throw new Error('context_summary_source_changed');
+    const summary = saveContextSummary(input);
+    db.prepare('UPDATE chat_context_summaries SET snapshot_json=? WHERE user_id=? AND chat_id=?')
+      .run(JSON.stringify(input.snapshot),input.userId,input.chatId);
+    // Room summaries are private; never archive shared participants' rows.
+    if (readers.length === 1) {
+      db.prepare(`UPDATE chat_messages SET archived=1,archived_at=CURRENT_TIMESTAMP
+        WHERE user_id=? AND chat_id=? AND COALESCE(timeline_index,id)<=? AND archived=0`)
+        .run(input.userId,input.chatId,input.throughTimelineIndex);
+      db.prepare(`UPDATE chat_messages SET archived=0,archived_at=NULL WHERE user_id=? AND chat_id=?
+        AND COALESCE(timeline_index,id)>? AND COALESCE(timeline_index,id)<=? AND archived=1`)
+        .run(input.userId,input.chatId,input.throughTimelineIndex,input.snapshot.throughTimelineIndex);
+    }
+    return summary;
+  })();
+}
+
 export const saveContextSummary = (input: {
   userId: number;
   chatId: number;
@@ -214,6 +256,7 @@ export const saveContextSummary = (input: {
   contextLimit: number;
   modelName: string | null;
   providerName: string | null;
+  tokenCount?:number;
 }): ContextSummaryDto => {
   db.prepare(`
     INSERT INTO chat_context_summaries (
@@ -229,9 +272,10 @@ export const saveContextSummary = (input: {
       context_limit = excluded.context_limit,
       model_name = excluded.model_name,
       provider_name = excluded.provider_name,
+      snapshot_json = NULL,
       updated_at = CURRENT_TIMESTAMP
   `).run(input.chatId, input.userId, input.content, input.sourceHash, input.throughTimelineIndex,
-    input.sourceMessageCount, countTokens(input.content), input.contextLimit, input.modelName, input.providerName);
+    input.sourceMessageCount, input.tokenCount ?? countTokens(input.content), input.contextLimit, input.modelName, input.providerName);
   return getContextSummary(input.userId, input.chatId)!;
 };
 

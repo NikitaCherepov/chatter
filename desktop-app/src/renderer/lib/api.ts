@@ -923,6 +923,8 @@ export type ChatContextTokens = {
   latest_reasoning_tokens: number;
   latest_model_name: string | null;
   current_context_tokens: number;
+  context_source?:'provider'|'local';
+  context_measurement_stale?:boolean;
   context_summary: ContextSummary | null;
 };
 

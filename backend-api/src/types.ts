@@ -210,8 +210,8 @@ export type MessageUsage = {
   latest: NormalizedTokenUsage;
   aggregate: NormalizedTokenUsage;
   calls: TokenUsageCall[];
-  context_estimate_tokens?: number;
-  context_local_tokens?: number;
+  /** Measurements of this MAIN model exchange. Auxiliary calls have separate windows. */
+  context_window?: { epoch:string; beforeTokens:number; afterTokens:number };
   /** Generation performance (computed locally, providers don't report it). */
   perf?: {
     /** ms from sending the first request to the first token (TTFT). */
