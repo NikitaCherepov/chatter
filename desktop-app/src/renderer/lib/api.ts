@@ -2716,6 +2716,13 @@ export type MemoryPreferences = {
   effective_result_limit: number;
 };
 
+export function getMemoryPreferences(): Promise<{ preferences: MemoryPreferences }> {
+  return apiFetch('/api/v1/user/memory-preferences');
+}
+export function patchMemoryPreferences(patch: Partial<Pick<MemoryPreferences, 'automatic_memory' | 'result_limit'>>): Promise<{ preferences: MemoryPreferences }> {
+  return apiFetch('/api/v1/user/memory-preferences', { method: 'PATCH', body: JSON.stringify(patch) });
+}
+
 export async function setFeatureFlags(flags: Partial<FeatureFlags>): Promise<{ ok: boolean; flags: FeatureFlags }> {
   return apiFetch('/api/v1/user/feature-flags', {
     method: 'PUT',
@@ -2758,6 +2765,12 @@ export async function setUserName(name: string): Promise<{ ok: boolean; name: st
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name }),
   });
+}
+export function changeAccountPassword(currentPassword: string, newPassword: string): Promise<{ ok: boolean }> {
+  return apiFetch('/api/v1/user/password', { method: 'PUT', body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }) });
+}
+export function changeAccountLogin(currentPassword: string, newLogin: string): Promise<{ ok: boolean; login: string }> {
+  return apiFetch('/api/v1/user/login', { method: 'PUT', body: JSON.stringify({ password: currentPassword, new_login: newLogin.trim() }) });
 }
 
 export async function setUserTimezone(timezoneOffset: number): Promise<{
@@ -2837,8 +2850,8 @@ export type QuotaInfo = {
   quota?: QuotaPeriodInfo | null;
 };
 
-export async function fetchQuota(): Promise<QuotaInfo> {
-  return apiFetch('/api/v1/account/quota');
+export async function fetchQuota(signal?: AbortSignal): Promise<QuotaInfo> {
+  return apiFetch('/api/v1/account/quota', { signal });
 }
 
 // ---------- Chat Attachments (Documents) ----------

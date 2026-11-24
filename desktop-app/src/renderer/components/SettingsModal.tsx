@@ -958,10 +958,7 @@ export function SettingsModal({
     }
     setPasswordSaving(true);
     try {
-      await api.apiFetch('/api/v1/user/password', {
-        method: 'PUT',
-        body: JSON.stringify({ current_password: pwdCurrent, new_password: newPassword }),
-      });
+      await api.changeAccountPassword(pwdCurrent, newPassword);
       setPwdCurrent('');
       setNewPassword('');
       toast.success(t('settings.toasts.passwordChanged'));
@@ -986,10 +983,7 @@ export function SettingsModal({
     }
     setLoginSaving(true);
     try {
-      const res = await api.apiFetch<{ ok: boolean; login: string }>('/api/v1/user/login', {
-        method: 'PUT',
-        body: JSON.stringify({ password: loginCurrent, new_login: newLogin.trim() }),
-      });
+      const res = await api.changeAccountLogin(loginCurrent, newLogin.trim());
       setLoginCurrent('');
       setNewLogin('');
       toast.success(t('settings.toasts.loginChanged', { login: res.login }));

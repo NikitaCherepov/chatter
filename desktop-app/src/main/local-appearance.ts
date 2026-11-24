@@ -1,5 +1,6 @@
 import { APPEARANCE_LABEL_KEYS } from './appearance-shell-types';
 import { THEME_README, THEME_GUIDES, THEME_SETTINGS_EXAMPLES } from './theme-documentation';
+import { SETTINGS_REQUEST_DECLARATIONS } from './theme-settings-request-documentation';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
@@ -831,10 +832,11 @@ export type Models={loading:boolean;busy:boolean;error:string|null;selectedId:st
 export type Context={showTokens:boolean;limit:number|null;tokens:number|null;cachePercent:number|null;messagesTokens:number|null;reasoningTokens:number|null;systemPromptTokens:number|null;activeMessages:number|null;archivedMessages:number|null;latest:(TokenUsage&{modelName:string|null})|null};
 export type Voice={status:'idle'|'requesting'|'recording'|'transcribing';canStart:boolean;error:string|null;transcript:{id:number;text:string}|null};
 export type SettingValue=string|number|boolean;
-export type SettingsField={id:string;groupId:string;label:string;help:string;type:'select'|'toggle'|'number'|'time';value:SettingValue;savedValue:SettingValue;dirty:boolean;error:string|null;visible:boolean;options?:{value:string;label:string}[];min?:number;max?:number;step?:number};
+export type SettingsField={id:string;groupId:string;label:string;help:string;type:'select'|'toggle'|'number'|'time'|'text';value:SettingValue;savedValue:SettingValue;dirty:boolean;error:string|null;visible:boolean;options?:{value:string;label:string;disabled?:boolean}[];min?:number;max?:number;step?:number;maxLength?:number};
 export type SettingsSection={id:string;groupId:string;label:string;mode:'native'|'hybrid'|'fields'};
-export type SettingsSearchResult={sectionId:string;key:string;title:string;sectionTitle:string;fieldId:string|null;native:boolean};
-export type SettingsState={groups:{id:string;label:string}[];sections:SettingsSection[];query:string;results:SettingsSearchResult[];hasMoreResults:boolean;editor:{id:string;sectionId:string;loading:boolean;busy:boolean;dirty:boolean;error:string|null;fields:SettingsField[];groups:{id:string;label:string}[];links:{id:string;label:string;sectionId:string;target:string}[]}|null};
+export type SettingsSearchResult={sectionId:string;key:string;title:string;sectionTitle:string;fieldId:string|null;operationId:string|null;native:boolean};
+export type SettingsState={groups:{id:string;label:string}[];sections:SettingsSection[];query:string;results:SettingsSearchResult[];hasMoreResults:boolean;editor:{id:string;sectionId:string;loading:boolean;busy:boolean;dirty:boolean;error:string|null;fields:SettingsField[];groups:{id:string;label:string}[];actions:{id:string;label:string;disabled:boolean;active:boolean}[];requests:SettingsRequestDescriptor[];links:{id:string;label:string;sectionId:string;target:string}[]}|null};
+${SETTINGS_REQUEST_DECLARATIONS}
 export type Message={id:number;role:string;content:string;createdAt:number;streaming:boolean;reasoningContent:string;workLog:WorkLogStep[];toolStatus:string|null;variantIndex:number;variantCount:number;actions:MessageAction[];editableContent?:string;info:MessageInfo;images:{url:string;type:'user_photo'|'generated'|'external'}[];attachments:{url:string;name:string;filename:string;mimeType:string;sizeBytes:number}[]};
 export type ConfirmationNode={type:'text'|'code'|'markdown'|'json'|'email';text:string}|{type:'diff';before:string;after:string}|{type:'group';label?:string;children:ConfirmationNode[]}|{type:'field';fieldId:string}|{type:'action';actionId:string};
 export type ConfirmationField={id:string;label:string;type:string;value:string|boolean;disabled:boolean;options?:{value:string;label:string}[]};
@@ -860,9 +862,12 @@ export type ThemeState = {
   locale:string;dark:boolean;palette:{background:string;text:string;accent:string;surface:string};labels:Labels;
 };
 export interface ThemeAPI {
+  requestSettings<S extends keyof SettingsRequestContract,O extends keyof SettingsRequestContract[S]>(sectionId:S,operation:O,...args:SettingsRequestParameters<S,O>):Promise<SettingsRequestResult<S,O>>;
   getSettingsSections():SettingsSection[];searchSettings(query:string):boolean;openSettingsSection(sectionId:string):boolean;
   setSettingValue(sectionId:string,fieldId:string,value:SettingValue):boolean;saveSettingsSection(sectionId:string):boolean;
   discardSettingsSection(sectionId:string):boolean;reloadSettingsSection(sectionId:string):boolean;
+  runSettingsAction(sectionId:string,actionId:string):boolean;
+  cancelSettingsRequests(sectionId:string):boolean;
   selectModel(id:string|null):boolean;
   startVoiceRecording():boolean;stopVoiceRecording():boolean;cancelVoiceRecording():boolean;
   getChatMenu(id:number):MenuItem[];getFolderMenu(id:number):MenuItem[];

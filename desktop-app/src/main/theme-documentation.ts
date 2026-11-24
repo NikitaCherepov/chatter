@@ -1,6 +1,9 @@
 import { APPEARANCE_LABEL_KEYS } from './appearance-shell-types';
 
 // Handbook index and focused guides. API signatures live in chatter.d.ts.
+import { SETTINGS_OPERATIONS_GUIDE } from './theme-settings-request-documentation';
+import { THEME_SETTINGS_RESOURCE_EXAMPLES } from './theme-settings-resource-examples';
+
 export const THEME_README = `# Local Chatter themes
 
 ## Start here
@@ -22,6 +25,7 @@ Available API features are not a mandatory UI checklist: choose what suits this 
 - docs/messages.md: content, streaming, workLog, tools, message actions, variants and speech.
 - docs/session.md: model selection, context/token indicators and voice recording/transcription.
 - docs/settings.md: settings catalog/search, reusable field descriptors, drafts/save/discard and native sections.
+- docs/settings-operations.md: account security forms, memory spaces/records/map, quotas, agents and theme management.
 - docs/media.md: images, full-resolution viewers, documents and outgoing attachments.
 - docs/confirmations.md: custom confirmation UI, fields, decisions and native fallback.
 - docs/appearance.json: ordinary appearance fields, allowed values and ranges.
@@ -38,6 +42,7 @@ Local raster backgrounds use assets/image.png (PNG/JPEG/WebP/GIF, up to 8 MiB); 
 `;
 
 export const THEME_GUIDES: Record<string, string> = {
+  'settings-operations.md': SETTINGS_OPERATIONS_GUIDE,
   'settings.md': `# Settings: data, actions and reusable theme components
 
 ## Choose your interface
@@ -47,16 +52,20 @@ drawer, command interface or only the controls your theme needs. getSettingsSect
 state.settings.sections return the same localized catalog. state.settings.groups provides group
 labels. Section IDs are stable; labels change with the app's language. Admin sections are omitted
 for non-admin accounts. mode is native (native contents), fields (custom field API) or hybrid
-(custom fields plus explicitly listed native editors). Currently app is hybrid; other sections
-are native. Never infer that a section is editable just because it is in the catalog.
+(custom fields plus explicitly listed native editors). Currently app, account, limits, agents,
+memory, voice and browser provide fields and operations; other sections are native. Never infer
+that a section is editable just because it is in the catalog.
 
 ## Search and opening
 
 searchSettings(query) updates state.settings.query/results/hasMoreResults using the native
 settings index of localized UI labels/help, not user values or secrets. Results have sectionId,
-key, title, sectionTitle, fieldId (custom field when mapped) and native. At most 50 results are
+key, title, sectionTitle, fieldId (custom field when mapped), operationId (when mapped) and native. At most 50 results are
 returned; refine a broad query if hasMoreResults is true. Built-in field labels are indexed;
-dynamic records inside native editors remain native for now.
+dynamic memory records, specialists and saved themes use the operations in settings-operations.md.
+Search matches inside the seven connected sections stay in their custom section, including
+password/login and appearance results. operationId identifies a form/control, not permission to
+automatically execute its operation; show the user's inputs/confirmation first.
 For a custom section call openSettingsSection(id). For a native result/section explicitly call
 openSettings(sectionId, optionalResultKey) from a user handler. The native modal opens that
 section and can highlight its indexed field, while retaining the selected theme underneath.
@@ -65,9 +74,10 @@ openSettings() without arguments remains the ordinary native settings entry.
 ## Field-based forms
 
 state.settings.editor is null before opening. Afterwards it has sectionId, loading, busy, dirty,
-error, groups, links and fields. Each field has id, groupId, type, localized label/help, value
+error, groups, links, actions, requests and fields. Each field has id, groupId, type, localized label/help, value
 (draft), savedValue, dirty, validation error and visible; select fields add options, number
-fields min/max/step. Fields/links are authoritative: do not invent IDs or save unseen unsupported
+fields min/max/step, text fields maxLength. Select options can be disabled (unavailable); render
+that flag, including when displaying an unchanged unavailable saved choice. Fields/links are authoritative: do not invent IDs or save unseen unsupported
 settings. visible controls presentation (for example, schedule times); validation applies to all
 draft fields. Scalar values are string/number/boolean. Numeric/time drafts may temporarily be
 invalid while typing; their errors prevent saving. The opaque editor id is handled by the bridge;
@@ -87,10 +97,52 @@ if a later field fails, earlier successful writes remain applied and only the re
 dirty. This is not one transaction across local preferences and server settings. Account/server
 changes, switching to another theme or unmounting discard obsolete drafts/results; chat navigation
 and editing the same theme's source alone retain them.
-Section app currently exposes language, theme, lightFrom, darkFrom, zoom, renderPerf, showTokens,
-diceRoll. Language/theme/zoom use existing desktop preferences and account UI flags use the existing
-UI-settings endpoint. editor.links explicitly lists the native theme editor (no raw theme-file
-editor API is implied). Invoke openSettings(link.sectionId,link.target) to open it.
+
+editor.actions lists non-saving operations with id, label, disabled and active. Invoke only
+listed enabled actions using runSettingsAction(sectionId,actionId) from a real user event.
+They do not save the form. Editing/discarding/saving/reloading or opening a different section
+cancels its current operation; unmount/account/server/theme changes also cancel it. Represent
+active/disabled/error in your UI. Do not invent action IDs or invoke them from render/effects.
+
+## Connected sections
+
+- app: language, theme, lightFrom, darkFrom, zoom, renderPerf, showTokens, diceRoll.
+- voice: recognitionSource (local/server), recognitionLanguage, modelId, voiceId, volume and
+  sfxVolume (0..1), wakeEnabled, wakeSensitivity (0..100), and wake_<word-id> toggles for available
+  activation names/phrases. The activation group must retain at least one phrase when enabled.
+  Enabling on Save starts the same native listener; simply reading/editing fields never requests
+  the microphone. Changing modelId updates voiceId and its options in the draft; submit the
+  resulting state, do not retain your own old voice list. Unavailable saved choices remain
+  visible but cannot be newly selected. Loading a section never changes the saved voice.
+  A failed remote voice/transcription catalog leaves local controls available. previewVoice
+  plays the draft engine/voice/volume without saving; stopPreview stops it. Supported preview
+  engines are Piper, builtin and Cartesia. Unavailable/unsupported choices disable the action.
+  Late generated audio after cancellation is ignored. No microphone is used for preview.
+- account: name and timezone (UTC offsets in hours, including quarter hours). An unconfirmed
+  timezone is the disabled saved value auto; choosing an explicit offset confirms it on Save.
+  Password/login forms use separate requestSettings operations; credentials are never settings fields.
+- limits: contextTokens (at least 1000; max comes from the server), attachmentTokens (0 means
+  automatic; otherwise at most 90% of the draft context). Reducing context can reduce the
+  effective existing attachment budget; the host rereads normalized values after saving.
+  browserConcurrency (1..6), desktopSearch and desktopReader control the existing desktop web
+  runtime. Quotas use the read-only getQuota operation.
+- agents: model (empty string means automatic), reasoning (empty string means automatic).
+  Options come from the available model catalog. Changing model resets an unsupported draft
+  reasoning level to automatic. listAgents supplies the localized specialists catalog.
+- memory: automaticMemory and resultLimit (automatic means the administrator's default;
+  otherwise a string from 1 to 20). These are account defaults; per-chat overrides continue
+  to take precedence. Spaces, records, search and map use separate operations.
+- browser: autoOpen, autoClick, autoFill and humanTyping, all booleans. The auto* fields are
+  positive permissions: true allows that browser action without confirmation. They invert
+  the existing browser_confirm_* storage flags. humanTyping=true means character-by-character
+  input, false means immediate insertion. The existing manual-only password protection remains.
+
+These are the ordinary desktop preferences and existing account endpoints, not settings stored
+inside the theme. Each section loads only when opened. editor.links lists the native portions;
+invoke openSettings(link.sectionId,link.target) to open one. Choosing a native link keeps this
+theme's draft; native changes to a dirty field cause a conflict on Save rather than silently
+overwriting it. See settings-operations.md for typed Promise operations and account/appearance
+forms. No arbitrary filesystem or provider-credential access is implied.
 
 ## Reuse your components
 
@@ -547,6 +599,7 @@ The isolated shell has no general network, filesystem, package installation or e
 };
 
 export const THEME_SETTINGS_EXAMPLES: Record<string, string> = {
+  ...THEME_SETTINGS_RESOURCE_EXAMPLES,
   'Field.tsx': `import React from 'react';
 import type { SettingsField } from '../chatter';
 export default function Field({ sectionId, field, disabled }: { sectionId: string; field: SettingsField; disabled: boolean }) {
@@ -557,9 +610,9 @@ export default function Field({ sectionId, field, disabled }: { sectionId: strin
   const props = { id: inputId, disabled, 'aria-describedby': describedBy, 'aria-invalid': Boolean(field.error) };
   return <div className="settings-row" data-setting={field.id}>
     <label htmlFor={inputId}>{field.label}</label>
-    {field.type === 'select' ? <select {...props} value={String(field.value)} onChange={event => update(event.target.value)}>{field.options?.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select>
+    {field.type === 'select' ? <select {...props} value={String(field.value)} onChange={event => update(event.target.value)}>{field.options?.map(option => <option key={option.value} value={option.value} disabled={option.disabled}>{option.label}</option>)}</select>
       : field.type === 'toggle' ? <input {...props} type="checkbox" checked={field.value === true} onChange={event => update(event.target.checked)}/>
-      : <input {...props} type={field.type} min={field.min} max={field.max} step={field.step} value={String(field.value)} onChange={event => update(event.target.value)}/>}
+      : <input {...props} type={field.type} min={field.min} max={field.max} step={field.step} maxLength={field.maxLength} value={String(field.value)} onChange={event => update(event.target.value)}/>}
     <div id={inputId + '-help'}>{field.help && <p>{field.help}</p>}{field.error && <p role="alert">{field.error}</p>}</div>
   </div>;
 }
@@ -577,6 +630,7 @@ export default function Section({ sectionId }: { sectionId: string }) {
     {(editor.loading || editor.busy) && <p role="status">{state.labels.loading}</p>}
     {editor.error && <p role="alert">{editor.error}</p>}
     {editor.groups.map(group => <fieldset key={group.id} disabled={editor.busy || editor.loading}><legend>{group.label}</legend>{editor.fields.filter(field => field.groupId === group.id).map(field => <Field key={field.id} sectionId={sectionId} field={field} disabled={editor.busy || editor.loading}/>)}</fieldset>)}
+    {editor.actions.map(action => <button type="button" key={action.id} data-settings-action={action.id} aria-busy={action.active} disabled={editor.loading || editor.busy || action.disabled} onClick={() => window.chatter.runSettingsAction(sectionId, action.id)}>{action.label}</button>)}
     {editor.links.map(link => <button type="button" key={link.id} disabled={editor.loading || editor.busy} onClick={() => window.chatter.openSettings(link.sectionId, link.target)}>{link.label}</button>)}
     <button type="button" disabled={!editor.dirty || editor.busy || editor.loading || editor.fields.some(field => field.error)} onClick={() => window.chatter.saveSettingsSection(sectionId)}>{state.labels.save}</button>
     <button type="button" disabled={!editor.dirty || editor.busy || editor.loading} onClick={() => window.chatter.discardSettingsSection(sectionId)}>{state.labels.cancel}</button>

@@ -54,6 +54,9 @@ try {
     [path.join(virtualRoot, 'components/Section.tsx'), fs.readFileSync(path.join(directory, 'examples/settings/Section.tsx'), 'utf8')],
     [path.join(virtualRoot, 'App.tsx'), 'import React from "react";import {Markdown,MessageImages,Attachments,useChatterState} from "@chatter/ui";export default function App(){const state=useChatterState({navigation:true,confirmations:true});const message=state?.messages[0];const tokens=state?.context.tokens;const transcript=state?.voice.transcript;const model=state?.models.selectedId;return message?<><Markdown messageId={message.id} content={message.content}/><MessageImages message={message}/><Attachments message={message}/><button onClick={()=>window.chatter.selectModel(model??null)}>{message.info.modelName} {tokens}</button><button onClick={()=>window.chatter.startVoiceRecording()}>{transcript?.text}</button><button onClick={()=>window.chatter.stopVoiceRecording()}>Stop</button><button onClick={()=>window.chatter.cancelVoiceRecording()}>Cancel</button></>:null;}'],
   ]);
+  for (const file of fs.readdirSync(path.join(directory, 'examples/settings'))) {
+    if (file.endsWith('.tsx')) virtualFiles.set(path.join(virtualRoot, 'components', file), fs.readFileSync(path.join(directory, 'examples/settings', file), 'utf8'));
+  }
   const compilerOptions = { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.ESNext, moduleResolution: ts.ModuleResolutionKind.Bundler,
     jsx: ts.JsxEmit.React, noEmit: true, strict: true, esModuleInterop: true, types: [], skipLibCheck: false };
   const compilerHost = ts.createCompilerHost(compilerOptions), originalRead = compilerHost.readFile, originalExists = compilerHost.fileExists;

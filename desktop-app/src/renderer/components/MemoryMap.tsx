@@ -10,6 +10,7 @@ import s from './MemoryRecordsPanel.module.scss';
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { computeMemoryProjection, memoryPageUrl, useMemoryKey, type MemoryPage } from '../lib/memory-queries';
+import { loadMemoryMapData } from '../lib/memory-settings-service';
 import { Select } from './Select';
 import { ConfirmDialog } from './ConfirmDialog';
 class MapBoundary extends Component<{ children: ReactNode; fallback: ReactNode }, { failed: boolean }> {
@@ -73,21 +74,7 @@ export default function MemoryMap({ active, endpoint, matches, textQuery, compac
   const vectorKey = [...key, 'vectors', generated];
   const vectorsQuery = useQuery({
     queryKey: vectorKey,
-    queryFn: async ({ signal }) => {
-      const records = new Map<string, MemoryRecord>(), vectors = new Map<string, MapVector>();
-      let offset = 0, total = 0;
-      while (offset < generated) {
-        signal.throwIfAborted();
-        const page = await api.apiFetch<MemoryPage>(memoryPageUrl(endpoint, { limit: Math.min(500, generated - offset), offset, include_vectors: 1 }), { signal });
-        total = page.total;
-        page.records.forEach(record => records.set(record.id, record));
-        (page.vectors ?? []).forEach(vector => vectors.set(vector.record_id, vector));
-        if (page.nextOffset === null || !page.records.length) break;
-        if (page.nextOffset <= offset) throw new Error('invalid_memory_page');
-        offset = page.nextOffset;
-      }
-      return { records: [...records.values()], vectors: [...vectors.values()], total };
-    },
+    queryFn: ({ signal }) => loadMemoryMapData(endpoint, generated, signal),
     enabled: active && generated > 0,
     staleTime: 300_000, gcTime: 300_000, retry: false,
   });

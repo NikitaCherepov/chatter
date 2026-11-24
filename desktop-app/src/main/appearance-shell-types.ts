@@ -1,5 +1,6 @@
 export const APPEARANCE_LABEL_KEYS = ["newChat", "allChats", "settings", "search", "loadMore", "loading", "empty", "workLog", "reasoning", "download", "image", "imageLoadFailed", "copy", "downloadDocx", "sendTelegram", "save", "cancel", "fork", "edit", "delete", "regenerate", "regenerateHint", "speak", "pauseSpeech", "resumeSpeech", "stopSpeech", "reviewConfirmation", "previousVariant", "nextVariant", "renameChat", "moveChat", "hideFromBot", "showInBot", "leaveChat", "createFolder", "renameFolder", "deleteFolder", "unfiled"] as const;
 import { parseThemeSettingsAction, canUseThemeSettings, type ThemeSettingsAction, type ThemeSettingsState, type NativeSettingsAction } from './settings-shell-types';
+import { parseSettingsRequest, settingsRequestScope } from './settings-request-types';
 export type AppearanceLabelKey = typeof APPEARANCE_LABEL_KEYS[number];
 export type AppearanceLabels = Record<AppearanceLabelKey, string> & Partial<Record<string, string>>;
 export type AppearanceChatMenuActionName = 'rename' | 'downloadDocx' | 'move' | 'setBotHidden' | 'delete' | 'leave';
@@ -52,6 +53,7 @@ export type AppearanceContentAction = { type: 'contentAction'; chatId: number; m
 export type AppearanceImageRequest = { id: string; requestId: string; chatId: number; messageId: number; variantIndex: number; url: string; width: number; pendingId?: string };
 export type AppearanceDocumentRequest = { requestId: string; method: 'readAttachment' | 'renderAttachmentPage'; chatId: number; messageId: number;
   variantIndex: number; index: number; url: string; page?: number; width?: number };
+export type AppearanceBridgeRequest = AppearanceDocumentRequest | import('./settings-request-types').ThemeSettingsRequest;
 export type AppearanceDocumentPreview = { kind: 'pdf' | 'docx' | 'spreadsheet' | 'text' | 'unsupported'; name: string; mimeType: string; sizeBytes: number;
   text: string; html?: string; pageCount?: number };
 export type AppearanceDocumentPage = { source: string; width: number; height: number; page: number; pageCount: number };
@@ -303,4 +305,10 @@ export function parseAppearanceDocumentRequest(value: unknown): AppearanceDocume
 export function canReadAppearanceDocument(state: AppearanceShellState, request: AppearanceDocumentRequest): boolean {
   return state.activeChatId === request.chatId && Boolean(state.messages.find(message => message.id === request.messageId
     && message.variantIndex === request.variantIndex)?.attachments?.[request.index]?.url === request.url);
+}
+export function parseAppearanceBridgeRequest(value: unknown): AppearanceBridgeRequest | null {
+  return (value as any)?.method === 'settings' ? parseSettingsRequest(value) : parseAppearanceDocumentRequest(value);
+}
+export function canReadAppearanceRequest(state: AppearanceShellState, request: AppearanceBridgeRequest): boolean {
+  return request.method === 'settings' ? settingsRequestScope(state.settings, request) : canReadAppearanceDocument(state, request);
 }

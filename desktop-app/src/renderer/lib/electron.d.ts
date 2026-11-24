@@ -18,7 +18,7 @@ declare global {
       appearanceShellState: (id: string, state: AppearanceShellState) => Promise<void>;
       appearanceImageResult: (id: string, requestId: string, url: string | null) => Promise<void>;
       appearanceDocumentResult: (id: string, requestId: string, result: unknown, error?: string) => Promise<void>;
-      onAppearanceDocumentRequest: (callback: (event: { id: string; request: import('../../main/appearance-shell-types').AppearanceDocumentRequest }) => void) => () => void;
+      onAppearanceDocumentRequest: (callback: (event: { id: string; request: import('../../main/appearance-shell-types').AppearanceBridgeRequest }) => void) => () => void;
       onAppearanceImageRequest: (callback: (request: import('../../main/appearance-shell-types').AppearanceImageRequest) => void) => () => void;
       onAppearanceShellAction: (callback: (event: AppearanceShellEvent) => void) => () => void;
       onInteractiveStatus: (callback: (status: InteractiveStatus) => void) => () => void;

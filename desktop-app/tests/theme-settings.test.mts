@@ -17,18 +17,22 @@ vm.runInNewContext(compile(fs.readFileSync(new URL('../src/renderer/lib/app-sett
     : { ZOOM_MIN_PCT: 40, ZOOM_MAX_PCT: 200, ZOOM_STEP_PCT: 5 },
 });
 const { appSettingsFields, APP_SETTING_KEYS } = fieldsModule.exports;
+const { SECTION_SETTING_KEYS } = require('../src/renderer/lib/settings-field-keys.ts');
+const { SETTINGS_REQUESTS, settingsOperations, parseSettingsRequest } = require('../src/main/settings-request-types.ts');
 const catalogModule: any = { exports: {} };
 vm.runInNewContext(compile(fs.readFileSync(new URL('../src/renderer/lib/settings-catalog.ts', import.meta.url), 'utf8')), {
   exports: catalogModule.exports, require: (name: string) => name.includes('settings-navigation') ? { SETTINGS_GROUPS, searchSettings, settingsSectionKey }
-    : name.includes('entries.json') ? { default: rawEntries } : { APP_SETTING_KEYS },
+    : name.includes('entries.json') ? { default: rawEntries } : name.includes('settings-field-keys') ? { SECTION_SETTING_KEYS }
+    : name.includes('settings-request-types') ? { SETTINGS_REQUESTS } : { APP_SETTING_KEYS },
 });
 const { settingsCatalog, themeSettingsSearch, nativeSettingsTarget } = catalogModule.exports;
 const catalog = settingsCatalog(t, false);
 assert.equal(catalog.sections.some((section: any) => section.id === 'admin'), false);
 assert.equal(settingsCatalog(t, true).sections.some((section: any) => section.id === 'admin'), true);
-assert.equal(catalog.sections.find((section: any) => section.id === 'app').mode, 'hybrid');
-assert.equal(catalog.sections.find((section: any) => section.id === 'voice').mode, 'native');
+assert.equal(catalog.sections.find((section: any) => section.id === 'app').mode, 'fields');
+assert.equal(catalog.sections.find((section: any) => section.id === 'voice').mode, 'fields');
 assert.equal(themeSettingsSearch('масштаб', russian, false)[0].fieldId, 'zoom');
+assert.ok(themeSettingsSearch('пароль', russian, false).some((result: any) => result.sectionId === 'account' && result.operationId === 'changePassword' && result.native === false));
 assert.equal(themeSettingsSearch('PRIVATE_VALUE', t, false).length, 0);
 assert.equal(nativeSettingsTarget('admin', undefined, false, t), null);
 assert.equal(nativeSettingsTarget('account', 'arbitrary_script', false, t), null);
@@ -41,6 +45,7 @@ function fixture() {
     search: (query: string) => themeSettingsSearch(query, t, false), error: (code: string) => 'error:' + code,
     sections: { app: {
     fields: (draft: any, saved: any) => appSettingsFields(draft, saved, t), groups: () => [], links: () => [],
+    actions: () => [{ id: 'fixture', label: 'Fixture action', disabled: false, active: false }], run: async () => {},
     read: async () => { if (failRead) throw new Error('fixture read'); return reading ? await reading : { ...values }; },
     write: async (id: string, value: any, current: () => boolean) => {
       if (id === fail) throw new Error('fixture write');
@@ -93,16 +98,20 @@ console.log('PASS: existing localized catalog/search and role checks, uniform fi
 
 let exposed: any, active = false;
 const events = new Map(), sent: any[] = [];
-vm.runInNewContext(compile(fs.readFileSync(new URL('../src/main/appearance-shell-preload.ts', import.meta.url), 'utf8')), {
+const bridgeSandbox = vm.createContext({
   exports: {}, URL, URLSearchParams, setTimeout, clearTimeout, console,
   navigator: { userActivation: { get isActive() { return active; } } }, window: { addEventListener() {} },
   require: () => ({ contextBridge: { exposeInMainWorld: (_: string, api: any) => { exposed = api; } }, ipcRenderer: { on: (name: string, handler: any) => events.set(name, handler), send: (...args: any[]) => sent.push(args) } }),
 });
+vm.runInContext(compile(fs.readFileSync(new URL('../src/main/appearance-shell-preload.ts', import.meta.url), 'utf8')), bridgeSandbox);
 const state = { activeChatId: 2, messages: [], settings: f.controller.getState() };
 const update = () => events.get('appearance-shell:state')({}, { ...state, settings: f.controller.getState() });
 update(); assert.equal(exposed.getSettingsSections().length, catalog.sections.length);
+assert.equal(exposed.runSettingsAction('app', 'fixture'), false, 'settings operations require a genuine gesture');
+active = true; assert.equal(exposed.runSettingsAction('app', 'fixture'), true); assert.equal(parse(sent.at(-1)[1]).actionId, 'fixture');
+assert.equal(allowed(state, parse(sent.at(-1)[1])), true); assert.equal(exposed.runSettingsAction('app', 'invented'), false); active = false;
 assert.equal(exposed.searchSettings('zoom'), true); assert.equal(parse(sent.at(-1)[1]).query, 'zoom');
-assert.equal(exposed.openSettingsSection('voice'), false);
+assert.equal(exposed.openSettingsSection('models'), false);
 assert.equal(exposed.setSettingValue('app', 'showTokens', false), true);
 const edit = parse(sent.at(-1)[1]); assert.equal(allowed({ ...state, settings: f.controller.getState() }, edit), true); await f.controller.handle(edit); update();
 assert.equal(exposed.saveSettingsSection('app'), false, 'persisting requires a genuine gesture'); active = true;
@@ -111,5 +120,18 @@ assert.equal(exposed.openSettings('admin'), false); assert.equal(exposed.openSet
 assert.equal(parse({ type: 'settingsAction', action: 'edit', sectionId: 'app', editorId: edit.editorId, fieldId: 'zoom', value: NaN }), null);
 assert.equal(allowed({ ...state, settings: f.controller.getState() }, { ...edit, editorId: 'obsolete' }), false);
 assert.equal(allowed(state, { type: 'openSettings', sectionId: 'admin' }), false);
+const accountState = { activeChatId: null, messages: [], settings: { ...f.controller.getState(), editor: {
+  ...f.controller.getState().editor, sectionId: 'account', requests: settingsOperations('account', t), busy: false, loading: false,
+} } };
+events.get('appearance-shell:state')({}, accountState); active = false;
+await assert.rejects(exposed.requestSettings('account', 'changePassword', { currentPassword: 'PRIVATE_CURRENT', newPassword: 'PRIVATE_NEW_PASSWORD' }), /unavailable/);
+active = true;
+const credentials = exposed.requestSettings('account', 'changePassword', { currentPassword: 'PRIVATE_CURRENT', newPassword: 'PRIVATE_NEW_PASSWORD' });
+const credentialRequest = sent.at(-1)[1]; assert.ok(parseSettingsRequest(credentialRequest));
+assert.equal(vm.runInContext('JSON.stringify([...documentRequests.values()].map(item=>item.request)).includes("PRIVATE_")', bridgeSandbox), false, 'pending sandbox requests retain scope metadata without credentials');
+events.get('appearance-shell:state')({}, { ...accountState, activeChatId: 123 });
+events.get('appearance-shell:result')({}, { requestId: credentialRequest.requestId, result: { ok: true } }); assert.equal((await credentials).ok, true, 'settings requests are independent of chat navigation');
+active = false; const canceledRead = exposed.requestSettings('account', 'getAccount');
+const canceled = assert.rejects(canceledRead, /settings_request_canceled/); assert.equal(exposed.cancelSettingsRequests('account'), true); await canceled;
 f.controller.dispose(); failedRead.controller.dispose(); concurrent.controller.dispose();
 console.log('PASS: isolated settings bridge, native deep links, genuine-save gating, host role/field/editor validation and automatic opaque draft IDs');

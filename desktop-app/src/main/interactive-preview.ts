@@ -4,8 +4,9 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { INTERACTIVE_CSP, INTERACTIVE_SCHEME, interactiveDocument, validateInteractiveInput } from './interactive-document';
 import type { InteractivePlacement, InteractiveStatus } from './interactive-types';
-import { parseAppearanceShellAction, canRunAppearanceAction, parseAppearanceDocumentRequest, canReadAppearanceDocument, parseAppearancePaste,
-  type AppearanceShellState, type AppearanceImageRequest, type AppearanceDocumentRequest } from './appearance-shell-types';
+import { parseAppearanceShellAction, canRunAppearanceAction, parseAppearanceBridgeRequest, canReadAppearanceRequest, parseAppearancePaste,
+  type AppearanceShellState, type AppearanceImageRequest, type AppearanceBridgeRequest } from './appearance-shell-types';
+import { canRequestSettings } from './settings-request-types';
 
 type Entry = {
   id: string; host: BrowserWindow; owner: WebContents; clip: View; view: WebContentsView;
@@ -16,7 +17,7 @@ type Entry = {
   cleanup: () => void;
   imageRequests: Map<string, { request: AppearanceImageRequest; controller: AbortController; resolve: (url: string | null) => void }>;
   imageLoads: Set<Promise<void>>;
-  documentRequests: Map<string, { request: AppearanceDocumentRequest; timer: ReturnType<typeof setTimeout> }>;
+  documentRequests: Map<string, { request: AppearanceBridgeRequest; timer: ReturnType<typeof setTimeout> }>;
 };
 
 /** One non-persistent session and renderer per preview. No preload, IPC or browser-tool reuse. */
@@ -103,14 +104,25 @@ export class InteractivePreviews {
         return;
       }
       if (channel === 'appearance-shell:request') {
-        const request = parseAppearanceDocumentRequest(value);
-        if (!request || !entry.appearance.state || !canReadAppearanceDocument(entry.appearance.state, request)
+        const request = parseAppearanceBridgeRequest(value);
+        if (!request && value && typeof value === 'object' && value.method === 'settings'
+            && typeof value.requestId === 'string' && value.requestId.length <= 100) {
+          contents.send('appearance-shell:result', { requestId: value.requestId, error: 'settings_bad_request' }); return;
+        }
+        if (!request || !entry.appearance.state || !canReadAppearanceRequest(entry.appearance.state, request)
+            || request.method === 'settings' && !canRequestSettings(entry.appearance.state.settings, request)
             || entry.documentRequests.has(request.requestId) || entry.documentRequests.size >= 4) {
-          if (request) contents.send('appearance-shell:result', { requestId: request.requestId, error: 'attachment_request_unavailable' });
+          if (request) contents.send('appearance-shell:result', { requestId: request.requestId, error: request.method === 'settings' ? 'settings_request_unavailable' : 'attachment_request_unavailable' });
           return;
         }
-        const timer = setTimeout(() => this.resolveAppearanceDocument(owner, id, request.requestId, null, 'attachment_request_timeout'), 30000);
-        entry.documentRequests.set(request.requestId, { request, timer });
+        if (request.method === 'settings') {
+          const bridge = entry.appearance;
+          if (Date.now() - bridge.window >= 1000) { bridge.window = Date.now(); bridge.count = 0; }
+          if (++bridge.count > 60) { contents.send('appearance-shell:result', { requestId: request.requestId, error: 'settings_request_unavailable' }); return; }
+        }
+        const requestId = request.requestId, settings = request.method === 'settings';
+        const timer = setTimeout(() => this.resolveAppearanceDocument(owner, id, requestId, null, settings ? 'settings_request_timeout' : 'attachment_request_timeout'), settings ? 120000 : 30000);
+        entry.documentRequests.set(requestId, { request: request.method === 'settings' ? { ...request, params: {} } : request, timer });
         owner.send('interactive-preview:appearance-document', { id, request });
         return;
       }
@@ -128,6 +140,11 @@ export class InteractivePreviews {
       const bridge = entry.appearance;
       if (!action || !bridge.state) return;
       if (!canRunAppearanceAction(bridge.state, action)) return;
+      if (action.type === 'settingsAction' && action.action === 'cancelRequests') {
+        for (const [requestId, pending] of entry.documentRequests) if (pending.request.method === 'settings'
+            && pending.request.sectionId === action.sectionId && pending.request.editorId === action.editorId)
+          this.resolveAppearanceDocument(owner, id, requestId, null, 'settings_request_canceled');
+      }
       if (Date.now() - bridge.window >= 1000) { bridge.window = Date.now(); bridge.count = 0; }
       if (++bridge.count > 60) return;
       if (action.type === 'openChat' && !bridge.state.chats.some(chat => chat.id === action.id)) return;
@@ -201,8 +218,8 @@ export class InteractivePreviews {
     const resetLegacyNavigation = entry.appearance.state?.view === 'conversation'
       && state.view === 'home' && !entry.appearance.handlesNavigation;
     entry.appearance.state = state;
-    for (const [requestId, pending] of entry.documentRequests) if (!canReadAppearanceDocument(state, pending.request))
-      this.resolveAppearanceDocument(owner, id, requestId, null, 'attachment_scope_changed');
+    for (const [requestId, pending] of entry.documentRequests) if (!canReadAppearanceRequest(state, pending.request))
+      this.resolveAppearanceDocument(owner, id, requestId, null, pending.request.method === 'settings' ? 'settings_scope_changed' : 'attachment_scope_changed');
     for (const pending of entry.imageRequests.values()) {
       if (!this.imageScopeCurrent(entry, pending.request)) { pending.controller.abort(); pending.resolve(null); }
     }
@@ -231,8 +248,8 @@ export class InteractivePreviews {
     const entry = this.entries.get(id), pending = entry?.documentRequests.get(requestId);
     if (!entry || entry.owner !== owner || !pending) return;
     clearTimeout(pending.timer); entry.documentRequests.delete(requestId);
-    if (!entry.appearance?.state || !canReadAppearanceDocument(entry.appearance.state, pending.request)) error = 'attachment_scope_changed';
-    if (!error && JSON.stringify(result)?.length > 16 * 1024 * 1024) error = 'attachment_preview_too_large';
+    if (!entry.appearance?.state || !canReadAppearanceRequest(entry.appearance.state, pending.request)) error = pending.request.method === 'settings' ? 'settings_scope_changed' : 'attachment_scope_changed';
+    if (!error && JSON.stringify(result)?.length > 16 * 1024 * 1024) error = pending.request.method === 'settings' ? 'settings_result_too_large' : 'attachment_preview_too_large';
     if (!entry.view.webContents.isDestroyed()) entry.view.webContents.send('appearance-shell:result', {
       requestId, ...(error ? { error } : { result }),
     });

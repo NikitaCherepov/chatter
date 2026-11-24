@@ -12,13 +12,45 @@ const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'chatter-theme-settings-
 const modulePath = (name: string) => JSON.stringify(path.join(desktop, 'src/renderer', name).replaceAll('\\', '/'));
 const native = fs.readFileSync(path.join(desktop, 'src/renderer/components/SettingsModal.tsx'), 'utf8');
 const nativeFlags = native.slice(native.indexOf('  const handleToggleShowTokens ='), native.indexOf('  const handleSubagentModelChange ='));
+const apiFile = fs.readFileSync(path.join(desktop, 'src/renderer/lib/api.ts'), 'utf8');
+const credentialWriters = apiFile.slice(apiFile.indexOf('export function changeAccountPassword'), apiFile.indexOf('export async function setUserTimezone'));
 const apiSource = `
 export const API_BASE='fixture';
 export const getUiSettings=async()=>{const user=window.testAccount;if(window.delaySettingsRead)await window.delaySettingsRead;return {settings:structuredClone(window.ui[user])};};
 export const setUiSettings=async patch=>{const user=window.testAccount;window.uiWrites.push({user,patch});if(window.failSettingsSave){window.failSettingsSave=false;throw new Error('fixture failure');}window.ui[user]={...window.ui[user],...patch};return {settings:structuredClone(window.ui[user]),ok:true};};
 export const setUserLanguage=async language=>{window.languageWrites.push({user:window.testAccount,language});return {ok:true,language};};
-export const apiFetch=async()=>({});export const localMcpScope=()=>'';export const syncLocalMcp=async()=>{};
-export const getModels=async()=>({models:[]});export const getModelSettings=async()=>({model_settings:{}});export const getSubagentModel=async()=>({subagent_model:null});export const getSubagentReasoningLevel=async()=>({reasoning_level:null});export const getLinkStatus=async()=>({});export const getContextTokenLimit=async()=>({});export const getAttachmentTokenLimit=async()=>({});export const getPrompts=async()=>({prompts:[]});
+export const apiFetch=async(url,options={})=>{
+ const payload=options.body?JSON.parse(options.body):{};
+ if(url==='/api/v1/user/password'||url==='/api/v1/user/login'){
+  window.credentialRequests=(window.credentialRequests||0)+1;
+  if(window.failCredentials){window.failCredentials=false;throw new Error('wrong_current_password');}
+  if(window.delayCredentials)await window.delayCredentials;
+  if((payload.current_password||payload.password)!=='correct-fixture-password')throw new Error('wrong_current_password');
+  if(url.endsWith('/password')&&payload.new_password!=='new-fixture-password')throw new Error('bad_password_length');
+  return {ok:true,...(url.endsWith('/login')?{login:payload.new_login.toLowerCase()}: {})};
+ }
+ if(url==='/api/v1/memory/status')return {configured:true};
+ if(url==='/api/v1/memory/spaces'&&options.method==='POST'){const space={id:3,name:payload.name,kind:'general',is_default:0,is_primary:0};window.memorySpaces.push(space);return {space};}
+ if(url==='/api/v1/memory/spaces')return {spaces:structuredClone(window.memorySpaces)};
+ if(url.includes('/memory/spaces/')&&url.endsWith('/activate')){const id=Number(url.split('/')[5]);window.memorySpaces=window.memorySpaces.map(space=>({...space,is_default:space.id===id?1:0}));return {space:window.memorySpaces.find(space=>space.id===id)};}
+ if(url.startsWith('/api/v1/memory/records?')){return {records:structuredClone(window.memoryRecords),total:window.memoryRecords.length,nextOffset:null};}
+ if(url.includes('/memory/records/')&&options.method==='PATCH'){const record=window.memoryRecords.find(record=>record.id===url.split('/').at(-1));Object.assign(record,payload);return {record:structuredClone(record)};}
+ if(url.includes('/memory/records/')&&options.method==='DELETE'){window.memoryRecords=window.memoryRecords.filter(record=>record.id!==url.split('/').at(-1));return {deleted:true};}
+ return {};
+};export const localMcpScope=()=>'';export const syncLocalMcp=async()=>{};
+${credentialWriters}
+export const getModels=async()=>({models:[{id:'smart',name:'Smart',reasoning_levels:['high']},{id:'simple',name:'Simple',reasoning_levels:[]}],auto_reasoning_levels:['high']});export const getModelSettings=async()=>({model_settings:{}});export const getSubagentModel=async()=>({subagent_model:window.agentModel});export const getSubagentReasoningLevel=async()=>({reasoning_level:window.agentReasoning});export const getLinkStatus=async()=>({});export const getPrompts=async()=>({prompts:[]});
+export const getContextTokenLimit=async()=>({max_context_tokens:window.contextTokens,max_context_tokens_limit:30000});
+export const getAttachmentTokenLimit=async()=>({attachment_max_tokens:Math.min(window.attachmentTokens,Math.floor(window.contextTokens*.9)),attachment_max_tokens_limit:Math.floor(window.contextTokens*.9),max_context_tokens:window.contextTokens});
+export const setContextTokenLimit=async value=>{window.contextTokens=value;return getContextTokenLimit();};export const setAttachmentTokenLimit=async value=>{window.attachmentTokens=Math.min(value,Math.floor(window.contextTokens*.9));return getAttachmentTokenLimit();};
+export const fetchMe=async()=>{const result={id:window.testAccount,...window.account};if(window.delayAccountRead)await window.delayAccountRead;window.accountReadsReturned=(window.accountReadsReturned||0)+1;return result;};export const setUserName=async name=>{window.account.name=name;return {name};};export const setUserTimezone=async offset=>{window.account.timezone_offset=offset;window.account.timezone_confirmed=true;return {timezone_offset:offset,timezone_confirmed:true};};
+export const setSubagentModel=async value=>{window.agentModel=value;return {subagent_model:value};};export const setSubagentReasoningLevel=async value=>{window.agentReasoning=value;return {reasoning_level:value};};
+export const fetchTranscriptionStatus=async()=>({available:true});export const fetchTtsProviders=async()=>({providers:[{id:'remote-fixture',name:'Remote fixture',voices:[{id:'remote-voice',name:'Fixture voice',language:'en'}]}]});
+export const getMemoryPreferences=async()=>({preferences:window.memoryPreferences});export const patchMemoryPreferences=async patch=>{window.memoryPreferences={...window.memoryPreferences,...patch};return getMemoryPreferences();};
+export const getSubagentCatalog=async()=>({agents:[{id:'search',name:'Fixture search',description:'Fixture description',icon:'globe'}]});
+export const fetchQuota=async()=>{if(window.delayQuota)await window.delayQuota;return {billing_mode:'tokens',percent:25,tokens:{used:25,quota:100},cost:{used:0,quota:0},resets_at:123456,quota:null};};
+export const generateTts=async()=>{throw new Error('No audio generation in settings tests');};export const fetchAudioBuffer=generateTts;export const fetchTtsVoicePreview=generateTts;
+export const resolveAuthenticatedAssetUrl=value=>value;
 `;
 const authSource = "import React from 'react';export const TestAuth=React.createContext(null);export const useAuth=()=>React.useContext(TestAuth);";
 const source = `
@@ -31,8 +63,12 @@ import {useSettingsRead} from ${modulePath('lib/useSettingsQueries.ts')};
 import {saveAppUiSettings} from ${modulePath('lib/app-settings.ts')};
 const client=new QueryClient({defaultOptions:{queries:{retry:false}}});
 window.testAccount=1;window.ui={1:{show_tokens:true,dice_roll_enabled:false},2:{show_tokens:true,dice_roll_enabled:false}};window.uiWrites=[];window.languageWrites=[];
+window.contextTokens=20000;window.attachmentTokens=15000;window.agentModel='smart';window.agentReasoning='high';window.account={name:'Fixture',plan:'pro',role:'user',timezone_offset:null,timezone_confirmed:false};
+window.memoryPreferences={automatic_memory:false,result_limit:null,admin_result_limit:7,effective_result_limit:7};
+window.memorySpaces=[{id:1,name:'General',kind:'general',is_default:1,is_primary:1},{id:2,name:'Chat only',kind:'chat',is_default:0,is_primary:0}];window.memoryRecords=[{id:'record-fixture',memory_space_id:1,text:'Before',source:'Fixture',updated_at:1}];window.authInvalidations=0;
+localStorage.setItem('chatter_tts_settings',JSON.stringify({modelId:'piper',voiceId:'ruslan',volume:.3,sfxVolume:.3}));
 function Body({user,setUser}){
- const themeSettings=useThemeSettings('fixture-theme'),{t}=useTranslation();
+ const themeSettings=useThemeSettings('fixture-theme',()=>{window.authInvalidations++;}),{t}=useTranslation();
  const [uiSettings,setUiSettingsState]=useState(user.ui_settings),[uiSettingsSaving,setUiSettingsSaving]=useState(false);
  const appScopeRef=useRef('');appScopeRef.current=String(user.id);
  const reads=useSettingsRead('ui',user.id,true);
@@ -41,29 +77,37 @@ function Body({user,setUser}){
  const toast={error(){}};
  ${nativeFlags}
  useEffect(()=>{window.settingsState=themeSettings.state;window.handleSettings=action=>themeSettings.handle(action);window.electronAPI.publishSettings(themeSettings.state);},[themeSettings.state]);
+ useEffect(()=>{window.handleSettingsRequest=async({id,request})=>{let result,error;try{result=await themeSettings.request(request);}catch(reason){error=reason.message;}finally{request.params={};}await window.electronAPI.replySettings(id,request.requestId,result,error);themeSettings.completeRequest(request.requestId);};},[themeSettings.state]);
  return <><button id="native-tokens" onClick={handleToggleShowTokens} disabled={uiSettingsSaving}>{String(uiSettings.show_tokens!==false)}</button><output id="auth-tokens">{String(user.ui_settings.show_tokens!==false)}</output></>;
 }
-function App(){const [user,setUser]=useState({id:1,name:'fixture',role:'user',is_admin:0,language:'en',ui_settings:window.ui[1]});
+function App(){const [user,setUser]=useState({id:1,name:'fixture',role:'user',is_admin:0,language:'en',ui_settings:window.ui[1]});const [mounted,setMounted]=useState(true);window.setSettingsMounted=setMounted;
  window.switchSettingsAccount=id=>{window.testAccount=id;setUser({id,name:'fixture',role:'user',is_admin:0,language:'en',ui_settings:window.ui[id]});};
- return <TestAuth.Provider value={{user,setUser}}><Body user={user} setUser={setUser}/></TestAuth.Provider>;
+ return <TestAuth.Provider value={{user,setUser}}><output id="account-name">{user.name}</output>{mounted&&<Body user={user} setUser={setUser}/>}</TestAuth.Provider>;
 }
 initializeI18n().then(()=>{createRoot(document.getElementById('root')).render(<React.StrictMode><QueryClientProvider client={client}><I18nextProvider i18n={i18n}><App/></I18nextProvider></QueryClientProvider></React.StrictMode>);});
 `;
-const preload = "const {contextBridge,ipcRenderer}=require('electron');contextBridge.exposeInMainWorld('electronAPI',{getSystemLanguages:async()=>['en'],getZoomLevel:()=>ipcRenderer.invoke('fixture:zoom'),setZoomLevel:value=>ipcRenderer.invoke('fixture:zoom',value),publishSettings:state=>ipcRenderer.send('fixture:settings',state)});";
+const preload = "const {contextBridge,ipcRenderer}=require('electron');let browser={concurrency:2,searchEnabled:true,readerEnabled:true};contextBridge.exposeInMainWorld('electronAPI',{getSystemLanguages:async()=>['en'],listPiperVoices:async()=>[{id:'ruslan',name:'Ruslan',lang:'ru'}],ttsGenerate:()=>ipcRenderer.invoke('fixture:tts'),localAppearance:payload=>ipcRenderer.invoke('fixture:appearance',payload),saveFile:async()=>({canceled:true}),replySettings:(id,requestId,result,error)=>ipcRenderer.invoke('fixture:settings-reply',id,requestId,result,error),getDesktopBrowserSettings:async()=>browser,setDesktopBrowserSettings:async value=>{browser=value;return browser;},getZoomLevel:()=>ipcRenderer.invoke('fixture:zoom'),setZoomLevel:value=>ipcRenderer.invoke('fixture:zoom',value),publishSettings:state=>ipcRenderer.send('fixture:settings',state)});";
 const electron = String.raw`
 const assert=require('node:assert/strict'),path=require('node:path');
 const {app,BrowserWindow,protocol,ipcMain}=require('electron');
 const {InteractivePreviews}=require(process.env.CHATTER_DESKTOP+'/dist/main/interactive-preview.js');
 const {INTERACTIVE_SCHEME}=require(process.env.CHATTER_DESKTOP+'/dist/main/interactive-document.js');
 const {THEME_SETTINGS_EXAMPLES}=require(process.env.CHATTER_DESKTOP+'/dist/main/theme-documentation.js');
+const {newAppearance}=require(process.env.CHATTER_DESKTOP+'/dist/main/appearance-schema.js');
 protocol.registerSchemesAsPrivileged([{scheme:INTERACTIVE_SCHEME,privileges:{standard:true,secure:true}}]);
 app.setPath('userData',path.join(__dirname,'user-data'));let host,manager,id,theme,zoom=0,settings,mainError;
+let previewRequests=0,finishPreview;
+const fixtureProfile=newAppearance('fixture-saved'),drafts={};
+const themeSnapshot={appearance:{version:1,revision:1,activeId:null,profiles:[fixtureProfile]},workspace:{directory:__dirname,draftsDirectory:__dirname+'/.drafts',documentation:__dirname+'/THEMES.md',activeId:null,profiles:[],drafts:[],migrationComplete:true,migrationErrors:[],issues:[]}};
 const deadline=setTimeout(()=>{console.error('settings fixture timeout',mainError);app.exit(1)},35000);
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 const until=async predicate=>{for(let n=0;n<250;n++){if(mainError)throw mainError;if(await predicate())return;await sleep(15);}throw new Error('Settings UI condition timed out');};
 const base={chats:[],folders:[],sections:[],activeChatId:1,view:'conversation',messages:[],labels:{save:'Save',cancel:'Discard',loading:'Loading'},canSend:true,sending:false};
 const push=()=>{if(id&&settings)manager.updateAppearanceState(host.webContents,id,{...base,settings});};
 ipcMain.handle('fixture:zoom',(_event,value)=>{if(value!==undefined)zoom=value;return zoom;});
+ipcMain.handle('fixture:tts',()=>{previewRequests++;return new Promise(resolve=>{finishPreview=resolve;});});
+ipcMain.handle('fixture:settings-reply',(_event,previewId,requestId,result,error)=>manager.resolveAppearanceDocument(host.webContents,previewId,requestId,result,error));
+ipcMain.handle('fixture:appearance',(_event,payload)=>{if(payload.action==='load')return structuredClone(themeSnapshot);if(payload.action==='write-draft'){drafts[payload.profile.id]=payload.profile;if(!themeSnapshot.workspace.drafts.some(item=>item.id===payload.profile.id))themeSnapshot.workspace.drafts.push({id:payload.profile.id,directory:__dirname+'/.drafts/'+payload.profile.id});return {written:true};}if(payload.action==='read-draft')return drafts[payload.id];throw new Error('Unexpected fixture appearance operation');});
 ipcMain.on('fixture:settings',(event,state)=>{if(event.sender===host?.webContents){settings=state;push();}});
 app.whenReady().then(async()=>{
  host=new BrowserWindow({show:false,width:1000,height:750,webPreferences:{sandbox:true,contextIsolation:true,preload:path.join(__dirname,'preload.cjs'),backgroundThrottling:false}});
@@ -73,13 +117,15 @@ app.whenReady().then(async()=>{
  const send=host.webContents.send.bind(host.webContents);
  host.webContents.send=(channel,payload)=>{
   if(channel==='interactive-preview:appearance-action'){
-   if(payload.action.type==='settingsAction')void host.webContents.executeJavaScript('window.handleSettings('+JSON.stringify(payload.action)+')').catch(error=>{mainError=error});
+   if(payload.action.type==='settingsAction')void host.webContents.executeJavaScript('void window.handleSettings('+JSON.stringify(payload.action)+')').catch(error=>{mainError=error});
   }
+  if(channel==='interactive-preview:appearance-document')void host.webContents.executeJavaScript('void window.handleSettingsRequest('+JSON.stringify(payload)+')').catch(error=>{mainError=error});
   return send(channel,payload);
  };
  id=manager.create(host.webContents,{language:'tsx',source:'',dark:false,errorLabel:'failed',bridge:'appearance-chat-list-v1',project:{entry:'App.tsx',files:{
-  'App.tsx':"import React from 'react';import Section from './components/Section';import {useChatterState} from '@chatter/ui';export default function App(){const state=useChatterState();const [opened,setOpened]=React.useState(false);return <main><button id='open' onClick={()=>setOpened(true)}>App settings</button><input id='search' onChange={event=>window.chatter.searchSettings(event.target.value)}/><output id='search-result'>{state?.settings?.results[0]?.fieldId}</output>{opened&&<Section sectionId='app'/>}</main>}",
+  'App.tsx':"import React from 'react';import Section from './components/Section';import AccountSecurity from './components/AccountSecurity';import {useChatterState} from '@chatter/ui';export default function App(){const state=useChatterState();const [section,setSection]=React.useState('');return <main>{['app','voice','account','limits','agents','memory','browser'].map(id=><button key={id} id={id==='app'?'open':'open-'+id} onClick={()=>setSection(id)}>{id}</button>)}<input id='search' onChange={event=>window.chatter.searchSettings(event.target.value)}/><output id='search-result'>{state?.settings?.results[0]?.fieldId}</output>{section&&<Section key={section} sectionId={section}/>}{section==='account'&&<AccountSecurity/>}</main>}",
   'components/Field.tsx':THEME_SETTINGS_EXAMPLES['Field.tsx'],'components/Section.tsx':THEME_SETTINGS_EXAMPLES['Section.tsx'],
+  'components/AccountSecurity.tsx':THEME_SETTINGS_EXAMPLES['AccountSecurity.tsx'],
  }}});
  theme=host.contentView.children.at(-1).children[0].webContents;
  theme.on('console-message',(_event,level,message)=>{if(level===3)console.log('theme:',message);});push();
@@ -88,8 +134,13 @@ app.whenReady().then(async()=>{
  const click=id=>theme.executeJavaScript(element(id)+'.click()',true);
  const input=async(id,value)=>{await theme.executeJavaScript('(()=>{const el='+element(id)+';el.focus();Object.getOwnPropertyDescriptor(el.tagName==="SELECT"?HTMLSelectElement.prototype:HTMLInputElement.prototype,"value").set.call(el,'+JSON.stringify(value)+');el.dispatchEvent(new Event(el.tagName==="SELECT"?"change":"input",{bubbles:true}));})()',true);};
  const named=label=>theme.executeJavaScript('Array.from(document.querySelectorAll("button")).find(button=>button.textContent==='+JSON.stringify(label)+').click()',true);
+ const resource=async(section,operation,params={},gesture=false)=>{await theme.executeJavaScript('window.resourceValue=undefined;window.resourceError=undefined;void window.chatter.requestSettings('+JSON.stringify(section)+','+JSON.stringify(operation)+','+JSON.stringify(params)+').then(value=>{window.resourceValue=value},error=>{window.resourceError=error.message});void 0',gesture);
+  await until(async()=>await js('window.resourceValue!==undefined||window.resourceError!==undefined'));const error=await js('window.resourceError');if(error)throw new Error(error);return js('window.resourceValue');};
  await until(async()=>await js('!!document.getElementById("open")'));await click('open');await until(()=>settings?.editor?.fields.length===8);
  assert.equal(settings.editor.dirty,false);assert.equal(await host.webContents.executeJavaScript('window.uiWrites.length'),0);
+ assert.equal((await resource('app','listThemes')).profiles[0].id,'fixture-saved');
+ const appearanceSchema=await resource('app','getAppearanceSchema');appearanceSchema.template.id='fixture-draft';
+ await resource('app','writeDraft',{profile:appearanceSchema.template},true);assert.equal((await resource('app','readDraft',{id:'fixture-draft'})).profile.id,'fixture-draft');
  await input('search','scale');await until(()=>settings.results.some(result=>result.fieldId==='zoom'));assert.equal(settings.sections.some(section=>section.id==='admin'),false);
  await input('setting-app-zoom','120');await until(()=>settings.editor.fields.find(field=>field.id==='zoom').value==='120');assert.equal(zoom,0);
  await named('Discard');await until(()=>!settings.editor.dirty);assert.equal(zoom,0);
@@ -107,10 +158,85 @@ app.whenReady().then(async()=>{
  await until(async()=>!settings.editor.busy&&!settings.editor.dirty&&await host.webContents.executeJavaScript('window.languageWrites.length>0'));
  assert.equal(settings.sections.find(section=>section.id==='app').label,'Приложение');
  await input('setting-app-theme','schedule');await until(()=>settings.editor.fields.find(field=>field.id==='darkFrom').visible);assert.equal(await js('!!document.querySelector("[data-setting=darkFrom] input")'),true);
+ await named('Discard');await until(()=>!settings.editor.dirty);
+ await click('open-voice');await until(()=>settings.editor?.sectionId==='voice'&&settings.editor.fields.length===14);
+ assert.equal(settings.editor.fields.find(field=>field.id==='voiceId').value,'ruslan');
+ await theme.executeJavaScript('document.querySelector("[data-settings-action=previewVoice]").click()',true);
+ await until(()=>previewRequests===1&&settings.editor.actions.some(action=>action.id==='previewVoice'&&action.active));
+ assert.equal(await host.webContents.executeJavaScript('JSON.parse(localStorage.getItem("chatter_tts_settings")).modelId'),'piper');
+ await theme.executeJavaScript('document.querySelector("[data-settings-action=stopPreview]").click()',true);
+ await until(()=>!settings.editor.actions.some(action=>action.active));finishPreview(null);
+ assert.equal(settings.editor.error,null);assert.equal(settings.editor.dirty,false,'preview and stop never save or dirty settings');
+ await input('setting-app-modelId','remote-fixture');await until(()=>settings.editor.fields.find(field=>field.id==='voiceId').value==='remote-voice');
+ assert.equal(await host.webContents.executeJavaScript('JSON.parse(localStorage.getItem("chatter_tts_settings")).modelId'),'piper');
+ await named('Save');await until(()=>!settings.editor.busy&&!settings.editor.dirty);
+ assert.equal(await host.webContents.executeJavaScript('JSON.parse(localStorage.getItem("chatter_tts_settings")).voiceId'),'remote-voice');
+ await input('setting-app-volume','0.55');await until(()=>settings.editor.dirty);await named('Save');await until(()=>!settings.editor.busy&&!settings.editor.dirty);
+ assert.equal(await host.webContents.executeJavaScript('JSON.parse(localStorage.getItem("chatter_tts_settings")).volume'),0.55);
+ await input('setting-app-recognitionSource','server');await until(()=>settings.editor.dirty);await named('Save');await until(()=>!settings.editor.busy&&!settings.editor.dirty);
+ assert.equal(await host.webContents.executeJavaScript('localStorage.getItem("chatter_speech_recognition_source")'),'server');
+ await input('setting-app-wakeSensitivity','65');await until(()=>settings.editor.dirty);await named('Save');await until(()=>!settings.editor.busy&&!settings.editor.dirty);
+ assert.equal(await host.webContents.executeJavaScript('JSON.parse(localStorage.getItem("chatter_wake_word_config")).sensitivity'),65);
+ await click('open-account');await until(()=>settings.editor?.sectionId==='account'&&settings.editor.fields.length===2);
+ await input('setting-app-name','  Updated fixture  ');await input('setting-app-timezone','5.75');await until(()=>settings.editor.dirty);await named('Save');await until(()=>!settings.editor.busy&&!settings.editor.dirty);
+ assert.equal(await host.webContents.executeJavaScript('window.account.name'),'Updated fixture');assert.equal(await host.webContents.executeJavaScript('window.account.timezone_offset'),5.75);
+ assert.equal(await host.webContents.executeJavaScript('JSON.parse(localStorage.getItem("chatter_user")).name'),'Updated fixture');
+ assert.equal((await resource('account','getAccount')).passwordRules.minLength,8);
+ await assert.rejects(resource('account','changePassword',{currentPassword:'correct-fixture-password',newPassword:'tiny'},true),/settings_bad_request/);
+ const fillSecurity=async(index,name,value)=>theme.executeJavaScript('document.querySelectorAll("form")['+index+'].elements.namedItem('+JSON.stringify(name)+').value='+JSON.stringify(value));
+ await host.webContents.executeJavaScript('window.failCredentials=true');await fillSecurity(0,'currentPassword','correct-fixture-password');await fillSecurity(0,'value','new-fixture-password');
+ await theme.executeJavaScript('document.querySelectorAll("form")[0].requestSubmit()',true);
+ await until(async()=>await js('document.body.textContent.includes("wrong_current_password")'));assert.equal(await host.webContents.executeJavaScript('window.authInvalidations'),0);
+ await host.webContents.executeJavaScript('window.delayCredentials=new Promise(resolve=>{window.finishCredentials=resolve});void 0');
+ await fillSecurity(0,'currentPassword','correct-fixture-password');await fillSecurity(0,'value','new-fixture-password');await theme.executeJavaScript('document.querySelectorAll("form")[0].requestSubmit()',true);
+ await until(()=>settings.editor.busy&&manager.entries.get(id).documentRequests.size===1);
+ assert.equal(JSON.stringify(settings).includes('fixture-password'),false);
+ assert.equal(JSON.stringify([...manager.entries.get(id).documentRequests.values()].map(item=>item.request)).includes('fixture-password'),false,'the main process retains only scope metadata');
+ assert.equal(await js('document.querySelectorAll("form")[0].elements.namedItem("currentPassword").value'),'');
+ await host.webContents.executeJavaScript('window.finishCredentials();window.delayCredentials=null;void 0');await until(async()=>await host.webContents.executeJavaScript('window.authInvalidations')===1);
+ await fillSecurity(1,'currentPassword','correct-fixture-password');await fillSecurity(1,'value','new.fixture');await theme.executeJavaScript('document.querySelectorAll("form")[1].requestSubmit()',true);
+ await until(async()=>await host.webContents.executeJavaScript('window.authInvalidations')===2);
+ await click('open-limits');await until(()=>settings.editor?.sectionId==='limits'&&settings.editor.fields.length===5);
+ assert.equal((await resource('limits','getQuota')).percent,25);
+ await host.webContents.executeJavaScript('window.delayQuota=new Promise(resolve=>{window.finishQuota=resolve});void 0');
+ await theme.executeJavaScript('window.cancelError=undefined;void window.chatter.requestSettings("limits","getQuota").catch(error=>{window.cancelError=error.message});void 0');
+ await until(()=>manager.entries.get(id).documentRequests.size===1);
+ assert.equal(await js('window.chatter.cancelSettingsRequests("limits")'),true);
+ await until(async()=>await js('window.cancelError')==='settings_request_canceled');await until(()=>manager.entries.get(id).documentRequests.size===0);
+ await host.webContents.executeJavaScript('window.finishQuota();window.delayQuota=null;void 0');
+ await input('setting-app-contextTokens','10000');await until(()=>settings.editor.fields.find(field=>field.id==='attachmentTokens').max===9000);await named('Save');await until(()=>!settings.editor.busy&&!settings.editor.dirty);
+ assert.equal(settings.editor.fields.find(field=>field.id==='attachmentTokens').value,9000);
+ await click('setting-app-desktopSearch');await input('setting-app-browserConcurrency','4');await until(()=>settings.editor.dirty);await named('Save');await until(()=>!settings.editor.busy&&!settings.editor.dirty);
+ assert.equal(await host.webContents.executeJavaScript('window.electronAPI.getDesktopBrowserSettings().then(value=>value.searchEnabled)'),false);
+ assert.equal(await host.webContents.executeJavaScript('window.electronAPI.getDesktopBrowserSettings().then(value=>value.concurrency)'),4);
+ await click('open-agents');await until(()=>settings.editor?.sectionId==='agents'&&settings.editor.fields.length===2);
+ assert.equal((await resource('agents','listAgents')).agents[0].id,'search');
+ await input('setting-app-model','simple');await until(()=>settings.editor.fields.find(field=>field.id==='reasoning').value==='');await named('Save');await until(()=>!settings.editor.busy&&!settings.editor.dirty);
+ assert.equal(await host.webContents.executeJavaScript('window.agentModel'),'simple');assert.equal(await host.webContents.executeJavaScript('window.agentReasoning'),null);
+ await click('open-memory');await until(()=>settings.editor?.sectionId==='memory'&&settings.editor.fields.length===2);
+ assert.equal((await resource('memory','listSpaces')).spaces.length,1);
+ assert.equal((await resource('memory','listRecords',{spaceId:1})).records[0].text,'Before');
+ await resource('memory','updateRecord',{recordId:'record-fixture',text:'After'},true);
+ assert.equal(await host.webContents.executeJavaScript('window.memoryRecords[0].text'),'After');
+ await resource('memory','deleteRecord',{recordId:'record-fixture',confirmed:true},true);assert.equal(await host.webContents.executeJavaScript('window.memoryRecords.length'),0);
+ await input('setting-app-resultLimit','12');await click('setting-app-automaticMemory');await until(()=>settings.editor.dirty);await named('Save');await until(()=>!settings.editor.busy&&!settings.editor.dirty);
+ assert.equal(await host.webContents.executeJavaScript('window.memoryPreferences.result_limit'),12);assert.equal(await host.webContents.executeJavaScript('window.memoryPreferences.automatic_memory'),true);
+ await click('open-browser');await until(()=>settings.editor?.sectionId==='browser'&&settings.editor.fields.length===4);
+ assert.equal(settings.editor.fields.find(field=>field.id==='autoOpen').value,false);
+ await click('setting-app-autoOpen');await click('setting-app-humanTyping');await until(()=>settings.editor.dirty);await named('Save');await until(()=>!settings.editor.busy&&!settings.editor.dirty);
+ assert.equal(await host.webContents.executeJavaScript('window.ui[1].browser_confirm_open'),false);assert.equal(await host.webContents.executeJavaScript('window.ui[1].browser_human_typing'),false);
+ assert.equal(await host.webContents.executeJavaScript('window.ui[1].show_tokens'),true);
+ await host.webContents.executeJavaScript('window.account.name="Stale account read";window.delayAccountRead=new Promise(resolve=>{window.finishAccountRead=resolve});void 0');
+ await click('open-account');await until(()=>settings.editor?.sectionId==='account'&&settings.editor.loading);
+ await host.webContents.executeJavaScript('window.setSettingsMounted(false)');await until(async()=>await host.webContents.executeJavaScript('!document.getElementById("native-tokens")'));
+ const readsBefore=await host.webContents.executeJavaScript('window.accountReadsReturned');await host.webContents.executeJavaScript('window.finishAccountRead()');
+ await until(async()=>await host.webContents.executeJavaScript('window.accountReadsReturned')>readsBefore);
+ assert.equal(await host.webContents.executeJavaScript('document.getElementById("account-name").textContent'),'Updated fixture','unmounted settings must not mutate Auth from a late read');
+ await host.webContents.executeJavaScript('window.delayAccountRead=null;window.setSettingsMounted(true)');await until(()=>settings.editor===null);
  await host.webContents.executeJavaScript('window.switchSettingsAccount(2)');await until(()=>settings.editor===null);assert.equal(await host.webContents.executeJavaScript('window.ui[2].dice_roll_enabled'),false);
  assert.equal(await js('[typeof electronAPI,typeof require].join(",")'),'undefined,undefined');
- console.log('PASS: isolated generated settings components, real host React draft lifecycle, Save/Discard, zoom IPC, native/API/Auth/cache synchronization, failures, live localization and account isolation');
-}).catch(error=>{console.error(error);process.exitCode=1;}).finally(()=>{clearTimeout(deadline);manager?.destroy();host?.destroy();app.exit(process.exitCode??0);});
+ console.log('PASS: seven isolated settings sections, generated credential forms/clearing/reauth, private IPC metadata, bad-input replies, memory CRUD, theme drafts, catalogs/quotas, dependent fields, native synchronization, localization and scope isolation');
+}).catch(error=>{console.error(error);process.exitCode=1;}).finally(async()=>{finishPreview?.(null);await sleep(10);clearTimeout(deadline);manager?.destroy();host?.destroy();app.exit(process.exitCode??0);});
 `;
 try {
   await build({ configFile: false, root: desktop, logLevel: 'error', plugins: [{ name: 'theme-settings-fixture', enforce: 'pre',
@@ -121,7 +247,7 @@ try {
     },
     async load(id: string) {
       if (id === '\0fixture-auth') return transformWithEsbuild(authSource, 'fixture-auth.tsx', { loader: 'tsx', jsx: 'automatic' });
-      if (id === '\0fixture-api') return apiSource;
+      if (id === '\0fixture-api') return transformWithEsbuild(apiSource, 'api-fixture.ts', { loader: 'ts' });
       if (id === '\0settings-fixture.tsx') return transformWithEsbuild(source, 'settings-fixture.tsx', { loader: 'tsx', jsx: 'automatic' });
     },
   }], build: { outDir: path.join(directory, 'renderer'), rollupOptions: { input: 'settings-fixture.tsx', output: { entryFileNames: 'entry.js' },
@@ -132,12 +258,12 @@ try {
   const child = spawn(require('electron'), [path.join(directory, 'main.cjs')], { env, stdio: ['ignore', 'pipe', 'pipe'] });
   let output = ''; child.stdout.on('data', chunk => { output += chunk; }); child.stderr.on('data', chunk => { output += chunk; });
   const code = await new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => { child.kill(); reject(new Error('Settings Electron timeout: ' + output)); }, 45000);
+    const timeout = setTimeout(() => { output += '\nSettings Electron timeout\n'; child.kill(); }, 45000);
     child.once('exit', code => { clearTimeout(timeout); resolve(code); }); child.once('error', reject);
   });
   process.stdout.write(output); assert.equal(code, 0);
 } finally {
   assert.equal(path.dirname(path.resolve(directory)), path.resolve(os.tmpdir()));
   assert.ok(path.basename(directory).startsWith('chatter-theme-settings-'));
-  fs.rmSync(directory, { recursive: true, force: true });
+ fs.rmSync(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 }

@@ -8,6 +8,7 @@ export const settingsReads = {
   agentModel: api.getSubagentModel,
   agentReasoning: api.getSubagentReasoningLevel,
   ui: api.getUiSettings,
+  memoryPreferences: api.getMemoryPreferences,
   link: api.getLinkStatus,
   context: api.getContextTokenLimit,
   attachment: api.getAttachmentTokenLimit,

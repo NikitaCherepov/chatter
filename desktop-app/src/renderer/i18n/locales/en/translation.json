@@ -3,7 +3,8 @@
     "invalid": "Check the value for {{field}}.",
     "conflict": "These settings changed elsewhere. Your draft is preserved. Discard it and reload to use the current values.",
     "save": "Could not save all changes. Successfully saved fields are applied; the remaining changes stay in your draft.",
-    "load": "Could not load settings. Try reloading this section."
+    "load": "Could not load settings. Try reloading this section.",
+    "action": "Could not complete this settings action. Your draft is unchanged."
   },
   "chatWorkspace": {
     "allChats": "All chats",

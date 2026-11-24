@@ -20,6 +20,7 @@ export function getSpeechRecognitionLanguage(): SpeechRecognitionLanguage {
 
 export function setSpeechRecognitionLanguage(language: SpeechRecognitionLanguage): void {
   localStorage.setItem(STORAGE_KEY, language);
+  window.dispatchEvent(new Event('chatter-voice-settings-changed'));
 }
 
 export function getSpeechRecognitionSource(): SpeechRecognitionSource {
@@ -32,4 +33,5 @@ export function getSpeechRecognitionSource(): SpeechRecognitionSource {
 
 export function setSpeechRecognitionSource(source: SpeechRecognitionSource): void {
   localStorage.setItem(SOURCE_STORAGE_KEY, source);
+  window.dispatchEvent(new Event('chatter-voice-settings-changed'));
 }

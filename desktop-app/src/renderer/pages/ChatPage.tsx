@@ -8,7 +8,7 @@ import { CHAT_LAYOUT_SIDEBAR_WIDTH, DEFAULT_CHAT_LAYOUT, parseChatLayoutProfile,
 import { ChatComposerDock } from '../components/ChatComposerDock';
 import { AppearanceConfirmation, type AppearanceProposal } from '../components/AppearanceConfirmation';
 import { AppearanceShell, useCurrentAppearance, useAppearanceShellTheme } from '../components/AppearanceShell';
-import { canRunAppearanceAction, canReadAppearanceDocument, type AppearanceDocumentRequest, type AppearanceShellAction, type AppearanceShellState } from '../../main/appearance-shell-types';
+import { canRunAppearanceAction, canReadAppearanceDocument, type AppearanceBridgeRequest, type AppearanceShellAction, type AppearanceShellState } from '../../main/appearance-shell-types';
 import { appearanceMessageActions, canEditChatMessage } from '../lib/appearance-message-actions';
 import { parseAppearanceProfile, type AppearanceProfile } from '../lib/appearance-schema';
 import { APPEARANCE_APPLIED_EVENT } from '../lib/appearance-runtime';
@@ -1102,7 +1102,9 @@ export function ChatPage() {
   }, [appearanceShell?.entry, appearanceShell?.files, appearanceShell?.language, appearanceShell?.scope, user?.id, api.API_BASE]);
   const navigate = useNavigate();
   const layouts = useChatLayouts();
-  const themeSettings = useThemeSettings(appearanceShell ? appearanceProfile?.id ?? 'preview' : null);
+  const themeSettings = useThemeSettings(appearanceShell ? appearanceProfile?.id ?? 'preview' : null, () => {
+    setShowSettings(false); logout(); navigate('/login', { replace: true });
+  });
   const [layoutPreview, setLayoutPreview] = useState<{ profile: ChatLayoutProfile; proposalId?: string }>();
   const [layoutEditorDraft, setLayoutEditorDraft] = useState<ChatLayoutProfile>();
   const activeLayout = layouts.state?.profiles.find(profile => profile.id === layouts.state?.activeId);
@@ -8786,7 +8788,8 @@ export function ChatPage() {
       if (tabsEnabled) setLibraryOpen(true);
     }
   };
-  const readShellDocument = async (request: AppearanceDocumentRequest) => {
+  const readShellDocument = async (request: AppearanceBridgeRequest) => {
+    if (request.method === 'settings') return themeSettings.request(request);
     if (messagesChatIdRef.current !== request.chatId || activeChatIdRef.current !== request.chatId || !canReadAppearanceDocument(shellState, request))
       throw new Error('attachment_scope_changed');
     const message = messagesRef.current.find(message => message.id === request.messageId && (message.variant_index ?? 0) === request.variantIndex);
@@ -8813,6 +8816,7 @@ export function ChatPage() {
         <AppearanceShell key={`${api.API_BASE}:${user?.id}`} shell={appearanceShell} state={shellState}
           visible={shellVisible} onAction={handleShellAction} onClose={() => setShellOpen(false)}
           onReadDocument={readShellDocument} resolvePendingImage={resolvePendingImage}
+          onRequestComplete={request => { if (request.method === 'settings') themeSettings.completeRequest(request.requestId); }}
           onFailure={() => {
             setShellOpen(false);
             toast.error(t('appearance.shellFailed'));

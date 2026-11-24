@@ -431,24 +431,32 @@ function pickBuiltinVoice(voiceId: string): SpeechSynthesisVoice | null {
 // ── Preview (for settings) ─────────────────────────────────────────────
 
 let previewPlaying = false;
+let previewTicket = 0;
+let finishBuiltinPreview: (() => void) | null = null;
 
 function stopPreviewPlayback(): void {
+  previewTicket++;
+  finishBuiltinPreview?.(); finishBuiltinPreview = null;
   speechSynthesis.cancel();
   audioManager.abort();
   previewPlaying = false;
 }
 
-export async function ttsPreview(modelId: string, voiceId: string): Promise<void> {
+export async function ttsPreview(modelId: string, voiceId: string, options?: { volume?: number; signal?: AbortSignal; throwOnError?: boolean }): Promise<void> {
   stopPreviewPlayback();
+  if (options?.signal?.aborted) return;
+  const ticket = previewTicket;
+  const current = () => ticket === previewTicket && !options?.signal?.aborted;
+  const cancel = () => { if (ticket === previewTicket) stopPreviewPlayback(); };
+  options?.signal?.addEventListener('abort', cancel, { once: true });
   previewPlaying = true;
-
-  const { volume } = loadSettings();
-
-  if (modelId === 'piper') {
-    try {
+  const volume = Math.max(0, Math.min(1, options?.volume ?? loadSettings().volume));
+  try {
+    if (modelId === 'piper') {
       const text = getPreviewText(getVoiceLanguage(modelId, voiceId));
       const buffer = await window.electronAPI.ttsGenerate(text, voiceId);
-      if (!buffer) { previewPlaying = false; return; }
+      if (!current()) return;
+      if (!buffer) throw new Error('tts_preview_empty');
 
       // Electron IPC returns Uint8Array, but decodeAudioData needs ArrayBuffer
       const raw = buffer instanceof ArrayBuffer
@@ -456,46 +464,41 @@ export async function ttsPreview(modelId: string, voiceId: string): Promise<void
         : new Uint8Array(buffer as unknown as Iterable<number>).buffer as ArrayBuffer;
 
       await audioManager.playBuffer(raw, volume);
-      previewPlaying = false;
-    } catch (err) {
-      console.error('[TTS:piper] preview error:', err);
-      previewPlaying = false;
+      return;
     }
-    return;
-  }
-
-  if (modelId === 'cartesia') {
-    try {
+    if (modelId === 'cartesia') {
       const { fetchTtsVoicePreview } = await import('./api');
       const language = getVoiceLanguage(modelId, voiceId);
       const text = getPreviewText(language);
       const result = await fetchTtsVoicePreview(voiceId, language, text);
+      if (!current()) return;
       const audioBuffer = await fetchAudioBuffer(result.audio_url);
+      if (!current()) return;
       await audioManager.playBuffer(audioBuffer, volume);
-      previewPlaying = false;
-    } catch (err) {
-      console.error('[TTS:cartesia] preview error:', err);
-      previewPlaying = false;
+      return;
     }
-    return;
+    if (modelId !== 'builtin') throw new Error('tts_preview_unsupported');
+    const voice = pickBuiltinVoice(voiceId);
+    const language = normalizeVoiceLanguage(voice?.lang || i18n.resolvedLanguage || i18n.language);
+    const utterance = new SpeechSynthesisUtterance(getPreviewText(language));
+    utterance.lang = voice?.lang || language;
+    utterance.rate = 1.0; utterance.pitch = 1.0; utterance.volume = volume;
+    if (voice) utterance.voice = voice;
+    await new Promise<void>((resolve, reject) => {
+      finishBuiltinPreview = resolve;
+      utterance.onend = () => resolve();
+      utterance.onerror = event => event.error === 'interrupted' || event.error === 'canceled' ? resolve() : reject(new Error(event.error));
+      speechSynthesis.speak(utterance);
+    });
+  } catch (error) {
+    if (current()) {
+      console.error('[TTS] preview error:', error);
+      if (options?.throwOnError) throw error;
+    }
+  } finally {
+    options?.signal?.removeEventListener('abort', cancel);
+    if (ticket === previewTicket) { previewPlaying = false; finishBuiltinPreview = null; }
   }
-
-  // Builtin
-  const voice = pickBuiltinVoice(voiceId);
-  const language = normalizeVoiceLanguage(voice?.lang || i18n.resolvedLanguage || i18n.language);
-  const text = getPreviewText(language);
-
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.lang = voice?.lang || language;
-  utterance.rate = 1.0;
-  utterance.pitch = 1.0;
-  if (voice) utterance.voice = voice;
-
-  utterance.onstart = () => { previewPlaying = true; };
-  utterance.onend = () => { previewPlaying = false; };
-  utterance.onerror = () => { previewPlaying = false; };
-
-  speechSynthesis.speak(utterance);
 }
 
 export function ttsStopPreview(): void {
@@ -549,7 +552,9 @@ export function getTtsSettings(): TtsSettings {
 
 export function setTtsSettings(s: TtsSettings): void {
   saveSettings(s);
+  if (previewPlaying) ttsStopPreview();
   ttsStop();
+  window.dispatchEvent(new Event('chatter-voice-settings-changed'));
 }
 
 // ── Init: listen for voiceschanged ─────────────────────────────────────

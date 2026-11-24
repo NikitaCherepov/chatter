@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { MemorySetupNotice } from './MemorySetupNotice';
 import { toast } from 'sonner';
 import * as api from '../lib/api';
+import * as memory from '../lib/memory-settings-service';
 import { useInvalidateMemory } from '../lib/memory-queries';
 import { ConfirmDialog } from './ConfirmDialog';
 import { MemoryRecordsPanel, type MemoryRecord } from './MemoryRecordsPanel';
@@ -12,7 +13,7 @@ import { Tooltip } from './Tooltip';
 import s from './GlobalMemorySettings.module.scss';
 import settingsStyles from './SettingsModal.module.scss';
 
-type MemorySpace = { id: number; name: string; kind: 'general' | 'chat'; is_default: number; is_primary: number };
+type MemorySpace = memory.MemorySpace;
 type MemoryDialog =
   | { type: 'rename-space'; space: MemorySpace }
   | { type: 'delete-space'; space: MemorySpace }
@@ -34,7 +35,7 @@ export function GlobalMemorySettings() {
   const [preferences, setPreferences] = useState<api.MemoryPreferences | null>(null);
   const [preferencesSaving, setPreferencesSaving] = useState(false);
   useEffect(() => {
-    void api.apiFetch<{ preferences: api.MemoryPreferences }>('/api/v1/user/memory-preferences')
+    void api.getMemoryPreferences()
       .then(result => setPreferences(result.preferences))
       .catch(() => toast.error(t('chat.memory.loadSettingsFailed')));
   }, [t]);
@@ -42,7 +43,7 @@ export function GlobalMemorySettings() {
     if (!preferences || preferencesSaving) return;
     setPreferencesSaving(true);
     try {
-      const result = await api.apiFetch<{ preferences: api.MemoryPreferences }>('/api/v1/user/memory-preferences', { method: 'PATCH', body: JSON.stringify(patch) });
+      const result = await api.patchMemoryPreferences(patch);
       setPreferences(result.preferences);
     } catch { toast.error(t('chat.memory.saveSettingsFailed')); }
     finally { setPreferencesSaving(false); }
@@ -55,7 +56,7 @@ export function GlobalMemorySettings() {
   );
 
   const loadSpaces = useCallback(async (preferredId?: number) => {
-    const result = await api.apiFetch<{ spaces: MemorySpace[] }>('/api/v1/memory/spaces');
+    const result = await memory.listMemorySpaces();
     setSpaces(result.spaces);
     const general = result.spaces.filter(space => space.kind === 'general');
     const selected = general.find(space => space.id === preferredId)
@@ -77,7 +78,7 @@ export function GlobalMemorySettings() {
     const previous = selectedId;
     setSelectedId(value);
     try {
-      await api.apiFetch(`/api/v1/memory/spaces/${encodeURIComponent(value)}/activate`, { method: 'POST' });
+      await memory.activateMemorySpace(Number(value));
       setSpaces(items => items.map(space => ({ ...space, is_default: String(space.id) === value ? 1 : 0 })));
     } catch {
       setSelectedId(previous);
@@ -90,11 +91,8 @@ export function GlobalMemorySettings() {
     if (!name || creating) return;
     setCreating(true);
     try {
-      const result = await api.apiFetch<{ space: MemorySpace }>('/api/v1/memory/spaces', {
-        method: 'POST',
-        body: JSON.stringify({ name }),
-      });
-      await api.apiFetch(`/api/v1/memory/spaces/${result.space.id}/activate`, { method: 'POST' });
+      const result = await memory.createMemorySpace(name);
+      await memory.activateMemorySpace(result.space.id);
       await loadSpaces(result.space.id);
       await invalidateMemory();
       setCreateOpen(false);
@@ -110,10 +108,7 @@ export function GlobalMemorySettings() {
     if (dialog?.type !== 'rename-space' || !draft.trim() || saving) return;
     setSaving(true);
     try {
-      await api.apiFetch(`/api/v1/memory/spaces/${dialog.space.id}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ name: draft.trim() }),
-      });
+      await memory.renameMemorySpace(dialog.space.id, draft.trim());
       await loadSpaces(dialog.space.id);
       setDialog(null);
     } catch {
@@ -127,9 +122,7 @@ export function GlobalMemorySettings() {
     if (dialog?.type !== 'delete-space' || saving) return;
     setSaving(true);
     try {
-      const result = await api.apiFetch<{ active_space: MemorySpace }>(`/api/v1/memory/spaces/${dialog.space.id}`, {
-        method: 'DELETE',
-      });
+      const result = await memory.deleteMemorySpace(dialog.space.id);
       await loadSpaces(result.active_space.id);
       await invalidateMemory();
       setDialog(null);
@@ -144,10 +137,7 @@ export function GlobalMemorySettings() {
     if (dialog?.type !== 'edit-record' || !draft.trim() || saving) return;
     setSaving(true);
     try {
-      const result = await api.apiFetch<{ record: MemoryRecord }>(`/api/v1/memory/records/${encodeURIComponent(dialog.record.id)}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ text: draft.trim() }),
-      });
+      await memory.updateMemoryRecord(dialog.record.id, draft.trim());
       await invalidateMemory();
       setDialog(null);
     } catch {
@@ -161,7 +151,7 @@ export function GlobalMemorySettings() {
     if (dialog?.type !== 'delete-record' || saving) return;
     setSaving(true);
     try {
-      await api.apiFetch(`/api/v1/memory/records/${encodeURIComponent(dialog.record.id)}`, { method: 'DELETE' });
+      await memory.deleteMemoryRecord(dialog.record.id);
       await invalidateMemory();
       setDialog(null);
     } catch {

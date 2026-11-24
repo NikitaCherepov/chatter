@@ -1,6 +1,6 @@
 /// <reference lib="dom" />
 import { contextBridge, ipcRenderer } from 'electron';
-import type { AppearanceShellState, AppearanceDocumentRequest } from './appearance-shell-types';
+import type { AppearanceShellState, AppearanceDocumentRequest, AppearanceBridgeRequest } from './appearance-shell-types';
 
 // This preload exposes only the appearance navigator contract in its isolated renderer.
 let state: AppearanceShellState | undefined;
@@ -11,7 +11,7 @@ const listeners = new Set<(state: AppearanceShellState) => void>();
 let confirmationSubscribers = 0;
 let navigationSubscribers = 0;
 let documentSequence = 0;
-const documentRequests = new Map<string, { request: AppearanceDocumentRequest; resolve: (value: unknown) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }>();
+const documentRequests = new Map<string, { request: AppearanceBridgeRequest; resolve: (value: unknown) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }>();
 ipcRenderer.on('appearance-shell:result', (_event, reply: { requestId: string; result?: unknown; error?: string }) => {
   const pending = documentRequests.get(reply.requestId); if (!pending) return;
   clearTimeout(pending.timer); documentRequests.delete(reply.requestId);
@@ -22,6 +22,12 @@ ipcRenderer.on('appearance-shell:state', (_event, next: AppearanceShellState) =>
   state = next;
   for (const [id, pending] of documentRequests) {
     const request = pending.request;
+    if (request.method === 'settings') {
+      if (next.settings?.editor?.id !== request.editorId || next.settings.editor.sectionId !== request.sectionId) {
+        clearTimeout(pending.timer); documentRequests.delete(id); pending.reject(new Error('settings_scope_changed'));
+      }
+      continue;
+    }
     const file = next.messages.find(message => message.id === request.messageId && message.variantIndex === request.variantIndex)?.attachments?.[request.index];
     if (next.activeChatId !== request.chatId || file?.url !== request.url) {
       clearTimeout(pending.timer); documentRequests.delete(id); pending.reject(new Error('attachment_scope_changed'));
@@ -135,7 +141,7 @@ const documentRequest = (method: AppearanceDocumentRequest['method'], messageId:
     documentRequests.set(request.requestId, { request, resolve, reject, timer }); ipcRenderer.send('appearance-shell:request', request);
   });
 };
-const settingsAction = (action: 'open' | 'edit' | 'save' | 'discard' | 'reload', sectionId: string, fieldId?: string, value?: unknown) => {
+const settingsAction = (action: 'open' | 'edit' | 'save' | 'discard' | 'reload' | 'run' | 'cancelRequests', sectionId: string, fieldId?: string, value?: unknown) => {
   const settings = state?.settings, editor = settings?.editor;
   if (!settings?.sections.some(section => section.id === sectionId && section.mode !== 'native')) return false;
   if (action === 'open') {
@@ -144,12 +150,36 @@ const settingsAction = (action: 'open' | 'edit' | 'save' | 'discard' | 'reload',
   }
   if (!editor || editor.sectionId !== sectionId || editor.busy || editor.loading) return false;
   if (action === 'save' && (!navigator.userActivation.isActive || !editor.dirty || editor.fields.some(field => field.error))) return false;
+  if (action === 'run' && (!navigator.userActivation.isActive || !editor.actions?.some(command => command.id === fieldId && !command.disabled))) return false;
   if (action === 'reload' && editor.dirty) return false;
+  if (action === 'cancelRequests') for (const [id, pending] of documentRequests) {
+    if (pending.request.method === 'settings' && pending.request.editorId === editor.id) {
+      clearTimeout(pending.timer); documentRequests.delete(id); pending.reject(new Error('settings_request_canceled'));
+    }
+  }
   if (action === 'edit' && (!editor.fields.some(field => field.id === fieldId) || !(typeof value === 'boolean'
       || typeof value === 'number' && Number.isFinite(value) || typeof value === 'string' && value.length <= 500))) return false;
-  send({ type: 'settingsAction', action, sectionId, editorId: editor.id, ...(action === 'edit' ? { fieldId, value } : {}) }); return true;
+  send({ type: 'settingsAction', action, sectionId, editorId: editor.id, ...(action === 'edit' ? { fieldId, value } : action === 'run' ? { actionId: fieldId } : {}) }); return true;
 };
 contextBridge.exposeInMainWorld('chatter', {
+  requestSettings: (sectionId: string, operation: string, params: Record<string, unknown> = {}) => {
+    const editor = state?.settings?.editor, descriptor = editor?.requests?.find(item => item.id === operation);
+    if (!editor || editor.sectionId !== sectionId || editor.loading || editor.busy || !descriptor || documentRequests.size >= 4
+        || descriptor.requiresGesture && !navigator.userActivation.isActive || descriptor.requiresConfirmation && params?.confirmed !== true)
+      return Promise.reject(new Error('settings_request_unavailable'));
+    let parameters: Record<string, unknown>;
+    try { if (!params || typeof params !== 'object' || Array.isArray(params)) throw new Error();
+      const encoded = JSON.stringify(params); if (encoded.length > 17 * 1024 * 1024) throw new Error(); parameters = JSON.parse(encoded); }
+    catch { return Promise.reject(new Error('settings_bad_request')); }
+    const requestId = String(++documentSequence);
+    const metadata = { requestId, method: 'settings' as const, sectionId, editorId: editor.id, operation };
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => { documentRequests.delete(requestId); reject(new Error('settings_request_timeout')); }, 120000);
+      documentRequests.set(requestId, { request: { ...metadata, params: {} }, resolve, reject, timer });
+      try { ipcRenderer.send('appearance-shell:request', { ...metadata, params: parameters }); }
+      catch { clearTimeout(timer); documentRequests.delete(requestId); reject(new Error('settings_bad_request')); }
+    });
+  },
   getSettingsSections: () => state?.settings?.sections ?? [],
   searchSettings: (query: string) => {
     if (!state?.settings || typeof query !== 'string' || query.length > 200) return false;
@@ -160,6 +190,8 @@ contextBridge.exposeInMainWorld('chatter', {
   saveSettingsSection: (sectionId: string) => settingsAction('save', sectionId),
   discardSettingsSection: (sectionId: string) => settingsAction('discard', sectionId),
   reloadSettingsSection: (sectionId: string) => settingsAction('reload', sectionId),
+  runSettingsAction: (sectionId: string, actionId: string) => settingsAction('run', sectionId, actionId),
+  cancelSettingsRequests: (sectionId: string) => settingsAction('cancelRequests', sectionId),
   selectModel: (id: string | null) => {
     if (!navigator.userActivation.isActive || !state?.models || state.models.loading || state.models.busy
         || id !== null && !state.models.items.some(model => model.id === id)) return false;

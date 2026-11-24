@@ -12,7 +12,7 @@ export const clampZoomPct = (percent: number) => Math.min(ZOOM_MAX_PCT, Math.max
 const changed = (detail?: Partial<api.UiSettings>) => window.dispatchEvent(new CustomEvent(APP_SETTINGS_CHANGED, { detail }));
 
 /** The same writes are used by native controls and theme forms; no alternate storage. */
-export async function saveAppUiSettings(patch: { show_tokens?: boolean; dice_roll_enabled?: boolean }, current: () => boolean = () => true) {
+export async function saveAppUiSettings(patch: Partial<Pick<api.UiSettings, 'show_tokens' | 'dice_roll_enabled' | 'browser_confirm_open' | 'browser_confirm_click' | 'browser_confirm_fill' | 'browser_human_typing'>>, current: () => boolean = () => true) {
   const result = await api.setUiSettings(patch);
   if (current()) changed({ show_tokens: result.settings.show_tokens, dice_roll_enabled: result.settings.dice_roll_enabled });
   return result;

@@ -7,7 +7,7 @@ import type { AppearanceShell as Shell } from '../lib/appearance-schema';
 import type {
   AppearanceShellAction,
   AppearanceShellState,
-  AppearanceDocumentRequest,
+  AppearanceBridgeRequest,
 } from '../../main/appearance-shell-types';
 import s from './AppearanceShell.module.scss';
 
@@ -34,6 +34,7 @@ export function AppearanceShell({
   onClose,
   onFailure,
   onReadDocument,
+  onRequestComplete,
   resolvePendingImage,
 }: {
   shell: Shell;
@@ -42,7 +43,8 @@ export function AppearanceShell({
   onAction: (action: AppearanceShellAction) => void;
   onClose: () => void;
   onFailure: () => void;
-  onReadDocument?: (request: AppearanceDocumentRequest) => Promise<unknown>;
+  onReadDocument?: (request: AppearanceBridgeRequest) => Promise<unknown>;
+  onRequestComplete?: (request: AppearanceBridgeRequest) => void;
   resolvePendingImage?: (id: string) => string | null;
 }) {
   const { t } = useTranslation();
@@ -78,7 +80,7 @@ export function AppearanceShell({
         project={project}
         language={shell.language}
         visible={visible}
-        appearance={{ state, onAction, onClose, onFailure, onReadDocument, resolvePendingImage }}
+        appearance={{ state, onAction, onClose, onFailure, onReadDocument, onRequestComplete, resolvePendingImage }}
       />
     </section>
   );

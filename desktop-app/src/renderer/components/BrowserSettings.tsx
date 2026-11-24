@@ -1,7 +1,9 @@
-import { useEffect, useState, useId, type ReactNode } from 'react';
+import { useEffect, useState, useId, useRef, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import * as api from '../lib/api';
+import { saveAppUiSettings } from '../lib/app-settings';
+import { useAuth } from '../lib/auth';
 import { Icon } from './Icon';
 import s from './SettingsModal.module.scss';
 import rows from './RestrictionsSettings.module.scss';
@@ -33,6 +35,11 @@ const normalizeSettings = (settings: api.UiSettings): BrowserSettingsValues => (
 
 export function BrowserSettings({ children }: { children?: ReactNode }) {
   const { t } = useTranslation();
+  const { user } = useAuth();
+  const scope = JSON.stringify([api.API_BASE, user?.id]);
+  const owner = useRef({ scope, epoch: 0, mounted: true });
+  if (owner.current.scope !== scope) owner.current = { scope, epoch: owner.current.epoch + 1, mounted: true };
+  useEffect(() => { owner.current.mounted = true; return () => { owner.current.mounted = false; }; }, [scope]);
   const id = useId();
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [loading, setLoading] = useState(true);
@@ -40,6 +47,7 @@ export function BrowserSettings({ children }: { children?: ReactNode }) {
 
   useEffect(() => {
     let cancelled = false;
+    setLoading(true); setSavingKey(null);
     api.getUiSettings()
       .then(({ settings: loaded }) => {
         if (!cancelled) setSettings(normalizeSettings(loaded));
@@ -51,20 +59,22 @@ export function BrowserSettings({ children }: { children?: ReactNode }) {
         if (!cancelled) setLoading(false);
       });
     return () => { cancelled = true; };
-  }, [t]);
+  }, [t, scope]);
 
   const handleChange = async (key: BrowserSettingKey, checked: boolean) => {
+    const epoch = owner.current.epoch, current = () => owner.current.mounted && owner.current.epoch === epoch;
     const previous = settings;
     setSettings(current => ({ ...current, [key]: checked }));
     setSavingKey(key);
     try {
-      const response = await api.setUiSettings({ [key]: checked });
-      setSettings(normalizeSettings(response.settings));
+      const response = await saveAppUiSettings({ [key]: checked }, current);
+      if (current()) setSettings(normalizeSettings(response.settings));
     } catch {
+      if (!current()) return;
       setSettings(previous);
       toast.error(t('settings.toasts.saveSettingFailed'));
     } finally {
-      setSavingKey(null);
+      if (current()) setSavingKey(null);
     }
   };
 

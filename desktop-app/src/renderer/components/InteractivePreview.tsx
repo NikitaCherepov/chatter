@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import type { InteractiveLanguage, InteractiveStatus } from '../../main/interactive-types';
 import type { AppearanceProject } from '../lib/appearance-project';
-import { canReadAppearanceDocument, type AppearanceShellAction, type AppearanceShellState, type AppearanceDocumentRequest } from '../../main/appearance-shell-types';
+import { canReadAppearanceRequest, type AppearanceShellAction, type AppearanceShellState, type AppearanceBridgeRequest } from '../../main/appearance-shell-types';
 import s from './InteractivePreview.module.scss';
 import { appearanceImageRequestAllowed } from '../lib/appearance-media';
 import { resolveImageUrl } from '../lib/api';
@@ -14,7 +14,8 @@ type AppearanceBridge = {
   onAction: (action: AppearanceShellAction) => void;
   onClose: () => void;
   onFailure: () => void;
-  onReadDocument?: (request: AppearanceDocumentRequest) => Promise<unknown>;
+  onReadDocument?: (request: AppearanceBridgeRequest) => Promise<unknown>;
+  onRequestComplete?: (request: AppearanceBridgeRequest) => void;
   resolvePendingImage?: (id: string) => string | null;
 };
 
@@ -108,10 +109,14 @@ export function InteractivePreview({ source, language, visible, appearance, proj
         let result: unknown, error: string | undefined;
         try {
           const shell = appearanceRef.current;
-          if (!shell?.onReadDocument || !canReadAppearanceDocument(shell.state, event.request)) throw new Error('attachment_scope_changed');
+          if (!shell?.onReadDocument || !canReadAppearanceRequest(shell.state, event.request)) throw new Error(event.request.method === 'settings' ? 'settings_scope_changed' : 'attachment_scope_changed');
           result = await shell.onReadDocument(event.request);
-        } catch (reason: any) { error = reason?.message?.startsWith('attachment_') ? reason.message : 'attachment_preview_failed'; }
+        } catch (reason: any) { error = event.request.method === 'settings'
+          ? typeof reason?.message === 'string' && /^[a-z][a-z0-9_]{0,100}$/.test(reason.message) ? reason.message : 'settings_operation_failed'
+          : reason?.message?.startsWith('attachment_') ? reason.message : 'attachment_preview_failed'; }
+        finally { if (event.request.method === 'settings') event.request.params = {}; }
         await api.appearanceDocumentResult(event.id, event.request.requestId, result, error).catch(() => {});
+        appearanceRef.current?.onRequestComplete?.(event.request);
       })();
     }) : () => {};
     void api.interactiveCreate({ source, language, project, dark: document.documentElement.dataset.theme === 'dark', errorLabel, bridge })
