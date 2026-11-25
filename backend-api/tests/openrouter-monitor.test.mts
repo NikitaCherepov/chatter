@@ -360,5 +360,29 @@ assert.ok(!outcomes.find(o => o.modelId === 'manual-1')?.notified, 'replacement 
 assert.strictEqual(notifications.filter(n => n.includes('Route: Manual')).length, 0);
 console.log('✔ price change can switch provider and stores the new baseline');
 
+// Numeric catalog statuses must work in both selection and price tracking.
+resetWorld();
+setSettings({ priceTracking: 'update_silent', action: 'cheapest' });
+catalog['google/gemini-2.5-flash'] = [
+  ep('provider-a', { status: 0 }),
+  ep('unavailable-number', { status: -1 }),
+  ep('another-unavailable-number', { status: 1 }),
+  ep('legacy-active', { status: 'ACTIVE' }),
+  ep('missing-status', { status: undefined }),
+  ep('malformed-status', { status: {} as any }),
+];
+outcomes = await runMonitorCycle();
+assert.equal(outcomes.find(o => o.modelId === 'manual-1')?.status, 'available');
+catalog['google/gemini-2.5-flash'][0].pricing!.prompt = '0.000004';
+outcomes = await runMonitorCycle();
+assert.equal(outcomes.find(o => o.modelId === 'manual-1')?.status, 'available');
+assert.equal(getModelOverride('manual-1')?.input_price_per_million, 4);
+for (const status of [-1, 1, 'inactive', {} as any]) {
+  catalog['google/gemini-2.5-flash'] = [ep('provider-a', { status })];
+  await runMonitorCycle();
+  assert.equal(selectReplacement(catalog['google/gemini-2.5-flash'], 'cheapest'), null);
+}
+console.log('✔ numeric and legacy statuses, unavailable endpoints, malformed status and automatic price update');
+
 console.log('\nAll openrouter-monitor tests passed.');
 process.exit(0);

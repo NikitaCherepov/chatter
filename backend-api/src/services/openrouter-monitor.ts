@@ -64,7 +64,7 @@ export type OpenRouterEndpoint = {
   tag?: string;
   name?: string;
   provider_name?: string;
-  status?: string;
+  status?: string | number | null;
   supported_parameters?: string[];
   zdr?: boolean;
   pricing?: Record<string, unknown>;
@@ -316,9 +316,14 @@ type CandidateGroup = {
 };
 
 const isEndpointUsable = (ep: OpenRouterEndpoint, requirements?: SelectionRequirements): boolean => {
-  // Inactive endpoints are excluded. OpenRouter uses "active"/"inactive";
-  // missing field is treated as active.
-  if (ep.status && ep.status.toLowerCase() !== 'active') return false;
+  // OpenRouter's numeric status uses 0 for available. Keep legacy string
+  // responses and endpoints without a status compatible with existing catalogs.
+  if (ep.status != null && ep.status !== '') {
+    const available = typeof ep.status === 'number'
+      ? ep.status === 0
+      : typeof ep.status === 'string' && ep.status.toLowerCase() === 'active';
+    if (!available) return false;
+  }
   const supported = new Set(ep.supported_parameters || []);
   if (requirements?.tools && !supported.has('tools')) return false;
   if (requirements?.caching && !supported.has('cache_control')) return false;

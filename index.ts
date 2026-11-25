@@ -66,6 +66,29 @@ const formatSafeError = (error: unknown) => {
     return String(error);
 };
 
+function sendTypingAction(ctx: BotContext): void {
+    if (!ctx.chat) return;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 3000);
+    timer.unref();
+    // The indicator is optional. Never delay AI work or its request lock for Telegram.
+    void (async () => {
+        try {
+            await ctx.telegram.callApi('sendChatAction', {
+                chat_id: ctx.chat!.id,
+                action: 'typing',
+                ...(ctx.message && 'message_thread_id' in ctx.message
+                    ? { message_thread_id: ctx.message.message_thread_id } : {}),
+            }, { signal: controller.signal as any });
+        } catch (error) {
+            const message = formatSafeError(error).replace(/bot\d+:[^/\s]+/g, 'bot[REDACTED]');
+            console.warn('[tg] Typing indicator failed:', message);
+        } finally {
+            clearTimeout(timer);
+        }
+    })();
+}
+
 const TELEGRAM_TOKEN = `${process.env.TELEGRAM_TOKEN || ''}`.trim();
 if (!TELEGRAM_TOKEN) throw new Error('telegram_token_not_configured');
 
@@ -1795,7 +1818,7 @@ const processPhotoAlbum = async (albumKey: string) => {
 
 
     try {
-        await ctx.sendChatAction('typing');
+        sendTypingAction(ctx);
 
         const mainImage = images[0];
         const extraImages = images.slice(1).map(img => ({
@@ -1897,7 +1920,7 @@ const processUserPhotoThroughAi = async (ctx: any) => {
             return;
         }
 
-        await ctx.sendChatAction('typing');
+        sendTypingAction(ctx);
 
         const backend = await runBackendPhotoAnalyze(
             userId,
@@ -6215,7 +6238,7 @@ const processUserTextThroughAi = async (
 
     let streamStopMessage: { chatId: number; messageId: number } | null = null;
     try {
-        await ctx.sendChatAction('typing');
+        sendTypingAction(ctx);
         const userChatId = Number.isFinite(Number(ctx.chat?.id)) ? Math.floor(Number(ctx.chat?.id)) : null;
         const userMessageId = Number.isFinite(Number(ctx.message?.message_id)) ? Math.floor(Number(ctx.message?.message_id)) : null;
 
