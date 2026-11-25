@@ -145,10 +145,12 @@ export function parseSettingsRequest(value: unknown): ThemeSettingsRequest | nul
   return { method: 'settings', requestId: value.requestId as string, sectionId: value.sectionId, editorId: value.editorId as string, operation: op, params: p };
 }
 export function settingsRequestScope(state: ThemeSettingsState | undefined, request: ThemeSettingsRequest): boolean {
-  return Boolean(state?.editor && state.editor.id === request.editorId && state.editor.sectionId === request.sectionId
-    && state.sections.some(section => section.id === request.sectionId && section.mode !== 'native'));
+  const editor=state?.editors?.[request.sectionId]??state?.editor;
+  return Boolean(editor && editor.id === request.editorId && editor.sectionId === request.sectionId
+    && state?.sections.some(section => section.id === request.sectionId && section.mode !== 'native'));
 }
 export function canRequestSettings(state: ThemeSettingsState | undefined, request: ThemeSettingsRequest): boolean {
-  return settingsRequestScope(state, request) && !state!.editor!.loading && !state!.editor!.busy
-    && Boolean(state!.editor!.requests?.some(operation => operation.id === request.operation));
+  const editor=state?.editors?.[request.sectionId]??state?.editor;
+  return settingsRequestScope(state, request) && !editor!.loading && !editor!.busy
+    && Boolean(editor!.requests?.some(operation => operation.id === request.operation));
 }

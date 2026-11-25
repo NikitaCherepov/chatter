@@ -7,6 +7,7 @@ export type ThemeSettingsSection = { id: string; groupId: string; label: string;
 export type ThemeSettingsSearchResult = { sectionId: string; key: string; title: string; sectionTitle: string; fieldId: string | null; operationId: string | null; native: boolean };
 export type ThemeSettingCommand = { id: string; label: string; disabled: boolean; active: boolean };
 export type ThemeSettingsState = {
+  scopeId?:string;
   groups: { id: string; label: string }[]; sections: ThemeSettingsSection[];
   query: string; results: ThemeSettingsSearchResult[]; hasMoreResults: boolean;
   editor: { id: string; sectionId: string; loading: boolean; busy: boolean; dirty: boolean; error: string | null;
@@ -14,9 +15,10 @@ export type ThemeSettingsState = {
     actions: ThemeSettingCommand[];
     requests: SettingsOperation[];
     links: { id: string; label: string; sectionId: string; target: string }[] } | null;
+  editors?: Record<string,NonNullable<ThemeSettingsState['editor']>>;
 };
 export type ThemeSettingsAction = { type: 'settingsAction'; action: 'search'; query: string }
-  | { type: 'settingsAction'; action: 'open'; sectionId: string }
+  | { type: 'settingsAction'; action: 'open'|'openSession'; sectionId: string }
   | { type: 'settingsAction'; action: 'edit'; sectionId: string; editorId: string; fieldId: string; value: SettingValue }
   | { type: 'settingsAction'; action: 'run'; sectionId: string; editorId: string; actionId: string }
   | { type: 'settingsAction'; action: 'save' | 'discard' | 'reload' | 'cancelRequests'; sectionId: string; editorId: string };
@@ -27,7 +29,7 @@ export function parseThemeSettingsAction(input: Record<string, unknown>): ThemeS
   if (input.action === 'search' && typeof input.query === 'string' && input.query.length <= 200)
     return { type: 'settingsAction', action: 'search', query: input.query };
   if (!id(input.sectionId)) return null;
-  if (input.action === 'open') return { type: 'settingsAction', action: 'open', sectionId: input.sectionId };
+  if (input.action === 'open'||input.action==='openSession') return { type: 'settingsAction', action: input.action, sectionId: input.sectionId };
   if (!id(input.editorId)) return null;
   const base = { type: 'settingsAction' as const, sectionId: input.sectionId, editorId: input.editorId };
   if (input.action === 'run' && id(input.actionId)) return { ...base, action: 'run', actionId: input.actionId };
@@ -42,9 +44,10 @@ export function canUseThemeSettings(state: ThemeSettingsState | undefined, actio
   if (!state) return false;
   if (action.action === 'search') return true;
   if (!state.sections.some(section => section.id === action.sectionId && section.mode !== 'native')) return false;
-  const editor = state.editor;
+  if(action.action==='openSession')return true;
+  const editor = action.action==='open'?state.editor:state.editors?.[action.sectionId]??state.editor;
   if (action.action === 'open') return !editor?.busy && (!editor?.dirty || editor.sectionId === action.sectionId);
-  if (!editor || editor.id !== action.editorId || editor.sectionId !== action.sectionId || editor.loading || editor.busy) return false;
+  if (!('editorId' in action)||!editor || editor.id !== action.editorId || editor.sectionId !== action.sectionId || editor.loading || editor.busy) return false;
   if (action.action === 'edit') return editor.fields.some(field => field.id === action.fieldId);
   if (action.action === 'run') return editor.actions?.some(command => command.id === action.actionId && !command.disabled) ?? false;
   if (action.action === 'save') return editor.dirty && !editor.fields.some(field => field.error);

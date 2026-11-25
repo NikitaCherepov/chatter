@@ -50,6 +50,8 @@ try {
   const virtualFiles = new Map([
     [path.join(virtualRoot, 'chatter.d.ts'), fs.readFileSync(path.join(directory, 'chatter.d.ts'), 'utf8')],
     [path.join(virtualRoot, 'chatter-ui.d.ts'), fs.readFileSync(path.join(directory, 'chatter-ui.d.ts'), 'utf8')],
+    [path.join(virtualRoot,'settings-sdk.d.ts'),fs.readFileSync(path.join(directory,'settings-sdk.d.ts'),'utf8')],
+    [path.join(virtualRoot,'settings-store.d.ts'),fs.readFileSync(path.join(directory,'settings-store.d.ts'),'utf8')],
     [path.join(virtualRoot, 'components/Field.tsx'), fs.readFileSync(path.join(directory, 'examples/settings/Field.tsx'), 'utf8')],
     [path.join(virtualRoot, 'components/Section.tsx'), fs.readFileSync(path.join(directory, 'examples/settings/Section.tsx'), 'utf8')],
     [path.join(virtualRoot, 'App.tsx'), 'import React from "react";import {Markdown,MessageImages,Attachments,useChatterState} from "@chatter/ui";export default function App(){const state=useChatterState({navigation:true,confirmations:true});const message=state?.messages[0];const tokens=state?.context.tokens;const transcript=state?.voice.transcript;const model=state?.models.selectedId;return message?<><Markdown messageId={message.id} content={message.content}/><MessageImages message={message}/><Attachments message={message}/><button onClick={()=>window.chatter.selectModel(model??null)}>{message.info.modelName} {tokens}</button><button onClick={()=>window.chatter.startVoiceRecording()}>{transcript?.text}</button><button onClick={()=>window.chatter.stopVoiceRecording()}>Stop</button><button onClick={()=>window.chatter.cancelVoiceRecording()}>Cancel</button></>:null;}'],

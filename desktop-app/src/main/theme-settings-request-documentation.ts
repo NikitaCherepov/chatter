@@ -119,6 +119,9 @@ export type SettingsRequestResult<S extends keyof SettingsRequestContract,O exte
 
 export const SETTINGS_OPERATIONS_GUIDE = `# Settings operations: forms and data
 
+For new React interfaces start with settings-sdk.md. It handles these operations, loading and
+draft lifecycles without prescribing markup. This guide describes the underlying bridge.
+
 The structured intuition editor is documented in settings-intuition.md.
 Prompt libraries and personas are documented in settings-profiles.md.
 

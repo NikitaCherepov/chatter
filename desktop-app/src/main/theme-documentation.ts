@@ -24,7 +24,8 @@ Available API features are not a mandatory UI checklist: choose what suits this 
 - docs/runtime.md: state/subscriptions (including useChatterState), navigation, isolated runtime and user actions.
 - docs/messages.md: content, streaming, workLog, tools, message actions, variants and speech.
 - docs/session.md: model selection, context/token indicators and voice recording/transcription.
-- docs/settings.md: settings catalog/search, reusable field descriptors, drafts/save/discard and native sections.
+- docs/settings-sdk.md: start here for settings; headless editors, shared drafts, typed operations and queries.
+- docs/settings.md: catalog/search, field descriptors and the lower-level bridge.
 - docs/settings-operations.md: account security forms, memory spaces/records/map, quotas, agents and theme management.
 - docs/settings-intuition.md: intuition preferences, editable questions and generated suggestions.
 - docs/settings-profiles.md: prompt libraries, generation, personas and their avatars.
@@ -33,7 +34,7 @@ Available API features are not a mandatory UI checklist: choose what suits this 
 - docs/media.md: images, full-resolution viewers, documents and outgoing attachments.
 - docs/confirmations.md: custom confirmation UI, fields, decisions and native fallback.
 - docs/appearance.json: ordinary appearance fields, allowed values and ranges.
-- chatter.d.ts: complete bridge signatures and ThemeState. chatter-ui.d.ts: optional component types.
+- chatter.d.ts: bridge signatures and ThemeState. chatter-ui.d.ts: headless SDK and optional components.
 - templates/component/ and templates/html/: complete file-based examples. template.json: ordinary theme.
 
 ## Project rules and limits
@@ -46,6 +47,106 @@ Local raster backgrounds use assets/image.png (PNG/JPEG/WebP/GIF, up to 8 MiB); 
 `;
 
 export const THEME_GUIDES: Record<string, string> = {
+  'settings-sdk.md': `# Settings SDK: behavior without markup
+
+Use the bundled @chatter/ui SDK for new React settings interfaces. The SDK has no modal, styles,
+layout, routing or required controls. It exposes data, state and methods. Draw a page, cards,
+floating panels or command UI. The lower-level window.chatter methods remain available for HTML
+and custom workflows. The host's endpoints, gesture checks and conflict guards are unchanged.
+
+## Smallest useful editor
+
+const form = usePersonaEditor(personaId); // number for an existing persona, null for a new draft
+return <form onSubmit={form.submit}>
+  <textarea {...form.bind('coreMemory')}/>
+  <button disabled={!form.canSave}>Save</button>
+  <button type="button" onClick={form.discard}>Discard</button>
+</form>;
+
+Render form.loading, busy, error, errors and conflict where appropriate. bind supplies only input
+value/checked/onChange/disabled/aria-invalid; it has no markup or style. Use draft and set instead
+for custom controls or commands. View choices (selected tab, dialog visibility, filters, zoom)
+remain your UI state. Do not recreate loading effects, draft baselines or stale-response guards.
+
+## Sessions and ownership
+
+Hooks open their section automatically with openSettingsSession. Host state.settings.editors has
+one canonical session per opened section. Several sections can coexist. state.settings.editor
+remains the legacy active-section pointer; SDK code should use hooks, not that pointer.
+Ordinary scalar drafts live in the existing host controller. Structured drafts live once in the
+SDK, keyed by session and entity; consumers of the same editor share them. They are not duplicate
+server preferences and are not written to disk. Hiding/unmounting a form retains its draft within
+the same session; returning to that entity restores it. Changing entity changes the draft key.
+Account/server/role/theme change, runtime destruction or explicit section reload invalidates the
+old session and its SDK stores. Chat navigation alone does not reset them. Discard explicitly
+abandons a draft. Saving never happens on unmount, blur, tab switch or proposal generation.
+
+## Forms and conflicts
+
+Editors provide draft, saved, dirty, loading, busy, error, errors, conflict, canSave and
+set(key,value), replace(value), bind(key), save(), submit(event), discard(), rebase(), clearError().
+save/submit are direct user actions. Reloaded data updates a clean form. A dirty form keeps its
+input; newer stored data is retained as incoming and conflicting saves are blocked. discard adopts
+stored data. After deliberately reconciling edits, rebase accepts the new baseline while keeping
+your edited draft; never call it automatically. Native CAS/preflight checks still run on saving.
+An unchanged ordinary form does not write again. Applying a survey proposal and submitting even
+empty optional answers are distinct explicit workflow actions and still reach the host.
+
+Methods that call Promise operations return {ok:true,value} or {ok:false,error}; failures remain
+in the controller and do not become unhandled rejections from JSX handlers. Mutations invoke the
+bridge before their first await, preserving genuine user activation. Already submitted mutations
+can finish on their original server after closing; a stale result never updates a new scope.
+
+## Ready-made behavior, arbitrary UI
+
+- useSettingsSection(id): ordinary fields/groups/actions/links, field(id), bind(id), set, save,
+  discard, reload, run and submit. Uses the host's existing scalar draft, availability and validation.
+  hasDraftChanges includes nested structured forms; canReload/reload protect them from an accidental
+  whole-section reset. Refresh a resource with its own reload to preserve and reconcile its draft.
+- usePersonas / usePrompts: shared library data and activate/select/remove(id,confirmed:true).
+- usePersonaEditor(id|null) / usePromptEditor(id|null): editable profile forms. createdId identifies
+  a successfully created entry. Prompt creation selects it; persona creation does not. Prompt
+  generate returns a separate proposal; useProposal copies it into the local draft only. Its
+  sections/sectionKeys/setSection support the native advanced editor format without extra requests.
+- useIntuitionEditor: config/questions, addQuestion/updateQuestion/removeQuestion/useDefaults,
+  suggest, proposal and useProposal. Stable question ids, defaults and save behavior are handled.
+- usePersonaInstructions(id): saved instruction form, surveys, selected/select, answers form,
+  proposal form, create, regenerate, followUp, apply and remove(surveyId,removeApplied,true).
+  create accepts the same optional choices as createPersonaSurvey. answers.submit invokes the
+  native answer validator/generator; apply is the final explicit instruction change. Failed AI
+  stages reload stored survey state without discarding local text. Read settings-instructions.md
+  for context sharing, quota, immutable answers and restoration semantics. No hidden consent.
+- useProfileAvatar(section,id): source/pick(file)/crop(rect,outputSize?)/save/remove/discard.
+  A picker and cropper can have any markup. Picking/cropping does not upload; save is explicit.
+
+Examples/settings are copyable markup patterns using these controllers. They do not automatically
+mount in your theme and are not a feature checklist. A persona profile editor excludes its separate
+instruction text so saving a biography cannot overwrite an instruction editor's newer work.
+
+## Generic building blocks
+
+useSettingsApi(section) exposes typed methods: const api=useSettingsApi('memory'); api.listSpaces().
+It returns ordinary rejecting Promises, for advanced composition. requestSettings remains intact.
+useSettingsResource(section,readOperation,params?) supplies shared data/loading/busy/error/reload.
+Only non-gesture reads auto-load. It deduplicates equivalent reads and schedules them within the
+bridge's concurrency budget. Canceled reads may retry once when idle; failures never start a polling loop.
+useSettingsAction(section,operation,key?) provides run(params), busy/error/data without effects or
+parameter retention. Destructive calls still require your own confirmation and confirmed:true.
+useSettingsTask(section,key) wraps a custom asynchronous user action with the same result/error
+handling. useSettingsQuery(section,key,loader,enabled?) supports dependent read queries.
+useSettingsForm(section,key,value,writer,validate?) provides shared draft behavior for other forms.
+Keys must distinguish different entities/workflows; two consumers using one key share one form.
+Do not put passwords/secrets in shared forms or resource keys. AccountSecurity.tsx keeps credentials
+only in the submission handler, clears inputs immediately and uses useSettingsAction.
+
+## Types and compatibility
+
+chatter-ui.d.ts and settings-sdk.d.ts describe the SDK. They are generated from its implementation
+by build:sdk; operation types come from the same contract as the handbook. Applications own saved
+settings. The SDK introduces no theme-specific preference database or alternate API endpoints.
+Existing raw bridge themes retain their old opening/dirty/save behavior. SDK sessions are additive;
+adopting one for the currently open section reuses the same host editor and scalar draft.
+`,
   'settings-instructions.md': `# Persona instructions and questionnaires
 
 Open the personas section, load listPersonas, then call getPersonaInstructions({id}) for a known
@@ -809,44 +910,4 @@ The isolated shell has no general network, filesystem, package installation or e
 `,
 };
 
-export const THEME_SETTINGS_EXAMPLES: Record<string, string> = {
-  ...THEME_SETTINGS_RESOURCE_EXAMPLES,
-  'Field.tsx': `import React from 'react';
-import type { SettingsField } from '../chatter';
-export default function Field({ sectionId, field, disabled }: { sectionId: string; field: SettingsField; disabled: boolean }) {
-  const inputId = React.useId();
-  if (!field.visible) return null;
-  const update = (value: string | number | boolean) => window.chatter.setSettingValue(sectionId, field.id, value);
-  const describedBy = field.help || field.error ? inputId + '-help' : undefined;
-  const props = { id: inputId, disabled, 'aria-describedby': describedBy, 'aria-invalid': Boolean(field.error) };
-  return <div className="settings-row" data-setting={field.id}>
-    <label htmlFor={inputId}>{field.label}</label>
-    {field.type === 'select' ? <select {...props} value={String(field.value)} onChange={event => update(event.target.value)}>{field.options?.map(option => <option key={option.value} value={option.value} disabled={option.disabled}>{option.label}</option>)}</select>
-      : field.type === 'toggle' ? <input {...props} type="checkbox" checked={field.value === true} onChange={event => update(event.target.checked)}/>
-      : <input {...props} type={field.type} min={field.min} max={field.max} step={field.step} maxLength={field.maxLength} value={String(field.value)} onChange={event => update(event.target.value)}/>}
-    <div id={inputId + '-help'}>{field.help && <p>{field.help}</p>}{field.error && <p role="alert">{field.error}</p>}</div>
-  </div>;
-}
-`,
-  'Section.tsx': `import React from 'react';
-import { useChatterState } from '@chatter/ui';
-import Field from './Field';
-export default function Section({ sectionId }: { sectionId: string }) {
-  const state = useChatterState();
-  React.useEffect(() => { window.chatter.openSettingsSection(sectionId); }, [sectionId]);
-  const editor = state?.settings.editor;
-  if (!state || !editor || editor.sectionId !== sectionId) return null;
-  return <section className="settings-section" aria-busy={editor.loading || editor.busy}>
-    <h2>{state.settings.sections.find(section => section.id === sectionId)?.label}</h2>
-    {(editor.loading || editor.busy) && <p role="status">{state.labels.loading}</p>}
-    {editor.error && <p role="alert">{editor.error}</p>}
-    {editor.groups.map(group => <fieldset key={group.id} disabled={editor.busy || editor.loading}><legend>{group.label}</legend>{editor.fields.filter(field => field.groupId === group.id).map(field => <Field key={field.id} sectionId={sectionId} field={field} disabled={editor.busy || editor.loading}/>)}</fieldset>)}
-    {editor.actions.map(action => <button type="button" key={action.id} data-settings-action={action.id} aria-busy={action.active} disabled={editor.loading || editor.busy || action.disabled} onClick={() => window.chatter.runSettingsAction(sectionId, action.id)}>{action.label}</button>)}
-    {editor.links.map(link => <button type="button" key={link.id} disabled={editor.loading || editor.busy} onClick={() => window.chatter.openSettings(link.sectionId, link.target)}>{link.label}</button>)}
-    <button type="button" disabled={!editor.dirty || editor.busy || editor.loading || editor.fields.some(field => field.error)} onClick={() => window.chatter.saveSettingsSection(sectionId)}>{state.labels.save}</button>
-    <button type="button" disabled={!editor.dirty || editor.busy || editor.loading} onClick={() => window.chatter.discardSettingsSection(sectionId)}>{state.labels.cancel}</button>
-    <button type="button" disabled={editor.dirty || editor.busy || editor.loading} onClick={() => window.chatter.reloadSettingsSection(sectionId)}>Reload</button>
-  </section>;
-}
-`,
-};
+export const THEME_SETTINGS_EXAMPLES=THEME_SETTINGS_RESOURCE_EXAMPLES;

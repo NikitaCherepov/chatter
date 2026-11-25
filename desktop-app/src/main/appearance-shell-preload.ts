@@ -23,7 +23,8 @@ ipcRenderer.on('appearance-shell:state', (_event, next: AppearanceShellState) =>
   for (const [id, pending] of documentRequests) {
     const request = pending.request;
     if (request.method === 'settings') {
-      if (next.settings?.editor?.id !== request.editorId || next.settings.editor.sectionId !== request.sectionId) {
+      const editor=next.settings?.editors?.[request.sectionId]??next.settings?.editor;
+      if (editor?.id !== request.editorId || editor.sectionId !== request.sectionId) {
         clearTimeout(pending.timer); documentRequests.delete(id); pending.reject(new Error('settings_scope_changed'));
       }
       continue;
@@ -141,13 +142,14 @@ const documentRequest = (method: AppearanceDocumentRequest['method'], messageId:
     documentRequests.set(request.requestId, { request, resolve, reject, timer }); ipcRenderer.send('appearance-shell:request', request);
   });
 };
-const settingsAction = (action: 'open' | 'edit' | 'save' | 'discard' | 'reload' | 'run' | 'cancelRequests', sectionId: string, fieldId?: string, value?: unknown) => {
-  const settings = state?.settings, editor = settings?.editor;
+const settingsAction = (action: 'open'|'openSession' | 'edit' | 'save' | 'discard' | 'reload' | 'run' | 'cancelRequests', sectionId: string, fieldId?: string, value?: unknown) => {
+  const settings = state?.settings, editor = action==='open'?settings?.editor:settings?.editors?.[sectionId]??settings?.editor;
   if (!settings?.sections.some(section => section.id === sectionId && section.mode !== 'native')) return false;
   if (action === 'open') {
     if (editor?.busy || editor?.dirty && editor.sectionId !== sectionId) return false;
     send({ type: 'settingsAction', action, sectionId }); return true;
   }
+  if(action==='openSession'){send({type:'settingsAction',action,sectionId});return true;}
   if (!editor || editor.sectionId !== sectionId || editor.busy || editor.loading) return false;
   if (action === 'save' && (!navigator.userActivation.isActive || !editor.dirty || editor.fields.some(field => field.error))) return false;
   if (action === 'run' && (!navigator.userActivation.isActive || !editor.actions?.some(command => command.id === fieldId && !command.disabled))) return false;
@@ -163,7 +165,7 @@ const settingsAction = (action: 'open' | 'edit' | 'save' | 'discard' | 'reload' 
 };
 contextBridge.exposeInMainWorld('chatter', {
   requestSettings: (sectionId: string, operation: string, params: Record<string, unknown> = {}) => {
-    const editor = state?.settings?.editor, descriptor = editor?.requests?.find(item => item.id === operation);
+    const editor = state?.settings?.editors?.[sectionId]??state?.settings?.editor, descriptor = editor?.requests?.find(item => item.id === operation);
     if (!editor || editor.sectionId !== sectionId || editor.loading || editor.busy || !descriptor || documentRequests.size >= 4
         || descriptor.requiresGesture && !navigator.userActivation.isActive || descriptor.requiresConfirmation && params?.confirmed !== true)
       return Promise.reject(new Error('settings_request_unavailable'));
@@ -186,6 +188,7 @@ contextBridge.exposeInMainWorld('chatter', {
     send({ type: 'settingsAction', action: 'search', query }); return true;
   },
   openSettingsSection: (sectionId: string) => settingsAction('open', sectionId),
+  openSettingsSession: (sectionId:string)=>settingsAction('openSession',sectionId),
   setSettingValue: (sectionId: string, fieldId: string, value: unknown) => settingsAction('edit', sectionId, fieldId, value),
   saveSettingsSection: (sectionId: string) => settingsAction('save', sectionId),
   discardSettingsSection: (sectionId: string) => settingsAction('discard', sectionId),

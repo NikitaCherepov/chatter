@@ -1,5 +1,6 @@
 import { APPEARANCE_LABEL_KEYS } from './appearance-shell-types';
 import { THEME_README, THEME_GUIDES, THEME_SETTINGS_EXAMPLES } from './theme-documentation';
+import {SETTINGS_SDK_TYPES,SETTINGS_STORE_TYPES,SETTINGS_SDK_UI_EXPORTS} from './theme-settings-sdk-declarations';
 import { SETTINGS_REQUEST_DECLARATIONS } from './theme-settings-request-documentation';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -396,6 +397,8 @@ export class LocalAppearanceStore {
     if (profile.shell?.language === 'tsx') {
       this.write(directory + '/chatter.d.ts', appearanceDeclarations);
       this.write(directory + '/chatter-ui.d.ts', appearanceUIDeclarations);
+      this.write(directory+'/settings-sdk.d.ts',SETTINGS_SDK_TYPES);
+      this.write(directory+'/settings-store.d.ts',SETTINGS_STORE_TYPES);
       this.write(
         directory + '/tsconfig.json',
         JSON.stringify(
@@ -818,6 +821,8 @@ export class LocalAppearanceStore {
     this.write('template.json', JSON.stringify(newAppearance('my-theme'), null, 2) + '\n');
     this.write('chatter.d.ts', appearanceDeclarations);
     this.write('chatter-ui.d.ts', appearanceUIDeclarations);
+    this.write('settings-sdk.d.ts',SETTINGS_SDK_TYPES);
+    this.write('settings-store.d.ts',SETTINGS_STORE_TYPES);
   }
 }
 
@@ -836,7 +841,7 @@ export type SettingValue=string|number|boolean;
 export type SettingsField={id:string;groupId:string;label:string;help:string;type:'select'|'toggle'|'number'|'time'|'text';value:SettingValue;savedValue:SettingValue;dirty:boolean;error:string|null;visible:boolean;options?:{value:string;label:string;disabled?:boolean}[];min?:number;max?:number;step?:number;maxLength?:number};
 export type SettingsSection={id:string;groupId:string;label:string;mode:'native'|'hybrid'|'fields'};
 export type SettingsSearchResult={sectionId:string;key:string;title:string;sectionTitle:string;fieldId:string|null;operationId:string|null;native:boolean};
-export type SettingsState={groups:{id:string;label:string}[];sections:SettingsSection[];query:string;results:SettingsSearchResult[];hasMoreResults:boolean;editor:{id:string;sectionId:string;loading:boolean;busy:boolean;dirty:boolean;error:string|null;fields:SettingsField[];groups:{id:string;label:string}[];actions:{id:string;label:string;disabled:boolean;active:boolean}[];requests:SettingsRequestDescriptor[];links:{id:string;label:string;sectionId:string;target:string}[]}|null};
+export type SettingsState={scopeId?:string;groups:{id:string;label:string}[];sections:SettingsSection[];query:string;results:SettingsSearchResult[];hasMoreResults:boolean;editors?:Record<string,NonNullable<SettingsState['editor']>>;editor:{id:string;sectionId:string;loading:boolean;busy:boolean;dirty:boolean;error:string|null;fields:SettingsField[];groups:{id:string;label:string}[];actions:{id:string;label:string;disabled:boolean;active:boolean}[];requests:SettingsRequestDescriptor[];links:{id:string;label:string;sectionId:string;target:string}[]}|null};
 ${SETTINGS_REQUEST_DECLARATIONS}
 export type Message={timelineIndex:number|null;archived:boolean;id:number;role:string;content:string;createdAt:number;streaming:boolean;reasoningContent:string;workLog:WorkLogStep[];toolStatus:string|null;variantIndex:number;variantCount:number;actions:MessageAction[];editableContent?:string;info:MessageInfo;images:{url:string;type:'user_photo'|'generated'|'external'}[];attachments:{url:string;name:string;filename:string;mimeType:string;sizeBytes:number}[]};
 export type ConfirmationNode={type:'text'|'code'|'markdown'|'json'|'email';text:string}|{type:'diff';before:string;after:string}|{type:'group';label?:string;children:ConfirmationNode[]}|{type:'field';fieldId:string}|{type:'action';actionId:string};
@@ -864,7 +869,7 @@ export type ThemeState = {
 };
 export interface ThemeAPI {
   requestSettings<S extends keyof SettingsRequestContract,O extends keyof SettingsRequestContract[S]>(sectionId:S,operation:O,...args:SettingsRequestParameters<S,O>):Promise<SettingsRequestResult<S,O>>;
-  getSettingsSections():SettingsSection[];searchSettings(query:string):boolean;openSettingsSection(sectionId:string):boolean;
+  getSettingsSections():SettingsSection[];searchSettings(query:string):boolean;openSettingsSection(sectionId:string):boolean;openSettingsSession(sectionId:string):boolean;
   setSettingValue(sectionId:string,fieldId:string,value:SettingValue):boolean;saveSettingsSection(sectionId:string):boolean;
   discardSettingsSection(sectionId:string):boolean;reloadSettingsSection(sectionId:string):boolean;
   runSettingsAction(sectionId:string,actionId:string):boolean;
@@ -900,6 +905,7 @@ declare global {interface Window {chatter:ThemeAPI}}
 `;
 
 const appearanceUIDeclarations = `declare module '@chatter/ui' {
+${SETTINGS_SDK_UI_EXPORTS}
   export type ImageTarget={chatId:number;messageId:number;variantIndex:number;url:string;source:string;alt:string};
   export type AttachmentTarget={chatId:number;messageId:number;variantIndex:number;index:number;url:string;name:string;mimeType:string;sizeBytes:number};
   export type ChatterStateOptions={navigation?:boolean;confirmations?:boolean};

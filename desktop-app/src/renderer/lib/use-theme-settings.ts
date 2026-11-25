@@ -92,10 +92,11 @@ export function useThemeSettings(themeId: string | null, onAuthInvalidated?: () 
   }, [controller, t, i18n.resolvedLanguage, isAdmin]);
   useEffect(() => {
     const refresh = () => {
-      const editor = controller.getState().editor;
-      // Operation-only forms own their drafts; a focus event cannot tell whether those are dirty.
-      if (editor && !editor.loading && !editor.busy && !editor.dirty && editor.fields.length > 0)
+      for(const editor of Object.values(controller.getState().editors??{})){
+      // Structured drafts live in the SDK; only clean scalar sessions can be refreshed here.
+      if (!editor.loading && !editor.busy && !editor.dirty && editor.fields.length > 0)
         void controller.handle({ type: 'settingsAction', action: 'reload', sectionId: editor.sectionId, editorId: editor.id });
+      }
     };
     const events = [APP_SETTINGS_CHANGED, 'chatter-voice-settings-changed', 'chatter:wakeword-toggle', 'chatter:wakeword-config', 'focus'];
     events.forEach(event => window.addEventListener(event, refresh));

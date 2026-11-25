@@ -55,7 +55,8 @@ export const apiFetch=async(url,options={})=>{
  if(url==='/api/v1/prompts/generate')return {generated_prompt:'Generated proposal'};
  if(url==='/api/v1/prompts/custom'&&options.method==='POST'){const id=-1001;window.prompts.custom_prompts.push({...payload,id,image_url:null});window.prompts.selected_prompt_id=id;return {ok:true,prompt_id:id};}
  if(url==='/api/v1/memory/personas'&&options.method==='POST'){const persona={...payload,id:2,image_url:null,is_primary:0,is_default:0,allow_core_memory_update:payload.allow_core_memory_update?1:0};window.personas.push(persona);return {persona};}
- if(url==='/api/v1/memory/personas')return {personas:structuredClone(window.personas)};
+ if(url==='/api/v1/memory/personas'){window.personaReads=(window.personaReads||0)+1;return {personas:structuredClone(window.personas)};}
+ if(url.startsWith('/api/v1/memory/personas/')&&options.method==='PATCH'){const persona=window.personas.find(p=>p.id===Number(url.split('/').at(-1)));Object.assign(persona,payload,{allow_core_memory_update:payload.allow_core_memory_update?1:0});return {persona:structuredClone(persona)};}
  if(url.includes('/memory/personas/')&&url.endsWith('/activate')){const id=Number(url.split('/').at(-2));window.personas=window.personas.map(p=>({...p,is_default:p.id===id?1:0}));return {};}
  if(url==='/api/v1/memory/spaces'&&options.method==='POST'){const space={id:3,name:payload.name,kind:'general',is_default:0,is_primary:0};window.memorySpaces.push(space);return {space};}
  if(url==='/api/v1/memory/spaces')return {spaces:structuredClone(window.memorySpaces)};
@@ -157,9 +158,10 @@ app.whenReady().then(async()=>{
   return send(channel,payload);
  };
  id=manager.create(host.webContents,{language:'tsx',source:'',dark:false,errorLabel:'failed',bridge:'appearance-chat-list-v1',project:{entry:'App.tsx',files:{
-  'App.tsx':"import React from 'react';import Section from './components/Section';import AccountSecurity from './components/AccountSecurity';import {useChatterState} from '@chatter/ui';export default function App(){const state=useChatterState();const [section,setSection]=React.useState('');return <main>{['app','voice','account','limits','agents','memory','browser','intuition','prompt','personas'].map(id=><button key={id} id={id==='app'?'open':'open-'+id} onClick={()=>setSection(id)}>{id}</button>)}<input id='search' onChange={event=>window.chatter.searchSettings(event.target.value)}/><output id='search-result'>{state?.settings?.results[0]?.fieldId}</output>{section&&<Section key={section} sectionId={section}/>}{section==='account'&&<AccountSecurity/>}</main>}",
+  'App.tsx':"import React from 'react';import Section from './components/Section';import AccountSecurity from './components/AccountSecurity';import SdkProbe from './components/SdkProbe';import {useChatterState} from '@chatter/ui';export default function App(){const state=useChatterState();const [section,setSection]=React.useState('');const [sdk,setSdk]=React.useState(false);window.sdkToggle=setSdk;return <main>{['app','voice','account','limits','agents','memory','browser','intuition','prompt','personas'].map(id=><button key={id} id={id==='app'?'open':'open-'+id} onClick={()=>{window.chatter.openSettingsSection(id);setSection(id);}}>{id}</button>)}<input id='search' onChange={event=>window.chatter.searchSettings(event.target.value)}/><output id='search-result'>{state?.settings?.results[0]?.fieldId}</output>{section&&<Section key={section} sectionId={section}/>}{section==='account'&&<AccountSecurity/>}{sdk&&<SdkProbe/>}</main>}",
   'components/Field.tsx':THEME_SETTINGS_EXAMPLES['Field.tsx'],'components/Section.tsx':THEME_SETTINGS_EXAMPLES['Section.tsx'],
   'components/AccountSecurity.tsx':THEME_SETTINGS_EXAMPLES['AccountSecurity.tsx'],
+  'components/SdkProbe.tsx':"import React from 'react';import {usePersonaEditor,useIntuitionEditor,useSettingsSection} from '@chatter/ui';export default function SdkProbe(){const a=usePersonaEditor(1),b=usePersonaEditor(1),i=useIntuitionEditor(),voice=useSettingsSection('voice'),section=useSettingsSection('personas');window.sdkReload=section.reload;return <section id='sdk-probe'><input id='sdk-name-a' {...a.bind('name')}/><input id='sdk-name-b' {...b.bind('name')}/><button id='sdk-save-persona' disabled={!a.canSave} onClick={()=>void a.save()}>Save persona</button><input id='sdk-history' type='number' {...i.bind('historyMessages')}/><button id='sdk-save-intuition' disabled={!i.canSave} onClick={()=>void i.save()}>Save intuition</button><output id='sdk-error'>{a.error||i.error}</output><output id='sdk-can-reload'>{String(section.canReload)}</output><output id='sdk-voice'>{voice.ready?'ready':'loading'}</output></section>}",
  }}});
  theme=host.contentView.children.at(-1).children[0].webContents;
  theme.on('console-message',(_event,level,message)=>{if(level===3)console.log('theme:',message);});push();
@@ -297,16 +299,31 @@ app.whenReady().then(async()=>{
  assert.equal(await host.webContents.executeJavaScript('window.instructions.text'),'Saved instructions');
  await resource('personas','applyPersonaSurvey',{id:2,surveyId:survey.id,text:'Reviewed instructions'},true);assert.equal(await host.webContents.executeJavaScript('window.instructions.text'),'Reviewed instructions');
  await resource('personas','deletePersonaSurvey',{id:2,surveyId:survey.id,removeApplied:false,confirmed:true},true);assert.equal(await host.webContents.executeJavaScript('window.instructions.surveys.length'),0);
+ const personaReads=await host.webContents.executeJavaScript('window.personaReads');await js('window.sdkToggle(true)');
+ await until(async()=>await js('!!document.getElementById("sdk-name-a")&&!document.getElementById("sdk-name-a").disabled&&document.getElementById("sdk-voice").textContent==="ready"'));
+ assert.equal(await host.webContents.executeJavaScript('window.personaReads'),personaReads+1,'two consumers share one library fetch');
+ await input('sdk-name-a','Unsaved SDK draft');await until(async()=>await js('document.getElementById("sdk-name-b").value')==='Unsaved SDK draft');
+ assert.equal(await js('window.sdkReload()'),false,'a generic section reload must not erase structured drafts');
+ await until(async()=>await js('document.getElementById("sdk-can-reload").textContent')==='false');
+ assert.equal(await host.webContents.executeJavaScript('window.personas[0].name'),'Main','SDK input never saves implicitly');
+ await js('window.sdkToggle(false)');await until(async()=>await js('!document.getElementById("sdk-probe")'));await js('window.sdkToggle(true)');
+ await until(async()=>await js('document.getElementById("sdk-name-a")?.value')==='Unsaved SDK draft');
+ await click('sdk-save-persona');await until(async()=>await host.webContents.executeJavaScript('window.personas[0].name')==='Unsaved SDK draft');
+ await input('sdk-history','');assert.equal(await js('document.getElementById("sdk-save-intuition").disabled'),true,'empty numeric draft is invalid, never silently null/default');
+ await input('sdk-history','4');await until(async()=>await js('!document.getElementById("sdk-save-intuition").disabled'));await click('sdk-save-intuition');await until(async()=>await host.webContents.executeJavaScript('window.intuition.settings.historyMessages')===4);
+ assert.ok(settings.editors.voice&&settings.editors.personas&&settings.editors.intuition,'independent sessions coexist');
+ await js('window.sdkToggle(false)');
  await host.webContents.executeJavaScript('window.account.name="Stale account read";window.delayAccountRead=new Promise(resolve=>{window.finishAccountRead=resolve});void 0');
- await click('open-account');await until(()=>settings.editor?.sectionId==='account'&&settings.editor.loading);
+ await click('open-account');await until(()=>settings.editor?.sectionId==='account');await js('window.chatter.reloadSettingsSection("account")');await until(()=>settings.editor.loading);
  await host.webContents.executeJavaScript('window.setSettingsMounted(false)');await until(async()=>await host.webContents.executeJavaScript('!document.getElementById("native-tokens")'));
  const readsBefore=await host.webContents.executeJavaScript('window.accountReadsReturned');await host.webContents.executeJavaScript('window.finishAccountRead()');
  await until(async()=>await host.webContents.executeJavaScript('window.accountReadsReturned')>readsBefore);
  assert.equal(await host.webContents.executeJavaScript('document.getElementById("account-name").textContent'),'Updated fixture','unmounted settings must not mutate Auth from a late read');
  await host.webContents.executeJavaScript('window.delayAccountRead=null;window.setSettingsMounted(true)');await until(()=>settings.editor===null);
  await host.webContents.executeJavaScript('window.switchSettingsAccount(2)');await until(()=>settings.editor===null);assert.equal(await host.webContents.executeJavaScript('window.ui[2].dice_roll_enabled'),false);
+ assert.equal(await js('window.sdkReload()'),false,'a handler retained from an old account cannot reload the new account session');
  assert.equal(await js('[typeof electronAPI,typeof require].join(",")'),'undefined,undefined');
- console.log('PASS: ten isolated settings sections, generated credential forms/reauth, intuition saves/proposals, prompt/persona libraries and activation, draft preservation on focus, private IPC metadata, memory CRUD, theme drafts, native synchronization and scope isolation');
+ console.log('PASS: ten isolated sections, headless SDK shared drafts and independent sessions, hidden-form restoration, protected reload/stale account handlers, numeric validation, native saves, credentials/reauth, surveys, real image cropping and legacy bridge compatibility');
 }).catch(error=>{console.error(error);process.exitCode=1;}).finally(async()=>{finishPreview?.(null);await sleep(10);clearTimeout(deadline);manager?.destroy();host?.destroy();app.exit(process.exitCode??0);});
 `;
 try {
