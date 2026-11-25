@@ -469,6 +469,14 @@ export const getAutoVisionSupport = () => ({
 });
 
 const ALL_REASONING_LEVELS: ReasoningLevel[] = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh'];
+const MAIN_CHAT_MAX_OUTPUT_TOKENS = 65_536;
+
+function getModelOutputTokenLimit(baseURL: string, model: string): number | null {
+  if (model.toLowerCase() !== 'celeris-1-magnus' || !URL.canParse(baseURL)) return null;
+  const { hostname } = new URL(baseURL);
+  // Celeris rejects requests for Magnus above this limit, including at regional endpoints.
+  return hostname === 'inference.celeris.ai' || hostname.endsWith('.inference.celeris.ai') ? 16_384 : null;
+}
 
 const REFUSELESS_MODELS_WITH_OFF = new Set([
   'deepseek-v4.1-flash-abliterated',
@@ -1338,6 +1346,7 @@ const createCompletionWithModelFallback = async (
 
   for (let modelIndex = 0; modelIndex < modelChain.length; modelIndex += 1) {
     const model = modelChain[modelIndex];
+    const modelOutputTokenLimit = getModelOutputTokenLimit(baseURL, model);
     const currentUniqueId = uniqueIds[modelIndex] || null;
     if (!canUseModel(currentUniqueId, undefined, client)) { lastError = new Error('model_access_denied'); failedModels.push(model); continue; }
     const override = currentUniqueId ? getModelOverride(currentUniqueId) : null;
@@ -1348,9 +1357,14 @@ const createCompletionWithModelFallback = async (
     const attempts = RETRIES_PER_MODEL + 1;
     for (let attempt = 1; attempt <= attempts; attempt += 1) {
       try {
-        const providerRequestBody = adaptRequestBodyForProvider(
+        const adaptedBody = adaptRequestBodyForProvider(
           requestBody, baseURL, model, reasoningLevel, modelSettings, openRouterSlug,
         );
+        const providerRequestBody = modelOutputTokenLimit !== null
+          && typeof adaptedBody.max_tokens === 'number'
+          && adaptedBody.max_tokens > modelOutputTokenLimit
+          ? { ...adaptedBody, max_tokens: modelOutputTokenLimit }
+          : adaptedBody;
         if (modelSettings) {
           console.log('[ai][model-settings]', {
             provider: providerName,
@@ -7666,7 +7680,12 @@ const sendMessageThroughAiInternal = async (
   const effectiveContextTokens = resolveMaxContextTokens(user, modelContextLimit);
   // Keep room for the completion itself. The rest is the maximum request-side
   // context used by archiving, room truncation and attachment reads.
-  const maxResponseTokens = Math.min(16_384, Math.max(256, Math.floor(effectiveContextTokens * 0.2)));
+  const modelOutputTokenLimit = manualModel ? getModelOutputTokenLimit(manualModel.baseURL, manualModel.apiModelName) : null;
+  const maxResponseTokens = Math.min(
+    MAIN_CHAT_MAX_OUTPUT_TOKENS,
+    modelOutputTokenLimit ?? Infinity,
+    Math.max(256, Math.floor(effectiveContextTokens * 0.2)),
+  );
   const maxContextTokens = Math.max(256, effectiveContextTokens - maxResponseTokens);
   const attachmentMaxTokens = resolveAttachmentMaxTokens(user, modelContextLimit);
   if (resolvedModelSettings?.max_tokens != null) {

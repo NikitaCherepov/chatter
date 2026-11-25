@@ -17,6 +17,16 @@ export const THEME_README = `# Local Chatter themes
 
 Available API features are not a mandatory UI checklist: choose what suits this theme. See docs/runtime.md, "Choosing features".
 
+## Build with reuse
+
+Keep generation and maintenance small by reusing code as you write it:
+
+- Use the existing SDK for supported behavior before writing loading, draft, save or error-handling logic yourself. For React settings start with docs/settings-sdk.md.
+- When the same structure serves the same purpose in two places, extract one theme-owned component and import it. Repeated fields, cards, dialogs and groups such as a form hint with Save/Discard buttons should share their markup; pass differences as props or children. Visual similarity alone does not require an abstraction.
+- Share repeated CSS through a base class, modifiers and variables instead of copying rules for each screen. A repeated group can start as a local component or shared class; a separate file for every small element is unnecessary.
+- Split larger themes by responsibility: keep the entry focused on composition and import panels, editors and shared components from separate files. Small themes may stay small. No fixed folder structure is required.
+- Reuse preserves the theme's own markup, style and animations. Do not simplify its design or replace cards with tables just to reduce code size. Bundled UI components remain optional.
+
 ## Guides
 
 - docs/theme-files.md: per-theme README.md, persistence and portable theme files.

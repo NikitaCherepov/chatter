@@ -286,8 +286,41 @@ try {
       .some((message) => message.tool_calls?.some((call) => call.name === 'get_user_time')),
     'completed actions survive a failed summary',
   );
+
+  mode = 'followup';
+  db.prepare('UPDATE users SET max_context_tokens = 400000, max_context_tokens_limit = 400000 WHERE id = 81').run();
+  const magnus = {
+    ...model,
+    id: 'magnus-card',
+    uniqueId: 'magnus-test',
+    model: 'celeris-1-magnus',
+    baseUrl: 'https://inference.celeris.ai/celeris-1-magnus/v1',
+  };
+  settings.updateModelSettings({ manualModels: [model, magnus] });
+  ai.refreshConfiguredModels();
+  const magnusClient = ai.resolveManualModel(magnus.uniqueId, true, 81)!;
+  magnusClient.client.baseURL = model.baseUrl;
+
+  for (const [configuredModel, limit] of [[model, 65_536], [magnus, 16_384]] as const) {
+    requests.length = 0;
+    const result = await ai.sendMessageThroughAi(81, 'Continue a large task', await create(), {
+      ...options,
+      preferredModel: configuredModel.uniqueId,
+    });
+    assert.match(result.reply_text, /Work complete/);
+    assert.equal(requests.at(-1).model, configuredModel.model);
+    assert.equal(requests.at(-1).max_tokens, limit);
+  }
+
+  // A model reached through the shared completion path must also respect Magnus's limit.
+  await ai.runCompletion('pro', {
+    messages: [{ role: 'user', content: 'Continue' }],
+    max_tokens: 65_536,
+  }, magnusClient);
+  assert.equal(requests.at(-1).model, magnus.model);
+  assert.equal(requests.at(-1).max_tokens, 16_384);
   console.log(
-    'PASS: real main loop/provider usage, mid-tool compaction, one overflow retry, persisted tail, no replay, summary failure preserves original history',
+    'PASS: main loop, provider usage, context compaction, overflow retry, preserved history, and model output limits',
   );
 } finally {
   timers.forEach(clearInterval);
