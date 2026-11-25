@@ -7,7 +7,7 @@ declare global {
   interface Window {
     electronAPI: {
       writeClipboardText: (text: string) => Promise<void>;
-      pickAttachmentFiles: () => Promise<{ canceled: boolean; selectionId?: string; files: { index: number; name: string; size: number }[] }>;
+      pickAttachmentFiles: (kind?: 'profile-image') => Promise<{ canceled: boolean; selectionId?: string; files: { index: number; name: string; size: number }[] }>;
       readPickedAttachment: (id: string, index: number) => Promise<ArrayBuffer>;
       releasePickedAttachments: (id: string) => Promise<void>;
       interactiveCreate: (input: InteractiveInput) => Promise<string>;

@@ -34,6 +34,7 @@ export type SettingsRequestContract={
   listGenerationModels:{params:{};result:SettingsGenerationModels};
   parsePromptSections:{params:{content:string};result:{sections:SettingsPromptSections}};
   serializePromptSections:{params:{sections:SettingsPromptSections};result:{content:string}};
+  chooseProfileImage:{params:{};result:SettingsProfileImage|null};
   cropProfileImage:{params:SettingsProfileImage&{crop:SettingsProfileCrop;outputSize?:number};result:SettingsCroppedProfileImage};
   startPromptChat:{params:{id:number};result:{chatId:number;messageId:number|null}};
   listPrompts:{params:{};result:SettingsPromptLibrary};
@@ -48,6 +49,7 @@ export type SettingsRequestContract={
  };
  personas:{
   listGenerationModels:{params:{};result:SettingsGenerationModels};
+  chooseProfileImage:{params:{};result:SettingsProfileImage|null};
   cropProfileImage:{params:SettingsProfileImage&{crop:SettingsProfileCrop;outputSize?:number};result:SettingsCroppedProfileImage};
   getPersonaInstructions:{params:{id:number};result:SettingsPersonaInstructions};
   savePersonaInstructions:{params:{id:number;text:string};result:SettingsPersonaInstructions};

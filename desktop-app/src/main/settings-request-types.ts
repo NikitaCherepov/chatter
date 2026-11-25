@@ -19,6 +19,7 @@ export const SETTINGS_REQUESTS: Record<string, Record<string, { key: string; mut
     suggestIntuitionQuestions: { key: 'intuition.suggest', gesture: true },
   },
   prompt: {
+    chooseProfileImage: {key:'appearance.upload',gesture:true},
     listGenerationModels: {key:'settings.voice.model'},
     parsePromptSections: {key:'settings.prompt.modeAdvanced'},
     serializePromptSections: {key:'settings.prompt.modeUsual'},
@@ -35,6 +36,7 @@ export const SETTINGS_REQUESTS: Record<string, Record<string, { key: string; mut
     deletePromptImage: {key:'common.delete',mutation:true},
   },
   personas: {
+    chooseProfileImage: {key:'appearance.upload',gesture:true},
     listGenerationModels: {key:'settings.voice.model'},
     cropProfileImage: {key:'settings.prompt.imageCropTitle',gesture:true},
     getPersonaInstructions: {key:'playerInstructions.general'},
@@ -100,7 +102,8 @@ export function parseSettingsRequest(value: unknown): ThemeSettingsRequest | nul
   let valid = false;
   const promptId=Number.isSafeInteger(p.id) && (Number(p.id)>0 || Number(p.id)<=-1000 || p.id===-1);
   const customPromptId=promptId && Number(p.id)<=-1000;
-  if(op==='cropProfileImage') valid=profileImage(p) && object(p.crop) && ['x','y','size'].every(key=>typeof (p.crop as Record<string,unknown>)[key]==='number' && Number.isFinite((p.crop as Record<string,unknown>)[key]))
+  if(op==='chooseProfileImage') valid=Object.keys(p).length===0;
+  else if(op==='cropProfileImage') valid=profileImage(p) && object(p.crop) && ['x','y','size'].every(key=>typeof (p.crop as Record<string,unknown>)[key]==='number' && Number.isFinite((p.crop as Record<string,unknown>)[key]))
     && Number(p.crop.x)>=0 && Number(p.crop.y)>=0 && Number(p.crop.size)>0 && (p.outputSize===undefined||Number.isInteger(p.outputSize)&&Number(p.outputSize)>=1&&Number(p.outputSize)<=2048);
   else if(op==='parsePromptSections') valid=text(p.content,2*1024*1024,true);
   else if(op==='serializePromptSections') valid=object(p.sections)&&['description','personality','scenario','examples','other'].every(key=>text((p.sections as Record<string,unknown>)[key],2*1024*1024,true));

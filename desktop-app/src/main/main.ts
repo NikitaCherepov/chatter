@@ -139,8 +139,9 @@ protocol.registerSchemesAsPrivileged([
 const interactivePreviews = new InteractivePreviews();
 const attachmentPicker = new AttachmentPicker();
 const attachmentPickerOwners = new Set<number>();
-ipcMain.handle('composer:pick-files', async event => {
+ipcMain.handle('composer:pick-files', async (event, kind?: 'profile-image') => {
   assertTrustedIpcSender(event);
+  if (kind !== undefined && kind !== 'profile-image') throw new Error('attachment_picker_invalid');
   const owner = BrowserWindow.fromWebContents(event.sender);
   const ownerId = event.sender.id;
   if (!attachmentPickerOwners.has(ownerId)) {
@@ -148,7 +149,9 @@ ipcMain.handle('composer:pick-files', async event => {
     event.sender.once('destroyed', () => { attachmentPicker.release(ownerId); attachmentPickerOwners.delete(ownerId); });
   }
   return attachmentPicker.choose(event.sender.id, async () => {
-    const options: OpenDialogOptions = { properties: ['openFile', 'multiSelections'] };
+    const options: OpenDialogOptions = kind === 'profile-image'
+      ? { properties: ['openFile'], filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif'] }] }
+      : { properties: ['openFile', 'multiSelections'] };
     const result = owner ? await dialog.showOpenDialog(owner, options) : await dialog.showOpenDialog(options);
     return result.canceled ? [] : result.filePaths;
   });

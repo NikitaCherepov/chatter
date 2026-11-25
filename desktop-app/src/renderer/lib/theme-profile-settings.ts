@@ -151,6 +151,42 @@ export function createThemeProfileRequests(context: Context): Record<string, Ada
     },
   });
   const shared = async (operation: string, params: Record<string, unknown>, guard: () => void) => {
+    if (operation === 'chooseProfileImage') {
+      const selection = await window.electronAPI.pickAttachmentFiles('profile-image');
+      try {
+        guard();
+        if (selection.canceled || !selection.files.length) return { result: null };
+        const file = selection.files[0];
+        if (!selection.selectionId || file.size <= 0 || file.size > 10 * 1024 * 1024)
+          throw new Error('profile_image_invalid');
+        const bytes = await window.electronAPI.readPickedAttachment(
+          selection.selectionId,
+          file.index,
+        );
+        guard();
+        const header = new Uint8Array(bytes, 0, Math.min(bytes.byteLength, 12));
+        const starts = (signature: number[]) =>
+          signature.every((byte, index) => header[index] === byte);
+        const mimeType = starts([137, 80, 78, 71, 13, 10, 26, 10])
+          ? 'image/png'
+          : starts([255, 216, 255])
+            ? 'image/jpeg'
+            : starts([71, 73, 70, 56]) && [55, 57].includes(header[4]) && header[5] === 97
+              ? 'image/gif'
+              : starts([82, 73, 70, 70]) &&
+                  [87, 69, 66, 80].every((byte, index) => header[index + 8] === byte)
+                ? 'image/webp'
+                : null;
+        if (!mimeType || bytes.byteLength > 10 * 1024 * 1024)
+          throw new Error('profile_image_invalid');
+        const dataUrl = await fileToBase64(new Blob([bytes], { type: mimeType }));
+        guard();
+        return { result: { base64: dataUrl.slice(dataUrl.indexOf(',') + 1), mimeType } };
+      } finally {
+        if (selection.selectionId)
+          await window.electronAPI.releasePickedAttachments(selection.selectionId).catch(() => {});
+      }
+    }
     if (operation === 'listGenerationModels') {
       const data = await api.getModels();
       guard();

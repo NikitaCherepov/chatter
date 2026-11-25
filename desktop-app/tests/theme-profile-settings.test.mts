@@ -155,6 +155,10 @@ const api: any = {
 };
 let imageMode: 'ok' | 'bad-type' | 'large' = 'ok',
   imageFetches = 0;
+let pickerMode = 'ok',
+  pickerReads = 0,
+  pickerReleases = 0;
+const pickedImage = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 0]);
 const module: any = { exports: {} };
 vm.runInNewContext(
   ts.transpileModule(
@@ -170,7 +174,38 @@ vm.runInNewContext(
     exports: module.exports,
     Blob,
     Event,
-    window: { dispatchEvent: (event: Event) => events.push(event.type) },
+    window: {
+      dispatchEvent: (event: Event) => events.push(event.type),
+      electronAPI: {
+        pickAttachmentFiles: async (kind: string) => {
+          assert.equal(kind, 'profile-image');
+          return pickerMode === 'cancel'
+            ? { canceled: true, files: [] }
+            : {
+                canceled: false,
+                selectionId: 'picked',
+                files: [
+                  {
+                    index: 0,
+                    name: 'avatar.png',
+                    size: pickerMode === 'large' ? 10 * 1024 * 1024 + 1 : pickedImage.length,
+                  },
+                ],
+              };
+        },
+        readPickedAttachment: async (id: string, index: number) => {
+          assert.equal(id, 'picked');
+          assert.equal(index, 0);
+          pickerReads++;
+          if (pickerMode === 'error') throw new Error('attachment_file_changed');
+          return pickerMode === 'bad-type' ? new Uint8Array([1, 2, 3]).buffer : pickedImage.buffer;
+        },
+        releasePickedAttachments: async (id: string) => {
+          assert.equal(id, 'picked');
+          pickerReleases++;
+        },
+      },
+    },
     fetch: async (url: string, options: any) => {
       imageFetches++;
       assert.equal(url, 'https://fixture.invalid/api/v1/images/avatar.png?token=private');
@@ -255,6 +290,33 @@ const request = async (sectionId: string, operation: string, params: any = {}) =
   }
 };
 await open('prompt');
+assert.equal(
+  settingsOperations('prompt', t).find((op: any) => op.id === 'chooseProfileImage').requiresGesture,
+  true,
+);
+assert.equal(
+  parseSettingsRequest(raw('prompt', 'chooseProfileImage', { path: 'arbitrary.png' })),
+  null,
+);
+const writesBeforePick = calls.length;
+const picked = await request('prompt', 'chooseProfileImage');
+assert.equal(picked.mimeType, 'image/png');
+assert.equal(picked.base64, Buffer.from(pickedImage).toString('base64'));
+assert.equal(calls.length, writesBeforePick, 'choosing an avatar never uploads or saves');
+assert.equal(pickerReleases, 1);
+pickerMode = 'cancel';
+assert.equal(await request('prompt', 'chooseProfileImage'), null);
+assert.equal(pickerReleases, 1);
+pickerMode = 'large';
+const readsBeforeLarge = pickerReads;
+await assert.rejects(request('prompt', 'chooseProfileImage'), /profile_image_invalid/);
+assert.equal(pickerReads, readsBeforeLarge, 'oversized selections are rejected before reading');
+pickerMode = 'bad-type';
+await assert.rejects(request('prompt', 'chooseProfileImage'), /profile_image_invalid/);
+pickerMode = 'error';
+await assert.rejects(request('prompt', 'chooseProfileImage'), /attachment_file_changed/);
+assert.equal(pickerReleases, 4, 'all file tickets are released, including errors');
+pickerMode = 'ok';
 await assert.rejects(
   request('prompt', 'updatePrompt', { id: -1001, name: 'x', content: 'y' }),
   /settings_read_required/,

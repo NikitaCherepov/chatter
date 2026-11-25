@@ -69,7 +69,7 @@ export const apiFetch=async(url,options={})=>{
 ${credentialWriters}
 ${promptWriters}
 ${characterChatWriter}
-export const setPersonaImage=async()=>({ok:true});export const deletePersonaImage=async()=>({ok:true});export const resolveImageUrl=value=>value;
+export const setPersonaImage=async()=>{window.avatarUploads=(window.avatarUploads||0)+1;return {ok:true};};export const deletePersonaImage=async()=>({ok:true});export const resolveImageUrl=value=>value;
 export const getModels=async()=>({models:[{id:'smart',name:'Smart',reasoning_levels:['high']},{id:'simple',name:'Simple',reasoning_levels:[]}],preferred_model:'smart',auto_reasoning_levels:['high']});export const getModelSettings=async()=>({model_settings:{}});export const getSubagentModel=async()=>({subagent_model:window.agentModel});export const getSubagentReasoningLevel=async()=>({reasoning_level:window.agentReasoning});export const getLinkStatus=async()=>({});export const getPrompts=async()=>({prompts:[]});
 export const getContextTokenLimit=async()=>({max_context_tokens:window.contextTokens,max_context_tokens_limit:30000});
 export const getAttachmentTokenLimit=async()=>({attachment_max_tokens:Math.min(window.attachmentTokens,Math.floor(window.contextTokens*.9)),attachment_max_tokens_limit:Math.floor(window.contextTokens*.9),max_context_tokens:window.contextTokens});
@@ -121,10 +121,11 @@ function App(){const [user,setUser]=useState({id:1,name:'fixture',role:'user',is
 }
 initializeI18n().then(()=>{createRoot(document.getElementById('root')).render(<React.StrictMode><QueryClientProvider client={client}><I18nextProvider i18n={i18n}><App/></I18nextProvider></QueryClientProvider></React.StrictMode>);});
 `;
-const preload = "const {contextBridge,ipcRenderer}=require('electron');let browser={concurrency:2,searchEnabled:true,readerEnabled:true};contextBridge.exposeInMainWorld('electronAPI',{getSystemLanguages:async()=>['en'],listPiperVoices:async()=>[{id:'ruslan',name:'Ruslan',lang:'ru'}],ttsGenerate:()=>ipcRenderer.invoke('fixture:tts'),localAppearance:payload=>ipcRenderer.invoke('fixture:appearance',payload),saveFile:async()=>({canceled:true}),replySettings:(id,requestId,result,error)=>ipcRenderer.invoke('fixture:settings-reply',id,requestId,result,error),getDesktopBrowserSettings:async()=>browser,setDesktopBrowserSettings:async value=>{browser=value;return browser;},getZoomLevel:()=>ipcRenderer.invoke('fixture:zoom'),setZoomLevel:value=>ipcRenderer.invoke('fixture:zoom',value),publishSettings:state=>ipcRenderer.send('fixture:settings',state)});";
+const preload = "const {contextBridge,ipcRenderer}=require('electron');let browser={concurrency:2,searchEnabled:true,readerEnabled:true};contextBridge.exposeInMainWorld('electronAPI',{pickAttachmentFiles:kind=>ipcRenderer.invoke('composer:pick-files',kind),readPickedAttachment:(id,index)=>ipcRenderer.invoke('composer:read-picked-file',id,index),releasePickedAttachments:id=>ipcRenderer.invoke('composer:release-picked-files',id),getSystemLanguages:async()=>['en'],listPiperVoices:async()=>[{id:'ruslan',name:'Ruslan',lang:'ru'}],ttsGenerate:()=>ipcRenderer.invoke('fixture:tts'),localAppearance:payload=>ipcRenderer.invoke('fixture:appearance',payload),saveFile:async()=>({canceled:true}),replySettings:(id,requestId,result,error)=>ipcRenderer.invoke('fixture:settings-reply',id,requestId,result,error),getDesktopBrowserSettings:async()=>browser,setDesktopBrowserSettings:async value=>{browser=value;return browser;},getZoomLevel:()=>ipcRenderer.invoke('fixture:zoom'),setZoomLevel:value=>ipcRenderer.invoke('fixture:zoom',value),publishSettings:state=>ipcRenderer.send('fixture:settings',state)});";
 const electron = String.raw`
 const assert=require('node:assert/strict'),path=require('node:path');
 const {app,BrowserWindow,protocol,ipcMain}=require('electron');
+const {AttachmentPicker}=require(process.env.CHATTER_DESKTOP+'/dist/main/attachment-picker.js');
 const {InteractivePreviews}=require(process.env.CHATTER_DESKTOP+'/dist/main/interactive-preview.js');
 const {INTERACTIVE_SCHEME}=require(process.env.CHATTER_DESKTOP+'/dist/main/interactive-document.js');
 const {THEME_SETTINGS_EXAMPLES}=require(process.env.CHATTER_DESKTOP+'/dist/main/theme-documentation.js');
@@ -134,6 +135,11 @@ app.setPath('userData',path.join(__dirname,'user-data'));let host,manager,id,the
 let previewRequests=0,finishPreview;
 const fixtureProfile=newAppearance('fixture-saved'),drafts={};
 const themeSnapshot={appearance:{version:1,revision:1,activeId:null,profiles:[fixtureProfile]},workspace:{directory:__dirname,draftsDirectory:__dirname+'/.drafts',documentation:__dirname+'/THEMES.md',activeId:null,profiles:[],drafts:[],migrationComplete:true,migrationErrors:[],issues:[]}};
+const avatarPicker=new AttachmentPicker();let avatarPickerMode='ok',avatarPickerCalls=0;
+const avatarPath=path.join(__dirname,'picked-avatar.png');require('node:fs').writeFileSync(avatarPath,Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aV1sAAAAASUVORK5CYII=','base64'));
+ipcMain.handle('composer:pick-files',(event,kind)=>{assert.equal(kind,'profile-image');avatarPickerCalls++;return avatarPicker.choose(event.sender.id,async()=>avatarPickerMode==='cancel'?[]:[avatarPath]);});
+ipcMain.handle('composer:read-picked-file',(event,id,index)=>avatarPicker.read(event.sender.id,id,index));
+ipcMain.handle('composer:release-picked-files',(event,id)=>avatarPicker.release(event.sender.id,id));
 const deadline=setTimeout(()=>{console.error('settings fixture timeout',mainError);app.exit(1)},35000);
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 const until=async predicate=>{for(let n=0;n<250;n++){if(mainError)throw mainError;if(await predicate())return;await sleep(15);}throw new Error('Settings UI condition timed out');};
@@ -161,7 +167,7 @@ app.whenReady().then(async()=>{
   'App.tsx':"import React from 'react';import Section from './components/Section';import AccountSecurity from './components/AccountSecurity';import SdkProbe from './components/SdkProbe';import {useChatterState} from '@chatter/ui';export default function App(){const state=useChatterState();const [section,setSection]=React.useState('');const [sdk,setSdk]=React.useState(false);window.sdkToggle=setSdk;return <main>{['app','voice','account','limits','agents','memory','browser','intuition','prompt','personas'].map(id=><button key={id} id={id==='app'?'open':'open-'+id} onClick={()=>{window.chatter.openSettingsSection(id);setSection(id);}}>{id}</button>)}<input id='search' onChange={event=>window.chatter.searchSettings(event.target.value)}/><output id='search-result'>{state?.settings?.results[0]?.fieldId}</output>{section&&<Section key={section} sectionId={section}/>}{section==='account'&&<AccountSecurity/>}{sdk&&<SdkProbe/>}</main>}",
   'components/Field.tsx':THEME_SETTINGS_EXAMPLES['Field.tsx'],'components/Section.tsx':THEME_SETTINGS_EXAMPLES['Section.tsx'],
   'components/AccountSecurity.tsx':THEME_SETTINGS_EXAMPLES['AccountSecurity.tsx'],
-  'components/SdkProbe.tsx':"import React from 'react';import {usePersonaEditor,useIntuitionEditor,useSettingsSection} from '@chatter/ui';export default function SdkProbe(){const a=usePersonaEditor(1),b=usePersonaEditor(1),i=useIntuitionEditor(),voice=useSettingsSection('voice'),section=useSettingsSection('personas');window.sdkReload=section.reload;return <section id='sdk-probe'><input id='sdk-name-a' {...a.bind('name')}/><input id='sdk-name-b' {...b.bind('name')}/><button id='sdk-save-persona' disabled={!a.canSave} onClick={()=>void a.save()}>Save persona</button><input id='sdk-history' type='number' {...i.bind('historyMessages')}/><button id='sdk-save-intuition' disabled={!i.canSave} onClick={()=>void i.save()}>Save intuition</button><output id='sdk-error'>{a.error||i.error}</output><output id='sdk-can-reload'>{String(section.canReload)}</output><output id='sdk-voice'>{voice.ready?'ready':'loading'}</output></section>}",
+  'components/SdkProbe.tsx':"import React from 'react';import {usePersonaEditor,useIntuitionEditor,useSettingsSection,useProfileAvatar} from '@chatter/ui';export default function SdkProbe(){const avatar=useProfileAvatar('personas',1);const a=usePersonaEditor(1),b=usePersonaEditor(1),i=useIntuitionEditor(),voice=useSettingsSection('voice'),section=useSettingsSection('personas');window.sdkReload=section.reload;return <section id='sdk-probe'><button id='sdk-choose-avatar' disabled={avatar.loading||avatar.busy} onClick={()=>void avatar.choose()}>Choose avatar</button><button id='sdk-save-avatar' disabled={!avatar.canSave||avatar.busy} onClick={()=>void avatar.save()}>Save avatar</button><button id='sdk-discard-avatar' onClick={avatar.discard}>Discard avatar</button><output id='sdk-avatar-source'>{avatar.source}</output><output id='sdk-avatar-error'>{avatar.error}</output><input id='sdk-name-a' {...a.bind('name')}/><input id='sdk-name-b' {...b.bind('name')}/><button id='sdk-save-persona' disabled={!a.canSave} onClick={()=>void a.save()}>Save persona</button><input id='sdk-history' type='number' {...i.bind('historyMessages')}/><button id='sdk-save-intuition' disabled={!i.canSave} onClick={()=>void i.save()}>Save intuition</button><output id='sdk-error'>{a.error||i.error}</output><output id='sdk-can-reload'>{String(section.canReload)}</output><output id='sdk-voice'>{voice.ready?'ready':'loading'}</output></section>}",
  }}});
  theme=host.contentView.children.at(-1).children[0].webContents;
  theme.on('console-message',(_event,level,message)=>{if(level===3)console.log('theme:',message);});push();
@@ -302,6 +308,20 @@ app.whenReady().then(async()=>{
  const personaReads=await host.webContents.executeJavaScript('window.personaReads');await js('window.sdkToggle(true)');
  await until(async()=>await js('!!document.getElementById("sdk-name-a")&&!document.getElementById("sdk-name-a").disabled&&document.getElementById("sdk-voice").textContent==="ready"'));
  assert.equal(await host.webContents.executeJavaScript('window.personaReads'),personaReads+1,'two consumers share one library fetch');
+ await until(async()=>await js('!document.getElementById("sdk-choose-avatar").disabled'));
+ await sleep(5500); // Chromium keeps the preceding click's transient activation for several seconds.
+ assert.equal(await js('navigator.userActivation.isActive'),false);
+ await assert.rejects(()=>js('window.chatter.requestSettings("personas","chooseProfileImage",{})'),/settings_request_unavailable/,'picker requires a genuine gesture');
+ assert.equal(avatarPickerCalls,0);
+ await click('sdk-choose-avatar');await until(async()=>await js('document.getElementById("sdk-avatar-source").textContent.startsWith("data:image/png;base64,")'));
+ assert.equal(avatarPickerCalls,1);assert.equal(await host.webContents.executeJavaScript('window.avatarUploads||0'),0,'choosing does not upload');
+ assert.equal(await js('document.getElementById("sdk-save-avatar").disabled'),false);
+ const sourceBeforeCancel=await js('document.getElementById("sdk-avatar-source").textContent');
+ avatarPickerMode='cancel';await click('sdk-choose-avatar');await until(async()=>!await js('document.getElementById("sdk-choose-avatar").disabled'));
+ assert.equal(avatarPickerCalls,2);assert.equal(await js('document.getElementById("sdk-avatar-source").textContent'),sourceBeforeCancel,'cancel keeps chosen draft');
+ assert.equal(await js('document.getElementById("sdk-avatar-error").textContent'),'');
+ await click('sdk-save-avatar');await until(async()=>await host.webContents.executeJavaScript('window.avatarUploads')===1);
+ await until(async()=>await js('document.getElementById("sdk-save-avatar").disabled'));
  await input('sdk-name-a','Unsaved SDK draft');await until(async()=>await js('document.getElementById("sdk-name-b").value')==='Unsaved SDK draft');
  assert.equal(await js('window.sdkReload()'),false,'a generic section reload must not erase structured drafts');
  await until(async()=>await js('document.getElementById("sdk-can-reload").textContent')==='false');
@@ -323,7 +343,7 @@ app.whenReady().then(async()=>{
  await host.webContents.executeJavaScript('window.switchSettingsAccount(2)');await until(()=>settings.editor===null);assert.equal(await host.webContents.executeJavaScript('window.ui[2].dice_roll_enabled'),false);
  assert.equal(await js('window.sdkReload()'),false,'a handler retained from an old account cannot reload the new account session');
  assert.equal(await js('[typeof electronAPI,typeof require].join(",")'),'undefined,undefined');
- console.log('PASS: ten isolated sections, headless SDK shared drafts and independent sessions, hidden-form restoration, protected reload/stale account handlers, numeric validation, native saves, credentials/reauth, surveys, real image cropping and legacy bridge compatibility');
+ console.log('PASS: ten isolated sections, headless SDK shared drafts and independent sessions, hidden-form restoration, protected reload/stale account handlers, numeric validation, native saves, credentials/reauth, surveys, host image selection with gesture checks, cancellation and explicit upload, real image cropping and legacy bridge compatibility');
 }).catch(error=>{console.error(error);process.exitCode=1;}).finally(async()=>{finishPreview?.(null);await sleep(10);clearTimeout(deadline);manager?.destroy();host?.destroy();app.exit(process.exitCode??0);});
 `;
 try {

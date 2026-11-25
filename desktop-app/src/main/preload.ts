@@ -6,7 +6,7 @@ import type { AppearanceShellEvent, AppearanceShellState, AppearanceImageRequest
 
 contextBridge.exposeInMainWorld('electronAPI', {
   writeClipboardText: (text: string) => ipcRenderer.invoke('clipboard:write-text', text),
-  pickAttachmentFiles: () => ipcRenderer.invoke('composer:pick-files'),
+  pickAttachmentFiles: (kind?: 'profile-image') => ipcRenderer.invoke('composer:pick-files', kind),
   readPickedAttachment: (id: string, index: number) => ipcRenderer.invoke('composer:read-picked-file', id, index),
   releasePickedAttachments: (id: string) => ipcRenderer.invoke('composer:release-picked-files', id),
   interactiveCreate: (input: InteractiveInput) => ipcRenderer.invoke('interactive-preview:create', input),

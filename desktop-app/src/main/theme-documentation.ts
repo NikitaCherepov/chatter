@@ -126,12 +126,27 @@ can finish on their original server after closing; a stale result never updates 
   native answer validator/generator; apply is the final explicit instruction change. Failed AI
   stages reload stored survey state without discarding local text. Read settings-instructions.md
   for context sharing, quota, immutable answers and restoration semantics. No hidden consent.
-- useProfileAvatar(section,id): source/pick(file)/crop(rect,outputSize?)/save/remove/discard.
+- useProfileAvatar(section,id): source/choose()/pick(file)/crop(rect,outputSize?)/save/remove/discard.
+  Call choose from a user click to open the host image picker. Cancel keeps the draft unchanged.
   A picker and cropper can have any markup. Picking/cropping does not upload; save is explicit.
 
 Examples/settings are copyable markup patterns using these controllers. They do not automatically
 mount in your theme and are not a feature checklist. A persona profile editor excludes its separate
 instruction text so saving a biography cannot overwrite an instruction editor's newer work.
+
+## Operations are not UI buttons
+
+useSettingsSection(id).requests (also editor.requests in host state) is the available API operation
+catalog, not a menu or a list of missing controls. SDK controllers already use these operations
+internally. Do not render requests automatically or add fallback buttons for operations that are
+absent from a manual "handled" list. Their labels alone do not describe a complete workflow.
+For example, cropProfileImage needs an image and crop geometry; getPersonaInstructions needs a
+persona id. Use the corresponding SDK controller or a documented typed call with valid inputs
+inside your chosen workflow. Do not execute operations to discover what they do or send
+confirmed:true without obtaining the user's confirmation.
+editor.actions is different: it describes host-provided UI commands invoked through the section's
+run(actionId). useSettingsAction(section,operation) wraps a typed API operation; its name does not
+turn every requests entry into a standalone UI command.
 
 ## Generic building blocks
 
@@ -231,8 +246,14 @@ an existing id. getPromptImageSource/getPersonaImageSource({id}) returns {source
 Use that source in any custom viewer/crop editor; raw image_url/imageUrl is metadata, not permission
 for a sandbox network fetch. Failed reads reject instead of pretending the avatar is absent.
 
-Build a file input or drag/drop picker in the theme. Read only user-selected PNG/JPEG/WebP/GIF,
-up to 10 MiB decoded, as raw base64 (remove FileReader's data-URL prefix). cropProfileImage accepts
+For React use useProfileAvatar(section,id).choose() from a user click after loading. For HTML or
+custom workflows use requestSettings(section,'chooseProfileImage',{}): the host opens its system
+image chooser and returns {base64,mimeType}, or null on cancel. No file path is exposed. Ordinary
+input type="file", input.click(), showPicker and filesystem picker APIs are blocked in the isolated
+theme; do not use them to open a picker. pick(file) remains available for an already supplied File,
+such as a drop. Render avatar.error and disable choose while avatar.loading or avatar.busy.
+Only user-selected PNG/JPEG/WebP/GIF up to 10 MiB are accepted. Choosing never uploads or saves.
+cropProfileImage accepts
 {base64,mimeType,crop:{x,y,size},outputSize?} in either the prompt or personas section. Coordinates
 are pixels in the decoded image; the square must fit inside it. outputSize defaults to 512,
 integer 1..2048. The existing server image budget of 60 million source pixels also applies.
@@ -390,6 +411,9 @@ settings. visible controls presentation (for example, schedule times); validatio
 draft fields. Scalar values are string/number/boolean. Numeric/time drafts may temporarily be
 invalid while typing; their errors prevent saving. The opaque editor id is handled by the bridge;
 authors do not read or increment revisions.
+
+requests is an API operation catalog, not buttons to render. See docs/settings-sdk.md,
+"Operations are not UI buttons", for its distinction from actions and SDK controller workflows.
 
 setSettingValue(sectionId,fieldId,value) changes only the draft. saveSettingsSection(sectionId)
 requires a real user event and applies only changed valid fields through the same writers as the

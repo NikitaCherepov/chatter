@@ -733,6 +733,14 @@ export function useProfileAvatar(section: 'prompt' | 'personas', id: number) {
     (draft) => (draft.image ? {} : { image: 'profile_image_invalid' }),
   );
   const task = useSettingsTask<SettingsProfileImage | null>(section, 'avatar-action:' + id);
+  const choose = async () => {
+    const result = await task.run('choose-file', () => {
+      if (!form.draft) throw new Error('settings_read_required');
+      return api.chooseProfileImage();
+    });
+    if (result.ok && result.value) form.set('image', result.value);
+    return result;
+  };
   const pick = async (file: File) => {
     const result = await task.run(
       'read-file',
@@ -794,6 +802,7 @@ export function useProfileAvatar(section: 'prompt' | 'personas', id: number) {
     source: form.draft?.image
       ? 'data:' + form.draft.image.mimeType + ';base64,' + form.draft.image.base64
       : null,
+    choose,
     pick,
     crop,
     remove,
