@@ -1,6 +1,11 @@
 import { APPEARANCE_LABEL_KEYS } from './appearance-shell-types';
-import { THEME_README, THEME_GUIDES, THEME_SETTINGS_EXAMPLES } from './theme-documentation';
+import { THEME_README, THEME_GUIDES, THEME_SETTINGS_EXAMPLES, THEME_CHAT_SDK_EXAMPLES } from './theme-documentation';
 import {SETTINGS_SDK_TYPES,SETTINGS_STORE_TYPES,SETTINGS_SDK_UI_EXPORTS} from './theme-settings-sdk-declarations';
+import {CHAT_SDK_TYPES,CHAT_STORE_TYPES,CHAT_SDK_UI_EXPORTS} from './theme-chat-sdk-declarations';
+import {EFFECTS_SDK_TYPES,EFFECTS_CONTRACT_TYPES} from './theme-effects-sdk-declarations';
+import {THEME_CHAT_STARTER} from './theme-chat-sdk-examples';
+import {THEME_EFFECTS_EXAMPLES} from './theme-effects-documentation';
+import {THEME_DND_EXAMPLES} from './theme-dnd-documentation';
 import { SETTINGS_REQUEST_DECLARATIONS } from './theme-settings-request-documentation';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -15,7 +20,7 @@ import {
   type AppearanceProfile,
   type AppearanceSettings,
 } from './appearance-schema';
-import { isAppearanceFilePath, APPEARANCE_PROJECT_LIMITS } from './appearance-project';
+import { isAppearanceFilePath, APPEARANCE_PROJECT_LIMITS, APPEARANCE_ASSET_LIMITS, APPEARANCE_ASSET_MIME, isAppearanceAssetPath, isAppearanceAssetURL } from './appearance-project';
 
 export type AppearanceWorkspace = {
   directory: string;
@@ -233,6 +238,21 @@ export class LocalAppearanceStore {
       throw new Error('appearance_image_invalid');
     return data;
   }
+  readAsset(url:string) {
+    if(!isAppearanceAssetURL(url)||new URL(url).hostname!==this.assetHost)throw new Error('appearance_asset_unavailable');
+    const name=new URL(url).pathname.slice(1),target=this.location('.assets/'+name),stat=fs.lstatSync(target);
+    if(!stat.isFile()||stat.isSymbolicLink()||stat.size>APPEARANCE_ASSET_LIMITS.fileBytes)throw new Error('appearance_asset_invalid');
+    const data=fs.readFileSync(target);
+    if(createHash('sha256').update(data).digest('hex')!==name.split('.')[0])throw new Error('appearance_asset_invalid');
+    return {data,mimeType:APPEARANCE_ASSET_MIME[name.split('.').at(-1)!]};
+  }
+  private storeAsset(data:Buffer,name:string) {
+    if(!isAppearanceAssetPath(name)||!data.length||data.length>APPEARANCE_ASSET_LIMITS.fileBytes)throw new Error('appearance_asset_invalid');
+    const file=createHash('sha256').update(data).digest('hex')+'.'+name.split('.').at(-1);
+    const target=this.location('.assets/'+file);
+    if(!fs.existsSync(target))fs.writeFileSync(target,data);
+    return 'chatter-theme://'+this.assetHost+'/'+file;
+  }
   private index(): Index {
     const target = this.location('.state.json');
     if (!fs.existsSync(target))
@@ -317,6 +337,7 @@ export class LocalAppearanceStore {
       )
         throw new Error('appearance_invalid');
       const files: Record<string, string> = {};
+      const assets:Record<string,string>={};let assetBytes=0;
       let visited = 0,
         sourceLength = 0;
       const walk = (folder: string) => {
@@ -330,6 +351,10 @@ export class LocalAppearanceStore {
           if (item.isDirectory()) {
             if (name.split('/').length > 8) throw new Error('appearance_invalid_path');
             walk(name);
+          } else if (isAppearanceAssetPath(name)) {
+            const stat=fs.statSync(this.location(directory+'/'+name));assetBytes+=stat.size;
+            if(Object.keys(assets).length>=APPEARANCE_ASSET_LIMITS.files||stat.size>APPEARANCE_ASSET_LIMITS.fileBytes||assetBytes>APPEARANCE_ASSET_LIMITS.totalBytes)throw new Error('appearance_asset_limit');
+            assets[name]=this.storeAsset(fs.readFileSync(this.location(directory+'/'+name)),name);
           } else if (
             name !== 'theme.json' &&
             name !== 'tsconfig.json' &&
@@ -367,7 +392,7 @@ export class LocalAppearanceStore {
         }
       };
       walk('');
-      manifest.shell = { ...shell, files };
+      manifest.shell = { ...shell, files, ...(Object.keys(assets).length?{assets}:{}) };
     }
     return parseAppearanceProfile(manifest);
   }
@@ -392,6 +417,10 @@ export class LocalAppearanceStore {
       manifest.shell = { version, language, scope, entry: profile.shell.entry };
       for (const [file, source] of Object.entries(profile.shell.files))
         this.write(directory + '/' + file, source);
+      for(const [file,url] of Object.entries(profile.shell.assets??{})) {
+        const asset=this.readAsset(url),target=this.location(directory+'/'+file);
+        fs.mkdirSync(path.dirname(target),{recursive:true});fs.writeFileSync(target,asset.data);
+      }
     }
     this.write(directory + '/theme.json', JSON.stringify(manifest, null, 2) + '\n');
     if (profile.shell?.language === 'tsx') {
@@ -399,6 +428,10 @@ export class LocalAppearanceStore {
       this.write(directory + '/chatter-ui.d.ts', appearanceUIDeclarations);
       this.write(directory+'/settings-sdk.d.ts',SETTINGS_SDK_TYPES);
       this.write(directory+'/settings-store.d.ts',SETTINGS_STORE_TYPES);
+      this.write(directory+'/chat-sdk.d.ts',CHAT_SDK_TYPES);
+      this.write(directory+'/chat-store.d.ts',CHAT_STORE_TYPES);
+      this.write(directory+'/effects-sdk.d.ts',EFFECTS_SDK_TYPES);
+      this.write(directory+'/theme-effects-types.d.ts',EFFECTS_CONTRACT_TYPES);
       this.write(
         directory + '/tsconfig.json',
         JSON.stringify(
@@ -411,7 +444,8 @@ export class LocalAppearanceStore {
               noEmit: true,
               allowJs: true,
               baseUrl: '.',
-              paths: { '@/*': ['./*'] },
+              paths: { '@/*': ['./*'], 'three':[path.relative(this.location(directory),this.location('types/node_modules/@types/three/build/three.module.d.ts')).split('\\').join('/')], '*':[path.relative(this.location(directory),this.location('types/node_modules')).split('\\').join('/')+'/*',path.relative(this.location(directory),this.location('types/node_modules/@types')).split('\\').join('/')+'/*'] },
+              skipLibCheck:true,
               lib: ['ES2020', 'DOM'],
             },
             include: ['**/*.ts', '**/*.tsx', '**/*.jsx'],
@@ -644,7 +678,7 @@ export class LocalAppearanceStore {
         const target = this.location(record.current + '/' + file),
           size = fs.statSync(target).size;
         total += size;
-        if (total > 12 * 1024 * 1024 || Object.keys(files).length >= 512)
+        if (total > APPEARANCE_ASSET_LIMITS.archiveBytes || Object.keys(files).length >= 1024)
           throw new Error('appearance_limit');
         files[file] = fs.readFileSync(target);
       }
@@ -653,7 +687,7 @@ export class LocalAppearanceStore {
     return zipSync(files, { level: 6 });
   }
   importBundle(data: Uint8Array): AppearanceProfile {
-    if (!(data instanceof Uint8Array) || data.length > 12 * 1024 * 1024)
+    if (!(data instanceof Uint8Array) || data.length > APPEARANCE_ASSET_LIMITS.archiveBytes)
       throw new Error('appearance_invalid');
     let total = 0,
       count = 0;
@@ -663,7 +697,7 @@ export class LocalAppearanceStore {
         if (
           ++count > 1024 ||
           !Number.isSafeInteger(item.originalSize) ||
-          total > 12 * 1024 * 1024 ||
+          total > APPEARANCE_ASSET_LIMITS.archiveBytes ||
           item.name
             .split('/')
             .some((part) => ['__proto__', 'constructor', 'prototype'].includes(part)) ||
@@ -708,7 +742,7 @@ export class LocalAppearanceStore {
     const profile = current ? this.readProject(current.current) : newAppearance(id);
     if (project && !current)
       profile.shell = structuredClone(
-        APPEARANCE_CAPABILITIES.shell.project.template,
+        { ...APPEARANCE_CAPABILITIES.shell.project.template, files: THEME_CHAT_STARTER },
       ) as AppearanceProfile['shell'];
     this.ensureDraft(profile);
     return this.load();
@@ -801,17 +835,21 @@ export class LocalAppearanceStore {
     return this.read('THEMES.md', 256_000);
   }
   private writeDocumentation() {
+    this.installLibraryTypes();
     this.write('THEMES.md', THEME_README);
     this.ensureDirectory('docs');
     for (const [name, text] of Object.entries(THEME_GUIDES)) this.write('docs/' + name, text);
     for (const [name, text] of Object.entries(THEME_SETTINGS_EXAMPLES)) this.write('examples/settings/' + name, text);
+    for (const [name, text] of Object.entries(THEME_CHAT_SDK_EXAMPLES)) this.write('examples/chat/' + name, text);
+    for(const [name,text] of Object.entries(THEME_EFFECTS_EXAMPLES))this.write('examples/effects/'+name,text);
+    for(const [name,text] of Object.entries(THEME_DND_EXAMPLES))this.write('examples/dnd/'+name,text);
     const { shell: _shell, template: _template, paletteExample: _paletteExample, ...appearance } = APPEARANCE_CAPABILITIES;
     const { template: _materialTemplate, ...materials } = appearance.materials;
     this.write('docs/appearance.json', JSON.stringify({ ...appearance, materials }, null, 2) + '\n');
     this.writeProject('templates/component', {
       ...newAppearance('my-theme'),
       readme: '# My theme\n\nDescribe the visual idea, component structure, supported features and known limitations here.\n\nThe entry and appearance settings are in theme.json. Read the workspace THEMES.md for the app API.\n',
-      shell: APPEARANCE_CAPABILITIES.shell.project.template as AppearanceProfile['shell'],
+      shell: { ...APPEARANCE_CAPABILITIES.shell.project.template, files: THEME_CHAT_STARTER } as AppearanceProfile['shell'],
     });
     this.writeProject('templates/html', {
       ...newAppearance('my-theme'),
@@ -823,6 +861,23 @@ export class LocalAppearanceStore {
     this.write('chatter-ui.d.ts', appearanceUIDeclarations);
     this.write('settings-sdk.d.ts',SETTINGS_SDK_TYPES);
     this.write('settings-store.d.ts',SETTINGS_STORE_TYPES);
+    this.write('chat-sdk.d.ts',CHAT_SDK_TYPES);
+    this.write('chat-store.d.ts',CHAT_STORE_TYPES);
+    this.write('effects-sdk.d.ts',EFFECTS_SDK_TYPES);
+    this.write('theme-effects-types.d.ts',EFFECTS_CONTRACT_TYPES);
+  }
+  private installLibraryTypes(){
+    const source=[path.join(__dirname,'../theme-libraries'),path.join(__dirname,'../../dist/theme-libraries')].find(folder=>fs.existsSync(path.join(folder,'types.zip')));
+    if(!source)return; // Source-only tests do not need optional build artifacts.
+    const data=fs.readFileSync(path.join(source,'types.zip')),digest=createHash('sha256').update(data).digest('hex');
+    if(!fs.existsSync(this.location('types/.version'))||this.read('types/.version')!==digest){
+      for(const [name,bytes] of Object.entries(unzipSync(data))){
+        if(name.includes('\\')||name.split('/').some(part=>!part||part==='..'||part==='.'||part.startsWith('.')))throw new Error('appearance_invalid_library_types');
+        const target='types/node_modules/'+name;this.ensureDirectory(path.posix.dirname(target));fs.writeFileSync(this.location(target),bytes);
+      }
+      this.write('types/.version',digest);
+    }
+    this.write('docs/libraries.json',fs.readFileSync(path.join(source,'versions.json'),'utf8'));
   }
 }
 
@@ -833,7 +888,8 @@ export type DocumentPreview={kind:'pdf'|'docx'|'spreadsheet'|'text'|'unsupported
 export type DocumentPage={source:string;width:number;height:number;page:number;pageCount:number};
 export type TokenUsage={promptTokens:number;completionTokens:number;totalTokens:number;cacheHitTokens:number;cacheMissTokens:number;reasoningTokens:number};
 export type MessageInfo={modelName:string|null;providerName:string|null;tokenCount:number|null;tokenCountSource:'provider'|'estimate'|null;usage:TokenUsage|null;performance:{firstTokenLatencyMs:number;generationMs:number;totalMs:number;tokensPerSecond:number}|null};
-export type Models={loading:boolean;busy:boolean;error:string|null;selectedId:string|null;automaticLabel:string;automaticSupportsVision:boolean;contextLimit:number|null;items:{id:string;name:string;description:string;supportsVision:boolean;isFree:boolean;contextLength:number|null;averageTokensPerSecond:number|null;intelligenceTier:number|null;priceTier:number|null}[]};
+export type ReasoningLevel='none'|'minimal'|'low'|'medium'|'high'|'xhigh';
+export type Models={loading:boolean;busy:boolean;error:string|null;selectedId:string|null;automaticLabel:string;automaticSupportsVision:boolean;contextLimit:number|null;reasoning?:{label:string;selectedLevel:ReasoningLevel|null;options:{value:ReasoningLevel|null;label:string;disabled?:boolean}[]};items:{id:string;name:string;description:string;supportsVision:boolean;isFree:boolean;contextLength:number|null;averageTokensPerSecond:number|null;intelligenceTier:number|null;priceTier:number|null}[]};
 export type ContextSummary={kind:"summary";title:string;content:string;throughTimelineIndex:number;sourceMessageCount:number;tokenCount:number;contextLimit:number;modelName:string|null;providerName:string|null;updatedAt:number};
 export type Context={summary:ContextSummary|null;source:"provider"|"local"|null;measurementStale:boolean;showTokens:boolean;limit:number|null;tokens:number|null;cachePercent:number|null;messagesTokens:number|null;reasoningTokens:number|null;systemPromptTokens:number|null;activeMessages:number|null;archivedMessages:number|null;latest:(TokenUsage&{modelName:string|null})|null};
 export type Voice={status:'idle'|'requesting'|'recording'|'transcribing';canStart:boolean;error:string|null;transcript:{id:number;text:string}|null};
@@ -844,6 +900,7 @@ export type SettingsSearchResult={sectionId:string;key:string;title:string;secti
 export type SettingsState={scopeId?:string;groups:{id:string;label:string}[];sections:SettingsSection[];query:string;results:SettingsSearchResult[];hasMoreResults:boolean;editors?:Record<string,NonNullable<SettingsState['editor']>>;editor:{id:string;sectionId:string;loading:boolean;busy:boolean;dirty:boolean;error:string|null;fields:SettingsField[];groups:{id:string;label:string}[];actions:{id:string;label:string;disabled:boolean;active:boolean}[];requests:SettingsRequestDescriptor[];links:{id:string;label:string;sectionId:string;target:string}[]}|null};
 ${SETTINGS_REQUEST_DECLARATIONS}
 export type Message={timelineIndex:number|null;archived:boolean;id:number;role:string;content:string;createdAt:number;streaming:boolean;reasoningContent:string;workLog:WorkLogStep[];toolStatus:string|null;variantIndex:number;variantCount:number;actions:MessageAction[];editableContent?:string;info:MessageInfo;images:{url:string;type:'user_photo'|'generated'|'external'}[];attachments:{url:string;name:string;filename:string;mimeType:string;sizeBytes:number}[]};
+export type MessageContent=Pick<Message,'content'|'reasoningContent'|'workLog'|'toolStatus'|'streaming'|'images'|'attachments'>;
 export type ConfirmationNode={type:'text'|'code'|'markdown'|'json'|'email';text:string}|{type:'diff';before:string;after:string}|{type:'group';label?:string;children:ConfirmationNode[]}|{type:'field';fieldId:string}|{type:'action';actionId:string};
 export type ConfirmationField={id:string;label:string;type:string;value:string|boolean;disabled:boolean;options?:{value:string;label:string}[]};
 export type ConfirmationAction={id:string;label:string;disabled:boolean;group:'primary'|'review'|'permissions'|'content';comment?:boolean};
@@ -851,8 +908,12 @@ export type Confirmation={id:string;title:string;summary:string;ready:boolean;re
 export type LabelKey=${APPEARANCE_LABEL_KEYS.map(key => JSON.stringify(key)).join('|')};
 export type Labels=Record<LabelKey,string>&Partial<Record<string,string>>;
 export type ChatMenuAction='rename'|'downloadDocx'|'move'|'setBotHidden'|'delete'|'leave';
+export type FolderMenuAction='create'|'rename'|'delete';
 export type MenuItem={id:string;label:string;disabled:boolean;dangerous:boolean;requiresConfirmation:boolean};
 export type ThemeState = {
+  themeEffects?:import('./theme-effects-types').ThemeEffectsPreferences;
+  themeAudio?:import('./theme-effects-types').ThemeAudioState;
+  scopeId?:string;
   chats: {id:number;title:string;folderId:number|null;updatedAt:number;isOwner:boolean|null;botHidden:boolean;actions:ChatMenuAction[]}[];
   folders: {id:number;name:string;count:number;actions:('rename'|'delete')[]}[];
   library:{busy:boolean;operation:string|null;error:string|null;canCreateFolder:boolean;limits:{chatTitle:number;folderName:number}};
@@ -868,6 +929,11 @@ export type ThemeState = {
   locale:string;dark:boolean;palette:{background:string;text:string;accent:string;surface:string};labels:Labels;
 };
 export interface ThemeAPI {
+  assetSource(path:string):string;
+  getThemeEnvironment():{visible:boolean;scopeId?:string;preferences?:import('./theme-effects-types').ThemeEffectsPreferences;audio?:import('./theme-effects-types').ThemeAudioState};
+  subscribeThemeEnvironment(listener:(environment:ReturnType<ThemeAPI['getThemeEnvironment']>)=>void):()=>void;
+  setThemeEffectsPreferences(patch:Partial<import('./theme-effects-types').ThemeEffectsPreferences>):boolean;
+  themeAudio(action:import('./theme-effects-types').ThemeAudioAction['action'],options?:Omit<import('./theme-effects-types').ThemeAudioAction,'type'|'action'>):boolean;
   requestSettings<S extends keyof SettingsRequestContract,O extends keyof SettingsRequestContract[S]>(sectionId:S,operation:O,...args:SettingsRequestParameters<S,O>):Promise<SettingsRequestResult<S,O>>;
   getSettingsSections():SettingsSection[];searchSettings(query:string):boolean;openSettingsSection(sectionId:string):boolean;openSettingsSession(sectionId:string):boolean;
   setSettingValue(sectionId:string,fieldId:string,value:SettingValue):boolean;saveSettingsSection(sectionId:string):boolean;
@@ -875,6 +941,7 @@ export interface ThemeAPI {
   runSettingsAction(sectionId:string,actionId:string):boolean;
   cancelSettingsRequests(sectionId:string):boolean;
   selectModel(id:string|null):boolean;
+  selectReasoning(level:ReasoningLevel|null):boolean;
   startVoiceRecording():boolean;stopVoiceRecording():boolean;cancelVoiceRecording():boolean;
   getChatMenu(id:number):MenuItem[];getFolderMenu(id:number):MenuItem[];
   renameChat(id:number,title:string):boolean;downloadChatDocx(id:number):boolean;
@@ -905,14 +972,18 @@ declare global {interface Window {chatter:ThemeAPI}}
 `;
 
 const appearanceUIDeclarations = `declare module '@chatter/ui' {
+  export const useThemeEffects:typeof import('./effects-sdk').useThemeEffects;
+  export const useThemeAudio:typeof import('./effects-sdk').useThemeAudio;
+  export const assetSource:typeof import('./effects-sdk').assetSource;
 ${SETTINGS_SDK_UI_EXPORTS}
+${CHAT_SDK_UI_EXPORTS}
   export type ImageTarget={chatId:number;messageId:number;variantIndex:number;url:string;source:string;alt:string};
   export type AttachmentTarget={chatId:number;messageId:number;variantIndex:number;index:number;url:string;name:string;mimeType:string;sizeBytes:number};
   export type ChatterStateOptions={navigation?:boolean;confirmations?:boolean};
   export function useChatterState(options?:ChatterStateOptions):import('./chatter').ThemeState|undefined;
   export function Markdown(props:{messageId:number;content:string;className?:string;style?:import('react').CSSProperties;components?:import('react-markdown').Components;onImageClick?:(image:ImageTarget)=>void}):import('react').ReactElement;
   export function Image(props:{messageId:number;url:string;alt?:string;className?:string;style?:import('react').CSSProperties;fullSize?:boolean;onImageClick?:(image:ImageTarget)=>void}):import('react').ReactElement;
-  export function MessageImages(props:{message:import('./chatter').Message;className?:string;onImageClick?:(image:ImageTarget)=>void}):import('react').ReactElement;
-  export function Attachments(props:{message:import('./chatter').Message;className?:string;onAttachmentClick?:(file:AttachmentTarget)=>void}):import('react').ReactElement;
+  export function MessageImages(props:{message:Pick<import('./chatter').Message,'id'|'images'>;className?:string;onImageClick?:(image:ImageTarget)=>void}):import('react').ReactElement;
+  export function Attachments(props:{message:Pick<import('./chatter').Message,'id'|'variantIndex'|'attachments'>;className?:string;onAttachmentClick?:(file:AttachmentTarget)=>void}):import('react').ReactElement;
 }
 `;

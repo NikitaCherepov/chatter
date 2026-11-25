@@ -240,7 +240,7 @@ export function parseAppearanceProfile(value: unknown): AppearanceProfile {
   }
   let shell: AppearanceShell | undefined;
   if (v.shell !== undefined) {
-    const source = keys(v.shell, ['version', 'language', 'scope', 'entry', 'files']);
+    const source = keys(v.shell, ['version', 'language', 'scope', 'entry', 'files', 'assets']);
     if (source.version !== 1) fail();
     const project = parseAppearanceProject(source);
     if ((source.language === 'html') !== project.entry.endsWith('.html')) fail();

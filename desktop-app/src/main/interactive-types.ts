@@ -7,6 +7,7 @@ export type InteractiveStatus = {
   escape?: boolean;
   reset?: boolean;
   confirmations?: boolean;
+  visible?: boolean;
 };
 export type InteractiveInput = {
   language: InteractiveLanguage;

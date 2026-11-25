@@ -24,7 +24,7 @@ const input = { language:'interactive',source:'</script><script>bad()</script>',
 const doc = interactiveDocument(input,'/* trusted bundle */');
 assert.ok(doc.includes('\\u003c/script>'));
 assert.ok(!doc.includes('<script>bad()'));
-assert.ok(INTERACTIVE_CSP.includes("connect-src 'none'") && INTERACTIVE_CSP.includes("frame-src 'none'"));
+assert.ok(INTERACTIVE_CSP.includes("connect-src chatter-interactive:") && INTERACTIVE_CSP.includes("frame-src 'none'"));
 assert.throws(()=>validateInteractiveInput({...input,source:'x'.repeat(100001)}));
 assert.throws(()=>validateInteractiveInput({...input,language:'javascript'}));
 console.log('interactive code: completed fences only, literal code, bounded inputs and safe payload encoding passed');

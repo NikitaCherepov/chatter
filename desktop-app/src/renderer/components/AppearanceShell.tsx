@@ -36,6 +36,7 @@ export function AppearanceShell({
   onReadDocument,
   onRequestComplete,
   resolvePendingImage,
+  onVisibility,
 }: {
   shell: Shell;
   state: AppearanceShellState;
@@ -46,10 +47,11 @@ export function AppearanceShell({
   onReadDocument?: (request: AppearanceBridgeRequest) => Promise<unknown>;
   onRequestComplete?: (request: AppearanceBridgeRequest) => void;
   resolvePendingImage?: (id: string) => string | null;
+  onVisibility?:(visible:boolean)=>void;
 }) {
   const { t } = useTranslation();
-  const project = useMemo(() => ({ entry: shell.entry, files: shell.files }),
-    [shell.entry, shell.files]);
+  const project = useMemo(() => ({ entry: shell.entry, files: shell.files, assets:shell.assets }),
+    [shell.entry, shell.files, shell.assets]);
   return (
     <section
       className={s.shell}
@@ -80,7 +82,7 @@ export function AppearanceShell({
         project={project}
         language={shell.language}
         visible={visible}
-        appearance={{ state, onAction, onClose, onFailure, onReadDocument, onRequestComplete, resolvePendingImage }}
+        appearance={{ state, onAction, onClose, onFailure, onReadDocument, onRequestComplete, resolvePendingImage,onVisibility }}
       />
     </section>
   );

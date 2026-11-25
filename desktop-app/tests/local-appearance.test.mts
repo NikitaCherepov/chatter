@@ -40,6 +40,8 @@ try {
   assert.throws(()=>parseAppearanceProfile({...largeTheme,shell:{...largeTheme.shell,files:{...manyFiles,'extra.ts':'export {}'}}}),/appearance_project_limit/);
 
   const beforeDocs = store.load().appearance;
+  assert.ok(fs.readFileSync(path.join(directory,'templates/component/components/Composer.tsx'),'utf8').includes('useComposer()'),'new local starters use SDK controllers');
+  assert.ok(fs.readFileSync(path.join(directory,'templates/component/components/Models.tsx'),'utf8').includes('models.reasoning.bind()'),'model starter includes reasoning selection');
   const guidePath = path.join(directory, 'THEMES.md');
   assert.equal(store.readDocumentation(), fs.readFileSync(guidePath, 'utf8'));
   assert.ok(store.readDocumentation().includes('theme.json'));
@@ -52,6 +54,10 @@ try {
     [path.join(virtualRoot, 'chatter-ui.d.ts'), fs.readFileSync(path.join(directory, 'chatter-ui.d.ts'), 'utf8')],
     [path.join(virtualRoot,'settings-sdk.d.ts'),fs.readFileSync(path.join(directory,'settings-sdk.d.ts'),'utf8')],
     [path.join(virtualRoot,'settings-store.d.ts'),fs.readFileSync(path.join(directory,'settings-store.d.ts'),'utf8')],
+    [path.join(virtualRoot,'chat-sdk.d.ts'),fs.readFileSync(path.join(directory,'chat-sdk.d.ts'),'utf8')],
+    [path.join(virtualRoot,'chat-store.d.ts'),fs.readFileSync(path.join(directory,'chat-store.d.ts'),'utf8')],
+    [path.join(virtualRoot,'effects-sdk.d.ts'),fs.readFileSync(path.join(directory,'effects-sdk.d.ts'),'utf8')],
+    [path.join(virtualRoot,'theme-effects-types.d.ts'),fs.readFileSync(path.join(directory,'theme-effects-types.d.ts'),'utf8')],
     [path.join(virtualRoot, 'components/Field.tsx'), fs.readFileSync(path.join(directory, 'examples/settings/Field.tsx'), 'utf8')],
     [path.join(virtualRoot, 'components/Section.tsx'), fs.readFileSync(path.join(directory, 'examples/settings/Section.tsx'), 'utf8')],
     [path.join(virtualRoot, 'App.tsx'), 'import React from "react";import {Markdown,MessageImages,Attachments,useChatterState} from "@chatter/ui";export default function App(){const state=useChatterState({navigation:true,confirmations:true});const message=state?.messages[0];const tokens=state?.context.tokens;const transcript=state?.voice.transcript;const model=state?.models.selectedId;return message?<><Markdown messageId={message.id} content={message.content}/><MessageImages message={message}/><Attachments message={message}/><button onClick={()=>window.chatter.selectModel(model??null)}>{message.info.modelName} {tokens}</button><button onClick={()=>window.chatter.startVoiceRecording()}>{transcript?.text}</button><button onClick={()=>window.chatter.stopVoiceRecording()}>Stop</button><button onClick={()=>window.chatter.cancelVoiceRecording()}>Cancel</button></>:null;}'],
@@ -67,6 +73,7 @@ try {
   compilerHost.getSourceFile = (file: string, version: any) => { const source = compilerHost.readFile(file); return source === undefined ? undefined : ts.createSourceFile(file, source, version); };
   const originalDirectoryExists = compilerHost.directoryExists;
   compilerHost.directoryExists = (file: string) => path.normalize(file) === virtualRoot || path.normalize(file) === path.join(virtualRoot, 'components') || originalDirectoryExists?.(file) || false;
+  for(const name of fs.readdirSync(path.join(directory,'examples/chat')))virtualFiles.set(path.join(virtualRoot,'components',name),fs.readFileSync(path.join(directory,'examples/chat',name),'utf8'));
   const editorProgram = ts.createProgram([...virtualFiles.keys()], compilerOptions, compilerHost);
   assert.deepEqual(ts.getPreEmitDiagnostics(editorProgram).filter((item: any) => item.category === ts.DiagnosticCategory.Error)
     .map((item: any) => ts.flattenDiagnosticMessageText(item.messageText, '\n')), [], 'generated @chatter/ui declarations type-check with the real React API');

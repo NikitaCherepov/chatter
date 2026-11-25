@@ -1,6 +1,7 @@
 export const APPEARANCE_LABEL_KEYS = ["newChat", "allChats", "settings", "search", "loadMore", "loading", "empty", "workLog", "reasoning", "download", "image", "imageLoadFailed", "copy", "downloadDocx", "sendTelegram", "save", "cancel", "fork", "edit", "delete", "regenerate", "regenerateHint", "speak", "pauseSpeech", "resumeSpeech", "stopSpeech", "reviewConfirmation", "previousVariant", "nextVariant", "renameChat", "moveChat", "hideFromBot", "showInBot", "leaveChat", "createFolder", "renameFolder", "deleteFolder", "unfiled"] as const;
 import { parseThemeSettingsAction, canUseThemeSettings, type ThemeSettingsAction, type ThemeSettingsState, type NativeSettingsAction } from './settings-shell-types';
 import { parseSettingsRequest, settingsRequestScope } from './settings-request-types';
+import {parseThemeAudioAction,parseThemeEffectsPatch,type ThemeAudioAction,type ThemeAudioState,type ThemeEffectsPreferences} from './theme-effects-types';
 export type AppearanceLabelKey = typeof APPEARANCE_LABEL_KEYS[number];
 export type AppearanceLabels = Record<AppearanceLabelKey, string> & Partial<Record<string, string>>;
 export type AppearanceChatMenuActionName = 'rename' | 'downloadDocx' | 'move' | 'setBotHidden' | 'delete' | 'leave';
@@ -33,13 +34,17 @@ export type AppearanceConfirmationRequest = { type: 'confirmationAction'; id: st
   | { type: 'confirmationField'; id: string; fieldId: string; value: string | boolean };
 export type AppearanceSpeechAction = { type: 'speechAction'; chatId: number; action: 'pause' | 'resume' | 'stop' };
 export type AppearanceVoiceAction = { type: 'voiceAction'; chatId: number; action: 'start' | 'stop' | 'cancel' };
-export type AppearanceModelAction = { type: 'selectModel'; id: string | null };
+export type AppearanceReasoningLevel = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
+export type AppearanceModelAction = { type: 'selectModel'; id: string | null }
+  | { type: 'selectReasoning'; level: AppearanceReasoningLevel | null };
 export type AppearanceTokenUsage = { promptTokens: number; completionTokens: number; totalTokens: number; cacheHitTokens: number; cacheMissTokens: number; reasoningTokens: number };
 export type AppearanceMessageInfo = { modelName: string | null; providerName: string | null; tokenCount: number | null;
   tokenCountSource: 'provider' | 'estimate' | null; usage: AppearanceTokenUsage | null;
   performance: { firstTokenLatencyMs: number; generationMs: number; totalMs: number; tokensPerSecond: number } | null };
 export type AppearanceModels = { loading: boolean; busy: boolean; error: string | null; selectedId: string | null; automaticLabel: string;
   automaticSupportsVision: boolean; contextLimit: number | null;
+  reasoning?: { label: string; selectedLevel: AppearanceReasoningLevel | null;
+    options: { value: AppearanceReasoningLevel | null; label: string; disabled?: boolean }[] };
   items: { id: string; name: string; description: string; supportsVision: boolean; isFree: boolean; contextLength: number | null;
     averageTokensPerSecond: number | null; intelligenceTier: number | null; priceTier: number | null }[] };
 export type AppearanceVoice = { status: 'idle' | 'requesting' | 'recording' | 'transcribing'; canStart: boolean; error: string | null;
@@ -63,6 +68,7 @@ export type AppearanceDocumentPage = { source: string; width: number; height: nu
 export type AppearanceComposerAction = { type: 'composerAction'; chatId: number; action: 'choose' | 'remove' | 'clear'; id?: string };
 export type AppearancePasteAction = { type: 'pasteAttachments'; chatId: number; files: { name: string; type: string; bytes: ArrayBuffer | null }[] };
 export type AppearanceShellAction = AppearanceNavigationAction | AppearanceMessageAction | AppearanceSpeechAction | AppearanceReviewAction
+  | ThemeAudioAction | {type:'themePreferences';patch:Partial<ThemeEffectsPreferences>}
   | AppearanceConfirmationRequest | AppearanceContentAction | AppearanceComposerAction | AppearancePasteAction | AppearanceChatMenuAction | AppearanceFolderMenuAction | AppearanceVoiceAction | AppearanceModelAction | ThemeSettingsAction | NativeSettingsAction
   | { type: 'confirmationPresentation'; custom: boolean };
 
@@ -83,6 +89,9 @@ export type AppearanceMessageContent = {
 };
 
 export type AppearanceShellState = {
+  themeEffects?:ThemeEffectsPreferences;
+  themeAudio?:ThemeAudioState;
+  scopeId?: string;
   chats: Array<{ id: number; title: string; folderId: number | null; updatedAt: number;
     isOwner?: boolean | null; botHidden?: boolean; actions?: AppearanceChatMenuActionName[] }>;
   folders: Array<{ id: number; name: string; count: number; actions?: Exclude<AppearanceFolderMenuActionName, 'create'>[] }>;
@@ -142,6 +151,8 @@ export function parseAppearancePaste(value: unknown): AppearancePasteAction | nu
 export function parseAppearanceShellAction(value: unknown): AppearanceShellAction | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const input = value as Record<string, unknown>;
+  if(input.type==='themeAudio')return parseThemeAudioAction(input);
+  if(input.type==='themePreferences'){const patch=parseThemeEffectsPatch(input.patch);return patch?{type:'themePreferences',patch}:null;}
   if (input.type === 'settingsAction') return parseThemeSettingsAction(input);
   if (input.type === 'openSettings') {
     if (input.sectionId === undefined && input.target === undefined) return { type: 'openSettings' };
@@ -152,6 +163,8 @@ export function parseAppearanceShellAction(value: unknown): AppearanceShellActio
   const validId = (value: unknown) => Number.isSafeInteger(value) && Number(value) > 0;
   if (input.type === 'selectModel' && (input.id === null || typeof input.id === 'string' && input.id.length > 0 && input.id.length <= 500))
     return { type: 'selectModel', id: input.id as string | null };
+  if (input.type === 'selectReasoning' && (input.level === null || typeof input.level === 'string' && ['none','minimal','low','medium','high','xhigh'].includes(input.level)))
+    return { type: 'selectReasoning', level: input.level as AppearanceReasoningLevel | null };
   if (input.type === 'chatMenuAction' && validId(input.id)) {
     const base = { type: 'chatMenuAction' as const, id: Number(input.id) };
     if (input.action === 'rename' && typeof input.title === 'string' && input.title.trim() && input.title.trim().length <= 120)
@@ -249,10 +262,13 @@ export function parseAppearanceShellAction(value: unknown): AppearanceShellActio
 }
 
 export function canRunAppearanceAction(state: AppearanceShellState, action: AppearanceShellAction): boolean {
+  if(action.type==='themeAudio'||action.type==='themePreferences')return !!state.themeEffects;
   if (action.type === 'settingsAction') return canUseThemeSettings(state.settings, action);
   if (action.type === 'openSettings') return !action.sectionId || Boolean(state.settings?.sections.some(section => section.id === action.sectionId));
   if (action.type === 'selectModel') return Boolean(state.models && !state.models.loading && !state.models.busy
     && (action.id === null || state.models.items.some(model => model.id === action.id)));
+  if (action.type === 'selectReasoning') return Boolean(state.models && !state.models.loading && !state.models.busy
+    && state.models.reasoning?.options.some(option => option.value === action.level && !option.disabled));
   if (action.type === 'chatMenuAction') {
     const chat = state.chats.find(chat => chat.id === action.id);
     return !state.library?.busy && Boolean(chat?.actions?.includes(action.action))

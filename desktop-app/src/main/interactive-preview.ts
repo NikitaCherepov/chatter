@@ -7,10 +7,12 @@ import type { InteractivePlacement, InteractiveStatus } from './interactive-type
 import { parseAppearanceShellAction, canRunAppearanceAction, parseAppearanceBridgeRequest, canReadAppearanceRequest, parseAppearancePaste,
   type AppearanceShellState, type AppearanceImageRequest, type AppearanceBridgeRequest } from './appearance-shell-types';
 import { canRequestSettings } from './settings-request-types';
+import {isAppearanceAssetPath} from './appearance-project';
 
 type Entry = {
   id: string; host: BrowserWindow; owner: WebContents; clip: View; view: WebContentsView;
   visible: boolean; timer?: ReturnType<typeof setInterval>; deadline?: ReturnType<typeof setTimeout>;
+  runtimeVisible?:boolean;
   isolated: Session;
   expanded?: boolean;
   appearance?: { state?: AppearanceShellState; window: number; count: number; handlesNavigation?: boolean; handlesConfirmations?: boolean };
@@ -24,7 +26,7 @@ type Entry = {
 export class InteractivePreviews {
   private entries = new Map<string, Entry>();
   private runtime: string | null = null;
-  constructor(private runtimeFile = path.join(__dirname, '../interactive/runtime.js')) {}
+  constructor(private runtimeFile = path.join(__dirname, '../interactive/runtime.js'),private readAsset?:(owner:WebContents,url:string)=>{data:Uint8Array;mimeType:string}) {}
 
   create(owner: WebContents, raw: unknown): string {
     const input = validateInteractiveInput(raw);
@@ -41,6 +43,9 @@ export class InteractivePreviews {
     const projectResource = (resource: URL) => input.language === 'html' && input.project && resource.protocol === INTERACTIVE_SCHEME + ':' && resource.hostname === id
       && /\.(js|css)$/.test(resource.pathname) && Object.prototype.hasOwnProperty.call(input.project.files, resource.pathname.slice(1));
     const isolated = session.fromPartition(`interactive-${id}`, { cache: false });
+    const assetResource=(resource:URL)=>resource.hostname===id&&resource.protocol===INTERACTIVE_SCHEME+':'&&resource.pathname.startsWith('/_asset/')
+      && isAppearanceAssetPath(resource.pathname.slice(8))&&Object.prototype.hasOwnProperty.call(input.project?.assets??{},resource.pathname.slice(8));
+    const libraryResource=(resource:URL)=>resource.hostname===id&&resource.protocol===INTERACTIVE_SCHEME+':'&&/^\/_library\/(three|motion|gsap|dnd)\.js$/.test(resource.pathname);
     isolated.enableNetworkEmulation({ offline: true });
     isolated.setPermissionCheckHandler(() => false);
     isolated.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
@@ -50,11 +55,20 @@ export class InteractivePreviews {
       const resource = new URL(details.url);
       const image = Boolean(input.bridge && details.resourceType === 'image' && resource.protocol === INTERACTIVE_SCHEME + ':'
         && resource.hostname === id && resource.pathname === '/_image');
-      callback({ cancel: details.method !== 'GET' || !(image || projectResource(resource) || details.url === url && details.resourceType === 'mainFrame') });
+      callback({ cancel: details.method !== 'GET' || !(image || assetResource(resource) || libraryResource(resource) || projectResource(resource) || details.url === url && details.resourceType === 'mainFrame') });
     });
     const document = interactiveDocument(input, this.runtime ?? '');
     isolated.protocol.handle(INTERACTIVE_SCHEME, request => {
       const resource = new URL(request.url);
+      if(request.method==='GET'&&assetResource(resource)&&this.readAsset){
+        try {const asset=this.readAsset(owner,input.project!.assets![resource.pathname.slice(8)]);
+          return new Response(new Uint8Array(asset.data).buffer,{headers:{'Content-Type':asset.mimeType,'Access-Control-Allow-Origin':'*','X-Content-Type-Options':'nosniff'}});
+        }catch{return new Response('',{status:404});}
+      }
+      if(request.method==='GET'&&libraryResource(resource)){
+        try{return new Response(fs.readFileSync(path.join(path.dirname(this.runtimeFile),'../theme-libraries',path.basename(resource.pathname)),'utf8'),{headers:{'Content-Type':'text/javascript','Access-Control-Allow-Origin':'*','X-Content-Type-Options':'nosniff'}});}
+        catch{return new Response('',{status:404});}
+      }
       if (input.bridge && resource.hostname === id && resource.pathname === '/_image' && request.method === 'GET')
         return this.loadAppearanceImage(id, resource);
       if (request.method === 'GET' && projectResource(resource)) return new Response(input.project!.files[resource.pathname.slice(1)], { headers: {
@@ -87,6 +101,10 @@ export class InteractivePreviews {
     this.entries.set(id, entry);
     owner.once('destroyed', gone);
     const contents = view.webContents;
+    if(input.bridge)contents.setAudioMuted(true);
+    const visibility=()=>this.notifyVisibility(entry);
+    host.on('show',visibility);host.on('hide',visibility);host.on('minimize',visibility);host.on('restore',visibility);
+    const cleanup=entry.cleanup;entry.cleanup=()=>{cleanup();host.removeListener('show',visibility);host.removeListener('hide',visibility);host.removeListener('minimize',visibility);host.removeListener('restore',visibility);};
     contents.setWebRTCIPHandlingPolicy('disable_non_proxied_udp');
     contents.setWindowOpenHandler(() => ({ action: 'deny' }));
     contents.on('will-navigate', event => event.preventDefault());
@@ -172,6 +190,7 @@ export class InteractivePreviews {
       if (!this.entries.has(id)) return;
       clearTimeout(entry.deadline);
       if (entry.appearance?.state) contents.send('appearance-shell:state', entry.appearance.state);
+      this.notifyVisibility(entry,true);
       this.emit(entry, 'ready');
       clearInterval(entry.timer);
       // Main-process watchdog remains usable even if generated code blocks its renderer.
@@ -203,6 +222,7 @@ export class InteractivePreviews {
     const height = Math.max(0, Math.min(Math.round(c.height * factor), hostHeight - y));
     entry.visible = !!payload.visible && width > 0 && height > 0 && b.width > 0 && b.height > 0;
     entry.clip.setVisible(entry.visible);
+    this.notifyVisibility(entry);
     if (!entry.visible) return;
     entry.clip.setBounds({ x, y, width, height });
     entry.view.setBounds({ x: Math.round(b.x * factor) - x, y: Math.round(b.y * factor) - y,
@@ -230,6 +250,13 @@ export class InteractivePreviews {
     }
     if (!entry.view.webContents.isDestroyed() && !entry.view.webContents.isLoading())
       entry.view.webContents.send('appearance-shell:state', state);
+  }
+
+  private notifyVisibility(entry:Entry,force=false){
+    const visible=entry.visible&&entry.host.isVisible()&&!entry.host.isMinimized();
+    if(!force&&entry.runtimeVisible===visible)return;entry.runtimeVisible=visible;
+    if(!entry.view.webContents.isDestroyed())entry.view.webContents.send('appearance-shell:visibility',visible);
+    if(entry.appearance&&!entry.view.webContents.isLoading())this.emit(entry,'ready',{visible});
   }
 
   stop(owner: WebContents, id: string): void {
@@ -316,7 +343,7 @@ export class InteractivePreviews {
 
   destroy(): void { for (const id of [...this.entries.keys()]) this.remove(id); }
 
-  private emit(entry: Entry, phase: InteractiveStatus['phase'], detail: Pick<InteractiveStatus, 'escape' | 'reset' | 'confirmations'> = {}): void {
+  private emit(entry: Entry, phase: InteractiveStatus['phase'], detail: Pick<InteractiveStatus, 'escape' | 'reset' | 'confirmations' | 'visible'> = {}): void {
     if (!entry.owner.isDestroyed()) entry.owner.send('interactive-preview:status', {
       id: entry.id, phase, ...(entry.appearance ? { confirmations: Boolean(entry.appearance.handlesConfirmations) } : {}), ...detail,
     } satisfies InteractiveStatus);

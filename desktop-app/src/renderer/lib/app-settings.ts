@@ -3,6 +3,8 @@ import { getLanguagePreference, isLanguagePreference, setLanguagePreference } fr
 import { getThemePreference, getThemeSchedule, setThemePreference, setThemeSchedule } from './theme';
 import { getRenderPerfLevel, setRenderPerfLevel } from './renderPerf';
 import type { SettingValue } from '../../main/settings-shell-types';
+import {THEME_EFFECT_FIELDS} from '../../main/theme-effects-types';
+import {readThemeEffectsPreferences,setThemeEffectsPreferences} from './theme-effects-preferences';
 
 export const APP_SETTINGS_CHANGED = 'chatter-app-settings-changed';
 export const ZOOM_STEP_PCT = 5, ZOOM_MIN_PCT = 40, ZOOM_MAX_PCT = 200;
@@ -37,6 +39,9 @@ export async function setAppZoomPercent(percent: number) {
   await window.electronAPI.setZoomLevel(percentToZoomLevel(value)); changed(); return value;
 }
 export function saveAppLocalSetting(field: string, value: SettingValue) {
+  if(Object.prototype.hasOwnProperty.call(THEME_EFFECT_FIELDS,field)){
+    setThemeEffectsPreferences({[THEME_EFFECT_FIELDS[field as keyof typeof THEME_EFFECT_FIELDS]]:value});changed();return;
+  }
   if (field === 'theme' && (value === 'system' || value === 'light' || value === 'dark' || value === 'schedule')) setThemePreference(value);
   else if (field === 'renderPerf' && (value === 'low' || value === 'medium' || value === 'high' || value === 'ultra')) setRenderPerfLevel(value);
   else if ((field === 'lightFrom' || field === 'darkFrom') && typeof value === 'string' && /^(?:[01][0-9]|2[0-3]):[0-5][0-9]$/.test(value))
@@ -46,5 +51,7 @@ export function saveAppLocalSetting(field: string, value: SettingValue) {
 }
 export function readLocalAppSettings(): Record<string, SettingValue> {
   const schedule = getThemeSchedule();
-  return { language: getLanguagePreference(), theme: getThemePreference(), lightFrom: schedule.light, darkFrom: schedule.dark, renderPerf: getRenderPerfLevel() };
+  const effects=readThemeEffectsPreferences();
+  return { language: getLanguagePreference(), theme: getThemePreference(), lightFrom: schedule.light, darkFrom: schedule.dark, renderPerf: getRenderPerfLevel(),
+    ...Object.fromEntries(Object.entries(THEME_EFFECT_FIELDS).map(([field,key])=>[field,effects[key]])) };
 }

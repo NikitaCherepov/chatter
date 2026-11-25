@@ -3,6 +3,7 @@ import { ChatWorkspaceBar, ChatWorkspaceTabs } from '../components/ChatWorkspace
 import { ChatLayoutConfirmation, ChatLayoutPreviewBar, type ChatLayoutProposal } from '../components/ChatLayoutPanel';
 import { useChatLayouts } from '../lib/chat-layout-service';
 import { useThemeSettings } from '../lib/use-theme-settings';
+import {useThemeEffectsBridge} from '../lib/use-theme-effects';
 import { nativeSettingsTarget } from '../lib/settings-catalog';
 import { CHAT_LAYOUT_SIDEBAR_WIDTH, DEFAULT_CHAT_LAYOUT, parseChatLayoutProfile, type ChatLayoutProfile } from '../lib/chat-layout-schema';
 import { ChatComposerDock } from '../components/ChatComposerDock';
@@ -1717,6 +1718,8 @@ export function ChatPage() {
   const [preferredModel, setPreferredModel] = useState<string | null>(null);
   const [selectedContextLimit, setSelectedContextLimit] = useState<number | null>(null);
   const [reasoningLevel, setReasoningLevel] = useState<api.ReasoningLevel | null>(null);
+  const savedReasoningLevelRef = useRef<api.ReasoningLevel | null>(null);
+  const modelConfigurationVersionRef = useRef(0);
   const [autoReasoningLevels, setAutoReasoningLevels] = useState<api.ReasoningLevel[]>(['none', 'minimal', 'low', 'medium', 'high', 'xhigh']);
   const [autoSupportsVision, setAutoSupportsVision] = useState<{ pro: boolean; lite: boolean }>({ pro: false, lite: false });
   const [regenHintMsgId, setRegenHintMsgId] = useState<number | null>(null);
@@ -1738,7 +1741,8 @@ export function ChatPage() {
 
   const loadModelConfiguration = useCallback(async () => {
     const epoch = modelScopeRef.current.epoch, selection = modelSelectionVersionRef.current;
-    const current = () => composerMountedRef.current && epoch === modelScopeRef.current.epoch;
+    const version = ++modelConfigurationVersionRef.current;
+    const current = () => composerMountedRef.current && epoch === modelScopeRef.current.epoch && version === modelConfigurationVersionRef.current;
     setModelsLoading(true);
     try {
       const res = await api.getModels();
@@ -1758,17 +1762,20 @@ export function ChatPage() {
       if (res.auto_reasoning_levels) setAutoReasoningLevels(res.auto_reasoning_levels);
       if (res.auto_supports_vision) setAutoSupportsVision(res.auto_supports_vision);
     } catch { if (current()) { modelCatalogEpochRef.current = epoch; setModelError(t('chat.toasts.modelChangeFailed')); } }
-    finally { if (current()) setModelsLoading(false); }
     try {
       const res = await api.getReasoningLevel();
       if (!current()) return;
-      setReasoningLevel(res.reasoning_level);
-    } catch {}
+      if (selection === modelSelectionVersionRef.current && modelOperationRef.current?.epoch !== epoch) {
+        savedReasoningLevelRef.current = res.reasoning_level;
+        setReasoningLevel(res.reasoning_level);
+      }
+    } catch { if (current()) setModelError(t('chat.toasts.reasoningChangeFailed')); }
     try {
       const res = await api.getContextTokenLimit();
       if (!current()) return;
       setSelectedContextLimit(res.max_context_tokens);
     } catch {}
+    if (current()) setModelsLoading(false);
   }, [modelScope, t]);
 
   const selectPreferredModel = useCallback(async (modelId: string | null) => {
@@ -1794,6 +1801,7 @@ export function ChatPage() {
   // Load models catalog + reasoning level
   useEffect(() => {
     setModelsCatalog([]); setPreferredModel(null); setSelectedContextLimit(null); setModelBusy(false); setModelError(null);
+    setReasoningLevel(null); savedReasoningLevelRef.current = null;
   }, [modelScope]);
   useEffect(() => {
     void loadModelConfiguration();
@@ -1890,6 +1898,20 @@ export function ChatPage() {
     }
     return [null, ...autoReasoningLevels];
   }, [preferredModel, modelsCatalog, autoReasoningLevels]);
+
+  const selectReasoningLevel = useCallback(async (level: api.ReasoningLevel | null) => {
+    const epoch = modelScopeRef.current.epoch;
+    if (modelsLoading || modelCatalogEpochRef.current !== epoch || modelOperationRef.current?.epoch === epoch || !availableLevels.includes(level)) return;
+    const operation = { epoch }; modelOperationRef.current = operation; modelSelectionVersionRef.current++;
+    const current = () => composerMountedRef.current && modelScopeRef.current.epoch === epoch;
+    setModelBusy(true); setModelError(null);
+    try {
+      await api.setReasoningLevel(level);
+      if (current()) { savedReasoningLevelRef.current = level; setReasoningLevel(level); }
+    } catch {
+      if (current()) { setReasoningLevel(savedReasoningLevelRef.current); const error = t('chat.toasts.reasoningChangeFailed'); setModelError(error); toast.error(error); }
+    } finally { if (modelOperationRef.current === operation) modelOperationRef.current = null; if (current()) setModelBusy(false); }
+  }, [modelsLoading, availableLevels, t]);
 
   const LEVEL_LABELS: Record<string, string> = {
     'null': t('chat.reasoning.auto'), 'none': t('chat.reasoning.off'), 'minimal': t('chat.reasoning.minimalShort'), 'low': t('chat.reasoning.lowShort'), 'medium': t('chat.reasoning.mediumShort'), 'high': t('chat.reasoning.highShort'), 'xhigh': t('chat.reasoning.maxShort'),
@@ -7124,13 +7146,8 @@ export function ChatPage() {
                     labels={LEVEL_LABELS}
                     value={reasoningLevel}
                     onChange={(v) => setReasoningLevel(v as api.ReasoningLevel | null)}
-                    onCommit={async () => {
-                      try {
-                        await api.setReasoningLevel(reasoningLevel);
-                      } catch {
-                        toast.error(t('chat.toasts.reasoningChangeFailed'));
-                      }
-                    }}
+                    disabled={modelsLoading || modelBusy}
+                    onCommit={() => { void selectReasoningLevel(reasoningLevel); }}
                   />
                 </div>
                 )}
@@ -8529,6 +8546,7 @@ export function ChatPage() {
     summary: card.props.summary ?? '', ready: false, revision: 0, busy: false, customizable: true, content: [], fields: [], actions: [],
   })));
   const shellConfirmations = useMemo<AppearanceShellState['confirmations']>(() => JSON.parse(shellConfirmationsJSON), [shellConfirmationsJSON]);
+  const themeEffectsBridge=useThemeEffectsBridge(themeSettings.state.scopeId,appearanceShell?.assets,ttsPlayback.status==='playing'||ttsPlayback.status==='loading');
   const shellState = useMemo<AppearanceShellState>(() => {
     const palette = appearanceProfile?.[appearanceTheme];
     const conversationReady = !!activeChatId && messagesChatIdRef.current === activeChatId && !loadingMessages;
@@ -8547,6 +8565,8 @@ export function ChatPage() {
       : chats;
     const knownChats = new Map(chats.map(chat => [chat.id, chat]));
     return {
+      scopeId: themeSettings.state.scopeId,
+      themeEffects:themeEffectsBridge.preferences,themeAudio:themeEffectsBridge.audio,
       chats: visibleChats.map(chat => {
         const known = knownChats.get(chat.id);
         const isOwner = typeof known?.is_owner === 'boolean' ? known.is_owner : null;
@@ -8585,6 +8605,8 @@ export function ChatPage() {
       models: { loading: modelsLoading || !modelsCurrent, busy: modelsCurrent && modelBusy, error: modelsCurrent ? modelError : null, selectedId: modelsCurrent ? preferredModel : null,
         automaticLabel: t('chat.reasoning.auto'), automaticSupportsVision: modelsCurrent && (user?.plan === 'pro' ? autoSupportsVision.pro : autoSupportsVision.lite),
         contextLimit: configuredLimit,
+        reasoning: { label: t('chat.reasoning.label'), selectedLevel: modelsCurrent ? reasoningLevel : null,
+          options: (modelsCurrent ? availableLevels : []).map(value => ({ value, label: LEVEL_LABELS[String(value)] || String(value) })) },
         items: (modelsCurrent ? modelsCatalog : []).map(model => ({ id: model.id, name: model.name, description: model.description,
           supportsVision: Boolean(model.supports_vision), isFree: Boolean(model.is_free), contextLength: model.context_length ?? null,
           averageTokensPerSecond: model.avg_tokens_per_second ?? null, intelligenceTier: model.intel_tier ?? null, priceTier: model.price_tier ?? null })) },
@@ -8641,15 +8663,20 @@ export function ChatPage() {
     appearanceShell?.scope === 'workspace' ? messages : null, loadingMessages, hasMoreMessages, loadingOlderMessages, sending,
     attachedImages, attachedDocuments, preparingAttachments, attachmentError, maxImageCount, maxImageBytes, pendingAttachmentId, confirmationComposer.comment, ttsPlayback, shellConfirmations,
     libraryBusy, libraryStatus, libraryScope, user?.id, user?.telegram_linked, roomCharacters, otherRoomHumans.length, forking, switchingVariantId, streamingMsgId,
-    modelsCatalog, modelsLoading, modelBusy, modelError, preferredModel, selectedContextLimit, autoSupportsVision, user?.plan, modelScope,
-    contextTokens, showTokens, voiceRequesting, isRecording, isTranscribing, voiceError, voiceTranscript, composerScope, themeSettings.state]);
+    modelsCatalog, modelsLoading, modelBusy, modelError, preferredModel, reasoningLevel, availableLevels, selectedContextLimit, autoSupportsVision, user?.plan, modelScope,
+    contextTokens, showTokens, voiceRequesting, isRecording, isTranscribing, voiceError, voiceTranscript, composerScope, themeSettings.state,themeEffectsBridge.preferences,themeEffectsBridge.audio]);
   const handleShellAction = (action: AppearanceShellAction) => {
+    if(action.type==='themeAudio'||action.type==='themePreferences'){if(appearanceShell&&canRunAppearanceAction(shellState,action))themeEffectsBridge.handle(action);return;}
     if (action.type === 'settingsAction') {
       if (appearanceShell && canRunAppearanceAction(shellState, action)) void themeSettings.handle(action);
       return;
     }
     if (action.type === 'selectModel') {
       if (appearanceShell && canRunAppearanceAction(shellState, action)) void selectPreferredModel(action.id);
+      return;
+    }
+    if (action.type === 'selectReasoning') {
+      if (appearanceShell && canRunAppearanceAction(shellState, action)) void selectReasoningLevel(action.level);
       return;
     }
     if (action.type === 'voiceAction') {
@@ -8824,7 +8851,7 @@ export function ChatPage() {
       {appearanceShell && (
         <AppearanceShell key={`${api.API_BASE}:${user?.id}`} shell={appearanceShell} state={shellState}
           visible={shellVisible} onAction={handleShellAction} onClose={() => setShellOpen(false)}
-          onReadDocument={readShellDocument} resolvePendingImage={resolvePendingImage}
+          onReadDocument={readShellDocument} resolvePendingImage={resolvePendingImage} onVisibility={themeEffectsBridge.setVisible}
           onRequestComplete={request => { if (request.method === 'settings') themeSettings.completeRequest(request.requestId); }}
           onFailure={() => {
             setShellOpen(false);

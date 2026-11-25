@@ -57,6 +57,7 @@ ipcMain.handle('themes:manage', async (event, payload: any) => {
     case 'docs': return { readme: store.readDocumentation(), desktopVersion: app.getVersion(), workspace: store.load().workspace };
     case 'migrate': return store.migrate(payload.legacy, payload.images, payload.imageErrors);
     case 'image': return { image: store.importImage(payload.base64) };
+    case 'asset': {const result=store.readAsset(payload.url);return {data:new Uint8Array(result.data).buffer,mimeType:result.mimeType};}
     case 'export-bundle': return store.exportBundle(payload.id);
     case 'import-bundle': return store.importBundle(payload.data);
     case 'change': return store.change(payload.command);
@@ -133,10 +134,10 @@ ipcMain.handle('mcp:cancel',(event,requestId:string)=>{
 });
 const execFileAsync = util.promisify(execFile);
 protocol.registerSchemesAsPrivileged([
-  { scheme: INTERACTIVE_SCHEME, privileges: { standard: true, secure: true } },
+  { scheme: INTERACTIVE_SCHEME, privileges: { standard: true, secure: true, supportFetchAPI:true, corsEnabled:true } },
   { scheme: 'chatter-theme', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } },
 ]);
-const interactivePreviews = new InteractivePreviews();
+const interactivePreviews = new InteractivePreviews(undefined,(owner,url)=>themeStore(owner).readAsset(url));
 const attachmentPicker = new AttachmentPicker();
 const attachmentPickerOwners = new Set<number>();
 ipcMain.handle('composer:pick-files', async (event, kind?: 'profile-image') => {

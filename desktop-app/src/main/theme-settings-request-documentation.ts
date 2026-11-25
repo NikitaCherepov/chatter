@@ -25,7 +25,7 @@ export type SettingsMemoryPage={records:SettingsMemoryRecord[];total:number;next
 export type SettingsQuota={billing_mode:'tokens'|'budget';percent:number;tokens:{used:number;quota:number};cost:{used:number;quota:number};resets_at:number|null;quota?:{period:{starts_at:number;ends_at:number};web_search:{used:number;limit:number};web_reader:{used:number;limit:number};image_gen:{used:number;limit:number}}|null};
 export type SettingsThemePalette={background:string;text:string;accent:string;surface?:string;chat?:string};
 export type SettingsThemeMaterial={opacity:number;blur:number;shadow:'none'|'soft'|'medium'|'strong';border:'none'|'subtle'|'defined';radius?:number};
-export type SettingsThemeProfile={id:string;name:string;revision:number;readme?:string;light:SettingsThemePalette;dark:SettingsThemePalette;typography:{uiFont:string;messageFont:string;codeFont:string;uiSize:number;messageSize:number;codeSize:number;lineHeight:number};geometry:{radius:number;density:number};materials?:{panels?:SettingsThemeMaterial;composer?:SettingsThemeMaterial};shell?:{version:1;language:'html'|'tsx';scope?:'navigator'|'workspace';entry:string;files:Record<string,string>};background:{type:'solid'|'gradient'|'image';color:string;color2:string;angle:number;image:string;dim:number;position:'center'|'top'|'bottom'};motion:{preset:'none'|'fade'|'slide'|'custom';duration:number;distance:number;scale:number;easing:'ease-out'|'ease-in-out'|'linear'}};
+export type SettingsThemeProfile={id:string;name:string;revision:number;readme?:string;light:SettingsThemePalette;dark:SettingsThemePalette;typography:{uiFont:string;messageFont:string;codeFont:string;uiSize:number;messageSize:number;codeSize:number;lineHeight:number};geometry:{radius:number;density:number};materials?:{panels?:SettingsThemeMaterial;composer?:SettingsThemeMaterial};shell?:{version:1;language:'html'|'tsx';scope?:'navigator'|'workspace';entry:string;files:Record<string,string>;assets?:Record<string,string>};background:{type:'solid'|'gradient'|'image';color:string;color2:string;angle:number;image:string;dim:number;position:'center'|'top'|'bottom'};motion:{preset:'none'|'fade'|'slide'|'custom';duration:number;distance:number;scale:number;easing:'ease-out'|'ease-in-out'|'linear'}};
 export type SettingsThemeWorkspace={directory:string;draftsDirectory:string;documentation:string;activeId:string|null;profiles:{id:string;name:string;directory:string;draftDirectory:string;hasPrevious:boolean}[];drafts:{id:string;directory:string}[];migrationComplete:boolean;migrationErrors:string[];issues:string[]};
 export type SettingsThemeList={revision:number;activeId:string|null;profiles:{id:string;name:string;revision:number}[];workspace:SettingsThemeWorkspace};
 export type SettingsRequestContract={
@@ -218,7 +218,7 @@ your navigation accordingly. No theme is modified merely by opening these contro
 
 importTheme({format:'json'|'zip',content}) creates an inactive disk draft; content is JSON text or
 base64 ZIP. Use a user-selected File and FileReader, never an ambient filesystem path. ZIP is
-limited to the existing 12 MiB archive budget; JSON/profile input is limited to 2 MiB. exportTheme
+limited to the 96 MiB archive budget; JSON/profile input is limited to 2 MiB. exportTheme
 opens the host's Save dialog for a portable ZIP (the isolated shell cannot download blobs itself).
 storeThemeImage accepts base64 raster bytes and returns the existing local image URL, ready for
 profile.background.image. Existing validation, archive traversal and image protections apply.

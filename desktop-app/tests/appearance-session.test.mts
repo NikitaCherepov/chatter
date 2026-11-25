@@ -15,11 +15,20 @@ vm.runInNewContext(compile(fs.readFileSync(new URL('../src/main/appearance-shell
   navigator: { userActivation: { get isActive() { return activated; } } }, window: { addEventListener() {} }, console,
 });
 const state = { activeChatId: 2, messages: [], canSend: true,
-  models: { items: [{ id: 'model-a' }], loading: false, busy: false },
+  models: { items: [{ id: 'model-a' }], loading: false, busy: false,
+    reasoning:{selectedLevel:null,options:[{value:null,label:'Automatic'},{value:'low',label:'Low'},{value:'high',label:'High'},{value:'none',label:'Off',disabled:true}]} },
   voice: { status: 'idle', canStart: true } };
 const update = (next = state) => events.get('appearance-shell:state')({}, next);
 update(); assert.equal(api.selectModel('model-a'), false); assert.equal(api.startVoiceRecording(), false);
+assert.equal(api.selectReasoning('high'),false);
 activated = true;
+assert.equal(api.selectReasoning('unsupported'),false);assert.equal(api.selectReasoning('none'),false);
+assert.equal(api.selectReasoning('high'),true);assert.equal(allowed(state,parse(sent.at(-1)[1])),true);
+assert.equal(api.selectReasoning(null),true);assert.equal(parse(sent.at(-1)[1]).level,null);
+assert.equal(parse({type:'selectReasoning',level:'auto'}),null);
+assert.equal(parse({type:'selectReasoning',level:['high']}),null);
+assert.equal(allowed({...state,models:{...state.models,busy:true}},{type:'selectReasoning',level:'high'}),false);
+assert.equal(allowed(state,{type:'selectReasoning',level:'none'}),false);
 assert.equal(api.selectModel('unknown'), false); assert.equal(api.selectModel('model-a'), true);
 assert.equal(allowed(state, parse(sent.at(-1)[1])), true);
 assert.equal(api.selectModel(null), true); assert.equal(parse(sent.at(-1)[1]).id, null);
@@ -123,3 +132,26 @@ const failed = models.select(null); models.fail(); await failed; assert.equal(mo
 const staleModel = modelFixture(); const old = staleModel.select('model-a'); staleModel.scope.current.epoch++; staleModel.complete(); await old;
 assert.equal(staleModel.result.selected, 'old', 'account/server change discards old model responses');
 console.log('PASS: native and theme model changes share validation, serialized writes, rollback-on-failure semantics and stale-account suppression');
+
+function reasoningFixture() {
+  const result:any={selected:'low',busy:false,error:null,calls:[]};
+  const scope={current:{epoch:1}},operation={current:null},saved={current:'low'};
+  let complete!:()=>void,fail!:()=>void;
+  const context:any={useCallback:(fn:any)=>fn,modelsLoading:false,modelScopeRef:scope,modelOperationRef:operation,
+    modelCatalogEpochRef:{current:1},modelSelectionVersionRef:{current:0},composerMountedRef:{current:true},
+    savedReasoningLevelRef:saved,availableLevels:[null,'low','high'],
+    api:{setReasoningLevel:(level:any)=>{result.calls.push(level);return new Promise<void>((resolve,reject)=>{complete=resolve;fail=()=>reject(Error('fixture'));});}},
+    setReasoningLevel:(value:any)=>{result.selected=value;},setModelBusy:(value:any)=>{result.busy=value;},
+    setModelError:(value:any)=>{result.error=value;},toast:{error(){}},t:(key:string)=>key,
+  };
+  vm.runInNewContext(compile(between('  const selectReasoningLevel =','  const LEVEL_LABELS:')+'\nglobalThis.select=selectReasoningLevel;'),context);
+  return {select:context.select,result,scope,saved,complete:()=>complete(),fail:()=>fail()};
+}
+const reasoning=reasoningFixture();await reasoning.select('none');assert.equal(reasoning.result.calls.length,0,'capabilities are model-specific');
+const thinking=reasoning.select('high');await reasoning.select(null);assert.equal(reasoning.result.calls.length,1,'writes are serialized with model selection');
+reasoning.complete();await thinking;assert.equal(reasoning.result.selected,'high');assert.equal(reasoning.saved.current,'high');assert.equal(reasoning.result.busy,false);
+const badReasoning=reasoning.select('low');reasoning.fail();await badReasoning;assert.equal(reasoning.result.selected,'high');assert.ok(reasoning.result.error);
+const automatic=reasoning.select(null);reasoning.complete();await automatic;assert.equal(reasoning.result.selected,null);
+const oldReasoning=reasoningFixture();const changingReasoning=oldReasoning.select('high');oldReasoning.scope.current.epoch++;oldReasoning.complete();await changingReasoning;
+assert.equal(oldReasoning.result.selected,'low','late reasoning responses never update another account/server');
+console.log('PASS: native/theme reasoning capability validation, automatic selection, shared write serialization, failure recovery and stale-scope protection');

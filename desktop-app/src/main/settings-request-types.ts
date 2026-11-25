@@ -98,7 +98,7 @@ export function parseSettingsRequest(value: unknown): ThemeSettingsRequest | nul
   if (!definition || !object(value.params)) return null;
   const p = value.params, op = value.operation;
   // Serialize once to reject cycles, unsupported objects and oversized input before any operation.
-  try { if (JSON.stringify(p).length > (['importTheme','storeThemeImage','setPromptImage','setPersonaImage','cropProfileImage'].includes(op) ? 17 * 1024 * 1024 : 2 * 1024 * 1024)) return null; } catch { return null; }
+  try { if (JSON.stringify(p).length > (op==='importTheme'&&p.format==='zip'?129*1024*1024:['storeThemeImage','setPromptImage','setPersonaImage','cropProfileImage'].includes(op) ? 17 * 1024 * 1024 : 2 * 1024 * 1024)) return null; } catch { return null; }
   let valid = false;
   const promptId=Number.isSafeInteger(p.id) && (Number(p.id)>0 || Number(p.id)<=-1000 || p.id===-1);
   const customPromptId=promptId && Number(p.id)<=-1000;
@@ -140,7 +140,7 @@ export function parseSettingsRequest(value: unknown): ThemeSettingsRequest | nul
   else if (op === 'openThemeFiles') valid = p.id === undefined || themeId(p.id);
   else if (op === 'activateTheme') valid = p.id === null || themeId(p.id);
   else if (op === 'saveTheme' || op === 'writeDraft' || op === 'checkTheme') valid = object(p.profile) && (p.apply === undefined || typeof p.apply === 'boolean');
-  else if (op === 'importTheme') valid = ['json', 'zip'].includes(String(p.format)) && text(p.content, p.format === 'json' ? 2 * 1024 * 1024 : 17 * 1024 * 1024);
+  else if (op === 'importTheme') valid = ['json', 'zip'].includes(String(p.format)) && text(p.content, p.format === 'json' ? 2 * 1024 * 1024 : 128 * 1024 * 1024);
   else if (op === 'storeThemeImage') valid = text(p.base64, 12 * 1024 * 1024);
   else valid = ['listGenerationModels','listPrompts','listPersonas','getIntuitionConfig','getAccount', 'getMemoryStatus', 'listSpaces', 'listAgents', 'getQuota', 'listThemes', 'getAppearanceSchema', 'cancelPreview', 'chooseThemesDirectory', 'retryThemeMigration'].includes(op);
   if (!valid || definition.confirm && p.confirmed !== true) return null;

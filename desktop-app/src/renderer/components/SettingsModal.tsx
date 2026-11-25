@@ -2,6 +2,7 @@ import { ChatLayoutPanel } from './ChatLayoutPanel';
 import type { ChatLayoutProfile } from '../lib/chat-layout-schema';
 import type { ChatLayouts } from '../lib/chat-layout-service';
 import { AppearancePanel } from './AppearancePanel';
+import {ThemeEffectsControls} from './ThemeEffectsControls';
 import type { AppearanceProfile } from '../lib/appearance-schema';
 import { useSettingsQueries } from '../lib/useSettingsQueries';
 import appLayout from './AppSettings.module.scss';
@@ -2675,6 +2676,7 @@ export function SettingsModal({
                 </div>
 
               </section>
+              <ThemeEffectsControls/>
               <section className={settingsRows.group}>
                 <h3>{t('settings.app.layout.chat')}</h3>
                 <div className={s.fieldGroup}>

@@ -1,7 +1,22 @@
 // Canonical virtual appearance project. Synced by scripts/sync-appearance.mjs.
 import type * as TypeScript from 'typescript';
 
-export type AppearanceProject = { entry: string; files: Record<string, string> };
+export type AppearanceProject = { entry: string; files: Record<string, string>; assets?: Record<string,string> };
+export const APPEARANCE_ASSET_LIMITS = { files:128, fileBytes:32*1024*1024, totalBytes:64*1024*1024, archiveBytes:96*1024*1024 } as const;
+export const APPEARANCE_ASSET_MIME: Record<string,string> = {
+  png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',webp:'image/webp',gif:'image/gif',
+  mp3:'audio/mpeg',wav:'audio/wav',ogg:'audio/ogg',m4a:'audio/mp4',flac:'audio/flac',
+  glb:'model/gltf-binary',hdr:'application/octet-stream',ttf:'font/ttf',woff:'font/woff',woff2:'font/woff2',
+};
+export function isAppearanceAssetPath(value:unknown):boolean {
+  return typeof value==='string' && value.length<=180 && value.startsWith('assets/')
+    && value.split('/').every(part=>/^[a-zA-Z0-9_-][a-zA-Z0-9_.-]*$/.test(part))
+    && Object.prototype.hasOwnProperty.call(APPEARANCE_ASSET_MIME,value.split('.').at(-1)!);
+}
+export function isAppearanceAssetURL(value:unknown):value is string {
+  return typeof value==='string' && /^chatter-theme:\/\/[a-f0-9]{24}\/[a-f0-9]{64}\.[a-z0-9]+$/.test(value)
+    && Object.prototype.hasOwnProperty.call(APPEARANCE_ASSET_MIME,value.split('.').at(-1)!);
+}
 export type AppearanceCodeDiagnostic = {
   file: string;
   line: number;
@@ -9,7 +24,9 @@ export type AppearanceCodeDiagnostic = {
   message: string;
 };
 export const APPEARANCE_PROJECT_LIMITS = { files: 256, sourceLength: 500_000 } as const;
-export const APPEARANCE_PROJECT_MODULES = ['react', 'react-markdown', 'remark-gfm', '@chatter/ui'] as const;
+export const APPEARANCE_PROJECT_MODULES = ['react', 'react-markdown', 'remark-gfm', '@chatter/ui',
+  'three','@react-three/fiber','@react-three/drei','framer-motion','gsap',
+  '@dnd-kit/core','@dnd-kit/sortable','@dnd-kit/modifiers','@dnd-kit/utilities'] as const;
 const own = (object: object, key: string) => Object.prototype.hasOwnProperty.call(object, key);
 
 export function isAppearanceFilePath(value: unknown): value is string {
@@ -49,7 +66,11 @@ export function parseAppearanceProject(value: unknown): AppearanceProject {
   if (length > APPEARANCE_PROJECT_LIMITS.sourceLength)
     return invalid(`Theme project contains ${length} source characters across ${files.length} files; the total limit is ${APPEARANCE_PROJECT_LIMITS.sourceLength}. This counts every runtime file together; splitting files does not reduce the total.`, 'appearance_project_limit');
   if (!project.files[project.entry].trim()) return invalid(`Entry file ${project.entry} is empty.`);
-  return { entry: project.entry, files: Object.fromEntries(files) };
+  if(project.assets!==undefined && (!project.assets || typeof project.assets!=='object' || Array.isArray(project.assets)
+    || Object.keys(project.assets).length>APPEARANCE_ASSET_LIMITS.files
+    || Object.entries(project.assets).some(([name,url])=>!isAppearanceAssetPath(name)||!isAppearanceAssetURL(url))))
+    return invalid('Invalid theme asset registry.');
+  return { entry: project.entry, files: Object.fromEntries(files), ...(project.assets?{assets:{...project.assets}}:{}) };
 }
 
 /** Resolve only files supplied in the profile. Never consult disk or the network. */

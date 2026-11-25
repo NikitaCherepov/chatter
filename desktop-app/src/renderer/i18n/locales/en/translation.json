@@ -1,4 +1,14 @@
 {
+  "themeEffects": {
+    "title": "Theme effects and audio",
+    "help": "These controls apply to every theme. Music starts only when you press Play in the theme.",
+    "enabled": "Visual effects",
+    "intensity": "Effect intensity",
+    "soundEnabled": "Theme sounds",
+    "musicEnabled": "Background music",
+    "soundVolume": "Sound volume",
+    "musicVolume": "Music volume"
+  },
   "themeSettings": {
     "invalid": "Check the value for {{field}}.",
     "conflict": "These settings changed elsewhere. Your draft is preserved. Discard it and reload to use the current values.",

@@ -98,7 +98,7 @@ export function useThemeSettings(themeId: string | null, onAuthInvalidated?: () 
         void controller.handle({ type: 'settingsAction', action: 'reload', sectionId: editor.sectionId, editorId: editor.id });
       }
     };
-    const events = [APP_SETTINGS_CHANGED, 'chatter-voice-settings-changed', 'chatter:wakeword-toggle', 'chatter:wakeword-config', 'focus'];
+    const events = [APP_SETTINGS_CHANGED, 'chatter-theme-effects-changed', 'chatter-voice-settings-changed', 'chatter:wakeword-toggle', 'chatter:wakeword-config', 'focus'];
     events.forEach(event => window.addEventListener(event, refresh));
     return () => { events.forEach(event => window.removeEventListener(event, refresh)); };
   }, [controller]);

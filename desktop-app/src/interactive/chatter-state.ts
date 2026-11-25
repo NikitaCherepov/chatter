@@ -1,6 +1,7 @@
 import { useRef, useLayoutEffect, useCallback, useSyncExternalStore } from 'react';
 import type { AppearanceShellState } from '../main/appearance-shell-types';
 import { updateSettingsScope } from './settings-sdk';
+import { updateChatState } from './chat-store';
 export type ChatterStateOptions = { navigation?: boolean; confirmations?: boolean };
 let snapshot: AppearanceShellState | undefined, unsubscribe: (() => void) | undefined;
 let subscribedOptions: ChatterStateOptions | undefined;
@@ -29,6 +30,7 @@ function updateSubscription() {
   // Register the replacement first: unchanged capabilities must not briefly turn off.
   unsubscribe = bridge.subscribe((state: AppearanceShellState) => {
     snapshot = state;
+    updateChatState(state);
     updateSettingsScope(state.settings);
     for (const listener of listeners) listener.notify();
   }, options);

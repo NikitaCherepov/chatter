@@ -17,6 +17,7 @@ type AppearanceBridge = {
   onReadDocument?: (request: AppearanceBridgeRequest) => Promise<unknown>;
   onRequestComplete?: (request: AppearanceBridgeRequest) => void;
   resolvePendingImage?: (id: string) => string | null;
+  onVisibility?:(visible:boolean)=>void;
 };
 
 export function InteractivePreview({ source, language, visible, appearance, project }: {
@@ -62,6 +63,7 @@ export function InteractivePreview({ source, language, visible, appearance, proj
     if (bridge) appearanceRef.current?.onAction({ type: 'confirmationPresentation', custom: false });
     const api = window.electronAPI;
     const applyStatus = (status: InteractiveStatus) => {
+      if(status.visible!==undefined)appearanceRef.current?.onVisibility?.(status.visible);
       setPhase(status.phase);
       if (status.confirmations !== undefined)
         appearanceRef.current?.onAction({ type: 'confirmationPresentation', custom: status.confirmations });
@@ -136,6 +138,7 @@ export function InteractivePreview({ source, language, visible, appearance, proj
       });
     return () => {
       disposed = true; unsubscribe(); unsubscribeActions(); unsubscribeImages(); unsubscribeDocuments();
+      appearanceRef.current?.onVisibility?.(false);
       if (id.current) { void api.interactiveStop(id.current).catch(() => {}); id.current = null; }
     };
   }, [available, seen, stopped, source, project, language, errorLabel, run, bridge]);

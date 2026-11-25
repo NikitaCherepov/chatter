@@ -178,8 +178,11 @@ app.whenReady().then(async()=>{
  const named=label=>theme.executeJavaScript('Array.from(document.querySelectorAll("button")).find(button=>button.textContent==='+JSON.stringify(label)+').click()',true);
  const resource=async(section,operation,params={},gesture=false)=>{await theme.executeJavaScript('window.resourceValue=undefined;window.resourceError=undefined;void window.chatter.requestSettings('+JSON.stringify(section)+','+JSON.stringify(operation)+','+JSON.stringify(params)+').then(value=>{window.resourceValue=value},error=>{window.resourceError=error.message});void 0',gesture);
   await until(async()=>await js('window.resourceValue!==undefined||window.resourceError!==undefined'));const error=await js('window.resourceError');if(error)throw new Error(error);return js('window.resourceValue');};
- await until(async()=>await js('!!document.getElementById("open")'));await click('open');await until(()=>settings?.editor?.fields.length===8);
+ await until(async()=>await js('!!document.getElementById("open")'));await click('open');await until(()=>settings?.editor?.fields.length===14);
  assert.equal(settings.editor.dirty,false);assert.equal(await host.webContents.executeJavaScript('window.uiWrites.length'),0);
+ await click('setting-app-themeSoundEnabled');await until(()=>settings.editor.dirty);await named('Save');await until(()=>!settings.editor.busy&&!settings.editor.dirty);
+ assert.equal(await host.webContents.executeJavaScript('JSON.parse(localStorage.getItem("chatter_theme_effects")).soundEnabled'),true);
+ await click('setting-app-themeSoundEnabled');await until(()=>settings.editor.dirty);await named('Save');await until(()=>!settings.editor.busy&&!settings.editor.dirty);
  assert.equal((await resource('app','listThemes')).profiles[0].id,'fixture-saved');
  const appearanceSchema=await resource('app','getAppearanceSchema');appearanceSchema.template.id='fixture-draft';
  await resource('app','writeDraft',{profile:appearanceSchema.template},true);assert.equal((await resource('app','readDraft',{id:'fixture-draft'})).profile.id,'fixture-draft');

@@ -1,12 +1,16 @@
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import React, { useMemo } from 'react';
 import type { Components, ExtraProps } from 'react-markdown';
 import type { AppearanceShellState } from '../main/appearance-shell-types';
 import { MessageMarkdown } from '../renderer/components/MessageMarkdown';
 import markdownStyles from '../renderer/components/MarkdownRenderer.module.scss?inline';
 import componentStyles from './chatter-ui.scss?inline';
 import {useChatterState,getChatterSnapshot} from './chatter-state';
+import { useImage } from './chat-sdk';
 export {useChatterState} from './chatter-state';
 export {useSettingsSection,useSettingsApi,useSettingsTask,useSettingsResource,useSettingsAction,useSettingsForm,useSettingsQuery,usePersonaEditor,usePromptEditor,useIntuitionEditor,usePersonas,usePrompts,usePersonaInstructions,useProfileAvatar} from './settings-sdk';
+export {useComposer,useVoice,useSpeech,useModels,useConversation,useMessage,useMessageEditor,useImage,useImageViewer,useDocument,useDocumentPage,useDocumentViewer,useConfirmations,useConfirmation,useChatLibrary,useChatMenu,useFolderMenu,useChatEditor,useFolderEditor} from './chat-sdk';
+export type {ChatMessage,ChatMessageAction,ChatReasoningLevel,ChatDocument,ChatDocumentPage,ChatResult,MessageActionInput} from './chat-sdk';
+export {useThemeEffects,useThemeAudio,assetSource} from './effects-sdk';
 
 const style = document.createElement('style');
 style.textContent = markdownStyles + componentStyles;
@@ -28,17 +32,13 @@ export function Image({ messageId, url, alt = '', className, style, fullSize = f
   messageId: number; url: string; alt?: string; className?: string; style?: React.CSSProperties;
   fullSize?: boolean; onImageClick?: (image: ImageTarget) => void;
 }) {
-  const state = useChatterState(), variant = state?.messages.find(message => message.id === messageId)?.variantIndex;
-  const src = useMemo(() => (fullSize ? api()?.fullImageSource(messageId, url) : api()?.imageSource(messageId, url)) ?? '',
-    [messageId, url, variant, state?.activeChatId, fullSize]);
-  const [failed, setFailed] = useState(false);
-  useEffect(() => setFailed(false), [src]);
-  if (!src) return <span>{alt}</span>;
-  if (failed) return <button type="button" className="chatter-image-error" onClick={() => setFailed(false)}>
+  const state = useChatterState(), image = useImage(messageId,url,{fullSize});
+  if (!image.source) return <span>{alt}</span>;
+  if (image.failed) return <button type="button" className="chatter-image-error" onClick={image.retry}>
     {state?.labels.imageLoadFailed || 'Image unavailable'}{alt ? ` — ${alt}` : ''}
   </button>;
-  return <img src={src} alt={alt} className={className} style={style} loading={fullSize ? 'eager' : 'lazy'} decoding="async" referrerPolicy="no-referrer"
-    onError={() => setFailed(true)} onClick={event => { event.preventDefault(); event.stopPropagation(); openImage(messageId, url, alt, onImageClick); }} />;
+  return <img key={image.key} src={image.source} alt={alt} className={className} style={style} loading={fullSize ? 'eager' : 'lazy'} decoding="async" referrerPolicy="no-referrer"
+    onError={image.onError} onLoad={image.onLoad} onClick={event => { event.preventDefault(); event.stopPropagation(); openImage(messageId, url, alt, onImageClick); }} />;
 }
 
 export function Markdown({ messageId, content, className = '', style, components, onImageClick }: {
@@ -71,7 +71,7 @@ export function Markdown({ messageId, content, className = '', style, components
   </div>;
 }
 
-export function MessageImages({ message, className = '', onImageClick }: { message: Message; className?: string; onImageClick?: (image: ImageTarget) => void }) {
+export function MessageImages({ message, className = '', onImageClick }: { message: Pick<Message,'id'|'images'>; className?: string; onImageClick?: (image: ImageTarget) => void }) {
   const state = useChatterState();
   return <div className={'chatter-message-images ' + className}>{(message.images ?? []).map((image, index) =>
     <figure key={image.url + index}><Image messageId={message.id} url={image.url} alt={state?.labels.image || 'Image'} onImageClick={onImageClick}/>
@@ -79,7 +79,7 @@ export function MessageImages({ message, className = '', onImageClick }: { messa
     </figure>)}</div>;
 }
 
-export function Attachments({ message, className = '', onAttachmentClick }: { message: Message; className?: string; onAttachmentClick?: (file: AttachmentTarget) => void }) {
+export function Attachments({ message, className = '', onAttachmentClick }: { message: Pick<Message,'id'|'variantIndex'|'attachments'>; className?: string; onAttachmentClick?: (file: AttachmentTarget) => void }) {
   const state = useChatterState();
   return <div className={'chatter-attachments ' + className}>{(message.attachments ?? []).map((file, index) =>
     <div className="chatter-attachment" key={file.url + index}><button type="button" onClick={() => {

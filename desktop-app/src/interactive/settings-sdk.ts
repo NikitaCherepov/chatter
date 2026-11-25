@@ -106,7 +106,8 @@ function drainReads() {
     reads.splice(index, 1)[0].execute();
   }
 }
-function read<T>(task: () => Promise<T>, section: string): Promise<T> {
+/** Shared read budget for settings and media; gesture-required mutations never enter this queue. */
+export function scheduleSdkRead<T>(task: () => Promise<T>, section = ''): Promise<T> {
   return new Promise((resolve, reject) => {
     const execute = () => {
       reading++;
@@ -319,7 +320,7 @@ export function useSettingsResource<
     : (deadTask as SettingsTask<T>);
   const state = React.useSyncExternalStore(store.subscribe, store.getSnapshot);
   const load = () =>
-    read(() => {
+    scheduleSdkRead(() => {
       if (!owner || !current(owner)()) throw new Error('settings_scope_changed');
       const descriptor = liveEditors[section]?.requests.find((item) => item.id === operation);
       if (!descriptor || descriptor.requiresGesture) throw new Error('settings_read_unavailable');
@@ -462,7 +463,7 @@ export function useSettingsQuery<T>(
     : (deadTask as SettingsTask<T>);
   const state = React.useSyncExternalStore(store.subscribe, store.getSnapshot);
   const load = () =>
-    read(() => {
+    scheduleSdkRead(() => {
       if (!owner || !current(owner)()) throw new Error('settings_scope_changed');
       return loader();
     }, section);

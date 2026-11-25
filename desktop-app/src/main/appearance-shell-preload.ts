@@ -4,6 +4,18 @@ import type { AppearanceShellState, AppearanceDocumentRequest, AppearanceBridgeR
 
 // This preload exposes only the appearance navigator contract in its isolated renderer.
 let state: AppearanceShellState | undefined;
+let runtimeVisible=false;
+const environmentListeners=new Set<(value:unknown)=>void>();
+const environment=()=>({visible:runtimeVisible,scopeId:state?.scopeId,preferences:state?.themeEffects,audio:state?.themeAudio});
+let environmentKey='';
+const notifyEnvironment=()=>{const value=environment(),key=JSON.stringify(value);if(key===environmentKey)return;environmentKey=key;for(const listener of environmentListeners)try{listener(value);}catch{}};
+ipcRenderer.on('appearance-shell:visibility',(_event,value:boolean)=>{runtimeVisible=value===true;notifyEnvironment();});
+let assetNames:Set<string>|undefined;
+const assetSource=(name:string)=>{
+  if(typeof name!=='string'||!name.startsWith('assets/')||!name.split('/').every(part=>/^[a-zA-Z0-9_-][a-zA-Z0-9_.-]*$/.test(part)))return '';
+  if(!assetNames){try{assetNames=new Set(JSON.parse(document.getElementById('theme-assets')?.textContent||'[]'));}catch{return '';}}
+  return assetNames.has(name)?new URL('/_asset/'+name,location.href).href:'';
+};
 let pasteEpoch = 0;
 let pasteBusy = false;
 let currentPaste: { event: ClipboardEvent; files: File[]; epoch: number; claimed: boolean } | undefined;
@@ -20,6 +32,7 @@ ipcRenderer.on('appearance-shell:result', (_event, reply: { requestId: string; r
 ipcRenderer.on('appearance-shell:state', (_event, next: AppearanceShellState) => {
   if (next.activeChatId !== state?.activeChatId) { pasteEpoch++; currentPaste = undefined; }
   state = next;
+  notifyEnvironment();
   for (const [id, pending] of documentRequests) {
     const request = pending.request;
     if (request.method === 'settings') {
@@ -164,6 +177,15 @@ const settingsAction = (action: 'open'|'openSession' | 'edit' | 'save' | 'discar
   send({ type: 'settingsAction', action, sectionId, editorId: editor.id, ...(action === 'edit' ? { fieldId, value } : action === 'run' ? { actionId: fieldId } : {}) }); return true;
 };
 contextBridge.exposeInMainWorld('chatter', {
+  assetSource,
+  getThemeEnvironment:environment,
+  subscribeThemeEnvironment:(listener:(value:unknown)=>void)=>{environmentListeners.add(listener);listener(environment());return()=>{environmentListeners.delete(listener);};},
+  setThemeEffectsPreferences:(patch:unknown)=>{if(!navigator.userActivation.isActive||!state?.themeEffects)return false;send({type:'themePreferences',patch});return true;},
+  themeAudio:(action:string,options:Record<string,unknown>={})=>{
+    if(!state?.themeEffects||!['sound','tone','musicPlay','musicPause','musicResume','musicStop','soundsStop'].includes(action))return false;
+    if(['musicPlay','musicResume'].includes(action)&&!navigator.userActivation.isActive)return false;
+    send({...options,type:'themeAudio',action});return true;
+  },
   requestSettings: (sectionId: string, operation: string, params: Record<string, unknown> = {}) => {
     const editor = state?.settings?.editors?.[sectionId]??state?.settings?.editor, descriptor = editor?.requests?.find(item => item.id === operation);
     if (!editor || editor.sectionId !== sectionId || editor.loading || editor.busy || !descriptor || documentRequests.size >= 4
@@ -199,6 +221,11 @@ contextBridge.exposeInMainWorld('chatter', {
     if (!navigator.userActivation.isActive || !state?.models || state.models.loading || state.models.busy
         || id !== null && !state.models.items.some(model => model.id === id)) return false;
     send({ type: 'selectModel', id }); return true;
+  },
+  selectReasoning: (level: string | null) => {
+    if (!navigator.userActivation.isActive || !state?.models || state.models.loading || state.models.busy
+        || !state.models.reasoning?.options.some(option => option.value === level && !option.disabled)) return false;
+    send({ type: 'selectReasoning', level }); return true;
   },
   startVoiceRecording: () => voiceAction('start'),
   stopVoiceRecording: () => voiceAction('stop'),

@@ -3,6 +3,10 @@ import { APPEARANCE_LABEL_KEYS } from './appearance-shell-types';
 // Handbook index and focused guides. API signatures live in chatter.d.ts.
 import { SETTINGS_OPERATIONS_GUIDE } from './theme-settings-request-documentation';
 import { THEME_SETTINGS_RESOURCE_EXAMPLES } from './theme-settings-resource-examples';
+import { CHAT_SDK_GUIDE } from './theme-chat-sdk-documentation';
+import { THEME_CHAT_EXAMPLES } from './theme-chat-sdk-examples';
+import {THEME_EFFECTS_GUIDE} from './theme-effects-documentation';
+import {THEME_DND_GUIDE} from './theme-dnd-documentation';
 
 export const THEME_README = `# Local Chatter themes
 
@@ -30,6 +34,9 @@ Keep generation and maintenance small by reusing code as you write it:
 ## Guides
 
 - docs/theme-files.md: per-theme README.md, persistence and portable theme files.
+- docs/effects.md: Three/Fiber/Drei, Motion/GSAP, local assets, sound/music and lifecycle.
+- docs/drag-and-drop.md: dnd-kit, sortable lists, drag handles, keyboard input and app actions.
+- docs/chat-sdk.md: start here for React chat/library, composer, models/reasoning, messages, media and confirmations.
 - docs/library.md: chat/folder menus, available operations and custom forms.
 - docs/runtime.md: state/subscriptions (including useChatterState), navigation, isolated runtime and user actions.
 - docs/messages.md: content, streaming, workLog, tools, message actions, variants and speech.
@@ -53,10 +60,13 @@ Each shell project may contain up to 256 runtime files and 500,000 source charac
 
 The app discovers .ts/.tsx/.js/.jsx/.css/.json/.html recursively (depth up to 8). theme.json, tsconfig.json, .d.ts, node_modules and hidden directories are excluded. TSX entries default-export a React component. Relative imports, index imports, JS-to-TS resolution and @/ project-root aliases are supported in React projects. HTML uses normal relative script/link references to its own JS/CSS files; browser modules need explicit filenames. General network access stays blocked.
 
-Local raster backgrounds use assets/image.png (PNG/JPEG/WebP/GIF, up to 8 MiB); HTTPS background links remain external. ZIP import/export supports the full 256-file project plus service files/assets (up to 512 file entries and 12 MiB total). Generated code need not fit into one file.
+Local raster backgrounds use assets/image.png (PNG/JPEG/WebP/GIF, up to 8 MiB); HTTPS background links remain external. Shell assets have separate budgets; see docs/effects.md. ZIP import/export supports the full project plus service files/assets (up to 1024 file entries and 96 MiB total). Generated code need not fit into one file.
 `;
 
 export const THEME_GUIDES: Record<string, string> = {
+  'drag-and-drop.md':THEME_DND_GUIDE,
+  'effects.md':THEME_EFFECTS_GUIDE,
+  'chat-sdk.md': CHAT_SDK_GUIDE,
   'settings-sdk.md': `# Settings SDK: behavior without markup
 
 Use the bundled @chatter/ui SDK for new React settings interfaces. The SDK has no modal, styles,
@@ -939,9 +949,10 @@ The theme owns markup, layout, styles and animations. Bundled @chatter/ui compon
 
 Keep input focus, draft text, selection and scroll position across state updates. Respect prefers-reduced-motion. Close custom media selections when chat/message/variant changes. To close your own overlay on Escape, handle keydown and preventDefault; unconsumed Escape navigates home. Ctrl/Cmd+Alt+Backspace always remains host recovery.
 
-The isolated shell has no general network, filesystem, package installation or electronAPI access. Use the bridge for app actions and media. React, react-markdown, remark-gfm and @chatter/ui are bundled. chatter-ui.d.ts describes optional components and callback types.
+The isolated shell has no general network, filesystem, package installation or electronAPI access. Use the bridge for app actions and media. React, react-markdown, remark-gfm and @chatter/ui are bundled; optional graphics/animation packages are listed in effects.md. chatter-ui.d.ts describes optional components and callback types.
 
 `,
 };
 
 export const THEME_SETTINGS_EXAMPLES=THEME_SETTINGS_RESOURCE_EXAMPLES;
+export const THEME_CHAT_SDK_EXAMPLES=THEME_CHAT_EXAMPLES;

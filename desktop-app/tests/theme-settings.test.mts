@@ -43,7 +43,8 @@ assert.equal(nativeSettingsTarget('account', 'arbitrary_script', false, t), null
 assert.equal(nativeSettingsTarget('app', 'appearance.title', false, t).result.title, t('appearance.title'));
 
 function fixture() {
-  const values: any = { language: 'system', theme: 'light', lightFrom: '07:00', darkFrom: '21:00', zoom: 100, renderPerf: 'low', showTokens: true, diceRoll: false };
+  const values: any = { language: 'system', theme: 'light', lightFrom: '07:00', darkFrom: '21:00', zoom: 100, renderPerf: 'low', showTokens: true, diceRoll: false,
+    themeEffectsEnabled:true,themeEffectIntensity:1,themeSoundEnabled:false,themeMusicEnabled:false,themeSoundVolume:.35,themeMusicVolume:.15 };
   const writes: any[] = []; let fail: string | null = null, failRead = false, reading: Promise<any> | null = null;
   const controller = new ThemeSettingsController({ catalog,
     search: (query: string) => themeSettingsSearch(query, t, false), error: (code: string) => 'error:' + code,
@@ -90,7 +91,7 @@ assert.equal(f.controller.getState().editor.fields.find((field: any) => field.id
 assert.equal(f.controller.getState().editor.fields.find((field: any) => field.id === 'renderPerf').dirty, true, 'failed writes remain editable');
 f.fail(null); await f.action('save'); assert.equal(f.controller.getState().editor.dirty, false);
 const failedRead = fixture(); failedRead.failRead(true); await failedRead.action('open'); assert.equal(failedRead.controller.getState().editor.error, 'error:load');
-failedRead.failRead(false); await failedRead.action('reload'); assert.equal(failedRead.controller.getState().editor.fields.length, 8);
+failedRead.failRead(false); await failedRead.action('reload'); assert.equal(failedRead.controller.getState().editor.fields.length, 14);
 const late = fixture(); let finish!: (value: any) => void;
 late.blockRead(new Promise(resolve => { finish = resolve; })); const loading = late.action('open'); late.controller.dispose(); finish(late.values); await loading;
 assert.equal(late.controller.getState().editor.loading, true, 'obsolete async results do not publish into a new scope');
