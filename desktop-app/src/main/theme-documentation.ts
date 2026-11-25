@@ -28,6 +28,8 @@ Available API features are not a mandatory UI checklist: choose what suits this 
 - docs/settings-operations.md: account security forms, memory spaces/records/map, quotas, agents and theme management.
 - docs/settings-intuition.md: intuition preferences, editable questions and generated suggestions.
 - docs/settings-profiles.md: prompt libraries, generation, personas and their avatars.
+- docs/settings-instructions.md: persona instructions and the complete questionnaire workflow.
+- docs/settings-profile-images.md: custom avatar pickers, previews and cropping without native modals.
 - docs/media.md: images, full-resolution viewers, documents and outgoing attachments.
 - docs/confirmations.md: custom confirmation UI, fields, decisions and native fallback.
 - docs/appearance.json: ordinary appearance fields, allowed values and ranges.
@@ -44,12 +46,105 @@ Local raster backgrounds use assets/image.png (PNG/JPEG/WebP/GIF, up to 8 MiB); 
 `;
 
 export const THEME_GUIDES: Record<string, string> = {
+  'settings-instructions.md': `# Persona instructions and questionnaires
+
+Open the personas section, load listPersonas, then call getPersonaInstructions({id}) for a known
+persona. It returns saved text and up to 50 most recent surveys. A persona always has enabled:true
+and mode:'both'; the both/persona/chat/off selector belongs to per-chat settings, not this editor.
+No new instruction mode is invented here. Types are in chatter.d.ts. Optional starting points:
+examples/settings/PersonaInstructions.tsx and SurveyQuestions.tsx. Compose or replace their markup.
+
+## Saving text
+
+Keep changes locally. savePersonaInstructions({id,text}) explicitly saves at most 12000 characters
+and returns the refreshed instruction state/surveys. The host retains the text read from the server
+for the existing atomic compare-and-save check. instructions_changed preserves the server's newer
+text: retain your draft, reload, reconcile and submit again. Never retry automatically. You need
+getPersonaInstructions again after that conflict. Persona biography/core memory are not changed.
+
+## Creating a proposal
+
+createPersonaSurvey({id,brief?,currentText?,questionCount?,includePrompt?,personalize?,modelId?})
+creates and stores a questionnaire, returning {survey}. brief defaults to empty (max 2000), currentText
+to the last loaded instructions (max 12000), questionCount to 10 (integer 1..100). The model may ask
+fewer questions. includePrompt and personalize default to false: offer explicit user controls and
+explain data use. includePrompt supplies the selected assistant prompt; personalize permits the
+native preference agent to consult permitted memory. Persona surveys NEVER receive chat history.
+The host ignores extra scope/target/history fields; the target is always the known persona id.
+
+listGenerationModels returns allowed id/name pairs and the preferred selectedId. Load it before
+passing an explicit modelId. Omit modelId to use the server preference; null explicitly chooses
+automatic selection for surveys. Subsequent stages use the survey's saved model and evidence.
+Generation operations require a direct user gesture, can consume quota and store surveys/answers;
+they never replace active instructions. An already submitted request can finish after closing.
+
+## Questions, answers and review
+
+survey.questionnaire contains id/title/questions. Each question has a stable id, label, required,
+type (single/multiple/text/textarea), optional options, allowOther and image metadata. Render any
+interface; a questionnaire component is not required. Submit answerPersonaSurvey({id,surveyId,answers}).
+Answer keys must match question ids. Text is a string; multiple is a string array of option values;
+an allowed custom answer is {other:string,selected?:string[]} (selected applies to multiple only).
+Required/options/lengths are checked by the shared native validator and the server. Text limits:
+1000 characters, textarea 4000, other 1000; at most 32000 serialized answer-value characters total.
+
+Answering stores answers, then generates survey.draft; instructions stay unchanged. If generation
+fails after saving answers, reload getPersonaInstructions and offer regeneratePersonaSurvey with
+the same id/surveyId. Saved answers are immutable; submitting different answers to an answered
+survey is rejected. regeneratePersonaSurvey uses saved answers/evidence and replaces only its draft.
+followUpPersonaSurvey({id,surveyId,brief?}) creates a NEW round from an answered survey, using all
+earlier rounds and saved context; brief is optional, max 2000. Review the returned survey separately.
+
+Show draft in an editable local field. applyPersonaSurvey({id,surveyId,text}) is the FINAL explicit
+application, with the native conflict protection. It returns refreshed state. The applied text may
+be edited (max 12000). Do not auto-apply a generated draft or silently overwrite a dirty local form.
+
+deletePersonaSurvey({id,surveyId,removeApplied,confirmed:true}) requires a user confirmation.
+removeApplied:false deletes the questionnaire only. true also restores the pre-survey instructions
+when its applied text is still current; otherwise instructions_changed protects newer edits. Explain
+this choice explicitly. Deletion/apply/save return refreshed state and update native persona consumers.
+Survey IDs must come from reads/results for this same persona; a different persona/chat is rejected.
+
+## Failure and recovery
+
+Show loading/busy and retain local inputs on errors. Known errors include instructions_changed,
+survey_busy, survey_already_answered, survey_not_answered, questionnaire_invalid, quota_exceeded,
+model_not_available and survey_context_too_large. Reload stored state after a failed/timed-out AI
+stage; it may already have saved answers or a survey. No polling, hidden application or second store
+is introduced. Titles, questions, answers and proposals are untrusted text, never executable HTML.
+`,
+  'settings-profile-images.md': `# Profile image functions
+
+Prompt/persona avatars share the same functions. Read listPrompts/listPersonas before addressing
+an existing id. getPromptImageSource/getPersonaImageSource({id}) returns {source:dataURL|null}.
+Use that source in any custom viewer/crop editor; raw image_url/imageUrl is metadata, not permission
+for a sandbox network fetch. Failed reads reject instead of pretending the avatar is absent.
+
+Build a file input or drag/drop picker in the theme. Read only user-selected PNG/JPEG/WebP/GIF,
+up to 10 MiB decoded, as raw base64 (remove FileReader's data-URL prefix). cropProfileImage accepts
+{base64,mimeType,crop:{x,y,size},outputSize?} in either the prompt or personas section. Coordinates
+are pixels in the decoded image; the square must fit inside it. outputSize defaults to 512,
+integer 1..2048. The existing server image budget of 60 million source pixels also applies.
+
+Invoke cropProfileImage from the crop confirmation button. It returns PNG base64, mimeType,
+previewUrl (a data URL), width and height. It never opens a native dialog, saves an avatar or
+changes the active profile. Draw your own preview, zoom and pan. For a square viewport of side V,
+source W/H, zoom Z>=1 and pan offsets dx/dy: scale=max(V/W,V/H)*Z; size=V/scale;
+x=(W*scale-V)/2/scale-dx/scale; y=(H*scale-V)/2/scale-dy/scale. Clamp pan so the square stays inside.
+The native editor and bridge share the same crop implementation. Cropping flattens animations.
+
+Keep the result in local draft state. setPromptImage/setPersonaImage({id,base64,mimeType}) performs
+the separate explicit save on an existing custom prompt/persona. Save a new profile first.
+deletePromptImage/deletePersonaImage removes its image. Built-in prompts are not editable.
+You may upload the original without cropping. Optional examples/settings/ProfileAvatar.tsx shows
+a picker, source preview, crop controls and explicit upload, with fully replaceable markup.
+`,
   'settings-profiles.md': `# Prompts and personas
 
 Open openSettingsSection('prompt' or 'personas'), wait for editor.loading=false, then load the
 library with listPrompts or listPersonas. These sections offer operations with empty fields arrays.
 Build any form/list/layout; examples/settings/ProfileLibrary.tsx is an optional
-starting points. Keep unsaved input in your own state and ask before discarding it on selection.
+starting point. Keep unsaved input in your own state and ask before discarding it on selection.
 Signatures/results live in SettingsRequestContract in chatter.d.ts.
 
 ## Prompts
@@ -66,17 +161,27 @@ also returns createdId. Use the returned plan-specific content limit and handle 
 deletePrompt({id,confirmed:true}) requires your own final user confirmation. Existing server
 selection/fallback rules apply after deletion. These are account defaults, not per-chat overrides.
 
-generatePrompt({instruction,currentContent?,detail?}) returns generated_prompt ONLY. It uses the
+generatePrompt({instruction,currentContent?,detail?,modelId?}) returns generated_prompt ONLY. It uses the
 configured AI and quota. Invoke directly from a user handler; show the proposal separately and
 only copy it into the local editor on request. Generating never saves or selects a prompt.
+listGenerationModels returns allowed models and selectedId; read it before passing an explicit
+modelId. Omit modelId to use the server preference. detail is minimal/medium/detailed/none.
+
+parsePromptSections({content}) and serializePromptSections({sections}) use the native advanced
+editor format: description/personality/scenario/examples/other with explicit top-level headings.
+Free-form text is retained in description. These local transformations never save/select a prompt;
+let the user edit a whole text or separate fields, then submit updatePrompt/createPrompt normally.
+For an existing custom entry with character_card metadata, startPromptChat({id}) starts its chat
+through the existing endpoint and opens it after the result is delivered. It returns chatId and
+messageId; the saved first message is included by the server. This does not import a Character Card.
 
 ## Personas
 
 listPersonas returns safe profile data: id/name/description/coreMemory/userInstructions/imageUrl,
 allowCoreMemoryUpdate/primary/active. IDs are unchanged; flags are booleans. createPersona and
 updatePersona accept name, description, coreMemory, allowCoreMemoryUpdate and optional
-userInstructions. Omitting userInstructions on update preserves it. This is plain instruction
-text, not the advanced instruction-mode/questionnaire API. Names are nonblank, at most 80
+userInstructions. Omitting userInstructions on update preserves it. For its dedicated instruction
+editor and full questionnaire workflow use settings-instructions.md. Names are nonblank, at most 80
 characters; descriptions at most 240; userInstructions at most 12000. Texts may otherwise be
 empty. The shared bridge request limit is 2 MiB total. The server remains authoritative.
 
@@ -88,14 +193,7 @@ return the refreshed library and update the same native cache/events; there is n
 
 ## Avatars, editing and recovery
 
-getPromptImageSource/getPersonaImageSource({id}) fetch the known entry's avatar through the app,
-returning {source:dataURL|null}. Use source in your own img/viewer; raw image_url/imageUrl are
-metadata, not network permission inside the isolated shell. No authentication URL is exposed.
-setPromptImage/setPersonaImage({id,base64,mimeType}) accepts raw base64 raster bytes (no data-URL
-prefix), PNG/JPEG/WebP/GIF, up to 10 MiB decoded. Read only a user-selected file and implement any
-preview/crop in the theme. Strip the FileReader data-URL prefix before submission. Image actions
-operate on existing entries; save a new profile first. deletePromptImage/deletePersonaImage removes
-the avatar. Built-in prompt images are not editable. Failed image reads reject, not source:null.
+Avatar source, picker, crop and upload functions are documented once in settings-profile-images.md.
 
 Read a library before addressing existing IDs. Only entries returned by this settings session's
 library reads are addressable. Before editing/deleting, the host rereads the target to detect outside changes;
@@ -103,10 +201,10 @@ settings_entity_changed means preserve the draft, explicitly reload and reconcil
 This preflight is not an atomic server revision lock. Loading/busy/errors and late results must
 be handled by your form, just like other settings operations. Generation does not overwrite drafts.
 
-editor.links explicitly offers the native section for Character Card imports, SillyTavern persona
-imports, questionnaires and other advanced controls not yet exposed as operations. Open that link
-only at the user's request with openSettings(link.sectionId,link.target). Core library operations
-stay in the theme and do not automatically open or replace its interface.
+Imports remain outside these operations. editor.links points to the native data/import section;
+open it only at the user's request with openSettings(link.sectionId,link.target). Ordinary library,
+instruction, survey and image operations stay in the theme; startPromptChat intentionally navigates
+to the created chat. No other operation automatically opens or replaces the interface.
 `,
   'settings-intuition.md': `# Intuition settings
 

@@ -73,6 +73,14 @@ let personas: any[] = [
   },
 ];
 const api: any = {
+  getModels: async () => ({
+    models: [{ id: 'model', name: 'Model', private: 'hidden' }],
+    preferred_model: 'model',
+  }),
+  startCharacterCardChat: async (id: number) => {
+    calls.push(['startPromptChat', id]);
+    return { chat_id: 55, message_id: 77, chat: { private: 'hidden' } };
+  },
   apiFetch: async (path: string, options: any = {}) => {
     calls.push([path, options]);
     readSignal = options.signal;
@@ -175,6 +183,15 @@ vm.runInNewContext(
     },
     require: (name: string) => {
       if (name === './api') return api;
+      if (name === './promptSections') return require('../src/renderer/lib/promptSections.ts');
+      if (name === './profile-image-crop')
+        return require('../src/renderer/lib/profile-image-crop.ts');
+      if (name === './theme-persona-instructions')
+        return {
+          createPersonaInstructionRequests: () => () => {
+            throw new Error('Covered by theme-persona-instructions.test.mts');
+          },
+        };
       if (name.endsWith('settings-request-types')) return { settingsOperations };
       if (name === './attachment-files')
         return {
@@ -261,6 +278,32 @@ assert.equal(
   null,
 );
 let result = await request('prompt', 'listPrompts');
+const modelList = await request('prompt', 'listGenerationModels');
+assert.equal(modelList.models[0].private, undefined);
+assert.equal(modelList.selectedId, 'model');
+await assert.rejects(
+  request('prompt', 'generatePrompt', { instruction: 'x', modelId: 'foreign' }),
+  /settings_entity_unavailable/,
+);
+assert.equal(
+  (await request('prompt', 'parsePromptSections', { content: 'Free-form prompt' })).sections
+    .description,
+  'Free-form prompt',
+);
+const sectioned = await request('prompt', 'serializePromptSections', {
+  sections: {
+    description: 'Desc',
+    personality: 'Kind',
+    scenario: 'Scene',
+    examples: 'Example',
+    other: 'Extra',
+  },
+});
+assert.equal(
+  (await request('prompt', 'parsePromptSections', { content: sectioned.content })).sections
+    .personality,
+  'Kind',
+);
 assert.equal(result.max_custom_prompt_length, 5000);
 assert.equal(result.internal, undefined);
 assert.equal(result.custom_prompts[0].private, undefined);
@@ -275,12 +318,24 @@ assert.equal(
       instruction: 'Make a proposal',
       currentContent: 'Original',
       detail: 'minimal',
+      modelId: 'model',
     })
   ).generated_prompt,
   'Proposal',
 );
 assert.deepEqual(library, original, 'generation never saves or selects');
 assert.equal(calls.at(-1)[1].current_content, 'Original');
+assert.equal(calls.at(-1)[1].preferred_model, 'model');
+await assert.rejects(
+  request('prompt', 'startPromptChat', { id: -1001 }),
+  /settings_entity_unavailable/,
+);
+library.custom_prompts[0].character_card = { first_message_present: true };
+await request('prompt', 'listPrompts');
+const started = await request('prompt', 'startPromptChat', { id: -1001 });
+assert.equal(started.chatId, 55);
+assert.equal(started.chat, undefined);
+assert.equal(calls.at(-1)[1], -1001);
 library.custom_prompts[0].content = 'Outside change';
 const writes = calls.filter((c) => c[0] === 'updatePrompt').length;
 await assert.rejects(

@@ -4,6 +4,13 @@ import { settingsOperations } from '../../main/settings-request-types';
 import type { ThemeSettingsSectionAdapter } from './theme-settings-controller';
 import type { SettingsTranslate } from './settings-fields';
 import { fileToBase64 } from './attachment-files';
+import { cropProfileImage, type ProfileCrop } from './profile-image-crop';
+import {
+  parsePromptSections,
+  serializePromptSections,
+  type PromptSections,
+} from './promptSections';
+import { createPersonaInstructionRequests } from './theme-persona-instructions';
 
 type Persona = {
   id: number;
@@ -22,6 +29,7 @@ type Context = {
   userId: number | undefined;
   current: () => boolean;
   t: SettingsTranslate;
+  chatCreated?: (id: number) => void;
 };
 type Adapter = Pick<ThemeSettingsSectionAdapter, 'requests' | 'request'>;
 const publicPersona = (item: Persona) => ({
@@ -70,6 +78,11 @@ export function createThemeProfileRequests(context: Context): Record<string, Ada
   const { client, base, userId, current, t } = context;
   let prompts: api.PromptsResponse | null = null;
   let personas: Persona[] | null = null;
+  let generationModels: Set<string> | null = null;
+  const validateModel = (id: unknown) => {
+    if (id !== undefined && id !== null && (!generationModels || !generationModels.has(String(id))))
+      throw new Error('settings_entity_unavailable');
+  };
   const scoped = (operationCurrent: () => boolean) => () => {
     if (!current() || !operationCurrent() || userId === undefined)
       throw new Error('settings_scope_changed');
@@ -121,8 +134,47 @@ export function createThemeProfileRequests(context: Context): Record<string, Ada
     } else {
       await client.invalidateQueries({ queryKey: ['memory-personas'] });
       await client.invalidateQueries({ queryKey: ['memory', base, userId] });
-      window.dispatchEvent(new Event('chatter:personas-changed'));
+      if (current()) window.dispatchEvent(new Event('chatter:personas-changed'));
     }
+  };
+  const instructionRequests = createPersonaInstructionRequests({
+    requirePersona: (id) => {
+      if (!personas?.some((p) => p.id === id)) throw new Error('settings_entity_unavailable');
+    },
+    validateModel,
+    changed: async (_id, guard, signal) => {
+      await invalidate('personas');
+      guard();
+      const items = await readPersonas(signal);
+      guard();
+      personas = items;
+    },
+  });
+  const shared = async (operation: string, params: Record<string, unknown>, guard: () => void) => {
+    if (operation === 'listGenerationModels') {
+      const data = await api.getModels();
+      guard();
+      generationModels = new Set(data.models.map((m) => m.id));
+      return {
+        result: {
+          models: data.models.map(({ id, name }) => ({ id, name })),
+          selectedId: data.preferred_model,
+        },
+      };
+    }
+    if (operation === 'cropProfileImage')
+      return {
+        result: await cropProfileImage(
+          {
+            base64: String(params.base64),
+            mimeType: String(params.mimeType),
+            crop: params.crop as ProfileCrop,
+            outputSize: params.outputSize as number | undefined,
+          },
+          guard,
+        ),
+      };
+    return null;
   };
   return {
     prompt: {
@@ -130,6 +182,15 @@ export function createThemeProfileRequests(context: Context): Record<string, Ada
       request: async (operation, params, operationCurrent, signal) => {
         const guard = scoped(operationCurrent);
         guard();
+        const common = await shared(operation, params, guard);
+        guard();
+        if (common) return common;
+        if (operation === 'parsePromptSections')
+          return { result: { sections: parsePromptSections(String(params.content)) } };
+        if (operation === 'serializePromptSections')
+          return {
+            result: { content: serializePromptSections(params.sections as PromptSections) },
+          };
         if (operation === 'listPrompts') {
           const data = await readPrompts(signal);
           guard();
@@ -137,10 +198,12 @@ export function createThemeProfileRequests(context: Context): Record<string, Ada
           return { result: publicPrompts(data) };
         }
         if (operation === 'generatePrompt') {
+          validateModel(params.modelId);
           const result = await api.generatePrompt({
             instruction: String(params.instruction),
             current_content: params.currentContent as string | undefined,
             detail: params.detail as 'minimal' | 'medium' | 'detailed' | 'none' | undefined,
+            preferred_model: params.modelId as string | undefined,
           });
           guard();
           return { result: { generated_prompt: result.generated_prompt } };
@@ -155,6 +218,8 @@ export function createThemeProfileRequests(context: Context): Record<string, Ada
           } else if (!known) throw new Error('settings_entity_unavailable');
           if (operation === 'getPromptImageSource')
             return { result: await imageSource(known!.image_url, guard, signal) };
+          if (operation === 'startPromptChat' && !known?.character_card)
+            throw new Error('settings_entity_unavailable');
           if (known && operation !== 'selectPrompt') {
             const fresh = await readPrompts(signal);
             guard();
@@ -166,6 +231,16 @@ export function createThemeProfileRequests(context: Context): Record<string, Ada
           }
         }
         let createdId: number | undefined;
+        if (operation === 'startPromptChat') {
+          const result = await api.startCharacterCardChat(id);
+          guard();
+          return {
+            result: { chatId: result.chat_id, messageId: result.message_id },
+            afterReply: () => {
+              if (current()) context.chatCreated?.(result.chat_id);
+            },
+          };
+        }
         if (operation === 'selectPrompt') await api.selectPrompt(id);
         else if (operation === 'createPrompt')
           createdId = (
@@ -204,6 +279,23 @@ export function createThemeProfileRequests(context: Context): Record<string, Ada
       request: async (operation, params, operationCurrent, signal) => {
         const guard = scoped(operationCurrent);
         guard();
+        const common = await shared(operation, params, guard);
+        guard();
+        if (common) return common;
+        if (
+          operation === 'getPersonaInstructions' ||
+          operation === 'savePersonaInstructions' ||
+          operation.endsWith('PersonaSurvey')
+        )
+          return instructionRequests(
+            operation,
+            params,
+            () => {
+              guard();
+              return true;
+            },
+            signal,
+          );
         if (operation === 'listPersonas') {
           const items = await readPersonas(signal);
           guard();

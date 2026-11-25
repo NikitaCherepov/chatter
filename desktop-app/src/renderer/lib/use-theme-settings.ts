@@ -12,7 +12,7 @@ import { createThemeSettingsSections } from './theme-settings-sections';
 import { createThemeSettingsRequests } from './theme-settings-requests';
 import type { ThemeSettingsSectionAdapter } from './theme-settings-controller';
 
-export function useThemeSettings(themeId: string | null, onAuthInvalidated?: () => void) {
+export function useThemeSettings(themeId: string | null, onAuthInvalidated?: () => void, onChatCreated?:(id:number)=>void) {
   const { user, setUser, logout } = useAuth();
   const queryClient = useQueryClient();
   const { t, i18n } = useTranslation();
@@ -20,8 +20,8 @@ export function useThemeSettings(themeId: string | null, onAuthInvalidated?: () 
   const scope = JSON.stringify([api.API_BASE, user?.id, isAdmin, themeId]);
   const owner = useRef({ scope, epoch: 0, mounted: true });
   if (owner.current.scope !== scope) owner.current = { scope, epoch: owner.current.epoch + 1, mounted: true };
-  const live = useRef({ t, isAdmin, locale: i18n.resolvedLanguage || i18n.language, base: api.API_BASE, userId: user?.id, legacyAppearance: user?.ui_settings?.appearance, reauthenticate: onAuthInvalidated ?? logout });
-  live.current = { t, isAdmin, locale: i18n.resolvedLanguage || i18n.language, base: api.API_BASE, userId: user?.id, legacyAppearance: user?.ui_settings?.appearance, reauthenticate: onAuthInvalidated ?? logout };
+  const live = useRef({ t, isAdmin, locale: i18n.resolvedLanguage || i18n.language, base: api.API_BASE, userId: user?.id, legacyAppearance: user?.ui_settings?.appearance, reauthenticate: onAuthInvalidated ?? logout,chatCreated:onChatCreated });
+  live.current = { t, isAdmin, locale: i18n.resolvedLanguage || i18n.language, base: api.API_BASE, userId: user?.id, legacyAppearance: user?.ui_settings?.appearance, reauthenticate: onAuthInvalidated ?? logout,chatCreated:onChatCreated };
   const controller = useMemo(() => {
     const epoch = owner.current.epoch, userId = user?.id, base = api.API_BASE;
     const current = () => owner.current.mounted && owner.current.epoch === epoch;
@@ -36,6 +36,7 @@ export function useThemeSettings(themeId: string | null, onAuthInvalidated?: () 
     };
     const requests = createThemeSettingsRequests({ client: queryClient, base, userId, current, t: (key, options) => String(live.current.t(key, options)),
       locale: () => live.current.locale, legacyAppearance: () => live.current.legacyAppearance,
+      chatCreated:id=>{if(current())live.current.chatCreated?.(id);},
       reauthenticate: () => { if (live.current.base === base && live.current.userId === userId) live.current.reauthenticate?.(); } });
     const withRequests = (sections: Record<string, ThemeSettingsSectionAdapter>) => Object.fromEntries(Object.entries(sections).map(([id, section]) =>
       [id, requests[id] ? { ...section, ...requests[id] } : section]));

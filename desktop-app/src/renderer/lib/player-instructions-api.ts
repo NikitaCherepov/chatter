@@ -15,9 +15,9 @@ export type PlayerSurvey = InstructionTarget & {
 export type InstructionsMode = 'both' | 'persona' | 'chat' | 'off';
 export type InstructionState = { text: string; enabled: boolean; mode: InstructionsMode };
 export type PlayerInstructions = InstructionState & { surveys: PlayerSurvey[] };
-export const getPlayerInstructions = (target: InstructionTarget) =>
+export const getPlayerInstructions = (target: InstructionTarget, signal?:AbortSignal) =>
   apiFetch<PlayerInstructions>(
-    `/api/v1/player-instructions?scope=${target.scope}&target_id=${target.target_id}`,
+    `/api/v1/player-instructions?scope=${target.scope}&target_id=${target.target_id}`,{signal},
   );
 export const savePlayerInstructions = (
   target: InstructionTarget,

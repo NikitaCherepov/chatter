@@ -8,6 +8,14 @@ export type SettingsPersona={id:number;name:string;description:string;coreMemory
 export type SettingsPersonaInput={name:string;description:string;coreMemory:string;userInstructions?:string;allowCoreMemoryUpdate:boolean};
 export type SettingsPersonaLibrary={personas:SettingsPersona[]};
 export type SettingsProfileImage={base64:string;mimeType:'image/png'|'image/jpeg'|'image/webp'|'image/gif'};
+export type SettingsProfileCrop={x:number;y:number;size:number};
+export type SettingsCroppedProfileImage=SettingsProfileImage&{mimeType:'image/png';previewUrl:string;width:number;height:number};
+export type SettingsPromptSections={description:string;personality:string;scenario:string;examples:string;other:string};
+export type SettingsGenerationModels={models:{id:string;name:string}[];selectedId:string|null};
+export type SettingsSurveyAnswer=string|string[]|{other:string;selected?:string[]};
+export type SettingsSurveyQuestion={id:string;label:string;type:'single'|'multiple'|'text'|'textarea';required:boolean;options?:string[];allowOther?:true;image?:{url:string;alt:string}};
+export type SettingsPersonaSurvey={id:string;scope:'persona';target_id:number;questionnaire:{id:string;title:string;questions:SettingsSurveyQuestion[]};answers:Record<string,SettingsSurveyAnswer>|null;draft:string|null;applied_text:string|null;created_at:number;include_history:boolean;personalize:boolean;model_id:string|null};
+export type SettingsPersonaInstructions={text:string;enabled:boolean;mode:'both'|'persona'|'chat'|'off';surveys:SettingsPersonaSurvey[]};
 export type SettingsIntuitionQuestion={id:string;name:string;question:string;enabled:boolean};
 export type SettingsIntuitionSettings={mode:'enabled'|'disabled';historyMessages:number|null;questions:SettingsIntuitionQuestion[]|null};
 export type SettingsIntuitionConfig={settings:SettingsIntuitionSettings;available:boolean;defaults:SettingsIntuitionQuestion[];effective:{enabled:boolean;historyMessages:number;questions:SettingsIntuitionQuestion[]};inherited?:{historyMessages:number;questions:SettingsIntuitionQuestion[]}};
@@ -22,17 +30,32 @@ export type SettingsThemeWorkspace={directory:string;draftsDirectory:string;docu
 export type SettingsThemeList={revision:number;activeId:string|null;profiles:{id:string;name:string;revision:number}[];workspace:SettingsThemeWorkspace};
 export type SettingsRequestContract={
  prompt:{
+  listGenerationModels:{params:{};result:SettingsGenerationModels};
+  parsePromptSections:{params:{content:string};result:{sections:SettingsPromptSections}};
+  serializePromptSections:{params:{sections:SettingsPromptSections};result:{content:string}};
+  cropProfileImage:{params:SettingsProfileImage&{crop:SettingsProfileCrop;outputSize?:number};result:SettingsCroppedProfileImage};
+  startPromptChat:{params:{id:number};result:{chatId:number;messageId:number|null}};
   listPrompts:{params:{};result:SettingsPromptLibrary};
   selectPrompt:{params:{id:number};result:SettingsPromptLibrary};
   createPrompt:{params:SettingsPromptInput;result:SettingsPromptLibrary&{createdId:number}};
   updatePrompt:{params:SettingsPromptInput&{id:number};result:SettingsPromptLibrary};
   deletePrompt:{params:{id:number;confirmed:true};result:SettingsPromptLibrary};
-  generatePrompt:{params:{instruction:string;currentContent?:string;detail?:'minimal'|'medium'|'detailed'|'none'};result:{generated_prompt:string}};
+  generatePrompt:{params:{instruction:string;currentContent?:string;detail?:'minimal'|'medium'|'detailed'|'none';modelId?:string};result:{generated_prompt:string}};
   getPromptImageSource:{params:{id:number};result:{source:string|null}};
   setPromptImage:{params:SettingsProfileImage&{id:number};result:SettingsPromptLibrary};
   deletePromptImage:{params:{id:number};result:SettingsPromptLibrary};
  };
  personas:{
+  listGenerationModels:{params:{};result:SettingsGenerationModels};
+  cropProfileImage:{params:SettingsProfileImage&{crop:SettingsProfileCrop;outputSize?:number};result:SettingsCroppedProfileImage};
+  getPersonaInstructions:{params:{id:number};result:SettingsPersonaInstructions};
+  savePersonaInstructions:{params:{id:number;text:string};result:SettingsPersonaInstructions};
+  createPersonaSurvey:{params:{id:number;brief?:string;currentText?:string;questionCount?:number;includePrompt?:boolean;personalize?:boolean;modelId?:string|null};result:{survey:SettingsPersonaSurvey}};
+  answerPersonaSurvey:{params:{id:number;surveyId:string;answers:Record<string,SettingsSurveyAnswer>};result:{survey:SettingsPersonaSurvey}};
+  regeneratePersonaSurvey:{params:{id:number;surveyId:string};result:{survey:SettingsPersonaSurvey}};
+  followUpPersonaSurvey:{params:{id:number;surveyId:string;brief?:string};result:{survey:SettingsPersonaSurvey}};
+  applyPersonaSurvey:{params:{id:number;surveyId:string;text:string};result:SettingsPersonaInstructions};
+  deletePersonaSurvey:{params:{id:number;surveyId:string;removeApplied:boolean;confirmed:true};result:SettingsPersonaInstructions};
   listPersonas:{params:{};result:SettingsPersonaLibrary};
   createPersona:{params:SettingsPersonaInput;result:SettingsPersonaLibrary&{createdId:number}};
   updatePersona:{params:SettingsPersonaInput&{id:number};result:SettingsPersonaLibrary};

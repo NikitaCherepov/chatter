@@ -1,8 +1,12 @@
+import {THEME_SETTINGS_PROFILE_EXTRAS} from './theme-settings-profile-extras';
 /** Optional source examples, never mounted by the app. Copy, restyle or replace them. */
 export const THEME_SETTINGS_RESOURCE_EXAMPLES: Record<string, string> = {
+  ...THEME_SETTINGS_PROFILE_EXTRAS,
   'ProfileLibrary.tsx': String.raw`import React from 'react';
 import {useChatterState} from '@chatter/ui';
 import type {SettingsPromptLibrary,SettingsPersonaLibrary} from '../chatter';
+import PersonaInstructions from './PersonaInstructions';
+import ProfileAvatar from './ProfileAvatar';
 
 type Draft={id?:number;name:string;description:string;content:string;userInstructions:string;allowCoreMemoryUpdate:boolean};
 type Item={id:number;name:string;active:boolean;editable:boolean;primary:boolean;draft?:Draft};
@@ -62,19 +66,20 @@ export default function ProfileLibrary({sectionId}:{sectionId:'prompt'|'personas
    void run(async()=>sectionId==='prompt'
     ?d.id===undefined?window.chatter.requestSettings('prompt','createPrompt',{name:d.name,description:d.description,content:d.content})
      :window.chatter.requestSettings('prompt','updatePrompt',{id:d.id,name:d.name,description:d.description,content:d.content})
-    :d.id===undefined?window.chatter.requestSettings('personas','createPersona',{name:d.name,description:d.description,coreMemory:d.content,userInstructions:d.userInstructions,allowCoreMemoryUpdate:d.allowCoreMemoryUpdate})
-     :window.chatter.requestSettings('personas','updatePersona',{id:d.id,name:d.name,description:d.description,coreMemory:d.content,userInstructions:d.userInstructions,allowCoreMemoryUpdate:d.allowCoreMemoryUpdate}),value=>{accept(value);setForm(undefined);setProposal(undefined);});
+    :d.id===undefined?window.chatter.requestSettings('personas','createPersona',{name:d.name,description:d.description,coreMemory:d.content,allowCoreMemoryUpdate:d.allowCoreMemoryUpdate})
+     :window.chatter.requestSettings('personas','updatePersona',{id:d.id,name:d.name,description:d.description,coreMemory:d.content,allowCoreMemoryUpdate:d.allowCoreMemoryUpdate}),value=>{accept(value);setForm(undefined);setProposal(undefined);});
   }}><fieldset disabled={locked}>
    <label>Name<input required maxLength={sectionId==='personas'?80:undefined} value={form.draft.name} onChange={event=>patch({name:event.target.value})}/></label>
    <label>Description<input maxLength={sectionId==='personas'?240:undefined} value={form.draft.description} onChange={event=>patch({description:event.target.value})}/></label>
    <label>{sectionId==='prompt'?'Prompt':'Core memory'}<textarea maxLength={sectionId==='prompt'?limit:undefined} value={form.draft.content} onChange={event=>patch({content:event.target.value})}/></label>
    {sectionId==='personas'&&<>
-    <label>Instructions<textarea maxLength={12000} value={form.draft.userInstructions} onChange={event=>patch({userInstructions:event.target.value})}/></label>
     <label>Allow automatic memory updates<input type="checkbox" checked={form.draft.allowCoreMemoryUpdate} onChange={event=>patch({allowCoreMemoryUpdate:event.target.checked})}/></label>
    </>}
    <button type="button" onClick={()=>{setForm(undefined);setProposal(undefined);}}>Discard edits</button>
    <button type="submit">{sectionId==='prompt'&&form.draft.id===undefined?'Create and select':'Save'}</button>
   </fieldset></form>}
+  {form?.draft.id!==undefined&&<ProfileAvatar key={'avatar-'+form.draft.id} sectionId={sectionId} id={form.draft.id}/>}
+  {sectionId==='personas'&&form?.draft.id!==undefined&&<PersonaInstructions key={form.draft.id} id={form.draft.id}/>}
   {sectionId==='prompt'&&form&&<form onSubmit={event=>{event.preventDefault();void run(()=>window.chatter.requestSettings('prompt','generatePrompt',{instruction:brief,currentContent:form.draft.content}),result=>setProposal(result.generated_prompt));}}>
    <label>Describe a proposal<textarea required value={brief} onChange={event=>setBrief(event.target.value)}/></label>
    <button type="submit" disabled={locked}>Generate proposal</button>

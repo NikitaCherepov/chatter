@@ -19,6 +19,11 @@ export const SETTINGS_REQUESTS: Record<string, Record<string, { key: string; mut
     suggestIntuitionQuestions: { key: 'intuition.suggest', gesture: true },
   },
   prompt: {
+    listGenerationModels: {key:'settings.voice.model'},
+    parsePromptSections: {key:'settings.prompt.modeAdvanced'},
+    serializePromptSections: {key:'settings.prompt.modeUsual'},
+    cropProfileImage: {key:'settings.prompt.imageCropTitle',gesture:true},
+    startPromptChat: {key:'settings.prompt.characterCard.startChat',mutation:true},
     listPrompts: {key:'settings.sections.prompt'},
     getPromptImageSource: {key:'chat.image.photoAlt'},
     selectPrompt: {key:'common.apply',mutation:true},
@@ -30,6 +35,16 @@ export const SETTINGS_REQUESTS: Record<string, Record<string, { key: string; mut
     deletePromptImage: {key:'common.delete',mutation:true},
   },
   personas: {
+    listGenerationModels: {key:'settings.voice.model'},
+    cropProfileImage: {key:'settings.prompt.imageCropTitle',gesture:true},
+    getPersonaInstructions: {key:'playerInstructions.general'},
+    savePersonaInstructions: {key:'common.save',mutation:true},
+    createPersonaSurvey: {key:'playerInstructions.generate',mutation:true},
+    answerPersonaSurvey: {key:'common.send',mutation:true},
+    regeneratePersonaSurvey: {key:'playerInstructions.regenerate',mutation:true},
+    followUpPersonaSurvey: {key:'playerInstructions.startFollowUp',mutation:true},
+    applyPersonaSurvey: {key:'playerInstructions.apply',mutation:true},
+    deletePersonaSurvey: {key:'common.delete',mutation:true,confirm:true},
     listPersonas: {key:'settings.sections.personas'},
     getPersonaImageSource: {key:'chat.image.photoAlt'},
     createPersona: {key:'settings.account.personas.createTitle',mutation:true},
@@ -60,6 +75,8 @@ const text = (value: unknown, max: number, blank = false) => typeof value === 's
 const password = (value: unknown, max: number) => typeof value === 'string' && value.length > 0 && value.length <= max;
 const positive = (value: unknown) => typeof value === 'number' && Number.isSafeInteger(value) && value > 0;
 const themeId = (value: unknown) => typeof value === 'string' && /^[a-zA-Z0-9_-]{1,80}$/.test(value);
+const profileImage = (p:Record<string,unknown>) => text(p.base64,14*1024*1024) && typeof p.mimeType==='string' && ['image/png','image/jpeg','image/webp','image/gif'].includes(p.mimeType);
+const modelId = (value:unknown) => value===undefined || text(value,200);
 export function validGlobalIntuitionSettings(value:unknown):boolean {
   if (!object(value) || !['enabled','disabled'].includes(String(value.mode))) return false;
   if (value.historyMessages!==null && !(Number.isInteger(value.historyMessages) && Number(value.historyMessages)>=0 && Number(value.historyMessages)<=50)) return false;
@@ -79,19 +96,31 @@ export function parseSettingsRequest(value: unknown): ThemeSettingsRequest | nul
   if (!definition || !object(value.params)) return null;
   const p = value.params, op = value.operation;
   // Serialize once to reject cycles, unsupported objects and oversized input before any operation.
-  try { if (JSON.stringify(p).length > (['importTheme','storeThemeImage','setPromptImage','setPersonaImage'].includes(op) ? 17 * 1024 * 1024 : 2 * 1024 * 1024)) return null; } catch { return null; }
+  try { if (JSON.stringify(p).length > (['importTheme','storeThemeImage','setPromptImage','setPersonaImage','cropProfileImage'].includes(op) ? 17 * 1024 * 1024 : 2 * 1024 * 1024)) return null; } catch { return null; }
   let valid = false;
   const promptId=Number.isSafeInteger(p.id) && (Number(p.id)>0 || Number(p.id)<=-1000 || p.id===-1);
   const customPromptId=promptId && Number(p.id)<=-1000;
-  if (op==='createPrompt'||op==='updatePrompt') valid=(op==='createPrompt'||customPromptId) && text(p.name,2*1024*1024) && text(p.content,2*1024*1024,true) && (p.description===undefined||text(p.description,2*1024*1024,true));
+  if(op==='cropProfileImage') valid=profileImage(p) && object(p.crop) && ['x','y','size'].every(key=>typeof (p.crop as Record<string,unknown>)[key]==='number' && Number.isFinite((p.crop as Record<string,unknown>)[key]))
+    && Number(p.crop.x)>=0 && Number(p.crop.y)>=0 && Number(p.crop.size)>0 && (p.outputSize===undefined||Number.isInteger(p.outputSize)&&Number(p.outputSize)>=1&&Number(p.outputSize)<=2048);
+  else if(op==='parsePromptSections') valid=text(p.content,2*1024*1024,true);
+  else if(op==='serializePromptSections') valid=object(p.sections)&&['description','personality','scenario','examples','other'].every(key=>text((p.sections as Record<string,unknown>)[key],2*1024*1024,true));
+  else if(op==='getPersonaInstructions'||op==='savePersonaInstructions') valid=positive(p.id)&&(op==='getPersonaInstructions'||text(p.text,12000,true));
+  else if(op==='createPersonaSurvey') valid=positive(p.id)&&(p.brief===undefined||text(p.brief,2000,true))&&(p.currentText===undefined||text(p.currentText,12000,true))
+    && (p.questionCount===undefined||Number.isInteger(p.questionCount)&&Number(p.questionCount)>=1&&Number(p.questionCount)<=100)
+    && (p.includePrompt===undefined||typeof p.includePrompt==='boolean')&&(p.personalize===undefined||typeof p.personalize==='boolean')&&(p.modelId===null||modelId(p.modelId));
+  else if(['answerPersonaSurvey','regeneratePersonaSurvey','followUpPersonaSurvey','applyPersonaSurvey','deletePersonaSurvey'].includes(op)) valid=positive(p.id)&&typeof p.surveyId==='string'&&/^[a-zA-Z0-9_-]{1,64}$/.test(p.surveyId)
+    && (op!=='answerPersonaSurvey'||object(p.answers)&&JSON.stringify(p.answers).length<=64000)
+    && (op!=='followUpPersonaSurvey'||p.brief===undefined||text(p.brief,2000,true))
+    && (op!=='applyPersonaSurvey'||text(p.text,12000,true))&&(op!=='deletePersonaSurvey'||typeof p.removeApplied==='boolean');
+  else if (op==='createPrompt'||op==='updatePrompt') valid=(op==='createPrompt'||customPromptId) && text(p.name,2*1024*1024) && text(p.content,2*1024*1024,true) && (p.description===undefined||text(p.description,2*1024*1024,true));
   else if (op==='selectPrompt') valid=promptId;
-  else if (op==='deletePrompt'||op==='getPromptImageSource') valid=customPromptId;
-  else if (op==='generatePrompt') valid=text(p.instruction,2*1024*1024) && (p.currentContent===undefined||text(p.currentContent,2*1024*1024,true)) && (p.detail===undefined||['minimal','medium','detailed','none'].includes(String(p.detail)));
+  else if (op==='deletePrompt'||op==='getPromptImageSource'||op==='startPromptChat') valid=customPromptId;
+  else if (op==='generatePrompt') valid=text(p.instruction,2*1024*1024) && (p.currentContent===undefined||text(p.currentContent,2*1024*1024,true)) && (p.detail===undefined||['minimal','medium','detailed','none'].includes(String(p.detail)))&&modelId(p.modelId);
   else if(op==='createPersona'||op==='updatePersona') valid=(op==='createPersona'||positive(p.id)) && text(p.name,80) && text(p.description,240,true)
     && text(p.coreMemory,2*1024*1024,true) && typeof p.allowCoreMemoryUpdate==='boolean' && (p.userInstructions===undefined||text(p.userInstructions,12000,true));
   else if(op==='activatePersona'||op==='deletePersona'||op==='getPersonaImageSource') valid=positive(p.id);
   else if(['setPromptImage','setPersonaImage','deletePromptImage','deletePersonaImage'].includes(op)) valid=(op.includes('Prompt')?customPromptId:positive(p.id))
-    && (!op.startsWith('set')||text(p.base64,14*1024*1024)&&typeof p.mimeType==='string'&&['image/png','image/jpeg','image/webp','image/gif'].includes(p.mimeType));
+    && (!op.startsWith('set')||profileImage(p));
   else if (op === 'saveIntuitionConfig') valid=validGlobalIntuitionSettings(p.settings);
   else if (op === 'suggestIntuitionQuestions') valid=text(p.brief,2000,true);
   else if (op === 'changePassword') valid = password(p.currentPassword, 4096) && password(p.newPassword, 128) && (p.newPassword as string).length >= 8;
@@ -110,7 +139,7 @@ export function parseSettingsRequest(value: unknown): ThemeSettingsRequest | nul
   else if (op === 'saveTheme' || op === 'writeDraft' || op === 'checkTheme') valid = object(p.profile) && (p.apply === undefined || typeof p.apply === 'boolean');
   else if (op === 'importTheme') valid = ['json', 'zip'].includes(String(p.format)) && text(p.content, p.format === 'json' ? 2 * 1024 * 1024 : 17 * 1024 * 1024);
   else if (op === 'storeThemeImage') valid = text(p.base64, 12 * 1024 * 1024);
-  else valid = ['listPrompts','listPersonas','getIntuitionConfig','getAccount', 'getMemoryStatus', 'listSpaces', 'listAgents', 'getQuota', 'listThemes', 'getAppearanceSchema', 'cancelPreview', 'chooseThemesDirectory', 'retryThemeMigration'].includes(op);
+  else valid = ['listGenerationModels','listPrompts','listPersonas','getIntuitionConfig','getAccount', 'getMemoryStatus', 'listSpaces', 'listAgents', 'getQuota', 'listThemes', 'getAppearanceSchema', 'cancelPreview', 'chooseThemesDirectory', 'retryThemeMigration'].includes(op);
   if (!valid || definition.confirm && p.confirmed !== true) return null;
   // Credentials/params remain request-local; never copy them into settings state or diagnostic text.
   return { method: 'settings', requestId: value.requestId as string, sectionId: value.sectionId, editorId: value.editorId as string, operation: op, params: p };

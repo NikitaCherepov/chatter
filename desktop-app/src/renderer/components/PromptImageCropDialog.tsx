@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPoi
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import s from './PromptImageCropDialog.module.scss';
+import {profileCropFromViewport,renderProfileCrop} from '../lib/profile-image-crop';
 
 const CROP_SIZE = 320;
 const OUTPUT_SIZE = 512;
@@ -91,39 +92,8 @@ export function PromptImageCropDialog({ sourceUrl, onCancel, onConfirm }: Props)
     if (!image || !imageSize || saving) return;
     setSaving(true);
     try {
-      const effectiveScale = baseScale * zoom;
-      const renderedWidth = imageSize.width * effectiveScale;
-      const renderedHeight = imageSize.height * effectiveScale;
-      const renderedLeft = (CROP_SIZE - renderedWidth) / 2 + offset.x;
-      const renderedTop = (CROP_SIZE - renderedHeight) / 2 + offset.y;
-      const sourceX = -renderedLeft / effectiveScale;
-      const sourceY = -renderedTop / effectiveScale;
-      const sourceSize = CROP_SIZE / effectiveScale;
-
-      const canvas = document.createElement('canvas');
-      canvas.width = OUTPUT_SIZE;
-      canvas.height = OUTPUT_SIZE;
-      const context = canvas.getContext('2d');
-      if (!context) throw new Error('canvas_unavailable');
-      context.imageSmoothingEnabled = true;
-      context.imageSmoothingQuality = 'high';
-      context.drawImage(
-        image,
-        sourceX,
-        sourceY,
-        sourceSize,
-        sourceSize,
-        0,
-        0,
-        OUTPUT_SIZE,
-        OUTPUT_SIZE,
-      );
-      const previewUrl = canvas.toDataURL('image/png');
-      onConfirm({
-        base64: previewUrl.split(',')[1] || '',
-        mimeType: 'image/png',
-        previewUrl,
-      });
+      const crop=profileCropFromViewport(imageSize.width,imageSize.height,CROP_SIZE,zoom,offset);
+      onConfirm(renderProfileCrop(image,imageSize.width,imageSize.height,crop,OUTPUT_SIZE));
     } finally {
       setSaving(false);
     }

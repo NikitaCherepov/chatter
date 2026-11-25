@@ -1104,6 +1104,12 @@ export function ChatPage() {
   const layouts = useChatLayouts();
   const themeSettings = useThemeSettings(appearanceShell ? appearanceProfile?.id ?? 'preview' : null, () => {
     setShowSettings(false); logout(); navigate('/login', { replace: true });
+  },chatId=>{
+    const scope=libraryScopeRef.current,epoch=libraryEpochRef.current;
+    void (async()=>{
+      await loadChats();if(scope!==libraryScopeRef.current||epoch!==libraryEpochRef.current)return;
+      await selectChat(chatId);
+    })().catch(error=>{if(scope===libraryScopeRef.current&&epoch===libraryEpochRef.current)toast.error(error.message);});
   });
   const [layoutPreview, setLayoutPreview] = useState<{ profile: ChatLayoutProfile; proposalId?: string }>();
   const [layoutEditorDraft, setLayoutEditorDraft] = useState<ChatLayoutProfile>();

@@ -15,6 +15,7 @@ const nativeFlags = native.slice(native.indexOf('  const handleToggleShowTokens 
 const apiFile = fs.readFileSync(path.join(desktop, 'src/renderer/lib/api.ts'), 'utf8');
 const credentialWriters = apiFile.slice(apiFile.indexOf('export function changeAccountPassword'), apiFile.indexOf('export async function setUserTimezone'));
 const promptWriters = apiFile.slice(apiFile.indexOf('export async function selectPrompt'), apiFile.indexOf('// ---------- Notes ----------'));
+const characterChatWriter = apiFile.slice(apiFile.indexOf('export async function startCharacterCardChat'),apiFile.indexOf('export type PromptsResponse'));
 const apiSource = `
 export const API_BASE='fixture';
 export const getUiSettings=async()=>{const user=window.testAccount;if(window.delaySettingsRead)await window.delaySettingsRead;return {settings:structuredClone(window.ui[user])};};
@@ -31,6 +32,19 @@ export const apiFetch=async(url,options={})=>{
   return {ok:true,...(url.endsWith('/login')?{login:payload.new_login.toLowerCase()}: {})};
  }
  if(url==='/api/v1/memory/status')return {configured:true};
+ if(url.startsWith('/api/v1/player-instructions?'))return structuredClone(window.instructions);
+ if(url==='/api/v1/player-instructions'&&options.method==='PATCH'){
+  if(payload.expected!==window.instructions.text)throw new Error('instructions_changed');
+  window.instructions.text=payload.text.trim();return structuredClone(window.instructions);
+ }
+ if(url==='/api/v1/player-instructions/surveys'){
+  const survey={id:'survey-fixture',scope:'persona',target_id:payload.target_id,questionnaire:{id:'prefs',title:'Preferences',questions:[{id:'style',label:'Preferred style',type:'text',required:true}]},answers:null,draft:null,applied_text:null,created_at:123,include_history:false,personalize:payload.personalize,model_id:payload.model_id??null};
+  window.instructions.surveys.push(survey);window.surveyInputs=payload;return {survey:structuredClone(survey)};
+ }
+ if(url.endsWith('/survey-fixture/answers')){const survey=window.instructions.surveys[0];survey.answers=payload.answers;survey.draft='Generated instruction proposal';return {survey:structuredClone(survey)};}
+ if(url.endsWith('/survey-fixture/apply')){window.instructions.text=payload.text;window.instructions.surveys[0].applied_text=payload.text;return structuredClone(window.instructions);}
+ if(url.endsWith('/survey-fixture')&&options.method==='DELETE'){window.instructions.surveys=[];return structuredClone(window.instructions);}
+ if(url.endsWith('/start-chat'))return {chat_id:77,message_id:88};
  if(url==='/api/v1/intuition'){
   if(options.method==='PUT'){if(payload.revision!==window.intuition.revision)throw new Error('intuition_settings_changed');window.intuition={...window.intuition,revision:window.intuition.revision+1,settings:payload.settings};}
   return structuredClone(window.intuition);
@@ -53,8 +67,9 @@ export const apiFetch=async(url,options={})=>{
 };export const localMcpScope=()=>'';export const syncLocalMcp=async()=>{};
 ${credentialWriters}
 ${promptWriters}
+${characterChatWriter}
 export const setPersonaImage=async()=>({ok:true});export const deletePersonaImage=async()=>({ok:true});export const resolveImageUrl=value=>value;
-export const getModels=async()=>({models:[{id:'smart',name:'Smart',reasoning_levels:['high']},{id:'simple',name:'Simple',reasoning_levels:[]}],auto_reasoning_levels:['high']});export const getModelSettings=async()=>({model_settings:{}});export const getSubagentModel=async()=>({subagent_model:window.agentModel});export const getSubagentReasoningLevel=async()=>({reasoning_level:window.agentReasoning});export const getLinkStatus=async()=>({});export const getPrompts=async()=>({prompts:[]});
+export const getModels=async()=>({models:[{id:'smart',name:'Smart',reasoning_levels:['high']},{id:'simple',name:'Simple',reasoning_levels:[]}],preferred_model:'smart',auto_reasoning_levels:['high']});export const getModelSettings=async()=>({model_settings:{}});export const getSubagentModel=async()=>({subagent_model:window.agentModel});export const getSubagentReasoningLevel=async()=>({reasoning_level:window.agentReasoning});export const getLinkStatus=async()=>({});export const getPrompts=async()=>({prompts:[]});
 export const getContextTokenLimit=async()=>({max_context_tokens:window.contextTokens,max_context_tokens_limit:30000});
 export const getAttachmentTokenLimit=async()=>({attachment_max_tokens:Math.min(window.attachmentTokens,Math.floor(window.contextTokens*.9)),attachment_max_tokens_limit:Math.floor(window.contextTokens*.9),max_context_tokens:window.contextTokens});
 export const setContextTokenLimit=async value=>{window.contextTokens=value;return getContextTokenLimit();};export const setAttachmentTokenLimit=async value=>{window.attachmentTokens=Math.min(value,Math.floor(window.contextTokens*.9));return getAttachmentTokenLimit();};
@@ -84,9 +99,10 @@ window.memorySpaces=[{id:1,name:'General',kind:'general',is_default:1,is_primary
 window.intuition={revision:0,settings:{mode:'disabled',historyMessages:null,questions:null},available:true,defaults:[],effective:{enabled:false,historyMessages:2,questions:[]}};
 window.prompts={prompts:[{id:1,name:'Builtin',description:'Default',is_default:1}],custom_prompts:[],selected_prompt_id:1,custom_prompt_content:null,max_custom_prompt_length:1000};
 window.personas=[{id:1,name:'Main',description:'Main',core_memory:'Memory',user_instructions:'',image_url:null,allow_core_memory_update:1,is_primary:1,is_default:1}];
+window.instructions={text:'Original instructions',enabled:true,mode:'both',surveys:[]};window.createdChats=[];
 localStorage.setItem('chatter_tts_settings',JSON.stringify({modelId:'piper',voiceId:'ruslan',volume:.3,sfxVolume:.3}));
 function Body({user,setUser}){
- const themeSettings=useThemeSettings('fixture-theme',()=>{window.authInvalidations++;}),{t}=useTranslation();
+ const themeSettings=useThemeSettings('fixture-theme',()=>{window.authInvalidations++;},id=>window.createdChats.push(id)),{t}=useTranslation();
  const [uiSettings,setUiSettingsState]=useState(user.ui_settings),[uiSettingsSaving,setUiSettingsSaving]=useState(false);
  const appScopeRef=useRef('');appScopeRef.current=String(user.id);
  const reads=useSettingsRead('ui',user.id,true);
@@ -259,12 +275,28 @@ app.whenReady().then(async()=>{
  assert.equal(await host.webContents.executeJavaScript('window.prompts.custom_prompts.length'),0);
  const createdPrompt=await resource('prompt','createPrompt',{name:'Fixture prompt',description:'Description',content:'Content'},true);
  assert.equal(createdPrompt.createdId,-1001);assert.equal(createdPrompt.selected_prompt_id,-1001);
+ assert.equal((await resource('prompt','listGenerationModels')).selectedId,'smart');
+ const sections=(await resource('prompt','parsePromptSections',{content:'Free form'})).sections;assert.equal(sections.description,'Free form');
+ assert.ok((await resource('prompt','serializePromptSections',{sections})).content.includes('# DESCRIPTION'));
+ const cropSource=await host.webContents.executeJavaScript('(()=>{const c=document.createElement("canvas");c.width=4;c.height=2;const ctx=c.getContext("2d");ctx.fillStyle="#ff0000";ctx.fillRect(0,0,2,2);ctx.fillStyle="#0000ff";ctx.fillRect(2,0,2,2);return c.toDataURL("image/png").split(",")[1];})()');
+ const cropped=await resource('prompt','cropProfileImage',{base64:cropSource,mimeType:'image/png',crop:{x:0,y:0,size:2},outputSize:2},true);assert.equal(cropped.width,2);
+ const pixel=await js('new Promise((resolve,reject)=>{const image=new Image();image.onload=()=>{const c=document.createElement("canvas");c.width=2;c.height=2;const ctx=c.getContext("2d");ctx.drawImage(image,0,0);resolve(Array.from(ctx.getImageData(0,0,1,1).data));};image.onerror=reject;image.src='+JSON.stringify(cropped.previewUrl)+';})');assert.deepEqual(pixel,[255,0,0,255]);
+ await host.webContents.executeJavaScript('window.prompts.custom_prompts[0].character_card={first_message_present:true}');await resource('prompt','listPrompts');
+ assert.equal((await resource('prompt','startPromptChat',{id:-1001},true)).messageId,88);await until(async()=>await host.webContents.executeJavaScript('window.createdChats.length')===1);assert.equal(await host.webContents.executeJavaScript('window.createdChats[0]'),77);
  await resource('prompt','selectPrompt',{id:1},true);assert.equal(await host.webContents.executeJavaScript('window.prompts.selected_prompt_id'),1);
  await click('open-personas');await until(()=>settings.editor?.sectionId==='personas'&&!settings.editor.loading);
  assert.equal((await resource('personas','listPersonas')).personas[0].primary,true);
  const createdPersona=await resource('personas','createPersona',{name:'Fixture persona',description:'Description',coreMemory:'Memory',allowCoreMemoryUpdate:false},true);
  assert.equal(createdPersona.createdId,2);assert.equal(createdPersona.personas.find(item=>item.id===2).active,false);
  await resource('personas','activatePersona',{id:2},true);assert.equal(await host.webContents.executeJavaScript('window.personas.find(item=>item.id===2).is_default'),1);
+ assert.equal((await resource('personas','getPersonaInstructions',{id:2})).text,'Original instructions');
+ await resource('personas','savePersonaInstructions',{id:2,text:'Saved instructions'},true);
+ const survey=(await resource('personas','createPersonaSurvey',{id:2,brief:'Test',questionCount:1},true)).survey;
+ assert.equal(await host.webContents.executeJavaScript('window.surveyInputs.include_history'),false);assert.equal(await host.webContents.executeJavaScript('window.surveyInputs.personalize'),false);
+ assert.equal((await resource('personas','answerPersonaSurvey',{id:2,surveyId:survey.id,answers:{style:'Concise'}},true)).survey.draft,'Generated instruction proposal');
+ assert.equal(await host.webContents.executeJavaScript('window.instructions.text'),'Saved instructions');
+ await resource('personas','applyPersonaSurvey',{id:2,surveyId:survey.id,text:'Reviewed instructions'},true);assert.equal(await host.webContents.executeJavaScript('window.instructions.text'),'Reviewed instructions');
+ await resource('personas','deletePersonaSurvey',{id:2,surveyId:survey.id,removeApplied:false,confirmed:true},true);assert.equal(await host.webContents.executeJavaScript('window.instructions.surveys.length'),0);
  await host.webContents.executeJavaScript('window.account.name="Stale account read";window.delayAccountRead=new Promise(resolve=>{window.finishAccountRead=resolve});void 0');
  await click('open-account');await until(()=>settings.editor?.sectionId==='account'&&settings.editor.loading);
  await host.webContents.executeJavaScript('window.setSettingsMounted(false)');await until(async()=>await host.webContents.executeJavaScript('!document.getElementById("native-tokens")'));

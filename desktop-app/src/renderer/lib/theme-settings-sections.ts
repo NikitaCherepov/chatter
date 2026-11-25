@@ -37,7 +37,7 @@ export function createThemeSettingsSections(context: Context): Record<string, Th
   return {
     ...Object.fromEntries(['prompt','personas'].map(section=>[section,{
       groups:()=>[],fields:()=>[],read:async()=>({}),
-      links:()=>[{id:'advanced',sectionId:section,target:'settings.sections.'+section,label:t('settings.sections.'+section)}],
+      links:()=>[{id:'import',sectionId:'data',target:'settings.sections.data',label:t('settings.sections.data')}],
       write:async()=>{throw new Error('invalid_setting_field');},
     }])),
     intuition: {
